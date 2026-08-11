@@ -2,23 +2,24 @@
 // perf-budget.mjs — deterministic build/deploy invariants + advisory wire-size
 // reporting for aadhar.sh.
 //
-// User experience is measured by Cloudflare RUM and a controlled browser lab;
-// this script cannot honestly turn a guessed byte number into an LCP guarantee.
+// User experience is measured in a controlled browser lab; this site deliberately
+// collects no browser RUM, and this script cannot honestly turn a guessed byte
+// number into an LCP guarantee.
 // It therefore HARD-fails only on facts that must never be ambiguous:
 //   1. luna.css parses clean (the v143-corruption tripwire);
 //   2. deploy assets are actually minified and retain readable source twins;
 //   3. the build output contains every expected asset.
 //
 // It also reports gzip + Brotli sizes against generous, role-aware envelopes.
-// Those envelopes are ADVISORY until RUM has enough observations to justify a
-// user-centered threshold. A deferred page island is not allowed to veto a
+// Those envelopes are ADVISORY because there is no field dataset from which to
+// derive a user-centered threshold. A deferred page island is not allowed to veto a
 // homepage feature merely because its raw source grew.
 //
 //   node perf-budget.mjs        (or: pnpm run perf-budget)
 //
 // Not measured here (needs a real browser): LCP/FCP/INP/CLS, TTFB by field
-// cohort, and the per-viewport photo-transfer delta. Cloudflare RUM is the
-// outcome source; a controlled 4G lab run is the repeatable pre-merge signal.
+// cohort, and the per-viewport photo-transfer delta. A controlled 4G lab run is
+// the repeatable pre-merge signal; no field-RUM outcome source is currently wired.
 //
 // ALSO NOT MEASURED HERE, and this is the newer and more important boundary:
 // whether THIS CHANGE moved anything. Every threshold below is an absolute line
@@ -44,7 +45,7 @@ import { HTML_MARKERS } from "./scripts/lib/html-markers.mjs";
 
 // Wire-size envelopes, not raw-source ceilings. These start from the current
 // built output with enough room for ordinary feature work; they are deliberately
-// advisory until the Cloudflare RUM baseline tells us which paths matter.
+// advisory while the site has no field-RUM baseline for path prioritization.
 const ASSET_ENVELOPES = {
   "nav.js":         { role: "shared deferred shell",       gzipKiB: 20, brotliKiB: 18 },
   "notepad.js":     { role: "writing-only island",         gzipKiB: 4,  brotliKiB: 3.5 },

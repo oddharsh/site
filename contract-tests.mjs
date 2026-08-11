@@ -592,7 +592,7 @@ test("rendered track rows re-host recognized art and pass everything else throug
 });
 
 // (the CSP's img-src end of this bargain is asserted alongside the other
-// directives in the RUM first-party test near the bottom of this file)
+// directives in the no-RUM contract test near the bottom of this file)
 
 test("the art route 404s every shape that is not one it minted", async () => {
   // This grammar is the only thing between the route and an open image proxy,
@@ -2342,22 +2342,33 @@ test("robots.txt never forbids a path the site advertises to agents", async () =
   }
 });
 
-test("the RUM beacon is first-party on both legs, and every page that says so agrees", async () => {
+test("browser RUM and its ledger proxy stay fully removed", async () => {
   const page = await readFile(new URL("holding/index.html", import.meta.url), "utf8");
+  const worker = await readFile(new URL("holding/_worker.js/index.js", import.meta.url), "utf8");
+  const wrangler = await readFile(new URL("wrangler.jsonc", import.meta.url), "utf8");
+  const wranglerDev = await readFile(new URL("wrangler.dev.jsonc", import.meta.url), "utf8");
   const headers = await readFile(new URL("holding/_headers", import.meta.url), "utf8");
   const security = await readFile(new URL("holding/_worker.js/lib/security.js", import.meta.url), "utf8");
   const whoareyou = await readFile(new URL("holding/_worker.js/whoareyou.js", import.meta.url), "utf8");
+  const whoareyouMd = await readFile(new URL("holding/md/whoareyou.md", import.meta.url), "utf8");
   const securityPage = await readFile(new URL("holding/_worker.js/security.js", import.meta.url), "utf8");
 
-  // Both legs. The script alone is not enough: without send.to the beacon falls
-  // back to its hardcoded cloudflareinsights.com endpoint, which the CSP below now
-  // blocks — so the script would load and every report would silently fail.
-  assert.match(page, /<script type="module" src="\/ledger\/rum\.js"/, "the beacon script must be served from this origin");
-  assert.match(page, /"send": \{"to": "\/ledger\/rum"\}/, "the beacon must be told to report to this origin too");
-  assert.doesNotMatch(page, /src="https:\/\/static\.cloudflareinsights\.com/, "no cross-origin beacon script");
+  // The loader, both route legs, both asset allowlists, and the dedicated module
+  // are one feature. Leaving any one behind either recreates the reported 404 or
+  // keeps an unused third-party forwarder exposed.
+  for (const [name, source] of [
+    ["index.html", page],
+    ["_worker.js/index.js", worker],
+    ["wrangler.jsonc", wrangler],
+    ["wrangler.dev.jsonc", wranglerDev],
+  ]) {
+    assert.doesNotMatch(source, /\/ledger\/rum|data-cf-beacon|cloudflareinsights\.com/, `${name} must carry no browser RUM wiring`);
+  }
+  assert.equal(existsSync(new URL("holding/_worker.js/rum.js", import.meta.url)), false,
+    "the retired RUM proxy module must not remain reachable for a future import");
 
-  // The CSP must not keep permitting an origin nothing calls any more. _headers is
-  // matched as TEXT (it is a literal header line). security.js is matched on the
+  // The CSP must not permit the retired collector. _headers is matched as TEXT
+  // (it is a literal header line). security.js is matched on the
   // policy it ASSEMBLES, because the per-document script-src work split the string
   // into pieces and a source scrape would now be checking punctuation instead of
   // the thing that reaches the browser. `/unmapped` deliberately misses the hash
@@ -2367,7 +2378,7 @@ test("the RUM beacon is first-party on both legs, and every page that says so ag
   for (const [name, text] of [["_headers", headers], ["lib/security.js", assembled]]) {
     const policy = (text.match(/default-src 'self';[^"\n]*upgrade-insecure-requests/) || [])[0];
     assert.ok(policy, `${name} must still declare a CSP`);
-    assert.doesNotMatch(policy, /cloudflareinsights\.com/, `${name}: drop the beacon's old third-party CSP entries`);
+    assert.doesNotMatch(policy, /cloudflareinsights\.com/, `${name}: keep the retired collector out of CSP`);
     assert.match(policy, /connect-src 'self';/, `${name}: connect-src should be back to pure 'self'`);
     assert.match(policy, /script-src 'self' 'unsafe-inline';/, `${name}: script-src should carry no external origin`);
     // Same rule, one directive over: album art is re-hosted behind /rn/art/, so
@@ -2378,17 +2389,14 @@ test("the RUM beacon is first-party on both legs, and every page that says so ag
     assert.doesNotMatch(policy, /scdn\.co|spotifycdn\.com/, `${name}: album art is first-party now`);
   }
 
-  // The honesty surfaces. A CSP that quietly disagrees with the page describing it
-  // is the failure this repo keeps designing against, and "first-party" is the
-  // easiest claim on this site to round up into a privacy win it is not. Both pages
-  // must keep saying that the forwarding still happens.
-  assert.match(whoareyou, /\/ledger\/rum\.js/, "/whoareyou must name the first-party beacon paths");
-  assert.match(whoareyou, /forwards those timings to Cloudflare/,
-    "/whoareyou must keep stating that the reporting did not stop, it moved server-side");
-  assert.match(whoareyou, /content blocker, the report it used to stop now gets through/,
-    "/whoareyou must keep disclosing what proxying costs a blocker-running visitor");
-  assert.match(securityPage, /it does not mean nothing is forwarded from here/,
-    "/security must not let 'no external origin' imply nothing leaves this server");
+  // Public disclosures must describe the new absence, not the former proxy.
+  for (const [name, source] of [["/whoareyou", whoareyou], ["/whoareyou.md", whoareyouMd]]) {
+    assert.match(source, /No page loads a Web Analytics or RUM beacon/, `${name} must state that browser analytics is absent`);
+    assert.match(source, /Page-load\s+timings are not\s+sent to Cloudflare/, `${name} must state the data consequence`);
+    assert.doesNotMatch(source, /\/ledger\/rum|forwards those timings/, `${name} must not describe the retired proxy`);
+  }
+  assert.match(securityPage, /no external script or connect origin/,
+    "/security must keep describing the browser-facing CSP accurately");
 });
 
 test("weak validators turn unchanged rendered HTML into an empty 304", async () => {
@@ -3630,7 +3638,7 @@ test("previews refuse every unsafe method, and the GET-shaped writes too", async
   // somebody remembering to list a new POST route. Paths here are deliberately
   // ones the guard has never heard of.
   for (const method of ["POST", "PUT", "PATCH", "DELETE", "OPTIONS", "post"]) {
-    for (const path of ["/book", "/webmention", "/ledger/rum", "/serendipity/sync", "/a-route-invented-tomorrow"]) {
+    for (const path of ["/book", "/webmention", "/search", "/serendipity/sync", "/a-route-invented-tomorrow"]) {
       const denied = previewDenial(path, method);
       assert.ok(denied, `${method} ${path} must be refused on a preview`);
       assert.equal(denied.status, 403);

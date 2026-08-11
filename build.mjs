@@ -60,6 +60,29 @@ function dczEncode(bytes, dictBytes) {
   };
 }
 
+// Parse host-shaped CSP sources before comparing DNS labels. A raw substring
+// test is both imprecise and security-shaped: `cloudflareinsights.com.evil`
+// contains the retired domain text but is not beneath that domain, while an
+// arbitrary subdomain of cloudflareinsights.com is. Keep that distinction
+// explicit so this invariant checks origins rather than URL spelling.
+function containsRetiredRumHost(source) {
+  const candidates = source.match(/\b(?:https?:\/\/)?(?:\*\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)+(?:\:\d+)?/gi) || [];
+  for (const candidate of candidates) {
+    const withoutWildcard = candidate.replace(/^\*\./, "");
+    let hostname;
+    try {
+      hostname = new URL(/^[a-z]+:\/\//i.test(withoutWildcard)
+        ? withoutWildcard
+        : `https://${withoutWildcard}`).hostname.toLowerCase();
+    } catch {
+      continue;
+    }
+    const labels = hostname.split(".");
+    if (labels.at(-2) === "cloudflareinsights" && labels.at(-1) === "com") return true;
+  }
+  return false;
+}
+
 // ── deploy-time invariant tripwires (explore-unknowns, phase A) ──────────────
 // Silent-failure classes this codebase has hit or is one careless edit from
 // hitting. They live here because build.mjs runs on every `pnpm run deploy:direct`, the
@@ -218,47 +241,37 @@ async function checkInvariants() {
     }
   } catch (e) { warn.push(`agent-skills digest check could not run: ${e.message}`); }
 
-  // 7b (hard) — the RUM beacon must carry a real site token. A placeholder token
-  // ships the worst of every trade at once: every visitor pays for a beacon that
-  // reports nowhere, and /whoareyou's disclosure describes traffic that buys no data.
-  // Both costs are invisible in testing, because a bad token fails silently by design.
-  //
-  // Hard rather than warn, for the same reason as the client-edge check above: this is
-  // a fill-in-the-blank left behind, not a taste call. Paste the token from
-  // Cloudflare dashboard > Web Analytics > (site) > Manage site, or delete the beacon
-  // block in index.html together with the /ledger/rum* routes.
+  // 7b (hard) — browser RUM was removed on 2026-08-11. Keep all four runtime
+  // surfaces absent together: the homepage loader, the Worker proxy/collector,
+  // the asset-dispatch allowlists, and any third-party CSP allowance. A partial
+  // restoration recreates the exact failure this check now guards against: a
+  // browser loading a beacon whose collector route 404s.
   try {
-    const home = await read("holding/index.html");
-    if (home.includes("CF_RUM_TOKEN_PLACEHOLDER")) {
-      hard.push("index.html: the Web Analytics beacon still carries CF_RUM_TOKEN_PLACEHOLDER — paste the real site token (dashboard > Web Analytics > Manage site), or remove the beacon and its /ledger/rum* routes in _worker.js/index.js");
-    }
-    // Both legs of the beacon are first-party as of 2026-07-29, so the invariant is
-    // no longer "beacon and CSP entry arrive together" — it is that the page and the
-    // routes that serve it arrive together. Either half alone is a quiet bug: a
-    // <script src="/ledger/rum.js"> with no route 404s on every homepage visit, and a
-    // route with no script is a live third-party forwarder nothing calls.
-    const headers = await read("holding/_headers");
-    const worker = await read("holding/_worker.js/index.js");
-    const loadsScript = home.includes('src="/ledger/rum.js"');
-    const sendsTo = home.includes('"to": "/ledger/rum"');
-    const routed = worker.includes('["/ledger/rum.js", handleRumScript]') &&
-                   worker.includes('["/ledger/rum", handleRumCollect]');
-    if (loadsScript !== routed) {
-      hard.push(`RUM beacon and its routes disagree: index.html ${loadsScript ? "loads" : "does not load"} /ledger/rum.js but _worker.js/index.js ${routed ? "routes" : "does not route"} the /ledger/rum* pair — ship both or neither`);
-    }
-    if (loadsScript && !sendsTo) {
-      hard.push('index.html: the beacon is served first-party but its data-cf-beacon has no `"send": {"to": "/ledger/rum"}` — without it the beacon falls back to its hardcoded cloudflareinsights.com endpoint, which the CSP now blocks, so the script would load and every report would fail');
-    }
-    // The CSP must NOT carry the old third-party entries. Leaving one behind would
-    // re-permit an origin nothing on the site calls any more, which is the same
-    // "allowed for no reason" bug the old form of this check guarded against.
-    for (const [name, text] of [["_headers", headers], ["lib/security.js", await read("holding/_worker.js/lib/security.js")]]) {
-      const policy = (text.match(/[Cc]ontent-[Ss]ecurity-[Pp]olicy[^\n]*/g) || []).join("\n");
-      if (policy.includes("cloudflareinsights.com")) {
-        hard.push(`${name}: the CSP still allows cloudflareinsights.com, but both beacon legs are first-party now — drop the script-src and connect-src entries`);
+    const runtimeFiles = [
+      "holding/index.html",
+      "holding/_worker.js/index.js",
+      "wrangler.jsonc",
+      "wrangler.dev.jsonc",
+    ];
+    const forbidden = ["/ledger/rum", "data-cf-beacon", "cloudflareinsights.com"];
+    for (const name of runtimeFiles) {
+      const source = await read(name);
+      for (const marker of forbidden) {
+        if (source.includes(marker)) hard.push(`${name}: browser RUM is retired; remove ${marker}`);
       }
     }
-  } catch (e) { warn.push(`RUM beacon check could not run: ${e.message}`); }
+    if ((await readdir("holding/_worker.js")).includes("rum.js")) {
+      hard.push("holding/_worker.js/rum.js: browser RUM is retired; remove the proxy module");
+    }
+    for (const [name, text] of [
+      ["holding/_headers", await read("holding/_headers")],
+      ["holding/_worker.js/lib/security.js", await read("holding/_worker.js/lib/security.js")],
+    ]) {
+      if (containsRetiredRumHost(text)) {
+        hard.push(`${name}: browser RUM is retired; remove the Cloudflare Insights CSP allowance`);
+      }
+    }
+  } catch (e) { warn.push(`no-RUM check could not run: ${e.message}`); }
 
   // 8 (hard) — the site surface registry (site-manifest.json) is the single truth
   // for which pages exist and where they show. Its two GENERATED projections must

@@ -18,7 +18,6 @@ import { handleWebmention, handleWebmentionDecision } from "./webmention.js";
 import { cronSendWebmentions } from "./webmention-send.js";
 import { countCrawlerHit, handleLedger, handleLedgerJson } from "./ledger.js";
 import { countSpeculativeLoad, handlePrefetchActivation } from "./speculation.js";
-import { handleRumCollect, handleRumScript } from "./rum.js";
 import { handleLens, handleLensBrowser, handleLensCompare, handleLensFetch, handleLensShot } from "./lens.js";
 import { handleLensWire } from "./lens-wire.js";
 import { serveAssetWith404Clamp, serveFreshAsset, servePrecompressedShell, serveStaticPage } from "./lib/assets.js";
@@ -395,11 +394,6 @@ const ROUTE_TABLE = [
   // monthly, collected never.
   ["/ledger", handleLedger],
   ["/ledger.json", handleLedgerJson],
-
-  // Cloudflare Web Analytics, both legs served from this origin. Not under
-  // /cdn-cgi/: that prefix is handled at the edge before a Worker sees it.
-  ["/ledger/rum.js", handleRumScript],
-  ["/ledger/rum", handleRumCollect],
 
   // the prefetch activation beacon's receiver (speculation.js). A credentialless
   // HEAD from the browser when a speculated document is actually navigated to.

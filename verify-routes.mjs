@@ -240,6 +240,10 @@ const ROUTES = [
   { path: "/llms-full.txt", status: [200, 402], ct: ["text/plain", "application/json"] },
   { path: "/ledger", status: 200, ct: "text/html", marker: "Crawl Ledger" },
   { path: "/ledger.json", status: 200, ct: "application/json" },
+  // Browser RUM is retired. Keep both old ledger paths dark so a stale loader
+  // cannot silently reconnect to a proxy or collector added as a static asset.
+  { path: "/ledger/rum.js", status: 404 },
+  { path: "/ledger/rum", status: 404 },
   { path: "/writing", status: 200, ct: "text/html" },
   { path: "/writing/", status: 301 },   // routeDropSlash 301s to /writing
   { path: `/writing/${SLUG}`, status: 200, ct: "text/html" },
