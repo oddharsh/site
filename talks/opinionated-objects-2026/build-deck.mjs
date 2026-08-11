@@ -15,27 +15,41 @@ const composite = await fs.readFile(path.join(here, "screengrabs", "03-three-sou
 const deck = Presentation.create({ slideSize: { width: 1280, height: 720 } });
 
 const C = {
-  ink: "#111318",
-  muted: "#606878",
-  paper: "#FAFBFD",
-  panel: "#F0F3F8",
-  line: "#C7CEDA",
-  blue: "#2456D6",
-  blueDark: "#163A9A",
-  bluePale: "#E8F0FF",
-  teal: "#0A788A",
-  tealPale: "#E5F7F8",
+  ink: "#181818",
+  muted: "#5A5A5A",
+  paper: "#FFFFFF",
+  panel: "#ECE9D8",
+  face: "#ECE9D8",
+  faceLight: "#F1EFE2",
+  highlight: "#FFFFFF",
+  shadow: "#ACA899",
+  darkShadow: "#716F64",
+  line: "#7F9DB9",
+  blue: "#0054E3",
+  blueBright: "#3D95FF",
+  blueDark: "#003399",
+  blueDeep: "#001EA0",
+  bluePale: "#E7F0FF",
+  teal: "#087C8C",
+  tealPale: "#DFF5F5",
   green: "#24713C",
+  greenBright: "#3C9A36",
   greenPale: "#E9F7EB",
+  sky: "#6DA6E3",
+  horizon: "#D9EDF7",
+  grass: "#55A947",
+  close: "#E45F3E",
 };
 
 function addText(slide, value, frame, style = {}) {
   const box = slide.shapes.add({ geometry: "textbox", position: frame });
   box.text.set(value);
+  const inferredTypeface = (style.fontSize || 24) >= 35 ? "Trebuchet MS" : "Tahoma";
+  const inferredColor = (style.fontSize || 24) >= 35 ? C.blueDark : C.ink;
   box.text.style = {
-    typeface: "Helvetica Neue",
+    typeface: inferredTypeface,
     fontSize: 24,
-    color: C.ink,
+    color: inferredColor,
     lineSpacing: 1.08,
     ...style,
   };
@@ -43,7 +57,7 @@ function addText(slide, value, frame, style = {}) {
   return box;
 }
 
-function addRect(slide, frame, fill, line = C.line, radius = "rounded-md") {
+function addRect(slide, frame, fill, line = C.line, radius = null) {
   return slide.shapes.add({
     geometry: radius ? "roundRect" : "rect",
     position: frame,
@@ -53,23 +67,108 @@ function addRect(slide, frame, fill, line = C.line, radius = "rounded-md") {
   });
 }
 
-function addRule(slide, y, color = C.line) {
-  addRect(slide, { left: 42, top: y, width: 1196, height: 2 }, color, null, null);
+function addRaised(slide, frame, fill = C.face) {
+  addRect(slide, frame, fill, C.darkShadow, null);
+  addRect(slide, { left: frame.left + 1, top: frame.top + 1, width: frame.width - 2, height: 1 }, C.highlight, null, null);
+  addRect(slide, { left: frame.left + 1, top: frame.top + 1, width: 1, height: frame.height - 2 }, C.highlight, null, null);
+  addRect(slide, { left: frame.left + 1, top: frame.top + frame.height - 2, width: frame.width - 2, height: 1 }, C.shadow, null, null);
+  addRect(slide, { left: frame.left + frame.width - 2, top: frame.top + 1, width: 1, height: frame.height - 2 }, C.shadow, null, null);
 }
 
-function addChrome(slide, number, label = "THE OTHER WEB") {
-  addText(slide, label, { left: 42, top: 26, width: 700, height: 22 }, {
-    fontSize: 13,
+function addSunken(slide, frame, fill = C.paper) {
+  addRect(slide, frame, fill, C.highlight, null);
+  addRect(slide, { left: frame.left, top: frame.top, width: frame.width, height: 1 }, C.darkShadow, null, null);
+  addRect(slide, { left: frame.left, top: frame.top, width: 1, height: frame.height }, C.darkShadow, null, null);
+  addRect(slide, { left: frame.left + 1, top: frame.top + 1, width: frame.width - 2, height: 1 }, C.shadow, null, null);
+  addRect(slide, { left: frame.left + 1, top: frame.top + 1, width: 1, height: frame.height - 2 }, C.shadow, null, null);
+  addRect(slide, { left: frame.left + 1, top: frame.top + frame.height - 2, width: frame.width - 2, height: 1 }, C.highlight, null, null);
+  addRect(slide, { left: frame.left + frame.width - 2, top: frame.top + 1, width: 1, height: frame.height - 2 }, C.highlight, null, null);
+}
+
+function addCaptionButton(slide, left, glyph, close = false) {
+  addRect(slide, { left, top: 18, width: 23, height: 21 }, close ? C.close : "#3E73F5", close ? "#AE3110" : "#1045BE", "rounded-sm");
+  addRect(slide, { left: left + 2, top: 20, width: 19, height: 4 }, close ? "#E8795F" : "#6C9BFF", null, "rounded-sm");
+  addText(slide, glyph, { left, top: close ? 17 : 18, width: 23, height: 20 }, {
+    fontSize: close ? 16 : 14,
     bold: true,
-    color: C.blueDark,
-    characterSpacing: 2,
+    alignment: "center",
+    color: C.highlight,
+    typeface: "Tahoma",
   });
-  addText(slide, String(number).padStart(2, "0"), { left: 1180, top: 26, width: 58, height: 22 }, {
-    fontSize: 13,
-    alignment: "right",
+}
+
+function addChrome(slide, number, label = "The Other Web") {
+  // Bliss desktop: the deck itself becomes one maximized Luna window.
+  addRect(slide, { left: 0, top: 0, width: 1280, height: 420 }, C.sky, null, null);
+  addRect(slide, { left: 0, top: 420, width: 1280, height: 120 }, C.horizon, null, null);
+  addRect(slide, { left: 0, top: 540, width: 1280, height: 180 }, C.grass, null, null);
+
+  // Hard drop, blue frame, white client area.
+  addRect(slide, { left: 24, top: 14, width: 1242, height: 670 }, "#315C91", null, "rounded-md");
+  addRect(slide, { left: 16, top: 8, width: 1244, height: 674 }, C.blueDeep, C.blueDeep, "rounded-md");
+  addRect(slide, { left: 19, top: 11, width: 1238, height: 668 }, C.paper, C.blueBright, "rounded-sm");
+
+  // Five-stop Luna caption, approximated with crisp editable bands.
+  addRect(slide, { left: 21, top: 13, width: 1234, height: 34 }, C.blue, null, "rounded-sm");
+  addRect(slide, { left: 23, top: 15, width: 1230, height: 5 }, C.blueBright, null, "rounded-sm");
+  addRect(slide, { left: 23, top: 20, width: 1230, height: 5 }, "#176AEE", null, null);
+  addRect(slide, { left: 23, top: 42, width: 1230, height: 3 }, "#2E7CF2", null, null);
+
+  addRect(slide, { left: 21, top: 47, width: 1234, height: 30 }, C.face, C.shadow, null);
+  addSunken(slide, { left: 100, top: 52, width: 1065, height: 20 }, C.paper);
+  addText(slide, "Address", { left: 33, top: 55, width: 62, height: 16 }, {
+    fontSize: 11,
     color: C.muted,
   });
-  addRule(slide, 58, C.blue);
+  addRect(slide, { left: 108, top: 56, width: 12, height: 12 }, C.blueBright, C.blue, "rounded-sm");
+  addText(slide, `aadhar.sh  ›  lens  ›  slides  ›  ${String(number).padStart(2, "0")}`, { left: 126, top: 54, width: 1018, height: 17 }, {
+    fontSize: 11,
+    bold: true,
+    color: C.blueDark,
+  });
+  addRaised(slide, { left: 1172, top: 51, width: 70, height: 22 }, C.faceLight);
+  addText(slide, "Go", { left: 1172, top: 54, width: 70, height: 17 }, {
+    fontSize: 11,
+    alignment: "center",
+  });
+
+  // Client area remains flat and readable; the chrome carries the period bit.
+  addRect(slide, { left: 22, top: 77, width: 1232, height: 599 }, C.paper, null, null);
+
+  addRect(slide, { left: 29, top: 21, width: 16, height: 16 }, "#F09A33", "#8F4E10", null);
+  addRect(slide, { left: 32, top: 24, width: 10, height: 10 }, "#FFE29A", null, null);
+  addText(slide, label === "THE OTHER WEB" ? "The Other Web — Lens Demo Day" : label, { left: 52, top: 20, width: 920, height: 22 }, {
+    fontSize: 15,
+    bold: true,
+    color: C.highlight,
+    typeface: "Trebuchet MS",
+  });
+  addCaptionButton(slide, 1174, "—");
+  addCaptionButton(slide, 1200, "□");
+  addCaptionButton(slide, 1226, "×", true);
+
+  // XP taskbar and active Lens task. It stays behind all content at y=688+.
+  addRect(slide, { left: 0, top: 688, width: 1280, height: 32 }, "#245EDC", null, null);
+  addRect(slide, { left: 0, top: 688, width: 1280, height: 2 }, "#6EA4F3", null, null);
+  addRect(slide, { left: 0, top: 690, width: 110, height: 30 }, "#3C9A36", "#1C6E2A", "rounded-md");
+  addText(slide, "start", { left: 24, top: 694, width: 72, height: 20 }, {
+    fontSize: 15,
+    bold: true,
+    italic: true,
+    color: C.highlight,
+    typeface: "Trebuchet MS",
+  });
+  addRect(slide, { left: 118, top: 692, width: 174, height: 25 }, "#3F7DE5", "#174EBA", "rounded-sm");
+  addText(slide, "▣  lens — demo", { left: 130, top: 696, width: 150, height: 17 }, {
+    fontSize: 11,
+    bold: true,
+    color: C.highlight,
+  });
+  addText(slide, `${String(number).padStart(2, "0")} / 07`, { left: 1180, top: 696, width: 76, height: 17 }, {
+    fontSize: 11,
+    alignment: "right",
+    color: C.highlight,
+  });
 }
 
 function setNotes(slide, lines, sources = []) {
@@ -84,15 +183,15 @@ function setNotes(slide, lines, sources = []) {
 }
 
 function addImageFrame(slide, bytes, frame, alt, fit = "contain") {
-  addRect(slide, { left: frame.left - 6, top: frame.top - 6, width: frame.width + 12, height: frame.height + 12 }, "#FFFFFF", C.line, "rounded-md");
+  addSunken(slide, { left: frame.left - 7, top: frame.top - 7, width: frame.width + 14, height: frame.height + 14 }, C.face);
+  addRect(slide, { left: frame.left - 3, top: frame.top - 3, width: frame.width + 6, height: frame.height + 6 }, C.paper, C.line, null);
   return slide.images.add({
     blob: bytes,
     contentType: "image/png",
     alt,
     fit,
     position: frame,
-    geometry: "roundRect",
-    borderRadius: "rounded-sm",
+    geometry: "rect",
   });
 }
 
@@ -145,7 +244,7 @@ function addImageFrame(slide, bytes, frame, alt, fit = "contain") {
     fontSize: 28,
     color: C.muted,
   });
-  addRect(slide, { left: 60, top: 300, width: 1160, height: 88 }, "#FFFFFF", C.ink, "rounded-sm");
+  addSunken(slide, { left: 60, top: 300, width: 1160, height: 88 }, C.paper);
   addText(slide, "https://", { left: 90, top: 326, width: 140, height: 35 }, {
     fontSize: 25,
     color: C.muted,
@@ -155,17 +254,17 @@ function addImageFrame(slide, bytes, frame, alt, fit = "contain") {
     fontSize: 25,
     typeface: "Courier New",
   });
-  addRect(slide, { left: 1050, top: 315, width: 140, height: 58 }, C.blue, C.blueDark, "rounded-sm");
+  addRaised(slide, { left: 1050, top: 315, width: 140, height: 58 }, C.faceLight);
   addText(slide, "GO", { left: 1050, top: 330, width: 140, height: 28 }, {
     fontSize: 22,
     bold: true,
     alignment: "center",
-    color: "#FFFFFF",
+    color: C.ink,
   });
   const chips = ["a local publication", "a favorite blog", "a useful tool"];
   chips.forEach((chip, index) => {
     const left = 60 + index * 310;
-    addRect(slide, { left, top: 430, width: 280, height: 54 }, C.bluePale, C.line, "rounded-sm");
+    addRaised(slide, { left, top: 430, width: 280, height: 54 }, C.face);
     addText(slide, chip, { left: left + 16, top: 446, width: 248, height: 24 }, {
       fontSize: 17,
       alignment: "center",
@@ -250,7 +349,8 @@ function addImageFrame(slide, bytes, frame, alt, fit = "contain") {
   ];
   cards.forEach((card, index) => {
     const left = 60 + index * 395;
-    addRect(slide, { left, top: 250, width: 365, height: 360 }, card.fill, C.line, "rounded-md");
+    addSunken(slide, { left, top: 250, width: 365, height: 360 }, card.fill);
+    addRaised(slide, { left: left + 12, top: 304, width: 341, height: 48 }, C.faceLight);
     addText(slide, card.n, { left: left + 24, top: 274, width: 50, height: 22 }, {
       fontSize: 13,
       bold: true,
@@ -295,6 +395,7 @@ function addImageFrame(slide, bytes, frame, alt, fit = "contain") {
     color: C.muted,
   });
   addImageFrame(slide, composite, { left: 60, top: 195, width: 700, height: 450 }, "Lens composite score with Cloudflare, Lens field evidence, and Defuddle recovery", "cover");
+  addSunken(slide, { left: 800, top: 200, width: 380, height: 160 }, C.face);
   addText(slide, "100", { left: 830, top: 215, width: 310, height: 110 }, {
     fontSize: 86,
     bold: true,
@@ -315,7 +416,7 @@ function addImageFrame(slide, bytes, frame, alt, fit = "contain") {
   ];
   scoreRows.forEach(([label, value], index) => {
     const top = 380 + index * 58;
-    addRect(slide, { left: 810, top, width: 360, height: 46 }, index === 2 ? C.tealPale : C.bluePale, C.line, "rounded-sm");
+    addSunken(slide, { left: 810, top, width: 360, height: 46 }, index === 2 ? C.tealPale : C.bluePale);
     addText(slide, label, { left: 826, top: top + 13, width: 250, height: 20 }, { fontSize: 16, bold: true });
     addText(slide, value, { left: 1090, top: top + 10, width: 62, height: 24 }, { fontSize: 20, bold: true, alignment: "right", color: C.green });
   });
@@ -355,7 +456,8 @@ function addImageFrame(slide, bytes, frame, alt, fit = "contain") {
   ];
   rows.forEach(([label, question, fill, color], index) => {
     const top = 275 + index * 106;
-    addRect(slide, { left: 60, top, width: 1160, height: 84 }, fill, C.line, "rounded-sm");
+    addSunken(slide, { left: 60, top, width: 1160, height: 84 }, fill);
+    addRaised(slide, { left: 72, top: top + 10, width: 180, height: 64 }, C.faceLight);
     addText(slide, label, { left: 84, top: top + 18, width: 170, height: 26 }, {
       fontSize: 15,
       bold: true,
@@ -398,13 +500,20 @@ function addImageFrame(slide, bytes, frame, alt, fit = "contain") {
     color: C.muted,
     lineSpacing: 1.1,
   });
-  addRect(slide, { left: 60, top: 565, width: 1160, height: 72 }, C.blue, C.blueDark, "rounded-sm");
-  addText(slide, "aadhar.sh/lens", { left: 90, top: 584, width: 1100, height: 34 }, {
+  addSunken(slide, { left: 60, top: 565, width: 960, height: 72 }, C.paper);
+  addText(slide, "https://aadhar.sh/lens", { left: 90, top: 584, width: 890, height: 34 }, {
     fontSize: 30,
     bold: true,
-    color: "#FFFFFF",
-    alignment: "center",
+    color: C.blueDark,
+    alignment: "left",
     typeface: "Courier New",
+  });
+  addRaised(slide, { left: 1040, top: 565, width: 180, height: 72 }, C.faceLight);
+  addText(slide, "Open", { left: 1040, top: 585, width: 180, height: 30 }, {
+    fontSize: 22,
+    bold: true,
+    alignment: "center",
+    color: C.ink,
   });
   setNotes(slide, [
     "5:10–6:00",
