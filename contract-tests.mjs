@@ -2137,6 +2137,29 @@ test("serendipity keeps historical feed and roster backfills alive", () => {
   );
 });
 
+test("serendipity hides collapsed description chrome and uses the Luna scrollbar", async () => {
+  const serendipity = await readFile(new URL("serendipity/serendipity.js", import.meta.url), "utf8");
+  const luna = await readFile(new URL("holding/luna.css", import.meta.url), "utf8");
+
+  assert.match(
+    serendipity,
+    /\.evdesc\[hidden="until-found"\]\{margin:0;padding:0;border:0\}/,
+    "hidden-until-found must not leave the description panel's padding and border visible",
+  );
+  assert.match(
+    luna,
+    /\.window>\.body>\.content[^{}]*\{scrollbar-color:auto\}/,
+    "the nested Serendipity scroller must reset the inherited standard color for Chromium",
+  );
+  for (const part of ["", "-track", "-thumb", "-thumb:hover", "-button:single-button", "-corner"]) {
+    assert.match(
+      luna,
+      new RegExp(`\\.window>\\.body>\\.content::\\-webkit-scrollbar${part}`),
+      `the nested Serendipity scroller must carry the Luna ${part || "bar"} rule`,
+    );
+  }
+});
+
 // ── the bundled photo pool ──────────────────────────────────────────
 // The pool is BUILD DATA: photos.js imports photo-index.json + hashes.json and
 // derives the render-ready rows at module scope. These tests run the real
