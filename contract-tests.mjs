@@ -408,8 +408,9 @@ test("art URLs are derived from the hash, whatever alias it arrived under", () =
   for (const host of ["i.scdn.co", "image-cdn-fa.spotifycdn.com", "image-cdn-ak.spotifycdn.com"]) {
     assert.equal(spotifyArtHash(`https://${host}/image/${ART_HASH_A}`), ART_HASH_A);
   }
-  // null means "emit the original URL untouched", so every unrecognized shape
-  // has to land here rather than produce a /rn/art/ URL that would 404.
+  // null means "emit no browser image", so every unrecognized shape has to land
+  // here rather than produce a /rn/art/ URL that would 404 or a CSP-blocked
+  // third-party frame.
   for (const no of [
     "https://mosaic.scdn.co/640/abc",
     `https://evil.example.com/image/${ART_HASH_A}`,
@@ -420,13 +421,13 @@ test("art URLs are derived from the hash, whatever alias it arrived under", () =
   ]) assert.equal(spotifyArtHash(no), null);
 
   const u = artUrls(`https://i.scdn.co/image/${ART_HASH_A}`);
-  assert.equal(u.src, `/rn/art/${ART_HASH_A}-240-${ART_VERSION}.jpg`);
-  assert.equal(u.srcset,
-    `/rn/art/${ART_HASH_A}-120-${ART_VERSION}.avif 120w, /rn/art/${ART_HASH_A}-240-${ART_VERSION}.avif 240w`);
-  // The warm tier is not a fourth URL: it has to be a URL the MARKUP already
-  // names, or the cache fills with bytes no browser ever asks for.
+  assert.equal(u.src, `/rn/art/${ART_HASH_A}-240-${ART_VERSION}.avif`);
+  // The warm tier and browser tier are the SAME URL. Keeping a JPEG fallback
+  // and 120w candidate beside it is what let repeated hover reconstruction turn
+  // one cover into an unbounded list of image work in the 2026-08-11 HAR.
   assert.equal(u.warm, `/rn/art/${ART_HASH_A}-240-${ART_VERSION}.avif`);
-  assert.ok(u.srcset.includes(u.warm));
+  assert.equal(u.src, u.warm);
+  assert.equal("srcset" in u, false);
   assert.equal(artUrls("https://mosaic.scdn.co/640/abc"), null);
 });
 
@@ -544,10 +545,10 @@ test("rendered track rows re-host recognized art and pass everything else throug
                   image_url: `https://image-cdn-fa.spotifycdn.com/image/${ART_HASH_A}` }],
     }],
   });
-  assert.match(html, new RegExp(`data-track-image="/rn/art/${ART_HASH_A}-240-${ART_VERSION}\\.jpg"`));
-  assert.match(html, /data-track-imageset="\/rn\/art\/[0-9a-f]{40}-120-\d+\.avif 120w/);
-  assert.match(html, new RegExp(`data-artist-image="/rn/art/${ART_HASH_A}-240-${ART_VERSION}\\.jpg"`));
-  assert.match(html, /data-artist-imageset=/);
+  assert.match(html, new RegExp(`data-track-image="/rn/art/${ART_HASH_A}-240-${ART_VERSION}\\.avif"`));
+  assert.match(html, new RegExp(`data-artist-image="/rn/art/${ART_HASH_A}-240-${ART_VERSION}\\.avif"`));
+  assert.doesNotMatch(html, /data-(?:track|artist)-imageset=|\/rn\/art\/[^" ]+\.jpg/,
+    "each hover target must name the one warmed AVIF, not alternate browser resources");
   // the whole point: a hover no longer reaches Spotify at all
   assert.doesNotMatch(html, /scdn\.co|spotifycdn\.com/);
 
@@ -2187,6 +2188,8 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   const page = await readFile(new URL("holding/index.html", import.meta.url), "utf8");
   const luna = await readFile(new URL("holding/luna.css", import.meta.url), "utf8");
   const nav = await readFile(new URL("holding/nav.js", import.meta.url), "utf8");
+  const hoist = await readFile(new URL("holding/hoist.js", import.meta.url), "utf8");
+  const tooltip = await readFile(new URL("holding/tooltip.js", import.meta.url), "utf8");
 
   const build = await readFile(new URL("build.mjs", import.meta.url), "utf8");
   assert.match(worker, /pickRandom\(pool,\s*12\)/, "the per-request random draw must remain 12");
@@ -2200,15 +2203,16 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   // Baked: a fallback the hydrator replaces, so a real src outside the
   // <noscript> twin is a thumbnail fetched and discarded milliseconds later.
   assert.match(baked, /data-photo-deferred/, "baked tiles must keep their URLs in data-* until hydration decides");
-  assert.match(baked, /data-src="\/i\/X1\.aaaaaaaa\.jpg"/, "the baked tile carries its jpg in data-src");
-  assert.match(baked, /<noscript><picture>/, "every baked tile needs its script-off twin");
+  assert.match(baked, /data-src="\/i\/X1-400\.aaaaaaaa\.avif"/, "the baked tile carries its one 400px AVIF in data-src");
+  assert.match(baked, /<noscript><img/, "every baked tile needs its script-off twin");
   assert.doesNotMatch(baked.slice(0, baked.indexOf("<noscript>")), /\ssrc="/,
     "a real src outside the noscript twin is a discarded download");
 
   // Fragment: these tiles ARE the grid. Nothing replaces them, so they carry
   // live URLs and start on innerHTML.
-  assert.match(fragment, /\ssrc="\/i\/X1\.aaaaaaaa\.jpg"/, "the fragment tile must carry a live src");
-  assert.match(fragment, /<source type="image\/avif"[^>]*\ssrcset=/, "the fragment tile must carry live srcset, not data-srcset");
+  assert.match(fragment, /\ssrc="\/i\/X1-400\.aaaaaaaa\.avif"/, "the fragment tile must carry its live 400px AVIF");
+  assert.doesNotMatch(fragment, /<picture|<source|srcset=|\ssrc="[^"]+\.jpg"/,
+    "one grid tile must expose one browser image resource, with no JPEG fallback to churn on hover");
   assert.doesNotMatch(fragment, /data-photo-deferred|data-src=|data-srcset=/,
     "a fragment tile has nothing to defer for; leaving it deferred is how the grid went blank in an unrendered tab");
   assert.doesNotMatch(fragment, /<noscript>/, "the fragment only ever arrives via fetch(), so a script-off twin is dead bytes");
@@ -2232,6 +2236,21 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   );
   assert.doesNotMatch(grid12, /fetchpriority="high"/,
     "no photo may outrank the introductory prose, which is the measured LCP element at 390px and 1280px alike");
+
+  // A → B → A must move A's already-loaded nodes back into the shared surface,
+  // not parse a third image element. The HAR that motivated this recorded up to
+  // 13 memory-cache image loads for one photo and repeated album/artist AVIFs.
+  assert.match(hoist, /const rendered = new Map\(\)/);
+  assert.match(hoist, /node\.replaceChildren\(\.\.\.children\)/);
+  assert.doesNotMatch(hoist, /node\.innerHTML\s*=\s*html/);
+  assert.doesNotMatch(tooltip, /<picture><source type="image\/avif"|dataset\.(?:track|artist)Imageset/,
+    "album and artist cards must not reconstruct a picture fallback set");
+
+  // The hover target includes the list padding and the grid gutters. Those used
+  // to alternate auto/pointer under a moving cursor even though one hover system
+  // owned the whole region.
+  assert.match(page, /\.photos\s*\{[^}]*cursor:\s*pointer/s);
+  assert.match(luna, /\.np-list li\[data-track-title\]\s*\{\s*cursor:\s*pointer;\s*\}/);
 
   assert.doesNotMatch(worker, /rel="preload" as="image"/, "a non-LCP random photo must not consume the preload lane");
   assert.match(page, /fetch\("\/photos\/grid\.html"\)/, "the homepage must hydrate its random twelve");

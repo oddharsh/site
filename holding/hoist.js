@@ -114,22 +114,26 @@ export function createHoist(o) {
     node.style.willChange = "auto";
   };
 
-  // innerHTML is a teardown: it destroys every child and builds new ones, and for
-  // these surfaces that always includes an <img>. Re-entering the SAME target is
-  // already cheap (pointerover returns early on target === activeTarget), but
-  // LEAVING and coming back is not, because hide() clears activeTarget — and
-  // sweeping the cursor down a list and back up is exactly that, once per row.
-  //
-  // The rebuilt <img> does not re-hit the network (measured 2026-07-29: ten
-  // rebuilds of one Spotify cover produced one fetch and nine memory-cache hits
-  // that never even created a resource-timing entry). What it does cost is real
-  // DOM work on a pointer-driven path, so skip it when the surface already holds
-  // exactly these bytes. Nothing else writes into the node, which is what makes
-  // the comparison sound.
+  // Parsed hover cards are retained by their exact HTML. Re-entering the same
+  // target was already cheap, but sweeping A → B → A destroyed A's subtree and
+  // constructed a fresh <img> for it. Chrome used to reuse those bytes without
+  // even exposing a resource-timing entry; a 2026-08-11 HAR instead recorded
+  // every reconstruction as another image load (often zero-byte memory-cache
+  // work, but still a new image element and decode path). Keep the actual nodes
+  // and move them back into the one visible hoist. Images remain lazy-by-use:
+  // content is parsed only on its first hover, never for the whole target list.
   let mounted = null;
+  const rendered = new Map();
   const render = (html) => {
     if (html === mounted) return;
-    node.innerHTML = html;
+    let children = rendered.get(html);
+    if (!children) {
+      const template = document.createElement("template");
+      template.innerHTML = html;
+      children = Array.from(template.content.childNodes);
+      rendered.set(html, children);
+    }
+    node.replaceChildren(...children);
     mounted = html;
   };
 

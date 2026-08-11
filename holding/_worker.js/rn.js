@@ -161,25 +161,16 @@ export function canonicalArtUrl(raw) {
 // which is why the handler does not validate the version beyond its shape.
 export const ART_VERSION = 1;
 
-// Two tiers for one 120px box: luna.css pins .xp-tooltip .cover.album to
-// 120x120, so 1x wants 120 and 2x wants 240, and srcset lets the browser take
-// only the one it needs. Billing is per UNIQUE transformation per calendar
-// month, so two tiers across ~20 covers is ~40 against the Images Free plan's
-// 5,000 — and the Free plan has no overage charge at all, it errors instead.
+// The browser path now uses only 240px AVIF for the 120px box. Keep accepting
+// the already-minted 120px and JPEG URLs at this handler boundary: old cached
+// fragments can still name them for RN_TRACKS_TTL, and an immutable URL must not
+// turn into a 404 just because new markup stopped emitting it.
 const ART_WIDTHS = new Set([120, 240]);
 
-// AVIF primary with a JPEG universal fallback, chosen in the MARKUP by
-// <picture>, exactly like the photo grid. The tempting alternative was
-// format:auto with Vary: accept, and it was rejected: one URL would then answer
-// with different bytes per browser, which puts the whole design at the mercy of
-// how faithfully three cache layers honour Vary — including caches.default,
-// where that behaviour cannot be verified from `wrangler dev`. Getting it wrong
-// serves an AVIF to a client that cannot decode one, and the symptom would be a
-// broken image for a minority of visitors. Pinning the format per URL means one
-// URL names exactly one byte string, needs no Vary, and lets the BROWSER choose,
-// which is the arrangement the site already trusts everywhere else.
-// (Gotcha 7 still applies: <picture> catches "format unsupported", never a
-// decode failure. If broken-image reports appear, demote AVIF here.)
+// Format stays explicit in every artifact URL. Never replace this with
+// format:auto + Vary:Accept: one URL would then answer with different bytes per
+// browser and depend on three cache layers honouring Vary perfectly. The new
+// browser markup simply emits one of these explicit resources instead of a set.
 const ART_EXT = { avif: "image/avif", jpg: "image/jpeg" };
 
 // 40 lowercase hex, which is every Spotify image id observed (16-char kind
@@ -192,9 +183,8 @@ const ART_PATH = /^\/rn\/art\/([0-9a-f]{40})-(\d{2,4})-(\d{1,4})\.(avif|jpg)$/;
 
 // Pull the content address out of any Spotify image URL we recognize. Returns
 // null for everything else (mosaic.scdn.co, a shape Spotify has not shipped
-// yet, a non-URL), and every caller treats null as "emit the original URL
-// untouched" — degrading to the cross-origin fetch that works today beats
-// serving a 404 through our own origin.
+// yet, a non-URL). Browser markup drops those images: the CSP is first-party
+// only, so emitting the original Spotify URL would guarantee a broken frame.
 export function spotifyArtHash(raw) {
   if (!raw) return null;
   try {
@@ -205,24 +195,22 @@ export function spotifyArtHash(raw) {
   } catch { return null; }
 }
 
-// What a hover surface needs to build one <picture>: an AVIF srcset carrying
-// both density tiers, and a single JPEG the <img> can always fall back to. Only
-// three transformations per cover, because the fallback is the rare path and
-// does not need its own 1x tier.
-//
-// Built server-side and handed over as attributes rather than derived in
-// tooltip.js, so the URL scheme and ART_VERSION live in exactly one file and a
-// re-tune never needs the client and the worker to ship together.
+// The one hover resource, built server-side and handed over as an attribute
+// rather than derived in tooltip.js. The URL scheme and ART_VERSION therefore
+// live in exactly one file and a re-tune never needs client and worker guesses.
 export function artUrls(raw) {
   const hash = spotifyArtHash(raw);
   if (!hash) return null;
   const at = (w, ext) => `/rn/art/${hash}-${w}-${ART_VERSION}.${ext}`;
   const avif2x = at(240, "avif");
-  // `warm` names the ONE tier a 2x display picks, so warmArtCache does not have
-  // to parse it back out of the srcset this function just built. A field rather
-  // than a second exported builder, because the whole reason the URL scheme sits
-  // in this function is that it sits in exactly one place.
-  return { src: at(240, "jpg"), srcset: `${at(120, "avif")} 120w, ${avif2x} 240w`, warm: avif2x };
+  // `warm` names the same URL the browser gets, so warmArtCache never needs to
+  // reverse-engineer a browser attribute.
+  // One browser URL, also the exact URL the background warm fills. The old
+  // markup paired this AVIF with a JPEG img.src fallback and a 120w candidate.
+  // Rebuilding the hover card made current Chromium log the chosen resource on
+  // every pass, and left two representations in one tiny 120px surface. 240px
+  // is the 2x display tier and is already the warmed canonical artifact.
+  return { src: avif2x, warm: avif2x };
 }
 
 // The hover attributes for one art URL — and NOTHING when the art cannot be
@@ -245,8 +233,7 @@ function artAttrs(kind, rawUrl) {
   if (!rawUrl) return "";
   const art = artUrls(rawUrl);
   if (!art) return "";
-  return ` data-${kind}-image="${escAttr(art.src)}"` +
-         ` data-${kind}-imageset="${escAttr(art.srcset)}"`;
+  return ` data-${kind}-image="${escAttr(art.src)}"`;
 }
 
 export async function handleRnArt(request, env, ctx) {

@@ -302,6 +302,10 @@ hr {
   gap: 6px;
   margin: 14px 0 24px;
   padding: 0 6px;
+  /* The six-pixel gutters are inside the rich-hover region. Inheriting one
+     cursor across tile and gutter avoids the arrow/hand strobe while sweeping
+     the grid; the anchors remain the only click targets. */
+  cursor: pointer;
 }
 .photos a {
   display: block;
@@ -335,13 +339,8 @@ hr {
   border-color: oklch(41.92% 0.0962 250.51);
   border-color: oklch(from var(--photo-frame) calc(l - 0.19) calc(c + 0.035) h);
 }
-/* <picture> + <img> fill the aspect-ratio'd frame. box aspect ≈ native aspect,
-   so object-fit: cover only trims sub-pixel rounding — no real crop. */
-.photos picture {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
+/* The one thumbnail <img> fills the aspect-ratio'd frame. box aspect ≈ native
+   aspect, so object-fit: cover only trims sub-pixel rounding — no real crop. */
 .photos img {
   display: block;
   width: 100%;
@@ -636,13 +635,10 @@ footer .signature small { color: oklch(56.93% 0 0); }
       the grid height doesn't shift when SSR content lands. each <a> is a
       square (aspect-ratio: 1) in CSS so the grid occupies its full height
       even when the <img>s have no src yet.
-      thumbnails are AVIF (primary <source>) → JPG (universal <img>
-      fallback). WebP middle tier was removed — modern browsers (Safari
-      16+, Chrome 85+, Firefox 93+) all advertise image/avif natively,
-      so the WebP middle never actually served anyone in 2026.
-      NB: <picture>'s type-based fallback ONLY catches "format not
-      supported"; it does NOT catch decode-time failures. if broken-
-      image reports start coming in, the fix is to demote AVIF.
+      each tile carries one 400px AVIF. That is already >2x its 184px box and
+      every supported browser decodes it. The old <picture> also named 600px
+      AVIF and JPEG fallback candidates; a hover HAR showed the JPEG being
+      reinstantiated repeatedly, so one tile now has one browser resource.
     -->
     <!-- XP-style tooltip element, positioned by JS on hover. lives outside
          the photos section so it can fixed-position over anything. -->
@@ -650,76 +646,40 @@ footer .signature small { color: oklch(56.93% 0 0); }
 
     <section class="photos" aria-label="photographs" data-ssr="0">
       <a>
-        <picture>
-          <source type="image/avif">
-          <img alt="" width="600" height="600" loading="lazy" decoding="async">
-        </picture>
+        <img alt="" width="600" height="600" loading="lazy" decoding="async">
       </a>
       <a>
-        <picture>
-          <source type="image/avif">
-          <img alt="" width="600" height="600" loading="lazy" decoding="async">
-        </picture>
+        <img alt="" width="600" height="600" loading="lazy" decoding="async">
       </a>
       <a>
-        <picture>
-          <source type="image/avif">
-          <img alt="" width="600" height="600" loading="lazy" decoding="async">
-        </picture>
+        <img alt="" width="600" height="600" loading="lazy" decoding="async">
       </a>
       <a>
-        <picture>
-          <source type="image/avif">
-          <img alt="" width="600" height="600" loading="lazy" decoding="async">
-        </picture>
+        <img alt="" width="600" height="600" loading="lazy" decoding="async">
       </a>
       <a>
-        <picture>
-          <source type="image/avif">
-          <img alt="" width="600" height="600" loading="lazy" decoding="async">
-        </picture>
+        <img alt="" width="600" height="600" loading="lazy" decoding="async">
       </a>
       <a>
-        <picture>
-          <source type="image/avif">
-          <img alt="" width="600" height="600" loading="lazy" decoding="async">
-        </picture>
+        <img alt="" width="600" height="600" loading="lazy" decoding="async">
       </a>
       <a>
-        <picture>
-          <source type="image/avif">
-          <img alt="" width="600" height="600" loading="lazy" decoding="async">
-        </picture>
+        <img alt="" width="600" height="600" loading="lazy" decoding="async">
       </a>
       <a>
-        <picture>
-          <source type="image/avif">
-          <img alt="" width="600" height="600" loading="lazy" decoding="async">
-        </picture>
+        <img alt="" width="600" height="600" loading="lazy" decoding="async">
       </a>
       <a>
-        <picture>
-          <source type="image/avif">
-          <img alt="" width="600" height="600" loading="lazy" decoding="async">
-        </picture>
+        <img alt="" width="600" height="600" loading="lazy" decoding="async">
       </a>
       <a>
-        <picture>
-          <source type="image/avif">
-          <img alt="" width="600" height="600" loading="lazy" decoding="async">
-        </picture>
+        <img alt="" width="600" height="600" loading="lazy" decoding="async">
       </a>
       <a>
-        <picture>
-          <source type="image/avif">
-          <img alt="" width="600" height="600" loading="lazy" decoding="async">
-        </picture>
+        <img alt="" width="600" height="600" loading="lazy" decoding="async">
       </a>
       <a>
-        <picture>
-          <source type="image/avif">
-          <img alt="" width="600" height="600" loading="lazy" decoding="async">
-        </picture>
+        <img alt="" width="600" height="600" loading="lazy" decoding="async">
       </a>
     </section>
 
@@ -766,17 +726,10 @@ footer .signature small { color: oklch(56.93% 0 0); }
       // fallback path, and it is why boot() runs either way. The grid is never
       // empty.
       const boot = () => {
-        for (const picture of document.querySelectorAll(".photos picture[data-photo-deferred]")) {
-          for (const source of picture.querySelectorAll("source[data-srcset]")) {
-            source.srcset = source.dataset.srcset;
-            source.removeAttribute("data-srcset");
-          }
-          const image = picture.querySelector("img[data-src]");
-          if (image) {
-            image.src = image.dataset.src;
-            image.removeAttribute("data-src");
-          }
-          picture.removeAttribute("data-photo-deferred");
+        for (const image of document.querySelectorAll(".photos img[data-photo-deferred][data-src]")) {
+          image.src = image.dataset.src;
+          image.removeAttribute("data-src");
+          image.removeAttribute("data-photo-deferred");
         }
       };
       fetch("/photos/grid.html")

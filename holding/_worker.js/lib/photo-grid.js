@@ -22,7 +22,14 @@ const abs = (u) => (u && u.startsWith("/") ? u : `/images/${u}`);
 
 // WHICH tiles carry a real `src` depends on which caller is rendering, and the
 // reason is the same one in both directions: a URL should only be in the markup
-// when it is a URL the visitor is actually going to use.
+// when it is a URL the visitor is actually going to use. Each tile names ONE
+// thumbnail. The old <picture> named a selected AVIF plus a JPEG fallback; a
+// Chromium hover capture on 2026-08-11 showed the fallback being instantiated
+// again and again as the cursor crossed the grid (13 JPEG image loads for one
+// tile, most from memory cache). Every browser this site targets decodes AVIF,
+// and the 400px tier is already more than 2x the 184px tile, so the canonical
+// browser path is one 400px AVIF URL rather than two representations competing
+// behind one element.
 //
 //   deferred: true  — the BAKED twelve. These are a fallback the hydrator is
 //     about to replace, so a real `src` here fetches a thumbnail that is
@@ -81,27 +88,15 @@ export function renderPhotoSlots(pick, altMap = {}, { deferred = true } = {}) {
     // Omitted rather than spelled `auto` because they mean the same thing to the
     // browser and one of them costs bytes on every tile.
     const pri = index < PRIORITISED_TILES ? "" : ` fetchpriority="low"`;
-    const small = p.thumb_small ? abs(p.thumb_small) : null;
-    const large = p.thumb_avif ? abs(p.thumb_avif) : null;
-    const jpg = abs(p.thumb_jpg);
+    // Current photo artifacts always have thumb_small. The larger AVIF and then
+    // JPEG are recovery paths for an old/incomplete manifest entry, not alternate
+    // candidates emitted beside it: even that degraded row still names one URL.
+    const thumb = abs(p.thumb_small || p.thumb_avif || p.thumb_jpg);
     // Fall back to the stem rather than alt="": the tile IS the link, so an
     // empty alt makes the <a> nameless for screen readers and agents.
     const alt = escAttr(altMap[p.stem] || p.stem);
     const sizeAttr = (typeof p.size === "number" && p.size > 0) ? ` data-size="${p.size}"` : "";
     const upAttr = p.uploaded ? ` data-uploaded="${escAttr(p.uploaded)}"` : "";
-
-    // Mobile (<=560px) pins the 400px tier; the tile renders 174px there, so
-    // 400px is already 2x-dense. Desktop is responsive: 400w/600w + sizes:174px
-    // lands 400px on DPR1/DPR2 and 600px only on DPR3. Descriptor use stays
-    // uniform across a picture's sources, which is what the HTML spec wants and
-    // what Nu flags when it is mixed.
-    const sources = (attr) =>
-      (small ? `<source type="image/avif" media="(max-width: 560px)" ${attr}="${escAttr(small)} 400w" sizes="174px">` : "") +
-      (large
-        ? (small
-            ? `<source type="image/avif" ${attr}="${escAttr(small)} 400w, ${escAttr(large)} 600w" sizes="174px">`
-            : `<source type="image/avif" ${attr}="${escAttr(large)}">`)
-        : "");
 
     // In a scripting browser <noscript> is inert text, so these real URLs never
     // enter the preload scanner and cannot undo the deferral above. Without JS
@@ -109,22 +104,16 @@ export function renderPhotoSlots(pick, altMap = {}, { deferred = true } = {}) {
     // photos rather than empty frames. The fragment needs no twin — reaching it
     // at all required fetch().
     const noScript = deferred
-      ? `<noscript><picture>` + sources("srcset") +
-          `<img alt="${alt}" width="600" height="600" src="${escAttr(jpg)}" loading="lazy"${pri} decoding="async">` +
-        `</picture></noscript>`
+      ? `<noscript><img alt="${alt}" width="600" height="600" src="${escAttr(thumb)}" loading="lazy"${pri} decoding="async"></noscript>`
       : "";
 
-    const picture = deferred
-      ? `<picture data-photo-deferred>` + sources("data-srcset") +
-          `<img alt="${alt}" width="600" height="600" data-src="${escAttr(jpg)}" loading="eager"${pri} decoding="async">` +
-        `</picture>`
-      : `<picture>` + sources("srcset") +
-          `<img alt="${alt}" width="600" height="600" src="${escAttr(jpg)}" loading="eager"${pri} decoding="async">` +
-        `</picture>`;
+    const image = deferred
+      ? `<img data-photo-deferred alt="${alt}" width="600" height="600" data-src="${escAttr(thumb)}" loading="eager"${pri} decoding="async">`
+      : `<img alt="${alt}" width="600" height="600" src="${escAttr(thumb)}" loading="eager"${pri} decoding="async">`;
 
     return `<a href="/images/full/${encodeURI(p.full)}" target="_blank" rel="noopener"` +
            ` data-full="${escAttr(p.full)}"${sizeAttr}${upAttr}>` +
-      picture + noScript +
+      image + noScript +
     `</a>`;
   }).join("");
 }

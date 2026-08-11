@@ -816,6 +816,10 @@ box-shadow:inset 1px 1px 0 oklch(100% 0 0),inset -1px -1px 0 oklch(84% 0.02 90)}
   font-size: 10pt;
   line-height: 1.35;
 }
+/* The li padding is part of the track's rich-hover target but sits outside its
+   inner link. Keep one cursor across both so a vertical sweep does not alternate
+   arrow/hand twice per row. Empty/error rows remain ordinary. */
+.np-list li[data-track-title] { cursor: pointer; }
 .np-list li:nth-child(even) { background: oklch(97.50% 0.0062 255.47); }
 .np-list li:last-child { border-bottom: none; }
 .np-list .np-empty {
