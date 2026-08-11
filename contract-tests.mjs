@@ -385,6 +385,13 @@ test("Lens state facts link to the evidence, not publication homepages", async (
   }
 });
 
+test("Lens dialogs leave layout and hit testing when closed", async () => {
+  const html = await renderLensShell().text();
+  assert.match(html, /\.lx-sow-dialog\s*\{[^}]*display:none[^}]*\}/);
+  assert.match(html, /\.lx-sow-dialog\[open\]\s*\{[^}]*display:flex[^}]*\}/);
+  assert.doesNotMatch(html, /<dialog[^>]*\sopen(?:\s|=|>)/i);
+});
+
 
 test("track HTML renderer emits rows only", () => {
   const html = renderTrackListHtml(TRACKS);
