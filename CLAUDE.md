@@ -2407,6 +2407,85 @@ pnpm run deploy:direct
     byte and no build byte, which is the contrast worth keeping: a patch bump
     inside a major is free here, and the major is not.
 
+31. **A rule in `_headers` does not OVERRIDE a glob it sits above, it COMBINES
+    with it, and for `Cache-Control` that ships a malformed header.** Cloudflare
+    applies every matching rule and appends same-named values, so specificity
+    and ordering buy nothing. Measured 2026-08-11 giving `/lwe/quadgrams.txt`
+    (the 16 KB quadgram model the `/lwe/vigenere` cracker fetches) a longer
+    browser cache than the `/lwe/*` pages it sits beside:
+
+    ```
+    /lwe/quadgrams.txt
+      Cache-Control: public, max-age=604800, stale-while-revalidate=604800
+    ```
+
+    put this on the wire:
+
+    ```
+    Cache-Control: public, max-age=604800, stale-while-revalidate=604800,
+                   public, max-age=0, s-maxage=86400, stale-while-revalidate=604800
+    ```
+
+    Two conflicting `max-age` values in one field, which RFC 9111 leaves
+    ambiguous and implementations resolve however they like. Strictly worse than
+    the single revalidation it was meant to save, so it was reverted and
+    `_headers` now carries a comment where the rule was.
+
+    **The failure is quiet in the direction that matters.** Nothing errors, the
+    asset still serves, and a browser still caches it *somehow*. Checking with
+    `curl -sI` is what shows it, and only if you read the whole line rather than
+    grep for the directive you added.
+
+    So a file under a glob has exactly two ways to get a different policy: move
+    it out of the glob, or set the header in the worker. Adding a narrower rule
+    is not one of them. Worth knowing before reaching for the obvious fix, since
+    every other layered-config system in this repo (wrangler's routes, the CSP
+    map, `run_worker_first`) does let the specific entry win, and this one reads
+    exactly like it should too.
+
+32. **`pnpm run pages:check` lints AUTHORED PAGE TEXT against the house voice,
+    and it is a required check.** `content-pipeline/page-contract.mjs` bans em
+    dashes, AI filler (`delve`, `leverage`, `utilize`, `robust`, `game-changer`,
+    `cutting-edge`), dead transitions (`furthermore`, `additionally`, `moreover`,
+    `moving forward`), and the "X, not Y" corrective negation. It fails the build
+    by field path:
+
+    ```
+    holding/lwe/vigenere.html.understanding.questions[5].options[2].why:
+    contains not X, Y negation
+    ```
+
+    That is `validate` going red on prose, which reads like a bug in the linter
+    the first time you see it and is not one.
+
+    **Its reach is narrower than its authority, and that gap is the trap.** It
+    walks the `understanding` (quiz) payload and the editorial fields, so a
+    violation anywhere else on the page ships. Adding one demo to
+    `/lwe/vigenere` on 2026-08-11 put **17** violations in the diff and CI could
+    see exactly **1**: 13 em dashes (6 in visitor-facing strings, 7 in comments),
+    3 negations, one curly apostrophe. Sixteen needed fixing, one em dash was a
+    deliberate glyph (below). Fixing only the flagged line would have left 15 in
+    a file whose own prose and comments contain zero of any of them.
+
+    Note the negations, since they are the ones a regex under-counts: the linter
+    caught 1 and the rule covers 3, because its pattern needs a comma AFTER the
+    negated clause and "what runs out is the evidence, not the count of keys"
+    ends the sentence instead. Read the rule, not just the pattern.
+
+    So run the patterns over your own diff rather than waiting for the field
+    path, because the linter is a floor and the file you are editing is the
+    actual spec:
+
+    ```bash
+    git diff origin/main -- holding/ | grep '^+' | grep -nE '—|[‘’“”]|\b(delve|leverage|utili[sz]e|robust)\b'
+    ```
+
+    Two exceptions are legitimate and already in the tree, both in
+    `/lwe/vigenere`: `"—"` as the glyph for a missing value, which is how
+    `st-ioc` has always rendered an unmeasurable IoC, and the box-drawing `─` in
+    section-header comments, which is a different character the linter never
+    matches. Keep them; the point is to know which of your dashes is which.
+
 ---
 
 ## Source folder for new photos
