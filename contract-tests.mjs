@@ -369,6 +369,22 @@ test("Lens shell states the past, present, and future argument before the instru
   assert.doesNotMatch(html, /6-minute tour|Demo path/);
 });
 
+test("Lens state facts link to the evidence, not publication homepages", async () => {
+  const html = await renderLensShell().text();
+  const links = [...html.matchAll(/<div class="lx-sow-src"><a href="([^"]+)"/g)]
+    .map((match) => new URL(match[1].replaceAll("&amp;", "&")));
+
+  assert.equal(links.length, 6, "every state-of-the-web card must carry one source");
+  for (const url of links) {
+    assert.equal(url.protocol, "https:", `${url.href} must be a public source`);
+    if (url.hostname === "www.x402scan.com") {
+      assert.equal(url.pathname, "/", "x402scan's homepage is the live statistics dashboard");
+    } else {
+      assert.notEqual(url.pathname, "/", `${url.href} is a publication homepage, not evidence`);
+    }
+  }
+});
+
 
 test("track HTML renderer emits rows only", () => {
   const html = renderTrackListHtml(TRACKS);

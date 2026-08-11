@@ -522,45 +522,45 @@ async function inspectLensRequest(request, env, ctx) {
 // (lensStateOfWebPanel). Facts without a `rail` key appear in the dialog only, so
 // the rail stays one line. Deriving both from the same array is the point: the
 // headline number and the sourced claim cannot drift apart.
-const LENS_SOW_MONTH = "2026-07";
+const LENS_SOW_MONTH = "2026-08";
 const LENS_SOW_CHECKED = "checked " + LENS_SOW_MONTH;
 const LENS_SOW_FACTS = [
   {
-    stat: "57.5%",
-    rail: "of the web's HTML requests are bots",
-    claim: "Bots now make more of the web's requests than people do. Automated clients sent 57.5% of HTML requests on Cloudflare's network — the first time bots crossed half.",
-    src: "Cloudflare Radar", href: "https://radar.cloudflare.com/",
+    stat: "56.0%",
+    rail: "of HTML requests are bots",
+    claim: "Automated clients sent 56.0% of HTML page requests in Cloudflare's latest published window: 47.2% from non-AI bots, 5.8% from AI bots, and 3.0% from mixed-purpose bots.",
+    src: "Cloudflare Radar", href: "https://radar.cloudflare.com/ai-insights?dateStart=2026-04-10&dateEnd=2026-07-28",
   },
   {
-    stat: "5.6% / ~0",
-    railStat: "5.6%",
-    rail: "of top sites publish llms.txt",
-    claim: "Publishers signal, models mostly don't read. llms.txt is now published by 5.6% of the top 10k sites (up ~5× in a year), but one server-log study found 408 llms.txt hits across ~500M AI-bot visits, and Google says it ignores the file.",
-    src: "HTTP Archive", href: "https://httparchive.org/",
+    stat: "10.0% / 9.7%",
+    railStat: "10.0%",
+    rail: "of desktop pages have llms.txt",
+    claim: "HTTP Archive found an llms.txt file on 10.0% of desktop pages and 9.7% of mobile pages in June 2026. Both shares were about 4.7 times their July 2025 level.",
+    src: "HTTP Archive", href: "https://httparchive.org/reports/search-engine-optimization",
   },
   {
-    stat: "~10k servers",
-    railStat: "~10k",
+    stat: ">10k servers",
+    railStat: ">10k",
     rail: "public MCP servers",
-    claim: "One protocol won the tool layer. MCP sits under the Linux Foundation with OpenAI, Google, Microsoft, and Amazon all shipping support, and roughly 10k public servers.",
-    src: "Linux Foundation", href: "https://www.linuxfoundation.org/",
+    claim: "More than 10,000 MCP servers had been published when MCP joined the Linux Foundation's Agentic AI Foundation in December 2025.",
+    src: "Linux Foundation", href: "https://www.linuxfoundation.org/press/linux-foundation-announces-the-formation-of-the-agentic-ai-foundation",
   },
   {
-    stat: "the CLI is the new API",
-    claim: "The action layer moved to the terminal. A Q1 2026 wave of agent-native CLIs (Stripe, Ramp, Google Workspace, Vercel) each crossed 20k GitHub stars in weeks — structured commands an agent runs, not HTTP well-knowns it discovers.",
-    src: "OSS Insight", href: "https://ossinsight.io/",
+    stat: "100+ agent skills",
+    claim: "Google Workspace's CLI ships more than 100 agent skills, returns structured JSON, and builds its command surface from Google's Discovery Service at runtime.",
+    src: "Google Workspace CLI", href: "https://github.com/googleworkspace/cli",
   },
   {
-    stat: "2 partners",
-    claim: "Paying to crawl is still an experiment. A year after Cloudflare's pay-per-crawl launched, it has two named AI-side partners; unsigned crawlers get blocked, and default-blocking arrives for new domains on Sept 15, 2026.",
-    src: "Cloudflare", href: "https://blog.cloudflare.com/introducing-pay-per-crawl/",
+    stat: "2 pay-per-use partners",
+    claim: "Cloudflare is testing pay per use with Ceramic.ai and You.com, tying payment to content appearing in results instead of the number of times a crawler fetches it.",
+    src: "Cloudflare", href: "https://blog.cloudflare.com/making-ai-search-smarter/",
   },
   {
-    stat: "$24M / 75M txns",
-    railStat: "$24M",
-    rail: "moved over x402 in 30 days",
-    claim: "Agent payments are many and tiny. x402 moved about $24M across ~75M transactions in the last 30 days — roughly $0.32 each, mostly sub-dollar micropayments.",
-    src: "CoinDesk", href: "https://www.coindesk.com/",
+    stat: "$898.13K / 9.04M txns",
+    railStat: "$898K",
+    rail: "in x402 volume over 30 days",
+    claim: "x402scan recorded $898.13K of volume across 9.04 million transactions over the past 30 days. That is about $0.10 per transaction on average.",
+    src: "x402scan", href: "https://www.x402scan.com/",
   },
 ];
 
