@@ -534,6 +534,33 @@ box-shadow:2px 3px 11px -3px oklch(40% 0.05 90 / .55)}
 #axp-balloon .mono{font-family:var(--font-mono,'Courier New',monospace);font-size:10px}
 #axp-balloon .load{padding:0 12px 6px 32px;color:oklch(55% 0.02 90);font-style:italic}
 #axp-balloon .ft{padding:2px 12px 9px 32px}#axp-balloon .ft a{color:oklch(42.61% 0.2353 263.74);font-size:10.5px;text-decoration:underline}
+/* ── infotips: the shell's own tooltips (holding/infotip.js) ─────────────── */
+/* Explorer's infotip and the ToolTip control's field tip were the same pale */
+/* box with different contents, so they are one surface here. Cursor-following */
+/* like .xp-tooltip, and clamped against its own size so no rect is measured. */
+/* `.up` flips it ABOVE the cursor for anything on the taskbar, which is the */
+/* one region where the default offset would cover what is being pointed at. */
+/* z-index only matters where popover is unsupported: it has to clear the */
+/* taskbar (99999) and the tray balloon (100000), since it describes both. */
+#axp-infotip{position:fixed;inset:auto;top:0;left:0;margin:0;display:none;z-index:100001;
+transform:translate(clamp(4px,calc(var(--x) + 14px),calc(100vw - 100% - 8px)),clamp(4px,calc(var(--y) + 20px),calc(100vh - 100% - 8px)));
+background:oklch(98.92% 0.0398 96.79);color:oklch(20% 0 0);border:1px solid oklch(15% 0 0);
+font-family:var(--font-ui,Tahoma,Verdana,Geneva,sans-serif);font-size:11px;line-height:1.45;
+padding:3px 7px 4px;max-width:min(300px,calc(100vw - 16px));pointer-events:none;
+box-shadow:2px 2px 0 oklch(15% 0 0 / .15)}
+#axp-infotip.up{transform:translate(clamp(4px,calc(var(--x) + 14px),calc(100vw - 100% - 8px)),clamp(4px,calc(var(--y) - 100% - 14px),calc(100vh - 100% - 8px)))}
+#axp-infotip.anchored{position-anchor:--axp-infotip;position-area:bottom span-right;top:auto;left:auto;transform:none;margin:5px 0 0;position-try-fallbacks:flip-block,flip-inline}
+#axp-infotip.anchored.up{position-area:top span-right;margin:0 0 5px}
+@supports selector(:popover-open){#axp-infotip:popover-open{display:block}}
+#axp-infotip .n{font-weight:bold;color:oklch(15% 0 0)}
+#axp-infotip .h{color:oklch(38% 0 0)}
+/* label/value rows. The grid keeps every value on one column the way Explorer
+   did, and `auto 1fr` lets a long value wrap under itself rather than push the
+   box wider than the clamp above allows. */
+#axp-infotip dl{display:grid;grid-template-columns:auto 1fr;gap:0 8px;margin:3px 0 0;
+border-top:1px solid oklch(15% 0 0 / .18);padding-top:3px}
+#axp-infotip dt{color:oklch(45% 0 0)}
+#axp-infotip dd{margin:0;color:oklch(22% 0 0);overflow-wrap:anywhere}
 /* ── Run dialog ── */
 /* Run is a native <dialog> now: the UA owns visibility (display:none until
    [open]) and the top layer, ::backdrop is the light-dismiss surface (kept

@@ -44,6 +44,8 @@ export const ANCHOR_OK = !!(window.CSS && CSS.supports &&
  * @param {string}  [o.anchorName="--xp-tip"]  must be unique per surface on a page
  * @param {number}  [o.dismissMs=50]
  * @param {number}  [o.settleMs=60]
+ * @param {number}  [o.openMs=0]     cold-open dwell (see below). 0 = show at once.
+ * @param {number}  [o.autopopMs=0]  hide again after this long. 0 = stay until dismissed.
  */
 export function createHoist(o) {
   const node = o.node;
@@ -53,6 +55,18 @@ export function createHoist(o) {
   const anchorName = o.anchorName || "--xp-tip";
   const DISMISS_MS = o.dismissMs == null ? 50 : o.dismissMs;
   const SETTLE_MS = o.settleMs == null ? 60 : o.settleMs;
+  // Windows' two tooltip delays, and both default OFF so the content surfaces
+  // (photos, tracks, the Run preview) keep the instant show they were tuned for.
+  // A surface over CHROME wants them: the cursor crosses a taskbar or a row of
+  // desktop icons on its way somewhere else far more often than it comes to rest
+  // on one, and a tip that fires on every pass is noise. OPEN_MS is XP's initial
+  // delay (SPI_GETMOUSEHOVERTIME, 400ms), skipped while a tip is already up so
+  // sweeping along a row of buttons swaps instantly — that is XP's "reshow"
+  // behaviour, and it is what makes the delay feel like care rather than lag.
+  const OPEN_MS = o.openMs || 0;
+  // XP's autopop (5s). It also covers the one dismissal the pointer cannot: a
+  // cursor that leaves the viewport for another window fires no pointerout.
+  const AUTOPOP_MS = o.autopopMs || 0;
 
   // A dead surface still answers every method, so callers never null-check.
   const dead = { show() {}, showAnchored() {}, hide() {}, isOpen: () => false, active: () => null };
@@ -61,6 +75,7 @@ export function createHoist(o) {
   let activeTarget = null, anchoredEl = null;
   let lastX = 0, lastY = 0;
   let hideTimer = 0, scrolling = false, scrollIdle = 0;
+  let openTimer = 0, pendingTarget = null, autopopTimer = 0;
 
   // Position is two CSS custom-property writes and nothing else. No rAF, no
   // getBoundingClientRect, no resize listener: the caller's CSS clamps against
@@ -88,6 +103,7 @@ export function createHoist(o) {
   // is what keeps tracking smooth on ProMotion / Low-Power VRR — then release it
   // the instant it closes.
   const openNode = () => {
+    if (AUTOPOP_MS) { clearTimeout(autopopTimer); autopopTimer = setTimeout(hide, AUTOPOP_MS); }
     if (followPointer) node.style.willChange = "transform";
     if (supportsPopover) { if (!node.matches(":popover-open")) node.showPopover(); }
     else node.style.display = "block";
@@ -121,7 +137,12 @@ export function createHoist(o) {
     if (anchoredEl) { anchoredEl.style.removeProperty("anchor-name"); anchoredEl = null; }
     node.classList.remove("anchored");
   };
-  const hide = () => { closeNode(); dropAnchor(); activeTarget = null; };
+  const cancelOpen = () => { clearTimeout(openTimer); openTimer = 0; pendingTarget = null; };
+  const hide = () => {
+    clearTimeout(autopopTimer); autopopTimer = 0;
+    cancelOpen();
+    closeNode(); dropAnchor(); activeTarget = null;
+  };
 
   // Dismissal is deferred by a hair so hopping from one target straight across
   // the small gap to the NEXT one doesn't flash the surface off-then-on. A fresh
@@ -139,6 +160,7 @@ export function createHoist(o) {
   const show = (target, e) => {
     if (scrolling) return;
     cancelHide();
+    cancelOpen();
     dropAnchor();
     activeTarget = target;
     const html = contentFor(target);
@@ -153,6 +175,7 @@ export function createHoist(o) {
   const showAnchored = (target) => {
     if (scrolling) return;
     cancelHide();
+    cancelOpen();
     const html = contentFor(target);
     if (!html) { hide(); return; }
     dropAnchor();
@@ -166,16 +189,33 @@ export function createHoist(o) {
     openNode();
   };
 
+  // Cold-open dwell. The wait is skipped entirely while a surface is already
+  // open, so only the FIRST tip of a pass costs it. `place` reads clientX/clientY
+  // and nothing else, so the deferred show hands it a plain pair rather than
+  // holding the event object alive for 400ms.
+  const showSoon = (target, e) => {
+    if (!OPEN_MS || isOpen()) { show(target, e); return; }
+    if (target === pendingTarget) return;    // pointerover bubbles from children
+    cancelOpen();
+    pendingTarget = target;
+    const x = e.clientX, y = e.clientY;
+    openTimer = setTimeout(() => {
+      openTimer = 0; pendingTarget = null;
+      show(target, { clientX: x, clientY: y });
+    }, OPEN_MS);
+  };
+
   if (findTarget) {
     document.addEventListener("pointerover", (e) => {
       const target = findTarget(e.target);
       if (!target) {
-        if (activeTarget) scheduleHide();   // only when open — no timer churn on plain moves
+        cancelOpen();                        // left the target before the dwell was up
+        if (activeTarget) scheduleHide();    // only when open — no timer churn on plain moves
         return;
       }
       cancelHide();                          // re-entered a target → keep it up
-      if (target === activeTarget) return;
-      show(target, e);
+      if (target === activeTarget) { cancelOpen(); return; }
+      showSoon(target, e);
     }, { passive: true });
 
     // passive: the browser dispatches without waiting on us, and the work is
@@ -190,6 +230,7 @@ export function createHoist(o) {
       const to = findTarget(e.relatedTarget);
       if (to === from) return;   // still inside the same target
       if (to) return;            // moving to another valid target: let pointerover swap without a flicker
+      cancelOpen();              // a dwell in progress ends with the hover that started it
       scheduleHide();
     }, { passive: true });
 
@@ -212,6 +253,7 @@ export function createHoist(o) {
     };
     document.addEventListener("scroll", () => {
       scrolling = true;
+      cancelOpen();
       if (isOpen()) hide();
       clearTimeout(scrollIdle);
       scrollIdle = setTimeout(() => { scrolling = false; reshowUnderCursor(); }, SETTLE_MS);

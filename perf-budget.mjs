@@ -156,7 +156,7 @@ const WORKER_ALERT_GROWTH = 0.25;
 const WORKER_STARTUP_ALERT_MS = 50;
 const TWINS = [
   "nav.src.js", "notepad.src.js", "lens.src.js", "lens-browser.src.js",
-  "quiz.src.js", "tooltip.src.js", "hoist.src.js", "luna.src.css",
+  "quiz.src.js", "tooltip.src.js", "infotip.src.js", "hoist.src.js", "luna.src.css",
   "lwe-base.src.css",
 ];
 const HTML_TWIN = "index.src.html";

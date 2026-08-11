@@ -1643,6 +1643,80 @@ test("outbound self-link list stays in sync with the desktop shell profiles", as
   }
 });
 
+// ── shell infotips ──────────────────────────────────────────────────────────
+// infotip.js cannot be imported here: it reaches /hoist.js by absolute
+// specifier, which node's loader will not resolve (the same wall gotcha 16
+// describes). So these assert on the source text, and each one guards a
+// failure that would ship silently.
+
+test("\"what was hovered\" is answered in exactly one place", async () => {
+  const nav = await readFile(new URL("holding/nav.js", import.meta.url), "utf8");
+  const tip = await readFile(new URL("holding/infotip.js", import.meta.url), "utf8");
+  // nav.js's loader has to match the same elements the module does, or the
+  // first hover over something it forgot never loads the module at all — and
+  // the failure is a tooltip that works everywhere except where you look first.
+  // So the matcher is a function nav.js passes over, not a selector each side
+  // keeps a copy of.
+  assert.match(nav, /var INFOTIP_TARGETS = \[/, "nav.js owns the target selector");
+  assert.match(nav, /var INFOTIP_SKIP = /, "and the list of hovers a richer surface already owns");
+  assert.match(nav, /find: targetFor/, "and hands the matcher itself to the module");
+  assert.match(tip, /const findTarget = o\.find;/, "infotip.js takes the matcher it is given");
+  // It still reads the DOM for per-family facts (which builder, and whether the
+  // target sits on the taskbar), and those are single selectors. What it must
+  // never grow is a LIST — that is the copy this test exists to stop.
+  assert.doesNotMatch(tip, /\.axp-\w[^\n"]*,[^\n"]*\.axp-/, "a second target list in infotip.js is the drift this test exists to stop");
+});
+
+test("the infotip yields to every richer hover surface on the page", async () => {
+  const nav = await readFile(new URL("holding/nav.js", import.meta.url), "utf8");
+  const skip = (nav.match(/var INFOTIP_SKIP = "([^"]+)"/) || [, ""])[1].split(",");
+  // Each of these draws its own card from the same engine, and `.lx-term` is
+  // the sharp one: those ship a `title` as their no-JS fallback and lens.js
+  // strips it once its surface is live, so without the skip a race between two
+  // lazy modules decides whether you get the glossary card or a flat line.
+  for (const owned of [".lx-term", ".photos a", ".np-list li", ".np-artist-link", ".car-link", ".ev[data-cover]"]) {
+    assert.ok(skip.includes(owned), `${owned} has its own hover card — the infotip must not double up on it`);
+  }
+});
+
+test("every string an infotip prints is escaped on the way in", async () => {
+  const tip = await readFile(new URL("holding/infotip.js", import.meta.url), "utf8");
+  // The surface renders `title` text from ANY page now, and some of those
+  // strings are not ours: /inbox carries webmention titles, /around and
+  // /reading carry text from sites this server crawled. innerHTML with one
+  // un-escaped hole would turn a remote string into markup on every page that
+  // loads the shell. Verified in a browser too (a title holding
+  // `<img src=x onerror=alert(1)>` renders as text and creates no element),
+  // but the source assertion is what fails a future edit.
+  for (const hole of [/<div class="n">\$\{esc\(/, /<div class="h">\$\{esc\(/, /<dt>\$\{esc\(/, /<dd>\$\{esc\(/]) {
+    assert.match(tip, hole, `${hole} must interpolate through esc()`);
+  }
+  const printed = tip.match(/<div class="n">\$\{[^}]+\}/g) || [];
+  assert.ok(printed.length >= 2 && printed.every((p) => p.includes("esc(")),
+    "every name line must be escaped, including any added later");
+});
+
+test("an infotip row is dropped rather than filled in", async () => {
+  const tip = await readFile(new URL("holding/infotip.js", import.meta.url), "utf8");
+  // Same rule the photo tooltip follows: a missing value prints nothing. A
+  // card that rendered "Contains: 0 pages" or "Colo: unknown" would be stating
+  // something the shell does not know, on chrome describing the shell.
+  assert.match(tip, /\.filter\(\(p\) => p && p\[1\]\)/, "card() must drop pairs with no value");
+  assert.doesNotMatch(tip, /"unknown"|"n\/a"|\|\| 0\)\s*\+\s*" page/i, "no placeholder stands in for a value");
+});
+
+test("the shell infotip ships minified, hashed, and with a readable twin", async () => {
+  const build = await readFile(new URL("build.mjs", import.meta.url), "utf8");
+  // Missing from SHELLS it would ship unminified with no /infotip.src.js twin;
+  // missing from STRING_ASSETS its import specifier would stay unhashed and
+  // the module would serve at max-age=300 forever beside its immutable peers.
+  assert.match(build, /\["infotip\.js",\s*"\/infotip\.src\.js"/, "infotip.js belongs in SHELLS");
+  assert.match(build, /\{ file: "\/infotip\.js",\s*base: "infotip"/, "and in STRING_ASSETS, so nav.js's import() is repointed");
+  const shells = build.slice(build.indexOf("const SHELLS = ["));
+  assert.ok(shells.indexOf('"/hoist.js"') < shells.indexOf('{ file: "/infotip.js"'),
+    "hoist must be hashed before infotip, or infotip's /a/ copy keeps the unhashed specifier");
+});
+
 test("outbound endpoint discovery follows the spec's precedence", () => {
   const base = "https://example.com/post";
   // Link header wins over markup.

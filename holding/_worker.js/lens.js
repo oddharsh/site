@@ -1118,7 +1118,8 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
     <form class="lx-addr" id="lx-form" action="/lens" method="get">
       <span class="lx-globe" aria-hidden="true"></span>
       <label class="lx-addr-label" for="lx-url">Address</label>
-      <input id="lx-url" class="lx-url" type="text" name="url" value="${escAttr(value)}" inputmode="url" placeholder="https://example.com  —  paste any URL" autocomplete="off" spellcheck="false">
+      <input id="lx-url" class="lx-url" type="text" name="url" value="${escAttr(value)}" inputmode="url" placeholder="https://example.com  —  paste any URL" autocomplete="off" spellcheck="false"
+             title="Any http(s) URL. This server fetches it as AadharshBot and shows you what came back.">
       <button class="lx-go" type="submit">Go</button>
       <button class="lx-go lx-vs-toggle" type="button" id="lx-vs-toggle" title="Compare two sites through one rubric" aria-expanded="${vsActive ? "true" : "false"}" aria-controls="lx-addr-vs">vs&hellip;</button>
     </form>
@@ -1129,7 +1130,8 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
     <div class="lx-addr lx-addr-vs${vsActive ? "" : " lx-off"}" id="lx-addr-vs">
       <span class="lx-globe" aria-hidden="true"></span>
       <label class="lx-addr-label" for="lx-url-vs">vs</label>
-      <input id="lx-url-vs" class="lx-url" type="text" form="lx-form" name="vs" value="${escAttr(vsValue)}" inputmode="url" placeholder="https://the-other-site.com  —  head-to-head, one rubric" autocomplete="off" spellcheck="false">
+      <input id="lx-url-vs" class="lx-url" type="text" form="lx-form" name="vs" value="${escAttr(vsValue)}" inputmode="url" placeholder="https://the-other-site.com  —  head-to-head, one rubric" autocomplete="off" spellcheck="false"
+             title="A second URL. Both are scanned against one rubric, side by side.">
       <button class="lx-go lx-vs-toggle" type="button" id="lx-vs-close" title="Back to a single scan">&#215;</button>
     </div>
     <div class="lx-chips">

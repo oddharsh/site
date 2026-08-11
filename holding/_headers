@@ -330,6 +330,12 @@
 /tooltip.js
   Cache-Control: public, max-age=300, stale-while-revalidate=86400, s-maxage=86400
 
+# infotip.js — the shell's tooltip layer, loaded by nav.js on the first hover
+# over chrome. Same class and same rule: served pages ask for the /a/<hash>
+# twin, and this covers dev plus any HTML cached before that hash existed.
+/infotip.js
+  Cache-Control: public, max-age=300, stale-while-revalidate=86400, s-maxage=86400
+
 # hoist.js — the shared tooltip/popover engine tooltip.js + notepad.js import,
 # and lens-browser.js — the /lens browser-view island. Both were missing a rule
 # and shipped the platform default (max-age=0, must-revalidate), so hoist.js
