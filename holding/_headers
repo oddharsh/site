@@ -358,6 +358,18 @@
 /lens-browser.js
   Cache-Control: public, max-age=300, stale-while-revalidate=86400, s-maxage=86400
 
+# the other two /lens islands, same class and same rule. lens-reader.js had been
+# missing one since it shipped — exactly the omission the note above describes
+# fixing for hoist.js and lens-browser.js, repeated on the next island added.
+# The pattern is worth naming: a new on-demand island inherits the platform
+# default (max-age=0, must-revalidate) unless someone remembers this file, and
+# the symptom is a silent 304 per load rather than anything that looks broken.
+/lens-reader.js
+  Cache-Control: public, max-age=300, stale-while-revalidate=86400, s-maxage=86400
+
+/lens-wire.js
+  Cache-Control: public, max-age=300, stale-while-revalidate=86400, s-maxage=86400
+
 # the retired service worker's unregister stub (v136): revalidates on every
 # check so installed copies pick it up fast, and must keep serving 200 for a
 # year+ (an old SW whose script 404s lingers forever). Service-Worker-Allowed

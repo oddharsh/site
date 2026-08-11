@@ -169,6 +169,7 @@ export const LENS_BUDGETS = {
   shot:    { binding: "LENS_RL_SHOT",    max: 3  },
   compare: { binding: "LENS_RL_COMPARE", max: 4  },
   browser: { binding: "LENS_RL_BROWSER", max: 3  },
+  wire:    { binding: "LENS_RL_WIRE",    max: 2  },
   // The shared ceiling. Keyed on a CONSTANT rather than the caller's IP, so
   // every browser-consuming route bills against one bucket and no single
   // visitor can spend the account's allowance.
@@ -278,6 +279,7 @@ const LENS_TAB_LABELS = {
   readiness: "Agent-ready?",
   anatomy: "Raw response",
   reader: "Reader's guess",
+  wire: "What it costs",
   structured: "What it claims",
   ai: "Model cost",
   terms: "Who's allowed",
@@ -289,8 +291,13 @@ const LENS_TAB_LABELS = {
 // `reader` sits second on purpose — it is one reader-mode extractor's opinion of
 // the very bytes the tab before it just showed, and the pairing is what makes
 // the gap between them legible. The tab strip renders from this array, so the
-// order lives in one place rather than in seven hand-written buttons.
-export const LENS_TAB_ORDER = ["anatomy", "reader", "structured", "ai", "terms", "discovery", "readiness"];
+// order lives in one place rather than in eight hand-written buttons.
+//
+// `wire` sits third for the same pairing reason one step out. The first two tabs
+// argue about what the DOCUMENT is; wire is the first tab that is not about the
+// document at all, and putting it directly after them is what makes "all of that
+// argument was 4% of what the page actually cost you" land.
+export const LENS_TAB_ORDER = ["anatomy", "reader", "wire", "structured", "ai", "terms", "discovery", "readiness"];
 
 function lensState(url) {
   const validViews = ["both", "human", "machine", "browser", "delta"];
@@ -851,6 +858,40 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 .lx-reader-recovery li { display:grid; grid-template-columns:minmax(120px,.8fr) minmax(150px,1.2fr); gap:8px; padding:5px 7px; border-left:3px solid oklch(70% 0.07 250); background:oklch(98% 0.01 250); font-size:8.3pt; }
 .lx-reader-recovery b { color:oklch(35% 0.07 255); }
 .lx-reader-recovery span { color:oklch(50% 0 0); }
+/* Wire lens. Same opt-in affordance as Reader (.lx-browser-run), warmer hue so
+   the two adjacent opt-in tabs are not mistaken for each other at a glance.
+   The split bar is the one piece of chart on this page: two spans in a track,
+   widths set inline from the percentage, because a 2-segment bar does not earn
+   a charting anything and the numbers are printed beside it regardless. */
+.lx-wire-intro { padding:10px 9px; border:1px solid oklch(78% 0.06 30); background:linear-gradient(180deg,oklch(98% 0.02 30),oklch(95% 0.04 30)); color:oklch(34% 0.05 25); font-size:9pt; line-height:1.45; }
+.lx-wire-intro b { color:oklch(38% 0.11 25); }
+.lx-wire-credit { margin-top:6px; opacity:0.85; }
+.lx-wire-split { margin:6px 0 8px; }
+.lx-wire-bar { display:flex; height:18px; border:1px solid oklch(62% 0.02 250); background:oklch(94% 0 0); overflow:hidden; }
+.lx-wire-bar span { display:block; height:100%; }
+.lx-wire-bar .lx-wire-first, .lx-wire-legend i.lx-wire-first { background:linear-gradient(180deg,oklch(74% 0.12 240),oklch(58% 0.15 245)); }
+.lx-wire-bar .lx-wire-third, .lx-wire-legend i.lx-wire-third { background:linear-gradient(180deg,oklch(74% 0.14 35),oklch(58% 0.17 30)); }
+.lx-wire-legend { display:flex; flex-wrap:wrap; gap:4px 14px; margin-top:5px; font-size:8.2pt; color:oklch(42% 0.02 250); }
+.lx-wire-legend span { display:flex; align-items:center; gap:5px; }
+.lx-wire-legend i { display:inline-block; width:10px; height:10px; border:1px solid oklch(55% 0.02 250); }
+.lx-wire-types { list-style:none; margin:4px 0 2px; padding:0; display:grid; gap:3px; }
+.lx-wire-types li { display:grid; grid-template-columns:minmax(96px,.6fr) 1fr minmax(96px,auto); align-items:center; gap:8px; font-size:8.3pt; }
+.lx-wire-types b { color:oklch(35% 0.05 255); font-weight:normal; }
+.lx-wire-track { display:block; height:9px; background:oklch(93% 0 0); border:1px solid oklch(80% 0.01 250); }
+.lx-wire-track i { display:block; height:100%; background:linear-gradient(180deg,oklch(76% 0.1 240),oklch(60% 0.13 245)); }
+.lx-wire-n { text-align:right; color:oklch(45% 0.02 250); font-variant-numeric:tabular-nums; }
+.lx-wire-dot { display:inline-block; width:7px; height:7px; margin-right:5px; border-radius:50%; vertical-align:middle; }
+.lx-wire-dot.third { background:oklch(62% 0.17 30); }
+.lx-wire-dot.first { background:oklch(64% 0.14 245); }
+.lx-wire-hosts td, .lx-wire-list td { font-variant-numeric:tabular-nums; }
+.lx-wire-hosts code, .lx-wire-list code { font:8.2pt "Courier New",monospace; }
+/* The row list is the one place here that can outgrow the pane, so it scrolls
+   inside its own box rather than widening the window (the site-wide rule). */
+.lx-wire-scroll { max-height:320px; overflow:auto; border:1px solid oklch(84% 0.01 250); }
+.lx-wire-list { width:100%; }
+.lx-wire-list thead th { position:sticky; top:0; background:oklch(93% 0.01 250); font-size:8pt; text-align:left; }
+.lx-wire-row.is-third td:first-child { border-left:3px solid oklch(70% 0.15 30); }
+.lx-wire-row.is-failed { background:oklch(96% 0.04 25); }
 
 /* rendered machine content */
 .lx-h-title { font-family:"Trebuchet MS",Verdana,sans-serif; font-size:13pt; font-weight:bold; color:oklch(30% 0.06 255); margin:0 0 8px; }

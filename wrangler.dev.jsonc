@@ -55,8 +55,11 @@
       "/reading", "/updates", "/updates.json",
     "/perf",
     "/perf.json", "/restore",
-      "/lens", "/lens/", "/lens/fetch", "/lens/shot", "/lens/browser", "/lens/compare.json",
-      "/lens/census", "/lens/census.json", "/mcp", "/terminal", "/terminal/*", // One wildcard per tool covers both the bare route and its .txt twin.
+      // Folded to a wildcard alongside wrangler.jsonc — see the long note there.
+      // Nothing static lives under /lens/, and the production config had no room
+      // for a ninth exact row.
+      "/lens", "/lens/*",
+      "/mcp", "/terminal", "/terminal/*", // One wildcard per tool covers both the bare route and its .txt twin.
       // NOT cosmetic: run_worker_first caps at 100 RULES (wrangler refuses to
       // boot at 101), and twelve exact entries put this config at 102. A site
       // can only claim so many paths from the asset layer, which is a real
@@ -134,7 +137,8 @@
     { "name": "LENS_RL_SHOT",    "namespace_id": "1002", "simple": { "limit": 3,  "period": 60 } },
     { "name": "LENS_RL_COMPARE", "namespace_id": "1003", "simple": { "limit": 4,  "period": 60 } },
     { "name": "LENS_RL_BROWSER", "namespace_id": "1004", "simple": { "limit": 3,  "period": 60 } },
-    { "name": "LENS_RL_BROWSER_ALL", "namespace_id": "1005", "simple": { "limit": 4, "period": 60 } }
+    { "name": "LENS_RL_BROWSER_ALL", "namespace_id": "1005", "simple": { "limit": 4, "period": 60 } },
+    { "name": "LENS_RL_WIRE", "namespace_id": "1006", "simple": { "limit": 2, "period": 60 } }
   ],
   "vars": {
     // Not a secret: an account id is an identifier, and this one is already

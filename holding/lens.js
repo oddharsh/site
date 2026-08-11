@@ -43,9 +43,11 @@
 
   // Must match LENS_TAB_LABELS in holding/_worker.js/lens.js: the tab labels are
   // phrased as the question each lens answers, so the tab row reads as a menu.
-  var LENS_LABEL = { readiness: "Agent-ready?", anatomy: "Raw response", reader: "Reader's guess", structured: "What it claims", ai: "Model cost", terms: "Who's allowed", discovery: "Agent doors" };
+  var LENS_LABEL = { readiness: "Agent-ready?", anatomy: "Raw response", reader: "Reader's guess", wire: "What it costs", structured: "What it claims", ai: "Model cost", terms: "Who's allowed", discovery: "Agent doors" };
   var readerData = null;   // last /lens/read extraction, null until asked for
   var readerBusy = false;
+  var wireData = null;     // last /lens/wire trace, null until asked for
+  var wireBusy = false;
   var cloudflareData = null; // normalized result from Cloudflare's public scanner
   var cloudflareBusy = false;
 
@@ -258,7 +260,13 @@
   function readUrlState() {
     var p = new URLSearchParams(location.search);
     var views = ["both", "human", "machine", "browser", "delta"];
-    var lenses = ["readiness", "anatomy", "structured", "ai", "terms", "discovery"];
+    // DERIVED from LENS_LABEL rather than listed again. This was a hand-written
+    // array of six and the tab strip had grown to eight, so `?lens=reader` and
+    // `?lens=wire` silently fell back to Raw response — a deep link that looks
+    // like it worked, on the tabs most worth linking to. The label map is the
+    // client's own source of truth for which lenses exist, so reading its keys
+    // is the one spelling that cannot fall behind the strip again.
+    var lenses = Object.keys(LENS_LABEL);
     // Seed every key false, then flip the ones named in ?cf=. Both callers REPLACE
     // `counterfactuals` with this object, and the toggle handler guards on
     // hasOwnProperty — so returning only the keys ?cf= mentioned (i.e. none, on a
@@ -322,8 +330,10 @@
     browserRecipeData = null;
     readerData = null;
     cloudflareData = null;
+    wireData = null;
     readerBusy = false;
     cloudflareBusy = false;
+    wireBusy = false;
     machineBody.innerHTML = '<div class="lx-empty">' + esc(msg) + "</div>";
     humanBody.innerHTML = '<div class="lx-empty">No page to show.</div>';
     renderBrowser();
@@ -341,8 +351,10 @@
     browserRecipeData = null;
     readerData = null;
     cloudflareData = null;
+    wireData = null;
     readerBusy = false;
     cloudflareBusy = false;
+    wireBusy = false;
     urlInput.value = url;
     // A new site is a fresh page: don't carry the last scan's Delta switches onto
     // it (a markdown/contract simulation from site A silently misrepresenting site
@@ -761,6 +773,26 @@
         "status": rd == null ? "not run — this lens costs a second fetch" : "extraction failed",
         "what it is": "a third-party extractor's opinion, not the served bytes",
         "engine": "defuddle (MIT), in its own Worker",
+      };
+    } else if (lens === "wire") {
+      // Same reason the reader branch exists: without it `wire` falls off the end
+      // of the chain into the Discovery focus and captions the pane with the
+      // wrong question.
+      var wd = wireData;
+      var third = wd && wd.ok ? wd.thirdParty.bytesPct : null;
+      title = "Wire focus";
+      badgeData = { text: wd == null ? "not run" : !wd.ok ? "failed" : third + "% third-party",
+        kind: wd == null ? "" : !wd.ok ? "warn" : third >= 60 ? "warn" : third >= 30 ? "" : "ok" };
+      caption = "What loading this page actually spends, and how much of it goes to somebody who wrote none of it.";
+      rows = wd && wd.ok ? {
+        "requests": wd.requests + " to " + wd.hostTotal + " host" + (wd.hostTotal === 1 ? "" : "s"),
+        "transferred": bytes(wd.bytes),
+        "third-party": wd.thirdParty.requests + " requests · " + bytes(wd.thirdParty.bytes),
+        "load": wd.loadFired ? wd.navMs + " ms" : "load event never fired",
+      } : {
+        "status": wd == null ? "not run — this lens costs a whole browser instance" : "the trace failed",
+        "what it is": "one cold load recorded over CDP, as a declared bot",
+        "why it is opt-in": "ten browser-minutes a day, shared with every other browser lens",
       };
     } else if (lens === "structured") {
       title = "Structured focus";
@@ -1215,6 +1247,7 @@
     LENS_FN.readiness = lensReadiness;
     LENS_FN.anatomy = lensAnatomy;
     LENS_FN.reader = lensReader;
+    LENS_FN.wire = lensWire;
     LENS_FN.structured = lensStructured;
     LENS_FN.ai = lensAI;
     LENS_FN.terms = lensTerms;
@@ -1232,6 +1265,8 @@
     if (lens === "readiness") bindReadinessActions();
     var readerBtn = machineBody.querySelector("#lx-reader-run");
     if (readerBtn) readerBtn.addEventListener("click", runReader);
+    var wireBtn = machineBody.querySelector("#lx-wire-run");
+    if (wireBtn) wireBtn.addEventListener("click", runWire);
     var scoreBtn = machineBody.querySelector(".lx-verdict-score");
     if (scoreBtn) scoreBtn.addEventListener("click", function () { setLens("readiness"); });
     if (lens === "readiness" && view !== "delta") setTimeout(ensureReadinessSources, 0);
@@ -1279,6 +1314,55 @@
     script.onerror = function () {
       if (!data || (data.finalUrl || data.url) !== targetUrl) return;
       readerBusy = false; renderMachine();
+    };
+    document.head.appendChild(script);
+  }
+
+  // The Wire lens. Same three-state shape as Reader and the same lazy module,
+  // for a different reason: Reader costs a second FETCH, this costs a browser
+  // INSTANCE out of an allowance of ten minutes a day for the whole account. So
+  // it is opt-in on its own tab and, unlike Reader, nothing else runs it
+  // automatically — Agent-ready? deliberately does not pull it in, because a
+  // score that quietly spends the site's browser budget every time somebody
+  // opens a tab is a score nobody can afford to look at.
+  function lensWire() {
+    if (window.LensWire) return window.LensWire.mount(wireData, wireBusy, data);
+    // Pre-module fallback, self-contained because the module may never arrive.
+    return section("What it costs", { text: "not run" },
+      "Every request the page actually makes, and who receives them.",
+      '<div class="lx-wire-intro">Every other lens reads the document. This one records the load: each request the page ' +
+      'fires, its bytes on the wire, and which host got it.' +
+      '<button class="lx-browser-run" type="button" id="lx-wire-run">Record the load</button></div>');
+  }
+
+  function runWire() {
+    if (wireBusy || !data) return;
+    var targetUrl = data.finalUrl || data.url;
+    wireBusy = true;
+    renderMachine();
+    function loaded() {
+      // Every callback re-checks that the scan it was started for is still the
+      // one on screen. A wire trace is the slowest thing on this page, so a
+      // visitor who types a second URL mid-record is the normal case rather than
+      // the edge one, and a late reply must not paint site A's waterfall over
+      // site B's scan.
+      if (!data || (data.finalUrl || data.url) !== targetUrl) return;
+      if (!window.LensWire) { wireBusy = false; renderMachine(); return; }
+      window.LensWire.run(data, function (json) {
+        if (!data || (data.finalUrl || data.url) !== targetUrl) return;
+        wireBusy = false; wireData = json; renderMachine(); renderStatus();
+      }, function () {
+        if (!data || (data.finalUrl || data.url) !== targetUrl) return;
+        wireBusy = false; renderMachine();
+      });
+    }
+    if (window.LensWire) { loaded(); return; }
+    var script = document.createElement("script");
+    script.src = "/lens-wire.js?v=1";
+    script.onload = loaded;
+    script.onerror = function () {
+      if (!data || (data.finalUrl || data.url) !== targetUrl) return;
+      wireBusy = false; renderMachine();
     };
     document.head.appendChild(script);
   }
@@ -1689,6 +1773,11 @@
         note: "What a reader-mode extractor thinks this page is, and how much of it that costs.",
         rows: ["Defuddle's extraction, from its own Worker", "the gap: words as served against words kept", "control labels that survived, which read as prose to an agent"]
       },
+      wire: {
+        title: "What it costs",
+        note: "Every request the page makes, and how much of the weight belongs to somebody else.",
+        rows: ["the third-party share of transfer bytes", "every host that received a request", "the load in order, recorded over CDP"]
+      },
       structured: {
         title: "Structured",
         note: "The entities and relationships a parser can lift from the markup.",
@@ -1900,8 +1989,10 @@
       browserRecipeData = null;
       readerData = null;
       cloudflareData = null;
+      wireData = null;
       readerBusy = false;
       cloudflareBusy = false;
+      wireBusy = false;
       humanBody.innerHTML = '<div class="lx-empty">Paste any URL above.<span>You get the page a person sees, the raw file a machine gets instead, and what that difference costs.</span></div>';
       machineBody.innerHTML = '<div class="lx-empty">The markup, metadata, and machine directives land here.</div>';
       renderBrowser();

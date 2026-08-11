@@ -20,6 +20,7 @@ import { countCrawlerHit, handleLedger, handleLedgerJson } from "./ledger.js";
 import { countSpeculativeLoad, handlePrefetchActivation } from "./speculation.js";
 import { handleRumCollect, handleRumScript } from "./rum.js";
 import { handleLens, handleLensBrowser, handleLensCompare, handleLensFetch, handleLensShot } from "./lens.js";
+import { handleLensWire } from "./lens-wire.js";
 import { serveAssetWith404Clamp, serveFreshAsset, servePrecompressedShell, serveStaticPage } from "./lib/assets.js";
 import { BOT_UA } from "./lib/botauth.js";
 import { CANONICAL_HOST, PAGE_CACHE_CONTROL, isCanonicalHost } from "./lib/const.js";
@@ -350,6 +351,7 @@ const ROUTE_TABLE = [
   ["/lens/fetch", handleLensFetch],
   ["/lens/shot", handleLensShot],
   ["/lens/browser", handleLensBrowser],
+  ["/lens/wire", handleLensWire],
   ["/lens/compare.json", handleLensCompare],
   ["/lens/census", handleCensus],
   ["/lens/census.json", handleCensusJson],
