@@ -167,10 +167,29 @@ async function productionAlias() {
 // `workers/alias` is the branch a build came from and the only branch signal a
 // version carries — the objects hold no commit sha (checked against the live
 // API, not assumed). So the alias is what this filters on.
+// Memoized, because two things read it now: the alias filter below, and the
+// freshness check, which needs `created_on` for whatever target was resolved —
+// including one passed as `--version`, where newestVersion() never runs.
+let versionListCache = null;
+async function versionList() {
+  if (!versionListCache) {
+    const list = await wrangler(["versions", "list", "--json"], { json: true });
+    if (!Array.isArray(list) || !list.length) die("no uploaded versions found");
+    versionListCache = list;
+  }
+  return versionListCache;
+}
+
+function createdOnFor(list, id) {
+  const short = String(id).slice(0, 8);
+  const raw = list.find((v) => String(v.id).slice(0, 8) === short)?.metadata?.created_on;
+  const at = raw ? new Date(raw) : null;
+  return at && !Number.isNaN(at.getTime()) ? at : null;
+}
+
 async function newestVersion() {
   const productionAliasName = await productionAlias();
-  const list = await wrangler(["versions", "list", "--json"], { json: true });
-  if (!Array.isArray(list) || !list.length) die("no uploaded versions found");
+  const list = await versionList();
   // wrangler lists newest first; sort defensively on the timestamp it carries.
   const sorted = [...list].sort((a, b) =>
     String(b.metadata?.created_on || "").localeCompare(String(a.metadata?.created_on || "")));
@@ -282,6 +301,89 @@ function countMatching(seen, id) {
   return n;
 }
 
+// ------------------------------------------------------- target freshness ----
+
+// WHY. Workers Builds takes a couple of minutes to upload after a merge, and a
+// ramp inside that window silently targets the PREVIOUS release. Nothing
+// downstream can catch it: the version it picks is a legitimate production
+// build, it has the production alias, traffic moves, the sampler sees 200s, and
+// the run reports success. The only evidence is a timestamp nobody was
+// comparing.
+//
+// It happened TWICE on 2026-08-10, both times to a change that had just merged.
+// #316's fix ramped `4b447b34`, uploaded at 21:16:17Z, against a merge at
+// 21:21:18Z — five minutes older than the commit it was supposed to ship, and
+// the ramp said `done. 4b447b34 is at 100%`.
+//
+// So compare the target's `created_on` against the local HEAD's COMMIT time.
+// Committer time is when the squash-merge landed on main, and Workers Builds
+// uploads strictly after that, so a target older than HEAD cannot contain HEAD.
+//
+// Deliberately a WARNING and not a refusal. Ramping something older than HEAD is
+// legitimate more than once here: re-ramping the serving version to write a
+// missed changelog row (gotcha 24), parking an older build while a fix lands, or
+// running from a tree that is simply ahead of production. A refusal would block
+// the repair path this note exists to describe.
+//
+// The healthy case PRINTS TOO. Silence is what let this through twice, and a
+// line saying the target was built after HEAD is the difference between "the
+// check passed" and "the check never ran" — the same reason `rn.art.warm`
+// reports `already` alongside `warmed`.
+async function headCommit() {
+  try {
+    const { stdout } = await exec("git", ["log", "-1", "--format=%h %cI"], { env: process.env });
+    const [sha, iso] = stdout.trim().split(" ");
+    const at = new Date(iso);
+    return sha && !Number.isNaN(at.getTime()) ? { sha, at } : null;
+  } catch {
+    // No git, no repo, no HEAD: the check simply does not apply. A ramp must
+    // never fail because a workstation is arranged unusually.
+    return null;
+  }
+}
+
+function humanGap(ms) {
+  const s = Math.round(Math.abs(ms) / 1000);
+  if (s < 90) return `${s}s`;
+  const m = Math.round(s / 60);
+  return m < 90 ? `${m}m` : `${(m / 60).toFixed(1)}h`;
+}
+
+async function reportTargetFreshness(targetId) {
+  const [head, list] = await Promise.all([headCommit(), versionList()]);
+  const built = createdOnFor(list, targetId);
+  // Name WHICH input was missing. The two causes want different responses, and
+  // one line saying "unknown" for both sends you looking in the wrong place.
+  if (!head) {
+    console.log("freshness:        unknown (no git HEAD here)\n");
+    return;
+  }
+  if (!built) {
+    // `wrangler versions list` is hard-capped at 10 with no pagination, so any
+    // target older than the last ten uploads lands here. That is not an error,
+    // and on a busy day it is the normal answer for a deliberately old target.
+    console.log(
+      `freshness:        unknown (${String(targetId).slice(0, 8)} is not among the ` +
+      `${list.length} versions wrangler lists, so it has no timestamp to compare)\n`);
+    return;
+  }
+  const gap = built.getTime() - head.at.getTime();
+  if (gap >= 0) {
+    console.log(`freshness:        built ${humanGap(gap)} AFTER HEAD ${head.sha}\n`);
+    return;
+  }
+  console.log(
+    `\n  ⚠ STALE TARGET: ${String(targetId).slice(0, 8)} was built ${humanGap(gap)} BEFORE your HEAD commit.\n` +
+    `\n    HEAD    ${head.sha}  committed ${head.at.toISOString()}` +
+    `\n    target  ${String(targetId).slice(0, 8)}  built     ${built.toISOString()}\n` +
+    `\n    A version uploaded before a commit cannot contain it. If you just merged,` +
+    `\n    Workers Builds has probably not finished uploading — wait a couple of` +
+    `\n    minutes and re-run --dry-run until this line clears.\n` +
+    `\n    Ramp anyway only if you MEAN to serve an older build (a rollback, or` +
+    `\n    re-ramping the serving version to write a missed changelog row).\n`,
+  );
+}
+
 // ------------------------------------------------------------------ run ----
 
 function die(message) {
@@ -331,7 +433,11 @@ if (steps.some((s) => !Number.isFinite(s) || s <= 0 || s > 100)) die(`bad steps:
 
 console.log(`target version:   ${target.slice(0, 8)}`);
 console.log(`serving now:      ${activeIds || "(nothing)"}`);
-console.log(`ramp:             ${steps.join("% -> ")}%\n`);
+console.log(`ramp:             ${steps.join("% -> ")}%`);
+// Before the dry-run exit, so it prints on BOTH paths. A warning that only
+// appears in --dry-run is worth nothing on the run that skips the dry run, and
+// skipping it is exactly what someone does when they are moving quickly.
+await reportTargetFreshness(target);
 
 // Resolve and print the target, move nothing. The point is to make the version
 // choice READABLE before it is acted on: the bug this flag ships with was one

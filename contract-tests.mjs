@@ -5124,6 +5124,26 @@ test("the ramp never double-parses wrangler's already-parsed JSON", async () => 
   assert.ok(/return json \? JSON\.parse\(stdout\) : stdout;/.test(src),
     "wrangler() must keep parsing when { json: true } — the call site depends on it");
 
+  // FRESHNESS. Workers Builds uploads a couple of minutes after a merge, and a
+  // ramp inside that window targets the PREVIOUS release while every downstream
+  // check passes. It happened twice on 2026-08-10. The check compares the
+  // target's created_on against HEAD's commit time, and the ONE thing worth
+  // pinning is WHERE it is called: before the --dry-run exit, so it prints on
+  // both paths. A warning that only appears in --dry-run is worth nothing on the
+  // run that skips it, and skipping it is exactly what a hurry looks like.
+  const freshnessAt = src.indexOf("await reportTargetFreshness(");
+  const dryRunExitAt = src.indexOf('if (has("dry-run"))');
+  assert.ok(freshnessAt > 0, "the ramp must report target freshness");
+  assert.ok(dryRunExitAt > 0, "the --dry-run early exit must still exist");
+  assert.ok(freshnessAt < dryRunExitAt,
+    "reportTargetFreshness must run BEFORE the --dry-run exit, or a real ramp loses the warning");
+
+  // It warns and does not refuse, on purpose: ramping something older than HEAD
+  // is legitimate for a rollback and for re-ramping the serving version to write
+  // a missed changelog row (gotcha 24). A die() there would block that repair.
+  assert.equal(/STALE TARGET[\s\S]{0,700}?\bdie\(/.test(src), false,
+    "a stale target must warn, never die — that would block the gotcha-24 repair path");
+
   // And the diagnostic must not name a cause. It covers a file read, a spawn and
   // a shape check; blaming D1 sent the reader to check a healthy database.
   assert.equal(/when D1 is reachable/.test(src), false,
