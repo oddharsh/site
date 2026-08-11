@@ -34,6 +34,7 @@ import { transform as transformCss } from "lightningcss";
 import { minifySync } from "oxc-minify";
 import { readManifest, workerModule, navFenceBody, readFenceBody } from "./scripts/gen-manifest.mjs";
 import { HTML_MARKERS } from "./scripts/lib/html-markers.mjs";
+import { patchStaticShell, renderDesktopArtifacts, staticShellPages } from "./holding/scripts/gen-desktop-partial.mjs";
 
 const OUT = ".build";
 
@@ -174,23 +175,26 @@ async function checkInvariants() {
     hard.push(`luna.css failed to parse as CSS: ${e.message.split("\n")[0]}`);
   }
 
-  // 4 (warn) — the static desktop partial is current with nav.js's data. A
-  // byte-compare would false-fire on whitespace, so this is a count proxy: one
-  // taskbar pin per SUBPAGE, one desktop icon per DESKTOP entry (Notepad +
-  // profiles). Catches the real drift (added/removed a destination without
-  // re-running gen-desktop-partial.mjs).
+  // 4 (hard) — the checked-in desktop shell is the exact projection of
+  // shell-data.mjs + site-manifest.json. The old count proxy let a whole page
+  // keep an older taskbar as long as the central partial had the right number
+  // of pins; /access did exactly that and silently missed /terminal. Render the
+  // canonical artifacts in memory and compare every consumer byte-for-byte.
   try {
-    const nav = await read("holding/nav.js");
-    const desktopMod = await read("holding/_worker.js/lib/desktop.js");
-    const chrome = JSON.parse((desktopMod.match(/DESKTOP_CHROME = ("(?:[^"\\]|\\.)*");/) || [,'""'])[1]);
-    const countLabels = (block) => (((nav.match(new RegExp("var " + block + " = \\[([\\s\\S]*?)\\];")) || [,""])[1].match(/label:/g)) || []).length;
-    const subpages = countLabels("SUBPAGES");
-    const profiles = countLabels("PROFILES");
-    const pins = (chrome.match(/class="axp-pin"/g) || []).length;
-    const icons = (chrome.match(/data-key=/g) || []).length;
-    if (pins !== subpages) warn.push(`lib/desktop.js has ${pins} taskbar pins but nav.js SUBPAGES has ${subpages} — re-run gen-desktop-partial.mjs`);
-    if (icons !== profiles + 1) warn.push(`lib/desktop.js has ${icons} desktop icons but nav.js has ${profiles + 1} (Notepad + profiles) — re-run gen-desktop-partial.mjs`);
-  } catch (e) { warn.push(`generator freshness check could not run: ${e.message}`); }
+    const artifacts = renderDesktopArtifacts();
+    if (await read("holding/_worker.js/lib/desktop.js") !== artifacts.moduleSource) {
+      hard.push("lib/desktop.js drifted from shell-data.mjs/site-manifest.json — run pnpm run gen:shell");
+    }
+    if (await read("holding/icons.svg") !== artifacts.sprite) {
+      hard.push("icons.svg drifted from shell-data.mjs — run pnpm run gen:shell");
+    }
+    for (const file of staticShellPages()) {
+      const source = await read(file);
+      if (patchStaticShell(source, artifacts) !== source) {
+        hard.push(`${file}: static desktop partial drifted — run pnpm run gen:shell`);
+      }
+    }
+  } catch (e) { hard.push(`desktop generator freshness check could not run: ${e.message}`); }
 
   // 5 (warn) — the OS-window critical-CSS copies are divergent per-context
   // subsets (cal carries almost none), so a full byte-guard would false-fire.
