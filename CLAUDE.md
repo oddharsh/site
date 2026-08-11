@@ -2057,10 +2057,15 @@ pnpm run deploy:direct
     changes what the Worker sees and is not a cosmetic edit.
 
 27. **A `github-advanced-security` failure is usually GitHub's own Copilot
-    Autofix falling over, not your diff.** Seen five times across two days: on
-    2026-08-08 on #289 and #295, and again on 2026-08-10 on #305, #307 and #313.
-    Every one of them ran while the separate `CodeQL` check reported *"No new
-    alerts in code changed by this pull request."*
+    Autofix falling over, not your diff.** Seen six times across three days: on
+    2026-08-08 on #289 and #295, on 2026-08-10 on #305, #307 and #313, and on
+    2026-08-11 on #319. Every one of them ran while the separate `CodeQL` check
+    reported *"No new alerts in code changed by this pull request."*
+
+    **Read the ROOT CAUSE paragraph at the end of this gotcha first.** Everything
+    between here and there is the fingerprint, which is what we had before the
+    job log gave up the actual error; it is still useful and it is no longer the
+    sharpest tool available.
 
     The signature is specific enough to recognise on sight: the check has an
     EMPTY output title, and its single annotation points at `.github:<line>` —
@@ -2101,7 +2106,7 @@ pnpm run deploy:direct
     reporting on itself. When the API tell above leaves you unsure which variant
     you have, ask whether the PR contains code at all. And confirm the stakes from
     the ruleset rather than from the check list, since `validate` is the only
-    required context: this has now been red on five PRs while gating none of them.
+    required context: this has now been red on six PRs while gating none of them.
 
     **#313 added two things, and the second one changes how you look.** Its lone
     annotation was at `.github:213` — the SAME line as #307, on an unrelated
@@ -2118,6 +2123,43 @@ pnpm run deploy:direct
     check failed, which reads exactly like a stale alert and is not one. Use the
     `check-runs` call above as the source of truth for whether this check is red;
     `gh pr checks` is fine for everything else.
+
+    **THE ROOT CAUSE, read out of the job log on #319 (2026-08-11), and it
+    retires the fingerprint as the primary test.** Every paragraph above infers
+    the artifact from circumstantial marks: a null title, an annotation at a
+    directory, a line number that repeats. The log says it outright:
+
+    ```
+    Error creating PR review request: SessionModelError: Execution failed:
+    CAPIError: 400 The requested model is not supported.
+    ```
+
+    Copilot's review agent asked GitHub's own model API for a model that API
+    refused, threw inside `runAgenticLoop`, and exited 1. It never read the diff.
+    So the check is reporting an outage in Copilot's model routing, and no change
+    to your branch can turn it green.
+
+    That gives a test which does not depend on recognising a signature:
+
+    ```bash
+    gh api repos/oddharsh/site/check-runs/<check-run-id> --jq .details_url
+    gh run view <run-id> --log-failed | grep -i "CAPIError\|Copilot Error"
+    ```
+
+    A crashed agent prints the error. A real finding prints an inline review
+    comment on a source line and leaves this grep empty. Prefer it to the
+    `.github:<line>` tell, which was only ever suggestive: this one names the
+    failure rather than pattern-matching around it.
+
+    Two smaller things #319 settled. The workflow is
+    `dynamic/agents/github-advanced-security`, titled "Code scanning AI findings
+    on PR #N", and it lives nowhere in `.github/workflows/`, which is why no file
+    in this repo configures it and why grepping the tree for it finds nothing.
+    And a **re-notification can arrive for a run that already failed hours
+    earlier**: #319 alerted twice on check-run `93749646946`, same `completed_at`
+    both times, with no new commit in between. Compare `id` and `completed_at`
+    before investigating, because a repeat alert about an old run is
+    indistinguishable from a fresh failure in the notification itself.
 
 28. **Bun runs this build byte-identically and about twice as fast, and it is
     still not adopted.** `pnpm run bun:check` is the control, in the same idiom as
