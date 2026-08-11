@@ -824,5 +824,19 @@
     "version": "aadhar-v182-lens-reader",
     "vnum": 182,
     "ymd": "2026-08-10"
+  },
+  {
+    "slug": "infotips",
+    "title": "Every tooltip on the site is an XP infotip now, and the ones with something to say say it: a taskbar button names how many pages it holds, the tray reads out the colo serving you, the clock spells out the date",
+    "version": "aadhar-v183-infotips",
+    "vnum": 183,
+    "ymd": "2026-08-11"
+  },
+  {
+    "slug": "vigenere-cracker",
+    "title": "The Vigenere explainer breaks a cipher you wrote yourself: type a message and a key, hand the ciphertext alone to a solver, and watch it recover your key in four steps, or tell you honestly that your message was too short to crack",
+    "version": "aadhar-v184-vigenere-cracker",
+    "vnum": 184,
+    "ymd": "2026-08-11"
   }
 ]
