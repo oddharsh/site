@@ -831,5 +831,12 @@
     "version": "aadhar-v183-infotips",
     "vnum": 183,
     "ymd": "2026-08-11"
+  },
+  {
+    "slug": "vigenere-cracker",
+    "title": "The Vigenere explainer breaks a cipher you wrote yourself: type a message and a key, hand the ciphertext alone to a solver, and watch it recover your key in four steps, or tell you honestly that your message was too short to crack",
+    "version": "aadhar-v184-vigenere-cracker",
+    "vnum": 184,
+    "ymd": "2026-08-11"
   }
 ]
