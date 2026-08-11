@@ -154,10 +154,11 @@ async function queryEvents(d) {
     `SELECT e.id, e.name, e.start_at, e.location, e.url, e.user_status, e.cover_url,
             SUM(CASE WHEN ea.is_host = 0 THEN 1 ELSE 0 END) AS attendee_count,
             SUM(CASE WHEN ea.is_host = 1 THEN 1 ELSE 0 END) AS host_count,
-            (SELECT GROUP_CONCAT(COALESCE(uc.label, 'unnamed-' || substr(ec.user_key,1,4)), char(31))
-               FROM event_contributions ec
-               LEFT JOIN user_cookies uc ON uc.user_key = ec.user_key
-              WHERE ec.event_id = e.id) AS contributors
+            (SELECT GROUP_CONCAT(label, char(31)) FROM (
+               SELECT DISTINCT COALESCE(uc.label, 'unnamed-' || substr(ec.user_key,1,4)) AS label
+                 FROM event_contributions ec
+                 LEFT JOIN user_cookies uc ON uc.user_key = ec.user_key
+                WHERE ec.event_id = e.id)) AS contributors
        FROM events e
        LEFT JOIN event_attendees ea ON ea.event_id = e.id
       GROUP BY e.id
@@ -169,7 +170,9 @@ async function queryEvent(d, id) {
 }
 async function queryEventAttendees(d, id) {
   return d.prepare(
-    `SELECT a.id AS attendee_id, a.name, a.bio_short, a.times_seen, ea.is_host,
+    `SELECT a.id AS attendee_id, a.name, a.bio_short,
+            (SELECT COUNT(*) FROM event_attendees seen WHERE seen.attendee_id = a.id) AS times_seen,
+            ea.is_host,
             a.website, a.twitter_handle, a.linkedin_handle, a.instagram_handle,
             en.company, en.role, en.bio AS enriched_bio, en.location,
             en.linkedin_url, en.enriched_at
@@ -181,11 +184,14 @@ async function queryEventAttendees(d, id) {
 }
 async function queryContributors(d, id) {
   return d.prepare(
-    `SELECT COALESCE(uc.label, 'unnamed-' || substr(ec.user_key,1,4)) AS label, uc.enabled AS enabled
-       FROM event_contributions ec
-       LEFT JOIN user_cookies uc ON uc.user_key = ec.user_key
-      WHERE ec.event_id = ?
-      ORDER BY ec.contributed_at DESC`
+    `SELECT label, MAX(enabled) AS enabled FROM (
+       SELECT COALESCE(uc.label, 'unnamed-' || substr(ec.user_key,1,4)) AS label,
+              COALESCE(uc.enabled, 0) AS enabled, ec.contributed_at
+         FROM event_contributions ec
+         LEFT JOIN user_cookies uc ON uc.user_key = ec.user_key
+        WHERE ec.event_id = ?)
+      GROUP BY label
+      ORDER BY MAX(contributed_at) DESC`
   ).all(id);
 }
 async function countContributors(d) {
@@ -787,13 +793,17 @@ function parseEvents(data, selfId) {
     };
   });
 }
+export const SERENDIPITY_SYNC_LIMITS = Object.freeze({ futurePages: 6, pastPages: 4, pastGuestEvents: 4 });
+
 async function fetchMyEvents(auth, selfId) {
   const all = [];
   for (const period of ["future", "past"]) {
     // page caps kept low: Cloudflare limits subrequests (fetch calls) per Worker
-    // invocation. ~10 fetches total stays well under the cap; full backfill is a
-    // cron/cursor job (future). Future events matter most, so it gets more pages.
-    let cursor = null, page = 0, max = period === "past" ? 2 : 6;
+    // invocation. Ten fetches total stays well under the cap. Four past pages
+    // restores the depth the original app used; the two-page Worker port silently
+    // dropped the older half of an active contributor's history.
+    let cursor = null, page = 0;
+    const max = period === "past" ? SERENDIPITY_SYNC_LIMITS.pastPages : SERENDIPITY_SYNC_LIMITS.futurePages;
     while (page < max) {
       page++;
       const p = new URLSearchParams({ pagination_limit: "50", period });
@@ -1006,7 +1016,9 @@ async function fetchDiscoverEvents(slug, cap) {
 }
 
 // single-statement attendee upsert (batch-friendly — no read-then-write).
-// preserves email/first_seen_at/times_seen on conflict; refreshes profile fields.
+// preserves private email + first_seen_at on conflict and refreshes public
+// profile fields. The legacy times_seen column is preserved too, but public
+// reads derive the count from event_attendees so it cannot drift.
 const UPSERT_ATTENDEE = `INSERT INTO attendees (id,name,email,avatar_url,bio_short,website,twitter_handle,linkedin_handle,instagram_handle,tiktok_handle,youtube_handle,first_seen_at,times_seen)
  VALUES (?,?,?,?,?,?,?,?,?,?,?,datetime('now'),1)
  ON CONFLICT(id) DO UPDATE SET name=excluded.name,avatar_url=excluded.avatar_url,bio_short=excluded.bio_short,website=excluded.website,
@@ -1119,6 +1131,24 @@ async function handleAddEvent(request, env, d, uid) {
   return back(msg, true);
 }
 
+const GUEST_SYNC_KEY = "serendipity_guest_sync_";
+
+// The roster endpoint is authoritative. Work out which old non-host links must
+// disappear after the fresh list has been inserted; otherwise cancellations stay
+// on the public page forever. Exported because the destructive half of a roster
+// replacement deserves a deterministic contract test.
+export function staleGuestIds(existingIds, nextGuests, selfId = null) {
+  const current = new Set(nextGuests.map((g) => g && g.id).filter((id) => id && id !== selfId));
+  return existingIds.filter((id) => id && !current.has(id));
+}
+
+async function markGuestSync(d, eventId, value) {
+  return d.prepare(
+    `INSERT INTO settings (key,value,updated_at) VALUES (?,?,datetime('now'))
+     ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=datetime('now')`
+  ).run(GUEST_SYNC_KEY + eventId, value);
+}
+
 // sync one event's full guest list (batched writes). Returns {synced} or {error}.
 async function syncGuests(d, eventId, userKey, cookiesJson) {
   const jar = cookieJar(cookiesJson);
@@ -1139,12 +1169,25 @@ async function syncGuests(d, eventId, userKey, cookiesJson) {
       S.push(d.stmt(`INSERT INTO event_attendees (event_id,attendee_id) VALUES (?,?) ON CONFLICT(event_id,attendee_id) DO NOTHING`, eventId, g.id));
     }
     await d.batch(S);
+    // Insert first, then remove links absent from the authoritative response.
+    // A failure can leave stale rows behind, but it can never erase a valid row
+    // before its replacement was safely written.
+    const existing = await d.prepare(
+      "SELECT attendee_id FROM event_attendees WHERE event_id = ? AND is_host = 0"
+    ).all(eventId);
+    const stale = staleGuestIds(existing.map((r) => r.attendee_id), guests, selfId);
+    await d.batch(stale.map((id) => d.stmt(
+      "DELETE FROM event_attendees WHERE event_id = ? AND attendee_id = ? AND is_host = 0", eventId, id
+    )));
+    await markGuestSync(d, eventId, `ok:${guests.length}`);
     await persistJar(d, userKey, jar);
-    return { synced: guests.length };
+    return { synced: guests.length, removed: stale.length };
   } catch (err) {
     await persistJar(d, userKey, jar).catch(() => {});
     const m = err instanceof Error ? err.message : String(err);
-    return { error: m.includes("403") ? "GUEST_LIST_RESTRICTED" : m };
+    const error = m.includes("403") ? "GUEST_LIST_RESTRICTED" : m;
+    await markGuestSync(d, eventId, `error:${error.slice(0, 180)}`).catch(() => {});
+    return { error };
   }
 }
 
@@ -1225,13 +1268,13 @@ async function handleSync(request, env, d) {
 // rotation Luma issues mid-run lands back in D1 instead of on the floor.
 //
 // Budgeted in SUBREQUESTS (Luma fetches and D1 calls both count): the feed
-// pass is ≤8 fetches + ~10 D1 per contributor, the guest sweep ≤4 events at
-// ~4-5 each, descriptions ≤10 fetches + 4 D1 — about 55 for today's single
-// contributor, far under the invocation cap. The caps are what keep growth
-// per added contributor linear and bounded; raise them only with that
-// arithmetic in hand. Failures stay per-arm: one dead guest list logs and
-// the run continues, same policy as every other cron here.
-const CRON_GUEST_EVENTS = 4;
+// pass is ≤10 fetches plus chunked D1 batches per contributor, the upcoming
+// sweep ≤4 events, the historical backfill ≤4 events, and descriptions ≤10
+// fetches. The caps keep growth bounded. Failures stay per-arm: one restricted
+// guest list is timestamped and the sweep advances instead of starving behind
+// the same unreadable event forever.
+const CRON_UPCOMING_GUEST_EVENTS = 4;
+const CRON_PAST_GUEST_EVENTS = SERENDIPITY_SYNC_LIMITS.pastGuestEvents;
 const CRON_DESC_LIMIT = 10;
 export async function cronSerendipity(env) {
   const d = db(env);
@@ -1248,8 +1291,20 @@ export async function cronSerendipity(env) {
   // "…T16:00" after "… 21:00" and let same-day past events shadow real ones.
   const soon = await d.prepare(
     `SELECT id FROM events WHERE user_status = 'going' AND start_at IS NOT NULL AND datetime(start_at) >= datetime('now') ORDER BY datetime(start_at) ASC LIMIT ?`
-  ).all(CRON_GUEST_EVENTS);
-  for (const ev of soon) {
+  ).all(CRON_UPCOMING_GUEST_EVENTS);
+  // Completed past rosters are immutable. Unattempted ones lead; restricted or
+  // transient failures fall to the back and are retried oldest-attempt first
+  // only after the sweep has made progress through the rest of the history.
+  const past = await d.prepare(
+    `SELECT e.id FROM events e
+       LEFT JOIN settings gs ON gs.key = ? || e.id
+      WHERE e.user_status = 'going' AND e.start_at IS NOT NULL
+        AND datetime(e.start_at) < datetime('now')
+        AND (gs.value IS NULL OR gs.value NOT LIKE 'ok:%')
+      ORDER BY (gs.updated_at IS NULL) DESC, datetime(gs.updated_at) ASC, datetime(e.start_at) DESC
+      LIMIT ?`
+  ).all(GUEST_SYNC_KEY, CRON_PAST_GUEST_EVENTS);
+  for (const ev of [...soon, ...past]) {
     // first set that can read this list wins; with one contributor that is one
     // try, and a restricted list falls through to the next set rather than dying.
     /** @type {{error?: string, synced?: number}} */
@@ -1442,7 +1497,7 @@ async function handleEnrich(request, env, d) {
        FROM event_attendees ea JOIN attendees a ON a.id = ea.attendee_id
        LEFT JOIN enrichments en ON en.attendee_id = a.id
       WHERE ea.event_id = ? AND ea.is_host = 0 AND en.attendee_id IS NULL
-      ORDER BY a.times_seen DESC LIMIT ?`).all(eid, limit);
+      ORDER BY (SELECT COUNT(*) FROM event_attendees seen WHERE seen.attendee_id = a.id) DESC LIMIT ?`).all(eid, limit);
   } else return jerr("pass ?attendee= or ?event=", 400);
 
   const out = [];
@@ -1618,12 +1673,14 @@ function mcpEventSummary(e) {
 async function mcpSearchPeople(d, q, limit) {
   const term = "%" + String(q).replace(/[\\%_]/g, "\\$&") + "%";
   const people = await d.prepare(
-    `SELECT a.id, a.name, a.bio_short, a.times_seen, a.website,
+    `SELECT a.id, a.name, a.bio_short,
+            (SELECT COUNT(*) FROM event_attendees seen WHERE seen.attendee_id = a.id) AS times_seen,
+            a.website,
             a.twitter_handle, a.linkedin_handle, a.instagram_handle,
             en.company, en.role, en.location, en.linkedin_url
        FROM attendees a LEFT JOIN enrichments en ON en.attendee_id = a.id
       WHERE a.name LIKE ? ESCAPE '\\'
-      ORDER BY a.times_seen DESC, a.name ASC
+      ORDER BY times_seen DESC, a.name ASC
       LIMIT ?`
   ).all(term, limit);
   if (!people.length) return [];
@@ -1700,7 +1757,9 @@ async function mcpListContributors(d) {
 // who-overlaps-with-whom is already implicit in the public guest lists, this
 // just computes it). co-attendance counts hosts and guests alike: being at the
 // same event is the edge.
-const PUB_COLS = `a.id, a.name, a.bio_short, a.times_seen, a.website,
+const PUB_COLS = `a.id, a.name, a.bio_short,
+            (SELECT COUNT(*) FROM event_attendees seen WHERE seen.attendee_id = a.id) AS times_seen,
+            a.website,
             a.twitter_handle, a.linkedin_handle, a.instagram_handle,
             en.company, en.role, en.location, en.linkedin_url`;
 
@@ -1709,7 +1768,7 @@ async function mcpResolvePerson(d, q) {
   const term = "%" + String(q || "").replace(/[\\%_]/g, "\\$&") + "%";
   return d.prepare(
     `SELECT ${PUB_COLS} FROM attendees a LEFT JOIN enrichments en ON en.attendee_id = a.id
-      WHERE a.name LIKE ? ESCAPE '\\' ORDER BY a.times_seen DESC, a.name ASC LIMIT 1`
+      WHERE a.name LIKE ? ESCAPE '\\' ORDER BY times_seen DESC, a.name ASC LIMIT 1`
   ).get(term);
 }
 
@@ -1748,7 +1807,7 @@ async function mcpCoAttendees(d, q, limit) {
        LEFT JOIN enrichments en ON en.attendee_id = a.id
       WHERE ea.event_id IN (SELECT event_id FROM event_attendees WHERE attendee_id = ?1)
         AND ea.attendee_id != ?1
-      GROUP BY a.id ORDER BY shared DESC, a.times_seen DESC, a.name ASC LIMIT ?2`
+      GROUP BY a.id ORDER BY shared DESC, times_seen DESC, a.name ASC LIMIT ?2`
   ).all(person.id, limit);
   const tot = await d.prepare(`SELECT COUNT(DISTINCT event_id) AS n FROM event_attendees WHERE attendee_id = ?`).get(person.id);
   return {
