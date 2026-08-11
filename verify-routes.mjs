@@ -175,6 +175,15 @@ const ROUTES = [
   { path: "/lens/browser?url=https%3A%2F%2Fexample.com&do=notarecipe", status: 400, ct: "application/json" },
   { path: "/lens/browser?recipes=1", status: 200, ct: "application/json" },
   { path: "/lens/compare.json?left=javascript%3Aalert(1)&right=https%3A%2F%2Fexample.com", status: 400, ct: "application/json" },
+  // /lens/wire opens a real CDP browser session, so the only rows worth sweeping
+  // here are the ones that must be refused BEFORE any budget is spent. Both are
+  // free: the guard runs before the engine check, so they answer 400 identically
+  // on a harness with no BROWSER binding and on production with one. There is
+  // deliberately no success row — a green run is not worth a browser-minute out
+  // of an allowance of ten a day, and /lens/shot's row above is already marked
+  // remote+flaky for exactly that reason.
+  { path: "/lens/wire?url=javascript%3Aalert(1)", status: 400, ct: "application/json" },
+  { path: "/lens/wire", status: 400, ct: "application/json" },
   { path: "/mcp", status: 405, ct: "application/json" },
 
   // ── the terminal programs ──────────────────────────────────────────────

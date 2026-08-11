@@ -1150,6 +1150,78 @@ Deploy it like the other auxiliaries, from its own directory. It is declared in
 `infra.json` under `workers.expected`, so `infra:check` fails if it goes missing. If it
 is down, `/lens` is unaffected and the Reader tab reports the extractor as unreachable.
 
+### `/lens/wire` — the request waterfall, and the CDP door behind the binding
+
+The eighth machine tab ("What it costs") records every request a page makes and
+reports how much of the weight belongs to somebody who wrote none of the words.
+Measured 2026-08-11: theverge.com is **307 requests, 6.98 MB, 94 hosts, 60% of
+transfer bytes third-party**, with 5 MB of the 7 being JavaScript. aadhar.sh is
+24 requests, 239 KB, one host, 0%.
+
+**`env.BROWSER` is a Fetcher with the full Chrome DevTools Protocol behind it,
+and this was not known here until it was probed.** Every browser surface on this
+site went through `quickAction`, whose payload schema is CLOSED (the Kitesurf
+probe proved it refuses unknown keys), so the request waterfall was assumed
+unreachable. It is four HTTP calls on the binding:
+
+```
+POST   https://localhost/v1/devtools/browser              -> { sessionId, webSocketDebuggerUrl }
+GET    https://localhost/v1/devtools/browser/<id>/json/protocol   (54 domains)
+       browser.fetch(<id>, { headers: { Upgrade: "websocket" } }) -> response.webSocket
+DELETE https://localhost/v1/devtools/browser/<id>
+```
+
+Verified against the production binding: Chrome/128.0.6613.137, and `Network`,
+`Performance`, `Tracing`, `Profiler`, `Security` and `Audits` all present. The
+recipe was read out of **`agents@0.20.1`** (`dist/connector-*.js`), which is the
+package Cloudflare's browser-agent example wraps.
+
+**We deliberately did NOT take that package.** Its `createBrowserTools` hands an
+LLM a `browser_execute` that writes its own CDP JavaScript and runs it in a
+Worker Loader sandbox, which is exactly the model-authored-code door
+`lens-recipes.js` exists to refuse, and it costs a `worker_loaders` binding plus
+a per-load fee on a public endpoint. The transport here is ~60 lines and the
+script is ours. A contract test asserts exactly one `params.get()` in the module,
+because a second one is how a `js=` or `selector=` parameter would arrive.
+
+**Three things about the cost, and the middle one is the surprise.** A CDP
+session is a real browser INSTANCE on the same 10-minutes-a-day account-wide
+allowance `/lens/shot` and `/lens/browser` share. The free plan mints **one new
+instance every 20 seconds**, which was hit live: a second session opened 20s
+after the first answered `429 Rate limit exceeded` on the create, so a refused
+session is the COMMON outcome rather than an edge case and is reported as our own
+budget rather than as the target failing. And the session is cheaper than
+feared — 3.7s for a session plus one command, 8.1s including a navigation, well
+under the ~19s a Quick Action render costs.
+
+Rationed three ways: `LENS_RL_WIRE` at 2/min/IP, the shared `LENS_RL_BROWSER_ALL`
+ceiling, and a 6h KV cache which is the real control. The session is deleted in a
+`finally`, which is not tidiness — a leaked session holds one of three concurrent
+browsers and blacks out every browser lens on the site.
+
+**Two accounting bugs worth knowing, both found by running it rather than by
+reading it.** `Network.loadingFailed` does NOT mean failure: our own `/hit?tick=1`
+beacon answers 204 and then reports `net::ERR_ABORTED`, because a fire-and-forget
+fetch nobody awaits is cancelled at teardown, so the discriminator is whether a
+response ever arrived and the third state is `aborted`. And the KV-hit path spread
+`cached: true` over the summary's `cached` COUNT of the target's cache-served
+requests, which rendered as "true served from cache"; the response-level flag is
+`fromCache` now. Both have tests naming the measurement.
+
+`run_worker_first` had to be FOLDED to fit this route. The eight exact `/lens`
+rows became `/lens` + `/lens/*`, taking the config from exactly 100 of 100 to 94
+— gotcha 26's own recommended remedy, and the reason `/lens/wire` needed no rule
+of its own. Safe because nothing static lives under `/lens/`: the three client
+scripts are top-level, and `/lens/read` belongs to the `lens-reader` Worker via a
+zone route matched before this config is read.
+
+**`/lens`'s bare shell is a generated page that lives only in `.build/`, so it
+404s under `pnpm run dev`.** That is by design and costs an hour if you meet it
+cold: `?url=` takes the live Worker path and works, while the empty shell is a
+built static page the readable tree has no file for. A stale `caches.default`
+entry in `.wrangler/state` can make it appear to work and then stop, which is
+what makes it read like a regression you just caused.
+
 ### Observability: Workers Traces + the span vocabulary
 
 Three layers, deliberately not redundant:

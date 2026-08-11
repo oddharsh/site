@@ -518,6 +518,7 @@ const SHELLS = [
   ["lens.js",    "/lens.src.js",    "replaceState"],   // verify-routes.mjs marker
   ["lens-browser.js", "/lens-browser.src.js", "LensBrowser"],
   ["lens-reader.js", "/lens-reader.src.js", "LensReader"],
+  ["lens-wire.js",   "/lens-wire.src.js",   "LensWire"],
   ["quiz.js",    "/quiz.src.js",    "luq-data"],       // the understanding-check widget
   ["tooltip.js", "/tooltip.src.js", "function start"],
   ["infotip.js", "/infotip.src.js", "axp-infotip"],   // the shell's own tooltips
@@ -1341,6 +1342,8 @@ for (const [file, srcPath, marker] of SHELLS) {
       [/(["'`])\/lens-browser\.js\?v=1\1/g, `$1${to}$1`] ] },
     { file: "/lens-reader.js",  base: "lens-reader",  mk: (to) => [
       [/(["'`])\/lens-reader\.js\?v=1\1/g, `$1${to}$1`] ] },
+    { file: "/lens-wire.js",    base: "lens-wire",    mk: (to) => [
+      [/(["'`])\/lens-wire\.js\?v=1\1/g, `$1${to}$1`] ] },
     { file: "/tooltip.js",      base: "tooltip",      mk: (to) => [
       [/import\((["'`])\/tooltip\.js\1\)/g, `import($1${to}$1)`] ] },
     // nav.js's shell infotips. Same shape as tooltip, and it depends on hoist
@@ -1385,6 +1388,7 @@ for (const [file, srcPath, marker] of SHELLS) {
     if (!idx.includes(hashedFor.hoist) || !nav.includes(hashedFor.hoist)) throw new Error("a hoist.js loader was not repointed (index.html or nav.js)");
     if (!lens.includes(hashedFor["lens-browser"])) throw new Error("lens.js was not repointed to hashed lens-browser.js");
     if (!lens.includes(hashedFor["lens-reader"])) throw new Error("lens.js was not repointed to hashed lens-reader.js");
+    if (!lens.includes(hashedFor["lens-wire"])) throw new Error("lens.js was not repointed to hashed lens-wire.js");
     // the SERVED tooltip bytes, not the staged source: this is the copy the browser gets,
     // and the one the old ordering left pointing at the unhashed duplicate.
     if (!tip.includes(hashedFor.hoist)) throw new Error(`${hashedFor.tooltip} still imports an unhashed /hoist.js — STRING_ASSETS ordering broke (hoist must be hashed before tooltip)`);
