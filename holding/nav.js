@@ -1,15 +1,16 @@
-// nav.js — site-wide XP "Luna" taskbar + Run command palette.
+// nav.js — site-wide XP "Luna" shell enhancer.
 //
-// One deferred, self-contained widget shared across every page (immutable /a/ URL) instead
-// of 10 inline copies — it injects its own <style> once (the same pattern the design
-// system's components use) and builds the taskbar + Run dialog into <body>.
+// The build/compiler puts the desktop icons and taskbar in every document. This
+// shared deferred script adopts that one DOM contract and wires behavior; it does
+// not carry a second shell constructor. Run and tray balloons arrive as separate
+// first-interaction modules, while their static links remain usable without JS.
 //
 // • Taskbar (fixed, bottom): Start orb · pinned profile "apps" · clock tray.
-// • Start orb / ⌘K (Ctrl-K) / the taskbar both open the Run dialog — a resto-mod of
+// • Start orb / ⌘K (Ctrl-K) opens the lazy Run dialog — a resto-mod of
 //   the XP Run box: "Type the name of a page, photo, or profile…". Filters the
 //   sitemap live; ↑/↓ + Enter to go, Esc to close.
-// • Destinations: pages + garage entries + profiles are inline (small, stable);
-//   the 131 photos load lazily from /images/manifest.json on first open, with
+// • Destinations: pages + garage entries + profiles live in nav-run.js;
+//   photos load lazily from /images/manifest.json on first open, with
 //   /images/alt.json captions as searchable labels (so "car" finds the Porsche).
 //
 // Native fonts only (via the page's --font-* tokens, with literal fallbacks), OKLCH
@@ -39,107 +40,9 @@
   // pageswap one also wrote the sessionStorage breadcrumb /garage/vt-check read;
   // that page now states plainly that the shell does not opt in.
 
-  // ── destinations ──────────────────────────────────────────────────────────
-  var PAGES = [
-    { label: "Home", path: "/", hint: "aadhar.sh" },
-    { label: "photos", path: "/photos", hint: "every photo, Explorer Thumbnails view — the archive the old /images/ listing became" },
-    { label: "whoareyou", path: "/whoareyou", hint: "system properties · what one request reveals · for agents + the curious" },
-    { label: "security center", path: "/security", hint: "the site's security posture, XP-style: firewall, updates, threat protection" },
-    { label: "windows update", path: "/updates", hint: "what shipped lately: the deploy changelog as installed updates" },
-    { label: "system restore", path: "/restore", hint: "scrub the site back through its real deploy history, backed by Cloudflare D1" },
-    { label: "around", path: "/around", hint: "the crypto-VC neighborhood" },
-    { label: "garage", path: "/garage", hint: "prototypes + experiments" },
-    { label: "serendipity", path: "/serendipity", hint: "events worth going to" },
-    { label: "music", path: "/rn", hint: "what I'm listening to right now" },
-    { label: "coffee", path: "/coffee", hint: "book a coffee / bagel" },
-    { label: "writing", path: "/writing", hint: "notes, in flux — an editable notepad" },
-    { label: "inbox", path: "/inbox", hint: "who linked here — webmentions from the open web, rendered as Outlook Express mail" },
-    { label: "reading", path: "/reading", hint: "what I've been reading — saved to Curius, mirrored here" },
-    { label: "lens", path: "/lens", hint: "the other web: see any URL the way a machine does — raw HTML, JSON-LD, llms.txt" },
-    { label: "terminal", path: "/terminal", hint: "terminal utilities — curl them, or drive them by keypress" },
-    { label: "finger", path: "/finger", hint: "who runs this host — drivable by keypress" },
-    { label: "radar", path: "/radar", hint: "signal readings in, a terminal instrument out" },
-    { label: "dict", path: "/dict", hint: "compression dictionary lint — will a browser ever use it?" },
-    { label: "cache", path: "/cache", hint: "behavioral revalidation lint — does your ETag ever 304?" },
-    { label: "encode", path: "/encode", hint: "what did your encoder actually do?" },
-    { label: "agent ready", path: "/agent-ready", hint: "the scorecard, pointed at anyone including us" },
-    { label: "pixel peeper", path: "/pixel-peeper", hint: "whose eye do you have? a compression vision test — pick the best encode, blind" },
-    { label: "learning with errors", path: "/lwe", hint: "chat-style explainers + live demos" },
-    // generated:lwe-pages:start
-    { label: "lwe · fhe", path: "/lwe/fhe", hint: "fully homomorphic encryption, explained" },
-    { label: "lwe · mpc", path: "/lwe/mpc", hint: "multi-party computation, honest majority and traitors" },
-    { label: "lwe · tee", path: "/lwe/tee", hint: "trusted execution environments and side-channels" },
-    { label: "lwe · utf-8", path: "/lwe/utf8", hint: "text encoding, ascii, utf-32, utf-8, live byte demos" },
-    { label: "lwe · vigenère", path: "/lwe/vigenere", hint: "the Vigenère cipher and Kryptos: keystream workbench, cipher stats" },
-    { label: "lwe · encoding", path: "/lwe/encoding", hint: "image encoding: avif, jpeg, jpegli, bytes-per-pixel" },
-    { label: "lwe · programmable crypto", path: "/lwe/pcrypto", hint: "programmable cryptography: zk, mpc, fhe as one toolkit" },
-    { label: "lwe · dac", path: "/lwe/dac", hint: "digital-to-analog: multibit R-2R vs delta-sigma noise shaping" },
-    { label: "lwe · drivers", path: "/lwe/drivers", hint: "headphone drivers: planar magnetic vs dynamic, force and breakup" },
-    { label: "lwe · knots", path: "/lwe/knots", hint: "knots: granny vs square, the Ian knot, why laces come undone" },
-    { label: "lwe · lean", path: "/lwe/lean", hint: "lean, formal verification, specs, verified compilers, kernel soundness, openai ten-proofs" },
-// generated:lwe-pages:end
-    // generated:garage-pages:start
-    { label: "garage · blueprint", path: "/garage/blueprint", hint: "the repo, blueprinted by Fable 5" },
-    { label: "garage · chunks", path: "/garage/chunks", hint: "content-addressed chunking" },
-    { label: "garage · cloudflare", path: "/garage/cloudflare", hint: "free Cloudflare features" },
-    { label: "garage · encoding", path: "/garage/encoding", hint: "thumbnail encoding study" },
-    { label: "garage · compression", path: "/garage/compression", hint: "brotli q11 + dcz deltas" },
-    { label: "garage · 5.6 sol", path: "/garage/gpt56", hint: "the performance pass outlined with 5.6 Sol" },
-    { label: "garage · horizon", path: "/garage/horizon", hint: "web-platform horizon" },
-    { label: "garage · iroh", path: "/garage/iroh", hint: "dial a machine by its public key" },
-    { label: "garage · masonry", path: "/garage/masonry", hint: "Grid Lanes masonry photo grid (with fixed-square fallback)" },
-    { label: "garage · dyno", path: "/garage/dyno", hint: "what this site weighs on the wire, one pull a night" },
-    { label: "garage · octane", path: "/garage/octane", hint: "what a framework's floor costs against no framework" },
-    { label: "garage · pretext", path: "/garage/pretext", hint: "DOM-free text measurement" },
-    { label: "garage · pqc", path: "/garage/pqc", hint: "what a PQ signature costs in bytes and milliseconds" },
-    { label: "garage · safari 27", path: "/garage/safari27", hint: "WWDC26 Safari 27 features, through this site's lens" },
-    { label: "garage · scroll", path: "/garage/scroll", hint: "XP scroll chrome" },
-    { label: "garage · teardown", path: "/garage/teardown", hint: "what a multi-agent audit found + fixed" },
-    { label: "garage · tooltips", path: "/garage/tooltips", hint: "tooltip experiments" },
-    { label: "garage · wire", path: "/garage/wire", hint: "the first build step + the brotli rabbit hole" },
-    { label: "garage · workers", path: "/garage/workers", hint: "off Pages, onto Workers" },
-    // generated:garage-pages:end
-    // Raycast deep-link easter eggs — fire built-in Raycast commands (every Raycast
-    // user has these). kind "raycast" → location.href to the protocol URL: the OS
-    // hands it to Raycast and the page stays put. Without Raycast it's a harmless
-    // no-op / "open Raycast?" prompt, so they're explicitly labeled. Naturally
-    // excluded from the prerender ruleset (the href isn't a "/*" path).
-    { label: "confetti 🎉", path: "raycast://extensions/raycast/raycast/confetti", hint: "fire Raycast confetti — needs Raycast installed", kind: "raycast" },
-    { label: "toggle bounce", path: "raycast://extensions/raycast/raycast/toggle-bounce-animation", hint: "toggle Raycast's window bounce — needs Raycast", kind: "raycast" }
-  ];
-  // `icon` (when present) keys the tile colour + glyph; `hint` doubles as a Run
-  // search alias + tooltip, so "Photos"/"Music" still resolve to insta/spotify.
-  var PROFILES = [
-    { label: "GitHub", url: "https://github.com/oddharsh" },
-    { label: "Twitter", url: "https://x.com/oddhash" },
-    { label: "Photos", icon: "Instagram", hint: "Instagram", url: "https://www.instagram.com/aadharsh.hif" },
-    { label: "Curius", url: "https://curius.app/aadharsh-pannirselvam" },
-    { label: "Beli", url: "https://beliapp.com/users/aadharsh" },
-    { label: "Music", icon: "Spotify", hint: "Spotify", url: "https://open.spotify.com/user/aadharsh2010" }
-  ];
-
-  // desktop shortcuts — launchers that live on the wallpaper (not the taskbar).
-  // Notepad is a "system folder"; profiles are internet shortcuts. (PROFILES
-  // objects are shared by reference — they get .path/.kind tagged below.)
-  // (My Pictures was removed: there's no Apache-style R2 bucket view to open.)
-  var DESKTOP = [
-    { label: "Notepad", path: "/writing", kind: "note", hint: "writing, in flux" }
-  ].concat(PROFILES);
-
-  // first-level subpages — the full-fledged "apps" pinned to the taskbar.
-  var SUBPAGES = [
-    { label: "garage", path: "/garage", hint: "prototypes + experiments" },
-    { label: "lwe", path: "/lwe", hint: "chat-style explainers + live demos" },
-    { label: "writing", path: "/writing", hint: "notes, in flux: an editable notepad" },
-    { label: "reading", path: "/reading", hint: "what I've been reading, from Curius" },
-    { label: "serendipity", path: "/serendipity", hint: "events worth going to" },
-    { label: "around", path: "/around", hint: "the crypto-VC neighborhood" },
-    { label: "lens", path: "/lens", hint: "the other web: how machines read a URL" },
-    { label: "terminal", path: "/terminal", hint: "terminal utilities, drivable by keypress" },
-    { label: "pixel peeper", path: "/pixel-peeper", hint: "a compression vision test — whose eye do you have?" },
-    { label: "music", path: "/rn", hint: "what I'm listening to right now" },
-    { label: "coffee", path: "/coffee", hint: "book a coffee / bagel" }
-  ];
+  // Run destinations and profiles live in /nav-run.js, transferred only when
+  // someone opens the palette. Section icons stay here because first-level
+  // pages use them immediately as their matching browser-tab favicon.
 
   // per-section icons — original CSS/SVG glyphs (colored tile + white pictogram,
   // so they read on the blue taskbar button AND a white browser tab). Used BOTH as
@@ -188,7 +91,7 @@
     // an eye whose pupil is a literal pixel — the whole premise in one glyph. The
     // magenta is the one hue the tile set had left (serendipity owns violet,
     // reading owns dusty rose), so it stays legible at 15px on the taskbar. Key is
-    // the SUBPAGES label, so it carries the space; the sprite id gets slugged.
+    // the taskbar label, so it carries the space; the sprite id gets slugged.
     "pixel peeper": sectionTile("peeper", ["#f19ad0","#d24d9c","#a32d73","#82205a"], '<path d="M2.6 16 C7 9.6 11.4 7.1 16 7.1 C20.6 7.1 25 9.6 29.4 16 C25 22.4 20.6 24.9 16 24.9 C11.4 24.9 7 22.4 2.6 16 Z" fill="#fff"/><rect x="11.1" y="11.1" width="9.8" height="9.8" rx="1" fill="#a32d73"/><rect x="12.9" y="12.9" width="3.1" height="3.1" rx=".5" fill="#fff" opacity=".92"/>')
   };
   var PHOTOS = null;          // lazy: [{ label, path, hint, kind:'photo' }]
@@ -196,8 +99,6 @@
   var photosPromise = null, writingPromise = null;
 
   function tag(kind, o) { o.kind = kind; return o; }
-  PAGES.forEach(function (p) { if (!p.kind) tag("page", p); });   // preserve a pre-set kind (e.g. "raycast")
-  PROFILES.forEach(function (p) { p.path = p.url; tag("profile", p); });
 
   // pull the photo manifest (for /images/full/<file> paths) + alt captions (labels)
   function loadPhotos() {
@@ -250,11 +151,11 @@
     (D.head || D.documentElement).appendChild(l);
   }
 
-  // ── build DOM ────────────────────────────────────────────────────────────────
-  var run, input, list, results = [], sel = -1, lastQuery = null, semantic = { q: "", items: [] }, searchTimer = null;
-  var preview = null, previewHoist = null, previewLoading = false;
-  // System Properties tray popout state
-  var balloon = null, balloonKind = null, sysData = null, updData = null;
+  // ── interaction islands + shared state ───────────────────────────────────────
+  var runPromise = null, runApi = null;
+  // Shared readers back both the lazy tray island and the lazy infotips.
+  var sysData = null, updData = null;
+  var trayPromise = null, accZ = 40;
 
   function el(html) { var t = D.createElement("template"); t.innerHTML = html.trim(); return t.content.firstChild; }
 
@@ -298,56 +199,40 @@
     };
   })();
 
-  function buildTaskbar() {
-    // ADOPT-OR-BUILD (shell rewrite phase B): most pages ship the taskbar as
-    // static markup now, so the desktop exists for curl, readers, and JS-off
-    // visitors and CLS is 0. Those pages take the adopt path one line down.
-    //
-    // The construct path below is NOT a legacy fallback. Two live routes load
-    // /nav.js without the partial and still build here every visit: /coffee
-    // (cal/src/templates.js, which ships a bare bottom strip as a placeholder)
-    // and /serendipity (serendipity.js). Both are separate Worker modules that
-    // predate lib/desktop.js and don't import it; until they do, this is their
-    // taskbar. gen-desktop-partial.mjs also evals the tray template out of this
-    // function, so the markup here stays the single source of truth either way.
-    // Whichever path runs, wireTaskbar() below binds behavior.
-    var bar = D.getElementById("axp-taskbar");
-    if (bar) { wireTaskbar(bar); return; }
-    bar = el('<div id="axp-taskbar" role="navigation" aria-label="taskbar"></div>');
-    // the Start orb is a real link to /run (the palette's no-script floor);
-    // wireTaskbar intercepts the click to open the live palette instead.
-    var start = el('<a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true"></span></a>');
-    bar.appendChild(start);
-    // app buttons — first-level subpages, each opening as its own "window".
-    // profiles used to live here as Quick Launch; they're desktop shortcuts now —
-    // the taskbar holds only runnable "apps".
-    // (qlColor/qlGlyph are kept: the desktop profile icons reuse them.)
-    var pins = el('<div id="axp-pins"></div>');
-    SUBPAGES.forEach(function (s) {
-      var b = el('<a class="axp-pin" title="' + s.hint + '"><span class="fav" aria-hidden="true">' + (SECTION_ICONS[s.label] || "") + '</span><span class="lbl">' + s.label + '</span></a>');
-      b.href = s.path; pins.appendChild(b);
-    });
-    bar.appendChild(pins);
-    bar.appendChild(el('<div id="axp-spacer"></div>'));
-    // GENERATOR INPUT: scripts/gen-desktop-partial.mjs slices this expression by
-    // its first line and its closing `</div>');`, then evals it to bake the tray
-    // into lib/desktop.js. Keep it one string-concatenation expression with that
-    // exact opening and closing shape; the generator throws if the marker moves.
-    var tray = el('<div id="axp-tray">' +
-      '<a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><svg viewBox="0 0 24 24"><defs><filter id="spSh" x="-30%" y="-20%" width="160%" height="150%"><feDropShadow dx="0" dy=".5" stdDeviation=".5" flood-color="#000" flood-opacity=".28"></feDropShadow></filter><linearGradient id="spBez" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f3efe4"></stop><stop offset=".5" stop-color="#d6d0be"></stop><stop offset="1" stop-color="#b1aa94"></stop></linearGradient><linearGradient id="spScr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6fb0e8"></stop><stop offset=".5" stop-color="#2f72b6"></stop><stop offset="1" stop-color="#16548f"></stop></linearGradient><linearGradient id="spGl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".5"></stop><stop offset="1" stop-color="#ffffff" stop-opacity="0"></stop></linearGradient></defs><g filter="url(#spSh)"><ellipse cx="12" cy="21.3" rx="5.2" ry="1" fill="#8f876f" opacity=".5"></ellipse><rect x="10.4" y="17.2" width="3.2" height="2.8" fill="#c3bca6"></rect><path d="M7 21 Q7 19.7 8.6 19.7 H15.4 Q17 19.7 17 21 Z" fill="url(#spBez)" stroke="#897f66" stroke-width=".4"></path><rect x="2.3" y="2.7" width="19.4" height="14.9" rx="2" fill="url(#spBez)" stroke="#857c63" stroke-width=".5"></rect><rect x="2.95" y="3.3" width="18.1" height="13.7" rx="1.5" fill="none" stroke="#ffffff" stroke-opacity=".5" stroke-width=".5"></rect><rect x="4.2" y="4.7" width="15.6" height="11" rx=".8" fill="#0f3d63"></rect><rect x="4.6" y="5.1" width="14.8" height="10.2" rx=".6" fill="url(#spScr)"></rect><path d="M4.6 5.1 H19.4 V7.9 Q12 11.8 4.6 9.1 Z" fill="url(#spGl)"></path><circle cx="20" cy="15.9" r=".8" fill="#84e85a" stroke="#3f7a2a" stroke-width=".3"></circle></g></svg></a>' +
-      '<a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><svg viewBox="0 0 24 24"><defs><filter id="seSh" x="-30%" y="-15%" width="160%" height="150%"><feDropShadow dx="0" dy=".5" stdDeviation=".5" flood-color="#000" flood-opacity=".28"></feDropShadow></filter><linearGradient id="seF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7ed24f"></stop><stop offset=".5" stop-color="#3f9c24"></stop><stop offset="1" stop-color="#297818"></stop></linearGradient><linearGradient id="seGl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".55"></stop><stop offset="1" stop-color="#ffffff" stop-opacity="0"></stop></linearGradient></defs><g filter="url(#seSh)"><path d="M12 2.2 L4.4 4.9 V11.4 C4.4 16.2 8 19.7 12 21.6 C16 19.7 19.6 16.2 19.6 11.4 V4.9 Z" fill="url(#seF)" stroke="#1f5f12" stroke-width=".7"></path><path d="M12 3.4 L5.6 5.7 V11.3 C5.6 15.3 8.6 18.4 12 20.1 C15.4 18.4 18.4 15.3 18.4 11.3 V5.7 Z" fill="none" stroke="#c6f2a6" stroke-opacity=".5" stroke-width=".6"></path><path d="M12 3.4 L5.6 5.7 V8.8 Q12 10.8 18.4 8.8 V5.7 Z" fill="url(#seGl)"></path><path d="M8 11.5 L11 14.5 L16.2 8.4" fill="none" stroke="#103f08" stroke-opacity=".35" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round"></path><path d="M8 11.2 L11 14.2 L16.2 8.1" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path></g></svg></a>' +
-      '<a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><svg viewBox="0 0 24 24"><defs><filter id="upSh" x="-25%" y="-20%" width="150%" height="155%"><feDropShadow dx="0" dy=".5" stdDeviation=".5" flood-color="#000" flood-opacity=".28"></feDropShadow></filter><radialGradient id="upG" cx=".36" cy=".3" r=".85"><stop offset="0" stop-color="#8eccf2"></stop><stop offset=".55" stop-color="#3f8fd0"></stop><stop offset="1" stop-color="#175a98"></stop></radialGradient><linearGradient id="upB" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#74cf52"></stop><stop offset="1" stop-color="#2c861d"></stop></linearGradient><radialGradient id="upGl" cx=".35" cy=".3" r=".5"><stop offset="0" stop-color="#ffffff" stop-opacity=".7"></stop><stop offset="1" stop-color="#ffffff" stop-opacity="0"></stop></radialGradient></defs><g filter="url(#upSh)"><circle cx="10.6" cy="10.6" r="8.2" fill="url(#upG)" stroke="#114e7d" stroke-width=".6"></circle><g fill="none" stroke="#dcefff" stroke-width=".55" opacity=".7"><path d="M2.5 10.6 H18.7"></path><path d="M3.6 7.1 H17.6"></path><path d="M3.6 14.1 H17.6"></path><path d="M10.6 2.4 V18.8"></path><ellipse cx="10.6" cy="10.6" rx="3.1" ry="8.2"></ellipse></g><ellipse cx="7.4" cy="7" rx="3.4" ry="2.2" fill="url(#upGl)"></ellipse><circle cx="17.8" cy="17.8" r="4.5" fill="url(#upB)" stroke="#ffffff" stroke-width=".9"></circle><path d="M17.8 15.6 A2.2 2.2 0 1 1 15.7 18.4" fill="none" stroke="#ffffff" stroke-width="1.1" stroke-linecap="round"></path><path d="M16.9 14.9 L18.8 15.3 L17.5 16.8 Z" fill="#ffffff"></path></g></svg></a>' +
-      '<span id="axp-clock" aria-hidden="true"></span></div>');
-    // mute/unmute speaker, inserted left of System Properties (painted by
-    // wireTaskbar; ships empty here, the static partial ships the "on" art)
-    var sndBtn = el('<button id="axp-sound" type="button"></button>');
-    tray.insertBefore(sndBtn, tray.firstChild);
-    bar.appendChild(tray);
-    D.body.appendChild(bar);
-    wireTaskbar(bar);
+  function front(win) { win.style.zIndex = ++accZ; }
+  function initRaise() {
+    D.addEventListener("pointerdown", function (e) {
+      var win = e.target && e.target.closest && e.target.closest(".window,.np-window,.axp-acc");
+      if (!win || String(win.style.zIndex) === String(accZ)) return;
+      front(win);
+    }, true);
   }
 
-  // behavior for the taskbar, whether adopted (static partial) or constructed.
+  function loadRun() {
+    if (!runPromise) {
+      runPromise = import("/nav-run.js").then(function (m) {
+        runApi = m.createRun({
+          kbd: KBD,
+          sound: AXP_SND,
+          loadPhotos: loadPhotos,
+          loadWriting: loadWriting,
+          front: front
+        });
+        return runApi;
+      });
+    }
+    return runPromise;
+  }
+  function toggleRun(viaKeyboard) {
+    if (runApi) {
+      if (runApi.isOpen()) runApi.close(); else runApi.open(viaKeyboard);
+      return Promise.resolve();
+    }
+    return loadRun().then(function (api) { api.open(viaKeyboard); });
+  }
+
+  // Behavior for the compiled taskbar. Shell presence is a build invariant:
+  // nav.js enhances one DOM contract instead of carrying a second constructor.
   function wireTaskbar(bar) {
     var start = D.getElementById("axp-start");
     if (start) {
@@ -359,7 +244,9 @@
         e.preventDefault();   // the href is the JS-off floor; JS gets the palette
         // detail === 0 means the click came from the keyboard (Enter/Space on the
         // focused orb) rather than a pointer, so the ring is still wanted here.
-        (run && run.open) ? closeRun() : openRun(e.detail === 0);
+        toggleRun(e.detail === 0).catch(function () {
+          location.assign(start.href);   // preserve the real /run fallback
+        });
       });
     }
     // XP taskbar truth: the app that's in front sits DEPRESSED. Match the
@@ -396,7 +283,9 @@
       ic.addEventListener("click", function (e) {
         if (e.metaKey || e.ctrlKey || e.shiftKey) return;   // let the browser navigate
         e.preventDefault();
-        toggleBalloon(ic.getAttribute("data-kind"), ic);
+        toggleTray(ic.getAttribute("data-kind"), ic).catch(function () {
+          location.assign(ic.href);   // a failed island load falls back to the real page
+        });
       });
     });
     tickClock();
@@ -404,26 +293,6 @@
   }
 
 
-  // Quick Launch tile gradients — brand-evoking colours (Instagram gets the
-  // retro tan→brown of its original skeuomorphic camera, not the modern ramp).
-  function qlColor(name) {
-    return {
-      Twitter: "linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))",
-      Instagram: "linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))",
-      Curius: "linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))",
-      Beli: "linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))",
-      Spotify: "linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))"
-    }[name] || "linear-gradient(180deg,oklch(72% 0.05 255),oklch(60% 0.07 257))";
-  }
-
-  // generic, non-trademark glyphs: a CSS camera for the photo app, @ for the
-  // microblog, a music note for the player, lettermarks for the rest.
-  function qlGlyph(name) {
-    if (name === "Instagram") return '<i class="cam" aria-hidden="true"></i>';
-    return { Twitter: "@", Spotify: "♪", Curius: "C", Beli: "B" }[name] || name.charAt(0);
-  }
-
-  var ICON_STEP = 86;
   // Desktop icon positions are DELIBERATELY not persisted. The stored layout
   // was read back in states that couldn't honour it (luna hides #axp-icons
   // under 1024px; on the homepage luna itself lands after boot() runs), so what
@@ -434,31 +303,6 @@
   // through (any time after ~2027-07), because a leftover key with no reader
   // is inert, it just wastes a slot in someone's localStorage.
   try { localStorage.removeItem("axp-icons-pos"); } catch (_) {}
-
-  // build the desktop-shortcut layer on the wallpaper.
-  // ADOPT-OR-BUILD: on pages carrying the static partial the icons already ship
-  // at their default positions (inline left/top), so adopting is a no-op. The
-  // construct path below runs on the two partial-less routes named at
-  // buildTaskbar (/coffee and /serendipity).
-  function buildIcons() {
-    if (D.getElementById("axp-icons")) return;
-    var wrap = el('<nav id="axp-icons" aria-label="desktop shortcuts"></nav>');
-    DESKTOP.forEach(function (it, i) {
-      var ext = it.kind === "profile";
-      var a = el('<a class="axp-ico"' + (ext ? ' target="_blank" rel="noopener me external"' : "") +
-        ' title="' + esc(it.hint || it.label) + (ext ? " (opens in a new tab)" : "") + '"></a>');
-      a.href = it.path;
-      a.dataset.key = it.label;
-      a.style.left = "9px";
-      a.style.top = (9 + i * ICON_STEP) + "px";
-      var cls = it.kind === "note" ? "note" : "";
-      var style = ext ? ' style="background:' + qlColor(it.icon || it.label) + '"' : "";
-      var inner = ext ? qlGlyph(it.icon || it.label) : "";
-      a.innerHTML = '<span class="ic ' + cls + '"' + style + " aria-hidden=\"true\">" + inner + "</span><span class=\"t\">" + esc(it.label) + "</span>";
-      wrap.appendChild(a);
-    });
-    D.body.appendChild(wrap);
-  }
 
   // drag desktop icons around the wallpaper (transform-free: left/top).
   // a movement threshold distinguishes a drag from a click so links still open.
@@ -520,411 +364,10 @@
     c.textContent = hh + ":" + (m < 10 ? "0" + m : m) + " " + ap;
   }
 
-  function buildRun() {
-    // a REAL <dialog> (phase C follow-up): showModal gives the native focus
-    // trap, Esc handling, inert page, and focus restore — the hand-rolled
-    // backdrop div, lastFocus juggling, and aria-modal claims all retire.
-    run = el(
-      '<dialog id="axp-run" aria-label="Run">' +
-        '<div class="tb"><span>Run</span><span class="axp-kbd" aria-hidden="true">' + KBD + '</span><button class="x" type="button" title="Close" aria-label="Close">✕</button></div>' +
-        '<div class="body"><div class="ico" aria-hidden="true"><div class="doc"></div><div class="sw"></div></div>' +
-          '<div class="prompt">Type the name of a page, photo, or profile, and <b>aadhar.sh</b> will open it for you.</div></div>' +
-        '<div class="open-row"><label for="axp-run-in">Open:</label><input id="axp-run-in" type="text" autocomplete="off" spellcheck="false" placeholder="start typing… (e.g. garage, encoding, spotify, a photo)"></div>' +
-        '<div class="list" id="axp-run-list" role="listbox" aria-label="destinations"></div>' +
-        '<div class="btns"><button class="btn def" type="button" data-act="ok">OK</button><button class="btn" type="button" data-act="cancel">Cancel</button></div>' +
-      '</dialog>'
-    );
-    D.body.appendChild(run);
-    // the preview card lives OUTSIDE the dialog and hoists into the top layer,
-    // because the list is its own scroller and would otherwise clip it. Shown
-    // after the modal opens, so it stacks above it.
-    preview = el('<div id="axp-run-preview" popover="manual" aria-hidden="true"></div>');
-    D.body.appendChild(preview);
-    // ::backdrop click = light dismiss: a click landing on the dialog element
-    // itself (not its children) can only be the backdrop-covered margin area
-    run.addEventListener("click", function (e) { if (e.target === run) closeRun(); });
-    // native close (Esc/cancel, or run.close()): one place for the side effects
-    // native Esc fires cancel (then close) WITHOUT routing through closeRun, so
-    // the card needs its own hook on that path too.
-    run.addEventListener("cancel", function () { if (previewHoist) previewHoist.hide(); });
-    run.addEventListener("close", function () {
-      AXP_SND.play("close");
-      if (previewHoist) previewHoist.hide();   // belt and braces with closeRun
-      var s = D.getElementById("axp-start"); if (s) s.setAttribute("aria-expanded", "false");
-    });
-    input = run.querySelector("#axp-run-in");
-    list = run.querySelector("#axp-run-list");
-    run.querySelector(".x").addEventListener("click", closeRun);
-    run.querySelector('[data-act=cancel]').addEventListener("click", closeRun);
-    run.querySelector('[data-act=ok]').addEventListener("click", function () { go(results[sel] || results[0]); });
-    input.addEventListener("input", render);
-    input.addEventListener("keydown", onKey);
-    list.addEventListener("click", function (e) {
-      var o = e.target.closest(".opt"); if (!o) return;
-      // Navigable rows are anchors now. A MODIFIED click (⌘/ctrl/shift/alt, or any
-      // non-primary button) is the user asking the browser for a new tab or window,
-      // so let it reach the anchor untouched instead of collapsing it into a
-      // same-tab go(). A plain click still routes through go(), which stays the one
-      // funnel for accessories, raycast links and profiles alike.
-      if (o.hasAttribute("href") && (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0)) return;
-      e.preventDefault();
-      go(results[+o.dataset.i]);
-    });
-    // XP list controls hot-track: the row under the cursor becomes the selection,
-    // so OK / Enter act on whatever you're hovering (not a stale keyboard pick).
-    list.addEventListener("mouseover", function (e) {
-      var o = e.target.closest(".opt"); if (!o) return;
-      setSel(+o.dataset.i);
-    });
-  }
+  // Run palette and accessory implementation moved to /nav-run.js.
 
-  // ── filtering + render ────────────────────────────────────────────────────────
-  function pool() { return PAGES.concat(ACCESSORIES, WRITING || [], PROFILES, PHOTOS || []); }
-
-  function score(item, q) {
-    var l = item.label.toLowerCase(), h = (item.hint || "").toLowerCase(), p = (item.path || "").toLowerCase();
-    if (l === q) return 100;
-    if (l.indexOf(q) === 0) return 80;
-    if (p.indexOf(q) > -1) return 60;
-    if (l.indexOf(q) > -1) return 50;
-    if (h.indexOf(q) > -1) return 30;
-    return -1;
-  }
-
-  function render() {
-    var q = input.value.trim().toLowerCase();
-    var items = pool();
-    if (q) {
-      items = items.map(function (it) { return { it: it, s: score(it, q) }; })
-        .filter(function (x) { return x.s >= 0; })
-        .sort(function (a, b) { return b.s - a.s; })
-        .map(function (x) { return x.it; })
-        .slice(0, 40);
-    } else {
-      // empty: show pages + writing + profiles + a handful of photos as a "directory"
-      items = PAGES.concat(ACCESSORIES, WRITING || [], PROFILES, (PHOTOS || []).slice(0, 8));
-    }
-    // Search Companion: semantic matches from the LWE index, prepended as their own
-    // group. Debounced fetch; the results fold in on a later render with the same query.
-    if (q && q.length >= 3) {
-      if (semantic.q === q) {
-        var have = {}; items.forEach(function (it) { have[it.path] = 1; });
-        items = semantic.items.filter(function (s) { return !have[s.path]; }).concat(items);
-      } else { scheduleSemantic(input.value.trim()); }
-    }
-    // preserve the selection across an async re-render (loadPhotos/loadWriting
-    // resolve and re-render with the SAME query, growing the list) — otherwise a
-    // keyboard-first user who arrow-selected a row would have it yanked back to
-    // the top mid-aim. only reset to the top when the query actually changed (a
-    // keystroke), where selecting the new best match IS correct.
-    var keep = (q === lastQuery && sel >= 0 && results[sel]) ? results[sel] : null;
-    results = items;
-    if (keep) {
-      sel = -1;
-      for (var si = 0; si < items.length; si++) {
-        if (items[si].kind === keep.kind && items[si].path === keep.path && items[si].label === keep.label) { sel = si; break; }
-      }
-      if (sel < 0) sel = items.length ? 0 : -1;
-    } else {
-      sel = items.length ? 0 : -1;
-    }
-    lastQuery = q;
-    var groups = { search: [], page: [], accessory: [], writing: [], profile: [], photo: [], raycast: [] };
-    var order  = ["search", "page", "accessory", "writing", "profile", "photo", "raycast"];
-    var names  = { search: "Search Companion", page: "Pages", accessory: "Accessories", writing: "Writing", profile: "Profiles", photo: "Photos", raycast: "Raycast" };
-    // defensive: a kind with no bucket must NOT throw and blank the whole palette.
-    // that's the bug this fixes — the empty-query "directory" lists every PAGES
-    // item incl. the kind:"raycast" easter eggs, and groups["raycast"] was
-    // undefined, so render threw and the list came up empty until you typed
-    // something that filtered the raycast rows out. any future kind self-buckets.
-    items.forEach(function (it, i) {
-      var k = it.kind || "page";
-      if (!groups[k]) { groups[k] = []; order.push(k); names[k] = k; }
-      groups[k].push({ it: it, i: i });
-    });
-    var html = "";
-    order.forEach(function (k) {
-      if (!groups[k].length) return;
-      html += '<div class="grp">' + names[k] + "</div>";
-      groups[k].forEach(function (g) {
-        // A row that navigates to a same-origin path renders as a REAL anchor, and
-        // the href is the whole point: `eagerness: "moderate"` starts a prerender
-        // when the pointer rests on a LINK, so a <div> row could never be
-        // prerendered no matter how long you hovered it. Every ⌘K navigation was
-        // therefore a cold load. go() still owns the plain click (below), so the
-        // href changes nothing about the funnel — it only makes the row visible to
-        // the speculation rules, and gives ⌘/middle-click a real target for free.
-        // Excluded on purpose: accessory rows open in-page and never navigate,
-        // raycast rows are protocol deep links (unprerenderable, and a stray href
-        // would let a modified click hand the OS a raw raycast:// URL), and profile
-        // rows are cross-origin, which "/*" cannot match anyway.
-        var navigable = g.it.path && g.it.path.charAt(0) === "/" &&
-          g.it.kind !== "accessory" && g.it.kind !== "raycast" && g.it.kind !== "profile";
-        html += "<" + (navigable ? "a" : "div") + ' class="opt" role="option" data-i="' + g.i + '"' +
-          (navigable ? ' href="' + esc(g.it.path) + '"' : "") +
-          (g.it.thumb ? ' data-thumb="' + esc(g.it.thumb) + '"' : "") +
-          ' aria-selected="' + (g.i === sel) + '">' +
-          '<span class="nm">' + esc(g.it.label) + "</span>" +
-          (g.it.hint ? '<span class="ht">' + esc(g.it.hint) + "</span>" : "") +
-          '<span class="pa">' + esc(g.it.kind === "profile" ? "↗" : g.it.kind === "raycast" ? "↗ raycast" : g.it.kind === "accessory" ? "↗ window" : g.it.path) + "</span>" +
-          "</" + (navigable ? "a" : "div") + ">";
-      });
-    });
-    list.innerHTML = html || '<div class="empty">No match. Try a page name, a photo stem, or a profile — or <a href="/photos">browse all photos</a>.</div>';
-    // route the freshly-rendered selection through the one funnel, so a new
-    // query re-points the preview card instead of stranding it on a dead row.
-    setSel(sel);
-  }
-
-  // ── Search Companion: debounced semantic search over the LWE index ─────────────
-  function scheduleSemantic(qRaw) {
-    clearTimeout(searchTimer);
-    searchTimer = setTimeout(function () { doSemantic(qRaw); }, 240);
-  }
-  function doSemantic(qRaw) {
-    var qKey = qRaw.trim().toLowerCase();
-    if (qKey.length < 3) return;
-    fetch("/lwe/ask/search", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ query: qRaw }) })
-      .then(function (r) { return r.ok ? r.json() : { results: [] }; })
-      .then(function (d) {
-        semantic = { q: qKey, items: (d.results || []).map(function (x) { return { kind: "search", label: x.title, hint: x.snippet, path: x.url }; }) };
-        if (input && input.value.trim().toLowerCase() === qKey && run && run.open) render();
-      })
-      .catch(function () {});
-  }
-
-  function onKey(e) {
-    if (e.key === "ArrowDown") { e.preventDefault(); move(1); }
-    else if (e.key === "ArrowUp") { e.preventDefault(); move(-1); }
-    else if (e.key === "Enter") { e.preventDefault(); go(results[sel] || results[0]); }
-    else if (e.key === "Escape") { e.preventDefault(); closeRun(); }
-  }
-  function move(d) {
-    if (!results.length) return;
-    // clamp, don't wrap — XP's Run combobox (and Windows list controls) stop at
-    // the ends rather than looping; wrapping reads as janky.
-    setSel(Math.max(0, Math.min(results.length - 1, sel + d)));
-  }
-
-  // THE single selection funnel. Arrow keys, mouse hot-track, and render()'s
-  // initial pick all route through here, which is what makes the preview card
-  // honest: it is tethered to the SELECTED row, never the merely-hovered one, so
-  // it can never show something that pressing Enter would not open.
-  function setSel(i) {
-    sel = i;
-    var cur = null;
-    [].forEach.call(list.querySelectorAll(".opt"), function (o) {
-      var on = +o.dataset.i === sel;
-      o.setAttribute("aria-selected", on);
-      if (on) cur = o;
-    });
-    ensureVisible();
-    showPreview(cur);
-  }
-
-  // ── Run preview card ────────────────────────────────────────────────────────
-  // Only rows carrying data-thumb ever mount one (photos, and semantic hits that
-  // resolve to an image); pages, profiles and notes never do. Nothing is fetched
-  // until such a row is actually selected, and then it's the 400px AVIF tier the
-  // photo grid already ships. The engine is the shared one in /hoist.js, driven
-  // manually here: this surface follows SELECTION, not the cursor, so it passes
-  // no findTarget and wires no listeners of its own.
-  function showPreview(row) {
-    if (!previewHoist) return;                     // module still loading, or coarse pointer
-    var src = row && row.dataset ? row.dataset.thumb : "";
-    if (!src) { previewHoist.hide(); return; }
-    previewHoist.showAnchored(row);
-  }
-  function loadPreview() {
-    if (previewHoist || previewLoading || !preview) return;
-    previewLoading = true;
-    import("/hoist.js").then(function (m) {
-      previewHoist = m.createHoist({
-        node: preview,
-        followPointer: false,                      // anchored only; there is no cursor to glide with
-        anchorName: "--axp-run-preview",
-        contentFor: function (row) {
-          var src = row.dataset.thumb;
-          if (!src) return "";
-          // width/height are reserved so the card never reflows as it decodes.
-          return '<img src="' + esc(src) + '" alt="" width="400" height="400" decoding="async">';
-        }
-      });
-      showPreview(list.querySelector('.opt[aria-selected=true]'));
-    }).catch(function () { /* no preview is a fine outcome; Run still navigates */ });
-  }
-
-  function ensureVisible() {
-    var o = list.querySelector('.opt[aria-selected=true]'); if (o) o.scrollIntoView({ block: "nearest" });
-  }
-
-  function go(item) {
-    if (!item) return;
-    closeRun();
-    if (item.kind === "accessory") openAccessory(item.accId);  // floating built-in app — opens here, no navigation
-    else if (item.kind === "raycast") location.href = item.path;   // protocol deep link → OS hands it to Raycast; page stays
-    else if (item.kind === "profile") window.open(item.url, "_blank", "noopener");
-    else location.assign(item.path);
-  }
-
-  // ── accessory window manager ────────────────────────────────────────────────
-  // Small built-in apps that float over the desktop as plain DOM windows: open
-  // several, drag them, click one (or its taskbar button) to bring it to front.
-  // No iframes, no SPA — the content pages stay one-document-per-window; only these
-  // accessories get the multi-window treatment (the same split XP itself made).
-  var ACC_Z = 40, ACC_OPEN = {};
-
-  // ── click-to-raise: any pointerdown inside a window brings it to the front ──
-  // "front" is just paint order among overlapping siblings, and windows only
-  // overlap once dragging (or an accessory popout) is involved — the flex
-  // desktop never overlaps them at rest. One monotonic counter shared by page
-  // windows and accessories keeps the two families interleaving correctly
-  // (click a page window and it rises above the Clock, and vice versa).
-  // Capture phase so clicks on scrollbars, inputs, and the textarea all raise.
-  // Ceiling stays far below the taskbar (99999) / Run (99998) / balloon layers.
-  function initRaise() {
-    D.addEventListener("pointerdown", function (e) {
-      var w = e.target && e.target.closest && e.target.closest(".window,.np-window,.axp-acc");
-      if (!w) return;
-      if (String(w.style.zIndex) === String(ACC_Z)) return;   // already on top
-      w.style.zIndex = ++ACC_Z;
-    }, true);
-  }
-  var ACCESSORIES = [
-    { label: "Clock", hint: "the current time, ticking", kind: "accessory", accId: "clock", path: "", icon: "🕐", build: buildClock }
-  ];
-  function accFront(win) { win.style.zIndex = ++ACC_Z; }
-  function openAccessory(id) {
-    var a = ACCESSORIES.filter(function (x) { return x.accId === id; })[0]; if (!a) return;
-    if (ACC_OPEN[id]) { accFront(ACC_OPEN[id].win); return; }
-    AXP_SND.play("open");
-    var n = Object.keys(ACC_OPEN).length;
-    var win = el('<div class="axp-acc"><div class="tb"><span class="ic" aria-hidden="true">' + a.icon + '</span><span class="t">' + a.label + '</span><span class="x" role="button" title="close" aria-label="close">✕</span></div><div class="bd"></div></div>');
-    win.style.left = Math.max(8, Math.min(innerWidth - 200, 86 + n * 24)) + "px";
-    win.style.top = Math.max(8, 64 + n * 24) + "px";
-    D.body.appendChild(win);
-    var bd = win.querySelector(".bd");
-    try { a.build(bd); } catch (e) {}
-    accFront(win);
-    var btn = el('<button class="axp-pin axp-acc-btn" title="' + a.hint + '"><span class="fav" aria-hidden="true">' + a.icon + '</span><span class="lbl">' + a.label + '</span></button>');
-    var bar = D.getElementById("axp-taskbar"), spacer = D.getElementById("axp-spacer");
-    if (bar && spacer) bar.insertBefore(btn, spacer);
-    btn.addEventListener("click", function () { accFront(win); });
-    ACC_OPEN[id] = { win: win, btn: btn };
-    win.addEventListener("pointerdown", function () { accFront(win); });
-    win.querySelector(".x").addEventListener("click", function (ev) {
-      ev.stopPropagation(); if (bd._iv) clearInterval(bd._iv); win.remove(); btn.remove(); delete ACC_OPEN[id];
-    });
-    var tb = win.querySelector(".tb");
-    // Same ProMotion discipline as initIconDrag / initDrag: the gesture writes
-    // TRANSFORM only (a pure compositor move, promoted by .axp-dragging's
-    // will-change) and commits the final left/top once, on release. Writing
-    // left/top per pointermove re-laid out this fixed window every frame — the
-    // judder those two drags were already rewritten to avoid. rAF batching would
-    // NOT help: pointermove is already frame-coalesced and getBoundingClientRect
-    // is read once at pointerdown, so there is no read/write thrash to defer; it
-    // would still force a layout per frame and diverge from the other two drags.
-    // .axp-acc is position:fixed, so viewport left/top and transform are the same
-    // coordinates, and it has no fixed-position descendants, so the transform's
-    // new containing block changes nothing.
-    tb.addEventListener("pointerdown", function (e) {
-      if (e.target.closest(".x")) return;
-      accFront(win);
-      var r = win.getBoundingClientRect(), sx = e.clientX, sy = e.clientY, ox = r.left, oy = r.top;
-      var nx = ox, ny = oy;
-      try { tb.setPointerCapture(e.pointerId); } catch (er) {}
-      win.classList.add("axp-dragging");   // earn-it: will-change on for the gesture, off on drop
-      function mv(ev) {
-        nx = Math.max(0, Math.min(innerWidth - 40, ox + ev.clientX - sx));
-        ny = Math.max(0, Math.min(innerHeight - 36, oy + ev.clientY - sy));
-        win.style.transform = "translate(" + (nx - ox) + "px," + (ny - oy) + "px)";
-      }
-      function up() {
-        win.style.left = nx + "px"; win.style.top = ny + "px";
-        win.style.transform = "";
-        win.classList.remove("axp-dragging");
-        tb.removeEventListener("pointermove", mv);
-        tb.removeEventListener("pointerup", up);
-        tb.removeEventListener("pointercancel", up);   // a cancelled gesture otherwise leaks mv + strands the drag
-      }
-      tb.addEventListener("pointermove", mv);
-      tb.addEventListener("pointerup", up);
-      tb.addEventListener("pointercancel", up);
-    });
-  }
-  function buildClock(bd) {
-    bd.innerHTML = '<div class="clk"><div class="clk-t">--:--:--</div><div class="clk-d"></div></div>';
-    var t = bd.querySelector(".clk-t"), dd = bd.querySelector(".clk-d");
-    function p2(n) { return (n < 10 ? "0" : "") + n; }
-    function tick() {
-      var now = new Date();
-      t.textContent = p2(now.getHours()) + ":" + p2(now.getMinutes()) + ":" + p2(now.getSeconds());
-      dd.textContent = now.toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" });
-    }
-    tick(); bd._iv = setInterval(tick, 1000);
-  }
-
-  // ── open / close ──────────────────────────────────────────────────────────────
-  // `viaKeyboard` decides whether the focused input shows its ring. The browser
-  // otherwise guesses from how focus seemed to arrive, and a scripted focus() is
-  // exactly the case its heuristic can't read: the SAME line serves ⌘K (mid
-  // keyboard flow, the ring is the only thing saying where you landed) and a
-  // click on Start (the pointer already said it, so the ring is noise).
-  // focus({focusVisible}) is the option that lets the caller answer instead.
-  // An engine without it ignores the member and keeps today's guess, so this
-  // costs nothing where it isn't supported (Chrome 145, Safari 18.4, FF 104).
-  function openRun(viaKeyboard) {
-    if (!run) buildRun();
-    if (run.open) return;
-    if (!PHOTOS) loadPhotos().then(function () { if (run.open) render(); });
-    if (!WRITING) loadWriting().then(function () { if (run.open) render(); });
-    // the hover engine is fetched on the FIRST Run open, never on page load:
-    // a visitor who never opens the palette never pays for it.
-    loadPreview();
-    run.showModal(); AXP_SND.play("open");
-    var s = D.getElementById("axp-start"); if (s) s.setAttribute("aria-expanded", "true");
-    input.value = ""; render();
-    input.focus({ focusVisible: !!viaKeyboard });
-  }
-  function closeRun() {
-    // The card is in the TOP LAYER, so if it outlives the dialog it floats over
-    // a page with nothing to explain it. Hide it here rather than only on the
-    // dialog's "close" event: that event is the tidy place for side effects, but
-    // it is not guaranteed to reach us (it does not fire at all in some
-    // embedded browser builds — measured), and a stranded card is too visible a
-    // failure to hang on an event. Cheap and idempotent, so both paths can run.
-    if (previewHoist) previewHoist.hide();
-    if (run && run.open) run.close();   // other side effects ride the "close" event
-  }
-
-  // ── tray balloons: brief XP notification-bubble popouts for the system-utility
-  // icons (System Properties, Security Center, Windows Update). One balloon at a
-  // time; it opens above whichever icon was clicked, with a tail pointing at it.
-  // The full pages keep all the detail; these are the quick at-a-glance status.
-  var BALLOON = {
-    sysprop: { title: "System Properties", href: "/whoareyou",
-      icon: "<svg viewBox='0 0 16 16' fill='none' stroke='#1c4bb0' stroke-width='1.3' stroke-linecap='round' stroke-linejoin='round'><rect x='1.8' y='2.4' width='12.4' height='8' rx='1'></rect><path d='M6 10.4v2M10 10.4v2M4.6 12.9h6.8'></path></svg>",
-      load: loadSys, render: renderSys },
-    security: { title: "Security Center", href: "/security",
-      icon: "<svg viewBox='0 0 16 16' fill='none' stroke='#2c8f1e' stroke-width='1.3' stroke-linejoin='round' stroke-linecap='round'><path d='M8 1.7 2.7 3.7 V8 c0 3.4 2.6 5.4 5.3 6.4 2.7-1 5.3-3 5.3-6.4 V3.7 Z'></path><path d='M5.7 8 7.3 9.7 10.5 6.2'></path></svg>",
-      load: loadSys, render: renderSec },
-    updates: { title: "Windows Update", href: "/updates",
-      icon: "<svg viewBox='0 0 16 16' fill='none' stroke='#1c4bb0' stroke-width='1.2'><circle cx='8' cy='8' r='6'></circle><path d='M2 8 h12 M8 2 c2.3 2.4 2.3 9.2 0 12 M8 2 c-2.3 2.4 -2.3 9.2 0 12'></path></svg>",
-      load: loadUpd, render: renderUpd }
-  };
-  function buildBalloon() {
-    if (balloon) return;
-    balloon = el(
-      '<div id="axp-balloon" role="dialog" aria-label="notification">' +
-        '<div class="tb"><span class="ic" aria-hidden="true"></span><span class="t"></span><button class="x" type="button" title="Close" aria-label="Close">✕</button></div>' +
-        '<div class="bd"></div><div class="ft"></div>' +
-      '</div>'
-    );
-    D.body.appendChild(balloon);
-    balloon.querySelector(".x").addEventListener("click", closeBalloon);
-  }
-  function balloonBody() { return balloon && balloon.querySelector(".bd"); }
-  // data, cached per page load
+  // Data is cached per page load. Keeping these readers in the core lets a tray
+  // click and a later live infotip share one fetch without shipping render code.
   function loadSys(cb) {
     if (sysData) { cb(sysData); return; }
     fetch("/whoareyou.json", { headers: { accept: "application/json" } })
@@ -939,98 +382,24 @@
       .then(function (j) { if (j && j.items) updData = j; cb(updData); })
       .catch(function () { cb(null); });
   }
-  function flatFields(j) { var m = {}; (j.groups || []).forEach(function (g) { (g.fields || []).forEach(function (f) { m[f.k] = f.v; }); }); return m; }
-  function renderSys(j) {
-    var b = balloonBody(); if (!b) return;
-    if (!j) { b.innerHTML = '<div class="load">couldn\'t read this connection.</div>'; return; }
-    var m = flatFields(j);
-    b.innerHTML =
-      '<div class="ln"><span class="k">Network</span> <b>' + esc(m["Cloudflare colo"] || "—") + '</b> <span class="k">' + esc(m["ISP / ASN"] || "") + '</span></div>' +
-      '<div class="ln"><span class="k">Transport</span> <b>' + esc(m["HTTP version"] || "—") + '</b> · ' + esc(m["TLS version"] || "") + '</div>' +
-      '<div class="ln"><span class="k">Region</span> ' + esc((m["City"] || "—") + ", " + (m["Country"] || "")) + '</div>' +
-      '<div class="ln"><span class="k">Client</span> ' + esc(m["Best guess"] || "—") + '</div>';
+  function toggleTray(kind, ic) {
+    if (!trayPromise) {
+      trayPromise = import("/nav-tray.js").then(function (m) {
+        return m.createTray({ sound: AXP_SND, loadSys: loadSys, loadUpd: loadUpd });
+      });
+    }
+    return trayPromise.then(function (tray) { tray.toggle(kind, ic); });
   }
-  function renderSec(j) {
-    var b = balloonBody(); if (!b) return;
-    var m = j ? flatFields(j) : {};
-    var tr = j ? ('<div class="ln"><span class="k">Transport</span> ' + esc((m["HTTP version"] || "") + " · " + (m["TLS version"] || "")) + '</div>') : "";
-    b.innerHTML =
-      '<div class="ln"><b>Firewall</b> <span class="ok">ON</span> <span class="k">Cloudflare edge</span></div>' +
-      '<div class="ln"><b>Automatic Updates</b> <span class="ok">ON</span> <span class="k">immutable assets</span></div>' +
-      '<div class="ln"><b>Threat protection</b> <span class="ok">ON</span> <span class="k">bot auth</span></div>' + tr;
-  }
-  function renderUpd(j) {
-    var b = balloonBody(); if (!b) return;
-    if (!j) { b.innerHTML = '<div class="load">couldn\'t read the update log.</div>'; return; }
-    var latest = (j.items || []).slice(0, 2).map(function (it) {
-      return '<div class="ln"><span class="k">' + esc(it.slug) + '</span> ' + esc(it.title) + '</div>';
-    }).join("");
-    b.innerHTML =
-      '<div class="ln"><b class="ok">aadhar.sh is up to date.</b></div>' +
-      '<div class="ln"><span class="k">build</span> <span class="mono">' + esc(j.build || "—") + '</span></div>' + latest;
-  }
-  function placeTail(ic) {
-    // aim the down-tail at the center of the icon that opened the balloon
-    try {
-      var ir = ic.getBoundingClientRect(), br = balloon.getBoundingClientRect();
-      var x = Math.max(14, Math.min(br.width - 14, (ir.left + ir.width / 2) - br.left));
-      balloon.style.setProperty("--tail", x + "px");
-    } catch (e) {}
-  }
-  function openBalloon(kind, ic) {
-    var cfg = BALLOON[kind]; if (!cfg) return;
-    if (!balloon) buildBalloon();
-    balloonKind = kind;
-    balloon.querySelector(".ic").innerHTML = cfg.icon;
-    balloon.querySelector(".t").textContent = cfg.title;
-    balloon.querySelector(".ft").innerHTML = '<a href="' + cfg.href + '">full page</a>';
-    balloonBody().innerHTML = '<div class="load">reading…</div>';
-    balloon.classList.add("open"); AXP_SND.play("open");
-    if (ic) { ic.setAttribute("aria-expanded", "true"); placeTail(ic); }
-    var x = balloon.querySelector(".x"); if (x) try { x.focus(); } catch (e) {}
-    cfg.load(function (data) { if (balloon.classList.contains("open") && balloonKind === kind) cfg.render(data); });
-  }
-  function closeBalloon() {
-    if (!balloon || !balloon.classList.contains("open")) return;
-    balloon.classList.remove("open"); AXP_SND.play("close");
-    var ic = balloonKind && D.querySelector('.axp-trayico[data-kind="' + balloonKind + '"]');
-    if (ic) { ic.setAttribute("aria-expanded", "false"); try { ic.focus(); } catch (e) {} }
-    balloonKind = null;
-  }
-  function toggleBalloon(kind, ic) {
-    if (!balloon) buildBalloon();
-    if (balloon.classList.contains("open") && balloonKind === kind) { closeBalloon(); return; }
-    openBalloon(kind, ic);
-  }
-
-  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
 
   // ⌘K / Ctrl-K anywhere
   D.addEventListener("keydown", function (e) {
     if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) {
       e.preventDefault();
-      run && run.open ? closeRun() : openRun(true);
+      toggleRun(true).catch(function () { location.assign("/run"); });
     }
   });
 
-  // Escape closes the tray balloon; a pointerdown anywhere outside it (and outside
-  // ANY tray icon — clicking a sibling icon swaps the balloon via its own handler)
-  // dismisses it, like a real XP notification balloon.
-  D.addEventListener("keydown", function (e) {
-    if (e.key === "Escape" && balloon && balloon.classList.contains("open")) closeBalloon();
-  });
-  D.addEventListener("pointerdown", function (e) {
-    if (!balloon || !balloon.classList.contains("open")) return;
-    if (e.target.closest && (e.target.closest("#axp-balloon") || e.target.closest(".axp-trayico"))) return;
-    closeBalloon();
-  }, true);
-
-  // ── desktop layer + dragging ─────────────────────────────────────────────────
-  function buildDesktop() {
-    if (D.getElementById("axp-desktop")) return;
-    var d = D.createElement("div"); d.id = "axp-desktop"; d.setAttribute("aria-hidden", "true");
-    D.body.insertBefore(d, D.body.firstChild);
-  }
+  // ── compiled desktop layer + dragging ────────────────────────────────────────
   // grab a title bar → drag the window with TRANSFORM ONLY (no position change), so it
   // stays in normal flow and the page keeps scrolling. (the old version popped the
   // window to position:fixed, which collapsed a content page's flow and broke its
@@ -1160,12 +529,16 @@
   // + home keep their own page favicons (e.g. each garage demo's distinct icon).
   function setFavicon() {
     var np = location.pathname.replace(/\/+$/, "") || "/";
-    var sec = SUBPAGES.filter(function (s) { return (s.path.replace(/\/+$/, "") || "/") === np; })[0];
-    if (!sec || !SECTION_ICONS[sec.label]) return;
+    var sec = [].filter.call(D.querySelectorAll(".axp-pin"), function (pin) {
+      return ((pin.getAttribute("href") || "").replace(/\/+$/, "") || "/") === np;
+    })[0];
+    var label = sec && sec.querySelector(".lbl");
+    label = label && label.textContent.trim();
+    if (!label || !SECTION_ICONS[label]) return;
     var link = D.querySelector('link[rel~="icon"]');
     if (!link) { link = D.createElement("link"); link.rel = "icon"; (D.head || D.documentElement).appendChild(link); }
     link.type = "image/svg+xml";
-    link.href = "data:image/svg+xml," + encodeURIComponent(SECTION_ICONS[sec.label]);
+    link.href = "data:image/svg+xml," + encodeURIComponent(SECTION_ICONS[label]);
   }
 
   // shell-wide Speculation Rules: prerender the shell's safe destinations on
@@ -1411,16 +784,12 @@
       // usually already warm from tooltip.js.
       import("/hoist.js").catch(function () {});
       mod = import("/infotip.js").then(function (m) {
-        // The tables go over as they are, and the module does the counting:
-        // every byte of derivation kept here would ship to every visitor,
-        // including the ones who never point at anything. Same for `load` —
-        // these are nav.js's own readers, so a tray infotip and its
-        // click-balloon share one fetch per page rather than race for it.
+        // These are nav.js's own readers, so a tray infotip and its click-balloon
+        // share one fetch per page rather than race for it.
         m.start({
           find: targetFor,
           initial: pending,
           kbd: KBD,
-          pages: PAGES,
           load: { sys: loadSys, upd: loadUpd, writing: loadWriting }
         });
         pending = null;
@@ -1456,22 +825,21 @@
     D.addEventListener("focusin", onFocus);
   }
 
-  function boot() { ensureLunaCss(); buildDesktop(); buildIcons(); buildTaskbar(); initDrag(); initRaise(); initIconDrag(); initScrollbars(); initResize(); setFavicon(); injectSpeculation(); initCloseBack(); initWindowControls(); initInfotips(); }
+  function boot() {
+    var bar = D.getElementById("axp-taskbar");
+    if (!bar || !D.getElementById("axp-desktop")) return;
+    ensureLunaCss(); wireTaskbar(bar); initDrag(); initRaise(); initIconDrag(); initScrollbars(); initResize(); setFavicon(); injectSpeculation(); initCloseBack(); initWindowControls(); initInfotips();
+  }
   function bootAfterStaticPaint() {
     // Generated/static pages and Worker-rendered shells already carry the desktop
     // and taskbar markup plus race-proof geometry in HTML. nav.js only ENHANCES
     // that shell (dragging, Run, clock, controls), so let its useful content paint
-    // before doing the DOM wiring. Two frames guarantee one complete static paint;
-    // pages without the server shell still build it synchronously as their fallback.
+    // before doing the DOM wiring. Two frames guarantee one complete static paint.
     // A prerendered document does not run animation frames while hidden. Enhance its
     // already-SSR'd shell now, so activation inherits a fully wired desktop instead
     // of paying both frames on the click that activates the prerender.
-    const hasStaticShell = D.getElementById("axp-desktop") && D.getElementById("axp-taskbar");
-    if (hasStaticShell) {
-      if (D.prerendering) return boot();
-      requestAnimationFrame(() => requestAnimationFrame(boot));
-    }
-    else boot();
+    if (D.prerendering) return boot();
+    requestAnimationFrame(() => requestAnimationFrame(boot));
   }
   if (D.readyState === "loading") D.addEventListener("DOMContentLoaded", bootAfterStaticPaint);
   else bootAfterStaticPaint();

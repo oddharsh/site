@@ -39,7 +39,8 @@ import { DATA_TOOLS } from "./holding/_worker.js/lib/tools.js";
 import { cronJob } from "./holding/_worker.js/lib/cron.js";
 import { PAGE_FAMILY_MATCH, serveStaticPage } from "./holding/_worker.js/lib/assets.js";
 import { serveMarkdown } from "./holding/_worker.js/home.js";
-import { readManifest, workerModule, navFenceBody, readFenceBody } from "./scripts/gen-manifest.mjs";
+import { readManifest, workerModule, navFenceBody, readFenceBody, runProfilesBody } from "./scripts/gen-manifest.mjs";
+import { PROFILES } from "./holding/scripts/shell-data.mjs";
 import { INDEXED_SECTIONS, TWIN_FACTS, buildTwins, checkTwinFacts, htmlFileFor, twinPath } from "./scripts/gen-md-twins.mjs";
 import { collectBlockClasses, readDocument } from "./scripts/lib/html-to-md.mjs";
 import {
@@ -1734,18 +1735,16 @@ test("outbound citations exclude the shell, self-links, and non-public URLs", ()
 });
 
 test("outbound self-link list stays in sync with the desktop shell profiles", async () => {
-  // the filter is only correct while it knows every profile nav.js stamps on
-  // every page; a new profile added there must be excluded here too.
-  const nav = await readFile("holding/nav.js", "utf8");
-  const block = (nav.match(/var PROFILES = \[([\s\S]*?)\];/) || [, ""])[1];
-  const urls = [...block.matchAll(/url:\s*"([^"]+)"/g)].map((m) => m[1]);
+  // The filter is only correct while it knows every profile the canonical shell
+  // compiler stamps on every page; a new profile must be excluded here too.
+  const urls = PROFILES.map((profile) => profile.url);
   assert.ok(urls.length >= 5);
   for (const raw of urls) {
     const u = new URL(raw);
     const bare = (u.host + u.pathname).replace(/^www\./, "").replace(/\/$/, "");
     assert.ok(
       SELF_LINK_HOSTS.some((self) => bare === self || bare.startsWith(self + "/")),
-      `nav.js PROFILES has ${bare} but webmention-send.js SELF_LINK_HOSTS does not exclude it`
+      `shell-data.mjs PROFILES has ${bare} but webmention-send.js SELF_LINK_HOSTS does not exclude it`
     );
   }
 });
@@ -1952,10 +1951,11 @@ test("committed manifest projections match a fresh generation", async () => {
   const { surfaces } = readManifest();
   const mod = await readFile("holding/_worker.js/lib/site-manifest.js", "utf8");
   assert.equal(mod.trim(), workerModule(surfaces).trim(), "lib/site-manifest.js is stale — run pnpm run gen:manifest");
-  const nav = await readFile("holding/nav.js", "utf8");
+  const nav = await readFile("holding/nav-run.js", "utf8");
   for (const [section, marker] of [["garage", "garage-pages"], ["lwe", "lwe-pages"]]) {
-    assert.equal(readFenceBody(nav, marker), navFenceBody(surfaces, section), `nav.js generated:${marker} is stale — run pnpm run gen:manifest`);
+    assert.equal(readFenceBody(nav, marker), navFenceBody(surfaces, section), `nav-run.js generated:${marker} is stale — run pnpm run gen:manifest`);
   }
+  assert.equal(readFenceBody(nav, "run-profiles"), runProfilesBody(), "nav-run.js profiles are stale — run pnpm run gen:manifest");
 });
 
 test("site MCP lists the agent surfaces as resources", async () => {
@@ -2286,7 +2286,8 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   assert.doesNotMatch(page, /new IntersectionObserver|rootMargin:/,
     "the photo grid must not reintroduce viewport gating; the whole set is ~136 KB off the LCP path, and the urgency split is what orders it now");
   assert.doesNotMatch(page, /requestIdleCallback\(load/, "the tooltip island must not transfer before hover intent");
-  assert.match(nav, /getElementById\("axp-desktop"\).*getElementById\("axp-taskbar"\)/, "every server-rendered shell must opt into post-paint enhancement");
+  assert.match(nav, /var bar = D\.getElementById\("axp-taskbar"\);\s*if \(!bar \|\| !D\.getElementById\("axp-desktop"\)\) return;/,
+    "every compiled shell must be present before nav.js enhances it");
   assert.match(nav, /D\.prerendering\) return boot\(\)/, "prerendered static shells must enhance before activation");
   assert.match(nav, /requestAnimationFrame\(\(\) => requestAnimationFrame\(boot\)\)/, "ordinary static shell enhancement must follow the first useful paint");
   assert.ok(
