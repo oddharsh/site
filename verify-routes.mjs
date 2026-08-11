@@ -149,6 +149,10 @@ const ROUTES = [
   ...(builtOutput ? [
     { path: "/nav.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", maxBytes: 65000 },
     { path: "/nav.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "axp-histnav" },
+    { path: "/nav-run.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", maxBytes: 25000 },
+    { path: "/nav-run.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "axp-run" },
+    { path: "/nav-tray.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", maxBytes: 10000 },
+    { path: "/nav-tray.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "axp-balloon" },
     { path: "/notepad.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "np-window" },
     { path: "/lens.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "replaceState" },
     { path: "/lens-browser.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "LensBrowser" },
