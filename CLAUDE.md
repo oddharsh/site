@@ -1645,10 +1645,15 @@ pnpm run deploy:direct
     and every HTML response advertises it via `Link: rel="compression-dictionary"`
     (`lib/security.js`). It also diffs the current page against the committed
     `holding/p-dict` snapshots from the previous release. The worker tries the
-    `Available-Dictionary` tag it receives, so a returning visitor gets the old
-    per-page ratio (93-97% in the measured set) while a visitor who holds only the
-    family corpus gets the broader fallback (~26% off q11: 298,933 B vs 405,909 B
-    across 38 pages). Both candidates are emitted only when they beat plain q11.
+    `Available-Dictionary` tag it receives. The family offer deliberately uses a
+    longer site-wide URLPattern than an exact page path, so RFC 9842 makes it the
+    preferred dictionary whenever both are cached; this prevents an uncaptured old
+    page snapshot from shadowing a usable family delta and forcing Brotli. The exact
+    page remains the high-ratio fallback (93-97% in the measured set) before the
+    idle-loaded family dictionary arrives. The family corpus includes representative
+    tails from its four outlier layouts and now beats q11 on all 46 deterministic
+    pages (428,238 B vs 494,073 B across the set). Both candidates are emitted only
+    when they beat plain q11.
     `pnpm run shell:roll` rolls both `a-dict` and `p-dict`; page snapshots are Brotli'd
     in the repo, ignored by the asset upload, and decompressed only at build time.
     **The two halves read different sources, and that is load-bearing rather than

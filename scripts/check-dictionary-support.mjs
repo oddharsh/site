@@ -13,6 +13,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import { brotliDecompressSync } from "node:zlib";
 import { createHash } from "node:crypto";
+import { PAGE_FAMILY_MATCH } from "../holding/_worker.js/lib/assets.js";
 
 const b64 = (buf) => `:${createHash("sha256").update(buf).digest("base64")}:`;
 const get = (url, dict) => fetch(url, { headers: {
@@ -60,7 +61,7 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
     let raw = body;
     try { raw = brotliDecompressSync(body); } catch { /* already decoded upstream */ }
     const uad = res.headers.get("use-as-dictionary") || "";
-    report("page dictionary offered", /match="\/\*"/.test(uad) && /match-dest=\("document"\)/.test(uad),
+    report("page dictionary offered", uad === `match="${PAGE_FAMILY_MATCH}", match-dest=("document")`,
            `${offered} ${raw.length} B, uad=${uad || "(absent)"}`);
     const r = await get("https://aadhar.sh/garage/pretext", b64(raw));
     const ce = r.headers.get("content-encoding");

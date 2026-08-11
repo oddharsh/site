@@ -174,11 +174,29 @@ const shellOffer = (pathname, ext) => {
   const base = pathname.slice("/a/".length).replace(/\.[0-9a-f]{8}\.(js|css|svg|dict)$/, "");
   return `match="/a/${base}.*", match-dest=${SHELL_DESTS[ext] || '("script" "style")'}`;
 };
+// RFC 9842 lets a client send exactly ONE matching dictionary and resolves ties in
+// this order: matching destination, longest `match` string, newest fetch. That made
+// the old `match="/*"` family offer lose to every exact per-page offer. When Chrome
+// held an exact snapshot the build had not captured, it sent that unusable hash and
+// the Worker had no way to ask for the family hash it also held, so the page fell all
+// the way back to Brotli.
+//
+// This is a site-wide URLPattern without custom regexp groups. Its deliberately
+// descriptive wildcard name makes the match string longer than any page path, so
+// the broad, build-guaranteed family delta wins whenever the family dictionary is
+// present. Exact page snapshots remain the high-ratio fallback while the family
+// dictionary is not cached yet. If a future page path is longer than this pattern,
+// pageOffer declines to register it rather than letting it shadow the family again.
+// Tested against URLPattern in shipping Chrome: it matches `/` and nested paths and
+// `hasRegExpGroups` is false, as RFC 9842 requires.
+export const PAGE_FAMILY_MATCH = "/:sitewide_html_dictionary_preferred_over_uncaptured_exact_page_snapshots*/*";
 const pageFamilyOffer = (pathname) =>
   /^\/a\/page-family\.[0-9a-f]{8}\.dict$/.test(pathname)
-    ? `match="/*", match-dest=("document")`
+    ? `match="${PAGE_FAMILY_MATCH}", match-dest=("document")`
     : null;
-const pageOffer = (pathname) => `match="${pathname}", match-dest=("document")`;
+const pageOffer = (pathname) => pathname.length < PAGE_FAMILY_MATCH.length
+  ? `match="${pathname}", match-dest=("document")`
+  : null;
 
 // Can the BROWSER keep an offer made on a response with this cache-control?
 //
@@ -212,9 +230,9 @@ const pageOffer = (pathname) => `match="${pathname}", match-dest=("document")`;
 // Both moves since were exactly that, neither touching this function: the pages took
 // `stale-while-revalidate` without `must-revalidate` and lit their tier back up, and `/`
 // dropped no-cache for PAGE_CACHE_CONTROL on 2026-07-31 and joined them. The immutable
-// /a/page-family.<hash>.dict still carries whoever the per-page tier cannot reach (a first
-// visit, a snapshot aged out of the KEEP window), so the two tiers stack rather than
-// compete.
+// /a/page-family.<hash>.dict is preferred whenever it is cached. The exact page tier
+// remains useful before that idle-loaded family dictionary arrives, so the two tiers
+// stack without letting an uncaptured exact hash force an avoidable Brotli response.
 const canRegisterAsDictionary = (cacheControl) => {
   const cc = (cacheControl || "").toLowerCase();
   if (/\b(?:no-store|no-cache|must-revalidate)\b/.test(cc)) return false;
@@ -422,14 +440,16 @@ export async function servePrecompressedShell(request, env) {
 
 
 // serveStaticPage: static and build-rendered HTML, with a dcz delta when the
-// client holds either a committed per-page snapshot or the immutable family
-// dictionary, otherwise the brotli q11 twin, otherwise the plain asset.
+// client holds either the preferred immutable family dictionary or a committed
+// per-page snapshot, otherwise the brotli q11 twin, otherwise the plain asset.
 //
 // The family dictionary lives at an immutable /a/ URL with a one-year lifetime and
 // is advertised by every HTML response. Static page responses also offer the page
 // itself as a scoped document dictionary; committed snapshots let the next release
-// answer that tag with the high-ratio per-page delta. Dynamic Worker pages keep the
-// family Link but never enter this precomputed route.
+// answer that tag with the high-ratio per-page delta before the family dictionary has
+// arrived. Once both exist, PAGE_FAMILY_MATCH deliberately wins RFC 9842's longest-
+// match selection so an uncaptured exact snapshot cannot shadow a usable family delta.
+// Dynamic Worker pages keep the family Link but never enter this precomputed route.
 export async function serveStaticPage(request, env, opts = {}) {
   const url = new URL(request.url);
   // HEAD walks the GET path far enough to answer with the SAME headers, then drops
@@ -452,7 +472,9 @@ export async function serveStaticPage(request, env, opts = {}) {
   // headers land, because the caller is what sets cache-control.
   const offerIfStorable = (headers) => {
     if (canRegisterAsDictionary(headers.get("cache-control"))) {
-      headers.set("use-as-dictionary", pageOffer(url.pathname));
+      const offer = pageOffer(url.pathname);
+      if (offer) headers.set("use-as-dictionary", offer);
+      else headers.delete("use-as-dictionary");
     } else {
       headers.delete("use-as-dictionary");
     }
