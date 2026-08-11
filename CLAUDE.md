@@ -2139,12 +2139,14 @@ pnpm run deploy:direct
     So the check is reporting an outage in Copilot's model routing, and no change
     to your branch can turn it green.
 
-    **It is not a flake, and #319 proved that by failing twice the same way on
-    two different commits.** Sixteen minutes apart, on the feature head and then
-    on a merge commit that only pulled `main` in, with different Request IDs and
-    the identical error. An outage in a service this check depends on reproduces
-    on whatever you push next, which is worth knowing before you start bisecting
-    a diff for the cause of it.
+    **It is not a flake: the same error landed on three commits across two PRs
+    in twenty-one minutes.** #319 twice (its feature head, then a merge commit
+    that only pulled `main` in), and then THIS PR, whose entire diff is the
+    paragraph you are reading. Three different Request IDs, one identical error,
+    including on a change that adds no executable line to the repository. An
+    outage in a service this check depends on reproduces on whatever you push
+    next, which is worth knowing before you start bisecting a diff for the cause
+    of it.
 
     That gives a test which does not depend on recognising a signature:
 
