@@ -777,37 +777,15 @@ a contract test fails if one goes back to being unqualified.
 Backfill or force a run with `workflow_dispatch`; it takes an optional `date` to
 place the row. Raw series at `/garage/dyno.json`.
 
-Cloudflare Web Analytics/RUM is the outcome source for LCP, INP, CLS, FCP, and
-page-load behavior. Until it has a useful baseline, do not turn an advisory
-asset warning into a CI failure. Use a controlled mobile/4G browser run for
-repeatable pre-merge checks; once field data is sufficient, replace guessed
-byte ceilings with route/cohort SLOs and keep bytes as regression signals.
+Browser RUM is deliberately off. No page loads Cloudflare Web Analytics, the Worker
+has no `/ledger/rum*` proxy or collector, and `build.mjs` tripwire #7b hard-fails if
+any of that runtime wiring returns. That removes client-side field collection: this
+site does not currently observe real-user LCP, INP, CLS, FCP, or Navigation Type.
 
-**Turning RUM on (the beacon side is already wired; two steps remain).** The
-homepage carries the beacon and the CSP allows it, but the site token is dashboard
-state that no config in this repo can derive, so `build.mjs` tripwire #7b HARD-FAILS
-the deploy while `holding/index.html` still says `CF_RUM_TOKEN_PLACEHOLDER`. That
-block is deliberate: a placeholder token costs every visitor a third-party request
-for a beacon that reports nowhere, and it fails silently by design, so nothing else
-would have caught it.
-
-1. Cloudflare dashboard > Web Analytics > Add a site > `aadhar.sh`. Choose the
-   MANUAL/JS-snippet option, not automatic injection — automatic cannot work here
-   (the worker serves precompressed br/dcz bodies with `encodeBody: "manual"`, and
-   the edge cannot rewrite HTML it did not compress).
-2. Copy the site token out of the generated snippet and replace
-   `CF_RUM_TOKEN_PLACEHOLDER` in `holding/index.html`. That is the only edit; the
-   CSP entries, the `/whoareyou` disclosure plus its markdown twin, and the
-   `/security` summary all already describe a live beacon.
-
-Then read Navigation Type (Web Analytics > Page views, bottom of the sidebar): the
-2026-04-30 release splits "Back-forward" from "Back-forward Cache" and "Navigate"
-from "Prerender", which is what makes the bfcache-preserving `no-cache` policy and
-the speculation rules measurable rather than asserted.
-
-While the placeholder is in place, `pnpm run perf-budget` cannot read the bundle gzip
-size (its wrangler dry-run needs a build that succeeds), so that one check reports
-`warn` instead of a number. Pasting the token restores it.
+Use a controlled mobile/4G browser run for repeatable performance checks, and keep
+the per-PR wire-size diff plus nightly trend as regression signals. Do not turn an
+advisory asset envelope into a CI failure or claim a route/cohort SLO without a new,
+explicitly approved field-measurement source.
 
 The Workers Build project should expose its build/deploy status on the release
 commit. After enabling it, verify the live homepage route surface plus

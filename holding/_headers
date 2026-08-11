@@ -17,12 +17,9 @@
   # frame-ancestors 'none' prevents clickjacking. upgrade-insecure-requests
   # rewrites any http:// to https://.
   #
-  # There are NO external script or connect origins. The Cloudflare Web Analytics
-  # (RUM) beacon used to need two cloudflareinsights.com entries; both legs moved
-  # behind the worker on 2026-07-29 (/ledger/rum.js + /ledger/rum, see rum.js), so
-  # the browser speaks only to this origin. The REPORTING did not stop, it moved
-  # server-side — /whoareyou and /security state that plainly, and this comment is
-  # not the place to let that get rounded up into a privacy claim.
+  # There are NO external script or connect origins. Browser-facing resources and
+  # connections are self-only; server-side route handlers document their own
+  # outbound calls separately.
   #
   # THIS LINE MUST MATCH SECURITY_HEADERS in _worker.js/lib/security.js. Static
   # assets get this copy; worker-rendered responses get that one. infra.json's
