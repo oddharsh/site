@@ -298,7 +298,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
           <div class="bubble"><p>it nailed mine, then I shortened the message and it fell apart. what's the actual floor?</p></div></div></div>
 
         <div class="msg bot"><div class="pic"></div><div><div class="who"><b>Vigen&egrave;re</b><time>23:11</time></div>
-          <div class="bubble"><p>Letters <b>per column</b>, not letters. A key of length <em>k</em> splits your text into <em>k</em> separate Caesars, and each one is solved from only its own slice, so 200 letters under a 4-letter key is a comfortable 50 per column while the same 200 under a 20-letter key is a starved 10. Measured on this exact solver and this exact table: at <b>20+ per column it solved every test</b>, at 12 it got 10 of 12, at 8 it got 6 of 12. That's the gauge under your message, and it's why <b>Kryptos K1 resists this</b> for two independent reasons at once: 63 letters under a 10-letter key is 6 per column, and the alphabet isn't <code>A&ndash;Z</code> anyway, so even a correct key decrypts to nothing. Short text starves the statistics; a keyed alphabet moves the target.</p></div></div></div>
+          <div class="bubble"><p>Letters <b>per column</b> are what run out. A key of length <em>k</em> splits your text into <em>k</em> separate Caesars, and each one is solved from only its own slice, so 200 letters under a 4-letter key is a comfortable 50 per column while the same 200 under a 20-letter key is a starved 10. Measured on this exact solver and this exact table: at <b>20+ per column it solved every test</b>, at 12 it got 10 of 12, at 8 it got 6 of 12. That's the gauge under your message, and it's why <b>Kryptos K1 resists this</b> for two independent reasons at once: 63 letters under a 10-letter key is 6 per column, and the alphabet isn't <code>A&ndash;Z</code> anyway, so even a correct key decrypts to nothing. Short text starves the statistics; a keyed alphabet moves the target.</p></div></div></div>
 
         <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>23:11</time></div>
           <div class="bubble"><p>back up to the <b>transposition</b> stage for a sec. K3 of Kryptos is pure transposition, no substitution at all, right? show me <b>columnar</b> specifically, and the double version.</p></div></div></div>
@@ -707,9 +707,9 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
     // column solved every test case, 12 got 10 of 12, 8 got 6 of 12.
     var per = L.length / k.length;
     var cls = per >= 20 ? "ok" : per >= 12 ? "thin" : "bad";
-    var verdict = per >= 20 ? "comfortable — this should solve."
-      : per >= 12 ? "marginal — it may recover most of the key and miss a letter or two."
-      : "too thin — expect it to fail, and to say so.";
+    var verdict = per >= 20 ? "comfortable, this should solve."
+      : per >= 12 ? "marginal, it may recover most of the key and miss a letter or two."
+      : "too thin, expect it to fail and to say so.";
     gauge.className = "sv-gauge " + cls;
     gauge.textContent = L.length + " letters ÷ key of " + k.length + " = " + per.toFixed(1) + " letters per column · " + verdict;
   }
@@ -749,7 +749,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
     solved = new Map();
     resetSteps();
 
-    // Step 1 — period by column IoC.
+    // Step 1: period by column IoC.
     setStep(1, "live", '<span style="color:#9a6a16">measuring…</span>');
     wait(function () {
       var max = Math.min(MAX_KEY, Math.max(1, Math.floor(L.length / 2))), rows = [], k;
@@ -758,7 +758,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
       // MULTIPLE and cannot do better. A multiple of the true period slices
       // just as cleanly (every 10th letter of a 5-key text is still one
       // Caesar), and a key whose own letters repeat makes its half-length
-      // score well too — PALIMPSEST has P at both 0 and 5. Preferring the
+      // score well too, since PALIMPSEST has P at both 0 and 5. Preferring the
       // shortest candidate inside some window was tried and is a tuned
       // constant that gets one of those two cases wrong whichever way it is
       // set. So step 1 reports the strongest length and says it is a starting
@@ -771,11 +771,11 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
           '<span class="bb' + (r.k === pick.k ? " win" : "") + '"><i style="width:' + w + '%"></i></span>' +
           '<span class="vv' + (r.k === pick.k ? " win" : "") + '">' + r.v.toFixed(3) + "</span>";
       }).join("") + "</div>" +
-        '<div>each row slices the ciphertext into every-<i>k</i>th letter and averages those slices’ IoC, shrunk toward flat by how few letters each slice holds. flat ≈ .038, English ≈ .067. <b>key length ' + pick.k +
-        "</b> is strongest — and this test only ever finds the period <em>up to a multiple</em>, since every-2<i>k</i>th letter of a <i>k</i>-key text is still one Caesar. step 4 settles which.</div>";
+        '<div>each row slices the ciphertext into every-<i>k</i>th letter and averages the IoC of those slices, shrunk toward flat by how few letters each slice holds. flat ≈ .038, English ≈ .067. <b>key length ' + pick.k +
+        "</b> is strongest, and this test only ever finds the period <em>up to a multiple</em>, since every-2<i>k</i>th letter of a <i>k</i>-key text is still one Caesar. step 4 settles which.</div>";
       setStep(1, "done", html);
 
-      // Step 2 — seed by chi-squared at that length.
+      // Step 2: seed by chi-squared at that length.
       setStep(2, "live", '<span style="color:#9a6a16">solving ' + pick.k + " Caesars…</span>");
       wait(function () {
         var seeded = columns(L, pick.k).map(seedColumn), seedKey = keyOf(seeded);
@@ -785,7 +785,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
           '<div class="sv-key" style="margin:3px 0">' + esc(seedKey) + "</div>" +
           '<div class="sv-plain">' + esc(seedPlain.slice(0, 160)) + (seedPlain.length > 160 ? "…" : "") + "</div>");
 
-        // Step 3 — hill-climb, then the full sweep for the ranked field.
+        // Step 3: hill-climb, then the full sweep for the ranked field.
         setStep(3, "live", '<span style="color:#9a6a16">climbing…</span>');
         wait(function () {
           var r = solveAt(L, pick.k);
@@ -793,7 +793,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
             return "pass " + t.pass + " · <b>" + esc(t.key) + "</b> · score " + Math.round(t.score);
           }).join("<br>");
           var moved = r.seedKey === keyOf(r.shifts)
-            ? "the climb changed nothing — χ² had already found every letter."
+            ? "the climb changed nothing, χ² had already found every letter."
             : "the climb moved " + (function () {
                 var n = 0, fk = keyOf(r.shifts);
                 for (var i = 0; i < fk.length; i++) if (fk[i] !== r.seedKey[i]) n++;
@@ -803,7 +803,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
             '<div style="font-family:var(--font-mono);font-size:8pt;line-height:1.5">seed · <b>' + esc(r.seedKey) + "</b> · score " + Math.round(r.seedScore) + "<br>" + trail + "</div>" +
             '<div style="margin-top:4px">' + moved + "</div>");
 
-          // Step 4 — sweep every length, dedupe by plaintext keeping the
+          // Step 4: sweep every length, dedupe by plaintext keeping the
           // shortest key, rank, and report against what the visitor chose.
           setStep(4, "live", '<span style="color:#9a6a16">ranking candidates…</span>');
           wait(function () {
@@ -822,10 +822,10 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
             var msg = exact
               ? "<b>solved.</b> it recovered your key from the ciphertext alone."
               : cls === "near"
-                ? "<b>close.</b> " + wrong + " of " + got.length + " letters wrong — the marked ones. more text would finish it."
+                ? "<b>close.</b> " + wrong + " of " + got.length + " letters wrong, the marked ones. more text would finish it."
                 : "<b>failed.</b> not enough text per column for the statistics to separate the right key from a plausible wrong one.";
             // The chart reads one statistic; the sweep is the answer. When they
-            // disagree, say so rather than quietly overwrite step 1 — the chart
+            // disagree, say so rather than quietly overwrite step 1, since the chart
             // landing on a multiple is the expected reason, not a failure.
             if (win.k !== pick.k) {
               msg += " (the sweep landed on key length <b>" + win.k + "</b> where the chart read <b>" + pick.k + "</b>" +
@@ -1074,11 +1074,11 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
         },
         {
           "t": "the longer key has more possible values, so the search space got too big to brute-force",
-          "why": "Search space is not the constraint, because nothing here brute-forces the key. Each column is solved independently in 26 tries, so a 20-letter key costs 520 evaluations rather than 26^20. What breaks is the evidence per column, not the count of keys."
+          "why": "Nothing here brute-forces the key, so the size of the search space never bites. Each column is solved independently in 26 tries, and a 20-letter key costs 520 evaluations rather than 26^20. What runs out is the evidence inside each column."
         },
         {
           "t": "the quadgram table only has 4,000 entries, so it stops recognising longer keys",
-          "why": "The table does not know about keys at all, it scores plaintext. Measured on this exact page: at 120 letters the full 46,040-gram table and the shipped 4,000 solve identically. Text length is what moved the result, not model size."
+          "why": "The table scores plaintext and knows nothing about keys at all. Measured on this exact page: at 120 letters the full 46,040-gram table and the shipped 4,000 solve identically, so text length is the variable that moved the result while model size sat still."
         },
         {
           "t": "a 20-letter key has no repeats within the message, so it behaves like a one-time pad",
