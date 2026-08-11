@@ -144,8 +144,7 @@
       "/coffee", "/coffee/*", "/serendipity", "/serendipity/*",
       "/slots", "/book", "/approve", "/decline",
       "/llms-full.txt", "/ledger", "/ledger.json",
-      // the Web Analytics beacon, both legs first-party (see _worker.js/rum.js)
-      "/ledger/rum.js", "/ledger/rum", "/ledger/prefetch",
+      "/ledger/prefetch",
       "/writing", "/writing/*",
       "/webmention", "/webmention/*", "/inbox",
       // "/rn.md" carries an extension, so without it here the asset layer would

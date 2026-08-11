@@ -9,18 +9,9 @@ import { scriptHashesFor } from "./csp-hashes.js";
 import { prefetchActivationHeader } from "../speculation.js";
 import { PREVIEW_ROBOTS } from "./preview.js";
 
-// There are NO external script or connect origins here, and that is a stronger
-// claim than it was. Until 2026-07-29 this policy carried two cloudflareinsights.com
-// entries for the Web Analytics (RUM) beacon. Both legs now run through the worker
-// (/ledger/rum.js and /ledger/rum, see rum.js), so the browser speaks only to this
-// origin and the policy went back to pure 'self'.
-//
-// Read that carefully before treating it as a privacy win: the REPORTING did not
-// stop, it moved server-side. This server makes the Cloudflare call on the visitor's
-// behalf. /whoareyou and /security both say so in those words, and a CSP that
-// quietly disagrees with the page describing it is the failure this repo keeps
-// designing against — so if the beacon ever goes cross-origin again, those two pages
-// change in the same commit.
+// There are NO external script or connect origins here. Browser-facing resources
+// and connections are self-only; server-side route handlers document their own
+// outbound calls separately.
 //
 // img-src is 'self' data: as of #186, and that is now the whole story:
 // every image on every page comes from this origin. Spotify's two hosts sat here
@@ -40,11 +31,6 @@ import { PREVIEW_ROBOTS } from "./preview.js";
 // script injection and leaves style injection open. Describe it that way on
 // /security rather than claiming a strict CSP.
 //
-// Automatic (zone-side) beacon injection is NOT usable here, and this is the reason:
-// the worker serves the homepage and the static pages as precompressed br/dcz bodies
-// with `encodeBody: "manual"`, and the edge cannot rewrite HTML it did not compress.
-// So the beacon is placed in source, which also keeps it visible in View Source.
-
 // ── script-src, and why it is hashes rather than a nonce ─────────────────────
 // A nonce has to be unique per response and it lives in the BODY. Build step 8
 // precompresses every staged document into brotli q11 twins plus dcz deltas, served
@@ -101,7 +87,7 @@ const cspWith = (scriptSrc, tail = CSP_TAIL) =>
 const CSP_LOOSE = cspWith(CSP_SCRIPT_SRC_LOOSE);
 
 // 'self' stays alongside the hashes: it covers the EXTERNAL scripts (/a/nav.js,
-// /tooltip.js, /hoist.js, /ledger/rum.js) and the dynamic import()s the homepage
+// /tooltip.js, /hoist.js) and the dynamic import()s the homepage
 // makes. Deliberately no 'strict-dynamic', which would make 'self' inert for
 // scripts and break exactly those loads.
 // An EMPTY hash list is meaningful and is the best case: a document with no inline

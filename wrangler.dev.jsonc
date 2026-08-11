@@ -70,7 +70,7 @@
       "/coffee", "/coffee/*", "/serendipity", "/serendipity/*",
       "/slots", "/book", "/approve", "/decline",
       "/llms-full.txt", "/ledger", "/ledger.json",
-      "/ledger/rum.js", "/ledger/rum", "/ledger/prefetch",
+      "/ledger/prefetch",
       "/writing", "/writing/*",
       "/rn", "/rn.md", "/rn/tracks", "/rn/tracks.html", "/rn/admin", "/rn/set", "/rn/art/*",
       "/bot", "/around", "/around/json", "/around/changes.json",

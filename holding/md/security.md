@@ -33,10 +33,9 @@ from AadharshBot can verify it really came from here. See
 
 - **Content-Security-Policy**: `default-src 'self'; object-src 'none';
   frame-ancestors 'none'; upgrade-insecure-requests`. No external script or
-  connect origin at all since 2026-07-29, when the homepage's Web Analytics
-  beacon moved behind this origin. Your browser talks only to this host, which
-  is not the same claim as "nothing is forwarded from here" (see
-  <https://aadhar.sh/whoareyou.md>).
+  connect origin: the browser-facing directives are self-only. Server-side
+  route handlers may still make the outbound calls documented on their own
+  surfaces.
 - **script-src**: every page built here ships a sha256 of each of its own inline
   scripts, so the policy can name them individually instead of trusting inline
   code as a class. That policy is currently sent as
