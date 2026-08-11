@@ -2274,22 +2274,50 @@ pnpm run deploy:direct
     `lockfileVersion` STAYS `'9.0'`, so this is the separator alone rather than a
     schema bump, and one upstream line could retire the entire objection.
 
-    Production would still build, and only for one reason: pnpm reads
-    `packageManager` from package.json BEFORE it opens the lockfile, downloads
-    the pinned version, and that binary parses its own format. Verified — a
-    global pnpm 11.20.0 in a tree pinned to `12.0.0-rc.3` answers
-    `12.0.0-rc.3`.
+    **This note first said production would still build, because pnpm reads
+    `packageManager` before it opens the lockfile and self-switches to the
+    pinned version. That was wrong, and the correction is the whole finding:
+    THE SELF-SWITCH IS WHAT BREAKS.** Measured 2026-08-11 by running the build
+    image's own path, pnpm 10.11.1 with self-switching left at its default ON:
 
-    **That single point of failure is why the pin stays on 11.** Adopting 12
-    would make every production install depend on one registry fetch of the
-    pinned binary; run the build image with `manage-package-manager-versions`
-    off, or lose that fetch, and it is left holding a lockfile it cannot parse.
-    Two majors behind is the milder failure.
+    ```
+    ERROR  Failed to switch pnpm to v12.0.0-rc.3. Looks like pnpm CLI is
+    missing at ".../pnpm/12.0.0-rc.3/bin" or is incorrect
+    spawnSync .../pnpm/12.0.0-rc.3/bin/pnpm ENOEXEC
+    ```
 
-    The general rule outlives the instance: **check that the BUILD IMAGE can
-    read what your package manager WRITES, not merely that your own install
-    works.** A lockfile is an interchange format between two machines running
-    different versions, and "it installs here" tests exactly one of them.
+    The file it tries to exec is a PLACEHOLDER: *"This is a placeholder. pnpm's
+    native binary replaces this file during installation (see ./install.js)."*
+    pnpm 12 ships its CLI as a per-platform native executable that a postinstall
+    step swaps in, where pnpm 11's equivalent is an ordinary
+    `#!/usr/bin/env node` script. So the older pnpm downloads the newer one,
+    finds text with no shebang, and dies before it ever reads the lockfile.
+
+    **The lockfile incompatibility above is therefore SECOND-ORDER.** It is real,
+    and nothing reaches it. Fixing the `---` separator upstream would not make
+    this work.
+
+    **It is also gotcha 29's `allowBuilds` warning coming due.** That note records
+    the key as pnpm 11 only, silently ignored by the pnpm 10 the build image
+    runs, and ends by saying it stops being harmless the day something genuinely
+    needs its build step. pnpm 12 is that day, and the something is pnpm itself.
+    Two notes filed separately turn out to describe one failure.
+
+    Scope of the claim, since the distinction matters. The ENOEXEC, the
+    placeholder, and the pnpm 11 contrast are all measured locally. That Workers
+    Builds hits the SAME thing is inference: its log needs dashboard access this
+    environment does not have. What is measured about production is that two
+    builds of the pnpm 12 branch failed while `validate` passed on both, and the
+    second ran with rc.3 at 38h, which rules out the `minimumReleaseAge` floor
+    that was the other candidate.
+
+    The general rule outlives the instance, and it is wider than this note drew
+    it at first: **check that the BUILD IMAGE can RUN the version you pin, and
+    then that it can READ what that version writes.** Both are interchange
+    surfaces between two machines on different versions, the handoff comes
+    first, and "it installs here" tests neither of them. Pinning
+    `packageManager` looks like it removes the version-skew problem and actually
+    moves it one layer down, into whether the old binary can launch the new one.
 
     **What waiting costs is worth writing down, because it is not nothing.**
     Benchmarked on this repo 2026-08-10, four runs each, steady state (the
