@@ -1093,12 +1093,16 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
    with NO blur, plus one tight ambient. XP dialogs really did drop a shadow,
    but it was cast, not diffused — the single 0 10px 40px this replaced read as
    a 2015 elevation surface. */
-.lx-sow-dialog { padding:0; margin:auto; width:min(660px,calc(100vw - 26px)); max-height:min(88vh,700px); color:oklch(28% 0.02 255); background:oklch(96% 0.014 250); border:1px solid oklch(44% 0.09 258); border-radius:6px 6px 3px 3px; box-shadow:4px 4px 0 rgba(0,30,160,.35),2px 3px 12px -2px oklch(30% 0.12 263 / .55); overflow:hidden; display:flex; flex-direction:column; }
+.lx-sow-dialog { padding:0; margin:auto; width:min(660px,calc(100vw - 26px)); max-height:min(88vh,700px); color:oklch(28% 0.02 255); background:oklch(96% 0.014 250); border:1px solid oklch(44% 0.09 258); border-radius:6px 6px 3px 3px; box-shadow:4px 4px 0 rgba(0,30,160,.35),2px 3px 12px -2px oklch(30% 0.12 263 / .55); overflow:hidden; display:none; flex-direction:column; }
+.lx-sow-dialog[open] { display:flex; }
 .lx-sow-dialog::backdrop { background:oklch(22% 0.04 258 / .38); }
 /* open and close on a short scale-from-the-button, so the panel arrives and
    leaves instead of blinking. display + overlay have to ride along as discrete
    transitions or the exit frame never paints; @starting-style supplies the
-   entry frame. Reduced motion gets the instant swap it asks for. */
+   entry frame. The closed display:none is also the hit-testing contract: an
+   authored display:flex overrides the browser's dialog:not([open]) rule and
+   leaves an invisible window swallowing clicks after close. Reduced motion and
+   browsers without discrete transitions get the safe instant swap. */
 @media (prefers-reduced-motion:no-preference){
   .lx-sow-dialog { opacity:0; transform:scale(.96); transition:opacity 120ms ease-out, transform 120ms ease-out, overlay 120ms allow-discrete, display 120ms allow-discrete; }
   .lx-sow-dialog[open] { opacity:1; transform:scale(1); }
