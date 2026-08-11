@@ -346,18 +346,11 @@ export function start(initial) {
           `</div>`;
       }
 
-      // One cover, in the two shapes a row can carry.
-      //
-      // With an imageset, rn.js recognized the Spotify hash and re-hosted it at
-      // /rn/art/<hash>-<w>-<v>, so this builds a <picture>: AVIF at 120w+240w
-      // for the density the display actually has, JPEG as the universal <img>
-      // fallback. Same arrangement as the photo grid, and for the same reason —
-      // the BROWSER picks, so one URL never has to mean two different bodies.
-      //
-      // Without one, the src is still a /rn/art/ URL and the srcset branch is
-      // simply skipped. The only shape that reaches it is a fragment cached
-      // before #182 shipped, which carries a plain Spotify src and is why this
-      // branch stays: it renders whatever it is handed rather than assuming.
+      // One cover, one URL. rn.js recognizes the Spotify hash, re-hosts the art,
+      // and emits the already-warmed 240px AVIF tier. The old <picture> paired a
+      // 120w/240w AVIF set with a JPEG fallback; recreating those nodes on hover
+      // produced the repeating image rows captured on 2026-08-11. A fixed 240px
+      // source is exactly 2x this 120px surface and has no competing fallback.
       // Art whose hash will not parse never gets here at all — rn.js emits no
       // image attribute for it, because img-src is 'self' data: and a URL the
       // policy blocks would be a broken frame where the text card belongs.
@@ -369,14 +362,8 @@ export function start(initial) {
       // visibility check before the one fetch that was always going to happen.
       // The same holds for the car popover, the Run preview, and serendipity's
       // event covers: an image that exists only while visible is not lazy work.
-      const coverHtml = (src, srcset) => {
-        const img = `<img class="cover album" src="${esc(src)}" alt="" decoding="async" width="120" height="120">`;
-        return `<div class="album-pop">` +
-          (srcset
-            ? `<picture><source type="image/avif" srcset="${esc(srcset)}" sizes="120px">${img}</picture>`
-            : img) +
-          `</div>`;
-      };
+      const coverHtml = (src) =>
+        `<div class="album-pop"><img class="cover album" src="${esc(src)}" alt="" decoding="async" width="120" height="120"></div>`;
 
       // artist tooltip: just the profile photo in an XP-frame border.
       // mirrors the album-popover treatment — the name is already in the
@@ -385,7 +372,7 @@ export function start(initial) {
       function buildArtistContent(span) {
         const image = span.dataset.artistImage || "";
         if (!image) return "";
-        return coverHtml(image, span.dataset.artistImageset || "");
+        return coverHtml(image);
       }
 
       // track tooltip: the album art with an XP-frame border when we have
@@ -397,7 +384,7 @@ export function start(initial) {
       // showing nothing makes the row feel broken next to its siblings.
       function buildTrackContent(li) {
         const image = li.dataset.trackImage || "";
-        if (image) return coverHtml(image, li.dataset.trackImageset || "");
+        if (image) return coverHtml(image);
         // text fallback. title + artists + duration; flag explicit if it is.
         const title    = li.dataset.trackTitle    || "";
         const artists  = li.dataset.trackArtists  || "";
