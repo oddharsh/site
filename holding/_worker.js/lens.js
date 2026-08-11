@@ -604,17 +604,17 @@ function lensStateOfWebPanel() {
 const LENS_ERAS = [
   {
     era: "Past", years: "1995-2011", label: "The semantic web asked first.",
-    claim: "Publishers were asked to mark meaning up front: meta tags (1995), microformats (2005), RDFa (2008), microdata (2009), Open Graph (2010), JSON-LD (2011). Each layer promised that machines could read facts instead of scraping prose. Adoption followed traffic, so the preview layers thrived while the rest fossilized in place.",
+    claim: "Publishers marked meaning up front: meta tags (1995), microformats (2005), RDFa (2008), microdata (2009), Open Graph (2010), and JSON-LD (2011). These layers let machines read facts instead of guessing from prose. The ones that delivered visible traffic, especially link previews, survived; the rest mostly fossilized in place.",
     jumps: [{ lens: "structured" }, { lens: "anatomy" }],
   },
   {
     era: "Present", years: "2022-now", label: "Models pay the difference.",
-    claim: "LLMs flipped the bargain: rather than wait for structure, they brute-force the page built for people and pay per read, in tokens. The same words cost a person nothing, cost a model real money, and earn the publisher none of it. Sites answered with rules and walls: named AI crawlers in robots.txt, Content Signals, bot challenges, pay-per-crawl.",
+    claim: "Models changed the bargain. They scrape pages built for people and pay the difference in tokens, so publishers no longer have to mark everything up first. Sites answer that appetite with crawler rules, AI-use signals, bot challenges, and pay-per-crawl.",
     jumps: [{ lens: "ai" }, { lens: "terms" }],
   },
   {
     era: "Future", years: "2024-on", label: "From reading to acting.",
-    claim: "The open question is whether a site publishes contracts an agent can act on: tools (MCP, WebMCP), identity (Web Bot Auth, OAuth), payment (x402, pay-per-crawl), instructions (llms.txt, AGENTS.md). Lens probes twenty-odd such surfaces live, scores them, and lets you flip the missing ones on to see what each would change.",
+    claim: "The next question is action. Can a site publish tools, identity, payment, and instructions that let an agent do something without driving a human interface? Lens probes those surfaces and lets you switch the missing ones on as counterfactuals.",
     jumps: [{ lens: "discovery" }, { lens: "readiness" }, { view: "delta", label: "Delta" }],
   },
 ];
@@ -634,7 +634,7 @@ function lensAboutPanel() {
     '<div class="lx-sow-tb"><span class="lx-sow-kicker" id="lx-abt-title">About The Other Web</span>' +
     '<button class="lx-sow-x" type="button" id="lx-abt-close" title="Close" aria-label="Close"></button></div>' +
     '<div class="lx-sow-inner">' +
-    '<div class="lx-abt-thesis">Every page now has two audiences: people, and the machines reading over their shoulders. This instrument watches the second one. The story it keeps showing you runs in three acts.</div>' +
+    '<div class="lx-abt-thesis">Every page now has two audiences: people, and the machines reading over their shoulders. This instrument watches the second one. Its story runs in three acts, and each act opens the evidence beneath it.</div>' +
     eras +
     '<div class="lx-abt-rules"><b>How this instrument behaves</b><ul class="lx-why">' +
     "<li>Every fetch is identified and cryptographically signed as AadharshBot. Lens never wears another bot's user-agent to get past a wall.</li>" +
@@ -1108,7 +1108,7 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
 `,
     body: `
     <h1>The Other Web</h1>
-    <p class="lx-lede">Every page has a second life as data. Paste a URL to see what a person receives, what representative bots can retrieve, and which missing web surfaces limit them. The score is a map, not a verdict: every point stays tied to evidence. Scan a few sites and you start predicting the briefing before it loads; that mental model is the point, since you build differently once you carry it. Fetched server-side, honestly, as <a href="/bot">AadharshBot</a>.</p>
+    <p class="lx-lede">Every page has two audiences: the person looking at it and the machine reading over their shoulder. The semantic web asked publishers to mark meaning; today&rsquo;s models scrape the human page; the next web must decide how machines act. Paste one URL to compare the human page, the HTTP response, and the browser-rendered result. Fetched server-side, honestly, as <a href="/bot">AadharshBot</a>.</p>
     ${lensStateOfWebRail()}
     <!-- both "?" triggers open a <dialog> through script, so with JS off they are
          buttons that do nothing. The rail's numbers are plain SSR'd text and stay.

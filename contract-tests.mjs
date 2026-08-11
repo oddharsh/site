@@ -351,6 +351,14 @@ test("Lens shell is a complete document, not a fragment", () => {
   return response.text().then(assertFullDocument);
 });
 
+test("Lens shell states the past, present, and future argument before the instrument", async () => {
+  const html = await renderLensShell().text();
+  assert.match(html, /The semantic web asked publishers to mark meaning/);
+  assert.match(html, /today&rsquo;s models scrape the human page/);
+  assert.match(html, /the next web must decide how machines act/);
+  assert.doesNotMatch(html, /6-minute tour|Demo path/);
+});
+
 
 test("track HTML renderer emits rows only", () => {
   const html = renderTrackListHtml(TRACKS);
