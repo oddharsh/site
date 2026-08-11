@@ -747,6 +747,20 @@ const transformInlineHtmlBlocks = (source, label = "holding/index.html") => {
   return out;
 };
 
+// The exact transform step 7b writes for every non-homepage HTML document. Kept
+// here as one function because the page-family dictionary samples the bytes the
+// browser will actually receive, before step 7b reaches the files themselves.
+// A dictionary sampled from the readable pre-minification source still works, but
+// wastes its scarce 64KB on whitespace and comments absent from every target.
+const minifiedPage = (staged, rel) => {
+  const twinRel = rel.replace(/\.html$/, ".src.html");
+  const banner = `<!-- minified at deploy; readable source: /${twinRel} -->\n`;
+  return banner + minifyHtml.minify(
+    Buffer.from(transformInlineHtmlBlocks(staged, `holding/${rel}`)),
+    HTML_MINIFY_CFG,
+  ).toString();
+};
+
 const inlineProbe = transformInlineHtmlBlocks(
   '<style>/* probe */ .x { color: red; }</style>\n' +
   '<script>/* probe */ const x = 1 + 2;</script>\n' +
@@ -1460,9 +1474,11 @@ for (const [file, srcPath, marker] of SHELLS) {
   // --train artifact is self-describing, so a server library recognizes its tables
   // while Chrome treats those same response bytes as raw content; the decoders
   // disagree and the navigation fails. Build one site-wide corpus from the final,
-  // repointed bytes of two complementary pages instead: the compact LWE shell plus
-  // the Garage compression explainer. The 64KB corpus costs 15.6KB as q11 once
-  // and measured best across every static/deterministic page in this tree.
+  // repointed bytes of two complementary pages: the compact LWE shell plus the
+  // Garage compression explainer. Then spend part of the fixed 64KB on the tails of
+  // the four layouts that corpus used to lose to plain q11 on. Measured 2026-08-11:
+  // the representative prefix moved family coverage from 42/46 to 46/46 and cut
+  // the preferred-family wire set from 450,321 B to 428,238 B (plain q11: 494,073 B).
   //
   // The corpus is a LIST rather than a fixed pair, and it is read in order until the
   // 64KB is filled. Two pages happened to cover it with 1,656 bytes to spare, which
@@ -1471,16 +1487,23 @@ for (const [file, srcPath, marker] of SHELLS) {
   // they contribute nothing while the leading pages are long enough, and they keep a
   // content edit from becoming a release incident.
   {
-    const CORPUS = [
+    const BASE_CORPUS = [
       "lwe/drivers.html",           // the compact LWE conversation shell
       "garage/compression.html",    // the Garage explainer, the other structural family
       "lwe/vigenere.html",          // slack, in corpus order
       "garage/chunks.html",
     ];
+    const REPRESENTATIVES = [
+      "garage/horizon.html",        // very large standalone lab
+      "garage/vt-b.html",           // tiny browser fixture
+      "garage/vt-check.html",       // tiny browser fixture
+      "access/index.html",          // standalone device matrix
+    ];
+    const REPRESENTATIVE_BYTES = 16_384;
     const SIZE = 65_536;
     const parts = [];
     let total = 0;
-    for (const rel of CORPUS) {
+    for (const rel of BASE_CORPUS) {
       const bytes = await readFile(`${OUT}/holding/${rel}`);
       parts.push(bytes);
       total += bytes.length;
@@ -1489,10 +1512,21 @@ for (const [file, srcPath, marker] of SHELLS) {
     if (total < SIZE) {
       throw new Error(
         `page-family dictionary: the corpus pages total ${total} B, ${SIZE - total} B short of the ${SIZE} B dictionary. ` +
-        `Add another staged page to CORPUS in build.mjs (order is load-bearing; append, do not reorder).`,
+        `Add another staged page to BASE_CORPUS in build.mjs (order is load-bearing; append, do not reorder).`,
       );
     }
-    const dictionary = Buffer.concat(parts).subarray(0, SIZE);
+    const base = Buffer.concat(parts).subarray(0, SIZE);
+    const representatives = [];
+    for (const rel of REPRESENTATIVES) {
+      const staged = await readFile(`${OUT}/holding/${rel}`, "utf8");
+      const final = Buffer.from(minifiedPage(staged, rel));
+      representatives.push(final.subarray(Math.max(0, final.length - REPRESENTATIVE_BYTES)));
+    }
+    const prefix = Buffer.concat(representatives);
+    if (prefix.length >= SIZE) {
+      throw new Error(`page-family dictionary representatives consume ${prefix.length} B of ${SIZE} B; reduce REPRESENTATIVE_BYTES`);
+    }
+    const dictionary = Buffer.concat([prefix, base.subarray(prefix.length)]);
     if (dictionary.readUInt32LE(0) === 0xec30a437) {
       throw new Error("page-family dictionary starts with the zstd --train magic — dcz needs RAW bytes, not a trained dictionary");
     }
@@ -1731,8 +1765,7 @@ for (const [file, srcPath, marker] of SHELLS) {
   for (const rel of pages) {
     const staged = await readFile(`${OUT}/holding/${rel}`, "utf8");
     const twinRel = rel.replace(/\.html$/, ".src.html");
-    const banner = `<!-- minified at deploy; readable source: /${twinRel} -->\n`;
-    const min = banner + minifyHtml.minify(Buffer.from(transformInlineHtmlBlocks(staged, `holding/${rel}`)), HTML_MINIFY_CFG).toString();
+    const min = minifiedPage(staged, rel);
 
     for (const [label, marker] of PAGE_MARKERS) {
       if (marker.test(staged) && !marker.test(min)) {
@@ -1925,11 +1958,11 @@ for (const [file, srcPath, marker] of SHELLS) {
 // diff instead of the document.
 //
 // A page delta is keyed by SLUG plus the dictionary tag:
-// /pd/<slug>.<dicttag>.dcz. The family corpus is the broad fallback for anyone who
-// has visited any page. The committed per-page snapshots are the high-ratio path for
-// a returning visitor who still holds that page's previous bytes; both candidates
-// are emitted when they beat the ordinary q11 twin. The browser tells the worker
-// which one it has via Available-Dictionary, so no unsafe guess is made server-side.
+// /pd/<slug>.<dicttag>.dcz. The family corpus is the broad, preferred path for anyone
+// who has visited any page. Committed per-page snapshots preserve a high-ratio path
+// while that idle-loaded family dictionary is not cached yet. Both candidates are
+// emitted when they beat the ordinary q11 twin. The browser tells the worker which
+// one it selected via Available-Dictionary, so no unsafe guess is made server-side.
 {
   // EVERY deploy-time HTML document, the homepage included. `/` used to be the
   // one exception, because four HTMLRewriter injections made its bytes differ

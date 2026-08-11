@@ -37,7 +37,7 @@ import { handleTool, tokenizeKeys } from "./holding/_worker.js/terminal.js";
 import { handleTerminal } from "./holding/_worker.js/wire.js";
 import { DATA_TOOLS } from "./holding/_worker.js/lib/tools.js";
 import { cronJob } from "./holding/_worker.js/lib/cron.js";
-import { serveStaticPage } from "./holding/_worker.js/lib/assets.js";
+import { PAGE_FAMILY_MATCH, serveStaticPage } from "./holding/_worker.js/lib/assets.js";
 import { serveMarkdown } from "./holding/_worker.js/home.js";
 import { readManifest, workerModule, navFenceBody, readFenceBody } from "./scripts/gen-manifest.mjs";
 import { INDEXED_SECTIONS, TWIN_FACTS, buildTwins, checkTwinFacts, htmlFileFor, twinPath } from "./scripts/gen-md-twins.mjs";
@@ -2642,6 +2642,23 @@ test("LWE pages share one base stylesheet and the build derives one site-page di
     assert.match(html, /<link rel="stylesheet" href="\/lwe-base\.css">/);
     assert.doesNotMatch(html, /compression-dictionary/);
     assert.doesNotMatch(html.match(/<style>([\s\S]*?)<\/style>/)?.[1] || "", /\.controls \{ display: inline-flex/);
+  }
+});
+
+test("the page-family dictionary outranks exact snapshots without narrowing its scope", async () => {
+  const pattern = new URLPattern({ pathname: PAGE_FAMILY_MATCH, baseURL: "https://aadhar.sh" });
+  assert.equal(pattern.hasRegExpGroups, false, "RFC 9842 rejects URLPatterns with custom regexp groups");
+
+  const pages = (await readdir(new URL("holding", import.meta.url), { recursive: true }))
+    .filter((path) => path.endsWith(".html"));
+  const routes = pages.map((path) => {
+    const route = path.replace(/\.html$/, "").replace(/(^|\/)index$/, "$1");
+    return `/${route}`.replace(/\/$/, "") || "/";
+  });
+  for (const route of routes) {
+    assert.equal(pattern.test(`https://aadhar.sh${route}`), true, `${PAGE_FAMILY_MATCH} must match ${route}`);
+    assert.ok(PAGE_FAMILY_MATCH.length > route.length,
+      `the family match must outrank the exact-page match for ${route}`);
   }
 });
 
