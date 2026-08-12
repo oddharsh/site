@@ -157,6 +157,7 @@ h2 {
 }
 .note { color: oklch(44.95% 0 0); font-size: 10pt; margin: 0 0 14px; }
 .note code { background: oklch(96.72% 0 0); border: 1px solid oklch(88.22% 0 0); padding: 0 4px; font-family: var(--font-mono); font-size: 9.5pt; }
+.toy { font: 9.5pt/1.5 var(--font-mono); color: oklch(30% 0.02 250); background: oklch(96.72% 0 0); border: 1px solid oklch(88.22% 0 0); padding: 8px 10px; margin: 4px 0 10px; overflow-x: auto; }
 hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px 0; }
 
 /* status pills (match garage/index.html styling) */
@@ -748,7 +749,28 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
       Variants I tried for the photo grid and tracklist on <a href="/">aadhar.sh</a>. Hover the slots and rows. The two photo variants below (Fuji LCD and XP-skinned camera readout) carry the same content shape under different chrome; the third (vinyl) targets tracks only. Status pills: <span class="status review">in review</span> marks a live candidate, <span class="status shipped">shipped</span> reached the homepage, <span class="status dead">rejected</span> got tried and lost, <span class="status ref">reference</span> sits here as a comparison point.
     </p>
     <p class="lede" style="margin-top: 4px;">
-      The live candidates share one architecture: popover API for show/hide, <code>@starting-style</code> for the entry fade, and two custom-property writes per move (<code>--x</code>/<code>--y</code>) for cursor tracking, with a clamped CSS transform doing the actual placement. No rAF, no layout reads. Roughly 100 lines of JS total.
+      The live candidates share one architecture, and it fits in ten lines once you take the guards out:
+    </p>
+    <pre class="toy">const place = (tip, e) =&gt; {
+  tip.style.setProperty("--x", e.clientX + "px");
+  tip.style.setProperty("--y", e.clientY + "px");
+};
+
+root.addEventListener("pointerover", (e) =&gt; {
+  tip.innerHTML = render(e.target);
+  place(tip, e);
+  tip.showPopover();
+});
+root.addEventListener("pointermove", (e) =&gt; place(tip, e));
+root.addEventListener("pointerout", () =&gt; tip.hidePopover());
+
+/* the other half, in CSS */
+.tip { transform: translate(var(--x), var(--y)); }</pre>
+    <p class="lede" style="margin-top: 4px;">
+      Popover API for show/hide, <code>@starting-style</code> for the entry fade, and two custom-property writes per move for cursor tracking. No rAF, no layout reads.
+    </p>
+    <p class="lede" style="margin-top: 4px;">
+      The shipping version is roughly 100 lines. Most of the difference is the markup each variant renders, and the rest is four guards that have nothing to do with tooltips. An <code>activeSlot</code> check, so moving across a slot's children does not re-render it. A <code>:popover-open</code> test before each show and hide, so the platform call only fires on a real state change. A <code>relatedTarget</code> containment test, so moving to another element inside the grid is not read as leaving it. And the <code>clamp()</code> wrapped around each translate, which is viewport edge handling rather than placement. Every one earns its keep and none of them is the idea.
     </p>
     <p class="lede" style="margin-top: 4px;">
       &larr; back to <a href="/garage">garage</a>
