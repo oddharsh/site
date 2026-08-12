@@ -767,7 +767,7 @@ root.addEventListener("pointerout", () =&gt; tip.hidePopover());
 /* the other half, in CSS */
 .tip { transform: translate(var(--x), var(--y)); }</pre>
     <p class="lede" style="margin-top: 4px;">
-      Popover API for show/hide, <code>@starting-style</code> for the entry fade, and two custom-property writes per move for cursor tracking. No rAF, no layout reads.
+      <a href="https://developer.mozilla.org/en-US/docs/Web/API/Popover_API" rel="external">Popover API</a> for show/hide, <code>@starting-style</code> for the entry fade, and two custom-property writes per move for cursor tracking. No rAF, no layout reads.
     </p>
     <p class="lede" style="margin-top: 4px;">
       The shipping version is roughly 100 lines. Most of the difference is the markup each variant renders, and the rest is four guards that have nothing to do with tooltips. An <code>activeSlot</code> check, so moving across a slot's children does not re-render it. A <code>:popover-open</code> test before each show and hide, so the platform call only fires on a real state change. A <code>relatedTarget</code> containment test, so moving to another element inside the grid is not read as leaving it. And the <code>clamp()</code> wrapped around each translate, which is viewport edge handling rather than placement. Every one earns its keep and none of them is the idea.

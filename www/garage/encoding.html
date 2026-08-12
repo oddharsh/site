@@ -306,7 +306,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
     <h2>Why the site built jpegli from source (then moved past it)</h2>
     <p>Look at the two JPEGs above at the shipped quality: <b>system/sips</b> q82 lands at 31.7 KB,
       <b>zenc</b> q84 (the same visual quality) at 15.9 KB: <em>~50% fewer bytes</em>.
-      Google's jpegli first showed the win (re-implement libjpeg, tune it psychovisually); that is
+      Google's <a href="https://github.com/google/jpegli" rel="external">jpegli</a> first showed the win (re-implement libjpeg, tune it psychovisually); that is
       why the pipeline shelled out to a from-source <code>cjpegli</code> for years instead of
       the OS encoder. The site has since moved to <b>zenc/zenjpeg</b> (the corpus study below), which
       takes another few percent at equal quality and, being a Rust crate, is dependabot-tracked and
@@ -315,7 +315,8 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
 
     <h2>Zenjpeg won and shipped <span class="status shipped">shipped</span></h2>
     <p>“Zenjpg” is a good shorthand, but the crate is published as
-      <a href="https://docs.rs/crate/zenjpeg/latest" rel="external"><code>zenjpeg</code></a>.
+      <a href="https://docs.rs/crate/zenjpeg/latest" rel="external"><code>zenjpeg</code></a>
+      (<a href="https://github.com/imazen/zenjpeg" rel="external">imazen/zenjpeg</a>).
       It ships no CLI, so the site checks in a small Rust wrapper (<code>www/scripts/zenc/</code>)
       and the photo Action builds it with cargo; dependabot tracks the pin. That retired the
       from-source jpegli build in 2026-07. The corpus run below is the evidence that drove the switch.</p>
