@@ -66,7 +66,7 @@ async function resolve(cmd, env, ctx, request) {
   return null;
 }
 
-function renderRun(request, { cmd = "", notFound = false } = {}) {
+export function renderRun({ cmd = "", notFound = false } = {}) {
   const options = DESTS.map(([name, path, hint]) =>
     `<option value="${escAttr(name)}">${escHtml(hint)} — ${escHtml(path)}</option>`).join("\n");
   const errorBanner = notFound
@@ -143,10 +143,10 @@ export async function handleRun(request, env, ctx) {
       return new Response(null, { status: 302, headers: { "location": location, "cache-control": "no-store" } });
     }
     // the classic Run error, as a page (200: the form is the content)
-    return renderRun(request, { cmd, notFound: true });
+    return renderRun({ cmd, notFound: true });
   }
 
   // bare /run is static-shaped: edge-cache it. Query variants never enter this
   // branch, so the 302/error paths can't be masked by a cached bare page.
-  return cachedRender(request, ctx, () => Promise.resolve(renderRun(request)), "/run", env);
+  return cachedRender(request, ctx, () => Promise.resolve(renderRun()), "/run", env);
 }

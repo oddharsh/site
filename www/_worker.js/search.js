@@ -81,11 +81,17 @@ export async function handleSearch(request, env, ctx) {
   const url = new URL(request.url);
   const query = url.searchParams.get("q") || "";
   const results = query.trim() ? await searchSite(env, query, url.searchParams.get("limit")) : { query: "", total: 0, returned: 0, results: [] };
+  const render = () => renderSearchPage(query, results);
+  // Query-specific HTML must never share the blank/search result cache key.
+  return query.trim() ? render() : cachedRender(request, ctx, render, "/search", env);
+}
+
+export function renderSearchPage(query = "", results = { query: "", total: 0, returned: 0, results: [] }) {
   const rows = results.results.map((result) => `<li><a href="${escAttr(result.url)}"><b>${escHtml(result.title)}</b></a><small>${escHtml(result.kind)} · ${escHtml(result.url)}</small><p>${escHtml(result.snippet || result.description)}</p></li>`).join("\n");
   const body = `<h1>Search aadhar.sh</h1>
 <form method="get" action="/search" class="search-form"><label for="search-q">Find something</label><input id="search-q" name="q" value="${escAttr(query)}" maxlength="160" autofocus title="Titles and body text across every public page here. One word usually beats a sentence."><button type="submit">Search</button></form>
 ${query.trim() ? `<p class="summary">${results.total} result${results.total === 1 ? "" : "s"} for <b>${escHtml(query)}</b>.</p>${rows ? `<ol class="results">${rows}</ol>` : "<p>No matching public page.</p>"}` : "<p class=\"hint\">Search the public pages, writing, garage notes, and utility descriptions.</p>"}`;
-  const render = () => lunaPage({
+  return lunaPage({
     title: "aadhar.sh/search",
     path: "aadhar.sh/search",
     route: "/search",
@@ -95,6 +101,4 @@ ${query.trim() ? `<p class="summary">${results.total} result${results.total === 
     css: `.search-form{display:flex;align-items:end;gap:7px;margin:12px 0}.search-form label{display:grid;gap:3px;flex:1;color:oklch(43% 0 0);font-size:9pt}.search-form input{font:10pt Tahoma,Verdana,sans-serif;padding:5px 7px;border:1px solid oklch(55% .04 250);box-shadow:inset 1px 1px 2px #999}.search-form button{font:9pt Tahoma,Verdana,sans-serif;padding:5px 12px}.summary,.hint{color:oklch(47% 0 0);font-size:9pt}.results{padding-left:22px}.results li{padding:7px 0;border-bottom:1px solid oklch(88% .02 250)}.results a{color:oklch(40% .13 255);text-decoration:none}.results a:hover{text-decoration:underline}.results small{display:block;color:oklch(55% 0 0);font:8pt "Courier New",monospace}.results p{margin:3px 0 0;color:oklch(35% .02 255);font-size:9pt}`,
     body,
   });
-  // Query-specific HTML must never share the blank/search result cache key.
-  return query.trim() ? render() : cachedRender(request, ctx, render, "/search", env);
 }

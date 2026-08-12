@@ -61,7 +61,8 @@ import { fetchFollowingPublicRedirects, privateHostBlocked } from "../www/_worke
 import { handleHit } from "../www/_worker.js/counter.js";
 import { cronHomeProbe, parseServerTiming } from "../www/_worker.js/perf-probe.js";
 import { gatherWhoareyou } from "../www/_worker.js/whoareyou.js";
-import { handleSearchJson, searchSite } from "../www/_worker.js/search.js";
+import { handleSearchJson, renderSearchPage, searchSite } from "../www/_worker.js/search.js";
+import { renderRun } from "../www/_worker.js/run.js";
 import { getPublicAvailability } from "../cal/src/slots.js";
 import { botHeaders } from "../www/_worker.js/lib/botauth.js";
 import { ml_dsa44 } from "@noble/post-quantum/ml-dsa.js";
@@ -1168,6 +1169,18 @@ test("site search and JSON contract share the generated corpus", async () => {
   assert.equal(response.status, 200);
   assert.equal((await response.json()).returned, 1);
   assert.equal((await handleSearchJson(new Request("https://aadhar.sh/search.json"), env)).status, 400);
+});
+
+test("the buildable utility shells preserve their no-JS forms", async () => {
+  const run = await renderRun().text();
+  assert.match(run, /<form action="\/run" method="get">/);
+  assert.match(run, /name="cmd"/);
+  assert.match(run, /<meta name="robots" content="noindex">/);
+
+  const search = await renderSearchPage().text();
+  assert.match(search, /<form method="get" action="\/search"/);
+  assert.match(search, /name="q"/);
+  assert.match(search, /Search the public pages/);
 });
 
 test("photo query filters public metadata and never exposes unlisted fields", async () => {
