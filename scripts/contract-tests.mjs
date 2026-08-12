@@ -23,7 +23,8 @@ import {
   renderLensShell,
   validateLensTarget,
 } from "../www/_worker.js/lens.js";
-import { scoreAgentReadiness, WEIGHTS as RUBRIC_WEIGHTS } from "../www/_worker.js/lib/agent-rubric.js";
+import { EXECUTION_META, EXECUTION_PROBE, executionChecks } from "../www/_worker.js/lib/agent-execution.js";
+import { lensReadiness } from "../www/_worker.js/lens.js";
 import { lensRecipe, lensRecipeIds, lensRecipeScript } from "../www/_worker.js/lens-recipes.js";
 import { handleCoffeeAvailability, readCoffeeAvailability } from "../www/_worker.js/coffee.js";
 import { reservationName } from "../cal/src/reservation.js";
@@ -6317,51 +6318,88 @@ test("the ref scanner reads unquoted attributes, which is how the site ships", a
     + '<a href=mailto:a@b.test>3</a><a href=//cdn.test/x.js>4</a><a href=../rel>5</a>'), []);
 });
 
-// ── the agent-readiness rubric ──────────────────────────────────────────────
-// A score is a CLAIM about somebody else's site, so the three properties below
-// are the ones that keep it defensible. They are pinned here rather than left
-// to the CLI, because /lens will publish this same number about third parties
-// and the CLI is not what runs in front of them.
+// ── the execution half of the readiness rubric ──────────────────────────────
+// /lens has scored agent readiness since it was built and every one of those
+// twenty checks is a declaration audit, which is why they were all green on
+// 2026-08-12 while this site's homepage rendered twelve blank squares in an
+// agent browser. These pin the two checks that close that gap, and the rule
+// that keeps them fair to a stranger's site.
 
-test("the rubric weights sum to 100 when every dimension is measured", () => {
-  const total = Object.values(RUBRIC_WEIGHTS).reduce((a, b) => a + b, 0);
-  assert.equal(total, 100, "a percentage nobody can reconstruct from the weights is a vibe");
-});
-
-test("an unmeasured dimension shrinks the denominator instead of scoring zero", () => {
-  // The photo pipeline's rule (every field nullable, skip the line rather than
-  // fabricate it), applied where the temptation is worst: a probe that did not
-  // run must not read as an accusation the scored site cannot answer.
-  const partial = scoreAgentReadiness({ http: { status: 200, words: 100 }, rendered: { words: 100, consoleErrors: 0, brokenImages: 0, totalImages: 0 } });
-  assert.ok(partial.unmeasured.length > 0, "this fixture deliberately omits the wire and discovery probes");
-  assert.ok(partial.max < 100, "max must shrink to the dimensions that carry evidence");
-  assert.equal(partial.max, partial.dimensions.reduce((a, d) => a + d.max, 0), "max is the sum of the scored dimensions");
-  for (const u of partial.unmeasured) {
-    assert.ok(!partial.dimensions.some((d) => d.id === u.id), `${u.id} is unmeasured, so it must not also be scored`);
-    assert.ok(u.why && u.why.length > 0, "an unmeasured dimension has to say why");
+test("execution checks stay NEUTRAL until an agent browser has actually rendered", () => {
+  // The load-bearing one. A render needs a real browser off a 10-minute-a-day
+  // account ceiling, so most scans will never have this evidence. An unknown
+  // DECLARED check is the site's fact (we asked, it did not answer); an
+  // unmeasured execution check is OURS, and docking a stranger for our spent
+  // budget would make the number dishonest.
+  for (const ev of [null, undefined, {}, { ran: false }]) {
+    const checks = executionChecks(ev);
+    assert.equal(checks.agentScripts.status, "neutral", "no render means no verdict on scripts");
+    assert.equal(checks.agentMedia.status, "neutral", "no render means no verdict on media");
+    assert.match(checks.agentScripts.detail, /render/, "the detail has to say why it is neutral");
   }
 });
 
-test("a script error and a failed image each cost real points", () => {
-  // The two defects found on 2026-08-12. If either can happen without moving
-  // the number, this rubric would have scored the site perfect on the day it
-  // was broken, which is the failure mode the whole file exists to avoid.
-  const base = { http: { status: 200, words: 300 }, declared: { llmsTxt: true, markdownTwin: true, agentCard: true, mcp: true, sitemap: true } };
-  const shot = { words: 300, totalImages: 12, imagesWithAlt: 12, imagesMissingAlt: 0, imagesDecorative: 0 };
-  const clean = scoreAgentReadiness({ ...base, rendered: { ...shot, consoleErrors: 0, brokenImages: 0 } });
-  const threw = scoreAgentReadiness({ ...base, rendered: { ...shot, consoleErrors: 1, brokenImages: 0 } });
-  const broke = scoreAgentReadiness({ ...base, rendered: { ...shot, consoleErrors: 0, brokenImages: 12 } });
-  assert.ok(threw.score < clean.score, "an uncaught script error must cost points");
-  assert.ok(broke.score < clean.score, "images an agent browser cannot decode must cost points");
-  // Alt text is the mitigation that saved the homepage, so a page whose images
-  // fail BUT are captioned must still outscore one that is neither.
-  const bare = scoreAgentReadiness({ ...base, rendered: { ...shot, consoleErrors: 0, brokenImages: 12, imagesWithAlt: 0, imagesMissingAlt: 12 } });
-  assert.ok(bare.score < broke.score, "captions must be worth something when the pixels do not arrive");
-  // An explicit alt="" is CORRECT markup for a decorative icon. The rubric's
-  // own first draft scored /garage 1/10 here because 14 of its 16 images are
-  // taskbar sprites doing the right thing, so this pins the repair: an
-  // all-decorative page owes no descriptions and is not scored on them.
-  const decorative = scoreAgentReadiness({ ...base, rendered: { ...shot, consoleErrors: 0, brokenImages: 0, totalImages: 14, imagesWithAlt: 0, imagesMissingAlt: 0, imagesDecorative: 14 } });
-  assert.ok(decorative.unmeasured.some((u) => u.id === "describable"),
-    "all-decorative images owe no description, so the dimension is unmeasured rather than failed");
+test("a throw fails the script check and a decode failure fails the media check", () => {
+  // The two defects found on 2026-08-12, one per check. If either can happen
+  // without moving a status, this category would have scored the site perfect
+  // on the day it was broken, which is the whole reason it exists.
+  const clean = executionChecks({ ran: true, engine: "kitesurf", consoleErrors: 0, pageErrors: 0, totalImages: 26, brokenImages: 0 });
+  assert.equal(clean.agentScripts.status, "pass");
+  assert.equal(clean.agentMedia.status, "pass");
+
+  const threw = executionChecks({ ran: true, consoleErrors: 1, firstError: "TypeError: navigation.addEventListener is not a function", totalImages: 26, brokenImages: 0 });
+  assert.equal(threw.agentScripts.status, "fail");
+  assert.match(threw.agentScripts.detail, /navigation\.addEventListener/, "the failing detail must name the error");
+
+  const broke = executionChecks({ ran: true, totalImages: 26, brokenImages: 12, consoleErrors: 0 });
+  assert.equal(broke.agentMedia.status, "fail");
+  assert.match(broke.agentMedia.detail, /12 of 26/, "the detail must quote the count it measured");
+
+  // A page serving no images owes no decode verdict.
+  assert.equal(executionChecks({ ran: true, totalImages: 0, brokenImages: 0, consoleErrors: 0 }).agentMedia.status, "neutral");
+});
+
+test("the DOM census treats an empty alt as a decision, not an omission", () => {
+  // This feature's own first bug: counting non-empty alt against ALL images
+  // scored /garage 1/10 when fourteen of its sixteen images are taskbar sprites
+  // carrying a deliberate alt="". The probe runs inside a third party's page
+  // through Runtime.evaluate, so it is asserted as source rather than executed.
+  assert.match(EXECUTION_PROBE, /hasAttribute\("alt"\)/, "decorative images are found by the attribute being PRESENT and empty");
+  assert.match(EXECUTION_PROBE, /imagesMissingAlt/, "a missing alt attribute is the only omission");
+  assert.match(EXECUTION_PROBE, /imagesDecorative/, "decorative images need their own count so they leave both sides of the ratio");
+  // naturalWidth alone is 0 for an image that simply has not finished loading,
+  // which would invent failures on a slow page.
+  assert.match(EXECUTION_PROBE, /i\.complete && i\.naturalWidth === 0/, "an image is only broken once it is complete");
+});
+
+test("both execution checks are declared in the category the rubric scores", () => {
+  for (const [key, meta] of Object.entries(EXECUTION_META)) {
+    assert.equal(meta.category, "execution", `${key} must sit in the execution category`);
+    assert.ok(meta.label && meta.label.length > 0, `${key} needs a label the grid can render`);
+    assert.ok(meta.countInScore !== false, `${key} must count once it has evidence`);
+  }
+  const lens = readFileSync("./www/_worker.js/lens.js", "utf8");
+  assert.match(lens, /\.\.\.EXECUTION_META/, "lens.js must spread the shared meta rather than restate it");
+  assert.match(lens, /key: "execution"/, "the execution category has to exist in LENS_READINESS_CATEGORIES");
+  // The drift this whole module exists to prevent.
+  assert.doesNotMatch(lens, /agentScripts: \{ category/, "lens.js must not re-declare an execution check locally");
+});
+
+test("an unrendered scan does not enlarge the readiness denominator", () => {
+  // The rule the whole execution category turns on, asserted through the real
+  // scorer rather than through executionChecks alone. Most scans will never
+  // hold browser evidence, because a render is rate-limited and capped
+  // account-wide at 10 minutes a day. If a neutral check still counted, every
+  // site scanned without a render would be marked down for OUR spent budget.
+  const base = { headers: {}, robots: null, sitemap: null, terms: null, discovery: null, agent: null, openapi: null, botViews: [] };
+  const noRender = lensReadiness({ ...base, execution: null });
+  const rendered = lensReadiness({ ...base, execution: { ran: true, consoleErrors: 1, totalImages: 26, brokenImages: 12 } });
+
+  const catOf = (r) => r.categories.find((c) => c.key === "execution");
+  assert.equal(catOf(noRender).total, 0, "an unrendered scan scores nothing in this category");
+  assert.equal(catOf(noRender).checkCount, 2, "both checks are still SHOWN, so the visitor learns they exist");
+  assert.equal(catOf(rendered).total, 2, "a render makes both checks count");
+  assert.equal(rendered.counted - noRender.counted, 2, "exactly the two execution checks join the denominator");
+  assert.ok(/neutral/.test(noRender.scoringNote) && /render/.test(noRender.scoringNote),
+    "the published scoring note has to explain the neutral rule, since the number is shown to strangers");
 });

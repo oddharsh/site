@@ -56,6 +56,7 @@ import { BOT_UA } from "./lib/botauth.js";
 // cycle. Budgets live there because that is where every other lens route reads
 // them, and a second copy is the drift the LENS_BUDGETS contract test refuses.
 import { BROWSER_FREE_PLAN, LENS_BUDGETS, lensSha256Hex, overLensBudget } from "./lens.js";
+import { EXECUTION_PROBE } from "./lib/agent-execution.js";
 
 const CDP_BASE = "https://localhost/v1/devtools/browser";
 
@@ -362,6 +363,23 @@ async function runWireSession(env, url) {
     }
     await cdp.send("Network.enable", {}, pageSession);
     await cdp.send("Page.enable", {}, pageSession);
+    // Runtime and Log carry the EXECUTION evidence, and both are enabled before
+    // the navigation because an exception thrown during load is the interesting
+    // case. This costs no extra browser instance and no extra minute: it is the
+    // session this lens already opens, answering two more questions on the way
+    // past. `agentScripts` and `agentMedia` in the readiness rubric are fed from
+    // here, and they are the two questions a declaration audit structurally
+    // cannot answer.
+    //
+    // Tolerated rather than awaited-or-die, exactly like the UA override above.
+    // A binding that refuses either domain should cost the execution checks and
+    // leave them neutral, not lose the whole request waterfall this route
+    // exists for.
+    let execDomains = true;
+    try {
+      await cdp.send("Runtime.enable", {}, pageSession);
+      await cdp.send("Log.enable", {}, pageSession);
+    } catch (_e) { execDomains = false; }
 
     const t0 = Date.now();
     await cdp.send("Page.navigate", { url }, pageSession);
@@ -371,7 +389,32 @@ async function runWireSession(env, url) {
     // the load event would systematically under-report the thing being measured.
     await sleep(Math.min(WIRE_TIMING.settleAfterLoadMs, Math.max(0, WIRE_TIMING.hardCapMs - (Date.now() - t0))));
 
-    return { events: cdp.events, navMs: Date.now() - t0, loadFired: Boolean(loaded), uaApplied, sessionId };
+    // The census runs AFTER the settle window on purpose: an image that has not
+    // finished loading yet reports naturalWidth 0 and is not broken, so probing
+    // at the load event would invent failures. EXECUTION_PROBE only counts an
+    // image once `complete` is true.
+    let execution = null;
+    if (execDomains) {
+      try {
+        const r = await cdp.send("Runtime.evaluate", { expression: EXECUTION_PROBE, returnByValue: true, awaitPromise: false }, pageSession);
+        const raw = r && r.result && typeof r.result.value === "string" ? JSON.parse(r.result.value) : null;
+        if (raw && !raw.probeError) {
+          // Uncaught errors, counted off the events this session already
+          // collected. Runtime.exceptionThrown is the page's own throw;
+          // Log.entryAdded at error level catches what the console reports
+          // without an exception object, which is how Kitesurf reports a
+          // callback that threw inside requestAnimationFrame.
+          const thrown = cdp.events.filter((e) => e.method === "Runtime.exceptionThrown");
+          const logged = cdp.events.filter((e) => e.method === "Log.entryAdded" && e.params && e.params.entry && e.params.entry.level === "error");
+          const first = thrown[0]
+            ? String((thrown[0].params && thrown[0].params.exceptionDetails && thrown[0].params.exceptionDetails.text) || "").slice(0, 120)
+            : logged[0] ? String((logged[0].params.entry.text) || "").slice(0, 120) : "";
+          execution = { ran: true, engine: "chromium-cdp", pageErrors: thrown.length, consoleErrors: logged.length, firstError: first || undefined, ...raw };
+        }
+      } catch (_e) { execution = null; }
+    }
+
+    return { events: cdp.events, navMs: Date.now() - t0, loadFired: Boolean(loaded), uaApplied, execution, sessionId };
   } finally {
     // Fire and forget would be wrong: a leaked session holds one of three
     // concurrent slots and blacks out every browser lens on the site.
@@ -459,6 +502,10 @@ export async function handleLensWire(request, env, ctx) {
       // being thrown away after the budget was already spent on it.
       loadFired: out.loadFired,
       identifiedAs: out.uaApplied ? BOT_UA : null,
+      // The execution evidence the readiness rubric's `execution` category
+      // consumes. Null when the probe could not run, which keeps those checks
+      // neutral rather than turning our own failure into the site's fail.
+      execution: out.execution || null,
       ...summary,
     };
 
@@ -467,6 +514,14 @@ export async function handleLensWire(request, env, ctx) {
     s.setAttribute("lens.wire_bytes", summary.bytes);
     s.setAttribute("lens.wire_third_pct", summary.thirdParty.bytesPct);
     s.setAttribute("lens.wire_hosts", summary.hostTotal);
+    // Attributes follow the pipeline rule: an undefined value is SKIPPED, never
+    // coerced. A scan with no execution evidence records nothing here rather
+    // than a zero that reads like a clean page.
+    if (out.execution) {
+      s.setAttribute("lens.exec_script_errors", (out.execution.consoleErrors || 0) + (out.execution.pageErrors || 0));
+      s.setAttribute("lens.exec_images_broken", out.execution.brokenImages || 0);
+      s.setAttribute("lens.exec_images_total", out.execution.totalImages || 0);
+    }
 
     if (env.RN_KV) ctx.waitUntil(env.RN_KV.put(cacheKey, JSON.stringify(payload), { expirationTtl: WIRE_CACHE_TTL }));
     return jsonResponse(payload);

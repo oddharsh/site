@@ -46,7 +46,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { chromium } from "playwright-core";
 
-import { scoreAgentReadiness, summarise } from "../www/_worker.js/lib/agent-rubric.js";
+import { executionChecks } from "../www/_worker.js/lib/agent-execution.js";
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const ORIGIN = process.env.AGENT_CHECK_ORIGIN || "https://aadhar.sh";
@@ -207,11 +207,13 @@ async function main() {
     const twinUrl = route === "/" ? `${ORIGIN}/index.md` : `${ORIGIN}${route.replace(/\/$/, "")}.md`;
     const twin = await head(twinUrl);
 
-    const result = scoreAgentReadiness({
-      http: { status: httpStatus.status, words: httpWords(raw), robotsAllowsAgents: declared.robotsAllowsAgents },
-      rendered: { ...k, engine: "kitesurf" },
-      declared: { ...declared, markdownTwin: twin.ok && /markdown/.test(twin.type) },
-    });
+    // The SAME two checks /lens scores, off the same module. This CLI
+    // deliberately publishes no overall score of its own: /lens already owns
+    // that number across twenty declared checks plus these two, and a second
+    // 0-100 in this repo would be two definitions of one claim.
+    const checks = executionChecks({ ran: !k.failed, engine: "kitesurf", ...k });
+    const hw = httpWords(raw);
+    const legible = k.words ? Math.round((Math.min(hw, k.words) / k.words) * 100) : null;
 
     // A defect COUNTS only when the control disagrees, or when no control ran
     // and the failure is unambiguous (a broken image is a decode result, not an
@@ -223,12 +225,16 @@ async function main() {
     if (k.brokenImages) notes.push(c && c.brokenImages === 0 ? `${k.brokenImages}/${k.totalImages} images failed to decode, Chrome control decoded all` : `${k.brokenImages}/${k.totalImages} images failed to decode`);
     if (k.maximize === "dead") notes.push(c && c.maximize === "wired" ? "window controls DEAD, wired in Chrome control" : "window controls dead");
 
-    const bad = Boolean(k.failed) || k.consoleErrors > 0 || k.brokenImages > 0;
+    const bad = Boolean(k.failed) || checks.agentScripts.status === "fail" || checks.agentMedia.status === "fail";
     if (bad) failures += 1;
-    rows.push({ route, result, kitesurf: k, control: c, notes, bad });
+    const twinOk = twin.ok && /markdown/.test(twin.type);
+    if (!twinOk) notes.push("no Markdown twin at " + twinUrl.replace(ORIGIN, ""));
+    rows.push({ route, checks, kitesurf: k, control: c, notes, bad, legible, twin: twinOk, declared });
 
     if (!WANT_JSON) {
-      console.log(`${bad ? "FAIL" : "ok  "}  ${route.padEnd(18)} ${summarise(result)}`);
+      const status = [checks.agentScripts, checks.agentMedia].map((x) => x.status[0].toUpperCase()).join("");
+      console.log(`${bad ? "FAIL" : "ok  "}  ${route.padEnd(18)} scripts:${checks.agentScripts.status.padEnd(7)} media:${checks.agentMedia.status.padEnd(7)} legible:${legible === null ? "?" : legible + "%"}${twinOk ? "" : "  no-twin"}`);
+      void status;
       for (const n of notes) console.log(`        ${n}`);
       if (k.brokenSrc?.length) console.log(`        first broken: ${k.brokenSrc.join(", ")}`);
       for (const e of k.errors || []) console.log(`        ${e}`);
@@ -243,10 +249,12 @@ async function main() {
     process.exit(failures ? 1 : 0);
   }
 
-  const avg = Math.round(rows.reduce((a, r) => a + r.result.pct, 0) / (rows.length || 1));
-  console.log(`\nsite average: ${avg}% across ${rows.length} route(s)`);
-  const un = rows[0]?.result.unmeasured || [];
-  if (un.length) console.log(`unmeasured here: ${un.map((u) => u.id).join(", ")} (the /lens wire and reader tabs fill these in)`);
+  const scriptFails = rows.filter((r) => r.checks.agentScripts.status === "fail").length;
+  const mediaFails = rows.filter((r) => r.checks.agentMedia.status === "fail").length;
+  const noTwin = rows.filter((r) => !r.twin).length;
+  console.log(`\n${rows.length} route(s): ${scriptFails} with script failures, ${mediaFails} with undecodable media, ${noTwin} with no Markdown twin`);
+  console.log(`declared surfaces: llms.txt ${declared.llmsTxt ? "yes" : "NO"}, agent card ${declared.agentCard ? "yes" : "NO"}, MCP ${declared.mcp ? "yes" : "NO"}, sitemap ${declared.sitemap ? "yes" : "NO"}`);
+  console.log("\nthe /lens Agent-ready? tab scores these same two checks, plus twenty declared ones, for any URL.");
   console.log(failures ? `\n${failures} route(s) with a real defect. See the notes above.` : "\nno defects on any route.");
   process.exit(failures ? 1 : 0);
 }

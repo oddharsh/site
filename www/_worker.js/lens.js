@@ -10,6 +10,7 @@ import { escAttr, escHtml, jsonResponse } from "./lib/http.js";
 import { span } from "./lib/trace.js";
 import { documentShape, hasRenderEngine, runBrowserAction } from "./lens-render.js";
 import { lensRecipe, lensRecipeCatalog, lensRecipeIds, lensRecipeNonce, lensRecipeReceipt, lensRecipeScript } from "./lens-recipes.js";
+import { EXECUTION_META, executionChecks } from "./lib/agent-execution.js";
 
 // The glossary. This page's whole subject is protocol names, which is fine for
 // the audience that already has them and a wall for the audience that doesn't.
@@ -2231,6 +2232,12 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
     out.readiness = lensReadiness({
       headers, robots, sitemap, terms: out.terms,
       discovery: out.discovery, agent: out.agent, openapi, botViews,
+      // Always null on the initial scan, and that is the design rather than a
+      // gap: this pass is 28 cheap HTTP probes, while execution evidence needs a
+      // real browser off a 10-minute-a-day account ceiling. The two checks come
+      // back neutral here and are filled in by /lens/wire, which already opens
+      // the CDP session they ride.
+      execution: null,
     });
     out.readiness.field = lensFieldEvidence({
       status: out.status,
@@ -3084,6 +3091,9 @@ const LENS_READINESS_META = {
   x402: { category: "commerce", label: "x402", optional: true, countInScore: false }, mpp: { category: "commerce", label: "MPP", optional: true, countInScore: false },
   ucp: { category: "commerce", label: "UCP", optional: true, countInScore: false }, acp: { category: "commerce", label: "ACP", optional: true, countInScore: false },
   ap2: { category: "commerce", label: "AP2", optional: true, countInScore: false },
+  // The EXECUTION half, imported so the CLI check and this rubric cannot drift
+  // into two different definitions of the same two questions.
+  ...EXECUTION_META,
 };
 
 const LENS_READINESS_CATEGORIES = [
@@ -3092,6 +3102,12 @@ const LENS_READINESS_CATEGORIES = [
   { key: "botAccessControl", label: "Bot Access Control", countInScore: true },
   { key: "discovery", label: "API, Auth, MCP & Skill Discovery", countInScore: true },
   { key: "commerce", label: "Commerce", countInScore: false },
+  // Last, because it is the only category that needs a real browser and so the
+  // only one that is usually neutral. Everything above it is a declaration
+  // audit: this asks what an engine DID with the page. Measured 2026-08-12,
+  // aadhar.sh passed all twenty declared checks on a day its homepage rendered
+  // twelve blank squares and every page threw.
+  { key: "execution", label: "Execution in an agent browser", countInScore: true },
 ];
 
 function lensJsonShape(probe, validate) {
@@ -3170,7 +3186,7 @@ export function lensFieldEvidence({ status, bodyUnreadable, anatomy, agent, botV
   };
 }
 
-export function lensReadiness({ headers, robots, sitemap, terms, discovery, agent, openapi, botViews }) {
+export function lensReadiness({ headers, robots, sitemap, terms, discovery, agent, openapi, botViews, execution }) {
   const items = {};
   const robotsParsed = robots && robots.ok ? lensParseRobots(robots.body || "") : null;
   const robotsRules = robotsParsed && robotsParsed.groups.length > 0;
@@ -3226,6 +3242,17 @@ export function lensReadiness({ headers, robots, sitemap, terms, discovery, agen
   items.acp = lensReadinessItem("acp", acp.status === "pass" ? "pass" : "neutral", acp.status === "pass" ? "ACP-shaped discovery metadata found" : "not observed (optional; not scored)");
   items.ap2 = lensReadinessItem("ap2", ap2.status === "pass" ? "pass" : "neutral", ap2.status === "pass" ? "AP2-shaped discovery metadata found" : "not observed (optional; not scored)");
 
+  // Execution rides whatever agent-browser evidence this scan happens to hold.
+  // With none, both come back `neutral`: shown in the grid, excluded from the
+  // score. That is deliberate and is the opposite of how `unknown` is treated
+  // above. An unknown DECLARED check means we asked and the site did not
+  // answer, which is the site's fact. An unmeasured execution check means our
+  // browser budget was spent, which is OURS, and docking a stranger's score for
+  // our rate limit would make the number dishonest.
+  const exec = executionChecks(execution);
+  items.agentScripts = lensReadinessItem("agentScripts", exec.agentScripts.status, exec.agentScripts.detail);
+  items.agentMedia = lensReadinessItem("agentMedia", exec.agentMedia.status, exec.agentMedia.detail);
+
   const categories = LENS_READINESS_CATEGORIES.map((category) => {
     const values = Object.values(items).filter((item) => item.category === category.key && item.countInScore && item.status !== "neutral");
     const passed = values.filter((item) => item.status === "pass").length;
@@ -3245,7 +3272,7 @@ export function lensReadiness({ headers, robots, sitemap, terms, discovery, agen
   return {
     overall, level: level.number, levelName: level.name,
     categories, checks: items, counted: counted.length, passed,
-    scoringNote: "Passes divided by pass + fail + unknown; neutral emerging-commerce checks are shown but excluded.",
+    scoringNote: "Passes divided by pass + fail + unknown; neutral checks are shown but excluded. Execution checks stay neutral until an agent browser has actually rendered the page, so a spent render budget never costs a site points.",
     nextActions, botViews: botViews || [],
   };
 }
