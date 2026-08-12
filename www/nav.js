@@ -208,9 +208,29 @@
     }, true);
   }
 
+  var STYLE_ASSETS = {
+    "nav-run": "/nav-run.css",
+    "nav-tray": "/nav-tray.css",
+    "infotip": "/infotip.css"
+  };
+  var stylePromises = Object.create(null);
+  function loadStyle(name) {
+    if (stylePromises[name]) return stylePromises[name];
+    stylePromises[name] = new Promise(function (resolve, reject) {
+      var link = D.createElement("link");
+      link.rel = "stylesheet";
+      link.href = STYLE_ASSETS[name];
+      link.onload = resolve;
+      link.onerror = function () { delete stylePromises[name]; link.remove(); reject(new Error(name + " styles failed")); };
+      (D.head || D.documentElement).appendChild(link);
+    });
+    return stylePromises[name];
+  }
+
   function loadRun() {
     if (!runPromise) {
-      runPromise = import("/nav-run.js").then(function (m) {
+      runPromise = Promise.all([loadStyle("nav-run"), import("/nav-run.js")]).then(function (loaded) {
+        var m = loaded[1];
         runApi = m.createRun({
           kbd: KBD,
           sound: AXP_SND,
@@ -403,7 +423,8 @@
   }
   function loadTray() {
     if (!trayPromise) {
-      trayPromise = import("/nav-tray.js").then(function (m) {
+      trayPromise = Promise.all([loadStyle("nav-tray"), import("/nav-tray.js")]).then(function (loaded) {
+        var m = loaded[1];
         return m.createTray({ sound: AXP_SND, loadSys: loadSys, loadUpd: loadUpd });
       });
     }
@@ -765,7 +786,8 @@
       // module cache is what the static import hits, and on the homepage it is
       // usually already warm from tooltip.js.
       import("/hoist.js").catch(function () {});
-      mod = import("/infotip.js").then(function (m) {
+      mod = Promise.all([loadStyle("infotip"), import("/infotip.js")]).then(function (loaded) {
+        var m = loaded[1];
         // These are nav.js's own readers, so a tray infotip and its click-balloon
         // share one fetch per page rather than race for it.
         m.start({
