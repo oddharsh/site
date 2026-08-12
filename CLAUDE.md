@@ -526,27 +526,37 @@ worktrees may edit freely, but a worktree is not a release surface.
   `Workers Scripts:Edit` + `D1:Edit` "and nothing else" from 2026-08-06 while no
   such token existed, so the list was never checked against a running ramp:
 
-  | permission | why |
-  |---|---|
-  | Account · Workers Scripts · **Edit** | `versions list`, `deployments status`, `versions deploy` |
-  | Account · D1 · **Edit** | `SELECT` the shipped vnums, `INSERT` the changelog row |
-  | Account · Account Settings · **Read** | wrangler resolves the account |
-  | User · User Details · **Read** | wrangler identifies itself non-interactively |
-  | User · Memberships · **Read** | same |
+  | permission | why | how sure |
+  |---|---|---|
+  | Account · Workers Scripts · **Edit** | `versions list`, `deployments status`, `versions deploy` | certain, it writes the traffic split |
+  | Account · D1 · **Edit** | `SELECT` the shipped vnums, `INSERT` the changelog row | certain |
+  | Account · Account Settings · **Read** | wrangler resolves the account | likely |
+  | User · User Details · **Read** | wrangler's identity call | SPECULATIVE |
+  | User · Memberships · **Read** | same | SPECULATIVE |
 
-  Restrict Account Resources to this one account. **Workers Routes is NOT needed**,
-  which is the one place this is narrower than the token Workers Builds generates
-  for itself (Account Settings:Read, Workers Scripts:Edit, KV:Edit, R2:Edit, Zone
-  Workers Routes:Edit, User Details:Read, Memberships:Read): a ramp shifts traffic
-  between versions that already exist and never uploads one, so it needs neither
-  the storage scopes nor routes.
+  Restrict Account Resources to this one account. **Workers Routes, KV and R2 are
+  NOT needed**, which is where this is narrower than the token Workers Builds
+  generates for itself: a ramp shifts traffic between versions that already exist
+  and never uploads one, so it needs neither the storage scopes nor routes.
 
-  The bottom three are wrangler's identity calls rather than anything the ramp asks
-  for, which is why the original two-scope list looked complete. Verify with
-  `CI=1 pnpm run deploy:promote -- --dry-run`, which exercises both read calls and
-  moves nothing; `CI=1` matters because `release-guard.mjs` ignores the token
-  entirely when `CI` is unset and falls back to your interactive login, so without
-  it the control tests the wrong credential.
+  **Start with the three Account rows and verify, rather than collecting all five.**
+  The two User rows were inferred from Workers Builds' auto-generated token, not
+  from anything the ramp is known to call, and `CLOUDFLARE_ACCOUNT_ID` is passed
+  explicitly precisely so wrangler need not enumerate anything. They are also
+  awkward to grant: **User-scoped permissions exist only on USER-owned tokens**
+  (scope `com.cloudflare.api.user`, under My Profile, API Tokens). An account-owned
+  token created from Manage Account does not offer the category at all, which reads
+  like a missing option and is a token-type difference.
+
+  The control, which moves nothing:
+
+  ```bash
+  CI=1 CLOUDFLARE_API_TOKEN=<token> CLOUDFLARE_ACCOUNT_ID=<id> pnpm run deploy:promote -- --dry-run
+  ```
+
+  `CI=1` is load-bearing: `release-guard.mjs` ignores the token entirely when `CI`
+  is unset and falls back to the interactive wrangler login, so without it the
+  control passes while testing the wrong credential.
 
   **An under-scoped D1 fails SILENTLY and late, and that is by design.** The
   changelog `INSERT` runs only after the last step hits 100%, and it is wrapped in
