@@ -2479,10 +2479,23 @@ pnpm run deploy:direct
 
     So the loop to run is short. Confirm the run id is new (a repeat alert looks
     identical), grep the log for `CAPIError`, and stop. Do NOT re-read the diff
-    looking for what upset it, and do not push anything to appease it. If the
-    noise stops being worth it, the fix is in GitHub's settings rather than in
-    this repo: Copilot code-scanning autofix is what crashes, `CodeQL` and
-    `Analyze (actions)` are the checks doing the actual work and both stay green.
+    looking for what upset it, and do not push anything to appease it.
+
+    **Turning off Copilot Autofix does NOT stop it, measured 2026-08-12.** This
+    paragraph said the fix was in GitHub's settings and named autofix; the owner
+    turned it off and the very next push failed identically. The run proves the
+    toggle landed and changed nothing that matters: the log carries
+    `COPILOT_AGENT_ONLINE_EVALUATION_DISABLED: true` and `[skills]
+    session=github/code-scanning enabled=false source=disabled`, then crashes on
+    the same `CAPIError: 400` anyway. The job also ran 29s instead of ~80s, so
+    something genuinely changed; the check still fails.
+
+    Which setting (if any) actually silences `dynamic/agents/github-advanced-security`
+    is UNKNOWN, and guessing has now cost one wrong answer. It configures nothing
+    in this repo (gotcha 27's own note: it lives in no workflow file here), so
+    treat it as an upstream red mark that gates nothing until GitHub fixes their
+    model routing. `CodeQL` and `Analyze (actions)` are the checks doing the real
+    scanning and both stay green throughout.
 
     **What it will not catch, learned the same day.** `Analyze (actions)` passed on
     a workflow that interpolated `${{ inputs.base }}` straight into a `run:` block,
