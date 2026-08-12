@@ -155,6 +155,30 @@ export function renderSectionIndex(section, surfaces, { descriptions = {} } = {}
  * pages are rewritten (hashed asset refs, minification); build.mjs owns that
  * ordering and reads the source tree first for everything that has one.
  */
+/**
+ * The /writing index, from the registry the page itself renders. Sorted newest
+ * first, matching the folder view.
+ *
+ * Each post ships as plain text at `<slug>.txt` and that URL is the twin for the
+ * post, so this index links to the text rather than to the Notepad window that
+ * wraps it: an agent following one of these gets the prose with no chrome to
+ * strip.
+ */
+export function renderWritingIndex(root = ".") {
+  const posts = JSON.parse(readFileSync(join(root, "www/writing/posts.json"), "utf8"));
+  const rows = [...posts]
+    .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")))
+    .map((p) => `- **${p.date}** [${p.title}](${ORIGIN}/writing/${p.slug}) ([plain text](${ORIGIN}/writing/${p.slug}.txt))`)
+    .join("\n");
+  return [
+    "# My Writing",
+    "",
+    `${posts.length} post${posts.length === 1 ? "" : "s"}. Each one is a plain text file; the site renders it as a Notepad window, and the text is the source.`,
+    "",
+    rows,
+  ].join("\n");
+}
+
 export function buildTwins(root = ".", opts = {}) {
   const manifest = readManifest(root);
   const lastmod = readLastmod(root);
@@ -198,6 +222,14 @@ export function buildTwins(root = ".", opts = {}) {
         // page were empty.
         note = "This page is an interactive tool: its content is built in the browser at runtime, so there is no static prose to mirror here. Open the source URL to use it.";
       }
+    } else if (surface.path === "/writing") {
+      // /writing renders from the Worker, so there is no HTML file to mirror,
+      // and a HAND twin would be the wrong shape: the page is a LIST, and a
+      // hand-written list goes stale the next time a post is added. The registry
+      // it renders from is committed, so the twin is derived from the same bytes
+      // the page is. Same argument as every other generated twin, reaching one
+      // step further back than the HTML.
+      body = renderWritingIndex(root);
     } else if (existsSync(handAbs)) {
       body = readFileSync(handAbs, "utf8").trim();
     } else if (generatedAbs && existsSync(generatedAbs)) {
