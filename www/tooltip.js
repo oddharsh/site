@@ -65,7 +65,7 @@ export function start(initial) {
             }
           } catch (e) {}
           const d = new Date(s);
-          if (isNaN(d)) return "";
+          if (isNaN(d.getTime())) return "";
           return `${p2(d.getMonth() + 1)}-${p2(d.getDate())}-${d.getFullYear()}, ${p2(d.getHours())}:${p2(d.getMinutes())}`;
         }
         try {

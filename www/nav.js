@@ -18,7 +18,8 @@
 // to a real destination; nothing decorative pretends to be interactive.
 (function () {
   "use strict";
-  if (window.__axpNav) return; window.__axpNav = true;
+  var W = /** @type {Window & typeof globalThis & {__axpNav?: boolean, webkitAudioContext?: typeof AudioContext}} */ (window);
+  if (W.__axpNav) return; W.__axpNav = true;
   var D = document;
   // The Run palette used to open and close inside a same-document View Transition.
   // It applies its DOM change directly now (2026-07-30), for the same reason the
@@ -31,7 +32,8 @@
   // platform-aware shortcut label shown on the Start orb + Run dialog. The
   // keydown handler binds BOTH ⌘K and Ctrl-K; this is only what we DISPLAY, so
   // Mac users see ⌘K and everyone else sees Ctrl K.
-  var IS_MAC = /Mac|iPhone|iPad|iPod/i.test((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || navigator.userAgent || "");
+  var uaData = /** @type {Navigator & {userAgentData?: {platform?: string}}} */ (navigator).userAgentData;
+  var IS_MAC = /Mac|iPhone|iPad|iPod/i.test((uaData && uaData.platform) || navigator.platform || navigator.userAgent || "");
   var KBD = IS_MAC ? "⌘K" : "Ctrl K";
 
   // The pageswap/pagereveal pair that tagged each navigation "axp-open" or
@@ -157,7 +159,14 @@
   var sysData = null, updData = null;
   var trayPromise = null, accZ = 40;
 
-  function el(html) { var t = D.createElement("template"); t.innerHTML = html.trim(); return t.content.firstChild; }
+  /** @returns {HTMLElement} */
+  function el(html) {
+    var t = D.createElement("template");
+    t.innerHTML = html.trim();
+    var node = t.content.firstElementChild;
+    if (!(node instanceof HTMLElement)) throw new Error("Shell template must produce an element");
+    return node;
+  }
 
   // ── XP-flavored sound: synthesized via Web Audio (no copyrighted audio, no asset
   // bytes), gated by the tray mute toggle. Default OFF so there is never surprise
@@ -166,7 +175,7 @@
   var AXP_SND = (function () {
     var ctx = null, on = false;
     try { on = localStorage.getItem("axp-sound") === "on"; } catch (e) {}
-    function ac() { if (!ctx) { try { ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; } } if (ctx.state === "suspended" && ctx.resume) ctx.resume(); return ctx; }
+    function ac() { if (!ctx) { try { var Audio = W.AudioContext || W.webkitAudioContext; if (!Audio) return null; ctx = new Audio(); } catch (e) { return null; } } if (ctx.state === "suspended" && ctx.resume) ctx.resume(); return ctx; }
     // one decaying partial: fast attack, exponential tail (a struck note, not a beep).
     function partial(c, freq, t0, dur, peak, type) {
       var o = c.createOscillator(), g = c.createGain();
@@ -202,8 +211,8 @@
   function front(win) { win.style.zIndex = ++accZ; }
   function initRaise() {
     D.addEventListener("pointerdown", function (e) {
-      var win = e.target && e.target.closest && e.target.closest(".window,.np-window,.axp-acc");
-      if (!win || String(win.style.zIndex) === String(accZ)) return;
+      var win = e.target instanceof Element && e.target.closest(".window,.np-window,.axp-acc");
+      if (!(win instanceof HTMLElement) || String(win.style.zIndex) === String(accZ)) return;
       front(win);
     }, true);
   }
@@ -255,7 +264,8 @@
   // nav.js enhances one DOM contract instead of carrying a second constructor.
   function wireTaskbar(bar) {
     var start = D.getElementById("axp-start");
-    if (start) {
+    if (start instanceof HTMLAnchorElement) {
+      var startHref = start.href;
       // platform-correct shortcut hint + title (the static partial ships ⌘K;
       // non-Mac visitors get it rewritten here before they can notice)
       start.title = "Run — navigate the site (" + KBD + ")";
@@ -265,7 +275,7 @@
         // detail === 0 means the click came from the keyboard (Enter/Space on the
         // focused orb) rather than a pointer, so the ring is still wanted here.
         toggleRun(e.detail === 0).catch(function () {
-          location.assign(start.href);   // preserve the real /run fallback
+          location.assign(startHref);   // preserve the real /run fallback
         });
       });
       // Warm the island on hover intent, the same signal the homepage tooltip
@@ -372,7 +382,8 @@
     }
     icons.addEventListener("pointerdown", function (e) {
       if (e.pointerType === "mouse" && e.button !== 0) return;
-      var a = e.target.closest(".axp-ico"); if (!a) return;
+      var a = e.target instanceof Element && e.target.closest(".axp-ico");
+      if (!(a instanceof HTMLElement)) return;
       cur = a; moved = false; sx = e.clientX; sy = e.clientY;
       ox = parseFloat(a.style.left) || 0; oy = parseFloat(a.style.top) || 0;
       try { a.setPointerCapture(e.pointerId); } catch (_) {}
@@ -478,8 +489,8 @@
     D.addEventListener("pointerdown", function (e) {
       if (e.pointerType === "touch") return;                       // let touch scroll the page, not drag
       if (e.pointerType === "mouse" && e.button !== 0) return;
-      var b = e.target.closest && e.target.closest(".title-bar,.np-titlebar,.titlebar,#axp-run .tb");
-      if (!b || e.target.closest("a,button,.controls,.np-controls,.x")) return;
+      var b = e.target instanceof Element && e.target.closest(".title-bar,.np-titlebar,.titlebar,#axp-run .tb");
+      if (!b || (e.target instanceof Element && e.target.closest("a,button,.controls,.np-controls,.x"))) return;
       var w = b.closest(".window,.np-window,#axp-run");
       if (!w) return;
       if (w.classList.contains("axp-max")) return;   // a maximized window is pinned, not draggable
@@ -520,8 +531,8 @@
   function rememberScroll(sc) {
     var key = "axp-scroll:" + location.pathname;
     var save = function () { try { sessionStorage.setItem(key, String(sc.scrollTop)); } catch (e) {} };
-    var nav = (performance.getEntriesByType && performance.getEntriesByType("navigation")[0]) || {};
-    if (nav.type === "reload") {
+    var nav = /** @type {PerformanceNavigationTiming|undefined} */ (performance.getEntriesByType && performance.getEntriesByType("navigation")[0]);
+    if (nav && nav.type === "reload") {
       var y = parseInt(sessionStorage.getItem(key), 10);
       if (y > 0) {
         var done = false;
@@ -579,9 +590,11 @@
     label = label && label.textContent.trim();
     if (!label || !SECTION_ICONS[label]) return;
     var link = D.querySelector('link[rel~="icon"]');
-    if (!link) { link = D.createElement("link"); link.rel = "icon"; (D.head || D.documentElement).appendChild(link); }
-    link.type = "image/svg+xml";
-    link.href = "data:image/svg+xml," + encodeURIComponent(SECTION_ICONS[label]);
+    if (link && !(link instanceof HTMLLinkElement)) return;
+    var iconLink = /** @type {HTMLLinkElement} */ (link || D.createElement("link"));
+    if (!link) { iconLink.rel = "icon"; (D.head || D.documentElement).appendChild(iconLink); }
+    iconLink.type = "image/svg+xml";
+    iconLink.href = "data:image/svg+xml," + encodeURIComponent(SECTION_ICONS[label]);
   }
 
   // The shell's Speculation Rules used to be built here and appended at boot.
@@ -618,7 +631,7 @@
     }
     D.addEventListener("click", function (e) {
       if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-      var a = e.target.closest && e.target.closest("a.close");
+      var a = e.target instanceof Element && e.target.closest("a.close");
       if (!a || history.length <= 1 || !prevIsHome()) return;
       e.preventDefault();
       history.back();
@@ -665,7 +678,7 @@
     // click to history.back() when you actually arrived from home (bfcache, no flash).
     if (!home) {
       var closeA = bar.querySelector("a.close");
-      if (closeA) { closeA.setAttribute("href", "/"); closeA.title = "close to aadhar.sh"; closeA.setAttribute("aria-label", "close to aadhar.sh"); }
+      if (closeA instanceof HTMLAnchorElement) { closeA.setAttribute("href", "/"); closeA.title = "close to aadhar.sh"; closeA.setAttribute("aria-label", "close to aadhar.sh"); }
     }
 
     // back / forward, injected at the head of the title bar (excluded from title-bar
@@ -682,6 +695,8 @@
       var hn = el('<span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>');
       bar.insertBefore(hn, bar.firstChild);
       var bBtn = hn.querySelector(".axp-back"), fBtn = hn.querySelector(".axp-fwd");
+      if (!(bBtn instanceof HTMLButtonElement) || !(fBtn instanceof HTMLButtonElement)) return;
+      var backButton = bBtn, forwardButton = fBtn;
       // Back's PARENT fallback: with no history behind this page (a cold
       // arrival, a shared link), Back walks UP the path instead of sitting
       // blank — /lwe/vigenere goes to /lwe/, /garage/wire to /garage/,
@@ -693,18 +708,18 @@
       var realBack = function () {
         return window.navigation ? navigation.canGoBack : history.length > 1;
       };
-      bBtn.addEventListener("click", function () {
+      backButton.addEventListener("click", function () {
         if (realBack()) history.back();
         else if (!atRoot) location.href = parentPath;
       });
-      fBtn.addEventListener("click", function () { history.forward(); });
+      forwardButton.addEventListener("click", function () { history.forward(); });
       var sync = function () {
         if (!window.navigation) return;                 // no Navigation API -> leave both enabled
         var rb = navigation.canGoBack;
-        bBtn.disabled = !rb && atRoot;                  // parent fallback keeps it live elsewhere
-        bBtn.title = rb || atRoot ? "Back" : "Back to " + parentPath;
-        bBtn.setAttribute("aria-label", bBtn.title);
-        fBtn.disabled = !navigation.canGoForward;
+        backButton.disabled = !rb && atRoot;                  // parent fallback keeps it live elsewhere
+        backButton.title = rb || atRoot ? "Back" : "Back to " + parentPath;
+        backButton.setAttribute("aria-label", backButton.title);
+        forwardButton.disabled = !navigation.canGoForward;
       };
       sync();
       if (window.navigation) navigation.addEventListener("currententrychange", sync);
@@ -713,21 +728,22 @@
 
     // maximize / restore the page window
     var maxBtn = bar.querySelector(".max");
-    if (maxBtn && !maxBtn.dataset.axpWired) {
-      maxBtn.dataset.axpWired = "1";
-      maxBtn.setAttribute("role", "button");
-      maxBtn.setAttribute("tabindex", "0");
-      maxBtn.removeAttribute("aria-hidden");
-      maxBtn.setAttribute("aria-label", "Maximize");
-      maxBtn.title = "Maximize";
-      maxBtn.style.cursor = "pointer";
+    if (maxBtn instanceof HTMLElement && !maxBtn.dataset.axpWired) {
+      var maximizeButton = maxBtn;
+      maximizeButton.dataset.axpWired = "1";
+      maximizeButton.setAttribute("role", "button");
+      maximizeButton.setAttribute("tabindex", "0");
+      maximizeButton.removeAttribute("aria-hidden");
+      maximizeButton.setAttribute("aria-label", "Maximize");
+      maximizeButton.title = "Maximize";
+      maximizeButton.style.cursor = "pointer";
       var toggle = function () {
         var on = win.classList.toggle("axp-max");
-        maxBtn.setAttribute("aria-label", on ? "Restore" : "Maximize");
-        maxBtn.title = on ? "Restore" : "Maximize";
+        maximizeButton.setAttribute("aria-label", on ? "Restore" : "Maximize");
+        maximizeButton.title = on ? "Restore" : "Maximize";
       };
-      maxBtn.addEventListener("click", toggle);
-      maxBtn.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } });
+      maximizeButton.addEventListener("click", toggle);
+      maximizeButton.addEventListener("keydown", function (/** @type {KeyboardEvent} */ e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } });
     }
   }
 
@@ -803,8 +819,8 @@
         // attached would run a second `closest()` walk per pointerover for the
         // rest of the session, on a path that fires on every element boundary
         // the cursor crosses. Retiring them is the whole reason they are named.
-        D.removeEventListener("pointerover", onOver, { passive: true });
-        D.removeEventListener("pointerout", onOut, { passive: true });
+        D.removeEventListener("pointerover", onOver);
+        D.removeEventListener("pointerout", onOut);
         D.removeEventListener("focusin", onFocus);
       }).catch(function () { mod = null; pending = null; });
     };
@@ -842,7 +858,9 @@
     // A prerendered document does not run animation frames while hidden. Enhance its
     // already-SSR'd shell now, so activation inherits a fully wired desktop instead
     // of paying both frames on the click that activates the prerender.
-    if (D.prerendering) return boot();
+    /** @type {Document & {prerendering?: boolean}} */
+    var prerenderDocument = D;
+    if (prerenderDocument.prerendering) return boot();
     requestAnimationFrame(() => requestAnimationFrame(boot));
   }
   if (D.readyState === "loading") D.addEventListener("DOMContentLoaded", bootAfterStaticPaint);

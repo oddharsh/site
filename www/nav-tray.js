@@ -8,7 +8,14 @@ export function createTray(options) {
   var loadUpd = options.loadUpd;
   var balloon = null, balloonKind = null;
 
-  function el(html) { var t = D.createElement("template"); t.innerHTML = html.trim(); return t.content.firstChild; }
+  /** @returns {HTMLElement} */
+  function el(html) {
+    var t = D.createElement("template");
+    t.innerHTML = html.trim();
+    var node = t.content.firstElementChild;
+    if (!(node instanceof HTMLElement)) throw new Error("Tray island template must produce an element");
+    return node;
+  }
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
   function body() { return balloon && balloon.querySelector(".bd"); }
   function flatFields(j) {
@@ -93,7 +100,7 @@ export function createTray(options) {
     if (!balloon || !balloon.classList.contains("open")) return;
     balloon.classList.remove("open"); sound.play("close");
     var ic = balloonKind && D.querySelector('.axp-trayico[data-kind="' + balloonKind + '"]');
-    if (ic) { ic.setAttribute("aria-expanded", "false"); try { ic.focus(); } catch (_) {} }
+    if (ic instanceof HTMLElement) { ic.setAttribute("aria-expanded", "false"); try { ic.focus(); } catch (_) {} }
     balloonKind = null;
   }
   function toggle(kind, ic) {
@@ -105,7 +112,7 @@ export function createTray(options) {
   D.addEventListener("keydown", function (e) { if (e.key === "Escape") close(); });
   D.addEventListener("pointerdown", function (e) {
     if (!balloon || !balloon.classList.contains("open")) return;
-    if (e.target.closest && (e.target.closest("#axp-balloon") || e.target.closest(".axp-trayico"))) return;
+    if (e.target instanceof Element && (e.target.closest("#axp-balloon") || e.target.closest(".axp-trayico"))) return;
     close();
   }, true);
 

@@ -56,9 +56,13 @@ const plural = (n, one) => n + " " + one + (n === 1 ? "" : "s");
  *        "what was hovered", passed in rather than restated: nav.js's loader has
  *        to answer the same question before this module exists, and two copies
  *        of that rule is how the two come to disagree about what has a tip.
- * @param {object} [o.initial] the hover that arrived before this module did
  * @param {string} [o.kbd]     "⌘K" / "Ctrl K", already platform-resolved
- * @param {object} [o.load]    { sys, upd, writing }: the shell's own data readers
+ * @param {{
+ *   sys?: (done: (value: any) => void) => void,
+ *   upd?: (done: (value: any) => void) => void,
+ *   writing?: () => Promise<any[]>
+ * }} [o.load] the shell's own data readers
+ * @param {{target?: Element, focus?: boolean, at?: number}} [o.initial]
  */
 export function start(o) {
   if (!hoverCapable()) return;
