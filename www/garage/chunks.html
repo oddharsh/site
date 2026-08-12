@@ -142,6 +142,7 @@ h2 {
 }
 .note { color: oklch(44.95% 0 0); font-size: 10pt; margin: 0 0 14px; }
 .note code, p code, li code { background: oklch(96.72% 0 0); border: 1px solid oklch(88.22% 0 0); padding: 0 4px; font-family: var(--font-mono); font-size: 9.5pt; }
+.toy { font: 9.5pt/1.5 var(--font-mono); color: oklch(30% 0.02 250); background: oklch(96.72% 0 0); border: 1px solid oklch(88.22% 0 0); padding: 8px 10px; margin: 0 0 12px; overflow-x: auto; }
 hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px 0; }
 a { color: oklch(41.92% 0.0962 250.51); }
 .status {
@@ -268,15 +269,33 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
 
     <h2>2 · FastCDC, briefly</h2>
     <p class="note">
-      A rolling <em>gear hash</em> slides over the bytes; wherever the hash's
-      low bits hit a target pattern, that's a chunk boundary. Because the cut
-      points follow the <em>data</em>, inserting or deleting bytes only
-      disturbs the boundaries you touched. The rest line up exactly as
-      before. <code>min</code>/<code>max</code> clamp pathological sizes;
-      "normalized" chunking tightens the mask before the average and
-      loosens it after, so sizes cluster near the target. ~60 lines, no
-      deps: the copy that runs this page's demos is in the source itself.
-      View Source and find <code>fastcdc</code>.
+      Here is the whole idea, with every operational concern taken back out:
+    </p>
+    <pre class="toy">function cut(bytes, avg) {
+  var mask = avg - 1, hash = 0, cuts = [];
+  for (var i = 0; i &lt; bytes.length; i++) {
+    hash = (hash &lt;&lt; 1) + GEAR[bytes[i]];
+    if ((hash &amp; mask) === 0) cuts.push(i + 1);
+  }
+  return cuts;
+}</pre>
+    <p class="note">
+      A rolling <em>gear hash</em> slides over the bytes, and wherever its low
+      bits come up zero, that is a boundary. Because the cut points follow the
+      <em>data</em>, inserting or deleting bytes only disturbs the boundaries
+      you touched. The rest line up exactly as before.
+    </p>
+    <p class="note">
+      Everything the shipping version adds is a separate concern wearing this
+      function's clothes. <code>min</code>/<code>max</code> clamp pathological
+      sizes, which is a memory budget rather than a claim about where a chunk
+      belongs. "Normalized" chunking swaps a tighter mask in before the average
+      and a looser one after, so sizes cluster near the target, which is a knob
+      on the distribution. The <code>&gt;&gt;&gt; 0</code> after every shift is
+      JavaScript keeping 32-bit arithmetic honest. Peel those three off and the
+      60-line function is the 8 lines above, which is the version worth carrying
+      in your head. The real one runs this page's demos: View Source and find
+      <code>fastcdc</code>.
     </p>
 
     <h2>3 · Big files</h2>

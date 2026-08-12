@@ -360,7 +360,9 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
           <span class="status review">prototype</span>
         </div>
         <div class="desc">
-          A vision test for image compression, in the ismy.blue spirit. Each call shows the
+          <a href="https://ismy.blue" rel="external">ismy.blue</a> keeps asking where green
+          becomes blue until it has your personal boundary. This does the same for image
+          compression. Each call shows the
           same photo squeezed two or three ways; you pick the best on instinct, over and over,
           and it profiles what your eye is quietly tuned to. Every tile is a real encode
           (zenc, jpegli, mozjpeg, sips; honest 4:2:2 vs 4:2:0 on the 4:2:2-native Fuji files),
@@ -386,7 +388,8 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
           code (<code style="font-family: var(--font-mono);font-size:9pt">encodeBody</code> is
           write-only Response init, so rebuilding a response drops it silently). Ends at
           ~19% off the shell for every browser and 116 bytes for a returning Chromium visitor,
-          via zstd shared-dictionary deltas. Keeps the wrong turns, since those transfer.
+          via <a href="https://www.rfc-editor.org/rfc/rfc9842.html" rel="external">RFC 9842</a>
+          zstd shared-dictionary deltas. Keeps the wrong turns, since those transfer.
         </div>
         <div class="meta">
           shape: measured teardown + shipped fix &middot; added 2026-07-27
@@ -441,7 +444,9 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
           <code style="font-family: var(--font-mono);font-size:9pt">/&lt;name&gt;.src.js</code>
           twins (nav.js went ~33KB to 20.4KB on the wire; sw.js turned out to be 64%
           comments), whether the CSS deserves the same treatment (measured: brotli voted
-          no), an esbuild vs Oxc head-to-head, and the Cache API layer that finally made
+          no), an <a href="https://github.com/evanw/esbuild" rel="external">esbuild</a> vs
+          <a href="https://github.com/oxc-project/oxc" rel="external">Oxc</a> head-to-head,
+          and the Cache API layer that finally made
           <code style="font-family: var(--font-mono);font-size:9pt">s-maxage</code> true.
           With a live edge-cache prober.
         </div>
@@ -458,7 +463,9 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
         <div class="desc">
           This site's TLS key agreement went post-quantum on its own; its signatures did not.
           What ML-DSA-44 and both SLH-DSA parameter sets actually cost on the one signature a
-          personal site controls, measured on the real signature base: header bytes, signing
+          personal site controls, measured on the real signature base through
+          <a href="https://github.com/paulmillr/noble-post-quantum" rel="external">@noble/post-quantum</a>:
+          header bytes, signing
           time, and why hash-based lost twice (22,784 bytes of header one way, 2.5 seconds per
           signature the other). Ends with the migration shipped, since
           <code style="font-family: var(--font-mono);font-size:9pt">Signature-Input</code> is a
@@ -493,7 +500,8 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
           <span class="status idle">watching</span>
         </div>
         <div class="desc">
-          iroh hit 1.0 (dial a machine by its public key, not its IP). I went looking
+          <a href="https://github.com/n0-computer/iroh" rel="external">iroh</a> hit 1.0: you
+          dial a machine by its public key rather than its IP address. I went looking
           for a way to use it here. The page has a native in-browser NodeId generator you
           can run, no library and no wasm, plus the honest reason a megabyte-class wasm
           blob, a Rust build step, and a relay do not belong on a lean static site. The
@@ -528,9 +536,10 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
           <span class="status idle">prototype</span>
         </div>
         <div class="desc">
-          The homepage grid crops every photo to a 1:1 square. This page tries
-          <code style="font-family: var(--font-mono);font-size:9pt">display: grid-lanes</code> (CSS Grid Lanes, shipped in
-          Safari&nbsp;27) for a ragged-height contact sheet where portrait and
+          <a href="https://drafts.csswg.org/css-grid-3/" rel="external">CSS Grid Lanes</a>
+          lays columns on a grid and stacks the rows masonry-style, and it shipped in
+          Safari&nbsp;27. The homepage grid crops every photo to a 1:1 square, so this page
+          tries <code style="font-family: var(--font-mono);font-size:9pt">display: grid-lanes</code> for a ragged-height contact sheet where portrait and
           landscape sit at their true heights, no JS. EXIF pins each photo&apos;s aspect
           ratio up front, so nothing reflows; a toggle A/Bs it against the squares, and
           browsers without Grid Lanes fall back to the squares.
@@ -546,7 +555,8 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
           <span class="status idle">watching</span>
         </div>
         <div class="desc">
-          WWDC26&apos;s Safari&nbsp;27 (macOS&nbsp;27 Golden Gate) shipped ~58 web features.
+          <a href="https://webkit.org/blog/17967/news-from-wwdc26-webkit-in-safari-27-beta/" rel="external">WebKit&apos;s
+          Safari&nbsp;27 beta notes</a> count ~58 new web features in macOS&nbsp;27 Golden Gate.
           I pulled the &quot;platform caught up&quot; cut: <code style="font-family: var(--font-mono);font-size:9pt">appearance: base-select</code>
           going stable, transform-aware anchor positioning, scroll anchoring, the
           <code style="font-family: var(--font-mono);font-size:9pt">:heading</code> pseudo-class, and mapped each one to what this
@@ -581,12 +591,14 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
           <span class="status shipped">shipped</span>
         </div>
         <div class="desc">
-          One photo run through every thumbnail choice (AVIF / WebP / JPEG,
-          jpegli vs the system encoder, chroma subsampling, quality, resolution),
-          with real byte counts. Why the pipeline builds <code style="font-family: var(--font-mono);font-size:9pt">cjpegli</code>
-          from source (~47% smaller JPEGs at the same quality), how zenjpeg's hybrid
-          trellis candidate compares at matched size, why grayscale drops to 4:0:0,
-          and what the grid actually ships.
+          <a href="https://github.com/google/jpegli" rel="external">jpegli</a> and
+          <a href="https://github.com/imazen/zenjpeg" rel="external">zenjpeg</a> both promise
+          real JPEG wins over the system encoder, so one photo went through every thumbnail
+          choice (AVIF / WebP / JPEG, chroma subsampling, quality, resolution) with real byte
+          counts. Why the pipeline built <code style="font-family: var(--font-mono);font-size:9pt">cjpegli</code> from source for ~47%
+          smaller JPEGs at the same quality, how zenjpeg's hybrid trellis then beat it by
+          another ~4% at matched size and took over, why grayscale drops to 4:0:0, and what
+          the grid actually ships.
         </div>
         <div class="meta">
           shape: encoder benchmark + the pipeline&apos;s reasoning &middot; added 2026-06-06
@@ -618,7 +630,9 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
         </div>
         <div class="desc">
           <a href="https://github.com/southpolesteve/nextane" rel="external">Nextane</a>
-          rebuilds the Next.js Pages Router on Octane and ships 60.9% less client
+          rebuilds the Next.js Pages Router on
+          <a href="https://github.com/octanejs/octane" rel="external">Octane</a>
+          and ships 60.9% less client
           JavaScript than Next.js 16. The claim holds: the deployed demo measures
           43,384 bytes gzip against a published 43.0 KiB. Every row of that
           benchmark is a framework though, so it fixes an order without ever fixing
@@ -655,13 +669,14 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
           <span class="status review">in review</span>
         </div>
         <div class="desc">
-          The quiet engine under the photo grid, made visible: FastCDC
+          <a href="https://github.com/officialunofficial/mkit" rel="external">mkit</a> names
+          every chunk of a file by its content hash, so a sync ships only what changed. That
+          is the quiet engine under the photo grid too, made visible here: FastCDC
           content-defined chunking + content-addressing, live in the browser
           (pure JS + <code style="font-family: var(--font-mono);font-size:9pt">crypto.subtle</code>).
           Snapshot a file, edit a byte, and watch fixed-size chunks re-send the
           whole thing while content-defined chunks barely flinch, plus a
-          drop-a-file dedup demo. Concepts credit
-          <a href="https://github.com/officialunofficial/mkit" rel="external">mkit</a>.
+          drop-a-file dedup demo.
         </div>
         <div class="meta">
           shape: interactive systems demo · added 2026-06-01
@@ -674,7 +689,9 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
           <span class="status review">in review</span>
         </div>
         <div class="desc">
-          Scroll-driven animation in a period-correct Luna idiom: the green
+          <a href="https://drafts.csswg.org/scroll-animations-1/" rel="external">Scroll-driven
+          animations</a> hand CSS a timeline made of scroll position, with no listener
+          anywhere. Here they are in a period-correct Luna idiom: the green
           file-copy progress bar that fills as you scroll, windows that
           maximize-open as they enter the viewport, and the blue gradient
           scrollbar. All <code style="font-family: var(--font-mono);font-size:9pt">animation-timeline</code>,
@@ -713,10 +730,10 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
           XP-skinned camera readout shipped on photo hover and the album cover-at-cursor
           on track hover; CSS anchor-positioning shipped too, as the keyboard-focus path.
           Also here: the Fuji LCD variant it beat, a polaroid flip that didn&apos;t survive
-          review, and a Luna balloon still in the wings. Built on
-          <code style="font-family: var(--font-mono);font-size:9pt">popover</code>,
+          review, and a Luna balloon still in the wings. Built on the
+          <a href="https://developer.mozilla.org/en-US/docs/Web/API/Popover_API" rel="external">Popover API</a>,
           <code style="font-family: var(--font-mono);font-size:9pt">@starting-style</code>,
-          and a small rAF translate3d loop.
+          and two custom-property writes per move. No rAF, no layout reads.
         </div>
         <div class="meta">
           shape: visual + interaction · added 2026-05-22

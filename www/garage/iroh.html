@@ -6,11 +6,11 @@
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
 <title>aadhar.sh/garage/iroh</title>
-<meta name="description" content="iroh hit 1.0: dial a machine by its public key, not its IP. A garage look at the P2P library, a native in-browser NodeId generator you can run, and an honest verdict on why a megabyte of wasm does not ride a lean static site.">
+<meta name="description" content="iroh hit 1.0: dial a machine by its public key rather than its IP. A garage look at the P2P library, a native in-browser NodeId generator you can run, and an honest verdict on why a megabyte of wasm does not ride a lean static site.">
 <link rel="canonical" href="https://aadhar.sh/garage/iroh">
 <meta property="og:type" content="website">
 <meta property="og:title" content="aadhar.sh/garage/iroh">
-<meta property="og:description" content="iroh hit 1.0: dial a machine by its public key, not its IP. A garage look at the P2P library, a native in-browser NodeId generator you can run, and an honest verdict on why a megabyte of wasm does not ride a lean static site.">
+<meta property="og:description" content="iroh hit 1.0: dial a machine by its public key rather than its IP. A garage look at the P2P library, a native in-browser NodeId generator you can run, and an honest verdict on why a megabyte of wasm does not ride a lean static site.">
 <meta property="og:url" content="https://aadhar.sh/garage/iroh">
 <meta name="twitter:card" content="summary_large_image">
 <meta property="og:image" content="https://aadhar.sh/og/garage-iroh.png">
@@ -142,6 +142,7 @@ h2 {
 }
 .note { color: oklch(44.95% 0 0); font-size: 10pt; margin: 0 0 14px; }
 .note code, p code, li code { background: oklch(96.72% 0 0); border: 1px solid oklch(88.22% 0 0); padding: 0 4px; font-family: var(--font-mono); font-size: 9.5pt; }
+.toy { font: 9.5pt/1.5 var(--font-mono); color: oklch(30% 0.02 250); background: oklch(96.72% 0 0); border: 1px solid oklch(88.22% 0 0); padding: 8px 10px; margin: 4px 0 12px; overflow-x: auto; }
 hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px 0; }
 a { color: oklch(41.92% 0.0962 250.51); }
 .status {
@@ -228,10 +229,18 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
   <div class="title-bar" aria-hidden="true"><span class="title-text"><span class="icon"></span>aadhar.sh/garage/iroh</span><span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span></div>
   <div class="content">
     <h1>Dial by key</h1>
-    <p class="lede">iroh hit 1.0. It is a networking library where you reach another machine by its public key, not its IP address: a 32-byte ed25519 identity that stays put while the network under it changes, with QUIC hole-punching for a direct encrypted link and a relay only as a fallback. I went looking for a way to use it here. This is where I landed, plus a small piece of it you can run right now.</p>
+    <p class="lede"><a href="https://github.com/n0-computer/iroh" rel="external">iroh</a> hit 1.0. It is a networking library where you reach another machine by its public key rather than its IP address: a 32-byte ed25519 identity that stays put while the network under it changes, with QUIC hole-punching for a direct encrypted link and a relay only as a fallback. I went looking for a way to use it here. This is where I landed, plus a small piece of it you can run right now.</p>
 
     <h2>The core idea, natively</h2>
-    <p>An iroh <code>NodeId</code> is just an ed25519 public key, printed in base32. You do not dial <code>203.0.113.7</code>; you dial the key, and iroh finds a path to it. The browser can mint that identity with no library at all. Press the button: it generates a real key with the Web Crypto API (a true ed25519 keypair where your browser supports it, a 256-bit random identity where it does not), then encodes the public half the way iroh prints a NodeId.</p>
+    <p>An iroh <code>NodeId</code> is just an ed25519 public key, printed in base32. You do not dial <code>203.0.113.7</code>; you dial the key, and iroh finds a path to it. The browser can mint that identity with no library at all, and "no library at all" means three calls:</p>
+
+    <pre class="toy">const kp = await crypto.subtle.generateKey(
+  { name: "Ed25519" }, true, ["sign", "verify"]);
+const pub = new Uint8Array(
+  await crypto.subtle.exportKey("raw", kp.publicKey));
+const nodeId = base32(pub);   // this string is the address</pre>
+
+    <p>Press the button to run it. Everything the real handler adds around those three lines is a different concern: a <code>try</code>/<code>catch</code> that falls back to 32 random bytes where the browser has no ed25519, which is why the label under the button tells you which of the two you got, and four DOM writes to put the result on screen. Neither one is about identity.</p>
 
     <div class="idbox">
       <div class="row">
