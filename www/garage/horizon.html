@@ -893,6 +893,17 @@ placeholder
   box-shadow: inset 0 -2px 0 oklch(41.92% 0.0962 250.51 / .6);
 }
 .rm-cap { font-size: 8.5pt; color: oklch(48% 0 0); margin: 6px 0 0; }
+
+/* the QUERY card: a measured table rather than a live probe, because the thing
+   being measured is an origin's edge and this page cannot re-run that on load. */
+.hq-probe { margin: 10px 0 0; }
+.hq-table { border-collapse: collapse; width: 100%; font-size: 8.5pt; margin: 6px 0 0; }
+.hq-table th, .hq-table td { text-align: left; padding: 3px 8px 3px 0; border-bottom: 1px solid oklch(88% 0 0); vertical-align: top; }
+.hq-table th { font-weight: 700; color: oklch(38% 0 0); border-bottom-color: oklch(72% 0 0); }
+.hq-table td.mono { white-space: nowrap; }
+.hq-table .hq-y { color: oklch(48% 0.13 145); font-weight: 700; }
+.hq-table .hq-n { color: oklch(52% 0.16 27); font-weight: 700; }
+.hq-cap { font-size: 8.5pt; color: oklch(48% 0 0); margin: 8px 0 0; }
   /* standard scrollbar tint (Chrome + Safari 26 + Firefox): Luna-blue thumb,
      pale track. the garage/scroll demo styles its own element separately. */
   html { scrollbar-color: oklch(62% 0.14 255) oklch(91% 0.02 248); }
@@ -1103,6 +1114,13 @@ window.__horizonCaps = (function () {
                 Array.isArray(PerformanceObserver.supportedEntryTypes) &&
                 PerformanceObserver.supportedEntryTypes.indexOf("soft-navigation") !== -1);
       },
+      // No honest synchronous probe, and this one is a trap rather than a gap.
+      // fetch() validates a method name only against its blocklist (CONNECT,
+      // TRACE, TRACK), so constructing a QUERY Request and reading .method back
+      // returns true in EVERY engine, supporting or not, exactly like the
+      // sizes-auto probe above. The capability that matters is whether any
+      // cache on the path stores the response, which a page cannot observe.
+      "http-query": function () { return (false); },
       // No synchronous probe: the four measurement entries here are a response
       // header, a proposal, and two fields that only exist once a speculation
       // has run. Honest-false, same convention as jpeg-xl above.
@@ -4347,6 +4365,97 @@ navigation.addEventListener("navigate", (e) =&gt; {
       </p>
     </section>
 
+    <!-- ───────────────────── the QUERY method ───────────────────── -->
+    <section class="demo" data-cap="http-query">
+      <h2>
+        <span>The QUERY method <span class="mono">RFC 10008</span></span>
+        <span class="stat trial">Published Jun 2026 &middot; every engine sends it &middot; no cache stores it</span>
+      </h2>
+      <p class="note">
+        HTTP has had a hole in it since the beginning: a request that is safe
+        and idempotent like <code>GET</code>, carrying a body like
+        <code>POST</code>. <code>QUERY</code> fills it. The query lives in the
+        request content, the method is declared safe and idempotent, so an
+        intermediary may retry it after a timeout and a cache may store the
+        response. Servers picked it up quickly, and a resource advertises which
+        body formats it takes through a new <code>Accept-Query</code> response
+        header. The headline everywhere is &quot;a GET with a body&quot;, and
+        the interesting part of this one is the layer underneath, because a
+        cache that stores a <code>QUERY</code> response has to key on the
+        request <em>body</em>, and almost nothing does yet.
+      </p>
+
+      <div class="hq-probe">
+        <p class="note" style="margin-top:0">
+          Measured against this origin on 2026-08-12, since the support tables
+          describe engines and the thing that decides whether you can use it is
+          the CDN in front of you:
+        </p>
+        <table class="hq-table">
+          <thead>
+            <tr><th>request</th><th>answer</th><th>what it tells you</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="mono">QUERY /whoareyou.json</td><td class="mono hq-y">200</td><td>Cloudflare passes the method to the Worker</td></tr>
+            <tr><td class="mono">FLOOP /whoareyou.json</td><td class="mono hq-n">501</td><td>the control: there is a method allowlist, and QUERY is on it</td></tr>
+            <tr><td class="mono">SEARCH /whoareyou.json</td><td class="mono hq-y">200</td><td>so is the old WebDAV verb, so this is a known-methods list rather than QUERY support</td></tr>
+            <tr><td class="mono">QUERY /nav.js</td><td class="mono hq-n">405</td><td>the static-asset layer is GET and HEAD only</td></tr>
+            <tr><td class="mono">QUERY /mcp</td><td class="mono hq-n">405</td><td>refused on purpose; MCP is a POST transport</td></tr>
+          </tbody>
+        </table>
+        <p class="hq-cap">
+          In the browser half, <code>new Request(url, {method:&apos;QUERY&apos;, body})</code>
+          throws in no engine and the request goes out on the wire, because
+          <code>fetch</code> forbids a body only on <code>GET</code> and
+          <code>HEAD</code>, and blocklists only <code>CONNECT</code>,
+          <code>TRACE</code> and <code>TRACK</code>. What browsers are still
+          missing is the storing half: the HTTP cache holds
+          <code>GET</code> responses, and cross-origin
+          <code>QUERY</code> needs a preflight because it is not
+          CORS-safelisted.
+        </p>
+      </div>
+
+      <p class="replaces">
+        On the site: <code>/mcp</code> is the one surface where this would ever
+        land, and the classification work is already done. Every tool in
+        <code>lib/mcp-tools.js</code> carries <code>readOnlyHint</code> and
+        <code>idempotentHint</code>, and the two that write to D1
+        (<code>representation_capture</code>, <code>representation_compare</code>)
+        declare <code>readOnlyHint: false</code> beside the INSERT. That pair of
+        annotations is exactly the eligibility test for <code>QUERY</code>.
+        Sharper tell: the server already emits <code>ttlMs</code> and
+        <code>cacheScope</code> on list and read results, which exist because a
+        POST transport cannot be cached, so the protocol rebuilt caching one
+        layer up. <code>QUERY</code> would hand that job back to HTTP, and the
+        change would live once in <code>lib/mcp-protocol.js</code> where both
+        servers on this origin would inherit it.
+      </p>
+      <p class="replaces">
+        The reason it stays a forward-look rather than a migration: everything
+        cacheable here is keyed by URL. Workers Cache, <code>caches.default</code>,
+        the edge, and both compression-dictionary tiers all key on the URL, and
+        the per-page dictionary offers match by <code>URLPattern</code>. A
+        <code>QUERY</code> response has no URL to key on, and the varying part
+        sits in a body where no <code>Vary</code> header reaches. This page&apos;s
+        own routes lean the other way on purpose too: <code>/terminal</code>
+        keeps its state in query parameters so a frame can be forked,
+        bookmarked and replayed, and <code>/lens</code> takes
+        <code>?url=</code>. Adopting <code>QUERY</code> would trade that away.
+        The signal worth waiting for is the MCP specification adopting it,
+        because no client will send one before then.
+      </p>
+      <p class="unsupported">
+        The chip below reads no for every visitor, and it is hardcoded. A
+        round-trip probe (construct a <code>QUERY</code> <code>Request</code>,
+        read the method back) returns true in every engine, since
+        <code>fetch</code> never validates a method name past its blocklist.
+        That is the same trap as <code>sizes=auto</code> further up. The
+        capability that actually matters, whether any cache along the path
+        stores the response, is not observable from a page at all.
+      </p>
+    </section>
+
     <!-- ───────────────────── @supports at-rule() + named-feature() ───────────────────── -->
     <section class="demo" data-cap="supports-at-rule">
       <h2>
@@ -4368,10 +4477,10 @@ navigation.addEventListener("navigate", (e) =&gt; {
       <p class="replaces">
         On the site: this is the fix for a limitation this page documents
         against itself. The capability chips below every card are
-        <code>CSS.supports()</code> probes, and five of them
+        <code>CSS.supports()</code> probes, and six of them
         (<code>jpeg-xl</code>, <code>route-matching</code>,
         <code>sizes-auto</code>, <code>import-text</code>,
-        <code>pq-webcrypto</code>) are hardcoded to
+        <code>pq-webcrypto</code>, <code>http-query</code>) are hardcoded to
         return <code>false</code> under a comment explaining that no synchronous
         probe exists, on the reasoning that a chip reading &quot;no&quot; is
         more honest than a probe that pretends to know. <code>at-rule()</code>
@@ -5210,6 +5319,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     "animation-trigger": "animation-trigger",
     "scroll-promise": "scroll promise",
     "xslt": "XSLTProcessor",
+    "http-query": "QUERY",
   };
   var state = {};
   Object.keys(checks).forEach(function (k) { state[k] = sup(checks[k]); });
