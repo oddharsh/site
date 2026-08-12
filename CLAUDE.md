@@ -2433,6 +2433,30 @@ pnpm run deploy:direct
     before investigating, because a repeat alert about an old run is
     indistinguishable from a fresh failure in the notification itself.
 
+    **It fires on EVERY PUSH now, and the outage has not moved in a day.** Three
+    more on 2026-08-12 (#351, check-runs `94224768202`, `94225922560`, plus one on
+    #340), all the same `CAPIError: 400`, taking it to nine recorded. One of them
+    landed on a commit whose entire diff moved `${{ }}` expressions out of `run:`
+    blocks and into `env:`, which strictly REDUCES attack surface — so a red mark
+    here carries no information about the diff even in the direction it claims to.
+    Those three cost three separate investigations in one session, which is the
+    real bill: the check is not required, it gates nothing, and it reliably pulls
+    somebody into a log.
+
+    So the loop to run is short. Confirm the run id is new (a repeat alert looks
+    identical), grep the log for `CAPIError`, and stop. Do NOT re-read the diff
+    looking for what upset it, and do not push anything to appease it. If the
+    noise stops being worth it, the fix is in GitHub's settings rather than in
+    this repo: Copilot code-scanning autofix is what crashes, `CodeQL` and
+    `Analyze (actions)` are the checks doing the actual work and both stay green.
+
+    **What it will not catch, learned the same day.** `Analyze (actions)` passed on
+    a workflow that interpolated `${{ inputs.base }}` straight into a `run:` block,
+    because the CodeQL Actions analyzer treats `workflow_dispatch` inputs as
+    trusted. That is defensible (dispatch needs write access) and it means the
+    injection class in workflow code is on you to read for. Grep new workflows for
+    `\$\{\{` inside `run:` and route values through `env:` instead.
+
 28. **Bun runs this build byte-identically and about twice as fast, and it is
     still not adopted.** `pnpm run bun:check` is the control, in the same idiom as
     `kitesurf:check`: it probes the zstd dictionary option, diffs a full node
