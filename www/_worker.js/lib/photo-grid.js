@@ -104,19 +104,16 @@ export function renderPhotoSlots(pick, altMap = {}, { deferred = true } = {}) {
     // photos rather than empty frames. The fragment needs no twin — reaching it
     // at all required fetch().
     //
-    // This ONE tile carries <picture>, and the reason it can is the sentence
-    // above: inert markup cannot instantiate a fallback, so the repeated JPEG
-    // loads that took <picture> off the live tiles are impossible here. What it
-    // buys is the no-JS reader that cannot decode AVIF, who otherwise gets a
-    // blank grid with no script running to repair it. Measured 2026-08-12: on
-    // /photos, which still ships <picture>, Kitesurf selected the JPEG for all
-    // 158 tiles and broke none, because a well-behaved engine DECLINES a source
-    // type it cannot decode rather than claiming it. The live tiles keep one URL.
-    const jpg = p.thumb_jpg ? abs(p.thumb_jpg) : null;
+    // ONE url here too. A <picture> was tried on 2026-08-12 and reverted the
+    // same day: it is SAFE in inert markup (nothing can instantiate a fallback,
+    // and a no-JS AVIF browser would still pick the AVIF source), but it costs
+    // 195 bytes a tile against 130 to serve a client that has to be no-JS AND
+    // no-AVIF at once. Kitesurf runs JavaScript, so the engine this whole repair
+    // exists for takes the onerror path in index.html and never reads this
+    // block. Paying every visitor for a hypothetical one is the trade this file
+    // already refuses everywhere else.
     const noScript = deferred
-      ? `<noscript>${jpg
-        ? `<picture><source type="image/avif" srcset="${escAttr(thumb)}"><img alt="${alt}" width="600" height="600" src="${escAttr(jpg)}" loading="lazy"${pri} decoding="async"></picture>`
-        : `<img alt="${alt}" width="600" height="600" src="${escAttr(thumb)}" loading="lazy"${pri} decoding="async">`}</noscript>`
+      ? `<noscript><img alt="${alt}" width="600" height="600" src="${escAttr(thumb)}" loading="lazy"${pri} decoding="async"></noscript>`
       : "";
 
     const image = deferred

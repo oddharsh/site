@@ -2383,14 +2383,15 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   // <noscript> twin is a thumbnail fetched and discarded milliseconds later.
   assert.match(baked, /data-photo-deferred/, "baked tiles must keep their URLs in data-* until hydration decides");
   assert.match(baked, /data-src="\/i\/X1-400\.aaaaaaaa\.avif"/, "the baked tile carries its one 400px AVIF in data-src");
-  // The script-off twin is where <picture> is SAFE, and the two assertions
-  // below are the boundary. Inert markup cannot instantiate a fallback, so the
-  // repeated JPEG loads that took <picture> off the live tiles cannot happen
-  // here, while a no-JS reader whose engine cannot decode AVIF still gets a
-  // grid instead of twelve blank frames.
-  assert.match(baked, /<noscript><picture><source type="image\/avif" srcset="\/i\/X1-400\.aaaaaaaa\.avif"><img[^>]+src="\/i\/X1\.aaaaaaaa\.jpg"/,
-    "the script-off twin offers AVIF and falls back to the JPEG");
-  assert.match(baked, /<noscript>[\s\S]*<img[\s\S]*<\/noscript>/, "every baked tile still needs its script-off twin");
+  assert.match(baked, /<noscript><img/, "every baked tile needs its script-off twin");
+  // ONE url in the twin too. <picture> here is safe but not free: 195 bytes a
+  // tile against 130, to serve a client that must be no-JS AND no-AVIF at once,
+  // when the engine this repair exists for runs JavaScript and takes the
+  // onerror path instead. Tried and reverted 2026-08-12.
+  assert.doesNotMatch(baked, /<noscript>[\s\S]*?<(picture|source)/,
+    "the script-off twin names one image, like every other tile on this page");
+  assert.doesNotMatch(baked, /<noscript>[\s\S]*?\.jpg/,
+    "no JPEG ships to a browser that can decode the AVIF it is already being sent");
   assert.doesNotMatch(baked.slice(0, baked.indexOf("<noscript>")), /\ssrc="/,
     "a real src outside the noscript twin is a discarded download");
 
