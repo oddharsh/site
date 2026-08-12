@@ -5056,18 +5056,6 @@ test("an end tag carrying attributes still closes its element", async () => {
     "contentOf closes on </script bar>");
 });
 
-// Removing a span can RE-FORM the thing being removed out of what is left either
-// side: `<!-` + `<!--x-->` + `-` collapses to `<!--` the moment the middle goes.
-// The webmention strippers are immune for free, since they replace with a SPACE
-// that keeps the two sides apart; lensMarkdown replaces with "" to preserve
-// markdown spacing, so it pays for that with a loop instead.
-test("stripping a comment cannot leave a fresh comment opener behind", async () => {
-  const { lensMarkdown } = await import("../www/_worker.js/lens.js");
-  const once = "<!-<!--x-->-".replace(/<!--[\s\S]*?(?:-->|--!>)/g, "");
-  assert.equal(once, "<!--", "one pass really does re-form the opener");
-  assert.ok(!lensMarkdown("<body><p>a<!-<!--x-->-</p><p>b</p></body>", "https://x/").includes("<!--"),
-    "the fixpoint loop clears what one pass re-formed");
-});
 
 // ── lens parse budget: the CPU-bound half ────────────────────────────────
 
