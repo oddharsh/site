@@ -28,12 +28,13 @@ name: Ramp production
 # The six-read-scope `CLOUDFLARE_API_TOKEN` that infra:check uses is a DIFFERENT,
 # read-only credential and this must not widen it.
 #
-# Every ramp step runs through `pnpm run`, deliberately, rather than `node
-# scripts/deploy-promote.mjs`. The script shells out to `npx wrangler`, and npx
-# resolves whatever it can find: measured 2026-08-12 in a tree with no
-# `node_modules`, `npx wrangler --version` answered 4.105.0 from its own cache
-# while this repo pins 4.120.0. Running under `pnpm run` puts `node_modules/.bin`
-# first, so the pinned wrangler is the one that moves traffic.
+# Ramp steps run through `pnpm run` to match the documented interface, and that
+# used to be load-bearing rather than cosmetic: deploy-promote.mjs shelled out to
+# `npx wrangler`, and npx resolves whatever it can find. Measured 2026-08-12 in a
+# tree with no `node_modules`, `npx wrangler --version` answered 4.105.0 while this
+# repo pins 4.120.0, so the wrangler that moved production traffic depended on how
+# the script was invoked. It calls `pnpm exec wrangler` now, which resolves the pin
+# on its own, so the choice here is consistency rather than a guardrail.
 
 on:
   workflow_run:

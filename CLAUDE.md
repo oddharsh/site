@@ -318,13 +318,15 @@ worktrees may edit freely, but a worktree is not a release surface.
     nothing canaried, silently, and every downstream check would pass because a
     version that built returns 200s. It compares against the 8-char prefix the
     canary actually put at 10% and fails if it moved.
-  - **Every step goes through `pnpm run`, not `node scripts/deploy-promote.mjs`.**
-    The script shells out to `npx wrangler`, and npx resolves whatever it can
-    find: measured 2026-08-12 in a tree with no `node_modules`, `npx wrangler
-    --version` answered **4.105.0** from its own cache while this repo pins
-    4.120.0. Under `pnpm run`, `node_modules/.bin` comes first, so the pinned
-    wrangler is the one that moves traffic. Worth knowing before anyone
-    "simplifies" that call.
+  - **The wrangler it runs is the pinned one, which was not true when this was
+    written.** `deploy-promote.mjs` shelled out to `npx wrangler`, and npx
+    resolves whatever it can find: measured 2026-08-12 in a tree with no
+    `node_modules`, `npx wrangler --version` answered **4.105.0** from its own
+    cache while this repo pins 4.120.0. So the wrangler that moved production
+    traffic depended on how the script happened to be invoked. It calls `pnpm
+    exec wrangler` now (see gotcha 29), which resolves the pin itself. Ramp steps
+    still go through `pnpm run` to match the documented interface, but that is
+    consistency now rather than the guardrail it briefly was.
 
   `--to`, `--steps`, `--status`, `--rollback` and `--dry-run` all still work by
   hand, and a rollback is still a workstation command on purpose.
@@ -2566,6 +2568,25 @@ pnpm run deploy:direct
     wrangler`, wrangler is a pinned devDependency, and `dlx` would fetch from the
     registry and ignore the pin. Use `dlx` only for something genuinely not in
     `package.json`.
+
+    **"all 30 call sites" was wrong, and EIGHT survived in `scripts/` until
+    2026-08-12.** `check-checkpoints.mjs`, `deploy-promote.mjs`, `lens-webmcp.mjs`
+    (x2), `perf-budget.mjs` (x2), `perf-snapshot.mjs` and `release-status.mjs` each
+    spawned `execFile("npx", ["wrangler", …])`, which the original sweep missed
+    because it read as a STRING ARGUMENT rather than a shell command, so no grep
+    for `npx wrangler` as a phrase would find it. That is the same blind spot the
+    `holding/` rename hit from the other direction: a path or command assembled
+    from array elements is invisible to a search for the assembled form.
+
+    The worst of the eight was `deploy-promote.mjs`, so **the wrangler that moved
+    production traffic depended on how the ramp was invoked**: under `pnpm run` it
+    got the pin, and from a tree with no `node_modules` it got whatever npx had
+    cached (measured: 4.105.0 against a pinned 4.120.0). All eight are `pnpm exec`
+    now and were each exercised afterwards, since a spawn failure here surfaces as
+    a missing binary at the worst moment rather than at review.
+
+    The general rule the sweep needed: grep for `"npx"` as a quoted token, not for
+    `npx <binary>` as a phrase.
 
     **THREE `npx` strings deliberately survive, and editing them breaks a check.**
     Both Workers Builds commands in `infra.json`, plus the mirrored copies in

@@ -201,7 +201,7 @@ let dryOut = "";
 try {
   // --outfile writes the single prebuilt bundle that `check startup` consumes
   // below, so the startup profile costs no second build.
-  dryOut = execFileSync("npx", ["wrangler", "deploy", "--dry-run", "--outdir", ".build/.perfbudget", "--outfile", ".build/.perfbudget/worker.bundle", "--metafile"], { encoding: "utf8" });
+  dryOut = execFileSync("pnpm", ["exec", "wrangler", "deploy", "--dry-run", "--outdir", ".build/.perfbudget", "--outfile", ".build/.perfbudget/worker.bundle", "--metafile"], { encoding: "utf8" });
 } catch (e) {
   dryOut = (e.stdout || "") + "\n" + (e.stderr || "");
 }
@@ -231,7 +231,7 @@ if (gz) {
 //
 // Runs on the prebuilt bundle from the dry-run above, so it adds no build.
 try {
-  const startOut = execFileSync("npx", [
+  const startOut = execFileSync("pnpm", ["exec",
     "wrangler", "check", "startup",
     "--workerBundle", ".build/.perfbudget/worker.bundle",
     "--outfile", ".build/.perfbudget/worker-startup.cpuprofile",

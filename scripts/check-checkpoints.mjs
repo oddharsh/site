@@ -40,7 +40,7 @@ const QUERY = "SELECT vnum, ymd, version, slug, title FROM checkpoints ORDER BY 
 
 let live;
 try {
-  const { stdout } = await run("npx", [
+  const { stdout } = await run("pnpm", ["exec",
     "wrangler", "d1", "execute", "aadhar-restore", "--remote", "--json", "--command", QUERY,
   ], { cwd: ROOT, maxBuffer: 32 * 1024 * 1024 });
   live = JSON.parse(stdout)[0].results;

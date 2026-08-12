@@ -32,7 +32,7 @@ const run = async (cmd, args, opts = {}) => {
 // good response into a parse error. Slice from the first structural character
 // rather than trusting the stream to be clean.
 const runJson = async (args) => {
-  const out = await run("npx", ["wrangler", ...args]);
+  const out = await run("pnpm", ["exec", "wrangler", ...args]);
   const start = Math.min(...[out.indexOf("["), out.indexOf("{")].filter((i) => i >= 0));
   if (!Number.isFinite(start)) throw new Error("no JSON in wrangler output");
   return JSON.parse(out.slice(start));

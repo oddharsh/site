@@ -101,7 +101,7 @@ async function record(outPath, label) {
   // mean a snapshot failure could redden a PR.
   let dryOut = "";
   try {
-    dryOut = execFileSync("npx", [
+    dryOut = execFileSync("pnpm", ["exec",
       "wrangler", "deploy", "--dry-run",
       "--outdir", DRYRUN_OUT,
       "--metafile",
