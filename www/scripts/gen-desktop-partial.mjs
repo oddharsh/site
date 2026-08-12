@@ -89,8 +89,7 @@ export function renderDesktopArtifacts(surfaces = readManifest().surfaces) {
 
   const pinsHtml = TASKBAR.map((item) => {
     const name = `pin-${item.label.replace(/\s+/g, "-")}`;
-    const favicon = `/section-icons/${item.label.replace(/\s+/g, "-")}.svg`;
-    return `<a class="axp-pin" title="${esc(item.hint)}" href="${esc(item.path)}" data-count="${counts.get(item.path) || 0}" data-favicon="${favicon}">`
+    return `<a class="axp-pin" title="${esc(item.hint)}" href="${esc(item.path)}" data-count="${counts.get(item.path) || 0}">`
       + `<span class="fav" aria-hidden="true">${spriteRef(name, SECTION_ICONS[item.label])}</span>`
       + `<span class="lbl">${esc(item.label)}</span></a>`;
   }).join("");
@@ -116,7 +115,8 @@ export function renderDesktopArtifacts(surfaces = readManifest().surfaces) {
     + `// site-manifest.json. Do not hand-edit; run pnpm run gen:shell.\n`
     + `// DESKTOP_TOP opens <body>; DESKTOP_CHROME closes it with icons/taskbar.\n`
     + `export const DESKTOP_TOP = ${JSON.stringify(desktopHtml)};\n`
-    + `export const DESKTOP_CHROME = ${JSON.stringify(chromeHtml)};\n`;
+    + `export const DESKTOP_CHROME = ${JSON.stringify(chromeHtml)};\n`
+    + `export const SECTION_FAVICONS = ${JSON.stringify(sectionFavicons(), null, 2)};\n`;
 
   const spriteWidth = Math.max(...cells.map((cell) => cell.right));
   const spriteHeight = Math.max(...cells.map((cell) => cell.bottom));
@@ -127,12 +127,21 @@ export function renderDesktopArtifacts(surfaces = readManifest().surfaces) {
     + "</svg>\n";
 
   const favicons = Object.fromEntries(TASKBAR.map((item) => [
-    item.label.replace(/\s+/g, "-"),
+    faviconSlug(item.label),
     `${SECTION_ICONS[item.label].replace("<svg ", '<svg width="32" height="32" ')}\n`,
   ]));
 
   return { desktopHtml, chromeHtml, moduleSource, sprite, favicons };
 }
+
+// A section's favicon is addressed by ROUTE, because that is what both consumers
+// have in hand: lunaPage knows its own route, and a static page is patched by the
+// path it lives at. The slug is the label with its one space folded, so
+// "pixel peeper" files as pixel-peeper.svg.
+export const faviconSlug = (label) => label.replace(/\s+/g, "-");
+export const faviconHref = (label) => `/section-icons/${faviconSlug(label)}.svg`;
+export const sectionFavicons = () =>
+  Object.fromEntries(TASKBAR.map((item) => [item.path, faviconHref(item.label)]));
 
 const navScript = /<script\b[^>]*\bsrc=["']\/nav\.js["'][^>]*><\/script>/i;
 

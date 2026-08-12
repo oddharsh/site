@@ -106,6 +106,9 @@ export function writingShell(o) {
     "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">" +
     "<meta name=\"theme-color\" content=\"#2D78BD\">" +
     "<title>" + escHtml(o.title) + "</title>" +
+    // The section tile, same as the taskbar pin. Notepad builds its own head
+    // rather than going through lunaPage, so it states this itself.
+    "<link rel=\"icon\" type=\"image/svg+xml\" href=\"/section-icons/writing.svg\">" +
     "<meta name=\"description\" content=\"" + escAttr(o.desc) + "\">" +
     "<link rel=\"canonical\" href=\"https://aadhar.sh" + escAttr(o.path) + "\">" +
     // Feed discovery for the whole section, on the index and on every post, which

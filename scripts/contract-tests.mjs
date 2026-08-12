@@ -41,7 +41,9 @@ import { PAGE_FAMILY_MATCH, serveStaticPage } from "../www/_worker.js/lib/assets
 import { serveMarkdown } from "../www/_worker.js/home.js";
 import { readManifest, workerModule, navFenceBody, readFenceBody, runProfilesBody } from "./gen-manifest.mjs";
 import { PROFILES } from "../www/scripts/shell-data.mjs";
-import { speculationHtml } from "../www/scripts/gen-desktop-partial.mjs";
+import { faviconHref, sectionFavicons, speculationHtml } from "../www/scripts/gen-desktop-partial.mjs";
+import { TASKBAR } from "../www/scripts/shell-data.mjs";
+import { SECTION_FAVICONS } from "../www/_worker.js/lib/desktop.js";
 import { INDEXED_SECTIONS, TWIN_FACTS, buildTwins, checkTwinFacts, htmlFileFor, twinPath } from "./gen-md-twins.mjs";
 import { collectBlockClasses, readDocument } from "./lib/html-to-md.mjs";
 import {
@@ -1840,6 +1842,43 @@ test("the shell infotip ships minified, hashed, and with a readable twin", async
   const shells = build.slice(build.indexOf("const SHELLS = ["));
   assert.ok(shells.indexOf('"/hoist.js"') < shells.indexOf('{ file: "/infotip.js"'),
     "hoist must be hashed before infotip, or infotip's /a/ copy keeps the unhashed specifier");
+});
+
+test("a section's favicon is in its own <head>, never set by script", async () => {
+  // setFavicon() used to read a data-favicon attribute off the matching taskbar
+  // pin at boot. That cost one attribute per pin on EVERY page so that 11 of them
+  // could read one, and it painted the wrong icon first and swapped. The document
+  // states its own favicon now, so the three ways it can regress are asserted.
+
+  // 1. The pins carry no favicon data. A reintroduced attribute is the whole
+  //    per-page cost coming back, and nothing would fail without this.
+  const chrome = await readFile(new URL("www/_worker.js/lib/desktop.js", ROOT), "utf8");
+  assert.doesNotMatch(chrome, /data-favicon/,
+    "taskbar pins must not carry favicon data: the page's own <head> owns this");
+
+  // 2. nav.js sets no favicon. A favicon applied after boot is a visible flip.
+  const nav = await readFile(new URL("www/nav.js", ROOT), "utf8");
+  assert.doesNotMatch(nav, /setFavicon|rel\s*=\s*["']icon["']/,
+    "nav.js must not set the tab favicon; the document declares it");
+
+  // 3. Every taskbar route resolves to an icon that EXISTS on disk, through the
+  //    generated map the worker actually reads. A route added to TASKBAR without
+  //    its tile would otherwise ship a 404 favicon.
+  assert.deepEqual(SECTION_FAVICONS, sectionFavicons(),
+    "lib/desktop.js drifted from shell-data.mjs — run pnpm run gen:shell");
+  for (const item of TASKBAR) {
+    const href = SECTION_FAVICONS[item.path];
+    assert.equal(href, faviconHref(item.label), `${item.path} favicon href`);
+    await readFile(new URL("www" + href, ROOT), "utf8");
+  }
+
+  // 4. The three hand-authored section pages link their own tile. These are the
+  //    only section pages outside lunaPage, so they are the ones that go quiet.
+  for (const [file, slug] of [["garage", "garage"], ["lwe", "lwe"], ["pixel-peeper", "pixel-peeper"]]) {
+    const page = await readFile(new URL(`www/${file}/index.html`, ROOT), "utf8");
+    assert.match(page, new RegExp(`<link rel="icon" type="image/svg\\+xml" href="/section-icons/${slug}\\.svg">`),
+      `www/${file}/index.html must link its own section tile`);
+  }
 });
 
 test("the speculation ruleset has exactly one author", async () => {

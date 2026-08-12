@@ -527,25 +527,6 @@
   }
 
   // ── boot ────────────────────────────────────────────────────────────────────
-  // Set the tab favicon to the current first-level section's compiled SVG asset,
-  // so the browser no longer carries a second SVG constructor + icon table.
-  // Exact-match only — /garage/<sub> + /writing/<slug> + home keep their own
-  // page favicons (e.g. each garage demo's distinct icon).
-  function setFavicon() {
-    var np = location.pathname.replace(/\/+$/, "") || "/";
-    var sec = [].filter.call(D.querySelectorAll(".axp-pin"), function (pin) {
-      return ((pin.getAttribute("href") || "").replace(/\/+$/, "") || "/") === np;
-    })[0];
-    var icon = sec && sec.getAttribute("data-favicon");
-    if (!icon) return;
-    var link = D.querySelector('link[rel~="icon"]');
-    if (link && !(link instanceof HTMLLinkElement)) return;
-    var iconLink = /** @type {HTMLLinkElement} */ (link || D.createElement("link"));
-    if (!link) { iconLink.rel = "icon"; (D.head || D.documentElement).appendChild(iconLink); }
-    iconLink.type = "image/svg+xml";
-    iconLink.href = icon;
-  }
-
   // The shell's Speculation Rules used to be built here and appended at boot.
   // They ship in the HTML now, projected from SPECULATION in shell-data.mjs into
   // the generated chrome, so they reach static and worker-rendered pages alike
@@ -797,7 +778,7 @@
   function boot() {
     var bar = D.getElementById("axp-taskbar");
     if (!bar || !D.getElementById("axp-desktop")) return;
-    ensureLunaCss(); wireTaskbar(bar); initDrag(); initRaise(); initIconDrag(); initScrollbars(); initResize(); setFavicon(); initCloseBack(); initWindowControls(); initInfotips();
+    ensureLunaCss(); wireTaskbar(bar); initDrag(); initRaise(); initIconDrag(); initScrollbars(); initResize();  initCloseBack(); initWindowControls(); initInfotips();
   }
   function bootAfterStaticPaint() {
     // Generated/static pages and Worker-rendered shells already carry the desktop

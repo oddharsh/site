@@ -1,6 +1,6 @@
 // lib/chrome.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
-import { DESKTOP_CHROME, DESKTOP_TOP } from "./desktop.js";
+import { DESKTOP_CHROME, DESKTOP_TOP, SECTION_FAVICONS } from "./desktop.js";
 import { addressBar, taskPane } from "./explorer.js";
 import { escAttr, escHtml } from "./http.js";
 import { SHELL_PRELOAD_LINK } from "./shell-assets.js";
@@ -63,6 +63,18 @@ export function xpChromeCss() {
 // hand-assemble: doctype, chrome CSS (xpChromeCss, once), title bar with the
 // path as its caption, caption controls, security posture, nav.js include.
 // When the window chrome changes, this function changes and nine pages follow.
+// A first-level section's tab favicon IS its taskbar tile, and it belongs in the
+// document rather than in nav.js. Setting it at boot meant every section page
+// painted one icon and then swapped to another, and it cost one data-favicon
+// attribute per pin on all 46 pages so that 11 of them could read one. Anything
+// that is not a section keeps /favicon.ico.
+function faviconLink(route) {
+  const icon = SECTION_FAVICONS[route];
+  return icon
+    ? `<link rel="icon" type="image/svg+xml" href="${icon}">`
+    : '<link rel="icon" href="/favicon.ico">';
+}
+
 export function lunaPage({
   title,
   path,
@@ -147,7 +159,7 @@ export function lunaPage({
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
 <title>${escHtml(documentTitle)}</title>${metaDescription}${metaRobots}${twinLink}
-<link rel="icon" href="/favicon.ico">
+${faviconLink(route)}
 ${head || ""}<style>
 :root{--axp-maxw:${width}px}
 ${xpChromeCss()}
