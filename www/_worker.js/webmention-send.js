@@ -190,10 +190,10 @@ export function contentOf(html) {
   return String(html)
     .replace(/<!-- axp:shell -->[\s\S]*?<!-- \/axp:shell -->/g, " ")
     .replace(/<!-- axp:desktop -->[\s\S]*?<!-- \/axp:desktop -->/g, " ")
-    .replace(/<head\b[\s\S]*?<\/head>/i, " ")
-    .replace(/<script\b[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style\b[\s\S]*?<\/style>/gi, " ")
-    .replace(/<!--[\s\S]*?-->/g, " ");
+    .replace(/<head\b[\s\S]*?<\/head\b[^>]*>/i, " ")
+    .replace(/<script\b[\s\S]*?<\/script\b[^>]*>/gi, " ")
+    .replace(/<style\b[\s\S]*?<\/style\b[^>]*>/gi, " ")
+    .replace(/<!--[\s\S]*?(?:-->|--!>)/g, " ");
 }
 
 // Every external link in the page's own content, deduped, minus my own profiles

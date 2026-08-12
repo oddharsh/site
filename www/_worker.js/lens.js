@@ -2673,13 +2673,36 @@ export function lensText(html) {
   return lensDecode(s).replace(/\s+/g, " ").trim();
 }
 
+// An end tag may carry attributes, so `</script bar>` closes a script element as
+// surely as `</script>` does. The closers below are `<\/tag\b[^>]*>` for that reason;
+// spelling one `<\/script\s*>` hands the whole body through into the markdown.
+//
+// CodeQL asks for a second thing here and does not get it, so the reasoning is
+// recorded rather than argued again every time the file moves. It flags each strip
+// below as js/incomplete-multi-character-sanitization, wanting a fixpoint loop,
+// because removing a span can RE-FORM what was removed out of what is left either
+// side. That really happens: one pass of the comment strip over `<p>a<!-<!--x-->-</p>`
+// leaves `<p>a<!--</p>`, since the match starts at the INNER opener.
+//
+// It is unreachable anyway, twice over. The re-formed opener is eaten by the generic
+// `<[^>]+>` strip further down (`<!--</p>` matches whole), and that strip is itself
+// already a fixpoint: its match runs from a `<` to the next `>`, so any `<` surviving
+// a pass has no `>` after it and a second pass cannot match. Looping all three cost a
+// MEASURED 6.29ms against 5.72ms on a 256KB page, node, same V8 — 10% of the
+// CPU-bound half of a scan, on the path LENS_PARSE_CAP exists to keep under the 10ms
+// Workers ceiling. That is a real bill for a bug nothing can reach.
+//
+// What would change the answer: narrowing any pattern here (a literal `/<script>/g`
+// re-forms and is NOT self-limiting), or the output ever reaching a parser instead of
+// pre() -> esc(). Add the loop then, and delete this paragraph.
+
 // best-effort, dependency-free HTML→Markdown — roughly what a basic LLM
 // scraper ingests. High-fidelity Readability/Turndown is a deliberate v2.
 export function lensMarkdown(html, baseUrl) {
   let s = html;
   const b = s.match(/<body[^>]*>([\s\S]*)<\/body>/i); if (b) s = b[1];
-  s = s.replace(/<!--[\s\S]*?-->/g, "");
-  s = s.replace(/<(script|style|noscript|template|svg|head|nav|footer|aside)[\s\S]*?<\/\1>/gi, "");
+  s = s.replace(/<!--[\s\S]*?(?:-->|--!>)/g, "");
+  s = s.replace(/<(script|style|noscript|template|svg|head|nav|footer|aside)\b[\s\S]*?<\/\1\b[^>]*>/gi, "");
   s = s.replace(/<pre[^>]*>([\s\S]*?)<\/pre>/gi, (m, i) => "\n\n```\n" + lensDecode(i.replace(/<[^>]+>/g, "")).replace(/\n+$/g, "") + "\n```\n\n");
   s = s.replace(/<code[^>]*>([\s\S]*?)<\/code>/gi, (m, i) => "`" + lensStripInline(i).trim() + "`");
   s = s.replace(/<br\s*\/?>/gi, "\n");

@@ -86,7 +86,7 @@ function pageHtml(spec) {
   const titleSuffix = c.title;
   const stat = spec.buddyStat || c.navHint;
   const pets = spec.petsLine || "Learning&nbsp;With&nbsp;Errors";
-  const favFill = c.accent.replace("#", "%23");
+  const favFill = c.accent.replaceAll("#", "%23");
   const favFont = c.glyphFont ? c.glyphFont.replace(/"/g, "'") : "Trebuchet MS,sans-serif";
   const askScript = (spec.hasAsk ?? c.hasAsk) ? `<script src="/lwe/ask.js" defer></script>\n` : "";
   const demoJs = spec.demoJs ? `<script>\n${spec.demoJs}\n</script>\n` : "";
@@ -189,7 +189,7 @@ function injectBetween(file, start, end, content) {
   if (i === -1 || j === -1) { console.log(`  · ${file}: markers not found, skipped (${start})`); return false; }
   const next = src.slice(0, i + start.length) + "\n" + content + "\n" + src.slice(j);
   writeFileSync(path, next);
-  console.log(`  · ${file}: rewrote ${start.replace(/<!--|-->|\/\//g, "").trim()} region`);
+  console.log(`  · ${file}: rewrote ${start.replace(/[^\w:-]+/g, " ").replace(/^[\s-]+|[\s-]+$/g, "")} region`);
   return true;
 }
 
