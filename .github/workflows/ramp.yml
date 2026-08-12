@@ -272,12 +272,19 @@ jobs:
         continue-on-error: true
         run: pnpm run dcz:check
 
+      # Through `env:` rather than `${{ }}` inside the script, for the same reason
+      # og-cards.yml does it: an expression is substituted into the script text
+      # before bash parses it. This particular value is a hex prefix the canary job
+      # matched with a regex, so it is already constrained; the point is that the
+      # safe shape should be the habit rather than a judgement call per value.
       - name: Publish the release record
         if: always()
+        env:
+          TARGET: ${{ needs.canary.outputs.target }}
         run: |
           {
             echo "## Release complete"
-            echo "- version at 100%: \`${{ needs.canary.outputs.target }}\`"
+            echo "- version at 100%: \`${TARGET}\`"
             echo "- changelog row written to D1 by the 100% step"
             echo ""
             echo "If \`dcz:check\` above is red, the committed dictionaries no longer"

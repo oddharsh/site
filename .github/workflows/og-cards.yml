@@ -157,12 +157,21 @@ jobs:
           you want before merging rather than assuming a diff means a fix."
           fi
 
+      # Values reach the shell through `env:`, never as `${{ }}` inside the script.
+      # `inputs.base` is a URL somebody types into the dispatch form, and a `${{ }}`
+      # expansion is substituted into the script TEXT before bash sees it, so a
+      # value containing shell metacharacters would execute. Dispatching needs
+      # write access, so this is hygiene rather than a hole, and it costs one line.
       - name: Record the bake
         if: always()
+        env:
+          BASE_ORIGIN: ${{ inputs.base }}
+          ONLY: ${{ inputs.only }}
+          CHANGED: ${{ steps.diff.outputs.changed }}
         run: |
           {
             echo "## OG cards"
-            echo "- captured from: \`${{ inputs.base }}\`"
-            echo "- scope: \`${{ inputs.only || 'every card' }}\`"
-            echo "- proposed a PR: \`${{ steps.diff.outputs.changed }}\`"
+            echo "- captured from: \`${BASE_ORIGIN}\`"
+            echo "- scope: \`${ONLY:-every card}\`"
+            echo "- proposed a PR: \`${CHANGED}\`"
           } >> "$GITHUB_STEP_SUMMARY"
