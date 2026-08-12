@@ -32,6 +32,16 @@ const esc = (value) => String(value)
 // than ending up with two rulesets, which the browser would union.
 const SPECULATION_BLOCK = /[ \t]*<script\b[^>]*\btype=["']speculationrules["'][^>]*>[\s\S]*?<\/script>\n?/gi;
 
+function stripSpeculationBlocks(input) {
+  let previous;
+  let next = input;
+  do {
+    previous = next;
+    next = next.replace(SPECULATION_BLOCK, "");
+  } while (next !== previous);
+  return next;
+}
+
 export const speculationHtml = () =>
   `<script type="speculationrules">${JSON.stringify(SPECULATION)}</script>`;
 
@@ -125,8 +135,8 @@ export function patchStaticShell(source, artifacts) {
   if (!hasShell && !navScript.test(source)) return null;
   let next = source
     .replace(new RegExp(`${TOP_OPEN}[\\s\\S]*?${TOP_CLOSE}\\n?`, "g"), "")
-    .replace(new RegExp(`${CHROME_OPEN}[\\s\\S]*?${CHROME_CLOSE}\\n?`, "g"), "")
-    .replace(SPECULATION_BLOCK, "");
+    .replace(new RegExp(`${CHROME_OPEN}[\\s\\S]*?${CHROME_CLOSE}\\n?`, "g"), "");
+  next = stripSpeculationBlocks(next);
   const body = next.match(/<body[^>]*>/i);
   if (!body) throw new Error("shell page has no <body>");
   if (!next.includes("</body>")) throw new Error("shell page has no </body>");
