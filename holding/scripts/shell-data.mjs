@@ -5,6 +5,51 @@
 // to stay in nav.js/nav-run.js. Keeping the facts here means the browser
 // runtime is no longer the build system's database.
 
+// The shell's Speculation Rules, and the one authored copy of them. Until
+// 2026-08-11 this block was hand-written into 26 documents plus a runtime
+// injector in nav.js, and the 27 copies had forked: garage pages excluded
+// /whoareyou alone, lwe pages carried a dead prefetch rule, lwe/encoding.html
+// carried two exclusions that two earlier commits had deliberately deleted
+// site-wide, and only the homepage and nav.js held the full list. See #338.
+//
+// "moderate" prerenders on hover or pointerdown rather than on load, so a
+// visitor who never opens /garage pays nothing for it and a visitor who does
+// gets a rendered document. That is why the cross-document View Transition could
+// come out: with the document already rendered there is no latency left for an
+// animation to cover.
+//
+// Every exclusion is here for one reason, that prerendering the path cannot
+// produce a document the next click will use:
+//
+//   /whoareyou   a per-request fingerprint, so a speculative render is a lie
+//   /run         the Start orb's JavaScript-off floor. This ruleset only exists
+//                when JS is on, and with JS on the orb opens the palette instead
+//                of navigating, so the render had no reader (#337)
+//   /rn          a 302 to Spotify built from a KV read, so the prerender spends
+//                a worker invocation and then dies at the cross-origin redirect
+//   the others   raw text and images, which are not documents
+//
+// There is deliberately NO prefetch rule. An eager /garage/* + /lwe/* one lived
+// on the 12 lwe pages and was measured fetching NOTHING, twice, by
+// scripts/speculation-probe.mjs: zero documents when /lwe offered it 12 matching
+// anchors at load, and zero when the Run palette injected 30 more on /lwe/utf8,
+// while the control in the same run (hover a link, moderate) reached the origin.
+// The homepage had already deleted its own copy on 2026-07-30 after measuring
+// the same nothing. Re-add one only behind a fresh measurement, never because
+// the rule reads like it ought to work.
+export const SPECULATION = {
+  prerender: [{
+    where: {
+      and: [
+        { href_matches: "/*" },
+        ...["/whoareyou*", "/run", "/rn*", "/images*", "/index.md", "/llms.txt"]
+          .map((href_matches) => ({ not: { href_matches } })),
+      ],
+    },
+    eagerness: "moderate",
+  }],
+};
+
 export const PROFILES = [
   { label: "GitHub", url: "https://github.com/oddharsh" },
   { label: "Twitter", url: "https://x.com/oddhash", background: "linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))", glyph: "@" },
