@@ -107,7 +107,7 @@ async function checkInvariants() {
   const routeKeys = [...routesBlock.matchAll(/\[\s*"([^"]+)"/g)].map((m) => m[1]);
   const allowBlock = (wrangler.match(/"run_worker_first"\s*:\s*\[([\s\S]*?)\]/) || [,""])[1];
   const allow = [...allowBlock.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
-  const globRe = (g) => new RegExp("^" + g.replace(/[.]/g, "\\$&").replace(/\*/g, ".*") + "$");
+  const globRe = (g) => new RegExp("^" + g.replace(/[\\.+?^${}()|[\]]/g, "\\$&").replace(/\*/g, ".*") + "$");
   const covered = (p) => allow.includes(p) || allow.some((a) => a.includes("*") && globRe(a).test(p));
   for (const k of routeKeys) if (!covered(k)) hard.push(`ROUTES key ${k} is not in wrangler run_worker_first (route would silently serve static)`);
 
@@ -1309,7 +1309,7 @@ for (const [file, srcPath, marker] of SHELLS) {
 // the build is allowed past the six shells + luna.css (hard rule 3).
 {
   const hash8 = (buf) => createHash("sha256").update(buf).digest("hex").slice(0, 8);
-  const esc = (s) => s.replace(/[/.]/g, "\\$&");
+  const esc = (s) => s.replace(/[\\/.*+?^${}()|[\]]/g, "\\$&");
   await mkdir(`${OUT}/www/a`, { recursive: true });
 
   const ASSETS = [
