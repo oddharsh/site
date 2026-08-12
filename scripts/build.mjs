@@ -1273,11 +1273,25 @@ for (const [file, srcPath, marker] of SHELLS) {
   };
   const nonce = `?build=${BUILD_NONCE}`;
   const lens = await import(pathToFileURL(resolve(OUT, "www/_worker.js/lens.js")).href + nonce);
+  const run = await import(pathToFileURL(resolve(OUT, "www/_worker.js/run.js")).href + nonce);
+  const search = await import(pathToFileURL(resolve(OUT, "www/_worker.js/search.js")).href + nonce);
   const writing = await import(pathToFileURL(resolve(OUT, "www/_worker.js/writing.js")).href + nonce);
 
   const lensResponse = lens.renderLensShell();
   if (lensResponse.status !== 200) throw new Error(`static /lens renderer returned ${lensResponse.status}`);
   await writeFile(`${OUT}/www/lens.html`, await lensResponse.text());
+
+  const runResponse = run.renderRun();
+  if (runResponse.status !== 200) throw new Error(`static /run renderer returned ${runResponse.status}`);
+  const runHtml = await runResponse.text();
+  if (!runHtml.includes('form action="/run"')) throw new Error("static /run renderer lost its no-JS form");
+  await writeFile(`${OUT}/www/run.html`, runHtml);
+
+  const searchResponse = search.renderSearchPage();
+  if (searchResponse.status !== 200) throw new Error(`static /search renderer returned ${searchResponse.status}`);
+  const searchHtml = await searchResponse.text();
+  if (!searchHtml.includes('form method="get" action="/search"')) throw new Error("static /search renderer lost its blank search form");
+  await writeFile(`${OUT}/www/search.html`, searchHtml);
 
   const env = { ASSETS: assets };
   const indexResponse = await writing.renderWritingIndex(env);
@@ -1291,7 +1305,7 @@ for (const [file, srcPath, marker] of SHELLS) {
     if (response.status !== 200) throw new Error(`static /writing/${post.slug} renderer returned ${response.status}`);
     await writeFile(`${OUT}/www/writing/${post.slug}.html`, await response.text());
   }
-  console.log(`static renders: /lens + /writing index + ${posts.length} notes staged from canonical Worker renderers`);
+  console.log(`static renders: /lens + blank /run + blank /search + /writing index + ${posts.length} notes staged from canonical Worker renderers`);
 }
 
 // 6) content-hash the critical-path shell assets (nav.js + luna.css + lens.js) into

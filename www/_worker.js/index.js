@@ -114,7 +114,7 @@ export { BookingWorkflow } from "../../cal/src/workflow.js";
 // actual lesson here: it was a private function in this module, this module cannot
 // be imported under plain node (see gotcha 16), and so nothing in the 78-test suite
 // could reach it. The bug shipped through a green CI.
-const WORKERS_CACHEABLE_PATHS = new Set("/ /favicon.ico /auth.md /.well-known/api-catalog /.well-known/agent-card.json /.well-known/oauth-protected-resource /.well-known/oauth-authorization-server /reading /updates /updates.json /restore /lens /ledger /writing /bot /around /around/json /around/changes.json /photos /rn/tracks /rn/tracks.html /images/manifest.json /images/metadata.json /coffee /coffee/availability.json /search /photos/query.json".split(" "));
+const WORKERS_CACHEABLE_PATHS = new Set("/ /favicon.ico /auth.md /.well-known/api-catalog /.well-known/agent-card.json /.well-known/oauth-protected-resource /.well-known/oauth-authorization-server /reading /updates /updates.json /restore /lens /ledger /writing /bot /around /around/json /around/changes.json /photos /rn/tracks /rn/tracks.html /images/manifest.json /images/metadata.json /coffee /coffee/availability.json /run /search /photos/query.json".split(" "));
 
 async function serveWorkerRequest(request, env, ctx) {
   const url = new URL(request.url);
@@ -383,7 +383,7 @@ const ROUTE_TABLE = [
   ["/photos.txt", handleTool],
   ["/lens.txt", handleTool],
 
-  ["/search", handleSearch],
+  ["/search", routeSearch],
   ["/search.json", handleSearchJson],
 
   // the x402 bot paywall: llms.txt's map is free, the full corpus costs $0.01
@@ -430,7 +430,7 @@ const ROUTE_TABLE = [
   // the homepage grid's random twelve, fetched by the inline hydrator
   ["/photos/grid.html", handlePhotoGrid],
   ["/coffee/availability.json", handleCoffeeAvailability],
-  ["/run", handleRun],
+  ["/run", routeRun],
 
   // the Apache-styled listings are retired (owner decree 2026-07-02): /photos
   // is the browse surface, so every listing URL 301s there instead of 404ing.
@@ -790,6 +790,23 @@ const GENERATED_PAGE_HEADERS = {
   "cache-control": PAGE_CACHE_CONTROL,
   "link": SHELL_PRELOAD_LINK,
 };
+
+const UTILITY_SHELL_HEADERS = {
+  "cache-control": "public, max-age=300, s-maxage=300",
+  "link": SHELL_PRELOAD_LINK,
+};
+
+function routeRun(request, env, ctx, url) {
+  if (url.searchParams.get("cmd")) return handleRun(request, env, ctx);
+  return serveStaticPage(request, env, {
+    headers: { ...UTILITY_SHELL_HEADERS, "x-robots-tag": "noindex" },
+  });
+}
+
+function routeSearch(request, env, ctx, url) {
+  if (url.searchParams.get("q")) return handleSearch(request, env, ctx);
+  return serveStaticPage(request, env, { headers: UTILITY_SHELL_HEADERS });
+}
 
 function routeLens(request, env, ctx, url) {
   // A target-bearing Lens response spends crawler/browser budget and contains
