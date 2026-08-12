@@ -1,0 +1,168 @@
+name: OG cards
+
+# Re-bake the 1200x630 OG/Twitter cards from the repo instead of from a laptop.
+#
+# Each card is a page's live demo screenshotted onto the Bliss desktop, so a link
+# unfurl shows the interaction rather than a bare title. They are pre-baked and
+# committed on purpose: X's card fetcher hits the image URL once and caches it, so
+# an on-the-fly render would risk a timeout and a blank card.
+#
+# DELIBERATELY NOT NIGHTLY, which is the one decision in here worth reading.
+# gen-og-cards.mjs captures PRODUCTION so that data-driven demos render populated
+# rather than empty — its own header names the photo grid, the live counters and
+# the routing prober. Those are not deterministic between runs, so a scheduled job
+# would open a PR of changed PNGs every single night, none of which means
+# anything. dictionary-roll.yml can be nightly because its output is a pure
+# function of the bytes production serves; this is not that.
+#
+# So it is dispatch-driven: a card is re-baked when someone changed a demo's look,
+# which is exactly what MAINTENANCE.md says the trigger is. What moves to the repo
+# here is the RUNNING of it (Chrome, playwright, the commit), not the decision.
+#
+# Ordering matters and is easy to get wrong: the cards capture production, so a
+# page that is not deployed yet renders as a 404. Re-bake AFTER the ramp reaches
+# 100%, never on the merge that authored the page.
+
+on:
+  workflow_dispatch:
+    inputs:
+      only:
+        description: "Comma-separated page ids to re-bake (e.g. garage-horizon,lwe-lean). Empty = every card."
+        required: false
+        type: string
+      base:
+        description: "Origin to capture (default https://aadhar.sh)"
+        required: false
+        default: "https://aadhar.sh"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: og-cards
+  cancel-in-progress: false
+
+jobs:
+  bake:
+    name: Re-bake cards and open a PR
+    if: github.repository == 'oddharsh/site'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      # Both are GITHUB token scopes. This job holds no Cloudflare credential at
+      # all: it reads production over plain HTTPS like any other visitor.
+      #
+      # `contents: write` reaches only the branch below. It CANNOT reach `main`,
+      # which carries a ruleset with zero bypass actors, so this opens a PR and
+      # stops. A bot PR is still a PR.
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Check out main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install pnpm
+        run: npm install -g pnpm@11.21.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # playwright-core drives the INSTALLED Chrome (`channel: "chrome"`) rather
+      # than downloading a browser, which is why there is no `playwright install`
+      # here. Asserted rather than assumed, so a runner image that drops Chrome
+      # fails on this line with a readable message instead of inside playwright.
+      - name: Require Google Chrome
+        run: |
+          set -euo pipefail
+          if ! command -v google-chrome >/dev/null 2>&1; then
+            echo "::error::google-chrome is not on this runner, and gen-og-cards.mjs launches channel:\"chrome\"."
+            echo "Add a setup-chrome step, or switch the script to a downloaded chromium."
+            exit 1
+          fi
+          google-chrome --version
+
+      - name: Bake the cards
+        env:
+          OG_ONLY: ${{ inputs.only }}
+          OG_BASE: ${{ inputs.base }}
+        run: pnpm run og-cards
+
+      # Idempotent, and separate from the bake on purpose: a new page needs its
+      # <head> meta as well as its PNG, and a re-bake of an existing card needs
+      # only the PNG. Running it always keeps a newly added page from shipping a
+      # card nothing references.
+      - name: Add meta to any page missing it
+        run: node www/scripts/inject-og-meta.mjs
+
+      - name: Anything to propose?
+        id: diff
+        run: |
+          set -euo pipefail
+          if [ -z "$(git status --porcelain www/og www/garage www/lwe www/pixel-peeper)" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Every card already matches what production renders; nothing to do."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git status --short www/og www/garage www/lwe www/pixel-peeper | head -40
+          fi
+
+      - name: Open or update the card PR
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: chore/og-cards
+          ONLY: ${{ inputs.only }}
+          BASE_ORIGIN: ${{ inputs.base }}
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          CARDS=$(git status --porcelain www/og | wc -l | tr -d ' ')
+          PAGES=$(git status --porcelain www/garage www/lwe www/pixel-peeper | wc -l | tr -d ' ')
+
+          # One long-lived branch, force-pushed, same as dictionary-roll. A fresh
+          # branch per run would leave a trail of superseded PRs, and only the
+          # newest bake describes what production renders now.
+          git checkout -B "$BRANCH"
+          git add www/og www/garage www/lwe www/pixel-peeper
+          git commit -m "chore(og): re-bake the social cards from production
+
+          ${CARDS} card(s) and ${PAGES} page head(s) changed. Captured from
+          ${BASE_ORIGIN:-https://aadhar.sh}${ONLY:+, scoped to ${ONLY}}.
+
+          Opened by .github/workflows/og-cards.yml."
+          git push --force origin "$BRANCH"
+
+          if [ -n "$(gh pr list --head "$BRANCH" --state open --json number --jq '.[].number')" ]; then
+            echo "PR already open for $BRANCH; the force-push updated it."
+          else
+            gh pr create --base main --head "$BRANCH" \
+              --title "chore(og): re-bake the social cards from production" \
+              --body "Automated by [\`og-cards.yml\`](.github/workflows/og-cards.yml). **${CARDS}** card(s), **${PAGES}** page head(s).
+
+          Captured from \`${BASE_ORIGIN:-https://aadhar.sh}\`${ONLY:+, scoped to \`${ONLY}\`}.
+
+          Some demos are data-driven (the photo grid, the live counters, the routing prober), so a
+          card can differ between bakes without anything having changed. Check the PNGs read the way
+          you want before merging rather than assuming a diff means a fix."
+          fi
+
+      - name: Record the bake
+        if: always()
+        run: |
+          {
+            echo "## OG cards"
+            echo "- captured from: \`${{ inputs.base }}\`"
+            echo "- scope: \`${{ inputs.only || 'every card' }}\`"
+            echo "- proposed a PR: \`${{ steps.diff.outputs.changed }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

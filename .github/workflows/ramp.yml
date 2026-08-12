@@ -1,0 +1,286 @@
+name: Ramp production
+
+# Moving traffic, from the repo instead of from a workstation.
+#
+# The release chain is four links and this file is the last one: CI passes on
+# `main` -> promote-production.yml moves the `production` branch -> Workers Builds
+# runs `wrangler versions upload`, which builds the commit and mints a servable
+# version WITHOUT moving traffic -> something ramps it. That last link was a human
+# at a terminal. CLAUDE.md described a `ramp.yml` doing it from 2026-08-06 onward
+# and no such workflow was ever written; this is it.
+#
+# What the ramp buys is the ability to read a change before everyone gets it, so
+# automating it must not mean removing the human. It does not:
+#
+#   canary  10%          `production-canary`, no reviewer, runs on its own
+#   full    50% -> 100%  `production-full`, REQUIRED REVIEWER, waits for a click
+#
+# A merge therefore reaches a tenth of traffic by itself and stops. The rest is a
+# person deciding, which is the same decision they were already making, minus the
+# terminal.
+#
+# THE TOKEN. Both ramping jobs need a Cloudflare credential that can write, and
+# this is the only place in this repo that holds one. It is an ENVIRONMENT secret
+# on the two environments below, never a repo secret, because this repository is
+# PUBLIC: Actions secrets are not exposed by a public repo, but a job that runs
+# untrusted input can exfiltrate whatever it can read, and a fork PR cannot name
+# an environment. Scope it to `Workers Scripts:Edit` + `D1:Edit` and nothing else.
+# The six-read-scope `CLOUDFLARE_API_TOKEN` that infra:check uses is a DIFFERENT,
+# read-only credential and this must not widen it.
+#
+# Every ramp step runs through `pnpm run`, deliberately, rather than `node
+# scripts/deploy-promote.mjs`. The script shells out to `npx wrangler`, and npx
+# resolves whatever it can find: measured 2026-08-12 in a tree with no
+# `node_modules`, `npx wrangler --version` answered 4.105.0 from its own cache
+# while this repo pins 4.120.0. Running under `pnpm run` puts `node_modules/.bin`
+# first, so the pinned wrangler is the one that moves traffic.
+
+on:
+  workflow_run:
+    workflows: [Promote production]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version id to ramp (default: newest production-aliased build)"
+        required: false
+        type: string
+      canary_only:
+        description: "Stop at 10% and do not offer the full ramp"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  # Never two ramps at once. Two `wrangler versions deploy` calls interleaving
+  # would fight over one traffic split, and the loser's percentages would win by
+  # arriving last rather than by being correct.
+  group: production-ramp
+  cancel-in-progress: false
+
+jobs:
+  canary:
+    name: 10% canary
+    # A failed promotion has nothing to ramp, and `workflow_run` fires on failure too.
+    if: >-
+      ${{
+        github.event_name == 'workflow_dispatch' ||
+        github.event.workflow_run.conclusion == 'success'
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: production-canary
+      url: https://aadhar.sh
+    outputs:
+      target: ${{ steps.ramp.outputs.target }}
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_RAMP }}
+      VERSION_INPUT: ${{ inputs.version }}
+
+    steps:
+      # The PRODUCTION branch, not main. The ramp writes the D1 changelog by
+      # diffing the checked-out www/_worker.js/checkpoints.json against D1, so the
+      # tree has to be the one that was actually built and uploaded. Reading
+      # main's tip would diff against a tree AHEAD of what is serving, which is
+      # gotcha 24 with the staleness pointing the other way.
+      - name: Check out the promoted commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: production
+
+      - name: Install pnpm
+        # package.json's packageManager field is the source of truth; this pins the
+        # same version so no self-switch is attempted (gotcha 30).
+        run: npm install -g pnpm@11.21.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Resolve the account id from wrangler.jsonc
+        run: node scripts/print-account-id.mjs >> "$GITHUB_ENV"
+
+      # Workers Builds is still building when the promotion workflow finishes, so
+      # the version this wants to ramp does not exist yet. deploy:promote's own
+      # freshness warning tells a human to "re-run --dry-run until this line
+      # clears"; this is that loop. --dry-run resolves and prints the target and
+      # moves nothing.
+      - name: Wait for Workers Builds to upload the version
+        run: |
+          set -uo pipefail
+          for attempt in $(seq 1 20); do
+            out="$(pnpm run --silent deploy:promote -- --dry-run ${VERSION_INPUT:+--version "$VERSION_INPUT"} 2>&1 || true)"
+            printf '%s\n' "$out"
+            target="$(printf '%s\n' "$out" | sed -n 's/^target version: *\([0-9a-f]\{8\}\).*/\1/p' | head -1)"
+            serving="$(printf '%s\n' "$out" | sed -n 's/^serving now: *//p' | head -1)"
+            if [ -n "$target" ] && ! printf '%s' "$serving" | grep -q "$target"; then
+              echo "resolved ${target}, which is not serving yet. proceeding."
+              exit 0
+            fi
+            echo "::notice::attempt ${attempt}/20 — no un-served production version yet, waiting 30s"
+            sleep 30
+          done
+          echo "::error::Workers Builds produced no rampable production version within 10 minutes."
+          exit 1
+
+      - name: Ramp to 10%
+        id: ramp
+        run: |
+          set -euo pipefail
+          out="$(pnpm run --silent deploy:promote -- --to 10 ${VERSION_INPUT:+--version "$VERSION_INPUT"} 2>&1 | tee /dev/stderr)"
+          target="$(printf '%s\n' "$out" | sed -n 's/^target version: *\([0-9a-f]\{8\}\).*/\1/p' | head -1)"
+          if [ -z "$target" ]; then
+            echo "::error::could not read the ramped version out of deploy:promote's output"
+            exit 1
+          fi
+          echo "target=${target}" >> "$GITHUB_OUTPUT"
+
+      - name: Record the canary
+        if: always()
+        env:
+          TARGET: ${{ steps.ramp.outputs.target }}
+        run: |
+          {
+            echo "## Canary at 10%"
+            echo "- version: \`${TARGET:-unresolved}\`"
+            echo "- the other 90% is still on the previous version"
+            echo ""
+            echo "The ramp samples status codes. It cannot tell whether the page is RIGHT."
+            echo "Read Workers Logs filtered to \`v=${TARGET:-}\` before approving the full ramp."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  full:
+    name: 50% then 100% (requires approval)
+    needs: canary
+    if: ${{ !inputs.canary_only }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      # Required reviewers live on this environment, so this job sits in
+      # "Waiting" until a human approves it. That pause IS the ramp.
+      name: production-full
+      url: https://aadhar.sh
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_RAMP }}
+      CANARY: ${{ needs.canary.outputs.target }}
+
+    steps:
+      - name: Check out the promoted commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: production
+
+      - name: Install pnpm
+        # package.json's packageManager field is the source of truth; this pins the
+        # same version so no self-switch is attempted (gotcha 30).
+        run: npm install -g pnpm@11.21.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Resolve the account id from wrangler.jsonc
+        run: node scripts/print-account-id.mjs >> "$GITHUB_ENV"
+
+      # THE GUARD THIS JOB EXISTS AROUND. Approval is asynchronous, so minutes or
+      # hours pass between the canary and this step, and Workers Builds uploads a
+      # version for EVERY push. Re-resolving the newest production build here
+      # could therefore ramp something no canary ever read, silently, and every
+      # downstream check would pass, because a version that built and deployed
+      # returns 200s. So compare against what the canary actually put at 10% and
+      # refuse if it moved. Eight hex characters is plenty to detect "a different
+      # build appeared"; it is not being used to address anything.
+      - name: Refuse to ramp a version the canary never saw
+        run: |
+          set -euo pipefail
+          out="$(pnpm run --silent deploy:promote -- --dry-run 2>&1 | tee /dev/stderr)"
+          now="$(printf '%s\n' "$out" | sed -n 's/^target version: *\([0-9a-f]\{8\}\).*/\1/p' | head -1)"
+          if [ "$now" != "$CANARY" ]; then
+            echo "::error::newest production version is ${now}, but ${CANARY} was canaried."
+            printf '%s\n' \
+              "A newer build landed while this ramp waited for approval." \
+              "Ramping ${now} would put traffic on something no canary ever read." \
+              "Re-run this workflow so it canaries ${now} first, or dispatch it with" \
+              "version=${CANARY} if serving the canaried build is what you mean."
+            exit 1
+          fi
+          echo "confirmed: ${now} is the version the canary put at 10%."
+
+      # Ends at 100, which is what makes deploy:promote write the D1 changelog row
+      # for this release. Because this checked out `production`, the
+      # checkpoints.json it diffs is the one that actually shipped.
+      - name: Ramp 50% then 100%
+        run: pnpm run deploy:promote -- --steps 50,100
+
+      - name: Show what is serving
+        if: always()
+        run: pnpm run deploy:promote -- --status
+
+  verify:
+    name: Post-ramp checks
+    needs: full
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # No environment and no Cloudflare credential. Both checks below read
+    # production over plain HTTPS, which is the whole reason they can run here
+    # without widening anything.
+
+    steps:
+      - name: Check out the promoted commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: production
+
+      - name: Install pnpm
+        # package.json's packageManager field is the source of truth; this pins the
+        # same version so no self-switch is attempted (gotcha 30).
+        run: npm install -g pnpm@11.21.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The committed dictionaries have to match the bytes production is NOW
+      # serving. dictionary-roll.yml opens a PR when they drift; this is the half
+      # that NOTICES, immediately after the deploy that could have caused it.
+      # Advisory on purpose: a stale dictionary tier is a lost optimisation
+      # rather than an outage, and reddening a job after traffic is already at
+      # 100% helps nobody.
+      - name: Dictionary tiers against live production
+        continue-on-error: true
+        run: pnpm run dcz:check
+
+      - name: Publish the release record
+        if: always()
+        run: |
+          {
+            echo "## Release complete"
+            echo "- version at 100%: \`${{ needs.canary.outputs.target }}\`"
+            echo "- changelog row written to D1 by the 100% step"
+            echo ""
+            echo "If \`dcz:check\` above is red, the committed dictionaries no longer"
+            echo "describe what production serves. dictionary-roll.yml opens a PR for"
+            echo "that nightly, or run it now from the Actions tab."
+          } >> "$GITHUB_STEP_SUMMARY"
