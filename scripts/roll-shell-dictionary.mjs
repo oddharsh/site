@@ -81,8 +81,8 @@ const only = process.argv.includes("--pages") ? "pages"
            : process.argv.includes("--shell") ? "shell"
            : "both";
 
-const BUILT = ".build/holding/a";
-const DICTS = "holding/a-dict";
+const BUILT = ".build/www/a";
+const DICTS = "www/a-dict";
 // Each extra candidate costs one delta per asset per deploy and widens the cache-variant
 // fan-out, while only serving visitors who skipped exactly that many deploys.
 const KEEP = 3;
@@ -97,12 +97,12 @@ const parse = (n) => {
 };
 
 if (!existsSync(BUILT)) {
-  console.error(`shell:roll — ${BUILT} is missing. Run \`node build.mjs\` first: the /a/ hashes`);
+  console.error(`shell:roll — ${BUILT} is missing. Run \`node scripts/build.mjs\` first: the /a/ hashes`);
   console.error("  come from the MINIFIED bytes, so the built tree is the only place they exist.");
   process.exit(1);
 }
 
-if (only === "pages") console.log("shell:roll — --pages given, leaving holding/a-dict/ alone.");
+if (only === "pages") console.log("shell:roll — --pages given, leaving www/a-dict/ alone.");
 else {
 await mkdir(DICTS, { recursive: true });
 const shell = (await readdir(BUILT)).map(parse).filter(Boolean);
@@ -132,10 +132,10 @@ for (const [, group] of byBase) {
   }
 }
 console.log(`shell:roll — adopted ${adopted}, pruned ${pruned}, keeping ${KEEP} per asset.`);
-console.log("  Commit holding/a-dict/. build.mjs regenerates the deltas on its own from here.");
+console.log("  Commit www/a-dict/. build.mjs regenerates the deltas on its own from here.");
 }
 
-// ── PAGE DICTIONARIES (holding/p-dict) ──────────────────────────────────────────
+// ── PAGE DICTIONARIES (www/p-dict) ──────────────────────────────────────────
 // Static pages have two useful dictionary populations. The immutable family corpus
 // reaches every visitor who has loaded any page; these committed snapshots recover
 // the 93-97% per-page ratio for visitors returning to a page they already hold.
@@ -151,7 +151,7 @@ console.log("  Commit holding/a-dict/. build.mjs regenerates the deltas on its o
 // the whole correctness argument for this block. A dictionary is matched by the
 // SHA-256 the browser computes over the body it stored, so the only bytes worth
 // committing are the bytes production actually delivered. Those two used to be
-// identical, which made reading `.build/holding` a harmless shortcut — until
+// identical, which made reading `.build/www` a harmless shortcut — until
 // WebMCP was enabled on 2026-08-06 and Cloudflare began injecting
 // `<script src="/.webmcp/bridge.js">` into every document with HTMLRewriter, at
 // the edge, after this Worker is done. The staged file has no such tag, so every
@@ -170,17 +170,17 @@ console.log("  Commit holding/a-dict/. build.mjs regenerates the deltas on its o
 // required). And a staged page production does not serve yet is SKIPPED with a
 // named line rather than adopted, because a browser cannot hold bytes that were
 // never sent to it.
-if (only === "shell") console.log("pages:roll — --shell given, leaving holding/p-dict/ alone.");
+if (only === "shell") console.log("pages:roll — --shell given, leaving www/p-dict/ alone.");
 else {
-  const BUILT_PAGES = ".build/holding";
-  const PDICTS = "holding/p-dict";
+  const BUILT_PAGES = ".build/www";
+  const PDICTS = "www/p-dict";
   const KEEP_PAGES = 2;
   const FETCH_CONCURRENCY = 6;
   const parse = (n) => {
     const m = n.match(/^(.+)\.([0-9a-f]{16})\.html\.br$/);
     return m ? { slug: m[1], tag: m[2], name: n } : null;
   };
-  // `.build/holding/garage/pretext.html` is served at `/garage/pretext`, and an
+  // `.build/www/garage/pretext.html` is served at `/garage/pretext`, and an
   // index file is served at its directory: `garage/index.html` -> `/garage`,
   // `index.html` -> `/`.
   const routeOf = (rel) => {

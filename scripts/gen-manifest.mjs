@@ -6,15 +6,15 @@
 //   node scripts/gen-manifest.mjs        # regen the worker module + Run fences
 //
 // What this OWNS (regenerated between markers; do not hand-edit those regions):
-//   - holding/_worker.js/lib/site-manifest.js  — AGENT_SURFACES, the projection
+//   - www/_worker.js/lib/site-manifest.js  — AGENT_SURFACES, the projection
 //     MCP resources/list serves (agents:true only, no shell bytes)
-//   - holding/nav-run.js generated:garage-pages + generated:lwe-pages — the Run
+//   - www/nav-run.js generated:garage-pages + generated:lwe-pages — the Run
 //     palette's garage/lwe sub-entries (terse {label,path,hint}, no temporal data)
 //
 // What this deliberately does NOT own (hand-authored, VERIFIED by build.mjs #8):
 //   - sitemap.xml — carries per-page hand-tuned <lastmod>; generating would
 //     flatten a real SEO freshness signal. build.mjs enforces coverage instead.
-//   - holding/garage/index.html — rich hand-written gallery cards. Verified.
+//   - www/garage/index.html — rich hand-written gallery cards. Verified.
 //   - nav-run.js top-level PAGES (Home/photos/…) — hand-authored. Verified subset.
 //
 // The projection functions below are PURE and exported, so build.mjs re-runs the
@@ -23,11 +23,11 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
-import { PROFILES } from "../holding/scripts/shell-data.mjs";
+import { PROFILES } from "../www/scripts/shell-data.mjs";
 
-export const MANIFEST = "site-manifest.json";
-const NAV = "holding/nav-run.js";
-const WORKER_MOD = "holding/_worker.js/lib/site-manifest.js";
+export const MANIFEST = "config/site-manifest.json";
+const NAV = "www/nav-run.js";
+const WORKER_MOD = "www/_worker.js/lib/site-manifest.js";
 const FENCE_SECTIONS = [["garage", "garage-pages"], ["lwe", "lwe-pages"]];
 
 export function readManifest() {

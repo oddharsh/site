@@ -48,7 +48,7 @@ import { fileURLToPath } from "node:url";
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const BUILD = join(ROOT, ".build");
 const SHADOW = join(ROOT, ".build.node-baseline");
-const TEST_LINK = join(ROOT, "contract-tests.test.mjs");
+const TEST_LINK = join(ROOT, "scripts", "contract-tests.test.mjs");
 
 const argv = process.argv.slice(2);
 const flag = (name) => {
@@ -160,10 +160,10 @@ if (existsSync(SHADOW)) rmSync(SHADOW, { recursive: true, force: true });
 let restored = false;
 try {
   rmSync(BUILD, { recursive: true, force: true });
-  const nodeMs = timedBuild("node", process.execPath, ["build.mjs"]);
+  const nodeMs = timedBuild("node", process.execPath, ["scripts/build.mjs"]);
   renameSync(BUILD, SHADOW);
 
-  const bunMs = timedBuild("bun", bun, ["build.mjs"]);
+  const bunMs = timedBuild("bun", bun, ["scripts/build.mjs"]);
 
   const a = hashTree(SHADOW);
   const b = hashTree(BUILD);
@@ -202,7 +202,7 @@ try {
 try {
   if (existsSync(TEST_LINK)) unlinkSync(TEST_LINK);
   symlinkSync("contract-tests.mjs", TEST_LINK);
-  const out = run(bun, ["test", "contract-tests.test.mjs"]);
+  const out = run(bun, ["test", "scripts/contract-tests.test.mjs"]);
   const text = `${out.stdout}\n${out.stderr}`;
   const pass = Number(text.match(/(\d+) pass/)?.[1] ?? 0);
   const fail = Number(text.match(/(\d+) fail/)?.[1] ?? -1);

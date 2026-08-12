@@ -72,7 +72,7 @@ jobs:
         run: |
           brew install exiftool ffmpeg jq libavif mozjpeg webp
           python -m venv "$RUNNER_TEMP/photo-venv"
-          "$RUNNER_TEMP/photo-venv/bin/pip" install --requirement holding/scripts/requirements.txt
+          "$RUNNER_TEMP/photo-venv/bin/pip" install --requirement www/scripts/requirements.txt
           echo "$RUNNER_TEMP/photo-venv/bin" >> "$GITHUB_PATH"
 
       - name: Install repository dependencies
@@ -81,7 +81,7 @@ jobs:
       - name: Build the JPEG encoder (zenc)
         # zenjpeg hybrid + progressive scan search; Cargo.lock pins the graph,
         # dependabot tracks the zenjpeg version. macOS runners ship cargo.
-        run: cargo build --release --manifest-path holding/scripts/zenc/Cargo.toml
+        run: cargo build --release --manifest-path www/scripts/zenc/Cargo.toml
 
       - name: Validate routine inputs
         run: |
@@ -112,7 +112,7 @@ jobs:
         run: |
           set -euo pipefail
           printf '%s\n' "$SOURCE_KEYS" > "$RUNNER_TEMP/photo-source-keys.txt"
-          ./holding/scripts/download-remote-photos.sh \
+          ./www/scripts/download-remote-photos.sh \
             "$RUNNER_TEMP/photo-source-keys.txt" \
             "$RUNNER_TEMP/photo-source"
 
@@ -127,23 +127,23 @@ jobs:
               pnpm run photos "$source_dir"
               ;;
             reencode-thumbnails)
-              ./holding/scripts/reencode-thumbnails.sh "$source_dir"
-              ./holding/scripts/hash-thumbnails.sh
-              python holding/scripts/photo-histograms.py
+              ./www/scripts/reencode-thumbnails.sh "$source_dir"
+              ./www/scripts/hash-thumbnails.sh
+              python www/scripts/photo-histograms.py
               pnpm run photos:check
               ;;
             refresh-metadata)
-              ./holding/scripts/extract-photo-metadata.sh --merge "$source_dir"
+              ./www/scripts/extract-photo-metadata.sh --merge "$source_dir"
               pnpm run photos:check
               ;;
             add-car-photo)
               key="$(find "$source_dir" -type f -print -quit)"
               [ -n "$key" ] || { echo "no downloaded car source" >&2; exit 1; }
-              ./holding/scripts/add-car-photo.sh "$CAR_STEM" "$key"
+              ./www/scripts/add-car-photo.sh "$CAR_STEM" "$key"
               ;;
             regenerate-encoding-study)
-              ./holding/scripts/gen-encoding-samples.sh
-              ./holding/scripts/gen-encoding-grids.sh
+              ./www/scripts/gen-encoding-samples.sh
+              ./www/scripts/gen-encoding-grids.sh
               ;;
           esac
 
@@ -156,11 +156,11 @@ jobs:
         run: |
           set -euo pipefail
           case "$ROUTINE" in
-            add-photo) paths=(holding/images holding/i); title="photos: process remote source batch";;
-            reencode-thumbnails) paths=(holding/images holding/i); title="photos: re-encode remote thumbnails";;
-            refresh-metadata) paths=(holding/images); title="photos: refresh remote metadata";;
-            add-car-photo) paths=(holding/cars); title="photos: update remote car image";;
-            regenerate-encoding-study) paths=(holding/garage/enc); title="garage: regenerate remote encoding study";;
+            add-photo) paths=(www/images www/i); title="photos: process remote source batch";;
+            reencode-thumbnails) paths=(www/images www/i); title="photos: re-encode remote thumbnails";;
+            refresh-metadata) paths=(www/images); title="photos: refresh remote metadata";;
+            add-car-photo) paths=(www/cars); title="photos: update remote car image";;
+            regenerate-encoding-study) paths=(www/garage/enc); title="garage: regenerate remote encoding study";;
           esac
 
           branch="photos/remote-$GITHUB_RUN_ID"
@@ -185,6 +185,6 @@ jobs:
               '' \
               "Routine: $ROUTINE" \
               'Source: R2-backed public photo route' \
-              'Encoder: zenjpeg via holding/scripts/zenc (Cargo-pinned, dependabot-tracked)' \
+              'Encoder: zenjpeg via www/scripts/zenc (Cargo-pinned, dependabot-tracked)' \
               '' \
               'The source files were downloaded to ephemeral runner storage only. Merge this PR through the normal CI and production-promotion path.')"

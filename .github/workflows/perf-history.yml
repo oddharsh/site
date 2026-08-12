@@ -121,7 +121,7 @@ jobs:
           else
             git checkout --orphan perf-history
             git rm -rf --cached . >/dev/null 2>&1 || true
-            rm -rf holding cal serendipity scripts .github node_modules 2>/dev/null || true
+            rm -rf www cal serendipity scripts .github node_modules 2>/dev/null || true
             printf '%s\n' \
               '# Wire-size history' '' \
               'One JSON object per line, appended nightly by .github/workflows/perf-history.yml.' \

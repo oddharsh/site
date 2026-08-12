@@ -32,7 +32,7 @@
 // A payload rejection surfaces as the existing `upstream_not_ok` 502 carrying
 // `unrecognized_keys`, which is the same signature the Kitesurf probe produced.
 
-import { restUrl } from "../holding/_worker.js/lens-render.js";
+import { restUrl } from "../www/_worker.js/lens-render.js";
 
 const TOKEN = process.env.BROWSER_RUN_TOKEN;
 const ACCOUNT = process.env.CLOUDFLARE_ACCOUNT_ID || "1c99acdb6141579023fb97d24261ea58";

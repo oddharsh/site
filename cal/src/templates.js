@@ -18,12 +18,12 @@
 // inline JS endpoints are prefixed with whatever path the request came
 // in on; the router sets env.BASE_PATH per-request.
 
-// The desktop partial the rest of the site ships. cal is staged beside holding/
+// The desktop partial the rest of the site ships. cal is staged beside www/
 // in .build with the same relative layout as the source tree, so this one path
 // resolves in both. Emitted only under /coffee (see `onShell` in shell()): on
 // the bare cal.aadhar.sh fallback the shell's links would be cross-origin and
 // /nav.js 404s, so that host stays a standalone window, as it always has.
-import { DESKTOP_CHROME, DESKTOP_TOP } from "../../holding/_worker.js/lib/desktop.js";
+import { DESKTOP_CHROME, DESKTOP_TOP } from "../../www/_worker.js/lib/desktop.js";
 
 const STYLES = `
 * { box-sizing: border-box; }

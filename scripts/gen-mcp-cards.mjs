@@ -13,13 +13,13 @@ import {
   MCP_TOOLS as SITE_TOOLS,
   SITE_MCP_CAPABILITIES,
   SITE_MCP_SERVER_INFO,
-} from "../holding/_worker.js/mcp.js";
+} from "../www/_worker.js/mcp.js";
 import {
   MCP_TOOLS as SERENDIPITY_TOOLS,
   SERENDIPITY_MCP_CAPABILITIES,
   SERENDIPITY_MCP_SERVER_INFO,
 } from "../serendipity/serendipity.js";
-import { MCP_MODERN } from "../holding/_worker.js/lib/mcp-protocol.js";
+import { MCP_MODERN } from "../www/_worker.js/lib/mcp-protocol.js";
 
 const ROOT = "https://aadhar.sh";
 
@@ -62,11 +62,11 @@ const serendipityCard = card({
   tools: SERENDIPITY_TOOLS,
 });
 
-await mkdir("holding/.well-known/mcp", { recursive: true });
+await mkdir("www/.well-known/mcp", { recursive: true });
 const outputs = new Map([
-  ["holding/.well-known/mcp/server-card.json", siteCard],
-  ["holding/.well-known/mcp.json", serendipityCard],
-  ["holding/.well-known/mcp/serendipity.json", serendipityCard],
+  ["www/.well-known/mcp/server-card.json", siteCard],
+  ["www/.well-known/mcp.json", serendipityCard],
+  ["www/.well-known/mcp/serendipity.json", serendipityCard],
 ]);
 for (const [file, value] of outputs) {
   await writeFile(file, `${JSON.stringify(value, null, 2)}\n`);

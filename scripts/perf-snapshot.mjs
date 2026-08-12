@@ -36,7 +36,7 @@
 // answered on the day it mattered, and commonwarexyz/benchmarks is 89 MB of
 // exactly the retention problem worth not having.
 //
-// `record` runs `wrangler deploy --dry-run`, which self-builds `.build/holding`
+// `record` runs `wrangler deploy --dry-run`, which self-builds `.build/www`
 // through wrangler.jsonc's build.command, so it needs no prior `pnpm run build`.
 //
 // Everything measured here is DETERMINISTIC: identical source bytes produce an
@@ -49,7 +49,7 @@ import { execFileSync } from "node:child_process";
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import { brotliCompressSync, constants as zlibConstants, gzipSync } from "node:zlib";
 
-const BUILD = ".build/holding";
+const BUILD = ".build/www";
 const DRYRUN_OUT = ".build/.perfsnap";
 
 const SCHEMA = 1;

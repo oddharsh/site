@@ -13,7 +13,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import { brotliDecompressSync } from "node:zlib";
 import { createHash } from "node:crypto";
-import { PAGE_FAMILY_MATCH } from "../holding/_worker.js/lib/assets.js";
+import { PAGE_FAMILY_MATCH } from "../www/_worker.js/lib/assets.js";
 
 const b64 = (buf) => `:${createHash("sha256").update(buf).digest("base64")}:`;
 const get = (url, dict) => fetch(url, { headers: {
@@ -28,10 +28,10 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
 {
   const home = await (await fetch("https://aadhar.sh/", { headers: { "accept-encoding": "identity" } })).text();
   const live = home.match(/\/a\/nav\.([0-9a-f]{8})\.js/)?.[1];
-  const cand = (await readdir("holding/a-dict")).find((n) => n.startsWith("nav.") && !n.includes(live));
+  const cand = (await readdir("www/a-dict")).find((n) => n.startsWith("nav.") && !n.includes(live));
   if (!cand) report("shell js (nav)", false, "no non-live a-dict candidate to probe with");
   else {
-    const r = await get(`https://aadhar.sh/a/nav.${live}.js`, b64(await readFile(`holding/a-dict/${cand}`)));
+    const r = await get(`https://aadhar.sh/a/nav.${live}.js`, b64(await readFile(`www/a-dict/${cand}`)));
     const ce = r.headers.get("content-encoding");
     report("shell js (nav)", ce === "dcz", `ce=${ce} vs candidate ${cand}`);
   }
@@ -69,7 +69,7 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
            ce === "dcz" ? `ce=dcz vs ${offered}` : `ce=${ce} — the deployed /pd/ deltas may predate this dictionary`);
   }
 
-  const candidates = (await readdir("holding/p-dict").catch(() => []))
+  const candidates = (await readdir("www/p-dict").catch(() => []))
     .filter((name) => name.startsWith("garage__pretext.") && name.endsWith(".html.br"));
   if (!candidates.length) {
     report("page html per-page tier", true, "no committed pretext snapshot — family tier is the only candidate");
@@ -82,7 +82,7 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
     // usable against production right now" is the property worth asserting.
     const tried = [];
     for (const name of candidates) {
-      const raw = brotliDecompressSync(await readFile(`holding/p-dict/${name}`));
+      const raw = brotliDecompressSync(await readFile(`www/p-dict/${name}`));
       const ce = (await get("https://aadhar.sh/garage/pretext", b64(raw))).headers.get("content-encoding");
       tried.push(`${name}=${ce}`);
       if (ce === "dcz") break;
@@ -97,7 +97,7 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
     // difference: it offers the committed tag, so it passes on a snapshot no browser
     // could ever offer. That is exactly what happened when WebMCP turned on and
     // Cloudflare started injecting `<script src="/.webmcp/bridge.js">` at the edge,
-    // downstream of this Worker — every snapshot rolled from `.build/holding` hashed
+    // downstream of this Worker — every snapshot rolled from `.build/www` hashed
     // to bytes nobody had, and the per-page tier fell back to the family dictionary
     // in total silence.
     //
@@ -113,7 +113,7 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
     );
     const liveDoc = await (await fetch("https://aadhar.sh/garage/pretext", { headers: { "accept-encoding": "identity" } })).text();
     const held = await Promise.all(candidates.map(async (name) =>
-      srcs(brotliDecompressSync(await readFile(`holding/p-dict/${name}`)).toString("utf8"))));
+      srcs(brotliDecompressSync(await readFile(`www/p-dict/${name}`)).toString("utf8"))));
     const unheld = [...srcs(liveDoc)].filter((src) => !held.some((set) => set.has(src)));
     report("committed snapshots are WIRE bytes", unheld.length === 0,
            unheld.length === 0
@@ -231,8 +231,8 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
   const url = `https://aadhar.sh/a/nav.${live}.js`;
 
   const deltas = [];
-  for (const name of (await readdir("holding/a-dict")).filter((n) => n.startsWith("nav.") && !n.includes(live))) {
-    const r = await get(url, b64(await readFile(`holding/a-dict/${name}`)));
+  for (const name of (await readdir("www/a-dict")).filter((n) => n.startsWith("nav.") && !n.includes(live))) {
+    const r = await get(url, b64(await readFile(`www/a-dict/${name}`)));
     const body = Buffer.from(await r.arrayBuffer());
     // dcz is not an encoding undici knows, so these bytes arrive raw — which is the
     // whole point here. Hash rather than compare lengths: two different deltas could

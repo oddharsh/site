@@ -7,7 +7,7 @@
 // boots this repo's Worker in-process on a real loopback port, so the same table
 // can gate a PR instead of only auditing a deployment.
 //
-//   pnpm run routes:check                 # boot .build/holding, sweep, exit non-zero on failure
+//   pnpm run routes:check                 # boot .build/www, sweep, exit non-zero on failure
 //
 // It points at wrangler.jsonc, NOT wrangler.dev.jsonc, deliberately: that config
 // carries `build.command`, so the harness runs build.mjs itself and serves the
@@ -20,7 +20,7 @@
 // answer from their fallback path. Status and content-type are real; a passing
 // /images/manifest.json here means the handler works, not that the photos exist.
 // Rows tagged `remote` in verify-routes.mjs are skipped for that reason. The
-// post-deploy `node verify-routes.mjs` sweep against production stays the check
+// post-deploy `node scripts/verify-routes.mjs` sweep against production stays the check
 // that sees real content, and neither one replaces the other.
 
 import { spawn, spawnSync } from "node:child_process";
@@ -81,7 +81,7 @@ try {
   code = await new Promise((resolve, reject) => {
     const child = spawn(
       process.execPath,
-      ["verify-routes.mjs", String(url).replace(/\/$/, "")],
+      ["scripts/verify-routes.mjs", String(url).replace(/\/$/, "")],
       { cwd: root, stdio: "inherit", env: { ...process.env, VERIFY_BUILT: "1", ...(remote ? { VERIFY_REMOTE: "1" } : {}) } },
     );
     child.on("error", reject);

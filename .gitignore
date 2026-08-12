@@ -38,15 +38,15 @@ cf-garage/node_modules/
 .claude/worktrees/
 
 # zenc (JPEG thumbnail encoder) build artifacts — Cargo.lock is committed, target/ is not
-holding/scripts/zenc/target/
+www/scripts/zenc/target/
 
 # verify-routes.mjs dev baselines against local servers (transient, per-port)
-verify-baseline.localhost_*.json
+scripts/verify-baseline.localhost_*.json
 
 # dcz deltas are BUILD OUTPUT now (build.mjs generates them with node:zlib zstd), not
 # committed artifacts. Nothing to ignore here; this note exists so the directory is not
 # re-added by hand.
-holding/ad/
+www/ad/
 
 # wrangler check startup writes this next to the config
 worker-startup.cpuprofile

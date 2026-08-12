@@ -33,7 +33,7 @@ const PRUNE = process.argv.includes("--prune");
 const API = "https://api.cloudflare.com/client/v4";
 const RRTYPE = { A: 1, NS: 2, CNAME: 5, MX: 15, TXT: 16, AAAA: 28, DS: 43, SVCB: 64 };
 
-const infra = JSON.parse(await readFile(join(ROOT, "infra.json"), "utf8"));
+const infra = JSON.parse(await readFile(join(ROOT, "config/infra.json"), "utf8"));
 const policy = infra.apply;
 
 // ------------------------------------------------------------- guardrails --

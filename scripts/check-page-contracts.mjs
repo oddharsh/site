@@ -8,9 +8,9 @@ import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { transform } from "esbuild";
 
-import { validateUnderstanding } from "../content-pipeline/page-contract.mjs";
-import { pageHtml as renderLwePage } from "../lwe-pipeline/generate.mjs";
-import { pageHtml as renderGaragePage, validateRegistry } from "../garage-pipeline/generate.mjs";
+import { validateUnderstanding } from "../pipelines/content/page-contract.mjs";
+import { pageHtml as renderLwePage } from "../pipelines/lwe/generate.mjs";
+import { pageHtml as renderGaragePage, validateRegistry } from "../pipelines/garage/generate.mjs";
 
 const ROOT = new URL("../", import.meta.url).pathname;
 
@@ -26,9 +26,9 @@ function payload(html, file) {
 }
 
 async function checkPublishedPages(family, skip = new Set()) {
-  for (const file of await filesIn(`holding/${family}`)) {
+  for (const file of await filesIn(`www/${family}`)) {
     if (file === "index.html" || skip.has(file)) continue;
-    const path = `holding/${family}/${file}`;
+    const path = `www/${family}/${file}`;
     const html = await readFile(join(ROOT, path), "utf8");
     assert.equal((html.match(/<script src="\/quiz\.js" defer><\/script>/g) || []).length, 1, `${path}: missing shared quiz runtime`);
     const data = payload(html, path);
@@ -41,18 +41,18 @@ async function checkPublishedPages(family, skip = new Set()) {
 
 // Rendering every structured LWE spec catches a future schema omission before
 // it can overwrite a page. The manually authored LWE pages are checked below.
-const lweSpecFiles = (await readdir(join(ROOT, "lwe-pipeline/specs")))
+const lweSpecFiles = (await readdir(join(ROOT, "pipelines/lwe/specs")))
   .filter((file) => file.endsWith(".json"))
   .sort();
 for (const file of lweSpecFiles) {
-  const spec = JSON.parse(await readFile(join(ROOT, "lwe-pipeline/specs", file), "utf8"));
+  const spec = JSON.parse(await readFile(join(ROOT, "pipelines/lwe/specs", file), "utf8"));
   const html = renderLwePage(spec);
-  assert.match(html, /id="luq-data"/, `lwe-pipeline/specs/${file}: generator omitted quiz data`);
-  assert.match(html, /<script src="\/quiz\.js" defer><\/script>/, `lwe-pipeline/specs/${file}: generator omitted quiz runtime`);
-  assert.match(html, /id="axp-desktop"/, `lwe-pipeline/specs/${file}: generator omitted static desktop shell`);
-  assert.match(html, /id="axp-taskbar"/, `lwe-pipeline/specs/${file}: generator omitted static taskbar shell`);
-  assert.equal((html.match(/<link rel="stylesheet" href="\/lwe-base\.css">/g) || []).length, 1, `lwe-pipeline/specs/${file}: generator omitted shared LWE CSS`);
-  assert.doesNotMatch(html, /<style>[\s\S]*?\*\s*\{\s*box-sizing:/, `lwe-pipeline/specs/${file}: generator re-inlined shared LWE structure`);
+  assert.match(html, /id="luq-data"/, `pipelines/lwe/specs/${file}: generator omitted quiz data`);
+  assert.match(html, /<script src="\/quiz\.js" defer><\/script>/, `pipelines/lwe/specs/${file}: generator omitted quiz runtime`);
+  assert.match(html, /id="axp-desktop"/, `pipelines/lwe/specs/${file}: generator omitted static desktop shell`);
+  assert.match(html, /id="axp-taskbar"/, `pipelines/lwe/specs/${file}: generator omitted static taskbar shell`);
+  assert.equal((html.match(/<link rel="stylesheet" href="\/lwe-base\.css">/g) || []).length, 1, `pipelines/lwe/specs/${file}: generator omitted shared LWE CSS`);
+  assert.doesNotMatch(html, /<style>[\s\S]*?\*\s*\{\s*box-sizing:/, `pipelines/lwe/specs/${file}: generator re-inlined shared LWE structure`);
 }
 
 validateRegistry();

@@ -1,0 +1,584 @@
+{
+  "$comment": [
+    "Account- and zone-level infrastructure that wrangler.jsonc cannot reach.",
+    "",
+    "wrangler.jsonc already declares the compute layer (routes, crons, bindings,",
+    "DO migrations) and CI dry-runs it on every PR. This file covers the rest: the",
+    "DNS records, the resources those bindings point at, the Worker inventory, and",
+    "the release wiring. Until this existed, all of that lived in prose in",
+    "CLAUDE.md and in the Cloudflare dashboard, so a wiped record or a fat-fingered",
+    "dashboard field left no red mark anywhere in the tree.",
+    "",
+    "This is a DECLARATION, not an apply path. `pnpm run infra:check` reads it and",
+    "diffs against reality; nothing here mutates Cloudflare. Changing a value here",
+    "does not change production, it changes what the check demands of production.",
+    "",
+    "Resource IDs deliberately live in wrangler.jsonc alone. This file names what",
+    "must exist and why; the checker reads the IDs from wrangler.jsonc so the two",
+    "cannot drift into two different answers."
+  ],
+
+  "account": {
+    "$comment": [
+      "The Cloudflare account everything here lives in. Declared because",
+      "wrangler auto-selects an account only while the login can see exactly",
+      "one, so the whole toolchain worked for months on an accident rather than",
+      "on anything written down. On 2026-08-07 a second account showed up on",
+      "this login and every non-interactive wrangler call broke at once with",
+      "\"More than one account available but unable to select one in",
+      "non-interactive mode\" — deploy, deploy:version, deploy:promote,",
+      "dev:remote and routes:check:remote, none of which had changed.",
+      "",
+      "Both wrangler configs pin `account_id` now and checkTree fails if they",
+      "drift from this id or from each other. The dev twin needs it for the",
+      "same reason the deploy config does: dev:remote and routes:check:remote",
+      "reach production bindings through wrangler.dev.jsonc.",
+      "",
+      "The id ships FOUR times, and checkTree reads all four. Each config",
+      "carries it as the deploy-time `account_id` pin and again as the runtime",
+      "var CF_ACCOUNT_ID, which /ledger uses to query this account's own",
+      "Analytics Engine. The var predates the pin, and it is the reason there",
+      "is no ambiguity about WHICH account is right: the deployed Worker has",
+      "been reading this one's analytics all along. Wrangler has no way to",
+      "reference a value from elsewhere in its own config, so the duplication",
+      "cannot be removed — it can only be checked, which is what this block is",
+      "for. An account_id and a CF_ACCOUNT_ID that disagree would deploy to one",
+      "account and read analytics from another, with each half looking fine.",
+      "",
+      "NO ID HERE, per this file's own rule: resource ids live in wrangler.jsonc",
+      "alone and the checker reads them from there, so the two can never drift",
+      "into two different answers. wrangler.jsonc's account_id is the source of",
+      "truth and the other three copies are checked against IT, not against a",
+      "fifth copy written here. What this block declares is the invariant — all",
+      "four must agree — which is the part wrangler.jsonc cannot state about",
+      "itself.",
+      "",
+      "This is the TREE tier, so it is a string comparison with no credential",
+      "and it runs on every PR. It deliberately does NOT assert that the",
+      "account exists or that a token can reach it: a token scoped to this",
+      "account cannot enumerate the others, so 'is this the right one of the",
+      "two' is not a question the API tier can answer. What the pin buys is",
+      "that the answer stops depending on how many accounts a given login",
+      "happens to see."
+    ],
+    "source_of_truth": "wrangler.jsonc account_id",
+    "must_agree": [
+      "wrangler.jsonc vars.CF_ACCOUNT_ID",
+      "wrangler.dev.jsonc account_id",
+      "wrangler.dev.jsonc vars.CF_ACCOUNT_ID"
+    ]
+  },
+  "zone": {
+    "name": "aadhar.sh",
+    "nameservers": ["daisy.ns.cloudflare.com.", "harlan.ns.cloudflare.com."],
+    "dnssec": {
+      "algorithm": "ECDSAP256SHA256",
+      "ds": "2371 13 2 5E0FBF232ED807AD0EA22563D9338B1D6B15AF1E2DE9CB4C29275A9189B97FB0",
+      "why": "DS is published at the registrar, so the chain of trust is out of Cloudflare's hands. If it ever stops matching, the DNS-AID SVCB answer below stops being authenticated and validating resolvers start refusing the zone outright."
+    }
+  },
+
+  "dns": [
+    {
+      "name": "aadhar.sh",
+      "type": "A",
+      "match": "proxied",
+      "why": "The apex, proxied through Cloudflare. Public DNS shows anycast edge addresses rather than an origin, so the check asserts the shape (at least one A and one AAAA) instead of pinning IPs Cloudflare is free to rotate."
+    },
+    {
+      "name": "www.aadhar.sh",
+      "type": "A",
+      "match": "sameAs",
+      "expect": "aadhar.sh",
+      "why": "www must land on the same proxied edge as the apex."
+    },
+    {
+      "name": "cal.aadhar.sh",
+      "type": "A",
+      "match": "sameAs",
+      "expect": "aadhar.sh",
+      "why": "Backs the `cal.aadhar.sh/*` route in wrangler.jsonc. The route is declared in code but the hostname it needs is not, so without this entry the coffee module can lose its domain and every config in the repo still validates clean."
+    },
+
+    {
+      "name": "_index._agents.aadhar.sh",
+      "type": "SVCB",
+      "match": "exact",
+      "expect": ["1 aadhar.sh. mandatory=alpn,port alpn=h2,h3 port=443"],
+      "why": "DNS-AID agent discovery (draft-mozleywilliams-dnsop-dnsaid + RFC 9460). Deliberately only _index is published, never _a2a: the site runs no Agent2Agent server, and a dangling _a2a would pass a scanner while breaking any agent that connected.",
+      "gotcha": "macOS ships dig 9.10.6, which does not know the SVCB mnemonic and silently degrades the query to an A lookup, reporting this record as missing when it is fine. The checker uses DoH and asks for type 64 by number."
+    },
+
+    {
+      "name": "aadhar.sh",
+      "type": "HTTPS",
+      "match": "contains",
+      "expect": ["alpn=h3,h2", "ech="],
+      "why": "The record that actually drives how a browser connects, and the DNS half of two zone toggles that have no other representation anywhere in this repo. `alpn=h3,h2` is HTTP/3 advertised in DNS (Speed > Settings > Protocol Optimization), and `ech=` is Encrypted ClientHello being on. Cloudflare generates and rotates this record; we do not author it, we assert its shape. Either toggle could be flipped in a dashboard and nothing in this tree would notice, which is the whole reason it is declared here.",
+      "gotcha": "Matched with `contains`, not `exact`, because Cloudflare owns the parts that move: the ech= key rotates and the ipv4/ipv6 hints change with the edge. Exact-matching would fail on every rotation; present-matching would miss the case that actually matters, which is a toggle silently dropping one parameter out of an otherwise healthy record.",
+      "pairs_with": "The edge tier's http3-on check. This asserts h3 is advertised in DNS; that one asserts the edge really answers with alt-svc h3. A client needs both, and either half can break alone.",
+      "esni": "There is deliberately no ESNI here. ESNI was the 2018 draft, it had known weaknesses, and Cloudflare removed support for it years ago. ECH is its replacement and is what `ech=` above refers to. If someone goes looking for an ESNI setting later, this is the note saying there is nothing to find."
+    },
+
+    {
+      "name": "aadhar.sh",
+      "type": "MX",
+      "match": "exact",
+      "expect": [
+        "25 route3.mx.cloudflare.net.",
+        "28 route2.mx.cloudflare.net.",
+        "42 route1.mx.cloudflare.net."
+      ],
+      "why": "Cloudflare Email Routing. coffee@aadhar.sh is the host address the booking flow sends from and the DMARC rua target, so losing MX breaks /coffee's approve/decline loop quietly."
+    },
+    {
+      "name": "aadhar.sh",
+      "type": "TXT",
+      "match": "exact",
+      "expect": ["v=spf1 include:_spf.mx.cloudflare.net include:_spf.google.com ~all"],
+      "why": "SPF for the two senders that actually exist: Cloudflare Email Routing and Google. Exact-matched because this is hand-authored policy, so any change should be deliberate rather than discovered later in a spam folder."
+    },
+    {
+      "name": "_dmarc.aadhar.sh",
+      "type": "TXT",
+      "match": "exact",
+      "expect": ["v=DMARC1; p=reject; rua=mailto:coffee@aadhar.sh,mailto:f528361e6ec148c8a4ee78398c1c1ab4@dmarc-reports.cloudflare.net; aspf=s; adkim=s"],
+      "why": "p=reject with strict alignment on both SPF and DKIM. Strict alignment is unforgiving by design, which makes the DKIM record below load-bearing rather than optional."
+    },
+    {
+      "name": "resend._domainkey.aadhar.sh",
+      "type": "TXT",
+      "match": "present",
+      "why": "Resend's DKIM key, which signs the /coffee confirmation and invite mail. Presence-matched, not exact: Resend owns rotation, so pinning the key would turn a routine rotation into a CI failure. Deletion still fails, which is the case that matters under adkim=s.",
+      "consumer": "cal/src/email.js"
+    },
+    {
+      "name": "default._bimi.aadhar.sh",
+      "type": "TXT",
+      "match": "exact",
+      "expect": ["v=BIMI1; l=https://aadhar.sh/bimi.svg"],
+      "why": "BIMI logo for inbox display. This record is the ONLY consumer of www/bimi.svg anywhere in the world, which is why that file reads as detritus to every reference sweep in this tree. The `consumer` field below is what closes the loop: the checker asserts the file exists, so deleting it now goes red here instead of silently breaking mail.",
+      "consumer": "www/bimi.svg"
+    }
+  ],
+
+  "resources": {
+    "$comment": "IDs live in wrangler.jsonc. This lists what must exist in the account and why, and the checker joins the two by binding name.",
+    "kv_namespaces": [
+      { "binding": "RN_KV", "title": "rn-cache", "why": "Playlist tracks, photo manifest, artist pics, Lens screenshots, the /around crawl snapshot." },
+      { "binding": "BOOKINGS", "title": "cal-aadhar-sh-CAL_BOOKINGS", "why": "Pending and confirmed coffee bookings, plus the per-slot held: keys." }
+    ],
+    "r2_buckets": [
+      { "binding": "PHOTOS_R2", "bucket": "aadhar-photos", "why": "The SOOC originals, ~3GB over 158 photos. The only copy that is not on the owner's SSD." }
+    ],
+    "d1_databases": [
+      { "binding": "RESTORE_DB", "database": "aadhar-restore", "why": "The deploy log. Single source for both /restore and /updates, which is what stops those two pages drifting apart." },
+      { "binding": "SERENDIPITY_DB", "database": "serendipity", "why": "Event pool behind /serendipity." },
+      { "binding": "SOCIAL_DB", "database": "aadhar-social", "why": "Inbound webmentions behind /inbox, plus the outbound send ledger. Deliberately NOT aadhar-restore: this is moderated, mutable content written by strangers, where checkpoints is the site's own append-only history." }
+    ],
+    "vectorize_indexes": [
+      { "binding": "VECTORIZE", "index": "lwe-passages", "config": "lwe-ask/wrangler.toml", "why": "Passage index for the /lwe/ask RAG endpoint. Created once by hand; the create command survives only as a comment in that config." }
+    ]
+  },
+
+  "workers": {
+    "$comment": "Worker inventory. `retired` is the interesting half: a Worker that should be gone but is not still holds its routes, and that is invisible from inside this repo.",
+    "expected": [
+      { "name": "aadhar-sh", "config": "wrangler.jsonc", "why": "The site Worker: homepage, Lens, coffee, Serendipity." },
+      { "name": "cf-garage", "config": "cf-garage/wrangler.toml", "why": "Intercepts /garage/cf/* ahead of the site Worker." },
+      { "name": "lwe-ask", "config": "lwe-ask/wrangler.toml", "why": "The /lwe/ask RAG endpoints." },
+      { "name": "lens-reader", "config": "lens-reader/wrangler.toml", "why": "Intercepts /lens/read* ahead of the site Worker and serves the /lens Reader lens. SEPARATE for two independent reasons, either sufficient on its own: Defuddle needs a DOM Document, which costs ~190 KB gzip against a site bundle already over its 204.24 KiB budget; and run_worker_first caps at 100 rules with this repo at exactly 100, so a /lens/read path on the site Worker would refuse to boot (gotcha 26) while a zone route needs no entry. If this Worker goes missing, /lens keeps working and the Reader tab reports the extractor as unreachable." }
+    ],
+    "retired": [
+      {
+        "name": "serendipity-collective",
+        "deleted": "2026-07-25",
+        "why": "The former Serendipity Worker. wrangler.jsonc now serves /serendipity* from the site Worker, so CLAUDE.md called for removing this one after the first successful production deploy. It was still deployed months later, which is what the first real run of the account tier caught. Deleted 2026-07-25 after confirming /serendipity still served 200 from the site Worker. The entry stays so the check keeps asserting it is gone: two deployments claiming overlapping surface, with the older one unversioned by this repo, is the state worth never returning to."
+      }
+    ],
+    "unmanaged": [
+      { "name": "archie-kit-slack-oauth", "why": "Belongs to a different project on the same account. Listed so the check does not flag it as a stray." }
+    ]
+  },
+
+  "apply": {
+    "$comment": [
+      "Policy for `pnpm run infra:apply`, the rebuild path. Everything else in",
+      "this file is read-only; this block is the one place that describes writes.",
+      "",
+      "SCOPE: DNS records whose `match` is `exact`, and nothing else. That is not",
+      "an arbitrary line. `exact` is precisely the set where infra.json knows the",
+      "whole desired value, so it is the only set that can be recreated from this",
+      "file without inventing something. Everything excluded is excluded because",
+      "some other system is its rightful owner:",
+      "",
+      "  match: present   the DKIM key. Resend owns rotation and this file",
+      "                   deliberately does not pin the value, so it cannot",
+      "                   recreate it. Re-verify the domain in Resend instead.",
+      "  match: proxied   the apex. Cloudflare creates and owns this record when",
+      "  match: sameAs    the Worker custom domain is attached, so a rebuild gets",
+      "                   it from deploying the Worker, never from here.",
+      "  resources        KV/R2/D1 creation mints NEW ids that would have to be",
+      "                   written back into wrangler.jsonc by hand. Wrangler",
+      "                   already creates these; see MAINTENANCE.md for the order.",
+      "  the Worker       Workers Builds is the only publisher. Nothing here may",
+      "                   ever deploy it, or the release backstop is gone.",
+      "",
+      "SAFETY: never runs in CI (a write token must not live in GitHub, which is",
+      "the whole reason production is unreachable from there). Prints a plan and",
+      "the exact API payloads before touching anything. Creates and updates only;",
+      "deleting needs --prune and is still confined to declared names, because an",
+      "undeclared record is more likely a third-party verification TXT than junk.",
+      "",
+      "The plan itself needs NO credential: it diffs infra.json against public DNS",
+      "over DoH, same as the check. Only the write needs a token."
+    ],
+    "zone": "aadhar.sh",
+    "default_ttl": 1,
+    "ttl_note": "1 means Cloudflare 'automatic'. Public DNS reports remaining TTL rather than configured TTL, so the plan cannot diff TTL and does not try; it only sets TTL on records it creates.",
+    "token": {
+      "env": "CLOUDFLARE_API_TOKEN_WRITE",
+      "scopes": ["Zone:DNS:Edit on aadhar.sh", "Zone:Zone:Read on aadhar.sh"],
+      "why": "A DELIBERATELY DIFFERENT env var from the read-only CLOUDFLARE_API_TOKEN the check uses. Two names means a write token can never be picked up by the check path by accident, and the read token in CI can never satisfy this one."
+    }
+  },
+
+  "edge": {
+    "$comment": [
+      "Zone settings that are load-bearing for something this repo does.",
+      "",
+      "Checked as OBSERVED RESPONSES rather than as dashboard toggles, for two",
+      "reasons. A response needs no credential, so this runs on every PR with the",
+      "DNS tier. And a toggle can read `on` while a cache rule or page rule",
+      "overrides it for one path, so the response is the thing actually worth",
+      "asserting: what a visitor receives.",
+      "",
+      "Only settings with a real consequence live here. Cloudflare exposes dozens",
+      "of zone toggles and almost all of them are defaults nobody has an opinion",
+      "about. Three of the five below are must-stay-OFF, which is the category",
+      "that rots quietest, because enabling a helpful-sounding feature never looks",
+      "like a regression at the time.",
+      "",
+      "NOTE: this tier tests PRODUCTION, not the branch. A failure here is not",
+      "caused by the PR that surfaced it. The checker labels it accordingly."
+    ],
+    "origin": "https://aadhar.sh",
+    "checks": [
+      {
+        "id": "polish-off",
+        "target": "sample-image",
+        "assert": { "headerAbsent": ["cf-polished", "cf-bgj"] },
+        "why": "Cloudflare Polish would re-encode images at the edge, which would silently discard the entire encoder toolchain this repo maintains: zenc built from zenjpeg, 10-bit AVIF via avifenc, the q84 tuning, the 158-photo benchmark behind those choices. The site would look fine and every byte of that craft would be gone. Of everything checked here, this is the one that costs the most and shows the least."
+      },
+      {
+        "id": "rocket-loader-off",
+        "target": "homepage",
+        "assert": { "bodyLacks": ["data-cf-settings", "rocket-loader"] },
+        "why": "Rocket Loader rewrites how scripts load, which would run straight over the deliberate discipline in index.html: the tiny inline tooltip loader, nav.js on defer, the speculation rules. The page is hand-tuned for its own load order."
+      },
+      {
+        "id": "http3-on",
+        "target": "homepage",
+        "assert": { "headerContains": { "alt-svc": "h3=" } },
+        "why": "The DNS-AID SVCB record advertises alpn=h2,h3. Turn HTTP/3 off at the zone and that record promises a protocol the edge does not speak, while the DNS check above stays green because the record itself never changed. Same cross-boundary shape as bimi.svg: two surfaces that only make sense together, and neither one alone can tell."
+      },
+      {
+        "id": "tls-0rtt-on",
+        "target": "homepage",
+        "assert": { "earlyData": true },
+        "why": "TLS 1.3 0-RTT session resumption: a returning visitor's request rides the resumption handshake itself, saving a full network round trip before the first response byte moves. With every payload on this site already at its compression floor, that round trip (tens of ms on a phone) is the largest per-visit latency lever left, and it is a dashboard toggle with no other representation in this tree — flipped off, nothing would notice while every repeat visit quietly got slower. Verified on 2026-07-30 by openssl probe: session tickets advertise max_early_data=14336 and a resumed connection's request sent as early data was accepted. Replay caveat, accepted deliberately: Cloudflare applies 0-RTT only to GET requests without query strings, and the one state-changing bare GET here is /hit, the noscript counter pixel — a replayed /hit inflates a vanity odometer and nothing else. The ?tick=1 beacon carries a query string and is excluded by construction, as are cal's signed approve/decline links.",
+        "gotcha": "The probe MUST hold the first connection open briefly after the request: TLS 1.3 delivers the session ticket AFTER the handshake, so a connect-and-hangup saves no ticket and the resumption test reads as a false rejection. Also, macOS system openssl is LibreSSL, whose s_client has no -early_data; the checker looks for a capable binary (homebrew openssl@3, or OPENSSL_BIN) and downgrades to a warning rather than reporting drift it cannot measure.",
+        "pairs_with": "http3-on above: h3 cuts the transport handshake for new connections, 0-RTT cuts it for resumed ones. Different visitors, same round trip."
+      },
+      {
+        "id": "compression-on",
+        "target": "homepage",
+        "assert": { "compression": ["zstd", "br", "gzip"] },
+        "why": "The performance budget is denominated in compressed bytes (CLAUDE.md pins the homepage at ~15.4KB zstd; perf-budget.mjs measures gzip and Brotli envelopes). Lose compression at the zone and those numbers quietly stop describing anything real, while perf-budget.mjs keeps passing because it compresses locally."
+      },
+      {
+        "id": "compression-prefers-brotli",
+        "target": "homepage",
+        "assert": { "compressionPrefers": { "offer": "gzip, deflate, br, zstd", "expect": "br" } },
+        "why": "compression-on proves the edge CAN speak each encoding, one at a time. This proves which one it PICKS when a real browser offers all of them at once, which is the only version of the question a visitor ever experiences. Cloudflare's default preference is zstd, and its on-the-fly zstd is worse than its own on-the-fly brotli on this site's content: measured 2026-07-28 against /images/manifest.json, chosen because its 35,162-byte body is byte-identical every request while the homepage's is not (a random 12-photo grid moves the size ~1.4KB between renders, which is wider than the effect being measured). br 6,642 bytes, zstd 6,847: +205 bytes and +3.1%, paid by the majority of visitors, since Chrome and Edge both advertise zstd. The fix is a Compression Rule scoped to Default Content Types with the \"Enable Brotli and Gzip Compression\" preset, which drops zstd from the candidate list rather than merely ranking it lower; the recipe and the two form defaults to avoid live in MAINTENANCE.md. If Cloudflare's on-the-fly zstd ever overtakes its brotli, re-measure and flip the rule and this line together — the numbers here are something to re-run, not a constant to trust."
+      },
+      {
+        "id": "markdown-compressed",
+        "target": "markdown-twin",
+        "assert": { "compressionPrefers": { "offer": "gzip, deflate, br, zstd", "expect": "br" } },
+        "why": "Cloudflare's default content-type list carries text/x-markdown, the pre-RFC name, and NOT text/markdown, the RFC 7763 type this site serves. So every Markdown surface shipped completely uncompressed until the Compression Rule went in: /index.md, /auth.md, /whoareyou.md, /bot.md and the www/md/ twins, 12,302 bytes that brotli takes to 5,943 — a 52% loss, measured 2026-07-28. It landed on exactly the surfaces built for agents and LLM crawlers, which fetch the .md representation by preference, and nothing in the tree noticed because no check had ever looked at a content type other than the homepage's. Serving text/x-markdown instead would win compression from the default list and is the wrong fix: it is deprecated, and agents expect the registered type. This check is the tripwire for the whole class, so if a new content type ever appears here, give it a target and a line.",
+        "pairs_with": "compression-prefers-brotli. That one asserts WHICH encoding is chosen; this one asserts that any is chosen at all. A rule scoped to Cloudflare's default content types would satisfy the first and fail this one."
+      },
+      {
+        "id": "hsts-preload",
+        "target": "homepage",
+        "assert": { "headerEquals": { "strict-transport-security": "max-age=31536000; includeSubDomains; preload" } },
+        "why": "Exact-matched like SPF and DMARC above, because it is hand-chosen policy rather than a platform default. Weakening a preloaded policy is slow to undo, since browsers keep honouring the old max-age until it expires. Raising it is fine and should update this line. Raised from 15552000 (180d) to a full year on 2026-07-26: hstspreload.org rejects anything under 31536000 with max_age.below_1_year, so the `preload` token had been a claim the zone could not cash, and the domain was not on the list."
+      },
+      {
+        "id": "app-owns-security-headers",
+        "target": "homepage",
+        "assert": {
+          "headerEquals": {
+            "x-frame-options": "DENY",
+            "referrer-policy": "strict-origin-when-cross-origin"
+          },
+          "headerAbsent": ["expect-ct", "x-xss-protection"]
+        },
+        "why": "The repo declares these in _headers AND in the worker's SECURITY_HEADERS, and for an unknown stretch before 2026-07-26 the edge quietly overrode both: Cloudflare's `Add security headers` managed transform served x-frame-options SAMEORIGIN over the declared DENY, referrer-policy same-origin over strict-origin-when-cross-origin, plus two headers nobody asked for (expect-ct, an obsolete spec, and x-xss-protection: 1; mode=block, whose recommended value is now 0). Nothing in the repo could see it, because every local check reads the source rather than the wire. That is the whole argument for asserting observed responses: a header the code sets is not a header the visitor gets."
+      },
+      {
+        "id": "speed-brain-off",
+        "target": "homepage",
+        "assert": { "headerAbsent": ["speculation-rules"] },
+        "why": "index.html ships hand-tuned speculation rules with a deliberate exclusion list (/whoareyou keeps a per-request fingerprint honest, /rn* and /images* are endpoints and multi-megabyte R2 originals rather than pages). Speed Brain injected a second rule set over the top via this header: a blanket href_matches /* prefetch with no exclusions at all. Same failure shape as Polish above, where a helpful-sounding toggle silently overrides a deliberate choice the repo cannot see being overridden."
+      },
+      {
+        "id": "markdown-for-agents-off",
+        "target": "homepage",
+        "request": { "accept": "text/markdown" },
+        "assert": {
+          "headerPresent": ["x-markdown-tokens"],
+          "headerAbsent": ["content-signal"]
+        },
+        "why": "This site already answers `Accept: text/markdown` ITSELF, in the worker: wantsMarkdown() in _worker.js/lib/http.js does real q-value negotiation (markdown has to outrank html, which Cloudflare's zone feature does not check), and home.js plus serveMarkdownTwin serve committed or build-generated .md twins. Cloudflare's Markdown for Agents would convert HTML at the edge over the top of that, on every route, including the ones deliberately left without a twin. Same must-stay-off shape as Polish and Speed Brain above: a helpful-sounding toggle silently overriding a deliberate choice. The two assertions are the discriminator rather than decoration. x-markdown-tokens proves SOMETHING answered in markdown, so this fails loudly if the worker's own negotiation breaks instead of quietly passing on an HTML response. content-signal proves it was not Cloudflare: per the 2026-07-13 Markdown for Agents release the edge injects a default `content-signal: ai-train=yes, search=yes, ai-input=yes` whenever the origin sends none, and this origin sends none, because the policy lives in robots.txt. So that header appearing at all means the zone feature got switched on."
+      }
+    ]
+  },
+
+  "release": {
+    "$comment": [
+      "Workers Builds is the only production publisher for the site Worker, and its",
+      "settings are the release backstop.",
+      "",
+      "THIS BLOCK IS NOW CHECKED, which it was not before 2026-08-04. The comment",
+      "here used to say there was no public REST endpoint for Workers Builds",
+      "configuration and that the checker CANNOT verify any of it, so the values",
+      "were recorded as intent alone and reviewed by hand. That is out of date:",
+      "Workers Builds has a REST API, the permission is `Workers Builds Configuration`, and it has a",
+      "READ variant — so verifying this costs a read-only scope and needs no",
+      "exception to the rule that nothing in this repo holds a token that can",
+      "write. check-infra.mjs reads the live triggers and fails on drift.",
+      "",
+      "Add `Workers Builds Configuration:Read` to the CI token (a sixth read alongside Account",
+      "Settings, Workers Scripts, Workers KV Storage, Workers R2 Storage, and D1).",
+      "Without it the section degrades to a note naming the missing scope, same as",
+      "every other section, and the values fall back to being intent.",
+      "",
+      "The dashboard's two command fields are two TRIGGERS in the API, told apart",
+      "by their branch filters: the one whose branch_includes holds \"production\"",
+      "is the dashboard's \"Deploy command\", and the other is its \"Non-production",
+      "branch deploy command\". Both are declared below.",
+      "",
+      "The build_command MUST stay blank. wrangler.jsonc's build.command runs",
+      "build.mjs during `wrangler deploy`, so a non-empty field here builds twice,",
+      "and a field that runs something other than build.mjs is how production once",
+      "ended up serving an unminified 78KB nav.js.",
+      "",
+      "BOTH deploy commands carry two hidden wrangler flags that DEFAULT TO",
+      "TRUE: --x-provision and --x-auto-create let a deploy create real KV/R2/D1",
+      "resources for any binding declared without an id. 4.114 relaxed the config",
+      "schema so more binding types can ship id-less, which makes that easier to",
+      "trip into. Resource IDs live in wrangler.jsonc and resources are created by",
+      "`pnpm run infra:apply` alone, so every deploy path is pinned off and a",
+      "missing id fails loudly instead of minting something nobody declared.",
+      "",
+      "The NON-PRODUCTION command was the hole in that sentence until 2026-08-04.",
+      "It ran bare, so both flags took their default, and a push to ANY branch",
+      "could mint resources nobody declared. The rule was written down and still",
+      "missed it, because the rule ENUMERATED three deploy paths (`pnpm run",
+      "deploy:direct`, `pnpm run deploy:version`, and the dashboard Deploy command) while",
+      "a branch build is a fourth. Enumerating is what let one hide, so the",
+      "checks in check-infra.mjs now walk both commands from a single list.",
+      "",
+      "A branch build is the worst place for this to sit rather than the most",
+      "harmless one. A feature branch is where an id-less binding gets written in",
+      "the first place, it publishes on every push with nobody watching, and the",
+      "Worker it publishes carries PRODUCTION bindings, since Cloudflare offers",
+      "no per-version override.",
+      "",
+      "THE DEPLOY COMMAND UPLOADS A VERSION AND MOVES NO TRAFFIC. It is",
+      "`versions upload`, not `deploy`, which changes what a merge means: the",
+      "build runs, the assets upload, the secrets are checked, the Worker gets a",
+      "servable preview URL, and production keeps serving the version it was",
+      "already serving. Traffic moves when a human runs `pnpm run deploy:promote`",
+      "and ramps it. Merging is no longer the last step of a release.",
+      "",
+      "The two provisioning flags survive the change, and that was VERIFIED",
+      "rather than assumed (2026-08-04): they are hidden, so --help does not",
+      "list them for either subcommand, and the way to tell whether `versions",
+      "upload` accepts them is that wrangler exits 1 on an unknown flag. It",
+      "exits 1 on --x-bogus-flag and 0 on --x-provision=false, so they are real",
+      "here. Re-run that control before trusting any flag --help omits.",
+      "",
+      "`pnpm run deploy:direct` still exists and still deploys straight to 100%. It is",
+      "the fallback for the case CLAUDE.md documents at length: a fix for",
+      "production drift that infra:check can see cannot turn its own CI green",
+      "until it is live, and something has to break that cycle from outside."
+    ],
+    "publisher": "cloudflare-workers-builds",
+    "worker": "aadhar-sh",
+    "production_branch": "production",
+    "root_directory": ".",
+    "build_command": "",
+    "$comment_npx": [
+      "These two keep `npx` while the rest of the repo moved to `pnpm exec` on",
+      "2026-08-10, and the exception is deliberate. They are not commands this",
+      "repo runs: they are a RECORD of two strings typed into the Cloudflare",
+      "dashboard, and check-infra.mjs compares them against the live values. Edit",
+      "them here and the next infra:check fails on drift it invented itself.",
+      "",
+      "Changing them for real is a two-step operation in this order: edit the",
+      "dashboard's Deploy command and Non-production branch deploy command, then",
+      "update these strings to match. `npx wrangler` was verified on 2026-08-10 to",
+      "resolve pnpm's node_modules/.bin and dry-run clean, so there is no pressure",
+      "to do it. The same reasoning pins the mirrored copies in wrangler.jsonc and",
+      "the example output comment in check-infra.mjs."
+    ],
+    "deploy_command": "npx wrangler versions upload --x-provision=false --x-auto-create=false",
+    "non_production_deploy_command": "npx wrangler versions upload --x-provision=false --x-auto-create=false",
+    "verifiable": true,
+    "promoted_by": ".github/workflows/promote-production.yml",
+    "traffic_moved_by": "pnpm run deploy:promote (scripts/deploy-promote.mjs), workstation-only",
+    "preview_urls": true
+  },
+
+  "repository": {
+    "$comment": [
+      "GitHub repository rulesets. This is the BRANCH half of the release model,",
+      "and it belongs here for the same reason the Workers Builds block does: it",
+      "is dashboard state no config in this repo can derive, it is load-bearing",
+      "for what may reach production, and its drift is silent.",
+      "",
+      "It reads with NO CREDENTIAL, because the repo is public and the rulesets",
+      "endpoint is public with it. So this tier runs on every PR like the DNS",
+      "tier rather than degrading to a note like the account tier. Set",
+      "GITHUB_TOKEN for rate-limit headroom alone (60/hr unauthenticated per IP,",
+      "which shared Actions runners can exhaust); a rate-limited or unreachable",
+      "read is an ADVISORY, never a failure, so GitHub being down cannot redden a",
+      "PR that only touched CSS.",
+      "",
+      "`visibility` is checked FIRST and is a precondition rather than a",
+      "preference. Rulesets on a private repo need a paid plan, so a repo flipped",
+      "back to private silently loses every rule below it. This file said the",
+      "opposite until 2026-08-05 (see CLAUDE.md, which carried the same stale",
+      "'free private-repo plan cannot enforce branch protection' premise), and a",
+      "flip back to private would restore that world without a word.",
+      "",
+      "ZERO bypass actors is the load-bearing assertion on `main`. Claude, Codex",
+      "and every local worktree push with the OWNER's credentials, so a 'bypass",
+      "for repository admins' entry exempts precisely the actors the rule exists",
+      "to catch. bypass_actors is checked as EMPTY rather than as a declared list",
+      "on purpose: a list invites somebody to add an entry to this file to make a",
+      "red check go green, which is the failure the check exists to prevent.",
+      "",
+      "`production` deliberately carries NO pull_request rule, and that absence is",
+      "asserted. promote-production.yml moves the ref with a PATCH carrying",
+      "force=false, and a PR rule there would break the release path outright.",
+      "Deletion + non_fast_forward buy one property: the release branch can only",
+      "move FORWARD, so Workers Builds cannot be handed a rewritten history. They",
+      "do NOT restrict WHO may push, so the workflow's own two guards (the commit",
+      "is still current main, and it belongs to a merged PR) remain the thing",
+      "keeping a non-CI commit off production. A ruleset governs refs; those",
+      "guards govern which commit may become a release.",
+      "",
+      "ONE INTERACTION TO KNOW, and it resolves itself. CLAUDE.md documents",
+      "setting the `main` ruleset's enforcement to `disabled` for a single merge,",
+      "as the escape from the infra:check deadlock (a drift fix cannot turn green",
+      "until it is live, and `validate` is the required check gating it). While it",
+      "is disabled this section fails, so `validate` goes red, and that is",
+      "harmless, because a disabled ruleset is not requiring `validate` either. The",
+      "failure is then the tripwire for the real risk, which is nobody flipping it",
+      "back. Do NOT reach for a bypass actor instead: a standing exemption is",
+      "permanent and silent, while a disabled ruleset is loud here and shows up in",
+      "the audit log."
+    ],
+    "host": "github.com",
+    "owner": "oddharsh",
+    "name": "site",
+    "visibility": "public",
+    "rulesets": [
+      {
+        "name": "main",
+        "target": "branch",
+        "enforcement": "active",
+        "include": ["refs/heads/main"],
+        "rules": ["deletion", "non_fast_forward", "pull_request", "required_status_checks"],
+        "required_approving_review_count": 0,
+        "required_status_checks": [{ "context": "validate", "integration_id": 15368 }],
+        "strict_required_status_checks_policy": false,
+        "why": "0 approvals because GitHub refuses to let anyone approve their own PR, so a solo repo requiring 1 could never merge. `validate` is pinned to integration_id 15368 (the GitHub Actions app) so only a real workflow run satisfies it and no caller of the commit-status API can. strict policy is FALSE so a Dependabot PR does not churn a rebase on every unrelated merge."
+      },
+      {
+        "name": "production",
+        "target": "branch",
+        "enforcement": "active",
+        "include": ["refs/heads/production"],
+        "rules": ["deletion", "non_fast_forward"],
+        "forbidden_rules": ["pull_request"],
+        "why": "Forward-only, so Workers Builds cannot be handed a rewritten history. A pull_request rule here would break promote-production.yml, which is why its absence is asserted rather than merely unlisted."
+      }
+    ],
+
+    "code_scanning": {
+      "$comment": [
+        "CodeQL default setup. Same class as the rulesets above, and it arrived",
+        "here the same way: #241 curated this list, wrote the reasoning into",
+        "MAINTENANCE.md, and recorded that `infra:check` could not see it. That",
+        "sentence was true when written and is the exact shape of claim this file",
+        "exists to retire.",
+        "",
+        "UNLIKE the rulesets, this one is WORKSTATION-ONLY, and structurally so.",
+        "The endpoint answers 401 unauthenticated even on a public repo, and the",
+        "permission it actually wants is the repository ADMINISTRATION read, which",
+        "is not among the keys a workflow may grant its GITHUB_TOKEN (actions,",
+        "artifact-metadata, attestations, checks, code-quality, contents,",
+        "deployments, discussions, id-token, issues, models, packages, pages,",
+        "pull-requests, repository-projects, security-events, statuses). So no",
+        "`permissions:` block can switch it on in CI.",
+        "",
+        "`security-events: read` was added to ci.yml for exactly this and MEASURED",
+        "to do nothing: still HTTP 403 (2026-08-07). It has been removed, with a",
+        "note where it sat, because a permission that looks like it enables a check",
+        "and does not is worse than its absence. This is the mirror image of the",
+        "Workers Builds case above, where a Read variant of the permission existed",
+        "and made verification free. Here the only credential that can read it is a",
+        "classic PAT with `repo`, which is the broad standing credential this repo",
+        "deliberately keeps out of CI, so the answer is no and the check runs where",
+        "the owner runs it. CI says so in one advisory rather than pretending.",
+        "",
+        "WHAT DRIFT LOOKS LIKE HERE, and why each field is worth a check.",
+        "",
+        "`languages` is the curated decision. #241 dropped `rust` and `python`",
+        "because between them they cost about 3 of the scan's 4 minutes to analyze",
+        "four files, all of it workstation and CI build tooling that never answers",
+        "a request. Re-enabling either from the Security tab silently buys that",
+        "cost back, and nothing in this tree would notice.",
+        "",
+        "The list looks like four languages and is TWO jobs. `javascript`,",
+        "`javascript-typescript` and `typescript` are aliases GitHub keeps and",
+        "folds into one analysis. The declaration matches what the API returns",
+        "rather than the honest job count, because a checker comparing against the",
+        "prettier number would fail on a correct configuration.",
+        "",
+        "`threat_model` is what makes the language argument valid. `remote` is why",
+        "build tooling that never answers a request is safely out of scope. Flip it",
+        "to include local and the case for dropping rust and python weakens, so a",
+        "silent change there would leave MAINTENANCE.md arguing from a premise the",
+        "dashboard no longer holds.",
+        "",
+        "`state` is the one that matters most and is easiest to lose: `configured`",
+        "vs the scan simply being turned off. A disabled scanner reports nothing,",
+        "which reads identically to a clean scan.",
+        "",
+        "`query_suite` is declared because `extended` is a large cost change that",
+        "somebody could reasonably click without meaning to make it permanent."
+      ],
+      "state": "configured",
+      "languages": ["actions", "javascript", "javascript-typescript", "typescript"],
+      "query_suite": "default",
+      "threat_model": "remote",
+      "why": "Two analysis jobs, not four: the last three languages are aliases GitHub folds into one. rust and python were dropped 2026-08-06 (#241) as build tooling unreachable under the `remote` threat model."
+    }
+  }
+}

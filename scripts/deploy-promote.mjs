@@ -136,7 +136,7 @@ async function currentDeployment() {
 // one subcommand you reach for when you are trying to find out what is going on.
 async function productionAlias() {
   try {
-    const infra = JSON.parse(await readFile(new URL("../infra.json", import.meta.url), "utf8"));
+    const infra = JSON.parse(await readFile(new URL("../config/infra.json", import.meta.url), "utf8"));
     const branch = infra?.release?.production_branch;
     if (!branch) throw new Error("infra.json declares no release.production_branch");
     // Workers Builds sanitizes a branch name into an alias by replacing runs of
@@ -564,7 +564,7 @@ console.log(`\ndone. ${target.slice(0, 8)} is at ${steps[steps.length - 1]}%.`);
 // version reached 100%, not that someone intended it to. A ramp that aborts at
 // 10% leaves the entry staged, which is exactly what it is.
 if (steps[steps.length - 1] === 100) {
-  const file = new URL("../holding/_worker.js/checkpoints.json", import.meta.url);
+  const file = new URL("../www/_worker.js/checkpoints.json", import.meta.url);
   let staged = [];
   try {
     const committed = JSON.parse(await readFile(file, "utf8"));
