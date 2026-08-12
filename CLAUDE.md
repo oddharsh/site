@@ -109,6 +109,15 @@ pnpm run infra:check
 # CLOUDFLARE_API_TOKEN_WRITE. refuses to run in CI, by design.
 pnpm run infra:apply
 
+# roll the shared-compression dictionaries onto what production is SERVING.
+# .github/workflows/dictionary-roll.yml does this nightly and opens a PR; this is
+# the manual form. Sourced from the wire, so it is correct from any checkout.
+pnpm run dict:roll
+
+# is the dictionary tier actually operational, per surface class, in production?
+# advisory: it reads production, so never make it a required check.
+pnpm run dcz:check
+
 # regenerate JUST the EXIF metadata (after photos are already uploaded)
 ./www/scripts/extract-photo-metadata.sh "/Users/aadharsh/Downloads/to post (from ssd)"
 
@@ -270,13 +279,21 @@ worktrees may edit freely, but a worktree is not a release surface.
   (the one route that reports which VERSION answered — both versions read the
   same D1 changelog, so `/updates.json` structurally cannot tell them apart) and
   aborts on a non-200 or on a step that never took. `--to`, `--steps`,
-  `--status`, and `--rollback` are the other modes. It runs anywhere that can
-  authenticate: on a workstation from your wrangler login, and in
-  `.github/workflows/ramp.yml` from the scoped environment secret. The old flat
-  `if (process.env.CI) die()` is gone — `scripts/lib/release-guard.mjs` asks
+  `--status`, and `--rollback` are the other modes. The old flat
+  `if (process.env.CI) die()` is gone: `scripts/lib/release-guard.mjs` asks
   whether the process can authenticate instead, because a blanket CI ban refused
   the gated pipeline it was meant to protect while doing nothing about a ramp
   that starts unauthenticated and dies after traffic already moved.
+
+  **In practice the ramp is WORKSTATION-ONLY, from your wrangler login.** This
+  paragraph and the token note below described a `.github/workflows/ramp.yml`
+  running it from a scoped environment secret. Checked 2026-08-12 and none of it
+  exists: no such workflow in any commit, the environments are `copilot` and
+  `production` rather than the canary/full pair, and the only repo secret is the
+  six-read-scope `CLOUDFLARE_API_TOKEN`. What landed on 2026-08-06 was the guard
+  rewrite alone; the pipeline it was clearing the way for was never built. The
+  design is still the right one if anyone builds it, which is why it is kept
+  below rather than deleted. Read it as a PLAN.
 
   What the ramp buys is the ability to read a change before everyone gets it. The
   script deliberately pauses between steps and tells you to go look at Workers
@@ -462,12 +479,16 @@ worktrees may edit freely, but a worktree is not a release surface.
   input can exfiltrate whatever it can read, so WHERE the secret lives is the
   whole control.
 
-  The write token (`CLOUDFLARE_API_TOKEN_RAMP`, `Workers Scripts:Edit` + `D1:Edit`
-  and nothing more) is an ENVIRONMENT secret on `production-canary` and
-  `production-full`, never a repo secret. A job that does not name those
-  environments cannot see it, which is what keeps it out of reach of fork PRs.
-  `production-full` carries required reviewers, so majority traffic cannot move
-  without a human. `.github/workflows/ramp.yml` is the only consumer.
+  **NOT BUILT, and the whole block is a design rather than a description
+  (verified 2026-08-12).** The plan: a write token
+  (`CLOUDFLARE_API_TOKEN_RAMP`, `Workers Scripts:Edit` + `D1:Edit` and nothing
+  more) as an ENVIRONMENT secret on `production-canary` and `production-full`,
+  never a repo secret, so a job that does not name those environments cannot see
+  it and fork PRs cannot reach it, with required reviewers on `production-full`
+  so majority traffic cannot move without a human, and
+  `.github/workflows/ramp.yml` as the only consumer. None of the three exists
+  today. Keep the shape if you build it; the reasoning about WHERE a secret lives
+  is what makes it safe, and it is unchanged.
 
   **The default is still read-only, and adding a second write token is still a
   no.** CI's own token stays exactly as it was. Scope it to exactly these six
@@ -1719,9 +1740,24 @@ pnpm run deploy:direct
     because an `/a/` asset is content-addressed: a change mints a new URL, so its
     dictionary must be bytes the BROWSER already holds and no build can derive that
     from source. `pnpm run shell:roll` adopts the current shell and prunes to 3 per
-    asset; it stays a human step because it writes into the source tree, which
-    build.mjs must never do. Not urgent either — a dictionary 11 days stale still
-    gave 87-93%. `a-dict` is `.assetsignore`d (build input, not a public URL).
+    asset; it writes into the source tree, which build.mjs must never do, so it can
+    only ever land as a separate commit.
+
+    **"Not urgent" was wrong, and the cost of believing it was 161 commits.**
+    This said a dictionary 11 days stale still gave 87-93%, which is true of a
+    dictionary that is STALE and false of one that is ABSENT. Those are different
+    failures: the page tier degrades to the family corpus (~26%), while the shell
+    tier has no fallback and degrades to plain brotli. Measured 2026-08-12, the
+    last real roll was #178 on 2026-07-30 and every dictionary-carrying shell asset
+    production served (nav, luna, hoist, tooltip, lens) was missing from `a-dict`.
+    A returning visitor was taking 13.7 KB on the render-blocking path where the
+    deltas are 1.3 KB. `dcz:check` printed PASS the whole time (see below).
+
+    `.github/workflows/dictionary-roll.yml` runs the roll nightly against
+    production and opens a PR when anything moved. It cannot merge that PR:
+    `main` takes zero bypass actors, which is the property the release model rests
+    on, so the last step stays a human one deliberately. `a-dict` is
+    `.assetsignore`d (build input, not a public URL).
 
     **PAGES use two dictionary tiers.** build.mjs derives ONE raw 64KB family corpus
     from the staged documents, ships it at an immutable `/a/page-family.<hash8>.dict`,
@@ -1739,13 +1775,21 @@ pnpm run deploy:direct
     when they beat plain q11.
     `pnpm run shell:roll` rolls both `a-dict` and `p-dict`; page snapshots are Brotli'd
     in the repo, ignored by the asset upload, and decompressed only at build time.
-    **The two halves read different sources, and that is load-bearing rather than
-    incidental.** `a-dict` adopts from `.build/www/a` (so it is only valid from
-    the deployed commit), while `p-dict` fetches the LIVE pages, because an edge
-    feature can rewrite a document after this Worker and a snapshot derived from
-    source then matches nothing — see gotcha 20 for the WebMCP instance and the
-    measurement. `pnpm run pages:roll` rolls the page half alone, which is the repair
-    step when that happens; `--shell` is the other half.
+    **BOTH halves can read the wire now, and `--live` is how the scheduled roll
+    works.** `p-dict` has always fetched the LIVE pages, because an edge feature can
+    rewrite a document after this Worker and a snapshot derived from source then
+    matches nothing (gotcha 20, the WebMCP instance and the measurement). `a-dict`
+    adopted from `.build/www/a`, which was never WRONG the same way (nothing
+    rewrites js/css at the edge) but forced the roll to run from the deployed
+    commit. `pnpm run dict:roll` passes `--live` so the shell half reads production
+    too. That buys two things: a roll can run from anywhere, including a scheduled
+    job on an unramped `main`, and it captures what browsers are holding rather than
+    what this checkout happens to build. Adopting from a build can only ever capture
+    THIS commit's shell, so a release that went by without a roll is unrecoverable,
+    and on an unramped tree it adopts bytes nobody holds while evicting one still in
+    use (KEEP is 3). It refuses outright if production reads empty, because an empty
+    read hands the prune an empty `current` set, which is exactly when it is free to
+    evict what is live. `pnpm run pages:roll` still rolls the page half alone.
     RFC 9842 requires RAW bytes here: a `zstd --train` artifact is self-describing,
     the server library reads its tables, Chrome reads the same bytes as content, and
     the navigation dies on `ERR_CONTENT_DECODING_FAILED`.
@@ -1758,11 +1802,24 @@ pnpm run deploy:direct
     server-side proven (149-byte page delta decodes to the live page), svg OFF by
     design (Chromium's image loader chokes). `pnpm run dcz:check` asserts both page
     tiers against production, reading the family dictionary out of the live `Link`
-    header and the per-page candidate from `www/p-dict`. Roll SHELL
-    dictionaries FROM THE DEPLOYED BUILD (main, post-deploy), never from a feature
-    branch: the dictionary must be bytes browsers actually hold, and a branch build
-    is not that. (`shell:roll` writes into `www/a-dict/` the moment it runs —
-    if you run it to read the code, `git checkout -- www/a-dict` after.)
+    header and the per-page candidate from `www/p-dict`. With `pnpm run dict:roll`
+    the source is production for both halves, so the old "roll only from the deployed
+    build, never from a feature branch" rule is satisfied by construction rather than
+    by remembering it. Plain `shell:roll` still reads `.build/` and still carries that
+    requirement. (Either writes into `www/a-dict/` the moment it runs, so if you run one
+    to read the code, `git checkout -- www/a-dict` after.)
+
+    **`dcz:check`'s shell probe could only ever agree with itself, and the coverage
+    assertion beside it is the fix.** The probe picks an a-dict candidate that is NOT
+    the live hash, offers it, and asserts `dcz` comes back. build.mjs builds a delta
+    for every a-dict entry, so that is true by construction; it reads the live hash
+    only to EXCLUDE it. What a returning visitor actually asks is whether the bytes
+    THEY hold are covered, which is the same shape as the page tier's "committed
+    snapshots are WIRE bytes" assertion. `live shell is covered by a-dict` now asks
+    it. Bases with no a-dict history are skipped, since a newly shipped asset cannot
+    have a dictionary until it has been served once. Keep it ADVISORY: like
+    `infra:check`'s edge tier it reads production, so making it required would
+    deadlock the release that would clear it.
 
 15. **Attaching CDP's `Network` domain suppresses Chrome's Early-Hints preload,
     so a devtools-driven trace reports a FALSE "the browser ignores our 103."**
