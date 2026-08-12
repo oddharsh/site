@@ -61,8 +61,28 @@ permissions:
 concurrency:
   # Never two ramps at once. Two `wrangler versions deploy` calls interleaving
   # would fight over one traffic split, and the loser's percentages would win by
-  # arriving last rather than by being correct.
-  group: production-ramp
+  # arriving last rather than by being correct. So real ramps share ONE group and
+  # queue, and `cancel-in-progress` stays false because cancelling a run that has
+  # already moved traffic leaves production on a split nobody chose.
+  #
+  # The expression exists because a no-op must not join that queue. This workflow
+  # fires on `Promote production` COMPLETING, and a skipped promote completes, so
+  # every skipped promote spawns a ramp whose canary will decline to run. Observed
+  # on the first real release (2026-08-12): three such runs, each with ZERO jobs,
+  # stuck behind the one parked on the reviewer gate. Concurrency is evaluated
+  # BEFORE jobs, so they could not even reach their own guard to no-op — they just
+  # sat in the queue, and a genuinely new release would have sat behind them.
+  #
+  # A per-run group for those, so they start, skip, and end. This condition must
+  # stay identical to the `canary` job's `if`; they are the same question asked in
+  # two places GitHub does not let you share.
+  group: >-
+    ${{
+      (github.event_name == 'workflow_dispatch' ||
+       github.event.workflow_run.conclusion == 'success')
+      && 'production-ramp'
+      || format('production-ramp-noop-{0}', github.run_id)
+    }}
   cancel-in-progress: false
 
 jobs:

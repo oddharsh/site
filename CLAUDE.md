@@ -305,6 +305,29 @@ worktrees may edit freely, but a worktree is not a release surface.
   before; `release-guard.mjs` asks whether the process can authenticate rather
   than whether it is CI, which is what made both paths possible.
 
+  **Expect more `Ramp production` runs in the Actions tab than releases, and most
+  of them doing nothing.** It fires on `Promote production` COMPLETING, and a
+  skipped promote completes, so every skipped promote spawns a ramp whose `canary`
+  declines to run. On the first real release there were three. They are no-ops, and
+  since 2026-08-12 they take a per-run concurrency group so they start, skip and
+  end rather than queueing behind a ramp parked on the reviewer gate — concurrency
+  is evaluated BEFORE jobs, so previously they could not even reach their own guard
+  and just sat in line. Real ramps still share one group and serialize.
+
+  **A ramp waiting on approval is not stuck.** `waiting` is the environment gate
+  doing its job, and the way to tell it apart from a jam is to ask what it is
+  waiting for:
+
+  ```bash
+  gh api repos/oddharsh/site/actions/runs/<id>/pending_deployments \
+    --jq '.[] | {environment: .environment.name, current_user_can_approve}'
+  ```
+
+  An approvable row means click it. Note also that `gh run view --log` refuses a
+  run that has not finished, so the canary's own output is unreadable until the
+  `full` job resolves; `pnpm run deploy:promote -- --status` answers what is
+  serving regardless and does not depend on the run at all.
+
   Three things about it that are load-bearing rather than incidental:
 
   - **It checks out `production`, never `main`.** The ramp writes the D1 changelog
