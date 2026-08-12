@@ -348,6 +348,9 @@ body:has(.window),body:has(.np-window),body:has(.wrap){overflow:hidden !importan
    its honest thin rendering (the downgrade the blueprint priced). The
    28px .axp-sb-pad gutter is gone too — a classic bar occupies layout.
 
+   Serendipity is the nested exception: it keeps its sidebar fixed and scrolls
+   .window>.body>.content, so that real scroller belongs in every rule below.
+
    The reset to auto is what makes that first clause TRUE, and it was missing
    until 2026-08-07. Chromium discards every ::-webkit-scrollbar rule on an
    element whose used scrollbar-color is not auto, and scrollbar-color
@@ -366,17 +369,17 @@ body:has(.window),body:has(.np-window),body:has(.wrap){overflow:hidden !importan
    obvious choice and is the one candidate the build breaks: Lightning CSS
    un-prefixes it to (appearance:none), which Chromium supports, so the query
    flips true and silently restores the exact bug this rule fixes. */
-.window>.content,.window>.body,.np-text{scrollbar-color:auto}
-@supports (not selector(::-webkit-scrollbar)) or selector(:-moz-focusring){.window>.content,.window>.body,.np-text{scrollbar-color:oklch(63% 0.16 257) oklch(92% 0.015 250)}}
-.window>.content::-webkit-scrollbar,.window>.body::-webkit-scrollbar,.np-text::-webkit-scrollbar{width:16px;height:16px}
-.window>.content::-webkit-scrollbar-track,.window>.body::-webkit-scrollbar-track,.np-text::-webkit-scrollbar-track{background:oklch(92% 0.015 250);box-shadow:inset 1px 0 0 oklch(72% 0.03 250),inset -1px 0 0 oklch(100% 0 0)}
-.window>.content::-webkit-scrollbar-thumb,.window>.body::-webkit-scrollbar-thumb,.np-text::-webkit-scrollbar-thumb{border:1px solid;border-color:oklch(88% 0.05 256) oklch(46% 0.15 260) oklch(46% 0.15 260) oklch(88% 0.05 256);background:linear-gradient(90deg,oklch(80% 0.08 256),oklch(63% 0.16 257));box-shadow:inset 1px 1px 0 oklch(92% 0.06 250)}
-.window>.content::-webkit-scrollbar-thumb:hover,.window>.body::-webkit-scrollbar-thumb:hover,.np-text::-webkit-scrollbar-thumb:hover{background:linear-gradient(90deg,oklch(84% 0.09 256),oklch(67% 0.17 257))}
-.window>.content::-webkit-scrollbar-button:single-button,.window>.body::-webkit-scrollbar-button:single-button,.np-text::-webkit-scrollbar-button:single-button{height:16px;border:1px solid;border-color:oklch(100% 0 0) oklch(50% 0.04 260) oklch(50% 0.04 260) oklch(100% 0 0);background-color:oklch(94% 0.02 255);background-image:linear-gradient(180deg,oklch(98% 0.01 255),oklch(86% 0.03 256));background-repeat:no-repeat;background-position:center}
-.window>.content::-webkit-scrollbar-button:single-button:active,.window>.body::-webkit-scrollbar-button:single-button:active,.np-text::-webkit-scrollbar-button:single-button:active{border-color:oklch(50% 0.04 260) oklch(100% 0 0) oklch(100% 0 0) oklch(50% 0.04 260)}
-.window>.content::-webkit-scrollbar-button:single-button:vertical:decrement,.window>.body::-webkit-scrollbar-button:single-button:vertical:decrement,.np-text::-webkit-scrollbar-button:single-button:vertical:decrement{background-image:linear-gradient(180deg,oklch(98% 0.01 255),oklch(86% 0.03 256)),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='7' height='4'%3E%3Cpath d='M3.5 0 7 4H0Z' fill='%23343e52'/%3E%3C/svg%3E");background-blend-mode:multiply}
-.window>.content::-webkit-scrollbar-button:single-button:vertical:increment,.window>.body::-webkit-scrollbar-button:single-button:vertical:increment,.np-text::-webkit-scrollbar-button:single-button:vertical:increment{background-image:linear-gradient(180deg,oklch(98% 0.01 255),oklch(86% 0.03 256)),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='7' height='4'%3E%3Cpath d='M3.5 4 0 0h7Z' fill='%23343e52'/%3E%3C/svg%3E");background-blend-mode:multiply}
-.window>.content::-webkit-scrollbar-corner,.window>.body::-webkit-scrollbar-corner,.np-text::-webkit-scrollbar-corner{background:oklch(92% 0.015 250)}
+.window>.content,.window>.body,.window>.body>.content,.np-text{scrollbar-color:auto}
+@supports (not selector(::-webkit-scrollbar)) or selector(:-moz-focusring){.window>.content,.window>.body,.window>.body>.content,.np-text{scrollbar-color:oklch(63% 0.16 257) oklch(92% 0.015 250)}}
+.window>.content::-webkit-scrollbar,.window>.body::-webkit-scrollbar,.window>.body>.content::-webkit-scrollbar,.np-text::-webkit-scrollbar{width:16px;height:16px}
+.window>.content::-webkit-scrollbar-track,.window>.body::-webkit-scrollbar-track,.window>.body>.content::-webkit-scrollbar-track,.np-text::-webkit-scrollbar-track{background:oklch(92% 0.015 250);box-shadow:inset 1px 0 0 oklch(72% 0.03 250),inset -1px 0 0 oklch(100% 0 0)}
+.window>.content::-webkit-scrollbar-thumb,.window>.body::-webkit-scrollbar-thumb,.window>.body>.content::-webkit-scrollbar-thumb,.np-text::-webkit-scrollbar-thumb{border:1px solid;border-color:oklch(88% 0.05 256) oklch(46% 0.15 260) oklch(46% 0.15 260) oklch(88% 0.05 256);background:linear-gradient(90deg,oklch(80% 0.08 256),oklch(63% 0.16 257));box-shadow:inset 1px 1px 0 oklch(92% 0.06 250)}
+.window>.content::-webkit-scrollbar-thumb:hover,.window>.body::-webkit-scrollbar-thumb:hover,.window>.body>.content::-webkit-scrollbar-thumb:hover,.np-text::-webkit-scrollbar-thumb:hover{background:linear-gradient(90deg,oklch(84% 0.09 256),oklch(67% 0.17 257))}
+.window>.content::-webkit-scrollbar-button:single-button,.window>.body::-webkit-scrollbar-button:single-button,.window>.body>.content::-webkit-scrollbar-button:single-button,.np-text::-webkit-scrollbar-button:single-button{height:16px;border:1px solid;border-color:oklch(100% 0 0) oklch(50% 0.04 260) oklch(50% 0.04 260) oklch(100% 0 0);background-color:oklch(94% 0.02 255);background-image:linear-gradient(180deg,oklch(98% 0.01 255),oklch(86% 0.03 256));background-repeat:no-repeat;background-position:center}
+.window>.content::-webkit-scrollbar-button:single-button:active,.window>.body::-webkit-scrollbar-button:single-button:active,.window>.body>.content::-webkit-scrollbar-button:single-button:active,.np-text::-webkit-scrollbar-button:single-button:active{border-color:oklch(50% 0.04 260) oklch(100% 0 0) oklch(100% 0 0) oklch(50% 0.04 260)}
+.window>.content::-webkit-scrollbar-button:single-button:vertical:decrement,.window>.body::-webkit-scrollbar-button:single-button:vertical:decrement,.window>.body>.content::-webkit-scrollbar-button:single-button:vertical:decrement,.np-text::-webkit-scrollbar-button:single-button:vertical:decrement{background-image:linear-gradient(180deg,oklch(98% 0.01 255),oklch(86% 0.03 256)),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='7' height='4'%3E%3Cpath d='M3.5 0 7 4H0Z' fill='%23343e52'/%3E%3C/svg%3E");background-blend-mode:multiply}
+.window>.content::-webkit-scrollbar-button:single-button:vertical:increment,.window>.body::-webkit-scrollbar-button:single-button:vertical:increment,.window>.body>.content::-webkit-scrollbar-button:single-button:vertical:increment,.np-text::-webkit-scrollbar-button:single-button:vertical:increment{background-image:linear-gradient(180deg,oklch(98% 0.01 255),oklch(86% 0.03 256)),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='7' height='4'%3E%3Cpath d='M3.5 4 0 0h7Z' fill='%23343e52'/%3E%3C/svg%3E");background-blend-mode:multiply}
+.window>.content::-webkit-scrollbar-corner,.window>.body::-webkit-scrollbar-corner,.window>.body>.content::-webkit-scrollbar-corner,.np-text::-webkit-scrollbar-corner{background:oklch(92% 0.015 250)}
 /* the Run list takes the Luna thumb colours too, but it isn't a window, so it gets
    no gutter and no ::-webkit dressing — just the browser's own bar, tinted. */
 #axp-run .list{scrollbar-color:oklch(62% 0.14 255) oklch(90% 0.02 250)}
