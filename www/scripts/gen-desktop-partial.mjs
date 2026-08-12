@@ -13,7 +13,7 @@
 // curl and JavaScript-off visits see the same desktop as production. build.mjs
 // independently renders these artifacts and hard-fails on any drift.
 
-import { readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { readManifest } from "../../scripts/gen-manifest.mjs";
 import { DESKTOP, PROFILES, SECTION_ICONS, SPECULATION, TASKBAR, TRAY_ITEMS } from "./shell-data.mjs";
@@ -89,7 +89,8 @@ export function renderDesktopArtifacts(surfaces = readManifest().surfaces) {
 
   const pinsHtml = TASKBAR.map((item) => {
     const name = `pin-${item.label.replace(/\s+/g, "-")}`;
-    return `<a class="axp-pin" title="${esc(item.hint)}" href="${esc(item.path)}" data-count="${counts.get(item.path) || 0}">`
+    const favicon = `/section-icons/${item.label.replace(/\s+/g, "-")}.svg`;
+    return `<a class="axp-pin" title="${esc(item.hint)}" href="${esc(item.path)}" data-count="${counts.get(item.path) || 0}" data-favicon="${favicon}">`
       + `<span class="fav" aria-hidden="true">${spriteRef(name, SECTION_ICONS[item.label])}</span>`
       + `<span class="lbl">${esc(item.label)}</span></a>`;
   }).join("");
@@ -125,7 +126,12 @@ export function renderDesktopArtifacts(surfaces = readManifest().surfaces) {
     + cells.map((cell) => `<g transform="translate(0 ${cell.dy})">${cell.inner}</g>`).join("")
     + "</svg>\n";
 
-  return { desktopHtml, chromeHtml, moduleSource, sprite };
+  const favicons = Object.fromEntries(TASKBAR.map((item) => [
+    item.label.replace(/\s+/g, "-"),
+    `${SECTION_ICONS[item.label].replace("<svg ", '<svg width="32" height="32" ')}\n`,
+  ]));
+
+  return { desktopHtml, chromeHtml, moduleSource, sprite, favicons };
 }
 
 const navScript = /<script\b[^>]*\bsrc=["']\/nav\.js["'][^>]*><\/script>/i;
@@ -160,6 +166,10 @@ function main() {
   const artifacts = renderDesktopArtifacts();
   writeFileSync("www/_worker.js/lib/desktop.js", artifacts.moduleSource);
   writeFileSync("www/icons.svg", artifacts.sprite);
+  mkdirSync("www/section-icons", { recursive: true });
+  for (const [name, svg] of Object.entries(artifacts.favicons)) {
+    writeFileSync(`www/section-icons/${name}.svg`, svg);
+  }
   let patched = 0;
   for (const file of staticShellPages()) {
     const source = readFileSync(file, "utf8");
@@ -169,6 +179,7 @@ function main() {
   }
   console.log(`lib/desktop.js: top ${artifacts.desktopHtml.length}B, chrome ${artifacts.chromeHtml.length}B`);
   console.log(`www/icons.svg: ${artifacts.sprite.length}B`);
+  console.log(`www/section-icons: ${Object.keys(artifacts.favicons).length} compiled favicons`);
   console.log(`patched ${patched} static pages with the canonical desktop partial`);
 }
 
