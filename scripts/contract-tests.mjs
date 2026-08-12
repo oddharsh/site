@@ -24,6 +24,7 @@ import {
   validateLensTarget,
 } from "../www/_worker.js/lens.js";
 import { EXECUTION_META, EXECUTION_PROBE, executionChecks } from "../www/_worker.js/lib/agent-execution.js";
+import { httpWords } from "./check-agent.mjs";
 import { lensReadiness } from "../www/_worker.js/lens.js";
 import { lensRecipe, lensRecipeIds, lensRecipeScript } from "../www/_worker.js/lens-recipes.js";
 import { handleCoffeeAvailability, readCoffeeAvailability } from "../www/_worker.js/coffee.js";
@@ -6402,4 +6403,33 @@ test("an unrendered scan does not enlarge the readiness denominator", () => {
   assert.equal(rendered.counted - noRender.counted, 2, "exactly the two execution checks join the denominator");
   assert.ok(/neutral/.test(noRender.scoringNote) && /render/.test(noRender.scoringNote),
     "the published scoring note has to explain the neutral rule, since the number is shown to strangers");
+});
+
+test("the agent check's word count strips a script closed any legal way", () => {
+  // CodeQL, on #353. An end tag may carry attributes and may hold whitespace, so
+  // `</script >` and `</script bar>` close a script element as surely as
+  // `</script>` does, and a stripper spelled the short way hands the whole body
+  // through. Same class and same fix as #347.
+  //
+  // Behavioural rather than a source-shape assertion, because the short spelling
+  // LOOKS right: the old regex leaked `var leak=1;` into the count as three
+  // words, which inflated the HTTP side of the legible-without-JavaScript
+  // comparison and so made a page read as more legible than it is.
+  for (const html of [
+    "<p>keep</p><script>var leak=1;</script>tail",
+    "<p>keep</p><script >var leak=1;</script >tail",
+    "<p>keep</p><script>var leak=1;</script bar>tail",
+    "<p>keep</p><script\ntype=\"module\">var leak=1;</script\n>tail",
+  ]) {
+    assert.equal(httpWords(html), 2, `script body leaked into the count: ${html}`);
+  }
+  for (const html of [
+    "<p>keep</p><style>.x{color:red}</style>tail",
+    "<p>keep</p><style >.x{color:red}</style >tail",
+    "<p>keep</p><style>.x{color:red}</style bar>tail",
+  ]) {
+    assert.equal(httpWords(html), 2, `style body leaked into the count: ${html}`);
+  }
+  // And the ordinary path still counts what it should.
+  assert.equal(httpWords("<h1>one two</h1><p>three</p>"), 3, "prose must survive the strip");
 });

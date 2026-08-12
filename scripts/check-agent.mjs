@@ -63,11 +63,20 @@ const SAMPLE = ["/", "/writing", "/garage", "/garage/horizon", "/terminal", "/le
 
 const log = (m) => { if (!WANT_JSON) console.log(m); };
 
-/** Words a plain GET yields, with scripts and styles removed and tags stripped. */
-function httpWords(html) {
+/**
+ * Words a plain GET yields, with scripts and styles removed and tags stripped.
+ *
+ * The closers are `<\/tag\b[^>]*>` rather than `<\/tag>` because an end tag may
+ * carry attributes: `</script bar>` and `</script >` both close a script element
+ * as surely as `</script>` does. Spelling it the short way hands the whole body
+ * through, and every word of it lands in the count this feeds. Same fix and same
+ * reasoning as #347, which closed this class across the tree; lens.js carries the
+ * long version of the argument beside its own strippers.
+ */
+export function httpWords(html) {
   const text = html
-    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script\b[^>]*>/gi, " ")
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style\b[^>]*>/gi, " ")
     .replace(/<[^>]+>/g, " ")
     .replace(/&[a-z#0-9]+;/gi, " ");
   return text.split(/\s+/).filter(Boolean).length;
@@ -259,7 +268,13 @@ async function main() {
   process.exit(failures ? 1 : 0);
 }
 
-main().catch((e) => {
-  console.error(e && e.stack ? e.stack : String(e));
-  process.exit(2);
-});
+// Guarded so the contract suite can import httpWords without launching a browser
+// and scanning production. The behavioural test is the point: an earlier version
+// of this stripper passed a source-shape assertion while still leaking script
+// bodies into the word count.
+if (import.meta.main) {
+  main().catch((e) => {
+    console.error(e && e.stack ? e.stack : String(e));
+    process.exit(2);
+  });
+}
