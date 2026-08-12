@@ -751,6 +751,47 @@ If either chunk fails (KV empty, R2 missing, etc.), the rewriter silently
 skips and the inline JS in `index.html` takes over with a client-side
 fetch.
 
+### Moving a page: what checks it, and what does not
+
+Renaming or moving a page used to leave every page LINKING to it pointing at a
+404, and nothing in the repo noticed. `routes:check` sweeps the routes it is
+TOLD about, which is the forward direction. Build invariant #1 asserts the
+Worker's routes reach `run_worker_first`. Neither one reads an href.
+
+**`scripts/lib/link-integrity.mjs`, run as a build invariant, closes that.** Every
+same-origin `href`/`src` in the minified documents has to resolve to a real staged
+file, a `<path>.html`, a Worker `ROUTES` key, a registered surface, or a dynamic
+namespace. 2645 refs across 48 documents in ~45ms, so it is COMPLETE rather than
+scoped to the diff: a diff-scoped version would be more code and would miss the
+case where the moved page is not in the diff and its dependents are.
+
+Two things about it are worth knowing before editing it.
+
+**`run_worker_first` cannot be the resolver on its own.** It answers "does the
+Worker SEE this request", not "does this path SERVE a page", and it carries
+`/garage/*` and `/lwe/*` — the namespaces holding most of the site's pages. A
+glob-only resolver called `/garage/renamed-page` fine, measured on a deliberately
+broken ref. So a namespace that already holds registered surfaces is GOVERNED by
+the registry: a path in it must be registered or be a real file, and the glob buys
+it nothing. The governed set is derived from `site-manifest.json`, so adding a
+section governs it with no edit here.
+
+**The scanner is quote-aware because minify-html unquotes attributes.** The served
+bytes carry `href=/coffee` far more often than `href="/coffee"`, and the first
+draft, written against the quoted form, reported 33 refs where there were 2645 and
+passed with a straight face. That is the third naive scanner this repo's minified
+output has caught.
+
+What this does NOT cover, deliberately:
+
+- **Prose mentions of a path** in docs or page copy. CLAUDE.md discusses routes
+  that were deliberately deleted (`/lens/rendered`), so asserting every `/path`
+  string in prose resolves would false-fire on its own history.
+- **The Run palette and nav fences**, which are generated from the registry and
+  asserted by invariant #8 instead.
+- **Off-origin links.** A dead third-party URL is a different job and needs the
+  network.
+
 ### Markdown twins (`scripts/gen-md-twins.mjs`)
 
 Every page with prose ships a Markdown twin at `<path>.md`, and the two big
