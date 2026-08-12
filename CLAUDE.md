@@ -526,27 +526,36 @@ worktrees may edit freely, but a worktree is not a release surface.
   `Workers Scripts:Edit` + `D1:Edit` "and nothing else" from 2026-08-06 while no
   such token existed, so the list was never checked against a running ramp:
 
-  | permission | why | how sure |
-  |---|---|---|
-  | Account · Workers Scripts · **Edit** | `versions list`, `deployments status`, `versions deploy` | certain, it writes the traffic split |
-  | Account · D1 · **Edit** | `SELECT` the shipped vnums, `INSERT` the changelog row | certain |
-  | Account · Account Settings · **Read** | wrangler resolves the account | likely |
-  | User · User Details · **Read** | wrangler's identity call | SPECULATIVE |
-  | User · Memberships · **Read** | same | SPECULATIVE |
+  | permission | why |
+  |---|---|
+  | Account · Workers Scripts · **Edit** | `versions list`, `deployments status`, `versions deploy` |
+  | Account · D1 · **Edit** | `SELECT` the shipped vnums, `INSERT` the changelog row |
+  | Account · Account Settings · **Read** | wrangler resolves the account |
+
+  **Three Account permissions, and NO User-scoped ones. Measured 2026-08-12** with
+  a real token: `CI=1 … deploy:promote -- --dry-run` resolved a target, printed the
+  current split, and skipped two non-production versions by alias, all without
+  `User Details:Read` or `Memberships:Read`. An earlier version of this table listed
+  those two, inferred from the token Workers Builds generates for itself; they are
+  not needed and are also unavailable on an account-owned token, so listing them
+  sent somebody looking for a category that was never there.
+
+  What the dry run does NOT prove is the two **Edit** halves: it only reads, so a
+  token holding `Workers Scripts:Read` would satisfy it too. `versions deploy` and
+  the D1 `INSERT` are first exercised on a real ramp, and the D1 one fails quietly
+  (see below).
 
   Restrict Account Resources to this one account. **Workers Routes, KV and R2 are
   NOT needed**, which is where this is narrower than the token Workers Builds
   generates for itself: a ramp shifts traffic between versions that already exist
   and never uploads one, so it needs neither the storage scopes nor routes.
 
-  **Start with the three Account rows and verify, rather than collecting all five.**
-  The two User rows were inferred from Workers Builds' auto-generated token, not
-  from anything the ramp is known to call, and `CLOUDFLARE_ACCOUNT_ID` is passed
-  explicitly precisely so wrangler need not enumerate anything. They are also
-  awkward to grant: **User-scoped permissions exist only on USER-owned tokens**
-  (scope `com.cloudflare.api.user`, under My Profile, API Tokens). An account-owned
-  token created from Manage Account does not offer the category at all, which reads
-  like a missing option and is a token-type difference.
+  Why `CLOUDFLARE_ACCOUNT_ID` is what replaces the identity scopes: it is passed
+  explicitly so wrangler never has to enumerate accounts, which is the call those
+  User permissions would have been for. **User-scoped permissions exist only on
+  USER-owned tokens** anyway (scope `com.cloudflare.api.user`, under My Profile,
+  API Tokens); an account-owned token created from Manage Account does not offer the
+  category at all, which reads like a missing option and is a token-type difference.
 
   The control, which moves nothing:
 
