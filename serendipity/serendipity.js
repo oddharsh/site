@@ -266,8 +266,10 @@ function shellCss() {
   @supports (color: contrast-color(red)){ .ava{ color:contrast-color(var(--ab)); text-shadow:none } }
   /* event description, collapsed-but-findable. hidden="until-found" keeps the text
      in the DOM (Ctrl-F + #:~:text= deep-links auto-reveal it on Chrome/Safari) while
-     the page stays compact; the button is the manual reveal. */
+     the page stays compact; the button is the manual reveal. The state leaves a
+     generated box in layout, so strip its chrome until the browser removes hidden. */
   .evdesc{white-space:pre-wrap;margin:0 0 16px;padding:10px 12px;background:oklch(98% 0.005 250);border:1px solid oklch(85% 0.015 250);border-radius:0;font-size:12px;color:oklch(28% 0.01 250);max-width:64ch}
+  .evdesc[hidden="until-found"]{margin:0;padding:0;border:0}
   .att .who{min-width:0;flex:1}
   .att .who .n{font-weight:bold;color:oklch(20% 0.02 255)}
   .att .who .sub{font-size:11px;color:oklch(45% 0.01 250);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
