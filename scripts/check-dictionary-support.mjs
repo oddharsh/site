@@ -36,6 +36,59 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
     report("shell js (nav)", ce === "dcz", `ce=${ce} vs candidate ${cand}`);
   }
 }
+// 1b. shell COVERAGE: is the a-dict set built against the bytes browsers actually HOLD?
+//
+// Probe 1 above offers a committed candidate and asserts the worker answers dcz. That is
+// true by construction: build.mjs builds a delta for every a-dict entry, so the probe can
+// only ever agree with itself. It reads the live hash purely to EXCLUDE it.
+//
+// The question a returning visitor asks is the opposite one. They hold whatever `/a/` asset
+// production served them last, they offer ITS hash, and they get a delta only if that hash
+// was in a-dict when the new version was built. So the assertion is coverage of the LIVE
+// shell, which is the same shape as the "committed snapshots are WIRE bytes" check the page
+// tier already has (gotcha 20). Without it the shell tier can go months uncovered while every
+// row here reads PASS. Measured 2026-08-12, live nav.1c6af07b.js and luna.1523f4f6.css were
+// absent while a-dict still held the three candidates from #178 on 2026-07-30.
+//
+// Bases with no a-dict entry at all are SKIPPED, not failed: a newly shipped asset cannot
+// have a dictionary until it has been served once, and `pnpm run shell:roll` adopts it on the
+// next roll. What this catches is a base that HAS a history and whose live bytes are missing
+// from it, which is the drift that matters.
+//
+// Advisory on purpose. Like infra:check's edge tier this reads production, so it stays red
+// until a deploy fixes it. Do NOT make dcz:check a required check or it deadlocks the very
+// release that would clear it.
+{
+  const committed = (await readdir("www/a-dict")).filter((n) => /\.[0-9a-f]{8}\.(js|css)$/.test(n));
+  const bases = new Set(committed.map((n) => n.replace(/\.[0-9a-f]{8}\.(js|css)$/, "")));
+
+  // Two pages, because no single document references every dictionary-carrying asset:
+  // the homepage pulls nav + luna, /lens pulls lens.js on top of them.
+  const refs = new Map();
+  for (const path of ["/", "/lens"]) {
+    const html = await (await fetch(`https://aadhar.sh${path}`, { headers: { "accept-encoding": "identity" } })).text();
+    for (const [, name] of html.matchAll(/\/a\/([\w-]+\.[0-9a-f]{8}\.(?:js|css))/g)) {
+      refs.set(name, name.replace(/\.[0-9a-f]{8}\.(js|css)$/, ""));
+    }
+  }
+
+  const tracked = [...refs].filter(([, base]) => bases.has(base));
+  const missing = [];
+  for (const [name] of tracked) {
+    if (!committed.includes(name)) { missing.push(name); continue; }
+    // A matching FILENAME is not a matching dictionary. The hash is only 8 hex of a
+    // sha256, and the browser keys on the full digest of the bytes it stored, so the
+    // committed copy has to be those bytes exactly.
+    const served = Buffer.from(await (await fetch(`https://aadhar.sh/a/${name}`, { headers: { "accept-encoding": "identity" } })).arrayBuffer());
+    if (!served.equals(await readFile(`www/a-dict/${name}`))) missing.push(`${name} (filename matches, bytes do not)`);
+  }
+  const skipped = [...refs].filter(([, base]) => !bases.has(base)).map(([n]) => n);
+  report("live shell is covered by a-dict", missing.length === 0,
+         missing.length
+           ? `run \`pnpm run shell:roll\` from the DEPLOYED commit. Uncovered: ${missing.join(", ")}`
+           : `${tracked.length} live asset(s) present in a-dict${skipped.length ? `; ${skipped.length} untracked base(s) skipped: ${skipped.join(", ")}` : ""}`);
+}
+
 // 2. page html — exercise both dictionary tiers. The family dictionary is read from
 // the production page's Link header; the per-page candidate is a committed snapshot
 // of the previous release. Both are real Available-Dictionary values a browser can

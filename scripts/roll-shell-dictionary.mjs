@@ -81,6 +81,20 @@ const only = process.argv.includes("--pages") ? "pages"
            : process.argv.includes("--shell") ? "shell"
            : "both";
 
+// --live sources the SHELL half from production instead of the built tree, which is
+// the same argument the page half makes below: a dictionary is matched by the SHA-256
+// the browser computed over the body it STORED, so the bytes worth committing are the
+// bytes production actually delivered.
+//
+// For `/a/` assets the two are normally identical (no edge feature rewrites js/css the
+// way WebMCP rewrites HTML), so this is not a correctness fix the way the page half was.
+// What it buys is that adoption no longer has to run FROM the deployed commit. Reading
+// the built tree can only ever capture the shell THIS checkout builds, so a release that
+// went by without a roll is unrecoverable, and an unramped checkout would adopt bytes no
+// browser holds and evict one that is still in use (KEEP is 3). Reading the wire captures
+// whatever is live, from anywhere, which is what lets a scheduled job do this unattended.
+const live = process.argv.includes("--live");
+
 const BUILT = ".build/www/a";
 const DICTS = "www/a-dict";
 // Each extra candidate costs one delta per asset per deploy and widens the cache-variant
@@ -96,23 +110,54 @@ const parse = (n) => {
   return m ? { base: m[1], hash8: m[2], ext: m[3], name: n } : null;
 };
 
-if (!existsSync(BUILT)) {
+if (!live && !existsSync(BUILT)) {
   console.error(`shell:roll — ${BUILT} is missing. Run \`node scripts/build.mjs\` first: the /a/ hashes`);
   console.error("  come from the MINIFIED bytes, so the built tree is the only place they exist.");
+  console.error("  Or pass --live to adopt what production is serving instead, which needs no build.");
   process.exit(1);
+}
+
+// The live shell, read the way the page half reads pages. No single document references
+// every dictionary-carrying asset, so this walks a few: the homepage pulls nav + luna +
+// hoist + tooltip, /lens pulls lens.js, an LWE page pulls lwe-base.css and quiz.js.
+async function liveShell() {
+  const names = new Set();
+  for (const path of ["/", "/lens", "/lwe/utf8", "/writing"]) {
+    let r;
+    try { r = await fetch(`${ORIGIN}${path}`, { headers: { "accept-encoding": "identity" } }); }
+    catch (e) { console.log(`  skipped ${path} (${e.message})`); continue; }
+    if (!r.ok) { console.log(`  skipped ${path} (HTTP ${r.status})`); continue; }
+    for (const [, n] of (await r.text()).matchAll(/\/a\/([\w-]+\.[0-9a-f]{8}\.(?:js|css))/g)) names.add(n);
+  }
+  // Abort rather than adopt nothing. An empty read means production is down or the ref
+  // shape moved, and continuing would hand the prune below an empty `current` set, which
+  // is precisely when it is free to evict the bytes browsers are holding.
+  if (!names.size) {
+    console.error(`shell:roll --live: no /a/ references found at ${ORIGIN}. Refusing to roll.`);
+    process.exit(1);
+  }
+  return [...names].map(parse).filter(Boolean);
 }
 
 if (only === "pages") console.log("shell:roll — --pages given, leaving www/a-dict/ alone.");
 else {
 await mkdir(DICTS, { recursive: true });
-const shell = (await readdir(BUILT)).map(parse).filter(Boolean);
+const shell = live ? await liveShell() : (await readdir(BUILT)).map(parse).filter(Boolean);
+console.log(`shell:roll: ${shell.length} candidate(s) from ${live ? `${ORIGIN} (live)` : BUILT}`);
 let adopted = 0;
 for (const a of shell) {
   if (existsSync(`${DICTS}/${a.name}`)) continue;
-  await writeFile(`${DICTS}/${a.name}`, await readFile(`${BUILT}/${a.name}`));
+  const bytes = live
+    ? Buffer.from(await (await fetch(`${ORIGIN}/a/${a.name}`, { headers: { "accept-encoding": "identity" } })).arrayBuffer())
+    : await readFile(`${BUILT}/${a.name}`);
+  await writeFile(`${DICTS}/${a.name}`, bytes);
   adopted++;
   console.log(`adopted ${a.name}`);
 }
+// Whatever is live must survive the prune: those are the bytes browsers hold right now,
+// so evicting one is the exact failure this roll exists to prevent. Same protection the
+// page half gives its currently-served snapshots.
+const currentShell = new Set(shell.map((a) => a.name));
 
 // Prune per base, so a rarely-changing asset (icons.svg) keeps its history instead of being
 // evicted by a churny neighbour (nav.js). Ordering is COMMIT time, not mtime, for the reason
@@ -125,7 +170,7 @@ for (const d of (await readdir(DICTS)).map(parse).filter(Boolean)) {
 let pruned = 0;
 for (const [, group] of byBase) {
   if (group.length <= KEEP) continue;
-  for (const g of await oldestFirst(DICTS, group, { keep: KEEP })) {
+  for (const g of await oldestFirst(DICTS, group, { keep: KEEP, current: currentShell })) {
     await rm(`${DICTS}/${g.name}`, { force: true });
     pruned++;
     console.log(`pruned ${g.name}`);

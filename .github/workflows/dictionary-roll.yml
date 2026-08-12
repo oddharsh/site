@@ -1,0 +1,162 @@
+name: Dictionary roll
+
+# The dictionary sets are the one build input no build step may produce.
+#
+# `/a/` assets and pages are content-addressed, so a change mints a new URL. A
+# returning visitor still holds the OLD bytes, offers their hash, and earns a
+# delta only if those exact bytes were committed here when the new version was
+# built. build.mjs cannot derive that from source: it would have to know what a
+# browser is holding. So the sets are committed, and committing them is a step a
+# human has to remember.
+#
+# Nobody remembered. Measured 2026-08-12: the last real roll was #178 on
+# 2026-07-30, 161 commits earlier, and every dictionary-carrying shell asset
+# production was serving (nav, luna, hoist, tooltip, lens) was absent from
+# www/a-dict. Returning visitors were taking plain brotli on the render-blocking
+# path: 13.7 KB where the deltas are 1.3 KB. `pnpm run dcz:check` reported PASS
+# throughout, because its shell probe offers a COMMITTED candidate and so could
+# only ever agree with itself. That probe now has a coverage assertion beside it,
+# and this job is what acts on it.
+#
+# Shape borrowed from perf-history.yml: nightly, skip when there is nothing to
+# say, and never push to a protected branch. The difference is the destination.
+# perf-history writes to a machine-owned branch nothing builds from; dictionaries
+# have to reach `main`, and `main`'s ruleset has ZERO bypass actors on purpose.
+# So this opens a PR and stops. A bot PR is still a PR.
+
+on:
+  schedule:
+    - cron: "30 9 * * *" # 09:30 UTC, after perf-history has taken its snapshot
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # One writer on the roll branch. Two runs force-pushing the same ref would race,
+  # and the loser's adoption is silently dropped.
+  group: dictionary-roll
+  cancel-in-progress: false
+
+jobs:
+  roll:
+    name: Roll against production, open a PR if anything moved
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      # Both are GITHUB token scopes, so the standing rule about never giving CI a
+      # Cloudflare token that can write is untouched, since this job holds no Cloudflare
+      # credential at all. `--live` reads production over plain HTTPS.
+      #
+      # `contents: write` reaches only the roll branch below. It CANNOT reach `main`
+      # or `production`: both carry rulesets with zero bypass actors, which is the
+      # property the whole release model rests on and which this job must not become
+      # the exception to.
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Check out main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The prune orders candidates by COMMIT time (gotcha 20: a checkout stamps
+          # every file with the checkout time, so mtime ordering in a fresh worktree
+          # is meaningless). That needs real history, not a shallow clone.
+          fetch-depth: 0
+
+      - name: Install pnpm
+        # package.json's packageManager field is the source of truth; this pins the
+        # same version so no self-switch is attempted (gotcha 30).
+        run: npm install -g pnpm@11.21.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        # The page half reads `.build/www` for the page LIST (it fetches the bytes
+        # from production). The shell half under --live needs no build, but the page
+        # half does, so the build runs once for both.
+        run: node scripts/build.mjs
+
+      - name: Roll both dictionary sets against production
+        # --live sources the shell half from the wire too, which is what lets this run
+        # unattended. Adopting from the built tree would only ever capture the shell
+        # THIS checkout builds, so it would have to run from the deployed commit, and
+        # on an unramped main it would adopt bytes no browser holds while evicting one
+        # still in use. The script refuses outright if production reads empty.
+        run: pnpm run dict:roll
+
+      - name: Anything to propose?
+        id: diff
+        run: |
+          set -euo pipefail
+          if [ -z "$(git status --porcelain www/a-dict www/p-dict)" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Dictionaries already cover what production is serving; nothing to do."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git status --short www/a-dict www/p-dict | head -40
+          fi
+
+      - name: Open or update the roll PR
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: chore/dictionary-roll
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          ADOPTED=$(git status --porcelain www/a-dict www/p-dict | grep -c '^??' || true)
+          PRUNED=$(git status --porcelain www/a-dict www/p-dict | grep -c '^ D' || true)
+
+          # One long-lived branch, force-pushed. A fresh branch per night would leave a
+          # trail of superseded PRs, and the roll is not a series: only the newest one
+          # describes what production is serving now.
+          git checkout -B "$BRANCH"
+          git add www/a-dict www/p-dict
+          git commit -m "chore(dcz): roll the dictionaries onto what production serves
+
+          Adopted $ADOPTED, pruned $PRUNED. Sourced from https://aadhar.sh over the
+          wire, so every committed candidate is bytes a browser can actually offer.
+
+          Opened by .github/workflows/dictionary-roll.yml."
+          git push --force origin "$BRANCH"
+
+          if [ -n "$(gh pr list --head "$BRANCH" --state open --json number --jq '.[].number')" ]; then
+            echo "PR already open for $BRANCH; the force-push updated it."
+          else
+            gh pr create --base main --head "$BRANCH" \
+              --title "chore(dcz): roll the dictionaries onto what production serves" \
+              --body "Automated by [\`dictionary-roll.yml\`](.github/workflows/dictionary-roll.yml). Adopted **$ADOPTED**, pruned **$PRUNED**.
+
+          A returning visitor holds whatever \`/a/\` asset and page production served them last, offers its hash, and earns a delta only if those exact bytes are committed here. No build step can derive that, which is why this is a commit and why it can be forgotten. It was, for 161 commits, until #178's set went stale under a \`dcz:check\` that reported PASS the whole time.
+
+          Sourced from production over the wire, so every candidate is bytes a browser can really offer. Verify with:
+
+          \`\`\`bash
+          pnpm run dcz:check
+          \`\`\`
+
+          Merging is a human call, because \`main\` takes no bypass actors."
+          fi
+
+      - name: Summary
+        run: |
+          {
+            echo "### Dictionary roll"
+            echo
+            if [ "${{ steps.diff.outputs.changed }}" = "true" ]; then
+              echo "Rolled against production; PR on \`chore/dictionary-roll\`."
+            else
+              echo "No change: the committed sets already cover what production is serving."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

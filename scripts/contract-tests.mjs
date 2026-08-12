@@ -1844,6 +1844,34 @@ test("the shell infotip ships minified, hashed, and with a readable twin", async
     "hoist must be hashed before infotip, or infotip's /a/ copy keeps the unhashed specifier");
 });
 
+test("every workflow bootstraps the pnpm that package.json pins", async () => {
+  // Each workflow comments that package.json's packageManager field is the source of
+  // truth, and four of them had drifted to 11.20.0 within two days of #310 moving it to
+  // 11.21.0. Harmless there, because self-switching is on by default and the older
+  // binary fetches the pinned one at every run. It stops being harmless the moment the
+  // gap crosses a major: pnpm 12 ships its CLI as a per-platform native executable that
+  // a postinstall swaps in, so an older pnpm downloads it, finds a placeholder with no
+  // shebang, and dies with ENOEXEC before it ever reads the lockfile (gotcha 30).
+  const pinned = JSON.parse(await readFile(new URL("package.json", ROOT), "utf8")).packageManager;
+  assert.match(pinned, /^pnpm@\d+\.\d+\.\d+$/);
+  const version = pinned.split("@")[1];
+
+  const dir = new URL(".github/workflows/", ROOT);
+  const files = (await readdir(dir)).filter((n) => n.endsWith(".yml"));
+  assert.ok(files.length >= 5, `expected the workflow set, found ${files.length}`);
+  let checked = 0;
+  for (const file of files) {
+    const body = await readFile(new URL(file, dir), "utf8");
+    for (const [, found] of body.matchAll(/npm install -g pnpm@(\d+\.\d+\.\d+)/g)) {
+      assert.equal(found, version, `.github/workflows/${file} bootstraps pnpm@${found}, package.json pins ${version}`);
+      checked++;
+    }
+  }
+  // Counted, because a regex that stops matching would otherwise assert nothing and
+  // still report a pass, the failure mode the Markdown-twin test had (gotcha 24).
+  assert.ok(checked >= 4, `expected several pnpm bootstraps, matched ${checked}`);
+});
+
 test("a section's favicon is in its own <head>, never set by script", async () => {
   // setFavicon() used to read a data-favicon attribute off the matching taskbar
   // pin at boot. That cost one attribute per pin on EVERY page so that 11 of them
