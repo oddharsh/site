@@ -515,13 +515,45 @@ worktrees may edit freely, but a worktree is not a release surface.
   input can exfiltrate whatever it can read, so WHERE the secret lives is the
   whole control.
 
-  **BUILT 2026-08-12, and this is now a description.** The write token
-  (`CLOUDFLARE_API_TOKEN_RAMP`, `Workers Scripts:Edit` + `D1:Edit` and nothing
-  more) is an ENVIRONMENT secret on `production-canary` and `production-full`,
-  never a repo secret, so a job that does not name those environments cannot see
-  it and fork PRs cannot reach it. `production-full` carries required reviewers,
-  so majority traffic cannot move without a human. `.github/workflows/ramp.yml`
-  is the only consumer.
+  **BUILT 2026-08-12, and this is now a description.** `CLOUDFLARE_API_TOKEN_RAMP`
+  is an ENVIRONMENT secret on `production-canary` and `production-full`, never a
+  repo secret, so a job that does not name those environments cannot see it and
+  fork PRs cannot reach it. `production-full` carries required reviewers, so
+  majority traffic cannot move without a human. `.github/workflows/ramp.yml` is
+  the only consumer.
+
+  **The scope list, derived from what the ramp actually executes.** This note said
+  `Workers Scripts:Edit` + `D1:Edit` "and nothing else" from 2026-08-06 while no
+  such token existed, so the list was never checked against a running ramp:
+
+  | permission | why |
+  |---|---|
+  | Account · Workers Scripts · **Edit** | `versions list`, `deployments status`, `versions deploy` |
+  | Account · D1 · **Edit** | `SELECT` the shipped vnums, `INSERT` the changelog row |
+  | Account · Account Settings · **Read** | wrangler resolves the account |
+  | User · User Details · **Read** | wrangler identifies itself non-interactively |
+  | User · Memberships · **Read** | same |
+
+  Restrict Account Resources to this one account. **Workers Routes is NOT needed**,
+  which is the one place this is narrower than the token Workers Builds generates
+  for itself (Account Settings:Read, Workers Scripts:Edit, KV:Edit, R2:Edit, Zone
+  Workers Routes:Edit, User Details:Read, Memberships:Read): a ramp shifts traffic
+  between versions that already exist and never uploads one, so it needs neither
+  the storage scopes nor routes.
+
+  The bottom three are wrangler's identity calls rather than anything the ramp asks
+  for, which is why the original two-scope list looked complete. Verify with
+  `CI=1 pnpm run deploy:promote -- --dry-run`, which exercises both read calls and
+  moves nothing; `CI=1` matters because `release-guard.mjs` ignores the token
+  entirely when `CI` is unset and falls back to your interactive login, so without
+  it the control tests the wrong credential.
+
+  **An under-scoped D1 fails SILENTLY and late, and that is by design.** The
+  changelog `INSERT` runs only after the last step hits 100%, and it is wrapped in
+  a catch that prints `warn: could not log vN` rather than unwinding a good
+  release. So a missing `D1:Edit` costs a changelog gap on a ramp that otherwise
+  reports success. The backstop is `checkpoints:check`, now a CI gate, which goes
+  red on the next PR naming the missing row.
 
   **Both environments also restrict deployments to `main`, and that rule is doing
   real work rather than tidiness.** `workflow_dispatch` can target any branch that

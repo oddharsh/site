@@ -24,7 +24,10 @@ name: Ramp production
 # on the two environments below, never a repo secret, because this repository is
 # PUBLIC: Actions secrets are not exposed by a public repo, but a job that runs
 # untrusted input can exfiltrate whatever it can read, and a fork PR cannot name
-# an environment. Scope it to `Workers Scripts:Edit` + `D1:Edit` and nothing else.
+# an environment. Scopes are in CLAUDE.md under the ramp token; the writes need
+# Workers Scripts:Edit and D1:Edit, and wrangler wants three reads on top of that
+# to identify itself non-interactively. Workers Routes is NOT needed: this shifts
+# traffic between versions that already exist and never uploads one.
 # The six-read-scope `CLOUDFLARE_API_TOKEN` that infra:check uses is a DIFFERENT,
 # read-only credential and this must not widen it.
 #
