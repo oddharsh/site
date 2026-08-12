@@ -1,0 +1,308 @@
+{
+  "version": 1,
+  "note": "The single registry of aadhar.sh's public routable surfaces. Authored by hand. scripts/gen-manifest.mjs derives the shell/sitemap/agent projections from it (pnpm run gen:manifest), and build.mjs invariant #8 fails the deploy on drift. Leaf content that already has its own registry is deliberately NOT duplicated here: writing posts live in www/writing/posts.json, photos in www/images/manifest.json, resume artifacts are static files. Flags map to one surface each so drift is checkable: run=nav.js PAGES (Run palette), taskbar=nav.js SUBPAGES (pinned apps), sitemap=sitemap.xml <loc>, gallery=www/garage/index.html shelf, agents=MCP resources/list projection, webmention=accepts an inbound Webmention (a section so flagged also vouches for its leaf posts in posts.json); searchIndex=generate-search-index.mjs manual injection (for worker-rendered pages the source-tree walk cannot see; static pages are auto-indexed regardless).",
+  "surfaces": [
+    { "path": "/", "title": "Home", "section": "home", "kind": "page",
+      "description": "The aadhar.sh homepage: now-playing tracks, a photo grid, and the XP desktop.",
+      "hint": "aadhar.sh",
+      "flags": { "run": true, "taskbar": false, "sitemap": true, "gallery": false, "agents": true, "searchIndex": false, "webmention": false } },
+
+    { "path": "/photos", "title": "Photos", "section": "photos", "kind": "utility",
+      "description": "The straight-out-of-camera photo archive and public photo query utility.",
+      "hint": "every photo, Explorer Thumbnails view — the archive the old /images/ listing became",
+      "flags": { "run": true, "taskbar": false, "sitemap": true, "gallery": false, "agents": true, "searchIndex": true, "webmention": false } },
+
+    { "path": "/whoareyou", "title": "Who are you", "section": "identity", "kind": "page",
+      "description": "System Properties for the site: what a single request reveals, for agents and the curious.",
+      "hint": "system properties · what one request reveals · for agents + the curious",
+      "flags": { "run": true, "taskbar": false, "sitemap": false, "gallery": false, "agents": true, "searchIndex": false, "webmention": false } },
+
+    { "path": "/security", "title": "Security Center", "section": "status", "kind": "page",
+      "description": "The site's security posture, XP-style: firewall, updates, threat protection.",
+      "hint": "the site's security posture, XP-style: firewall, updates, threat protection",
+      "flags": { "run": true, "taskbar": false, "sitemap": false, "gallery": false, "agents": true, "searchIndex": false, "webmention": false } },
+
+    { "path": "/updates", "title": "Windows Update", "section": "status", "kind": "page",
+      "description": "The deploy changelog rendered as installed Windows updates, backed by Cloudflare D1.",
+      "hint": "what shipped lately: the deploy changelog as installed updates",
+      "flags": { "run": true, "taskbar": false, "sitemap": false, "gallery": false, "agents": true, "searchIndex": false, "webmention": false } },
+
+    { "path": "/restore", "title": "System Restore", "section": "status", "kind": "page",
+      "description": "Scrub the site back through its real deploy history, backed by Cloudflare D1.",
+      "hint": "scrub the site back through its real deploy history, backed by Cloudflare D1",
+      "flags": { "run": true, "taskbar": false, "sitemap": false, "gallery": false, "agents": true, "searchIndex": false, "webmention": false } },
+
+
+    { "path": "/around", "title": "Around", "section": "around", "kind": "utility",
+      "description": "AadharshBot's scheduled crawl of the crypto-VC neighborhood.",
+      "hint": "the crypto-VC neighborhood",
+      "flags": { "run": true, "taskbar": true, "sitemap": false, "gallery": false, "agents": true, "searchIndex": true, "webmention": false } },
+
+    { "path": "/garage", "title": "Garage", "section": "garage", "kind": "section",
+      "description": "Prototypes and experiments: the site's workshop.",
+      "hint": "prototypes + experiments",
+      "flags": { "run": true, "taskbar": true, "sitemap": true, "gallery": false, "agents": true, "searchIndex": false, "webmention": false } },
+
+    { "path": "/serendipity", "title": "Serendipity", "section": "serendipity", "kind": "section",
+      "description": "A public pool of events worth going to.",
+      "hint": "events worth going to",
+      "flags": { "run": true, "taskbar": true, "sitemap": true, "gallery": false, "agents": true, "searchIndex": true, "webmention": false } },
+
+    { "path": "/rn", "title": "Music", "section": "music", "kind": "page",
+      "description": "What I'm listening to right now, scraped live from a Spotify playlist.",
+      "hint": "what I'm listening to right now",
+      "flags": { "run": true, "taskbar": true, "sitemap": false, "gallery": false, "agents": true, "searchIndex": false, "webmention": false } },
+
+    { "path": "/coffee", "title": "Coffee", "section": "coffee", "kind": "utility",
+      "description": "Book a coffee in NYC or inspect the current public availability.",
+      "hint": "book a coffee / bagel",
+      "flags": { "run": true, "taskbar": true, "sitemap": false, "gallery": false, "agents": true, "searchIndex": true, "webmention": false } },
+
+    { "path": "/writing", "title": "Writing", "section": "writing", "kind": "section",
+      "description": "Notes, in flux: an editable XP Notepad. Posts are registered in posts.json.",
+      "hint": "notes, in flux — an editable notepad",
+      "flags": { "run": true, "taskbar": true, "sitemap": true, "gallery": false, "agents": true, "searchIndex": false, "webmention": true } },
+
+    { "path": "/reading", "title": "Reading", "section": "reading", "kind": "utility",
+      "description": "A native mirror of Aadharsh's saved reading list, synced from Curius.",
+      "hint": "what I've been reading — saved to Curius, mirrored here",
+      "flags": { "run": true, "taskbar": true, "sitemap": true, "gallery": false, "agents": true, "searchIndex": true, "webmention": false } },
+
+    { "path": "/lens", "title": "The Other Web", "section": "lens", "kind": "utility",
+      "description": "Inspect how a public URL reads to people and machines: raw HTML, JSON-LD, llms.txt.",
+      "hint": "the other web: see any URL the way a machine does — raw HTML, JSON-LD, llms.txt",
+      "flags": { "run": true, "taskbar": true, "sitemap": false, "gallery": false, "agents": true, "searchIndex": true, "webmention": false } },
+
+    { "path": "/finger", "title": "Finger", "section": "finger", "kind": "utility",
+      "description": "Look up who runs this host: writing, reading, listening, photographs, neighborhood, availability, deploy log, and a search across all of it.",
+      "hint": "who runs this host — drivable by keypress",
+      "flags": { "run": true, "taskbar": false, "sitemap": false, "gallery": false, "agents": true, "searchIndex": false, "webmention": false } },
+
+    { "path": "/radar", "title": "Radar", "section": "radar", "kind": "utility",
+      "description": "An instrument with no antenna: POST signal readings from a machine that has one and it draws them as bands, meters and trends.",
+      "hint": "signal readings in, a terminal instrument out",
+      "flags": { "run": true, "taskbar": false, "sitemap": false, "gallery": false, "agents": true, "searchIndex": false, "webmention": false } },
+
+    { "path": "/dict", "title": "Dict", "section": "dict", "kind": "utility",
+      "description": "Will a browser ever actually use the compression dictionary you are serving? The registration rules fail in total silence; this encodes them, measured.",
+      "hint": "compression dictionary lint",
+      "flags": { "run": true, "taskbar": false, "sitemap": false, "gallery": false, "agents": true, "searchIndex": false, "webmention": false } },
+
+    { "path": "/cache", "title": "Cache", "section": "cache", "kind": "utility",
+      "description": "Does your ETag ever actually 304? Fetches twice, replays the validator, and reports what the origin DID — the failure header graders cannot see.",
+      "hint": "behavioral revalidation lint",
+      "flags": { "run": true, "taskbar": false, "sitemap": false, "gallery": false, "agents": true, "searchIndex": false, "webmention": false } },
+
+    { "path": "/encode", "title": "Encode", "section": "encode", "kind": "utility",
+      "description": "What did your encoder actually do? Reads a JPEG or AVIF container — quantization tables, scan script, chroma subsampling, bit depth — and says where bytes are being left on the table. No pixels are decoded.",
+      "hint": "what did your encoder actually do?",
+      "flags": { "run": true, "taskbar": false, "sitemap": false, "gallery": false, "agents": true, "searchIndex": false, "webmention": false } },
+
+    { "path": "/agent-ready", "title": "Agent Ready", "section": "agent-ready", "kind": "utility",
+      "description": "How much of an origin a machine can actually use — the agent doors, counted rather than scored — and, for this origin, what building all of it cost in files and lines.",
+      "hint": "the scorecard, pointed at anyone including us",
+      "flags": { "run": true, "taskbar": false, "sitemap": false, "gallery": false, "agents": true, "searchIndex": false, "webmention": false } },
+
+    { "path": "/terminal", "title": "Terminal", "section": "tui", "kind": "utility",
+      "description": "Three terminal programs an agent can drive by keypress: finger (who runs this host), photos (the archive), and lens (how a URL reads to a machine).",
+      "hint": "terminal utilities — curl them, or drive them by keypress",
+      "note": "sitemap:false because a frame is per-query and every response is x-robots-tag noindex, so there is no canonical document here for a crawler to hold. searchIndex:false for a different reason worth keeping straight: these programs RENDER other surfaces' data, so indexing their frames would file every record the index already carries a second time under a /terminal URL.",
+      "flags": { "run": true, "taskbar": true, "sitemap": false, "gallery": false, "agents": true, "searchIndex": false, "webmention": false } },
+
+    { "path": "/access", "title": "Access", "section": "access", "kind": "page",
+      "description": "Device Manager for language models: the flavors of access that shipped, what they depend on, and the ones with no driver installed.",
+      "hint": "a skill tree for model access — what shipped, what's blocked, what nobody built",
+      "note": "EVERY FLAG IS FALSE ON PURPOSE, and this is the only surface here in that state. The route is live and canonical, but it stays out of the Run palette, the taskbar, the sitemap, the agent catalog, and the search index until the internal research presentation it was built for has happened (owner call, 2026-08-03). Flipping run/taskbar/sitemap/agents/searchIndex to true is the entire follow-up: nothing else about the page changes, and build.mjs #8b will then demand the matching nav.js and sitemap.xml entries, which is the point of registering it now rather than later.",
+      "flags": { "run": false, "taskbar": false, "sitemap": false, "gallery": false, "agents": false, "searchIndex": false, "webmention": false } },
+
+    { "path": "/pixel-peeper", "title": "Pixel Peeper", "section": "pixel-peeper", "kind": "utility",
+      "description": "A vision test for image compression, in the ismy.blue spirit: pick the best encode on instinct, repeatedly.",
+      "hint": "whose eye do you have? a compression vision test",
+      "flags": { "run": true, "taskbar": true, "sitemap": true, "gallery": true, "agents": true, "searchIndex": false, "webmention": false } },
+
+    { "path": "/lwe", "title": "Learning with Errors", "section": "lwe", "kind": "section",
+      "description": "Chat-style explainers with live demos, at the pace of a 2009 MSN conversation.",
+      "hint": "chat-style explainers + live demos",
+      "flags": { "run": true, "taskbar": true, "sitemap": true, "gallery": false, "agents": true, "searchIndex": false, "webmention": false } },
+
+    { "path": "/lwe/fhe", "title": "FHE", "section": "lwe", "kind": "content",
+      "description": "Fully Homomorphic Encryption, explained at the pace of a 2009 MSN conversation.",
+      "hint": "fully homomorphic encryption, explained",
+      "flags": { "run": true, "taskbar": false, "sitemap": true, "gallery": false, "agents": true, "searchIndex": false, "webmention": true } },
+
+    { "path": "/lwe/mpc", "title": "MPC", "section": "lwe", "kind": "content",
+      "description": "Multi-Party Computation: honest majority, dishonest majority, and traitor tracing.",
+      "hint": "multi-party computation, honest majority and traitors",
+      "flags": { "run": true, "taskbar": false, "sitemap": true, "gallery": false, "agents": true, "searchIndex": false, "webmention": true } },
+
+    { "path": "/lwe/tee", "title": "TEE", "section": "lwe", "kind": "content",
+      "description": "Trusted Execution Environments: the secret room in the chip, and the side-channels that leak it.",
+      "hint": "trusted execution environments and side-channels",
+      "flags": { "run": true, "taskbar": false, "sitemap": true, "gallery": false, "agents": true, "searchIndex": false, "webmention": true } },
+
+    { "path": "/lwe/utf8", "title": "UTF-8", "section": "lwe", "kind": "content", "short": "utf-8",
+      "description": "Text encoding: ASCII vs UTF-32 vs UTF-8, with live byte demos.",
+      "hint": "text encoding, ascii, utf-32, utf-8, live byte demos",
+      "flags": { "run": true, "taskbar": false, "sitemap": true, "gallery": false, "agents": true, "searchIndex": false, "webmention": true } },
+
+    { "path": "/lwe/vigenere", "title": "Vigenère", "section": "lwe", "kind": "content", "short": "vigenère",
+      "description": "The Vigenère cipher and Kryptos: keyed alphabets, autokeys, K1–K3, and a keystream workbench.",
+      "hint": "the Vigenère cipher and Kryptos: keystream workbench, cipher stats",
+      "flags": { "run": true, "taskbar": false, "sitemap": true, "gallery": false, "agents": true, "searchIndex": false, "webmention": true } },
+
+    { "path": "/lwe/encoding", "title": "Image encoding", "section": "lwe", "kind": "content",
+      "description": "Why one photo gives three file sizes: AVIF vs JPEG vs the tuned JPEG encoders.",
+      "hint": "image encoding: avif, jpeg, jpegli, bytes-per-pixel",
+      "flags": { "run": true, "taskbar": false, "sitemap": true, "gallery": false, "agents": true, "searchIndex": false, "webmention": true } },
+
+    { "path": "/lwe/pcrypto", "title": "Programmable cryptography", "section": "lwe", "kind": "content", "short": "programmable crypto",
+      "description": "Programmable cryptography: 2PC and garbled circuits, SNARKs, FHE, and ORAM as one toolkit.",
+      "hint": "programmable cryptography: zk, mpc, fhe as one toolkit",
+      "flags": { "run": true, "taskbar": false, "sitemap": true, "gallery": false, "agents": true, "searchIndex": false, "webmention": true } },
+
+    { "path": "/lwe/dac", "title": "DAC", "section": "lwe", "kind": "content",
+      "description": "Multibit versus delta-sigma DACs: an R-2R ladder you can mismatch and a live noise-shaping demo.",
+      "hint": "digital-to-analog: multibit R-2R vs delta-sigma noise shaping",
+      "flags": { "run": true, "taskbar": false, "sitemap": true, "gallery": false, "agents": true, "searchIndex": false, "webmention": true } },
+
+    { "path": "/lwe/drivers", "title": "Headphone drivers", "section": "lwe", "kind": "content",
+      "description": "Planar magnetic versus dynamic headphone drivers, with a live diaphragm-motion demo.",
+      "hint": "headphone drivers: planar magnetic vs dynamic, force and breakup",
+      "flags": { "run": true, "taskbar": false, "sitemap": true, "gallery": false, "agents": true, "searchIndex": false, "webmention": true } },
+
+    { "path": "/lwe/knots", "title": "Knots", "section": "lwe", "kind": "content",
+      "description": "Why shoelaces come undone: granny versus square, the Ian knot, and bunny ears, with a live demo.",
+      "hint": "knots: granny vs square, the Ian knot, why laces come undone",
+      "flags": { "run": true, "taskbar": false, "sitemap": true, "gallery": false, "agents": true, "searchIndex": false, "webmention": true } },
+
+    { "path": "/lwe/lean", "title": "Lean", "section": "lwe", "kind": "content",
+      "description": "Lean and formal verification: why a proof is not an inspection, how a vacuous spec passes, a toy verified compiler you can break, and the 1,765 lines of statement holding up OpenAI's ten proofs.",
+      "hint": "lean, formal verification, specs, verified compilers, kernel soundness, openai ten-proofs",
+      "flags": { "run": true, "taskbar": false, "sitemap": true, "gallery": false, "agents": true, "searchIndex": false, "webmention": true } },
+
+    { "path": "/garage/blueprint", "title": "Blueprint", "section": "garage", "kind": "content",
+      "description": "The teardown's sequel: Fable 5 read every file in the repo and drew the blueprint it would rebuild from.",
+      "hint": "the repo, blueprinted by Fable 5",
+      "flags": { "run": true, "taskbar": false, "sitemap": true, "gallery": true, "agents": true, "searchIndex": false, "webmention": true } },
+
+    { "path": "/garage/chunks", "title": "Content-addressed chunking", "section": "garage", "kind": "content",
+      "description": "Live FastCDC content-defined chunking and content-addressing in the browser: pure JS + crypto.subtle.",
+      "hint": "content-addressed chunking",
+      "flags": { "run": true, "taskbar": false, "sitemap": true, "gallery": true, "agents": true, "searchIndex": false, "webmention": true } },
+
+    { "path": "/garage/cloudflare", "title": "Four free Cloudflare features", "section": "garage", "kind": "content",
+      "description": "Live demos of four free Cloudflare Workers platform features, from Durable Objects to Workers AI.",
+      "hint": "free Cloudflare features",
+      "flags": { "run": true, "taskbar": false, "sitemap": true, "gallery": true, "agents": true, "searchIndex": false, "webmention": true } },
+
+    { "path": "/garage/encoding", "title": "Thumbnail encoding study", "section": "garage", "kind": "content",
+      "description": "The same photo through AVIF, WebP, and JPEG (zenc), with real byte counts and quality measurements.",
+      "hint": "thumbnail encoding study",
+      "flags": { "run": true, "taskbar": false, "sitemap": true, "gallery": true, "agents": true, "searchIndex": false, "webmention": true } },
+
+    { "path": "/garage/compression", "title": "Compression teardown", "section": "garage", "kind": "content",
+      "description": "Shipping brotli q11 and zstd shared-dictionary deltas: what the edge really does, three platform limits that turned out innocent, and the one-line bug behind all of them.",
+      "hint": "brotli q11 + dcz deltas",
+      "flags": { "run": true, "taskbar": false, "sitemap": true, "gallery": true, "agents": true, "searchIndex": false, "webmention": true } },
+
+    { "path": "/garage/gpt56", "title": "5.6 Sol", "section": "garage", "kind": "content", "short": "5.6 sol",
+      "description": "The performance pass outlined with 5.6 Sol: the bytes, cache boundaries, and first-paint decisions.",
+      "hint": "the performance pass outlined with 5.6 Sol",
+      "flags": { "run": true, "taskbar": false, "sitemap": true, "gallery": true, "agents": true, "searchIndex": false, "webmention": true } },
+
+    { "path": "/garage/horizon", "title": "Web-platform horizon", "section": "garage", "kind": "content",
+      "description": "Test-driving upcoming web-platform features (text-box-trim, contrast-color, anchor positioning).",
+      "hint": "web-platform horizon",
+      "flags": { "run": true, "taskbar": false, "sitemap": true, "gallery": true, "agents": true, "searchIndex": false, "webmention": true } },
+
+    { "path": "/garage/iroh", "title": "iroh", "section": "garage", "kind": "content",
+      "description": "iroh 1.0: dial a machine by its public key, not its IP. A native in-browser NodeId generator.",
+      "hint": "dial a machine by its public key",
+      "flags": { "run": true, "taskbar": false, "sitemap": true, "gallery": true, "agents": true, "searchIndex": false, "webmention": true } },
+
+    { "path": "/garage/masonry", "title": "Masonry", "section": "garage", "kind": "content",
+      "description": "A ragged-height contact-sheet photo grid with CSS Grid Lanes, falling back to the fixed-square grid.",
+      "hint": "Grid Lanes masonry photo grid (with fixed-square fallback)",
+      "flags": { "run": true, "taskbar": false, "sitemap": true, "gallery": true, "agents": true, "searchIndex": false, "webmention": true } },
+
+    { "path": "/garage/dyno", "title": "Dyno", "section": "garage", "kind": "content",
+      "description": "The site on the rollers: worker bundle, pages, and client assets weighed nightly, charted over time.",
+      "hint": "what this site weighs on the wire, one pull a night",
+      "flags": { "run": true, "taskbar": false, "sitemap": true, "gallery": true, "agents": true, "searchIndex": false, "webmention": false } },
+
+    { "path": "/garage/octane", "title": "Octane, priced against no framework", "section": "garage", "kind": "content", "short": "octane",
+      "description": "Nextane's 60.9% win over Next.js, re-measured on the live demo, then given the row every framework benchmark leaves out: a site that ships no framework at all.",
+      "hint": "what a framework's floor costs against no framework",
+      "flags": { "run": true, "taskbar": false, "sitemap": true, "gallery": true, "agents": true, "searchIndex": false, "webmention": true } },
+
+    { "path": "/garage/pretext", "title": "DOM-free text measurement", "section": "garage", "kind": "content",
+      "description": "chenglou/pretext measures and lays out multiline text with canvas as ground truth instead of the DOM.",
+      "hint": "DOM-free text measurement",
+      "flags": { "run": true, "taskbar": false, "sitemap": true, "gallery": true, "agents": true, "searchIndex": false, "webmention": true } },
+
+    { "path": "/garage/pqc", "title": "Post-quantum signatures, priced", "section": "garage", "kind": "content",
+      "description": "What ML-DSA-44 and the hash-based alternatives cost on the one signature this site controls: its crawler's RFC 9421 request signing, which now carries two.",
+      "hint": "what a PQ signature costs in bytes and milliseconds",
+      "flags": { "run": true, "taskbar": false, "sitemap": true, "gallery": true, "agents": true, "searchIndex": false, "webmention": true } },
+
+    { "path": "/garage/safari27", "title": "Safari 27", "section": "garage", "kind": "content", "short": "safari 27",
+      "description": "What WWDC26's Safari 27 ships that this site already leans on: base-select, anchor-positioning, more.",
+      "hint": "WWDC26 Safari 27 features, through this site's lens",
+      "flags": { "run": true, "taskbar": false, "sitemap": true, "gallery": true, "agents": true, "searchIndex": false, "webmention": true } },
+
+    { "path": "/garage/scroll", "title": "XP scroll chrome", "section": "garage", "kind": "content",
+      "description": "Scroll-driven animations in a period-correct Windows XP idiom: the Luna file-copy progress bar and more.",
+      "hint": "XP scroll chrome",
+      "flags": { "run": true, "taskbar": false, "sitemap": true, "gallery": true, "agents": true, "searchIndex": false, "webmention": true } },
+
+    { "path": "/garage/teardown", "title": "Teardown", "section": "garage", "kind": "content",
+      "description": "What Fable 5's multi-agent audit found and fixed across aadhar.sh, from a cache-poisoning hole on down.",
+      "hint": "what a multi-agent audit found + fixed",
+      "flags": { "run": true, "taskbar": false, "sitemap": true, "gallery": true, "agents": true, "searchIndex": false, "webmention": true } },
+
+    { "path": "/garage/tooltips", "title": "Tooltip experiments", "section": "garage", "kind": "content",
+      "description": "Cursor-following tooltip styles for the photo grid and tracklist. Hover the slots and rows to compare.",
+      "hint": "tooltip experiments",
+      "flags": { "run": true, "taskbar": false, "sitemap": true, "gallery": true, "agents": true, "searchIndex": false, "webmention": true } },
+
+    { "path": "/garage/wire", "title": "Bytes on the wire", "section": "garage", "kind": "content",
+      "description": "The site's first build step, and the brotli rabbit hole that led there: where Cloudflare compresses.",
+      "hint": "the first build step + the brotli rabbit hole",
+      "flags": { "run": true, "taskbar": false, "sitemap": true, "gallery": true, "agents": true, "searchIndex": false, "webmention": true } },
+
+    { "path": "/garage/workers", "title": "Off Pages, onto Workers", "section": "garage", "kind": "content",
+      "description": "Why this site moved from Cloudflare Pages advanced mode to Workers with static assets: an atomic deploy.",
+      "hint": "off Pages, onto Workers",
+      "flags": { "run": true, "taskbar": false, "sitemap": true, "gallery": true, "agents": true, "searchIndex": false, "webmention": true } },
+
+    { "path": "/bot", "title": "AadharshBot", "section": "identity", "kind": "page",
+      "description": "The site's branded crawler: who it is, how it signs requests, and where its keys live.",
+      "hint": "the site's identifiable crawler",
+      "flags": { "run": false, "taskbar": false, "sitemap": true, "gallery": false, "agents": true, "searchIndex": false, "webmention": false } },
+
+    { "path": "/inbox", "title": "Inbox", "section": "utility", "kind": "utility",
+      "description": "Webmentions from the open web: who linked to aadhar.sh, moderated and rendered as Outlook Express mail.",
+      "hint": "who linked here, as mail",
+      "flags": { "run": true, "taskbar": false, "sitemap": false, "gallery": false, "agents": true, "searchIndex": true, "webmention": false } },
+
+    { "path": "/search", "title": "Site search", "section": "utility", "kind": "utility",
+      "description": "Search the public pages and writing on aadhar.sh.",
+      "hint": "search the site",
+      "flags": { "run": false, "taskbar": false, "sitemap": false, "gallery": false, "agents": true, "searchIndex": true, "webmention": false } },
+
+    { "path": "/lens/census", "title": "Lens census", "section": "lens", "kind": "utility",
+      "description": "Weekly longitudinal history of agent readiness across representative sites.",
+      "hint": "agent-readiness, tracked weekly",
+      "flags": { "run": false, "taskbar": false, "sitemap": false, "gallery": false, "agents": true, "searchIndex": true, "webmention": false } },
+
+    { "path": "/ledger", "title": "Crawl ledger", "section": "utility", "kind": "utility",
+      "description": "A commentary ledger of identified AI-crawler visits.",
+      "hint": "identified AI-crawler visits, annotated",
+      "flags": { "run": false, "taskbar": false, "sitemap": false, "gallery": false, "agents": true, "searchIndex": true, "webmention": false } },
+
+    { "path": "/run", "title": "Run", "section": "utility", "kind": "utility",
+      "description": "The site's command palette and route launcher.",
+      "hint": "the command palette",
+      "flags": { "run": false, "taskbar": false, "sitemap": false, "gallery": false, "agents": false, "searchIndex": true, "webmention": false } }
+  ]
+}

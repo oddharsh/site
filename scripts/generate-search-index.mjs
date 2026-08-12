@@ -4,14 +4,14 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 
-const ROOT = "holding";
+const ROOT = "www";
 const OUT = join(ROOT, "search-index.json");
 const MAX_TEXT = 1800;
 const SKIP_DIRS = new Set(["images", "i", "meta", "full", ".wrangler"]);
 // Worker-rendered utilities the source-tree walk below can't see (no static
 // file), injected from the surface registry so search and the shell share one
 // list. Static pages are auto-indexed by the walk regardless of the manifest.
-const manifest = JSON.parse(await readFile("site-manifest.json", "utf8"));
+const manifest = JSON.parse(await readFile("config/site-manifest.json", "utf8"));
 const MANUAL = manifest.surfaces
   .filter((s) => s.flags.searchIndex)
   .map((s) => [s.path, s.title, s.description, "utility"]);

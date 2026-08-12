@@ -90,7 +90,7 @@ async function postBook(fields, overrides = {}) {
 // given instance run one at a time. Instances are keyed by name, so two slots
 // never contend, and each holds its own storage. The claim logic itself is the
 // real module — only the serialization is simulated, because that is a runtime
-// guarantee this pool cannot bind (the class lives in holding/, and importing it
+// guarantee this pool cannot bind (the class lives in www/, and importing it
 // from cal would make cal untestable without the site tree).
 function stubCounterNamespace() {
   const instances = new Map();

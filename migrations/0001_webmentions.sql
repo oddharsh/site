@@ -1,7 +1,7 @@
 -- aadhar-social / webmentions — inbound Webmention storage for /inbox.
 --
 -- The worker also creates this table lazily (CREATE TABLE IF NOT EXISTS in
--- holding/_worker.js/webmention.js, same pattern census.js and around.js use),
+-- www/_worker.js/webmention.js, same pattern census.js and around.js use),
 -- so a fresh binding self-provisions and this file is the explicit form for
 -- anyone who would rather apply the schema up front:
 --

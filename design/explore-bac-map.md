@@ -116,8 +116,8 @@ the user; nothing closed off-screen.
 7. The blink tripwire (step 5c) is C. Record C's sharp edges (above). The map
    itself is C's verified-understanding deliverable.
 
-**Verify:** `node build.mjs` clean, break each hard-block once to confirm it
-fires, `node verify-routes.mjs` green, a served `manifest.json` is all `/i/`,
+**Verify:** `node scripts/build.mjs` clean, break each hard-block once to confirm it
+fires, `node scripts/verify-routes.mjs` green, a served `manifest.json` is all `/i/`,
 the homepage grid + `/photos` render.
 
 ## Shipped (2026-07-05 / 06)

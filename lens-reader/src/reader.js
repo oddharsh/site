@@ -14,7 +14,7 @@
 import Defuddle from "defuddle";
 import { parseHTML } from "linkedom";
 import TurndownService from "turndown";
-import { privateHostBlocked, validateLensTarget } from "../../holding/_worker.js/lib/crawl.js";
+import { privateHostBlocked, validateLensTarget } from "../../www/_worker.js/lib/crawl.js";
 
 // Errors whose MESSAGE is deliberately written for the visitor. Everything else
 // that escapes `read()` is an internal failure whose text is not ours to publish:

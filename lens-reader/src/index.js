@@ -30,7 +30,7 @@
 // with "Incorrect type for map entry '<name>': the provided value is not of
 // type 'function or ExportedHandler'", which is how that rule was learned here.
 import { EXTRACTOR, READER_LIMIT_PER_MIN, READER_NOTE, ReaderError, read } from "./reader.js";
-import { validateLensTarget } from "../../holding/_worker.js/lib/crawl.js";
+import { validateLensTarget } from "../../www/_worker.js/lib/crawl.js";
 
 export default {
   async fetch(request, env) {

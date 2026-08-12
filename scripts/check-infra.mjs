@@ -1005,7 +1005,7 @@ async function checkCodeScanning(repo, slug, token) {
 
 // Which pages answer an agent in Markdown, measured on the wire rather than inferred
 // from filenames. The twins arrive by three different conventions — /index.md for the
-// homepage, holding/md/<name>.md for /whoareyou and /bot, build-generated twins for
+// homepage, www/md/<name>.md for /whoareyou and /bot, build-generated twins for
 // /garage/* and /lwe/* — so a local file check would have to know all three and would
 // still be guessing about production. One request per page settles it.
 //
@@ -1020,7 +1020,7 @@ async function checkCodeScanning(repo, slug, token) {
 async function checkAgentMarkdown() {
   let surfaces;
   try {
-    ({ surfaces } = JSON.parse(await readFile(join(ROOT, "site-manifest.json"), "utf8")));
+    ({ surfaces } = JSON.parse(await readFile(join(ROOT, "config/site-manifest.json"), "utf8")));
   } catch (e) {
     warn(`agent markdown coverage could not run: ${e.message}`);
     return;
@@ -1053,7 +1053,7 @@ async function checkAgentMarkdown() {
 
 // ----------------------------------------------------------------- main ----
 
-const infra = JSON.parse(await readFile(join(ROOT, "infra.json"), "utf8"));
+const infra = JSON.parse(await readFile(join(ROOT, "config/infra.json"), "utf8"));
 const wrangler = await readJsonc("wrangler.jsonc");
 const lweConfig = await readFile(join(ROOT, "lwe-ask/wrangler.toml"), "utf8");
 

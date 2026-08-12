@@ -2,16 +2,16 @@
   // LOCAL DEV ONLY — `wrangler dev -c wrangler.dev.jsonc` (see .claude/launch.json).
   //
   // This is the twin of wrangler.jsonc. The two differ in exactly four places:
-  //   - main:             holding/... here vs .build/holding/... in wrangler.jsonc
-  //   - assets.directory: holding    here vs .build/holding    in wrangler.jsonc
-  //   - no "build" block here (dev serves the readable holding/ tree directly, so
-  //     the fast edit->reload loop never pays the full holding/ -> .build copy)
+  //   - main:             www/... here vs .build/www/... in wrangler.jsonc
+  //   - assets.directory: www        here vs .build/www    in wrangler.jsonc
+  //   - no "build" block here (dev serves the readable www/ tree directly, so
+  //     the fast edit->reload loop never pays the full www/ -> .build copy)
   //   - Workers Cache is disabled for both local entrypoints, so edit->reload
   //     never observes a stale cached response; deploy enables it for CachedPages
   // Everything else (bindings, crons, vars, migrations) MUST match wrangler.jsonc.
   // build.mjs warns if a binding name drifts between the two. Deploys never use
   // this file — wrangler.jsonc self-builds via its build.command and ships the
-  // minified .build/holding tree.
+  // minified .build/www tree.
   "name": "aadhar-sh",
   // Same pin as wrangler.jsonc, and NOT a fifth difference between the two —
   // it is one of the values that must match. Plain `pnpm run dev` is local and
@@ -20,7 +20,7 @@
   // config, so they hit the same "more than one account available" wall that
   // wrangler.jsonc's comment describes.
   "account_id": "1c99acdb6141579023fb97d24261ea58",
-  "main": "holding/_worker.js/index.js",
+  "main": "www/_worker.js/index.js",
   "compatibility_date": "2026-06-01",
   "cache": { "enabled": false, "cross_version_cache": false },
   "exports": {
@@ -35,7 +35,7 @@
     { "pattern": "cal.aadhar.sh/*", "zone_name": "aadhar.sh" }
   ],
   "assets": {
-    "directory": "holding",
+    "directory": "www",
     "binding": "ASSETS",
     // MUST match wrangler.jsonc: canonical URLs carry no trailing slash.
     "html_handling": "drop-trailing-slash",
@@ -142,7 +142,7 @@
   ],
   "vars": {
     // Not a secret: an account id is an identifier, and this one is already
-    // committed as the default in holding/scripts/gen-alt-text.py. It is a VAR
+    // committed as the default in www/scripts/gen-alt-text.py. It is a VAR
     // because two features need it to build a REST URL and both fail SILENTLY
     // without it — /ledger's cost line has been reading "unconfigured" in
     // production, and the Kitesurf path in lens-render.js would have skipped

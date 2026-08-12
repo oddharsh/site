@@ -169,9 +169,9 @@ A "depressed/active button" swaps to sunken while held. Selected slot buttons
 
 ## Per-surface notes
 
-- **Homepage (`holding/index.html`)** — the canonical reference. When two
+- **Homepage (`www/index.html`)** — the canonical reference. When two
   surfaces disagree, the homepage's Luna usually wins (then promote it to a token).
-- **Garage (`holding/garage/*`)** — deliberate **development mules**: testbeds
+- **Garage (`www/garage/*`)** — deliberate **development mules**: testbeds
   for ideas. They share the chrome (title-bar caption buttons, 720px width) but
   are *allowed* to be experimental inside. Don't homogenize their content; do
   keep their chrome on-token.
