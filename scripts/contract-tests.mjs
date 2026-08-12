@@ -23,6 +23,7 @@ import {
   renderLensShell,
   validateLensTarget,
 } from "../www/_worker.js/lens.js";
+import { scoreAgentReadiness, WEIGHTS as RUBRIC_WEIGHTS } from "../www/_worker.js/lib/agent-rubric.js";
 import { lensRecipe, lensRecipeIds, lensRecipeScript } from "../www/_worker.js/lens-recipes.js";
 import { handleCoffeeAvailability, readCoffeeAvailability } from "../www/_worker.js/coffee.js";
 import { reservationName } from "../cal/src/reservation.js";
@@ -6314,4 +6315,45 @@ test("the ref scanner reads unquoted attributes, which is how the site ships", a
   // Off-origin and in-page refs are not this check's business.
   assert.deepEqual(internalRefs('<a href=https://x.test/a>1</a><a href=#top>2</a>'
     + '<a href=mailto:a@b.test>3</a><a href=//cdn.test/x.js>4</a><a href=../rel>5</a>'), []);
+});
+
+// ── the agent-readiness rubric ──────────────────────────────────────────────
+// A score is a CLAIM about somebody else's site, so the three properties below
+// are the ones that keep it defensible. They are pinned here rather than left
+// to the CLI, because /lens will publish this same number about third parties
+// and the CLI is not what runs in front of them.
+
+test("the rubric weights sum to 100 when every dimension is measured", () => {
+  const total = Object.values(RUBRIC_WEIGHTS).reduce((a, b) => a + b, 0);
+  assert.equal(total, 100, "a percentage nobody can reconstruct from the weights is a vibe");
+});
+
+test("an unmeasured dimension shrinks the denominator instead of scoring zero", () => {
+  // The photo pipeline's rule (every field nullable, skip the line rather than
+  // fabricate it), applied where the temptation is worst: a probe that did not
+  // run must not read as an accusation the scored site cannot answer.
+  const partial = scoreAgentReadiness({ http: { status: 200, words: 100 }, rendered: { words: 100, consoleErrors: 0, brokenImages: 0, totalImages: 0 } });
+  assert.ok(partial.unmeasured.length > 0, "this fixture deliberately omits the wire and discovery probes");
+  assert.ok(partial.max < 100, "max must shrink to the dimensions that carry evidence");
+  assert.equal(partial.max, partial.dimensions.reduce((a, d) => a + d.max, 0), "max is the sum of the scored dimensions");
+  for (const u of partial.unmeasured) {
+    assert.ok(!partial.dimensions.some((d) => d.id === u.id), `${u.id} is unmeasured, so it must not also be scored`);
+    assert.ok(u.why && u.why.length > 0, "an unmeasured dimension has to say why");
+  }
+});
+
+test("a script error and a failed image each cost real points", () => {
+  // The two defects found on 2026-08-12. If either can happen without moving
+  // the number, this rubric would have scored the site perfect on the day it
+  // was broken, which is the failure mode the whole file exists to avoid.
+  const base = { http: { status: 200, words: 300 }, declared: { llmsTxt: true, markdownTwin: true, agentCard: true, mcp: true, sitemap: true } };
+  const clean = scoreAgentReadiness({ ...base, rendered: { words: 300, consoleErrors: 0, brokenImages: 0, totalImages: 12, imagesWithAlt: 12 } });
+  const threw = scoreAgentReadiness({ ...base, rendered: { words: 300, consoleErrors: 1, brokenImages: 0, totalImages: 12, imagesWithAlt: 12 } });
+  const broke = scoreAgentReadiness({ ...base, rendered: { words: 300, consoleErrors: 0, brokenImages: 12, totalImages: 12, imagesWithAlt: 12 } });
+  assert.ok(threw.score < clean.score, "an uncaught script error must cost points");
+  assert.ok(broke.score < clean.score, "images an agent browser cannot decode must cost points");
+  // Alt text is the mitigation that saved the homepage, so a page whose images
+  // fail BUT are captioned must still outscore one that is neither.
+  const bare = scoreAgentReadiness({ ...base, rendered: { words: 300, consoleErrors: 0, brokenImages: 12, totalImages: 12, imagesWithAlt: 0 } });
+  assert.ok(bare.score < broke.score, "captions must be worth something when the pixels do not arrive");
 });

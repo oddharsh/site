@@ -36,6 +36,7 @@
     "dict:roll": "node scripts/roll-shell-dictionary.mjs --live",
     "dcz:check": "node scripts/check-dictionary-support.mjs",
     "kitesurf:check": "node scripts/check-kitesurf.mjs",
+    "agent:check": "node scripts/check-agent.mjs",
     "bun:check": "node scripts/check-bun.mjs",
     "speculation:probe": "node scripts/speculation-probe.mjs",
     "checkpoints:check": "node scripts/check-checkpoints.mjs",
