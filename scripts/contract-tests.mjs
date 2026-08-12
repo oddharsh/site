@@ -41,7 +41,9 @@ import { PAGE_FAMILY_MATCH, serveStaticPage } from "../www/_worker.js/lib/assets
 import { serveMarkdown } from "../www/_worker.js/home.js";
 import { readManifest, workerModule, navFenceBody, readFenceBody, runProfilesBody } from "./gen-manifest.mjs";
 import { PROFILES } from "../www/scripts/shell-data.mjs";
-import { speculationHtml } from "../www/scripts/gen-desktop-partial.mjs";
+import { faviconHref, sectionFavicons, speculationHtml } from "../www/scripts/gen-desktop-partial.mjs";
+import { TASKBAR } from "../www/scripts/shell-data.mjs";
+import { SECTION_FAVICONS } from "../www/_worker.js/lib/desktop.js";
 import { INDEXED_SECTIONS, TWIN_FACTS, buildTwins, checkTwinFacts, htmlFileFor, twinPath } from "./gen-md-twins.mjs";
 import { collectBlockClasses, readDocument } from "./lib/html-to-md.mjs";
 import {
@@ -61,7 +63,8 @@ import { fetchFollowingPublicRedirects, privateHostBlocked } from "../www/_worke
 import { handleHit } from "../www/_worker.js/counter.js";
 import { cronHomeProbe, parseServerTiming } from "../www/_worker.js/perf-probe.js";
 import { gatherWhoareyou } from "../www/_worker.js/whoareyou.js";
-import { handleSearchJson, searchSite } from "../www/_worker.js/search.js";
+import { handleSearchJson, renderSearchPage, searchSite } from "../www/_worker.js/search.js";
+import { renderRun } from "../www/_worker.js/run.js";
 import { getPublicAvailability } from "../cal/src/slots.js";
 import { botHeaders } from "../www/_worker.js/lib/botauth.js";
 import { ml_dsa44 } from "@noble/post-quantum/ml-dsa.js";
@@ -1170,6 +1173,18 @@ test("site search and JSON contract share the generated corpus", async () => {
   assert.equal((await handleSearchJson(new Request("https://aadhar.sh/search.json"), env)).status, 400);
 });
 
+test("the buildable utility shells preserve their no-JS forms", async () => {
+  const run = await renderRun().text();
+  assert.match(run, /<form action="\/run" method="get">/);
+  assert.match(run, /name="cmd"/);
+  assert.match(run, /<meta name="robots" content="noindex">/);
+
+  const search = await renderSearchPage().text();
+  assert.match(search, /<form method="get" action="\/search"/);
+  assert.match(search, /name="q"/);
+  assert.match(search, /Search the public pages/);
+});
+
 test("photo query filters public metadata and never exposes unlisted fields", async () => {
   const env = { ASSETS: staticAssets({
     "/images/metadata.json": { A: { camera: "X-T50", lens: "XF18mm", film: "Classic Chrome", date: "2026:01:02", gps: "secret" }, B: { camera: "Leica", film: "Monochrome", date: "2025:01:02" } },
@@ -1829,6 +1844,43 @@ test("the shell infotip ships minified, hashed, and with a readable twin", async
     "hoist must be hashed before infotip, or infotip's /a/ copy keeps the unhashed specifier");
 });
 
+test("a section's favicon is in its own <head>, never set by script", async () => {
+  // setFavicon() used to read a data-favicon attribute off the matching taskbar
+  // pin at boot. That cost one attribute per pin on EVERY page so that 11 of them
+  // could read one, and it painted the wrong icon first and swapped. The document
+  // states its own favicon now, so the three ways it can regress are asserted.
+
+  // 1. The pins carry no favicon data. A reintroduced attribute is the whole
+  //    per-page cost coming back, and nothing would fail without this.
+  const chrome = await readFile(new URL("www/_worker.js/lib/desktop.js", ROOT), "utf8");
+  assert.doesNotMatch(chrome, /data-favicon/,
+    "taskbar pins must not carry favicon data: the page's own <head> owns this");
+
+  // 2. nav.js sets no favicon. A favicon applied after boot is a visible flip.
+  const nav = await readFile(new URL("www/nav.js", ROOT), "utf8");
+  assert.doesNotMatch(nav, /setFavicon|rel\s*=\s*["']icon["']/,
+    "nav.js must not set the tab favicon; the document declares it");
+
+  // 3. Every taskbar route resolves to an icon that EXISTS on disk, through the
+  //    generated map the worker actually reads. A route added to TASKBAR without
+  //    its tile would otherwise ship a 404 favicon.
+  assert.deepEqual(SECTION_FAVICONS, sectionFavicons(),
+    "lib/desktop.js drifted from shell-data.mjs — run pnpm run gen:shell");
+  for (const item of TASKBAR) {
+    const href = SECTION_FAVICONS[item.path];
+    assert.equal(href, faviconHref(item.label), `${item.path} favicon href`);
+    await readFile(new URL("www" + href, ROOT), "utf8");
+  }
+
+  // 4. The three hand-authored section pages link their own tile. These are the
+  //    only section pages outside lunaPage, so they are the ones that go quiet.
+  for (const [file, slug] of [["garage", "garage"], ["lwe", "lwe"], ["pixel-peeper", "pixel-peeper"]]) {
+    const page = await readFile(new URL(`www/${file}/index.html`, ROOT), "utf8");
+    assert.match(page, new RegExp(`<link rel="icon" type="image/svg\\+xml" href="/section-icons/${slug}\\.svg">`),
+      `www/${file}/index.html must link its own section tile`);
+  }
+});
+
 test("the speculation ruleset has exactly one author", async () => {
   // This block lived in 26 documents plus a runtime injector, and the copies had
   // forked (#338). Two of the three ways it can fork again are structural, so
@@ -1860,6 +1912,10 @@ test("the speculation ruleset has exactly one author", async () => {
   const generator = await readFile(new URL("pipelines/lwe/generate.mjs", ROOT), "utf8");
   assert.doesNotMatch(generator, /speculationrules/,
     "generate.mjs must emit DESKTOP_CHROME and never its own ruleset; a stale template here re-infects every page it regenerates");
+  assert.doesNotMatch(generator, /serviceWorker\.register\(["']\/sw\.js["']\)/,
+    "the LWE generator must not reinstall the retired service worker; /sw.js remains only as a cleanup stub for old clients");
+  assert.match(generator, /<!-- axp:desktop -->\$\{DESKTOP_TOP\}<!-- \/axp:desktop -->/,
+    "the LWE template must hand its desktop to the canonical shell compiler inside one generated sentinel");
 
   // 3. nav.js building one at runtime again, which is where the injected copy
   //    lived. Rules in the HTML parse with the document; injected ones landed
@@ -2357,7 +2413,7 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   assert.doesNotMatch(page, /requestIdleCallback\(load/, "the tooltip island must not transfer before hover intent");
   assert.match(nav, /var bar = D\.getElementById\("axp-taskbar"\);\s*if \(!bar \|\| !D\.getElementById\("axp-desktop"\)\) return;/,
     "every compiled shell must be present before nav.js enhances it");
-  assert.match(nav, /D\.prerendering\) return boot\(\)/, "prerendered static shells must enhance before activation");
+  assert.match(nav, /prerenderDocument\.prerendering\) return boot\(\)/, "prerendered static shells must enhance before activation");
   assert.match(nav, /requestAnimationFrame\(\(\) => requestAnimationFrame\(boot\)\)/, "ordinary static shell enhancement must follow the first useful paint");
   assert.ok(
     page.indexOf('type="application/ld+json"') > page.indexOf('<section class="now-playing"'),

@@ -13,7 +13,7 @@
 // curl and JavaScript-off visits see the same desktop as production. build.mjs
 // independently renders these artifacts and hard-fails on any drift.
 
-import { readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { readManifest } from "../../scripts/gen-manifest.mjs";
 import { DESKTOP, PROFILES, SECTION_ICONS, SPECULATION, TASKBAR, TRAY_ITEMS } from "./shell-data.mjs";
@@ -115,7 +115,8 @@ export function renderDesktopArtifacts(surfaces = readManifest().surfaces) {
     + `// site-manifest.json. Do not hand-edit; run pnpm run gen:shell.\n`
     + `// DESKTOP_TOP opens <body>; DESKTOP_CHROME closes it with icons/taskbar.\n`
     + `export const DESKTOP_TOP = ${JSON.stringify(desktopHtml)};\n`
-    + `export const DESKTOP_CHROME = ${JSON.stringify(chromeHtml)};\n`;
+    + `export const DESKTOP_CHROME = ${JSON.stringify(chromeHtml)};\n`
+    + `export const SECTION_FAVICONS = ${JSON.stringify(sectionFavicons(), null, 2)};\n`;
 
   const spriteWidth = Math.max(...cells.map((cell) => cell.right));
   const spriteHeight = Math.max(...cells.map((cell) => cell.bottom));
@@ -125,8 +126,22 @@ export function renderDesktopArtifacts(surfaces = readManifest().surfaces) {
     + cells.map((cell) => `<g transform="translate(0 ${cell.dy})">${cell.inner}</g>`).join("")
     + "</svg>\n";
 
-  return { desktopHtml, chromeHtml, moduleSource, sprite };
+  const favicons = Object.fromEntries(TASKBAR.map((item) => [
+    faviconSlug(item.label),
+    `${SECTION_ICONS[item.label].replace("<svg ", '<svg width="32" height="32" ')}\n`,
+  ]));
+
+  return { desktopHtml, chromeHtml, moduleSource, sprite, favicons };
 }
+
+// A section's favicon is addressed by ROUTE, because that is what both consumers
+// have in hand: lunaPage knows its own route, and a static page is patched by the
+// path it lives at. The slug is the label with its one space folded, so
+// "pixel peeper" files as pixel-peeper.svg.
+export const faviconSlug = (label) => label.replace(/\s+/g, "-");
+export const faviconHref = (label) => `/section-icons/${faviconSlug(label)}.svg`;
+export const sectionFavicons = () =>
+  Object.fromEntries(TASKBAR.map((item) => [item.path, faviconHref(item.label)]));
 
 const navScript = /<script\b[^>]*\bsrc=["']\/nav\.js["'][^>]*><\/script>/i;
 
@@ -160,6 +175,10 @@ function main() {
   const artifacts = renderDesktopArtifacts();
   writeFileSync("www/_worker.js/lib/desktop.js", artifacts.moduleSource);
   writeFileSync("www/icons.svg", artifacts.sprite);
+  mkdirSync("www/section-icons", { recursive: true });
+  for (const [name, svg] of Object.entries(artifacts.favicons)) {
+    writeFileSync(`www/section-icons/${name}.svg`, svg);
+  }
   let patched = 0;
   for (const file of staticShellPages()) {
     const source = readFileSync(file, "utf8");
@@ -169,6 +188,7 @@ function main() {
   }
   console.log(`lib/desktop.js: top ${artifacts.desktopHtml.length}B, chrome ${artifacts.chromeHtml.length}B`);
   console.log(`www/icons.svg: ${artifacts.sprite.length}B`);
+  console.log(`www/section-icons: ${Object.keys(artifacts.favicons).length} compiled favicons`);
   console.log(`patched ${patched} static pages with the canonical desktop partial`);
 }
 

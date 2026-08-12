@@ -1,0 +1,29 @@
+{
+  // Browser modules need the DOM's globals, while the Worker check deliberately
+  // excludes them so Cloudflare's CacheStorage remains authoritative there.
+  // Keep this a second project: combining the two environments makes both less
+  // accurate and recreates the caches.default collision documented next door.
+  "compilerOptions": {
+    "noEmit": true,
+    "allowJs": true,
+    "checkJs": true,
+    "target": "esnext",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "paths": { "/*": ["../www/*"] },
+    "lib": ["esnext", "dom", "dom.iterable"],
+    "skipLibCheck": true,
+    "strict": false
+  },
+  // The shared hover engine and its two consumers are included together because
+  // tsc follows their static imports. The shell's Run and tray islands complete
+  // the first-interaction surface without pulling Worker modules into this graph.
+  "include": [
+    "../www/hoist.js",
+    "../www/tooltip.js",
+    "../www/infotip.js",
+    "../www/nav.js",
+    "../www/nav-run.js",
+    "../www/nav-tray.js"
+  ]
+}

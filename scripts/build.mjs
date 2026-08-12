@@ -188,6 +188,11 @@ async function checkInvariants() {
     if (await read("www/icons.svg") !== artifacts.sprite) {
       hard.push("icons.svg drifted from shell-data.mjs — run pnpm run gen:shell");
     }
+    for (const [name, svg] of Object.entries(artifacts.favicons)) {
+      if (await read(`www/section-icons/${name}.svg`) !== svg) {
+        hard.push(`section-icons/${name}.svg drifted from shell-data.mjs — run pnpm run gen:shell`);
+      }
+    }
     for (const file of staticShellPages()) {
       const source = await read(file);
       if (patchStaticShell(source, artifacts) !== source) {
@@ -1190,7 +1195,8 @@ for (const [file, srcPath, marker] of SHELLS) {
 // render-blocking sheet every worker-rendered + garage/lwe page loads, almost
 // all of it the heavy View-Source comments (which live on in luna.src.css).
 // Owner-approved 2026-07 as the ONE non-shell file the build is allowed to
-// minify; do not extend CSS minification past luna.css without the owner's say-so.
+// minify. The three first-interaction sheets below are explicit exceptions: each
+// was extracted byte-for-byte from luna.css and loads only with its matching JS.
 {
   const src = await readFile("www/luna.css", "utf8");
   await writeFile(`${OUT}/www/luna.src.css`, src);
@@ -1198,6 +1204,15 @@ for (const [file, srcPath, marker] of SHELLS) {
   const out = `/*! minified at deploy - readable source: /luna.src.css */\n` + code;
   await writeFile(`${OUT}/www/luna.css`, out);
   console.log(`luna.css: ${src.length} -> ${out.length} bytes (+ /luna.src.css)`);
+}
+
+for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
+  const src = await readFile(`www/${file}`, "utf8");
+  await writeFile(`${OUT}/www/${file.replace(".css", ".src.css")}`, src);
+  const code = minifyCss(`www/${file}`, src);
+  const out = `/*! minified at deploy - readable source: /${file.replace(".css", ".src.css")} */\n` + code;
+  await writeFile(`${OUT}/www/${file}`, out);
+  console.log(`${file}: ${src.length} -> ${out.length} bytes`);
 }
 
 // 4b) the LWE conversation pages share their byte-identical structural CSS
@@ -1273,11 +1288,25 @@ for (const [file, srcPath, marker] of SHELLS) {
   };
   const nonce = `?build=${BUILD_NONCE}`;
   const lens = await import(pathToFileURL(resolve(OUT, "www/_worker.js/lens.js")).href + nonce);
+  const run = await import(pathToFileURL(resolve(OUT, "www/_worker.js/run.js")).href + nonce);
+  const search = await import(pathToFileURL(resolve(OUT, "www/_worker.js/search.js")).href + nonce);
   const writing = await import(pathToFileURL(resolve(OUT, "www/_worker.js/writing.js")).href + nonce);
 
   const lensResponse = lens.renderLensShell();
   if (lensResponse.status !== 200) throw new Error(`static /lens renderer returned ${lensResponse.status}`);
   await writeFile(`${OUT}/www/lens.html`, await lensResponse.text());
+
+  const runResponse = run.renderRun();
+  if (runResponse.status !== 200) throw new Error(`static /run renderer returned ${runResponse.status}`);
+  const runHtml = await runResponse.text();
+  if (!runHtml.includes('form action="/run"')) throw new Error("static /run renderer lost its no-JS form");
+  await writeFile(`${OUT}/www/run.html`, runHtml);
+
+  const searchResponse = search.renderSearchPage();
+  if (searchResponse.status !== 200) throw new Error(`static /search renderer returned ${searchResponse.status}`);
+  const searchHtml = await searchResponse.text();
+  if (!searchHtml.includes('form method="get" action="/search"')) throw new Error("static /search renderer lost its blank search form");
+  await writeFile(`${OUT}/www/search.html`, searchHtml);
 
   const env = { ASSETS: assets };
   const indexResponse = await writing.renderWritingIndex(env);
@@ -1291,7 +1320,7 @@ for (const [file, srcPath, marker] of SHELLS) {
     if (response.status !== 200) throw new Error(`static /writing/${post.slug} renderer returned ${response.status}`);
     await writeFile(`${OUT}/www/writing/${post.slug}.html`, await response.text());
   }
-  console.log(`static renders: /lens + /writing index + ${posts.length} notes staged from canonical Worker renderers`);
+  console.log(`static renders: /lens + blank /run + blank /search + /writing index + ${posts.length} notes staged from canonical Worker renderers`);
 }
 
 // 6) content-hash the critical-path shell assets (nav.js + luna.css + lens.js) into
@@ -1368,7 +1397,21 @@ for (const [file, srcPath, marker] of SHELLS) {
   // later reads bytes that already carry its dependency's hashed URL. tooltip depends on
   // hoist, so hoist must be hashed and rewritten first — otherwise tooltip's `/a/` copy
   // ships the unhashed specifier forever, since the rewrite pass deliberately skips `a/`.
+  // `/a/<base>.<hash8>.<ext>` must dehash back to the asset's own filename, or
+  // perf-snapshot's merge (which keys on that dehashed name) reads the top-level
+  // copy and the /a/ copy as two separate assets and counts every byte twice. So
+  // base tracks the FILE, and the js/css pairs that now share a stem are told
+  // apart by extension in hashedFor instead of by a "-style" suffix nothing else
+  // knew about. #341's own size table read +4.82 KiB for what is a -1.28 KiB
+  // change, which is how this was found.
+  const hashKey = (a) => (a.ext && a.ext !== "js" ? `${a.base}.${a.ext}` : a.base);
   const STRING_ASSETS = [
+    { file: "/nav-run.css",     base: "nav-run",           ext: "css", mk: (to) => [
+      [/(\"nav-run\"\s*:\s*)(["'`])\/nav-run\.css\2/g, `$1$2${to}$2`] ] },
+    { file: "/nav-tray.css",    base: "nav-tray",          ext: "css", mk: (to) => [
+      [/(\"nav-tray\"\s*:\s*)(["'`])\/nav-tray\.css\2/g, `$1$2${to}$2`] ] },
+    { file: "/infotip.css",     base: "infotip",           ext: "css", mk: (to) => [
+      [/(\binfotip\b\s*:\s*)(["'`])\/infotip\.css\2/g, `$1$2${to}$2`] ] },
     { file: "/hoist.js",        base: "hoist",        mk: (to) => [
       [/import\((["'`])\/hoist\.js\1\)/g, `import($1${to}$1)`],
       [/(\bfrom\s*)(["'`])\/hoist\.js\2/g, `$1$2${to}$2`] ] },
@@ -1407,9 +1450,9 @@ for (const [file, srcPath, marker] of SHELLS) {
     let hits = 0;
     for (const a of STRING_ASSETS) {
       const bytes = await readFile(`${OUT}/www${a.file}`);
-      const to = `/a/${a.base}.${createHash("sha256").update(bytes).digest("hex").slice(0, 8)}.js`;
+      const to = `/a/${a.base}.${createHash("sha256").update(bytes).digest("hex").slice(0, 8)}.${a.ext || "js"}`;
       await writeFile(`${OUT}/www${to}`, bytes);
-      hashedFor[a.base] = to;
+      hashedFor[hashKey(a)] = to;
       const reps = a.mk(to);
       for (const path of stringTargets) {
         let t; try { t = await readFile(path, "utf8"); } catch { continue; }
@@ -1429,6 +1472,9 @@ for (const [file, srcPath, marker] of SHELLS) {
     if (!idx.includes(hashedFor.tooltip)) throw new Error("index.html was not repointed to hashed tooltip.js");
     if (!idx.includes(hashedFor.hoist) || !run.includes(hashedFor.hoist)) throw new Error("a hoist.js loader was not repointed (index.html or nav-run.js)");
     if (!nav.includes(hashedFor["nav-run"]) || !nav.includes(hashedFor["nav-tray"])) throw new Error("nav.js was not repointed to its first-interaction islands");
+    for (const style of ["nav-run", "nav-tray", "infotip"]) {
+      if (!nav.includes(hashedFor[`${style}.css`])) throw new Error(`nav.js was not repointed to hashed ${style}.css`);
+    }
     if (!lens.includes(hashedFor["lens-browser"])) throw new Error("lens.js was not repointed to hashed lens-browser.js");
     if (!lens.includes(hashedFor["lens-reader"])) throw new Error("lens.js was not repointed to hashed lens-reader.js");
     if (!lens.includes(hashedFor["lens-wire"])) throw new Error("lens.js was not repointed to hashed lens-wire.js");

@@ -1,6 +1,18 @@
 // nav-run.js — first-interaction island for the Run palette and accessories.
 // Static shell links remain the no-JS and failed-module fallback.
 
+/**
+ * @typedef {object} RunItem
+ * @property {string} label
+ * @property {string} [path]
+ * @property {string} [url]
+ * @property {string} [hint]
+ * @property {string} [kind]
+ * @property {string} [accId]
+ * @property {string} [icon]
+ * @property {(body: HTMLElement) => void} [build]
+ */
+
 export function createRun(options) {
   var D = document;
   var kbd = options.kbd;
@@ -12,10 +24,18 @@ export function createRun(options) {
   var preview = null, previewHoist = null, previewLoading = false;
   var PHOTOS = null, WRITING = null;
 
-  function el(html) { var t = D.createElement("template"); t.innerHTML = html.trim(); return t.content.firstChild; }
+  /** @returns {HTMLElement} */
+  function el(html) {
+    var t = D.createElement("template");
+    t.innerHTML = html.trim();
+    var node = t.content.firstElementChild;
+    if (!(node instanceof HTMLElement)) throw new Error("Run island template must produce an element");
+    return node;
+  }
   function esc(s) { return String(s).replace(/[&<>\"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '\"': "&quot;" }[c]; }); }
   function tag(kind, o) { o.kind = kind; return o; }
 
+  /** @type {RunItem[]} */
   var PAGES = [
     { label: "Home", path: "/", hint: "aadhar.sh" },
     { label: "photos", path: "/photos", hint: "every photo, Explorer Thumbnails view — the archive the old /images/ listing became" },
@@ -85,6 +105,7 @@ export function createRun(options) {
   ];
   // `icon` (when present) keys the tile colour + glyph; `hint` doubles as a Run
   // search alias + tooltip, so "Photos"/"Music" still resolve to insta/spotify.
+  /** @type {RunItem[]} */
   var PROFILES = [
     // generated:run-profiles:start
     { label: "GitHub", url: "https://github.com/oddharsh" },
@@ -322,6 +343,7 @@ export function createRun(options) {
         followPointer: false,                      // anchored only; there is no cursor to glide with
         anchorName: "--axp-run-preview",
         contentFor: function (row) {
+          if (!(row instanceof HTMLElement)) return "";
           var src = row.dataset.thumb;
           if (!src) return "";
           // width/height are reserved so the card never reflows as it decodes.
@@ -352,6 +374,7 @@ export function createRun(options) {
   // accessories get the multi-window treatment (the same split XP itself made).
   var ACC_OPEN = {};
 
+  /** @type {RunItem[]} */
   var ACCESSORIES = [
     { label: "Clock", hint: "the current time, ticking", kind: "accessory", accId: "clock", path: "", icon: "🕐", build: buildClock }
   ];
@@ -365,7 +388,8 @@ export function createRun(options) {
     win.style.left = Math.max(8, Math.min(innerWidth - 200, 86 + n * 24)) + "px";
     win.style.top = Math.max(8, 64 + n * 24) + "px";
     D.body.appendChild(win);
-    var bd = win.querySelector(".bd");
+    var bd = /** @type {HTMLElement & {_iv?: number}} */ (win.querySelector(".bd"));
+    if (!bd) throw new Error("Accessory window is missing its body");
     try { a.build(bd); } catch (e) {}
     accFront(win);
     var btn = el('<button class="axp-pin axp-acc-btn" title="' + a.hint + '"><span class="fav" aria-hidden="true">' + a.icon + '</span><span class="lbl">' + a.label + '</span></button>');
@@ -378,6 +402,7 @@ export function createRun(options) {
       ev.stopPropagation(); if (bd._iv) clearInterval(bd._iv); win.remove(); btn.remove(); delete ACC_OPEN[id];
     });
     var tb = win.querySelector(".tb");
+    if (!(tb instanceof HTMLElement)) throw new Error("Accessory window is missing its title bar");
     // Same ProMotion discipline as initIconDrag / initDrag: the gesture writes
     // TRANSFORM only (a pure compositor move, promoted by .axp-dragging's
     // will-change) and commits the final left/top once, on release. Writing
@@ -389,8 +414,8 @@ export function createRun(options) {
     // .axp-acc is position:fixed, so viewport left/top and transform are the same
     // coordinates, and it has no fixed-position descendants, so the transform's
     // new containing block changes nothing.
-    tb.addEventListener("pointerdown", function (e) {
-      if (e.target.closest(".x")) return;
+    tb.addEventListener("pointerdown", function (/** @type {PointerEvent} */ e) {
+      if (e.target instanceof Element && e.target.closest(".x")) return;
       accFront(win);
       var r = win.getBoundingClientRect(), sx = e.clientX, sy = e.clientY, ox = r.left, oy = r.top;
       var nx = ox, ny = oy;
