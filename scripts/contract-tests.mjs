@@ -2357,7 +2357,7 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   assert.doesNotMatch(page, /requestIdleCallback\(load/, "the tooltip island must not transfer before hover intent");
   assert.match(nav, /var bar = D\.getElementById\("axp-taskbar"\);\s*if \(!bar \|\| !D\.getElementById\("axp-desktop"\)\) return;/,
     "every compiled shell must be present before nav.js enhances it");
-  assert.match(nav, /D\.prerendering\) return boot\(\)/, "prerendered static shells must enhance before activation");
+  assert.match(nav, /prerenderDocument\.prerendering\) return boot\(\)/, "prerendered static shells must enhance before activation");
   assert.match(nav, /requestAnimationFrame\(\(\) => requestAnimationFrame\(boot\)\)/, "ordinary static shell enhancement must follow the first useful paint");
   assert.ok(
     page.indexOf('type="application/ld+json"') > page.indexOf('<section class="now-playing"'),
