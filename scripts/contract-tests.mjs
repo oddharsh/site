@@ -1860,6 +1860,10 @@ test("the speculation ruleset has exactly one author", async () => {
   const generator = await readFile(new URL("pipelines/lwe/generate.mjs", ROOT), "utf8");
   assert.doesNotMatch(generator, /speculationrules/,
     "generate.mjs must emit DESKTOP_CHROME and never its own ruleset; a stale template here re-infects every page it regenerates");
+  assert.doesNotMatch(generator, /serviceWorker\.register\(["']\/sw\.js["']\)/,
+    "the LWE generator must not reinstall the retired service worker; /sw.js remains only as a cleanup stub for old clients");
+  assert.match(generator, /<!-- axp:desktop -->\$\{DESKTOP_TOP\}<!-- \/axp:desktop -->/,
+    "the LWE template must hand its desktop to the canonical shell compiler inside one generated sentinel");
 
   // 3. nav.js building one at runtime again, which is where the injected copy
   //    lived. Rules in the HTML parse with the document; injected ones landed
