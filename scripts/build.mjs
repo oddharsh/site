@@ -1878,6 +1878,65 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   console.log(`pages(min): ${pages.length} documents ${before} -> ${after} bytes (${(((before - after) / before) * 100).toFixed(1)}% off raw), ${pages.length} .src.html twins (${generated} from staged, no authored source), ${checked} understanding-check payloads verified byte-equal`);
 }
 
+// 7b-links) Does every internal href/src point at something this site serves?
+//
+// Moving or renaming a page turned every page LINKING to it into a 404, and no gate
+// in this repo read a page body to notice. routes:check sweeps the routes it is
+// told about; invariant #1 asserts the Worker's routes reach run_worker_first.
+// Neither looks at an href.
+//
+// Runs on the MINIFIED tree, deliberately: those are the bytes a visitor gets, and
+// the minifier rewrites asset refs to their hashed /a/ form. Checking the source
+// tree would validate paths nobody is served.
+//
+// Cost, measured: 2645 refs across 48 pages in ~45ms, so this is complete rather
+// than scoped to a diff. A diff-scoped version would be more code and would miss
+// the case where the moved page is not in the diff but its dependents are.
+{
+  const { makeResolver, internalRefs } = await import("./lib/link-integrity.mjs");
+
+  const served = new Set();
+  for (const rel of await readdir(`${OUT}/www`, { recursive: true })) served.add("/" + rel);
+
+  const idxSrc = await readFile("www/_worker.js/index.js", "utf8");
+  const wranglerSrc = await readFile("wrangler.jsonc", "utf8");
+  const routesSrc = (idxSrc.match(/const ROUTES = new Map\(\[([\s\S]*?)\]\);/) || [, ""])[1];
+  const allowSrc = (wranglerSrc.match(/"run_worker_first"\s*:\s*\[([\s\S]*?)\]/) || [, ""])[1];
+  const surfaceList = JSON.parse(await readFile("config/site-manifest.json", "utf8")).surfaces;
+
+  const resolves = makeResolver({
+    files: served,
+    routeKeys: new Set([...routesSrc.matchAll(/\[\s*"([^"]+)"/g)].map((m) => m[1])),
+    allow: [...allowSrc.matchAll(/"([^"]+)"/g)].map((m) => m[1]).filter((a) => !a.startsWith("!")),
+    surfaces: new Set(surfaceList.map((s) => s.path)),
+  });
+
+  const docs = [...served].filter((f) => f.endsWith(".html") && !f.endsWith(".src.html"));
+  const dangling = new Map();
+  let refs = 0;
+  for (const doc of docs) {
+    for (const path of internalRefs(await readFile(`${OUT}/www${doc}`, "utf8"))) {
+      refs++;
+      if (resolves(path)) continue;
+      if (!dangling.has(path)) dangling.set(path, new Set());
+      dangling.get(path).add(doc);
+    }
+  }
+
+  if (dangling.size) {
+    const lines = [...dangling].slice(0, 12)
+      .map(([p, from]) => `  ${p}  <- ${[...from].slice(0, 4).join(", ")}${from.size > 4 ? ` +${from.size - 4}` : ""}`);
+    throw new Error(
+      `link-integrity: ${dangling.size} internal reference(s) point at nothing this site serves:\n`
+      + lines.join("\n")
+      + (dangling.size > 12 ? `\n  … and ${dangling.size - 12} more` : "")
+      + "\n  A moved or renamed page leaves its inbound links behind. Fix the href, or"
+      + "\n  register the new path in config/site-manifest.json (pnpm run gen:manifest).",
+    );
+  }
+  console.log(`links: ${refs} internal refs across ${docs.length} documents all resolve`);
+}
+
 // 7c) CSP: hash every inline <script> in the staged documents, so script-src can
 // drop 'unsafe-inline'. Runs LAST of the HTML passes and before the compression in
 // step 8, because a hash is only true of the FINAL bytes: step 2 minifies the

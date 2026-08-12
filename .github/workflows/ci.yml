@@ -159,10 +159,30 @@ jobs:
       # green before it deploys, because the thing it asserts against is the thing it
       # repairs. That happened the same day (#195) and the documented way out is the
       # local fallback, `pnpm run deploy`, followed by a re-run.
+      # The account id is read out of wrangler.jsonc rather than from a repo
+      # variable. This step said `vars.CLOUDFLARE_ACCOUNT_ID` until 2026-08-12 and
+      # NO repository variable of that name has ever existed, so it expanded to the
+      # empty string on every run.
+      #
+      # HARDENING, not a repair, and worth saying so because the first version of
+      # this comment claimed otherwise. checkApi() falls back to `GET /accounts`
+      # and only degrades when the count is not exactly 1; the scoped CI token sees
+      # exactly one, so the account tier was asserting normally. Measured on either
+      # side of this change: `infra ok: 44 checks passed, 1 skipped or advisory`,
+      # the advisory being the CodeQL note, with no `token sees N accounts` warning
+      # in either run. The two-account fact belongs to the owner's interactive
+      # wrangler login, a DIFFERENT credential from this token.
+      #
+      # What it buys: a value that cannot be silently empty, cannot drift from the
+      # account the deploy targets (it IS that string), and one fewer API call.
+      # release-guard.mjs makes the same helper REQUIRED for ramp.yml, where the
+      # account id is not optional.
+      - name: Resolve the account id from wrangler.jsonc
+        run: node scripts/print-account-id.mjs >> "$GITHUB_ENV"
+
       - name: Check infrastructure declaration
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
           # Rate-limit headroom for the repository-ruleset tier, nothing more.
           # The repo is public, so that endpoint reads without a credential at
           # all; what a token buys is 1000/hr instead of the 60/hr an unauthed
@@ -172,3 +192,31 @@ jobs:
           # CodeQL assertion; see the permissions note at the top of this file.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: pnpm run infra:check
+
+      # Does the committed changelog projection still match D1? /updates and
+      # /restore are precomputed at BUILD time, so a stale projection ships the
+      # previous log and looks fine while being wrong.
+      #
+      # This was deliberately unwired ("NOT wired into the PR job by default", its
+      # own header) because it needs a D1 read. It does not need a NEW credential:
+      # `D1:Read` is already one of the six scopes on CLOUDFLARE_API_TOKEN, so this
+      # costs nothing but the call.
+      #
+      # Fatal on drift rather than advisory, which is safe because the script
+      # already tells a STAGED release apart from a rewrite: rows above D1's newest
+      # that form a contiguous tail are reported as pending, not as drift. So a PR
+      # whose whole job is staging v186 passes, and only a row rewritten below D1's
+      # newest, or a broken sequence, fails.
+      #
+      # Tiered on the credential the same way infra:check is. A fork PR cannot read
+      # repository secrets, and failing somebody's PR for not holding a token would
+      # be a worse check than no check.
+      - name: Check the changelog projection against D1
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ -z "${CLOUDFLARE_API_TOKEN}" ]; then
+            echo "::notice::no CLOUDFLARE_API_TOKEN (fork PR) — skipping the D1 changelog comparison"
+            exit 0
+          fi
+          pnpm run checkpoints:check

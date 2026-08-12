@@ -57,9 +57,13 @@ is the subject split in the table above rather than an accident.
 > bust caches, version bumps, what every script does): [MAINTENANCE.md](docs/MAINTENANCE.md).
 
 ```bash
-# production, the normal path: merge to main; CI promotes the tested commit to
-# production; Workers Builds UPLOADS it as a version and moves no traffic. Then
-# ramp it (10% -> 50% -> 100%, sampling between steps). Workstation-only.
+# production, the normal path, and it needs NOTHING from you at a terminal:
+# merge to main; CI promotes the tested commit to production; Workers Builds
+# UPLOADS it as a version and moves no traffic; ramp.yml then takes it to 10% on
+# its own and WAITS for you to approve the `full` job in the Actions tab, which
+# is what carries it 50% -> 100%. Approve it there, or run the commands below.
+#
+# By hand (still supported, and the only way to roll back):
 pnpm run deploy:promote --dry-run     # which version WOULD ramp. run this first
 pnpm run deploy:promote
 pnpm run deploy:promote --status      # what is serving right now
@@ -285,15 +289,47 @@ worktrees may edit freely, but a worktree is not a release surface.
   the gated pipeline it was meant to protect while doing nothing about a ramp
   that starts unauthenticated and dies after traffic already moved.
 
-  **In practice the ramp is WORKSTATION-ONLY, from your wrangler login.** This
-  paragraph and the token note below described a `.github/workflows/ramp.yml`
-  running it from a scoped environment secret. Checked 2026-08-12 and none of it
-  exists: no such workflow in any commit, the environments are `copilot` and
-  `production` rather than the canary/full pair, and the only repo secret is the
-  six-read-scope `CLOUDFLARE_API_TOKEN`. What landed on 2026-08-06 was the guard
-  rewrite alone; the pipeline it was clearing the way for was never built. The
-  design is still the right one if anyone builds it, which is why it is kept
-  below rather than deleted. Read it as a PLAN.
+  **The ramp runs in Actions now, and it splits at the human.**
+  `.github/workflows/ramp.yml` (built 2026-08-12) fires off a successful
+  `Promote production`, waits for Workers Builds to finish uploading, and then:
+
+  | job | traffic | environment | gate |
+  |---|--:|---|---|
+  | `canary` | 10% | `production-canary` | none, runs on its own |
+  | `full` | 50% then 100% | `production-full` | REQUIRED REVIEWER |
+  | `verify` | none | (no environment, no credential) | runs `dcz:check` |
+
+  So a merge reaches a tenth of traffic by itself and stops. Approving the `full`
+  job is the same decision you were making at a terminal, minus the terminal, and
+  the pause is still the point. A workstation ramp keeps working exactly as
+  before; `release-guard.mjs` asks whether the process can authenticate rather
+  than whether it is CI, which is what made both paths possible.
+
+  Three things about it that are load-bearing rather than incidental:
+
+  - **It checks out `production`, never `main`.** The ramp writes the D1 changelog
+    by diffing the checked-out `checkpoints.json` against D1, so the tree has to
+    be the one that was built and uploaded. This is gotcha 24 solved rather than
+    relocated: CI cannot ramp from a stale tree, and it cannot ramp from one
+    running AHEAD of what is serving either.
+  - **`full` refuses a version the canary never saw.** Approval is asynchronous
+    and Workers Builds uploads a version for every push, so re-resolving the
+    newest production build after an approval could put traffic on something
+    nothing canaried, silently, and every downstream check would pass because a
+    version that built returns 200s. It compares against the 8-char prefix the
+    canary actually put at 10% and fails if it moved.
+  - **The wrangler it runs is the pinned one, which was not true when this was
+    written.** `deploy-promote.mjs` shelled out to `npx wrangler`, and npx
+    resolves whatever it can find: measured 2026-08-12 in a tree with no
+    `node_modules`, `npx wrangler --version` answered **4.105.0** from its own
+    cache while this repo pins 4.120.0. So the wrangler that moved production
+    traffic depended on how the script happened to be invoked. It calls `pnpm
+    exec wrangler` now (see gotcha 29), which resolves the pin itself. Ramp steps
+    still go through `pnpm run` to match the documented interface, but that is
+    consistency now rather than the guardrail it briefly was.
+
+  `--to`, `--steps`, `--status`, `--rollback` and `--dry-run` all still work by
+  hand, and a rollback is still a workstation command on purpose.
 
   What the ramp buys is the ability to read a change before everyone gets it. The
   script deliberately pauses between steps and tells you to go look at Workers
@@ -479,16 +515,78 @@ worktrees may edit freely, but a worktree is not a release surface.
   input can exfiltrate whatever it can read, so WHERE the secret lives is the
   whole control.
 
-  **NOT BUILT, and the whole block is a design rather than a description
-  (verified 2026-08-12).** The plan: a write token
-  (`CLOUDFLARE_API_TOKEN_RAMP`, `Workers Scripts:Edit` + `D1:Edit` and nothing
-  more) as an ENVIRONMENT secret on `production-canary` and `production-full`,
-  never a repo secret, so a job that does not name those environments cannot see
-  it and fork PRs cannot reach it, with required reviewers on `production-full`
-  so majority traffic cannot move without a human, and
-  `.github/workflows/ramp.yml` as the only consumer. None of the three exists
-  today. Keep the shape if you build it; the reasoning about WHERE a secret lives
-  is what makes it safe, and it is unchanged.
+  **BUILT 2026-08-12, and this is now a description.** `CLOUDFLARE_API_TOKEN_RAMP`
+  is an ENVIRONMENT secret on `production-canary` and `production-full`, never a
+  repo secret, so a job that does not name those environments cannot see it and
+  fork PRs cannot reach it. `production-full` carries required reviewers, so
+  majority traffic cannot move without a human. `.github/workflows/ramp.yml` is
+  the only consumer.
+
+  **The scope list, derived from what the ramp actually executes.** This note said
+  `Workers Scripts:Edit` + `D1:Edit` "and nothing else" from 2026-08-06 while no
+  such token existed, so the list was never checked against a running ramp:
+
+  | permission | why |
+  |---|---|
+  | Account · Workers Scripts · **Edit** | `versions list`, `deployments status`, `versions deploy` |
+  | Account · D1 · **Edit** | `SELECT` the shipped vnums, `INSERT` the changelog row |
+  | Account · Account Settings · **Read** | wrangler resolves the account |
+
+  **Three Account permissions, and NO User-scoped ones. Measured 2026-08-12** with
+  a real token: `CI=1 … deploy:promote -- --dry-run` resolved a target, printed the
+  current split, and skipped two non-production versions by alias, all without
+  `User Details:Read` or `Memberships:Read`. An earlier version of this table listed
+  those two, inferred from the token Workers Builds generates for itself; they are
+  not needed and are also unavailable on an account-owned token, so listing them
+  sent somebody looking for a category that was never there.
+
+  What the dry run does NOT prove is the two **Edit** halves: it only reads, so a
+  token holding `Workers Scripts:Read` would satisfy it too. `versions deploy` and
+  the D1 `INSERT` are first exercised on a real ramp, and the D1 one fails quietly
+  (see below).
+
+  Restrict Account Resources to this one account. **Workers Routes, KV and R2 are
+  NOT needed**, which is where this is narrower than the token Workers Builds
+  generates for itself: a ramp shifts traffic between versions that already exist
+  and never uploads one, so it needs neither the storage scopes nor routes.
+
+  Why `CLOUDFLARE_ACCOUNT_ID` is what replaces the identity scopes: it is passed
+  explicitly so wrangler never has to enumerate accounts, which is the call those
+  User permissions would have been for. **User-scoped permissions exist only on
+  USER-owned tokens** anyway (scope `com.cloudflare.api.user`, under My Profile,
+  API Tokens); an account-owned token created from Manage Account does not offer the
+  category at all, which reads like a missing option and is a token-type difference.
+
+  The control, which moves nothing:
+
+  ```bash
+  CI=1 CLOUDFLARE_API_TOKEN=<token> CLOUDFLARE_ACCOUNT_ID=<id> pnpm run deploy:promote -- --dry-run
+  ```
+
+  `CI=1` is load-bearing: `release-guard.mjs` ignores the token entirely when `CI`
+  is unset and falls back to the interactive wrangler login, so without it the
+  control passes while testing the wrong credential.
+
+  **An under-scoped D1 fails SILENTLY and late, and that is by design.** The
+  changelog `INSERT` runs only after the last step hits 100%, and it is wrapped in
+  a catch that prints `warn: could not log vN` rather than unwinding a good
+  release. So a missing `D1:Edit` costs a changelog gap on a ramp that otherwise
+  reports success. The backstop is `checkpoints:check`, now a CI gate, which goes
+  red on the next PR naming the missing row.
+
+  **Both environments also restrict deployments to `main`, and that rule is doing
+  real work rather than tidiness.** `workflow_dispatch` can target any branch that
+  carries the workflow file, so without a branch policy anyone able to push a
+  branch could ship a modified `ramp.yml` and read the token out of it. The
+  environment is the boundary the secret lives behind; a branch policy is what
+  stops the boundary being reachable from an arbitrary branch.
+
+  This state is NOT declared in `infra.json` yet, which makes it the one piece of
+  release-critical dashboard state on the honour system: delete the required
+  reviewer and the gate is gone silently, which is precisely the failure the
+  ruleset declarations exist to catch. Declaring `environments` and asserting them
+  in `check-infra.mjs` is the obvious follow-up and is deliberately not bundled
+  into the change that created them.
 
   **The default is still read-only, and adding a second write token is still a
   no.** CI's own token stays exactly as it was. Scope it to exactly these six
@@ -652,6 +750,47 @@ and uses `HTMLRewriter` to inject them into the static HTML:
 If either chunk fails (KV empty, R2 missing, etc.), the rewriter silently
 skips and the inline JS in `index.html` takes over with a client-side
 fetch.
+
+### Moving a page: what checks it, and what does not
+
+Renaming or moving a page used to leave every page LINKING to it pointing at a
+404, and nothing in the repo noticed. `routes:check` sweeps the routes it is
+TOLD about, which is the forward direction. Build invariant #1 asserts the
+Worker's routes reach `run_worker_first`. Neither one reads an href.
+
+**`scripts/lib/link-integrity.mjs`, run as a build invariant, closes that.** Every
+same-origin `href`/`src` in the minified documents has to resolve to a real staged
+file, a `<path>.html`, a Worker `ROUTES` key, a registered surface, or a dynamic
+namespace. 2645 refs across 48 documents in ~45ms, so it is COMPLETE rather than
+scoped to the diff: a diff-scoped version would be more code and would miss the
+case where the moved page is not in the diff and its dependents are.
+
+Two things about it are worth knowing before editing it.
+
+**`run_worker_first` cannot be the resolver on its own.** It answers "does the
+Worker SEE this request", not "does this path SERVE a page", and it carries
+`/garage/*` and `/lwe/*` — the namespaces holding most of the site's pages. A
+glob-only resolver called `/garage/renamed-page` fine, measured on a deliberately
+broken ref. So a namespace that already holds registered surfaces is GOVERNED by
+the registry: a path in it must be registered or be a real file, and the glob buys
+it nothing. The governed set is derived from `site-manifest.json`, so adding a
+section governs it with no edit here.
+
+**The scanner is quote-aware because minify-html unquotes attributes.** The served
+bytes carry `href=/coffee` far more often than `href="/coffee"`, and the first
+draft, written against the quoted form, reported 33 refs where there were 2645 and
+passed with a straight face. That is the third naive scanner this repo's minified
+output has caught.
+
+What this does NOT cover, deliberately:
+
+- **Prose mentions of a path** in docs or page copy. CLAUDE.md discusses routes
+  that were deliberately deleted (`/lens/rendered`), so asserting every `/path`
+  string in prose resolves would false-fire on its own history.
+- **The Run palette and nav fences**, which are generated from the registry and
+  asserted by invariant #8 instead.
+- **Off-origin links.** A dead third-party URL is a different job and needs the
+  network.
 
 ### Markdown twins (`scripts/gen-md-twins.mjs`)
 
@@ -2388,6 +2527,43 @@ pnpm run deploy:direct
     before investigating, because a repeat alert about an old run is
     indistinguishable from a fresh failure in the notification itself.
 
+    **It fires on EVERY PUSH now, and the outage has not moved in a day.** Three
+    more on 2026-08-12 (#351, check-runs `94224768202`, `94225922560`, plus one on
+    #340), all the same `CAPIError: 400`, taking it to nine recorded. One of them
+    landed on a commit whose entire diff moved `${{ }}` expressions out of `run:`
+    blocks and into `env:`, which strictly REDUCES attack surface — so a red mark
+    here carries no information about the diff even in the direction it claims to.
+    Those three cost three separate investigations in one session, which is the
+    real bill: the check is not required, it gates nothing, and it reliably pulls
+    somebody into a log.
+
+    So the loop to run is short. Confirm the run id is new (a repeat alert looks
+    identical), grep the log for `CAPIError`, and stop. Do NOT re-read the diff
+    looking for what upset it, and do not push anything to appease it.
+
+    **Turning off Copilot Autofix does NOT stop it, measured 2026-08-12.** This
+    paragraph said the fix was in GitHub's settings and named autofix; the owner
+    turned it off and the very next push failed identically. The run proves the
+    toggle landed and changed nothing that matters: the log carries
+    `COPILOT_AGENT_ONLINE_EVALUATION_DISABLED: true` and `[skills]
+    session=github/code-scanning enabled=false source=disabled`, then crashes on
+    the same `CAPIError: 400` anyway. The job also ran 29s instead of ~80s, so
+    something genuinely changed; the check still fails.
+
+    Which setting (if any) actually silences `dynamic/agents/github-advanced-security`
+    is UNKNOWN, and guessing has now cost one wrong answer. It configures nothing
+    in this repo (gotcha 27's own note: it lives in no workflow file here), so
+    treat it as an upstream red mark that gates nothing until GitHub fixes their
+    model routing. `CodeQL` and `Analyze (actions)` are the checks doing the real
+    scanning and both stay green throughout.
+
+    **What it will not catch, learned the same day.** `Analyze (actions)` passed on
+    a workflow that interpolated `${{ inputs.base }}` straight into a `run:` block,
+    because the CodeQL Actions analyzer treats `workflow_dispatch` inputs as
+    trusted. That is defensible (dispatch needs write access) and it means the
+    injection class in workflow code is on you to read for. Grep new workflows for
+    `\$\{\{` inside `run:` and route values through `env:` instead.
+
 28. **Bun runs this build byte-identically and about twice as fast, and it is
     still not adopted.** `pnpm run bun:check` is the control, in the same idiom as
     `kitesurf:check`: it probes the zstd dictionary option, diffs a full node
@@ -2497,6 +2673,25 @@ pnpm run deploy:direct
     wrangler`, wrangler is a pinned devDependency, and `dlx` would fetch from the
     registry and ignore the pin. Use `dlx` only for something genuinely not in
     `package.json`.
+
+    **"all 30 call sites" was wrong, and EIGHT survived in `scripts/` until
+    2026-08-12.** `check-checkpoints.mjs`, `deploy-promote.mjs`, `lens-webmcp.mjs`
+    (x2), `perf-budget.mjs` (x2), `perf-snapshot.mjs` and `release-status.mjs` each
+    spawned `execFile("npx", ["wrangler", …])`, which the original sweep missed
+    because it read as a STRING ARGUMENT rather than a shell command, so no grep
+    for `npx wrangler` as a phrase would find it. That is the same blind spot the
+    `holding/` rename hit from the other direction: a path or command assembled
+    from array elements is invisible to a search for the assembled form.
+
+    The worst of the eight was `deploy-promote.mjs`, so **the wrangler that moved
+    production traffic depended on how the ramp was invoked**: under `pnpm run` it
+    got the pin, and from a tree with no `node_modules` it got whatever npx had
+    cached (measured: 4.105.0 against a pinned 4.120.0). All eight are `pnpm exec`
+    now and were each exercised afterwards, since a spawn failure here surfaces as
+    a missing binary at the worst moment rather than at review.
+
+    The general rule the sweep needed: grep for `"npx"` as a quoted token, not for
+    `npx <binary>` as a phrase.
 
     **THREE `npx` strings deliberately survive, and editing them breaks a check.**
     Both Workers Builds commands in `infra.json`, plus the mirrored copies in

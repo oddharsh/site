@@ -1278,6 +1278,19 @@ on the Bliss desktop (`www/og/<section>-<name>.png`), wired via
 `og:image`/`twitter:card` in each page's `<head>`. Regenerate when a demo's look
 changes or a new page lands:
 
+**Easiest path: run it from the repo.** `.github/workflows/og-cards.yml` does both
+commands below on a runner and opens a PR, with an `only` input that maps to
+`OG_ONLY` so you can re-bake one card. Actions tab, "OG cards", Run workflow.
+
+It is **dispatch-only on purpose, never scheduled.** The cards capture production
+so data-driven demos render populated, and the photo grid, the live counters and
+the routing prober are not deterministic between runs, so a nightly job would
+open a PR of changed PNGs every night that meant nothing. `dictionary-roll.yml`
+can be nightly because its output is a pure function of what production serves;
+this is not that.
+
+By hand:
+
 ```bash
 pnpm run og-cards                    # captures LIVE aadhar.sh (data-driven demos render populated)
 node www/scripts/inject-og-meta.mjs   # add the meta to any page missing it (idempotent)
