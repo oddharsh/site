@@ -43,59 +43,8 @@
   // that page now states plainly that the shell does not opt in.
 
   // Run destinations and profiles live in /nav-run.js, transferred only when
-  // someone opens the palette. Section icons stay here because first-level
-  // pages use them immediately as their matching browser-tab favicon.
-
-  // per-section icons — original CSS/SVG glyphs (colored tile + white pictogram,
-  // so they read on the blue taskbar button AND a white browser tab). Used BOTH as
-  // each first-level route's tab favicon (set by setFavicon below) and its taskbar
-  // app-button icon — the favicons and the desktop shell finally share one language.
-  // Glossy Luna app-tile chrome shared by every SECTION icon. `p` is a per-route id
-  // prefix (so gradient/filter ids never collide when several render on one page);
-  // `c` is [light, mid, dark, outline]; `art` is the white pictogram. The face is a
-  // top->bottom 3-stop gradient with a white inner rim, a curved top gloss sweep, and
-  // a soft drop shadow; the pictogram gets a faint dark drop-shadow so it sits on the
-  // gloss like real XP art. ONE tile drives both the taskbar app-button AND the
-  // route's browser-tab favicon (setFavicon encodeURIComponent's it), so the shell
-  // and the favicons speak one language. Original recreations in the Luna spirit,
-  // drawn from scratch — never Microsoft's actual icon assets.
-  function sectionTile(p, c, art) {
-    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs>'
-      + '<linearGradient id="' + p + 'F" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="' + c[0] + '"/><stop offset=".5" stop-color="' + c[1] + '"/><stop offset="1" stop-color="' + c[2] + '"/></linearGradient>'
-      + '<linearGradient id="' + p + 'G" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>'
-      + '<filter id="' + p + 'S" x="-20%" y="-15%" width="140%" height="145%"><feDropShadow dx="0" dy=".6" stdDeviation=".7" flood-color="#000" flood-opacity=".32"/></filter>'
-      + '</defs><g filter="url(#' + p + 'S)">'
-      + '<rect x="1" y="1" width="30" height="30" rx="7" fill="url(#' + p + 'F)" stroke="' + c[3] + '" stroke-width="1"/>'
-      + '<rect x="2.3" y="2.3" width="27.4" height="27.4" rx="5.8" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width="1"/>'
-      + '<path d="M3 9 Q3 3 9 3 H23 Q29 3 29 9 V12.5 Q16 18 3 12.5 Z" fill="url(#' + p + 'G)"/>'
-      + '<g style="filter:drop-shadow(0 .5px .4px rgba(0,0,0,.35))">' + art + '</g>'
-      + '</g></svg>';
-  }
-  var SECTION_ICONS = {
-    garage:      sectionTile("garage", ["#ffb45a","#ef8f24","#c2660a","#8f4d06"], '<g fill="#fff"><rect x="14" y="5" width="4" height="22" rx="1.5"/><rect x="5" y="14" width="22" height="4" rx="1.5"/><rect x="14" y="5" width="4" height="22" rx="1.5" transform="rotate(45 16 16)"/><rect x="14" y="5" width="4" height="22" rx="1.5" transform="rotate(-45 16 16)"/><circle cx="16" cy="16" r="6.5"/></g><circle cx="16" cy="16" r="2.8" fill="#ef8f24"/>'),
-    writing:     sectionTile("writing", ["#6fa0ee","#2f6bd6","#1a4ba8","#143c86"], '<g fill="#fff"><rect x="8" y="8" width="16" height="2.6" rx="1.3"/><rect x="8" y="14.7" width="16" height="2.6" rx="1.3"/><rect x="8" y="21.4" width="10" height="2.6" rx="1.3"/></g>'),
-    reading:     sectionTile("reading", ["#de8186","#c1545a","#93333a","#732830"], '<g fill="#fff"><path d="M16 9 C13 7.2 9 7 6 7.6 V24 C9 23.4 13 23.6 16 25 Z"/><path d="M16 9 C19 7.2 23 7 26 7.6 V24 C23 23.4 19 23.6 16 25 Z" opacity=".82"/></g><path d="M16 9 V25" stroke="#c1545a" stroke-width="1.4"/>'),
-    serendipity: sectionTile("serendipity", ["#a886e8","#7c4dd6","#5a32a8","#482788"], '<rect x="6" y="8" width="20" height="18" rx="2" fill="#fff"/><rect x="6" y="8" width="20" height="5" rx="2" fill="#e7e7ef"/><g fill="#7c4dd6"><rect x="9" y="16" width="3.4" height="3.4"/><rect x="14.3" y="16" width="3.4" height="3.4"/><rect x="19.6" y="16" width="3.4" height="3.4"/><rect x="9" y="21" width="3.4" height="3.4"/><rect x="14.3" y="21" width="3.4" height="3.4"/></g>'),
-    around:      sectionTile("around", ["#5cc6ba","#1f9b8e","#137468","#0d5a50"], '<path d="M16 6 C11.6 6 8 9.3 8 13.6 C8 19 16 26 16 26 C16 26 24 19 24 13.6 C24 9.3 20.4 6 16 6 Z" fill="#fff"/><circle cx="16" cy="13.6" r="3.2" fill="#1f9b8e"/>'),
-    whoareyou:   sectionTile("whoareyou", ["#8190e6","#4a5bd0","#3140a4","#263286"], '<rect x="15" y="4" width="2" height="4" fill="#fff"/><circle cx="16" cy="4" r="2" fill="#fff"/><rect x="8" y="9" width="16" height="14" rx="3.5" fill="#fff"/><circle cx="12.5" cy="15" r="2.1" fill="#4a5bd0"/><circle cx="19.5" cy="15" r="2.1" fill="#4a5bd0"/><rect x="12" y="19" width="8" height="1.8" rx="0.9" fill="#4a5bd0"/>'),
-    music:       sectionTile("music", ["#6fcd8a","#2faa55","#1d8040","#156030"], '<g fill="#fff"><rect x="17" y="7" width="2.6" height="14"/><path d="M19.6 7 C23 8 25 10 24.4 13.6 C23 11 21 11 19.6 11.8 Z"/><ellipse cx="14" cy="21" rx="4.4" ry="3.5"/></g>'),
-    coffee:      sectionTile("coffee", ["#b08858","#875c34","#5e3c1e","#472d16"], '<path d="M8 12 h13 v6 a6.5 6.5 0 0 1-13 0 Z" fill="#fff"/><path d="M21 13 h3 a2.6 2.6 0 0 1 0 5.2 h-3" fill="none" stroke="#fff" stroke-width="2.2"/><g stroke="#fff" stroke-width="1.8" stroke-linecap="round"><path d="M11 5.5 v3"/><path d="M14.5 5 v3.5"/></g>'),
-    lwe:         sectionTile("lwe", ["#838ae6","#4b53c9","#333aa0","#272d82"], '<path d="M6 9 h20 a2 2 0 0 1 2 2 v9 a2 2 0 0 1-2 2 H14 l-5 4 v-4 H6 a2 2 0 0 1-2-2 v-9 a2 2 0 0 1 2-2 Z" fill="#fff"/><g stroke="#4b53c9" stroke-width="1.7" stroke-linecap="round" fill="none"><path d="M8.5 13.5 q2 -2.4 4 0 t4 0 t4 0"/><path d="M8.5 18 q2 -2.4 4 0 t4 0"/></g>'),
-    lens:        sectionTile("lens", ["#79c7e6","#2f9fc4","#1d7895","#145d73"], '<rect x="5.5" y="5" width="15" height="19" rx="2" fill="#fff"/><g fill="#2f9fc4"><rect x="8.5" y="9.5" width="9" height="1.7" rx="0.6"/><rect x="8.5" y="13" width="9" height="1.7" rx="0.6"/><rect x="8.5" y="16.5" width="6" height="1.7" rx="0.6"/></g><circle cx="20.5" cy="20.5" r="6" fill="#2f9fc4" stroke="#fff" stroke-width="2.2"/><circle cx="18.6" cy="18.6" r="1.5" fill="#fff" opacity=".85"/><path d="M24.8 24.8 L28.5 28.5" stroke="#fff" stroke-width="3.2" stroke-linecap="round"/>'),
-    // a console window with a prompt inside it. The navy is PowerShell's own
-    // #012456, lifted two stops at the top of the gradient so the tile still
-    // reads at 15px against the blue taskbar — the true colour is close enough
-    // to the taskbar's that the glyph sank into it. Blue is the crowded hue in
-    // this set (writing, lwe, whoareyou and lens all sit in it), so this one
-    // goes darker than any of them and carries a white window face, which is
-    // what separates it at a glance.
-    terminal:    sectionTile("terminal", ["#4a6ea8","#22497f","#012456","#001633"], '<rect x="4" y="6.5" width="24" height="19" rx="2" fill="#fff"/><rect x="4" y="6.5" width="24" height="4.2" rx="2" fill="#dfe3ee"/><g stroke="#012456" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M9 15 l3.4 2.9 L9 20.8"/></g><rect x="15.2" y="19.2" width="7.6" height="2" rx="1" fill="#012456"/>'),
-    // an eye whose pupil is a literal pixel — the whole premise in one glyph. The
-    // magenta is the one hue the tile set had left (serendipity owns violet,
-    // reading owns dusty rose), so it stays legible at 15px on the taskbar. Key is
-    // the taskbar label, so it carries the space; the sprite id gets slugged.
-    "pixel peeper": sectionTile("peeper", ["#f19ad0","#d24d9c","#a32d73","#82205a"], '<path d="M2.6 16 C7 9.6 11.4 7.1 16 7.1 C20.6 7.1 25 9.6 29.4 16 C25 22.4 20.6 24.9 16 24.9 C11.4 24.9 7 22.4 2.6 16 Z" fill="#fff"/><rect x="11.1" y="11.1" width="9.8" height="9.8" rx="1" fill="#a32d73"/><rect x="12.9" y="12.9" width="3.1" height="3.1" rx=".5" fill="#fff" opacity=".92"/>')
-  };
+  // someone opens the palette. Section artwork lives only in shell-data.mjs;
+  // the compiler already projected it into each taskbar pin's sprite image.
   var PHOTOS = null;          // lazy: [{ label, path, hint, kind:'photo' }]
   var WRITING = null;         // lazy: [{ label, path, hint, kind:'writing' }]
   var photosPromise = null, writingPromise = null;
@@ -578,23 +527,23 @@
   }
 
   // ── boot ────────────────────────────────────────────────────────────────────
-  // set the tab favicon to the current first-level section's icon, so the favicon
-  // matches its taskbar button. exact-match only — /garage/<sub> + /writing/<slug>
-  // + home keep their own page favicons (e.g. each garage demo's distinct icon).
+  // Set the tab favicon to the current first-level section's compiled SVG asset,
+  // so the browser no longer carries a second SVG constructor + icon table.
+  // Exact-match only — /garage/<sub> + /writing/<slug> + home keep their own
+  // page favicons (e.g. each garage demo's distinct icon).
   function setFavicon() {
     var np = location.pathname.replace(/\/+$/, "") || "/";
     var sec = [].filter.call(D.querySelectorAll(".axp-pin"), function (pin) {
       return ((pin.getAttribute("href") || "").replace(/\/+$/, "") || "/") === np;
     })[0];
-    var label = sec && sec.querySelector(".lbl");
-    label = label && label.textContent.trim();
-    if (!label || !SECTION_ICONS[label]) return;
+    var icon = sec && sec.getAttribute("data-favicon");
+    if (!icon) return;
     var link = D.querySelector('link[rel~="icon"]');
     if (link && !(link instanceof HTMLLinkElement)) return;
     var iconLink = /** @type {HTMLLinkElement} */ (link || D.createElement("link"));
     if (!link) { iconLink.rel = "icon"; (D.head || D.documentElement).appendChild(iconLink); }
     iconLink.type = "image/svg+xml";
-    iconLink.href = "data:image/svg+xml," + encodeURIComponent(SECTION_ICONS[label]);
+    iconLink.href = icon;
   }
 
   // The shell's Speculation Rules used to be built here and appended at boot.

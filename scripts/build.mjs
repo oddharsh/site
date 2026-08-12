@@ -188,6 +188,11 @@ async function checkInvariants() {
     if (await read("www/icons.svg") !== artifacts.sprite) {
       hard.push("icons.svg drifted from shell-data.mjs — run pnpm run gen:shell");
     }
+    for (const [name, svg] of Object.entries(artifacts.favicons)) {
+      if (await read(`www/section-icons/${name}.svg`) !== svg) {
+        hard.push(`section-icons/${name}.svg drifted from shell-data.mjs — run pnpm run gen:shell`);
+      }
+    }
     for (const file of staticShellPages()) {
       const source = await read(file);
       if (patchStaticShell(source, artifacts) !== source) {

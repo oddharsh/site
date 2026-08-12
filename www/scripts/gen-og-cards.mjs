@@ -108,12 +108,11 @@ const HERO = {
   // photo and can change two tiles to three. Nothing downstream may assume a count
   // (see the alt text in og-pages.mjs).
   //
-  // Capture this one against PRODUCTION, not the local static server. Its favicon
-  // is set at runtime by nav.js's setFavicon, which matches location.pathname
-  // against the taskbar roster EXACTLY — and the static server serves the page at
-  // /pixel-peeper/index.html, which does not equal /pixel-peeper. Locally the
-  // favicon never gets set and the card's brand stamp silently falls back to a
-  // plain blue square. Anything with a nav.js-provided favicon has this problem.
+  // Capture this one against PRODUCTION, not the local static server. nav.js
+  // adopts the matching taskbar pin's compiled /section-icons SVG as the
+  // favicon, and its exact pathname match sees /pixel-peeper in production but
+  // /pixel-peeper/index.html under a plain static server. Locally the favicon
+  // never gets set and the card's brand stamp silently falls back to blue.
   "pixel-peeper": { preset: "#go", presetWait: 2600, span: [".row", ".gb"], hero: [".gb", ".tiles"] },
 };
 
