@@ -115,7 +115,7 @@ function pageHtml(spec) {
 ${spec.demoCss || ""}</style>
 </head>
 <body>
-${DESKTOP_TOP}
+<!-- axp:desktop -->${DESKTOP_TOP}<!-- /axp:desktop -->
 <div class="window">
   <div class="title-bar" aria-hidden="true">
     <span class="title-text"><span class="icon"></span>aadhar.sh/lwe — ${titleSuffix}</span>
@@ -142,9 +142,6 @@ ${spec.messages.map((m) => renderMsg(m, c)).join("\n\n")}
   </div>
 </div>
 
-<script>
-if ("serviceWorker" in navigator) { var reg = function () { navigator.serviceWorker.register("/sw.js").catch(function () {}); }; "requestIdleCallback" in window ? requestIdleCallback(reg, { timeout: 2000 }) : setTimeout(reg, 1000); }
-</script>
 ${demoJs}${askScript}${understanding}
 <script src="/nav.js" defer></script>
 <!-- axp:shell -->${DESKTOP_CHROME}<!-- /axp:shell -->
