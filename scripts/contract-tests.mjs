@@ -5043,6 +5043,32 @@ test("a spaced end tag and an --!> comment close their elements", async () => {
     "outbound link extraction skips script bodies closed with a space");
 });
 
+// HTML lets an end tag carry attributes, so `</script bar>` closes a script element
+// as surely as `</script>`. A stripper that only allows whitespace before the `>`
+// hands the whole body through.
+test("an end tag carrying attributes still closes its element", async () => {
+  const { lensMarkdown } = await import("../www/_worker.js/lens.js");
+  const { contentOf } = await import("../www/_worker.js/webmention-send.js");
+
+  assert.ok(!lensMarkdown("<body><script>var leak=1;</script bar>tail</body>", "https://x/").includes("leak"),
+    "lensMarkdown closes on </script bar>");
+  assert.ok(!contentOf("<html><body><script>var s=1;</script bar>real</body></html>").includes("var s"),
+    "contentOf closes on </script bar>");
+});
+
+// Removing a span can RE-FORM the thing being removed out of what is left either
+// side: `<!-` + `<!--x-->` + `-` collapses to `<!--` the moment the middle goes.
+// The webmention strippers are immune for free, since they replace with a SPACE
+// that keeps the two sides apart; lensMarkdown replaces with "" to preserve
+// markdown spacing, so it pays for that with a loop instead.
+test("stripping a comment cannot leave a fresh comment opener behind", async () => {
+  const { lensMarkdown } = await import("../www/_worker.js/lens.js");
+  const once = "<!-<!--x-->-".replace(/<!--[\s\S]*?(?:-->|--!>)/g, "");
+  assert.equal(once, "<!--", "one pass really does re-form the opener");
+  assert.ok(!lensMarkdown("<body><p>a<!-<!--x-->-</p><p>b</p></body>", "https://x/").includes("<!--"),
+    "the fixpoint loop clears what one pass re-formed");
+});
+
 // ── lens parse budget: the CPU-bound half ────────────────────────────────
 
 test("the parse is capped, and a prefix parse says so instead of under-reporting", async () => {

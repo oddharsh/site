@@ -2673,21 +2673,25 @@ export function lensText(html) {
   return lensDecode(s).replace(/\s+/g, " ").trim();
 }
 
-// One pass of /<[^>]+>/g is ALREADY a fixpoint, and it is worth writing down why so
-// nobody re-derives it: the match runs from a `<` to the next `>`, so any `<` that
-// survives a pass has no `>` after it anywhere, and a second pass can never match.
-// The classic re-formation bug (a pass eating an inner tag and closing an outer one
-// out of the leftovers) needs a NARROWER pattern, like /<script>/g, to bite.
+// Two things a single pass gets wrong, and only the second one is obvious.
 //
-// The loop is here for the two readers who cannot see that argument: CodeQL, which
-// flags every single-pass multi-character strip as js/incomplete-multi-character-
-// sanitization, and the next person to swap this regex for a narrower one, where the
-// proof stops holding and the loop starts earning its keep. It costs one extra scan
-// that finds nothing. Bounded anyway, because this runs on third-party pages up to
-// 2MB and an unbounded fixpoint over someone else's bytes is their budget to spend.
-function lensStripTags(h, repl = "") {
-  let out = String(h), prev = null, guard = 0;
-  while (out !== prev && guard++ < 8) { prev = out; out = out.replace(/<[^>]+>/g, repl); }
+// An end tag may carry attributes, so `</script bar>` closes a script element as
+// surely as `</script>` does, and a stripper spelled `</script\s*>` hands the body
+// through. That one is a plain fidelity bug: script source lands in the markdown.
+//
+// The subtle one is that removing a span can RE-FORM the very thing being removed
+// out of what is left on either side. `<!-` + `<!--x-->` + `-` collapses to `<!--`
+// the moment the middle goes, so one pass leaves a comment opener behind. Note that
+// the webmention strippers are immune to this for free, because they replace with a
+// SPACE rather than "", which keeps the two sides from touching. These replace with
+// "" to preserve markdown spacing, so they pay for it with a loop instead.
+//
+// Bounded, because this runs on third-party pages up to 2MB and an unbounded
+// fixpoint over someone else's bytes is their budget to spend. Real documents reach
+// a fixpoint on pass two.
+function untilStable(s, re, repl = "") {
+  let out = String(s), prev = null, guard = 0;
+  while (out !== prev && guard++ < 8) { prev = out; out = out.replace(re, repl); }
   return out;
 }
 
@@ -2696,9 +2700,9 @@ function lensStripTags(h, repl = "") {
 export function lensMarkdown(html, baseUrl) {
   let s = html;
   const b = s.match(/<body[^>]*>([\s\S]*)<\/body>/i); if (b) s = b[1];
-  s = s.replace(/<!--[\s\S]*?(?:-->|--!>)/g, "");
-  s = s.replace(/<(script|style|noscript|template|svg|head|nav|footer|aside)\b[\s\S]*?<\/\1\s*>/gi, "");
-  s = s.replace(/<pre[^>]*>([\s\S]*?)<\/pre>/gi, (m, i) => "\n\n```\n" + lensDecode(lensStripTags(i)).replace(/\n+$/g, "") + "\n```\n\n");
+  s = untilStable(s, /<!--[\s\S]*?(?:-->|--!>)/g);
+  s = untilStable(s, /<(script|style|noscript|template|svg|head|nav|footer|aside)\b[\s\S]*?<\/\1\b[^>]*>/gi);
+  s = s.replace(/<pre[^>]*>([\s\S]*?)<\/pre>/gi, (m, i) => "\n\n```\n" + lensDecode(untilStable(i, /<[^>]+>/g)).replace(/\n+$/g, "") + "\n```\n\n");
   s = s.replace(/<code[^>]*>([\s\S]*?)<\/code>/gi, (m, i) => "`" + lensStripInline(i).trim() + "`");
   s = s.replace(/<br\s*\/?>/gi, "\n");
   s = s.replace(/<hr\s*\/?>/gi, "\n\n---\n\n");
@@ -2710,13 +2714,13 @@ export function lensMarkdown(html, baseUrl) {
   s = s.replace(/<(strong|b)\b[^>]*>([\s\S]*?)<\/\1>/gi, (m, t, i) => "**" + lensStripInline(i).trim() + "**");
   s = s.replace(/<(em|i)\b[^>]*>([\s\S]*?)<\/\1>/gi, (m, t, i) => "*" + lensStripInline(i).trim() + "*");
   s = s.replace(/<\/(p|div|section|article|header|main|ul|ol|table|tr|h[1-6])>/gi, "\n\n");
-  s = lensStripTags(s);
+  s = untilStable(s, /<[^>]+>/g);
   s = lensDecode(s);
   s = s.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").replace(/[ \t]{2,}/g, " ");
   return s.trim();
 }
 
-export function lensStripInline(h) { return lensDecode(lensStripTags(h, " ")).replace(/\s+/g, " "); }
+export function lensStripInline(h) { return lensDecode(untilStable(h, /<[^>]+>/g, " ")).replace(/\s+/g, " "); }
 
 export function lensTagAttr(tag, name) { const m = String(tag).match(new RegExp(name + "\\s*=\\s*(\"([^\"]*)\"|'([^']*)'|([^\\s>]+))", "i")); return m ? (m[2] ?? m[3] ?? m[4] ?? "") : ""; }
 

@@ -310,14 +310,14 @@ function mentionKind(html, target) {
 // about my page — far more useful than the post's opening line.
 function excerptAround(html, target) {
   const stripped = String(html)
-    .replace(/<script\b[\s\S]*?<\/script\s*>/gi, " ")
-    .replace(/<style\b[\s\S]*?<\/style\s*>/gi, " ")
+    .replace(/<script\b[\s\S]*?<\/script\b[^>]*>/gi, " ")
+    .replace(/<style\b[\s\S]*?<\/style\b[^>]*>/gi, " ")
     // <svg> matters as much as <script> here: an inline icon carries a d="M9.64a1.998
     // 2 0 0 0 2.83 0l1.25-1.25…" path, and a page like a GitHub gist is full of them.
     // Left in, that geometry is what lands in the excerpt and makes a real mention
     // read like spam.
-    .replace(/<svg\b[\s\S]*?<\/svg\s*>/gi, " ")
-    .replace(/<noscript\b[\s\S]*?<\/noscript\s*>/gi, " ")
+    .replace(/<svg\b[\s\S]*?<\/svg\b[^>]*>/gi, " ")
+    .replace(/<noscript\b[\s\S]*?<\/noscript\b[^>]*>/gi, " ")
     .replace(/<!--[\s\S]*?(?:-->|--!>)/g, " ");
   const e = firstMatch(stripped, /class="[^"]*\be-content\b[^"]*"[^>]*>([\s\S]{0,1200})</i);
   const hay = e || stripped;

@@ -190,9 +190,9 @@ export function contentOf(html) {
   return String(html)
     .replace(/<!-- axp:shell -->[\s\S]*?<!-- \/axp:shell -->/g, " ")
     .replace(/<!-- axp:desktop -->[\s\S]*?<!-- \/axp:desktop -->/g, " ")
-    .replace(/<head\b[\s\S]*?<\/head\s*>/i, " ")
-    .replace(/<script\b[\s\S]*?<\/script\s*>/gi, " ")
-    .replace(/<style\b[\s\S]*?<\/style\s*>/gi, " ")
+    .replace(/<head\b[\s\S]*?<\/head\b[^>]*>/i, " ")
+    .replace(/<script\b[\s\S]*?<\/script\b[^>]*>/gi, " ")
+    .replace(/<style\b[\s\S]*?<\/style\b[^>]*>/gi, " ")
     .replace(/<!--[\s\S]*?(?:-->|--!>)/g, " ");
 }
 

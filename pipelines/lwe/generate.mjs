@@ -192,7 +192,7 @@ function injectBetween(file, start, end, content) {
   if (i === -1 || j === -1) { console.log(`  · ${file}: markers not found, skipped (${start})`); return false; }
   const next = src.slice(0, i + start.length) + "\n" + content + "\n" + src.slice(j);
   writeFileSync(path, next);
-  console.log(`  · ${file}: rewrote ${start.replace(/<!--|--!?>|\/\//g, "").trim()} region`);
+  console.log(`  · ${file}: rewrote ${start.replace(/[^\w:-]+/g, " ").replace(/^[\s-]+|[\s-]+$/g, "")} region`);
   return true;
 }
 
