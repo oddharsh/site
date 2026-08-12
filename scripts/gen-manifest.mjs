@@ -3,19 +3,19 @@
 // surface registry from site-manifest.json, so the places that used to list the
 // site's pages by hand cannot fork again.
 //
-//   node scripts/gen-manifest.mjs        # regen the worker module + nav.js fences
+//   node scripts/gen-manifest.mjs        # regen the worker module + Run fences
 //
 // What this OWNS (regenerated between markers; do not hand-edit those regions):
 //   - holding/_worker.js/lib/site-manifest.js  — AGENT_SURFACES, the projection
 //     MCP resources/list serves (agents:true only, no shell bytes)
-//   - holding/nav.js generated:garage-pages + generated:lwe-pages — the Run
+//   - holding/nav-run.js generated:garage-pages + generated:lwe-pages — the Run
 //     palette's garage/lwe sub-entries (terse {label,path,hint}, no temporal data)
 //
 // What this deliberately does NOT own (hand-authored, VERIFIED by build.mjs #8):
 //   - sitemap.xml — carries per-page hand-tuned <lastmod>; generating would
 //     flatten a real SEO freshness signal. build.mjs enforces coverage instead.
 //   - holding/garage/index.html — rich hand-written gallery cards. Verified.
-//   - nav.js top-level PAGES (Home/photos/…) — hand-authored. Verified subset.
+//   - nav-run.js top-level PAGES (Home/photos/…) — hand-authored. Verified subset.
 //
 // The projection functions below are PURE and exported, so build.mjs re-runs the
 // exact same logic in-memory and fails the deploy if a committed output drifts.
@@ -23,9 +23,10 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
+import { PROFILES } from "../holding/scripts/shell-data.mjs";
 
 export const MANIFEST = "site-manifest.json";
-const NAV = "holding/nav.js";
+const NAV = "holding/nav-run.js";
 const WORKER_MOD = "holding/_worker.js/lib/site-manifest.js";
 const FENCE_SECTIONS = [["garage", "garage-pages"], ["lwe", "lwe-pages"]];
 
@@ -46,6 +47,18 @@ export function navFenceBody(surfaces, section) {
     .filter((s) => s.section === section && s.kind === "content" && s.flags.run)
     .map(navEntry)
     .join("\n");
+}
+
+// The Run island is a browser projection of the same profiles the shell compiler
+// stamps onto the desktop. This fence keeps search and visible shortcuts exact.
+export function runProfilesBody(profiles = PROFILES) {
+  return profiles.map((profile) => {
+    const fields = ["label", "icon", "hint", "url"]
+      .filter((key) => profile[key])
+      .map((key) => `${key}: ${JSON.stringify(profile[key])}`)
+      .join(", ");
+    return `    { ${fields} },`;
+  }).join("\n").replace(/,$/, "");
 }
 
 // the agent catalog: only agents:true surfaces, only the fields resources/list
@@ -113,8 +126,9 @@ function main() {
     nav = writeFenceBody(nav, marker, body);
     counts.push(`${body.split("\n").filter(Boolean).length} ${section}`);
   }
+  nav = writeFenceBody(nav, "run-profiles", runProfilesBody());
   writeFileSync(NAV, nav);
-  console.log(`nav.js: ${counts.join(" + ")} palette entries`);
+  console.log(`nav-run.js: ${counts.join(" + ")} palette entries + ${PROFILES.length} profiles`);
 
   writeFileSync(WORKER_MOD, workerModule(surfaces));
   console.log(`lib/site-manifest.js: ${agentSurfaces(surfaces).length} agent surfaces`);

@@ -3,7 +3,7 @@
 // Authoring stays buildless: everything in holding/, cal/, and serendipity/ is
 // committed readable and is the source of truth. This script stages the static
 // holding tree plus the two embedded application modules under .build/ and
-// minifies exactly six client scripts (the assets pages load) plus the homepage
+// minifies the selected client scripts (the assets pages load) plus the homepage
 // HTML; images and _headers ship byte-identical to git. Each transformed asset
 // gets a readable twin deployed alongside it, because View Source is part of the
 // product and minification must not cost it.
@@ -32,8 +32,9 @@ import { brotliCompressSync, brotliDecompressSync, constants as zlibConstants, z
 import minifyHtml from "@minify-html/node";
 import { transform as transformCss } from "lightningcss";
 import { minifySync } from "oxc-minify";
-import { readManifest, workerModule, navFenceBody, readFenceBody } from "./scripts/gen-manifest.mjs";
+import { readManifest, workerModule, navFenceBody, readFenceBody, runProfilesBody } from "./scripts/gen-manifest.mjs";
 import { HTML_MARKERS } from "./scripts/lib/html-markers.mjs";
+import { patchStaticShell, renderDesktopArtifacts, staticShellPages } from "./holding/scripts/gen-desktop-partial.mjs";
 
 const OUT = ".build";
 
@@ -174,23 +175,26 @@ async function checkInvariants() {
     hard.push(`luna.css failed to parse as CSS: ${e.message.split("\n")[0]}`);
   }
 
-  // 4 (warn) — the static desktop partial is current with nav.js's data. A
-  // byte-compare would false-fire on whitespace, so this is a count proxy: one
-  // taskbar pin per SUBPAGE, one desktop icon per DESKTOP entry (Notepad +
-  // profiles). Catches the real drift (added/removed a destination without
-  // re-running gen-desktop-partial.mjs).
+  // 4 (hard) — the checked-in desktop shell is the exact projection of
+  // shell-data.mjs + site-manifest.json. The old count proxy let a whole page
+  // keep an older taskbar as long as the central partial had the right number
+  // of pins; /access did exactly that and silently missed /terminal. Render the
+  // canonical artifacts in memory and compare every consumer byte-for-byte.
   try {
-    const nav = await read("holding/nav.js");
-    const desktopMod = await read("holding/_worker.js/lib/desktop.js");
-    const chrome = JSON.parse((desktopMod.match(/DESKTOP_CHROME = ("(?:[^"\\]|\\.)*");/) || [,'""'])[1]);
-    const countLabels = (block) => (((nav.match(new RegExp("var " + block + " = \\[([\\s\\S]*?)\\];")) || [,""])[1].match(/label:/g)) || []).length;
-    const subpages = countLabels("SUBPAGES");
-    const profiles = countLabels("PROFILES");
-    const pins = (chrome.match(/class="axp-pin"/g) || []).length;
-    const icons = (chrome.match(/data-key=/g) || []).length;
-    if (pins !== subpages) warn.push(`lib/desktop.js has ${pins} taskbar pins but nav.js SUBPAGES has ${subpages} — re-run gen-desktop-partial.mjs`);
-    if (icons !== profiles + 1) warn.push(`lib/desktop.js has ${icons} desktop icons but nav.js has ${profiles + 1} (Notepad + profiles) — re-run gen-desktop-partial.mjs`);
-  } catch (e) { warn.push(`generator freshness check could not run: ${e.message}`); }
+    const artifacts = renderDesktopArtifacts();
+    if (await read("holding/_worker.js/lib/desktop.js") !== artifacts.moduleSource) {
+      hard.push("lib/desktop.js drifted from shell-data.mjs/site-manifest.json — run pnpm run gen:shell");
+    }
+    if (await read("holding/icons.svg") !== artifacts.sprite) {
+      hard.push("icons.svg drifted from shell-data.mjs — run pnpm run gen:shell");
+    }
+    for (const file of staticShellPages()) {
+      const source = await read(file);
+      if (patchStaticShell(source, artifacts) !== source) {
+        hard.push(`${file}: static desktop partial drifted — run pnpm run gen:shell`);
+      }
+    }
+  } catch (e) { hard.push(`desktop generator freshness check could not run: ${e.message}`); }
 
   // 5 (warn) — the OS-window critical-CSS copies are divergent per-context
   // subsets (cal carries almost none), so a full byte-guard would false-fire.
@@ -282,20 +286,21 @@ async function checkInvariants() {
   let manifestChecked = 0;
   try {
     const { surfaces } = readManifest();
-    const nav = await read("holding/nav.js");
+    const nav = await read("holding/nav-run.js");
+    const desktop = await read("holding/_worker.js/lib/desktop.js");
 
     // 8a — generated projections match `pnpm run gen:manifest` output exactly.
     const modActual = (await read("holding/_worker.js/lib/site-manifest.js")).trim();
     if (modActual !== workerModule(surfaces).trim()) hard.push("lib/site-manifest.js drifted from site-manifest.json — run pnpm run gen:manifest");
     for (const [section, marker] of [["garage", "garage-pages"], ["lwe", "lwe-pages"]]) {
-      if (readFenceBody(nav, marker) !== navFenceBody(surfaces, section)) hard.push(`nav.js generated:${marker} drifted from site-manifest.json — run pnpm run gen:manifest`);
+      if (readFenceBody(nav, marker) !== navFenceBody(surfaces, section)) hard.push(`nav-run.js generated:${marker} drifted from site-manifest.json — run pnpm run gen:manifest`);
     }
+    if (readFenceBody(nav, "run-profiles") !== runProfilesBody()) hard.push("nav-run.js profiles drifted from shell-data.mjs — run pnpm run gen:manifest");
 
     // parse the live surfaces out of each hand-authored consumer.
     const navPagesBlock = (nav.match(/var PAGES = \[([\s\S]*?)\n {2}\];/) || [, ""])[1];
     const navRun = new Set([...navPagesBlock.matchAll(/path:\s*"(\/[^"]*)"/g)].map((m) => m[1]));
-    const subBlock = (nav.match(/var SUBPAGES = \[([\s\S]*?)\];/) || [, ""])[1];
-    const navTaskbar = new Set([...subBlock.matchAll(/path:\s*"([^"]+)"/g)].map((m) => m[1]));
+    const navTaskbar = new Set([...desktop.matchAll(/class=\\"axp-pin\\"[^>]*href=\\"([^"]+)\\"/g)].map((m) => m[1]));
     const sitemap = await read("holding/sitemap.xml");
     const smLocs = new Set([...sitemap.matchAll(/<loc>https:\/\/aadhar\.sh([^<]*)<\/loc>/g)].map((m) => m[1] || "/"));
     // the generated desktop partial is chrome, not gallery content, and it links
@@ -314,8 +319,8 @@ async function checkInvariants() {
       for (const p of w) if (!have.has(p)) hard.push(`${label}: ${p} is flagged in site-manifest.json but missing from the surface`);
       if (!opts.subsetOnly) for (const p of have) if (!w.has(p)) hard.push(`${label}: ${p} is in the surface but not flagged in site-manifest.json`);
     };
-    bidi("run/nav PAGES", want("run"), navRun);
-    bidi("taskbar/nav SUBPAGES", want("taskbar"), navTaskbar);
+    bidi("run/nav-run.js PAGES", want("run"), navRun);
+    bidi("taskbar/compiled desktop", want("taskbar"), navTaskbar);
     bidi("gallery/garage index", want("gallery"), galLinks);
     // sitemap carries leaf content the registry doesn't own (writing posts,
     // resume files), so forward is full but reverse is scoped to garage/lwe.
@@ -527,6 +532,8 @@ const clientEdgeMirror = (source, decl) => {
 // readable and verbatim (no version string, no twin, nothing to tripwire).
 const SHELLS = [
   ["nav.js",     "/nav.src.js",     "axp-histnav"],
+  ["nav-run.js", "/nav-run.src.js", "axp-run"],
+  ["nav-tray.js", "/nav-tray.src.js", "axp-balloon"],
   ["notepad.js", "/notepad.src.js", "np-window"],
   ["lens.js",    "/lens.src.js",    "replaceState"],   // verify-routes.mjs marker
   ["lens-browser.js", "/lens-browser.src.js", "LensBrowser"],
@@ -1365,6 +1372,13 @@ for (const [file, srcPath, marker] of SHELLS) {
     { file: "/hoist.js",        base: "hoist",        mk: (to) => [
       [/import\((["'`])\/hoist\.js\1\)/g, `import($1${to}$1)`],
       [/(\bfrom\s*)(["'`])\/hoist\.js\2/g, `$1$2${to}$2`] ] },
+    // First-interaction shell islands. nav-run depends on hoist, so hoist must
+    // be rewritten into its source before nav-run receives its own hash. Both
+    // are then rewritten into nav.js before the shared shell is hashed below.
+    { file: "/nav-run.js",      base: "nav-run",      mk: (to) => [
+      [/import\((["'`])\/nav-run\.js\1\)/g, `import($1${to}$1)`] ] },
+    { file: "/nav-tray.js",     base: "nav-tray",     mk: (to) => [
+      [/import\((["'`])\/nav-tray\.js\1\)/g, `import($1${to}$1)`] ] },
     { file: "/lens-browser.js", base: "lens-browser", mk: (to) => [
       [/(["'`])\/lens-browser\.js\?v=1\1/g, `$1${to}$1`] ] },
     { file: "/lens-reader.js",  base: "lens-reader",  mk: (to) => [
@@ -1411,8 +1425,10 @@ for (const [file, srcPath, marker] of SHELLS) {
     const nav = await readFile(`${OUT}/holding/nav.js`, "utf8");
     const lens = await readFile(`${OUT}/holding/lens.js`, "utf8");
     const tip = await readFile(`${OUT}/holding${hashedFor.tooltip}`, "utf8");
+    const run = await readFile(`${OUT}/holding${hashedFor["nav-run"]}`, "utf8");
     if (!idx.includes(hashedFor.tooltip)) throw new Error("index.html was not repointed to hashed tooltip.js");
-    if (!idx.includes(hashedFor.hoist) || !nav.includes(hashedFor.hoist)) throw new Error("a hoist.js loader was not repointed (index.html or nav.js)");
+    if (!idx.includes(hashedFor.hoist) || !run.includes(hashedFor.hoist)) throw new Error("a hoist.js loader was not repointed (index.html or nav-run.js)");
+    if (!nav.includes(hashedFor["nav-run"]) || !nav.includes(hashedFor["nav-tray"])) throw new Error("nav.js was not repointed to its first-interaction islands");
     if (!lens.includes(hashedFor["lens-browser"])) throw new Error("lens.js was not repointed to hashed lens-browser.js");
     if (!lens.includes(hashedFor["lens-reader"])) throw new Error("lens.js was not repointed to hashed lens-reader.js");
     if (!lens.includes(hashedFor["lens-wire"])) throw new Error("lens.js was not repointed to hashed lens-wire.js");

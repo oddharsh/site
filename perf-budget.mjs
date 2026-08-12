@@ -48,6 +48,8 @@ import { HTML_MARKERS } from "./scripts/lib/html-markers.mjs";
 // advisory while the site has no field-RUM baseline for path prioritization.
 const ASSET_ENVELOPES = {
   "nav.js":         { role: "shared deferred shell",       gzipKiB: 20, brotliKiB: 18 },
+  "nav-run.js":     { role: "first-open Run island",       gzipKiB: 12, brotliKiB: 10 },
+  "nav-tray.js":    { role: "first-click tray island",     gzipKiB: 5,  brotliKiB: 4 },
   "notepad.js":     { role: "writing-only island",         gzipKiB: 4,  brotliKiB: 3.5 },
   "lens.js":        { role: "lens-only island",             gzipKiB: 24, brotliKiB: 21 },
   // Raised from 4/3.5 on 2026-08-08 for the interaction recipes: the chip row,
@@ -157,7 +159,7 @@ const WORKER_ALERT_GROWTH = 0.25;
 // profile at that resolution has no business failing a PR.
 const WORKER_STARTUP_ALERT_MS = 50;
 const TWINS = [
-  "nav.src.js", "notepad.src.js", "lens.src.js", "lens-browser.src.js",
+  "nav.src.js", "nav-run.src.js", "nav-tray.src.js", "notepad.src.js", "lens.src.js", "lens-browser.src.js",
   "quiz.src.js", "tooltip.src.js", "infotip.src.js", "hoist.src.js", "luna.src.css",
   "lwe-base.src.css",
 ];

@@ -51,6 +51,8 @@ for (const file of lweSpecFiles) {
   assert.match(html, /<script src="\/quiz\.js" defer><\/script>/, `lwe-pipeline/specs/${file}: generator omitted quiz runtime`);
   assert.match(html, /id="axp-desktop"/, `lwe-pipeline/specs/${file}: generator omitted static desktop shell`);
   assert.match(html, /id="axp-taskbar"/, `lwe-pipeline/specs/${file}: generator omitted static taskbar shell`);
+  assert.equal((html.match(/<link rel="stylesheet" href="\/lwe-base\.css">/g) || []).length, 1, `lwe-pipeline/specs/${file}: generator omitted shared LWE CSS`);
+  assert.doesNotMatch(html, /<style>[\s\S]*?\*\s*\{\s*box-sizing:/, `lwe-pipeline/specs/${file}: generator re-inlined shared LWE structure`);
 }
 
 validateRegistry();

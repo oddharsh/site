@@ -15,10 +15,10 @@
 // Both are the same pale-yellow box, which is why they are one surface here.
 //
 // Everything it says is read from live state or from data the shell already
-// loads: a pin's page count comes from nav.js's own destination table, the tray
-// rows from the JSON their balloons already fetch, the clock's date from the
-// clock. Nothing is decorative and nothing is guessed — a row whose value is
-// missing is dropped, exactly like the photo tooltip's EXIF rows.
+// carries: a pin's page count is compiled into its static link, the tray rows
+// come from the JSON their balloons also fetch, and the clock's date comes from
+// the clock. Nothing is decorative and nothing is guessed — a row whose value
+// is missing is dropped, exactly like the photo tooltip's EXIF rows.
 //
 // The hover ENGINE is /hoist.js, shared with tooltip.js and the Run preview.
 // What this file owns is which chrome has something to say, and what.
@@ -58,7 +58,6 @@ const plural = (n, one) => n + " " + one + (n === 1 ? "" : "s");
  *        of that rule is how the two come to disagree about what has a tip.
  * @param {object} [o.initial] the hover that arrived before this module did
  * @param {string} [o.kbd]     "⌘K" / "Ctrl K", already platform-resolved
- * @param {Array}  [o.pages]   nav.js's destination table, counted here (see below)
  * @param {object} [o.load]    { sys, upd, writing }: the shell's own data readers
  */
 export function start(o) {
@@ -67,19 +66,6 @@ export function start(o) {
   const findTarget = o.find;
   const kbd = o.kbd || "";
   const load = o.load || {};
-  // How many destinations live under a section, counted from the table nav.js
-  // already carries. Counting HERE rather than there keeps the derivation on
-  // the lazy side of the split: a visitor who never points at a taskbar button
-  // pays for none of it. One pass, cached, because a pin is hovered repeatedly.
-  const pages = o.pages || [];
-  const counted = Object.create(null);
-  const under = (path) => {
-    if (counted[path] === undefined) {
-      counted[path] = pages.filter((p) => p.path.indexOf(path + "/") === 0).length;
-    }
-    return counted[path];
-  };
-
   const tip = document.createElement("div");
   tip.id = "axp-infotip";
   tip.setAttribute("popover", "manual");
@@ -114,16 +100,16 @@ export function start(o) {
 
   // ── content, one builder per family ────────────────────────────────────────
 
-  // A taskbar app button. "Contains" counts what nav.js's own destination table
-  // knows under that section, so it can only ever be a real number of real
-  // pages; a section with nothing under it simply loses the row. "Running" is
-  // the pressed state the taskbar already paints, said out loud.
+  // A taskbar app button. "Contains" is compiled from site-manifest.json into
+  // the static shell, so it can only ever be a real number of real pages; a
+  // section with nothing under it simply loses the row. "Running" is the
+  // pressed state the taskbar already paints, said out loud.
   const pinTip = (a) => {
     const name = (a.querySelector(".lbl") || {}).textContent || a.dataset.tip || "";
     const path = a.getAttribute("href") || "";
     // /writing is the one section whose contents nav.js does not already carry
     // (the notes are a fetch, not a table), so it counts notes rather than pages.
-    const n = path === "/writing" ? notes(a) : under(path);
+    const n = path === "/writing" ? notes(a) : Number(a.dataset.count || 0);
     const held = n ? plural(n, path === "/writing" ? "note" : "page") : "";
     return card(name, a.dataset.tip, [
       ["Type", "Application"],
