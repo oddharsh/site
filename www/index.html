@@ -732,6 +732,33 @@ footer .signature small { color: oklch(56.93% 0 0); }
           image.removeAttribute("data-photo-deferred");
         }
       };
+
+      // AVIF DECODE REPAIR, for engines that fetch a tile happily and cannot
+      // decode it. Measured 2026-08-12 against Kitesurf, Cloudflare's agent
+      // browser: all twelve tiles returned HTTP 200 and every one failed, so the
+      // grid was twelve blank squares to any agent that renders this page.
+      //
+      // Every tile names ONE url on purpose (see lib/photo-grid.js: a <picture>
+      // here had its JPEG fallback instantiated over and over as the cursor
+      // crossed the grid). That decision is untouched. This is the recovery
+      // path, and it costs a browser that CAN decode AVIF exactly nothing,
+      // because `error` never fires there.
+      //
+      // The stem is read back out of the failing url rather than shipped in a
+      // data-* attribute, so the repair adds no bytes to any tile. `-400` is
+      // spelled out rather than matched as `-\d+` because a stem may legitimately
+      // end in a dash and digits, and the small tier is the only suffix we mint.
+      // /images/<stem>.jpg then 301s to the hashed JPEG, which is a hop this path
+      // can afford and the fast path never takes.
+      document.querySelector(".photos")?.addEventListener("error", (event) => {
+        const image = event.target;
+        if (!(image instanceof HTMLImageElement) || image.dataset.jpgTried) return;
+        const stem = /\/i\/([^/]+?)(?:-400)?\.[0-9a-f]{8}\.avif(?:$|\?)/.exec(image.src);
+        if (!stem) return;
+        image.dataset.jpgTried = "1";
+        image.src = "/images/" + stem[1] + ".jpg";
+      }, true);   // capture: `error` on an <img> does not bubble
+
       fetch("/photos/grid.html")
         .then((r) => (r.ok ? r.text() : null))
         .then((html) => {

@@ -2383,7 +2383,14 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   // <noscript> twin is a thumbnail fetched and discarded milliseconds later.
   assert.match(baked, /data-photo-deferred/, "baked tiles must keep their URLs in data-* until hydration decides");
   assert.match(baked, /data-src="\/i\/X1-400\.aaaaaaaa\.avif"/, "the baked tile carries its one 400px AVIF in data-src");
-  assert.match(baked, /<noscript><img/, "every baked tile needs its script-off twin");
+  // The script-off twin is where <picture> is SAFE, and the two assertions
+  // below are the boundary. Inert markup cannot instantiate a fallback, so the
+  // repeated JPEG loads that took <picture> off the live tiles cannot happen
+  // here, while a no-JS reader whose engine cannot decode AVIF still gets a
+  // grid instead of twelve blank frames.
+  assert.match(baked, /<noscript><picture><source type="image\/avif" srcset="\/i\/X1-400\.aaaaaaaa\.avif"><img[^>]+src="\/i\/X1\.aaaaaaaa\.jpg"/,
+    "the script-off twin offers AVIF and falls back to the JPEG");
+  assert.match(baked, /<noscript>[\s\S]*<img[\s\S]*<\/noscript>/, "every baked tile still needs its script-off twin");
   assert.doesNotMatch(baked.slice(0, baked.indexOf("<noscript>")), /\ssrc="/,
     "a real src outside the noscript twin is a discarded download");
 
@@ -2394,6 +2401,20 @@ test("homepage selects 12 photos and transfers all of them", async () => {
     "one grid tile must expose one browser image resource, with no JPEG fallback to churn on hover");
   assert.doesNotMatch(fragment, /data-photo-deferred|data-src=|data-srcset=/,
     "a fragment tile has nothing to defer for; leaving it deferred is how the grid went blank in an unrendered tab");
+
+  // The live tiles stay single-URL, so an engine that cannot decode AVIF needs a
+  // RECOVERY path rather than a second candidate. Measured 2026-08-12: Kitesurf
+  // fetched all twelve with HTTP 200 and decoded none, and it does fire `error`,
+  // which is the event this listener rides. Capture is required because `error`
+  // on an <img> does not bubble, and the stem is parsed back out of the failing
+  // URL so the repair costs no bytes on a tile that will never use it.
+  const home = await readFile(new URL("www/index.html", ROOT), "utf8");
+  const repair = home.slice(home.indexOf("AVIF DECODE REPAIR"), home.indexOf("fetch(\"/photos/grid.html\")"));
+  assert.ok(repair.length > 0, "the homepage must carry the AVIF decode repair");
+  assert.match(repair, /addEventListener\("error"[\s\S]*\}, true\)/, "the repair must listen in the CAPTURE phase or it never fires");
+  assert.match(repair, /\(\?:-400\)\?/, "the small tier is the only suffix we mint, so match it literally rather than -\\d+");
+  assert.match(repair, /dataset\.jpgTried/, "a failing JPEG must not loop back into the handler");
+  assert.match(repair, /"\/images\/" \+ stem\[1\] \+ "\.jpg"/, "recover through the legacy redirect, which needs no hash in the page");
   assert.doesNotMatch(fragment, /<noscript>/, "the fragment only ever arrives via fetch(), so a script-off twin is dead bytes");
   assert.match(worker, /\{ deferred: false \}/, "/photos/grid.html must render the live-URL form");
 

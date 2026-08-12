@@ -103,8 +103,20 @@ export function renderPhotoSlots(pick, altMap = {}, { deferred = true } = {}) {
     // they are the entire grid, which is why the baked set has to be real
     // photos rather than empty frames. The fragment needs no twin — reaching it
     // at all required fetch().
+    //
+    // This ONE tile carries <picture>, and the reason it can is the sentence
+    // above: inert markup cannot instantiate a fallback, so the repeated JPEG
+    // loads that took <picture> off the live tiles are impossible here. What it
+    // buys is the no-JS reader that cannot decode AVIF, who otherwise gets a
+    // blank grid with no script running to repair it. Measured 2026-08-12: on
+    // /photos, which still ships <picture>, Kitesurf selected the JPEG for all
+    // 158 tiles and broke none, because a well-behaved engine DECLINES a source
+    // type it cannot decode rather than claiming it. The live tiles keep one URL.
+    const jpg = p.thumb_jpg ? abs(p.thumb_jpg) : null;
     const noScript = deferred
-      ? `<noscript><img alt="${alt}" width="600" height="600" src="${escAttr(thumb)}" loading="lazy"${pri} decoding="async"></noscript>`
+      ? `<noscript>${jpg
+        ? `<picture><source type="image/avif" srcset="${escAttr(thumb)}"><img alt="${alt}" width="600" height="600" src="${escAttr(jpg)}" loading="lazy"${pri} decoding="async"></picture>`
+        : `<img alt="${alt}" width="600" height="600" src="${escAttr(thumb)}" loading="lazy"${pri} decoding="async">`}</noscript>`
       : "";
 
     const image = deferred
