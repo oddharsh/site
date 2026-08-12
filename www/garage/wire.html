@@ -216,7 +216,9 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
     <p class="lede">
       This site was no-build on principle: every page inline, every byte committed
       the way it ships. This is the story of the first build step that earned its
-      place anyway, the brotli rabbit hole that led there, the Oxc and Lightning CSS
+      place anyway, the brotli rabbit hole that led there, the
+      <a href="https://github.com/oxc-project/oxc" rel="external">Oxc</a> and
+      <a href="https://github.com/parcel-bundler/lightningcss" rel="external">Lightning CSS</a>
       knobs that survived contact with the real site, and the cache layer that finally
       made a header the site had been sending for months actually do something.
       Every number below was measured on this site, most of them twice.
@@ -495,7 +497,8 @@ transition:filter 60ms ease-out}</pre></figure>
     <div class="cf-feat">
       <h2>Sidebar: Oxc without the bundler cosplay</h2>
       <p>The earlier four-shell head-to-head still explains why the switch was attractive:
-        Oxc was about six times faster than esbuild, while the brotli output differed by only
+        Oxc was about six times faster than
+        <a href="https://github.com/evanw/esbuild" rel="external">esbuild</a>, while the brotli output differed by only
         40 bytes. But the thing now shipped is narrower than “the Rust toolchain”: this repo
         uses Oxc Minify directly. It does not add Rolldown, and it does not bundle the six
         client islands together.</p>

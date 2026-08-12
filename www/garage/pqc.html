@@ -122,6 +122,20 @@ Certificate:             ecdsa-with-SHA256, P-256</code></pre>
                  sig2=("@authority" "signature-agent");created=1785186311;
                    keyid="rn-mldsa-2026-07-27";alg="ml-dsa-44";tag="web-bot-auth"</code></pre>
 <p>A verifier that only knows Ed25519 reads <code>sig1</code> and skips the label it does not recognise. Nothing breaks, and the cost of ignoring <code>sig2</code> is zero. That property is what makes it defensible to ship an algorithm the registry has not blessed. The token <code>ml-dsa-44</code> is this site's spelling, chosen to match the registry's existing convention so it slots in if a real registration lands, and <a href="/bot">/bot</a> says plainly that you should verify <code>sig1</code> and ignore <code>sig2</code>.</p>
+<p>The code that puts it there is the same shape. Two labels, each signing its own parameters, joined into one dictionary:</p>
+<pre><code>const base = (params) =&gt; utf8([
+  `"@authority": ${host}`,
+  `"signature-agent": "${SIG_AGENT}"`,
+  `"@signature-params": ${params}`,
+].join("\n"));
+
+const p1 = paramsFor(created, edKid, "ed25519");
+const p2 = paramsFor(created, pqKid, "ml-dsa-44");
+
+headers.set("Signature-Input", `sig1=${p1}, sig2=${p2}`);
+headers.set("Signature",
+  `sig1=:${b64(edSign(base(p1)))}:, sig2=:${b64(pqSign(base(p2)))}:`);</code></pre>
+<p>That is the whole mechanism, and the rest of the file is concerns that sit beside signing rather than steps inside it. A shape check that throws on a malformed AKP key, because the key directory advertises this key and a broken one has to be loud. The <code>if (!key) return null</code> that drops back to <code>sig1</code> alone, which is the degrade path the closing section argues for. The module-scope key cache priced two sections down. And one shared <code>created</code> for both labels, so a verifier comparing them never sees a skew we invented. Peel those four off and the 30 lines are the 10 above.</p>
 <p>The public key is published under the same JWKS as an <code>AKP</code> key per <a href="https://www.rfc-editor.org/rfc/rfc9964.html" target="_blank" rel="noopener">RFC 9964</a>, which standardised ML-DSA for JOSE and COSE in May 2026. So the key format is a real standard even though the wire token is not:</p>
 <div class="pqc-live" id="pqc-live">
   <div class="pqc-live-head">Live, from this site's key directory</div>
