@@ -35,6 +35,7 @@
     "dcz:check": "node scripts/check-dictionary-support.mjs",
     "kitesurf:check": "node scripts/check-kitesurf.mjs",
     "bun:check": "node scripts/check-bun.mjs",
+    "speculation:probe": "node scripts/speculation-probe.mjs",
     "checkpoints:check": "node scripts/check-checkpoints.mjs",
     "checkpoints:sync": "node scripts/check-checkpoints.mjs --sync",
     "inp": "node scripts/inp-lab.mjs",

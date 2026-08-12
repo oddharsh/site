@@ -41,6 +41,7 @@ import { PAGE_FAMILY_MATCH, serveStaticPage } from "./holding/_worker.js/lib/ass
 import { serveMarkdown } from "./holding/_worker.js/home.js";
 import { readManifest, workerModule, navFenceBody, readFenceBody, runProfilesBody } from "./scripts/gen-manifest.mjs";
 import { PROFILES } from "./holding/scripts/shell-data.mjs";
+import { speculationHtml } from "./holding/scripts/gen-desktop-partial.mjs";
 import { INDEXED_SECTIONS, TWIN_FACTS, buildTwins, checkTwinFacts, htmlFileFor, twinPath } from "./scripts/gen-md-twins.mjs";
 import { collectBlockClasses, readDocument } from "./scripts/lib/html-to-md.mjs";
 import {
@@ -1821,6 +1822,46 @@ test("the shell infotip ships minified, hashed, and with a readable twin", async
   const shells = build.slice(build.indexOf("const SHELLS = ["));
   assert.ok(shells.indexOf('"/hoist.js"') < shells.indexOf('{ file: "/infotip.js"'),
     "hoist must be hashed before infotip, or infotip's /a/ copy keeps the unhashed specifier");
+});
+
+test("the speculation ruleset has exactly one author", async () => {
+  // This block lived in 26 documents plus a runtime injector, and the copies had
+  // forked (#338). Two of the three ways it can fork again are structural, so
+  // they are asserted here rather than left to review.
+  //
+  // 1. A hand-written block anywhere in holding/. The build already byte-compares
+  //    every static page against a fresh render, so a page that carries one fails
+  //    the deploy; this names the rule so the failure is legible.
+  const pages = (await readdir(new URL("holding", import.meta.url), { recursive: true }))
+    .filter((relative) => relative.endsWith(".html"));
+  const canonical = speculationHtml();
+  let carrying = 0;
+  for (const relative of pages) {
+    const html = await readFile(new URL(`holding/${relative}`, import.meta.url), "utf8");
+    // Count real tags only. /garage/horizon discusses this very block in prose as
+    // escaped `&lt;script type="speculationrules"&gt;`, and it is the fourth naive
+    // scanner that page's demo content would have caught.
+    const blocks = html.match(/<script\b[^>]*\btype="speculationrules"[^>]*>/g) || [];
+    if (!blocks.length) continue;
+    carrying++;
+    assert.equal(blocks.length, 1, `${relative} carries ${blocks.length} rulesets; the browser unions them`);
+    assert.ok(html.includes(canonical), `${relative} has a ruleset that is not the projection of SPECULATION; run pnpm run gen:shell`);
+  }
+  assert.ok(carrying >= 30, `only ${carrying} pages carry the ruleset; the projection has collapsed`);
+
+  // 2. The lwe generator getting its own template back. It had one, it went stale
+  //    when two commits removed exclusions site-wide, and regenerating a page then
+  //    silently restored the old rules onto it (holding/lwe/encoding.html).
+  const generator = await readFile(new URL("lwe-pipeline/generate.mjs", import.meta.url), "utf8");
+  assert.doesNotMatch(generator, /speculationrules/,
+    "generate.mjs must emit DESKTOP_CHROME and never its own ruleset; a stale template here re-infects every page it regenerates");
+
+  // 3. nav.js building one at runtime again, which is where the injected copy
+  //    lived. Rules in the HTML parse with the document; injected ones landed
+  //    after first paint and could not prerender anything hovered before that.
+  const nav = await readFile(new URL("holding/nav.js", import.meta.url), "utf8");
+  assert.doesNotMatch(nav, /type\s*=\s*["']speculationrules["']/,
+    "nav.js must not inject a ruleset; it ships in the chrome now");
 });
 
 test("outbound endpoint discovery follows the spec's precedence", () => {

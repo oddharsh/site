@@ -563,59 +563,10 @@
     link.href = "data:image/svg+xml," + encodeURIComponent(SECTION_ICONS[label]);
   }
 
-  // shell-wide Speculation Rules: prerender the shell's safe destinations on
-  // hover-intent (eagerness "moderate"), so opening a "window" (garage, writing,
-  // serendipity, coffee…) is near-instant. This is the whole reason the View
-  // Transition could come out: with the document already rendered at click time
-  // there is nothing for an animation to cover, only latency to add. The
-  // homepage is prerenderable now (its counter only
-  // PEEKS on render; the tick left the document for the /hit beacon) and so is
-  // /around (its crawl moved to a cron; a visit is a pure KV read).
-  // excluded: /whoareyou (per-request fingerprint),
-  // /rn (redirect), images + raw text. /coffee IS prerendered: GET is read-only
-  // (booking is POST) so a speculative open is safe.
-  // /run is excluded because this ruleset only exists when JS is on, and with JS
-  // on the Start orb's click calls preventDefault() and opens the palette. So a
-  // hover was buying a full worker invocation and document render for a page the
-  // click never navigates to; its only reader is the island-load failure
-  // fallback. The hover now warms nav-run.js instead, which is 5 KiB against a
-  // whole prerendered document and is what actually opens. The tray icons keep
-  // their prerenders: /security and /updates are real destinations, because each
-  // balloon carries a "full page" link to them.
-  // unsupported browsers ignore the script → plain navigation. skips the homepage,
-  // which ships its own inline ruleset earlier in the HTML.
-  function injectSpeculation() {
-    if (D.querySelector('script[type="speculationrules"]')) return;
-    if (typeof HTMLScriptElement === "undefined" || !HTMLScriptElement.supports || !HTMLScriptElement.supports("speculationrules")) return;
-    var s = D.createElement("script");
-    s.type = "speculationrules";
-    s.textContent = JSON.stringify({
-      prerender: [{
-        where: { and: [
-          { href_matches: "/*" },
-          { not: { href_matches: "/whoareyou*" } },
-          { not: { href_matches: "/run" } },
-          { not: { href_matches: "/rn*" } },
-          { not: { href_matches: "/images*" } },
-          { not: { href_matches: "/index.md" } },
-          { not: { href_matches: "/llms.txt" } }
-        ] },
-        eagerness: "moderate"
-      }],
-      // eager prefetch (document-only, no render) for the cheap STATIC content pages
-      // (garage + lwe explainers, minus the lwe-ask worker endpoint), so even an
-      // un-hovered/touch click loads from cache. dynamic worker pages stay prerender-
-      // on-hover above, so we don't fire a worker invocation per link on every visit.
-      prefetch: [{
-        where: { and: [
-          { or: [ { href_matches: "/garage/*" }, { href_matches: "/lwe/*" } ] },
-          { not: { href_matches: "/lwe/ask*" } }
-        ] },
-        eagerness: "eager"
-      }]
-    });
-    D.body.appendChild(s);
-  }
+  // The shell's Speculation Rules used to be built here and appended at boot.
+  // They ship in the HTML now, projected from SPECULATION in shell-data.mjs into
+  // the generated chrome, so they reach static and worker-rendered pages alike
+  // and parse with the document instead of after first paint. See #338.
 
   // Instant "close": the close glyph means "up to aadhar.sh". When the window
   // was opened directly FROM the homepage, going back restores it from bfcache —
@@ -859,7 +810,7 @@
   function boot() {
     var bar = D.getElementById("axp-taskbar");
     if (!bar || !D.getElementById("axp-desktop")) return;
-    ensureLunaCss(); wireTaskbar(bar); initDrag(); initRaise(); initIconDrag(); initScrollbars(); initResize(); setFavicon(); injectSpeculation(); initCloseBack(); initWindowControls(); initInfotips();
+    ensureLunaCss(); wireTaskbar(bar); initDrag(); initRaise(); initIconDrag(); initScrollbars(); initResize(); setFavicon(); initCloseBack(); initWindowControls(); initInfotips();
   }
   function bootAfterStaticPaint() {
     // Generated/static pages and Worker-rendered shells already carry the desktop

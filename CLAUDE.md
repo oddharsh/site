@@ -2609,6 +2609,40 @@ pnpm run deploy:direct
     section-header comments, which is a different character the linter never
     matches. Keep them; the point is to know which of your dashes is which.
 
+33. **A speculation rule cannot be measured from the page, and no agent browser
+    here can measure it at all.** Two independent traps, each of which returns a
+    confident zero for a rule that is working. Hit both on 2026-08-11 while
+    deciding whether the eager `/garage/*` prefetch rule earned its place (#338).
+
+    **Resource Timing never sees a speculation fetch.** The browser's preloading
+    machinery issues it, not the document, so
+    `performance.getEntriesByType("resource")` reports nothing on a page whose
+    rule is firing perfectly. Measure at the ORIGIN instead: `pnpm run dev` logs
+    every request, and a speculated one also carries `Sec-Purpose`, which is what
+    `countSpeculativeLoad` (`_worker.js/speculation.js`) already counts in
+    production.
+
+    **Chrome gates speculation on visibility, and every agent-driven browser here
+    backgrounds its tab.** Both the in-app Browser pane and Claude-in-Chrome
+    reported `visibilityState: "hidden"` between tool calls; a screenshot flips a
+    tab visible just long enough to photograph it and it reverts. So a hover that
+    lands on a real anchor and dwells four seconds produces nothing, which reads
+    exactly like a broken rule. `scripts/speculation-probe.mjs` exists because of
+    this: it launches a real headful window through playwright-core, attaches no
+    CDP session (gotcha 15), and prints a CONTROL line first.
+
+    **Read the control before the result, every time.** The control hovers a link
+    under the `moderate` rule; if that does not reach the origin, the run measured
+    the instrument. That is what separated the real finding from the two false
+    ones: with the control passing, the eager prefetch rule fetched zero documents
+    when `/lwe` offered it 12 matching anchors AND when the Run palette injected
+    30 more, so it was deleted rather than kept as a variant.
+
+    Generalises past speculation: **a browser feature that the page cannot
+    observe needs a server-side instrument and a positive control**, and "the
+    agent's browser showed nothing" is not evidence until the control says the
+    browser could have shown something.
+
 ---
 
 ## Source folder for new photos

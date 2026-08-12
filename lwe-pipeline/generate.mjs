@@ -142,9 +142,6 @@ ${spec.messages.map((m) => renderMsg(m, c)).join("\n\n")}
   </div>
 </div>
 
-<script type="speculationrules">
-{ "prerender": [ { "where": { "and": [ { "href_matches": "/*" }, { "not": { "href_matches": "/" } }, { "not": { "href_matches": "/around*" } }, { "not": { "href_matches": "/whoareyou*" } } ] }, "eagerness": "moderate" } ], "prefetch": [ { "where": { "and": [ { "or": [ { "href_matches": "/garage/*" }, { "href_matches": "/lwe/*" } ] }, { "not": { "href_matches": "/lwe/ask*" } } ] }, "eagerness": "eager" } ] }
-</script>
 <script>
 if ("serviceWorker" in navigator) { var reg = function () { navigator.serviceWorker.register("/sw.js").catch(function () {}); }; "requestIdleCallback" in window ? requestIdleCallback(reg, { timeout: 2000 }) : setTimeout(reg, 1000); }
 </script>
