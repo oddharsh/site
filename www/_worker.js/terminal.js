@@ -1044,6 +1044,7 @@ function toolPage(frame, path) {
   return lunaPage({
     title: `aadhar.sh${path}`,
     path: `aadhar.sh${path}`,
+    route: "/terminal",
     width: 760,
     description: String(frame.title || "").slice(0, 140),
     robots: "noindex",

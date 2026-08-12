@@ -188,6 +188,11 @@ async function checkInvariants() {
     if (await read("www/icons.svg") !== artifacts.sprite) {
       hard.push("icons.svg drifted from shell-data.mjs — run pnpm run gen:shell");
     }
+    for (const [name, svg] of Object.entries(artifacts.favicons)) {
+      if (await read(`www/section-icons/${name}.svg`) !== svg) {
+        hard.push(`section-icons/${name}.svg drifted from shell-data.mjs — run pnpm run gen:shell`);
+      }
+    }
     for (const file of staticShellPages()) {
       const source = await read(file);
       if (patchStaticShell(source, artifacts) !== source) {
@@ -1392,12 +1397,20 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   // later reads bytes that already carry its dependency's hashed URL. tooltip depends on
   // hoist, so hoist must be hashed and rewritten first — otherwise tooltip's `/a/` copy
   // ships the unhashed specifier forever, since the rewrite pass deliberately skips `a/`.
+  // `/a/<base>.<hash8>.<ext>` must dehash back to the asset's own filename, or
+  // perf-snapshot's merge (which keys on that dehashed name) reads the top-level
+  // copy and the /a/ copy as two separate assets and counts every byte twice. So
+  // base tracks the FILE, and the js/css pairs that now share a stem are told
+  // apart by extension in hashedFor instead of by a "-style" suffix nothing else
+  // knew about. #341's own size table read +4.82 KiB for what is a -1.28 KiB
+  // change, which is how this was found.
+  const hashKey = (a) => (a.ext && a.ext !== "js" ? `${a.base}.${a.ext}` : a.base);
   const STRING_ASSETS = [
-    { file: "/nav-run.css",     base: "nav-run-style",     ext: "css", mk: (to) => [
+    { file: "/nav-run.css",     base: "nav-run",           ext: "css", mk: (to) => [
       [/(\"nav-run\"\s*:\s*)(["'`])\/nav-run\.css\2/g, `$1$2${to}$2`] ] },
-    { file: "/nav-tray.css",    base: "nav-tray-style",    ext: "css", mk: (to) => [
+    { file: "/nav-tray.css",    base: "nav-tray",          ext: "css", mk: (to) => [
       [/(\"nav-tray\"\s*:\s*)(["'`])\/nav-tray\.css\2/g, `$1$2${to}$2`] ] },
-    { file: "/infotip.css",     base: "infotip-style",     ext: "css", mk: (to) => [
+    { file: "/infotip.css",     base: "infotip",           ext: "css", mk: (to) => [
       [/(\binfotip\b\s*:\s*)(["'`])\/infotip\.css\2/g, `$1$2${to}$2`] ] },
     { file: "/hoist.js",        base: "hoist",        mk: (to) => [
       [/import\((["'`])\/hoist\.js\1\)/g, `import($1${to}$1)`],
@@ -1439,7 +1452,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
       const bytes = await readFile(`${OUT}/www${a.file}`);
       const to = `/a/${a.base}.${createHash("sha256").update(bytes).digest("hex").slice(0, 8)}.${a.ext || "js"}`;
       await writeFile(`${OUT}/www${to}`, bytes);
-      hashedFor[a.base] = to;
+      hashedFor[hashKey(a)] = to;
       const reps = a.mk(to);
       for (const path of stringTargets) {
         let t; try { t = await readFile(path, "utf8"); } catch { continue; }
@@ -1460,7 +1473,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     if (!idx.includes(hashedFor.hoist) || !run.includes(hashedFor.hoist)) throw new Error("a hoist.js loader was not repointed (index.html or nav-run.js)");
     if (!nav.includes(hashedFor["nav-run"]) || !nav.includes(hashedFor["nav-tray"])) throw new Error("nav.js was not repointed to its first-interaction islands");
     for (const style of ["nav-run", "nav-tray", "infotip"]) {
-      if (!nav.includes(hashedFor[`${style}-style`])) throw new Error(`nav.js was not repointed to hashed ${style}.css`);
+      if (!nav.includes(hashedFor[`${style}.css`])) throw new Error(`nav.js was not repointed to hashed ${style}.css`);
     }
     if (!lens.includes(hashedFor["lens-browser"])) throw new Error("lens.js was not repointed to hashed lens-browser.js");
     if (!lens.includes(hashedFor["lens-reader"])) throw new Error("lens.js was not repointed to hashed lens-reader.js");

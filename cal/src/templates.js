@@ -344,7 +344,6 @@ body { min-height: 0; height: calc(100vh - 30px); height: calc(100dvh - 30px);
 // the coffee section glyph — mirrors nav.js SECTION_ICONS.coffee + the taskbar
 // app button, so the tab favicon is right on first paint (and on cal.aadhar.sh,
 // where nav.js never loads to set it). hex colors %23-encoded for the data URI.
-const COFFEE_FAVICON = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%237a5230'/><path d='M8 12 h13 v6 a6.5 6.5 0 0 1-13 0 Z' fill='%23fff'/><path d='M21 13 h3 a2.6 2.6 0 0 1 0 5.2 h-3' fill='none' stroke='%23fff' stroke-width='2.2'/><g stroke='%23fff' stroke-width='1.8' stroke-linecap='round'><path d='M11 5.5 v3'/><path d='M14.5 5 v3.5'/></g></svg>";
 
 function shell(title, body, env) {
   const home = env.HOST_PUBLIC_URL || "https://aadhar.sh";
@@ -362,7 +361,7 @@ function shell(title, body, env) {
 <link rel="stylesheet" href="https://aadhar.sh/luna.css">
 <title>${esc(fullTitle)}</title>
 <meta name="description" content="let's grab coffee or a bagel with ${esc(env.HOST_NAME)} in NYC. requests are reviewed by hand.">
-<link rel="icon" type="image/svg+xml" href="${COFFEE_FAVICON}">
+<link rel="icon" type="image/svg+xml" href="/section-icons/coffee.svg">
 <style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}${STYLES}${onShell ? SHELL_GEOMETRY : ""}</style>
 </head>
 <body>${onShell ? DESKTOP_TOP : ""}
