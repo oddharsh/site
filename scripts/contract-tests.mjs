@@ -6347,13 +6347,21 @@ test("a script error and a failed image each cost real points", () => {
   // the number, this rubric would have scored the site perfect on the day it
   // was broken, which is the failure mode the whole file exists to avoid.
   const base = { http: { status: 200, words: 300 }, declared: { llmsTxt: true, markdownTwin: true, agentCard: true, mcp: true, sitemap: true } };
-  const clean = scoreAgentReadiness({ ...base, rendered: { words: 300, consoleErrors: 0, brokenImages: 0, totalImages: 12, imagesWithAlt: 12 } });
-  const threw = scoreAgentReadiness({ ...base, rendered: { words: 300, consoleErrors: 1, brokenImages: 0, totalImages: 12, imagesWithAlt: 12 } });
-  const broke = scoreAgentReadiness({ ...base, rendered: { words: 300, consoleErrors: 0, brokenImages: 12, totalImages: 12, imagesWithAlt: 12 } });
+  const shot = { words: 300, totalImages: 12, imagesWithAlt: 12, imagesMissingAlt: 0, imagesDecorative: 0 };
+  const clean = scoreAgentReadiness({ ...base, rendered: { ...shot, consoleErrors: 0, brokenImages: 0 } });
+  const threw = scoreAgentReadiness({ ...base, rendered: { ...shot, consoleErrors: 1, brokenImages: 0 } });
+  const broke = scoreAgentReadiness({ ...base, rendered: { ...shot, consoleErrors: 0, brokenImages: 12 } });
   assert.ok(threw.score < clean.score, "an uncaught script error must cost points");
   assert.ok(broke.score < clean.score, "images an agent browser cannot decode must cost points");
   // Alt text is the mitigation that saved the homepage, so a page whose images
   // fail BUT are captioned must still outscore one that is neither.
-  const bare = scoreAgentReadiness({ ...base, rendered: { words: 300, consoleErrors: 0, brokenImages: 12, totalImages: 12, imagesWithAlt: 0 } });
+  const bare = scoreAgentReadiness({ ...base, rendered: { ...shot, consoleErrors: 0, brokenImages: 12, imagesWithAlt: 0, imagesMissingAlt: 12 } });
   assert.ok(bare.score < broke.score, "captions must be worth something when the pixels do not arrive");
+  // An explicit alt="" is CORRECT markup for a decorative icon. The rubric's
+  // own first draft scored /garage 1/10 here because 14 of its 16 images are
+  // taskbar sprites doing the right thing, so this pins the repair: an
+  // all-decorative page owes no descriptions and is not scored on them.
+  const decorative = scoreAgentReadiness({ ...base, rendered: { ...shot, consoleErrors: 0, brokenImages: 0, totalImages: 14, imagesWithAlt: 0, imagesMissingAlt: 0, imagesDecorative: 14 } });
+  assert.ok(decorative.unmeasured.some((u) => u.id === "describable"),
+    "all-decorative images owe no description, so the dimension is unmeasured rather than failed");
 });

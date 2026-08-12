@@ -65,6 +65,7 @@ const pts = (ratio, weight) => Math.round(Math.max(0, Math.min(1, ratio)) * weig
  *   what a plain GET returned, with no JavaScript run.
  * @param {{words?:number, consoleErrors?:number, pageErrors?:number,
  *          brokenImages?:number, totalImages?:number, imagesWithAlt?:number,
+ *          imagesDecorative?:number, imagesMissingAlt?:number,
  *          engine?:string}} [ev.rendered]
  *   what an AGENT BROWSER got. Kitesurf here, because that is the engine an
  *   agent driving Cloudflare's stack actually runs.
@@ -167,10 +168,20 @@ export function scoreAgentReadiness(ev = {}) {
   const parts5 = [];
   let e5 = 0;
   let o5 = 0;
-  if (r && typeof r.imagesWithAlt === "number" && typeof r.totalImages === "number" && r.totalImages > 0) {
+  // DECORATIVE IMAGES ARE NOT A GAP, and getting this wrong was the rubric's
+  // own first bug. An explicit alt="" is the correct markup for a shell icon,
+  // so the first draft scored /garage 1/10 for describability when 14 of its 16
+  // images are taskbar sprites doing exactly the right thing. The denominator
+  // is images that OWE a description: the ones that carry a real alt, plus the
+  // ones carrying no alt attribute at all. An empty alt drops out of both
+  // sides, which is the whole point of writing one.
+  const described = r?.imagesWithAlt;
+  const missing = r?.imagesMissingAlt;
+  if (typeof described === "number" && typeof missing === "number" && described + missing > 0) {
     o5 += 1;
-    e5 += r.imagesWithAlt / r.totalImages;
-    parts5.push(`${r.imagesWithAlt}/${r.totalImages} images carry alt text`);
+    e5 += described / (described + missing);
+    const dec = typeof r.imagesDecorative === "number" && r.imagesDecorative > 0 ? `, ${r.imagesDecorative} decorative` : "";
+    parts5.push(`${described}/${described + missing} content images described${dec}`);
   }
   if (ev.reader && typeof ev.reader.kept === "number" && typeof ev.reader.source === "number" && ev.reader.source > 0) {
     o5 += 1;

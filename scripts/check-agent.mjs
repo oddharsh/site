@@ -144,7 +144,12 @@ async function renderOnce(page, url) {
         words: txt.split(/\s+/).filter(Boolean).length,
         totalImages: imgs.length,
         brokenImages: imgs.filter((i) => i.naturalWidth === 0).length,
-        imagesWithAlt: imgs.filter((i) => (i.alt || "").trim().length > 0).length,
+        // Three states, not two. alt="" is a DECISION (this image is
+        // decorative) and a missing alt attribute is an omission; collapsing
+        // them scores correct markup as a defect.
+        imagesWithAlt: imgs.filter((i) => (i.getAttribute("alt") || "").trim().length > 0).length,
+        imagesDecorative: imgs.filter((i) => i.hasAttribute("alt") && !(i.getAttribute("alt") || "").trim()).length,
+        imagesMissingAlt: imgs.filter((i) => !i.hasAttribute("alt")).length,
         brokenSrc: imgs.filter((i) => i.naturalWidth === 0).map((i) => (i.currentSrc || i.src || "").split("/").pop()).slice(0, 4),
         maximize,
       };
@@ -196,10 +201,16 @@ async function main() {
     const k = await renderOnce(kpage, url);
     const c = cpage ? await renderOnce(cpage, url) : null;
 
+    // The Markdown twin is the one discovery surface that is PER ROUTE, so it
+    // is probed here rather than with the site-wide four. `/` publishes its
+    // hand-written twin at /index.md; everything else appends .md.
+    const twinUrl = route === "/" ? `${ORIGIN}/index.md` : `${ORIGIN}${route.replace(/\/$/, "")}.md`;
+    const twin = await head(twinUrl);
+
     const result = scoreAgentReadiness({
       http: { status: httpStatus.status, words: httpWords(raw), robotsAllowsAgents: declared.robotsAllowsAgents },
       rendered: { ...k, engine: "kitesurf" },
-      declared,
+      declared: { ...declared, markdownTwin: twin.ok && /markdown/.test(twin.type) },
     });
 
     // A defect COUNTS only when the control disagrees, or when no control ran
