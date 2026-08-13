@@ -635,8 +635,18 @@
       // the homepage there is no parent, so Back stays disabled there.
       var parentPath = location.pathname.replace(/\/+$/, "").replace(/[^/]+$/, "") || "/";
       var atRoot = (location.pathname.replace(/\/+$/, "") || "/") === "/";
+      // CAPABILITY, not presence. Kitesurf, Cloudflare's agent browser, ships a
+      // `navigation` stub carrying entries() and currentEntry and nothing else:
+      // no canGoBack, no addEventListener. So every `if (window.navigation)`
+      // here passed, and the listener line below THREW, which took out the rest
+      // of this function. Measured 2026-08-12 against the public Kitesurf CDP:
+      // the maximize control never wired on any of six pages, while a Chrome
+      // control wired it on all six. Ask for the member each branch actually
+      // uses, so a partial implementation degrades to the history fallback
+      // rather than crashing past it.
+      var navApi = window.navigation && typeof navigation.canGoBack === "boolean" ? navigation : null;
       var realBack = function () {
-        return window.navigation ? navigation.canGoBack : history.length > 1;
+        return navApi ? navApi.canGoBack : history.length > 1;
       };
       backButton.addEventListener("click", function () {
         if (realBack()) history.back();
@@ -644,15 +654,15 @@
       });
       forwardButton.addEventListener("click", function () { history.forward(); });
       var sync = function () {
-        if (!window.navigation) return;                 // no Navigation API -> leave both enabled
-        var rb = navigation.canGoBack;
+        if (!navApi) return;                            // no Navigation API -> leave both enabled
+        var rb = navApi.canGoBack;
         backButton.disabled = !rb && atRoot;                  // parent fallback keeps it live elsewhere
         backButton.title = rb || atRoot ? "Back" : "Back to " + parentPath;
         backButton.setAttribute("aria-label", backButton.title);
-        forwardButton.disabled = !navigation.canGoForward;
+        forwardButton.disabled = !navApi.canGoForward;
       };
       sync();
-      if (window.navigation) navigation.addEventListener("currententrychange", sync);
+      if (navApi && typeof navApi.addEventListener === "function") navApi.addEventListener("currententrychange", sync);
       addEventListener("pageshow", sync);               // re-sync after a bfcache restore
     }
 

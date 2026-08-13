@@ -23,6 +23,9 @@ import {
   renderLensShell,
   validateLensTarget,
 } from "../www/_worker.js/lens.js";
+import { EXECUTION_META, EXECUTION_PROBE, executionChecks } from "../www/_worker.js/lib/agent-execution.js";
+import { httpWords } from "./check-agent.mjs";
+import { lensReadiness } from "../www/_worker.js/lens.js";
 import { lensRecipe, lensRecipeIds, lensRecipeScript } from "../www/_worker.js/lens-recipes.js";
 import { handleCoffeeAvailability, readCoffeeAvailability } from "../www/_worker.js/coffee.js";
 import { reservationName } from "../cal/src/reservation.js";
@@ -6314,4 +6317,119 @@ test("the ref scanner reads unquoted attributes, which is how the site ships", a
   // Off-origin and in-page refs are not this check's business.
   assert.deepEqual(internalRefs('<a href=https://x.test/a>1</a><a href=#top>2</a>'
     + '<a href=mailto:a@b.test>3</a><a href=//cdn.test/x.js>4</a><a href=../rel>5</a>'), []);
+});
+
+// ── the execution half of the readiness rubric ──────────────────────────────
+// /lens has scored agent readiness since it was built and every one of those
+// twenty checks is a declaration audit, which is why they were all green on
+// 2026-08-12 while this site's homepage rendered twelve blank squares in an
+// agent browser. These pin the two checks that close that gap, and the rule
+// that keeps them fair to a stranger's site.
+
+test("execution checks stay NEUTRAL until an agent browser has actually rendered", () => {
+  // The load-bearing one. A render needs a real browser off a 10-minute-a-day
+  // account ceiling, so most scans will never have this evidence. An unknown
+  // DECLARED check is the site's fact (we asked, it did not answer); an
+  // unmeasured execution check is OURS, and docking a stranger for our spent
+  // budget would make the number dishonest.
+  for (const ev of [null, undefined, {}, { ran: false }]) {
+    const checks = executionChecks(ev);
+    assert.equal(checks.agentScripts.status, "neutral", "no render means no verdict on scripts");
+    assert.equal(checks.agentMedia.status, "neutral", "no render means no verdict on media");
+    assert.match(checks.agentScripts.detail, /render/, "the detail has to say why it is neutral");
+  }
+});
+
+test("a throw fails the script check and a decode failure fails the media check", () => {
+  // The two defects found on 2026-08-12, one per check. If either can happen
+  // without moving a status, this category would have scored the site perfect
+  // on the day it was broken, which is the whole reason it exists.
+  const clean = executionChecks({ ran: true, engine: "kitesurf", consoleErrors: 0, pageErrors: 0, totalImages: 26, brokenImages: 0 });
+  assert.equal(clean.agentScripts.status, "pass");
+  assert.equal(clean.agentMedia.status, "pass");
+
+  const threw = executionChecks({ ran: true, consoleErrors: 1, firstError: "TypeError: navigation.addEventListener is not a function", totalImages: 26, brokenImages: 0 });
+  assert.equal(threw.agentScripts.status, "fail");
+  assert.match(threw.agentScripts.detail, /navigation\.addEventListener/, "the failing detail must name the error");
+
+  const broke = executionChecks({ ran: true, totalImages: 26, brokenImages: 12, consoleErrors: 0 });
+  assert.equal(broke.agentMedia.status, "fail");
+  assert.match(broke.agentMedia.detail, /12 of 26/, "the detail must quote the count it measured");
+
+  // A page serving no images owes no decode verdict.
+  assert.equal(executionChecks({ ran: true, totalImages: 0, brokenImages: 0, consoleErrors: 0 }).agentMedia.status, "neutral");
+});
+
+test("the DOM census treats an empty alt as a decision, not an omission", () => {
+  // This feature's own first bug: counting non-empty alt against ALL images
+  // scored /garage 1/10 when fourteen of its sixteen images are taskbar sprites
+  // carrying a deliberate alt="". The probe runs inside a third party's page
+  // through Runtime.evaluate, so it is asserted as source rather than executed.
+  assert.match(EXECUTION_PROBE, /hasAttribute\("alt"\)/, "decorative images are found by the attribute being PRESENT and empty");
+  assert.match(EXECUTION_PROBE, /imagesMissingAlt/, "a missing alt attribute is the only omission");
+  assert.match(EXECUTION_PROBE, /imagesDecorative/, "decorative images need their own count so they leave both sides of the ratio");
+  // naturalWidth alone is 0 for an image that simply has not finished loading,
+  // which would invent failures on a slow page.
+  assert.match(EXECUTION_PROBE, /i\.complete && i\.naturalWidth === 0/, "an image is only broken once it is complete");
+});
+
+test("both execution checks are declared in the category the rubric scores", () => {
+  for (const [key, meta] of Object.entries(EXECUTION_META)) {
+    assert.equal(meta.category, "execution", `${key} must sit in the execution category`);
+    assert.ok(meta.label && meta.label.length > 0, `${key} needs a label the grid can render`);
+    assert.ok(meta.countInScore !== false, `${key} must count once it has evidence`);
+  }
+  const lens = readFileSync("./www/_worker.js/lens.js", "utf8");
+  assert.match(lens, /\.\.\.EXECUTION_META/, "lens.js must spread the shared meta rather than restate it");
+  assert.match(lens, /key: "execution"/, "the execution category has to exist in LENS_READINESS_CATEGORIES");
+  // The drift this whole module exists to prevent.
+  assert.doesNotMatch(lens, /agentScripts: \{ category/, "lens.js must not re-declare an execution check locally");
+});
+
+test("an unrendered scan does not enlarge the readiness denominator", () => {
+  // The rule the whole execution category turns on, asserted through the real
+  // scorer rather than through executionChecks alone. Most scans will never
+  // hold browser evidence, because a render is rate-limited and capped
+  // account-wide at 10 minutes a day. If a neutral check still counted, every
+  // site scanned without a render would be marked down for OUR spent budget.
+  const base = { headers: {}, robots: null, sitemap: null, terms: null, discovery: null, agent: null, openapi: null, botViews: [] };
+  const noRender = lensReadiness({ ...base, execution: null });
+  const rendered = lensReadiness({ ...base, execution: { ran: true, consoleErrors: 1, totalImages: 26, brokenImages: 12 } });
+
+  const catOf = (r) => r.categories.find((c) => c.key === "execution");
+  assert.equal(catOf(noRender).total, 0, "an unrendered scan scores nothing in this category");
+  assert.equal(catOf(noRender).checkCount, 2, "both checks are still SHOWN, so the visitor learns they exist");
+  assert.equal(catOf(rendered).total, 2, "a render makes both checks count");
+  assert.equal(rendered.counted - noRender.counted, 2, "exactly the two execution checks join the denominator");
+  assert.ok(/neutral/.test(noRender.scoringNote) && /render/.test(noRender.scoringNote),
+    "the published scoring note has to explain the neutral rule, since the number is shown to strangers");
+});
+
+test("the agent check's word count strips a script closed any legal way", () => {
+  // CodeQL, on #353. An end tag may carry attributes and may hold whitespace, so
+  // `</script >` and `</script bar>` close a script element as surely as
+  // `</script>` does, and a stripper spelled the short way hands the whole body
+  // through. Same class and same fix as #347.
+  //
+  // Behavioural rather than a source-shape assertion, because the short spelling
+  // LOOKS right: the old regex leaked `var leak=1;` into the count as three
+  // words, which inflated the HTTP side of the legible-without-JavaScript
+  // comparison and so made a page read as more legible than it is.
+  for (const html of [
+    "<p>keep</p><script>var leak=1;</script>tail",
+    "<p>keep</p><script >var leak=1;</script >tail",
+    "<p>keep</p><script>var leak=1;</script bar>tail",
+    "<p>keep</p><script\ntype=\"module\">var leak=1;</script\n>tail",
+  ]) {
+    assert.equal(httpWords(html), 2, `script body leaked into the count: ${html}`);
+  }
+  for (const html of [
+    "<p>keep</p><style>.x{color:red}</style>tail",
+    "<p>keep</p><style >.x{color:red}</style >tail",
+    "<p>keep</p><style>.x{color:red}</style bar>tail",
+  ]) {
+    assert.equal(httpWords(html), 2, `style body leaked into the count: ${html}`);
+  }
+  // And the ordinary path still counts what it should.
+  assert.equal(httpWords("<h1>one two</h1><p>three</p>"), 3, "prose must survive the strip");
 });
