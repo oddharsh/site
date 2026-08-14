@@ -18,8 +18,8 @@ review policy and entry point for future agent runs.
 
 ## Current baseline
 
-- Wrangler 4.112.0 is the exact root pin shared by all Worker projects.
-- Oxc Minify 0.140.0 and Lightning CSS 1.33.0 are exact root pins for the
+- Wrangler 4.120.0 is the exact root pin shared by all Worker projects.
+- Oxc Minify 0.144.0 and Lightning CSS 1.33.0 are exact root pins for the
   deploy-time JavaScript and CSS minifiers. Their platform-specific optional
   packages run only in the build environment; they add no browser or Worker
   runtime dependency. Dependabot should review their release notes for output,
@@ -33,17 +33,27 @@ review policy and entry point for future agent runs.
   unchanged code, and should treat any tsgolint release as paired with a
   TypeScript one. Every rule this repo turns off is turned off in
   `.oxlintrc.json` beside the measurement that decided it.
-- esbuild 0.28.2 left the minification path when Oxc took over, but it stays a
-  direct pin: `scripts/check-page-contracts.mjs` uses its `transform()` with
-  `loader: "css"` to parse the garage scaffold's inline CSS while validating page
-  contracts. (It parses CSS, never JS; this line said "inline JS" until
-  2026-08-14.) Lightning CSS is the obvious replacement and is NOT a drop-in:
-  measured the same day, esbuild is stricter on lexical sloppiness while
-  Lightning CSS throws on structurally broken input and warns on the CSS
-  Overflow 5 selectors `/garage/horizon` ships deliberately, so a swap needs the
-  tolerated-warning family `minifyCss` already carries. Wrangler
-  also carries its own nested copy for Cloudflare's Worker bundler; that
-  transitive package is separate from this pin.
+- **esbuild is no longer a direct dependency, as of 2026-08-14.** It had left the
+  minification path when Oxc took over and stayed pinned for ONE call:
+  `scripts/check-page-contracts.mjs` parsed the garage scaffold's inline CSS with
+  `transform(css, { loader: "css" })`. (It parsed CSS, never JS; this line said
+  "inline JS" until 2026-08-14.) That was 20MB of Go binary for one call, and the
+  size was the smaller problem. **The two CSS parsers disagree in both
+  directions**, measured the same day: esbuild is stricter on lexical sloppiness
+  (it warns on an unclosed block, which the CSS spec says to recover from), while
+  Lightning CSS throws on structurally broken input and warns on the CSS Overflow
+  5 selectors `/garage/horizon` ships deliberately. So a page could pass the
+  contract check and fail the build, which is the wrong way round: the build
+  decides what reaches a visitor, so a pre-build check should agree with the
+  build's parser. Both now call `parseCss` in `scripts/lib/css-parse.mjs`, which
+  owns the tolerated-warning family and re-proves the pass-through on every call.
+  The staged tree is byte-identical across all 1476 files.
+
+  Two esbuild copies REMAIN in the tree and neither is ours to remove. Wrangler
+  hard-depends on 0.28.1 for Cloudflare's Worker bundler. Vite 8 keeps 0.28.2 as
+  an OPTIONAL peer through `cal`'s vitest chain, so `pnpm why esbuild` still
+  reports it; dropping the root pin removed the root's path to it without
+  shrinking the store. Do not read the removal as a disk saving.
 - minify-html 0.18.1 is the exact root pin for the deploy-time HTML pass over
   `index.html` and the worker shells.
 - TypeScript 7.0.2 and @cloudflare/workers-types are exact root pins for
@@ -59,7 +69,10 @@ review policy and entry point for future agent runs.
   the locally installed Google Chrome rather than a bundled browser). Only
   `www/scripts/gen-og-cards.mjs` uses it, and only on demand; no CI job and
   no deploy path touches it.
-- Pillow 12.3.0 is pinned in `www/scripts/requirements.txt` for the
-  histogram bake.
+- Pillow 12.3.0 is pinned in `www/scripts/requirements.txt` for
+  `gen-pixel-peeper.py`, a one-off generator for the /pixel-peeper comparison
+  frames. It baked the photo histograms until 2026-08-14, when that moved into
+  `zenc histogram` and left the core photo pipeline with no Pillow dependency at
+  all. Nothing in CI installs it any more.
 - The root workspace lockfile is authoritative; workspace-local Wrangler pins
   are rejected by `pnpm run check-wrangler`.

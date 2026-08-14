@@ -2,7 +2,7 @@
 name = "zenc"
 version = "0.1.0"
 edition = "2021"
-description = "The site's JPEG thumbnail encoder: zenjpeg hybrid trellis + progressive scan search. Replaces the from-source cjpegli build; dependabot tracks the zenjpeg pin."
+description = "The site's JPEG thumbnail encoder (zenjpeg hybrid trellis + progressive scan search) and the per-photo histogram bake. Replaces the from-source cjpegli build and photo-histograms.py; dependabot tracks the zenjpeg pin."
 license = "AGPL-3.0-or-later"
 publish = false
 
@@ -17,6 +17,11 @@ zenjpeg = { version = "0.8.4", features = ["parallel", "trellis"] }
 # Input decode only. The pipeline hands us an already-upright, metadata-stripped
 # PNG/JPG, so keep image lean: no extra format decoders to widen the dep graph.
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+# The histogram bake's only new dependency, and it replaces a whole python3 + pip
+# prerequisite. preserve_order keeps an existing meta file's key order across the
+# read/modify/write, which is what python dicts did for free and what makes the
+# re-bake a no-op diff instead of a 158-file reshuffle.
+serde_json = { version = "1.0", features = ["preserve_order"] }
 
 [profile.release]
 opt-level = 3

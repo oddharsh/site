@@ -23,6 +23,12 @@ on:
 
 permissions:
   contents: read
+  # Listing workflow runs, for the parked-ramp tripwire below and nothing else.
+  # It is the documented key for that endpoint rather than one that merely sounds
+  # right, which this file has been burned by once already (see the
+  # security-events note directly below). A read, on a public repo, of data the
+  # Actions tab shows anyone.
+  actions: read
   # Deliberately NOT `security-events: read`. It was added on 2026-08-07 for
   # infra:check's CodeQL default-setup assertion and measured to do nothing: that
   # endpoint needs the repository *Administration* permission, which is not one of
@@ -267,6 +273,71 @@ jobs:
           # CodeQL assertion; see the permissions note at the top of this file.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: pnpm run infra:check
+
+      # TRIPWIRE: a ramp parked on the reviewer gate. It lives HERE, outside
+      # ramp.yml's concurrency group, because a jam inside that group cannot be
+      # reported from inside it. That is not hypothetical: run 31644451923 sat
+      # `waiting` for two days and the only visible trace was a handful of
+      # cancelled runs that read as housekeeping.
+      #
+      # What it catches is now DIFFERENT from what it would have caught before
+      # 2026-08-14. `cancel-in-progress: true` stopped a parked ramp deleting
+      # later releases (ramp.yml's concurrency block has that story). It does
+      # nothing about the other half: a canary nobody ever decides on leaves
+      # production split 10/90 indefinitely, and no surface anywhere says so.
+      #
+      # ADVISORY, and deliberately so. Failing here would gate every merge on a
+      # state no PR caused, and would deadlock the one PR able to fix a stuck
+      # ramp, which is the trap infra:check's edge tier documents at length. It
+      # also swallows its own errors: a tripwire that reddens CI when the GitHub
+      # API hiccups gets muted, and a muted tripwire is worse than none.
+      - name: Warn on a ramp parked at the reviewer gate
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Hours before a parked ramp is worth saying something about. Minutes
+          # are the gate working. Overnight is production sitting on a split
+          # nobody is watching.
+          STALE_HOURS: "6"
+        run: |
+          set -uo pipefail
+          runs="$(gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/ramp.yml/runs?status=waiting&per_page=20" \
+            --jq '.workflow_runs[] | "\(.id)\t\(.created_at)\t\(.head_sha[0:8])"' 2>/dev/null || true)"
+          if [ -z "${runs//[[:space:]]/}" ]; then
+            echo "no ramp is parked at the reviewer gate."
+            exit 0
+          fi
+          now="$(date -u +%s)"
+          header=0
+          while IFS="$(printf '\t')" read -r id created sha; do
+            [ -z "${id:-}" ] && continue
+            # GNU date, which ubuntu-latest has, parses the ISO-8601 Z form
+            # directly. If it ever cannot, fall STALE rather than fresh: an
+            # unparseable timestamp defaulting to age 0 would mute the tripwire
+            # permanently and look identical to a healthy repo.
+            started="$(date -u -d "$created" +%s 2>/dev/null || echo 0)"
+            if [ "$started" -eq 0 ]; then
+              age="$STALE_HOURS"
+              echo "::warning::could not parse ${created}; treating run ${id} as stale"
+            else
+              age="$(( (now - started) / 3600 ))"
+            fi
+            if [ "$header" -eq 0 ]; then
+              header=1
+              {
+                echo "## A ramp is parked at the reviewer gate"
+                echo ""
+                echo "Traffic is split until someone approves or cancels it."
+              } >> "$GITHUB_STEP_SUMMARY"
+            fi
+            echo "- run \`${id}\` (\`${sha}\`), waiting ${age}h" >> "$GITHUB_STEP_SUMMARY"
+            echo "ramp ${id} (${sha}) has been waiting ${age}h"
+            if [ "$age" -ge "$STALE_HOURS" ]; then
+              echo "::warning title=Ramp parked ${age}h at the reviewer gate::Run ${id} (${sha}) is still waiting on production-full. Production is on a split nobody has decided. Approve it, or cancel it to free the release path."
+            fi
+          done <<< "$runs"
+          exit 0
 
       # Does the committed changelog projection still match D1? /updates and
       # /restore are precomputed at BUILD time, so a stale projection ships the

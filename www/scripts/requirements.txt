@@ -1,2 +1,8 @@
-# Decode the shipped JPG tier while baking deterministic photo histograms.
+# Pillow is for gen-pixel-peeper.py, which composites the /pixel-peeper
+# comparison frames (Image, ImageChops, ImageDraw, ImageFilter, ImageOps,
+# ImageStat). It is a one-off page generator, NOT part of add-photos.sh.
+#
+# The histogram bake used to live here too and moved into zenc on 2026-08-14
+# (`zenc histogram`), so the CORE photo pipeline no longer needs Pillow. It does
+# still need python3, for gen-alt-text.py and build-recipes.py.
 Pillow==12.3.0

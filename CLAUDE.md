@@ -319,9 +319,46 @@ worktrees may edit freely, but a worktree is not a release surface.
   skipped promote completes, so every skipped promote spawns a ramp whose `canary`
   declines to run. On the first real release there were three. They are no-ops, and
   since 2026-08-12 they take a per-run concurrency group so they start, skip and
-  end rather than queueing behind a ramp parked on the reviewer gate — concurrency
-  is evaluated BEFORE jobs, so previously they could not even reach their own guard
-  and just sat in line. Real ramps still share one group and serialize.
+  end rather than queueing behind a ramp parked on the reviewer gate, because
+  concurrency is evaluated BEFORE jobs and previously they could not even reach
+  their own guard.
+
+  **Real ramps do NOT queue, and believing they did cost every release between
+  2026-08-12 and 2026-08-14.** This note used to end "real ramps still share one
+  group and serialize." A concurrency group holds at most ONE pending run, and
+  each new arrival CANCELS the previously pending one. `cancel-in-progress`
+  governs IN-PROGRESS runs alone and does nothing about that, so a ramp parked on
+  the reviewer gate deleted its successors one at a time rather than delaying
+  them, silently, while production stayed on the stale 10/90 split that same
+  parked run had left. Run 31644451923 sat `waiting` two days and three real ramps
+  died behind it, each with ZERO jobs, the last cancelled one second after the
+  next entered the group. `cancel-in-progress: true` since 2026-08-14, so the
+  newest promoted commit wins and an unapproved canary expires instead of blocking
+  what follows. The long argument is at the concurrency block in `ramp.yml`.
+
+  That block shipped with one thing unmeasured, whether `cancel-in-progress`
+  reaches a run merely `waiting` on an environment gate, and **the very next
+  release answered it: yes.** Run 31820445866 entered the group at 16:40:27 on
+  2026-08-14 and the run parked since 15:32:04 was cancelled at 16:40:28. The
+  named fallback, moving `full` into its own workflow, is therefore not needed.
+
+  **`ci.yml` carries a TRIPWIRE for a parked ramp, and it lives there rather than
+  in `ramp.yml` on purpose.** A jam inside a concurrency group cannot be reported
+  from inside that group, which is why two days of stalled releases produced no
+  signal at all. It warns past 6 hours, names the run, and is ADVISORY: failing
+  would gate every merge on a state no PR caused and would deadlock the one PR
+  able to fix a stuck ramp, the same trap `infra:check`'s edge tier documents. It
+  swallows its own API errors for the same reason, since a tripwire that reddens
+  CI on a GitHub hiccup gets muted, and a muted tripwire is worse than none. An
+  unparseable timestamp falls STALE rather than fresh, because the alternative
+  reads as a healthy repo forever. It found a real parked ramp on its first run.
+
+  **The newest `Ramp production` run is usually the no-op rather than the
+  release.** A no-op finishes in seconds while a real ramp waits on Workers
+  Builds, so sorting by recency hands you the wrong run: on 2026-08-14 the two
+  fired six seconds apart and the no-op completed first, which reads as a release
+  that did nothing. Select by `headSha` matching the promoted commit, never by
+  `--limit 1`.
 
   **A ramp waiting on approval is not stuck.** `waiting` is the environment gate
   doing its job, and the way to tell it apart from a jam is to ask what it is
@@ -382,10 +419,35 @@ worktrees may edit freely, but a worktree is not a release surface.
 
   The fix is one Transform Rule deriving `Cloudflare-Workers-Version-Key` from
   `ip.src`. It is DECLARED in [`infra.json`](config/infra.json) under
-  `zone.version_affinity` and NOT YET CREATED, because it needs a zone write and
-  the only write token here is DNS-scoped and workstation-only. The recipe is in
+  `zone.version_affinity`, the recipe is in
   [MAINTENANCE.md](docs/MAINTENANCE.md), and `infra:check` fails on the missing
-  rule until somebody creates it. Two things about it are load-bearing.
+  rule until somebody creates it.
+
+  **It is LIVE, measured behaviourally on 2026-08-14 during the ramp of
+  `f5e56ab6`.** This paragraph said NOT YET CREATED. Plain requests to
+  `/whoareyou.json` came back on ONE version 45 times, then 30 times, across a
+  known 90/10 split; the same requests carrying a per-request
+  `Cloudflare-Workers-Version-Key` came back 19/5. Random per-request routing
+  cannot produce the first result, so something is supplying a stable key per
+  client, which is what this rule does and nothing else here would. Confirm the
+  RULE itself with `pnpm run infra:check` on a workstation, since that tier is
+  zone-scoped and unreachable from CI.
+
+  **The consequence is a trap, and it cost two wrong readings before the header
+  explained it: YOU CANNOT SEE A TRAFFIC SPLIT FROM ONE CLIENT.** Affinity pins
+  you, by design, so a canary that is working perfectly reads as a canary that
+  moved no traffic, and the more samples you take the more confident the wrong
+  answer looks. 45 identical answers against a real 10% minority is a 0.9%
+  outcome, which is the shape of a broken instrument rather than a rare event
+  (gotcha 15 is the same lesson from Early Hints). To watch a split, vary
+  `Cloudflare-Workers-Version-Key` per request, which is exactly why the rule
+  exempts requests already carrying it:
+
+  ```bash
+  curl -s -H "Cloudflare-Workers-Version-Key: probe-$RANDOM" https://aadhar.sh/whoareyou.json
+  ```
+
+  Two things about it are load-bearing.
   Its expression must EXEMPT a request that already carries that header, because
   `deploy-promote.mjs` sends one key per request so it can still watch a split take
   from a single IP; clobber those and every intermediate step reads as a dead ramp,
@@ -713,7 +775,7 @@ Single-page personal site at `aadhar.sh`. A Cloudflare Worker with static assets
 | `www/.well-known/http-message-signatures-directory` | JWKS for AadharshBot's Ed25519 public key (Web Bot Auth IETF draft). |
 | `www/images/` + `www/i/` | `images/` holds the photo DATA surfaces: `metadata.json` (the EXIF RECORD, long field names + the Fuji recipe card), `exif.json` (the tooltip's TEXT tier: every photo's short-key EXIF in one 2.6KB-brotli file, warmed once on idle because the homepage draws a fresh random 12 of 158 per request and a per-slot warm-up was cold nearly every visit), `meta/<stem>.json` (per-photo EXIF plus the four 64-bin histogram channels — the BARS tier, fetched only on the hover that needs them, and the self-healing fallback for a stem missing from a cached `exif.json`), `alt.json` (AI captions), `hashes.json` (stem to hash8 map). The pixel tiers (600px AVIF+JPG squares + 400px mobile AVIF) live in `i/` under content-hashed names, 474 files for 158 photos. |
 | `www/og/` | Pre-baked 1200x630 OG/Twitter cards, one per garage + lwe page (`<section>-<name>.png`): the page's live demo floated on the Bliss desktop with an XP dock naming the route, so a shared link unfurls as the interaction, not a bare title. Wired via `og:image`/`twitter:card` in each page's `<head>` (edge-direct static pages can't be worker-injected). Built by `scripts/gen-og-cards.mjs` (playwright-core → Chrome, captures production for live data); meta added by `scripts/inject-og-meta.mjs`. Regen recipe in MAINTENANCE.md. Cached 30d, deploy purges the edge. |
-| `www/scripts/` | Photo-pipeline + asset scripts (see below). Beyond the core pipeline (`add-photos.sh`, `extract-photo-metadata.sh`, `check-photo-pipeline.mjs`, `zenc/` the JPEG encoder crate): `add-car-photo.sh` (one resto-mod reference photo into the dual AVIF+JPG pair the car-link tooltips expect, output `www/cars/<stem>.{avif,jpg}`, no EXIF/R2); `gen-alt-text.py` (AI alt text for every grid photo, writes `www/images/alt.json` `{stem: alt}`, resumable; run by `add-photos.sh` phase 4 — posts the committed `i/` thumbnail bytes to Workers AI when `CLOUDFLARE_API_TOKEN` is set so a brand-new photo captions pre-deploy, else falls back to the cf-garage `/garage/cf/caption` endpoint by stem, which only sees deployed photos); `gen-encoding-samples.sh` (regenerates the color sample set for the `/garage/encoding` study through every encoder, prints byte counts + bytes-per-pixel); `reencode-thumbnails.sh` (re-encodes all published grid thumbnails as pre-cropped center squares from the canonical source folder, two square tiers); `photo-histograms.py` (bakes the four 64-bin RGB/luminance channels into each per-photo meta file). |
+| `www/scripts/` | Photo-pipeline + asset scripts (see below). Beyond the core pipeline (`add-photos.sh`, `extract-photo-metadata.sh`, `check-photo-pipeline.mjs`, `zenc/` the JPEG encoder crate): `add-car-photo.sh` (one resto-mod reference photo into the dual AVIF+JPG pair the car-link tooltips expect, output `www/cars/<stem>.{avif,jpg}`, no EXIF/R2); `gen-alt-text.py` (AI alt text for every grid photo, writes `www/images/alt.json` `{stem: alt}`, resumable; run by `add-photos.sh` phase 4 — posts the committed `i/` thumbnail bytes to Workers AI when `CLOUDFLARE_API_TOKEN` is set so a brand-new photo captions pre-deploy, else falls back to the cf-garage `/garage/cf/caption` endpoint by stem, which only sees deployed photos); `gen-encoding-samples.sh` (regenerates the color sample set for the `/garage/encoding` study through every encoder, prints byte counts + bytes-per-pixel); `reencode-thumbnails.sh` (re-encodes all published grid thumbnails as pre-cropped center squares from the canonical source folder, two square tiers); `gen-pixel-peeper.py` (the one remaining Pillow consumer, a one-off generator for the /pixel-peeper comparison frames; NOT part of add-photos.sh). The four 64-bin RGB/luminance channels are baked by `zenc histogram`, inside the encoder crate, since 2026-08-14. |
 
 ### The photo pipeline
 
@@ -738,7 +800,7 @@ www/images/<stem>.{avif,jpg}  +  R2 aadhar-photos/<filename>
    |   pulls Fuji recipe (FilmMode, DynamicRange, ColorChrome FX +Blue,
    |   Grain roughness + size, tone curves, saturation) plus standard
    |   exposure / focus / metering / WB shift / Kelvin temperature.
-   |   also writes per-photo /images/meta/<stem>.json files. photo-histograms.py
+   |   also writes per-photo /images/meta/<stem>.json files. `zenc histogram`
    |   then bakes four 64-bin RGB/luminance channels into those files from the
    |   shipped hashed JPG tier, so the tooltip has a stable, whole-image
    |   histogram. build-exif-index.mjs finally rolls every per-photo file MINUS
@@ -769,8 +831,9 @@ Two encoders + one transform tool, all built from source:
   native, no extra dep) when avifenc isn't installed.
 - **exiftool, jq** (`brew install exiftool jq`) — metadata extraction.
 - **Pillow** (`python3 -m pip install -r www/scripts/requirements.txt`) — required by
-  `photo-histograms.py` to bake the four 64-bin RGB/luminance channels from
-  the shipped hashed JPG tier.
+  `gen-pixel-peeper.py` alone, which is a one-off generator rather than part of
+  this pipeline. The 64-bin RGB/luminance bake moved into `zenc histogram` on
+  2026-08-14, so nothing in add-photos.sh or extract-photo-metadata.sh needs it.
 
 ### `<picture>` + content-addressed thumbnails
 
@@ -1001,6 +1064,34 @@ Three deliberate deviations, all written down at the code:
    reason they are written down here: /lens reported three well-known live MCP
    servers as unreadable doors, on the one surface whose whole premise is never
    reporting a failed check as a negative result.
+
+   **`MCP-Protocol-Version` is the sharper case, because there is NO fixed
+   request that satisfies the ecosystem, and a survey of 38 live servers is what
+   showed it.** `mcp.svelte.dev` refuses without that header (`-32020`, "Header
+   mismatch: MCP-Protocol-Version is required"). `mcp.deepwiki.com` and
+   `mcp.exa.ai` serve happily WITHOUT it and refuse the byte-identical request
+   WITH it, because they validate the header against their own supported list
+   and neither speaks `2026-07-28`. All measured 2026-08-14. So sending it
+   always and sending it never each break a real population, and the client
+   sends it only as a reply to a refusal that names it: one retry, on nobody who
+   already works, carrying the revision the body declares. Generalise it past
+   this header. **A header that is REQUIRED by one half of an ecosystem and
+   VALIDATED by the other cannot be a constant**, and the way you find out is
+   the second population, which a survey finds and a fix for one broken server
+   never does.
+
+   The same survey settled how a 401 reads. Sixteen of the 38 are auth-gated and
+   they refuse in two dialects: an EMPTY body (Cloudflare's six) and an OAuth
+   challenge body (Notion, Sentry, Linear, PayPal, Neon, Webflow, Canva,
+   Grafana, Wix). Those used to render as "not JSON" and as the literal string
+   "undefined: undefined", while `lens.js` was already calling the same status an
+   OAuth-protected server at the knock, so two halves of one page disagreed about
+   one origin. A locked door is reported as UNREADABLE with the scheme named,
+   because the door is there and we did not get to look.
+
+   Two servers name a revision our own `MCP_SUPPORTED` does not carry,
+   `2025-11-25`. That is a question about this site's SERVER rather than its
+   client and is deliberately still open.
 2. **`ping` is kept** though 2026-07-28 removed it. Legacy clients send it and
    it costs nothing.
 3. **`protocolVersion` is not enforced as a REQUIRED `_meta` field, though
@@ -1144,18 +1235,29 @@ generic hex back.
 
 - **RN_KV** (KV namespace ID `3cb8a107c58e47dc9244e75b33401f36`) — caches the
   playlist tracks, artist profile pics, the visit-count mirror, and a few
-  crawler results. ~10K writes/day budget; we use a handful. (The photo
+  crawler results. The ceiling is **1,000 writes/day to distinct keys on Workers
+  Free and unlimited on Paid**, plus 1 write/sec to the SAME key on either. This
+  said "~10K writes/day budget; we use a handful" until 2026-08-14, which was 10x
+  optimistic on Free and meaningless on Paid, so check which plan the account is
+  on before reasoning against either number. (The photo
   manifest left KV 2026-07-28: the worker bundles `photo-index.json` +
   `hashes.json`, so the pool is module memory and a deploy is its bust. The
   `/lens` rate-limit counters left KV 2026-08-04 for the Rate Limiting binding
   below — they were a WRITE per allowed request on the busiest route here, which
   had quietly made "we use a handful" false.)
 - **LENS_RL_\*** (Rate Limiting bindings, `ratelimits` in `wrangler.jsonc`) —
-  the four per-IP crawl budgets `/lens` and the `/mcp` lens tools share:
-  inspect 30/min, shot 8/min, compare 4/min, browser 4/min. Counters are
-  per-colo and cost no write. `LENS_BUDGETS` in `lens.js` mirrors the ceilings
-  because that is what the 429 message quotes, and a contract test pins the two
-  configs and the code together so a message cannot outlive its limit.
+  the six per-IP crawl budgets `/lens` and the `/mcp` lens tools share:
+  inspect 30/min, shot 3/min, compare 4/min, browser 3/min, wire 2/min, tools
+  10/min. A seventh, `LENS_RL_BROWSER_ALL` at 4/min, is keyed on a CONSTANT
+  rather than on the caller, so every browser-consuming route bills against one
+  bucket. Counters are per-colo and cost no write. `LENS_BUDGETS` in `lens.js`
+  mirrors the ceilings because that is what the 429 message quotes, and a
+  contract test pins the two configs and the code together so a message cannot
+  outlive its limit. **This prose is a THIRD copy that the test does not cover**,
+  which is how it undercounted the budgets and overstated two of the ceilings
+  until 2026-08-14 while config and code agreed with each other throughout. The
+  wrong values are deliberately not restated here: a stale number written as
+  `N/min` inside its own correction is still a greppable stale number.
 - **PHOTOS_R2** — R2 bucket `aadhar-photos`, holds the SOOC originals
   (~3 GB / 158 photos at FUJIFILM X-T50 + Leica resolution).
 - **ASSETS** — the Workers static-assets binding (wrangler.jsonc `assets`), serves files from www/.
@@ -2663,6 +2765,24 @@ pnpm run deploy:direct
     So the check is reporting an outage in Copilot's model routing, and no change
     to your branch can turn it green.
 
+    **The log NAMES the model, which is the sharpest form of this fingerprint
+    and was missing from every entry above.** Read on #368 (2026-08-14), one
+    line before the error:
+
+    ```
+    Creating copilot-sdk session with model: claude-opus-4.6 and clientName: github/code-scanning
+    ```
+
+    That narrows the outage from "Copilot's model routing" to one model on one
+    client, which is worth knowing for two reasons. It says the refusal is a
+    routing or entitlement gap for a specific model rather than the review agent
+    being broken, so the fix is upstream configuration and not a Copilot release.
+    And the line is emitted whether or not the request then fails, so it is the
+    thing to read on the day this goes green: it tells you WHICH model GitHub
+    moved to, which is the only evidence that the outage ended rather than
+    paused. Grep for it alongside `CAPIError`, since a run that prints the
+    session line and no error is the recovery signal.
+
     **It is not a flake: the same error landed on three commits across two PRs
     in twenty-one minutes.** #319 twice (its feature head, then a merge commit
     that only pulled `main` in), and then THIS PR, whose entire diff is the
@@ -2675,9 +2795,17 @@ pnpm run deploy:direct
     That gives a test which does not depend on recognising a signature:
 
     ```bash
-    gh api repos/oddharsh/site/check-runs/<check-run-id> --jq .details_url
-    gh run view <run-id> --log-failed | grep -i "CAPIError\|Copilot Error"
+    URL=$(gh api repos/oddharsh/site/check-runs/<check-run-id> --jq .details_url)
+    RUN=$(echo "$URL" | sed -E 's#.*/actions/runs/([0-9]+)/.*#\1#')
+    gh run view $RUN --log-failed | grep -i "CAPIError\|Copilot Error\|session with model"
     ```
+
+    **Pull the run id with that sed rather than off the end of the URL.**
+    `details_url` ends `/actions/runs/<run-id>/job/<job-id>`, so the trailing
+    number is the JOB, and `gh run view <job-id>` exits 0 and prints NOTHING.
+    An empty grep is supposed to mean "a real finding, no crash", so handing it
+    the wrong id inverts the verdict without erroring. Cost one step on #370,
+    which is the PR that added this line.
 
     A crashed agent prints the error. A real finding prints an inline review
     comment on a source line and leaves this grep empty. Prefer it to the
@@ -2707,6 +2835,12 @@ pnpm run deploy:direct
     So the loop to run is short. Confirm the run id is new (a repeat alert looks
     identical), grep the log for `CAPIError`, and stop. Do NOT re-read the diff
     looking for what upset it, and do not push anything to appease it.
+
+    **Ten recorded, and the outage is three days old as of 2026-08-14** (#368,
+    check-run `94825132999`, annotation at `.github:214`, `claude-opus-4.6`).
+    The `.github:<line>` number has now been 211, 213 and 214 across four
+    unrelated diffs, which settles that it tracks the harness rather than
+    anything in the repository.
 
     **Turning off Copilot Autofix does NOT stop it, measured 2026-08-12.** This
     paragraph said the fix was in GitHub's settings and named autofix; the owner
