@@ -1033,6 +1033,34 @@ Three deliberate deviations, all written down at the code:
    reason they are written down here: /lens reported three well-known live MCP
    servers as unreadable doors, on the one surface whose whole premise is never
    reporting a failed check as a negative result.
+
+   **`MCP-Protocol-Version` is the sharper case, because there is NO fixed
+   request that satisfies the ecosystem, and a survey of 38 live servers is what
+   showed it.** `mcp.svelte.dev` refuses without that header (`-32020`, "Header
+   mismatch: MCP-Protocol-Version is required"). `mcp.deepwiki.com` and
+   `mcp.exa.ai` serve happily WITHOUT it and refuse the byte-identical request
+   WITH it, because they validate the header against their own supported list
+   and neither speaks `2026-07-28`. All measured 2026-08-14. So sending it
+   always and sending it never each break a real population, and the client
+   sends it only as a reply to a refusal that names it: one retry, on nobody who
+   already works, carrying the revision the body declares. Generalise it past
+   this header. **A header that is REQUIRED by one half of an ecosystem and
+   VALIDATED by the other cannot be a constant**, and the way you find out is
+   the second population, which a survey finds and a fix for one broken server
+   never does.
+
+   The same survey settled how a 401 reads. Sixteen of the 38 are auth-gated and
+   they refuse in two dialects: an EMPTY body (Cloudflare's six) and an OAuth
+   challenge body (Notion, Sentry, Linear, PayPal, Neon, Webflow, Canva,
+   Grafana, Wix). Those used to render as "not JSON" and as the literal string
+   "undefined: undefined", while `lens.js` was already calling the same status an
+   OAuth-protected server at the knock, so two halves of one page disagreed about
+   one origin. A locked door is reported as UNREADABLE with the scheme named,
+   because the door is there and we did not get to look.
+
+   Two servers name a revision our own `MCP_SUPPORTED` does not carry,
+   `2025-11-25`. That is a question about this site's SERVER rather than its
+   client and is deliberately still open.
 2. **`ping` is kept** though 2026-07-28 removed it. Legacy clients send it and
    it costs nothing.
 3. **`protocolVersion` is not enforced as a REQUIRED `_meta` field, though
@@ -1176,18 +1204,29 @@ generic hex back.
 
 - **RN_KV** (KV namespace ID `3cb8a107c58e47dc9244e75b33401f36`) — caches the
   playlist tracks, artist profile pics, the visit-count mirror, and a few
-  crawler results. ~10K writes/day budget; we use a handful. (The photo
+  crawler results. The ceiling is **1,000 writes/day to distinct keys on Workers
+  Free and unlimited on Paid**, plus 1 write/sec to the SAME key on either. This
+  said "~10K writes/day budget; we use a handful" until 2026-08-14, which was 10x
+  optimistic on Free and meaningless on Paid, so check which plan the account is
+  on before reasoning against either number. (The photo
   manifest left KV 2026-07-28: the worker bundles `photo-index.json` +
   `hashes.json`, so the pool is module memory and a deploy is its bust. The
   `/lens` rate-limit counters left KV 2026-08-04 for the Rate Limiting binding
   below — they were a WRITE per allowed request on the busiest route here, which
   had quietly made "we use a handful" false.)
 - **LENS_RL_\*** (Rate Limiting bindings, `ratelimits` in `wrangler.jsonc`) —
-  the four per-IP crawl budgets `/lens` and the `/mcp` lens tools share:
-  inspect 30/min, shot 8/min, compare 4/min, browser 4/min. Counters are
-  per-colo and cost no write. `LENS_BUDGETS` in `lens.js` mirrors the ceilings
-  because that is what the 429 message quotes, and a contract test pins the two
-  configs and the code together so a message cannot outlive its limit.
+  the six per-IP crawl budgets `/lens` and the `/mcp` lens tools share:
+  inspect 30/min, shot 3/min, compare 4/min, browser 3/min, wire 2/min, tools
+  10/min. A seventh, `LENS_RL_BROWSER_ALL` at 4/min, is keyed on a CONSTANT
+  rather than on the caller, so every browser-consuming route bills against one
+  bucket. Counters are per-colo and cost no write. `LENS_BUDGETS` in `lens.js`
+  mirrors the ceilings because that is what the 429 message quotes, and a
+  contract test pins the two configs and the code together so a message cannot
+  outlive its limit. **This prose is a THIRD copy that the test does not cover**,
+  which is how it undercounted the budgets and overstated two of the ceilings
+  until 2026-08-14 while config and code agreed with each other throughout. The
+  wrong values are deliberately not restated here: a stale number written as
+  `N/min` inside its own correction is still a greppable stale number.
 - **PHOTOS_R2** — R2 bucket `aadhar-photos`, holds the SOOC originals
   (~3 GB / 158 photos at FUJIFILM X-T50 + Leica resolution).
 - **ASSETS** — the Workers static-assets binding (wrangler.jsonc `assets`), serves files from www/.

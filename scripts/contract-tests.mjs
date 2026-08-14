@@ -4967,6 +4967,17 @@ test("a refusal that carries a reason reports the reason, not its status code", 
   assert.match(refused.detail, /-32020: the request headers and body disagree/);
   assert.ok(!refused.unreadable, "a server that answered is not an unread door");
 
+  // Not every refusal is JSON-RPC shaped. mcp.stripe.com answers a 400 carrying
+  // {error:{message}} with no code, which the old renderer printed as
+  // "undefined: Unrecognized request URL". Measured 2026-08-14.
+  const vendor = await foreignMcpTools("https://aadhar.sh", answer(
+    '{"error":{"message":"Unrecognized request URL (POST: /mcp)","type":"invalid_request_error"}}',
+    { status: 400, headers: { "content-type": "application/json" } },
+  ));
+  assert.equal(vendor.ok, false);
+  assert.equal(vendor.detail, "Unrecognized request URL (POST: /mcp)");
+  assert.ok(!/undefined/.test(vendor.detail), "the reader printed its own undefined into the frame");
+
   // A body we DID receive and could not parse is a finding about them. A
   // request that never arrived says nothing about whether the server exists,
   // and the two must not merge — same rule as classifyDoor above.
@@ -4977,6 +4988,187 @@ test("a refusal that carries a reason reports the reason, not its status code", 
   const dead = await foreignMcpTools("https://aadhar.sh", { SELF_FETCH: () => { throw new Error("connection reset"); } });
   assert.equal(dead.ok, false);
   assert.equal(dead.unreadable, true, "a failed check was reported as a negative result");
+});
+
+test("a foreign catalogue is read from the stream with a ceiling, and the ceiling is reported as ours", async () => {
+  // A catalogue is text a stranger controls. Every other crawl path here reads
+  // through readResponseCapped; this one is a POST, so it could not go through
+  // lensFetch and had quietly inherited none of its bounds.
+  const { foreignMcpTools } = await import("../www/_worker.js/lib/doors.js");
+
+  // The cap is well clear of anything real: this site's own 24-tool catalogue
+  // measured 28,471 bytes on 2026-08-14, the largest on hand.
+  const wide = { jsonrpc: "2.0", id: 1, result: { tools: Array.from({ length: 40 }, (_, i) => ({
+    name: `tool_${i}`, description: "d".repeat(400), inputSchema: { type: "object" },
+  })) } };
+  const ordinary = await foreignMcpTools("https://aadhar.sh", { SELF_FETCH: () => new Response(
+    JSON.stringify(wide), { headers: { "content-type": "application/json" } }) });
+  assert.equal(ordinary.ok, true);
+  assert.equal(ordinary.count, 40);
+
+  // Past the ceiling the read stops. It is OUR limit, so it is reported as
+  // ours: a truncated body would fail to parse and read out as "that is not
+  // JSON", which blames a server that answered correctly at a length we
+  // declined to read. Same rule as the browser lens reporting a spent render
+  // budget as our own budget rather than as the target failing.
+  const flood = "x".repeat(300 * 1024);
+  const huge = await foreignMcpTools("https://aadhar.sh", { SELF_FETCH: () => new Response(
+    `{"jsonrpc":"2.0","id":1,"result":{"tools":[{"name":"a","description":"${flood}"}]}}`,
+    { headers: { "content-type": "application/json" } }) });
+  assert.equal(huge.ok, false);
+  assert.equal(huge.unreadable, true, "our own ceiling was reported as the server's failure");
+  assert.match(huge.detail, /256 KB/);
+  assert.ok(!/JSON/.test(huge.detail), "a truncated read must not read out as a malformed answer");
+});
+
+test("a redirect off a vetted origin is validated per hop, not followed blindly", async () => {
+  // validateLensTarget vetted the origin the visitor typed. A 302 from there is
+  // a NEW target nobody vetted, and under redirect:"follow" that hop was taken
+  // and its body read — the same hole lensFetch closed for the GET path, which
+  // this POST could not share because lensFetch forwards no body.
+  //
+  // What a test can pin is that the guard is IN the path: the platform's own
+  // fetch is what follows a redirect, so a stubbed fetch cannot reproduce the
+  // vulnerable behaviour, only the routing that prevents it. Reverted to
+  // redirect:"follow", this fails on the verdict rather than on the hop count.
+  const { foreignMcpTools } = await import("../www/_worker.js/lib/doors.js");
+
+  // A real key, because every external probe signs before it fetches and the
+  // whole external branch is unreachable without one.
+  const pair = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
+  const env = { RN_SIGNING_KEY_JWK: JSON.stringify({ ...await crypto.subtle.exportKey("jwk", pair.privateKey), kid: "test" }) };
+
+  const realFetch = globalThis.fetch;
+  const run = async (location, second) => {
+    const hops = [];
+    globalThis.fetch = async (url) => {
+      hops.push(String(url));
+      return hops.length === 1
+        ? new Response(null, { status: 302, headers: { location } })
+        : second();
+    };
+    try { return { out: await foreignMcpTools("https://example.com", env), hops }; }
+    finally { globalThis.fetch = realFetch; }
+  };
+
+  const blocked = await run("http://169.254.169.254/mcp", () => new Response(
+    '{"jsonrpc":"2.0","result":{"tools":[{"name":"leaked"}]}}', { headers: { "content-type": "application/json" } }));
+  assert.deepEqual(blocked.hops, ["https://example.com/mcp"], "the blocked hop was requested anyway");
+  assert.equal(blocked.out.ok, false);
+  // Ours, not theirs: we declined to look, which is not the same as finding
+  // nothing there.
+  assert.equal(blocked.out.unreadable, true);
+  assert.match(blocked.out.detail, /redirect/);
+
+  // And a redirect to another PUBLIC host is still followed, so this is a guard
+  // rather than a blanket refusal to move.
+  const moved = await run("https://elsewhere.example/mcp", () => new Response(
+    '{"jsonrpc":"2.0","result":{"tools":[{"name":"moved"}]}}', { headers: { "content-type": "application/json" } }));
+  assert.deepEqual(moved.hops, ["https://example.com/mcp", "https://elsewhere.example/mcp"]);
+  assert.equal(moved.out.ok, true);
+  assert.equal(moved.out.tools[0].name, "moved");
+});
+
+test("a locked door is reported as locked, in whatever dialect the server refuses in", async () => {
+  // A 401 is neither a broken server nor an absent one. lens already reports
+  // this status as an OAuth-protected server when it KNOCKS, and doors
+  // contradicted it one line later, in two different ways depending on what the
+  // server put in the body. Both shapes measured across 16 live servers on
+  // 2026-08-14: Cloudflare's six answer an empty-bodied 401 and used to read as
+  // "answered no content-type, not JSON", while Notion, Sentry, Linear, PayPal,
+  // Neon, Webflow, Canva, Grafana and Wix answer an OAuth challenge body and
+  // used to read as the literal string "undefined: undefined".
+  const { foreignMcpTools, rpcErrorDetail } = await import("../www/_worker.js/lib/doors.js");
+  const answer = (body, init) => ({ SELF_FETCH: () => new Response(body, init) });
+
+  const empty = await foreignMcpTools("https://aadhar.sh", answer(null, { status: 401, headers: {
+    "www-authenticate": 'Bearer realm="OAuth", resource_metadata="https://x/.well-known/oauth-protected-resource"' } }));
+  assert.equal(empty.ok, false);
+  assert.equal(empty.gated, true);
+  assert.equal(empty.unreadable, true, "a door we were not let through is not a door that is shut");
+  assert.match(empty.detail, /needs OAuth \(HTTP 401\)/);
+
+  // The OAuth challenge BODY, which is not JSON-RPC and never was.
+  const challenge = await foreignMcpTools("https://aadhar.sh", answer(
+    '{"error":"invalid_token","error_description":"Missing or invalid access token"}',
+    { status: 401, headers: { "content-type": "application/json", "www-authenticate": 'Bearer realm="OAuth"' } }));
+  assert.equal(challenge.gated, true);
+  assert.ok(!/undefined/.test(challenge.detail), "the reader printed its own undefined into the frame");
+
+  // No challenge header, and a 403: say what is true rather than naming a
+  // scheme the server never claimed. mcp.hf.co answers exactly this.
+  const bare = await foreignMcpTools("https://aadhar.sh", answer("", { status: 403 }));
+  assert.match(bare.detail, /needs credentials \(HTTP 403\)/);
+
+  // The renderer reads .error off a JSON-RPC error, and plenty of things that
+  // answer an MCP endpoint speak their own dialect instead.
+  assert.equal(rpcErrorDetail({ error: { code: -32020, message: "header mismatch" } }), "-32020: header mismatch");
+  assert.equal(rpcErrorDetail({ error: "invalid_token", error_description: "Missing or invalid access token" }),
+    "Missing or invalid access token");
+  // Stripe's shape: a message, no code. It used to print "undefined: <message>".
+  assert.equal(rpcErrorDetail({ error: { message: "Unrecognized request URL" } }), "Unrecognized request URL");
+  for (const odd of [{ error: {} }, { error: [] }, { error: 7 }, { error: true }]) {
+    assert.ok(!/undefined/.test(rpcErrorDetail(odd)), `rpcErrorDetail leaked undefined for ${JSON.stringify(odd)}`);
+  }
+});
+
+test("the version header goes only to a server that asked for one", async () => {
+  // Three live servers, all measured 2026-08-14, and they cannot be satisfied
+  // by one fixed request. mcp.svelte.dev refuses without MCP-Protocol-Version
+  // (-32020 "MCP-Protocol-Version is required"). mcp.deepwiki.com and
+  // mcp.exa.ai serve happily WITHOUT it and refuse the byte-identical request
+  // WITH it, because they validate the header against their own supported list
+  // and neither speaks 2026-07-28. So the header is a reply to a refusal, never
+  // an opener.
+  const { foreignMcpTools, wantsProtocolHeader } = await import("../www/_worker.js/lib/doors.js");
+  const CATALOGUE = '{"jsonrpc":"2.0","id":1,"result":{"tools":[{"name":"get-documentation","description":"d"}]}}';
+
+  // The server that works without it must never be sent one. This is the
+  // regression guard: sending it unconditionally reads MORE servers in a naive
+  // count and BREAKS two that already worked.
+  const easy = [];
+  const openOut = await foreignMcpTools("https://aadhar.sh", { SELF_FETCH: (req) => {
+    easy.push(req.headers.get("mcp-protocol-version"));
+    return new Response(CATALOGUE, { headers: { "content-type": "application/json" } });
+  } });
+  assert.equal(openOut.ok, true);
+  assert.deepEqual(easy, [null], "a server that never asked was sent a version header anyway");
+
+  // The server that asks gets exactly one retry, carrying the SAME revision the
+  // body declares — a header disagreeing with the body is the other half of
+  // what -32020 refuses.
+  const strict = [];
+  const strictOut = await foreignMcpTools("https://aadhar.sh", { SELF_FETCH: async (req) => {
+    const sent = req.headers.get("mcp-protocol-version");
+    strict.push({ sent, body: JSON.parse(await req.text()) });
+    return sent
+      ? new Response(CATALOGUE, { headers: { "content-type": "application/json" } })
+      : new Response('{"jsonrpc":"2.0","id":1,"error":{"code":-32020,"message":"MCP error -32020: Header mismatch: MCP-Protocol-Version is required"}}',
+        { status: 400, headers: { "content-type": "application/json" } });
+  } });
+  assert.equal(strict.length, 2, "the refusal that names the header should be answered exactly once");
+  assert.equal(strict[0].sent, null);
+  assert.equal(strict[1].sent, strict[1].body.params._meta["io.modelcontextprotocol/protocolVersion"]);
+  assert.equal(strictOut.ok, true);
+  assert.equal(strictOut.tools[0].name, "get-documentation");
+
+  // Narrow on purpose: a refusal that is an ANSWER rather than an instruction
+  // gets no retry, because the second request would be identical to the first.
+  assert.equal(wantsProtocolHeader({ error: { code: -32020, message: "MCP-Protocol-Version is required" } }), true);
+  assert.equal(wantsProtocolHeader({ error: { code: -32020, message: "the body names method tools/list but the required Mcp-Method header is absent" } }), false);
+  assert.equal(wantsProtocolHeader({ error: { code: -32022, message: "Unsupported protocol version: 2026-07-28" } }), false);
+  assert.equal(wantsProtocolHeader({ result: { tools: [] } }), false);
+
+  // And a server that keeps refusing is reported, not retried again.
+  let calls = 0;
+  const stubborn = await foreignMcpTools("https://aadhar.sh", { SELF_FETCH: () => {
+    calls++;
+    return new Response('{"jsonrpc":"2.0","id":1,"error":{"code":-32020,"message":"MCP-Protocol-Version is required"}}',
+      { status: 400, headers: { "content-type": "application/json" } });
+  } });
+  assert.equal(calls, 2, "one retry, not a loop");
+  assert.equal(stubborn.ok, false);
+  assert.match(stubborn.detail, /-32020/);
 });
 
 // ── /ask sessions — the one thing here with a Durable Object ────
