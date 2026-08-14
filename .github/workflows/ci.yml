@@ -82,6 +82,18 @@ jobs:
       - name: Validate site Worker config
         run: pnpm exec wrangler deploy --dry-run
 
+      # Lint, syntax AND type-aware, in one pass. tsgolint (the Go type checker
+      # behind `--type-aware`) tracks TypeScript 7.0.2, which is the version
+      # pinned below, and that pairing is not a coincidence: TypeScript 7.0 ships
+      # no stable programmatic API, so typescript-eslint cannot run on it at all.
+      # oxlint reaches the same type-aware rules through tsgolint instead.
+      #
+      # It runs FIRST because it is the cheapest thing in this job (0.56s locally,
+      # against 1.1s for the typecheck it precedes) and because a dead binding is
+      # a cheaper thing to read than whatever it causes further down.
+      - name: Lint
+        run: pnpm run lint
+
       # Type checking WITHOUT TypeScript: tsc reads the JSDoc already in these
       # files, emits nothing, and never touches a served byte. Scoped to cal/src
       # today (see tsconfig.json for the measured error counts of the scopes it

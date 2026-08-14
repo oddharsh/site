@@ -285,7 +285,12 @@ export function start(initial) {
       // data lands.
       function buildPhotoContent(slot) {
         const stem = photoStem(slot);
-        const img  = slot.querySelector("img");
+        // Dead: queried on every photo hover and never read. Same reasoning as
+    // nav.js: tooltip.js is content-hashed, so this costs a new /a/ URL to
+    // remove. Worth taking on the next real edit, since it is a DOM query per
+    // hover rather than only a dead binding.
+    // oxlint-disable-next-line no-unused-vars
+    const img  = slot.querySelector("img");
         fetchMeta(stem);                           // per-photo lazy fetch (no-op if already in hand)
         const exif = metaMap[stem] || {};
 

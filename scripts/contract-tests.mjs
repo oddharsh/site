@@ -27,7 +27,7 @@ import { EXECUTION_META, EXECUTION_PROBE, executionChecks } from "../www/_worker
 import { httpWords } from "./check-agent.mjs";
 import { lensReadiness } from "../www/_worker.js/lens.js";
 import { lensRecipe, lensRecipeIds, lensRecipeScript } from "../www/_worker.js/lens-recipes.js";
-import { handleCoffeeAvailability, readCoffeeAvailability } from "../www/_worker.js/coffee.js";
+import { handleCoffeeAvailability } from "../www/_worker.js/coffee.js";
 import { reservationName } from "../cal/src/reservation.js";
 import { handleSiteMcp, MCP_TOOLS as SITE_MCP_TOOLS, SITE_MCP_SERVER_INFO } from "../www/_worker.js/mcp.js";
 import { documentContent, handleWebmention, handleWebmentionDecision, linksTo } from "../www/_worker.js/webmention.js";
@@ -47,10 +47,8 @@ import { PROFILES } from "../www/scripts/shell-data.mjs";
 import { faviconHref, sectionFavicons, speculationHtml } from "../www/scripts/gen-desktop-partial.mjs";
 import { TASKBAR } from "../www/scripts/shell-data.mjs";
 import { SECTION_FAVICONS } from "../www/_worker.js/lib/desktop.js";
-import { INDEXED_SECTIONS, TWIN_FACTS, buildTwins, checkTwinFacts, htmlFileFor, twinPath } from "./gen-md-twins.mjs";
 import { collectBlockClasses, readDocument } from "./lib/html-to-md.mjs";
 import {
-  MCP_TOOLS,
   SERENDIPITY_MCP_SERVER_INFO,
   SERENDIPITY_SYNC_LIMITS,
   cookieJar,
@@ -2510,7 +2508,6 @@ test("browser RUM and its ledger proxy stay fully removed", async () => {
   const wrangler = await readFile(new URL("wrangler.jsonc", ROOT), "utf8");
   const wranglerDev = await readFile(new URL("wrangler.dev.jsonc", ROOT), "utf8");
   const headers = await readFile(new URL("www/_headers", ROOT), "utf8");
-  const security = await readFile(new URL("www/_worker.js/lib/security.js", ROOT), "utf8");
   const whoareyou = await readFile(new URL("www/_worker.js/whoareyou.js", ROOT), "utf8");
   const whoareyouMd = await readFile(new URL("www/md/whoareyou.md", ROOT), "utf8");
   const securityPage = await readFile(new URL("www/_worker.js/security.js", ROOT), "utf8");
@@ -5903,7 +5900,7 @@ test("the dyno chart draws lines, not filled regions", async () => {
     { ts: "2026-08-10", sha: "aaa1111", worker_gzip: 264540, pages_br: 476528, assets_br: 58186, source: "nightly" },
     { ts: "2026-08-11", sha: "bbb2222", worker_gzip: 266000, pages_br: 476000, assets_br: 58200, source: "nightly" },
   ]);
-  const html = await (await renderDyno(rows)).text();
+  const html = await renderDyno(rows).text();
 
   // The bug this pins: a bare `.s-worker { stroke; fill }` outranks
   // `polyline { fill: none }` on specificity, so every series filled down to the
@@ -5921,9 +5918,9 @@ test("the dyno chart draws lines, not filled regions", async () => {
 
 test("the dyno page distinguishes measured points from hand-entered ones", async () => {
   const { mergeHistory, renderDyno } = await import("../www/_worker.js/dyno.js");
-  const html = await (await renderDyno(mergeHistory([
+  const html = await renderDyno(mergeHistory([
     { ts: "2026-08-10", sha: "aaa1111", worker_gzip: 264540, pages_br: 476528, assets_br: 58186, source: "nightly" },
-  ]))).text();
+  ])).text();
   // Dashed for the seeded prefix, solid for the measured tail, and the legend
   // says which is which. A chart that renders a number somebody typed into a
   // code comment identically to one a runner measured is lying about its own

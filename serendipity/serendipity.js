@@ -1351,8 +1351,8 @@ function parseStructured(text) {
   const m = KV.exec(text);
   const proseEnd = m ? m.index : text.length;
   let bio = text.slice(0, proseEnd)
-    .replace(/^\s*PART\s*1\b[\s:.—\-]*(?:Bio\b[\s:.—\-]*)?/i, "")  // drop "PART 1 [— Bio:]" lead-in
-    .replace(/\bPART\s*2\b[\s:.—\-]*$/i, "")                              // drop trailing "PART 2"
+    .replace(/^\s*PART\s*1\b[\s:.—-]*(?:Bio\b[\s:.—-]*)?/i, "")  // drop "PART 1 [— Bio:]" lead-in
+    .replace(/\bPART\s*2\b[\s:.—-]*$/i, "")                              // drop trailing "PART 2"
     .replace(/^\s*(?:Bio|Summary)\s*:\s*/im, "")
     .replace(/\s+/g, " ").trim() || null;
   const kv = m ? text.slice(proseEnd) : "";

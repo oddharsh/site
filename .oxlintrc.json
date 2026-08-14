@@ -1,0 +1,154 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+
+  // Two directories hold committed JavaScript that nobody here authored.
+  // `a-dict` is the shell dictionary snapshots, which are minified BUILD INPUT
+  // captured off the wire, and `pretext.lib.js` is @chenglou/pretext 0.0.7
+  // vendored same-origin so /garage/pretext can load it under `script-src
+  // 'self'`. Linting either one reports on somebody else's minifier.
+  "ignorePatterns": ["www/a-dict/**", "www/garage/pretext.lib.js", ".build/**"],
+
+  "categories": { "correctness": "error" },
+
+  "rules": {
+    // Three rules fire only on idioms this codebase uses deliberately and
+    // consistently. Each is relaxed rather than suppressed per-site, because a
+    // rule that needs 96 inline disables is a rule that disagrees with the
+    // house style, and the disables would be the noise instead.
+
+    // 96 sites, all `catch { }` or `catch (e) { }` swallowing a failure the
+    // caller is designed to survive: a disallowing robots.txt, an absent KV
+    // entry, a third party that will not parse. The deliberate quiet
+    // degradation those sites implement is documented all over CLAUDE.md, and
+    // `cron.*` / `around.neighbor` spans exist precisely because it is quiet.
+    //
+    // `args: "none"` is the same argument at a different address. Worker,
+    // Durable Object and cron signatures are POSITIONAL and fixed by the
+    // platform: `fetch(request, env, ctx)` must accept `ctx` whether or not it
+    // uses it, so an unused trailing parameter here is a contract rather than
+    // an oversight. 15 sites, 11 of them `ctx`.
+    "no-unused-vars": [
+      "error",
+      {
+        "caughtErrors": "none",
+        "args": "none",
+        // `const { [HISTOGRAM_KEY]: _hist, ...exif } = ...` is how three files
+        // here drop one key while keeping the rest. Both options are ESLint's
+        // own defaults for that idiom; oxlint ships them off.
+        "ignoreRestSiblings": true,
+        "varsIgnorePattern": "^_"
+      }
+    ],
+
+    // 9 sites, every one the match-fallback idiom:
+    //     (html.match(/<title>(.*?)<\/title>/) || [, ""])[1]
+    // The hole at index 0 stands for the full match, which is discarded on
+    // purpose. Writing it out as `[undefined, ""]` says less, not more.
+    "no-sparse-arrays": "off",
+
+    // 11 sites, 9 of them in check-infra.mjs, all one reporting shape:
+    //     same ? pass(`nameservers match`) : drift(`...`)
+    // A ternary used as a statement for its side effects is the house form for
+    // every tier of that script. allowShortCircuit covers the `x && f()` twin.
+    "no-unused-expressions": ["error", { "allowTernary": true, "allowShortCircuit": true }],
+
+    // OFF because its AUTOFIX introduced a real regression here, measured
+    // 2026-08-14. In webmention.js the spread is load-bearing:
+    //
+    //   [...new Uint8Array(d).slice(0, 12)].map((b) => b.toString(16)...)
+    //
+    // `--fix` rewrote it to `new Uint8Array(d).slice(0, 12).map(...)`, and
+    // TypedArray.prototype.map returns a TYPED ARRAY, so every hex string it
+    // produced was coerced straight back to a number. The id for a fixed digest
+    // went from `deadbeef0102030405060708` to `000012345678`, which is not an
+    // error, not a test failure, and not visible in a diff review that trusts
+    // the fixer. It would simply have changed every webmention id and broken
+    // dedup against the rows already in D1.
+    //
+    // The rule is right about plain arrays and cannot tell the two apart here,
+    // so it is off rather than disabled per-site: one silent wrong autofix is
+    // enough to stop trusting the family on a codebase this full of typed
+    // arrays and crypto digests.
+    "unicorn/no-useless-spread": "off",
+
+    // `new Array(values.length)` in crawl.js pre-sizes the output of
+    // mapWithConcurrency, which writes results back BY INDEX out of order. The
+    // rule exists to catch `new Array(5)` where `[5]` was meant, and cannot see
+    // the difference; every alternative it would accept (Array.from({length}),
+    // a fill, a push loop) allocates or walks the array a second time to reach
+    // the same place. Off rather than autofixed, for the same reason as above.
+    "unicorn/no-new-array": "off"
+  },
+
+  // Type-aware linting, via tsgolint, enabled by `--type-aware` in the `lint`
+  // script. It costs 0.56s over the whole tree, which is less than the tsc pass
+  // it runs beside, so there is no reason to split it into a second script.
+  //
+  // TRIAGE WARNING, learned the expensive way on the day this landed: how much
+  // this pass REPORTS depends on how much of the dependency graph resolves. A
+  // first triage ran against a root-only install and came back with 56 findings;
+  // after a full `pnpm install` populated the workspace, `@types/node` resolved,
+  // `test()` typed as returning a promise, and the same command reported 272
+  // more. Nothing had changed in the source. So triage a rule against a COLD
+  // `pnpm install --frozen-lockfile`, which is what CI runs, and treat a count
+  // taken from a partial install as a floor. Same shape as the lens-reader
+  // lesson in CLAUDE.md, from the other direction.
+  //
+  // Six of the eight type-aware families that fire on this tree fire because
+  // the tree is unannotated JavaScript rather than because anything is wrong,
+  // and they are off with the measurement that decided each one:
+  //
+  //   no-base-to-string (14) + restrict-template-expressions (12)
+  //     Both want a provable `string` in a template literal. In a .js file with
+  //     no JSDoc the value is `any`, so these fire on `${url}` where url is a
+  //     URL and on `${method}` where method is a literal string. Neither is a
+  //     defect; both would be if this were TypeScript.
+  //
+  //   require-array-sort-compare (10)
+  //     `[...services].sort()` in ledger.js is a Set built from String(...), so
+  //     it is provably strings to a reader and `Set<any>` to the checker. The
+  //     rule's own `ignoreStringArrays` option cannot help when the element type
+  //     is unknowable.
+  //
+  //   no-misused-spread (8)
+  //     `[...str]` splitting a string into code points. Correct to flag when the
+  //     input might carry emoji; every site here spreads ASCII the build just
+  //     produced.
+  //
+  //   unbound-method (5)
+  //     All five are in lens-tools.js, on `read: inner.read`. Every `read` is a
+  //     CLOSURE over a DOM node (the file says so at its renderer comment: "a
+  //     plan in, DOM plus a read() closure out"), so none of them touch `this`.
+  //
+  //   no-implied-eval (2)
+  //     Both are deliberate test technique in contract-tests.mjs: `new
+  //     Function(script)` as a syntax check on inline blocks, and again to load
+  //     a browser module under node. Each already carries a comment saying so.
+  //
+  // What stays on is the family that catches the failure this runtime actually
+  // has: a promise nobody awaited, which workerd cancels at request teardown.
+  "overrides": [
+    {
+      // `node:test` and Vitest both return a promise from `test()` that the
+      // RUNNER tracks, so a top-level `test("...", async () => {})` is the
+      // documented usage rather than a dropped promise. 272 of them here, and
+      // `void` on every one would be noise that hides the rule's real subject.
+      // Scoped to test files by name so the rule keeps its teeth everywhere a
+      // Worker actually runs, which is the only place a floating promise gets
+      // cancelled at request teardown.
+      "files": ["scripts/contract-tests.mjs", "**/test/**", "**/*.test.*"],
+      "rules": { "typescript/no-floating-promises": "off" }
+    },
+    {
+      "files": ["**/*.js", "**/*.mjs"],
+      "rules": {
+        "typescript/no-base-to-string": "off",
+        "typescript/restrict-template-expressions": "off",
+        "typescript/require-array-sort-compare": "off",
+        "typescript/no-misused-spread": "off",
+        "typescript/unbound-method": "off",
+        "typescript/no-implied-eval": "off"
+      }
+    }
+  ]
+}

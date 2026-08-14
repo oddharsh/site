@@ -285,7 +285,7 @@ export async function discoverEndpoint(target) {
     // A HEAD-equivalent shortcut: if the Link header already names an endpoint,
     // don't read the body at all.
     if (linkHeader && /\bwebmention\b/i.test(linkHeader)) {
-      res.body?.cancel?.();
+      void res.body?.cancel?.();
       return findEndpointIn("", linkHeader, finalUrl);
     }
     if (!res.ok) return null;
@@ -314,7 +314,7 @@ async function postMention(endpoint, source, target) {
       body: new URLSearchParams({ source, target }).toString(),
       signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
     });
-    res.body?.cancel?.();
+    void res.body?.cancel?.();
     return res.status;
   } catch { return 0; }
 }
