@@ -4951,6 +4951,37 @@ test("a refusal that carries a reason reports the reason, not its status code", 
   assert.equal(dead.unreadable, true, "a failed check was reported as a negative result");
 });
 
+test("a foreign catalogue is read from the stream with a ceiling, and the ceiling is reported as ours", async () => {
+  // A catalogue is text a stranger controls. Every other crawl path here reads
+  // through readResponseCapped; this one is a POST, so it could not go through
+  // lensFetch and had quietly inherited none of its bounds.
+  const { foreignMcpTools } = await import("../www/_worker.js/lib/doors.js");
+
+  // The cap is well clear of anything real: this site's own 24-tool catalogue
+  // measured 28,471 bytes on 2026-08-14, the largest on hand.
+  const wide = { jsonrpc: "2.0", id: 1, result: { tools: Array.from({ length: 40 }, (_, i) => ({
+    name: `tool_${i}`, description: "d".repeat(400), inputSchema: { type: "object" },
+  })) } };
+  const ordinary = await foreignMcpTools("https://aadhar.sh", { SELF_FETCH: () => new Response(
+    JSON.stringify(wide), { headers: { "content-type": "application/json" } }) });
+  assert.equal(ordinary.ok, true);
+  assert.equal(ordinary.count, 40);
+
+  // Past the ceiling the read stops. It is OUR limit, so it is reported as
+  // ours: a truncated body would fail to parse and read out as "that is not
+  // JSON", which blames a server that answered correctly at a length we
+  // declined to read. Same rule as the browser lens reporting a spent render
+  // budget as our own budget rather than as the target failing.
+  const flood = "x".repeat(300 * 1024);
+  const huge = await foreignMcpTools("https://aadhar.sh", { SELF_FETCH: () => new Response(
+    `{"jsonrpc":"2.0","id":1,"result":{"tools":[{"name":"a","description":"${flood}"}]}}`,
+    { headers: { "content-type": "application/json" } }) });
+  assert.equal(huge.ok, false);
+  assert.equal(huge.unreadable, true, "our own ceiling was reported as the server's failure");
+  assert.match(huge.detail, /256 KB/);
+  assert.ok(!/JSON/.test(huge.detail), "a truncated read must not read out as a malformed answer");
+});
+
 // ── /ask sessions — the one thing here with a Durable Object ────
 
 

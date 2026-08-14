@@ -17,12 +17,16 @@
 // different threat model. The catalog is rendered as information; nothing here
 // can invoke it.
 //
-// Everything goes through lensFetch/lensProbe, so every request inherits the
-// SSRF guards (http(s) only, no localhost/private/link-local/169.254.169.254,
-// ports 80/443), the 8s timeout, the byte cap, and the AadharshBot signature.
-// This module adds no new way to reach the network.
+// The origin-level doors go through lensFetch/lensProbe, so those requests
+// inherit the SSRF guards (http(s) only, no localhost/private/link-local/
+// 169.254.169.254, ports 80/443), the 8s timeout, the byte cap, and the
+// AadharshBot signature. tools/list is the one exception, because it needs a
+// POST body that lensFetch cannot express, so it re-states each of those bounds
+// itself rather than inheriting them. This module adds no new way to reach the
+// network.
 import { botHeaders } from "./botauth.js";
 import { CANONICAL_HOST } from "./const.js";
+import { readResponseCapped } from "./crawl.js";
 import { MCP_MODERN, META_PROTOCOL, META_CLIENT_CAPS } from "./mcp-protocol.js";
 import { lensProbe, originDiscovery } from "../lens.js";
 
@@ -65,6 +69,14 @@ const trim = (text, max) => {
 // entitled to refuse a request whose header disagrees with its body (-32020 is
 // exactly that check). One constant, so they cannot.
 const LIST_METHOD = "tools/list";
+
+// A catalogue is text a stranger controls, so it is read from the stream with a
+// ceiling rather than buffered whole. 256 KB is roughly 9x the largest catalogue
+// on hand: measured 2026-08-14, this site's own 24 tools are 28,471 bytes, and
+// the four foreign servers in the tests run 1.5-7 KB. Big enough that no honest
+// server trips it, small enough that a hostile or broken one cannot spend the
+// isolate's memory.
+const CATALOG_CAP = 256 * 1024;
 
 /**
  * Read a Streamable HTTP answer, whichever framing the server chose.
@@ -173,7 +185,16 @@ export async function foreignMcpTools(origin, env, opts = {}) {
     const res = isSelf
       ? await (env.SELF_FETCH ? env.SELF_FETCH(selfReq) : env.ASSETS.fetch(selfReq))
       : await fetch(url, { method: "POST", headers, body, redirect: "follow", signal: controller.signal, cf: { cacheTtl: 0 } });
-    const parsed = parseMcpBody(await res.text(), res.headers.get("content-type"));
+    const read = await readResponseCapped(res, CATALOG_CAP);
+    // OUR ceiling, so it is reported as ours. A truncated catalogue would fail
+    // to parse and read out as "that is not JSON", which blames a server that
+    // answered correctly at a length we declined to read — the same rule the
+    // browser lens follows when it reports a spent render budget as our own
+    // rather than as the target failing.
+    if (read.truncated) {
+      return { ok: false, unreadable: true, detail: `catalogue over ${CATALOG_CAP / 1024} KB — not read` };
+    }
+    const parsed = parseMcpBody(read.text, res.headers.get("content-type"));
     if (!parsed.ok) return { ok: false, detail: parsed.detail };
     const payload = parsed.payload;
     // The RPC error is read BEFORE the status, because the interesting refusals
