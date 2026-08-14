@@ -28,6 +28,7 @@
     "infra:check": "node scripts/check-infra.mjs",
     "infra:apply": "node scripts/apply-infra.mjs",
     "pages:check": "node scripts/check-page-contracts.mjs",
+    "tools:check": "node scripts/check-tools.mjs",
     "test": "node --test scripts/contract-tests.mjs",
     "lint": "oxlint --type-aware",
     "typecheck": "tsc -p config/tsconfig.json && tsc -p config/tsconfig.browser.json",

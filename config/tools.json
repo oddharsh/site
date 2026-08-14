@@ -1,0 +1,140 @@
+{
+  "$comment": [
+    "The external binaries the photo and encoding pipelines shell out to, declared",
+    "once so `pnpm run tools:check` can verify them. NOT in infra.json on purpose:",
+    "that file declares Cloudflare and GitHub state and `infra:check` diffs it",
+    "against those APIs, while nothing here is remote and nothing here has an API.",
+    "Mixing them would give one file two unrelated contracts.",
+    "",
+    "This exists because the list used to live in three places that disagreed:",
+    "CLAUDE.md's encoder section, MAINTENANCE.md's brew line, and inline guards in",
+    "the scripts. ffmpeg, cwebp, ssimulacra2 and butteraugli_main were required and",
+    "documented nowhere, so a clean machine met them as a raw shell error.",
+    "",
+    "`optional` means a script degrades rather than exits: avifenc falls back to",
+    "sips in add-photos.sh and reencode-thumbnails.sh, and is REQUIRED by the two",
+    "encoding-grid scripts, so it is listed optional and its hard callers are named",
+    "in `required_by` anyway. A tool that is optional everywhere is still declared,",
+    "because the point is a complete list rather than a blocking one.",
+    "",
+    "`path` is for a binary a script resolves by absolute location rather than",
+    "PATH. jpegtran is the only one: mozjpeg is keg-only, so `command -v jpegtran`",
+    "can find libjpeg-turbo's copy while the scripts use mozjpeg's, and probing",
+    "PATH would report a pass on the wrong binary."
+  ],
+
+  "tools": [
+    {
+      "bin": "exiftool",
+      "install": "brew install exiftool",
+      "why": "EXIF, orientation, and the Fujifilm recipe card",
+      "required_by": [
+        "www/scripts/extract-photo-metadata.sh",
+        "www/scripts/add-photos.sh",
+        "www/scripts/download-remote-photos.sh",
+        "www/scripts/export-for-instagram.sh",
+        "www/scripts/gen-encoding-samples.sh",
+        "www/scripts/reencode-thumbnails.sh"
+      ]
+    },
+    {
+      "bin": "jq",
+      "install": "brew install jq",
+      "why": "JSON assembly in the metadata shell scripts",
+      "required_by": [
+        "www/scripts/extract-photo-metadata.sh",
+        "www/scripts/download-remote-photos.sh"
+      ]
+    },
+    {
+      "bin": "sips",
+      "install": "ships with macOS",
+      "why": "resize, HEIF decode, and the AVIF fallback encoder",
+      "required_by": [
+        "www/scripts/add-photos.sh",
+        "www/scripts/export-for-instagram.sh",
+        "www/scripts/gen-encoding-grids.sh",
+        "www/scripts/gen-encoding-samples.sh",
+        "www/scripts/reencode-thumbnails.sh"
+      ]
+    },
+    {
+      "bin": "curl",
+      "install": "ships with macOS",
+      "why": "pulls the R2 originals back down",
+      "required_by": ["www/scripts/download-remote-photos.sh"]
+    },
+    {
+      "bin": "cargo",
+      "install": "https://rustup.rs",
+      "why": "builds zenc, the shipped JPEG encoder, on first run",
+      "required_by": [
+        "www/scripts/add-car-photo.sh",
+        "www/scripts/add-photos.sh",
+        "www/scripts/export-for-instagram.sh",
+        "www/scripts/gen-encoding-grids.sh",
+        "www/scripts/gen-encoding-samples.sh",
+        "www/scripts/reencode-thumbnails.sh"
+      ]
+    },
+    {
+      "bin": "jpegtran",
+      "path": "/opt/homebrew/opt/mozjpeg/bin/jpegtran",
+      "install": "brew install mozjpeg",
+      "why": "lossless EXIF-orientation rotation before recompression",
+      "required_by": [
+        "www/scripts/add-photos.sh",
+        "www/scripts/reencode-thumbnails.sh"
+      ]
+    },
+    {
+      "bin": "cjpeg",
+      "install": "brew install mozjpeg",
+      "why": "the chroma-subsampling row of the /garage/encoding grids",
+      "required_by": ["www/scripts/gen-encoding-grids.sh"]
+    },
+    {
+      "bin": "avifenc",
+      "install": "brew install libavif",
+      "optional": true,
+      "why": "primary 10-bit AVIF tier; add-photos and reencode-thumbnails fall back to sips, the grid scripts do not",
+      "required_by": [
+        "www/scripts/gen-encoding-grids.sh",
+        "www/scripts/gen-encoding-samples.sh"
+      ]
+    },
+    {
+      "bin": "cwebp",
+      "install": "brew install webp",
+      "why": "the WebP point on the /garage/encoding format grid",
+      "required_by": [
+        "www/scripts/gen-encoding-grids.sh",
+        "www/scripts/gen-encoding-samples.sh"
+      ]
+    },
+    {
+      "bin": "ffmpeg",
+      "install": "brew install ffmpeg",
+      "why": "PNG to PPM, because cjpeg will not read PNG and sips BMP confuses it",
+      "required_by": ["www/scripts/gen-encoding-grids.sh"]
+    },
+    {
+      "bin": "ssimulacra2",
+      "install": "build libjxl with -DJPEGXL_ENABLE_TOOLS=ON; brew's jpeg-xl does not ship it",
+      "why": "the perceptual metric the Instagram export searches quality against",
+      "required_by": ["www/scripts/export-for-instagram.sh"]
+    },
+    {
+      "bin": "butteraugli_main",
+      "install": "build libjxl with -DJPEGXL_ENABLE_TOOLS=ON; brew's jpeg-xl does not ship it",
+      "why": "the second metric bounding that same search",
+      "required_by": ["www/scripts/export-for-instagram.sh"]
+    },
+    {
+      "bin": "python3",
+      "install": "brew install python",
+      "why": "alt text in add-photos.sh, plus build-recipes.py and gen-pixel-peeper.py; only the last of those wants Pillow, from www/scripts/requirements.txt",
+      "required_by": ["www/scripts/add-photos.sh"]
+    }
+  ]
+}
