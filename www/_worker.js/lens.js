@@ -91,6 +91,120 @@ export const LENS_GLOSSARY = {
     plain: "This page's own term: fetching the URL with a real headless Chrome, so the site's JavaScript actually runs.",
     more: "A plain fetch sees only the file the server sent. Many sites look empty until the JavaScript fills them in.",
   },
+
+  // ── the tagging schemes ─────────────────────────────────────────────────
+  // Four ways to say the same thing, which is most of why none of them won.
+  // Each definition stands alone rather than describing itself against the
+  // others, because a reader meeting "RDFa" for the first time has not met
+  // JSON-LD either.
+  "json-ld": {
+    label: "JSON-LD",
+    plain: "A block of machine-readable facts a page carries about itself: who wrote it, what it sells, when it was published.",
+    more: "A parser reads those facts straight off the page instead of inferring them from the prose around them.",
+  },
+  "schema-org": {
+    label: "Schema.org",
+    plain: "The shared vocabulary most structured data uses, so a recipe on one site and a recipe on another describe themselves the same way.",
+    more: "Google, Microsoft, Yahoo and Yandex agreed on it in 2011, which is most of why it stuck.",
+  },
+  microdata: {
+    label: "microdata",
+    plain: "An older way of tagging facts by adding attributes to the page's existing HTML rather than shipping a separate block.",
+    more: "It survives on plenty of older pages, and few new sites add it.",
+  },
+  rdfa: {
+    label: "RDFa",
+    plain: "Another in-page tagging scheme, from the era when the web tried to describe itself in one formal language.",
+    more: "Rare on new pages and still common across academic and government sites.",
+  },
+  microformats: {
+    label: "microformats",
+    plain: "Ordinary CSS class names, agreed by convention, that mark a person, an event, or a link so software can pick it out.",
+    more: "The lightest of the schemes here: no extra block, no vocabulary to look up.",
+  },
+  "open-graph": {
+    label: "Open Graph",
+    alt: ["Twitter card"],
+    plain: "The handful of tags deciding what a link looks like when somebody pastes it into a chat app.",
+    more: "The one piece of the semantic web nearly everybody shipped, because the payoff showed up the same afternoon.",
+  },
+
+  // ── the doors ───────────────────────────────────────────────────────────
+  openapi: {
+    label: "OpenAPI",
+    plain: "A written description of a web API: every operation it offers, what each one takes, and what it gives back.",
+    more: "Built so developers could generate client code from it. Models now read it to work out what they are allowed to call.",
+  },
+  "agent-card": {
+    label: "agent card",
+    alt: ["agent-card"],
+    plain: "A small file at a known address describing what an automated service can do and how to talk to it.",
+    more: "A business card left at the front door, so visiting software has something to read before it starts guessing.",
+  },
+  a2a: {
+    label: "A2A",
+    plain: "Agent2Agent: a protocol for two pieces of autonomous software to find each other and split a task between them.",
+    more: "Announced in 2025 with 50-odd organizations behind it, and still far smaller in practice than the tool-calling layer.",
+  },
+  nlweb: {
+    label: "NLWeb",
+    plain: "A proposal that a site answer questions about itself in plain language, instead of making software read its pages first.",
+  },
+  webmcp: {
+    label: "WebMCP",
+    plain: "A way for a page to hand the browser a list of things it can do, so an assistant working in that tab can use them.",
+    more: "The tools live inside the page the visitor already has open, rather than on a server somewhere else.",
+  },
+  "api-catalog": {
+    label: "API catalog",
+    alt: ["linkset"],
+    plain: "A published index of every API a site offers, at a fixed address, so software can find them without being told where to look.",
+  },
+
+  // ── identity, permission, cost ──────────────────────────────────────────
+  oauth: {
+    label: "OAuth",
+    plain: "The sign-in handoff where you approve one app to do specific things on your behalf, and can withdraw that later.",
+    more: "It is what turns \"this software can act as me\" into a decision somebody made on purpose.",
+  },
+  "web-bot-auth": {
+    label: "Web Bot Auth",
+    plain: "A way for a bot to cryptographically prove it is the bot it claims to be, so a site can trust the name on the request.",
+    more: "Without it, anything can call itself Googlebot, and plenty of things do.",
+  },
+  "user-agent": {
+    label: "user agent",
+    plain: "The name a visitor's software gives when it asks for a page. A browser, a crawler, or a model can each set its own.",
+    more: "Nothing checks it, so an unverified name is a claim rather than evidence.",
+  },
+  "third-party": {
+    label: "third-party",
+    plain: "Everything a page loads from somebody other than the site you visited: ad networks, analytics, fonts, trackers.",
+    more: "On a typical commercial page that is most of the weight and none of the words.",
+  },
+
+  // ── how the page is actually read ───────────────────────────────────────
+  "reader-mode": {
+    label: "reader mode",
+    alt: ["Defuddle", "extractor"],
+    plain: "Software that guesses which part of a page is the article and throws away everything else.",
+    more: "It does well on a news story and badly on anything that is not one, which is what makes the gap worth measuring.",
+  },
+  cdp: {
+    label: "CDP",
+    alt: ["Chrome DevTools Protocol"],
+    plain: "The control channel Chrome's own developer tools speak, which lets software drive a browser and watch every request it makes.",
+  },
+  ech: {
+    label: "ECH",
+    plain: "Encrypted Client Hello: it hides which site you asked for from anyone watching the connection being set up.",
+    more: "Without it the site's name travels in the clear even though everything after it is encrypted.",
+  },
+  "compression-dictionary": {
+    label: "compression dictionary",
+    plain: "A file the browser already holds that a server can compress against, so the next version arrives as a small patch.",
+    more: "A repeat visit downloads the parts that changed rather than the whole page again.",
+  },
 };
 
 // Wrap known glossary terms in the hover markup. Input MUST already be escaped:
@@ -115,27 +229,51 @@ const LENS_SPELLINGS = Object.keys(LENS_GLOSSARY)
   .flatMap((key) => [LENS_GLOSSARY[key].label, ...(LENS_GLOSSARY[key].alt || [])].map((s) => [key, s]))
   .sort((a, b) => b[1].length - a[1].length);
 
+// ONE LEFT-TO-RIGHT PASS OVER THE SOURCE, and that is the load-bearing part
+// rather than a style preference. The old version looped the terms and re-matched
+// against its own accumulating OUTPUT, so every tag it inserted became fair game
+// for the next term. That was harmless only while no term's spelling appeared
+// inside another term's markup, and it stopped being harmless the moment
+// "agent-card" joined a glossary that already had "agent": the emitted
+// data-t="agent-card" contains "agent", the leading guard admits a quote and the
+// trailing one deliberately admits a hyphen, so the second pass wrapped a fragment
+// of the first pass's attribute and produced nested garbage on screen.
+//
+// Matching against `src` and emitting into `out` makes that structurally
+// impossible: nothing this function writes is ever read back. Attribute VALUES
+// are equally safe, which matters because a definition can name another term.
+//
+// Semantics kept: one definition per key per string, leftmost match wins, and on
+// a tie the longer spelling wins (LENS_SPELLINGS is sorted longest-first, so the
+// longer one claims the position before the shorter one is tried).
 export function glossify(escaped, only) {
-  let out = String(escaped);
-  const seen = new Set();
+  const src = String(escaped);
   const pairs = only
     ? LENS_SPELLINGS.filter(([key]) => only.indexOf(key) !== -1)
     : LENS_SPELLINGS;
-  for (const [key, spelling] of pairs) {
-    if (seen.has(key)) continue;         // one definition per string, not one per spelling
-    const re = new RegExp("(^|[^\\w.-])(" + spelling.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ")(?!\\w)(?!\\.\\w)");
-    const m = out.match(re);
-    if (!m) continue;
-    seen.add(key);
-    const at = m.index + m[1].length;
+  const seen = new Set();
+  let out = "";
+  let pos = 0;
+  for (;;) {
+    let best = null;
+    for (const [key, spelling] of pairs) {
+      if (seen.has(key)) continue;       // one definition per string, not one per spelling
+      const re = new RegExp("(^|[^\\w.-])(" + spelling.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ")(?!\\w)(?!\\.\\w)");
+      const m = src.slice(pos).match(re);
+      if (!m) continue;
+      const at = pos + m.index + m[1].length;
+      if (!best || at < best.at) best = { at, key, text: m[2] };
+    }
+    if (!best) break;
+    seen.add(best.key);
     // The title is the no-JS / touch fallback and what a screen reader reads.
     // On a hover-capable pointer the client strips it the moment the richer
     // surface is live, so the two tips never stack on one word.
-    out = out.slice(0, at) +
-      '<abbr class="lx-term" data-t="' + escAttr(key) + '" title="' + escAttr(LENS_GLOSSARY[key].plain) + '">' + m[2] + "</abbr>" +
-      out.slice(at + m[2].length);
+    out += src.slice(pos, best.at) +
+      '<abbr class="lx-term" data-t="' + escAttr(best.key) + '" title="' + escAttr(LENS_GLOSSARY[best.key].plain) + '">' + best.text + "</abbr>";
+    pos = best.at + best.text.length;
   }
-  return out;
+  return out + src.slice(pos);
 }
 
 // Per-IP crawl budgets, one place. These used to be inlined at each call site,
@@ -812,6 +950,13 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 /* Delta ignores the lens (it runs its own narrative), so the strip hides there.
    Human and Browser hide the whole Machine pane, taking the tabs with it. */
 .lx-panes.is-delta .lx-lenses { display:none; }
+/* The static slot above the tabs, holding the score strip and the agent trace.
+   Sits outside .lx-body on purpose, so the verdict stays put while the lens
+   report under it scrolls. Empty in every view but Machine, and an empty slot
+   must not leave a padded gap. */
+.lx-machine-top { padding:9px 11px 10px; background:oklch(97.5% 0.005 250); border-bottom:1px solid oklch(84% 0.03 250); }
+.lx-machine-top:empty { display:none; }
+.lx-machine-top .lx-sec { margin-bottom:0; }
 
 /* panes */
 .lx-panes { display:flex; gap:8px; margin-top:8px; min-height:560px; }
@@ -1219,12 +1364,20 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
     </div>
 
     <div class="lx-toolbar is-${state.view}${vsActive ? " lx-off" : ""}" id="lx-toolbar">
+      <!-- Ordered by DENSITY, cheapest to read first. Compare is last because it
+           is three panes at once and reads as a wall to somebody arriving cold;
+           it was first here until 2026-08-14. It is still the DEFAULT view
+           (view=both), so the selected segment sits at the END of the strip on
+           load: order says what to reach for next, not what opens.
+           NB: no backticks in this comment. It lives inside a JS template
+           literal, so one would end the string mid-file and the build would
+           fail on a line that looks fine (CLAUDE.md gotcha 19). -->
       <div class="lx-view" role="radiogroup" aria-label="page mode">
-        <button class="lx-seg${state.view === "both" ? " is-on" : ""}" data-view="both" role="radio" aria-checked="${state.view === "both" ? "true" : "false"}" type="button">Compare</button>
         <button class="lx-seg${state.view === "human" ? " is-on" : ""}" data-view="human" role="radio" aria-checked="${state.view === "human" ? "true" : "false"}" type="button">Human</button>
         <button class="lx-seg${state.view === "machine" ? " is-on" : ""}" data-view="machine" role="radio" aria-checked="${state.view === "machine" ? "true" : "false"}" type="button">Machine</button>
         <button class="lx-seg${state.view === "browser" ? " is-on" : ""}" data-view="browser" role="radio" aria-checked="${state.view === "browser" ? "true" : "false"}" type="button">Browser</button>
         <button class="lx-seg${state.view === "delta" ? " is-on" : ""}" data-view="delta" role="radio" aria-checked="${state.view === "delta" ? "true" : "false"}" type="button">Delta<span class="lx-seg-n" id="lx-delta-n"${cfOn ? "" : " hidden"}>${cfOn || ""}</span></button>
+        <button class="lx-seg${state.view === "both" ? " is-on" : ""}" data-view="both" role="radio" aria-checked="${state.view === "both" ? "true" : "false"}" type="button">Compare</button>
       </div>
     </div>
     <div class="lx-mode-note${vsActive ? " lx-off" : ""}" id="lx-mode-note">${modeNote}</div>
@@ -1238,6 +1391,14 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
       </section>
       <section class="lx-pane lx-pane-machine" id="lx-machine">
         <div class="lx-pane-h" id="lx-machine-h">${machineHeader}</div>
+        <!-- The agent trace sits ABOVE the tab strip because no tab changes it:
+             it is one verdict about the whole URL, not one lens's evidence.
+             Under the tabs it read as the pane's body, so switching tabs looked
+             like a no-op, because the focus block it swaps was pushed below
+             ~140px of unchanging console. Filled by renderMachine() in Machine
+             view only; empty (and hidden by :empty) everywhere else, including
+             the no-script render. -->
+        <div class="lx-machine-top" id="lx-machine-top"></div>
         <!-- The lens tabs live inside the pane they steer. Order is evidence to
              verdict: raw observation first (the default lens, so the first tab is
              the selected one on load), Agent-ready? last as the capstone. -->
@@ -2866,11 +3027,16 @@ export function lensTerms({ finalUrl, status, headers, body, robots, tdmrep, met
 // brutally — stripe hit 2.5), stripped text ≈ 4.5, markdown ≈ 3.9.
 // Estimates, and the UI labels them ≈.
 const LENS_CPT = { html: 3.0, text: 4.5, markdown: 3.9 };
-// reference input prices, USD per million tokens, last checked 2026-07.
+// reference input prices, USD per million tokens, last checked 2026-08-14 against
+// each vendor's own pricing page. Ordered most to least expensive, because the
+// first entry is the headline the cost table and the agent trace both quote.
+// Sonnet 5 is listed at its STANDARD $3.00, not the $2.00 introductory rate that
+// runs to 2026-08-31: a page pricing somebody else's HTML should not quote a
+// number that expires in a fortnight.
 const LENS_RATES = [
-  { model: "Claude Sonnet 4.5", usdPerMtok: 3.0 },
-  { model: "GPT-5", usdPerMtok: 1.25 },
+  { model: "Claude Sonnet 5", usdPerMtok: 3.0 },
   { model: "Claude Haiku 4.5", usdPerMtok: 1.0 },
+  { model: "GPT-5.6 Luna", usdPerMtok: 0.2 },
 ];
 
 /**
@@ -2891,7 +3057,7 @@ export function lensCost({ html, text, markdown, headings, raw }) {
     add("outline", "outline", "headings only — what an efficient agent asks for first", outline.length, LENS_CPT.markdown);
   }
   add("raw", "raw body", "served as-is — already machine-shaped", raw, LENS_CPT.text);
-  return tiers.length ? { tokenizer: "o200k_base, calibrated estimate", checked: "2026-07", rates: LENS_RATES, tiers } : null;
+  return tiers.length ? { tokenizer: "o200k_base, calibrated estimate", checked: "2026-08", rates: LENS_RATES, tiers } : null;
 }
 
 // ── agent doors ---------------------------------------------------------------
