@@ -1144,18 +1144,29 @@ generic hex back.
 
 - **RN_KV** (KV namespace ID `3cb8a107c58e47dc9244e75b33401f36`) — caches the
   playlist tracks, artist profile pics, the visit-count mirror, and a few
-  crawler results. ~10K writes/day budget; we use a handful. (The photo
+  crawler results. The ceiling is **1,000 writes/day to distinct keys on Workers
+  Free and unlimited on Paid**, plus 1 write/sec to the SAME key on either. This
+  said "~10K writes/day budget; we use a handful" until 2026-08-14, which was 10x
+  optimistic on Free and meaningless on Paid, so check which plan the account is
+  on before reasoning against either number. (The photo
   manifest left KV 2026-07-28: the worker bundles `photo-index.json` +
   `hashes.json`, so the pool is module memory and a deploy is its bust. The
   `/lens` rate-limit counters left KV 2026-08-04 for the Rate Limiting binding
   below — they were a WRITE per allowed request on the busiest route here, which
   had quietly made "we use a handful" false.)
 - **LENS_RL_\*** (Rate Limiting bindings, `ratelimits` in `wrangler.jsonc`) —
-  the four per-IP crawl budgets `/lens` and the `/mcp` lens tools share:
-  inspect 30/min, shot 8/min, compare 4/min, browser 4/min. Counters are
-  per-colo and cost no write. `LENS_BUDGETS` in `lens.js` mirrors the ceilings
-  because that is what the 429 message quotes, and a contract test pins the two
-  configs and the code together so a message cannot outlive its limit.
+  the six per-IP crawl budgets `/lens` and the `/mcp` lens tools share:
+  inspect 30/min, shot 3/min, compare 4/min, browser 3/min, wire 2/min, tools
+  10/min. A seventh, `LENS_RL_BROWSER_ALL` at 4/min, is keyed on a CONSTANT
+  rather than on the caller, so every browser-consuming route bills against one
+  bucket. Counters are per-colo and cost no write. `LENS_BUDGETS` in `lens.js`
+  mirrors the ceilings because that is what the 429 message quotes, and a
+  contract test pins the two configs and the code together so a message cannot
+  outlive its limit. **This prose is a THIRD copy that the test does not cover**,
+  which is how it undercounted the budgets and overstated two of the ceilings
+  until 2026-08-14 while config and code agreed with each other throughout. The
+  wrong values are deliberately not restated here: a stale number written as
+  `N/min` inside its own correction is still a greppable stale number.
 - **PHOTOS_R2** — R2 bucket `aadhar-photos`, holds the SOOC originals
   (~3 GB / 158 photos at FUJIFILM X-T50 + Leica resolution).
 - **ASSETS** — the Workers static-assets binding (wrangler.jsonc `assets`), serves files from www/.
