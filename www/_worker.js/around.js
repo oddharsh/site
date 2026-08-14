@@ -96,9 +96,12 @@ export async function handleAroundJson(request, env, ctx) {
     if (!report) {
       // 503 pending is never cached (cachedRender only stores 200) — a snapshot
       // that appears next cron won't be shadowed by a pinned "pending".
-      return new Response(JSON.stringify({ pending: true, note: "no snapshot yet; the cron crawl hasn't run" }), {
+      return new Response(JSON.stringify({ pending: true, note: "no snapshot yet; the daily crawl hasn't run" }), {
         status: 503,
-        headers: { "content-type": "application/json; charset=utf-8", "retry-after": "1800", "x-robots-tag": "noindex" },
+        // retry-after tracks the crawl cadence, which became daily on 2026-08-14.
+        // Only reachable before the first successful crawl ever: after that a
+        // snapshot exists and an all-error crawl deliberately will not clear it.
+        headers: { "content-type": "application/json; charset=utf-8", "retry-after": "86400", "x-robots-tag": "noindex" },
       });
     }
     return new Response(JSON.stringify(report, null, 2), {
@@ -302,8 +305,13 @@ export async function handleAroundChangesJson(request, env) {
   }
 }
 
-// cron entry: crawl the neighborhood and persist the snapshot. A crawl where
-// EVERY neighbor errored stores nothing, so the last good snapshot keeps serving.
+// cron entry: crawl the neighborhood and persist the snapshot. Runs on the DAILY
+// outbound tick (41 5) alongside the webmention pass, not on a schedule of its
+// own; see lib/cron.js for why the two share one, and wrangler.jsonc for why the
+// crawl may never move back onto the request path.
+//
+// A crawl where EVERY neighbor errored stores nothing, so the last good snapshot
+// keeps serving.
 // (results.length is always NEIGHBORS.length — one row per neighbor, success or
 // error — so the old length>0 guard never fired; check for a non-error row.)
 export async function cronAround(env) {
