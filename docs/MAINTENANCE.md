@@ -1117,10 +1117,10 @@ workflow that hand-tracked the from-source jpegli commit. Only Homebrew formulas
 ```bash
 # the photo pipeline
 brew install exiftool jq mozjpeg libavif              # mozjpeg = jpegtran + cjpeg; libavif = avifenc (optional, sips falls back)
-python3 -m pip install -r www/scripts/requirements.txt  # Pillow, for gen-pixel-peeper.py only
+brew install uv && pnpm run photos:env               # Pillow, for gen-pixel-peeper.py only (brew's python3 is PEP 668; pip into it fails)
 # the JPEG encoder (zenc) builds itself on first pipeline run; needs rust (rustup.rs)
 cargo build --release --manifest-path www/scripts/zenc/Cargo.toml
-wrangler login                                         # Cloudflare auth (deploys + KV + R2 all use it)
+pnpm exec wrangler login                                         # Cloudflare auth (deploys + KV + R2 all use it)
 
 # the study pages, which are NOT needed to add a photo
 brew install webp ffmpeg                              # cwebp for the encoding grids; ffmpeg for their PNG -> PPM step
@@ -1429,13 +1429,13 @@ The homepage scrapes a Spotify playlist; `playlist-id` in KV points at it. To sw
 
 ```bash
 NS="3cb8a107c58e47dc9244e75b33401f36"
-OLD=$(wrangler kv key get --namespace-id="$NS" playlist-id --remote)   # save the current id
-wrangler kv key put --namespace-id="$NS" playlist-id "<NEW_22_CHAR_ID>" --remote
+OLD=$(pnpm exec wrangler kv key get --namespace-id="$NS" playlist-id --remote)   # save the current id
+pnpm exec wrangler kv key put --namespace-id="$NS" playlist-id "<NEW_22_CHAR_ID>" --remote
 # clear the old playlist's two-key SWR cache (value + freshness sentinel):
-wrangler kv key delete --namespace-id="$NS" "tracks:${OLD}" --remote
-wrangler kv key delete --namespace-id="$NS" "tracks:${OLD}:fresh" --remote
+pnpm exec wrangler kv key delete --namespace-id="$NS" "tracks:${OLD}" --remote
+pnpm exec wrangler kv key delete --namespace-id="$NS" "tracks:${OLD}:fresh" --remote
 curl -s "https://aadhar.sh/rn/tracks" >/dev/null                       # warms tracks:<new> by scraping
-wrangler deploy   # from the repo root; deploys the aadhar-sh Worker (www/ as static assets)
+pnpm run deploy:direct   # from the repo root; deploys the aadhar-sh Worker (www/ as static assets)
 ```
 - The id is the 22 chars after `/playlist/` in the share URL (drop `?si=...`).
 - **Why the redeploy:** the worker caches `playlist-id` in a module variable (`_playlistId`) per warm isolate. A redeploy recycles isolates so the homepage *prerenders* the new list immediately instead of waiting for them to age out.
@@ -1451,11 +1451,11 @@ NS="3cb8a107c58e47dc9244e75b33401f36"
 # (the photo manifest is no longer a cache: the worker bundles photo-index.json,
 #  so a deploy replaces it atomically and there are no manifest:* keys to touch)
 # directory-listing indexes:
-wrangler kv key delete --namespace-id="$NS" "idx:images" --remote
-wrangler kv key delete --namespace-id="$NS" "idx:imagesfull" --remote
+pnpm exec wrangler kv key delete --namespace-id="$NS" "idx:images" --remote
+pnpm exec wrangler kv key delete --namespace-id="$NS" "idx:imagesfull" --remote
 # a specific playlist's tracks (delete both keys):
-wrangler kv key delete --namespace-id="$NS" "tracks:<id>" --remote
-wrangler kv key delete --namespace-id="$NS" "tracks:<id>:fresh" --remote
+pnpm exec wrangler kv key delete --namespace-id="$NS" "tracks:<id>" --remote
+pnpm exec wrangler kv key delete --namespace-id="$NS" "tracks:<id>:fresh" --remote
 ```
 
 ### Bump THUMB_VERSION (retired — nothing to bump)

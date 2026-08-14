@@ -64,6 +64,16 @@ set -e
 # resolve from anywhere — assumes script lives at www/scripts/
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_DIR="$( cd "$SCRIPT_DIR/../.." && pwd )"
+
+# The R2 uploads below go through the REPO'S PINNED wrangler, never whatever is
+# on PATH. This script used to require a bare `wrangler`, which meant the binary
+# writing to the photo bucket was whichever one happened to be installed
+# globally: measured 2026-08-14, an `npm i -g wrangler` from June was answering
+# 4.105.0 on this workstation against a repo pin of 4.120.x. Same class as
+# gotcha 29's npx finding, one layer up, and it would not have surfaced until a
+# photo run. `check-wrangler` enforces one version across the Worker projects
+# and could not see this, because a shell script is not a package.json.
+WRANGLER="$PROJECT_DIR/node_modules/.bin/wrangler"
 DEST="$PROJECT_DIR/www/images"
 TMP="/tmp/aadhar-add-photos-$$"
 
@@ -90,7 +100,12 @@ ZENC_Q=84
 MOZJPEG_DIR="/opt/homebrew/opt/mozjpeg/bin"
 MOZ_JTRAN="$MOZJPEG_DIR/jpegtran"
 
-for cmd in sips wrangler exiftool; do
+if [ ! -x "$WRANGLER" ]; then
+  echo "error: pinned wrangler not found at $WRANGLER" >&2
+  echo "  run: pnpm install" >&2
+  exit 1
+fi
+for cmd in sips exiftool; do
   if ! command -v "$cmd" >/dev/null 2>&1; then
     echo "error: $cmd not found in PATH" >&2
     case "$cmd" in
@@ -262,7 +277,7 @@ else
   echo "phase 3 — R2 uploads (parallel 4)"
   upload() {
     local key="$1" file="$2" ct="$3"
-    if wrangler r2 object put "aadhar-photos/$key" --file="$file" --content-type="$ct" --remote >/dev/null 2>&1; then
+    if "$WRANGLER" r2 object put "aadhar-photos/$key" --file="$file" --content-type="$ct" --remote >/dev/null 2>&1; then
       printf "."
     else
       printf "✗"
