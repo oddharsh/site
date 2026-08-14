@@ -44,11 +44,13 @@
 
   // Must match LENS_TAB_LABELS in www/_worker.js/lens.js: the tab labels are
   // phrased as the question each lens answers, so the tab row reads as a menu.
-  var LENS_LABEL = { readiness: "Agent-ready?", anatomy: "Raw response", reader: "Reader's guess", wire: "What it costs", structured: "What it claims", ai: "Model cost", terms: "Who's allowed", discovery: "Agent doors" };
+  var LENS_LABEL = { readiness: "Agent-ready?", anatomy: "Raw response", reader: "Reader's guess", wire: "What it costs", structured: "What it claims", ai: "Model cost", terms: "Who's allowed", discovery: "Agent doors", tools: "What it accepts" };
   var readerData = null;   // last /lens/read extraction, null until asked for
   var readerBusy = false;
   var wireData = null;     // last /lens/wire trace, null until asked for
   var wireBusy = false;
+  var toolsData = null;    // last /lens/tools catalogue, null until asked for
+  var toolsBusy = false;
   var cloudflareData = null; // normalized result from Cloudflare's public scanner
   var cloudflareBusy = false;
 
@@ -1320,6 +1322,7 @@
     LENS_FN.ai = lensAI;
     LENS_FN.terms = lensTerms;
     LENS_FN.discovery = lensDiscovery;
+    LENS_FN.tools = lensTools;
     var candidate = Object.prototype.hasOwnProperty.call(LENS_FN, lens) ? LENS_FN[lens] : null;
     var fn = typeof candidate === "function" ? candidate : lensAnatomy;
     var body = view === "machine" ? machineBrief() + '<div class="lx-machine-block">' + section("Selected evidence lens", { text: LENS_LABEL[lens] }, "The original inspector remains available below the briefing.", fn()) + "</div>"
@@ -1335,6 +1338,12 @@
     if (readerBtn) readerBtn.addEventListener("click", runReader);
     var wireBtn = machineBody.querySelector("#lx-wire-run");
     if (wireBtn) wireBtn.addEventListener("click", runWire);
+    var toolsBtn = machineBody.querySelector("#lx-tools-run");
+    if (toolsBtn) toolsBtn.addEventListener("click", runTools);
+    // The catalogue's controls are real nodes rather than markup, because they
+    // carry a stranger's tool names and enum labels. Built after the pane's HTML
+    // lands, exactly like bindCounterfactuals.
+    if (lens === "tools" && window.LensTools) window.LensTools.bind(machineBody, toolsData, renderMachine);
     // The strip sits in machineTop in Machine view and inside the body in every
     // other one, so look in both rather than in whichever was true last week.
     var scoreBtn = machineBody.querySelector(".lx-verdict-score") ||
@@ -1434,6 +1443,51 @@
     script.onerror = function () {
       if (!data || (data.finalUrl || data.url) !== targetUrl) return;
       wireBusy = false; renderMachine();
+    };
+    document.head.appendChild(script);
+  }
+
+  // The Tools lens. Opt-in like Reader and Wire, and for the same reason: every
+  // run is a real POST to somebody else's server, so it happens when a visitor
+  // asks for it rather than on every scan.
+  function lensTools() {
+    if (window.LensTools) return window.LensTools.render(toolsBusy ? { pending: true } : toolsData);
+    // Pre-module fallback, self-contained because the module may never arrive.
+    return section("What it accepts", { text: "not run" },
+      "Reads this origin's MCP catalogue and draws a form for every tool, from the argument schema the server publishes.",
+      '<div class="lx-tools-intro"><b>An MCP tool list is an ABI.</b> A block explorer turns one into a form you can fill in, ' +
+      'and <code>inputSchema</code> is the same artefact under another name.' +
+      '<button class="lx-browser-run" type="button" id="lx-tools-run">Read the catalogue</button></div>');
+  }
+
+  function runTools() {
+    if (toolsBusy || !data) return;
+    var targetUrl = data.finalUrl || data.url;
+    toolsBusy = true;
+    renderMachine();
+    function loaded() {
+      // Same staleness guard as runWire: a visitor who types a second URL while
+      // this is in flight is normal, and a late reply must not paint origin A's
+      // catalogue over origin B's scan.
+      if (!data || (data.finalUrl || data.url) !== targetUrl) return;
+      if (!window.LensTools) { toolsBusy = false; renderMachine(); return; }
+      window.LensTools.run(targetUrl, function (json) {
+        if (!data || (data.finalUrl || data.url) !== targetUrl) return;
+        toolsBusy = false; toolsData = json; renderMachine();
+      }, function () {
+        if (!data || (data.finalUrl || data.url) !== targetUrl) return;
+        toolsBusy = false;
+        toolsData = { ok: false, unreadable: true, error: "the catalogue request did not complete" };
+        renderMachine();
+      });
+    }
+    if (window.LensTools) { loaded(); return; }
+    var script = document.createElement("script");
+    script.src = "/lens-tools.js?v=1";
+    script.onload = loaded;
+    script.onerror = function () {
+      if (!data || (data.finalUrl || data.url) !== targetUrl) return;
+      toolsBusy = false; renderMachine();
     };
     document.head.appendChild(script);
   }

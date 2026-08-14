@@ -60,6 +60,7 @@ const ASSET_ENVELOPES = {
   // interpret is worth less than no result. Bumped deliberately rather than
   // discovered by CI.
   "lens-browser.js": { role: "optional browser island",    gzipKiB: 5,  brotliKiB: 4.5 },
+  "lens-tools.js":  { role: "optional MCP-form island",     gzipKiB: 7,  brotliKiB: 6 },
   "quiz.js":        { role: "understanding-check island",  gzipKiB: 6,  brotliKiB: 5 },
   "tooltip.js":     { role: "optional hover island",       gzipKiB: 6,  brotliKiB: 5 },
   "hoist.js":       { role: "shared hover engine",         gzipKiB: 2,  brotliKiB: 1.5 },
@@ -159,7 +160,7 @@ const WORKER_ALERT_GROWTH = 0.25;
 // profile at that resolution has no business failing a PR.
 const WORKER_STARTUP_ALERT_MS = 50;
 const TWINS = [
-  "nav.src.js", "nav-run.src.js", "nav-tray.src.js", "notepad.src.js", "lens.src.js", "lens-browser.src.js",
+  "nav.src.js", "nav-run.src.js", "nav-tray.src.js", "notepad.src.js", "lens.src.js", "lens-browser.src.js", "lens-tools.src.js",
   "quiz.src.js", "tooltip.src.js", "infotip.src.js", "hoist.src.js", "luna.src.css",
   "lwe-base.src.css",
 ];
