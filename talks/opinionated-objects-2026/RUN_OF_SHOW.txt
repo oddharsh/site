@@ -22,17 +22,18 @@ SAFE FALLBACK URLS
 - https://en.wikipedia.org/wiki/Semantic_Web
 - https://example.com/
 
-BEFORE YOU PRESENT (added 2026-08-14, and it gates the demo)
-- /lens swapped its extractor from Defuddle to Readability. The slide text and
-  these notes already say Readability. The SCREENSHOTS do not: screengrabs/ and
-  rendered/ still show “Defuddle content recovery”, and slide 5 embeds one of
-  them next to a score row that now reads Readability.
-- Fix the order, do not shortcut it: ramp the change to 100%, retake the three
-  screengrabs against production, then rebuild the deck. Rebuilding needs
-  @oai/artifact-tool, which only the Codex environment bundles.
-- Until that is done the LIVE demo and the BACKUP deck disagree, and the backup
-  is the one that is wrong. If you must present first, present live and skip the
-  slide-5 screenshot.
+BEFORE YOU PRESENT (added 2026-08-14)
+- /lens swapped its extractor from Defuddle to Readability. Slide text, these
+  notes, and the screengrabs are all updated and agree with the live site.
+- ONE THING IS STILL STALE: lens-demo-day-backup.pptx and rendered/*.png were
+  built before the swap and still say Defuddle. Rebuild with build-deck.mjs in
+  the Codex environment (it needs @oai/artifact-tool). Until then, present LIVE
+  and treat the .pptx as the emergency fallback only.
+- Re-taking the screengrabs is now one command:
+      node talks/opinionated-objects-2026/capture-screengrabs.mjs
+  It captures production and refuses to write a stale or degraded frame. Note
+  Browser Run is a 10 min/day account-wide budget, so do not run it repeatedly
+  on the day of the talk.
 
 IF THE LIVE SITE FAILS
 - Continue from slide 3. It contains the complete comparison state.

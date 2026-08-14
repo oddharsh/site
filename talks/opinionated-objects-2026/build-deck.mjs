@@ -1,16 +1,21 @@
-// STALE ARTIFACT WARNING, 2026-08-14. This SOURCE names Readability, because
-// /lens switched extractors from Defuddle. The committed `lens-demo-day-backup.pptx`
-// and `rendered/*.png` were built BEFORE that and still say Defuddle, and they
-// cannot be rebuilt here: this script needs `@oai/artifact-tool`, which only the
-// Codex environment bundles (set LENS_ARTIFACT_TOOL_PATH to run it elsewhere).
+// SCREENGRABS ARE SCRIPTED NOW, and the .pptx still is not.
 //
-// `screengrabs/03-three-source-evidence.png` is worse, because it is a real
-// screenshot of the /lens UI showing "03 Defuddle content recovery" twice, and
-// slide 5 embeds it beside a score row this commit just relabelled. No script
-// generates the screengrabs; they are taken by hand against PRODUCTION. So the
-// order is fixed and cannot be shortcut: ramp the extractor change to 100%,
-// retake the three screengrabs, then rebuild this deck. Presenting before that
-// means the slide's own screenshot contradicts its caption on the projector.
+// `screengrabs/` used to be hand-taken, which is why swapping the Reader
+// extractor left slide 5 embedding a screenshot that read "Defuddle content
+// recovery" beside a score row that read Readability. `capture-screengrabs.mjs`
+// retakes them from production and refuses to write a frame that is stale,
+// duplicated, or captured while the Browser Run budget is spent.
+//
+// Retaken 2026-08-14 against the live site: 02 and 03 now show
+// "03 Readability content recovery" and a settled 100/100 composite. 01 was
+// deliberately LEFT at its original bytes, because it names no extractor (its
+// tab reads "Reader's guess") and re-capturing it would have cost a degraded
+// Browser Run pane after four iterations exhausted the daily render budget.
+//
+// STILL STALE: `lens-demo-day-backup.pptx` and `rendered/*.png`, because this
+// script needs `@oai/artifact-tool` and only the Codex environment bundles it
+// (set LENS_ARTIFACT_TOOL_PATH to run it elsewhere). Rebuild there, then the
+// deck and the screengrabs finally agree.
 
 import fs from "node:fs/promises";
 import path from "node:path";
