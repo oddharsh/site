@@ -15,6 +15,14 @@
     if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
     return (n / 1048576).toFixed(2) + " MB";
   }
+  // Mirrors fmtTok in lens.js. A bare 87381 reads as noise in a table beside
+  // "1.20 MB"; the pane's other magnitudes are all rounded, so this one is too.
+  function fmtTok(n) {
+    if (n == null) return "?";
+    if (n >= 1e6) return (n / 1e6).toFixed(1) + "M";
+    if (n >= 1000) return (n / 1000).toFixed(1) + "k";
+    return String(n);
+  }
   function section(title, badge, caption, inner) {
     var b = badge ? ' <span class="lx-badge ' + (badge.kind || "") + '">' + esc(badge.text) + "</span>" : "";
     var c = caption ? '<div class="lx-cap">' + esc(caption) + "</div>" : "";
@@ -220,6 +228,47 @@
       "</div>");
   }
 
+  // WHAT TO SHOW WHEN THERE IS NO RENDER. A one-line error above 250px of white
+  // is the single thing on this page that reads as broken rather than as
+  // degraded, and on the free plan it is the COMMON outcome: 10 browser-minutes
+  // a day, account-wide, shared with every other browser lens.
+  //
+  // So the pane says what it cannot show, and then shows what it CAN. The HTTP
+  // scan already happened and none of it needed a browser, so every number here
+  // is real and already in hand. Nothing is invented, and nothing pretends a
+  // render occurred: the missing comparison is named as missing.
+  function unavailable(error, data) {
+    var msg = (error && error.message) || String(error || "unknown");
+    var budget = /rate-limit|budget/i.test(msg);
+    var out = '<div class="lx-fallback-note">' + esc(
+      budget
+        ? "No rendered snapshot right now: the shared Browser Run budget is spent. Everything below came from the HTTP fetch and is unaffected."
+        : "Browser Run could not render this URL: " + msg
+    ) + "</div>" +
+      '<button class="lx-browser-run" type="button" id="lx-browser-run">Try again</button>';
+    if (!data) return out;
+    var a = data.anatomy || {};
+    var st = data.structured || {};
+    var cost = data.cost && data.cost.tiers && data.cost.tiers[0];
+    out += section("What a render would add", { text: "not run", kind: "warn" },
+      "Rendered HTML after the page's JavaScript, a screenshot, the browser's own Markdown, and its accessibility tree. The gap between that and the HTTP response is this pane's whole point, and measuring it needs the render.",
+      "");
+    out += section("What the HTTP fetch already got", { text: "observed", kind: "ok" },
+      "None of this needed a browser. It is the same response every machine lens on this page is reading.",
+      kvTable({
+        status: data.status == null ? "unknown" : data.status,
+        title: st.title || "(untitled)",
+        "final URL": data.finalUrl || data.url,
+        "content type": data.contentType || "(none)",
+        "HTTP payload": bytes(a.rawBytes) + (data.truncated ? " (capped)" : ""),
+        "readable text": (a.wordCount != null ? a.wordCount + " words" : bytes((a.text || "").length)),
+        headings: a.headings ? a.headings.length : 0,
+        "links in head": st.relLinks ? st.relLinks.length : 0,
+        "cost to read": cost ? "~" + fmtTok(cost.tokens) + " tokens of " + cost.label : "not modelled",
+      }));
+    return out;
+  }
+
   function summary(snapshot, data) {
     var tree = snapshot.accessibilityTree;
     var facts = {
@@ -298,8 +347,7 @@
       })
       .then(done)
       .catch(function (error) {
-        body.innerHTML = '<div class="lx-fallback-note">Browser Run could not render this URL: ' + esc(error && error.message || error) + '</div>' +
-          '<button class="lx-browser-run" type="button" id="lx-browser-run">Try again</button>';
+        body.innerHTML = unavailable(error, data);
         var button = document.getElementById("lx-browser-run");
         if (button) button.addEventListener("click", onRun);
         onError(error);
