@@ -40,7 +40,7 @@ import { handleTool, tokenizeKeys } from "../www/_worker.js/terminal.js";
 import { handleTerminal } from "../www/_worker.js/wire.js";
 import { DATA_TOOLS } from "../www/_worker.js/lib/tools.js";
 import { cronJob } from "../www/_worker.js/lib/cron.js";
-import { FLOOR_CLAIMS, auditDependencyDocs, checkDependencyDocs, findClaims } from "./lib/dependency-docs.mjs";
+import { BASELINE_HEADING, FLOOR_CLAIMS, auditDependencyDocs, baselineSection, checkDependencyDocs, findClaims } from "./lib/dependency-docs.mjs";
 import { PAGE_FAMILY_MATCH, serveStaticPage } from "../www/_worker.js/lib/assets.js";
 import { serveMarkdown } from "../www/_worker.js/home.js";
 import { readManifest, workerModule, navFenceBody, readFenceBody, runProfilesBody } from "./gen-manifest.mjs";
@@ -1879,6 +1879,15 @@ test("every workflow bootstraps the pnpm that package.json pins", async () => {
   assert.ok(checked >= 4, `expected several pnpm bootstraps, matched ${checked}`);
 });
 
+// #382's version of this test lived here. #386 deleted it as a duplicate of the
+// dependency-docs module, which was right about the duplication and wrong about
+// what to keep: it touched only this file, so THREE rules #382 had and the
+// module did not went with it. Two of them were real protections. They live in
+// scripts/lib/dependency-docs.mjs now, and the tests below exercise them:
+// scoping the scan to the `## Current baseline` section, and REJECTING a
+// range-pinned package in the alias table instead of stripping the caret (which
+// would let `^1.2.3` agree with a doc claiming `1.2.3`). The third, a declared
+// package losing its sentence, the reverse direction already covered.
 test("a section's favicon is in its own <head>, never set by script", async () => {
   // setFavicon() used to read a data-favicon attribute off the matching taskbar
   // pin at boot. That cost one attribute per pin on EVERY page so that 11 of them
@@ -2658,41 +2667,85 @@ test("docs/DEPENDENCIES.md agrees with the manifests", async () => {
 
 test("the dependency-doc check catches every drift it exists for", () => {
   const pins = { wrangler: "4.120.1" };
-  // one rule at a time: no exemptions to go stale, no floor to trip.
-  const quiet = { versionless: new Map(), floor: 0 };
-  const ok = auditDependencyDocs({ doc: "- Wrangler 4.120.1 is the pin.", pins, ...quiet });
+  // one rule at a time: just the alias under test, no exemptions to go stale,
+  // no floor to trip. The real policy is the default and these override it.
+  const quiet = { aliases: [{ prose: "Wrangler", pkg: "wrangler" }], versionless: new Map(), floor: 0 };
+  const ok = auditDependencyDocs({ doc: `${BASELINE_HEADING}\n- Wrangler 4.120.1 is the pin.`, pins, ...quiet });
   assert.deepEqual(ok.problems, [], "a matching doc must pass");
 
   // 1. the exact bug that motivated this: a bumped pin, an unbumped sentence
-  const stale = auditDependencyDocs({ doc: "- Wrangler 4.120.0 is the pin.", pins, ...quiet });
+  const stale = auditDependencyDocs({ doc: `${BASELINE_HEADING}\n- Wrangler 4.120.0 is the pin.`, pins, ...quiet });
   assert.equal(stale.problems.length, 1);
   assert.match(stale.problems[0], /states "Wrangler 4\.120\.0" but package\.json pins wrangler at 4\.120\.1/);
 
   // 2. a new dependency that nobody documented
   const undocumented = auditDependencyDocs({
-    doc: "- Wrangler 4.120.1 is the pin.",
+    doc: `${BASELINE_HEADING}\n- Wrangler 4.120.1 is the pin.`,
     pins: { ...pins, "left-pad": "1.0.0" },
     ...quiet,
   });
   assert.equal(undocumented.problems.length, 1);
   assert.match(undocumented.problems[0], /left-pad is a root dependency/);
 
-  // 3. a claim surviving the package's removal
-  const removed = auditDependencyDocs({ doc: "- Wrangler 4.120.1 is the pin.", pins: {}, ...quiet });
-  assert.ok(removed.problems.some((p) => /is not a root dependency/.test(p)));
+  // 3. a claim surviving the package's removal. The message tells you to stop
+  // restating the number, because a stale version inside its own correction is
+  // still a greppable stale version.
+  const removed = auditDependencyDocs({ doc: `${BASELINE_HEADING}\n- Wrangler 4.120.1 is the pin.`, pins: {}, ...quiet });
+  assert.ok(removed.problems.some((p) => /wrangler is declared in DOC_ALIASES but package\.json no longer pins it/.test(p)),
+    removed.problems.join("\n"));
 
   // 4. the floor: a doc with no claims at all must fail rather than pass empty
-  const empty = auditDependencyDocs({ doc: "no versions here", pins: {} });
+  const empty = auditDependencyDocs({ doc: `${BASELINE_HEADING}\nno versions here`, pins: {} });
   assert.ok(empty.problems.some((p) => /below the floor/.test(p)));
 
   // 5. Pillow lives in requirements.txt, not package.json
   const pillow = auditDependencyDocs({
-    doc: "- Wrangler 4.120.1 is the pin.\n- Pillow 12.3.0 is pinned.",
+    doc: `${BASELINE_HEADING}\n- Wrangler 4.120.1 is the pin.\n- Pillow 12.3.0 is pinned.`,
     pins,
     requirements: "Pillow==12.4.0\n",
     ...quiet,
   });
   assert.ok(pillow.problems.some((p) => /Pillow 12\.3\.0.*pins 12\.4\.0/.test(p)));
+});
+
+test("the collapsed check keeps the two rules that came from #382", () => {
+  const H = BASELINE_HEADING;
+  const quiet = { aliases: [{ prose: "Wrangler", pkg: "wrangler" }], versionless: new Map(), floor: 0 };
+
+  // (a) RANGE PINS. Stripping the caret and comparing would let ^1.2.3 agree
+  // with a doc claiming 1.2.3, which is a range the prose cannot honestly
+  // state. It must be moved to VERSIONLESS instead, and say so.
+  const ranged = auditDependencyDocs({
+    doc: `${H}\n- Wrangler 4.120.1 is the pin.`,
+    pins: { wrangler: "^4.120.1" },
+    ...quiet,
+  });
+  assert.ok(ranged.problems.some((p) => /range-pinned \(\^4\.120\.1\).*Move it to VERSIONLESS/s.test(p)),
+    ranged.problems.join("\n"));
+
+  // (b) A DECLARED PACKAGE LOSING ITS SENTENCE. Deleting the line must not
+  // silently drop it from the check, which is what a forward-only scan does.
+  const dropped = auditDependencyDocs({
+    doc: `${H}\n- nothing about wrangler here.`,
+    pins: { wrangler: "4.120.1" },
+    ...quiet,
+  });
+  assert.ok(dropped.problems.some((p) => /no longer states a version for Wrangler/.test(p)),
+    dropped.problems.join("\n"));
+
+  // (c) BASELINE SCOPING. A claim in the intro prose is not the baseline making
+  // it, so the scan must not see it, and a renamed heading must fail loudly
+  // rather than slice to one character and report a clean pass.
+  assert.equal(baselineSection("no heading here"), null);
+  const outside = auditDependencyDocs({
+    doc: `Wrangler 9.9.9 in the intro.\n${H}\n- Wrangler 4.120.1 is the pin.`,
+    pins: { wrangler: "4.120.1" },
+    ...quiet,
+  });
+  assert.deepEqual(outside.problems, [], "a version in the intro must not be read as a baseline claim");
+
+  const renamed = auditDependencyDocs({ doc: "## Something Else\n- Wrangler 4.120.1", pins: {}, ...quiet });
+  assert.ok(renamed.problems.some((p) => /has no "## Current baseline" section/.test(p)));
 });
 
 test("the dependency-doc scanner does not read prose as a version claim", () => {
