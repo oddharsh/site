@@ -336,7 +336,7 @@ async function probe(r) {
     const res = await fetch(url, {
       redirect: "manual",
       signal: AbortSignal.timeout(TIMEOUT_MS),
-      headers: { accept: "*/*", ...(r.headers || {}) },
+      headers: { accept: "*/*", ...r.headers },
     });
     const ct = res.headers.get("content-type") || "";
     let body = "", bytes = null;
@@ -431,4 +431,4 @@ async function main() {
   process.exit(hardFails ? 1 : 0);
 }
 
-main();
+await main();

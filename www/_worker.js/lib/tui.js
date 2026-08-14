@@ -22,33 +22,24 @@
 
 export const COLS = 80;
 
-// ── palette ───────────────────────────────────────────────────────────────
-// MID-TONES ONLY, and that is a hard constraint rather than taste. A terminal
-// theme is the user's, not ours: near-white foregrounds vanish on a light
-// profile and near-black ones vanish on a dark one, and a TUI that is unreadable
-// on half of all terminals is a TUI that doesn't work. Every color here is
-// legible against both. Body text carries NO color at all and inherits the
-// terminal's own foreground, which is the most theme-safe choice available.
+// ── palette (retired) ─────────────────────────────────────────────────────
+// There is no palette here any more, and the constraint that governed it is
+// worth keeping because it governs any future one. MID-TONES ONLY: a terminal
+// theme belongs to the visitor, so a near-white foreground vanishes on a light
+// profile and a near-black one vanishes on a dark profile, and a TUI unreadable
+// on half of all terminals is a TUI that does not work.
 //
-// The one painted region is the title bar, because a blue bar with white text IS
-// the Luna signature and it sets its own background, so it doesn't depend on the
-// terminal's. 256-color codes throughout (\x1b[38;5;Nm); xterm-256 is effectively
-// universal, and the 16-color fallback would cost the Luna blue.
-const SGR = {
-  bar:     "\x1b[1;38;5;255;48;5;25m",   // white bold on Luna blue — the title bar
-  barDim:  "\x1b[38;5;153;48;5;25m",     // the bar's secondary text (window controls)
-  border:  "\x1b[38;5;66m",              // box drawing
-  label:   "\x1b[38;5;66m",              // field names
-  key:     "\x1b[1;38;5;136m",           // a hotkey letter in the status bar
-  accent:  "\x1b[38;5;25m",              // links, paths, the selected row
-  sel:     "\x1b[1;38;5;255;48;5;25m",   // the cursor row, painted like the bar
-  ok:      "\x1b[38;5;29m",
-  warn:    "\x1b[38;5;136m",
-  bad:     "\x1b[38;5;124m",
-  dim:     "\x1b[2m",
-  strong:  "\x1b[1m",
-};
-const RESET = "\x1b[0m";
+// The one painted region was the title bar, since a blue bar with white text is
+// the Luna signature and sets its own background. emit() stopped turning styles
+// into escapes on 2026-08-06, when the window chrome came off for being a
+// Windows window drawn in ASCII inside a real one. That left the SGR table and
+// titleBarLine unreferenced for eight days; oxlint reported both and they were
+// deleted 2026-08-14.
+//
+// Spans still carry a style NAME, which is exactly what let the 2026-08-06 strip
+// land without touching a single caller. So colour comes back by teaching emit()
+// to map those names, never by reviving a constant next to a renderer that
+// ignores it.
 
 // ── spans ─────────────────────────────────────────────────────────────────
 /** One styled run of text. `style` is a key of SGR, or null for terminal default. */
@@ -237,20 +228,6 @@ export function table({ cols, rows, width: w = COLS, header = true }) {
   return lines;
 }
 
-/**
- * The title bar's one line, sized to `w` (the frame's inner width).
- *
- * The gap between the title and the window controls is padded with the BAR
- * style rather than left unstyled. A generic ends() would insert an unpainted
- * run there, and an unpainted run inside a painted region reads on screen as a
- * blue bar with a hole punched through the middle of it.
- */
-function titleBarLine(title, right, w) {
-  const tail = [s(right + " ", "barDim")];
-  const head = truncTo([s(" " + title, "bar")], Math.max(0, w - width(tail) - 1));
-  const gap = Math.max(0, w - width(head) - width(tail));
-  return [...head, s(" ".repeat(gap), "bar"), ...tail];
-}
 
 /**
  * The window. An outer double-line frame with a painted Luna title bar, a body,

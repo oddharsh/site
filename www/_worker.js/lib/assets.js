@@ -634,7 +634,7 @@ export async function serveStaticPage(request, env, opts = {}) {
   const plain = await serveAssetWith404Clamp(request, env, {
     headers: {
       "vary": "accept-encoding, available-dictionary",
-      ...(opts.headers || {}),
+      ...opts.headers,
     },
   });
   plain.headers.delete("use-as-dictionary");

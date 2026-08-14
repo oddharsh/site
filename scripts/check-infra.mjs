@@ -785,6 +785,95 @@ async function checkApi(infra, wrangler, token) {
     const known = new Set([...infra.workers.expected, ...infra.workers.retired, ...infra.workers.unmanaged].map((w) => w.name));
     for (const name of live) if (!known.has(name)) warn(`Worker ${name} is deployed but not accounted for in infra.json`);
   });
+
+  // Version affinity: the Transform Rule that keeps one visitor on one Worker
+  // version for the length of a ramp.
+  //
+  // ZONE-scoped, which makes it the first thing in this tier the account-scoped
+  // CI token cannot reach. It needs Zone:Zone:Read to resolve the id and
+  // Zone:Transform Rules:Read to read the phase, neither of which is among the
+  // six reads CI carries, so IN CI THIS ALWAYS DEGRADES TO A NOTE. That is the
+  // same standing as repository.code_scanning: the assertion runs on a
+  // workstation and CI reports one advisory naming what it could not read.
+  //
+  // Worth a section anyway, because the rule is invisible from inside this repo
+  // and its absence is silent. Nothing errors when affinity is off. The next
+  // ramp that changes a shell asset simply serves part of the audience an
+  // unstyled page for the length of the canary, and the release still reports
+  // success, because every sampled document came back 200 and the assets that
+  // 404ed were never sampled. The arithmetic is in infra.json under
+  // zone.version_affinity.
+  await section("version affinity", "Zone:Transform Rules:Read and Zone:Zone:Read", async () => {
+    const declared = infra.zone?.version_affinity;
+    if (!declared) return;
+
+    const zones = await cf(token, `/zones?name=${encodeURIComponent(infra.zone.name)}`);
+    const zoneId = zones?.[0]?.id;
+    if (!zoneId) {
+      warn(`version affinity unchecked: this token sees no zone named ${infra.zone.name}`);
+      return;
+    }
+
+    let ruleset;
+    try {
+      ruleset = await cf(token, `/zones/${zoneId}/rulesets/phases/${declared.phase}/entrypoint`);
+    } catch (e) {
+      // A 404 on the phase entrypoint is NOT "could not check". It is the phase
+      // holding no ruleset at all, which is a definite statement that the rule
+      // is absent. Anything else is a genuine read failure and belongs to
+      // section()'s handling, so rethrow it.
+      if (!/\b404\b/.test(e.message)) throw e;
+      fail(`no ${declared.phase} ruleset on ${infra.zone.name}, so nothing sets ${declared.header}. ${declared.why}`);
+      return;
+    }
+
+    const wanted = declared.header.toLowerCase();
+    const rule = (ruleset.rules || []).find((r) =>
+      Object.keys(r?.action_parameters?.headers || {}).some((h) => h.toLowerCase() === wanted));
+    if (!rule) {
+      fail(`no Transform Rule on ${infra.zone.name} sets ${declared.header}. ${declared.why}`);
+      return;
+    }
+
+    // A DISABLED rule is the quietest way for this to be gone: it survives every
+    // listing, reads as configured to anyone glancing at the dashboard, and does
+    // nothing. Check it before the values, which are meaningless while it is off.
+    if (rule.enabled === false) {
+      fail(`the ${declared.header} Transform Rule exists on ${infra.zone.name} but is DISABLED, so ramps run without version affinity. ${declared.why}`);
+      return;
+    }
+
+    const entry = Object.entries(rule.action_parameters.headers).find(([h]) => h.toLowerCase() === wanted)[1];
+
+    // "Set dynamic" comes back as an `expression`; "Set static" comes back as a
+    // `value`. The difference is not cosmetic here: a static key is the SAME key
+    // for every visitor on earth, which hashes to one version and puts 100% of
+    // traffic on one side of a split that reports itself as 10%. That is worse
+    // than having no affinity at all, so it gets its own failure.
+    if (entry.value !== undefined && entry.expression === undefined) {
+      fail(`${declared.header} is set STATICALLY to ${JSON.stringify(entry.value)} on ${infra.zone.name}, so every visitor shares one affinity key and a ramp puts all traffic on one version regardless of the percentages. It must be "Set dynamic" with ${JSON.stringify(declared.value)}`);
+      return;
+    }
+    if (String(entry.expression || "").trim() !== String(declared.value).trim()) {
+      fail(`${declared.header} is derived from ${JSON.stringify(entry.expression)} but infra.json declares ${JSON.stringify(declared.value)}. The dashboard is the live value, so fix it there`);
+      return;
+    }
+
+    // The rule's own filter expression, checked for the ONE property that
+    // matters rather than string-equal against the declaration. Cloudflare
+    // normalizes expressions, so a textual diff would false-fire on formatting;
+    // what has to hold is that the rule SKIPS a request that already carries the
+    // header. deploy-promote.mjs sends one key per request so it can still watch
+    // the split take from a single IP, and a rule that overwrites those keys
+    // collapses every sample onto one version, which the ramp reads as dead and
+    // aborts on. Fails closed, and loudly, but it aborts healthy releases.
+    if (!String(rule.expression || "").toLowerCase().includes(wanted)) {
+      fail(`the ${declared.header} rule matches on ${JSON.stringify(rule.expression)}, which does not exempt requests that already carry the header. It will overwrite the per-request keys deploy:promote sends, and every ramp step will read as "the ramp did not take". infra.json declares: ${declared.expression}`);
+      return;
+    }
+
+    pass(`version affinity: ${declared.header} set dynamically from ${declared.value}, client-supplied keys exempted`);
+  });
 }
 
 // ----------------------------------------------------- tier: repository ----

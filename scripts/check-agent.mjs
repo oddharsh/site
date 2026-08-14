@@ -206,7 +206,6 @@ async function main() {
   for (const route of routes) {
     const url = `${ORIGIN}${route}`;
     const raw = await fetch(url).then((r) => r.text()).catch(() => "");
-    const httpStatus = await head(url);
     const k = await renderOnce(kpage, url);
     const c = cpage ? await renderOnce(cpage, url) : null;
 

@@ -27,7 +27,7 @@ import { EXECUTION_META, EXECUTION_PROBE, executionChecks } from "../www/_worker
 import { httpWords } from "./check-agent.mjs";
 import { lensReadiness } from "../www/_worker.js/lens.js";
 import { lensRecipe, lensRecipeIds, lensRecipeScript } from "../www/_worker.js/lens-recipes.js";
-import { handleCoffeeAvailability, readCoffeeAvailability } from "../www/_worker.js/coffee.js";
+import { handleCoffeeAvailability } from "../www/_worker.js/coffee.js";
 import { reservationName } from "../cal/src/reservation.js";
 import { handleSiteMcp, MCP_TOOLS as SITE_MCP_TOOLS, SITE_MCP_SERVER_INFO } from "../www/_worker.js/mcp.js";
 import { documentContent, handleWebmention, handleWebmentionDecision, linksTo } from "../www/_worker.js/webmention.js";
@@ -47,10 +47,8 @@ import { PROFILES } from "../www/scripts/shell-data.mjs";
 import { faviconHref, sectionFavicons, speculationHtml } from "../www/scripts/gen-desktop-partial.mjs";
 import { TASKBAR } from "../www/scripts/shell-data.mjs";
 import { SECTION_FAVICONS } from "../www/_worker.js/lib/desktop.js";
-import { INDEXED_SECTIONS, TWIN_FACTS, buildTwins, checkTwinFacts, htmlFileFor, twinPath } from "./gen-md-twins.mjs";
 import { collectBlockClasses, readDocument } from "./lib/html-to-md.mjs";
 import {
-  MCP_TOOLS,
   SERENDIPITY_MCP_SERVER_INFO,
   SERENDIPITY_SYNC_LIMITS,
   cookieJar,
@@ -2510,7 +2508,6 @@ test("browser RUM and its ledger proxy stay fully removed", async () => {
   const wrangler = await readFile(new URL("wrangler.jsonc", ROOT), "utf8");
   const wranglerDev = await readFile(new URL("wrangler.dev.jsonc", ROOT), "utf8");
   const headers = await readFile(new URL("www/_headers", ROOT), "utf8");
-  const security = await readFile(new URL("www/_worker.js/lib/security.js", ROOT), "utf8");
   const whoareyou = await readFile(new URL("www/_worker.js/whoareyou.js", ROOT), "utf8");
   const whoareyouMd = await readFile(new URL("www/md/whoareyou.md", ROOT), "utf8");
   const securityPage = await readFile(new URL("www/_worker.js/security.js", ROOT), "utf8");
@@ -4551,6 +4548,37 @@ test("neither MCP server keeps a private copy of the protocol constants", async 
   }
 });
 
+test("both CSS checks go through the one parser, and it still tolerates the right family", async () => {
+  // build.mjs decides what reaches a visitor; check-page-contracts.mjs is a
+  // pre-build gate on the same stylesheets. They ran DIFFERENT engines until
+  // 2026-08-14 (Lightning CSS and esbuild), which disagree in both directions, so
+  // a scaffold could pass the gate and fail the build. One parser, one family.
+  for (const file of ["scripts/build.mjs", "scripts/check-page-contracts.mjs"]) {
+    const src = readFileSync(file, "utf8");
+    assert.ok(/from "\.\/lib\/css-parse\.mjs"/.test(src), `${file} must import the shared CSS parser`);
+    assert.ok(!/from "esbuild"/.test(src), `${file} must not reach for a second CSS engine`);
+    assert.ok(!/UNKNOWN_SELECTOR\s*=/.test(src), `${file} re-declares the tolerated warning family instead of importing it`);
+  }
+
+  const { parseCss, UNKNOWN_SELECTOR } = await import("../scripts/lib/css-parse.mjs");
+
+  // The family is tolerated AND preserved verbatim, which is the whole bargain.
+  const carousel = "ul::scroll-marker-group{display:flex}li::scroll-marker{content:\"\"}";
+  const out = parseCss("probe", carousel, { minify: true });
+  assert.match(out, /::scroll-marker-group/, "the tolerated selector must survive");
+  assert.match(out, /::scroll-marker/, "the tolerated selector must survive");
+
+  // A warning OUTSIDE the family is still fatal, so tolerance stays narrow.
+  assert.throws(() => parseCss("probe", "@nonsense (x) { .a { color: red } }"),
+    /emitted warnings/, "an unknown at-rule must not be swept in with the carousel family");
+
+  // And structurally broken CSS still fails rather than being recovered silently.
+  assert.throws(() => parseCss("probe", ".a{color:red}}"), /.*/, "broken CSS must throw");
+
+  assert.ok(UNKNOWN_SELECTOR.test("'::scroll-marker' is not recognized as a valid pseudo-element"),
+    "the family regex must still match the message Lightning actually emits");
+});
+
 // ── /terminal — the terminal programs ─────────────────────────────────────────
 // The renderer is pure and the apps are readers, so these run with stub assets
 // and no network. What they pin is the handful of properties a frame stops
@@ -5903,7 +5931,7 @@ test("the dyno chart draws lines, not filled regions", async () => {
     { ts: "2026-08-10", sha: "aaa1111", worker_gzip: 264540, pages_br: 476528, assets_br: 58186, source: "nightly" },
     { ts: "2026-08-11", sha: "bbb2222", worker_gzip: 266000, pages_br: 476000, assets_br: 58200, source: "nightly" },
   ]);
-  const html = await (await renderDyno(rows)).text();
+  const html = await renderDyno(rows).text();
 
   // The bug this pins: a bare `.s-worker { stroke; fill }` outranks
   // `polyline { fill: none }` on specificity, so every series filled down to the
@@ -5921,9 +5949,9 @@ test("the dyno chart draws lines, not filled regions", async () => {
 
 test("the dyno page distinguishes measured points from hand-entered ones", async () => {
   const { mergeHistory, renderDyno } = await import("../www/_worker.js/dyno.js");
-  const html = await (await renderDyno(mergeHistory([
+  const html = await renderDyno(mergeHistory([
     { ts: "2026-08-10", sha: "aaa1111", worker_gzip: 264540, pages_br: 476528, assets_br: 58186, source: "nightly" },
-  ]))).text();
+  ])).text();
   // Dashed for the seeded prefix, solid for the measured tail, and the legend
   // says which is which. A chart that renders a number somebody typed into a
   // code comment identically to one a runner measured is lying about its own
@@ -6539,6 +6567,58 @@ test("the agent check's word count strips a script closed any legal way", () => 
   }
   // And the ordinary path still counts what it should.
   assert.equal(httpWords("<h1>one two</h1><p>three</p>"), 3, "prose must survive the strip");
+});
+
+// ── version affinity: the rule and the ramp have to agree ────────────────────
+//
+// STRUCTURAL, and it has to be: Cloudflare's expression language runs at their
+// edge, so nothing here can execute the rule. What can be checked is the seam,
+// and the seam is where this breaks.
+//
+// The contract has two halves in two languages. The Transform Rule declared in
+// infra.json derives Cloudflare-Workers-Version-Key from ip.src, and deliberately
+// SKIPS any request that already carries that header. deploy-promote.mjs relies
+// on that exemption: it sends one key per request so it can still watch a split
+// take from a single IP. Take the exemption out and the rule overwrites those
+// keys, every sample lands on one version, and each intermediate ramp step reads
+// as "the ramp did not take": a false abort on a healthy release, on the one
+// path where a confusing failure costs the most.
+//
+// Neither file can catch that alone, and nothing else reads both.
+test("the affinity rule exempts the header the ramp sampler sends", async () => {
+  const infra = JSON.parse(await readFile(new URL("../config/infra.json", import.meta.url), "utf8"));
+  const declared = infra.zone?.version_affinity;
+  assert.ok(declared, "infra.json must declare zone.version_affinity");
+
+  const header = declared.header.toLowerCase();
+  assert.equal(header, "cloudflare-workers-version-key", "the affinity header name is fixed by Cloudflare");
+
+  // The rule's own filter has to name the header, which is the only way it can
+  // tell "already carries a key" from "does not". A blanket `true` passes a
+  // reader's eye and is the exact mistake this test exists for.
+  assert.match(
+    declared.expression.toLowerCase(),
+    new RegExp(header.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
+    "the rule expression must reference the header, or it cannot exempt a request that already carries one",
+  );
+  assert.match(
+    declared.expression.toLowerCase(),
+    /\bnot\b/,
+    "the exemption is a negation: the rule applies only when the header is ABSENT",
+  );
+
+  // And the ramp has to actually send it. If this line ever goes, the exemption
+  // above is exempting nothing and the affinity rule silently governs the
+  // sampler again.
+  const ramp = await readFile(new URL("./deploy-promote.mjs", import.meta.url), "utf8");
+  assert.match(ramp, new RegExp(`"${header}"\\s*:`), "deploy-promote.mjs must send a per-request affinity key");
+  assert.match(ramp, /"cloudflare-workers-version-overrides"\s*:/, "deploy-promote.mjs must pin its health probe to one version");
+
+  // The override header is `<worker-name>="<version>"`, and the name comes from
+  // the same declaration Workers Builds publishes under. A literal here would be
+  // free to drift from the Worker that actually serves.
+  assert.match(ramp, /infra\?\.release\?\.worker/, "the worker name in the override header must come from infra.json, not a literal");
+  assert.ok(infra.release?.worker, "infra.json must declare release.worker for the override header");
 });
 
 // ── the Tools lens: schema in, form plan out ────────────────────────────────

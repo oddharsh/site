@@ -33,6 +33,7 @@ import minifyHtml from "@minify-html/node";
 import { transform as transformCss } from "lightningcss";
 import { minifySync } from "oxc-minify";
 import { readManifest, workerModule, navFenceBody, readFenceBody, runProfilesBody } from "./gen-manifest.mjs";
+import { parseCss } from "./lib/css-parse.mjs";
 import { HTML_MARKERS } from "./lib/html-markers.mjs";
 import { patchStaticShell, renderDesktopArtifacts, staticShellPages } from "../www/scripts/gen-desktop-partial.mjs";
 
@@ -67,7 +68,7 @@ function dczEncode(bytes, dictBytes) {
 // arbitrary subdomain of cloudflareinsights.com is. Keep that distinction
 // explicit so this invariant checks origins rather than URL spelling.
 function containsRetiredRumHost(source) {
-  const candidates = source.match(/\b(?:https?:\/\/)?(?:\*\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)+(?:\:\d+)?/gi) || [];
+  const candidates = source.match(/\b(?:https?:\/\/)?(?:\*\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)+(?::\d+)?/gi) || [];
   for (const candidate of candidates) {
     const withoutWildcard = candidate.replace(/^\*\./, "");
     let hostname;
@@ -386,7 +387,7 @@ async function checkInvariants() {
       // are not taste calls. Reasons are printed in the build summary, so an
       // exemption stays visible instead of quietly becoming the new normal.
       const okOn = (off) => {
-        const m = /taste-ok:\s*([^*\/]+)/.exec(lineAt(off));
+        const m = /taste-ok:\s*([^*/]+)/.exec(lineAt(off));
         if (!m) return false;
         tasteOk.push(`${f}: ${m[1].trim()}`);
         return true;
@@ -640,40 +641,10 @@ const minifyJavaScript = (filename, sourceText) => {
   return result.code;
 };
 
-// Lightning CSS 1.33 does not know the CSS Overflow 5 carousel selectors
-// (::scroll-marker, ::scroll-marker-group, ::scroll-button(), :target-current).
-// /garage/horizon demos them on purpose, because being new is the page's subject,
-// and minifying that page's inline CSS turned 13 advisory warnings into a hard
-// deploy failure the first time step 7b ran over it.
-//
-// Verified against lightningcss 1.33.0: it warns and then emits the selector
-// VERBATIM, so the output is correct and the warning is advice about a parser gap
-// rather than a report of damage. Tolerating the family is therefore safe, and
-// tolerating it blindly is not, so the pass-through is re-proven on every build:
-// each warned selector must still appear in the output. A future Lightning that
-// starts DROPPING what it cannot parse fails here instead of silently shipping a
-// page with its demo stripped out.
-const UNKNOWN_SELECTOR = /'([^']+)' is not recognized as a valid pseudo-(?:element|class)/;
-
-const minifyCss = (filename, sourceText) => {
-  const result = transformCss({ filename, code: Buffer.from(sourceText), minify: true });
-  const out = Buffer.from(result.code).toString();
-  const fatal = [], tolerated = [];
-  for (const w of result.warnings) {
-    const m = UNKNOWN_SELECTOR.exec(w.message);
-    if (m) tolerated.push(m[1]);
-    else fatal.push(w.message);
-  }
-  if (fatal.length) {
-    throw new Error(`${filename}: Lightning CSS minify emitted warnings: ${fatal.join("; ")}`);
-  }
-  for (const selector of new Set(tolerated)) {
-    if (!out.includes(selector)) {
-      throw new Error(`${filename}: Lightning CSS dropped the selector it could not parse (${selector}); it must be preserved verbatim`);
-    }
-  }
-  return out;
-};
+// The tolerated-warning family and the pass-through re-proof live in
+// scripts/lib/css-parse.mjs, shared with check-page-contracts.mjs so a stylesheet
+// cannot pass one CSS check and fail the other. See that file for why.
+const minifyCss = (filename, sourceText) => parseCss(filename, sourceText, { minify: true });
 
 // Homepage HTML uses minify-html for structure only; inline CSS/JS are passed
 // through the same Lightning CSS and Oxc settings used everywhere else in the
@@ -1024,7 +995,7 @@ let dressPage = () => { throw new Error("explorer: dressPage used before 1g2 def
   };
 
   const pages = (await readdir(`${OUT}/www`, { recursive: true }))
-    .filter((f) => f.endsWith(".html") && !/\.src\.html$/.test(f) && !/^(i|images|og|cars|a)\//.test(f))
+    .filter((f) => f.endsWith(".html") && !f.endsWith('.src.html') && !/^(i|images|og|cars|a)\//.test(f))
     .filter((f) => f !== "index.html");
 
   // One page's worth of work, shared with the twin writer at 7b.
@@ -1039,7 +1010,7 @@ let dressPage = () => { throw new Error("explorer: dressPage used before 1g2 def
     // .shelf; every other page reports none rather than counting whatever list
     // it happens to contain.
     const details = [];
-    if (/\/index\.html$/.test(rel) || !rel.includes("/")) {
+    if (rel.endsWith('/index.html') || !rel.includes("/")) {
       const shelf = /<ul\b[^>]*class="[^"]*\bshelf\b[^"]*"[\s\S]*?<\/ul>/.exec(html);
       const items = shelf ? (shelf[0].match(/<li\b/g) || []).length : 0;
       if (items) details.push({ term: "Contains", value: `${items} experiments` });
@@ -1408,9 +1379,9 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   const hashKey = (a) => (a.ext && a.ext !== "js" ? `${a.base}.${a.ext}` : a.base);
   const STRING_ASSETS = [
     { file: "/nav-run.css",     base: "nav-run",           ext: "css", mk: (to) => [
-      [/(\"nav-run\"\s*:\s*)(["'`])\/nav-run\.css\2/g, `$1$2${to}$2`] ] },
+      [/("nav-run"\s*:\s*)(["'`])\/nav-run\.css\2/g, `$1$2${to}$2`] ] },
     { file: "/nav-tray.css",    base: "nav-tray",          ext: "css", mk: (to) => [
-      [/(\"nav-tray\"\s*:\s*)(["'`])\/nav-tray\.css\2/g, `$1$2${to}$2`] ] },
+      [/("nav-tray"\s*:\s*)(["'`])\/nav-tray\.css\2/g, `$1$2${to}$2`] ] },
     { file: "/infotip.css",     base: "infotip",           ext: "css", mk: (to) => [
       [/(\binfotip\b\s*:\s*)(["'`])\/infotip\.css\2/g, `$1$2${to}$2`] ] },
     { file: "/hoist.js",        base: "hoist",        mk: (to) => [

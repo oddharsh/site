@@ -20,7 +20,7 @@
 // Every exported function is PURE so build.mjs can re-run this in-memory; only
 // main() touches the filesystem.
 
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { readDocument } from "./lib/html-to-md.mjs";

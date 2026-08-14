@@ -31,7 +31,7 @@ export async function sendApprovalRequest(env, booking, approveUrl, declineUrl) 
 }
 
 export async function sendInvite(env, booking) {
-  const { name, email, start, end, topic } = booking;
+  const { name, email, start, end } = booking;
   const ics = buildICS(env, booking);
   const when = fmtRange(start, end, env.HOST_TIMEZONE);
   const html = `

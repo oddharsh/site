@@ -45,7 +45,7 @@ const ONLY = onlyArg > -1 ? new Set((process.argv[onlyArg + 1] || "").split(",")
 const FIXTURE = `<!doctype html><title>probe</title><body>
 <p id="sync">SYNC-ABSENT</p><p id="async">ASYNC-ABSENT</p>
 <details><summary>s</summary><p>HIDDENWORD</p></details>
-<script>window.__loadAt=Date.now();setTimeout(function(){document.body.dataset.late="1";},300);<\/script>
+<script>window.__loadAt=Date.now();setTimeout(function(){document.body.dataset.late="1";},300);</script>
 </body>`;
 
 // Same shape as a real recipe harness: flip a marker synchronously, plant an

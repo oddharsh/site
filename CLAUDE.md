@@ -90,6 +90,14 @@ pnpm run photos "/path/to/photo.HIF" "/path/to/folder/"
 # validate the committed photo artifact graph without uploading anything
 pnpm run photos:check
 
+# lint, syntax plus TYPE-AWARE, in one 0.6s pass. the type half runs on tsgolint,
+# which tracks the exact TypeScript 7.0.2 pinned here; that pairing matters
+# because TS 7.0 ships no stable programmatic API, so typescript-eslint cannot
+# run on it at all. config + every suppression's reason: .oxlintrc.json.
+# NB: read gotcha 34 before running `oxlint --fix`, and 35 before "fixing" a
+# finding inside a content-hashed client asset.
+pnpm run lint
+
 # the wire-size DIFF. perf-budget checks numbers against constants that rot;
 # this compares two builds and has no constants. CI runs it against the merge
 # base on every PR touching served code and comments the delta, gating nothing.
@@ -156,7 +164,8 @@ worktrees may edit freely, but a worktree is not a release surface.
   your branch out from under you.
 - Keep each change on its own branch, commit it, push it, and open a PR. Do
   not deploy from a dirty worktree or push agent work directly to `main`.
-- PR CI builds the site, enforces the performance budget, dry-runs the single
+- PR CI lints (`pnpm run lint`, oxlint including its type-aware rules), builds
+  the site, enforces the performance budget, dry-runs the single
   site Worker plus the auxiliary Garage/LWE configs (`cf-garage/`, `lwe-ask/`),
   runs the coffee tests, and sweeps the route oracle against a Worker booted
   in-process (`pnpm run routes:check`, wrangler's `createTestHarness()`), so a
@@ -389,6 +398,43 @@ worktrees may edit freely, but a worktree is not a release surface.
   What the ramp buys is the ability to read a change before everyone gets it. The
   script deliberately pauses between steps and tells you to go look at Workers
   Logs; it checks status codes, and it cannot check whether the page is *right*.
+
+  **A SPLIT DEPLOYMENT SPLITS ASSET REQUESTS TOO, which is what version affinity
+  is for.** Every document here references content-hashed shell assets
+  (`/a/luna.<hash8>.css`, `/a/nav.<hash8>.js`), `build.mjs` keeps exactly one hash
+  per asset, and during a ramp each request picks a version independently. So a
+  document from one version asks for an asset the other version has never built
+  and gets a 404: `/a/*` is `run_worker_first` and is NOT in
+  `WORKERS_CACHEABLE_PATHS`, so nothing bridges the two. At the 10% canary that is
+  roughly 90% of the new-HTML cohort plus 10% of the old-HTML cohort, per changed
+  asset, on any release touching `nav.js` or `luna.css`. `ramp.yml`'s canary job
+  runs unattended, so it fires on its own. Cloudflare's docs name this exact
+  case. What keeps it from being permanent is the 404 cache-clamp, which was
+  written for `/images/*` (gotcha 1) and has been quietly holding this line too.
+
+  The fix is one Transform Rule deriving `Cloudflare-Workers-Version-Key` from
+  `ip.src`. It is DECLARED in [`infra.json`](config/infra.json) under
+  `zone.version_affinity` and NOT YET CREATED, because it needs a zone write and
+  the only write token here is DNS-scoped and workstation-only. The recipe is in
+  [MAINTENANCE.md](docs/MAINTENANCE.md), and `infra:check` fails on the missing
+  rule until somebody creates it. Two things about it are load-bearing.
+  Its expression must EXEMPT a request that already carries that header, because
+  `deploy-promote.mjs` sends one key per request so it can still watch a split take
+  from a single IP; clobber those and every intermediate step reads as a dead ramp,
+  which fails closed and wastes an afternoon. And the check for it is
+  ZONE-scoped, so CI's six account reads cannot reach it and that section always
+  degrades to a note there. It is workstation-only, the same standing as
+  `repository.code_scanning`.
+
+  **The ramp itself now asks the new version directly**, with
+  `Cloudflare-Workers-Version-Overrides: aadhar-sh="<version>"`, 12 requests all
+  handled by the target. That is the health check. The 40-request unpinned sweep
+  stays, because pinning bypasses the split by construction and so cannot tell you
+  whether traffic moved. Worth knowing why this changed: errors used to be found
+  only in whatever share of the 40 sampled requests landed on the new code, about
+  four at a 10% step, so a fault in the version being ramped had four requests
+  looking for it. Cloudflare honours the override only for a version already in the
+  deployment, so the probe runs after each step and never before.
 
   `pnpm run deploy:direct` still exists and still goes straight to 100%. Keep it: the
   `infra:check` deadlock below is exactly the case where a ramp's extra step is
@@ -2622,6 +2668,24 @@ pnpm run deploy:direct
     So the check is reporting an outage in Copilot's model routing, and no change
     to your branch can turn it green.
 
+    **The log NAMES the model, which is the sharpest form of this fingerprint
+    and was missing from every entry above.** Read on #368 (2026-08-14), one
+    line before the error:
+
+    ```
+    Creating copilot-sdk session with model: claude-opus-4.6 and clientName: github/code-scanning
+    ```
+
+    That narrows the outage from "Copilot's model routing" to one model on one
+    client, which is worth knowing for two reasons. It says the refusal is a
+    routing or entitlement gap for a specific model rather than the review agent
+    being broken, so the fix is upstream configuration and not a Copilot release.
+    And the line is emitted whether or not the request then fails, so it is the
+    thing to read on the day this goes green: it tells you WHICH model GitHub
+    moved to, which is the only evidence that the outage ended rather than
+    paused. Grep for it alongside `CAPIError`, since a run that prints the
+    session line and no error is the recovery signal.
+
     **It is not a flake: the same error landed on three commits across two PRs
     in twenty-one minutes.** #319 twice (its feature head, then a merge commit
     that only pulled `main` in), and then THIS PR, whose entire diff is the
@@ -2634,9 +2698,17 @@ pnpm run deploy:direct
     That gives a test which does not depend on recognising a signature:
 
     ```bash
-    gh api repos/oddharsh/site/check-runs/<check-run-id> --jq .details_url
-    gh run view <run-id> --log-failed | grep -i "CAPIError\|Copilot Error"
+    URL=$(gh api repos/oddharsh/site/check-runs/<check-run-id> --jq .details_url)
+    RUN=$(echo "$URL" | sed -E 's#.*/actions/runs/([0-9]+)/.*#\1#')
+    gh run view $RUN --log-failed | grep -i "CAPIError\|Copilot Error\|session with model"
     ```
+
+    **Pull the run id with that sed rather than off the end of the URL.**
+    `details_url` ends `/actions/runs/<run-id>/job/<job-id>`, so the trailing
+    number is the JOB, and `gh run view <job-id>` exits 0 and prints NOTHING.
+    An empty grep is supposed to mean "a real finding, no crash", so handing it
+    the wrong id inverts the verdict without erroring. Cost one step on #370,
+    which is the PR that added this line.
 
     A crashed agent prints the error. A real finding prints an inline review
     comment on a source line and leaves this grep empty. Prefer it to the
@@ -2666,6 +2738,12 @@ pnpm run deploy:direct
     So the loop to run is short. Confirm the run id is new (a repeat alert looks
     identical), grep the log for `CAPIError`, and stop. Do NOT re-read the diff
     looking for what upset it, and do not push anything to appease it.
+
+    **Ten recorded, and the outage is three days old as of 2026-08-14** (#368,
+    check-run `94825132999`, annotation at `.github:214`, `claude-opus-4.6`).
+    The `.github:<line>` number has now been 211, 213 and 214 across four
+    unrelated diffs, which settles that it tracks the harness rather than
+    anything in the repository.
 
     **Turning off Copilot Autofix does NOT stop it, measured 2026-08-12.** This
     paragraph said the fix was in GitHub's settings and named autofix; the owner
@@ -3075,6 +3153,60 @@ pnpm run deploy:direct
     observe needs a server-side instrument and a positive control**, and "the
     agent's browser showed nothing" is not evidence until the control says the
     browser could have shown something.
+
+34. **A linter's `--fix` is a code change nobody reviewed, and one of them was
+    wrong here on the first run.** oxlint landed 2026-08-14 (`pnpm run lint`, a
+    required step in `validate`). `oxlint --fix` rewrote 18 findings across 8
+    files, and `unicorn/no-useless-spread` silently broke `webmention.js`:
+
+    ```js
+    // before, correct
+    [...new Uint8Array(digest).slice(0, 12)].map((b) => b.toString(16).padStart(2, "0")).join("")
+    // after --fix, wrong
+    new Uint8Array(digest).slice(0, 12).map((b) => b.toString(16).padStart(2, "0")).join("")
+    ```
+
+    The spread was load-bearing. `TypedArray.prototype.map` returns a TYPED
+    ARRAY, so every hex string it produced was coerced straight back to a
+    number. Measured on a fixed digest, the id went from
+    `deadbeef0102030405060708` to `000012345678`.
+
+    **Nothing would have caught it.** It throws no error, no test covers
+    `mentionId`, and a reviewer scanning a diff full of true one-line cleanups
+    reads it as one more. The effect is a changed webmention id, which breaks
+    dedup against the rows already in D1 rather than failing.
+
+    The rule is off in `.oxlintrc.json` with that measurement written at it, and
+    the general form is the part to keep: **an autofixer reasons about syntax and
+    this codebase is full of typed arrays and crypto digests, where the syntax is
+    identical and the semantics are not.** Read every hunk `--fix` produces, and
+    prefer running it on `scripts/` before anything served.
+
+35. **A cosmetic lint fix to a CONTENT-HASHED asset costs 1400 files, and a
+    comment costs nothing.** The same 2026-08-14 run wanted two useless escapes
+    out of `www/nav-run.js`. Correcting them moved `/a/nav-run.e943e545.js` to
+    `/a/nav-run.b5389c82.js`, which re-minted every page referencing it, every
+    per-page dictionary, `_headers`, and `shell-assets.js`.
+
+    Measured by reverting that one file and rebuilding: the diff against the
+    baseline collapsed from thousands of lines to exactly the 3 Worker modules
+    that had actually been edited. So the rule is sharp and worth knowing before
+    any sweep:
+
+    | edited | rebuilds |
+    |---|---|
+    | `scripts/**` | nothing |
+    | `www/_worker.js/**`, `cal/src/**`, `serendipity/` | that module alone |
+    | an unhashed client asset (`www/lwe/ask.js`) | that asset alone |
+    | a HASHED client asset (`nav`, `nav-run`, `tooltip`, `lens*`, `hoist`, `quiz`, `notepad`, `luna.css`, …) | itself, every page, every page dictionary, `_headers` |
+
+    **A comment is free on all of them**, because oxc-minify strips it and the
+    hash holds (verified: the hash stayed `e943e545` through a comment-only
+    edit). So the three findings in hashed assets carry an
+    `oxlint-disable-next-line` plus the reason, and they get fixed on the next
+    change to those files that is worth a new URL. That keeps a tooling PR from
+    forcing a dictionary roll as a side effect, which is the same
+    byte-identical bar gotcha 28 set for the bun evaluation.
 
 ---
 
