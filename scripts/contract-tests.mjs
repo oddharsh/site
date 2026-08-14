@@ -4849,6 +4849,108 @@ test("a door that could not be read is never reported as a door that is shut", a
   assert.equal(open.bytes, 12);
 });
 
+test("the MCP client reads both Streamable HTTP framings", async () => {
+  // A server answers one JSON object or an SSE stream, at its own discretion.
+  // A client that handles only the first reports the second as a broken door,
+  // which is the exact dishonesty classifyDoor above exists to prevent.
+  const { parseMcpBody } = await import("../www/_worker.js/lib/doors.js");
+
+  const plain = parseMcpBody('{"jsonrpc":"2.0","id":1,"result":{"tools":[]}}', "application/json");
+  assert.equal(plain.ok, true);
+  assert.equal(plain.framing, "json");
+
+  // Byte-for-byte the shape mcp.deepwiki.com returns, measured 2026-08-14.
+  const stream = parseMcpBody(
+    'event: message\ndata: {"jsonrpc":"2.0","id":1,"result":{"tools":[{"name":"ask_question"}]}}\n\n',
+    "text/event-stream",
+  );
+  assert.equal(stream.ok, true);
+  assert.equal(stream.framing, "sse");
+  assert.equal(stream.payload.result.tools[0].name, "ask_question");
+
+  // The content-type is a hint, not the rule: a stream under the wrong type is
+  // still a stream, and a data: line is unambiguous.
+  assert.equal(parseMcpBody('data: {"jsonrpc":"2.0","result":{}}\n\n', "text/plain").framing, "sse");
+
+  // A stream carries keep-alives and notifications as well as the answer, so
+  // the first line that PARSES is not necessarily the message.
+  const noisy = parseMcpBody(
+    ': keep-alive\ndata: {"note":"not jsonrpc"}\ndata: {"jsonrpc":"2.0","id":1,"result":{"tools":[{"name":"real"}]}}\n\n',
+    "text/event-stream",
+  );
+  assert.equal(noisy.payload.result.tools[0].name, "real");
+
+  // And the two failures stay legible rather than throwing.
+  assert.equal(parseMcpBody(": keep-alive\ndata: not json\n\n", "text/event-stream").ok, false);
+  const html = parseMcpBody("<!doctype html>", "text/html; charset=utf-8");
+  assert.equal(html.ok, false);
+  assert.match(html.detail, /text\/html/, "a shut door should name what it answered instead");
+});
+
+test("the MCP client sends Mcp-Method, and it agrees with the body", async () => {
+  // Being a permissive SERVER does not license being a lax CLIENT. /mcp
+  // validates this header only when present, because requiring it would reject
+  // every legacy client; the strict half of the ecosystem does require it, and
+  // mcp.context7.com and docs.mcp.cloudflare.com both answered 400 -32020
+  // without it (measured 2026-08-14) — three live servers reading as broken.
+  //
+  // Driven through the self-dispatch hatch, which is the only door into this
+  // function that needs neither the network nor the AadharshBot signing key.
+  const { foreignMcpTools } = await import("../www/_worker.js/lib/doors.js");
+
+  let seen = null;
+  const env = { SELF_FETCH: (req) => {
+    seen = req;
+    return new Response(
+      'event: message\ndata: {"jsonrpc":"2.0","id":1,"result":{"tools":[{"name":"now_playing","description":"d"}]}}\n\n',
+      { headers: { "content-type": "text/event-stream" } },
+    );
+  } };
+  const out = await foreignMcpTools("https://aadhar.sh", env);
+
+  assert.equal(seen.headers.get("mcp-method"), "tools/list");
+  const sent = JSON.parse(await seen.text());
+  assert.equal(sent.method, seen.headers.get("mcp-method"), "a header that disagrees with the body is what -32020 refuses");
+  // Both framings offered, because the server picks. DeepWiki answers 406 to a
+  // JSON-only Accept rather than downgrading to what we said we could read.
+  const accept = seen.headers.get("accept");
+  assert.match(accept, /application\/json/);
+  assert.match(accept, /text\/event-stream/);
+
+  // The SSE answer above is read, not reported as a door that would not open.
+  assert.equal(out.ok, true);
+  assert.equal(out.count, 1);
+  assert.equal(out.tools[0].name, "now_playing");
+});
+
+test("a refusal that carries a reason reports the reason, not its status code", async () => {
+  // -32020 and -32022 both arrive on a 400 and both carry the one sentence
+  // that says what to fix. Reading the status first would throw it away and
+  // leave the frame saying "HTTP 400" about a server that had just explained
+  // itself.
+  const { foreignMcpTools } = await import("../www/_worker.js/lib/doors.js");
+  const answer = (body, init) => ({ SELF_FETCH: () => new Response(body, init) });
+
+  const refused = await foreignMcpTools("https://aadhar.sh", answer(
+    '{"jsonrpc":"2.0","id":1,"error":{"code":-32020,"message":"the request headers and body disagree"}}',
+    { status: 400, headers: { "content-type": "application/json" } },
+  ));
+  assert.equal(refused.ok, false);
+  assert.match(refused.detail, /-32020: the request headers and body disagree/);
+  assert.ok(!refused.unreadable, "a server that answered is not an unread door");
+
+  // A body we DID receive and could not parse is a finding about them. A
+  // request that never arrived says nothing about whether the server exists,
+  // and the two must not merge — same rule as classifyDoor above.
+  const shell = await foreignMcpTools("https://aadhar.sh", answer("<!doctype html>", { headers: { "content-type": "text/html" } }));
+  assert.equal(shell.ok, false);
+  assert.ok(!shell.unreadable, "a 200 that is not JSON-RPC is a shut door, not an unreadable one");
+
+  const dead = await foreignMcpTools("https://aadhar.sh", { SELF_FETCH: () => { throw new Error("connection reset"); } });
+  assert.equal(dead.ok, false);
+  assert.equal(dead.unreadable, true, "a failed check was reported as a negative result");
+});
+
 // ── /ask sessions — the one thing here with a Durable Object ────
 
 

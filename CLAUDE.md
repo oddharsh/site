@@ -940,6 +940,21 @@ Three deliberate deviations, all written down at the code:
    server → Fails" row of the spec's own compatibility matrix. A *mismatch* is
    still `-32020`, because a header disagreeing with the body is the exact case
    the header exists to prevent.
+
+   **That is a SERVER rule and it does not travel to the CLIENT half.** Being
+   permissive about what you accept and being correct about what you send are
+   different jobs, and the strict half of the ecosystem does require the header:
+   measured 2026-08-14, `mcp.context7.com` and `docs.mcp.cloudflare.com` both
+   answer 400 `-32020` without it and 200 with it. So `foreignMcpTools()` in
+   [`lib/doors.js`](www/_worker.js/lib/doors.js), the one MCP client this site
+   has, SENDS `Mcp-Method` and derives it from the same constant as the body so
+   the two cannot disagree. It also offers BOTH framings on `Accept`, because a
+   Streamable HTTP server may answer JSON or an SSE stream at its own discretion
+   and `mcp.deepwiki.com` refuses a JSON-only `Accept` outright (406, "Client
+   must accept both"). Both omissions had the same silent cost, which is the
+   reason they are written down here: /lens reported three well-known live MCP
+   servers as unreadable doors, on the one surface whose whole premise is never
+   reporting a failed check as a negative result.
 2. **`ping` is kept** though 2026-07-28 removed it. Legacy clients send it and
    it costs nothing.
 3. **`protocolVersion` is not enforced as a REQUIRED `_meta` field, though
