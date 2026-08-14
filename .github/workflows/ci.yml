@@ -189,6 +189,69 @@ jobs:
       # account the deploy targets (it IS that string), and one fewer API call.
       # release-guard.mjs makes the same helper REQUIRED for ramp.yml, where the
       # account id is not optional.
+      # Known vulnerabilities across EVERY lockfile in the tree, advisory by
+      # design. It reads osv.dev, which aggregates GHSA, NVD and the per-
+      # ecosystem databases, so it sees more than the GitHub advisories
+      # dependabot alone works from.
+      #
+      # WHAT IT ACTUALLY BUYS, and it is not the wider database: `lens-reader`
+      # is invisible to dependabot. That project deliberately stays out of the
+      # workspace (gotcha 29), so its lockfile sits under none of the four
+      # directories `.github/dependabot.yml` watches, and its three dependencies
+      # have had NO vulnerability coverage at all. The other three lockfiles here
+      # are already watched and are scanned anyway, because listing them costs a
+      # line and omitting one is how a gap starts.
+      #
+      # NOT the google/osv-scanner-action: it defaults to `upload-sarif: true`
+      # and therefore wants `security-events: write`, which this workflow's
+      # permissions block exists to refuse. Downloading the pinned release binary
+      # also matches how pnpm is installed above — no action, and one version
+      # string rather than a digest to maintain.
+      #
+      # The checksum is pinned, so tampered or corrupted bytes FAIL rather than
+      # run. That is the same reasoning as pinning every action by digest, and it
+      # is deliberately a different case from a network blip, which warns and
+      # skips.
+      #
+      # ADVISORY on findings, FATAL on a broken scan, and the split is the point.
+      # Exit 1 means real findings, and blocking on those would be wrong here:
+      # measured 2026-08-14, the one finding is `extract-zip 2.0.1`
+      # (GHSA-jmr9-qjv8-65gv, symlink path traversal) reached through
+      # `cf-garage -> @cloudflare/puppeteer -> @puppeteer/browsers`, with NO fixed
+      # version published, so a required check would redden every PR in the repo
+      # over something nobody can fix. Exit 127 is different: it means the scan
+      # never ran, which is this tree's own lockfile paths being wrong, and a
+      # scanner that cannot tell "clean" from "did not run" is decoration.
+      - name: Scan lockfiles for known vulnerabilities
+        env:
+          OSV_VERSION: v2.5.0
+          OSV_SHA256: edcfc41d257db36148f065055655fe3fcfc434b0b423ea67468a84c207524e0c
+        run: |
+          url="https://github.com/google/osv-scanner/releases/download/${OSV_VERSION}/osv-scanner_linux_amd64"
+          if ! curl -sSfL --retry 2 --max-time 180 -o /tmp/osv-scanner "$url"; then
+            echo "::warning::could not download osv-scanner ${OSV_VERSION}; skipping the vulnerability scan"
+            exit 0
+          fi
+          if ! echo "${OSV_SHA256}  /tmp/osv-scanner" | sha256sum -c -; then
+            echo "::error::osv-scanner ${OSV_VERSION} did not match its pinned checksum"
+            exit 1
+          fi
+          chmod +x /tmp/osv-scanner
+          set +e
+          /tmp/osv-scanner scan source \
+            --lockfile pnpm-lock.yaml \
+            --lockfile lens-reader/pnpm-lock.yaml \
+            --lockfile www/scripts/zenc/Cargo.lock \
+            --lockfile www/scripts/requirements.txt
+          status=$?
+          set -e
+          case "$status" in
+            0) echo "::notice::osv-scanner found no known vulnerabilities" ;;
+            1) echo "::warning::osv-scanner found known vulnerabilities; advisory, see the table above" ;;
+            *) echo "::error::osv-scanner exited ${status} without completing a scan; a lockfile path is probably wrong"
+               exit 1 ;;
+          esac
+
       - name: Resolve the account id from wrangler.jsonc
         run: node scripts/print-account-id.mjs >> "$GITHUB_ENV"
 
