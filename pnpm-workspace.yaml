@@ -34,12 +34,18 @@ packages:
 
 # Lifecycle scripts are DENIED by default (pnpm 10+), and pnpm 11 makes an
 # unapproved build a HARD ERROR that blocks `pnpm run` as well as `pnpm
-# install`. Both entries below were measured to be unnecessary for a working
-# build: every native dependency here ships its platform binary through
-# optionalDependencies, so `esbuild` and `workerd` both pass their probes with
-# their postinstalls blocked. They are approved anyway so the tree matches what
-# the packages intend, and so a future dependency that genuinely needs its
-# build step fails loudly here instead of silently degrading.
+# install`. All three entries below were measured to be unnecessary for a
+# working build: every native dependency here ships its platform binary through
+# optionalDependencies, so `esbuild`, `sharp` and `workerd` all pass their
+# probes with their postinstalls blocked. They are approved anyway so the tree
+# matches what the packages intend, and so a future dependency that genuinely
+# needs its build step fails loudly here instead of silently degrading.
+#
+# `sharp` is not a dependency of this repo. It arrives through `miniflare`, which
+# uses it for local Cloudflare Images emulation, and it landed here as pnpm's
+# literal placeholder string (`set this to true or false`) the first time an
+# install noticed its build script. A placeholder is not a decision, and it is
+# the one value that reads as answered while meaning nobody looked.
 #
 # WARNING, and it is the reason PNPM_VERSION is pinned in infra.json: this key
 # is pnpm 11 only. pnpm 10 spells it `onlyBuiltDependencies` and silently
@@ -48,7 +54,7 @@ packages:
 # adding a dependency that needs its build script.
 allowBuilds:
   esbuild: true
-  sharp: set this to true or false
+  sharp: true
   workerd: true
 
 # A package published in the last 24 hours is REFUSED, which is the window a
