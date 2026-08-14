@@ -2666,9 +2666,17 @@ pnpm run deploy:direct
     That gives a test which does not depend on recognising a signature:
 
     ```bash
-    gh api repos/oddharsh/site/check-runs/<check-run-id> --jq .details_url
-    gh run view <run-id> --log-failed | grep -i "CAPIError\|Copilot Error\|session with model"
+    URL=$(gh api repos/oddharsh/site/check-runs/<check-run-id> --jq .details_url)
+    RUN=$(echo "$URL" | sed -E 's#.*/actions/runs/([0-9]+)/.*#\1#')
+    gh run view $RUN --log-failed | grep -i "CAPIError\|Copilot Error\|session with model"
     ```
+
+    **Pull the run id with that sed rather than off the end of the URL.**
+    `details_url` ends `/actions/runs/<run-id>/job/<job-id>`, so the trailing
+    number is the JOB, and `gh run view <job-id>` exits 0 and prints NOTHING.
+    An empty grep is supposed to mean "a real finding, no crash", so handing it
+    the wrong id inverts the verdict without erroring. Cost one step on #370,
+    which is the PR that added this line.
 
     A crashed agent prints the error. A real finding prints an inline review
     comment on a source line and leaves this grep empty. Prefer it to the
