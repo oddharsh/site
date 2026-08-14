@@ -6171,7 +6171,7 @@ test("the dyno page distinguishes measured points from hand-entered ones", async
 // EVERY assertion below reads SOURCE TEXT and imports nothing from lens-reader/.
 // That is a hard constraint, not a style: this suite runs under plain node with
 // the ROOT workspace's dependencies, and lens-reader/src/reader.js imports
-// defuddle, linkedom and turndown, which live only in that sub-project. Importing
+// readability, linkedom and turndown, which live only in that sub-project. Importing
 // it here fails with ERR_MODULE_NOT_FOUND in CI while passing on any workstation
 // that happens to have run `pnpm install` in lens-reader/ — which is exactly how
 // this was caught (PR #299, first run). Same family as gotcha 16: what this file

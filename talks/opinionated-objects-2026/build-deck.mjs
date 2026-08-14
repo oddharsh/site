@@ -1,3 +1,17 @@
+// STALE ARTIFACT WARNING, 2026-08-14. This SOURCE names Readability, because
+// /lens switched extractors from Defuddle. The committed `lens-demo-day-backup.pptx`
+// and `rendered/*.png` were built BEFORE that and still say Defuddle, and they
+// cannot be rebuilt here: this script needs `@oai/artifact-tool`, which only the
+// Codex environment bundles (set LENS_ARTIFACT_TOOL_PATH to run it elsewhere).
+//
+// `screengrabs/03-three-source-evidence.png` is worse, because it is a real
+// screenshot of the /lens UI showing "03 Defuddle content recovery" twice, and
+// slide 5 embeds it beside a score row this commit just relabelled. No script
+// generates the screengrabs; they are taken by hand against PRODUCTION. So the
+// order is fixed and cannot be shortcut: ramp the extractor change to 100%,
+// retake the three screengrabs, then rebuild this deck. Presenting before that
+// means the slide's own screenshot contradicts its caption on the projector.
+
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -394,7 +408,7 @@ function addImageFrame(slide, bytes, frame, alt, fit = "contain") {
     fontSize: 20,
     color: C.muted,
   });
-  addImageFrame(slide, composite, { left: 60, top: 195, width: 700, height: 450 }, "Lens composite score with Cloudflare, Lens field evidence, and Defuddle recovery", "cover");
+  addImageFrame(slide, composite, { left: 60, top: 195, width: 700, height: 450 }, "Lens composite score with Cloudflare, Lens field evidence, and Readability recovery", "cover");
   addSunken(slide, { left: 800, top: 200, width: 380, height: 160 }, C.face);
   addText(slide, "100", { left: 830, top: 215, width: 310, height: 110 }, {
     fontSize: 86,
@@ -412,7 +426,7 @@ function addImageFrame(slide, bytes, frame, alt, fit = "contain") {
   const scoreRows = [
     ["Cloudflare standards", "100"],
     ["Lens field evidence", "100"],
-    ["Defuddle recovery", "100"],
+    ["Readability recovery", "100"],
   ];
   scoreRows.forEach(([label, value], index) => {
     const top = 380 + index * 58;
@@ -429,12 +443,12 @@ function addImageFrame(slide, bytes, frame, alt, fit = "contain") {
   setNotes(slide, [
     "3:00–4:15",
     "This is the criticism-preemption slide. The Cloudflare score is one input, not the product.",
-    "Lens adds an observed field score, and Defuddle provides an independent extraction whose output Lens evaluates with four published binary checks.",
+    "Lens adds an observed field score, and Readability provides an independent extraction whose output Lens evaluates with four published binary checks.",
     "Each source gets exactly one third. If any source fails, the result says unfinished instead of silently moving the goalposts.",
   ], [
     "https://blog.cloudflare.com/agent-readiness/",
     "https://isitagentready.com/",
-    "https://github.com/kepano/defuddle",
+    "https://github.com/mozilla/readability",
     "https://aadhar.sh/lens",
   ]);
 }
@@ -475,12 +489,12 @@ function addImageFrame(slide, bytes, frame, alt, fit = "contain") {
   });
   setNotes(slide, [
     "4:15–5:10",
-    "Cloudflare measures declared readiness. Lens measures observed behavior. Defuddle gives us a separate content-recovery result.",
+    "Cloudflare measures declared readiness. Lens measures observed behavior. Readability gives us a separate content-recovery result.",
     "A disagreement is more interesting than a perfect score: it tells the publisher where standards, enforcement, and actual legibility diverge.",
     "The aggregate is a summary. Every component remains visible and falsifiable below it.",
   ], [
     "https://blog.cloudflare.com/agent-readiness/",
-    "https://github.com/kepano/defuddle",
+    "https://github.com/mozilla/readability",
     "https://aadhar.sh/lens",
   ]);
 }

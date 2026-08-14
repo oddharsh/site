@@ -22,6 +22,18 @@ SAFE FALLBACK URLS
 - https://en.wikipedia.org/wiki/Semantic_Web
 - https://example.com/
 
+BEFORE YOU PRESENT (added 2026-08-14, and it gates the demo)
+- /lens swapped its extractor from Defuddle to Readability. The slide text and
+  these notes already say Readability. The SCREENSHOTS do not: screengrabs/ and
+  rendered/ still show “Defuddle content recovery”, and slide 5 embeds one of
+  them next to a score row that now reads Readability.
+- Fix the order, do not shortcut it: ramp the change to 100%, retake the three
+  screengrabs against production, then rebuild the deck. Rebuilding needs
+  @oai/artifact-tool, which only the Codex environment bundles.
+- Until that is done the LIVE demo and the BACKUP deck disagree, and the backup
+  is the one that is wrong. If you must present first, present live and skip the
+  slide-5 screenshot.
+
 IF THE LIVE SITE FAILS
 - Continue from slide 3. It contains the complete comparison state.
 - Slide 5 contains the complete composite evidence.
@@ -34,8 +46,15 @@ ONE-SENTENCE ANSWERS
 - “Why average them?”
   Equal thirds make the opinion explicit; a missing source leaves the aggregate unfinished instead of changing the weights.
 
-- “Does Defuddle provide that score?”
-  No. Defuddle provides the extraction; Lens publishes four transparent binary checks over its output.
+- “Does Readability provide that score?”
+  No. Readability provides the extraction; Lens publishes four transparent binary checks over its output.
+
+- “Why Readability and not something else?”
+  It is Firefox Reader View’s engine, so it is the extractor most readers have
+  actually met. We ran it against Defuddle over five pages before switching: on
+  /garage/horizon, Defuddle handed over 14 of 26 control labels as prose and
+  Readability hands over 3. It is not uniformly better, which is why the control
+  count stays on screen: on stripe.com it leaks 5 where Defuddle leaked 2.
 
 - “Is a 200 response the same as agent access?”
   No. Retrieval, interpretation, permission, and action are separate; Lens keeps those distinctions visible.
