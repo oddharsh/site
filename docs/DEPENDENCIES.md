@@ -18,7 +18,7 @@ review policy and entry point for future agent runs.
 
 ## Current baseline
 
-- Wrangler 4.120.0 is the exact root pin shared by all Worker projects.
+- Wrangler 4.120.1 is the exact root pin shared by all Worker projects.
 - Oxc Minify 0.144.0 and Lightning CSS 1.33.0 are exact root pins for the
   deploy-time JavaScript and CSS minifiers. Their platform-specific optional
   packages run only in the build environment; they add no browser or Worker
