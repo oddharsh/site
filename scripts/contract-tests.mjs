@@ -1113,8 +1113,13 @@ test("a recipe run caches beside the plain snapshot, never on top of it", async 
   assert.equal(writes.length, 2);
   assert.match(writes[0][0], /^lens:browser:[0-9a-f]{64}$/, "the plain key shape is load-bearing");
   assert.equal(writes[1][0], writes[0][0] + ":expand", "a recipe appends, so the plain entry survives as the before");
-  assert.equal(writes[0][1].expirationTtl, 900);
-  assert.equal(writes[1][1].expirationTtl, 900);
+  // 6h, raised from 15 minutes on 2026-08-14. Deliberately a LITERAL rather than
+  // an imported constant: the number is the budget control for the most
+  // expensive call this site can make, so changing it should cost a visible edit
+  // here. A test that imported the value would agree with any future change.
+  // Keep it equal to /lens/shot and /lens/wire, which both sit at 21600.
+  assert.equal(writes[0][1].expirationTtl, 21600);
+  assert.equal(writes[1][1].expirationTtl, 21600);
 });
 
 test("the before comes from the cached plain snapshot, and is never manufactured", async () => {

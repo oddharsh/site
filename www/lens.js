@@ -14,6 +14,7 @@
   var panes = document.getElementById("lx-panes");
   var humanBody = document.getElementById("lx-human-body");
   var machineBody = document.getElementById("lx-machine-body");
+  var machineTop = document.getElementById("lx-machine-top");
   var browserBody = document.getElementById("lx-browser-body");
   var machineH = document.getElementById("lx-machine-h");
   var humanH = document.getElementById("lx-human-h");
@@ -101,24 +102,38 @@
   // trailing lookaheads: (?![\w-]) alone rejected "robots.txt." at the end of a
   // sentence, so the second one lets a bare period through while still refusing
   // llms.txtfoo and sitemap.xml.gz.
+  // ONE LEFT-TO-RIGHT PASS OVER THE SOURCE. Mirrors the worker's rewrite, and for
+  // the same reason: the old loop re-matched against its own output, so a term
+  // whose spelling appears inside an emitted attribute got wrapped a second time.
+  // "agent" inside data-t="agent-card" is the case that caught it. Reading `src`
+  // and writing `out` makes that impossible by construction.
   function glossify(escaped, only) {
-    var out = String(escaped);
+    var src = String(escaped);
     var seen = {};
-    for (var i = 0; i < GLOSS_SPELLINGS.length; i++) {
-      var key = GLOSS_SPELLINGS[i][0], spelling = GLOSS_SPELLINGS[i][1];
-      if (seen[key]) continue;           // one definition per string, not one per spelling
-      if (only && only.indexOf(key) === -1) continue;
-      var lit = spelling.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      var m = out.match(new RegExp("(^|[^\\w.-])(" + lit + ")(?!\\w)(?!\\.\\w)"));
-      if (!m) continue;
-      seen[key] = 1;
-      var at = m.index + m[1].length;
-      out = out.slice(0, at) +
-        '<abbr class="lx-term" data-t="' + esc(key) + '"' +
-        (hoistLive ? "" : ' title="' + esc(GLOSS[key].plain) + '"') + ">" + m[2] + "</abbr>" +
-        out.slice(at + m[2].length);
+    var out = "";
+    var pos = 0;
+    for (;;) {
+      var best = null;
+      for (var i = 0; i < GLOSS_SPELLINGS.length; i++) {
+        var key = GLOSS_SPELLINGS[i][0], spelling = GLOSS_SPELLINGS[i][1];
+        if (seen[key]) continue;         // one definition per string, not one per spelling
+        if (only && only.indexOf(key) === -1) continue;
+        var lit = spelling.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        var m = src.slice(pos).match(new RegExp("(^|[^\\w.-])(" + lit + ")(?!\\w)(?!\\.\\w)"));
+        if (!m) continue;
+        var at = pos + m.index + m[1].length;
+        // Leftmost wins; on a tie the longer spelling already claimed the spot,
+        // because GLOSS_SPELLINGS is sorted longest-first.
+        if (!best || at < best.at) best = { at: at, key: key, text: m[2] };
+      }
+      if (!best) break;
+      seen[best.key] = 1;
+      out += src.slice(pos, best.at) +
+        '<abbr class="lx-term" data-t="' + esc(best.key) + '"' +
+        (hoistLive ? "" : ' title="' + esc(GLOSS[best.key].plain) + '"') + ">" + best.text + "</abbr>";
+      pos = best.at + best.text.length;
     }
-    return out;
+    return out + src.slice(pos);
   }
 
   // The hover surface rides the site's shared engine (hoist.js): top-layer
@@ -335,6 +350,7 @@
     cloudflareBusy = false;
     wireBusy = false;
     machineBody.innerHTML = '<div class="lx-empty">' + esc(msg) + "</div>";
+    if (machineTop) machineTop.innerHTML = "";
     humanBody.innerHTML = '<div class="lx-empty">No page to show.</div>';
     renderBrowser();
     statusBar.innerHTML = '<span class="err">Failed:</span> <span>' + esc(msg) + "</span>";
@@ -567,17 +583,42 @@
     renderShot();
   }
 
+  // Turn a snapshot failure into a sentence somebody watching over your shoulder
+  // can follow. The wire strings name the mechanism ("Browser Run returned 422")
+  // because that is what a span needs; a reader needs to know whose fault it is
+  // and what still works. Falls through to the server's own text whenever that
+  // text is already plain, so a new server-side message is never swallowed.
+  function shotTrouble(j, status) {
+    if (j && j.reason === "budget_spent") return null;      // server text is already plain
+    if (status === 429) return null;
+    if (j && j.error && !/^Browser Run (returned|request failed)/.test(j.error)) return j.error;
+    return "A rendered snapshot needs a real headless Chrome, and this one did not come back (upstream said " +
+      (status || "no status") + ")";
+  }
+
   function renderShot() {
-    bleed(true);
-    // The refusal is evidence, and we hold the refusing header: cite it.
-    setHumanH("Refused", (data.frameReason ? "framing refused (" + data.frameReason + ")" : "this site refuses to be framed") + "; a machine's render stands in");
-    humanBody.innerHTML = '<div class="lx-spin">Rendering a snapshot with headless Chrome&hellip;</div>';
     var shotUrl = data.finalUrl;
+    // LEAD WITH THE READABLE TEXT rather than an empty pane. A snapshot needs a
+    // real headless Chrome: it can take most of a minute, and on a spent daily
+    // budget it does not arrive at all. A featureless spinner for that long
+    // reads as a hang, which is exactly what it looked like on 2026-08-14
+    // (nytimes.com sat on the spinner for ~60s and then fell back). The reader
+    // text is a real answer we already hold from the HTTP scan, so show it now
+    // and let the snapshot UPGRADE it if it lands.
+    renderReader(null, "Asking for a rendered snapshot as well");
     fetch("/lens/shot?url=" + encodeURIComponent(shotUrl))
       .then(function (r) {
         var ct = r.headers.get("content-type") || "";
         if (r.ok && ct.indexOf("image/") === 0) {
+          if (!data || (data.finalUrl || data.url) !== shotUrl) return;
+          bleed(true);
+          // The refusal is evidence, and we hold the refusing header: cite it.
+          setHumanH("Refused", (data.frameReason ? "framing refused (" + data.frameReason + ")" : "this site refuses to be framed") + "; a machine's render stands in");
           return r.blob().then(function (b) {
+            // The scan may have moved on while headless Chrome took its minute.
+            // Painting a stale snapshot under a new URL is the one failure here
+            // that a viewer cannot spot, so drop it rather than show it.
+            if (!data || (data.finalUrl || data.url) !== shotUrl) return;
             // revoke the previous snapshot's object URL before minting the next, and
             // again once this one has decoded. Overwriting innerHTML drops the <img> but
             // NOT the blob-URL registry entry, so scanning several framing-blocked sites
@@ -595,10 +636,10 @@
             humanBody.appendChild(img);
           });
         }
-        return r.json().then(function (j) { renderReader((j && j.error) || ("snapshot failed (" + r.status + ")")); })
-          .catch(function () { renderReader("snapshot failed (" + r.status + ")"); });
+        return r.json().then(function (j) { renderReader(shotTrouble(j, r.status) || (j && j.error) || ("snapshot failed (" + r.status + ")")); })
+          .catch(function () { renderReader(shotTrouble(null, r.status) || ("snapshot failed (" + r.status + ")")); });
       })
-      .catch(function () { renderReader("the snapshot request didn't go through"); });
+      .catch(function () { renderReader("The snapshot request did not go through"); });
   }
 
   // ---- Browser Run pane --------------------------------------------------
@@ -670,12 +711,19 @@
     document.head.appendChild(script);
   }
 
-  // last-resort readable view: title + outline + stripped text.
-  function renderReader(note) {
+  // The readable view: title + outline + stripped text. It is the FIRST thing
+  // the pane shows for an unframable site and the last thing it falls back to,
+  // which is why it takes two different notes. `pending` means a snapshot is
+  // still in flight, so the header must not yet claim there is none.
+  function renderReader(note, pending) {
     bleed(false);
-    setHumanH("Reader", "embedding blocked, no snapshot, so here is the readable text");
+    setHumanH("Reader", pending
+      ? "embedding blocked, so here is the readable text while a snapshot is fetched"
+      : "embedding blocked, no snapshot, so here is the readable text");
     var a = data.anatomy;
-    var out = note ? '<div class="lx-fallback-note">' + esc(note.replace(/\.\s*$/, "")) + ". Showing the readable text instead.</div>" : "";
+    var out = "";
+    if (pending) out = '<div class="lx-fallback-note lx-pending">' + esc(pending) + "&hellip;</div>";
+    else if (note) out = '<div class="lx-fallback-note">' + esc(String(note).replace(/\.\s*$/, "")) + ". Showing the readable text instead.</div>";
     if (!a) { humanBody.innerHTML = out + '<div class="lx-empty">No readable text either.</div>'; return; }
     var title = (data.structured && data.structured.title) || "";
     if (title) out += '<div class="lx-h-title">' + esc(title) + "</div>";
@@ -694,7 +742,13 @@
   // ---- machine pane -----------------------------------------------------
   function section(title, badge, caption, inner) {
     var b = badge ? ' <span class="lx-badge ' + (badge.kind || "") + '">' + esc(badge.text) + "</span>" : "";
-    var c = caption ? '<div class="lx-cap">' + esc(caption) + "</div>" : "";
+    // Captions are the one string in a section that is always PLAIN TEXT the
+    // author wrote, so this is the cheapest place to reach every lens at once:
+    // one call, and each report's own framing sentence carries its definitions.
+    // Titles are deliberately left alone (they are labels, and a hover on a
+    // heading reads as a mistake), and kv VALUES are left alone because those
+    // are the scanned site's data rather than our prose.
+    var c = caption ? '<div class="lx-cap">' + glossify(esc(caption)) + "</div>" : "";
     return '<div class="lx-sec"><div class="lx-sec-h">' + esc(title) + b + "</div>" + c + inner + "</div>";
   }
   function kvTable(obj, order) {
@@ -880,7 +934,9 @@
 
     var body = lines.map(function (l) {
       var glyph = l.kind === "ok" ? "✓" : l.kind === "no" ? "✗" : "•";
-      return '<div class="lx-trace-line ' + l.kind + '"><span class="lx-trace-g">' + glyph + '</span><span>' + esc(l.text).replace(/&amp;times;/g, "&times;") + "</span></div>";
+      // glossify LAST, over already-escaped text: it inserts real tags, and the
+      // only thing making that safe is esc() having removed every < and > first.
+      return '<div class="lx-trace-line ' + l.kind + '"><span class="lx-trace-g">' + glyph + '</span><span>' + glossify(esc(l.text).replace(/&amp;times;/g, "&times;")) + "</span></div>";
     }).join("");
     return section("Agent trace", { text: "what an agent would do", kind: vkind === "no" ? "warn" : vkind },
       "One agent's attempt at a task on this URL, narrated only from evidence Lens already gathered. No model was called.",
@@ -911,7 +967,10 @@
       "links in head": relCount,
       "fetched as": data.fetchedBy || "identified bot",
     };
-    var out = agentTrace() + '<div class="lx-brief-lede"><b>Machine briefing.</b> This is a reconstruction from the response and the probes Lens actually ran. It describes available evidence; it does not claim that a site has agreed to a new interface.</div>' + lensFocus();
+    // The agent trace used to open this briefing. It moved above the tab strip
+    // (renderMachine), because it is the one block on this pane that no tab
+    // changes, and sitting inside the body it buried the block they do change.
+    var out = '<div class="lx-brief-lede"><b>Machine briefing.</b> This is a reconstruction from the response and the probes Lens actually ran. It describes available evidence; it does not claim that a site has agreed to a new interface.</div>' + lensFocus();
     out += section("Observed document", { text: "observed", kind: "ok" },
       "The minimum contract a machine can recover from this response.", kvTable(facts));
     out += section("Machine affordances", { text: st.verdict || "unknown", kind: st.verdict === "agent-native" ? "ok" : st.verdict === "agent-readable" ? "" : "warn" },
@@ -1236,6 +1295,15 @@
     // carries it. Must match machineHeader in _worker.js/lens.js renderLensShell.
     machineH.innerHTML = view === "delta" ? "Delta view &middot; What changes" : "Machine view";
     updateDeltaCount();
+    // Everything ABOVE the tab strip is what no tab changes: the score and the
+    // dollar line (one claim about the whole URL) and then the agent trace (one
+    // task attempted against it). Everything the tabs steer stays in the body
+    // under them. Machine view is the only view that fills this slot, and the
+    // score used to be missing from it entirely: verdictStrip() rode above the
+    // body in every OTHER view, so switching to Machine dropped the /100 the
+    // Compare pane had just shown. This runs BEFORE the no-data bail so a reset
+    // cannot leave the last scan's verdict pinned over an empty pane.
+    if (machineTop) machineTop.innerHTML = data && view === "machine" ? verdictStrip() + agentTrace() : "";
     if (!data) { return; }
     // own-property lookup: `lens` comes off the tab strip and the URL, and a bare
     // object literal still inherits Object.prototype, so lens="toString" or
@@ -1267,7 +1335,10 @@
     if (readerBtn) readerBtn.addEventListener("click", runReader);
     var wireBtn = machineBody.querySelector("#lx-wire-run");
     if (wireBtn) wireBtn.addEventListener("click", runWire);
-    var scoreBtn = machineBody.querySelector(".lx-verdict-score");
+    // The strip sits in machineTop in Machine view and inside the body in every
+    // other one, so look in both rather than in whichever was true last week.
+    var scoreBtn = machineBody.querySelector(".lx-verdict-score") ||
+      (machineTop && machineTop.querySelector(".lx-verdict-score"));
     if (scoreBtn) scoreBtn.addEventListener("click", function () { setLens("readiness"); });
     if (lens === "readiness" && view !== "delta") setTimeout(ensureReadinessSources, 0);
   }
@@ -1800,6 +1871,8 @@
       }
     };
     var p = primers[lens] || primers.anatomy;
+    // No scan, no verdict: the slot above the tabs must not outlive its data.
+    if (machineTop) machineTop.innerHTML = "";
     machineBody.innerHTML = '<div class="lx-idle-lens"><div class="lx-idle-kicker">Selected machine lens</div>' +
       '<h3>' + esc(LENS_LABEL[lens] || p.title) + '</h3><p>' + esc(p.note) + '</p><ul>' +
       p.rows.map(function (row) { return '<li>' + esc(row) + '</li>'; }).join("") +

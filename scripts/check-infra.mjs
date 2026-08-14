@@ -681,6 +681,9 @@ async function checkApi(infra, wrangler, token) {
   //   ok  Workers Builds build_command matches infra.json ("")
   //   ok  Workers Builds root_directory matches infra.json (".")
   //   ok  Workers Builds non-production trigger uploads without deploying
+  // Left verbatim because it is a transcript of that run. Both commands moved
+  // from `npx` to `pnpm exec` on 2026-08-14, so a run today prints the same
+  // lines with the new prefix.
   //
   // A SHAPE SURPRISE STILL DEGRADES TO A NOTE rather than failing, and that is
   // now a doctrine call rather than a hedge. This file's own header draws the
