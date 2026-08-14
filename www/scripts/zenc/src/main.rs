@@ -15,6 +15,8 @@ use zenjpeg::encoder::{
     ChromaSubsampling, EncoderConfig, PixelLayout, ProgressiveScanMode, Unstoppable,
 };
 
+mod histogram;
+
 fn die(msg: String) -> ! {
     eprintln!("zenc: {msg}");
     exit(1)
@@ -22,6 +24,15 @@ fn die(msg: String) -> ! {
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
+
+    // One subcommand, dispatched before the positional encode interface so that
+    // interface is untouched. The bake lives here rather than in its own binary
+    // because it shares the JPEG decoder the encoder already links, which is the
+    // entire reason it costs nothing to carry.
+    if args.get(1).map(String::as_str) == Some("histogram") {
+        exit(histogram::run(&args[2..]));
+    }
+
     let (mut input, mut output, mut q): (Option<String>, Option<String>, u8) = (None, None, 82);
     // Default 4:2:0 (thumbnails). --yuv 422 matches the Fuji HIF source (10-bit
     // 4:2:2) for the archive: it neither discards the sensor's vertical chroma

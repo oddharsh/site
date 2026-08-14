@@ -69,7 +69,10 @@ review policy and entry point for future agent runs.
   the locally installed Google Chrome rather than a bundled browser). Only
   `www/scripts/gen-og-cards.mjs` uses it, and only on demand; no CI job and
   no deploy path touches it.
-- Pillow 12.3.0 is pinned in `www/scripts/requirements.txt` for the
-  histogram bake.
+- Pillow 12.3.0 is pinned in `www/scripts/requirements.txt` for
+  `gen-pixel-peeper.py`, a one-off generator for the /pixel-peeper comparison
+  frames. It baked the photo histograms until 2026-08-14, when that moved into
+  `zenc histogram` and left the core photo pipeline with no Pillow dependency at
+  all. Nothing in CI installs it any more.
 - The root workspace lockfile is authoritative; workspace-local Wrangler pins
   are rejected by `pnpm run check-wrangler`.
