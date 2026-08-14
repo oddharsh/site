@@ -23,6 +23,7 @@
 // This module adds no new way to reach the network.
 import { botHeaders } from "./botauth.js";
 import { CANONICAL_HOST } from "./const.js";
+import { MCP_MODERN, META_PROTOCOL, META_CLIENT_CAPS } from "./mcp-protocol.js";
 import { lensProbe, originDiscovery } from "../lens.js";
 
 // Bounds. A door reader that follows whatever it finds is a crawler; these keep
@@ -38,6 +39,45 @@ const trim = (text, max) => {
   return value.length > max ? value.slice(0, max) + "\n…[truncated]" : value;
 };
 
+// The method travels in two places on a modern request, and a server is
+// entitled to refuse a request whose header disagrees with its body (-32020 is
+// exactly that check). One constant, so they cannot.
+const LIST_METHOD = "tools/list";
+
+/**
+ * Read a Streamable HTTP answer, whichever framing the server chose.
+ *
+ * A server may answer one JSON object or an SSE stream, at its own discretion
+ * and without announcing which in advance, so a client that only handles JSON
+ * reports half the ecosystem as broken. mcp.deepwiki.com answers
+ * text/event-stream, measured 2026-08-14.
+ *
+ * The content-type is a hint rather than the rule: a stream served under the
+ * wrong type is still a stream, and a `data:` line is unambiguous. Pure and
+ * exported because the framings are the whole behaviour worth testing here and
+ * every live probe fails at signing before a test can reach one.
+ */
+export function parseMcpBody(text, contentType) {
+  const type = String(contentType || "").toLowerCase();
+  const body = String(text || "");
+  if (type.includes("text/event-stream") || /^[ \t]*(?:event|data):/m.test(body)) {
+    for (const line of body.split(/\r?\n/)) {
+      const match = /^data:[ \t]?(.*)$/.exec(line);
+      if (!match) continue;
+      try {
+        const value = JSON.parse(match[1]);
+        // A stream carries comments, keep-alives and notifications alongside
+        // the answer, so the first line that PARSES is not necessarily the
+        // message. The `jsonrpc` member is what makes it one.
+        if (value && value.jsonrpc) return { ok: true, payload: value, framing: "sse" };
+      } catch { /* keep reading the stream */ }
+    }
+    return { ok: false, detail: "SSE stream carried no JSON-RPC message" };
+  }
+  try { return { ok: true, payload: JSON.parse(body), framing: "json" }; }
+  catch { return { ok: false, detail: `answered ${type.split(";")[0] || "no content-type"}, not JSON` }; }
+}
+
 /**
  * tools/list against a foreign MCP server.
  *
@@ -51,6 +91,16 @@ const trim = (text, max) => {
  * handshake answers an error, and that error is reported rather than retried —
  * the retry would be a second round trip to learn something the frame can say in
  * a line.
+ *
+ * ── a permissive server does not license a lax client ─────────────────────
+ * Our own /mcp validates `Mcp-Method` when present and never requires it,
+ * because requiring it would reject every legacy client at the transport layer.
+ * That is a dual-era SERVER's job. A client has the opposite one: the header
+ * exists so an intermediary can route on the method without parsing the body,
+ * and the strict half of the ecosystem enforces it. Measured 2026-08-14, both
+ * mcp.context7.com and docs.mcp.cloudflare.com answer 400 -32020 without it and
+ * 200 with it. Sending it is free; omitting it made three well-known live
+ * servers read as broken doors.
  */
 export async function foreignMcpTools(origin, env) {
   const url = origin.replace(/\/+$/, "") + "/mcp";
@@ -59,11 +109,13 @@ export async function foreignMcpTools(origin, env) {
   // no roots, no sampling, no elicitation. Sending it matters twice over — a
   // strict foreign server is entitled to refuse us with -32602 without it, and
   // the self-scan below loops back into our own /mcp, which does exactly that.
+  // The values come from the server module so this client cannot advertise a
+  // revision the site itself has stopped speaking.
   const body = JSON.stringify({
-    jsonrpc: "2.0", id: 1, method: "tools/list",
+    jsonrpc: "2.0", id: 1, method: LIST_METHOD,
     params: { _meta: {
-      "io.modelcontextprotocol/protocolVersion": "2026-07-28",
-      "io.modelcontextprotocol/clientCapabilities": {},
+      [META_PROTOCOL]: MCP_MODERN,
+      [META_CLIENT_CAPS]: {},
     } },
   });
   const controller = new AbortController();
@@ -79,7 +131,14 @@ export async function foreignMcpTools(origin, env) {
   try { isSelf = new URL(url).hostname.toLowerCase() === CANONICAL_HOST && !!(env.SELF_FETCH || env.ASSETS); } catch { /* not self */ }
   try {
     const headers = await botHeaders(url, env, {
-      headers: { "content-type": "application/json", accept: "application/json" },
+      headers: {
+        "content-type": "application/json",
+        // Both framings, because the server picks. DeepWiki refuses a
+        // JSON-only Accept outright (406, "Client must accept both") rather
+        // than downgrading to the one framing we said we could read.
+        accept: "application/json, text/event-stream",
+        "mcp-method": LIST_METHOD,
+      },
       method: "POST",
       sign: !isSelf,
     });
@@ -87,9 +146,15 @@ export async function foreignMcpTools(origin, env) {
     const res = isSelf
       ? await (env.SELF_FETCH ? env.SELF_FETCH(selfReq) : env.ASSETS.fetch(selfReq))
       : await fetch(url, { method: "POST", headers, body, redirect: "follow", signal: controller.signal, cf: { cacheTtl: 0 } });
-    if (!res.ok) return { ok: false, detail: `HTTP ${res.status}` };
-    const payload = await res.json();
+    const parsed = parseMcpBody(await res.text(), res.headers.get("content-type"));
+    if (!parsed.ok) return { ok: false, detail: parsed.detail };
+    const payload = parsed.payload;
+    // The RPC error is read BEFORE the status, because the interesting refusals
+    // arrive on a 400: -32020 (header mismatch) and -32022 (unsupported
+    // revision) both carry the one sentence that says what to fix, and "HTTP
+    // 400" would throw it away.
     if (payload?.error) return { ok: false, detail: `${payload.error.code}: ${String(payload.error.message).slice(0, 80)}` };
+    if (!res.ok) return { ok: false, detail: `HTTP ${res.status}` };
     const tools = Array.isArray(payload?.result?.tools) ? payload.result.tools : [];
     return {
       ok: true,
@@ -101,7 +166,9 @@ export async function foreignMcpTools(origin, env) {
     };
   } catch (error) {
     // Same distinction as readable() above: a thrown request never reached the
-    // server, so it says nothing about whether that server exists.
+    // server, so it says nothing about whether that server exists. A body we
+    // DID receive and could not parse is a finding about them, not about us,
+    // and is reported as a shut door above rather than as an unreadable one.
     return { ok: false, unreadable: true, detail: String(error?.message || error).slice(0, 80) };
   } finally { clearTimeout(timer); }
 }
