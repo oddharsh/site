@@ -266,11 +266,20 @@ export default {
       await cron("cron.home_probe", () => cronHomeProbe(env, ctx));   // :07/:37 — the two homepage fragments' KV latency -> Analytics Engine
     } else if (job === "census") {
       await cron("cron.census", () => cronCensus(env));   // Mondays 08:17 UTC — the longitudinal census, full roster in one awaited pass
-    } else if (job === "webmention_send") {
-      // 05:41 UTC daily — tell the sources these pages cite that they were
-      // cited. Its own schedule (not the */30 tick) because it reads my own
-      // pages and then probes third-party hosts: a slow, polite, once-a-day job.
-      await cron("cron.webmention_send", () => cronSendWebmentions(env));
+    } else if (job === "daily_outbound") {
+      // 05:41 UTC daily — the two jobs that probe somebody else's server.
+      // Sequential, not Promise.all: both fetch third-party hosts and running
+      // them together doubles the burst this site presents at one instant, which
+      // is the opposite of why they share an off-peak daily tick.
+      //
+      // Each is awaited inside its own span, so one failing still lets the other
+      // run and the trace says which. That matters more here than elsewhere,
+      // because a cron has no response and both jobs are designed to be quiet.
+      // Both are caught so a failure in one cannot skip the other. span() does
+      // not swallow, so enterSpan has already recorded the exception by the time
+      // the catch runs; what is dropped here is only the rethrow.
+      await cron("cron.webmention_send", () => cronSendWebmentions(env)).catch(() => {});
+      await cron("cron.around", () => cronAround(env)).catch(() => {});
     } else if (job === "serendipity") {
       // 00/06/12/18:23 UTC — re-sync every enabled Luma feed into the
       // serendipity pool (serendipity.js cronSerendipity): events, then the
@@ -280,8 +289,6 @@ export default {
       // tick the pool only refreshed on a cookie re-paste. Odd minute, same
       // collision-avoidance as the others.
       await cron("cron.serendipity", () => cronSerendipity(env));
-    } else if (job === "around") {
-      await cron("cron.around", () => cronAround(env));   // */30 — the neighborhood crawl
     } else {
       await cron("cron.unmatched", async () => ({ ok: false, cron: event.cron }));
     }

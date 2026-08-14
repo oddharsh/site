@@ -3049,9 +3049,14 @@ test("cron dispatch survives Cloudflare's expression normalization", () => {
   assert.equal(cronJob("17 8 * * 1"), "census");
   assert.equal(cronJob("17 8 * * MON"), "census");
   assert.equal(cronJob("7,37 * * * *"), "home_probe");
-  assert.equal(cronJob("41 5 * * *"), "webmention_send");
+  assert.equal(cronJob("41 5 * * *"), "daily_outbound");
   assert.equal(cronJob("23 */6 * * *"), "serendipity");
-  assert.equal(cronJob("*/30 * * * *"), "around");
+  // "*/30 * * * *" was the /around crawl until 2026-08-14, when it folded onto
+  // the daily outbound tick. It must now be UNMATCHED rather than quietly
+  // running somebody else's job, which is the same property the census bug
+  // above is about: a retired expression is exactly as dangerous as a
+  // normalized one if the else-chain catches it.
+  assert.equal(cronJob("*/30 * * * *"), null);
   // Unknown expressions surface as null (a traced cron.unmatched event), never
   // as somebody else's job — that silent fallback is the bug class this fixes.
   assert.equal(cronJob("0 0 * * *"), null);

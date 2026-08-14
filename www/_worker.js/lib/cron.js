@@ -18,8 +18,14 @@ export function cronJob(expr) {
   const sig = String(expr || "").trim().split(/\s+/).slice(0, 2).join(" ");
   if (sig === "7,37 *") return "home_probe";
   if (sig === "17 8") return "census";
-  if (sig === "41 5") return "webmention_send";
+  // One daily outbound tick, two jobs. Both read this site and then probe
+  // third parties, so they share a schedule chosen for POLITENESS rather than
+  // for freshness. The /around crawl moved here from its own "*/30 *" trigger
+  // on 2026-08-14: twenty VC homepages do not change every half hour, and the
+  // old cadence spent 960 signed third-party fetches and 960 D1 row-writes a
+  // day to notice that. Merging also freed a trigger slot, and Workers Free
+  // caps an account at five.
+  if (sig === "41 5") return "daily_outbound";
   if (sig === "23 */6") return "serendipity";
-  if (sig === "*/30 *") return "around";
   return null;
 }
