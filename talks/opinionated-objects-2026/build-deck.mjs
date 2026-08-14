@@ -1,3 +1,22 @@
+// SCREENGRABS ARE SCRIPTED NOW, and the .pptx still is not.
+//
+// `screengrabs/` used to be hand-taken, which is why swapping the Reader
+// extractor left slide 5 embedding a screenshot that read "Defuddle content
+// recovery" beside a score row that read Readability. `capture-screengrabs.mjs`
+// retakes them from production and refuses to write a frame that is stale,
+// duplicated, or captured while the Browser Run budget is spent.
+//
+// Retaken 2026-08-14 against the live site: 02 and 03 now show
+// "03 Readability content recovery" and a settled 100/100 composite. 01 was
+// deliberately LEFT at its original bytes, because it names no extractor (its
+// tab reads "Reader's guess") and re-capturing it would have cost a degraded
+// Browser Run pane after four iterations exhausted the daily render budget.
+//
+// STILL STALE: `lens-demo-day-backup.pptx` and `rendered/*.png`, because this
+// script needs `@oai/artifact-tool` and only the Codex environment bundles it
+// (set LENS_ARTIFACT_TOOL_PATH to run it elsewhere). Rebuild there, then the
+// deck and the screengrabs finally agree.
+
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -394,7 +413,7 @@ function addImageFrame(slide, bytes, frame, alt, fit = "contain") {
     fontSize: 20,
     color: C.muted,
   });
-  addImageFrame(slide, composite, { left: 60, top: 195, width: 700, height: 450 }, "Lens composite score with Cloudflare, Lens field evidence, and Defuddle recovery", "cover");
+  addImageFrame(slide, composite, { left: 60, top: 195, width: 700, height: 450 }, "Lens composite score with Cloudflare, Lens field evidence, and Readability recovery", "cover");
   addSunken(slide, { left: 800, top: 200, width: 380, height: 160 }, C.face);
   addText(slide, "100", { left: 830, top: 215, width: 310, height: 110 }, {
     fontSize: 86,
@@ -412,7 +431,7 @@ function addImageFrame(slide, bytes, frame, alt, fit = "contain") {
   const scoreRows = [
     ["Cloudflare standards", "100"],
     ["Lens field evidence", "100"],
-    ["Defuddle recovery", "100"],
+    ["Readability recovery", "100"],
   ];
   scoreRows.forEach(([label, value], index) => {
     const top = 380 + index * 58;
@@ -429,12 +448,12 @@ function addImageFrame(slide, bytes, frame, alt, fit = "contain") {
   setNotes(slide, [
     "3:00–4:15",
     "This is the criticism-preemption slide. The Cloudflare score is one input, not the product.",
-    "Lens adds an observed field score, and Defuddle provides an independent extraction whose output Lens evaluates with four published binary checks.",
+    "Lens adds an observed field score, and Readability provides an independent extraction whose output Lens evaluates with four published binary checks.",
     "Each source gets exactly one third. If any source fails, the result says unfinished instead of silently moving the goalposts.",
   ], [
     "https://blog.cloudflare.com/agent-readiness/",
     "https://isitagentready.com/",
-    "https://github.com/kepano/defuddle",
+    "https://github.com/mozilla/readability",
     "https://aadhar.sh/lens",
   ]);
 }
@@ -475,12 +494,12 @@ function addImageFrame(slide, bytes, frame, alt, fit = "contain") {
   });
   setNotes(slide, [
     "4:15–5:10",
-    "Cloudflare measures declared readiness. Lens measures observed behavior. Defuddle gives us a separate content-recovery result.",
+    "Cloudflare measures declared readiness. Lens measures observed behavior. Readability gives us a separate content-recovery result.",
     "A disagreement is more interesting than a perfect score: it tells the publisher where standards, enforcement, and actual legibility diverge.",
     "The aggregate is a summary. Every component remains visible and falsifiable below it.",
   ], [
     "https://blog.cloudflare.com/agent-readiness/",
-    "https://github.com/kepano/defuddle",
+    "https://github.com/mozilla/readability",
     "https://aadhar.sh/lens",
   ]);
 }

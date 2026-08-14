@@ -1,6 +1,6 @@
 // The BEHAVIOURAL half of the Reader lens's tests. It lives here rather than in
 // the root contract-tests.mjs because it imports ../src/reader.js, which imports
-// defuddle, linkedom and turndown — dependencies of THIS project alone. The root
+// readability, linkedom and turndown — dependencies of THIS project alone. The root
 // suite runs under plain node with the root workspace's deps, so importing this
 // module there fails with ERR_MODULE_NOT_FOUND in CI while passing on a
 // workstation that happened to install them (caught on PR #299's first run).
