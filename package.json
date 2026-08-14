@@ -29,6 +29,7 @@
     "infra:apply": "node scripts/apply-infra.mjs",
     "pages:check": "node scripts/check-page-contracts.mjs",
     "test": "node --test scripts/contract-tests.mjs",
+    "lint": "oxlint --type-aware",
     "typecheck": "tsc -p config/tsconfig.json && tsc -p config/tsconfig.browser.json",
     "typecheck:browser": "tsc -p config/tsconfig.browser.json",
     "shell:roll": "node scripts/roll-shell-dictionary.mjs",
@@ -50,6 +51,8 @@
     "esbuild": "0.28.2",
     "lightningcss": "1.33.0",
     "oxc-minify": "0.144.0",
+    "oxlint": "1.78.0",
+    "oxlint-tsgolint": "7.0.2001",
     "playwright-core": "^1.62.1",
     "typescript": "7.0.2",
     "wrangler": "4.120.0"

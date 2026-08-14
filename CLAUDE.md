@@ -90,6 +90,14 @@ pnpm run photos "/path/to/photo.HIF" "/path/to/folder/"
 # validate the committed photo artifact graph without uploading anything
 pnpm run photos:check
 
+# lint, syntax plus TYPE-AWARE, in one 0.6s pass. the type half runs on tsgolint,
+# which tracks the exact TypeScript 7.0.2 pinned here; that pairing matters
+# because TS 7.0 ships no stable programmatic API, so typescript-eslint cannot
+# run on it at all. config + every suppression's reason: .oxlintrc.json.
+# NB: read gotcha 34 before running `oxlint --fix`, and 35 before "fixing" a
+# finding inside a content-hashed client asset.
+pnpm run lint
+
 # the wire-size DIFF. perf-budget checks numbers against constants that rot;
 # this compares two builds and has no constants. CI runs it against the merge
 # base on every PR touching served code and comments the delta, gating nothing.
@@ -156,7 +164,8 @@ worktrees may edit freely, but a worktree is not a release surface.
   your branch out from under you.
 - Keep each change on its own branch, commit it, push it, and open a PR. Do
   not deploy from a dirty worktree or push agent work directly to `main`.
-- PR CI builds the site, enforces the performance budget, dry-runs the single
+- PR CI lints (`pnpm run lint`, oxlint including its type-aware rules), builds
+  the site, enforces the performance budget, dry-runs the single
   site Worker plus the auxiliary Garage/LWE configs (`cf-garage/`, `lwe-ask/`),
   runs the coffee tests, and sweeps the route oracle against a Worker booted
   in-process (`pnpm run routes:check`, wrangler's `createTestHarness()`), so a
@@ -3043,6 +3052,60 @@ pnpm run deploy:direct
     observe needs a server-side instrument and a positive control**, and "the
     agent's browser showed nothing" is not evidence until the control says the
     browser could have shown something.
+
+34. **A linter's `--fix` is a code change nobody reviewed, and one of them was
+    wrong here on the first run.** oxlint landed 2026-08-14 (`pnpm run lint`, a
+    required step in `validate`). `oxlint --fix` rewrote 18 findings across 8
+    files, and `unicorn/no-useless-spread` silently broke `webmention.js`:
+
+    ```js
+    // before, correct
+    [...new Uint8Array(digest).slice(0, 12)].map((b) => b.toString(16).padStart(2, "0")).join("")
+    // after --fix, wrong
+    new Uint8Array(digest).slice(0, 12).map((b) => b.toString(16).padStart(2, "0")).join("")
+    ```
+
+    The spread was load-bearing. `TypedArray.prototype.map` returns a TYPED
+    ARRAY, so every hex string it produced was coerced straight back to a
+    number. Measured on a fixed digest, the id went from
+    `deadbeef0102030405060708` to `000012345678`.
+
+    **Nothing would have caught it.** It throws no error, no test covers
+    `mentionId`, and a reviewer scanning a diff full of true one-line cleanups
+    reads it as one more. The effect is a changed webmention id, which breaks
+    dedup against the rows already in D1 rather than failing.
+
+    The rule is off in `.oxlintrc.json` with that measurement written at it, and
+    the general form is the part to keep: **an autofixer reasons about syntax and
+    this codebase is full of typed arrays and crypto digests, where the syntax is
+    identical and the semantics are not.** Read every hunk `--fix` produces, and
+    prefer running it on `scripts/` before anything served.
+
+35. **A cosmetic lint fix to a CONTENT-HASHED asset costs 1400 files, and a
+    comment costs nothing.** The same 2026-08-14 run wanted two useless escapes
+    out of `www/nav-run.js`. Correcting them moved `/a/nav-run.e943e545.js` to
+    `/a/nav-run.b5389c82.js`, which re-minted every page referencing it, every
+    per-page dictionary, `_headers`, and `shell-assets.js`.
+
+    Measured by reverting that one file and rebuilding: the diff against the
+    baseline collapsed from thousands of lines to exactly the 3 Worker modules
+    that had actually been edited. So the rule is sharp and worth knowing before
+    any sweep:
+
+    | edited | rebuilds |
+    |---|---|
+    | `scripts/**` | nothing |
+    | `www/_worker.js/**`, `cal/src/**`, `serendipity/` | that module alone |
+    | an unhashed client asset (`www/lwe/ask.js`) | that asset alone |
+    | a HASHED client asset (`nav`, `nav-run`, `tooltip`, `lens*`, `hoist`, `quiz`, `notepad`, `luna.css`, …) | itself, every page, every page dictionary, `_headers` |
+
+    **A comment is free on all of them**, because oxc-minify strips it and the
+    hash holds (verified: the hash stayed `e943e545` through a comment-only
+    edit). So the three findings in hashed assets carry an
+    `oxlint-disable-next-line` plus the reason, and they get fixed on the next
+    change to those files that is worth a new URL. That keeps a tooling PR from
+    forcing a dictionary roll as a side effect, which is the same
+    byte-identical bar gotcha 28 set for the bun evaluation.
 
 ---
 

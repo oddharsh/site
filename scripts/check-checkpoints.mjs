@@ -52,8 +52,6 @@ try {
   process.exit(0);
 }
 
-const canon = (rows) => JSON.stringify(rows, Object.keys(rows[0] || {}).sort(), 2);
-const liveJson = JSON.stringify(live, null, 2) + "\n";
 
 if (SYNC) {
   await writeFile(FILE, JSON.stringify(live, null, 2).replace(/\n$/, "") + "\n");

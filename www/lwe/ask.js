@@ -64,7 +64,7 @@
       '<div class="lwe-status" role="status"></div>' +
     '</div>';
   var q = compose.querySelector(".lwe-q"), go = compose.querySelector(".lwe-go"),
-      verifyBtn = compose.querySelector(".lwe-verify"), gate = compose.querySelector(".lwe-gate"),
+      verifyBtn = compose.querySelector(".lwe-verify"),
       barStatus = compose.querySelector(".lwe-ask > .lwe-status");
   var askToken = null, askExp = 0;
 

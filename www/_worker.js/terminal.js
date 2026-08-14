@@ -63,7 +63,7 @@ import { CANONICAL_HOST } from "./lib/const.js";
 import { escHtml } from "./lib/http.js";
 import { AGENT_SURFACES } from "./lib/site-manifest.js";
 import {
-  COLS, blank, emit, fit, keys as keyHints, kv, meter, pane, rightTo, rows, rule, s, table, plainFrame, wrap,
+  COLS, blank, emit, fit, keys as keyHints, kv, meter, rows, rule, s, table, plainFrame, wrap,
 } from "./lib/tui.js";
 import { photoFacets, queryPhotos } from "./photos.js";
 import { RN_FALLBACK, getTracksSWR } from "./rn.js";

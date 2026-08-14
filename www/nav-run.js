@@ -32,6 +32,15 @@ export function createRun(options) {
     if (!(node instanceof HTMLElement)) throw new Error("Run island template must produce an element");
     return node;
   }
+  // The two escapes below are genuinely unnecessary (`\"` inside a character
+  // class and inside a single-quoted string), and they stay. This file is a
+  // CONTENT-HASHED shell asset: measured 2026-08-14, correcting them moved
+  // /a/nav-run.e943e545.js to /a/nav-run.b5389c82.js, which re-minted every
+  // page that references it, every per-page dictionary, and _headers: 1400+
+  // built files for two backslashes. A comment costs nothing, because
+  // oxc-minify strips it and the hash holds. Fix it the next time this
+  // function changes for a real reason.
+  // oxlint-disable-next-line no-useless-escape
   function esc(s) { return String(s).replace(/[&<>\"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '\"': "&quot;" }[c]; }); }
   function tag(kind, o) { o.kind = kind; return o; }
 

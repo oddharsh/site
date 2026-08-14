@@ -198,7 +198,7 @@ export function mcpServer({ serverInfo, capabilities, instructions }) {
   const result = (id, payload, cache) => ({ jsonrpc: "2.0", id, result: {
     resultType: "complete",
     ...payload,
-    ...(cache || {}),
+    ...cache,
     _meta: { [META_SERVER_INFO]: serverInfo },
   } });
 
