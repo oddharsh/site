@@ -28,7 +28,7 @@
 # post-processing:
 #   4. regenerates www/images/metadata.json + per-stem images/meta/<stem>.json
 #      (EXIF for the tooltip) and bakes the 64-bin RGB+luma histograms into
-#      meta.hist via photo-histograms.py — the tooltip renders the bars from
+#      meta.hist via `zenc histogram` — the tooltip renders the bars from
 #      that field, and the metadata regen drops it, so the bake runs right after
 #   5. writes the stem's entry into www/_worker.js/photo-index.json — the
 #      committed photo index the worker BUNDLES (which photos exist: R2 key,
@@ -400,11 +400,10 @@ fi
 # or every incremental add strips the bars off all existing photos. computed from
 # the shipped /i/ thumbnails via hashes.json; idempotent (unchanged thumbs re-bake
 # byte-identically), so running over the whole library each add is a no-op diff.
-if command -v python3 >/dev/null 2>&1 && python3 -c "import PIL" >/dev/null 2>&1; then
-  python3 "$SCRIPT_DIR/photo-histograms.py" 2>&1 | tail -1
-else
-  echo "  Pillow (python3 PIL) missing — skipping histogram bake (run photo-histograms.py after 'pip3 install --user pillow')"
-fi
+# zenc does this now (2026-08-14, was photo-histograms.py + Pillow), which is why
+# there is no longer a conditional here: $ZENC is built above and is not optional,
+# so the bake either runs or the whole script has already failed.
+"$ZENC" histogram --root "$PROJECT_DIR/www" 2>&1 | tail -1
 
 # caption anything still missing alt text. runs AFTER hash-thumbnails.sh because
 # it reads the committed www/i/ square via hashes.json and posts those exact

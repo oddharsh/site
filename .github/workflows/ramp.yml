@@ -59,23 +59,55 @@ permissions:
   contents: read
 
 concurrency:
-  # Never two ramps at once. Two `wrangler versions deploy` calls interleaving
-  # would fight over one traffic split, and the loser's percentages would win by
-  # arriving last rather than by being correct. So real ramps share ONE group and
-  # queue, and `cancel-in-progress` stays false because cancelling a run that has
-  # already moved traffic leaves production on a split nobody chose.
+  # Never two ramps moving traffic at once. Two `wrangler versions deploy` calls
+  # interleaving would fight over one split, and the loser's percentages would win
+  # by arriving last rather than by being correct.
   #
-  # The expression exists because a no-op must not join that queue. This workflow
+  # The expression exists because a no-op must not join that group. This workflow
   # fires on `Promote production` COMPLETING, and a skipped promote completes, so
-  # every skipped promote spawns a ramp whose canary will decline to run. Observed
-  # on the first real release (2026-08-12): three such runs, each with ZERO jobs,
-  # stuck behind the one parked on the reviewer gate. Concurrency is evaluated
-  # BEFORE jobs, so they could not even reach their own guard to no-op — they just
-  # sat in the queue, and a genuinely new release would have sat behind them.
+  # every skipped promote spawns a ramp whose canary will decline to run.
+  # Concurrency is evaluated BEFORE jobs, so without a group of their own they
+  # cannot even reach their own guard: they just sit in the queue. Hence the
+  # per-run group, so they start, skip, and end. This condition must stay
+  # identical to the `canary` job's `if`; they are the same question asked in two
+  # places GitHub does not let you share.
   #
-  # A per-run group for those, so they start, skip, and end. This condition must
-  # stay identical to the `canary` job's `if`; they are the same question asked in
-  # two places GitHub does not let you share.
+  # `cancel-in-progress` WAS false, and it cost this repo every release between
+  # 2026-08-12 and 2026-08-14. The comment it carried said real ramps "share ONE
+  # group and queue". They do not queue. A concurrency group holds at most ONE
+  # pending run, and each new arrival CANCELS the previously pending one, which
+  # `cancel-in-progress: false` does nothing about because that flag governs
+  # IN-PROGRESS runs alone. So one ramp parked on the reviewer gate did not delay
+  # later releases, it deleted them one at a time, in silence, while production
+  # stayed on the stale 10/90 split that same parked run had left behind.
+  #
+  # Measured 2026-08-14. Run 31644451923 sat `waiting` on `production-full` for
+  # two days. Three real ramps died behind it, at 14:49:54, 14:52:55 and 15:11:16,
+  # each with ZERO jobs; the last was cancelled at 15:13:17, one second after the
+  # next entered the group. Nothing reported a failure, because a cancelled run
+  # that never started a job looks like housekeeping.
+  #
+  # TRUE is the safer setting, which is the opposite of how it reads. What it
+  # risks is a cancel landing inside a ramp step, leaving a split nobody chose;
+  # those steps are short and the state is both visible and undoable
+  # (`deploy:promote --status`, then `--rollback`). Measured on run 31813397643:
+  # 26s for the 10% move, 50s for 50->100. What FALSE risked is unbounded, ends in
+  # releases disappearing, and is what actually happened. "Newest promoted commit
+  # wins" is also the right precedence for a release pipeline: a ramp nobody
+  # approved before the next release landed is a ramp that should not finish.
+  #
+  # THE LOAD-BEARING QUESTION IS ANSWERED, and the answer is yes. This block
+  # shipped saying it was NOT measured whether cancel-in-progress reaches a run
+  # whose status is `waiting` on an environment gate rather than `in_progress`,
+  # and asked for the next release that landed while one was parked. That release
+  # was this file's own: run 31820445866 entered the group at 16:40:27 on
+  # 2026-08-14 and the parked run 31814961381, `waiting` since 15:32:04, was
+  # cancelled at 16:40:28. One second.
+  #
+  # So this setting is sufficient by itself and the fallback it named, moving
+  # `full` into its own workflow so the wait never holds the group, is not
+  # needed. Keep the fallback in mind rather than in the tree: it is the answer
+  # if GitHub ever narrows cancel-in-progress to `in_progress` alone.
   group: >-
     ${{
       (github.event_name == 'workflow_dispatch' ||
@@ -83,7 +115,7 @@ concurrency:
       && 'production-ramp'
       || format('production-ramp-noop-{0}', github.run_id)
     }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   canary:
@@ -181,6 +213,10 @@ jobs:
             echo ""
             echo "The ramp samples status codes. It cannot tell whether the page is RIGHT."
             echo "Read Workers Logs filtered to \`v=${TARGET:-}\` before approving the full ramp."
+            echo ""
+            echo "Leaving this parked does NOT hold a queue open. The next release cancels"
+            echo "this run and ramps its own version, so an unapproved canary expires"
+            echo "quietly rather than blocking what comes after it."
           } >> "$GITHUB_STEP_SUMMARY"
 
   full:

@@ -6,8 +6,8 @@
 import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { transform } from "esbuild";
 
+import { parseCss } from "./lib/css-parse.mjs";
 import { validateUnderstanding } from "../pipelines/content/page-contract.mjs";
 import { pageHtml as renderLwePage } from "../pipelines/lwe/generate.mjs";
 import { pageHtml as renderGaragePage, validateRegistry } from "../pipelines/garage/generate.mjs";
@@ -106,8 +106,10 @@ assert.match(garageHtml, /id="axp-desktop"/, "Garage scaffold omitted static des
 assert.match(garageHtml, /id="axp-taskbar"/, "Garage scaffold omitted static taskbar shell");
 const garageCss = garageHtml.match(/<style>([\s\S]*?)<\/style>/)?.[1];
 assert.ok(garageCss, "Garage scaffold omitted inline CSS");
-const cssResult = await transform(garageCss, { loader: "css", minify: false });
-assert.equal(cssResult.warnings.length, 0, "Garage scaffold CSS should parse without warnings");
+// Parsed by the SAME engine and the same tolerated-warning family the build
+// uses, so a scaffold cannot pass here and fail step 7b. This used to be
+// esbuild's CSS loader, which disagrees with Lightning in both directions.
+parseCss("garage scaffold inline <style>", garageCss);
 
 const invalidUnderstanding = JSON.parse(JSON.stringify(garageFixture.understanding));
 invalidUnderstanding.questions[0].options[1].ok = true;
