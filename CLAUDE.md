@@ -2636,6 +2636,24 @@ pnpm run deploy:direct
     So the check is reporting an outage in Copilot's model routing, and no change
     to your branch can turn it green.
 
+    **The log NAMES the model, which is the sharpest form of this fingerprint
+    and was missing from every entry above.** Read on #368 (2026-08-14), one
+    line before the error:
+
+    ```
+    Creating copilot-sdk session with model: claude-opus-4.6 and clientName: github/code-scanning
+    ```
+
+    That narrows the outage from "Copilot's model routing" to one model on one
+    client, which is worth knowing for two reasons. It says the refusal is a
+    routing or entitlement gap for a specific model rather than the review agent
+    being broken, so the fix is upstream configuration and not a Copilot release.
+    And the line is emitted whether or not the request then fails, so it is the
+    thing to read on the day this goes green: it tells you WHICH model GitHub
+    moved to, which is the only evidence that the outage ended rather than
+    paused. Grep for it alongside `CAPIError`, since a run that prints the
+    session line and no error is the recovery signal.
+
     **It is not a flake: the same error landed on three commits across two PRs
     in twenty-one minutes.** #319 twice (its feature head, then a merge commit
     that only pulled `main` in), and then THIS PR, whose entire diff is the
@@ -2648,9 +2666,17 @@ pnpm run deploy:direct
     That gives a test which does not depend on recognising a signature:
 
     ```bash
-    gh api repos/oddharsh/site/check-runs/<check-run-id> --jq .details_url
-    gh run view <run-id> --log-failed | grep -i "CAPIError\|Copilot Error"
+    URL=$(gh api repos/oddharsh/site/check-runs/<check-run-id> --jq .details_url)
+    RUN=$(echo "$URL" | sed -E 's#.*/actions/runs/([0-9]+)/.*#\1#')
+    gh run view $RUN --log-failed | grep -i "CAPIError\|Copilot Error\|session with model"
     ```
+
+    **Pull the run id with that sed rather than off the end of the URL.**
+    `details_url` ends `/actions/runs/<run-id>/job/<job-id>`, so the trailing
+    number is the JOB, and `gh run view <job-id>` exits 0 and prints NOTHING.
+    An empty grep is supposed to mean "a real finding, no crash", so handing it
+    the wrong id inverts the verdict without erroring. Cost one step on #370,
+    which is the PR that added this line.
 
     A crashed agent prints the error. A real finding prints an inline review
     comment on a source line and leaves this grep empty. Prefer it to the
@@ -2680,6 +2706,12 @@ pnpm run deploy:direct
     So the loop to run is short. Confirm the run id is new (a repeat alert looks
     identical), grep the log for `CAPIError`, and stop. Do NOT re-read the diff
     looking for what upset it, and do not push anything to appease it.
+
+    **Ten recorded, and the outage is three days old as of 2026-08-14** (#368,
+    check-run `94825132999`, annotation at `.github:214`, `claude-opus-4.6`).
+    The `.github:<line>` number has now been 211, 213 and 214 across four
+    unrelated diffs, which settles that it tracks the harness rather than
+    anything in the repository.
 
     **Turning off Copilot Autofix does NOT stop it, measured 2026-08-12.** This
     paragraph said the fix was in GitHub's settings and named autofix; the owner
