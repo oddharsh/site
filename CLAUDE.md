@@ -334,8 +334,13 @@ worktrees may edit freely, but a worktree is not a release surface.
   died behind it, each with ZERO jobs, the last cancelled one second after the
   next entered the group. `cancel-in-progress: true` since 2026-08-14, so the
   newest promoted commit wins and an unapproved canary expires instead of blocking
-  what follows. The long argument, including the one thing still unmeasured, is at
-  the concurrency block in `ramp.yml`.
+  what follows. The long argument is at the concurrency block in `ramp.yml`.
+
+  That block shipped with one thing unmeasured, whether `cancel-in-progress`
+  reaches a run merely `waiting` on an environment gate, and **the very next
+  release answered it: yes.** Run 31820445866 entered the group at 16:40:27 on
+  2026-08-14 and the run parked since 15:32:04 was cancelled at 16:40:28. The
+  named fallback, moving `full` into its own workflow, is therefore not needed.
 
   **`ci.yml` carries a TRIPWIRE for a parked ramp, and it lives there rather than
   in `ramp.yml` on purpose.** A jam inside a concurrency group cannot be reported
@@ -414,10 +419,35 @@ worktrees may edit freely, but a worktree is not a release surface.
 
   The fix is one Transform Rule deriving `Cloudflare-Workers-Version-Key` from
   `ip.src`. It is DECLARED in [`infra.json`](config/infra.json) under
-  `zone.version_affinity` and NOT YET CREATED, because it needs a zone write and
-  the only write token here is DNS-scoped and workstation-only. The recipe is in
+  `zone.version_affinity`, the recipe is in
   [MAINTENANCE.md](docs/MAINTENANCE.md), and `infra:check` fails on the missing
-  rule until somebody creates it. Two things about it are load-bearing.
+  rule until somebody creates it.
+
+  **It is LIVE, measured behaviourally on 2026-08-14 during the ramp of
+  `f5e56ab6`.** This paragraph said NOT YET CREATED. Plain requests to
+  `/whoareyou.json` came back on ONE version 45 times, then 30 times, across a
+  known 90/10 split; the same requests carrying a per-request
+  `Cloudflare-Workers-Version-Key` came back 19/5. Random per-request routing
+  cannot produce the first result, so something is supplying a stable key per
+  client, which is what this rule does and nothing else here would. Confirm the
+  RULE itself with `pnpm run infra:check` on a workstation, since that tier is
+  zone-scoped and unreachable from CI.
+
+  **The consequence is a trap, and it cost two wrong readings before the header
+  explained it: YOU CANNOT SEE A TRAFFIC SPLIT FROM ONE CLIENT.** Affinity pins
+  you, by design, so a canary that is working perfectly reads as a canary that
+  moved no traffic, and the more samples you take the more confident the wrong
+  answer looks. 45 identical answers against a real 10% minority is a 0.9%
+  outcome, which is the shape of a broken instrument rather than a rare event
+  (gotcha 15 is the same lesson from Early Hints). To watch a split, vary
+  `Cloudflare-Workers-Version-Key` per request, which is exactly why the rule
+  exempts requests already carrying it:
+
+  ```bash
+  curl -s -H "Cloudflare-Workers-Version-Key: probe-$RANDOM" https://aadhar.sh/whoareyou.json
+  ```
+
+  Two things about it are load-bearing.
   Its expression must EXEMPT a request that already carries that header, because
   `deploy-promote.mjs` sends one key per request so it can still watch a split take
   from a single IP; clobber those and every intermediate step reads as a dead ramp,
