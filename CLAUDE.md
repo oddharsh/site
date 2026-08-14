@@ -2716,14 +2716,32 @@ pnpm run deploy:direct
     The general rule the sweep needed: grep for `"npx"` as a quoted token, not for
     `npx <binary>` as a phrase.
 
-    **THREE `npx` strings deliberately survive, and editing them breaks a check.**
-    Both Workers Builds commands in `infra.json`, plus the mirrored copies in
-    `wrangler.jsonc` and `check-infra.mjs`, RECORD what is typed into the
-    Cloudflare dashboard rather than commands this repo runs. `infra:check`
-    compares them against the live values, so changing them here alone fails on
-    drift it invented itself. Changing them for real means the dashboard FIRST
-    and the strings second. `pnpm exec wrangler` was verified to resolve pnpm's
-    `node_modules/.bin` and dry-run clean, so there is no pressure to.
+    **The sweep finished on 2026-08-14, and the last holdouts were the two
+    Workers Builds dashboard commands.** This paragraph used to say all three
+    `npx` strings would deliberately survive, on the reasoning that `npx
+    wrangler` was measured resolving pnpm's `node_modules/.bin` so the swap
+    bought nothing. That reasoning was incomplete: npx FETCHES what it cannot
+    resolve locally, so a build image whose install left no linked wrangler
+    would publish production with a registry download and say nothing, which is
+    precisely what this gotcha's own sweep measured in `deploy-promote.mjs`
+    (4.105.0 against a pinned 4.120.0). `pnpm exec` turns that silent
+    wrong-version publish into a loud failure. Both commands are `pnpm exec
+    wrangler versions upload` now.
+
+    **The ORDER survives the migration and is the part to keep.** Those two
+    strings in `infra.json`, plus the mirrored copies in `wrangler.jsonc` and
+    `check-infra.mjs`, RECORD what is typed into the Cloudflare dashboard rather
+    than commands this repo runs. `check-infra.mjs` compares them against the
+    live values with an exact string match, and `validate` is a required check,
+    so editing this file first fails on drift it invented itself and blocks its
+    own merge. **Dashboard FIRST, strings second, every time.**
+
+    **What a workstation cannot check here is whether the Workers Builds deploy
+    shell can run the command at all**, since `pnpm exec` dry-running clean
+    locally says nothing about that image. A branch build is the proof, which is
+    why the Non-production branch deploy command is the right place to stage any
+    future change to these two: it is the only trigger whose failure costs no
+    release.
 
     **`lens-reader` needs `pnpm install --ignore-workspace`.** It deliberately
     stays out of the workspace (defuddle + linkedom are ~22 MB that only that
