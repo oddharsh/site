@@ -310,9 +310,30 @@ worktrees may edit freely, but a worktree is not a release surface.
   skipped promote completes, so every skipped promote spawns a ramp whose `canary`
   declines to run. On the first real release there were three. They are no-ops, and
   since 2026-08-12 they take a per-run concurrency group so they start, skip and
-  end rather than queueing behind a ramp parked on the reviewer gate — concurrency
-  is evaluated BEFORE jobs, so previously they could not even reach their own guard
-  and just sat in line. Real ramps still share one group and serialize.
+  end rather than queueing behind a ramp parked on the reviewer gate, because
+  concurrency is evaluated BEFORE jobs and previously they could not even reach
+  their own guard.
+
+  **Real ramps do NOT queue, and believing they did cost every release between
+  2026-08-12 and 2026-08-14.** This note used to end "real ramps still share one
+  group and serialize." A concurrency group holds at most ONE pending run, and
+  each new arrival CANCELS the previously pending one. `cancel-in-progress`
+  governs IN-PROGRESS runs alone and does nothing about that, so a ramp parked on
+  the reviewer gate deleted its successors one at a time rather than delaying
+  them, silently, while production stayed on the stale 10/90 split that same
+  parked run had left. Run 31644451923 sat `waiting` two days and three real ramps
+  died behind it, each with ZERO jobs, the last cancelled one second after the
+  next entered the group. `cancel-in-progress: true` since 2026-08-14, so the
+  newest promoted commit wins and an unapproved canary expires instead of blocking
+  what follows. The long argument, including the one thing still unmeasured, is at
+  the concurrency block in `ramp.yml`.
+
+  **The newest `Ramp production` run is usually the no-op rather than the
+  release.** A no-op finishes in seconds while a real ramp waits on Workers
+  Builds, so sorting by recency hands you the wrong run: on 2026-08-14 the two
+  fired six seconds apart and the no-op completed first, which reads as a release
+  that did nothing. Select by `headSha` matching the promoted commit, never by
+  `--limit 1`.
 
   **A ramp waiting on approval is not stuck.** `waiting` is the environment gate
   doing its job, and the way to tell it apart from a jam is to ask what it is
