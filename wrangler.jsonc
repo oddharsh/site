@@ -192,16 +192,29 @@
   // edge entries atomically instead of waiting out their TTL. Not populated in
   // local dev (the key falls back to "dev" there).
   "version_metadata": { "binding": "CF_VERSION_METADATA" },
-  // */30 — the /around neighborhood crawl (per-generation, never per-visitor;
-  // the request path only reads the KV snapshot this cron writes, around.js).
   // 17 8 * * 1 — the weekly /lens/census sweep into D1 (index.js switches on
   // event.cron). Odd minute so it doesn't collide with the :00/:30 crawl tick.
   // (The old 0 4 * * 7 coffee-booking sweep is retired: each pending booking now
   // carries its own BookingWorkflow expiry timer — see the workflows binding.)
-  // 41 5 * * * — the daily outbound webmention pass: read this site's own
-  // mention-enabled pages, find the sources they cite, and tell those sources
-  // they were cited (webmention-send.js). Daily and off-peak because it probes
-  // third-party hosts, and a citation graph does not change by the half hour.
+  // 41 5 * * * — the DAILY OUTBOUND tick, and the only one that touches somebody
+  // else's server. Two jobs, run sequentially so they do not double the burst
+  // this site presents at one instant:
+  //   - webmention-send.js: read this site's own mention-enabled pages, find the
+  //     sources they cite, and tell those sources they were cited.
+  //   - around.js cronAround: crawl the twenty-origin neighborhood and write the
+  //     KV snapshot /around reads. This had its own "*/30 * * * *" trigger until
+  //     2026-08-14. Twenty VC homepages do not change every half hour, and that
+  //     cadence spent 960 signed third-party fetches, 960 D1 row-writes and 48 KV
+  //     snapshot writes a day to find that out. Merging cut all three by 48x and
+  //     freed a trigger slot, which matters because Workers Free caps an account
+  //     at five.
+  // The crawl stays on a CRON rather than moving to the request path, and that is
+  // load-bearing rather than incidental: dbbd44f moved it here so that no visitor,
+  // crawler or speculative prerender can make this site fetch twenty third-party
+  // homepages. /around carries no speculation exclusion precisely BECAUSE its GET
+  // is pure, so putting the crawl back on a read would make a taskbar hover fire
+  // a real crawl. Daily and off-peak because it probes third-party hosts, and
+  // neither a citation graph nor a fund's homepage changes by the half hour.
   // 7,37 * * * * — the homepage perf probe (perf-probe.js): render `/` in-process,
   // parse its own Server-Timing, write the spans to Analytics Engine. Offset
   // from the */30 around-crawl so the two never share a tick. 48 samples/day.
@@ -211,7 +224,7 @@
   // stored Luma session warm (Luma sessions idle-expire in weeks, and before
   // this tick nothing exercised the stored cookie between pastes); rotations
   // Luma issues mid-run are persisted back to D1 by the cookie jar.
-  "triggers": { "crons": ["*/30 * * * *", "17 8 * * 1", "41 5 * * *", "7,37 * * * *", "23 */6 * * *"] },
+  "triggers": { "crons": ["17 8 * * 1", "41 5 * * *", "7,37 * * * *", "23 */6 * * *"] },
   "kv_namespaces": [
     { "binding": "RN_KV", "id": "3cb8a107c58e47dc9244e75b33401f36" },
     { "binding": "BOOKINGS", "id": "37acb65118fe485583a90a94cb89365e" }

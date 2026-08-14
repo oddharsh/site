@@ -103,6 +103,15 @@ export function renderPhotoSlots(pick, altMap = {}, { deferred = true } = {}) {
     // they are the entire grid, which is why the baked set has to be real
     // photos rather than empty frames. The fragment needs no twin — reaching it
     // at all required fetch().
+    //
+    // ONE url here too. A <picture> was tried on 2026-08-12 and reverted the
+    // same day: it is SAFE in inert markup (nothing can instantiate a fallback,
+    // and a no-JS AVIF browser would still pick the AVIF source), but it costs
+    // 195 bytes a tile against 130 to serve a client that has to be no-JS AND
+    // no-AVIF at once. Kitesurf runs JavaScript, so the engine this whole repair
+    // exists for takes the onerror path in index.html and never reads this
+    // block. Paying every visitor for a hypothetical one is the trade this file
+    // already refuses everywhere else.
     const noScript = deferred
       ? `<noscript><img alt="${alt}" width="600" height="600" src="${escAttr(thumb)}" loading="lazy"${pri} decoding="async"></noscript>`
       : "";
