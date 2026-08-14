@@ -207,13 +207,29 @@ jobs:
       # ecosystem databases, so it sees more than the GitHub advisories
       # dependabot alone works from.
       #
-      # WHAT IT ACTUALLY BUYS, and it is not the wider database: `lens-reader`
-      # is invisible to dependabot. That project deliberately stays out of the
-      # workspace (gotcha 29), so its lockfile sits under none of the four
-      # directories `.github/dependabot.yml` watches, and its three dependencies
-      # have had NO vulnerability coverage at all. The other three lockfiles here
-      # are already watched and are scanned anyway, because listing them costs a
-      # line and omitting one is how a gap starts.
+      # WHAT IT ACTUALLY BUYS IS TIMING, and this block said something else
+      # until 2026-08-14. It claimed `lens-reader` was invisible to dependabot
+      # and that its three dependencies had NO vulnerability coverage at all.
+      # That is false, and the correction is worth keeping because it turns on a
+      # distinction between two dependabot features that read as one:
+      #
+      #   security ALERTS   come from GitHub's DEPENDENCY GRAPH, which indexes
+      #                     every manifest in the repository and does not read
+      #                     dependabot.yml at all. Measured: defuddle, linkedom,
+      #                     turndown and @mixmark-io/domino are all in this
+      #                     repo's SBOM, and alert #13 (extract-zip) is the same
+      #                     finding this step reports, so the marginal FINDING
+      #                     count here is zero.
+      #
+      #   version UPDATES   are scoped strictly to the directories dependabot.yml
+      #                     lists. lens-reader really was missing there, and the
+      #                     fix was five lines in that file rather than this step.
+      #
+      # What survives is the half that has nothing to do with coverage: a
+      # dependabot alert arrives AFTER a merge, and this runs at PR time. That is
+      # the whole justification now, and it is enough on its own. The other three
+      # lockfiles are scanned anyway, because listing them costs a line and
+      # omitting one is how a gap starts.
       #
       # NOT the google/osv-scanner-action: it defaults to `upload-sarif: true`
       # and therefore wants `security-events: write`, which this workflow's
