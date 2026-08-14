@@ -48,7 +48,6 @@
   "devDependencies": {
     "@cloudflare/workers-types": "5.20260811.1",
     "@minify-html/node": "0.18.1",
-    "esbuild": "0.28.2",
     "lightningcss": "1.33.0",
     "oxc-minify": "0.144.0",
     "oxlint": "1.78.0",

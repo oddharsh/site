@@ -4548,6 +4548,37 @@ test("neither MCP server keeps a private copy of the protocol constants", async 
   }
 });
 
+test("both CSS checks go through the one parser, and it still tolerates the right family", async () => {
+  // build.mjs decides what reaches a visitor; check-page-contracts.mjs is a
+  // pre-build gate on the same stylesheets. They ran DIFFERENT engines until
+  // 2026-08-14 (Lightning CSS and esbuild), which disagree in both directions, so
+  // a scaffold could pass the gate and fail the build. One parser, one family.
+  for (const file of ["scripts/build.mjs", "scripts/check-page-contracts.mjs"]) {
+    const src = readFileSync(file, "utf8");
+    assert.ok(/from "\.\/lib\/css-parse\.mjs"/.test(src), `${file} must import the shared CSS parser`);
+    assert.ok(!/from "esbuild"/.test(src), `${file} must not reach for a second CSS engine`);
+    assert.ok(!/UNKNOWN_SELECTOR\s*=/.test(src), `${file} re-declares the tolerated warning family instead of importing it`);
+  }
+
+  const { parseCss, UNKNOWN_SELECTOR } = await import("../scripts/lib/css-parse.mjs");
+
+  // The family is tolerated AND preserved verbatim, which is the whole bargain.
+  const carousel = "ul::scroll-marker-group{display:flex}li::scroll-marker{content:\"\"}";
+  const out = parseCss("probe", carousel, { minify: true });
+  assert.match(out, /::scroll-marker-group/, "the tolerated selector must survive");
+  assert.match(out, /::scroll-marker/, "the tolerated selector must survive");
+
+  // A warning OUTSIDE the family is still fatal, so tolerance stays narrow.
+  assert.throws(() => parseCss("probe", "@nonsense (x) { .a { color: red } }"),
+    /emitted warnings/, "an unknown at-rule must not be swept in with the carousel family");
+
+  // And structurally broken CSS still fails rather than being recovered silently.
+  assert.throws(() => parseCss("probe", ".a{color:red}}"), /.*/, "broken CSS must throw");
+
+  assert.ok(UNKNOWN_SELECTOR.test("'::scroll-marker' is not recognized as a valid pseudo-element"),
+    "the family regex must still match the message Lightning actually emits");
+});
+
 // ── /terminal — the terminal programs ─────────────────────────────────────────
 // The renderer is pure and the apps are readers, so these run with stub assets
 // and no network. What they pin is the handful of properties a frame stops
