@@ -1356,31 +1356,58 @@ generic hex back.
 
 The seventh machine tab on `/lens` ("Reader's guess") runs a THIRD-PARTY reader-mode
 extractor over the same URL and reports what it threw away. Engine is
-[Defuddle](https://github.com/kepano/defuddle) (MIT, kepano; the one behind Obsidian
-Web Clipper), pinned at `0.19.2`.
+[Readability](https://github.com/mozilla/readability) (Apache-2.0, Mozilla; the one
+behind Firefox Reader View), pinned at `0.6.0`. It was Defuddle 0.19.2 until
+2026-08-14; the swap and its measurements are below.
 
 **The gap is the artifact, not the extraction.** Anyone who wants to read a page can
 open it. What no other surface here shows is that an extractor is GUESSING which part
 of a document is the article, and how badly that goes on a page that is not one.
-Measured 2026-08-09: stripe.com loses 55% of its words and its hero headline;
-Wikipedia loses 22%, which is an extractor doing its job; `/garage/horizon` loses 2%
-but hands over **13 of 25 control labels** as prose, because Defuddle keeps `<button>`
+Measured 2026-08-14 on the live Worker: stripe.com loses 64% of its words and its hero
+headline; Wikipedia loses 5%, which is an extractor doing its job; `/garage/horizon`
+loses 2% and hands over **3 of 26 control labels** as prose. That last number is the
+same failure `scripts/lib/html-to-md.mjs` rule 2 exists to refuse, which is why the
+twins still use the hand-rolled converter.
+
+**THE EXTRACTOR WAS SWAPPED FOR THAT NUMBER, and the decision came out of running both
+against one corpus rather than reading either one's docs.** Defuddle keeps `<button>`
 text on purpose (`dist/markdown.js`, `addRule('button', replacement: content =>
-content)`). That last number is the same failure `scripts/lib/html-to-md.mjs` rule 2
-exists to refuse, which is why the twins still use the hand-rolled converter — the
-sweep behind that decision is in the PR.
+content)`), which cost 14 of 26 labels on horizon where Readability costs 3. The other
+half of the case is size: Readability bundles to **11.4 KB gzip against Defuddle's
+90.0**, taking the whole Worker from 237.68 to 153.17 KB.
+
+Two things keep this honest. Readability is **not uniformly better** — on stripe.com it
+leaks 5 control labels where Defuddle leaked 2, so the `controls` readout stays on the
+payload rather than being retired as solved. And the swap does NOT weaken the lens's
+premise, because the premise is what a real third-party extractor discards and
+Readability is the more widely deployed of the two.
+
+**What running both revealed is worth more than the swap, and is the open follow-up.**
+Over five pages, agreement tracks how much the page is actually an article: on a clean
+blog post the two produce **0 unique passages on either side** out of 6,866; on
+Wikipedia they share 89% of vocabulary but only 57% of 5-gram passages, because
+Readability keeps the infobox and Defuddle flattens citation markers into the prose 66
+times (`"issues. 17 All other"` against `"issues. [ 5 ] All other"`, and they disagree
+on the number); on the NYT homepage they share **9%**, with Defuddle taking the
+top-stories nav for the article and Readability keeping 69 words. So a single
+extractor's delta says "stripe.com lost 55%", which reads as extraction failure, while
+two extractors disagreeing on 66% of passages says there was no article to find. The
+harness is in the PR. Publishing that disagreement needs a second engine in the bundle,
+which is why it did not ship with the swap.
 
 So the payload never claims to be what the machine got. It names the extractor and
 version, reports `source` / `kept` / `dropped`, and both word counts come from ONE
 function on ONE fetch, because comparing against a number `lens.js` computed would be
 comparing two definitions of "word" and calling the difference an extraction loss.
 
-**It is a separate Worker for two independent reasons, either sufficient alone.**
-Defuddle needs a DOM `Document` and Workers have HTMLRewriter, so supplying one costs
-linkedom: ~190 KB gzip across the three deps against a site bundle already over its
-204.24 KiB budget. And `run_worker_first` caps at 100 rules with this repo at exactly
-100 (gotcha 26), so a `/lens/read` path on the site Worker would refuse to boot, while
-a zone route needs no entry at all. Same shape as `cf-garage` owning `/garage/cf/*`.
+**It is a separate Worker, and only ONE of the two original reasons still holds.**
+Readability needs a DOM `Document` and Workers have HTMLRewriter, so supplying one
+costs linkedom, which is **94.6 KB gzip on its own** against a site bundle already over
+its 204.24 KiB budget. Note what that means after the swap: linkedom is now 8x the
+extractor it exists to serve, and 62% of the Worker's dependency weight is scaffolding.
+The second reason this section used to give, `run_worker_first`'s 100-rule cap, EXPIRED
+when the eight exact `/lens` rows were folded to `/lens` + `/lens/*` and the config
+dropped to 94. Do not cite it again. Same shape as `cf-garage` owning `/garage/cf/*`.
 
 What it DOES share with the site tree is exactly one thing: the SSRF guard.
 `validateLensTarget` moved from `lens.js` into `lib/crawl.js`, beside the
@@ -1406,7 +1433,7 @@ itself is decoration" lesson as gotcha 24.
 
 **The root suite may not import ANYTHING from `lens-reader/src/`, and this is gotcha 16
 wearing different clothes.** `contract-tests.mjs` runs under plain node with the ROOT
-workspace's dependencies; `reader.js` imports defuddle, linkedom and turndown, which
+workspace's dependencies; `reader.js` imports readability, linkedom and turndown, which
 live only in that sub-project. Importing it fails with `ERR_MODULE_NOT_FOUND` in CI
 while passing on any workstation that has run `pnpm install` in `lens-reader/` — which
 is exactly how it was caught, on PR #299's first run, after a local suite that had been
@@ -2861,7 +2888,7 @@ pnpm run deploy:direct
     release.
 
     **`lens-reader` needs `pnpm install --ignore-workspace`.** It deliberately
-    stays out of the workspace (defuddle + linkedom are ~22 MB that only that
+    stays out of the workspace (readability + linkedom are megabytes that only that
     Worker bundles), and under pnpm a bare `pnpm install` inside it walks UP to
     the root `pnpm-workspace.yaml`, installs the five workspace projects, and
     never creates `lens-reader/node_modules` at all. Its tests then die on

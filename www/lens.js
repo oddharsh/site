@@ -209,7 +209,7 @@
       : "";
     if (!c || !c.tiers || c.tiers.length < 2) {
       return score
-        ? '<div class="lx-verdict">' + score + "Lens observed <b>" + esc(field.overall) + "/100</b> field access. The independent Cloudflare and Defuddle inputs sit under <b>Agent-ready?</b>.</div>"
+        ? '<div class="lx-verdict">' + score + "Lens observed <b>" + esc(field.overall) + "/100</b> field access. The independent Cloudflare and Readability inputs sit under <b>Agent-ready?</b>.</div>"
         : "";
     }
     var rate = (c.rates && c.rates[0]) || { usdPerMtok: 3 };
@@ -803,7 +803,7 @@
       var firstFix = rr.nextActions && rr.nextActions[0];
       title = "Field evidence focus";
       badgeData = { text: (rf.overall == null ? "unknown" : rf.overall + "/100"), kind: rf.overall >= 75 ? "ok" : "warn" };
-      caption = "This is what Lens observed itself; external standards and Defuddle recovery join it only in Agent-ready?.";
+      caption = "This is what Lens observed itself; external standards and Readability recovery join it only in Agent-ready?.";
       rows = { "identified fetch": data.status == null ? "unknown" : data.status, "bot samples": rr.botViews ? rr.botViews.length : 0, "machine door": data.agent && data.agent.strategy ? data.agent.strategy.verdict : "unknown", "next standards gap": firstFix ? readinessCopy(firstFix).label : "none observed" };
     } else if (lens === "anatomy") {
       var alt = a.imgTotal ? ((a.imgTotal - a.imgNoAlt) + " / " + a.imgTotal + " images have alt") : "no images found";
@@ -824,11 +824,11 @@
         "as served": (rd.source ? rd.source.words : "?") + " words",
         "extractor kept": (rd.kept ? rd.kept.words : "?") + " words",
         "control labels kept": rd.controls ? rd.controls.kept + " of " + rd.controls.total : "not counted",
-        "extractor": rd.extractor ? rd.extractor.name + " " + rd.extractor.version : "defuddle",
+        "extractor": rd.extractor ? rd.extractor.name + " " + rd.extractor.version : "readability",
       } : {
         "status": rd == null ? "not run — this lens costs a second fetch" : "extraction failed",
         "what it is": "a third-party extractor's opinion, not the served bytes",
-        "engine": "defuddle (MIT), in its own Worker",
+        "engine": "readability (Apache-2.0), in its own Worker",
       };
     } else if (lens === "wire") {
       // Same reason the reader branch exists: without it `wire` falls off the end
@@ -1233,7 +1233,7 @@
     var sources = '<div class="lx-composite-sources">' +
       readinessSource(1, "Cloudflare standards", cloudflareValue, cloudflareCaption, [], cloudflareBusy ? "is-waiting" : cfScore == null ? "is-missing" : "is-ready") +
       readinessSource(2, "Lens field evidence", fieldScore == null ? "—" : esc(fieldScore) + '<span>/100</span>', "Observed here: an identified fetch, six named bot samples, a usable body, and a machine door.", fieldDetails, fieldScore == null ? "is-missing" : "is-ready") +
-      readinessSource(3, "Defuddle content recovery", readerBusy ? "extracting…" : recoveryScore == null ? "—" : esc(recoveryScore) + '<span>/100</span>', readerBusy ? "Defuddle is re-reading the page in the separate Reader Worker." : recoveryScore == null ? esc((readerData && readerData.error) || "The extraction result is unavailable.") : 'Lens’s transparent checks over <a href="https://github.com/kepano/defuddle" rel="noopener">Defuddle</a> output; Defuddle does not publish this score.', recoveryDetails, readerBusy ? "is-waiting" : recoveryScore == null ? "is-missing" : "is-ready") +
+      readinessSource(3, "Readability content recovery", readerBusy ? "extracting…" : recoveryScore == null ? "—" : esc(recoveryScore) + '<span>/100</span>', readerBusy ? "Readability is re-reading the page in the separate Reader Worker." : recoveryScore == null ? esc((readerData && readerData.error) || "The extraction result is unavailable.") : 'Lens’s transparent checks over <a href="https://github.com/mozilla/readability" rel="noopener">Readability</a> output; Readability does not publish this score.', recoveryDetails, readerBusy ? "is-waiting" : recoveryScore == null ? "is-missing" : "is-ready") +
       '</div>';
     var formula = '<div class="lx-composite-formula"><b>' +
       (cfScore == null ? "?" : esc(cfScore)) + '</b> + <b>' + (fieldScore == null ? "?" : esc(fieldScore)) + '</b> + <b>' + (recoveryScore == null ? "?" : esc(recoveryScore)) +
@@ -1359,14 +1359,14 @@
   // result loads lazily, exactly like lens-browser.js.
   //
   // It remains opt-in on its own tab. Agent-ready? also asks for it automatically,
-  // because Defuddle's independent extraction is one named third of that score.
+  // because Readability's independent extraction is one named third of that score.
   function lensReader() {
     if (window.LensReader) return window.LensReader.mount(readerData, readerBusy, data);
     // Pre-module fallback. It has to be self-contained: the module may never
     // arrive (offline, blocked), and a bare empty pane would read as a bug.
     return section("Reader's guess", { text: "not run" },
       "A third-party extractor's opinion of this page, from its own Worker.",
-      '<div class="lx-reader-intro">Defuddle (MIT, kepano/defuddle) guesses which part of the document is the article and throws the rest away. ' +
+      '<div class="lx-reader-intro">Readability (Apache-2.0, mozilla/readability) guesses which part of the document is the article and throws the rest away. ' +
       'The Raw response tab is what the server actually sent. The interesting number is the gap.' +
       '<button class="lx-browser-run" type="button" id="lx-reader-run">Run the extractor</button></div>');
   }
@@ -1886,7 +1886,7 @@
       readiness: {
         title: "Readiness",
         note: "Three opinions, kept separate until the arithmetic: standards, observed access, and recovered content.",
-        rows: ["Cloudflare's independent Agent Readiness level", "Lens field evidence from an identified fetch and six named bot samples", "Lens's transparent content-recovery checks over Defuddle output"]
+        rows: ["Cloudflare's independent Agent Readiness level", "Lens field evidence from an identified fetch and six named bot samples", "Lens's transparent content-recovery checks over Readability output"]
       },
       anatomy: {
         title: "Anatomy",
@@ -1896,7 +1896,7 @@
       reader: {
         title: "Reader's guess",
         note: "What a reader-mode extractor thinks this page is, and how much of it that costs.",
-        rows: ["Defuddle's extraction, from its own Worker", "the gap: words as served against words kept", "control labels that survived, which read as prose to an agent"]
+        rows: ["Readability's extraction, from its own Worker", "the gap: words as served against words kept", "control labels that survived, which read as prose to an agent"]
       },
       wire: {
         title: "What it costs",

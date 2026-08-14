@@ -186,7 +186,7 @@ export const LENS_GLOSSARY = {
   // ── how the page is actually read ───────────────────────────────────────
   "reader-mode": {
     label: "reader mode",
-    alt: ["Defuddle", "extractor"],
+    alt: ["Readability", "extractor"],
     plain: "Software that guesses which part of a page is the article and throws away everything else.",
     more: "It does well on a news story and badly on anything that is not one, which is what makes the gap worth measuring.",
   },
@@ -836,7 +836,7 @@ export function renderLensShell(initial, state, inputValue, compare) {
         ? "Delta toggles hypothetical infrastructure. Predict, flip, check."
         : "Compare puts Human, HTTP Machine, and Browser Run side by side. Predict the machine pane; the miss is the lesson.";
   const initialScript = initial ? '<script type="application/json" id="lx-initial-data">' + lensScriptJson(initial) + "</script>" : "";
-  const lensDescription = "Paste any URL and compare the human page with observed bot access, Cloudflare's standards level, Defuddle content recovery, raw HTML, structured data, machine terms, and agent doors.";
+  const lensDescription = "Paste any URL and compare the human page with observed bot access, Cloudflare's standards level, Readability content recovery, raw HTML, structured data, machine terms, and agent doors.";
   return lunaPage({
     title: "The Other Web · aadhar.sh",
     path: "The Other Web",
