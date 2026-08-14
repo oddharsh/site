@@ -20,6 +20,7 @@
     "photos": "bash www/scripts/add-photos.sh",
     "photos:check": "node www/scripts/check-photo-pipeline.mjs",
     "captions": "python3 www/scripts/gen-alt-text.py",
+  "photos:env": "uv venv www/scripts/.venv --python 3.12 --allow-existing && uv pip install --python www/scripts/.venv/bin/python -r www/scripts/requirements.txt",
     "perf-budget": "node scripts/perf-budget.mjs",
     "perf:snapshot": "node scripts/perf-snapshot.mjs",
     "check-wrangler": "node scripts/check-wrangler.mjs",

@@ -50,3 +50,9 @@ www/ad/
 
 # wrangler check startup writes this next to the config
 worker-startup.cpuprofile
+
+# The Python environment for gen-pixel-peeper.py, built by `pnpm run photos:env`.
+# uv writes a `*` .gitignore inside the venv so it self-ignores, but that only
+# holds while uv is the tool that made it; a hand-rolled `python -m venv` would
+# not. Stated explicitly so the directory stays untracked either way.
+www/scripts/.venv/

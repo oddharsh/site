@@ -48,7 +48,21 @@ packages:
 # adding a dependency that needs its build script.
 allowBuilds:
   esbuild: true
-  sharp: set this to true or false
+  # sharp reaches this tree ONLY through miniflare, which uses it to emulate the
+  # Images binding both wrangler configs declare, so it is a real local-dev
+  # dependency rather than dead weight. It sat here as pnpm's literal `set this
+  # to true or false` placeholder, which is the string pnpm writes when it finds
+  # an unapproved build and nobody answers. That stopped being cosmetic on
+  # 2026-08-14: a `--frozen-lockfile` install now fails with
+  # ERR_PNPM_IGNORED_BUILDS naming sharp, so the unanswered prompt breaks the
+  # install it was recording.
+  #
+  # Approved for the same measured reason as its two neighbours, and the
+  # measurement was repeated rather than assumed: with the build script blocked,
+  # `require("sharp")` still loads and reports 0.35.2, because the platform
+  # binary arrives through @img/sharp-<platform> as an optionalDependency and the
+  # postinstall is only a probe over it.
+  sharp: true
   workerd: true
 
 # A package published in the last 24 hours is REFUSED, which is the window a

@@ -133,8 +133,10 @@ pnpm run dcz:check
 # regenerate JUST the EXIF metadata (after photos are already uploaded)
 ./www/scripts/extract-photo-metadata.sh "/Users/aadharsh/Downloads/to post (from ssd)"
 
-# install the histogram decoder dependency
-python3 -m pip install -r www/scripts/requirements.txt
+# build the Python environment for gen-pixel-peeper.py (uv, into www/scripts/.venv).
+# NOT needed for the photo pipeline: the histogram bake moved into `zenc histogram`
+# on 2026-08-14. Homebrew's python3 is PEP 668, so a plain pip install fails.
+pnpm run photos:env
 
 # build the JPEG thumbnail encoder (zenc = zenjpeg hybrid+scan). the pipeline
 # scripts auto-build it on first run; this is the explicit form.
@@ -145,8 +147,8 @@ cargo build --release --manifest-path www/scripts/zenc/Cargo.toml
 # photo-index.json + hashes.json, so a deploy replaces the pool atomically
 # and there are no manifest:* keys. Tracks remain KV (two-key SWR):
 NS="3cb8a107c58e47dc9244e75b33401f36"
-wrangler kv key delete --namespace-id="$NS" "tracks:4IRq9W1N2tOWHhH0O3vXiF" --remote
-wrangler kv key delete --namespace-id="$NS" "tracks:4IRq9W1N2tOWHhH0O3vXiF:fresh" --remote
+pnpm exec wrangler kv key delete --namespace-id="$NS" "tracks:4IRq9W1N2tOWHhH0O3vXiF" --remote
+pnpm exec wrangler kv key delete --namespace-id="$NS" "tracks:4IRq9W1N2tOWHhH0O3vXiF:fresh" --remote
 ```
 
 ## Collaboration and release discipline
@@ -830,10 +832,17 @@ Two encoders + one transform tool, all built from source:
   primary AVIF thumbnail. Falls back to `sips -s format avif` (macOS
   native, no extra dep) when avifenc isn't installed.
 - **exiftool, jq** (`brew install exiftool jq`) — metadata extraction.
-- **Pillow** (`python3 -m pip install -r www/scripts/requirements.txt`) — required by
+- **Pillow, via uv** (`brew install uv`, then `pnpm run photos:env`) — required by
   `gen-pixel-peeper.py` alone, which is a one-off generator rather than part of
   this pipeline. The 64-bin RGB/luminance bake moved into `zenc histogram` on
   2026-08-14, so nothing in add-photos.sh or extract-photo-metadata.sh needs it.
+  It installs into a venv at `www/scripts/.venv` rather than the system
+  interpreter, because Homebrew's python3 is PEP 668 **externally managed** and
+  refuses `pip install` outright: the documented recipe here was
+  `python3 -m pip install -r www/scripts/requirements.txt` and it had stopped
+  working, measured 2026-08-14. CI has always built its own venv in `RUNNER_TEMP`;
+  this is the local half of the same idea. Since the zenc move, a missing Pillow
+  costs one study page's regeneration rather than the histograms on 158 photos.
 
 The four below serve the STUDY pages rather than the photo pipeline, and every
 one of them was undocumented until `tools:check` went looking (2026-08-14):
