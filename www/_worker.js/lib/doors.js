@@ -22,11 +22,11 @@
 // 169.254.169.254, ports 80/443), the 8s timeout, the byte cap, and the
 // AadharshBot signature. tools/list is the one exception, because it needs a
 // POST body that lensFetch cannot express, so it re-states each of those bounds
-// itself rather than inheriting them. This module adds no new way to reach the
-// network.
+// itself rather than inheriting them, per-hop redirect validation included.
+// This module adds no new way to reach the network.
 import { botHeaders } from "./botauth.js";
 import { CANONICAL_HOST } from "./const.js";
-import { readResponseCapped } from "./crawl.js";
+import { fetchFollowingPublicRedirects, readResponseCapped, validateLensTarget } from "./crawl.js";
 import { MCP_MODERN, META_PROTOCOL, META_CLIENT_CAPS } from "./mcp-protocol.js";
 import { lensProbe, originDiscovery } from "../lens.js";
 
@@ -182,9 +182,24 @@ export async function foreignMcpTools(origin, env, opts = {}) {
       sign: !isSelf,
     });
     const selfReq = isSelf ? new Request(url, { method: "POST", headers, body }) : null;
-    const res = isSelf
-      ? await (env.SELF_FETCH ? env.SELF_FETCH(selfReq) : env.ASSETS.fetch(selfReq))
-      : await fetch(url, { method: "POST", headers, body, redirect: "follow", signal: controller.signal, cf: { cacheTtl: 0 } });
+    let res;
+    if (isSelf) {
+      res = await (env.SELF_FETCH ? env.SELF_FETCH(selfReq) : env.ASSETS.fetch(selfReq));
+    } else {
+      // Per-hop validation, not redirect:"follow", for the reason lensFetch
+      // already gives: the allowlist vetted the origin the visitor typed, and a
+      // 302 from there is a NEW target nobody vetted. Under "follow" that hop
+      // was taken and its body read, so a public host could hand this POST to
+      // an address validateLensTarget exists to refuse. A refused hop reads as
+      // an unreachable target, which is what it is.
+      const followed = await fetchFollowingPublicRedirects(
+        url,
+        { method: "POST", headers, body, signal: controller.signal, cf: { cacheTtl: 0 } },
+        (candidate) => validateLensTarget(candidate),
+      );
+      if (!followed.ok) return { ok: false, unreadable: true, detail: "redirected somewhere this reader will not follow" };
+      res = followed.response;
+    }
     const read = await readResponseCapped(res, CATALOG_CAP);
     // OUR ceiling, so it is reported as ours. A truncated catalogue would fail
     // to parse and read out as "that is not JSON", which blames a server that

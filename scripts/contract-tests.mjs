@@ -4982,6 +4982,54 @@ test("a foreign catalogue is read from the stream with a ceiling, and the ceilin
   assert.ok(!/JSON/.test(huge.detail), "a truncated read must not read out as a malformed answer");
 });
 
+test("a redirect off a vetted origin is validated per hop, not followed blindly", async () => {
+  // validateLensTarget vetted the origin the visitor typed. A 302 from there is
+  // a NEW target nobody vetted, and under redirect:"follow" that hop was taken
+  // and its body read — the same hole lensFetch closed for the GET path, which
+  // this POST could not share because lensFetch forwards no body.
+  //
+  // What a test can pin is that the guard is IN the path: the platform's own
+  // fetch is what follows a redirect, so a stubbed fetch cannot reproduce the
+  // vulnerable behaviour, only the routing that prevents it. Reverted to
+  // redirect:"follow", this fails on the verdict rather than on the hop count.
+  const { foreignMcpTools } = await import("../www/_worker.js/lib/doors.js");
+
+  // A real key, because every external probe signs before it fetches and the
+  // whole external branch is unreachable without one.
+  const pair = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
+  const env = { RN_SIGNING_KEY_JWK: JSON.stringify({ ...await crypto.subtle.exportKey("jwk", pair.privateKey), kid: "test" }) };
+
+  const realFetch = globalThis.fetch;
+  const run = async (location, second) => {
+    const hops = [];
+    globalThis.fetch = async (url) => {
+      hops.push(String(url));
+      return hops.length === 1
+        ? new Response(null, { status: 302, headers: { location } })
+        : second();
+    };
+    try { return { out: await foreignMcpTools("https://example.com", env), hops }; }
+    finally { globalThis.fetch = realFetch; }
+  };
+
+  const blocked = await run("http://169.254.169.254/mcp", () => new Response(
+    '{"jsonrpc":"2.0","result":{"tools":[{"name":"leaked"}]}}', { headers: { "content-type": "application/json" } }));
+  assert.deepEqual(blocked.hops, ["https://example.com/mcp"], "the blocked hop was requested anyway");
+  assert.equal(blocked.out.ok, false);
+  // Ours, not theirs: we declined to look, which is not the same as finding
+  // nothing there.
+  assert.equal(blocked.out.unreadable, true);
+  assert.match(blocked.out.detail, /redirect/);
+
+  // And a redirect to another PUBLIC host is still followed, so this is a guard
+  // rather than a blanket refusal to move.
+  const moved = await run("https://elsewhere.example/mcp", () => new Response(
+    '{"jsonrpc":"2.0","result":{"tools":[{"name":"moved"}]}}', { headers: { "content-type": "application/json" } }));
+  assert.deepEqual(moved.hops, ["https://example.com/mcp", "https://elsewhere.example/mcp"]);
+  assert.equal(moved.out.ok, true);
+  assert.equal(moved.out.tools[0].name, "moved");
+});
+
 // ── /ask sessions — the one thing here with a Durable Object ────
 
 
