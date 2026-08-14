@@ -114,6 +114,14 @@ const ROUTES = [
   { path: "/updates.md", status: 200, ct: "text/markdown", marker: "Recently installed" },
   { path: "/restore.md", status: 200, ct: "text/markdown", marker: "Restore point" },
   { path: "/photos.md", status: 200, ct: "text/markdown" },
+  // The four Worker-rendered surfaces that advertised flags.agents while serving
+  // no twin at all, found 2026-08-12 by probing the twin per route rather than
+  // trusting the site-wide count. Each marker is a load-bearing sentence rather
+  // than a title, so a twin that degrades into a stub fails here.
+  { path: "/writing.md", status: 200, ct: "text/markdown", marker: "plain text file" },
+  { path: "/lens.md", status: 200, ct: "text/markdown", marker: "Execution checks stay neutral" },
+  { path: "/coffee.md", status: 200, ct: "text/markdown", marker: "Booking fails closed" },
+  { path: "/around.md", status: 200, ct: "text/markdown", marker: "Nothing here is an endorsement" },
   { path: "/updates", status: 200, ct: "text/markdown", headers: { accept: "text/markdown" } },
   { path: "/restore", status: 200, ct: "text/markdown", headers: { accept: "text/markdown" } },
   { path: "/updates.json", status: 200, ct: "application/json" },
