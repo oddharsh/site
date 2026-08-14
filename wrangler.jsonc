@@ -18,7 +18,8 @@
   // the minified shells + luna.css — there is no longer a path that serves the
   // readable originals by accident (which is exactly how prod ended up on an
   // unminified 78KB nav.js). In Workers Builds, leave the dashboard's separate
-  // Build command blank and set its Deploy command to `npx wrangler deploy`;
+  // Build command blank and set its Deploy command to the `pnpm exec wrangler
+  // versions upload` recorded in config/infra.json under `release`;
   // Wrangler then owns this one build instead of running it twice. Local dev
   // must NOT use this config (it would pay the full www/ -> .build copy on
   // every reload); it uses wrangler.dev.jsonc, which points at www/ directly.
