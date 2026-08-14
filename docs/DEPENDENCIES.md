@@ -102,22 +102,20 @@ Four dependency surfaces sit outside `package.json`, and the baseline above
 covered none of them until 2026-08-14. One is its own Dependabot ecosystem, so
 it drifts on the same cadence the baseline does.
 
-**No versions are restated in this section, on purpose.**
-`scripts/lib/dependency-docs.mjs` reads the ROOT `package.json` and
-`requirements.txt` and holds the prose above to them. It cannot reach these
-manifests, so a version written here would be an unchecked copy, which is the
-exact drift this file has already shipped twice: the Wrangler sentence was
-eight patch releases stale, was corrected in #371, and was wrong again within
-hours when #377 moved the pin. Read the version from the manifest named in each
-entry.
+**These four are checked now**, as of 2026-08-14.
+`scripts/lib/dependency-docs.mjs` reads them alongside the root `package.json`
+and holds this prose to them in both directions: a stated version that stops
+matching fails CI, and a NEW dependency in any of the four fails CI until
+somebody either states its version or exempts it with a reason. That is what
+makes it safe to write numbers here at all. The previous revision of this
+section deliberately wrote none, because an unchecked copy is the exact drift
+this file had already shipped twice.
 
-The stale numbers are deliberately not repeated here, for the reason the check
-itself demonstrated while this section was being written: it scans everything
-from `## Current baseline` onward, so a historical version quoted as an example
-is indistinguishable from a live claim, and it failed this file on its own
-illustration. A stale number written inside its own correction is still a
-greppable stale number. Extending the checker to reach these four manifests is
-the obvious follow-up and is deliberately not bundled here.
+Four of the nine dependencies below carry no version, and the split is the
+useful part: `cal` and `cf-garage` caret-range everything, and Cargo reads a
+bare `"0.25"` as a caret range too. **A range is a version the prose cannot
+honestly state**, so those are exempted by name in `SUB_MANIFEST_POLICY` with
+the reason, rather than written here with the caret quietly dropped.
 
 - **`lens-reader/`** is its own npm ecosystem with its OWN lockfile, and it is
   outside the pnpm workspace deliberately: its dependencies are megabytes only
@@ -126,13 +124,13 @@ the obvious follow-up and is deliberately not bundled here.
   `lens-reader/node_modules` at all (gotcha 29).
 
   Three dependencies, and each carries a trap worth knowing before reviewing a
-  bump. `@mozilla/readability` is the extractor, swapped in from Defuddle on
+  bump. `@mozilla/readability` 0.6.0 is the extractor, swapped in from Defuddle on
   2026-08-14 on a measured control-label win; the argument and the numbers are
   in CLAUDE.md under the `lens-reader/` section, and a bump should be read for
   whether it changes what the extractor DISCARDS, since the discard is the
-  lens's whole artifact. `linkedom` exists only to supply the DOM that Workers
+  lens's whole artifact. `linkedom` 0.18.13 exists only to supply the DOM that Workers
   lack and is several times the weight of the extractor it serves, so its
-  releases matter for bundle size more than for behaviour. `turndown` ships two
+  releases matter for bundle size more than for behaviour. `turndown` 7.2.4 ships two
   builds and wrangler resolves the BROWSER one, which throws `document is not
   defined` in a Worker while passing under `node --test`; the fix is to pass it
   a node rather than an HTML string, and a major bump should be re-checked
@@ -143,7 +141,7 @@ the obvious follow-up and is deliberately not bundled here.
   import from `lens-reader/src/` fails in CI with `ERR_MODULE_NOT_FOUND` while
   passing on any workstation that has installed there.
 
-- **`www/scripts/zenc/`** pins `zenjpeg` and `image` through Cargo. zenjpeg is
+- **`www/scripts/zenc/`** pins `zenjpeg` 0.8.4, `image` and `serde_json` through Cargo. zenjpeg is
   the production JPEG thumbnail encoder, so a bump changes the BYTES of every
   photo re-encoded after it. Nothing re-encodes automatically, so the risk is
   deferred rather than absent: the next `pnpm run photos` run mints new
