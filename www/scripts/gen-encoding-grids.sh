@@ -28,6 +28,29 @@ if [ ! -x "$ZENC" ]; then
   command -v cargo >/dev/null 2>&1 || { echo "error: cargo (rust) not found; install from https://rustup.rs" >&2; exit 1; }
   cargo build --release --manifest-path "$ZENC_DIR/Cargo.toml" >&2 || { echo "error: zenc build failed" >&2; exit 1; }
 fi
+# mozjpeg is KEG-ONLY, so `brew install mozjpeg` leaves its cjpeg off PATH and a
+# bare `cjpeg` resolves libjpeg-turbo's instead. These grids publish a cell
+# labelled "mozjpeg" on /lwe/encoding, so that silently compared the wrong
+# encoder against itself: measured 2026-08-14 on one 64x64 edge, libjpeg-turbo
+# 3.2.0 wrote 753 bytes where mozjpeg 4.1.5 wrote 513, a 32% gap on the exact
+# axis this page teaches. add-photos.sh already resolves jpegtran this way.
+#
+# READ THIS BEFORE REGENERATING. The committed grids were produced by the bare
+# (libjpeg-turbo) cjpeg, so the first run after this fix SHRINKS the mozjpeg
+# cell from 1371 to 940 bytes, and that breaks the page's narrative rather than
+# just its label: /lwe/encoding walks four encoders "in the order the site
+# adopted them" and says each "squeezes a little harder than the last", which
+# stops being true when mozjpeg (940 B) lands under zenjpeg (980 B) on this
+# crop. Sizes on that page are measured live from these files, so the images
+# and the copy disagree the moment you regenerate. Update the copy in the same
+# commit, or do not regenerate.
+MOZ_CJPEG="/opt/homebrew/opt/mozjpeg/bin/cjpeg"
+if [ ! -x "$MOZ_CJPEG" ]; then
+  echo "error: mozjpeg's cjpeg not found at $MOZ_CJPEG (brew install mozjpeg)" >&2
+  echo "       a bare cjpeg is libjpeg-turbo's and would mislabel the grid" >&2
+  exit 1
+fi
+
 TMP="/tmp/encgrid-$$"; mkdir -p "$TMP"; trap 'rm -rf "$TMP"' EXIT
 
 # one centered 96x96 detail crop, shared by all three grids
@@ -43,13 +66,13 @@ AV="--speed 6 --jobs 4 --ignore-icc --ignore-exif --ignore-xmp --yuv 420"
 for q in 78 42 18; do avifenc -q $q $AV "$TMP/crop.png" "$DEST/z-av$q.avif" >/dev/null 2>&1; done
 
 # 2. chroma subsampling (mozjpeg, one quality so only the chroma sampling varies)
-cjpeg -quality 40 -sample 1x1 "$TMP/crop.ppm" > "$DEST/z-ch444.jpg" 2>/dev/null
-cjpeg -quality 40 -sample 2x1 "$TMP/crop.ppm" > "$DEST/z-ch422.jpg" 2>/dev/null
-cjpeg -quality 40 -sample 2x2 "$TMP/crop.ppm" > "$DEST/z-ch420.jpg" 2>/dev/null
+"$MOZ_CJPEG" -quality 40 -sample 1x1 "$TMP/crop.ppm" > "$DEST/z-ch444.jpg" 2>/dev/null
+"$MOZ_CJPEG" -quality 40 -sample 2x1 "$TMP/crop.ppm" > "$DEST/z-ch422.jpg" 2>/dev/null
+"$MOZ_CJPEG" -quality 40 -sample 2x2 "$TMP/crop.ppm" > "$DEST/z-ch420.jpg" 2>/dev/null
 
 # 3. jpeg encoders at the SAME quality setting (q72): baseline vs mozjpeg vs zenc
 sips -s format jpeg --setProperty formatOptions 72 "$TMP/crop.png" --out "$DEST/z-enc-baseline.jpg" >/dev/null 2>&1
-cjpeg -quality 72 "$TMP/crop.ppm" > "$DEST/z-enc-mozjpeg.jpg" 2>/dev/null
+"$MOZ_CJPEG" -quality 72 "$TMP/crop.ppm" > "$DEST/z-enc-mozjpeg.jpg" 2>/dev/null
 "$ZENC" "$TMP/crop.png" "$DEST/z-enc-zenc.jpg" -q 72 >/dev/null 2>&1
 
 exiftool -all= -overwrite_original "$DEST"/z-*.jpg >/dev/null 2>&1 || true

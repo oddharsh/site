@@ -89,6 +89,7 @@
     },
     {
       "bin": "cjpeg",
+      "path": "/opt/homebrew/opt/mozjpeg/bin/cjpeg",
       "install": "brew install mozjpeg",
       "why": "the chroma-subsampling row of the /garage/encoding grids",
       "required_by": ["www/scripts/gen-encoding-grids.sh"]
