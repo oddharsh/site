@@ -288,18 +288,23 @@ is roughly 90% of the new-HTML cohort plus 10% of the old-HTML cohort, per chang
 asset, on any release touching `nav.js` or `luna.css`. Cloudflare's docs name this
 exact case as what version affinity is for.
 
-Create it under **Rules → Transform Rules → Modify Request Header** on the
-`aadhar.sh` zone:
+On the `aadhar.sh` zone, go to **Rules**, create a rule, and pick **Request
+Header Transform Rule** from the type list (under "Transform requests or
+responses"). The list also offers Redirect, URL Rewrite, Configuration, Origin,
+Cache and Response Header rules; none of those can set a request header.
 
-| field | value |
-|---|---|
-| Expression | `not any(http.request.headers.names[*] eq "cloudflare-workers-version-key")` |
-| Operation | Set dynamic |
-| Header name | `Cloudflare-Workers-Version-Key` |
-| Value | `ip.src` |
+Then, in the two panes of the editor:
 
-Validate the expression in the dashboard's own editor before saving; it is the
-only thing here that checks the syntax.
+| pane | field | value |
+|---|---|---|
+| When incoming requests match | Expression (use the Expression Editor, not the visual builder) | `not any(http.request.headers.names[*] eq "cloudflare-workers-version-key")` |
+| Then | Operation | Set dynamic |
+| Then | Header name | `Cloudflare-Workers-Version-Key` |
+| Then | Value | `ip.src` |
+
+The visual builder has no field for "this header is absent", which is why the
+expression goes in as raw text. Validate it in the dashboard's own editor before
+saving; that editor is the only thing anywhere that checks this syntax.
 
 **The expression guard is load-bearing.** A blanket `true` would overwrite the
 per-request keys `deploy:promote` sends and collapse every sampled sweep onto one
