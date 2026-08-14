@@ -295,7 +295,12 @@
     // visitor is already more than the platform will actually serve; the real
     // controls are the 6h KV cache and the shared LENS_RL_BROWSER_ALL ceiling
     // this route also bills against.
-    { "name": "LENS_RL_WIRE", "namespace_id": "1006", "simple": { "limit": 2, "period": 60 } }
+    { "name": "LENS_RL_WIRE", "namespace_id": "1006", "simple": { "limit": 2, "period": 60 } },
+    // One POST to a foreign /mcp, answered from that server's own memory. Cheap
+    // for us and cheap for them, so the per-caller ceiling is generous. The real
+    // control is the 1h KV cache in lens-tools.js, which exists to stop a public
+    // button re-asking a stranger the same question on every click.
+    { "name": "LENS_RL_TOOLS", "namespace_id": "1007", "simple": { "limit": 10, "period": 60 } }
   ],
   "vars": {
     // Not a secret: an account id is an identifier, and this one is already

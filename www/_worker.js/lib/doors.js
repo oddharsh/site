@@ -32,7 +32,29 @@ export const DOOR_LIMITS = {
   corpus: 6000,     // characters of third-party text handed to a model
   tools: 24,        // foreign tools listed
   toolDesc: 160,    // characters per foreign tool description
+  // Argument schemas, and only when a caller asks for them. A schema is
+  // arbitrary third-party JSON of no stated size — mcp.context7.com ships tool
+  // descriptions over a kilobyte on their own — so it is bounded like every
+  // other foreign string here rather than trusted to be small.
+  schemaBytes: 6000,
 };
+
+/**
+ * Keep a foreign inputSchema only when it is small enough to be worth carrying.
+ *
+ * Truncating JSON is not an option: half a schema is not a schema, and a form
+ * built from one would silently describe the wrong contract. So this is
+ * all-or-nothing and REPORTS the drop, which lets the pane say "this tool's
+ * schema was too large to carry" instead of "this tool takes no arguments".
+ * Those are opposite claims and the second one is a lie.
+ */
+function capSchema(schema) {
+  if (!schema || typeof schema !== "object") return { schema: null };
+  let encoded;
+  try { encoded = JSON.stringify(schema); } catch { return { schema: null, oversize: false }; }
+  if (encoded.length > DOOR_LIMITS.schemaBytes) return { schema: null, oversize: true, bytes: encoded.length };
+  return { schema };
+}
 
 const trim = (text, max) => {
   const value = String(text || "").replace(/\r/g, "").trim();
@@ -101,8 +123,13 @@ export function parseMcpBody(text, contentType) {
  * mcp.context7.com and docs.mcp.cloudflare.com answer 400 -32020 without it and
  * 200 with it. Sending it is free; omitting it made three well-known live
  * servers read as broken doors.
+ *
+ * `opts.schemas` additionally carries each tool's inputSchema, title and
+ * annotations. OFF by default, because the three existing callers render a
+ * catalogue as prose and a schema would be dead weight in a terminal frame. The
+ * Tools lens turns it on: a schema is the only thing a form can be built from.
  */
-export async function foreignMcpTools(origin, env) {
+export async function foreignMcpTools(origin, env, opts = {}) {
   const url = origin.replace(/\/+$/, "") + "/mcp";
   // Both `_meta` keys are REQUIRED on a modern request. `clientCapabilities` is
   // empty because this probe reads a catalogue and offers the server nothing:
@@ -159,10 +186,22 @@ export async function foreignMcpTools(origin, env) {
     return {
       ok: true,
       count: tools.length,
-      tools: tools.slice(0, DOOR_LIMITS.tools).map((tool) => ({
-        name: String(tool?.name || "").slice(0, 60),
-        description: trim(tool?.description, DOOR_LIMITS.toolDesc),
-      })),
+      tools: tools.slice(0, DOOR_LIMITS.tools).map((tool) => {
+        const row = {
+          name: String(tool?.name || "").slice(0, 60),
+          description: trim(tool?.description, DOOR_LIMITS.toolDesc),
+        };
+        if (!opts.schemas) return row;
+        const capped = capSchema(tool?.inputSchema);
+        row.inputSchema = capped.schema;
+        if (capped.oversize) row.schemaOversize = capped.bytes;
+        if (tool?.title) row.title = String(tool.title).slice(0, 80);
+        // Annotations are forwarded as the server WROTE them, including the
+        // absence of any. The pane labels them as claims; normalising a missing
+        // set into a default here would manufacture a claim nobody made.
+        if (tool?.annotations && typeof tool.annotations === "object") row.annotations = tool.annotations;
+        return row;
+      }),
     };
   } catch (error) {
     // Same distinction as readable() above: a thrown request never reached the

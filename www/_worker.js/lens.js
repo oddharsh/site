@@ -309,6 +309,7 @@ export const LENS_BUDGETS = {
   compare: { binding: "LENS_RL_COMPARE", max: 4  },
   browser: { binding: "LENS_RL_BROWSER", max: 3  },
   wire:    { binding: "LENS_RL_WIRE",    max: 2  },
+  tools:   { binding: "LENS_RL_TOOLS",   max: 10 },
   // The shared ceiling. Keyed on a CONSTANT rather than the caller's IP, so
   // every browser-consuming route bills against one bucket and no single
   // visitor can spend the account's allowance.
@@ -423,6 +424,7 @@ const LENS_TAB_LABELS = {
   ai: "Model cost",
   terms: "Who's allowed",
   discovery: "Agent doors",
+  tools: "What it accepts",
 };
 
 // Tab ORDER is evidence to verdict: raw observation first (the default lens, so
@@ -432,11 +434,15 @@ const LENS_TAB_LABELS = {
 // the gap between them legible. The tab strip renders from this array, so the
 // order lives in one place rather than in eight hand-written buttons.
 //
+// `tools` sits directly after `discovery` for the same pairing reason: discovery
+// KNOCKS on /mcp and infers a verdict from a status code, and tools walks
+// through and reads the catalogue. Door then room.
+//
 // `wire` sits third for the same pairing reason one step out. The first two tabs
 // argue about what the DOCUMENT is; wire is the first tab that is not about the
 // document at all, and putting it directly after them is what makes "all of that
 // argument was 4% of what the page actually cost you" land.
-export const LENS_TAB_ORDER = ["anatomy", "reader", "wire", "structured", "ai", "terms", "discovery", "readiness"];
+export const LENS_TAB_ORDER = ["anatomy", "reader", "wire", "structured", "ai", "terms", "discovery", "tools", "readiness"];
 
 function lensState(url) {
   const validViews = ["both", "human", "machine", "browser", "delta"];
@@ -1015,6 +1021,52 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 .lx-wire-intro { padding:10px 9px; border:1px solid oklch(78% 0.06 30); background:linear-gradient(180deg,oklch(98% 0.02 30),oklch(95% 0.04 30)); color:oklch(34% 0.05 25); font-size:9pt; line-height:1.45; }
 .lx-wire-intro b { color:oklch(38% 0.11 25); }
 .lx-wire-credit { margin-top:6px; opacity:0.85; }
+/* ── the Tools lens: a catalogue that opens into a form per tool ──────────
+   Sunken fields and a raised add button, the same Luna vocabulary the rest of
+   the site uses for forms. The accordion is deliberate: the machine pane is
+   ~310px wide in Compare, where the prototype's three columns do not fit. */
+.lx-tools-intro { padding:10px 9px; border:1px solid oklch(78% 0.06 265); background:linear-gradient(180deg,oklch(98% 0.02 265),oklch(95% 0.04 265)); color:oklch(32% 0.05 260); font-size:9pt; line-height:1.45; }
+.lx-tools-intro b { color:oklch(35% 0.11 262); }
+.lx-tools-intro code { font-family:"Courier New",monospace; font-size:8.5pt; }
+.lx-tools-fail { padding:6px 8px; border:1px solid oklch(62% 0.16 25); background:oklch(96% 0.03 25); color:oklch(38% 0.12 25); font-size:9pt; }
+.lx-tools-fail ul { margin:3px 0 0; padding-left:17px; }
+.lx-tools-list { border:1px solid oklch(80% 0.02 260); }
+.lx-tool + .lx-tool { border-top:1px solid oklch(88% 0.015 260); }
+.lx-tool-head { display:flex; align-items:center; gap:6px; flex-wrap:wrap; width:100%; padding:5px 7px; border:0; background:oklch(98% 0.004 260); font:9.5pt "Courier New",monospace; text-align:left; cursor:pointer; }
+.lx-tool-head:hover { background:oklch(95% 0.02 262); }
+.lx-tool.is-open > .lx-tool-head { background:oklch(93% 0.035 262); }
+.lx-tool-name { font-weight:bold; color:oklch(30% 0.09 262); }
+.lx-tool-body { padding:8px 9px 10px; background:oklch(99.5% 0.002 260); }
+.lx-tool-desc { margin:0 0 6px; font-size:9pt; line-height:1.45; }
+.lx-tool-frame, .lx-tool-curl { margin:0 0 6px; padding:7px 8px; background:oklch(24% 0.02 258); color:oklch(92% 0.03 150); font:8.5pt/1.5 "Courier New",monospace; white-space:pre-wrap; word-break:break-word; overflow:auto; max-height:230px; }
+.lx-tool-curl { color:oklch(90% 0.04 90); max-height:150px; }
+.lx-tool-problems:empty { display:none; }
+/* the generated controls */
+.lx-tf { margin:0 0 10px; }
+.lx-tf-head { display:flex; align-items:baseline; gap:6px; margin-bottom:2px; }
+.lx-tf-label { display:flex; align-items:baseline; gap:6px; cursor:pointer; }
+.lx-tf-name { font:bold 9.5pt "Courier New",monospace; color:oklch(28% 0.05 260); }
+.lx-tf-req { font-size:7.5pt; text-transform:uppercase; letter-spacing:0.04em; color:oklch(52% 0.19 25); }
+.lx-tf-kind { margin-left:auto; font:8pt "Courier New",monospace; color:oklch(55% 0.02 260); }
+.lx-tf-desc { font-size:8.5pt; color:oklch(45% 0.02 260); margin-bottom:3px; line-height:1.4; }
+.lx-tf-cons { font:8.5pt "Courier New",monospace; color:oklch(42% 0.09 262); margin-bottom:3px; }
+.lx-tf-warn { font-size:8.5pt; color:oklch(52% 0.13 75); margin-bottom:3px; }
+.lx-tf-note { font-size:8.5pt; color:oklch(42% 0.02 260); background:oklch(95% 0.008 260); border:1px solid oklch(85% 0.015 260); padding:4px 7px; margin-bottom:8px; }
+.lx-tf-input { box-sizing:border-box; width:100%; font-family:Tahoma,Verdana,sans-serif; font-size:9.5pt; color:oklch(18% 0.01 260); background:oklch(100% 0 0); padding:3px 5px; border-radius:0; border:1px solid oklch(66% 0.04 250); box-shadow:inset 1px 1px 0 oklch(0% 0 0/0.18), inset -1px -1px 0 oklch(100% 0 0); }
+.lx-tf-input:focus { outline:none; border-color:oklch(52% 0.16 262); box-shadow:inset 1px 1px 0 oklch(0% 0 0/0.18), 0 0 0 1px oklch(52% 0.16 262); }
+.lx-tf-json { font-family:"Courier New",monospace; font-size:9pt; }
+.lx-tf-check { display:flex; align-items:center; gap:5px; font-size:9pt; }
+.lx-tf-multi { background:oklch(100% 0 0); border:1px solid oklch(66% 0.04 250); box-shadow:inset 1px 1px 0 oklch(0% 0 0/0.18); padding:3px 6px; max-height:130px; overflow:auto; }
+.lx-tf-multi-row { display:flex; align-items:center; gap:5px; padding:1px 0; font-size:9pt; }
+.lx-tf-row { display:flex; gap:6px; align-items:flex-start; padding:6px; margin-bottom:5px; background:oklch(96% 0.006 260); border:1px solid oklch(84% 0.015 260); }
+.lx-tf-row > *:first-child { flex:1; min-width:0; }
+.lx-tf-row .lx-tf:last-child { margin-bottom:0; }
+.lx-tf-group { padding:7px 8px; background:oklch(96% 0.006 260); border:1px solid oklch(84% 0.015 260); }
+.lx-tf-group .lx-tf:last-child { margin-bottom:0; }
+.lx-tf-const { font:9pt "Courier New",monospace; color:oklch(45% 0.02 260); }
+.lx-tf-add, .lx-tf-kill, .lx-tool-copy { font:8pt Tahoma,Verdana,sans-serif; padding:2px 9px; cursor:pointer; border:1px solid oklch(64% 0.03 255); border-radius:3px; background:linear-gradient(180deg,oklch(100% 0 0),oklch(92% 0.008 255)); color:oklch(20% 0.01 260); }
+.lx-tf-add:hover, .lx-tf-kill:hover, .lx-tool-copy:hover { border-color:oklch(70% 0.13 65); }
+.lx-tf-kill { flex:none; min-width:22px; padding:1px 6px; }
 .lx-wire-split { margin:6px 0 8px; }
 .lx-wire-bar { display:flex; height:18px; border:1px solid oklch(62% 0.02 250); background:oklch(94% 0 0); overflow:hidden; }
 .lx-wire-bar span { display:block; height:100%; }
