@@ -1001,6 +1001,34 @@ Three deliberate deviations, all written down at the code:
    reason they are written down here: /lens reported three well-known live MCP
    servers as unreadable doors, on the one surface whose whole premise is never
    reporting a failed check as a negative result.
+
+   **`MCP-Protocol-Version` is the sharper case, because there is NO fixed
+   request that satisfies the ecosystem, and a survey of 38 live servers is what
+   showed it.** `mcp.svelte.dev` refuses without that header (`-32020`, "Header
+   mismatch: MCP-Protocol-Version is required"). `mcp.deepwiki.com` and
+   `mcp.exa.ai` serve happily WITHOUT it and refuse the byte-identical request
+   WITH it, because they validate the header against their own supported list
+   and neither speaks `2026-07-28`. All measured 2026-08-14. So sending it
+   always and sending it never each break a real population, and the client
+   sends it only as a reply to a refusal that names it: one retry, on nobody who
+   already works, carrying the revision the body declares. Generalise it past
+   this header. **A header that is REQUIRED by one half of an ecosystem and
+   VALIDATED by the other cannot be a constant**, and the way you find out is
+   the second population, which a survey finds and a fix for one broken server
+   never does.
+
+   The same survey settled how a 401 reads. Sixteen of the 38 are auth-gated and
+   they refuse in two dialects: an EMPTY body (Cloudflare's six) and an OAuth
+   challenge body (Notion, Sentry, Linear, PayPal, Neon, Webflow, Canva,
+   Grafana, Wix). Those used to render as "not JSON" and as the literal string
+   "undefined: undefined", while `lens.js` was already calling the same status an
+   OAuth-protected server at the knock, so two halves of one page disagreed about
+   one origin. A locked door is reported as UNREADABLE with the scheme named,
+   because the door is there and we did not get to look.
+
+   Two servers name a revision our own `MCP_SUPPORTED` does not carry,
+   `2025-11-25`. That is a question about this site's SERVER rather than its
+   client and is deliberately still open.
 2. **`ping` is kept** though 2026-07-28 removed it. Legacy clients send it and
    it costs nothing.
 3. **`protocolVersion` is not enforced as a REQUIRED `_meta` field, though
