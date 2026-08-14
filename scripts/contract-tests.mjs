@@ -1879,15 +1879,44 @@ test("every workflow bootstraps the pnpm that package.json pins", async () => {
   assert.ok(checked >= 4, `expected several pnpm bootstraps, matched ${checked}`);
 });
 
-// #382's version of this test lived here. #386 deleted it as a duplicate of the
-// dependency-docs module, which was right about the duplication and wrong about
-// what to keep: it touched only this file, so THREE rules #382 had and the
-// module did not went with it. Two of them were real protections. They live in
-// scripts/lib/dependency-docs.mjs now, and the tests below exercise them:
-// scoping the scan to the `## Current baseline` section, and REJECTING a
-// range-pinned package in the alias table instead of stripping the caret (which
-// would let `^1.2.3` agree with a doc claiming `1.2.3`). The third, a declared
-// package losing its sentence, the reverse direction already covered.
+test("every allowBuilds entry is a decision, never a placeholder pnpm wrote", async () => {
+  // When pnpm 11 meets a package whose build script nobody has ruled on, it
+  // writes the literal string `set this to true or false` INTO
+  // pnpm-workspace.yaml. That reads as a filled-in field and answers nothing:
+  // pnpm stores it verbatim and still counts the package as un-decided, so the
+  // hard error stays armed against `pnpm run` as well as `pnpm install`.
+  //
+  // `sharp` sat that way until #380 answered it. Nothing caught it for the
+  // whole time, because the error only fires on an install that has to
+  // RE-EVALUATE the build, and a clean install never does — so CI and every
+  // fresh clone stayed green while any tree needing a re-install broke. It had
+  // reached a release path by then: `deploy-promote.mjs` shells to `pnpm exec
+  // wrangler` (gotcha 29), so the command that broke was the one you would
+  // reach for during a rollback.
+  //
+  // This is the guard rather than the fix. The next dependency that ships a
+  // build script gets the same placeholder written into the same file, and the
+  // only reason anyone noticed this one was a rollback that needed a
+  // workaround.
+  const ws = await readFile(new URL("pnpm-workspace.yaml", ROOT), "utf8");
+  const block = ws.match(/^allowBuilds:\n((?:[ \t]+.*\n)+)/m);
+  assert.ok(block, "pnpm-workspace.yaml no longer has an allowBuilds block");
+
+  let checked = 0;
+  for (const line of block[1].split("\n")) {
+    if (!line.trim() || /^\s*#/.test(line)) continue;   // the block is commented
+    const entry = line.match(/^\s+([\w@/-]+):\s*(.+?)\s*$/);
+    assert.ok(entry, `unparseable allowBuilds line: ${line}`);
+    const [, pkg, value] = entry;
+    assert.match(value, /^(true|false)$/,
+      `allowBuilds.${pkg} is "${value}", which is pnpm's placeholder rather than a decision; run \`pnpm approve-builds\` or set a boolean`);
+    checked++;
+  }
+  // Counted, because a matcher that stops matching asserts nothing and still
+  // reports a pass. Three entries today: esbuild, sharp, workerd.
+  assert.ok(checked >= 3, `expected the declared build allowlist, checked ${checked}`);
+});
+
 test("a section's favicon is in its own <head>, never set by script", async () => {
   // setFavicon() used to read a data-favicon attribute off the matching taskbar
   // pin at boot. That cost one attribute per pin on EVERY page so that 11 of them
