@@ -1494,6 +1494,62 @@ built static page the readable tree has no file for. A stale `caches.default`
 entry in `.wrangler/state` can make it appear to work and then stop, which is
 what makes it read like a regression you just caused.
 
+### `/lens/tools` — the ninth tab, and why it reads without ever calling
+
+"What it accepts" walks through the door `discovery` only knocks on. It reads a
+foreign origin's `tools/list` WITH the argument schemas and draws a form per
+tool, which is a block explorer's contract page pointed at MCP: Etherscan turns
+an ABI into a form, and `inputSchema` is the same artefact under another name.
+
+**The analogy stops at simulation, and that limit is the whole design.** A chain
+is a public state machine anyone can fork, so `eth_call` at a block height is
+reproducible by anyone. An MCP server is a private database behind an RPC. There
+is no fork, no state override, no revert, and the protocol has **no dry-run
+primitive**: no `dryRun` flag, no simulate method, nothing in `_meta`. So "what
+would `send_invoice` do" is unanswerable without the server volunteering an
+answer, and none of them do. What IS answerable is the exact frame a call would
+carry, so the pane renders that plus a copyable curl and stops.
+
+Execution moving to the visitor's own machine is the SAFETY property rather than
+a consolation prize. A public button that fired strangers' tools would do it
+from this account's IP and under AadharshBot's signature, which is the argument
+`lens-recipes.js` already makes for refusing a `js=` parameter. A contract test
+asserts the pane makes exactly one request, to our own route, and that
+`_worker.js/lens-tools.js` never names `tools/call` and never calls `fetch`.
+
+Three rules decide the planner in `www/lens-tools.js`, and the first is the one
+that keeps it honest:
+
+1. **Never lie about the schema.** `oneOf`, `anyOf`, `$ref`, type unions, tuple
+   items, free-form objects and anything past 3 levels of nesting degrade to a
+   raw JSON box that states WHY. Rendering `anyOf` as its first arm is worse
+   than a textarea, because the reader believes it. Not hypothetical:
+   `mcp.deepwiki.com`'s `ask_question.repoName` is an `anyOf`.
+2. **Types survive the DOM.** Enum options carry the JSON encoding of their real
+   value, so `image_transform`'s `rotate` comes back as the number 90 rather
+   than `"90"`. An unchecked optional boolean is ABSENT, not `false`, and a
+   blank optional is omitted rather than sent as `""`.
+3. **Bounded and untrusting.** Depth, property and option caps, and the controls
+   are built with `createElement` and `textContent`, because every string in
+   them came from a stranger's server. Same rule `www/terminal.js` follows for
+   third-party page titles.
+
+`foreignMcpTools` grew an `opts.schemas` flag, OFF by default: the three
+existing callers render a catalogue as prose and a schema is dead weight in a
+terminal frame. An over-cap schema is dropped WHOLE and flagged, never
+truncated, because half a schema silently describes the wrong contract and
+"too large to carry" and "takes no arguments" are opposite claims.
+
+Opt-in like Reader and Wire, for the same reason: every run is a real POST to
+somebody else's server. Cached 1h in KV to keep a public button from re-asking a
+stranger the same question on every click, and rate-limited by `LENS_RL_TOOLS`.
+
+**Local dev can only scan THIS origin.** An external probe fails at signing
+before it leaves, since the AadharshBot key is a secret and secrets are not
+remotable, so `?url=https://aadhar.sh` is the one target that works under
+`pnpm run dev` (self-dispatch needs no wire signature). Everything else needs a
+deployed version.
+
 ### Observability: Workers Traces + the span vocabulary
 
 Three layers, deliberately not redundant:
