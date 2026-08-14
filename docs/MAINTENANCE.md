@@ -1116,7 +1116,7 @@ workflow that hand-tracked the from-source jpegli commit. Only Homebrew formulas
 
 ```bash
 brew install exiftool jq mozjpeg libavif              # mozjpeg = jpegtran; libavif = avifenc (optional, sips falls back)
-python3 -m pip install -r www/scripts/requirements.txt  # Pillow for histogram baking
+python3 -m pip install -r www/scripts/requirements.txt  # Pillow, for gen-pixel-peeper.py only
 # the JPEG encoder (zenc) builds itself on first pipeline run; needs rust (rustup.rs)
 cargo build --release --manifest-path www/scripts/zenc/Cargo.toml
 wrangler login                                         # Cloudflare auth (deploys + KV + R2 all use it)
@@ -1602,7 +1602,7 @@ until its twin agrees: `checkTwinFacts()` recomposes the User-Agent from
 | `gen-alt-text.py` | AI alt text for grid photos -> `images/alt.json`. Run by `add-photos.sh` phase 4. Posts the committed `i/` thumbnail to Workers AI when `CLOUDFLARE_API_TOKEN` is set (captions pre-deploy), else asks `/garage/cf/caption` by stem (deployed photos only). Resumable. |
 | `gen-photo-semantics.mjs` | Retrieval terms for `photo_query` -> `images/semantics.json`. Derived tier (EXIF vocabulary repair) needs nothing; `--vision` adds model-written keywords and needs `CLOUDFLARE_API_TOKEN`. Deliberately offline so the Worker keeps zero AI credentials. Resumable. |
 | `gen-encoding-samples.sh` | Regenerate the color sample set for `/garage/encoding` through every encoder; defaults to the committed `garage/enc/c-png.png` fixture and prints byte counts. |
-| `photo-histograms.py` | Bakes four 64-bin RGB/luminance histogram channels into each per-photo `images/meta/<stem>.json` from the shipped hashed JPG tier. Requires the pinned Pillow dependency in `www/scripts/requirements.txt` and is called by both metadata extraction and `add-photos.sh`. |
+| `zenc histogram --root www` | Bakes four 64-bin RGB/luminance histogram channels into each per-photo `images/meta/<stem>.json` from the shipped hashed JPG tier. A subcommand of the encoder crate since 2026-08-14 (it was `photo-histograms.py` + Pillow), called by both metadata extraction and `add-photos.sh`. `--check` compares against what is on disk and writes nothing, which is how you tell a decoder bump from an edit. |
 | `gen-og-cards.mjs` | Render the 1200x630 OG/Twitter card per garage + lwe page (live demo on the Bliss desktop) into `www/og/`. `pnpm run og-cards`. Drives the installed Chrome via `playwright-core`; captures production so data-driven demos render full. Hero selectors + presets in the `HERO{}` map. See "Regenerate the OG / Twitter cards". |
 | `inject-og-meta.mjs` | Idempotently add `og:image`/`twitter:card` meta to any garage + lwe page missing it, pointing at `/og/<section>-<name>.png`. `--check` reports gaps without writing. |
 | `hash-thumbnails.sh` | sha256 each pixel tier into `www/i/<stem>.<hash8>.<ext>`, write `images/hashes.json`, and prune tiers no longer named by it. Run by `add-photos.sh`; a re-encode mints new URLs, so there is no version to bump. |

@@ -87,6 +87,17 @@ fi
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 OUT="$SCRIPT_DIR/../images/metadata.json"
 
+# zenc bakes the histogram channels at the end of this script (it replaced
+# photo-histograms.py + Pillow on 2026-08-14, sharing the JPEG decoder the
+# encoder already links). Same auto-build-on-first-run convention the other six
+# pipeline scripts use, so a fresh checkout needs cargo and nothing else.
+ZENC_DIR="$(cd "$SCRIPT_DIR/zenc" && pwd)"
+ZENC="$ZENC_DIR/target/release/zenc"
+if [ ! -x "$ZENC" ]; then
+  echo "building zenc (histogram bake) — first run only…" >&2
+  cargo build --release --manifest-path "$ZENC_DIR/Cargo.toml" >&2 || { echo "error: zenc build failed" >&2; exit 1; }
+fi
+
 # exiftool can output JSON natively, but we want a custom shape keyed by
 # filename. dump per-file JSON and reduce with jq.
 TMP=$(mktemp)
@@ -216,7 +227,7 @@ fi
 # fields dropped. these are fetched once per hover (the hot path), so every byte is
 # on someone's cursor. metadata.json keeps the full, readable, long-key schema — it
 # is the public /photos index (photos.js PHOTO_PUBLIC_FIELDS reads it) and the
-# archive. KEEP THIS MAP IN SYNC with tooltip.js (reader) and photo-histograms.py
+# archive. KEEP THIS MAP IN SYNC with tooltip.js (reader) and zenc's histogram.rs
 # (which merges the "hi" histogram into these same files):
 #   cm camera · ln lens · ap aperture · sp shutter · is iso · fl focal · ev ·
 #   dt date · w width · h height · wb white_balance · ct color_temp · fs flash ·
@@ -239,7 +250,7 @@ done
 
 # bake the 64-bin histograms back into the meta files (the full run may have
 # wiped them; the tooltip reads meta.hi instead of computing client-side)
-"$SCRIPT_DIR/photo-histograms.py" 2>&1 | tail -1
+"$ZENC" histogram --root "$SCRIPT_DIR/.." 2>&1 | tail -1
 
 # roll the per-photo EXIF (minus histograms) into the one shared index the
 # tooltip warms on idle. derived data, so it MUST be rebuilt whenever the

@@ -71,8 +71,13 @@ jobs:
       - name: Install image toolchain
         run: |
           brew install exiftool ffmpeg jq libavif mozjpeg webp
+          # The venv is for gen-alt-text.py and build-recipes.py, which need
+          # python3 and nothing else. requirements.txt is deliberately NOT
+          # installed here any more: its one entry is Pillow, the histogram bake
+          # moved into zenc on 2026-08-14, and the only remaining Pillow consumer
+          # (gen-pixel-peeper.py) is a one-off page generator this workflow never
+          # runs. Verified by import, not by assumption.
           python -m venv "$RUNNER_TEMP/photo-venv"
-          "$RUNNER_TEMP/photo-venv/bin/pip" install --requirement www/scripts/requirements.txt
           echo "$RUNNER_TEMP/photo-venv/bin" >> "$GITHUB_PATH"
 
       - name: Install repository dependencies
@@ -129,7 +134,7 @@ jobs:
             reencode-thumbnails)
               ./www/scripts/reencode-thumbnails.sh "$source_dir"
               ./www/scripts/hash-thumbnails.sh
-              python www/scripts/photo-histograms.py
+              ./www/scripts/zenc/target/release/zenc histogram --root www
               pnpm run photos:check
               ;;
             refresh-metadata)

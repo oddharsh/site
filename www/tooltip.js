@@ -99,7 +99,7 @@ export function start(initial) {
         const b = Array.isArray(h.b) ? `<polyline class="b" points="${pts(h.b)}"/>` : "";
         return `<svg class="hist-svg" viewBox="0 0 ${n - 1} 32" preserveAspectRatio="none">${luma}${r}${g}${b}</svg>`;
       };
-      // histogram bins are BAKED at photo-add time (photo-histograms.py measures
+      // histogram bins are BAKED at photo-add time (`zenc histogram` measures
       // the shipped JPG twin, so the bars stay tied to the published thumbnail)
       // and ride the same meta/<stem>.json as the EXIF. The old decode → canvas
       // → getImageData → main-thread binning pipeline is gone; renderHistogramSvg
