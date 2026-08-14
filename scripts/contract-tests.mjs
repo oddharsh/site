@@ -40,6 +40,7 @@ import { handleTool, tokenizeKeys } from "../www/_worker.js/terminal.js";
 import { handleTerminal } from "../www/_worker.js/wire.js";
 import { DATA_TOOLS } from "../www/_worker.js/lib/tools.js";
 import { cronJob } from "../www/_worker.js/lib/cron.js";
+import { FLOOR_CLAIMS, auditDependencyDocs, checkDependencyDocs, findClaims } from "./lib/dependency-docs.mjs";
 import { PAGE_FAMILY_MATCH, serveStaticPage } from "../www/_worker.js/lib/assets.js";
 import { serveMarkdown } from "../www/_worker.js/home.js";
 import { readManifest, workerModule, navFenceBody, readFenceBody, runProfilesBody } from "./gen-manifest.mjs";
@@ -2617,6 +2618,77 @@ test("cached renders stream the first miss while tagging the background copy", a
 // buildTwins and friends were imported here and never called, so this file
 // asserted nothing about any of it. Same shape as the quiz test CLAUDE.md
 // describes, which read the wrong field names and passed while checking nothing.
+// ── docs/DEPENDENCIES.md states version pins in prose ─────────────────────────
+// and dependabot rewrites those pins daily, so the file goes stale on a cadence
+// rather than by accident: twice in two days before this landed. These assert
+// the doc against the manifests, and then assert the CHECK itself has teeth,
+// because a version of this that only ever agreed with the current tree would
+// be the third check in this repo to pass while asserting nothing.
+
+test("docs/DEPENDENCIES.md agrees with the manifests", async () => {
+  const { claims, problems } = await checkDependencyDocs();
+  assert.deepEqual(problems, [], problems.join("\n"));
+  assert.ok(
+    claims.length >= FLOOR_CLAIMS,
+    `only ${claims.length} version claims matched, floor is ${FLOOR_CLAIMS}`,
+  );
+});
+
+test("the dependency-doc check catches every drift it exists for", () => {
+  const pins = { wrangler: "4.120.1" };
+  // one rule at a time: no exemptions to go stale, no floor to trip.
+  const quiet = { versionless: new Map(), floor: 0 };
+  const ok = auditDependencyDocs({ doc: "- Wrangler 4.120.1 is the pin.", pins, ...quiet });
+  assert.deepEqual(ok.problems, [], "a matching doc must pass");
+
+  // 1. the exact bug that motivated this: a bumped pin, an unbumped sentence
+  const stale = auditDependencyDocs({ doc: "- Wrangler 4.120.0 is the pin.", pins, ...quiet });
+  assert.equal(stale.problems.length, 1);
+  assert.match(stale.problems[0], /states "Wrangler 4\.120\.0" but package\.json pins wrangler at 4\.120\.1/);
+
+  // 2. a new dependency that nobody documented
+  const undocumented = auditDependencyDocs({
+    doc: "- Wrangler 4.120.1 is the pin.",
+    pins: { ...pins, "left-pad": "1.0.0" },
+    ...quiet,
+  });
+  assert.equal(undocumented.problems.length, 1);
+  assert.match(undocumented.problems[0], /left-pad is a root dependency/);
+
+  // 3. a claim surviving the package's removal
+  const removed = auditDependencyDocs({ doc: "- Wrangler 4.120.1 is the pin.", pins: {}, ...quiet });
+  assert.ok(removed.problems.some((p) => /is not a root dependency/.test(p)));
+
+  // 4. the floor: a doc with no claims at all must fail rather than pass empty
+  const empty = auditDependencyDocs({ doc: "no versions here", pins: {} });
+  assert.ok(empty.problems.some((p) => /below the floor/.test(p)));
+
+  // 5. Pillow lives in requirements.txt, not package.json
+  const pillow = auditDependencyDocs({
+    doc: "- Wrangler 4.120.1 is the pin.\n- Pillow 12.3.0 is pinned.",
+    pins,
+    requirements: "Pillow==12.4.0\n",
+    ...quiet,
+  });
+  assert.ok(pillow.problems.some((p) => /Pillow 12\.3\.0.*pins 12\.4\.0/.test(p)));
+});
+
+test("the dependency-doc scanner does not read prose as a version claim", () => {
+  // Every one of these appears in the real file and breaks a naive
+  // /(\w+) (\d[\d.]*)/ sweep. A two-component number is prose about a major
+  // line; the others are not packages at all.
+  const prose = [
+    "TypeScript 7.0 ships no stable programmatic API",
+    "the CSS Overflow 5 selectors /garage/horizon ships deliberately",
+    "Vite 8 keeps 0.28.2 as an OPTIONAL peer",
+    "Wrangler hard-depends on 0.28.1 for Cloudflare's Worker bundler",
+  ].join("\n");
+  assert.deepEqual(findClaims(prose), [], "prose must yield no version claims");
+
+  // and the real thing still matches, so the guard above is not just strictness
+  assert.equal(findClaims("- TypeScript 7.0.2 and @cloudflare/workers-types are pins").length, 1);
+});
+
 test("a flex item is its own box, and promoting one never eats an image", () => {
   const page = (style, body) =>
     `<html><head><title>T</title><style>${style}</style></head><body><main>${body}</main></body></html>`;

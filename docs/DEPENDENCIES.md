@@ -18,7 +18,7 @@ review policy and entry point for future agent runs.
 
 ## Current baseline
 
-- Wrangler 4.120.0 is the exact root pin shared by all Worker projects.
+- Wrangler 4.120.1 is the exact root pin shared by all Worker projects.
 - Oxc Minify 0.144.0 and Lightning CSS 1.33.0 are exact root pins for the
   deploy-time JavaScript and CSS minifiers. Their platform-specific optional
   packages run only in the build environment; they add no browser or Worker
@@ -74,5 +74,13 @@ review policy and entry point for future agent runs.
   frames. It baked the photo histograms until 2026-08-14, when that moved into
   `zenc histogram` and left the core photo pipeline with no Pillow dependency at
   all. Nothing in CI installs it any more.
+- @noble/post-quantum 0.7.0 is the exact root pin and **the only dependency in
+  this repo that reaches a visitor.** Everything else here is build or test
+  tooling. `lib/botauth.js` imports `ml-dsa.js` lazily for AadharshBot's
+  additive `sig2` ML-DSA-44 signature, because workerd's WebCrypto ships no
+  post-quantum algorithm at any parameter size, so pure JavaScript is the only
+  door. It is therefore the one entry here whose releases should be read for
+  BUNDLE SIZE and cold-start cost as well as correctness: it is Worker bytes,
+  not build bytes. `/garage/pqc` is the measurement behind choosing it.
 - The root workspace lockfile is authoritative; workspace-local Wrangler pins
   are rejected by `pnpm run check-wrangler`.
