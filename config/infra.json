@@ -234,7 +234,7 @@
       { "name": "aadhar-sh", "config": "wrangler.jsonc", "why": "The site Worker: homepage, Lens, coffee, Serendipity." },
       { "name": "cf-garage", "config": "cf-garage/wrangler.toml", "why": "Intercepts /garage/cf/* ahead of the site Worker." },
       { "name": "lwe-ask", "config": "lwe-ask/wrangler.toml", "why": "The /lwe/ask RAG endpoints." },
-      { "name": "lens-reader", "config": "lens-reader/wrangler.toml", "why": "Intercepts /lens/read* ahead of the site Worker and serves the /lens Reader lens. SEPARATE for two independent reasons, either sufficient on its own: Defuddle needs a DOM Document, which costs ~190 KB gzip against a site bundle already over its 204.24 KiB budget; and run_worker_first caps at 100 rules with this repo at exactly 100, so a /lens/read path on the site Worker would refuse to boot (gotcha 26) while a zone route needs no entry. If this Worker goes missing, /lens keeps working and the Reader tab reports the extractor as unreachable." }
+      { "name": "lens-reader", "config": "lens-reader/wrangler.toml", "why": "Intercepts /lens/read* ahead of the site Worker and serves the /lens Reader lens. SEPARATE because Readability needs a DOM Document, and linkedom supplying one costs 94.6 KB gzip on its own against a site bundle already over its 204.24 KiB budget. The second reason this note used to give, run_worker_first's 100-rule cap, EXPIRED when the eight exact /lens rows were folded to /lens + /lens/* and the config dropped to 94; the size reason is doing the work alone now. If this Worker goes missing, /lens keeps working and the Reader tab reports the extractor as unreachable." }
     ],
     "retired": [
       {

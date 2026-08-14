@@ -11,7 +11,7 @@
 // so the constants and helpers the contract tests assert against cannot live
 // beside `export default { fetch }`. Same shape as lib/tui.js: pure module,
 // three callers (the Worker, the tests, and anything that wants the numbers).
-import Defuddle from "defuddle";
+import { Readability } from "@mozilla/readability";
 import { parseHTML } from "linkedom";
 import TurndownService from "turndown";
 import { privateHostBlocked, validateLensTarget } from "../../www/_worker.js/lib/crawl.js";
@@ -30,16 +30,17 @@ export class ReaderError extends Error {
 }
 
 export const BOT_UA = "AadharshBot/1.0 (+https://aadhar.sh/bot)";
-export const EXTRACTOR = { name: "defuddle", version: "0.19.2" };
+export const EXTRACTOR = { name: "readability", version: "0.6.0" };
 export const READER_LIMIT_PER_MIN = 10;
 export const FETCH_TIMEOUT_MS = 8000;
 export const BODY_CAP = 2 * 1024 * 1024;   // same 2MB ceiling /lens/fetch reads to
 export const MARKDOWN_CAP = 120 * 1024;    // same cap the Browser view puts on content
 
 export const READER_NOTE =
-  "Defuddle is a third-party extractor (MIT, kepano/defuddle). What it returns is its OPINION " +
-  "of which part of the page is the article, never what the server sent. /lens's Machine view " +
-  "is the served bytes; this pane is the reading view, and the gap between them is the point.";
+  "Readability is a third-party extractor (Apache-2.0, mozilla/readability), the engine behind " +
+  "Firefox Reader View. What it returns is its OPINION of which part of the page is the article, " +
+  "never what the server sent. /lens's Machine view is the served bytes; this pane is the reading " +
+  "view, and the gap between them is the point.";
 
 // ── the read ────────────────────────────────────────────────────────────────
 
@@ -93,12 +94,19 @@ export async function read(targetUrl) {
     };
   }
 
+  // TWO parses, and the second one is not redundant. Readability REWRITES the
+  // document it is given (it strips, unwraps and re-parents nodes in place), so
+  // a single shared parse would hand `countControls` a corpse: the <button>
+  // census below would run over whatever survived extraction and report every
+  // page as leaking zero controls. `document` is the untouched copy the census
+  // reads; `working` is the one Readability is allowed to destroy.
   const t1 = Date.now();
   const { document } = parseHTML(html);
+  const { document: working } = parseHTML(html);
   const parseMs = Date.now() - t1;
 
   const t2 = Date.now();
-  const result = new Defuddle(document, { url: finalUrl }).parse();
+  const result = new Readability(working, { charThreshold: 500 }).parse() || {};
   const extractMs = Date.now() - t2;
 
   const contentHtml = String(result.content || "");
@@ -122,21 +130,25 @@ export async function read(targetUrl) {
     extractor: EXTRACTOR,
     note: READER_NOTE,
     title,
-    author: str(result.author, 200),
-    published: str(result.published, 100),
-    site: str(result.site, 200),
+    author: str(result.byline, 200),
+    published: str(result.publishedTime, 100),
+    site: str(result.siteName, 200),
     source,
     kept,
     dropped: {
       words: Math.max(0, source.words - kept.words),
       pct: source.words ? Math.round(((source.words - kept.words) / source.words) * 100) : null,
     },
-    // The readout this lens exists for, beyond the word gap. Defuddle keeps
-    // `<button>` TEXT on purpose (dist/markdown.js: addRule('button',
-    // replacement: content => content)), so a live demo's control labels arrive
-    // as prose. On /garage/horizon that is 13 of 25 distinct labels. An agent
-    // reading the output has no way to tell a label from a sentence, which is
-    // exactly the failure `scripts/lib/html-to-md.mjs` rule 2 refuses.
+    // The readout this lens exists for, beyond the word gap. An extractor that
+    // hands a live demo's control labels over as prose gives an agent no way to
+    // tell a label from a sentence, which is exactly the failure
+    // `scripts/lib/html-to-md.mjs` rule 2 refuses.
+    //
+    // Measured 2026-08-14 over the same five-page corpus, this is where the
+    // extractor swap paid: on /garage/horizon Defuddle leaked 14 of 26 distinct
+    // control labels and Readability leaks 3. It is NOT a uniform win, which is
+    // why this number stays on the payload rather than being retired as solved:
+    // on stripe.com Readability leaks 5 where Defuddle leaked 2.
     controls,
     recovery,
     markdown: markdown.slice(0, MARKDOWN_CAP),
@@ -208,8 +220,8 @@ export function countControls(document, contentHtml) {
   };
 }
 
-// Lens's score, derived from Defuddle's output. Defuddle does not publish a
-// readability grade, so calling this "Defuddle's score" would give borrowed
+// Lens's score, derived from Readability's output. Readability does not publish
+// a readability grade, so calling this "Readability's score" would give borrowed
 // authority to a number it never made. Four binary checks keep the calculation
 // legible enough to audit from the pane itself.
 export function scoreExtraction({ source, kept, controls, title, markdown }) {
@@ -228,7 +240,7 @@ export function scoreExtraction({ source, kept, controls, title, markdown }) {
     {
       key: "title", label: "title recovered",
       pass: !!String(title || "").trim(),
-      detail: title ? "Defuddle returned a title" : "no title returned",
+      detail: title ? "Readability returned a title" : "no title returned",
     },
     {
       key: "controls", label: "control-label purity",
@@ -247,7 +259,7 @@ export function scoreExtraction({ source, kept, controls, title, markdown }) {
     passed,
     counted: checks.length,
     checks,
-    scoringNote: "Lens computes four equally weighted checks from Defuddle's output; Defuddle itself does not publish this score.",
+    scoringNote: "Lens computes four equally weighted checks from Readability's output; Readability itself does not publish this score.",
   };
 }
 

@@ -8,9 +8,9 @@ importers:
 
   .:
     dependencies:
-      defuddle:
-        specifier: 0.19.2
-        version: 0.19.2
+      '@mozilla/readability':
+        specifier: 0.6.0
+        version: 0.6.0
       linkedom:
         specifier: 0.18.13
         version: 0.18.13
@@ -23,17 +23,13 @@ packages:
   '@mixmark-io/domino@2.2.0':
     resolution: {integrity: sha512-Y28PR25bHXUg88kCV7nivXrP2Nj2RueZ3/l/jdx6J9f8J4nsEGcgX0Qe6lt7Pa+J79+kPiJU3LguR6O/6zrLOw==}
 
-  '@xmldom/xmldom@0.9.10':
-    resolution: {integrity: sha512-A9gOqLdi6cV4ibazAjcQufGj0B1y/vDqYrcuP6d/6x8P27gRS8643Dj9o1dEKtB6O7fwxb2FgBmJS2mX7gpvdw==}
-    engines: {node: '>=14.6'}
+  '@mozilla/readability@0.6.0':
+    resolution: {integrity: sha512-juG5VWh4qAivzTAeMzvY9xs9HY5rAcr2E4I7tiSSCokRFi7XIZCAu92ZkSTsIj1OPceCifL3cpfteP3pDT9/QQ==}
+    engines: {node: '>=14.0.0'}
 
   boolbase@2.0.0:
     resolution: {integrity: sha512-DkVaaQHymRhpYEYo9x1oo7Q7B0Y6KJUsjm3c9eTyFDby4MHLBTwZ6ZDWBel5zrYxj1WsZgC5oLpiz+93MluXeA==}
     engines: {node: '>=20.19.0'}
-
-  commander@12.1.0:
-    resolution: {integrity: sha512-Vw8qHK3bZM9y/P10u3Vib8o/DdkvA2OtPtZvD871QKjy74Wj1WSKFILMPRPSdUSx5RFK1arlJzEtA4PkFgnbuA==}
-    engines: {node: '>=18'}
 
   css-select@7.0.0:
     resolution: {integrity: sha512-snmjEVXy+1LnwXdxhYvTMj1d9tOh4HxkA1YmoayVBeeyR2C14Pum7fcxJIm4SswYspVy866eYNwlH6xC3/VH5g==}
@@ -45,10 +41,6 @@ packages:
 
   cssom@0.5.0:
     resolution: {integrity: sha512-iKuQcq+NdHqlAcwUY0o/HL69XQrUaQdMjmStJ8JFmUaiiQErlhrmuigkg/CU4E2J0IyUKUrMAgl36TvN67MqTw==}
-
-  defuddle@0.19.2:
-    resolution: {integrity: sha512-FY+a9Byo3uS04SQnQjLaguNoEA0Y58vXTB1XvvnOkO6M0zo897ipekv2Unci42QEY70emZ6OLe7C0vPojr1JEA==}
-    hasBin: true
 
   dom-serializer@2.0.0:
     resolution: {integrity: sha512-wIkAryiqt/nV5EQKqQpo3SToSOV9J0DnbJqwK7Wv/Trc92zIAYZ4FlMu+JPFW1DfGFt81ZTCGgDEabffXeLyJg==}
@@ -106,16 +98,9 @@ packages:
       canvas:
         optional: true
 
-  mathml-to-latex@1.8.0:
-    resolution: {integrity: sha512-gQ0uK3zqB8HwlfaXJkEL5rgaZNbKUiBMmBP/B/W+b+t6KcseLSuYb1b0BjLgS9ZiQa24ePkqTX8/6FaQuDL7wQ==}
-
   nth-check@3.0.1:
     resolution: {integrity: sha512-GX0gsdbGVCgnRgbeGaubfjpBXyYRWOOCVeYh08bSQvDZqxz5ndXs1OTfAt/h36G1xvI94YIspsI0sVFqAV9+RQ==}
     engines: {node: '>=20.19.0'}
-
-  temml@0.13.4:
-    resolution: {integrity: sha512-k1yolMBswx34Jw9hZn5Xh2/GBlwqlW+wiN7QaUYUMhSa1ypfti6rlCfSmCxWyooxH1G32C/Z+qVvgAsBOELZBQ==}
-    engines: {node: '>=18.13.0'}
 
   turndown@7.2.4:
     resolution: {integrity: sha512-I8yFsfRzmzK0WV1pNNOA4A7y4RDfFxPRxb3t+e3ui14qSGOxGtiSP6GjeX+Y6CHb7HYaFj7ECUD7VE5kQMZWGQ==}
@@ -128,12 +113,9 @@ snapshots:
 
   '@mixmark-io/domino@2.2.0': {}
 
-  '@xmldom/xmldom@0.9.10':
-    optional: true
+  '@mozilla/readability@0.6.0': {}
 
   boolbase@2.0.0: {}
-
-  commander@12.1.0: {}
 
   css-select@7.0.0:
     dependencies:
@@ -146,17 +128,6 @@ snapshots:
   css-what@8.0.0: {}
 
   cssom@0.5.0: {}
-
-  defuddle@0.19.2:
-    dependencies:
-      commander: 12.1.0
-    optionalDependencies:
-      linkedom: 0.18.13
-      mathml-to-latex: 1.8.0
-      temml: 0.13.4
-      turndown: 7.2.4
-    transitivePeerDependencies:
-      - canvas
 
   dom-serializer@2.0.0:
     dependencies:
@@ -217,17 +188,9 @@ snapshots:
       htmlparser2: 10.1.0
       uhyphen: 0.2.0
 
-  mathml-to-latex@1.8.0:
-    dependencies:
-      '@xmldom/xmldom': 0.9.10
-    optional: true
-
   nth-check@3.0.1:
     dependencies:
       boolbase: 2.0.0
-
-  temml@0.13.4:
-    optional: true
 
   turndown@7.2.4:
     dependencies:

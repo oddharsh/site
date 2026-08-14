@@ -2,27 +2,31 @@
 //
 // WHAT THIS IS. /lens shows a page the way a machine receives it. This Worker
 // shows the same page the way a READER-MODE EXTRACTOR thinks of it, using
-// Defuddle (kepano/defuddle, the engine behind Obsidian Web Clipper). The two
-// answers are deliberately different, and the DIFFERENCE is the artifact: an
+// Readability (mozilla/readability, the engine behind Firefox Reader View). The
+// two answers are deliberately different, and the DIFFERENCE is the artifact: an
 // extractor is guessing which part of a document is the article, and on a
 // landing page it guesses badly in a way that is invisible unless you put the
-// two side by side. Measured 2026-08-09 on stripe.com, Defuddle dropped the
-// hero headline entirely and reported 1,029 words against the served page's
+// two side by side. Measured 2026-08-14 on stripe.com, Readability dropped the
+// hero headline entirely and reported 671 words against the served page's
 // 1,875. That is the lesson the lens exists to teach.
 //
 // So the response NEVER claims to be what the machine got. It reports the
 // extractor by name and version, what it kept, and what it threw away.
 //
-// WHY ITS OWN WORKER, and this is the load-bearing part. Defuddle needs a DOM
-// `Document`; Workers have HTMLRewriter. Supplying one costs linkedom, and the
-// three deps bundle to ~190 KB gzip (defuddle core 91.9 + linkedom 97.6 +
-// turndown 4.1, measured 2026-08-09). The site Worker's budget is 204.24 KiB
-// gzip and already in breach, so this cannot live there. A second Worker on a
-// zone route costs the site bundle nothing.
+// WHY ITS OWN WORKER, and this is the load-bearing part. Readability needs a DOM
+// `Document`; Workers have HTMLRewriter. Supplying one costs linkedom at 94.6 KB
+// gzip, against a site Worker budget of 204.24 KiB that is already in breach, so
+// this cannot live there. A second Worker on a zone route costs it nothing.
 //
-// It ALSO sidesteps a hard wall: `run_worker_first` caps at 100 rules and this
-// repo sits at exactly 100 (CLAUDE.md gotcha 26), so a /lens/read path on the
-// site Worker would refuse to boot. A zone route needs no entry in that list.
+// Worth seeing plainly after the 2026-08-14 extractor swap: linkedom is now 8x
+// the size of the extractor it exists to serve (94.6 KB against Readability's
+// 11.4), so most of what keeps this Worker separate is scaffolding rather than
+// extraction. A DOM-free extractor would collapse the split entirely.
+//
+// The SECOND reason this comment used to give has EXPIRED. `run_worker_first`
+// capped at 100 rules with the repo at exactly 100 (CLAUDE.md gotcha 26), but
+// folding the eight exact /lens rows to /lens + /lens/* dropped it to 94. The
+// size argument is carrying this alone now; do not cite the cap again.
 //
 // This module is the ENTRYPOINT and nothing else. Everything testable lives in
 // reader.js, because a Worker entrypoint may export only the default handler

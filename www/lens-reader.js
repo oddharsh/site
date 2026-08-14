@@ -38,20 +38,20 @@
   function pre(text) { return '<pre class="lx-pre">' + esc(text) + "</pre>"; }
 
   var CREDIT =
-    '<div class="lx-cap lx-reader-credit">Extraction by <a href="https://github.com/kepano/defuddle" rel="noopener">Defuddle</a> ' +
-    "(MIT, kepano) — the engine behind Obsidian Web Clipper. It runs in its own Worker at /lens/read, " +
-    "because a DOM implementation costs ~190 KB gzip and this site's Worker will not carry one.</div>";
+    '<div class="lx-cap lx-reader-credit">Extraction by <a href="https://github.com/mozilla/readability" rel="noopener">Readability</a> ' +
+    "(Apache-2.0, Mozilla) &mdash; the engine behind Firefox Reader View. It runs in its own Worker at /lens/read, " +
+    "because it still needs a DOM implementation and this site's Worker will not carry one.</div>";
 
   function intro() {
     return section("Reader's guess", { text: "not run" },
       "A third-party extractor's opinion of this page, from its own Worker.",
-      '<div class="lx-reader-intro">Defuddle guesses which part of the document is the article and throws the rest away. ' +
+      '<div class="lx-reader-intro">Readability guesses which part of the document is the article and throws the rest away. ' +
       'The <b>Raw response</b> tab is what the server actually sent. The interesting number is the gap between them.' +
       '<button class="lx-browser-run" type="button" id="lx-reader-run">Run the extractor</button></div>' + CREDIT);
   }
 
   function busyPane() {
-    return '<div class="lx-spin">Defuddle is re-reading the page and extracting an article&hellip;</div>';
+    return '<div class="lx-spin">Readability is re-reading the page and extracting an article&hellip;</div>';
   }
 
   // The headline. A percentage alone would be a verdict, and the verdict depends
@@ -81,16 +81,19 @@
     var rows = (r.checks || []).map(function (check) {
       return '<li><b>' + (check.pass ? '&#10003;' : '&#10005;') + ' ' + esc(check.label) + '</b><span>' + esc(check.detail || "") + '</span></li>';
     }).join("");
-    return section("Defuddle content recovery", { text: r.overall + "/100", kind: r.overall >= 75 ? "ok" : r.overall >= 50 ? "" : "warn" },
-      "Lens computes this from Defuddle's output. Defuddle itself does not publish a readability score.",
+    return section("Readability content recovery", { text: r.overall + "/100", kind: r.overall >= 75 ? "ok" : r.overall >= 50 ? "" : "warn" },
+      "Lens computes this from Readability's output. Readability itself does not publish a readability score.",
       '<ol class="lx-reader-recovery">' + rows + '</ol><div class="lx-cap">' + esc(r.scoringNote || "") + '</div>');
   }
 
-  // The finding this lens exists to make visible, beyond the word gap. Defuddle
-  // keeps <button> text ON PURPOSE (its markdown rules carry
-  // addRule('button', replacement: content => content)), so a page with live
-  // demos hands an agent control labels as though they were prose. An agent
-  // cannot tell "Run all three" from a sentence.
+  // The finding this lens exists to make visible, beyond the word gap. An
+  // extractor that keeps <button> text hands an agent control labels as though
+  // they were prose, and an agent cannot tell "Run all three" from a sentence.
+  //
+  // Readability leaks far fewer of these than Defuddle did, which is most of
+  // why the extractor was swapped: on /garage/horizon, 3 of 26 labels against
+  // Defuddle's 14 of 26 (measured 2026-08-14). It is NOT uniformly better, so
+  // the readout stays: on stripe.com it leaks 5 where Defuddle leaked 2.
   function controls(d) {
     var c = d.controls;
     if (!c || !c.total) return "";
@@ -108,7 +111,7 @@
 
   function claims(d) {
     return section("What the extractor claims this is", { text: d.title ? "titled" : "untitled" },
-      "Metadata Defuddle lifted while extracting. Unset fields are omitted rather than guessed.",
+      "Metadata Readability lifted while extracting. Unset fields are omitted rather than guessed.",
       kvTable({
         title: d.title, author: d.author, published: d.published, site: d.site,
         "final URL": d.finalUrl, "redirected": d.redirected ? "yes" : null,
@@ -139,7 +142,7 @@
       kvTable({
         "fetch the page again": phase(ms.fetch),
         "build a DOM (linkedom)": phase(ms.parse),
-        "extract (defuddle)": phase(ms.extract),
+        "extract (readability)": phase(ms.extract),
         "to markdown (turndown)": phase(ms.markdown),
       }) + (blind
         ? '<div class="lx-cap">A Worker\'s clock advances across I/O and never during synchronous execution, so the three CPU phases cannot time themselves from inside. They are real work — the same run under a local runtime reported 30 ms, 347 ms and 10 ms — and the zeros here mean "unmeasurable", not "free". Actual CPU is readable in Workers Logs as <code>cpuTime</code>.</div>'
@@ -149,9 +152,9 @@
   function prose(d) {
     var md = d.markdown || "";
     if (!md) return section("The extraction", { text: "empty" },
-      "Defuddle returned no content for this page.", '<div class="lx-empty">Nothing extracted.</div>');
+      "Readability returned no content for this page.", '<div class="lx-empty">Nothing extracted.</div>');
     return section("The extraction", { text: bytes(md.length) + (d.markdownTruncated ? " (capped)" : "") },
-      "The markdown Defuddle would hand a clipper or an agent. First slice.",
+      "The markdown Readability would hand a clipper or an agent. First slice.",
       pre(md.slice(0, 2000) + (md.length > 2000 ? "\n\n[… " + bytes(md.length) + " total]" : "")));
   }
 
