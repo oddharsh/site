@@ -273,10 +273,17 @@ way to do what `pnpm run deploy:direct` already did.
 
 ### Version affinity (the Transform Rule)
 
-**Not yet created.** It needs a zone write, which no script in this repo has: the
-one write token is DNS-scoped and workstation-only. This is the recipe, and
-`pnpm run infra:check` fails until the rule exists, because it is declared in
-`config/infra.json` under `zone.version_affinity`.
+**Created 2026-08-14.** It is declared in `config/infra.json` under
+`zone.version_affinity`, and `pnpm run infra:check` reads the live rule back. The
+recipe below is kept because the rule needs a zone write that no script here has
+(the one write token is DNS-scoped and workstation-only), so rebuilding it is a
+dashboard job.
+
+Two things about its state, and the difference matters. The EXPRESSION is
+verified: the dashboard editor accepted it, which is the only syntax check that
+exists for the Rules language. The BEHAVIOUR is not yet verified, because
+affinity does nothing while one version serves 100% of traffic and so cannot be
+observed until a ramp splits it. Run the control below at the first 10% step.
 
 **What it fixes.** Every document here references content-hashed shell assets
 (`/a/luna.<hash8>.css`, `/a/nav.<hash8>.js`), the build keeps exactly one hash per
@@ -318,17 +325,34 @@ one per visitor, which is a tracking-shaped change to a site whose `/whoareyou`
 makes claims about what it does not collect, and a `Set-Cookie` on the HTML
 response would take the page out of shared caches.
 
-Verify it after the next ramp reaches a split:
+**Verify it during a split, never before one.** With one version at 100% every
+request reports that version whatever the key says, so a passing check at rest
+proves nothing. Run both halves at a 10% step. They are a positive and a negative
+control and neither is conclusive alone.
+
+First with NO key, where the rule should derive one from `ip.src`, so a sweep from
+a single machine must land entirely on ONE version:
 
 ```bash
-curl -s https://aadhar.sh/whoareyou.json -H 'Cloudflare-Workers-Version-Key: probe-1' | jq -r '.groups[]|select(.title=="Server").fields[]|select(.k=="Serving version").v'
+for i in $(seq 1 20); do curl -s "https://aadhar.sh/whoareyou.json?u=$i" | jq -r '.groups[]|select(.title=="Server").fields[]|select(.k=="Serving version").v'; done | sort | uniq -c
 ```
 
-Same key twice must report the same version; different keys should spread across
-both. `pnpm run infra:check` reads the rule itself, and needs a token carrying
-`Zone:Transform Rules:Read` and `Zone:Zone:Read`. Neither is among CI's six
-account reads, so in CI that section always degrades to a note and the assertion
-is a workstation run, the same standing as `repository.code_scanning`.
+Then with a DISTINCT key per request, which the rule must leave alone. These
+should spread across both versions, roughly in the ramp's proportions:
+
+```bash
+for i in $(seq 1 20); do curl -s "https://aadhar.sh/whoareyou.json?k=$i" -H "Cloudflare-Workers-Version-Key: probe-$i" | jq -r '.groups[]|select(.title=="Server").fields[]|select(.k=="Serving version").v'; done | sort | uniq -c
+```
+
+One line from the first and two from the second means both halves work. Two lines
+from the first means the rule is not firing at all. One line from the second means
+the rule is clobbering the keys `deploy:promote` depends on, and every ramp step
+will read as a dead deploy until the expression is fixed.
+
+`pnpm run infra:check` reads the rule's own configuration and needs a token
+carrying `Zone:Transform Rules:Read` and `Zone:Zone:Read`. Neither is among CI's
+six account reads, so that section always degrades to a note in CI and the
+assertion is a workstation run, the same standing as `repository.code_scanning`.
 
 ### Preview URLs
 
