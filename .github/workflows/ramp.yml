@@ -96,14 +96,18 @@ concurrency:
   # wins" is also the right precedence for a release pipeline: a ramp nobody
   # approved before the next release landed is a ramp that should not finish.
   #
-  # ONE THING HERE IS NOT MEASURED, and it is the load-bearing one: whether
-  # cancel-in-progress cancels a run whose status is `waiting` on an environment
-  # gate rather than `in_progress`. What IS measured is that FALSE does not
-  # (31644451923 outlived every later arrival for two days) and that a PENDING run
-  # is evicted either way. If a parked ramp survives the next release too, this
-  # setting is not enough and the fix is to stop the wait holding the group at
-  # all, by moving `full` into its own workflow. Check it on the next release
-  # that lands while one is parked, rather than assuming.
+  # THE LOAD-BEARING QUESTION IS ANSWERED, and the answer is yes. This block
+  # shipped saying it was NOT measured whether cancel-in-progress reaches a run
+  # whose status is `waiting` on an environment gate rather than `in_progress`,
+  # and asked for the next release that landed while one was parked. That release
+  # was this file's own: run 31820445866 entered the group at 16:40:27 on
+  # 2026-08-14 and the parked run 31814961381, `waiting` since 15:32:04, was
+  # cancelled at 16:40:28. One second.
+  #
+  # So this setting is sufficient by itself and the fallback it named, moving
+  # `full` into its own workflow so the wait never holds the group, is not
+  # needed. Keep the fallback in mind rather than in the tree: it is the answer
+  # if GitHub ever narrows cancel-in-progress to `in_progress` alone.
   group: >-
     ${{
       (github.event_name == 'workflow_dispatch' ||
