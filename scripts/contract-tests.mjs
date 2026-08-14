@@ -40,7 +40,7 @@ import { handleTool, tokenizeKeys } from "../www/_worker.js/terminal.js";
 import { handleTerminal } from "../www/_worker.js/wire.js";
 import { DATA_TOOLS } from "../www/_worker.js/lib/tools.js";
 import { cronJob } from "../www/_worker.js/lib/cron.js";
-import { BASELINE_HEADING, FLOOR_CLAIMS, auditDependencyDocs, baselineSection, checkDependencyDocs, findClaims } from "./lib/dependency-docs.mjs";
+import { BASELINE_HEADING, FLOOR_CLAIMS, auditDependencyDocs, baselineSection, checkDependencyDocs, findClaims, parseCargoDeps } from "./lib/dependency-docs.mjs";
 import { PAGE_FAMILY_MATCH, serveStaticPage } from "../www/_worker.js/lib/assets.js";
 import { serveMarkdown } from "../www/_worker.js/home.js";
 import { readManifest, workerModule, navFenceBody, readFenceBody, runProfilesBody } from "./gen-manifest.mjs";
@@ -2775,6 +2775,101 @@ test("the collapsed check keeps the two rules that came from #382", () => {
 
   const renamed = auditDependencyDocs({ doc: "## Something Else\n- Wrangler 4.120.1", pins: {}, ...quiet });
   assert.ok(renamed.problems.some((p) => /has no "## Current baseline" section/.test(p)));
+});
+
+test("the dependency-doc check reaches the four manifests outside the root", () => {
+  const H = BASELINE_HEADING;
+  // Root kept quiet so each assertion is about the sub-manifest under test.
+  const quiet = { aliases: [], versionless: new Map(), floor: 0, pins: {} };
+  const sub = (over = {}) => [{
+    manifest: "lens-reader/package.json",
+    aliases: [{ prose: "turndown", pkg: "turndown" }],
+    versionless: new Map(),
+    pins: { turndown: "7.2.4" },
+    ...over,
+  }];
+
+  const ok = auditDependencyDocs({ doc: `${H}\n- \`turndown\` 7.2.4 ships two builds.`, ...quiet, subManifests: sub() });
+  assert.deepEqual(ok.problems, [], "a matching sub-manifest claim must pass");
+
+  // 1. THE BACKTICK. This doc writes package names as `code`, so a pattern that
+  //    only matched a bare name would silently match nothing for every entry in
+  //    the file's own house style, and the floor is the only thing that would
+  //    have noticed.
+  const bare = auditDependencyDocs({ doc: `${H}\n- turndown 7.2.4 ships two builds.`, ...quiet, subManifests: sub() });
+  assert.deepEqual(bare.problems, [], "an unbackticked name must still match");
+
+  // 2. a bumped sub-manifest pin against an unbumped sentence
+  const stale = auditDependencyDocs({ doc: `${H}\n- \`turndown\` 7.2.3 ships two builds.`, ...quiet, subManifests: sub() });
+  assert.ok(stale.problems.some((p) => /states "turndown 7\.2\.3" but lens-reader\/package\.json pins turndown at 7\.2\.4/.test(p)),
+    stale.problems.join("\n"));
+
+  // 3. a NEW sub-manifest dependency nobody documented. This is the direction
+  //    that found serde_json, which arrived with #373 and was unmentioned.
+  const undocumented = auditDependencyDocs({
+    doc: `${H}\n- \`turndown\` 7.2.4 ships two builds.`,
+    ...quiet,
+    subManifests: sub({ pins: { turndown: "7.2.4", "left-pad": "1.0.0" } }),
+  });
+  assert.ok(undocumented.problems.some((p) => /left-pad is a lens-reader\/package\.json dependency/.test(p)),
+    undocumented.problems.join("\n"));
+
+  // 4. a RANGE in a sub-manifest alias table. Cargo's bare "0.25" is a caret
+  //    range, so it has to fail here exactly as a ^ would.
+  const ranged = auditDependencyDocs({
+    doc: `${H}\n- \`image\` 0.25 decodes input.`,
+    ...quiet,
+    subManifests: sub({ manifest: "www/scripts/zenc/Cargo.toml", aliases: [{ prose: "image", pkg: "image" }], pins: { image: "0.25" } }),
+  });
+  assert.ok(ranged.problems.some((p) => /image is range-pinned \(0\.25\)/.test(p)), ranged.problems.join("\n"));
+
+  // 5. a manifest that cannot be read must be REPORTED, never audited as {}.
+  //    An empty pin set scans clean and asserts nothing, which is how a moved
+  //    file would read as a healthy project forever.
+  const missing = auditDependencyDocs({
+    doc: `${H}\n- \`turndown\` 7.2.4 ships two builds.`,
+    ...quiet,
+    subManifests: sub({ missing: true, pins: {} }),
+  });
+  assert.ok(missing.problems.some((p) => /lens-reader\/package\.json is declared in SUB_MANIFEST_POLICY but could not be read/.test(p)),
+    missing.problems.join("\n"));
+
+  // 6. a stale exemption in a sub-manifest, same rule the root has.
+  const staleExempt = auditDependencyDocs({
+    doc: `${H}\n- \`turndown\` 7.2.4 ships two builds.`,
+    ...quiet,
+    subManifests: sub({ versionless: new Map([["gone-pkg", "reason"]]) }),
+  });
+  assert.ok(staleExempt.problems.some((p) => /gone-pkg is exempted .* but is no longer a lens-reader\/package\.json dependency/.test(p)),
+    staleExempt.problems.join("\n"));
+});
+
+test("the Cargo reader takes both dependency shapes and ignores the rest", () => {
+  const toml = [
+    "[package]", 'name = "zenc"', 'version = "0.1.0"',
+    "", "[dependencies]",
+    "# a comment",
+    'zenjpeg = { version = "0.8.4", features = ["parallel"] }',
+    'image = "0.25"',
+    'serde_json = { version = "1.0", features = ["preserve_order"] }',
+    "", "[profile.release]", "opt-level = 3",
+  ].join("\n");
+  const deps = parseCargoDeps(toml);
+  assert.deepEqual(deps, { zenjpeg: "0.8.4", image: "0.25", serde_json: "1.0" });
+  // [package] and [profile.release] must not leak in: `version = "0.1.0"` sits
+  // in [package] and would otherwise read as a dependency called "version".
+  assert.ok(!("version" in deps) && !("name" in deps) && !("opt-level" in deps),
+    "only the [dependencies] table may be read");
+  assert.deepEqual(parseCargoDeps("[package]\nname = \"x\"\n"), {}, "no [dependencies] table is an empty set");
+
+  // The [dependencies] table LAST, with no section after it. The first draft
+  // anchored on `\Z`, which JavaScript does not have, so this case returned {}
+  // and scanned clean. oxlint found it; this pins it.
+  assert.deepEqual(
+    parseCargoDeps('[package]\nname = "zenc"\n\n[dependencies]\nzenjpeg = "0.8.4"\n'),
+    { zenjpeg: "0.8.4" },
+    "a [dependencies] table with nothing after it must still be read",
+  );
 });
 
 test("the dependency-doc scanner does not read prose as a version claim", () => {
