@@ -1,16 +1,27 @@
 # Dependency updates and site leverage
 
-Dependabot watches the root npm workspace and GitHub Actions. Each update PR
-keeps the upstream release notes/changelog in its Dependabot description and
-gets a persistent site-review comment containing the exact version change,
-update type, and questions for the site.
+Dependabot watches FIVE ecosystems, and this paragraph named two of them until
+2026-08-14:
+
+| ecosystem | directory | what it owns |
+|---|---|---|
+| npm | `/` | the shared deploy toolchain and the one shipped dependency |
+| npm | `/lens-reader` | the Reader lens Worker, which is outside the workspace on purpose |
+| github-actions | `/` | the five digest-pinned actions |
+| cargo | `/www/scripts/zenc` | the JPEG thumbnail encoder's zenjpeg pin |
+| pip | `/www/scripts` | Pillow, for one page generator |
+
+Each update PR keeps the upstream release notes/changelog in its Dependabot
+description and gets a persistent site-review comment containing the exact
+version change, update type, and questions for the site.
 
 Before merging a dependency PR, future agents should record whether the new
 release changes any of these surfaces:
 
 - Cloudflare Workers, Wrangler, R2/KV/D1, Browser Run, or Workers Builds APIs;
 - bundle size, runtime compatibility, browser support, or performance budgets;
-- local photo tooling, metadata extraction, image encoders, Pillow, or CI behavior.
+- local photo tooling, metadata extraction, the image encoders (zenjpeg through
+  `zenc`, and the system binaries `config/tools.json` declares), or CI behavior.
 
 If there is no useful leverage, say so explicitly in the PR review. The merged
 PR and its review comment are the changelog record; this file is the durable
@@ -84,3 +95,69 @@ review policy and entry point for future agent runs.
   not build bytes. `/garage/pqc` is the measurement behind choosing it.
 - The root workspace lockfile is authoritative; workspace-local Wrangler pins
   are rejected by `pnpm run check-wrangler`.
+
+## Outside the root manifest
+
+Four dependency surfaces sit outside `package.json`, and the baseline above
+covered none of them until 2026-08-14. One is its own Dependabot ecosystem, so
+it drifts on the same cadence the baseline does.
+
+**No versions are restated in this section, on purpose.**
+`scripts/lib/dependency-docs.mjs` reads the ROOT `package.json` and
+`requirements.txt` and holds the prose above to them. It cannot reach these
+manifests, so a version written here would be an unchecked copy, which is the
+exact drift this file has already shipped twice: the Wrangler sentence was
+eight patch releases stale, was corrected in #371, and was wrong again within
+hours when #377 moved the pin. Read the version from the manifest named in each
+entry.
+
+The stale numbers are deliberately not repeated here, for the reason the check
+itself demonstrated while this section was being written: it scans everything
+from `## Current baseline` onward, so a historical version quoted as an example
+is indistinguishable from a live claim, and it failed this file on its own
+illustration. A stale number written inside its own correction is still a
+greppable stale number. Extending the checker to reach these four manifests is
+the obvious follow-up and is deliberately not bundled here.
+
+- **`lens-reader/`** is its own npm ecosystem with its OWN lockfile, and it is
+  outside the pnpm workspace deliberately: its dependencies are megabytes only
+  that Worker bundles. Install it with `pnpm install --ignore-workspace`, since
+  a bare `pnpm install` there walks up to the root workspace and never creates
+  `lens-reader/node_modules` at all (gotcha 29).
+
+  Three dependencies, and each carries a trap worth knowing before reviewing a
+  bump. `@mozilla/readability` is the extractor, swapped in from Defuddle on
+  2026-08-14 on a measured control-label win; the argument and the numbers are
+  in CLAUDE.md under the `lens-reader/` section, and a bump should be read for
+  whether it changes what the extractor DISCARDS, since the discard is the
+  lens's whole artifact. `linkedom` exists only to supply the DOM that Workers
+  lack and is several times the weight of the extractor it serves, so its
+  releases matter for bundle size more than for behaviour. `turndown` ships two
+  builds and wrangler resolves the BROWSER one, which throws `document is not
+  defined` in a Worker while passing under `node --test`; the fix is to pass it
+  a node rather than an HTML string, and a major bump should be re-checked
+  against that.
+
+  Its tests live in `lens-reader/test/` rather than the root suite, because the
+  root suite runs under plain node with the ROOT workspace's dependencies. An
+  import from `lens-reader/src/` fails in CI with `ERR_MODULE_NOT_FOUND` while
+  passing on any workstation that has installed there.
+
+- **`www/scripts/zenc/`** pins `zenjpeg` and `image` through Cargo. zenjpeg is
+  the production JPEG thumbnail encoder, so a bump changes the BYTES of every
+  photo re-encoded after it. Nothing re-encodes automatically, so the risk is
+  deferred rather than absent: the next `pnpm run photos` run mints new
+  content-hashed URLs. Read its releases for encoder output changes, and treat
+  a quality or scan-search change as a reason to re-measure rather than to
+  trust the version number.
+
+- **`cal/`** carries `vitest` and `@cloudflare/vitest-pool-workers`, both
+  caret-ranged. This is the chain that pulls Vite 8, and therefore Rolldown and
+  the second esbuild copy the baseline section describes. It runs the booking
+  and calendar policy tests inside workerd, so a pool-workers bump should be
+  read against the miniflare version it carries.
+
+- **`cf-garage/`** carries `@cloudflare/puppeteer`, caret-ranged, for the garage
+  demo Worker. It is a separately deployed auxiliary Worker, so nothing here
+  reaches production through the site Worker.
+
