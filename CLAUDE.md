@@ -328,6 +328,17 @@ worktrees may edit freely, but a worktree is not a release surface.
   what follows. The long argument, including the one thing still unmeasured, is at
   the concurrency block in `ramp.yml`.
 
+  **`ci.yml` carries a TRIPWIRE for a parked ramp, and it lives there rather than
+  in `ramp.yml` on purpose.** A jam inside a concurrency group cannot be reported
+  from inside that group, which is why two days of stalled releases produced no
+  signal at all. It warns past 6 hours, names the run, and is ADVISORY: failing
+  would gate every merge on a state no PR caused and would deadlock the one PR
+  able to fix a stuck ramp, the same trap `infra:check`'s edge tier documents. It
+  swallows its own API errors for the same reason, since a tripwire that reddens
+  CI on a GitHub hiccup gets muted, and a muted tripwire is worse than none. An
+  unparseable timestamp falls STALE rather than fresh, because the alternative
+  reads as a healthy repo forever. It found a real parked ramp on its first run.
+
   **The newest `Ramp production` run is usually the no-op rather than the
   release.** A no-op finishes in seconds while a real ramp waits on Workers
   Builds, so sorting by recency hands you the wrong run: on 2026-08-14 the two
