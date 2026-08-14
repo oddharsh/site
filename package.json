@@ -45,7 +45,7 @@
     "release": "node scripts/release-status.mjs"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "5.20260810.1",
+    "@cloudflare/workers-types": "5.20260811.1",
     "@minify-html/node": "0.18.1",
     "esbuild": "0.28.2",
     "lightningcss": "1.33.0",
