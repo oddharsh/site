@@ -24,17 +24,34 @@
 // WHAT IT ACTUALLY CHECKS BETWEEN STEPS. It polls /whoareyou.json, which reports
 // the serving version per request (whoareyou.js explains why that route and not
 // /updates.json — both versions read the same D1 changelog, so the changelog
-// cannot tell them apart). Two things come out of the sample and they fail for
-// different reasons:
+// cannot tell them apart). TWO PROBES run per step and they answer different
+// questions, which is why neither replaces the other:
 //
-//   1. The observed split. If you asked for 10% and every sampled request comes
-//      back on the OLD version, the ramp did not take, and continuing to 50%
-//      would be ramping something you have not tested. Sampling error is real at
-//      these counts, so the tolerance is wide and the check is for "did it move
-//      at all", not for a precise percentage.
-//   2. Non-200s from the new version specifically. A 500 on 10% of traffic is
-//      the entire reason to ramp, and it is invisible in an aggregate error rate
-//      that is still 90% healthy.
+//   1. THE PINNED PROBE (probePinned). 12 requests carrying
+//      `Cloudflare-Workers-Version-Overrides`, so every one of them is handled
+//      by the version being ramped. This is the health check, and a non-200 here
+//      is conclusive. It replaced a much weaker arrangement on 2026-08-14: the
+//      sampled sweep below found errors only in whatever fraction of its 40
+//      requests happened to land on the new code, which at a 10% step is about
+//      four. A 500 in the new version had roughly four requests looking for it.
+//      Cloudflare honours the header only for a version already in the current
+//      deployment, so this necessarily runs AFTER the step, never before.
+//   2. THE SAMPLED SWEEP (sample). 40 unpinned requests, each carrying its own
+//      `Cloudflare-Workers-Version-Key`. This is the routing check: did the
+//      split actually take. The pinned probe cannot answer it, because pinning
+//      bypasses the split by construction. Sampling error is real at these
+//      counts, so the tolerance stays wide and the question stays "did it move
+//      at all" rather than "is it exactly 10%".
+//
+// The per-request version keys in (2) are not decoration. Cloudflare hashes that
+// header to pick a version, so distinct keys give a real spread from one machine
+// and no socket can pin them, which is a strict improvement on sending nothing.
+// They also survive the version-affinity Transform Rule declared in infra.json
+// under zone.version_affinity: that rule derives the same header from ip.src so
+// visitors stop getting HTML from one version with content-hashed assets from
+// another, and it exempts requests already carrying a key so that this sweep can
+// still watch a split take. Once it exists, a sweep with no keys would hash to
+// one version and read as a dead ramp.
 //
 // WHAT IT DOES NOT CHECK, SAID PLAINLY. Latency, correctness, and anything a
 // visitor would notice that still returns 200. Workers Logs is the surface for
@@ -77,6 +94,15 @@ const SAMPLE_ATTEMPTS = 3;
 // 8s is ~5x the whole 40-request sweep measured against production (1.5s), so a
 // timeout here means something is genuinely wrong rather than merely slow.
 const REQ_TIMEOUT_MS = 8000;
+// The PINNED probe: requests aimed at one version with
+// `Cloudflare-Workers-Version-Overrides`, rather than fired into the split and
+// sorted afterwards. Small on purpose. The unpinned sweep needs 40 because it is
+// looking for a 10% signal in noise; this one is deterministic, so 12 requests
+// buy 12 real exercises of the new code instead of ~1.2.
+const PINNED_PROBES = 12;
+// One affinity key per request, namespaced per run so a re-ramp does not inherit
+// the previous run's version assignments.
+const RUN_ID = Math.random().toString(36).slice(2, 8);
 
 // ---------------------------------------------------------------- args ----
 
@@ -223,6 +249,21 @@ async function newestVersion() {
   return production[0].id;
 }
 
+// The Worker's name, which is half of the version-override header. Read from the
+// same declaration Workers Builds publishes under, so it cannot drift from the
+// script the dashboard actually deploys, and read lazily for the same reason
+// productionAlias() is: `--status` must not break on a malformed infra.json.
+async function workerName() {
+  try {
+    const infra = JSON.parse(await readFile(new URL("../config/infra.json", import.meta.url), "utf8"));
+    const name = infra?.release?.worker;
+    if (!name) throw new Error("infra.json declares no release.worker");
+    return name;
+  } catch (e) {
+    die(`could not read the worker name from infra.json: ${e.message}`);
+  }
+}
+
 // -------------------------------------------------------------- sampling ----
 
 // Poll the live site and attribute each response to a version. Sequential on
@@ -251,7 +292,23 @@ async function sample(target, previous) {
   for (let i = 0; i < SAMPLES; i++) {
     try {
       const res = await fetch(`${SAMPLE_URL}?s=${i}`, {
-        headers: { accept: "application/json" },
+        headers: {
+          accept: "application/json",
+          // A DISTINCT affinity key per request, and it does two jobs.
+          //
+          // Cloudflare hashes this header to choose a version, so a fresh key
+          // per request cannot be pinned by a reused connection. That is the
+          // hazard this loop's sequential shape was already working around.
+          //
+          // It also keeps the sweep working once the version-affinity Transform
+          // Rule exists. That rule derives the same header from ip.src, so a
+          // sweep from one machine would otherwise hash to ONE version and a
+          // healthy ramp would read as dead. The rule skips requests that
+          // already carry a key, which is what makes this line survive it;
+          // infra.json's zone.version_affinity declares that exemption and
+          // check-infra.mjs asserts it.
+          "cloudflare-workers-version-key": `ramp-${RUN_ID}-${i}`,
+        },
         cache: "no-store",
         // No default request timeout exists on fetch. Without this a single
         // stalled socket hangs the whole ramp mid-step.
@@ -281,6 +338,61 @@ async function sample(target, previous) {
   // proved nothing, which is not the same as proving the deploy is fine.
   const answered = SAMPLES - stalls;
   return { seen, errors, errorVersions, stalls, stallReasons, answered, onTarget, onPrevious, total: SAMPLES };
+}
+
+// ---------------------------------------------------- the pinned probe ----
+
+// Ask ONE version directly, with `Cloudflare-Workers-Version-Overrides`.
+//
+// WHY THIS EXISTS ALONGSIDE sample(). The two answer different questions, and
+// until 2026-08-14 only one of them was being asked. sample() fires into the
+// live split and sorts the results, so at a 10% step roughly 4 of its 40
+// requests exercise the new code and the other 36 re-prove that the version
+// already serving production still works. The whole reason to ramp is to catch a
+// fault in the NEW version while it is small, and the check aimed at it had four
+// requests behind it.
+//
+// The override header removes the sampling entirely: every request here is
+// handled by the target, so 12 of 12 exercise the code about to take the site.
+// An error found this way is conclusive in the way sample()'s errors were only
+// probabilistically conclusive.
+//
+// TWO CONSTRAINTS, both from Cloudflare's docs and both load-bearing. The
+// override only applies if the named version is IN the current deployment, so
+// this can only run after the step that puts it there, never before. And it
+// bypasses the split by construction, so it says nothing about whether traffic
+// actually moved, which stays sample()'s job, and is why both still run.
+async function probePinned(versionId, worker) {
+  const override = `${worker}="${versionId}"`;
+  let onTarget = 0, offTarget = 0, errors = 0, stalls = 0;
+  const errorDetail = [], stallReasons = [], strayVersions = new Set();
+
+  for (let i = 0; i < PINNED_PROBES; i++) {
+    try {
+      const res = await fetch(`${SAMPLE_URL}?p=${i}`, {
+        headers: { accept: "application/json", "cloudflare-workers-version-overrides": override },
+        cache: "no-store",
+        signal: AbortSignal.timeout(REQ_TIMEOUT_MS),
+      });
+      const version = await servingVersion(res);
+      if (!res.ok) {
+        errors++;
+        errorDetail.push(version ? `${String(version).slice(0, 8)} HTTP ${res.status}` : `HTTP ${res.status}`);
+        continue;
+      }
+      // A 200 from the WRONG version means the override was not honoured, which
+      // is an instrument failure rather than a fault in the release. Counted
+      // separately for that reason: treating it as an error would roll back a
+      // healthy deploy because a header did not apply.
+      if (String(version || "").slice(0, 8) === String(versionId).slice(0, 8)) onTarget++;
+      else { offTarget++; if (version) strayVersions.add(String(version).slice(0, 8)); }
+    } catch (e) {
+      stalls++;
+      stallReasons.push(e?.name === "TimeoutError" ? `timed out after ${REQ_TIMEOUT_MS}ms` : String(e?.message || e));
+    }
+  }
+
+  return { onTarget, offTarget, errors, errorDetail, stalls, stallReasons, strayVersions: [...strayVersions], answered: PINNED_PROBES - stalls, total: PINNED_PROBES };
 }
 
 async function servingVersion(res) {
@@ -453,6 +565,8 @@ if (previous && target.slice(0, 8) === previous.slice(0, 8)) {
   die("the target version is already the only one serving; nothing to ramp");
 }
 
+const worker = await workerName();
+
 for (const pct of steps) {
   console.log(`── ${pct}% ───────────────────────────────────────────`);
   // BOTH SIDES OF THE SPLIT, ALWAYS. `wrangler versions deploy` requires the
@@ -500,9 +614,38 @@ for (const pct of steps) {
   // So: sample, and if nothing lands on the target, wait and sample again before
   // calling it. A genuinely dead ramp stays at zero across all three windows; a
   // live one at 10% clears 0-of-40 three times running about 1 in 300,000.
+  await sleep(SETTLE_MS);
+
+  // The target, asked directly. First, because a fault in the new version is the
+  // thing worth finding earliest and this is the check that actually looks for
+  // it: 12 of 12 requests handled by the code about to take the site, against
+  // roughly 4 of 40 in the sampled sweep below.
+  const pinned = await probePinned(target, worker);
+  const pinnedStalled = pinned.stalls ? `, ${pinned.stalls} stalled` : "";
+  console.log(`   pinned ${pinned.total}: ${pinned.onTarget} answered by ${target.slice(0, 8)}, ${pinned.errors} error(s)${pinnedStalled}`);
+
+  if (pinned.errors) {
+    console.error(`   FAILED: ${pinned.errors} non-200 with traffic pinned to ${target.slice(0, 8)}: ${[...new Set(pinned.errorDetail)].join(", ")}`);
+    console.error(`   every one of those was handled by the version being ramped, so this is not sampling noise.`);
+    console.error(`   traffic is CURRENTLY SPLIT at ${pct}% — this script does not roll back for you.`);
+    console.error(`   roll back with: pnpm run deploy:promote --rollback`);
+    process.exit(1);
+  }
+  // The override not applying is an INSTRUMENT failure, not a fault in the
+  // release, so it reports and continues. Cloudflare only honours the header for
+  // a version that is in the current deployment; anything else and this step
+  // simply falls back to the sampled check, which is what carried the ramp
+  // before the pinned probe existed.
+  if (!pinned.answered) {
+    console.log(`   note: not one pinned request completed from this machine (${[...new Set(pinned.stallReasons)][0]}). Nothing was proved either way.`);
+  } else if (pinned.onTarget === 0) {
+    console.log(`   note: the version override did not apply (answered by ${pinned.strayVersions.join(", ") || "an unidentified version"}).`);
+    console.log(`         the pinned check proved nothing this step; the sampled one below is carrying it.`);
+  }
+
   let s = null;
   for (let attempt = 1; attempt <= SAMPLE_ATTEMPTS; attempt++) {
-    await sleep(attempt === 1 ? SETTLE_MS : RESAMPLE_MS);
+    if (attempt > 1) await sleep(RESAMPLE_MS);
     s = await sample(target, previous);
     const pctSeen = Math.round((s.onTarget / s.total) * 100);
     const note = attempt > 1 ? ` (attempt ${attempt}/${SAMPLE_ATTEMPTS})` : "";
@@ -538,6 +681,19 @@ for (const pct of steps) {
   }
   if (pct < 100 && s.onTarget === 0) {
     console.error(`   FAILED: no sampled request reached ${target.slice(0, 8)} across ${SAMPLE_ATTEMPTS} windows. The ramp did not take.`);
+    // Name the likeliest cause rather than leaving it as a mystery. A healthy
+    // version that answers every PINNED request and none of the split ones is
+    // not a dead ramp; it is a routing question, and the version-affinity
+    // Transform Rule is the one thing on this path that can collapse a sweep
+    // onto a single version. It is supposed to skip requests already carrying
+    // Cloudflare-Workers-Version-Key, which is exactly what sample() sends.
+    if (pinned.onTarget > 0) {
+      console.error(`   BUT ${pinned.onTarget}/${pinned.total} requests pinned to that version answered fine, so the version is healthy`);
+      console.error(`   and something is stopping the SPLIT from routing. Likeliest cause: the version-affinity`);
+      console.error(`   Transform Rule is overwriting the per-request keys this script sends. Its expression must`);
+      console.error(`   exempt requests that already carry Cloudflare-Workers-Version-Key. Check it with:`);
+      console.error(`     pnpm run infra:check      (the "version affinity" section)`);
+    }
     console.error(`   traffic is CURRENTLY SPLIT at ${pct}% — this script does not roll back for you.`);
     console.error(`   check it with:  pnpm run deploy:promote --status`);
     console.error(`   roll back with: pnpm run deploy:promote --rollback`);

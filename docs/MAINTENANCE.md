@@ -234,13 +234,32 @@ pnpm run deploy:promote --steps 5,100
 pnpm run deploy:promote --rollback    # 100% back to the previous version
 ```
 
-Between steps it samples `/whoareyou.json` 40 times and reads the **Serving
-version** field out of each response. Two failures stop the ramp: any non-200,
-and a step where not one sampled request reached the target (which means the
-deploy did not land, and continuing would ramp something untested). It sleeps 5s
-after each step before believing the sample, and it polls sequentially, because
-connection reuse can pin a burst of parallel requests to one version and make a
-working ramp look dead.
+Between steps it runs two probes against `/whoareyou.json`, reading the **Serving
+version** field out of each response. They answer different questions and neither
+replaces the other:
+
+| probe | requests | asks |
+|---|--:|---|
+| pinned | 12 | is the NEW version healthy? Each request carries `Cloudflare-Workers-Version-Overrides`, so all 12 are handled by the target. A non-200 here is conclusive and stops the ramp. |
+| sampled | 40 | did the split actually take? Unpinned, one `Cloudflare-Workers-Version-Key` per request. Pinning bypasses the split by construction, so only this probe can see routing. |
+
+The pinned probe is the one that catches a bad release. Before it existed, errors
+were found only in whatever share of the 40 sampled requests happened to land on
+the new code, which at a 10% step is about four: a fault in the version being
+ramped had four requests looking for it. Cloudflare honours the override header
+only for a version already in the current deployment, so the probe necessarily
+runs after each step rather than before it.
+
+Two failures stop the ramp: a non-200 from the pinned probe, and a step where not
+one sampled request reached the target (the deploy did not land, and continuing
+would ramp something untested). It sleeps 20s after each step before believing
+anything, and it polls sequentially.
+
+The per-request keys in the sampled probe are what let it work under version
+affinity (below). Without them a sweep from one machine hashes to one version and
+a healthy ramp reads as dead. If a step ever fails with "the ramp did not take"
+while the pinned probe reported the version answering fine, that is the shape of
+it, and the error says so.
 
 **Read the logs at the hold points.** The script checks status codes and nothing
 else. It cannot tell you the page is wrong, only that it answered. Filter Workers
@@ -251,6 +270,60 @@ way to do what `pnpm run deploy:direct` already did.
 
 `pnpm run deploy:direct` still goes straight to 100% and is the right tool for the
 `infra:check` deadlock above, where the extra step is the liability.
+
+### Version affinity (the Transform Rule)
+
+**Not yet created.** It needs a zone write, which no script in this repo has: the
+one write token is DNS-scoped and workstation-only. This is the recipe, and
+`pnpm run infra:check` fails until the rule exists, because it is declared in
+`config/infra.json` under `zone.version_affinity`.
+
+**What it fixes.** Every document here references content-hashed shell assets
+(`/a/luna.<hash8>.css`, `/a/nav.<hash8>.js`), the build keeps exactly one hash per
+asset, and during a gradual deployment each request routes to a version
+independently. So a document from one version asks for an asset the other version
+has never heard of and gets a 404. `/a/*` is `run_worker_first` and is not in
+`WORKERS_CACHEABLE_PATHS`, so nothing bridges the two. At the 10% canary step that
+is roughly 90% of the new-HTML cohort plus 10% of the old-HTML cohort, per changed
+asset, on any release touching `nav.js` or `luna.css`. Cloudflare's docs name this
+exact case as what version affinity is for.
+
+Create it under **Rules → Transform Rules → Modify Request Header** on the
+`aadhar.sh` zone:
+
+| field | value |
+|---|---|
+| Expression | `not any(http.request.headers.names[*] eq "cloudflare-workers-version-key")` |
+| Operation | Set dynamic |
+| Header name | `Cloudflare-Workers-Version-Key` |
+| Value | `ip.src` |
+
+Validate the expression in the dashboard's own editor before saving; it is the
+only thing here that checks the syntax.
+
+**The expression guard is load-bearing.** A blanket `true` would overwrite the
+per-request keys `deploy:promote` sends and collapse every sampled sweep onto one
+version, which the ramp reads as a dead deploy. That fails closed rather than
+shipping anything bad, and it aborts healthy releases until someone works out why,
+so `check-infra.mjs` asserts the exemption and a contract test pins it against the
+header the sampler actually sends.
+
+`ip.src` rather than the cookie Cloudflare's docs prefer. A cookie means minting
+one per visitor, which is a tracking-shaped change to a site whose `/whoareyou`
+makes claims about what it does not collect, and a `Set-Cookie` on the HTML
+response would take the page out of shared caches.
+
+Verify it after the next ramp reaches a split:
+
+```bash
+curl -s https://aadhar.sh/whoareyou.json -H 'Cloudflare-Workers-Version-Key: probe-1' | jq -r '.groups[]|select(.title=="Server").fields[]|select(.k=="Serving version").v'
+```
+
+Same key twice must report the same version; different keys should spread across
+both. `pnpm run infra:check` reads the rule itself, and needs a token carrying
+`Zone:Transform Rules:Read` and `Zone:Zone:Read`. Neither is among CI's six
+account reads, so in CI that section always degrades to a note and the assertion
+is a workstation run, the same standing as `repository.code_scanning`.
 
 ### Preview URLs
 

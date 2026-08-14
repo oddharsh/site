@@ -358,6 +358,43 @@ worktrees may edit freely, but a worktree is not a release surface.
   script deliberately pauses between steps and tells you to go look at Workers
   Logs; it checks status codes, and it cannot check whether the page is *right*.
 
+  **A SPLIT DEPLOYMENT SPLITS ASSET REQUESTS TOO, which is what version affinity
+  is for.** Every document here references content-hashed shell assets
+  (`/a/luna.<hash8>.css`, `/a/nav.<hash8>.js`), `build.mjs` keeps exactly one hash
+  per asset, and during a ramp each request picks a version independently. So a
+  document from one version asks for an asset the other version has never built
+  and gets a 404: `/a/*` is `run_worker_first` and is NOT in
+  `WORKERS_CACHEABLE_PATHS`, so nothing bridges the two. At the 10% canary that is
+  roughly 90% of the new-HTML cohort plus 10% of the old-HTML cohort, per changed
+  asset, on any release touching `nav.js` or `luna.css`. `ramp.yml`'s canary job
+  runs unattended, so it fires on its own. Cloudflare's docs name this exact
+  case. What keeps it from being permanent is the 404 cache-clamp, which was
+  written for `/images/*` (gotcha 1) and has been quietly holding this line too.
+
+  The fix is one Transform Rule deriving `Cloudflare-Workers-Version-Key` from
+  `ip.src`. It is DECLARED in [`infra.json`](config/infra.json) under
+  `zone.version_affinity` and NOT YET CREATED, because it needs a zone write and
+  the only write token here is DNS-scoped and workstation-only. The recipe is in
+  [MAINTENANCE.md](docs/MAINTENANCE.md), and `infra:check` fails on the missing
+  rule until somebody creates it. Two things about it are load-bearing.
+  Its expression must EXEMPT a request that already carries that header, because
+  `deploy-promote.mjs` sends one key per request so it can still watch a split take
+  from a single IP; clobber those and every intermediate step reads as a dead ramp,
+  which fails closed and wastes an afternoon. And the check for it is
+  ZONE-scoped, so CI's six account reads cannot reach it and that section always
+  degrades to a note there. It is workstation-only, the same standing as
+  `repository.code_scanning`.
+
+  **The ramp itself now asks the new version directly**, with
+  `Cloudflare-Workers-Version-Overrides: aadhar-sh="<version>"`, 12 requests all
+  handled by the target. That is the health check. The 40-request unpinned sweep
+  stays, because pinning bypasses the split by construction and so cannot tell you
+  whether traffic moved. Worth knowing why this changed: errors used to be found
+  only in whatever share of the 40 sampled requests landed on the new code, about
+  four at a 10% step, so a fault in the version being ramped had four requests
+  looking for it. Cloudflare honours the override only for a version already in the
+  deployment, so the probe runs after each step and never before.
+
   `pnpm run deploy:direct` still exists and still goes straight to 100%. Keep it: the
   `infra:check` deadlock below is exactly the case where a ramp's extra step is
   a liability rather than a safety net.
