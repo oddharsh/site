@@ -583,17 +583,42 @@
     renderShot();
   }
 
+  // Turn a snapshot failure into a sentence somebody watching over your shoulder
+  // can follow. The wire strings name the mechanism ("Browser Run returned 422")
+  // because that is what a span needs; a reader needs to know whose fault it is
+  // and what still works. Falls through to the server's own text whenever that
+  // text is already plain, so a new server-side message is never swallowed.
+  function shotTrouble(j, status) {
+    if (j && j.reason === "budget_spent") return null;      // server text is already plain
+    if (status === 429) return null;
+    if (j && j.error && !/^Browser Run (returned|request failed)/.test(j.error)) return j.error;
+    return "A rendered snapshot needs a real headless Chrome, and this one did not come back (upstream said " +
+      (status || "no status") + ")";
+  }
+
   function renderShot() {
-    bleed(true);
-    // The refusal is evidence, and we hold the refusing header: cite it.
-    setHumanH("Refused", (data.frameReason ? "framing refused (" + data.frameReason + ")" : "this site refuses to be framed") + "; a machine's render stands in");
-    humanBody.innerHTML = '<div class="lx-spin">Rendering a snapshot with headless Chrome&hellip;</div>';
     var shotUrl = data.finalUrl;
+    // LEAD WITH THE READABLE TEXT rather than an empty pane. A snapshot needs a
+    // real headless Chrome: it can take most of a minute, and on a spent daily
+    // budget it does not arrive at all. A featureless spinner for that long
+    // reads as a hang, which is exactly what it looked like on 2026-08-14
+    // (nytimes.com sat on the spinner for ~60s and then fell back). The reader
+    // text is a real answer we already hold from the HTTP scan, so show it now
+    // and let the snapshot UPGRADE it if it lands.
+    renderReader(null, "Asking for a rendered snapshot as well");
     fetch("/lens/shot?url=" + encodeURIComponent(shotUrl))
       .then(function (r) {
         var ct = r.headers.get("content-type") || "";
         if (r.ok && ct.indexOf("image/") === 0) {
+          if (!data || (data.finalUrl || data.url) !== shotUrl) return;
+          bleed(true);
+          // The refusal is evidence, and we hold the refusing header: cite it.
+          setHumanH("Refused", (data.frameReason ? "framing refused (" + data.frameReason + ")" : "this site refuses to be framed") + "; a machine's render stands in");
           return r.blob().then(function (b) {
+            // The scan may have moved on while headless Chrome took its minute.
+            // Painting a stale snapshot under a new URL is the one failure here
+            // that a viewer cannot spot, so drop it rather than show it.
+            if (!data || (data.finalUrl || data.url) !== shotUrl) return;
             // revoke the previous snapshot's object URL before minting the next, and
             // again once this one has decoded. Overwriting innerHTML drops the <img> but
             // NOT the blob-URL registry entry, so scanning several framing-blocked sites
@@ -611,10 +636,10 @@
             humanBody.appendChild(img);
           });
         }
-        return r.json().then(function (j) { renderReader((j && j.error) || ("snapshot failed (" + r.status + ")")); })
-          .catch(function () { renderReader("snapshot failed (" + r.status + ")"); });
+        return r.json().then(function (j) { renderReader(shotTrouble(j, r.status) || (j && j.error) || ("snapshot failed (" + r.status + ")")); })
+          .catch(function () { renderReader(shotTrouble(null, r.status) || ("snapshot failed (" + r.status + ")")); });
       })
-      .catch(function () { renderReader("the snapshot request didn't go through"); });
+      .catch(function () { renderReader("The snapshot request did not go through"); });
   }
 
   // ---- Browser Run pane --------------------------------------------------
@@ -686,12 +711,19 @@
     document.head.appendChild(script);
   }
 
-  // last-resort readable view: title + outline + stripped text.
-  function renderReader(note) {
+  // The readable view: title + outline + stripped text. It is the FIRST thing
+  // the pane shows for an unframable site and the last thing it falls back to,
+  // which is why it takes two different notes. `pending` means a snapshot is
+  // still in flight, so the header must not yet claim there is none.
+  function renderReader(note, pending) {
     bleed(false);
-    setHumanH("Reader", "embedding blocked, no snapshot, so here is the readable text");
+    setHumanH("Reader", pending
+      ? "embedding blocked, so here is the readable text while a snapshot is fetched"
+      : "embedding blocked, no snapshot, so here is the readable text");
     var a = data.anatomy;
-    var out = note ? '<div class="lx-fallback-note">' + esc(note.replace(/\.\s*$/, "")) + ". Showing the readable text instead.</div>" : "";
+    var out = "";
+    if (pending) out = '<div class="lx-fallback-note lx-pending">' + esc(pending) + "&hellip;</div>";
+    else if (note) out = '<div class="lx-fallback-note">' + esc(String(note).replace(/\.\s*$/, "")) + ". Showing the readable text instead.</div>";
     if (!a) { humanBody.innerHTML = out + '<div class="lx-empty">No readable text either.</div>'; return; }
     var title = (data.structured && data.structured.title) || "";
     if (title) out += '<div class="lx-h-title">' + esc(title) + "</div>";

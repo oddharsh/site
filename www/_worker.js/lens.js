@@ -987,6 +987,9 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 .lx-shot { width:100%; height:auto; display:block; }
 .lx-browser-shot { width:100%; height:auto; display:block; border:1px solid oklch(82% 0.04 210); background:#fff; }
 .lx-fallback-note { font-size:8.8pt; color:oklch(42% 0.11 60); background:oklch(96% 0.045 92); border:1px solid oklch(82% 0.09 80); border-radius:3px; padding:5px 9px; margin:0 0 10px; }
+/* Same note, recoloured for work still in flight. Amber says something went
+   wrong; a snapshot that has not arrived YET has not. */
+.lx-fallback-note.lx-pending { color:oklch(40% 0.10 255); background:oklch(96% 0.03 250); border-color:oklch(80% 0.07 250); }
 .lx-mode { font-family:"Courier New",monospace; font-size:7.6pt; font-weight:normal; text-transform:none; letter-spacing:0; color:oklch(38% 0.09 150); background:#fff; border-radius:7px; padding:1px 7px; vertical-align:middle; }
 .lx-mode-sub { font-weight:normal; text-transform:none; letter-spacing:0; opacity:.85; font-size:8pt; }
 .lx-browser-intro { padding:10px 9px; border:1px solid oklch(78% 0.06 210); background:linear-gradient(180deg,oklch(98% 0.015 210),oklch(94% 0.025 210)); color:oklch(31% 0.04 220); font-size:9pt; line-height:1.45; }
@@ -1928,7 +1931,15 @@ export async function handleLensBrowser(request, env, ctx) {
     // oversize snapshot used to throw where nobody was listening — the only
     // symptom being a page that re-rendered from scratch on every visit.
     const serialized = JSON.stringify(output);
-    if (serialized.length <= LENS_BROWSER_KV_MAX) ctx.waitUntil(env.RN_KV.put(cacheKey, serialized, { expirationTtl: 900 }));
+    // 6h, up from 15 MINUTES, which was the shortest TTL of the three browser
+    // caches while guarding by far the most expensive call. A render costs a
+    // slice of a 10-minute-a-day account-wide allowance and takes ~19s; expiring
+    // it after a quarter of an hour meant two visitors twenty minutes apart paid
+    // twice for the same page, and it made the cache useless as the budget
+    // control it exists to be. /lens/shot and /lens/wire both already sit at 6h
+    // on exactly this reasoning, and the snapshot labels itself "KV cache" in
+    // the summary, so a reader is told what they are looking at.
+    if (serialized.length <= LENS_BROWSER_KV_MAX) ctx.waitUntil(env.RN_KV.put(cacheKey, serialized, { expirationTtl: 21600 }));
     else s.setAttribute("lens.cache_skipped", serialized.length);
   }
   return jsonResponse({ ...output, cached: false });
