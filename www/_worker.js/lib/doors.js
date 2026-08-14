@@ -27,7 +27,7 @@
 import { botHeaders } from "./botauth.js";
 import { CANONICAL_HOST } from "./const.js";
 import { fetchFollowingPublicRedirects, readResponseCapped, validateLensTarget } from "./crawl.js";
-import { MCP_MODERN, META_PROTOCOL, META_CLIENT_CAPS } from "./mcp-protocol.js";
+import { ERR_HEADER_MISMATCH, MCP_MODERN, META_PROTOCOL, META_CLIENT_CAPS } from "./mcp-protocol.js";
 import { lensProbe, originDiscovery } from "../lens.js";
 
 // Bounds. A door reader that follows whatever it finds is a crawler; these keep
@@ -77,6 +77,64 @@ const LIST_METHOD = "tools/list";
 // server trips it, small enough that a hostile or broken one cannot spend the
 // isolate's memory.
 const CATALOG_CAP = 256 * 1024;
+
+/**
+ * Render whatever a server put in `error` as one readable line.
+ *
+ * A JSON-RPC error is `{code, message}`. Plenty of things that answer an MCP
+ * endpoint are not JSON-RPC and say so in their own dialect: an OAuth challenge
+ * body is `{error: "invalid_token", error_description: "…"}`, and a vendor API
+ * error is `{error: {type, message}}` with no code. Reading `.code`/`.message`
+ * off those printed the literal string "undefined: undefined" into the frame,
+ * which is worse than saying nothing — measured on eight live servers
+ * (Notion, Sentry, Linear, PayPal, Neon, Webflow, Canva, Grafana) 2026-08-14.
+ */
+export function rpcErrorDetail(payload) {
+  const error = payload && payload.error;
+  const code = Number.isInteger(error && error.code) ? error.code : null;
+  const message = String(
+    (error && error.message)
+    || (payload && payload.error_description)
+    || (typeof error === "string" ? error : "")
+    || "",
+  ).trim();
+  if (code !== null) return `${code}: ${message.slice(0, 80) || "no message"}`;
+  if (message) return message.slice(0, 90);
+  // Something was there and none of the known shapes fit. Say what it was
+  // rather than inventing a verdict about it.
+  try { return JSON.stringify(error).slice(0, 90); } catch { return "an error with no readable message"; }
+}
+
+// A version header some servers require and others refuse. See the call site.
+const PROTOCOL_HEADER = "mcp-protocol-version";
+
+/**
+ * Did the server refuse us for want of the version HEADER specifically?
+ *
+ * Narrow on purpose. It matches the refusal that names the header, never a
+ * generic -32020 and never an unsupported-version complaint, because those two
+ * are answers rather than instructions: retrying either one sends the same
+ * request and gets the same refusal, one round trip later.
+ */
+export function wantsProtocolHeader(payload) {
+  const error = payload && payload.error;
+  if (!error || error.code !== ERR_HEADER_MISMATCH) return false;
+  return new RegExp(PROTOCOL_HEADER.replace(/-/g, "[- ]?"), "i").test(String(error.message || ""));
+}
+
+/**
+ * A door that is there and locked.
+ *
+ * The scheme is read from WWW-Authenticate when the server sends one, because
+ * "needs OAuth" tells a reader what to go and get while "HTTP 401" does not.
+ */
+export function gatedDoor(res) {
+  const challenge = String((res.headers && res.headers.get("www-authenticate")) || "").trim();
+  const how = /oauth|resource_metadata/i.test(challenge)
+    ? "OAuth"
+    : challenge ? challenge.split(/[\s,;]/)[0] : "credentials";
+  return { ok: false, unreadable: true, gated: true, detail: `needs ${how} (HTTP ${res.status})` };
+}
 
 /**
  * Read a Streamable HTTP answer, whichever framing the server chose.
@@ -168,7 +226,8 @@ export async function foreignMcpTools(origin, env, opts = {}) {
   // which is also why a self-scan works in local dev without the signing key.
   let isSelf = false;
   try { isSelf = new URL(url).hostname.toLowerCase() === CANONICAL_HOST && !!(env.SELF_FETCH || env.ASSETS); } catch { /* not self */ }
-  try {
+
+  const send = async (extra) => {
     const headers = await botHeaders(url, env, {
       headers: {
         "content-type": "application/json",
@@ -177,46 +236,86 @@ export async function foreignMcpTools(origin, env, opts = {}) {
         // than downgrading to the one framing we said we could read.
         accept: "application/json, text/event-stream",
         "mcp-method": LIST_METHOD,
+        ...extra,
       },
       method: "POST",
       sign: !isSelf,
     });
-    const selfReq = isSelf ? new Request(url, { method: "POST", headers, body }) : null;
-    let res;
     if (isSelf) {
-      res = await (env.SELF_FETCH ? env.SELF_FETCH(selfReq) : env.ASSETS.fetch(selfReq));
-    } else {
-      // Per-hop validation, not redirect:"follow", for the reason lensFetch
-      // already gives: the allowlist vetted the origin the visitor typed, and a
-      // 302 from there is a NEW target nobody vetted. Under "follow" that hop
-      // was taken and its body read, so a public host could hand this POST to
-      // an address validateLensTarget exists to refuse. A refused hop reads as
-      // an unreachable target, which is what it is.
-      const followed = await fetchFollowingPublicRedirects(
-        url,
-        { method: "POST", headers, body, signal: controller.signal, cf: { cacheTtl: 0 } },
-        (candidate) => validateLensTarget(candidate),
-      );
-      if (!followed.ok) return { ok: false, unreadable: true, detail: "redirected somewhere this reader will not follow" };
-      res = followed.response;
+      const selfReq = new Request(url, { method: "POST", headers, body });
+      return { res: await (env.SELF_FETCH ? env.SELF_FETCH(selfReq) : env.ASSETS.fetch(selfReq)) };
     }
-    const read = await readResponseCapped(res, CATALOG_CAP);
+    // Per-hop validation, not redirect:"follow", for the reason lensFetch
+    // already gives: the allowlist vetted the origin the visitor typed, and a
+    // 302 from there is a NEW target nobody vetted. Under "follow" that hop
+    // was taken and its body read, so a public host could hand this POST to
+    // an address validateLensTarget exists to refuse. A refused hop reads as
+    // an unreachable target, which is what it is.
+    const followed = await fetchFollowingPublicRedirects(
+      url,
+      { method: "POST", headers, body, signal: controller.signal, cf: { cacheTtl: 0 } },
+      (candidate) => validateLensTarget(candidate),
+    );
+    if (!followed.ok) return { blocked: true };
+    return { res: followed.response };
+  };
+
+  const read = async (res) => {
+    const got = await readResponseCapped(res, CATALOG_CAP);
     // OUR ceiling, so it is reported as ours. A truncated catalogue would fail
     // to parse and read out as "that is not JSON", which blames a server that
     // answered correctly at a length we declined to read — the same rule the
     // browser lens follows when it reports a spent render budget as our own
     // rather than as the target failing.
-    if (read.truncated) {
-      return { ok: false, unreadable: true, detail: `catalogue over ${CATALOG_CAP / 1024} KB — not read` };
+    if (got.truncated) return { over: true };
+    return parseMcpBody(got.text, res.headers.get("content-type"));
+  };
+
+  try {
+    let sent = await send(null);
+    if (sent.blocked) return { ok: false, unreadable: true, detail: "redirected somewhere this reader will not follow" };
+    let res = sent.res;
+
+    // 401/403 is neither a broken server nor an absent one: the door is there
+    // and it wants a key this reader does not have. lens already reports the
+    // same status as an OAuth-protected server when it KNOCKS, and doors used
+    // to contradict it one line later — Cloudflare's six servers answer an
+    // empty-bodied 401 and read as "not JSON", while Notion, Sentry, Linear and
+    // PayPal answer an OAuth challenge body and read as "undefined: undefined".
+    // Eleven live servers, measured 2026-08-14. UNREADABLE rather than shut,
+    // because we did not get to look, which is the whole distinction this
+    // module exists to keep.
+    if (res.status === 401 || res.status === 403) return gatedDoor(res);
+
+    let parsed = await read(res);
+    if (parsed.over) return { ok: false, unreadable: true, detail: `catalogue over ${CATALOG_CAP / 1024} KB — not read` };
+
+    // Some servers require the revision as a HEADER as well as in `_meta` and
+    // refuse without it (mcp.svelte.dev: -32020 "MCP-Protocol-Version is
+    // required"). Sending it unconditionally is NOT the fix — mcp.deepwiki.com
+    // and mcp.exa.ai serve happily WITHOUT it and refuse the byte-identical
+    // request WITH it, because they validate the header against their own
+    // supported list and neither speaks 2026-07-28. All three measured
+    // 2026-08-14. So it goes only to a server that has just said it needs one,
+    // which costs a round trip on nobody who works without it, and it carries
+    // the version the body already declared because a header disagreeing with
+    // the body is the other half of what -32020 refuses.
+    if (parsed.ok && wantsProtocolHeader(parsed.payload)) {
+      sent = await send({ [PROTOCOL_HEADER]: MCP_MODERN });
+      if (sent.blocked) return { ok: false, unreadable: true, detail: "redirected somewhere this reader will not follow" };
+      res = sent.res;
+      if (res.status === 401 || res.status === 403) return gatedDoor(res);
+      parsed = await read(res);
+      if (parsed.over) return { ok: false, unreadable: true, detail: `catalogue over ${CATALOG_CAP / 1024} KB — not read` };
     }
-    const parsed = parseMcpBody(read.text, res.headers.get("content-type"));
+
     if (!parsed.ok) return { ok: false, detail: parsed.detail };
     const payload = parsed.payload;
     // The RPC error is read BEFORE the status, because the interesting refusals
     // arrive on a 400: -32020 (header mismatch) and -32022 (unsupported
     // revision) both carry the one sentence that says what to fix, and "HTTP
     // 400" would throw it away.
-    if (payload?.error) return { ok: false, detail: `${payload.error.code}: ${String(payload.error.message).slice(0, 80)}` };
+    if (payload?.error) return { ok: false, detail: rpcErrorDetail(payload) };
     if (!res.ok) return { ok: false, detail: `HTTP ${res.status}` };
     const tools = Array.isArray(payload?.result?.tools) ? payload.result.tools : [];
     return {
