@@ -123,6 +123,13 @@ jobs:
       - name: Validate LWE and Garage page contracts
         run: pnpm run pages:check
 
+      # Only the DECLARATION tier gates here. It reads shell source and needs no
+      # binary present, so it runs anywhere. The presence tier prints what is
+      # absent and passes, because a hosted runner carries none of the photo
+      # toolchain and never runs the pipeline that wants it.
+      - name: Check system tool declaration
+        run: pnpm run tools:check
+
       - name: Test coffee Worker
         run: pnpm --filter cal-aadhar-sh test
 

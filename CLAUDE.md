@@ -835,6 +835,41 @@ Two encoders + one transform tool, all built from source:
   this pipeline. The 64-bin RGB/luminance bake moved into `zenc histogram` on
   2026-08-14, so nothing in add-photos.sh or extract-photo-metadata.sh needs it.
 
+The four below serve the STUDY pages rather than the photo pipeline, and every
+one of them was undocumented until `tools:check` went looking (2026-08-14):
+
+- **webp** (`brew install webp`) — `cwebp` draws the WebP point on both
+  `/garage/encoding` grids.
+- **ffmpeg** (`brew install ffmpeg`) — one PNG-to-PPM conversion in
+  `gen-encoding-grids.sh`, because `cjpeg` will not read PNG and sips' BMP
+  output confuses it.
+- **ssimulacra2** and **butteraugli_main** — the two perceptual metrics
+  `export-for-instagram.sh` searches quality against. These are libjxl TOOLS,
+  built with `-DJPEGXL_ENABLE_TOOLS=ON`, and **`brew install jpeg-xl` does not
+  ship them**, which is why the script falls back to `/opt/zerobrew/prefix/bin`.
+  The error message in that script names the formula rather than the tools and
+  is misleading; the binaries are what to go find.
+
+> **The whole list is DECLARED in [`config/tools.json`](config/tools.json) and
+> `pnpm run tools:check` fails on drift.** It sits outside `infra.json` on
+> purpose: that file declares Cloudflare and GitHub state and diffs it against
+> those APIs, while nothing here is remote and nothing here has an API.
+>
+> The check is tiered the same way `infra:check` is. Its DECLARATION tier reads
+> source text, needs no binary, and runs on every PR: every `for cmd in …` guard,
+> every literal `command -v`, and every `brew install` hint in the shell scripts
+> must have an entry, and both this file and MAINTENANCE.md must name it. Its
+> PRESENCE tier probes the machine and is ADVISORY in CI, because a hosted runner
+> has none of these and is not meant to.
+>
+> The guard scanner is the load-bearing part, and it is why four prerequisites
+> could stay undocumented. Most of these preconditions are written `for cmd in
+> sips exiftool`, so the binary name exists only as a loop word and a grep for the
+> name finds nothing. That is gotcha 29's blind spot in different clothes: a
+> command assembled from list elements is invisible to a search for the assembled
+> form. Each scanner also carries a FLOOR and fails if its match count collapses,
+> since a scanner that matches nothing otherwise reports a pass.
+
 ### `<picture>` + content-addressed thumbnails
 
 Photo thumbnails are dual-encoded AVIF + JPG, served via `<picture>` from

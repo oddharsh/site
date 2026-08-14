@@ -1115,14 +1115,33 @@ workflow that hand-tracked the from-source jpegli commit. Only Homebrew formulas
 ## Local fallback setup
 
 ```bash
-brew install exiftool jq mozjpeg libavif              # mozjpeg = jpegtran; libavif = avifenc (optional, sips falls back)
+# the photo pipeline
+brew install exiftool jq mozjpeg libavif              # mozjpeg = jpegtran + cjpeg; libavif = avifenc (optional, sips falls back)
 python3 -m pip install -r www/scripts/requirements.txt  # Pillow, for gen-pixel-peeper.py only
 # the JPEG encoder (zenc) builds itself on first pipeline run; needs rust (rustup.rs)
 cargo build --release --manifest-path www/scripts/zenc/Cargo.toml
 wrangler login                                         # Cloudflare auth (deploys + KV + R2 all use it)
+
+# the study pages, which are NOT needed to add a photo
+brew install webp ffmpeg                              # cwebp for the encoding grids; ffmpeg for their PNG -> PPM step
 ```
 This is an emergency fallback only. sips is macOS-native (no install), and the
 normal path is the remote workflow above.
+
+`export-for-instagram.sh` additionally wants **ssimulacra2** and
+**butteraugli_main**, the two perceptual metrics it searches quality against.
+Those are libjxl tools built with `-DJPEGXL_ENABLE_TOOLS=ON`, and Homebrew's
+`jpeg-xl` formula does not ship them, so there is no brew line for this row. The
+script falls back to `/opt/zerobrew/prefix/bin`, which is where this workstation's
+source build put them.
+
+**`pnpm run tools:check` is the check on all of it**, declared in
+[`config/tools.json`](../config/tools.json). Its declaration tier runs on every
+PR and needs no binary; its presence tier probes this machine and is advisory in
+CI. Run it before a pipeline session on a fresh machine and it names what is
+missing and how to get it, rather than letting a script exit on a raw shell
+error four steps in. Four of the tools above were required and documented nowhere
+until it was written.
 
 ---
 
