@@ -24,23 +24,17 @@
   ],
   "tools": [
     {
-      "bin": "exiftool",
-      "install": "brew install exiftool",
-      "why": "EXIF and orientation across the encoding and export scripts. It stopped feeding extract-photo-metadata.sh on 2026-08-14, when exif-sooc took over that path",
+      "bin": "exif-sooc",
+      "install": "cargo install --git https://github.com/oddharsh/exif-sooc",
+      "why": "every EXIF read and write in the pipeline. It emits metadata.json's record shape directly and owns the merge, which retired the 50-line jq reshape and build-recipes.py, and on 2026-08-14 it took the last of exiftool's jobs too: orientation reads, -all= strips and -TagsFromFile copies, in ExifTool's own flag spellings",
       "required_by": [
         "www/scripts/add-photos.sh",
         "www/scripts/download-remote-photos.sh",
         "www/scripts/export-for-instagram.sh",
+        "www/scripts/extract-photo-metadata.sh",
+        "www/scripts/gen-encoding-grids.sh",
         "www/scripts/gen-encoding-samples.sh",
         "www/scripts/reencode-thumbnails.sh"
-      ]
-    },
-    {
-      "bin": "exif-sooc",
-      "install": "cargo install --git https://github.com/oddharsh/exif-sooc",
-      "why": "the photo index and the Fujifilm recipe card: it emits metadata.json's record shape directly and owns the merge, which is what retired the 50-line jq reshape, jq's object `*` operator, and build-recipes.py",
-      "required_by": [
-        "www/scripts/extract-photo-metadata.sh"
       ]
     },
     {
