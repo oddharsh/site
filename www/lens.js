@@ -1961,7 +1961,12 @@
       structured: {
         title: "Structured",
         note: "The entities and relationships a parser can lift from the markup.",
-        rows: ["JSON-LD and Schema.org entities", "Microdata, RDFa, and microformats", "Open Graph and Twitter preview fields"]
+        // "RDFa, microdata" rather than "Microdata, RDFa": glossify matches
+        // case-SENSITIVELY on purpose (it is what keeps Cloudflare's "Agent
+        // Readiness" from being wrapped as the generic "agent"), so a lowercase
+        // label sitting first in a row silently loses its definition while its
+        // siblings keep theirs. Put the capitalized spellings first.
+        rows: ["JSON-LD and Schema.org entities", "RDFa, microdata, and microformats", "Open Graph and Twitter preview fields"]
       },
       ai: {
         title: "AI view",
@@ -1983,8 +1988,13 @@
     // No scan, no verdict: the slot above the tabs must not outlive its data.
     if (machineTop) machineTop.innerHTML = "";
     machineBody.innerHTML = '<div class="lx-idle-lens"><div class="lx-idle-kicker">Selected machine lens</div>' +
-      '<h3>' + esc(LENS_LABEL[lens] || p.title) + '</h3><p>' + esc(p.note) + '</p><ul>' +
-      p.rows.map(function (row) { return '<li>' + esc(row) + '</li>'; }).join("") +
+      // The primer is the FIRST prose a cold visitor reads on a tab, and it was
+      // the one author-written surface still shipping bare: "the entities and
+      // relationships a parser can lift from the markup" is three unexplained
+      // terms in eleven words. Same rule as section() captions, which is that
+      // our own sentences carry their own definitions.
+      '<h3>' + esc(LENS_LABEL[lens] || p.title) + '</h3><p>' + glossify(esc(p.note)) + '</p><ul>' +
+      p.rows.map(function (row) { return '<li>' + glossify(esc(row)) + '</li>'; }).join("") +
       '</ul><div class="lx-idle-cta">Choose an example above or paste a URL, then press <b>Go</b> to replace this primer with observed evidence.</div></div>';
   }
 

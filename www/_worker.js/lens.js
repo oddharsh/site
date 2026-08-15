@@ -15,7 +15,9 @@ import { EXECUTION_META, executionChecks } from "./lib/agent-execution.js";
 // The glossary. This page's whole subject is protocol names, which is fine for
 // the audience that already has them and a wall for the audience that doesn't.
 // Every definition here is written for someone who has never read a spec: plain
-// sentence first, no term defined using another term on this list.
+// sentence first, and a definition may lean only DOWNWARD, on the umbrella terms
+// below (structured data, entity, markup, parser). Two schemes must never
+// explain each other, because a reader meeting one of them has met neither.
 //
 // `plain` is the one-liner. `more` is the second sentence the hover adds, and
 // is optional — several terms are genuinely one sentence and padding them would
@@ -83,6 +85,7 @@ export const LENS_GLOSSARY = {
   },
   bot: {
     label: "bots",
+    alt: ["bot", "crawlers", "crawler"],
     plain: "Automated visitors. They request pages like a browser does, but nobody is watching the screen.",
     more: "They are feeding a search index or an AI model. As of 2026 they make more of the web's requests than people do.",
   },
@@ -90,6 +93,66 @@ export const LENS_GLOSSARY = {
     label: "Browser Run",
     plain: "This page's own term: fetching the URL with a real headless Chrome, so the site's JavaScript actually runs.",
     more: "A plain fetch sees only the file the server sent. Many sites look empty until the JavaScript fills them in.",
+  },
+
+  // ── the umbrella terms ────────────────────────────────────
+  // These sit ABOVE the schemes below, and they were the gap: someone meeting
+  // "JSON-LD" cold has usually never met "structured data" or "entity" either,
+  // so the scheme definitions were leaning on vocabulary the reader was missing.
+  // Defining the umbrella once lets each scheme stay one sentence about what
+  // makes IT different, which is the shape those definitions already wanted.
+  "semantic-web": {
+    label: "semantic web",
+    alt: ["semantic-web"],
+    plain: "The 2000s project to have every site publish its facts in one shared format, so software could answer questions across the whole web.",
+    more: "It asked publishers to do the work up front. Most never did, and models now read the human page and pay the difference.",
+  },
+  "structured-data": {
+    label: "structured data",
+    plain: "Facts a page states about itself in a fixed format, instead of leaving a reader to work them out from the writing.",
+    more: "The price, the author, the date. A person picks those out of the layout; software needs them written down separately.",
+  },
+  entity: {
+    label: "entity",
+    alt: ["entities"],
+    plain: "A specific thing a page is about: a person, a product, an event, a place.",
+    more: "Naming one outright is what lets software tell two people with the same name apart.",
+  },
+  rdf: {
+    label: "RDF",
+    alt: ["RDF triples", "triples"],
+    plain: "A way of writing every fact as three parts: a thing, one of its properties, and the value.",
+    more: "\"This page, author, Ada\" is one triple. Chain enough of them and the result is something software can query.",
+  },
+  markup: {
+    label: "markup",
+    plain: "The tags wrapped around a page's words saying what each part is: a heading, a link, an image, a paragraph.",
+    more: "It carries no meaning of its own. A heading is marked as a heading whether it says anything or not.",
+  },
+  parser: {
+    label: "parser",
+    plain: "The piece of software that reads a file and works out its structure before anything else can use it.",
+  },
+  w3c: {
+    label: "W3C",
+    plain: "The World Wide Web Consortium, the body that has published the web's core standards since 1994.",
+    more: "It writes the specification. Whether browsers and sites then implement it is a separate question, and often the answer is no.",
+  },
+  "meta-tags": {
+    label: "meta tags",
+    alt: ["meta tag"],
+    plain: "Lines in a page's header that describe it to software: a summary, an author, instructions for search engines.",
+    more: "Invisible on screen, and still the first thing most automated visitors read.",
+  },
+  "rich-results": {
+    label: "rich results",
+    plain: "Search listings that show more than a blue link: star ratings, prices, cooking times, event dates.",
+    more: "They are the payoff that got publishers to mark their pages up at all.",
+  },
+  indieweb: {
+    label: "IndieWeb",
+    plain: "A loose movement of people who publish on their own domains and wire the pieces together with small agreed conventions.",
+    more: "It favors what one person can ship this weekend over what a committee can ratify.",
   },
 
   // ── the tagging schemes ─────────────────────────────────────────────────
@@ -174,6 +237,10 @@ export const LENS_GLOSSARY = {
   },
   "user-agent": {
     label: "user agent",
+    // The page's own prose spells it hyphenated everywhere ("six representative
+    // crawler user-agents"), so the unhyphenated label alone never once matched
+    // and this definition had been unreachable since it was written.
+    alt: ["user-agents", "user-agent"],
     plain: "The name a visitor's software gives when it asks for a page. A browser, a crawler, or a model can each set its own.",
     more: "Nothing checks it, so an unverified name is a claim rather than evidence.",
   },
