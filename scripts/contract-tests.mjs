@@ -4375,6 +4375,42 @@ test("overLensBudget fails open without a limiter and closes when one says no", 
   assert.equal(new Set(names).size, names.length, "two budgets share one binding");
 });
 
+test("every browser lens reads its cache before it checks a budget", async () => {
+  // STRUCTURAL, and it says so here because the behavioural version needs a
+  // Rate Limiting binding plus a populated KV, neither of which node --test has.
+  // What it pins is an ORDER in the source, which is exactly what regressed.
+  //
+  // The rule: the per-minute limits exist to ration Browser Run, a cache hit
+  // spends none of it, so a hit must be answered before any limit is consulted.
+  // Getting this backwards refuses a reader a snapshot the Worker is already
+  // holding, and it does so hardest when the cache is fullest.
+  const files = {
+    "lens.js": await readFile(new URL("../www/_worker.js/lens.js", import.meta.url), "utf8"),
+    "lens-wire.js": await readFile(new URL("../www/_worker.js/lens-wire.js", import.meta.url), "utf8"),
+  };
+  const cases = [
+    { file: "lens.js", handler: "handleLensShot", key: '"lens:shot:"' },
+    { file: "lens.js", handler: "handleLensBrowser", key: '"lens:browser:"' },
+    { file: "lens-wire.js", handler: "handleLensWire", key: '"lens:wire:"' },
+  ];
+  for (const c of cases) {
+    const src = files[c.file];
+    const from = src.indexOf("export async function " + c.handler);
+    assert.ok(from > -1, `${c.handler} not found in ${c.file}`);
+    // The next exported function is where this one ends. Scanning to end-of-file
+    // would let a LATER handler's cache read satisfy an earlier handler's test.
+    const next = src.indexOf("export async function ", from + 1);
+    const body = src.slice(from, next === -1 ? src.length : next);
+
+    const cacheAt = body.indexOf(c.key);
+    const budgetAt = body.indexOf("overLensBudget(");
+    assert.ok(cacheAt > -1, `${c.handler} no longer builds its ${c.key} cache key`);
+    assert.ok(budgetAt > -1, `${c.handler} no longer checks a budget, so this test is now vacuous`);
+    assert.ok(cacheAt < budgetAt,
+      `${c.handler} checks a rate limit before reading its cache, so a cached answer can be refused`);
+  }
+});
+
 test("documentShape counts substance, not framework payload", async () => {
   const { documentShape } = await import("../www/_worker.js/lens-render.js");
 
