@@ -1009,12 +1009,6 @@
     return out;
   }
 
-  function cfState(observed, key) {
-    if (observed) return { text: "observed", kind: "ok" };
-    if (counterfactuals[key]) return { text: "counterfactual", kind: "warn" };
-    return { text: "missing", kind: "off" };
-  }
-
   // ONE source of truth for whether a counterfactual's surface is already published,
   // read off the SAME data.readiness.checks the projection scores against. deltaView
   // used to HARDCODE authority (and receipt) as never-observed while readinessProjection
@@ -1023,6 +1017,10 @@
   // Delta view and present in the Readiness tab at once. markdown/contract/authority now
   // derive from these checks in both places; semantic has no single readiness check (it is
   // computed from structured data) and receipt has no probe backing it yet.
+  //
+  // This answers "is the SURFACE published", which is no longer the same question as
+  // "is the STAGE satisfied". Read is satisfied by the fetch actually carrying words,
+  // so markdown negotiation feeds that stage's `signal` and not its `observed`.
   var CF_MAP = {
     markdown:  { checks: ["markdownNegotiation"] },
     contract:  { checks: ["apiCatalog"] },
@@ -1043,8 +1041,21 @@
     var jsonld = s.jsonld && s.jsonld.length > 0;
     var semantic = jsonld || (s.microdata && s.microdata.itemtypes && s.microdata.itemtypes.length) || (s.rdfa && s.rdfa.typeof && s.rdfa.typeof.length);
     var action = st.action && st.action.length > 0;   // the agent strategy's action surface, for the evidence line below
+
+    // Reading is the one stage on this path Lens MEASURES rather than infers from a
+    // published surface: the identified fetch either came back carrying words or it
+    // did not. So markdown negotiation is an upgrade INSIDE this stage rather than
+    // its gate. A page handing a bot 600 words of plain HTML is readable whether or
+    // not it also answers text/markdown, and scoring Read on the negotiation alone
+    // reported every such page as unreadable. Same two predicates the field score
+    // already uses (identifiedFetch, usableBody), so the two cannot disagree.
+    var an = data.anatomy || {};
+    var words = Number.isFinite(an.wordCount) ? an.wordCount : null;
+    var fetchOk = data.status >= 200 && data.status < 400 && !data.bodyUnreadable;
+    var canRead = !!(fetchOk && words >= 40);
+
     var cf = [
-      { key: "markdown", label: "Clean machine text", stage: "Read", observed: cfObserved("markdown", checks), detail: "Serve a deliberate text/markdown representation from the same URL." },
+      { key: "markdown", label: "Clean machine text", stage: "Read", observed: canRead, signal: cfObserved("markdown", checks), detail: "Serve a deliberate text/markdown representation from the same URL." },
       { key: "semantic", label: "Entity schema", stage: "Understand", observed: !!semantic, detail: "Publish stable entities and properties a parser can validate." },
       { key: "contract", label: "Action contract", stage: "Act", observed: cfObserved("contract", checks), detail: "Describe callable operations, their parameters, and side effects. In 2026 this contract is landing as MCP servers and agent CLIs, not the OpenAPI files that mostly never shipped." },
       { key: "authority", label: "Delegated authority", stage: "Authorize", observed: cfObserved("authority", checks), detail: "Add a consent boundary with scopes and an explicit user approval." },
@@ -1055,12 +1066,45 @@
       return '<div class="lx-cf-card' + (on ? " is-on" : "") + '"><h4>' + esc(x.label) + '</h4><p>' + esc(x.detail) + '</p>' +
         '<button class="lx-cf-toggle" type="button" data-cf="' + esc(x.key) + '" aria-pressed="' + (on ? "true" : "false") + '"><span class="lx-cf-dot" aria-hidden="true"></span>' + (on ? "on" : "off") + "</button></div>";
     }).join("") + "</div>";
+    // The five stages are a CHAIN and this rendered them as five detached booleans,
+    // so the lab would draw a machine that understood a page it could not read.
+    // Measured 2026-08-15: stripe.com and nytimes.com both publish structured
+    // entities and both fail markdown negotiation, so that inverted route was the
+    // COMMON case rather than an edge one. A stage is reachable only once every
+    // stage above it is satisfied, by observation or by a flipped switch, and a real
+    // signal sitting below the break reads as published-and-unreached rather than as
+    // a rung somebody climbs. Flipping one switch therefore lights the rest of the
+    // ladder, which is the lesson a micro-world is for.
+    var open = true, reached = null, stopStage = null;
     var path = cf.map(function (x) {
-      var state = cfState(x.observed, x.key);
-      var copy = x.observed ? "published signal found" : counterfactuals[x.key] ? x.detail : "no matching surface observed";
+      var signal = x.signal == null ? x.observed : x.signal;
+      var satisfied = x.observed || !!counterfactuals[x.key];
+      var state, copy;
+      if (!open) {
+        state = { text: "unreached", kind: "off" };
+        copy = signal
+          ? "This surface is published. Nothing upstream carries a machine to it."
+          : "Nothing upstream carries a machine this far.";
+      } else if (x.observed) {
+        state = { text: "observed", kind: "ok" };
+        copy = x.key === "markdown"
+          ? words + " words reached an identified bot." + (signal ? " The same URL also answers text/markdown." : " There is no deliberate machine text; the switch adds one.")
+          : "published signal found";
+      } else if (counterfactuals[x.key]) {
+        state = { text: "counterfactual", kind: "warn" };
+        copy = x.detail;
+      } else {
+        state = { text: "missing", kind: "off" };
+        copy = x.key === "markdown"
+          ? (!fetchOk ? "The identified fetch returned no readable response."
+            : words === null ? "The response body was never parsed."
+            : "Only " + words + " words survived the fetch.")
+          : "no matching surface observed";
+      }
+      if (open) { if (satisfied) reached = x.stage; else { open = false; stopStage = x.stage; } }
       return '<div class="lx-stage"><div class="lx-stage-name">' + esc(x.stage) + '</div><div class="lx-stage-copy">' + badge(state.text, state.kind) + esc(copy) + '</div></div>';
     }).join("");
-    var intro = '<div class="lx-delta-intro"><b>Counterfactual lab.</b> Turn on one piece of web infrastructure and watch the route change. Green means Lens observed a signal. Amber means this page is simulating the addition locally.</div>';
+    var intro = '<div class="lx-delta-intro"><b>Counterfactual lab.</b> Turn on one piece of web infrastructure and watch the route change. The stages compound: a machine that cannot read this page never gets as far as understanding it, so the route stops where the chain breaks. Green means Lens observed a signal. Amber means this page is simulating the addition locally.</div>';
     var proof = '<div class="lx-proof"><b>Current evidence:</b> ' + esc((d.llmsTxt && d.llmsTxt.ok ? "llms.txt is present. " : "No llms.txt observed. ") + (action ? "An action surface answered. " : "No action surface answered. ") + (semantic ? "Structured data exists." : "Structured entity data is absent.")) + '</div>';
     var deltaText = cf.filter(function (x) { return counterfactuals[x.key]; }).map(function (x) { return "+ " + x.stage.toLowerCase() + " · " + x.label; }).join("\n");
 
@@ -1092,11 +1136,13 @@
     var wireCap = "A dictionary was worth 87-97% fewer bytes on the aadhar.sh shell (measured 2026-07); the token win follows for an agent that re-reads only the delta. ECH changes what a network observer learns, leaving the byte count alone.";
     var wireOn = wire.filter(function (x) { return !!counterfactuals[x.key]; }).map(function (x) { return "+ wire · " + x.label; }).join("\n");
     var allDelta = [deltaText, wireOn].filter(Boolean).join("\n");
+    var routeLine = "reaches " + (reached ? reached.toLowerCase() : "nothing") +
+      (stopStage ? ", stops at " + stopStage.toLowerCase() : ", complete");
 
-    return intro + section("Infrastructure switches", null, "Each switch changes one stage of the path and nothing else.", controls) +
-      section("The route", { text: "no score" }, "A task path is more useful here than a readiness number.", '<div class="lx-path">' + path + '</div>' + proof) +
+    return intro + section("Infrastructure switches", null, "Each switch adds one piece of infrastructure at one stage. A later stage becomes reachable only once every stage above it holds.", controls) +
+      section("The route", { text: "no score" }, "A task path is more useful here than a readiness number. Each stage depends on the one above it, so the route stops at the first stage nothing satisfies.", '<div class="lx-path">' + path + '</div>' + proof) +
       section("The wire", { text: "transport" }, "Two knobs under the same task path: what the wire carries, and what it hides. Folks rarely turn either on.", wireControls + wireProof + '<div class="lx-cap">' + esc(wireCap) + "</div>") +
-      section("What this proves", { text: "local simulation", kind: "warn" }, "Counterfactuals clarify a missing contract; they do not create a real endpoint on the scanned site.", pre("# delta\n" + (allDelta || "(no switches on)"), true)) +
+      section("What this proves", { text: "local simulation", kind: "warn" }, "Counterfactuals clarify a missing contract; they do not create a real endpoint on the scanned site.", pre("# route\n" + routeLine + "\n\n# delta\n" + (allDelta || "(no switches on)"), true)) +
       '<div class="lx-cf-credit">Papert&rsquo;s micro-world: flip, predict, check. After <a href="https://www.geoffreylitt.com/2026/07/02/understanding-is-the-new-bottleneck">Geoffrey Litt&rsquo;s &ldquo;Understanding is the new bottleneck&rdquo;</a>.</div>';
   }
 
