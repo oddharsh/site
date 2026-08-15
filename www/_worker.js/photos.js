@@ -246,7 +246,7 @@ const PHOTO_PUBLIC_FIELDS = [
   "flash", "exposure_mode", "meter", "focus_mode", "drive", "sharpness",
   "noise_reduction", "clarity", "film", "dr", "dr_value", "chrome", "chrome_blue",
   "grain", "grain_size", "highlight_tone", "shadow_tone", "saturation",
-  // the derived film-recipe card (build-recipes.py): the same knobs, spelled the
+  // the derived film-recipe card (exif-sooc --keyed): the same knobs, spelled the
   // way a recipe is written down, so a reader can re-shoot the look directly.
   "recipe",
 ];
