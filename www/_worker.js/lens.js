@@ -1643,16 +1643,20 @@ export async function handleLensShot(request, env, ctx) {
   if (!v.ok) return jsonResponse({ ok: false, error: v.error }, 400);
   if (!env.BROWSER || typeof env.BROWSER.quickAction !== "function") return jsonResponse({ ok: false, error: "Browser Run is not configured on this deployment." }, 503);
 
-  // screenshots are the expensive path — tighter per-IP limit + a KV cache.
-  if (await overLensBudget(LENS_BUDGETS.shot, request, env)) {
-    return jsonResponse({ ok: false, error: `Snapshots are rate-limited to ${LENS_BUDGETS.shot.max}/min. Hang on a moment.` }, 429);
-  }
-  // The shared ceiling is checked AFTER the per-caller one, so a single heavy
-  // visitor is turned away by their own budget before they can spend everyone's.
-  if (await overLensBudget(LENS_BUDGETS.browserAll, request, env)) {
-    return jsonResponse({ ok: false, error: "The shared browser budget for this minute is spent. Try again shortly." }, 429);
-  }
-
+  // THE CACHE IS READ BEFORE THE BUDGETS, and the order is the point rather than
+  // a micro-optimization. Every limit below exists to ration Browser Run: 6 calls
+  // a minute account-wide and 10 browser-minutes a day. A cache hit spends
+  // exactly none of that, so refusing one protects nothing and costs the reader a
+  // 429 for a screenshot this Worker is already holding.
+  //
+  // It reads as a bug at the worst moment, because the cache is FULLEST exactly
+  // when demand is highest: a page everyone is looking at is warm, and warm is
+  // the state this ordering punished. Measured 2026-08-15 against a fully warmed
+  // cache, one visitor clicking through the seeded chips got 429 on the third,
+  // with all seven entries present in KV the whole time.
+  //
+  // /lens/wire has read cache-first since it was written. This is the older pair
+  // catching up to it, not a new policy.
   const cacheKey = "lens:shot:" + (await lensSha256Hex(v.url));
   if (env.RN_KV) {
     const hit = await env.RN_KV.get(cacheKey, "arrayBuffer");
@@ -1666,6 +1670,17 @@ export async function handleLensShot(request, env, ctx) {
         return new Response(hit, { headers: lensPngHeaders(true) });
       });
     }
+  }
+
+  // Past here a miss means a real render, so screenshots take the tighter per-IP
+  // limit and then the shared one.
+  if (await overLensBudget(LENS_BUDGETS.shot, request, env)) {
+    return jsonResponse({ ok: false, error: `Snapshots are rate-limited to ${LENS_BUDGETS.shot.max}/min. Hang on a moment.` }, 429);
+  }
+  // The shared ceiling is checked AFTER the per-caller one, so a single heavy
+  // visitor is turned away by their own budget before they can spend everyone's.
+  if (await overLensBudget(LENS_BUDGETS.browserAll, request, env)) {
+    return jsonResponse({ ok: false, error: "The shared browser budget for this minute is spent. Try again shortly." }, 429);
   }
 
   // Headless Chrome is by far the most expensive thing this site can be asked to
@@ -1805,20 +1820,6 @@ export async function handleLensBrowser(request, env, ctx) {
 
   if (!hasRenderEngine(env)) return jsonResponse({ ok: false, error: "Browser Run is not configured on this deployment." }, 503);
 
-  // The throw-guard that used to be spelled out here now lives inside
-  // overLensBudget, and the reason it existed is worth keeping: an unhandled
-  // throw on this path does not produce a JSON error, it produces Cloudflare's
-  // HTML 1101 page, which the client then tries to JSON.parse.
-  if (await overLensBudget(LENS_BUDGETS.browser, request, env)) {
-    return jsonResponse({ ok: false, error: `Browser Run snapshots are rate-limited to ${LENS_BUDGETS.browser.max}/min. Hang on a moment.` }, 429);
-  }
-  // Same shared ceiling as /lens/shot. Two routes drawing on one account-wide
-  // allowance have to bill against one bucket, or each stays politely under a
-  // limit that the pair of them blows through together.
-  if (await overLensBudget(LENS_BUDGETS.browserAll, request, env)) {
-    return jsonResponse({ ok: false, error: "The shared browser budget for this minute is spent. Try again shortly." }, 429);
-  }
-
   // The plain key keeps its exact legacy shape and a recipe run APPENDS to it.
   // Hashing url+id together would have been tidier and would also have changed
   // every plain key in one deploy, invalidating the namespace and buying a wave
@@ -1838,6 +1839,25 @@ export async function handleLensBrowser(request, env, ctx) {
         });
       }
     } catch (_e) { /* a corrupt cache entry is a miss, never a user-visible failure */ }
+  }
+
+  // Past here a miss means a real render, so the per-IP ceiling and then the
+  // shared one. Both sit BELOW the cache read above for the reason spelled out
+  // in handleLensShot: a hit spends no Browser Run allowance, so rationing one
+  // refuses a reader a snapshot this Worker already has.
+  //
+  // The throw-guard that used to be spelled out here now lives inside
+  // overLensBudget, and the reason it existed is worth keeping: an unhandled
+  // throw on this path does not produce a JSON error, it produces Cloudflare's
+  // HTML 1101 page, which the client then tries to JSON.parse.
+  if (await overLensBudget(LENS_BUDGETS.browser, request, env)) {
+    return jsonResponse({ ok: false, error: `Browser Run snapshots are rate-limited to ${LENS_BUDGETS.browser.max}/min. Hang on a moment.` }, 429);
+  }
+  // Same shared ceiling as /lens/shot. Two routes drawing on one account-wide
+  // allowance have to bill against one bucket, or each stays politely under a
+  // limit that the pair of them blows through together.
+  if (await overLensBudget(LENS_BUDGETS.browserAll, request, env)) {
+    return jsonResponse({ ok: false, error: "The shared browser budget for this minute is spent. Try again shortly." }, 429);
   }
 
   // Same reasoning as lens.shot, one step heavier: this asks Browser Run for four
