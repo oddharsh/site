@@ -809,7 +809,7 @@ Single-page personal site at `aadhar.sh`. A Cloudflare Worker with static assets
 | the `/terminal` window | It is a **console window, not a page**, and the difference is entirely in what was REMOVED. `lunaPage` gained `windowClass`/`contentClass`/`windowAttrs` (all defaulting to empty, so the other nine callers are byte-identical) and the window declares `data-no-histnav`, which `nav.js` honours by skipping the site-wide Back/Forward injection — those are BROWSER controls, and a console carrying them reads as a terminal running inside Internet Explorer. Drag, resize, maximize and close all stay, because those are OS chrome. There is also nothing below the window: the explanatory paragraph that used to sit there was the single strongest tell, since real consoles do not come with a caption. Width is 624px so the console is exactly 80 columns, the size a real one opens at; left at the 760px page default it carried 136px of dead field to the right of every frame. Fonts stay on the design system — `"Lucida Console", var(--font-mono)`, one native Windows font in front of the existing token, no `@font-face`, no bytes. |
 | `www/_worker.js` | The module worker (bundled by wrangler at deploy). Owns routing, photo serving from R2, manifest building, Spotify playlist scraping, AadharshBot crawler, the `/writing` Notepad pages, cache-control overrides. |
 | `www/_headers` | Static-asset cache + security headers (CSP, Permissions-Policy, etc.). Applied to direct static-asset requests; the worker overrides cache-control for select paths. |
-| `www/sw.js` | RETIRED (v136, 2026-07-03): now a ~15-line unregister stub (skipWaiting, delete caches, claim, unregister) that must keep serving 200 for a year+ so installed copies clean themselves up. No CACHE_VERSION anymore; the deploy-log vnum lives in D1 alone (bump-version.sh derives the next from MAX(vnum)). Repeat-visit speed comes from immutable assets + bfcache + speculation prerender. |
+| `www/sw.js` | RETIRED (v136, 2026-07-03): now a ~15-line unregister stub (skipWaiting, delete caches, claim, unregister) that must keep serving 200 for a year+ so installed copies clean themselves up. No CACHE_VERSION anymore; the deploy-log vnum is staged in `checkpoints.json` and recorded in D1 by the ramp (bump-version.sh mints the next from that projection). Repeat-visit speed comes from immutable assets + bfcache + speculation prerender. |
 | `www/llms.txt` | The llms.txt format — concise site summary for LLMs. Linked from `<link rel="alternate">`. |
 | `www/index.md` | Markdown source of homepage copy (used by `/llms.txt` and as a fallback). The one COMMITTED Markdown twin: `gen-md-twins.mjs` skips any path that already has one, so this hand-written prose is never regenerated over. |
 | `www/md/` | Hand-authored Markdown twins for the three Worker-rendered prose pages, `/bot`, `/whoareyou` and `/security`, whose text lives in template literals no build step can read. `.assetsignore`d (build input, not a public URL): the generator publishes them at `/bot.md`, `/whoareyou.md` and `/security.md`. `checkTwinFacts()` pins the load-bearing strings against the Worker in BOTH directions, so bumping `BOT_VERSION` fails the deploy until `bot.md` agrees. `security.md`'s pins read `lib/security.js` rather than the page, since a page ABOUT headers must agree with the module that SENDS them; one of them is derived from `ENFORCE_PAGE_HASHES`, so finishing the hashed-CSP rollout fails the deploy until the twin stops calling the policy report-only. |
@@ -1393,8 +1393,8 @@ generic hex back.
 - **ASSETS** — the Workers static-assets binding (wrangler.jsonc `assets`), serves files from www/.
 - **RESTORE_DB** — D1 database `aadhar-restore` (id `88c8daf1-3a36-4f8e-a2ad-dba8a74e1b9f`),
   the **single source of truth for the deploy log**. One row per logged deploy
-  (bump-version.sh insert; the retired SW's `CACHE_VERSION` used to carry the
-  number), seeded from git history. BOTH `/restore` (the restore-point
+  (written by the ramp at 100%, staged by bump-version.sh; the retired SW's
+  `CACHE_VERSION` used to carry the number), seeded from git history. BOTH `/restore` (the restore-point
   scrubber + "You are here" banner) AND `/updates` (Windows Update changelog + running
   build) read this one `checkpoints` table, so they cannot drift apart. Schema:
   `checkpoints(vnum INTEGER PK, ts INTEGER, ymd TEXT, version TEXT, slug TEXT, title TEXT)`
@@ -1402,9 +1402,25 @@ generic hex back.
   **Configured in `wrangler.jsonc`** (d1_databases), like every other binding
   since the Workers migration.
   **Log a deploy** (so both pages stay current):
-  `./www/scripts/bump-version.sh <slug> "<title>"`, then deploy. It derives
-  the next vnum from `SELECT MAX(vnum)` and inserts the checkpoint (no file edit;
-  the SW that used to carry the version string retired in v136).
+  `./www/scripts/bump-version.sh <slug> "<title>"`, run INSIDE the PR being
+  released, then commit the file it writes.
+
+  **It writes ONE FILE and touches no D1, which is the reverse of what this said
+  until 2026-08-15.** The old prose ("derives the next vnum from `SELECT
+  MAX(vnum)` and inserts the checkpoint, no file edit") described the behaviour
+  the script's own header explains it abandoned, so anyone following it went
+  looking for a D1 row that nothing had written. It appends to
+  `www/_worker.js/checkpoints.json`, mints the vnum from that projection, and
+  needs no network or credential. `deploy:promote` writes the D1 row once traffic
+  actually reaches 100%, which is the only thing that knows the release shipped.
+  The ordering matters: `/updates` and `/restore` render the projection at BUILD
+  time, so an entry written to D1 first could only be published by a SECOND
+  deploy. `checkpoints:check` allows the projection to run ahead by a contiguous
+  tail of unreleased entries and fails on every other divergence.
+
+  The title reaches D1 as a single-quoted SQL literal, so **it cannot contain an
+  apostrophe** and the script rejects one. That rules out contractions, which is
+  the one place on this site where the house voice loses to the tooling.
 - **BROWSER (Browser Run binding)** — powers `/lens/shot` and
   `/lens/browser` inside **`/lens`** ("The Other Web", which shows any URL the way a
   machine does). `/lens`'s Human view embeds framable sites in a live cross-origin
