@@ -3395,14 +3395,15 @@ pnpm run deploy:direct
     forcing a dictionary roll as a side effect, which is the same
     byte-identical bar gotcha 28 set for the bun evaluation.
 
-36. **This account is on WORKERS FREE, so the per-invocation budget is 10ms of
-    CPU and 50 subrequests, and a fan-out crosses both without saying so.**
-    Diagnosed 2026-08-15 after the homepage album covers went missing for the
-    second time. Three separate notes in this file each recorded a piece of it
-    and none of them met: the ML-DSA signature was measured at ~8.5ms and filed
-    as a one-off cost, the five-cron cap named the plan in a comment about
-    something else, and the KV ceiling note said to check which plan the account
-    is on without anybody doing it.
+36. **This account is on WORKERS FREE, so a fan-out crosses the per-invocation
+    budget without saying so. The SUBREQUEST cap is the hard one at 50; CPU is a
+    pressure problem rather than the flat 10ms wall it looks like.** Diagnosed
+    2026-08-15 after the homepage album covers went missing for the second time.
+    Three separate notes in this file each recorded a piece of it and none of
+    them met: the ML-DSA signature was measured at ~8.5ms and filed as a one-off
+    cost, the five-cron cap named the plan in a comment about something else, and
+    the KV ceiling note said to check which plan the account is on without
+    anybody doing it.
 
     Two surfaces were dark at once, for one reason:
 
@@ -3410,6 +3411,26 @@ pnpm run deploy:direct
     |---|--:|--:|
     | `/rn` playlist scrape | 21, one per track | ~180ms |
     | `/lens` discovery | 28 probes | ~240ms |
+
+    **Be careful with the 10ms number, which an earlier draft of this note stated
+    as a flat per-invocation cap. It is the documented Workers Free limit and it
+    is NOT what a single request meets.** Measured against production the same
+    day: requests routinely finish `ok` far above it (90ms and 196ms on the old
+    code, both fine), so there is real burst tolerance. What happened in the
+    03:00Z window was a CLAMP under sustained load, where `exceededCpu` landed on
+    31 of 51 sampled requests at exactly 10ms while `/lens` was being hammered.
+    So the same code passes when the account is quiet and dies when it is busy,
+    which is why this presented as intermittent and why chasing a repro on one
+    URL kept exonerating the wrong things.
+
+    **What that means for reading a fix: measure CPU, never just status codes.**
+    Pinning both versions with `Cloudflare-Workers-Version-Overrides` and firing
+    identical `/lens/fetch` requests at one target, sig2 on against sig2 off, gave
+    a median of **51ms against 15ms** and a spread of 67ms against 10ms. Every one
+    of those twelve requests returned 200, on both versions, so a pass/fail probe
+    would have reported the fix as doing nothing. **The header wants the FULL
+    version UUID; the 8-char prefix silently fails to pin and every request lands
+    on the majority version**, which reads exactly like a fix that changed nothing.
 
     **KV OPERATIONS COUNT AS SUBREQUESTS**, which is the part that is easy to
     forget and is most of how the scrape reached ~67 against a cap of 50: 37
@@ -3435,11 +3456,13 @@ pnpm run deploy:direct
       the span, which `rn.track_embeds_failed` did and which nobody read. Better
       still, make the global case loud: `rn.covers_pending` is now an attribute
       that should walk to 0, so a stall is a number rather than a missing image.
-    - **Check the plan before reasoning about limits.** `exceededCpu` clustered
-      at exactly 10ms in the tail, which is the free-plan CPU cap, while some
-      requests still succeeded at 194ms. Read the tail (`wrangler tail
-      aadhar-sh --format json`) and group by `outcome` rather than inferring
-      either number from the docs.
+    - **Check the plan before reasoning about limits, and then check the plan's
+      numbers against the wire.** Both halves cost time here. Nothing said which
+      plan this account was on, and once the docs supplied 10ms that number went
+      straight into a note as a wall, which the very next measurement contradicted.
+      Read the tail (`wrangler tail aadhar-sh --format json`), group by `outcome`,
+      and compare the CPU of requests that PASSED against ones that died before
+      believing any published ceiling is what you are hitting.
 
 ---
 
