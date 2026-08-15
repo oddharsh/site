@@ -1429,6 +1429,40 @@ node www/scripts/inject-og-meta.mjs   # add the meta to any page missing it (ide
   OG_ONLY=lens pnpm run og-cards
   ```
 
+### The GitHub repo card
+
+Separate generator, separate size, separate destination. GitHub's social preview
+is **1280x640** and it is uploaded through the repository settings, not served by
+this site, so it lives in `.github/` rather than `www/og/` and no page links it.
+
+```bash
+pnpm run repo-card                        # both variants, into .github/
+pnpm run repo-card desktop                # just one (desktop | card)
+pnpm run repo-card --out /tmp/preview     # somewhere throwaway
+```
+
+Two variants ship because the card has two honest jobs:
+
+- `social-preview-card.png` is a composed Luna window on the Bliss wallpaper:
+  the name at 96px, one line of subtitle, four measured facts. **This is the one
+  uploaded to GitHub**, because it is the one that survives a Slack thumbnail,
+  where a whole desktop reads as blue mush.
+- `social-preview-desktop.png` is the LIVE homepage at 2:1, full bleed. No copy
+  at all: desktop icons, the window, the taskbar, real photos. It is generated on
+  demand and **deliberately not committed**: the homepage draws a random 12 of
+  158 photos per request, so every run would land a different PNG in the diff,
+  the same non-determinism that keeps `og-cards.yml` dispatch-only. Run
+  `pnpm run repo-card desktop` when you want one for a talk or a post.
+
+The chips are COUNTED from `config/site-manifest.json` and
+`www/images/hashes.json` rather than typed, because a card outlives most of what
+it describes. The wallpaper and the window icon are read out of `www/luna.css`
+and `www/index.html` for the same reason, so there is no second copy of either.
+
+Nothing in the pipeline uploads it: GitHub exposes no API for the social preview.
+Settings, then Social preview, then upload the PNG by hand.
+
+
 ---
 
 ## Change the now-playing playlist
