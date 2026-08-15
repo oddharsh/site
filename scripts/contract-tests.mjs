@@ -25,7 +25,7 @@ import {
 } from "../www/_worker.js/lens.js";
 import { EXECUTION_META, EXECUTION_PROBE, executionChecks } from "../www/_worker.js/lib/agent-execution.js";
 import { httpWords } from "./check-agent.mjs";
-import { lensReadiness } from "../www/_worker.js/lens.js";
+import { lensReadiness, lensSitemapShape, lensSitemapDeclared, lensAgentDoors } from "../www/_worker.js/lens.js";
 import { lensRecipe, lensRecipeIds, lensRecipeScript } from "../www/_worker.js/lens-recipes.js";
 import { handleCoffeeAvailability } from "../www/_worker.js/coffee.js";
 import { reservationName } from "../cal/src/reservation.js";
@@ -6995,6 +6995,128 @@ test("an unrendered scan does not enlarge the readiness denominator", () => {
   assert.equal(rendered.counted - noRender.counted, 2, "exactly the two execution checks join the denominator");
   assert.ok(/neutral/.test(noRender.scoringNote) && /render/.test(noRender.scoringNote),
     "the published scoring note has to explain the neutral rule, since the number is shown to strangers");
+});
+
+test("a 200 at the sitemap URL is not a sitemap until something reads it", () => {
+  // The bug this exists to stop: `probe.ok` was the whole test, so any site
+  // serving an SPA shell or a soft-404 at /sitemap.xml scored a valid sitemap.
+  // A missed sitemap is an undercount; an invented one is a false claim, so the
+  // validator refuses rather than guesses.
+  const html = { ok: true, status: 200, contentType: "text/html", body: "<!doctype html><html><body>Not found</body></html>", url: "https://x.test/sitemap.xml" };
+  assert.equal(lensSitemapShape(html).valid, false, "an HTML page at the sitemap URL is not a sitemap");
+  assert.match(lensSitemapShape(html).reason, /HTML/, "and the reason has to name what it actually got");
+
+  const xml = { ok: true, status: 200, contentType: "application/xml", body: '<?xml version="1.0"?><urlset><url><loc>https://x.test/</loc></url><url><loc>https://x.test/a</loc></url></urlset>', url: "https://x.test/sitemap.xml" };
+  assert.equal(lensSitemapShape(xml).valid, true, "a real urlset passes");
+  assert.equal(lensSitemapShape(xml).entries, 2, "and its entries are counted for the detail line");
+
+  const index = { ok: true, status: 200, contentType: "application/xml", body: "<sitemapindex><sitemap><loc>https://x.test/s1.xml</loc></sitemap></sitemapindex>", url: "https://x.test/sitemap.xml" };
+  assert.equal(lensSitemapShape(index).valid, true, "a sitemapindex is a sitemap too");
+
+  // sitemaps.org blesses a plain-text list, so refusing it would undercount.
+  const text = { ok: true, status: 200, contentType: "text/plain", body: "https://x.test/\nhttps://x.test/a\n", url: "https://x.test/sitemap.txt" };
+  assert.equal(lensSitemapShape(text).valid, true, "a plain-text URL list is a legal sitemap");
+
+  // A .gz body read as text is compressed bytes. Calling that "not a sitemap"
+  // would be a claim about a file we never decoded, so it reads UNKNOWN.
+  const gz = { ok: true, status: 200, contentType: "application/gzip", body: "\u001f\u008b\u0008", url: "https://x.test/sitemap.xml.gz" };
+  assert.equal(lensSitemapShape(gz).valid, false, "a compressed sitemap is not verified");
+  assert.equal(lensSitemapShape(gz).compressed, true, "but it is flagged as compressed rather than absent");
+
+  assert.equal(lensSitemapShape(null).valid, false, "a missing probe is not a sitemap");
+  assert.equal(lensSitemapShape({ ok: false, status: 404 }).valid, false, "and neither is a 404");
+});
+
+test("robots.txt decides where the sitemap is, not the /sitemap.xml convention", () => {
+  // RFC 9309 2.2.3 makes the Sitemap directive authoritative. Probing only the
+  // convention called Stripe's real sitemap (/sitemap/sitemap.xml) missing, and
+  // did the same to 13 more sites in the 2026-08-15 survey.
+  const robots = (body) => ({ ok: true, status: 200, body });
+  assert.equal(
+    lensSitemapDeclared(robots("User-agent: *\nSitemap: https://x.test/sitemap/sitemap.xml"), "https://x.test"),
+    "https://x.test/sitemap/sitemap.xml", "the declared location is followed");
+  // A cross-host declaration is normal (netlify.com declares www.netlify.com).
+  assert.equal(
+    lensSitemapDeclared(robots("Sitemap: https://www.x.test/sitemap-index.xml"), "https://x.test"),
+    "https://www.x.test/sitemap-index.xml", "a cross-host sitemap is still the site's own declaration");
+  // Already probed in the parallel batch; re-fetching it would buy nothing.
+  assert.equal(
+    lensSitemapDeclared(robots("Sitemap: https://x.test/sitemap.xml"), "https://x.test"),
+    null, "the conventional path is not probed a second time");
+  // The declared URL is third-party controlled, so it goes through the same
+  // SSRF guard a visitor-supplied target does.
+  assert.equal(lensSitemapDeclared(robots("Sitemap: http://127.0.0.1/sitemap.xml"), "https://x.test"), null, "a private host is refused");
+  assert.equal(lensSitemapDeclared(robots("Sitemap: file:///etc/passwd"), "https://x.test"), null, "a non-http scheme is refused");
+  assert.equal(lensSitemapDeclared({ ok: false, status: 404 }, "https://x.test"), null, "no robots.txt means nothing is declared");
+
+  const lens = readFileSync("./www/_worker.js/lens.js", "utf8");
+  assert.match(lens, /if \(!lensSitemapShape\(sitemap\)\.valid\) \{/,
+    "the follow-up probe must be CONDITIONAL, so the common path keeps its parallel fan-out");
+});
+
+test("the readiness rubric scores the declared sitemap and refuses the fake one", () => {
+  const base = { headers: {}, robots: null, terms: null, discovery: null, agent: null, openapi: null, botViews: [], execution: null };
+  const good = '<urlset><url><loc>https://x.test/</loc></url></urlset>';
+
+  const fake = lensReadiness({ ...base, sitemap: { ok: true, status: 200, contentType: "text/html", body: "<html><body>hi</body></html>", url: "https://x.test/sitemap.xml" } });
+  assert.equal(fake.checks.sitemap.status, "fail", "an HTML 200 must not score a sitemap pass");
+
+  const declared = lensReadiness({
+    ...base,
+    sitemap: { ok: false, status: 404, url: "https://x.test/sitemap.xml" },
+    sitemapDeclared: { ok: true, status: 200, contentType: "application/xml", body: good, url: "https://x.test/sitemap/sitemap.xml" },
+  });
+  assert.equal(declared.checks.sitemap.status, "pass", "a sitemap at the declared location counts");
+  assert.match(declared.checks.sitemap.detail, /robots\.txt declares/, "and the detail says where it was found");
+
+  const compressed = lensReadiness({ ...base, sitemap: { ok: true, status: 200, contentType: "application/gzip", body: "x", url: "https://x.test/sitemap.xml.gz" } });
+  assert.equal(compressed.checks.sitemap.status, "unknown", "a sitemap we could not decode is unknown, never a fail");
+});
+
+test("a door that never answered is not an action surface", () => {
+  // 4 of the 6 sites this rubric called Agent-Native in the 2026-08-15 survey
+  // earned the top rung from an /ask that answered 410, 412, 429 or 401 — a
+  // dead API and three bot walls. lensProbeNlweb returned "maybe" for ANY
+  // non-404 JSON, and an NLWeb door is an ACTION surface.
+  const lens = readFileSync("./www/_worker.js/lens.js", "utf8");
+  assert.match(lens, /if \(json && res\.ok\) return \{ verdict: "maybe"/,
+    "an NLWeb candidate has to have ANSWERED, not merely returned JSON");
+  assert.match(lens, /json && res\.status === 401 && www/,
+    "a 401 counts only when the origin says how to authenticate, the same rule /mcp uses");
+
+  const doorsFor = (verdict) => lensAgentDoors({
+    llmsTxt: { ok: false }, mdNego: null, mcp: { verdict: "no" }, nlweb: { verdict },
+    webmcp: { found: false }, agentCard: { ok: false }, openapi: { ok: false },
+    aiPlugin: { ok: false }, apiCatalog: { ok: false },
+  });
+  assert.equal(doorsFor("maybe").strategy.action.length, 1, "a live /ask is an action surface");
+  assert.equal(doorsFor("likely").strategy.action.length, 1, "so is an auth-gated one that names its scheme");
+  assert.equal(doorsFor("no").strategy.action.length, 0, "a refused /ask is not");
+  assert.equal(doorsFor("unknown").strategy.action.length, 0, "and neither is one that never answered");
+});
+
+test("a level may claim at most one rung beyond what the score supports", () => {
+  // github.com scored 13/100 and was published as Agent-Native, walmart.com
+  // 27/100 and the same, because the ladder reads one signal per rung while the
+  // score reads twenty. The two contradicted each other in public.
+  const base = { headers: {}, robots: { ok: true, status: 200, body: "User-agent: *" }, terms: null, discovery: null, openapi: null, botViews: [], execution: null };
+  const withDoor = { strategy: { verdict: "agent-native", action: ["an MCP endpoint"], readable: [], unknowns: [] } };
+
+  const thin = lensReadiness({ ...base, sitemap: null, agent: withDoor });
+  assert.ok(thin.overall < 40, "precondition: this site passes almost nothing");
+  assert.ok(thin.level < 5, "a 13-of-100 site cannot be published as Agent-Native on one probe");
+  assert.ok(thin.levelNote && /held at/.test(thin.levelNote), "and the cap has to be stated, not applied silently");
+
+  // The cap must not erase a real capability claim: one rung of headroom is the
+  // whole point, since a site can ship a working agent interface while
+  // publishing none of the metadata the other checks look for.
+  const rich = lensReadiness({
+    ...base,
+    sitemap: { ok: true, status: 200, contentType: "application/xml", body: "<urlset><url><loc>https://x.test/</loc></url></urlset>", url: "https://x.test/sitemap.xml" },
+    agent: withDoor,
+  });
+  assert.ok(rich.level >= thin.level, "a better-scoring site with the same door never ranks lower");
+  assert.equal(lensReadiness({ ...base, sitemap: null, agent: null }).levelNote, null, "an uncapped level carries no note");
 });
 
 test("the agent check's word count strips a script closed any legal way", () => {

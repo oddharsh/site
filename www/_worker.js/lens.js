@@ -524,7 +524,9 @@ function lensMachineFragment(data, state) {
   const doors = ag.strategy && ag.strategy.verdict || "unknown";
   const files = [
     d.robotsTxt && d.robotsTxt.ok ? "robots.txt" : "",
-    d.sitemapXml && d.sitemapXml.ok ? "sitemap.xml" : "",
+    // Same rule the readiness check uses: an HTML page answering 200 at the
+    // sitemap URL is not a sitemap, so it does not get listed as one here.
+    lensSitemapShape(d.sitemapXml).valid ? "sitemap.xml" : lensSitemapShape(d.sitemapDeclared).valid ? "sitemap (declared in robots.txt)" : "",
     d.llmsTxt && d.llmsTxt.ok ? "llms.txt" : "",
   ].filter(Boolean);
   return '<div class="lx-brief-lede"><b>Server-rendered machine summary.</b> JavaScript can enhance this into the full selected lens; this fragment is the no-script evidence floor.</div>' +
@@ -605,7 +607,7 @@ function lensVsColumn(s) {
   ].map((row) => "<tr><td>" + escHtml(row[0]) + "</td><td>" + (row[1] == null ? cost : escHtml(row[1])) + "</td></tr>").join("");
   return '<div class="lx-vs-col"><div class="lx-vs-h"><span>' + escHtml(host) + '</span><a href="/lens?url=' + escAttr(encodeURIComponent(s.url)) + '">full scan &rarr;</a></div>' +
     '<div class="lx-vs-body"><div class="lx-vs-score"><b>' + (s.readiness == null ? "?" : escHtml(s.readiness)) + "<span>/100</span></b>" +
-    '<span class="lx-badge ' + levelKind + '">Level ' + (s.level == null ? "?" : escHtml(s.level)) + "</span> <span>" + escHtml(s.levelName || "") + "</span></div>" +
+    '<span class="lx-badge ' + levelKind + '"' + (s.levelNote ? ' title="' + escAttr(s.levelNote) + '"' : "") + ">Level " + (s.level == null ? "?" : escHtml(s.level)) + "</span> <span>" + escHtml(s.levelName || "") + "</span></div>" +
     '<table class="lx-kv">' + rows + "</table>" +
     '<div class="lx-tags" style="margin-top:6px">' + (pub || '<span class="lx-none">no machine surfaces published</span>') + "</div></div></div>";
 }
@@ -2064,6 +2066,7 @@ export function lensObservationSummary(result) {
     fieldScore: readiness.field?.overall ?? null,
     level: readiness.level ?? null,
     levelName: readiness.levelName ?? null,
+    levelNote: readiness.levelNote ?? null,
     tier: spectrum.tier || "unknown",
     doors: lensDoorCount(result?.agent),
     // The dollar figure the verdict strip states for a single scan, carried
@@ -2395,7 +2398,7 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
     // which refetches THIS url as six crawlers.
     const disco = await originDiscovery(origin, new URL(finalUrl).hostname, env, { selfLens });
     const {
-      robots, sitemap, llms, llmsFull, aiTxt, secTxt, tdmrep, agentCard, openapi, aiPlugin,
+      robots, sitemap, sitemapDeclared, llms, llmsFull, aiTxt, secTxt, tdmrep, agentCard, openapi, aiPlugin,
       apiCatalog, mcp, nlweb, webBotAuth, openidConfig, oauthServer, oauthResource, authMd,
       mcpServerCard, agentSkills, ucp, acp, ap2, agentsMd, dnsAid, ech,
     } = disco;
@@ -2424,7 +2427,7 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
     const feeds = (out.structured?.relLinks || []).filter((l) =>
       /alternate/.test(l.rel) && /(rss|atom|feed|\+xml|\+json)/i.test((l.type || "") + " " + (l.href || "")));
     out.discovery = {
-      origin, robotsTxt: robots, sitemapXml: sitemap, llmsTxt: llms, llmsFullTxt: llmsFull,
+      origin, robotsTxt: robots, sitemapXml: sitemap, sitemapDeclared, llmsTxt: llms, llmsFullTxt: llmsFull,
       aiTxt, securityTxt: secTxt, feeds, dnsAid, agentsMd,
       webBotAuth, oauthDiscovery: { openidConfiguration: openidConfig, oauthAuthorizationServer: oauthServer },
       oauthProtectedResource: oauthResource, authMd, mcpServerCard, agentSkills,
@@ -2454,7 +2457,7 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
     // readiness is judged from the probe RESULTS, each of which carries its own
     // status and body, rather than from the page that prompted the fan-out.
     out.readiness = lensReadiness({
-      headers, robots, sitemap, terms: out.terms,
+      headers, robots, sitemap, sitemapDeclared, terms: out.terms,
       discovery: out.discovery, agent: out.agent, openapi, botViews,
       // Always null on the initial scan, and that is the design rather than a
       // gap: this pass is 28 cheap HTTP probes, while execution evidence needs a
@@ -2682,8 +2685,31 @@ export async function originDiscovery(origin, hostname, env, opts = {}) {
       lensProbeDnsAid(hostname),
       lensProbeEch(hostname),
     ]);
+    // ONE conditional follow-up, and only when the convention did not deliver:
+    // robots.txt names where the sitemap actually is. Sequential because it
+    // cannot be known until robots.txt has been read, and skipped entirely on
+    // the common path, so the fan-out above keeps its shape for every site
+    // whose sitemap sits where the convention says.
+    let sitemapDeclared = null;
+    if (!lensSitemapShape(sitemap).valid) {
+      const declared = lensSitemapDeclared(robots, origin);
+      if (declared) {
+        s.setAttribute("lens.sitemap_declared", true);
+        const probe = await lensProbe(declared, env);
+        // Count first, then TRIM. This whole result is cached as one JSON blob
+        // under DISCOVERY_MAX_BYTES, and a large sitemap kept whole would push
+        // the blob over that ceiling — which does not error, it just stops
+        // caching, so the site silently pays 28 probes on every future scan.
+        // The shape check only needs the head of the document.
+        if (probe.ok && typeof probe.body === "string") {
+          probe.entries = (probe.body.match(/<url>|<sitemap>/gi) || []).length;
+          probe.body = probe.body.slice(0, 8 * 1024);
+        }
+        sitemapDeclared = probe;
+      }
+    }
     return {
-      robots, sitemap, llms, llmsFull, aiTxt, secTxt, tdmrep, agentCard, openapi, aiPlugin,
+      robots, sitemap, sitemapDeclared, llms, llmsFull, aiTxt, secTxt, tdmrep, agentCard, openapi, aiPlugin,
       apiCatalog, mcp, nlweb, webBotAuth, openidConfig, oauthServer, oauthResource, authMd,
       mcpServerCard, agentSkills, ucp, acp, ap2, agentsMd, dnsAid, ech,
     };
@@ -3161,7 +3187,24 @@ export async function lensProbeNlweb(origin, env) {
     const ct = (res.headers.get("content-type") || "").split(";")[0].trim();
     const head = (await lensReadCapped(res, 1024)).text.trim();
     if (res.status === 404 || /html/i.test(ct)) return { verdict: "no", detail: res.status === 404 ? "no /ask" : "HTML at /ask (a page, not an endpoint)" };
-    if (/json/i.test(ct) || head.startsWith("{")) return { verdict: "maybe", detail: "JSON at /ask (HTTP " + res.status + ") — NLWeb-shaped" };
+    const json = /json/i.test(ct) || head.startsWith("{");
+    // A door has to ANSWER before it counts as one. This accepted ANY non-404
+    // JSON, and error pages are overwhelmingly JSON on a JSON endpoint, so a
+    // `410 Gone`, a `412`, a `429` and a bare `401` all read as "NLWeb-shaped"
+    // — and because an NLWeb door is an ACTION surface, each one promoted its
+    // whole site to Agent-Native. Measured over a 46-site survey (2026-08-15):
+    // 4 of the 6 sites this rubric called Agent-Native earned the top rung from
+    // a /ask that answered 410, 412, 429 or 401. One decade-dead API and three
+    // bot walls, scored as a working agent interface.
+    if (json && res.ok) return { verdict: "maybe", detail: "JSON at /ask (HTTP " + res.status + ") — NLWeb-shaped" };
+    // 401 is the one refusal that still evidences a door, and only when the
+    // origin says how to open it. Same rule lensProbeMcp already applies to a
+    // 401 at /mcp, so the two door probes agree about what a locked door is.
+    const www = res.headers.get("www-authenticate") || "";
+    if (json && res.status === 401 && www) return { verdict: "likely", detail: "401 + WWW-Authenticate at /ask (auth-gated endpoint)" };
+    // A 5xx is our probe failing to get an answer, not the site lacking a door;
+    // `unknown` is what the doors tier already renders as "never answered".
+    if (res.status >= 500) return { verdict: "unknown", detail: "HTTP " + res.status + " at /ask — origin did not answer" };
     return { verdict: "no", detail: "HTTP " + res.status + (ct ? " " + ct : "") };
   } catch (_e) { return { verdict: "unknown", detail: "probe failed" }; }
 }
@@ -3260,7 +3303,7 @@ export function lensAgentDoors({ llmsTxt, mdNego, mcp, nlweb, webmcp, agentCard,
   // the verdict: action surfaces beat readable ones beat nothing.
   const action = [];
   if (doors.mcp.verdict === "yes" || doors.mcp.verdict === "likely") action.push("an MCP endpoint");
-  if (doors.nlweb.verdict === "maybe") action.push("an NLWeb-shaped /ask");
+  if (doors.nlweb.verdict === "maybe" || doors.nlweb.verdict === "likely") action.push("an NLWeb-shaped /ask");
   if (doors.webmcp.found) action.push("in-page WebMCP tools");
   if (doors.agentCard.present) action.push("an A2A agent card");
   const readable = [];
@@ -3300,6 +3343,61 @@ export function lensAgentDoors({ llmsTxt, mdNego, mcp, nlweb, webmcp, agentCard,
   }
   doors.strategy = { verdict, note, action, readable, unknowns };
   return doors;
+}
+
+// ── sitemaps ---------------------------------------------------------------
+// Is this response actually a sitemap? `probe.ok` alone is not the question,
+// and treating it as the question is how this rubric MANUFACTURED passes: a
+// site that serves its SPA shell or a soft-404 page at /sitemap.xml answers
+// 200 text/html, and every one of those was scored a valid sitemap. A missed
+// sitemap is an undercount; an invented one is a lie, so this errs toward
+// refusing rather than guessing.
+export function lensSitemapShape(probe) {
+  if (!probe || !probe.ok) {
+    return { valid: false, reason: probe && probe.status ? "HTTP " + probe.status : "no response" };
+  }
+  const body = String(probe.body || "");
+  const ct = String(probe.contentType || "").toLowerCase();
+  // A .gz sitemap is legal and common, and this probe reads TEXT, so the body
+  // in hand is compressed bytes decoded as text. Saying "not sitemap-shaped"
+  // about that would be a fabrication about a file we did not read.
+  if (/application\/(x-)?gzip|application\/octet-stream/.test(ct) || /\.gz(\?|#|$)/i.test(String(probe.url || ""))) {
+    return { valid: false, compressed: true, reason: "compressed sitemap — this probe reads text, so its contents were not verified" };
+  }
+  if (/<(urlset|sitemapindex)\b/i.test(body)) {
+    // `entries` may be precomputed by the caller: the declared-sitemap probe
+    // counts before trimming its body, because a 256KB sitemap kept whole would
+    // push the discovery blob past DISCOVERY_MAX_BYTES and silently disable the
+    // cache for exactly the sites that need it most.
+    return { valid: true, kind: "xml", entries: Number.isFinite(probe.entries) ? probe.entries : (body.match(/<url>|<sitemap>/gi) || []).length };
+  }
+  // sitemaps.org also blesses a plain-text file of one URL per line.
+  const lines = body.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (lines.length && /text\/plain/.test(ct) && lines.every((l) => /^https?:\/\/\S+$/i.test(l))) {
+    return { valid: true, kind: "text", entries: lines.length };
+  }
+  if (/<html|<!doctype html/i.test(body)) return { valid: false, reason: "HTML at the sitemap URL — a page, not a sitemap" };
+  return { valid: false, reason: "answered, but is not sitemap-shaped" };
+}
+
+// robots.txt is the AUTHORITY on where a sitemap lives (RFC 9309 §2.2.3);
+// /sitemap.xml is a convention and nothing more. Probing only the convention
+// called Stripe's real sitemap (/sitemap/sitemap.xml, declared in its
+// robots.txt) missing, and it did the same to 13 other sites in the same
+// survey — the single largest source of disagreement with Cloudflare's
+// scanner, which follows the directive. The declared URL is third-party
+// controlled, so it goes through the same SSRF guard every visitor-supplied
+// target does.
+export function lensSitemapDeclared(robots, origin) {
+  if (!robots || !robots.ok) return null;
+  const conventional = origin + "/sitemap.xml";
+  for (const raw of lensParseRobots(robots.body || "").sitemaps) {
+    const v = validateLensTarget(raw);
+    if (!v.ok) continue;
+    if (v.url === conventional || v.url === conventional + "/") continue;
+    return v.url;
+  }
+  return null;
 }
 
 // ── agent readiness rubric -------------------------------------------------
@@ -3415,7 +3513,7 @@ export function lensFieldEvidence({ status, bodyUnreadable, anatomy, agent, botV
   };
 }
 
-export function lensReadiness({ headers, robots, sitemap, terms, discovery, agent, openapi, botViews, execution }) {
+export function lensReadiness({ headers, robots, sitemap, sitemapDeclared, terms, discovery, agent, openapi, botViews, execution }) {
   const items = {};
   const robotsParsed = robots && robots.ok ? lensParseRobots(robots.body || "") : null;
   const robotsRules = robotsParsed && robotsParsed.groups.length > 0;
@@ -3439,7 +3537,28 @@ export function lensReadiness({ headers, robots, sitemap, terms, discovery, agen
   const ap2 = lensJsonShape(discovery && discovery.commerce && discovery.commerce.ap2, (j) => !!(j.protocol || j.version || j.capabilities));
 
   items.robotsTxt = lensReadinessItem("robotsTxt", robots && robots.ok ? "pass" : robots && (robots.status === 404 || robots.status === 410) ? "fail" : "unknown", robots && robots.ok ? "valid response with " + robotsParsed.groups.length + " User-agent group(s)" : "robots.txt did not return a readable 200");
-  items.sitemap = lensReadinessItem("sitemap", sitemap && sitemap.ok ? "pass" : sitemap && (sitemap.status === 404 || sitemap.status === 410) ? "fail" : "unknown", sitemap && sitemap.ok ? "sitemap answered with " + ((sitemap.body || "").match(/<url>|<sitemap>/gi) || []).length + " URL entries" : "sitemap.xml was not found or did not answer");
+  // Two probes, best-of: the conventional /sitemap.xml and whatever robots.txt
+  // DECLARED, which is the authoritative location and often a different path.
+  // Each is validated rather than trusted for answering 200 — see
+  // lensSitemapShape for why a bare `ok` was manufacturing passes.
+  const sitemapCandidates = [
+    { probe: sitemap, shape: lensSitemapShape(sitemap), declared: false },
+    { probe: sitemapDeclared, shape: lensSitemapShape(sitemapDeclared), declared: true },
+  ].filter((c) => c.probe);
+  const sitemapHit = sitemapCandidates.find((c) => c.shape.valid);
+  const sitemapCompressed = sitemapCandidates.find((c) => c.shape.compressed);
+  const sitemapAnswered = sitemapCandidates.some((c) => c.probe.ok || c.probe.status === 404 || c.probe.status === 410);
+  items.sitemap = lensReadinessItem(
+    "sitemap",
+    sitemapHit ? "pass" : sitemapCompressed || !sitemapAnswered ? "unknown" : "fail",
+    sitemapHit
+      ? "sitemap answered with " + sitemapHit.shape.entries + " URL entr" + (sitemapHit.shape.entries === 1 ? "y" : "ies") + (sitemapHit.declared ? " (at the location robots.txt declares)" : "")
+      : sitemapCompressed
+        ? sitemapCompressed.shape.reason
+        : sitemapCandidates.length
+          ? sitemapCandidates[sitemapCandidates.length - 1].shape.reason
+          : "sitemap.xml was not found or did not answer",
+  );
   items.linkHeaders = lensReadinessItem("linkHeaders", usefulLinks ? "pass" : "fail", usefulLinks ? usefulLinks + " agent-useful Link relation(s)" : "no agent-useful Link relations on the fetched response");
   items.dnsAid = lensReadinessItem("dnsAid", discovery && discovery.dnsAid && discovery.dnsAid.ok ? (discovery.dnsAid.found ? "pass" : "fail") : "unknown", discovery && discovery.dnsAid && discovery.dnsAid.found ? "DNS-AID record found" : "no DNS-AID record found at the checked discovery names");
   // A probe that never ran cannot be a "fail". lensProbeMdNego sets `note` ONLY when
@@ -3493,13 +3612,35 @@ export function lensReadiness({ headers, robots, sitemap, terms, discovery, agen
   const actionSurface = !!(agent && agent.strategy && agent.strategy.action && agent.strategy.action.length);
   const strongPublishing = items.markdownNegotiation.status === "pass" && items.contentSignals.status === "pass" && items.linkHeaders.status === "pass";
   const baseline = items.robotsTxt.status === "pass" || items.sitemap.status === "pass";
-  const level = actionSurface ? { number: 5, name: "Agent-Native" } : strongPublishing ? { number: 3, name: "Agent-Readable" } : baseline ? { number: 1, name: "Basic Web Presence" } : { number: 0, name: "Not Ready" };
+  const ladder = actionSurface ? 5 : strongPublishing ? 3 : baseline ? 1 : 0;
+  // The ladder reads ONE signal per rung, and the score reads twenty. Left
+  // alone the two contradict each other in public: github.com scored 13/100 and
+  // was labelled Agent-Native, walmart.com 27/100 and the same, because a
+  // single door probe outranks every failed check beneath it. So a rung may
+  // claim at most ONE step beyond what the breadth of the score supports.
+  //
+  // One step rather than zero on purpose. The top rung is a claim about
+  // CAPABILITY, and a site can genuinely ship a working agent interface while
+  // publishing none of the metadata the other checks look for — that site
+  // deserves to outrank its score. What it may not do is outrun the whole
+  // rubric by four rungs on the strength of one probe.
+  const RUNGS = [0, 1, 3, 5];
+  const supported = Math.floor(overall / 20) + 1;
+  const ceiling = RUNGS.filter((rung) => rung <= supported).pop() ?? 0;
+  const number = Math.min(ladder, ceiling);
+  const LEVEL_NAMES = { 0: "Not Ready", 1: "Basic Web Presence", 3: "Agent-Readable", 5: "Agent-Native" };
+  const level = { number, name: LEVEL_NAMES[number] };
+  // Say so when the cap bit, rather than quietly publishing a smaller number
+  // than the evidence produced — the reader is owed the disagreement.
+  const levelNote = number < ladder
+    ? `one signal supports ${LEVEL_NAMES[ladder]}, but ${overall}/100 of the rubric passed, so the level is held at ${LEVEL_NAMES[number]}`
+    : null;
   // ship the label with each action: LENS_READINESS_META already owns it, so the
   // client should render it off the envelope rather than keep a second copy that
   // silently wins and drifts when a label is renamed here.
   const nextActions = Object.values(items).filter((item) => item.status === "fail" && item.countInScore).slice(0, 5).map((item) => ({ key: item.key, label: item.label }));
   return {
-    overall, level: level.number, levelName: level.name,
+    overall, level: level.number, levelName: level.name, levelNote,
     categories, checks: items, counted: counted.length, passed,
     scoringNote: "Passes divided by pass + fail + unknown; neutral checks are shown but excluded. Execution checks stay neutral until an agent browser has actually rendered the page, so a spent render budget never costs a site points.",
     nextActions, botViews: botViews || [],
