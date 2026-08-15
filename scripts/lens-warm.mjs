@@ -30,6 +30,8 @@
 //
 // Exit code is 0 when every target ended up cached, 1 otherwise.
 
+import { lensChipTargets } from "./lib/lens-chips.mjs";
+
 const args = process.argv.slice(2);
 const valueOf = (name, fallback) => {
   const at = args.indexOf(name);
@@ -38,20 +40,13 @@ const valueOf = (name, fallback) => {
 
 const ORIGIN = (valueOf("--origin", "https://aadhar.sh") || "").replace(/\/+$/, "");
 
-// The seeded chips on /lens, which is what a demo actually clicks. Keep in sync
-// with the data-url list in www/_worker.js/lens.js renderLensShell.
-const CHIPS = [
-  "https://aadhar.sh/",
-  "https://daringfireball.net/",
-  "https://stripe.com/",
-  "https://en.wikipedia.org/wiki/Semantic_Web",
-  "https://www.nytimes.com/",
-  "https://aadhar.sh/llms-full.txt",
-  "https://example.com/",
-];
-
+// The seeded chips on /lens, which is what a demo actually clicks. Read out of
+// the shell renderer rather than pasted here: this list used to carry a "keep in
+// sync" comment, and a comment is not a mechanism. The reader throws if its
+// pattern stops matching, so a moved chip fails loudly instead of warming
+// nothing and reporting a clean run.
 const urls = args.filter((a) => /^https?:\/\//.test(a));
-const targets = urls.length ? urls : CHIPS;
+const targets = urls.length ? urls : lensChipTargets();
 
 // The binding mints at most one new browser every 10 seconds on this plan, and
 // the per-IP ceilings are tighter still (/lens/shot 3/min, /lens/browser 3/min,

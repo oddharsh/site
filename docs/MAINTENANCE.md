@@ -1297,6 +1297,79 @@ Read which engine actually answered, and the shape it measured:
 curl -s 'https://aadhar.sh/lens/browser?url=https://react.dev/' | jq '.engine, .shape'
 ```
 
+### Warm the /lens browser caches before a demo
+
+Browser Run on the free plan allows 6 calls a minute account-wide and 10
+browser-minutes a DAY, shared by `/lens/shot`, `/lens/browser` and `/lens/wire`.
+One render costs about 19s of that. So the Human and Browser panes are fine on a
+quiet afternoon and blacked out the moment anybody leans on them, which is
+exactly what a live demo does.
+
+Every browser route caches to KV for 6h, so the fix is spending the budget
+EARLIER rather than asking for a bigger one. Run this within 6 hours of the
+demo, because an expired warm is the same as no warm:
+
+```bash
+node scripts/lens-warm.mjs                 # the seeded /lens chips, production
+node scripts/lens-warm.mjs https://foo/    # specific URLs instead
+```
+
+It performs REAL Browser Run calls, away from an audience. Re-running it is also
+the check: an already-warm URL comes back cached in milliseconds and bills
+nothing. There is deliberately no `--check` mode, because a probe that reports
+"is this warm?" warms it as a side effect, and a miss costs a full render.
+
+**When the daily allowance is already gone, warming has nothing left to spend.**
+The allowance resets at 00:00 UTC and not before, so a demo landing after that
+ceiling needs the other script:
+
+```bash
+node scripts/lens-seed.mjs --dry-run   # capture locally, write nothing, print sizes
+node scripts/lens-seed.mjs             # capture and seed production KV (24h TTL)
+```
+
+That drives real headless Chrome on this machine (playwright-core, channel
+chrome) and writes the results into the same cache keys Browser Run would have
+filled. Every byte still comes from a real browser really loading the real URL.
+What changes is WHERE the browser ran, and the snapshot says so: it carries
+`engine: "chromium-local-capture"`, which the pane prints under every comparison
+it draws. **Do not relabel those as `chromium-binding` to make the caption
+tidier.** The server already reports a cache read as "KV cache", so nothing
+claims to be a fresh render.
+
+Two fields are honestly derived rather than captured, and both are marked at the
+code: `markdown` comes from this repo's own HTML-to-Markdown converter run over
+the rendered DOM, since there is no way to ask Browser Run for its own, and
+`accessibilityTree` is rebuilt from CDP's flat AX node list.
+
+It seeds three keys per URL, so all three browser-backed tabs survive:
+`lens:browser:<sha>` (the Browser pane), `lens:shot:<sha>` (the Human view's
+fallback screenshot for a site that forbids framing), and `lens:wire:<sha>`
+(the Wire tab). Pass `--no-shot` or `--no-wire` to skip either.
+
+**The Wire capture reuses the production summariser rather than reimplementing
+it.** `/lens/wire` builds its entire payload by handing raw CDP events to
+`summariseWire(events, url)`, so a local CDP session produces the same events and
+the same exported function turns them into the payload. That matters because the
+summariser owns real judgement calls: a `loadingFailed` carrying a status is
+`aborted` rather than `failed`, wire bytes come off `loadingFinished` and not off
+the response, and a redirect arrives as a second `requestWillBeSent` on one id. A
+hand-rolled copy would drift from all three silently.
+
+One gap worth knowing: the Wire pane does not display `engine`, so a locally
+captured waterfall does not announce itself there the way the Browser pane does.
+That is true of a real `chromium-cdp` capture too, so it is a pre-existing gap
+rather than something this introduces, and the field is in the JSON either way.
+
+Both scripts take their target list from `scripts/lib/lens-chips.mjs`, which
+reads the chips out of the shell renderer in `www/_worker.js/lens.js`. Adding a
+chip there is all it takes; nothing needs updating here.
+
+The TTL is a day rather than a week on purpose. A stale local capture outliving
+the outage it covered is the failure to avoid, and the site returns to live
+Browser Run renders the moment the entries expire. To undo sooner, delete the
+`lens:browser:<sha>` and `lens:shot:<sha>` keys the script prints.
+
 ### Add or change a /lens interaction recipe
 
 Recipes are the fixed scripts `/lens/browser?do=<id>` runs inside a page before
