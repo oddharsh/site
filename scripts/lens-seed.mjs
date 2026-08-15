@@ -47,7 +47,9 @@ import { chromium } from "playwright-core";
 import { lensChipTargets } from "./lib/lens-chips.mjs";
 import { readDocument } from "./lib/html-to-md.mjs";
 import { documentShape } from "../www/_worker.js/lens-render.js";
+import { WIRE_TIMING, summariseWire } from "../www/_worker.js/lens-wire.js";
 import { BOT_UA } from "../www/_worker.js/lib/botauth.js";
+import { EXECUTION_PROBE } from "../www/_worker.js/lib/agent-execution.js";
 
 const args = process.argv.slice(2);
 const has = (name) => args.includes(name);
@@ -61,6 +63,7 @@ const ORIGIN = (valueOf("--origin", "https://aadhar.sh") || "").replace(/\/+$/, 
 const NAMESPACE = valueOf("--namespace-id", "3cb8a107c58e47dc9244e75b33401f36"); // RN_KV, wrangler.jsonc
 const TTL = Number(valueOf("--ttl", "86400"));
 const SHOTS = !has("--no-shot");
+const WIRE = !has("--no-wire");
 
 // Mirrors LENS_GOTO and the Quick Action payload in www/_worker.js/lens.js. The
 // viewport matters more than it looks: a different width renders a different
@@ -112,6 +115,89 @@ function axTree(nodes) {
     return out;
   };
   return root ? convert(root) : null;
+}
+
+// The Wire tab, and the reason this is not a second reimplementation. /lens/wire
+// drives raw CDP over the Browser Run binding, and its whole payload is built by
+// summariseWire(events, url) from the events that session collected. Those events
+// are ordinary CDP frames, so a local session produces the same ones and the
+// PRODUCTION summariser turns them into the payload.
+//
+// That is worth the plumbing: the summariser owns real judgement calls (a
+// loadingFailed carrying a status is `aborted` rather than `failed`, wire bytes
+// come off loadingFinished and not off the response, a redirect is a second
+// requestWillBeSent on one id), and a hand-rolled copy here would drift from all
+// three silently. Nothing about the shape is being guessed.
+//
+// Playwright's CDPSession emits per method rather than a wildcard, so the list
+// below is explicit. It carries everything summariseWire switches on plus the
+// two error channels the execution probe reads.
+const WIRE_EVENTS = [
+  "Network.requestWillBeSent",
+  "Network.responseReceived",
+  "Network.requestServedFromCache",
+  "Network.loadingFinished",
+  "Network.loadingFailed",
+  "Runtime.exceptionThrown",
+  "Log.entryAdded",
+];
+
+async function captureWire(browser, url) {
+  const context = await browser.newContext({ userAgent: BOT_UA, viewport: VIEWPORT, deviceScaleFactor: 1 });
+  const page = await context.newPage();
+  const started = Date.now();
+  try {
+    const cdp = await context.newCDPSession(page);
+    const events = [];
+    for (const method of WIRE_EVENTS) cdp.on(method, (params) => events.push({ method, params }));
+    // Enabled BEFORE the navigation, or the whole point of the lens (what the
+    // page asked for on its way up) is already over by the time we are listening.
+    await cdp.send("Network.enable");
+    await cdp.send("Runtime.enable");
+    await cdp.send("Log.enable");
+
+    let loadFired = true;
+    try {
+      await page.goto(url, { waitUntil: "load", timeout: WIRE_TIMING.navigateMs });
+    } catch (e) {
+      if (!/Timeout/i.test(e.message)) throw e;
+      // A page that never fires load is a real page with a real waterfall, and
+      // the route reports it rather than throwing the observation away. Same here.
+      loadFired = false;
+    }
+    // The settle window is what catches the analytics beacons that fire ON load,
+    // which are most of what this lens exists to show.
+    await new Promise((r) => setTimeout(r, WIRE_TIMING.settleAfterLoadMs));
+
+    let execution = null;
+    try {
+      const r = await cdp.send("Runtime.evaluate", { expression: EXECUTION_PROBE, returnByValue: true, awaitPromise: false });
+      const raw = r?.result && typeof r.result.value === "string" ? JSON.parse(r.result.value) : null;
+      if (raw && !raw.probeError) {
+        const thrown = events.filter((e) => e.method === "Runtime.exceptionThrown");
+        const logged = events.filter((e) => e.method === "Log.entryAdded" && e.params?.entry?.level === "error");
+        const first = thrown[0]
+          ? String(thrown[0].params?.exceptionDetails?.text || "").slice(0, 120)
+          : logged[0] ? String(logged[0].params.entry.text || "").slice(0, 120) : "";
+        execution = { ran: true, engine: "chromium-local-cdp", pageErrors: thrown.length, consoleErrors: logged.length, firstError: first || undefined, ...raw };
+      }
+    } catch { /* no execution evidence is null, never a zero that reads as a clean page */ }
+
+    return {
+      ok: true,
+      url,
+      fetchedBy: "Local headless Chrome over CDP (Cloudflare Browser Run budget exhausted)",
+      engine: "chromium-local-cdp",
+      navMs: Date.now() - started,
+      loadFired,
+      identifiedAs: BOT_UA,
+      execution,
+      capturedAt: new Date().toISOString(),
+      ...summariseWire(events, url),
+    };
+  } finally {
+    await context.close();
+  }
 }
 
 async function capture(browser, url) {
@@ -242,7 +328,15 @@ try {
       process.stdout.write(`      SKIPPED: ${bytes(json.length)} is over the ${bytes(KV_MAX)} KV ceiling the live route enforces.\n`);
       continue;
     }
-    if (DRY) continue;
+    if (DRY) {
+      if (WIRE) {
+        try {
+          const wire = await captureWire(browser, target);
+          process.stdout.write(`      wire: ${wire.requests} reqs, ${bytes(wire.bytes)}, ${wire.hostTotal} hosts, ${wire.thirdParty.bytesPct}% third-party\n`);
+        } catch (e) { process.stdout.write(`      wire FAILED: ${(e && e.message) || e}\n`); failed++; }
+      }
+      continue;
+    }
 
     const hash = sha256(target);
     const jsonFile = join(scratch, `${hash}.json`);
@@ -252,6 +346,26 @@ try {
       const pngFile = join(scratch, `${hash}.png`);
       writeFileSync(pngFile, png);
       kvPut(`lens:shot:${hash}`, pngFile, `shot (${bytes(png.length)})`);
+    }
+
+    // A SECOND page load, deliberately. The render capture above reads the page
+    // after JavaScript; the wire capture watches it being assembled, and the two
+    // want different instrumentation on the session from the first byte. Reusing
+    // one load would mean enabling Network for a capture that does not read it
+    // and settling for one that does.
+    if (WIRE) {
+      try {
+        const wire = await captureWire(browser, target);
+        const wireFile = join(scratch, `${hash}.wire.json`);
+        writeFileSync(wireFile, JSON.stringify(wire));
+        kvPut(`lens:wire:${hash}`, wireFile,
+          `wire (${wire.requests} reqs, ${bytes(wire.bytes)}, ${wire.thirdParty.bytesPct}% third-party)`);
+      } catch (e) {
+        // The render is the load-bearing half and it is already seeded. A wire
+        // capture that fails costs one tab, not the URL.
+        process.stdout.write(`      wire FAILED: ${(e && e.message) || e}\n`);
+        failed++;
+      }
     }
   }
 } finally {

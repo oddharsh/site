@@ -1342,6 +1342,25 @@ code: `markdown` comes from this repo's own HTML-to-Markdown converter run over
 the rendered DOM, since there is no way to ask Browser Run for its own, and
 `accessibilityTree` is rebuilt from CDP's flat AX node list.
 
+It seeds three keys per URL, so all three browser-backed tabs survive:
+`lens:browser:<sha>` (the Browser pane), `lens:shot:<sha>` (the Human view's
+fallback screenshot for a site that forbids framing), and `lens:wire:<sha>`
+(the Wire tab). Pass `--no-shot` or `--no-wire` to skip either.
+
+**The Wire capture reuses the production summariser rather than reimplementing
+it.** `/lens/wire` builds its entire payload by handing raw CDP events to
+`summariseWire(events, url)`, so a local CDP session produces the same events and
+the same exported function turns them into the payload. That matters because the
+summariser owns real judgement calls: a `loadingFailed` carrying a status is
+`aborted` rather than `failed`, wire bytes come off `loadingFinished` and not off
+the response, and a redirect arrives as a second `requestWillBeSent` on one id. A
+hand-rolled copy would drift from all three silently.
+
+One gap worth knowing: the Wire pane does not display `engine`, so a locally
+captured waterfall does not announce itself there the way the Browser pane does.
+That is true of a real `chromium-cdp` capture too, so it is a pre-existing gap
+rather than something this introduces, and the field is in the JSON either way.
+
 Both scripts take their target list from `scripts/lib/lens-chips.mjs`, which
 reads the chips out of the shell renderer in `www/_worker.js/lens.js`. Adding a
 chip there is all it takes; nothing needs updating here.
