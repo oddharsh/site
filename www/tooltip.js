@@ -133,7 +133,7 @@ export function start(initial) {
       // immediately from the index and fetches the one histogram it needs.
       const metaMap = Object.create(null);   // stem → exif object (may lack .hi) | absent
       const inFlight = new Set();            // stems with a per-photo fetch open
-      const META_V = "mv=6";                 // bump when metadata is regenerated (6: shared EXIF index + per-photo histograms)
+      const META_V = "mv=7";                 // bump when metadata is regenerated (7: empty lens is null, so `ln` is absent rather than "" on 11 frames)
       const fetchMeta = (stem, priority) => {
         const have = metaMap[stem];
         if (have && have.hi) return;         // text + bars both in hand
