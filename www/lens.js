@@ -490,7 +490,7 @@
     ].map(function (row) { return "<tr><td>" + esc(row[0]) + "</td><td>" + row[1] + "</td></tr>"; }).join("");
     return '<div class="lx-vs-col"><div class="lx-vs-h"><span>' + esc(host) + '</span><a href="/lens?url=' + esc(encodeURIComponent(s.url || "")) + '">full scan &rarr;</a></div>' +
       '<div class="lx-vs-body"><div class="lx-vs-score"><b>' + (s.readiness == null ? "?" : esc(s.readiness)) + "<span>/100</span></b>" +
-      badge("Level " + (s.level == null ? "?" : s.level), levelKind) + "<span>" + esc(s.levelName || "") + "</span></div>" +
+      badge("Level " + (s.level == null ? "?" : s.level), levelKind, s.levelNote || "") + "<span>" + esc(s.levelName || "") + "</span></div>" +
       '<table class="lx-kv">' + rows + "</table>" +
       '<div class="lx-tags" style="margin-top:6px">' + (pub || '<span class="lx-none">no machine surfaces published</span>') + "</div></div></div>";
   }
@@ -769,8 +769,11 @@
     return '<pre class="lx-pre' + (light ? " lx-pre-light" : "") + '">' + esc(text) + "</pre>";
   }
 
-  function badge(text, kind) {
-    return '<span class="lx-badge ' + (kind || "") + '">' + esc(text) + "</span>";
+  // `title` is optional and every existing caller omits it. Any [title] on this
+  // site is already an infotip (nav.js owns the matcher), so a badge that can
+  // explain itself costs no new surface.
+  function badge(text, kind, title) {
+    return '<span class="lx-badge ' + (kind || "") + '"' + (title ? ' title="' + esc(title) + '"' : "") + ">" + esc(text) + "</span>";
   }
 
   function briefTable(rows) {
@@ -1284,7 +1287,13 @@
     if (!gaps.length) gaps.push("The main access surfaces are published. Inspect the individual checks for the remaining edge cases and bot-specific policy.");
     var gapHtml = '<ul class="lx-why">' + gaps.map(function (g) { return '<li>' + esc(g) + '</li>'; }).join("") + '</ul>';
     var next = (r.nextActions || []).length ? '<div class="lx-next-actions">' + r.nextActions.map(function (a) { var copy = readinessCopy(a); return '<div><b>' + esc(copy.label) + '</b><span>' + esc(copy.fix) + '</span></div>'; }).join("") + '</div>' : '<div class="lx-none">No scored fixes are waiting.</div>';
-    var localMirror = '<div class="lx-local-mirror"><b>' + esc(r.overall) + '/100</b> ' + badge("Level " + r.level, levelKind) + ' <span>' + esc(r.levelName) + '</span></div>' + cats;
+    // The level is capped when one signal outruns the breadth of the score, and
+    // the cap has to be VISIBLE or the two numbers beside each other read as a
+    // contradiction. The worker ships `levelNote` on exactly those scans; the
+    // SSR floor renders it as a title on the badge, and this is the same fact
+    // for the ~everyone who has JavaScript.
+    var levelWhy = r.levelNote ? '<div class="lx-level-note">' + esc(r.levelNote) + "</div>" : "";
+    var localMirror = '<div class="lx-local-mirror"><b>' + esc(r.overall) + '/100</b> ' + badge("Level " + r.level, levelKind) + ' <span>' + esc(r.levelName) + '</span></div>' + levelWhy + cats;
     if (projection) localMirror += '<div class="lx-projection"><b>Local standards projection:</b> ' + esc(projection.score + "/100 if you add " + projection.labels.join(", ") + ".") + ' <span>illustrative; the origin has not changed.</span></div>';
     return score + section("Local standards mirror", null, "The detailed checklist mirrors Cloudflare's public rubric for inspection and fixes. It is not counted again in the composite.", localMirror) +
       section("The access gap", { text: "human vs bot" }, "A browser can render a page even when an agent cannot establish what it may read or do.", gapHtml) +

@@ -7131,6 +7131,25 @@ test("a door that never answered is not an action surface", () => {
   assert.equal(doorsFor("unknown").strategy.action.length, 0, "and neither is one that never answered");
 });
 
+test("a capped level explains itself on every surface that shows the level", () => {
+  // The failure this stops is a half-shipped signal: lensReadiness computes
+  // `levelNote`, the JSON carries it, and nothing renders it — so a visitor
+  // sees 13/100 beside "Level 1" with no account of why the ladder was held.
+  // It shipped that way once already, surfaced only in the SSR floor.
+  const worker = readFileSync("./www/_worker.js/lens.js", "utf8");
+  const client = readFileSync("./www/lens.js", "utf8");
+
+  assert.match(worker, /levelNote: readiness\.levelNote/, "the observation summary has to carry the note, or compare mode cannot show it");
+  assert.match(worker, /overall, level: level\.number, levelName: level\.name, levelNote/, "the readiness envelope has to publish it");
+  assert.match(worker, /s\.levelNote \? ' title="'/, "the SSR badge explains itself for the no-JS floor");
+  assert.match(client, /r\.levelNote \?/, "and the client renders it for everyone else");
+  assert.match(worker, /\.lx-level-note \{/, "the note needs a style, or it renders as unlabelled prose");
+
+  // Both level surfaces in the client must be able to carry it.
+  assert.match(client, /badge\("Level " \+ \(s\.level == null \? "\?" : s\.level\), levelKind, s\.levelNote/, "the compare column passes the note through");
+  assert.match(client, /function badge\(text, kind, title\)/, "badge takes an optional title rather than a second helper");
+});
+
 test("a level may claim at most one rung beyond what the score supports", () => {
   // github.com scored 13/100 and was published as Agent-Native, walmart.com
   // 27/100 and the same, because the ladder reads one signal per rung while the
