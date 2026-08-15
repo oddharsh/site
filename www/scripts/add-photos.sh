@@ -15,7 +15,7 @@
 #      step 3, which zenc already writes progressive.
 #   3. if the original is HEIF (.hif/.heic/.heif), generates a full-res archive
 #      JPG (sips decodes to lossless PNG, zenc re-encodes at q100 4:2:2 with the
-#      full trellis + scan-search, exiftool re-attaches source EXIF incl
+#      full trellis + scan-search, exif-sooc re-attaches source EXIF incl
 #      Orientation) and uploads THAT. 4:2:2 matches the Fuji HIF's native chroma
 #      (the sensor records 10-bit 4:2:2): unlike 4:4:4 it doesn't spend bytes on
 #      interpolated horizontal chroma the sensor never sampled, and unlike 4:2:0
@@ -105,15 +105,25 @@ if [ ! -x "$WRANGLER" ]; then
   echo "  run: pnpm install" >&2
   exit 1
 fi
-for cmd in sips exiftool; do
+for cmd in sips exif-sooc; do
   if ! command -v "$cmd" >/dev/null 2>&1; then
     echo "error: $cmd not found in PATH" >&2
     case "$cmd" in
-      exiftool) echo "  install with: brew install exiftool" >&2 ;;
+      exif-sooc) echo "  install with: cargo install --git https://github.com/oddharsh/exif-sooc" >&2 ;;
     esac
     exit 1
   fi
 done
+
+# A stale exif-sooc does not ERROR on -all=: it reads it as a tag SELECTION and
+# prints JSON, so the strip quietly does nothing and the file keeps its EXIF.
+# Every write below is wrapped in `|| true`, so nothing would say a word, and
+# the shipped file would carry metadata this pipeline exists to remove.
+exif-sooc --help 2>/dev/null | grep -q -- '-all=' || {
+  echo "error: exif-sooc is too old to write metadata (no -all=)." >&2
+  echo "  update with: cargo install --git https://github.com/oddharsh/exif-sooc --force" >&2
+  exit 1
+}
 if [ ! -x "$ZENC" ]; then
   command -v cargo >/dev/null 2>&1 || { echo "error: cargo (rust) not found; install from https://rustup.rs" >&2; exit 1; }
   echo "building zenc (zenjpeg encoder) — first run only…" >&2
@@ -157,7 +167,7 @@ echo ""
 # read EXIF Orientation → the jpegtran flag that brings the pixels upright.
 # empty = no rotation. 1=normal, 3=180°, 6=90°CW, 8=270°CW, etc.
 exif_to_jpegtran() {
-  local o; o=$(exiftool -s -s -s -n -Orientation "$1" 2>/dev/null || echo "")
+  local o; o=$(exif-sooc -s -s -s -n -Orientation "$1" 2>/dev/null || echo "")
   case "$o" in
     ""|"1") echo "" ;;  "2") echo "-flip horizontal" ;;  "3") echo "-rotate 180" ;;
     "4") echo "-flip vertical" ;;  "5") echo "-transpose" ;;  "6") echo "-rotate 90" ;;
@@ -213,7 +223,7 @@ while IFS= read -r f; do
   #    any residual metadata (sips can leave a grayscale ICC on B&W frames; keep
   #    formats consistent / sRGB).
   if ! "$ZENC" "$sq" "$jpg" -q "$ZENC_Q" >/dev/null 2>&1; then T_FAIL=$((T_FAIL+1)); printf "✗"; continue; fi
-  exiftool -all= -overwrite_original "$jpg" >/dev/null 2>&1 || true
+  exif-sooc -all= -overwrite_original "$jpg" >/dev/null 2>&1 || true
   # 5. desktop square AVIF
   if ! avif_encode "$sq" "$avif"; then T_FAIL=$((T_FAIL+1)); printf "✗"; continue; fi
   # 6. mobile square AVIF (downscale the SQ square → SQ_SM, square→square)
@@ -251,7 +261,7 @@ while IFS= read -r f; do
   # This export IS the R2 share/click copy; the .HIF original stays local-only.
   # sips decodes the 10-bit HIF to a lossless PNG (sensor-native pixels, no
   # orientation applied), zenc re-encodes it at q100 4:2:2 (the HIF's native
-  # chroma; hybrid trellis + scan search + sharp_yuv), and exiftool copies the
+  # chroma; hybrid trellis + scan search + sharp_yuv), and exif-sooc copies the
   # source EXIF back, including Orientation, so browsers rotate it exactly as the
   # old sips export did. Net: better than sips q100 and source-faithful on chroma
   # (4:4:4 fabricates horizontal chroma the sensor never sampled; 4:2:0 drops the
@@ -260,7 +270,7 @@ while IFS= read -r f; do
   tmppng="$EXPORTS/${stem}.decode.png"
   if sips -s format png "$f" --out "$tmppng" >/dev/null 2>&1 \
      && "$ZENC" "$tmppng" "$out" -q 100 --yuv 422 >/dev/null 2>&1 \
-     && exiftool -TagsFromFile "$f" -all:all -overwrite_original "$out" >/dev/null 2>&1; then
+     && exif-sooc -TagsFromFile "$f" -all:all -overwrite_original "$out" >/dev/null 2>&1; then
     rm -f "$tmppng"; H_OK=$((H_OK+1)); printf "."
   else
     rm -f "$tmppng"; H_FAIL=$((H_FAIL+1)); printf "✗"
@@ -401,12 +411,12 @@ done
 if [ -z "$META_SRC" ]; then
   META_SRC="$(dirname "$(head -1 "$SOURCES")")"
 fi
-if command -v exiftool >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
+if command -v exif-sooc >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
   META_MODE=()
   if [ "${REMOTE_RENDER_ONLY:-0}" = "1" ]; then META_MODE=(--merge); fi
   "$SCRIPT_DIR/extract-photo-metadata.sh" "${META_MODE[@]}" "$META_SRC" 2>&1 | tail -1
 else
-  echo "  exiftool or jq missing — skipping metadata regen"
+  echo "  exif-sooc or jq missing — skipping metadata regen"
 fi
 
 # bake 64-bin RGB+luma histograms into per-stem meta. the photo tooltip renders

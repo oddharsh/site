@@ -39,7 +39,7 @@ else
   for e in HIF hif HEIC heic jpg JPG; do [ -f "$SRC_DIR/$STEM.$e" ] && src="$SRC_DIR/$STEM.$e" && break; done
 fi
 [ -n "$src" ] || { echo "no source for $STEM in $SOURCE_ARG" >&2; exit 1; }
-for c in avifenc cwebp sips exiftool; do command -v "$c" >/dev/null 2>&1 || [ -x "$c" ] || { echo "missing: $c" >&2; exit 1; }; done
+for c in avifenc cwebp sips exif-sooc; do command -v "$c" >/dev/null 2>&1 || [ -x "$c" ] || { echo "missing: $c" >&2; exit 1; }; done
 
 echo "source: $src"
 
@@ -61,7 +61,7 @@ cp "$base" "$DEST/c-png.png"                                                   #
 sips -s format jpeg --setProperty formatOptions 82 "$base" --out "$DEST/c-sips82.jpg" >/dev/null 2>&1
 # zenc quality ladder; q84 is the shipped thumbnail setting (≈ old jpegli q82).
 for q in 62 84 95; do "$ZENC" "$base" "$DEST/c-zc$q.jpg" -q "$q" >/dev/null 2>&1; done
-exiftool -all= -overwrite_original "$DEST"/c-sips82.jpg "$DEST"/c-zc*.jpg >/dev/null 2>&1 || true
+exif-sooc -all= -overwrite_original "$DEST"/c-sips82.jpg "$DEST"/c-zc*.jpg >/dev/null 2>&1 || true
 
 for q in 60 80; do cwebp -q "$q" "$base" -o "$DEST/c-wp$q.webp" >/dev/null 2>&1; done
 
@@ -84,9 +84,19 @@ for long in 400 800 1200; do
   avifenc -q 63 --yuv 420 $AV "$b" "$TMP/r$long.avif" >/dev/null 2>&1
   av=$(sz "$TMP/r$long.avif")
   "$ZENC" "$b" "$TMP/r$long.jpg" -q 84 >/dev/null 2>&1
-  exiftool -all= -overwrite_original "$TMP/r$long.jpg" >/dev/null 2>&1 || true
+  exif-sooc -all= -overwrite_original "$TMP/r$long.jpg" >/dev/null 2>&1 || true
   jl=$(sz "$TMP/r$long.jpg")
   save=$(awk -v a="$av" -v j="$jl" 'BEGIN{printf "%.0f", (1-a/j)*100}')
   printf "  %sx%s   AVIF %6s KB   zenc %6s KB   AVIF saves %s%%\n" "$w" "$h" "$(kb "$av")" "$(kb "$jl")" "$save"
 done
+
+# A stale exif-sooc does not ERROR on -all=: it reads it as a tag SELECTION and
+# prints JSON, so the strip quietly does nothing and the file keeps its EXIF.
+# Every write below is wrapped in `|| true`, so nothing would say a word, and
+# the shipped file would carry metadata this pipeline exists to remove.
+exif-sooc --help 2>/dev/null | grep -q -- '-all=' || {
+  echo "error: exif-sooc is too old to write metadata (no -all=)." >&2
+  echo "  update with: cargo install --git https://github.com/oddharsh/exif-sooc --force" >&2
+  exit 1
+}
 echo ""; echo "done — update figcaptions/prose/table in www/garage/encoding.html to match."

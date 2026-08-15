@@ -70,7 +70,13 @@ jobs:
 
       - name: Install image toolchain
         run: |
-          brew install exiftool ffmpeg jq libavif mozjpeg webp
+          brew install ffmpeg jq libavif mozjpeg webp
+          # exif-sooc reads and writes every EXIF the pipeline touches, and
+          # replaced exiftool on 2026-08-14. It was NOT installed here when the
+          # extractor moved onto it in #390, so this workflow would have failed
+          # on its next run. macOS runners ship cargo, as the zenc step below
+          # relies on too.
+          cargo install --git https://github.com/oddharsh/exif-sooc --locked
           # The venv is for gen-alt-text.py and build-recipes.py, which need
           # python3 and nothing else. requirements.txt is deliberately NOT
           # installed here any more: its one entry is Pillow, the histogram bake

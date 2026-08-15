@@ -18,7 +18,7 @@ KEYS_FILE="$1"
 DEST_DIR="$2"
 ORIGIN="${PHOTO_SOURCE_ORIGIN:-https://aadhar.sh}"
 
-for cmd in curl jq exiftool; do
+for cmd in curl jq exif-sooc; do
   command -v "$cmd" >/dev/null 2>&1 || {
     echo "error: $cmd not found in PATH" >&2
     exit 1
@@ -72,7 +72,7 @@ while IFS= read -r key || [ -n "$key" ]; do
     --output "$output"
 
   if [ ! -s "$output" ] ||
-     ! exiftool -q -q -s -ImageWidth -ImageHeight "$output" | grep -Eq '[0-9]'; then
+     ! exif-sooc -q -s3 -ImageWidth -ImageHeight "$output" | grep -Eq '[0-9]'; then
     echo "error: downloaded object is not a readable image: $key" >&2
     exit 1
   fi
