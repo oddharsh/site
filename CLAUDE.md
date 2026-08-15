@@ -3464,6 +3464,35 @@ pnpm run deploy:direct
       and compare the CPU of requests that PASSED against ones that died before
       believing any published ceiling is what you are hitting.
 
+    **APPROVE A PARKED RAMP BEFORE MERGING ANYTHING ELSE.** Shipping this fix
+    found a race the concurrency block does not describe. That block explains
+    that a newer ramp cancels a pending one, which reads as a queueing rule about
+    runs that have not started. It also cancels a ramp that is MID-FLIGHT because
+    you just approved it, and the merge that does the cancelling can be
+    completely unrelated.
+
+    Measured 2026-08-15. Run 31862702940 was approved and moving traffic; the
+    ramp for the next merge entered the group at 12:13:35Z and 31862702940 was
+    cancelled at **12:13:54Z**, 19 seconds later. It reported
+    `completed/cancelled` having already reached 100%, which is the confusing
+    part: traffic landed, the run looks failed, and the two facts are both true.
+
+    **What it can actually cost is the changelog.** The D1 `INSERT` runs only
+    after the last step hits 100%, so a cancellation lands squarely on the one
+    step that has nothing to retry it. Here it cost nothing because no checkpoint
+    was staged, and that was luck rather than design. A release carrying a
+    changelog entry would have gone to 100% and silently logged nothing, which is
+    gotcha 24's failure arriving through a different door: `checkpoints:check`
+    catches it on the next PR, long after the ramp read as done.
+
+    Ordering does NOT save you, and neither does approving first: the successor
+    ramp arrives whenever Workers Builds finishes, which is minutes after a merge
+    and nothing you control. The rule is about the WINDOW rather than the
+    sequence. Let a parked ramp finish before merging, and if a merge has already
+    gone in, expect the cancellation and confirm the split with
+    `pnpm run deploy:promote -- --status` rather than reading the run's
+    conclusion.
+
 ---
 
 ## Source folder for new photos
