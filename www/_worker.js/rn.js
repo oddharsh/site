@@ -703,121 +703,195 @@ export async function scrapePlaylistTracks(playlistId, env, ctx) {
       };
     });
 
-  // tier 2: per-track embed → cover image URL + structured artist list.
-  // ONE fetch per track replaces the prior playlist-embed + oEmbed pair
-  // (oEmbed only returned the cover; the track embed returns cover + the
-  // artist URIs we need for the artist-hover feature).
-  const enriched = await span("rn.scrape.tracks", async (s) => {
-    s.setAttribute("rn.track_count", baseTracks.length);
-    // a per-track embed that throws degrades that ONE track to no cover and no
-    // artists (the catch below), which is invisible in the rendered list. The
-    // count makes partial degradation a number instead of a shrug.
-    let failed = 0;
-    const out = await Promise.all(baseTracks.map(async t => {
-      try {
-        const e = await scrapeSpotifyEmbed(`track/${t.id}`, env);
-        // canonicalized here too, not just at emit: this value is what lands in
-        // the KV payload and what /rn/tracks hands back as JSON, so a consumer
-        // that never touches the HTML still gets one host per image.
-        const image_url = canonicalArtUrl(e?.visualIdentity?.image?.[0]?.url || null);
-        const artists = Array.isArray(e?.artists)
-          ? e.artists
-              .filter(a => a && typeof a.uri === "string" && a.uri.startsWith("spotify:artist:"))
-              .map(a => {
-                const id = a.uri.slice("spotify:artist:".length);
-                return {
-                  id,
-                  name:        a.name || "",
-                  spotify_url: `https://open.spotify.com/artist/${id}`,
-                  image_url:   null,    // filled in tier 3 below
-                };
-              })
-          : [];
-        return { ...t, image_url, artists };
-      } catch {
-        failed++;
-        return { ...t, image_url: null, artists: [] };
-      }
-    }));
-    s.setAttribute("rn.track_embeds_failed", failed);
-    return out;
+  // tier 2 (covers) and tier 3 (artist photos) USED TO RUN HERE, one signed
+  // fetch per track and per artist, inline. That is what this function no
+  // longer does, and the reason is a hard platform ceiling rather than taste:
+  // Workers Free allows 50 subrequests and 10ms of CPU per invocation, and one
+  // cold scrape of a 21-track playlist spends ~67 subrequests. It had been
+  // failing every one of those 21 track embeds and writing the result as a
+  // payload full of nulls, which renders as a tracklist whose album art has
+  // quietly stopped appearing. See cronEnrichTracks below.
+  //
+  // What is left inline is ONE fetch and ONE KV read, so a cold build is ~7
+  // subrequests and comfortably inside both budgets.
+  const meta = await span("rn.scrape.meta", async (s) => {
+    let known = {};
+    try {
+      known = (await env?.RN_KV?.get(TRACK_META_KEY, "json")) || {};
+    } catch { /* a missing map means every cover is pending, never an error */ }
+    s.setAttribute("rn.meta_known", Object.keys(known).length);
+    return known;
   });
 
-  // tier 3: per-unique-artist embed → profile picture. cached in KV
-  // under `artist:<id>` for ARTIST_KV_TTL because artist photos rarely
-  // change. cache hit → no network. cache miss → scrape + write back.
-  const uniqueArtists = new Map();
-  for (const t of enriched) {
-    for (const a of (t.artists || [])) {
-      if (!uniqueArtists.has(a.id)) uniqueArtists.set(a.id, a);
-    }
-  }
-  // The hit/miss split is the number worth having here: artist photos are
-  // KV-cached for ARTIST_KV_TTL precisely so a cold playlist scrape does not pay
-  // network per artist, and whether that is actually working is invisible from
-  // the outside. A scrape that shows 0 hits and 20 misses says the artist cache
-  // expired under it; the same scrape at 20 hits and 0 misses is cheap.
-  await span("rn.scrape.artists", async (s) => {
-    s.setAttribute("rn.unique_artists", uniqueArtists.size);
-    let cached = 0, scraped = 0, failed = 0;
-    await Promise.all([...uniqueArtists.values()].map(async a => {
-      const cacheKey = `artist:${a.id}`;
-      if (env?.RN_KV) {
-        const hit = await env.RN_KV.get(cacheKey, "json");
-        if (hit && typeof hit === "object") {
-          cached++;
-          a.image_url = hit.image_url || null;
-          if (hit.name && !a.name) a.name = hit.name;
-          return;
-        }
-      }
-      try {
-        const e = await scrapeSpotifyEmbed(`artist/${a.id}`, env);
-        scraped++;
-        // pick the 320px variant: the tooltip renders at 120×120 (luna.css pins
-        // .xp-tooltip .cover.album to exactly that), so a 2x display wants 240
-        // and 320 is the smallest Spotify tier that clears it without paying the
-        // 640px hero weight. The next tier DOWN is 160, which goes soft on
-        // retina, so there is no cheaper correct answer among Spotify's sizes.
-        // (This comment said 180×180 until 2026-07-30; the conclusion was right
-        // and the number was never checked against the stylesheet.)
-        // fall through to whatever's first if no 320 variant exists.
-        const imgs = Array.isArray(e?.visualIdentity?.image) ? e.visualIdentity.image : [];
-        const pick = imgs.find(i => i.maxWidth === 320) || imgs.find(i => i.maxWidth === 160) || imgs[0] || null;
-        a.image_url = canonicalArtUrl(pick?.url || null);
-        if (e?.name && !a.name) a.name = e.name;
-        if (env?.RN_KV && ctx) {
-          ctx.waitUntil(env.RN_KV.put(cacheKey, JSON.stringify({
-            name: a.name, image_url: a.image_url
-          }), { expirationTtl: ARTIST_KV_TTL }));
-        }
-      } catch {
-        failed++;
-        a.image_url = null;
-      }
-    }));
-    s.setAttribute("rn.artists_cached", cached);
-    s.setAttribute("rn.artists_scraped", scraped);
-    s.setAttribute("rn.artists_failed", failed);
-  });
-
-  // copy enriched artist data back onto every track (the per-track .artists
-  // arrays share Map references but Promise.all parallelism means we need
-  // to re-derive image_url after the artist loop resolves)
-  for (const t of enriched) {
-    t.artists = (t.artists || []).map(a => ({
-      ...a,
-      image_url: uniqueArtists.get(a.id)?.image_url || null,
-      name:      uniqueArtists.get(a.id)?.name || a.name,
-    }));
-  }
-
+  const tracks = baseTracks.map(t => withTrackMeta(t, meta[t.id]));
   return {
     playlist_id:   playlistId,
     playlist_name: playlistEntity.name || "rn",
-    tracks:        enriched,
+    tracks,
     fetched_at:    new Date().toISOString(),
   };
+}
+
+// The one place a stored meta entry becomes a rendered track. Both the inline
+// build and the cron go through it, so a shape change cannot land in one and
+// miss the other.
+function withTrackMeta(track, meta) {
+  return {
+    ...track,
+    image_url: meta?.image_url || null,
+    artists:   Array.isArray(meta?.artists) ? meta.artists : [],
+  };
+}
+
+// ── the enrichment pass (cron) ───────────────────────────────────────
+//
+// Covers and artist photos are HOVER-ONLY: the tracklist itself renders from
+// tier 1 alone. So filling them in over a few ticks costs a visitor nothing,
+// where doing it inline cost them everything, because the invocation died and
+// took the covers with it.
+//
+// Budgets are per RUN and deliberately small. Worst case per tick is 3 KV reads
+// + 6 track embeds + 6 artist reads + 6 artist embeds + 6 artist writes + 2
+// payload writes = 29 subrequests, against a cap of 50. Raise these ONLY with
+// that arithmetic redone: the cap counts KV operations, which is the part that
+// is easy to forget and is how the inline version got to 67.
+const TRACK_META_KEY       = "trackmeta:v1";
+const ENRICH_TRACK_BUDGET  = 6;
+const ENRICH_ARTIST_BUDGET = 6;
+
+// Parse one track embed into the stored shape. Artist images are left null and
+// filled by the artist pass, which is a separate budget.
+function trackMetaFromEntity(e) {
+  return {
+    image_url: canonicalArtUrl(e?.visualIdentity?.image?.[0]?.url || null),
+    artists: Array.isArray(e?.artists)
+      ? e.artists
+          .filter(a => a && typeof a.uri === "string" && a.uri.startsWith("spotify:artist:"))
+          .map(a => {
+            const id = a.uri.slice("spotify:artist:".length);
+            return {
+              id,
+              name:        a.name || "",
+              spotify_url: `https://open.spotify.com/artist/${id}`,
+              image_url:   null,
+            };
+          })
+      : [],
+  };
+}
+
+export async function cronEnrichTracks(env, ctx) {
+  if (!env?.RN_KV) return { ok: false, reason: "no_kv_binding" };
+
+  return span("rn.enrich", async (s) => {
+    const playlistId = await env.RN_KV.get("playlist-id");
+    if (!playlistId || !/^[0-9A-Za-z]{22}$/.test(playlistId)) {
+      s.setAttribute("rn.outcome", "no_playlist_set");
+      return { ok: false, reason: "no_playlist_set" };
+    }
+    const cacheKey = `tracks:${playlistId}`;
+    const [payload, storedMeta] = await Promise.all([
+      env.RN_KV.get(cacheKey, "json"),
+      env.RN_KV.get(TRACK_META_KEY, "json"),
+    ]);
+    if (!payload || !Array.isArray(payload.tracks) || payload.tracks.length === 0) {
+      // nothing has built the playlist yet; the SWR path owns that, not this.
+      s.setAttribute("rn.outcome", "no_payload");
+      return { ok: false, reason: "no_payload" };
+    }
+
+    const meta = (storedMeta && typeof storedMeta === "object") ? { ...storedMeta } : {};
+    const live = payload.tracks.map(t => t.id).filter(Boolean);
+
+    // PRUNE FIRST, against the live playlist. Without this the map is
+    // append-only and every playlist swap leaves its predecessor's covers
+    // behind forever, in a value that is read on the homepage's critical path.
+    let pruned = 0;
+    const liveSet = new Set(live);
+    for (const id of Object.keys(meta)) {
+      if (!liveSet.has(id)) { delete meta[id]; pruned++; }
+    }
+
+    const pendingTracks = live.filter(id => !meta[id]).slice(0, ENRICH_TRACK_BUDGET);
+    let trackScraped = 0, trackFailed = 0;
+    await Promise.all(pendingTracks.map(async id => {
+      try {
+        meta[id] = trackMetaFromEntity(await scrapeSpotifyEmbed(`track/${id}`, env));
+        trackScraped++;
+      } catch { trackFailed++; }   // stays pending, retried next tick
+    }));
+
+    // Artists, across the WHOLE map rather than only the tracks just added: an
+    // artist whose photo failed last tick is pending until it lands, and it is
+    // the same bounded budget either way.
+    const pendingArtists = new Map();
+    for (const id of Object.keys(meta)) {
+      for (const a of (meta[id].artists || [])) {
+        if (!a.image_url && !pendingArtists.has(a.id)) pendingArtists.set(a.id, a.name || "");
+        if (pendingArtists.size >= ENRICH_ARTIST_BUDGET) break;
+      }
+      if (pendingArtists.size >= ENRICH_ARTIST_BUDGET) break;
+    }
+
+    const resolved = new Map();
+    let artistCached = 0, artistScraped = 0, artistFailed = 0;
+    await Promise.all([...pendingArtists.keys()].map(async id => {
+      const key = `artist:${id}`;
+      try {
+        const hit = await env.RN_KV.get(key, "json");
+        if (hit && typeof hit === "object") {
+          artistCached++;
+          resolved.set(id, { name: hit.name || "", image_url: hit.image_url || null });
+          return;
+        }
+      } catch { /* fall through to the scrape */ }
+      try {
+        const e = await scrapeSpotifyEmbed(`artist/${id}`, env);
+        artistScraped++;
+        // 320px: the tooltip renders at 120x120 (luna.css pins
+        // .xp-tooltip .cover.album to exactly that), so a 2x display wants 240
+        // and 320 is the smallest Spotify tier that clears it without paying
+        // the 640px hero weight. The tier DOWN is 160, which goes soft on
+        // retina, so there is no cheaper correct answer among Spotify's sizes.
+        const imgs = Array.isArray(e?.visualIdentity?.image) ? e.visualIdentity.image : [];
+        const pick = imgs.find(i => i.maxWidth === 320) || imgs.find(i => i.maxWidth === 160) || imgs[0] || null;
+        const rec = { name: e?.name || "", image_url: canonicalArtUrl(pick?.url || null) };
+        resolved.set(id, rec);
+        if (ctx) ctx.waitUntil(env.RN_KV.put(key, JSON.stringify(rec), { expirationTtl: ARTIST_KV_TTL }));
+      } catch { artistFailed++; }
+    }));
+
+    for (const id of Object.keys(meta)) {
+      meta[id].artists = (meta[id].artists || []).map(a => {
+        const hit = resolved.get(a.id);
+        return hit ? { ...a, image_url: hit.image_url || null, name: a.name || hit.name } : a;
+      });
+    }
+
+    // Write the map, then re-project the payload through it so the change is
+    // visible without waiting for the SWR sentinel to lapse. The payload write
+    // deliberately leaves `fetched_at` alone: it names when the PLAYLIST was
+    // read, and this pass did not read it.
+    const next = { ...payload, tracks: payload.tracks.map(t => withTrackMeta(t, meta[t.id])) };
+    await Promise.all([
+      env.RN_KV.put(TRACK_META_KEY, JSON.stringify(meta)),
+      env.RN_KV.put(cacheKey, JSON.stringify(next)),
+    ]);
+
+    const covered = live.filter(id => meta[id]?.image_url).length;
+    s.setAttribute("rn.tracks_total", live.length);
+    s.setAttribute("rn.tracks_covered", covered);
+    s.setAttribute("rn.track_scraped", trackScraped);
+    s.setAttribute("rn.track_failed", trackFailed);
+    s.setAttribute("rn.artists_cached", artistCached);
+    s.setAttribute("rn.artists_scraped", artistScraped);
+    s.setAttribute("rn.artists_failed", artistFailed);
+    s.setAttribute("rn.meta_pruned", pruned);
+    // the number to alert on: covers still missing after a tick. It should walk
+    // to 0 within ceil(tracks / ENRICH_TRACK_BUDGET) runs of a stable playlist.
+    s.setAttribute("rn.covers_pending", live.length - covered);
+    return { ok: true, total: live.length, covered, pending: live.length - covered };
+  });
 }
 
 // shared Spotify embed scraper. fetches https://open.spotify.com/embed/<kind>/<id>

@@ -10,10 +10,6 @@ overrides:
 importers:
 
   .:
-    dependencies:
-      '@noble/post-quantum':
-        specifier: 0.7.0
-        version: 0.7.0
     devDependencies:
       '@cloudflare/workers-types':
         specifier: 5.20260811.1
@@ -686,22 +682,6 @@ packages:
     peerDependencies:
       '@emnapi/core': ^1.7.1
       '@emnapi/runtime': ^1.7.1
-
-  '@noble/ciphers@2.3.0':
-    resolution: {integrity: sha512-Clu/xdfgVTf9o7ngLOURaxePwR0j8sjclKEtVij10/jGulwFsPWCvvRgG/XjUVf8Nei+jLG6uwyXzUTGY1DQrw==}
-    engines: {node: '>= 20.19.0'}
-
-  '@noble/curves@2.3.0':
-    resolution: {integrity: sha512-v7cY+4oWYPQszRj6ZFGzTVL7uP2TaLo1xMhWHzYC5wj0ZhOXQ5x+sBre8rF3hi8cAoi0bh1qXoovoOkdFtvqEg==}
-    engines: {node: '>= 20.19.0'}
-
-  '@noble/hashes@2.3.0':
-    resolution: {integrity: sha512-oN+QwyX7VSHotibwubG3kpzbwKrfnyR6OOO+3Nk/53ADL7FmgHHz4TgrbaYKvvOw09u6QTx0oiH1cNCIOuN0CQ==}
-    engines: {node: '>= 20.19.0'}
-
-  '@noble/post-quantum@0.7.0':
-    resolution: {integrity: sha512-IH2tpuGV4vBMdpCCua2BN7EuUICtmGp6DlBMNBYAYcL6QQ7eHt85GjLyD7ZT6Qx/xgIPIMqsSLDGvYqOm8Vqag==}
-    engines: {node: '>= 20.19.0'}
 
   '@oxc-minify/binding-android-arm-eabi@0.144.0':
     resolution: {integrity: sha512-4TLwfvjxf2Dum+N9kr3Cczsx2FKwyctjVKRnyZZn/KsL1h2+yoZVslvQLOrJzSCKTNPhw8yYwZjGzRxKQV8KFw==}
@@ -2369,20 +2349,6 @@ snapshots:
       '@emnapi/runtime': 1.11.1
       '@tybys/wasm-util': 0.10.3
     optional: true
-
-  '@noble/ciphers@2.3.0': {}
-
-  '@noble/curves@2.3.0':
-    dependencies:
-      '@noble/hashes': 2.3.0
-
-  '@noble/hashes@2.3.0': {}
-
-  '@noble/post-quantum@0.7.0':
-    dependencies:
-      '@noble/ciphers': 2.3.0
-      '@noble/curves': 2.3.0
-      '@noble/hashes': 2.3.0
 
   '@oxc-minify/binding-android-arm-eabi@0.144.0':
     optional: true

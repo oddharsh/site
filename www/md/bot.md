@@ -10,7 +10,6 @@ to stop it from visiting if you don't want it to.
 - **Signature-Agent**: `https://aadhar.sh/`
 - **JWKS**: <https://aadhar.sh/.well-known/http-message-signatures-directory>
 - **Algorithm (`sig1`)**: Ed25519 (EdDSA), per RFC 9421 + the Web Bot Auth draft
-- **Algorithm (`sig2`)**: ML-DSA-44 (FIPS 204), provisional. See below.
 - **Operator**: coffee@aadhar.sh
 
 ## What it does
@@ -30,24 +29,21 @@ key whose `kid` matches, and verify the Ed25519 signature over the canonical
 components listed in `Signature-Input`. If verification fails, the request did
 not come from this site.
 
-## The second signature
+## The second signature, retired
 
-Both header fields are structured-fields Dictionaries, so every request carries
-two labels over the same covered components. `sig1` is the Ed25519 signature
-described above. `sig2` is a post-quantum
-[ML-DSA-44](https://csrc.nist.gov/pubs/fips/204/final) signature whose public key
-is the `AKP` entry in the same JWKS, formatted per
-[RFC 9964](https://www.rfc-editor.org/rfc/rfc9964.html).
+Between 2026-07-27 and 2026-08-15 every request carried a second label, `sig2`, a
+post-quantum [ML-DSA-44](https://csrc.nist.gov/pubs/fips/204/final) signature over
+the same covered components. It is gone, and its public key has been removed from
+the JWKS, so a request from this bot now carries `sig1` alone.
 
-**Verify `sig1`, not `sig2`.** The [IANA HTTP Signature Algorithms
-registry](https://www.iana.org/assignments/http-message-signature/http-message-signature.xhtml)
-holds six entries and none of them are post-quantum, so `alg="ml-dsa-44"` is this
-site's spelling rather than a registered codepoint. It is here because the
-migration is cheap now and awkward later, and because a running example is worth
-more than a writeup. Treat it as provisional: if a real registration lands with a
-different token, this one changes. Ignoring `sig2` entirely costs you nothing,
-which is the point. [/garage/pqc](https://aadhar.sh/garage/pqc) has the
-measurements and the reasoning.
+It was removed for its CPU cost. Cloudflare's runtime has no ML-DSA in WebCrypto,
+so signing ran in pure JavaScript at roughly 8.5ms per request, against a 10ms
+per-invocation budget. One signature spent most of a request, and anything that
+fans out spent several requests' worth: the playlist scrape signs once per track,
+and the [/lens](https://aadhar.sh/lens) discovery pass signs 28 probes. Both were
+failing because of it. Nothing on the internet verified `sig2`, so dropping it
+costs no verifier anything. [/garage/pqc](https://aadhar.sh/garage/pqc) has the
+measurements and the full argument.
 
 ## How to opt out
 
