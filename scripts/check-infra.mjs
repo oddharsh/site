@@ -378,6 +378,67 @@ async function checkTree(infra, wrangler, lwe) {
     fail(`infra.json's release.preview_urls (${infra.release.preview_urls}) disagrees with wrangler.jsonc's (${wrangler.preview_urls}) — with workers_dev false, an unset value means OFF`);
   }
   pass(`release block agrees with wrangler.jsonc (Worker ${wrangler.name}, build owned by Wrangler, upload-then-ramp, previews ${wrangler.preview_urls ? "on" : "off"})`);
+
+  await checkCodeqlWorkflow(infra.repository);
+}
+
+// The CodeQL language curation, asserted from the COMMITTED workflow rather
+// than from the dashboard. This is the whole reason advanced setup was worth
+// the move on 2026-08-15: the same decision used to live in default setup's
+// config, where the only credential that could read it was a broad standing
+// `repo` token, so it was workstation-only and went unasserted for weeks. A
+// committed matrix is a tree check that runs on every PR with no credential.
+//
+// It asserts the three things the declaration actually rests on. `languages`
+// is #241's curation. `query_suite` and `threat_model` are asserted as
+// ABSENCES, because CodeQL's defaults are `default` and `remote`: the workflow
+// setting neither key IS the declaration holding. That is why each check below
+// tests for a key rather than a value.
+async function checkCodeqlWorkflow(repo) {
+  const want = repo?.code_scanning;
+  if (!want || want.mode !== "advanced") return;
+
+  let text;
+  try {
+    text = await readFile(join(ROOT, want.workflow), "utf8");
+  } catch {
+    fail(`code_scanning declares mode "advanced" but ${want.workflow} is missing. With default setup off (see the API tier), that is NO code scanning at all, which reports exactly like a clean scan`);
+    return;
+  }
+
+  // Count failures rather than falling through: an earlier version emitted the
+  // summary `pass` line even on a drift, so one run reported both "2 analysis
+  // jobs, matches" and "gained rust". A check that prints a pass beside its own
+  // failure is worse than one that stays quiet, because the pass is what gets
+  // skimmed.
+  const before = hard.length;
+
+  const got = [...text.matchAll(/^\s*-\s*language:\s*(\S+)\s*$/gm)].map((m) => m[1]).sort();
+  const declared = [...want.languages].sort();
+  if (got.join(",") !== declared.join(",")) {
+    const added = got.filter((l) => !declared.includes(l));
+    const dropped = declared.filter((l) => !got.includes(l));
+    const parts = [];
+    if (added.length) parts.push(`gained ${added.join(", ")}`);
+    if (dropped.length) parts.push(`lost ${dropped.join(", ")}`);
+    fail(`${want.workflow} ${parts.join(" and ")} (matrix has ${got.join(", ") || "nothing"}); #241 curated this list, so re-read MAINTENANCE.md before widening it`);
+  }
+
+  // A floating tag on a security scanner is a supply-chain hole with write
+  // access to security-events. Every other `uses:` in this repo is pinned.
+  for (const [, ref] of text.matchAll(/uses:\s*(\S+)/g)) {
+    if (!/@[0-9a-f]{40}$/.test(ref)) fail(`${want.workflow} uses an unpinned action ${JSON.stringify(ref)}; pin it to a full commit SHA like every other workflow here`);
+  }
+
+  if (want.query_suite === "default" && /^\s*queries:/m.test(text)) {
+    fail(`${want.workflow} sets \`queries:\` while infra.json declares the ${JSON.stringify(want.query_suite)} suite; extended is a large cost change and both must move together`);
+  }
+  if (want.threat_model === "remote" && /threat[-_]models?:/.test(text)) {
+    fail(`${want.workflow} sets a threat model while infra.json declares ${JSON.stringify(want.threat_model)}; MAINTENANCE.md argues rust and python are droppable BECAUSE the model is remote`);
+  }
+
+  if (hard.length > before) return;
+  pass(`${want.workflow} matches: ${got.length} analysis job(s) (${got.join(", ")}), ${want.query_suite} suite, ${want.threat_model} threat model, actions SHA-pinned`);
 }
 
 // ------------------------------------------------------------ tier: dns ----
@@ -1060,6 +1121,19 @@ async function checkCodeScanning(repo, slug, token) {
     return;
   }
 
+  // Under ADVANCED setup this tier has exactly one job: prove default setup is
+  // still OFF. Both on would analyze every commit twice and file duplicate
+  // alerts, and the dashboard is one click from doing it. The curation itself
+  // moved to checkCodeqlWorkflow, which needs no credential.
+  if (want.mode === "advanced") {
+    if (live.state !== want.default_setup_state) {
+      fail(`CodeQL default setup is ${JSON.stringify(live.state)}, declared ${JSON.stringify(want.default_setup_state)}. With ${want.workflow} committed, both being on double-scans every commit and files duplicate alerts`);
+      return;
+    }
+    pass(`CodeQL default setup is ${live.state}, leaving ${want.workflow} the only scanner`);
+    return;
+  }
+
   // state first. A scanner that is simply off reports nothing, which reads
   // exactly like a clean scan, so every field below is moot if this drifted.
   if (live.state !== want.state) {
@@ -1080,8 +1154,6 @@ async function checkCodeScanning(repo, slug, token) {
     fail(`CodeQL default setup ${parts.join(" and ")} (live ${got.join(", ")}); #241 curated this list, so re-read MAINTENANCE.md before widening it`);
   }
 
-  // threat_model is what makes the language argument valid: `remote` is why
-  // build tooling that never answers a request is safely out of scope.
   if (live.threat_model !== want.threat_model) {
     fail(`CodeQL threat_model is ${JSON.stringify(live.threat_model)}, declared ${JSON.stringify(want.threat_model)}. MAINTENANCE.md argues rust and python are droppable BECAUSE the model is remote, so this change invalidates that reasoning`);
   }
@@ -1092,6 +1164,7 @@ async function checkCodeScanning(repo, slug, token) {
 
   pass(`CodeQL default setup matches: ${got.length} languages (${got.join(", ")}), ${live.query_suite} suite, ${live.threat_model} threat model`);
 }
+
 
 // ------------------------------------------- tier: agent markdown surface ----
 

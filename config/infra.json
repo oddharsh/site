@@ -644,11 +644,13 @@
         "`query_suite` is declared because `extended` is a large cost change that",
         "somebody could reasonably click without meaning to make it permanent."
       ],
-      "state": "configured",
-      "languages": ["actions", "javascript", "javascript-typescript", "typescript"],
+      "mode": "advanced",
+      "workflow": ".github/workflows/codeql.yml",
+      "default_setup_state": "not-configured",
+      "languages": ["actions", "javascript-typescript"],
       "query_suite": "default",
       "threat_model": "remote",
-      "why": "Two analysis jobs, not four: the last three languages are aliases GitHub folds into one. rust and python were dropped 2026-08-06 (#241) as build tooling unreachable under the `remote` threat model."
+      "why": "Advanced setup since 2026-08-15. TWO analysis jobs, and the omissions are the decision: rust and python were dropped 2026-08-06 (#241) as build tooling unreachable under the `remote` threat model. The old default-setup declaration listed four language names for the same two jobs, because that API reports `javascript`, `javascript-typescript` and `typescript` as aliases; a committed matrix has no aliases, so the list is now the honest job count."
     }
   }
 }

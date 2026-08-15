@@ -1,0 +1,86 @@
+# CodeQL, ADVANCED setup. This file replaces the dashboard's default setup,
+# which was turned off on 2026-08-15; the two must never both be on, because
+# each would analyze the same commit and file duplicate alerts.
+#
+# Moving to advanced buys one thing this repo cares about disproportionately:
+# the language curation becomes a COMMITTED, reviewable file instead of
+# dashboard state that only a workstation could read (see the
+# `repository.code_scanning` block in config/infra.json). A silent re-enable of
+# rust or python used to be invisible to every PR. Now it is a diff.
+#
+# It also removed the `github-advanced-security` check, which had been red on
+# every push since 2026-08-08 (gotcha 27). That was a side effect of disabling
+# default setup rather than the reason for it, and it may return.
+name: "CodeQL"
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly, matching what default setup ran. Offset off the hour because
+    # GitHub queues everything scheduled on :00.
+    - cron: "28 17 * * 3"
+
+permissions:
+  contents: read
+  security-events: write
+  # Fetching CodeQL packs.
+  packages: read
+  # The generator marks this private-repo-only, and this repo is public. It is
+  # kept anyway: the `actions` analysis is the one that reads workflow metadata,
+  # and a security scanner is a bad place to shave a read permission on a
+  # guess. Measure it before removing it, the way ci.yml measured
+  # `security-events: read` and then dropped it with a note.
+  actions: read
+
+concurrency:
+  group: codeql-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # TWO entries on purpose, and the omissions are the decision. #241
+        # dropped `rust` and `python` because between them they cost about 3 of
+        # the scan's 4 minutes to analyze four files, all of it workstation and
+        # CI build tooling (www/scripts/zenc, gen-pixel-peeper.py) that never
+        # answers a request. That argument rests entirely on the `remote` threat
+        # model below: widen the threat model and this list has to be revisited.
+        #
+        # `javascript-typescript` covers the js/ts/jsx/tsx tree in one analysis.
+        # GitHub's default-setup API reports it as three alias languages, which
+        # is why config/infra.json declares four names for two jobs.
+        include:
+          - language: actions
+            build-mode: none
+          - language: javascript-typescript
+            build-mode: none
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          # The `default` suite, matching what config/infra.json declares.
+          # `security-extended` is a large cost change and would need that
+          # declaration updated in the same commit.
+
+      # No manual build step: every language here is `build-mode: none`, so the
+      # generator's `exit 1` placeholder would only ever be dead weight.
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
+        with:
+          category: "/language:${{ matrix.language }}"
