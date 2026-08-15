@@ -261,10 +261,34 @@ worktrees may edit freely, but a worktree is not a release surface.
   `security-events`, `statuses`). No `permissions:` block turns it on.
 
   `security-events: read` was added to `ci.yml` for it and MEASURED to do nothing
-  (still 403, 2026-08-07), so it came back out with a note where it sat. The only
-  credential that can read it is a classic PAT with `repo`, which is exactly the
-  broad standing credential this repo keeps out of CI, so the answer is no. The
-  assertion runs on a workstation and CI reports one advisory naming the limit.
+  (still 403, 2026-08-07), so it came back out with a note where it sat. What
+  reads it is any standing credential carrying `repo`, which is exactly the broad
+  credential this repo keeps out of CI, so the answer is still no. The assertion
+  runs on a workstation and CI reports one advisory naming the limit.
+
+  **A classic PAT is NOT the only such credential, and this note said it was.**
+  The gh CLI's own OAuth token qualifies, measured 2026-08-15: an unauthenticated
+  `curl` to `repos/oddharsh/site/code-scanning/default-setup` answers 401, and
+  `gh api` on the same path answers 200 on a `gho_` token whose scopes are
+  `admin:public_key, gist, read:org, repo`. The CI conclusion is untouched, since
+  `repo` is the disqualifying scope either way. What changes is the WORKSTATION
+  bar: no PAT needs minting.
+
+  **Being logged in buys NOTHING on its own, which is the trap.**
+  `check-infra.mjs` reads `process.env.GITHUB_TOKEN` and never shells out to
+  `gh`, so a workstation with a perfectly good `gh auth login` still reports this
+  tier as an unverifiable 401 note, exactly as CI does. Hand it the token
+  explicitly:
+
+  ```bash
+  GITHUB_TOKEN=$(gh auth token) pnpm run infra:check
+  ```
+
+  Measured on the same machine minutes apart: a bare run printed the "not
+  verifiable here" note, and the line above asserted the tier and immediately
+  caught a real drift (`state` was `not-configured` against a declared
+  `configured`). The advisory's own text used to say "on a workstation with `gh`
+  logged in", which is the misleading half, so it now names the variable.
 
   Two general lessons, and the second is the expensive one. "GitHub read,
   therefore free" does not generalize, so check the auth requirement per endpoint
@@ -2978,6 +3002,21 @@ pnpm run deploy:direct
     `github.com/settings/copilot`, under the coding agent's repository access.
     Upgrading to Copilot Pro+ clears it the other way, by paying for a second
     reviewer that duplicates the CodeQL already running green.
+
+    **What ACTUALLY stopped it was disabling CodeQL default setup, measured on
+    #403, 2026-08-15.** The owner flipped `repository.code_scanning.state` to
+    `not-configured` while #403 was open, and the very next read of that PR's
+    check runs carried ZERO `github-advanced-security` entries while `validate`,
+    `Analyze (actions)` and `Analyze (javascript-typescript)` all still reported.
+    So the AI review agent is spawned by code scanning being configured at all,
+    and killing its parent kills it.
+
+    Read that as a REAL cost rather than a free win. Default setup is what
+    produced the `Analyze (...)` jobs, this tree holds no CodeQL workflow of its
+    own, and `infra.json` still declares `state: "configured"`, so until an
+    advanced setup replaces it there is no code scanning here and `infra:check`
+    fails on the drift. The cloud-agent opt-out above stays the cheaper lever if
+    somebody wants the scanning back with the agent still off.
 
     Until one of those happens, treat it as an upstream red mark that gates
     nothing: the `main` ruleset's only required check is `validate`, and `CodeQL`
