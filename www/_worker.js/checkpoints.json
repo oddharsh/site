@@ -852,5 +852,12 @@
     "version": "aadhar-v186-dictionary-roll",
     "vnum": 186,
     "ymd": "2026-08-12"
+  },
+  {
+    "slug": "pq-retire",
+    "title": "The now-playing list has its album art back, and The Other Web stopped timing out. Both were spending most of a request on a post-quantum signature that nothing on the internet verifies, so it is retired, and the covers now fill in on a schedule instead of racing a limit they could never beat",
+    "version": "aadhar-v187-pq-retire",
+    "vnum": 187,
+    "ymd": "2026-08-15"
   }
 ]
