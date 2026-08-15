@@ -250,9 +250,25 @@ worktrees may edit freely, but a worktree is not a release surface.
   IP unauthenticated, which shared Actions runners exhaust), and a read that
   fails is an advisory, so GitHub being down cannot redden an unrelated PR.
 
-  **`repository.code_scanning` is the exception, and it is WORKSTATION-ONLY.**
-  CodeQL default setup declares the language list #241 curated, plus `state`,
-  `query_suite` and `threat_model`. Its endpoint answers 401 unauthenticated even
+  **`repository.code_scanning` moved to ADVANCED setup on 2026-08-15, and the
+  curation came with it.** Default setup is off, `.github/workflows/codeql.yml`
+  is the only scanner, and `infra.json` declares `mode: "advanced"`. The split is
+  now two tiers rather than one:
+
+  | tier | asserts | credential |
+  |---|---|---|
+  | tree, EVERY PR | the workflow's language matrix equals the declared list, every action is SHA-pinned, and it sets neither `queries:` nor a threat model (so `default` and `remote` hold by CodeQL's own defaults) | none |
+  | api, workstation | default setup is still `not-configured`, so the two cannot double-scan and file duplicate alerts | `repo` |
+
+  **That is the reason the move was worth making.** #241's curation used to live
+  in dashboard state whose endpoint no CI token can read, so re-enabling rust or
+  python from the Security tab was invisible to every PR. A committed matrix is a
+  diff. The assertions are proven by three controls (re-add rust, unpin an
+  action, delete the workflow), each of which fails the check by name.
+
+  Everything below is the DEFAULT-SETUP era and is kept because the credential
+  reasoning still governs the API tier. CodeQL default setup declared the
+  language list #241 curated, plus `state`, `query_suite` and `threat_model`. Its endpoint answers 401 unauthenticated even
   on a public repo, and the permission it wants is the repository
   **Administration** read, which is **not one of the keys a workflow may grant its
   `GITHUB_TOKEN`** (`actions`, `artifact-metadata`, `attestations`, `checks`,
