@@ -947,10 +947,25 @@ When `/` is requested, the worker pulls two cached chunks of data from KV
 and uses `HTMLRewriter` to inject them into the static HTML:
 
 1. **`/rn/tracks` (Spotify playlist tracks)** — populated by a separate
-   handler that scrapes `open.spotify.com/embed/playlist/<id>`, then
-   `embed/track/<id>` (for album cover + artist IDs), then
-   `embed/artist/<id>` (for artist profile pics, KV-cached 30d).
-   Identifies as `AadharshBot/1.0 (+https://aadhar.sh/bot)` UA.
+   handler that scrapes `open.spotify.com/embed/playlist/<id>` for the ordered
+   track list. Identifies as `AadharshBot/1.0 (+https://aadhar.sh/bot)` UA.
+
+   **The per-track and per-artist tiers are NOT on this path, since 2026-08-15,
+   and that split is a platform ceiling rather than a preference.** They used to
+   run inline: `embed/track/<id>` per track for the cover plus artist ids, then
+   `embed/artist/<id>` per artist for profile pics. One cold scrape of a 21-track
+   playlist spends ~67 subrequests, and Workers Free allows **50 per invocation**,
+   so tier 2 threw for every track and the catch wrote the result as a payload of
+   nulls. That renders as a tracklist whose album art has quietly stopped
+   appearing, which is why it went unnoticed twice (gotcha 36).
+
+   `cronEnrichTracks` (rn.js) owns them now. It rides the existing `7,37 * * * *`
+   tick rather than spending the last of the five triggers Workers Free allows,
+   fills a bounded batch per run into one `trackmeta:v1` KV map, and converges in
+   `ceil(tracks / 6)` ticks. The inline build is 1 fetch + 1 KV read, and covers
+   are hover-only, so a visitor sees the tracklist immediately either way. The
+   span reports `rn.covers_pending`, which is the number to watch: it should
+   reach 0 within a few ticks of a stable playlist.
 2. **Photo grid** — random 12 from manifest, emitted as
    `<a><picture><source><img></picture></a>` slots inside `<section class="photos">`.
 
@@ -3379,6 +3394,52 @@ pnpm run deploy:direct
     change to those files that is worth a new URL. That keeps a tooling PR from
     forcing a dictionary roll as a side effect, which is the same
     byte-identical bar gotcha 28 set for the bun evaluation.
+
+36. **This account is on WORKERS FREE, so the per-invocation budget is 10ms of
+    CPU and 50 subrequests, and a fan-out crosses both without saying so.**
+    Diagnosed 2026-08-15 after the homepage album covers went missing for the
+    second time. Three separate notes in this file each recorded a piece of it
+    and none of them met: the ML-DSA signature was measured at ~8.5ms and filed
+    as a one-off cost, the five-cron cap named the plan in a comment about
+    something else, and the KV ceiling note said to check which plan the account
+    is on without anybody doing it.
+
+    Two surfaces were dark at once, for one reason:
+
+    | surface | signed fetches per invocation | ML-DSA CPU |
+    |---|--:|--:|
+    | `/rn` playlist scrape | 21, one per track | ~180ms |
+    | `/lens` discovery | 28 probes | ~240ms |
+
+    **KV OPERATIONS COUNT AS SUBREQUESTS**, which is the part that is easy to
+    forget and is most of how the scrape reached ~67 against a cap of 50: 37
+    fetches, then 15 artist cache reads, then 15 writes. Count KV when you budget.
+
+    **The failure is SILENT in the worst way, because the code catches it.** The
+    scrape wraps each track embed in a try/catch so one bad embed degrades one
+    track, which is correct for a bad embed and catastrophic for a platform
+    limit: "Too many subrequests" arrives as a normal exception, all 21 catches
+    fire, and the payload is WRITTEN with 21 nulls. Every downstream check
+    passes, since there are 21 tracks with 21 titles. Nothing errors, nothing
+    logs, and the symptom is an absence, the same shape as gotcha 18.
+
+    Three things generalize past this bug:
+
+    - **A per-request cost is not a number until you multiply it by fan-out and
+      divide by the budget.** `/garage/pqc` priced the signature honestly at
+      8.58ms and its own falsification note watched for header size and verifier
+      compatibility, both of which were fine. The cost that killed it was on our
+      side, in a column that page never had.
+    - **A catch that degrades one item will happily degrade every item.** Where a
+      failure can be per-item OR global, count the failures and put the count in
+      the span, which `rn.track_embeds_failed` did and which nobody read. Better
+      still, make the global case loud: `rn.covers_pending` is now an attribute
+      that should walk to 0, so a stall is a number rather than a missing image.
+    - **Check the plan before reasoning about limits.** `exceededCpu` clustered
+      at exactly 10ms in the tail, which is the free-plan CPU cap, while some
+      requests still succeeded at 194ms. Read the tail (`wrangler tail
+      aadhar-sh --format json`) and group by `outcome` rather than inferring
+      either number from the docs.
 
 ---
 

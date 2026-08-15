@@ -49,7 +49,6 @@ export function renderBotPage() {
       <dt>Signature-Agent</dt><dd>${esc(SIG_AGENT)}</dd>
       <dt>JWKS</dt><dd><a href="/.well-known/http-message-signatures-directory">/.well-known/http-message-signatures-directory</a></dd>
       <dt>Algorithm</dt><dd>sig1: Ed25519 (EdDSA), per RFC 9421 + Web Bot Auth draft</dd>
-      <dt></dt><dd>sig2: ML-DSA-44 (FIPS 204), provisional. See below.</dd>
       <dt>Operator</dt><dd><!--email_off--><a href="mailto:coffee@aadhar.sh">coffee@aadhar.sh</a><!--/email_off--></dd>
     </dl>
 
@@ -74,25 +73,22 @@ export function renderBotPage() {
       If the verification fails, the request is not from this site.
     </p>
 
-    <h2>The second signature</h2>
+    <h2>The second signature, retired</h2>
     <p>
-      Both header fields are structured-fields Dictionaries, so every request carries
-      two labels over the same covered components: <code>sig1</code> is the Ed25519
-      signature described above, and <code>sig2</code> is a post-quantum
+      Between 2026-07-27 and 2026-08-15 every request carried a second label,
+      <code>sig2</code>, a post-quantum
       <a href="https://csrc.nist.gov/pubs/fips/204/final" target="_blank" rel="noopener">ML-DSA-44</a>
-      signature. The public key is the <code>AKP</code> entry in the same JWKS, formatted per
-      <a href="https://www.rfc-editor.org/rfc/rfc9964.html" target="_blank" rel="noopener">RFC 9964</a>.
+      signature over the same covered components. It is gone, and its public key has been
+      removed from the JWKS, so a request from this bot now carries <code>sig1</code> alone.
     </p>
     <p>
-      <strong>Verify <code>sig1</code>, not <code>sig2</code>.</strong> The
-      <a href="https://www.iana.org/assignments/http-message-signature/http-message-signature.xhtml" target="_blank" rel="noopener">IANA
-      HTTP Signature Algorithms registry</a> holds six entries and none of them are
-      post-quantum, so <code>alg="ml-dsa-44"</code> is this site's spelling rather than a
-      registered codepoint. It is here because the migration is cheap now and awkward
-      later, and because a running example is worth more than a writeup. Treat it as
-      provisional: if a real registration lands with a different token, this one changes.
-      Ignoring <code>sig2</code> entirely costs you nothing, which is the point.
-      <a href="/garage/pqc">/garage/pqc</a> has the measurements and the reasoning.
+      It was removed for its CPU cost. Cloudflare's runtime has no ML-DSA in WebCrypto, so
+      signing ran in pure JavaScript at roughly 8.5ms per request, against a 10ms
+      per-invocation budget. One signature spent most of a request, and anything that fans
+      out spent several requests' worth: the playlist scrape signs once per track, and the
+      <a href="/lens">/lens</a> discovery pass signs 28 probes. Both were failing because of it.
+      Nothing on the internet verified <code>sig2</code>, so dropping it costs no verifier
+      anything. <a href="/garage/pqc">/garage/pqc</a> has the measurements and the full argument.
     </p>
 
     <h2>How to opt out</h2>

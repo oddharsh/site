@@ -7,34 +7,32 @@
 // can fetch the JWKS at https://aadhar.sh/.well-known/http-message-signatures-directory
 // and verify against the published public keys.
 //
-// Every request carries TWO signatures over the same components:
+// Every request carries ONE signature: sig1, ed25519, the one verifiers check.
 //
-//   sig1  ed25519     the one verifiers actually check today
-//   sig2  ml-dsa-44   post-quantum, additive, nothing verifies it yet
+// It used to carry a second, sig2, an ML-DSA-44 post-quantum label riding
+// alongside. That shipped 2026-07-27 as a live example (the numbers are still
+// at /garage/pqc) and came back out on 2026-08-15, because the thing that made
+// it "additive" was never true of its CPU.
 //
-// sig2 exists because the migration is cheap here and expensive later, and
-// because a live example beats a writeup. Read /garage/pqc for the numbers.
-// It is deliberately NOT load-bearing: see MLDSA_ALG on why it cannot be.
-// The ML-DSA import is DYNAMIC, and that is a startup fix rather than a style
-// choice. @noble/post-quantum builds its NTT lattice tables (getZettas,
-// reverseBits) in module scope, so a static import made every cold isolate pay
-// for them before serving a byte -- including the overwhelming majority of
-// requests that never sign anything, since sig2 only rides AadharshBot's
-// OUTBOUND crawls (rn's Spotify scrape, /around, census, webmention, /lens).
-// `wrangler check startup` put the package at 45% of active startup; deferring
-// it took the local profile from 3.9ms to 1.4ms median (25 runs each).
+// workerd has no ML-DSA in WebCrypto, so signing was pure JS at ~8.5ms per
+// request. This account is on Workers Free, which allows 10ms of CPU per
+// invocation, so ONE signature spent most of a request's entire budget and any
+// fan-out spent several budgets. Two surfaces were dark because of it:
 //
-// esbuild keeps the module in this same bundle and wraps it in a lazy __esm
-// initializer, so there is no extra network fetch at runtime and no
-// find_additional_modules config -- the deferral is the wrapper, not a second
-// module load. Verified under workerd, which permits a runtime import() inside
-// a request handler.
+//   - rn's Spotify scrape signs once per track. 21 tracks = ~180ms of signing,
+//     so tier 2 never completed and every album cover came back null.
+//   - /lens signs every foreign fetch, and discovery fans out to 28 probes.
+//     Measured 2026-08-15 in production: 31 of 51 sampled requests died
+//     `exceededCpu`, nearly all of them /lens/fetch and /lens/tools.
 //
-// NB the ordering below: mldsaSigner checks for the KEY before it awaits this,
-// so a deployment with no ML-DSA key configured never builds the tables at all.
-let mlDsaPromise = null;
-const getMlDsa44 = () => (mlDsaPromise ||= import("@noble/post-quantum/ml-dsa.js").then((m) => m.ml_dsa44));
-
+// Nothing on the internet verified sig2, so removing it costs no verifier
+// anything and buys back the CPU both surfaces needed. The key is also gone
+// from the published JWKS: advertising a key we no longer sign with is the
+// dangling-pointer problem the DNS-AID note refuses for `_a2a`.
+//
+// Reviving it needs a runtime with native ML-DSA, or a plan that is not
+// "sign on the request path". Do not re-add it to signRequestForWebBotAuth
+// without one, and read the CPU note above first.
 export const BOT_NAME    = "AadharshBot";
 
 const BOT_VERSION = "1.0";   // module-private: only BOT_UA below consumes it
@@ -83,28 +81,6 @@ export async function signedFetch(targetUrl, env, opts = {}) {
   });
 }
 
-// The IANA HTTP Signature Algorithms registry holds six entries and none of
-// them are post-quantum, so this token is OURS, not a codepoint. It is spelled
-// to match the registry's existing convention (ed25519, ecdsa-p256-sha256) so
-// it slots straight in if a real registration ever lands. Until then nothing
-// on the internet verifies sig2, and the site says so on /bot rather than
-// implying a standard it does not have.
-const MLDSA_ALG = "ml-dsa-44";
-
-// ML-DSA-44 keygen expands a 32-byte seed into a 2560-byte secret key, which
-// costs real milliseconds. Workers isolates outlive a request, so derive once
-// and keep it. Keyed by the raw secret so rotating it inside a live isolate
-// re-derives instead of signing with the retired key.
-let mldsaCache = null;
-
-function b64urlToBytes(s) {
-  const b64 = s.replace(/-/g, "+").replace(/_/g, "/");
-  const bin = atob(b64.padEnd(Math.ceil(b64.length / 4) * 4, "="));
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out;
-}
-
 function bytesToB64(bytes) {
   // structured-fields binary content: base64 with padding, wrapped in colons by the caller
   let bin = "";
@@ -112,38 +88,8 @@ function bytesToB64(bytes) {
   return btoa(bin);
 }
 
-// RFC 9964 AKP JWK (kty AKP, alg ML-DSA-44, priv = the 32-byte seed). Absent is
-// fine and means "ed25519 only", because sig2 promises nothing yet and a crawl
-// that still verifies beats a crawl that 500s. Malformed is NOT fine: the key
-// directory advertises this key, so a broken one has to be loud.
-async function mldsaSigner(env) {
-  const raw = env && env.RN_SIGNING_KEY_MLDSA_JWK;
-  if (!raw) return null;
-  if (mldsaCache && mldsaCache.raw === raw) return mldsaCache;
-
-  const jwk = JSON.parse(raw);
-  if (jwk.kty !== "AKP" || jwk.alg !== "ML-DSA-44" || typeof jwk.priv !== "string") {
-    throw new Error("AadharshBot ML-DSA key is malformed: expected an RFC 9964 AKP JWK with alg ML-DSA-44");
-  }
-  const seed = b64urlToBytes(jwk.priv);
-  if (seed.length !== 32) {
-    throw new Error(`AadharshBot ML-DSA seed is ${seed.length} bytes, expected 32`);
-  }
-  // shape checks first, tables second: a malformed key still fails loudly
-  // without building 27KB of lattice constants to reject it.
-  const ml_dsa44 = await getMlDsa44();
-  mldsaCache = {
-    raw,
-    keyId: jwk.kid || "rn-mldsa",
-    secretKey: ml_dsa44.keygen(seed).secretKey,
-    sign: (msg, key) => ml_dsa44.sign(msg, key),
-  };
-  return mldsaCache;
-}
-
 // RFC 9421 signature base: one covered component per line, then the parameters
-// of the label being signed. Each label signs its own params, so sig1 and sig2
-// cover identical components but are never byte-identical inputs.
+// of the label being signed.
 function signatureBase(host, params) {
   return new TextEncoder().encode([
     `"@authority": ${host}`,
@@ -156,37 +102,24 @@ function paramsFor(created, keyId, alg) {
   return `("@authority" "signature-agent");created=${created};keyid="${keyId}";alg="${alg}";tag="web-bot-auth"`;
 }
 
-// build + sign the Web Bot Auth signatures over (@authority, signature-agent).
-// returns one entry per label, in the order they go on the wire.
+// build + sign the Web Bot Auth signature over (@authority, signature-agent).
+// One entry, kept as a list because the wire format is a structured-fields
+// Dictionary and the callers join it: a second label would slot in here, and
+// the header-building code above never has to learn how many there are.
 export async function signRequestForWebBotAuth(targetUrl, env) {
   const host = new URL(targetUrl).host;
-  // one timestamp for both labels: they describe the same request, and a
-  // verifier comparing created across labels should not see a skew we invented.
   const created = Math.floor(Date.now() / 1000);
-  const out = [];
 
   const jwk = JSON.parse(env.RN_SIGNING_KEY_JWK);
   const edParams = paramsFor(created, jwk.kid || "rn", "ed25519");
+  // Ed25519 is native in workerd's WebCrypto, so this costs microseconds. The
+  // retired sig2 was pure JS at ~8.5ms, which is the whole reason it is gone.
   const edKey = await crypto.subtle.importKey("jwk", jwk, { name: "Ed25519" }, false, ["sign"]);
-  out.push({
+  return [{
     label: "sig1",
     params: edParams,
     b64: bytesToB64(new Uint8Array(await crypto.subtle.sign(
       "Ed25519", edKey, signatureBase(host, edParams)
     ))),
-  });
-
-  // workerd's WebCrypto has no ML-DSA (it is still a WICG proposal), so this
-  // one is pure JS. ~8.5ms and ~3.2KB of header, measured on /garage/pqc.
-  const pq = await mldsaSigner(env);
-  if (pq) {
-    const pqParams = paramsFor(created, pq.keyId, MLDSA_ALG);
-    out.push({
-      label: "sig2",
-      params: pqParams,
-      b64: bytesToB64(pq.sign(signatureBase(host, pqParams), pq.secretKey)),
-    });
-  }
-
-  return out;
+  }];
 }

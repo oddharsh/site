@@ -59,9 +59,11 @@ export const DOC_ALIASES = [
   { prose: "oxlint-tsgolint", pkg: "oxlint-tsgolint" },
   { prose: "minify-html", pkg: "@minify-html/node" },
   { prose: "TypeScript", pkg: "typescript" },
-  // The one entry whose prose name IS the package name, because it is the one
-  // package this doc discusses as a shipped dependency rather than as a tool.
-  { prose: "@noble/post-quantum", pkg: "@noble/post-quantum" },
+  // @noble/post-quantum sat here as the one entry whose prose name WAS the
+  // package name, because it was the only package this repo shipped to a
+  // visitor rather than used as a tool. It left with sig2 on 2026-08-15, so
+  // every entry above is build or test tooling again and this repo declares no
+  // runtime dependencies at all.
 ];
 
 // Documented on purpose WITHOUT a version, each for a stated reason. An entry
@@ -170,13 +172,18 @@ export function baselineSection(doc, heading = BASELINE_HEADING) {
   return at === -1 ? null : doc.slice(at);
 }
 
-// Floor: one per alias across ALL FIVE manifests (8 root + 4 in the three
+// Floor: one per alias across ALL FIVE manifests (7 root + 4 in the three
 // sub-manifests that carry exact pins). Set AT today's count rather than under
 // it, because every alias is separately required to appear, so this can only
 // fall by the scanner breaking. Without it a regex that quietly stops matching
 // reports a clean pass over nothing, which is the failure this repo has now
 // shipped twice, and which the backtick gap below would have been a third of.
-export const FLOOR_CLAIMS = 12;
+//
+// 12 until 2026-08-15, when @noble/post-quantum left with sig2. Lower this ONLY
+// alongside a dependency that genuinely went away, and never to quiet a red
+// check: a drop with the manifests unchanged is the scanner breaking, which is
+// the entire thing this number exists to catch.
+export const FLOOR_CLAIMS = 11;
 
 // ONE manifest's worth of checking, in all four directions. Extracted from the
 // root path on 2026-08-14 so the four manifests outside package.json get the

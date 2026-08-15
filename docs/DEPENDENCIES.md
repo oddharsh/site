@@ -85,14 +85,14 @@ review policy and entry point for future agent runs.
   frames. It baked the photo histograms until 2026-08-14, when that moved into
   `zenc histogram` and left the core photo pipeline with no Pillow dependency at
   all. Nothing in CI installs it any more.
-- @noble/post-quantum 0.7.0 is the exact root pin and **the only dependency in
-  this repo that reaches a visitor.** Everything else here is build or test
-  tooling. `lib/botauth.js` imports `ml-dsa.js` lazily for AadharshBot's
-  additive `sig2` ML-DSA-44 signature, because workerd's WebCrypto ships no
-  post-quantum algorithm at any parameter size, so pure JavaScript is the only
-  door. It is therefore the one entry here whose releases should be read for
-  BUNDLE SIZE and cold-start cost as well as correctness: it is Worker bytes,
-  not build bytes. `/garage/pqc` is the measurement behind choosing it.
+- **This repo declares no runtime dependencies.** Everything below is build or
+  test tooling. @noble/post-quantum 0.7.0 used to be the exception, the one
+  package that reached a visitor, because `lib/botauth.js` imported `ml-dsa.js`
+  for AadharshBot's additive `sig2` signature and workerd's WebCrypto ships no
+  post-quantum algorithm at any parameter size. That signature was retired on
+  2026-08-15 and the package went with it: pure-JS ML-DSA costs ~8.5ms per
+  request against a 10ms CPU budget, which was taking down the playlist scrape
+  and `/lens`. `/garage/pqc` carries the measurements and the retirement note.
 - The root workspace lockfile is authoritative; workspace-local Wrangler pins
   are rejected by `pnpm run check-wrangler`.
 

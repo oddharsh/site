@@ -36,7 +36,7 @@ import { installTracing as installCalTracing } from "../../cal/src/trace.js";
 import { getThumbHashes, handleImagesManifest, handlePhotoQuery, handlePhotos, servePhotoFromR2 } from "./photos.js";
 import { handleReading } from "./reading.js";
 import { handleRun } from "./run.js";
-import { handleRn, handleRnAdmin, handleRnArt, handleRnMarkdown, handleRnSet, handleRnTracks, handleRnTracksHtml } from "./rn.js";
+import { cronEnrichTracks, handleRn, handleRnAdmin, handleRnArt, handleRnMarkdown, handleRnSet, handleRnTracks, handleRnTracksHtml } from "./rn.js";
 import { cronHomeProbe } from "./perf-probe.js";
 import { handleDyno, handleDynoJson } from "./dyno.js";
 import { handleSearch, handleSearchJson } from "./search.js";
@@ -264,6 +264,12 @@ export default {
     const job = cronJob(event.cron);
     if (job === "home_probe") {
       await cron("cron.home_probe", () => cronHomeProbe(env, ctx));   // :07/:37 — the two homepage fragments' KV latency -> Analytics Engine
+      // Same tick, because Workers Free caps an account at five triggers and
+      // this needs no schedule of its own: it fills a bounded batch of album
+      // covers per run and converges in a few ticks (rn.js cronEnrichTracks).
+      // Caught, so a Spotify wobble cannot cost the probe its measurement, and
+      // ordered second for the same reason.
+      await cron("cron.rn_enrich", () => cronEnrichTracks(env, ctx)).catch(() => {});
     } else if (job === "census") {
       await cron("cron.census", () => cronCensus(env));   // Mondays 08:17 UTC — the longitudinal census, full roster in one awaited pass
     } else if (job === "daily_outbound") {
