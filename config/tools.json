@@ -22,19 +22,25 @@
     "can find libjpeg-turbo's copy while the scripts use mozjpeg's, and probing",
     "PATH would report a pass on the wrong binary."
   ],
-
   "tools": [
     {
       "bin": "exiftool",
       "install": "brew install exiftool",
-      "why": "EXIF, orientation, and the Fujifilm recipe card",
+      "why": "EXIF and orientation across the encoding and export scripts. It stopped feeding extract-photo-metadata.sh on 2026-08-14, when exif-sooc took over that path",
       "required_by": [
-        "www/scripts/extract-photo-metadata.sh",
         "www/scripts/add-photos.sh",
         "www/scripts/download-remote-photos.sh",
         "www/scripts/export-for-instagram.sh",
         "www/scripts/gen-encoding-samples.sh",
         "www/scripts/reencode-thumbnails.sh"
+      ]
+    },
+    {
+      "bin": "exif-sooc",
+      "install": "cargo install --git https://github.com/oddharsh/exif-sooc",
+      "why": "the photo index and the Fujifilm recipe card: it emits metadata.json's record shape directly and owns the merge, which is what retired the 50-line jq reshape, jq's object `*` operator, and build-recipes.py",
+      "required_by": [
+        "www/scripts/extract-photo-metadata.sh"
       ]
     },
     {
@@ -62,7 +68,9 @@
       "bin": "curl",
       "install": "ships with macOS",
       "why": "pulls the R2 originals back down",
-      "required_by": ["www/scripts/download-remote-photos.sh"]
+      "required_by": [
+        "www/scripts/download-remote-photos.sh"
+      ]
     },
     {
       "bin": "cargo",
@@ -92,7 +100,9 @@
       "path": "/opt/homebrew/opt/mozjpeg/bin/cjpeg",
       "install": "brew install mozjpeg",
       "why": "the chroma-subsampling row of the /garage/encoding grids",
-      "required_by": ["www/scripts/gen-encoding-grids.sh"]
+      "required_by": [
+        "www/scripts/gen-encoding-grids.sh"
+      ]
     },
     {
       "bin": "avifenc",
@@ -117,25 +127,33 @@
       "bin": "ffmpeg",
       "install": "brew install ffmpeg",
       "why": "PNG to PPM, because cjpeg will not read PNG and sips BMP confuses it",
-      "required_by": ["www/scripts/gen-encoding-grids.sh"]
+      "required_by": [
+        "www/scripts/gen-encoding-grids.sh"
+      ]
     },
     {
       "bin": "ssimulacra2",
       "install": "build libjxl with -DJPEGXL_ENABLE_TOOLS=ON; brew's jpeg-xl does not ship it",
       "why": "the perceptual metric the Instagram export searches quality against",
-      "required_by": ["www/scripts/export-for-instagram.sh"]
+      "required_by": [
+        "www/scripts/export-for-instagram.sh"
+      ]
     },
     {
       "bin": "butteraugli_main",
       "install": "build libjxl with -DJPEGXL_ENABLE_TOOLS=ON; brew's jpeg-xl does not ship it",
       "why": "the second metric bounding that same search",
-      "required_by": ["www/scripts/export-for-instagram.sh"]
+      "required_by": [
+        "www/scripts/export-for-instagram.sh"
+      ]
     },
     {
       "bin": "python3",
       "install": "brew install python",
-      "why": "alt text in add-photos.sh, plus build-recipes.py and gen-pixel-peeper.py; only the last of those wants Pillow, from www/scripts/requirements.txt",
-      "required_by": ["www/scripts/add-photos.sh"]
+      "why": "alt text in add-photos.sh, plus gen-pixel-peeper.py; only the last of those wants Pillow, from www/scripts/requirements.txt. build-recipes.py was the third consumer and was deleted on 2026-08-14 when exif-sooc took over the recipe card",
+      "required_by": [
+        "www/scripts/add-photos.sh"
+      ]
     }
   ]
 }

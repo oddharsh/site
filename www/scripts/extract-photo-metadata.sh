@@ -8,7 +8,14 @@
 #   ./extract-photo-metadata.sh /path/to/sooc-originals/
 #   ./extract-photo-metadata.sh --merge /path/to/selected-sources/
 #
-# requires: exiftool (brew install exiftool), jq (brew install jq)
+# requires: exif-sooc (cargo install --git https://github.com/oddharsh/exif-sooc),
+#           jq (brew install jq)
+#
+# This read exiftool + jq + build-recipes.py until 2026-08-14. exif-sooc emits
+# this record shape and the recipe card directly, and owns the merge, so the
+# reshape filter and the Python step are both gone. Measured on the 158
+# committed photos: byte-identical output, and 9.9ms against exiftool's 995ms,
+# which is within 0.3ms of the I/O floor for opening those files at all.
 #
 # --merge updates only the supplied source batch and preserves metadata for
 # other photos. This is the mode used by the remote GitHub Actions pipeline,
@@ -74,8 +81,9 @@ if [ ! -d "$SRC_DIR" ]; then
   exit 1
 fi
 
-if ! command -v exiftool >/dev/null 2>&1; then
-  echo "error: exiftool not found. install with: brew install exiftool" >&2
+if ! command -v exif-sooc >/dev/null 2>&1; then
+  echo "error: exif-sooc not found. install with:" >&2
+  echo "  cargo install --git https://github.com/oddharsh/exif-sooc" >&2
   exit 1
 fi
 if ! command -v jq >/dev/null 2>&1; then
@@ -98,118 +106,36 @@ if [ ! -x "$ZENC" ]; then
   cargo build --release --manifest-path "$ZENC_DIR/Cargo.toml" >&2 || { echo "error: zenc build failed" >&2; exit 1; }
 fi
 
-# exiftool can output JSON natively, but we want a custom shape keyed by
-# filename. dump per-file JSON and reduce with jq.
-TMP=$(mktemp)
-EXTRACTED=$(mktemp)
-# `-Orientation#` forces numeric output (1..8) for the rotation tag so
-# the jq below can compare integers. without the trailing #, exiftool
-# prints "Rotate 270 CW" which is human-readable but awkward to parse.
-# the other tags stay in their friendly form: "1/250" for shutter,
-# "f/2.8" for aperture, "ISO 100" etc. — that's what the tooltip wants.
+# exif-sooc reads the containers directly and emits this script's exact record
+# shape, so the 50-line jq `reduce` that used to reshape `exiftool -json` is
+# gone, and so is the `jq -s '.[0] * .[1]'` merge that followed it.
 #
-# the second block pulls Fuji X-series MakerNotes (Film Mode / Color
-# Chrome / Grain Effect / tone curves / saturation / WB fine-tune) so
-# the tooltip can show what "recipe" was set in-camera. these tags are
-# silently empty on non-Fuji bodies (Leica, iPhone), so they cost
-# nothing to extract universally.
-exiftool -json -q \
-  -FileName \
-  -Make -Model -LensModel \
-  -FNumber -ExposureTime -ISO \
-  -FocalLengthIn35mmFormat \
-  -ExposureCompensation \
-  -ExposureMode -ExposureProgram -MeteringMode \
-  -DateTimeOriginal \
-  -ImageWidth -ImageHeight \
-  -ColorSpace \
-  -WhiteBalance -ColorTemperature -WhiteBalanceFineTune \
-  -FlashMode -Flash \
-  -FilmMode \
-  -DynamicRange \
-  -FocusMode -DriveMode \
-  -FujiFilm:Sharpness -NoiseReduction -Clarity \
-  -DevelopmentDynamicRange \
-  -ColorChromeEffect -ColorChromeFXBlue \
-  -GrainEffectRoughness -GrainEffectSize \
-  -HighlightTone -ShadowTone -Saturation \
-  '-Orientation#' \
-  "$SRC_DIR" > "$TMP"
-
-# NB: metadata extraction intentionally emits only EXIF/Fuji fields. The
-# follow-up bake below adds the {l,r,g,b} histogram channels to each per-photo
-# meta file from the shipped hashed JPG tier. Keeping that as a separate step
-# makes incremental adds safe: extraction can rebuild metadata without
-# silently dropping histogram data.
-
-# transform into {stem: {camera, lens, aperture, shutter, iso, focal, date,
-# width, height}} keyed by stem (filename without extension). orientation-
-# aware width/height: for portrait shots, the camera writes landscape-
-# physical sensor dims (e.g. 7728×5152) + an EXIF Orientation tag (6 or 8)
-# telling viewers to rotate. our tooltip displays the orientation-corrected
-# dims (5152×7728 here) so they match what the user actually sees.
-#   Orientation 5/6/7/8 → 90° transforms → swap w/h
-#   Orientation 1/2/3/4 → identity/180/flip → keep w/h as-is
-jq '
-  reduce .[] as $e ({}; . + {
-  ($e.FileName | tostring | sub("\\.[^.]+$"; "")):
-    (($e.Orientation // 1) as $o |
-     (if ($o == 5 or $o == 6 or $o == 7 or $o == 8)
-       then { w: ($e.ImageHeight // null), h: ($e.ImageWidth // null) }
-       else { w: ($e.ImageWidth // null),  h: ($e.ImageHeight // null) }
-      end) as $dim |
-    {
-      camera:   (if $e.Make and $e.Model then ($e.Make + " " + $e.Model) else ($e.Make // $e.Model // null) end),
-      lens:     ($e.LensModel // null),
-      aperture: (if $e.FNumber then ("f/" + ($e.FNumber | tostring)) else null end),
-      shutter:  ($e.ExposureTime // null),
-      iso:      ($e.ISO // null),
-      focal:    (if $e.FocalLengthIn35mmFormat then ($e.FocalLengthIn35mmFormat | tostring) else null end),
-      ev:       ($e.ExposureCompensation // null),
-      date:     ($e.DateTimeOriginal // null),
-      width:    $dim.w,
-      height:   $dim.h,
-      color_space:    ($e.ColorSpace // null),
-      white_balance:  ($e.WhiteBalance // null),
-      color_temp:     ($e.ColorTemperature // null),
-      wb_shift:       ($e.WhiteBalanceFineTune // null),
-      flash:          ($e.Flash // null),
-      # standard exposure / focus / metering fields. populated on most bodies.
-      exposure_mode:  ($e.ExposureMode // $e.ExposureProgram // null),
-      meter:          ($e.MeteringMode // null),
-      focus_mode:     ($e.FocusMode // null),
-      drive:          ($e.DriveMode // null),
-      # Fuji writes TWO Sharpness tags: the standard ExifIFD one is a coarse
-      # Soft/Normal/Hard, while FujiFilm:Sharpness carries the real -4..+4 the
-      # recipe card needs. we ask for the FujiFilm one explicitly above.
-      sharpness:      ($e.Sharpness // null),
-      noise_reduction:($e.NoiseReduction // null),
-      clarity:        ($e.Clarity // null),
-      # DynamicRange reads "Standard"; DevelopmentDynamicRange is the real
-      # 100/200/400 that prints as DR100/DR200/DR400.
-      dr_value:       ($e.DevelopmentDynamicRange // null),
-      # Fuji-only film-recipe fields. silently null on Leica/iPhone shots.
-      film:           ($e.FilmMode // null),
-      dr:             ($e.DynamicRange // null),
-      chrome:         ($e.ColorChromeEffect // null),
-      chrome_blue:    ($e.ColorChromeFXBlue // null),
-      grain:          ($e.GrainEffectRoughness // null),
-      grain_size:     ($e.GrainEffectSize // null),
-      highlight_tone: ($e.HighlightTone // null),
-      shadow_tone:    ($e.ShadowTone // null),
-      saturation:     ($e.Saturation // null),
-    })
-})' "$TMP" > "$EXTRACTED"
-
-if [ "$MERGE" -eq 1 ] && [ -s "$OUT" ]; then
-  MERGED=$(mktemp)
-  jq -s '.[0] * .[1]' "$OUT" "$EXTRACTED" > "$MERGED"
-  mv "$MERGED" "$OUT"
+# THE MERGE IS THE REASON THIS SWAP MATTERS, more than the speed. jq's object
+# `*` is a RECURSIVE merge, and the reflexive substitute `+` is shallow: on a
+# --merge run the fresh read carries no `recipe`, so `+` would drop the card
+# from every re-merged photo, silently, and the failure reads as a tooltip that
+# has quietly stopped showing lines. That operator pinned this pipeline to jq
+# specifically. `--merge-into` states the rule instead of relying on one:
+#
+#   * a stem the read did not see passes through untouched
+#   * a stem it did see keeps every key it already had, freshly read fields on top
+#
+# It prints to stdout and never writes the file it read, so a crash cannot leave
+# a truncated metadata.json where a complete one was.
+#
+# The recipe card comes out of the same pass (exif-sooc derives it from the Fuji
+# tags), which is what retired build-recipes.py and the last Python in this
+# script's path.
+#
+# Verified before the swap: regenerating all 158 committed photos through
+# exif-sooc produced records byte-identical to what exiftool + jq + Python
+# produced, recipe cards included, 158/158.
+if [ "$MERGE" -eq 1 ]; then
+  exif-sooc --keyed --merge-into "$OUT" -q -r "$SRC_DIR" > "$OUT.tmp"
 else
-  mv "$EXTRACTED" "$OUT"
+  exif-sooc --keyed -q -r "$SRC_DIR" > "$OUT.tmp"
 fi
-
-rm -f "$TMP" "$EXTRACTED"
+mv "$OUT.tmp" "$OUT"
 
 # also emit one file per photo for the tooltip's per-photo lazy fetch:
 # /images/meta/<stem>.json. these are immutable + content-addressed, so a visitor
@@ -243,10 +169,11 @@ jq -c 'to_entries[]' "$OUT" | while IFS= read -r entry; do
   } | with_entries(select(.value != null))' > "$META_DIR/$stem.json"
 done
 
-# derive the self-documenting Fuji recipe card for each photo (fujixweekly
-# idiom) into metadata.json. runs on the full index, so it also refreshes
-# photos outside a --merge batch whose recipe format may have changed.
-"$SCRIPT_DIR/build-recipes.py" 2>&1 | tail -1
+# the recipe card is derived during extraction now (exif-sooc --keyed), so
+# build-recipes.py is gone. One consequence worth knowing: a --merge run
+# refreshes cards for the BATCH only, where the old script rewrote every card on
+# every run. A full run still regenerates all of them, which is what to do after
+# an exif-sooc upgrade that changes the card.
 
 # bake the 64-bin histograms back into the meta files (the full run may have
 # wiped them; the tooltip reads meta.hi instead of computing client-side)

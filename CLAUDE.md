@@ -831,7 +831,33 @@ Two encoders + one transform tool, all built from source:
 - **libavif** (`brew install libavif`, optional) — `avifenc` for the
   primary AVIF thumbnail. Falls back to `sips -s format avif` (macOS
   native, no extra dep) when avifenc isn't installed.
-- **exiftool, jq** (`brew install exiftool jq`) — metadata extraction.
+- **exif-sooc** (`cargo install --git https://github.com/oddharsh/exif-sooc`).
+  The metadata reader for the photo INDEX, since 2026-08-14. Its `--keyed` mode
+  emits `metadata.json`'s record shape and the Fujifilm recipe card directly,
+  and `--merge-into` owns the merge, which together retired a 50-line `jq`
+  reshape, `build-recipes.py`, and the last Python in that script's path.
+
+  **The merge is why this swap happened, more than the speed.** `jq -s '.[0] *
+  .[1]'` is a RECURSIVE merge and the reflexive substitute `+` is shallow: on a
+  `--merge` run the fresh read carries no `recipe`, so `+` drops the card from
+  every re-merged photo, silently, and it surfaces as a tooltip that has quietly
+  stopped showing lines. That one operator pinned this pipeline to jq
+  specifically (jaq, measured 2026-08-14, refuses it outright). `--merge-into`
+  states the rule instead of relying on an operator, and a contract test in that
+  repo pins it.
+
+  Verified before the swap rather than after: regenerating all 158 committed
+  photos produced records byte-identical to what `exiftool` + `jq` + Python
+  produced, recipe cards included. Speed is a bonus and is NOT the reason,
+  though it is large: 9.9ms against exiftool's 995ms over the same 160 files.
+  Do not chase it further, because 9.6ms of that is the I/O floor for opening
+  those files at all, so the parse is ~0.3ms and no language or rewrite can
+  reach it. The photo pipeline's real cost is the encode: the same run spends
+  ~19s in the zenc histogram bake.
+- **exiftool, jq** (`brew install exiftool jq`). Still required: exiftool by six
+  OTHER scripts (encoding grids and samples, Instagram export, re-encode, add
+  photos, remote download), and jq by the per-stem split in the same metadata
+  script. Only the index EXTRACTION moved.
 - **Pillow, via uv** (`brew install uv`, then `pnpm run photos:env`) — required by
   `gen-pixel-peeper.py` alone, which is a one-off generator rather than part of
   this pipeline. The 64-bin RGB/luminance bake moved into `zenc histogram` on
