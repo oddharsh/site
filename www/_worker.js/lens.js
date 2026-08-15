@@ -1164,6 +1164,7 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 .lx-composite-formula strong { margin-left:5px; color:oklch(36% 0.14 150); font-size:11pt; }
 .lx-local-mirror { display:flex; align-items:center; gap:7px; margin:4px 0 7px; color:oklch(35% 0.05 255); }
 .lx-local-mirror > b { font:bold 17pt "Courier New",monospace; color:oklch(39% 0.13 255); }
+.lx-level-note { margin:-3px 0 9px; padding:5px 8px; border-left:3px solid oklch(66% 0.13 250); background:oklch(97% 0.02 250); color:oklch(40% 0.05 255); font-size:8.5pt; }
 .lx-readiness-cats { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:5px; margin:5px 0 12px; }
 .lx-readiness-cat { border:1px solid oklch(82% 0.03 250); border-radius:3px; padding:6px 8px; background:#fff; }
 .lx-readiness-cat > div { display:flex; justify-content:space-between; gap:7px; font-size:8.4pt; color:oklch(37% 0.04 255); }

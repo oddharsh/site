@@ -859,5 +859,12 @@
     "version": "aadhar-v187-pq-retire",
     "vnum": 187,
     "ymd": "2026-08-15"
+  },
+  {
+    "slug": "lens-grading",
+    "title": "The Other Web grades sitemaps and levels honestly now. It used to look for a sitemap at one fixed address and trust whatever answered, so a real sitemap kept one directory over read as missing while a stray HTML page read as found. A site could also earn the top rung from a single machine door that was answering 410 Gone: four of the six it called agent-native had earned it exactly that way.",
+    "version": "aadhar-v188-lens-grading",
+    "vnum": 188,
+    "ymd": "2026-08-15"
   }
 ]
