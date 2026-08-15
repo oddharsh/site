@@ -137,9 +137,19 @@ whole --width "$WIDTH"; whole --qmax "$QMAX"; whole --qmin "$QMIN"
 [ "$QMIN" -le "$QMAX" ] || { echo "error: --qmin ($QMIN) is above --qmax ($QMAX)" >&2; exit 1; }
 
 # ── preconditions ─────────────────────────────────────────────────────
-for cmd in sips exiftool; do
+for cmd in sips exif-sooc; do
   command -v "$cmd" >/dev/null 2>&1 || { echo "error: $cmd not found in PATH" >&2; exit 1; }
 done
+
+# A stale exif-sooc does not ERROR on -all=: it reads it as a tag SELECTION and
+# prints JSON, so the strip quietly does nothing and the file keeps its EXIF.
+# Every write below is wrapped in `|| true`, so nothing would say a word, and
+# the shipped file would carry metadata this pipeline exists to remove.
+exif-sooc --help 2>/dev/null | grep -q -- '-all=' || {
+  echo "error: exif-sooc is too old to write metadata (no -all=)." >&2
+  echo "  update with: cargo install --git https://github.com/oddharsh/exif-sooc --force" >&2
+  exit 1
+}
 for tool in "$SSIMULACRA2" "$BUTTERAUGLI"; do
   [ -x "$tool" ] || { echo "error: $(basename "$tool") not found (brew install jpeg-xl)" >&2; exit 1; }
 done
@@ -165,7 +175,7 @@ pct() { awk -v a="$1" -v b="$2" 'BEGIN{printf "%+.0f%%", (a-b)*100/b}'; }
 # EXIF Orientation → the clockwise rotation + flip that brings pixels upright.
 # sips ignores the tag on decode, so this is applied by hand on the PNG.
 orient_ops() {
-  local o; o=$(exiftool -s -s -s -n -Orientation "$1" 2>/dev/null || echo "")
+  local o; o=$(exif-sooc -s -s -s -n -Orientation "$1" 2>/dev/null || echo "")
   case "$o" in
     ""|1) echo "" ;;      2) echo "f:horizontal" ;;   3) echo "r:180" ;;
     4)    echo "f:vertical" ;;  5) echo "r:90 f:horizontal" ;;  6) echo "r:90" ;;
@@ -188,7 +198,7 @@ orient_ops() {
 # (CLAUDE.md gotcha 6), applied before the rotation rather than after.
 prepare_reference() {  # prepare_reference <src> <out.png>
   local src="$1" ref="$2" o ops axis cur w h
-  o=$(exiftool -s -s -s -n -Orientation "$src" 2>/dev/null || echo "")
+  o=$(exif-sooc -s -s -s -n -Orientation "$src" 2>/dev/null || echo "")
   ops=$(orient_ops "$src")
   w=$(sips -g pixelWidth "$src" 2>/dev/null | awk '/pixelWidth/{print $2}')
   h=$(sips -g pixelHeight "$src" 2>/dev/null | awk '/pixelHeight/{print $2}')
@@ -234,9 +244,9 @@ finish() {  # finish <candidate.jpg> <stem> <source> — place it, metadata hand
     # across tells every viewer that honours EXIF to turn the frame a second
     # time — a portrait shot lands on its side, in the one mode that was
     # supposed to preserve more.
-    exiftool -TagsFromFile "$src" -all:all "-Orientation#=1" -overwrite_original "$dest" >/dev/null 2>&1 || true
+    exif-sooc -TagsFromFile "$src" -all:all "-Orientation#=1" -overwrite_original "$dest" >/dev/null 2>&1 || true
   else
-    exiftool -all= -overwrite_original "$dest" >/dev/null 2>&1 || true
+    exif-sooc -all= -overwrite_original "$dest" >/dev/null 2>&1 || true
   fi
   stat -f%z "$dest"
 }

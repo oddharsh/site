@@ -854,10 +854,15 @@ Two encoders + one transform tool, all built from source:
   those files at all, so the parse is ~0.3ms and no language or rewrite can
   reach it. The photo pipeline's real cost is the encode: the same run spends
   ~19s in the zenc histogram bake.
-- **exiftool, jq** (`brew install exiftool jq`). Still required: exiftool by six
-  OTHER scripts (encoding grids and samples, Instagram export, re-encode, add
-  photos, remote download), and jq by the per-stem split in the same metadata
-  script. Only the index EXTRACTION moved.
+- **exif-sooc, jq** (`cargo install --git https://github.com/oddharsh/exif-sooc --locked`, and
+  `brew install jq`). exiftool is GONE from this repository as of 2026-08-14:
+  the six other scripts that still called it (encoding grids and samples,
+  Instagram export, add photos, remote download, thumbnail re-encode) moved too, using ExifTool's own
+  flag spellings so each swap was one word. `-all=` is byte-identical to
+  ExifTool's output across a 20-file, 452 MB mixed Fujifilm and Leica set, and
+  `-TagsFromFile` copies APP1 segments verbatim where ExifTool rebuilds them,
+  keeping 165 tags to its 163 at the cost of the source's padding. jq is still
+  wanted by the per-stem split.
 - **Pillow, via uv** (`brew install uv`, then `pnpm run photos:env`) — required by
   `gen-pixel-peeper.py` alone, which is a one-off generator rather than part of
   this pipeline. The 64-bin RGB/luminance bake moved into `zenc histogram` on
@@ -899,7 +904,7 @@ one of them was undocumented until `tools:check` went looking (2026-08-14):
 >
 > The guard scanner is the load-bearing part, and it is why four prerequisites
 > could stay undocumented. Most of these preconditions are written `for cmd in
-> sips exiftool`, so the binary name exists only as a loop word and a grep for the
+> sips exif-sooc`, so the binary name exists only as a loop word and a grep for the
 > name finds nothing. That is gotcha 29's blind spot in different clothes: a
 > command assembled from list elements is invisible to a search for the assembled
 > form. Each scanner also carries a FLOOR and fails if its match count collapses,

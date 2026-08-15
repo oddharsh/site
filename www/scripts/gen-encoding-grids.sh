@@ -18,6 +18,16 @@
 # JPEG could be halved and the grid reads as the sequence the site actually
 # walked. Do not delete it expecting a rerun to bring it back.
 set -euo pipefail
+
+# A stale exif-sooc does not ERROR on -all=: it reads it as a tag SELECTION and
+# prints JSON, so the strip quietly does nothing and the file keeps its EXIF.
+# Every write below is wrapped in `|| true`, so nothing would say a word, and
+# the shipped file would carry metadata this pipeline exists to remove.
+exif-sooc --help 2>/dev/null | grep -q -- '-all=' || {
+  echo "error: exif-sooc is too old to write metadata (no -all=)." >&2
+  echo "  update with: cargo install --git https://github.com/oddharsh/exif-sooc --force" >&2
+  exit 1
+}
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 DEST="$( cd "$SCRIPT_DIR/.." && pwd )/garage/enc"
 # zenc (zenjpeg hybrid trellis + progressive scan search) is the site's shipped
@@ -75,7 +85,7 @@ sips -s format jpeg --setProperty formatOptions 72 "$TMP/crop.png" --out "$DEST/
 "$MOZ_CJPEG" -quality 72 "$TMP/crop.ppm" > "$DEST/z-enc-mozjpeg.jpg" 2>/dev/null
 "$ZENC" "$TMP/crop.png" "$DEST/z-enc-zenc.jpg" -q 72 >/dev/null 2>&1
 
-exiftool -all= -overwrite_original "$DEST"/z-*.jpg >/dev/null 2>&1 || true
+exif-sooc -all= -overwrite_original "$DEST"/z-*.jpg >/dev/null 2>&1 || true
 
 echo "=== generated (96x96 crop) ==="
 for f in "$DEST"/z-*; do printf "  %-22s %6s B\n" "$(basename "$f")" "$(sz "$f")"; done

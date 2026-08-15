@@ -67,9 +67,19 @@ ZENC="$ZENC_DIR/target/release/zenc"
 ZENC_Q=84   # calibrated to match the retired cjpegli q82 quality at fewer bytes
 MOZ_JTRAN="/opt/homebrew/opt/mozjpeg/bin/jpegtran"
 
-for cmd in sips exiftool; do
+for cmd in sips exif-sooc; do
   command -v "$cmd" >/dev/null 2>&1 || { echo "error: $cmd not in PATH" >&2; exit 1; }
 done
+
+# A stale exif-sooc does not ERROR on -all=: it reads it as a tag SELECTION and
+# prints JSON, so the strip quietly does nothing and the file keeps its EXIF.
+# Every write below is wrapped in `|| true`, so nothing would say a word, and
+# the shipped file would carry metadata this pipeline exists to remove.
+exif-sooc --help 2>/dev/null | grep -q -- '-all=' || {
+  echo "error: exif-sooc is too old to write metadata (no -all=)." >&2
+  echo "  update with: cargo install --git https://github.com/oddharsh/exif-sooc --force" >&2
+  exit 1
+}
 if [ ! -x "$ZENC" ]; then
   command -v cargo >/dev/null 2>&1 || { echo "error: cargo (rust) not found; install from https://rustup.rs" >&2; exit 1; }
   echo "building zenc (zenjpeg encoder) — first run only…" >&2
@@ -81,7 +91,7 @@ if command -v avifenc >/dev/null 2>&1; then AVIF_ENCODER="avifenc"; else AVIF_EN
 
 # EXIF Orientation → jpegtran transform flag (identical to add-photos.sh).
 exif_to_jpegtran() {
-  local o; o=$(exiftool -s -s -s -n -Orientation "$1" 2>/dev/null || echo "")
+  local o; o=$(exif-sooc -s -s -s -n -Orientation "$1" 2>/dev/null || echo "")
   case "$o" in
     ""|"1") echo "" ;;  "2") echo "-flip horizontal" ;;  "3") echo "-rotate 180" ;;
     "4") echo "-flip vertical" ;;  "5") echo "-transpose" ;;  "6") echo "-rotate 90" ;;
@@ -146,7 +156,7 @@ while IFS= read -r stem; do
   #    so strip the JPG too. assumes sRGB display (the AVIF primary has no profile
   #    either, so this keeps the two formats consistent).
   if ! "$ZENC" "$sqjpg" "$jpg" -q "$ZENC_Q" >/dev/null 2>&1; then FAIL=$((FAIL+1)); printf "✗"; continue; fi
-  exiftool -all= -overwrite_original "$jpg" >/dev/null 2>&1 || true
+  exif-sooc -all= -overwrite_original "$jpg" >/dev/null 2>&1 || true
   space=$(sips -g space "$sqjpg" 2>/dev/null | awk '/space:/{print $2}'); [ "$space" = "Gray" ] && yuv=400 || yuv=420
   if [ "$AVIF_ENCODER" = "avifenc" ]; then
     avifenc -q 63 -d 10 --ignore-icc --ignore-exif --ignore-xmp --speed 4 --jobs 4 --yuv "$yuv" "$sqjpg" "$avif" >/dev/null 2>&1 || { FAIL=$((FAIL+1)); printf "✗"; continue; }
