@@ -1006,6 +1006,17 @@ and uses `HTMLRewriter` to inject them into the static HTML:
    are hover-only, so a visitor sees the tracklist immediately either way. The
    span reports `rn.covers_pending`, which is the number to watch: it should
    reach 0 within a few ticks of a stable playlist.
+
+   **That map is pruned BY AGE, and the reason is a same-day regression worth
+   generalising.** The first version deleted any entry missing from the stored
+   payload, which makes one upstream read the authority on deletion. It is not:
+   `shouldStore` accepts ANY non-empty payload, so a truncated playlist embed is
+   saved as the whole tracklist and takes every cover it failed to mention with
+   it. Hours after shipping, the map went 21 entries to 6 and the covers refilled
+   from scratch at 6 a tick, silently, because a short playlist looks exactly like
+   a playlist someone edited. Entries carry a `seen` stamp now and expire after 30
+   days. **Absence from a single read is not evidence for deleting anything**, and
+   the same reasoning applies to every cache in here that mirrors a remote list.
 2. **Photo grid** — random 12 from manifest, emitted as
    `<a><picture><source><img></picture></a>` slots inside `<section class="photos">`.
 

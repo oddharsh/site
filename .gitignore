@@ -56,3 +56,6 @@ worker-startup.cpuprofile
 # holds while uv is the tool that made it; a hand-rolled `python -m venv` would
 # not. Stated explicitly so the directory stays untracked either way.
 www/scripts/.venv/
+
+# regenerated on demand and different every run (random photo grid)
+.github/social-preview-desktop.png
