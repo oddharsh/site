@@ -82,6 +82,7 @@ import {
   artUrls,
   artWarmList,
   canonicalArtUrl,
+  cronEnrichTracks,
   handleRnArt,
   handleRnTracks,
   handleRnTracksHtml,
@@ -273,6 +274,66 @@ test("sig1 verifies against the ed25519 key the JWKS publishes", async () => {
   // and it must not verify a base it did not sign
   base[13] ^= 1;
   assert.equal(await crypto.subtle.verify("Ed25519", pair.publicKey, sig, base), false);
+});
+
+// ── rn: the track-meta map must survive a SHORT playlist read ────────
+// Regression, 2026-08-15. The prune deleted any entry missing from
+// `payload.tracks`, and `shouldStore` accepts any non-empty payload, so one
+// truncated playlist embed stored a 6-track playlist as the whole thing and
+// took 15 covers with it. Absence from a single read is not evidence.
+
+function metaEnv({ tracks, meta }) {
+  const store = new Map([
+    ["playlist-id", "0raTdu2MZH4dNvfG5keVAL"],
+    ["tracks:0raTdu2MZH4dNvfG5keVAL", JSON.stringify({ tracks, playlist_id: "0raTdu2MZH4dNvfG5keVAL" })],
+    ["trackmeta:v1", JSON.stringify(meta)],
+  ]);
+  return {
+    store,
+    env: {
+      RN_KV: {
+        get: async (k, t) => {
+          const v = store.get(k);
+          if (v === undefined) return null;
+          return (t === "json" || t?.type === "json") ? JSON.parse(v) : v;
+        },
+        put: async (k, v) => void store.set(k, v),
+      },
+    },
+  };
+}
+
+const metaFor = (ids) => Object.fromEntries(
+  ids.map((id) => [id, { image_url: `https://i.scdn.co/image/${id}`, artists: [], seen: Date.now() }])
+);
+
+test("a SHORT playlist read cannot delete track meta", async () => {
+  const all = ["a", "b", "c", "d", "e", "f", "g", "h"];
+  // the payload has regressed to two tracks; the map still holds all eight
+  const { store, env } = metaEnv({ tracks: [{ id: "a" }, { id: "b" }], meta: metaFor(all) });
+  await cronEnrichTracks(env, null);
+  const after = JSON.parse(store.get("trackmeta:v1"));
+  assert.deepEqual(Object.keys(after).sort(), all, "a short read must delete nothing");
+  for (const id of all) assert.ok(after[id].image_url, `${id} keeps its cover`);
+});
+
+test("an entry unseen past the age window is pruned, so the map stays bounded", async () => {
+  const stale = 31 * 24 * 60 * 60 * 1000;
+  const meta = metaFor(["a", "b"]);
+  meta.b.seen = Date.now() - stale;          // dropped from the playlist a month ago
+  const { store, env } = metaEnv({ tracks: [{ id: "a" }], meta });
+  await cronEnrichTracks(env, null);
+  const after = JSON.parse(store.get("trackmeta:v1"));
+  assert.deepEqual(Object.keys(after), ["a"], "only the long-unseen entry goes");
+});
+
+test("an entry written before `seen` existed is stamped, never dropped", async () => {
+  const meta = { a: { image_url: "https://i.scdn.co/image/a", artists: [] } };  // no `seen`
+  const { store, env } = metaEnv({ tracks: [{ id: "a" }], meta });
+  await cronEnrichTracks(env, null);
+  const after = JSON.parse(store.get("trackmeta:v1"));
+  assert.ok(after.a, "the upgrade must not become the outage it prevents");
+  assert.equal(typeof after.a.seen, "number");
 });
 
 test("the published key directory advertises only what the bot signs with", async () => {

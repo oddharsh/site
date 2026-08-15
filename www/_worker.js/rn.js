@@ -758,6 +758,11 @@ function withTrackMeta(track, meta) {
 const TRACK_META_KEY       = "trackmeta:v1";
 const ENRICH_TRACK_BUDGET  = 6;
 const ENRICH_ARTIST_BUDGET = 6;
+// How long an entry survives without being seen in the live playlist. It exists
+// to bound the map rather than to keep it tight, so it is deliberately far
+// longer than any plausible upstream wobble: see the prune block for what a
+// short window cost. A playlist swap leaves ~21 dead entries for 30 days.
+const TRACK_META_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
 // Parse one track embed into the stored shape. Artist images are left null and
 // filled by the artist pass, which is a separate budget.
@@ -803,13 +808,35 @@ export async function cronEnrichTracks(env, ctx) {
     const meta = (storedMeta && typeof storedMeta === "object") ? { ...storedMeta } : {};
     const live = payload.tracks.map(t => t.id).filter(Boolean);
 
-    // PRUNE FIRST, against the live playlist. Without this the map is
-    // append-only and every playlist swap leaves its predecessor's covers
-    // behind forever, in a value that is read on the homepage's critical path.
-    let pruned = 0;
+    // PRUNE BY AGE, never by absence from one read. The first version of this
+    // deleted any entry missing from `payload.tracks`, which treats a single
+    // upstream read as ground truth for deletion, and that read can be short:
+    // `shouldStore` accepts ANY non-empty payload, so one truncated playlist
+    // embed from Spotify is stored as the whole tracklist and takes every cover
+    // it failed to mention with it.
+    //
+    // It did exactly that on 2026-08-15, hours after shipping. The map went from
+    // 21 entries to 6, the survivors being the first 6 in playlist order, and
+    // the covers then refilled from scratch at 6 a tick. Nothing errored, because
+    // a short playlist is indistinguishable from a playlist someone edited.
+    //
+    // Stamping `seen` and expiring on age decouples deletion from any one read.
+    // A short payload now costs nothing, since absence stops being evidence, and
+    // the map still cannot grow without bound: a track that genuinely leaves the
+    // playlist stops being stamped and ages out. At ~21 entries against a 30-day
+    // window this trades a bounded, invisible amount of staleness for never
+    // dropping a cover we already paid to fetch.
+    const now = Date.now();
     const liveSet = new Set(live);
+    for (const id of liveSet) {
+      if (meta[id]) meta[id].seen = now;
+    }
+    let pruned = 0;
     for (const id of Object.keys(meta)) {
-      if (!liveSet.has(id)) { delete meta[id]; pruned++; }
+      // an entry written before this field existed is stamped rather than
+      // deleted, so the upgrade cannot itself become the outage it prevents.
+      if (typeof meta[id].seen !== "number") { meta[id].seen = now; continue; }
+      if (now - meta[id].seen > TRACK_META_MAX_AGE_MS) { delete meta[id]; pruned++; }
     }
 
     const pendingTracks = live.filter(id => !meta[id]).slice(0, ENRICH_TRACK_BUDGET);
