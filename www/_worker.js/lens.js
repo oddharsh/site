@@ -1025,13 +1025,36 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 /* Delta ignores the lens (it runs its own narrative), so the strip hides there.
    Human and Browser hide the whole Machine pane, taking the tabs with it. */
 .lx-panes.is-delta .lx-lenses { display:none; }
-/* The static slot above the tabs, holding the score strip and the agent trace.
-   Sits outside .lx-body on purpose, so the verdict stays put while the lens
-   report under it scrolls. Empty in every view but Machine, and an empty slot
-   must not leave a padded gap. */
-.lx-machine-top { padding:9px 11px 10px; background:oklch(97.5% 0.005 250); border-bottom:1px solid oklch(84% 0.03 250); }
+/* The machine pane scrolls as ONE column rather than pinning a fixed header
+   over a scrolling body: the static half is now the whole briefing and is far
+   too tall to hold open above the fold. The tab strip goes sticky instead, so
+   it pins to the top of the pane once you reach it and the lens report under it
+   always has its own controls in view. */
+.lx-machine-scroll { flex:1 1 auto; min-height:0; overflow:auto; display:flex; flex-direction:column; }
+.lx-machine-scroll > .lx-body { flex:0 0 auto; overflow:visible; }
+.lx-machine-scroll > .lx-lenses { position:sticky; top:0; z-index:3; }
+/* Compare puts three panes side by side and the shortest must scroll to match
+   the tallest, which is what the wrapper's own overflow buys. Alone in the
+   window, the pane is as tall as its content and that overflow never engages,
+   so it would only CLIP the sticky strip to a box already fully in view.
+   Handing those two views the page's scrollport instead is what makes the tabs
+   pin at the top of the window while the lens report runs under them. */
+.lx-panes.is-machine .lx-machine-scroll, .lx-panes.is-delta .lx-machine-scroll { overflow:visible; }
+/* Everything above the tabs: the score strip, the agent trace, and the machine
+   briefing. Tinted and rule-separated so the split from the lens report reads
+   as two halves of one pane rather than one long scroll. Empty in every view
+   but Machine, and an empty slot must not leave a padded gap. */
+.lx-machine-top { padding:9px 11px 14px; background:oklch(97.5% 0.005 250); }
 .lx-machine-top:empty { display:none; }
-.lx-machine-top .lx-sec { margin-bottom:0; }
+.lx-machine-top > .lx-sec:last-child { margin-bottom:9px; }
+/* The strip carries the rule between the two halves, and paints its own
+   background upward past its border box. Both exist for the pinned state: a
+   scroll container paints content inside its padding, so the window's 18px
+   band above a pinned strip showed the lens report sliding through it. The
+   shadow covers that band, and in the strip's resting position it lands on the
+   clearance the padding-bottom above reserves for it, reading as the tab bar's
+   shoulder. */
+.lx-panes.is-machine .lx-machine-scroll > .lx-lenses { border-top:1px solid oklch(84% 0.03 250); box-shadow:0 -22px 0 oklch(93% 0.015 250); }
 
 /* panes */
 .lx-panes { display:flex; gap:8px; margin-top:8px; min-height:560px; }
@@ -1310,8 +1333,6 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 .lx-focus .lx-sec { margin-bottom:7px; }
 .lx-focus .lx-sec-h { color:oklch(29% 0.12 250); }
 .lx-focus .lx-kv td { border-bottom-color:oklch(88% 0.025 250); }
-.lx-machine-block { border-top:1px solid oklch(86% 0.03 250); padding-top:9px; margin-top:11px; }
-.lx-machine-block .lx-sec-h { color:oklch(30% 0.10 250); }
 .lx-delta-intro { margin:0 0 10px; padding:7px 9px; border:1px solid oklch(82% 0.08 75); background:oklch(97% 0.035 85); color:oklch(39% 0.05 60); font-size:9pt; line-height:1.45; }
 .lx-cf-credit { margin-top:10px; font-size:8pt; color:oklch(55% 0 0); line-height:1.5; }
 .lx-cf-credit a { color:oklch(42.61% 0.2353 263.74); }
@@ -1516,21 +1537,30 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
       </section>
       <section class="lx-pane lx-pane-machine" id="lx-machine">
         <div class="lx-pane-h" id="lx-machine-h">${machineHeader}</div>
-        <!-- The agent trace sits ABOVE the tab strip because no tab changes it:
-             it is one verdict about the whole URL, not one lens's evidence.
-             Under the tabs it read as the pane's body, so switching tabs looked
-             like a no-op, because the focus block it swaps was pushed below
-             ~140px of unchanging console. Filled by renderMachine() in Machine
-             view only; empty (and hidden by :empty) everywhere else, including
-             the no-script render. -->
-        <div class="lx-machine-top" id="lx-machine-top"></div>
-        <!-- The lens tabs live inside the pane they steer. Order is evidence to
-             verdict: raw observation first (the default lens, so the first tab is
-             the selected one on load), Agent-ready? last as the capstone. -->
-        <div class="lx-lenses" role="tablist" aria-label="machine lens">${LENS_TAB_ORDER.map((key) =>
-          `<button class="lx-tab${state.lens === key ? " is-on" : ""}" data-lens="${key}" role="tab" aria-selected="${state.lens === key ? "true" : "false"}" aria-controls="lx-machine-body" type="button">${LENS_TAB_LABELS[key]}</button>`
-        ).join("")}</div>
-        <div class="lx-body" id="lx-machine-body">${seeded ? lensMachineFragment(initial, state) : '<div class="lx-empty">What the machine actually receives.<span>The raw file, the rules it is handed, and the bill for reading them.</span></div>'}</div>
+        <!-- ONE scroller over all three children, so the pane reads top to
+             bottom as: everything no tab changes, then the tabs, then only what
+             they change. The tab strip is sticky inside it, so it pins to the
+             top of the pane the moment you scroll past the static half and the
+             lens report never scrolls away from its own controls. -->
+        <div class="lx-machine-scroll" id="lx-machine-scroll">
+          <!-- The whole machine briefing sits ABOVE the tab strip because no tab
+               changes any of it: the score, the agent trace, the observed
+               document, the affordance table, the copyable brief and the
+               boundaries are one claim about the URL rather than one lens's
+               evidence. Under the tabs they read as the pane's body, so
+               switching tabs looked like a no-op, with the block they do change
+               pushed below several hundred px of unchanging report. Filled by
+               renderMachine() in Machine view only; empty (and hidden by
+               :empty) everywhere else, including the no-script render. -->
+          <div class="lx-machine-top" id="lx-machine-top"></div>
+          <!-- The lens tabs live inside the pane they steer. Order is evidence to
+               verdict: raw observation first (the default lens, so the first tab is
+               the selected one on load), Agent-ready? last as the capstone. -->
+          <div class="lx-lenses" role="tablist" aria-label="machine lens">${LENS_TAB_ORDER.map((key) =>
+            `<button class="lx-tab${state.lens === key ? " is-on" : ""}" data-lens="${key}" role="tab" aria-selected="${state.lens === key ? "true" : "false"}" aria-controls="lx-machine-body" type="button">${LENS_TAB_LABELS[key]}</button>`
+          ).join("")}</div>
+          <div class="lx-body" id="lx-machine-body">${seeded ? lensMachineFragment(initial, state) : '<div class="lx-empty">What the machine actually receives.<span>The raw file, the rules it is handed, and the bill for reading them.</span></div>'}</div>
+        </div>
       </section>
       <section class="lx-pane lx-pane-browser" id="lx-browser">
         <div class="lx-pane-h" id="lx-browser-h">${browserHeader}</div>

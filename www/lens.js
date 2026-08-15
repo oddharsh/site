@@ -15,6 +15,10 @@
   var humanBody = document.getElementById("lx-human-body");
   var machineBody = document.getElementById("lx-machine-body");
   var machineTop = document.getElementById("lx-machine-top");
+  // The machine pane's single scroller, wrapping the static block, the tab
+  // strip and the lens report. Null on any older cached shell, which every use
+  // guards for.
+  var machineScroll = document.getElementById("lx-machine-scroll");
   var browserBody = document.getElementById("lx-browser-body");
   var machineH = document.getElementById("lx-machine-h");
   var humanH = document.getElementById("lx-human-h");
@@ -972,10 +976,12 @@
       "links in head": relCount,
       "fetched as": data.fetchedBy || "identified bot",
     };
-    // The agent trace used to open this briefing. It moved above the tab strip
-    // (renderMachine), because it is the one block on this pane that no tab
-    // changes, and sitting inside the body it buried the block they do change.
-    var out = '<div class="lx-brief-lede"><b>Machine briefing.</b> This is a reconstruction from the response and the probes Lens actually ran. It describes available evidence; it does not claim that a site has agreed to a new interface.</div>' + lensFocus();
+    // Everything this function returns is static across the tab strip, which is
+    // why the whole of it renders ABOVE the tabs (renderMachine). The agent
+    // trace and the per-lens focus block both used to open this briefing; the
+    // trace moved up beside it, and lensFocus() moved DOWN under the tabs,
+    // because it is the one part of the old briefing a tab does change.
+    var out = '<div class="lx-brief-lede"><b>Machine briefing.</b> This is a reconstruction from the response and the probes Lens actually ran. It describes available evidence; it does not claim that a site has agreed to a new interface.</div>';
     out += section("Observed document", { text: "observed", kind: "ok" },
       "The minimum contract a machine can recover from this response.", kvTable(facts));
     out += section("Machine affordances", { text: st.verdict || "unknown", kind: st.verdict === "agent-native" ? "ok" : st.verdict === "agent-readable" ? "" : "warn" },
@@ -1352,15 +1358,17 @@
     // carries it. Must match machineHeader in _worker.js/lens.js renderLensShell.
     machineH.innerHTML = view === "delta" ? "Delta view &middot; What changes" : "Machine view";
     updateDeltaCount();
-    // Everything ABOVE the tab strip is what no tab changes: the score and the
-    // dollar line (one claim about the whole URL) and then the agent trace (one
-    // task attempted against it). Everything the tabs steer stays in the body
-    // under them. Machine view is the only view that fills this slot, and the
-    // score used to be missing from it entirely: verdictStrip() rode above the
-    // body in every OTHER view, so switching to Machine dropped the /100 the
-    // Compare pane had just shown. This runs BEFORE the no-data bail so a reset
-    // cannot leave the last scan's verdict pinned over an empty pane.
-    if (machineTop) machineTop.innerHTML = data && view === "machine" ? verdictStrip() + agentTrace() : "";
+    // Everything ABOVE the tab strip is what no tab changes, as one continuous
+    // block: the score and the dollar line (one claim about the whole URL), the
+    // agent trace (one task attempted against it), and the machine briefing
+    // (the observed document, the affordance table, the copyable brief, the
+    // boundaries). Everything the tabs steer is one continuous block in the
+    // body under them. Machine view is the only view that fills this slot, and
+    // the score used to be missing from it entirely: verdictStrip() rode above
+    // the body in every OTHER view, so switching to Machine dropped the /100
+    // the Compare pane had just shown. This runs BEFORE the no-data bail so a
+    // reset cannot leave the last scan's verdict pinned over an empty pane.
+    if (machineTop) machineTop.innerHTML = data && view === "machine" ? verdictStrip() + agentTrace() + machineBrief() : "";
     if (!data) { return; }
     // own-property lookup: `lens` comes off the tab strip and the URL, and a bare
     // object literal still inherits Object.prototype, so lens="toString" or
@@ -1380,13 +1388,18 @@
     LENS_FN.tools = lensTools;
     var candidate = Object.prototype.hasOwnProperty.call(LENS_FN, lens) ? LENS_FN[lens] : null;
     var fn = typeof candidate === "function" ? candidate : lensAnatomy;
-    var body = view === "machine" ? machineBrief() + '<div class="lx-machine-block">' + section("Selected evidence lens", { text: LENS_LABEL[lens] }, "The original inspector remains available below the briefing.", fn()) + "</div>"
+    var body = view === "machine" ? lensFocus() + fn()
       : view === "delta" ? deltaView() : fn();
     // the dollar thesis rides above every scanned lens except Delta (which runs its
     // own no-score narrative). Machine view already leads with the briefing/trace.
     if (view !== "delta" && view !== "machine") body = verdictStrip() + body;
     machineBody.innerHTML = body;
-    machineBody.scrollTop = 0;
+    // The pane scrolls as one column now, so machineBody has no scrollTop of its
+    // own and the wrapper inherits the reset. That reset is a no-op in Machine
+    // view, where the wrapper defers to the window's own scrollport, and that is
+    // deliberate: the strip is sticky there, so a tab switch already leaves the
+    // block that changed starting directly under it.
+    if (machineScroll) machineScroll.scrollTop = 0;
     if (view === "delta") bindCounterfactuals();
     if (lens === "readiness") bindReadinessActions();
     var readerBtn = machineBody.querySelector("#lx-reader-run");
