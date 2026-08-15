@@ -8,7 +8,7 @@
 #   ./extract-photo-metadata.sh /path/to/sooc-originals/
 #   ./extract-photo-metadata.sh --merge /path/to/selected-sources/
 #
-# requires: exif-sooc (cargo install --git https://github.com/oddharsh/exif-sooc),
+# requires: exif-sooc (cargo install --git https://github.com/oddharsh/exif-sooc exif-sooc),
 #           jq (brew install jq)
 #
 # This read exiftool + jq + build-recipes.py until 2026-08-14. exif-sooc emits
@@ -83,7 +83,7 @@ fi
 
 if ! command -v exif-sooc >/dev/null 2>&1; then
   echo "error: exif-sooc not found. install with:" >&2
-  echo "  cargo install --git https://github.com/oddharsh/exif-sooc" >&2
+  echo "  cargo install --git https://github.com/oddharsh/exif-sooc exif-sooc" >&2
   exit 1
 fi
 if ! command -v jq >/dev/null 2>&1; then

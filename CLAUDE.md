@@ -831,7 +831,7 @@ Two encoders + one transform tool, all built from source:
 - **libavif** (`brew install libavif`, optional) — `avifenc` for the
   primary AVIF thumbnail. Falls back to `sips -s format avif` (macOS
   native, no extra dep) when avifenc isn't installed.
-- **exif-sooc** (`cargo install --git https://github.com/oddharsh/exif-sooc`).
+- **exif-sooc** (`cargo install --git https://github.com/oddharsh/exif-sooc exif-sooc`).
   The metadata reader for the photo INDEX, since 2026-08-14. Its `--keyed` mode
   emits `metadata.json`'s record shape and the Fujifilm recipe card directly,
   and `--merge-into` owns the merge, which together retired a 50-line `jq`
@@ -854,7 +854,7 @@ Two encoders + one transform tool, all built from source:
   those files at all, so the parse is ~0.3ms and no language or rewrite can
   reach it. The photo pipeline's real cost is the encode: the same run spends
   ~19s in the zenc histogram bake.
-- **exif-sooc, jq** (`cargo install --git https://github.com/oddharsh/exif-sooc --locked`, and
+- **exif-sooc, jq** (`cargo install --git https://github.com/oddharsh/exif-sooc exif-sooc --locked`, and
   `brew install jq`). exiftool is GONE from this repository as of 2026-08-14:
   the six other scripts that still called it (encoding grids and samples,
   Instagram export, add photos, remote download, thumbnail re-encode) moved too, using ExifTool's own
@@ -3395,14 +3395,15 @@ pnpm run deploy:direct
     forcing a dictionary roll as a side effect, which is the same
     byte-identical bar gotcha 28 set for the bun evaluation.
 
-36. **This account is on WORKERS FREE, so the per-invocation budget is 10ms of
-    CPU and 50 subrequests, and a fan-out crosses both without saying so.**
-    Diagnosed 2026-08-15 after the homepage album covers went missing for the
-    second time. Three separate notes in this file each recorded a piece of it
-    and none of them met: the ML-DSA signature was measured at ~8.5ms and filed
-    as a one-off cost, the five-cron cap named the plan in a comment about
-    something else, and the KV ceiling note said to check which plan the account
-    is on without anybody doing it.
+36. **This account is on WORKERS FREE, so a fan-out crosses the per-invocation
+    budget without saying so. The SUBREQUEST cap is the hard one at 50; CPU is a
+    pressure problem rather than the flat 10ms wall it looks like.** Diagnosed
+    2026-08-15 after the homepage album covers went missing for the second time.
+    Three separate notes in this file each recorded a piece of it and none of
+    them met: the ML-DSA signature was measured at ~8.5ms and filed as a one-off
+    cost, the five-cron cap named the plan in a comment about something else, and
+    the KV ceiling note said to check which plan the account is on without
+    anybody doing it.
 
     Two surfaces were dark at once, for one reason:
 
@@ -3410,6 +3411,26 @@ pnpm run deploy:direct
     |---|--:|--:|
     | `/rn` playlist scrape | 21, one per track | ~180ms |
     | `/lens` discovery | 28 probes | ~240ms |
+
+    **Be careful with the 10ms number, which an earlier draft of this note stated
+    as a flat per-invocation cap. It is the documented Workers Free limit and it
+    is NOT what a single request meets.** Measured against production the same
+    day: requests routinely finish `ok` far above it (90ms and 196ms on the old
+    code, both fine), so there is real burst tolerance. What happened in the
+    03:00Z window was a CLAMP under sustained load, where `exceededCpu` landed on
+    31 of 51 sampled requests at exactly 10ms while `/lens` was being hammered.
+    So the same code passes when the account is quiet and dies when it is busy,
+    which is why this presented as intermittent and why chasing a repro on one
+    URL kept exonerating the wrong things.
+
+    **What that means for reading a fix: measure CPU, never just status codes.**
+    Pinning both versions with `Cloudflare-Workers-Version-Overrides` and firing
+    identical `/lens/fetch` requests at one target, sig2 on against sig2 off, gave
+    a median of **51ms against 15ms** and a spread of 67ms against 10ms. Every one
+    of those twelve requests returned 200, on both versions, so a pass/fail probe
+    would have reported the fix as doing nothing. **The header wants the FULL
+    version UUID; the 8-char prefix silently fails to pin and every request lands
+    on the majority version**, which reads exactly like a fix that changed nothing.
 
     **KV OPERATIONS COUNT AS SUBREQUESTS**, which is the part that is easy to
     forget and is most of how the scrape reached ~67 against a cap of 50: 37
@@ -3435,11 +3456,42 @@ pnpm run deploy:direct
       the span, which `rn.track_embeds_failed` did and which nobody read. Better
       still, make the global case loud: `rn.covers_pending` is now an attribute
       that should walk to 0, so a stall is a number rather than a missing image.
-    - **Check the plan before reasoning about limits.** `exceededCpu` clustered
-      at exactly 10ms in the tail, which is the free-plan CPU cap, while some
-      requests still succeeded at 194ms. Read the tail (`wrangler tail
-      aadhar-sh --format json`) and group by `outcome` rather than inferring
-      either number from the docs.
+    - **Check the plan before reasoning about limits, and then check the plan's
+      numbers against the wire.** Both halves cost time here. Nothing said which
+      plan this account was on, and once the docs supplied 10ms that number went
+      straight into a note as a wall, which the very next measurement contradicted.
+      Read the tail (`wrangler tail aadhar-sh --format json`), group by `outcome`,
+      and compare the CPU of requests that PASSED against ones that died before
+      believing any published ceiling is what you are hitting.
+
+    **APPROVE A PARKED RAMP BEFORE MERGING ANYTHING ELSE.** Shipping this fix
+    found a race the concurrency block does not describe. That block explains
+    that a newer ramp cancels a pending one, which reads as a queueing rule about
+    runs that have not started. It also cancels a ramp that is MID-FLIGHT because
+    you just approved it, and the merge that does the cancelling can be
+    completely unrelated.
+
+    Measured 2026-08-15. Run 31862702940 was approved and moving traffic; the
+    ramp for the next merge entered the group at 12:13:35Z and 31862702940 was
+    cancelled at **12:13:54Z**, 19 seconds later. It reported
+    `completed/cancelled` having already reached 100%, which is the confusing
+    part: traffic landed, the run looks failed, and the two facts are both true.
+
+    **What it can actually cost is the changelog.** The D1 `INSERT` runs only
+    after the last step hits 100%, so a cancellation lands squarely on the one
+    step that has nothing to retry it. Here it cost nothing because no checkpoint
+    was staged, and that was luck rather than design. A release carrying a
+    changelog entry would have gone to 100% and silently logged nothing, which is
+    gotcha 24's failure arriving through a different door: `checkpoints:check`
+    catches it on the next PR, long after the ramp read as done.
+
+    Ordering does NOT save you, and neither does approving first: the successor
+    ramp arrives whenever Workers Builds finishes, which is minutes after a merge
+    and nothing you control. The rule is about the WINDOW rather than the
+    sequence. Let a parked ramp finish before merging, and if a merge has already
+    gone in, expect the cancellation and confirm the split with
+    `pnpm run deploy:promote -- --status` rather than reading the run's
+    conclusion.
 
 ---
 
