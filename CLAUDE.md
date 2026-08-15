@@ -261,10 +261,34 @@ worktrees may edit freely, but a worktree is not a release surface.
   `security-events`, `statuses`). No `permissions:` block turns it on.
 
   `security-events: read` was added to `ci.yml` for it and MEASURED to do nothing
-  (still 403, 2026-08-07), so it came back out with a note where it sat. The only
-  credential that can read it is a classic PAT with `repo`, which is exactly the
-  broad standing credential this repo keeps out of CI, so the answer is no. The
-  assertion runs on a workstation and CI reports one advisory naming the limit.
+  (still 403, 2026-08-07), so it came back out with a note where it sat. What
+  reads it is any standing credential carrying `repo`, which is exactly the broad
+  credential this repo keeps out of CI, so the answer is still no. The assertion
+  runs on a workstation and CI reports one advisory naming the limit.
+
+  **A classic PAT is NOT the only such credential, and this note said it was.**
+  The gh CLI's own OAuth token qualifies, measured 2026-08-15: an unauthenticated
+  `curl` to `repos/oddharsh/site/code-scanning/default-setup` answers 401, and
+  `gh api` on the same path answers 200 on a `gho_` token whose scopes are
+  `admin:public_key, gist, read:org, repo`. The CI conclusion is untouched, since
+  `repo` is the disqualifying scope either way. What changes is the WORKSTATION
+  bar: no PAT needs minting.
+
+  **Being logged in buys NOTHING on its own, which is the trap.**
+  `check-infra.mjs` reads `process.env.GITHUB_TOKEN` and never shells out to
+  `gh`, so a workstation with a perfectly good `gh auth login` still reports this
+  tier as an unverifiable 401 note, exactly as CI does. Hand it the token
+  explicitly:
+
+  ```bash
+  GITHUB_TOKEN=$(gh auth token) pnpm run infra:check
+  ```
+
+  Measured on the same machine minutes apart: a bare run printed the "not
+  verifiable here" note, and the line above asserted the tier and immediately
+  caught a real drift (`state` was `not-configured` against a declared
+  `configured`). The advisory's own text used to say "on a workstation with `gh`
+  logged in", which is the misleading half, so it now names the variable.
 
   Two general lessons, and the second is the expensive one. "GitHub read,
   therefore free" does not generalize, so check the auth requirement per endpoint
@@ -2941,12 +2965,71 @@ pnpm run deploy:direct
     the same `CAPIError: 400` anyway. The job also ran 29s instead of ~80s, so
     something genuinely changed; the check still fails.
 
-    Which setting (if any) actually silences `dynamic/agents/github-advanced-security`
-    is UNKNOWN, and guessing has now cost one wrong answer. It configures nothing
-    in this repo (gotcha 27's own note: it lives in no workflow file here), so
-    treat it as an upstream red mark that gates nothing until GitHub fixes their
-    model routing. `CodeQL` and `Analyze (actions)` are the checks doing the real
-    scanning and both stay green throughout.
+    **ROOT CAUSE, measured 2026-08-15: it is an ACCOUNT ENTITLEMENT, and no
+    repository setting can reach it.** This paragraph used to ask which setting
+    silences `dynamic/agents/github-advanced-security` and answer UNKNOWN. The
+    question was aimed at the wrong machine. Ask the account instead:
+
+    ```bash
+    gh api -H "Editor-Version: vscode/1.0" /copilot_internal/user \
+      --jq '{sku: .access_type_sku, premium: .quota_snapshots.premium_interactions}'
+    ```
+
+    ```json
+    {"sku": "free_limited_copilot",
+     "premium": {"entitlement": 0, "has_quota": false, "credits_used": 0}}
+    ```
+
+    Entitlement is exactly 0 AND `credits_used` is 0, so that budget is UNSPENT
+    rather than exhausted and no amount of waiting refills it. GitHub shipped
+    agentic autofix to public preview on 2026-07-10; it requires a Copilot license
+    with the cloud agent and it draws down AI credits. It asks for
+    `claude-opus-4.6`, and Opus-class models sit on Pro+ alone since the June 2026
+    billing change. So `400 The requested model is not supported` is LITERALLY
+    TRUE of this account, on every push, indefinitely.
+
+    That retires the "until GitHub fixes their model routing" reading above, since
+    there is no outage to end, and the recovery signal this gotcha tells you to
+    grep for will never arrive on this plan. It also explains the autofix
+    measurement in one line, because a feature toggle cannot grant an entitlement.
+
+    **The lever nobody has pulled is the CLOUD AGENT opt-out.** GitHub's disabling
+    doc gives two ways to stop agentic autofix: turn off Copilot Autofix (done
+    2026-08-12, changed nothing) OR opt the repository out of the Copilot cloud
+    agent. The second has never been tried. No REST endpoint exposes it
+    (`user/copilot/coding_agent`, `repos/:owner/:repo/copilot/coding_agent` and
+    `user/settings/copilot` all 404), so it is a browser trip to
+    `github.com/settings/copilot`, under the coding agent's repository access.
+    Upgrading to Copilot Pro+ clears it the other way, by paying for a second
+    reviewer that duplicates the CodeQL already running green.
+
+    **What ACTUALLY stopped it was disabling CodeQL default setup, measured on
+    #403, 2026-08-15.** The owner flipped `repository.code_scanning.state` to
+    `not-configured` while #403 was open, and the very next read of that PR's
+    check runs carried ZERO `github-advanced-security` entries while `validate`,
+    `Analyze (actions)` and `Analyze (javascript-typescript)` all still reported.
+    So the AI review agent is spawned by code scanning being configured at all,
+    and killing its parent kills it.
+
+    Read that as a REAL cost rather than a free win. Default setup is what
+    produced the `Analyze (...)` jobs, this tree holds no CodeQL workflow of its
+    own, and `infra.json` still declares `state: "configured"`, so until an
+    advanced setup replaces it there is no code scanning here and `infra:check`
+    fails on the drift. The cloud-agent opt-out above stays the cheaper lever if
+    somebody wants the scanning back with the agent still off.
+
+    Until one of those happens, treat it as an upstream red mark that gates
+    nothing: the `main` ruleset's only required check is `validate`, and `CodeQL`
+    plus `Analyze (actions)` are the checks doing the real scanning and stay green
+    throughout.
+
+    Thirteen recorded as of 2026-08-15, the last three being two on #400 (runs
+    `31884142298` and `31884163295`) and one on #401. The general lesson is the
+    one this gotcha's whole length is the bill for. **A check that fails
+    identically on every diff, including a prose-only one, is reporting on
+    something outside the repository, so widen the search past the repository
+    EARLY.** Every entry above this one hunted for a setting, a workflow file or a
+    signature; the answer was three fields on the account, one API call away.
 
     **What it will not catch, learned the same day.** `Analyze (actions)` passed on
     a workflow that interpolated `${{ inputs.base }}` straight into a `run:` block,
