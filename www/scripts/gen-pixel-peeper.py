@@ -188,14 +188,25 @@ def load_source(stem, tmp):
         raise FileNotFoundError(f"{stem} not in {SRC_DIR}")
     path = matches[0]
     if path.suffix.lower() in (".hif", ".heic"):
-        png = tmp / f"{stem}-src.png"
-        r = run(["sips", "-s", "format", "png", path, "--out", png])
-        if r.returncode != 0 or not png.exists():
+        # TIFF, not PNG. Both are lossless and sips writes the same pixels, but
+        # PNG spends its time deflating an intermediate that is deleted a moment
+        # later: measured on one 7728x5152 frame, 6.17s against 0.42s.
+        tif = tmp / f"{stem}-src.tiff"
+        r = run(["sips", "-s", "format", "tiff", path, "--out", tif])
+        if r.returncode != 0 or not tif.exists():
             raise RuntimeError(f"sips could not decode {path.name}: {r.stderr.strip()}")
-        im = Image.open(png)
+        im = Image.open(tif)
     else:
         im = Image.open(path)
-        im = ImageOps.exif_transpose(im)   # camera writes a rotation hint, not rotated pixels
+    # Both branches, because the camera writes a rotation HINT rather than
+    # rotated pixels and every source carries one. This used to sit in the else
+    # arm alone, so a HIF was cropped from the unrotated frame while a JPG of
+    # the same scene was cropped from the upright one: 10 of the 18 trial
+    # sources are rotated HIFs. Pillow happens to apply the hint itself when it
+    # loads a TIFF and not when it loads a PNG, which would have hidden the
+    # difference rather than fixed it; this makes the rotation explicit either
+    # way, and it is a no-op when there is no hint to apply.
+    im = ImageOps.exif_transpose(im)
     return im.convert("RGB")
 
 
