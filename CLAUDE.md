@@ -831,7 +831,7 @@ Two encoders + one transform tool, all built from source:
 - **libavif** (`brew install libavif`, optional) — `avifenc` for the
   primary AVIF thumbnail. Falls back to `sips -s format avif` (macOS
   native, no extra dep) when avifenc isn't installed.
-- **exif-sooc** (`cargo install --git https://github.com/oddharsh/exif-sooc`).
+- **exif-sooc** (`cargo install --git https://github.com/oddharsh/exif-sooc exif-sooc`).
   The metadata reader for the photo INDEX, since 2026-08-14. Its `--keyed` mode
   emits `metadata.json`'s record shape and the Fujifilm recipe card directly,
   and `--merge-into` owns the merge, which together retired a 50-line `jq`
@@ -854,7 +854,7 @@ Two encoders + one transform tool, all built from source:
   those files at all, so the parse is ~0.3ms and no language or rewrite can
   reach it. The photo pipeline's real cost is the encode: the same run spends
   ~19s in the zenc histogram bake.
-- **exif-sooc, jq** (`cargo install --git https://github.com/oddharsh/exif-sooc --locked`, and
+- **exif-sooc, jq** (`cargo install --git https://github.com/oddharsh/exif-sooc exif-sooc --locked`, and
   `brew install jq`). exiftool is GONE from this repository as of 2026-08-14:
   the six other scripts that still called it (encoding grids and samples,
   Instagram export, add photos, remote download, thumbnail re-encode) moved too, using ExifTool's own
