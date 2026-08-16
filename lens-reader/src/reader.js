@@ -225,6 +225,22 @@ function longestRun(value, char) {
   return best;
 }
 
+// ONE escaper for both link destinations, because they had drifted apart the day
+// they were written: the anchor escaped backslash before `)` and the image escaped
+// only `)`. That is not cosmetic. An src of `a\)b` came out as `a\\)b`, where the
+// input's own backslash pairs with the escape and leaves the paren bare, so the
+// link closes early and the rest of the URL lands in the prose. Order matters:
+// backslash FIRST, or the escapes escape each other. CodeQL's
+// js/incomplete-sanitization caught the image half.
+function mdDestination(value) {
+  return String(value || "").replace(/\\/g, "\\\\").replace(/\)/g, "\\)");
+}
+
+function mdTitle(value) {
+  const title = String(value || "");
+  return title ? ` "${title.replace(/([\\"])/g, "\\$1")}"` : "";
+}
+
 function codeSpan(value) {
   const text = String(value || "");
   if (!text) return "";
@@ -286,16 +302,12 @@ function markdownNode(node) {
       const title = attr(node, "title");
       if (!href || /^javascript:/i.test(href)) return label;
       if (!label && !title) return "";
-      const destination = href.replace(/\\/g, "\\\\").replace(/\)/g, "\\)");
-      const suffix = title ? ` "${title.replace(/([\\"])/g, "\\$1")}"` : "";
-      return `[${label}](${destination}${suffix})`;
+      return `[${label}](${mdDestination(href)}${mdTitle(title)})`;
     }
     case "img": {
       const src = attr(node, "src");
       const alt = attr(node, "alt").replace(/([\\[\]])/g, "\\$1");
-      const title = attr(node, "title");
-      const suffix = title ? ` "${title.replace(/([\\"])/g, "\\$1")}"` : "";
-      return src ? `![${alt}](${src.replace(/\)/g, "\\)")}${suffix})` : "";
+      return src ? `![${alt}](${mdDestination(src)}${mdTitle(attr(node, "title"))})` : "";
     }
     case "blockquote": {
       const value = tidyMarkdown(inner()).trim();

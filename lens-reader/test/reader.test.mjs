@@ -191,3 +191,18 @@ test("the control census reads an untouched parse, not the extractor's leftovers
   assert.ok(working.body.innerHTML.length < beforeBytes / 2,
     "Readability left the working document intact, so read()'s two parses are now pointless");
 });
+
+test("a link destination cannot be closed early by its own backslash", () => {
+  // CodeQL js/incomplete-sanitization on the image half: the anchor escaped
+  // backslash before `)` and the image escaped only `)`, so an input backslash
+  // paired with the escape and left the paren bare, closing the link early and
+  // spilling the rest of the URL into the prose. One escaper now serves both,
+  // and the assertion is that they agree for the same input.
+  const url = String.raw`https://x.test/a\)b`;
+  const escaped = String.raw`https://x.test/a\\\)b`;
+  const { document } = parseHTML(`<div><a href="${url}">label</a><img src="${url}" alt="shot"></div>`);
+  const md = toMarkdown(document.querySelector("div"));
+
+  assert.ok(md.includes(`[label](${escaped})`), `anchor destination not fully escaped: ${md}`);
+  assert.ok(md.includes(`![shot](${escaped})`), `image destination not fully escaped: ${md}`);
+});
