@@ -3874,6 +3874,45 @@ test("the CSP falls back to 'unsafe-inline' only where the build cannot speak", 
   assert.equal(scriptHashesFor(""), null);
 });
 
+test("the hashed policy REPLACES the asset layer's generic stamp, and never a bespoke one", async () => {
+  const { withSecurityHeaders, SECURITY_HEADERS } = await import("../www/_worker.js/lib/security.js");
+  const mod = await import("../www/_worker.js/lib/csp-hashes.js");
+  const LOOSE = SECURITY_HEADERS["content-security-policy"];
+
+  // Every staged document reaches withSecurityHeaders from the ASSETS binding with
+  // `_headers`' copy of this exact string already on it. A `.has()` bail reads that
+  // as a route having chosen a policy and skips the hashed one, which is how the
+  // enforcing half sat inert through the whole report-only era while the twin (a
+  // DIFFERENT header name) looked perfect. Absence of a regression here is silent:
+  // the loose policy still ships and every page still works.
+  const original = { ...mod.PAGE_SCRIPT_HASHES };
+  try {
+    mod.PAGE_SCRIPT_HASHES["/probe"] = ["AAAA"];
+
+    const stamped = new Response("<!doctype html>", {
+      headers: { "content-type": "text/html", "content-security-policy": LOOSE },
+    });
+    const out = await withSecurityHeaders(stamped, "/probe");
+    assert.match(out.headers.get("content-security-policy"), /'sha256-AAAA'/,
+      "the generic _headers stamp must not shadow the per-document hashes");
+    assert.ok(!/script-src 'self' 'unsafe-inline'/.test(out.headers.get("content-security-policy")),
+      "'unsafe-inline' must be gone from script-src once a document is hashed");
+
+    // The bail still has a job: lens.js composes its own policy for the framed
+    // view, and that one is an OPINION rather than a default.
+    const bespoke = "default-src 'none'; frame-src https://example.com";
+    const framed = new Response("<!doctype html>", {
+      headers: { "content-type": "text/html", "content-security-policy": bespoke },
+    });
+    const kept = await withSecurityHeaders(framed, "/probe");
+    assert.equal(kept.headers.get("content-security-policy"), bespoke,
+      "a route that set its own policy keeps it");
+  } finally {
+    for (const k of Object.keys(mod.PAGE_SCRIPT_HASHES)) delete mod.PAGE_SCRIPT_HASHES[k];
+    Object.assign(mod.PAGE_SCRIPT_HASHES, original);
+  }
+});
+
 test("the hashed policy is well-formed and keeps 'self' for the external scripts", async () => {
   const { cspHeadersFor, ENFORCE_PAGE_HASHES } = await import("../www/_worker.js/lib/security.js");
   const csp = cspHeadersFor("/anything-unmapped")["content-security-policy"];

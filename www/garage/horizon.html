@@ -4631,10 +4631,19 @@ navigation.addEventListener("navigate", (e) =&gt; {
         var sanGo = document.getElementById("san-go");
         if (sanGo) {
           var esc = function (s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); };
+          // Parse into an INERT document, which has no browsing context: images
+          // never fetch and event-handler attributes never fire. Both panes report
+          // the markup that survived, as text, so nothing about the comparison
+          // changes. What it removes is a real defect. run() fires on load, so
+          // setHTMLUnsafe() parsed the default payload into a live detached node,
+          // `src=x` 404'd, and onerror ran alert(1) on EVERY visit to this page.
+          // It also cost the hashed CSP a violation a hash cannot cover, since
+          // hashes never apply to event handlers.
+          var inert = document.implementation.createHTMLDocument("");
           var run = function () {
             var src = document.getElementById("san-in").value;
-            var a = document.createElement("div");
-            var b = document.createElement("div");
+            var a = inert.createElement("div");
+            var b = inert.createElement("div");
             try { a.setHTMLUnsafe(src); } catch (e) { a.innerHTML = src; }
             if (typeof b.setHTML === "function") {
               b.setHTML(src);

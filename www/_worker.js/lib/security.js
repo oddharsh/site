@@ -52,11 +52,28 @@ const CSP_SCRIPT_SRC_LOOSE = "'self' 'unsafe-inline'";
 // The rollout flag. FALSE ships the hashed policy as report-only alongside the
 // loose enforcing one, so a miss shows up in DevTools instead of blanking a page;
 // TRUE promotes it to the enforcing policy and drops the report-only twin.
-// Flip it only after a deploy has run report-only in production and come back
-// clean, the same way `SHELL_PRECOMPRESS_DEFAULT_ON` earned its default. The
-// failure mode this guards against is silent: a blocked inline script leaves the
-// page rendering and merely dead.
-export const ENFORCE_PAGE_HASHES = false;
+//
+// TRUE since 2026-08-16, and the report-only era ended by finally being READ.
+// Nothing ever collected the reports (no `report-to`, no endpoint), so "come back
+// clean" meant somebody opening DevTools on each page, which nobody had done.
+// Doing it found /garage/horizon failing twice, and both misses were in places a
+// hash cannot reach from where the build was looking:
+//
+//   1. the `#mb-frame` srcdoc's inline counter. A srcdoc document INHERITS this
+//      policy, and build step 7c only walked the parent document, so the script
+//      was uncovered. It is the proof that moveBefore() reparents without
+//      reloading, so enforcing would have frozen it at 0, silently. 7c hashes
+//      srcdoc now.
+//   2. an inline event handler, from the sanitizer demo parsing its hostile
+//      default payload into a LIVE detached node on load. That fired alert(1) on
+//      every visit to that page, which was a defect on its own. It parses into an
+//      inert document now, so no handler runs and the panes are unchanged.
+//
+// Verified against a locally built Worker before the flip: 48 documents swept
+// under enforcement, zero violations, and horizon's counter, sanitizer panes and
+// demos all still live. The failure mode this guarded against is silent, so the
+// evidence had to be a sweep rather than a page load.
+export const ENFORCE_PAGE_HASHES = true;
 
 // Everything after script-src, held once so the loose and hashed policies cannot
 // drift apart. img-src is 'self' data: per #186 — do NOT let a rebase quietly
@@ -188,8 +205,20 @@ export function withSecurityHeaders(response, pathname, opts) {
   // bytes there would be pure waste on a site that counts them. Anything already
   // carrying its own policy (lens.js sets one for the framed view) is left alone.
   if (ct.startsWith("text/html")) {
+    // A route that composed its OWN policy keeps it (lens.js does, for the framed
+    // view). The generic stamp is not that. Every staged document arrives from the
+    // ASSETS binding with `_headers`' copy of CSP_LOOSE already on it, so a bare
+    // `.has()` bail treats the asset layer's default as a deliberate choice and
+    // skips the hashed policy for exactly the 48 documents the hashes were built
+    // for. That is invisible: the loose policy still ships, the page still works,
+    // and nothing reports. It hid here through the whole report-only era because
+    // the twin lands on a DIFFERENT header name, so the reporting half looked
+    // perfect while the enforcing half was never applied at all. Compare against
+    // the known stamp instead, which distinguishes "no opinion" from "an opinion".
+    const stamped = headers.get("content-security-policy");
+    const bespoke = stamped !== null && stamped !== CSP_LOOSE;
     for (const [k, v] of Object.entries(cspHeadersFor(pathname))) {
-      if (k === "content-security-policy" && response.headers.has(k)) continue;
+      if (k === "content-security-policy" && bespoke) continue;
       headers.set(k, v);
     }
   }

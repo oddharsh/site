@@ -43,6 +43,7 @@
     "agent:check": "node scripts/check-agent.mjs",
     "bun:check": "node scripts/check-bun.mjs",
     "speculation:probe": "node scripts/speculation-probe.mjs",
+    "csp:sweep": "node scripts/csp-sweep.mjs",
     "checkpoints:check": "node scripts/check-checkpoints.mjs",
     "checkpoints:sync": "node scripts/check-checkpoints.mjs --sync",
     "inp": "node scripts/inp-lab.mjs",

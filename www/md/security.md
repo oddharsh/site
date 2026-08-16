@@ -37,13 +37,12 @@ from AadharshBot can verify it really came from here. See
   route handlers may still make the outbound calls documented on their own
   surfaces.
 - **script-src**: every page built here ships a sha256 of each of its own inline
-  scripts, so the policy can name them individually instead of trusting inline
-  code as a class. That policy is currently sent as
-  `Content-Security-Policy-Report-Only` while it proves itself against real
-  browsers; the enforced policy still carries `'unsafe-inline'`. The style
-  directive keeps `'unsafe-inline'` and will, because the CSS here is inline by
-  design, so this is protection against script injection and not against style
-  injection.
+  scripts, so the enforced policy names each inline script by hash instead of
+  trusting inline code as a class. `'unsafe-inline'` is gone from this directive
+  as of 2026-08-16; it rode along in a report-only twin for the two weeks it took
+  to prove itself against real browsers. The style directive keeps
+  `'unsafe-inline'` and will, because the CSS here is inline by design, so this is
+  protection against script injection and not against style injection.
 - **... and what it lets through**: hashing inline scripts says nothing about
   scripts loaded by `src` from this origin, which `'self'` permits. That is not
   hypothetical here: since 2026-08-06 the edge injects `/.webmcp/bridge.js` into
