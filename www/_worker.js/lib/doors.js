@@ -29,6 +29,7 @@ import { CANONICAL_HOST } from "./const.js";
 import { fetchFollowingPublicRedirects, readResponseCapped, validateLensTarget } from "./crawl.js";
 import { ERR_HEADER_MISMATCH, MCP_MODERN, META_PROTOCOL, META_CLIENT_CAPS } from "./mcp-protocol.js";
 import { lensProbe, originDiscovery } from "../lens.js";
+import { asRecord, asText } from "./parse.js";
 
 // Bounds. A door reader that follows whatever it finds is a crawler; these keep
 // it to one hop and a readable amount of text.
@@ -53,7 +54,7 @@ export const DOOR_LIMITS = {
  * Those are opposite claims and the second one is a lie.
  */
 function capSchema(schema) {
-  if (!schema || typeof schema !== "object") return { schema: null };
+  if (!asRecord(schema) && !Array.isArray(schema)) return { schema: null };
   let encoded;
   try { encoded = JSON.stringify(schema); } catch { return { schema: null, oversize: false }; }
   if (encoded.length > DOOR_LIMITS.schemaBytes) return { schema: null, oversize: true, bytes: encoded.length };
@@ -95,7 +96,7 @@ export function rpcErrorDetail(payload) {
   const message = String(
     (error && error.message)
     || (payload && payload.error_description)
-    || (typeof error === "string" ? error : "")
+    || asText(error, "")
     || "",
   ).trim();
   if (code !== null) return `${code}: ${message.slice(0, 80) || "no message"}`;
@@ -334,7 +335,7 @@ export async function foreignMcpTools(origin, env, opts = {}) {
         // Annotations are forwarded as the server WROTE them, including the
         // absence of any. The pane labels them as claims; normalising a missing
         // set into a default here would manufacture a claim nobody made.
-        if (tool?.annotations && typeof tool.annotations === "object") row.annotations = tool.annotations;
+        if (asRecord(tool?.annotations)) row.annotations = tool.annotations;
         return row;
       }),
     };

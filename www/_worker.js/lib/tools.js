@@ -28,6 +28,7 @@ import { mcpTool } from "./mcp-tools.js";
 // import appearing in either would take the whole suite down at link time
 // (gotcha 16).
 import { serendipityFindEvents } from "../../../serendipity/serendipity.js";
+import { asRecord } from "./parse.js";
 
 export function toolError(message) { return { _error: String(message).slice(0, 400) }; }
 
@@ -107,7 +108,7 @@ export const DATA_TOOLS = DATA_TOOL_DEFINITIONS.map((tool) => mcpTool(tool));
 export const DATA_TOOL_NAMES = new Set(DATA_TOOLS.map((t) => t.name));
 
 export async function callDataTool(name, args, request, env, ctx) {
-  args = args && typeof args === "object" ? args : {};
+  args = asRecord(args) || {};
   if (name === "search_site") return searchSite(env, args.q, args.limit);
   if (name === "photo_query") return queryPhotos(env, args, ctx);
   if (name === "coffee_availability") return readCoffeeAvailability(env, ctx);

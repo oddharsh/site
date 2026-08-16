@@ -36,6 +36,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createHash } from "node:crypto";
+import { asRecord } from "../_worker.js/lib/parse.js";
 
 const run = promisify(execFile);
 const args = process.argv.slice(2);
@@ -101,13 +102,13 @@ async function bluetooth() {
   // versions. Walk for `device_rssi` rather than pinning a path.
   const walk = (node, name = "") => {
     if (Array.isArray(node)) return node.forEach((item) => walk(item, name));
-    if (!node || typeof node !== "object") return;
+    if (!asRecord(node)) return;
     if (node.device_rssi !== undefined) {
       const rssi = Number(node.device_rssi);
       if (Number.isFinite(rssi) && rssi < 0) out.push({ name: label(name || "bluetooth device"), rssi, kind: "ble" });
     }
     for (const [key, value] of Object.entries(node)) {
-      if (value && typeof value === "object") walk(value, key.startsWith("device_") || key.startsWith("spbluetooth") ? name : key);
+      if (asRecord(value)) walk(value, key.startsWith("device_") || key.startsWith("spbluetooth") ? name : key);
     }
   };
   walk(data);

@@ -121,6 +121,8 @@
             else { setDlg(esc(v.error || "not quite — try the fresh set"), "no"); loadChallenge(); }
           }).catch(function () { setDlg("network hiccup — try again", "no"); });
       };
+  // Capability probe: <dialog> support, not a value off the wire.
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof
       if (typeof dlg.showModal === "function") dlg.showModal(); else dlg.setAttribute("open", "");
     }).catch(function () { setBar("couldn&rsquo;t load the challenge", "no"); });
   }

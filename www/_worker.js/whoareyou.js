@@ -5,6 +5,7 @@ import { BOT_UA } from "./lib/botauth.js";
 import { deadline } from "./lib/cache.js";
 import { lunaPage } from "./lib/chrome.js";
 import { esc, wantsMarkdown } from "./lib/http.js";
+import { asNumber, asText } from "./lib/parse.js";
 
 const RDAP_BUDGET_MS = 250;
 
@@ -53,7 +54,7 @@ export async function fetchRdap(ip) {
     const c = Array.isArray(data.cidr0_cidrs) ? data.cidr0_cidrs[0] : null;
     if (c) {
       const prefix = c.v4prefix || c.v6prefix;
-      if (prefix && typeof c.length === "number") cidr = `${prefix}/${c.length}`;
+      if (prefix && asNumber(c.length) !== null) cidr = `${prefix}/${c.length}`;
     }
     if (!cidr && data.startAddress && data.endAddress) {
       cidr = `${data.startAddress} – ${data.endAddress}`;
@@ -69,7 +70,7 @@ export async function fetchRdap(ip) {
     const vcard = registrant?.vcardArray;
     if (Array.isArray(vcard) && Array.isArray(vcard[1])) {
       const fn = vcard[1].find(v => Array.isArray(v) && v[0] === "fn");
-      if (fn && typeof fn[3] === "string") owner = fn[3];
+      if (fn && asText(fn[3]) !== null) owner = fn[3];
     }
 
     // events — registration date + last changed are most interesting.

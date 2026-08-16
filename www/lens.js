@@ -7,6 +7,15 @@
 // build. Deferred, short-cached with SWR.
 (function () {
   "use strict";
+
+  // The local parse layer. Client scripts here have no shared module graph, so
+  // they cannot import _worker.js/lib/parse.js; redeclaring a couple of
+  // coercions is the same trade these files already make for esc().
+  /* oxlint-disable anti-slop/no-runtime-typeof -- a hand-rolled parser is made
+     of typeof; keeping the checks here rather than at each use is the point. */
+  function asRecord(v) { return v !== null && typeof v === "object" && !Array.isArray(v) ? v : null; }
+  function asText(v) { return typeof v === "string" && v !== "" ? v : null; }
+  /* oxlint-enable anti-slop/no-runtime-typeof */
   var form = document.getElementById("lx-form");
   if (!form) return; // not the /lens page
 
@@ -191,7 +200,7 @@
     if (x > 0) return "<$0.0005";
     return "$0";
   }
-  function has(o) { return o && typeof o === "object" && Object.keys(o).length > 0; }
+  function has(o) { return asRecord(o) !== null && Object.keys(o).length > 0; }
 
   // The one-sentence thesis, stated in dollars, shown above every scanned lens so
   // the cost gap is visceral without hunting for the AI-view tab. Built entirely
@@ -692,7 +701,7 @@
     if (browserBusy || !data) return;
     // A chip handler is an event listener, so it would otherwise pass a
     // MouseEvent in here and encode "[object PointerEvent]" into the query.
-    if (typeof recipeId !== "string") recipeId = "";
+    if (asText(recipeId) === null) recipeId = "";
     browserBusy = true;
     function runLoaded() {
       if (!window.LensBrowser) { browserBusy = false; renderBrowser(); return; }
@@ -1182,7 +1191,7 @@
     acp: "Publish /.well-known/acp.json so agents can discover commerce services and transports.", ap2: "Publish the AP2 discovery metadata when your commerce flow supports it.",
   };
   function readinessCopy(itemOrKey) {
-    var key = typeof itemOrKey === "string" ? itemOrKey : itemOrKey && itemOrKey.key;
+    var key = asText(itemOrKey) !== null ? itemOrKey : itemOrKey && itemOrKey.key;
     var label = (itemOrKey && itemOrKey.label) || key || "check";   // the worker ships label on both items and nextActions entries
     return { label: label, fix: READINESS_FIX[key] || "Inspect this surface and publish the expected machine-readable contract." };
   }
@@ -1387,6 +1396,8 @@
     LENS_FN.discovery = lensDiscovery;
     LENS_FN.tools = lensTools;
     var candidate = Object.prototype.hasOwnProperty.call(LENS_FN, lens) ? LENS_FN[lens] : null;
+  // Capability probe on a caller-supplied callback, not a parsed value.
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof
     var fn = typeof candidate === "function" ? candidate : lensAnatomy;
     var body = view === "machine" ? lensFocus() + fn()
       : view === "delta" ? deltaView() : fn();

@@ -14,6 +14,7 @@ import { AGENT_SURFACES } from "./lib/site-manifest.js";
 import { CACHE_EMPTY, CACHE_LIVE, CACHE_STATIC, mcpCorsHeaders, mcpGate, mcpHttpStatus, mcpServer } from "./lib/mcp-protocol.js";
 import { mcpTool } from "./lib/mcp-tools.js";
 import { previewToolRefusal } from "./lib/preview.js";
+import { asRecord, asText } from "./lib/parse.js";
 
 // DUAL-ERA. The wire rules (versions, `_meta` keys, resultType, cache hints,
 // error codes, the header check) live in lib/mcp-protocol.js because
@@ -285,7 +286,7 @@ async function overMcpBudget(name, max, request, env, ctx) {
 // whichever door you knock on.
 
 async function callTool(name, args, request, env, ctx) {
-  args = args && typeof args === "object" ? args : {};
+  args = asRecord(args) || {};
   // The seven data tools live in lib/tools.js, because /ask calls the
   // same seven through the same function. Dispatching them here would mean two
   // switch statements that have to agree.
@@ -344,8 +345,8 @@ export async function handleSiteMcp(request, env, ctx) {
   try { payload = await request.json(); } catch { return respond({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "Parse error" } }); }
   const rpcError = (id, code, message) => ({ jsonrpc: "2.0", id: id === undefined ? null : id, error: { code, message } });
   const handleOne = async (msg) => {
-    const hasId = !!msg && typeof msg === "object" && "id" in msg;
-    if (!msg || msg.jsonrpc !== "2.0" || typeof msg.method !== "string") return hasId ? rpcError(msg.id, -32600, "Invalid Request") : null;
+    const hasId = asRecord(msg) !== null && "id" in msg;
+    if (!msg || msg.jsonrpc !== "2.0" || asText(msg.method) === null) return hasId ? rpcError(msg.id, -32600, "Invalid Request") : null;
     const id = msg.id;
     try {
       // Version first, then the routing headers. Both rules are shared with

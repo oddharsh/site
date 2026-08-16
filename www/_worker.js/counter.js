@@ -1,4 +1,5 @@
 import { claimReservation, dropReservation } from "../../cal/src/reservation.js";
+import { asNumber } from "./lib/parse.js";
 
 // counter.js — the homepage visit counter: an in-house Durable Object, read by
 // the document and advanced out-of-band by /hit.
@@ -132,7 +133,7 @@ export async function handleHit(request, env, ctx) {
   // the count into the render's existing parallel fan-out at 5-8ms. The number
   // can lag by up to MIRROR_TTL, which is invisible on an odometer and cheaper
   // than stalling every visitor's shell.
-  const mirror = (n) => (env.RN_KV && typeof n === "number" ? mirrorCount(env, n) : null);
+  const mirror = (n) => (env.RN_KV && asNumber(n) !== null ? mirrorCount(env, n) : null);
 
   // The activation beacon wants the tick and discards the number, so there is
   // nothing here for the client to wait on. Hand back the 204 immediately and
@@ -173,7 +174,7 @@ export async function handleHit(request, env, ctx) {
   const pending = mirror(n);
   if (pending && ctx) ctx.waitUntil(pending);
 
-  const digits = typeof n === "number" ? String(n).padStart(6, "0") : "------";
+  const digits = asNumber(n) === null ? "------" : String(n).padStart(6, "0");
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="52" height="12" viewBox="0 0 52 12" role="img" aria-label="visitor ${digits}"><text x="0" y="10" font-family="'Courier New',Courier,monospace" font-size="12" font-weight="bold" letter-spacing="1.2" fill="oklch(86.52% 0.1768 90.38)">${digits}</text></svg>`;
   return new Response(svg, {
     headers: {

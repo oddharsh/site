@@ -83,7 +83,12 @@ async function fetchBusySWRInner(env, ctx, allowStale, s) {
   // continues after the response. Booking and /slots callers leave this false:
   // they must still wait for a live calendar or fail closed.
   if (snap && allowStale) {
-    if (ctx && typeof ctx.waitUntil === "function") {
+    // cal MUST NOT import www/_worker.js/lib/parse.js: cal's Vitest pool boots from
+  // cal/src/index.js alone, so that edge would make cal untestable without the
+  // site tree (gotcha 16, the same constraint that keeps cal/src/trace.js a
+  // deliberate duplicate). One binding check does not earn a second parse layer.
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof
+  if (ctx && typeof ctx.waitUntil === "function") {
       ctx.waitUntil(span("cal.refresh_background", () => refreshBusy(env)).catch(() => {}));
     }
     return done({ busy: snap.busy || [], ageMs: age, ok: true, source: "stale" });

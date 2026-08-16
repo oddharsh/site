@@ -82,6 +82,9 @@
       // browser ships it; fall back to Date everywhere else.
       var Y, Mo, Da, H, Mi;
       try {
+  // Bare global: an undeclared `Temporal` cannot be handed to a parser without
+  // throwing ReferenceError, so typeof is the only operator that can ask.
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof
         if (typeof Temporal !== "undefined" && Temporal.Now && Temporal.Now.plainDateTimeISO) {
           var z = Temporal.Now.plainDateTimeISO();
           Y = z.year; Mo = z.month; Da = z.day; H = z.hour; Mi = z.minute;

@@ -131,6 +131,20 @@
     // live vocabulary rather than replaced dead vocabulary.
     "anti-slop/no-shape-in-symbol-names": "error",
 
+    // Wants input parsed where it ENTERS, then branched on a trusted value,
+    // rather than `typeof`-checked at each use. The argument is right and this
+    // Worker had the failure it describes: the same "is this really a string?"
+    // was asked in a dozen places and answered slightly differently in each.
+    //
+    // A schema library is the usual answer and was NOT taken. This repo
+    // declares zero runtime dependencies and the bundle sits on a 204.24 KiB
+    // baseline, so the parse layer is hand-rolled: `lib/parse.js` for the
+    // Worker, a few local coercions per client IIFE (they cannot import).
+    //
+    // The two exemptions below are the classes the rule is categorically wrong
+    // about, and both are language facts rather than preferences.
+    "anti-slop/no-runtime-typeof": "error",
+
     "vitest/no-restricted-vi-methods": [
       "error",
       {
@@ -188,6 +202,33 @@
   // What stays on is the family that catches the failure this runtime actually
   // has: a promise nobody awaited, which workerd cancels at request teardown.
   "overrides": [
+    {
+      // The parse layer itself. A hand-rolled parser is MADE of `typeof`, so
+      // the only thing this rule can buy is that the checks live in one named
+      // place instead of at every call site. Turning it off here is what makes
+      // turning it on everywhere else mean something; the file's own header
+      // says the same thing from the other side.
+      "files": ["www/_worker.js/lib/parse.js"],
+      "rules": { "anti-slop/no-runtime-typeof": "off" }
+    },
+    {
+      // The AUTHORING contract, which is the same argument one layer out: these
+      // two files are the boundary parser for page content, and `requireText`
+      // is literally "parse it where it enters, then branch on a value you can
+      // trust". A validator is made of `typeof`; the rule cannot be satisfied
+      // inside the thing it is asking you to build.
+      "files": ["pipelines/content/page-contract.mjs", "pipelines/garage/generate.mjs"],
+      "rules": { "anti-slop/no-runtime-typeof": "off" }
+    },
+    {
+      // A test that asserts `typeof x === "boolean"` is CHECKING the contract,
+      // which is the rule's goal rather than a violation of it. Rewriting these
+      // through the parse layer would assert that the parse layer works, not
+      // that the surface under test returns the right type. Same scoping as the
+      // no-floating-promises entry below, and for a related reason.
+      "files": ["scripts/contract-tests.mjs", "**/test/**", "**/*.test.*"],
+      "rules": { "anti-slop/no-runtime-typeof": "off" }
+    },
     {
       // `slide.shapes.add()` is the pptx library's API, not ours, so there is
       // nothing here to rename. The deck builder ships nothing and runs by hand.
