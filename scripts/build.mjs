@@ -571,6 +571,7 @@ const SHELLS = [
   ["nav-run.js", "/nav-run.src.js", "axp-run"],
   ["nav-tray.js", "/nav-tray.src.js", "axp-balloon"],
   ["notepad.js", "/notepad.src.js", "np-window"],
+  ["lens-boot.js", "/lens-boot.src.js", "requestSubmit"],
   ["lens.js",    "/lens.src.js",    "replaceState"],   // verify-routes.mjs marker
   ["lens-browser.js", "/lens-browser.src.js", "LensBrowser"],
   ["lens-reader.js", "/lens-reader.src.js", "LensReader"],
@@ -1327,7 +1328,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   console.log(`static renders: /lens + blank /run + blank /search + /writing index + ${posts.length} notes staged from canonical Worker renderers`);
 }
 
-// 6) content-hash the critical-path shell assets (nav.js + luna.css + lens.js) into
+// 6) content-hash the critical-path shell assets (nav.js + luna.css + lens-boot.js) into
 // immutable /a/<name>.<hash8>.<ext> URLs, then repoint every <script src>/<link
 // href> that loads them. /a/<name>.<hash8> names exact bytes (same content-
 // addressed contract as /i/ thumbnails, and edge-direct for the same reason: not
@@ -1348,12 +1349,10 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   const ASSETS = [
     { attr: "src",  from: "/nav.js",   base: "nav",  ext: "js",  witness: "index.html" },
     { attr: "href", from: "/luna.css", base: "luna", ext: "css", witness: "index.html" },
-    // lens.js is emitted by ONE tag (lens.js `scripts:`), which used to carry a
-    // hand-bumped ?v=N. The /lens shell is no-store but the script was cached, so
-    // a forgotten bump paired a fresh shell with an old script — the comment at
-    // the tag said so out loud. A content hash retires the ritual. Not in
-    // run_worker_first, so /a/ is edge-direct and inherits the immutable rule.
-    { attr: "src",  from: "/lens.js",  base: "lens", ext: "js",  witness: "_worker.js/lens.js" },
+    // The server-rendered idle Lens shell emits only the interaction bootstrap.
+    // Phase 0 hashes the full client and rewrites its URL into this file first;
+    // hashing the bootstrap here makes the complete two-step chain immutable.
+    { attr: "src",  from: "/lens-boot.js",  base: "lens-boot", ext: "js",  witness: "_worker.js/lens.js" },
     // the desktop icon sprite. Unlike the three above, every ref carries a
     // #fragment (src="/icons.svg#pin-garage"), so `frag` widens the match to
     // keep it. Its witness is the desktop partial, which is where all 12 live.
@@ -1379,9 +1378,10 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   // ── phase 0: the three JS-STRING-loaded islands (tooltip, hoist, lens-browser) ──
   // These load via `import("/hoist.js")` / `script.src = "/lens-browser.js?v=1"`, which
   // the attribute-scoped repointer below cannot touch. They are hashed FIRST, and their
-  // loader strings rewritten across the staged tree BEFORE nav.js / lens.js are hashed,
-  // so a dependent's hash covers its final bytes (nav.js imports hoist; lens.js loads
-  // lens-browser). The patterns are exact call-syntax matches — `import((["'`])/x.js\1)`
+  // loader strings rewritten across the staged tree BEFORE nav.js / lens-boot.js are
+  // hashed, so a dependent's hash covers its final bytes (nav.js imports hoist;
+  // lens.js loads its four feature modules; lens-boot.js imports lens.js). The
+  // patterns are exact call-syntax matches — `import((["'`])/x.js\1)`
   // — so the garage pages' documentary "/hoist.js" prose mentions cannot be caught, which
   // is the precision the attribute rule existed to protect. The ?v=1 ritual on
   // lens-browser retires here: the hash IS the version.
@@ -1434,6 +1434,11 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
       [/(["'`])\/lens-wire\.js\?v=1\1/g, `$1${to}$1`] ] },
     { file: "/lens-tools.js",   base: "lens-tools",   mk: (to) => [
       [/(["'`])\/lens-tools\.js\?v=1\1/g, `$1${to}$1`] ] },
+    // The full Lens application depends on all four feature modules above. It
+    // must be hashed after they rewrite it, and before lens-boot.js is hashed by
+    // ASSETS below, so every URL names the final bytes of its complete subtree.
+    { file: "/lens.js",         base: "lens",         mk: (to) => [
+      [/import\((["'`])\/lens\.js\?v=1\1\)/g, `import($1${to}$1)`] ] },
     { file: "/tooltip.js",      base: "tooltip",      mk: (to) => [
       [/import\((["'`])\/tooltip\.js\1\)/g, `import($1${to}$1)`] ] },
     // nav.js's shell infotips. Same shape as tooltip, and it depends on hoist
@@ -1485,6 +1490,8 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     if (!lens.includes(hashedFor["lens-reader"])) throw new Error("lens.js was not repointed to hashed lens-reader.js");
     if (!lens.includes(hashedFor["lens-wire"])) throw new Error("lens.js was not repointed to hashed lens-wire.js");
     if (!lens.includes(hashedFor["lens-tools"])) throw new Error("lens.js was not repointed to hashed lens-tools.js");
+    const lensBoot = await readFile(`${OUT}/www/lens-boot.js`, "utf8");
+    if (!lensBoot.includes(hashedFor.lens)) throw new Error("lens-boot.js was not repointed to hashed lens.js");
     // the SERVED tooltip bytes, not the staged source: this is the copy the browser gets,
     // and the one the old ordering left pointing at the unhashed duplicate.
     if (!tip.includes(hashedFor.hoist)) throw new Error(`${hashedFor.tooltip} still imports an unhashed /hoist.js — STRING_ASSETS ordering broke (hoist must be hashed before tooltip)`);
@@ -1653,7 +1660,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   // tripwires: the rewrite must fire, and each asset's own entry point must load
   // the hashed URL (a moved ref or renamed asset would silently drop the immutable
   // win). Each asset names its WITNESS: the served file that must carry the hashed
-  // ref. index.html for the two shell assets it loads; the lens shell for lens.js,
+  // ref. index.html for the two shell assets it loads; the lens shell for lens-boot.js,
   // which the homepage never loads.
   if (!refCount) throw new Error("hashed-asset rewrite matched zero references — did the src=/href= ref shape change?");
   for (const a of ASSETS) {

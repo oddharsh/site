@@ -51,7 +51,8 @@ const ASSET_ENVELOPES = {
   "nav-run.js":     { role: "first-open Run island",       gzipKiB: 12, brotliKiB: 10 },
   "nav-tray.js":    { role: "first-click tray island",     gzipKiB: 5,  brotliKiB: 4 },
   "notepad.js":     { role: "writing-only island",         gzipKiB: 4,  brotliKiB: 3.5 },
-  "lens.js":        { role: "lens-only island",             gzipKiB: 24, brotliKiB: 21 },
+  "lens-boot.js":   { role: "idle Lens bootstrap",         gzipKiB: 1,  brotliKiB: 1 },
+  "lens.js":        { role: "post-intent Lens application", gzipKiB: 24, brotliKiB: 21 },
   // Raised from 4/3.5 on 2026-08-08 for the interaction recipes: the chip row,
   // the before/after screenshot pair, and the six honest-null strings that say
   // WHY a recipe found nothing (a CSP refusing inline script, a forged receipt,
@@ -160,7 +161,7 @@ const WORKER_ALERT_GROWTH = 0.25;
 // profile at that resolution has no business failing a PR.
 const WORKER_STARTUP_ALERT_MS = 50;
 const TWINS = [
-  "nav.src.js", "nav-run.src.js", "nav-tray.src.js", "notepad.src.js", "lens.src.js", "lens-browser.src.js", "lens-tools.src.js",
+  "nav.src.js", "nav-run.src.js", "nav-tray.src.js", "notepad.src.js", "lens-boot.src.js", "lens.src.js", "lens-browser.src.js", "lens-tools.src.js",
   "quiz.src.js", "tooltip.src.js", "infotip.src.js", "hoist.src.js", "luna.src.css",
   "lwe-base.src.css",
 ];
