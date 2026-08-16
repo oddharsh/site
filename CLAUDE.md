@@ -1679,25 +1679,50 @@ a visitor-supplied URL at the public internet is the same surface `/lens/fetch` 
 two copies of an allowlist pass review on the day they are written. A contract test
 asserts both files import it and neither redefines it.
 
-**Turndown ships two builds and wrangler picks the one that cannot work.** The node
-build falls back to `@mixmark-io/domino` and takes an HTML string happily; the browser
-build reaches for `document.implementation.createHTMLDocument`. Wrangler resolves the
-BROWSER condition, so `turndown(htmlString)` throws `document is not defined` in a
-Worker while passing under `node --test`. Measured both ways 2026-08-10. The fix is to
-pass a NODE (turndown's `RootNode` does `input.cloneNode(true)` for a non-string), which
-skips its parser entirely — no global shim, and three successive shims are what it costs
-to learn that the shim route is a dead end.
+**HISTORY, and the lesson is the part that outlives it: a package can ship two
+builds and wrangler picks the one that cannot work.** Turndown was the converter
+here until 2026-08-16, when a first-party serializer replaced it (below). Its node
+build falls back to `@mixmark-io/domino` and takes an HTML string happily; its
+browser build reaches for `document.implementation.createHTMLDocument`. Wrangler
+resolves the BROWSER condition, so `turndown(htmlString)` threw `document is not
+defined` in a Worker while passing under `node --test`. Measured both ways
+2026-08-10. The fix was to pass a NODE, which skipped its parser entirely: no
+global shim, and three successive shims are what it costs to learn that the shim
+route is a dead end.
 
-The contract test for it is STRUCTURAL and says so at the assertion, because the
+Keep the paragraph. The dependency is gone and the trap is a property of
+wrangler's condition resolution, so the next package with an `exports` map that
+branches on `browser` inherits it whole, and the failure is invisible to a node
+suite by construction. Turndown is no longer in this repository: `pnpm test`
+asserts the manifest cannot carry it and that `reader.js` names neither it nor
+`TurndownService`.
+
+The contract test for it was STRUCTURAL and said so at the assertion, because the
 behavioural version is impossible: `node --test` resolves the node build, so it
-exercises the one path that cannot fail. The first version of that test reintroduced the
-bug deliberately and still went green — the same "a check that can only agree with
-itself is decoration" lesson as gotcha 24.
+exercises the one path that cannot fail. The first version of that test
+reintroduced the bug deliberately and still went green, the same "a check that can
+only agree with itself is decoration" lesson as gotcha 24. That reasoning still
+governs anything asserted about a Worker-only resolution from the root suite.
+
+**The node crosses directly from Readability into the Markdown walk.** Readability's
+supported `serializer` hook receives the finished article node, so the Reader keeps
+that node while returning the same `innerHTML` its default serializer returns. The
+first path serialized the node, parsed that HTML into a third linkedom document, and
+then handed the reconstruction to the converter. Across all 36 extractable HTML documents in `www/`
+(570,632 extracted bytes per round, 8 rounds / 288 conversions), the string path took
+565.3 ms and the original-node path took 325.6 ms: 42.4% less Markdown CPU. Both
+numbers are Turndown's, since that measurement is what retired the second parse; the
+serializer that replaced it walks the same node and took the remaining traversal out
+with it. Thirty-five
+outputs were byte-identical. The 126,500-character Horizon output gained two inert
+protective escapes (`\.` and `\-`) because the original node preserves two text-node
+boundaries serialization collapses; rendered Markdown is identical. `toMarkdown(string)`
+remains as the isolated-caller fallback; `read()` uses the node.
 
 **The root suite may not import ANYTHING from `lens-reader/src/`, and this is gotcha 16
 wearing different clothes.** `contract-tests.mjs` runs under plain node with the ROOT
-workspace's dependencies; `reader.js` imports readability, linkedom and turndown, which
-live only in that sub-project. Importing it fails with `ERR_MODULE_NOT_FOUND` in CI
+workspace's dependencies; `reader.js` imports readability and linkedom, which live
+only in that sub-project. Importing it fails with `ERR_MODULE_NOT_FOUND` in CI
 while passing on any workstation that has run `pnpm install` in `lens-reader/` — which
 is exactly how it was caught, on PR #299's first run, after a local suite that had been
 green all afternoon. The split is by CAPABILITY: everything provable from source text

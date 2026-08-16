@@ -116,7 +116,6 @@ export const SUB_MANIFEST_POLICY = [
     aliases: [
       { prose: "@mozilla/readability", pkg: "@mozilla/readability" },
       { prose: "linkedom", pkg: "linkedom" },
-      { prose: "turndown", pkg: "turndown" },
     ],
     versionless: new Map(),
   },

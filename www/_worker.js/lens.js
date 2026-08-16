@@ -3076,8 +3076,11 @@ export function lensText(html) {
 // re-forms and is NOT self-limiting), or the output ever reaching a parser instead of
 // pre() -> esc(). Add the loop then, and delete this paragraph.
 
-// best-effort, dependency-free HTML→Markdown — roughly what a basic LLM
-// scraper ingests. High-fidelity Readability/Turndown is a deliberate v2.
+// best-effort, dependency-free HTML→Markdown, roughly what a basic LLM scraper
+// ingests. The high-fidelity read is a deliberate SEPARATE surface rather than a
+// v2 of this one: /lens/read runs Readability in the lens-reader Worker, because
+// a real extractor needs a DOM and linkedom alone is 94.6 KB gzip. This stays
+// crude on purpose, since the AI view is showing what a crude scraper sees.
 export function lensMarkdown(html, baseUrl) {
   let s = html;
   const b = s.match(/<body[^>]*>([\s\S]*)<\/body>/i); if (b) s = b[1];
