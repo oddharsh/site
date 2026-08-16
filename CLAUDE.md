@@ -2522,14 +2522,60 @@ pnpm run deploy:direct
     `value="&lt;img src=x onerror=alert(1)&gt;"` as demo TEXT, and a naive
     `/ on\w+=/` over the raw tag calls that an event handler.
 
-    **The rollout is not finished.** `ENFORCE_PAGE_HASHES` in `lib/security.js` is
-    FALSE, so the hashed policy ships as `Content-Security-Policy-Report-Only`
-    beside the loose enforcing one. Flip it only after a production deploy has run
-    report-only and come back clean, the way `SHELL_PRECOMPRESS_DEFAULT_ON` earned
-    its default. You cannot hedge inside one header: a browser that understands
-    hashes IGNORES `'unsafe-inline'` in the same directive, so the two policies have
-    to be two headers. The failure mode is silent, a blocked inline script leaves
-    the page rendering and merely dead.
+    **The rollout FINISHED on 2026-08-16, and the report-only era is worth reading
+    as a lesson about evidence rather than as history.** `ENFORCE_PAGE_HASHES` is
+    TRUE, the twin is gone, and `script-src` carries no `'unsafe-inline'` on the 48
+    hashed documents. You still cannot hedge inside one header: a browser that
+    understands hashes IGNORES `'unsafe-inline'` in the same directive, which is why
+    the two policies had to be two headers while both shipped.
+
+    **The flip was blocked by three things, and NONE of them were visible from the
+    report-only twin working correctly.** It came up because a browser console
+    warned that the report-only policy names no `report-to` and "will have no
+    effect", which is overstated: replaying production's exact header locally on
+    Chrome 148 still logged the violation, so what is missing is the network
+    reports, not the DevTools evidence. Nothing ever collected reports, so "come
+    back clean" meant somebody opening DevTools per page, which nobody had done.
+
+    1. **`/garage/horizon`'s srcdoc iframe.** A `srcdoc` document INHERITS the
+       embedding page's CSP, and build step 7c only walked the parent document, so
+       the `#mb-frame` uptime counter was never hashed. It is the proof that
+       `moveBefore()` reparents without reloading, so enforcing would have frozen
+       it at 0 with nothing logged. 7c hashes srcdoc now, decoding character
+       references once because that is what the browser does on the way to the
+       srcdoc's source text.
+    2. **An inline event handler on the same page**, from the sanitizer demo
+       parsing its hostile default payload into a LIVE detached node on load. That
+       fired `alert(1)` on EVERY visit, a defect on its own, and hashes never cover
+       event handlers. It parses into an inert document now, so nothing executes
+       and both panes are unchanged.
+    3. **The enforcing policy was never actually applied to a static document, and
+       this is the sharp one.** `withSecurityHeaders` bailed on
+       `response.headers.has("content-security-policy")`, meaning "a route composed
+       its own policy, leave it alone". But every staged document arrives from the
+       ASSETS binding with `_headers`' copy of `CSP_LOOSE` already stamped on, so
+       the bail fired for exactly the 48 documents the hashes exist for. It hid for
+       the whole report-only era **because the twin lands on a DIFFERENT header
+       name**: the reporting half looked perfect while the enforcing half was
+       inert. Flipping the flag alone would have been a silent no-op, dropping the
+       twin and the console warning and delivering no protection. The bail now
+       compares against `CSP_LOOSE`, which separates "no opinion" from an opinion
+       (lens.js's framed view keeps its own), and a contract test pins both arms.
+
+    **`pnpm run csp:sweep` is the evidence, and it needs its control read first.**
+    It drives a real Chrome over every hashed document against a locally built
+    Worker and reports blocked scripts. Two ways it reports a clean sweep while
+    measuring nothing, both hit while writing it: a stale `caches.default` in
+    `.wrangler/state` serves entries carrying the CSP they were stored with (a
+    `CF-Cache-Status: HIT` on a cache-busted URL is the tell), and editing a staged
+    `.html` changes nothing because step 8's `.br` twin is what ships. Both produced
+    a confident 48/48 green against pages that could not fail. The control is to
+    perturb one inline script in a staged document AND its `.br`, leaving the hash
+    map alone, and confirm the sweep goes red.
+
+    The failure mode all of this guards against is silent, in both directions: a
+    blocked inline script leaves the page rendering and merely dead, and an
+    unapplied policy leaves the page working and merely unprotected.
 
 18. **`scrollbar-color` INHERITS, and it silently disables every
     `::-webkit-scrollbar` rule underneath it.** Chromium treats the standard

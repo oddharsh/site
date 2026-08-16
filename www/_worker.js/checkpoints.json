@@ -866,5 +866,12 @@
     "version": "aadhar-v188-lens-grading",
     "vnum": 188,
     "ymd": "2026-08-15"
+  },
+  {
+    "slug": "csp-hashes",
+    "title": "Content-Security-Policy now names every inline script by hash",
+    "version": "aadhar-v189-csp-hashes",
+    "vnum": 189,
+    "ymd": "2026-08-16"
   }
 ]
