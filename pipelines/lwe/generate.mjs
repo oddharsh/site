@@ -96,6 +96,7 @@ function pageHtml(spec) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preload" as="style" href="/luna.css">
 <title>aadhar.sh${c.path}</title>
 <meta name="description" content="${spec.description || ""}">
 <link rel="canonical" href="https://aadhar.sh${c.path}">
@@ -113,6 +114,7 @@ function pageHtml(spec) {
 <link rel="stylesheet" href="/lwe-base.css">
 <style>${chromeCss(c)}
 ${spec.demoCss || ""}</style>
+<link rel="stylesheet" href="/luna.css">
 </head>
 <body>
 <!-- axp:desktop -->${DESKTOP_TOP}<!-- /axp:desktop -->
