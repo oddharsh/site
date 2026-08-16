@@ -173,9 +173,10 @@ the reason, rather than written here with the caret quietly dropped.
   and calendar policy tests inside workerd, so a pool-workers bump should be
   read against the miniflare version it carries.
 
-- **`cf-garage/`** carries `@cloudflare/puppeteer`, caret-ranged, for the garage
-  demo Worker. It is a separately deployed auxiliary Worker, so nothing here
-  reaches production through the site Worker.
+- **`cf-garage/`** declares no package dependencies. Its one browser operation
+  calls the native Browser Run `quickAction("screenshot", ...)` binding directly;
+  pulling a general-purpose CDP client into this separately deployed demo Worker
+  made a 146.26 KiB gzip bundle where the native action produces 2.77 KiB gzip.
 
 
 ## Evaluated and declined: dmmulroy/anti-slop

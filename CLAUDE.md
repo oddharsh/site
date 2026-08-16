@@ -1596,9 +1596,22 @@ generic hex back.
   The engine was `chromium-binding`, since a local dev session holds no
   `BROWSER_RUN_TOKEN`.
 
-  **`waitForTimeout` is the one thing still unmeasured, and it gates only an
-  ASYNC recipe.** Nothing shipping sends it. Probe cases 3 and 4 are that
-  question and they need the REST token, so they stay a workstation run.
+  **`waitForTimeout` is ACCEPTED by the binding, measured 2026-08-16, and what
+  is still unmeasured is narrower than this paragraph used to claim.** It said
+  the key was unmeasured and that answering it needed the REST token. The
+  ACCEPTANCE half needs neither a token nor a render: the payload schema is
+  closed, so a bogus key alongside a deliberately invalid `url` answers it for
+  free. The control returned BOTH `unrecognized_keys:
+  ["definitely_not_a_key_xyz"]` and the url error, while `waitForTimeout`,
+  `actionTimeout` and `cacheTTL` each returned the url error ALONE, individually
+  and together. cf-garage's screenshot sends all three.
+
+  What is still open is the BEHAVIOUR, which is what actually gates an async
+  recipe: whether the capture waits out the timeout rather than merely tolerating
+  the key. Probe cases 3 and 4 are that question and stay a workstation run.
+  Take the general shape past this key, since it is cheap and nobody had run it:
+  **on a closed schema, "is this key accepted" and "does this key work" are two
+  questions, and the first one is free.**
 
   The snapshot now reports `engine` and a server-computed `shape` (words,
   headings, links, images, JSON-LD). `shape` is counted from the FULL rendered
