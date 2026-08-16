@@ -1,0 +1,48 @@
+{
+  "$comment": [
+    "The identity of the bun this repo builds with, declared once because the",
+    "version STRING cannot carry it.",
+    "",
+    "THE PROBLEM, measured 2026-08-16. bun 1.4 is not released. It is not on npm",
+    "in any form: the registry's newest bun is 1.3.14 (2026-05-13) and its",
+    "`canary` dist-tag points at a 1.3.13 canary. The 1.4 line exists only as a",
+    "GitHub release asset under the tag `canary`, and THAT TAG ROLLS — the",
+    "darwin-aarch64 asset reported updated_at 2026-08-16T11:26:46Z while the",
+    "release itself is titled after a different commit than the binary reports.",
+    "There is no immutable per-canary tag (bun-v1.4.0-canary.1 answers 404).",
+    "",
+    "So `1.4.0-canary.1` names a MOVING TARGET. package.json's packageManager",
+    "field holds that string and looks like a pin; it is a label that will stay",
+    "constant while the binary under it changes daily. Pinning by version here",
+    "would be the same class of mistake as trusting a flag --help omits.",
+    "",
+    "WHAT IS PINNED INSTEAD is the binary's SHA-256, plus the capability the",
+    "repo actually depends on. check-bun-canary.mjs asserts both. When bun rolls",
+    "the canary the sha stops matching and CI goes red by name, which is the",
+    "point: a bump becomes a deliberate, visible commit rather than a silent",
+    "change of compiler underneath a content-addressed artifact graph.",
+    "",
+    "THE CAPABILITY is not a preference. bun 1.3.14 accepts zstdCompressSync's",
+    "`dictionary` option and silently ignores it (measured: none=65 good=65",
+    "wrong=65, against node's 65/18/64), which ships no-op dcz deltas — gotcha",
+    "28. build.mjs feature-detects it and throws, but 40 seconds into a build.",
+    "The probe below is the same control run first and named.",
+    "",
+    "Re-verify with: bun run bun:canary:check"
+  ],
+  "version": "1.4.0-canary.1",
+  "revision": "1.4.0-canary.1+8326d1bd3",
+  "platforms": {
+    "darwin-aarch64": {
+      "url": "https://github.com/oven-sh/bun/releases/download/canary/bun-darwin-aarch64.zip",
+      "binary_sha256": "144b9f41062faf28b64a7ecb8e863dfd0607f95913a1fcc89cf88b6e4af142da"
+    }
+  },
+  "verified": {
+    "on": "2026-08-16",
+    "build_bytes_identical_to_node": true,
+    "build_files": 1484,
+    "contract_tests": "291 across 1 file",
+    "zstd_dictionary": "none=65 good=18 wrong=64 (honours it, same as node v26.7.0)"
+  }
+}

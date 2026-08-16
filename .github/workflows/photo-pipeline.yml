@@ -50,18 +50,15 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Install pnpm
-        # No action, no digest to maintain: package.json's packageManager
-        # field is the source of truth and this pins the same version.
-        # Must precede setup-node, whose `cache: pnpm` needs pnpm on PATH.
-        run: npm install -g pnpm@11.21.0
+      - name: Set up bun
+        # config/bun-canary.json is the source of truth: the canary tag ROLLS,
+        # so the pin is the binary SHA-256 rather than the version string.
+        uses: ./.github/actions/setup-bun
 
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .node-version
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
 
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -87,7 +84,7 @@ jobs:
           echo "$RUNNER_TEMP/photo-venv/bin" >> "$GITHUB_PATH"
 
       - name: Install repository dependencies
-        run: pnpm install --frozen-lockfile
+        run: bun install --frozen-lockfile
 
       - name: Build the JPEG encoder (zenc)
         # zenjpeg hybrid + progressive scan search; Cargo.lock pins the graph,
@@ -135,17 +132,17 @@ jobs:
           source_dir="$RUNNER_TEMP/photo-source"
           case "$ROUTINE" in
             add-photo)
-              pnpm run photos "$source_dir"
+              bun run photos "$source_dir"
               ;;
             reencode-thumbnails)
               ./www/scripts/reencode-thumbnails.sh "$source_dir"
               ./www/scripts/hash-thumbnails.sh
               ./www/scripts/zenc/target/release/zenc histogram --root www
-              pnpm run photos:check
+              bun run photos:check
               ;;
             refresh-metadata)
               ./www/scripts/extract-photo-metadata.sh --merge "$source_dir"
-              pnpm run photos:check
+              bun run photos:check
               ;;
             add-car-photo)
               key="$(find "$source_dir" -type f -print -quit)"

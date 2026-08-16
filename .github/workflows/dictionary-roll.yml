@@ -13,7 +13,7 @@ name: Dictionary roll
 # 2026-07-30, 161 commits earlier, and every dictionary-carrying shell asset
 # production was serving (nav, luna, hoist, tooltip, lens) was absent from
 # www/a-dict. Returning visitors were taking plain brotli on the render-blocking
-# path: 13.7 KB where the deltas are 1.3 KB. `pnpm run dcz:check` reported PASS
+# path: 13.7 KB where the deltas are 1.3 KB. `bun run dcz:check` reported PASS
 # throughout, because its shell probe offers a COMMITTED candidate and so could
 # only ever agree with itself. That probe now has a coverage assertion beside it,
 # and this job is what acts on it.
@@ -64,20 +64,18 @@ jobs:
           # is meaningless). That needs real history, not a shallow clone.
           fetch-depth: 0
 
-      - name: Install pnpm
-        # package.json's packageManager field is the source of truth; this pins the
-        # same version so no self-switch is attempted (gotcha 30).
-        run: npm install -g pnpm@11.21.0
+      - name: Set up bun
+        # config/bun-canary.json is the source of truth: the canary tag ROLLS,
+        # so the pin is the binary SHA-256 rather than the version string.
+        uses: ./.github/actions/setup-bun
 
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .node-version
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: bun install --frozen-lockfile
 
       - name: Build
         # The page half reads `.build/www` for the page LIST (it fetches the bytes
@@ -91,7 +89,7 @@ jobs:
         # THIS checkout builds, so it would have to run from the deployed commit, and
         # on an unramped main it would adopt bytes no browser holds while evicting one
         # still in use. The script refuses outright if production reads empty.
-        run: pnpm run dict:roll
+        run: bun run dict:roll
 
       - name: Anything to propose?
         id: diff
@@ -143,7 +141,7 @@ jobs:
           Sourced from production over the wire, so every candidate is bytes a browser can really offer. Verify with:
 
           \`\`\`bash
-          pnpm run dcz:check
+          bun run dcz:check
           \`\`\`
 
           Merging is a human call, because \`main\` takes no bypass actors."

@@ -1,0 +1,80 @@
+name: Set up bun
+description: >-
+  Install the exact bun declared in config/bun-canary.json, verified by SHA-256.
+  One action rather than a step per workflow, because the thing being installed
+  is a MOVING asset and seven copies of a digest check is seven places to drift.
+
+# WHY THIS IS NOT `oven-sh/setup-bun` WITH A VERSION.
+#
+# bun 1.4 is not released. It is on npm in no form (newest there is 1.3.14 from
+# 2026-05-13; the `canary` dist-tag points at a 1.3.13 canary), so the 1.4 line
+# exists only as a GitHub release asset under the tag `canary`. That tag ROLLS:
+# measured 2026-08-16, the darwin-aarch64 asset carried updated_at of that same
+# morning while the release was titled after a different commit than the binary
+# reports, and no immutable per-canary tag exists (bun-v1.4.0-canary.1 -> 404).
+#
+# So `bun-version: 1.4.0-canary.1` is not a pin. It is a label that stays fixed
+# while the binary under it changes daily, which is the worst shape for a repo
+# whose build output is content-addressed: a compiler swap underneath /a/ and
+# /i/ re-mints URLs and orphans every committed dictionary, silently.
+#
+# The digest is the pin. When bun rolls, this fails BY NAME and the bump becomes
+# a deliberate commit somebody reviewed.
+
+inputs:
+  platform:
+    description: Key into the `platforms` map of config/bun-canary.json
+    required: false
+    default: linux-x64
+
+runs:
+  using: composite
+  steps:
+    - name: Install and verify bun
+      shell: bash
+      run: |
+        set -euo pipefail
+        decl=config/bun-canary.json
+        plat='${{ inputs.platform }}'
+
+        url=$(node -e "process.stdout.write(require('./'+process.argv[1]).platforms[process.argv[2]].url)" "$decl" "$plat")
+        want=$(node -e "process.stdout.write(require('./'+process.argv[1]).platforms[process.argv[2]].binary_sha256)" "$decl" "$plat")
+        ver=$(node -e "process.stdout.write(require('./'+process.argv[1]).version)" "$decl")
+
+        tmp=$(mktemp -d)
+        curl -fsSL -o "$tmp/bun.zip" "$url"
+        unzip -qo "$tmp/bun.zip" -d "$tmp"
+        bin=$(find "$tmp" -type f -name bun | head -1)
+
+        got=$(sha256sum "$bin" | cut -d' ' -f1)
+        if [ "$got" != "$want" ]; then
+          echo "::error title=bun canary rolled::config/bun-canary.json declares $want for $plat, the asset now hashes $got."
+          echo "The canary tag is rolling, so this is expected periodically and is NOT a flake."
+          echo "Re-verify with 'bun run bun:canary:check' and commit the new digest deliberately."
+          exit 1
+        fi
+
+        mkdir -p "$HOME/.bun-canary"
+        install -m 0755 "$bin" "$HOME/.bun-canary/bun"
+        echo "$HOME/.bun-canary" >> "$GITHUB_PATH"
+        echo "bun $("$HOME/.bun-canary/bun" --revision) verified against $decl (declared $ver)"
+
+    - name: Probe the capability the build depends on
+      shell: bash
+      run: |
+        set -euo pipefail
+        # gotcha 28: bun 1.3.14 ACCEPTS zstdCompressSync's `dictionary` and
+        # silently ignores it, which ships no-op dcz deltas. build.mjs throws on
+        # that, but 40 seconds in. This is the same control, run first and named.
+        "$HOME/.bun-canary/bun" -e '
+          const { zstdCompressSync } = require("node:zlib");
+          const t = Buffer.from("the quick brown fox jumps over the lazy dog. ".repeat(40));
+          const d = Buffer.from("the quick brown fox jumps over the lazy dog. ".repeat(10));
+          const none = zstdCompressSync(t).length;
+          const good = zstdCompressSync(t, { dictionary: d }).length;
+          if (!(good < none)) {
+            console.error(`::error title=bun ignores zstd dictionaries::none=${none} good=${good}. This bun would ship no-op dcz deltas.`);
+            process.exit(1);
+          }
+          console.log(`zstd dictionary honoured (none=${none} good=${good})`);
+        '

@@ -1902,17 +1902,32 @@ test("the shell infotip ships minified, hashed, and with a readable twin", async
     "hoist must be hashed before infotip, or infotip's /a/ copy keeps the unhashed specifier");
 });
 
-test("every workflow bootstraps the pnpm that package.json pins", async () => {
-  // Each workflow comments that package.json's packageManager field is the source of
-  // truth, and four of them had drifted to 11.20.0 within two days of #310 moving it to
-  // 11.21.0. Harmless there, because self-switching is on by default and the older
-  // binary fetches the pinned one at every run. It stops being harmless the moment the
-  // gap crosses a major: pnpm 12 ships its CLI as a per-platform native executable that
-  // a postinstall swaps in, so an older pnpm downloads it, finds a placeholder with no
-  // shebang, and dies with ENOEXEC before it ever reads the lockfile (gotcha 30).
+test("every workflow bootstraps the bun that package.json pins", async () => {
+  // Inherited from the pnpm era and SHARPER here, because the pin is a canary.
+  // pnpm's version of this was self-healing: self-switching is on by default, so
+  // an older pnpm fetched the pinned one at every run and a drifted workflow was
+  // merely wasteful. Two things remove that safety net under bun.
+  //
+  // First, `bun@1.4.0-canary.1` IS NOT ON NPM. The npm registry's newest bun is
+  // 1.3.14 (2026-05-13) and its `canary` dist-tag points at a 1.3.13 canary;
+  // 1.4.0-canary.1 exists only as a GitHub release asset. So nothing can resolve
+  // this pin the way corepack resolves a pnpm pin — a workflow has to fetch the
+  // binary explicitly, and a workflow that fetches the WRONG one gets no warning.
+  //
+  // Second, the version this repo needs is not a preference. bun 1.3.14 accepts
+  // `zstdCompressSync`'s `dictionary` option and SILENTLY IGNORES it (measured
+  // 2026-08-16: none=65 good=65 wrong=65, against node's 65/18/64), which is the
+  // no-op-delta failure gotcha 28 records. build.mjs feature-detects that and
+  // throws, so the build dies rather than shipping dead deltas — but it dies 40
+  // seconds in, with a message about a collapse, in CI.
+  const declared = JSON.parse(await readFile(new URL("config/bun-canary.json", ROOT), "utf8"));
+  const { url, binary_sha256 } = declared.platforms["darwin-aarch64"];
+  assert.match(declared.version, /^\d+\.\d+\.\d+(-canary\.\d+)?$/);
+  assert.match(binary_sha256, /^[0-9a-f]{64}$/, "the pin is the binary digest, not the version string");
+
   const pinned = JSON.parse(await readFile(new URL("package.json", ROOT), "utf8")).packageManager;
-  assert.match(pinned, /^pnpm@\d+\.\d+\.\d+$/);
-  const version = pinned.split("@")[1];
+  assert.equal(pinned, `bun@${declared.version}`,
+    `package.json pins ${pinned}, config/bun-canary.json declares ${declared.version}`);
 
   const dir = new URL(".github/workflows/", ROOT);
   const files = (await readdir(dir)).filter((n) => n.endsWith(".yml"));
@@ -1920,47 +1935,46 @@ test("every workflow bootstraps the pnpm that package.json pins", async () => {
   let checked = 0;
   for (const file of files) {
     const body = await readFile(new URL(file, dir), "utf8");
-    for (const [, found] of body.matchAll(/npm install -g pnpm@(\d+\.\d+\.\d+)/g)) {
-      assert.equal(found, version, `.github/workflows/${file} bootstraps pnpm@${found}, package.json pins ${version}`);
-      checked++;
-    }
+    if (!body.includes("bun-canary.json") && !body.includes(url)) continue;
+    // A workflow that fetches the rolling asset MUST also verify the digest, or
+    // it is silently building with whatever bun shipped that morning.
+    assert.ok(body.includes("bun-canary.json"),
+      `.github/workflows/${file} fetches the canary without reading the declaration`);
+    checked++;
   }
-  // Counted, because a regex that stops matching would otherwise assert nothing and
-  // still report a pass, the failure mode the Markdown-twin test had (gotcha 24).
-  assert.ok(checked >= 4, `expected several pnpm bootstraps, matched ${checked}`);
+  assert.ok(checked >= 4, `expected several bun bootstraps, matched ${checked}`);
 });
 
-test("every allowBuilds entry is a decision, never a placeholder pnpm wrote", async () => {
-  // When pnpm 11 meets a package whose build script nobody has ruled on, it
-  // writes the literal string `set this to true or false` INTO
-  // pnpm-workspace.yaml. That reads as a filled-in field and answers nothing:
-  // pnpm stores it verbatim and still counts the package as un-decided, so the
-  // hard error stays armed against `pnpm run` as well as `pnpm install`.
+test("every trustedDependencies entry is a live approval, never a dead one", async () => {
+  // The pnpm ancestor of this test guarded a placeholder: pnpm 11 writes the
+  // literal `set this to true or false` into pnpm-workspace.yaml for a build
+  // nobody has ruled on, which reads as a filled-in field and answers nothing.
+  // `sharp` sat that way until #380 and nothing caught it, because the hard
+  // error only fires on an install that RE-EVALUATES the build and a clean
+  // install never does — so CI and every fresh clone stayed green while any
+  // tree needing a re-install broke.
   //
-  // `sharp` sat that way until #380 answered it. Nothing caught it for the
-  // whole time, because the error only fires on an install that has to
-  // RE-EVALUATE the build, and a clean install never does — so CI and every
-  // fresh clone stayed green while any tree needing a re-install broke. It had
-  // reached a release path by then: `deploy-promote.mjs` shells to `pnpm exec
-  // wrangler` (gotcha 29), so the command that broke was the one you would
-  // reach for during a rollback.
+  // bun writes no placeholder, so that exact hole is gone. The FAILURE MODE it
+  // was really guarding is not, and bun makes it quieter in one specific way:
+  // declaring `trustedDependencies` REPLACES bun's built-in default allowlist
+  // rather than adding to it. So the moment this key exists, a dependency bun
+  // would have built by default stops being built, silently, with no error on
+  // any install — clean or otherwise.
   //
-  // This is the guard rather than the fix. The next dependency that ships a
-  // build script gets the same placeholder written into the same file, and the
-  // only reason anyone noticed this one was a rollback that needed a
-  // workaround.
-  const ws = await readFile(new URL("pnpm-workspace.yaml", ROOT), "utf8");
-  const block = ws.match(/^allowBuilds:\n((?:[ \t]+.*\n)+)/m);
-  assert.ok(block, "pnpm-workspace.yaml no longer has an allowBuilds block");
+  // What is checkable from source text is the other half: an entry naming a
+  // package that is not in the tree is a DEAD approval. It reads as a decision
+  // somebody made and grants nothing, and it is how a rename or a removed
+  // dependency leaves the real approval missing while the list still looks full.
+  const pkg = JSON.parse(await readFile(new URL("package.json", ROOT), "utf8"));
+  const trusted = pkg.trustedDependencies;
+  assert.ok(Array.isArray(trusted), "package.json no longer declares trustedDependencies");
 
+  const lock = await readFile(new URL("bun.lock", ROOT), "utf8");
   let checked = 0;
-  for (const line of block[1].split("\n")) {
-    if (!line.trim() || /^\s*#/.test(line)) continue;   // the block is commented
-    const entry = line.match(/^\s+([\w@/-]+):\s*(.+?)\s*$/);
-    assert.ok(entry, `unparseable allowBuilds line: ${line}`);
-    const [, pkg, value] = entry;
-    assert.match(value, /^(true|false)$/,
-      `allowBuilds.${pkg} is "${value}", which is pnpm's placeholder rather than a decision; run \`pnpm approve-builds\` or set a boolean`);
+  for (const name of trusted) {
+    assert.match(name, /^(@[\w.-]+\/)?[\w.-]+$/, `unparseable trustedDependencies entry: ${name}`);
+    assert.ok(lock.includes(`"${name}@`) || lock.includes(`"${name}"`),
+      `trustedDependencies names ${name}, which is not in bun.lock — a dead approval that grants nothing`);
     checked++;
   }
   // Counted, because a matcher that stops matching asserts nothing and still

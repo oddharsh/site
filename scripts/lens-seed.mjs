@@ -290,9 +290,9 @@ async function keyUrl(url) {
 }
 
 function kvPut(key, file, label) {
-  const argv = ["exec", "wrangler", "kv", "key", "put", key, "--path", file,
+  const argv = ["x", "--no-install", "wrangler", "kv", "key", "put", key, "--path", file,
     "--namespace-id", NAMESPACE, "--remote", "--ttl", String(TTL)];
-  execFileSync("pnpm", argv, { stdio: ["ignore", "ignore", "inherit"] });
+  execFileSync("bun", argv, { stdio: ["ignore", "ignore", "inherit"] });
   process.stdout.write(`      wrote ${label} -> ${key}\n`);
 }
 

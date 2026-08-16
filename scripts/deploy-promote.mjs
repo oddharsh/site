@@ -120,7 +120,7 @@ if (credentialError) die(credentialError);
 
 async function wrangler(args, { json = false } = {}) {
   try {
-    const { stdout } = await exec("pnpm", ["exec", "wrangler", ...args], {
+    const { stdout } = await exec("bun", ["x", "--no-install", "wrangler", ...args], {
       maxBuffer: 16 * 1024 * 1024,
       env: process.env,
     });

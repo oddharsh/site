@@ -43,13 +43,13 @@ try {
   fail(error && error.message ? error.message : String(error));
 } finally {
   if (sessionId && !keepOpen) {
-    try { await execFileAsync("pnpm", ["exec", "wrangler", "browser", "close", sessionId], { cwd: process.cwd(), maxBuffer: 2 * 1024 * 1024 }); }
+    try { await execFileAsync("bun", ["x", "--no-install", "wrangler", "browser", "close", sessionId], { cwd: process.cwd(), maxBuffer: 2 * 1024 * 1024 }); }
     catch (error) { process.stderr.write("Could not close Browser Run session " + sessionId + ": " + (error.message || error) + "\n"); }
   }
 }
 
 async function createSession(seconds) {
-  const { stdout } = await execFileAsync("pnpm", ["exec",
+  const { stdout } = await execFileAsync("bun", ["x", "--no-install",
     "wrangler", "browser", "create", "--lab", "--keepAlive", String(seconds), "--open", "false", "--json",
   ], { cwd: process.cwd(), maxBuffer: 8 * 1024 * 1024 });
   const start = stdout.indexOf("{");
