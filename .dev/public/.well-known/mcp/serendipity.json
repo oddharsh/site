@@ -1,0 +1,329 @@
+{
+  "version": "1.0",
+  "protocolVersion": "2026-07-28",
+  "serverInfo": {
+    "name": "serendipity",
+    "title": "Serendipity",
+    "version": "2.0.0",
+    "description": "Read-only access to the Serendipity event pool on aadhar.sh: community-curated events worth going to, and who's going. Public data only."
+  },
+  "transport": {
+    "type": "streamable-http",
+    "url": "https://aadhar.sh/serendipity/mcp"
+  },
+  "capabilities": {
+    "tools": true,
+    "resources": false,
+    "prompts": false
+  },
+  "authentication": {
+    "required": false
+  },
+  "documentationUrl": "https://aadhar.sh/serendipity/mcp-info",
+  "tools": [
+    {
+      "name": "list_events",
+      "title": "List Events",
+      "description": "List events in the Serendipity pool, each with a head count of who's going and an RSVP tier. The pool mixes events a contributor actually RSVP'd to or hosts (rsvp:\"going\" — first-class, the ones with real rosters) with events synced from just browsing a Luma feed (rsvp:\"invited\"/\"pending\"/etc — no roster, second-class). By default only the going (RSVP'd) events are returned, with a discovered_hidden count noting how many browsed events were omitted; pass rsvp:\"all\" to include them (first-class first) or rsvp:\"discovered\" for only the browsed ones. Each event carries attending (bool) + rsvp (raw status). Defaults to upcoming, soonest first.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "when": {
+            "type": "string",
+            "enum": [
+              "upcoming",
+              "past",
+              "all"
+            ],
+            "description": "which time slice to return (default \"upcoming\")"
+          },
+          "rsvp": {
+            "type": "string",
+            "enum": [
+              "going",
+              "all",
+              "discovered"
+            ],
+            "description": "RSVP tier: \"going\" = only events a contributor RSVP'd to / hosts (default); \"all\" = include browsed-but-not-RSVP'd events, first-class first; \"discovered\" = only the browsed ones"
+          },
+          "q": {
+            "type": "string",
+            "description": "optional case-insensitive filter on event name, location, or contributor"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200,
+            "description": "max events to return (default 50)"
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "get_event",
+      "title": "Get Event",
+      "description": "Full detail for one event by id: description, time, location, Luma link, hosts, the guest list (who's going, with role/company/socials when known), and which contributors added it.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "the event id, as returned by list_events"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "search_people",
+      "title": "Search People",
+      "description": "Search people across all events by name. Returns who they are (role/company/socials when known), how many events they've turned up at, and their events split into going_to (upcoming) and been_to (past), so you see both trajectory and reach.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "q": {
+            "type": "string",
+            "description": "a name or partial name to search for"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "description": "max people to return (default 25)"
+          }
+        },
+        "required": [
+          "q"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "list_contributors",
+      "title": "List Contributors",
+      "description": "List the contributors feeding the pool (the people who synced a Luma feed): their label, an 8-char id prefix, and how many events each has fed in. Use the label or id prefix with contributor_events.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "contributor_events",
+      "title": "Contributor Events",
+      "description": "Given a contributor (their cookie id / user_key, an id prefix, or their label), return every event they fed into the pool, split into going_to (upcoming) and been_to (past). This is one contributor's whole event footprint.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "contributor": {
+            "type": "string",
+            "description": "a contributor's cookie id (user_key), an id prefix from list_contributors, or their label"
+          }
+        },
+        "required": [
+          "contributor"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "frequent_people",
+      "title": "Frequent People",
+      "description": "The people who show up across the most events in the pool (who you're seeing a lot), each with an event count. Optionally restrict the count to upcoming or past.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "when": {
+            "type": "string",
+            "enum": [
+              "upcoming",
+              "past",
+              "all"
+            ],
+            "description": "restrict the count to a slice (default all)"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "description": "max people (default 25)"
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "co_attendees",
+      "title": "Co Attendees",
+      "description": "Given a person by name, who they cross paths with most: the people most often at the same events, with a shared-event count and the names of those shared events. Pass your own name to answer \"who am I seeing a lot\".",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "q": {
+            "type": "string",
+            "description": "a name or partial name"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "description": "max co-attendees (default 25)"
+          }
+        },
+        "required": [
+          "q"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "connections",
+      "title": "Connections",
+      "description": "The tightest co-attendance pairs in the whole pool (who's seeing who): pairs of people who keep turning up at the same events, with the shared count and the shared event names. The relationship graph's strongest edges.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "min_shared": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "only pairs sharing at least this many events (default 2)"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "description": "max pairs (default 25)"
+          }
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "shared_events",
+      "title": "Shared Events",
+      "description": "Given two people by name, the events they both attended (did these two cross paths, and where).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "a": {
+            "type": "string",
+            "description": "first person's name"
+          },
+          "b": {
+            "type": "string",
+            "description": "second person's name"
+          }
+        },
+        "required": [
+          "a",
+          "b"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
+      "name": "stats",
+      "title": "Stats",
+      "description": "Overview of the pool: upcoming/past event counts, distinct people seen, and active contributors.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    }
+  ]
+}

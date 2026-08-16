@@ -1,0 +1,405 @@
+# IMPORTANT: do NOT put Cache-Control on /*. Workers static assets merge
+# _headers rules from every matching pattern into one combined response, so a /* Cache-
+# Control would merge with /images/*'s Cache-Control into a single header
+# containing TWO max-age values. browsers (and the CF Cache Rule's "respect
+# origin TTL") then pick the most-restrictive max-age per RFC 7234, which
+# is the /* rule's short value — clobbering the 1-year immutable cache on
+# thumbnails. instead: security headers on /*, Cache-Control on explicit
+# paths below.
+
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  # CSP: nearly every resource the site needs is same-origin. inline <style> and
+  # <script> blocks are part of the perf design (one HTTP request gets you
+  # everything — see /bot for the McMaster-Carr-school philosophy), so
+  # 'unsafe-inline' is necessary. data: URLs allowed for the inlined-favicon SVG.
+  # frame-ancestors 'none' prevents clickjacking. upgrade-insecure-requests
+  # rewrites any http:// to https://.
+  #
+  # There are NO external script or connect origins. Browser-facing resources and
+  # connections are self-only; server-side route handlers document their own
+  # outbound calls separately.
+  #
+  # THIS LINE MUST MATCH SECURITY_HEADERS in _worker.js/lib/security.js. Static
+  # assets get this copy; worker-rendered responses get that one. infra.json's
+  # app-owns-security-headers check reads the wire, so a drift between the two shows
+  # up as one route disagreeing with another rather than as a failing build.
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; worker-src 'self'; manifest-src 'self'; upgrade-insecure-requests
+  # Permissions-Policy: explicitly opt out of every browser API we don't
+  # use. shrinks fingerprinting surface and prevents stray code from popping
+  # permission prompts. every token here must be one a shipping browser still
+  # recognizes: an unknown one is inert AND logs a console error. that has now
+  # eaten both ad-targeting opt-outs — `interest-cohort` died with FLoC, and
+  # `browsing-topics` went with the Topics API (deprecated Chrome 144, feature
+  # removed, so it warns as of 2026-07). nothing is lost: strict CSP means no
+  # third-party code runs here to call Topics in the first place.
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), bluetooth=(), midi=(), accelerometer=(), gyroscope=(), magnetometer=(), screen-wake-lock=(), hid=(), idle-detection=()
+  X-Frame-Options: DENY
+
+# thumbnails are content-addressed by filename (uploads keep their SOOC
+# names — IMG_1234.jpg, DSCF5678.heic, etc.), never replaced in place.
+# that makes them safe to cache for a year + immutable, which is what
+# Lighthouse wants to see on static assets. if you ever DO replace a
+# file at the same name, purge that URL in the CF dashboard.
+/images/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# content-addressed thumbnails (hash cutover 2026-07-03): /i/<stem>.<hash8>.<ext>
+# names exact bytes forever, so immutable is structurally true here — a new
+# encode gets a new URL, and the old /images/<thumb> shape 301s into this one.
+# Deliberately NOT worker-first: these are edge-direct static assets.
+/i/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# hashed app-shell assets: /a/<name>.<hash8>.<ext> (nav.js + luna.css + lens.js). build.mjs
+# mints a fresh hash whenever the shell bytes change, so the URL names exact bytes
+# and a year + immutable is structurally safe — same content-addressed contract as
+# /i/ thumbnails.
+#
+# NO LONGER edge-direct (changed 2026-07-26). /a/* is in run_worker_first so the
+# worker can hand out build.mjs's brotli q11 `.br` twin, which the edge would not
+# have produced: it fly-compresses at about q4 and prefers zstd when a browser
+# offers everything, and zstd measured LARGER than its own brotli on this site.
+# Worth ~19% of nav.js + luna.css on the wire. This rule still applies to both the
+# asset and its `.br` twin (the glob matches each), so the immutable cache survives
+# the move; the worker carries the asset layer's headers through and only corrects
+# content-type, content-encoding, vary, and the ETag.
+# The unhashed /nav.js + /luna.css + /lens.js below stay short-cached as fallbacks
+# (cal/coffee's absolute refs, dev, any stale HTML); every page the build touches
+# loads the hashed URL.
+/a/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# resto-mod car reference photos (homepage car-link tooltips). versioned via
+# ?v=N in the markup, so safe to cache a year + immutable like the thumbnails.
+# bump the ?v in index.html if a car image is replaced in place.
+/cars/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# OG / Twitter card images (www/og/<section>-<name>.png), rendered from each
+# garage + lwe demo by tools/photos/gen-og-cards.mjs. The URL is stable and the bytes
+# change only when a demo's look changes (rare), so NOT immutable — a 30-day
+# cache clears Lighthouse's "efficient cache lifetimes" bar while a regen + deploy
+# purges the edge so a refreshed card lands. Social crawlers cache on their own
+# side anyway; re-scrape on the platform if a card must update instantly.
+# the 11 compiled section tiles, each one a page's <link rel="icon">. Generated
+# from shell-data.mjs and NOT content-addressed, so `immutable` would be a lie:
+# 30 days matches /og/, which is the other generated-but-unhashed image tier, and
+# a deploy purges the edge. Left unruled these inherited the static-assets default
+# of `max-age=0, must-revalidate`, which costs a 304 per section page view for an
+# icon that changes about never.
+/section-icons/*
+  Cache-Control: public, max-age=2592000, s-maxage=2592000
+
+/og/*
+  Cache-Control: public, max-age=2592000, s-maxage=2592000
+
+# a mutable one-off document, replaced in place (the URL is the product; the
+# bytes change under it). browser revalidates every time (cheap edge 304), the
+# edge holds a day, a deploy purges it — same staleness model as the garage
+# pages. INDEXABLE on purpose: surfaced to machines via sitemap.xml + llms.txt
+# so search and LLMs find it, but deliberately absent from every human-facing
+# link on the site (no nav, footer, taskbar, Run palette) and de-named in the
+# changelog, so a casual site browser never trips over it.
+/resume.pdf
+  Cache-Control: public, max-age=0, must-revalidate, s-maxage=86400
+
+# machine-readable resume mirrors (same indexable, human-unlinked posture as
+# the PDF above): a plain-text copy and a JSON Resume document for agents.
+/resume.md
+  Content-Type: text/markdown; charset=utf-8
+  Cache-Control: public, max-age=0, must-revalidate, s-maxage=86400
+/resume.json
+  Content-Type: application/json; charset=utf-8
+  Cache-Control: public, max-age=0, must-revalidate, s-maxage=86400
+
+# garage experiment pages — active development mules, edited constantly. the
+# browser revalidates on every navigation (max-age=0) so fresh edits show; the
+# revalidation is a cheap 304 against the edge (s-maxage=86400), not the origin,
+# and each deploy purges the edge so new bytes land immediately.
+#
+# stale-while-revalidate is what makes these pages eligible to be their OWN
+# compression dictionary, and it replaced a `must-revalidate` that used to sit
+# here. Chromium sizes a registered dictionary's lifetime from the response's own
+# freshness, and must-revalidate is the explicit withdrawal of permission to serve
+# stale, so the old value was stale on arrival and no browser ever kept the offer
+# (measured in Chrome 2026-07-29 across seven policies; the table is in
+# _worker.js/lib/assets.js). The window doubles AS the dictionary's lifetime —
+# `stale-while-revalidate=5` registered nothing — so a week is about the smallest
+# value that still serves a visitor returning days later, which is the entire
+# population this tier exists for.
+#
+# What it costs: the browser may paint its cached copy once while revalidating
+# behind it, so the first navigation after a deploy can show the previous bytes.
+# That is ONE stale paint per change, not a week of staleness, because every
+# navigation kicks off the background revalidate that corrects it. Put
+# must-revalidate back (and lose the per-page delta) if a mule ever needs the old
+# no-layer-holds-it-stale guarantee.
+#
+# the Link line preloads the two shared shell assets (luna.css + nav.js) so
+# Cloudflare Early Hints replays them as a 103 ahead of the HTML — safe to share
+# across visitors because these are content-hashed, immutable URLs (build.mjs
+# rewrites /luna.css + /nav.js here to their /a/<hash> forms). NOT the photos:
+# those are per-page and would make a shared 103 stale (see home.js). Early Hints
+# fires only on navigations, so the header is inert on the enc/* image + ask.js
+# subresources that also match this glob. The worker sets the same header on the
+# pages it renders (lib/security.js homepage, lib/chrome.js luna pages).
+/garage/*
+  Cache-Control: public, max-age=0, s-maxage=86400, stale-while-revalidate=604800
+  Link: </luna.css>; rel=preload; as=style, </nav.js>; rel=preload; as=script
+  Link: </webmention>; rel="webmention"
+
+# NB: /lwe/quadgrams.txt (the model the vigenere cracker fetches) deliberately
+# has NO rule of its own, and a longer browser max-age for it was tried and
+# reverted 2026-08-11. A more specific rule does not OVERRIDE the glob below,
+# it COMBINES with it: adding one produced
+#   Cache-Control: public, max-age=604800, …, public, max-age=0, s-maxage=86400, …
+# on the wire, two conflicting max-ages in one field, which is worse than the
+# 304 it was meant to save. Cache-Control here is one value per matching rule,
+# appended, so the only way to give a file under a glob a different policy is
+# to move it out of the glob or set the header in the worker. For a 16 KB inert
+# asset fetched once per solve, neither is worth it.
+
+# LWE concept pages: same deal as the garage mules. static content that changes
+# rarely, so let the edge serve a cheap 304 (s-maxage) instead of revalidating
+# against the origin on every back-nav and repeat visit.
+/lwe/*
+  Cache-Control: public, max-age=0, s-maxage=86400, stale-while-revalidate=604800
+  Link: </luna.css>; rel=preload; as=style, </lwe-base.css>; rel=preload; as=style, </nav.js>; rel=preload; as=script
+  Link: </webmention>; rel="webmention"
+
+# pixel-peeper — the compression eye exam (/pixel-peeper). a static XP-window
+# game: the shell + metadata manifest revalidate like the garage pages (a deploy
+# purges the edge, so fresh copy always lands), while the per-tile encodes carry
+# content-hashed names, so they're immutable-1y like /i/ — a re-encode mints a
+# new filename and can never shadow old bytes. It is a first-level taskbar app
+# now, so it also preloads the shared shell the way /lwe/* and /garage/* do.
+#
+# Keyed on the TWIN, not the page path. serveStaticPage answers a page from its
+# precompressed `<base>.html.br` and copies that asset's cache-control/link onto the
+# response (see lib/assets.js findBrotli), so these rules are matched against
+# `/pixel-peeper/index.html.br` — never against `/pixel-peeper`. The bare
+# `/pixel-peeper` this used to say matched nothing at all, and the page silently took
+# the Workers-assets default (`public, max-age=0, must-revalidate`) with no preload.
+# /garage/* and /lwe/* never showed the bug because a glob covers the twin, the plain
+# .html, and the section index's `<base>/index.html.br` alike.
+#
+# Two costs, and the second is the quiet one: no s-maxage meant no shared caching, and
+# must-revalidate VETOES dictionary registration (canRegisterAsDictionary, same file),
+# so the page sat outside the per-page dcz tier while still advertising
+# `vary: available-dictionary`. That is the same defect `/` carried until 2026-07-31.
+#
+# Scoped to `index.html*` rather than a `/pixel-peeper/*` glob on purpose: matching
+# rules ACCUMULATE and duplicate headers are comma-joined with no most-specific-wins,
+# so a glob here would prepend max-age=0 to the immutable tiles rule below and clamp a
+# year down to nothing. This spelling covers index.html and index.html.br, and reaches
+# neither tiles/ nor manifest.json.
+/pixel-peeper/index.html*
+  Cache-Control: public, max-age=0, s-maxage=86400, stale-while-revalidate=604800
+  Link: </luna.css>; rel=preload; as=style, </nav.js>; rel=preload; as=script
+/pixel-peeper/manifest.json
+  Cache-Control: public, max-age=0, must-revalidate, s-maxage=86400
+/pixel-peeper/tiles/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# homepage: the same generated-page policy every other document here ships.
+# The `private, no-cache, must-revalidate` this replaced was written when the
+# worker pre-rendered a fresh 12-photo pick and bumped the counter INSIDE the
+# document, so a shared cache would have pinned one visitor's twelve photos and
+# frozen the count for everyone. None of that is true anymore: the random grid
+# is a separate no-store fragment, the counter is a separate /hit beacon, and
+# the document build-bakes a fixed twelve. The premise expired; the directives
+# outlived it and cost the page both its dictionary tier and its ability to be
+# cached at all. See lib/const.js PAGE_CACHE_CONTROL for what each clause buys.
+# deliberately still NOT `no-store`: that is the one directive that disqualifies
+# a page from the browser's back/forward cache (bfcache). `max-age=0` revalidates
+# without forfeiting that, so Back/Forward still restores the homepage instantly
+# from the browser's in-memory snapshot, matching every other page here.
+# Also: advertise machine-readable resources for agents per RFC 8288 +
+# RFC 9727 §3. multiple Link headers are valid; one per resource for readability.
+/
+  Cache-Control: public, max-age=0, s-maxage=86400, stale-while-revalidate=604800
+  Link: </sitemap.xml>; rel="sitemap"; type="application/xml"
+  Link: </llms.txt>; rel="alternate"; type="text/plain"; title="llms.txt summary"
+  Link: </auth.md>; rel="service-doc"; type="text/markdown"; title="Auth.md agent registration"
+  Link: </.well-known/oauth-protected-resource>; rel="service-desc"; type="application/json"; title="OAuth protected resource metadata"
+  Link: </.well-known/oauth-authorization-server>; rel="service-desc"; type="application/json"; title="OAuth authorization server metadata"
+  Link: </rn/tracks>; rel="service-desc"; type="application/json"; title="current rn playlist as JSON"
+  Link: </.well-known/http-message-signatures-directory>; rel="http-message-signatures-directory"; type="application/jwk-set+json"
+  Link: </.well-known/security.txt>; rel="security-policy"; type="text/plain"
+  Link: </.well-known/api-catalog>; rel="api-catalog"; type="application/linkset+json"
+  Link: </.well-known/mcp/server-card.json>; rel="service-desc"; type="application/json"; title="Aadharsh site MCP server card"
+  Link: </.well-known/agent-card.json>; rel="service-desc"; type="application/json"; title="Aadharsh site agent card"
+  Vary: Accept
+
+# discovery files: long cache. these all change rarely (sitemap when
+# new public pages land, robots.txt when bot policy shifts, llms.txt
+# when site copy changes, JWKS when the bot's signing key rotates) —
+# and when they do change, `wrangler kv` purges + a redeploy lands new
+# bytes within a minute. Lighthouse's "Use efficient cache lifetimes"
+# audit flags anything < 30 days, so 30d (2592000s) clears the bar
+# while leaving room for manual purge if any of these change urgently.
+/sitemap.xml
+  Cache-Control: public, max-age=2592000, s-maxage=2592000
+
+/robots.txt
+  Cache-Control: public, max-age=2592000, s-maxage=2592000
+
+/llms.txt
+  Cache-Control: public, max-age=2592000, s-maxage=2592000
+  Content-Type: text/plain; charset=utf-8
+
+# Writing's registry is a deploy-time artifact consumed by the Run palette.
+# Keep browser revalidation cheap while allowing the edge to reuse it between
+# deploys; the deploy itself purges the old asset bytes.
+/writing/posts.json
+  Cache-Control: public, max-age=300, stale-while-revalidate=86400, s-maxage=86400
+
+# JWKS at the well-known location for Web Bot Auth. content-type must be
+# explicit because the path has no extension.
+/.well-known/http-message-signatures-directory
+  Content-Type: application/jwk-set+json
+  Cache-Control: public, max-age=2592000, s-maxage=2592000
+
+# NOTE: the five worker-first docs below (api-catalog, auth.md, both oauth
+# metadata files, agent-card.json) are served through serveFreshAsset, which sets
+# their Cache-Control itself, so no Cache-Control line here would reach the client.
+# agent discovery surfaces. content-types are explicit because the api-catalog
+# path has no extension and the .md files must serve as markdown (not text/html
+# or octet-stream). the .json cards under .well-known/mcp/ + agent-skills/ get
+# application/json from the static-assets engine automatically. NO /.well-known/* wildcard here —
+# per the merge note at the top of this file, a wildcard Cache-Control would
+# clobber the explicit per-file rules.
+/.well-known/api-catalog
+  Content-Type: application/linkset+json
+  Link: </.well-known/api-catalog>; rel="api-catalog"; type="application/linkset+json"
+
+/auth.md
+  Content-Type: text/markdown; charset=utf-8
+
+/.well-known/oauth-protected-resource
+  Content-Type: application/json; charset=utf-8
+
+/.well-known/oauth-authorization-server
+  Content-Type: application/json; charset=utf-8
+
+/.well-known/agent-card.json
+  Content-Type: application/json; charset=utf-8
+  Link: </.well-known/agent-card.json>; rel="service-desc"; type="application/json"; title="Aadharsh site agent card"
+
+# MCP server cards are static discovery metadata. Cache them at the edge long
+# enough to keep pre-connection discovery cheap; a deploy purges the old bytes.
+/.well-known/mcp/server-card.json
+  Content-Type: application/json; charset=utf-8
+  Cache-Control: public, max-age=2592000, s-maxage=2592000
+/.well-known/mcp.json
+  Content-Type: application/json; charset=utf-8
+  Cache-Control: public, max-age=2592000, s-maxage=2592000
+/.well-known/mcp/serendipity.json
+  Content-Type: application/json; charset=utf-8
+  Cache-Control: public, max-age=2592000, s-maxage=2592000
+
+/.well-known/agent-skills/serendipity-events/SKILL.md
+  Content-Type: text/markdown; charset=utf-8
+  Cache-Control: public, max-age=0, must-revalidate, s-maxage=86400
+
+# (security.txt is served by Cloudflare's managed Security Center now —
+# no local file, no _headers rule needed. the Link header on / and the
+# llms.txt entry still resolve because the URL responds.)
+
+# shared shell scripts — the ONE external asset every page pulls. without a
+# rule these shipped Pages' default (max-age=0, must-revalidate), so a first-
+# visit session paid a conditional request for the shell on every navigation.
+# a short browser cache + SWR keeps repeats free; a deploy purges the edge,
+# so updates still land within max-age.
+/nav.js
+  Cache-Control: public, max-age=300, stale-while-revalidate=86400, s-maxage=86400
+
+# luna.css — the OS as one stylesheet (shell-rewrite phase A). same staleness
+# model as the shell scripts: short browser cache + SWR, edge purged per deploy.
+/luna.css
+  Cache-Control: public, max-age=300, stale-while-revalidate=86400, s-maxage=86400
+
+/lwe-base.css
+  Cache-Control: public, max-age=300, stale-while-revalidate=86400, s-maxage=86400
+
+/notepad.js
+  Cache-Control: public, max-age=300, stale-while-revalidate=86400, s-maxage=86400
+
+# quiz.js — the understanding-check widget garage + lwe pages load. same
+# staleness model as the other shell scripts.
+/quiz.js
+  Cache-Control: public, max-age=300, stale-while-revalidate=86400, s-maxage=86400
+
+# lens.js — the /lens shell script. same class as nav.js/notepad.js (deferred,
+# one page loads it), but it had no rule so it shipped the platform default
+# (max-age=0, must-revalidate), paying a conditional 304 on every cold
+# navigation to /lens. give it the same short-cache + SWR the other two
+# shell scripts get. Served pages request the /a/<hash> twin above; this rule
+# now covers dev and stale HTML, the same role /nav.js's block plays.
+/lens.js
+  Cache-Control: public, max-age=300, stale-while-revalidate=86400, s-maxage=86400
+
+# tooltip.js — the homepage's idle-prefetched interaction island. It is not
+# critical-path JS, but once a visitor warms it the browser should reuse it for
+# later hovers and the edge should serve it without a Worker invocation.
+/tooltip.js
+  Cache-Control: public, max-age=300, stale-while-revalidate=86400, s-maxage=86400
+
+# infotip.js — the shell's tooltip layer, loaded by nav.js on the first hover
+# over chrome. Same class and same rule: served pages ask for the /a/<hash>
+# twin, and this covers dev plus any HTML cached before that hash existed.
+/infotip.js
+  Cache-Control: public, max-age=300, stale-while-revalidate=86400, s-maxage=86400
+
+# hoist.js — the shared tooltip/popover engine tooltip.js + notepad.js import,
+# and lens-browser.js — the /lens browser-view island. Both were missing a rule
+# and shipped the platform default (max-age=0, must-revalidate), so hoist.js
+# cost a 304 on every warm homepage load: it was the ONLY revalidation left in
+# a cache-on Safari capture (2026-07-26). Same fix, same reasoning as /lens.js.
+/hoist.js
+  Cache-Control: public, max-age=300, stale-while-revalidate=86400, s-maxage=86400
+
+/lens-browser.js
+  Cache-Control: public, max-age=300, stale-while-revalidate=86400, s-maxage=86400
+
+# the other two /lens islands, same class and same rule. lens-reader.js had been
+# missing one since it shipped — exactly the omission the note above describes
+# fixing for hoist.js and lens-browser.js, repeated on the next island added.
+# The pattern is worth naming: a new on-demand island inherits the platform
+# default (max-age=0, must-revalidate) unless someone remembers this file, and
+# the symptom is a silent 304 per load rather than anything that looks broken.
+/lens-reader.js
+  Cache-Control: public, max-age=300, stale-while-revalidate=86400, s-maxage=86400
+
+/lens-wire.js
+  Cache-Control: public, max-age=300, stale-while-revalidate=86400, s-maxage=86400
+
+/lens-tools.js
+  Cache-Control: public, max-age=300, stale-while-revalidate=86400, s-maxage=86400
+
+# the retired service worker's unregister stub (v136): revalidates on every
+# check so installed copies pick it up fast, and must keep serving 200 for a
+# year+ (an old SW whose script 404s lingers forever). Service-Worker-Allowed
+# stays so the stub can replace root-scope registrations.
+/sw.js
+  Content-Type: application/javascript; charset=utf-8
+  Cache-Control: public, max-age=0, must-revalidate, s-maxage=60
+  Service-Worker-Allowed: /
+
+# RSS feeds are build output (tools/gen-feeds.mjs), regenerated on every deploy
+# from site-manifest.json + sitemap lastmod + posts.json. Served as
+# application/rss+xml rather than the extension's default application/xml so a
+# reader recognizes the document without sniffing it. Cached like the other
+# generated indexes: a subscriber polls on its own schedule and an hour of
+# staleness in a feed is invisible, while a long TTL would delay a new post.
+/writing/feed.xml
+  Content-Type: application/rss+xml; charset=utf-8
+  Cache-Control: public, max-age=0, s-maxage=3600, stale-while-revalidate=86400
+/garage/feed.xml
+  Content-Type: application/rss+xml; charset=utf-8
+  Cache-Control: public, max-age=0, s-maxage=3600, stale-while-revalidate=86400
+/lwe/feed.xml
+  Content-Type: application/rss+xml; charset=utf-8
+  Cache-Control: public, max-age=0, s-maxage=3600, stale-while-revalidate=86400

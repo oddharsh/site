@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#2D78BD">
+<link rel="preload" as="style" href="/luna.css">
+<title>aadhar.sh/lwe/mpc</title>
+<meta name="description" content="Multi-Party Computation explained at the pace of a 2009 MSN chat: honest majority, dishonest majority, and traitor tracing, with a live node demo. Teacher lines verbatim from an Archetype essay.">
+<link rel="canonical" href="https://aadhar.sh/lwe/mpc">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='7'%20fill='%231f9b8e'/%3E%3Cg%20fill='none'%20stroke='%23fff'%20stroke-width='2.2'%3E%3Ccircle%20cx='16'%20cy='8'%20r='3'/%3E%3Ccircle%20cx='8'%20cy='22'%20r='3'/%3E%3Ccircle%20cx='24'%20cy='22'%20r='3'/%3E%3Cpath%20d='M16%2011%20v4%20M16%2018%20l-6%202%20M16%2018%20l6%202'/%3E%3C/g%3E%3Ccircle%20cx='16'%20cy='16'%20r='1.6'%20fill='%23fff'/%3E%3C/svg%3E">
+<meta property="og:type" content="article">
+<meta property="og:title" content="aadhar.sh/lwe/mpc — Multi-Party Computation">
+<meta property="og:url" content="https://aadhar.sh/lwe/mpc">
+<meta name="twitter:card" content="summary_large_image">
+<meta property="og:image" content="https://aadhar.sh/og/lwe-mpc.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="aadhar.sh/lwe/mpc — Multi-Party Computation, live demo screenshotted">
+<meta name="twitter:image" content="https://aadhar.sh/og/lwe-mpc.png">
+
+<link rel="stylesheet" href="/lwe-base.css">
+<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace; --accent:#0e7c70; --accent-soft:#e0f2ef}
+.title-bar { background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%); color: #fff; font-family: var(--font-caption); font-weight: bold; font-size: 10pt; padding: 4px 5px 4px 8px; display: flex; align-items: center; gap: 6px; text-shadow: 1px 1px #0f1089; user-select: none; }
+.title-bar .icon { width: 14px; height: 14px; flex: 0 0 14px; background: #fff; border: 1px solid #1a6d63; position: relative; }
+.title-bar .icon::before { content: "⋔"; position: absolute; inset: 0; display: grid; place-items: center; font-size: 11px; color: var(--accent); font-weight: bold; text-shadow: none; }
+.window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 12px; }
+
+/* messenger */
+.msgr-head { display: flex; align-items: center; gap: 9px; padding: 8px 12px; background: linear-gradient(180deg, #fbfdff, #e6f3f0); border-bottom: 1px solid #a9d3cc; }
+.msgr-head .ava { width: 34px; height: 34px; flex: 0 0 34px; border-radius: 4px; border: 1px solid #1a6d63; background: linear-gradient(180deg,#34b3a4,#0e7c70); position: relative; }
+.msgr-head .ava::before { content: "⋔"; position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-weight: bold; font-size: 18px; }
+.msgr-head .who b { font-family: var(--font-caption); font-size: 11pt; color: #0c5a51; }
+.disclosure b { color: #7a6a16; } .disclosure a { color: #1a4fc4; }
+.msg.bot .pic { background: linear-gradient(180deg,#34b3a4,#0e7c70); border-color:#0c5a51; }
+.msg.bot .pic::before { content: "⋔"; position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-weight: bold; font-size: 14px; }
+.msg.bot .who b { color: #0c5a51; }
+.msg .who time { color:#66707d; font-family: var(--font-mono); font-size: 8pt; margin-left: 5px; }
+.msg .cite { display: inline-block; margin-top: 4px; font-size: 8pt; color: #6b7280; text-decoration: none; border-bottom: 1px dotted #9aa3b2; }
+.msg .cite::before { content: "▸ "; } .msg .cite:hover { color: #0c5a51; border-color: #0c5a51; }
+.msg.ai-note .bubble { background: #f3f0fb; border: 1px solid #d7cdef; border-radius: 4px; padding: 7px 9px; }
+.msg.ai-note .tagai { display: inline-block; font-size: 7.5pt; font-weight: bold; color: #6b4ec2; background: #ece5fb; border: 1px solid #d0c3f0; border-radius: 9px; padding: 0 6px; margin-bottom: 4px; letter-spacing: .03em; }
+
+.demo { grid-column: 1 / -1; border: 1px solid var(--accent); border-radius: 4px; background: var(--accent-soft); margin: 2px 0; overflow: hidden; box-shadow: inset 0 1px 0 #fff; }
+.demo > .bar { display: flex; align-items: center; gap: 6px; padding: 4px 8px; font-size: 8.5pt; color: #0c5a51; background: linear-gradient(180deg,#e6f3f0,#cfe9e3); border-bottom: 1px solid var(--accent); font-weight: bold; }
+.demo > .pad { padding: 11px 12px 13px; background:#fff; }
+.btn { font-family: var(--font-ui); font-size: 9.5pt; padding: 3px 11px; cursor: pointer; color: #1a2030; background: linear-gradient(to bottom, #fff 0%, #e9edf5 100%); border: 1px solid #7d8aa3; border-radius: 0; box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 #b9c2d4; }
+.btn:hover { border-color: var(--accent); background: linear-gradient(to bottom, #fff, #e0f2ef); }
+.btn:active { box-shadow: inset 1px 1px 0 #b9c2d4, inset -1px -1px 0 #fff; }
+.btn.on { font-weight: bold; background: linear-gradient(to bottom, #e0f2ef, #b8e3da); border-color: var(--accent); }
+.btn:disabled { color: #aab; background: linear-gradient(to bottom,#f3f3f3,#e6e6e6); border-color: #bbb; cursor: not-allowed; }
+
+/* MPC demo */
+.nodes { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 6px 0 12px; }
+.node { width: 56px; text-align: center; cursor: pointer; user-select: none; }
+.node .face { width: 40px; height: 40px; margin: 0 auto 3px; border-radius: 7px; border: 2px solid #2c7a36; background: linear-gradient(180deg,#bde6c4,#7fce8c); display: grid; place-items: center; font-size: 17px; position: relative; transition: transform .1s; }
+.node.bad .face { border-color: #c43636; background: linear-gradient(180deg,#f3b6b6,#e07a7a); }
+.node:active .face { transform: scale(.93); }
+.node .lab { font-size: 7.5pt; color: #6b7280; font-family: var(--font-mono); }
+.node.traced .face { box-shadow: 0 0 0 3px #f0b000, 0 0 7px #f0b000; }
+.mode-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 9px; font-size: 8.5pt; color: #4a5568; }
+.verdict { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin: 6px 0; }
+.vcard { border: 1px solid #c3cbdb; border-radius: 4px; padding: 7px 9px; font-size: 8.5pt; background: #f7f9fc; }
+.vcard b { display: block; color: #15243f; margin-bottom: 2px; font-size: 9pt; }
+.vcard .v { font-weight: bold; } .vcard .v.ok { color: #2c7a36; } .vcard .v.no { color: #c43636; }
+.vcard .rule { color:#66707d; font-size: 7.5pt; }
+.trace-out { margin-top: 8px; font-size: 8.5pt; padding: 7px 9px; border: 1px dashed var(--accent); border-radius: 4px; background: var(--accent-soft); color: #15243f; min-height: 1.4em; }
+.demo .ops { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+
+.scrollnote { text-align: center; font-size: 8pt; color:#66707d; padding: 3px 0 9px; }
+.compose { border-top: 1px solid #a9d3cc; background: linear-gradient(180deg,#f3fbf9,#e0f0ed); padding: 7px 10px; }
+.compose .ta { flex: 1; min-height: 30px; border: 1px solid #7d8aa3; background: #fff; box-shadow: inset 1px 1px 0 #c3cbdb; padding: 4px 6px; font-family: var(--font-ui); font-size: 9.5pt; color:#66707d; }
+
+@media (max-width: 520px){ body { padding: 8px 4px 32px; } .msgr-head .pets { display:none } .verdict{grid-template-columns:1fr} }
+body { text-wrap: pretty; } /* progressive; older engines ignore it */
+</style>
+<link rel="stylesheet" href="/luna.css">
+</head>
+<body>
+<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<div class="window">
+  <div class="title-bar" aria-hidden="true">
+    <span class="title-text"><span class="icon"></span>aadhar.sh/lwe &mdash; MPC</span>
+    <span class="controls"><span class="min" title="minimize"></span><span class="max" title="maximize"></span><a class="close" href="/lwe" title="back to Learning With Errors" aria-label="back to Learning With Errors"></a></span>
+  </div>
+  <div class="content">
+    <div class="msgr">
+
+      <div class="msgr-head">
+        <div class="ava" aria-hidden="true"></div>
+        <div class="who"><b>MPC</b><span class="stat">Online, Multi-Party Computation</span></div>
+        <div class="pets">Learning&nbsp;With&nbsp;Errors<br>a chat about PETs</div>
+      </div>
+
+      <p class="disclosure"><b>How to read this:</b> the <b>MPC</b> teacher's messages are <b>verbatim</b> excerpts from
+        <a href="https://www.archetype.fund/media/privacy-2-0-pets-and-the-promise-of-private-shared-state-i" rel="external">&ldquo;Privacy 2.0&rdquo;</a> by Aadharsh Pannirselvam.
+        The learner's lines, the <b>AI-noted</b> asides (e.g. traitor tracing, which isn't in the essay), and the demo are AI-generated. Scroll. ↓</p>
+
+      <div class="log">
+
+        <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>21:03</time></div>
+          <div class="bubble"><p>ok, MPC. a bunch of nodes compute on one secret together? explain it like it's MSN 2009.</p></div></div></div>
+
+        <div class="msg bot"><div class="pic"></div><div><div class="who"><b>MPC</b><time>21:03</time></div>
+          <div class="bubble"><p>Multi Party Computation (MPC) involves partitioning a secret or task over a set of distributed compute nodes to collectively perform computational work&mdash;somewhat like BitTorrent over computation.</p>
+          <a class="cite" href="https://www.archetype.fund/media/privacy-2-0-pets-and-the-promise-of-private-shared-state-i" rel="external">from the article</a></div></div></div>
+
+        <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>21:04</time></div>
+          <div class="bubble"><p>BitTorrent for computation, lol. but if the work is split across nodes, how many of them do I have to <em>trust</em>?</p></div></div></div>
+
+        <div class="msg bot"><div class="pic"></div><div><div class="who"><b>MPC</b><time>21:04</time></div>
+          <div class="bubble"><p>Secure MPC as we know it today was first developed in the early 1980s, after cryptographer Adi Shamir developed a &ldquo;threshold scheme&rdquo; for sharing secret data across multiple parties with some redundancy, specifically for the purpose of managing cryptographic keys. In 1982, Andrew Yao extended this approach to computation by demonstrating a mathematical proof for a &ldquo;Millionaire&rsquo;s Problem&rdquo; where two parties could compare their wealth without revealing their actual net worths. Five years later, Goldreich et al. built upon Yao by extending fault-tolerant computation to arbitrarily many parties. Critically, the paper&rsquo;s result only extended to situations where over half of the N parties, or an <em>honest majority,</em> are not adversarial. By proposing a solution to this toy problem for two, and eventually N party compute, Yao and Goldreich et al. respectively highlighted the <b>core idea behind MPC: enabling computation that depends on shared information while preserving individual data privacy.</b></p>
+          <a class="cite" href="https://www.archetype.fund/media/privacy-2-0-pets-and-the-promise-of-private-shared-state-i" rel="external">from the article</a></div></div></div>
+
+        <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>21:05</time></div>
+          <div class="bubble"><p>so an "honest majority" means over half have to stay honest. what happens if more than half go rogue?</p></div></div></div>
+
+        <div class="msg bot"><div class="pic"></div><div><div class="who"><b>MPC</b><time>21:05</time></div>
+          <div class="bubble"><p>By the late 1980s, protocols like that of Ben-Or, Goldwasser, and Wigderson (BGW) formally proved the ability to compute arbitrary functions under an honest majority assumption where, as long as more than two-thirds of the participants are honest, a protocol could remain secure. As practical efficiency concerns mounted, SPDZ (pronounced speedz) was eventually created as a more viable MPC scheme for even larger majorities of dishonest actors. SPDZ introduced preprocessing techniques which allowed secure computation even with only one honest actor, provided that the malicious parties did not collude. The domain specific applications that became possible ranged from secure auctions to privacy-preserving machine learning. But despite decades of progress, MPC remains constrained by fundamental trade-offs: efficiency, trust assumptions, and coordination complexity.</p>
+          <a class="cite" href="https://www.archetype.fund/media/privacy-2-0-pets-and-the-promise-of-private-shared-state-i" rel="external">from the article</a></div></div></div>
+
+        <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>21:06</time></div>
+          <div class="bubble"><p>wait, there's a whole spectrum: BGW needs 2/3 honest, but SPDZ survives on even <em>one</em> honest node as long as the bad ones don't collude? let me see that.</p></div></div></div>
+
+        <!-- DEMO: honest majority / SPDZ / traitor tracing -->
+        <div class="msg bot"><div class="pic"></div><div style="min-width:0"><div class="who"><b>MPC</b><time>21:06</time></div>
+          <div class="demo" id="demo-mpc">
+            <div class="bar">MPC shared a demo: who do you have to trust?</div>
+            <div class="pad">
+              <p class="lead">7 nodes share one secret. <b>Click a node</b> to flip it honest&nbsp;⋔&nbsp;↔&nbsp;traitor&nbsp;☠. Watch when each trust model still holds:</p>
+              <div class="nodes" id="mpc-nodes"></div>
+              <div class="verdict">
+                <div class="vcard"><b>BGW &middot; honest majority</b><span class="v" id="v-bgw">—</span><span class="rule">needs &gt; 2/3 honest (≥ 5 of 7)</span></div>
+                <div class="vcard"><b>SPDZ &middot; dishonest majority</b><span class="v" id="v-spdz">—</span><span class="rule">needs ≥ 1 honest &amp; no collusion</span></div>
+              </div>
+              <div class="mode-row">
+                <label><input type="checkbox" id="mpc-collude"> the traitors are <b>colluding</b> 🤝</label><span id="mpc-collude-hint" style="font-size:7.5pt;color:#9a6a16"></span>
+              </div>
+              <div class="ops">
+                <button class="btn" id="mpc-trace">🔍 trace the leak</button>
+                <button class="btn" id="mpc-reset" style="margin-left:auto">reset (all honest)</button>
+              </div>
+              <div class="trace-out" id="mpc-trace-out">Each share is watermarked. When a key leaks, the watermark says <b>who</b> leaked it: that's traitor tracing. Make a node a traitor, then hit trace.</div>
+            </div>
+          </div></div></div>
+
+        <div class="msg ai-note"><div class="pic" style="background:linear-gradient(180deg,#a78bdc,#6b4ec2);border-color:#523aa0"></div><div><div class="who"><b>sidekick</b><time>21:08</time></div>
+          <div class="bubble"><span class="tagai">AI &middot; not in the essay</span>
+          <p><b>traitor tracing</b>, loosely: hand every party a <em>uniquely watermarked</em> share of the secret (or key), and whenever a leaked share or a pirated key surfaces, the watermark fingerprints which party leaked it. A traitor can still leak; the watermark just names them afterward, which deters collusion up front. Same energy as the honest-majority assumption: MPC leans on bad actors fearing exposure as much as on the math.</p></div></div></div>
+
+        <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>21:09</time></div>
+          <div class="bubble"><p>ok, but if all the nodes secretly live in one datacenter, "distributed trust" is kind of a lie, right?</p></div></div></div>
+
+        <div class="msg bot"><div class="pic"></div><div><div class="who"><b>MPC</b><time>21:09</time></div>
+          <div class="bubble"><p>In contrast to TEEs, which externalize trust to the hardware manufacturer and operator of a specific node, MPC protocols decentralize trust across <em>multiple</em> nodes. Much like validators for blockchains, they do so with the trust assumption that a proportion of nodes aren&rsquo;t colluding or being controlled by a malicious third party. Given this last point, selecting a set of robust nodes can mean that geographically dense sets of nodes implicitly carry stronger trust assumptions&mdash;if a majority of nodes live under the same roof, an MPC network&rsquo;s trust assumptions start to look similar to TEEs or a very centralized blockchain. However, an MPC network with tens of distributed nodes will encounter greater communication overheads (simply put, latency) relative to a two-party compute network.</p>
+          <a class="cite" href="https://www.archetype.fund/media/privacy-2-0-pets-and-the-promise-of-private-shared-state-i" rel="external">from the article</a></div></div></div>
+
+        <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>21:10</time></div>
+          <div class="bubble"><p>got it: more nodes buy stronger trust but more latency, and "decentralized" only counts if the nodes are actually independent. thanks, MPC.</p>
+          <p>→ <a href="https://www.archetype.fund/media/privacy-2-0-pets-and-the-promise-of-private-shared-state-i" rel="external">read the essay</a> · <a href="/lwe">back to Learning With Errors</a> · <a href="/lwe/tee">next: TEEs →</a> · <a href="/lwe/pcrypto">2PC &rarr; MPC, the 0xPARC view</a></p></div></div></div>
+
+      </div>
+      <div class="scrollnote">end of conversation</div>
+      <div class="compose"><div class="box"><div class="ta">This is a recorded conversation. Poke the node demo above.</div></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var root = document.getElementById("demo-mpc"); if (!root) return;
+  var N = 7, honest = [], traced = -1;
+  for (var i = 0; i < N; i++) honest.push(true);
+  var wrap = document.getElementById("mpc-nodes");
+  function draw() {
+    wrap.innerHTML = "";
+    for (var i = 0; i < N; i++) {
+      var n = document.createElement("div");
+      n.className = "node" + (honest[i] ? "" : " bad") + (traced === i ? " traced" : "");
+      n.dataset.i = i;
+      n.innerHTML = '<div class="face">' + (honest[i] ? "⋔" : "☠") + '</div><div class="lab">node ' + (i + 1) + '</div>';
+      wrap.appendChild(n);
+    }
+    verdict();
+  }
+  function verdict() {
+    var h = honest.filter(Boolean).length, t = N - h, collude = document.getElementById("mpc-collude").checked;
+    var bgw = h >= 5; // > 2/3 of 7
+    var spdz = h >= 1 && !(collude && t >= 2);
+    set("v-bgw", bgw, h + " honest, " + t + " traitor" + (t === 1 ? "" : "s"));
+    set("v-spdz", spdz, collude && t >= 2 ? "traitors colluding → broken" : (h >= 1 ? "≥1 honest holds" : "0 honest"));
+    // collusion only matters with ≥2 traitors; tracing needs ≥1 — gate the controls
+    // so they don't look like no-ops on an all-honest grid.
+    document.getElementById("mpc-collude").disabled = t < 2;
+    document.getElementById("mpc-collude-hint").textContent = t < 2 ? "← flip ≥2 nodes to traitors first" : "";
+    document.getElementById("mpc-trace").disabled = t < 1;
+  }
+  function set(id, ok, why) {
+    var el = document.getElementById(id);
+    el.className = "v " + (ok ? "ok" : "no");
+    el.textContent = (ok ? "secure ✓" : "BROKEN ✗") + ": " + why;
+  }
+  wrap.addEventListener("click", function (e) {
+    var n = e.target.closest(".node"); if (!n) return;
+    var i = +n.dataset.i; honest[i] = !honest[i]; traced = -1; draw();
+    document.getElementById("mpc-trace-out").innerHTML = "Each share is watermarked. When a key leaks, the watermark says <b>who</b> leaked it: that's traitor tracing. Make a node a traitor, then hit trace.";
+  });
+  document.getElementById("mpc-collude").addEventListener("change", verdict);
+  document.getElementById("mpc-reset").addEventListener("click", function () {
+    for (var i = 0; i < N; i++) honest[i] = true; traced = -1;
+    document.getElementById("mpc-collude").checked = false; draw();
+  });
+  document.getElementById("mpc-trace").addEventListener("click", function () {
+    var traitors = []; for (var i = 0; i < N; i++) if (!honest[i]) traitors.push(i);
+    var out = document.getElementById("mpc-trace-out");
+    if (!traitors.length) { traced = -1; draw(); out.innerHTML = "Nothing to trace: every node is honest ⋔."; return; }
+    var leaker = traitors[Math.floor((Date.now() / 137) % traitors.length)];
+    traced = leaker; draw();
+    out.innerHTML = "🔍 a leaked share carried watermark <span class=\"mono\">#" + (leaker + 1) + "a9f3</span> → <b>traced to node " + (leaker + 1) + "</b> (the traitor is now identifiable).";
+  });
+  draw();
+})();
+</script>
+
+<script type="application/json" id="luq-data">
+{
+  "skin": "lwe",
+  "intro": "Before you close this window and go trust a network of strangers with a secret: pop quiz. 4 questions, no stakes. The node demo above counts as an open book.",
+  "questions": [
+    {
+      "q": "Start where the chat started. One secret gets partitioned across a bunch of nodes that compute on it together, BitTorrent style. What is that actually buying you?",
+      "options": [
+        {
+          "t": "computing on shared data while everyone's own inputs stay private",
+          "ok": true,
+          "why": "That's the core idea Yao and Goldreich et al. highlighted: computation that depends on shared information while preserving individual data privacy. The splitting serves privacy; any speedup is incidental."
+        },
+        {
+          "t": "raw throughput, like BitTorrent parallelizing a big download",
+          "why": "The BitTorrent line describes how the work is partitioned, and it stops there. MPC actually pays extra communication overhead, so it tends to run slower than one machine; the essay lists efficiency among its standing trade-offs."
+        },
+        {
+          "t": "the secret stays sealed so even the nodes can never touch it",
+          "why": "The nodes collectively perform the computational work, that's the job description in the first teacher message. Each node holds a share that reveals nothing alone, so privacy survives while computation still happens."
+        },
+        {
+          "t": "fault tolerance, the network recovers the answer if nodes die",
+          "why": "Redundancy is real, Shamir's threshold scheme shared secrets with some redundancy on purpose, but it serves as the mechanism. The stated core idea is computing on shared information while keeping each party's data private."
+        }
+      ]
+    },
+    {
+      "q": "Demo time. Flip 4 of the 7 nodes to traitors and leave the colluding box unchecked. What do the two verdict cards show?",
+      "options": [
+        {
+          "t": "BGW breaks but SPDZ still holds",
+          "ok": true,
+          "why": "3 honest of 7 misses BGW's bar of more than two-thirds honest, which needs 5 of 7, while SPDZ asks only for one honest node plus no collusion. The two cards disagreeing over the same grid is the honest-majority spectrum in one screen."
+        },
+        {
+          "t": "both break, a dishonest majority sinks everything",
+          "why": "A dishonest majority sinks BGW alone. SPDZ was built for exactly that regime; its card stays secure until the last honest node flips, or until you tick the colluding box with 2 or more traitors."
+        },
+        {
+          "t": "both hold, the split secret protects them equally",
+          "why": "Splitting the secret only helps while few enough shareholders go bad. Once traitors hold 4 of 7 shares, the honest-majority math behind BGW gives out, and the demo's BGW card reads BROKEN at exactly that point."
+        },
+        {
+          "t": "SPDZ breaks first, the older math is sturdier",
+          "why": "It runs the other way. BGW carries the stricter assumption, more than two-thirds honest, so it fails first; SPDZ traded preprocessing work for surviving a dishonest majority, which is the move the 21:05 message describes."
+        }
+      ]
+    },
+    {
+      "q": "The sidekick's aside now. A leaked share surfaces, you hit trace, and the watermark points at node 4. What did traitor tracing actually accomplish?",
+      "options": [
+        {
+          "t": "it named the leaker after the fact, and that threat deters leaks up front",
+          "ok": true,
+          "why": "Every party holds a uniquely watermarked share, so a leaked key fingerprints its source. The leak itself still happened; what you bought is deterrence, the same lean on bad actors fearing exposure that the honest-majority assumption makes."
+        },
+        {
+          "t": "it stopped the leak before the key ever got out",
+          "why": "Tracing is forensic. The sidekick's note says a traitor can still leak and the watermark just names them afterward; prevention comes from the protocol's trust assumptions, while tracing handles the morning after."
+        },
+        {
+          "t": "it reassembled the full secret so you could rotate the key",
+          "why": "The watermark identifies a party and nothing more. Rebuilding the secret would undo the privacy the shares exist for; the demo's trace output only ever prints a watermark and a node number."
+        },
+        {
+          "t": "it certified the other six nodes as honest",
+          "why": "Tracing speaks only about the share that leaked. The remaining nodes could be traitors who simply haven't leaked yet, and the demo will happily show several red nodes while tracing just one of them."
+        }
+      ]
+    },
+    {
+      "q": "Last one. An MPC network where most of the nodes rack up in one datacenter: what happens to its trust story?",
+      "options": [
+        {
+          "t": "it starts to look like a TEE or a centralized chain, one roof can steer a majority",
+          "ok": true,
+          "why": "The trust assumption is that a proportion of nodes aren't colluding or controlled by one malicious party. Shared geography makes a single operator's grip on a majority plausible, which is exactly the comparison the 21:09 message draws."
+        },
+        {
+          "t": "nothing changes, the cryptography holds wherever the nodes sit",
+          "why": "The math assumes independent parties, and independence is a fact about operators as much as equations. The 21:09 message says geographically dense node sets implicitly carry stronger trust assumptions, so location feeds straight into how much you must trust."
+        },
+        {
+          "t": "it gets safer, lower latency between nodes leaves attackers less room",
+          "why": "Latency sits on the other side of the trade-off: dense nodes talk fast, while tens of truly distributed nodes pay extra communication overhead. The essay counts that overhead as the price of independence; speed buys no security here."
+        },
+        {
+          "t": "the protocol refuses to run, MPC requires geographic spread",
+          "why": "No line of the protocol checks coordinates, and it runs fine under one roof. What degrades is how believable the non-collusion assumption is, a judgment about who controls the machines as much as about the math."
+        }
+      ]
+    }
+  ]
+}
+</script>
+<script src="/quiz.js" defer></script>
+<script src="/lwe/ask.js" defer></script>
+<script src="/nav.js" defer></script>
+<!-- axp:shell --><nav id="axp-icons" aria-label="desktop shortcuts"><a class="axp-ico" title="writing, in flux" href="/writing" data-key="Notepad" style="left:9px;top:9px"><span class="ic note" aria-hidden="true"></span><span class="t">Notepad</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="GitHub (opens in a new tab)" href="https://github.com/oddharsh" data-key="GitHub" style="left:9px;top:95px"><span class="ic " style="background:linear-gradient(180deg,oklch(72% 0.05 255),oklch(60% 0.07 257))" aria-hidden="true">G</span><span class="t">GitHub</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Twitter (opens in a new tab)" href="https://x.com/oddhash" data-key="Twitter" style="left:9px;top:181px"><span class="ic " style="background:linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))" aria-hidden="true">@</span><span class="t">Twitter</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Instagram (opens in a new tab)" href="https://www.instagram.com/aadharsh.hif" data-key="Photos" style="left:9px;top:267px"><span class="ic " style="background:linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))" aria-hidden="true"><i class="cam" aria-hidden="true"></i></span><span class="t">Photos</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Curius (opens in a new tab)" href="https://curius.app/aadharsh-pannirselvam" data-key="Curius" style="left:9px;top:353px"><span class="ic " style="background:linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))" aria-hidden="true">C</span><span class="t">Curius</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Beli (opens in a new tab)" href="https://beliapp.com/users/aadharsh" data-key="Beli" style="left:9px;top:439px"><span class="ic " style="background:linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))" aria-hidden="true">B</span><span class="t">Beli</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Spotify (opens in a new tab)" href="https://open.spotify.com/user/aadharsh2010" data-key="Music" style="left:9px;top:525px"><span class="ic " style="background:linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))" aria-hidden="true">♪</span><span class="t">Music</span></a></nav><div id="axp-taskbar" role="navigation" aria-label="taskbar"><a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a><div id="axp-pins"><a class="axp-pin" title="prototypes + experiments" href="/garage" data-count="19"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-garage" alt=""></span><span class="lbl">garage</span></a><a class="axp-pin" title="chat-style explainers + live demos" href="/lwe" data-count="11"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lwe" alt=""></span><span class="lbl">lwe</span></a><a class="axp-pin" title="notes, in flux: an editable notepad" href="/writing" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-writing" alt=""></span><span class="lbl">writing</span></a><a class="axp-pin" title="what I've been reading, from Curius" href="/reading" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-reading" alt=""></span><span class="lbl">reading</span></a><a class="axp-pin" title="events worth going to" href="/serendipity" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-serendipity" alt=""></span><span class="lbl">serendipity</span></a><a class="axp-pin" title="the crypto-VC neighborhood" href="/around" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-around" alt=""></span><span class="lbl">around</span></a><a class="axp-pin" title="the other web: how machines read a URL" href="/lens" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lens" alt=""></span><span class="lbl">lens</span></a><a class="axp-pin" title="terminal utilities, drivable by keypress" href="/terminal" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-terminal" alt=""></span><span class="lbl">terminal</span></a><a class="axp-pin" title="a compression vision test — whose eye do you have?" href="/pixel-peeper" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-pixel-peeper" alt=""></span><span class="lbl">pixel peeper</span></a><a class="axp-pin" title="what I'm listening to right now" href="/rn" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-music" alt=""></span><span class="lbl">music</span></a><a class="axp-pin" title="book a coffee / bagel" href="/coffee" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-coffee" alt=""></span><span class="lbl">coffee</span></a></div><div id="axp-spacer"></div><div id="axp-tray"><button id="axp-sound" type="button" hidden></button><a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><img src="/icons.svg#tray-sysprop" alt=""></a><a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><img src="/icons.svg#tray-security" alt=""></a><a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><img src="/icons.svg#tray-updates" alt=""></a><span id="axp-clock" aria-hidden="true"></span></div></div><script type="speculationrules">{"prerender":[{"where":{"and":[{"href_matches":"/*"},{"not":{"href_matches":"/whoareyou*"}},{"not":{"href_matches":"/run"}},{"not":{"href_matches":"/rn*"}},{"not":{"href_matches":"/images*"}},{"not":{"href_matches":"/index.md"}},{"not":{"href_matches":"/llms.txt"}}]},"eagerness":"moderate"}]}</script><!-- /axp:shell -->
+</body>
+</html>

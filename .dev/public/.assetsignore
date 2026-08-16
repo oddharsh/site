@@ -1,0 +1,19 @@
+# Files in www/ that must NOT be uploaded as public static assets.
+# Cloudflare warns that uploading the worker as an asset exposes server-side
+# source. The _worker.js directory is the worker bundle entry, not an asset.
+_worker.js
+
+# The photo + asset pipeline used to sit at www/scripts and be ignored here.
+# It is tools/photos now, outside the served tree entirely, so there is nothing
+# at that path to ignore and a stale entry would silently exclude any future
+# www/scripts from upload.
+
+# The shell and page dictionary snapshots used to sit at www/a-dict and www/p-dict
+# and be ignored here. They are src/dict/ now, build INPUT that never enters the
+# served tree, so there is nothing at those paths to ignore.
+
+# Hand-authored Markdown twins for the Worker-rendered prose pages (/bot,
+# /whoareyou, /security), whose text lives in template literals no build can read.
+# tools/gen-md-twins.mjs publishes each one AT ITS PAGE'S PATH (/bot.md), so
+# shipping this directory as well would serve the same twin at a second URL.
+md

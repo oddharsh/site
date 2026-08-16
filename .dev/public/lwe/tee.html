@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#2D78BD">
+<link rel="preload" as="style" href="/luna.css">
+<title>aadhar.sh/lwe/tee</title>
+<meta name="description" content="Trusted Execution Environments explained at the pace of a 2009 MSN chat: the secret room in the chip, and the side-channels that leak it. Teacher lines verbatim from an Archetype essay.">
+<link rel="canonical" href="https://aadhar.sh/lwe/tee">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='7'%20fill='%235b6675'/%3E%3Crect%20x='9'%20y='14'%20width='14'%20height='11'%20rx='1.5'%20fill='%23fff'/%3E%3Cpath%20d='M11.5%2014%20v-2.5%20a4.5%204.5%200%200%201%209%200%20V14'%20fill='none'%20stroke='%23fff'%20stroke-width='2.2'/%3E%3Crect%20x='15'%20y='18'%20width='2'%20height='4'%20rx='1'%20fill='%235b6675'/%3E%3C/svg%3E">
+<meta property="og:type" content="article">
+<meta property="og:title" content="aadhar.sh/lwe/tee · Trusted Execution Environments">
+<meta property="og:url" content="https://aadhar.sh/lwe/tee">
+<meta name="twitter:card" content="summary_large_image">
+<meta property="og:image" content="https://aadhar.sh/og/lwe-tee.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="aadhar.sh/lwe/tee · Trusted Execution Environments, live demo screenshotted">
+<meta name="twitter:image" content="https://aadhar.sh/og/lwe-tee.png">
+
+<link rel="stylesheet" href="/lwe-base.css">
+<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace; --accent:#475569; --accent-soft:#eef1f5}
+.title-bar { background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%); color: #fff; font-family: var(--font-caption); font-weight: bold; font-size: 10pt; padding: 4px 5px 4px 8px; display: flex; align-items: center; gap: 6px; text-shadow: 1px 1px #0f1089; user-select: none; }
+.title-bar .icon { width: 14px; height: 14px; flex: 0 0 14px; background: #fff; border: 1px solid #44505f; position: relative; }
+.title-bar .icon::before { content: "🔒"; position: absolute; inset: 0; display: grid; place-items: center; font-size: 9px; text-shadow: none; filter: grayscale(.3); }
+.window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 12px; }
+.msgr-head { display: flex; align-items: center; gap: 9px; padding: 8px 12px; background: linear-gradient(180deg, #fbfdff, #eaedf2); border-bottom: 1px solid #c0c8d2; }
+.msgr-head .ava { width: 34px; height: 34px; flex: 0 0 34px; border-radius: 4px; border: 1px solid #44505f; background: linear-gradient(180deg,#6b7889,#475569); position: relative; }
+.msgr-head .ava::before { content: "🔒"; position: absolute; inset: 0; display: grid; place-items: center; font-size: 15px; }
+.msgr-head .who b { font-family: var(--font-caption); font-size: 11pt; color: #334155; }
+.disclosure b { color: #7a6a16; } .disclosure a { color: #1a4fc4; }
+.msg.bot .pic { background: linear-gradient(180deg,#6b7889,#475569); border-color:#334155; }
+.msg.bot .pic::before { content: "🔒"; position: absolute; inset: 0; display: grid; place-items: center; font-size: 12px; }
+.msg.bot .who b { color: #334155; }
+.msg .who time { color:#66707d; font-family: var(--font-mono); font-size: 8pt; margin-left: 5px; }
+.msg .cite { display: inline-block; margin-top: 4px; font-size: 8pt; color: #6b7280; text-decoration: none; border-bottom: 1px dotted #9aa3b2; }
+.msg .cite::before { content: "▸ "; } .msg .cite:hover { color: #334155; border-color: #334155; }
+.msg.ai-note .bubble { background: #f3f0fb; border: 1px solid #d7cdef; border-radius: 4px; padding: 7px 9px; }
+.msg.ai-note .tagai { display: inline-block; font-size: 7.5pt; font-weight: bold; color: #6b4ec2; background: #ece5fb; border: 1px solid #d0c3f0; border-radius: 9px; padding: 0 6px; margin-bottom: 4px; letter-spacing: .03em; }
+
+.demo { grid-column: 1 / -1; border: 1px solid var(--accent); border-radius: 4px; background: var(--accent-soft); margin: 2px 0; overflow: hidden; box-shadow: inset 0 1px 0 #fff; }
+.demo > .bar { display: flex; align-items: center; gap: 6px; padding: 4px 8px; font-size: 8.5pt; color: #334155; background: linear-gradient(180deg,#eaedf2,#d8dee6); border-bottom: 1px solid var(--accent); font-weight: bold; }
+.demo > .pad { padding: 11px 12px 13px; background:#fff; }
+.btn { font-family: var(--font-ui); font-size: 9.5pt; padding: 3px 11px; cursor: pointer; color: #1a2030; background: linear-gradient(to bottom, #fff 0%, #e9edf5 100%); border: 1px solid #7d8aa3; border-radius: 0; box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 #b9c2d4; }
+.btn:hover { border-color: var(--accent); background: linear-gradient(to bottom, #fff, #eef1f5); }
+.btn:active { box-shadow: inset 1px 1px 0 #b9c2d4, inset -1px -1px 0 #fff; }
+.btn.on { font-weight: bold; background: linear-gradient(to bottom, #dfe5ee, #c3ccd9); border-color: var(--accent); }
+
+/* TEE side-channel demo */
+.enclave { border: 2px solid #44505f; border-radius: 6px; background: linear-gradient(180deg,#3a4453,#2a3340); color: #cfe3ff; padding: 12px; text-align: center; position: relative; }
+.enclave .lockline { font-size: 9pt; color: #9fb6cf; } .enclave .lockline b { color: #fff; }
+.enclave .secret { font-family: var(--font-mono); font-size: 20px; letter-spacing: 4px; margin: 6px 0 2px; color: #6b7d93; }
+.enclave .secret.leaked { color: #ff9d6e; text-shadow: 0 0 8px rgba(255,120,60,.5); }
+.atk { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 8px; }
+.trace { margin-top: 8px; min-height: 46px; border: 1px solid var(--accent); border-radius: 4px; background: #0f1722; padding: 8px 10px; font-family: var(--font-mono); font-size: 8.5pt; color: #7ee0a0; overflow: hidden; }
+.trace .t-title { color: #9fb6cf; margin-bottom: 4px; } .trace .t-title b { color:#fff }
+.trace .bars { display: flex; align-items: flex-end; gap: 2px; height: 22px; }
+.trace .bars i { display: block; width: 6px; background: #4fd1a0; }
+.note { font-size: 8.5pt; color: #4a5568; margin-top: 8px; } .note b { color:#15243f }
+
+.scrollnote { text-align: center; font-size: 8pt; color:#66707d; padding: 3px 0 9px; }
+.compose { border-top: 1px solid #c0c8d2; background: linear-gradient(180deg,#f5f7fa,#e6eaef); padding: 7px 10px; }
+.compose .ta { flex: 1; min-height: 30px; border: 1px solid #7d8aa3; background: #fff; box-shadow: inset 1px 1px 0 #c3cbdb; padding: 4px 6px; font-family: var(--font-ui); font-size: 9.5pt; color:#66707d; }
+
+@media (max-width: 520px){ body { padding: 8px 4px 32px; } .msgr-head .pets { display:none } }
+body { text-wrap: pretty; } /* progressive; older engines ignore it */
+</style>
+<link rel="stylesheet" href="/luna.css">
+</head>
+<body>
+<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<div class="window">
+  <div class="title-bar" aria-hidden="true">
+    <span class="title-text"><span class="icon"></span>aadhar.sh/lwe &middot; TEEs</span>
+    <span class="controls"><span class="min" title="minimize"></span><span class="max" title="maximize"></span><a class="close" href="/lwe" title="back to Learning With Errors" aria-label="back to Learning With Errors"></a></span>
+  </div>
+  <div class="content">
+    <div class="msgr">
+
+      <div class="msgr-head">
+        <div class="ava" aria-hidden="true"></div>
+        <div class="who"><b>TEEs</b><span class="stat">Online, Trusted Execution Environments</span></div>
+        <div class="pets">Learning&nbsp;With&nbsp;Errors<br>a chat about PETs</div>
+      </div>
+
+      <p class="disclosure"><b>How to read this:</b> the <b>TEEs</b> teacher's messages are <b>verbatim</b> excerpts from
+        <a href="https://www.archetype.fund/media/privacy-2-0-pets-and-the-promise-of-private-shared-state-i" rel="external">&ldquo;Privacy 2.0&rdquo;</a> by Aadharsh Pannirselvam.
+        The learner's lines, the <b>AI-noted</b> side-channel taxonomy, and the demo are AI-generated. Scroll. ↓</p>
+
+      <div class="log">
+
+        <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>21:22</time></div>
+          <div class="bubble"><p>TEEs. the "secure enclave" thing in my phone? explain it MSN-style.</p></div></div></div>
+
+        <div class="msg bot"><div class="pic"></div><div><div class="who"><b>TEEs</b><time>21:22</time></div>
+          <div class="bubble"><p>Trusted Execution Environments (TEEs) are secure sections of physical chips that use a static but unique &ldquo;root of trust&rdquo; as a base secret to encrypt things. Apple has been using TEEs to locally verify and store biometrics and credit card information on their hardware since 2013&rsquo;s iPhone 5s and 2017&rsquo;s T2 desktop enclave.</p>
+          <a class="cite" href="https://www.archetype.fund/media/privacy-2-0-pets-and-the-promise-of-private-shared-state-i" rel="external">from the article</a></div></div></div>
+
+        <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>21:23</time></div>
+          <div class="bubble"><p>so it's a secret room inside the chip. has anyone tried to break in?</p></div></div></div>
+
+        <div class="msg bot"><div class="pic"></div><div><div class="who"><b>TEEs</b><time>21:23</time></div>
+          <div class="bubble"><p>This eventually gave way to Secret Network, a network that used a set of SGX nodes for private transactions and smart contracts. Crucially, the SGX nodes held a &ldquo;consensus seed&rdquo; in their protected memory which functioned akin to a Secret Network-wide decryption key. In October of 2022, a group of researchers used a previously disclosed processor architecture exploit called Aepicleak to build a proof of concept attack in which malicious actors could emulate Secret Network nodes in software to ultimately extract the network&rsquo;s consensus seed from memory.</p>
+          <a class="cite" href="https://www.archetype.fund/media/privacy-2-0-pets-and-the-promise-of-private-shared-state-i" rel="external">from the article</a></div></div></div>
+
+        <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>21:24</time></div>
+          <div class="bubble"><p>wait, they pulled the master key <em>out of memory</em>? how do you even attack a sealed chip?</p></div></div></div>
+
+        <div class="msg bot"><div class="pic"></div><div><div class="who"><b>TEEs</b><time>21:24</time></div>
+          <div class="bubble"><p>In many of these examples, researchers measured heat, cache activity, power consumption, and other side effects of executing programs to infer and extract secrets from operational SGX units. Though it may seem easy to solely fault Intel, SGX isn&rsquo;t alone in being exploited via so-called &ldquo;side-channels&rdquo;. Last year, a set of researchers similarly attacked AMD&rsquo;s SEV using malicious memory units and firmware, while a security team focused on jailbreaking exploits found a physical exploit chain for Apple&rsquo;s hardware enclaves aboard their mobile chips.</p>
+          <a class="cite" href="https://www.archetype.fund/media/privacy-2-0-pets-and-the-promise-of-private-shared-state-i" rel="external">from the article</a></div></div></div>
+
+        <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>21:25</time></div>
+          <div class="bubble"><p>heat, cache, power... so the chip leaks the secret just by <em>running</em>? what are the actual flavors of side-channel? show me.</p></div></div></div>
+
+        <!-- DEMO: side-channel leak visualizer -->
+        <div class="msg bot"><div class="pic"></div><div style="min-width:0"><div class="who"><b>TEEs</b><time>21:25</time></div>
+          <div class="demo" id="demo-tee">
+            <div class="bar">TEEs shared a demo: watch the enclave leak</div>
+            <div class="pad">
+              <p class="lead">A secret PIN lives inside the enclave, and you <b>can't read it directly</b>. But running it leaks physical side effects. Pick an attack and watch the secret fall out:</p>
+              <div class="enclave">
+                <div class="lockline">🔒 <b>SGX enclave</b>, root of trust sealed</div>
+                <div class="secret" id="tee-secret">• • • •</div>
+                <div class="lockline" id="tee-status">memory reads as encrypted ciphertext</div>
+              </div>
+              <div class="atk">
+                <button class="btn" data-atk="timing">⏱ timing</button>
+                <button class="btn" data-atk="cache">🗄 cache</button>
+                <button class="btn" data-atk="power">⚡ power</button>
+                <button class="btn" data-atk="thermal">🌡 thermal</button>
+                <button class="btn" id="tee-reset" style="margin-left:auto">re-seal</button>
+              </div>
+              <div class="trace" id="tee-trace"><div class="t-title">no probe running, the enclave looks opaque.</div></div>
+            </div>
+          </div></div></div>
+
+        <div class="msg ai-note"><div class="pic" style="background:linear-gradient(180deg,#a78bdc,#6b4ec2);border-color:#523aa0"></div><div><div class="who"><b>sidekick</b><time>21:27</time></div>
+          <div class="bubble"><span class="tagai">AI &middot; expanding the essay</span>
+          <p>the essay names the symptoms (heat, cache, power); here's the loose <b>taxonomy</b> of side-channels:</p>
+          <p>• <b>Timing</b>: secret-dependent branches take measurably different times.<br>
+          • <b>Cache</b>: what got cached vs evicted reveals which memory the secret touched (this family powers Spectre/Meltdown-style attacks and the Aepicleak-era tricks).<br>
+          • <b>Power</b>: the current draw traces the exact operations (classic on smartcards and SIMs).<br>
+          • <b>EM / thermal</b>: radiated emissions and heat leak the same thing, contactlessly.<br>
+          • <b>Fault injection</b>: glitch the voltage, clock, or memory (Rowhammer, AMD SEV's BadRAM) to make the chip mis-compute and spill secrets.</p>
+          <p>all of them read the <em>physics around</em> the computation instead of breaking the math. that's why a sealed chip stays so hard to fully trust.</p></div></div></div>
+
+        <div class="msg bot"><div class="pic"></div><div><div class="who"><b>TEEs</b><time>21:28</time></div>
+          <div class="bubble"><p>These attacks collectively speak to how complex TEEs are, as well as how difficult it can be to use TEEs as the sole layer of security for a network. Given the limited capacity to update a TEE&rsquo;s hardware and firmware, as well as its unique and immutable root of trust, fully trusting a closed source TEE implies trusting the TEE&rsquo;s firmware maintainers as well as manufacturers, who feasibly could have a log matching TEEs to their unique roots of trust. Further, fully trusting a network of closed source TEEs in operation implies fully trusting that the TEE isn&rsquo;t compromised and is operated by a non-malicious actor. As such, <b>the value for malicious actors to exploit a TEE must be lower than the cost to perform said exploit</b> at each of these layers.</p>
+          <a class="cite" href="https://www.archetype.fund/media/privacy-2-0-pets-and-the-promise-of-private-shared-state-i" rel="external">from the article</a></div></div></div>
+
+        <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>21:29</time></div>
+          <div class="bubble"><p>so the security really comes down to "attacking it costs more than the secret is worth," and you're trusting the manufacturer on top of that. got it, that's why people pair TEEs with MPC. thanks, TEEs.</p>
+          <p>→ <a href="https://www.archetype.fund/media/privacy-2-0-pets-and-the-promise-of-private-shared-state-i" rel="external">read the essay</a> · <a href="/lwe/mpc">← MPC</a> · <a href="/lwe">back to Learning With Errors</a> · <a href="/lwe/pcrypto">the crypto alternative (0xPARC)</a></p></div></div></div>
+
+      </div>
+      <div class="scrollnote">end of conversation</div>
+      <div class="compose"><div class="box"><div class="ta">This is a recorded conversation. Run a side-channel above.</div></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var root = document.getElementById("demo-tee"); if (!root) return;
+  var PIN = "4827";
+  var secret = document.getElementById("tee-secret"), status = document.getElementById("tee-status"), trace = document.getElementById("tee-trace");
+  var copy = {
+    timing: { t: "⏱ TIMING probe", d: "branch timings per digit (µs):", leak: "longer branch on each secret digit → " },
+    cache:  { t: "🗄 CACHE probe",  d: "cache hit/miss pattern (Flush+Reload):", leak: "touched cache lines map to → " },
+    power:  { t: "⚡ POWER probe",  d: "current draw trace (mA), DPA:", leak: "spikes align with each digit → " },
+    thermal:{ t: "🌡 THERMAL/EM probe", d: "radiated heat + EM over the core:", leak: "emission envelope decodes to → " }
+  };
+  function bars(seed) {
+    var h = "", s = seed;
+    for (var i = 0; i < 28; i++) { s = (s * 9301 + 49297) % 233280; var v = 4 + (s % 18); h += '<i style="height:' + v + 'px"></i>'; }
+    return '<div class="bars">' + h + '</div>';
+  }
+  root.addEventListener("click", function (e) {
+    var b = e.target.closest("[data-atk]");
+    if (e.target.id === "tee-reset") { secret.textContent = "• • • •"; secret.className = "secret"; status.textContent = "memory reads as encrypted ciphertext"; trace.innerHTML = '<div class="t-title">no probe running, the enclave looks opaque.</div>'; return; }
+    if (!b) return;
+    var k = b.dataset.atk, c = copy[k], seed = k.charCodeAt(0) * 31 + 7;
+    secret.textContent = PIN.split("").join(" "); secret.className = "secret leaked";
+    status.innerHTML = "side-channel recovered the PIN: <b>no decryption key needed</b>";
+    trace.innerHTML = '<div class="t-title"><b>' + c.t + '</b>: ' + c.d + '</div>' + bars(seed) +
+      '<div style="margin-top:5px;color:#ff9d6e">' + c.leak + 'PIN = ' + PIN + '</div>';
+  });
+})();
+</script>
+
+<script type="application/json" id="luq-data">
+{
+  "skin": "lwe",
+  "intro": "Wait, one thing before you close the window: pop quiz, 4 questions, no stakes. The demo's enclave held its PIN for about four seconds; let's see how long you hold the ideas.",
+  "questions": [
+    {
+      "q": "Start at the base layer. What is the 'root of trust' a TEE builds everything on?",
+      "options": [
+        {
+          "t": "a fixed secret unique to each chip that everything else gets encrypted under",
+          "ok": true,
+          "why": "Right. Static but unique is the exact phrase: the secret never changes, no two chips share it, and it is the base the enclave encrypts biometrics and card data under."
+        },
+        {
+          "t": "a master password the owner picks the first time they boot the device",
+          "why": "That would make it human-chosen and changeable. Scroll back to the 21:22 message: the root of trust is a property of the physical chip itself, in place before you ever touch the device."
+        },
+        {
+          "t": "a certificate the manufacturer rotates with every firmware update it ships",
+          "why": "Rotation is exactly what it lacks. The 21:28 message calls the root of trust unique and immutable, and that immutability is why a leaked one is so hard to recover from."
+        },
+        {
+          "t": "the OS deciding which apps are allowed to touch the enclave's memory",
+          "why": "The OS sits outside the trust boundary. A TEE is a secure section of the physical chip, built to keep its secrets even from the operating system running above it."
+        }
+      ]
+    },
+    {
+      "q": "The Secret Network story. Why did one processor exploit, Aepicleak, put the whole network's private state at risk?",
+      "options": [
+        {
+          "t": "every SGX node held the same consensus seed, basically a network-wide decryption key",
+          "ok": true,
+          "why": "Right, and that is the design lesson: one static secret shared across every node means a single successful extraction decrypts everything the network was protecting."
+        },
+        {
+          "t": "the seed passed between nodes in plaintext, so anyone sniffing traffic could grab it",
+          "why": "The seed sat inside protected enclave memory the whole time. The attack emulated Secret Network nodes in software and pulled the seed out of that memory, no network sniffing involved."
+        },
+        {
+          "t": "researchers broke the encryption math, so every chain using that cipher fell with it",
+          "why": "The cipher held. Aepicleak is a processor architecture exploit, which is this page's recurring theme: attackers go around the math by attacking the hardware that runs it."
+        },
+        {
+          "t": "a rogue node operator copied the seed out and posted it, an inside job",
+          "why": "Outside researchers built it as a proof of concept, and that is the scary part: Aepicleak let malicious actors emulate nodes in software, so insider access was never required."
+        }
+      ]
+    },
+    {
+      "q": "You ran the demo: four different probes, and the PIN fell out every time while the enclave's memory still read as ciphertext. What do timing, cache, power, and thermal attacks have in common?",
+      "options": [
+        {
+          "t": "they all measure physical side effects of the chip running and infer the secret from those",
+          "ok": true,
+          "why": "Exactly. Side-channels read the physics around the computation, which is why the demo's status line says no decryption key was needed: the ciphertext stays sealed while the secret walks out."
+        },
+        {
+          "t": "each finds a different flaw in the encryption algorithm and quietly decrypts the memory",
+          "why": "Re-run any probe and read the status line: the PIN comes back with no decryption key involved. The leak lives in the execution itself, and the encryption holds the entire time."
+        },
+        {
+          "t": "they need the chip decapped on a lab bench with probes soldered straight on",
+          "why": "Researchers pulled secrets from operational SGX units in the field, and cache attacks like Flush+Reload run as ordinary software on the same machine. EM and thermal even work contactlessly."
+        },
+        {
+          "t": "they exploit bugs in the application code running inside the enclave",
+          "why": "The app can be perfectly written and still leak. The sidekick's taxonomy at 21:27 draws the line: these attacks read heat, current, and cache state, so correct code leaks anyway."
+        }
+      ]
+    },
+    {
+      "q": "Last one, the essay's bottom line. Fully trusting a closed source TEE means trusting what, exactly?",
+      "options": [
+        {
+          "t": "the maker, the firmware maintainers, and a bet that the exploit costs more than the prize",
+          "ok": true,
+          "why": "That is the full stack. The manufacturer could feasibly keep a log matching each chip to its root of trust, and the final backstop is economic: keep the value of the secret below the cost of the attack."
+        },
+        {
+          "t": "just the silicon itself, since a sealed chip takes humans out of the trust equation",
+          "why": "The 21:28 message lists the humans still inside the boundary: firmware maintainers, manufacturers who could log roots of trust, and whoever actually operates the node."
+        },
+        {
+          "t": "the strength of the encryption math sealing the enclave's protected memory",
+          "why": "Every attack on this page went around the math: Aepicleak read the seed straight out of memory, and the demo's probes recovered the PIN from side effects while the cipher held."
+        },
+        {
+          "t": "the vendor's patch pipeline, since a firmware update can retire any known exploit",
+          "why": "Patching has hard limits here. The essay points at the limited capacity to update a TEE's hardware and firmware, and the root of trust itself is immutable, so some breaks never heal."
+        }
+      ]
+    }
+  ]
+}
+</script>
+<script src="/quiz.js" defer></script>
+<script src="/lwe/ask.js" defer></script>
+<script src="/nav.js" defer></script>
+<!-- axp:shell --><nav id="axp-icons" aria-label="desktop shortcuts"><a class="axp-ico" title="writing, in flux" href="/writing" data-key="Notepad" style="left:9px;top:9px"><span class="ic note" aria-hidden="true"></span><span class="t">Notepad</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="GitHub (opens in a new tab)" href="https://github.com/oddharsh" data-key="GitHub" style="left:9px;top:95px"><span class="ic " style="background:linear-gradient(180deg,oklch(72% 0.05 255),oklch(60% 0.07 257))" aria-hidden="true">G</span><span class="t">GitHub</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Twitter (opens in a new tab)" href="https://x.com/oddhash" data-key="Twitter" style="left:9px;top:181px"><span class="ic " style="background:linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))" aria-hidden="true">@</span><span class="t">Twitter</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Instagram (opens in a new tab)" href="https://www.instagram.com/aadharsh.hif" data-key="Photos" style="left:9px;top:267px"><span class="ic " style="background:linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))" aria-hidden="true"><i class="cam" aria-hidden="true"></i></span><span class="t">Photos</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Curius (opens in a new tab)" href="https://curius.app/aadharsh-pannirselvam" data-key="Curius" style="left:9px;top:353px"><span class="ic " style="background:linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))" aria-hidden="true">C</span><span class="t">Curius</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Beli (opens in a new tab)" href="https://beliapp.com/users/aadharsh" data-key="Beli" style="left:9px;top:439px"><span class="ic " style="background:linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))" aria-hidden="true">B</span><span class="t">Beli</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Spotify (opens in a new tab)" href="https://open.spotify.com/user/aadharsh2010" data-key="Music" style="left:9px;top:525px"><span class="ic " style="background:linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))" aria-hidden="true">♪</span><span class="t">Music</span></a></nav><div id="axp-taskbar" role="navigation" aria-label="taskbar"><a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a><div id="axp-pins"><a class="axp-pin" title="prototypes + experiments" href="/garage" data-count="19"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-garage" alt=""></span><span class="lbl">garage</span></a><a class="axp-pin" title="chat-style explainers + live demos" href="/lwe" data-count="11"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lwe" alt=""></span><span class="lbl">lwe</span></a><a class="axp-pin" title="notes, in flux: an editable notepad" href="/writing" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-writing" alt=""></span><span class="lbl">writing</span></a><a class="axp-pin" title="what I've been reading, from Curius" href="/reading" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-reading" alt=""></span><span class="lbl">reading</span></a><a class="axp-pin" title="events worth going to" href="/serendipity" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-serendipity" alt=""></span><span class="lbl">serendipity</span></a><a class="axp-pin" title="the crypto-VC neighborhood" href="/around" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-around" alt=""></span><span class="lbl">around</span></a><a class="axp-pin" title="the other web: how machines read a URL" href="/lens" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lens" alt=""></span><span class="lbl">lens</span></a><a class="axp-pin" title="terminal utilities, drivable by keypress" href="/terminal" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-terminal" alt=""></span><span class="lbl">terminal</span></a><a class="axp-pin" title="a compression vision test — whose eye do you have?" href="/pixel-peeper" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-pixel-peeper" alt=""></span><span class="lbl">pixel peeper</span></a><a class="axp-pin" title="what I'm listening to right now" href="/rn" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-music" alt=""></span><span class="lbl">music</span></a><a class="axp-pin" title="book a coffee / bagel" href="/coffee" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-coffee" alt=""></span><span class="lbl">coffee</span></a></div><div id="axp-spacer"></div><div id="axp-tray"><button id="axp-sound" type="button" hidden></button><a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><img src="/icons.svg#tray-sysprop" alt=""></a><a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><img src="/icons.svg#tray-security" alt=""></a><a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><img src="/icons.svg#tray-updates" alt=""></a><span id="axp-clock" aria-hidden="true"></span></div></div><script type="speculationrules">{"prerender":[{"where":{"and":[{"href_matches":"/*"},{"not":{"href_matches":"/whoareyou*"}},{"not":{"href_matches":"/run"}},{"not":{"href_matches":"/rn*"}},{"not":{"href_matches":"/images*"}},{"not":{"href_matches":"/index.md"}},{"not":{"href_matches":"/llms.txt"}}]},"eagerness":"moderate"}]}</script><!-- /axp:shell -->
+</body>
+</html>

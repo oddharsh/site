@@ -22,7 +22,7 @@
   // config, so they hit the same "more than one account available" wall that
   // wrangler.jsonc's comment describes.
   "account_id": "1c99acdb6141579023fb97d24261ea58",
-  "main": "src/worker/index.js",
+  "main": "src/worker/index.ts",
   "compatibility_date": "2026-06-01",
   "cache": { "enabled": false, "cross_version_cache": false },
   "exports": {

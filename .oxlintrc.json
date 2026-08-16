@@ -208,7 +208,7 @@
       // place instead of at every call site. Turning it off here is what makes
       // turning it on everywhere else mean something; the file's own header
       // says the same thing from the other side.
-      "files": ["src/worker/lib/parse.js"],
+      "files": ["src/worker/lib/parse.ts"],
       "rules": { "anti-slop/no-runtime-typeof": "off" }
     },
     {
@@ -247,6 +247,73 @@
       "rules": { "typescript/no-floating-promises": "off" }
     },
     {
+      // Counting CODE POINTS is the point here, not an accident. tui.js renders
+      // fixed 80-column frames, so `[...row].length` is deliberately measuring
+      // what will occupy a column rather than UTF-16 units, which is what
+      // `.length` would give and is wrong for anything outside the BMP. The rule
+      // is right that a ZWJ emoji still splits, and that is a known limit of a
+      // terminal frame rather than something Intl.Segmenter should be pulled in
+      // to fix on a hot path. Scoped to this file so the rule keeps its teeth
+      // everywhere else.
+      "files": ["src/worker/lib/tui.ts"],
+      "rules": { "typescript/no-misused-spread": "off" }
+    },
+    {
+      // The Worker became TypeScript on 2026-08-16 and these modules are the
+      // ones that were not type-clean, declared in config/ts-migration.json with
+      // a `// @ts-nocheck` header each. These four rules need type information
+      // to say anything useful, so on a module whose types are still unknown
+      // they report the absence of types rather than a defect. That is the same
+      // reason the `**/*.js` entry below exists, and this entry expires the same
+      // way: a contract test pins this list to the inventory, so a module that
+      // gets typed leaves BOTH at once and immediately faces these rules for
+      // real.
+      "files": [
+        "src/worker/agent-ready.ts",
+        "src/worker/agent.ts",
+        "src/worker/around.ts",
+        "src/worker/cache-lint.ts",
+        "src/worker/census.ts",
+        "src/worker/counter.ts",
+        "src/worker/dict.ts",
+        "src/worker/dyno.ts",
+        "src/worker/home.ts",
+        "src/worker/image-tools.ts",
+        "src/worker/index.ts",
+        "src/worker/lens-tools.ts",
+        "src/worker/lens-wire.ts",
+        "src/worker/lens.ts",
+        "src/worker/lib/assets.ts",
+        "src/worker/lib/botauth.ts",
+        "src/worker/lib/cache.ts",
+        "src/worker/lib/crawl.ts",
+        "src/worker/lib/doors.ts",
+        "src/worker/lib/mcp-tools.ts",
+        "src/worker/lib/security.ts",
+        "src/worker/mcp.ts",
+        "src/worker/photos.ts",
+        "src/worker/rn.ts",
+        "src/worker/search.ts",
+        "src/worker/terminal.ts",
+        "src/worker/webmention-send.ts",
+        "src/worker/whoareyou.ts",
+        "src/worker/wire.ts",
+        "src/worker/writing.ts"
+      ],
+      "rules": {
+        "typescript/no-base-to-string": "off",
+        "typescript/restrict-template-expressions": "off",
+        "typescript/require-array-sort-compare": "off",
+        "typescript/no-misused-spread": "off"
+      }
+    },
+    {
+      // These four rules are type-aware and a .js file gives them nothing to
+      // work with, so left on they flag the absence of type information rather
+      // than a defect. unbound-method and no-implied-eval are here for the same
+      // reason. This entry carried no explanation until the TypeScript move made
+      // it load-bearing: it is why none of these ever fired on the Worker before,
+      // and the entry above is its bounded TypeScript twin.
       "files": ["**/*.js", "**/*.mjs"],
       "rules": {
         "typescript/no-base-to-string": "off",

@@ -6,7 +6,7 @@
 //   node scripts/gen-manifest.mjs        # regen the worker module + Run fences
 //
 // What this OWNS (regenerated between markers; do not hand-edit those regions):
-//   - src/worker/lib/site-manifest.js  — AGENT_SURFACES, the projection
+//   - src/worker/lib/site-manifest.ts  — AGENT_SURFACES, the projection
 //     MCP resources/list serves (agents:true only, no shell bytes)
 //   - src/client/nav-run.js generated:garage-pages + generated:lwe-pages — the Run
 //     palette's garage/lwe sub-entries (terse {label,path,hint}, no temporal data)
@@ -27,7 +27,7 @@ import { PROFILES } from "../www/scripts/shell-data.mjs";
 
 export const MANIFEST = "config/site-manifest.json";
 const NAV = "src/client/nav-run.js";
-const WORKER_MOD = "src/worker/lib/site-manifest.js";
+const WORKER_MOD = "src/worker/lib/site-manifest.ts";
 const FENCE_SECTIONS = [["garage", "garage-pages"], ["lwe", "lwe-pages"]];
 
 export function readManifest() {

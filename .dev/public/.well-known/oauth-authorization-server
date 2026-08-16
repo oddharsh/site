@@ -1,0 +1,53 @@
+{
+  "issuer": "https://aadhar.sh",
+  "resource": "https://aadhar.sh/",
+  "authorization_servers": [
+    "https://aadhar.sh"
+  ],
+  "scopes_supported": [
+    "public.read",
+    "mcp.read",
+    "rn.read",
+    "photos.read",
+    "around.read"
+  ],
+  "bearer_methods_supported": [
+    "header"
+  ],
+  "token_endpoint": "https://aadhar.sh/oauth2/token",
+  "revocation_endpoint": "https://aadhar.sh/oauth2/revoke",
+  "grant_types_supported": [
+    "urn:workos:agent-auth:grant-type:anonymous"
+  ],
+  "token_endpoint_auth_methods_supported": [
+    "none"
+  ],
+  "agent_auth": {
+    "skill": "https://aadhar.sh/auth.md",
+    "register_uri": "https://aadhar.sh/agent/auth",
+    "identity_endpoint": "https://aadhar.sh/agent/auth",
+    "claim_uri": "https://aadhar.sh/agent/auth/claim",
+    "claim_endpoint": "https://aadhar.sh/agent/auth/claim",
+    "revocation_uri": "https://aadhar.sh/oauth2/revoke",
+    "identity_types_supported": [
+      "anonymous"
+    ],
+    "credential_types_supported": [
+      "bearer_token"
+    ],
+    "anonymous": {
+      "credential_types_supported": [
+        "bearer_token"
+      ],
+      "scopes_supported": [
+        "public.read",
+        "mcp.read",
+        "rn.read",
+        "photos.read",
+        "around.read"
+      ],
+      "claim_uri": "https://aadhar.sh/agent/auth/claim"
+    },
+    "events_supported": []
+  }
+}

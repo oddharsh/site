@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#2D78BD">
+<link rel="preload" as="style" href="/luna.css">
+<title>aadhar.sh/garage/scroll</title>
+<meta name="description" content="Scroll-driven animations done in a period-correct Windows XP idiom: the Luna file-copy progress bar, window maximize-on-enter, and the blue gradient scrollbar. animation-timeline, no scroll listeners.">
+<link rel="canonical" href="https://aadhar.sh/garage/scroll">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20x='11'%20y='3'%20width='10'%20height='26'%20rx='1.5'%20fill='%23dbe7fb'%20stroke='%230855dd'%20stroke-width='1.2'/%3E%3Cpath%20d='M13%207.5%20L19%207.5%20L16%204.5%20Z'%20fill='%23003bda'/%3E%3Cpath%20d='M13%2024.5%20L19%2024.5%20L16%2027.5%20Z'%20fill='%23003bda'/%3E%3Crect%20x='12.6'%20y='11'%20width='6.8'%20height='10'%20rx='1'%20fill='%23166aee'/%3E%3Cline%20x1='14'%20y1='16'%20x2='18'%20y2='16'%20stroke='%23dbe7fb'%20stroke-width='0.9'/%3E%3C/svg%3E">
+<meta property="og:type" content="website">
+<meta property="og:title" content="aadhar.sh/garage/scroll">
+<meta property="og:description" content="Scroll-driven animation in a period-correct Windows XP idiom.">
+<meta property="og:url" content="https://aadhar.sh/garage/scroll">
+<meta name="twitter:card" content="summary_large_image">
+<meta property="og:image" content="https://aadhar.sh/og/garage-scroll.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="aadhar.sh/garage/scroll, live demo screenshotted">
+<meta name="twitter:image" content="https://aadhar.sh/og/garage-scroll.png">
+
+<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; } html{background:linear-gradient(180deg,oklch(56% 0.13 250) 0%,oklch(73% 0.10 236) 50%,oklch(88% 0.05 232) 60%,oklch(60% 0.16 140) 100%)}
+body {
+  background: linear-gradient(180deg, oklch(56% 0.13 250) 0%, oklch(73% 0.10 236) 50%, oklch(88% 0.05 232) 60%, oklch(60% 0.16 140) 100%);
+  font-family: var(--font-ui);
+  font-size: 10.5pt; line-height: 1.5; color: oklch(21.78% 0 0);
+  padding: 24px 12px 60px; min-height: 100vh;
+}
+.window {
+  --axp-maxw: 680px; max-width: var(--axp-maxw); margin: 0 auto; background: oklch(100% 0 0);
+  /* NO overflow:hidden here: it would steal the view() scroll source from the
+     root, breaking animation-timeline:view() on .maxi descendants. The title-bar
+     has its own matching border-radius so corners look correct without it. */
+  border: 2px solid #0831d9; border-right-color: #001ea0; border-bottom-color: #001ea0;
+  border-top-left-radius: 8px; border-top-right-radius: 8px;
+  box-shadow: inset 1px 1px 0 #166aee, inset 2px 2px 0 #0855dd,
+              inset -1px -1px 0 #00138c, inset -2px -2px 0 #003bda,
+              4px 4px 0 rgba(0,30,160,.35);
+}
+.title-bar {
+  background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
+  color: oklch(100% 0 0); font-family: var(--font-caption);
+  font-size: 10pt; font-weight: bold; padding: 4px 8px;
+  border-bottom: 1px solid oklch(41.92% 0.0962 250.51);
+  display: flex; align-items: center; justify-content: space-between;
+  text-box-trim: trim-both; text-box-edge: cap alphabetic;
+}
+.title-bar .icon { display: inline-block; width: 16px; height: 16px; margin-right: 6px; background: oklch(87.82% 0.0877 66.27); position: relative; flex-shrink: 0; }
+.title-bar .icon::before { content: ""; position: absolute; inset: 3px; background: oklch(69.58% 0.2043 43.49); clip-path: polygon(20% 0, 100% 50%, 20% 100%, 0 50%); }
+.title-bar .title-text { flex: 1; padding-left: 4px; }
+.title-bar .controls { display: flex; align-items: center; gap: 2px; letter-spacing: 0; }
+/* authentic Luna caption buttons: 21x21 glossy "gel" lozenges with a top specular
+   highlight + CSS-drawn white glyphs (no text, no images). min/max are blue, CLOSE
+   is RED at rest. CLASS-BASED (.min/.max/.close) so decorative demo windows that use
+   <span class="close"> get the identical skin as a real <a class="close">. sRGB hex
+   traced from the Luna .msstyles bitmap, kept as hex on purpose. */
+.title-bar .controls .min,
+.title-bar .controls .max,
+.title-bar .controls .close {
+  position: relative; box-sizing: border-box;
+  width: 21px; height: 21px; padding: 0; margin: 0;
+  display: inline-block; overflow: hidden; font-size: 0; color: transparent;
+  border: 1px solid #6696eb; border-radius: 3px;
+  text-decoration: none; cursor: pointer;
+  background-color: #3e73f5;
+  background-image: linear-gradient(180deg, #5f8cf7 0%, #3a71f5 22%, #3e73f5 55%, #2a70f2 82%, #1045be 100%);
+  transition: filter 60ms ease-out;
+}
+/* "wet plastic" gloss band over the top ~45% (close uses ::after for its X stroke) */
+.title-bar .controls .min::after,
+.title-bar .controls .max::after {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 45%;
+  background: linear-gradient(180deg, rgba(255,255,255,.55) 0%, rgba(255,255,255,.12) 70%, rgba(255,255,255,0) 100%);
+  pointer-events: none; border-radius: 2px 2px 5px 5px;
+}
+.title-bar .controls .min:hover, .title-bar .controls .min:focus-visible,
+.title-bar .controls .max:hover, .title-bar .controls .max:focus-visible {
+  border-color: #8fb4ff; background-color: #4fa4ff;
+  background-image: linear-gradient(180deg, #689bff 0%, #468aff 22%, #4fa4ff 55%, #3990fc 82%, #1858c8 100%);
+  outline: none;
+}
+/* CLOSE = red at rest */
+.title-bar .controls .close {
+  border-color: #d8401c; background-color: #e45f3e;
+  background-image: linear-gradient(180deg, #e8795f 0%, #e45f40 30%, #e45d3d 52%, #e2552a 80%, #ae3110 100%);
+}
+.title-bar .controls .close:hover, .title-bar .controls .close:focus-visible {
+  border-color: #ff7a66; background-color: #ff957c;
+  background-image: linear-gradient(180deg, #ff8b7d 0%, #ff7463 26%, #ff957c 55%, #fd7e64 82%, #d34936 100%);
+  box-shadow: 0 0 4px rgba(255,120,96,.7); outline: none;
+}
+.title-bar .controls .min:active,
+.title-bar .controls .max:active,
+.title-bar .controls .close:active { filter: brightness(.9); }
+/* white glyphs drawn with pseudo-elements */
+.title-bar .controls .min::before {
+  content: ""; position: absolute; left: 5px; right: 5px; bottom: 5px; height: 2px;
+  background: #fff; box-shadow: 0 1px 0 rgba(0,0,0,.35);
+}
+.title-bar .controls .max::before {
+  content: ""; position: absolute; left: 5px; top: 5px; width: 11px; height: 9px;
+  box-sizing: border-box; border: 1px solid #fff; border-top-width: 2px;
+  filter: drop-shadow(0 1px 0 rgba(0,0,0,.35));
+}
+.title-bar .controls .close::before,
+.title-bar .controls .close::after {
+  content: ""; position: absolute; left: 50%; top: 50%;
+  width: 13px; height: 2px; margin: -1px 0 0 -6.5px; background: #fff;
+  box-shadow: 0 1px 0 rgba(0,0,0,.35);
+}
+.title-bar .controls .close::before { transform: rotate(45deg); }
+.title-bar .controls .close::after  { transform: rotate(-45deg); }
+/* --- Luna polish: caption text shadow + rounded top corners + 3px window frame --- */
+.title-bar { text-shadow: 1px 1px #0f1089; border-top-left-radius: 8px; border-top-right-radius: 8px; }
+.window {
+  border: 2px solid #0831d9; border-right-color: #001ea0; border-bottom-color: #001ea0;
+  border-top-left-radius: 8px; border-top-right-radius: 8px;
+  box-shadow: inset 1px 1px 0 #166aee, inset 2px 2px 0 #0855dd,
+              inset -1px -1px 0 #00138c, inset -2px -2px 0 #003bda,
+              4px 4px 0 rgba(0,30,160,.35);
+}
+.content { padding: 12px 16px 16px; }
+h1 { font-family: var(--font-caption); font-size: 14pt; color: oklch(41.92% 0.0962 250.51); margin: 0 0 4px; font-weight: bold; letter-spacing: -0.01em; }
+.lede { margin: 0 0 14px; color: oklch(38.67% 0 0); font-size: 10.5pt; }
+p { margin: 0 0 12px; }
+a:link { color: oklch(42.61% 0.2353 263.74); text-decoration: underline; }
+a:visited { color: oklch(42.09% 0.1935 328.36); }
+a:hover { color: oklch(62.80% 0.2577 29.23); }
+hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 16px 0; height: 0; }
+code { font-family: var(--font-mono); font-size: 9.5pt; }
+.chip { font-family: var(--font-mono); font-size: 8.5pt; font-weight: bold; padding: 2px 7px; border: 1px solid; border-radius: 2px; }
+.chip.yes { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(97% 0.04 142); }
+.chip.yes::before { content: "\2713 "; }
+.chip.no { color: oklch(51% 0 0); border-color: oklch(72% 0 0); background: oklch(97% 0 0); }
+.chip.no::before { content: "\2717 "; }
+
+.proto { border: 1px solid oklch(61.14% 0.0611 253.60); border-top-color: oklch(47.12% 0.0555 253.58); border-left-color: oklch(47.12% 0.0555 253.58); background: oklch(100% 0 0); margin: 0 0 20px; padding: 14px 16px; }
+.proto > h2 { font-family: var(--font-caption); font-size: 13pt; font-weight: bold; color: oklch(41.92% 0.0962 250.51); margin: 0 0 6px; }
+.proto .note { font-size: 9.5pt; color: oklch(40% 0 0); margin: 0 0 10px; }
+.proto .how { font-size: 9pt; color: oklch(35% 0 0); border-left: 3px solid oklch(86% 0.03 250); padding-left: 8px; margin: 10px 0 0; }
+.scroll-hint { font-size: 8.5pt; color: oklch(54.44% 0.1504 47.10); font-weight: bold; }
+
+/* ── prototype 1: the "Copying…" dialog, progress fills with page scroll ── */
+.xp-dialog {
+  max-width: 380px; margin: 4px auto; border: 1px solid oklch(41.92% 0.0962 250.51);
+  background: oklch(94.66% 0.0114 252.09); box-shadow: 3px 3px 0 oklch(61.14% 0.0611 253.60 / .35);
+}
+.xp-dialog .bar { padding: 3px 6px; font-size: 9.5pt; }
+.xp-dialog .body { padding: 12px 14px; font-size: 9pt; color: oklch(28% 0 0); }
+.xp-copyrow { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.xp-folder { width: 34px; height: 28px; flex-shrink: 0; position: relative; background: oklch(78% 0.10 85); border: 1px solid oklch(55% 0.10 80); border-radius: 0 3px 3px 3px; }
+.xp-folder::before { content: ""; position: absolute; top: -4px; left: 0; width: 14px; height: 5px; background: oklch(78% 0.10 85); border: 1px solid oklch(55% 0.10 80); border-bottom: 0; border-radius: 3px 3px 0 0; }
+.xp-paper { width: 12px; height: 15px; background: oklch(99% 0 0); border: 1px solid oklch(60% 0 0); position: relative; }
+.xp-paper::after { content: ""; position: absolute; inset: 3px 2px auto 2px; height: 1px; background: oklch(70% 0 0); box-shadow: 0 3px 0 oklch(70% 0 0), 0 6px 0 oklch(70% 0 0); }
+.xp-meta { font-size: 8.5pt; color: oklch(45% 0 0); margin: 0 0 4px; }
+/* the green segmented bar: sunken trough + bright Luna-green blocks */
+.xp-progress { height: 19px; background: oklch(100% 0 0); border: 1px solid; border-color: oklch(50% 0 0) oklch(100% 0 0) oklch(100% 0 0) oklch(50% 0 0); padding: 2px; overflow: hidden; }
+.xp-progress-fill {
+  height: 100%; width: 0;
+  background:
+    linear-gradient(180deg, oklch(92% 0.20 142 / .9) 0 40%, transparent 41%),
+    repeating-linear-gradient(90deg, oklch(72% 0.24 142) 0 9px, oklch(100% 0 0) 9px 11px);
+}
+@supports (animation-timeline: scroll()) {
+  .xp-progress-fill { animation: xp-fill linear both; animation-timeline: scroll(root block); }
+  @keyframes xp-fill { from { width: 0; } to { width: 100%; } }
+}
+@supports not (animation-timeline: scroll()) { .xp-progress-fill { width: 60%; } }
+.xp-btn { display: inline-block; margin-top: 12px; font-family: var(--font-ui); font-size: 9pt; padding: 3px 16px; background: linear-gradient(180deg, oklch(99% 0 0), oklch(90% 0.01 250)); border: 1px solid oklch(50% 0.02 250); border-top-color: oklch(100% 0 0); border-left-color: oklch(100% 0 0); box-shadow: 1px 1px 0 oklch(40% 0.03 250); cursor: not-allowed; color: oklch(40% 0 0); }
+
+/* ── prototype 2: windows that maximize-open as they enter the viewport ── */
+.maxi-stack { display: grid; gap: 12px; margin-top: 4px; }
+.maxi {
+  border: 1px solid oklch(61.14% 0.0611 253.60); background: oklch(100% 0 0);
+  box-shadow: 2px 2px 0 oklch(61.14% 0.0611 253.60 / .3);
+}
+.maxi .bar { padding: 3px 8px; font-size: 9pt; display: flex; justify-content: space-between; }
+.maxi .pane { padding: 14px; font-size: 9.5pt; color: oklch(30% 0 0); }
+@supports (animation-timeline: view()) {
+  .maxi {
+    animation: xp-maximize linear both;
+    animation-timeline: view();
+    animation-range: entry 5% cover 32%;   /* play as it rises into view */
+    transform-origin: center bottom;
+  }
+  @keyframes xp-maximize {
+    from { transform: scale(.86) translateY(14px); opacity: 0; }
+    60%  { opacity: 1; }
+    to   { transform: scale(1) translateY(0); opacity: 1; }
+  }
+}
+
+/* ── prototype 3: the Luna scrollbar, a faithful XP recreation ── */
+/* scrollbar-color must be auto here or Chromium discards every ::-webkit rule
+   below and the demo box renders a zero-width overlay bar — this page spent a
+   while demonstrating the opposite of what it claims. It inherits a non-auto
+   value from the html rule further down, so the reset is not redundant.
+   Firefox gets the two-tone (thumb / track) through the query instead; the
+   :-moz-focusring arm is there because FF153 answers yes to the ::-webkit
+   probe, which this page's sibling /garage/horizon documents. (-moz-appearance
+   is the trap: Lightning CSS un-prefixes it to appearance, which Chromium
+   supports, so the query would flip true and undo the reset at build time.) */
+.luna-scroller { height: 150px; overflow-y: scroll; border: 1px solid oklch(61.14% 0.0611 253.60); background: oklch(99% 0.004 250); padding: 8px 12px; font-size: 9.5pt; margin-top: 4px; scrollbar-color: auto; }
+@supports (not selector(::-webkit-scrollbar)) or selector(:-moz-focusring) {
+  .luna-scroller { scrollbar-color: #6898d0 #c0d4ec; }
+}
+
+.luna-scroller::-webkit-scrollbar { width: 17px; }
+
+/* track: pale blue-grey with the classic XP 2×2 checker dither.
+   Lighter "dots" on a slightly darker base: the pattern XP used on all
+   unfilled scroll areas since Windows 3.1, kept in Luna. */
+.luna-scroller::-webkit-scrollbar-track {
+  background-color: #c0d4ec;
+  background-image:
+    linear-gradient(45deg, rgba(255,255,255,.55) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(255,255,255,.55) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgba(255,255,255,.55) 75%),
+    linear-gradient(-45deg, transparent 75%, rgba(255,255,255,.55) 75%);
+  background-size: 2px 2px;
+  background-position: 0 0, 0 1px, 1px -1px, -1px 0;
+  border-left: 1px solid #8ab0d8;
+}
+
+/* thumb: the raised Luna-blue ridge everyone remembers.
+   Three-layer build-up:
+   1. Horizontal grip ridges: repeating dark+light line pairs (the
+      grooved elevator-grip look). Start at row 3 so the first ridge
+      isn't flush with the top border.
+   2. Left-to-right convex bevel: bright edge → blue body → blue body → bright edge
+      (symmetric, like a ridge cross-section).
+   3. 3D border: light TL (highlight), dark BR (shadow). */
+.luna-scroller::-webkit-scrollbar-thumb {
+  background:
+    repeating-linear-gradient(
+      180deg,
+      transparent         0px 3px,
+      rgba(18,52,140,.55) 3px 4px,   /* groove dark line  */
+      rgba(200,224,255,.8) 4px 5px,  /* groove light line */
+      transparent         5px 8px
+    ),
+    linear-gradient(90deg,
+      #dce8f8  0   2px,   /* left highlight edge */
+      #aeccee  2px 4px,   /* shoulder */
+      #6898d0  4px 9px,   /* main body */
+      #5080c0  9px 11px,  /* center dip */
+      #6898d0 11px 14px,  /* mirror body */
+      #aeccee 14px 16px,  /* shoulder */
+      #d8e8f8 16px        /* right highlight edge */
+    );
+  border-top:    1px solid #d4e8fc;
+  border-left:   1px solid #d4e8fc;
+  border-bottom: 1px solid #183878;
+  border-right:  1px solid #183878;
+  border-radius: 1px;
+  min-height: 24px;
+}
+.luna-scroller::-webkit-scrollbar-thumb:hover {
+  background:
+    repeating-linear-gradient(
+      180deg,
+      transparent          0px 3px,
+      rgba(18,52,140,.5)   3px 4px,
+      rgba(210,232,255,.85) 4px 5px,
+      transparent          5px 8px
+    ),
+    linear-gradient(90deg,
+      #e4f0ff  0   2px,
+      #bcd8f8  2px 4px,
+      #78a8e0  4px 9px,
+      #5c8cd0  9px 11px,
+      #78a8e0 11px 14px,
+      #bcd8f8 14px 16px,
+      #e0f0ff 16px
+    );
+}
+.luna-scroller::-webkit-scrollbar-thumb:active { filter: brightness(.9); }
+
+/* arrow buttons: same 3D raised bevel as the thumb, vertical gradient,
+   dark navy arrow dead-center. */
+.luna-scroller::-webkit-scrollbar-button:vertical:decrement,
+.luna-scroller::-webkit-scrollbar-button:vertical:increment {
+  height: 17px;
+  background-color: #6898d0;
+  border-top:    1px solid #d4e8fc;
+  border-left:   1px solid #d4e8fc;
+  border-bottom: 1px solid #183878;
+  border-right:  1px solid #183878;
+  background-repeat: no-repeat;
+  background-position: center center, center center;
+  background-size: 7px 5px, auto;
+}
+/* up arrow, layered: SVG glyph on top of blue gradient */
+.luna-scroller::-webkit-scrollbar-button:vertical:decrement {
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 7 4'%3E%3Cpath d='M3.5 0 L7 4 L0 4 Z' fill='%23122858'/%3E%3C/svg%3E"),
+    linear-gradient(180deg, #dce8f8 0 1px, #b0c8ea 1px 30%, #6898d0 50%, #3d65b0 85%, #1a3878 100%);
+}
+/* down arrow */
+.luna-scroller::-webkit-scrollbar-button:vertical:increment {
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 7 4'%3E%3Cpath d='M3.5 4 L0 0 L7 0 Z' fill='%23122858'/%3E%3C/svg%3E"),
+    linear-gradient(180deg, #dce8f8 0 1px, #b0c8ea 1px 30%, #6898d0 50%, #3d65b0 85%, #1a3878 100%);
+}
+.luna-scroller::-webkit-scrollbar-button:active { filter: brightness(.88); }
+
+/* honor reduced-motion: freeze the zoom + show a static copy bar. (the
+   scrollbar isn't motion; it stays.) */
+@media (prefers-reduced-motion: reduce) {
+  .maxi { animation: none !important; transform: none !important; opacity: 1 !important; }
+  .xp-progress-fill { animation: none !important; width: 60% !important; }
+}
+footer { text-align: center; font-family: var(--font-ui); font-size: 9pt; color: oklch(44.95% 0 0); margin: 18px 0 0; padding-top: 14px; border-top: 1px solid oklch(86.67% 0.0294 259.59); }
+/* spacer so there's room to actually scroll and watch the copy bar fill */
+.scroll-room { height: 60vh; display: flex; align-items: center; justify-content: center; color: oklch(60% 0 0); font-size: 9pt; font-style: italic; }
+  /* standard scrollbar tint (Chrome + Safari 26 + Firefox): Luna-blue thumb,
+     pale track. the garage/scroll demo styles its own element separately. */
+  html { scrollbar-color: oklch(62% 0.14 255) oklch(91% 0.02 248); }
+
+  /* OS-window geometry inlined so FIRST PAINT matches nav.js (no shell "pop"
+     when the deferred desktop arrives). keep in sync with nav.js (search
+     "app-shell"); degrades with JS off (.content scrolls natively). */
+  html { height: 100dvh; overflow: hidden; }
+  body { min-height: 0; height: calc(100vh - 30px); height: calc(100dvh - 30px);
+    overflow: hidden; box-sizing: border-box; display: flex; flex-direction: column;
+    align-items: center; padding: 8px; }
+  .window { flex: 0 1 auto; min-height: 0; max-height: 100%; width: 100%;
+    display: flex; flex-direction: column; }
+  .window > .title-bar { flex: 0 0 auto; }
+  .window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 12px !important; }
+  body::after { content: ""; position: fixed; left: 0; right: 0; bottom: 0; height: 30px;
+    z-index: 1; background: linear-gradient(180deg, oklch(67% 0.15 256) 0%, oklch(58% 0.19 257) 4%,
+    oklch(51% 0.20 258) 9%, oklch(49% 0.20 258) 50%, oklch(46% 0.20 259) 92%, oklch(40% 0.18 260) 100%); }
+
+body { text-wrap: pretty; } /* progressive; older engines ignore it */
+</style>
+<link rel="stylesheet" href="/luna.css">
+</head>
+<body>
+<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+
+<div class="window">
+  <div class="title-bar" aria-hidden="true">
+    <span class="title-text"><span class="icon"></span>aadhar.sh/garage/scroll</span>
+    <span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
+  </div>
+  <div class="content">
+
+    <h1>Scroll, the XP way</h1>
+    <p class="lede">
+      <a href="https://drafts.csswg.org/scroll-animations-1/" rel="external">Scroll-driven animation</a>, but in a period-correct Luna idiom: the
+      file-copy progress bar, windows that maximize as they open, the blue
+      gradient scrollbar. All <code>animation-timeline</code>, no scroll
+      listeners, no JS. Your browser: <span id="cap-scroll" class="chip no">animation-timeline: scroll()</span>
+      <span id="cap-view" class="chip no">view()</span>
+    </p>
+    <hr>
+
+    <!-- prototype 1 -->
+    <section class="proto">
+      <h2>1 &middot; &quot;Copying&hellip;&quot; <span class="scroll-hint">(scroll the page to fill it)</span></h2>
+      <p class="note">
+        The most XP thing imaginable: the green segmented file-copy bar. Here
+        your scroll through the page drives the fill. Your scroll
+        <em>is</em> the copy. It&apos;d make a perfect reading-progress indicator.
+      </p>
+      <div class="xp-dialog">
+        <div class="title-bar bar"><span class="title-text">Copying&hellip;</span><span class="controls"><a class="close" aria-label="close"></a></span></div>
+        <div class="body">
+          <div class="xp-copyrow">
+            <span class="xp-folder"></span>
+            <span class="xp-paper" aria-hidden="true"></span>
+            <span class="xp-folder"></span>
+          </div>
+          <p class="xp-meta">Copying <strong>Tuthill_911K.jpg</strong> to <strong>/garage</strong></p>
+          <p class="xp-meta">Time remaining: depends how fast you scroll</p>
+          <div class="xp-progress"><div class="xp-progress-fill"></div></div>
+          <span class="xp-btn">Cancel</span>
+        </div>
+      </div>
+      <p class="how">
+        <code>.xp-progress-fill { animation: xp-fill linear both; animation-timeline: scroll(root block); }</code>.
+        The keyframes just animate <code>width: 0 &rarr; 100%</code>; the
+        browser maps it to document scroll. Where unsupported it falls back to a
+        static 60%-filled frame.
+      </p>
+    </section>
+
+    <!-- prototype 2 -->
+    <section class="proto">
+      <h2>2 &middot; Maximize on open <span class="scroll-hint">(scroll so each window enters)</span></h2>
+      <p class="note">
+        XP windows opened with a quick zoom-from-small. Each card below plays
+        that as it rises into the viewport, fast and snappy like the real
+        Luna animation, driven by <code>animation-timeline: view()</code>.
+      </p>
+      <div class="maxi-stack">
+        <div class="maxi"><div class="title-bar bar"><span class="title-text">My Documents</span><span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><span class="close" aria-hidden="true"></span></span></div><div class="pane">Opened as it entered the viewport.</div></div>
+        <div class="maxi"><div class="title-bar bar"><span class="title-text">My Pictures</span><span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><span class="close" aria-hidden="true"></span></span></div><div class="pane">Scale from 0.86 + fade, origin at the bottom.</div></div>
+        <div class="maxi"><div class="title-bar bar"><span class="title-text">My Music</span><span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><span class="close" aria-hidden="true"></span></span></div><div class="pane">animation-range: entry 5% &rarr; cover 32%. Done quick, then it sits still.</div></div>
+      </div>
+      <p class="how">
+        <code>animation-timeline: view(); animation-range: entry 5% cover 32%;</code>
+        with a <code>transform-origin: bottom</code> zoom. It finishes early
+        (within a third of the way across the viewport) so it reads as a one-shot
+        &quot;open,&quot; not a parallax that keeps moving.
+      </p>
+    </section>
+
+    <!-- prototype 3 -->
+    <section class="proto">
+      <h2>3 &middot; The Luna scrollbar <span class="scroll-hint">(scroll inside the box)</span></h2>
+      <p class="note">
+        The most-missed bit of XP scroll chrome, no animation involved: the blue
+        gradient scrollbar. Pure CSS (<code>::-webkit-scrollbar</code> +
+        <code>scrollbar-color</code> for Firefox). <b>Shipped.</b> The
+        <code>scrollbar-color</code> tint now paints every page site-wide (<a href="/">the homepage</a>,
+        this garage, serendipity), so this one graduated out of the lab.
+      </p>
+      <div class="luna-scroller">
+        <p>The Windows XP scrollbar: a Luna-blue gradient thumb with a 3D bevel, a lighter track, and square arrow buttons top and bottom.</p>
+        <p>Scroll this box to drive it. WebKit/Blink get the full gradient thumb + buttons; Firefox gets the two-tone <code>scrollbar-color</code> (thumb + track), no buttons.</p>
+        <p>On the homepage the photo wall and tracklist would scroll inside windows that actually look like windows, right down to the chrome.</p>
+        <p>Keep scrolling&hellip; the thumb is the gradient, the track is the lighter channel beside it.</p>
+        <p>That&apos;s the whole trick. No images, no JS, just a styled native scrollbar.</p>
+      </div>
+      <p class="how">
+        <code>::-webkit-scrollbar-thumb { background: linear-gradient(90deg, &hellip;); }</code>
+        plus <code>scrollbar-color</code> for Firefox. Safari styles the thumb
+        but ignores the arrow buttons.
+      </p>
+    </section>
+
+    <div class="scroll-room">↑ scroll back up and watch the copy bar empty ↑</div>
+
+    <footer>
+      <p>&larr; back to the <a href="/garage">garage</a> &middot; <a href="/">aadhar.sh</a></p>
+      <p><small>&copy; 2026 Aadharsh Pannirselvam &middot; built in the open &middot; prefers-reduced-motion respected</small></p>
+    </footer>
+
+    <hr>
+    <section id="luq" aria-label="understanding check"></section>
+
+  </div>
+</div>
+
+<script>
+// capability chips for this visitor
+(function () {
+  var set = function (id, ok) { var e = document.getElementById(id); if (e) e.className = "chip " + (ok ? "yes" : "no"); };
+  try { set("cap-scroll", CSS.supports("animation-timeline: scroll()")); } catch (e) {}
+  try { set("cap-view", CSS.supports("animation-timeline: view()")); } catch (e) {}
+})();
+</script>
+
+<!-- register the SW on idle so deep-link visitors install it too -->
+<!-- prerender internal pages eagerly (McMaster-style); same exclusions as homepage -->
+<script type="application/json" id="luq-data">
+{
+  "skin": "garage",
+  "intro": "Scrolled the whole way down? Five questions to check the model actually stuck.",
+  "questions": [
+    {
+      "q": "The page's lede promises no scroll listeners and no JS. What does animation-timeline change about an otherwise ordinary CSS animation to make that possible?",
+      "options": [
+        {
+          "t": "It swaps the clock for a scroll position as the driver of progress; the keyframes stay ordinary.",
+          "ok": true,
+          "why": "Right. xp-fill just animates width from 0 to 100%; animation-timeline: scroll(root block) maps that progress onto how far down the document you've scrolled. Same keyframes, different clock."
+        },
+        {
+          "t": "It registers a scroll listener for you under the hood, so it's the same JS pattern with nicer syntax.",
+          "why": "This is declarative CSS the browser can drive off the main thread. The page's only script sets the two capability chips in the lede; zero scroll-listening code ships."
+        },
+        {
+          "t": "It fires the animation once the page crosses a chosen scroll threshold, like a CSS trigger.",
+          "why": "A trigger fires once; a timeline binds progress continuously to position. That's why the copy bar in section 1 drains again when you scroll back up instead of staying full."
+        },
+        {
+          "t": "It moves the animation onto the scroll container itself, the way section 3 styles the native scrollbar.",
+          "why": "Section 3 is the one prototype with no animation at all, just CSS on the native widget. Timelines attach to any element: the copy-bar fill and the maxi windows are plain divs."
+        }
+      ]
+    },
+    {
+      "q": "Scroll to the bottom of the page and the copy bar fills; scroll back up and it empties. Why?",
+      "options": [
+        {
+          "t": "Its progress is bound to scroll position, so it scrubs in both directions like dragging a playhead.",
+          "ok": true,
+          "why": "Yes. Wherever you sit in the document is where the animation sits; the page even leaves an empty stretch at the bottom so you can drag it back down and watch it drain."
+        },
+        {
+          "t": "The keyframes run with alternate direction, so each pass through the page reverses the animation.",
+          "why": "animation-direction never enters it: scroll position alone dictates the current frame, forward or back, with no playback of its own."
+        },
+        {
+          "t": "A small script watches scroll direction and plays the animation backwards when you head up.",
+          "why": "The lede's claim is literal: no scroll listeners, no JS driving motion. The only script on the page sets the two green-or-grey support chips at the top."
+        },
+        {
+          "t": "The dialog re-enters the viewport on the way up, which restarts the animation from zero.",
+          "why": "Visibility-based entry is how section 2's view() windows work. The copy bar uses scroll(root block), which tracks document scroll no matter where the dialog is on screen."
+        }
+      ]
+    },
+    {
+      "q": "The copy bar uses scroll() and the maximize-on-open windows use view(). What's the actual difference between the two timelines?",
+      "options": [
+        {
+          "t": "scroll() tracks how far a scroll container has scrolled; view() tracks one element's own trip across the viewport.",
+          "ok": true,
+          "why": "That's the split the demos make: every copy-bar pixel maps to document position, while each window animates on its own schedule as it personally rises into view."
+        },
+        {
+          "t": "view() is an IntersectionObserver in CSS: it fires the animation once when the element first becomes visible.",
+          "why": "view() still scrubs continuously with position. The windows only look one-shot because animation-range packs the whole animation into the start of each element's travel."
+        },
+        {
+          "t": "scroll() handles vertical movement and view() handles horizontal movement.",
+          "why": "Both take an axis; section 1 passes block as an argument in scroll(root block). The real split is what gets measured, the container's offset or the element's position."
+        },
+        {
+          "t": "view() reads the viewport's size, so the windows can animate differently on a phone than a desktop.",
+          "why": "Sizing questions belong to media queries. view() reads where the element sits inside the scrollport as you scroll, which is the same mechanism at any screen width."
+        }
+      ]
+    },
+    {
+      "q": "The maximize effect sets animation-range: entry 5% cover 32%. What is that range buying?",
+      "options": [
+        {
+          "t": "It packs the whole zoom into the early part of the element's travel, so it finishes fast and then holds still.",
+          "ok": true,
+          "why": "Right: the open completes within the first third of the card's trip across the viewport, so it reads as XP's snappy one-shot maximize rather than a parallax that keeps drifting."
+        },
+        {
+          "t": "It delays the start by 5% of a second and caps the animation at 32% of a second.",
+          "why": "Those percentages name positions along the element's view() timeline. A clock never enters it, which is the premise of the whole page."
+        },
+        {
+          "t": "It restricts the effect to windows that cover at least 32% of the viewport.",
+          "why": "cover names a stretch of the element's crossing of the scrollport, a position range. All three demo windows play the same entrance regardless of their height."
+        },
+        {
+          "t": "It skips the effect for the first 5% of page scroll so the top of the page stays still.",
+          "why": "The range is measured per element on its own view() timeline, which is why the third window still plays its entrance long after the first one finished."
+        }
+      ]
+    },
+    {
+      "q": "How does the Luna scrollbar in section 3 relate to the scroll-driven animation the rest of the page is about?",
+      "options": [
+        {
+          "t": "It animates nothing: the native scrollbar restyled in pure CSS, and it already shipped site-wide.",
+          "ok": true,
+          "why": "Right. ::-webkit-scrollbar draws the gradient thumb and arrow buttons, scrollbar-color covers Firefox, and the tint graduated out of the lab onto every page of the site."
+        },
+        {
+          "t": "The gradient thumb is driven by animation-timeline: scroll() attached to the track.",
+          "why": "The thumb's gradient is a static background on a native widget; your scrolling moves the widget itself. Section 3's note says up front that no animation is involved."
+        },
+        {
+          "t": "It needs a few lines of JS to redraw the thumb's gradient as it moves.",
+          "why": "The demo box spells it out: no images, no JS, just a styled native scrollbar. Firefox even gets a reduced two-tone version from a single scrollbar-color declaration."
+        },
+        {
+          "t": "It's what the other two prototypes fall back to under prefers-reduced-motion.",
+          "why": "Under reduced motion the zoom freezes and the copy bar pins at a static fill; the scrollbar simply stays everywhere because styling a widget adds no motion to respect."
+        }
+      ]
+    }
+  ]
+}
+</script>
+<script src="/quiz.js" defer></script>
+  <script src="/nav.js" defer></script>
+<!-- axp:shell --><nav id="axp-icons" aria-label="desktop shortcuts"><a class="axp-ico" title="writing, in flux" href="/writing" data-key="Notepad" style="left:9px;top:9px"><span class="ic note" aria-hidden="true"></span><span class="t">Notepad</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="GitHub (opens in a new tab)" href="https://github.com/oddharsh" data-key="GitHub" style="left:9px;top:95px"><span class="ic " style="background:linear-gradient(180deg,oklch(72% 0.05 255),oklch(60% 0.07 257))" aria-hidden="true">G</span><span class="t">GitHub</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Twitter (opens in a new tab)" href="https://x.com/oddhash" data-key="Twitter" style="left:9px;top:181px"><span class="ic " style="background:linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))" aria-hidden="true">@</span><span class="t">Twitter</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Instagram (opens in a new tab)" href="https://www.instagram.com/aadharsh.hif" data-key="Photos" style="left:9px;top:267px"><span class="ic " style="background:linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))" aria-hidden="true"><i class="cam" aria-hidden="true"></i></span><span class="t">Photos</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Curius (opens in a new tab)" href="https://curius.app/aadharsh-pannirselvam" data-key="Curius" style="left:9px;top:353px"><span class="ic " style="background:linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))" aria-hidden="true">C</span><span class="t">Curius</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Beli (opens in a new tab)" href="https://beliapp.com/users/aadharsh" data-key="Beli" style="left:9px;top:439px"><span class="ic " style="background:linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))" aria-hidden="true">B</span><span class="t">Beli</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Spotify (opens in a new tab)" href="https://open.spotify.com/user/aadharsh2010" data-key="Music" style="left:9px;top:525px"><span class="ic " style="background:linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))" aria-hidden="true">♪</span><span class="t">Music</span></a></nav><div id="axp-taskbar" role="navigation" aria-label="taskbar"><a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a><div id="axp-pins"><a class="axp-pin" title="prototypes + experiments" href="/garage" data-count="19"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-garage" alt=""></span><span class="lbl">garage</span></a><a class="axp-pin" title="chat-style explainers + live demos" href="/lwe" data-count="11"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lwe" alt=""></span><span class="lbl">lwe</span></a><a class="axp-pin" title="notes, in flux: an editable notepad" href="/writing" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-writing" alt=""></span><span class="lbl">writing</span></a><a class="axp-pin" title="what I've been reading, from Curius" href="/reading" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-reading" alt=""></span><span class="lbl">reading</span></a><a class="axp-pin" title="events worth going to" href="/serendipity" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-serendipity" alt=""></span><span class="lbl">serendipity</span></a><a class="axp-pin" title="the crypto-VC neighborhood" href="/around" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-around" alt=""></span><span class="lbl">around</span></a><a class="axp-pin" title="the other web: how machines read a URL" href="/lens" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lens" alt=""></span><span class="lbl">lens</span></a><a class="axp-pin" title="terminal utilities, drivable by keypress" href="/terminal" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-terminal" alt=""></span><span class="lbl">terminal</span></a><a class="axp-pin" title="a compression vision test — whose eye do you have?" href="/pixel-peeper" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-pixel-peeper" alt=""></span><span class="lbl">pixel peeper</span></a><a class="axp-pin" title="what I'm listening to right now" href="/rn" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-music" alt=""></span><span class="lbl">music</span></a><a class="axp-pin" title="book a coffee / bagel" href="/coffee" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-coffee" alt=""></span><span class="lbl">coffee</span></a></div><div id="axp-spacer"></div><div id="axp-tray"><button id="axp-sound" type="button" hidden></button><a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><img src="/icons.svg#tray-sysprop" alt=""></a><a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><img src="/icons.svg#tray-security" alt=""></a><a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><img src="/icons.svg#tray-updates" alt=""></a><span id="axp-clock" aria-hidden="true"></span></div></div><script type="speculationrules">{"prerender":[{"where":{"and":[{"href_matches":"/*"},{"not":{"href_matches":"/whoareyou*"}},{"not":{"href_matches":"/run"}},{"not":{"href_matches":"/rn*"}},{"not":{"href_matches":"/images*"}},{"not":{"href_matches":"/index.md"}},{"not":{"href_matches":"/llms.txt"}}]},"eagerness":"moderate"}]}</script><!-- /axp:shell -->
+</body>
+</html>

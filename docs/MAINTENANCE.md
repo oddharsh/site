@@ -354,7 +354,7 @@ unservable and nothing said so.
 **A preview runs production bindings and secrets.** There is no per-version
 override in Cloudflare, so it is the same RN_KV, the same `aadhar-photos`
 bucket, the same three D1 databases, the same `RESEND_API_KEY`.
-`src/worker/lib/preview.js` is what makes the URL safe to paste into a
+`src/worker/lib/preview.ts` is what makes the URL safe to paste into a
 PR:
 
 - every response gets `X-Robots-Tag: noindex, nofollow`, including redirects and
@@ -1362,7 +1362,7 @@ That is true of a real `chromium-cdp` capture too, so it is a pre-existing gap
 rather than something this introduces, and the field is in the JSON either way.
 
 Both scripts take their target list from `scripts/lib/lens-chips.mjs`, which
-reads the chips out of the shell renderer in `src/worker/lens.js`. Adding a
+reads the chips out of the shell renderer in `src/worker/lens.ts`. Adding a
 chip there is all it takes; nothing needs updating here.
 
 The TTL is a day rather than a week on purpose. A stale local capture outliving
@@ -1373,7 +1373,7 @@ Browser Run renders the moment the entries expire. To undo sooner, delete the
 ### Add or change a /lens interaction recipe
 
 Recipes are the fixed scripts `/lens/browser?do=<id>` runs inside a page before
-reading it. They live in `src/worker/lens-recipes.js` and are published
+reading it. They live in `src/worker/lens-recipes.ts` and are published
 verbatim, so anyone can check what ran:
 
 ```bash

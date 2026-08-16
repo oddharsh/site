@@ -233,3 +233,76 @@ the literal `www/nav.js` existed to find and the build died at the first shell w
 the file it names moved. The mapping lists all three directories now. Worth
 remembering for anything else that resolves an absolute, URL-shaped specifier:
 after a split like this, exactly one of them is right and the others fail quietly.
+
+## The restructure, step 3: the Worker is TypeScript
+
+All 67 Worker modules are `.ts`. The deployed bundle is **byte-identical**:
+666.62 KiB / 227.77 KiB gzip, the same numbers as the JavaScript Worker, because
+types erase and nothing else changed.
+
+### `.ts` import specifiers, and that is forced rather than stylistic
+
+Measured across the three runtimes that have to agree:
+
+| runtime | `./x.js` naming an x.ts | `./x.ts` |
+|---|---|---|
+| bun 1.4.0-canary.1 | resolves | resolves |
+| wrangler / esbuild | resolves | resolves |
+| **node 26.7.0** | **throws** | resolves |
+
+Only `.ts` satisfies all three, and node matters because gotcha 16 exists so
+plain node can import these modules. `allowImportingTsExtensions` is what lets
+tsc agree, and it requires `noEmit`, which was already set.
+
+### What TypeScript found, and what it did not
+
+381 errors, none of them new defects. The code is what shipped as JavaScript.
+What changed is that a `.js` file lets TypeScript treat **every parameter as
+optional** and infer object shapes loosely, so two classes were structurally
+invisible: TS2554 (arity, 92) and TS2339 (unknown property, 269). That is 361 of
+the 381.
+
+36 of the 67 modules were already clean and are now fully checked, which is the
+half of the migration that pays immediately. The other 31 carry a
+`// @ts-nocheck` header and are declared in
+[`config/ts-migration.json`](../config/ts-migration.json) with their per-file
+error counts, so progress is measurable rather than asserted. A contract test
+pins the two together in both directions and caps the list at 31, so it may only
+shrink: an undeclared `@ts-nocheck` fails by name (verified by control), and
+fixing a module means deleting its entry in the same commit.
+
+One error was worth fixing on the spot rather than filing. `mcpServer`'s
+`result(id, payload, cache)` had three required parameters and three call sites
+in `serendipity.js` passed two. Harmless, because `...cache` spreads `undefined`
+as a no-op, but the signature was lying about its own contract for as long as it
+was JavaScript. `cache?` now says what was always true.
+
+### The lint suppression that was already there, undocumented
+
+`.oxlintrc.json` disabled six type-aware rules for `**/*.js` with no comment
+saying why, and that entry turned out to be load-bearing: it is the reason none
+of them ever fired on the Worker. Becoming TypeScript switched four of them on
+and surfaced 9 findings.
+
+One was real and is fixed: `ledger.ts` built `new Set()`, which infers `Set<any>`,
+so `require-array-sort-compare` could not tell a safe default string sort from an
+unsafe one. It says `Set<string>` now.
+
+The rest split cleanly. `tui.ts` spreading a string is DELIBERATE, because it
+renders fixed 80-column frames and is counting what occupies a column rather than
+UTF-16 units; it has its own entry saying so. The others are all modules in the
+migration inventory, where a type-aware rule reports the absence of types rather
+than a defect, so their entry is pinned to that same inventory by the contract
+test and expires with it.
+
+### The third silent walk
+
+The `/*min*/` CSS pass over the Worker modules filtered on `.js` and, after the
+rename, matched nothing. It had **no floor**, so it printed "minified 0 literals
+across 0 modules" and the build carried on shipping every Worker-rendered page
+with unminified CSS. It cost ~3.9 KB and read on the wire as a 3.92 KiB bundle
+regression that looked like a TypeScript tax and was not.
+
+Found by diffing served bytes, again. It has a floor of 7 now, which is the true
+count. That is three walks in this migration that located Worker modules by
+extension, and the two with no counted tripwire are the two that failed silently.

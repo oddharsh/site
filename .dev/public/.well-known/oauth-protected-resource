@@ -1,0 +1,18 @@
+{
+  "resource": "https://aadhar.sh/",
+  "resource_name": "aadhar.sh public agent surfaces",
+  "resource_documentation": "https://aadhar.sh/auth.md",
+  "authorization_servers": [
+    "https://aadhar.sh"
+  ],
+  "scopes_supported": [
+    "public.read",
+    "mcp.read",
+    "rn.read",
+    "photos.read",
+    "around.read"
+  ],
+  "bearer_methods_supported": [
+    "header"
+  ]
+}

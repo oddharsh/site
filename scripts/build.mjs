@@ -132,7 +132,7 @@ async function checkInvariants() {
   // become a concrete probe path). Allowlist globs are matched as patterns, never
   // required literally (a symmetric diff would false-fire on the glob entries —
   // the exact disable-magnet).
-  const idx = await read("src/worker/index.js");
+  const idx = await read("src/worker/index.ts");
   const wrangler = await read("wrangler.jsonc");
   const routesBlock = (idx.match(/const ROUTES = new Map\(\[([\s\S]*?)\]\);/) || [,""])[1];
   const routeKeys = [...routesBlock.matchAll(/\[\s*"([^"]+)"/g)].map((m) => m[1]);
@@ -153,7 +153,7 @@ async function checkInvariants() {
   // 2 (hard) — wherever a worker emits a CSP with a style-src, it includes
   // 'self'. cal emits no CSP and passes vacuously (this is the exact thing that
   // blanked serendipity's taskbar).
-  for (const f of ["www/_headers", "src/worker/lib/security.js", "serendipity/serendipity.js", "cal/src/templates.js", "cal/src/index.js"]) {
+  for (const f of ["www/_headers", "src/worker/lib/security.ts", "serendipity/serendipity.js", "cal/src/templates.js", "cal/src/index.js"]) {
     let s; try { s = await read(f); } catch { continue; }
     for (const m of s.matchAll(/style-src([^;'"]*(?:'[^']*')?[^;'"]*)*/g)) {
       const dir = m[0];
@@ -213,7 +213,7 @@ async function checkInvariants() {
   // canonical artifacts in memory and compare every consumer byte-for-byte.
   try {
     const artifacts = renderDesktopArtifacts();
-    if (await read("src/worker/lib/desktop.js") !== artifacts.moduleSource) {
+    if (await read("src/worker/lib/desktop.ts") !== artifacts.moduleSource) {
       hard.push("lib/desktop.js drifted from shell-data.mjs/site-manifest.json — run pnpm run gen:shell");
     }
     if (await read("www/icons.svg") !== artifacts.sprite) {
@@ -238,7 +238,7 @@ async function checkInvariants() {
   // file that carries the calc must agree with luna.css, or first paint lands
   // a different window height than the final.
   const floors = new Map();
-  for (const f of ["src/styles/luna.css", "src/worker/lib/chrome.js", "src/worker/writing.js", "serendipity/serendipity.js"]) {
+  for (const f of ["src/styles/luna.css", "src/worker/lib/chrome.ts", "src/worker/writing.ts", "serendipity/serendipity.js"]) {
     let s; try { s = await read(f); } catch { continue; }
     // the BODY floor only (`height:calc(...)`), not a window `max-height:calc(...)`
     for (const m of s.matchAll(/(?<!max-)height:calc\(100dvh - (\d+)px\)/g)) floors.set(f, m[1]);
@@ -289,7 +289,7 @@ async function checkInvariants() {
   try {
     const runtimeFiles = [
       "www/index.html",
-      "src/worker/index.js",
+      "src/worker/index.ts",
       "wrangler.jsonc",
       "wrangler.dev.jsonc",
     ];
@@ -300,12 +300,12 @@ async function checkInvariants() {
         if (source.includes(marker)) hard.push(`${name}: browser RUM is retired; remove ${marker}`);
       }
     }
-    if ((await readdir("src/worker")).includes("rum.js")) {
-      hard.push("src/worker/rum.js: browser RUM is retired; remove the proxy module");
+    if ((await readdir("src/worker")).includes("rum.ts")) {
+      hard.push("src/worker/rum.ts: browser RUM is retired; remove the proxy module");
     }
     for (const [name, text] of [
       ["www/_headers", await read("www/_headers")],
-      ["src/worker/lib/security.js", await read("src/worker/lib/security.js")],
+      ["src/worker/lib/security.ts", await read("src/worker/lib/security.ts")],
     ]) {
       if (containsRetiredRumHost(text)) {
         hard.push(`${name}: browser RUM is retired; remove the Cloudflare Insights CSP allowance`);
@@ -323,10 +323,10 @@ async function checkInvariants() {
   try {
     const { surfaces } = readManifest();
     const nav = await read("src/client/nav-run.js");
-    const desktop = await read("src/worker/lib/desktop.js");
+    const desktop = await read("src/worker/lib/desktop.ts");
 
     // 8a — generated projections match `pnpm run gen:manifest` output exactly.
-    const modActual = (await read("src/worker/lib/site-manifest.js")).trim();
+    const modActual = (await read("src/worker/lib/site-manifest.ts")).trim();
     if (modActual !== workerModule(surfaces).trim()) hard.push("lib/site-manifest.js drifted from site-manifest.json — run pnpm run gen:manifest");
     for (const [section, marker] of [["garage", "garage-pages"], ["lwe", "lwe-pages"]]) {
       if (readFenceBody(nav, marker) !== navFenceBody(surfaces, section)) hard.push(`nav-run.js generated:${marker} drifted from site-manifest.json — run pnpm run gen:manifest`);
@@ -636,7 +636,7 @@ await cp("www", `${OUT}/www`, {
 // The Worker is a PROGRAM, not a document, so its source lives in src/worker
 // beside cal/ and serendipity/ rather than inside the tree of things a browser
 // can fetch. Its STAGED position is unchanged: wrangler.jsonc still points main
-// at .build/src/worker/index.js, and every deploy path and content hash
+// at .build/src/worker/index.ts, and every deploy path and content hash
 // downstream is therefore untouched by the move.
 await cp("src/worker", `${OUT}/src/worker`, { recursive: true });
 // The client islands and stylesheets author in src/ beside the Worker, and stage
@@ -715,7 +715,7 @@ await cp("serendipity/serendipity.js", `${OUT}/serendipity/serendipity.js`);
     // .build/www silently dropped those two from the mirror, which the floor
     // below did not catch because 31 still cleared it.
     .concat((await readdir(`${OUT}/src/worker`, { recursive: true }))
-      .filter((f) => f.endsWith(".js"))
+      .filter((f) => f.endsWith(".ts"))
       .map((f) => `${OUT}/src/worker/${f}`))
     .concat([`${OUT}/cal/src/templates.js`, `${OUT}/serendipity/serendipity.js`]);
 
@@ -910,8 +910,8 @@ if (inlineProbe.includes("/* probe */") ||
 // does — which is also the only time the page's meaning changes.
 {
   const nonce = `?build=${BUILD_NONCE}`;
-  const grid = await import(pathToFileURL(resolve(OUT, "src/worker/lib/photo-grid.js")).href + nonce);
-  const photos = await import(pathToFileURL(resolve(OUT, "src/worker/photos.js")).href + nonce);
+  const grid = await import(pathToFileURL(resolve(OUT, "src/worker/lib/photo-grid.ts")).href + nonce);
+  const photos = await import(pathToFileURL(resolve(OUT, "src/worker/photos.ts")).href + nonce);
   const pool = photos.derivePhotoPool(
     JSON.parse(await readFile(`${OUT}/src/worker/photo-index.json`, "utf8")),
     JSON.parse(await readFile(`${OUT}/www/images/hashes.json`, "utf8")),
@@ -963,8 +963,8 @@ if (inlineProbe.includes("/* probe */") ||
 // worse than a failed deploy.
 {
   const nonce = `?build=${BUILD_NONCE}`;
-  const photos = await import(pathToFileURL(resolve(OUT, "src/worker/photos.js")).href + nonce);
-  const bot = await import(pathToFileURL(resolve(OUT, "src/worker/bot.js")).href + nonce);
+  const photos = await import(pathToFileURL(resolve(OUT, "src/worker/photos.ts")).href + nonce);
+  const bot = await import(pathToFileURL(resolve(OUT, "src/worker/bot.ts")).href + nonce);
 
   const pool = photos.derivePhotoPool(
     JSON.parse(await readFile(`${OUT}/src/worker/photo-index.json`, "utf8")),
@@ -997,7 +997,7 @@ if (inlineProbe.includes("/* probe */") ||
 // `pnpm run checkpoints:check` re-reads D1 and fails on drift.
 {
   const nonce = `?build=${BUILD_NONCE}`;
-  const updates = await import(pathToFileURL(resolve(OUT, "src/worker/updates.js")).href + nonce);
+  const updates = await import(pathToFileURL(resolve(OUT, "src/worker/updates.ts")).href + nonce);
   const points = JSON.parse(await readFile(`${OUT}/src/worker/checkpoints.json`, "utf8"));
   if (!points.length) throw new Error("updates/restore: the checkpoint projection is empty — both pages would ship with no log");
   const cp = { points, state: "ok" };
@@ -1083,7 +1083,7 @@ let dressPage = () => { throw new Error("explorer: dressPage used before 1g2 def
 // asked for a count it answers about whichever list it happens to render. The
 // devices describe an object inside a folder, so they go where that is true.
 {
-  const { PLACES, addressBar, taskPane } = await import("../src/worker/lib/explorer.js");
+  const { PLACES, addressBar, taskPane } = await import("../src/worker/lib/explorer.ts");
 
   // PLACES is a literal in a Worker module (no data file at runtime), so the
   // manifest is what keeps it honest. A section registered for the taskbar and
@@ -1105,7 +1105,7 @@ let dressPage = () => { throw new Error("explorer: dressPage used before 1g2 def
   // marked line in the STAGED copy so the Worker-rendered pages advertise the
   // same twins from the same source.
   {
-    const target = `${OUT}/src/worker/lib/twins.js`;
+    const target = `${OUT}/src/worker/lib/twins.ts`;
     const source = await readFile(target, "utf8");
     const marker = /^export const TWIN_PATHS = .*; \/\/ build:twins$/m;
     if (!marker.test(source)) throw new Error("explorer: build:twins marker missing from lib/twins.js");
@@ -1336,7 +1336,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
 // remains in www/ while only the staged worker bytes shrink on the wire.
 {
   const dir = `${OUT}/src/worker`;
-  const jsFiles = (await readdir(dir, { recursive: true })).filter((f) => f.endsWith(".js"));
+  const jsFiles = (await readdir(dir, { recursive: true })).filter((f) => f.endsWith(".ts"));
   const marker = /`(\/\*min\*\/[^`]*)`/g;
   let litCount = 0, saved = 0, fileCount = 0;
   for (const rel of jsFiles) {
@@ -1367,6 +1367,11 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     await writeFile(path, out);
     fileCount++;
   }
+  // Counted, because this pass had NO floor and the .js -> .ts conversion made it
+  // match nothing: it printed "0 literals across 0 modules" and the build carried
+  // on shipping every Worker-rendered page with unminified CSS. Found by diffing
+  // served bytes, not by any check here. Same lesson as the client-edge mirror.
+  if (litCount < 7) throw new Error(`worker CSS: minified only ${litCount} /*min*/ literals across ${fileCount} modules (expected 7+) — did the module walk stop matching?`);
   console.log(`worker CSS: minified ${litCount} /*min*/ literals across ${fileCount} modules, ~${(saved / 1024).toFixed(1)}KB raw saved`);
 }
 
@@ -1393,10 +1398,10 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     },
   };
   const nonce = `?build=${BUILD_NONCE}`;
-  const lens = await import(pathToFileURL(resolve(OUT, "src/worker/lens.js")).href + nonce);
-  const run = await import(pathToFileURL(resolve(OUT, "src/worker/run.js")).href + nonce);
-  const search = await import(pathToFileURL(resolve(OUT, "src/worker/search.js")).href + nonce);
-  const writing = await import(pathToFileURL(resolve(OUT, "src/worker/writing.js")).href + nonce);
+  const lens = await import(pathToFileURL(resolve(OUT, "src/worker/lens.ts")).href + nonce);
+  const run = await import(pathToFileURL(resolve(OUT, "src/worker/run.ts")).href + nonce);
+  const search = await import(pathToFileURL(resolve(OUT, "src/worker/search.ts")).href + nonce);
+  const writing = await import(pathToFileURL(resolve(OUT, "src/worker/writing.ts")).href + nonce);
 
   const lensResponse = lens.renderLensShell();
   if (lensResponse.status !== 200) throw new Error(`static /lens renderer returned ${lensResponse.status}`);
@@ -1453,13 +1458,13 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     // The server-rendered idle Lens shell emits only the interaction bootstrap.
     // Phase 0 hashes the full client and rewrites its URL into this file first;
     // hashing the bootstrap here makes the complete two-step chain immutable.
-    { attr: "src",  from: "/lens-boot.js",  base: "lens-boot", ext: "js",  witness: "../src/worker/lens.js" },
+    { attr: "src",  from: "/lens-boot.js",  base: "lens-boot", ext: "js",  witness: "../src/worker/lens.ts" },
     // the desktop icon sprite. Unlike the three above, every ref carries a
     // #fragment (src="/icons.svg#pin-garage"), so `frag` widens the match to
     // keep it. Its witness is the desktop partial, which is where all 12 live.
     // src= rather than href= because the refs are <img> against <view>s, not
     // <svg><use> against <symbol>s — see the WebKit note in gen-desktop-partial.mjs.
-    { attr: "src", from: "/icons.svg", base: "icons", ext: "svg", frag: true, witness: "../src/worker/lib/desktop.js" },
+    { attr: "src", from: "/icons.svg", base: "icons", ext: "svg", frag: true, witness: "../src/worker/lib/desktop.ts" },
     // quiz.js + notepad.js joined 2026-07-27. Both were served unhashed at max-age=300,
     // so hashing them buys a year + immutable outright, and enrolling them in /a/ means
     // they inherit the brotli q11 twin and the dcz delta path for free.
@@ -1471,7 +1476,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     // It would silently miss those three and the witness tripwire would fail the deploy.
     // Moving them needs a different mechanism, not another line here.
     { attr: "src", from: "/quiz.js",    base: "quiz",    ext: "js", witness: "garage/encoding.html" },
-    { attr: "src", from: "/notepad.js", base: "notepad", ext: "js", witness: "../src/worker/writing.js" },
+    { attr: "src", from: "/notepad.js", base: "notepad", ext: "js", witness: "../src/worker/writing.ts" },
     // Shared LWE structure is a separate warm-cache object.
     { attr: "href", from: "/lwe-base.css", base: "lwe-base", ext: "css", witness: "lwe/vigenere.html" },
   ];
@@ -1635,7 +1640,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   // _worker.js), and mirroring the source layout is what lets one relative
   // specifier resolve in both the source and the staged tree.
   for (const rel of await readdir(`${OUT}/src/worker`, { recursive: true })) {
-    if (rel.endsWith(".js")) targets.push(`${OUT}/src/worker/${rel}`);
+    if (rel.endsWith(".ts")) targets.push(`${OUT}/src/worker/${rel}`);
   }
   let refCount = 0, filesTouched = 0;
   for (const path of targets) {
@@ -1733,7 +1738,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   // Point the worker's Early-Hints header and its HTML dictionary Link header at
   // the exact same content-addressed assets as the staged documents.
   {
-    const p = `${OUT}/src/worker/lib/shell-assets.js`;
+    const p = `${OUT}/src/worker/lib/shell-assets.ts`;
     const src = await readFile(p, "utf8");
     const line = `export const SHELL_ASSETS = { luna: ${JSON.stringify(hashedFor.luna)}, nav: ${JSON.stringify(hashedFor.nav)} }; // build:shell-assets`;
     const dictionaryLine = `export const PAGE_DICTIONARY = ${JSON.stringify(hashedFor["page-family"])}; // build:page-dictionary`;
@@ -2010,7 +2015,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   const served = new Set();
   for (const rel of await readdir(`${OUT}/www`, { recursive: true })) served.add("/" + rel);
 
-  const idxSrc = await readFile("src/worker/index.js", "utf8");
+  const idxSrc = await readFile("src/worker/index.ts", "utf8");
   const wranglerSrc = await readFile("wrangler.jsonc", "utf8");
   const routesSrc = (idxSrc.match(/const ROUTES = new Map\(\[([\s\S]*?)\]\);/) || [, ""])[1];
   const allowSrc = (wranglerSrc.match(/"run_worker_first"\s*:\s*\[([\s\S]*?)\]/) || [, ""])[1];
@@ -2216,7 +2221,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     throw new Error(`csp-hash: only ${covered} of ${pages.length} documents got hashes (floor is 40) — did an earlier HTML pass change shape?`);
   }
 
-  const target = `${OUT}/src/worker/lib/csp-hashes.js`;
+  const target = `${OUT}/src/worker/lib/csp-hashes.ts`;
   const source = await readFile(target, "utf8");
   const marker = /^export const PAGE_SCRIPT_HASHES = .*; \/\/ build:csp-hashes$/m;
   if (!marker.test(source)) throw new Error("csp-hash: build:csp-hashes marker missing from lib/csp-hashes.js");

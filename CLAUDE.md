@@ -22,7 +22,7 @@ decides which one a given file belongs in:
 | entry | holds |
 |---|---|
 | **`www/`** | **everything the site serves.** Pages, client scripts, CSS, photos, dictionaries. If a browser can fetch it, it is in here. |
-| **`src/worker/`** | **the site Worker**, which was `www/_worker.js/` until 2026-08-16. It moved for the reason the row below already gave for cal and serendipity: it is a program with its own tests, not a document. It was never served either way (`.assetsignore` has always listed `_worker.js`), so the move changed no served byte. It STAGES to `.build/src/worker/`, mirroring its source path, and that mirroring is load-bearing rather than tidy: cal and serendipity import the Worker across the project boundary and are bundled from `.build/`, so a relative specifier has to resolve in BOTH trees, which is only possible when the two have the same shape. |
+| **`src/worker/`** | **the site Worker**, TypeScript since 2026-08-16 and `www/_worker.js/` before that. It moved for the reason the row below already gave for cal and serendipity: it is a program with its own tests, not a document. It was never served either way (`.assetsignore` has always listed `_worker.js`), so the move changed no served byte. It STAGES to `.build/src/worker/`, mirroring its source path, and that mirroring is load-bearing rather than tidy: cal and serendipity import the Worker across the project boundary and are bundled from `.build/`, so a relative specifier has to resolve in BOTH trees, which is only possible when the two have the same shape. Specifiers say `.ts` because that is the ONLY spelling all three runtimes accept: bun and esbuild resolve `./x.js` and `./x.ts` alike, node 26 resolves only `./x.ts`, and node has to work because contract-tests imports these modules (gotcha 16). 36 of the 67 modules are fully type-checked; the other 31 carry `// @ts-nocheck` and are declared in [`config/ts-migration.json`](config/ts-migration.json), which a contract test caps so it may only SHRINK. Those errors are not defects: the bundle is byte-identical at 666.62 KiB, and a `.js` file merely let TypeScript treat every parameter as optional. |
 | **`src/client/`**, **`src/styles/`** | the client islands (`nav.js`, `tooltip.js`, `lens*.js`, `quiz.js`, …) and the stylesheets (`luna.css`, `lwe-base.css`, …), moved out of `www/` on 2026-08-16. They STAGE back to the root of the served tree, so their public URLs are still `/nav.js` and `/luna.css`: source layout and URL layout are different questions, and only the first one moved. Every served byte and every `/a/` content hash is unchanged. |
 | `cal/`, `serendipity/` | the two application modules the site Worker bundles and serves at `/coffee` and `/serendipity`. They sit outside `www/` because they are programs with their own tests, not documents. |
 | `cf-garage/`, `lwe-ask/`, `lens-reader/` | the three SEPARATELY deployed auxiliary Workers, each with its own `wrangler.toml` and its own deploy. Nothing here reaches production through the site Worker. |
@@ -655,7 +655,7 @@ worktrees may edit freely, but a worktree is not a release surface.
 
   A preview runs **production bindings and secrets**. Cloudflare offers no
   per-version override, so the same RN_KV, the same photo bucket, the same three
-  D1s, the same `RESEND_API_KEY`. `src/worker/lib/preview.js` is what
+  D1s, the same `RESEND_API_KEY`. `src/worker/lib/preview.ts` is what
   makes a preview URL safe to paste into a PR: every response is `noindex`
   (a byte-identical duplicate of the site on another host would otherwise compete
   with the canonical one), and writes are refused by DEFAULT-DENY on unsafe
@@ -817,7 +817,7 @@ Single-page personal site at `aadhar.sh`. A Cloudflare Worker with static assets
 | `src/client/nav.js` | Site-wide XP **desktop shell**. The ONE shared external asset (deferred, SW-cached) — every page includes `<script src="/nav.js" defer>`; it injects its own `<style>` + builds, into `<body>`: the **Bliss desktop** wallpaper, **draggable desktop icons** (Notepad + the 5 profiles; icons drag freely within a visit but positions are DELIBERATELY not persisted, since the stored layout was read back in states that couldn't honour it and came back as a stack), the **taskbar** (Start orb → Run, first-level-subpage app buttons each with a per-section SVG icon, clock via Temporal), and the **Run** command palette (⌘K / Start). Also owns the **OS-window model**: body is a clipping flex desktop, each `.window`/`.np-window` is pinned + its content scrolls internally behind a **custom XP scrollbar**, windows are **draggable** (top is a hard boundary) + **resizable**, and Navigations hard-cut: the cross-document View Transition this file used to describe was removed 2026-07-30 (prerender already made navigation instant, so the animation was pure added latency). Sets each first-level route's **tab favicon** to its section icon. Run destinations: pages + profiles inline; 158 photos lazy-loaded from `/images/manifest.json` with `/images/alt.json` captions. Wired into homepage + all garage pages + worker-gen `/around`,`/whoareyou`,`/bot` + serendipity shell. |
 | `src/client/quiz.js` | The **understanding-check** widget (deferred, shared, minified at deploy with a `/quiz.src.js` twin). Every garage + LWE content page ends with an active-recall quiz rendered by this one script from an inline `<script type="application/json" id="luq-data">` block: garage pages get an XP GroupBox self-test (`<section id="luq">` mount), LWE pages get the quiz as a continuation of the MSN chat (appended into `.log`, no mount). Misconception-based distractors, deterministic option shuffle, per-page best score in localStorage. The idea is Geoffrey Litt's "Understanding is the new bottleneck" (credited in the widget footer); /lens carries the same pedagogy in copy (predict-then-check mode notes, the Delta counterfactual lab as a Papert micro-world). |
 | `www/terminal.js` | The **Windows PowerShell** console at `/terminal`, and an actual **MCP client**: typing `dict <url>` sends the same `POST /mcp` `tools/call` an agent sends, and echoes the request before making it. Deliberately no private endpoints — if the console had its own, watching it would say nothing about what an agent gets and the two could drift unnoticed. The page server-renders one frame as boot output, so the route reads with JS off. Builds output with `createTextNode`, never `innerHTML`, because frames carry photo captions and third-party page titles. |
-| `src/worker/terminal.js` + `lib/tui.js` | The tools and the 80-column frame renderer. Tools are TOP-LEVEL utilities (`/finger`, `/radar`, `/dict`, `/cache`), because this site puts utilities at the root and only content nests; `/terminal` is the console that DRIVES them, not their parent. The frame is a REPRESENTATION alongside `.md`: one URL answers HTML to a browser, the frame to everything else, and `<tool>.txt` explicitly. **The MCP tool name IS the route name** — what you type in the console, what you curl, and what an agent calls are one word, and a contract test asserts every tool with a route is reachable over MCP. State is query params (small and addressable), so frames fork, bookmark and replay. `lib/tui.js` is pure, which is what lets one renderer answer HTTP, MCP and `node --test`; its palette is MID-TONES ONLY because a terminal theme belongs to the visitor. |
+| `src/worker/terminal.ts` + `lib/tui.js` | The tools and the 80-column frame renderer. Tools are TOP-LEVEL utilities (`/finger`, `/radar`, `/dict`, `/cache`), because this site puts utilities at the root and only content nests; `/terminal` is the console that DRIVES them, not their parent. The frame is a REPRESENTATION alongside `.md`: one URL answers HTML to a browser, the frame to everything else, and `<tool>.txt` explicitly. **The MCP tool name IS the route name** — what you type in the console, what you curl, and what an agent calls are one word, and a contract test asserts every tool with a route is reachable over MCP. State is query params (small and addressable), so frames fork, bookmark and replay. `lib/tui.js` is pure, which is what lets one renderer answer HTTP, MCP and `node --test`; its palette is MID-TONES ONLY because a terminal theme belongs to the visitor. |
 | the `/terminal` window | It is a **console window, not a page**, and the difference is entirely in what was REMOVED. `lunaPage` gained `windowClass`/`contentClass`/`windowAttrs` (all defaulting to empty, so the other nine callers are byte-identical) and the window declares `data-no-histnav`, which `nav.js` honours by skipping the site-wide Back/Forward injection — those are BROWSER controls, and a console carrying them reads as a terminal running inside Internet Explorer. Drag, resize, maximize and close all stay, because those are OS chrome. There is also nothing below the window: the explanatory paragraph that used to sit there was the single strongest tell, since real consoles do not come with a caption. Width is 624px so the console is exactly 80 columns, the size a real one opens at; left at the 760px page default it carried 136px of dead field to the right of every frame. Fonts stay on the design system — `"Lucida Console", var(--font-mono)`, one native Windows font in front of the existing token, no `@font-face`, no bytes. |
 | `src/worker` | The module worker (bundled by wrangler at deploy). Owns routing, photo serving from R2, manifest building, Spotify playlist scraping, AadharshBot crawler, the `/writing` Notepad pages, cache-control overrides. |
 | `www/_headers` | Static-asset cache + security headers (CSP, Permissions-Policy, etc.). Applied to direct static-asset requests; the worker overrides cache-control for select paths. |
@@ -1164,7 +1164,7 @@ per RFC 9421 + Web Bot Auth IETF draft. JWKS at
 
 ### `/mcp` — dual-era, and why both eras are served
 
-`src/worker/mcp.js` speaks **2026-07-28** and the three legacy revisions
+`src/worker/mcp.ts` speaks **2026-07-28** and the three legacy revisions
 (`2025-06-18`, `2025-03-26`, `2024-11-05`) on one endpoint. The spec sanctions
 this explicitly, and the client's opening move picks the era: a request carrying
 per-request `_meta` is served statelessly under the new revision, an `initialize`
@@ -1208,7 +1208,7 @@ Three deliberate deviations, all written down at the code:
    different jobs, and the strict half of the ecosystem does require the header:
    measured 2026-08-14, `mcp.context7.com` and `docs.mcp.cloudflare.com` both
    answer 400 `-32020` without it and 200 with it. So `foreignMcpTools()` in
-   [`lib/doors.js`](src/worker/lib/doors.js), the one MCP client this site
+   [`lib/doors.js`](src/worker/lib/doors.ts), the one MCP client this site
    has, SENDS `Mcp-Method` and derives it from the same constant as the body so
    the two cannot disagree. It also offers BOTH framings on `Accept`, because a
    Streamable HTTP server may answer JSON or an SSE stream at its own discretion
@@ -1273,7 +1273,7 @@ Three deliberate deviations, all written down at the code:
 (`serendipity/serendipity.js`) is a separate server with different tools and no
 shared data, but the wire rules — versions, `_meta` keys, `resultType`, cache
 hints, error codes, the header check, the version gate — live once in
-[`lib/mcp-protocol.js`](src/worker/lib/mcp-protocol.js) and both import
+[`lib/mcp-protocol.js`](src/worker/lib/mcp-protocol.ts) and both import
 it. Two MCP servers on one origin speaking different dialects is a bug a client
 author reports to you rather than one you find yourself.
 
@@ -1533,7 +1533,7 @@ generic hex back.
   **`/lens/browser?do=<recipe>` runs a FIXED script in the page before reading
   it**, which is how the Browser view answers "what does a machine see once the
   consent wall is gone". Two recipes ship, `expand` and `consent`, both
-  synchronous, in [`lens-recipes.js`](src/worker/lens-recipes.js).
+  synchronous, in [`lens-recipes.js`](src/worker/lens-recipes.ts).
   `?recipes=1` publishes the whole allowlist verbatim, and a contract test pins
   the published script to the executed one.
 
