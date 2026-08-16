@@ -143,7 +143,7 @@
         "fetch the page again": phase(ms.fetch),
         "build a DOM (linkedom)": phase(ms.parse),
         "extract (readability)": phase(ms.extract),
-        "to markdown (turndown)": phase(ms.markdown),
+        "to markdown (first-party)": phase(ms.markdown),
       }) + (blind
         ? '<div class="lx-cap">A Worker\'s clock advances across I/O and never during synchronous execution, so the three CPU phases cannot time themselves from inside. They are real work — the same run under a local runtime reported 30 ms, 347 ms and 10 ms — and the zeros here mean "unmeasurable", not "free". Actual CPU is readable in Workers Logs as <code>cpuTime</code>.</div>'
         : ""));
