@@ -36,6 +36,7 @@ import { minifySync } from "oxc-minify";
 import { readManifest, workerModule, navFenceBody, readFenceBody, runProfilesBody } from "./gen-manifest.mjs";
 import { parseCss } from "./lib/css-parse.mjs";
 import { HTML_MARKERS } from "./lib/html-markers.mjs";
+import { zstdCompressDictionaryBatch } from "./lib/zstd-batch.mjs";
 import { patchStaticShell, renderDesktopArtifacts, staticShellPages } from "../www/scripts/gen-desktop-partial.mjs";
 
 const OUT = ".build";
@@ -62,14 +63,10 @@ function brotliQ11(bytes) {
 // the raw digest. Being valid zstd, that prefix is skipped by any conforming
 // decoder, which is what lets `zstd -d -D dict` round-trip the whole file.
 //
-// One function because the shell pass and the page pass each built this by hand and
+// One framing function because the shell pass and the page pass each built this by hand and
 // the browser is the decoder: a byte wrong in either copy is a delta no client can
 // apply, and only on the surface whose copy drifted. Consolidated 2026-07-28.
-function dczEncode(bytes, dictBytes) {
-  const frame = zstdCompressSync(bytes, {
-    dictionary: dictBytes,
-    params: { [zlibConstants.ZSTD_c_compressionLevel]: 19 },
-  });
+function frameDcz(frame, dictBytes) {
   const digest = createHash("sha256").update(dictBytes).digest();
   const len = Buffer.alloc(4);
   len.writeUInt32LE(digest.length, 0);
@@ -77,6 +74,22 @@ function dczEncode(bytes, dictBytes) {
     out: Buffer.concat([Buffer.from([0x5e, 0x2a, 0x4d, 0x18]), len, digest, frame]),
     digest,
   };
+}
+
+function dczEncode(bytes, dictBytes) {
+  const frame = zstdCompressSync(bytes, {
+    dictionary: dictBytes,
+    params: { [zlibConstants.ZSTD_c_compressionLevel]: 19 },
+  });
+  return frameDcz(frame, dictBytes);
+}
+
+async function dczEncodeBatch(jobs) {
+  const frames = await zstdCompressDictionaryBatch(jobs.map(({ bytes, dictBytes }) => ({
+    bytes,
+    dictionary: dictBytes,
+  })));
+  return jobs.map(({ dictBytes }, index) => frameDcz(frames[index], dictBytes));
 }
 
 // Parse host-shaped CSP sources before comparing DNS labels. A raw substring
@@ -2115,6 +2128,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     const bytes = await readFile(`${OUT}/www/${page}`);
     return { page, bytes, br: await brotliQ11(bytes) };
   }));
+  const deltaJobs = [];
   for (const { page, bytes, br } of compressedPages) {
     if (br.length < bytes.length) {
       await writeFile(`${OUT}/www/${page}.br`, br);
@@ -2125,22 +2139,27 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     for (const candidate of pageDicts.filter((d) => d.slug === slug)) {
       const dictBytes = brotliDecompressSync(await readFile(`${dictDir}/${candidate.name}`));
       if (dictBytes.equals(bytes)) continue;
-      const { out, digest } = dczEncode(bytes, dictBytes);
-      if (out.length >= br.length) {
-        console.log(`page-delta: SKIPPED ${slug} vs per-page ${candidate.tag.slice(0, 8)} (dcz ${out.length} >= br ${br.length})`);
-        continue;
-      }
-      await writeFile(`${OUT}/www/pd/${slug}.${digest.toString("hex").slice(0, 16)}.dcz`, out);
-      dCount++; dBytes += out.length; dPlain += br.length; pageCount++; pageBytes += out.length;
+      deltaJobs.push({ kind: "page", slug, tag: candidate.tag, bytes, dictBytes, br });
     }
     if (familyBytes) {
-      const { out, digest } = dczEncode(bytes, familyBytes);
-      if (out.length >= br.length) {
-        console.log(`page-delta: SKIPPED ${slug} vs site-page (dcz ${out.length} >= br ${br.length})`);
-      } else {
-        await writeFile(`${OUT}/www/pd/${slug}.${digest.toString("hex").slice(0, 16)}.dcz`, out);
-        dCount++; dBytes += out.length; dPlain += br.length; familyCount++; familyBytesOut += out.length;
-      }
+      deltaJobs.push({ kind: "family", slug, bytes, dictBytes: familyBytes, br });
+    }
+  }
+  const deltas = await dczEncodeBatch(deltaJobs);
+  for (let i = 0; i < deltaJobs.length; i++) {
+    const job = deltaJobs[i];
+    const { out, digest } = deltas[i];
+    if (out.length >= job.br.length) {
+      const label = job.kind === "page" ? `per-page ${job.tag.slice(0, 8)}` : "site-page";
+      console.log(`page-delta: SKIPPED ${job.slug} vs ${label} (dcz ${out.length} >= br ${job.br.length})`);
+      continue;
+    }
+    await writeFile(`${OUT}/www/pd/${job.slug}.${digest.toString("hex").slice(0, 16)}.dcz`, out);
+    dCount++; dBytes += out.length; dPlain += job.br.length;
+    if (job.kind === "page") {
+      pageCount++; pageBytes += out.length;
+    } else {
+      familyCount++; familyBytesOut += out.length;
     }
   }
   console.log(`pages: ${brCount} brotli q11 twins, ${(brRaw / 1024).toFixed(1)}KB -> ${(brEnc / 1024).toFixed(1)}KB`);
