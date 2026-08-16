@@ -159,3 +159,70 @@ the reason, rather than written here with the caret quietly dropped.
   demo Worker. It is a separately deployed auxiliary Worker, so nothing here
   reaches production through the site Worker.
 
+
+## Evaluated and declined: dmmulroy/anti-slop
+
+[anti-slop](https://github.com/dmmulroy/anti-slop) is 15 Oxlint rules that
+reject low-evidence TypeScript and JavaScript patterns. It is designed to be
+VENDORED rather than depended on, so adopting it means copying ~20 source files
+into this repo and owning them. Measured against this tree on 2026-08-15, one
+rule was worth that and it was already available in core Oxlint, so nothing was
+vendored and `@oxlint/plugins` was not added.
+
+The measurement, run by pointing a throwaway config's `jsPlugins` at a clone
+and enabling all 15 rules at `error` over `www cal serendipity scripts
+pipelines lens-reader/src` (165 files):
+
+| rule | findings | verdict |
+|---|--:|---|
+| `no-runtime-typeof` | 110 | rejected, see below |
+| `no-shape-in-symbol-names` | 81 | rejected, see below |
+| `no-conditional-empty-object-spread` | 12 | rejected, see below |
+| the other 12 | 0 | 10 of them structurally |
+
+**Ten of the fifteen rules can never fire here**, because they visit only
+TypeScript AST nodes (`TSAsExpression`, `TSTypeAliasDeclaration`,
+`TSIndexSignature`, `TSParameterProperty`) and this tree has no `.ts` source at
+all. Everything served is JavaScript, type-checked through JSDoc and tsgolint.
+That is 10 rules of vendored code to maintain against a TypeScript migration
+nobody has proposed. Revisit only if one starts.
+
+**The three that do fire each disagree with a documented house idiom**, which is
+the same test `.oxlintrc.json` already applies to `no-sparse-arrays` and
+`unicorn/no-useless-spread`: a rule needing dozens of inline disables is a rule
+that disagrees with the codebase, and the disables become the noise.
+
+- `no-runtime-typeof` wants boundary parsing instead of ad hoc `typeof`
+  narrowing, which is right in a repo with a schema library. This Worker parses
+  third-party HTML, KV JSON and Spotify embeds with no validator anywhere, so
+  the rule is asking for a rewrite rather than a fix. Its `allowInTypeGuards`
+  escape hatch needs TypeScript predicate signatures, so it buys nothing here.
+- `no-shape-in-symbol-names` bans the term outright and is not configurable.
+  `documentShape`, `lensSitemapShape` and `lensJsonShape` are `/lens` domain
+  vocabulary, and `shape` is a PUBLISHED field on the `/lens/browser` snapshot
+  payload. Renaming them to satisfy a linter would change a wire contract.
+- `no-conditional-empty-object-spread` flags `...(x ? { k } : {})`, and all 12
+  sites are the absent-rather-than-zero discipline this repo applies everywhere
+  (the photo pipeline's nullable fields, the span attribute rule, `ranking`'s
+  `dropped` and `common` keys). Its suggested repair, building the object across
+  separate statements, trades a declarative literal for imperative mutation.
+
+**What was taken is the one rule with zero findings and real teeth**,
+`no-module-mocking`, which rejects `vi.mock` in favour of real dependency
+seams. Core Oxlint already ships `vitest/no-restricted-vi-methods`, so it is
+three lines in `.oxlintrc.json` with nothing vendored and no new dependency.
+`cal/` is the only Vitest project here and its 7 test files use real seams
+today, so it arms a tripwire rather than starting a cleanup, on the surface
+where a wrong assertion means a real person got double-booked.
+
+Adding it surfaced a trap worth more than the rule. **Naming any plugin in
+`plugins` REPLACES the default set rather than appending to it**, silently: with
+`"plugins": ["vitest"]`, a planted `Promise.all([p])` stopped reporting
+`unicorn/no-single-promise-in-promise-methods`, the lint still exited 0, and the
+tree read as clean because most of the rules checking it were gone. The config
+now lists all five explicitly with that measurement at the array.
+
+To re-run the whole evaluation, clone the repo, `pnpm install` inside it, and
+point a scratch config at `src/index.ts` through `jsPlugins`. The pinned Oxlint
+1.78.0 does support custom JS plugins and `@oxlint/plugins` is published at a
+matching 1.78.0, so feasibility was never the blocker; applicability was.
