@@ -46,7 +46,7 @@ import { join } from "node:path";
 import { chromium } from "playwright-core";
 import { lensChipTargets } from "./lib/lens-chips.mjs";
 import { readDocument } from "./lib/html-to-md.mjs";
-import { documentShape } from "../www/_worker.js/lens-render.js";
+import { documentTally } from "../www/_worker.js/lens-render.js";
 import { WIRE_TIMING, summariseWire } from "../www/_worker.js/lens-wire.js";
 import { BOT_UA } from "../www/_worker.js/lib/botauth.js";
 import { EXECUTION_PROBE } from "../www/_worker.js/lib/agent-execution.js";
@@ -256,8 +256,8 @@ async function capture(browser, url) {
       fetchedBy: "Local headless Chrome (Cloudflare Browser Run budget exhausted)",
       engine: "chromium-local-capture",
       capturedAt: new Date().toISOString(),
-      shape: documentShape(content),
-      shapeTruncated: content.length > CONTENT_MAX,
+      tally: documentTally(content),
+      tallyTruncated: content.length > CONTENT_MAX,
       elapsedMs: Date.now() - started,
       _png: png,
     };
@@ -320,7 +320,7 @@ try {
     const png = snap._png;
     delete snap._png;
     const json = JSON.stringify(snap);
-    const words = snap.shape ? snap.shape.words : 0;
+    const words = snap.tally ? snap.tally.words : 0;
     process.stdout.write(`${String(snap.status ?? "?").padEnd(4)} ${String(words).padStart(6)} words  ${bytes(json.length).padStart(9)}  ${snap.elapsedMs} ms\n`);
 
     if (json.length > KV_MAX) {

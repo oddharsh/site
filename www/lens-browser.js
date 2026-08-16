@@ -79,14 +79,14 @@
     if (!renWords) return null;                       // absent, never 0%
     return Math.min(100, Math.round((rawWords / renWords) * 100));
   }
-  function structural(shape, a) {
+  function structural(tally, a) {
     // Only the axes the HTTP side actually measured. anatomy carries images and
     // their alt coverage but no heading or link totals, so claiming a delta on
     // those would be inventing the "before" half of a comparison.
     var rows = [];
-    if (shape.jsonld != null) rows.push([shape.jsonld, "JSON-LD block"]);
-    if (shape.headings != null) rows.push([shape.headings, "heading"]);
-    if (shape.links != null) rows.push([shape.links, "link"]);
+    if (tally.jsonld != null) rows.push([tally.jsonld, "JSON-LD block"]);
+    if (tally.headings != null) rows.push([tally.headings, "heading"]);
+    if (tally.links != null) rows.push([tally.links, "link"]);
     return rows.map(function (r) {
       return r[0] + " " + r[1] + (r[0] === 1 ? "" : "s");
     }).join(" &middot; ");
@@ -96,29 +96,30 @@
     if (!a || a.rawBytes == null) return "";
     var renBytes = (snapshot.content || "").length;
     var rawWords = a.wordCount || 0;
-    var shape = snapshot.shape;
+    var tally = snapshot.tally;
 
-    // Old snapshots cached before the server started counting have no `shape`.
-    // Fall back to parsing the delivered body, which is what this did for its
-    // whole life — and keep the truncation bail with it, because a capped DOM
-    // compared against a full HTTP body produced confident nonsense
-    // (stripe: "1874 -> 139 words" off a 120KB slice).
-    if (!shape) {
+    // A snapshot can arrive without a `tally`: one cached before the server
+    // started counting, or one cached under the old `shape` key before that
+    // rename. Both drain on the 6h TTL. Fall back to parsing the delivered
+    // body, which is what this did for its whole life, and keep the truncation
+    // bail with it, because a capped DOM compared against a full HTTP body
+    // produced confident nonsense (stripe: "1874 -> 139 words" off a 120KB slice).
+    if (!tally) {
       if (snapshot.contentTruncated) {
         return '<div class="lx-browser-delta"><b>HTTP vs rendered:</b> ' +
           esc(bytes(a.rawBytes)) + " &rarr; &ge;" + esc(bytes(renBytes)) +
           " (the rendered body hit the capture cap). A word-level comparison needs the full body, so Lens leaves it uncounted.</div>";
       }
-      shape = { words: (snapshot.content || "")
+      tally = { words: (snapshot.content || "")
         .replace(/<(script|style|noscript|template|svg)[\s\S]*?<\/\1>/gi, " ")
         .replace(/<[^>]+>/g, " ").split(/\s+/).filter(Boolean).length };
     }
 
-    // The cap no longer silences the comparison. The server counts the shape
+    // The cap no longer silences the comparison. The server counts the tally
     // from the FULL rendered body before truncating the `content` field, so a
     // capped snapshot still yields honest word counts — which is exactly the
     // case the old bail existed to refuse.
-    var renWords = shape.words || 0;
+    var renWords = tally.words || 0;
     var share = pct(rawWords, renWords);
     var headline;
     if (share === null) {
@@ -132,7 +133,7 @@
         rawWords + " of the " + renWords + " words a browser ends up with.";
     }
 
-    var extra = structural(shape, a);
+    var extra = structural(tally, a);
     return '<div class="lx-browser-delta"><b>HTTP vs rendered:</b> ' + headline +
       '<div class="lx-cap">' + esc(bytes(a.rawBytes)) + " &rarr; " + esc(bytes(renBytes)) +
       (snapshot.contentTruncated ? "+" : "") + " &middot; " + rawWords + " &rarr; " + renWords + " words" +
@@ -186,14 +187,14 @@
       head = "Nothing to do here. Lens examined <b>" + (it.scanned || 0) + "</b> candidate" + (it.scanned === 1 ? "" : "s") + " and none matched.";
     } else {
       var n = it.acted, noun = n + " element" + (n === 1 ? "" : "s");
-      var aw = (after.shape && after.shape.words) || 0;
+      var aw = (after.tally && after.tally.words) || 0;
       // The client's own plain snapshot wins over the server's `it.before`, and
       // that order is deliberate rather than accidental. Both are the same
-      // documentShape() of the same URL, but the server's copy came from a KV
+      // documentTally() of the same URL, but the server's copy came from a KV
       // read that can miss (eventual consistency, or a plain run that was never
       // cached) while the pane is still holding the real thing in memory. So
       // beforeSource can honestly say "none" while a delta is still shown.
-      var bw = before && before.shape ? before.shape.words : (it.before ? it.before.words : null);
+      var bw = before && before.tally ? before.tally.words : (it.before ? it.before.words : null);
       if (bw == null) {
         head = "<b>" + noun + "</b> changed. Lens has no plain snapshot to measure this against, so it is not claiming a delta.";
       } else if (aw <= bw) {

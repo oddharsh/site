@@ -25,7 +25,7 @@ import {
 } from "../www/_worker.js/lens.js";
 import { EXECUTION_META, EXECUTION_PROBE, executionChecks } from "../www/_worker.js/lib/agent-execution.js";
 import { httpWords } from "./check-agent.mjs";
-import { lensReadiness, lensSitemapShape, lensSitemapDeclared, lensAgentDoors } from "../www/_worker.js/lens.js";
+import { lensReadiness, lensSitemapVerdict, lensSitemapDeclared, lensAgentDoors } from "../www/_worker.js/lens.js";
 import { lensRecipe, lensRecipeIds, lensRecipeScript } from "../www/_worker.js/lens-recipes.js";
 import { handleCoffeeAvailability } from "../www/_worker.js/coffee.js";
 import { reservationName } from "../cal/src/reservation.js";
@@ -1083,7 +1083,7 @@ test("the receipt is read, then removed before anything counts or caps it", asyn
         captured[name] = input;
         const n = input.addScriptTag[0].content.match(/"([0-9a-f]{16})"/)[1];
         // 500 words of padding inside the receipt: if the strip happens after
-        // documentShape, they land in the word count and the delta lies.
+        // documentTally, they land in the word count and the delta lies.
         return Response.json({
           result: { content: `<html><body><p>one two three</p><script type="application/lens-receipt" id="lens-recipe-receipt">{"v":1,"n":"${n}","acted":4,"scanned":9,"note":"acted","pad":"${"word ".repeat(500)}"}</script></body></html>` },
           meta: { status: 200 },
@@ -1097,7 +1097,7 @@ test("the receipt is read, then removed before anything counts or caps it", asyn
   assert.equal(body.interaction.acted, 4);
   assert.equal(body.interaction.scanned, 9);
   assert.equal(body.content.includes("lens-recipe-receipt"), false, "the receipt must not reach the reader's content");
-  assert.equal(body.shape.words, 3, "the receipt must be gone before the words are counted");
+  assert.equal(body.tally.words, 3, "the receipt must be gone before the words are counted");
 });
 
 test("a page cannot forge a result for a script it was not given", async () => {
@@ -1143,7 +1143,7 @@ test("a recipe that finds nothing, or never runs, is a 200 and says which", asyn
   assert.equal(body.ok, true);
   assert.equal(body.interaction.ran, false);
   assert.equal(body.interaction.note, "no-receipt", "a CSP-refused injection is reported, not hidden");
-  assert.equal(body.shape.words, 3, "and the snapshot itself is still returned in full");
+  assert.equal(body.tally.words, 3, "and the snapshot itself is still returned in full");
 });
 
 test("a recipe run caches beside the plain snapshot, never on top of it", async () => {
@@ -1174,14 +1174,14 @@ test("a recipe run caches beside the plain snapshot, never on top of it", async 
 test("the before comes from the cached plain snapshot, and is never manufactured", async () => {
   // Rendering a before on demand would be two Quick Actions for one click.
   let quickActions = 0;
-  const plain = { ok: true, shape: { words: 210, headings: 2, links: 14, images: 3, jsonld: 0 } };
+  const plain = { ok: true, tally: { words: 210, headings: 2, links: 14, images: 3, jsonld: 0 } };
   const env = {
     BROWSER: { async quickAction() { quickActions++; return Response.json({ result: { content: "<html><body>a b c</body></html>" }, meta: {} }); } },
     RN_KV: { get: async (k) => (k.endsWith(":expand") ? null : plain), put: async () => {} },
   };
   const body = await (await handleLensBrowser(browserReq("&do=expand"), env, context())).json();
   assert.equal(quickActions, 1, "one click must cost exactly one render");
-  assert.deepEqual(body.interaction.before, plain.shape);
+  assert.deepEqual(body.interaction.before, plain.tally);
   assert.equal(body.interaction.beforeSource, "kv");
 
   // And with no plain entry, no delta is claimed rather than a zero invented.
@@ -4472,8 +4472,8 @@ test("every browser lens reads its cache before it checks a budget", async () =>
   }
 });
 
-test("documentShape counts substance, not framework payload", async () => {
-  const { documentShape } = await import("../www/_worker.js/lens-render.js");
+test("documentTally counts substance, not framework payload", async () => {
+  const { documentTally } = await import("../www/_worker.js/lens-render.js");
 
   // A client-rendered shell: almost all of its bytes are an inline script, and
   // none of that is anything a reader or a parser gets. This is why the shape
@@ -4481,12 +4481,12 @@ test("documentShape counts substance, not framework payload", async () => {
   // content and call this page mostly-visible to a crawler.
   const raw = `<html><head><title>Shop</title></head><body><div id="root"></div>
     <script>${"var padding='x';".repeat(400)}</script></body></html>`;
-  const shell = documentShape(raw);
+  const shell = documentTally(raw);
   assert.equal(shell.words, 1, "the title counts, the 6KB script body does not");
   assert.equal(shell.headings, 0);
   assert.equal(shell.jsonld, 0);
 
-  const rendered = documentShape(`<html><body><h1>Winter jackets</h1>
+  const rendered = documentTally(`<html><body><h1>Winter jackets</h1>
     <p>Forty two jackets, wool and down, in stock today.</p>
     <a href="/a">one</a><a href="/b">two</a><img src="/j.png">
     <script type="application/ld+json">{"@type":"Product"}</script></body></html>`);
@@ -7100,28 +7100,28 @@ test("a 200 at the sitemap URL is not a sitemap until something reads it", () =>
   // A missed sitemap is an undercount; an invented one is a false claim, so the
   // validator refuses rather than guesses.
   const html = { ok: true, status: 200, contentType: "text/html", body: "<!doctype html><html><body>Not found</body></html>", url: "https://x.test/sitemap.xml" };
-  assert.equal(lensSitemapShape(html).valid, false, "an HTML page at the sitemap URL is not a sitemap");
-  assert.match(lensSitemapShape(html).reason, /HTML/, "and the reason has to name what it actually got");
+  assert.equal(lensSitemapVerdict(html).valid, false, "an HTML page at the sitemap URL is not a sitemap");
+  assert.match(lensSitemapVerdict(html).reason, /HTML/, "and the reason has to name what it actually got");
 
   const xml = { ok: true, status: 200, contentType: "application/xml", body: '<?xml version="1.0"?><urlset><url><loc>https://x.test/</loc></url><url><loc>https://x.test/a</loc></url></urlset>', url: "https://x.test/sitemap.xml" };
-  assert.equal(lensSitemapShape(xml).valid, true, "a real urlset passes");
-  assert.equal(lensSitemapShape(xml).entries, 2, "and its entries are counted for the detail line");
+  assert.equal(lensSitemapVerdict(xml).valid, true, "a real urlset passes");
+  assert.equal(lensSitemapVerdict(xml).entries, 2, "and its entries are counted for the detail line");
 
   const index = { ok: true, status: 200, contentType: "application/xml", body: "<sitemapindex><sitemap><loc>https://x.test/s1.xml</loc></sitemap></sitemapindex>", url: "https://x.test/sitemap.xml" };
-  assert.equal(lensSitemapShape(index).valid, true, "a sitemapindex is a sitemap too");
+  assert.equal(lensSitemapVerdict(index).valid, true, "a sitemapindex is a sitemap too");
 
   // sitemaps.org blesses a plain-text list, so refusing it would undercount.
   const text = { ok: true, status: 200, contentType: "text/plain", body: "https://x.test/\nhttps://x.test/a\n", url: "https://x.test/sitemap.txt" };
-  assert.equal(lensSitemapShape(text).valid, true, "a plain-text URL list is a legal sitemap");
+  assert.equal(lensSitemapVerdict(text).valid, true, "a plain-text URL list is a legal sitemap");
 
   // A .gz body read as text is compressed bytes. Calling that "not a sitemap"
   // would be a claim about a file we never decoded, so it reads UNKNOWN.
   const gz = { ok: true, status: 200, contentType: "application/gzip", body: "\u001f\u008b\u0008", url: "https://x.test/sitemap.xml.gz" };
-  assert.equal(lensSitemapShape(gz).valid, false, "a compressed sitemap is not verified");
-  assert.equal(lensSitemapShape(gz).compressed, true, "but it is flagged as compressed rather than absent");
+  assert.equal(lensSitemapVerdict(gz).valid, false, "a compressed sitemap is not verified");
+  assert.equal(lensSitemapVerdict(gz).compressed, true, "but it is flagged as compressed rather than absent");
 
-  assert.equal(lensSitemapShape(null).valid, false, "a missing probe is not a sitemap");
-  assert.equal(lensSitemapShape({ ok: false, status: 404 }).valid, false, "and neither is a 404");
+  assert.equal(lensSitemapVerdict(null).valid, false, "a missing probe is not a sitemap");
+  assert.equal(lensSitemapVerdict({ ok: false, status: 404 }).valid, false, "and neither is a 404");
 });
 
 test("robots.txt decides where the sitemap is, not the /sitemap.xml convention", () => {
@@ -7147,7 +7147,7 @@ test("robots.txt decides where the sitemap is, not the /sitemap.xml convention",
   assert.equal(lensSitemapDeclared({ ok: false, status: 404 }, "https://x.test"), null, "no robots.txt means nothing is declared");
 
   const lens = readFileSync("./www/_worker.js/lens.js", "utf8");
-  assert.match(lens, /if \(!lensSitemapShape\(sitemap\)\.valid\) \{/,
+  assert.match(lens, /if \(!lensSitemapVerdict\(sitemap\)\.valid\) \{/,
     "the follow-up probe must be CONDITIONAL, so the common path keeps its parallel fan-out");
 });
 

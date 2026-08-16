@@ -89,7 +89,7 @@ export async function read(targetUrl) {
       ok: true, url: targetUrl, finalUrl, status: response.status, contentType,
       extractor: EXTRACTOR, note: READER_NOTE,
       skipped: "not-html",
-      source: shape(html),
+      source: tally(html),
       ms: { fetch: fetchMs },
     };
   }
@@ -117,7 +117,7 @@ export async function read(targetUrl) {
   // BOTH word counts come from the same function on the same request. Comparing
   // this against a number lens.js computed would be comparing two codebases'
   // definitions of "word" and calling the difference an extraction loss.
-  const source = shape(html);
+  const source = tally(html);
   const kept = { words: countWords(textOf(contentHtml)), bytes: contentHtml.length };
   const title = str(result.title, 300);
   const controls = countControls(document, contentHtml);
@@ -177,9 +177,9 @@ export function toMarkdown(contentHtml) {
   return service.turndown(root).trim();
 }
 
-// ── shape + counting ────────────────────────────────────────────────────────
+// ── tally + counting ────────────────────────────────────────────────────────
 
-export function shape(html) {
+export function tally(html) {
   const body = String(html).match(/<body[^>]*>([\s\S]*)<\/body>/i);
   const text = textOf(body ? body[1] : String(html));
   return { words: countWords(text), bytes: String(html).length };

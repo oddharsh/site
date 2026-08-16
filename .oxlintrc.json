@@ -119,6 +119,18 @@
     // page rebuild and no dictionary roll (gotcha 35).
     "anti-slop/no-conditional-empty-object-spread": "error",
 
+    // Bans the term outright and takes no options, which is why the rename
+    // rather than a config was the work. The three lens counters are
+    // `documentTally` / `plainTally` now, the two probe classifiers are
+    // `lensSitemapVerdict` / `lensJsonVerdict`, and the /lens/browser payload
+    // key is `tally`. Every one of those names says what the value IS, where
+    // "shape" only said that it had structure.
+    //
+    // `anatomy` was the obvious target and is WRONG: it is already a lens tab
+    // name and already a payload key, so the rename would have collided with
+    // live vocabulary rather than replaced dead vocabulary.
+    "anti-slop/no-shape-in-symbol-names": "error",
+
     "vitest/no-restricted-vi-methods": [
       "error",
       {
@@ -176,6 +188,12 @@
   // What stays on is the family that catches the failure this runtime actually
   // has: a promise nobody awaited, which workerd cancels at request teardown.
   "overrides": [
+    {
+      // `slide.shapes.add()` is the pptx library's API, not ours, so there is
+      // nothing here to rename. The deck builder ships nothing and runs by hand.
+      "files": ["talks/**"],
+      "rules": { "anti-slop/no-shape-in-symbol-names": "off" }
+    },
     {
       // `node:test` and Vitest both return a promise from `test()` that the
       // RUNNER tracks, so a top-level `test("...", async () => {})` is the
