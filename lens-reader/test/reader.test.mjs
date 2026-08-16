@@ -13,7 +13,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { parseHTML } from "linkedom";
-import { countControls, countWords, scoreExtraction, tally, toMarkdown } from "../src/reader.js";
+import { countControls, countWords, read, scoreExtraction, tally, toMarkdown } from "../src/reader.js";
 
 test("markdown conversion runs at all, which is the part node can prove", () => {
   // The trap is that turndown ships two builds: node falls back to domino and
@@ -35,6 +35,38 @@ test("script and style bodies never reach the markdown", () => {
   assert.match(md, /Real prose/);
   assert.doesNotMatch(md, /alert/);
   assert.doesNotMatch(md, /color:red/);
+});
+
+test("the extracted article node preserves the string path byte for byte", () => {
+  const html = `<article><h2>Title</h2><p>Body <strong>text</strong> and
+    <a href="/notes">a link</a>.</p><ul><li>One</li><li>Two</li></ul>
+    <pre><code>const answer = 42;</code></pre></article>`;
+  const { document } = parseHTML(html);
+  const node = document.querySelector("article");
+  assert.equal(toMarkdown(node), toMarkdown(node.outerHTML));
+});
+
+test("read publishes Markdown from Readability's finished article node", async () => {
+  const originalFetch = globalThis.fetch;
+  const html = `<!doctype html><html><head><title>Direct Article</title></head><body>
+    <nav>Navigation that should lose.</nav><article><h1>Direct Article</h1>
+    ${"<p>Article prose with <strong>structure</strong> that the extractor should retain.</p>".repeat(12)}
+    </article></body></html>`;
+  try {
+    globalThis.fetch = async () => new Response(html, {
+      status: 200,
+      headers: { "content-type": "text/html; charset=utf-8" },
+    });
+    const result = await read("https://example.com/article");
+    const baseline = new (await import("@mozilla/readability")).Readability(
+      parseHTML(html).document,
+      { charThreshold: 500 },
+    ).parse();
+    assert.equal(result.title, "Direct Article");
+    assert.equal(result.markdown, toMarkdown(baseline.content));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("both word counts come from one function, so the gap is extraction", () => {

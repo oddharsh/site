@@ -106,12 +106,23 @@ export async function read(targetUrl) {
   const parseMs = Date.now() - t1;
 
   const t2 = Date.now();
-  const result = new Readability(working, { charThreshold: 500 }).parse() || {};
+  let articleNode;
+  const result = new Readability(working, {
+    charThreshold: 500,
+    // Readability calls its serializer with the finished article node. Keep that
+    // node while returning the same innerHTML its default serializer returns, so
+    // the public `content` contract does not move and Markdown can skip reparsing
+    // the exact HTML Readability just serialized.
+    serializer(element) {
+      articleNode = element;
+      return element.innerHTML;
+    },
+  }).parse() || {};
   const extractMs = Date.now() - t2;
 
   const contentHtml = String(result.content || "");
   const t3 = Date.now();
-  const markdown = toMarkdown(contentHtml);
+  const markdown = toMarkdown(articleNode || contentHtml);
   const markdownMs = Date.now() - t3;
 
   // BOTH word counts come from the same function on the same request. Comparing
@@ -165,13 +176,17 @@ export async function read(targetUrl) {
 // dead end (measured 2026-08-09: three successive shims, three further misses).
 //
 // Passing a NODE skips the parser entirely — turndown's RootNode does
-// `input.cloneNode(true)` for anything that is not a string — so linkedom parses
-// and turndown only ever walks a tree. No globals, no shim, no `document`.
-export function toMarkdown(contentHtml) {
-  if (!contentHtml) return "";
-  const { document } = parseHTML("<div id=\"lens-root\"></div>");
-  const root = document.getElementById("lens-root");
-  root.innerHTML = contentHtml;
+// `input.cloneNode(true)` for anything that is not a string — so read() keeps
+// the finished article node from Readability's serializer hook. The string path
+// remains for isolated callers and tests; it is the fallback, not the hot path.
+export function toMarkdown(content) {
+  if (!content) return "";
+  let root = content;
+  if (!content.nodeType) {
+    const { document } = parseHTML("<div id=\"lens-root\"></div>");
+    root = document.getElementById("lens-root");
+    root.innerHTML = content;
+  }
   const service = new TurndownService({ headingStyle: "atx", codeBlockStyle: "fenced", bulletListMarker: "-" });
   service.remove(["script", "style"]);
   return service.turndown(root).trim();

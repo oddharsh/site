@@ -1694,6 +1694,18 @@ exercises the one path that cannot fail. The first version of that test reintrod
 bug deliberately and still went green — the same "a check that can only agree with
 itself is decoration" lesson as gotcha 24.
 
+**The node crosses directly from Readability to Turndown.** Readability's supported
+`serializer` hook receives the finished article node, so the Reader keeps that node
+while returning the same `innerHTML` its default serializer returns. The first path
+serialized the node, parsed that HTML into a third linkedom document, and then handed
+the reconstruction to Turndown. Across all 36 extractable HTML documents in `www/`
+(570,632 extracted bytes per round, 8 rounds / 288 conversions), the string path took
+565.3 ms and the original-node path took 325.6 ms: 42.4% less Markdown CPU. Thirty-five
+outputs were byte-identical. The 126,500-character Horizon output gained two inert
+protective escapes (`\.` and `\-`) because the original node preserves two text-node
+boundaries serialization collapses; rendered Markdown is identical. `toMarkdown(string)`
+remains as the isolated-caller fallback; `read()` uses the node.
+
 **The root suite may not import ANYTHING from `lens-reader/src/`, and this is gotcha 16
 wearing different clothes.** `contract-tests.mjs` runs under plain node with the ROOT
 workspace's dependencies; `reader.js` imports readability, linkedom and turndown, which
