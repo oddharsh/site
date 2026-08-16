@@ -168,12 +168,9 @@ export function withSecurityHeaders(response, pathname, opts) {
   if (noindex && !response.headers.has("x-robots-tag")) {
     const h = new Headers(response.headers);
     h.set("x-robots-tag", PREVIEW_ROBOTS);
-    response = new Response(response.body, {
-      status: response.status,
-      statusText: response.statusText,
-      headers: h,
-      ...(response.headers.has("content-encoding") ? { encodeBody: "manual" } : {}),
-    });
+    const init = { status: response.status, statusText: response.statusText, headers: h };
+    if (response.headers.has("content-encoding")) init.encodeBody = "manual";
+    response = new Response(response.body, init);
   }
 
   // redirects don't need (and shouldn't carry) document-level headers
@@ -215,21 +212,18 @@ export function withSecurityHeaders(response, pathname, opts) {
       headers.set("link", current ? `${current}, ${dictionaryLink}` : dictionaryLink);
     }
   }
-  return new Response(response.body, {
-    status:     response.status,
-    statusText: response.statusText,
-    headers,
-    // `encodeBody` is write-only Response init, so rebuilding a response SILENTLY
-    // drops it, and the runtime then compresses the body a second time to match the
-    // content-encoding header it can still see. Because every worker response passes
-    // through here, that made `encodeBody: "manual"` a no-op site-wide, which is what
-    // produced brotli-in-brotli on both /a/ canaries AND on a worker-built body with
-    // no asset fetch at all (34 bytes for a 30-byte payload, control arm identical).
-    //
-    // A content-encoding header means the body is ALREADY encoded, so carrying the
-    // flag forward is the correct reading in every case: the alternative is a
-    // double-encoded body no client can read. Responses with no content-encoding are
-    // unaffected, which is nearly all of them.
-    ...(response.headers.has("content-encoding") ? { encodeBody: "manual" } : {}),
-  });
+  const init = { status: response.status, statusText: response.statusText, headers };
+  // `encodeBody` is write-only Response init, so rebuilding a response SILENTLY
+  // drops it, and the runtime then compresses the body a second time to match the
+  // content-encoding header it can still see. Because every worker response passes
+  // through here, that made `encodeBody: "manual"` a no-op site-wide, which is what
+  // produced brotli-in-brotli on both /a/ canaries AND on a worker-built body with
+  // no asset fetch at all (34 bytes for a 30-byte payload, control arm identical).
+  //
+  // A content-encoding header means the body is ALREADY encoded, so carrying the
+  // flag forward is the correct reading in every case: the alternative is a
+  // double-encoded body no client can read. Responses with no content-encoding are
+  // unaffected, which is nearly all of them.
+  if (response.headers.has("content-encoding")) init.encodeBody = "manual";
+  return new Response(response.body, init);
 }

@@ -177,13 +177,23 @@ async function reindex(req, env) {
   // loop fires ~80 Workers AI requests and trips the rate limit (2003). ~25 per call keeps
   // it to a handful. Direct env.AI.run, not the per-text gateway cache, since this is a
   // one-shot bulk embed.
+  // `source` and `title` are omitted rather than empty-stringed: Vectorize
+  // metadata is queryable, and an empty string is a value that matches filters a
+  // missing key does not.
+  const passageMetadata = (p) => {
+    const metadata = { concept: p.concept, text: p.text };
+    if (p.source) metadata.source = p.source;
+    if (p.title) metadata.title = p.title;
+    return metadata;
+  };
+
   const BATCH = 25, vectors = [];
   for (let i = 0; i < PASSAGES.length; i += BATCH) {
     const chunk = PASSAGES.slice(i, i + BATCH);
     const { data } = await env.AI.run(env.EMBED_MODEL, { text: chunk.map((p) => p.text) });
     chunk.forEach((p, j) => vectors.push({
       id: p.id, values: data[j],
-      metadata: { concept: p.concept, text: p.text, ...(p.source ? { source: p.source } : {}), ...(p.title ? { title: p.title } : {}) },
+      metadata: passageMetadata(p),
     }));
   }
   return json({ ok: true, upserted: vectors.length, mutation: await env.VECTORIZE.upsert(vectors) });

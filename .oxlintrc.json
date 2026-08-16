@@ -6,7 +6,7 @@
   // captured off the wire, and `pretext.lib.js` is @chenglou/pretext 0.0.7
   // vendored same-origin so /garage/pretext can load it under `script-src
   // 'self'`. Linting either one reports on somebody else's minifier.
-  "ignorePatterns": ["www/a-dict/**", "www/garage/pretext.lib.js", ".build/**"],
+  "ignorePatterns": ["www/a-dict/**", "www/garage/pretext.lib.js", ".build/**", "tools/oxlint/anti-slop/**"],
 
   // NAMING ANY PLUGIN REPLACES THE DEFAULT SET, so this list has to restate the
   // four that were on implicitly. Measured 2026-08-15: with `"plugins":
@@ -16,6 +16,12 @@
   // that were checking it are gone. Adding a plugin here means appending to
   // this array, never writing the one you want.
   "plugins": ["eslint", "unicorn", "typescript", "oxc", "vitest"],
+
+  // Three rules vendored from dmmulroy/anti-slop, at tools/oxlint/anti-slop.
+  // That directory is ignorePattern'd above: it is TypeScript in a repository
+  // with no TypeScript, so linting it reports on somebody else's source under
+  // rules written for ours.
+  "jsPlugins": [{ "name": "anti-slop", "specifier": "./tools/oxlint/anti-slop/index.ts" }],
 
   "categories": { "correctness": "error" },
 
@@ -101,6 +107,18 @@
     // asserting against a fake booking store, on the surface where a bug means
     // a real person double-booked. The 12 remaining anti-slop rules are not
     // vendored; docs/DEPENDENCIES.md records the measurement that decided each one.
+    // Rejects `...(cond ? { k } : {})`. The absent-rather-than-zero discipline
+    // that idiom implements is RIGHT and is kept: a `score: 0` on a filter-only
+    // query reads as "scored and found wanting" when nothing was scored, and the
+    // photo pipeline, the span attributes and the /lens payloads all omit rather
+    // than fabricate. What the rule objects to is spelling it as a spread, which
+    // hides the omission inside an expression. Building the object and adding the
+    // key under an `if` says the same thing where a reader can see it.
+    //
+    // 12 sites, none of them in a content-hashed client asset, so this costs no
+    // page rebuild and no dictionary roll (gotcha 35).
+    "anti-slop/no-conditional-empty-object-spread": "error",
+
     "vitest/no-restricted-vi-methods": [
       "error",
       {

@@ -153,13 +153,14 @@ async function visionTerms(stem, hashes) {
     console.log(`      would POST ${body.length}B to Workers AI (${MODEL})`);
     return null;
   }
+  // The gateway id is omitted rather than sent empty, because an empty
+  // `cf-aig-gateway-id` is not the same request as one that names no gateway,
+  // and CLAUDE.md records that a wrong gateway FAILS the inference call.
+  const headers = { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" };
+  if (GATEWAY) headers["cf-aig-gateway-id"] = GATEWAY;
   const response = await fetch(AI_RUN, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${TOKEN}`,
-      "Content-Type": "application/json",
-      ...(GATEWAY ? { "cf-aig-gateway-id": GATEWAY } : {}),
-    },
+    headers,
     body,
   });
   if (!response.ok) throw new Error(`${response.status} ${(await response.text()).slice(0, 160)}`);
@@ -191,11 +192,14 @@ for (const stem of stems) {
   // The caption is folded in so one field answers the query. It is already
   // scored on its own at a higher weight, and a duplicate hit costs nothing
   // because each term scores once, at its best field.
-  out[stem] = {
+  const entry = {
     terms: [derived, prior.vision || "", String(alt[stem] || "").toLowerCase()].filter(Boolean).join(" "),
     from: prior.vision ? ["derived", "vision"] : ["derived"],
-    ...(prior.vision ? { vision: prior.vision } : {}),
   };
+  // Omitted rather than empty-stringed, so a stem with no vision pass is
+  // distinguishable from one whose vision pass returned nothing.
+  if (prior.vision) entry.vision = prior.vision;
+  out[stem] = entry;
 }
 
 if (WANT_VISION) {

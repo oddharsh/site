@@ -614,17 +614,18 @@ const mdText = (s) => String(s ?? "").replace(/([\\`*_[\]])/g, "\\$1");
 export async function handleRnMarkdown(request, env, ctx) {
   const [result, target] = await Promise.all([loadRnTracks(request, env, ctx), playlistUrl(env)]);
   const negotiated = wantsMarkdown(request) && !new URL(request.url).pathname.endsWith(".md");
+  const headers = {
+    "content-type":           "text/markdown; charset=utf-8",
+    "cache-control":          negotiated ? "no-store, must-revalidate" : "public, max-age=300, s-maxage=600",
+    "x-content-type-options": "nosniff",
+  };
+  if (negotiated) headers.vary = "accept";
   return new Response(renderTrackListMarkdown(result.payload, target), {
     // 200 even on a failed scrape: the response says so in prose, and the useful
     // half of it (which playlist, where to open it) is still true. /rn/tracks
     // keeps the 502 for machines reading the status.
     status: 200,
-    headers: {
-      "content-type":           "text/markdown; charset=utf-8",
-      "cache-control":          negotiated ? "no-store, must-revalidate" : "public, max-age=300, s-maxage=600",
-      ...(negotiated ? { vary: "accept" } : {}),
-      "x-content-type-options": "nosniff",
-    },
+    headers,
   });
 }
 

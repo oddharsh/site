@@ -44,6 +44,14 @@ review policy and entry point for future agent runs.
   unchanged code, and should treat any tsgolint release as paired with a
   TypeScript one. Every rule this repo turns off is turned off in
   `.oxlintrc.json` beside the measurement that decided it.
+- @oxlint/plugins 1.78.0 is the runtime for the three rules vendored from
+  anti-slop at `tools/oxlint/anti-slop`. **Bump it in lockstep with oxlint and
+  never on its own**: it is the ABI between the linter and a JS plugin, the two
+  ship one version number, and a mismatch would fail at plugin load rather than
+  at install. It carries no transitive dependencies. Since the rules themselves
+  are vendored rather than depended on, an anti-slop release is NOT a Dependabot
+  event here; re-syncing is a deliberate copy, and the section at the end of this
+  file says which three files it covers.
 - **esbuild is no longer a direct dependency, as of 2026-08-14.** It had left the
   minification path when Oxc took over and stayed pinned for ONE call:
   `scripts/check-page-contracts.mjs` parsed the garage scaffold's inline CSS with

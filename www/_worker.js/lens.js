@@ -1982,11 +1982,11 @@ export async function handleLensBrowser(request, env, ctx) {
     // than reach in here.
     gotoOptions: LENS_GOTO,
     userAgent: BOT_UA,
-    // The ONLY place caller input reaches the payload is `url`. `content` is
-    // assembled from the frozen registry plus a server-generated nonce, and a
-    // contract test asserts no caller bytes appear anywhere else.
-    ...(recipe ? { addScriptTag: [{ content: lensRecipeScript(recipe, nonce) }] } : {}),
   };
+  // The ONLY place caller input reaches the payload is `url`. `content` is
+  // assembled from the frozen registry plus a server-generated nonce, and a
+  // contract test asserts no caller bytes appear anywhere else.
+  if (recipe) payload.addScriptTag = [{ content: lensRecipeScript(recipe, nonce) }];
   if (recipe) s.setAttribute("lens.recipe", recipe.id);
 
   let response;
@@ -2087,12 +2087,13 @@ export async function handleLensBrowser(request, env, ctx) {
     // client's deltaStrip subtracts this from the HTTP anatomy.
     shape: documentShape(rawContent),
     shapeTruncated: rawContent.length > 120000,
-    // Absent entirely on a plain run, so every existing consumer sees the exact
-    // response it saw before. `shape` above stays the AFTER; the before lives
-    // inside here, next to the count of what the recipe actually touched.
-    ...(interaction ? { interaction: interactionPayload(interaction) } : {}),
-    elapsedMs: Date.now() - started,
   };
+  // Absent entirely on a plain run, so every existing consumer sees the exact
+  // response it saw before. `shape` above stays the AFTER; the before lives
+  // inside here, next to the count of what the recipe actually touched. Set
+  // before `elapsedMs` so the key order of the JSON is what it always was.
+  if (interaction) output.interaction = interactionPayload(interaction);
+  output.elapsedMs = Date.now() - started;
   s.setAttribute("lens.outcome", "ok");
   s.setAttribute("lens.content_bytes", rawContent.length);
   s.setAttribute("lens.has_screenshot", !!output.screenshot);
