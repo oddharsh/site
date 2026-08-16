@@ -31,6 +31,9 @@ async function checkPublishedPages(family, skip = new Set()) {
     const path = `www/${family}/${file}`;
     const html = await readFile(join(ROOT, path), "utf8");
     assert.equal((html.match(/<script src="\/quiz\.js" defer><\/script>/g) || []).length, 1, `${path}: missing shared quiz runtime`);
+    if (family === "lwe") {
+      assert.equal((html.match(/<link rel="stylesheet" href="\/luna\.css">/g) || []).length, 1, `${path}: missing parse-time Luna shell CSS`);
+    }
     const data = payload(html, path);
     assert.equal(data.skin, family === "lwe" ? "lwe" : "garage", `${path}: wrong quiz skin`);
     const { skin, ...understanding } = data;
@@ -52,6 +55,7 @@ for (const file of lweSpecFiles) {
   assert.match(html, /id="axp-desktop"/, `pipelines/lwe/specs/${file}: generator omitted static desktop shell`);
   assert.match(html, /id="axp-taskbar"/, `pipelines/lwe/specs/${file}: generator omitted static taskbar shell`);
   assert.equal((html.match(/<link rel="stylesheet" href="\/lwe-base\.css">/g) || []).length, 1, `pipelines/lwe/specs/${file}: generator omitted shared LWE CSS`);
+  assert.equal((html.match(/<link rel="stylesheet" href="\/luna\.css">/g) || []).length, 1, `pipelines/lwe/specs/${file}: generator omitted parse-time Luna shell CSS`);
   assert.doesNotMatch(html, /<style>[\s\S]*?\*\s*\{\s*box-sizing:/, `pipelines/lwe/specs/${file}: generator re-inlined shared LWE structure`);
 }
 
