@@ -1,4 +1,5 @@
 // trace.js — one wrapper over Workers Traces so every span in this worker has a
+import { isCallable } from "./parse.js";
 // single import site and a single failure story. Bundled by wrangler at deploy;
 // not served.
 //
@@ -44,7 +45,7 @@ let tracing = null;
 // runtime that drops or renames the export leaves spans inert rather than
 // throwing on every request.
 export function installTracing(candidate) {
-  tracing = typeof candidate?.enterSpan === "function" ? candidate : null;
+  tracing = isCallable(candidate?.enterSpan) ? candidate : null;
 }
 
 // Stand-in span for the not-installed case, so callbacks can always assume the

@@ -409,7 +409,11 @@ worktrees may edit freely, but a worktree is not a release surface.
   Builds, so sorting by recency hands you the wrong run: on 2026-08-14 the two
   fired six seconds apart and the no-op completed first, which reads as a release
   that did nothing. Select by `headSha` matching the promoted commit, never by
-  `--limit 1`.
+  `--limit 1`. **Raising the limit does not fix this**, which the wording here
+  implied for a day: `--limit 3` hid a parked run just as completely on
+  2026-08-16, because no-ops keep arriving and every one of them sorts above the
+  run you want. When the question is "is a ramp parked", filter on `status`
+  instead of on any count; the recipe is at the end of gotcha 36.
 
   **A ramp waiting on approval is not stuck.** `waiting` is the environment gate
   doing its job, and the way to tell it apart from a jam is to ask what it is
@@ -3679,6 +3683,46 @@ pnpm run deploy:direct
     gone in, expect the cancellation and confirm the split with
     `pnpm run deploy:promote -- --status` rather than reading the run's
     conclusion.
+
+    **Recency cannot find a parked ramp, and `--limit 3` hides one as reliably
+    as `--limit 1`.** The note further up says to select by `headSha` rather
+    than by `--limit 1`, which reads as a warning about taking exactly one row.
+    It is weaker than that. Measured 2026-08-16: a `--limit 3` check reported
+    three `completed` runs and concluded the coast was clear, while run
+    31918548684 sat `waiting` in fourth place. Three no-op ramps had fired in the
+    ten minutes since it parked and each finished in seconds, so every one of
+    them sorted above the run that mattered. The merge went in on that reading
+    and cancelled it. Any limit is a guess about how many no-ops happened to fire
+    recently, which is not something you know before you look.
+
+    Ask for the STATUS, which nothing can push down a list:
+
+    ```bash
+    gh run list --workflow=ramp.yml --limit 20 --json databaseId,status,headSha \
+      --jq '.[] | select(.status == "waiting")'
+    ```
+
+    **Expect a ramp to be superseded rather than to reach the gate.** Two died in
+    ten minutes on 2026-08-16: #420's ramp cancelled #419's parked one, then #421
+    cancelled #420's while it was still climbing. #421 was another session's work
+    and touched nothing either of them touched. On a repository where several
+    agents merge through the day, a ramp surviving to `production-full` is the
+    exception, so treat the run id you are watching as perishable and re-read the
+    list rather than polling one id to completion.
+
+    **What rescues it is ancestry.** A commit merged on top of yours carries your
+    code, so its ramp ships what yours would have shipped and approving that one
+    is the whole repair. Check rather than assume:
+
+    ```bash
+    git merge-base --is-ancestor <your-commit> <the-ramping-commit>
+    ```
+
+    That held on 2026-08-16 (`389e5391` descended from `05e33859`), so approving
+    the newer ramp put the older PR at 100% and the two cancellations cost
+    nothing. It stops holding the moment somebody force-pushes or reverts a
+    branch between the two, which is why it is a check rather than a rule of
+    thumb.
 
 ---
 

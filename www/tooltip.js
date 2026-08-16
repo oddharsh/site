@@ -9,6 +9,15 @@
 
 import { createHoist, hoverCapable, ANCHOR_OK } from "/hoist.js";
 
+// The local parse layer. Client scripts here have no shared module graph, so
+// they cannot import _worker.js/lib/parse.js; redeclaring a couple of
+// coercions is the same trade these files already make for esc().
+/* oxlint-disable anti-slop/no-runtime-typeof -- a hand-rolled parser is made
+   of typeof; keeping the checks here rather than at each use is the point. */
+function asNumber(v) { return typeof v === "number" && isFinite(v) ? v : null; }
+function asRecord(v) { return v !== null && typeof v === "object" && !Array.isArray(v) ? v : null; }
+/* oxlint-enable anti-slop/no-runtime-typeof */
+
 export function start(initial) {
       const tip = document.getElementById("xp-tooltip");
       if (!tip) return;
@@ -59,6 +68,8 @@ export function start(initial) {
         const isInstant = /[zZ]|[+-]\d{2}:?\d{2}$/.test(s);
         if (isInstant) {
           try {
+    // Bare global, only typeof can ask.
+    // oxlint-disable-next-line anti-slop/no-runtime-typeof
             if (typeof Temporal !== "undefined") {
               const z = Temporal.Instant.from(s).toZonedDateTimeISO(Temporal.Now.timeZoneId());
               return `${p2(z.month)}-${p2(z.day)}-${z.year}, ${p2(z.hour)}:${p2(z.minute)}`;
@@ -69,6 +80,8 @@ export function start(initial) {
           return `${p2(d.getMonth() + 1)}-${p2(d.getDate())}-${d.getFullYear()}, ${p2(d.getHours())}:${p2(d.getMinutes())}`;
         }
         try {
+    // Bare global, only typeof can ask.
+    // oxlint-disable-next-line anti-slop/no-runtime-typeof
           if (typeof Temporal !== "undefined") {
             const t = Temporal.PlainDateTime.from(s);
             return `${p2(t.month)}-${p2(t.day)}-${t.year}, ${p2(t.hour)}:${p2(t.minute)}`;
@@ -153,7 +166,7 @@ export function start(initial) {
             return r.json();
           })
           .then(m => {
-            if (!m || typeof m !== "object") throw 0;
+            if (!asRecord(m)) throw 0;
             metaMap[stem] = m;   // superset of the index entry: EXIF plus .hi
             // re-render if this photo's tip is still the open one. `hoist` is
             // declared below but always initialized by the time this fetch
@@ -184,7 +197,7 @@ export function start(initial) {
             return r.json();
           })
           .then(all => {
-            if (!all || typeof all !== "object") throw 0;
+            if (!asRecord(all)) throw 0;
             for (const stem of Object.keys(all)) {
               // never clobber a per-photo record already in hand: that one has .hi
               if (!metaMap[stem]) metaMap[stem] = all[stem];
@@ -215,6 +228,8 @@ export function start(initial) {
           warmPhotoMeta();
         };
         const idle = () => {
+  // Capability probe on the browser, not a wire value: nothing to parse.
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof
           if (typeof window.requestIdleCallback === "function") {
             window.requestIdleCallback(run, { timeout: 2000 });
           } else {
@@ -303,7 +318,7 @@ export function start(initial) {
         // the photo's size, so the old fallback flashed "600 × 600" before EXIF landed.
         const w = exif.w, h = exif.h;
         const dims = (w && h) ? `${w} × ${h}` : "";
-        const evStr = (typeof exif.ev === "number" && exif.ev !== 0) ? ((exif.ev > 0 ? "+" : "") + exif.ev + " EV") : "";
+        const evStr = (asNumber(exif.ev) !== null && exif.ev !== 0) ? ((exif.ev > 0 ? "+" : "") + exif.ev + " EV") : "";
         const metaStrip = [evStr, dims, slot.dataset.size ? fmtBytes(slot.dataset.size) : ""].filter(Boolean).join(" · ");
 
         // Fuji recipe rows — only the populated/non-default ones

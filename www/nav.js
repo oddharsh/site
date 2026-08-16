@@ -355,6 +355,8 @@
   // local wall-clock parts via Temporal when the browser ships it, else Date.
   function nowHM() {
     try {
+    // Bare global, only typeof can ask whether it is declared.
+    // oxlint-disable-next-line anti-slop/no-runtime-typeof
       if (typeof Temporal !== "undefined" && Temporal.Now && Temporal.Now.plainTimeISO) {
         var t = Temporal.Now.plainTimeISO();
         return { h: t.hour, m: t.minute };
@@ -650,6 +652,8 @@
       // control wired it on all six. Ask for the member each branch actually
       // uses, so a partial implementation degrades to the history fallback
       // rather than crashing past it.
+    // Same: feature detection on the Navigation API, which older engines omit.
+    // oxlint-disable-next-line anti-slop/no-runtime-typeof
       var navApi = window.navigation && typeof navigation.canGoBack === "boolean" ? navigation : null;
       var realBack = function () {
         return navApi ? navApi.canGoBack : history.length > 1;
@@ -668,6 +672,9 @@
         forwardButton.disabled = !navApi.canGoForward;
       };
       sync();
+    // Capability probe on a live browser object, not a wire value: there is no
+    // boundary to parse, only an API the engine either implements or does not.
+    // oxlint-disable-next-line anti-slop/no-runtime-typeof
       if (navApi && typeof navApi.addEventListener === "function") navApi.addEventListener("currententrychange", sync);
       addEventListener("pageshow", sync);               // re-sync after a bfcache restore
     }

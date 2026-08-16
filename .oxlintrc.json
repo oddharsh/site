@@ -6,7 +6,7 @@
   // captured off the wire, and `pretext.lib.js` is @chenglou/pretext 0.0.7
   // vendored same-origin so /garage/pretext can load it under `script-src
   // 'self'`. Linting either one reports on somebody else's minifier.
-  "ignorePatterns": ["www/a-dict/**", "www/garage/pretext.lib.js", ".build/**"],
+  "ignorePatterns": ["www/a-dict/**", "www/garage/pretext.lib.js", ".build/**", "tools/oxlint/anti-slop/**"],
 
   // NAMING ANY PLUGIN REPLACES THE DEFAULT SET, so this list has to restate the
   // four that were on implicitly. Measured 2026-08-15: with `"plugins":
@@ -16,6 +16,12 @@
   // that were checking it are gone. Adding a plugin here means appending to
   // this array, never writing the one you want.
   "plugins": ["eslint", "unicorn", "typescript", "oxc", "vitest"],
+
+  // Three rules vendored from dmmulroy/anti-slop, at tools/oxlint/anti-slop.
+  // That directory is ignorePattern'd above: it is TypeScript in a repository
+  // with no TypeScript, so linting it reports on somebody else's source under
+  // rules written for ours.
+  "jsPlugins": [{ "name": "anti-slop", "specifier": "./tools/oxlint/anti-slop/index.ts" }],
 
   "categories": { "correctness": "error" },
 
@@ -101,6 +107,44 @@
     // asserting against a fake booking store, on the surface where a bug means
     // a real person double-booked. The 12 remaining anti-slop rules are not
     // vendored; docs/DEPENDENCIES.md records the measurement that decided each one.
+    // Rejects `...(cond ? { k } : {})`. The absent-rather-than-zero discipline
+    // that idiom implements is RIGHT and is kept: a `score: 0` on a filter-only
+    // query reads as "scored and found wanting" when nothing was scored, and the
+    // photo pipeline, the span attributes and the /lens payloads all omit rather
+    // than fabricate. What the rule objects to is spelling it as a spread, which
+    // hides the omission inside an expression. Building the object and adding the
+    // key under an `if` says the same thing where a reader can see it.
+    //
+    // 12 sites, none of them in a content-hashed client asset, so this costs no
+    // page rebuild and no dictionary roll (gotcha 35).
+    "anti-slop/no-conditional-empty-object-spread": "error",
+
+    // Bans the term outright and takes no options, which is why the rename
+    // rather than a config was the work. The three lens counters are
+    // `documentTally` / `plainTally` now, the two probe classifiers are
+    // `lensSitemapVerdict` / `lensJsonVerdict`, and the /lens/browser payload
+    // key is `tally`. Every one of those names says what the value IS, where
+    // "shape" only said that it had structure.
+    //
+    // `anatomy` was the obvious target and is WRONG: it is already a lens tab
+    // name and already a payload key, so the rename would have collided with
+    // live vocabulary rather than replaced dead vocabulary.
+    "anti-slop/no-shape-in-symbol-names": "error",
+
+    // Wants input parsed where it ENTERS, then branched on a trusted value,
+    // rather than `typeof`-checked at each use. The argument is right and this
+    // Worker had the failure it describes: the same "is this really a string?"
+    // was asked in a dozen places and answered slightly differently in each.
+    //
+    // A schema library is the usual answer and was NOT taken. This repo
+    // declares zero runtime dependencies and the bundle sits on a 204.24 KiB
+    // baseline, so the parse layer is hand-rolled: `lib/parse.js` for the
+    // Worker, a few local coercions per client IIFE (they cannot import).
+    //
+    // The two exemptions below are the classes the rule is categorically wrong
+    // about, and both are language facts rather than preferences.
+    "anti-slop/no-runtime-typeof": "error",
+
     "vitest/no-restricted-vi-methods": [
       "error",
       {
@@ -158,6 +202,39 @@
   // What stays on is the family that catches the failure this runtime actually
   // has: a promise nobody awaited, which workerd cancels at request teardown.
   "overrides": [
+    {
+      // The parse layer itself. A hand-rolled parser is MADE of `typeof`, so
+      // the only thing this rule can buy is that the checks live in one named
+      // place instead of at every call site. Turning it off here is what makes
+      // turning it on everywhere else mean something; the file's own header
+      // says the same thing from the other side.
+      "files": ["www/_worker.js/lib/parse.js"],
+      "rules": { "anti-slop/no-runtime-typeof": "off" }
+    },
+    {
+      // The AUTHORING contract, which is the same argument one layer out: these
+      // two files are the boundary parser for page content, and `requireText`
+      // is literally "parse it where it enters, then branch on a value you can
+      // trust". A validator is made of `typeof`; the rule cannot be satisfied
+      // inside the thing it is asking you to build.
+      "files": ["pipelines/content/page-contract.mjs", "pipelines/garage/generate.mjs"],
+      "rules": { "anti-slop/no-runtime-typeof": "off" }
+    },
+    {
+      // A test that asserts `typeof x === "boolean"` is CHECKING the contract,
+      // which is the rule's goal rather than a violation of it. Rewriting these
+      // through the parse layer would assert that the parse layer works, not
+      // that the surface under test returns the right type. Same scoping as the
+      // no-floating-promises entry below, and for a related reason.
+      "files": ["scripts/contract-tests.mjs", "**/test/**", "**/*.test.*"],
+      "rules": { "anti-slop/no-runtime-typeof": "off" }
+    },
+    {
+      // `slide.shapes.add()` is the pptx library's API, not ours, so there is
+      // nothing here to rename. The deck builder ships nothing and runs by hand.
+      "files": ["talks/**"],
+      "rules": { "anti-slop/no-shape-in-symbol-names": "off" }
+    },
     {
       // `node:test` and Vitest both return a promise from `test()` that the
       // RUNNER tracks, so a top-level `test("...", async () => {})` is the

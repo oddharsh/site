@@ -115,6 +115,12 @@ function decodeEntities(s) {
 
 // constant-time string compare so we don't leak the secret via timing.
 export function timingSafeEqual(a, b) {
+  // NOT parsed through lib/parse.js, deliberately. `asText` treats "" as absent,
+  // which is right at a boundary and wrong here: two empty secrets must still
+  // compare equal rather than fall out as a type failure. This is a precondition
+  // on an internal call, not a boundary parse, and it guards a timing-safe
+  // compare, so it stays the plain type test.
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof
   if (typeof a !== "string" || typeof b !== "string") return false;
   if (a.length !== b.length) return false;
   let diff = 0;

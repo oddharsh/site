@@ -8,9 +8,10 @@ import { lensParseRobots, lensPathMatch, lensRobotsVerdict } from "./lib/robots.
 import { lunaPage } from "./lib/chrome.js";
 import { escAttr, escHtml, jsonResponse } from "./lib/http.js";
 import { span } from "./lib/trace.js";
-import { documentShape, hasRenderEngine, runBrowserAction } from "./lens-render.js";
+import { documentTally, hasRenderEngine, runBrowserAction } from "./lens-render.js";
 import { lensRecipe, lensRecipeCatalog, lensRecipeIds, lensRecipeNonce, lensRecipeReceipt, lensRecipeScript } from "./lens-recipes.js";
 import { EXECUTION_META, executionChecks } from "./lib/agent-execution.js";
+import { asRecord, asText, isCallable } from "./lib/parse.js";
 
 // The glossary. This page's whole subject is protocol names, which is fine for
 // the audience that already has them and a wall for the audience that doesn't.
@@ -414,7 +415,7 @@ export const LENS_BUDGETS = {
 // alternative to an imperfect key here is no limit at all.
 export async function overLensBudget(budget, request, env) {
   const limiter = env && env[budget.binding];
-  if (!limiter || typeof limiter.limit !== "function") return false;
+  if (!limiter || !isCallable(limiter.limit)) return false;
   // A budget carrying a fixed `key` is a SHARED ceiling rather than a per-caller
   // one: everybody bills against the same bucket on purpose.
   const ip = budget.key || request.headers.get("cf-connecting-ip") || "0.0.0.0";
@@ -593,7 +594,7 @@ function lensMachineFragment(data, state) {
     d.robotsTxt && d.robotsTxt.ok ? "robots.txt" : "",
     // Same rule the readiness check uses: an HTML page answering 200 at the
     // sitemap URL is not a sitemap, so it does not get listed as one here.
-    lensSitemapShape(d.sitemapXml).valid ? "sitemap.xml" : lensSitemapShape(d.sitemapDeclared).valid ? "sitemap (declared in robots.txt)" : "",
+    lensSitemapVerdict(d.sitemapXml).valid ? "sitemap.xml" : lensSitemapVerdict(d.sitemapDeclared).valid ? "sitemap (declared in robots.txt)" : "",
     d.llmsTxt && d.llmsTxt.ok ? "llms.txt" : "",
   ].filter(Boolean);
   return '<div class="lx-brief-lede"><b>Server-rendered machine summary.</b> JavaScript can enhance this into the full selected lens; this fragment is the no-script evidence floor.</div>' +
@@ -1692,7 +1693,7 @@ export async function handleLensCloudflareScore(request, env, ctx) {
     }
     if (env && env.RN_KV) {
       const write = env.RN_KV.put(cacheKey, JSON.stringify(parsed), { expirationTtl: CLOUDFLARE_SCORE_TTL });
-      if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(write);
+      if (ctx && isCallable(ctx.waitUntil)) ctx.waitUntil(write);
       else await write;
     }
     return jsonResponse({ ok: true, cached: false, ...parsed });
@@ -1739,7 +1740,7 @@ const LENS_GOTO = { waitUntil: "networkidle2", timeout: 18000 };
 export async function handleLensShot(request, env, ctx) {
   const v = validateLensTarget(new URL(request.url).searchParams.get("url") || "");
   if (!v.ok) return jsonResponse({ ok: false, error: v.error }, 400);
-  if (!env.BROWSER || typeof env.BROWSER.quickAction !== "function") return jsonResponse({ ok: false, error: "Browser Run is not configured on this deployment." }, 503);
+  if (!env.BROWSER || !isCallable(env.BROWSER.quickAction)) return jsonResponse({ ok: false, error: "Browser Run is not configured on this deployment." }, 503);
 
   // THE CACHE IS READ BEFORE THE BUDGETS, and the order is the point rather than
   // a micro-optimization. Every limit below exists to ration Browser Run: 6 calls
@@ -1853,15 +1854,15 @@ const LENS_BROWSER_KV_MAX = 20_000_000;
 // render: manufacturing a before would cost a second Quick Action for one
 // click, on an account with ten browser-minutes a day. No plain entry means no
 // delta is claimed, which is the honest answer rather than a guessed one.
-async function plainShape(env, plainKey) {
+async function plainTally(env, plainKey) {
   if (!env.RN_KV) return null;
   try {
     const hit = await env.RN_KV.get(plainKey, "json");
-    return hit && hit.ok && hit.shape ? hit.shape : null;
+    return hit && hit.ok && hit.tally ? hit.tally : null;
   } catch (_e) { return null; }
 }
 
-// Both sides of the comparison run through the SAME documentShape(), which is
+// Both sides of the comparison run through the SAME documentTally(), which is
 // the only reason the number is claimable. An in-page innerText count and
 // stripped() are different counters, and comparing two incompatible counters is
 // the bug deltaStrip already carries a bail for.
@@ -1982,11 +1983,11 @@ export async function handleLensBrowser(request, env, ctx) {
     // than reach in here.
     gotoOptions: LENS_GOTO,
     userAgent: BOT_UA,
-    // The ONLY place caller input reaches the payload is `url`. `content` is
-    // assembled from the frozen registry plus a server-generated nonce, and a
-    // contract test asserts no caller bytes appear anywhere else.
-    ...(recipe ? { addScriptTag: [{ content: lensRecipeScript(recipe, nonce) }] } : {}),
   };
+  // The ONLY place caller input reaches the payload is `url`. `content` is
+  // assembled from the frozen registry plus a server-generated nonce, and a
+  // contract test asserts no caller bytes appear anywhere else.
+  if (recipe) payload.addScriptTag = [{ content: lensRecipeScript(recipe, nonce) }];
   if (recipe) s.setAttribute("lens.recipe", recipe.id);
 
   let response;
@@ -2039,7 +2040,7 @@ export async function handleLensBrowser(request, env, ctx) {
   }
   const result = envelope && envelope.result ? envelope.result : envelope || {};
   const meta = envelope && envelope.meta ? envelope.meta : {};
-  // Strip the receipt FIRST. Everything downstream — documentShape, the 120KB
+  // Strip the receipt FIRST. Everything downstream — documentTally, the 120KB
   // cap, the body the reader sees — has to run on a document that no longer
   // carries our own injected node. Count before stripping and `shape` counts our
   // script; cap before stripping and the receipt falls off the end of a large
@@ -2048,7 +2049,7 @@ export async function handleLensBrowser(request, env, ctx) {
     ? lensRecipeReceipt(String(result.content || ""), nonce)
     : { receipt: null, html: String(result.content || "") };
   const rawContent = settled.html;
-  const interaction = recipe ? buildInteraction(recipe, settled.receipt, await plainShape(env, plainKey)) : null;
+  const interaction = recipe ? buildInteraction(recipe, settled.receipt, await plainTally(env, plainKey)) : null;
   if (recipe) s.setAttribute("lens.recipe_outcome", interaction.outcome);
   // Every other field on this snapshot is capped; the screenshot was not, and a
   // fullPage PNG has no natural ceiling. Measured 2026-08-04 against production:
@@ -2085,14 +2086,15 @@ export async function handleLensBrowser(request, env, ctx) {
     // Counted from the FULL body, before the 120KB content cap above, so a
     // truncated `content` field cannot quietly shrink the comparison. The
     // client's deltaStrip subtracts this from the HTTP anatomy.
-    shape: documentShape(rawContent),
-    shapeTruncated: rawContent.length > 120000,
-    // Absent entirely on a plain run, so every existing consumer sees the exact
-    // response it saw before. `shape` above stays the AFTER; the before lives
-    // inside here, next to the count of what the recipe actually touched.
-    ...(interaction ? { interaction: interactionPayload(interaction) } : {}),
-    elapsedMs: Date.now() - started,
+    tally: documentTally(rawContent),
+    tallyTruncated: rawContent.length > 120000,
   };
+  // Absent entirely on a plain run, so every existing consumer sees the exact
+  // response it saw before. `shape` above stays the AFTER; the before lives
+  // inside here, next to the count of what the recipe actually touched. Set
+  // before `elapsedMs` so the key order of the JSON is what it always was.
+  if (interaction) output.interaction = interactionPayload(interaction);
+  output.elapsedMs = Date.now() - started;
   s.setAttribute("lens.outcome", "ok");
   s.setAttribute("lens.content_bytes", rawContent.length);
   s.setAttribute("lens.has_screenshot", !!output.screenshot);
@@ -2758,6 +2760,10 @@ export async function originDiscovery(origin, hostname, env, opts = {}) {
   // `caches` is a Workers global and does not exist under plain node, where the
   // contract tests import this module. Absent cache means every call is a live
   // fan-out, which is exactly the previous behaviour.
+  // `caches` is a bare global that may be undeclared; referencing it to hand it
+  // to a parser would throw ReferenceError, so typeof is the only operator that
+  // can ask. The one class lib/parse.js cannot cover.
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof
   const cache = typeof caches !== "undefined" ? caches.default : null;
   const key = discoveryKey(origin);
 
@@ -2809,7 +2815,7 @@ export async function originDiscovery(origin, hostname, env, opts = {}) {
     // the common path, so the fan-out above keeps its shape for every site
     // whose sitemap sits where the convention says.
     let sitemapDeclared = null;
-    if (!lensSitemapShape(sitemap).valid) {
+    if (!lensSitemapVerdict(sitemap).valid) {
       const declared = lensSitemapDeclared(robots, origin);
       if (declared) {
         s.setAttribute("lens.sitemap_declared", true);
@@ -2819,7 +2825,7 @@ export async function originDiscovery(origin, hostname, env, opts = {}) {
         // the blob over that ceiling — which does not error, it just stops
         // caching, so the site silently pays 28 probes on every future scan.
         // The shape check only needs the head of the document.
-        if (probe.ok && typeof probe.body === "string") {
+        if (probe.ok && asText(probe.body) !== null) {
           probe.entries = (probe.body.match(/<url>|<sitemap>/gi) || []).length;
           probe.body = probe.body.slice(0, 8 * 1024);
         }
@@ -3026,7 +3032,7 @@ export function lensParseJsonld(raw) {
     const obj = JSON.parse(trimmed);
     const types = new Set();
     (function walk(o) {
-      if (!o || typeof o !== "object") return;
+      if (!asRecord(o) && !Array.isArray(o)) return;
       if (Array.isArray(o)) return o.forEach(walk);
       if (o["@type"]) [].concat(o["@type"]).forEach((t) => types.add(String(t)));
       for (const k in o) walk(o[k]);
@@ -3393,7 +3399,7 @@ function lensJsonDoor(probe, validate, label) {
   }
   let j = null;
   try { j = JSON.parse(probe.body); } catch (_e) { return { present: false, note: "answered, but not JSON (SPA fallback?)" }; }
-  if (!j || typeof j !== "object" || !validate(j)) return { present: false, note: "JSON, but not " + label + "-shaped" };
+  if (!asRecord(j) || !validate(j)) return { present: false, note: "JSON, but not " + label + "-shaped" };
   return { present: true, json: j };
 }
 
@@ -3470,7 +3476,7 @@ export function lensAgentDoors({ llmsTxt, mdNego, mcp, nlweb, webmcp, agentCard,
 // 200 text/html, and every one of those was scored a valid sitemap. A missed
 // sitemap is an undercount; an invented one is a lie, so this errs toward
 // refusing rather than guessing.
-export function lensSitemapShape(probe) {
+export function lensSitemapVerdict(probe) {
   if (!probe || !probe.ok) {
     return { valid: false, reason: probe && probe.status ? "HTTP " + probe.status : "no response" };
   }
@@ -3555,7 +3561,7 @@ const LENS_READINESS_CATEGORIES = [
   { key: "execution", label: "Execution in an agent browser", countInScore: true },
 ];
 
-function lensJsonShape(probe, validate) {
+function lensJsonVerdict(probe, validate) {
   // same "did it answer?" rule as lensJsonDoor: a 5xx origin did NOT answer, so it is
   // unknown, not a definitive fail (this used to call a reachable-but-broken 503 a fail,
   // undercounting webBotAuth / the oauth checks that route through here).
@@ -3644,37 +3650,37 @@ export function lensReadiness({ headers, robots, sitemap, sitemapDeclared, terms
     g.agents.some((a) => a !== "*" && /bot|crawler|extended|spider|anthropic|openai|claude/i.test(a))));
   const link = String((headers && headers.link) || "");
   const usefulLinks = (link.match(/rel\s*=\s*["']?(?:sitemap|alternate|service-doc|service-desc|api-catalog)/gi) || []).length;
-  const botAuth = lensJsonShape(discovery && discovery.webBotAuth, (j) => Array.isArray(j.keys) && j.keys.length > 0);
-  const oauthOpen = lensJsonShape(discovery && discovery.oauthDiscovery && discovery.oauthDiscovery.openidConfiguration, (j) => !!(j.issuer || j.authorization_endpoint || j.token_endpoint));
-  const oauthServer = lensJsonShape(discovery && discovery.oauthDiscovery && discovery.oauthDiscovery.oauthAuthorizationServer, (j) => !!(j.issuer || j.token_endpoint || j.authorization_endpoint));
-  const oauthResource = lensJsonShape(discovery && discovery.oauthProtectedResource, (j) => !!(j.resource || j.authorization_servers || j.scopes_supported));
-  const mcpCard = lensJsonShape(discovery && discovery.mcpServerCard, (j) => !!(j.serverInfo || j.server || j.name || j.capabilities));
-  const skills = lensJsonShape(discovery && discovery.agentSkills, (j) => Array.isArray(j.skills));
-  const ucp = lensJsonShape(discovery && discovery.commerce && discovery.commerce.ucp, (j) => !!(j.protocol || j.version || j.services || j.capabilities));
-  const acp = lensJsonShape(discovery && discovery.commerce && discovery.commerce.acp, (j) => !!(j.protocol || j.api_base_url || j.capabilities || j.services));
-  const ap2 = lensJsonShape(discovery && discovery.commerce && discovery.commerce.ap2, (j) => !!(j.protocol || j.version || j.capabilities));
+  const botAuth = lensJsonVerdict(discovery && discovery.webBotAuth, (j) => Array.isArray(j.keys) && j.keys.length > 0);
+  const oauthOpen = lensJsonVerdict(discovery && discovery.oauthDiscovery && discovery.oauthDiscovery.openidConfiguration, (j) => !!(j.issuer || j.authorization_endpoint || j.token_endpoint));
+  const oauthServer = lensJsonVerdict(discovery && discovery.oauthDiscovery && discovery.oauthDiscovery.oauthAuthorizationServer, (j) => !!(j.issuer || j.token_endpoint || j.authorization_endpoint));
+  const oauthResource = lensJsonVerdict(discovery && discovery.oauthProtectedResource, (j) => !!(j.resource || j.authorization_servers || j.scopes_supported));
+  const mcpCard = lensJsonVerdict(discovery && discovery.mcpServerCard, (j) => !!(j.serverInfo || j.server || j.name || j.capabilities));
+  const skills = lensJsonVerdict(discovery && discovery.agentSkills, (j) => Array.isArray(j.skills));
+  const ucp = lensJsonVerdict(discovery && discovery.commerce && discovery.commerce.ucp, (j) => !!(j.protocol || j.version || j.services || j.capabilities));
+  const acp = lensJsonVerdict(discovery && discovery.commerce && discovery.commerce.acp, (j) => !!(j.protocol || j.api_base_url || j.capabilities || j.services));
+  const ap2 = lensJsonVerdict(discovery && discovery.commerce && discovery.commerce.ap2, (j) => !!(j.protocol || j.version || j.capabilities));
 
   items.robotsTxt = lensReadinessItem("robotsTxt", robots && robots.ok ? "pass" : robots && (robots.status === 404 || robots.status === 410) ? "fail" : "unknown", robots && robots.ok ? "valid response with " + robotsParsed.groups.length + " User-agent group(s)" : "robots.txt did not return a readable 200");
   // Two probes, best-of: the conventional /sitemap.xml and whatever robots.txt
   // DECLARED, which is the authoritative location and often a different path.
   // Each is validated rather than trusted for answering 200 — see
-  // lensSitemapShape for why a bare `ok` was manufacturing passes.
+  // lensSitemapVerdict for why a bare `ok` was manufacturing passes.
   const sitemapCandidates = [
-    { probe: sitemap, shape: lensSitemapShape(sitemap), declared: false },
-    { probe: sitemapDeclared, shape: lensSitemapShape(sitemapDeclared), declared: true },
+    { probe: sitemap, verdict: lensSitemapVerdict(sitemap), declared: false },
+    { probe: sitemapDeclared, verdict: lensSitemapVerdict(sitemapDeclared), declared: true },
   ].filter((c) => c.probe);
-  const sitemapHit = sitemapCandidates.find((c) => c.shape.valid);
-  const sitemapCompressed = sitemapCandidates.find((c) => c.shape.compressed);
+  const sitemapHit = sitemapCandidates.find((c) => c.verdict.valid);
+  const sitemapCompressed = sitemapCandidates.find((c) => c.verdict.compressed);
   const sitemapAnswered = sitemapCandidates.some((c) => c.probe.ok || c.probe.status === 404 || c.probe.status === 410);
   items.sitemap = lensReadinessItem(
     "sitemap",
     sitemapHit ? "pass" : sitemapCompressed || !sitemapAnswered ? "unknown" : "fail",
     sitemapHit
-      ? "sitemap answered with " + sitemapHit.shape.entries + " URL entr" + (sitemapHit.shape.entries === 1 ? "y" : "ies") + (sitemapHit.declared ? " (at the location robots.txt declares)" : "")
+      ? "sitemap answered with " + sitemapHit.verdict.entries + " URL entr" + (sitemapHit.verdict.entries === 1 ? "y" : "ies") + (sitemapHit.declared ? " (at the location robots.txt declares)" : "")
       : sitemapCompressed
-        ? sitemapCompressed.shape.reason
+        ? sitemapCompressed.verdict.reason
         : sitemapCandidates.length
-          ? sitemapCandidates[sitemapCandidates.length - 1].shape.reason
+          ? sitemapCandidates[sitemapCandidates.length - 1].verdict.reason
           : "sitemap.xml was not found or did not answer",
   );
   items.linkHeaders = lensReadinessItem("linkHeaders", usefulLinks ? "pass" : "fail", usefulLinks ? usefulLinks + " agent-useful Link relation(s)" : "no agent-useful Link relations on the fetched response");

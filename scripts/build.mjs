@@ -28,7 +28,8 @@ const BUILD_NONCE = process.hrtime.bigint().toString(36);
 import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { brotliCompressSync, brotliDecompressSync, constants as zlibConstants, zstdCompressSync } from "node:zlib";
+import { promisify } from "node:util";
+import { brotliCompress, brotliDecompressSync, constants as zlibConstants, zstdCompressSync } from "node:zlib";
 import minifyHtml from "@minify-html/node";
 import { transform as transformCss } from "lightningcss";
 import { minifySync } from "oxc-minify";
@@ -38,6 +39,22 @@ import { HTML_MARKERS } from "./lib/html-markers.mjs";
 import { patchStaticShell, renderDesktopArtifacts, staticShellPages } from "../www/scripts/gen-desktop-partial.mjs";
 
 const OUT = ".build";
+const brotliCompressAsync = promisify(brotliCompress);
+
+// q11 dominates clean builds, so use zlib's callback path to run independent
+// files in the libuv pool. Promise.all preserves input order, and the callback
+// and sync APIs produced a byte-identical staged tree in the 2026-08-15 trial.
+// Keep the dcz encoder synchronous: its async API changed every `.dcz` byte.
+function brotliQ11(bytes) {
+  return brotliCompressAsync(bytes, {
+    params: {
+      [zlibConstants.BROTLI_PARAM_QUALITY]: 11,
+      // 24 is the largest window legal for Content-Encoding: br (RFC 7932 §4).
+      [zlibConstants.BROTLI_PARAM_LGWIN]: 24,
+      [zlibConstants.BROTLI_PARAM_SIZE_HINT]: bytes.length,
+    },
+  });
+}
 
 // dcz framing (RFC 9842), the one construction both delta passes share: compress
 // against the dictionary, then prepend the dictionary's SHA-256 in a Zstandard
@@ -1246,6 +1263,8 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   const root = resolve(OUT, "www");
   const assets = {
     async fetch(input) {
+  // A deliberate two-shape signature (string | Request), not a wire value.
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof
       const url = new URL(typeof input === "string" ? input : input.url);
       const rel = decodeURIComponent(url.pathname).replace(/^\/+/, "");
       if (!rel || rel.includes("..")) return new Response("not found", { status: 404 });
@@ -1657,18 +1676,11 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   const files = (await readdir(dir)).filter((f) => /\.(js|css|svg|dict)$/.test(f));
   if (!files.length) throw new Error("precompression found no /a/ shell assets — did step 6 stop emitting them?");
   let raw = 0, enc = 0;
-  for (const f of files) {
+  const compressed = await Promise.all(files.map(async (f) => {
     const bytes = await readFile(`${dir}/${f}`);
-    const out = brotliCompressSync(bytes, {
-      params: {
-        [zlibConstants.BROTLI_PARAM_QUALITY]: 11,
-        // 24 is the largest window a `Content-Encoding: br` response may use (RFC 7932
-        // §4). Large-window brotli reaches 2^30 but is not legal on the wire, so a
-        // decoder is entitled to reject it — never raise this.
-        [zlibConstants.BROTLI_PARAM_LGWIN]: 24,
-        [zlibConstants.BROTLI_PARAM_SIZE_HINT]: bytes.length,
-      },
-    });
+    return { f, bytes, out: await brotliQ11(bytes) };
+  }));
+  for (const { f, bytes, out } of compressed) {
     // Refuse to ship a "compressed" twin that isn't smaller. Cheap guard against a
     // future asset type where q11 loses (already-compressed bytes, tiny files).
     if (out.length >= bytes.length) {
@@ -2099,15 +2111,11 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   if (familyBytes || pageDicts.length) await mkdir(`${OUT}/www/pd`, { recursive: true });
 
   let brCount = 0, brRaw = 0, brEnc = 0, dCount = 0, dBytes = 0, dPlain = 0, pageCount = 0, pageBytes = 0, familyCount = 0, familyBytesOut = 0;
-  for (const page of pages) {
+  const compressedPages = await Promise.all(pages.map(async (page) => {
     const bytes = await readFile(`${OUT}/www/${page}`);
-    const br = brotliCompressSync(bytes, {
-      params: {
-        [zlibConstants.BROTLI_PARAM_QUALITY]: 11,
-        [zlibConstants.BROTLI_PARAM_LGWIN]: 24,
-        [zlibConstants.BROTLI_PARAM_SIZE_HINT]: bytes.length,
-      },
-    });
+    return { page, bytes, br: await brotliQ11(bytes) };
+  }));
+  for (const { page, bytes, br } of compressedPages) {
     if (br.length < bytes.length) {
       await writeFile(`${OUT}/www/${page}.br`, br);
       brCount++; brRaw += bytes.length; brEnc += br.length;

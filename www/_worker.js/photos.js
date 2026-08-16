@@ -387,7 +387,7 @@ export async function queryPhotos(env, options = {}, ctx = null) {
   const rows = ranked.map(({ stem, record, scored }) => {
     const manifestPhoto = manifestByStem.get(stem);
     const hash = hashes?.[stem] || {};
-    return {
+    const row = {
       stem,
       alt: String(altMap?.[stem] || "").slice(0, 240),
       full: manifestPhoto?.full ? `/images/full/${encodeURIComponent(manifestPhoto.full).replace(/%2F/g, "/")}` : null,
@@ -397,24 +397,30 @@ export async function queryPhotos(env, options = {}, ctx = null) {
         small: hash.s ? `/i/${stem}-400.${hash.s}.avif` : null,
       },
       metadata: photoMetadata(record),
-      // Absent rather than zero when nothing was ranked, the same rule lens
-      // follows for an unrun phase. A `score: 0` on a filter-only query would
-      // read as "scored and found wanting" when nothing was scored at all.
-      ...(scored ? { score: scored.score, matched: scored.matched } : {}),
     };
+    // Absent rather than zero when nothing was ranked, the same rule lens
+    // follows for an unrun phase. A `score: 0` on a filter-only query would
+    // read as "scored and found wanting" when nothing was scored at all.
+    if (scored) {
+      row.score = scored.score;
+      row.matched = scored.matched;
+    }
+    return row;
   });
+
+  // `dropped` and `common` are omitted rather than sent empty, so a caller can
+  // tell "no terms were dropped" from "this build does not report drops". Built
+  // in order so the JSON reads exactly as it always did.
+  const ranking = { mode, terms: queryTermList };
+  if (dropped.length) ranking.dropped = dropped;
+  if (common.length) ranking.common = common;
+  ranking.semantic = Boolean(semantics);
 
   return {
     query: { q, camera, lens, film, recipe, from, to },
     // How the result set was arrived at, so a caller can tell a precise answer
     // from a best-effort one without guessing from the scores.
-    ranking: {
-      mode,
-      terms: queryTermList,
-      ...(dropped.length ? { dropped } : {}),
-      ...(common.length ? { common } : {}),
-      semantic: Boolean(semantics),
-    },
+    ranking,
     total: rows.length,
     offset,
     limit,

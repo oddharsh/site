@@ -57,6 +57,11 @@ export const DOC_ALIASES = [
   { prose: "Lightning CSS", pkg: "lightningcss" },
   { prose: "Oxlint", pkg: "oxlint" },
   { prose: "oxlint-tsgolint", pkg: "oxlint-tsgolint" },
+  // The one entry whose prose name is the package name again, for the reason
+  // the note below gives about @noble/post-quantum: nobody writes "@oxlint/
+  // plugins" in a sentence any other way, so there is no friendlier alias to
+  // pick. It is the ABI for the vendored anti-slop rules and moves with oxlint.
+  { prose: "@oxlint/plugins", pkg: "@oxlint/plugins" },
   { prose: "minify-html", pkg: "@minify-html/node" },
   { prose: "TypeScript", pkg: "typescript" },
   // @noble/post-quantum sat here as the one entry whose prose name WAS the
@@ -183,7 +188,7 @@ export function baselineSection(doc, heading = BASELINE_HEADING) {
 // alongside a dependency that genuinely went away, and never to quiet a red
 // check: a drop with the manifests unchanged is the scanner breaking, which is
 // the entire thing this number exists to catch.
-export const FLOOR_CLAIMS = 11;
+export const FLOOR_CLAIMS = 12;
 
 // ONE manifest's worth of checking, in all four directions. Extracted from the
 // root path on 2026-08-14 so the four manifests outside package.json get the

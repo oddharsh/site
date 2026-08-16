@@ -1,4 +1,5 @@
 // lens-render.js — WHICH browser engine answers a Quick Action, and the shape
+import { isCallable } from "./lib/parse.js";
 // of what came back.
 //
 // This file used to carry a whole second rendering route (/lens/rendered) before
@@ -70,7 +71,7 @@ export const restUrl = (accountId, action, engine) =>
 // Either door counts. A deployment holding only a REST token still renders, so
 // a guard that insists on the BINDING would 503 a working configuration.
 export const hasRenderEngine = (env) =>
-  Boolean((env && env.BROWSER && typeof env.BROWSER.quickAction === "function")
+  Boolean((env && env.BROWSER && isCallable(env.BROWSER.quickAction))
     || (env && env.CF_ACCOUNT_ID && env.BROWSER_RUN_TOKEN));
 
 // Runs a Quick Action and reports which engine served it. Returns a Response so
@@ -106,7 +107,7 @@ export async function runBrowserAction(action, payload, env, { engine = "kitesur
     // came back clean, which is everything a 200 can tell us. See the header.
     return { response, engine: tryEngine && kitesurfParamLive ? "kitesurf-requested" : "chromium-rest" };
   }
-  if (!env.BROWSER || typeof env.BROWSER.quickAction !== "function") return null;
+  if (!env.BROWSER || !isCallable(env.BROWSER.quickAction)) return null;
   return { response: await env.BROWSER.quickAction(action, payload), engine: "chromium-binding" };
 }
 
@@ -130,7 +131,7 @@ const countMatches = (html, re) => (String(html || "").match(re) || []).length;
 // NOT a comparison axis here: a framework's inlined payload swings them wildly
 // while changing nothing a reader or a parser gets, which is the same reason
 // lens-browser.js's deltaStrip already leads with words.
-export function documentShape(html) {
+export function documentTally(html) {
   const text = stripped(html);
   return {
     words: text ? text.split(" ").filter(Boolean).length : 0,

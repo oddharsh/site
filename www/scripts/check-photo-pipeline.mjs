@@ -12,6 +12,7 @@ import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildExifIndex } from "./build-exif-index.mjs";
+import { asRecord, asText } from "../_worker.js/lib/parse.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const IMAGES = path.join(ROOT, "www/images");
@@ -52,7 +53,7 @@ if (JSON.stringify(stems) !== JSON.stringify(indexStems)) {
        `\n  add-photos.sh phase 4 writes the index; a removed photo must lose its entry here too`);
 }
 for (const [stem, entry] of Object.entries(photoIndex)) {
-  if (typeof entry?.full !== "string" || !entry.full.startsWith(`${stem}.`)) {
+  if (asText(entry?.full) === null || !entry.full.startsWith(`${stem}.`)) {
     fail(`${stem}: index full must be the R2 key for this stem (got ${JSON.stringify(entry?.full)})`);
   }
   if (!Number.isInteger(entry.size) || entry.size <= 0) {
@@ -66,7 +67,7 @@ for (const [stem, entry] of Object.entries(photoIndex)) {
 const expectedFiles = new Set();
 for (const stem of stems) {
   const entry = hashes[stem];
-  if (!entry || typeof entry !== "object" || !entry.a || !entry.j || !entry.s) {
+  if (!asRecord(entry) || !entry.a || !entry.j || !entry.s) {
     fail(`${stem}: hash entry must contain a, j, and s tiers`);
   }
 

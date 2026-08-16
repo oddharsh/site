@@ -3,6 +3,7 @@
 import { signedFetch } from "./lib/botauth.js";
 import { deleteSWRKV, swrKV } from "./lib/cache.js";
 import { lunaPage } from "./lib/chrome.js";
+import { asNumber, asRecord, asText } from "./lib/parse.js";
 import { esc, escAttr, escHtml, jsonResp, timingSafeEqual, wantsMarkdown } from "./lib/http.js";
 import { span } from "./lib/trace.js";
 
@@ -384,6 +385,11 @@ export function artWarmList(payload, origin) {
 // fully warm colo pays ~28 cache lookups and zero subrequests, which is the
 // cheap case anyway. The guard bought a rounding error and cost the feature.
 export async function warmArtCache(payload, request, env, ctx) {
+  // `caches` is a BARE GLOBAL that may not be declared at all, and referencing
+  // an undeclared identifier to hand it to a parser throws ReferenceError, so
+  // `typeof` is the only operator that can ask the question. This is the one
+  // class lib/parse.js cannot cover.
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof
   if (!ctx || typeof caches === "undefined") return { warmed: 0, already: 0 };
   const urls = artWarmList(payload, new URL(request.url).origin);
   if (!urls.length) return { warmed: 0, already: 0 };
@@ -614,17 +620,18 @@ const mdText = (s) => String(s ?? "").replace(/([\\`*_[\]])/g, "\\$1");
 export async function handleRnMarkdown(request, env, ctx) {
   const [result, target] = await Promise.all([loadRnTracks(request, env, ctx), playlistUrl(env)]);
   const negotiated = wantsMarkdown(request) && !new URL(request.url).pathname.endsWith(".md");
+  const headers = {
+    "content-type":           "text/markdown; charset=utf-8",
+    "cache-control":          negotiated ? "no-store, must-revalidate" : "public, max-age=300, s-maxage=600",
+    "x-content-type-options": "nosniff",
+  };
+  if (negotiated) headers.vary = "accept";
   return new Response(renderTrackListMarkdown(result.payload, target), {
     // 200 even on a failed scrape: the response says so in prose, and the useful
     // half of it (which playlist, where to open it) is still true. /rn/tracks
     // keeps the 502 for machines reading the status.
     status: 200,
-    headers: {
-      "content-type":           "text/markdown; charset=utf-8",
-      "cache-control":          negotiated ? "no-store, must-revalidate" : "public, max-age=300, s-maxage=600",
-      ...(negotiated ? { vary: "accept" } : {}),
-      "x-content-type-options": "nosniff",
-    },
+    headers,
   });
 }
 
@@ -636,7 +643,7 @@ function linkifyArtists(artists, fallbackText) {
       return `<span class="np-artist-link" data-href="${escAttr(href)}" data-artist-name="${escAttr(a.name)}"${img} role="link" tabindex="0">${escHtml(a.name)}</span>`;
     }).join(", ");
   }
-  const raw = fallbackText || (typeof artists === "string" ? artists : "");
+  const raw = fallbackText || asText(artists, "");
   if (!raw) return "";
   return String(raw).split(/,\s*/).filter(Boolean).map(name => {
     const href = `https://open.spotify.com/search/${encodeURIComponent(name)}/artists`;
@@ -688,7 +695,7 @@ export async function scrapePlaylistTracks(playlistId, env, ctx) {
   const trackList = Array.isArray(playlistEntity.trackList) ? playlistEntity.trackList : [];
 
   const baseTracks = trackList
-    .filter(t => t && typeof t.uri === "string" && t.uri.startsWith("spotify:track:"))
+    .filter(t => asText(t?.uri, "").startsWith("spotify:track:"))
     .map(t => {
       const id = t.uri.slice("spotify:track:".length);
       return {
@@ -697,7 +704,7 @@ export async function scrapePlaylistTracks(playlistId, env, ctx) {
         artists_text:  t.subtitle || "",   // raw "A, B" string kept for back-compat
         spotify_url:   `https://open.spotify.com/track/${id}`,
         song_link_url: `https://song.link/s/${id}`,
-        duration_ms:   typeof t.duration === "number" ? t.duration : null,
+        duration_ms:   asNumber(t.duration),
         preview_url:   t.audioPreview?.url || null,
         is_explicit:   !!t.isExplicit,
       };
@@ -771,7 +778,7 @@ function trackMetaFromEntity(e) {
     image_url: canonicalArtUrl(e?.visualIdentity?.image?.[0]?.url || null),
     artists: Array.isArray(e?.artists)
       ? e.artists
-          .filter(a => a && typeof a.uri === "string" && a.uri.startsWith("spotify:artist:"))
+          .filter(a => asText(a?.uri, "").startsWith("spotify:artist:"))
           .map(a => {
             const id = a.uri.slice("spotify:artist:".length);
             return {
@@ -805,7 +812,7 @@ export async function cronEnrichTracks(env, ctx) {
       return { ok: false, reason: "no_payload" };
     }
 
-    const meta = (storedMeta && typeof storedMeta === "object") ? { ...storedMeta } : {};
+    const meta = { ...asRecord(storedMeta) };
     const live = payload.tracks.map(t => t.id).filter(Boolean);
 
     // PRUNE BY AGE, never by absence from one read. The first version of this
@@ -835,7 +842,7 @@ export async function cronEnrichTracks(env, ctx) {
     for (const id of Object.keys(meta)) {
       // an entry written before this field existed is stamped rather than
       // deleted, so the upgrade cannot itself become the outage it prevents.
-      if (typeof meta[id].seen !== "number") { meta[id].seen = now; continue; }
+      if (asNumber(meta[id].seen) === null) { meta[id].seen = now; continue; }
       if (now - meta[id].seen > TRACK_META_MAX_AGE_MS) { delete meta[id]; pruned++; }
     }
 
@@ -865,10 +872,10 @@ export async function cronEnrichTracks(env, ctx) {
     await Promise.all([...pendingArtists.keys()].map(async id => {
       const key = `artist:${id}`;
       try {
-        const hit = await env.RN_KV.get(key, "json");
-        if (hit && typeof hit === "object") {
+        const hit = asRecord(await env.RN_KV.get(key, "json"));
+        if (hit) {
           artistCached++;
-          resolved.set(id, { name: hit.name || "", image_url: hit.image_url || null });
+          resolved.set(id, { name: asText(hit.name, ""), image_url: asText(hit.image_url) });
           return;
         }
       } catch { /* fall through to the scrape */ }

@@ -23,6 +23,7 @@ import { validateLensTarget } from "./lens.js";
 import { privateHostBlocked, readResponseCapped } from "./lib/crawl.js";
 import { WEBMENTION_PATHS, WEBMENTION_SECTIONS } from "./lib/site-manifest.js";
 import { span } from "./lib/trace.js";
+import { asText } from "./lib/parse.js";
 
 const SEND_TIMEOUT_MS = 8000;
 const PAGE_BYTE_CAP = 512 * 1024;
@@ -160,7 +161,7 @@ export async function mentionablePages(env, origin) {
       if (!res.ok) continue;
       const posts = await res.json();
       for (const p of Array.isArray(posts) ? posts : []) {
-        if (p && typeof p.slug === "string") paths.push(`/writing/${p.slug}`);
+        if (p && asText(p.slug) !== null) paths.push(`/writing/${p.slug}`);
       }
     } catch {}
   }

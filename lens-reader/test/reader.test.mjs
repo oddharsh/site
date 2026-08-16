@@ -13,7 +13,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { parseHTML } from "linkedom";
-import { countControls, countWords, scoreExtraction, shape, toMarkdown } from "../src/reader.js";
+import { countControls, countWords, scoreExtraction, tally, toMarkdown } from "../src/reader.js";
 
 test("markdown conversion runs at all, which is the part node can prove", () => {
   // The trap is that turndown ships two builds: node falls back to domino and
@@ -43,10 +43,10 @@ test("both word counts come from one function, so the gap is extraction", () => 
   // disagreeing, which is the failure gotcha 24 names: a number that cannot be
   // wrong because nothing independent produced it.
   const html = "<html><body><p>one two three four five</p></body></html>";
-  assert.equal(shape(html).words, 5);
+  assert.equal(tally(html).words, 5);
   assert.equal(countWords("one two three four five"), 5);
   // and the body extractor must not count markup as words
-  assert.equal(shape("<html><body><p><b>a</b> <i>b</i></p></body></html>").words, 2);
+  assert.equal(tally("<html><body><p><b>a</b> <i>b</i></p></body></html>").words, 2);
 });
 
 test("control counting is an upper bound and never a silent overcount", () => {

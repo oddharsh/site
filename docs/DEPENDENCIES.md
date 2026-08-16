@@ -29,7 +29,13 @@ review policy and entry point for future agent runs.
 
 ## Current baseline
 
-- Wrangler 4.120.1 is the exact root pin shared by all Worker projects.
+- Wrangler 4.123.0 is the exact root pin shared by all Worker projects.
+  `cal`'s @cloudflare/vitest-pool-workers floor is 0.21.3, which resolves the
+  same Wrangler, Miniflare, and Workerd stack as the root. Measured on
+  2026-08-15 across five warm-store, clean installs, that alignment cut median
+  install time from 4.62 s to 3.03 s and `node_modules` from 781 MiB to 562 MiB.
+  Review these two updates together when either package changes its Cloudflare
+  toolchain dependencies.
 - Oxc Minify 0.144.0 and Lightning CSS 1.33.0 are exact root pins for the
   deploy-time JavaScript and CSS minifiers. Their platform-specific optional
   packages run only in the build environment; they add no browser or Worker
@@ -44,6 +50,14 @@ review policy and entry point for future agent runs.
   unchanged code, and should treat any tsgolint release as paired with a
   TypeScript one. Every rule this repo turns off is turned off in
   `.oxlintrc.json` beside the measurement that decided it.
+- @oxlint/plugins 1.78.0 is the runtime for the three rules vendored from
+  anti-slop at `tools/oxlint/anti-slop`. **Bump it in lockstep with oxlint and
+  never on its own**: it is the ABI between the linter and a JS plugin, the two
+  ship one version number, and a mismatch would fail at plugin load rather than
+  at install. It carries no transitive dependencies. Since the rules themselves
+  are vendored rather than depended on, an anti-slop release is NOT a Dependabot
+  event here; re-syncing is a deliberate copy, and the section at the end of this
+  file says which three files it covers.
 - **esbuild is no longer a direct dependency, as of 2026-08-14.** It had left the
   minification path when Oxc took over and stayed pinned for ONE call:
   `scripts/check-page-contracts.mjs` parsed the garage scaffold's inline CSS with

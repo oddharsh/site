@@ -35,8 +35,10 @@
 // no workers.dev URL at all (`workers_dev: false`), so the suffix alone is an
 // exact test for "not the canonical host". Checked on hostname, never on the Host
 // header directly, because a spoofed Host must not be able to turn the guard OFF.
+import { asText } from "./parse.js";
+
 export function isPreviewHost(hostname) {
-  return typeof hostname === "string" && hostname.toLowerCase().endsWith(".workers.dev");
+  return asText(hostname, "").toLowerCase().endsWith(".workers.dev");
 }
 
 // Sent on every preview response. `nofollow` as well as `noindex` because the
