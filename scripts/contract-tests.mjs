@@ -2669,6 +2669,21 @@ test("browser RUM and its ledger proxy stay fully removed", async () => {
     "/security must keep describing the browser-facing CSP accurately");
 });
 
+test("production minifies the Worker without obscuring deployed stack traces", async () => {
+  const { parseJsonc } = await import("./lib/jsonc.mjs");
+  const production = parseJsonc(await readFile(new URL("wrangler.jsonc", ROOT), "utf8"));
+  const development = parseJsonc(await readFile(new URL("wrangler.dev.jsonc", ROOT), "utf8"));
+
+  assert.equal(production.minify, true,
+    "production should upload the smaller minified Worker bundle");
+  assert.equal(production.upload_source_maps, true,
+    "production minification must keep original stack locations available to Workers Logs");
+  assert.equal(development.minify, undefined,
+    "local development should keep readable code and its faster edit/reload loop");
+  assert.equal(development.upload_source_maps, undefined,
+    "local source locations need no separately uploaded map");
+});
+
 test("weak validators turn unchanged rendered HTML into an empty 304", async () => {
   const tagged = await withWeakEtag(new Response("<!doctype html><p>same</p>", {
     headers: { "content-type": "text/html", "cache-control": "public, max-age=0", "content-encoding": "br" },
