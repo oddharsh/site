@@ -8,6 +8,15 @@
   // 'self'`. Linting either one reports on somebody else's minifier.
   "ignorePatterns": ["www/a-dict/**", "www/garage/pretext.lib.js", ".build/**"],
 
+  // NAMING ANY PLUGIN REPLACES THE DEFAULT SET, so this list has to restate the
+  // four that were on implicitly. Measured 2026-08-15: with `"plugins":
+  // ["vitest"]` alone, a planted `Promise.all([p])` stopped reporting
+  // unicorn/no-single-promise-in-promise-methods entirely. Nothing warns, the
+  // lint still exits 0, and the tree reads as clean because most of the rules
+  // that were checking it are gone. Adding a plugin here means appending to
+  // this array, never writing the one you want.
+  "plugins": ["eslint", "unicorn", "typescript", "oxc", "vitest"],
+
   "categories": { "correctness": "error" },
 
   "rules": {
@@ -77,7 +86,28 @@
     // the difference; every alternative it would accept (Array.from({length}),
     // a fill, a push loop) allocates or walks the array a second time to reach
     // the same place. Off rather than autofixed, for the same reason as above.
-    "unicorn/no-new-array": "off"
+    "unicorn/no-new-array": "off",
+
+    // The one rule worth taking from dmmulroy/anti-slop, an Oxlint plugin of
+    // 15. Three of the other 14 fire on this tree and all three disagree with a
+    // documented house idiom; ten cannot fire at all, since they visit only
+    // TypeScript AST nodes and nothing here is TypeScript. Nothing was vendored,
+    // because core Oxlint already ships this one.
+    //
+    // `cal/` is the only Vitest project in the tree and its 7 test files
+    // use real seams today, so this is a tripwire on zero existing sites rather
+    // than a cleanup. It is worth setting because a module mock is the cheapest
+    // wrong turn available to anyone extending those tests: it would pass while
+    // asserting against a fake booking store, on the surface where a bug means
+    // a real person double-booked. The 12 remaining anti-slop rules are not
+    // vendored; docs/DEPENDENCIES.md records the measurement that decided each one.
+    "vitest/no-restricted-vi-methods": [
+      "error",
+      {
+        "mock": "Use a real dependency seam. A module mock asserts against a fake.",
+        "doMock": "Use a real dependency seam. A module mock asserts against a fake."
+      }
+    ]
   },
 
   // Type-aware linting, via tsgolint, enabled by `--type-aware` in the `lint`
