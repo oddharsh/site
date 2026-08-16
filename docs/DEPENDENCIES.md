@@ -29,7 +29,13 @@ review policy and entry point for future agent runs.
 
 ## Current baseline
 
-- Wrangler 4.120.1 is the exact root pin shared by all Worker projects.
+- Wrangler 4.123.0 is the exact root pin shared by all Worker projects.
+  `cal`'s @cloudflare/vitest-pool-workers floor is 0.21.3, which resolves the
+  same Wrangler, Miniflare, and Workerd stack as the root. Measured on
+  2026-08-15 across five warm-store, clean installs, that alignment cut median
+  install time from 4.62 s to 3.03 s and `node_modules` from 781 MiB to 562 MiB.
+  Review these two updates together when either package changes its Cloudflare
+  toolchain dependencies.
 - Oxc Minify 0.144.0 and Lightning CSS 1.33.0 are exact root pins for the
   deploy-time JavaScript and CSS minifiers. Their platform-specific optional
   packages run only in the build environment; they add no browser or Worker
