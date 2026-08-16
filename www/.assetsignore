@@ -3,11 +3,10 @@
 # source. The _worker.js directory is the worker bundle entry, not an asset.
 _worker.js
 
-# The photo-pipeline + asset build scripts are dev tooling, not site content.
-# Left uploaded they served as public 200s (exposing deploy mechanics + the
-# hardcoded RN_KV namespace id + the /garage/cf/caption endpoint). Nothing
-# secret, but there's no reason to ship them.
-scripts
+# The photo + asset pipeline used to sit at www/scripts and be ignored here.
+# It is tools/photos now, outside the served tree entirely, so there is nothing
+# at that path to ignore and a stale entry would silently exclude any future
+# www/scripts from upload.
 
 # Previous shipped versions of the content-hashed shell, kept ONLY as dictionary inputs
 # for scripts/gen-shell-deltas.mjs. Uploading them would serve stale nav.js/luna.css at

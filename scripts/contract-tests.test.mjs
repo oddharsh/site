@@ -44,9 +44,9 @@ import { BASELINE_HEADING, FLOOR_CLAIMS, auditDependencyDocs, baselineSection, c
 import { PAGE_FAMILY_MATCH, serveStaticPage } from "../src/worker/lib/assets.ts";
 import { serveMarkdown } from "../src/worker/home.ts";
 import { readManifest, workerModule, navFenceBody, readFenceBody, runProfilesBody } from "./gen-manifest.mjs";
-import { PROFILES } from "../www/scripts/shell-data.mjs";
-import { faviconHref, sectionFavicons, speculationHtml } from "../www/scripts/gen-desktop-partial.mjs";
-import { TASKBAR } from "../www/scripts/shell-data.mjs";
+import { PROFILES } from "../tools/photos/shell-data.mjs";
+import { faviconHref, sectionFavicons, speculationHtml } from "../tools/photos/gen-desktop-partial.mjs";
+import { TASKBAR } from "../tools/photos/shell-data.mjs";
 import { SECTION_FAVICONS } from "../src/worker/lib/desktop.ts";
 import { collectBlockClasses, readDocument } from "./lib/html-to-md.mjs";
 import {
@@ -2995,7 +2995,7 @@ test("the dependency-doc check reaches the four manifests outside the root", () 
   const ranged = auditDependencyDocs({
     doc: `${H}\n- \`image\` 0.25 decodes input.`,
     ...quiet,
-    subManifests: sub({ manifest: "www/scripts/zenc/Cargo.toml", aliases: [{ prose: "image", pkg: "image" }], pins: { image: "0.25" } }),
+    subManifests: sub({ manifest: "tools/photos/zenc/Cargo.toml", aliases: [{ prose: "image", pkg: "image" }], pins: { image: "0.25" } }),
   });
   assert.ok(ranged.problems.some((p) => /image is range-pinned \(0\.25\)/.test(p)), ranged.problems.join("\n"));
 

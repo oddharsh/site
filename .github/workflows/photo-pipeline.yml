@@ -89,7 +89,7 @@ jobs:
       - name: Build the JPEG encoder (zenc)
         # zenjpeg hybrid + progressive scan search; Cargo.lock pins the graph,
         # dependabot tracks the zenjpeg version. macOS runners ship cargo.
-        run: cargo build --release --manifest-path www/scripts/zenc/Cargo.toml
+        run: cargo build --release --manifest-path tools/photos/zenc/Cargo.toml
 
       - name: Validate routine inputs
         run: |
@@ -120,7 +120,7 @@ jobs:
         run: |
           set -euo pipefail
           printf '%s\n' "$SOURCE_KEYS" > "$RUNNER_TEMP/photo-source-keys.txt"
-          ./www/scripts/download-remote-photos.sh \
+          ./tools/photos/download-remote-photos.sh \
             "$RUNNER_TEMP/photo-source-keys.txt" \
             "$RUNNER_TEMP/photo-source"
 
@@ -135,23 +135,23 @@ jobs:
               bun run photos "$source_dir"
               ;;
             reencode-thumbnails)
-              ./www/scripts/reencode-thumbnails.sh "$source_dir"
-              ./www/scripts/hash-thumbnails.sh
-              ./www/scripts/zenc/target/release/zenc histogram --root www
+              ./tools/photos/reencode-thumbnails.sh "$source_dir"
+              ./tools/photos/hash-thumbnails.sh
+              ./tools/photos/zenc/target/release/zenc histogram --root www
               bun run photos:check
               ;;
             refresh-metadata)
-              ./www/scripts/extract-photo-metadata.sh --merge "$source_dir"
+              ./tools/photos/extract-photo-metadata.sh --merge "$source_dir"
               bun run photos:check
               ;;
             add-car-photo)
               key="$(find "$source_dir" -type f -print -quit)"
               [ -n "$key" ] || { echo "no downloaded car source" >&2; exit 1; }
-              ./www/scripts/add-car-photo.sh "$CAR_STEM" "$key"
+              ./tools/photos/add-car-photo.sh "$CAR_STEM" "$key"
               ;;
             regenerate-encoding-study)
-              ./www/scripts/gen-encoding-samples.sh
-              ./www/scripts/gen-encoding-grids.sh
+              ./tools/photos/gen-encoding-samples.sh
+              ./tools/photos/gen-encoding-grids.sh
               ;;
           esac
 
@@ -193,6 +193,6 @@ jobs:
               '' \
               "Routine: $ROUTINE" \
               'Source: R2-backed public photo route' \
-              'Encoder: zenjpeg via www/scripts/zenc (Cargo-pinned, dependabot-tracked)' \
+              'Encoder: zenjpeg via tools/photos/zenc (Cargo-pinned, dependabot-tracked)' \
               '' \
               'The source files were downloaded to ephemeral runner storage only. Merge this PR through the normal CI and production-promotion path.')"

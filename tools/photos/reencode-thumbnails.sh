@@ -47,8 +47,8 @@
 # and rewrites images/hashes.json. A re-encode mints a NEW content-addressed URL,
 # so there is nothing to bust (THUMB_VERSION is gone; it only ever survived in the
 # legacy-fallback URL shape).
-#   SQ=600 ./www/scripts/reencode-thumbnails.sh
-#   SQ=600 SQ_SM=400 ./www/scripts/reencode-thumbnails.sh "/path/to/source/folder"
+#   SQ=600 ./tools/photos/reencode-thumbnails.sh
+#   SQ=600 SQ_SM=400 ./tools/photos/reencode-thumbnails.sh "/path/to/source/folder"
 #
 set -euo pipefail
 

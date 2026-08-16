@@ -37,7 +37,7 @@ import { readManifest, workerModule, navFenceBody, readFenceBody, runProfilesBod
 import { parseCss } from "./lib/css-parse.mjs";
 import { HTML_MARKERS } from "./lib/html-markers.mjs";
 import { zstdCompressDictionaryBatch } from "./lib/zstd-batch.mjs";
-import { patchStaticShell, renderDesktopArtifacts, staticShellPages } from "../www/scripts/gen-desktop-partial.mjs";
+import { patchStaticShell, renderDesktopArtifacts, staticShellPages } from "../tools/photos/gen-desktop-partial.mjs";
 
 const OUT = ".build";
 const brotliCompressAsync = promisify(brotliCompress);

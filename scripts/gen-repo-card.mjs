@@ -16,7 +16,7 @@
 //     node scripts/gen-repo-card.mjs desktop         # one variant
 //     node scripts/gen-repo-card.mjs --out /tmp/x    # somewhere else
 //
-// Same idiom as www/scripts/gen-og-cards.mjs: playwright-core driving the
+// Same idiom as tools/photos/gen-og-cards.mjs: playwright-core driving the
 // installed Chrome, the wallpaper read straight out of luna.css so the card
 // background is pixel-identical to the real desktop (no second asset), and the
 // screenshot supersampled at DSF 2 then downscaled into a 1x card.

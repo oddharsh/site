@@ -5,11 +5,11 @@
 // does. This reads wifi and Bluetooth signal strength on macOS and either prints
 // the readings or POSTs them to the instrument, which draws them.
 //
-//   node www/scripts/radar-sample.mjs                 # print the frame
-//   node www/scripts/radar-sample.mjs --json          # print the samples
-//   node www/scripts/radar-sample.mjs --watch         # redraw every 2s
-//   node www/scripts/radar-sample.mjs --anonymize     # hash the names first
-//   node www/scripts/radar-sample.mjs --at http://localhost:8795
+//   node tools/photos/radar-sample.mjs                 # print the frame
+//   node tools/photos/radar-sample.mjs --json          # print the samples
+//   node tools/photos/radar-sample.mjs --watch         # redraw every 2s
+//   node tools/photos/radar-sample.mjs --anonymize     # hash the names first
+//   node tools/photos/radar-sample.mjs --at http://localhost:8795
 //
 // ── what it reads, and what that costs ────────────────────────────────────
 // Both come from `system_profiler`, which needs NO SUDO — the older `airport -I`

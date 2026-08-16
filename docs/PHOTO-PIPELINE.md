@@ -25,7 +25,7 @@ Run GitHub Actions → Remote photo pipeline and choose a routine:
 
 The workflow runs on an ephemeral GitHub-hosted macOS runner because the
 current decoder path deliberately uses macOS sips. It builds the JPEG encoder
-(www/scripts/zenc, a Cargo crate wrapping zenjpeg) with cargo, installs
+(tools/photos/zenc, a Cargo crate wrapping zenjpeg) with cargo, installs
 Homebrew's mozjpeg/libavif/jq tools plus exif-sooc, and never commits the downloaded
 sources or the built encoder binary.
 
@@ -51,7 +51,7 @@ and an emergency fallback; they are no longer the normal execution surface.
 
 ## Toolchain refresh
 
-The JPEG encoder pins zenjpeg through Cargo (`www/scripts/zenc`), so Dependabot's cargo ecosystem opens the version-bump PRs on the weekly cadence, the same as npm, GitHub Actions, and Pillow. This replaced the hand-rolled `Refresh image toolchain` workflow that used to track the from-source `google/jpegli` commit and regenerate the study; a bumped zenjpeg goes through normal CI and merge review like any other Dependabot PR.
+The JPEG encoder pins zenjpeg through Cargo (`tools/photos/zenc`), so Dependabot's cargo ecosystem opens the version-bump PRs on the weekly cadence, the same as npm, GitHub Actions, and Pillow. This replaced the hand-rolled `Refresh image toolchain` workflow that used to track the from-source `google/jpegli` commit and regenerate the study; a bumped zenjpeg goes through normal CI and merge review like any other Dependabot PR.
 
 Homebrew formulas (mozjpeg for `jpegtran`, libavif for `avifenc`) stay outside Dependabot's reach and update on their own cadence.
 

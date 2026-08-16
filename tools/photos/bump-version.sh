@@ -6,8 +6,8 @@
 # the merge, and `pnpm run deploy:promote` records it in D1 once traffic actually
 # reaches 100%.
 #
-#   ./www/scripts/bump-version.sh <slug> "<title>"
-#   e.g. ./www/scripts/bump-version.sh confetti "Run palette: Raycast confetti easter egg"
+#   ./tools/photos/bump-version.sh <slug> "<title>"
+#   e.g. ./tools/photos/bump-version.sh confetti "Run palette: Raycast confetti easter egg"
 #
 # slug   becomes the version suffix (aadhar-v<N+1>-<slug>) and the changelog tag.
 # title  is the human description shown on /updates and /restore.

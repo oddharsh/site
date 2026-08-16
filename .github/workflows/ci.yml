@@ -275,8 +275,8 @@ jobs:
           /tmp/osv-scanner scan source \
             --lockfile bun.lock \
             --lockfile lens-reader/bun.lock \
-            --lockfile www/scripts/zenc/Cargo.lock \
-            --lockfile www/scripts/requirements.txt
+            --lockfile tools/photos/zenc/Cargo.lock \
+            --lockfile tools/photos/requirements.txt
           status=$?
           set -e
           case "$status" in

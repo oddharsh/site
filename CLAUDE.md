@@ -27,7 +27,7 @@ decides which one a given file belongs in:
 | `cal/`, `serendipity/` | the two application modules the site Worker bundles and serves at `/coffee` and `/serendipity`. They sit outside `www/` because they are programs with their own tests, not documents. |
 | `cf-garage/`, `lwe-ask/`, `lens-reader/` | the three SEPARATELY deployed auxiliary Workers, each with its own `wrangler.toml` and its own deploy. Nothing here reaches production through the site Worker. |
 | **`scripts/`** | **every developer tool.** The build (`build.mjs`), the test suite (`contract-tests.mjs`), the route oracle, the perf budget, and the `check-*` / `gen-*` family. Nothing in here ships. |
-| `www/scripts/` | the photo and asset pipeline specifically, kept beside the pixels it operates on. The split from `scripts/` is by SUBJECT: this one touches `www/images` and `www/i`, nothing else does. |
+| `tools/photos/` | the photo and asset pipeline, at `www/scripts/` until 2026-08-16. The split from `scripts/` is still by SUBJECT: this one touches `www/images` and `www/i`, nothing else does. It left `www/` because it is DEV TOOLING that ships nothing, so `.assetsignore` no longer needs a `scripts` entry and the build no longer stages 28 files it then excludes. Every script here resolves its root two levels up, which survives the move because `www/scripts` and `tools/photos` sit at the same depth; `gen-photo-semantics.mjs` was the one exception (it used `dirname(dirname())`, so its root was `www/` rather than the repo) and now matches its siblings. |
 | **`config/`** | `infra.json` (declared Cloudflare + GitHub state), `site-manifest.json` (the surface registry), `tsconfig.json`. |
 | `pipelines/` | the page GENERATORS, one directory per section: `content/` (the shared page contract), `garage/`, `lwe/`. These author into `www/`; they are not part of the build. |
 | **`docs/`** | the long-form runbooks: `MAINTENANCE.md`, `PHOTO-PIPELINE.md`, `DEPENDENCIES.md`, `UNDERSTANDING-REVIEW.md`. |
@@ -54,7 +54,7 @@ moving any of them costs more than it buys:
 
 Two naming notes worth having. `www/` was called `www/` until 2026-08-11,
 so any branch or note older than that says `holding` for the same directory.
-And the ONE path that reads as a duplicate, `scripts/` against `www/scripts/`,
+And the ONE path that reads as a duplicate, `scripts/` against `tools/photos/`,
 is the subject split in the table above rather than an accident.
 
 ---
@@ -139,16 +139,16 @@ pnpm run dict:roll
 pnpm run dcz:check
 
 # regenerate JUST the EXIF metadata (after photos are already uploaded)
-./www/scripts/extract-photo-metadata.sh "/Users/aadharsh/Downloads/to post (from ssd)"
+./tools/photos/extract-photo-metadata.sh "/Users/aadharsh/Downloads/to post (from ssd)"
 
-# build the Python environment for gen-pixel-peeper.py (uv, into www/scripts/.venv).
+# build the Python environment for gen-pixel-peeper.py (uv, into tools/photos/.venv).
 # NOT needed for the photo pipeline: the histogram bake moved into `zenc histogram`
 # on 2026-08-14. Homebrew's python3 is PEP 668, so a plain pip install fails.
 pnpm run photos:env
 
 # build the JPEG thumbnail encoder (zenc = zenjpeg hybrid+scan). the pipeline
 # scripts auto-build it on first run; this is the explicit form.
-cargo build --release --manifest-path www/scripts/zenc/Cargo.toml
+cargo build --release --manifest-path tools/photos/zenc/Cargo.toml
 
 # bust caches via wrangler (RN_KV namespace ID hardcoded in scripts).
 # NB: the photo manifest is NOT a cache anymore — the worker bundles
@@ -828,8 +828,8 @@ Single-page personal site at `aadhar.sh`. A Cloudflare Worker with static assets
 | `www/sitemap.xml`, `robots.txt` | Standard SEO files. robots.txt explicitly allows AadharshBot. |
 | `www/.well-known/http-message-signatures-directory` | JWKS for AadharshBot's Ed25519 public key (Web Bot Auth IETF draft). |
 | `www/images/` + `www/i/` | `images/` holds the photo DATA surfaces: `metadata.json` (the EXIF RECORD, long field names + the Fuji recipe card), `exif.json` (the tooltip's TEXT tier: every photo's short-key EXIF in one 2.6KB-brotli file, warmed once on idle because the homepage draws a fresh random 12 of 158 per request and a per-slot warm-up was cold nearly every visit), `meta/<stem>.json` (per-photo EXIF plus the four 64-bin histogram channels — the BARS tier, fetched only on the hover that needs them, and the self-healing fallback for a stem missing from a cached `exif.json`), `alt.json` (AI captions), `hashes.json` (stem to hash8 map). The pixel tiers (600px AVIF+JPG squares + 400px mobile AVIF) live in `i/` under content-hashed names, 474 files for 158 photos. |
-| `www/og/` | Pre-baked 1200x630 OG/Twitter cards, one per garage + lwe page (`<section>-<name>.png`): the page's live demo floated on the Bliss desktop under the page's own favicon as a brand stamp, so a shared link unfurls as the interaction rather than a bare title. **There is no route label on the card**, and this row said there was until 2026-08-15: the generator's own header comment has described a "translucent XP dock naming the route" since #55 while the card template has never rendered one, and the claim was copied here. Wired via `og:image`/`twitter:card` in each page's `<head>` (edge-direct static pages can't be worker-injected). Built by `www/scripts/gen-og-cards.mjs` (playwright-core → Chrome, captures production for live data); meta added by `www/scripts/inject-og-meta.mjs`. **Both paths read `scripts/` here until the same date**, which is the split the layout table above draws and costs a `No such file` to anyone following this row. Regen recipe in MAINTENANCE.md. Cached 30d, deploy purges the edge. |
-| `www/scripts/` | Photo-pipeline + asset scripts (see below). Beyond the core pipeline (`add-photos.sh`, `extract-photo-metadata.sh`, `check-photo-pipeline.mjs`, `zenc/` the JPEG encoder crate): `add-car-photo.sh` (one resto-mod reference photo into the dual AVIF+JPG pair the car-link tooltips expect, output `www/cars/<stem>.{avif,jpg}`, no EXIF/R2); `gen-alt-text.py` (AI alt text for every grid photo, writes `www/images/alt.json` `{stem: alt}`, resumable; run by `add-photos.sh` phase 4 — posts the committed `i/` thumbnail bytes to Workers AI when `CLOUDFLARE_API_TOKEN` is set so a brand-new photo captions pre-deploy, else falls back to the cf-garage `/garage/cf/caption` endpoint by stem, which only sees deployed photos); `gen-encoding-samples.sh` (regenerates the color sample set for the `/garage/encoding` study through every encoder, prints byte counts + bytes-per-pixel); `reencode-thumbnails.sh` (re-encodes all published grid thumbnails as pre-cropped center squares from the canonical source folder, two square tiers); `gen-pixel-peeper.py` (the one remaining Pillow consumer, a one-off generator for the /pixel-peeper comparison frames; NOT part of add-photos.sh). The four 64-bin RGB/luminance channels are baked by `zenc histogram`, inside the encoder crate, since 2026-08-14. |
+| `www/og/` | Pre-baked 1200x630 OG/Twitter cards, one per garage + lwe page (`<section>-<name>.png`): the page's live demo floated on the Bliss desktop under the page's own favicon as a brand stamp, so a shared link unfurls as the interaction rather than a bare title. **There is no route label on the card**, and this row said there was until 2026-08-15: the generator's own header comment has described a "translucent XP dock naming the route" since #55 while the card template has never rendered one, and the claim was copied here. Wired via `og:image`/`twitter:card` in each page's `<head>` (edge-direct static pages can't be worker-injected). Built by `tools/photos/gen-og-cards.mjs` (playwright-core → Chrome, captures production for live data); meta added by `tools/photos/inject-og-meta.mjs`. **Both paths read `scripts/` here until the same date**, which is the split the layout table above draws and costs a `No such file` to anyone following this row. Regen recipe in MAINTENANCE.md. Cached 30d, deploy purges the edge. |
+| `tools/photos/` | Photo-pipeline + asset scripts (see below). Beyond the core pipeline (`add-photos.sh`, `extract-photo-metadata.sh`, `check-photo-pipeline.mjs`, `zenc/` the JPEG encoder crate): `add-car-photo.sh` (one resto-mod reference photo into the dual AVIF+JPG pair the car-link tooltips expect, output `www/cars/<stem>.{avif,jpg}`, no EXIF/R2); `gen-alt-text.py` (AI alt text for every grid photo, writes `www/images/alt.json` `{stem: alt}`, resumable; run by `add-photos.sh` phase 4 — posts the committed `i/` thumbnail bytes to Workers AI when `CLOUDFLARE_API_TOKEN` is set so a brand-new photo captions pre-deploy, else falls back to the cf-garage `/garage/cf/caption` endpoint by stem, which only sees deployed photos); `gen-encoding-samples.sh` (regenerates the color sample set for the `/garage/encoding` study through every encoder, prints byte counts + bytes-per-pixel); `reencode-thumbnails.sh` (re-encodes all published grid thumbnails as pre-cropped center squares from the canonical source folder, two square tiers); `gen-pixel-peeper.py` (the one remaining Pillow consumer, a one-off generator for the /pixel-peeper comparison frames; NOT part of add-photos.sh). The four 64-bin RGB/luminance channels are baked by `zenc histogram`, inside the encoder crate, since 2026-08-14. |
 
 ### The photo pipeline
 
@@ -875,11 +875,11 @@ Two encoders + one transform tool, all built from source:
 
 - **mozjpeg** (`brew install mozjpeg`, keg-only at `/opt/homebrew/opt/mozjpeg/`)
   — provides `jpegtran` for lossless EXIF-orientation rotation.
-- **zenc** (`www/scripts/zenc/`, a Rust crate wrapping
+- **zenc** (`tools/photos/zenc/`, a Rust crate wrapping
   `github.com/imazen/zenjpeg`) — the JPEG universal-fallback encoder: hybrid
   trellis + 64-candidate progressive scan search + sharp_yuv chroma, ~4% under the
   retired cjpegli at equal quality. Builds with `cargo`; dependabot tracks the
-  zenjpeg pin. Replaced the from-source jpegli build (2026-07). See `www/scripts/zenc/src/main.rs`.
+  zenjpeg pin. Replaced the from-source jpegli build (2026-07). See `tools/photos/zenc/src/main.rs`.
 - **libavif** (`brew install libavif`, optional) — `avifenc` for the
   primary AVIF thumbnail. Falls back to `sips -s format avif` (macOS
   native, no extra dep) when avifenc isn't installed.
@@ -919,10 +919,10 @@ Two encoders + one transform tool, all built from source:
   `gen-pixel-peeper.py` alone, which is a one-off generator rather than part of
   this pipeline. The 64-bin RGB/luminance bake moved into `zenc histogram` on
   2026-08-14, so nothing in add-photos.sh or extract-photo-metadata.sh needs it.
-  It installs into a venv at `www/scripts/.venv` rather than the system
+  It installs into a venv at `tools/photos/.venv` rather than the system
   interpreter, because Homebrew's python3 is PEP 668 **externally managed** and
   refuses `pip install` outright: the documented recipe here was
-  `python3 -m pip install -r www/scripts/requirements.txt` and it had stopped
+  `python3 -m pip install -r tools/photos/requirements.txt` and it had stopped
   working, measured 2026-08-14. CI has always built its own venv in `RUNNER_TEMP`;
   this is the local half of the same idea. Since the zenc move, a missing Pillow
   costs one study page's regeneration rather than the histograms on 158 photos.
@@ -1425,7 +1425,7 @@ generic hex back.
   **Configured in `wrangler.jsonc`** (d1_databases), like every other binding
   since the Workers migration.
   **Log a deploy** (so both pages stay current):
-  `./www/scripts/bump-version.sh <slug> "<title>"`, run INSIDE the PR being
+  `./tools/photos/bump-version.sh <slug> "<title>"`, run INSIDE the PR being
   released, then commit the file it writes.
 
   **It writes ONE FILE and touches no D1, which is the reverse of what this said

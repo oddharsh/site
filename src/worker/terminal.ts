@@ -743,7 +743,7 @@ function radarIdleFrame() {
     body: rows(
       ...wrap("A server has no antenna and neither does an agent, so this half does not sense anything. POST signal readings and it draws them: concentric bands by strength, a meter and a trend per source.", INNER).map((row) => [s(row)]),
       blank(),
-      [s("  node www/scripts/radar-sample.mjs --at https://aadhar.sh", "accent")],
+      [s("  node tools/photos/radar-sample.mjs --at https://aadhar.sh", "accent")],
       [s("  curl -X POST aadhar.sh/radar -d '{\"samples\":[{\"name\":\"AP\",\"rssi\":-58}]}'", "accent")],
       blank(),
       rule(INNER, "the shape"),
