@@ -78,6 +78,17 @@ function renderMsg(m, c) {
   return `      <div class="msg ${m.who}"><div class="pic"></div><div><div class="who"><b>${who}</b>${m.time ? `<time>${m.time}</time>` : ""}</div>\n        <div class="bubble">${m.html}${cite}</div></div></div>`;
 }
 
+function demoSource(spec) {
+  if (spec.demoJs && spec.demoJsFile) {
+    throw new Error(`LWE spec "${spec.id}" must use either demoJs or demoJsFile, not both`);
+  }
+  if (!spec.demoJsFile) return spec.demoJs || "";
+  if (!/^[a-z0-9-]+\.js$/.test(spec.demoJsFile)) {
+    throw new Error(`LWE spec "${spec.id}" has an invalid demoJsFile`);
+  }
+  return readFileSync(join(HERE, "specs", spec.demoJsFile), "utf8").trimEnd();
+}
+
 // ---- the full page ----
 function pageHtml(spec) {
   const c = byId(spec.id);
@@ -89,7 +100,8 @@ function pageHtml(spec) {
   const favFill = c.accent.replaceAll("#", "%23");
   const favFont = c.glyphFont ? c.glyphFont.replace(/"/g, "'") : "Trebuchet MS,sans-serif";
   const askScript = (spec.hasAsk ?? c.hasAsk) ? `<script src="/lwe/ask.js" defer></script>\n` : "";
-  const demoJs = spec.demoJs ? `<script>\n${spec.demoJs}\n</script>\n` : "";
+  const demoProgram = demoSource(spec);
+  const demoJs = demoProgram ? `<script>\n${demoProgram}\n</script>\n` : "";
   const understanding = renderUnderstanding(spec.understanding, "lwe");
   return `<!DOCTYPE html>
 <html lang="en">
