@@ -1,27 +1,21 @@
 // The BEHAVIOURAL half of the Reader lens's tests. It lives here rather than in
 // the root contract-tests.mjs because it imports ../src/reader.js, which imports
-// readability, linkedom and turndown — dependencies of THIS project alone. The root
+// readability and linkedom — dependencies of THIS project alone. The root
 // suite runs under plain node with the root workspace's deps, so importing this
 // module there fails with ERR_MODULE_NOT_FOUND in CI while passing on a
 // workstation that happened to install them (caught on PR #299's first run).
 //
 // The split by capability:
 //   root contract-tests.mjs — everything provable from SOURCE TEXT: the rate
-//     limit against wrangler.toml, the shared SSRF guard, the turndown call
-//     shape, the dropped tally, the tab labels.
+//     limit against wrangler.toml, the shared SSRF guard, the dependency floor,
+//     the dropped tally, the tab labels.
 //   here — everything that has to actually RUN.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { parseHTML } from "linkedom";
-import { countControls, countWords, scoreExtraction, tally, toMarkdown } from "../src/reader.js";
+import { collectControlLabels, countControls, countWords, read, scoreExtraction, tally, toMarkdown } from "../src/reader.js";
 
-test("markdown conversion runs at all, which is the part node can prove", () => {
-  // The trap is that turndown ships two builds: node falls back to domino and
-  // takes an HTML string, the browser build needs document.implementation, and
-  // wrangler resolves the BROWSER one. So this test CANNOT reproduce the Worker
-  // failure — under node the broken form works too. The call shape is pinned in
-  // the root suite; what this settles is that the node path produces the right
-  // markdown, so a turndown bump that changes output fails here.
+test("the focused Markdown walk covers the article vocabulary", () => {
   const md = toMarkdown("<h2>Title</h2><p>Body <strong>text</strong>.</p>");
   assert.match(md, /^## Title/m);
   assert.match(md, /\*\*text\*\*/);
@@ -35,6 +29,54 @@ test("script and style bodies never reach the markdown", () => {
   assert.match(md, /Real prose/);
   assert.doesNotMatch(md, /alert/);
   assert.doesNotMatch(md, /color:red/);
+});
+
+test("the focused walk preserves links, code, nested lists, and unknown wrappers", () => {
+  const md = toMarkdown(`<article data-new-wrapper><h2>Title</h2>
+    <p>Body <em>voice</em>, <a href="/notes" title="Notes">a link</a>, and <code>a\`b</code>.</p>
+    <ul><li>One</li><li>Two<ol start="3"><li>Three</li></ol></li></ul>
+    <blockquote><p>Quoted.</p></blockquote>
+    <pre><code class="language-js">const answer = 42;</code></pre>
+    <img src="/x.jpg" alt="Example"><future-article-element>Future prose.</future-article-element></article>`);
+  assert.match(md, /^## Title/m);
+  assert.match(md, /Body \*voice\*, \[a link\]\(\/notes "Notes"\), and `` a`b ``\./);
+  assert.match(md, /^- Two\n\s+3\. Three/m, "the nested ordered list must stay nested");
+  assert.match(md, /^> Quoted\.$/m);
+  assert.match(md, /```js\nconst answer = 42;\n```/);
+  assert.match(md, /!\[Example\]\(\/x\.jpg\)/);
+  assert.match(md, /Future prose\./, "an unknown semantic wrapper must keep its prose");
+});
+
+test("the extracted article node preserves the string path byte for byte", () => {
+  const html = `<article><h2>Title</h2><p>Body <strong>text</strong> and
+    <a href="/notes">a link</a>.</p><ul><li>One</li><li>Two</li></ul>
+    <pre><code>const answer = 42;</code></pre></article>`;
+  const { document } = parseHTML(html);
+  const node = document.querySelector("article");
+  assert.equal(toMarkdown(node), toMarkdown(node.outerHTML));
+});
+
+test("read publishes Markdown from Readability's finished article node", async () => {
+  const originalFetch = globalThis.fetch;
+  const html = `<!doctype html><html><head><title>Direct Article</title></head><body>
+    <nav>Navigation that should lose.</nav><article><h1>Direct Article</h1>
+    ${"<p>Article prose with <strong>structure</strong> that the extractor should retain.</p>".repeat(12)}
+    </article></body></html>`;
+  try {
+    globalThis.fetch = async () => new Response(html, {
+      status: 200,
+      headers: { "content-type": "text/html; charset=utf-8" },
+    });
+    const result = await read("https://example.com/article");
+    const baseline = new (await import("@mozilla/readability")).Readability(
+      parseHTML(html).document,
+      { charThreshold: 500 },
+    ).parse();
+    assert.equal(result.title, "Direct Article");
+    assert.equal(result.markdown, toMarkdown(baseline.content));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("both word counts come from one function, so the gap is extraction", () => {
@@ -53,7 +95,7 @@ test("control counting is an upper bound and never a silent overcount", () => {
   const { document } = parseHTML('<html><body><button>Run all three</button><button>Close</button></body></html>');
   // "Close" also appears as ordinary prose, which is precisely why the payload
   // labels this an upper bound instead of reporting it as fact.
-  const counted = countControls(document, "<p>Run all three now. Then close the window.</p>");
+  const counted = countControls(collectControlLabels(document), "<p>Run all three now. Then close the window.</p>");
   assert.equal(counted.total, 2);
   assert.ok(counted.kept >= 1);
   assert.match(counted.note, /upper bound/);
@@ -122,11 +164,10 @@ test("the extractor actually extracts, which no other test here proved", async (
   assert.doesNotMatch(result.content, /Subscribe now/, "a control label survived as prose");
 });
 
-test("the control census reads an untouched parse, not the extractor's leftovers", async () => {
-  // Readability REWRITES the document it is handed, in place. read() therefore
-  // parses twice on purpose. Fold those back into one parse to save a few ms
-  // and countControls runs over the post-extraction corpse, reporting every
-  // page as leaking zero controls, which reads as a clean bill of health.
+test("the control census survives Readability mutation without a second DOM", async () => {
+  // Readability REWRITES the document it is handed, in place. Snapshotting the
+  // labels before extraction must preserve the census after the source nodes
+  // disappear, without retaining a second complete hostile-HTML tree.
   //
   // Measured on the real /garage/horizon 2026-08-14: body 217,022 -> 2,473
   // bytes and 29 <button> elements -> 0. The fixture below is sized to
@@ -140,12 +181,30 @@ test("the control census reads an untouched parse, not the extractor's leftovers
       ${"<p>Sidebar filler that should lose.</p>".repeat(10)}
     </aside></body></html>`;
 
-  const { document: census } = parseHTML(html);
-  const { document: working } = parseHTML(html);
-  const beforeBytes = working.body.innerHTML.length;
-  new Readability(working, { charThreshold: 500 }).parse();
+  const { document } = parseHTML(html);
+  const labels = collectControlLabels(document);
+  const beforeBytes = document.body.innerHTML.length;
+  const result = new Readability(document, { charThreshold: 500 }).parse();
 
-  assert.equal(census.querySelectorAll("button").length, 1, "the untouched parse lost its button");
-  assert.ok(working.body.innerHTML.length < beforeBytes / 2,
-    "Readability left the working document intact, so read()'s two parses are now pointless");
+  assert.ok(document.body.innerHTML.length < beforeBytes / 2,
+    "Readability left the document intact, so the mutation boundary is no longer exercised");
+  assert.equal(document.querySelectorAll("button").length, 0, "the fixture did not lose its source control");
+  const counted = countControls(labels, result.content);
+  assert.equal(counted.total, 1, "the pre-extraction label snapshot lost the source control");
+  assert.equal(counted.kept, 0, "the removed control was reported as surviving extraction");
+});
+
+test("a link destination cannot be closed early by its own backslash", () => {
+  // CodeQL js/incomplete-sanitization on the image half: the anchor escaped
+  // backslash before `)` and the image escaped only `)`, so an input backslash
+  // paired with the escape and left the paren bare, closing the link early and
+  // spilling the rest of the URL into the prose. One escaper now serves both,
+  // and the assertion is that they agree for the same input.
+  const url = String.raw`https://x.test/a\)b`;
+  const escaped = String.raw`https://x.test/a\\\)b`;
+  const { document } = parseHTML(`<div><a href="${url}">label</a><img src="${url}" alt="shot"></div>`);
+  const md = toMarkdown(document.querySelector("div"));
+
+  assert.ok(md.includes(`[label](${escaped})`), `anchor destination not fully escaped: ${md}`);
+  assert.ok(md.includes(`![shot](${escaped})`), `image destination not fully escaped: ${md}`);
 });

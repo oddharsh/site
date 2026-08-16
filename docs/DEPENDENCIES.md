@@ -137,18 +137,22 @@ the reason, rather than written here with the caret quietly dropped.
   a bare `pnpm install` there walks up to the root workspace and never creates
   `lens-reader/node_modules` at all (gotcha 29).
 
-  Three dependencies, and each carries a trap worth knowing before reviewing a
+  Two dependencies, and each carries a trap worth knowing before reviewing a
   bump. `@mozilla/readability` 0.6.0 is the extractor, swapped in from Defuddle on
   2026-08-14 on a measured control-label win; the argument and the numbers are
   in CLAUDE.md under the `lens-reader/` section, and a bump should be read for
   whether it changes what the extractor DISCARDS, since the discard is the
   lens's whole artifact. `linkedom` 0.18.13 exists only to supply the DOM that Workers
   lack and is several times the weight of the extractor it serves, so its
-  releases matter for bundle size more than for behaviour. `turndown` 7.2.4 ships two
-  builds and wrangler resolves the BROWSER one, which throws `document is not
-  defined` in a Worker while passing under `node --test`; the fix is to pass it
-  a node rather than an HTML string, and a major bump should be re-checked
-  against that.
+  releases matter for bundle size more than for behaviour.
+
+  Markdown is a focused first-party walk over Readability's finished article
+  node. It replaced `turndown` 7.2.4 after a 36-document corpus preserved every
+  word token in order while the Worker bundle moved 613.96 -> 594.61 KiB raw and
+  153.32 -> 148.87 KiB gzip; the median of nine alternating 288-conversion
+  trials moved 328.6 -> 89.7 ms (72.7% less conversion time).
+  Unknown elements are transparent and only script/style bodies are discarded,
+  so new semantic wrappers retain their prose instead of needing an allowlist.
 
   Its tests live in `lens-reader/test/` rather than the root suite, because the
   root suite runs under plain node with the ROOT workspace's dependencies. An
