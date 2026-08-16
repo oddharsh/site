@@ -2682,6 +2682,21 @@ test("production minifies the Worker without obscuring deployed stack traces", a
     "local development should keep readable code and its faster edit/reload loop");
   assert.equal(development.upload_source_maps, undefined,
     "local source locations need no separately uploaded map");
+
+  // Minifying moved the worker-bundle advisory from firing to silent WITHOUT the
+  // code shrinking, which is the one way to turn that check green while every
+  // constant in perf-budget.mjs holds still. The guard is a source-bytes twin
+  // that a minifier cannot move, and it is asserted HERE, beside the setting
+  // that made it necessary, so removing one while keeping the other fails.
+  const budget = await readFile(new URL("scripts/perf-budget.mjs", ROOT), "utf8");
+  assert.match(budget, /const WORKER_BASELINE_SOURCE_KIB = [\d.]+;/,
+    "a minified production bundle needs a source-bytes baseline the minifier cannot move");
+  assert.match(budget, /worker source \$\{sourceKib/,
+    "the source-bytes total must be REPORTED, since a constant nothing prints guards nothing");
+  assert.match(budget, /input\.bytes/,
+    "the source-bytes total must read esbuild's per-input source sizes, not bytesInOutput");
+  assert.match(budget, /227\.67 KiB OBSERVED/,
+    "the baseline history must record the drop minification produced, or it reads as a real improvement");
 });
 
 test("weak validators turn unchanged rendered HTML into an empty 304", async () => {
