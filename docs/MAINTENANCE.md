@@ -874,6 +874,27 @@ the per-PR wire-size diff plus nightly trend as regression signals. Do not turn 
 advisory asset envelope into a CI failure or claim a route/cohort SLO without a new,
 explicitly approved field-measurement source.
 
+### Performance autoresearch
+
+[`PERFORMANCE-RESEARCH.md`](PERFORMANCE-RESEARCH.md) defines the browser experiment
+loop. It adapts leaderboard-style autoresearch to a multi-route website without
+turning one noisy score into a merge gate.
+
+`pnpm run perf:nav` records cold navigation metrics across the homepage, Garage,
+Lens, and Writing. `pnpm run inp --out <file>` records the existing trusted Run
+interactions. `pnpm run perf:research -- compare <base> <candidate>` returns
+`promote`, `reject`, or `inconclusive` from compatible schema 1 reports.
+
+The comparator ranks candidates with a normalized geomean, then applies route-level
+guardrails. A large win cannot hide a material loss on another protected scenario.
+Browser promotion remains provisional until correctness checks and the deterministic
+`perf:snapshot` diff pass.
+
+Keep raw lab output under `.perf-research/`. Commit one compact evidence row
+per completed experiment to `performance-experiments.jsonl`, including rejected and
+inconclusive work. Those negative rows prevent a later session from repeating the
+same idea without an explicit new hypothesis.
+
 The Workers Build project should expose its build/deploy status on the release
 commit. After enabling it, verify the live homepage route surface plus
 `/coffee`, `/coffee/slots`, and `/serendipity`. GitHub-side branch protection is

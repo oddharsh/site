@@ -7,6 +7,7 @@
 //   pnpm run inp --url https://aadhar.sh
 //   pnpm run inp --throttle 6 --runs 12
 //   pnpm run inp --headed          # watch it drive
+//   pnpm run inp --out .perf-research/inp.json --label candidate
 //
 // WHY THIS EXISTS
 // CrUX (and PageSpeed Insights) give you an INP number with no attribution: you
@@ -39,6 +40,8 @@
 // keyboard only, so the three pointermove drag paths in nav.js — which is where
 // most of the listener mass lives — cannot affect it and are not exercised here.
 
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
 import { chromium } from "playwright-core";
 
 // ── args ──────────────────────────────────────────────────────────────────────
@@ -50,6 +53,11 @@ const URL_BASE = arg("--url", "http://localhost:8799");
 const THROTTLE = Number(arg("--throttle", "4"));
 const RUNS     = Number(arg("--runs", "9"));
 const HEADED   = process.argv.includes("--headed");
+const OUT      = arg("--out", "");
+const LABEL    = arg("--label", URL_BASE);
+
+if (!Number.isInteger(RUNS) || RUNS < 3) throw new Error("--runs must be an integer of at least 3");
+if (!Number.isFinite(THROTTLE) || THROTTLE < 1) throw new Error("--throttle must be at least 1");
 
 // ── the interaction catalogue ─────────────────────────────────────────────────
 // Deliberately only interactions that do NOT navigate: a navigation ends the
@@ -63,12 +71,14 @@ const HEADED   = process.argv.includes("--headed");
 // so a regression points at a handler instead of at the site.
 const INTERACTIONS = [
   {
+    id: "run-open-pointer",
     name: "Start orb → open Run",
     note: "click; showModal + first render of the pool",
     run: async (page) => { await page.click("#axp-start"); await page.waitForTimeout(220); },
     reset: async (page) => { await page.keyboard.press("Escape"); await page.waitForTimeout(220); },
   },
   {
+    id: "run-open-keyboard",
     name: "⌘K → open Run",
     note: "keydown; same path as the orb, different entry point",
     run: async (page) => {
@@ -78,6 +88,7 @@ const INTERACTIONS = [
     reset: async (page) => { await page.keyboard.press("Escape"); await page.waitForTimeout(220); },
   },
   {
+    id: "run-filter-key",
     name: "keystroke in Run",
     note: "input → render(): scores the pool, rewrites ≤40 rows",
     setup: async (page) => {
@@ -93,6 +104,7 @@ const INTERACTIONS = [
     teardown: async (page) => { await page.keyboard.press("Escape"); await page.waitForTimeout(200); },
   },
   {
+    id: "run-close-keyboard",
     name: "Esc → close Run",
     note: "keydown; dialog close + top-layer teardown",
     setup: async (page) => { await page.click("#axp-start"); await page.waitForTimeout(260); },
@@ -189,12 +201,14 @@ async function measure(browser, { reducedMotion, label }) {
     if (ix.teardown) await ix.teardown(page);
     const real = samples.filter((s) => s !== null);
     results.push({
+      id: ix.id,
       name: ix.name,
       note: ix.note,
       med: real.length ? median(real) : null,
       max: real.length ? Math.max(...real) : null,
       counted: real.length,
       total: samples.length,
+      samples,
     });
   }
   await context.close();
@@ -251,6 +265,25 @@ try {
       : `\n  Worst INP-counted interaction is ${worst.toFixed(0)}ms, inside the 200ms "good"\n` +
         `  threshold. Whatever INP is being spent, it is not being spent here.\n`
   );
+
+  if (OUT) {
+    const report = {
+      schema: 1,
+      kind: "inp",
+      label: LABEL,
+      generatedAt: new Date().toISOString(),
+      baseUrl: URL_BASE,
+      browser: browser.version(),
+      platform: `${process.platform}-${process.arch}`,
+      cpuThrottle: THROTTLE,
+      runs: RUNS,
+      eventTimingFloorMs: 16,
+      results,
+    };
+    await mkdir(dirname(OUT), { recursive: true });
+    await writeFile(OUT, `${JSON.stringify(report, null, 2)}\n`);
+    console.log(`Wrote ${OUT}\n`);
+  }
 } finally {
   await browser.close();
 }

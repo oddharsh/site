@@ -45,6 +45,8 @@
     "speculation:probe": "node scripts/speculation-probe.mjs",
     "checkpoints:check": "node scripts/check-checkpoints.mjs",
     "checkpoints:sync": "node scripts/check-checkpoints.mjs --sync",
+    "perf:nav": "node scripts/navigation-lab.mjs",
+    "perf:research": "node scripts/perf-research.mjs",
     "inp": "node scripts/inp-lab.mjs",
     "release": "node scripts/release-status.mjs"
   },

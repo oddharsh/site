@@ -4,6 +4,10 @@
 # deploy-time build staging (build.mjs output; regenerated every build)
 .build/
 
+# Browser autoresearch output. Kept outside .build because build.mjs replaces
+# that directory, which would erase the evidence before perf:snapshot can read it.
+.perf-research/
+
 # the remote-bindings twin (scripts/gen-remote-config.mjs). Derived on demand from
 # wrangler.jsonc / wrangler.dev.jsonc, and it lives at the ROOT rather than under
 # .build/ because wrangler resolves main + assets.directory relative to the config

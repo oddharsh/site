@@ -6461,6 +6461,59 @@ test("the twin list is generated, not committed", () => {
 // here rather than only looked at. All three tests below came out of building
 // it, and the middle one is a bug that shipped to a screenshot.
 
+test("performance research promotes measured wins but rejects protected regressions", async () => {
+  const { compareReports } = await import("./lib/perf-research.mjs");
+  const navScenario = (id, lcp) => ({
+    id, name: id,
+    summary: {
+      lcpMs: { median: lcp, p75: lcp + 12, p90: lcp + 20 },
+      fcpMs: { median: lcp - 40 },
+      ttfbMs: { median: 20 },
+      cls: { max: 0 },
+    },
+  });
+  const report = (label, scenarios) => ({
+    schema: 1, kind: "navigation", label, cpuThrottle: 4, runs: 7,
+    platform: "darwin-arm64", browser: "Chrome/140.0.0.0", scenarios,
+  });
+
+  const base = report("base", [navScenario("home", 240), navScenario("lens", 320)]);
+  const winning = report("candidate", [navScenario("home", 208), navScenario("lens", 320)]);
+  const promoted = compareReports(base, winning);
+  assert.equal(promoted.decision, "promote");
+  assert.deepEqual(promoted.improvements, ["home"]);
+  assert.ok(promoted.score < 1);
+
+  // A large win on one route must not average away a material loss on another.
+  const mixed = report("mixed", [navScenario("home", 160), navScenario("lens", 360)]);
+  const rejected = compareReports(base, mixed);
+  assert.equal(rejected.decision, "reject");
+  assert.deepEqual(rejected.regressions.map((row) => row.id), ["lens"]);
+});
+
+test("performance research calls sub-resolution INP movement inconclusive", async () => {
+  const { compareReports } = await import("./lib/perf-research.mjs");
+  const report = (label, med, max) => ({
+    schema: 1, kind: "inp", label, cpuThrottle: 6, runs: 12,
+    platform: "darwin-arm64", browser: "Chrome/140.0.0.0",
+    results: [{ id: "run-open", name: "Run open", med, max }],
+  });
+  const result = compareReports(report("base", 72, 88), report("candidate", 64, 80));
+  assert.equal(result.decision, "inconclusive", "one 8ms Event Timing quantum is not a performance result");
+});
+
+test("performance research refuses incomparable environments", async () => {
+  const { compareReports } = await import("./lib/perf-research.mjs");
+  const base = {
+    schema: 1, kind: "inp", label: "base", cpuThrottle: 4, runs: 9,
+    platform: "darwin-arm64", browser: "Chrome/140.0.0.0", results: [],
+  };
+  assert.throws(
+    () => compareReports(base, { ...base, label: "candidate", cpuThrottle: 6 }),
+    /CPU throttles differ/,
+  );
+});
+
 test("the dyno series merges hand-entered history under measured rows", async () => {
   const { mergeHistory } = await import("../www/_worker.js/dyno.js");
   const seeded = mergeHistory([]);
