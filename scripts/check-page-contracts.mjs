@@ -57,6 +57,13 @@ for (const file of lweSpecFiles) {
   assert.equal((html.match(/<link rel="stylesheet" href="\/lwe-base\.css">/g) || []).length, 1, `pipelines/lwe/specs/${file}: generator omitted shared LWE CSS`);
   assert.equal((html.match(/<link rel="stylesheet" href="\/luna\.css">/g) || []).length, 1, `pipelines/lwe/specs/${file}: generator omitted parse-time Luna shell CSS`);
   assert.doesNotMatch(html, /<style>[\s\S]*?\*\s*\{\s*box-sizing:/, `pipelines/lwe/specs/${file}: generator re-inlined shared LWE structure`);
+  if (spec.demoJsFile) {
+    const demo = (await readFile(join(ROOT, "pipelines/lwe/specs", spec.demoJsFile), "utf8")).trimEnd();
+    assert.ok(html.includes(`<script>\n${demo}\n</script>`),
+      `pipelines/lwe/specs/${file}: generator omitted its external demo program`);
+    const published = await readFile(join(ROOT, "www/lwe", `${spec.id}.html`), "utf8");
+    assert.equal(html, published, `www/lwe/${spec.id}.html: run node pipelines/lwe/generate.mjs page ${spec.id}`);
+  }
 }
 
 validateRegistry();
