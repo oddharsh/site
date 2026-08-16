@@ -113,6 +113,21 @@ The scan also produced one false lead: `/rn` looked like a 4.28 s local LCP unti
 
 The promoted result fixes visual stability, not nominal load latency. A 20-pair confirmation reproduced the same CLS movement (1.011 to 0.010) while median LCP stayed within the lab's resolution (420 ms to 416 ms). The cause was concrete: the generated page painted an unstyled desktop shell, then deferred `nav.js` injected `/luna.css` and shifted the whole viewport.
 
+## Build and dependency trials
+
+Browser metrics cannot rank developer-only work. Build and dependency trials
+use median wall time as their score, with the staged site's bytes as a hard
+correctness gate.
+
+| experiment | prediction | result | decision |
+|---|---|---|---|
+| align Wrangler with the coffee test pool | remove a duplicate Cloudflare toolchain from installs | five-run median fell 4.62 s to 3.03 s; `node_modules` fell 781 MiB to 562 MiB | promote |
+| run independent Brotli q11 jobs in Node's worker pool | reduce the build's dominant synchronous compression cost | ten-pair median fell 3.66 s to 2.43 s; five-pair Wrangler dry run fell 4.91 s to 3.71 s | promote |
+
+Both candidates produced a staged tree identical to `origin/main`. Two build
+variants failed the promotion bar. Eight libuv workers saved only 0.14 s and
+depended on machine topology. Async Zstandard changed every `.dcz` output.
+
 ## Experiment loop
 
 Start with a profile or a measured slow scenario. Write one sentence that predicts which cost will move and why.
@@ -134,6 +149,16 @@ For each experiment:
 5. Compare the result and append one row to `docs/performance-experiments.jsonl`.
 6. Run `pnpm run perf:snapshot` for any candidate that clears the browser gate.
 7. Run the repository's authoritative checks before promotion.
+
+For build and install trials, require at least five runs and a 10 percent median
+wall-time improvement. Build candidates use paired, interleaved runs from the
+same commit and dependency tree. Dependency candidates use clean installs with
+the same warm pnpm store.
+
+Recursively compare `.build` against the baseline before promotion. Dependency
+trials must also record installed size and resolved copies for the packages they
+claim to deduplicate. Include a Wrangler dry run for changes that affect the
+build or deployment toolchain.
 
 Retain a near miss only when it shows repeatable local evidence or attacks an independently profiled cost. Kill a family after repeated regressions, a correctness contradiction, or evidence that its target is immaterial.
 
