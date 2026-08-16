@@ -1,14 +1,14 @@
-(function(){var PX=400*266,body=document.getElementById('bpp-body');if(!body)return;var rows=[{k:'PNG',f:'lossless',u:'/garage/enc/c-png.png'},{k:'JPEG',f:'baseline q82',u:'/garage/enc/c-sips82.jpg'},{k:'jpegli',f:'q82',u:'/garage/enc/c-jl82.jpg'},{k:'zenjpeg',f:'q84 · shipped',u:'/garage/enc/c-zc84.jpg'},{k:'WebP',f:'q80',u:'/garage/enc/c-wp80.webp'},{k:'AVIF',f:'q63',u:'/garage/enc/c-av63.avif'}];void Promise.all(rows.map(function(r){return fetch(r.u+'?v=2').then(function(x){return x.blob()}).then(function(b){r.bytes=b.size;return r}).catch(function(){r.bytes=null;return r})})).then(function(rs){var png=(rs[0].bytes)||1;var lossy=rs.slice(1).map(function(r){return r.bytes}).filter(function(n){return n!=null});var min=lossy.length?Math.min.apply(null,lossy):0;body.innerHTML=rs.map(function(r){if(r.bytes==null)return'';var kb=(r.bytes/1024).toFixed(1),bpp=(r.bytes/PX).toFixed(2),pct=Math.round(r.bytes/png*100);var w=(r.bytes===min)?' class="win"':'';return'<tr'+w+'><td><b>'+r.k+'</b> <span class="dim">'+r.f+'</span></td><td class="mono">'+kb+' KB</td><td class="mono">'+bpp+'</td><td class="mono">'+pct+'%</td></tr>'}).join('')})})();
-
-function initWhenNear(id, fn) {
+function initWhenNear(id, fn, margin) {
   var target = document.getElementById(id);
   if (!target || !("IntersectionObserver" in window)) { fn(); return; }
   var observer = new IntersectionObserver(function(entries) {
     if (!entries.some(function(entry) { return entry.isIntersecting; })) return;
     observer.disconnect(); fn();
-  }, { root: target.closest(".content"), rootMargin: "300px 0px" });
+  }, { root: target.closest(".content"), rootMargin: (margin == null ? 300 : margin) + "px 0px" });
   observer.observe(target);
 }
+
+initWhenNear("demo-bpp", function(){var PX=400*266,body=document.getElementById('bpp-body');if(!body)return;var rows=[{k:'PNG',f:'lossless',u:'/garage/enc/c-png.png'},{k:'JPEG',f:'baseline q82',u:'/garage/enc/c-sips82.jpg'},{k:'jpegli',f:'q82',u:'/garage/enc/c-jl82.jpg'},{k:'zenjpeg',f:'q84 · shipped',u:'/garage/enc/c-zc84.jpg'},{k:'WebP',f:'q80',u:'/garage/enc/c-wp80.webp'},{k:'AVIF',f:'q63',u:'/garage/enc/c-av63.avif'}];void Promise.all(rows.map(function(r){return fetch(r.u+'?v=2').then(function(x){return x.blob()}).then(function(b){r.bytes=b.size;return r}).catch(function(){r.bytes=null;return r})})).then(function(rs){var png=(rs[0].bytes)||1;var lossy=rs.slice(1).map(function(r){return r.bytes}).filter(function(n){return n!=null});var min=lossy.length?Math.min.apply(null,lossy):0;body.innerHTML=rs.map(function(r){if(r.bytes==null)return'';var kb=(r.bytes/1024).toFixed(1),bpp=(r.bytes/PX).toFixed(2),pct=Math.round(r.bytes/png*100);var w=(r.bytes===min)?' class="win"':'';return'<tr'+w+'><td><b>'+r.k+'</b> <span class="dim">'+r.f+'</span></td><td class="mono">'+kb+' KB</td><td class="mono">'+bpp+'</td><td class="mono">'+pct+'%</td></tr>'}).join('')})}, 100);
 
 // ── Demo: chroma subsampling (4:4:4 vs 4:2:2 vs 4:2:0) ────────────────
 // The eye resolves brightness (luma) far better than color (chroma), so codecs
@@ -60,4 +60,4 @@ initWhenNear("csCanvas", function(){
 });
 
 // live byte sizes for the zoomed comparison grids
-(function(){var ns=document.querySelectorAll('[data-zsize]');for(var i=0;i<ns.length;i++){(function(n){void fetch(n.getAttribute('data-zsize')).then(function(r){return r.blob();}).then(function(b){n.textContent=(b.size/1024).toFixed(1)+' KB';}).catch(function(){n.textContent='';});})(ns[i]);}})();
+['demo-fmtgrid','demo-encgrid','demo-chromagrid'].forEach(function(id){initWhenNear(id,function(){var root=document.getElementById(id),ns=root?root.querySelectorAll('[data-zsize]'):[];for(var i=0;i<ns.length;i++){(function(n){void fetch(n.getAttribute('data-zsize')).then(function(r){return r.blob();}).then(function(b){n.textContent=(b.size/1024).toFixed(1)+' KB';}).catch(function(){n.textContent='';});})(ns[i]);}})});
