@@ -13,7 +13,6 @@
 // three callers (the Worker, the tests, and anything that wants the numbers).
 import { Readability } from "@mozilla/readability";
 import { parseHTML } from "linkedom";
-import TurndownService from "turndown";
 import { privateHostBlocked, validateLensTarget } from "../../www/_worker.js/lib/crawl.js";
 
 // Errors whose MESSAGE is deliberately written for the visitor. Everything else
@@ -168,17 +167,18 @@ export async function read(targetUrl) {
   };
 }
 
-// ── markdown, without a global document ─────────────────────────────────────
+// ── markdown, over Readability's finished DOM ───────────────────────────────
 
-// Turndown wants `document.implementation.createHTMLDocument` plus a doc that
-// supports open/write/close, and linkedom supplies none of the three, so the
-// obvious `turndown(htmlString)` throws in workerd. Shimming those globals is a
-// dead end (measured 2026-08-09: three successive shims, three further misses).
-//
-// Passing a NODE skips the parser entirely — turndown's RootNode does
-// `input.cloneNode(true)` for anything that is not a string — so read() keeps
-// the finished article node from Readability's serializer hook. The string path
-// remains for isolated callers and tests; it is the fallback, not the hot path.
+// This is deliberately a focused serializer rather than a general HTML parser.
+// Linkedom has already parsed hostile HTML, and Readability has already reduced
+// that document to an article node. Walking that node directly covers the prose
+// vocabulary an article can carry without cloning the tree or bringing a second
+// DOM implementation into node_modules. Unknown elements are transparent, so a
+// new semantic wrapper keeps its text instead of disappearing.
+// `scripts/lib/html-to-md.mjs` is intentionally not shared: it parses this
+// repository's closed authored-HTML set and applies site-specific CSS/chrome
+// rules, while this boundary receives arbitrary DOM already reduced by
+// Readability. Importing it would add a second parser and the wrong policy.
 export function toMarkdown(content) {
   if (!content) return "";
   let root = content;
@@ -187,9 +187,126 @@ export function toMarkdown(content) {
     root = document.getElementById("lens-root");
     root.innerHTML = content;
   }
-  const service = new TurndownService({ headingStyle: "atx", codeBlockStyle: "fenced", bulletListMarker: "-" });
-  service.remove(["script", "style"]);
-  return service.turndown(root).trim();
+  return tidyMarkdown(markdownChildren(root)).trim();
+}
+
+const MD_DROP = new Set(["script", "style"]);
+const MD_BLOCK = new Set([
+  "address", "article", "aside", "body", "caption", "details", "div", "figcaption", "figure",
+  "fieldset", "footer", "form", "header", "li", "main", "nav", "output", "section", "summary",
+  "table", "tbody", "td", "tfoot", "th", "thead", "tr",
+]);
+
+const nodeName = (node) => String(node && node.nodeName || "").toLowerCase();
+const childrenOf = (node) => Array.from(node && node.childNodes || []);
+const attr = (node, name) => String(node && node.getAttribute && node.getAttribute(name) || "");
+
+function tidyMarkdown(value) {
+  return String(value)
+    .replace(/\u00a0/g, " ")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n");
+}
+
+function escapeMarkdown(value) {
+  return String(value)
+    .replace(/\s+/g, " ")
+    .replace(/([\\`*_[\]<>])/g, "\\$1")
+    .replace(/^(\s*)([#>+-]|\d+\.)\s/gm, "$1\\$2 ");
+}
+
+function longestRun(value, char) {
+  let best = 0;
+  let run = 0;
+  for (const current of String(value)) {
+    run = current === char ? run + 1 : 0;
+    if (run > best) best = run;
+  }
+  return best;
+}
+
+function codeSpan(value) {
+  const text = String(value || "");
+  if (!text) return "";
+  const fence = "`".repeat(longestRun(text, "`") + 1);
+  const pad = text.includes("`") || /^\s|\s$/.test(text) ? " " : "";
+  return `${fence}${pad}${text}${pad}${fence}`;
+}
+
+function markdownChildren(node) {
+  return childrenOf(node).map(markdownNode).join("");
+}
+
+function markdownList(node, ordered) {
+  const start = ordered ? Math.max(1, Number(attr(node, "start")) || 1) : 1;
+  const items = childrenOf(node).filter((child) => nodeName(child) === "li");
+  const lines = items.map((item, index) => {
+    const marker = ordered ? `${start + index}.` : "-";
+    const body = tidyMarkdown(markdownChildren(item)).trim();
+    const indent = " ".repeat(marker.length + 1);
+    return `${marker} ${body.replace(/\n/g, `\n${indent}`)}`;
+  });
+  return lines.length ? `\n\n${lines.join("\n")}\n\n` : "";
+}
+
+function markdownNode(node) {
+  if (!node) return "";
+  if (node.nodeType === 3) return escapeMarkdown(node.nodeValue || "");
+  if (node.nodeType !== 1) return markdownChildren(node);
+
+  const tag = nodeName(node);
+  if (MD_DROP.has(tag)) return "";
+  const inner = () => markdownChildren(node);
+  const inline = () => inner().trim();
+
+  if (/^h[1-6]$/.test(tag)) {
+    const value = inline();
+    return value ? `\n\n${"#".repeat(Number(tag[1]))} ${value}\n\n` : "";
+  }
+  if (MD_BLOCK.has(tag) || tag === "p") return `\n\n${inner()}\n\n`;
+
+  switch (tag) {
+    case "br": return "  \n";
+    case "hr": return "\n\n---\n\n";
+    case "strong": case "b": { const value = inline(); return value ? `**${value}**` : ""; }
+    case "em": case "i": case "cite": { const value = inline(); return value ? `*${value}*` : ""; }
+    case "del": case "s": { const value = inline(); return value ? `~~${value}~~` : ""; }
+    case "code": return codeSpan(node.textContent);
+    case "pre": {
+      const value = String(node.textContent || "").replace(/^\n/, "").replace(/\s+$/, "");
+      if (!value) return "";
+      const fence = "`".repeat(Math.max(3, longestRun(value, "`") + 1));
+      const code = childrenOf(node).find((child) => nodeName(child) === "code");
+      const language = (attr(code, "class").match(/(?:^|\s)language-([\w-]+)/) || [])[1] || "";
+      return `\n\n${fence}${language}\n${value}\n${fence}\n\n`;
+    }
+    case "a": {
+      const label = inline();
+      const href = attr(node, "href");
+      const title = attr(node, "title");
+      if (!href || /^javascript:/i.test(href)) return label;
+      if (!label && !title) return "";
+      const destination = href.replace(/\\/g, "\\\\").replace(/\)/g, "\\)");
+      const suffix = title ? ` "${title.replace(/([\\"])/g, "\\$1")}"` : "";
+      return `[${label}](${destination}${suffix})`;
+    }
+    case "img": {
+      const src = attr(node, "src");
+      const alt = attr(node, "alt").replace(/([\\[\]])/g, "\\$1");
+      const title = attr(node, "title");
+      const suffix = title ? ` "${title.replace(/([\\"])/g, "\\$1")}"` : "";
+      return src ? `![${alt}](${src.replace(/\)/g, "\\)")}${suffix})` : "";
+    }
+    case "blockquote": {
+      const value = tidyMarkdown(inner()).trim();
+      return value ? `\n\n${value.split("\n").map((line) => line ? `> ${line}` : "> ").join("\n")}\n\n` : "";
+    }
+    case "ul": return markdownList(node, false);
+    case "ol": return markdownList(node, true);
+    case "dt": { const value = inline(); return value ? `\n\n**${value}**\n` : ""; }
+    case "dd": return `\n${inner()}\n\n`;
+    default: return inner();
+  }
 }
 
 // ── tally + counting ────────────────────────────────────────────────────────
