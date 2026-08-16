@@ -217,11 +217,17 @@ jobs:
       #
       #   security ALERTS   come from GitHub's DEPENDENCY GRAPH, which indexes
       #                     every manifest in the repository and does not read
-      #                     dependabot.yml at all. Measured: defuddle, linkedom,
-      #                     turndown and @mixmark-io/domino are all in this
-      #                     repo's SBOM. Alert #13 (extract-zip) was the same
-      #                     finding this step reported until the Puppeteer chain
-      #                     left cf-garage, so the marginal FINDING count was zero.
+      #                     dependabot.yml at all. Measured 2026-08-14 against
+      #                     the manifest of THAT day: defuddle, linkedom,
+      #                     turndown and @mixmark-io/domino were all in this
+      #                     repo's SBOM. Read that as a dated record rather than
+      #                     a current package list, because lens-reader's
+      #                     dependency set has been turning over since (defuddle
+      #                     left the day this was written) and the bullet's claim
+      #                     is about the GRAPH, which no package change touches.
+      #                     Alert #13 (extract-zip) was the same finding this
+      #                     step reported until the Puppeteer chain left
+      #                     cf-garage, so the marginal FINDING count was zero.
       #
       #   version UPDATES   are scoped strictly to the directories dependabot.yml
       #                     lists. lens-reader really was missing there, and the
