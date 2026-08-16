@@ -208,3 +208,28 @@ that path did not see it and the test failed after everything else was green.
 Same blind spot gotcha 29 records from the other direction: a path assembled from
 parts is invisible to a search for the assembled form. When moving a path, grep
 for the escaped spelling too.
+
+## The restructure, step 2: the islands and stylesheets
+
+The 15 client islands and 5 stylesheets moved from the root of `www/` into
+`src/client/` and `src/styles/`. They stage back to the root of the served tree,
+so their public URLs are still `/nav.js` and `/luna.css`.
+
+**Served surface byte-identical again**, all 1402 files, every `/a/` hash included.
+That is the second confirmation of the same rule: source layout and URL layout are
+different questions, and moving the first does not disturb the second.
+
+Two things this surfaced.
+
+**A path built from a variable is invisible to a search for the assembled path.**
+The shell and stylesheet staging loops read `` `www/${file}` ``, so nothing matching
+the literal `www/nav.js` existed to find and the build died at the first shell with
+`ENOENT: www/nav.js`. Third time this class has bitten in this migration, after the
+`${OUT}/www/_worker.js` template and the escaped regex in the contract test.
+
+**The served URL root is a COMPOSITE now**, assembled by `build.mjs` from `www/`,
+`src/client/` and `src/styles/`. `config/tsconfig.browser.json` mapped `/*` at
+`../www/*`, so `import "/hoist.js"` inside `nav.js` stopped resolving the moment
+the file it names moved. The mapping lists all three directories now. Worth
+remembering for anything else that resolves an absolute, URL-shaped specifier:
+after a split like this, exactly one of them is right and the others fail quietly.

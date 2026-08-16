@@ -482,7 +482,7 @@ export async function handleLens(request, env, ctx) {
 // One label per lens, shared by the SSR tabs, the SSR machine header, and the
 // client (LENS_LABEL in lens.js must match). These are phrased as the question
 // each lens answers, not practitioner nouns, so a first-time visitor can read
-// the tab row as a menu of questions. Change here + in www/lens.js together.
+// the tab row as a menu of questions. Change here + in src/client/lens.js together.
 const LENS_TAB_LABELS = {
   readiness: "Agent-ready?",
   anatomy: "Raw response",
@@ -638,7 +638,7 @@ function lensStatusFragment(data, state) {
 // Two sites through one rubric, rendered from the same summaries /lens/compare
 // serves. This is the page's strongest single exhibit (a 13 next to a 93 does
 // more explaining than either scan alone), so it gets a real UI instead of
-// living as JSON only. Mirrored by renderVs() in www/lens.js — the SSR copy
+// living as JSON only. Mirrored by renderVs() in src/client/lens.js — the SSR copy
 // is the no-JS floor for a shared ?url=&vs= link, the client copy is what the
 // vs form renders without a round-trip through this template.
 const LENS_VS_SURFACES = [
@@ -890,12 +890,12 @@ export function renderLensShell(initial, state, inputValue, compare) {
     : "Human view &middot; the live page";
   // The header no longer repeats the lens name: the tab strip sits inside the
   // pane now, so the active tab IS the lens label. Must match renderMachine()
-  // and updateModeUi() in www/lens.js or the header rewrites on hydrate.
+  // and updateModeUi() in src/client/lens.js or the header rewrites on hydrate.
   const machineHeader = state.view === "delta" ? "Delta view &middot; What changes" : "Machine view";
   const browserHeader = "Browser Run &middot; Rendered";
   // Mode notes coach, they don't caption: each one asks for a prediction the
   // pane will then confirm or correct. Keep the strings byte-identical to
-  // MODE_NOTE in www/lens.js or the note visibly rewrites on hydrate.
+  // MODE_NOTE in src/client/lens.js or the note visibly rewrites on hydrate.
   const modeNote = state.view === "human"
     ? "Human is the page as a person receives it. Every other view subtracts the person."
     : state.view === "machine"

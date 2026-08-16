@@ -191,7 +191,7 @@ async function checkInvariants() {
       : s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
     if (/@view-transition\s*\{/.test(css)) hard.push(`${f}: re-opts into View Transitions (@view-transition), removed site-wide 2026-07-30`);
   }
-  const luna = await read("www/luna.css");
+  const luna = await read("src/styles/luna.css");
 
   // 3b (hard) — luna.css parses as valid CSS. A botched find-replace in v143
   // wrapped several .window/.xp-button declarations in :where(...) and left
@@ -200,7 +200,7 @@ async function checkInvariants() {
   // releases (the .window box-shadow + the whole .xp-button base rule dropped
   // from the CSSOM). Transform as CSS and block on any warning.
   try {
-    const res = transformCss({ filename: "www/luna.css", code: Buffer.from(luna), minify: false });
+    const res = transformCss({ filename: "src/styles/luna.css", code: Buffer.from(luna), minify: false });
     for (const w of res.warnings) hard.push(`luna.css CSS parse warning: ${w.message}${w.loc ? ` (line ${w.loc.line})` : ""}`);
   } catch (e) {
     hard.push(`luna.css failed to parse as CSS: ${e.message.split("\n")[0]}`);
@@ -238,7 +238,7 @@ async function checkInvariants() {
   // file that carries the calc must agree with luna.css, or first paint lands
   // a different window height than the final.
   const floors = new Map();
-  for (const f of ["www/luna.css", "src/worker/lib/chrome.js", "src/worker/writing.js", "serendipity/serendipity.js"]) {
+  for (const f of ["src/styles/luna.css", "src/worker/lib/chrome.js", "src/worker/writing.js", "serendipity/serendipity.js"]) {
     let s; try { s = await read(f); } catch { continue; }
     // the BODY floor only (`height:calc(...)`), not a window `max-height:calc(...)`
     for (const m of s.matchAll(/(?<!max-)height:calc\(100dvh - (\d+)px\)/g)) floors.set(f, m[1]);
@@ -251,7 +251,7 @@ async function checkInvariants() {
   // If the declaration can't be found in luna.css there is nothing to inject and
   // every page silently loses its first-paint mirror, so this blocks rather than
   // warns: a missing rule here is a rename or a bad edit, not a taste call.
-  if (!clientEdgeDecl(await read("www/luna.css"))) hard.push("luna.css: the client-edge declaration went missing (search \"THE CLIENT EDGE\") — build.mjs injects it into every windowed page and has nothing to inject");
+  if (!clientEdgeDecl(await read("src/styles/luna.css"))) hard.push("luna.css: the client-edge declaration went missing (search \"THE CLIENT EDGE\") — build.mjs injects it into every windowed page and has nothing to inject");
 
   // 6 (warn) — the local-dev twin (wrangler.dev.jsonc) must declare the same
   // bindings as the deploy config (wrangler.jsonc), or local `wrangler dev`
@@ -322,7 +322,7 @@ async function checkInvariants() {
   let manifestChecked = 0;
   try {
     const { surfaces } = readManifest();
-    const nav = await read("www/nav-run.js");
+    const nav = await read("src/client/nav-run.js");
     const desktop = await read("src/worker/lib/desktop.js");
 
     // 8a — generated projections match `pnpm run gen:manifest` output exactly.
@@ -639,6 +639,12 @@ await cp("www", `${OUT}/www`, {
 // at .build/src/worker/index.js, and every deploy path and content hash
 // downstream is therefore untouched by the move.
 await cp("src/worker", `${OUT}/src/worker`, { recursive: true });
+// The client islands and stylesheets author in src/ beside the Worker, and stage
+// back to the ROOT of the served tree because their public URLs are /nav.js and
+// /luna.css. Source layout and URL layout are different questions; only the first
+// one moved, so every served byte and every /a/ content hash is untouched.
+await cp("src/client", `${OUT}/www`, { recursive: true });
+await cp("src/styles", `${OUT}/www`, { recursive: true });
 await mkdir(`${OUT}/cal`, { recursive: true });
 await cp("cal/src", `${OUT}/cal/src`, { recursive: true });
 await mkdir(`${OUT}/serendipity`, { recursive: true });
@@ -700,7 +706,7 @@ await cp("serendipity/serendipity.js", `${OUT}/serendipity/serendipity.js`);
 // file. Pages that load luna.css render-blocking (garage/gpt56.html) carry no
 // geometry mirror and correctly get nothing.
 {
-  const decl = clientEdgeDecl(await readFile("www/luna.css", "utf8"));
+  const decl = clientEdgeDecl(await readFile("src/styles/luna.css", "utf8"));
   const targets = (await readdir(`${OUT}/www`, { recursive: true }))
     .filter((f) => /\.(html|js)$/.test(f) && !/\.src\.|^(i|images|og|cars)\//.test(f))
     .map((f) => `${OUT}/www/${f}`)
@@ -1271,10 +1277,10 @@ let dressPage = () => { throw new Error("explorer: dressPage used before 1g2 def
 
 // 3) shells: deploy the readable original as <name>.src.js, minify the served file
 for (const [file, srcPath, marker] of SHELLS) {
-  const src = await readFile(`www/${file}`, "utf8");
+  const src = await readFile(`src/client/${file}`, "utf8");
   await writeFile(`${OUT}/www/${srcPath.slice(1)}`, src);
 
-  const code = minifyJavaScript(`www/${file}`, src);
+  const code = minifyJavaScript(`src/client/${file}`, src);
   const banner = `/*! minified at deploy - readable source: ${srcPath} */\n`;
   const min = banner + code;
 
@@ -1296,18 +1302,18 @@ for (const [file, srcPath, marker] of SHELLS) {
 // minify. The three first-interaction sheets below are explicit exceptions: each
 // was extracted byte-for-byte from luna.css and loads only with its matching JS.
 {
-  const src = await readFile("www/luna.css", "utf8");
+  const src = await readFile("src/styles/luna.css", "utf8");
   await writeFile(`${OUT}/www/luna.src.css`, src);
-  const code = minifyCss("www/luna.css", src);
+  const code = minifyCss("src/styles/luna.css", src);
   const out = `/*! minified at deploy - readable source: /luna.src.css */\n` + code;
   await writeFile(`${OUT}/www/luna.css`, out);
   console.log(`luna.css: ${src.length} -> ${out.length} bytes (+ /luna.src.css)`);
 }
 
 for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
-  const src = await readFile(`www/${file}`, "utf8");
+  const src = await readFile(`src/styles/${file}`, "utf8");
   await writeFile(`${OUT}/www/${file.replace(".css", ".src.css")}`, src);
-  const code = minifyCss(`www/${file}`, src);
+  const code = minifyCss(`src/styles/${file}`, src);
   const out = `/*! minified at deploy - readable source: /${file.replace(".css", ".src.css")} */\n` + code;
   await writeFile(`${OUT}/www/${file}`, out);
   console.log(`${file}: ${src.length} -> ${out.length} bytes`);
@@ -1317,9 +1323,9 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
 // instead of embedding it eleven times. Keep the same readable-twin contract as
 // luna.css: author the source directly, ship a small minified render-blocker.
 {
-  const src = await readFile("www/lwe-base.css", "utf8");
+  const src = await readFile("src/styles/lwe-base.css", "utf8");
   await writeFile(`${OUT}/www/lwe-base.src.css`, src);
-  const code = minifyCss("www/lwe-base.css", src);
+  const code = minifyCss("src/styles/lwe-base.css", src);
   const out = `/*! minified at deploy - readable source: /lwe-base.src.css */\n` + code;
   await writeFile(`${OUT}/www/lwe-base.css`, out);
   console.log(`lwe-base.css: ${src.length} -> ${out.length} bytes (+ /lwe-base.src.css)`);

@@ -10,7 +10,11 @@
     "target": "esnext",
     "module": "esnext",
     "moduleResolution": "bundler",
-    "paths": { "/*": ["../www/*"] },
+    // The served URL root is a COMPOSITE now: build.mjs stages www/, src/client/
+    // and src/styles/ into one tree, so /hoist.js and /nav.js resolve out of
+    // src/client while /index.html and /images/* still come from www/. Listing
+    // both is what keeps an absolute specifier checkable after the split.
+    "paths": { "/*": ["../src/client/*", "../src/styles/*", "../www/*"] },
     "lib": ["esnext", "dom", "dom.iterable"],
     "skipLibCheck": true,
     "strict": false
@@ -19,11 +23,11 @@
   // tsc follows their static imports. The shell's Run and tray islands complete
   // the first-interaction surface without pulling Worker modules into this graph.
   "include": [
-    "../www/hoist.js",
-    "../www/tooltip.js",
-    "../www/infotip.js",
-    "../www/nav.js",
-    "../www/nav-run.js",
-    "../www/nav-tray.js"
+    "../src/client/hoist.js",
+    "../src/client/tooltip.js",
+    "../src/client/infotip.js",
+    "../src/client/nav.js",
+    "../src/client/nav-run.js",
+    "../src/client/nav-tray.js"
   ]
 }

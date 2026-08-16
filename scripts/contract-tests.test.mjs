@@ -1835,8 +1835,8 @@ test("outbound self-link list stays in sync with the desktop shell profiles", as
 // failure that would ship silently.
 
 test("\"what was hovered\" is answered in exactly one place", async () => {
-  const nav = await readFile(new URL("www/nav.js", ROOT), "utf8");
-  const tip = await readFile(new URL("www/infotip.js", ROOT), "utf8");
+  const nav = await readFile(new URL("src/client/nav.js", ROOT), "utf8");
+  const tip = await readFile(new URL("src/client/infotip.js", ROOT), "utf8");
   // nav.js's loader has to match the same elements the module does, or the
   // first hover over something it forgot never loads the module at all — and
   // the failure is a tooltip that works everywhere except where you look first.
@@ -1853,7 +1853,7 @@ test("\"what was hovered\" is answered in exactly one place", async () => {
 });
 
 test("the infotip yields to every richer hover surface on the page", async () => {
-  const nav = await readFile(new URL("www/nav.js", ROOT), "utf8");
+  const nav = await readFile(new URL("src/client/nav.js", ROOT), "utf8");
   const skip = (nav.match(/var INFOTIP_SKIP = "([^"]+)"/) || [, ""])[1].split(",");
   // Each of these draws its own card from the same engine, and `.lx-term` is
   // the sharp one: those ship a `title` as their no-JS fallback and lens.js
@@ -1865,7 +1865,7 @@ test("the infotip yields to every richer hover surface on the page", async () =>
 });
 
 test("every string an infotip prints is escaped on the way in", async () => {
-  const tip = await readFile(new URL("www/infotip.js", ROOT), "utf8");
+  const tip = await readFile(new URL("src/client/infotip.js", ROOT), "utf8");
   // The surface renders `title` text from ANY page now, and some of those
   // strings are not ours: /inbox carries webmention titles, /around and
   // /reading carry text from sites this server crawled. innerHTML with one
@@ -1882,7 +1882,7 @@ test("every string an infotip prints is escaped on the way in", async () => {
 });
 
 test("an infotip row is dropped rather than filled in", async () => {
-  const tip = await readFile(new URL("www/infotip.js", ROOT), "utf8");
+  const tip = await readFile(new URL("src/client/infotip.js", ROOT), "utf8");
   // Same rule the photo tooltip follows: a missing value prints nothing. A
   // card that rendered "Contains: 0 pages" or "Colo: unknown" would be stating
   // something the shell does not know, on chrome describing the shell.
@@ -1995,7 +1995,7 @@ test("a section's favicon is in its own <head>, never set by script", async () =
     "taskbar pins must not carry favicon data: the page's own <head> owns this");
 
   // 2. nav.js sets no favicon. A favicon applied after boot is a visible flip.
-  const nav = await readFile(new URL("www/nav.js", ROOT), "utf8");
+  const nav = await readFile(new URL("src/client/nav.js", ROOT), "utf8");
   assert.doesNotMatch(nav, /setFavicon|rel\s*=\s*["']icon["']/,
     "nav.js must not set the tab favicon; the document declares it");
 
@@ -2058,7 +2058,7 @@ test("the speculation ruleset has exactly one author", async () => {
   // 3. nav.js building one at runtime again, which is where the injected copy
   //    lived. Rules in the HTML parse with the document; injected ones landed
   //    after first paint and could not prerender anything hovered before that.
-  const nav = await readFile(new URL("www/nav.js", ROOT), "utf8");
+  const nav = await readFile(new URL("src/client/nav.js", ROOT), "utf8");
   assert.doesNotMatch(nav, /type\s*=\s*["']speculationrules["']/,
     "nav.js must not inject a ruleset; it ships in the chrome now");
 });
@@ -2191,7 +2191,7 @@ test("committed manifest projections match a fresh generation", async () => {
   const { surfaces } = readManifest();
   const mod = await readFile("src/worker/lib/site-manifest.js", "utf8");
   assert.equal(mod.trim(), workerModule(surfaces).trim(), "lib/site-manifest.js is stale — run pnpm run gen:manifest");
-  const nav = await readFile("www/nav-run.js", "utf8");
+  const nav = await readFile("src/client/nav-run.js", "utf8");
   for (const [section, marker] of [["garage", "garage-pages"], ["lwe", "lwe-pages"]]) {
     assert.equal(readFenceBody(nav, marker), navFenceBody(surfaces, section), `nav-run.js generated:${marker} is stale — run pnpm run gen:manifest`);
   }
@@ -2386,7 +2386,7 @@ test("serendipity keeps historical feed and roster backfills alive", () => {
 
 test("serendipity hides collapsed description chrome and uses the Luna scrollbar", async () => {
   const serendipity = await readFile(new URL("serendipity/serendipity.js", ROOT), "utf8");
-  const luna = await readFile(new URL("www/luna.css", ROOT), "utf8");
+  const luna = await readFile(new URL("src/styles/luna.css", ROOT), "utf8");
 
   assert.match(
     serendipity,
@@ -2472,10 +2472,10 @@ test("both homepage fragments are preloaded, and the reason that is free still h
 test("homepage selects 12 photos and transfers all of them", async () => {
   const worker = await readFile(new URL("src/worker/home.js", ROOT), "utf8");
   const page = await readFile(new URL("www/index.html", ROOT), "utf8");
-  const luna = await readFile(new URL("www/luna.css", ROOT), "utf8");
-  const nav = await readFile(new URL("www/nav.js", ROOT), "utf8");
-  const hoist = await readFile(new URL("www/hoist.js", ROOT), "utf8");
-  const tooltip = await readFile(new URL("www/tooltip.js", ROOT), "utf8");
+  const luna = await readFile(new URL("src/styles/luna.css", ROOT), "utf8");
+  const nav = await readFile(new URL("src/client/nav.js", ROOT), "utf8");
+  const hoist = await readFile(new URL("src/client/hoist.js", ROOT), "utf8");
+  const tooltip = await readFile(new URL("src/client/tooltip.js", ROOT), "utf8");
 
   const build = await readFile(new URL("scripts/build.mjs", ROOT), "utf8");
   assert.match(worker, /pickRandom\(pool,\s*12\)/, "the per-request random draw must remain 12");
@@ -3263,7 +3263,7 @@ test("static page negotiation prefers 304, then DCZ with the current validator",
 });
 
 test("LWE pages share one base stylesheet and the build derives one site-page dictionary", async () => {
-  const base = await readFile(new URL("www/lwe-base.css", ROOT), "utf8");
+  const base = await readFile(new URL("src/styles/lwe-base.css", ROOT), "utf8");
   assert.match(base, /\.controls \{ display: inline-flex/);
   const build = await readFile(new URL("scripts/build.mjs", ROOT), "utf8");
   assert.match(build, /site-page corpus/);
@@ -6763,7 +6763,7 @@ test("the reader owns one focused Markdown walk over Readability's node", async 
 
 test("the reader reports what it dropped, never only what it kept", async () => {
   const reader = readFileSync("./lens-reader/src/reader.js", "utf8");
-  const client = readFileSync("./www/lens-reader.js", "utf8");
+  const client = readFileSync("./src/client/lens-reader.js", "utf8");
   // The whole point of this lens is the GAP. A payload that reported only the
   // extraction would read as "here is the page", which is the claim /lens exists
   // to complicate — an extractor is guessing, and on a landing page it guesses
@@ -6781,7 +6781,7 @@ test("the reader reports what it dropped, never only what it kept", async () => 
 test("every machine lens tab has a label, and the reader is one of them", async () => {
   const { LENS_TAB_ORDER } = await import("../src/worker/lens.js");
   const server = readFileSync("./src/worker/lens.js", "utf8");
-  const client = readFileSync("./www/lens.js", "utf8");
+  const client = readFileSync("./src/client/lens.js", "utf8");
   assert.ok(LENS_TAB_ORDER.includes("reader"), "the reader tab must be in the tab order");
   // The strip renders from LENS_TAB_ORDER, so a key with no label ships an empty
   // button rather than failing. The client keeps its own LENS_LABEL map (no
@@ -6796,7 +6796,7 @@ test("every machine lens tab has a label, and the reader is one of them", async 
 
 test("a ?lens= deep link works for every tab in the strip", async () => {
   const { LENS_TAB_ORDER } = await import("../src/worker/lens.js");
-  const client = readFileSync("./www/lens.js", "utf8");
+  const client = readFileSync("./src/client/lens.js", "utf8");
   // The client validates ?lens= against its OWN allowlist before honouring it.
   // That list was hand-written and stopped at six while the strip grew to eight,
   // so ?lens=reader and ?lens=wire fell back to Raw response — a deep link that
@@ -6813,7 +6813,7 @@ test("a ?lens= deep link works for every tab in the strip", async () => {
 
 test("the idle Lens shell defers its full client without losing the first action", () => {
   const server = readFileSync("./src/worker/lens.js", "utf8");
-  const boot = readFileSync("./www/lens-boot.js", "utf8");
+  const boot = readFileSync("./src/client/lens-boot.js", "utf8");
   const build = readFileSync("./scripts/build.mjs", "utf8");
 
   assert.match(server, /scripts: `<script src="\/lens-boot\.js" defer><\/script>`/,
@@ -6846,7 +6846,7 @@ test("the idle Lens shell defers its full client without losing the first action
   // the idle shell. Derive the expectation from the client instead. This is the
   // same failure the ?lens= tab list already had once, where a hand-written array
   // of six sat beside a strip of eight.
-  const client = readFileSync("./www/lens.js", "utf8");
+  const client = readFileSync("./src/client/lens.js", "utf8");
   const holders = new Set(
     [...client.matchAll(/(\w+)\s*=\s*new URLSearchParams\(location\.search\)\s*;/g)].map((m) => m[1]),
   );
@@ -6878,7 +6878,7 @@ test("the idle Lens shell defers its full client without losing the first action
 });
 
 test("the reader never renders an unmeasurable phase as 0 ms", () => {
-  const client = readFileSync("./www/lens-reader.js", "utf8");
+  const client = readFileSync("./src/client/lens-reader.js", "utf8");
   // A Worker's clock advances across I/O and never during synchronous execution,
   // so `parse`, `extract` and `markdown` come back 0 from production while
   // `fetch` carries real time. Measured through the live route 2026-08-10:
@@ -7087,7 +7087,7 @@ test("data: URIs are counted but kept out of the host roll call", async () => {
 test("the KV-hit flag does not collide with the target's own cache count", async () => {
   const { summariseWire } = await import("../src/worker/lens-wire.js");
   const worker = readFileSync("./src/worker/lens-wire.js", "utf8");
-  const pane = readFileSync("./www/lens-wire.js", "utf8");
+  const pane = readFileSync("./src/client/lens-wire.js", "utf8");
   // Caught in the browser 2026-08-11, rendering as "true served from cache".
   // The summary owns `cached` — how many of the TARGET's requests came from the
   // browser's own cache — and the KV-hit path was spreading `cached: true` over
@@ -7117,7 +7117,7 @@ test("siteOf groups subdomains without a public-suffix list, and says where it i
   // an approximation presented as a fact is the failure mode that matters.
   const src = readFileSync("./src/worker/lens-wire.js", "utf8");
   assert.match(src, /NOT a public-suffix list/, "the heuristic must be labelled as one in the source");
-  const pane = readFileSync("./www/lens-wire.js", "utf8");
+  const pane = readFileSync("./src/client/lens-wire.js", "utf8");
   assert.match(pane, /last two labels of the hostname/, "the pane must disclose the grouping rule to the reader");
 });
 
@@ -7419,7 +7419,7 @@ test("a capped level explains itself on every surface that shows the level", () 
   // sees 13/100 beside "Level 1" with no account of why the ladder was held.
   // It shipped that way once already, surfaced only in the SSR floor.
   const worker = readFileSync("./src/worker/lens.js", "utf8");
-  const client = readFileSync("./www/lens.js", "utf8");
+  const client = readFileSync("./src/client/lens.js", "utf8");
 
   assert.match(worker, /levelNote: readiness\.levelNote/, "the observation summary has to carry the note, or compare mode cannot show it");
   assert.match(worker, /overall, level: level\.number, levelName: level\.name, levelNote/, "the readiness envelope has to publish it");
@@ -7545,7 +7545,7 @@ test("the affinity rule exempts the header the ramp sampler sends", async () => 
 // alternative was a structural test, and a structural test cannot tell whether a
 // numeric enum survives — which is the one property this thing exists to have.
 function loadLensTools() {
-  const src = readFileSync("./www/lens-tools.js", "utf8");
+  const src = readFileSync("./src/client/lens-tools.js", "utf8");
   const win = {};
   new Function("window", "document", src)(win, undefined);
   return win.LensTools;
@@ -7618,7 +7618,7 @@ test("the Tools pane builds foreign strings as NODES, never as markup", () => {
   // www/terminal.js follows the same rule for third-party page titles; this is
   // that rule made checkable, because the failure is a stored XSS and the diff
   // that introduces it looks like ordinary convenience.
-  const src = readFileSync("./www/lens-tools.js", "utf8");
+  const src = readFileSync("./src/client/lens-tools.js", "utf8");
   const forms = src.slice(src.indexOf("function buildField"));
   assert.ok(!/\.innerHTML\s*=/.test(forms), "the form builders must not assign innerHTML");
   assert.ok(/createElement/.test(src) && /textContent/.test(src), "the builders create nodes and set text");
@@ -7628,7 +7628,7 @@ test("the Tools lens reads a catalogue and has NO path to calling a tool", () =>
   // The whole safety argument: /lens must never become a public button that
   // fires strangers' tools from this account's IP and under AadharshBot's
   // signature. Same shape as lens-wire's single-params.get assertion.
-  const client = readFileSync("./www/lens-tools.js", "utf8");
+  const client = readFileSync("./src/client/lens-tools.js", "utf8");
   const fetches = client.match(/fetch\(/g) || [];
   assert.equal(fetches.length, 1, "the pane makes exactly one request, to our own route");
   assert.ok(client.includes('fetch("/lens/tools?url="'), "and that request is /lens/tools");
