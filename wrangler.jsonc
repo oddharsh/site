@@ -43,6 +43,11 @@
   "main": ".build/www/_worker.js/index.js",
   "build": { "command": "node scripts/build.mjs" },
   "compatibility_date": "2026-06-01",
+  // Deploy-only. Measured 2026-08-16: 274.45 -> 227.67 KiB gzip (17.0% off).
+  // Keep the local-dev twin readable; uploaded source maps retain original stack
+  // locations in Workers Logs without shipping to clients.
+  "minify": true,
+  "upload_source_maps": true,
   // Workers Cache sits in front of the public-response entrypoint below. The
   // default dispatcher stays uncached because it owns mutations, per-visitor
   // views, content-negotiated representations, and request logging; response

@@ -1,11 +1,13 @@
 {
   // LOCAL DEV ONLY — `wrangler dev -c wrangler.dev.jsonc` (see .claude/launch.json).
   //
-  // This is the twin of wrangler.jsonc. The two differ in exactly four places:
+  // This is the twin of wrangler.jsonc. The two differ in exactly six places:
   //   - main:             www/... here vs .build/www/... in wrangler.jsonc
   //   - assets.directory: www        here vs .build/www    in wrangler.jsonc
   //   - no "build" block here (dev serves the readable www/ tree directly, so
   //     the fast edit->reload loop never pays the full www/ -> .build copy)
+  //   - no deploy-time minification here; local code stays readable
+  //   - no uploaded source maps; local stack locations already point at source
   //   - Workers Cache is disabled for both local entrypoints, so edit->reload
   //     never observes a stale cached response; deploy enables it for CachedPages
   // Everything else (bindings, crons, vars, migrations) MUST match wrangler.jsonc.
