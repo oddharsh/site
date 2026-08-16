@@ -17,6 +17,8 @@ const faster = (base, candidate, ms = LOAD_DELTA_MS, fraction = LOAD_DELTA_RATIO
   base - candidate >= ms && ratio(base, candidate) <= 1 - fraction;
 const slower = (base, candidate, ms = LOAD_DELTA_MS, fraction = LOAD_DELTA_RATIO) =>
   candidate - base >= ms && ratio(base, candidate) >= 1 + fraction;
+const clsFaster = (base, candidate) =>
+  (base > 0.1 && candidate <= 0.1) || (base - candidate >= CLS_DELTA && candidate <= base * 0.9);
 
 const browserMajor = (value) => String(value || "").match(/\d+/)?.[0] || "unknown";
 
@@ -77,12 +79,15 @@ function compareNavigation(base, candidate) {
     const bCls = finite(b?.cls?.max, `${pair.base.id} base CLS max`);
     const cCls = finite(c?.cls?.max, `${pair.base.id} candidate CLS max`);
     const reasons = [];
+    const improvements = [];
 
     if (slower(bLcp, cLcp)) reasons.push("LCP median regressed");
     if (slower(bTail, cTail, TAIL_DELTA_MS, TAIL_DELTA_RATIO)) reasons.push("LCP p75 regressed");
     if (slower(bFcp, cFcp)) reasons.push("FCP median regressed");
     if (slower(bTtfb, cTtfb, TTFB_DELTA_MS, TTFB_DELTA_RATIO)) reasons.push("TTFB median regressed");
     if ((cCls > 0.1 && bCls <= 0.1) || cCls - bCls >= CLS_DELTA) reasons.push("CLS regressed");
+    if (faster(bLcp, cLcp)) improvements.push("LCP median materially improved");
+    if (clsFaster(bCls, cCls)) improvements.push(`CLS materially improved (${bCls.toFixed(3)} → ${cCls.toFixed(3)})`);
 
     rows.push({
       id: pair.base.id,
@@ -90,7 +95,8 @@ function compareNavigation(base, candidate) {
       base: bLcp,
       candidate: cLcp,
       ratio: ratio(bLcp, cLcp),
-      improved: faster(bLcp, cLcp),
+      improved: improvements.length > 0,
+      improvements,
       reasons,
       detail: { baseP75: bTail, candidateP75: cTail, baseCls: bCls, candidateCls: cCls },
     });
@@ -167,13 +173,13 @@ export function renderComparison(result) {
     "|---|--:|--:|--:|---|",
   ];
   for (const row of result.rows) {
-    const verdict = row.reasons.length ? row.reasons.join("; ") : row.improved ? "material improvement" : "within resolution";
+    const verdict = row.reasons.length ? row.reasons.join("; ") : row.improved ? row.improvements.join("; ") : "within resolution";
     lines.push(`| ${row.name} | ${ms(row.base)} | ${ms(row.candidate)} | ${pct(row.ratio)} | ${verdict} |`);
   }
   lines.push(
     "",
     result.decision === "promote"
-      ? "At least one scenario improved by both 10% and 16 ms, with no material regression. This clears the browser-evidence gate; correctness and wire-size checks still have to pass."
+      ? "At least one user-visible metric materially improved with no protected regression. Latency needs both 10% and 16 ms; CLS must cross into the good range or improve by at least 0.02 and 10%. Correctness and wire-size checks still have to pass."
       : result.decision === "reject"
         ? "A protected scenario regressed. Keep any useful idea in its beam, but do not promote this candidate as measured."
         : "The movement is below the lab's resolution. Record it as inconclusive; do not promote it as a performance win.",

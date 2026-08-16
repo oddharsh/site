@@ -111,12 +111,13 @@ pnpm run perf:snapshot compare base.json head.json
 # the machine-owned `perf-history` branch and /garage/dyno charts them.
 pnpm run perf:snapshot row base.json
 
-# the controlled browser experiment loop. perf:nav records a cold route/viewport
-# matrix, inp records trusted Run interactions, and perf:research compares like
-# environments without averaging away a slower route. Full protocol, beam rules,
-# and the goal prompt: docs/PERFORMANCE-RESEARCH.md.
-pnpm run perf:nav -- --url http://127.0.0.1:8799 --out .perf-research/base-nav.json
-pnpm run inp --url http://127.0.0.1:8799 --out .perf-research/base-inp.json
+# the controlled browser experiment loop. perf:nav can interleave baseline and
+# candidate samples in one Chrome process, inp records trusted Run interactions,
+# and perf:research compares like environments without averaging away a slower
+# route. Full protocol, first trial, and goal prompt: docs/PERFORMANCE-RESEARCH.md.
+pnpm run perf:nav -- --url http://127.0.0.1:8800 --candidate-url http://127.0.0.1:8799 \
+  --baseline-out .perf-research/base-nav.json --candidate-out .perf-research/candidate-nav.json
+pnpm run inp --url http://127.0.0.1:8800 --out .perf-research/base-inp.json
 pnpm run perf:research -- compare .perf-research/base-nav.json .perf-research/candidate-nav.json
 
 # diff infra.json (DNS, zone/edge settings, account resources, Workers) against

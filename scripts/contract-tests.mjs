@@ -6463,13 +6463,13 @@ test("the twin list is generated, not committed", () => {
 
 test("performance research promotes measured wins but rejects protected regressions", async () => {
   const { compareReports } = await import("./lib/perf-research.mjs");
-  const navScenario = (id, lcp) => ({
+  const navScenario = (id, lcp, cls = 0) => ({
     id, name: id,
     summary: {
       lcpMs: { median: lcp, p75: lcp + 12, p90: lcp + 20 },
       fcpMs: { median: lcp - 40 },
       ttfbMs: { median: 20 },
-      cls: { max: 0 },
+      cls: { max: cls },
     },
   });
   const report = (label, scenarios) => ({
@@ -6489,6 +6489,16 @@ test("performance research promotes measured wins but rejects protected regressi
   const rejected = compareReports(base, mixed);
   assert.equal(rejected.decision, "reject");
   assert.deepEqual(rejected.regressions.map((row) => row.id), ["lens"]);
+
+  // A stability fix is a performance result even when LCP is already flat.
+  // /lwe/encoding exposed the missing case: 1.01 CLS to 0.01, with a 4ms LCP
+  // movement the latency threshold correctly calls noise.
+  const unstable = report("unstable", [navScenario("encoding", 420, 1.01)]);
+  const stable = report("stable", [navScenario("encoding", 416, 0.01)]);
+  const clsPromoted = compareReports(unstable, stable);
+  assert.equal(clsPromoted.decision, "promote");
+  assert.deepEqual(clsPromoted.improvements, ["encoding"]);
+  assert.match(clsPromoted.rows[0].improvements.join(" "), /CLS materially improved/);
 });
 
 test("performance research calls sub-resolution INP movement inconclusive", async () => {

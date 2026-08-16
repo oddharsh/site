@@ -881,14 +881,18 @@ loop. It adapts leaderboard-style autoresearch to a multi-route website without
 turning one noisy score into a merge gate.
 
 `pnpm run perf:nav` records cold navigation metrics across the homepage, Garage,
-Lens, and Writing. `pnpm run inp --out <file>` records the existing trusted Run
-interactions. `pnpm run perf:research -- compare <base> <candidate>` returns
-`promote`, `reject`, or `inconclusive` from compatible schema 1 reports.
+Lens, Writing, and the LWE Encoding shell. With `--candidate-url`,
+`--baseline-out`, and `--candidate-out`, it interleaves both arms in one browser
+process and alternates their order. `pnpm run inp --out <file>` records the
+existing trusted Run interactions. `pnpm run perf:research -- compare <base>
+<candidate>` returns `promote`, `reject`, or `inconclusive` from compatible
+schema 1 reports.
 
-The comparator ranks candidates with a normalized geomean, then applies route-level
-guardrails. A large win cannot hide a material loss on another protected scenario.
-Browser promotion remains provisional until correctness checks and the deterministic
-`perf:snapshot` diff pass.
+The comparator ranks latency with a normalized geomean, then applies route-level
+guardrails. A large win cannot hide a material loss on another protected scenario,
+and a material CLS fix can promote with flat latency. Browser promotion remains
+provisional until correctness checks and the deterministic `perf:snapshot` diff
+pass.
 
 Keep raw lab output under `.perf-research/`. Commit one compact evidence row
 per completed experiment to `performance-experiments.jsonl`, including rejected and

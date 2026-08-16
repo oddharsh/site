@@ -29,7 +29,7 @@ Improve a measured user-visible scenario without slowing another protected scena
 
 A candidate receives one of three decisions:
 
-- `promote`: one scenario improves by at least 10 percent and 16 ms, and no protected scenario materially regresses.
+- `promote`: one scenario materially improves and no protected scenario materially regresses. Latency needs at least 10 percent and 16 ms; CLS must cross from above 0.1 to at most 0.1, or improve by at least 0.02 and 10 percent.
 - `reject`: LCP, FCP, TTFB, CLS, or interaction latency crosses a regression guardrail.
 - `inconclusive`: movement stays below the lab's resolution. Record the result without claiming a win.
 
@@ -43,7 +43,7 @@ The navigation tail guard uses p75. Seven samples would make p90 equal the singl
 
 The loop uses three separate instruments because each answers a different question.
 
-1. `pnpm run perf:nav` measures cold LCP, FCP, TTFB, load time, CLS, request count, and transfer size across five page and viewport scenarios.
+1. `pnpm run perf:nav` measures cold LCP, FCP, TTFB, load time, CLS, request count, and transfer size across six page and viewport scenarios.
 2. `pnpm run inp` measures trusted Run interactions under CPU throttling. `--out` now writes raw samples and summaries as schema 1 JSON.
 3. `pnpm run perf:snapshot` compares deterministic wire bytes and Worker modules. It remains the authority for network cost.
 
@@ -53,33 +53,41 @@ The lab uses an unthrottled local network. Read its LCP as render and main-threa
 
 ## Baseline and candidate protocol
 
-Use fresh worktrees from the same `origin/main`. Run one server and one browser recording at a time so parallel builds or browsers cannot compete for CPU.
+Use fresh worktrees from the same `origin/main`. Start the baseline and candidate servers on separate ports, then let one browser process interleave A/B samples. The recorder alternates arm order each pair so temperature and Chrome drift do not consistently favor either side.
 
 Build and serve the production-shaped config. `wrangler.dev.jsonc` serves readable, unminified sources and would measure a different artifact.
 
-Run both recordings with the candidate worktree's copy of the lab. The URL selects the baseline or candidate server. This keeps instrumentation identical across both sides.
+Run both recordings with the candidate worktree's copy of the lab. It validates the final origin after navigation, so a redirect to another site cannot masquerade as a slow local page.
 
 ```bash
 # Baseline worktree, terminal 1
 pnpm install --frozen-lockfile
+pnpm exec wrangler dev -c wrangler.jsonc --port 8800
+
+# Candidate worktree, terminal 2
+pnpm install --frozen-lockfile
 pnpm exec wrangler dev -c wrangler.jsonc --port 8799
 
-# Baseline recording from the candidate worktree, terminal 2
-pnpm run perf:nav -- --url http://127.0.0.1:8799 --throttle 6 --runs 9 \
-  --label origin-main --out .perf-research/base-nav.json
-pnpm run inp --url http://127.0.0.1:8799 --throttle 6 --runs 12 \
-  --label origin-main --out .perf-research/base-inp.json
-```
-
-Stop the baseline server. Start the candidate on the same port and repeat with `--label candidate`.
-
-```bash
+# Recording from the candidate worktree, terminal 3
+pnpm run perf:nav -- --url http://127.0.0.1:8800 \
+  --candidate-url http://127.0.0.1:8799 --throttle 6 --runs 9 \
+  --label origin-main --candidate-label candidate \
+  --baseline-out .perf-research/base-nav.json \
+  --candidate-out .perf-research/candidate-nav.json
 pnpm run perf:research -- compare \
   .perf-research/base-nav.json \
   .perf-research/candidate-nav.json \
   --out .perf-research/navigation.md \
   --json .perf-research/navigation-decision.json
+```
 
+Record interactions one arm at a time; the navigation pairing flags do not apply to the trusted-interaction lab.
+
+```bash
+pnpm run inp --url http://127.0.0.1:8800 --throttle 6 --runs 12 \
+  --label origin-main --out .perf-research/base-inp.json
+pnpm run inp --url http://127.0.0.1:8799 --throttle 6 --runs 12 \
+  --label candidate --out .perf-research/candidate-inp.json
 pnpm run perf:research -- compare \
   .perf-research/base-inp.json \
   .perf-research/candidate-inp.json \
@@ -89,7 +97,21 @@ pnpm run perf:research -- compare \
 
 The comparator exits `0` for promote, `1` for reject or invalid input, and `2` for inconclusive.
 
-Repeat a surprising result in A/B/A order. A single browser session can drift with temperature, background load, and Chrome state.
+Repeat a surprising result with more pairs or a separate A/B/A run. Pairing reduces drift; it does not erase background load or thermal effects.
+
+## First trial
+
+The first live loop on 2026-08-16 did useful negative work before it found a winner.
+
+| experiment | prediction | result | decision |
+|---|---|---|---|
+| defer offscreen Garage cards with `content-visibility` | reduce initial rendering cost on the dense Garage page | no repeatable Garage LCP improvement in A/B/A | reject |
+| replace long-note `field-sizing: content` with a fixed initial height | reduce mobile Writing layout work | median LCP moved 376 ms to 372 ms; layout cost regressed | reject |
+| load Luna shell CSS at parse time on `/lwe/encoding` | prevent the late full-shell restyle | paired 9-run CLS moved 1.011 to 0.010; LCP stayed effectively flat at 424 ms to 416 ms | promote |
+
+The scan also produced one false lead: `/rn` looked like a 4.28 s local LCP until inspection showed that it had redirected to Spotify. Final-origin validation is now part of the recorder.
+
+The promoted result fixes visual stability, not nominal load latency. A 20-pair confirmation reproduced the same CLS movement (1.011 to 0.010) while median LCP stayed within the lab's resolution (420 ms to 416 ms). The cause was concrete: the generated page painted an unstyled desktop shell, then deferred `nav.js` injected `/luna.css` and shifted the whole viewport.
 
 ## Experiment loop
 
@@ -101,7 +123,7 @@ Maintain a small beam when evidence supports it:
 - a near-miss family with a repeatable isolated win;
 - a structural family aimed at a different profiled cost.
 
-The site's current evidence does not support three active optimization families. The first loop should establish the navigation baseline, then profile the slowest scenario.
+The first trial established the navigation baseline, killed two unsupported families, and promoted one shell-stability fix. Start the next beam from a newly profiled material cost, not from one of the rejected patches.
 
 For each experiment:
 
