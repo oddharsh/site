@@ -128,6 +128,25 @@ Both candidates produced a staged tree identical to `origin/main`. Two build
 variants failed the promotion bar. Eight libuv workers saved only 0.14 s and
 depended on machine topology. Async Zstandard changed every `.dcz` output.
 
+## Second pass
+
+The next browser profile found 212 ms of layout work on `/lwe/encoding`, but
+layout containment did not produce trustworthy evidence. A rebuilt candidate
+server had been mixed with the CSS trial, so the loop discarded that result.
+
+The useful cost sat in the page's inline program. Its offscreen chroma demo
+allocated three image planes and processed every pixel before first paint.
+
+| experiment | prediction | result | decision |
+|---|---|---|---|
+| defer the chroma simulation until its canvas nears the viewport | remove offscreen pixel work from first paint | 20-pair mobile LCP fell 396 ms to 356 ms; CLS held at 0.010 | promote, draft PR #425 |
+| batch page DCZ jobs across worker threads | parallelize the 477 ms Zstandard profile leaf without changing bytes | ten-pair build median fell 2.505 s to 2.177 s; staged trees matched | promote, draft PR #426 |
+| resolve Vite and Wrangler to one esbuild version | remove the final duplicated native tool | install size fell 20.8 MiB, but install time stayed at 3.20 s and the change dropped 0.28.2 correctness fixes | reject |
+
+The browser candidate added 0.13 KiB Brotli to one page and changed no client
+asset. The build candidate reduced a full Wrangler dry run by 7.7 percent.
+Both passed the repository's local correctness and dry-run gates.
+
 ## Experiment loop
 
 Start with a profile or a measured slow scenario. Write one sentence that predicts which cost will move and why.
