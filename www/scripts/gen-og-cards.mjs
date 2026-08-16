@@ -2,7 +2,17 @@
 // plus the top-level page directories registered in og-pages.mjs.
 //
 // Each card is a 1200x630 PNG: the page's live interactive demo screenshotted
-// and floated on the Bliss desktop, with a translucent XP dock naming the route.
+// and floated on the Bliss desktop, with the page's own favicon as a brand stamp
+// bottom-left. There is NO route label on the card, and this comment claimed one
+// from the first commit (#55) while `cardHtml` below has always said the opposite
+// in the same file. `git log -S 'class="dock"'` over this path returns zero
+// commits, so the dock was designed, dropped for the favicon stamp, and only the
+// header kept describing it. What makes the drift expensive is that `route` IS
+// still computed, at the "route label" comment further down, and it feeds the
+// per-card console line, so a run prints `aadhar.sh/<page>` beside every card and
+// reads exactly like a label that got applied. Cropping the same 90x520 region
+// out of four unrelated committed cards is the control: all four are favicon and
+// wallpaper, no text. Measured 2026-08-15.
 // The demo panels already carry their own `.bar` title strip, so on the wallpaper
 // they read as a little open XP app — which is exactly the "grabby, unmistakably
 // this site" look we want in a link unfurl.
