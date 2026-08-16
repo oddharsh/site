@@ -3,6 +3,12 @@ main = "src/index.js"
 compatibility_date = "2026-07-02"
 compatibility_flags = ["nodejs_compat"]
 
+# Deploy-only. Measured 2026-08-16: 148.92 -> 113.09 KiB gzip (24.1% off).
+# Source maps preserve original stack locations in Workers Logs; local Wrangler
+# development still reads the authored modules.
+minify = true
+upload_source_maps = true
+
 # Intercepts /lens/read* ahead of the site Worker, exactly the way cf-garage
 # intercepts /garage/cf/*. This is a ROUTE and not a `run_worker_first` entry,
 # which is the whole reason the feature lives in its own script: that list is a

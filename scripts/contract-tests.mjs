@@ -2863,33 +2863,33 @@ test("the dependency-doc check reaches the four manifests outside the root", () 
   const quiet = { aliases: [], versionless: new Map(), floor: 0, pins: {} };
   const sub = (over = {}) => [{
     manifest: "lens-reader/package.json",
-    aliases: [{ prose: "turndown", pkg: "turndown" }],
+    aliases: [{ prose: "linkedom", pkg: "linkedom" }],
     versionless: new Map(),
-    pins: { turndown: "7.2.4" },
+    pins: { linkedom: "0.18.13" },
     ...over,
   }];
 
-  const ok = auditDependencyDocs({ doc: `${H}\n- \`turndown\` 7.2.4 ships two builds.`, ...quiet, subManifests: sub() });
+  const ok = auditDependencyDocs({ doc: `${H}\n- \`linkedom\` 0.18.13 supplies a DOM.`, ...quiet, subManifests: sub() });
   assert.deepEqual(ok.problems, [], "a matching sub-manifest claim must pass");
 
   // 1. THE BACKTICK. This doc writes package names as `code`, so a pattern that
   //    only matched a bare name would silently match nothing for every entry in
   //    the file's own house style, and the floor is the only thing that would
   //    have noticed.
-  const bare = auditDependencyDocs({ doc: `${H}\n- turndown 7.2.4 ships two builds.`, ...quiet, subManifests: sub() });
+  const bare = auditDependencyDocs({ doc: `${H}\n- linkedom 0.18.13 supplies a DOM.`, ...quiet, subManifests: sub() });
   assert.deepEqual(bare.problems, [], "an unbackticked name must still match");
 
   // 2. a bumped sub-manifest pin against an unbumped sentence
-  const stale = auditDependencyDocs({ doc: `${H}\n- \`turndown\` 7.2.3 ships two builds.`, ...quiet, subManifests: sub() });
-  assert.ok(stale.problems.some((p) => /states "turndown 7\.2\.3" but lens-reader\/package\.json pins turndown at 7\.2\.4/.test(p)),
+  const stale = auditDependencyDocs({ doc: `${H}\n- \`linkedom\` 0.18.12 supplies a DOM.`, ...quiet, subManifests: sub() });
+  assert.ok(stale.problems.some((p) => /states "linkedom 0\.18\.12" but lens-reader\/package\.json pins linkedom at 0\.18\.13/.test(p)),
     stale.problems.join("\n"));
 
   // 3. a NEW sub-manifest dependency nobody documented. This is the direction
   //    that found serde_json, which arrived with #373 and was unmentioned.
   const undocumented = auditDependencyDocs({
-    doc: `${H}\n- \`turndown\` 7.2.4 ships two builds.`,
+    doc: `${H}\n- \`linkedom\` 0.18.13 supplies a DOM.`,
     ...quiet,
-    subManifests: sub({ pins: { turndown: "7.2.4", "left-pad": "1.0.0" } }),
+    subManifests: sub({ pins: { linkedom: "0.18.13", "left-pad": "1.0.0" } }),
   });
   assert.ok(undocumented.problems.some((p) => /left-pad is a lens-reader\/package\.json dependency/.test(p)),
     undocumented.problems.join("\n"));
@@ -2907,7 +2907,7 @@ test("the dependency-doc check reaches the four manifests outside the root", () 
   //    An empty pin set scans clean and asserts nothing, which is how a moved
   //    file would read as a healthy project forever.
   const missing = auditDependencyDocs({
-    doc: `${H}\n- \`turndown\` 7.2.4 ships two builds.`,
+    doc: `${H}\n- \`linkedom\` 0.18.13 supplies a DOM.`,
     ...quiet,
     subManifests: sub({ missing: true, pins: {} }),
   });
@@ -2916,7 +2916,7 @@ test("the dependency-doc check reaches the four manifests outside the root", () 
 
   // 6. a stale exemption in a sub-manifest, same rule the root has.
   const staleExempt = auditDependencyDocs({
-    doc: `${H}\n- \`turndown\` 7.2.4 ships two builds.`,
+    doc: `${H}\n- \`linkedom\` 0.18.13 supplies a DOM.`,
     ...quiet,
     subManifests: sub({ versionless: new Map([["gone-pkg", "reason"]]) }),
   });
@@ -6558,7 +6558,7 @@ test("the dyno page distinguishes measured points from hand-entered ones", async
 // EVERY assertion below reads SOURCE TEXT and imports nothing from lens-reader/.
 // That is a hard constraint, not a style: this suite runs under plain node with
 // the ROOT workspace's dependencies, and lens-reader/src/reader.js imports
-// readability, linkedom and turndown, which live only in that sub-project. Importing
+// readability and linkedom, which live only in that sub-project. Importing
 // it here fails with ERR_MODULE_NOT_FOUND in CI while passing on any workstation
 // that happens to have run `pnpm install` in lens-reader/ — which is exactly how
 // this was caught (PR #299, first run). Same family as gotcha 16: what this file
@@ -6582,6 +6582,14 @@ test("the reader's rate-limit message quotes the ceiling wrangler declares", asy
     "the reader's 429 message would quote a limit the binding does not enforce");
 });
 
+test("the reader minifies its dependency-heavy deploy without losing source locations", () => {
+  const toml = readFileSync("./lens-reader/wrangler.toml", "utf8");
+  assert.match(toml, /^minify\s*=\s*true$/m,
+    "the Reader Worker should minify its dependency-heavy production bundle");
+  assert.match(toml, /^upload_source_maps\s*=\s*true$/m,
+    "Reader minification must retain original source locations in Workers Logs");
+});
+
 test("the reader Worker shares the site's SSRF guard rather than copying it", async () => {
   const reader = readFileSync("./lens-reader/src/reader.js", "utf8");
   const entry = readFileSync("./lens-reader/src/index.js", "utf8");
@@ -6603,37 +6611,19 @@ test("the reader Worker shares the site's SSRF guard rather than copying it", as
     "lens.js and lib/crawl.js must expose the same function object, not two copies");
 });
 
-test("the reader hands turndown a NODE, because a string throws in workerd", async () => {
+test("the reader owns one focused Markdown walk over Readability's node", async () => {
   const src = readFileSync("./lens-reader/src/reader.js", "utf8");
-  // THE trap this feature hit, and the assertion is STRUCTURAL on purpose —
-  // read the next paragraph before "improving" it into a behavioural one.
-  //
-  // turndown ships two builds. The node build falls back to @mixmark-io/domino
-  // and happily takes an HTML string; the browser build reaches for
-  // document.implementation.createHTMLDocument. Wrangler resolves the BROWSER
-  // condition, so `turndown(htmlString)` fails in a Worker while passing under
-  // node. Measured 2026-08-10 against `wrangler dev`: the string form answers
-  // {"ok":false,"error":"document is not defined"}, the node form returns real
-  // markdown. Passing a node sidesteps it entirely, since turndown's RootNode
-  // does input.cloneNode(true) for anything that is not a string.
-  //
-  // A behavioural test here is IMPOSSIBLE, not merely awkward: `node --test`
-  // resolves the node build, so it exercises the one code path that cannot
-  // fail. The first version of this test called toMarkdown() with the bug
-  // deliberately reintroduced and still went green — a check that can only ever
-  // agree with itself. So this asserts the call SHAPE, which is the thing a
-  // future edit would actually change, and the runtime claim is carried by the
-  // measurement recorded above rather than pretended at here.
-  const fn = src.match(/export function toMarkdown\([\s\S]*?\n\}/)[0];
-  assert.match(fn, /service\.turndown\(root\)/,
-    "toMarkdown must pass turndown a NODE — a string resolves turndown's browser build and throws in workerd");
-  assert.doesNotMatch(fn, /turndown\(contentHtml\)|turndown\(html\)/,
-    "passing turndown an HTML string works under node and fails in the Worker");
-  // The output assertions (headings convert, script bodies never reach the
-  // markdown) need the real dependencies, so they live in
-  // lens-reader/test/reader.test.mjs rather than here.
-  assert.match(fn, /service\.remove\(\["script", "style"\]\)/,
-    "toMarkdown must strip script and style before converting");
+  const manifest = JSON.parse(readFileSync("./lens-reader/package.json", "utf8"));
+  assert.equal(manifest.dependencies.turndown, undefined,
+    "a general HTML-to-Markdown dependency would restore a second traversal and tree clone");
+  assert.doesNotMatch(src, /from "turndown"|TurndownService/,
+    "the Reader Worker must not carry the removed converter in its bundle");
+  assert.match(src, /return tidyMarkdown\(markdownChildren\(root\)\)\.trim\(\)/,
+    "toMarkdown must walk Readability's finished node directly");
+  assert.match(src, /const MD_DROP = new Set\(\["script", "style"\]\)/,
+    "only non-prose script and style bodies may be discarded by the serializer");
+  assert.match(src, /default: return inner\(\)/,
+    "unknown semantic wrappers must retain their prose");
 });
 
 test("the reader reports what it dropped, never only what it kept", async () => {

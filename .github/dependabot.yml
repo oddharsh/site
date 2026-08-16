@@ -67,17 +67,21 @@ updates:
   #
   #   security ALERTS   come from GitHub's dependency graph, which indexes every
   #                     manifest in the repository regardless of this file.
-  #                     lens-reader was ALREADY covered. Verified 2026-08-14:
-  #                     defuddle, linkedom, turndown and @mixmark-io/domino all
-  #                     appear in this repo's SBOM
+  #                     lens-reader was ALREADY covered. Verified 2026-08-14 on
+  #                     the manifest of that day: defuddle, linkedom, turndown
+  #                     and @mixmark-io/domino all appeared in this repo's SBOM
   #                     (`gh api repos/oddharsh/site/dependency-graph/sbom`).
+  #                     Three of those four have since left (Readability replaced
+  #                     defuddle, a first-party serializer replaced turndown and
+  #                     its domino fallback); the coverage claim is about the
+  #                     GRAPH rather than about any package, so it is unchanged.
   #
   #   version UPDATES   are scoped strictly to the directories listed HERE, and
   #                     an unwatched directory simply never gets a bump PR.
   #
   # So this closes a staleness gap, never a missed-advisory one. It went
-  # unnoticed because defuddle 0.19.2, linkedom 0.18.13 and turndown 7.2.4 are
-  # all current, so nothing has drifted yet to reveal it.
+  # unnoticed because every pin in that project was current, so nothing had
+  # drifted yet to reveal it.
   #
   # Anyone editing that project by hand needs `pnpm install --ignore-workspace`;
   # a bare install walks UP to the root workspace and never creates
