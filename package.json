@@ -49,7 +49,7 @@
     "release": "node scripts/release-status.mjs"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "5.20260811.1",
+    "@cloudflare/workers-types": "5.20260813.1",
     "@minify-html/node": "0.18.1",
     "@oxlint/plugins": "1.78.0",
     "lightningcss": "1.33.0",

@@ -102,13 +102,14 @@ export function parseCargoDeps(toml) {
 }
 
 // The four manifests outside package.json. Each carries its own alias table and
-// its own exemptions, for the same reason the root does: the mapping from prose
-// to package key is the copy the check adds, so it is explicit.
+// exemptions where it has dependencies, for the same reason the root does: the
+// mapping from prose to package key is the copy the check adds, so it is explicit.
 //
-// Note which packages are NOT here as exact claims. cal and cf-garage pin every
-// dependency with a caret, and Cargo treats a bare `"0.25"` as a caret range, so
-// four of the eight entries are exempted rather than stated. That split is the
-// point: a range is a version the prose cannot honestly state.
+// Note which packages are NOT here as exact claims. cal pins every dependency
+// with a caret, and Cargo treats a bare `"0.25"` as a caret range, so those
+// entries are exempted rather than stated. That split is the point: a range is a
+// version the prose cannot honestly state. cf-garage stays in this list with an
+// empty policy so a future dependency cannot arrive undocumented.
 export const SUB_MANIFEST_POLICY = [
   {
     manifest: "lens-reader/package.json",
@@ -116,7 +117,6 @@ export const SUB_MANIFEST_POLICY = [
     aliases: [
       { prose: "@mozilla/readability", pkg: "@mozilla/readability" },
       { prose: "linkedom", pkg: "linkedom" },
-      { prose: "turndown", pkg: "turndown" },
     ],
     versionless: new Map(),
   },
@@ -133,9 +133,7 @@ export const SUB_MANIFEST_POLICY = [
     manifest: "cf-garage/package.json",
     kind: "npm",
     aliases: [],
-    versionless: new Map([
-      ["@cloudflare/puppeteer", "caret-ranged; cf-garage is a separately deployed demo Worker and nothing it bundles reaches production through the site Worker"],
-    ]),
+    versionless: new Map(),
   },
   {
     manifest: "www/scripts/zenc/Cargo.toml",

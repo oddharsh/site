@@ -51,7 +51,8 @@ const ASSET_ENVELOPES = {
   "nav-run.js":     { role: "first-open Run island",       gzipKiB: 12, brotliKiB: 10 },
   "nav-tray.js":    { role: "first-click tray island",     gzipKiB: 5,  brotliKiB: 4 },
   "notepad.js":     { role: "writing-only island",         gzipKiB: 4,  brotliKiB: 3.5 },
-  "lens.js":        { role: "lens-only island",             gzipKiB: 24, brotliKiB: 21 },
+  "lens-boot.js":   { role: "idle Lens bootstrap",         gzipKiB: 1,  brotliKiB: 1 },
+  "lens.js":        { role: "post-intent Lens application", gzipKiB: 24, brotliKiB: 21 },
   // Raised from 4/3.5 on 2026-08-08 for the interaction recipes: the chip row,
   // the before/after screenshot pair, and the six honest-null strings that say
   // WHY a recipe found nothing (a CSP refusing inline script, a forged receipt,
@@ -93,6 +94,28 @@ const ASSET_ENVELOPES = {
 //              comment into a changelog of somebody silencing a check, and the
 //              growth has not been attributed to anything yet.
 //
+//   227.67 KiB OBSERVED on 2026-08-16, DOWN from 274.46 on the same code,
+//              because `minify: true` reached wrangler.jsonc. The advisory had
+//              been firing continuously and now does not. Nothing was fixed:
+//              the source is byte-for-byte what it was, esbuild just prints a
+//              smaller number for it, and the constant was left alone because
+//              there is nothing here to re-baseline.
+//
+//              This is the failure the paragraphs above guard against, arriving
+//              through a door they do not cover. They watch for someone EDITING
+//              the constant to turn the check green. A transform that changes
+//              what the measurement MEANS turns it green while every constant
+//              in this file holds still, so the diff shows two lines of config
+//              and no baseline change at all. That is harder to catch by
+//              review, not easier.
+//
+//              What answers it is the source-bytes advisory below, which reads
+//              esbuild's per-input source sizes and therefore cannot be moved by
+//              a minifier, a compressor, or the next transform nobody has
+//              thought of. The gzip number keeps its job of describing the
+//              artifact that ships; it is no longer the only thing standing
+//              between this repo and unattributed code growth.
+//
 // The 129.23 baseline had therefore been BREACHED continuously rather than
 // occasionally, and because this check warns rather than fails, CI printed
 // "hard checks green" over it every run. A permanently-firing advisory carries
@@ -121,6 +144,21 @@ const ASSET_ENVELOPES = {
 // interchangeable.
 const WORKER_BASELINE_GZIP_KIB = 204.24;
 const WORKER_ALERT_GROWTH = 0.25;
+
+// The minify-invariant twin of the number above, in SOURCE bytes, summed from
+// esbuild's metafile inputs. Measured 2026-08-16: 1376.65 KiB across 83 modules,
+// every one of them first-party (the metafile carries no node_modules input at
+// all, which is worth knowing before splitting this by vendor again).
+//
+// It answers a question the gzip figure stopped being able to answer the moment
+// production started minifying: how much code is in here. Both numbers are worth
+// having and they measure different things. Gzip is what the deploy uploads and
+// what a cold start parses; source bytes are what the repository wrote, and only
+// the second one is invariant under a change to how the first is produced.
+//
+// Shares WORKER_ALERT_GROWTH on purpose, so there is one headroom knob rather
+// than two that can drift apart. Advisory, like everything else here.
+const WORKER_BASELINE_SOURCE_KIB = 1376.65;
 
 // `wrangler check startup` advisory ceiling, in ms of ACTIVE startup CPU.
 //
@@ -160,7 +198,7 @@ const WORKER_ALERT_GROWTH = 0.25;
 // profile at that resolution has no business failing a PR.
 const WORKER_STARTUP_ALERT_MS = 50;
 const TWINS = [
-  "nav.src.js", "nav-run.src.js", "nav-tray.src.js", "notepad.src.js", "lens.src.js", "lens-browser.src.js", "lens-tools.src.js",
+  "nav.src.js", "nav-run.src.js", "nav-tray.src.js", "notepad.src.js", "lens-boot.src.js", "lens.src.js", "lens-browser.src.js", "lens-tools.src.js",
   "quiz.src.js", "tooltip.src.js", "infotip.src.js", "hoist.src.js", "luna.src.css",
   "lwe-base.src.css",
 ];
@@ -267,6 +305,26 @@ try {
     console.log(`        ${inputs.length} modules in the bundle; largest:`);
     for (const [name, bytes] of inputs.slice(0, 5)) console.log(`          ${fmt(kib(bytes)).padStart(9)}  ${name}`);
   } else ok(`bundle attribution available (${inputs.length} modules, largest ${inputs[0][0]} at ${fmt(kib(inputs[0][1]))})`);
+
+  // 2c) the same bundle in SOURCE bytes, which no transform can shrink ---------
+  // `bytesInOutput` above is post-minify and moves when the pipeline changes.
+  // `meta.inputs[path].bytes` is the file esbuild read, so this total answers
+  // "how much code is in here" independently of how it is emitted. Both the
+  // 2026-08-16 minify drop and any future compression change leave it alone.
+  //
+  // A collapsed count is the failure mode worth guarding: an empty or tiny
+  // metafile would otherwise report a huge improvement. Floor it at the module
+  // count the bundle is known to carry.
+  const sourceKib = kib(Object.values(meta.inputs ?? {}).reduce((sum, input) => sum + (input.bytes ?? 0), 0));
+  const sourceAlertAt = WORKER_BASELINE_SOURCE_KIB * (1 + WORKER_ALERT_GROWTH);
+  const modules = Object.keys(meta.inputs ?? {}).length;
+  if (modules < 40) {
+    warn(`metafile listed only ${modules} source inputs, so the source-bytes total cannot be trusted (expected the whole Worker graph)`);
+  } else if (sourceKib > sourceAlertAt) {
+    warn(`worker source ${sourceKib.toFixed(2)} KiB > ${sourceAlertAt.toFixed(2)} KiB advisory alert (${Math.round(WORKER_ALERT_GROWTH * 100)}% over ${WORKER_BASELINE_SOURCE_KIB} KiB baseline, ${modules} modules). This one is minify-invariant, so it is real growth.`);
+  } else {
+    ok(`worker source ${sourceKib.toFixed(2)} KiB across ${modules} modules (advisory alert at ${sourceAlertAt.toFixed(2)} KiB; minify-invariant)`);
+  }
 } catch (e) {
   warn(`could not read bundle metafile (${e.message}); skipping bundle breakdown`);
 }

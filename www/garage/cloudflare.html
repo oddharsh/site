@@ -299,14 +299,13 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
 
     <div class="callout" id="parked">
       <b>The fifth, parked honestly: Browser Rendering.</b> Headless Chromium in a Worker
-      (Puppeteer): <code class="m">puppeteer.launch(env.BROWSER) → page.goto() →
-      page.screenshot()</code>, the basis for on-the-fly <code class="m">og:image</code> cards. I bind
+      via <code class="m">env.BROWSER.quickAction("screenshot", options)</code>, the basis for
+      on-the-fly <code class="m">og:image</code> cards. I bind
       it and the worker deploys; no enable toggle exists (the binding
-      is the access). The browser <em>does</em> provision. The catch was on my side: a
-      timeout race that abandoned the in-flight browser stranded its websocket session (the free
-      plan caps concurrency at 2), so each probe leaked a session and the next launch errored. The
-      handler now bounds every launch and always releases the browser, and a bare hit no-ops instead
-      of launching, so crawlers can&apos;t burn the <b>10 browser-minutes/day</b> budget. It&apos;s
+      is the access). The first implementation used Puppeteer for one screenshot and brought its
+      whole CDP client into this Worker; the native Quick Action now owns the session lifecycle and
+      keeps the same bounded navigation and paint-settle behavior without that dependency. A bare
+      hit still no-ops, so crawlers can&apos;t burn the <b>10 browser-minutes/day</b> budget. It&apos;s
       unbuttoned here until the OG-image use case earns that budget; trigger it by hand at
       <code class="m">/garage/cf/screenshot?go=1</code>.</div>
 
@@ -481,16 +480,16 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
       ]
     },
     {
-      "q": "Browser Rendering is bound, deployed, and buttonless here. What actually broke when I first probed it?",
+      "q": "Browser Rendering is bound and buttonless here. Why does its screenshot path use a Quick Action?",
       "options": [
         {
-          "t": "My timeout race abandoned in-flight launches, stranding websocket sessions against the free plan's concurrency cap of 2, so later launches errored.",
+          "t": "It is one bounded screenshot operation, so the binding can own its session lifecycle without bundling a general-purpose CDP client.",
           "ok": true,
-          "why": "Right. The callout owns the bug: the platform provisioned fine, and the fix was bounding every launch, always releasing the browser, and no-oping bare hits."
+          "why": "Right. The native Quick Action expresses the whole operation and keeps Puppeteer's CDP implementation out of this auxiliary Worker."
         },
         {
           "t": "The free plan refuses to provision a headless browser: the binding deploys, but every launch gets rejected until you pay.",
-          "why": "The callout says the browser does provision, and the binding itself is the access (no enable toggle exists). The failures traced back to my handler code."
+          "why": "The callout says the binding itself is the access; the route is parked to protect the browser-minute budget, not because provisioning requires a paid plan."
         },
         {
           "t": "Crawlers found the endpoint and drained the 10 browser-minutes/day budget before any real request could run.",
@@ -498,7 +497,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
         },
         {
           "t": "Puppeteer cannot screenshot inside a worker, so the on-the-fly og:image card idea turned out to be a dead end.",
-          "why": "The pipeline works end to end: puppeteer.launch, page.goto, page.screenshot, triggerable by hand with go=1. It waits for a use case to earn the budget."
+          "why": "The pipeline works end to end through Browser Run's native screenshot action, triggerable by hand with go=1. It waits for a use case to earn the budget."
         }
       ]
     }

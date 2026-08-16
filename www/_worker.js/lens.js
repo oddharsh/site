@@ -1581,13 +1581,12 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
     <script type="application/json" id="lx-glossary">${lensScriptJson(LENS_GLOSSARY)}</script>
     ${initialScript}
 `,
-    // The shell is cached at the edge and browsers cache static scripts too, so a
-    // fresh shell must not be able to pair with an older lens.js. This used to be a
-    // hand-bumped ?v=N, which only worked as long as nobody forgot. build.mjs now
-    // rewrites this src to /a/lens.<hash8>.js (same treatment as nav.js + luna.css),
-    // so the URL names exact bytes and the pairing is enforced, not remembered. The
-    // plain /lens.js below stays served, short-cached, for dev and any stale HTML.
-    scripts: `<script src="/lens.js" defer></script>`,
+    // The idle shell is complete server-rendered HTML, including a native GET form,
+    // so it loads only the tiny interaction bootstrap. build.mjs hashes the full
+    // lens client first, rewrites that exact URL into the bootstrap, then hashes the
+    // bootstrap itself. A fresh shell therefore cannot pair with either stale layer.
+    // The plain files stay served, short-cached, for dev and stale HTML.
+    scripts: `<script src="/lens-boot.js" defer></script>`,
     cache: "public, max-age=60, s-maxage=300",
     headers: {
       // No x-robots-tag here: the bare shell is meant to be indexed. handleLens
@@ -3077,8 +3076,11 @@ export function lensText(html) {
 // re-forms and is NOT self-limiting), or the output ever reaching a parser instead of
 // pre() -> esc(). Add the loop then, and delete this paragraph.
 
-// best-effort, dependency-free HTML→Markdown — roughly what a basic LLM
-// scraper ingests. High-fidelity Readability/Turndown is a deliberate v2.
+// best-effort, dependency-free HTML→Markdown, roughly what a basic LLM scraper
+// ingests. The high-fidelity read is a deliberate SEPARATE surface rather than a
+// v2 of this one: /lens/read runs Readability in the lens-reader Worker, because
+// a real extractor needs a DOM and linkedom alone is 94.6 KB gzip. This stays
+// crude on purpose, since the AI view is showing what a crude scraper sees.
 export function lensMarkdown(html, baseUrl) {
   let s = html;
   const b = s.match(/<body[^>]*>([\s\S]*)<\/body>/i); if (b) s = b[1];

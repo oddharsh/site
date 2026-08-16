@@ -2669,6 +2669,36 @@ test("browser RUM and its ledger proxy stay fully removed", async () => {
     "/security must keep describing the browser-facing CSP accurately");
 });
 
+test("production minifies the Worker without obscuring deployed stack traces", async () => {
+  const { parseJsonc } = await import("./lib/jsonc.mjs");
+  const production = parseJsonc(await readFile(new URL("wrangler.jsonc", ROOT), "utf8"));
+  const development = parseJsonc(await readFile(new URL("wrangler.dev.jsonc", ROOT), "utf8"));
+
+  assert.equal(production.minify, true,
+    "production should upload the smaller minified Worker bundle");
+  assert.equal(production.upload_source_maps, true,
+    "production minification must keep original stack locations available to Workers Logs");
+  assert.equal(development.minify, undefined,
+    "local development should keep readable code and its faster edit/reload loop");
+  assert.equal(development.upload_source_maps, undefined,
+    "local source locations need no separately uploaded map");
+
+  // Minifying moved the worker-bundle advisory from firing to silent WITHOUT the
+  // code shrinking, which is the one way to turn that check green while every
+  // constant in perf-budget.mjs holds still. The guard is a source-bytes twin
+  // that a minifier cannot move, and it is asserted HERE, beside the setting
+  // that made it necessary, so removing one while keeping the other fails.
+  const budget = await readFile(new URL("scripts/perf-budget.mjs", ROOT), "utf8");
+  assert.match(budget, /const WORKER_BASELINE_SOURCE_KIB = [\d.]+;/,
+    "a minified production bundle needs a source-bytes baseline the minifier cannot move");
+  assert.match(budget, /worker source \$\{sourceKib/,
+    "the source-bytes total must be REPORTED, since a constant nothing prints guards nothing");
+  assert.match(budget, /input\.bytes/,
+    "the source-bytes total must read esbuild's per-input source sizes, not bytesInOutput");
+  assert.match(budget, /227\.67 KiB OBSERVED/,
+    "the baseline history must record the drop minification produced, or it reads as a real improvement");
+});
+
 test("weak validators turn unchanged rendered HTML into an empty 304", async () => {
   const tagged = await withWeakEtag(new Response("<!doctype html><p>same</p>", {
     headers: { "content-type": "text/html", "cache-control": "public, max-age=0", "content-encoding": "br" },
@@ -2833,33 +2863,33 @@ test("the dependency-doc check reaches the four manifests outside the root", () 
   const quiet = { aliases: [], versionless: new Map(), floor: 0, pins: {} };
   const sub = (over = {}) => [{
     manifest: "lens-reader/package.json",
-    aliases: [{ prose: "turndown", pkg: "turndown" }],
+    aliases: [{ prose: "linkedom", pkg: "linkedom" }],
     versionless: new Map(),
-    pins: { turndown: "7.2.4" },
+    pins: { linkedom: "0.18.13" },
     ...over,
   }];
 
-  const ok = auditDependencyDocs({ doc: `${H}\n- \`turndown\` 7.2.4 ships two builds.`, ...quiet, subManifests: sub() });
+  const ok = auditDependencyDocs({ doc: `${H}\n- \`linkedom\` 0.18.13 supplies a DOM.`, ...quiet, subManifests: sub() });
   assert.deepEqual(ok.problems, [], "a matching sub-manifest claim must pass");
 
   // 1. THE BACKTICK. This doc writes package names as `code`, so a pattern that
   //    only matched a bare name would silently match nothing for every entry in
   //    the file's own house style, and the floor is the only thing that would
   //    have noticed.
-  const bare = auditDependencyDocs({ doc: `${H}\n- turndown 7.2.4 ships two builds.`, ...quiet, subManifests: sub() });
+  const bare = auditDependencyDocs({ doc: `${H}\n- linkedom 0.18.13 supplies a DOM.`, ...quiet, subManifests: sub() });
   assert.deepEqual(bare.problems, [], "an unbackticked name must still match");
 
   // 2. a bumped sub-manifest pin against an unbumped sentence
-  const stale = auditDependencyDocs({ doc: `${H}\n- \`turndown\` 7.2.3 ships two builds.`, ...quiet, subManifests: sub() });
-  assert.ok(stale.problems.some((p) => /states "turndown 7\.2\.3" but lens-reader\/package\.json pins turndown at 7\.2\.4/.test(p)),
+  const stale = auditDependencyDocs({ doc: `${H}\n- \`linkedom\` 0.18.12 supplies a DOM.`, ...quiet, subManifests: sub() });
+  assert.ok(stale.problems.some((p) => /states "linkedom 0\.18\.12" but lens-reader\/package\.json pins linkedom at 0\.18\.13/.test(p)),
     stale.problems.join("\n"));
 
   // 3. a NEW sub-manifest dependency nobody documented. This is the direction
   //    that found serde_json, which arrived with #373 and was unmentioned.
   const undocumented = auditDependencyDocs({
-    doc: `${H}\n- \`turndown\` 7.2.4 ships two builds.`,
+    doc: `${H}\n- \`linkedom\` 0.18.13 supplies a DOM.`,
     ...quiet,
-    subManifests: sub({ pins: { turndown: "7.2.4", "left-pad": "1.0.0" } }),
+    subManifests: sub({ pins: { linkedom: "0.18.13", "left-pad": "1.0.0" } }),
   });
   assert.ok(undocumented.problems.some((p) => /left-pad is a lens-reader\/package\.json dependency/.test(p)),
     undocumented.problems.join("\n"));
@@ -2877,7 +2907,7 @@ test("the dependency-doc check reaches the four manifests outside the root", () 
   //    An empty pin set scans clean and asserts nothing, which is how a moved
   //    file would read as a healthy project forever.
   const missing = auditDependencyDocs({
-    doc: `${H}\n- \`turndown\` 7.2.4 ships two builds.`,
+    doc: `${H}\n- \`linkedom\` 0.18.13 supplies a DOM.`,
     ...quiet,
     subManifests: sub({ missing: true, pins: {} }),
   });
@@ -2886,7 +2916,7 @@ test("the dependency-doc check reaches the four manifests outside the root", () 
 
   // 6. a stale exemption in a sub-manifest, same rule the root has.
   const staleExempt = auditDependencyDocs({
-    doc: `${H}\n- \`turndown\` 7.2.4 ships two builds.`,
+    doc: `${H}\n- \`linkedom\` 0.18.13 supplies a DOM.`,
     ...quiet,
     subManifests: sub({ versionless: new Map([["gone-pkg", "reason"]]) }),
   });
@@ -6528,7 +6558,7 @@ test("the dyno page distinguishes measured points from hand-entered ones", async
 // EVERY assertion below reads SOURCE TEXT and imports nothing from lens-reader/.
 // That is a hard constraint, not a style: this suite runs under plain node with
 // the ROOT workspace's dependencies, and lens-reader/src/reader.js imports
-// readability, linkedom and turndown, which live only in that sub-project. Importing
+// readability and linkedom, which live only in that sub-project. Importing
 // it here fails with ERR_MODULE_NOT_FOUND in CI while passing on any workstation
 // that happens to have run `pnpm install` in lens-reader/ — which is exactly how
 // this was caught (PR #299, first run). Same family as gotcha 16: what this file
@@ -6552,6 +6582,14 @@ test("the reader's rate-limit message quotes the ceiling wrangler declares", asy
     "the reader's 429 message would quote a limit the binding does not enforce");
 });
 
+test("the reader minifies its dependency-heavy deploy without losing source locations", () => {
+  const toml = readFileSync("./lens-reader/wrangler.toml", "utf8");
+  assert.match(toml, /^minify\s*=\s*true$/m,
+    "the Reader Worker should minify its dependency-heavy production bundle");
+  assert.match(toml, /^upload_source_maps\s*=\s*true$/m,
+    "Reader minification must retain original source locations in Workers Logs");
+});
+
 test("the reader Worker shares the site's SSRF guard rather than copying it", async () => {
   const reader = readFileSync("./lens-reader/src/reader.js", "utf8");
   const entry = readFileSync("./lens-reader/src/index.js", "utf8");
@@ -6573,37 +6611,19 @@ test("the reader Worker shares the site's SSRF guard rather than copying it", as
     "lens.js and lib/crawl.js must expose the same function object, not two copies");
 });
 
-test("the reader hands turndown a NODE, because a string throws in workerd", async () => {
+test("the reader owns one focused Markdown walk over Readability's node", async () => {
   const src = readFileSync("./lens-reader/src/reader.js", "utf8");
-  // THE trap this feature hit, and the assertion is STRUCTURAL on purpose —
-  // read the next paragraph before "improving" it into a behavioural one.
-  //
-  // turndown ships two builds. The node build falls back to @mixmark-io/domino
-  // and happily takes an HTML string; the browser build reaches for
-  // document.implementation.createHTMLDocument. Wrangler resolves the BROWSER
-  // condition, so `turndown(htmlString)` fails in a Worker while passing under
-  // node. Measured 2026-08-10 against `wrangler dev`: the string form answers
-  // {"ok":false,"error":"document is not defined"}, the node form returns real
-  // markdown. Passing a node sidesteps it entirely, since turndown's RootNode
-  // does input.cloneNode(true) for anything that is not a string.
-  //
-  // A behavioural test here is IMPOSSIBLE, not merely awkward: `node --test`
-  // resolves the node build, so it exercises the one code path that cannot
-  // fail. The first version of this test called toMarkdown() with the bug
-  // deliberately reintroduced and still went green — a check that can only ever
-  // agree with itself. So this asserts the call SHAPE, which is the thing a
-  // future edit would actually change, and the runtime claim is carried by the
-  // measurement recorded above rather than pretended at here.
-  const fn = src.match(/export function toMarkdown\([\s\S]*?\n\}/)[0];
-  assert.match(fn, /service\.turndown\(root\)/,
-    "toMarkdown must pass turndown a NODE — a string resolves turndown's browser build and throws in workerd");
-  assert.doesNotMatch(fn, /turndown\(contentHtml\)|turndown\(html\)/,
-    "passing turndown an HTML string works under node and fails in the Worker");
-  // The output assertions (headings convert, script bodies never reach the
-  // markdown) need the real dependencies, so they live in
-  // lens-reader/test/reader.test.mjs rather than here.
-  assert.match(fn, /service\.remove\(\["script", "style"\]\)/,
-    "toMarkdown must strip script and style before converting");
+  const manifest = JSON.parse(readFileSync("./lens-reader/package.json", "utf8"));
+  assert.equal(manifest.dependencies.turndown, undefined,
+    "a general HTML-to-Markdown dependency would restore a second traversal and tree clone");
+  assert.doesNotMatch(src, /from "turndown"|TurndownService/,
+    "the Reader Worker must not carry the removed converter in its bundle");
+  assert.match(src, /return tidyMarkdown\(markdownChildren\(root\)\)\.trim\(\)/,
+    "toMarkdown must walk Readability's finished node directly");
+  assert.match(src, /const MD_DROP = new Set\(\["script", "style"\]\)/,
+    "only non-prose script and style bodies may be discarded by the serializer");
+  assert.match(src, /default: return inner\(\)/,
+    "unknown semantic wrappers must retain their prose");
 });
 
 test("the reader reports what it dropped, never only what it kept", async () => {
@@ -6654,6 +6674,72 @@ test("a ?lens= deep link works for every tab in the strip", async () => {
   for (const key of LENS_TAB_ORDER) {
     assert.match(labels, new RegExp(`\\b${key}: "`), `LENS_LABEL has no entry for "${key}", so ?lens=${key} cannot resolve`);
   }
+});
+
+test("the idle Lens shell defers its full client without losing the first action", () => {
+  const server = readFileSync("./www/_worker.js/lens.js", "utf8");
+  const boot = readFileSync("./www/lens-boot.js", "utf8");
+  const build = readFileSync("./scripts/build.mjs", "utf8");
+
+  assert.match(server, /scripts: `<script src="\/lens-boot\.js" defer><\/script>`/,
+    "the server-rendered idle shell must load only the bootstrap");
+  assert.doesNotMatch(server, /scripts: `<script src="\/lens\.js"/,
+    "the full Lens application must not sit on the passive render path");
+  assert.match(boot, /import\("\/lens\.js\?v=1"\)/,
+    "the bootstrap must load the full application through the build's hashable specifier");
+  assert.match(boot, /root\.addEventListener\("click", click, true\)/,
+    "a cold button click must be captured before the unloaded application can miss it");
+  assert.match(boot, /root\.addEventListener\("submit", submit, true\)/,
+    "a cold form submission must be captured before the unloaded application can miss it");
+  assert.match(boot, /form\.requestSubmit\(submitter \|\| undefined\)/,
+    "the first form action must be replayed with its original submitter");
+
+  // The capture click handler calls stopImmediatePropagation, so its ROOT decides
+  // which buttons wait on a module they may not need. nav.js injects Back and
+  // Forward into every window title bar, outside .content, so a document-level
+  // binding made the shell's own chrome pay for the Lens client. Assert the
+  // negative too: the four listeners moving back to `document` is the exact
+  // regression, and only the positive match would still pass if both existed.
+  assert.doesNotMatch(boot, /document\.addEventListener\(/,
+    "the bootstrap must bind inside the Lens UI, never on the document the desktop shell shares");
+  assert.match(boot, /form\.closest\("\.content"\)/,
+    "the Lens content root is the scope, so shell chrome outside it stays instant");
+
+  // The eager-hydrate list is a COPY of what the client reads off the URL, and a
+  // copy pinned to a literal cannot notice the original growing: adding a sixth
+  // parameter to lens.js would leave this green while that deep link rendered
+  // the idle shell. Derive the expectation from the client instead. This is the
+  // same failure the ?lens= tab list already had once, where a hand-written array
+  // of six sat beside a strip of eight.
+  const client = readFileSync("./www/lens.js", "utf8");
+  const holders = new Set(
+    [...client.matchAll(/(\w+)\s*=\s*new URLSearchParams\(location\.search\)\s*;/g)].map((m) => m[1]),
+  );
+  const read = new Set();
+  for (const m of client.matchAll(/new URLSearchParams\(location\.search\)\.(?:get|has)\("([\w-]+)"\)/g)) read.add(m[1]);
+  for (const name of holders) {
+    for (const m of client.matchAll(new RegExp(`\\b${name}\\.(?:get|has)\\("([\\w-]+)"\\)`, "g"))) read.add(m[1]);
+  }
+  // A scanner that matches nothing reports a pass, which is how the twin-facts
+  // check and the CSP attribute scan each shipped asserting zero. Floor it.
+  assert.ok(read.size >= 5, `lens.js URL-parameter scan found ${read.size} reads, so the pattern stopped matching`);
+  const hydrated = new Set(
+    (boot.match(/\[(?:\s*"[\w-]+",?)+\s*\]/) || [""])[0].match(/"([\w-]+)"/g)?.map((q) => q.slice(1, -1)) || [],
+  );
+  for (const key of read) {
+    assert.ok(hydrated.has(key), `lens.js reads ?${key}= but lens-boot.js will not eagerly hydrate for it`);
+  }
+
+  assert.match(build, /\["lens-boot\.js", "\/lens-boot\.src\.js", "requestSubmit"\]/,
+    "the bootstrap must be minified with a readable source twin");
+  assert.match(build, /\{ file: "\/lens\.js",\s+base: "lens"/,
+    "the full client must be content-hashed as a string-loaded dependency");
+  assert.match(build, /from: "\/lens-boot\.js",\s+base: "lens-boot"/,
+    "the shell must receive the final content-hashed bootstrap");
+  assert.ok(build.indexOf('{ file: "/lens-tools.js"') < build.indexOf('{ file: "/lens.js"'),
+    "Lens feature modules must be hashed before the application that loads them");
+  assert.ok(build.indexOf("for (const a of STRING_ASSETS)") < build.indexOf("for (const a of ASSETS)"),
+    "string-loaded applications must be hashed before the shell assets that import them");
 });
 
 test("the reader never renders an unmeasurable phase as 0 ms", () => {

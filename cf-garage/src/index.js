@@ -127,20 +127,12 @@ export default {
         return json({ ok: true, stem, caption });
       }
 
-      // Feature #3 — Browser Run: headless-Chromium screenshot. PARKED (see
+      // Feature #3 — Browser Run quick-action screenshot. PARKED (see
       // /garage/cloudflare). A bare GET no-ops WITHOUT launching, so crawlers,
-      // prerenders, and cache-busted probes can't burn the free 10-min/day budget or
-      // leak sessions — only ?go=1 drives a real browser. Every path is BOUNDED and
-      // ALWAYS releases the browser:
-      //   • the launch is raced against a 25s timeout; if it resolves late, the browser
-      //     is reaped via waitUntil rather than stranded (the old code abandoned a live
-      //     browser on timeout → the isolate tore down its pending websocket → the
-      //     "Websocket error: SessionID …" log noise, and the un-close()d session ate
-      //     one of the 2 free concurrent slots, erroring the next launch).
-      //   • NO session reuse: connecting to an "idle" session is unbounded, and a dead
-      //     orphan reads as idle, so reuse just hangs on the corpse. A fresh launch each
-      //     time is slower but always bounded.
-      //   • close() in finally frees the slot + stops the per-session time meter.
+      // prerenders, and cache-busted probes can't burn the free 10-min/day budget —
+      // only ?go=1 drives a real browser. The binding owns the session lifecycle and
+      // applies the explicit navigation/action bounds below, so this one operation
+      // does not need Puppeteer's general-purpose CDP client in the Worker bundle.
       if (path === "/garage/cf/screenshot") {
         if (url.searchParams.get("go") !== "1") {
           log({ feature: "browser-rendering", step: "parked-noop", ms: Date.now() - t0 });
@@ -149,38 +141,66 @@ export default {
         }
         let target = url.searchParams.get("url") || ORIGIN;
         if (!/^https:\/\/(www\.)?aadhar\.sh(\/|$)/.test(target)) target = ORIGIN; // SSRF guard
-        const puppeteer = (await import("@cloudflare/puppeteer")).default;
-        const launch = puppeteer.launch(env.BROWSER);
-        let browser;
+        let screenshot;
         try {
-          browser = await Promise.race([
-            launch,
-            new Promise((_, rej) => setTimeout(() => rej(new Error("launch timed out (25s) — free tier didn't provision a browser in time")), 25000)),
-          ]);
-        } catch (e) {
-          ctx.waitUntil(launch.then((b) => b.close()).catch(() => {})); // reap a late launch
-          log({ feature: "browser-rendering", step: "launch-timeout", ms: Date.now() - t0, error: String((e && e.message) || e).slice(0, 200) });
-          // the copy is a LITERAL, not e.message: the timeout we raise ourselves
-          // above says exactly this, and anything else that lands here is a
-          // platform error whose text is not ours to publish.
-          return json({ ok: false, error: "the browser did not provision in time (free tier, 25s)" }, 502);
-        }
-        log({ feature: "browser-rendering", step: "launched", ms: Date.now() - t0 });
-        try {
-          const page = await browser.newPage();
-          await page.setViewport({ width: 900, height: 600, deviceScaleFactor: 1 });
-          await page.goto(target, { waitUntil: "domcontentloaded", timeout: 15000 });
-          await new Promise((r) => setTimeout(r, 800)); // brief paint settle
-          const png = await page.screenshot({ type: "png" });
-          log({ feature: "browser-rendering", target, bytes: png.length, ms: Date.now() - t0 });
-          return new Response(png, {
-            headers: {
-              "content-type": "image/png",
-              "access-control-allow-origin": ORIGIN,
-              "cache-control": "public, max-age=300",
-            },
+          // The payload schema is CLOSED: an unrecognized key is refused rather
+          // than ignored. These five were therefore PROBED against the real
+          // binding before shipping, 2026-08-16, because the site's own proven
+          // /lens/shot payload sends none of the last three. Sending a bogus key
+          // alongside a deliberately invalid url answers it for free, since
+          // nothing can render: the control came back with BOTH
+          // `unrecognized_keys: ["definitely_not_a_key_xyz"]` and the url error,
+          // while waitForTimeout, actionTimeout and cacheTTL each returned the
+          // url error ALONE, individually and together. All three are accepted.
+          // Run that control again before adding a sixth key; "the docs list it"
+          // is what the Kitesurf `browser` key also had.
+          screenshot = await env.BROWSER.quickAction("screenshot", {
+            url: target,
+            viewport: { width: 900, height: 600, deviceScaleFactor: 1 },
+            gotoOptions: { waitUntil: "domcontentloaded", timeout: 15000 },
+            waitForTimeout: 800,
+            actionTimeout: 10000,
+            cacheTTL: 0,
           });
-        } finally { try { await browser.close(); } catch {} }
+        } catch (e) {
+          log({ feature: "browser-rendering", step: "screenshot-threw", ms: Date.now() - t0, error: String((e && e.message) || e).slice(0, 200) });
+          // the copy is a LITERAL, not e.message: a platform error's text is not
+          // ours to publish, and this branch is only ever reached by one.
+          return json({ ok: false, error: "the browser did not complete the screenshot" }, 502);
+        }
+        // Browser Run refusing US is not the demo failing, and on the free plan
+        // it is the most likely answer here: 6 quick actions a minute and 10
+        // browser-minutes a day, both account-wide and both shared with /lens.
+        // Collapsing it into a 502 points whoever reads the page at a broken
+        // feature instead of at a spent budget, which is the same mistake
+        // /lens/shot made and corrected.
+        if (screenshot.status === 429) {
+          log({ feature: "browser-rendering", step: "budget-spent", ms: Date.now() - t0 });
+          return json({ ok: false, budget: true,
+            error: "Browser Run is rate-limited right now (free plan: 6/min account-wide, 10 min/day, shared with /lens). Try again shortly." }, 429);
+        }
+        const ctype = screenshot.headers.get("content-type") || "";
+        if (!screenshot.ok || !ctype.startsWith("image/")) {
+          log({ feature: "browser-rendering", step: "screenshot-error", status: screenshot.status, ctype, ms: Date.now() - t0 });
+          return json({ ok: false, error: `Browser Run returned ${screenshot.status}.` }, 502);
+        }
+        // BUFFERED rather than streamed, for the log line. The binding's response
+        // carries no content-length (measured against the real binding twice on
+        // 2026-08-16, 218,085 and 198,858 bytes, neither announced), so reading
+        // the header logged `bytes: undefined` on every success and the field
+        // vanished from Workers Logs. Puppeteer's page.screenshot() handed back a
+        // Buffer and this line has always reported a real number. A screenshot is
+        // bounded by the 900x600 viewport, so holding one is cheaper than losing
+        // the only size signal this feature emits.
+        const png = await screenshot.arrayBuffer();
+        log({ feature: "browser-rendering", target, bytes: png.byteLength, ms: Date.now() - t0 });
+        return new Response(png, {
+          headers: {
+            "content-type": ctype,
+            "access-control-allow-origin": ORIGIN,
+            "cache-control": "public, max-age=300",
+          },
+        });
       }
 
       // Feature #5 — Workers tracing: custom spans around our OWN logic.
