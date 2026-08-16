@@ -64,4 +64,7 @@ www/scripts/.venv/
 # and images/histograms.json, which are the committed source. Kept out of git for
 # the same reason the Markdown twins are: a pure function of committed bytes
 # should not be a second committed copy that can fall behind.
-www/images/meta/
+public/images/meta/
+
+# the composed readable tree for `bun run dev` (tools/compose-dev.mjs)
+.dev/

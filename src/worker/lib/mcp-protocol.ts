@@ -14,7 +14,7 @@
 // because its Vitest pool boots from `cal/src/index.js` alone, so a cal ->
 // holding import would make cal untestable without the site tree. Serendipity
 // has no such constraint and already imports `lib/desktop.js` and
-// `lib/crawl.js`; the serendipity -> www/lib direction is established.
+// `lib/crawl.js`; the serendipity -> public/lib direction is established.
 //
 // Nothing here may import `cloudflare:workers` (gotcha 16): both importers are
 // pulled into contract-tests.mjs under plain node.

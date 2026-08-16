@@ -2083,7 +2083,7 @@ export async function handleLensBrowser(request, env, ctx) {
     // WebMCP discovery is currently a Chrome-beta lab capability, not a
     // production Browser Run binding capability. The local helper performs
     // the real runtime listing; this field keeps that boundary explicit.
-    webmcp: { status: "lab-required", detail: "Runtime WebMCP listing requires the local Browser Run Chrome-beta lab. Use scripts/lens-webmcp.mjs." },
+    webmcp: { status: "lab-required", detail: "Runtime WebMCP listing requires the local Browser Run Chrome-beta lab. Use tools/lens-webmcp.mjs." },
     fetchedBy: "Cloudflare Browser Run",
     // WHICH engine rendered this. A reader comparing two snapshots needs to know
     // whether they came from the same one, and "Browser Run" alone stopped being

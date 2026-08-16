@@ -59,7 +59,7 @@
 #
 # GPS data is intentionally NOT included (privacy).
 #
-# output: www/images/metadata.json, schema:
+# output: public/images/metadata.json, schema:
 #   { "01.jpg": { "camera": "...", ... }, "IMG_1234.heic": { ... } }
 
 set -euo pipefail

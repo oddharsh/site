@@ -32,7 +32,7 @@ The generator always emits the quiz data block and `/quiz.js`, so a new page
 cannot silently omit the understanding check.
 
 > **`generate.mjs wire` is stale. Do not run it.** It predates
-> [`scripts/gen-manifest.mjs`](../scripts/gen-manifest.mjs), which now owns the
+> [`tools/gen-manifest.mjs`](../scripts/gen-manifest.mjs), which now owns the
 > `generated:garage-pages` fence in `nav.js` and derives it from
 > `site-manifest.json`. `wire` also wants to own `garage/index.html` and
 > `sitemap.xml`, which are deliberately hand-authored: the shelf cards are

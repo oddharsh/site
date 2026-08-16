@@ -8,7 +8,7 @@ import { esc, wantsMarkdown } from "./lib/http.ts";
 export async function handleSecurityCenter(request, env) {
   // The prose here is static; only the three connection values below are
   // per-request, and the twin says so and points at /whoareyou.json for them.
-  // Hand-authored (www/md/security.md) because this page renders from a
+  // Hand-authored (src/content/md/security.md) because this page renders from a
   // template literal, and build.mjs fails the deploy if the twin drifts from
   // lib/security.js, which is where the header values it quotes actually live.
   // x-robots-tag rides along because the HTML sets it: a Markdown rendering of a

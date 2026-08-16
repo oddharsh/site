@@ -372,7 +372,7 @@ export async function servePrecompressedShell(request, env) {
 
   // ── dcz: the delta path ────────────────────────────────────────────────────────
   // A Chromium client that accepted our Use-As-Dictionary offer sends back the SHA-256
-  // of the shell bytes it already holds. scripts/gen-shell-deltas.mjs has precomputed
+  // of the shell bytes it already holds. tools/gen-shell-deltas.mjs has precomputed
   // zstd-against-that-dictionary offline, so serving the diff is a filename lookup:
   // /ad/<base>.<hash8>.<dicttag>.dcz. The first real one: luna.css in 115 bytes instead
   // of 7,615, a 98.5% cut, from an ordinary CSS change.

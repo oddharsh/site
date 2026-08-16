@@ -43,7 +43,7 @@
 # With just two bodies it's near-binary today — the visual variety will come
 # from aspect ratios, not this — but it future-proofs the moment a 3rd body lands.
 #
-# After running, re-run hash-thumbnails.sh: it re-hashes each tier into www/i/
+# After running, re-run hash-thumbnails.sh: it re-hashes each tier into public/i/
 # and rewrites images/hashes.json. A re-encode mints a NEW content-addressed URL,
 # so there is nothing to bust (THUMB_VERSION is gone; it only ever survived in the
 # legacy-fallback URL shape).
@@ -54,7 +54,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_DIR="$( cd "$SCRIPT_DIR/../.." && pwd )"
-DEST="$PROJECT_DIR/www/images"
+DEST="$PROJECT_DIR/public/images"
 SRC="${1:-/Users/aadharsh/Downloads/to post (from ssd)}"
 SQ="${SQ:-600}"        # desktop square edge
 SQ_SM="${SQ_SM:-400}"  # mobile square edge (filename suffix; must match THUMB_SMALL_PX)
@@ -135,12 +135,12 @@ find_source() {
   return 1
 }
 
-# Enumerate published stems from the content-hashed JPG tiles in www/i/. The
+# Enumerate published stems from the content-hashed JPG tiles in public/i/. The
 # old images/*.jpg location emptied out in the /i/ cutover, so globbing $DEST would
 # match nothing (and, with no nullglob, silently loop once on the literal glob).
-STEMS=$(for j in "$PROJECT_DIR/www/i/"*.jpg; do b=$(basename "$j" .jpg); echo "${b%.*}"; done | sort -u)
+STEMS=$(for j in "$PROJECT_DIR/public/i/"*.jpg; do b=$(basename "$j" .jpg); echo "${b%.*}"; done | sort -u)
 TOTAL=$(echo "$STEMS" | grep -c . || true)
-[ "$TOTAL" -gt 0 ] || { echo "error: no published thumbnails found in www/i/ (expected the content-hashed JPG tiles)" >&2; exit 1; }
+[ "$TOTAL" -gt 0 ] || { echo "error: no published thumbnails found in public/i/ (expected the content-hashed JPG tiles)" >&2; exit 1; }
 echo "re-encoding $TOTAL thumbnails as ${SQ}×${SQ} / ${SQ_SM}×${SQ_SM} center squares  (zenc q${ZENC_Q} + AVIF via $AVIF_ENCODER)"
 echo "  source: $SRC"
 echo ""

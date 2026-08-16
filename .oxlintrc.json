@@ -6,7 +6,7 @@
   // captured off the wire, and `pretext.lib.js` is @chenglou/pretext 0.0.7
   // vendored same-origin so /garage/pretext can load it under `script-src
   // 'self'`. Linting either one reports on somebody else's minifier.
-  "ignorePatterns": ["www/a-dict/**", "www/garage/pretext.lib.js", ".build/**", "tools/oxlint/anti-slop/**"],
+  "ignorePatterns": ["src/dict/a-dict/**", "public/garage/pretext.lib.js", ".build/**", "tools/oxlint/anti-slop/**"],
 
   // NAMING ANY PLUGIN REPLACES THE DEFAULT SET, so this list has to restate the
   // four that were on implicitly. Measured 2026-08-15: with `"plugins":
@@ -226,7 +226,7 @@
       // through the parse layer would assert that the parse layer works, not
       // that the surface under test returns the right type. Same scoping as the
       // no-floating-promises entry below, and for a related reason.
-      "files": ["scripts/contract-tests.test.mjs", "**/test/**", "**/*.test.*"],
+      "files": ["tools/contract-tests.test.mjs", "**/test/**", "**/*.test.*"],
       "rules": { "anti-slop/no-runtime-typeof": "off" }
     },
     {
@@ -243,7 +243,7 @@
       // Scoped to test files by name so the rule keeps its teeth everywhere a
       // Worker actually runs, which is the only place a floating promise gets
       // cancelled at request teardown.
-      "files": ["scripts/contract-tests.test.mjs", "**/test/**", "**/*.test.*"],
+      "files": ["tools/contract-tests.test.mjs", "**/test/**", "**/*.test.*"],
       "rules": { "typescript/no-floating-promises": "off" }
     },
     {

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // gen-photo-semantics.mjs — retrieval terms for every photo, written to
-// www/images/semantics.json as {stem: {terms, from}}.
+// public/images/semantics.json as {stem: {terms, from}}.
 //
 // ── why this exists ───────────────────────────────────────────────────────
 // queryPhotos ranks a query against the caption and the EXIF. Both are narrow.
@@ -47,13 +47,13 @@ import { fileURLToPath } from "node:url";
 
 // ROOT is the REPO root, matching every sibling in this directory. It used to be
 // dirname(dirname(here)), which resolved to www/ only because this script lived
-// at www/scripts — the one script here that did not use "../..", and therefore
+// at public/scripts — the one script here that did not use "../..", and therefore
 // the one the move to tools/photos would have silently repointed at tools/.
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const META = path.join(ROOT, "www", "images", "metadata.json");
-const HASHES = path.join(ROOT, "www", "images", "hashes.json");
-const ALT = path.join(ROOT, "www", "images", "alt.json");
-const OUT = path.join(ROOT, "www", "images", "semantics.json");
+const META = path.join(ROOT, "public", "images", "metadata.json");
+const HASHES = path.join(ROOT, "public", "images", "hashes.json");
+const ALT = path.join(ROOT, "public", "images", "alt.json");
+const OUT = path.join(ROOT, "public", "images", "semantics.json");
 
 const WANT_VISION = process.argv.includes("--vision");
 const DRY_RUN = process.argv.includes("--dry-run");
@@ -146,7 +146,7 @@ function derivedTerms(record) {
 async function visionTerms(stem, hashes) {
   const entry = hashes[stem] || {};
   if (!entry.j) throw new Error(`${stem} missing from hashes.json (half-run pipeline?)`);
-  const file = path.join(ROOT, "www", "i", `${stem}.${entry.j}.jpg`);
+  const file = path.join(ROOT, "public", "i", `${stem}.${entry.j}.jpg`);
   const image = Array.from(fs.readFileSync(file));
   const body = JSON.stringify({ image, prompt: VISION_PROMPT, max_tokens: 128 });
   if (DRY_RUN) {

@@ -3,10 +3,10 @@
 # hash-thumbnails.sh — content-address the published thumbnails (migration
 # duty 4, first run 2026-07-03) and keep them addressed on every photo add.
 #
-# For every tier file in www/images/ (<stem>.avif, <stem>.jpg,
+# For every tier file in public/images/ (<stem>.avif, <stem>.jpg,
 # <stem>-400.avif) this computes sha256, copies the bytes to
-# www/i/<name-with-.hash8-before-ext>, and writes
-# www/images/hashes.json ({stem: {a,j,s}}), which buildImagesManifest
+# public/i/<name-with-.hash8-before-ext>, and writes
+# public/images/hashes.json ({stem: {a,j,s}}), which buildImagesManifest
 # reads to bake /i/ URLs into the photo manifest. A URL is born with its
 # bytes, so the ?v=THUMB_VERSION global-bump class and the 4h edge-404
 # poison class both die structurally; /images/<thumb> stays alive as a 301
@@ -15,8 +15,8 @@
 # Idempotent: re-running only adds/refreshes entries whose bytes changed
 # (a changed file gets a NEW hashed name; the old one is left for git rm).
 # The map is MERGED into the existing hashes.json, never rebuilt from scratch:
-# an incremental add only stages the NEW stems in www/images/ (the earlier
-# tiers were git-rm'd after they were hashed into www/i/), so a from-scratch
+# an incremental add only stages the NEW stems in public/images/ (the earlier
+# tiers were git-rm'd after they were hashed into public/i/), so a from-scratch
 # rebuild would drop every prior stem from the map and make buildImagesManifest
 # skip those photos. Merging keeps the full 1:1 map across incremental adds.
 #
@@ -101,7 +101,7 @@ with open(map_path, "w") as f:
 #   1. drop the un-hashed source tiers we just addressed — they live in /i/ now.
 #      metadata.json / alt.json / hashes.json / meta/ stay put.
 #   2. drop /i/ files a re-encode superseded (not referenced by the merged map),
-#      so www/i/ is 1:1 with hashes.json and check-photo-pipeline.mjs passes.
+#      so public/i/ is 1:1 with hashes.json and check-photo-pipeline.mjs passes.
 pruned_src = pruned_i = 0
 for stem in stems:
     for name in (f"{stem}.avif", f"{stem}.jpg", f"{stem}-400.avif", f"{stem}-200.avif"):

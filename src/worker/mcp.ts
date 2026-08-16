@@ -34,7 +34,7 @@ import { asRecord, asText } from "./lib/parse.ts";
 // said "intentionally stateless" since it was written, and statelessness is
 // precisely what the new revision assumes. There was nothing to unwind.
 // Exported because the published server card is a PROJECTION of this server,
-// not a second hand-maintained description of it. scripts/gen-mcp-cards.mjs
+// not a second hand-maintained description of it. tools/gen-mcp-cards.mjs
 // imports these three, so the card cannot claim an identity the Worker does not
 // report at `initialize`.
 export const SITE_MCP_SERVER_INFO = { name: "aadhar.sh", title: "Aadharsh Site", version: "2.1.0" };

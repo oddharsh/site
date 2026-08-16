@@ -24,8 +24,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const IMAGES = path.join(ROOT, "www/images");
-const HASHED = path.join(ROOT, "www/i");
+const IMAGES = path.join(ROOT, "public/images");
+const HASHED = path.join(ROOT, "public/i");
 const hashes = JSON.parse(await readFile(path.join(IMAGES, "hashes.json"), "utf8"));
 
 const digest = async (file) => createHash("sha256").update(await readFile(file)).digest("hex");

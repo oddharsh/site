@@ -24,7 +24,7 @@ Usage:
     python3 tools/photos/gen-pixel-peeper.py            # full rebuild
     python3 tools/photos/gen-pixel-peeper.py --dry-run  # measure, write nothing
 
-Needs: zenc (cargo build in scripts/zenc), cjpegli, mozjpeg's cjpeg, sips,
+Needs: zenc (cargo build in tools/zenc), cjpegli, mozjpeg's cjpeg, sips,
 ssimulacra2, butteraugli_main, and Pillow.
 """
 

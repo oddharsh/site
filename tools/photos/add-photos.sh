@@ -2,7 +2,7 @@
 # add-photos.sh — process one or more SOOC photos into the site.
 #
 # per source file, this script:
-#   1. generates the grid thumbnails at www/images/<stem>.{jpg,avif} +
+#   1. generates the grid thumbnails at public/images/<stem>.{jpg,avif} +
 #      <stem>-<SQ_SM>.avif — PRE-CROPPED CENTER SQUARES (what the grid shows:
 #      aspect-ratio:1 + object-fit:cover), metadata-stripped. mirrors
 #      reencode-thumbnails.sh exactly (keep the two encode paths in sync).
@@ -29,7 +29,7 @@
 #      serving/sharing, not cold storage of originals.
 #
 # post-processing:
-#   4. regenerates www/images/metadata.json + per-stem images/meta/<stem>.json
+#   4. regenerates public/images/metadata.json + per-stem images/meta/<stem>.json
 #      (EXIF for the tooltip) and bakes the 64-bin RGB+luma histograms into
 #      meta.hist via `zenc histogram` — the tooltip renders the bars from
 #      that field, and the metadata regen drops it, so the bake runs right after
@@ -77,7 +77,7 @@ PROJECT_DIR="$( cd "$SCRIPT_DIR/../.." && pwd )"
 # photo run. `check-wrangler` enforces one version across the Worker projects
 # and could not see this, because a shell script is not a package.json.
 WRANGLER="$PROJECT_DIR/node_modules/.bin/wrangler"
-DEST="$PROJECT_DIR/www/images"
+DEST="$PROJECT_DIR/public/images"
 TMP="/tmp/aadhar-add-photos-$$"
 
 # square thumbnail edges (px). the file IS the displayed pixels (center square),
@@ -400,7 +400,7 @@ echo ""
 
 # ── phase 4: content-hash the new tiers + photo index + metadata ─────
 echo "phase 4 — hash tiers + photo index + metadata regen"
-# content-address every tier into www/i/ + refresh hashes.json (the
+# content-address every tier into public/i/ + refresh hashes.json (the
 # worker bakes /i/ URLs from that map; idempotent, only new bytes copy)
 "$SCRIPT_DIR/hash-thumbnails.sh" 2>&1 | tail -1
 
@@ -473,7 +473,7 @@ fi
 "$ZENC" histogram --root "$PROJECT_DIR/www" 2>&1 | tail -1
 
 # caption anything still missing alt text. runs AFTER hash-thumbnails.sh because
-# it reads the committed www/i/ square via hashes.json and posts those exact
+# it reads the committed public/i/ square via hashes.json and posts those exact
 # bytes to Workers AI — no round trip to production, so a photo added seconds ago
 # gets captioned here rather than waiting for a deploy. resumable and idempotent:
 # already-captioned stems cost nothing. a 429 (the free 10k neurons/day) stops it

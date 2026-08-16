@@ -35,7 +35,7 @@ For every input, the pipeline:
 
 1. decodes and bakes EXIF orientation;
 2. emits a 600px JPG fallback, a 600px AVIF, and a 400px mobile AVIF;
-3. content-addresses those three tiers under `www/i/`;
+3. content-addresses those three tiers under `public/i/`;
 4. regenerates nullable EXIF/Fuji-recipe metadata;
 5. bakes four 64-bin RGB/luminance histograms from the shipped hashed JPG;
 6. validates the complete artifact graph with `pnpm run photos:check`;

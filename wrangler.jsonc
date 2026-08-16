@@ -12,7 +12,7 @@
   // request". It is a deterministic document now and carries the same q11 twin, dcz
   // delta, and ETag as every other page.)
   //
-  // UNBYPASSABLE BUILD: main + assets point at .build/www (the minified
+  // UNBYPASSABLE BUILD: main + assets point at .build/public (the minified
   // tree), and the "build" block below runs build.mjs FIRST on every deploy.
   // So `wrangler deploy` (bare), `pnpm run deploy:direct`, and Workers Builds all ship
   // the minified shells + luna.css — there is no longer a path that serves the
@@ -41,7 +41,7 @@
   // fails if the two stop agreeing.
   "account_id": "1c99acdb6141579023fb97d24261ea58",
   "main": ".build/src/worker/index.ts",
-  "build": { "command": "node scripts/build.mjs" },
+  "build": { "command": "node tools/build.mjs" },
   "compatibility_date": "2026-06-01",
   // Deploy-only. Measured 2026-08-16: 274.45 -> 227.67 KiB gzip (17.0% off).
   // Keep the local-dev twin readable; uploaded source maps retain original stack
@@ -91,7 +91,7 @@
     { "pattern": "cal.aadhar.sh/*", "zone_name": "aadhar.sh" }
   ],
   "assets": {
-    "directory": ".build/www",
+    "directory": ".build/public",
     "binding": "ASSETS",
     // canonical URLs carry NO trailing slash (sitemap.xml, both rel=canonical tags,
     // llms.txt and nav.js's own normalization all say so). drop-trailing-slash makes

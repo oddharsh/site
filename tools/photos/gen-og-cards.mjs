@@ -42,7 +42,7 @@ import path from "node:path";
 import { OG_PAGE_DIRS } from "./og-pages.mjs";
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
-const HOLDING = path.join(ROOT, "www");
+const HOLDING = path.join(ROOT, "src", "pages");
 const OUT = path.join(HOLDING, "og");
 const BASE = (process.env.OG_BASE || "https://aadhar.sh").replace(/\/$/, "");
 const LOCAL = /^https?:\/\/(localhost|127\.0\.0\.1)/.test(BASE);
@@ -345,7 +345,7 @@ async function main() {
 
   const ok = results.filter(r => !r.error).length;
   const fb = results.filter(r => r.usedFallback).length;
-  console.log(`\n${ok}/${results.length} cards written to www/og/  (${fb} used the window fallback)`);
+  console.log(`\n${ok}/${results.length} cards written to public/og/  (${fb} used the window fallback)`);
   if (fb) console.log("fallback pages may want a hero selector in HERO{} — check the gallery.");
 }
 

@@ -110,7 +110,7 @@ jobs:
 
       # The route oracle, pre-merge. createTestHarness() boots the site Worker
       # in-process (honouring wrangler.jsonc's build.command, so it serves the
-      # minified .build/www tree) and verify-routes.mjs sweeps it. This is
+      # minified .build/public tree) and verify-routes.mjs sweeps it. This is
       # status + content-type + markers for real; it is NOT a data check, since
       # local KV/R2/D1 come up empty. See MAINTENANCE.md "Verify the whole route
       # surface" for what the `remote: true` rows sit out and why.
@@ -287,7 +287,7 @@ jobs:
           esac
 
       - name: Resolve the account id from wrangler.jsonc
-        run: node scripts/print-account-id.mjs >> "$GITHUB_ENV"
+        run: node tools/print-account-id.mjs >> "$GITHUB_ENV"
 
       - name: Check infrastructure declaration
         env:

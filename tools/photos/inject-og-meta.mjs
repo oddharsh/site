@@ -16,7 +16,7 @@ import path from "node:path";
 import { OG_PAGE_DIRS } from "./og-pages.mjs";
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
-const HOLDING = path.join(ROOT, "www");
+const HOLDING = path.join(ROOT, "src", "pages");
 const SITE = "https://aadhar.sh";
 const CHECK = process.argv.includes("--check");
 // diagnostic/test harnesses that get no card (must match gen-og-cards.mjs)
