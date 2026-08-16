@@ -6,6 +6,8 @@ const TTFB_DELTA_MS = 20;
 const TTFB_DELTA_RATIO = 0.20;
 const INP_FLOOR_MS = 16;
 const CLS_DELTA = 0.02;
+const TRANSFER_DELTA_BYTES = 64 * 1024;
+const TRANSFER_DELTA_RATIO = 0.20;
 
 const finite = (value, label) => {
   if (!Number.isFinite(value)) throw new Error(`${label} is not a finite number`);
@@ -19,6 +21,13 @@ const slower = (base, candidate, ms = LOAD_DELTA_MS, fraction = LOAD_DELTA_RATIO
   candidate - base >= ms && ratio(base, candidate) >= 1 + fraction;
 const clsFaster = (base, candidate) =>
   (base > 0.1 && candidate <= 0.1) || (base - candidate >= CLS_DELTA && candidate <= base * 0.9);
+const transferFaster = (baseBytes, candidateBytes, baseRequests, candidateRequests) =>
+  baseBytes - candidateBytes >= TRANSFER_DELTA_BYTES &&
+  ratio(baseBytes, candidateBytes) <= 1 - TRANSFER_DELTA_RATIO &&
+  candidateRequests < baseRequests;
+const transferSlower = (base, candidate) =>
+  candidate - base >= TRANSFER_DELTA_BYTES &&
+  ratio(base, candidate) >= 1 + TRANSFER_DELTA_RATIO;
 
 const browserMajor = (value) => String(value || "").match(/\d+/)?.[0] || "unknown";
 
@@ -78,6 +87,10 @@ function compareNavigation(base, candidate) {
     const cTtfb = finite(c?.ttfbMs?.median, `${pair.base.id} candidate TTFB median`);
     const bCls = finite(b?.cls?.max, `${pair.base.id} base CLS max`);
     const cCls = finite(c?.cls?.max, `${pair.base.id} candidate CLS max`);
+    const bTransfer = finite(b?.transferBytes?.median, `${pair.base.id} base transfer median`);
+    const cTransfer = finite(c?.transferBytes?.median, `${pair.base.id} candidate transfer median`);
+    const bRequests = finite(b?.requestCount?.median, `${pair.base.id} base request median`);
+    const cRequests = finite(c?.requestCount?.median, `${pair.base.id} candidate request median`);
     const reasons = [];
     const improvements = [];
 
@@ -86,8 +99,12 @@ function compareNavigation(base, candidate) {
     if (slower(bFcp, cFcp)) reasons.push("FCP median regressed");
     if (slower(bTtfb, cTtfb, TTFB_DELTA_MS, TTFB_DELTA_RATIO)) reasons.push("TTFB median regressed");
     if ((cCls > 0.1 && bCls <= 0.1) || cCls - bCls >= CLS_DELTA) reasons.push("CLS regressed");
+    if (transferSlower(bTransfer, cTransfer)) reasons.push("initial transfer regressed");
     if (faster(bLcp, cLcp)) improvements.push("LCP median materially improved");
     if (clsFaster(bCls, cCls)) improvements.push(`CLS materially improved (${bCls.toFixed(3)} → ${cCls.toFixed(3)})`);
+    if (transferFaster(bTransfer, cTransfer, bRequests, cRequests)) {
+      improvements.push(`initial transfer materially improved (${bTransfer} B → ${cTransfer} B; ${bRequests} → ${cRequests} requests)`);
+    }
 
     rows.push({
       id: pair.base.id,
@@ -98,7 +115,16 @@ function compareNavigation(base, candidate) {
       improved: improvements.length > 0,
       improvements,
       reasons,
-      detail: { baseP75: bTail, candidateP75: cTail, baseCls: bCls, candidateCls: cCls },
+      detail: {
+        baseP75: bTail,
+        candidateP75: cTail,
+        baseCls: bCls,
+        candidateCls: cCls,
+        baseTransfer: bTransfer,
+        candidateTransfer: cTransfer,
+        baseRequests: bRequests,
+        candidateRequests: cRequests,
+      },
     });
   }
   return rows;
@@ -167,7 +193,7 @@ export function renderComparison(result) {
   const lines = [
     `# Performance experiment: ${result.decision}`,
     "",
-    `\`${result.base}\` → \`${result.candidate}\` · normalized geomean ${result.score.toFixed(3)} (${result.speedup.toFixed(2)}×)`,
+    `\`${result.base}\` → \`${result.candidate}\` · LCP geomean ${result.score.toFixed(3)} (${result.speedup.toFixed(2)}×)`,
     "",
     "| scenario | base | candidate | delta | verdict |",
     "|---|--:|--:|--:|---|",
@@ -179,7 +205,7 @@ export function renderComparison(result) {
   lines.push(
     "",
     result.decision === "promote"
-      ? "At least one user-visible metric materially improved with no protected regression. Latency needs both 10% and 16 ms; CLS must cross into the good range or improve by at least 0.02 and 10%. Correctness and wire-size checks still have to pass."
+      ? "At least one user-visible metric materially improved with no protected regression. Latency needs both 10% and 16 ms; CLS must cross into the good range or improve by at least 0.02 and 10%; initial transfer needs both 20% and 64 KiB plus fewer requests. Correctness and wire-size checks still have to pass."
       : result.decision === "reject"
         ? "A protected scenario regressed. Keep any useful idea in its beam, but do not promote this candidate as measured."
         : "The movement is below the lab's resolution. Record it as inconclusive; do not promote it as a performance win.",
@@ -197,4 +223,6 @@ export const PERF_RESEARCH_THRESHOLDS = Object.freeze({
   ttfbDeltaRatio: TTFB_DELTA_RATIO,
   inpFloorMs: INP_FLOOR_MS,
   clsDelta: CLS_DELTA,
+  transferDeltaBytes: TRANSFER_DELTA_BYTES,
+  transferDeltaRatio: TRANSFER_DELTA_RATIO,
 });

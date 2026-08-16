@@ -29,13 +29,15 @@ Improve a measured user-visible scenario without slowing another protected scena
 
 A candidate receives one of three decisions:
 
-- `promote`: one scenario materially improves and no protected scenario materially regresses. Latency needs at least 10 percent and 16 ms; CLS must cross from above 0.1 to at most 0.1, or improve by at least 0.02 and 10 percent.
-- `reject`: LCP, FCP, TTFB, CLS, or interaction latency crosses a regression guardrail.
+- `promote`: one scenario materially improves and no protected scenario materially regresses. Latency needs at least 10 percent and 16 ms; CLS must cross from above 0.1 to at most 0.1, or improve by at least 0.02 and 10 percent. Initial transfer can promote at 20 percent and 64 KiB when request count also falls.
+- `reject`: LCP, FCP, TTFB, CLS, initial transfer, or interaction latency crosses a regression guardrail.
 - `inconclusive`: movement stays below the lab's resolution. Record the result without claiming a win.
 
 Event Timing rounds durations to 8 ms. The 16 ms floor requires two quantization steps before the loop treats movement as evidence.
 
-The normalized geomean ranks candidates inside a beam. Promotion remains Pareto-style: a large win cannot hide a material loss elsewhere.
+The normalized LCP geomean ranks candidates inside a latency beam. Network
+candidates rank on initial transfer. Promotion remains Pareto-style: a large
+win cannot hide a material loss elsewhere.
 
 The navigation tail guard uses p75. Seven samples would make p90 equal the single maximum, so a lone cold outlier triggers a repeat instead of a rejection.
 
@@ -45,7 +47,11 @@ The loop uses three separate instruments because each answers a different questi
 
 1. `pnpm run perf:nav` measures cold LCP, FCP, TTFB, load time, CLS, request count, and transfer size across six page and viewport scenarios.
 2. `pnpm run inp` measures trusted Run interactions under CPU throttling. `--out` now writes raw samples and summaries as schema 1 JSON.
-3. `pnpm run perf:snapshot` compares deterministic wire bytes and Worker modules. It remains the authority for network cost.
+3. `pnpm run perf:snapshot` compares deterministic artifact bytes and Worker modules. It remains the authority for per-artifact wire cost.
+
+The navigation recorder answers which artifacts a fresh visit starts. The
+snapshot answers how large each artifact is. A scheduling change must pass both
+instruments because either one alone can miss a network regression.
 
 The navigation lab applies CPU throttling and creates a fresh browser context for every sample. It leaves CDP's Network domain detached because that domain suppresses Chrome's Early Hints behavior.
 
@@ -147,6 +153,47 @@ The browser candidate added 0.13 KiB Brotli to one page and changed no client
 asset. The build candidate reduced a full Wrangler dry run by 7.7 percent.
 Both passed the repository's local correctness and dry-run gates.
 
+## Third pass
+
+The third browser pass first revisited layout containment with a clean server
+pair. It moved mobile LWE LCP from 420 ms to 392 ms, but the 6.7 percent change
+remained below the latency gate. CLS moved by only 0.009. The loop recorded the
+result as inconclusive and removed the patch.
+
+The next trace found 23 startup requests that existed only to fill byte labels
+in offscreen demos. The page already lazy-loaded the matching images, but its
+measurement program fetched every file again at startup.
+
+| experiment | prediction | result | decision |
+|---|---|---|---|
+| defer live byte measurements by demo | remove offscreen fetches from a fresh visit | 20-pair initial transfer fell 371,246 B to 76,893 B and requests fell 33 to 10; median load fell 407.4 ms to 381.3 ms | promote, draft PR #427 |
+| overlap the HTML minifier's native load with staging | hide its 354 ms native startup cost behind file work | ten-pair build median fell 2.400 s to 2.366 s | reject |
+| replace `@minify-html/node` with a local tokenizer | remove a 16.2 MiB native dependency and its startup cost | ten-pair build median rose 2.138 s to 2.196 s; page DCZ bytes rose 467,234 to 508,706 | reject |
+| use copy-on-write staging on macOS | reduce the roughly 390 ms staging copy | the direct copy saved about 120 ms, but the full-build opportunity stayed below 10 percent and had no portable implementation | reject |
+
+The browser result does not claim an LCP win. Marginal medians moved 360 ms to
+384 ms, while the paired median moved by 4 ms and p75 stayed at 384 ms. Every
+candidate load completed faster, CLS stayed at 0.010, and the transfer change
+cleared both network floors by a wide margin. Chrome then confirmed that the
+six-row table, all 16 crop labels, and the chroma canvas initialized as their
+demos approached the scrollport.
+
+The handwritten minifier trial tested the dependency-replacement path directly.
+Removing structural minification made Brotli and dictionary compression do more
+work. A bespoke tokenizer restored ordinary page Brotli from 516.2 KiB to
+500.9 KiB, close to the 500.5 KiB baseline, but it still made the build 2.7
+percent slower and grew dictionary deltas by 8.9 percent. The dependency's
+contract includes stable canonical bytes for historical dictionaries, not only
+valid compact HTML. That family is closed unless a replacement can reproduce
+that contract and beat the end-to-end build.
+
+The remaining profiles expose no obvious low-risk pass at the current gate.
+Browser traces now top out around half a second in the tested routes. The build's
+largest parent-process leaf is native HTML-minifier loading, but hiding or
+removing it lost. Copy staging has no portable full-build win. The installed
+graph's only actionable duplicate is the already rejected esbuild patch split;
+the other large packages are distinct native tools or platform alternatives.
+
 ## Experiment loop
 
 Start with a profile or a measured slow scenario. Write one sentence that predicts which cost will move and why.
@@ -157,7 +204,7 @@ Maintain a small beam when evidence supports it:
 - a near-miss family with a repeatable isolated win;
 - a structural family aimed at a different profiled cost.
 
-The first trial established the navigation baseline, killed two unsupported families, and promoted one shell-stability fix. Start the next beam from a newly profiled material cost, not from one of the rejected patches.
+The first three passes established the navigation baseline, killed the unsupported families, and promoted six independent browser, build, and dependency wins. Start the next beam from a newly profiled material cost, not from one of the rejected patches.
 
 For each experiment:
 

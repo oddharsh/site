@@ -6463,13 +6463,15 @@ test("the twin list is generated, not committed", () => {
 
 test("performance research promotes measured wins but rejects protected regressions", async () => {
   const { compareReports } = await import("./lib/perf-research.mjs");
-  const navScenario = (id, lcp, cls = 0) => ({
+  const navScenario = (id, lcp, cls = 0, transfer = 100_000, requests = 10) => ({
     id, name: id,
     summary: {
       lcpMs: { median: lcp, p75: lcp + 12, p90: lcp + 20 },
       fcpMs: { median: lcp - 40 },
       ttfbMs: { median: 20 },
       cls: { max: cls },
+      transferBytes: { median: transfer },
+      requestCount: { median: requests },
     },
   });
   const report = (label, scenarios) => ({
@@ -6499,6 +6501,23 @@ test("performance research promotes measured wins but rejects protected regressi
   assert.equal(clsPromoted.decision, "promote");
   assert.deepEqual(clsPromoted.improvements, ["encoding"]);
   assert.match(clsPromoted.rows[0].improvements.join(" "), /CLS materially improved/);
+
+  // Fetch scheduling is user-visible work even when render time stays inside
+  // the noise floor. The bytes and request count must agree so moving one
+  // request into a larger bundle cannot look like a network win.
+  const eager = report("eager", [navScenario("encoding", 360, 0.01, 371_246, 33)]);
+  const lazy = report("lazy", [navScenario("encoding", 384, 0.01, 76_893, 10)]);
+  const networkPromoted = compareReports(eager, lazy);
+  assert.equal(networkPromoted.decision, "promote");
+  assert.match(networkPromoted.rows[0].improvements.join(" "), /initial transfer materially improved/);
+
+  const heavy = report("heavy", [navScenario("home", 224, 0, 230_000, 10)]);
+  const transferRejected = compareReports(
+    report("light", [navScenario("home", 240, 0, 100_000, 10)]),
+    heavy,
+  );
+  assert.equal(transferRejected.decision, "reject");
+  assert.match(transferRejected.regressions[0].reasons.join(" "), /initial transfer regressed/);
 });
 
 test("performance research calls sub-resolution INP movement inconclusive", async () => {
