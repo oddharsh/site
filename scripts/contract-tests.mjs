@@ -6676,6 +6676,72 @@ test("a ?lens= deep link works for every tab in the strip", async () => {
   }
 });
 
+test("the idle Lens shell defers its full client without losing the first action", () => {
+  const server = readFileSync("./www/_worker.js/lens.js", "utf8");
+  const boot = readFileSync("./www/lens-boot.js", "utf8");
+  const build = readFileSync("./scripts/build.mjs", "utf8");
+
+  assert.match(server, /scripts: `<script src="\/lens-boot\.js" defer><\/script>`/,
+    "the server-rendered idle shell must load only the bootstrap");
+  assert.doesNotMatch(server, /scripts: `<script src="\/lens\.js"/,
+    "the full Lens application must not sit on the passive render path");
+  assert.match(boot, /import\("\/lens\.js\?v=1"\)/,
+    "the bootstrap must load the full application through the build's hashable specifier");
+  assert.match(boot, /root\.addEventListener\("click", click, true\)/,
+    "a cold button click must be captured before the unloaded application can miss it");
+  assert.match(boot, /root\.addEventListener\("submit", submit, true\)/,
+    "a cold form submission must be captured before the unloaded application can miss it");
+  assert.match(boot, /form\.requestSubmit\(submitter \|\| undefined\)/,
+    "the first form action must be replayed with its original submitter");
+
+  // The capture click handler calls stopImmediatePropagation, so its ROOT decides
+  // which buttons wait on a module they may not need. nav.js injects Back and
+  // Forward into every window title bar, outside .content, so a document-level
+  // binding made the shell's own chrome pay for the Lens client. Assert the
+  // negative too: the four listeners moving back to `document` is the exact
+  // regression, and only the positive match would still pass if both existed.
+  assert.doesNotMatch(boot, /document\.addEventListener\(/,
+    "the bootstrap must bind inside the Lens UI, never on the document the desktop shell shares");
+  assert.match(boot, /form\.closest\("\.content"\)/,
+    "the Lens content root is the scope, so shell chrome outside it stays instant");
+
+  // The eager-hydrate list is a COPY of what the client reads off the URL, and a
+  // copy pinned to a literal cannot notice the original growing: adding a sixth
+  // parameter to lens.js would leave this green while that deep link rendered
+  // the idle shell. Derive the expectation from the client instead. This is the
+  // same failure the ?lens= tab list already had once, where a hand-written array
+  // of six sat beside a strip of eight.
+  const client = readFileSync("./www/lens.js", "utf8");
+  const holders = new Set(
+    [...client.matchAll(/(\w+)\s*=\s*new URLSearchParams\(location\.search\)\s*;/g)].map((m) => m[1]),
+  );
+  const read = new Set();
+  for (const m of client.matchAll(/new URLSearchParams\(location\.search\)\.(?:get|has)\("([\w-]+)"\)/g)) read.add(m[1]);
+  for (const name of holders) {
+    for (const m of client.matchAll(new RegExp(`\\b${name}\\.(?:get|has)\\("([\\w-]+)"\\)`, "g"))) read.add(m[1]);
+  }
+  // A scanner that matches nothing reports a pass, which is how the twin-facts
+  // check and the CSP attribute scan each shipped asserting zero. Floor it.
+  assert.ok(read.size >= 5, `lens.js URL-parameter scan found ${read.size} reads, so the pattern stopped matching`);
+  const hydrated = new Set(
+    (boot.match(/\[(?:\s*"[\w-]+",?)+\s*\]/) || [""])[0].match(/"([\w-]+)"/g)?.map((q) => q.slice(1, -1)) || [],
+  );
+  for (const key of read) {
+    assert.ok(hydrated.has(key), `lens.js reads ?${key}= but lens-boot.js will not eagerly hydrate for it`);
+  }
+
+  assert.match(build, /\["lens-boot\.js", "\/lens-boot\.src\.js", "requestSubmit"\]/,
+    "the bootstrap must be minified with a readable source twin");
+  assert.match(build, /\{ file: "\/lens\.js",\s+base: "lens"/,
+    "the full client must be content-hashed as a string-loaded dependency");
+  assert.match(build, /from: "\/lens-boot\.js",\s+base: "lens-boot"/,
+    "the shell must receive the final content-hashed bootstrap");
+  assert.ok(build.indexOf('{ file: "/lens-tools.js"') < build.indexOf('{ file: "/lens.js"'),
+    "Lens feature modules must be hashed before the application that loads them");
+  assert.ok(build.indexOf("for (const a of STRING_ASSETS)") < build.indexOf("for (const a of ASSETS)"),
+    "string-loaded applications must be hashed before the shell assets that import them");
+});
+
 test("the reader never renders an unmeasurable phase as 0 ms", () => {
   const client = readFileSync("./www/lens-reader.js", "utf8");
   // A Worker's clock advances across I/O and never during synchronous execution,
