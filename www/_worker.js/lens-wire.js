@@ -57,6 +57,8 @@ import { BOT_UA } from "./lib/botauth.js";
 // them, and a second copy is the drift the LENS_BUDGETS contract test refuses.
 import { BROWSER_FREE_PLAN, LENS_BUDGETS, lensSha256Hex, overLensBudget } from "./lens.js";
 import { EXECUTION_PROBE } from "./lib/agent-execution.js";
+import { isCallable } from "./lib/parse.js";
+import { asText } from "./lib/parse.js";
 
 const CDP_BASE = "https://localhost/v1/devtools/browser";
 
@@ -271,7 +273,7 @@ function cdpClient(ws) {
 
   ws.addEventListener("message", (ev) => {
     let msg;
-    try { msg = JSON.parse(typeof ev.data === "string" ? ev.data : ""); } catch { return; }
+    try { msg = JSON.parse(asText(ev.data, "")); } catch { return; }
     if (msg.id && pending.has(msg.id)) {
       const { resolve, reject } = pending.get(msg.id);
       pending.delete(msg.id);
@@ -397,7 +399,7 @@ async function runWireSession(env, url) {
     if (execDomains) {
       try {
         const r = await cdp.send("Runtime.evaluate", { expression: EXECUTION_PROBE, returnByValue: true, awaitPromise: false }, pageSession);
-        const raw = r && r.result && typeof r.result.value === "string" ? JSON.parse(r.result.value) : null;
+        const raw = r && r.result && asText(r.result.value) !== null ? JSON.parse(r.result.value) : null;
         if (raw && !raw.probeError) {
           // Uncaught errors, counted off the events this session already
           // collected. Runtime.exceptionThrown is the page's own throw;
@@ -430,7 +432,7 @@ export async function handleLensWire(request, env, ctx) {
   const v = validateLensTarget(params.get("url") || "");
   if (!v.ok) return jsonResponse({ ok: false, error: v.error }, 400);
 
-  if (!env.BROWSER || typeof env.BROWSER.fetch !== "function") {
+  if (!env.BROWSER || !isCallable(env.BROWSER.fetch)) {
     return jsonResponse({ ok: false, error: "Browser Run is not configured on this deployment." }, 503);
   }
 

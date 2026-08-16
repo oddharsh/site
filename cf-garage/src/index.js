@@ -21,6 +21,9 @@ const json = (obj, status = 200) =>
 // present, and we time every span locally too — so /garage/cf/trace can return
 // the waterfall and the demo page can draw it without the dashboard.
 async function inSpan(tr, name, fn) {
+  // Capability probe on the injected tracer (gotcha 16's seam). This Worker is
+  // deployed on its own and does not import the site tree.
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof
   if (tr && typeof tr.enterSpan === "function") return tr.enterSpan(name, fn);
   return fn({ setAttribute() {}, isTraced: false });
 }
@@ -188,6 +191,8 @@ export default {
       // and return the locally-timed waterfall for the demo page to render.
       if (path === "/garage/cf/trace") {
         const tr = ctx && ctx.tracing;                 // present when the runtime supports it
+  // Capability probe on the injected tracer; separate Worker, own bundle.
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof
         const available = !!(tr && typeof tr.enterSpan === "function");
         const tt = Date.now();
         const spans = [];

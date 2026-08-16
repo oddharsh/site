@@ -24,6 +24,17 @@
 //     so the form is built with createElement and textContent, never innerHTML,
 //     and depth, property count and option count are all capped.
 (function () {
+  // The local parse layer. This file redeclares esc/section for the reason the
+  // header gives (no module graph on /lens), and the same constraint applies
+  // here: it cannot import _worker.js/lib/parse.js. Every value below arrives
+  // from a stranger's MCP server, so it is parsed once, by name, at the top.
+  /* oxlint-disable anti-slop/no-runtime-typeof -- a hand-rolled parser is made
+     of typeof; keeping those checks in these three lines is the whole point. */
+  function asText(v) { return typeof v === "string" && v !== "" ? v : null; }
+  function asNumber(v) { return typeof v === "number" && isFinite(v) ? v : null; }
+  function asRecord(v) { return v !== null && typeof v === "object" && !Array.isArray(v) ? v : null; }
+  /* oxlint-enable anti-slop/no-runtime-typeof */
+
   function esc(s) {
     return String(s == null ? "" : s)
       .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -74,7 +85,7 @@
 
   function planField(name, schema, required, depth) {
     var base = { name: name, required: !!required, description: "", constraints: [] };
-    if (!schema || typeof schema !== "object" || Object.prototype.toString.call(schema) === "[object Array]") {
+    if (!asRecord(schema) || Object.prototype.toString.call(schema) === "[object Array]") {
       return { name: name, required: !!required, description: "", constraints: [], kind: "json", why: "no schema for this property" };
     }
     base.description = trim(schema.description, PLAN_LIMITS.desc);
@@ -93,7 +104,7 @@
       var all = schema.enum;
       base.kind = "select";
       base.options = all.slice(0, PLAN_LIMITS.options).map(function (value) {
-        return { value: value, label: typeof value === "string" ? value : JSON.stringify(value) };
+        return { value: value, label: asText(value) === null ? JSON.stringify(value) : value };
       });
       base.truncated = all.length > base.options.length ? all.length - base.options.length : 0;
       return base;
@@ -118,13 +129,13 @@
 
     if (t.type === "array") {
       var items = schema.items;
-      if (!items || typeof items !== "object" || Object.prototype.toString.call(items) === "[object Array]") {
+      if (!asRecord(items) || Object.prototype.toString.call(items) === "[object Array]") {
         base.kind = "json"; base.why = items ? "tuple-style items" : "array with no item schema"; return base;
       }
       if (Object.prototype.toString.call(items.enum) === "[object Array]") {
         base.kind = "multiselect";
         base.options = items.enum.slice(0, PLAN_LIMITS.options).map(function (value) {
-          return { value: value, label: typeof value === "string" ? value : JSON.stringify(value) };
+          return { value: value, label: asText(value) === null ? JSON.stringify(value) : value };
         });
         base.maxItems = schema.maxItems;
         return base;
@@ -167,7 +178,7 @@
   }
 
   function planForm(inputSchema) {
-    if (!inputSchema || typeof inputSchema !== "object") {
+    if (!asRecord(inputSchema)) {
       return { fields: [], notes: ["this tool published no inputSchema, so its arguments are unconstrained"], freeform: true };
     }
     var t = typeOf(inputSchema);
@@ -189,7 +200,7 @@
         var at = path ? path + "." + f.name : f.name;
         if (value === undefined || value === "") { if (f.required) problems.push({ at: at, why: "required" }); continue; }
         if (f.kind === "number") {
-          if (typeof value !== "number") problems.push({ at: at, why: "not a number" });
+          if (asNumber(value) === null) problems.push({ at: at, why: "not a number" });
           else {
             if (f.integer && Math.floor(value) !== value) problems.push({ at: at, why: "must be an integer" });
             if (f.min !== undefined && value < f.min) problems.push({ at: at, why: "below minimum " + f.min });
@@ -197,7 +208,7 @@
           }
         }
         if (f.maxItems !== undefined && value && value.length > f.maxItems) problems.push({ at: at, why: "more than " + f.maxItems + " items" });
-        if (f.kind === "group" && value && typeof value === "object") walk(f.fields, value, at);
+        if (f.kind === "group" && asRecord(value)) walk(f.fields, value, at);
         if (f.kind === "table" && value && value.length) {
           for (var j = 0; j < value.length; j++) walk(f.columns, value[j], at + "[" + j + "]");
         }
@@ -212,11 +223,11 @@
     // A field whose JSON did not parse contributes NOTHING to the frame. The
     // problem list says why the key is absent; inventing a placeholder would put
     // a byte on the wire the real call would never carry.
-    if (value && typeof value === "object" && value.__parseError) return undefined;
+    if (asRecord(value) && value.__parseError) return undefined;
     if (Object.prototype.toString.call(value) === "[object Array]") {
       return value.map(strip).filter(function (v) { return v !== undefined; });
     }
-    if (value && typeof value === "object") {
+    if (asRecord(value)) {
       var out = {}, keys = Object.keys(value);
       for (var i = 0; i < keys.length; i++) {
         var clean = strip(value[keys[i]]);

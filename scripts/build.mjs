@@ -1246,6 +1246,8 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   const root = resolve(OUT, "www");
   const assets = {
     async fetch(input) {
+  // A deliberate two-shape signature (string | Request), not a wire value.
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof
       const url = new URL(typeof input === "string" ? input : input.url);
       const rel = decodeURIComponent(url.pathname).replace(/^\/+/, "");
       if (!rel || rel.includes("..")) return new Response("not found", { status: 404 });

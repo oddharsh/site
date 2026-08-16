@@ -11,6 +11,7 @@ import { span } from "./lib/trace.js";
 import { documentTally, hasRenderEngine, runBrowserAction } from "./lens-render.js";
 import { lensRecipe, lensRecipeCatalog, lensRecipeIds, lensRecipeNonce, lensRecipeReceipt, lensRecipeScript } from "./lens-recipes.js";
 import { EXECUTION_META, executionChecks } from "./lib/agent-execution.js";
+import { asRecord, asText, isCallable } from "./lib/parse.js";
 
 // The glossary. This page's whole subject is protocol names, which is fine for
 // the audience that already has them and a wall for the audience that doesn't.
@@ -414,7 +415,7 @@ export const LENS_BUDGETS = {
 // alternative to an imperfect key here is no limit at all.
 export async function overLensBudget(budget, request, env) {
   const limiter = env && env[budget.binding];
-  if (!limiter || typeof limiter.limit !== "function") return false;
+  if (!limiter || !isCallable(limiter.limit)) return false;
   // A budget carrying a fixed `key` is a SHARED ceiling rather than a per-caller
   // one: everybody bills against the same bucket on purpose.
   const ip = budget.key || request.headers.get("cf-connecting-ip") || "0.0.0.0";
@@ -1692,7 +1693,7 @@ export async function handleLensCloudflareScore(request, env, ctx) {
     }
     if (env && env.RN_KV) {
       const write = env.RN_KV.put(cacheKey, JSON.stringify(parsed), { expirationTtl: CLOUDFLARE_SCORE_TTL });
-      if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(write);
+      if (ctx && isCallable(ctx.waitUntil)) ctx.waitUntil(write);
       else await write;
     }
     return jsonResponse({ ok: true, cached: false, ...parsed });
@@ -1739,7 +1740,7 @@ const LENS_GOTO = { waitUntil: "networkidle2", timeout: 18000 };
 export async function handleLensShot(request, env, ctx) {
   const v = validateLensTarget(new URL(request.url).searchParams.get("url") || "");
   if (!v.ok) return jsonResponse({ ok: false, error: v.error }, 400);
-  if (!env.BROWSER || typeof env.BROWSER.quickAction !== "function") return jsonResponse({ ok: false, error: "Browser Run is not configured on this deployment." }, 503);
+  if (!env.BROWSER || !isCallable(env.BROWSER.quickAction)) return jsonResponse({ ok: false, error: "Browser Run is not configured on this deployment." }, 503);
 
   // THE CACHE IS READ BEFORE THE BUDGETS, and the order is the point rather than
   // a micro-optimization. Every limit below exists to ration Browser Run: 6 calls
@@ -2759,6 +2760,10 @@ export async function originDiscovery(origin, hostname, env, opts = {}) {
   // `caches` is a Workers global and does not exist under plain node, where the
   // contract tests import this module. Absent cache means every call is a live
   // fan-out, which is exactly the previous behaviour.
+  // `caches` is a bare global that may be undeclared; referencing it to hand it
+  // to a parser would throw ReferenceError, so typeof is the only operator that
+  // can ask. The one class lib/parse.js cannot cover.
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof
   const cache = typeof caches !== "undefined" ? caches.default : null;
   const key = discoveryKey(origin);
 
@@ -2820,7 +2825,7 @@ export async function originDiscovery(origin, hostname, env, opts = {}) {
         // the blob over that ceiling — which does not error, it just stops
         // caching, so the site silently pays 28 probes on every future scan.
         // The shape check only needs the head of the document.
-        if (probe.ok && typeof probe.body === "string") {
+        if (probe.ok && asText(probe.body) !== null) {
           probe.entries = (probe.body.match(/<url>|<sitemap>/gi) || []).length;
           probe.body = probe.body.slice(0, 8 * 1024);
         }
@@ -3027,7 +3032,7 @@ export function lensParseJsonld(raw) {
     const obj = JSON.parse(trimmed);
     const types = new Set();
     (function walk(o) {
-      if (!o || typeof o !== "object") return;
+      if (!asRecord(o) && !Array.isArray(o)) return;
       if (Array.isArray(o)) return o.forEach(walk);
       if (o["@type"]) [].concat(o["@type"]).forEach((t) => types.add(String(t)));
       for (const k in o) walk(o[k]);
@@ -3394,7 +3399,7 @@ function lensJsonDoor(probe, validate, label) {
   }
   let j = null;
   try { j = JSON.parse(probe.body); } catch (_e) { return { present: false, note: "answered, but not JSON (SPA fallback?)" }; }
-  if (!j || typeof j !== "object" || !validate(j)) return { present: false, note: "JSON, but not " + label + "-shaped" };
+  if (!asRecord(j) || !validate(j)) return { present: false, note: "JSON, but not " + label + "-shaped" };
   return { present: true, json: j };
 }
 

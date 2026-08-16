@@ -55,6 +55,10 @@ async function hmac(secret, msg) {
   return [...new Uint8Array(sig)].map(b => b.toString(16).padStart(2, "0")).join("");
 }
 function timingSafeEq(a, b) {
+  // Same reasoning as lib/http.js: asText treats "" as absent, which is right at
+  // a boundary and wrong for a constant-time compare where two empty secrets must
+  // still compare equal. A precondition on an internal call, not a parse.
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof
   if (typeof a !== "string" || typeof b !== "string" || a.length !== b.length) return false;
   let d = 0; for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return d === 0;

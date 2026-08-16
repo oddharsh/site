@@ -15,13 +15,14 @@
 // because they are one string.
 import { readFile } from "node:fs/promises";
 import { parseJsonc } from "./lib/jsonc.mjs";
+import { asText } from "../www/_worker.js/lib/parse.js";
 
 const CONFIG = new URL("../wrangler.jsonc", import.meta.url);
 
 const config = parseJsonc(await readFile(CONFIG, "utf8"));
 const id = config?.account_id;
 
-if (!id || typeof id !== "string") {
+if (asText(id) === null) {
   console.error("print-account-id: wrangler.jsonc declares no account_id");
   process.exit(1);
 }
