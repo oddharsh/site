@@ -33,7 +33,7 @@
 #      (EXIF for the tooltip) and bakes the 64-bin RGB+luma histograms into
 #      meta.hist via `zenc histogram` — the tooltip renders the bars from
 #      that field, and the metadata regen drops it, so the bake runs right after
-#   5. writes the stem's entry into www/_worker.js/photo-index.json — the
+#   5. writes the stem's entry into src/worker/photo-index.json — the
 #      committed photo index the worker BUNDLES (which photos exist: R2 key,
 #      size, upload date). This is what makes a photo appear in the grid, and
 #      it ships at deploy like every other committed artifact. (It replaced the
@@ -404,7 +404,7 @@ echo "phase 4 — hash tiers + photo index + metadata regen"
 # worker bakes /i/ URLs from that map; idempotent, only new bytes copy)
 "$SCRIPT_DIR/hash-thumbnails.sh" 2>&1 | tail -1
 
-# ── the committed photo index (www/_worker.js/photo-index.json) ──
+# ── the committed photo index (src/worker/photo-index.json) ──
 # One entry per published stem: the R2 key, its byte size, and when it was
 # uploaded. The worker BUNDLES this file (photos.js imports it), so the pool
 # read costs module memory instead of a KV round trip — and this write step is
@@ -418,7 +418,7 @@ echo "phase 4 — hash tiers + photo index + metadata regen"
 # the R2 object), the q100 export for a HIF source. `uploaded` is preserved
 # for a stem that already has an entry, so re-renders don't masquerade as new
 # photos in the footer's "Last modified".
-INDEX_FILE="$PROJECT_DIR/www/_worker.js/photo-index.json"
+INDEX_FILE="$PROJECT_DIR/src/worker/photo-index.json"
 NOW_ISO="$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
 NEW_ENTRIES="$TMP/index-entries.json"
 echo '{}' > "$NEW_ENTRIES"

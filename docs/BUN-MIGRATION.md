@@ -144,3 +144,67 @@ That is gotcha 30's lesson pointed at bun: check that the build image can RUN th
 version you pin before checking that it can READ what that version writes. The
 recommendation is to leave Workers Builds on the current publisher until bun 1.4
 ships stable, then flip the dashboard first and the strings second.
+
+## The restructure, step 1: the Worker is a program, not a document
+
+`www/_worker.js/` is `src/worker/`. It sits beside `cal/` and `serendipity/` now,
+for the reason the layout table already gave for those two: it is a program with
+its own tests rather than something a browser fetches. It never was fetchable
+either, since `.assetsignore` has always listed `_worker.js`.
+
+**Every served byte is unchanged.** 1402 served files, byte-identical, including
+every `/a/` and `/i/` hashed URL, all 48 pages, all 144 dcz deltas and the family
+dictionary. Nothing was re-minted and no dictionary was orphaned. The only files
+that moved are five that reference the moved path, four of which are the
+`www/scripts/` photo tooling that `.assetsignore` also excludes from upload.
+
+That is worth stating plainly, because the assumption going in was the opposite.
+A relocation does not re-mint content hashes. Only a change of CONTENT does.
+The expensive part of the greenfield sketch is the part that rewrites bytes, and
+moving files is not that part.
+
+### What the move actually cost
+
+**The staged layout had to mirror the source layout, and this was the real
+constraint.** The first attempt kept the Worker staging at `.build/www/_worker.js`
+while the source moved, which seemed conservative and is impossible:
+`cal/src/templates.js` and `serendipity.js` import the Worker across the project
+boundary and are bundled from `.build/`, so one relative specifier has to resolve
+in the source tree AND the staged tree. Those only have the same shape if both
+trees agree. So the Worker stages to `.build/src/worker/` and `wrangler.jsonc`
+points `main` there.
+
+The one import that still could not survive is `photos.js` reaching
+`../images/hashes.json`, which worked only because the Worker used to live inside
+`www/`. It is `../../www/images/hashes.json` now, which resolves from both trees,
+exactly like the `../../cal/src/*` imports that already did.
+
+### Three walks found the Worker by accident, and one of them failed silently
+
+Every place that collected Worker modules by walking `.build/www` and filtering on
+a `_worker.js/` prefix stopped finding them:
+
+1. the shell-ref rewrite, which would have left `/a/` specifiers unhashed
+2. the hashed-asset **witness** checks, which failed loudly (`ENOENT`)
+3. the **client-edge CSS mirror**, which failed SILENTLY
+
+The third is the one worth remembering. `/bot` and `/lens` are rendered by Worker
+modules that carry the window geometry, so they quietly lost their client-edge
+mirror and shipped 2 pages short. The build said nothing, because its tripwire
+was `mirrored < 25` against a real count of 33: eight pages of slack, and the
+regression only cost two. Caught by diffing the served bytes, which is the whole
+argument for the byte-identical bar over "the build succeeds".
+
+The floor is 32 now, just under the true count, matching how the other counted
+tripwires in that file are set.
+
+### One search that could not find what it was looking for
+
+The contract test pinning lens-reader's shared SSRF guard hardcodes the import
+path as an escaped regex, `/from "\.\.\/\.\.\/www\/_worker\.js\/lib\/crawl\.js"/`.
+The literal string `www/_worker.js` never appears in it, so a tree-wide search for
+that path did not see it and the test failed after everything else was green.
+
+Same blind spot gotcha 29 records from the other direction: a path assembled from
+parts is invisible to a search for the assembled form. When moving a path, grep
+for the escaped spelling too.

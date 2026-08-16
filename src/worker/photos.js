@@ -19,7 +19,7 @@ import { commonPairs, queryTerms, scoreFields } from "./lib/text.js";
 // (`with { type: "json" }`: import attributes, understood by both esbuild and
 // node ≥20.10 — contract-tests import this module under plain node.)
 import photoIndex from "./photo-index.json" with { type: "json" };
-import thumbHashes from "../images/hashes.json" with { type: "json" };
+import thumbHashes from "../../www/images/hashes.json" with { type: "json" };
 
 // ── /images/full/<key> → R2 ─────────────────────────────────────────
 // proxies an R2 GET through the worker. supports If-None-Match (304s on

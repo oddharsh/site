@@ -13,7 +13,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import { brotliDecompressSync } from "node:zlib";
 import { createHash } from "node:crypto";
-import { PAGE_FAMILY_MATCH } from "../www/_worker.js/lib/assets.js";
+import { PAGE_FAMILY_MATCH } from "../src/worker/lib/assets.js";
 
 const b64 = (buf) => `:${createHash("sha256").update(buf).digest("base64")}:`;
 const get = (url, dict) => {

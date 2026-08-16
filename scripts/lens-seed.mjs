@@ -46,10 +46,10 @@ import { join } from "node:path";
 import { chromium } from "playwright-core";
 import { lensChipTargets } from "./lib/lens-chips.mjs";
 import { readDocument } from "./lib/html-to-md.mjs";
-import { documentTally } from "../www/_worker.js/lens-render.js";
-import { WIRE_TIMING, summariseWire } from "../www/_worker.js/lens-wire.js";
-import { BOT_UA } from "../www/_worker.js/lib/botauth.js";
-import { EXECUTION_PROBE } from "../www/_worker.js/lib/agent-execution.js";
+import { documentTally } from "../src/worker/lens-render.js";
+import { WIRE_TIMING, summariseWire } from "../src/worker/lens-wire.js";
+import { BOT_UA } from "../src/worker/lib/botauth.js";
+import { EXECUTION_PROBE } from "../src/worker/lib/agent-execution.js";
 
 const args = process.argv.slice(2);
 const has = (name) => args.includes(name);
@@ -65,7 +65,7 @@ const TTL = Number(valueOf("--ttl", "86400"));
 const SHOTS = !has("--no-shot");
 const WIRE = !has("--no-wire");
 
-// Mirrors LENS_GOTO and the Quick Action payload in www/_worker.js/lens.js. The
+// Mirrors LENS_GOTO and the Quick Action payload in src/worker/lens.js. The
 // viewport matters more than it looks: a different width renders a different
 // page, and the whole pane is a comparison.
 const VIEWPORT = { width: 1280, height: 800 };

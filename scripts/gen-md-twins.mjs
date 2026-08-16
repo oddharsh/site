@@ -270,7 +270,7 @@ export const TWIN_FACTS = [
     facts: [
       {
         label: "User-Agent",
-        source: "www/_worker.js/lib/botauth.js",
+        source: "src/worker/lib/botauth.js",
         // BOT_UA is a template literal over two constants, so no single source
         // line contains the string a reader of /bot actually sees
         derive: (src) => {
@@ -279,22 +279,22 @@ export const TWIN_FACTS = [
           return name && version ? `${name}/${version} (+https://aadhar.sh/bot)` : null;
         },
       },
-      { label: "JWKS path", source: "www/_worker.js/bot.js", string: "/.well-known/http-message-signatures-directory" },
-      { label: "sig1 algorithm", source: "www/_worker.js/bot.js", string: "Ed25519" },
-      { label: "sig2 algorithm", source: "www/_worker.js/bot.js", string: "ML-DSA-44" },
+      { label: "JWKS path", source: "src/worker/bot.js", string: "/.well-known/http-message-signatures-directory" },
+      { label: "sig1 algorithm", source: "src/worker/bot.js", string: "Ed25519" },
+      { label: "sig2 algorithm", source: "src/worker/bot.js", string: "ML-DSA-44" },
     ],
   },
   {
     twin: "www/md/whoareyou.md",
     facts: [
-      { label: "JSON endpoint", source: "www/_worker.js/whoareyou.js", string: "/whoareyou.json" },
-      { label: "no-storage claim", source: "www/_worker.js/whoareyou.js", string: "none of it is stored" },
+      { label: "JSON endpoint", source: "src/worker/whoareyou.js", string: "/whoareyou.json" },
+      { label: "no-storage claim", source: "src/worker/whoareyou.js", string: "none of it is stored" },
       // The page's whole subject is what a request reveals, so the ONE script on it
       // that this repository does not contain has to be named in both copies or in
       // neither. Pinning the path means turning the edge injection off (or Cloudflare
       // renaming it) fails the deploy rather than leaving the page describing a tag
       // that is no longer there.
-      { label: "WebMCP bridge", source: "www/_worker.js/whoareyou.js", string: "/.webmcp/bridge.js" },
+      { label: "WebMCP bridge", source: "src/worker/whoareyou.js", string: "/.webmcp/bridge.js" },
     ],
   },
   {
@@ -304,9 +304,9 @@ export const TWIN_FACTS = [
     // actually sends them, except the JWKS path, which is the page's own claim.
     twin: "www/md/security.md",
     facts: [
-      { label: "frame-ancestors", source: "www/_worker.js/lib/security.js", string: "frame-ancestors 'none'" },
-      { label: "object-src",      source: "www/_worker.js/lib/security.js", string: "object-src 'none'" },
-      { label: "Referrer-Policy", source: "www/_worker.js/lib/security.js", string: "strict-origin-when-cross-origin" },
+      { label: "frame-ancestors", source: "src/worker/lib/security.js", string: "frame-ancestors 'none'" },
+      { label: "object-src",      source: "src/worker/lib/security.js", string: "object-src 'none'" },
+      { label: "Referrer-Policy", source: "src/worker/lib/security.js", string: "strict-origin-when-cross-origin" },
       {
         // The one fact on that page with a scheduled expiry. ENFORCE_PAGE_HASHES
         // is false today, so the hashed policy ships report-only beside a loose
@@ -314,7 +314,7 @@ export const TWIN_FACTS = [
         // sentence false; this fails the deploy until the twin is rewritten,
         // which is the only reminder the rollout has.
         label: "hashed-CSP rollout state",
-        source: "www/_worker.js/lib/security.js",
+        source: "src/worker/lib/security.js",
         derive: (src) => {
           const m = /ENFORCE_PAGE_HASHES\s*=\s*(true|false)/.exec(src);
           if (!m) return null;
@@ -323,7 +323,7 @@ export const TWIN_FACTS = [
             : "Content-Security-Policy-Report-Only";
         },
       },
-      { label: "JWKS path", source: "www/_worker.js/security.js", string: "/.well-known/http-message-signatures-directory" },
+      { label: "JWKS path", source: "src/worker/security.js", string: "/.well-known/http-message-signatures-directory" },
     ],
   },
 ];

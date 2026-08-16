@@ -139,7 +139,7 @@ jobs:
 
     steps:
       # The PRODUCTION branch, not main. The ramp writes the D1 changelog by
-      # diffing the checked-out www/_worker.js/checkpoints.json against D1, so the
+      # diffing the checked-out src/worker/checkpoints.json against D1, so the
       # tree has to be the one that was actually built and uploaded. Reading
       # main's tip would diff against a tree AHEAD of what is serving, which is
       # gotcha 24 with the staleness pointing the other way.

@@ -39,7 +39,7 @@ fi
 case "$title" in *\'*) echo "title cannot contain a single quote (')" >&2; exit 1;; esac
 
 ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/../.." && pwd )"
-OUT="$ROOT/www/_worker.js/checkpoints.json"
+OUT="$ROOT/src/worker/checkpoints.json"
 
 SLUG="$slug" TITLE="$title" YMD="$(date -u +%Y-%m-%d)" python3 - "$OUT" <<'PY'
 import json, os, sys
@@ -64,6 +64,6 @@ print(f"staged: v{vnum} ({ymd}) as {version}")
 print(f"        {title}")
 PY
 
-echo "next:   commit www/_worker.js/checkpoints.json with the change it describes."
+echo "next:   commit src/worker/checkpoints.json with the change it describes."
 echo "        /updates + /restore show it as soon as that version serves;"
 echo "        pnpm run deploy:promote records it in D1 at 100%."

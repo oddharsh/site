@@ -15,7 +15,7 @@
 // because they are one string.
 import { readFile } from "node:fs/promises";
 import { parseJsonc } from "./lib/jsonc.mjs";
-import { asText } from "../www/_worker.js/lib/parse.js";
+import { asText } from "../src/worker/lib/parse.js";
 
 const CONFIG = new URL("../wrangler.jsonc", import.meta.url);
 

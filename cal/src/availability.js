@@ -83,7 +83,7 @@ async function fetchBusySWRInner(env, ctx, allowStale, s) {
   // continues after the response. Booking and /slots callers leave this false:
   // they must still wait for a live calendar or fail closed.
   if (snap && allowStale) {
-    // cal MUST NOT import www/_worker.js/lib/parse.js: cal's Vitest pool boots from
+    // cal MUST NOT import src/worker/lib/parse.js: cal's Vitest pool boots from
   // cal/src/index.js alone, so that edge would make cal untestable without the
   // site tree (gotcha 16, the same constraint that keeps cal/src/trace.js a
   // deliberate duplicate). One binding check does not earn a second parse layer.
