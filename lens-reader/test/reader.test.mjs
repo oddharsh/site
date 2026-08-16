@@ -13,7 +13,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { parseHTML } from "linkedom";
-import { countControls, countWords, read, scoreExtraction, tally, toMarkdown } from "../src/reader.js";
+import { collectControlLabels, countControls, countWords, read, scoreExtraction, tally, toMarkdown } from "../src/reader.js";
 
 test("the focused Markdown walk covers the article vocabulary", () => {
   const md = toMarkdown("<h2>Title</h2><p>Body <strong>text</strong>.</p>");
@@ -95,7 +95,7 @@ test("control counting is an upper bound and never a silent overcount", () => {
   const { document } = parseHTML('<html><body><button>Run all three</button><button>Close</button></body></html>');
   // "Close" also appears as ordinary prose, which is precisely why the payload
   // labels this an upper bound instead of reporting it as fact.
-  const counted = countControls(document, "<p>Run all three now. Then close the window.</p>");
+  const counted = countControls(collectControlLabels(document), "<p>Run all three now. Then close the window.</p>");
   assert.equal(counted.total, 2);
   assert.ok(counted.kept >= 1);
   assert.match(counted.note, /upper bound/);
@@ -164,11 +164,10 @@ test("the extractor actually extracts, which no other test here proved", async (
   assert.doesNotMatch(result.content, /Subscribe now/, "a control label survived as prose");
 });
 
-test("the control census reads an untouched parse, not the extractor's leftovers", async () => {
-  // Readability REWRITES the document it is handed, in place. read() therefore
-  // parses twice on purpose. Fold those back into one parse to save a few ms
-  // and countControls runs over the post-extraction corpse, reporting every
-  // page as leaking zero controls, which reads as a clean bill of health.
+test("the control census survives Readability mutation without a second DOM", async () => {
+  // Readability REWRITES the document it is handed, in place. Snapshotting the
+  // labels before extraction must preserve the census after the source nodes
+  // disappear, without retaining a second complete hostile-HTML tree.
   //
   // Measured on the real /garage/horizon 2026-08-14: body 217,022 -> 2,473
   // bytes and 29 <button> elements -> 0. The fixture below is sized to
@@ -182,14 +181,17 @@ test("the control census reads an untouched parse, not the extractor's leftovers
       ${"<p>Sidebar filler that should lose.</p>".repeat(10)}
     </aside></body></html>`;
 
-  const { document: census } = parseHTML(html);
-  const { document: working } = parseHTML(html);
-  const beforeBytes = working.body.innerHTML.length;
-  new Readability(working, { charThreshold: 500 }).parse();
+  const { document } = parseHTML(html);
+  const labels = collectControlLabels(document);
+  const beforeBytes = document.body.innerHTML.length;
+  const result = new Readability(document, { charThreshold: 500 }).parse();
 
-  assert.equal(census.querySelectorAll("button").length, 1, "the untouched parse lost its button");
-  assert.ok(working.body.innerHTML.length < beforeBytes / 2,
-    "Readability left the working document intact, so read()'s two parses are now pointless");
+  assert.ok(document.body.innerHTML.length < beforeBytes / 2,
+    "Readability left the document intact, so the mutation boundary is no longer exercised");
+  assert.equal(document.querySelectorAll("button").length, 0, "the fixture did not lose its source control");
+  const counted = countControls(labels, result.content);
+  assert.equal(counted.total, 1, "the pre-extraction label snapshot lost the source control");
+  assert.equal(counted.kept, 0, "the removed control was reported as surviving extraction");
 });
 
 test("a link destination cannot be closed early by its own backslash", () => {
