@@ -3066,13 +3066,65 @@ pnpm run deploy:direct
     plus `Analyze (actions)` are the checks doing the real scanning and stay green
     throughout.
 
+    **IT DOES NOT FAIL ON EVERY DIFF, and this gotcha said twice that it did.**
+    The run always fires; whether it REQUESTS A MODEL depends on the diff, and
+    the discriminator is a file exclusion list the job prints on every run:
+
+    ```
+    FileExclusionPatterns = *.c,*.cpp,*.cs,*.go,*.h,*.html,*.java,*.js,*.json,
+    *.jsx,*.kt,*.mjs,*.mts,*.py,*.rb,*.rs,*.ts,*.tsx,*.vue,*.xml,*.yaml,*.yml,
+    **/action.yml,*.github/workflows/*.yml,Cargo.toml,Gemfile
+    ```
+
+    **`.md` and `.sh` are NOT on it**, so a docs diff survives the filter and gets
+    a `claude-opus-4.6` request, while a pure JavaScript diff is filtered to
+    nothing and the run exits clean. Both paths print `Sessions disabled: not
+    supported for code scanning yet`, so that line is NOISE rather than the
+    signal; the discriminating line is `Creating copilot-sdk session with model`,
+    which only the failing path reaches. Measured over the five runs of
+    2026-08-15:
+
+    | PR | extensions | survives | outcome |
+    |---|---|---|---|
+    | #399 | jpg, json | no | success |
+    | #402 | js, mjs | no | success |
+    | #398 | md | YES | failure |
+    | #400 | json, md, sh, yml | YES | failure |
+    | #401 | md | YES | failure |
+
+    So on THIS repo the check fails on documentation and passes on code, which is
+    the inverse of what the words "code scanning" predict, and it is why a gotcha
+    that grew mostly on docs PRs saw an unbroken run of failures.
+
+    **It also holds on all seven earlier failures, checked backwards, for 12 of
+    12.** #305, #307, #351 and #368 each carried `.md`; #313 was the "CSS-only"
+    diff this gotcha already singles out, and `.css` is not on the list either;
+    #319 and #340 carried both. Worth one correction to the #351 note above,
+    which calls that PR's "entire diff" a `${{ }}` move inside workflow files: it
+    touched `md` and `mjs` too, and the `md` is what drew the model request. The
+    conclusion there survives, since a red mark still carries no information
+    about the diff.
+
+    That does not weaken the prose-only argument above, it inverts its mechanism.
+    A docs PR reddens this check because markdown is one of the few things the
+    detector still looks at, rather than because the agent read the prose and
+    choked. Keep the conclusion and drop the reasoning that a prose diff is
+    "obviously nothing to analyze": to this detector it is the main course.
+
     Thirteen recorded as of 2026-08-15, the last three being two on #400 (runs
     `31884142298` and `31884163295`) and one on #401. The general lesson is the
-    one this gotcha's whole length is the bill for. **A check that fails
-    identically on every diff, including a prose-only one, is reporting on
+    one this gotcha's whole length is the bill for. **A check that fails on
+    diffs that cannot carry the finding it claims to make is reporting on
     something outside the repository, so widen the search past the repository
     EARLY.** Every entry above this one hunted for a setting, a workflow file or a
     signature; the answer was three fields on the account, one API call away.
+
+    **The corollary is a warning about this gotcha's own method.** Nine entries
+    were built by pattern-matching outcomes across PRs without once reading which
+    FILES each diff touched, and the pattern that emerged ("fails on everything")
+    was an artifact of the sample. One column of data nobody collected explained
+    the whole shape. When a failure looks unconditional, check what the runs that
+    passed had in common before concluding there were none.
 
     **What it will not catch, learned the same day.** `Analyze (actions)` passed on
     a workflow that interpolated `${{ inputs.base }}` straight into a `run:` block,
