@@ -6552,6 +6552,14 @@ test("the reader's rate-limit message quotes the ceiling wrangler declares", asy
     "the reader's 429 message would quote a limit the binding does not enforce");
 });
 
+test("the reader minifies its dependency-heavy deploy without losing source locations", () => {
+  const toml = readFileSync("./lens-reader/wrangler.toml", "utf8");
+  assert.match(toml, /^minify\s*=\s*true$/m,
+    "the Reader Worker should minify its dependency-heavy production bundle");
+  assert.match(toml, /^upload_source_maps\s*=\s*true$/m,
+    "Reader minification must retain original source locations in Workers Logs");
+});
+
 test("the reader Worker shares the site's SSRF guard rather than copying it", async () => {
   const reader = readFileSync("./lens-reader/src/reader.js", "utf8");
   const entry = readFileSync("./lens-reader/src/index.js", "utf8");
