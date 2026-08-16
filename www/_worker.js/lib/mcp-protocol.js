@@ -29,6 +29,8 @@
 // The legacy list stays because legacy clients have NO fall-forward mechanism.
 // Pointed at a modern-only server they fail outright, with no diagnostic they
 // can surface to a user.
+import { asRecord, asText } from "./parse.js";
+
 export const MCP_MODERN = "2026-07-28";
 export const MCP_LEGACY = ["2025-06-18", "2025-03-26", "2024-11-05"];
 export const MCP_SUPPORTED = [MCP_MODERN, ...MCP_LEGACY];
@@ -91,7 +93,7 @@ export const CACHE_EMPTY  = { ttlMs: 86_400_000, cacheScope: "public" };  // per
 // against callers who made it. See missingRequiredMeta().
 export function declaredVersion(msg) {
   const v = msg?.params?._meta?.[META_PROTOCOL];
-  return typeof v === "string" && v ? v : null;
+  return asText(v);
 }
 
 // The `_meta` field this MODERN request is missing, or null if it is fine.
@@ -109,7 +111,7 @@ export function declaredVersion(msg) {
 export function missingRequiredMeta(msg) {
   if (!declaredVersion(msg)) return null;
   const caps = msg?.params?._meta?.[META_CLIENT_CAPS];
-  const ok = caps !== null && typeof caps === "object" && !Array.isArray(caps);
+  const ok = asRecord(caps) !== null;
   return ok ? null : META_CLIENT_CAPS;
 }
 

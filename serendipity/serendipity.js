@@ -25,6 +25,7 @@ import { privateHostBlocked } from "../www/_worker.js/lib/crawl.js";
 import { CACHE_EMPTY, CACHE_STATIC, mcpGate, mcpHttpStatus, mcpServer } from "../www/_worker.js/lib/mcp-protocol.js";
 import { mcpTool } from "../www/_worker.js/lib/mcp-tools.js";
 import { previewToolRefusal } from "../www/_worker.js/lib/preview.js";
+import { asRecord, asText } from "../www/_worker.js/lib/parse.js";
 
 // ── tiny helpers ────────────────────────────────────────────────────────────
 const esc = (v) =>
@@ -52,7 +53,10 @@ function relativeTime(date) {
   // compat flag), else the plain epoch-ms delta. same output either way.
   let days;
   try {
-    if (typeof Temporal !== "undefined" && date.toTemporalInstant) {
+    // Bare global: referencing an undeclared `Temporal` to hand it to a parser
+  // throws ReferenceError, so typeof is the only operator that can ask.
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof
+  if (typeof Temporal !== "undefined" && date.toTemporalInstant) {
       days = Math.floor(Temporal.Now.instant().since(date.toTemporalInstant()).total({ unit: "hour" }) / 24);
     }
   } catch (e) {}
@@ -74,7 +78,9 @@ function fmtDateTime(s) {
   // Temporal when available: a wall-clock string shows as recorded; an instant
   // shows in UTC (matching this Worker's clock). falls back to Date otherwise.
   try {
-    if (typeof Temporal !== "undefined") {
+    // Bare global, same as above: only typeof can ask whether it exists.
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof
+  if (typeof Temporal !== "undefined") {
       const z = s.replace(" ", "T");
       const pdt = /[zZ]|[+-]\d{2}:?\d{2}$/.test(z)
         ? Temporal.Instant.from(z).toZonedDateTimeISO("UTC").toPlainDateTime()
@@ -738,7 +744,7 @@ async function persistJar(d, userKey, jar) {
 // absorbed BEFORE the ok-check: a 4xx can still carry a rotation, and losing
 // it because the call failed would strand the session one key behind.
 async function lumaFetch(url, auth) {
-  const jar = typeof auth === "string" ? null : auth;
+  const jar = asText(auth) === null ? auth : null;
   const res = await fetch(url, { headers: { "Content-Type": "application/json", Cookie: jar ? jar.header() : auth, "x-luma-web-url": "https://lu.ma" } });
   if (jar) jar.absorb(res);
   if (!res.ok) { const b = await res.text().catch(() => ""); throw new Error(`Luma ${res.status}: ${b.slice(0, 200)}`); }
@@ -776,8 +782,11 @@ function parseEvents(data, selfId) {
     const ticketKey = gi.ticket_key || null;
     const approval = gi.approval_status || gi.calendar_status || null;
     const er = entry.role;
-    const roleType = er && typeof er === "object" ? er.type : (typeof er === "string" ? er : null);
-    const isManager = !!((er && typeof er === "object" && er.is_manager) || entry.host_info || entry.manager_info);
+    // Luma's api2 sends `role` as either a record or a bare string, and it is
+    // legacy and drifting (so both shapes stay handled). Parsed once here.
+    const erRecord = asRecord(er);
+    const roleType = erRecord ? erRecord.type : asText(er);
+    const isManager = !!((erRecord && erRecord.is_manager) || entry.host_info || entry.manager_info);
     const hosts = (entry.hosts || []);
     const isHost = isManager || roleType === "host" || (selfId != null && hosts.some((h) => h.api_id === selfId));
     const userStatus = mapStatus(approval, ticketKey, gi.role || gi.user_role || null, isHost);
@@ -843,7 +852,7 @@ async function fetchEventGuests(eventId, ticketKey, auth) {
 // concatenate, hard breaks → \n, block nodes (paragraph/heading/list item)
 // → trailing \n\n so paragraphs survive.
 function pmToText(node) {
-  if (!node || typeof node !== "object") return "";
+  if (!asRecord(node)) return "";
   if (node.type === "text") return node.text || "";
   if (/hard.?break|hardBreak/.test(node.type || "")) return "\n";
   let s = (node.content || []).map(pmToText).join("");
@@ -2121,8 +2130,8 @@ export async function handleMcp(request, env, d) {
   catch { return respond(rpcErr(null, -32700, "Parse error")); }
 
   const handleOne = async (msg) => {
-    const hasId = msg && typeof msg === "object" && "id" in msg;
-    if (!msg || msg.jsonrpc !== "2.0" || typeof msg.method !== "string") {
+    const hasId = asRecord(msg) !== null && "id" in msg;
+    if (!msg || msg.jsonrpc !== "2.0" || asText(msg.method) === null) {
       return hasId ? rpcErr(msg.id, -32600, "Invalid Request") : null;
     }
     const id = msg.id, m = msg.method;

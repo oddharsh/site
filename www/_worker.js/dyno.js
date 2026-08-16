@@ -22,6 +22,7 @@
 import { BOT_UA } from "./lib/botauth.js";
 import { swrKV } from "./lib/cache.js";
 import { lunaPage } from "./lib/chrome.js";
+import { asNumber } from "./lib/parse.js";
 import { esc, jsonResponse } from "./lib/http.js";
 import { span } from "./lib/trace.js";
 import seed from "./dyno-seed.json" with { type: "json" };
@@ -117,7 +118,7 @@ const day = (ts) => Date.parse(`${ts}T00:00:00Z`);
 // data does not have.
 function scales(rows, pick) {
   const xs = rows.map((r) => day(r.ts));
-  const ys = rows.map(pick).filter((v) => typeof v === "number");
+  const ys = rows.map(pick).filter((v) => asNumber(v) !== null);
   const x0 = Math.min(...xs), x1 = Math.max(...xs);
   const yMax = Math.max(...ys) * 1.12;
   return {
@@ -128,7 +129,7 @@ function scales(rows, pick) {
 }
 
 function polyline(rows, sc, pick, cls) {
-  const pts = rows.filter((r) => typeof pick(r) === "number")
+  const pts = rows.filter((r) => asNumber(pick(r)) !== null)
     .map((r) => `${sc.x(r.ts).toFixed(1)},${sc.y(pick(r)).toFixed(1)}`);
   return pts.length < 2 ? "" : `<polyline class="${cls}" points="${pts.join(" ")}"/>`;
 }
@@ -137,7 +138,7 @@ function polyline(rows, sc, pick, cls) {
 // no JavaScript: the browser draws the tooltip natively. Hand-entered points get
 // a wider dot because they are the ones with a note worth reading.
 function dots(rows, sc, pick, cls) {
-  return rows.filter((r) => typeof pick(r) === "number").map((r) =>
+  return rows.filter((r) => asNumber(pick(r)) !== null).map((r) =>
     `<circle class="${cls}" cx="${sc.x(r.ts).toFixed(1)}" cy="${sc.y(pick(r)).toFixed(1)}" r="${r.source === "baseline-note" ? "3.2" : "1.7"}"><title>${esc(`${r.ts} · ${kib(pick(r)).toFixed(1)} KiB · ${r.sha}${r.note ? ` — ${r.note}` : ""}`)}</title></circle>`
   ).join("");
 }
@@ -201,7 +202,7 @@ function chart(rows) {
 // ── page ────────────────────────────────────────────────────────────────────
 
 const delta = (rows, key) => {
-  const have = rows.filter((r) => typeof r[key] === "number");
+  const have = rows.filter((r) => asNumber(r[key]) !== null);
   if (have.length < 2) return null;
   const a = have[0][key], b = have[have.length - 1][key];
   return { a, b, pct: ((b - a) / a) * 100, from: have[0].ts, to: have[have.length - 1].ts };
@@ -212,12 +213,16 @@ export function renderDyno(rows) {
   const worker = delta(rows, "worker_gzip");
   const last = rows[rows.length - 1];
 
+  // An em dash for a row that carries no number, which is what a JSONL row
+  // written before that column existed looks like. asNumber also refuses NaN,
+  // so a corrupt cell reads as absent rather than plotting as zero.
+  const cell = (v) => (asNumber(v) === null ? "—" : kib(asNumber(v)).toFixed(1));
   const table = rows.slice(-14).reverse().map((r) => `<tr>
       <td class="mono">${esc(r.ts)}</td>
       <td class="mono sha">${esc(r.sha)}</td>
-      <td class="num">${typeof r.worker_gzip === "number" ? kib(r.worker_gzip).toFixed(1) : "—"}</td>
-      <td class="num">${typeof r.pages_br === "number" ? kib(r.pages_br).toFixed(1) : "—"}</td>
-      <td class="num">${typeof r.assets_br === "number" ? kib(r.assets_br).toFixed(1) : "—"}</td>
+      <td class="num">${cell(r.worker_gzip)}</td>
+      <td class="num">${cell(r.pages_br)}</td>
+      <td class="num">${cell(r.assets_br)}</td>
       <td class="src">${r.source === "baseline-note" ? "by hand" : "measured"}</td>
     </tr>`).join("\n    ");
 

@@ -15,6 +15,7 @@
 // Worker global, so Node can import it straight out of the staged tree at
 // build time.
 import { escAttr } from "./http.js";
+import { asNumber } from "./parse.js";
 
 // Pool URLs are already absolute /i/ form; this is the last-resort shim for a
 // pool entry that predates that (kept identical to photos.js's absThumb).
@@ -95,7 +96,7 @@ export function renderPhotoSlots(pick, altMap = {}, { deferred = true } = {}) {
     // Fall back to the stem rather than alt="": the tile IS the link, so an
     // empty alt makes the <a> nameless for screen readers and agents.
     const alt = escAttr(altMap[p.stem] || p.stem);
-    const sizeAttr = (typeof p.size === "number" && p.size > 0) ? ` data-size="${p.size}"` : "";
+    const sizeAttr = (asNumber(p.size) > 0) ? ` data-size="${p.size}"` : "";
     const upAttr = p.uploaded ? ` data-uploaded="${escAttr(p.uploaded)}"` : "";
 
     // In a scripting browser <noscript> is inert text, so these real URLs never

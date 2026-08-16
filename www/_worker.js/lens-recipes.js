@@ -97,6 +97,8 @@
 
 // The enum a receipt's `note` may carry. Anything else becomes "unknown"
 // server-side rather than being echoed, because echoing is the injection.
+import { asRecord, asText } from "./lib/parse.js";
+
 const RECIPE_NOTES = new Set(["acted", "none-found", "blocked", "threw"]);
 
 // Counts above this are a forgery or a bug, never an observation — no real page
@@ -177,7 +179,7 @@ const BY_ID = new Map(/** @type {[string, (typeof LENS_RECIPES)[number]][]} */ (
 // useful than silently guessing and far less surprising than a near-miss that
 // works.
 export function lensRecipe(id) {
-  return (typeof id === "string" && BY_ID.get(id)) || null;
+  return (asText(id) !== null && BY_ID.get(id)) || null;
 }
 
 export function lensRecipeIds() {
@@ -227,7 +229,7 @@ export function lensRecipeReceipt(html, nonce) {
 
   let parsed;
   try { parsed = JSON.parse(match[1]); } catch (_e) { return { receipt: null, html: stripped }; }
-  if (!parsed || typeof parsed !== "object") return { receipt: null, html: stripped };
+  if (!asRecord(parsed)) return { receipt: null, html: stripped };
 
   // The nonce check. A page that shipped its own receipt is REPORTED rather than
   // ignored, because "this page tried to spoof the instrument" is a genuinely

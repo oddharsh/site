@@ -172,6 +172,9 @@ async function captureWire(browser, url) {
     let execution = null;
     try {
       const r = await cdp.send("Runtime.evaluate", { expression: EXECUTION_PROBE, returnByValue: true, awaitPromise: false });
+  // CDP frame off the wire; this script is a one-shot seeder outside the Worker
+  // bundle, so it carries the check inline rather than importing the parse layer.
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof
       const raw = r?.result && typeof r.result.value === "string" ? JSON.parse(r.result.value) : null;
       if (raw && !raw.probeError) {
         const thrown = events.filter((e) => e.method === "Runtime.exceptionThrown");

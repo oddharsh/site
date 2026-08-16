@@ -4,6 +4,14 @@
 (function () {
   "use strict";
 
+  // The local parse layer. Client scripts here have no shared module graph, so
+  // they cannot import _worker.js/lib/parse.js; redeclaring a couple of
+  // coercions is the same trade these files already make for esc().
+  /* oxlint-disable anti-slop/no-runtime-typeof -- a hand-rolled parser is made
+     of typeof; keeping the checks here rather than at each use is the point. */
+  function asRecord(v) { return v !== null && typeof v === "object" && !Array.isArray(v) ? v : null; }
+  /* oxlint-enable anti-slop/no-runtime-typeof */
+
   function esc(s) {
     return String(s == null ? "" : s)
       .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
@@ -41,7 +49,7 @@
   function treeNodes(tree) {
     var n = 0;
     (function walk(node) {
-      if (!node || typeof node !== "object") return;
+      if (!asRecord(node)) return;
       n++;
       (node.children || []).forEach(walk);
     })(tree);

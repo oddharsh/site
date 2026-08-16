@@ -75,6 +75,9 @@ export default {
 
 async function overBudget(env, request) {
   const limiter = env && env.READER_RL;
+  // Binding capability probe, and this Worker is outside the site tree with its
+  // own dependency set, so it cannot import _worker.js/lib/parse.js.
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof
   if (!limiter || typeof limiter.limit !== "function") return null;
   const ip = request.headers.get("cf-connecting-ip") || "anon";
   try {

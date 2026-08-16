@@ -22,6 +22,11 @@
 let tracing = null;
 
 export function installTracing(candidate) {
+  // cal cannot import www/_worker.js/lib/parse.js: its Vitest pool boots from
+  // cal/src/index.js alone, so that edge would make cal untestable without the
+  // site tree. This file is already a deliberate duplicate for that same reason
+  // (gotcha 16), and one capability check does not earn a second parse layer.
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof
   tracing = typeof candidate?.enterSpan === "function" ? candidate : null;
 }
 
