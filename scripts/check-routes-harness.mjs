@@ -78,11 +78,16 @@ try {
   const { url } = await server.listen();
   console.log(`harness: ${config} booted in ${Date.now() - t0}ms at ${url}`);
 
+  // VERIFY_REMOTE is left UNSET rather than set to "" on a local run, since
+  // verify-routes.mjs reads presence rather than value.
+  const childEnv = { ...process.env, VERIFY_BUILT: "1" };
+  if (remote) childEnv.VERIFY_REMOTE = "1";
+
   code = await new Promise((resolve, reject) => {
     const child = spawn(
       process.execPath,
       ["scripts/verify-routes.mjs", String(url).replace(/\/$/, "")],
-      { cwd: root, stdio: "inherit", env: { ...process.env, VERIFY_BUILT: "1", ...(remote ? { VERIFY_REMOTE: "1" } : {}) } },
+      { cwd: root, stdio: "inherit", env: childEnv },
     );
     child.on("error", reject);
     child.on("exit", (status, signal) => resolve(signal ? 1 : status ?? 1));

@@ -16,10 +16,14 @@ import { createHash } from "node:crypto";
 import { PAGE_FAMILY_MATCH } from "../www/_worker.js/lib/assets.js";
 
 const b64 = (buf) => `:${createHash("sha256").update(buf).digest("base64")}:`;
-const get = (url, dict) => fetch(url, { headers: {
-  "accept-encoding": "zstd, br, dcz",
-  ...(dict ? { "available-dictionary": dict } : {}),
-}, redirect: "manual" });
+const get = (url, dict) => {
+  // The header is ABSENT on the control arm rather than empty: an empty
+  // `available-dictionary` is a different request from one that never offered a
+  // dictionary, and the control depends on the second.
+  const headers = { "accept-encoding": "zstd, br, dcz" };
+  if (dict) headers["available-dictionary"] = dict;
+  return fetch(url, { headers, redirect: "manual" });
+};
 
 let fail = 0;
 const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}  ${detail}`); if (!ok) fail++; };
