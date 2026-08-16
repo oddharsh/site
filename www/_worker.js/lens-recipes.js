@@ -62,7 +62,7 @@
 //   <script type="application/lens-receipt" id="lens-recipe-receipt">{…}</script>
 //
 // A <script> with a non-JS type never executes and never renders. More usefully,
-// `documentShape()`'s `stripped()` in lens-render.js already deletes <script>
+// `documentTally()`'s `stripped()` in lens-render.js already deletes <script>
 // bodies before it counts words, so the receipt CANNOT inflate the word delta
 // by construction rather than by convention. That property is the reason to
 // pick this node over a <div> or a data- attribute on <html>.
@@ -89,7 +89,7 @@
 //
 // That is survivable because the receipt is NOT the load-bearing number. The
 // claim the UI makes ("the page went from 210 to 1,840 words") is computed
-// server-side by documentShape() over the HTML the page returned, and a page
+// server-side by documentTally() over the HTML the page returned, and a page
 // cannot inflate that without actually serving the words. The receipt only says
 // how many elements we touched. A forged one is caught, reported as
 // "forged-receipt", and its counts discarded; a perfectly forged one costs a
@@ -213,7 +213,7 @@ const clampCount = (n) => (Number.isFinite(n) && n > 0 ? Math.min(Math.floor(n),
 // Pull the receipt out of the rendered HTML and hand back the html WITHOUT it.
 //
 // Both halves matter and the order they are used in matters more. The caller
-// must strip before it calls documentShape() and before it applies the 120KB
+// must strip before it calls documentTally() and before it applies the 120KB
 // content cap: count first and `shape` counts our own injected script, cap first
 // and the receipt falls off the end of a large page and vanishes. The existing
 // `__lens_webmcp_runtime__` assertion is the precedent for this exact bug class.

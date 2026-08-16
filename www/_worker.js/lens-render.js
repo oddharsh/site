@@ -130,7 +130,7 @@ const countMatches = (html, re) => (String(html || "").match(re) || []).length;
 // NOT a comparison axis here: a framework's inlined payload swings them wildly
 // while changing nothing a reader or a parser gets, which is the same reason
 // lens-browser.js's deltaStrip already leads with words.
-export function documentShape(html) {
+export function documentTally(html) {
   const text = stripped(html);
   return {
     words: text ? text.split(" ").filter(Boolean).length : 0,
