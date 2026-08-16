@@ -6725,6 +6725,74 @@ test("the reader minifies its dependency-heavy deploy without losing source loca
     "Reader minification must retain original source locations in Workers Logs");
 });
 
+test("a repository path inside served bytes must still exist", async () => {
+  // Two failures this catches, and the branch that added it produced both.
+  //
+  // STALE: a page describing the architecture keeps naming a directory after it
+  // moves. Byte-identity discipline makes this MORE likely rather than less,
+  // because preserving bytes means reverting served files and leaving their prose
+  // behind. Ten of these existed at once on 2026-08-16.
+  //
+  // COUPLED: a repository path inside a CONTENT-ADDRESSED artifact ties the file
+  // layout to a public URL. Moving the source then re-mints /a/<name>.<hash>.<ext>
+  // and orphans every committed dictionary naming the old one. www/icons.svg did
+  // exactly that, via a banner that named its generator by path.
+  //
+  // Read the BUILT tree, because a source comment may be stripped and only the
+  // served bytes decide: a comment in a client island reaches its .src.js twin
+  // alone, while a string literal reaches the hashed asset too.
+  const OUT = new URL(".build/www/", ROOT);
+  if (!existsSync(OUT)) return;                      // no staged tree; `bun run build` first
+
+  // Anchored so a URL path like /images/x or an MCP method like tools/list does
+  // not match: only tokens naming a real top-level directory of this repository.
+  const RE = /(?<![\w./-])(www|src|scripts|tools|cal|pipelines|config|serendipity)\/[A-Za-z0-9_./-]+/g;
+  const NOT_A_PATH = [
+    /^tools\/(list|call)$/, /^config\/(list|get|set)$/,   // MCP methods, not paths
+    // Cited from ANOTHER repository. /lwe/vigenere ports a periodic-cipher
+    // attack from github.com/0xdiid/buttcrack and names the file it came from,
+    // which is attribution rather than a reference into this tree.
+    /^src\/buttcrack\//,
+  ];
+  // Only a token naming a FILE is a citation that has to resolve. A bare
+  // directory mention is usually prose ("used to sit at www/scripts",
+  // "cal/coffee") or a build-output path that exists only under .build
+  // (www/ad/, www/a/). Flagging those makes this a nuisance, and a nuisance
+  // check gets commented out, which is the failure mode this repo warns about
+  // at every tripwire it has.
+  const NAMES_A_FILE = /\.[A-Za-z0-9]{1,5}$/;
+  const BINARY = /\.(br|dcz|dict|png|jpg|avif|pdf|woff2?|ico)$/;
+
+  const bad = [];
+  let scanned = 0;
+  const walk = async (dir) => {
+    for (const e of await readdir(new URL(dir, OUT), { withFileTypes: true })) {
+      const rel = dir + e.name;
+      if (e.isDirectory()) { await walk(rel + "/"); continue; }
+      if (BINARY.test(rel)) continue;
+      let body;
+      try { body = await readFile(new URL(rel, OUT), "utf8"); } catch { continue; }
+      scanned++;
+      for (const tok of new Set(body.match(RE) || [])) {
+        if (NOT_A_PATH.some((r) => r.test(tok))) continue;
+        // Trim trailing punctuation that prose leaves on a path.
+        const clean = tok.replace(/[,;:)\]]+$/, "").replace(/\.$/, "");
+        if (!NAMES_A_FILE.test(clean)) continue;
+        if (existsSync(new URL(clean, ROOT))) continue;
+        bad.push(`${rel}: ${clean}`);
+      }
+    }
+  };
+  await walk("");
+
+  // Counted, because a scanner that stops matching asserts nothing and still
+  // reports a pass. This repo has caught three naive scanners on its own
+  // minified output already.
+  assert.ok(scanned > 200, `expected the staged tree, scanned only ${scanned} files`);
+  assert.deepEqual(bad, [],
+    "served bytes name repository paths that do not exist:\n  " + bad.join("\n  "));
+});
+
 test("the TypeScript migration inventory may only shrink", async () => {
   // The Worker moved from JavaScript to TypeScript on 2026-08-16. 36 of its 67
   // modules were type-clean and are fully checked; the other 31 carry a

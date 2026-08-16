@@ -341,3 +341,53 @@ root two levels up, which survives because `www/scripts` and `tools/photos` sit 
 the same depth. `gen-photo-semantics.mjs` was the single exception, using
 `dirname(dirname(here))` so its root was `www/` rather than the repository, and it
 would have silently started reading `tools/images`. It matches its siblings now.
+
+## The scan before the `www/` split
+
+`icons.svg` re-minted a public URL because a repository path lived inside a
+content-addressed artifact. Before splitting `www/` into pages and assets, the
+sensible move is to find every other instance rather than discover them from a
+red build. `scripts/contract-tests.test.mjs` now carries that as a check.
+
+**Two findings, and the first was self-inflicted.**
+
+**Ten stale paths in served bytes.** Most were created by this branch. The
+byte-identity discipline says to revert served files so the bytes do not move,
+and the cost of that is prose left behind: pages went on naming
+`www/_worker.js/index.js`, `www/_worker.js/counter.js`, `www/scripts/zenc/` and
+`www/scripts/add-photos.sh` after every one of those had moved. `/garage/workers`
+is a page ABOUT the Worker and it was citing a directory that no longer existed.
+One (`scripts/gen-shell-deltas.mjs`) predates the branch entirely.
+
+Worth stating as a rule, because it cuts against the discipline that produced it:
+**preserving bytes preserves stale documentation too.** A move is not finished
+when the build is byte-identical; it is finished when the prose still describes
+where things are.
+
+**One live coupling in a content-addressed asset.** `/a/lens-browser.<hash>.js`
+contains the string `node scripts/lens-webmcp.mjs`, which the Browser view prints
+so a visitor can run the probe themselves. That is a real path in a real command,
+so it cannot be made path-free the way the icons banner was. The consequence is
+worth knowing BEFORE the move rather than after: **`scripts/` to `tools/` will
+re-mint that asset and orphan its three `a-dict` entries**, unavoidably.
+
+A useful distinction fell out of it. A COMMENT in a client island reaches only its
+`.src.js` twin, because minification strips it; a STRING LITERAL reaches the
+hashed asset too. So the five stale comments cost nothing but page bytes, and
+every `/a/` URL was verified unchanged after fixing them.
+
+### The check, and the three false positives it had to lose
+
+The first version reported `tools/` nine times and every one was MCP's
+`tools/list` and `tools/call`. That is the naive-scanner trap this repo has now
+caught four times on its own output. It also flagged `cal/coffee` (a route),
+`www/ad/` (build output that exists only under `.build`), and `www/scripts`
+inside a comment whose whole job is to record that the directory MOVED.
+
+The principle that removed all of them without an exception list: **only a token
+naming a FILE is a citation that has to resolve.** A bare directory mention is
+prose. One genuine allowlist entry remains, `src/buttcrack/`, which is a file in
+somebody else's repository that `/lwe/vigenere` cites as attribution.
+
+It reads the BUILT tree, counts what it scanned so a matcher that stops matching
+cannot pass, and was verified by planting a citation to a nonexistent file.

@@ -1048,7 +1048,7 @@ footer .signature small { color: oklch(56.93% 0 0); }
   means "immediately", so it would put two document fetches on every homepage
   load, including for the visitors who never click either section, on the same
   critical path this page is otherwise tuned to the byte. The speculation
-  ledger (www/_worker.js/speculation.js) now counts what the surviving
+  ledger (src/worker/speculation.ts) now counts what the surviving
   moderate rule actually converts. Re-add with that number in hand, not before.
 -->
 <!-- the counter's ONLY scripted tick: fires once per real visit, deferred to

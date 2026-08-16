@@ -557,7 +557,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
   // is derived from RANK on a Zipf curve. Only the ORDER of scores matters to a
   // hill-climb, and dropping the counts is 60% of the bytes. TOP is log10 of
   // the share "THAT" holds in the source corpus, FLOOR an unseen quadgram.
-  // Both printed by scripts/gen-quadgram-table.mjs, which builds the table.
+  // Both printed by tools/photos/gen-quadgram-table.mjs, which builds the table.
   var TOP = -2.4773, FLOOR = -8.7282, ZIPF = 0.75;
   var MAX_KEY = 12, MAX_LETTERS = 900, PSEUDO = 40;
   var LOGP = null, HI = 0, model = null;

@@ -9,7 +9,7 @@ _worker.js
 # www/scripts from upload.
 
 # Previous shipped versions of the content-hashed shell, kept ONLY as dictionary inputs
-# for scripts/gen-shell-deltas.mjs. Uploading them would serve stale nav.js/luna.css at
+# for scripts/roll-shell-dictionary.mjs. Uploading them would serve stale nav.js/luna.css at
 # public URLs for no reason. www/ad/ (the .dcb deltas) is deliberately NOT ignored:
 # the worker fetches those through ASSETS to answer an Available-Dictionary request.
 a-dict

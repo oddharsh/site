@@ -78,7 +78,7 @@
   Cache-Control: public, max-age=31536000, immutable
 
 # OG / Twitter card images (www/og/<section>-<name>.png), rendered from each
-# garage + lwe demo by scripts/gen-og-cards.mjs. The URL is stable and the bytes
+# garage + lwe demo by tools/photos/gen-og-cards.mjs. The URL is stable and the bytes
 # change only when a demo's look changes (rare), so NOT immutable — a 30-day
 # cache clears Lighthouse's "efficient cache lifetimes" bar while a regen + deploy
 # purges the edge so a refreshed card lands. Social crawlers cache on their own
