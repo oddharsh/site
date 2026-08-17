@@ -684,3 +684,63 @@ the first element whatever it is, because a promise is always truthy.
 was standing in for a language feature, keep the one doing real work. `sips`,
 `exif-sooc`, `avifenc`, `cwebp`, `ffmpeg`, `zenc`, mozjpeg and the two libjxl
 metrics all stay.
+
+## The histogram bake is build-dependent, and the format amplifies it
+
+Running `add-photos` on one real photo rewrote all 158 histograms with nothing
+about the input having changed. Investigated rather than shrugged at, because
+"the pipeline rewrites 158 files when you add one" is the kind of thing that
+gets normalised and then hides a real defect.
+
+**What was ruled out.** `Cargo.lock` is committed and unchanged, pinning the
+decoder at `image` 0.25.10 / `zune-jpeg` 0.5.15. The bake reads
+`public/i/<stem>.<j>.jpg` through `hashes.json`, and those hashes are unchanged,
+so the input bytes are identical. Two consecutive bakes on this build produce
+identical output, so it is not nondeterminism. The only remaining variable is
+the BUILD, and there was no `rust-toolchain` file: rustc was whatever the machine
+had.
+
+**What actually moved**, measured across all 40,448 bins:
+
+| delta | share |
+|---|---|
+| ±1 level | 62% |
+| ±2 levels | 20% |
+| worst case | **37 levels** |
+
+31.2% of bins differ. The ±1 and ±2 band is exactly the decoder noise
+`histogram.rs`'s own header measures and says binning absorbs, and it is right
+about that. The 37-level tail is not absorbed by anything, and the mechanism is
+in the pack:
+
+```rust
+let peak = binned.iter().copied().max().unwrap_or(0).max(1);
+… ((100.0 * b as f64) / peak as f64).round_ties_even()
+```
+
+**The histogram is PEAK-NORMALISED.** Every bar is a percentage of the largest
+bar, so a decoder difference that nudges the peak bin rescales all 64 at once.
+One pixel moving between bins at the peak is enough to move every bar in that
+channel. That is why a 0.07% pixel disagreement produces a 31% bin disagreement.
+
+### What was done, and what was not
+
+Two cheap fixes, because both remove a variable without moving any served byte:
+
+- `tools/photos/zenc/rust-toolchain.toml` pins rustc 1.93.0, so the toolchain
+  stops being ambient.
+- `ensureZenc` builds with `--locked`, so a build cannot silently update the
+  committed lock. It could before, and that would have moved every histogram
+  with no visible cause at all.
+
+**Neither fixes the existing mismatch, and that is deliberate.** The committed
+histograms came from an unrecorded build, so no pin reproduces them
+retroactively. Closing the gap needs ONE deliberate rebake, committed, which
+moves the served histogram bytes for all 158 photos and re-mints nothing else.
+That is a call for the owner rather than a side effect of a tooling branch.
+
+The deeper fix, if the drift ever costs more than one rebake: normalise against a
+STABLE denominator (total pixels, or a fixed ceiling) instead of the peak, so one
+noisy bin cannot rescale the other 63. That changes the format and every
+committed histogram once, and it would make the bake robust to exactly the
+decoder differences the header already documents as unavoidable.

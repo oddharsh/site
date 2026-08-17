@@ -73,7 +73,10 @@ export async function ensureZenc(): Promise<string> {
   requireBins(["cargo"]);
   const { $ } = await import("bun");
   console.error("zenc: building (first run only)…");
-  const built = await $`cargo build --release --manifest-path ${dir}Cargo.toml`.nothrow();
+  // --locked: Cargo.lock is committed and pins the JPEG decoder (image 0.25.10,
+  // zune-jpeg 0.5.15), which the histogram bake depends on bit-for-bit. Without
+  // it a build may silently UPDATE the lock, and every histogram moves.
+  const built = await $`cargo build --release --locked --manifest-path ${dir}Cargo.toml`.nothrow();
   if (built.exitCode !== 0) {
     console.error("error: zenc build failed");
     process.exit(1);
