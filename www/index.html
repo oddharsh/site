@@ -754,17 +754,22 @@ footer .signature small { color: oklch(56.93% 0 0); }
       // because `error` never fires there.
       //
       // The stem is read back out of the failing url rather than shipped in a
-      // data-* attribute, so the repair adds no bytes to any tile. `-400` is
-      // spelled out rather than matched as `-\d+` because a stem may legitimately
-      // end in a dash and digits, and the small tier is the only suffix we mint.
+      // data-* attribute, so the repair adds no bytes to any tile. The tier
+      // suffixes are spelled out rather than matched as `-\d+` because a stem may
+      // legitimately end in a dash and digits, and we mint exactly two.
       // /images/<stem>.jpg then 301s to the hashed JPEG, which is a hop this path
       // can afford and the fast path never takes.
       document.querySelector(".photos")?.addEventListener("error", (event) => {
         const image = event.target;
         if (!(image instanceof HTMLImageElement) || image.dataset.jpgTried) return;
-        const stem = /\/i\/([^/]+?)(?:-400)?\.[0-9a-f]{8}\.avif(?:$|\?)/.exec(image.src);
+        const stem = /\/i\/([^/]+?)(?:-(?:200|400))?\.[0-9a-f]{8}\.avif(?:$|\?)/.exec(image.src);
         if (!stem) return;
         image.dataset.jpgTried = "1";
+        // srcset BEATS src, so assigning src alone would leave the browser
+        // re-picking the AVIF candidate it just failed to decode and the repair
+        // would silently do nothing. Clear the source set first, then recover.
+        image.removeAttribute("srcset");
+        image.removeAttribute("sizes");
         image.src = "/images/" + stem[1] + ".jpg";
       }, true);   // capture: `error` on an <img> does not bubble
 

@@ -12,6 +12,7 @@ import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildExifIndex } from "./build-exif-index.mjs";
+import { buildHistogramIndex } from "./build-histogram-index.mjs";
 import { asRecord, asText } from "../_worker.js/lib/parse.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -172,6 +173,26 @@ if (stale.length) {
   fail(`images/exif.json disagrees with images/meta/ for ${stale.length} photo(s): ${stale.slice(0, 8).join(", ")}` +
        `${stale.length > 8 ? " …" : ""}\n  fix with: node www/scripts/build-exif-index.mjs`);
 }
+// The packed histogram index (/images/histograms.json) is what the worker inlines
+// into each tile as data-hist, so a stale or partial one is a tooltip whose bars
+// quietly go back to costing a request per hover. Derived from the same per-photo
+// files, and rebuilt through the generator's OWN packing function rather than a
+// second copy of the rule, so this cannot pass by agreeing with itself.
+const histIndex = await json(path.join(IMAGES, "histograms.json"));
+const rebuiltHist = (await buildHistogramIndex()).index;
+const histMissing = stems.filter((stem) => !histIndex[stem]);
+if (histMissing.length) {
+  fail(`${histMissing.length} photo(s) absent from images/histograms.json: ${histMissing.slice(0, 8).join(", ")}` +
+       `${histMissing.length > 8 ? " …" : ""}\n  fix with: node www/scripts/build-histogram-index.mjs`);
+}
+const histStale = stems.filter((stem) => histIndex[stem] !== rebuiltHist[stem]);
+if (histStale.length) {
+  fail(`images/histograms.json disagrees with images/meta/ for ${histStale.length} photo(s): ${histStale.slice(0, 8).join(", ")}` +
+       `${histStale.length > 8 ? " …" : ""}\n  fix with: node www/scripts/build-histogram-index.mjs`);
+}
+const histStrays = Object.keys(histIndex).filter((stem) => !hashes[stem]);
+if (histStrays.length) fail(`images/histograms.json carries unpublished stems: ${histStrays.join(", ")}`);
+
 const strays = Object.keys(exifIndex).filter((stem) => !hashes[stem]);
 if (strays.length) fail(`images/exif.json carries unpublished stems: ${strays.join(", ")}`);
 

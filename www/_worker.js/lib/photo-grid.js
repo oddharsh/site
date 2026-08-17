@@ -91,7 +91,7 @@ const abs = (u) => (u && u.startsWith("/") ? u : `/images/${u}`);
 // whatever the wrap, which is the property that makes this safe to hardcode.
 const PRIORITISED_TILES = 6;
 
-export function renderPhotoSlots(pick, altMap = {}, { deferred = true } = {}) {
+export function renderPhotoSlots(pick, altMap = {}, { deferred = true, histograms = {} } = {}) {
   return pick.map((p, index) => {
     // Omitted rather than spelled `auto` because they mean the same thing to the
     // browser and one of them costs bytes on every tile.
@@ -126,6 +126,23 @@ export function renderPhotoSlots(pick, altMap = {}, { deferred = true } = {}) {
     // Fall back to the stem rather than alt="": the tile IS the link, so an
     // empty alt makes the <a> nameless for screen readers and agents.
     const alt = escAttr(altMap[p.stem] || p.stem);
+    // The tooltip's four histogram channels, packed to 256 bytes and base64'd,
+    // riding with the tile that owns them. This used to arrive on the hover that
+    // needed it, one /images/meta/<stem>.json per photo: measured on production
+    // at 135ms and 117ms for the first two hovers, once per photo, with the bars
+    // unable to draw until the file landed.
+    //
+    // It has to be in the MARKUP rather than warmed by tooltip.js, because
+    // tooltip.js does not exist until the first hover happens (index.html's
+    // loader is deliberate about that: "visitors who never hover transfer no
+    // tooltip JavaScript"). Anything that module warms is by construction too
+    // late for hover number one.
+    //
+    // base64 rather than JSON arrays: 344 chars a tile against ~660, and it needs
+    // no attribute escaping. Absent is a legal state and tooltip.js falls back to
+    // its per-photo fetch, which is what a stem with no baked histogram gets.
+    const hist = histograms[p.stem];
+    const histAttr = hist ? ` data-hist="${escAttr(hist)}"` : "";
     const sizeAttr = (asNumber(p.size) > 0) ? ` data-size="${p.size}"` : "";
     const upAttr = p.uploaded ? ` data-uploaded="${escAttr(p.uploaded)}"` : "";
 
@@ -165,7 +182,7 @@ export function renderPhotoSlots(pick, altMap = {}, { deferred = true } = {}) {
       : `<img alt="${alt}" width="184" height="184" src="${escAttr(thumb)}"${srcset} loading="eager"${pri} decoding="async">`;
 
     return `<a href="/images/full/${encodeURI(p.full)}" target="_blank" rel="noopener"` +
-           ` data-full="${escAttr(p.full)}"${sizeAttr}${upAttr}>` +
+           ` data-full="${escAttr(p.full)}"${sizeAttr}${upAttr}${histAttr}>` +
       image + noScript +
     `</a>`;
   }).join("");

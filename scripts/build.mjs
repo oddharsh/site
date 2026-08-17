@@ -849,9 +849,14 @@ if (inlineProbe.includes("/* probe */") ||
   );
   if (!pool.length) throw new Error("homepage bake: the photo pool is empty — the grid fallback would ship as bare frames");
   const altMap = JSON.parse(await readFile(`${OUT}/www/images/alt.json`, "utf8").catch(() => "{}"));
+  const histograms = JSON.parse(await readFile(`${OUT}/www/images/histograms.json`, "utf8").catch(() => "{}"));
   const twelve = grid.deterministicTwelve(pool);
   if (twelve.length !== 12) throw new Error(`homepage bake: expected 12 fallback tiles, pool yielded ${twelve.length}`);
-  const slots = grid.renderPhotoSlots(twelve, altMap);
+  // A silent {} here would ship a grid whose tiles all fall back to the per-hover
+  // fetch, which is the pre-#440 behaviour and looks like nothing is wrong.
+  const histed = twelve.filter((p) => histograms[p.stem]).length;
+  if (histed !== 12) throw new Error(`homepage bake: ${histed} of 12 baked tiles carry a histogram — run pnpm run photos or node www/scripts/build-histogram-index.mjs`);
+  const slots = grid.renderPhotoSlots(twelve, altMap, { histograms });
 
   let html = await readFile(`${OUT}/www/index.html`, "utf8");
   const section = /(<section class="photos"[^>]*>)([\s\S]*?)(<\/section>)/;

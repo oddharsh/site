@@ -223,6 +223,29 @@ export async function getAltMap(env) {
 // memory; these callers (the legacy /images/<thumb> 301 mapper, queryPhotos)
 // are not hot, and keeping them on ASSETS keeps them stubbable in
 // contract-tests. Both readers see the same committed file per deploy.
+// Packed histograms {stem: base64(4 channels x 64 bins, one byte each)}, written
+// by scripts/build-histogram-index.mjs. Module-cached like _altMap, and that memo
+// is the whole reason this is an ASSETS read rather than a bundled import: the
+// fragment draws a random twelve per request so all 158 must be reachable, and
+// bundling them costs 22.9 KiB gzip (83% of the bundle's remaining headroom)
+// while reading twelve files per request costs twelve subrequests against a 50
+// cap. One memoised read costs neither.
+//
+// Only the drawn twelve reach the client, as data-hist on each tile. That is what
+// keeps this from being the download build-exif-index.mjs declined: all 158 would
+// be 24 KiB brotli of bars most visitors never see, where the twelve a visitor can
+// actually hover are ~1.9 KiB.
+export let _histograms;
+
+export async function getHistogramMap(env) {
+  if (_histograms) return _histograms;
+  try {
+    const r = await env.ASSETS.fetch("https://assets.local/images/histograms.json");
+    _histograms = r.ok ? await r.json() : {};
+  } catch { _histograms = {}; }
+  return _histograms;
+}
+
 export let _thumbHashes;
 
 export async function getThumbHashes(env) {
@@ -243,6 +266,7 @@ export async function getThumbHashes(env) {
 export function _resetPhotoCaches() {
   _altMap = undefined;
   _thumbHashes = undefined;
+  _histograms = undefined;
 }
 
 const PHOTO_PUBLIC_FIELDS = [
