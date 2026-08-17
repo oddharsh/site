@@ -12,7 +12,7 @@
     "documented nowhere, so a clean machine met them as a raw shell error.",
     "",
     "`optional` means a script degrades rather than exits: avifenc falls back to",
-    "sips in add-photos.sh and reencode-thumbnails.ts, and is REQUIRED by the two",
+    "sips in add-photos.ts and reencode-thumbnails.ts, and is REQUIRED by the two",
     "encoding-grid scripts, so it is listed optional and its hard callers are named",
     "in `required_by` anyway. A tool that is optional everywhere is still declared,",
     "because the point is a complete list rather than a blocking one.",
@@ -28,7 +28,7 @@
       "install": "cargo install --git https://github.com/oddharsh/exif-sooc exif-sooc",
       "why": "every EXIF read and write in the pipeline. It emits metadata.json's record shape directly and owns the merge, which retired the 50-line jq reshape and build-recipes.py, and on 2026-08-14 it took the last of exiftool's jobs too: orientation reads, -all= strips and -TagsFromFile copies, in ExifTool's own flag spellings. Pinned at 0.2.0 by the guards in the writing scripts: 0.1.0 could not write, and its -all= truncated progressive JPEGs at the first scan, which is every JPEG this pipeline produces",
       "required_by": [
-        "tools/photos/add-photos.sh",
+        "tools/photos/add-photos.ts",
         "tools/photos/download-remote-photos.ts",
         "tools/photos/export-for-instagram.ts",
         "tools/photos/extract-photo-metadata.ts",
@@ -50,7 +50,7 @@
       "why": "resize, HEIF decode, and the AVIF fallback encoder",
       "required_by": [
         "tools/photos/add-car-photo.ts",
-        "tools/photos/add-photos.sh",
+        "tools/photos/add-photos.ts",
         "tools/photos/export-for-instagram.ts",
         "tools/photos/gen-encoding-grids.ts",
         "tools/photos/gen-encoding-samples.ts",
@@ -68,7 +68,6 @@
       "install": "https://rustup.rs",
       "why": "builds zenc, the shipped JPEG encoder, on first run",
       "required_by": [
-        "tools/photos/add-photos.sh",
         "tools/photos/lib/prereqs.ts"
       ]
     },
@@ -78,7 +77,7 @@
       "install": "brew install mozjpeg",
       "why": "lossless EXIF-orientation rotation before recompression",
       "required_by": [
-        "tools/photos/add-photos.sh",
+        "tools/photos/add-photos.ts",
         "tools/photos/reencode-thumbnails.ts"
       ]
     },
@@ -98,6 +97,7 @@
       "why": "primary 10-bit AVIF tier; add-photos and reencode-thumbnails fall back to sips, the grid scripts do not",
       "required_by": [
         "tools/photos/add-car-photo.ts",
+        "tools/photos/add-photos.ts",
         "tools/photos/gen-encoding-grids.ts",
         "tools/photos/gen-encoding-samples.ts",
         "tools/photos/reencode-thumbnails.ts"
@@ -139,9 +139,9 @@
     {
       "bin": "python3",
       "install": "brew install python",
-      "why": "alt text in add-photos.sh, plus gen-pixel-peeper.py; only the last of those wants Pillow, from tools/photos/requirements.txt. build-recipes.py was the third consumer and was deleted on 2026-08-14 when exif-sooc took over the recipe card",
+      "why": "alt text in add-photos.ts, plus gen-pixel-peeper.py; only the last of those wants Pillow, from tools/photos/requirements.txt. build-recipes.py was the third consumer and was deleted on 2026-08-14 when exif-sooc took over the recipe card",
       "required_by": [
-        "tools/photos/add-photos.sh"
+        "tools/photos/add-photos.ts"
       ]
     }
   ]

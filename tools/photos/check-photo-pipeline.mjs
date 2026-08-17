@@ -3,7 +3,7 @@
 // Validate the committed public photo artifact graph. Full-resolution source
 // files stay outside git; this checks everything the site actually serves:
 // the photo index the worker bundles, metadata, per-photo EXIF/histogram JSON,
-// the hash map, and all three pixel tiers. add-photos.sh runs this as its last
+// the hash map, and all three pixel tiers. add-photos.ts runs this as its last
 // phase, and CI runs it on every PR so an incremental add cannot silently
 // truncate the library.
 
@@ -51,7 +51,7 @@ if (JSON.stringify(stems) !== JSON.stringify(indexStems)) {
   fail(`photo-index/hash stem sets differ (${indexStems.length} index, ${stems.length} hashes)` +
        `${missing.length ? `\n  hashed but not indexed: ${missing.slice(0, 8).join(", ")}` : ""}` +
        `${extra.length ? `\n  indexed but not hashed: ${extra.slice(0, 8).join(", ")}` : ""}` +
-       `\n  add-photos.sh phase 4 writes the index; a removed photo must lose its entry here too`);
+       `\n  add-photos.ts phase 4 writes the index; a removed photo must lose its entry here too`);
 }
 for (const [stem, entry] of Object.entries(photoIndex)) {
   if (asText(entry?.full) === null || !entry.full.startsWith(`${stem}.`)) {
@@ -207,7 +207,7 @@ const strays = Object.keys(exifIndex).filter((stem) => !hashes[stem]);
 if (strays.length) fail(`images/exif.json carries unpublished stems: ${strays.join(", ")}`);
 
 // alt text is a served artifact like the pixels and the EXIF, so a gap fails here
-// rather than shipping an unlabelled image. add-photos.sh generates captions just
+// rather than shipping an unlabelled image. add-photos.ts generates captions just
 // above this check, so reaching it means the captioner was rate-limited or skipped.
 const uncaptioned = stems.filter((stem) => !(alt[stem] || "").trim());
 if (uncaptioned.length) {

@@ -94,7 +94,7 @@ if (import.meta.main) {
 
   const stems = [...new Set(
     (await readdir(join(root, "public/i"))).filter((f) => f.endsWith(".jpg")).map(stemOfHashed),
-  )].sort();
+  )].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
   if (!stems.length) {
     console.error("error: no published thumbnails found in public/i/ (expected the content-hashed JPG tiles)");
     process.exit(1);
@@ -118,7 +118,7 @@ if (import.meta.main) {
       const source = join(src, found);
 
       try {
-        let work = join(inter, `${stem}.jpg`);
+        let work = join(inter, stem + ".jpg");
         // 1. decode source -> working JPG (long edge 2000, ample to crop a sharp square)
         await $`${bin.sips} -Z 2000 -s format jpeg --setProperty formatOptions 100 ${source} --out ${work}`.quiet();
 
@@ -126,7 +126,7 @@ if (import.meta.main) {
         const o = (await $`exif-sooc -s -s -s -n -Orientation ${source}`.quiet().nothrow()).stdout.toString();
         const flags = orientationFlags(o);
         if (flags.length) {
-          const rot = join(inter, `${stem}.rot.jpg`);
+          const rot = join(inter, stem + ".rot.jpg");
           const r = await $`${MOZ_JTRAN} -copy none ${flags} ${work}`.quiet().nothrow();
           if (r.exitCode === 0) { await Bun.write(rot, r.stdout); work = rot; }
         }
@@ -141,9 +141,9 @@ if (import.meta.main) {
         const h = Number(dims.match(/pixelHeight:\s*(\d+)/)?.[1]);
         if (!w || !h) { fail++; process.stdout.write("x"); continue; }
 
-        const tif = join(inter, `${stem}.tif`);
-        const sqt = join(inter, `${stem}.sq.tif`);
-        const sqPng = join(inter, `${stem}.sq.png`);
+        const tif = join(inter, stem + ".tif");
+        const sqt = join(inter, stem + ".sq.tif");
+        const sqPng = join(inter, stem + ".sq.png");
         await $`${bin.sips} -s format tiff ${work} --out ${tif}`.quiet();
         await $`${bin.sips} -Z ${longEdgeFor(w, h, SQ)} ${tif}`.quiet();
         await $`${bin.sips} -c ${SQ} ${SQ} ${tif} --out ${sqt}`.quiet();
@@ -155,18 +155,20 @@ if (import.meta.main) {
         const yuv = /space:\s*Gray/.test(space) ? "400" : "420";
 
         if (tiers.has("sq")) {
-          await $`${zenc} ${sqPng} ${join(dest, `${stem}.jpg`)} -q ${ZENC_Q}`.quiet();
-          await $`exif-sooc -all= -overwrite_original ${join(dest, `${stem}.jpg`)}`.quiet().nothrow();
-          await avif(sqPng, join(dest, `${stem}.avif`), yuv);
+          await $`${zenc} ${sqPng} ${join(dest, stem + ".jpg")} -q ${ZENC_Q}`.quiet();
+          await $`exif-sooc -all= -overwrite_original ${join(dest, stem + ".jpg")}`.quiet().nothrow();
+          await avif(sqPng, join(dest, stem + ".avif"), yuv);
         }
         // 5/6. the smaller tiers come from the same lossless square, so each is ONE
         //      encode from the source rather than a resize of a resize.
-        for (const [tier, edge] of [["sm", SQ_SM], ["xs", SQ_XS]] as const) {
+        for (const tierSpec of [{ name: "sm", edge: SQ_SM }, { name: "xs", edge: SQ_XS }]) {
+          const tier: string = tierSpec.name;
+          const edge: number = tierSpec.edge;
           if (!tiers.has(tier)) continue;
-          const scaled = join(inter, `${stem}.${tier}.png`);
+          const scaled = join(inter, stem + "." + tier + ".png");
           const r = await $`${bin.sips} -Z ${edge} ${sqPng} --out ${scaled}`.quiet().nothrow();
           if (r.exitCode !== 0) { process.stdout.write("~"); continue; }
-          await avif(scaled, join(dest, `${stem}-${edge}.avif`), yuv).catch(() => process.stdout.write("~"));
+          await avif(scaled, join(dest, stem + "-" + String(edge) + ".avif"), yuv).catch(() => process.stdout.write("~"));
         }
         ok++;
         process.stdout.write(".");

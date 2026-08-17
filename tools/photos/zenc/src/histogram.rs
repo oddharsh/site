@@ -3,7 +3,7 @@
 //
 // Ported from photo-histograms.py on 2026-08-14, which retired Pillow and with
 // it the whole python3 + pip prerequisite of the photo pipeline. The port has to
-// be BYTE-IDENTICAL against 158 committed meta files, because add-photos.sh
+// be BYTE-IDENTICAL against 158 committed meta files, because add-photos.ts
 // re-bakes the entire library on every add and calls the no-op diff its
 // idempotence check. Three things had to match exactly, and two of them are not
 // what you would write from scratch:

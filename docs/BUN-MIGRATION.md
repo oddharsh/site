@@ -355,7 +355,7 @@ red build. `tools/contract-tests.test.mjs` now carries that as a check.
 byte-identity discipline says to revert served files so the bytes do not move,
 and the cost of that is prose left behind: pages went on naming
 `www/_worker.js/index.js`, `www/_worker.js/counter.js`, `www/scripts/zenc/` and
-`www/scripts/add-photos.sh` after every one of those had moved. `/garage/workers`
+`www/scripts/add-photos.ts` after every one of those had moved. `/garage/workers`
 is a page ABOUT the Worker and it was citing a directory that no longer existed.
 One (`tools/gen-shell-deltas.mjs`) predates the branch entirely.
 
@@ -613,3 +613,74 @@ PRINTED. A drifting wrangler exited 0. That was survivable while the scan was
 reading a missing directory and the count was always zero; with the scan working
 it would have been a scanner nobody reads. It fails now, exit 1, with the
 offending versions named.
+
+## The media scripts are Bun Shell, all ten of them
+
+`tools/photos` holds no shell. Every script was verified equivalent against the
+one it replaced BEFORE the shell version was deleted:
+
+| script | how it was verified |
+|---|---|
+| `add-car-photo` | byte-identical jpg + avif |
+| `bump-version` | byte-identical `checkpoints.json`, original restored |
+| `download-remote-photos` | byte-identical 8.9 MB download, matching rejection |
+| `hash-thumbnails` | sandboxed: identical tree + map across merge, prune, additive tier |
+| `gen-encoding-grids` | 16 outputs byte-identical, in a scratch dest |
+| `gen-encoding-samples` | 11 outputs byte-identical, in a scratch dest |
+| `extract-photo-metadata` | all 158 projections identical to real `jq` |
+| `reencode-thumbnails` | 2 real originals through 4 tiers, 8 outputs identical |
+| `export-for-instagram` | both branches: same q51, same metrics, same bytes |
+| `add-photos` | index merge identical to `jq`; front-half behaviour matched |
+
+**`add-photos` was NOT run end to end, deliberately.** Phase 3 uploads to R2 and
+phase 4 rewrites `public/i` and the photo index, so a verification run would have
+had to modify the real photo tree to prove anything. What was verified instead is
+every piece that was REIMPLEMENTED rather than translated: the index merge
+against real `jq` on the real 158-entry index, and the argument and prerequisite
+handling against the shell. The geometry it shares with `reencode-thumbnails` is
+the code that WAS verified byte-identical on real photos.
+
+### What the conversion was actually for
+
+Not ergonomics. In shell a prerequisite is written `for cmd in sips exif-sooc`,
+so the binary name exists only as a loop word and a search for it finds nothing.
+That is why four prerequisites stayed undocumented until `tools:check` went
+looking, and why that checker carried THREE source-scraping scanners, each with a
+floor, so that a scanner which stopped matching could not report a pass.
+
+Every script now exports `REQUIRES = [...]`. The checker READS it: no regex, no
+floor, and both directions checked (a binary `tools.json` does not declare, and a
+declaration left behind after a script stopped using it).
+
+**All three shell scanners are deleted.** With no shell left they would report
+"0 scanned" and pass, which is the decoration this repo's own comments warn about
+everywhere else. `git log -- tools/check-tools.mjs` has them if shell returns.
+
+### Seven scripts were already broken and nothing knew
+
+`add-car-photo`, `hash-thumbnails`, `extract-photo-metadata` (twice),
+`gen-encoding-grids`, `add-photos` and `reencode`'s sibling all computed a root as
+`$(dirname $0)/..`, which was `www/` before the tree split and became `tools/`
+after. `SRC_DIR` pointed at `tools/images`, `DEST` at `tools/garage/enc`, the
+histogram bake at `tools/`. **No search for `www/` can find any of them, because
+the path is COMPUTED rather than written.** That is the same blind spot as
+`${OUT}/www`, `` `www/${dir}` ``, `www${p}.html` and the extensionless config
+files: four costumes, one lesson.
+
+### Two bugs fixed in flight
+
+`gen-encoding-samples` ran its `exif-sooc` version gate at the very END, after
+every write that depends on it. A too-old binary strips nothing (it reads `-all=`
+as a tag SELECTION) and 0.1.0 truncated progressive JPEGs at their first scan, so
+it would publish damaged files and only then announce the binary was unusable.
+
+And `add-photos` had `inputs.find(async …)` in my own first draft, which returns
+the first element whatever it is, because a promise is always truthy.
+
+### Tools that left rather than moved
+
+`python3` from five scripts to two, `curl` and `jq` from the downloader,
+`jq` from the metadata extractor. The line held throughout: replace a tool that
+was standing in for a language feature, keep the one doing real work. `sips`,
+`exif-sooc`, `avifenc`, `cwebp`, `ffmpeg`, `zenc`, mozjpeg and the two libjxl
+metrics all stay.

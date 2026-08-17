@@ -38,9 +38,6 @@ let declaredScripts = 0;
 // One guard list and one brew hint per remaining script is the weakest claim
 // that still catches a scanner which has stopped matching, and when the last .sh
 // goes both scanners retire themselves rather than passing on an empty set.
-const SHELL_LEFT = (await readdir(new URL("photos/", import.meta.url))).filter((n) => n.endsWith(".sh")).length;
-const FLOOR_GUARD_LISTS = SHELL_LEFT;
-const FLOOR_BREW_HINTS = SHELL_LEFT;
 
 const errors = [];
 
@@ -51,15 +48,7 @@ if (tools.length === 0) {
   process.exit(1);
 }
 
-const byBin = new Map(tools.map((t) => [t.bin, t]));
-const declaredBins = new Set(byBin.keys());
-const declaredInstalls = new Set(tools.map((t) => t.install).filter(Boolean));
 
-// wrangler is guarded like a system binary and is not one: it comes from the
-// workspace install, is pinned exactly at the root, and check-wrangler.mjs
-// already asserts that. Declaring it here would put one version pin in two
-// files, which is the drift this repo keeps writing gotchas about.
-const NOT_SYSTEM = new Set(["wrangler"]);
 
 // ── the shell corpus ─────────────────────────────────────────────────────────
 async function shellScripts() {
@@ -143,76 +132,27 @@ for (const tool of tools) {
   }
 }
 
-// ── tier 1b: every `for cmd in …` guard list is declared ─────────────────────
+// ── tiers 1b/1c/1d: RETIRED ─────────────────────────────────────────────────
 //
-// The shape is `for <var> in <words>; do … command -v "$<var>" …`, which is how
-// most of these scripts check their preconditions. A grep for the binary NAME
-// cannot see these, because the name only exists as a loop word. That blind spot
-// is gotcha 29's, in a different costume.
-let guardLists = 0;
-const guardPattern = /^[ \t]*for[ \t]+(\w+)[ \t]+in[ \t]+([^;\n]+);?[ \t]*(?:do)?[ \t]*$/gm;
-for (const [rel, text] of source) {
-  for (const match of text.matchAll(guardPattern)) {
-    const [, variable, wordsRaw] = match;
-    // Only a loop whose body probes the loop variable is a precondition guard.
-    const after = text.slice(match.index, match.index + 400);
-    if (!after.includes(`command -v "$${variable}"`) && !after.includes(`-x "$${variable}"`)) continue;
-    guardLists += 1;
-    for (const word of wordsRaw.trim().split(/\s+/)) {
-      // Words that are themselves variables hold a path resolved earlier; the
-      // binary they point at is declared under its own name instead.
-      if (word.includes("$")) continue;
-      const bin = word.replace(/^["']|["']$/g, "");
-      if (!bin || declaredBins.has(bin) || NOT_SYSTEM.has(bin)) continue;
-      errors.push(`${rel}: guards on \`${bin}\`, which config/tools.json does not declare`);
-    }
-  }
-}
-if (guardLists < FLOOR_GUARD_LISTS) {
-  errors.push(
-    `guard-list scanner matched ${guardLists} loops, below the floor of ${FLOOR_GUARD_LISTS}. ` +
-      `The shell changed shape and this scanner is now checking nothing.`,
-  );
-}
-
-// ── tier 1c: every `command -v <literal>` is declared ────────────────────────
-let literalProbes = 0;
-for (const [rel, text] of source) {
-  for (const match of text.matchAll(/command -v[ \t]+"?([A-Za-z][\w.-]*)"?/g)) {
-    const bin = match[1];
-    if (bin.startsWith("$")) continue;
-    literalProbes += 1;
-    if (declaredBins.has(bin) || NOT_SYSTEM.has(bin)) continue;
-    errors.push(`${rel}: probes \`${bin}\`, which config/tools.json does not declare`);
-  }
-}
-
-// ── tier 1d: every `brew install …` hint maps to a declaration ───────────────
+// Three scanners used to read shell source here: `for cmd in …` guard lists,
+// literal `command -v` probes, and `brew install` hints. Each carried a FLOOR,
+// because a source scanner that stops matching otherwise reports a pass.
 //
-// A formula is not a binary (mozjpeg gives jpegtran and cjpeg, libavif gives
-// avifenc, webp gives cwebp), so this matches on the install STRING rather than
-// trying to translate. A new hint that nothing declares is a new prerequisite.
-let brewHints = 0;
-for (const [rel, text] of source) {
-  for (const match of text.matchAll(/brew install ([a-z0-9][a-z0-9 -]*)/g)) {
-    const hint = `brew install ${match[1].trim()}`;
-    brewHints += 1;
-    if (declaredInstalls.has(hint)) continue;
-    // A multi-formula hint is satisfied when every formula in it is declared
-    // somewhere, since the docs write them as one line.
-    const formulae = match[1].trim().split(/\s+/);
-    const covered = formulae.every((f) => [...declaredInstalls].some((i) => i.split(/\s+/).includes(f)));
-    if (!covered) {
-      errors.push(`${rel}: suggests \`${hint}\`, which config/tools.json does not account for`);
-    }
-  }
-}
-if (brewHints < FLOOR_BREW_HINTS) {
-  errors.push(
-    `brew-hint scanner matched ${brewHints} hints, below the floor of ${FLOOR_BREW_HINTS}. ` +
-      `The install hints moved and this scanner is now checking nothing.`,
-  );
-}
+// They existed for ONE reason: shell hid the binary names. A prerequisite
+// written `for cmd in sips exif-sooc` puts the name in a loop word, so a grep
+// for it finds nothing, and four prerequisites stayed undocumented until these
+// scanners went looking.
+//
+// There is no shell left in this repository. All ten scripts in tools/photos
+// export their binaries as values (tier 1a2 above), which is checkable by
+// READING rather than by regex and needs no floor, because there is no pattern
+// that can silently stop matching.
+//
+// So the scanners are gone rather than left reporting `0 scanned` and passing.
+// A check whose population is empty is decoration, and this file's own comments
+// have said so about every other check in it.
+//
+// If shell ever comes back, `git log -- tools/check-tools.mjs` has them.
 
 // ── tier 1e: the docs name every tool ────────────────────────────────────────
 //
@@ -254,8 +194,7 @@ for (const tool of tools) {
 }
 
 // ── report ───────────────────────────────────────────────────────────────────
-console.log(`tools: ${tools.length} declared across ${scripts.length} shell scripts`);
-console.log(`declaration: ${guardLists} guard loops, ${literalProbes} literal probes, ${brewHints} brew hints scanned`);
+console.log(`tools: ${tools.length} declared`);
 console.log(`declaration: ${declaredScripts} converted script(s) declare their binaries as values`);
 
 if (errors.length) {

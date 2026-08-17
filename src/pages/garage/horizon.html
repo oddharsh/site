@@ -2171,7 +2171,7 @@ ctx.drawElementImage(el, 0, 0);            // &lt;- the new primitive (el has la
   &lt;img src="/images/&lt;stem&gt;.jpg?v=11" loading="lazy" decoding="async"&gt;
 &lt;/picture&gt;
 
-# pipeline: one more encode step after the jpegli stage in add-photos.sh
+# pipeline: one more encode step after the jpegli stage in add-photos.ts
 cjxl --lossless_jpeg=1 &lt;stem&gt;.jpg &lt;stem&gt;.jxl   # byte-reversible re-wrap
 # OR re-encode from the 1200px source for max ratio:
 cjxl -q 90 -e 7 &lt;stem&gt;.png &lt;stem&gt;.jxl</pre>
@@ -2180,7 +2180,7 @@ cjxl -q 90 -e 7 &lt;stem&gt;.png &lt;stem&gt;.jxl</pre>
       <p class="replaces">
         On the site: a <em>third</em> tier above AVIF in every photo-grid
         <code>&lt;picture&gt;</code>, plus a <code>cjxl</code> step in
-        <code>add-photos.sh</code> after the jpegli encode and another stem
+        <code>add-photos.ts</code> after the jpegli encode and another stem
         format in <code>public/images/</code> (120 stems &times; <em>3</em>
         formats). But the <code>&lt;picture&gt;</code> type-fallback decode trap
         from the CLAUDE.md gotcha applies double here: the format split is
@@ -2243,7 +2243,7 @@ cjxl -q 90 -e 7 &lt;stem&gt;.png &lt;stem&gt;.jxl</pre>
       </div>
       <div class="hdr-room" aria-hidden="true"><span class="head"></span></div>
       <details>
-        <summary class="note" style="cursor:pointer">pipeline sketch (what add-photos.sh would gain)</summary>
+        <summary class="note" style="cursor:pointer">pipeline sketch (what add-photos.ts would gain)</summary>
 <pre># today: SOOC -&gt; sips resize -&gt; jpegtran rotate -&gt; cjpegli q82 -&gt; avifenc CQ30
 #         single SDR-tonemapped AVIF + JPG, P3-tagged.
 
@@ -2264,7 +2264,7 @@ ultrahdr_app -m 0 -i base.jpg -g gainmap.jpg -o photo-uhdr.jpg
         On the site: this doesn&apos;t replace anything, it&apos;s a
         forward-look for the photo grid. The gain-map base layer <em>is</em> the
         existing SDR JPG/AVIF, so the fallback is free and the pipeline is purely
-        additive: one extra encode step in <code>add-photos.sh</code>, no new
+        additive: one extra encode step in <code>add-photos.ts</code>, no new
         client JS. It pairs with the <code>@media (color-gamut: p3)</code>
         upgrades already in the stylesheet via a sibling
         <code>@media (dynamic-range: high)</code> gate, so SDR visitors keep the

@@ -2,10 +2,16 @@
 // the public source tree so search and the agent interface share the site's
 // actual words without making the homepage pay for a client-side search bundle.
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
-import { join, relative } from "node:path";
+import { dirname, join, relative } from "node:path";
 
-const ROOT = "src/pages";
-const OUT = join(ROOT, "search-index.json");
+// The SCAN roots and the OUTPUT path are different questions, and collapsing them
+// into one ROOT after the www/ split wrote a served asset into src/pages and lost
+// 6 records: this indexes .html (src/pages) AND .md/.txt (src/content, which is
+// where the writing posts and the markdown live).
+// public/ is here for llms.txt and the other root-level prose assets: the
+// pre-split walk of www/ saw them, and dropping it silently cost one record.
+const SCAN_ROOTS = ["src/pages", "src/content", "public"];
+const OUT = "public/search-index.json";
 const MAX_TEXT = 1800;
 const SKIP_DIRS = new Set(["images", "i", "meta", "full", ".wrangler"]);
 // Worker-rendered utilities the source-tree walk below can't see (no static
@@ -63,8 +69,8 @@ async function walk(dir) {
 
 const records = [];
 for (const [url, title, description, kind] of MANUAL) records.push({ url, title, description, text: `${title} ${description}`, kind });
-for (const file of await walk(ROOT)) {
-  const rel = relative(ROOT, file).replaceAll("\\", "/");
+for (const { root, file } of (await Promise.all(SCAN_ROOTS.map(async (root) => (await walk(root)).map((file) => ({ root, file }))))).flat()) {
+  const rel = relative(root, file).replaceAll("\\", "/");
   const url = routeFor(rel);
   if (!url || url === "/search") continue;
   if (!/\.(?:html|md|txt)$/i.test(rel)) continue;
@@ -82,6 +88,6 @@ for (const file of await walk(ROOT)) {
 
 const byUrl = new Map(records.map((record) => [record.url, record]));
 const result = [...byUrl.values()].sort((a, b) => a.url.localeCompare(b.url));
-await mkdir(join(ROOT), { recursive: true });
+await mkdir(dirname(OUT), { recursive: true });
 await writeFile(OUT, JSON.stringify({ version: 1, generatedAt: "source-tree", records: result }, null, 2) + "\n");
 console.log(`search index: ${result.length} records -> ${OUT}`);

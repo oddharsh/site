@@ -35,7 +35,7 @@
     "gen:shell": "bun tools/photos/gen-desktop-partial.mjs",
     "gen:mcp-cards": "bun tools/gen-mcp-cards.mjs",
     "search:index": "bun tools/generate-search-index.mjs",
-    "photos": "bash tools/photos/add-photos.sh",
+    "photos": "bun tools/photos/add-photos.ts",
     "photos:check": "bun tools/photos/check-photo-pipeline.mjs",
     "captions": "python3 tools/photos/gen-alt-text.py",
     "photos:env": "uv venv tools/photos/.venv --python 3.12 --allow-existing && uv pip install --python tools/photos/.venv/bin/python -r tools/photos/requirements.txt",

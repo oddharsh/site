@@ -10,7 +10,7 @@ prompt, so a caption reads identically whichever one produced it:
   LOCAL (preferred; needs CLOUDFLARE_API_TOKEN) reads the square thumbnail
   already sitting in public/i/ and posts those bytes to the Workers AI REST
   API. Because it never asks production for anything, it captions a photo that
-  has never been deployed — which is the whole reason add-photos.sh can caption
+  has never been deployed — which is the whole reason add-photos.ts can caption
   a shot in the same run that encodes it.
 
   REMOTE (fallback; no credentials) hands a stem to /garage/cf/caption and lets

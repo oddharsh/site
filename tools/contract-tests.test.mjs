@@ -6248,7 +6248,7 @@ test("the JPEG parser agrees with the pipeline that made the files", async () =>
     const bytes = new Uint8Array(readFileSync(`public/i/${f}`));
     assert.equal(sniff(bytes), "jpeg", `${f} should sniff as jpeg`);
     const info = parseJpeg(bytes);
-    // add-photos.sh emits 600px squares through zenc at 4:2:0, progressive.
+    // add-photos.ts emits 600px squares through zenc at 4:2:0, progressive.
     assert.equal(info.width, 600, `${f} width`);
     assert.equal(info.height, 600, `${f} height`);
     assert.equal(info.subsampling, "4:2:0", `${f} is the delivery tier, so 4:2:0`);

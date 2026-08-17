@@ -13,7 +13,7 @@ import { ARCHIVE_VERSION } from "./lib/const.ts";
 import { errorResp, escAttr, escHtml, jsonResp } from "./lib/http.ts";
 import { commonPairs, queryTerms, scoreFields } from "./lib/text.ts";
 // the photo pool, as BUILD INPUTS: photo-index.json (which photos exist — full
-// R2 key, byte size, upload date; written by add-photos.sh at upload time) and
+// R2 key, byte size, upload date; written by add-photos.ts at upload time) and
 // hashes.json (the content-hash map the /i/ URLs are minted from). esbuild
 // inlines both into the bundle, so reading the pool is module memory: 0ms, no
 // I/O, no cold-read class. This replaced the KV-cached R2-list manifest
@@ -141,7 +141,7 @@ export async function servePhotoFromR2(request, env, ctx) {
 
 // ── the photo pool ──────────────────────────────────────────────────
 // photo-index.json is the single source of truth for which photos exist:
-// one entry per published stem, written by add-photos.sh when it uploads the
+// one entry per published stem, written by add-photos.ts when it uploads the
 // original. Deleting a photo = deleting its entry (plus the R2 object and /i/
 // tiles); the old REMOVED_STEMS tombstone set retired with the R2 list() it
 // was compensating for, since a committed index has no eventual consistency
