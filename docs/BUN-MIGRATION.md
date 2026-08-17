@@ -57,6 +57,13 @@ linux-x64 asset the runner fetched hashed the same value a workstation fetch got
 minutes later, so the asset had genuinely moved rather than being served
 inconsistently.
 
+**It rolled again the same day**, hours after that bump, to
+`1.4.0-canary.1+7aad38741`. Two bumps in one day is the shape of this pin
+rather than bad luck, so expect to re-bump on most days the branch is open, and
+expect a reviewer arriving cold to find `validate` red on the setup step. Same
+controls each time, and the build stayed byte-identical across all 1499 files
+through both.
+
 `1.4.0-canary.1+8326d1bd3` to `1.4.0-canary.1+8bc4d2a88`. The version string
 and `packageManager` are untouched, because neither of them moved, which is the
 whole reason the digest is the declaration.

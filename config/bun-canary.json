@@ -36,23 +36,23 @@
     "because .github/actions/setup-bun indexes this map by platform."
   ],
   "version": "1.4.0-canary.1",
-  "revision": "1.4.0-canary.1+8bc4d2a88",
+  "revision": "1.4.0-canary.1+7aad38741",
   "platforms": {
     "darwin-aarch64": {
       "url": "https://github.com/oven-sh/bun/releases/download/canary/bun-darwin-aarch64.zip",
-      "binary_sha256": "ebd629c687cd2f2e78f9e150b0c5ea11576f8df403d04060f5833fb73fa6238a"
+      "binary_sha256": "d4f385f1be3be4e654e4a07b11201a622441842475ed7b5584487e9e6f81b865"
     },
     "linux-x64": {
       "url": "https://github.com/oven-sh/bun/releases/download/canary/bun-linux-x64.zip",
-      "binary_sha256": "3e271b24baaec79287adaae2c3f70111e726ddbbcb06a049c4c7e8305ed98c11"
+      "binary_sha256": "fef4eaaacb904d605192426e7c72b5a053053c5c8cd81a2621dff0732ec9c9ba"
     }
   },
   "verified": {
     "on": "2026-08-17",
     "build_bytes_identical_to_node": true,
     "build_files": 1499,
-    "build_bytes_identical_to_previous_canary": "1.4.0-canary.1+8326d1bd3, all 1499 files",
-    "contract_tests": "307 across 1 file",
+    "build_bytes_identical_to_previous_canary": "1.4.0-canary.1+8bc4d2a88, all 1499 files",
+    "contract_tests": "316 across 1 file",
     "zstd_dictionary": "none=65 good=18 wrong=64 (honours it, same as node v26.7.0)"
   }
 }
