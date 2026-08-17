@@ -2623,7 +2623,7 @@ test("homepage selects 12 photos and transfers all of them", async () => {
 
 
 test("the packed histogram survives the round trip tooltip.js does", async () => {
-  const { packHistogram, CHANNELS, BINS, HIST_BASE, HIST_LEVELS } = await import("../www/scripts/build-histogram-index.mjs");
+  const { packHistogram, CHANNELS, BINS, HIST_BASE, HIST_LEVELS } = await import("../tools/photos/build-histogram-index.mjs");
   const hi = {};
   for (const [ci, c] of CHANNELS.entries()) hi[c] = Array.from({ length: BINS }, (_, i) => (i * 7 + ci * 13) % 101);
   const packed = packHistogram(hi);
@@ -2643,7 +2643,7 @@ test("the packed histogram survives the round trip tooltip.js does", async () =>
   // 63..126 holds none of & < > " (34, 38, 60, 62), so the attribute can never
   // need escaping. Asserted over every committed histogram rather than a
   // fixture, because the day this breaks is the day a bin goes out of range.
-  const committed = JSON.parse(readFileSync("www/images/histograms.json", "utf8"));
+  const committed = JSON.parse(readFileSync("public/images/histograms.json", "utf8"));
   const stems = Object.keys(committed);
   assert.ok(stems.length > 100, `expected the real corpus, got ${stems.length} entries`);
   for (const stem of stems) {

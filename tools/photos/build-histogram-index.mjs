@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-// Build www/images/histograms.json: every photo's four histogram channels,
+// Build public/images/histograms.json: every photo's four histogram channels,
 // packed, keyed by stem. This file is a SERVER-SIDE input and is never fetched
 // by a browser, which is what makes its size unremarkable.
 //

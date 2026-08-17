@@ -88,7 +88,7 @@ for stem in stems:
     if entry:
         # MERGE rather than replace. An additive run carries only the tier it
         # generated, so assigning the entry outright would drop a, j and s for
-        # every stem it touched — and the tiers would still be on disk in www/i/,
+        # every stem it touched — and the tiers would still be on disk in public/i/,
         # so the damage reads as a map that forgot them rather than as missing
         # files. The file's header has always described this as a merge; the
         # per-stem write was the one place that was not one.

@@ -132,7 +132,7 @@ export function start(initial) {
       // tile without one, or a hover on something that is not a grid tile, falls
       // through to the per-photo fetch exactly as before.
       // One character per bin, ASCII 63..126, written by
-      // www/scripts/build-histogram-index.mjs (which carries the reasoning). The
+      // tools/photos/build-histogram-index.mjs (which carries the reasoning). The
       // stored form IS this form, so the worker copies the string straight into
       // the attribute and this is the only place it is ever decoded.
       const HIST_BASE = 63, HIST_LEVELS = 64, HIST_BINS = 64;

@@ -660,7 +660,7 @@ await cp("serendipity/serendipity.js", `${OUT}/serendipity/serendipity.js`);
 // should not be a second committed copy that can fall behind, and generating it
 // here means there is no step anyone can forget.
 //
-// www/images/meta is in STAGE_SKIP for this reason. Copying whatever happens to be
+// public/images/meta is in STAGE_SKIP for this reason. Copying whatever happens to be
 // on the local disk and then writing over it would make the built tree depend on
 // pipeline leftovers; deriving it makes the two indexes the only source.
 //
@@ -669,11 +669,11 @@ await cp("serendipity/serendipity.js", `${OUT}/serendipity/serendipity.js`);
 // by at most 1. That is 0.32px in the 32-unit SVG these feed, and the real source
 // of truth is the photograph, which `zenc histogram` can re-bake.
 {
-  const exif = JSON.parse(await readFile(`${OUT}/www/images/exif.json`, "utf8").catch(() => "{}"));
-  const packed = JSON.parse(await readFile(`${OUT}/www/images/histograms.json`, "utf8").catch(() => "{}"));
+  const exif = JSON.parse(await readFile(`${OUT}/public/images/exif.json`, "utf8").catch(() => "{}"));
+  const packed = JSON.parse(await readFile(`${OUT}/public/images/histograms.json`, "utf8").catch(() => "{}"));
   const CHANNELS = ["l", "r", "g", "b"];
   const BINS = 64, HIST_BASE = 63, HIST_LEVELS = 64;
-  await mkdir(`${OUT}/www/images/meta`, { recursive: true });
+  await mkdir(`${OUT}/public/images/meta`, { recursive: true });
   let written = 0;
   // Parsed at the boundary: a packed entry becomes channels or nothing, and every
   // caller below branches on the channels rather than on the string. A wrong-typed
@@ -691,7 +691,7 @@ await cp("serendipity/serendipity.js", `${OUT}/serendipity/serendipity.js`);
     const out = { ...record };
     const hi = unpackChannels(packed[stem]);
     if (hi) out.hi = hi;
-    await writeFile(`${OUT}/www/images/meta/${stem}.json`, JSON.stringify(out));
+    await writeFile(`${OUT}/public/images/meta/${stem}.json`, JSON.stringify(out));
     written++;
   }
   // A silent zero here serves 404s to every fallback fetch, which reads as a
@@ -919,12 +919,13 @@ if (inlineProbe.includes("/* probe */") ||
   );
   if (!pool.length) throw new Error("homepage bake: the photo pool is empty — the grid fallback would ship as bare frames");
   const altMap = JSON.parse(await readFile(`${OUT}/public/images/alt.json`, "utf8").catch(() => "{}"));
+  const histograms = JSON.parse(await readFile(`${OUT}/public/images/histograms.json`, "utf8").catch(() => "{}"));
   const twelve = grid.deterministicTwelve(pool);
   if (twelve.length !== 12) throw new Error(`homepage bake: expected 12 fallback tiles, pool yielded ${twelve.length}`);
   // A silent {} here would ship a grid whose tiles all fall back to the per-hover
   // fetch, which is the pre-#440 behaviour and looks like nothing is wrong.
   const histed = twelve.filter((p) => histograms[p.stem]).length;
-  if (histed !== 12) throw new Error(`homepage bake: ${histed} of 12 baked tiles carry a histogram — run pnpm run photos or node www/scripts/build-histogram-index.mjs`);
+  if (histed !== 12) throw new Error(`homepage bake: ${histed} of 12 baked tiles carry a histogram — run bun run photos or bun tools/photos/build-histogram-index.mjs`);
   const slots = grid.renderPhotoSlots(twelve, altMap, { histograms });
 
   let html = await readFile(`${OUT}/public/index.html`, "utf8");
