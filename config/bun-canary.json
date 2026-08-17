@@ -28,7 +28,12 @@
     "28. build.mjs feature-detects it and throws, but 40 seconds into a build.",
     "The probe below is the same control run first and named.",
     "",
-    "Re-verify with: bun run bun:canary:check"
+    "Re-verify with: bun run bun:canary:check",
+    "",
+    "BOTH platforms are declared because they are BOTH used: darwin-aarch64 is the",
+    "workstation and linux-x64 is every GitHub runner. Declaring only the one you",
+    "develop on fails CI at the first step with a TypeError rather than a message,",
+    "because .github/actions/setup-bun indexes this map by platform."
   ],
   "version": "1.4.0-canary.1",
   "revision": "1.4.0-canary.1+8326d1bd3",
@@ -36,6 +41,10 @@
     "darwin-aarch64": {
       "url": "https://github.com/oven-sh/bun/releases/download/canary/bun-darwin-aarch64.zip",
       "binary_sha256": "144b9f41062faf28b64a7ecb8e863dfd0607f95913a1fcc89cf88b6e4af142da"
+    },
+    "linux-x64": {
+      "url": "https://github.com/oven-sh/bun/releases/download/canary/bun-linux-x64.zip",
+      "binary_sha256": "5aafc3be2517f79411347d3854151a2d35706c3a0359e3ddd914b00e231ff74f"
     }
   },
   "verified": {
