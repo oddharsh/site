@@ -58,6 +58,17 @@ DEST="$PROJECT_DIR/www/images"
 SRC="${1:-/Users/aadharsh/Downloads/to post (from ssd)}"
 SQ="${SQ:-600}"        # desktop square edge
 SQ_SM="${SQ_SM:-400}"  # mobile square edge (filename suffix; must match THUMB_SMALL_PX)
+SQ_XS="${SQ_XS:-200}"  # 1x square edge (the 184px tile at DPR-1)
+
+# WHICH tiers to write. Default is everything, which is what a real re-encode
+# wants. The reason this knob exists is that adding a tier must be ADDITIVE: an
+# /i/ URL names its bytes, so re-encoding a tier that did not need to change
+# mints a new hash, rewrites every page that references it, and orphans the
+# a-dict and p-dict snapshots built against the old ones. `TIERS=xs` writes the
+# 200px tier and leaves the other three byte-identical, which is how the 158
+# committed photos were backfilled without touching a single existing hash.
+TIERS="${TIERS:-sq,sm,xs}"
+want() { case ",$TIERS," in *",$1,"*) return 0;; *) return 1;; esac; }
 TMP="/tmp/aadhar-reencode-$$"
 mkdir -p "$TMP"
 trap 'rm -rf "$TMP"' EXIT
@@ -145,6 +156,7 @@ while IFS= read -r stem; do
   tif="$INTER/${stem}.tif"; sqt="$INTER/${stem}.sq.tif"
   sqjpg="$INTER/${stem}.sq.png"; smtmp="$INTER/${stem}.sm.png"
   jpg="$DEST/${stem}.jpg"; avif="$DEST/${stem}.avif"; smavif="$DEST/${stem}-${SQ_SM}.avif"
+  xstmp="$INTER/${stem}.xs.png"; xsavif="$DEST/${stem}-${SQ_XS}.avif"
 
   # 1. decode source → working JPG (long edge 2000 — ample to crop a sharp square)
   if ! sips -Z 2000 -s format jpeg --setProperty formatOptions 100 "$src" --out "$work" >/dev/null 2>&1; then
@@ -179,20 +191,31 @@ while IFS= read -r stem; do
   #    already emits clean JPGs, but sips can leave a grayscale ICC on B&W frames,
   #    so strip the JPG too. assumes sRGB display (the AVIF primary has no profile
   #    either, so this keeps the two formats consistent).
+  space=$(sips -g space "$sqjpg" 2>/dev/null | awk '/space:/{print $2}'); [ "$space" = "Gray" ] && yuv=400 || yuv=420
+  if want sq; then
   if ! "$ZENC" "$sqjpg" "$jpg" -q "$ZENC_Q" >/dev/null 2>&1; then FAIL=$((FAIL+1)); printf "✗"; continue; fi
   exif-sooc -all= -overwrite_original "$jpg" >/dev/null 2>&1 || true
-  space=$(sips -g space "$sqjpg" 2>/dev/null | awk '/space:/{print $2}'); [ "$space" = "Gray" ] && yuv=400 || yuv=420
   if [ "$AVIF_ENCODER" = "avifenc" ]; then
     avifenc -q 63 -d 10 --ignore-icc --ignore-exif --ignore-xmp --speed 4 --jobs 4 --yuv "$yuv" "$sqjpg" "$avif" >/dev/null 2>&1 || { FAIL=$((FAIL+1)); printf "✗"; continue; }
   else
     sips -s format avif --setProperty formatOptions 60 "$sqjpg" --out "$avif" >/dev/null 2>&1 || { FAIL=$((FAIL+1)); printf "✗"; continue; }
   fi
+  fi
   # 5. mobile square: downscale the SQ square to SQ_SM (square→square, no distortion)
-  if sips -Z "$SQ_SM" "$sqjpg" --out "$smtmp" >/dev/null 2>&1; then
+  if want sm && sips -Z "$SQ_SM" "$sqjpg" --out "$smtmp" >/dev/null 2>&1; then
     if [ "$AVIF_ENCODER" = "avifenc" ]; then
       avifenc -q 63 -d 10 --ignore-icc --ignore-exif --ignore-xmp --speed 4 --jobs 4 --yuv "$yuv" "$smtmp" "$smavif" >/dev/null 2>&1 || printf "~"
     else
       sips -s format avif --setProperty formatOptions 60 "$smtmp" --out "$smavif" >/dev/null 2>&1 || printf "~"
+    fi
+  fi
+  # 6. 1x square: the same lossless SQ square down to SQ_XS, so this tier is ONE
+  #    encode from the source like the other two rather than a resize of a resize.
+  if want xs && sips -Z "$SQ_XS" "$sqjpg" --out "$xstmp" >/dev/null 2>&1; then
+    if [ "$AVIF_ENCODER" = "avifenc" ]; then
+      avifenc -q 63 -d 10 --ignore-icc --ignore-exif --ignore-xmp --speed 4 --jobs 4 --yuv "$yuv" "$xstmp" "$xsavif" >/dev/null 2>&1 || printf "~"
+    else
+      sips -s format avif --setProperty formatOptions 60 "$xstmp" --out "$xsavif" >/dev/null 2>&1 || printf "~"
     fi
   fi
   OK=$((OK+1)); printf "."

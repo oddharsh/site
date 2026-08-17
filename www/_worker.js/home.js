@@ -4,7 +4,7 @@ import { serveMarkdownTwin } from "./lib/assets.js";
 import { HOMEPAGE_DISCOVERY_LINK } from "./lib/security.js";
 import { renderPhotoSlots } from "./lib/photo-grid.js";
 import { span } from "./lib/trace.js";
-import { getAltMap, getImagesManifest } from "./photos.js";
+import { getAltMap, getHistogramMap, getImagesManifest } from "./photos.js";
 
 // ── the homepage's dynamic half, as a fragment ──────────────────────
 // `/` itself is now a DETERMINISTIC static document: build.mjs bakes a fixed
@@ -46,10 +46,15 @@ import { getAltMap, getImagesManifest } from "./photos.js";
 // one number (as the probe's positional `doubles` fuses them) a slow cold
 // manifest and a slow cold alt map are indistinguishable.
 export async function handlePhotoGrid(request, env, ctx) {
-  const [pool, altMap] = await Promise.all([
+  const [pool, altMap, histograms] = await Promise.all([
     span("home.grid.manifest", () =>
       getImagesManifest(env, ctx).then((a) => (Array.isArray(a) && a.length ? a : null), () => null)),
     span("home.grid.alt", () => getAltMap(env).catch(() => ({}))),
+    // Module-cached like the alt map, so this is one ASSETS read per isolate
+    // rather than per request, and free on every warm one. An empty map is a
+    // legal answer: the tiles simply carry no data-hist and tooltip.js falls
+    // back to the per-photo fetch it used to always make.
+    span("home.grid.hist", () => getHistogramMap(env).catch(() => ({}))),
   ]);
   // 503 is the honest answer when the manifest is unreachable: the fragment has
   // nothing to say and the page keeps its baked twelve. Recorded as an attribute
@@ -64,9 +69,10 @@ export async function handlePhotoGrid(request, env, ctx) {
     s.setAttribute("home.grid.served", true);
     s.setAttribute("home.grid.pool_size", pool.length);
     s.setAttribute("home.grid.alt_known", Object.keys(altMap || {}).length);
+    s.setAttribute("home.grid.hist_known", Object.keys(histograms || {}).length);
     // deferred:false — these twelve are the real grid, not a placeholder, so
     // they carry live URLs and start the moment innerHTML lands.
-    return new Response(renderPhotoSlots(pickRandom(pool, 12), altMap || {}, { deferred: false }), {
+    return new Response(renderPhotoSlots(pickRandom(pool, 12), altMap || {}, { deferred: false, histograms }), {
       status: 200,
       headers: {
         "content-type": "text/html; charset=utf-8",

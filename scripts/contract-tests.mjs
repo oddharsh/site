@@ -2467,7 +2467,7 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   assert.match(build, /deterministicTwelve/, "the document must carry a baked fallback grid, or `/` stops being crawlable without JS");
   // The two renderings differ in exactly one way, so assert on the OUTPUT
   // rather than on the source that produces it.
-  const photo = [{ stem: "X1", full: "X1.jpg", thumb_jpg: "/i/X1.aaaaaaaa.jpg", thumb_avif: "/i/X1.aaaaaaaa.avif", thumb_small: "/i/X1-400.aaaaaaaa.avif", size: 1, uploaded: "2026-01-01" }];
+  const photo = [{ stem: "X1", full: "X1.jpg", thumb_jpg: "/i/X1.aaaaaaaa.jpg", thumb_avif: "/i/X1.aaaaaaaa.avif", thumb_small: "/i/X1-400.aaaaaaaa.avif", thumb_xs: "/i/X1-200.aaaaaaaa.avif", size: 1, uploaded: "2026-01-01" }];
   const baked = renderPhotoSlots(photo, {});
   const fragment = renderPhotoSlots(photo, {}, { deferred: false });
 
@@ -2475,6 +2475,10 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   // <noscript> twin is a thumbnail fetched and discarded milliseconds later.
   assert.match(baked, /data-photo-deferred/, "baked tiles must keep their URLs in data-* until hydration decides");
   assert.match(baked, /data-src="\/i\/X1-400\.aaaaaaaa\.avif"/, "the baked tile carries its one 400px AVIF in data-src");
+  assert.match(baked, /data-srcset="[^"]*200w[^"]*400w[^"]*600w[^"]*"/,
+    "the baked tile's candidates ride in data-srcset, for the same reason its src does");
+  assert.doesNotMatch(baked.slice(0, baked.indexOf("<noscript>")), /\ssrcset="/,
+    "a real srcset outside the twin selects and fetches before the hydrator can");
   assert.match(baked, /<noscript><img/, "every baked tile needs its script-off twin");
   // ONE url in the twin too. <picture> here is safe but not free: 195 bytes a
   // tile against 130, to serve a client that must be no-JS AND no-AVIF at once,
@@ -2490,8 +2494,38 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   // Fragment: these tiles ARE the grid. Nothing replaces them, so they carry
   // live URLs and start on innerHTML.
   assert.match(fragment, /\ssrc="\/i\/X1-400\.aaaaaaaa\.avif"/, "the fragment tile must carry its live 400px AVIF");
-  assert.doesNotMatch(fragment, /<picture|<source|srcset=|\ssrc="[^"]+\.jpg"/,
-    "one grid tile must expose one browser image resource, with no JPEG fallback to churn on hover");
+  // ONE FORMAT, which is what the old "one browser image resource" rule was
+  // actually protecting. That rule banned `srcset=` too, because at the time one
+  // URL and one format were the same policy. They are not: <picture>/<source>
+  // select on TYPE and leave a loser to be instantiated (13 JPEG loads for one
+  // tile, 2026-08-11), while srcset selects on SIZE and resolves to a single
+  // candidate. Measured before this changed, 12 tiles and two full hover passes
+  // at DPR 1 and 2: 0 image loads beyond the initial 12, identical to a
+  // single-URL control. So the assertion now pins the invariant rather than the
+  // proxy — no type selection, no JPEG, and every candidate the same format.
+  assert.doesNotMatch(fragment, /<picture|<source|\ssrc="[^"]+\.jpg"/,
+    "a grid tile must not select on TYPE: that is the fallback that churns on hover");
+  const cands = (/\ssrcset="([^"]+)"/.exec(fragment)?.[1] || "").split(",").map((c) => c.trim()).filter(Boolean);
+  assert.equal(cands.length, 3, "the fragment tile offers all three size candidates");
+  for (const c of cands) assert.match(c, /\.avif \d+w$/, `every srcset candidate is one AVIF with a width descriptor: ${c}`);
+  assert.match(fragment, /\ssizes="184px"/,
+    "sizes must name the fixed .photos column, or the browser guesses 100vw and picks the largest tier");
+
+  // THE BARS RIDE ON THE TILE. Measured on production before this: a photo hover
+  // stalled 135ms then 117ms waiting for /images/meta/<stem>.json, once per photo,
+  // with the histogram blank until it landed. It has to be in the markup rather
+  // than warmed by tooltip.js, because index.html loads that module on the FIRST
+  // hover on purpose, so anything it warms is too late for the hover that caused
+  // the load. Controlled in a browser with /images/meta/* aborted outright: bars
+  // drew on 6 of 6 hovers.
+  const packed = "?".repeat(128) + "~".repeat(128);   // 256 chars, both ends of the safe range
+  const withHist = renderPhotoSlots(photo, {}, { deferred: false, histograms: { X1: packed } });
+  assert.match(withHist, /data-hist="/, "a tile whose histogram is known carries it");
+  assert.equal(/data-hist="([^"]*)"/.exec(withHist)[1], packed, "the packed histogram ships verbatim");
+  // Absent is a LEGAL state, not a failure: tooltip.js falls back to the per-photo
+  // fetch, which is what a stem baked before this existed gets.
+  assert.doesNotMatch(renderPhotoSlots(photo, {}, { deferred: false }), /data-hist=/,
+    "a tile with no known histogram omits the attribute rather than shipping an empty one");
   assert.doesNotMatch(fragment, /data-photo-deferred|data-src=|data-srcset=/,
     "a fragment tile has nothing to defer for; leaving it deferred is how the grid went blank in an unrendered tab");
 
@@ -2505,11 +2539,15 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   const repair = home.slice(home.indexOf("AVIF DECODE REPAIR"), home.indexOf("fetch(\"/photos/grid.html\")"));
   assert.ok(repair.length > 0, "the homepage must carry the AVIF decode repair");
   assert.match(repair, /addEventListener\("error"[\s\S]*\}, true\)/, "the repair must listen in the CAPTURE phase or it never fires");
-  assert.match(repair, /\(\?:-400\)\?/, "the small tier is the only suffix we mint, so match it literally rather than -\\d+");
+  assert.match(repair, /\(\?:-\(\?:200\|400\)\)\?/, "both minted tier suffixes must be matched literally rather than as -\\d+");
+  // srcset beats src, so a repair that only assigns src leaves the browser
+  // re-picking the AVIF candidate it just failed to decode. Silent by nature:
+  // the handler runs, the attribute changes, and the image stays broken.
+  assert.match(repair, /removeAttribute\("srcset"\)/, "the repair must clear the source set before assigning src, or it does nothing");
   assert.match(repair, /dataset\.jpgTried/, "a failing JPEG must not loop back into the handler");
   assert.match(repair, /"\/images\/" \+ stem\[1\] \+ "\.jpg"/, "recover through the legacy redirect, which needs no hash in the page");
   assert.doesNotMatch(fragment, /<noscript>/, "the fragment only ever arrives via fetch(), so a script-off twin is dead bytes");
-  assert.match(worker, /\{ deferred: false \}/, "/photos/grid.html must render the live-URL form");
+  assert.match(worker, /deferred: false/, "/photos/grid.html must render the live-URL form");
 
   // Priority is split WITHIN the grid, and the two halves fail differently.
   // The CEILING is the #156 invariant: the LCP element is the prose, so no tile
@@ -2566,6 +2604,49 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   );
   assert.match(luna, /homepage music island \(below the fold\)/);
   assert.match(luna, /homepage hover island \(non-critical\)/);
+});
+
+
+test("the packed histogram survives the round trip tooltip.js does", async () => {
+  const { packHistogram, CHANNELS, BINS, HIST_BASE, HIST_LEVELS } = await import("../www/scripts/build-histogram-index.mjs");
+  const hi = {};
+  for (const [ci, c] of CHANNELS.entries()) hi[c] = Array.from({ length: BINS }, (_, i) => (i * 7 + ci * 13) % 101);
+  const packed = packHistogram(hi);
+  assert.equal(packed.length, CHANNELS.length * BINS, "one character per bin, no padding");
+
+  // The exact decode tooltip.js runs.
+  const decode = (s, ci, i) => Math.round((s.charCodeAt(ci * BINS + i) - HIST_BASE) * 100 / (HIST_LEVELS - 1));
+  let worst = 0;
+  for (const [ci, c] of CHANNELS.entries()) {
+    for (let i = 0; i < BINS; i++) worst = Math.max(worst, Math.abs(decode(packed, ci, i) - hi[c][i]));
+  }
+  // 64 levels over a 0-100 source, rendered into a 32-unit-tall SVG, so one
+  // level is half a pixel and this bound is the whole quality argument.
+  assert.ok(worst <= 1, `round trip is within one unit of 100, got ${worst}`);
+
+  // THE ENCODING'S SAFETY IS STRUCTURAL, not a property of the current data:
+  // 63..126 holds none of & < > " (34, 38, 60, 62), so the attribute can never
+  // need escaping. Asserted over every committed histogram rather than a
+  // fixture, because the day this breaks is the day a bin goes out of range.
+  const committed = JSON.parse(readFileSync("www/images/histograms.json", "utf8"));
+  const stems = Object.keys(committed);
+  assert.ok(stems.length > 100, `expected the real corpus, got ${stems.length} entries`);
+  for (const stem of stems) {
+    const v = committed[stem];
+    assert.equal(v.length, CHANNELS.length * BINS, `${stem} packs to one character per bin`);
+    assert.doesNotMatch(v, /["&<>]/, `${stem} carries no character that would need escaping in an attribute`);
+    for (let i = 0; i < v.length; i++) {
+      const code = v.charCodeAt(i);
+      assert.ok(code >= HIST_BASE && code < HIST_BASE + HIST_LEVELS,
+        `${stem} character ${i} is inside the safe range`);
+    }
+  }
+
+  // A malformed channel yields null rather than a plausible wrong shape, which is
+  // the same rule the photo pipeline follows everywhere: skip what you cannot
+  // state, never fabricate it.
+  assert.equal(packHistogram({ l: [1, 2], r: [], g: [], b: [] }), null, "a short channel packs to null");
+  assert.equal(packHistogram(null), null, "no histogram packs to null");
 });
 
 test("robots.txt never forbids a path the site advertises to agents", async () => {

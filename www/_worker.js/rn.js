@@ -160,7 +160,9 @@ export function canonicalArtUrl(raw) {
 // 1-year immutable response cannot be corrected any other way. Bump it to
 // re-tune width or quality; old URLs keep serving whatever they already cached,
 // which is why the handler does not validate the version beyond its shape.
-export const ART_VERSION = 1;
+// 2: quality 82 -> 63 (2026-08-17). Old URLs keep serving their q82 bytes for
+// the rest of their year, which is exactly what this constant is for.
+export const ART_VERSION = 2;
 
 // The browser path now uses only 240px AVIF for the 120px box. Keep accepting
 // the already-minted 120px and JPEG URLs at this handler boundary: old cached
@@ -272,7 +274,21 @@ export async function handleRnArt(request, env, ctx) {
   let res = null;
   try {
     res = await fetch(upstream, {
-      cf: { image: { width, fit: "scale-down", format: ext === "jpg" ? "jpeg" : "avif", quality: 82 } },
+      // 63 rather than 82, matching the number the photo pipeline gives avifenc.
+      // The two encoders are different, so the number alone proves nothing and the
+      // sweep is what justifies it. Measured against the real Cloudflare AVIF
+      // encoder on four covers from the live playlist, ssimulacra2 at the 120px
+      // size the art is actually DISPLAYED at:
+      //
+      //   q82   88.67  89.85  88.67  88.82     16013  7348  15148  13331 bytes
+      //   q70   86.43  87.74  85.33  87.30     12765  5947  12289  11263
+      //   q63   83.73  86.53  83.83  85.12     11136  5293  10929  10313
+      //
+      // ~27% off, and the floor to compare against is what this site already
+      // ships: the 200px photo tier every DPR-1 visitor gets measures 78-80 at
+      // ITS display size, so q63 art sits above the grid it sits next to. Judging
+      // at 240px would have been the wrong test and reads ~5 points harsher.
+      cf: { image: { width, fit: "scale-down", format: ext === "jpg" ? "jpeg" : "avif", quality: 63 } },
     });
   } catch { res = null; }
 

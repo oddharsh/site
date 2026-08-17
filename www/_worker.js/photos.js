@@ -159,11 +159,22 @@ export async function servePhotoFromR2(request, env, ctx) {
 // this comparator changes the order rather than breaking -- and the ordering
 // is only the pool's stable enumeration, which nothing user-visible pins.
 //
-// dual-source: thumb_avif is the <picture> primary; thumb_jpg is
-// the universal <img src> fallback (thumb_small is the 400px mobile AVIF).
-// NB: <picture> type-fallback only catches "format not supported" — it
-// does NOT catch DECODE failures. AVIF decode failures historically caused
-// broken images here; if they recur, the fix is to demote AVIF entirely.
+// FOUR TIERS, and none of them is a <picture> fallback any more. That markup was
+// removed in #156 because the losing candidate kept being instantiated on hover,
+// so the grid emits ONE format and selects a SIZE through srcset:
+//
+//   thumb_xs     200px AVIF, the DPR-1 candidate
+//   thumb_small  400px AVIF, DPR-2, and the plain src every tile carries
+//   thumb_avif   600px AVIF, DPR-3
+//   thumb_jpg    600px JPG, which the grid never emits — it is what /photos
+//                renders, and the target of index.html's AVIF decode repair
+//
+// This block used to describe thumb_avif as "the <picture> primary", thumb_jpg as
+// "the universal <img src> fallback", and thumb_small as "the 400px mobile AVIF".
+// All three stopped being true, in three separate changes, without the comment
+// moving. AVIF decode failures are still real (Kitesurf, 2026-08-12) and are
+// handled by the recovery listener in index.html rather than by a second
+// candidate here.
 // slim hot-path rows: ONLY the fields the SSR slot-builder reads
 // (EXIF rides /images/meta/<stem>.json, fetched per photo on hover).
 export function derivePhotoPool(index, hashes) {
@@ -178,6 +189,11 @@ export function derivePhotoPool(index, hashes) {
       thumb_avif:  `/i/${stem}.${h.a}.avif`,
       thumb_jpg:   `/i/${stem}.${h.j}.jpg`,
       thumb_small: `/i/${stem}-400.${h.s}.avif`,
+      // The DPR-1 candidate. Optional on purpose: a stem hashed before the 200px
+      // tier existed still serves, it just has one fewer srcset candidate, so a
+      // half-run pipeline degrades to the old behaviour rather than dropping the
+      // photo. derivePhotoPool already skips a stem missing a, j or s.
+      thumb_xs:    h.x ? `/i/${stem}-200.${h.x}.avif` : null,
       stem,
       size:       p.size,                   // R2 object size in bytes
       uploaded:   p.uploaded || null,
@@ -218,6 +234,29 @@ export async function getAltMap(env) {
 // memory; these callers (the legacy /images/<thumb> 301 mapper, queryPhotos)
 // are not hot, and keeping them on ASSETS keeps them stubbable in
 // contract-tests. Both readers see the same committed file per deploy.
+// Packed histograms {stem: base64(4 channels x 64 bins, one byte each)}, written
+// by scripts/build-histogram-index.mjs. Module-cached like _altMap, and that memo
+// is the whole reason this is an ASSETS read rather than a bundled import: the
+// fragment draws a random twelve per request so all 158 must be reachable, and
+// bundling them costs 22.9 KiB gzip (83% of the bundle's remaining headroom)
+// while reading twelve files per request costs twelve subrequests against a 50
+// cap. One memoised read costs neither.
+//
+// Only the drawn twelve reach the client, as data-hist on each tile. That is what
+// keeps this from being the download build-exif-index.mjs declined: all 158 would
+// be 24 KiB brotli of bars most visitors never see, where the twelve a visitor can
+// actually hover are ~1.9 KiB.
+export let _histograms;
+
+export async function getHistogramMap(env) {
+  if (_histograms) return _histograms;
+  try {
+    const r = await env.ASSETS.fetch("https://assets.local/images/histograms.json");
+    _histograms = r.ok ? await r.json() : {};
+  } catch { _histograms = {}; }
+  return _histograms;
+}
+
 export let _thumbHashes;
 
 export async function getThumbHashes(env) {
@@ -238,6 +277,7 @@ export async function getThumbHashes(env) {
 export function _resetPhotoCaches() {
   _altMap = undefined;
   _thumbHashes = undefined;
+  _histograms = undefined;
 }
 
 const PHOTO_PUBLIC_FIELDS = [
@@ -395,6 +435,7 @@ export async function queryPhotos(env, options = {}, ctx = null) {
         avif: hash.a ? `/i/${stem}.${hash.a}.avif` : null,
         jpg: hash.j ? `/i/${stem}.${hash.j}.jpg` : null,
         small: hash.s ? `/i/${stem}-400.${hash.s}.avif` : null,
+        xs: hash.x ? `/i/${stem}-200.${hash.x}.avif` : null,
       },
       metadata: photoMetadata(record),
     };

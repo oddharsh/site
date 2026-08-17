@@ -24,13 +24,20 @@ const abs = (u) => (u && u.startsWith("/") ? u : `/images/${u}`);
 // WHICH tiles carry a real `src` depends on which caller is rendering, and the
 // reason is the same one in both directions: a URL should only be in the markup
 // when it is a URL the visitor is actually going to use. Each tile names ONE
-// thumbnail. The old <picture> named a selected AVIF plus a JPEG fallback; a
+// FORMAT. The old <picture> named a selected AVIF plus a JPEG fallback; a
 // Chromium hover capture on 2026-08-11 showed the fallback being instantiated
 // again and again as the cursor crossed the grid (13 JPEG image loads for one
 // tile, most from memory cache). Every browser this site targets decodes AVIF,
-// and the 400px tier is already more than 2x the 184px tile, so the canonical
-// browser path is one 400px AVIF URL rather than two representations competing
-// behind one element.
+// so the canonical browser path is AVIF with no second format behind it.
+//
+// That paragraph used to end "one 400px AVIF URL", and the sentence before it
+// read "the 400px tier is already more than 2x the 184px tile". Both were the
+// format argument doing double duty as a SIZE argument, and the size half was
+// wrong in both directions: 2x the tile is right for a DPR-2 display and 2.3x
+// oversupply for DPR-1, while DPR-3 asks for 552px and was handed 400. The tile
+// now names three SIZES of the one format through srcset, which is a different
+// mechanism from <picture>'s type selection and measurably does not reproduce
+// the re-instantiation above (see the control at the srcset construction below).
 //
 //   deferred: true  — the BAKED twelve. These are a fallback the hydrator is
 //     about to replace, so a real `src` here fetches a thumbnail that is
@@ -84,7 +91,7 @@ const abs = (u) => (u && u.startsWith("/") ? u : `/images/${u}`);
 // whatever the wrap, which is the property that makes this safe to hardcode.
 const PRIORITISED_TILES = 6;
 
-export function renderPhotoSlots(pick, altMap = {}, { deferred = true } = {}) {
+export function renderPhotoSlots(pick, altMap = {}, { deferred = true, histograms = {} } = {}) {
   return pick.map((p, index) => {
     // Omitted rather than spelled `auto` because they mean the same thing to the
     // browser and one of them costs bytes on every tile.
@@ -93,9 +100,61 @@ export function renderPhotoSlots(pick, altMap = {}, { deferred = true } = {}) {
     // JPEG are recovery paths for an old/incomplete manifest entry, not alternate
     // candidates emitted beside it: even that degraded row still names one URL.
     const thumb = abs(p.thumb_small || p.thumb_avif || p.thumb_jpg);
+    // ONE FORMAT, THREE SIZES. The candidates are all AVIF, which is what makes
+    // this different from the <picture> the note above removed: that raced two
+    // FORMATS behind one element and the loser kept being instantiated on hover.
+    // srcset resolves to a single candidate at layout and never touches the
+    // others. Measured before writing this, 12 tiles and two full hover passes at
+    // DPR 1 and DPR 2: 12 image loads on the page, 0 extra from hovering, byte
+    // for byte the same count as the single-URL control.
+    //
+    // 184px is .photos' fixed column (repeat(auto-fill, 184px)), so `sizes` is a
+    // constant rather than a guess: 184, 368 and 552 device pixels at DPR 1, 2
+    // and 3, which is exactly what the three tiers cover. Before this the 400px
+    // file went to everyone, 2.3x what a 1x display can show, while a DPR-3 phone
+    // asked for 552 and got 400.
+    const cands = [
+      p.thumb_xs ? `${abs(p.thumb_xs)} 200w` : "",
+      p.thumb_small ? `${abs(p.thumb_small)} 400w` : "",
+      p.thumb_avif ? `${abs(p.thumb_avif)} 600w` : "",
+    ].filter(Boolean);
+    // One candidate is what `src` already says, so the attribute would be pure
+    // bytes. This is also the degraded path for a stem the pipeline half-ran.
+    const srcset = cands.length > 1
+      ? ` srcset="${escAttr(cands.join(", "))}" sizes="184px"`
+      : "";
     // Fall back to the stem rather than alt="": the tile IS the link, so an
     // empty alt makes the <a> nameless for screen readers and agents.
     const alt = escAttr(altMap[p.stem] || p.stem);
+    // The tooltip's four histogram channels, packed to 256 bytes and base64'd,
+    // riding with the tile that owns them. This used to arrive on the hover that
+    // needed it, one /images/meta/<stem>.json per photo: measured on production
+    // at 135ms and 117ms for the first two hovers, once per photo, with the bars
+    // unable to draw until the file landed.
+    //
+    // It has to be in the MARKUP rather than warmed by tooltip.js, because
+    // tooltip.js does not exist until the first hover happens (index.html's
+    // loader is deliberate about that: "visitors who never hover transfer no
+    // tooltip JavaScript"). Anything that module warms is by construction too
+    // late for hover number one.
+    //
+    // One character per bin in ASCII 63..126, packed by
+    // scripts/build-histogram-index.mjs, which carries the reasoning. 256 chars a
+    // tile against base64's 344, and 36% smaller after brotli because base64
+    // destroys the byte alignment brotli exploits on smooth data.
+    //
+    // The range holds no character needing escaping, so escAttr is a no-op here
+    // by construction rather than by luck. It DOES hold a backtick (96), one of
+    // the characters that forces minify-html to keep the quotes: measured on the
+    // staged document, 7 of 12 tiles quoted and 5 unquoted, all 12 intact at 256
+    // characters. Both forms are spec-legal and dataset reads them identically;
+    // noted because an attribute whose quoting varies per value looks like a bug
+    // the first time you diff the output.
+    //
+    // Absent is a legal state and tooltip.js falls back to its per-photo fetch,
+    // which is what a stem with no baked histogram gets.
+    const hist = histograms[p.stem];
+    const histAttr = hist ? ` data-hist="${escAttr(hist)}"` : "";
     const sizeAttr = (asNumber(p.size) > 0) ? ` data-size="${p.size}"` : "";
     const upAttr = p.uploaded ? ` data-uploaded="${escAttr(p.uploaded)}"` : "";
 
@@ -113,16 +172,29 @@ export function renderPhotoSlots(pick, altMap = {}, { deferred = true } = {}) {
     // exists for takes the onerror path in index.html and never reads this
     // block. Paying every visitor for a hypothetical one is the trade this file
     // already refuses everywhere else.
+    // 184x184 rather than 600x600. The attributes exist to reserve layout, and
+    // the ratio is what does that, so the old value was harmless and also
+    // described a file that has not been served since the grid moved to the
+    // 400px tier. With srcset it would be actively misleading: the intrinsic
+    // size now depends on which candidate wins, and the tile is always 184.
+    //
+    // The noscript twin deliberately keeps ONE url and no srcset. It is inert
+    // text in a scripting browser, and the note above already priced a second
+    // representation there at 195 bytes a tile against 130 to serve a client
+    // that must be no-JS AND no-AVIF at once.
     const noScript = deferred
-      ? `<noscript><img alt="${alt}" width="600" height="600" src="${escAttr(thumb)}" loading="lazy"${pri} decoding="async"></noscript>`
+      ? `<noscript><img alt="${alt}" width="184" height="184" src="${escAttr(thumb)}" loading="lazy"${pri} decoding="async"></noscript>`
       : "";
 
+    // data-srcset rides with data-src for the deferred set, for the same reason
+    // data-src does: a real srcset here starts a fetch the hydrator is about to
+    // throw away, which is the double-download #156 removed.
     const image = deferred
-      ? `<img data-photo-deferred alt="${alt}" width="600" height="600" data-src="${escAttr(thumb)}" loading="eager"${pri} decoding="async">`
-      : `<img alt="${alt}" width="600" height="600" src="${escAttr(thumb)}" loading="eager"${pri} decoding="async">`;
+      ? `<img data-photo-deferred alt="${alt}" width="184" height="184" data-src="${escAttr(thumb)}"${srcset.replace(" srcset=", " data-srcset=")} loading="eager"${pri} decoding="async">`
+      : `<img alt="${alt}" width="184" height="184" src="${escAttr(thumb)}"${srcset} loading="eager"${pri} decoding="async">`;
 
     return `<a href="/images/full/${encodeURI(p.full)}" target="_blank" rel="noopener"` +
-           ` data-full="${escAttr(p.full)}"${sizeAttr}${upAttr}>` +
+           ` data-full="${escAttr(p.full)}"${sizeAttr}${upAttr}${histAttr}>` +
       image + noScript +
     `</a>`;
   }).join("");

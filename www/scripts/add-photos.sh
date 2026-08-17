@@ -83,8 +83,15 @@ TMP="/tmp/aadhar-add-photos-$$"
 # square thumbnail edges (px). the file IS the displayed pixels (center square),
 # so no off-square bytes ship. MUST match reencode-thumbnails.sh + THUMB_SMALL_PX
 # in _worker.js (the -<N>.avif suffix). override per run with SQ=/SQ_SM=.
-SQ="${SQ:-600}"        # desktop square edge (~197px tile at DPR-3)
-SQ_SM="${SQ_SM:-400}"  # mobile square edge (served via <source media> ≤560px)
+SQ="${SQ:-600}"        # desktop square edge (the 184px tile at DPR-3)
+SQ_SM="${SQ_SM:-400}"  # DPR-2 square edge
+SQ_XS="${SQ_XS:-200}"  # DPR-1 square edge
+
+# The three edges are the srcset candidates lib/photo-grid.js emits against a
+# fixed 184px tile: 184, 368 and 552 device pixels at DPR 1, 2 and 3. Before the
+# 200px tier existed every visitor got the 400px file, which is 2.3x what a 1x
+# display can show (measured over a 12-photo draw: 113.3 KiB served against 42.5
+# KiB displayable) while a DPR-3 phone got a 400px file for a 552px need.
 
 # preconditions
 if [ $# -eq 0 ]; then
@@ -212,6 +219,7 @@ INTER="$TMP/inter"; mkdir -p "$INTER"
 while IFS= read -r f; do
   base=$(basename "$f"); stem="${base%.*}"
   jpg="$DEST/${stem}.jpg"; avif="$DEST/${stem}.avif"; smavif="$DEST/${stem}-${SQ_SM}.avif"
+  xs="$TMP/sq/${stem}-xs.png"; xsavif="$DEST/${stem}-${SQ_XS}.avif"
   if [ -f "$jpg" ] && [ -f "$avif" ] && [ -f "$smavif" ] && [ "$jpg" -nt "$f" ]; then
     T_SKIP=$((T_SKIP+1)); printf "·"; continue
   fi
@@ -259,6 +267,10 @@ while IFS= read -r f; do
   # be a JPEG resized from a JPEG, which cost it a fourth generation.
   if sips -Z "$SQ_SM" "$sq" --out "$sm" >/dev/null 2>&1; then
     avif_encode "$sm" "$smavif" || printf "~"
+  fi
+  # 7. 1x square AVIF, same one-encode-from-the-square property as step 6.
+  if sips -Z "$SQ_XS" "$sq" --out "$xs" >/dev/null 2>&1; then
+    avif_encode "$xs" "$xsavif" || printf "~"
   fi
   T_OK=$((T_OK+1)); printf "."
 done < "$SOURCES"

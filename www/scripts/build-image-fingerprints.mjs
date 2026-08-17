@@ -40,8 +40,9 @@ for (const stem of Object.keys(hashes).sort()) {
     a: `${stem}.${entry.a}.avif`,
     j: `${stem}.${entry.j}.jpg`,
     s: `${stem}-400.${entry.s}.avif`,
+    x: `${stem}-200.${entry.x}.avif`,
   };
-  for (const tier of ["a", "j", "s"]) {
+  for (const tier of ["a", "j", "s", "x"]) {
     const sum = await digest(path.join(HASHED, files[tier]));
     // Two published tiers holding identical bytes cannot both be represented by
     // an inverted index. The old stem-first shape did not make this impossible,
