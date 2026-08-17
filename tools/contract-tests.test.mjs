@@ -7969,3 +7969,87 @@ test("around renders an honest empty panel rather than a fabricated table", asyn
     assert.ok(!empty.includes(`>${n.name}<`), `${n.name} must not appear as a row when there is no data`);
   }
 });
+
+// ── the CSP hash scanner ────────────────────────────────────────────────────
+// build.mjs step 7c reads every staged document with tools/lib/csp-scan.mjs and
+// writes the hashes the enforcing script-src is built from. It runs on
+// HTMLRewriter (lol-html, the same parser the Worker uses) because the walker it
+// replaced was regex-shaped and this repo has three recorded incidents of a
+// naive scanner misreading its own minified output.
+//
+// Tested for TEETH, like the link resolver above: the real tree currently has
+// zero event handlers and one srcdoc, so a test that only asserted "the site
+// passes" would keep passing after the scanner was reduced to `() => []`.
+const CSP_SCAN = "./lib/csp-scan.mjs";
+
+test("the CSP scanner hashes what a browser would execute, and nothing else", async () => {
+  const { scanDocument } = await import(CSP_SCAN);
+  const { hashes } = await scanDocument(
+    `<script>a()</script>` +
+    `<script type="module">b()</script>` +
+    `<script type="speculationrules">{"prerender":[]}</script>` +
+    `<script type="application/json" id="luq-data">{"q":1}</script>` +
+    `<script type="application/ld+json">{"@type":"WebSite"}</script>` +
+    `<script src="/nav.js"></script>`,
+    "fixture",
+  );
+  assert.equal(hashes.length, 3, "js + module + speculationrules are executable; json, ld+json and external are not");
+});
+
+test("the CSP scanner hashes the RAW body, the way the browser does", async () => {
+  const { scanDocument } = await import(CSP_SCAN);
+  const { hashes } = await scanDocument(`<script>let a = 1 & 2 < 3; s = "&amp;";</script>`, "fixture");
+  // A script body is raw text: `&amp;` is two ampersand-a-m-p characters to the
+  // browser too, and `<` does not open a tag. The parser hands the body back in
+  // chunks split on `<`, so this pin is what proves the join is lossless.
+  assert.deepEqual(hashes, ["A+bRdrpssc15fMql2+y0eHcTpgQgCrSdWFDe7C/J5i8="]);
+});
+
+test("the CSP scanner descends into srcdoc, in document order", async () => {
+  const { scanDocument } = await import(CSP_SCAN);
+  const { hashes } = await scanDocument(
+    `<script>first()</script>` +
+    `<iframe srcdoc="&lt;script&gt;inner()&lt;/script&gt;"></iframe>` +
+    `<script>last()</script>`,
+    "fixture",
+  );
+  assert.equal(hashes.length, 3, "an srcdoc document inherits this page's CSP, so its scripts hash here");
+
+  // Order is load-bearing rather than cosmetic: the map is serialised into
+  // csp-hashes.ts, so a reshuffle is a changed Worker bundle for no reason.
+  const flat = await scanDocument(`<script>first()</script><script>inner()</script><script>last()</script>`, "fixture");
+  assert.deepEqual(hashes, flat.hashes, "the srcdoc hash sits in the position its iframe does");
+});
+
+test("the CSP scanner reads an attribute VALUE as text, not as a handler", async () => {
+  const { scanDocument } = await import(CSP_SCAN);
+  // garage/horizon ships this exact payload as demo TEXT in an input. A
+  // /\son\w+=/ over the raw tag calls it an event handler and fails the build,
+  // which is the false positive that made the old walker parse attributes.
+  const demo = await scanDocument(`<input value="&lt;img src=x onerror=alert(1)&gt;">`, "fixture");
+  assert.deepEqual(demo.handlers, [], "an onerror inside a quoted value is a string, not a handler");
+
+  const real = await scanDocument(`<div onclick="go()"></div>`, "fixture");
+  assert.equal(real.handlers.length, 1, "a real inline handler is still caught");
+  assert.match(real.handlers[0], /<div onclick=/, "and is named at its site");
+});
+
+test("the CSP scanner is loud about the two silent failures", async () => {
+  const { scanDocument, requireParser, PARSER_MISSING } = await import(CSP_SCAN);
+
+  // An empty executable block still needs the hash of the empty string. It has
+  // no text node, so a scanner keyed on text chunks drops it and the page
+  // quietly keeps 'unsafe-inline'.
+  const { hashes } = await scanDocument(`<script></script>`, "fixture");
+  assert.deepEqual(hashes, ["47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU="]);
+
+  await assert.rejects(() => scanDocument(`<script>a()`, "fixture"), /unterminated <script>/,
+    "a dropped block must throw rather than shorten the map");
+
+  // The parser is a bun global with no node equivalent, so the build states the
+  // requirement by name instead of dying on an undefined symbol.
+  assert.equal(typeof requireParser, "function");
+  assert.match(PARSER_MISSING, /bun/);
+  const build = readFileSync(new URL("./build.mjs", import.meta.url), "utf8");
+  assert.match(build, /cspRequireParser\(\);/, "build.mjs must announce the requirement before it scans");
+});

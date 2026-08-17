@@ -81,7 +81,7 @@ jobs:
         # The page half reads `.build/public` for the page LIST (it fetches the bytes
         # from production). The shell half under --live needs no build, but the page
         # half does, so the build runs once for both.
-        run: node tools/build.mjs
+        run: bun run build
 
       - name: Roll both dictionary sets against production
         # --live sources the shell half from the wire too, which is what lets this run

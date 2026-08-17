@@ -770,3 +770,72 @@ STABLE denominator (total pixels, or a fixed ceiling) instead of the peak, so on
 noisy bin cannot rescale the other 63. That changes the format and every
 committed histogram once, and it would make the bake robust to exactly the
 decoder differences the header already documents as unavoidable.
+
+## The CSP hash scan runs on HTMLRewriter, which node cannot do at all
+
+The first thing bun bought that is about the SITE rather than the toolchain.
+`build.mjs` step 7c reads every staged document and writes the sha256 map the
+enforcing `script-src` is built from. It did that with a hand-rolled tag walker,
+and the walker was correct only because it had been patched three times against
+the served bytes: minify-html unquotes attributes and decodes character
+references inside quoted values, so a scanner written against authored HTML
+reads minified HTML wrong. CLAUDE.md records all three incidents.
+
+Bun ships HTMLRewriter as a global. It is lol-html, **the same parser
+`src/worker/` runs**, so the build now reads a document the way the Worker does
+and the way the browser computing these hashes does. There is no node
+equivalent and no way to get one without a dependency.
+
+### The parser and the walker agree exactly, which is the point
+
+Over the 48 served pages, in 35ms:
+
+| inline `<script>` by type | count |
+|---|--:|
+| no type | 50 |
+| `speculationrules` | 46 |
+| `module` | 1 |
+| `application/json` + `ld+json`, data rather than script | 31 |
+| inside `garage/horizon.html`'s `iframe[srcdoc]` | 1 |
+
+97 executable in the documents plus the srcdoc one is the 98 the step has always
+reported. **A full build after the swap is byte-identical across all 1499
+files**, which is the bar every commit on this branch has had to clear, and it
+is the only assertion that could have caught a hash moving.
+
+So this changed no output and bought no speed. What it bought is that the
+scanner is now correct because it is a parser rather than correct because
+somebody patched it three times.
+
+### What the tests pin, and the controls that prove they can fail
+
+Five tests in `tools/contract-tests.test.mjs`, written for TEETH the way the
+link resolver above them is: the real tree has zero event handlers and one
+srcdoc, so a test asserting only "the site passes" would survive the scanner
+being reduced to `() => []`.
+
+- data blocks are not hashed and `speculationrules` is
+- the hash is over the RAW body, pinned to a literal, so the `&amp;` in a script
+  body and the chunk split on `<` both stay honest
+- srcdoc is descended IN DOCUMENT ORDER, asserted against the flattened
+  equivalent, because the map is serialised into `csp-hashes.ts` and a reshuffle
+  is a changed Worker bundle for nothing
+- `value="&lt;img src=x onerror=alert(1)&gt;"` is text, and a real `onclick` is
+  still caught. That false positive is what made the old walker parse attributes
+- an empty `<script></script>` still hashes the empty string, and an unterminated
+  one throws
+
+Two controls, run and reverted: making every type executable fails the first test
+by name, and dropping the srcdoc descent fails the third.
+
+### One runtime now, and the guard sits before the first `rm`
+
+The build can no longer run under node. The one caller that still did,
+`dictionary-roll.yml`'s build step, moves to `bun run build`; it already sets up
+bun and installs with it, so the node line was a leftover.
+
+`cspRequireParser()` runs BEFORE the first `rm(OUT)` rather than at step 7c.
+Checked at 7c it fires two seconds in, after the staging has already deleted the
+previous build. That is the same lesson `config/bun-canary.json` records about
+the zstd probe, where the feature detection was correct and 40 seconds late: **a
+precondition checked after the work is a precondition that costs the work.**

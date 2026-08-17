@@ -35,6 +35,7 @@ import { transform as transformCss } from "lightningcss";
 import { minifySync } from "oxc-minify";
 import { readManifest, workerModule, navFenceBody, readFenceBody, runProfilesBody } from "./gen-manifest.mjs";
 import { parseCss } from "./lib/css-parse.mjs";
+import { requireParser as cspRequireParser, scanDocument } from "./lib/csp-scan.mjs";
 import { HTML_MARKERS } from "./lib/html-markers.mjs";
 import { zstdCompressDictionaryBatch } from "./lib/zstd-batch.mjs";
 import { patchStaticShell, renderDesktopArtifacts, staticShellPages } from "../tools/photos/gen-desktop-partial.mjs";
@@ -603,6 +604,14 @@ await checkInvariants();
 // by the staging step below and ships artifacts current code would never build — which is
 // how an icons.*.dcz survived #119's svg exclusion locally, long after the guard forbidding
 // it was in place. That guard stops GENERATION, not staging of stale files.
+// Step 7c parses every staged document with HTMLRewriter, a bun global with no
+// node equivalent, so this build has ONE runtime. Assert it before the first
+// rm: the same lesson config/bun-canary.json records about the zstd dictionary
+// probe, where build.mjs feature-detected the capability correctly and did it 40
+// seconds in. A precondition checked after the work is a precondition that costs
+// the work.
+cspRequireParser();
+
 for (const dead of ["public/ad"]) {
   await rm(dead, { recursive: true, force: true });
 }
@@ -2079,119 +2088,22 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     return p === "/index" ? "/" : p.endsWith("/index") ? p.slice(0, -6) : p;
   };
 
-  // Walk a document's tags with the same quote-aware scanner the inline minifier
-  // uses, collecting (a) executable inline script bodies to hash and (b) inline
-  // event-handler attributes, which a hash CANNOT cover and which therefore have
-  // to be refactored rather than allowlisted.
+  // The scan lives in tools/lib/csp-scan.mjs and runs on HTMLRewriter, which is
+  // lol-html: the same parser src/worker/ uses, so the build reads a document the
+  // way the Worker and the browser do rather than the way a regex guesses. It
+  // replaced a hand-rolled tag walker that was correct only because it had been
+  // patched three times against the served bytes. Full argument at that file.
   //
-  // Attributes are parsed properly instead of regexed off the raw tag, because
-  // garage/horizon.html carries `value="&lt;img src=x onerror=alert(1)&gt;"` as
-  // demo TEXT. A naive / on\w+=/ over the tag token calls that an event handler
-  // and sends you refactoring a string literal.
-  const HANDLER_ATTR = /^on[a-z]+$/;
-
-  // An `srcdoc` document INHERITS the embedding page's CSP, so its inline scripts
-  // are checked against this page's script-src and have to be hashed here. The
-  // walker above steps over the whole attribute (it is quote-aware, which is what
-  // keeps the inner `<script>` from reading as a real one), so without this the
-  // hashes are silently short by exactly the scripts nobody can see. Found in
-  // production on 2026-08-16: garage/horizon's `#mb-frame` uptime counter is the
-  // proof that moveBefore() reparents without reloading, and enforcing the policy
-  // would have frozen it at 0 with nothing logged.
-  const SRCDOC_ATTR = "srcdoc";
-  const scanAttrs = (tagToken) => {
-    const found = [];
-    let srcdoc = null;
-    let i = 1;
-    while (i < tagToken.length && !/\s/.test(tagToken[i])) i++;  // skip tag name
-    while (i < tagToken.length) {
-      while (i < tagToken.length && /[\s/>]/.test(tagToken[i])) i++;
-      let name = "";
-      while (i < tagToken.length && !/[\s=/>]/.test(tagToken[i])) name += tagToken[i++];
-      if (!name) break;
-      while (i < tagToken.length && /\s/.test(tagToken[i])) i++;
-      let value = "";
-      if (tagToken[i] === "=") {
-        i++;
-        while (i < tagToken.length && /\s/.test(tagToken[i])) i++;
-        const q = tagToken[i];
-        if (q === '"' || q === "'") { i++; while (i < tagToken.length && tagToken[i] !== q) value += tagToken[i++]; i++; }
-        else while (i < tagToken.length && !/[\s>]/.test(tagToken[i])) value += tagToken[i++];
-      }
-      const lower = name.toLowerCase();
-      if (HANDLER_ATTR.test(lower)) found.push(lower);
-      if (lower === SRCDOC_ATTR) srcdoc = value;
-    }
-    return { handlers: found, srcdoc };
-  };
-
-  // The browser resolves character references in an attribute value exactly once
-  // on its way to the srcdoc document's source text, and the hash is taken over
-  // THAT text. So decode exactly once, over the staged bytes. In practice the
-  // staged copy already carries raw `<`, because minify-html decodes entities
-  // inside quoted attribute values (the same behaviour gotcha 20a in CLAUDE.md
-  // documents), which makes this a no-op today and correct if that ever changes.
-  const NAMED_REFS = { lt: "<", gt: ">", quot: '"', apos: "'", "#39": "'", nbsp: "\u00a0", amp: "&" };
-  const decodeCharRefs = (value) =>
-    value.replace(/&(#x[0-9a-f]+|#[0-9]+|[a-z]+);/gi, (whole, ref) => {
-      const key = ref.toLowerCase();
-      if (key.startsWith("#x")) return String.fromCodePoint(parseInt(ref.slice(2), 16));
-      if (key.startsWith("#")) return String.fromCodePoint(parseInt(ref.slice(1), 10));
-      return key in NAMED_REFS ? NAMED_REFS[key] : whole;
-    });
-
-  // A `<script>` is CSP-checked when the browser would EXECUTE it. That covers the
-  // JavaScript types and, verified in a real browser, `speculationrules`. It does
-  // not cover data blocks (application/json for the quiz payloads, ld+json), which
-  // are parsed as data and never reach script-src.
-  const EXECUTABLE_EXTRA = new Set(["speculationrules"]);
-  const collect = (source, label) => {
-    const hashes = [], handlers = [];
-    let cursor = 0;
-    while (cursor < source.length) {
-      const lt = source.indexOf("<", cursor);
-      if (lt === -1) break;
-      if (source.startsWith("<!--", lt)) {
-        const end = source.indexOf("-->", lt + 4);
-        if (end === -1) throw new Error(`csp-hash: unterminated comment in ${label}`);
-        cursor = end + 3;
-        continue;
-      }
-      const gt = findHtmlTagEnd(source, lt);
-      const token = source.slice(lt, gt + 1);
-      cursor = gt + 1;
-      const match = token.match(/^<\s*(\/?)\s*([A-Za-z][^\s/>]*)/);
-      if (!match || match[1]) continue;
-      const tag = match[2].toLowerCase();
-
-      const attrs = scanAttrs(token);
-      for (const attr of attrs.handlers) handlers.push(`${label}: <${tag} ${attr}=…>`);
-      if (attrs.srcdoc) {
-        const inner = collect(decodeCharRefs(attrs.srcdoc), `${label}: <${tag} srcdoc>`);
-        hashes.push(...inner.hashes);
-        handlers.push(...inner.handlers);
-      }
-      if (!RAW_HTML_TAGS.has(tag)) continue;
-
-      const close = new RegExp("<\\/\\s*" + tag + "\\s*>", "i").exec(source.slice(cursor));
-      if (!close) throw new Error(`csp-hash: unterminated <${tag}> in ${label}`);
-      const body = source.slice(cursor, cursor + close.index);
-      cursor += close.index + close[0].length;
-
-      if (tag !== "script") continue;
-      if (/\ssrc\s*=/i.test(token)) continue;               // external: covered by 'self'
-      if (!isJavaScriptScript(token) && !EXECUTABLE_EXTRA.has(scriptType(token))) continue;
-      hashes.push(createHash("sha256").update(body, "utf8").digest("base64"));
-    }
-    return { hashes, handlers };
-  };
+  // It is also a contract test rather than a promise: csp-scan asserts the srcdoc
+  // descent, the data-block exclusion and the horizon false positive by name.
+  cspRequireParser();
 
   const map = {};
   const handlers = [];
   let blocks = 0;
   for (const page of pages) {
     const source = await readFile(`${OUT}/public/${page}`, "utf8");
-    const found = collect(source, page);
+    const found = await scanDocument(source, page);
     handlers.push(...found.handlers);
     // Record EVERY staged document, including the ones with no inline script at
     // all. An empty list is a real and stronger answer than an absent key: absent
