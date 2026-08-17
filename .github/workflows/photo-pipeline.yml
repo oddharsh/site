@@ -141,7 +141,7 @@ jobs:
               bun run photos:check
               ;;
             refresh-metadata)
-              ./tools/photos/extract-photo-metadata.sh --merge "$source_dir"
+              bun tools/photos/extract-photo-metadata.ts --merge "$source_dir"
               bun run photos:check
               ;;
             add-car-photo)

@@ -22,12 +22,12 @@
 // text from the index immediately and fetches the one histogram it needs when a
 // hover actually happens.
 //
-// Run by extract-photo-metadata.sh (so `pnpm run photos` keeps it current) and
+// Run by extract-photo-metadata.ts (so `pnpm run photos` keeps it current) and
 // verified by check-photo-pipeline.mjs, which fails on a stale or partial index.
 //
 // images/meta/ IS A LOCAL PIPELINE ARTIFACT as of 2026-08-17, not a committed
 // tree. This script and build-histogram-index.mjs read it right after
-// extract-photo-metadata.sh writes it, and the two indexes they emit are what
+// extract-photo-metadata.ts writes it, and the two indexes they emit are what
 // gets committed; build.mjs then derives the served /images/meta/<stem>.json
 // files back out of those indexes. So the causality runs one way now, and a
 // stale per-photo file is no longer a state the repository can hold.

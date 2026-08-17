@@ -456,14 +456,14 @@ fi
 if command -v exif-sooc >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
   META_MODE=()
   if [ "${REMOTE_RENDER_ONLY:-0}" = "1" ]; then META_MODE=(--merge); fi
-  "$SCRIPT_DIR/extract-photo-metadata.sh" "${META_MODE[@]}" "$META_SRC" 2>&1 | tail -1
+  "$SCRIPT_DIR/extract-photo-metadata.ts" "${META_MODE[@]}" "$META_SRC" 2>&1 | tail -1
 else
   echo "  exif-sooc or jq missing — skipping metadata regen"
 fi
 
 # bake 64-bin RGB+luma histograms into per-stem meta. the photo tooltip renders
 # the histogram from meta.hist (index.html renderHistogramSvg), and
-# extract-photo-metadata.sh above does NOT emit hist — so this MUST run after it,
+# extract-photo-metadata.ts above does NOT emit hist — so this MUST run after it,
 # or every incremental add strips the bars off all existing photos. computed from
 # the shipped /i/ thumbnails via hashes.json; idempotent (unchanged thumbs re-bake
 # byte-identically), so running over the whole library each add is a no-op diff.

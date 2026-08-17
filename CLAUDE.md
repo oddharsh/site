@@ -142,7 +142,7 @@ pnpm run dict:roll
 pnpm run dcz:check
 
 # regenerate JUST the EXIF metadata (after photos are already uploaded)
-./tools/photos/extract-photo-metadata.sh "/Users/aadharsh/Downloads/to post (from ssd)"
+bun tools/photos/extract-photo-metadata.ts "/Users/aadharsh/Downloads/to post (from ssd)"
 
 # build the Python environment for gen-pixel-peeper.py (uv, into tools/photos/.venv).
 # NOT needed for the photo pipeline: the histogram bake moved into `zenc histogram`
@@ -832,7 +832,7 @@ Single-page personal site at `aadhar.sh`. A Cloudflare Worker with static assets
 | `www/.well-known/http-message-signatures-directory` | JWKS for AadharshBot's Ed25519 public key (Web Bot Auth IETF draft). |
 | `public/images/` + `public/i/` | `images/` holds the photo DATA surfaces: `metadata.json` (the EXIF RECORD, long field names + the Fuji recipe card), `exif.json` (the tooltip's TEXT tier: every photo's short-key EXIF in one 2.6KB-brotli file, warmed once on idle because the homepage draws a fresh random 12 of 158 per request and a per-slot warm-up was cold nearly every visit), `meta/<stem>.json` (per-photo EXIF plus the four 64-bin histogram channels — the BARS tier, fetched only on the hover that needs them, and the self-healing fallback for a stem missing from a cached `exif.json`), `alt.json` (AI captions), `hashes.json` (stem to hash8 map). The pixel tiers (600px AVIF+JPG squares + 400px mobile AVIF) live in `i/` under content-hashed names, 474 files for 158 photos. |
 | `public/og/` | Pre-baked 1200x630 OG/Twitter cards, one per garage + lwe page (`<section>-<name>.png`): the page's live demo floated on the Bliss desktop under the page's own favicon as a brand stamp, so a shared link unfurls as the interaction rather than a bare title. **There is no route label on the card**, and this row said there was until 2026-08-15: the generator's own header comment has described a "translucent XP dock naming the route" since #55 while the card template has never rendered one, and the claim was copied here. Wired via `og:image`/`twitter:card` in each page's `<head>` (edge-direct static pages can't be worker-injected). Built by `tools/photos/gen-og-cards.mjs` (playwright-core → Chrome, captures production for live data); meta added by `tools/photos/inject-og-meta.mjs`. **Both paths read `scripts/` here until the same date**, which is the split the layout table above draws and costs a `No such file` to anyone following this row. Regen recipe in MAINTENANCE.md. Cached 30d, deploy purges the edge. |
-| `tools/photos/` | Photo-pipeline + asset scripts (see below). Beyond the core pipeline (`add-photos.sh`, `extract-photo-metadata.sh`, `check-photo-pipeline.mjs`, `zenc/` the JPEG encoder crate): `add-car-photo.sh` (one resto-mod reference photo into the dual AVIF+JPG pair the car-link tooltips expect, output `public/cars/<stem>.{avif,jpg}`, no EXIF/R2); `gen-alt-text.py` (AI alt text for every grid photo, writes `public/images/alt.json` `{stem: alt}`, resumable; run by `add-photos.sh` phase 4 — posts the committed `i/` thumbnail bytes to Workers AI when `CLOUDFLARE_API_TOKEN` is set so a brand-new photo captions pre-deploy, else falls back to the cf-garage `/garage/cf/caption` endpoint by stem, which only sees deployed photos); `gen-encoding-samples.ts` (regenerates the color sample set for the `/garage/encoding` study through every encoder, prints byte counts + bytes-per-pixel); `reencode-thumbnails.sh` (re-encodes all published grid thumbnails as pre-cropped center squares from the canonical source folder, two square tiers); `gen-pixel-peeper.py` (the one remaining Pillow consumer, a one-off generator for the /pixel-peeper comparison frames; NOT part of add-photos.sh). The four 64-bin RGB/luminance channels are baked by `zenc histogram`, inside the encoder crate, since 2026-08-14. |
+| `tools/photos/` | Photo-pipeline + asset scripts (see below). Beyond the core pipeline (`add-photos.sh`, `extract-photo-metadata.ts`, `check-photo-pipeline.mjs`, `zenc/` the JPEG encoder crate): `add-car-photo.sh` (one resto-mod reference photo into the dual AVIF+JPG pair the car-link tooltips expect, output `public/cars/<stem>.{avif,jpg}`, no EXIF/R2); `gen-alt-text.py` (AI alt text for every grid photo, writes `public/images/alt.json` `{stem: alt}`, resumable; run by `add-photos.sh` phase 4 — posts the committed `i/` thumbnail bytes to Workers AI when `CLOUDFLARE_API_TOKEN` is set so a brand-new photo captions pre-deploy, else falls back to the cf-garage `/garage/cf/caption` endpoint by stem, which only sees deployed photos); `gen-encoding-samples.ts` (regenerates the color sample set for the `/garage/encoding` study through every encoder, prints byte counts + bytes-per-pixel); `reencode-thumbnails.sh` (re-encodes all published grid thumbnails as pre-cropped center squares from the canonical source folder, two square tiers); `gen-pixel-peeper.py` (the one remaining Pillow consumer, a one-off generator for the /pixel-peeper comparison frames; NOT part of add-photos.sh). The four 64-bin RGB/luminance channels are baked by `zenc histogram`, inside the encoder crate, since 2026-08-14. |
 
 ### The photo pipeline
 
@@ -852,7 +852,7 @@ SOOC original (in /Users/aadharsh/Downloads/to post (from ssd)/)
 public/images/<stem>.{avif,jpg}  +  R2 aadhar-photos/<filename>
    |
    v
-[extract-photo-metadata.sh] generates public/images/metadata.json
+[extract-photo-metadata.ts] generates public/images/metadata.json
    |   keyed by stem (not filename), orientation-corrected width/height.
    |   pulls Fuji recipe (FilmMode, DynamicRange, ColorChrome FX +Blue,
    |   Grain roughness + size, tone curves, saturation) plus standard
@@ -921,7 +921,7 @@ Two encoders + one transform tool, all built from source:
 - **Pillow, via uv** (`brew install uv`, then `pnpm run photos:env`) — required by
   `gen-pixel-peeper.py` alone, which is a one-off generator rather than part of
   this pipeline. The 64-bin RGB/luminance bake moved into `zenc histogram` on
-  2026-08-14, so nothing in add-photos.sh or extract-photo-metadata.sh needs it.
+  2026-08-14, so nothing in add-photos.sh or extract-photo-metadata.ts needs it.
   It installs into a venv at `tools/photos/.venv` rather than the system
   interpreter, because Homebrew's python3 is PEP 668 **externally managed** and
   refuses `pip install` outright: the documented recipe here was
@@ -3816,7 +3816,7 @@ pnpm run deploy:direct
 
 The local mirror of the R2 originals lives at
 `/Users/aadharsh/Downloads/to post (from ssd)/` — that's what
-`extract-photo-metadata.sh` reads from, and what `add-photos.sh` accepts as
+`extract-photo-metadata.ts` reads from, and what `add-photos.sh` accepts as
 input. **Privacy rule: nothing else from elsewhere on disk.** The user has
 curated this folder; treat it as the canonical photo source.
 

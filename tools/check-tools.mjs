@@ -29,8 +29,18 @@ const IN_CI = Boolean(process.env.CI) && !STRICT;
 // Floors. Each is comfortably under today's count and above zero, so ordinary
 // edits never trip them and a scanner that stops matching always does.
 let declaredScripts = 0;
-const FLOOR_GUARD_LISTS = 4;
-const FLOOR_BREW_HINTS = 4;
+// The shell scanners are VESTIGIAL and shrinking. Every script converted to Bun
+// Shell exports its binaries as values instead (tier 1a2 above), so a constant
+// floor here rots the moment a conversion lands: it fired on the seventh one,
+// correctly, because there genuinely was less shell to scan.
+//
+// So the floors track the shell that is LEFT rather than a number someone typed.
+// One guard list and one brew hint per remaining script is the weakest claim
+// that still catches a scanner which has stopped matching, and when the last .sh
+// goes both scanners retire themselves rather than passing on an empty set.
+const SHELL_LEFT = (await readdir(new URL("photos/", import.meta.url))).filter((n) => n.endsWith(".sh")).length;
+const FLOOR_GUARD_LISTS = SHELL_LEFT;
+const FLOOR_BREW_HINTS = SHELL_LEFT;
 
 const errors = [];
 

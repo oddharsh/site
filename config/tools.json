@@ -31,7 +31,7 @@
         "tools/photos/add-photos.sh",
         "tools/photos/download-remote-photos.ts",
         "tools/photos/export-for-instagram.sh",
-        "tools/photos/extract-photo-metadata.sh",
+        "tools/photos/extract-photo-metadata.ts",
         "tools/photos/gen-encoding-grids.ts",
         "tools/photos/gen-encoding-samples.ts",
         "tools/photos/reencode-thumbnails.sh"
@@ -42,9 +42,7 @@
       "bin": "jq",
       "install": "brew install jq",
       "why": "JSON assembly in the metadata shell scripts",
-      "required_by": [
-        "tools/photos/extract-photo-metadata.sh"
-      ]
+      "required_by": []
     },
     {
       "bin": "sips",
