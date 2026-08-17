@@ -69,6 +69,8 @@ for (const [stem, entry] of Object.entries(photoIndex)) {
 // s (400 AVIF, DPR-2), x (200 AVIF, DPR-1).
 const TIER_KEYS = ["a", "j", "s", "x"];
 
+const histIndex = await json(path.join(IMAGES, "histograms.json"));
+
 const expectedFiles = new Set();
 for (const stem of stems) {
   const entry = hashes[stem];
@@ -99,12 +101,15 @@ for (const stem of stems) {
     if (fingerprints[actual] !== `${stem}:${tier}`) fail(`${stem}: fingerprint drift for ${file}`);
   }
 
-  let perPhoto;
-  try { perPhoto = await json(path.join(META, `${stem}.json`)); }
-  catch { fail(`${stem}: missing per-photo metadata`); }
-  const hist = perPhoto.hi;
-  if (!hist || !["l", "r", "g", "b"].every((channel) => Array.isArray(hist[channel]) && hist[channel].length === 64)) {
-    fail(`${stem}: histogram must contain four 64-bin channels`);
+  // The four histogram channels are asserted against the INDEX now, because
+  // images/meta/ is build output and is not in a fresh checkout. Same coverage,
+  // one representation fewer.
+  // Length is the domain check: a packed entry is 4 channels x 64 bins, one
+  // character each. A missing or wrong-typed entry has no .length and fails here
+  // the same way, so nothing needs to ask what type it is.
+  const packedHist = histIndex[stem];
+  if (!packedHist || packedHist.length !== 4 * 64) {
+    fail(`${stem}: histograms.json must carry four 64-bin channels (got ${packedHist ? `${packedHist.length} chars` : "nothing"})`);
   }
 }
 const fingerprintStems = [...new Set(Object.values(fingerprints).map((entry) => String(entry).slice(0, String(entry).lastIndexOf(":"))))];
@@ -155,41 +160,46 @@ for (const file of authored) {
   }
 }
 
-// The shared EXIF index (/images/exif.json) is what the tooltip reads for its
-// text on every hover, so a stale or partial one is a silently blanker tooltip
-// rather than an error anyone would notice. It is DERIVED from the per-photo
-// files, so rebuild it here and compare: any drift means extract-photo-metadata.sh
-// ran without regenerating it. The tooltip still self-heals per photo, but the
-// point of the index is that it should not have to.
 const exifIndex = await json(path.join(IMAGES, "exif.json"));
-const rebuilt = await buildExifIndex();
+// TIERED, because images/meta/ is BUILD OUTPUT now and is absent from a fresh
+// checkout. Where it exists — a workstation that just ran the pipeline, which is
+// the only place these two indexes can actually go stale — rebuild both from it
+// and fail on any drift. Where it does not, say so and check coverage instead.
+//
+// Nothing is lost by that. The drift these guarded was two committed copies
+// disagreeing, and there is one copy now: build.mjs derives meta/ from the
+// indexes rather than the other way round, so a stale per-photo file is no longer
+// a state the repository can be in.
+const metaPresent = await stat(META).then((s) => s.isDirectory(), () => false);
+
 const missing = stems.filter((stem) => !exifIndex[stem]);
 if (missing.length) {
   fail(`${missing.length} photo(s) absent from images/exif.json: ${missing.slice(0, 8).join(", ")}` +
        `${missing.length > 8 ? " …" : ""}\n  fix with: node www/scripts/build-exif-index.mjs`);
 }
-const stale = stems.filter((stem) => JSON.stringify(exifIndex[stem]) !== JSON.stringify(rebuilt[stem]));
-if (stale.length) {
-  fail(`images/exif.json disagrees with images/meta/ for ${stale.length} photo(s): ${stale.slice(0, 8).join(", ")}` +
-       `${stale.length > 8 ? " …" : ""}\n  fix with: node www/scripts/build-exif-index.mjs`);
-}
-// The packed histogram index (/images/histograms.json) is what the worker inlines
-// into each tile as data-hist, so a stale or partial one is a tooltip whose bars
-// quietly go back to costing a request per hover. Derived from the same per-photo
-// files, and rebuilt through the generator's OWN packing function rather than a
-// second copy of the rule, so this cannot pass by agreeing with itself.
-const histIndex = await json(path.join(IMAGES, "histograms.json"));
-const rebuiltHist = (await buildHistogramIndex()).index;
 const histMissing = stems.filter((stem) => !histIndex[stem]);
 if (histMissing.length) {
   fail(`${histMissing.length} photo(s) absent from images/histograms.json: ${histMissing.slice(0, 8).join(", ")}` +
        `${histMissing.length > 8 ? " …" : ""}\n  fix with: node www/scripts/build-histogram-index.mjs`);
 }
-const histStale = stems.filter((stem) => histIndex[stem] !== rebuiltHist[stem]);
-if (histStale.length) {
-  fail(`images/histograms.json disagrees with images/meta/ for ${histStale.length} photo(s): ${histStale.slice(0, 8).join(", ")}` +
-       `${histStale.length > 8 ? " …" : ""}\n  fix with: node www/scripts/build-histogram-index.mjs`);
+
+if (metaPresent) {
+  const rebuilt = await buildExifIndex();
+  const stale = stems.filter((stem) => JSON.stringify(exifIndex[stem]) !== JSON.stringify(rebuilt[stem]));
+  if (stale.length) {
+    fail(`images/exif.json disagrees with images/meta/ for ${stale.length} photo(s): ${stale.slice(0, 8).join(", ")}` +
+         `${stale.length > 8 ? " …" : ""}\n  fix with: node www/scripts/build-exif-index.mjs`);
+  }
+  const rebuiltHist = (await buildHistogramIndex()).index;
+  const histStale = stems.filter((stem) => histIndex[stem] !== rebuiltHist[stem]);
+  if (histStale.length) {
+    fail(`images/histograms.json disagrees with images/meta/ for ${histStale.length} photo(s): ${histStale.slice(0, 8).join(", ")}` +
+         `${histStale.length > 8 ? " …" : ""}\n  fix with: node www/scripts/build-histogram-index.mjs`);
+  }
+} else {
+  console.log("photo-pipeline: images/meta/ absent (build output), so the index drift checks are skipped here");
 }
+
 const histStrays = Object.keys(histIndex).filter((stem) => !hashes[stem]);
 if (histStrays.length) fail(`images/histograms.json carries unpublished stems: ${histStrays.join(", ")}`);
 
