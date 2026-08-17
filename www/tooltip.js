@@ -131,17 +131,29 @@ export function start(initial) {
       // base64), so a hover on a tile that has one costs no request at all. A
       // tile without one, or a hover on something that is not a grid tile, falls
       // through to the per-photo fetch exactly as before.
-      const unpackHist = (b64) => {
-        try {
-          const bin = atob(b64);
-          if (bin.length !== 256) return null;
-          const out = { l: [], r: [], g: [], b: [] };
-          const channels = ["l", "r", "g", "b"];
-          for (let c = 0; c < 4; c++) {
-            for (let i = 0; i < 64; i++) out[channels[c]].push(bin.charCodeAt(c * 64 + i));
+      // One character per bin, ASCII 63..126, written by
+      // www/scripts/build-histogram-index.mjs (which carries the reasoning). The
+      // stored form IS this form, so the worker copies the string straight into
+      // the attribute and this is the only place it is ever decoded.
+      const HIST_BASE = 63, HIST_LEVELS = 64, HIST_BINS = 64;
+      const unpackHist = (packed) => {
+        // dataset yields a string or undefined, so presence IS the check here and a
+        // typeof would be narrowing a representation the DOM already guarantees.
+        if (!packed || packed.length !== HIST_BINS * 4) return null;
+        const out = { l: [], r: [], g: [], b: [] };
+        const channels = ["l", "r", "g", "b"];
+        for (let c = 0; c < 4; c++) {
+          for (let i = 0; i < HIST_BINS; i++) {
+            const level = packed.charCodeAt(c * HIST_BINS + i) - HIST_BASE;
+            // Out of range means the attribute was truncated or tampered with.
+            // Refuse the whole histogram rather than draw a shape with a hole in
+            // it: a wrong curve is worse than no curve on a surface whose point
+            // is showing what the file actually contains.
+            if (level < 0 || level >= HIST_LEVELS) return null;
+            out[channels[c]].push(Math.round(level * 100 / (HIST_LEVELS - 1)));
           }
-          return out;
-        } catch { return null; }
+        }
+        return out;
       };
       const bakedHist = Object.create(null);   // stem → unpacked channels, decoded once
       const histFromSlot = (stem, slot) => {

@@ -138,9 +138,21 @@ export function renderPhotoSlots(pick, altMap = {}, { deferred = true, histogram
     // tooltip JavaScript"). Anything that module warms is by construction too
     // late for hover number one.
     //
-    // base64 rather than JSON arrays: 344 chars a tile against ~660, and it needs
-    // no attribute escaping. Absent is a legal state and tooltip.js falls back to
-    // its per-photo fetch, which is what a stem with no baked histogram gets.
+    // One character per bin in ASCII 63..126, packed by
+    // scripts/build-histogram-index.mjs, which carries the reasoning. 256 chars a
+    // tile against base64's 344, and 36% smaller after brotli because base64
+    // destroys the byte alignment brotli exploits on smooth data.
+    //
+    // The range holds no character needing escaping, so escAttr is a no-op here
+    // by construction rather than by luck. It DOES hold a backtick (96), one of
+    // the characters that forces minify-html to keep the quotes: measured on the
+    // staged document, 7 of 12 tiles quoted and 5 unquoted, all 12 intact at 256
+    // characters. Both forms are spec-legal and dataset reads them identically;
+    // noted because an attribute whose quoting varies per value looks like a bug
+    // the first time you diff the output.
+    //
+    // Absent is a legal state and tooltip.js falls back to its per-photo fetch,
+    // which is what a stem with no baked histogram gets.
     const hist = histograms[p.stem];
     const histAttr = hist ? ` data-hist="${escAttr(hist)}"` : "";
     const sizeAttr = (asNumber(p.size) > 0) ? ` data-size="${p.size}"` : "";

@@ -22,13 +22,40 @@
 // actually drew ride in the document, which measures at ~1.9 KiB brotli, and
 // they are exactly the twelve a visitor is able to hover.
 //
-// Packing: four channels of 64 bins, each 0-100, so one byte per bin and 256
-// bytes per photo, base64'd for a JSON string. Base64 rather than the nested
-// arrays the meta files use because the arrays cost 103,962 bytes against
-// 56,569 for the same data, and this is read on a worker cold start.
+// Packing: four channels of 64 bins, ONE CHARACTER PER BIN, in ASCII 63..126.
+// The stored form is the WIRE form, so the worker copies the string into the
+// attribute and does no encoding per request.
+//
+// Base64 was the obvious choice and is the wrong one HERE, because these end up
+// inside a brotli'd document. Base64 packs 3 bytes into 4 characters, which
+// destroys the byte alignment brotli's context modelling exploits, and histogram
+// bins are SMOOTH: neighbours are close, so neighbouring characters are close.
+// Measured over the twelve tiles a homepage draws:
+//
+//   base64             344 chars/tile   1964 B brotli
+//   one char per bin   256 chars/tile   1263 B brotli   -36%
+//   5-bit packed+b64   216 chars/tile   1240 B brotli
+//
+// The 5-bit variant wins by 23 bytes and costs a bit-packing loop at both ends,
+// which is a bad trade for a value the tooltip has to decode on a hover.
+//
+// 63..126 is 64 contiguous characters holding NONE of & < > " (34, 38, 60, 62,
+// all below the range), so the attribute never escapes and the encoder never has
+// to think about it. Verified over all 158 photos: zero unsafe characters.
+//
+// 64 levels against a source range of 0..100 costs at most 1 unit of round-trip
+// error, and the SVG this feeds is 32 units tall, so one level is half a pixel.
+// Decoding is charCodeAt minus 63, with no atob, no Buffer and no typed array.
 //
 // Run by extract-photo-metadata.sh so `pnpm run photos` keeps it current, and
 // rebuilt by check-photo-pipeline.mjs, which fails on any drift.
+//
+// images/meta/ IS A LOCAL PIPELINE ARTIFACT as of 2026-08-17, not a committed
+// tree. This script and build-histogram-index.mjs read it right after
+// extract-photo-metadata.sh writes it, and the two indexes they emit are what
+// gets committed; build.mjs then derives the served /images/meta/<stem>.json
+// files back out of those indexes. So the causality runs one way now, and a
+// stale per-photo file is no longer a state the repository can hold.
 
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -40,25 +67,31 @@ const META = path.join(IMAGES, "meta");
 
 export const CHANNELS = ["l", "r", "g", "b"];
 export const BINS = 64;
+// Exported so tooltip.js's decoder and the contract test read the same two
+// numbers rather than each carrying a copy that can drift from this one.
+export const HIST_BASE = 63;
+export const HIST_LEVELS = 64;
 
 // Exported so check-photo-pipeline.mjs rebuilds through the SAME function rather
 // than through a second copy of the packing rule that could agree with itself.
 export function packHistogram(hi) {
   if (!hi) return null;
-  const out = Buffer.alloc(CHANNELS.length * BINS);
-  for (const [ci, channel] of CHANNELS.entries()) {
+  let out = "";
+  for (const channel of CHANNELS) {
     const bins = hi[channel];
     if (!Array.isArray(bins) || bins.length !== BINS) return null;
     for (let i = 0; i < BINS; i++) {
       const v = Number(bins[i]);
-      // Clamped rather than trusted: a bin outside 0-100 would wrap in a byte and
-      // draw a plausible wrong shape, which is the failure mode this whole
-      // surface is built to avoid (the pipeline's rule is to skip a value it
-      // cannot state, never to fabricate one).
-      out[ci * BINS + i] = Math.max(0, Math.min(255, Math.round(Number.isFinite(v) ? v : 0)));
+      // Clamped rather than trusted: a bin outside 0-100 would land outside the
+      // safe character range and could emit a quote or an ampersand, which is a
+      // markup bug rather than a wrong shape. The pipeline's rule everywhere is
+      // to refuse a value it cannot state, never to fabricate one.
+      const level = Math.max(0, Math.min(HIST_LEVELS - 1,
+        Math.round((Number.isFinite(v) ? v : 0) * (HIST_LEVELS - 1) / 100)));
+      out += String.fromCharCode(HIST_BASE + level);
     }
   }
-  return out.toString("base64");
+  return out;
 }
 
 export async function buildHistogramIndex() {

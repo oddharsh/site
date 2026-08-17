@@ -2518,7 +2518,7 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   // hover on purpose, so anything it warms is too late for the hover that caused
   // the load. Controlled in a browser with /images/meta/* aborted outright: bars
   // drew on 6 of 6 hovers.
-  const packed = "AAEC" + "A".repeat(340);
+  const packed = "?".repeat(128) + "~".repeat(128);   // 256 chars, both ends of the safe range
   const withHist = renderPhotoSlots(photo, {}, { deferred: false, histograms: { X1: packed } });
   assert.match(withHist, /data-hist="/, "a tile whose histogram is known carries it");
   assert.equal(/data-hist="([^"]*)"/.exec(withHist)[1], packed, "the packed histogram ships verbatim");
@@ -2608,18 +2608,40 @@ test("homepage selects 12 photos and transfers all of them", async () => {
 
 
 test("the packed histogram survives the round trip tooltip.js does", async () => {
-  const { packHistogram, CHANNELS, BINS } = await import("../www/scripts/build-histogram-index.mjs");
+  const { packHistogram, CHANNELS, BINS, HIST_BASE, HIST_LEVELS } = await import("../www/scripts/build-histogram-index.mjs");
   const hi = {};
   for (const [ci, c] of CHANNELS.entries()) hi[c] = Array.from({ length: BINS }, (_, i) => (i * 7 + ci * 13) % 101);
-  const b64 = packHistogram(hi);
-  // The exact decode tooltip.js runs: 4 channels x 64 bins, one byte each.
-  const bin = Buffer.from(b64, "base64");
-  assert.equal(bin.length, CHANNELS.length * BINS, "256 bytes, one per bin");
+  const packed = packHistogram(hi);
+  assert.equal(packed.length, CHANNELS.length * BINS, "one character per bin, no padding");
+
+  // The exact decode tooltip.js runs.
+  const decode = (s, ci, i) => Math.round((s.charCodeAt(ci * BINS + i) - HIST_BASE) * 100 / (HIST_LEVELS - 1));
+  let worst = 0;
   for (const [ci, c] of CHANNELS.entries()) {
-    for (let i = 0; i < BINS; i++) {
-      assert.equal(bin[ci * BINS + i], hi[c][i], `channel ${c} bin ${i} round-trips`);
+    for (let i = 0; i < BINS; i++) worst = Math.max(worst, Math.abs(decode(packed, ci, i) - hi[c][i]));
+  }
+  // 64 levels over a 0-100 source, rendered into a 32-unit-tall SVG, so one
+  // level is half a pixel and this bound is the whole quality argument.
+  assert.ok(worst <= 1, `round trip is within one unit of 100, got ${worst}`);
+
+  // THE ENCODING'S SAFETY IS STRUCTURAL, not a property of the current data:
+  // 63..126 holds none of & < > " (34, 38, 60, 62), so the attribute can never
+  // need escaping. Asserted over every committed histogram rather than a
+  // fixture, because the day this breaks is the day a bin goes out of range.
+  const committed = JSON.parse(readFileSync("www/images/histograms.json", "utf8"));
+  const stems = Object.keys(committed);
+  assert.ok(stems.length > 100, `expected the real corpus, got ${stems.length} entries`);
+  for (const stem of stems) {
+    const v = committed[stem];
+    assert.equal(v.length, CHANNELS.length * BINS, `${stem} packs to one character per bin`);
+    assert.doesNotMatch(v, /["&<>]/, `${stem} carries no character that would need escaping in an attribute`);
+    for (let i = 0; i < v.length; i++) {
+      const code = v.charCodeAt(i);
+      assert.ok(code >= HIST_BASE && code < HIST_BASE + HIST_LEVELS,
+        `${stem} character ${i} is inside the safe range`);
     }
   }
+
   // A malformed channel yields null rather than a plausible wrong shape, which is
   // the same rule the photo pipeline follows everywhere: skip what you cannot
   // state, never fabricate it.

@@ -159,11 +159,22 @@ export async function servePhotoFromR2(request, env, ctx) {
 // this comparator changes the order rather than breaking -- and the ordering
 // is only the pool's stable enumeration, which nothing user-visible pins.
 //
-// dual-source: thumb_avif is the <picture> primary; thumb_jpg is
-// the universal <img src> fallback (thumb_small is the 400px mobile AVIF).
-// NB: <picture> type-fallback only catches "format not supported" — it
-// does NOT catch DECODE failures. AVIF decode failures historically caused
-// broken images here; if they recur, the fix is to demote AVIF entirely.
+// FOUR TIERS, and none of them is a <picture> fallback any more. That markup was
+// removed in #156 because the losing candidate kept being instantiated on hover,
+// so the grid emits ONE format and selects a SIZE through srcset:
+//
+//   thumb_xs     200px AVIF, the DPR-1 candidate
+//   thumb_small  400px AVIF, DPR-2, and the plain src every tile carries
+//   thumb_avif   600px AVIF, DPR-3
+//   thumb_jpg    600px JPG, which the grid never emits — it is what /photos
+//                renders, and the target of index.html's AVIF decode repair
+//
+// This block used to describe thumb_avif as "the <picture> primary", thumb_jpg as
+// "the universal <img src> fallback", and thumb_small as "the 400px mobile AVIF".
+// All three stopped being true, in three separate changes, without the comment
+// moving. AVIF decode failures are still real (Kitesurf, 2026-08-12) and are
+// handled by the recovery listener in index.html rather than by a second
+// candidate here.
 // slim hot-path rows: ONLY the fields the SSR slot-builder reads
 // (EXIF rides /images/meta/<stem>.json, fetched per photo on hover).
 export function derivePhotoPool(index, hashes) {
