@@ -135,7 +135,7 @@ jobs:
               bun run photos "$source_dir"
               ;;
             reencode-thumbnails)
-              ./tools/photos/reencode-thumbnails.sh "$source_dir"
+              bun tools/photos/reencode-thumbnails.ts "$source_dir"
               bun tools/photos/hash-thumbnails.ts
               ./tools/photos/zenc/target/release/zenc histogram --root www
               bun run photos:check

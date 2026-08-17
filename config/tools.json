@@ -12,7 +12,7 @@
     "documented nowhere, so a clean machine met them as a raw shell error.",
     "",
     "`optional` means a script degrades rather than exits: avifenc falls back to",
-    "sips in add-photos.sh and reencode-thumbnails.sh, and is REQUIRED by the two",
+    "sips in add-photos.sh and reencode-thumbnails.ts, and is REQUIRED by the two",
     "encoding-grid scripts, so it is listed optional and its hard callers are named",
     "in `required_by` anyway. A tool that is optional everywhere is still declared,",
     "because the point is a complete list rather than a blocking one.",
@@ -30,11 +30,11 @@
       "required_by": [
         "tools/photos/add-photos.sh",
         "tools/photos/download-remote-photos.ts",
-        "tools/photos/export-for-instagram.sh",
+        "tools/photos/export-for-instagram.ts",
         "tools/photos/extract-photo-metadata.ts",
         "tools/photos/gen-encoding-grids.ts",
         "tools/photos/gen-encoding-samples.ts",
-        "tools/photos/reencode-thumbnails.sh"
+        "tools/photos/reencode-thumbnails.ts"
       ],
       "min_version": "0.2.0"
     },
@@ -51,10 +51,10 @@
       "required_by": [
         "tools/photos/add-car-photo.ts",
         "tools/photos/add-photos.sh",
-        "tools/photos/export-for-instagram.sh",
+        "tools/photos/export-for-instagram.ts",
         "tools/photos/gen-encoding-grids.ts",
         "tools/photos/gen-encoding-samples.ts",
-        "tools/photos/reencode-thumbnails.sh"
+        "tools/photos/reencode-thumbnails.ts"
       ]
     },
     {
@@ -68,12 +68,8 @@
       "install": "https://rustup.rs",
       "why": "builds zenc, the shipped JPEG encoder, on first run",
       "required_by": [
-        "tools/photos/lib/prereqs.ts",
         "tools/photos/add-photos.sh",
-        "tools/photos/export-for-instagram.sh",
-        "tools/photos/gen-encoding-grids.ts",
-        "tools/photos/gen-encoding-samples.ts",
-        "tools/photos/reencode-thumbnails.sh"
+        "tools/photos/lib/prereqs.ts"
       ]
     },
     {
@@ -83,7 +79,7 @@
       "why": "lossless EXIF-orientation rotation before recompression",
       "required_by": [
         "tools/photos/add-photos.sh",
-        "tools/photos/reencode-thumbnails.sh"
+        "tools/photos/reencode-thumbnails.ts"
       ]
     },
     {
@@ -103,7 +99,8 @@
       "required_by": [
         "tools/photos/add-car-photo.ts",
         "tools/photos/gen-encoding-grids.ts",
-        "tools/photos/gen-encoding-samples.ts"
+        "tools/photos/gen-encoding-samples.ts",
+        "tools/photos/reencode-thumbnails.ts"
       ]
     },
     {
@@ -128,7 +125,7 @@
       "install": "build libjxl with -DJPEGXL_ENABLE_TOOLS=ON; brew's jpeg-xl does not ship it",
       "why": "the perceptual metric the Instagram export searches quality against",
       "required_by": [
-        "tools/photos/export-for-instagram.sh"
+        "tools/photos/export-for-instagram.ts"
       ]
     },
     {
@@ -136,7 +133,7 @@
       "install": "build libjxl with -DJPEGXL_ENABLE_TOOLS=ON; brew's jpeg-xl does not ship it",
       "why": "the second metric bounding that same search",
       "required_by": [
-        "tools/photos/export-for-instagram.sh"
+        "tools/photos/export-for-instagram.ts"
       ]
     },
     {

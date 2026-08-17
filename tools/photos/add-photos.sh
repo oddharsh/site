@@ -5,7 +5,7 @@
 #   1. generates the grid thumbnails at public/images/<stem>.{jpg,avif} +
 #      <stem>-<SQ_SM>.avif — PRE-CROPPED CENTER SQUARES (what the grid shows:
 #      aspect-ratio:1 + object-fit:cover), metadata-stripped. mirrors
-#      reencode-thumbnails.sh exactly (keep the two encode paths in sync).
+#      reencode-thumbnails.ts exactly (keep the two encode paths in sync).
 #      Everything after the lossless jpegtran rotation happens on a TIFF/PNG
 #      intermediate, so each output is ONE JPEG encode away from the source
 #      rather than three.
@@ -54,7 +54,7 @@
 # folder) so the 100+ existing originals aren't re-uploaded.
 #
 # NB: this only ADDS at the current SQ/SQ_SM. to change the square size for the
-# whole library, that's reencode-thumbnails.sh's job (then hash-thumbnails.ts
+# whole library, that's reencode-thumbnails.ts's job (then hash-thumbnails.ts
 # mints the new content-addressed /i/ URLs).
 #
 # usage:
@@ -81,7 +81,7 @@ DEST="$PROJECT_DIR/public/images"
 TMP="/tmp/aadhar-add-photos-$$"
 
 # square thumbnail edges (px). the file IS the displayed pixels (center square),
-# so no off-square bytes ship. MUST match reencode-thumbnails.sh + THUMB_SMALL_PX
+# so no off-square bytes ship. MUST match reencode-thumbnails.ts + THUMB_SMALL_PX
 # in _worker.js (the -<N>.avif suffix). override per run with SQ=/SQ_SM=.
 SQ="${SQ:-600}"        # desktop square edge (the 184px tile at DPR-3)
 SQ_SM="${SQ_SM:-400}"  # DPR-2 square edge

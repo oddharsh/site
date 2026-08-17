@@ -1137,7 +1137,7 @@ brew install webp ffmpeg                              # cwebp for the encoding g
 This is an emergency fallback only. sips is macOS-native (no install), and the
 normal path is the remote workflow above.
 
-`export-for-instagram.sh` additionally wants **ssimulacra2** and
+`export-for-instagram.ts` additionally wants **ssimulacra2** and
 **butteraugli_main**, the two perceptual metrics it searches quality against.
 Those are libjxl tools built with `-DJPEGXL_ENABLE_TOOLS=ON`, and Homebrew's
 `jpeg-xl` formula does not ship them, so there is no brew line for this row. The
@@ -1190,7 +1190,7 @@ the tooltip skips nulls rather than guess.
 
 ### Re-encode ALL thumbnails (e.g. a new resolution/quality)
 ```bash
-./tools/photos/reencode-thumbnails.sh           # re-encodes every grid thumb as pre-cropped center squares
+bun tools/photos/reencode-thumbnails.ts           # re-encodes every grid thumb as pre-cropped center squares
 bun tools/photos/hash-thumbnails.ts               # re-hash the tiers into /i/ + rewrite hashes.json
 # commit + deploy (new bytes = new URLs; the worker bundles the index + hashes, so the deploy is the bust)
 ```
@@ -1730,7 +1730,7 @@ until its twin agrees: `checkTwinFacts()` recomposes the User-Agent from
 | `extract-photo-metadata.ts` | Read EXIF from the SOOC folder, emit `images/metadata.json` + per-photo `images/meta/<stem>.json`. Pulls the Fuji recipe fields too. Requires exif-sooc + jq. **Two schemas, on purpose:** `metadata.json` is the RECORD (long, self-documenting field names, plus the derived `recipe` card) and the per-photo files are the tooltip's RENDER CACHE (short keys, tooltip-only fields, nulls dropped, ~28% smaller compressed because one is fetched per hover). Bump `META_V` in `tooltip.js` when the per-photo shape changes. |
 | `build-exif-index.mjs` | Roll every per-photo `images/meta/<stem>.json` MINUS its histogram into one `images/exif.json` (158 photos, 2.6KB brotli). Called by `extract-photo-metadata.ts`, so `pnpm run photos` keeps it current, and `check-photo-pipeline.mjs` rebuilds it to fail on drift. **Why it exists:** the homepage draws a random 12 of 158 per request, so warming metadata per visible slot was 12 cold requests on nearly every visit (a given slot repeats ~7.6% of the time). One immutable index is smaller than that on the first visit and free after. Histograms stay per-photo because they are 623 of a meta file's ~977 bytes, so folding them in would take the index from 2.6KB to 24KB for bars most visitors never see. |
 | `build-recipes.py` | **RETIRED 2026-08-14.** The Fujifilm recipe card is derived during extraction now, by `exif-sooc --keyed`, from the Fuji tags rather than from the flattened record this script re-read. Same idiom and same output: all 158 committed cards regenerate byte-identical. One behaviour change worth knowing, since the old script rewrote every card on every run: a `--merge` run now refreshes the BATCH only, so re-run a full extraction after an exif-sooc upgrade that changes the card. Query it with `/photos/query.json?recipe=DR400` as before. |
-| `reencode-thumbnails.sh` | Re-encode every published grid thumb from the source folder at a new resolution (pre-cropped squares, two tiers). Follow with `hash-thumbnails.ts`, then commit + deploy. |
+| `reencode-thumbnails.ts` | Re-encode every published grid thumb from the source folder at a new resolution (pre-cropped squares, two tiers). Follow with `hash-thumbnails.ts`, then commit + deploy. |
 | `add-car-photo.ts` | One resto-mod reference photo -> `cars/<stem>.{avif,jpg}` for the homepage car tooltips. No EXIF, no R2. |
 | `zenc/` | The JPEG thumbnail encoder: a Rust crate wrapping zenjpeg (hybrid trellis + progressive scan search). `cargo build --release` (auto-built on first pipeline run). `zenc <in> <out> -q 84`. dependabot tracks the zenjpeg pin; replaced the from-source jpegli build in 2026-07. |
 | `download-remote-photos.ts` | Download selected R2 object keys into disposable runner storage for the GitHub Actions photo workflow; accepts `all` for the public manifest. |
