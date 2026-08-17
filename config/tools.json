@@ -29,7 +29,7 @@
       "why": "every EXIF read and write in the pipeline. It emits metadata.json's record shape directly and owns the merge, which retired the 50-line jq reshape and build-recipes.py, and on 2026-08-14 it took the last of exiftool's jobs too: orientation reads, -all= strips and -TagsFromFile copies, in ExifTool's own flag spellings. Pinned at 0.2.0 by the guards in the writing scripts: 0.1.0 could not write, and its -all= truncated progressive JPEGs at the first scan, which is every JPEG this pipeline produces",
       "required_by": [
         "tools/photos/add-photos.sh",
-        "tools/photos/download-remote-photos.sh",
+        "tools/photos/download-remote-photos.ts",
         "tools/photos/export-for-instagram.sh",
         "tools/photos/extract-photo-metadata.sh",
         "tools/photos/gen-encoding-grids.sh",
@@ -43,8 +43,7 @@
       "install": "brew install jq",
       "why": "JSON assembly in the metadata shell scripts",
       "required_by": [
-        "tools/photos/extract-photo-metadata.sh",
-        "tools/photos/download-remote-photos.sh"
+        "tools/photos/extract-photo-metadata.sh"
       ]
     },
     {
@@ -64,9 +63,7 @@
       "bin": "curl",
       "install": "ships with macOS",
       "why": "pulls the R2 originals back down",
-      "required_by": [
-        "tools/photos/download-remote-photos.sh"
-      ]
+      "required_by": []
     },
     {
       "bin": "cargo",

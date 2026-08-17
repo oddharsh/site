@@ -21,7 +21,7 @@ export async function handleWindowsUpdate(request, env, ctx) {
 //
 // It also makes the three renderers PURE, so build.mjs can call them in Node against
 // the committed projection (public/_worker.js/checkpoints.json, written by
-// bump-version.sh) and emit updates.html + restore.html at deploy time. Those two
+// bump-version.ts) and emit updates.html + restore.html at deploy time. Those two
 // pages are the only dynamic surfaces whose data changes ONLY at deploy — the
 // checkpoint row is inserted moments before it — so baking them costs no freshness
 // at all, unlike /reading or /around whose feeds move on their own.
@@ -36,7 +36,7 @@ export async function readCheckpoints(env) {
   // reading one committed file is the same guarantee, made stronger — all three
   // surfaces now serve literally the same bytes rather than the same query.
   //
-  // D1 remains the source of truth: bump-version.sh writes it and then derives this
+  // D1 remains the source of truth: bump-version.ts writes it and then derives this
   // file from it, and `pnpm run checkpoints:check` fails on any drift between them.
   // env is kept in the signature because the handlers pass it and a future caller
   // may want the live table; nothing here needs it today.
@@ -45,7 +45,7 @@ export async function readCheckpoints(env) {
 
 export async function renderWindowsUpdate(cp) {
   // Single source of truth: the same D1 `checkpoints` table that backs /restore.
-  // One row per logged deploy (tools/bump-version.sh, which now derives the
+  // One row per logged deploy (tools/bump-version.ts, which now derives the
   // next vnum from this table; the retired service worker used to carry it as
   // CACHE_VERSION). The newest row is the running build and the recent rows ARE
   // the changelog, so /updates and /restore cannot drift apart. Degrades
@@ -128,7 +128,7 @@ export async function renderUpdatesJson(cp) {
 
 // ── /restore handler (Windows System Restore reskin, backed by D1) ───
 // Restore points live in the aadhar-restore D1 database, one row per logged
-// deploy (bump-version.sh insert), seeded from this repo's git history. The
+// deploy (bump-version.ts insert), seeded from this repo's git history. The
 // scrubber previews the recorded state at any past point; it changes nothing.
 // A real rollback is a destructive D1 Time Travel restore run from the CLI
 // (7-day window on the free plan), never exposed to a visitor. env.RESTORE_DB

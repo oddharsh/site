@@ -934,7 +934,7 @@ Key facts (don't hardcode these elsewhere, they drift):
 - RN_KV namespace id: `3cb8a107c58e47dc9244e75b33401f36`
 - R2 bucket: `aadhar-photos` (SOOC originals + full-res JPGs)
 - Thumbnails are content-addressed at `/i/<stem>.<hash8>.<ext>` (hashes.json via `hash-thumbnails.sh`); `THUMB_VERSION` is gone entirely (retired with the last legacy fallback — `lib/const.js` keeps only `CANONICAL_HOST` + `ARCHIVE_VERSION`).
-- The service worker RETIRED in v136 (2026-07-03): `src/client/sw.js` is an unregister stub that must keep serving 200 for a year+. There is no `CACHE_VERSION`; the deploy-log number lives in D1 (`bump-version.sh` derives the next from `MAX(vnum)`).
+- The service worker RETIRED in v136 (2026-07-03): `src/client/sw.js` is an unregister stub that must keep serving 200 for a year+. There is no `CACHE_VERSION`; the deploy-log number lives in D1 (`bump-version.ts` derives the next from `MAX(vnum)`).
 - Canonical photo source: the aadhar-photos R2 bucket. Raw source files are
   never committed to GitHub; the Actions workflow downloads only the requested
   object keys into disposable runner storage.
@@ -1231,7 +1231,7 @@ run mid-ramp.
 
 The changelog entry is staged **in the PR**, alongside the change it describes:
 ```bash
-./tools/photos/bump-version.sh <slug> "<title>"
+bun tools/photos/bump-version.ts <slug> "<title>"
 ```
 That writes one file and touches no network — the vnum comes from the committed
 projection, so it needs no D1, no wrangler and no account selection. Commit it
@@ -1686,8 +1686,8 @@ What this changes day to day: a new span's NAME and ATTRIBUTES can be checked
 before it ships. Previously the cheapest way to find out whether a span was
 usefully named was to deploy it and open the dashboard.
 
-### Log a deploy (bump-version.sh)
-`./tools/photos/bump-version.sh <slug> "<title>"`, then deploy. Inserts the next checkpoint into D1 (vnum from `SELECT MAX(vnum)`), which is what `/updates` and `/restore` render. Nothing edits sw.js anymore: the service worker retired in v136, `nav.js`/`notepad.js` updates land via their short `_headers` max-age plus the per-deploy edge purge, and the stub at `/sw.js` cleans up old installs.
+### Log a deploy (bump-version.ts)
+`bun tools/photos/bump-version.ts <slug> "<title>"`, then deploy. Inserts the next checkpoint into D1 (vnum from `SELECT MAX(vnum)`), which is what `/updates` and `/restore` render. Nothing edits sw.js anymore: the service worker retired in v136, `nav.js`/`notepad.js` updates land via their short `_headers` max-age plus the per-deploy edge purge, and the stub at `/sw.js` cleans up old installs.
 
 ---
 
@@ -1733,7 +1733,7 @@ until its twin agrees: `checkTwinFacts()` recomposes the User-Agent from
 | `reencode-thumbnails.sh` | Re-encode every published grid thumb from the source folder at a new resolution (pre-cropped squares, two tiers). Follow with `hash-thumbnails.sh`, then commit + deploy. |
 | `add-car-photo.ts` | One resto-mod reference photo -> `cars/<stem>.{avif,jpg}` for the homepage car tooltips. No EXIF, no R2. |
 | `zenc/` | The JPEG thumbnail encoder: a Rust crate wrapping zenjpeg (hybrid trellis + progressive scan search). `cargo build --release` (auto-built on first pipeline run). `zenc <in> <out> -q 84`. dependabot tracks the zenjpeg pin; replaced the from-source jpegli build in 2026-07. |
-| `download-remote-photos.sh` | Download selected R2 object keys into disposable runner storage for the GitHub Actions photo workflow; accepts `all` for the public manifest. |
+| `download-remote-photos.ts` | Download selected R2 object keys into disposable runner storage for the GitHub Actions photo workflow; accepts `all` for the public manifest. |
 | `gen-alt-text.py` | AI alt text for grid photos -> `images/alt.json`. Run by `add-photos.sh` phase 4. Posts the committed `i/` thumbnail to Workers AI when `CLOUDFLARE_API_TOKEN` is set (captions pre-deploy), else asks `/garage/cf/caption` by stem (deployed photos only). Resumable. |
 | `gen-photo-semantics.mjs` | Retrieval terms for `photo_query` -> `images/semantics.json`. Derived tier (EXIF vocabulary repair) needs nothing; `--vision` adds model-written keywords and needs `CLOUDFLARE_API_TOKEN`. Deliberately offline so the Worker keeps zero AI credentials. Resumable. |
 | `gen-encoding-samples.sh` | Regenerate the color sample set for `/garage/encoding` through every encoder; defaults to the committed `garage/enc/c-png.png` fixture and prints byte counts. |
@@ -1743,7 +1743,7 @@ until its twin agrees: `checkTwinFacts()` recomposes the User-Agent from
 | `hash-thumbnails.sh` | sha256 each pixel tier into `public/i/<stem>.<hash8>.<ext>`, write `images/hashes.json`, and prune tiers no longer named by it. Run by `add-photos.sh`; a re-encode mints new URLs, so there is no version to bump. |
 | `gen-encoding-grids.sh` | Regenerate the ZOOMED 96px comparison crops (`garage/enc/z-*`) that `/lwe/encoding` fetches. Run by the `regenerate-encoding-study` routine of the photo workflow. |
 | `gen-desktop-partial.mjs` | Bake the XP desktop shell into `_worker.js/lib/desktop.js` and patch it into the 28 static pages, generated from nav.js's own `PROFILES`/`SUBPAGES`/`SECTION_ICONS`/tray template so the two cannot drift. Re-run after editing any of those. A run on an unchanged tree is a byte-exact no-op. |
-| `bump-version.sh` | Insert one `checkpoints` row into the `aadhar-restore` D1 database, deriving the next vnum from `MAX(vnum)`. Both `/restore` and `/updates` read that table, so this is the only place a deploy gets logged. `./tools/photos/bump-version.sh <slug> "<title>"`. |
+| `bump-version.ts` | Insert one `checkpoints` row into the `aadhar-restore` D1 database, deriving the next vnum from `MAX(vnum)`. Both `/restore` and `/updates` read that table, so this is the only place a deploy gets logged. `bun tools/photos/bump-version.ts <slug> "<title>"`. |
 
 ---
 

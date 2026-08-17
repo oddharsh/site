@@ -120,7 +120,7 @@ jobs:
         run: |
           set -euo pipefail
           printf '%s\n' "$SOURCE_KEYS" > "$RUNNER_TEMP/photo-source-keys.txt"
-          ./tools/photos/download-remote-photos.sh \
+          bun tools/photos/download-remote-photos.ts \
             "$RUNNER_TEMP/photo-source-keys.txt" \
             "$RUNNER_TEMP/photo-source"
 

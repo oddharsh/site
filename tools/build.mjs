@@ -987,14 +987,14 @@ if (inlineProbe.includes("/* probe */") ||
 
 // 1f) /updates and /restore as deploy-time documents.
 //
-// The only two dynamic pages whose data changes solely AT DEPLOY: bump-version.sh
+// The only two dynamic pages whose data changes solely AT DEPLOY: bump-version.ts
 // inserts the checkpoint row moments before `pnpm run deploy:direct`, and nothing else
 // writes that table. So baking them costs no freshness at all — unlike /reading
 // (6h Curius refresh) or /around (30m crawl), whose feeds move on their own and
 // which are deliberately left dynamic for exactly that reason.
 //
 // D1 remains the source of truth. checkpoints.json is its committed projection,
-// written by bump-version.sh right after a successful insert, and
+// written by bump-version.ts right after a successful insert, and
 // `pnpm run checkpoints:check` re-reads D1 and fails on drift.
 {
   const nonce = `?build=${BUILD_NONCE}`;

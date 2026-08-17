@@ -166,7 +166,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
         <tr><td>sw.js</td><td>Cache-first with NO background revalidate for content-addressed thumbnails (a refetch can never observe new bytes), SWR for the shells, network-only for everything rendered. Full-res R2 originals deliberately excluded: the browser HTTP cache already holds them immutable, and a second copy is pure disk cost.</td></tr>
         <tr><td>index.html</td><td>Speculation rules prerender on intent, with exclusions chosen for side effects, not size: prerendering <code>/around</code> would fire a real crawl, <code>/whoareyou</code> would fingerprint a request nobody made, <code>/</code> would burn a counter tick.</td></tr>
         <tr><td>whoareyou.js, botauth.js</td><td>The machine surface is honest in both directions: inbound gets system-properties transparency with nothing logged, outbound crawls sign themselves per RFC 9421 with a published JWKS. Plus llms.txt, JSON-LD, markdown content negotiation on <code>/</code>, and MCP cards. A 2003 body with 2026 paperwork.</td></tr>
-        <tr><td>verify-routes.mjs, bump-version.sh</td><td>The operational spine: a 42-route oracle gates every deploy, and one script bumps the SW version AND logs a D1 checkpoint that both <a href="/updates">/updates</a> and <a href="/restore">/restore</a> read, so the changelog cannot drift from reality.</td></tr>
+        <tr><td>verify-routes.mjs, bump-version.ts</td><td>The operational spine: a 42-route oracle gates every deploy, and one script bumps the SW version AND logs a D1 checkpoint that both <a href="/updates">/updates</a> and <a href="/restore">/restore</a> read, so the changelog cannot drift from reality.</td></tr>
       </tbody>
     </table>
 
