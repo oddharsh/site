@@ -76,14 +76,16 @@ for (const stem of stems) {
     `${stem}.${entry.j}.jpg`,
     `${stem}-400.${entry.s}.avif`,
   ];
-  const fp = fingerprints[stem];
-  if (!fp || !fp.a || !fp.j || !fp.s) fail(`${stem}: fingerprint entry must contain a, j, and s tiers`);
   for (const [tier, file] of [["a", files[0]], ["j", files[1]], ["s", files[2]]]) {
     expectedFiles.add(file);
     try { await stat(path.join(HASHED, file)); }
     catch { fail(`${stem}: missing hashed pixel tier ${file}`); }
     const actual = createHash("sha256").update(await readFile(path.join(HASHED, file))).digest("hex");
-    if (actual !== fp[tier]) fail(`${stem}: fingerprint drift for ${file}`);
+    // Asserted in the direction photo_recipe reads it: hash the published bytes,
+    // and the index must name this exact stem and tier. A missing entry and a
+    // drifted one are the same failure here, which is why the old separate
+    // "must contain a, j and s tiers" guard is gone rather than rewritten.
+    if (fingerprints[actual] !== `${stem}:${tier}`) fail(`${stem}: fingerprint drift for ${file}`);
   }
 
   let perPhoto;
@@ -94,8 +96,20 @@ for (const stem of stems) {
     fail(`${stem}: histogram must contain four 64-bin channels`);
   }
 }
-const fingerprintStrays = Object.keys(fingerprints).filter((stem) => !hashes[stem]);
+const fingerprintStems = [...new Set(Object.values(fingerprints).map((entry) => String(entry).slice(0, String(entry).lastIndexOf(":"))))];
+const fingerprintStrays = fingerprintStems.filter((stem) => !hashes[stem]);
 if (fingerprintStrays.length) fail(`images/fingerprints.json carries unpublished stems: ${fingerprintStrays.join(", ")}`);
+// What this catches that nothing above does: a STALE digest naming a photo that
+// is still published, left over from a previous encode. The per-stem loop passes
+// because the CURRENT bytes still resolve, and the stray check passes because the
+// stem is still in hashes.json, so the count is the only witness. Measured with
+// both controls rather than reasoned about: an earlier version of this comment
+// claimed it was the backstop for a digest COLLISION, and a collision in fact
+// trips the per-stem loop first, since the surviving entry names the other stem
+// and that reads as drift.
+if (Object.keys(fingerprints).length !== stems.length * 3) {
+  fail(`images/fingerprints.json holds ${Object.keys(fingerprints).length} digests, expected ${stems.length * 3} (${stems.length} photos x 3 tiers)`);
+}
 
 const actualFiles = (await readdir(HASHED)).filter((file) => /\.(avif|jpg)$/.test(file));
 const orphans = actualFiles.filter((file) => !expectedFiles.has(file));

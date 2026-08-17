@@ -119,15 +119,49 @@ if (!live && !existsSync(BUILT)) {
 
 // The live shell, read the way the page half reads pages. No single document references
 // every dictionary-carrying asset, so this walks a few: the homepage pulls nav + luna +
-// hoist + tooltip, /lens pulls lens.js, an LWE page pulls lwe-base.css and quiz.js.
+// hoist + tooltip, /lens pulls lens-boot, an LWE page pulls lwe-base.css and quiz.js.
+//
+// Walking DOCUMENTS alone is not enough, and the gap was silent for as long as --live has
+// been the nightly path. An asset loaded lazily from JavaScript appears in no document, so
+// an HTML-only scan found 8 of 19 and the other 11 had never been given a dictionary at
+// all — including nav-run, nav-tray and infotip, which nav.js pulls on EVERY page, so a
+// returning visitor re-downloaded them in full where a delta is a few hundred bytes.
+//
+// The references are transitive (/lens -> lens-boot -> lens -> lens-tools is three hops),
+// so this closes over the graph rather than following a level and calling it done.
+//
+// Bodies are CACHED because the adoption loop below wants the same bytes. Fetching twice
+// costs a second request per asset and, worse, opens a window for a deploy to land between
+// the scan and the adopt, which would store bytes this run never actually read.
+const liveBody = new Map();
+const assetRefs = (body) => [...body.toString("utf8").matchAll(/\/a\/([\w-]+\.[0-9a-f]{8}\.(?:js|css))/g)].map(([, n]) => n);
+
+async function fetchLive(path) {
+  let r;
+  try { r = await fetch(`${ORIGIN}${path}`, { headers: { "accept-encoding": "identity" } }); }
+  catch (e) { console.log(`  skipped ${path} (${e.message})`); return null; }
+  if (!r.ok) { console.log(`  skipped ${path} (HTTP ${r.status})`); return null; }
+  return Buffer.from(await r.arrayBuffer());
+}
+
 async function liveShell() {
   const names = new Set();
   for (const path of ["/", "/lens", "/lwe/utf8", "/writing"]) {
-    let r;
-    try { r = await fetch(`${ORIGIN}${path}`, { headers: { "accept-encoding": "identity" } }); }
-    catch (e) { console.log(`  skipped ${path} (${e.message})`); continue; }
-    if (!r.ok) { console.log(`  skipped ${path} (HTTP ${r.status})`); continue; }
-    for (const [, n] of (await r.text()).matchAll(/\/a\/([\w-]+\.[0-9a-f]{8}\.(?:js|css))/g)) names.add(n);
+    const body = await fetchLive(path);
+    if (body) for (const n of assetRefs(body)) names.add(n);
+  }
+  // Close over the graph. Only .js can name another asset, and the visited set is the
+  // termination proof: the /a/ namespace is finite and each name is fetched at most once.
+  const queue = [...names];
+  const walked = new Set();
+  while (queue.length) {
+    const name = queue.shift();
+    if (!name.endsWith(".js") || walked.has(name)) continue;
+    walked.add(name);
+    const body = await fetchLive(`/a/${name}`);
+    if (!body) continue;
+    liveBody.set(name, body);
+    for (const n of assetRefs(body)) if (!names.has(n)) { names.add(n); queue.push(n); }
   }
   // Abort rather than adopt nothing. An empty read means production is down or the ref
   // shape moved, and continuing would hand the prune below an empty `current` set, which
@@ -147,8 +181,10 @@ console.log(`shell:roll: ${shell.length} candidate(s) from ${live ? `${ORIGIN} (
 let adopted = 0;
 for (const a of shell) {
   if (existsSync(`${DICTS}/${a.name}`)) continue;
+  // liveBody already holds every .js the walk fetched; css was never walked, so it
+  // still costs one request here.
   const bytes = live
-    ? Buffer.from(await (await fetch(`${ORIGIN}/a/${a.name}`, { headers: { "accept-encoding": "identity" } })).arrayBuffer())
+    ? liveBody.get(a.name) ?? Buffer.from(await (await fetch(`${ORIGIN}/a/${a.name}`, { headers: { "accept-encoding": "identity" } })).arrayBuffer())
     : await readFile(`${BUILT}/${a.name}`);
   await writeFile(`${DICTS}/${a.name}`, bytes);
   adopted++;
