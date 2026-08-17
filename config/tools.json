@@ -32,8 +32,8 @@
         "tools/photos/download-remote-photos.ts",
         "tools/photos/export-for-instagram.sh",
         "tools/photos/extract-photo-metadata.sh",
-        "tools/photos/gen-encoding-grids.sh",
-        "tools/photos/gen-encoding-samples.sh",
+        "tools/photos/gen-encoding-grids.ts",
+        "tools/photos/gen-encoding-samples.ts",
         "tools/photos/reencode-thumbnails.sh"
       ],
       "min_version": "0.2.0"
@@ -54,8 +54,8 @@
         "tools/photos/add-car-photo.ts",
         "tools/photos/add-photos.sh",
         "tools/photos/export-for-instagram.sh",
-        "tools/photos/gen-encoding-grids.sh",
-        "tools/photos/gen-encoding-samples.sh",
+        "tools/photos/gen-encoding-grids.ts",
+        "tools/photos/gen-encoding-samples.ts",
         "tools/photos/reencode-thumbnails.sh"
       ]
     },
@@ -73,8 +73,8 @@
         "tools/photos/lib/prereqs.ts",
         "tools/photos/add-photos.sh",
         "tools/photos/export-for-instagram.sh",
-        "tools/photos/gen-encoding-grids.sh",
-        "tools/photos/gen-encoding-samples.sh",
+        "tools/photos/gen-encoding-grids.ts",
+        "tools/photos/gen-encoding-samples.ts",
         "tools/photos/reencode-thumbnails.sh"
       ]
     },
@@ -94,7 +94,7 @@
       "install": "brew install mozjpeg",
       "why": "the chroma-subsampling row of the /garage/encoding grids",
       "required_by": [
-        "tools/photos/gen-encoding-grids.sh"
+        "tools/photos/gen-encoding-grids.ts"
       ]
     },
     {
@@ -104,8 +104,8 @@
       "why": "primary 10-bit AVIF tier; add-photos and reencode-thumbnails fall back to sips, the grid scripts do not",
       "required_by": [
         "tools/photos/add-car-photo.ts",
-        "tools/photos/gen-encoding-grids.sh",
-        "tools/photos/gen-encoding-samples.sh"
+        "tools/photos/gen-encoding-grids.ts",
+        "tools/photos/gen-encoding-samples.ts"
       ]
     },
     {
@@ -113,8 +113,8 @@
       "install": "brew install webp",
       "why": "the WebP point on the /garage/encoding format grid",
       "required_by": [
-        "tools/photos/gen-encoding-grids.sh",
-        "tools/photos/gen-encoding-samples.sh"
+        "tools/photos/gen-encoding-grids.ts",
+        "tools/photos/gen-encoding-samples.ts"
       ]
     },
     {
@@ -122,7 +122,7 @@
       "install": "brew install ffmpeg",
       "why": "PNG to PPM, because cjpeg will not read PNG and sips BMP confuses it",
       "required_by": [
-        "tools/photos/gen-encoding-grids.sh"
+        "tools/photos/gen-encoding-grids.ts"
       ]
     },
     {

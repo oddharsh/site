@@ -150,8 +150,8 @@ jobs:
               bun tools/photos/add-car-photo.ts "$CAR_STEM" "$key"
               ;;
             regenerate-encoding-study)
-              ./tools/photos/gen-encoding-samples.sh
-              ./tools/photos/gen-encoding-grids.sh
+              bun tools/photos/gen-encoding-samples.ts
+              bun tools/photos/gen-encoding-grids.ts
               ;;
           esac
 
