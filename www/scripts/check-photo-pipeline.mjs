@@ -64,19 +64,29 @@ for (const [stem, entry] of Object.entries(photoIndex)) {
   }
 }
 
+// The published pixel tiers, in one place: a (600 AVIF), j (600 JPG),
+// s (400 AVIF, DPR-2), x (200 AVIF, DPR-1).
+const TIER_KEYS = ["a", "j", "s", "x"];
+
 const expectedFiles = new Set();
 for (const stem of stems) {
   const entry = hashes[stem];
-  if (!asRecord(entry) || !entry.a || !entry.j || !entry.s) {
-    fail(`${stem}: hash entry must contain a, j, and s tiers`);
+  // x (the 200px DPR-1 tier) is required alongside the other three. It could
+  // have been optional, since photo-grid.js degrades to two srcset candidates
+  // without it and photos.js keeps serving the stem — but "the pipeline half ran"
+  // is exactly the state this file exists to refuse, and an optional tier is one
+  // nothing would ever notice missing.
+  if (!asRecord(entry) || !entry.a || !entry.j || !entry.s || !entry.x) {
+    fail(`${stem}: hash entry must contain a, j, s, and x tiers`);
   }
 
   const files = [
     `${stem}.${entry.a}.avif`,
     `${stem}.${entry.j}.jpg`,
     `${stem}-400.${entry.s}.avif`,
+    `${stem}-200.${entry.x}.avif`,
   ];
-  for (const [tier, file] of [["a", files[0]], ["j", files[1]], ["s", files[2]]]) {
+  for (const [tier, file] of [["a", files[0]], ["j", files[1]], ["s", files[2]], ["x", files[3]]]) {
     expectedFiles.add(file);
     try { await stat(path.join(HASHED, file)); }
     catch { fail(`${stem}: missing hashed pixel tier ${file}`); }
@@ -107,8 +117,12 @@ if (fingerprintStrays.length) fail(`images/fingerprints.json carries unpublished
 // claimed it was the backstop for a digest COLLISION, and a collision in fact
 // trips the per-stem loop first, since the surviving entry names the other stem
 // and that reads as drift.
-if (Object.keys(fingerprints).length !== stems.length * 3) {
-  fail(`images/fingerprints.json holds ${Object.keys(fingerprints).length} digests, expected ${stems.length * 3} (${stems.length} photos x 3 tiers)`);
+// TIER_KEYS rather than a literal 3: this assertion hardcoded the tier count and
+// went red the moment the 200px tier landed, naming a number nobody had thought
+// to update. It was the check doing its job, and it should not need a second
+// edit next time.
+if (Object.keys(fingerprints).length !== stems.length * TIER_KEYS.length) {
+  fail(`images/fingerprints.json holds ${Object.keys(fingerprints).length} digests, expected ${stems.length * TIER_KEYS.length} (${stems.length} photos x ${TIER_KEYS.length} tiers)`);
 }
 
 const actualFiles = (await readdir(HASHED)).filter((file) => /\.(avif|jpg)$/.test(file));

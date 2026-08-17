@@ -727,6 +727,15 @@ footer .signature small { color: oklch(56.93% 0 0); }
       // empty.
       const boot = () => {
         for (const image of document.querySelectorAll(".photos img[data-photo-deferred][data-src]")) {
+          // srcset and sizes go on BEFORE src. The browser selects a candidate
+          // when the source set changes, so setting src first makes it commit to
+          // that URL and only then re-evaluate, which is a wasted request on the
+          // 1x displays this tier exists for.
+          if (image.dataset.srcset) {
+            image.sizes = "184px";
+            image.srcset = image.dataset.srcset;
+            image.removeAttribute("data-srcset");
+          }
           image.src = image.dataset.src;
           image.removeAttribute("data-src");
           image.removeAttribute("data-photo-deferred");

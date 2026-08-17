@@ -2467,7 +2467,7 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   assert.match(build, /deterministicTwelve/, "the document must carry a baked fallback grid, or `/` stops being crawlable without JS");
   // The two renderings differ in exactly one way, so assert on the OUTPUT
   // rather than on the source that produces it.
-  const photo = [{ stem: "X1", full: "X1.jpg", thumb_jpg: "/i/X1.aaaaaaaa.jpg", thumb_avif: "/i/X1.aaaaaaaa.avif", thumb_small: "/i/X1-400.aaaaaaaa.avif", size: 1, uploaded: "2026-01-01" }];
+  const photo = [{ stem: "X1", full: "X1.jpg", thumb_jpg: "/i/X1.aaaaaaaa.jpg", thumb_avif: "/i/X1.aaaaaaaa.avif", thumb_small: "/i/X1-400.aaaaaaaa.avif", thumb_xs: "/i/X1-200.aaaaaaaa.avif", size: 1, uploaded: "2026-01-01" }];
   const baked = renderPhotoSlots(photo, {});
   const fragment = renderPhotoSlots(photo, {}, { deferred: false });
 
@@ -2475,6 +2475,10 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   // <noscript> twin is a thumbnail fetched and discarded milliseconds later.
   assert.match(baked, /data-photo-deferred/, "baked tiles must keep their URLs in data-* until hydration decides");
   assert.match(baked, /data-src="\/i\/X1-400\.aaaaaaaa\.avif"/, "the baked tile carries its one 400px AVIF in data-src");
+  assert.match(baked, /data-srcset="[^"]*200w[^"]*400w[^"]*600w[^"]*"/,
+    "the baked tile's candidates ride in data-srcset, for the same reason its src does");
+  assert.doesNotMatch(baked.slice(0, baked.indexOf("<noscript>")), /\ssrcset="/,
+    "a real srcset outside the twin selects and fetches before the hydrator can");
   assert.match(baked, /<noscript><img/, "every baked tile needs its script-off twin");
   // ONE url in the twin too. <picture> here is safe but not free: 195 bytes a
   // tile against 130, to serve a client that must be no-JS AND no-AVIF at once,
@@ -2490,8 +2494,22 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   // Fragment: these tiles ARE the grid. Nothing replaces them, so they carry
   // live URLs and start on innerHTML.
   assert.match(fragment, /\ssrc="\/i\/X1-400\.aaaaaaaa\.avif"/, "the fragment tile must carry its live 400px AVIF");
-  assert.doesNotMatch(fragment, /<picture|<source|srcset=|\ssrc="[^"]+\.jpg"/,
-    "one grid tile must expose one browser image resource, with no JPEG fallback to churn on hover");
+  // ONE FORMAT, which is what the old "one browser image resource" rule was
+  // actually protecting. That rule banned `srcset=` too, because at the time one
+  // URL and one format were the same policy. They are not: <picture>/<source>
+  // select on TYPE and leave a loser to be instantiated (13 JPEG loads for one
+  // tile, 2026-08-11), while srcset selects on SIZE and resolves to a single
+  // candidate. Measured before this changed, 12 tiles and two full hover passes
+  // at DPR 1 and 2: 0 image loads beyond the initial 12, identical to a
+  // single-URL control. So the assertion now pins the invariant rather than the
+  // proxy — no type selection, no JPEG, and every candidate the same format.
+  assert.doesNotMatch(fragment, /<picture|<source|\ssrc="[^"]+\.jpg"/,
+    "a grid tile must not select on TYPE: that is the fallback that churns on hover");
+  const cands = (/\ssrcset="([^"]+)"/.exec(fragment)?.[1] || "").split(",").map((c) => c.trim()).filter(Boolean);
+  assert.equal(cands.length, 3, "the fragment tile offers all three size candidates");
+  for (const c of cands) assert.match(c, /\.avif \d+w$/, `every srcset candidate is one AVIF with a width descriptor: ${c}`);
+  assert.match(fragment, /\ssizes="184px"/,
+    "sizes must name the fixed .photos column, or the browser guesses 100vw and picks the largest tier");
   assert.doesNotMatch(fragment, /data-photo-deferred|data-src=|data-srcset=/,
     "a fragment tile has nothing to defer for; leaving it deferred is how the grid went blank in an unrendered tab");
 

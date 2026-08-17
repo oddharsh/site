@@ -265,7 +265,7 @@ function publicPhoto(record, stem, hashes, alt, kind, tier) {
   return {
     stem, matchKind: kind, matchedTier: tier || null,
     full: index?.full ? `/images/full/${encodeURIComponent(index.full).replace(/%2F/g, "/")}` : null,
-    thumb: { avif: hash.a ? `/i/${stem}.${hash.a}.avif` : null, jpg: hash.j ? `/i/${stem}.${hash.j}.jpg` : null, small: hash.s ? `/i/${stem}-400.${hash.s}.avif` : null },
+    thumb: { avif: hash.a ? `/i/${stem}.${hash.a}.avif` : null, jpg: hash.j ? `/i/${stem}.${hash.j}.jpg` : null, small: hash.s ? `/i/${stem}-400.${hash.s}.avif` : null, xs: hash.x ? `/i/${stem}-200.${hash.x}.avif` : null },
     alt: String(alt?.[stem] || "").slice(0, 240), metadata,
   };
 }

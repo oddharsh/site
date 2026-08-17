@@ -178,6 +178,11 @@ export function derivePhotoPool(index, hashes) {
       thumb_avif:  `/i/${stem}.${h.a}.avif`,
       thumb_jpg:   `/i/${stem}.${h.j}.jpg`,
       thumb_small: `/i/${stem}-400.${h.s}.avif`,
+      // The DPR-1 candidate. Optional on purpose: a stem hashed before the 200px
+      // tier existed still serves, it just has one fewer srcset candidate, so a
+      // half-run pipeline degrades to the old behaviour rather than dropping the
+      // photo. derivePhotoPool already skips a stem missing a, j or s.
+      thumb_xs:    h.x ? `/i/${stem}-200.${h.x}.avif` : null,
       stem,
       size:       p.size,                   // R2 object size in bytes
       uploaded:   p.uploaded || null,
@@ -395,6 +400,7 @@ export async function queryPhotos(env, options = {}, ctx = null) {
         avif: hash.a ? `/i/${stem}.${hash.a}.avif` : null,
         jpg: hash.j ? `/i/${stem}.${hash.j}.jpg` : null,
         small: hash.s ? `/i/${stem}-400.${hash.s}.avif` : null,
+        xs: hash.x ? `/i/${stem}-200.${hash.x}.avif` : null,
       },
       metadata: photoMetadata(record),
     };
