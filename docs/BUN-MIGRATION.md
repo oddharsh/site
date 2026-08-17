@@ -539,3 +539,77 @@ bogus key and reading the error. `Bun.build` is the opposite: it IGNORES unknown
 option keys, so a missing error proves nothing at all. Every row in that control
 is measured by EFFECT on the output bytes, never by whether an option was
 accepted. Check which kind of schema you are holding before designing the probe.
+
+## Pulling pnpm and node out
+
+**pnpm is gone.** No lockfile, no workspace file, no invocation, no message
+telling anyone to run it. The only surviving mentions are the two Workers Builds
+deploy commands in `infra.json`, which RECORD what is typed into the Cloudflare
+dashboard rather than anything this repo runs, and prose recording what changed.
+Those two strings cannot move first: `check-infra.mjs` compares them against the
+live dashboard by exact match, so editing them ahead of the dashboard fails on
+drift it invented itself.
+
+**node is down to exactly two things, both measured, both re-testable.**
+
+`wrangler.jsonc`'s `build.command` was still `node tools/build.mjs`, so every
+`wrangler deploy` shelled back into node for the build. It is `bun` now, and the
+whole deploy path was then verified with node genuinely unavailable: a stub on
+PATH that exits 127. `wrangler deploy --dry-run` completed and produced a
+**byte-identical bundle** (one sha256 across both runs).
+
+What still needs node:
+
+1. **The wrangler CLI itself**, because `node_modules/.bin/wrangler` carries a
+   `#!/usr/bin/env node` shebang. There IS an escape hatch and it is measured:
+   `bun ./node_modules/wrangler/bin/wrangler.js --version` answered 4.123.0 with
+   node shadowed. `bun x --no-install wrangler` does NOT work, because bunx
+   honours the shebang and spawns node. So node can be removed the day it has to
+   be, by invoking the entry rather than the shim.
+2. **`routes:check`**, which boots workerd through `createTestHarness()` and
+   still hangs under bun. Re-tested on this canary: no output, no error, killed
+   at the timeout with workerd children idle.
+
+Neither is a bun defect to route around. Both are wrangler, miniflare and workerd
+being node-pinned, which was known going in.
+
+### gzip is runtime-dependent, and brotli is not
+
+Worth knowing before anyone compares a number across runtimes. On identical
+input, bun's `node:zlib` gzip is consistently ~0.7-0.8% larger than node's:
+
+| | node | bun |
+|---|--:|--:|
+| `nav.js` gzip | 17,810 | 17,951 |
+| `lens.js` gzip | 44,766 | 45,084 |
+| `luna.css` gzip | 21,940 | 22,100 |
+| all three, brotli q11 | **identical** | **identical** |
+
+**Nothing that reaches a visitor changes**, because the wire is brotli and zstd
+and both are byte-identical between runtimes. gzip is a REPORTING path:
+`perf-budget.mjs` computes its own with `gzipSync`, and wrangler prints one in
+`Total Upload`. That is why the same bundle reported 227.78 KiB gzip under node
+and 230.10 under bun while the artifact hashed identically.
+
+The budgets have room (index.html is 9.4 KiB gzip against a 22 KiB envelope), so
+nothing needed re-baselining. But a gzip figure is only comparable to another
+gzip figure taken on the same runtime, and this repo's budget history is a list
+of numbers somebody typed.
+
+### A check that had been agreeing with itself
+
+`check-wrangler.mjs` counts transitive wrangler copies by reading the isolated
+linker's store, and it read `node_modules/.pnpm` alone. That directory stopped
+existing at the pnpm removal, the `try/catch` swallowed the ENOENT, and it
+reported "0 transitive copies" on every run since: a clean pass that had
+inspected nothing.
+
+It reads `.bun` and `.pnpm` now, parses both suffix conventions (`+hash` and
+`_peer`), and says out loud when it finds neither rather than reporting an
+unscanned tree as clean. Verified by planting a `wrangler@3.0.0` in the store.
+
+While fixing it, a second and older weakness: the transitive count was only ever
+PRINTED. A drifting wrangler exited 0. That was survivable while the scan was
+reading a missing directory and the count was always zero; with the scan working
+it would have been a scanner nobody reads. It fails now, exit 1, with the
+offending versions named.

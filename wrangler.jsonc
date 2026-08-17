@@ -41,7 +41,7 @@
   // fails if the two stop agreeing.
   "account_id": "1c99acdb6141579023fb97d24261ea58",
   "main": ".build/src/worker/index.ts",
-  "build": { "command": "node tools/build.mjs" },
+  "build": { "command": "bun tools/build.mjs" },
   "compatibility_date": "2026-06-01",
   // Deploy-only. Measured 2026-08-16: 274.45 -> 227.67 KiB gzip (17.0% off).
   // Keep the local-dev twin readable; uploaded source maps retain original stack

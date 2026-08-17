@@ -210,7 +210,7 @@ try {
   console.error(
     `\ncannot reach ${URL_BASE} (${e.message})\n\n` +
     (URL_BASE.includes("localhost")
-      ? `Start the dev server first:\n  pnpm exec wrangler dev -c wrangler.dev.jsonc --port 8799\n\n` +
+      ? `Start the dev server first:\n  bun run dev -- --port 8799\n\n` +
         `Or point at production:\n  pnpm run inp --url https://aadhar.sh\n`
       : `Check the URL is reachable.\n`)
   );

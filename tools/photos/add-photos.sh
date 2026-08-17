@@ -112,7 +112,7 @@ MOZ_JTRAN="$MOZJPEG_DIR/jpegtran"
 
 if [ ! -x "$WRANGLER" ]; then
   echo "error: pinned wrangler not found at $WRANGLER" >&2
-  echo "  run: pnpm install" >&2
+  echo "  run: bun install" >&2
   exit 1
 fi
 for cmd in sips exif-sooc; do

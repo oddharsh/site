@@ -2,7 +2,7 @@
 // exactly at the root. A drifting Wrangler is how a config key means one thing
 // in CI and another on a workstation.
 //
-// This read the npm lockfile until the pnpm migration. It now reads the
+// This read a lockfile until the pnpm era. It now reads the
 // INSTALLED TREE instead, which is a stronger check rather than a weaker one:
 // a lockfile records what should be there, node_modules records what is.
 //
@@ -13,7 +13,7 @@
 // step that already passed is decoration.
 //
 // The cost of reading node_modules is that this script now REQUIRES an install
-// first. CI installs before calling it. Run `pnpm install` if it reports that.
+// first. CI installs before calling it. Run `bun install` if it reports that.
 import { readFile, readdir, access } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -40,24 +40,45 @@ const errors = [];
 
 if (!(await exists("node_modules/wrangler/package.json"))) {
   console.error("Wrangler version check failed:");
-  console.error("- node_modules/wrangler is missing. This check reads the installed tree; run `pnpm install` first.");
+  console.error("- node_modules/wrangler is missing. This check reads the installed tree; run `bun install` first.");
   process.exit(1);
 }
 
 const rootDeclared = rootPackage.devDependencies?.wrangler || rootPackage.dependencies?.wrangler || "";
 const installed = (await readJson("node_modules/wrangler/package.json")).version || "";
 
-// Transitive copies live under pnpm's content-addressed store link farm, one
-// directory per resolved version (a peer-dependency suffix may follow the
-// version, hence the prefix match rather than an equality test).
+// Transitive copies live under the isolated linker's content-addressed store,
+// one directory per resolved version. bun spells that node_modules/.bun and
+// suffixes the entry with +<hash>; pnpm spelled it node_modules/.pnpm and used
+// _<peer-suffix>. Both are handled, because a tree can be either.
+//
+// THIS SILENTLY DEGRADED FOR THE WHOLE BUN MIGRATION. It read .pnpm alone, that
+// directory stopped existing, the catch swallowed the ENOENT, and the check
+// reported "0 transitive copies" on every run: a clean pass that had inspected
+// nothing. Exactly the shape this repo warns about, a check that can only ever
+// agree with itself. The floor below is what makes the next spelling change
+// LOUD rather than green.
+const STORES = ["node_modules/.bun", "node_modules/.pnpm"];
 let transitiveVersions = [];
-try {
-  transitiveVersions = (await readdir(path.join(ROOT, "node_modules/.pnpm")))
+let storeSeen = null;
+for (const store of STORES) {
+  let entries;
+  try {
+    entries = await readdir(path.join(ROOT, store));
+  } catch {
+    continue;                       // this tree uses the other linker
+  }
+  storeSeen = store;
+  transitiveVersions = entries
     .filter((entry) => entry.startsWith("wrangler@"))
-    .map((entry) => entry.slice("wrangler@".length).split("_")[0])
+    .map((entry) => entry.slice("wrangler@".length).split(/[_+]/)[0])
     .filter((version) => version !== installed);
-} catch {
-  // no .pnpm directory (a hoisted or non-pnpm layout); the checks below still hold
+  break;
+}
+if (!storeSeen) {
+  // A hoisted layout has no store at all, which is legitimate. Say so, rather
+  // than reporting a scan that never happened as a clean result.
+  console.warn("- no isolated store (.bun or .pnpm) found; transitive-copy scan skipped, not passed.");
 }
 
 if (!/^\d+\.\d+\.\d+$/.test(expected)) {
@@ -65,6 +86,13 @@ if (!/^\d+\.\d+\.\d+$/.test(expected)) {
 }
 if (rootDeclared !== expected) errors.push(`root: package.json declares ${JSON.stringify(rootDeclared)}, expected ${expected}`);
 if (installed !== expected) errors.push(`root: node_modules resolves Wrangler ${JSON.stringify(installed)}, expected ${expected}`);
+// A transitive copy at a DIFFERENT version is precisely the drift this script
+// exists to catch, and it was only ever PRINTED. That was survivable while the
+// scan was silently reading a directory that did not exist, since the count was
+// always 0; with the scan working it would be a scanner nobody reads.
+if (transitiveVersions.length) {
+  errors.push(`transitive Wrangler copies at other versions: ${[...new Set(transitiveVersions)].join(", ")} (root is ${installed}) — a drifting Wrangler is how a config key means one thing in CI and another on a workstation`);
+}
 console.log(`root: Wrangler ${rootDeclared} (installed ${installed}; ${transitiveVersions.length} transitive ${transitiveVersions.length === 1 ? "copy" : "copies"})`);
 
 for (const project of PROJECTS) {

@@ -526,7 +526,7 @@ if (has("rollback")) {
   const newest = await newestVersion();
   const older = active.filter((v) => v.id.slice(0, 8) !== newest.slice(0, 8));
   if (!older.length) {
-    die(`nothing to roll back to: ${newest.slice(0, 8)} already holds all traffic. Pick a version explicitly with \`pnpm exec wrangler versions deploy <id>@100 --yes\`, or re-upload the previous commit.`);
+    die(`nothing to roll back to: ${newest.slice(0, 8)} already holds all traffic. Pick a version explicitly with \`bun x --no-install wrangler versions deploy <id>@100 --yes\`, or re-upload the previous commit.`);
   }
   const to = older.sort((a, b) => b.pct - a.pct)[0];
   console.log(`rolling back: 100% to ${to.id.slice(0, 8)}`);
