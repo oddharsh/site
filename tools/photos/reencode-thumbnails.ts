@@ -23,6 +23,7 @@ import { mkdir, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { ensureZenc, requireBins } from "./lib/prereqs.ts";
+import { PHOTO_JOBS, pool } from "./lib/pool.ts";
 import { EXIF_SOOC_MIN, versionAtLeast } from "./gen-encoding-grids.ts";
 
 export const REQUIRES = ["sips", "exif-sooc", "avifenc"] as const;
@@ -100,7 +101,7 @@ if (import.meta.main) {
     process.exit(1);
   }
 
-  console.log(`re-encoding ${stems.length} thumbnails as ${SQ}x${SQ} / ${SQ_SM}x${SQ_SM} center squares  (zenc q${ZENC_Q} + AVIF via avifenc)`);
+  console.log(`re-encoding ${stems.length} thumbnails as ${SQ}x${SQ} / ${SQ_SM}x${SQ_SM} center squares  (zenc q${ZENC_Q} + AVIF via avifenc, ${PHOTO_JOBS} at a time)`);
   console.log(`  source: ${src}\n`);
 
   const tmp = join(tmpdir(), `aadhar-reencode-${process.pid}`);
@@ -112,9 +113,13 @@ if (import.meta.main) {
     $`${bin.avifenc} -q 63 -d 10 --ignore-icc --ignore-exif --ignore-xmp --speed 4 --jobs 4 --yuv ${yuv} ${input} ${out}`.quiet();
 
   try {
-    for (const stem of stems) {
+    // Intermediates here stay keyed by stem, and that is safe by CONSTRUCTION
+    // rather than by luck: stems are the keys of the hash map, so they are
+    // unique. The sibling loops in add-photos.ts take an input LIST where two
+    // folders can supply one filename, which is why those key by item index.
+    await pool(stems, PHOTO_JOBS, async (stem) => {
       const found = findSource(stem);
-      if (!found) { miss++; process.stdout.write("?"); continue; }
+      if (!found) { miss++; process.stdout.write("?"); return; }
       const source = join(src, found);
 
       try {
@@ -139,7 +144,7 @@ if (import.meta.main) {
         const dims = (await $`${bin.sips} -g pixelWidth -g pixelHeight ${work}`.quiet()).stdout.toString();
         const w = Number(dims.match(/pixelWidth:\s*(\d+)/)?.[1]);
         const h = Number(dims.match(/pixelHeight:\s*(\d+)/)?.[1]);
-        if (!w || !h) { fail++; process.stdout.write("x"); continue; }
+        if (!w || !h) { fail++; process.stdout.write("x"); return; }
 
         const tif = join(inter, stem + ".tif");
         const sqt = join(inter, stem + ".sq.tif");
@@ -176,7 +181,7 @@ if (import.meta.main) {
         fail++;
         process.stdout.write("x");
       }
-    }
+    });
   } finally {
     await rm(tmp, { recursive: true, force: true });
   }

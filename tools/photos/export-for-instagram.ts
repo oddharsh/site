@@ -25,6 +25,7 @@ import { copyFile, mkdir, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, extname, join } from "node:path";
 import { ensureZenc, requireBins } from "./lib/prereqs.ts";
+import { PHOTO_JOBS, pool } from "./lib/pool.ts";
 import { EXIF_SOOC_MIN, versionAtLeast } from "./gen-encoding-grids.ts";
 
 export const REQUIRES = ["sips", "exif-sooc"] as const;
@@ -172,43 +173,67 @@ if (import.meta.main) {
   console.log("");
 
   let ok = 0, missed = 0, failed = 0;
+
+  // Every photo here is a quality SEARCH: a binary search over q, each rung a
+  // zenc encode scored by ssimulacra2 and butteraugli. That makes this the most
+  // spawn-heavy loop in the photo tooling, and it ran one photo at a time.
+  //
+  // Output stays in INPUT order even though the work does not: each photo
+  // collects its own lines and the writer flushes a prefix as it completes, so
+  // the table reads exactly as it did serially rather than in finish order.
+  const pending: (string[] | undefined)[] = new Array(list.length);
+  let flushed = 0;
+  const flush = (i: number, lines: string[]) => {
+    pending[i] = lines;
+    while (flushed < pending.length && pending[flushed]) {
+      for (const line of pending[flushed] as string[]) console.log(line);
+      flushed++;
+    }
+  };
+
   try {
-    for (const f of list) {
+    await pool(list, PHOTO_JOBS, async (f, i) => {
+      const say: string[] = [];
+      try {
       const stem = basename(f, extname(f));
-      const ref = join(tmp, `${stem}-ref.png`);
+      // per-ITEM, never per-stem: two inputs can share a stem (two source folders,
+      // same filename), and in parallel that is a race on the intermediates
+      // rather than the harmless overwrite it was when one photo ran at a time.
+      const work = `${i}-${stem}`;
+      const ref = join(tmp, `${work}-ref.png`);
       const size = await prepareReference(f, ref);
-      if (!size) { console.log(`  ${stem} — could not decode, skipped`); failed++; continue; }
+      if (!size) { say.push(`  ${stem} — could not decode, skipped`); failed++; return; }
 
       if (opts.mode === "calibrate") {
         const dir = join(opts.out, `${stem}-ladder`);
         if (!opts.dry) { await mkdir(dir, { recursive: true }); await copyFile(ref, join(dir, "original.png")); }
-        console.log(`${stem}  ${size}`);
-        console.log(`    ${"q".padEnd(4)} ${"bytes".padEnd(11)} ${"ssim2".padEnd(8)} ${"butter".padEnd(8)}`);
+        say.push(`${stem}  ${size}`);
+        say.push(`    ${"q".padEnd(4)} ${"bytes".padEnd(11)} ${"ssim2".padEnd(8)} ${"butter".padEnd(8)}`);
         for (const q of LADDER) {
-          const cand = join(tmp, `${stem}-${q}.jpg`);
+          const cand = join(tmp, `${work}-${q}.jpg`);
           if ((await $`${zenc} ${ref} ${cand} -q ${q} --yuv ${opts.yuv}`.quiet().nothrow()).exitCode !== 0) continue;
           const sc = await s2(ref, cand), bc = await ba(ref, cand);
           const mark = clears(sc, bc) ? `← clears ${opts.target}` : "";
-          console.log(`    ${String(q).padEnd(4)} ${(await kb(cand)).padEnd(11)} ${sc.padEnd(8)} ${bc.padEnd(8)} ${mark}`);
+          say.push(`    ${String(q).padEnd(4)} ${(await kb(cand)).padEnd(11)} ${sc.padEnd(8)} ${bc.padEnd(8)} ${mark}`);
           if (!opts.dry) await copyFile(cand, join(dir, `q${q}.jpg`));
         }
-        console.log("");
+        say.push("");
         ok++;
-        continue;
+        return;
       }
 
-      const top = join(tmp, `${stem}-top.jpg`);
+      const top = join(tmp, `${work}-top.jpg`);
       if ((await $`${zenc} ${ref} ${top} -q ${opts.qmax} --yuv ${opts.yuv}`.quiet().nothrow()).exitCode !== 0) {
-        console.log(`  ${stem} — encode failed`); failed++; continue;
+        say.push(`  ${stem} — encode failed`); failed++; return;
       }
       const topBytes = (await stat(top)).size;
 
       if (opts.mode === "max") {
         const sc = await s2(ref, top), bc = await ba(ref, top);
         const outBytes = opts.dry ? topBytes : await finish(top, stem, f);
-        console.log(`  ${stem.padEnd(14)} ${size.padEnd(11)} q${String(opts.qmax).padEnd(3)} ${`${(outBytes / 1024).toFixed(1)} KB`.padEnd(11)} s2 ${sc.padEnd(7)} ba ${bc}`);
+        say.push(`  ${stem.padEnd(14)} ${size.padEnd(11)} q${String(opts.qmax).padEnd(3)} ${`${(outBytes / 1024).toFixed(1)} KB`.padEnd(11)} s2 ${sc.padEnd(7)} ba ${bc}`);
         ok++;
-        continue;
+        return;
       }
 
       // binary search for the LOWEST q that still clears the gate
@@ -216,13 +241,13 @@ if (import.meta.main) {
       let best = 0, bestS2 = "", bestBa = "", bestFile = "";
       while (lo <= hi) {
         const mid = Math.floor((lo + hi) / 2);
-        const cand = join(tmp, `${stem}-try.jpg`);
+        const cand = join(tmp, `${work}-try.jpg`);
         if ((await $`${zenc} ${ref} ${cand} -q ${mid} --yuv ${opts.yuv}`.quiet().nothrow()).exitCode !== 0) break;
         const sc = await s2(ref, cand);
         const bc = opts.baMax ? await ba(ref, cand) : "";
         if (clears(sc, bc)) {
           best = mid; bestS2 = sc; bestBa = bc;
-          bestFile = join(tmp, `${stem}-best.jpg`);
+          bestFile = join(tmp, `${work}-best.jpg`);
           await copyFile(cand, bestFile);
           hi = mid - 1;
         } else {
@@ -233,18 +258,21 @@ if (import.meta.main) {
       if (!best) {
         const sc = await s2(ref, top), bc = await ba(ref, top);
         const outBytes = opts.dry ? topBytes : await finish(top, stem, f);
-        console.log(`  ${stem.padEnd(14)} ${size.padEnd(11)} q${String(opts.qmax).padEnd(3)} ${`${(outBytes / 1024).toFixed(1)} KB`.padEnd(11)} s2 ${sc.padEnd(7)} ba ${bc.padEnd(7)} MISSED target ${opts.target} at q${opts.qmax}`);
+        say.push(`  ${stem.padEnd(14)} ${size.padEnd(11)} q${String(opts.qmax).padEnd(3)} ${`${(outBytes / 1024).toFixed(1)} KB`.padEnd(11)} s2 ${sc.padEnd(7)} ba ${bc.padEnd(7)} MISSED target ${opts.target} at q${opts.qmax}`);
         missed++;
-        continue;
+        return;
       }
 
       const bestBytes = (await stat(bestFile)).size;
       if (!bestBa) bestBa = await ba(ref, bestFile);
       const outBytes = opts.dry ? bestBytes : await finish(bestFile, stem, f);
       const pct = `${(((bestBytes - topBytes) * 100) / topBytes >= 0 ? "+" : "")}${(((bestBytes - topBytes) * 100) / topBytes).toFixed(0)}%`;
-      console.log(`  ${stem.padEnd(14)} ${size.padEnd(11)} q${String(best).padEnd(3)} ${`${(outBytes / 1024).toFixed(1)} KB`.padEnd(11)} s2 ${bestS2.padEnd(7)} ba ${bestBa.padEnd(7)} ${pct} vs q${opts.qmax}`);
+      say.push(`  ${stem.padEnd(14)} ${size.padEnd(11)} q${String(best).padEnd(3)} ${`${(outBytes / 1024).toFixed(1)} KB`.padEnd(11)} s2 ${bestS2.padEnd(7)} ba ${bestBa.padEnd(7)} ${pct} vs q${opts.qmax}`);
       ok++;
-    }
+      } finally {
+        flush(i, say);
+      }
+    });
   } finally {
     await rm(tmp, { recursive: true, force: true });
   }

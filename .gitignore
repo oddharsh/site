@@ -69,3 +69,6 @@ public/images/meta/
 
 # the composed readable tree for `bun run dev` (tools/compose-dev.mjs)
 .dev/
+
+# bun test --coverage output; tools/coverage-report.mjs reads and removes it
+coverage/

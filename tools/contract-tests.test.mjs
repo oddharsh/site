@@ -8053,3 +8053,61 @@ test("the CSP scanner is loud about the two silent failures", async () => {
   const build = readFileSync(new URL("./build.mjs", import.meta.url), "utf8");
   assert.match(build, /cspRequireParser\(\);/, "build.mjs must announce the requirement before it scans");
 });
+
+// ── the photo job pool ──────────────────────────────────────────────────────
+// tools/photos/lib/pool.ts runs the per-photo subprocess chains N at a time. The
+// helper it replaced batched (`for i += n: await Promise.all(slice)`), which
+// puts a barrier at every batch, so these test the two properties that differ:
+// the cap is real, and there is no barrier. Deterministic by construction —
+// jobs park on deferred promises rather than on timers.
+const deferred = () => { let resolve; const promise = new Promise((r) => { resolve = r; }); return { promise, resolve }; };
+const tick = () => new Promise((r) => setTimeout(r, 0));
+
+test("the photo pool runs exactly N at a time", async () => {
+  const { pool } = await import("../tools/photos/lib/pool.ts");
+  let inFlight = 0, peak = 0;
+  await pool(Array.from({ length: 12 }, (_, i) => i), 3, async () => {
+    inFlight++; peak = Math.max(peak, inFlight);
+    await tick();
+    inFlight--;
+  });
+  assert.equal(peak, 3, "three workers, never a fourth, and never fewer than the cap allows");
+});
+
+test("the photo pool has no batch barrier", async () => {
+  const { pool } = await import("../tools/photos/lib/pool.ts");
+  const gate = deferred();
+  const started = [];
+  const run = pool([0, 1, 2, 3], 2, async (item) => {
+    started.push(item);
+    if (item === 0) await gate.promise;          // one slow photo holds one worker
+  });
+
+  await tick();
+  await tick();
+  // Batching would stall here: items 2 and 3 are the next batch, and no batch
+  // starts until the slowest of the previous one finishes. A queue lets the free
+  // worker walk on past the slow item.
+  assert.deepEqual(started, [0, 1, 2, 3], "the free worker drains the queue while item 0 is still running");
+
+  gate.resolve();
+  await run;
+});
+
+test("the photo pool passes the index, which is what keeps intermediates apart", async () => {
+  const { pool } = await import("../tools/photos/lib/pool.ts");
+  const seen = [];
+  await pool(["a", "b", "c"], 2, async (item, index) => { seen.push(`${index}-${item}`); });
+  assert.deepEqual(seen.sort(), ["0-a", "1-b", "2-c"],
+    "two inputs can share a stem, so the per-item temp name is the index rather than the name");
+});
+
+test("the photo pool surfaces a failure rather than swallowing it", async () => {
+  const { pool, PHOTO_JOBS, UPLOAD_JOBS } = await import("../tools/photos/lib/pool.ts");
+  await assert.rejects(() => pool([1, 2, 3], 2, async (n) => { if (n === 2) throw new Error("boom"); }), /boom/,
+    "callers that want per-item degradation keep their own try/catch, which every photo script does");
+
+  await pool([], 4, async () => { assert.fail("an empty list must not run anything"); });
+  assert.ok(PHOTO_JOBS >= 1 && PHOTO_JOBS <= 8, `PHOTO_JOBS is capped at the measured knee, got ${PHOTO_JOBS}`);
+  assert.ok(UPLOAD_JOBS >= 1, "uploads keep their own smaller number, bounded by the far end");
+});

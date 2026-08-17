@@ -839,3 +839,92 @@ Checked at 7c it fires two seconds in, after the staging has already deleted the
 previous build. That is the same lesson `config/bun-canary.json` records about
 the zstd probe, where the feature detection was correct and 40 seconds late: **a
 precondition checked after the work is a precondition that costs the work.**
+
+## The photo pipeline runs N photos at a time, and the pool is measured
+
+Every per-photo loop in the photo tooling ran ONE photo at a time on a 14-core
+machine, at about 85% of a single core. Phase 1 alone spawns 6 sips, 1 zenc and
+3 avifenc per photo. Timed on a real source file, that chain is 1.1s: 273ms in
+the first `sips -Z 2000`, 189/126/83ms in the three avifenc calls, the rest in
+sips conversions and zenc.
+
+`tools/photos/lib/pool.ts` is now shared by `add-photos.ts` (phases 1, 2 and the
+R2 uploads), `reencode-thumbnails.ts` and `export-for-instagram.ts`.
+
+### The number, and why 8
+
+24 real photos through the phase-1 chain:
+
+| concurrency | ms/photo |
+|---|--:|
+| serial | 836 |
+| 4 | 228 |
+| 6 | 184 |
+| **8** | **159** |
+| 10 | 163 |
+| 12 | 150 |
+
+The knee is 8 and past it the differences sit inside run-to-run noise, because
+avifenc already takes `--jobs 4`, so the machine is oversubscribed either way.
+`PHOTO_JOBS` overrides it; uploads keep their own `UPLOAD_JOBS` of 4, since what
+bounds them is R2 rather than the CPU.
+
+End to end on the one script that is easy to measure honestly, 30 files through
+`export-for-instagram --dry-run`, which is the heaviest loop here (a binary
+search over q, each rung scored by ssimulacra2 and butteraugli): **33.7s to
+6.2s, with byte-identical stdout.**
+
+### Two controls, and the second one found a real bug
+
+**Encoders first.** Concurrency is only free if the bytes do not move, and `/i/`
+is content-addressed, so a moved byte re-mints a URL and orphans dictionaries. 8
+photos through the full chain serially and pooled: all 32 encoded outputs (600
+JPG, 600/400/200 AVIF) byte-identical. No encoder flag was touched, deliberately,
+and `--jobs 4` stays exactly where it was, since threading changes inside an
+encoder are precisely the kind of thing that moves output.
+
+**Then stdout, which is where the bug was.** The pooled export printed different
+ssimulacra2 scores than the serial run. Cause: intermediates were keyed by STEM
+(`${stem}-try.jpg`), and two inputs can share a stem, which is a harmless
+overwrite when one photo runs at a time and a race when eight do. The pool hands
+each item its INDEX, so intermediates are per item now and cannot collide.
+`reencode-thumbnails.ts` keeps stem-keyed temps because its stems are the keys of
+a hash map and unique by construction; that invariant is written at the loop.
+
+The lesson generalises past photos: **parallelising a loop makes every shared
+name a race, and the shared names are usually the temp files nobody thinks of as
+state.** The output comparison is what surfaced it, so run one.
+
+### A queue, not batches
+
+The helper this replaces was `for (let i = 0; i < items.length; i += n) await
+Promise.all(items.slice(i, i + n).map(fn))`, which puts a barrier at every batch:
+nobody starts item n+1 until the slowest of the first n finishes. Photos are not
+uniform, so a batch runs at the speed of its worst member. Four contract tests
+pin the difference, and the barrier one FAILS against the old batching helper,
+which is the control that makes it worth having.
+
+### Output order survives
+
+`export-for-instagram` prints an aligned per-photo table, so its rows are
+buffered per item and flushed in INPUT order as each prefix completes. Finish
+order would have been easier and would have shuffled the table.
+
+## Coverage is a report, deliberately
+
+`bun test --coverage` works with no configuration, so `bun run test:coverage`
+(`tools/coverage-report.mjs`) reads the lcov and names what the 316 contract
+tests never execute. Today that is **7707 of 14063 lines, 54.8%**, with
+`src/worker/updates.ts` at 4.7%, `tools/check-agent.mjs` at 11.3% and
+`src/worker/whoareyou.ts` at 22.0%.
+
+CI runs it inside `validate` under `continue-on-error` and puts the table in the
+job summary. It gates NOTHING, and that is the design rather than timidity: a
+coverage floor is one more constant somebody widens, and this repo has the
+receipts for what that does, since perf-budget spent an era in breach while
+printing "hard checks green" over itself every run. The useful moment for this
+number is picking what to test next, which #444 did by hand.
+
+One honesty note is built into the output: `cal/` looks uncovered here and is
+not, because its own Vitest suite runs inside workerd. Those files are counted
+out and named rather than silently hidden.

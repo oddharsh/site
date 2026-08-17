@@ -16,6 +16,7 @@ import { $ } from "bun";
 import { mkdir, readdir, rm, stat } from "node:fs/promises";
 import { basename, dirname, extname, join } from "node:path";
 import { ensureZenc, requireBins } from "./lib/prereqs.ts";
+import { PHOTO_JOBS, UPLOAD_JOBS, pool } from "./lib/pool.ts";
 import { EXIF_SOOC_MIN, versionAtLeast } from "./gen-encoding-grids.ts";
 import { longEdgeFor, orientationFlags, MOZ_JTRAN, ZENC_Q } from "./reencode-thumbnails.ts";
 
@@ -83,10 +84,16 @@ if (import.meta.main) {
   };
 
   // ── phase 1: square thumbnails ────────────────────────────────────────────
-  console.log(`phase 1 — square thumbnails (${SQ}x${SQ} / ${SQ_SM}x${SQ_SM}, zenc q${ZENC_Q} + AVIF, metadata-stripped)`);
+  console.log(`phase 1 — square thumbnails (${SQ}x${SQ} / ${SQ_SM}x${SQ_SM}, zenc q${ZENC_Q} + AVIF, metadata-stripped, ${PHOTO_JOBS} at a time)`);
   let tOk = 0, tSkip = 0, tFail = 0;
-  for (const f of list) {
+  await pool(list, PHOTO_JOBS, async (f, i) => {
     const stem = basename(f, extname(f));
+    // INTERMEDIATES are per ITEM, outputs stay per stem. Two inputs can share a
+    // stem (two source folders, one filename), which used to be a harmless
+    // overwrite when one photo ran at a time and is a race now. Caught by the
+    // control on export-for-instagram, which reported one photo's score
+    // against another photo's bytes before the temp names were split.
+    const tmpBase = `${i}-${stem}`;
     const jpg = join(dest, `${stem}.jpg`);
     const avif = join(dest, `${stem}.avif`);
     const smavif = join(dest, `${stem}-${SQ_SM}.avif`);
@@ -94,11 +101,11 @@ if (import.meta.main) {
     // skip when every tier already exists AND is newer than the source
     const [js, ss] = await Promise.all([stat(jpg).catch(() => null), stat(f).catch(() => null)]);
     if (js && ss && await Bun.file(avif).exists() && await Bun.file(smavif).exists() && js.mtimeMs > ss.mtimeMs) {
-      tSkip++; process.stdout.write("·"); continue;
+      tSkip++; process.stdout.write("·"); return;
     }
 
     try {
-      let work = join(inter, `${stem}.jpg`);
+      let work = join(inter, `${tmpBase}.jpg`);
       await $`${bin.sips} -Z 2000 -s format jpeg --setProperty formatOptions 100 ${f} --out ${work}`.quiet();
 
       const o = (await $`exif-sooc -s -s -s -n -Orientation ${f}`.quiet().nothrow()).stdout.toString();
@@ -106,7 +113,7 @@ if (import.meta.main) {
       if (flags.length) {
         const r = await $`${MOZ_JTRAN} -copy none ${flags} ${work}`.quiet().nothrow();
         if (r.exitCode === 0) {
-          const rot = join(inter, `${stem}.rot.jpg`);
+          const rot = join(inter, `${tmpBase}.rot.jpg`);
           await Bun.write(rot, r.stdout);
           work = rot;
         }
@@ -115,11 +122,11 @@ if (import.meta.main) {
       const dims = (await $`${bin.sips} -g pixelWidth -g pixelHeight ${work}`.quiet()).stdout.toString();
       const w = Number(dims.match(/pixelWidth:\s*(\d+)/)?.[1]);
       const h = Number(dims.match(/pixelHeight:\s*(\d+)/)?.[1]);
-      if (!w || !h) { tFail++; process.stdout.write("x"); continue; }
+      if (!w || !h) { tFail++; process.stdout.write("x"); return; }
 
-      const tif = join(inter, `${stem}.tif`);
-      const sqt = join(inter, `${stem}.sq.tif`);
-      const sq = join(inter, `${stem}.sq.png`);
+      const tif = join(inter, `${tmpBase}.tif`);
+      const sqt = join(inter, `${tmpBase}.sq.tif`);
+      const sq = join(inter, `${tmpBase}.sq.png`);
       await $`${bin.sips} -s format tiff ${work} --out ${tif}`.quiet();
       await $`${bin.sips} -Z ${longEdgeFor(w, h, SQ)} ${tif}`.quiet();
       await $`${bin.sips} -c ${SQ} ${SQ} ${tif} --out ${sqt}`.quiet();
@@ -127,10 +134,10 @@ if (import.meta.main) {
 
       await $`${zenc} ${sq} ${jpg} -q ${ZENC_Q}`.quiet();
       await $`exif-sooc -all= -overwrite_original ${jpg}`.quiet().nothrow();
-      if ((await avifEncode(sq, avif)).exitCode !== 0) { tFail++; process.stdout.write("x"); continue; }
+      if ((await avifEncode(sq, avif)).exitCode !== 0) { tFail++; process.stdout.write("x"); return; }
 
       for (const [edge, out] of [[SQ_SM, smavif], [SQ_XS, join(dest, `${stem}-${SQ_XS}.avif`)]] as const) {
-        const scaled = join(inter, `${stem}.${edge}.png`);
+        const scaled = join(inter, `${tmpBase}.${edge}.png`);
         const r = await $`${bin.sips} -Z ${edge} ${sq} --out ${scaled}`.quiet().nothrow();
         if (r.exitCode === 0) { if ((await avifEncode(scaled, out)).exitCode !== 0) process.stdout.write("~"); }
       }
@@ -138,28 +145,28 @@ if (import.meta.main) {
     } catch {
       tFail++; process.stdout.write("x");
     }
-  }
+  });
   console.log(`\n  generated: ${tOk}  skipped (current): ${tSkip}  failed: ${tFail}\n`);
 
   // ── phase 2: HIF -> full-res JPG ──────────────────────────────────────────
-  console.log("phase 2 — HIF → full-res JPG exports");
+  console.log(`phase 2 — HIF → full-res JPG exports (${PHOTO_JOBS} at a time)`);
   let hOk = 0, hSkip = 0, hFail = 0;
-  for (const f of list) {
-    if (!IS_HEIF.test(f)) continue;
+  await pool(list, PHOTO_JOBS, async (f, i) => {
+    if (!IS_HEIF.test(f)) return;
     const stem = basename(f, extname(f));
     // a JPG sibling in the source folder IS the share copy; do not make a second
     const siblings = await readdir(dirname(f));
-    if (siblings.some((s) => new RegExp(`^${stem}\\.jpe?g$`, "i").test(s))) { hSkip++; process.stdout.write("→"); continue; }
+    if (siblings.some((s) => new RegExp(`^${stem}\\.jpe?g$`, "i").test(s))) { hSkip++; process.stdout.write("→"); return; }
 
     const out = join(exports_, `${stem}.jpg`);
-    const png = join(exports_, `${stem}.decode.png`);
+    const png = join(exports_, `${i}-${stem}.decode.png`);
     const okDecode = (await $`${bin.sips} -s format png ${f} --out ${png}`.quiet().nothrow()).exitCode === 0;
     // q100 4:2:2 because Fuji HIF is 4:2:2 native; 4:4:4 would be a byte tax
     const okEnc = okDecode && (await $`${zenc} ${png} ${out} -q 100 --yuv 422`.quiet().nothrow()).exitCode === 0;
     const okExif = okEnc && (await $`exif-sooc -TagsFromFile ${f} -all:all -overwrite_original ${out}`.quiet().nothrow()).exitCode === 0;
     await rm(png, { force: true });
     if (okExif) { hOk++; process.stdout.write("."); } else { hFail++; process.stdout.write("x"); }
-  }
+  });
   console.log(`\n  exported: ${hOk}  skipped (JPG sibling exists): ${hSkip}  failed: ${hFail}\n`);
 
   // ── phase 3: R2 ───────────────────────────────────────────────────────────
@@ -167,7 +174,7 @@ if (import.meta.main) {
   if (remoteOnly) {
     console.log("phase 3 — R2 uploads skipped (source is already remote)");
   } else {
-    console.log("phase 3 — R2 uploads (parallel 4)");
+    console.log(`phase 3 — R2 uploads (${UPLOAD_JOBS} at a time)`);
   }
   const upload = async (key: string, file: string) => {
     const r = await $`${wrangler} r2 object put ${`aadhar-photos/${key}`} --file=${file} --content-type=image/jpeg --remote`.quiet().nothrow();
@@ -180,15 +187,11 @@ if (import.meta.main) {
     return r.exitCode === 0 && (await stat(out).catch(() => null))?.size ? out : src;
   };
 
-  const pool = async <T>(items: T[], n: number, fn: (t: T) => Promise<void>) => {
-    for (let i = 0; i < items.length; i += n) await Promise.all(items.slice(i, i + n).map(fn));
-  };
-
   const originals = list.filter((f) => !IS_HEIF.test(f));
-  await pool(originals, 4, async (f) => {
+  await pool(originals, UPLOAD_JOBS, async (f, i) => {
     const stem = basename(f, extname(f));
     const ext = extname(f).slice(1).toLowerCase();
-    const send = await prepOriginal(f, join(progdir, `${stem}.${ext}`));
+    const send = await prepOriginal(f, join(progdir, `${i}-${stem}.${ext}`));
     staged.set(stem, send);
     if (!remoteOnly) await upload(`${stem}.${ext}`, send);
   });
@@ -198,7 +201,7 @@ if (import.meta.main) {
   for (const f of exported) staged.set(basename(f, ".jpg"), join(exports_, f));
   if (!remoteOnly && exported.length) {
     console.log("  HIF JPG exports:");
-    await pool(exported, 4, (f) => upload(f, join(exports_, f)));
+    await pool(exported, UPLOAD_JOBS, (f) => upload(f, join(exports_, f)));
     console.log("");
   }
 

@@ -108,6 +108,16 @@ jobs:
       - name: Test homepage representation contracts
         run: bun run test
 
+      # ADVISORY, and the continue-on-error is the whole design rather than
+      # caution. It sits inside validate because it is 3 seconds and wants the
+      # install that is already here, but a coverage number that can fail a
+      # merge is a constant somebody widens; perf-budget spent an era in breach
+      # printing "hard checks green" over itself. This one goes in the job
+      # summary to be read, most usefully when picking what to test next.
+      - name: Coverage report
+        continue-on-error: true
+        run: bun run test:coverage -- --markdown >> "$GITHUB_STEP_SUMMARY"
+
       # The route oracle, pre-merge. createTestHarness() boots the site Worker
       # in-process (honouring wrangler.jsonc's build.command, so it serves the
       # minified .build/public tree) and verify-routes.mjs sweeps it. This is

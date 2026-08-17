@@ -65,6 +65,7 @@
     "checkpoints:sync": "bun tools/check-checkpoints.mjs --sync",
     "inp": "bun tools/inp-lab.mjs",
     "release": "bun tools/release-status.mjs",
+    "test:coverage": "bun tools/coverage-report.mjs",
     "test:node": "node --test tools/contract-tests.test.mjs",
     "bun:canary:check": "bun tools/check-bun-canary.mjs",
     "dev:compose": "bun tools/compose-dev.mjs",
