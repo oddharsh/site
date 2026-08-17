@@ -465,3 +465,46 @@ a name that merely looks like a path.
 transforms, so `bun run dev` still serves the bytes you authored, comments intact.
 It is deliberately not `build.mjs`: dev needs composition, and minification,
 hashing, precompression and dictionaries are deploy concerns.
+
+## Should `Bun.build()` replace any of the build's transforms? No, on all three.
+
+`bun run bun:build:check` is the control. It asks three questions, because
+"adopt Bun.build" is three decisions with different answers.
+
+| | current | bun | verdict |
+|---|--:|--:|---|
+| CSS (`luna.css`) | 7,746 br | 11,356 br | keep lightningcss, **+46.6%** |
+| JS (15 islands) | 60,706 br | 62,133 br | keep oxc-minify, **+2.4%** |
+| HTML entrypoints | bespoke pipeline | fails to build | keep the pipeline |
+
+**The CSS panic is FIXED, and that changes the argument rather than the answer.**
+An earlier canary crashed inspecting a `Bun.build()` result for this stylesheet;
+this one returns cleanly. What it returns is 69,806 bytes from a 69,503-byte
+source, because Bun emits sRGB, P3 and LAB fallbacks by default. So the reason to
+keep lightningcss is SIZE now, not a crash, which is both more durable and easier
+to re-check.
+
+**Cutting around the CSS does not rescue the JS half.** That was the hypothesis
+worth testing and it does not survive: 13 of 15 islands come out larger, the
+total is 2.4% worse on the wire, and `tooltip.js` loses the `function start`
+marker `build.mjs` asserts. Only `lens-reader` (-2.7%) and `lens-wire` (-2.0%)
+improve. On render-blocking shell assets that ship q11-precompressed and carry
+dictionary deltas, 2.4% is the wrong direction.
+
+**The HTML entrypoint is the one that would have bought a CAPABILITY**, replacing
+SHELLS, STRING_ASSETS and the hashed-asset repointer with a bundler that follows
+`<script>` and `<link>`, hashes the outputs and rewrites the paths. It fails, and
+the reason is architectural rather than a bug: every page references `/luna.css`,
+`/nav.js` and `/quiz.js` as ABSOLUTE URLs so that all 48 documents share ONE
+content-hashed copy of each. A bundler cannot resolve those, and making them
+relative would give each page its own copy, which is precisely what the `/a/`
+tier exists to prevent.
+
+That is the honest shape of the whole question. **Bun is winning where it runs
+code and losing where it transforms bytes.** Install, script running, the test
+runner, the build runtime and TypeScript for the Worker are all adopted and all
+paying. The transform layer is mature, tuned and specialised, and a general
+bundler does not beat it here.
+
+Re-run the control when a Bun release lands. Question 3 is the one most likely to
+change and the one worth re-checking even while 1 and 2 stay lost.

@@ -67,7 +67,8 @@
     "release": "bun tools/release-status.mjs",
     "test:node": "node --test tools/contract-tests.test.mjs",
     "bun:canary:check": "bun tools/check-bun-canary.mjs",
-    "dev:compose": "bun tools/compose-dev.mjs"
+    "dev:compose": "bun tools/compose-dev.mjs",
+    "bun:build:check": "bun tools/check-bun-build.mjs"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "5.20260814.1",
