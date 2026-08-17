@@ -126,7 +126,43 @@ export function start(initial) {
       // dt date · w · h · wb white-balance · ct color-temp · fs flash · fm film ·
       // dr · cc chrome · cb chrome-blue · gr grain · gs grain-size · ht highlight ·
       // st shadow · sa saturation · hi {l,r,g,b} histogram. nulls dropped.
-      const histFor = (stem) => (metaMap[stem] && metaMap[stem].hi) || null;
+      // Bars come from the TILE first and the network second. The worker packs the
+      // twelve it drew into data-hist (4 channels x 64 bins, one byte each,
+      // base64), so a hover on a tile that has one costs no request at all. A
+      // tile without one, or a hover on something that is not a grid tile, falls
+      // through to the per-photo fetch exactly as before.
+      // One character per bin, ASCII 63..126, written by
+      // www/scripts/build-histogram-index.mjs (which carries the reasoning). The
+      // stored form IS this form, so the worker copies the string straight into
+      // the attribute and this is the only place it is ever decoded.
+      const HIST_BASE = 63, HIST_LEVELS = 64, HIST_BINS = 64;
+      const unpackHist = (packed) => {
+        // dataset yields a string or undefined, so presence IS the check here and a
+        // typeof would be narrowing a representation the DOM already guarantees.
+        if (!packed || packed.length !== HIST_BINS * 4) return null;
+        const out = { l: [], r: [], g: [], b: [] };
+        const channels = ["l", "r", "g", "b"];
+        for (let c = 0; c < 4; c++) {
+          for (let i = 0; i < HIST_BINS; i++) {
+            const level = packed.charCodeAt(c * HIST_BINS + i) - HIST_BASE;
+            // Out of range means the attribute was truncated or tampered with.
+            // Refuse the whole histogram rather than draw a shape with a hole in
+            // it: a wrong curve is worse than no curve on a surface whose point
+            // is showing what the file actually contains.
+            if (level < 0 || level >= HIST_LEVELS) return null;
+            out[channels[c]].push(Math.round(level * 100 / (HIST_LEVELS - 1)));
+          }
+        }
+        return out;
+      };
+      const bakedHist = Object.create(null);   // stem → unpacked channels, decoded once
+      const histFromSlot = (stem, slot) => {
+        if (stem in bakedHist) return bakedHist[stem];
+        const packed = slot && slot.dataset && slot.dataset.hist;
+        bakedHist[stem] = packed ? unpackHist(packed) : null;
+        return bakedHist[stem];
+      };
+      const histFor = (stem, slot) => histFromSlot(stem, slot) || (metaMap[stem] && metaMap[stem].hi) || null;
       // EXIF is NOT inlined on the uncacheable homepage. It arrives in two tiers.
       //
       // TEXT: one shared /images/exif.json for all 158 photos, 2.6KB brotli,
@@ -140,10 +176,19 @@ export function start(initial) {
       // and 158 records compress against each other) and free on every visit
       // after, whatever the draw.
       //
-      // BARS: the four 64-bin histogram channels stay PER PHOTO, because they are
-      // 623 of a meta file's ~977 bytes and would take the index from 2.6KB to
-      // 24KB for bars most visitors never see. So a hover renders its text
-      // immediately from the index and fetches the one histogram it needs.
+      // BARS: the four 64-bin channels stay OUT of that index, because they are
+      // 623 of a meta file's ~977 bytes and would take it from 2.6KB to 24KB for
+      // bars most visitors never see. They now ride on the TILE instead
+      // (data-hist, ~1.9KB brotli for the twelve a visitor can actually hover),
+      // which is the same argument reaching a different answer once the set is
+      // twelve rather than 158.
+      //
+      // This had to be in the markup rather than warmed here: index.html loads
+      // this module on the FIRST HOVER, on purpose ("visitors who never hover
+      // transfer no tooltip JavaScript"), so anything warmed from inside it is by
+      // construction too late for that hover. Measured on production before the
+      // change: 135ms then 117ms, once per photo, with the bars blank until the
+      // file landed. The per-photo fetch below stays as the fallback.
       const metaMap = Object.create(null);   // stem → exif object (may lack .hi) | absent
       const inFlight = new Set();            // stems with a per-photo fetch open
       const META_V = "mv=7";                 // bump when metadata is regenerated (7: empty lens is null, so `ln` is absent rather than "" on 11 frames)
@@ -300,13 +345,17 @@ export function start(initial) {
       // data lands.
       function buildPhotoContent(slot) {
         const stem = photoStem(slot);
-        // Dead: queried on every photo hover and never read. Same reasoning as
-    // nav.js: tooltip.js is content-hashed, so this costs a new /a/ URL to
-    // remove. Worth taking on the next real edit, since it is a DOM query per
-    // hover rather than only a dead binding.
-    // oxlint-disable-next-line no-unused-vars
-    const img  = slot.querySelector("img");
-        fetchMeta(stem);                           // per-photo lazy fetch (no-op if already in hand)
+        // The dead `const img = slot.querySelector("img")` that sat here is gone.
+        // Its note said to take it on the next real edit to this file, since
+        // tooltip.js is content-hashed and removing it alone would mint a new
+        // /a/ URL for nothing. This is that edit.
+        //
+        // Fetch only what the tile cannot answer. data-hist carries the bars, so
+        // the request is now for TEXT alone and is skipped entirely once the
+        // shared EXIF index has landed. A tile with no baked histogram takes the
+        // old path, which is also what a non-grid hover gets.
+        const baked = histFromSlot(stem, slot);
+        if (!baked || !metaMap[stem]) fetchMeta(stem);
         const exif = metaMap[stem] || {};
 
         // exposure trio
@@ -350,7 +399,7 @@ export function start(initial) {
         ].filter(([, v]) => v && v !== "undefined")
          .map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("");
 
-        const hist = histFor(stem);
+        const hist = histFor(stem, slot);
         const histSvg = hist ? renderHistogramSvg(hist) : "";
         const dateStr = fmtDate(exif.dt) || (slot.dataset.uploaded ? "up " + fmtDate(slot.dataset.uploaded) : "");
 

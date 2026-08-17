@@ -41,7 +41,22 @@ def h8(path):
     with open(path, "rb") as f:
         return hashlib.sha256(f.read()).hexdigest()[:8]
 
-stems = sorted(f[:-4] for f in os.listdir(src_dir) if f.endswith(".jpg"))
+# Stems come from ANY tier present, not just the JPG. A full re-encode writes
+# every tier so the JPG was a fine proxy; an ADDITIVE run (TIERS=xs in
+# reencode-thumbnails.sh, which is how the 200px tier was backfilled without
+# reminting the other three hashes) writes one AVIF and no JPG at all, and a
+# JPG-only scan finds nothing and silently hashes zero photos.
+def _stem(f):
+    for suffix in ("-400.avif", "-200.avif"):
+        if f.endswith(suffix):
+            return f[: -len(suffix)]
+    if f.endswith(".jpg"):
+        return f[:-4]
+    if f.endswith(".avif"):
+        return f[:-5]
+    return None
+
+stems = sorted({st for st in (_stem(f) for f in os.listdir(src_dir)) if st})
 # MERGE into the existing map (see header): start from what's already hashed so
 # an incremental add adds/refreshes its stems without dropping the rest.
 hashes = {}
@@ -57,6 +72,7 @@ for stem in stems:
         "a": (f"{stem}.avif",     f"{stem}.{{h}}.avif"),
         "j": (f"{stem}.jpg",      f"{stem}.{{h}}.jpg"),
         "s": (f"{stem}-400.avif", f"{stem}-400.{{h}}.avif"),
+        "x": (f"{stem}-200.avif", f"{stem}-200.{{h}}.avif"),
     }
     entry = {}
     for key, (src_name, out_pat) in tiers.items():
@@ -70,7 +86,13 @@ for stem in stems:
             copied += 1
         entry[key] = h
     if entry:
-        hashes[stem] = entry
+        # MERGE rather than replace. An additive run carries only the tier it
+        # generated, so assigning the entry outright would drop a, j and s for
+        # every stem it touched — and the tiers would still be on disk in www/i/,
+        # so the damage reads as a map that forgot them rather than as missing
+        # files. The file's header has always described this as a merge; the
+        # per-stem write was the one place that was not one.
+        hashes.setdefault(stem, {}).update(entry)
 
 with open(map_path, "w") as f:
     json.dump(hashes, f, separators=(",", ":"), sort_keys=True)
@@ -82,7 +104,7 @@ with open(map_path, "w") as f:
 #      so www/i/ is 1:1 with hashes.json and check-photo-pipeline.mjs passes.
 pruned_src = pruned_i = 0
 for stem in stems:
-    for name in (f"{stem}.avif", f"{stem}.jpg", f"{stem}-400.avif"):
+    for name in (f"{stem}.avif", f"{stem}.jpg", f"{stem}-400.avif", f"{stem}-200.avif"):
         p = os.path.join(src_dir, name)
         if os.path.exists(p):
             os.remove(p); pruned_src += 1
@@ -91,6 +113,7 @@ for st, e in hashes.items():
     if "a" in e: expected.add(f"{st}.{e['a']}.avif")
     if "j" in e: expected.add(f"{st}.{e['j']}.jpg")
     if "s" in e: expected.add(f"{st}-400.{e['s']}.avif")
+    if "x" in e: expected.add(f"{st}-200.{e['x']}.avif")
 for f in os.listdir(out_dir):
     if f.endswith((".avif", ".jpg")) and f not in expected:
         os.remove(os.path.join(out_dir, f)); pruned_i += 1
