@@ -980,7 +980,7 @@ content-hashed URLs (cutover 2026-07-03):
 </a>
 ```
 
-**A URL names exact bytes.** `tools/hash-thumbnails.sh` (run by
+**A URL names exact bytes.** `tools/hash-thumbnails.ts` (run by
 add-photos.sh) sha256-hashes each tier into `public/i/` and writes
 `public/images/hashes.json`, which `buildImagesManifest` bakes into the
 manifest's absolute `thumb_avif`/`thumb_jpg`/`thumb_small` URLs. `/i/*` is

@@ -136,7 +136,7 @@ const orphans = actualFiles.filter((file) => !expectedFiles.has(file));
 if (orphans.length) fail(`unreferenced hashed pixel files: ${orphans.join(", ")}`);
 
 // Hand-written pages may hardcode an /i/ URL (the /garage/tooltips demo slots do).
-// A /i/ URL names exact bytes, so a re-encode mints a new hash and hash-thumbnails.sh
+// A /i/ URL names exact bytes, so a re-encode mints a new hash and hash-thumbnails.ts
 // prunes the old file — which would leave those pages 404ing on images with nothing
 // to catch it. Walk the authored HTML/JS and hold every hardcoded reference to the
 // same standard as the manifest's own tiers.

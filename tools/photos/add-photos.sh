@@ -54,7 +54,7 @@
 # folder) so the 100+ existing originals aren't re-uploaded.
 #
 # NB: this only ADDS at the current SQ/SQ_SM. to change the square size for the
-# whole library, that's reencode-thumbnails.sh's job (then hash-thumbnails.sh
+# whole library, that's reencode-thumbnails.sh's job (then hash-thumbnails.ts
 # mints the new content-addressed /i/ URLs).
 #
 # usage:
@@ -402,7 +402,7 @@ echo ""
 echo "phase 4 — hash tiers + photo index + metadata regen"
 # content-address every tier into public/i/ + refresh hashes.json (the
 # worker bakes /i/ URLs from that map; idempotent, only new bytes copy)
-"$SCRIPT_DIR/hash-thumbnails.sh" 2>&1 | tail -1
+bun "$SCRIPT_DIR/hash-thumbnails.ts" 2>&1 | tail -1
 
 # ── the committed photo index (src/worker/photo-index.json) ──
 # One entry per published stem: the R2 key, its byte size, and when it was
@@ -472,7 +472,7 @@ fi
 # so the bake either runs or the whole script has already failed.
 "$ZENC" histogram --root "$PROJECT_DIR/www" 2>&1 | tail -1
 
-# caption anything still missing alt text. runs AFTER hash-thumbnails.sh because
+# caption anything still missing alt text. runs AFTER hash-thumbnails.ts because
 # it reads the committed public/i/ square via hashes.json and posts those exact
 # bytes to Workers AI — no round trip to production, so a photo added seconds ago
 # gets captioned here rather than waiting for a deploy. resumable and idempotent:

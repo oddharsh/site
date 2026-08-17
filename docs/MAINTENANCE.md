@@ -933,7 +933,7 @@ and keeps the understanding check diagnostic rather than a gate. Read the
 Key facts (don't hardcode these elsewhere, they drift):
 - RN_KV namespace id: `3cb8a107c58e47dc9244e75b33401f36`
 - R2 bucket: `aadhar-photos` (SOOC originals + full-res JPGs)
-- Thumbnails are content-addressed at `/i/<stem>.<hash8>.<ext>` (hashes.json via `hash-thumbnails.sh`); `THUMB_VERSION` is gone entirely (retired with the last legacy fallback — `lib/const.js` keeps only `CANONICAL_HOST` + `ARCHIVE_VERSION`).
+- Thumbnails are content-addressed at `/i/<stem>.<hash8>.<ext>` (hashes.json via `hash-thumbnails.ts`); `THUMB_VERSION` is gone entirely (retired with the last legacy fallback — `lib/const.js` keeps only `CANONICAL_HOST` + `ARCHIVE_VERSION`).
 - The service worker RETIRED in v136 (2026-07-03): `src/client/sw.js` is an unregister stub that must keep serving 200 for a year+. There is no `CACHE_VERSION`; the deploy-log number lives in D1 (`bump-version.ts` derives the next from `MAX(vnum)`).
 - Canonical photo source: the aadhar-photos R2 bucket. Raw source files are
   never committed to GitHub; the Actions workflow downloads only the requested
@@ -1173,7 +1173,7 @@ pnpm run deploy:direct   # local fallback only; normal production is merge + CI 
   and runs `pnpm run photos:check` as the final gate.
 - A photo appears in the grid at DEPLOY, when its index entry ships with the
   worker. There is no KV manifest and nothing to bust.
-- A thumbnail can't go stale anymore: its URL is its bytes (`/i/<stem>.<hash8>`). If one looks wrong, re-run `hash-thumbnails.sh`, commit, deploy; a changed file gets a new URL automatically.
+- A thumbnail can't go stale anymore: its URL is its bytes (`/i/<stem>.<hash8>`). If one looks wrong, re-run `hash-thumbnails.ts`, commit, deploy; a changed file gets a new URL automatically.
 - To REMOVE a photo: delete its `photo-index.json` entry, its `hashes.json`
   entry, its `/i/` tiers, metadata, and caption, then deploy (photos:check
   enforces the bijection). Delete the R2 object separately if the original
@@ -1191,7 +1191,7 @@ the tooltip skips nulls rather than guess.
 ### Re-encode ALL thumbnails (e.g. a new resolution/quality)
 ```bash
 ./tools/photos/reencode-thumbnails.sh           # re-encodes every grid thumb as pre-cropped center squares
-./tools/photos/hash-thumbnails.sh               # re-hash the tiers into /i/ + rewrite hashes.json
+bun tools/photos/hash-thumbnails.ts               # re-hash the tiers into /i/ + rewrite hashes.json
 # commit + deploy (new bytes = new URLs; the worker bundles the index + hashes, so the deploy is the bust)
 ```
 `SQ_SM` (mobile tier) must match `THUMB_SMALL_PX` in `_worker.js` (the `-<N>.avif` suffix). add-photos.sh mirrors this script's two encode paths; keep them in sync.
@@ -1575,7 +1575,7 @@ pnpm exec wrangler kv key delete --namespace-id="$NS" "tracks:<id>:fresh" --remo
 ```
 
 ### Bump THUMB_VERSION (retired — nothing to bump)
-Fully retired (hash cutover 2026-07-03): thumbnails are content-addressed at `/i/<stem>.<hash8>.<ext>`, so a re-encode mints new URLs by itself — run `./tools/photos/hash-thumbnails.sh` after re-encoding, commit, deploy (the bundled index/hashes make the deploy the bust). The constant no longer exists in `lib/const.js`; legacy `/images/<stem>.<ext>[?v=N]` URLs just 301 into `/i/` regardless of their `?v`. The worker route still clamps unknown-thumb 404s to `max-age=0` so misses do not inherit immutable caching.
+Fully retired (hash cutover 2026-07-03): thumbnails are content-addressed at `/i/<stem>.<hash8>.<ext>`, so a re-encode mints new URLs by itself — run `bun tools/photos/hash-thumbnails.ts` after re-encoding, commit, deploy (the bundled index/hashes make the deploy the bust). The constant no longer exists in `lib/const.js`; legacy `/images/<stem>.<ext>[?v=N]` URLs just 301 into `/i/` regardless of their `?v`. The worker route still clamps unknown-thumb 404s to `max-age=0` so misses do not inherit immutable caching.
 
 ### Read the homepage perf probe
 A cron (`7,37 * * * *`) renders `/` in-process, parses its own Server-Timing,
@@ -1730,7 +1730,7 @@ until its twin agrees: `checkTwinFacts()` recomposes the User-Agent from
 | `extract-photo-metadata.sh` | Read EXIF from the SOOC folder, emit `images/metadata.json` + per-photo `images/meta/<stem>.json`. Pulls the Fuji recipe fields too. Requires exif-sooc + jq. **Two schemas, on purpose:** `metadata.json` is the RECORD (long, self-documenting field names, plus the derived `recipe` card) and the per-photo files are the tooltip's RENDER CACHE (short keys, tooltip-only fields, nulls dropped, ~28% smaller compressed because one is fetched per hover). Bump `META_V` in `tooltip.js` when the per-photo shape changes. |
 | `build-exif-index.mjs` | Roll every per-photo `images/meta/<stem>.json` MINUS its histogram into one `images/exif.json` (158 photos, 2.6KB brotli). Called by `extract-photo-metadata.sh`, so `pnpm run photos` keeps it current, and `check-photo-pipeline.mjs` rebuilds it to fail on drift. **Why it exists:** the homepage draws a random 12 of 158 per request, so warming metadata per visible slot was 12 cold requests on nearly every visit (a given slot repeats ~7.6% of the time). One immutable index is smaller than that on the first visit and free after. Histograms stay per-photo because they are 623 of a meta file's ~977 bytes, so folding them in would take the index from 2.6KB to 24KB for bars most visitors never see. |
 | `build-recipes.py` | **RETIRED 2026-08-14.** The Fujifilm recipe card is derived during extraction now, by `exif-sooc --keyed`, from the Fuji tags rather than from the flattened record this script re-read. Same idiom and same output: all 158 committed cards regenerate byte-identical. One behaviour change worth knowing, since the old script rewrote every card on every run: a `--merge` run now refreshes the BATCH only, so re-run a full extraction after an exif-sooc upgrade that changes the card. Query it with `/photos/query.json?recipe=DR400` as before. |
-| `reencode-thumbnails.sh` | Re-encode every published grid thumb from the source folder at a new resolution (pre-cropped squares, two tiers). Follow with `hash-thumbnails.sh`, then commit + deploy. |
+| `reencode-thumbnails.sh` | Re-encode every published grid thumb from the source folder at a new resolution (pre-cropped squares, two tiers). Follow with `hash-thumbnails.ts`, then commit + deploy. |
 | `add-car-photo.ts` | One resto-mod reference photo -> `cars/<stem>.{avif,jpg}` for the homepage car tooltips. No EXIF, no R2. |
 | `zenc/` | The JPEG thumbnail encoder: a Rust crate wrapping zenjpeg (hybrid trellis + progressive scan search). `cargo build --release` (auto-built on first pipeline run). `zenc <in> <out> -q 84`. dependabot tracks the zenjpeg pin; replaced the from-source jpegli build in 2026-07. |
 | `download-remote-photos.ts` | Download selected R2 object keys into disposable runner storage for the GitHub Actions photo workflow; accepts `all` for the public manifest. |
@@ -1740,7 +1740,7 @@ until its twin agrees: `checkTwinFacts()` recomposes the User-Agent from
 | `zenc histogram --root www` | Bakes four 64-bin RGB/luminance histogram channels into each per-photo `images/meta/<stem>.json` from the shipped hashed JPG tier. A subcommand of the encoder crate since 2026-08-14 (it was `photo-histograms.py` + Pillow), called by both metadata extraction and `add-photos.sh`. `--check` compares against what is on disk and writes nothing, which is how you tell a decoder bump from an edit. |
 | `gen-og-cards.mjs` | Render the 1200x630 OG/Twitter card per garage + lwe page (live demo on the Bliss desktop) into `public/og/`. `pnpm run og-cards`. Drives the installed Chrome via `playwright-core`; captures production so data-driven demos render full. Hero selectors + presets in the `HERO{}` map. See "Regenerate the OG / Twitter cards". |
 | `inject-og-meta.mjs` | Idempotently add `og:image`/`twitter:card` meta to any garage + lwe page missing it, pointing at `/og/<section>-<name>.png`. `--check` reports gaps without writing. |
-| `hash-thumbnails.sh` | sha256 each pixel tier into `public/i/<stem>.<hash8>.<ext>`, write `images/hashes.json`, and prune tiers no longer named by it. Run by `add-photos.sh`; a re-encode mints new URLs, so there is no version to bump. |
+| `hash-thumbnails.ts` | sha256 each pixel tier into `public/i/<stem>.<hash8>.<ext>`, write `images/hashes.json`, and prune tiers no longer named by it. Run by `add-photos.sh`; a re-encode mints new URLs, so there is no version to bump. |
 | `gen-encoding-grids.sh` | Regenerate the ZOOMED 96px comparison crops (`garage/enc/z-*`) that `/lwe/encoding` fetches. Run by the `regenerate-encoding-study` routine of the photo workflow. |
 | `gen-desktop-partial.mjs` | Bake the XP desktop shell into `_worker.js/lib/desktop.js` and patch it into the 28 static pages, generated from nav.js's own `PROFILES`/`SUBPAGES`/`SECTION_ICONS`/tray template so the two cannot drift. Re-run after editing any of those. A run on an unchanged tree is a byte-exact no-op. |
 | `bump-version.ts` | Insert one `checkpoints` row into the `aadhar-restore` D1 database, deriving the next vnum from `MAX(vnum)`. Both `/restore` and `/updates` read that table, so this is the only place a deploy gets logged. `bun tools/photos/bump-version.ts <slug> "<title>"`. |

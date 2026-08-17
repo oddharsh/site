@@ -43,7 +43,7 @@
 # With just two bodies it's near-binary today — the visual variety will come
 # from aspect ratios, not this — but it future-proofs the moment a 3rd body lands.
 #
-# After running, re-run hash-thumbnails.sh: it re-hashes each tier into public/i/
+# After running, re-run hash-thumbnails.ts: it re-hashes each tier into public/i/
 # and rewrites images/hashes.json. A re-encode mints a NEW content-addressed URL,
 # so there is nothing to bust (THUMB_VERSION is gone; it only ever survived in the
 # legacy-fallback URL shape).
@@ -223,6 +223,6 @@ done <<< "$STEMS"
 echo ""
 echo ""
 echo "  re-encoded: $OK   source-missing: $MISS   failed: $FAIL"
-echo "  next: re-run hash-thumbnails.sh (new bytes mint new /i/ URLs), commit,"
+echo "  next: re-run hash-thumbnails.ts (new bytes mint new /i/ URLs), commit,"
 echo "  then deploy — the worker bundles photo-index.json + hashes.json, so"
 echo "  the deploy IS the cache bust."

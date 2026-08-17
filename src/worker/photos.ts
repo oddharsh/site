@@ -231,7 +231,7 @@ export async function getAltMap(env) {
   return _altMap;
 }
 
-// content-hash map {stem: {a,j,s}} written by tools/hash-thumbnails.sh at
+// content-hash map {stem: {a,j,s}} written by tools/hash-thumbnails.ts at
 // photo-add time. The pool bakes these into /i/ URLs, so a thumbnail URL
 // is born with its bytes: no global ?v= bump, and a cached 404 can never
 // shadow real bytes (a new encode IS a new URL). Module-cached like _altMap.
