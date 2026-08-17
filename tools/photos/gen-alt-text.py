@@ -33,11 +33,14 @@ empty alt.
 """
 import json, os, sys, time, urllib.error, urllib.request
 
-ROOT   = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-META   = os.path.join(ROOT, "images", "metadata.json")
-HASHES = os.path.join(ROOT, "images", "hashes.json")
-HASHED = os.path.join(ROOT, "i")
-OUT    = os.path.join(ROOT, "images", "alt.json")
+# THREE levels: tools/photos/<file> -> the repository root. It was two when this
+# lived at www/scripts/, which made ROOT the served tree; after the split the
+# same expression pointed at tools/ and every path below was wrong.
+ROOT   = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+META   = os.path.join(ROOT, "public", "images", "metadata.json")
+HASHES = os.path.join(ROOT, "public", "images", "hashes.json")
+HASHED = os.path.join(ROOT, "public", "i")
+OUT    = os.path.join(ROOT, "public", "images", "alt.json")
 
 # keep in sync with cf-garage/src/index.js's ?mode=alt branch — that endpoint is
 # the public /garage/cf demo and carries its own copy of this prompt.

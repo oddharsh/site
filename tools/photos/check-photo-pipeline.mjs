@@ -13,7 +13,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildExifIndex } from "./build-exif-index.mjs";
 import { buildHistogramIndex } from "./build-histogram-index.mjs";
-import { asRecord, asText } from "../_worker.js/lib/parse.js";
+import { asRecord, asText } from "../../src/worker/lib/parse.ts";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const IMAGES = path.join(ROOT, "public/images");

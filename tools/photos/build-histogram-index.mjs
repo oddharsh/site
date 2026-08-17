@@ -62,7 +62,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const IMAGES = path.join(ROOT, "www/images");
+const IMAGES = path.join(ROOT, "public/images");
 const META = path.join(IMAGES, "meta");
 
 export const CHANNELS = ["l", "r", "g", "b"];
