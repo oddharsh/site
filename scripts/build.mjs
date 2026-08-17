@@ -26,7 +26,7 @@ import { createHash } from "node:crypto";
 // are rewritten in place by later steps, so each import site needs a fresh URL.
 const BUILD_NONCE = process.hrtime.bigint().toString(36);
 import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { brotliCompress, brotliDecompressSync, constants as zlibConstants, zstdCompressSync } from "node:zlib";
@@ -605,7 +605,34 @@ await mkdir(OUT, { recursive: true });
 // copied into .build anymore — the deploy config (wrangler.jsonc) points main +
 // assets at .build/www and runs THIS script via its build.command, so the
 // build output never needs its own config. (Local dev uses wrangler.dev.jsonc.)
-await cp("www", `${OUT}/www`, { recursive: true });
+//
+// www/scripts is the ONE exception, and it is 89% of the tree's bytes: the zenc
+// cargo target/ and the uv venv put it at ~232 MB across 767 files, against
+// ~27 MB for everything that actually ships. Staging it copied a quarter of a
+// gigabyte per build so that .assetsignore could then refuse to upload it.
+//
+// Skipping is safe because every consumer imports from the SOURCE tree
+// (`../www/scripts/...` in build.mjs, contract-tests.mjs, gen-manifest.mjs, and
+// the package.json script paths), so nothing has ever read .build/www/scripts.
+//
+// What catches a page that starts to: LINK-INTEGRITY, which resolves every
+// same-origin href/src against the staged tree and now finds no /scripts/ there.
+// Verified rather than assumed, with a link to /scripts/shell-data.mjs injected
+// into a page's prose: `link-integrity: 1 internal reference(s) point at nothing
+// this site serves`. Note the FIRST attempt at that control was invalid, because
+// it added a <script> before </body> and tripped the desktop-partial tripwire
+// instead; a path that IS staged failed identically, which is the tell.
+//
+// The staged tree is byte-identical either way: 1444 files, 0 differing, which is
+// the bar content-addressed /a/ and /i/ URLs set.
+//
+// Keep the `scripts` line in www/.assetsignore regardless: wrangler.dev.jsonc
+// serves the readable www/ tree directly, where the directory is still present.
+const STAGE_SKIP = new Set(["www/scripts"]);
+await cp("www", `${OUT}/www`, {
+  recursive: true,
+  filter: (source) => !STAGE_SKIP.has(source.split(sep).join("/")),
+});
 await mkdir(`${OUT}/cal`, { recursive: true });
 await cp("cal/src", `${OUT}/cal/src`, { recursive: true });
 await mkdir(`${OUT}/serendipity`, { recursive: true });
