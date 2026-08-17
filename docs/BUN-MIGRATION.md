@@ -49,6 +49,32 @@ than a compiler swapped underneath a content-addressed artifact graph.
 
 Re-verify with `bun run bun:canary:check`.
 
+### The first roll, 2026-08-17
+
+It fired the day after it was written, which is the pin behaving as designed
+rather than a flake. CI stopped at `Set up bun` naming both digests, and the
+linux-x64 asset the runner fetched hashed the same value a workstation fetch got
+minutes later, so the asset had genuinely moved rather than being served
+inconsistently.
+
+`1.4.0-canary.1+8326d1bd3` to `1.4.0-canary.1+8bc4d2a88`. The version string
+and `packageManager` are untouched, because neither of them moved, which is the
+whole reason the digest is the declaration.
+
+What a bump costs is the control, run before the digest was committed:
+
+| control | result |
+|---|---|
+| build under the new canary against the old one | **1499 files, 0 differing** |
+| build under node v26.7.0 against the new canary | **1499 files, 0 differing** |
+| zstd dictionary probe | none=65 good=18 wrong=64, unchanged |
+| contract / cal / lens-reader | 307, 59, 13 pass |
+| routes, typecheck, lint, `pages:check`, `tools:check`, `check-wrangler`, `perf-budget` | clean |
+
+The node comparison is the one worth keeping in the loop. The other two builds
+share a compiler lineage, so agreeing with each other is weaker evidence than
+agreeing with the runtime this repo shipped every committed hash under.
+
 ## The capability that decides the version
 
 bun 1.3.14 accepts `zstdCompressSync`'s `dictionary` option and **silently
