@@ -52,6 +52,7 @@
       "install": "ships with macOS",
       "why": "resize, HEIF decode, and the AVIF fallback encoder",
       "required_by": [
+        "tools/photos/add-car-photo.ts",
         "tools/photos/add-photos.sh",
         "tools/photos/export-for-instagram.sh",
         "tools/photos/gen-encoding-grids.sh",
@@ -72,7 +73,7 @@
       "install": "https://rustup.rs",
       "why": "builds zenc, the shipped JPEG encoder, on first run",
       "required_by": [
-        "tools/photos/add-car-photo.sh",
+        "tools/photos/lib/prereqs.ts",
         "tools/photos/add-photos.sh",
         "tools/photos/export-for-instagram.sh",
         "tools/photos/gen-encoding-grids.sh",
@@ -105,6 +106,7 @@
       "optional": true,
       "why": "primary 10-bit AVIF tier; add-photos and reencode-thumbnails fall back to sips, the grid scripts do not",
       "required_by": [
+        "tools/photos/add-car-photo.ts",
         "tools/photos/gen-encoding-grids.sh",
         "tools/photos/gen-encoding-samples.sh"
       ]

@@ -147,7 +147,7 @@ jobs:
             add-car-photo)
               key="$(find "$source_dir" -type f -print -quit)"
               [ -n "$key" ] || { echo "no downloaded car source" >&2; exit 1; }
-              ./tools/photos/add-car-photo.sh "$CAR_STEM" "$key"
+              bun tools/photos/add-car-photo.ts "$CAR_STEM" "$key"
               ;;
             regenerate-encoding-study)
               ./tools/photos/gen-encoding-samples.sh

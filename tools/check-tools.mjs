@@ -28,6 +28,7 @@ const IN_CI = Boolean(process.env.CI) && !STRICT;
 
 // Floors. Each is comfortably under today's count and above zero, so ordinary
 // edits never trip them and a scanner that stops matching always does.
+let declaredScripts = 0;
 const FLOOR_GUARD_LISTS = 4;
 const FLOOR_BREW_HINTS = 4;
 
@@ -89,6 +90,45 @@ for (const tool of tools) {
     }
     if (!text.includes(tool.bin)) {
       errors.push(`config/tools.json: ${tool.bin} claims ${rel}, which never mentions it`);
+    }
+  }
+}
+
+// ── tier 1a2: converted scripts DECLARE their binaries ───────────────────────
+//
+// This is the tier the shell scanners below are a workaround for. A script
+// converted to Bun Shell says
+//
+//     export const REQUIRES = ["sips", "avifenc"] as const;
+//
+// so the binary names are values: greppable, importable, and checkable by
+// READING rather than by regex. No floor is needed here, because there is no
+// pattern that can silently stop matching — if the export is gone, the import
+// throws.
+//
+// Every name must be declared in config/tools.json, and tools.json must name
+// the script back. The two directions catch different mistakes: a new binary
+// nobody documented, and a declaration left behind after a script stopped
+// using it.
+{
+  const converted = (await readdir(new URL("photos/", import.meta.url)))
+    .filter((n) => n.endsWith(".ts"))
+    .map((n) => `tools/photos/${n}`);
+
+  for (const rel of converted) {
+    const mod = await import(new URL(`../${rel}`, import.meta.url).href).catch(() => null);
+    const requires = mod?.REQUIRES;
+    if (!requires) continue;                       // not every .ts declares one
+    declaredScripts++;
+    for (const bin of requires) {
+      const tool = tools.find((t) => t.bin === bin);
+      if (!tool) {
+        errors.push(`${rel} REQUIRES ${bin}, which config/tools.json does not declare`);
+        continue;
+      }
+      if (!tool.required_by?.includes(rel)) {
+        errors.push(`${rel} REQUIRES ${bin}, but tools.json's ${bin}.required_by does not list it`);
+      }
     }
   }
 }
@@ -206,6 +246,7 @@ for (const tool of tools) {
 // ── report ───────────────────────────────────────────────────────────────────
 console.log(`tools: ${tools.length} declared across ${scripts.length} shell scripts`);
 console.log(`declaration: ${guardLists} guard loops, ${literalProbes} literal probes, ${brewHints} brew hints scanned`);
+console.log(`declaration: ${declaredScripts} converted script(s) declare their binaries as values`);
 
 if (errors.length) {
   console.error("\ndeclaration check FAILED:");
