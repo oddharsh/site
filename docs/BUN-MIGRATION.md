@@ -508,3 +508,34 @@ bundler does not beat it here.
 
 Re-run the control when a Bun release lands. Question 3 is the one most likely to
 change and the one worth re-checking even while 1 and 2 stay lost.
+
+### Can it be configured to match? No, and the two halves fail differently
+
+The obvious response to those rows is "configure Bun the same way". It cannot be,
+and `bun run bun:build:check` now measures that as a fourth question.
+
+**JS: Bun is already at maximum.** `minify: true` produces byte-identical output
+to `{ whitespace: true, syntax: true, identifiers: true }`, so there is no more
+aggressive setting to reach for. Turning identifier mangling OFF makes nav.js
+worse (5,957 to 6,548 brotli), which is the only direction the knob moves. oxc
+ships at 5,783 on the same file, and the gap is inherent to the minifier rather
+than to how it is configured.
+
+Worth naming what oxc is configured with, since it is the thing Bun has no
+equivalent for: `compress.target: "esnext"` plus `mangle: { toplevel: false }`.
+Top-level names are deliberately NOT mangled because several islands expose
+globals other site code finds by name. Bun exposes `identifiers` as one boolean
+with no top-level carve-out, so matching that config is not expressible.
+
+**CSS: the fallbacks are unconditional.** lightningcss is called with NO `targets`
+option, which is why it emits no fallbacks and lands at 36,841 bytes. Bun emits
+sRGB, P3 and LAB fallbacks and lands at 69,806. A modern `.browserslistrc`
+changes that by **zero bytes**, and so does a `browserslist` key in
+`package.json`; both were measured, both ignored.
+
+**One methodological note, because it inverts an earlier lesson.** The Kitesurf
+probe established that a CLOSED payload schema lets you test support by sending a
+bogus key and reading the error. `Bun.build` is the opposite: it IGNORES unknown
+option keys, so a missing error proves nothing at all. Every row in that control
+is measured by EFFECT on the output bytes, never by whether an option was
+accepted. Check which kind of schema you are holding before designing the probe.

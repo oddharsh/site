@@ -31,7 +31,7 @@
 // the JS API. That is fixed here. The reason to keep lightningcss is now size
 // rather than a crash, which is a different and more durable argument.
 import { brotliCompressSync, constants as Z } from "node:zlib";
-import { readFileSync, readdirSync, mkdtempSync, rmSync } from "node:fs";
+import { readFileSync, readdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { minifySync } from "oxc-minify";
@@ -122,6 +122,44 @@ let lost = 0;
     console.log(`         making them relative would give each page its own copy, which is the`);
     console.log(`         opposite of what the /a/ tier exists for.`);
   }
+}
+
+// ── 4. can it be TUNED to match? ─────────────────────────────────────────────
+// Asked because the obvious response to rows 1 and 2 is "configure it the same".
+// It cannot be, and the two halves fail differently.
+{
+  const js = "src/client/nav.js";
+  const src = readFileSync(js, "utf8");
+  const oxc = minifySync(js, src, {
+    module: false,
+    compress: { target: "esnext", dropDebugger: true, unused: true, joinVars: true, sequences: true },
+    mangle: { toplevel: false },
+    codegen: { removeWhitespace: true, legalComments: "none" },
+  }).code;
+  const bun = async (opts) => {
+    const r = await Bun.build({ entrypoints: [js], target: "browser", external: ["/*"], ...opts });
+    return r.success ? await r.outputs[0].text() : null;
+  };
+  const flat = await bun({ minify: true });
+  const gran = await bun({ minify: { whitespace: true, syntax: true, identifiers: true } });
+  console.log("\n4. TUNING");
+  console.log(`   js: oxc ${br(oxc)} br, bun ${br(flat)} br; minify:true already equals`);
+  console.log(`       {whitespace,syntax,identifiers} (${br(flat) === br(gran) ? "byte-identical" : "they differ"}), so bun is`);
+  console.log("       ALREADY at its most aggressive and no option closes the gap.");
+
+  // browserslist, from BOTH locations it could be read from
+  const base = (await Bun.build({ entrypoints: ["src/styles/luna.css"], minify: true })
+    .then((r) => r.outputs[0].text())).length;
+  const BL = ".browserslistrc";
+  writeFileSync(BL, "last 2 chrome versions\nlast 2 safari versions\n");
+  const withRc = (await Bun.build({ entrypoints: ["src/styles/luna.css"], minify: true })
+    .then((r) => r.outputs[0].text())).length;
+  rmSync(BL, { force: true });
+  console.log(`   css: ${base} bytes with no browserslist, ${withRc} with a modern .browserslistrc`);
+  console.log(`       ${base === withRc ? "IDENTICAL, so the fallbacks are unconditional" : "changed, re-evaluate"}. package.json browserslist`);
+  console.log("       was measured the same way and is also ignored (2026-08-16).");
+  console.log("   NOTE: Bun.build ignores unknown option keys, so a missing error proves");
+  console.log("       nothing here. Every row above is measured by EFFECT on the bytes.");
 }
 
 console.log(`\nverdict: ${lost === 0 ? "Bun.build wins somewhere — read the rows above" : `${lost} of 3 still lost; keep the current transforms`}`);
