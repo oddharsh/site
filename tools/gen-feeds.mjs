@@ -92,7 +92,7 @@ export const FEEDS = [
 export function buildFeeds(root = ".") {
   const manifest = JSON.parse(readFileSync(`${root}/config/site-manifest.json`, "utf8"));
   const dates = sitemapDates(readFileSync(`${root}/www/sitemap.xml`, "utf8"));
-  const posts = JSON.parse(readFileSync(`${root}/www/writing/posts.json`, "utf8"));
+  const posts = JSON.parse(readFileSync(`${root}/src/content/writing/posts.json`, "utf8"));
 
   // /writing entries are not registered surfaces (a post is a row in posts.json,
   // not a manifest page), so that section reads its own registry and carries its

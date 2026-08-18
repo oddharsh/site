@@ -14,7 +14,7 @@
 // WHAT IS AUTHORED BY HAND
 // /bot, /whoareyou and /security render from the Worker, so their prose lives in
 // template literals rather than a file this script can read. Their twins are
-// authored in www/md/, and checkTwinFacts() below pins the load-bearing
+// authored in src/content/md/, and checkTwinFacts() below pins the load-bearing
 // strings so the twin cannot quietly disagree with the page.
 //
 // Every exported function is PURE so build.mjs can re-run this in-memory; only
@@ -28,7 +28,7 @@ import { readDocument } from "./lib/html-to-md.mjs";
 export const ORIGIN = "https://aadhar.sh";
 const MANIFEST = "config/site-manifest.json";
 const SITEMAP = "www/sitemap.xml";
-const HAND_DIR = "www/md";
+const HAND_DIR = "src/content/md";
 
 // the sections that earn their own index. A section index is only worth a fetch
 // when the section is big enough that the root llms.txt is the wrong grain.
@@ -165,7 +165,7 @@ export function renderSectionIndex(section, surfaces, { descriptions = {} } = {}
  * strip.
  */
 export function renderWritingIndex(root = ".") {
-  const posts = JSON.parse(readFileSync(join(root, "www/writing/posts.json"), "utf8"));
+  const posts = JSON.parse(readFileSync(join(root, "src/content/writing/posts.json"), "utf8"));
   const rows = [...posts]
     .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")))
     .map((p) => `- **${p.date}** [${p.title}](${ORIGIN}/writing/${p.slug}) ([plain text](${ORIGIN}/writing/${p.slug}.txt))`)
@@ -197,7 +197,12 @@ export function buildTwins(root = ".", opts = {}) {
     // www/index.html would; it also already ships as a static asset and
     // already answers `Accept: text/markdown`. Generating over it would be a
     // regression dressed up as consistency.
-    if (existsSync(join(root, "www", twinPath(surface.path).replace(/^\//, "")))) {
+    // Looked in www/ until the prose moved: the homepage twin is authored at
+    // src/content/index.md now and STAGES to /index.md, so the check follows the
+    // source rather than the served path. Reading the old location silently
+    // stopped finding it, and the symptom was the hand-written twin being
+    // overwritten by a generated one that is 472 bytes shorter.
+    if (existsSync(join(root, "src/content", twinPath(surface.path).replace(/^\//, "")))) {
       descriptions[surface.path] = surface.description || "";
       continue;
     }
@@ -266,7 +271,7 @@ export function buildTwins(root = ".", opts = {}) {
  */
 export const TWIN_FACTS = [
   {
-    twin: "www/md/bot.md",
+    twin: "src/content/md/bot.md",
     facts: [
       {
         label: "User-Agent",
@@ -285,7 +290,7 @@ export const TWIN_FACTS = [
     ],
   },
   {
-    twin: "www/md/whoareyou.md",
+    twin: "src/content/md/whoareyou.md",
     facts: [
       { label: "JSON endpoint", source: "src/worker/whoareyou.js", string: "/whoareyou.json" },
       { label: "no-storage claim", source: "src/worker/whoareyou.js", string: "none of it is stored" },
@@ -302,7 +307,7 @@ export const TWIN_FACTS = [
     // those headers would only prove the twin agrees with prose that is itself
     // free to rot. Every fact below is read from lib/security.js, the module that
     // actually sends them, except the JWKS path, which is the page's own claim.
-    twin: "www/md/security.md",
+    twin: "src/content/md/security.md",
     facts: [
       { label: "frame-ancestors", source: "src/worker/lib/security.js", string: "frame-ancestors 'none'" },
       { label: "object-src",      source: "src/worker/lib/security.js", string: "object-src 'none'" },

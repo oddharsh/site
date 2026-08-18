@@ -20,7 +20,7 @@
 //     exemptions carrying their reason; and a pure core with negative tests.
 //
 // Same shape as checkTwinFacts() in gen-md-twins.mjs, which pins the
-// load-bearing strings in www/md/*.md against the Worker in both directions.
+// load-bearing strings in src/content/md/*.md against the Worker in both directions.
 // Same shape as check-tools.mjs #375 in intent, with one difference worth
 // keeping in mind: tools.json had to DECLARE what no manifest recorded, while
 // every number here already lives in package.json or requirements.txt. So this

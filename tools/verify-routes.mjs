@@ -99,7 +99,7 @@ const ROUTES = [
   { path: "/whoareyou.json", status: 200, ct: "application/json" },
   { path: "/security", status: 200, ct: "text/html" },
   // /security is static prose about the headers, so it earns a hand twin
-  // (www/md/security.md). Both halves asserted for the same reason the
+  // (src/content/md/security.md). Both halves asserted for the same reason the
   // generated ones below are: the .md URL proves the build staged it, the
   // negotiated form proves handleSecurityCenter reaches it.
   { path: "/security.md", status: 200, ct: "text/markdown", marker: "Security Center" },

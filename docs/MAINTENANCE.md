@@ -507,7 +507,7 @@ render, wider than the effect being measured):
 *Hole.* Cloudflare's default content-type list carries `text/x-markdown`, the
 pre-RFC name, and **not** `text/markdown`, the RFC 7763 type this site correctly
 serves. So every Markdown surface shipped uncompressed — `/index.md`, `/auth.md`,
-`/whoareyou.md`, `/bot.md`, and the `www/md/` twins. 12,302 bytes that brotli
+`/whoareyou.md`, `/bot.md`, and the `src/content/md/` twins. 12,302 bytes that brotli
 takes to 5,943, a 52% loss on exactly the surfaces built for agents and LLM
 crawlers, which prefer the `.md` representation. Serving `text/x-markdown` to win
 compression is the wrong fix: that is a deprecated type, and agents expect the
@@ -1713,7 +1713,7 @@ curl -s https://aadhar.sh/garage/llms.txt | head
 
 The first two must both answer `text/markdown`; a browser `Accept` header and a
 bare `*/*` must both still get `text/html`. `/bot` and `/whoareyou` are the two
-twins written BY HAND (in `www/md/`), because those pages render from Worker
+twins written BY HAND (in `src/content/md/`), because those pages render from Worker
 template literals no build step can read. Edit either page and the deploy fails
 until its twin agrees: `checkTwinFacts()` recomposes the User-Agent from
 `botauth.js`'s own constants and requires it verbatim in `bot.md`, so a
