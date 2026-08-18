@@ -20,8 +20,8 @@
 // cacheTtl on the render path (max 300s), so each sample finds the colo's KV
 // cache in whatever state eviction left it rather than in a probe-warmed one.
 // (The render's own SWR refreshes fire as on any visit; the probe IS a visit.)
-import { handlePhotoGrid } from "./home.js";
-import { handleRnTracksHtml } from "./rn.js";
+import { handlePhotoGrid } from "./home.ts";
+import { handleRnTracksHtml } from "./rn.ts";
 import { CANONICAL_HOST } from "./lib/const.ts";
 
 // "assets;dur=5, tracks;dur=25;desc=deadline" -> { spans: {assets: 5, ...},

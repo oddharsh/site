@@ -12,8 +12,8 @@ import { lensParseRobots, lensPathMatch, lensRobotsVerdict } from "./lib/robots.
 import { lunaPage } from "./lib/chrome.ts";
 import { escAttr, escHtml, jsonResponse } from "./lib/http.ts";
 import { span } from "./lib/trace.ts";
-import { documentTally, hasRenderEngine, runBrowserAction } from "./lens-render.js";
-import { lensRecipe, lensRecipeCatalog, lensRecipeIds, lensRecipeNonce, lensRecipeReceipt, lensRecipeScript } from "./lens-recipes.js";
+import { documentTally, hasRenderEngine, runBrowserAction } from "./lens-render.ts";
+import { lensRecipe, lensRecipeCatalog, lensRecipeIds, lensRecipeNonce, lensRecipeReceipt, lensRecipeScript } from "./lens-recipes.ts";
 import { EXECUTION_META, executionChecks } from "./lib/agent-execution.ts";
 import { asRecord, asText, isCallable } from "./lib/parse.ts";
 

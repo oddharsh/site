@@ -6,7 +6,7 @@
 import { cachedRender } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { escAttr, escHtml } from "./lib/http.ts";
-import { getImagesManifest } from "./photos.js";
+import { getImagesManifest } from "./photos.ts";
 
 // Mirrors nav.js's inline pages + profiles set (kept small on purpose; photos
 // resolve dynamically against the manifest instead of bloating the datalist).

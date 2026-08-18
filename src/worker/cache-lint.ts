@@ -27,7 +27,7 @@
 // changed while Vary claims it cannot.
 import { botHeaders } from "./lib/botauth.ts";
 import { CANONICAL_HOST } from "./lib/const.ts";
-import { parseCacheControl } from "./dict.js";
+import { parseCacheControl } from "./dict.ts";
 
 const FETCH_TIMEOUT = 8000;
 

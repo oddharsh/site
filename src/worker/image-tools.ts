@@ -4,7 +4,7 @@
 // public photo bucket or the representation vault.
 import photoIndex from "./photo-index.json" with { type: "json" };
 import { CANONICAL_HOST } from "./lib/const.ts";
-import { validateLensTarget } from "./lens.js";
+import { validateLensTarget } from "./lens.ts";
 
 const INPUT_CAP = 8 * 1024 * 1024;
 const OUTPUT_CAP = 4 * 1024 * 1024;

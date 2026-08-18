@@ -8,7 +8,7 @@ import { serveMarkdownTwin } from "./lib/assets.ts";
 import { HOMEPAGE_DISCOVERY_LINK } from "./lib/security.ts";
 import { renderPhotoSlots } from "./lib/photo-grid.ts";
 import { span } from "./lib/trace.ts";
-import { getAltMap, getHistogramMap, getImagesManifest } from "./photos.js";
+import { getAltMap, getHistogramMap, getImagesManifest } from "./photos.ts";
 
 // ── the homepage's dynamic half, as a fragment ──────────────────────
 // `/` itself is now a DETERMINISTIC static document: build.mjs bakes a fixed

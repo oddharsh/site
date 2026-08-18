@@ -38,7 +38,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import { parseJsonc } from "./lib/jsonc.mjs";
-import { restUrl } from "../src/worker/lens-render.js";
+import { restUrl } from "../src/worker/lens-render.ts";
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const WANT_RENDER = process.argv.includes("--render");

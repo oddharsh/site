@@ -33,7 +33,7 @@ import { botHeaders } from "./botauth.ts";
 import { CANONICAL_HOST } from "./const.ts";
 import { fetchFollowingPublicRedirects, readResponseCapped, validateLensTarget } from "./crawl.ts";
 import { ERR_HEADER_MISMATCH, MCP_MODERN, META_PROTOCOL, META_CLIENT_CAPS } from "./mcp-protocol.ts";
-import { lensProbe, originDiscovery } from "../lens.js";
+import { lensProbe, originDiscovery } from "../lens.ts";
 import { asRecord, asText } from "./parse.ts";
 
 // Bounds. A door reader that follows whatever it finds is a crawler; these keep

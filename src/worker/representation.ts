@@ -1,7 +1,7 @@
 // HTTP representation vault. It captures bounded, normalized observations of
 // a public URL under several request profiles. Raw response bodies are parsed
 // only long enough to derive a title/word count and are never persisted.
-import { lensFetch, validateLensTarget } from "./lens.js";
+import { lensFetch, validateLensTarget } from "./lens.ts";
 import { extractTitle } from "./lib/http.ts";
 import { readResponseCapped } from "./lib/crawl.ts";
 

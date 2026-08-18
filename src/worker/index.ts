@@ -9,48 +9,48 @@
 
 import { WorkerEntrypoint, tracing } from "cloudflare:workers";
 import calWorker from "../../cal/src/index.js";
-import { handleAgentAuthClaim, handleAgentAuthRegister, handleAgentAuthRevoke, handleAgentAuthToken } from "./agent.js";
-import { cronAround, handleAround, handleAroundChangesJson, handleAroundJson } from "./around.js";
-import { handleBotPage } from "./bot.js";
-import { cronCensus, handleCensus, handleCensusJson } from "./census.js";
+import { handleAgentAuthClaim, handleAgentAuthRegister, handleAgentAuthRevoke, handleAgentAuthToken } from "./agent.ts";
+import { cronAround, handleAround, handleAroundChangesJson, handleAroundJson } from "./around.ts";
+import { handleBotPage } from "./bot.ts";
+import { cronCensus, handleCensus, handleCensusJson } from "./census.ts";
 import { shouldUseWorkersCache } from "./lib/cache.ts";
-import { handleCoffeeAvailability } from "./coffee.js";
-import { handleHit } from "./counter.js";
-import { handlePhotoGrid, serveMarkdown } from "./home.js";
-import { handleInbox } from "./inbox.js";
-import { handleWebmention, handleWebmentionDecision } from "./webmention.js";
-import { cronSendWebmentions } from "./webmention-send.js";
-import { countCrawlerHit, handleLedger, handleLedgerJson } from "./ledger.js";
-import { countSpeculativeLoad, handlePrefetchActivation } from "./speculation.js";
-import { handleLens, handleLensBrowser, handleLensCompare, handleLensFetch, handleLensShot } from "./lens.js";
-import { handleLensWire } from "./lens-wire.js";
-import { handleLensTools } from "./lens-tools.js";
+import { handleCoffeeAvailability } from "./coffee.ts";
+import { handleHit } from "./counter.ts";
+import { handlePhotoGrid, serveMarkdown } from "./home.ts";
+import { handleInbox } from "./inbox.ts";
+import { handleWebmention, handleWebmentionDecision } from "./webmention.ts";
+import { cronSendWebmentions } from "./webmention-send.ts";
+import { countCrawlerHit, handleLedger, handleLedgerJson } from "./ledger.ts";
+import { countSpeculativeLoad, handlePrefetchActivation } from "./speculation.ts";
+import { handleLens, handleLensBrowser, handleLensCompare, handleLensFetch, handleLensShot } from "./lens.ts";
+import { handleLensWire } from "./lens-wire.ts";
+import { handleLensTools } from "./lens-tools.ts";
 import { serveAssetWith404Clamp, serveFreshAsset, servePrecompressedShell, serveStaticPage } from "./lib/assets.ts";
 import { BOT_UA } from "./lib/botauth.ts";
 import { CANONICAL_HOST, PAGE_CACHE_CONTROL, isCanonicalHost } from "./lib/const.ts";
 import { HOMEPAGE_DISCOVERY_LINK } from "./lib/security.ts";
 import { wantsMarkdown } from "./lib/http.ts";
 import { isPreviewHost, previewDenial } from "./lib/preview.ts";
-import { handleSiteMcp } from "./mcp.js";
+import { handleSiteMcp } from "./mcp.ts";
 import { withSecurityHeaders } from "./lib/security.ts";
 import { SHELL_PRELOAD_LINK } from "./lib/shell-assets.ts";
 import { cronJob } from "./lib/cron.ts";
 import { installTracing, span } from "./lib/trace.ts";
 import { installTracing as installCalTracing } from "../../cal/src/trace.js";
-import { getThumbHashes, handleImagesManifest, handlePhotoQuery, handlePhotos, servePhotoFromR2 } from "./photos.js";
-import { handleReading } from "./reading.js";
-import { handleRun } from "./run.js";
-import { cronEnrichTracks, handleRn, handleRnAdmin, handleRnArt, handleRnMarkdown, handleRnSet, handleRnTracks, handleRnTracksHtml } from "./rn.js";
-import { cronHomeProbe } from "./perf-probe.js";
-import { handleDyno, handleDynoJson } from "./dyno.js";
-import { handleSearch, handleSearchJson } from "./search.js";
-import { handleSecurityCenter } from "./security.js";
-import { handleTool } from "./terminal.js";
-import { handleTerminal } from "./wire.js";
-import { handleSystemRestore, handleUpdatesJson, handleWindowsUpdate } from "./updates.js";
-import { handleWhoareyou, handleWhoareyouJson } from "./whoareyou.js";
-import { handleWritingIndex, handleWritingPost } from "./writing.js";
-import { handleLlmsFull } from "./x402.js";
+import { getThumbHashes, handleImagesManifest, handlePhotoQuery, handlePhotos, servePhotoFromR2 } from "./photos.ts";
+import { handleReading } from "./reading.ts";
+import { handleRun } from "./run.ts";
+import { cronEnrichTracks, handleRn, handleRnAdmin, handleRnArt, handleRnMarkdown, handleRnSet, handleRnTracks, handleRnTracksHtml } from "./rn.ts";
+import { cronHomeProbe } from "./perf-probe.ts";
+import { handleDyno, handleDynoJson } from "./dyno.ts";
+import { handleSearch, handleSearchJson } from "./search.ts";
+import { handleSecurityCenter } from "./security.ts";
+import { handleTool } from "./terminal.ts";
+import { handleTerminal } from "./wire.ts";
+import { handleSystemRestore, handleUpdatesJson, handleWindowsUpdate } from "./updates.ts";
+import { handleWhoareyou, handleWhoareyouJson } from "./whoareyou.ts";
+import { handleWritingIndex, handleWritingPost } from "./writing.ts";
+import { handleLlmsFull } from "./x402.ts";
 import { cronSerendipity, handleSerendipity, withSerendipitySecurityHeaders } from "../../serendipity/serendipity.js";
 
 // Hand the runtime's tracer to both span helpers. THIS is the only module that
@@ -64,7 +64,7 @@ installCalTracing(tracing);
 
 // the homepage visit-counter Durable Object, hosted in-house (see counter.js).
 // must be a named export of the entry so the COUNTER binding can resolve it.
-export { Counter } from "./counter.js";
+export { Counter } from "./counter.ts";
 
 
 // the coffee-booking expiry timer (Workflows). One durable instance per pending

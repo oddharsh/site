@@ -44,4 +44,20 @@ export const asBool = (value, fallback = null) =>
  *  one: `env.BROWSER.quickAction`, `ctx.waitUntil`, a rate limiter's `limit`.
  *  There is no wire format to parse, only a platform that either handed us the
  *  method or did not, so this is the honest floor for that whole class. */
+/**
+ * A value going into text a human or an agent will read: a URL parameter, a
+ * tooltip line, a frame cell. Primitives keep their exact spelling; anything
+ * else is JSON rather than "[object Object]", which is what plain String()
+ * produces and what three sites shipped until TypeScript pointed at them.
+ *
+ * The three were reading values this Worker does not own: EXIF recipe cards
+ * parsed from JSON, and MCP tool arguments, which arrive from a stranger.
+ */
+export const asScalarText = (value) => {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "bigint" || typeof value === "boolean") return String(value);
+  if (value === null || value === undefined) return "";
+  try { return JSON.stringify(value) ?? ""; } catch { return ""; }
+};
+
 export const isCallable = (value) => typeof value === "function";
