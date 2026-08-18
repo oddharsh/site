@@ -1,11 +1,15 @@
+// @ts-nocheck — TEMPORARY, declared in config/ts-migration.json under "callers".
+// This module is still JavaScript and calls into src/worker/lib, which became
+// TypeScript on 2026-08-18. tsc now checks those call sites strictly and this
+// file does not pass yet. The entry goes away when this module converts.
 // rn.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
-import { signedFetch } from "./lib/botauth.js";
-import { deleteSWRKV, swrKV } from "./lib/cache.js";
-import { lunaPage } from "./lib/chrome.js";
-import { asNumber, asRecord, asText } from "./lib/parse.js";
-import { esc, escAttr, escHtml, jsonResp, timingSafeEqual, wantsMarkdown } from "./lib/http.js";
-import { span } from "./lib/trace.js";
+import { signedFetch } from "./lib/botauth.ts";
+import { deleteSWRKV, swrKV } from "./lib/cache.ts";
+import { lunaPage } from "./lib/chrome.ts";
+import { asNumber, asRecord, asText } from "./lib/parse.ts";
+import { esc, escAttr, escHtml, jsonResp, timingSafeEqual, wantsMarkdown } from "./lib/http.ts";
+import { span } from "./lib/trace.ts";
 
 // ── /rn redirect target ─────────────────────────────────────────────
 // the link on the site is static (/rn). the redirect target lives in KV

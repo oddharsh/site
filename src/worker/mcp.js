@@ -1,20 +1,24 @@
+// @ts-nocheck — TEMPORARY, declared in config/ts-migration.json under "callers".
+// This module is still JavaScript and calls into src/worker/lib, which became
+// TypeScript on 2026-08-18. tsc now checks those call sites strictly and this
+// file does not pass yet. The entry goes away when this module converts.
 // The canonical site-level MCP surface. It is intentionally stateless: one
 // JSON-RPC request in, one JSON response out, with the same functions used by
 // the corresponding HTTP endpoints. Almost every tool is read-only too, but the
 // two representation-vault tools INSERT a D1 row, so this header no longer
 // claims otherwise — a header that said "read-only" is what let /mcp sit on the
 // preview guard's safe list long after it stopped being true.
-import { jsonResponse } from "./lib/http.js";
+import { jsonResponse } from "./lib/http.ts";
 import { imageCompare, imageInspect, imageTransform, photoRecipe } from "./image-tools.js";
-import { DATA_TOOLS, DATA_TOOL_NAMES, callDataTool } from "./lib/tools.js";
+import { DATA_TOOLS, DATA_TOOL_NAMES, callDataTool } from "./lib/tools.ts";
 import { captureRepresentation, compareRepresentation, readRepresentation } from "./representation.js";
 import { frameText, terminalToolFrame } from "./terminal.js";
 import { radarFrame, readSamples } from "./radar.js";
-import { AGENT_SURFACES } from "./lib/site-manifest.js";
-import { CACHE_EMPTY, CACHE_LIVE, CACHE_STATIC, mcpCorsHeaders, mcpGate, mcpHttpStatus, mcpServer } from "./lib/mcp-protocol.js";
-import { mcpTool } from "./lib/mcp-tools.js";
-import { previewToolRefusal } from "./lib/preview.js";
-import { asRecord, asText } from "./lib/parse.js";
+import { AGENT_SURFACES } from "./lib/site-manifest.ts";
+import { CACHE_EMPTY, CACHE_LIVE, CACHE_STATIC, mcpCorsHeaders, mcpGate, mcpHttpStatus, mcpServer } from "./lib/mcp-protocol.ts";
+import { mcpTool } from "./lib/mcp-tools.ts";
+import { previewToolRefusal } from "./lib/preview.ts";
+import { asRecord, asText } from "./lib/parse.ts";
 
 // DUAL-ERA. The wire rules (versions, `_meta` keys, resultType, cache hints,
 // error codes, the header check) live in lib/mcp-protocol.js because

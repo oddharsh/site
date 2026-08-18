@@ -3,9 +3,9 @@
 // page: an <input list> + <datalist> of destinations and a GET form this
 // handler answers with a 302. Works with scripting disabled, invokers missing,
 // or dialog unsupported — the palette's own footer links here.
-import { cachedRender } from "./lib/cache.js";
-import { lunaPage } from "./lib/chrome.js";
-import { escAttr, escHtml } from "./lib/http.js";
+import { cachedRender } from "./lib/cache.ts";
+import { lunaPage } from "./lib/chrome.ts";
+import { escAttr, escHtml } from "./lib/http.ts";
 import { getImagesManifest } from "./photos.js";
 
 // Mirrors nav.js's inline pages + profiles set (kept small on purpose; photos

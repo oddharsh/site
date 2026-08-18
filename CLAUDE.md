@@ -669,7 +669,7 @@ worktrees may edit freely, but a worktree is not a release surface.
 
   A preview runs **production bindings and secrets**. Cloudflare offers no
   per-version override, so the same RN_KV, the same photo bucket, the same three
-  D1s, the same `RESEND_API_KEY`. `src/worker/lib/preview.js` is what
+  D1s, the same `RESEND_API_KEY`. `src/worker/lib/preview.ts` is what
   makes a preview URL safe to paste into a PR: every response is `noindex`
   (a byte-identical duplicate of the site on another host would otherwise compete
   with the canonical one), and writes are refused by DEFAULT-DENY on unsafe
@@ -1222,7 +1222,7 @@ Three deliberate deviations, all written down at the code:
    different jobs, and the strict half of the ecosystem does require the header:
    measured 2026-08-14, `mcp.context7.com` and `docs.mcp.cloudflare.com` both
    answer 400 `-32020` without it and 200 with it. So `foreignMcpTools()` in
-   [`lib/doors.js`](src/worker/lib/doors.js), the one MCP client this site
+   [`lib/doors.js`](src/worker/lib/doors.ts), the one MCP client this site
    has, SENDS `Mcp-Method` and derives it from the same constant as the body so
    the two cannot disagree. It also offers BOTH framings on `Accept`, because a
    Streamable HTTP server may answer JSON or an SSE stream at its own discretion
@@ -1287,7 +1287,7 @@ Three deliberate deviations, all written down at the code:
 (`serendipity/serendipity.js`) is a separate server with different tools and no
 shared data, but the wire rules — versions, `_meta` keys, `resultType`, cache
 hints, error codes, the header check, the version gate — live once in
-[`lib/mcp-protocol.js`](src/worker/lib/mcp-protocol.js) and both import
+[`lib/mcp-protocol.js`](src/worker/lib/mcp-protocol.ts) and both import
 it. Two MCP servers on one origin speaking different dialects is a bug a client
 author reports to you rather than one you find yourself.
 

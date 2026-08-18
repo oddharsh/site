@@ -1,3 +1,7 @@
+// @ts-nocheck — TEMPORARY, declared in config/ts-migration.json under "callers".
+// This module is still JavaScript and calls into src/worker/lib, which became
+// TypeScript on 2026-08-18. tsc now checks those call sites strictly and this
+// file does not pass yet. The entry goes away when this module converts.
 // _worker.js/index.js: the dispatcher. Handlers live in sibling modules;
 // wrangler bundles this directory at deploy (its build, not ours). The ROUTES
 // and PREFIX tables below mirror wrangler.jsonc's allowlist one-to-one; keep
@@ -9,7 +13,7 @@ import { handleAgentAuthClaim, handleAgentAuthRegister, handleAgentAuthRevoke, h
 import { cronAround, handleAround, handleAroundChangesJson, handleAroundJson } from "./around.js";
 import { handleBotPage } from "./bot.js";
 import { cronCensus, handleCensus, handleCensusJson } from "./census.js";
-import { shouldUseWorkersCache } from "./lib/cache.js";
+import { shouldUseWorkersCache } from "./lib/cache.ts";
 import { handleCoffeeAvailability } from "./coffee.js";
 import { handleHit } from "./counter.js";
 import { handlePhotoGrid, serveMarkdown } from "./home.js";
@@ -21,17 +25,17 @@ import { countSpeculativeLoad, handlePrefetchActivation } from "./speculation.js
 import { handleLens, handleLensBrowser, handleLensCompare, handleLensFetch, handleLensShot } from "./lens.js";
 import { handleLensWire } from "./lens-wire.js";
 import { handleLensTools } from "./lens-tools.js";
-import { serveAssetWith404Clamp, serveFreshAsset, servePrecompressedShell, serveStaticPage } from "./lib/assets.js";
-import { BOT_UA } from "./lib/botauth.js";
-import { CANONICAL_HOST, PAGE_CACHE_CONTROL, isCanonicalHost } from "./lib/const.js";
-import { HOMEPAGE_DISCOVERY_LINK } from "./lib/security.js";
-import { wantsMarkdown } from "./lib/http.js";
-import { isPreviewHost, previewDenial } from "./lib/preview.js";
+import { serveAssetWith404Clamp, serveFreshAsset, servePrecompressedShell, serveStaticPage } from "./lib/assets.ts";
+import { BOT_UA } from "./lib/botauth.ts";
+import { CANONICAL_HOST, PAGE_CACHE_CONTROL, isCanonicalHost } from "./lib/const.ts";
+import { HOMEPAGE_DISCOVERY_LINK } from "./lib/security.ts";
+import { wantsMarkdown } from "./lib/http.ts";
+import { isPreviewHost, previewDenial } from "./lib/preview.ts";
 import { handleSiteMcp } from "./mcp.js";
-import { withSecurityHeaders } from "./lib/security.js";
-import { SHELL_PRELOAD_LINK } from "./lib/shell-assets.js";
-import { cronJob } from "./lib/cron.js";
-import { installTracing, span } from "./lib/trace.js";
+import { withSecurityHeaders } from "./lib/security.ts";
+import { SHELL_PRELOAD_LINK } from "./lib/shell-assets.ts";
+import { cronJob } from "./lib/cron.ts";
+import { installTracing, span } from "./lib/trace.ts";
 import { installTracing as installCalTracing } from "../../cal/src/trace.js";
 import { getThumbHashes, handleImagesManifest, handlePhotoQuery, handlePhotos, servePhotoFromR2 } from "./photos.js";
 import { handleReading } from "./reading.js";

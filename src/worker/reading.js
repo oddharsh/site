@@ -1,9 +1,9 @@
 // reading.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
-import { BOT_NAME, signedFetch } from "./lib/botauth.js";
-import { cachedRender, deleteSWRKV, edgeKey, swrKV } from "./lib/cache.js";
-import { lunaPage } from "./lib/chrome.js";
-import { esc } from "./lib/http.js";
+import { BOT_NAME, signedFetch } from "./lib/botauth.ts";
+import { cachedRender, deleteSWRKV, edgeKey, swrKV } from "./lib/cache.ts";
+import { lunaPage } from "./lib/chrome.ts";
+import { esc } from "./lib/http.ts";
 
 // ── /reading — a native, Luna-styled mirror of my Curius reading list ──
 // Curius (the social reading-list app) exposes a clean JSON API per user. We

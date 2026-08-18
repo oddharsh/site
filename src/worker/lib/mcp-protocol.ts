@@ -29,7 +29,7 @@
 // The legacy list stays because legacy clients have NO fall-forward mechanism.
 // Pointed at a modern-only server they fail outright, with no diagnostic they
 // can surface to a user.
-import { asRecord, asText } from "./parse.js";
+import { asRecord, asText } from "./parse.ts";
 
 export const MCP_MODERN = "2026-07-28";
 export const MCP_LEGACY = ["2025-06-18", "2025-03-26", "2024-11-05"];
@@ -197,7 +197,12 @@ export function mcpCorsHeaders() {
 // result fields, and the spec tells modern clients to read a missing
 // `resultType` as "complete" anyway. One code path beats two that must agree.
 export function mcpServer({ serverInfo, capabilities, instructions }) {
-  const result = (id, payload, cache) => ({ jsonrpc: "2.0", id, result: {
+  // `cache` has always been optional: every caller that omits it spreads
+  // undefined, which contributes nothing. A .js file let that pass silently; a
+  // .ts file treats an unannotated parameter as REQUIRED, so the three callers
+  // in serendipity that legitimately omit it started failing. The default says
+  // what the code already meant and spreads to the same nothing.
+  const result = (id, payload, cache = {}) => ({ jsonrpc: "2.0", id, result: {
     resultType: "complete",
     ...payload,
     ...cache,

@@ -52,19 +52,19 @@
 import { agentReadyFrame } from "./agent-ready.js";
 import { ENCODE_CAP, encodeReadout, fetchImageBytes, parseAvif, parseJpeg, sniff } from "./encode.js";
 import { probeRevalidation } from "./cache-lint.js";
-import { readDoors } from "./lib/doors.js";
+import { readDoors } from "./lib/doors.ts";
 import { MEASURED, auditUrl } from "./dict.js";
 import { RADAR_LIMITS, radarFrame, readSamples } from "./radar.js";
 import { readAroundChanges } from "./around.js";
 import { readCoffeeAvailability } from "./coffee.js";
 import { LENS_BUDGETS, lensFetch, lensInspect, lensObservationSummary, overLensBudget, validateLensTarget } from "./lens.js";
-import { lunaPage } from "./lib/chrome.js";
-import { CANONICAL_HOST } from "./lib/const.js";
-import { escHtml } from "./lib/http.js";
-import { AGENT_SURFACES } from "./lib/site-manifest.js";
+import { lunaPage } from "./lib/chrome.ts";
+import { CANONICAL_HOST } from "./lib/const.ts";
+import { escHtml } from "./lib/http.ts";
+import { AGENT_SURFACES } from "./lib/site-manifest.ts";
 import {
   COLS, blank, emit, fit, keys as keyHints, kv, meter, rows, rule, s, table, plainFrame, wrap,
-} from "./lib/tui.js";
+} from "./lib/tui.ts";
 import { photoFacets, queryPhotos } from "./photos.js";
 import { RN_FALLBACK, getTracksSWR } from "./rn.js";
 import { getCuriusCached } from "./reading.js";

@@ -19,7 +19,7 @@ import { LENS_BUDGETS, compareLensTargets, lensInspect, lensObservationSummary, 
 import { queryPhotos } from "../photos.js";
 import { RN_FALLBACK, getTracksSWR } from "../rn.js";
 import { searchSite } from "../search.js";
-import { mcpTool } from "./mcp-tools.js";
+import { mcpTool } from "./mcp-tools.ts";
 // holding -> serendipity, which is the reverse of the established direction
 // (serendipity already imports lib/desktop.js, lib/crawl.js, lib/mcp-protocol.js).
 // It is not a cycle: nothing under serendipity/ imports this registry. It is also
@@ -28,7 +28,7 @@ import { mcpTool } from "./mcp-tools.js";
 // import appearing in either would take the whole suite down at link time
 // (gotcha 16).
 import { serendipityFindEvents } from "../../../serendipity/serendipity.js";
-import { asRecord } from "./parse.js";
+import { asRecord } from "./parse.ts";
 
 export function toolError(message) { return { _error: String(message).slice(0, 400) }; }
 

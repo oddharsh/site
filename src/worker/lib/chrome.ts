@@ -1,10 +1,10 @@
 // lib/chrome.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
-import { DESKTOP_CHROME, DESKTOP_TOP, SECTION_FAVICONS } from "./desktop.js";
-import { addressBar, taskPane } from "./explorer.js";
-import { escAttr, escHtml } from "./http.js";
-import { SHELL_PRELOAD_LINK } from "./shell-assets.js";
-import { twinFor } from "./twins.js";
+import { DESKTOP_CHROME, DESKTOP_TOP, SECTION_FAVICONS } from "./desktop.ts";
+import { addressBar, taskPane } from "./explorer.ts";
+import { escAttr, escHtml } from "./http.ts";
+import { SHELL_PRELOAD_LINK } from "./shell-assets.ts";
+import { twinFor } from "./twins.ts";
 
 // shared XP window chrome for the server-rendered pages (/around, /bot,
 // /whoareyou, /rn/set). these four used to each carry their own copy of

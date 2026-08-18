@@ -13,7 +13,7 @@
 // module invents nothing: given no tasks and no details it renders the two rows
 // it can always prove (where you are, and what is above you) and stops. A task
 // pane that pads itself out with plausible links is worse than no task pane.
-import { escAttr, escHtml } from "./http.js";
+import { escAttr, escHtml } from "./http.ts";
 
 // The first-level places, in taskbar order. Declared here rather than derived
 // at runtime so the Worker carries no data file; build.mjs asserts this list

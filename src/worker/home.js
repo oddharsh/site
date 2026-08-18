@@ -1,9 +1,13 @@
+// @ts-nocheck — TEMPORARY, declared in config/ts-migration.json under "callers".
+// This module is still JavaScript and calls into src/worker/lib, which became
+// TypeScript on 2026-08-18. tsc now checks those call sites strictly and this
+// file does not pass yet. The entry goes away when this module converts.
 // home.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
-import { serveMarkdownTwin } from "./lib/assets.js";
-import { HOMEPAGE_DISCOVERY_LINK } from "./lib/security.js";
-import { renderPhotoSlots } from "./lib/photo-grid.js";
-import { span } from "./lib/trace.js";
+import { serveMarkdownTwin } from "./lib/assets.ts";
+import { HOMEPAGE_DISCOVERY_LINK } from "./lib/security.ts";
+import { renderPhotoSlots } from "./lib/photo-grid.ts";
+import { span } from "./lib/trace.ts";
 import { getAltMap, getHistogramMap, getImagesManifest } from "./photos.js";
 
 // ── the homepage's dynamic half, as a fragment ──────────────────────

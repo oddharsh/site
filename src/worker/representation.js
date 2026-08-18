@@ -2,8 +2,8 @@
 // a public URL under several request profiles. Raw response bodies are parsed
 // only long enough to derive a title/word count and are never persisted.
 import { lensFetch, validateLensTarget } from "./lens.js";
-import { extractTitle } from "./lib/http.js";
-import { readResponseCapped } from "./lib/crawl.js";
+import { extractTitle } from "./lib/http.ts";
+import { readResponseCapped } from "./lib/crawl.ts";
 
 const BODY_CAP = 1024 * 1024;
 const PROFILES = {

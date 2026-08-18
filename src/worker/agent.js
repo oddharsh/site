@@ -1,6 +1,6 @@
 // agent.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
-import { jsonResponse } from "./lib/http.js";
+import { jsonResponse } from "./lib/http.ts";
 
 export const AGENT_AUTH_SCOPES = ["public.read", "mcp.read", "rn.read", "photos.read", "around.read"];
 

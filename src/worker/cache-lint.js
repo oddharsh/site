@@ -25,8 +25,8 @@
 // markdown ask off a warm cache came back HTML. The lint probes it the same
 // behavioral way: ask for a second representation and check whether the answer
 // changed while Vary claims it cannot.
-import { botHeaders } from "./lib/botauth.js";
-import { CANONICAL_HOST } from "./lib/const.js";
+import { botHeaders } from "./lib/botauth.ts";
+import { CANONICAL_HOST } from "./lib/const.ts";
 import { parseCacheControl } from "./dict.js";
 
 const FETCH_TIMEOUT = 8000;

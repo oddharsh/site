@@ -1,6 +1,6 @@
 // trace.js — cal's own span helper over Workers Traces.
 //
-// DELIBERATELY a near-duplicate of src/worker/lib/trace.js, and not a
+// DELIBERATELY a near-duplicate of src/worker/lib/trace.ts, and not a
 // shared import. The dependency direction in this repo runs www -> cal:
 // _worker.js/index.js imports cal/src/index.js to serve /coffee, and
 // cal/wrangler.test.toml boots the Vitest pool from cal/src/index.js alone. An
@@ -22,7 +22,7 @@
 let tracing = null;
 
 export function installTracing(candidate) {
-  // cal cannot import src/worker/lib/parse.js: its Vitest pool boots from
+  // cal cannot import src/worker/lib/parse.ts: its Vitest pool boots from
   // cal/src/index.js alone, so that edge would make cal untestable without the
   // site tree. This file is already a deliberate duplicate for that same reason
   // (gotcha 16), and one capability check does not earn a second parse layer.

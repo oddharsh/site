@@ -1,5 +1,5 @@
 import { claimReservation, dropReservation } from "../../cal/src/reservation.js";
-import { asNumber } from "./lib/parse.js";
+import { asNumber } from "./lib/parse.ts";
 
 // counter.js — the homepage visit counter: an in-house Durable Object, read by
 // the document and advanced out-of-band by /hit.

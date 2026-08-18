@@ -1,13 +1,17 @@
+// @ts-nocheck — TEMPORARY, declared in config/ts-migration.json under "callers".
+// This module is still JavaScript and calls into src/worker/lib, which became
+// TypeScript on 2026-08-18. tsc now checks those call sites strictly and this
+// file does not pass yet. The entry goes away when this module converts.
 // census.js — the longitudinal chip census. Once a week (cron), Lens re-scans a
 // fixed roster of representative sites and records each one's spectrum tier,
 // agent-readiness score, and agent-door count into D1. /lens/census renders the
 // trend over time. Nobody else publishes agent-readiness as a time series for
 // named sites, so even a few months of this is original, citable evidence about
 // where the web is going — the point the rest of /lens argues one URL at a time.
-import { lunaPage } from "./lib/chrome.js";
-import { escHtml, escAttr, jsonResponse, timingSafeEqual } from "./lib/http.js";
+import { lunaPage } from "./lib/chrome.ts";
+import { escHtml, escAttr, jsonResponse, timingSafeEqual } from "./lib/http.ts";
 import { lensInspect } from "./lens.js";
-import { span } from "./lib/trace.js";
+import { span } from "./lib/trace.ts";
 
 // The roster: 16 sites chosen to span the open → agent-native spectrum a
 // crypto-VC audience cares about. Agent-native infra, AI labs, publishers

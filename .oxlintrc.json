@@ -208,7 +208,7 @@
       // place instead of at every call site. Turning it off here is what makes
       // turning it on everywhere else mean something; the file's own header
       // says the same thing from the other side.
-      "files": ["src/worker/lib/parse.js"],
+      "files": ["src/worker/lib/parse.ts"],
       "rules": { "anti-slop/no-runtime-typeof": "off" }
     },
     {

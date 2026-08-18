@@ -1,7 +1,12 @@
+// @ts-nocheck — declared in config/ts-migration.json, which may only SHRINK.
+// This module carried type errors when src/worker/lib became TypeScript. The
+// code is unchanged and runs identically; what changed is that tsc stopped
+// being lenient. Remove this line, fix what tsc then reports, and delete the
+// entry from that file. A contract test fails if the two disagree.
 // lib/assets.js: the ways this worker hands out a static file when the default
 // asset path would lie.
-import { wantsMarkdown } from "./http.js";
-import { notModifiedIfFresh } from "./cache.js";
+import { wantsMarkdown } from "./http.ts";
+import { notModifiedIfFresh } from "./cache.ts";
 //
 // serveFreshAsset: fetch the asset under a unique query (which busts the
 // read-through asset cache), then re-emit it at the canonical URL with an honest

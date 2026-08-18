@@ -12,8 +12,8 @@
 // No avatars, by choice: hotlinking a stranger's profile picture leaks my
 // readers' IPs to their host and buys nothing OE ever had. Name, subject, date,
 // excerpt — very 2003.
-import { lunaPage } from "./lib/chrome.js";
-import { esc } from "./lib/http.js";
+import { lunaPage } from "./lib/chrome.ts";
+import { esc } from "./lib/http.ts";
 import { readApprovedMentions } from "./webmention.js";
 
 const KIND_LABEL = {

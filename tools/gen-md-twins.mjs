@@ -275,7 +275,7 @@ export const TWIN_FACTS = [
     facts: [
       {
         label: "User-Agent",
-        source: "src/worker/lib/botauth.js",
+        source: "src/worker/lib/botauth.ts",
         // BOT_UA is a template literal over two constants, so no single source
         // line contains the string a reader of /bot actually sees
         derive: (src) => {
@@ -309,9 +309,9 @@ export const TWIN_FACTS = [
     // actually sends them, except the JWKS path, which is the page's own claim.
     twin: "src/content/md/security.md",
     facts: [
-      { label: "frame-ancestors", source: "src/worker/lib/security.js", string: "frame-ancestors 'none'" },
-      { label: "object-src",      source: "src/worker/lib/security.js", string: "object-src 'none'" },
-      { label: "Referrer-Policy", source: "src/worker/lib/security.js", string: "strict-origin-when-cross-origin" },
+      { label: "frame-ancestors", source: "src/worker/lib/security.ts", string: "frame-ancestors 'none'" },
+      { label: "object-src",      source: "src/worker/lib/security.ts", string: "object-src 'none'" },
+      { label: "Referrer-Policy", source: "src/worker/lib/security.ts", string: "strict-origin-when-cross-origin" },
       {
         // The one fact on that page with a scheduled expiry. ENFORCE_PAGE_HASHES
         // is false today, so the hashed policy ships report-only beside a loose
@@ -319,7 +319,7 @@ export const TWIN_FACTS = [
         // sentence false; this fails the deploy until the twin is rewritten,
         // which is the only reminder the rollout has.
         label: "hashed-CSP rollout state",
-        source: "src/worker/lib/security.js",
+        source: "src/worker/lib/security.ts",
         derive: (src) => {
           const m = /ENFORCE_PAGE_HASHES\s*=\s*(true|false)/.exec(src);
           if (!m) return null;

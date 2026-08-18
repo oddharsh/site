@@ -1,11 +1,11 @@
 // whoareyou.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
-import { serveMarkdownTwin } from "./lib/assets.js";
-import { BOT_UA } from "./lib/botauth.js";
-import { deadline } from "./lib/cache.js";
-import { lunaPage } from "./lib/chrome.js";
-import { esc, wantsMarkdown } from "./lib/http.js";
-import { asNumber, asText } from "./lib/parse.js";
+import { serveMarkdownTwin } from "./lib/assets.ts";
+import { BOT_UA } from "./lib/botauth.ts";
+import { deadline } from "./lib/cache.ts";
+import { lunaPage } from "./lib/chrome.ts";
+import { esc, wantsMarkdown } from "./lib/http.ts";
+import { asNumber, asText } from "./lib/parse.ts";
 
 const RDAP_BUDGET_MS = 250;
 

@@ -1,3 +1,7 @@
+// @ts-nocheck — TEMPORARY, declared in config/ts-migration.json under "callers".
+// This module is still JavaScript and calls into src/worker/lib, which became
+// TypeScript on 2026-08-18. tsc now checks those call sites strictly and this
+// file does not pass yet. The entry goes away when this module converts.
 // lens-tools.js — the Tools lens: a foreign MCP server's catalogue, WITH the
 // argument schemas, so the pane can draw a form per tool.
 //
@@ -26,10 +30,10 @@
 // this route adds no new way out. It inherits that module's SSRF guards, its
 // 8s timeout, its byte caps and its bot signature, and it inherits the wire
 // rules (framing, headers, protocol revision) rather than restating them.
-import { validateLensTarget } from "./lib/crawl.js";
-import { jsonResponse } from "./lib/http.js";
-import { span } from "./lib/trace.js";
-import { foreignMcpTools } from "./lib/doors.js";
+import { validateLensTarget } from "./lib/crawl.ts";
+import { jsonResponse } from "./lib/http.ts";
+import { span } from "./lib/trace.ts";
+import { foreignMcpTools } from "./lib/doors.ts";
 import { LENS_BUDGETS, lensSha256Hex, overLensBudget } from "./lens.js";
 
 // A catalogue read is one POST that a foreign server answers from memory, so

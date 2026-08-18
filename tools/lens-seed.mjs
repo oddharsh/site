@@ -48,8 +48,8 @@ import { lensChipTargets } from "./lib/lens-chips.mjs";
 import { readDocument } from "./lib/html-to-md.mjs";
 import { documentTally } from "../src/worker/lens-render.js";
 import { WIRE_TIMING, summariseWire } from "../src/worker/lens-wire.js";
-import { BOT_UA } from "../src/worker/lib/botauth.js";
-import { EXECUTION_PROBE } from "../src/worker/lib/agent-execution.js";
+import { BOT_UA } from "../src/worker/lib/botauth.ts";
+import { EXECUTION_PROBE } from "../src/worker/lib/agent-execution.ts";
 
 const args = process.argv.slice(2);
 const has = (name) => args.includes(name);

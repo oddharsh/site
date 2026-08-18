@@ -26,7 +26,12 @@ export const SHELL_ASSETS = { luna: "/luna.css", nav: "/nav.js" }; // build:shel
 // Empty in readable local development: the page dictionary is derived from the
 // final staged HTML, so it does not exist until build.mjs runs. The build
 // replaces this marker with its immutable content-addressed URL.
-export const PAGE_DICTIONARY = ""; // build:page-dictionary
+// The ANNOTATION is load-bearing now that this file is TypeScript. Build step
+// rewrites this line, so at runtime it is a URL; in source it is "", and tsc
+// infers the literal type from that. Every `if (PAGE_DICTIONARY)` then narrows
+// to never, which reads as an unreachable branch and made oxlint reject the
+// interpolation in security.ts. Declaring it `string` says what the build does.
+export const PAGE_DICTIONARY: string = ""; // build:page-dictionary
 
 // luna.css first: it is render-blocking style, so it outranks the deferred
 // nav.js script. Browsers dedupe a preload against the in-document <link
