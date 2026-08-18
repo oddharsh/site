@@ -58,13 +58,13 @@
 # mints the new content-addressed /i/ URLs).
 #
 # usage:
-#   ./www/scripts/add-photos.sh /path/to/photo.HIF
-#   ./www/scripts/add-photos.sh /path/to/folder/
-#   ./www/scripts/add-photos.sh /path/a.jpg /path/b.HIF /path/folder/
+#   ./tools/photos/add-photos.sh /path/to/photo.HIF
+#   ./tools/photos/add-photos.sh /path/to/folder/
+#   ./tools/photos/add-photos.sh /path/a.jpg /path/b.HIF /path/folder/
 
 set -e
 
-# resolve from anywhere — assumes script lives at www/scripts/
+# resolve from anywhere — assumes script lives at tools/photos/
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_DIR="$( cd "$SCRIPT_DIR/../.." && pwd )"
 
@@ -98,7 +98,7 @@ if [ $# -eq 0 ]; then
   echo "usage: $0 <file-or-dir>..." >&2
   exit 1
 fi
-# zenc (www/scripts/zenc) is the JPEG encoder: a zenjpeg wrapper running
+# zenc (tools/photos/zenc) is the JPEG encoder: a zenjpeg wrapper running
 # hybrid trellis + progressive scan search, ~4% smaller than the retired cjpegli
 # at equal quality (see /garage/encoding). It builds from source with cargo, so
 # any machine with rust runs this pipeline; dependabot tracks the zenjpeg pin.
@@ -486,7 +486,7 @@ else
   echo "  python3 missing — skipping alt-text generation"
 fi
 
-node "$PROJECT_DIR/www/scripts/check-photo-pipeline.mjs"
+node "$PROJECT_DIR/tools/photos/check-photo-pipeline.mjs"
 echo ""
 
 echo "✓ done. deploy with:"

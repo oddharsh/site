@@ -278,8 +278,8 @@ jobs:
           /tmp/osv-scanner scan source \
             --lockfile pnpm-lock.yaml \
             --lockfile lens-reader/pnpm-lock.yaml \
-            --lockfile www/scripts/zenc/Cargo.lock \
-            --lockfile www/scripts/requirements.txt
+            --lockfile tools/photos/zenc/Cargo.lock \
+            --lockfile tools/photos/requirements.txt
           status=$?
           set -e
           case "$status" in

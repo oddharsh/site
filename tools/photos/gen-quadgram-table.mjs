@@ -22,7 +22,7 @@
 // diid), src/buttcrack/data/english_quadgrams.txt, itself the standard
 // practicalcryptography.com English quadgram counts.
 //
-// Usage: node www/scripts/gen-quadgram-table.mjs <path-to-english_quadgrams.txt>
+// Usage: node tools/photos/gen-quadgram-table.mjs <path-to-english_quadgrams.txt>
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { brotliCompressSync, constants } from "node:zlib";

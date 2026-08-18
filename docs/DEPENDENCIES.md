@@ -8,8 +8,8 @@ Dependabot watches FIVE ecosystems, and this paragraph named two of them until
 | npm | `/` | the shared deploy toolchain and the one shipped dependency |
 | npm | `/lens-reader` | the Reader lens Worker, which is outside the workspace on purpose |
 | github-actions | `/` | the five digest-pinned actions |
-| cargo | `/www/scripts/zenc` | the JPEG thumbnail encoder's zenjpeg pin |
-| pip | `/www/scripts` | Pillow, for one page generator |
+| cargo | `/tools/photos/zenc` | the JPEG thumbnail encoder's zenjpeg pin |
+| pip | `/tools/photos` | Pillow, for one page generator |
 
 Each update PR keeps the upstream release notes/changelog in its Dependabot
 description and gets a persistent site-review comment containing the exact
@@ -92,9 +92,9 @@ review policy and entry point for future agent runs.
   on unchanged code, and workers-types for binding-shape changes.
 - playwright-core is a scripts-only devDep (caret-ranged, not pinned: it drives
   the locally installed Google Chrome rather than a bundled browser). Only
-  `www/scripts/gen-og-cards.mjs` uses it, and only on demand; no CI job and
+  `tools/photos/gen-og-cards.mjs` uses it, and only on demand; no CI job and
   no deploy path touches it.
-- Pillow 12.3.0 is pinned in `www/scripts/requirements.txt` for
+- Pillow 12.3.0 is pinned in `tools/photos/requirements.txt` for
   `gen-pixel-peeper.py`, a one-off generator for the /pixel-peeper comparison
   frames. It baked the photo histograms until 2026-08-14, when that moved into
   `zenc histogram` and left the core photo pipeline with no Pillow dependency at
@@ -159,7 +159,7 @@ the reason, rather than written here with the caret quietly dropped.
   import from `lens-reader/src/` fails in CI with `ERR_MODULE_NOT_FOUND` while
   passing on any workstation that has installed there.
 
-- **`www/scripts/zenc/`** pins `zenjpeg` 0.8.4, `image` and `serde_json` through Cargo. zenjpeg is
+- **`tools/photos/zenc/`** pins `zenjpeg` 0.8.4, `image` and `serde_json` through Cargo. zenjpeg is
   the production JPEG thumbnail encoder, so a bump changes the BYTES of every
   photo re-encoded after it. Nothing re-encodes automatically, so the risk is
   deferred rather than absent: the next `pnpm run photos` run mints new

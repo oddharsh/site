@@ -37,7 +37,7 @@ import { readManifest, workerModule, navFenceBody, readFenceBody, runProfilesBod
 import { parseCss } from "./lib/css-parse.mjs";
 import { HTML_MARKERS } from "./lib/html-markers.mjs";
 import { zstdCompressDictionaryBatch } from "./lib/zstd-batch.mjs";
-import { patchStaticShell, renderDesktopArtifacts, staticShellPages } from "../www/scripts/gen-desktop-partial.mjs";
+import { patchStaticShell, renderDesktopArtifacts, staticShellPages } from "../tools/photos/gen-desktop-partial.mjs";
 
 const OUT = ".build";
 const brotliCompressAsync = promisify(brotliCompress);
@@ -606,29 +606,23 @@ await mkdir(OUT, { recursive: true });
 // assets at .build/www and runs THIS script via its build.command, so the
 // build output never needs its own config. (Local dev uses wrangler.dev.jsonc.)
 //
-// www/scripts is the ONE exception, and it is 89% of the tree's bytes: the zenc
-// cargo target/ and the uv venv put it at ~232 MB across 767 files, against
-// ~27 MB for everything that actually ships. Staging it copied a quarter of a
-// gigabyte per build so that .assetsignore could then refuse to upload it.
+// www/scripts USED TO BE the one exception here, and it was 89% of the tree's
+// bytes: the zenc cargo target/ and the uv venv put it at ~232 MB across 767
+// files, against ~27 MB for everything that actually ships, so the build copied
+// a quarter of a gigabyte per run for .assetsignore to then refuse to upload.
 //
-// Skipping is safe because every consumer imports from the SOURCE tree
-// (`../www/scripts/...` in build.mjs, contract-tests.mjs, gen-manifest.mjs, and
-// the package.json script paths), so nothing has ever read .build/www/scripts.
+// The pipeline lives at tools/photos now, outside www/ entirely, so there is
+// nothing to skip and no exception to keep correct. That is the point of moving
+// it: an exception that existed only because dev tooling sat in the served tree
+// disappears when the tooling leaves, rather than being maintained forever.
 //
-// What catches a page that starts to: LINK-INTEGRITY, which resolves every
-// same-origin href/src against the staged tree and now finds no /scripts/ there.
-// Verified rather than assumed, with a link to /scripts/shell-data.mjs injected
-// into a page's prose: `link-integrity: 1 internal reference(s) point at nothing
-// this site serves`. Note the FIRST attempt at that control was invalid, because
-// it added a <script> before </body> and tripped the desktop-partial tripwire
-// instead; a path that IS staged failed identically, which is the tell.
+// What still catches a page that starts referencing it is LINK-INTEGRITY, which
+// resolves every same-origin href/src against the staged tree and finds no
+// /scripts/ there. Verified rather than assumed, with a link to
+// /scripts/shell-data.mjs injected into a page's prose: link-integrity reported
+// 1 internal reference pointing at nothing this site serves.
 //
-// The staged tree is byte-identical either way: 1444 files, 0 differing, which is
-// the bar content-addressed /a/ and /i/ URLs set.
-//
-// Keep the `scripts` line in www/.assetsignore regardless: wrangler.dev.jsonc
-// serves the readable www/ tree directly, where the directory is still present.
-const STAGE_SKIP = new Set(["www/scripts", "www/images/meta"]);
+const STAGE_SKIP = new Set(["www/images/meta"]);
 await cp("www", `${OUT}/www`, {
   recursive: true,
   filter: (source) => !STAGE_SKIP.has(source.split(sep).join("/")),

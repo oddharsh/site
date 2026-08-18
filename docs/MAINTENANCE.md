@@ -207,8 +207,8 @@ neither `queries:` nor a threat model, so CodeQL's own defaults (`default` suite
 below depends on it.
 
 `rust` and `python` were dropped 2026-08-06. Between them they cost about 3 of the
-scan's 4 minutes to analyze four files: `www/scripts/zenc/src/main.rs` and the
-three `www/scripts/*.py` pipeline scripts. Every one of them is workstation and
+scan's 4 minutes to analyze four files: `tools/photos/zenc/src/main.rs` and the
+three `tools/photos/*.py` pipeline scripts. Every one of them is workstation and
 CI build tooling that runs before a deploy and never answers a request, while the
 configured threat model is `remote`. The Worker, which is the code an attacker can
 actually reach, is JavaScript and stays covered.
@@ -1116,7 +1116,7 @@ the job ends. The runner is the only execution host; nothing on the author's
 machine is part of the contract.
 
 Dependabot covers the encoder now: its cargo ecosystem tracks the zenjpeg pin in
-`www/scripts/zenc`, opening a version-bump PR on the weekly cadence alongside
+`tools/photos/zenc`, opening a version-bump PR on the weekly cadence alongside
 the Actions, npm, and Pillow layers. This retired the old `Refresh image toolchain`
 workflow that hand-tracked the from-source jpegli commit. Only Homebrew formulas
 (mozjpeg, libavif) fall outside Dependabot and update on their own cadence.
@@ -1128,7 +1128,7 @@ workflow that hand-tracked the from-source jpegli commit. Only Homebrew formulas
 brew install jq mozjpeg libavif              # mozjpeg = jpegtran + cjpeg; libavif = avifenc (optional, sips falls back)
 brew install uv && pnpm run photos:env               # Pillow, for gen-pixel-peeper.py only (brew's python3 is PEP 668; pip into it fails)
 # the JPEG encoder (zenc) builds itself on first pipeline run; needs rust (rustup.rs)
-cargo build --release --manifest-path www/scripts/zenc/Cargo.toml
+cargo build --release --manifest-path tools/photos/zenc/Cargo.toml
 pnpm exec wrangler login                                         # Cloudflare auth (deploys + KV + R2 all use it)
 
 # the study pages, which are NOT needed to add a photo
@@ -1159,7 +1159,7 @@ until it was written.
 ```bash
 # The normal remote path is the Remote photo pipeline workflow above.
 # This local command remains for recovery when Actions or R2 ingress is unavailable.
-./www/scripts/add-photos.sh "/path/to/photo.HIF" [more files...]
+./tools/photos/add-photos.sh "/path/to/photo.HIF" [more files...]
 # then it prints the deploy line; run it:
 pnpm run deploy:direct   # local fallback only; normal production is merge + CI promotion
 ```
@@ -1181,7 +1181,7 @@ pnpm run deploy:direct   # local fallback only; normal production is merge + CI 
 
 ### Regenerate just the EXIF metadata (photos already uploaded)
 ```bash
-./www/scripts/extract-photo-metadata.sh "/path/to/sooc-originals"
+./tools/photos/extract-photo-metadata.sh "/path/to/sooc-originals"
 ```
 The normal remote equivalent is the `refresh-metadata` routine in the Remote
 photo pipeline workflow. Local `--merge` mode updates only a selected batch;
@@ -1190,15 +1190,15 @@ the tooltip skips nulls rather than guess.
 
 ### Re-encode ALL thumbnails (e.g. a new resolution/quality)
 ```bash
-./www/scripts/reencode-thumbnails.sh           # re-encodes every grid thumb as pre-cropped center squares
-./www/scripts/hash-thumbnails.sh               # re-hash the tiers into /i/ + rewrite hashes.json
+./tools/photos/reencode-thumbnails.sh           # re-encodes every grid thumb as pre-cropped center squares
+./tools/photos/hash-thumbnails.sh               # re-hash the tiers into /i/ + rewrite hashes.json
 # commit + deploy (new bytes = new URLs; the worker bundles the index + hashes, so the deploy is the bust)
 ```
 `SQ_SM` (mobile tier) must match `THUMB_SMALL_PX` in `_worker.js` (the `-<N>.avif` suffix). add-photos.sh mirrors this script's two encode paths; keep them in sync.
 
 ### Add a car reference photo (homepage tooltip)
 ```bash
-./www/scripts/add-car-photo.sh <stem> <input-image>   # stem: singer | tuthill | hwa-evo | f355
+./tools/photos/add-car-photo.sh <stem> <input-image>   # stem: singer | tuthill | hwa-evo | f355
 ```
 Outputs `www/cars/<stem>.{avif,jpg}` (no EXIF, no R2). Bump the `?v=` on that car image in `index.html` if you replace one in place, then deploy.
 
@@ -1231,7 +1231,7 @@ run mid-ramp.
 
 The changelog entry is staged **in the PR**, alongside the change it describes:
 ```bash
-./www/scripts/bump-version.sh <slug> "<title>"
+./tools/photos/bump-version.sh <slug> "<title>"
 ```
 That writes one file and touches no network — the vnum comes from the committed
 projection, so it needs no D1, no wrangler and no account selection. Commit it
@@ -1421,8 +1421,8 @@ A binding that refuses `addScriptTag` surfaces as the existing `upstream_not_ok`
 `images/semantics.json` is what `photo_query` ranks against beyond the caption and
 the EXIF. Two tiers, and every stem records which it got:
 ```bash
-node www/scripts/gen-photo-semantics.mjs            # derived tier only
-node www/scripts/gen-photo-semantics.mjs --vision   # + model-written terms
+node tools/photos/gen-photo-semantics.mjs            # derived tier only
+node tools/photos/gen-photo-semantics.mjs --vision   # + model-written terms
 ```
 The **derived** tier needs no network and no credential — it is vocabulary repair,
 mapping what the camera writes to what a person types (`Nostalgic Neg` →
@@ -1444,7 +1444,7 @@ zero credentials and zero subrequests, and it still works on the free plan. Dele
 
 ### Regenerate the /garage/encoding study samples
 ```bash
-./www/scripts/gen-encoding-samples.sh [STEM] [SRC_DIR]
+./tools/photos/gen-encoding-samples.sh [STEM] [SRC_DIR]
 ```
 Prints byte counts + bytes-per-pixel so the figcaptions on `/garage/encoding` can be updated to match. The grayscale (`g-*`) set is generated separately and is not touched.
 
@@ -1472,7 +1472,7 @@ By hand:
 
 ```bash
 pnpm run og-cards                    # captures LIVE aadhar.sh (data-driven demos render populated)
-node www/scripts/inject-og-meta.mjs   # add the meta to any page missing it (idempotent)
+node tools/photos/inject-og-meta.mjs   # add the meta to any page missing it (idempotent)
 # then deploy — a deploy purges the edge so the refreshed card lands.
 ```
 
@@ -1575,7 +1575,7 @@ pnpm exec wrangler kv key delete --namespace-id="$NS" "tracks:<id>:fresh" --remo
 ```
 
 ### Bump THUMB_VERSION (retired — nothing to bump)
-Fully retired (hash cutover 2026-07-03): thumbnails are content-addressed at `/i/<stem>.<hash8>.<ext>`, so a re-encode mints new URLs by itself — run `./www/scripts/hash-thumbnails.sh` after re-encoding, commit, deploy (the bundled index/hashes make the deploy the bust). The constant no longer exists in `lib/const.js`; legacy `/images/<stem>.<ext>[?v=N]` URLs just 301 into `/i/` regardless of their `?v`. The worker route still clamps unknown-thumb 404s to `max-age=0` so misses do not inherit immutable caching.
+Fully retired (hash cutover 2026-07-03): thumbnails are content-addressed at `/i/<stem>.<hash8>.<ext>`, so a re-encode mints new URLs by itself — run `./tools/photos/hash-thumbnails.sh` after re-encoding, commit, deploy (the bundled index/hashes make the deploy the bust). The constant no longer exists in `lib/const.js`; legacy `/images/<stem>.<ext>[?v=N]` URLs just 301 into `/i/` regardless of their `?v`. The worker route still clamps unknown-thumb 404s to `max-age=0` so misses do not inherit immutable caching.
 
 ### Read the homepage perf probe
 A cron (`7,37 * * * *`) renders `/` in-process, parses its own Server-Timing,
@@ -1687,7 +1687,7 @@ before it ships. Previously the cheapest way to find out whether a span was
 usefully named was to deploy it and open the dashboard.
 
 ### Log a deploy (bump-version.sh)
-`./www/scripts/bump-version.sh <slug> "<title>"`, then deploy. Inserts the next checkpoint into D1 (vnum from `SELECT MAX(vnum)`), which is what `/updates` and `/restore` render. Nothing edits sw.js anymore: the service worker retired in v136, `nav.js`/`notepad.js` updates land via their short `_headers` max-age plus the per-deploy edge purge, and the stub at `/sw.js` cleans up old installs.
+`./tools/photos/bump-version.sh <slug> "<title>"`, then deploy. Inserts the next checkpoint into D1 (vnum from `SELECT MAX(vnum)`), which is what `/updates` and `/restore` render. Nothing edits sw.js anymore: the service worker retired in v136, `nav.js`/`notepad.js` updates land via their short `_headers` max-age plus the per-deploy edge purge, and the stub at `/sw.js` cleans up old installs.
 
 ---
 
@@ -1721,7 +1721,7 @@ until its twin agrees: `checkTwinFacts()` recomposes the User-Agent from
 
 ---
 
-## The scripts (`www/scripts/`)
+## The scripts (`tools/photos/`)
 
 | script | what it does |
 |---|---|
@@ -1743,7 +1743,7 @@ until its twin agrees: `checkTwinFacts()` recomposes the User-Agent from
 | `hash-thumbnails.sh` | sha256 each pixel tier into `www/i/<stem>.<hash8>.<ext>`, write `images/hashes.json`, and prune tiers no longer named by it. Run by `add-photos.sh`; a re-encode mints new URLs, so there is no version to bump. |
 | `gen-encoding-grids.sh` | Regenerate the ZOOMED 96px comparison crops (`garage/enc/z-*`) that `/lwe/encoding` fetches. Run by the `regenerate-encoding-study` routine of the photo workflow. |
 | `gen-desktop-partial.mjs` | Bake the XP desktop shell into `_worker.js/lib/desktop.js` and patch it into the 28 static pages, generated from nav.js's own `PROFILES`/`SUBPAGES`/`SECTION_ICONS`/tray template so the two cannot drift. Re-run after editing any of those. A run on an unchanged tree is a byte-exact no-op. |
-| `bump-version.sh` | Insert one `checkpoints` row into the `aadhar-restore` D1 database, deriving the next vnum from `MAX(vnum)`. Both `/restore` and `/updates` read that table, so this is the only place a deploy gets logged. `./www/scripts/bump-version.sh <slug> "<title>"`. |
+| `bump-version.sh` | Insert one `checkpoints` row into the `aadhar-restore` D1 database, deriving the next vnum from `MAX(vnum)`. Both `/restore` and `/updates` read that table, so this is the only place a deploy gets logged. `./tools/photos/bump-version.sh <slug> "<title>"`. |
 
 ---
 

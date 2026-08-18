@@ -132,7 +132,7 @@ So `/radar` does not sense anything. **You bring the signal; it brings
 the display.** POST readings you have already measured and it draws them:
 
 ```
-node www/scripts/radar-sample.mjs --at https://aadhar.sh --anonymize
+node tools/photos/radar-sample.mjs --at https://aadhar.sh --anonymize
 curl -X POST aadhar.sh/radar -d '{"samples":[{"name":"AP","rssi":-58}]}'
 ```
 
