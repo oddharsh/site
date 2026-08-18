@@ -934,7 +934,7 @@ Key facts (don't hardcode these elsewhere, they drift):
 - RN_KV namespace id: `3cb8a107c58e47dc9244e75b33401f36`
 - R2 bucket: `aadhar-photos` (SOOC originals + full-res JPGs)
 - Thumbnails are content-addressed at `/i/<stem>.<hash8>.<ext>` (hashes.json via `hash-thumbnails.sh`); `THUMB_VERSION` is gone entirely (retired with the last legacy fallback — `lib/const.js` keeps only `CANONICAL_HOST` + `ARCHIVE_VERSION`).
-- The service worker RETIRED in v136 (2026-07-03): `www/sw.js` is an unregister stub that must keep serving 200 for a year+. There is no `CACHE_VERSION`; the deploy-log number lives in D1 (`bump-version.sh` derives the next from `MAX(vnum)`).
+- The service worker RETIRED in v136 (2026-07-03): `src/client/sw.js` is an unregister stub that must keep serving 200 for a year+. There is no `CACHE_VERSION`; the deploy-log number lives in D1 (`bump-version.sh` derives the next from `MAX(vnum)`).
 - Canonical photo source: the aadhar-photos R2 bucket. Raw source files are
   never committed to GitHub; the Actions workflow downloads only the requested
   object keys into disposable runner storage.
@@ -964,7 +964,7 @@ files) are served straight from disk. Worker-owned routes are enumerated in
 | `/lens`, `/lens/`, `/lens/fetch`, `/lens/shot` | `handleLens` / `handleLensFetch` / `handleLensShot` | `lens.js` |
 | `/coffee`, `/coffee/*` | Cal booking module delegation | `../cal/src/index.js` |
 | `/serendipity`, `/serendipity/*` | Serendipity module delegation + local CSP | `../serendipity/serendipity.js` |
-| `/lens.js` | static client renderer | `www/lens.js` (served asset) |
+| `/lens.js` | static client renderer | `src/client/lens.js` (served asset) |
 | `/llms-full.txt` | `handleLlmsFull` (x402 bot paywall; free until `X402_PAY_TO` is set) | `x402.js` |
 | `/ledger`, `/ledger.json` | `handleLedger` / `handleLedgerJson` (AI-crawler invoice from Analytics Engine; counting via `countCrawlerHit` in `index.js`) | `ledger.js` |
 | `/writing`, `/writing/`, `/writing/<slug>` | `handleWritingIndex` / `handleWritingPost` (Notepad) | `writing.js` |
@@ -1529,7 +1529,7 @@ Two variants ship because the card has two honest jobs:
 
 The chips are COUNTED from `config/site-manifest.json` and
 `www/images/hashes.json` rather than typed, because a card outlives most of what
-it describes. The wallpaper and the window icon are read out of `www/luna.css`
+it describes. The wallpaper and the window icon are read out of `src/styles/luna.css`
 and `www/index.html` for the same reason, so there is no second copy of either.
 
 Nothing in the pipeline uploads it: GitHub exposes no API for the social preview.
