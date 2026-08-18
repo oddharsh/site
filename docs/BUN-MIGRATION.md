@@ -988,3 +988,73 @@ is what makes the delegate available there. And `packageManager` has to name
 something the image can resolve, so pointing it at a released bun is the
 remaining repo-side step, with the dashboard commands after it and `infra.json`
 after that.
+
+## The lockfile is what actually blocked Workers Builds, and it is one-way
+
+Three builds on 2026-08-18 closed the question of getting a canary into the
+image, and opened a different door.
+
+**Neither lever reaches the canary.** With `packageManager: bun@1.3.14` and
+`BUN_VERSION=canary` set, the image reported `Installing bun 1.3.14`: the field
+wins and the variable is ignored. With `packageManager: bun@canary` it reported
+`bun@1.2.15` and no `Installing bun` line at all, silently falling back to the
+image default. The image resolves a RELEASED version or nothing.
+
+**And the lockfile stops released bun cold**, which is why the earlier runs never
+got as far as a build:
+
+```
+bun install v1.3.14
+  "lockfileVersion": 2,
+error: Unknown lockfile version   at bun.lock:2:22
+error: lockfile had changes, but lockfile is frozen
+```
+
+That is gotcha 30 with the roles swapped. pnpm 12 wrote a lockfile pnpm 10 could
+not read, and it is why this repo is not on pnpm 12; here bun 1.4 writes v2 and
+released bun cannot parse it.
+
+### The asymmetry that resolves it
+
+| | writes | reads v1 | reads v2 |
+|---|---|---|---|
+| bun 1.3.14 | v1 | yes | **no** |
+| bun 1.4 canary | v2 | **yes** | yes |
+
+So ONE v1 lockfile serves both: the image installs with released bun, while the
+workstation and CI keep the canary. `packageManager` names `bun@1.3.14` because
+that is the only string the image resolves, and `config/bun-canary.json` still
+pins the canary by digest for everywhere else. **The two pins are deliberately
+different now**, and the contract test that used to assert they were equal says
+so instead.
+
+`configVersion` is not part of it, measured rather than assumed: released bun
+parses the file with `configVersion` 0, with 1, and with the key deleted. Only
+`lockfileVersion` decides, which is exactly where the image error pointed.
+
+### The tripwire, because the regression is silent
+
+A plain `bun install` under the canary rewrites the file to v2, and the next
+thing to notice would be a failed production deploy. A contract test pins
+`lockfileVersion: 1` and tells you to use `--frozen-lockfile`.
+
+### The image simulated end to end
+
+Released bun 1.3.14, a frozen install from the v1 lockfile into a deleted
+`node_modules`, then `bun ./node_modules/wrangler/bin/wrangler.js deploy
+--dry-run` with node 26 on PATH: **byte-identical across all 1499 files**. The
+deltas went through the node delegate, which is what that seam is for.
+
+Also measured, and it corrects every `bun x` in this repo: with node replaced by
+a stub exiting 127, `bun x --no-install wrangler` INVOKES NODE and fails, while
+`bun ./node_modules/wrangler/bin/wrangler.js` runs. `bun x` honours the
+`#!/usr/bin/env node` shebang. CI's four dry-run steps work only because the
+runners have node.
+
+### What is left
+
+The dashboard commands. `pnpm exec …` cannot run on a bun tree at all (pnpm
+refuses on `packageManager: bun@…`), and a bun-shaped command would break every
+build from `main`, which is still a pnpm tree with no bun installed. The bridge
+is a repo script that picks its invocation from the lockfile it finds, landed on
+`main` first so both trees work, with `infra.json` following the dashboard.

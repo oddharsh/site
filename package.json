@@ -3,7 +3,7 @@
   "private": true,
   "description": "aadhar.sh - deploy-time transform only (authoring stays buildless; see build.mjs)",
   "type": "module",
-  "packageManager": "bun@1.4.0-canary.1",
+  "packageManager": "bun@1.3.14",
   "workspaces": [
     "cal",
     "cf-garage",
@@ -72,7 +72,7 @@
     "bun:build:check": "bun tools/check-bun-build.mjs"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "5.20260814.1",
+    "@cloudflare/workers-types": "5.20260818.1",
     "@minify-html/node": "0.18.1",
     "@oxlint/plugins": "1.78.0",
     "lightningcss": "1.33.0",

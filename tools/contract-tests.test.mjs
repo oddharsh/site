@@ -1925,9 +1925,26 @@ test("every workflow bootstraps the bun that package.json pins", async () => {
   assert.match(declared.version, /^\d+\.\d+\.\d+(-canary\.\d+)?$/);
   assert.match(binary_sha256, /^[0-9a-f]{64}$/, "the pin is the binary digest, not the version string");
 
+  // THE TWO PINS ARE DELIBERATELY DIFFERENT NOW, and this used to assert they
+  // were equal. They answer different questions:
+  //
+  //   packageManager        what CLOUDFLARE’S BUILD IMAGE must install. Measured
+  //                         2026-08-18, three builds: the image resolves a
+  //                         RELEASED version or nothing. bun@1.4.0-canary.1 fails
+  //                         (no release is tagged that), bun@canary silently
+  //                         degrades to the image default 1.2.15, and
+  //                         BUN_VERSION=canary is ignored outright.
+  //   config/bun-canary.json  what CI and the workstation run, pinned by digest
+  //                         because the canary tag rolls.
+  //
+  // One lockfile serves both, and that is the asymmetry the whole arrangement
+  // rests on: bun 1.4 WRITES v2 and released bun cannot parse it, while the
+  // canary READS v1 happily. The tripwire for that is its own test.
   const pinned = JSON.parse(await readFile(new URL("package.json", ROOT), "utf8")).packageManager;
-  assert.equal(pinned, `bun@${declared.version}`,
-    `package.json pins ${pinned}, config/bun-canary.json declares ${declared.version}`);
+  assert.match(pinned, /^bun@\d+\.\d+\.\d+$/,
+    `packageManager is ${pinned}; it must name a RELEASED bun, since that is the only string the build image resolves`);
+  assert.ok(declared.version.includes("canary"),
+    "config/bun-canary.json is the canary pin; if it stops being a canary, collapse these two back together");
 
   const dir = new URL(".github/workflows/", ROOT);
   const files = (await readdir(dir)).filter((n) => n.endsWith(".yml"));
@@ -8163,4 +8180,40 @@ test("the capability check names where the compression will happen", async () =>
       if (value === undefined) delete process.env[key]; else process.env[key] = value;
     }
   }
+});
+
+// ── the lockfile the build image can read ───────────────────────────────────
+// bun 1.4 writes `lockfileVersion: 2` and released bun CANNOT PARSE IT. Measured
+// in a real Workers Builds run on 2026-08-18, twice:
+//
+//   bun install v1.3.14
+//   error: Unknown lockfile version   at bun.lock:2:22
+//   error: lockfile had changes, but lockfile is frozen
+//
+// The image resolves a RELEASED bun or nothing (BUN_VERSION=canary is ignored,
+// and packageManager: bun@canary falls back to the image default), so a v2
+// lockfile means Workers Builds cannot install this repo at all.
+//
+// The asymmetry is what saves it: the canary READS v1 happily, so one v1 file
+// serves both. This test is the tripwire, because a plain `bun install` under
+// the canary upgrades the file to v2 silently and the next thing to notice
+// would be a failed production deploy.
+test("bun.lock stays at the version the build image can read", async () => {
+  const lock = readFileSync(new URL("../bun.lock", import.meta.url), "utf8");
+  const version = /"lockfileVersion"\s*:\s*(\d+)/.exec(lock)?.[1];
+  assert.equal(version, "1",
+    "bun 1.4 wrote a v2 lockfile: run `bun install --frozen-lockfile` rather than a bare install, " +
+    "and restore the version field. Released bun cannot parse v2, and Workers Builds only installs released bun.");
+
+  // configVersion is NOT part of it, measured rather than assumed: released bun
+  // parses the file with configVersion 0, with 1, and with the key deleted. Only
+  // lockfileVersion decides, which matches where the image error pointed
+  // (bun.lock:2:22). An assertion on configVersion would have been a guess that
+  // failed on the very next regeneration.
+
+  // The pin has to name a version the image can actually resolve. `canary` is
+  // not one: measured, it degrades to the image default rather than erroring.
+  const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+  assert.match(pkg.packageManager, /^bun@\d+\.\d+\.\d+$/,
+    "packageManager must name a RELEASED bun, since that is the only string the build image resolves");
 });
