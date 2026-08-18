@@ -34,8 +34,8 @@ on:
       - "!www/images/**"
       - "!www/cars/**"
       - "!www/og/**"
-      - "!www/p-dict/**"
-      - "!www/a-dict/**"
+      - "!src/dict/p-dict/**"
+      - "!src/dict/a-dict/**"
       - "!**.md"
 
 permissions:

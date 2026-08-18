@@ -96,7 +96,7 @@ const only = process.argv.includes("--pages") ? "pages"
 const live = process.argv.includes("--live");
 
 const BUILT = ".build/www/a";
-const DICTS = "www/a-dict";
+const DICTS = "src/dict/a-dict";
 // Each extra candidate costs one delta per asset per deploy and widens the cache-variant
 // fan-out, while only serving visitors who skipped exactly that many deploys.
 const KEEP = 3;
@@ -173,7 +173,7 @@ async function liveShell() {
   return [...names].map(parse).filter(Boolean);
 }
 
-if (only === "pages") console.log("shell:roll — --pages given, leaving www/a-dict/ alone.");
+if (only === "pages") console.log("shell:roll — --pages given, leaving src/dict/a-dict/ alone.");
 else {
 await mkdir(DICTS, { recursive: true });
 const shell = live ? await liveShell() : (await readdir(BUILT)).map(parse).filter(Boolean);
@@ -213,10 +213,10 @@ for (const [, group] of byBase) {
   }
 }
 console.log(`shell:roll — adopted ${adopted}, pruned ${pruned}, keeping ${KEEP} per asset.`);
-console.log("  Commit www/a-dict/. build.mjs regenerates the deltas on its own from here.");
+console.log("  Commit src/dict/a-dict/. build.mjs regenerates the deltas on its own from here.");
 }
 
-// ── PAGE DICTIONARIES (www/p-dict) ──────────────────────────────────────────
+// ── PAGE DICTIONARIES (src/dict/p-dict) ──────────────────────────────────────────
 // Static pages have two useful dictionary populations. The immutable family corpus
 // reaches every visitor who has loaded any page; these committed snapshots recover
 // the 93-97% per-page ratio for visitors returning to a page they already hold.
@@ -251,10 +251,10 @@ console.log("  Commit www/a-dict/. build.mjs regenerates the deltas on its own f
 // required). And a staged page production does not serve yet is SKIPPED with a
 // named line rather than adopted, because a browser cannot hold bytes that were
 // never sent to it.
-if (only === "shell") console.log("pages:roll — --shell given, leaving www/p-dict/ alone.");
+if (only === "shell") console.log("pages:roll — --shell given, leaving src/dict/p-dict/ alone.");
 else {
   const BUILT_PAGES = ".build/www";
-  const PDICTS = "www/p-dict";
+  const PDICTS = "src/dict/p-dict";
   const KEEP_PAGES = 2;
   const FETCH_CONCURRENCY = 6;
   const parse = (n) => {

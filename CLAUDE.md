@@ -2351,7 +2351,7 @@ pnpm run deploy:direct
     step to forget, and no staleness tripwire needed, because a delta is a pure
     function of bytes the build just produced.
 
-    What still has to be committed is `www/a-dict/`, the SHELL dictionary set,
+    What still has to be committed is `src/dict/a-dict/`, the SHELL dictionary set,
     because an `/a/` asset is content-addressed: a change mints a new URL, so its
     dictionary must be bytes the BROWSER already holds and no build can derive that
     from source. `pnpm run shell:roll` adopts the current shell and prunes to 3 per
@@ -2378,7 +2378,7 @@ pnpm run deploy:direct
     from the staged documents, ships it at an immutable `/a/page-family.<hash8>.dict`,
     and every HTML response advertises it via `Link: rel="compression-dictionary"`
     (`lib/security.js`). It also diffs the current page against the committed
-    `www/p-dict` snapshots from the previous release. The worker tries the
+    `src/dict/p-dict` snapshots from the previous release. The worker tries the
     `Available-Dictionary` tag it receives. The family offer deliberately uses a
     longer site-wide URLPattern than an exact page path, so RFC 9842 makes it the
     preferred dictionary whenever both are cached; this prevents an uncaptured old
@@ -2417,12 +2417,12 @@ pnpm run deploy:direct
     server-side proven (149-byte page delta decodes to the live page), svg OFF by
     design (Chromium's image loader chokes). `pnpm run dcz:check` asserts both page
     tiers against production, reading the family dictionary out of the live `Link`
-    header and the per-page candidate from `www/p-dict`. With `pnpm run dict:roll`
+    header and the per-page candidate from `src/dict/p-dict`. With `pnpm run dict:roll`
     the source is production for both halves, so the old "roll only from the deployed
     build, never from a feature branch" rule is satisfied by construction rather than
     by remembering it. Plain `shell:roll` still reads `.build/` and still carries that
-    requirement. (Either writes into `www/a-dict/` the moment it runs, so if you run one
-    to read the code, `git checkout -- www/a-dict` after.)
+    requirement. (Either writes into `src/dict/a-dict/` the moment it runs, so if you run one
+    to read the code, `git checkout -- src/dict/a-dict` after.)
 
     **`dcz:check`'s shell probe could only ever agree with itself, and the coverage
     assertion beside it is the fix.** The probe picks an a-dict candidate that is NOT
@@ -2668,7 +2668,7 @@ pnpm run deploy:direct
     claim that "the edge cannot rewrite HTML it did not compress" is true of the
     zone-side Web Analytics injector and NOT true in general. Verify per feature.
 
-    What broke: `www/p-dict` snapshots were adopted from `.build/www/*.html`,
+    What broke: `src/dict/p-dict` snapshots were adopted from `.build/www/*.html`,
     and a shared dictionary is matched by the SHA-256 a BROWSER computes over the
     body it stored. The staged file has no injected tag, so every snapshot hashed to
     bytes nobody held and the 93-97% per-page tier fell back to the family

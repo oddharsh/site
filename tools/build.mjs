@@ -174,7 +174,7 @@ async function checkInvariants() {
   const VT_DIAGNOSTIC = /^garage\/vt-(check|b)\.html$/;
   const vtSources = [
     ...(await readdir("www", { recursive: true }))
-      .filter((r) => /\.(html|css|js)$/.test(r) && !VT_DIAGNOSTIC.test(r) && !r.startsWith("a-dict/"))
+      .filter((r) => /\.(html|css|js)$/.test(r) && !VT_DIAGNOSTIC.test(r))
       .map((r) => `www/${r}`),
     "cal/src/templates.js", "serendipity/serendipity.js", "pipelines/lwe/generate.mjs",
   ];
@@ -1832,7 +1832,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   // no `pnpm run shell:deltas` step to forget, and no staleness tripwire needed at all,
   // because a delta is now a pure function of bytes this build just produced.
   //
-  // Still committed, and unavoidably so: www/a-dict/, the DICTIONARY set. A dictionary
+  // Still committed, and unavoidably so: src/dict/a-dict/, the DICTIONARY set. A dictionary
   // has to be bytes the BROWSER already holds, which no build can derive from source.
   {
     // HARD CHECK: is the `dictionary` option actually honored by this Node?
@@ -1859,7 +1859,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
       );
     }
 
-    const dictDir = "www/a-dict";
+    const dictDir = "src/dict/a-dict";
     const dicts = await readdir(dictDir).catch(() => []);
     const parse = (n) => { const m = n.match(/^(.+)\.([0-9a-f]{8})\.(js|css|svg)$/); return m ? { base: m[1], hash8: m[2], ext: m[3], name: n } : null; };
     const shell = files.map(parse).filter(Boolean);
@@ -2249,7 +2249,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   // slug: the request path with separators folded, so it survives as one filename segment.
   const slugOf = (assetPath) => assetPath.replace(/\.html$/, "").replace(/\//g, "__");
 
-  const dictDir = "www/p-dict";
+  const dictDir = "src/dict/p-dict";
   const dicts = (await readdir(dictDir).catch(() => []));
   const parseDict = (n) => {
     const m = n.match(/^(.+)\.([0-9a-f]{16})\.html\.br$/);
