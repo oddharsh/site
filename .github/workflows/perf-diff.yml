@@ -21,7 +21,7 @@ on:
     # it. A README edit or a new photo cannot move a byte the browser downloads,
     # and a job that runs anyway teaches people its result is noise.
     paths:
-      - "www/**"
+      - "public/**"
       - "cal/**"
       - "serendipity/**"
       - "scripts/**"
@@ -30,12 +30,12 @@ on:
       - ".github/workflows/perf-diff.yml"
       # The photo tiers are content-addressed binaries served straight from the
       # edge. They are real bytes, they are just not bytes this measures.
-      - "!www/i/**"
-      - "!www/images/**"
-      - "!www/cars/**"
-      - "!www/og/**"
-      - "!www/p-dict/**"
-      - "!www/a-dict/**"
+      - "!public/i/**"
+      - "!public/images/**"
+      - "!public/cars/**"
+      - "!public/og/**"
+      - "!src/dict/p-dict/**"
+      - "!src/dict/a-dict/**"
       - "!**.md"
 
 permissions:
@@ -101,7 +101,7 @@ jobs:
       # on the PR that introduces it, and measuring each side with its own copy
       # would report a change to the MEASUREMENT as a change in wire size.
       - name: Stash the measurement script
-        run: cp scripts/perf-snapshot.mjs "$RUNNER_TEMP/perf-snapshot.mjs"
+        run: cp tools/perf-snapshot.mjs "$RUNNER_TEMP/perf-snapshot.mjs"
 
       - name: Record the merge base
         env:

@@ -15,17 +15,17 @@
 const PREFIX = "/serendipity";
 
 // The desktop partial the rest of the site ships. serendipity is staged beside
-// www/ in .build with the same relative layout as the source tree, so this
+// public/ in .build with the same relative layout as the source tree, so this
 // one path resolves in both. Before this, /serendipity loaded /nav.js and let
 // it CONSTRUCT the desktop after load: curl and JS-off visitors got no desktop
 // at all, and everyone else got a shell pop. Now the markup is in the document
 // and nav.js only wires behavior, same as every other page.
-import { DESKTOP_CHROME, DESKTOP_TOP } from "../src/worker/lib/desktop.js";
-import { privateHostBlocked } from "../src/worker/lib/crawl.js";
-import { CACHE_EMPTY, CACHE_STATIC, mcpGate, mcpHttpStatus, mcpServer } from "../src/worker/lib/mcp-protocol.js";
-import { mcpTool } from "../src/worker/lib/mcp-tools.js";
-import { previewToolRefusal } from "../src/worker/lib/preview.js";
-import { asRecord, asText } from "../src/worker/lib/parse.js";
+import { DESKTOP_CHROME, DESKTOP_TOP } from "../src/worker/lib/desktop.ts";
+import { privateHostBlocked } from "../src/worker/lib/crawl.ts";
+import { CACHE_EMPTY, CACHE_STATIC, mcpGate, mcpHttpStatus, mcpServer } from "../src/worker/lib/mcp-protocol.ts";
+import { mcpTool } from "../src/worker/lib/mcp-tools.ts";
+import { previewToolRefusal } from "../src/worker/lib/preview.ts";
+import { asRecord, asText } from "../src/worker/lib/parse.ts";
 
 // ── tiny helpers ────────────────────────────────────────────────────────────
 const esc = (v) =>
@@ -1626,7 +1626,7 @@ async function handleCover(request, env, ctx) {
 // DUAL-ERA as of 2026-07-28, on the same terms as the site server at /mcp: a
 // request carrying modern `_meta` is served statelessly under the new revision,
 // an `initialize` request selects legacy semantics. The wire rules live in
-// src/worker/lib/mcp-protocol.js and are SHARED with /mcp, deliberately
+// src/worker/lib/mcp-protocol.ts and are SHARED with /mcp, deliberately
 // — two MCP servers on one origin speaking different dialects is a bug waiting
 // to be reported by a client author rather than by us.
 export const SERENDIPITY_MCP_SERVER_INFO = { name: "serendipity", title: "Serendipity", version: "2.0.0" };

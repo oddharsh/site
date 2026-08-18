@@ -94,7 +94,7 @@ jobs:
 
       - name: Record a snapshot
         run: |
-          node scripts/perf-snapshot.mjs record "$RUNNER_TEMP/snapshot.json" \
+          node tools/perf-snapshot.mjs record "$RUNNER_TEMP/snapshot.json" \
             --label "$(git rev-parse --short HEAD)"
 
       - name: Reduce to one history row
@@ -103,7 +103,7 @@ jobs:
         run: |
           args=()
           [ -n "$DATE_OVERRIDE" ] && args=(--date "$DATE_OVERRIDE")
-          node scripts/perf-snapshot.mjs row "$RUNNER_TEMP/snapshot.json" "${args[@]}" \
+          node tools/perf-snapshot.mjs row "$RUNNER_TEMP/snapshot.json" "${args[@]}" \
             > "$RUNNER_TEMP/row.jsonl"
           cat "$RUNNER_TEMP/row.jsonl"
 

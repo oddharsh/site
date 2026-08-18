@@ -2,10 +2,10 @@
   // LOCAL DEV ONLY — `wrangler dev -c wrangler.dev.jsonc` (see .claude/launch.json).
   //
   // This is the twin of wrangler.jsonc. The two differ in exactly six places:
-  //   - main:             www/... here vs .build/www/... in wrangler.jsonc
-  //   - assets.directory: www        here vs .build/www    in wrangler.jsonc
-  //   - no "build" block here (dev serves the readable www/ tree directly, so
-  //     the fast edit->reload loop never pays the full www/ -> .build copy)
+  //   - main:             public/... here vs .build/public/... in wrangler.jsonc
+  //   - assets.directory: www        here vs .build/public    in wrangler.jsonc
+  //   - no "build" block here (dev serves the readable public/ tree directly, so
+  //     the fast edit->reload loop never pays the full public/ -> .build copy)
   //   - no deploy-time minification here; local code stays readable
   //   - no uploaded source maps; local stack locations already point at source
   //   - Workers Cache is disabled for both local entrypoints, so edit->reload
@@ -13,7 +13,7 @@
   // Everything else (bindings, crons, vars, migrations) MUST match wrangler.jsonc.
   // build.mjs warns if a binding name drifts between the two. Deploys never use
   // this file — wrangler.jsonc self-builds via its build.command and ships the
-  // minified .build/www tree.
+  // minified .build/public tree.
   "name": "aadhar-sh",
   // Same pin as wrangler.jsonc, and NOT a fifth difference between the two —
   // it is one of the values that must match. Plain `pnpm run dev` is local and
@@ -22,7 +22,7 @@
   // config, so they hit the same "more than one account available" wall that
   // wrangler.jsonc's comment describes.
   "account_id": "1c99acdb6141579023fb97d24261ea58",
-  "main": "src/worker/index.js",
+  "main": "src/worker/index.ts",
   "compatibility_date": "2026-06-01",
   "cache": { "enabled": false, "cross_version_cache": false },
   "exports": {

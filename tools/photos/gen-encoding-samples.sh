@@ -113,4 +113,4 @@ if [ -z "$sooc_ver" ] || [ "$(printf '%s\n%s\n' "$EXIF_SOOC_MIN" "$sooc_ver" | s
   echo "  update with: cargo install --git https://github.com/oddharsh/exif-sooc exif-sooc --force" >&2
   exit 1
 fi
-echo ""; echo "done — update figcaptions/prose/table in www/garage/encoding.html to match."
+echo ""; echo "done — update figcaptions/prose/table in src/pages/garage/encoding.html to match."

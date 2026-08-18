@@ -10,11 +10,11 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 import { renderUnderstanding, validatePageSpec } from "../content/page-contract.mjs";
-import { DESKTOP_CHROME, DESKTOP_TOP } from "../../src/worker/lib/desktop.js";
+import { DESKTOP_CHROME, DESKTOP_TOP } from "../../src/worker/lib/desktop.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..", "..");   // pipelines/<name>/ -> repo root
-const HOLDING = join(ROOT, "www");
+const HOLDING = join(ROOT, "src/pages");
 const REGISTRY = JSON.parse(readFileSync(join(HERE, "pages.json"), "utf8")).pages;
 
 function fail(message) {

@@ -167,11 +167,11 @@ jobs:
         run: |
           set -euo pipefail
           case "$ROUTINE" in
-            add-photo) paths=(www/images www/i); title="photos: process remote source batch";;
-            reencode-thumbnails) paths=(www/images www/i); title="photos: re-encode remote thumbnails";;
-            refresh-metadata) paths=(www/images); title="photos: refresh remote metadata";;
-            add-car-photo) paths=(www/cars); title="photos: update remote car image";;
-            regenerate-encoding-study) paths=(www/garage/enc); title="garage: regenerate remote encoding study";;
+            add-photo) paths=(public/images public/i); title="photos: process remote source batch";;
+            reencode-thumbnails) paths=(public/images public/i); title="photos: re-encode remote thumbnails";;
+            refresh-metadata) paths=(public/images); title="photos: refresh remote metadata";;
+            add-car-photo) paths=(public/cars); title="photos: update remote car image";;
+            regenerate-encoding-study) paths=(public/garage/enc); title="garage: regenerate remote encoding study";;
           esac
 
           branch="photos/remote-$GITHUB_RUN_ID"

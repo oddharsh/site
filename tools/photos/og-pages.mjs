@@ -1,7 +1,7 @@
 // og-pages.mjs — the top-level PAGE DIRECTORIES that get an OG card, as one list
 // both halves of the card pipeline read.
 //
-// There are three static shapes under www/ and the card pipeline only knew
+// There are three static shapes under public/ and the card pipeline only knew
 // about one of them:
 //
 //   SECTION       many .html files under one directory (garage/, lwe/). Walked by
