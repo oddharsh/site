@@ -175,12 +175,12 @@ const metaPresent = await stat(META).then((s) => s.isDirectory(), () => false);
 const missing = stems.filter((stem) => !exifIndex[stem]);
 if (missing.length) {
   fail(`${missing.length} photo(s) absent from images/exif.json: ${missing.slice(0, 8).join(", ")}` +
-       `${missing.length > 8 ? " …" : ""}\n  fix with: node www/scripts/build-exif-index.mjs`);
+       `${missing.length > 8 ? " …" : ""}\n  fix with: node tools/photos/build-exif-index.mjs`);
 }
 const histMissing = stems.filter((stem) => !histIndex[stem]);
 if (histMissing.length) {
   fail(`${histMissing.length} photo(s) absent from images/histograms.json: ${histMissing.slice(0, 8).join(", ")}` +
-       `${histMissing.length > 8 ? " …" : ""}\n  fix with: node www/scripts/build-histogram-index.mjs`);
+       `${histMissing.length > 8 ? " …" : ""}\n  fix with: node tools/photos/build-histogram-index.mjs`);
 }
 
 if (metaPresent) {
@@ -188,13 +188,13 @@ if (metaPresent) {
   const stale = stems.filter((stem) => JSON.stringify(exifIndex[stem]) !== JSON.stringify(rebuilt[stem]));
   if (stale.length) {
     fail(`images/exif.json disagrees with images/meta/ for ${stale.length} photo(s): ${stale.slice(0, 8).join(", ")}` +
-         `${stale.length > 8 ? " …" : ""}\n  fix with: node www/scripts/build-exif-index.mjs`);
+         `${stale.length > 8 ? " …" : ""}\n  fix with: node tools/photos/build-exif-index.mjs`);
   }
   const rebuiltHist = (await buildHistogramIndex()).index;
   const histStale = stems.filter((stem) => histIndex[stem] !== rebuiltHist[stem]);
   if (histStale.length) {
     fail(`images/histograms.json disagrees with images/meta/ for ${histStale.length} photo(s): ${histStale.slice(0, 8).join(", ")}` +
-         `${histStale.length > 8 ? " …" : ""}\n  fix with: node www/scripts/build-histogram-index.mjs`);
+         `${histStale.length > 8 ? " …" : ""}\n  fix with: node tools/photos/build-histogram-index.mjs`);
   }
 } else {
   console.log("photo-pipeline: images/meta/ absent (build output), so the index drift checks are skipped here");

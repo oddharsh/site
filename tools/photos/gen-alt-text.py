@@ -26,7 +26,7 @@ Resumable either way: a re-run only fills stems that have no caption, so a 429
 
   export CLOUDFLARE_API_TOKEN=...   # Account · Workers AI · Read
   export CLOUDFLARE_AI_GATEWAY=""   # opt OUT of gateway routing (defaults to "default")
-  npm run captions                  # or: python3 www/scripts/gen-alt-text.py
+  npm run captions                  # or: python3 tools/photos/gen-alt-text.py
 
 Strippable: delete alt.json plus the worker/template lookups to revert to
 empty alt.

@@ -7,7 +7,7 @@
 // modelled on — is a native macOS CLI rather than a web page.
 //
 // So this is not a hosted radar. It is a hosted INSTRUMENT: the sensing happens
-// where the antenna is (www/scripts/radar-sample.mjs, or any agent with a
+// where the antenna is (tools/photos/radar-sample.mjs, or any agent with a
 // shell), and the readings are POSTed here to be drawn. The client brings the
 // signal, the site brings the display. That is the only honest way to host this,
 // and it happens to be the version an agent can actually use.

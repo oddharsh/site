@@ -136,7 +136,7 @@ export const SUB_MANIFEST_POLICY = [
     versionless: new Map(),
   },
   {
-    manifest: "www/scripts/zenc/Cargo.toml",
+    manifest: "tools/photos/zenc/Cargo.toml",
     kind: "cargo",
     aliases: [{ prose: "zenjpeg", pkg: "zenjpeg" }],
     versionless: new Map([
@@ -356,7 +356,7 @@ export function auditDependencyDocs({
   const pillowDoc = /(?<![\w-])Pillow\s+v?(\d+\.\d+\.\d+[\w.-]*)/i.exec(baseline);
   const pillowPin = /^\s*Pillow==([^\s#]+)/im.exec(requirements);
   if (pillowPin && !pillowDoc) {
-    problems.push(`www/scripts/requirements.txt pins Pillow==${pillowPin[1]} and docs/DEPENDENCIES.md states no version for it.`);
+    problems.push(`tools/photos/requirements.txt pins Pillow==${pillowPin[1]} and docs/DEPENDENCIES.md states no version for it.`);
   } else if (pillowPin && pillowDoc && pillowPin[1] !== pillowDoc[1]) {
     problems.push(`docs/DEPENDENCIES.md states "Pillow ${pillowDoc[1]}" but requirements.txt pins ${pillowPin[1]}.`);
   } else if (!pillowPin && pillowDoc) {
@@ -372,7 +372,7 @@ export async function checkDependencyDocs(root = REPO_ROOT) {
   const [doc, pkgRaw, requirements] = await Promise.all([
     read("docs/DEPENDENCIES.md"),
     read("package.json"),
-    read("www/scripts/requirements.txt").catch(() => ""),
+    read("tools/photos/requirements.txt").catch(() => ""),
   ]);
   const pkg = JSON.parse(pkgRaw);
 

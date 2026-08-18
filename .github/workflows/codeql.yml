@@ -51,7 +51,7 @@ jobs:
         # TWO entries on purpose, and the omissions are the decision. #241
         # dropped `rust` and `python` because between them they cost about 3 of
         # the scan's 4 minutes to analyze four files, all of it workstation and
-        # CI build tooling (www/scripts/zenc, gen-pixel-peeper.py) that never
+        # CI build tooling (tools/photos/zenc, gen-pixel-peeper.py) that never
         # answers a request. That argument rests entirely on the `remote` threat
         # model below: widen the threat model and this list has to be revisited.
         #

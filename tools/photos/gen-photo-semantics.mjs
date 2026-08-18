@@ -31,9 +31,9 @@
 //             it is opt-in and the artifact is honest when it is absent.
 //
 // Usage:
-//   node www/scripts/gen-photo-semantics.mjs              # derived only
-//   node www/scripts/gen-photo-semantics.mjs --vision     # + model terms
-//   node www/scripts/gen-photo-semantics.mjs --vision --dry-run
+//   node tools/photos/gen-photo-semantics.mjs              # derived only
+//   node tools/photos/gen-photo-semantics.mjs --vision     # + model terms
+//   node tools/photos/gen-photo-semantics.mjs --vision --dry-run
 //
 //   export CLOUDFLARE_API_TOKEN=...   # the same token gen-alt-text.py uses
 //   export CLOUDFLARE_AI_GATEWAY=""   # opt OUT of gateway routing (defaults to "default")
@@ -45,11 +45,15 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const META = path.join(ROOT, "images", "metadata.json");
-const HASHES = path.join(ROOT, "images", "hashes.json");
-const ALT = path.join(ROOT, "images", "alt.json");
-const OUT = path.join(ROOT, "images", "semantics.json");
+// ROOT is the REPO root, matching every sibling in this directory. It used to be
+// dirname(dirname(here)), which resolved to www/ only because this script lived
+// at www/scripts — the one script here that did not use "../..", and therefore
+// the one the move to tools/photos would have silently repointed at tools/.
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const META = path.join(ROOT, "www", "images", "metadata.json");
+const HASHES = path.join(ROOT, "www", "images", "hashes.json");
+const ALT = path.join(ROOT, "www", "images", "alt.json");
+const OUT = path.join(ROOT, "www", "images", "semantics.json");
 
 const WANT_VISION = process.argv.includes("--vision");
 const DRY_RUN = process.argv.includes("--dry-run");
@@ -142,7 +146,7 @@ function derivedTerms(record) {
 async function visionTerms(stem, hashes) {
   const entry = hashes[stem] || {};
   if (!entry.j) throw new Error(`${stem} missing from hashes.json (half-run pipeline?)`);
-  const file = path.join(ROOT, "i", `${stem}.${entry.j}.jpg`);
+  const file = path.join(ROOT, "www", "i", `${stem}.${entry.j}.jpg`);
   const image = Array.from(fs.readFileSync(file));
   const body = JSON.stringify({ image, prompt: VISION_PROMPT, max_tokens: 128 });
   if (DRY_RUN) {

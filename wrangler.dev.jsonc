@@ -149,7 +149,7 @@
   ],
   "vars": {
     // Not a secret: an account id is an identifier, and this one is already
-    // committed as the default in www/scripts/gen-alt-text.py. It is a VAR
+    // committed as the default in tools/photos/gen-alt-text.py. It is a VAR
     // because two features need it to build a REST URL and both fail SILENTLY
     // without it — /ledger's cost line has been reading "unconfigured" in
     // production, and the Kitesurf path in lens-render.js would have skipped

@@ -22,7 +22,7 @@
 // and serve immutable. Regenerate when a demo's look changes:
 //
 //     pnpm run og-cards                                  # captures the LIVE site (aadhar.sh)
-//     OG_BASE=http://localhost:8787 node www/scripts/gen-og-cards.mjs   # local static server instead
+//     OG_BASE=http://localhost:8787 node tools/photos/gen-og-cards.mjs   # local static server instead
 //
 // Captures production by default so data-driven demos (the photo grid, the live
 // counters, the routing prober) render populated, not empty — which is exactly

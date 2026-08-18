@@ -60,10 +60,10 @@
 # being rounded away.
 #
 # usage:
-#   ./www/scripts/export-for-instagram.sh photo.HIF
-#   ./www/scripts/export-for-instagram.sh -t 84 "/path/to/folder/"
-#   ./www/scripts/export-for-instagram.sh --calibrate XT500010.HIF
-#   ./www/scripts/export-for-instagram.sh --max XT500010.HIF     # for IG itself
+#   ./tools/photos/export-for-instagram.sh photo.HIF
+#   ./tools/photos/export-for-instagram.sh -t 84 "/path/to/folder/"
+#   ./tools/photos/export-for-instagram.sh --calibrate XT500010.HIF
+#   ./tools/photos/export-for-instagram.sh --max XT500010.HIF     # for IG itself
 #
 # options:
 #   -o, --out DIR      output directory        (default ~/Desktop/ig-export)

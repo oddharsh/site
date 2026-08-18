@@ -21,8 +21,8 @@ Three rules this script exists to enforce:
      reported, not quietly shipped. A call nobody can see is not a test.
 
 Usage:
-    python3 www/scripts/gen-pixel-peeper.py            # full rebuild
-    python3 www/scripts/gen-pixel-peeper.py --dry-run  # measure, write nothing
+    python3 tools/photos/gen-pixel-peeper.py            # full rebuild
+    python3 tools/photos/gen-pixel-peeper.py --dry-run  # measure, write nothing
 
 Needs: zenc (cargo build in scripts/zenc), cjpegli, mozjpeg's cjpeg, sips,
 ssimulacra2, butteraugli_main, and Pillow.
@@ -600,7 +600,7 @@ def preflight():
         missing.append(f"source photos at {SRC_DIR}")
     if missing:
         log("missing: " + ", ".join(missing))
-        log("  zenc:  cargo build --release --manifest-path www/scripts/zenc/Cargo.toml")
+        log("  zenc:  cargo build --release --manifest-path tools/photos/zenc/Cargo.toml")
         sys.exit(1)
 
 

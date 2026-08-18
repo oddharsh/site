@@ -10,7 +10,7 @@
 # formats + chroma subsampling) — XT509338 (Porsche: red calipers, yellow car,
 # blue accent, silver wheel, cobblestone) replaces the old near-monochrome tree.
 #
-#   ./www/scripts/gen-encoding-samples.sh [STEM] [SRC_DIR_OR_FILE]
+#   ./tools/photos/gen-encoding-samples.sh [STEM] [SRC_DIR_OR_FILE]
 # With no source argument, the committed 400×266 PNG fixture is used, so the
 # study can be regenerated remotely without the private SOOC archive.
 #

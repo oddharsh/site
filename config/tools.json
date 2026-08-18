@@ -28,13 +28,13 @@
       "install": "cargo install --git https://github.com/oddharsh/exif-sooc exif-sooc",
       "why": "every EXIF read and write in the pipeline. It emits metadata.json's record shape directly and owns the merge, which retired the 50-line jq reshape and build-recipes.py, and on 2026-08-14 it took the last of exiftool's jobs too: orientation reads, -all= strips and -TagsFromFile copies, in ExifTool's own flag spellings. Pinned at 0.2.0 by the guards in the writing scripts: 0.1.0 could not write, and its -all= truncated progressive JPEGs at the first scan, which is every JPEG this pipeline produces",
       "required_by": [
-        "www/scripts/add-photos.sh",
-        "www/scripts/download-remote-photos.sh",
-        "www/scripts/export-for-instagram.sh",
-        "www/scripts/extract-photo-metadata.sh",
-        "www/scripts/gen-encoding-grids.sh",
-        "www/scripts/gen-encoding-samples.sh",
-        "www/scripts/reencode-thumbnails.sh"
+        "tools/photos/add-photos.sh",
+        "tools/photos/download-remote-photos.sh",
+        "tools/photos/export-for-instagram.sh",
+        "tools/photos/extract-photo-metadata.sh",
+        "tools/photos/gen-encoding-grids.sh",
+        "tools/photos/gen-encoding-samples.sh",
+        "tools/photos/reencode-thumbnails.sh"
       ],
       "min_version": "0.2.0"
     },
@@ -43,8 +43,8 @@
       "install": "brew install jq",
       "why": "JSON assembly in the metadata shell scripts",
       "required_by": [
-        "www/scripts/extract-photo-metadata.sh",
-        "www/scripts/download-remote-photos.sh"
+        "tools/photos/extract-photo-metadata.sh",
+        "tools/photos/download-remote-photos.sh"
       ]
     },
     {
@@ -52,11 +52,11 @@
       "install": "ships with macOS",
       "why": "resize, HEIF decode, and the AVIF fallback encoder",
       "required_by": [
-        "www/scripts/add-photos.sh",
-        "www/scripts/export-for-instagram.sh",
-        "www/scripts/gen-encoding-grids.sh",
-        "www/scripts/gen-encoding-samples.sh",
-        "www/scripts/reencode-thumbnails.sh"
+        "tools/photos/add-photos.sh",
+        "tools/photos/export-for-instagram.sh",
+        "tools/photos/gen-encoding-grids.sh",
+        "tools/photos/gen-encoding-samples.sh",
+        "tools/photos/reencode-thumbnails.sh"
       ]
     },
     {
@@ -64,7 +64,7 @@
       "install": "ships with macOS",
       "why": "pulls the R2 originals back down",
       "required_by": [
-        "www/scripts/download-remote-photos.sh"
+        "tools/photos/download-remote-photos.sh"
       ]
     },
     {
@@ -72,12 +72,12 @@
       "install": "https://rustup.rs",
       "why": "builds zenc, the shipped JPEG encoder, on first run",
       "required_by": [
-        "www/scripts/add-car-photo.sh",
-        "www/scripts/add-photos.sh",
-        "www/scripts/export-for-instagram.sh",
-        "www/scripts/gen-encoding-grids.sh",
-        "www/scripts/gen-encoding-samples.sh",
-        "www/scripts/reencode-thumbnails.sh"
+        "tools/photos/add-car-photo.sh",
+        "tools/photos/add-photos.sh",
+        "tools/photos/export-for-instagram.sh",
+        "tools/photos/gen-encoding-grids.sh",
+        "tools/photos/gen-encoding-samples.sh",
+        "tools/photos/reencode-thumbnails.sh"
       ]
     },
     {
@@ -86,8 +86,8 @@
       "install": "brew install mozjpeg",
       "why": "lossless EXIF-orientation rotation before recompression",
       "required_by": [
-        "www/scripts/add-photos.sh",
-        "www/scripts/reencode-thumbnails.sh"
+        "tools/photos/add-photos.sh",
+        "tools/photos/reencode-thumbnails.sh"
       ]
     },
     {
@@ -96,7 +96,7 @@
       "install": "brew install mozjpeg",
       "why": "the chroma-subsampling row of the /garage/encoding grids",
       "required_by": [
-        "www/scripts/gen-encoding-grids.sh"
+        "tools/photos/gen-encoding-grids.sh"
       ]
     },
     {
@@ -105,8 +105,8 @@
       "optional": true,
       "why": "primary 10-bit AVIF tier; add-photos and reencode-thumbnails fall back to sips, the grid scripts do not",
       "required_by": [
-        "www/scripts/gen-encoding-grids.sh",
-        "www/scripts/gen-encoding-samples.sh"
+        "tools/photos/gen-encoding-grids.sh",
+        "tools/photos/gen-encoding-samples.sh"
       ]
     },
     {
@@ -114,8 +114,8 @@
       "install": "brew install webp",
       "why": "the WebP point on the /garage/encoding format grid",
       "required_by": [
-        "www/scripts/gen-encoding-grids.sh",
-        "www/scripts/gen-encoding-samples.sh"
+        "tools/photos/gen-encoding-grids.sh",
+        "tools/photos/gen-encoding-samples.sh"
       ]
     },
     {
@@ -123,7 +123,7 @@
       "install": "brew install ffmpeg",
       "why": "PNG to PPM, because cjpeg will not read PNG and sips BMP confuses it",
       "required_by": [
-        "www/scripts/gen-encoding-grids.sh"
+        "tools/photos/gen-encoding-grids.sh"
       ]
     },
     {
@@ -131,7 +131,7 @@
       "install": "build libjxl with -DJPEGXL_ENABLE_TOOLS=ON; brew's jpeg-xl does not ship it",
       "why": "the perceptual metric the Instagram export searches quality against",
       "required_by": [
-        "www/scripts/export-for-instagram.sh"
+        "tools/photos/export-for-instagram.sh"
       ]
     },
     {
@@ -139,15 +139,15 @@
       "install": "build libjxl with -DJPEGXL_ENABLE_TOOLS=ON; brew's jpeg-xl does not ship it",
       "why": "the second metric bounding that same search",
       "required_by": [
-        "www/scripts/export-for-instagram.sh"
+        "tools/photos/export-for-instagram.sh"
       ]
     },
     {
       "bin": "python3",
       "install": "brew install python",
-      "why": "alt text in add-photos.sh, plus gen-pixel-peeper.py; only the last of those wants Pillow, from www/scripts/requirements.txt. build-recipes.py was the third consumer and was deleted on 2026-08-14 when exif-sooc took over the recipe card",
+      "why": "alt text in add-photos.sh, plus gen-pixel-peeper.py; only the last of those wants Pillow, from tools/photos/requirements.txt. build-recipes.py was the third consumer and was deleted on 2026-08-14 when exif-sooc took over the recipe card",
       "required_by": [
-        "www/scripts/add-photos.sh"
+        "tools/photos/add-photos.sh"
       ]
     }
   ]

@@ -20,7 +20,7 @@
 # rebuild would drop every prior stem from the map and make buildImagesManifest
 # skip those photos. Merging keeps the full 1:1 map across incremental adds.
 #
-#   ./www/scripts/hash-thumbnails.sh
+#   ./tools/photos/hash-thumbnails.sh
 #
 set -euo pipefail
 

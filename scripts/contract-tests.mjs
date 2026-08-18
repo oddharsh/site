@@ -44,9 +44,9 @@ import { BASELINE_HEADING, FLOOR_CLAIMS, auditDependencyDocs, baselineSection, c
 import { PAGE_FAMILY_MATCH, serveStaticPage } from "../src/worker/lib/assets.js";
 import { serveMarkdown } from "../src/worker/home.js";
 import { readManifest, workerModule, navFenceBody, readFenceBody, runProfilesBody } from "./gen-manifest.mjs";
-import { PROFILES } from "../www/scripts/shell-data.mjs";
-import { faviconHref, sectionFavicons, speculationHtml } from "../www/scripts/gen-desktop-partial.mjs";
-import { TASKBAR } from "../www/scripts/shell-data.mjs";
+import { PROFILES } from "../tools/photos/shell-data.mjs";
+import { faviconHref, sectionFavicons, speculationHtml } from "../tools/photos/gen-desktop-partial.mjs";
+import { TASKBAR } from "../tools/photos/shell-data.mjs";
 import { SECTION_FAVICONS } from "../src/worker/lib/desktop.js";
 import { collectBlockClasses, readDocument } from "./lib/html-to-md.mjs";
 import {
@@ -2609,7 +2609,7 @@ test("homepage selects 12 photos and transfers all of them", async () => {
 
 
 test("the packed histogram survives the round trip tooltip.js does", async () => {
-  const { packHistogram, CHANNELS, BINS, HIST_BASE, HIST_LEVELS } = await import("../www/scripts/build-histogram-index.mjs");
+  const { packHistogram, CHANNELS, BINS, HIST_BASE, HIST_LEVELS } = await import("../tools/photos/build-histogram-index.mjs");
   const hi = {};
   for (const [ci, c] of CHANNELS.entries()) hi[c] = Array.from({ length: BINS }, (_, i) => (i * 7 + ci * 13) % 101);
   const packed = packHistogram(hi);
@@ -2981,7 +2981,7 @@ test("the dependency-doc check reaches the four manifests outside the root", () 
   const ranged = auditDependencyDocs({
     doc: `${H}\n- \`image\` 0.25 decodes input.`,
     ...quiet,
-    subManifests: sub({ manifest: "www/scripts/zenc/Cargo.toml", aliases: [{ prose: "image", pkg: "image" }], pins: { image: "0.25" } }),
+    subManifests: sub({ manifest: "tools/photos/zenc/Cargo.toml", aliases: [{ prose: "image", pkg: "image" }], pins: { image: "0.25" } }),
   });
   assert.ok(ranged.problems.some((p) => /image is range-pinned \(0\.25\)/.test(p)), ranged.problems.join("\n"));
 

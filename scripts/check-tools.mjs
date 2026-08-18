@@ -52,7 +52,7 @@ const NOT_SYSTEM = new Set(["wrangler"]);
 
 // ── the shell corpus ─────────────────────────────────────────────────────────
 async function shellScripts() {
-  const dirs = ["www/scripts", "scripts"];
+  const dirs = ["tools/photos", "scripts"];
   const found = [];
   for (const dir of dirs) {
     let entries = [];
