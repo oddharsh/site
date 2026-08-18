@@ -227,8 +227,8 @@ console.log("perf-budget: aadhar.sh pre-deploy gate\n");
 
 // 1) luna.css parses clean ---------------------------------------------------
 try {
-  const css = await readFile("www/luna.css", "utf8");
-  const { warnings } = transformCss({ filename: "www/luna.css", code: Buffer.from(css), minify: false });
+  const css = await readFile("src/styles/luna.css", "utf8");
+  const { warnings } = transformCss({ filename: "src/styles/luna.css", code: Buffer.from(css), minify: false });
   if (warnings.length) bad(`luna.css: ${warnings.length} CSS parse warning(s): ${warnings.map((w) => w.message).join("; ")}`);
   else ok("luna.css parses clean (0 warnings)");
 } catch (e) {
