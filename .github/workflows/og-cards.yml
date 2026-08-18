@@ -107,12 +107,12 @@ jobs:
         id: diff
         run: |
           set -euo pipefail
-          if [ -z "$(git status --porcelain www/og www/garage www/lwe www/pixel-peeper)" ]; then
+          if [ -z "$(git status --porcelain public/og public/garage public/lwe public/pixel-peeper)" ]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "Every card already matches what production renders; nothing to do."
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
-            git status --short www/og www/garage www/lwe www/pixel-peeper | head -40
+            git status --short public/og public/garage public/lwe public/pixel-peeper | head -40
           fi
 
       - name: Open or update the card PR
@@ -127,14 +127,14 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          CARDS=$(git status --porcelain www/og | wc -l | tr -d ' ')
-          PAGES=$(git status --porcelain www/garage www/lwe www/pixel-peeper | wc -l | tr -d ' ')
+          CARDS=$(git status --porcelain public/og | wc -l | tr -d ' ')
+          PAGES=$(git status --porcelain public/garage public/lwe public/pixel-peeper | wc -l | tr -d ' ')
 
           # One long-lived branch, force-pushed, same as dictionary-roll. A fresh
           # branch per run would leave a trail of superseded PRs, and only the
           # newest bake describes what production renders now.
           git checkout -B "$BRANCH"
-          git add www/og www/garage www/lwe www/pixel-peeper
+          git add public/og public/garage public/lwe public/pixel-peeper
           git commit -m "chore(og): re-bake the social cards from production
 
           ${CARDS} card(s) and ${PAGES} page head(s) changed. Captured from

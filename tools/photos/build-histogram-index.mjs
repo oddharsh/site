@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-// Build www/images/histograms.json: every photo's four histogram channels,
+// Build public/images/histograms.json: every photo's four histogram channels,
 // packed, keyed by stem. This file is a SERVER-SIDE input and is never fetched
 // by a browser, which is what makes its size unremarkable.
 //
@@ -62,7 +62,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const IMAGES = path.join(ROOT, "www/images");
+const IMAGES = path.join(ROOT, "public/images");
 const META = path.join(IMAGES, "meta");
 
 export const CHANNELS = ["l", "r", "g", "b"];

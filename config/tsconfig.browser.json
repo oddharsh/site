@@ -10,11 +10,11 @@
     "target": "esnext",
     "module": "esnext",
     "moduleResolution": "bundler",
-    // The served URL root is a COMPOSITE now: build.mjs stages www/, src/client/
+    // The served URL root is a COMPOSITE now: build.mjs stages public/, src/client/
     // and src/styles/ into one tree, so /hoist.js and /nav.js resolve out of
-    // src/client while /index.html and /images/* still come from www/. Listing
+    // src/client while /index.html and /images/* still come from public/. Listing
     // both is what keeps an absolute specifier checkable after the split.
-    "paths": { "/*": ["../src/client/*", "../src/styles/*", "../www/*"] },
+    "paths": { "/*": ["../src/client/*", "../src/styles/*", "../public/*"] },
     "lib": ["esnext", "dom", "dom.iterable"],
     "skipLibCheck": true,
     "strict": false

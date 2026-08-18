@@ -44,7 +44,7 @@ const VARIANTS = want.length ? want : ["desktop", "card"];
 async function favicon() {
   const html = await readFile(path.join(WWW, "index.html"), "utf8");
   const m = html.match(/<link rel="icon"[^>]*href="([^"]+)"/);
-  if (!m) throw new Error("no favicon in www/index.html");
+  if (!m) throw new Error("no favicon in src/pages/index.html");
   return m[1];
 }
 

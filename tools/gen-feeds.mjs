@@ -8,7 +8,7 @@
 // static asset served from the edge.
 //
 // WHY THE SITEMAP IS THE DATE SOURCE. Feed items need a date, and this site
-// already maintains one per URL in www/sitemap.xml as <lastmod>. Reading it
+// already maintains one per URL in public/sitemap.xml as <lastmod>. Reading it
 // keeps ONE authored date per page rather than introducing a second one that
 // would immediately start disagreeing. Deliberately NOT git commit dates: a
 // whitespace fix would republish an item to every subscriber, and a page moved
@@ -91,7 +91,7 @@ export const FEEDS = [
  */
 export function buildFeeds(root = ".") {
   const manifest = JSON.parse(readFileSync(`${root}/config/site-manifest.json`, "utf8"));
-  const dates = sitemapDates(readFileSync(`${root}/www/sitemap.xml`, "utf8"));
+  const dates = sitemapDates(readFileSync(`${root}/public/sitemap.xml`, "utf8"));
   const posts = JSON.parse(readFileSync(`${root}/src/content/writing/posts.json`, "utf8"));
 
   // /writing entries are not registered surfaces (a post is a row in posts.json,

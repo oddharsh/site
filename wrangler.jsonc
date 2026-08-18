@@ -12,7 +12,7 @@
   // request". It is a deterministic document now and carries the same q11 twin, dcz
   // delta, and ETag as every other page.)
   //
-  // UNBYPASSABLE BUILD: main + assets point at .build/www (the minified
+  // UNBYPASSABLE BUILD: main + assets point at .build/public (the minified
   // tree), and the "build" block below runs build.mjs FIRST on every deploy.
   // So `wrangler deploy` (bare), `pnpm run deploy:direct`, and Workers Builds all ship
   // the minified shells + luna.css — there is no longer a path that serves the
@@ -21,8 +21,8 @@
   // Build command blank and set its Deploy command to the `pnpm exec wrangler
   // versions upload` recorded in config/infra.json under `release`;
   // Wrangler then owns this one build instead of running it twice. Local dev
-  // must NOT use this config (it would pay the full www/ -> .build copy on
-  // every reload); it uses wrangler.dev.jsonc, which points at www/ directly.
+  // must NOT use this config (it would pay the full public/ -> .build copy on
+  // every reload); it uses wrangler.dev.jsonc, which points at public/ directly.
   // The two configs' bindings must match; build.mjs warns on drift.
   "name": "aadhar-sh",
   // Pinned because wrangler picks an account only when the login has exactly
@@ -91,7 +91,7 @@
     { "pattern": "cal.aadhar.sh/*", "zone_name": "aadhar.sh" }
   ],
   "assets": {
-    "directory": ".build/www",
+    "directory": ".build/public",
     "binding": "ASSETS",
     // canonical URLs carry NO trailing slash (sitemap.xml, both rel=canonical tags,
     // llms.txt and nav.js's own normalization all say so). drop-trailing-slash makes

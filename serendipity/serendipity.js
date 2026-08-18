@@ -15,7 +15,7 @@
 const PREFIX = "/serendipity";
 
 // The desktop partial the rest of the site ships. serendipity is staged beside
-// www/ in .build with the same relative layout as the source tree, so this
+// public/ in .build with the same relative layout as the source tree, so this
 // one path resolves in both. Before this, /serendipity loaded /nav.js and let
 // it CONSTRUCT the desktop after load: curl and JS-off visitors got no desktop
 // at all, and everyone else got a shell pop. Now the markup is in the document

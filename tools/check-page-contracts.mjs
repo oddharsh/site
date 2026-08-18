@@ -26,9 +26,9 @@ function payload(html, file) {
 }
 
 async function checkPublishedPages(family, skip = new Set()) {
-  for (const file of await filesIn(`www/${family}`)) {
+  for (const file of await filesIn(`src/pages/${family}`)) {
     if (file === "index.html" || skip.has(file)) continue;
-    const path = `www/${family}/${file}`;
+    const path = `src/pages/${family}/${file}`;
     const html = await readFile(join(ROOT, path), "utf8");
     assert.equal((html.match(/<script src="\/quiz\.js" defer><\/script>/g) || []).length, 1, `${path}: missing shared quiz runtime`);
     if (family === "lwe") {
@@ -61,8 +61,8 @@ for (const file of lweSpecFiles) {
     const demo = (await readFile(join(ROOT, "pipelines/lwe/specs", spec.demoJsFile), "utf8")).trimEnd();
     assert.ok(html.includes(`<script>\n${demo}\n</script>`),
       `pipelines/lwe/specs/${file}: generator omitted its external demo program`);
-    const published = await readFile(join(ROOT, "www/lwe", `${spec.id}.html`), "utf8");
-    assert.equal(html, published, `www/lwe/${spec.id}.html: run node pipelines/lwe/generate.mjs page ${spec.id}`);
+    const published = await readFile(join(ROOT, "src/pages/lwe", `${spec.id}.html`), "utf8");
+    assert.equal(html, published, `src/pages/lwe/${spec.id}.html: run node pipelines/lwe/generate.mjs page ${spec.id}`);
   }
 }
 

@@ -5,7 +5,7 @@ with the exact command and the gotcha that bit me last time. Deep design notes
 and the full conventions list live in [CLAUDE.md](CLAUDE.md); this is the ops sheet.
 
 One site Worker, with three source islands:
-- **www/** (aadhar.sh): the **Cloudflare Worker with static assets** (migrated off Pages 2026-06-30). Config is `wrangler.jsonc` at the repo root: it points `main` + `assets.directory` at `.build/www` and runs `build.mjs` via its `build.command`, so `assets.run_worker_first` (an allowlist mirroring the `ROUTES`/`PREFIX` tables in `index.js`; static is the default) applies to the built tree; `workers_dev:false` (custom domain only). **Production deploy: merge to `main`; GitHub CI promotes the exact tested commit to the machine-owned `production` branch, then Cloudflare Workers Builds deploys it.** The config self-builds, so the Workers Build Deploy command ships the minified tree; local dev uses `wrangler.dev.jsonc` (readable `www/`, fast reload). A local `wrangler deploy` is fallback-only. Verify after every deploy with `node tools/verify-routes.mjs https://aadhar.sh` (now also asserts `/nav.js` minified + `.src` twins resolve). All site bindings live in `wrangler.jsonc`; secrets via `wrangler versions secret put`.
+- **public/** (aadhar.sh): the **Cloudflare Worker with static assets** (migrated off Pages 2026-06-30). Config is `wrangler.jsonc` at the repo root: it points `main` + `assets.directory` at `.build/public` and runs `build.mjs` via its `build.command`, so `assets.run_worker_first` (an allowlist mirroring the `ROUTES`/`PREFIX` tables in `index.js`; static is the default) applies to the built tree; `workers_dev:false` (custom domain only). **Production deploy: merge to `main`; GitHub CI promotes the exact tested commit to the machine-owned `production` branch, then Cloudflare Workers Builds deploys it.** The config self-builds, so the Workers Build Deploy command ships the minified tree; local dev uses `wrangler.dev.jsonc` (readable `public/`, fast reload). A local `wrangler deploy` is fallback-only. Verify after every deploy with `node tools/verify-routes.mjs https://aadhar.sh` (now also asserts `/nav.js` minified + `.src` twins resolve). All site bindings live in `wrangler.jsonc`; secrets via `wrangler versions secret put`.
 - **cal/** (coffee booking module): **LIVE** at `aadhar.sh/coffee`, dispatched by the same `aadhar-sh` Worker. Availability still serves from an SWR calendar snapshot (KV `cal:busy`, 2s upstream deadline, stale fallback); the GET page edge-caches 30s; booking fails closed if the calendar can't be vouched for. See [cal/README.md](cal/README.md). `cal/wrangler.test.toml` is test-only; it is not a deployment target.
 - **serendipity/** (event dashboard module): **LIVE** at `aadhar.sh/serendipity`, dispatched by the same `aadhar-sh` Worker. Its D1, secrets, route-specific CSP, and dashboard cache policy remain isolated in the module and shared root bindings.
 
@@ -1018,7 +1018,7 @@ Two files have zero inbound references in the tree, so a reference sweep reads
 them as detritus. Both have real consumers. Leave them, and re-run the checks
 below whenever they look unreferenced again:
 
-- **`www/bimi.svg`** is the BIMI logo (SVG Tiny-PS, square and full-bleed
+- **`public/bimi.svg`** is the BIMI logo (SVG Tiny-PS, square and full-bleed
   because inboxes circle-crop it). Its consumer is a Cloudflare DNS record, so
   deleting the file breaks mail rather than the site.
 
@@ -1200,18 +1200,18 @@ the tooltip skips nulls rather than guess.
 ```bash
 ./tools/photos/add-car-photo.sh <stem> <input-image>   # stem: singer | tuthill | hwa-evo | f355
 ```
-Outputs `www/cars/<stem>.{avif,jpg}` (no EXIF, no R2). Bump the `?v=` on that car image in `index.html` if you replace one in place, then deploy.
+Outputs `public/cars/<stem>.{avif,jpg}` (no EXIF, no R2). Bump the `?v=` on that car image in `index.html` if you replace one in place, then deploy.
 
 ### Generate AI alt text for the grid
 `add-photos.sh` already does this in phase 4, so a normal add needs nothing here.
 Run it by hand to backfill or to retry after a rate limit:
 ```bash
-pnpm run captions                            # writes www/images/alt.json {stem: alt}
+pnpm run captions                            # writes public/images/alt.json {stem: alt}
 ```
 Resumable: only fills uncaptioned stems, so a 429 (Workers-AI neuron budget) just means run again later.
 
 **Set a token once and captions work pre-deploy.** With `CLOUDFLARE_API_TOKEN` in
-the environment, the script reads the committed `www/i/<stem>.<hash8>.jpg` and
+the environment, the script reads the committed `public/i/<stem>.<hash8>.jpg` and
 posts those bytes straight to Workers AI, so a photo added seconds ago gets
 captioned in the same run. Without one it falls back to handing a stem to
 `/garage/cf/caption`, which fetches the thumbnail from production and therefore
@@ -1453,7 +1453,7 @@ Prints byte counts + bytes-per-pixel so the figcaptions on `/garage/encoding` ca
 ## Regenerate the OG / Twitter cards
 
 Every garage + lwe page unfurls as a 1200x630 card showing its live demo floated
-on the Bliss desktop (`www/og/<section>-<name>.png`), wired via
+on the Bliss desktop (`public/og/<section>-<name>.png`), wired via
 `og:image`/`twitter:card` in each page's `<head>`. Regenerate when a demo's look
 changes or a new page lands:
 
@@ -1506,7 +1506,7 @@ node tools/photos/inject-og-meta.mjs   # add the meta to any page missing it (id
 
 Separate generator, separate size, separate destination. GitHub's social preview
 is **1280x640** and it is uploaded through the repository settings, not served by
-this site, so it lives in `.github/` rather than `www/og/` and no page links it.
+this site, so it lives in `.github/` rather than `public/og/` and no page links it.
 
 ```bash
 pnpm run repo-card                        # both variants, into .github/
@@ -1528,9 +1528,9 @@ Two variants ship because the card has two honest jobs:
   `pnpm run repo-card desktop` when you want one for a talk or a post.
 
 The chips are COUNTED from `config/site-manifest.json` and
-`www/images/hashes.json` rather than typed, because a card outlives most of what
+`public/images/hashes.json` rather than typed, because a card outlives most of what
 it describes. The wallpaper and the window icon are read out of `src/styles/luna.css`
-and `www/index.html` for the same reason, so there is no second copy of either.
+and `src/pages/index.html` for the same reason, so there is no second copy of either.
 
 Nothing in the pipeline uploads it: GitHub exposes no API for the social preview.
 Settings, then Social preview, then upload the PNG by hand.
@@ -1551,7 +1551,7 @@ pnpm exec wrangler kv key put --namespace-id="$NS" playlist-id "<NEW_22_CHAR_ID>
 pnpm exec wrangler kv key delete --namespace-id="$NS" "tracks:${OLD}" --remote
 pnpm exec wrangler kv key delete --namespace-id="$NS" "tracks:${OLD}:fresh" --remote
 curl -s "https://aadhar.sh/rn/tracks" >/dev/null                       # warms tracks:<new> by scraping
-pnpm run deploy:direct   # from the repo root; deploys the aadhar-sh Worker (www/ as static assets)
+pnpm run deploy:direct   # from the repo root; deploys the aadhar-sh Worker (public/ as static assets)
 ```
 - The id is the 22 chars after `/playlist/` in the share URL (drop `?si=...`).
 - **Why the redeploy:** the worker caches `playlist-id` in a module variable (`_playlistId`) per warm isolate. A redeploy recycles isolates so the homepage *prerenders* the new list immediately instead of waiting for them to age out.
@@ -1738,9 +1738,9 @@ until its twin agrees: `checkTwinFacts()` recomposes the User-Agent from
 | `gen-photo-semantics.mjs` | Retrieval terms for `photo_query` -> `images/semantics.json`. Derived tier (EXIF vocabulary repair) needs nothing; `--vision` adds model-written keywords and needs `CLOUDFLARE_API_TOKEN`. Deliberately offline so the Worker keeps zero AI credentials. Resumable. |
 | `gen-encoding-samples.sh` | Regenerate the color sample set for `/garage/encoding` through every encoder; defaults to the committed `garage/enc/c-png.png` fixture and prints byte counts. |
 | `zenc histogram --root www` | Bakes four 64-bin RGB/luminance histogram channels into each per-photo `images/meta/<stem>.json` from the shipped hashed JPG tier. A subcommand of the encoder crate since 2026-08-14 (it was `photo-histograms.py` + Pillow), called by both metadata extraction and `add-photos.sh`. `--check` compares against what is on disk and writes nothing, which is how you tell a decoder bump from an edit. |
-| `gen-og-cards.mjs` | Render the 1200x630 OG/Twitter card per garage + lwe page (live demo on the Bliss desktop) into `www/og/`. `pnpm run og-cards`. Drives the installed Chrome via `playwright-core`; captures production so data-driven demos render full. Hero selectors + presets in the `HERO{}` map. See "Regenerate the OG / Twitter cards". |
+| `gen-og-cards.mjs` | Render the 1200x630 OG/Twitter card per garage + lwe page (live demo on the Bliss desktop) into `public/og/`. `pnpm run og-cards`. Drives the installed Chrome via `playwright-core`; captures production so data-driven demos render full. Hero selectors + presets in the `HERO{}` map. See "Regenerate the OG / Twitter cards". |
 | `inject-og-meta.mjs` | Idempotently add `og:image`/`twitter:card` meta to any garage + lwe page missing it, pointing at `/og/<section>-<name>.png`. `--check` reports gaps without writing. |
-| `hash-thumbnails.sh` | sha256 each pixel tier into `www/i/<stem>.<hash8>.<ext>`, write `images/hashes.json`, and prune tiers no longer named by it. Run by `add-photos.sh`; a re-encode mints new URLs, so there is no version to bump. |
+| `hash-thumbnails.sh` | sha256 each pixel tier into `public/i/<stem>.<hash8>.<ext>`, write `images/hashes.json`, and prune tiers no longer named by it. Run by `add-photos.sh`; a re-encode mints new URLs, so there is no version to bump. |
 | `gen-encoding-grids.sh` | Regenerate the ZOOMED 96px comparison crops (`garage/enc/z-*`) that `/lwe/encoding` fetches. Run by the `regenerate-encoding-study` routine of the photo workflow. |
 | `gen-desktop-partial.mjs` | Bake the XP desktop shell into `_worker.js/lib/desktop.js` and patch it into the 28 static pages, generated from nav.js's own `PROFILES`/`SUBPAGES`/`SECTION_ICONS`/tray template so the two cannot drift. Re-run after editing any of those. A run on an unchanged tree is a byte-exact no-op. |
 | `bump-version.sh` | Insert one `checkpoints` row into the `aadhar-restore` D1 database, deriving the next vnum from `MAX(vnum)`. Both `/restore` and `/updates` read that table, so this is the only place a deploy gets logged. `./tools/photos/bump-version.sh <slug> "<title>"`. |
@@ -1752,7 +1752,7 @@ until its twin agrees: `checkTwinFacts()` recomposes the User-Agent from
 - **Thumbnail 404s must be uncacheable.** Workers static assets no longer return homepage HTML for missing files, but a real miss under `/images/*` can still inherit the immutable cache rule unless the worker clamps it. Keep the thumbnail route worker-first; a re-encode mints a fresh `/i/` URL by itself, so there is no version to bump.
 - **zsh eats `${var}:something`.** Brace-quote KV key names with colons (`"tracks:${OLD}:fresh"`), and use `${=flag}` if you need word-splitting in ad-hoc snippets (the scripts use `#!/usr/bin/env bash` so they are safe internally).
 - **`jpegtran` / mozjpeg strip EXIF.** Rotate losslessly with `jpegtran -copy none -rotate N` *before* recompressing, and send its binary stdout to a file (`2>/dev/null > out.jpg`), not through a pipe that could mix in stderr.
-- **Production deploy = merge to `main`, CI promotion to `production`, then Workers Builds**; the single site Worker deploys the root `wrangler.jsonc`, bundling `www/`, `cal/src/`, and `serendipity/` from that exact release branch. The deploy config points `main` + `assets` at `.build/www` and runs `build.mjs` first through its `build.command`, so the production path self-builds and ships the minified client scripts + `luna.css`. Local dev is the exception: `wrangler dev -c wrangler.dev.jsonc` (`pnpm run dev`, wired into `.claude/launch.json`) serves the readable tree directly. Before merging, CI runs `pnpm run perf-budget`; after configuring Workers Builds, verify its release status and run `node tools/verify-routes.mjs https://aadhar.sh` plus the `/coffee` and `/serendipity` route smoke checks.
+- **Production deploy = merge to `main`, CI promotion to `production`, then Workers Builds**; the single site Worker deploys the root `wrangler.jsonc`, bundling `public/`, `cal/src/`, and `serendipity/` from that exact release branch. The deploy config points `main` + `assets` at `.build/public` and runs `build.mjs` first through its `build.command`, so the production path self-builds and ships the minified client scripts + `luna.css`. Local dev is the exception: `wrangler dev -c wrangler.dev.jsonc` (`pnpm run dev`, wired into `.claude/launch.json`) serves the readable tree directly. Before merging, CI runs `pnpm run perf-budget`; after configuring Workers Builds, verify its release status and run `node tools/verify-routes.mjs https://aadhar.sh` plus the `/coffee` and `/serendipity` route smoke checks.
 - **`_playlistId` is module-cached per isolate.** After changing `playlist-id`, redeploy to flush it (see the playlist section).
 - **The worker is bundled, not hand-concatenated.** `_worker.js/` imports sibling modules; wrangler bundles them at deploy via built-in esbuild.
-- **Authoring is buildless; SERVING is minified.** `build.mjs` (repo root; minifier devDependencies: `@minify-html/node`, `lightningcss`, `oxc-minify`) copies `www/` to `.build/` and minifies: `index.html` (structure via minify-html, inline CSS/JS through the same Lightning CSS + Oxc settings, with marker tripwires and a readable `/index.src.html` twin), the six client scripts (`nav.js`, `notepad.js`, `lens.js`, `lens-browser.js`, `quiz.js`, `tooltip.js`), `luna.css` (owner-approved 2026-07), and the worker modules' `/*min*/` CSS literals — each with a readable `/<name>.src.*` twin (the banner in each minified file points there). It hard-fails the deploy if `luna.css` doesn't parse as valid CSS (the v143 corruption slipped through for three releases), and content-hashes `nav.js` + `luna.css` into immutable `/a/` URLs. Garage/lwe HTML, images, and `_headers` ship byte-identical to git (View Source is part of the design). Do NOT extend the build into bundling or version auto-bumps; the scripts remain independently readable islands.
+- **Authoring is buildless; SERVING is minified.** `build.mjs` (repo root; minifier devDependencies: `@minify-html/node`, `lightningcss`, `oxc-minify`) copies `public/` to `.build/` and minifies: `index.html` (structure via minify-html, inline CSS/JS through the same Lightning CSS + Oxc settings, with marker tripwires and a readable `/index.src.html` twin), the six client scripts (`nav.js`, `notepad.js`, `lens.js`, `lens-browser.js`, `quiz.js`, `tooltip.js`), `luna.css` (owner-approved 2026-07), and the worker modules' `/*min*/` CSS literals — each with a readable `/<name>.src.*` twin (the banner in each minified file points there). It hard-fails the deploy if `luna.css` doesn't parse as valid CSS (the v143 corruption slipped through for three releases), and content-hashes `nav.js` + `luna.css` into immutable `/a/` URLs. Garage/lwe HTML, images, and `_headers` ship byte-identical to git (View Source is part of the design). Do NOT extend the build into bundling or version auto-bumps; the scripts remain independently readable islands.

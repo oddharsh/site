@@ -6,7 +6,7 @@
   // captured off the wire, and `pretext.lib.js` is @chenglou/pretext 0.0.7
   // vendored same-origin so /garage/pretext can load it under `script-src
   // 'self'`. Linting either one reports on somebody else's minifier.
-  "ignorePatterns": ["src/dict/a-dict/**", "www/garage/pretext.lib.js", ".build/**", "tools/oxlint/anti-slop/**"],
+  "ignorePatterns": ["src/dict/a-dict/**", "public/garage/pretext.lib.js", ".build/**", "tools/oxlint/anti-slop/**"],
 
   // NAMING ANY PLUGIN REPLACES THE DEFAULT SET, so this list has to restate the
   // four that were on implicitly. Measured 2026-08-15: with `"plugins":

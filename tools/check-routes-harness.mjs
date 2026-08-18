@@ -7,7 +7,7 @@
 // boots this repo's Worker in-process on a real loopback port, so the same table
 // can gate a PR instead of only auditing a deployment.
 //
-//   pnpm run routes:check                 # boot .build/www, sweep, exit non-zero on failure
+//   pnpm run routes:check                 # boot .build/public, sweep, exit non-zero on failure
 //
 // It points at wrangler.jsonc, NOT wrangler.dev.jsonc, deliberately: that config
 // carries `build.command`, so the harness runs build.mjs itself and serves the

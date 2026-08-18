@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-// Build www/images/exif.json: every photo's EXIF in ONE file, with the
+// Build public/images/exif.json: every photo's EXIF in ONE file, with the
 // histograms left behind.
 //
 // Why one file, when per-photo files were the deliberate choice: the homepage
@@ -37,8 +37,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const META = path.join(ROOT, "www/images/meta");
-const OUT = path.join(ROOT, "www/images/exif.json");
+const META = path.join(ROOT, "public/images/meta");
+const OUT = path.join(ROOT, "public/images/exif.json");
 
 // `hi` is the four 64-bin histogram channels. Everything else is EXIF text.
 export const HISTOGRAM_KEY = "hi";

@@ -129,7 +129,7 @@ const HERO = {
 // Selectors tried when a page has no HERO entry, or its listed heroes all miss.
 const FALLBACK = [".demo", ".workbench", "canvas", ".map", ".content > figure"];
 
-// Worker-rendered pages have no www/<section>/*.html file for listPages()
+// Worker-rendered pages have no public/<section>/*.html file for listPages()
 // to find, so they're listed by hand. `path` is the exact route to capture —
 // including query state, so a card can show the page mid-task rather than
 // empty. `span` crops from the top of the first selector to the bottom of the
@@ -298,7 +298,7 @@ async function capture(page, cardPage, p, bliss) {
   return { id: p.id, route, usedFallback: !box };
 }
 
-// Boot a throwaway static server over www/ so the generator is one command.
+// Boot a throwaway static server over public/ so the generator is one command.
 // Skipped when OG_BASE is set (reuse a dev server you already have running).
 function waitForPort(port, ms = 8000) {
   const deadline = Date.now() + ms;
@@ -315,7 +315,7 @@ async function maybeStartServer() {
   const port = 8787;
   const srv = spawn("python3", ["-m", "http.server", String(port), "--directory", HOLDING], { stdio: "ignore" });
   await waitForPort(port);
-  console.log(`static server up on :${port} (serving www/)`);
+  console.log(`static server up on :${port} (serving public/)`);
   return srv;
 }
 
@@ -345,7 +345,7 @@ async function main() {
 
   const ok = results.filter(r => !r.error).length;
   const fb = results.filter(r => r.usedFallback).length;
-  console.log(`\n${ok}/${results.length} cards written to www/og/  (${fb} used the window fallback)`);
+  console.log(`\n${ok}/${results.length} cards written to public/og/  (${fb} used the window fallback)`);
   if (fb) console.log("fallback pages may want a hero selector in HERO{} — check the gallery.");
 }
 
