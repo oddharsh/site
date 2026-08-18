@@ -338,7 +338,7 @@ test("an entry written before `seen` existed is stamped, never dropped", async (
 });
 
 test("the published key directory advertises only what the bot signs with", async () => {
-  const dir = JSON.parse(await readFile(new URL("./www/.well-known/http-message-signatures-directory", ROOT), "utf8"));
+  const dir = JSON.parse(await readFile(new URL("./public/.well-known/http-message-signatures-directory", ROOT), "utf8"));
   // Advertising a key we no longer sign with is the dangling-pointer problem
   // the DNS-AID note refuses for `_a2a`: it passes a scanner and misleads a
   // verifier that goes looking for the label.
@@ -1520,10 +1520,10 @@ test("site MCP image workbench returns an image content block and exact receipt"
 });
 
 test("photo_recipe only claims exact archive identities", async () => {
-  const metadata = JSON.parse(readFileSync("www/images/metadata.json", "utf8"));
-  const hashes = JSON.parse(readFileSync("www/images/hashes.json", "utf8"));
-  const alt = JSON.parse(readFileSync("www/images/alt.json", "utf8"));
-  const fingerprints = JSON.parse(readFileSync("www/images/fingerprints.json", "utf8"));
+  const metadata = JSON.parse(readFileSync("public/images/metadata.json", "utf8"));
+  const hashes = JSON.parse(readFileSync("public/images/hashes.json", "utf8"));
+  const alt = JSON.parse(readFileSync("public/images/alt.json", "utf8"));
+  const fingerprints = JSON.parse(readFileSync("public/images/fingerprints.json", "utf8"));
   const stem = Object.keys(metadata)[0];
   const env = { ASSETS: staticAssets({ "/images/metadata.json": metadata, "/images/hashes.json": hashes, "/images/alt.json": alt, "/images/fingerprints.json": fingerprints }) };
   const exact = await handleSiteMcp(new Request("https://aadhar.sh/mcp", { method: "POST", body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "photo_recipe", arguments: { stem } } }), headers: { "content-type": "application/json" } }), env, context());
@@ -1531,7 +1531,7 @@ test("photo_recipe only claims exact archive identities", async () => {
   assert.equal(exactBody.result.structuredContent.matched, true);
   assert.equal(exactBody.result.structuredContent.photo.stem, stem);
   assert.equal("gps" in exactBody.result.structuredContent.photo.metadata, false);
-  const jpgPath = `www/i/${stem}.${hashes[stem].j}.jpg`;
+  const jpgPath = `public/i/${stem}.${hashes[stem].j}.jpg`;
   const bytes = readFileSync(jpgPath).toString("base64");
   const byBytes = await handleSiteMcp(new Request("https://aadhar.sh/mcp", { method: "POST", body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "photo_recipe", arguments: { image_data: bytes } } }), headers: { "content-type": "application/json" } }), env, context());
   const byBytesBody = await byBytes.json();
@@ -1738,7 +1738,7 @@ test("every page that accepts a mention also advertises where to send it", async
   // spec-compliant sender, which is the same as not accepting it. /writing was
   // exactly that for one deploy: flagged in the registry, 202 on POST, and no
   // Link header on the folder itself. Tie the two together so they cannot drift.
-  const headers = await readFile("www/_headers", "utf8");
+  const headers = await readFile("public/_headers", "utf8");
   const advertisedByHeaders = headers
     .split(/\n(?=\S)/)
     .filter((block) => /Link:.*rel="webmention"/.test(block))
@@ -1993,15 +1993,15 @@ test("a section's favicon is in its own <head>, never set by script", async () =
   for (const item of TASKBAR) {
     const href = SECTION_FAVICONS[item.path];
     assert.equal(href, faviconHref(item.label), `${item.path} favicon href`);
-    await readFile(new URL("www" + href, ROOT), "utf8");
+    await readFile(new URL("public" + href, ROOT), "utf8");
   }
 
   // 4. The three hand-authored section pages link their own tile. These are the
   //    only section pages outside lunaPage, so they are the ones that go quiet.
   for (const [file, slug] of [["garage", "garage"], ["lwe", "lwe"], ["pixel-peeper", "pixel-peeper"]]) {
-    const page = await readFile(new URL(`www/${file}/index.html`, ROOT), "utf8");
+    const page = await readFile(new URL(`src/pages/${file}/index.html`, ROOT), "utf8");
     assert.match(page, new RegExp(`<link rel="icon" type="image/svg\\+xml" href="/section-icons/${slug}\\.svg">`),
-      `www/${file}/index.html must link its own section tile`);
+      `src/pages/${file}/index.html must link its own section tile`);
   }
 });
 
@@ -2010,15 +2010,15 @@ test("the speculation ruleset has exactly one author", async () => {
   // forked (#338). Two of the three ways it can fork again are structural, so
   // they are asserted here rather than left to review.
   //
-  // 1. A hand-written block anywhere in www/. The build already byte-compares
+  // 1. A hand-written block anywhere in public/. The build already byte-compares
   //    every static page against a fresh render, so a page that carries one fails
   //    the deploy; this names the rule so the failure is legible.
-  const pages = (await readdir(new URL("www", ROOT), { recursive: true }))
+  const pages = (await readdir(new URL("src/pages", ROOT), { recursive: true }))
     .filter((relative) => relative.endsWith(".html"));
   const canonical = speculationHtml();
   let carrying = 0;
   for (const relative of pages) {
-    const html = await readFile(new URL(`www/${relative}`, ROOT), "utf8");
+    const html = await readFile(new URL(`src/pages/${relative}`, ROOT), "utf8");
     // Count real tags only. /garage/horizon discusses this very block in prose as
     // escaped `&lt;script type="speculationrules"&gt;`, and it is the fourth naive
     // scanner that page's demo content would have caught.
@@ -2032,7 +2032,7 @@ test("the speculation ruleset has exactly one author", async () => {
 
   // 2. The lwe generator getting its own template back. It had one, it went stale
   //    when two commits removed exclusions site-wide, and regenerating a page then
-  //    silently restored the old rules onto it (www/lwe/encoding.html).
+  //    silently restored the old rules onto it (src/pages/lwe/encoding.html).
   const generator = await readFile(new URL("pipelines/lwe/generate.mjs", ROOT), "utf8");
   assert.doesNotMatch(generator, /speculationrules/,
     "generate.mjs must emit DESKTOP_CHROME and never its own ruleset; a stale template here re-infects every page it regenerates");
@@ -2228,21 +2228,21 @@ test("published MCP server cards and discovery files stay aligned with both live
   }), {}, null)).json();
   const cards = [
     {
-      file: "www/.well-known/mcp/server-card.json",
+      file: "public/.well-known/mcp/server-card.json",
       endpoint: "https://aadhar.sh/mcp",
       live: siteLive.result.tools,
       info: { name: SITE_MCP_SERVER_INFO.name, title: SITE_MCP_SERVER_INFO.title, version: SITE_MCP_SERVER_INFO.version },
       capabilities: { tools: true, resources: true, prompts: false },
     },
     {
-      file: "www/.well-known/mcp.json",
+      file: "public/.well-known/mcp.json",
       endpoint: "https://aadhar.sh/serendipity/mcp",
       live: serendipityLive.result.tools,
       info: { name: SERENDIPITY_MCP_SERVER_INFO.name, title: SERENDIPITY_MCP_SERVER_INFO.title, version: SERENDIPITY_MCP_SERVER_INFO.version },
       capabilities: { tools: true, resources: false, prompts: false },
     },
     {
-      file: "www/.well-known/mcp/serendipity.json",
+      file: "public/.well-known/mcp/serendipity.json",
       endpoint: "https://aadhar.sh/serendipity/mcp",
       live: serendipityLive.result.tools,
       info: { name: SERENDIPITY_MCP_SERVER_INFO.name, title: SERENDIPITY_MCP_SERVER_INFO.title, version: SERENDIPITY_MCP_SERVER_INFO.version },
@@ -2258,7 +2258,7 @@ test("published MCP server cards and discovery files stay aligned with both live
     assert.deepEqual(card.tools, live, `${file} tool metadata drifted from tools/list`);
   }
 
-  const agentCard = JSON.parse(await readFile(new URL("www/.well-known/agent-card.json", ROOT), "utf8"));
+  const agentCard = JSON.parse(await readFile(new URL("public/.well-known/agent-card.json", ROOT), "utf8"));
   const interfaces = agentCard["x-aadhar-sh"].interfaces.mcp;
   assert.deepEqual(
     interfaces.map((entry) => [entry.url, entry.serverCard]),
@@ -2268,11 +2268,11 @@ test("published MCP server cards and discovery files stay aligned with both live
     ],
     "agent-card MCP interfaces must name their server cards",
   );
-  const catalog = JSON.parse(await readFile(new URL("www/.well-known/api-catalog", ROOT), "utf8"));
+  const catalog = JSON.parse(await readFile(new URL("public/.well-known/api-catalog", ROOT), "utf8"));
   const links = new Map(catalog.linkset.map((entry) => [entry.anchor, entry]));
   assert.equal(links.get("https://aadhar.sh/mcp")["service-desc"][0].href, "https://aadhar.sh/.well-known/mcp/server-card.json");
   assert.equal(links.get("https://aadhar.sh/serendipity/mcp")["service-desc"][0].href, "https://aadhar.sh/.well-known/mcp/serendipity.json");
-  const llms = await readFile(new URL("www/llms.txt", ROOT), "utf8");
+  const llms = await readFile(new URL("public/llms.txt", ROOT), "utf8");
   assert.match(llms, /https:\/\/aadhar\.sh\/\.well-known\/mcp\/server-card\.json/);
   assert.match(llms, /https:\/\/aadhar\.sh\/\.well-known\/mcp\/serendipity\.json/);
 });
@@ -2402,7 +2402,7 @@ test("serendipity hides collapsed description chrome and uses the Luna scrollbar
 // checker must not be able to disagree about what is published.
 test("bundled photo pool derives one well-formed row per committed stem", async () => {
   const index = JSON.parse(await readFile(new URL("src/worker/photo-index.json", ROOT), "utf8"));
-  const hashes = JSON.parse(await readFile(new URL("www/images/hashes.json", ROOT), "utf8"));
+  const hashes = JSON.parse(await readFile(new URL("public/images/hashes.json", ROOT), "utf8"));
   const pool = derivePhotoPool(index, hashes);
   assert.equal(pool.length, Object.keys(index).length, "every indexed stem must derive a row");
   assert.equal(pool.length, Object.keys(hashes).length, "index and hashes must be in bijection");
@@ -2426,7 +2426,7 @@ test("getImagesManifest serves the bundled pool without env", async () => {
 });
 
 test("both homepage fragments are preloaded, and the reason that is free still holds", async () => {
-  const page = await readFile(new URL("www/index.html", ROOT), "utf8");
+  const page = await readFile(new URL("src/pages/index.html", ROOT), "utf8");
 
   // `crossorigin` is load-bearing even same-origin: without it the preload is
   // mode "no-cors" and will NOT match the hydrator's fetch(), whose default is
@@ -2457,7 +2457,7 @@ test("both homepage fragments are preloaded, and the reason that is free still h
 
 test("homepage selects 12 photos and transfers all of them", async () => {
   const worker = await readFile(new URL("src/worker/home.js", ROOT), "utf8");
-  const page = await readFile(new URL("www/index.html", ROOT), "utf8");
+  const page = await readFile(new URL("src/pages/index.html", ROOT), "utf8");
   const luna = await readFile(new URL("src/styles/luna.css", ROOT), "utf8");
   const nav = await readFile(new URL("src/client/nav.js", ROOT), "utf8");
   const hoist = await readFile(new URL("src/client/hoist.js", ROOT), "utf8");
@@ -2536,7 +2536,7 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   // which is the event this listener rides. Capture is required because `error`
   // on an <img> does not bubble, and the stem is parsed back out of the failing
   // URL so the repair costs no bytes on a tile that will never use it.
-  const home = await readFile(new URL("www/index.html", ROOT), "utf8");
+  const home = await readFile(new URL("src/pages/index.html", ROOT), "utf8");
   const repair = home.slice(home.indexOf("AVIF DECODE REPAIR"), home.indexOf("fetch(\"/photos/grid.html\")"));
   assert.ok(repair.length > 0, "the homepage must carry the AVIF decode repair");
   assert.match(repair, /addEventListener\("error"[\s\S]*\}, true\)/, "the repair must listen in the CAPTURE phase or it never fires");
@@ -2629,7 +2629,7 @@ test("the packed histogram survives the round trip tooltip.js does", async () =>
   // 63..126 holds none of & < > " (34, 38, 60, 62), so the attribute can never
   // need escaping. Asserted over every committed histogram rather than a
   // fixture, because the day this breaks is the day a bin goes out of range.
-  const committed = JSON.parse(readFileSync("www/images/histograms.json", "utf8"));
+  const committed = JSON.parse(readFileSync("public/images/histograms.json", "utf8"));
   const stems = Object.keys(committed);
   assert.ok(stems.length > 100, `expected the real corpus, got ${stems.length} entries`);
   for (const stem of stems) {
@@ -2661,7 +2661,7 @@ test("robots.txt never forbids a path the site advertises to agents", async () =
   // search index says so with X-Robots-Tag, which a crawler can only read if it
   // is allowed to fetch the response carrying it.
   const read = (p) => readFile(new URL(p, ROOT), "utf8");
-  const robots = await read("www/robots.txt");
+  const robots = await read("public/robots.txt");
 
   const disallowed = [...new Set(
     robots.split("\n").filter((l) => /^Disallow:/i.test(l)).map((l) => l.slice(9).trim()),
@@ -2673,11 +2673,11 @@ test("robots.txt never forbids a path the site advertises to agents", async () =
   const { HOMEPAGE_DISCOVERY_LINK } = await import("../src/worker/lib/security.js");
   const surfaces = {
     "the homepage Link header": HOMEPAGE_DISCOVERY_LINK,
-    "_headers":                 await read("www/_headers"),
-    ".well-known/api-catalog":  await read("www/.well-known/api-catalog"),
-    "agent-card.json":          await read("www/.well-known/agent-card.json"),
+    "_headers":                 await read("public/_headers"),
+    ".well-known/api-catalog":  await read("public/.well-known/api-catalog"),
+    "agent-card.json":          await read("public/.well-known/agent-card.json"),
     "auth.md":                  await read("src/content/auth.md"),
-    "llms.txt":                 await read("www/llms.txt"),
+    "llms.txt":                 await read("public/llms.txt"),
   };
 
   for (const [name, text] of Object.entries(surfaces)) {
@@ -2696,11 +2696,11 @@ test("robots.txt never forbids a path the site advertises to agents", async () =
 });
 
 test("browser RUM and its ledger proxy stay fully removed", async () => {
-  const page = await readFile(new URL("www/index.html", ROOT), "utf8");
+  const page = await readFile(new URL("src/pages/index.html", ROOT), "utf8");
   const worker = await readFile(new URL("src/worker/index.js", ROOT), "utf8");
   const wrangler = await readFile(new URL("wrangler.jsonc", ROOT), "utf8");
   const wranglerDev = await readFile(new URL("wrangler.dev.jsonc", ROOT), "utf8");
-  const headers = await readFile(new URL("www/_headers", ROOT), "utf8");
+  const headers = await readFile(new URL("public/_headers", ROOT), "utf8");
   const whoareyou = await readFile(new URL("src/worker/whoareyou.js", ROOT), "utf8");
   const whoareyouMd = await readFile(new URL("src/content/md/whoareyou.md", ROOT), "utf8");
   const securityPage = await readFile(new URL("src/worker/security.js", ROOT), "utf8");
@@ -3258,15 +3258,15 @@ test("LWE pages share one base stylesheet and the build derives one site-page di
   assert.match(build, /site-page dictionary/);
   // The snapshots live at src/dict/ now, OUTSIDE the served tree, which is a
   // stronger statement than the .assetsignore entry this used to assert: an
-  // ignore line keeps a file from being uploaded, while being outside www/
+  // ignore line keeps a file from being uploaded, while being outside public/
   // means the build never stages it in the first place.
-  const served = await readdir(new URL("www/", ROOT));
+  const served = await readdir(new URL("public/", ROOT));
   assert.ok(!served.includes("p-dict") && !served.includes("a-dict"),
     "dictionary snapshots are build input and must not sit in the served tree");
   const security = await readFile(new URL("src/worker/lib/security.js", ROOT), "utf8");
   assert.match(security, /rel="compression-dictionary"/);
   for (const name of ["index", "dac", "drivers", "encoding", "fhe", "knots", "mpc", "pcrypto", "tee", "utf8", "vigenere"]) {
-    const html = await readFile(new URL(`www/lwe/${name}.html`, ROOT), "utf8");
+    const html = await readFile(new URL(`src/pages/lwe/${name}.html`, ROOT), "utf8");
     assert.match(html, /<link rel="stylesheet" href="\/lwe-base\.css">/);
     assert.doesNotMatch(html, /compression-dictionary/);
     assert.doesNotMatch(html.match(/<style>([\s\S]*?)<\/style>/)?.[1] || "", /\.controls \{ display: inline-flex/);
@@ -3277,7 +3277,7 @@ test("the page-family dictionary outranks exact snapshots without narrowing its 
   const pattern = new URLPattern({ pathname: PAGE_FAMILY_MATCH, baseURL: "https://aadhar.sh" });
   assert.equal(pattern.hasRegExpGroups, false, "RFC 9842 rejects URLPatterns with custom regexp groups");
 
-  const pages = (await readdir(new URL("www", ROOT), { recursive: true }))
+  const pages = (await readdir(new URL("src/pages", ROOT), { recursive: true }))
     .filter((path) => path.endsWith(".html"));
   const routes = pages.map((path) => {
     const route = path.replace(/\.html$/, "").replace(/(^|\/)index$/, "$1");
@@ -3674,8 +3674,8 @@ test("slot reservations name one Durable Object instance per slot", () => {
 // the page would just quietly serve stale-but-plausible HTML.
 test("renderPhotosPage is pure over the committed pool", async () => {
   const index = JSON.parse(await readFile(new URL("src/worker/photo-index.json", ROOT), "utf8"));
-  const hashes = JSON.parse(await readFile(new URL("www/images/hashes.json", ROOT), "utf8"));
-  const alt = JSON.parse(await readFile(new URL("www/images/alt.json", ROOT), "utf8"));
+  const hashes = JSON.parse(await readFile(new URL("public/images/hashes.json", ROOT), "utf8"));
+  const alt = JSON.parse(await readFile(new URL("public/images/alt.json", ROOT), "utf8"));
   const pool = derivePhotoPool(index, hashes);
 
   // no env, no ctx, no bindings: the signature cannot smuggle in runtime state
@@ -3864,7 +3864,7 @@ test("the homepage's Link header carries the shell preloads, or it gets no Early
   // exists precisely because production policy for some pages comes from this file, which
   // canRegisterAsDictionary never sees.
   const { PAGE_CACHE_CONTROL } = await import("../src/worker/lib/const.js");
-  const headers = await readFile(new URL("www/_headers", ROOT), "utf8");
+  const headers = await readFile(new URL("public/_headers", ROOT), "utf8");
   const rootRule = headers.match(/^\/\n((?:  .*\n)+)/m);
   assert.ok(rootRule, "_headers must still carry a rule for /");
   assert.match(rootRule[1], new RegExp(`Cache-Control: ${PAGE_CACHE_CONTROL.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "m"),
@@ -3891,7 +3891,7 @@ test("the homepage's Link header carries the shell preloads, or it gets no Early
 test("_headers page rules match the twin the worker fetches, not the request path", async () => {
   const { PAGE_CACHE_CONTROL } = await import("../src/worker/lib/const.js");
   const { readdir } = await import("node:fs/promises");
-  const raw = await readFile(new URL("www/_headers", ROOT), "utf8");
+  const raw = await readFile(new URL("public/_headers", ROOT), "utf8");
 
   // `_headers` blocks: a line starting with `/`, then its indented header lines.
   const rules = [...raw.matchAll(/^(\/\S*)\n((?:[ \t]+\S.*\n)+)/gm)].map(([, pattern, body]) => ({
@@ -3907,7 +3907,7 @@ test("_headers page rules match the twin the worker fetches, not the request pat
   const families = ["garage", "lwe", "pixel-peeper"];
   let checked = 0;
   for (const family of families) {
-    for (const file of (await readdir(new URL(`www/${family}`, ROOT))).sort()) {
+    for (const file of (await readdir(new URL(`src/pages/${family}`, ROOT))).sort()) {
       if (!file.endsWith(".html")) continue;
       const twin = `/${family}/${file}.br`;
       const hit = rules.filter((rule) => rule.matches(twin) && rule.cacheControl);
@@ -3933,7 +3933,7 @@ test("_headers page rules match the twin the worker fetches, not the request pat
 });
 
 test("the offscreen Horizon iframe does not start ticking during initial load", async () => {
-  const horizon = await readFile(new URL("www/garage/horizon.html", ROOT), "utf8");
+  const horizon = await readFile(new URL("src/pages/garage/horizon.html", ROOT), "utf8");
   const iframe = horizon.match(/<iframe\s+[^>]*id="mb-frame"[^>]*>/)?.[0];
   assert.ok(iframe, "the state-preserving move demo must keep its uptime iframe");
   assert.match(iframe, /\sloading="lazy"(?:\s|>)/,
@@ -4065,16 +4065,16 @@ test("every inline script in the STAGED tree is covered by the emitted hash map"
   // deliberately different parser and compares. Same-code-twice would prove
   // nothing, and the failure this guards against (a blocked script leaves the
   // page rendering and merely dead) is invisible without it.
-  if (!existsSync("./.build/www/_worker.js/lib/csp-hashes.js")) return; // no staged tree; `pnpm run build` first
+  if (!existsSync("./.build/public/_worker.js/lib/csp-hashes.js")) return; // no staged tree; `pnpm run build` first
   const { createHash } = await import("node:crypto");
   const { readdir } = await import("node:fs/promises");
 
-  const emitted = readFileSync("./.build/www/_worker.js/lib/csp-hashes.js", "utf8")
+  const emitted = readFileSync("./.build/public/_worker.js/lib/csp-hashes.js", "utf8")
     .match(/^export const PAGE_SCRIPT_HASHES = (.*); \/\/ build:csp-hashes$/m);
   assert.ok(emitted, "the build did not rewrite the build:csp-hashes marker");
   const map = JSON.parse(emitted[1]);
 
-  const pages = (await readdir("./.build/www", { recursive: true }))
+  const pages = (await readdir("./.build/public", { recursive: true }))
     .filter((p) => p.endsWith(".html") && !p.endsWith(".src.html"));
   assert.ok(pages.length >= 40, `expected the full staged document set, saw ${pages.length}`);
 
@@ -4134,7 +4134,7 @@ test("every inline script in the STAGED tree is covered by the emitted hash map"
 
   let checked = 0;
   for (const page of pages) {
-    const html = readFileSync(`./.build/www/${page}`, "utf8");
+    const html = readFileSync(`./.build/public/${page}`, "utf8");
     const key = "/" + page.replace(/\.html$/, "").replace(/(^|\/)index$/, "") || "/";
     const path = key.length > 1 && key.endsWith("/") ? key.slice(0, -1) : key;
     assert.ok(map[path], `${page}: no entry at ${path} — it would silently fall back to 'unsafe-inline'`);
@@ -4467,7 +4467,7 @@ test("preview noindex reaches the responses the security wrapper otherwise skips
 // Each one fails silently: a node with no downside still renders, a mis-ordered
 // label still parses into something, and a dangling rival just draws no edge.
 test("every /access device previews a cost, and the clause order its parser depends on holds", async () => {
-  const html = await readFile(new URL("www/access/index.html", ROOT), "utf8");
+  const html = await readFile(new URL("src/pages/access/index.html", ROOT), "utf8");
   const rows = [...html.matchAll(/<tr data-id="([^"]+)"([^>]*)>([\s\S]*?)<\/tr>/g)];
   // A collapsed roster would satisfy every assertion below, so pin the count too.
   assert.ok(rows.length >= 60, `expected the full device table, saw ${rows.length} rows`);
@@ -6249,11 +6249,11 @@ test("the scorecard grades other origins, and only bills its own", async () => {
 test("the JPEG parser agrees with the pipeline that made the files", async () => {
   const { parseJpeg, sniff, estimateQuality } = await import("../src/worker/encode.js");
   const { readdirSync } = await import("node:fs");
-  const files = readdirSync("www/i").filter((f) => f.endsWith(".jpg")).slice(0, 12);
+  const files = readdirSync("public/i").filter((f) => f.endsWith(".jpg")).slice(0, 12);
   assert.ok(files.length > 4, "expected committed thumbnails to test against");
 
   for (const f of files) {
-    const bytes = new Uint8Array(readFileSync(`www/i/${f}`));
+    const bytes = new Uint8Array(readFileSync(`public/i/${f}`));
     assert.equal(sniff(bytes), "jpeg", `${f} should sniff as jpeg`);
     const info = parseJpeg(bytes);
     // add-photos.sh emits 600px squares through zenc at 4:2:0, progressive.
@@ -6279,11 +6279,11 @@ test("the AVIF parser reads bit depth and subsampling, and monochrome is real", 
   // parser and a right one looked identical until the sample got bigger.
   const { parseAvif, sniff } = await import("../src/worker/encode.js");
   const { readdirSync } = await import("node:fs");
-  const files = readdirSync("www/i").filter((f) => f.endsWith(".avif")).slice(0, 30);
+  const files = readdirSync("public/i").filter((f) => f.endsWith(".avif")).slice(0, 30);
   let mono = 0, colour = 0;
 
   for (const f of files) {
-    const bytes = new Uint8Array(readFileSync(`www/i/${f}`));
+    const bytes = new Uint8Array(readFileSync(`public/i/${f}`));
     assert.equal(sniff(bytes), "avif", `${f} should sniff as avif`);
     const info = parseAvif(bytes);
     assert.ok(info, `${f} should parse`);
@@ -6524,7 +6524,7 @@ test("every feed is well-formed, dated, and newest-first", async () => {
 // date source next to it.
 test("feed dates come from the sitemap the crawler already reads", async () => {
   const { buildFeeds, sitemapDates } = await import("./gen-feeds.mjs");
-  const dates = sitemapDates(readFileSync("www/sitemap.xml", "utf8"));
+  const dates = sitemapDates(readFileSync("public/sitemap.xml", "utf8"));
   assert.ok(dates.size >= 40, `expected the sitemap to carry lastmod dates, found ${dates.size}`);
 
   const garage = buildFeeds(".").get("/garage/feed.xml");
@@ -6539,7 +6539,7 @@ test("feed dates come from the sitemap the crawler already reads", async () => {
 // Discovery is the half that makes a feed reachable: a reader's subscribe button
 // looks for <link rel="alternate"> on the page, not for a URL somebody guessed.
 test("each section advertises its feed", () => {
-  for (const [file, feed] of [["www/garage/index.html", "/garage/feed.xml"], ["www/lwe/index.html", "/lwe/feed.xml"]]) {
+  for (const [file, feed] of [["src/pages/garage/index.html", "/garage/feed.xml"], ["src/pages/lwe/index.html", "/lwe/feed.xml"]]) {
     const html = readFileSync(file, "utf8");
     assert.ok(html.includes(`type="application/rss+xml"`) && html.includes(`href="${feed}"`),
       `${file} does not advertise ${feed}`);
@@ -6557,7 +6557,7 @@ test("each section advertises its feed", () => {
 // citation are fine and stay fine: several garage pages are about this site and
 // have no upstream to credit, and inventing one would be worse than the gap.
 test("a garage card cites nothing the page it describes does not", () => {
-  const index = readFileSync("www/garage/index.html", "utf8");
+  const index = readFileSync("src/pages/garage/index.html", "utf8");
   const cards = index.match(/<li>[\s\S]*?<\/li>/g) || [];
   let checked = 0, cited = 0;
   for (const card of cards) {
@@ -6568,8 +6568,8 @@ test("a garage card cites nothing the page it describes does not", () => {
     const urls = [...desc[1].matchAll(/href="(https?:\/\/[^"]+)"/g)].map((m) => m[1]);
     if (!urls.length) continue;
     const file = slug[1] === "/pixel-peeper"
-      ? "www/pixel-peeper/index.html"
-      : `www${slug[1]}.html`;
+      ? "src/pages/pixel-peeper/index.html"
+      : `src/pages${slug[1]}.html`;
     // /garage/dyno is Worker-rendered and has no file here. That is fine while it
     // cites nothing; the day it cites something, this says so rather than throwing
     // ENOENT at whoever added the link.
@@ -6906,14 +6906,14 @@ test("the reader never renders an unmeasurable phase as 0 ms", () => {
 });
 
 test("the cracker's scorer matches the quadgram table it ships", () => {
-  // The /lwe/vigenere cracker fetches www/lwe/quadgrams.txt and derives every
+  // The /lwe/vigenere cracker fetches public/lwe/quadgrams.txt and derives every
   // score from a gram's RANK in that file, so the file's SHAPE is part of the
   // scorer. Regenerating it at a different size, or with counts left in, changes
   // what the solver computes while both the page and the table still look fine.
   // Nothing else in the build reads this file, so this is the only thing that
   // would notice.
-  const table = readFileSync("./www/lwe/quadgrams.txt", "utf8");
-  const page = readFileSync("./www/lwe/vigenere.html", "utf8");
+  const table = readFileSync("./public/lwe/quadgrams.txt", "utf8");
+  const page = readFileSync("./src/pages/lwe/vigenere.html", "utf8");
 
   assert.match(table, /^[A-Z]+$/, "the table must be bare A-Z with no counts, separators or trailing newline");
   assert.equal(table.length % 4, 0, "the table must be whole quadgrams");
@@ -6944,7 +6944,7 @@ test("the cracker's scorer matches the quadgram table it ships", () => {
 });
 
 test("the cracker reports a verdict rather than always answering", () => {
-  const page = readFileSync("./www/lwe/vigenere.html", "utf8");
+  const page = readFileSync("./src/pages/lwe/vigenere.html", "utf8");
   // A solver that always returns its best guess is indistinguishable from one
   // that solved the cipher, which is the whole reason step 4 exists. The three
   // outcomes and the sample-size shrinkage are the load-bearing parts.
@@ -7624,7 +7624,7 @@ test("a blank optional is omitted from the frame, never sent as an empty string"
 
 test("the Tools pane builds foreign strings as NODES, never as markup", () => {
   // Tool names, descriptions and enum labels all come from a stranger's server.
-  // www/terminal.js follows the same rule for third-party page titles; this is
+  // public/terminal.js follows the same rule for third-party page titles; this is
   // that rule made checkable, because the failure is a stored XSS and the diff
   // that introduces it looks like ordinary convenience.
   const src = readFileSync("./src/client/lens-tools.js", "utf8");

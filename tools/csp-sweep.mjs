@@ -42,7 +42,7 @@ const pathsFrom = (file) => {
 
 const paths = process.env.PATHS
   ? JSON.parse(readFileSync(process.env.PATHS, "utf8"))
-  : pathsFrom(new URL("../.build/www/_worker.js/lib/csp-hashes.js", import.meta.url));
+  : pathsFrom(new URL("../.build/public/_worker.js/lib/csp-hashes.js", import.meta.url));
 
 const browser = await chromium.launch({ channel: "chrome", headless: true });
 const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });

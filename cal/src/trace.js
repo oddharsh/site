@@ -4,7 +4,7 @@
 // shared import. The dependency direction in this repo runs www -> cal:
 // _worker.js/index.js imports cal/src/index.js to serve /coffee, and
 // cal/wrangler.test.toml boots the Vitest pool from cal/src/index.js alone. An
-// import pointing back at www/ would make cal untestable without the site
+// import pointing back at public/ would make cal untestable without the site
 // tree around it, which is the one property cal/ is organized to keep. Twenty
 // lines of duplication is the cheaper side of that trade — please don't
 // "consolidate" these two files.

@@ -62,11 +62,11 @@ const serendipityCard = card({
   tools: SERENDIPITY_TOOLS,
 });
 
-await mkdir("www/.well-known/mcp", { recursive: true });
+await mkdir("public/.well-known/mcp", { recursive: true });
 const outputs = new Map([
-  ["www/.well-known/mcp/server-card.json", siteCard],
-  ["www/.well-known/mcp.json", serendipityCard],
-  ["www/.well-known/mcp/serendipity.json", serendipityCard],
+  ["public/.well-known/mcp/server-card.json", siteCard],
+  ["public/.well-known/mcp.json", serendipityCard],
+  ["public/.well-known/mcp/serendipity.json", serendipityCard],
 ]);
 for (const [file, value] of outputs) {
   await writeFile(file, `${JSON.stringify(value, null, 2)}\n`);

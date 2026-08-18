@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // gen-photo-semantics.mjs — retrieval terms for every photo, written to
-// www/images/semantics.json as {stem: {terms, from}}.
+// public/images/semantics.json as {stem: {terms, from}}.
 //
 // ── why this exists ───────────────────────────────────────────────────────
 // queryPhotos ranks a query against the caption and the EXIF. Both are narrow.
@@ -46,8 +46,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 // ROOT is the REPO root, matching every sibling in this directory. It used to be
-// dirname(dirname(here)), which resolved to www/ only because this script lived
-// at www/scripts — the one script here that did not use "../..", and therefore
+// dirname(dirname(here)), which resolved to public/ only because this script lived
+// at public/scripts — the one script here that did not use "../..", and therefore
 // the one the move to tools/photos would have silently repointed at tools/.
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const META = path.join(ROOT, "www", "images", "metadata.json");

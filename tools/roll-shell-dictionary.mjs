@@ -95,7 +95,7 @@ const only = process.argv.includes("--pages") ? "pages"
 // whatever is live, from anywhere, which is what lets a scheduled job do this unattended.
 const live = process.argv.includes("--live");
 
-const BUILT = ".build/www/a";
+const BUILT = ".build/public/a";
 const DICTS = "src/dict/a-dict";
 // Each extra candidate costs one delta per asset per deploy and widens the cache-variant
 // fan-out, while only serving visitors who skipped exactly that many deploys.
@@ -232,7 +232,7 @@ console.log("  Commit src/dict/a-dict/. build.mjs regenerates the deltas on its 
 // the whole correctness argument for this block. A dictionary is matched by the
 // SHA-256 the browser computes over the body it stored, so the only bytes worth
 // committing are the bytes production actually delivered. Those two used to be
-// identical, which made reading `.build/www` a harmless shortcut — until
+// identical, which made reading `.build/public` a harmless shortcut — until
 // WebMCP was enabled on 2026-08-06 and Cloudflare began injecting
 // `<script src="/.webmcp/bridge.js">` into every document with HTMLRewriter, at
 // the edge, after this Worker is done. The staged file has no such tag, so every
@@ -253,7 +253,7 @@ console.log("  Commit src/dict/a-dict/. build.mjs regenerates the deltas on its 
 // never sent to it.
 if (only === "shell") console.log("pages:roll — --shell given, leaving src/dict/p-dict/ alone.");
 else {
-  const BUILT_PAGES = ".build/www";
+  const BUILT_PAGES = ".build/public";
   const PDICTS = "src/dict/p-dict";
   const KEEP_PAGES = 2;
   const FETCH_CONCURRENCY = 6;
@@ -261,7 +261,7 @@ else {
     const m = n.match(/^(.+)\.([0-9a-f]{16})\.html\.br$/);
     return m ? { slug: m[1], tag: m[2], name: n } : null;
   };
-  // `.build/www/garage/pretext.html` is served at `/garage/pretext`, and an
+  // `.build/public/garage/pretext.html` is served at `/garage/pretext`, and an
   // index file is served at its directory: `garage/index.html` -> `/garage`,
   // `index.html` -> `/`.
   const routeOf = (rel) => {

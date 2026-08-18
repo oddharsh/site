@@ -34,9 +34,9 @@ const base = (process.argv[2] || "https://aadhar.sh").replace(/\/$/, "");
 const TIMEOUT_MS = Number(process.env.VERIFY_TIMEOUT_MS || 20000);
 
 // Build-output assertions (minified shells + luna.css + the .src twins) only hold
-// against a real deploy. Local `wrangler dev` serves the readable www/ tree
+// against a real deploy. Local `wrangler dev` serves the readable public/ tree
 // (unminified, no .src twins), so those checks are gated to non-localhost bases.
-// VERIFY_BUILT=1 forces them back on for a local base pointed at .build/www,
+// VERIFY_BUILT=1 forces them back on for a local base pointed at .build/public,
 // which is what check-routes-harness.mjs does: there the built tree IS the tree
 // under test, so the "deploy bypassed build.mjs" tripwire can fire pre-merge.
 const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])/.test(base);
@@ -62,7 +62,7 @@ const FULL = "L1000069_3.jpg";         // /images/full/<key>
 // hashes.json the worker bakes manifests from, so this row tracks re-encodes.
 let HASHED = null;
 try {
-  const hashes = JSON.parse(readFileSync(new URL("./www/images/hashes.json", ROOT), "utf8"));
+  const hashes = JSON.parse(readFileSync(new URL("./public/images/hashes.json", ROOT), "utf8"));
   if (hashes[META] && hashes[META].a) HASHED = `/i/${META}.${hashes[META].a}.avif`;
 } catch {}
 
@@ -150,7 +150,7 @@ const ROUTES = [
   { path: "/luna.css", status: 200, ct: "text/css", marker: "axp-desktop", maxBytes: builtOutput ? 50000 : undefined },
   // the retired SW's unregister stub: must keep serving 200 for a year+
   { path: "/sw.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "unregister" },
-  // build-output oracle (prod only — dev serves the readable www/ tree): a
+  // build-output oracle (prod only — dev serves the readable public/ tree): a
   // deploy that skipped build.mjs ships the readable 98KB nav.js with no banner
   // and 404s every .src twin. These are the tripwire for that exact bypass.
   //

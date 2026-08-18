@@ -7,7 +7,7 @@
 # stem is one of: singer | tuthill | hwa-evo | f355  (matches data-car-* in index.html)
 # input can be any format sips reads (JPG/PNG/HEIC/WEBP/AVIF...).
 #
-# Output: www/cars/<stem>.{avif,jpg}, long edge capped at 480px (2x the
+# Output: public/cars/<stem>.{avif,jpg}, long edge capped at 480px (2x the
 # 240x160 tooltip box, so it stays crisp on retina while staying tiny). The
 # tooltip CSS does object-fit:cover, so the source aspect ratio is preserved
 # here and cropped at render — no distortion.

@@ -1,5 +1,5 @@
 {
-  "_comment": "Registry for the Learning With Errors section. One entry per concept. This is the single source of truth that drives the buddy list (www/lwe/index.html), the nav.js Run destinations, and the sitemap. `node pipelines/lwe/generate.mjs wire` rewrites the marked regions from this file. Pages themselves are generated from pipelines/lwe/specs/<id>.json via `node pipelines/lwe/generate.mjs page <id>`. Voice rule for all displayed copy here: no em dashes, straight apostrophes, no emojis.",
+  "_comment": "Registry for the Learning With Errors section. One entry per concept. This is the single source of truth that drives the buddy list (src/pages/lwe/index.html), the nav.js Run destinations, and the sitemap. `node pipelines/lwe/generate.mjs wire` rewrites the marked regions from this file. Pages themselves are generated from pipelines/lwe/specs/<id>.json via `node pipelines/lwe/generate.mjs page <id>`. Voice rule for all displayed copy here: no em dashes, straight apostrophes, no emojis.",
   "concepts": [
     {
       "id": "fhe",

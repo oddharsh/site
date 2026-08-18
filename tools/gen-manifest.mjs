@@ -14,7 +14,7 @@
 // What this deliberately does NOT own (hand-authored, VERIFIED by build.mjs #8):
 //   - sitemap.xml — carries per-page hand-tuned <lastmod>; generating would
 //     flatten a real SEO freshness signal. build.mjs enforces coverage instead.
-//   - www/garage/index.html — rich hand-written gallery cards. Verified.
+//   - src/pages/garage/index.html — rich hand-written gallery cards. Verified.
 //   - nav-run.js top-level PAGES (Home/photos/…) — hand-authored. Verified subset.
 //
 // The projection functions below are PURE and exported, so build.mjs re-runs the

@@ -1,4 +1,4 @@
-// captcha-data.js — GENERATED from www/images/alt.json (the accessibility
+// captcha-data.js — GENERATED from public/images/alt.json (the accessibility
 // alt-text doubles as CAPTCHA ground truth). Stems of the author's own photos,
 // classified car vs not-car. Regenerate when photos/alt.json change.
 export const CAR_STEMS = ["XT507333","XT507345","XT507348","XT507445","XT507469","XT507488","XT507494","XT507495","XT507510","XT507517","XT507521","XT507524","XT507525","XT507527","XT507876","XT508887","XT509227","XT509269","XT509271","XT509276","XT509295","XT509334","XT509337","XT509338","XT509346","XT509349","XT509352","XT509362","XT509375","XT509391","XT509534","XT509535","XT509779","XT509782","XT509786","XT509794","XT509804","XT509809","XT509814","XT509832","XT509839","XT509848","XT509869","XT509872","XT509880","XT509890","XT509892"];

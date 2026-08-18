@@ -154,7 +154,7 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
     // difference: it offers the committed tag, so it passes on a snapshot no browser
     // could ever offer. That is exactly what happened when WebMCP turned on and
     // Cloudflare started injecting `<script src="/.webmcp/bridge.js">` at the edge,
-    // downstream of this Worker — every snapshot rolled from `.build/www` hashed
+    // downstream of this Worker — every snapshot rolled from `.build/public` hashed
     // to bytes nobody had, and the per-page tier fell back to the family dictionary
     // in total silence.
     //

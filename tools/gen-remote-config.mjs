@@ -72,7 +72,7 @@ function main() {
   // Written to the repo ROOT, not under .build/, and that is load-bearing rather
   // than tidy-minded. Wrangler resolves `main`, `assets.directory` and the build
   // command's cwd RELATIVE TO THE CONFIG FILE, so the same config placed one
-  // directory down silently becomes `.build/.build/www/...` and boots a
+  // directory down silently becomes `.build/.build/public/...` and boots a
   // Worker with no entrypoint. Keeping the derived twin beside its source means
   // every relative path in it still means what it meant. Gitignored.
   const outArg = argv[argv.indexOf("--out") + 1];

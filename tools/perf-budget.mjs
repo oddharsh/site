@@ -235,7 +235,7 @@ try {
   bad(`luna.css: could not read/parse (${e.message})`);
 }
 
-// 2) worker bundle gzip via wrangler dry-run (self-builds .build/www) -----
+// 2) worker bundle gzip via wrangler dry-run (self-builds .build/public) -----
 let dryOut = "";
 try {
   // --outfile writes the single prebuilt bundle that `check startup` consumes
@@ -331,7 +331,7 @@ try {
 
 // 3) minified shells + luna.css: banner + compressed advisory envelope --------
 for (const [file, envelope] of Object.entries(ASSET_ENVELOPES)) {
-  const path = `.build/www/${file}`;
+  const path = `.build/public/${file}`;
   let bytes;
   try { bytes = await readFile(path); } catch { bad(`${file}: missing from build output (run build first)`); continue; }
   const text = bytes.toString("utf8");
@@ -347,19 +347,19 @@ for (const [file, envelope] of Object.entries(ASSET_ENVELOPES)) {
 
 // 4) readable twins present --------------------------------------------------
 for (const t of TWINS) {
-  try { await stat(`.build/www/${t}`); ok(`twin ${t} present`); }
+  try { await stat(`.build/public/${t}`); ok(`twin ${t} present`); }
   catch { bad(`twin ${t} missing from build output`); }
 }
 
 // 4b) dictionary + generated-page pipeline ----------------------------------
 try {
-  const name = (await readdir(".build/www/a"))
+  const name = (await readdir(".build/public/a"))
     .find((f) => /^page-family\.[0-9a-f]{8}\.dict$/.test(f));
   if (!name) bad("page-family.dict: content-hashed build asset missing");
   else {
     const [dict, br] = await Promise.all([
-      readFile(`.build/www/a/${name}`),
-      readFile(`.build/www/a/${name}.br`),
+      readFile(`.build/public/a/${name}`),
+      readFile(`.build/public/a/${name}.br`),
     ]);
     if (dict.length !== 65_536 || dict.readUInt32LE(0) === 0xec30a437) {
       bad("page-family.dict: expected an exact 64KB raw-content dictionary, not a trained zstd dictionary");
@@ -374,18 +374,18 @@ try {
 }
 
 try {
-  const pages = (await readdir(".build/www", { recursive: true }))
+  const pages = (await readdir(".build/public", { recursive: true }))
     .filter((path) => path.endsWith(".html") && !path.endsWith(".src.html"));
-  const deltas = await readdir(".build/www/pd");
+  const deltas = await readdir(".build/public/pd");
   // PAGE_FAMILY_MATCH makes this the dictionary Chrome selects whenever both the
   // family and an exact page snapshot are cached. Coverage by EITHER tier is no
   // longer an honest gate: a page with only an exact delta would still receive the
   // family hash and fall through to Brotli. Require the preferred family tag on
   // every deterministic page; exact snapshots remain a high-ratio cold-family path.
-  const familyName = (await readdir(".build/www/a"))
+  const familyName = (await readdir(".build/public/a"))
     .find((name) => /^page-family\.[0-9a-f]{8}\.dict$/.test(name));
   if (!familyName) throw new Error("page-family dictionary is missing");
-  const family = await readFile(`.build/www/a/${familyName}`);
+  const family = await readFile(`.build/public/a/${familyName}`);
   const familyTag = createHash("sha256").update(family).digest("hex").slice(0, 16);
   const missing = pages
     .map((path) => path.replace(/\.html$/, "").replace(/\//g, "__"))
@@ -408,8 +408,8 @@ for (const path of [
 ]) {
   try {
     const [raw, br] = await Promise.all([
-      readFile(`.build/www/${path}`),
-      readFile(`.build/www/${path}.br`),
+      readFile(`.build/public/${path}`),
+      readFile(`.build/public/${path}.br`),
     ]);
     if (br.length >= raw.length) bad(`${path}: q11 twin is not smaller than the generated page`);
     else ok(`${path}: deterministic renderer staged ${raw.length} B -> ${br.length} B q11`);
@@ -421,7 +421,7 @@ for (const path of [
 // 5) homepage HTML: minification banner, readable twin, and semantic anchors
 let homepage;
 try {
-  homepage = await readFile(".build/www/index.html");
+  homepage = await readFile(".build/public/index.html");
 } catch {
   bad("index.html: missing from build output");
 }
@@ -433,9 +433,9 @@ if (homepage) {
     if (!marker.test(text)) bad("index.html: missing required marker " + label);
   }
   try {
-    const source = await readFile("www/index.html");
-    const twin = await readFile(`.build/www/${HTML_TWIN}`);
-    if (!source.equals(twin)) bad("index.src.html: readable twin differs from www/index.html");
+    const source = await readFile("src/pages/index.html");
+    const twin = await readFile(`.build/public/${HTML_TWIN}`);
+    if (!source.equals(twin)) bad("index.src.html: readable twin differs from src/pages/index.html");
     else ok("index.src.html: readable homepage twin present");
   } catch {
     bad("index.src.html: readable homepage twin missing");
@@ -450,16 +450,16 @@ if (homepage) {
   // a twin that came back minified would make View Source a dead link.
   try {
     const { readdir } = await import("node:fs/promises");
-    const served = (await readdir(".build/www", { recursive: true }))
+    const served = (await readdir(".build/public", { recursive: true }))
       .filter((rel) => rel.endsWith(".html") && !rel.endsWith(".src.html") && rel !== "index.html")
       .sort();
     let missing = 0, unbannered = 0, unreadable = 0;
     for (const rel of served) {
-      const page = (await readFile(`.build/www/${rel}`)).toString("utf8");
+      const page = (await readFile(`.build/public/${rel}`)).toString("utf8");
       const twinRel = rel.replace(/\.html$/, ".src.html");
       if (!page.startsWith(`<!-- minified at deploy; readable source: /${twinRel} -->`)) unbannered++;
       let twin;
-      try { twin = (await readFile(`.build/www/${twinRel}`)).toString("utf8"); }
+      try { twin = (await readFile(`.build/public/${twinRel}`)).toString("utf8"); }
       catch { missing++; continue; }
       // The claim is that the twin is the PRE-minification document, so the exact
       // test is that it does not itself carry the banner the minifier stamps on.

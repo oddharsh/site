@@ -1,6 +1,6 @@
 // build.mjs: the site's one build step, and it runs only at deploy.
 //
-// Authoring stays buildless: everything in www/, cal/, and serendipity/ is
+// Authoring stays buildless: everything in public/, cal/, and serendipity/ is
 // committed readable and is the source of truth. This script stages the static
 // www tree plus the two embedded application modules under .build/ and
 // minifies the selected client scripts (the assets pages load) plus the homepage
@@ -115,6 +115,22 @@ function containsRetiredRumHost(source) {
   return false;
 }
 
+// The served tree has THREE authored roots now, so anything that used to walk
+// www/ walks all of them. Keeping this in one place is the point: a check that
+// walks only some of the roots reports a clean tree it never fully read, which
+// is the quietest way for one of these tripwires to stop meaning anything.
+const SERVED_SOURCES = ["public", "src/pages", "src/content"];
+const servedFiles = async (filter) => {
+  const out = [];
+  for (const root of SERVED_SOURCES) {
+    for (const rel of await readdir(root, { recursive: true })) {
+      if (filter && !filter(rel)) continue;
+      out.push(`${root}/${rel}`);
+    }
+  }
+  return out;
+};
+
 // ── deploy-time invariant tripwires (explore-unknowns, phase A) ──────────────
 // Silent-failure classes this codebase has hit or is one careless edit from
 // hitting. They live here because build.mjs runs on every `pnpm run deploy:direct`, the
@@ -153,7 +169,7 @@ async function checkInvariants() {
   // 2 (hard) — wherever a worker emits a CSP with a style-src, it includes
   // 'self'. cal emits no CSP and passes vacuously (this is the exact thing that
   // blanked serendipity's taskbar).
-  for (const f of ["www/_headers", "src/worker/lib/security.js", "serendipity/serendipity.js", "cal/src/templates.js", "cal/src/index.js"]) {
+  for (const f of ["public/_headers", "src/worker/lib/security.js", "serendipity/serendipity.js", "cal/src/templates.js", "cal/src/index.js"]) {
     let s; try { s = await read(f); } catch { continue; }
     for (const m of s.matchAll(/style-src([^;'"]*(?:'[^']*')?[^;'"]*)*/g)) {
       const dir = m[0];
@@ -173,9 +189,9 @@ async function checkInvariants() {
   // contained diagnostic pair that probes the PLATFORM, wired to no shell.
   const VT_DIAGNOSTIC = /^garage\/vt-(check|b)\.html$/;
   const vtSources = [
-    ...(await readdir("www", { recursive: true }))
-      .filter((r) => /\.(html|css|js)$/.test(r) && !VT_DIAGNOSTIC.test(r))
-      .map((r) => `www/${r}`),
+    ...(await servedFiles((r) => /\.(html|css|js)$/.test(r) && !VT_DIAGNOSTIC.test(r))),
+    ...(await readdir("src/client")).filter((r) => r.endsWith(".js")).map((r) => `src/client/${r}`),
+    ...(await readdir("src/styles")).filter((r) => r.endsWith(".css")).map((r) => `src/styles/${r}`),
     "cal/src/templates.js", "serendipity/serendipity.js", "pipelines/lwe/generate.mjs",
   ];
   for (const f of vtSources) {
@@ -216,11 +232,11 @@ async function checkInvariants() {
     if (await read("src/worker/lib/desktop.js") !== artifacts.moduleSource) {
       hard.push("lib/desktop.js drifted from shell-data.mjs/site-manifest.json — run pnpm run gen:shell");
     }
-    if (await read("www/icons.svg") !== artifacts.sprite) {
+    if (await read("public/icons.svg") !== artifacts.sprite) {
       hard.push("icons.svg drifted from shell-data.mjs — run pnpm run gen:shell");
     }
     for (const [name, svg] of Object.entries(artifacts.favicons)) {
-      if (await read(`www/section-icons/${name}.svg`) !== svg) {
+      if (await read(`public/section-icons/${name}.svg`) !== svg) {
         hard.push(`section-icons/${name}.svg drifted from shell-data.mjs — run pnpm run gen:shell`);
       }
     }
@@ -272,9 +288,9 @@ async function checkInvariants() {
   // that state once, so the check belongs on the one unbypassable deploy path.
   let skillsChecked = 0;
   try {
-    const idx = JSON.parse(await read("www/.well-known/agent-skills/index.json"));
+    const idx = JSON.parse(await read("public/.well-known/agent-skills/index.json"));
     for (const s of idx.skills || []) {
-      const path = "www" + new URL(s.url).pathname;
+      const path = "public" + new URL(s.url).pathname;
       const actual = "sha256:" + createHash("sha256").update(await readFile(path)).digest("hex");
       if (s.digest !== actual) hard.push(`agent-skills: ${s.name} digest is stale — index.json says ${s.digest.slice(0, 20)}…, ${path} hashes to ${actual.slice(0, 20)}… (regenerate index.json)`);
       skillsChecked++;
@@ -288,7 +304,7 @@ async function checkInvariants() {
   // browser loading a beacon whose collector route 404s.
   try {
     const runtimeFiles = [
-      "www/index.html",
+      "src/pages/index.html",
       "src/worker/index.js",
       "wrangler.jsonc",
       "wrangler.dev.jsonc",
@@ -304,7 +320,7 @@ async function checkInvariants() {
       hard.push("src/worker/rum.js: browser RUM is retired; remove the proxy module");
     }
     for (const [name, text] of [
-      ["www/_headers", await read("www/_headers")],
+      ["public/_headers", await read("public/_headers")],
       ["src/worker/lib/security.js", await read("src/worker/lib/security.js")],
     ]) {
       if (containsRetiredRumHost(text)) {
@@ -337,13 +353,13 @@ async function checkInvariants() {
     const navPagesBlock = (nav.match(/var PAGES = \[([\s\S]*?)\n {2}\];/) || [, ""])[1];
     const navRun = new Set([...navPagesBlock.matchAll(/path:\s*"(\/[^"]*)"/g)].map((m) => m[1]));
     const navTaskbar = new Set([...desktop.matchAll(/class=\\"axp-pin\\"[^>]*href=\\"([^"]+)\\"/g)].map((m) => m[1]));
-    const sitemap = await read("www/sitemap.xml");
+    const sitemap = await read("public/sitemap.xml");
     const smLocs = new Set([...sitemap.matchAll(/<loc>https:\/\/aadhar\.sh([^<]*)<\/loc>/g)].map((m) => m[1] || "/"));
     // the generated desktop partial is chrome, not gallery content, and it links
     // every taskbar app — so a pin whose path matches the gallery shape (e.g.
     // /pixel-peeper) would otherwise read as a gallery card that isn't there.
     // Strip the partial before scanning so this only ever sees hand-written cards.
-    const gallery = (await read("www/garage/index.html"))
+    const gallery = (await read("src/pages/garage/index.html"))
       .replace(/<!-- axp:shell -->[\s\S]*?<!-- \/axp:shell -->/g, "");
     const galLinks = new Set([...gallery.matchAll(/href="(\/(?:garage\/[a-z0-9]+|pixel-peeper))"/g)].map((m) => m[1]));
 
@@ -368,7 +384,7 @@ async function checkInvariants() {
     const BARE = new Set(["index.html", "vt-b.html", "vt-check.html"]);
     const known = new Set(surfaces.map((s) => s.path));
     for (const dir of ["garage", "lwe"]) {
-      for (const f of await readdir(`www/${dir}`)) {
+      for (const f of await readdir(`public/${dir}`)) {
         if (!f.endsWith(".html") || BARE.has(f)) continue;
         const p = `/${dir}/${f.slice(0, -5)}`;
         if (!known.has(p)) hard.push(`${p} exists on disk but is not registered in site-manifest.json`);
@@ -389,15 +405,7 @@ async function checkInvariants() {
   // frontier CSS in them is the point, while a web font anywhere is still fatal.
   let tasteScanned = 0, tasteOk = [];
   try {
-    const walk = async (dir, out = []) => {
-      for (const e of await readdir(dir, { withFileTypes: true })) {
-        const p = `${dir}/${e.name}`;
-        if (e.isDirectory()) { if (!/^(i|images|og|cars|node_modules|\.well-known)$/.test(e.name)) await walk(p, out); }
-        else if (/\.(css|html|js)$/.test(e.name) && !/\.src\.(js|css|html)$/.test(e.name)) out.push(p);
-      }
-      return out;
-    };
-    const served = [...await walk("www"), "cal/src/templates.js", "serendipity/serendipity.js"];
+    const served = [...await servedFiles(), "cal/src/templates.js", "serendipity/serendipity.js"];
     const isDemo = (p) => /^www\/(garage|lwe)\//.test(p);
     // Blank block comments before pattern-matching (luna.css discusses @font-face
     // in prose twice, and a guard that fires on its own documentation gets
@@ -474,7 +482,7 @@ async function checkInvariants() {
   } catch (e) { warn.push(`taste tripwire could not run: ${e.message}`); }
 
   // 10 (hard) — no git conflict markers in anything the site serves. A rebase on
-  // 2026-07-27 left an empty-vs-empty conflict in www/garage/compression.html;
+  // 2026-07-27 left an empty-vs-empty conflict in src/pages/garage/compression.html;
   // `git add -A` swallowed the three residue lines, and the build, the perf
   // budget, and all 24 contract tests passed. A human caught them by eye, in a
   // screenshot, rendering as visible text above the taskbar. Nothing in the
@@ -498,8 +506,9 @@ async function checkInvariants() {
     const flat = async (dir, match) =>
       (await readdir(dir, { withFileTypes: true })).filter((e) => e.isFile() && match.test(e.name)).map((e) => `${dir}/${e.name}`);
     const files = [
-      ...await collect("www", /\.html$/, /^(i|images|og|cars|node_modules)$/),
-      ...await flat("www", /\.(js|css)$/),
+      ...await collect("src/pages", /\.html$/, /^(i|images|og|cars|node_modules)$/),
+      ...await flat("src/client", /\.js$/),
+      ...await flat("src/styles", /\.css$/),
       ...await collect("src/worker", /\.js$/),
       ...await flat("cal/src", /\.js$/),
       ...await flat("serendipity", /\.js$/),
@@ -591,27 +600,27 @@ const SHELLS = [
 await checkInvariants();
 
 // Generated delta dirs must never exist in the SOURCE tree. They were committed under an
-// earlier design and are pure build output now, but a leftover www/ad/ gets copied in
+// earlier design and are pure build output now, but a leftover public/ad/ gets copied in
 // by the staging step below and ships artifacts current code would never build — which is
 // how an icons.*.dcz survived #119's svg exclusion locally, long after the guard forbidding
 // it was in place. That guard stops GENERATION, not staging of stale files.
-for (const dead of ["www/ad"]) {
+for (const dead of ["public/ad"]) {
   await rm(dead, { recursive: true, force: true });
 }
 await rm(OUT, { recursive: true, force: true });
 await mkdir(OUT, { recursive: true });
 
-// 1) stage: www/ verbatim (.assetsignore rides along). No wrangler config is
+// 1) stage: public/ verbatim (.assetsignore rides along). No wrangler config is
 // copied into .build anymore — the deploy config (wrangler.jsonc) points main +
-// assets at .build/www and runs THIS script via its build.command, so the
+// assets at .build/public and runs THIS script via its build.command, so the
 // build output never needs its own config. (Local dev uses wrangler.dev.jsonc.)
 //
-// www/scripts USED TO BE the one exception here, and it was 89% of the tree's
+// public/scripts USED TO BE the one exception here, and it was 89% of the tree's
 // bytes: the zenc cargo target/ and the uv venv put it at ~232 MB across 767
 // files, against ~27 MB for everything that actually ships, so the build copied
 // a quarter of a gigabyte per run for .assetsignore to then refuse to upload.
 //
-// The pipeline lives at tools/photos now, outside www/ entirely, so there is
+// The pipeline lives at tools/photos now, outside public/ entirely, so there is
 // nothing to skip and no exception to keep correct. That is the point of moving
 // it: an exception that existed only because dev tooling sat in the served tree
 // disappears when the tooling leaves, rather than being maintained forever.
@@ -622,11 +631,18 @@ await mkdir(OUT, { recursive: true });
 // /scripts/shell-data.mjs injected into a page's prose: link-integrity reported
 // 1 internal reference pointing at nothing this site serves.
 //
-const STAGE_SKIP = new Set(["www/images/meta"]);
-await cp("www", `${OUT}/www`, {
+// The served tree is COMPOSED from four source directories now, and its shape
+// under .build/public is unchanged, so every public URL is where it was. What
+// moved is where each file is AUTHORED: public/ is byte-for-byte assets,
+// src/pages/ is every HTML document, src/content/ is authored prose, and
+// src/client + src/styles supply the shell. src/dict/ is deliberately absent:
+// the committed dictionary snapshots are build INPUT (#455).
+const STAGE_SKIP = new Set(["public/images/meta"]);
+await cp("public", `${OUT}/public`, {
   recursive: true,
   filter: (source) => !STAGE_SKIP.has(source.split(sep).join("/")),
 });
+await cp("src/pages", `${OUT}/public`, { recursive: true });
 // The Worker is a PROGRAM, not a document, so its source lives in src/worker
 // beside cal/ and serendipity/ rather than inside the tree of things a browser
 // can fetch. Its STAGED position is unchanged: wrangler.jsonc still points main
@@ -643,9 +659,9 @@ await cp("src/worker", `${OUT}/src/worker`, { recursive: true });
 // paths, so /writing/<slug>.txt, /index.md and the rest answer exactly where they
 // did. Source layout and URL layout are different questions, and only the first
 // one moved.
-await cp("src/content", `${OUT}/www`, { recursive: true });
-await cp("src/client", `${OUT}/www`, { recursive: true });
-await cp("src/styles", `${OUT}/www`, { recursive: true });
+await cp("src/content", `${OUT}/public`, { recursive: true });
+await cp("src/client", `${OUT}/public`, { recursive: true });
+await cp("src/styles", `${OUT}/public`, { recursive: true });
 await mkdir(`${OUT}/cal`, { recursive: true });
 await cp("cal/src", `${OUT}/cal/src`, { recursive: true });
 await mkdir(`${OUT}/serendipity`, { recursive: true });
@@ -660,7 +676,7 @@ await cp("serendipity/serendipity.js", `${OUT}/serendipity/serendipity.js`);
 // should not be a second committed copy that can fall behind, and generating it
 // here means there is no step anyone can forget.
 //
-// www/images/meta is in STAGE_SKIP for this reason. Copying whatever happens to be
+// public/images/meta is in STAGE_SKIP for this reason. Copying whatever happens to be
 // on the local disk and then writing over it would make the built tree depend on
 // pipeline leftovers; deriving it makes the two indexes the only source.
 //
@@ -669,11 +685,11 @@ await cp("serendipity/serendipity.js", `${OUT}/serendipity/serendipity.js`);
 // by at most 1. That is 0.32px in the 32-unit SVG these feed, and the real source
 // of truth is the photograph, which `zenc histogram` can re-bake.
 {
-  const exif = JSON.parse(await readFile(`${OUT}/www/images/exif.json`, "utf8").catch(() => "{}"));
-  const packed = JSON.parse(await readFile(`${OUT}/www/images/histograms.json`, "utf8").catch(() => "{}"));
+  const exif = JSON.parse(await readFile(`${OUT}/public/images/exif.json`, "utf8").catch(() => "{}"));
+  const packed = JSON.parse(await readFile(`${OUT}/public/images/histograms.json`, "utf8").catch(() => "{}"));
   const CHANNELS = ["l", "r", "g", "b"];
   const BINS = 64, HIST_BASE = 63, HIST_LEVELS = 64;
-  await mkdir(`${OUT}/www/images/meta`, { recursive: true });
+  await mkdir(`${OUT}/public/images/meta`, { recursive: true });
   let written = 0;
   // Parsed at the boundary: a packed entry becomes channels or nothing, and every
   // caller below branches on the channels rather than on the string. A wrong-typed
@@ -691,7 +707,7 @@ await cp("serendipity/serendipity.js", `${OUT}/serendipity/serendipity.js`);
     const out = { ...record };
     const hi = unpackChannels(packed[stem]);
     if (hi) out.hi = hi;
-    await writeFile(`${OUT}/www/images/meta/${stem}.json`, JSON.stringify(out));
+    await writeFile(`${OUT}/public/images/meta/${stem}.json`, JSON.stringify(out));
     written++;
   }
   // A silent zero here serves 404s to every fallback fetch, which reads as a
@@ -708,12 +724,12 @@ await cp("serendipity/serendipity.js", `${OUT}/serendipity/serendipity.js`);
 // geometry mirror and correctly get nothing.
 {
   const decl = clientEdgeDecl(await readFile("src/styles/luna.css", "utf8"));
-  const targets = (await readdir(`${OUT}/www`, { recursive: true }))
+  const targets = (await readdir(`${OUT}/public`, { recursive: true }))
     .filter((f) => /\.(html|js)$/.test(f) && !/\.src\.|^(i|images|og|cars)\//.test(f))
-    .map((f) => `${OUT}/www/${f}`)
+    .map((f) => `${OUT}/public/${f}`)
     // The Worker modules stage outside the asset tree now, and several of them
     // RENDER pages (/bot, /lens) that carry the geometry mirror. Walking only
-    // .build/www silently dropped those two from the mirror, which the floor
+    // .build/public silently dropped those two from the mirror, which the floor
     // below did not catch because 31 still cleared it.
     .concat((await readdir(`${OUT}/src/worker`, { recursive: true }))
       .filter((f) => f.endsWith(".js"))
@@ -820,10 +836,10 @@ const isJavaScriptScript = (openTag) => {
 };
 
 // `label` names the document in any error the inline minifiers raise. It used to
-// be hardcoded to www/index.html, which was true while the homepage was the
+// be hardcoded to src/pages/index.html, which was true while the homepage was the
 // only caller and became a lie the moment step 7b started feeding 43 pages
 // through here: /garage/horizon's CSS failure reported itself as index.html.
-const transformInlineHtmlBlocks = (source, label = "www/index.html") => {
+const transformInlineHtmlBlocks = (source, label = "src/pages/index.html") => {
   let out = "";
   let cursor = 0;
 
@@ -881,7 +897,7 @@ const minifiedPage = (staged, rel) => {
   const twinRel = rel.replace(/\.html$/, ".src.html");
   const banner = `<!-- minified at deploy; readable source: /${twinRel} -->\n`;
   return banner + minifyHtml.minify(
-    Buffer.from(transformInlineHtmlBlocks(staged, `www/${rel}`)),
+    Buffer.from(transformInlineHtmlBlocks(staged, `public/${rel}`)),
     HTML_MINIFY_CFG,
   ).toString();
 };
@@ -915,20 +931,20 @@ if (inlineProbe.includes("/* probe */") ||
   const photos = await import(pathToFileURL(resolve(OUT, "src/worker/photos.js")).href + nonce);
   const pool = photos.derivePhotoPool(
     JSON.parse(await readFile(`${OUT}/src/worker/photo-index.json`, "utf8")),
-    JSON.parse(await readFile(`${OUT}/www/images/hashes.json`, "utf8")),
+    JSON.parse(await readFile(`${OUT}/public/images/hashes.json`, "utf8")),
   );
   if (!pool.length) throw new Error("homepage bake: the photo pool is empty — the grid fallback would ship as bare frames");
-  const altMap = JSON.parse(await readFile(`${OUT}/www/images/alt.json`, "utf8").catch(() => "{}"));
-  const histograms = JSON.parse(await readFile(`${OUT}/www/images/histograms.json`, "utf8").catch(() => "{}"));
+  const altMap = JSON.parse(await readFile(`${OUT}/public/images/alt.json`, "utf8").catch(() => "{}"));
+  const histograms = JSON.parse(await readFile(`${OUT}/public/images/histograms.json`, "utf8").catch(() => "{}"));
   const twelve = grid.deterministicTwelve(pool);
   if (twelve.length !== 12) throw new Error(`homepage bake: expected 12 fallback tiles, pool yielded ${twelve.length}`);
   // A silent {} here would ship a grid whose tiles all fall back to the per-hover
   // fetch, which is the pre-#440 behaviour and looks like nothing is wrong.
   const histed = twelve.filter((p) => histograms[p.stem]).length;
-  if (histed !== 12) throw new Error(`homepage bake: ${histed} of 12 baked tiles carry a histogram — run pnpm run photos or node www/scripts/build-histogram-index.mjs`);
+  if (histed !== 12) throw new Error(`homepage bake: ${histed} of 12 baked tiles carry a histogram — run pnpm run photos or node public/scripts/build-histogram-index.mjs`);
   const slots = grid.renderPhotoSlots(twelve, altMap, { histograms });
 
-  let html = await readFile(`${OUT}/www/index.html`, "utf8");
+  let html = await readFile(`${OUT}/public/index.html`, "utf8");
   const section = /(<section class="photos"[^>]*>)([\s\S]*?)(<\/section>)/;
   if (!section.test(html)) throw new Error("homepage bake: no <section class=\"photos\"> to fill — did the grid markup move?");
   html = html.replace(section, (_m, open, _inner, close) =>
@@ -945,7 +961,7 @@ if (inlineProbe.includes("/* probe */") ||
     html = html.replace(/<time datetime="([^"]*)"[^>]*>([^<]*)<\/time>/, (m, floor) =>
       iso >= floor ? `<time datetime="${iso}">${shown}</time>` : m);
   }
-  await writeFile(`${OUT}/www/index.html`, html);
+  await writeFile(`${OUT}/public/index.html`, html);
   console.log(`homepage bake: 12 deterministic fallback tiles + last-modified ${new Date(newest).toISOString().slice(0, 10)}`);
 }
 
@@ -969,18 +985,18 @@ if (inlineProbe.includes("/* probe */") ||
 
   const pool = photos.derivePhotoPool(
     JSON.parse(await readFile(`${OUT}/src/worker/photo-index.json`, "utf8")),
-    JSON.parse(await readFile(`${OUT}/www/images/hashes.json`, "utf8")),
+    JSON.parse(await readFile(`${OUT}/public/images/hashes.json`, "utf8")),
   );
   if (!pool.length) throw new Error("photos page: the pool is empty — the contact sheet would ship with no tiles");
-  const altMap = JSON.parse(await readFile(`${OUT}/www/images/alt.json`, "utf8").catch(() => "{}"));
+  const altMap = JSON.parse(await readFile(`${OUT}/public/images/alt.json`, "utf8").catch(() => "{}"));
 
   const photosHtml = await photos.renderPhotosPage(pool, altMap).text();
   if (!photosHtml.includes("class=\"ph\"")) throw new Error("photos page: rendered document has no tiles — did the markup move?");
-  await writeFile(`${OUT}/www/photos.html`, photosHtml);
+  await writeFile(`${OUT}/public/photos.html`, photosHtml);
 
   const botHtml = await bot.renderBotPage().text();
   if (!botHtml.includes("AadharshBot")) throw new Error("bot page: rendered document does not name the crawler — did the copy move?");
-  await writeFile(`${OUT}/www/bot.html`, botHtml);
+  await writeFile(`${OUT}/public/bot.html`, botHtml);
 
   console.log(`pages(gen): photos.html ${photosHtml.length}B (${pool.length} tiles), bot.html ${botHtml.length}B`);
 }
@@ -1005,17 +1021,17 @@ if (inlineProbe.includes("/* probe */") ||
 
   const updatesHtml = await (await updates.renderWindowsUpdate(cp)).text();
   if (!updatesHtml.includes("wu-tag")) throw new Error("updates page: no changelog rows rendered — did the markup move?");
-  await writeFile(`${OUT}/www/updates.html`, updatesHtml);
+  await writeFile(`${OUT}/public/updates.html`, updatesHtml);
 
   const restoreHtml = await (await updates.renderSystemRestore(cp)).text();
   if (!restoreHtml.includes("srList")) throw new Error("restore page: no restore-point stage rendered — did the markup move?");
-  await writeFile(`${OUT}/www/restore.html`, restoreHtml);
+  await writeFile(`${OUT}/public/restore.html`, restoreHtml);
 
   console.log(`pages(gen): updates.html ${updatesHtml.length}B, restore.html ${restoreHtml.length}B (${points.length} checkpoints, newest ${points[points.length - 1].version})`);
 }
 
 // 1g) the Markdown twins + per-section llms.txt indexes. Generated from the
-// READABLE source in www/ wherever a page has one, never from the staged
+// READABLE source in public/ wherever a page has one, never from the staged
 // copy: the staged pages are about to be rewritten (client edge, hashed asset
 // refs) and index.html is about to be minified, none of which belongs in a twin.
 // Because a twin is a pure function of source bytes, generating it here makes
@@ -1049,7 +1065,7 @@ let dressPage = () => { throw new Error("explorer: dressPage used before 1g2 def
   const { files, skipped, generated } = buildTwins(".", { generatedRoot: OUT });
   twinFiles = files;
   for (const [rel, body] of files) {
-    const dest = `${OUT}/www${rel}`;
+    const dest = `${OUT}/public${rel}`;
     await mkdir(dest.slice(0, dest.lastIndexOf("/")), { recursive: true });
     await writeFile(dest, body);
   }
@@ -1127,7 +1143,7 @@ let dressPage = () => { throw new Error("explorer: dressPage used before 1g2 def
       .trim();
   };
 
-  const pages = (await readdir(`${OUT}/www`, { recursive: true }))
+  const pages = (await readdir(`${OUT}/public`, { recursive: true }))
     .filter((f) => f.endsWith(".html") && !f.endsWith('.src.html') && !/^(i|images|og|cars|a)\//.test(f))
     .filter((f) => f !== "index.html");
 
@@ -1195,7 +1211,7 @@ let dressPage = () => { throw new Error("explorer: dressPage used before 1g2 def
 
   let dressed = 0, linked = 0;
   for (const rel of pages) {
-    const file = `${OUT}/www/${rel}`;
+    const file = `${OUT}/public/${rel}`;
     const html = await readFile(file, "utf8");
     const hasChrome = html.includes('class="axp-tasks"');
     const windowed = /<div class="content"[^>]*>/.test(html) && /<div class="window"/.test(html);
@@ -1236,7 +1252,7 @@ let dressPage = () => { throw new Error("explorer: dressPage used before 1g2 def
     // polling it forever and never learns anything went wrong.
     if (!count) throw new Error(`feeds: ${route} has no items — did the manifest sections or sitemap lastmod dates change shape?`);
     items += count;
-    const dest = `${OUT}/www${route}`;
+    const dest = `${OUT}/public${route}`;
     await mkdir(dest.slice(0, dest.lastIndexOf("/")), { recursive: true });
     await writeFile(dest, body);
   }
@@ -1249,7 +1265,7 @@ let dressPage = () => { throw new Error("explorer: dressPage used before 1g2 def
 // so doing this before ASSETS.fetch keeps the rewriter path allocation-free.
 {
   // TWO sources on purpose, and the split is the whole point of the twin:
-  //   - `authored` is www/index.html untouched. It is what /index.src.html
+  //   - `authored` is src/pages/index.html untouched. It is what /index.src.html
   //     ships, and perf-budget.mjs asserts the twin is byte-identical to it.
   //     "Readable source" means the file a human wrote, not a build artifact.
   //   - `staged` is that file plus step 1b's injected client edge, and it is what
@@ -1258,11 +1274,11 @@ let dressPage = () => { throw new Error("explorer: dressPage used before 1g2 def
   //     mirror (it did, for one commit).
   // The twin is not lying by omission: the inline block says in so many words
   // that the client edge is injected by build.mjs from luna.css.
-  const authored = await readFile("www/index.html", "utf8");
-  const staged = await readFile(`${OUT}/www/index.html`, "utf8");
+  const authored = await readFile("src/pages/index.html", "utf8");
+  const staged = await readFile(`${OUT}/public/index.html`, "utf8");
   const srcPath = "/index.src.html";
   const banner = `<!-- minified at deploy; readable source: ${srcPath} -->\n`;
-  const inlineMinified = transformInlineHtmlBlocks(staged, "www/index.html");
+  const inlineMinified = transformInlineHtmlBlocks(staged, "src/pages/index.html");
   const body = minifyHtml.minify(Buffer.from(inlineMinified), HTML_MINIFY_CFG).toString();
   const min = banner + body;
   for (const [label, marker] of HTML_MARKERS) {
@@ -1270,8 +1286,8 @@ let dressPage = () => { throw new Error("explorer: dressPage used before 1g2 def
   }
   // the served copy must actually carry the injection; the twin must not
   if (!/border:\s*6px solid #ece9d8/.test(min)) throw new Error("index.html: the minified homepage lost the injected client edge");
-  await writeFile(`${OUT}/www/${srcPath.slice(1)}`, authored);
-  await writeFile(`${OUT}/www/index.html`, min);
+  await writeFile(`${OUT}/public/${srcPath.slice(1)}`, authored);
+  await writeFile(`${OUT}/public/index.html`, min);
   console.log(`index.html: ${staged.length} -> ${min.length} bytes (+ ${srcPath}, byte-identical to source; inline JS/CSS use existing minifiers)`);
 }
 
@@ -1279,7 +1295,7 @@ let dressPage = () => { throw new Error("explorer: dressPage used before 1g2 def
 // 3) shells: deploy the readable original as <name>.src.js, minify the served file
 for (const [file, srcPath, marker] of SHELLS) {
   const src = await readFile(`src/client/${file}`, "utf8");
-  await writeFile(`${OUT}/www/${srcPath.slice(1)}`, src);
+  await writeFile(`${OUT}/public/${srcPath.slice(1)}`, src);
 
   const code = minifyJavaScript(`src/client/${file}`, src);
   const banner = `/*! minified at deploy - readable source: ${srcPath} */\n`;
@@ -1290,7 +1306,7 @@ for (const [file, srcPath, marker] of SHELLS) {
     throw new Error(`${file}: minified output lost the "${marker}" marker`);
   }
 
-  await writeFile(`${OUT}/www/${file}`, min);
+  await writeFile(`${OUT}/public/${file}`, min);
   console.log(`${file}: ${src.length} -> ${min.length} bytes (+ ${srcPath})`);
 }
 
@@ -1304,19 +1320,19 @@ for (const [file, srcPath, marker] of SHELLS) {
 // was extracted byte-for-byte from luna.css and loads only with its matching JS.
 {
   const src = await readFile("src/styles/luna.css", "utf8");
-  await writeFile(`${OUT}/www/luna.src.css`, src);
+  await writeFile(`${OUT}/public/luna.src.css`, src);
   const code = minifyCss("src/styles/luna.css", src);
   const out = `/*! minified at deploy - readable source: /luna.src.css */\n` + code;
-  await writeFile(`${OUT}/www/luna.css`, out);
+  await writeFile(`${OUT}/public/luna.css`, out);
   console.log(`luna.css: ${src.length} -> ${out.length} bytes (+ /luna.src.css)`);
 }
 
 for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   const src = await readFile(`src/styles/${file}`, "utf8");
-  await writeFile(`${OUT}/www/${file.replace(".css", ".src.css")}`, src);
+  await writeFile(`${OUT}/public/${file.replace(".css", ".src.css")}`, src);
   const code = minifyCss(`src/styles/${file}`, src);
   const out = `/*! minified at deploy - readable source: /${file.replace(".css", ".src.css")} */\n` + code;
-  await writeFile(`${OUT}/www/${file}`, out);
+  await writeFile(`${OUT}/public/${file}`, out);
   console.log(`${file}: ${src.length} -> ${out.length} bytes`);
 }
 
@@ -1325,16 +1341,16 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
 // luna.css: author the source directly, ship a small minified render-blocker.
 {
   const src = await readFile("src/styles/lwe-base.css", "utf8");
-  await writeFile(`${OUT}/www/lwe-base.src.css`, src);
+  await writeFile(`${OUT}/public/lwe-base.src.css`, src);
   const code = minifyCss("src/styles/lwe-base.css", src);
   const out = `/*! minified at deploy - readable source: /lwe-base.src.css */\n` + code;
-  await writeFile(`${OUT}/www/lwe-base.css`, out);
+  await writeFile(`${OUT}/public/lwe-base.css`, out);
   console.log(`lwe-base.css: ${src.length} -> ${out.length} bytes (+ /lwe-base.src.css)`);
 }
 
 // 5) worker-module CSS: minify static CSS template literals marked with a
 // leading /*min*/ sentinel. Dynamic page CSS stays unmarked; readable source
-// remains in www/ while only the staged worker bytes shrink on the wire.
+// remains in public/ while only the staged worker bytes shrink on the wire.
 {
   const dir = `${OUT}/src/worker`;
   const jsFiles = (await readdir(dir, { recursive: true })).filter((f) => f.endsWith(".js"));
@@ -1376,7 +1392,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
 // renderers after CSS-literal minification, then the ordinary hashing and page
 // precompression passes treat the results exactly like garage/LWE documents.
 {
-  const root = resolve(OUT, "www");
+  const root = resolve(OUT, "public");
   const assets = {
     async fetch(input) {
   // A deliberate two-shape signature (string | Request), not a wire value.
@@ -1401,31 +1417,31 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
 
   const lensResponse = lens.renderLensShell();
   if (lensResponse.status !== 200) throw new Error(`static /lens renderer returned ${lensResponse.status}`);
-  await writeFile(`${OUT}/www/lens.html`, await lensResponse.text());
+  await writeFile(`${OUT}/public/lens.html`, await lensResponse.text());
 
   const runResponse = run.renderRun();
   if (runResponse.status !== 200) throw new Error(`static /run renderer returned ${runResponse.status}`);
   const runHtml = await runResponse.text();
   if (!runHtml.includes('form action="/run"')) throw new Error("static /run renderer lost its no-JS form");
-  await writeFile(`${OUT}/www/run.html`, runHtml);
+  await writeFile(`${OUT}/public/run.html`, runHtml);
 
   const searchResponse = search.renderSearchPage();
   if (searchResponse.status !== 200) throw new Error(`static /search renderer returned ${searchResponse.status}`);
   const searchHtml = await searchResponse.text();
   if (!searchHtml.includes('form method="get" action="/search"')) throw new Error("static /search renderer lost its blank search form");
-  await writeFile(`${OUT}/www/search.html`, searchHtml);
+  await writeFile(`${OUT}/public/search.html`, searchHtml);
 
   const env = { ASSETS: assets };
   const indexResponse = await writing.renderWritingIndex(env);
   if (indexResponse.status !== 200) throw new Error(`static /writing renderer returned ${indexResponse.status}`);
-  await mkdir(`${OUT}/www/writing`, { recursive: true });
-  await writeFile(`${OUT}/www/writing/index.html`, await indexResponse.text());
+  await mkdir(`${OUT}/public/writing`, { recursive: true });
+  await writeFile(`${OUT}/public/writing/index.html`, await indexResponse.text());
 
-  const posts = JSON.parse(await readFile(`${OUT}/www/writing/posts.json`, "utf8"));
+  const posts = JSON.parse(await readFile(`${OUT}/public/writing/posts.json`, "utf8"));
   for (const post of posts) {
     const response = await writing.renderWritingPost(post.slug, env);
     if (response.status !== 200) throw new Error(`static /writing/${post.slug} renderer returned ${response.status}`);
-    await writeFile(`${OUT}/www/writing/${post.slug}.html`, await response.text());
+    await writeFile(`${OUT}/public/writing/${post.slug}.html`, await response.text());
   }
   console.log(`static renders: /lens + blank /run + blank /search + /writing index + ${posts.length} notes staged from canonical Worker renderers`);
 }
@@ -1446,7 +1462,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
 {
   const hash8 = (buf) => createHash("sha256").update(buf).digest("hex").slice(0, 8);
   const esc = (s) => s.replace(/[\\/.*+?^${}()|[\]]/g, "\\$&");
-  await mkdir(`${OUT}/www/a`, { recursive: true });
+  await mkdir(`${OUT}/public/a`, { recursive: true });
 
   const ASSETS = [
     { attr: "src",  from: "/nav.js",   base: "nav",  ext: "js",  witness: "index.html" },
@@ -1554,17 +1570,17 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     // .src twins, and NOT `a/` — the hashed copies are already-final bytes, which is
     // precisely why each asset must be rewritten before the next one is hashed.
     const stringTargets = [`${OUT}/serendipity/serendipity.js`];
-    for (const rel of await readdir(`${OUT}/www`, { recursive: true })) {
+    for (const rel of await readdir(`${OUT}/public`, { recursive: true })) {
       if (rel.includes(".src.")) continue;
       if (rel.endsWith(".html") || (rel.endsWith(".js") && !rel.startsWith("a/"))) {
-        stringTargets.push(`${OUT}/www/${rel}`);
+        stringTargets.push(`${OUT}/public/${rel}`);
       }
     }
     let hits = 0;
     for (const a of STRING_ASSETS) {
-      const bytes = await readFile(`${OUT}/www${a.file}`);
+      const bytes = await readFile(`${OUT}/public${a.file}`);
       const to = `/a/${a.base}.${createHash("sha256").update(bytes).digest("hex").slice(0, 8)}.${a.ext || "js"}`;
-      await writeFile(`${OUT}/www${to}`, bytes);
+      await writeFile(`${OUT}/public${to}`, bytes);
       hashedFor[hashKey(a)] = to;
       const reps = a.mk(to);
       for (const path of stringTargets) {
@@ -1577,11 +1593,11 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     }
     // Witnesses: each island's loader must now carry the hashed URL, or the enrolment
     // silently did nothing and the deploy must not proceed.
-    const idx = await readFile(`${OUT}/www/index.html`, "utf8");
-    const nav = await readFile(`${OUT}/www/nav.js`, "utf8");
-    const lens = await readFile(`${OUT}/www/lens.js`, "utf8");
-    const tip = await readFile(`${OUT}/www${hashedFor.tooltip}`, "utf8");
-    const run = await readFile(`${OUT}/www${hashedFor["nav-run"]}`, "utf8");
+    const idx = await readFile(`${OUT}/public/index.html`, "utf8");
+    const nav = await readFile(`${OUT}/public/nav.js`, "utf8");
+    const lens = await readFile(`${OUT}/public/lens.js`, "utf8");
+    const tip = await readFile(`${OUT}/public${hashedFor.tooltip}`, "utf8");
+    const run = await readFile(`${OUT}/public${hashedFor["nav-run"]}`, "utf8");
     if (!idx.includes(hashedFor.tooltip)) throw new Error("index.html was not repointed to hashed tooltip.js");
     if (!idx.includes(hashedFor.hoist) || !run.includes(hashedFor.hoist)) throw new Error("a hoist.js loader was not repointed (index.html or nav-run.js)");
     if (!nav.includes(hashedFor["nav-run"]) || !nav.includes(hashedFor["nav-tray"])) throw new Error("nav.js was not repointed to its first-interaction islands");
@@ -1592,7 +1608,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     if (!lens.includes(hashedFor["lens-reader"])) throw new Error("lens.js was not repointed to hashed lens-reader.js");
     if (!lens.includes(hashedFor["lens-wire"])) throw new Error("lens.js was not repointed to hashed lens-wire.js");
     if (!lens.includes(hashedFor["lens-tools"])) throw new Error("lens.js was not repointed to hashed lens-tools.js");
-    const lensBoot = await readFile(`${OUT}/www/lens-boot.js`, "utf8");
+    const lensBoot = await readFile(`${OUT}/public/lens-boot.js`, "utf8");
     if (!lensBoot.includes(hashedFor.lens)) throw new Error("lens-boot.js was not repointed to hashed lens.js");
     // the SERVED tooltip bytes, not the staged source: this is the copy the browser gets,
     // and the one the old ordering left pointing at the unhashed duplicate.
@@ -1602,10 +1618,10 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
 
   const reps = [];
   for (const a of ASSETS) {
-    const bytes = await readFile(`${OUT}/www${a.from}`);   // exact served bytes (banner incl.)
+    const bytes = await readFile(`${OUT}/public${a.from}`);   // exact served bytes (banner incl.)
     const to = `/a/${a.base}.${hash8(bytes)}.${a.ext}`;
     hashedFor[a.base] = to;
-    await writeFile(`${OUT}/www${to}`, bytes);
+    await writeFile(`${OUT}/public${to}`, bytes);
     // one regex for quoted "x" AND backslash-escaped \"x\" (writing.js builds its
     // <head> as an escaped string); a second for minify-html's unquoted x.
     const frag = a.frag ? "(#[\\w-]+)" : "";
@@ -1618,7 +1634,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   // repoint: every served HTML file + the two worker tag-emitters (chrome.js,
   // writing.js) + the serendipity shell. NOT the top-level shell scripts /
   // luna.css, and NOT the readable *.src.html twin (it must stay byte-identical
-  // to www/index.html for the perf-budget twin check — View Source is the
+  // to src/pages/index.html for the perf-budget twin check — View Source is the
   // authoring source, which keeps the plain /nav.js the fallback still serves).
   // cal/src rides along: /coffee's SSR templates load the shell too, and were the
   // whole reason the unhashed fallbacks existed. Their nav ref is attribute-shaped so
@@ -1628,8 +1644,8 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   for (const rel of await readdir(`${OUT}/cal/src`).catch(() => [])) {
     if (rel.endsWith(".js")) targets.push(`${OUT}/cal/src/${rel}`);
   }
-  for (const rel of await readdir(`${OUT}/www`, { recursive: true })) {
-    if (rel.endsWith(".html") && !rel.endsWith(".src.html")) targets.push(`${OUT}/www/${rel}`);
+  for (const rel of await readdir(`${OUT}/public`, { recursive: true })) {
+    if (rel.endsWith(".html") && !rel.endsWith(".src.html")) targets.push(`${OUT}/public/${rel}`);
   }
   // The Worker stages beside cal and serendipity now rather than inside the asset
   // tree, so it needs its own walk. It was never served (.assetsignore listed
@@ -1699,7 +1715,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     const parts = [];
     let total = 0;
     for (const rel of BASE_CORPUS) {
-      const bytes = await readFile(`${OUT}/www/${rel}`);
+      const bytes = await readFile(`${OUT}/public/${rel}`);
       parts.push(bytes);
       total += bytes.length;
       if (total >= SIZE) break;
@@ -1713,7 +1729,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     const base = Buffer.concat(parts).subarray(0, SIZE);
     const representatives = [];
     for (const rel of REPRESENTATIVES) {
-      const staged = await readFile(`${OUT}/www/${rel}`, "utf8");
+      const staged = await readFile(`${OUT}/public/${rel}`, "utf8");
       const final = Buffer.from(minifiedPage(staged, rel));
       representatives.push(final.subarray(Math.max(0, final.length - REPRESENTATIVE_BYTES)));
     }
@@ -1726,7 +1742,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
       throw new Error("page-family dictionary starts with the zstd --train magic — dcz needs RAW bytes, not a trained dictionary");
     }
     const to = `/a/page-family.${hash8(dictionary)}.dict`;
-    await writeFile(`${OUT}/www${to}`, dictionary);
+    await writeFile(`${OUT}/public${to}`, dictionary);
     hashedFor["page-family"] = to;
     console.log(`hashed asset: site-page corpus -> ${to} (${dictionary.length} raw bytes)`);
   }
@@ -1752,7 +1768,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   // `/luna.css` PATH-pattern rules (their own cache blocks) have no angle
   // brackets, so they're left alone.
   {
-    const p = `${OUT}/www/_headers`;
+    const p = `${OUT}/public/_headers`;
     const src = await readFile(p, "utf8");
     const out = src
       .split("</luna.css>").join(`<${hashedFor.luna}>`)
@@ -1771,7 +1787,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   if (!refCount) throw new Error("hashed-asset rewrite matched zero references — did the src=/href= ref shape change?");
   for (const a of ASSETS) {
     const to = hashedFor[a.base];
-    const body = await readFile(`${OUT}/www/${a.witness}`, "utf8");
+    const body = await readFile(`${OUT}/public/${a.witness}`, "utf8");
     if (!body.includes(to)) throw new Error(`${a.witness} was not repointed to hashed ${a.base} (${to})`);
   }
   console.log(`hashed-asset refs: repointed ${refCount} references across ${filesTouched} files`);
@@ -1798,7 +1814,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
 // serves a .br twin only when the request actually offers `br` AND the twin exists.
 // A skipped build step, or a client without brotli, gets the identity bytes.
 {
-  const dir = `${OUT}/www/a`;
+  const dir = `${OUT}/public/a`;
   const files = (await readdir(dir)).filter((f) => /\.(js|css|svg|dict)$/.test(f));
   if (!files.length) throw new Error("precompression found no /a/ shell assets — did step 6 stop emitting them?");
   let raw = 0, enc = 0;
@@ -1871,7 +1887,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     const parse = (n) => { const m = n.match(/^(.+)\.([0-9a-f]{8})\.(js|css|svg)$/); return m ? { base: m[1], hash8: m[2], ext: m[3], name: n } : null; };
     const shell = files.map(parse).filter(Boolean);
     const cands = dicts.map(parse).filter(Boolean);
-    if (cands.length) await mkdir(`${OUT}/www/ad`, { recursive: true });
+    if (cands.length) await mkdir(`${OUT}/public/ad`, { recursive: true });
     let n = 0, deltaBytes = 0;
     for (const asset of shell) {
       // Images sit out the dictionary path — see DICTIONARY_TYPES in lib/assets.js. The
@@ -1896,7 +1912,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
           continue;
         }
         const tag = digest.toString("hex").slice(0, 16);
-        await writeFile(`${OUT}/www/ad/${asset.base}.${asset.hash8}.${tag}.dcz`, out);
+        await writeFile(`${OUT}/public/ad/${asset.base}.${asset.hash8}.${tag}.dcz`, out);
         n++; deltaBytes += out.length;
         console.log(`delta: /ad/${asset.base}.${asset.hash8}.${tag}.dcz ${out.length} bytes (vs ${plainTwin} plain br)`);
       }
@@ -1935,7 +1951,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
 // ever exists for that URL.
 {
   const { PAGE_MARKERS } = await import("./lib/html-markers.mjs");
-  const pages = (await readdir(`${OUT}/www`, { recursive: true }))
+  const pages = (await readdir(`${OUT}/public`, { recursive: true }))
     .filter((rel) => rel.endsWith(".html") && !rel.endsWith(".src.html") && rel !== "index.html")
     .sort();
 
@@ -1951,7 +1967,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
 
   let before = 0, after = 0, checked = 0, generated = 0;
   for (const rel of pages) {
-    const staged = await readFile(`${OUT}/www/${rel}`, "utf8");
+    const staged = await readFile(`${OUT}/public/${rel}`, "utf8");
     const twinRel = rel.replace(/\.html$/, ".src.html");
     const min = minifiedPage(staged, rel);
 
@@ -1972,7 +1988,13 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
 
     let twin = staged;
     try {
-      twin = await readFile(`www/${rel}`, "utf8");
+      // The AUTHORED page, which lives at src/pages now. Pointing this at the
+      // staged copy instead is silent: the catch below just counts the page as
+      // "no authored source" and ships the staged bytes, which by this point
+      // carry rewritten /a/ hashes. The twin then stops being the readable
+      // original that View Source is supposed to show. The counter in the log
+      // line is the tell, 12 from staged against 47.
+      twin = await readFile(`src/pages/${rel}`, "utf8");
       // The authored file is the readable source, but it predates the Explorer
       // chrome the build injects at 1g2, and a twin missing markup the page
       // carries stops being the same program — which is the entire argument for
@@ -1983,8 +2005,8 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     } catch {
       generated++;
     }
-    await writeFile(`${OUT}/www/${twinRel}`, twin);
-    await writeFile(`${OUT}/www/${rel}`, min);
+    await writeFile(`${OUT}/public/${twinRel}`, twin);
+    await writeFile(`${OUT}/public/${rel}`, min);
     before += staged.length;
     after += min.length;
   }
@@ -2009,7 +2031,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   const { makeResolver, internalRefs } = await import("./lib/link-integrity.mjs");
 
   const served = new Set();
-  for (const rel of await readdir(`${OUT}/www`, { recursive: true })) served.add("/" + rel);
+  for (const rel of await readdir(`${OUT}/public`, { recursive: true })) served.add("/" + rel);
 
   const idxSrc = await readFile("src/worker/index.js", "utf8");
   const wranglerSrc = await readFile("wrangler.jsonc", "utf8");
@@ -2028,7 +2050,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   const dangling = new Map();
   let refs = 0;
   for (const doc of docs) {
-    for (const path of internalRefs(await readFile(`${OUT}/www${doc}`, "utf8"))) {
+    for (const path of internalRefs(await readFile(`${OUT}/public${doc}`, "utf8"))) {
       refs++;
       if (resolves(path)) continue;
       if (!dangling.has(path)) dangling.set(path, new Set());
@@ -2060,7 +2082,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
 // short version is that these documents are precompressed, so nothing can be
 // injected into them per request.
 {
-  const pages = (await readdir(`${OUT}/www`, { recursive: true }))
+  const pages = (await readdir(`${OUT}/public`, { recursive: true }))
     .filter((rel) => rel.endsWith(".html") && !rel.endsWith(".src.html"))
     .sort();
 
@@ -2185,7 +2207,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   const handlers = [];
   let blocks = 0;
   for (const page of pages) {
-    const source = await readFile(`${OUT}/www/${page}`, "utf8");
+    const source = await readFile(`${OUT}/public/${page}`, "utf8");
     const found = collect(source, page);
     handlers.push(...found.handlers);
     // Record EVERY staged document, including the ones with no inline script at
@@ -2251,7 +2273,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   // per request and no precomputed response could equal them. Step 1d bakes
   // those out, so it is now an ordinary deterministic document and earns the
   // same twin, delta, and validator as the rest.
-  const pages = (await readdir(`${OUT}/www`, { recursive: true }))
+  const pages = (await readdir(`${OUT}/public`, { recursive: true }))
     .filter((rel) => rel.endsWith(".html") && !rel.endsWith(".src.html"));
   // slug: the request path with separators folded, so it survives as one filename segment.
   const slugOf = (assetPath) => assetPath.replace(/\.html$/, "").replace(/\//g, "__");
@@ -2263,23 +2285,23 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     return m ? { slug: m[1], tag: m[2], name: n } : null;
   };
   const pageDicts = dicts.map(parseDict).filter(Boolean);
-  const familyName = (await readdir(`${OUT}/www/a`)).find((n) => /^page-family\.[0-9a-f]{8}\.dict$/.test(n));
-  const familyBytes = familyName ? await readFile(`${OUT}/www/a/${familyName}`) : null;
+  const familyName = (await readdir(`${OUT}/public/a`)).find((n) => /^page-family\.[0-9a-f]{8}\.dict$/.test(n));
+  const familyBytes = familyName ? await readFile(`${OUT}/public/a/${familyName}`) : null;
   const familyTag = familyBytes ? createHash("sha256").update(familyBytes).digest("hex").slice(0, 16) : null;
   if (familyBytes) {
     console.log(`page-delta: site-page dictionary ${familyName} (${familyBytes.length} bytes, tag ${familyTag})`);
   }
-  if (familyBytes || pageDicts.length) await mkdir(`${OUT}/www/pd`, { recursive: true });
+  if (familyBytes || pageDicts.length) await mkdir(`${OUT}/public/pd`, { recursive: true });
 
   let brCount = 0, brRaw = 0, brEnc = 0, dCount = 0, dBytes = 0, dPlain = 0, pageCount = 0, pageBytes = 0, familyCount = 0, familyBytesOut = 0;
   const compressedPages = await Promise.all(pages.map(async (page) => {
-    const bytes = await readFile(`${OUT}/www/${page}`);
+    const bytes = await readFile(`${OUT}/public/${page}`);
     return { page, bytes, br: await brotliQ11(bytes) };
   }));
   const deltaJobs = [];
   for (const { page, bytes, br } of compressedPages) {
     if (br.length < bytes.length) {
-      await writeFile(`${OUT}/www/${page}.br`, br);
+      await writeFile(`${OUT}/public/${page}.br`, br);
       brCount++; brRaw += bytes.length; brEnc += br.length;
     }
 
@@ -2302,7 +2324,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
       console.log(`page-delta: SKIPPED ${job.slug} vs ${label} (dcz ${out.length} >= br ${job.br.length})`);
       continue;
     }
-    await writeFile(`${OUT}/www/pd/${job.slug}.${digest.toString("hex").slice(0, 16)}.dcz`, out);
+    await writeFile(`${OUT}/public/pd/${job.slug}.${digest.toString("hex").slice(0, 16)}.dcz`, out);
     dCount++; dBytes += out.length; dPlain += job.br.length;
     if (job.kind === "page") {
       pageCount++; pageBytes += out.length;

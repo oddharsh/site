@@ -16,8 +16,8 @@ import { buildHistogramIndex } from "./build-histogram-index.mjs";
 import { asRecord, asText } from "../../src/worker/lib/parse.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const IMAGES = path.join(ROOT, "www/images");
-const HASHED = path.join(ROOT, "www/i");
+const IMAGES = path.join(ROOT, "public/images");
+const HASHED = path.join(ROOT, "public/i");
 const META = path.join(IMAGES, "meta");
 
 const json = async (file) => JSON.parse(await readFile(file, "utf8"));
@@ -140,7 +140,7 @@ if (orphans.length) fail(`unreferenced hashed pixel files: ${orphans.join(", ")}
 // prunes the old file — which would leave those pages 404ing on images with nothing
 // to catch it. Walk the authored HTML/JS and hold every hardcoded reference to the
 // same standard as the manifest's own tiers.
-const HARDCODED_ROOTS = ["www/garage", "www/lwe", "www/index.html"];
+const HARDCODED_ROOTS = ["public/garage", "public/lwe", "src/pages/index.html"];
 const walk = async (target) => {
   const entry = await stat(target);
   if (!entry.isDirectory()) return [target];
