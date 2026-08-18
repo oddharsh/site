@@ -1,0 +1,122 @@
+name: Bun release watch
+
+# The bun migration (#443) is finished and parked on ONE upstream event: bun 1.4
+# going GA. This job is the thing that notices, because otherwise the trigger for
+# a day's worth of completed work is somebody remembering to check npm.
+#
+# WHAT MAKES IT WORTH A JOB RATHER THAN A CALENDAR REMINDER. Three separate
+# facts have to become true together, and each was measured false on 2026-08-18:
+#
+#   * npm has to carry a 1.4. It carries 1.3.14, and its `canary` dist-tag points
+#     at a 1.3.13 canary from April.
+#   * a RELEASE has to be tagged. `bun-v1.4.0-canary.1` answers 404; the 1.4 line
+#     ships only as an asset under the rolling `canary` tag.
+#   * Cloudflare's build image has to resolve it. The image takes a released
+#     version or nothing: BUN_VERSION=canary is ignored, and
+#     packageManager: bun@canary silently degrades to the image default.
+#
+# The first two are checkable from here. The third follows from the second, since
+# the image resolves released versions, and the probe kept on the parked branch
+# (tools/bun-image-probe.mjs) is how it gets confirmed on the day.
+#
+# ADVISORY BY CONSTRUCTION: it opens an issue and nothing else. It gates no
+# merge, touches no branch, and holds no Cloudflare credential.
+
+on:
+  schedule:
+    - cron: "17 9 * * 1"        # Mondays, off the hour so it does not pile onto the :00 rush
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write                 # the only write it has, and only to say "it shipped"
+
+concurrency:
+  group: bun-release-watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Is bun 1.4 released yet?
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          # npm first: it is the registry `packageManager` resolution ultimately
+          # reads, and it answers without authentication.
+          npm_latest=$(npm view bun version 2>/dev/null || echo "unknown")
+          echo "npm latest: $npm_latest"
+
+          # Then the release tags, filtered to STABLE. A canary tag rolling to
+          # 1.4 means nothing here: the image cannot install a canary, which is
+          # the whole reason the migration is parked.
+          gh_stable=$(gh api repos/oven-sh/bun/releases --paginate --jq \
+            '.[] | select(.prerelease == false and .draft == false) | .tag_name' 2>/dev/null \
+            | grep -E '^bun-v[0-9]+\.[0-9]+\.[0-9]+$' | head -1 || true)
+          gh_stable=${gh_stable:-unknown}
+          echo "newest stable release: $gh_stable"
+
+          major_minor() { echo "$1" | sed -E 's/^bun-v//; s/^([0-9]+)\.([0-9]+).*/\1.\2/'; }
+          npm_mm=$(major_minor "$npm_latest")
+          gh_mm=$(major_minor "$gh_stable")
+
+          # `sort -V` rather than a numeric compare, so 1.10 does not read as
+          # older than 1.4 the day bun gets there.
+          at_least_14() {
+            [ "$1" != "unknown" ] || return 1
+            [ "$(printf '%s\n1.4\n' "$1" | sort -V | head -1)" = "1.4" ]
+          }
+
+          if at_least_14 "$npm_mm" || at_least_14 "$gh_mm"; then
+            echo "shipped=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "shipped=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "npm=$npm_latest" >> "$GITHUB_OUTPUT"
+          echo "release=$gh_stable" >> "$GITHUB_OUTPUT"
+
+      - name: Say so, once
+        if: steps.check.outputs.shipped == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NPM: ${{ steps.check.outputs.npm }}
+          RELEASE: ${{ steps.check.outputs.release }}
+        run: |
+          set -euo pipefail
+          title="bun 1.4 is out: resume the toolchain migration"
+
+          # ONCE. This runs weekly and the condition stays true forever after it
+          # flips, so without this it files an issue every Monday until somebody
+          # does the migration.
+          if gh issue list --state all --search "$title in:title" --json title \
+            --jq '.[].title' | grep -Fqx "$title"; then
+            echo "already filed; nothing to do"
+            exit 0
+          fi
+
+          gh issue create --title "$title" --body "$(cat <<BODY
+          npm reports \`$NPM\`, newest stable release \`$RELEASE\`.
+
+          The migration is complete and parked in #443. It is not waiting on
+          review or on a fix; it was waiting on this.
+
+          The day-one checklist lives in [\`docs/BUN-MIGRATION.md\`](https://github.com/oddharsh/site/blob/bun/greenfield/docs/BUN-MIGRATION.md)
+          on that branch. In short: point \`packageManager\` at the released 1.4,
+          regenerate \`bun.lock\` (it becomes v2, which released bun could not
+          read and which is what actually blocked Workers Builds), delete
+          \`config/bun-canary.json\` and the digest step in
+          \`.github/actions/setup-bun\`, drop the lockfile tripwire and collapse
+          the two-pin contract test back into one, then the dashboard commands
+          and \`infra.json\` in that order using #445.
+
+          Confirm the image before believing any of it: \`tools/bun-image-probe.mjs\`
+          on the parked branch re-asks the three questions this job cannot
+          (which bun the image resolves, whether the lockfile parses, what node
+          it carries), and the byte-identical build control is the bar for the
+          whole thing.
+          BODY
+          )"
