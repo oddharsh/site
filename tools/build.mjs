@@ -637,6 +637,13 @@ await cp("src/worker", `${OUT}/src/worker`, { recursive: true });
 // back to the ROOT of the served tree because their public URLs are /nav.js and
 // /luna.css. Source layout and URL layout are different questions; only the first
 // one moved, so every served byte and every /a/ content hash is untouched.
+// Authored PROSE and the registries beside it: the writing posts and their
+// posts.json, the hand-written Markdown twins for the Worker-rendered pages, and
+// the four root .md documents. They stage back into the served tree at the SAME
+// paths, so /writing/<slug>.txt, /index.md and the rest answer exactly where they
+// did. Source layout and URL layout are different questions, and only the first
+// one moved.
+await cp("src/content", `${OUT}/www`, { recursive: true });
 await cp("src/client", `${OUT}/www`, { recursive: true });
 await cp("src/styles", `${OUT}/www`, { recursive: true });
 await mkdir(`${OUT}/cal`, { recursive: true });

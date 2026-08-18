@@ -2676,7 +2676,7 @@ test("robots.txt never forbids a path the site advertises to agents", async () =
     "_headers":                 await read("www/_headers"),
     ".well-known/api-catalog":  await read("www/.well-known/api-catalog"),
     "agent-card.json":          await read("www/.well-known/agent-card.json"),
-    "auth.md":                  await read("www/auth.md"),
+    "auth.md":                  await read("src/content/auth.md"),
     "llms.txt":                 await read("www/llms.txt"),
   };
 
@@ -2702,7 +2702,7 @@ test("browser RUM and its ledger proxy stay fully removed", async () => {
   const wranglerDev = await readFile(new URL("wrangler.dev.jsonc", ROOT), "utf8");
   const headers = await readFile(new URL("www/_headers", ROOT), "utf8");
   const whoareyou = await readFile(new URL("src/worker/whoareyou.js", ROOT), "utf8");
-  const whoareyouMd = await readFile(new URL("www/md/whoareyou.md", ROOT), "utf8");
+  const whoareyouMd = await readFile(new URL("src/content/md/whoareyou.md", ROOT), "utf8");
   const securityPage = await readFile(new URL("src/worker/security.js", ROOT), "utf8");
 
   // The loader, both route legs, both asset allowlists, and the dedicated module

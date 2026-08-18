@@ -1170,7 +1170,7 @@ async function checkCodeScanning(repo, slug, token) {
 
 // Which pages answer an agent in Markdown, measured on the wire rather than inferred
 // from filenames. The twins arrive by three different conventions — /index.md for the
-// homepage, www/md/<name>.md for /whoareyou and /bot, build-generated twins for
+// homepage, src/content/md/<name>.md for /whoareyou and /bot, build-generated twins for
 // /garage/* and /lwe/* — so a local file check would have to know all three and would
 // still be guessing about production. One request per page settles it.
 //

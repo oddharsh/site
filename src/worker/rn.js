@@ -33,7 +33,7 @@ export const RN_FALLBACK = "https://open.spotify.com/playlist/4IRq9W1N2tOWHhH0O3
 //
 // So /rn answers Markdown instead of redirecting, and the answer is RENDERED
 // from the same live payload /rn/tracks serves rather than described in a twin
-// under www/md/. There is nothing fixed here to hand-author: the playlist
+// under src/content/md/. There is nothing fixed here to hand-author: the playlist
 // changes, and a file claiming otherwise would be wrong within a rollover. This
 // also cannot drift by construction, which is the property the twin machinery
 // buys with checkTwinFacts.
