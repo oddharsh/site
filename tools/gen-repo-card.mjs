@@ -12,9 +12,9 @@
 //             of subtitle, four measured facts. Reads at thumbnail size, where
 //             a screenshot of a whole desktop reads as blue mush.
 //
-//     node scripts/gen-repo-card.mjs                 # both, into .github/
-//     node scripts/gen-repo-card.mjs desktop         # one variant
-//     node scripts/gen-repo-card.mjs --out /tmp/x    # somewhere else
+//     node tools/gen-repo-card.mjs                 # both, into .github/
+//     node tools/gen-repo-card.mjs desktop         # one variant
+//     node tools/gen-repo-card.mjs --out /tmp/x    # somewhere else
 //
 // Same idiom as tools/photos/gen-og-cards.mjs: playwright-core driving the
 // installed Chrome, the wallpaper read straight out of luna.css so the card

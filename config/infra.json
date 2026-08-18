@@ -494,7 +494,7 @@
     "non_production_deploy_command": "pnpm exec wrangler versions upload --x-provision=false --x-auto-create=false",
     "verifiable": true,
     "promoted_by": ".github/workflows/promote-production.yml",
-    "traffic_moved_by": "pnpm run deploy:promote (scripts/deploy-promote.mjs), workstation-only",
+    "traffic_moved_by": "pnpm run deploy:promote (tools/deploy-promote.mjs), workstation-only",
     "preview_urls": true
   },
 

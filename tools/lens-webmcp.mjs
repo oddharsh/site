@@ -15,7 +15,7 @@ const keepOpen = args.includes("--keep-open");
 const target = args.find((arg) => !arg.startsWith("--"));
 const keepAlive = Number((args.find((arg) => arg.startsWith("--keep-alive=")) || "").split("=")[1] || 300);
 
-if (!target) fail("Usage: node scripts/lens-webmcp.mjs https://example.com [--keep-open] [--keep-alive=300]");
+if (!target) fail("Usage: node tools/lens-webmcp.mjs https://example.com [--keep-open] [--keep-alive=300]");
 let url;
 try { url = new URL(target); }
 catch { fail("Target must be an absolute http(s) URL."); }

@@ -1,4 +1,4 @@
-// scripts/lib/jsonc.mjs — the one JSONC reader.
+// tools/lib/jsonc.mjs — the one JSONC reader.
 //
 // Wrangler's configs are the most heavily commented files in this repo (that is
 // deliberate; they are where the deploy's reasoning lives), and they also carry

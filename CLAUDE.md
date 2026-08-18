@@ -82,7 +82,7 @@ pnpm run deploy:promote --rollback    # 100% back to the previous version
 pnpm run deploy:direct
 
 # local dev against PRODUCTION KV/R2/Browser (D1 stays local unless you pass
-# --d1; read scripts/gen-remote-config.mjs before you do). Workstation-only.
+# --d1; read tools/gen-remote-config.mjs before you do). Workstation-only.
 pnpm run dev:remote
 
 # the route oracle with those same remote bindings, which un-skips the 5 rows a
@@ -343,7 +343,7 @@ worktrees may edit freely, but a worktree is not a release surface.
   same D1 changelog, so `/updates.json` structurally cannot tell them apart) and
   aborts on a non-200 or on a step that never took. `--to`, `--steps`,
   `--status`, and `--rollback` are the other modes. The old flat
-  `if (process.env.CI) die()` is gone: `scripts/lib/release-guard.mjs` asks
+  `if (process.env.CI) die()` is gone: `tools/lib/release-guard.mjs` asks
   whether the process can authenticate instead, because a blanket CI ban refused
   the gated pipeline it was meant to protect while doing nothing about a ramp
   that starts unauthenticated and dies after traffic already moved.
@@ -1043,7 +1043,7 @@ Renaming or moving a page used to leave every page LINKING to it pointing at a
 TOLD about, which is the forward direction. Build invariant #1 asserts the
 Worker's routes reach `run_worker_first`. Neither one reads an href.
 
-**`scripts/lib/link-integrity.mjs`, run as a build invariant, closes that.** Every
+**`tools/lib/link-integrity.mjs`, run as a build invariant, closes that.** Every
 same-origin `href`/`src` in the minified documents has to resolve to a real staged
 file, a `<path>.html`, a Worker `ROUTES` key, a registered surface, or a dynamic
 namespace. 2645 refs across 48 documents in ~45ms, so it is COMPLETE rather than
@@ -1077,7 +1077,7 @@ What this does NOT cover, deliberately:
 - **Off-origin links.** A dead third-party URL is a different job and needs the
   network.
 
-### Markdown twins (`scripts/gen-md-twins.mjs`)
+### Markdown twins (`tools/gen-md-twins.mjs`)
 
 Every page with prose ships a Markdown twin at `<path>.md`, and the two big
 sections carry their own `llms.txt`. `/garage/encoding` and
@@ -1091,7 +1091,7 @@ and no step anyone can forget. Same argument the dcz deltas won. It reads the
 SOURCE tree deliberately: the staged copy is about to be rewritten (client edge,
 hashed asset refs) and `index.html` minified, none of which belongs in a twin.
 
-Two rules the converter (`scripts/lib/html-to-md.mjs`) exists to enforce:
+Two rules the converter (`tools/lib/html-to-md.mjs`) exists to enforce:
 
 1. **`<script>` bodies never reach the tree.** Every garage/lwe page carries a
    `<script type="application/json" id="luq-data">` holding the understanding
@@ -1586,7 +1586,7 @@ generic hex back.
   and the receipt falls off a large page, so the run reports as never having
   happened.
 
-  `scripts/lens-inject-probe.mjs` is this feature's control, in the same idiom as
+  `tools/lens-inject-probe.mjs` is this feature's control, in the same idiom as
   `kitesurf:check`: does the engine execute an injection, is the capture after
   it, and does `waitForTimeout` land after injection. That last one is the gate
   on any future ASYNC recipe; both shipping recipes are synchronous, so v1 sends
@@ -1650,7 +1650,7 @@ of a document is the article, and how badly that goes on a page that is not one.
 Measured 2026-08-14 on the live Worker: stripe.com loses 64% of its words and its hero
 headline; Wikipedia loses 5%, which is an extractor doing its job; `/garage/horizon`
 loses 2% and hands over **3 of 26 control labels** as prose. That last number is the
-same failure `scripts/lib/html-to-md.mjs` rule 2 exists to refuse, which is why the
+same failure `tools/lib/html-to-md.mjs` rule 2 exists to refuse, which is why the
 twins still use the hand-rolled converter.
 
 **THE EXTRACTOR WAS SWAPPED FOR THAT NUMBER, and the decision came out of running both
@@ -2810,7 +2810,7 @@ pnpm run deploy:direct
 24. **The ramp writes the changelog from YOUR WORKING TREE, so pull `main` before
     you ramp.** `deploy:promote` decides what to log by reading the local
     `src/worker/checkpoints.json` and diffing it against D1
-    (`scripts/deploy-promote.mjs`, the `steps[last] === 100` block). Ramp from a
+    (`tools/deploy-promote.mjs`, the `steps[last] === 100` block). Ramp from a
     tree that has not pulled the merge and the file it reads still ends at the
     previous release, so the diff is empty and the row is never written.
 
@@ -2857,7 +2857,7 @@ pnpm run deploy:direct
     A secret is a version (see the `versions secret put` note above), so
     `wrangler versions secret put|delete` mints one. That version is created by
     `create_version_api` and therefore carries **no `workers/alias`**. And since
-    #259, `newestVersion()` in `scripts/deploy-promote.mjs` filters candidates to
+    #259, `newestVersion()` in `tools/deploy-promote.mjs` filters candidates to
     the production alias, because ramping the newest version outright was a live
     way to walk another agent's branch build to 100%.
 
@@ -3599,7 +3599,7 @@ pnpm run deploy:direct
     reported `visibilityState: "hidden"` between tool calls; a screenshot flips a
     tab visible just long enough to photograph it and it reverts. So a hover that
     lands on a real anchor and dwells four seconds produces nothing, which reads
-    exactly like a broken rule. `scripts/speculation-probe.mjs` exists because of
+    exactly like a broken rule. `tools/speculation-probe.mjs` exists because of
     this: it launches a real headful window through playwright-core, attaches no
     CDP session (gotcha 15), and prints a CONTROL line first.
 

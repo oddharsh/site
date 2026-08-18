@@ -966,7 +966,7 @@ function routeIndexHtml(_request, _env, _ctx, url) {
 // COST ONE: no-cache bars reuse without revalidation, which is exactly the
 // permission RFC 9842 requires, so Chromium refuses to keep a dictionary offered
 // under it (measured across eight policies — the table lives in lib/assets.js and
-// scripts/check-dictionary-support.mjs). That left `/` as the ONE page outside the
+// tools/check-dictionary-support.mjs). That left `/` as the ONE page outside the
 // per-page dictionary tier, taking the family corpus's 6.3% where every other page
 // gets 93-97%. Measured against production 2026-07-31: 8,780 B plain q11 versus
 // 8,225 B against the family dictionary.

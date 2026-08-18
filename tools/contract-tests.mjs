@@ -1891,7 +1891,7 @@ test("an infotip row is dropped rather than filled in", async () => {
 });
 
 test("the shell infotip ships minified, hashed, and with a readable twin", async () => {
-  const build = await readFile(new URL("scripts/build.mjs", ROOT), "utf8");
+  const build = await readFile(new URL("tools/build.mjs", ROOT), "utf8");
   // Missing from SHELLS it would ship unminified with no /infotip.src.js twin;
   // missing from STRING_ASSETS its import specifier would stay unhashed and
   // the module would serve at max-age=300 forever beside its immutable peers.
@@ -2463,7 +2463,7 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   const hoist = await readFile(new URL("src/client/hoist.js", ROOT), "utf8");
   const tooltip = await readFile(new URL("src/client/tooltip.js", ROOT), "utf8");
 
-  const build = await readFile(new URL("scripts/build.mjs", ROOT), "utf8");
+  const build = await readFile(new URL("tools/build.mjs", ROOT), "utf8");
   assert.match(worker, /pickRandom\(pool,\s*12\)/, "the per-request random draw must remain 12");
   assert.match(build, /deterministicTwelve/, "the document must carry a baked fallback grid, or `/` stops being crawlable without JS");
   // The two renderings differ in exactly one way, so assert on the OUTPUT
@@ -2770,7 +2770,7 @@ test("production minifies the Worker without obscuring deployed stack traces", a
   // constant in perf-budget.mjs holds still. The guard is a source-bytes twin
   // that a minifier cannot move, and it is asserted HERE, beside the setting
   // that made it necessary, so removing one while keeping the other fails.
-  const budget = await readFile(new URL("scripts/perf-budget.mjs", ROOT), "utf8");
+  const budget = await readFile(new URL("tools/perf-budget.mjs", ROOT), "utf8");
   assert.match(budget, /const WORKER_BASELINE_SOURCE_KIB = [\d.]+;/,
     "a minified production bundle needs a source-bytes baseline the minifier cannot move");
   assert.match(budget, /worker source \$\{sourceKib/,
@@ -3251,7 +3251,7 @@ test("static page negotiation prefers 304, then DCZ with the current validator",
 test("LWE pages share one base stylesheet and the build derives one site-page dictionary", async () => {
   const base = await readFile(new URL("src/styles/lwe-base.css", ROOT), "utf8");
   assert.match(base, /\.controls \{ display: inline-flex/);
-  const build = await readFile(new URL("scripts/build.mjs", ROOT), "utf8");
+  const build = await readFile(new URL("tools/build.mjs", ROOT), "utf8");
   assert.match(build, /site-page corpus/);
   assert.match(build, /page-family\.\$\{hash8\(dictionary\)\}\.dict/);
   assert.match(build, /www\/p-dict/);
@@ -5066,14 +5066,14 @@ test("both CSS checks go through the one parser, and it still tolerates the righ
   // pre-build gate on the same stylesheets. They ran DIFFERENT engines until
   // 2026-08-14 (Lightning CSS and esbuild), which disagree in both directions, so
   // a scaffold could pass the gate and fail the build. One parser, one family.
-  for (const file of ["scripts/build.mjs", "scripts/check-page-contracts.mjs"]) {
+  for (const file of ["tools/build.mjs", "tools/check-page-contracts.mjs"]) {
     const src = readFileSync(file, "utf8");
     assert.ok(/from "\.\/lib\/css-parse\.mjs"/.test(src), `${file} must import the shared CSS parser`);
     assert.ok(!/from "esbuild"/.test(src), `${file} must not reach for a second CSS engine`);
     assert.ok(!/UNKNOWN_SELECTOR\s*=/.test(src), `${file} re-declares the tolerated warning family instead of importing it`);
   }
 
-  const { parseCss, UNKNOWN_SELECTOR } = await import("../scripts/lib/css-parse.mjs");
+  const { parseCss, UNKNOWN_SELECTOR } = await import("../tools/lib/css-parse.mjs");
 
   // The family is tolerated AND preserved verbatim, which is the whole bargain.
   const carousel = "ul::scroll-marker-group{display:flex}li::scroll-marker{content:\"\"}";
@@ -6332,7 +6332,7 @@ test("the ramp never double-parses wrangler's already-parsed JSON", async () => 
   //
   // Asserted as source text because the alternative is spawning wrangler against
   // production D1 from the test suite, which no contract test should ever do.
-  const src = await readFile(new URL("./scripts/deploy-promote.mjs", ROOT), "utf8");
+  const src = await readFile(new URL("./tools/deploy-promote.mjs", ROOT), "utf8");
 
   assert.ok(/const rows = \(await wrangler\(/.test(src),
     "the D1 read must consume wrangler's parsed result directly");
@@ -6380,7 +6380,7 @@ test("no ramp sample can hang, and a stall is never reported as an origin error"
   //
   // Source text for the same reason as the test above: the alternative is
   // spawning wrangler against production from the suite.
-  const src = await readFile(new URL("./scripts/deploy-promote.mjs", ROOT), "utf8");
+  const src = await readFile(new URL("./tools/deploy-promote.mjs", ROOT), "utf8");
 
   // Counted rather than matched once, so a SECOND fetch added later without a
   // timeout fails this instead of riding the first one's signal.
@@ -6462,7 +6462,7 @@ test("inert regions are removed without eating the document", () => {
 });
 
 // ── RSS feeds ────────────────────────────────────────────────────────
-// Feeds are BUILD OUTPUT (scripts/gen-feeds.mjs), like the Markdown twins and
+// Feeds are BUILD OUTPUT (tools/gen-feeds.mjs), like the Markdown twins and
 // the dcz deltas: a pure function of site-manifest.json, the sitemap's lastmod
 // dates, and posts.json, so no committed copy can fall behind. These tests pin
 // the properties a subscriber depends on, none of which the build's own count
@@ -6818,7 +6818,7 @@ test("a ?lens= deep link works for every tab in the strip", async () => {
 test("the idle Lens shell defers its full client without losing the first action", () => {
   const server = readFileSync("./src/worker/lens.js", "utf8");
   const boot = readFileSync("./src/client/lens-boot.js", "utf8");
-  const build = readFileSync("./scripts/build.mjs", "utf8");
+  const build = readFileSync("./tools/build.mjs", "utf8");
 
   assert.match(server, /scripts: `<script src="\/lens-boot\.js" defer><\/script>`/,
     "the server-rendered idle shell must load only the bootstrap");

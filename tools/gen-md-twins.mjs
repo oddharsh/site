@@ -2,7 +2,7 @@
 // gen-md-twins.mjs — the Markdown twin for every page on the site that has prose,
 // plus the per-section llms.txt indexes.
 //
-//   node scripts/gen-md-twins.mjs [outDir]     # default: .build/www
+//   node tools/gen-md-twins.mjs [outDir]     # default: .build/www
 //
 // WHY THIS IS BUILD OUTPUT, NOT COMMITTED SOURCE
 // A twin is a pure function of the HTML the build just produced, so generating

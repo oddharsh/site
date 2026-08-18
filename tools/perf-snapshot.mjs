@@ -19,9 +19,9 @@
 // comment, and fail on nothing. A perf number that fails a PR teaches people to
 // widen the threshold. A perf number in a comment gets read.
 //
-//   node scripts/perf-snapshot.mjs record <out.json> [--label <name>]
-//   node scripts/perf-snapshot.mjs compare <base.json> <head.json> [--out <file.md>]
-//   node scripts/perf-snapshot.mjs row <snapshot.json> [--date YYYY-MM-DD]
+//   node tools/perf-snapshot.mjs record <out.json> [--label <name>]
+//   node tools/perf-snapshot.mjs compare <base.json> <head.json> [--out <file.md>]
+//   node tools/perf-snapshot.mjs row <snapshot.json> [--date YYYY-MM-DD]
 //
 // `row` is the TREND half, and it exists because a per-PR diff catches the STEP
 // while only a series catches the DRIFT. This repo's worker bundle went 86 ->

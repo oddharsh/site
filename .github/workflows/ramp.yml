@@ -164,7 +164,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Resolve the account id from wrangler.jsonc
-        run: node scripts/print-account-id.mjs >> "$GITHUB_ENV"
+        run: node tools/print-account-id.mjs >> "$GITHUB_ENV"
 
       # Workers Builds is still building when the promotion workflow finishes, so
       # the version this wants to ramp does not exist yet. deploy:promote's own
@@ -256,7 +256,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Resolve the account id from wrangler.jsonc
-        run: node scripts/print-account-id.mjs >> "$GITHUB_ENV"
+        run: node tools/print-account-id.mjs >> "$GITHUB_ENV"
 
       # THE GUARD THIS JOB EXISTS AROUND. Approval is asynchronous, so minutes or
       # hours pass between the canary and this step, and Workers Builds uploads a

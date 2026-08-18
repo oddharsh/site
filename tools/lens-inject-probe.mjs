@@ -15,8 +15,8 @@
 // against ten browser-minutes a day. The fixture plants absent-markers that only
 // an executed injection can flip, so a pass cannot be faked by the page itself.
 //
-//     BROWSER_RUN_TOKEN=... node scripts/lens-inject-probe.mjs
-//     BROWSER_RUN_TOKEN=... node scripts/lens-inject-probe.mjs --only 1,3
+//     BROWSER_RUN_TOKEN=... node tools/lens-inject-probe.mjs
+//     BROWSER_RUN_TOKEN=... node tools/lens-inject-probe.mjs --only 1,3
 //
 // Roughly one render per case, spaced 11s apart because the free plan allows six
 // a minute account-wide and a burst here would 429 the probe rather than answer
