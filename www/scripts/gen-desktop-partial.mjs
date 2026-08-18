@@ -173,7 +173,7 @@ export function staticShellPages() {
 
 function main() {
   const artifacts = renderDesktopArtifacts();
-  writeFileSync("www/_worker.js/lib/desktop.js", artifacts.moduleSource);
+  writeFileSync("src/worker/lib/desktop.js", artifacts.moduleSource);
   writeFileSync("www/icons.svg", artifacts.sprite);
   mkdirSync("www/section-icons", { recursive: true });
   for (const [name, svg] of Object.entries(artifacts.favicons)) {

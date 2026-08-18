@@ -720,7 +720,7 @@ console.log(`\ndone. ${target.slice(0, 8)} is at ${steps[steps.length - 1]}%.`);
 // version reached 100%, not that someone intended it to. A ramp that aborts at
 // 10% leaves the entry staged, which is exactly what it is.
 if (steps[steps.length - 1] === 100) {
-  const file = new URL("../www/_worker.js/checkpoints.json", import.meta.url);
+  const file = new URL("../src/worker/checkpoints.json", import.meta.url);
   let staged = [];
   try {
     const committed = JSON.parse(await readFile(file, "utf8"));

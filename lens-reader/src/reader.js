@@ -13,7 +13,7 @@
 // three callers (the Worker, the tests, and anything that wants the numbers).
 import { Readability } from "@mozilla/readability";
 import { parseHTML } from "linkedom";
-import { privateHostBlocked, validateLensTarget } from "../../www/_worker.js/lib/crawl.js";
+import { privateHostBlocked, validateLensTarget } from "../../src/worker/lib/crawl.js";
 
 // Errors whose MESSAGE is deliberately written for the visitor. Everything else
 // that escapes `read()` is an internal failure whose text is not ours to publish:

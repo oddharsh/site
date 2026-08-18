@@ -46,7 +46,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { chromium } from "playwright-core";
 
-import { executionChecks } from "../www/_worker.js/lib/agent-execution.js";
+import { executionChecks } from "../src/worker/lib/agent-execution.js";
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const ORIGIN = process.env.AGENT_CHECK_ORIGIN || "https://aadhar.sh";

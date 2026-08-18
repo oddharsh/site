@@ -23,7 +23,7 @@
 // resolves in both. Emitted only under /coffee (see `onShell` in shell()): on
 // the bare cal.aadhar.sh fallback the shell's links would be cross-origin and
 // /nav.js 404s, so that host stays a standalone window, as it always has.
-import { DESKTOP_CHROME, DESKTOP_TOP } from "../../www/_worker.js/lib/desktop.js";
+import { DESKTOP_CHROME, DESKTOP_TOP } from "../../src/worker/lib/desktop.js";
 
 const STYLES = `
 * { box-sizing: border-box; }
