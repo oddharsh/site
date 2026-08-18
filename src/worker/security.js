@@ -1,8 +1,8 @@
 // security.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
-import { serveMarkdownTwin } from "./lib/assets.js";
-import { lunaPage } from "./lib/chrome.js";
-import { esc, wantsMarkdown } from "./lib/http.js";
+import { serveMarkdownTwin } from "./lib/assets.ts";
+import { lunaPage } from "./lib/chrome.ts";
+import { esc, wantsMarkdown } from "./lib/http.ts";
 
 // ── /security handler (Windows Security Center reskin) ───────────────
 export async function handleSecurityCenter(request, env) {

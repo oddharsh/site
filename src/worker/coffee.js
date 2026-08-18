@@ -2,7 +2,7 @@
 // keeps its own fail-closed validation; this route is a small machine-facing
 // view over the same slot calculation.
 import { getPublicAvailability } from "../../cal/src/slots.js";
-import { jsonResponse } from "./lib/http.js";
+import { jsonResponse } from "./lib/http.ts";
 
 export async function readCoffeeAvailability(env, ctx) {
   return getPublicAvailability(env, ctx);

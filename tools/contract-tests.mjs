@@ -23,7 +23,7 @@ import {
   renderLensShell,
   validateLensTarget,
 } from "../src/worker/lens.js";
-import { EXECUTION_META, EXECUTION_PROBE, executionChecks } from "../src/worker/lib/agent-execution.js";
+import { EXECUTION_META, EXECUTION_PROBE, executionChecks } from "../src/worker/lib/agent-execution.ts";
 import { httpWords } from "./check-agent.mjs";
 import { lensReadiness, lensSitemapVerdict, lensSitemapDeclared, lensAgentDoors } from "../src/worker/lens.js";
 import { lensRecipe, lensRecipeIds, lensRecipeScript } from "../src/worker/lens-recipes.js";
@@ -34,20 +34,20 @@ import { documentContent, handleWebmention, handleWebmentionDecision, linksTo } 
 import { handleInbox } from "../src/worker/inbox.js";
 import { citationsIn, findEndpointIn, SELF_LINK_HOSTS } from "../src/worker/webmention-send.js";
 import { sign } from "../cal/src/sign.js";
-import { AGENT_SURFACES, WEBMENTION_PATHS } from "../src/worker/lib/site-manifest.js";
+import { AGENT_SURFACES, WEBMENTION_PATHS } from "../src/worker/lib/site-manifest.ts";
 import { handleWritingIndex } from "../src/worker/writing.js";
 import { handleTool, tokenizeKeys } from "../src/worker/terminal.js";
 import { handleTerminal } from "../src/worker/wire.js";
-import { DATA_TOOLS } from "../src/worker/lib/tools.js";
-import { cronJob } from "../src/worker/lib/cron.js";
+import { DATA_TOOLS } from "../src/worker/lib/tools.ts";
+import { cronJob } from "../src/worker/lib/cron.ts";
 import { BASELINE_HEADING, FLOOR_CLAIMS, auditDependencyDocs, baselineSection, checkDependencyDocs, findClaims, parseCargoDeps } from "./lib/dependency-docs.mjs";
-import { PAGE_FAMILY_MATCH, serveStaticPage } from "../src/worker/lib/assets.js";
+import { PAGE_FAMILY_MATCH, serveStaticPage } from "../src/worker/lib/assets.ts";
 import { serveMarkdown } from "../src/worker/home.js";
 import { readManifest, workerModule, navFenceBody, readFenceBody, runProfilesBody } from "./gen-manifest.mjs";
 import { PROFILES } from "../tools/photos/shell-data.mjs";
 import { faviconHref, sectionFavicons, speculationHtml } from "../tools/photos/gen-desktop-partial.mjs";
 import { TASKBAR } from "../tools/photos/shell-data.mjs";
-import { SECTION_FAVICONS } from "../src/worker/lib/desktop.js";
+import { SECTION_FAVICONS } from "../src/worker/lib/desktop.ts";
 import { collectBlockClasses, readDocument } from "./lib/html-to-md.mjs";
 import {
   SERENDIPITY_MCP_SERVER_INFO,
@@ -56,22 +56,22 @@ import {
   parseCookies,
   staleGuestIds,
 } from "../serendipity/serendipity.js";
-import { MCP_SUPPORTED as MCP_SUPPORTED_VERSIONS } from "../src/worker/lib/mcp-protocol.js";
+import { MCP_SUPPORTED as MCP_SUPPORTED_VERSIONS } from "../src/worker/lib/mcp-protocol.ts";
 import { derivePhotoPool, renderPhotosPage, getImagesManifest, handlePhotoQuery, queryPhotos, _resetPhotoCaches } from "../src/worker/photos.js";
-import { renderPhotoSlots } from "../src/worker/lib/photo-grid.js";
-import { cachedRender, deadline } from "../src/worker/lib/cache.js";
-import { ifNoneMatchMatches, notModifiedIfFresh, withWeakEtag } from "../src/worker/lib/cache.js";
-import { fetchFollowingPublicRedirects, privateHostBlocked } from "../src/worker/lib/crawl.js";
+import { renderPhotoSlots } from "../src/worker/lib/photo-grid.ts";
+import { cachedRender, deadline } from "../src/worker/lib/cache.ts";
+import { ifNoneMatchMatches, notModifiedIfFresh, withWeakEtag } from "../src/worker/lib/cache.ts";
+import { fetchFollowingPublicRedirects, privateHostBlocked } from "../src/worker/lib/crawl.ts";
 import { handleHit } from "../src/worker/counter.js";
 import { cronHomeProbe, parseServerTiming } from "../src/worker/perf-probe.js";
 import { gatherWhoareyou } from "../src/worker/whoareyou.js";
 import { handleSearchJson, renderSearchPage, searchSite } from "../src/worker/search.js";
 import { renderRun } from "../src/worker/run.js";
 import { getPublicAvailability } from "../cal/src/slots.js";
-import { botHeaders } from "../src/worker/lib/botauth.js";
-import { mapWithConcurrency, readResponseCapped } from "../src/worker/lib/crawl.js";
+import { botHeaders } from "../src/worker/lib/botauth.ts";
+import { mapWithConcurrency, readResponseCapped } from "../src/worker/lib/crawl.ts";
 import { NEIGHBORS, diffAroundRows, handleAroundChangesJson, readAroundChanges, renderAroundHtml } from "../src/worker/around.js";
-import * as tui from "../src/worker/lib/tui.js";
+import * as tui from "../src/worker/lib/tui.ts";
 
 // Every path lookup below is relative to the REPO ROOT, not to this file.
 // Naming it means moving this script again costs one line instead of 57.
@@ -1976,7 +1976,7 @@ test("a section's favicon is in its own <head>, never set by script", async () =
 
   // 1. The pins carry no favicon data. A reintroduced attribute is the whole
   //    per-page cost coming back, and nothing would fail without this.
-  const chrome = await readFile(new URL("src/worker/lib/desktop.js", ROOT), "utf8");
+  const chrome = await readFile(new URL("src/worker/lib/desktop.ts", ROOT), "utf8");
   assert.doesNotMatch(chrome, /data-favicon/,
     "taskbar pins must not carry favicon data: the page's own <head> owns this");
 
@@ -2175,7 +2175,7 @@ test("committed manifest projections match a fresh generation", async () => {
   // guards against a commit that edits site-manifest.json but forgets
   // `pnpm run gen:manifest` — the same drift build.mjs #8 blocks, checked here too.
   const { surfaces } = readManifest();
-  const mod = await readFile("src/worker/lib/site-manifest.js", "utf8");
+  const mod = await readFile("src/worker/lib/site-manifest.ts", "utf8");
   assert.equal(mod.trim(), workerModule(surfaces).trim(), "lib/site-manifest.js is stale — run pnpm run gen:manifest");
   const nav = await readFile("src/client/nav-run.js", "utf8");
   for (const [section, marker] of [["garage", "garage-pages"], ["lwe", "lwe-pages"]]) {
@@ -2670,7 +2670,7 @@ test("robots.txt never forbids a path the site advertises to agents", async () =
   // The action endpoints. Nothing advertises them and nothing should.
   assert.deepEqual(disallowed.sort(), ["/lwe/ask", "/rn/admin", "/rn/set"]);
 
-  const { HOMEPAGE_DISCOVERY_LINK } = await import("../src/worker/lib/security.js");
+  const { HOMEPAGE_DISCOVERY_LINK } = await import("../src/worker/lib/security.ts");
   const surfaces = {
     "the homepage Link header": HOMEPAGE_DISCOVERY_LINK,
     "_headers":                 await read("public/_headers"),
@@ -2725,7 +2725,7 @@ test("browser RUM and its ledger proxy stay fully removed", async () => {
   // into pieces and a source scrape would now be checking punctuation instead of
   // the thing that reaches the browser. `/unmapped` deliberately misses the hash
   // map, so this is the fallback policy every live worker page still gets.
-  const { cspHeadersFor } = await import("../src/worker/lib/security.js");
+  const { cspHeadersFor } = await import("../src/worker/lib/security.ts");
   const assembled = cspHeadersFor("/unmapped-probe")["content-security-policy"];
   for (const [name, text] of [["_headers", headers], ["lib/security.js", assembled]]) {
     const policy = (text.match(/default-src 'self';[^"\n]*upgrade-insecure-requests/) || [])[0];
@@ -3234,7 +3234,7 @@ test("static page negotiation prefers 304, then DCZ with the current validator",
   // whole per-page tier (its /pd/ deltas, its committed p-dict snapshots, its build time)
   // is spent on offers no browser keeps. Pinned against the live constant rather than a
   // copy, so editing the policy runs this check instead of quietly bypassing it.
-  const { PAGE_CACHE_CONTROL } = await import("../src/worker/lib/const.js");
+  const { PAGE_CACHE_CONTROL } = await import("../src/worker/lib/const.ts");
   const shipped = await serveStaticPage(new Request("https://aadhar.sh/lwe/drivers", {
     headers: { "available-dictionary": available },
   }), makeEnv(PAGE_CACHE_CONTROL));
@@ -3263,7 +3263,7 @@ test("LWE pages share one base stylesheet and the build derives one site-page di
   const served = await readdir(new URL("public/", ROOT));
   assert.ok(!served.includes("p-dict") && !served.includes("a-dict"),
     "dictionary snapshots are build input and must not sit in the served tree");
-  const security = await readFile(new URL("src/worker/lib/security.js", ROOT), "utf8");
+  const security = await readFile(new URL("src/worker/lib/security.ts", ROOT), "utf8");
   assert.match(security, /rel="compression-dictionary"/);
   for (const name of ["index", "dac", "drivers", "encoding", "fhe", "knots", "mpc", "pcrypto", "tee", "utf8", "vigenere"]) {
     const html = await readFile(new URL(`src/pages/lwe/${name}.html`, ROOT), "utf8");
@@ -3778,7 +3778,7 @@ test("the activation beacon answers 204 and records which page paid off", async 
 });
 
 test("the activation header lands on navigable HTML only", async () => {
-  const { withSecurityHeaders } = await import("../src/worker/lib/security.js");
+  const { withSecurityHeaders } = await import("../src/worker/lib/security.ts");
   const html = () => new Response("<p>hi", { headers: { "content-type": "text/html; charset=utf-8" } });
   const HDR = "on-prefetch-activation";
 
@@ -3830,7 +3830,7 @@ test("the homepage's Link header carries the shell preloads, or it gets no Early
   // Matched on the DEFINITIONS, not on mentions: the comment left behind in that
   // file explains what used to live there and why it went, which is worth
   // keeping. It is a second LIVE definition that must not come back.
-  const security = await readFile(new URL("src/worker/lib/security.js", ROOT), "utf8");
+  const security = await readFile(new URL("src/worker/lib/security.ts", ROOT), "utf8");
   assert.doesNotMatch(security, /^\s*(export )?function withHomepageDiscoveryHeaders/m,
     "lib/security.js should not keep a second, uncalled definition of the homepage Link header");
   assert.doesNotMatch(security, /^\s*(export )?const HOMEPAGE_LINK\s*=/m,
@@ -3863,7 +3863,7 @@ test("the homepage's Link header carries the shell preloads, or it gets no Early
   // _headers is the static-asset fallback for the same URL, and check-dictionary-support
   // exists precisely because production policy for some pages comes from this file, which
   // canRegisterAsDictionary never sees.
-  const { PAGE_CACHE_CONTROL } = await import("../src/worker/lib/const.js");
+  const { PAGE_CACHE_CONTROL } = await import("../src/worker/lib/const.ts");
   const headers = await readFile(new URL("public/_headers", ROOT), "utf8");
   const rootRule = headers.match(/^\/\n((?:  .*\n)+)/m);
   assert.ok(rootRule, "_headers must still carry a rule for /");
@@ -3889,7 +3889,7 @@ test("the homepage's Link header carries the shell preloads, or it gets no Early
 // `<base>/index.html.br` alike, which is exactly why one hand-written exact rule could
 // sit wrong next to them without ever looking wrong.
 test("_headers page rules match the twin the worker fetches, not the request path", async () => {
-  const { PAGE_CACHE_CONTROL } = await import("../src/worker/lib/const.js");
+  const { PAGE_CACHE_CONTROL } = await import("../src/worker/lib/const.ts");
   const { readdir } = await import("node:fs/promises");
   const raw = await readFile(new URL("public/_headers", ROOT), "utf8");
 
@@ -3941,7 +3941,7 @@ test("the offscreen Horizon iframe does not start ticking during initial load", 
 });
 
 test("the CSP falls back to 'unsafe-inline' only where the build cannot speak", async () => {
-  const { canonicalPath, scriptHashesFor } = await import("../src/worker/lib/csp-hashes.js");
+  const { canonicalPath, scriptHashesFor } = await import("../src/worker/lib/csp-hashes.ts");
 
   // canonicalPath folds the spellings a request can arrive in onto the one the
   // build emits. If these two ever disagree the map misses SILENTLY and the page
@@ -3962,8 +3962,8 @@ test("the CSP falls back to 'unsafe-inline' only where the build cannot speak", 
 });
 
 test("the hashed policy REPLACES the asset layer's generic stamp, and never a bespoke one", async () => {
-  const { withSecurityHeaders, SECURITY_HEADERS } = await import("../src/worker/lib/security.js");
-  const mod = await import("../src/worker/lib/csp-hashes.js");
+  const { withSecurityHeaders, SECURITY_HEADERS } = await import("../src/worker/lib/security.ts");
+  const mod = await import("../src/worker/lib/csp-hashes.ts");
   const LOOSE = SECURITY_HEADERS["content-security-policy"];
 
   // Every staged document reaches withSecurityHeaders from the ASSETS binding with
@@ -4001,7 +4001,7 @@ test("the hashed policy REPLACES the asset layer's generic stamp, and never a be
 });
 
 test("the hashed policy is well-formed and keeps 'self' for the external scripts", async () => {
-  const { cspHeadersFor, ENFORCE_PAGE_HASHES } = await import("../src/worker/lib/security.js");
+  const { cspHeadersFor, ENFORCE_PAGE_HASHES } = await import("../src/worker/lib/security.ts");
   const csp = cspHeadersFor("/anything-unmapped")["content-security-policy"];
 
   // the fallback is exactly today's policy, so an unmapped page is never a regression
@@ -4013,7 +4013,7 @@ test("the hashed policy is well-formed and keeps 'self' for the external scripts
 
   // Rebuild the hashed arm against a stub map, so this asserts the SHAPE the
   // build's output will take rather than waiting on a staged tree.
-  const mod = await import("../src/worker/lib/csp-hashes.js");
+  const mod = await import("../src/worker/lib/csp-hashes.ts");
   const original = { ...mod.PAGE_SCRIPT_HASHES };
   try {
     mod.PAGE_SCRIPT_HASHES["/probe"] = ["AAAA", "BBBB"];
@@ -4173,7 +4173,7 @@ test("Workers Cache never answers a content-negotiated request from the stored r
   // _worker.js/index.js, and that module imports `cloudflare:workers`, so no test
   // under plain node could reach it (gotcha 16). Moving it to lib/cache.js is what
   // makes this test possible, and the test is the point of the move.
-  const { shouldUseWorkersCache } = await import("../src/worker/lib/cache.js");
+  const { shouldUseWorkersCache } = await import("../src/worker/lib/cache.ts");
   const PATHS = new Set(["/", "/bot", "/lens", "/reading"]);
   const req = (url, headers = {}) => new Request(url, { headers });
 
@@ -4219,8 +4219,8 @@ test("Workers Cache never answers a content-negotiated request from the stored r
 // rather than two copies, and `?cb=` on any of them returned the real 404 through
 // the query-string bail.
 test("only the canonical hostname may be served from Workers Cache", async () => {
-  const { shouldUseWorkersCache } = await import("../src/worker/lib/cache.js");
-  const { isCanonicalHost } = await import("../src/worker/lib/const.js");
+  const { shouldUseWorkersCache } = await import("../src/worker/lib/cache.ts");
+  const { isCanonicalHost } = await import("../src/worker/lib/const.ts");
   const PATHS = new Set(["/", "/photos", "/reading", "/writing"]);
   const req = (url) => new Request(url, { headers: { accept: "text/html" } });
 
@@ -4250,7 +4250,7 @@ test("only the canonical hostname may be served from Workers Cache", async () =>
 // prevent is a coffee booking emailed to a stranger from a branch.
 
 test("the preview host test matches workers.dev and nothing that merely looks like it", async () => {
-  const { isPreviewHost } = await import("../src/worker/lib/preview.js");
+  const { isPreviewHost } = await import("../src/worker/lib/preview.ts");
 
   for (const host of [
     "abc12345-aadhar-sh.oddharsh.workers.dev",
@@ -4273,7 +4273,7 @@ test("the preview host test matches workers.dev and nothing that merely looks li
 });
 
 test("previews refuse every unsafe method, and the GET-shaped writes too", async () => {
-  const { previewDenial } = await import("../src/worker/lib/preview.js");
+  const { previewDenial } = await import("../src/worker/lib/preview.ts");
 
   // DEFAULT-DENY is the property worth pinning: the guard must not depend on
   // somebody remembering to list a new POST route. Paths here are deliberately
@@ -4298,7 +4298,7 @@ test("previews refuse every unsafe method, and the GET-shaped writes too", async
   // restating them — a copy of the list here asserts only that the list equals
   // itself, which is how the stale coffee paths survived. What gives this teeth
   // is the pin in the next test.
-  const { PREVIEW_GET_WRITES } = await import("../src/worker/lib/preview.js");
+  const { PREVIEW_GET_WRITES } = await import("../src/worker/lib/preview.ts");
   assert.ok(PREVIEW_GET_WRITES.size >= 6, "the GET-write list must not quietly collapse");
   for (const path of PREVIEW_GET_WRITES) {
     const denied = previewDenial(path, "GET");
@@ -4328,7 +4328,7 @@ test("previews refuse every unsafe method, and the GET-shaped writes too", async
 // allowed to import "cloudflare:workers", and importing it here would kill the
 // whole suite at link time (gotcha 16).
 test("every preview-guarded GET write names a path the site really routes", async () => {
-  const { PREVIEW_GET_WRITES } = await import("../src/worker/lib/preview.js");
+  const { PREVIEW_GET_WRITES } = await import("../src/worker/lib/preview.ts");
   const dispatcher = readFileSync(new URL("./src/worker/index.js", ROOT), "utf8");
   const cal = readFileSync(new URL("./cal/src/index.js", ROOT), "utf8");
 
@@ -4401,7 +4401,7 @@ test("MCP tools that write are refused on a preview host, and reads still run", 
 });
 
 test("preview noindex reaches the responses the security wrapper otherwise skips", async () => {
-  const { withSecurityHeaders } = await import("../src/worker/lib/security.js");
+  const { withSecurityHeaders } = await import("../src/worker/lib/security.ts");
 
   // The wrapper bails early on redirects and images, which is correct for CSP
   // and wrong for robots: both are independently indexable, so a preview that
@@ -4984,7 +4984,7 @@ test("the routing headers are checked when present and never required", async ()
 // ── both MCP servers speak one protocol ─────────────────────────────
 // This origin publishes TWO MCP servers, /mcp and /serendipity/mcp. They share
 // no data and no tools; they DO share the wire rules, via
-// src/worker/lib/mcp-protocol.js. Two servers on one origin speaking
+// src/worker/lib/mcp-protocol.ts. Two servers on one origin speaking
 // different dialects is the kind of bug a client author reports to you, so the
 // conformance assertions run against both rather than against the site one.
 
@@ -5060,7 +5060,7 @@ test("neither MCP server keeps a private copy of the protocol constants", async 
   // would pass every test above on the day it was written and drift later.
   for (const file of ["src/worker/mcp.js", "serendipity/serendipity.js"]) {
     const src = readFileSync(file, "utf8");
-    assert.ok(/from ".*lib\/mcp-protocol\.js"/.test(src), `${file} must import the shared protocol module`);
+    assert.ok(/from ".*lib\/mcp-protocol\.(js|ts)"/.test(src), `${file} must import the shared protocol module`);
     assert.ok(!/^const MCP_SUPPORTED\s*=/m.test(src), `${file} re-declares MCP_SUPPORTED instead of importing it`);
     assert.ok(!/^const MCP_PROTOCOL\s*=/m.test(src), `${file} re-declares MCP_PROTOCOL instead of importing it`);
   }
@@ -5373,7 +5373,7 @@ test("the ask loop and the MCP server call ONE tool registry", async () => {
     assert.ok(tool.description && tool.inputSchema, `${tool.name} must carry a description and a schema for function calling`);
   }
   const src = readFileSync("src/worker/mcp.js", "utf8");
-  assert.match(src, /from "\.\/lib\/tools\.js"/, "mcp.js must import the shared registry");
+  assert.match(src, /from "\.\/lib\/tools\.(js|ts)"/, "mcp.js must import the shared registry");
   assert.ok(!/name: "search_site"/.test(src), "mcp.js re-declares a data tool instead of importing it");
 });
 
@@ -5387,7 +5387,7 @@ test("a door that could not be read is never reported as a door that is shut", a
   // external probe fails for want of the AadharshBot signing key, and reporting
   // that as "not served" would have this thing confidently announcing that
   // well-known origins have no llms.txt.
-  const { classifyDoor } = await import("../src/worker/lib/doors.js");
+  const { classifyDoor } = await import("../src/worker/lib/doors.ts");
 
   const failed = classifyDoor({ ok: false, error: "signing key is unavailable" }, "text/plain");
   assert.equal(failed.ok, false);
@@ -5417,7 +5417,7 @@ test("the MCP client reads both Streamable HTTP framings", async () => {
   // A server answers one JSON object or an SSE stream, at its own discretion.
   // A client that handles only the first reports the second as a broken door,
   // which is the exact dishonesty classifyDoor above exists to prevent.
-  const { parseMcpBody } = await import("../src/worker/lib/doors.js");
+  const { parseMcpBody } = await import("../src/worker/lib/doors.ts");
 
   const plain = parseMcpBody('{"jsonrpc":"2.0","id":1,"result":{"tools":[]}}', "application/json");
   assert.equal(plain.ok, true);
@@ -5460,7 +5460,7 @@ test("the MCP client sends Mcp-Method, and it agrees with the body", async () =>
   //
   // Driven through the self-dispatch hatch, which is the only door into this
   // function that needs neither the network nor the AadharshBot signing key.
-  const { foreignMcpTools } = await import("../src/worker/lib/doors.js");
+  const { foreignMcpTools } = await import("../src/worker/lib/doors.ts");
 
   let seen = null;
   const env = { SELF_FETCH: (req) => {
@@ -5492,7 +5492,7 @@ test("a refusal that carries a reason reports the reason, not its status code", 
   // that says what to fix. Reading the status first would throw it away and
   // leave the frame saying "HTTP 400" about a server that had just explained
   // itself.
-  const { foreignMcpTools } = await import("../src/worker/lib/doors.js");
+  const { foreignMcpTools } = await import("../src/worker/lib/doors.ts");
   const answer = (body, init) => ({ SELF_FETCH: () => new Response(body, init) });
 
   const refused = await foreignMcpTools("https://aadhar.sh", answer(
@@ -5530,7 +5530,7 @@ test("a foreign catalogue is read from the stream with a ceiling, and the ceilin
   // A catalogue is text a stranger controls. Every other crawl path here reads
   // through readResponseCapped; this one is a POST, so it could not go through
   // lensFetch and had quietly inherited none of its bounds.
-  const { foreignMcpTools } = await import("../src/worker/lib/doors.js");
+  const { foreignMcpTools } = await import("../src/worker/lib/doors.ts");
 
   // The cap is well clear of anything real: this site's own 24-tool catalogue
   // measured 28,471 bytes on 2026-08-14, the largest on hand.
@@ -5567,7 +5567,7 @@ test("a redirect off a vetted origin is validated per hop, not followed blindly"
   // fetch is what follows a redirect, so a stubbed fetch cannot reproduce the
   // vulnerable behaviour, only the routing that prevents it. Reverted to
   // redirect:"follow", this fails on the verdict rather than on the hop count.
-  const { foreignMcpTools } = await import("../src/worker/lib/doors.js");
+  const { foreignMcpTools } = await import("../src/worker/lib/doors.ts");
 
   // A real key, because every external probe signs before it fetches and the
   // whole external branch is unreachable without one.
@@ -5614,7 +5614,7 @@ test("a locked door is reported as locked, in whatever dialect the server refuse
   // "answered no content-type, not JSON", while Notion, Sentry, Linear, PayPal,
   // Neon, Webflow, Canva, Grafana and Wix answer an OAuth challenge body and
   // used to read as the literal string "undefined: undefined".
-  const { foreignMcpTools, rpcErrorDetail } = await import("../src/worker/lib/doors.js");
+  const { foreignMcpTools, rpcErrorDetail } = await import("../src/worker/lib/doors.ts");
   const answer = (body, init) => ({ SELF_FETCH: () => new Response(body, init) });
 
   const empty = await foreignMcpTools("https://aadhar.sh", answer(null, { status: 401, headers: {
@@ -5656,7 +5656,7 @@ test("the version header goes only to a server that asked for one", async () => 
   // WITH it, because they validate the header against their own supported list
   // and neither speaks 2026-07-28. So the header is a reply to a refusal, never
   // an opener.
-  const { foreignMcpTools, wantsProtocolHeader } = await import("../src/worker/lib/doors.js");
+  const { foreignMcpTools, wantsProtocolHeader } = await import("../src/worker/lib/doors.ts");
   const CATALOGUE = '{"jsonrpc":"2.0","id":1,"result":{"tools":[{"name":"get-documentation","description":"d"}]}}';
 
   // The server that works without it must never be sent one. This is the
@@ -5920,7 +5920,7 @@ test("readDoors reads lens's discovery rather than re-probing the same files", a
   // doors.js originally fetched llms.txt, the agent card and the api-catalog
   // itself, duplicating four of lens's twenty-six probes. Worse than wasteful:
   // two surfaces on one site could disagree about the same origin.
-  const src = readFileSync("src/worker/lib/doors.js", "utf8");
+  const src = readFileSync("src/worker/lib/doors.ts", "utf8");
   assert.match(src, /originDiscovery/, "doors must consume the shared discovery");
   for (const dup of ["/llms.txt", "/.well-known/agent-card.json", "/.well-known/api-catalog"]) {
     assert.ok(!src.includes(`lensProbe(origin + "${dup}"`), `doors re-probes ${dup} instead of reusing discovery`);
@@ -6593,7 +6593,7 @@ test("a garage card cites nothing the page it describes does not", () => {
 // claims they make: that the pane's "Other places" is the site's own first-level
 // list, and that nothing invents a row.
 test("the task pane's places are the manifest's taskbar surfaces", async () => {
-  const { PLACES } = await import("../src/worker/lib/explorer.js");
+  const { PLACES } = await import("../src/worker/lib/explorer.ts");
   const manifest = JSON.parse(readFileSync("config/site-manifest.json", "utf8"));
   const pinned = manifest.surfaces.filter((s) => s.flags && s.flags.taskbar).map((s) => s.path).sort();
   assert.deepEqual(PLACES.map((p) => p.path).sort(), pinned,
@@ -6601,7 +6601,7 @@ test("the task pane's places are the manifest's taskbar surfaces", async () => {
 });
 
 test("the pane states only what it was given", async () => {
-  const { taskPane, addressBar } = await import("../src/worker/lib/explorer.js");
+  const { taskPane, addressBar } = await import("../src/worker/lib/explorer.ts");
   // A page with no tasks and no counted details gets the two rows that are true
   // of every object, and no Contains, Modified, or Status invented for it.
   const bare = taskPane({ path: "/garage/wire", name: "On the wire" });
@@ -6624,7 +6624,7 @@ test("the pane states only what it was given", async () => {
 // empty on purpose (dev serves a tree with no twins), so the guard is that the
 // marker build.mjs rewrites is still there to be rewritten.
 test("the twin list is generated, not committed", () => {
-  const source = readFileSync("src/worker/lib/twins.js", "utf8");
+  const source = readFileSync("src/worker/lib/twins.ts", "utf8");
   assert.match(source, /^export const TWIN_PATHS = \[\]; \/\/ build:twins$/m,
     "lib/twins.js must ship empty with its build:twins marker — a committed list would advertise twins that 404 in dev");
 });
@@ -6742,14 +6742,14 @@ test("the reader Worker shares the site's SSRF guard rather than copying it", as
   // the day they are written and diverge quietly afterwards, so this asserts the
   // import exists AND that no local redefinition shadows it.
   for (const [name, src] of [["reader.js", reader], ["index.js", entry]]) {
-    assert.match(src, /from "\.\.\/\.\.\/src\/worker\/lib\/crawl\.js"/,
+    assert.match(src, /from "\.\.\/\.\.\/src\/worker\/lib\/crawl\.(js|ts)"/,
       `lens-reader/src/${name} must import the shared guard, not reimplement it`);
     assert.doesNotMatch(src, /function\s+validateLensTarget|function\s+privateHostBlocked/,
       `lens-reader/src/${name} redefines a guard it is supposed to be importing`);
   }
   // And the site's export is still the shared one, so moving it did not leave
   // lens.js with a stale private copy that only IT uses.
-  const crawl = await import("../src/worker/lib/crawl.js");
+  const crawl = await import("../src/worker/lib/crawl.ts");
   const lens = await import("../src/worker/lens.js");
   assert.equal(lens.validateLensTarget, crawl.validateLensTarget,
     "lens.js and lib/crawl.js must expose the same function object, not two copies");
@@ -7135,7 +7135,7 @@ test("the wire lens shares the SSRF guard and reaches the browser with nothing b
   // The rule lens-recipes.js is built around: this route points a real browser
   // at a visitor-supplied address, so the ONLY caller byte that may reach it is
   // the URL, after the shared guard has passed it.
-  assert.match(src, /from "\.\/lib\/crawl\.js"/, "must import the shared guard, not reimplement it");
+  assert.match(src, /from "\.\/lib\/crawl\.(js|ts)"/, "must import the shared guard, not reimplement it");
   assert.doesNotMatch(src, /function\s+validateLensTarget|function\s+privateHostBlocked/,
     "lens-wire.js redefines a guard it is supposed to be importing");
   // Exactly one searchParams read, and it is the url. A second one is how a
@@ -7649,8 +7649,8 @@ test("the Tools lens reads a catalogue and has NO path to calling a tool", () =>
 });
 
 test("foreignMcpTools carries schemas ONLY when asked, and drops one it cannot bound", async () => {
-  const { DOOR_LIMITS } = await import("../src/worker/lib/doors.js");
-  const doors = readFileSync("./src/worker/lib/doors.js", "utf8");
+  const { DOOR_LIMITS } = await import("../src/worker/lib/doors.ts");
+  const doors = readFileSync("./src/worker/lib/doors.ts", "utf8");
   assert.ok(DOOR_LIMITS.schemaBytes > 0, "a foreign schema is bounded like every other foreign string");
   // Truncating JSON is not an option: half a schema is not a schema, and a form
   // built from one silently describes the wrong contract. So the cap drops the

@@ -24,7 +24,7 @@
 // quantization tables — and every "quality: 82" any tool prints is an inference
 // from those tables. The method is named in the output so the number can be
 // argued with rather than believed.
-import { COLS, blank, fit, kv, rows, rule, s, wrap } from "./lib/tui.js";
+import { COLS, blank, fit, kv, rows, rule, s, wrap } from "./lib/tui.ts";
 
 const INNER = COLS - 4;
 

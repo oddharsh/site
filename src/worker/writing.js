@@ -1,10 +1,10 @@
 // writing.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
-import { cachedRender } from "./lib/cache.js";
-import { DESKTOP_CHROME, DESKTOP_TOP } from "./lib/desktop.js";
-import { addressBar, taskPane } from "./lib/explorer.js";
-import { escAttr, escHtml } from "./lib/http.js";
-import { twinFor } from "./lib/twins.js";
+import { cachedRender } from "./lib/cache.ts";
+import { DESKTOP_CHROME, DESKTOP_TOP } from "./lib/desktop.ts";
+import { addressBar, taskPane } from "./lib/explorer.ts";
+import { escAttr, escHtml } from "./lib/http.ts";
+import { twinFor } from "./lib/twins.ts";
 
 // ── /writing — the Notepad view ───────────────────────────────────────────────
 // Written content lives in plain .txt files under /writing/ + a posts.json registry.

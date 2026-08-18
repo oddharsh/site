@@ -14,7 +14,7 @@
 //   X402_NETWORK      "base" (default) or "base-sepolia" for testing.
 //   X402_FACILITATOR  verify/settle service; defaults to x402.org's hosted
 //                     one (base-sepolia only — mainnet needs e.g. Coinbase's).
-import { jsonResponse } from "./lib/http.js";
+import { jsonResponse } from "./lib/http.ts";
 
 const X402_VERSION = 1;
 const PRICE_ATOMIC = "10000"; // USDC has 6 decimals → $0.01

@@ -17,9 +17,9 @@
 //   API with BILLING_READ_TOKEN (Billing : Read). It is the only figure on the
 //   page that was ever actually paid, and it is account-level by necessity;
 //   see queryBillableUsage() for why there is no per-bot cost column.
-import { cachedRender } from "./lib/cache.js";
-import { lunaPage } from "./lib/chrome.js";
-import { esc, jsonResp } from "./lib/http.js";
+import { cachedRender } from "./lib/cache.ts";
+import { lunaPage } from "./lib/chrome.ts";
+import { esc, jsonResp } from "./lib/http.ts";
 
 const RATE_USD = 0.01;      // the site's posted price (the /llms-full.txt cent), not a market quote
 const WINDOW_DAYS = 30;

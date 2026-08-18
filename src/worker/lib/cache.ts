@@ -1,5 +1,10 @@
-import { isCanonicalHost } from "./const.js";
-import { wantsMarkdown } from "./http.js";
+// @ts-nocheck — declared in config/ts-migration.json, which may only SHRINK.
+// This module carried type errors when src/worker/lib became TypeScript. The
+// code is unchanged and runs identically; what changed is that tsc stopped
+// being lenient. Remove this line, fix what tsc then reports, and delete the
+// entry from that file. A contract test fails if the two disagree.
+import { isCanonicalHost } from "./const.ts";
+import { wantsMarkdown } from "./http.ts";
 
 // lib/cache.js: the worker's caching kit, one primitive surface where four
 // hand-rolled dialects used to drift apart.

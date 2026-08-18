@@ -1,10 +1,10 @@
 // /search — bounded server-side search over the generated public corpus.
 // The index is static and loaded only on this route (or by the site MCP tool),
 // keeping the homepage critical path free of search bytes and fan-out.
-import { cachedRender } from "./lib/cache.js";
-import { lunaPage } from "./lib/chrome.js";
-import { escAttr, escHtml, jsonResp } from "./lib/http.js";
-import { queryTerms as queryTermsOf, terms } from "./lib/text.js";
+import { cachedRender } from "./lib/cache.ts";
+import { lunaPage } from "./lib/chrome.ts";
+import { escAttr, escHtml, jsonResp } from "./lib/http.ts";
+import { queryTerms as queryTermsOf, terms } from "./lib/text.ts";
 
 let indexCache = null;
 

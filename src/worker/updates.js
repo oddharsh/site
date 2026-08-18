@@ -1,8 +1,8 @@
 // updates.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
-import { cachedRender } from "./lib/cache.js";
-import { lunaPage } from "./lib/chrome.js";
-import { esc } from "./lib/http.js";
+import { cachedRender } from "./lib/cache.ts";
+import { lunaPage } from "./lib/chrome.ts";
+import { esc } from "./lib/http.ts";
 import checkpoints from "./checkpoints.json" with { type: "json" };
 
 // ── /updates handler (Windows Update reskin) ────────────────────────

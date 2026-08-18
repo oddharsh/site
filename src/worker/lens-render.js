@@ -1,5 +1,5 @@
 // lens-render.js — WHICH browser engine answers a Quick Action, and the shape
-import { isCallable } from "./lib/parse.js";
+import { isCallable } from "./lib/parse.ts";
 // of what came back.
 //
 // This file used to carry a whole second rendering route (/lens/rendered) before

@@ -1,10 +1,10 @@
 // photos.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
-import { cachedRender } from "./lib/cache.js";
-import { lunaPage } from "./lib/chrome.js";
-import { ARCHIVE_VERSION } from "./lib/const.js";
-import { errorResp, escAttr, escHtml, jsonResp } from "./lib/http.js";
-import { commonPairs, queryTerms, scoreFields } from "./lib/text.js";
+import { cachedRender } from "./lib/cache.ts";
+import { lunaPage } from "./lib/chrome.ts";
+import { ARCHIVE_VERSION } from "./lib/const.ts";
+import { errorResp, escAttr, escHtml, jsonResp } from "./lib/http.ts";
+import { commonPairs, queryTerms, scoreFields } from "./lib/text.ts";
 // the photo pool, as BUILD INPUTS: photo-index.json (which photos exist — full
 // R2 key, byte size, upload date; written by add-photos.sh at upload time) and
 // hashes.json (the content-hash map the /i/ URLs are minted from). esbuild

@@ -24,7 +24,7 @@
 //
 // The bands are findphone's, because they are field-calibrated rather than
 // derived: -45 arm's reach, -60 same table, -72 same room.
-import { COLS, blank, fit, kv, rightTo, rows, rule, s, wrap } from "./lib/tui.js";
+import { COLS, blank, fit, kv, rightTo, rows, rule, s, wrap } from "./lib/tui.ts";
 
 const INNER = COLS - 4;
 

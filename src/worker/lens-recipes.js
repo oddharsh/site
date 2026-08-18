@@ -97,7 +97,7 @@
 
 // The enum a receipt's `note` may carry. Anything else becomes "unknown"
 // server-side rather than being echoed, because echoing is the injection.
-import { asRecord, asText } from "./lib/parse.js";
+import { asRecord, asText } from "./lib/parse.ts";
 
 const RECIPE_NOTES = new Set(["acted", "none-found", "blocked", "threw"]);
 

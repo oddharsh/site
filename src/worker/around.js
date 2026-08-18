@@ -1,12 +1,16 @@
+// @ts-nocheck — TEMPORARY, declared in config/ts-migration.json under "callers".
+// This module is still JavaScript and calls into src/worker/lib, which became
+// TypeScript on 2026-08-18. tsc now checks those call sites strictly and this
+// file does not pass yet. The entry goes away when this module converts.
 // around.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
-import { BOT_NAME, BOT_UA, SIG_AGENT, signedFetch } from "./lib/botauth.js";
-import { cachedRender, deleteSWRKV } from "./lib/cache.js";
-import { crawlDocument, mapWithConcurrency, readResponseCapped } from "./lib/crawl.js";
-import { lunaPage } from "./lib/chrome.js";
-import { esc, extractMeta, jsonResponse } from "./lib/http.js";
-import { lensParseRobots, lensRobotsVerdict } from "./lib/robots.js";
-import { span } from "./lib/trace.js";
+import { BOT_NAME, BOT_UA, SIG_AGENT, signedFetch } from "./lib/botauth.ts";
+import { cachedRender, deleteSWRKV } from "./lib/cache.ts";
+import { crawlDocument, mapWithConcurrency, readResponseCapped } from "./lib/crawl.ts";
+import { lunaPage } from "./lib/chrome.ts";
+import { esc, extractMeta, jsonResponse } from "./lib/http.ts";
+import { lensParseRobots, lensRobotsVerdict } from "./lib/robots.ts";
+import { span } from "./lib/trace.ts";
 
 // Obey robots.txt before crawling a neighbor. /bot promises AadharshBot reads and
 // obeys robots.txt, and this cron is the one path that fetches third-party sites

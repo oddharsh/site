@@ -14,8 +14,8 @@
 // ever thrown away). This module deliberately imports nothing that touches a
 // Worker global, so Node can import it straight out of the staged tree at
 // build time.
-import { escAttr } from "./http.js";
-import { asNumber } from "./parse.js";
+import { escAttr } from "./http.ts";
+import { asNumber } from "./parse.ts";
 
 // Pool URLs are already absolute /i/ form; this is the last-resort shim for a
 // pool entry that predates that (kept identical to photos.js's absThumb).

@@ -1,3 +1,7 @@
+// @ts-nocheck — TEMPORARY, declared in config/ts-migration.json under "callers".
+// This module is still JavaScript and calls into src/worker/lib, which became
+// TypeScript on 2026-08-18. tsc now checks those call sites strictly and this
+// file does not pass yet. The entry goes away when this module converts.
 // agent-ready.js — how much of this origin can a machine actually use, and what
 // did that cost to build?
 //
@@ -20,8 +24,8 @@
 // a single number would invent a precision the observation cannot support, and
 // this codebase has spent a lot of effort not doing that (see lib/doors.js on
 // shut-versus-unread, and lens on absent-versus-zero).
-import { COLS, blank, fit, kv, rows, rule, s, table, wrap } from "./lib/tui.js";
-import { readDoors } from "./lib/doors.js";
+import { COLS, blank, fit, kv, rows, rule, s, table, wrap } from "./lib/tui.ts";
+import { readDoors } from "./lib/doors.ts";
 
 const INNER = COLS - 4;
 

@@ -1,3 +1,7 @@
+// @ts-nocheck — TEMPORARY, declared in config/ts-migration.json under "callers".
+// This module is still JavaScript and calls into src/worker/lib, which became
+// TypeScript on 2026-08-18. tsc now checks those call sites strictly and this
+// file does not pass yet. The entry goes away when this module converts.
 // webmention-send.js — the OUTBOUND half: this site telling the sources it
 // cites that it linked to them. The mirror of webmention.js, and the reason the
 // pair is worth having: a site that accepts mentions but never sends them is
@@ -20,10 +24,10 @@
 // there is no allowlist to maintain: send to every real citation, and only the
 // webmention-aware ones light up.
 import { validateLensTarget } from "./lens.js";
-import { privateHostBlocked, readResponseCapped } from "./lib/crawl.js";
-import { WEBMENTION_PATHS, WEBMENTION_SECTIONS } from "./lib/site-manifest.js";
-import { span } from "./lib/trace.js";
-import { asText } from "./lib/parse.js";
+import { privateHostBlocked, readResponseCapped } from "./lib/crawl.ts";
+import { WEBMENTION_PATHS, WEBMENTION_SECTIONS } from "./lib/site-manifest.ts";
+import { span } from "./lib/trace.ts";
+import { asText } from "./lib/parse.ts";
 
 const SEND_TIMEOUT_MS = 8000;
 const PAGE_BYTE_CAP = 512 * 1024;

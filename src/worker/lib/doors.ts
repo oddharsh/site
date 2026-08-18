@@ -1,3 +1,8 @@
+// @ts-nocheck — declared in config/ts-migration.json, which may only SHRINK.
+// This module carried type errors when src/worker/lib became TypeScript. The
+// code is unchanged and runs identically; what changed is that tsc stopped
+// being lenient. Remove this line, fix what tsc then reports, and delete the
+// entry from that file. A contract test fails if the two disagree.
 // lib/doors.js — read what is actually BEHIND another origin's agent doors.
 //
 // /lens knocks: it reports that a site has an llms.txt, that /mcp answers
@@ -24,12 +29,12 @@
 // POST body that lensFetch cannot express, so it re-states each of those bounds
 // itself rather than inheriting them, per-hop redirect validation included.
 // This module adds no new way to reach the network.
-import { botHeaders } from "./botauth.js";
-import { CANONICAL_HOST } from "./const.js";
-import { fetchFollowingPublicRedirects, readResponseCapped, validateLensTarget } from "./crawl.js";
-import { ERR_HEADER_MISMATCH, MCP_MODERN, META_PROTOCOL, META_CLIENT_CAPS } from "./mcp-protocol.js";
+import { botHeaders } from "./botauth.ts";
+import { CANONICAL_HOST } from "./const.ts";
+import { fetchFollowingPublicRedirects, readResponseCapped, validateLensTarget } from "./crawl.ts";
+import { ERR_HEADER_MISMATCH, MCP_MODERN, META_PROTOCOL, META_CLIENT_CAPS } from "./mcp-protocol.ts";
 import { lensProbe, originDiscovery } from "../lens.js";
-import { asRecord, asText } from "./parse.js";
+import { asRecord, asText } from "./parse.ts";
 
 // Bounds. A door reader that follows whatever it finds is a crawler; these keep
 // it to one hop and a readable amount of text.

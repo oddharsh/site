@@ -22,7 +22,7 @@
 // (The render's own SWR refreshes fire as on any visit; the probe IS a visit.)
 import { handlePhotoGrid } from "./home.js";
 import { handleRnTracksHtml } from "./rn.js";
-import { CANONICAL_HOST } from "./lib/const.js";
+import { CANONICAL_HOST } from "./lib/const.ts";
 
 // "assets;dur=5, tracks;dur=25;desc=deadline" -> { spans: {assets: 5, ...},
 // deadlined: ["tracks"] }. Tolerates reordering, missing spans, and unknown

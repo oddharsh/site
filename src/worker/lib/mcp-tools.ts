@@ -1,3 +1,8 @@
+// @ts-nocheck — declared in config/ts-migration.json, which may only SHRINK.
+// This module carried type errors when src/worker/lib became TypeScript. The
+// code is unchanged and runs identically; what changed is that tsc stopped
+// being lenient. Remove this line, fix what tsc then reports, and delete the
+// entry from that file. A contract test fails if the two disagree.
 // lib/mcp-tools.js — the shared public metadata for MCP tool descriptors.
 //
 // Tool annotations help a client choose and explain a tool, but they are hints,

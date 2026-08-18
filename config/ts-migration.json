@@ -1,0 +1,60 @@
+{
+  "$comment": [
+    "Modules that were NOT type-clean when src/worker/lib became TypeScript.",
+    "Each carries a `// @ts-nocheck` header pointing here.",
+    "",
+    "THIS LIST MAY ONLY SHRINK. A contract test asserts that the set of files",
+    "carrying @ts-nocheck is exactly the set named here, so adding one is a",
+    "deliberate edit somebody reviews rather than a quiet opt-out, and fixing a",
+    "module means deleting its entry. The counts are what tsc reported the day",
+    "the conversion landed, kept so progress is measurable rather than asserted.",
+    "",
+    "THE ERRORS ARE NOT NEW DEFECTS. The code is byte-for-byte what shipped as",
+    "JavaScript and the staged bundle is byte-identical. What changed is the",
+    "checker: a .js file lets TypeScript treat every parameter as optional and",
+    "infer object shapes loosely, so TS2554 (arity) and TS2339 (unknown",
+    "property) were structurally invisible before. Those two are 97 of the 99.",
+    "",
+    "19 of the 27 lib modules are clean and ARE fully checked from here on. That",
+    "is what this buys immediately, and it is why the answer was not to relax the",
+    "compiler for the whole directory.",
+    "",
+    "THE CALLERS ARE A SEPARATE, TEMPORARY GROUP. Typing lib/ made TypeScript",
+    "check its call sites strictly, and 12 Worker modules that are still",
+    "JavaScript now fail against the signatures it infers. Their entries below",
+    "carry a .js extension and disappear as each module converts, so this half of",
+    "the list shrinks by construction rather than by anybody remembering."
+  ],
+  "generated_on": "2026-08-18",
+  "totals": {
+    "modules_converted": 27,
+    "modules_clean": 19,
+    "modules_quarantined": 8,
+    "errors_at_conversion": 45,
+    "callers_quarantined": 12
+  },
+  "modules": {
+    "src/worker/lib/assets.ts": 7,
+    "src/worker/lib/botauth.ts": 6,
+    "src/worker/lib/cache.ts": 7,
+    "src/worker/lib/crawl.ts": 3,
+    "src/worker/lib/doors.ts": 12,
+    "src/worker/lib/mcp-tools.ts": 2,
+    "src/worker/lib/security.ts": 3,
+    "src/worker/lib/tui.ts": 5
+  },
+  "callers": {
+    "src/worker/agent-ready.js": 1,
+    "src/worker/around.js": 4,
+    "src/worker/census.js": 2,
+    "src/worker/dyno.js": 1,
+    "src/worker/home.js": 5,
+    "src/worker/index.js": 1,
+    "src/worker/lens-tools.js": 7,
+    "src/worker/lens-wire.js": 3,
+    "src/worker/lens.js": 11,
+    "src/worker/mcp.js": 4,
+    "src/worker/rn.js": 7,
+    "src/worker/webmention-send.js": 5
+  }
+}

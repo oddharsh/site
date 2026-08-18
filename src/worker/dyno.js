@@ -1,3 +1,7 @@
+// @ts-nocheck — TEMPORARY, declared in config/ts-migration.json under "callers".
+// This module is still JavaScript and calls into src/worker/lib, which became
+// TypeScript on 2026-08-18. tsc now checks those call sites strictly and this
+// file does not pass yet. The entry goes away when this module converts.
 // dyno.js — /garage/dyno, the site's own performance history as a chart.
 //
 // A dyno tells you what an engine actually puts down. This one straps the site
@@ -19,12 +23,12 @@
 // SERVER-RENDERED SVG, zero client JS. Not a style choice: the served pages here
 // carry no cross-origin assets and inline scripts need per-document CSP hashes,
 // so a chart that draws itself on the server costs one <svg> and no exceptions.
-import { BOT_UA } from "./lib/botauth.js";
-import { swrKV } from "./lib/cache.js";
-import { lunaPage } from "./lib/chrome.js";
-import { asNumber } from "./lib/parse.js";
-import { esc, jsonResponse } from "./lib/http.js";
-import { span } from "./lib/trace.js";
+import { BOT_UA } from "./lib/botauth.ts";
+import { swrKV } from "./lib/cache.ts";
+import { lunaPage } from "./lib/chrome.ts";
+import { asNumber } from "./lib/parse.ts";
+import { esc, jsonResponse } from "./lib/http.ts";
+import { span } from "./lib/trace.ts";
 import seed from "./dyno-seed.json" with { type: "json" };
 
 // The machine-owned branch. `perf-history.yml` appends one line a night and

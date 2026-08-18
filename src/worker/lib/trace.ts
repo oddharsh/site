@@ -1,5 +1,5 @@
 // trace.js — one wrapper over Workers Traces so every span in this worker has a
-import { isCallable } from "./parse.js";
+import { isCallable } from "./parse.ts";
 // single import site and a single failure story. Bundled by wrangler at deploy;
 // not served.
 //

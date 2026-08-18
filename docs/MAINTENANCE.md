@@ -354,7 +354,7 @@ unservable and nothing said so.
 **A preview runs production bindings and secrets.** There is no per-version
 override in Cloudflare, so it is the same RN_KV, the same `aadhar-photos`
 bucket, the same three D1 databases, the same `RESEND_API_KEY`.
-`src/worker/lib/preview.js` is what makes the URL safe to paste into a
+`src/worker/lib/preview.ts` is what makes the URL safe to paste into a
 PR:
 
 - every response gets `X-Robots-Tag: noindex, nofollow`, including redirects and

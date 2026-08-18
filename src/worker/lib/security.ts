@@ -1,13 +1,18 @@
+// @ts-nocheck — declared in config/ts-migration.json, which may only SHRINK.
+// This module carried type errors when src/worker/lib became TypeScript. The
+// code is unchanged and runs identically; what changed is that tsc stopped
+// being lenient. Remove this line, fix what tsc then reports, and delete the
+// entry from that file. A contract test fails if the two disagree.
 // lib/security.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
 // security headers applied to every worker-generated response. mirrors
 // what's set on static assets via _headers — without this wrapper, the
 // worker-rendered pages (/whoareyou, /around, /bot, /rn/admin, etc.)
 // would skip _headers entirely and ship without CSP / Permissions-Policy.
-import { PAGE_DICTIONARY } from "./shell-assets.js";
-import { scriptHashesFor } from "./csp-hashes.js";
+import { PAGE_DICTIONARY } from "./shell-assets.ts";
+import { scriptHashesFor } from "./csp-hashes.ts";
 import { prefetchActivationHeader } from "../speculation.js";
-import { PREVIEW_ROBOTS } from "./preview.js";
+import { PREVIEW_ROBOTS } from "./preview.ts";
 
 // There are NO external script or connect origins here. Browser-facing resources
 // and connections are self-only; server-side route handlers document their own

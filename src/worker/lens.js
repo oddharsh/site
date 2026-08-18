@@ -1,17 +1,21 @@
+// @ts-nocheck — TEMPORARY, declared in config/ts-migration.json under "callers".
+// This module is still JavaScript and calls into src/worker/lib, which became
+// TypeScript on 2026-08-18. tsc now checks those call sites strictly and this
+// file does not pass yet. The entry goes away when this module converts.
 // lens.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
-import { BOT_UA, botHeaders } from "./lib/botauth.js";
-import { cachedRender } from "./lib/cache.js";
-import { CANONICAL_HOST } from "./lib/const.js";
-import { fetchFollowingPublicRedirects, privateHostBlocked, readResponseCapped, validateLensTarget } from "./lib/crawl.js";
-import { lensParseRobots, lensPathMatch, lensRobotsVerdict } from "./lib/robots.js";
-import { lunaPage } from "./lib/chrome.js";
-import { escAttr, escHtml, jsonResponse } from "./lib/http.js";
-import { span } from "./lib/trace.js";
+import { BOT_UA, botHeaders } from "./lib/botauth.ts";
+import { cachedRender } from "./lib/cache.ts";
+import { CANONICAL_HOST } from "./lib/const.ts";
+import { fetchFollowingPublicRedirects, privateHostBlocked, readResponseCapped, validateLensTarget } from "./lib/crawl.ts";
+import { lensParseRobots, lensPathMatch, lensRobotsVerdict } from "./lib/robots.ts";
+import { lunaPage } from "./lib/chrome.ts";
+import { escAttr, escHtml, jsonResponse } from "./lib/http.ts";
+import { span } from "./lib/trace.ts";
 import { documentTally, hasRenderEngine, runBrowserAction } from "./lens-render.js";
 import { lensRecipe, lensRecipeCatalog, lensRecipeIds, lensRecipeNonce, lensRecipeReceipt, lensRecipeScript } from "./lens-recipes.js";
-import { EXECUTION_META, executionChecks } from "./lib/agent-execution.js";
-import { asRecord, asText, isCallable } from "./lib/parse.js";
+import { EXECUTION_META, executionChecks } from "./lib/agent-execution.ts";
+import { asRecord, asText, isCallable } from "./lib/parse.ts";
 
 // The glossary. This page's whole subject is protocol names, which is fine for
 // the audience that already has them and a wall for the audience that doesn't.

@@ -1,10 +1,10 @@
 // bot.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
-import { serveMarkdownTwin } from "./lib/assets.js";
-import { BOT_NAME, BOT_UA, SIG_AGENT } from "./lib/botauth.js";
-import { cachedRender } from "./lib/cache.js";
-import { lunaPage } from "./lib/chrome.js";
-import { esc, wantsMarkdown } from "./lib/http.js";
+import { serveMarkdownTwin } from "./lib/assets.ts";
+import { BOT_NAME, BOT_UA, SIG_AGENT } from "./lib/botauth.ts";
+import { cachedRender } from "./lib/cache.ts";
+import { lunaPage } from "./lib/chrome.ts";
+import { esc, wantsMarkdown } from "./lib/http.ts";
 
 // ── /bot info page ──────────────────────────────────────────────────
 // static shell: ride the caches.default layer like the other rendered pages;

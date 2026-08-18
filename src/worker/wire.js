@@ -18,8 +18,8 @@
 // Lives outside terminal.js because mcp.js imports terminal.js, and reaching
 // back the other way would be a cycle.
 import { handleSiteMcp } from "./mcp.js";
-import { lunaPage } from "./lib/chrome.js";
-import { escHtml } from "./lib/http.js";
+import { lunaPage } from "./lib/chrome.ts";
+import { escHtml } from "./lib/http.ts";
 
 const WIRE_CSS = `/*min*/
 .wire{font:12px/1.5 var(--font-mono)}

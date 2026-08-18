@@ -1,3 +1,7 @@
+// @ts-nocheck — TEMPORARY, declared in config/ts-migration.json under "callers".
+// This module is still JavaScript and calls into src/worker/lib, which became
+// TypeScript on 2026-08-18. tsc now checks those call sites strictly and this
+// file does not pass yet. The entry goes away when this module converts.
 // lens-wire.js — the WIRE lens: every request a page actually makes.
 //
 // The eighth machine tab answers the one question /lens could not. Every other
@@ -48,17 +52,17 @@
 // concurrent slots until it times out, which would black out every browser lens
 // on the site, so cleanup is not tidiness.
 
-import { validateLensTarget } from "./lib/crawl.js";
-import { jsonResponse } from "./lib/http.js";
-import { span } from "./lib/trace.js";
-import { BOT_UA } from "./lib/botauth.js";
+import { validateLensTarget } from "./lib/crawl.ts";
+import { jsonResponse } from "./lib/http.ts";
+import { span } from "./lib/trace.ts";
+import { BOT_UA } from "./lib/botauth.ts";
 // lens.js does not import this file, so the edge runs one way and there is no
 // cycle. Budgets live there because that is where every other lens route reads
 // them, and a second copy is the drift the LENS_BUDGETS contract test refuses.
 import { BROWSER_FREE_PLAN, LENS_BUDGETS, lensSha256Hex, overLensBudget } from "./lens.js";
-import { EXECUTION_PROBE } from "./lib/agent-execution.js";
-import { isCallable } from "./lib/parse.js";
-import { asText } from "./lib/parse.js";
+import { EXECUTION_PROBE } from "./lib/agent-execution.ts";
+import { isCallable } from "./lib/parse.ts";
+import { asText } from "./lib/parse.ts";
 
 const CDP_BASE = "https://localhost/v1/devtools/browser";
 

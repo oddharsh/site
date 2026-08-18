@@ -1,3 +1,8 @@
+// @ts-nocheck — declared in config/ts-migration.json, which may only SHRINK.
+// This module carried type errors when src/worker/lib became TypeScript. The
+// code is unchanged and runs identically; what changed is that tsc stopped
+// being lenient. Remove this line, fix what tsc then reports, and delete the
+// entry from that file. A contract test fails if the two disagree.
 // tui.js — the frame renderer behind /terminal/*. Box-drawing, ANSI SGR, and the
 // width math that keeps an 80-column frame actually 80 columns wide.
 //
@@ -19,6 +24,14 @@
 // stems, film simulations, URLs, English prose), and the cost of being wrong is
 // a border one column off rather than anything structural. Said plainly here so
 // the next person doesn't discover it as a bug.
+
+// COLUMN MATH USES CODE POINTS, deliberately, at the three spreads below.
+// This renders an 80-column terminal frame, so the question is how many cells
+// a string occupies. Plain .length counts UTF-16 units and is the bug these
+// spreads already fix. oxlint wants Intl.Segmenter, which counts GRAPHEME
+// CLUSTERS: a third answer, and adopting it would re-wrap every frame this
+// site has ever served. The rule only started firing when this file became
+// .ts and the type-aware rules could read it.
 
 export const COLS = 80;
 
@@ -141,6 +154,7 @@ export function wrap(text, w) {
   let cur = "";
   for (const word of words) {
     if (!cur) { cur = word; continue; }
+    // oxlint-disable-next-line typescript/no-misused-spread
     if ([...cur].length + 1 + [...word].length <= w) { cur += " " + word; continue; }
     out.push(cur);
     cur = word;
@@ -148,6 +162,7 @@ export function wrap(text, w) {
   if (cur) out.push(cur);
   // A single word longer than the column (a URL, usually) still has to fit.
   return out.flatMap((row) => {
+    // oxlint-disable-next-line typescript/no-misused-spread
     const chars = [...row];
     if (chars.length <= w) return [row];
     const parts = [];
@@ -161,6 +176,7 @@ export function rule(w, label = "") {
   if (!label) return [s(G.h.repeat(w), "border")];
   const text = ` ${label} `;
   const lead = 2;
+  // oxlint-disable-next-line typescript/no-misused-spread
   const tail = Math.max(0, w - lead - [...text].length);
   return [s(G.h.repeat(lead), "border"), s(text, "label"), s(G.h.repeat(tail), "border")];
 }
