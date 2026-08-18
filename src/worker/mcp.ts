@@ -9,11 +9,11 @@
 // claims otherwise — a header that said "read-only" is what let /mcp sit on the
 // preview guard's safe list long after it stopped being true.
 import { jsonResponse } from "./lib/http.ts";
-import { imageCompare, imageInspect, imageTransform, photoRecipe } from "./image-tools.js";
+import { imageCompare, imageInspect, imageTransform, photoRecipe } from "./image-tools.ts";
 import { DATA_TOOLS, DATA_TOOL_NAMES, callDataTool } from "./lib/tools.ts";
-import { captureRepresentation, compareRepresentation, readRepresentation } from "./representation.js";
-import { frameText, terminalToolFrame } from "./terminal.js";
-import { radarFrame, readSamples } from "./radar.js";
+import { captureRepresentation, compareRepresentation, readRepresentation } from "./representation.ts";
+import { frameText, terminalToolFrame } from "./terminal.ts";
+import { radarFrame, readSamples } from "./radar.ts";
 import { AGENT_SURFACES } from "./lib/site-manifest.ts";
 import { CACHE_EMPTY, CACHE_LIVE, CACHE_STATIC, mcpCorsHeaders, mcpGate, mcpHttpStatus, mcpServer } from "./lib/mcp-protocol.ts";
 import { mcpTool } from "./lib/mcp-tools.ts";

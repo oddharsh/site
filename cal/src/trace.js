@@ -13,7 +13,7 @@
 // `cloudflare:workers` import here, because contract-tests.mjs pulls
 // cal/src/slots.js (and through it availability.js, and through that this file)
 // into PLAIN NODE, whose ESM loader rejects the `cloudflare:` scheme at link
-// time. src/worker/index.js installs the real tracer at init.
+// time. src/worker/index.ts installs the real tracer at init.
 //
 // Under cal's own Vitest pool nothing installs it, so cal's spans are inert in
 // its unit tests. That is correct: those tests assert booking policy, not

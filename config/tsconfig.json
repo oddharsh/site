@@ -18,7 +18,7 @@
   //
   //   72   one heterogeneous ROUTES table taking its element type from the first
   //        entry, exactly as predicted. Settled by ONE annotation on the new
-  //        ROUTE_TABLE declaration in src/worker/index.js.
+  //        ROUTE_TABLE declaration in src/worker/index.ts.
   //   18   serendipity/serendipity.js, which the glob never names — tsc follows
   //        imports, so widening to the Worker drags in everything it reaches.
   //   22   scattered, and all of one family: a value that coerces at runtime and

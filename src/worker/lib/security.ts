@@ -11,7 +11,7 @@
 // would skip _headers entirely and ship without CSP / Permissions-Policy.
 import { PAGE_DICTIONARY } from "./shell-assets.ts";
 import { scriptHashesFor } from "./csp-hashes.ts";
-import { prefetchActivationHeader } from "../speculation.js";
+import { prefetchActivationHeader } from "../speculation.ts";
 import { PREVIEW_ROBOTS } from "./preview.ts";
 
 // There are NO external script or connect origins here. Browser-facing resources

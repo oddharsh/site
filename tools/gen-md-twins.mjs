@@ -284,22 +284,22 @@ export const TWIN_FACTS = [
           return name && version ? `${name}/${version} (+https://aadhar.sh/bot)` : null;
         },
       },
-      { label: "JWKS path", source: "src/worker/bot.js", string: "/.well-known/http-message-signatures-directory" },
-      { label: "sig1 algorithm", source: "src/worker/bot.js", string: "Ed25519" },
-      { label: "sig2 algorithm", source: "src/worker/bot.js", string: "ML-DSA-44" },
+      { label: "JWKS path", source: "src/worker/bot.ts", string: "/.well-known/http-message-signatures-directory" },
+      { label: "sig1 algorithm", source: "src/worker/bot.ts", string: "Ed25519" },
+      { label: "sig2 algorithm", source: "src/worker/bot.ts", string: "ML-DSA-44" },
     ],
   },
   {
     twin: "src/content/md/whoareyou.md",
     facts: [
-      { label: "JSON endpoint", source: "src/worker/whoareyou.js", string: "/whoareyou.json" },
-      { label: "no-storage claim", source: "src/worker/whoareyou.js", string: "none of it is stored" },
+      { label: "JSON endpoint", source: "src/worker/whoareyou.ts", string: "/whoareyou.json" },
+      { label: "no-storage claim", source: "src/worker/whoareyou.ts", string: "none of it is stored" },
       // The page's whole subject is what a request reveals, so the ONE script on it
       // that this repository does not contain has to be named in both copies or in
       // neither. Pinning the path means turning the edge injection off (or Cloudflare
       // renaming it) fails the deploy rather than leaving the page describing a tag
       // that is no longer there.
-      { label: "WebMCP bridge", source: "src/worker/whoareyou.js", string: "/.webmcp/bridge.js" },
+      { label: "WebMCP bridge", source: "src/worker/whoareyou.ts", string: "/.webmcp/bridge.js" },
     ],
   },
   {
@@ -328,7 +328,7 @@ export const TWIN_FACTS = [
             : "Content-Security-Policy-Report-Only";
         },
       },
-      { label: "JWKS path", source: "src/worker/security.js", string: "/.well-known/http-message-signatures-directory" },
+      { label: "JWKS path", source: "src/worker/security.ts", string: "/.well-known/http-message-signatures-directory" },
     ],
   },
 ];

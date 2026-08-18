@@ -49,15 +49,16 @@
 // everywhere. A per-session DO lands near whoever opened it — tens of ms, paid
 // once per ask, next to a model call. Latency was never the reason the programs
 // stay on URLs. Forking, bookmarking, and testability were.
-import { agentReadyFrame } from "./agent-ready.js";
-import { ENCODE_CAP, encodeReadout, fetchImageBytes, parseAvif, parseJpeg, sniff } from "./encode.js";
-import { probeRevalidation } from "./cache-lint.js";
+import { agentReadyFrame } from "./agent-ready.ts";
+import { asScalarText } from "./lib/parse.ts";
+import { ENCODE_CAP, encodeReadout, fetchImageBytes, parseAvif, parseJpeg, sniff } from "./encode.ts";
+import { probeRevalidation } from "./cache-lint.ts";
 import { readDoors } from "./lib/doors.ts";
-import { MEASURED, auditUrl } from "./dict.js";
-import { RADAR_LIMITS, radarFrame, readSamples } from "./radar.js";
-import { readAroundChanges } from "./around.js";
-import { readCoffeeAvailability } from "./coffee.js";
-import { LENS_BUDGETS, lensFetch, lensInspect, lensObservationSummary, overLensBudget, validateLensTarget } from "./lens.js";
+import { MEASURED, auditUrl } from "./dict.ts";
+import { RADAR_LIMITS, radarFrame, readSamples } from "./radar.ts";
+import { readAroundChanges } from "./around.ts";
+import { readCoffeeAvailability } from "./coffee.ts";
+import { LENS_BUDGETS, lensFetch, lensInspect, lensObservationSummary, overLensBudget, validateLensTarget } from "./lens.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { CANONICAL_HOST } from "./lib/const.ts";
 import { escHtml } from "./lib/http.ts";
@@ -65,12 +66,12 @@ import { AGENT_SURFACES } from "./lib/site-manifest.ts";
 import {
   COLS, blank, emit, fit, keys as keyHints, kv, meter, rows, rule, s, table, plainFrame, wrap,
 } from "./lib/tui.ts";
-import { photoFacets, queryPhotos } from "./photos.js";
-import { RN_FALLBACK, getTracksSWR } from "./rn.js";
-import { getCuriusCached } from "./reading.js";
-import { searchSite } from "./search.js";
-import { readCheckpoints } from "./updates.js";
-import { readPosts } from "./writing.js";
+import { photoFacets, queryPhotos } from "./photos.ts";
+import { RN_FALLBACK, getTracksSWR } from "./rn.ts";
+import { getCuriusCached } from "./reading.ts";
+import { searchSite } from "./search.ts";
+import { readCheckpoints } from "./updates.ts";
+import { readPosts } from "./writing.ts";
 
 // The frame is 80 columns because that is what a terminal is, and because an
 // agent's context window pays for every column of padding it never reads.
@@ -1173,7 +1174,7 @@ export async function handleTool(request, env, ctx) {
 export async function terminalToolFrame(app, args, request, env, ctx) {
   const url = new URL(`https://aadhar.sh/terminal/${app}`);
   for (const [key, value] of Object.entries(args || {})) {
-    if (value !== undefined && value !== null && value !== "") url.searchParams.set(key, String(value).slice(0, 512));
+    if (value !== undefined && value !== null && value !== "") url.searchParams.set(key, asScalarText(value).slice(0, 512));
   }
   const frame = await buildFrame(app, request, env, ctx, url);
   if (!frame) return { _error: `unknown tui program: ${app}` };

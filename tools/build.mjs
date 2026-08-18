@@ -148,7 +148,7 @@ async function checkInvariants() {
   // become a concrete probe path). Allowlist globs are matched as patterns, never
   // required literally (a symmetric diff would false-fire on the glob entries —
   // the exact disable-magnet).
-  const idx = await read("src/worker/index.js");
+  const idx = await read("src/worker/index.ts");
   const wrangler = await read("wrangler.jsonc");
   const routesBlock = (idx.match(/const ROUTES = new Map\(\[([\s\S]*?)\]\);/) || [,""])[1];
   const routeKeys = [...routesBlock.matchAll(/\[\s*"([^"]+)"/g)].map((m) => m[1]);
@@ -254,7 +254,7 @@ async function checkInvariants() {
   // file that carries the calc must agree with luna.css, or first paint lands
   // a different window height than the final.
   const floors = new Map();
-  for (const f of ["src/styles/luna.css", "src/worker/lib/chrome.ts", "src/worker/writing.js", "serendipity/serendipity.js"]) {
+  for (const f of ["src/styles/luna.css", "src/worker/lib/chrome.ts", "src/worker/writing.ts", "serendipity/serendipity.js"]) {
     let s; try { s = await read(f); } catch { continue; }
     // the BODY floor only (`height:calc(...)`), not a window `max-height:calc(...)`
     for (const m of s.matchAll(/(?<!max-)height:calc\(100dvh - (\d+)px\)/g)) floors.set(f, m[1]);
@@ -305,7 +305,7 @@ async function checkInvariants() {
   try {
     const runtimeFiles = [
       "src/pages/index.html",
-      "src/worker/index.js",
+      "src/worker/index.ts",
       "wrangler.jsonc",
       "wrangler.dev.jsonc",
     ];
@@ -316,7 +316,9 @@ async function checkInvariants() {
         if (source.includes(marker)) hard.push(`${name}: browser RUM is retired; remove ${marker}`);
       }
     }
-    if ((await readdir("src/worker")).includes("rum.js")) {
+    // Either extension: the Worker is TypeScript now, so a resurrected proxy
+    // would be rum.ts and a check pinned to .js would wave it through.
+    if ((await readdir("src/worker")).some((f) => f === "rum.js" || f === "rum.ts")) {
       hard.push("src/worker/rum.js: browser RUM is retired; remove the proxy module");
     }
     for (const [name, text] of [
@@ -646,7 +648,7 @@ await cp("src/pages", `${OUT}/public`, { recursive: true });
 // The Worker is a PROGRAM, not a document, so its source lives in src/worker
 // beside cal/ and serendipity/ rather than inside the tree of things a browser
 // can fetch. Its STAGED position is unchanged: wrangler.jsonc still points main
-// at .build/src/worker/index.js, and every deploy path and content hash
+// at .build/src/worker/index.ts, and every deploy path and content hash
 // downstream is therefore untouched by the move.
 await cp("src/worker", `${OUT}/src/worker`, { recursive: true });
 // The client islands and stylesheets author in src/ beside the Worker, and stage
@@ -928,7 +930,7 @@ if (inlineProbe.includes("/* probe */") ||
 {
   const nonce = `?build=${BUILD_NONCE}`;
   const grid = await import(pathToFileURL(resolve(OUT, "src/worker/lib/photo-grid.ts")).href + nonce);
-  const photos = await import(pathToFileURL(resolve(OUT, "src/worker/photos.js")).href + nonce);
+  const photos = await import(pathToFileURL(resolve(OUT, "src/worker/photos.ts")).href + nonce);
   const pool = photos.derivePhotoPool(
     JSON.parse(await readFile(`${OUT}/src/worker/photo-index.json`, "utf8")),
     JSON.parse(await readFile(`${OUT}/public/images/hashes.json`, "utf8")),
@@ -980,8 +982,8 @@ if (inlineProbe.includes("/* probe */") ||
 // worse than a failed deploy.
 {
   const nonce = `?build=${BUILD_NONCE}`;
-  const photos = await import(pathToFileURL(resolve(OUT, "src/worker/photos.js")).href + nonce);
-  const bot = await import(pathToFileURL(resolve(OUT, "src/worker/bot.js")).href + nonce);
+  const photos = await import(pathToFileURL(resolve(OUT, "src/worker/photos.ts")).href + nonce);
+  const bot = await import(pathToFileURL(resolve(OUT, "src/worker/bot.ts")).href + nonce);
 
   const pool = photos.derivePhotoPool(
     JSON.parse(await readFile(`${OUT}/src/worker/photo-index.json`, "utf8")),
@@ -1014,7 +1016,7 @@ if (inlineProbe.includes("/* probe */") ||
 // `pnpm run checkpoints:check` re-reads D1 and fails on drift.
 {
   const nonce = `?build=${BUILD_NONCE}`;
-  const updates = await import(pathToFileURL(resolve(OUT, "src/worker/updates.js")).href + nonce);
+  const updates = await import(pathToFileURL(resolve(OUT, "src/worker/updates.ts")).href + nonce);
   const points = JSON.parse(await readFile(`${OUT}/src/worker/checkpoints.json`, "utf8"));
   if (!points.length) throw new Error("updates/restore: the checkpoint projection is empty — both pages would ship with no log");
   const cp = { points, state: "ok" };
@@ -1410,10 +1412,10 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     },
   };
   const nonce = `?build=${BUILD_NONCE}`;
-  const lens = await import(pathToFileURL(resolve(OUT, "src/worker/lens.js")).href + nonce);
-  const run = await import(pathToFileURL(resolve(OUT, "src/worker/run.js")).href + nonce);
-  const search = await import(pathToFileURL(resolve(OUT, "src/worker/search.js")).href + nonce);
-  const writing = await import(pathToFileURL(resolve(OUT, "src/worker/writing.js")).href + nonce);
+  const lens = await import(pathToFileURL(resolve(OUT, "src/worker/lens.ts")).href + nonce);
+  const run = await import(pathToFileURL(resolve(OUT, "src/worker/run.ts")).href + nonce);
+  const search = await import(pathToFileURL(resolve(OUT, "src/worker/search.ts")).href + nonce);
+  const writing = await import(pathToFileURL(resolve(OUT, "src/worker/writing.ts")).href + nonce);
 
   const lensResponse = lens.renderLensShell();
   if (lensResponse.status !== 200) throw new Error(`static /lens renderer returned ${lensResponse.status}`);
@@ -1470,7 +1472,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     // The server-rendered idle Lens shell emits only the interaction bootstrap.
     // Phase 0 hashes the full client and rewrites its URL into this file first;
     // hashing the bootstrap here makes the complete two-step chain immutable.
-    { attr: "src",  from: "/lens-boot.js",  base: "lens-boot", ext: "js",  witness: "../src/worker/lens.js" },
+    { attr: "src",  from: "/lens-boot.js",  base: "lens-boot", ext: "js",  witness: "../src/worker/lens.ts" },
     // the desktop icon sprite. Unlike the three above, every ref carries a
     // #fragment (src="/icons.svg#pin-garage"), so `frag` widens the match to
     // keep it. Its witness is the desktop partial, which is where all 12 live.
@@ -1488,7 +1490,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     // It would silently miss those three and the witness tripwire would fail the deploy.
     // Moving them needs a different mechanism, not another line here.
     { attr: "src", from: "/quiz.js",    base: "quiz",    ext: "js", witness: "garage/encoding.html" },
-    { attr: "src", from: "/notepad.js", base: "notepad", ext: "js", witness: "../src/worker/writing.js" },
+    { attr: "src", from: "/notepad.js", base: "notepad", ext: "js", witness: "../src/worker/writing.ts" },
     // Shared LWE structure is a separate warm-cache object.
     { attr: "href", from: "/lwe-base.css", base: "lwe-base", ext: "css", witness: "lwe/vigenere.html" },
   ];
@@ -2033,7 +2035,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   const served = new Set();
   for (const rel of await readdir(`${OUT}/public`, { recursive: true })) served.add("/" + rel);
 
-  const idxSrc = await readFile("src/worker/index.js", "utf8");
+  const idxSrc = await readFile("src/worker/index.ts", "utf8");
   const wranglerSrc = await readFile("wrangler.jsonc", "utf8");
   const routesSrc = (idxSrc.match(/const ROUTES = new Map\(\[([\s\S]*?)\]\);/) || [, ""])[1];
   const allowSrc = (wranglerSrc.match(/"run_worker_first"\s*:\s*\[([\s\S]*?)\]/) || [, ""])[1];

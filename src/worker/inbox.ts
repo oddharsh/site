@@ -14,7 +14,7 @@
 // excerpt — very 2003.
 import { lunaPage } from "./lib/chrome.ts";
 import { esc } from "./lib/http.ts";
-import { readApprovedMentions } from "./webmention.js";
+import { readApprovedMentions } from "./webmention.ts";
 
 const KIND_LABEL = {
   reply: "replied",

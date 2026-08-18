@@ -22,27 +22,27 @@ import {
   handleLensShot,
   renderLensShell,
   validateLensTarget,
-} from "../src/worker/lens.js";
+} from "../src/worker/lens.ts";
 import { EXECUTION_META, EXECUTION_PROBE, executionChecks } from "../src/worker/lib/agent-execution.ts";
 import { httpWords } from "./check-agent.mjs";
-import { lensReadiness, lensSitemapVerdict, lensSitemapDeclared, lensAgentDoors } from "../src/worker/lens.js";
-import { lensRecipe, lensRecipeIds, lensRecipeScript } from "../src/worker/lens-recipes.js";
-import { handleCoffeeAvailability } from "../src/worker/coffee.js";
+import { lensReadiness, lensSitemapVerdict, lensSitemapDeclared, lensAgentDoors } from "../src/worker/lens.ts";
+import { lensRecipe, lensRecipeIds, lensRecipeScript } from "../src/worker/lens-recipes.ts";
+import { handleCoffeeAvailability } from "../src/worker/coffee.ts";
 import { reservationName } from "../cal/src/reservation.js";
-import { handleSiteMcp, MCP_TOOLS as SITE_MCP_TOOLS, SITE_MCP_SERVER_INFO } from "../src/worker/mcp.js";
-import { documentContent, handleWebmention, handleWebmentionDecision, linksTo } from "../src/worker/webmention.js";
-import { handleInbox } from "../src/worker/inbox.js";
-import { citationsIn, findEndpointIn, SELF_LINK_HOSTS } from "../src/worker/webmention-send.js";
+import { handleSiteMcp, MCP_TOOLS as SITE_MCP_TOOLS, SITE_MCP_SERVER_INFO } from "../src/worker/mcp.ts";
+import { documentContent, handleWebmention, handleWebmentionDecision, linksTo } from "../src/worker/webmention.ts";
+import { handleInbox } from "../src/worker/inbox.ts";
+import { citationsIn, findEndpointIn, SELF_LINK_HOSTS } from "../src/worker/webmention-send.ts";
 import { sign } from "../cal/src/sign.js";
 import { AGENT_SURFACES, WEBMENTION_PATHS } from "../src/worker/lib/site-manifest.ts";
-import { handleWritingIndex } from "../src/worker/writing.js";
-import { handleTool, tokenizeKeys } from "../src/worker/terminal.js";
-import { handleTerminal } from "../src/worker/wire.js";
+import { handleWritingIndex } from "../src/worker/writing.ts";
+import { handleTool, tokenizeKeys } from "../src/worker/terminal.ts";
+import { handleTerminal } from "../src/worker/wire.ts";
 import { DATA_TOOLS } from "../src/worker/lib/tools.ts";
 import { cronJob } from "../src/worker/lib/cron.ts";
 import { BASELINE_HEADING, FLOOR_CLAIMS, auditDependencyDocs, baselineSection, checkDependencyDocs, findClaims, parseCargoDeps } from "./lib/dependency-docs.mjs";
 import { PAGE_FAMILY_MATCH, serveStaticPage } from "../src/worker/lib/assets.ts";
-import { serveMarkdown } from "../src/worker/home.js";
+import { serveMarkdown } from "../src/worker/home.ts";
 import { readManifest, workerModule, navFenceBody, readFenceBody, runProfilesBody } from "./gen-manifest.mjs";
 import { PROFILES } from "../tools/photos/shell-data.mjs";
 import { faviconHref, sectionFavicons, speculationHtml } from "../tools/photos/gen-desktop-partial.mjs";
@@ -57,20 +57,20 @@ import {
   staleGuestIds,
 } from "../serendipity/serendipity.js";
 import { MCP_SUPPORTED as MCP_SUPPORTED_VERSIONS } from "../src/worker/lib/mcp-protocol.ts";
-import { derivePhotoPool, renderPhotosPage, getImagesManifest, handlePhotoQuery, queryPhotos, _resetPhotoCaches } from "../src/worker/photos.js";
+import { derivePhotoPool, renderPhotosPage, getImagesManifest, handlePhotoQuery, queryPhotos, _resetPhotoCaches } from "../src/worker/photos.ts";
 import { renderPhotoSlots } from "../src/worker/lib/photo-grid.ts";
 import { cachedRender, deadline } from "../src/worker/lib/cache.ts";
 import { ifNoneMatchMatches, notModifiedIfFresh, withWeakEtag } from "../src/worker/lib/cache.ts";
 import { fetchFollowingPublicRedirects, privateHostBlocked } from "../src/worker/lib/crawl.ts";
-import { handleHit } from "../src/worker/counter.js";
-import { cronHomeProbe, parseServerTiming } from "../src/worker/perf-probe.js";
-import { gatherWhoareyou } from "../src/worker/whoareyou.js";
-import { handleSearchJson, renderSearchPage, searchSite } from "../src/worker/search.js";
-import { renderRun } from "../src/worker/run.js";
+import { handleHit } from "../src/worker/counter.ts";
+import { cronHomeProbe, parseServerTiming } from "../src/worker/perf-probe.ts";
+import { gatherWhoareyou } from "../src/worker/whoareyou.ts";
+import { handleSearchJson, renderSearchPage, searchSite } from "../src/worker/search.ts";
+import { renderRun } from "../src/worker/run.ts";
 import { getPublicAvailability } from "../cal/src/slots.js";
 import { botHeaders } from "../src/worker/lib/botauth.ts";
 import { mapWithConcurrency, readResponseCapped } from "../src/worker/lib/crawl.ts";
-import { NEIGHBORS, diffAroundRows, handleAroundChangesJson, readAroundChanges, renderAroundHtml } from "../src/worker/around.js";
+import { NEIGHBORS, diffAroundRows, handleAroundChangesJson, readAroundChanges, renderAroundHtml } from "../src/worker/around.ts";
 import * as tui from "../src/worker/lib/tui.ts";
 
 // Every path lookup below is relative to the REPO ROOT, not to this file.
@@ -90,7 +90,7 @@ import {
   renderTrackListHtml,
   spotifyArtHash,
   warmArtCache,
-} from "../src/worker/rn.js";
+} from "../src/worker/rn.ts";
 
 const PLAYLIST_ID = "4IRq9W1N2tOWHhH0O3vXiF";
 const TRACKS = {
@@ -1030,7 +1030,7 @@ test("two runs of one recipe never share a nonce", async () => {
 });
 
 test("the recipe registry stays inside what it is allowed to do", async () => {
-  const { LENS_RECIPES } = await import("../src/worker/lens-recipes.js");
+  const { LENS_RECIPES } = await import("../src/worker/lens-recipes.ts");
   const ids = new Set();
   for (const r of LENS_RECIPES) {
     assert.match(r.id, /^[a-z][a-z0-9-]{1,15}$/, `${r.id} is not a safe id`);
@@ -1050,7 +1050,7 @@ test("the recipe registry stays inside what it is allowed to do", async () => {
 });
 
 test("no shipping recipe presses a control on somebody else's page", async () => {
-  const { LENS_RECIPES } = await import("../src/worker/lens-recipes.js");
+  const { LENS_RECIPES } = await import("../src/worker/lens-recipes.ts");
   // Removing a consent overlay from our own copy of the DOM sets no cookie and
   // records no choice. Clicking "Accept all" from a Cloudflare IP would be this
   // site manufacturing a consent record on a third party's page, which is the
@@ -1064,7 +1064,7 @@ test("no shipping recipe presses a control on somebody else's page", async () =>
 });
 
 test("the published scripts are the scripts that run", async () => {
-  const { LENS_RECIPES } = await import("../src/worker/lens-recipes.js");
+  const { LENS_RECIPES } = await import("../src/worker/lens-recipes.ts");
   const response = await handleLensBrowser(new Request("https://aadhar.sh/lens/browser?recipes=1"), {}, context());
   const body = await response.json();
   assert.equal(response.status, 200);
@@ -1116,7 +1116,7 @@ test("a page cannot forge a result for a script it was not given", async () => {
 });
 
 test("nonsense counts in a receipt are clamped rather than believed", async () => {
-  const { lensRecipeReceipt } = await import("../src/worker/lens-recipes.js");
+  const { lensRecipeReceipt } = await import("../src/worker/lens-recipes.ts");
   const wrap = (json) => `<script type="application/lens-receipt" id="lens-recipe-receipt">${json}</script>`;
   const read = (json) => lensRecipeReceipt(wrap(json), "n").receipt;
   assert.equal(read('{"n":"n","acted":"12","scanned":0,"note":"acted"}').acted, 0, "a string is not a count");
@@ -2456,7 +2456,7 @@ test("both homepage fragments are preloaded, and the reason that is free still h
 });
 
 test("homepage selects 12 photos and transfers all of them", async () => {
-  const worker = await readFile(new URL("src/worker/home.js", ROOT), "utf8");
+  const worker = await readFile(new URL("src/worker/home.ts", ROOT), "utf8");
   const page = await readFile(new URL("src/pages/index.html", ROOT), "utf8");
   const luna = await readFile(new URL("src/styles/luna.css", ROOT), "utf8");
   const nav = await readFile(new URL("src/client/nav.js", ROOT), "utf8");
@@ -2697,13 +2697,13 @@ test("robots.txt never forbids a path the site advertises to agents", async () =
 
 test("browser RUM and its ledger proxy stay fully removed", async () => {
   const page = await readFile(new URL("src/pages/index.html", ROOT), "utf8");
-  const worker = await readFile(new URL("src/worker/index.js", ROOT), "utf8");
+  const worker = await readFile(new URL("src/worker/index.ts", ROOT), "utf8");
   const wrangler = await readFile(new URL("wrangler.jsonc", ROOT), "utf8");
   const wranglerDev = await readFile(new URL("wrangler.dev.jsonc", ROOT), "utf8");
   const headers = await readFile(new URL("public/_headers", ROOT), "utf8");
-  const whoareyou = await readFile(new URL("src/worker/whoareyou.js", ROOT), "utf8");
+  const whoareyou = await readFile(new URL("src/worker/whoareyou.ts", ROOT), "utf8");
   const whoareyouMd = await readFile(new URL("src/content/md/whoareyou.md", ROOT), "utf8");
-  const securityPage = await readFile(new URL("src/worker/security.js", ROOT), "utf8");
+  const securityPage = await readFile(new URL("src/worker/security.ts", ROOT), "utf8");
 
   // The loader, both route legs, both asset allowlists, and the dedicated module
   // are one feature. Leaving any one behind either recreates the reported 404 or
@@ -3691,7 +3691,7 @@ test("renderPhotosPage is pure over the committed pool", async () => {
 });
 
 test("renderBotPage takes no arguments and is deterministic", async () => {
-  const { renderBotPage } = await import("../src/worker/bot.js");
+  const { renderBotPage } = await import("../src/worker/bot.ts");
   assert.equal(renderBotPage.length, 0, "any parameter is a door for runtime state");
   const a = await renderBotPage().text();
   const b = await renderBotPage().text();
@@ -3710,7 +3710,7 @@ function speculationEnv() {
 }
 
 test("the speculation denominator counts real speculations and nothing else", async () => {
-  const { countSpeculativeLoad } = await import("../src/worker/speculation.js");
+  const { countSpeculativeLoad } = await import("../src/worker/speculation.ts");
   const ok = new Response("", { status: 200 });
 
   const cases = [
@@ -3748,7 +3748,7 @@ test("the speculation denominator counts real speculations and nothing else", as
 
 test("the activation beacon answers 204 and records which page paid off", async () => {
   const { handlePrefetchActivation, prefetchActivationHeader } =
-    await import("../src/worker/speculation.js");
+    await import("../src/worker/speculation.ts");
 
   // the header the browser is handed must round-trip a path through the query
   const value = prefetchActivationHeader("/garage/horizon");
@@ -3816,7 +3816,7 @@ test("the homepage's Link header carries the shell preloads, or it gets no Early
   // route imported. This test is the part that was missing: an assertion that
   // ties the header to the route rather than to a helper that may drift out of
   // the call graph.
-  const index = await readFile(new URL("src/worker/index.js", ROOT), "utf8");
+  const index = await readFile(new URL("src/worker/index.ts", ROOT), "utf8");
   const block = index.match(/const HOMEPAGE_HEADERS = \{[\s\S]*?\};/);
   assert.ok(block, "HOMEPAGE_HEADERS must still exist");
   assert.match(block[0], /SHELL_PRELOAD_LINK/,
@@ -3854,7 +3854,7 @@ test("the homepage's Link header carries the shell preloads, or it gets no Early
   // omitted x-markdown-tokens. The duplicate is gone, so assert it stays gone
   // rather than that a second copy still agrees. Same move as the
   // withHomepageDiscoveryHeaders assertions above.
-  const home = await readFile(new URL("src/worker/home.js", ROOT), "utf8");
+  const home = await readFile(new URL("src/worker/home.ts", ROOT), "utf8");
   assert.doesNotMatch(home, /^\s*(export )?function homepageHeadResponse/m,
     "the homepage HEAD must not go back to a hand-written header set; it takes the GET's own path");
   assert.doesNotMatch(index, /method === "HEAD"\s*\)\s*return homepageHeadResponse/,
@@ -4329,7 +4329,7 @@ test("previews refuse every unsafe method, and the GET-shaped writes too", async
 // whole suite at link time (gotcha 16).
 test("every preview-guarded GET write names a path the site really routes", async () => {
   const { PREVIEW_GET_WRITES } = await import("../src/worker/lib/preview.ts");
-  const dispatcher = readFileSync(new URL("./src/worker/index.js", ROOT), "utf8");
+  const dispatcher = readFileSync(new URL("./src/worker/index.ts", ROOT), "utf8");
   const cal = readFileSync(new URL("./cal/src/index.js", ROOT), "utf8");
 
   // Exact ROUTES entries in the site dispatcher, plus cal's own matches, which
@@ -4436,7 +4436,7 @@ test("preview noindex reaches the responses the security wrapper otherwise skips
   // /coffee at a second hostname (cal's templates carry no rel=canonical). The
   // dispatcher cannot be imported here, since index.js is the one module allowed
   // to import "cloudflare:workers" (gotcha 16), so pin the decision as source.
-  const dispatcher = readFileSync(new URL("./src/worker/index.js", ROOT), "utf8");
+  const dispatcher = readFileSync(new URL("./src/worker/index.ts", ROOT), "utf8");
   assert.match(
     dispatcher,
     /noindex:\s*!isCanonicalHost\(url\.hostname\)/,
@@ -4524,7 +4524,7 @@ test("every /access device previews a cost, and the clause order its parser depe
 // ceiling" are both worth pinning.
 
 test("every rate-limit ceiling matches the ratelimits declared in both wrangler configs", async () => {
-  const { LENS_BUDGETS } = await import("../src/worker/lens.js");
+  const { LENS_BUDGETS } = await import("../src/worker/lens.ts");
   const { parseJsonc } = await import("./lib/jsonc.mjs");
 
   // EVERY per-IP budget on the site, not just Lens's. The orphan check at the
@@ -4560,7 +4560,7 @@ test("every rate-limit ceiling matches the ratelimits declared in both wrangler 
 });
 
 test("overLensBudget fails open without a limiter and closes when one says no", async () => {
-  const { LENS_BUDGETS, overLensBudget } = await import("../src/worker/lens.js");
+  const { LENS_BUDGETS, overLensBudget } = await import("../src/worker/lens.ts");
   const req = new Request("https://aadhar.sh/lens/fetch?url=https://example.com", {
     headers: { "cf-connecting-ip": "203.0.113.7" },
   });
@@ -4602,8 +4602,8 @@ test("every browser lens reads its cache before it checks a budget", async () =>
   // Getting this backwards refuses a reader a snapshot the Worker is already
   // holding, and it does so hardest when the cache is fullest.
   const files = {
-    "lens.js": await readFile(new URL("../src/worker/lens.js", import.meta.url), "utf8"),
-    "lens-wire.js": await readFile(new URL("../src/worker/lens-wire.js", import.meta.url), "utf8"),
+    "lens.js": await readFile(new URL("../src/worker/lens.ts", import.meta.url), "utf8"),
+    "lens-wire.js": await readFile(new URL("../src/worker/lens-wire.ts", import.meta.url), "utf8"),
   };
   const cases = [
     { file: "lens.js", handler: "handleLensShot", key: '"lens:shot:"' },
@@ -4629,7 +4629,7 @@ test("every browser lens reads its cache before it checks a budget", async () =>
 });
 
 test("documentTally counts substance, not framework payload", async () => {
-  const { documentTally } = await import("../src/worker/lens-render.js");
+  const { documentTally } = await import("../src/worker/lens-render.ts");
 
   // A client-rendered shell: almost all of its bytes are an inline script, and
   // none of that is anything a reader or a parser gets. This is why the shape
@@ -4655,7 +4655,7 @@ test("documentTally counts substance, not framework payload", async () => {
 
 test("the kitesurf selector is tried, and a rejection is remembered rather than reported", async () => {
   const { runBrowserAction, _resetKitesurfProbe, _kitesurfParamLive } =
-    await import("../src/worker/lens-render.js");
+    await import("../src/worker/lens-render.ts");
   const env = { CF_ACCOUNT_ID: "acct", BROWSER_RUN_TOKEN: "tok" };
   const realFetch = globalThis.fetch;
   const calls = [];
@@ -4691,7 +4691,7 @@ test("the kitesurf selector is tried, and a rejection is remembered rather than 
 
 test("the selector rides the browser-run path, which is the only one it works on", async () => {
   const { restUrl, runBrowserAction, _resetKitesurfProbe } =
-    await import("../src/worker/lens-render.js");
+    await import("../src/worker/lens-render.ts");
 
   // Both spellings ROUTE — probed unauthenticated against the real account id,
   // each answers error 10000 rather than 7003 "could not route to". So posting
@@ -4722,7 +4722,7 @@ test("the selector rides the browser-run path, which is the only one it works on
 
 test("a 200 is not evidence that kitesurf rendered, and is not reported as if it were", async () => {
   const { runBrowserAction, _resetKitesurfProbe } =
-    await import("../src/worker/lens-render.js");
+    await import("../src/worker/lens-render.ts");
   const realFetch = globalThis.fetch;
 
   try {
@@ -4770,7 +4770,7 @@ test("the ramp guard asks whether it can authenticate, not whether it is CI", as
 });
 
 test("the shared browser ceiling bills everyone to one bucket, not per caller", async () => {
-  const { BROWSER_FREE_PLAN, LENS_BUDGETS, overLensBudget } = await import("../src/worker/lens.js");
+  const { BROWSER_FREE_PLAN, LENS_BUDGETS, overLensBudget } = await import("../src/worker/lens.ts");
 
   // A budget carrying a fixed key must IGNORE the caller's IP. Two different
   // visitors have to land in the same bucket, because the allowance they are
@@ -5058,7 +5058,7 @@ test("neither MCP server keeps a private copy of the protocol constants", async 
   // The whole point of lib/mcp-protocol.js is that there is ONE answer to "what
   // does this origin speak". A server that re-declares MCP_SUPPORTED locally
   // would pass every test above on the day it was written and drift later.
-  for (const file of ["src/worker/mcp.js", "serendipity/serendipity.js"]) {
+  for (const file of ["src/worker/mcp.ts", "serendipity/serendipity.js"]) {
     const src = readFileSync(file, "utf8");
     assert.ok(/from ".*lib\/mcp-protocol\.(js|ts)"/.test(src), `${file} must import the shared protocol module`);
     assert.ok(!/^const MCP_SUPPORTED\s*=/m.test(src), `${file} re-declares MCP_SUPPORTED instead of importing it`);
@@ -5372,7 +5372,7 @@ test("the ask loop and the MCP server call ONE tool registry", async () => {
     assert.ok(listed.includes(tool.name), `${tool.name} is in the ask catalog but not in tools/list`);
     assert.ok(tool.description && tool.inputSchema, `${tool.name} must carry a description and a schema for function calling`);
   }
-  const src = readFileSync("src/worker/mcp.js", "utf8");
+  const src = readFileSync("src/worker/mcp.ts", "utf8");
   assert.match(src, /from "\.\/lib\/tools\.(js|ts)"/, "mcp.js must import the shared registry");
   assert.ok(!/name: "search_site"/.test(src), "mcp.js re-declares a data tool instead of importing it");
 });
@@ -5721,7 +5721,7 @@ test("radar drops readings that are not dBm, and bounds the rest", async () => {
   // is dropped rather than fatal. dBm is negative by definition: a positive
   // number is a unit mistake, not a very strong signal, and plotting it would
   // put a device inside the centre ring.
-  const { readSamples, RADAR_LIMITS } = await import("../src/worker/radar.js");
+  const { readSamples, RADAR_LIMITS } = await import("../src/worker/radar.ts");
   const parsed = readSamples({ samples: [
     { name: "ok", rssi: -58 },
     { name: "positive", rssi: 5 },
@@ -5740,7 +5740,7 @@ test("radar drops readings that are not dBm, and bounds the rest", async () => {
 });
 
 test("radar bands match findphone's field calibration", async () => {
-  const { bandOf } = await import("../src/worker/radar.js");
+  const { bandOf } = await import("../src/worker/radar.ts");
   assert.equal(bandOf(-40).label, "arm's reach");
   assert.equal(bandOf(-45).label, "arm's reach");
   assert.equal(bandOf(-55).label, "same table");
@@ -5799,7 +5799,7 @@ test("an empty or malformed radar payload explains itself instead of 500ing", as
 // every external fetch in this repo dies at signing in a test environment.
 
 test("each Chromium veto is caught on its own, and a clean dictionary passes", async () => {
-  const { auditDictionary } = await import("../src/worker/dict.js");
+  const { auditDictionary } = await import("../src/worker/dict.ts");
   const base = { "use-as-dictionary": 'match="/a/*"' };
 
   // must-revalidate and no-cache are the two that surprise people: neither means
@@ -5830,7 +5830,7 @@ test("the lint knows the dictionary's life is the SWR window, not max-age", asyn
   // The non-obvious rule, and the one that reads as "it worked yesterday": a
   // dictionary with a year of max-age and no stale-while-revalidate is usable
   // for zero seconds past freshness.
-  const { auditDictionary } = await import("../src/worker/dict.js");
+  const { auditDictionary } = await import("../src/worker/dict.ts");
   const noSwr = auditDictionary({ "use-as-dictionary": "match=\"/*\"", "cache-control": "public, max-age=31536000, immutable" });
   assert.equal(noSwr.registers, true, "no SWR is a warning, not a veto");
   assert.ok(noSwr.warns.some((w) => w.id === "lifetime"));
@@ -5843,7 +5843,7 @@ test("the lint knows the dictionary's life is the SWR window, not max-age", asyn
 test("a delta served without vary: available-dictionary is flagged as a decode failure", async () => {
   // Not a slow page. A shared cache hands the delta to a client with no
   // dictionary and the navigation dies on ERR_CONTENT_DECODING_FAILED.
-  const { auditConsumer } = await import("../src/worker/dict.js");
+  const { auditConsumer } = await import("../src/worker/dict.ts");
   const unsafe = auditConsumer({ "content-encoding": "dcz", vary: "accept-encoding" });
   assert.equal(unsafe.isDelta, true);
   assert.equal(unsafe.variesOnDictionary, false);
@@ -5868,7 +5868,7 @@ test("a second scan of the same origin reuses discovery instead of re-probing", 
   // 656ms of a 685ms scan, re-asking one host the same 26 questions it had
   // already answered. The cache is keyed by ORIGIN, not URL, because not one of
   // those 26 depends on which page was scanned.
-  const { originDiscovery } = await import("../src/worker/lens.js");
+  const { originDiscovery } = await import("../src/worker/lens.ts");
   const store = new Map();
   const realCaches = globalThis.caches;
   globalThis.caches = {
@@ -5906,7 +5906,7 @@ test("a second scan of the same origin reuses discovery instead of re-probing", 
 test("discovery still works with no cache at all", async () => {
   // Under plain node `caches` does not exist, and a scan must degrade to the
   // previous behaviour (a live fan-out every time) rather than throw.
-  const { originDiscovery } = await import("../src/worker/lens.js");
+  const { originDiscovery } = await import("../src/worker/lens.ts");
   const realCaches = globalThis.caches;
   delete globalThis.caches;
   try {
@@ -5934,7 +5934,7 @@ test("a page-only scan omits the discovery-derived fields rather than zeroing th
   // is not a partial score, it is a WRONG one, and `doors: 0` would read as
   // "this site has no agent doors" when it means "nobody looked". So the fields
   // are ABSENT and `phases` says which ran.
-  const { lensInspect, lensObservationSummary } = await import("../src/worker/lens.js");
+  const { lensInspect, lensObservationSummary } = await import("../src/worker/lens.ts");
   let out;
   try {
     out = await lensInspect("https://example.com/", {}, { phases: ["page"] });
@@ -5957,12 +5957,12 @@ test("a page-only scan omits the discovery-derived fields rather than zeroing th
 test("the default scan is unchanged — every phase still runs", async () => {
   // The split must be opt-in. Existing callers (/lens/fetch, lens_inspect,
   // /lens, the census) pass no phases and must keep the full behaviour.
-  const src = readFileSync("src/worker/lens.js", "utf8");
+  const src = readFileSync("src/worker/lens.ts", "utf8");
   assert.match(src, /if \(opts\.phases && !opts\.phases\.includes\("discovery"\)\) return out;/,
     "the early return must require an explicit phases opt-in");
   // A summary built from a full result reports every phase true by default, so
   // nothing downstream has to special-case the old shape.
-  const { lensObservationSummary } = await import("../src/worker/lens.js");
+  const { lensObservationSummary } = await import("../src/worker/lens.ts");
   assert.deepEqual(lensObservationSummary({}).phases, { page: true, discovery: true, botViews: true });
 });
 
@@ -5974,7 +5974,7 @@ test("the default scan is unchanged — every phase still runs", async () => {
 // excerpt is stored escaped), so what it costs is fidelity: script source lands in a
 // markdown render, and minified JS lands in a webmention excerpt that a human reads.
 test("a spaced end tag and an --!> comment close their elements", async () => {
-  const { lensMarkdown } = await import("../src/worker/lens.js");
+  const { lensMarkdown } = await import("../src/worker/lens.ts");
 
   const md = lensMarkdown("<body><p>keep</p><script >var leak=1;</script >tail</body>", "https://x/");
   assert.ok(!md.includes("leak"), "a spaced </script > must close the script");
@@ -5988,7 +5988,7 @@ test("a spaced end tag and an --!> comment close their elements", async () => {
   assert.ok(lensMarkdown("<body><header><p>nav</p></header><p>body</p></body>", "https://x/").includes("body"),
     "<header> is not <head>");
 
-  const { contentOf } = await import("../src/worker/webmention-send.js");
+  const { contentOf } = await import("../src/worker/webmention-send.ts");
   assert.ok(!contentOf("<html><body><script >var s=1;</script >real</body></html>").includes("var s"),
     "outbound link extraction skips script bodies closed with a space");
 });
@@ -5997,8 +5997,8 @@ test("a spaced end tag and an --!> comment close their elements", async () => {
 // as surely as `</script>`. A stripper that only allows whitespace before the `>`
 // hands the whole body through.
 test("an end tag carrying attributes still closes its element", async () => {
-  const { lensMarkdown } = await import("../src/worker/lens.js");
-  const { contentOf } = await import("../src/worker/webmention-send.js");
+  const { lensMarkdown } = await import("../src/worker/lens.ts");
+  const { contentOf } = await import("../src/worker/webmention-send.ts");
 
   assert.ok(!lensMarkdown("<body><script>var leak=1;</script bar>tail</body>", "https://x/").includes("leak"),
     "lensMarkdown closes on </script bar>");
@@ -6014,7 +6014,7 @@ test("the parse is capped, and a prefix parse says so instead of under-reporting
   // same V8). At the old 2MB fetch cap that is ~64ms of pure CPU — impossible on
   // the Workers free plan's 10ms ceiling and wasteful on paid. Capping the PARSE
   // bounds the worst case; the median page is nowhere near it and is untouched.
-  const { LENS_PARSE_CAP, lensObservationSummary } = await import("../src/worker/lens.js");
+  const { LENS_PARSE_CAP, lensObservationSummary } = await import("../src/worker/lens.ts");
   assert.ok(LENS_PARSE_CAP > 0 && LENS_PARSE_CAP <= 512 * 1024);
 
   // rawBytes must stay the TRUE size. We know it from the fetch even when we
@@ -6036,7 +6036,7 @@ test("the parse is capped, and a prefix parse says so instead of under-reporting
 test("the parse cap is a deployment knob, not a code change", async () => {
   // "Move lens onto the free plan" should be a var flip. The floor keeps a
   // typo (LENS_PARSE_KB=0 or 1) from disabling parsing entirely.
-  const src = readFileSync("src/worker/lens.js", "utf8");
+  const src = readFileSync("src/worker/lens.ts", "utf8");
   assert.match(src, /Number\(env\?\.LENS_PARSE_KB\)/, "the cap must be env-overridable");
   assert.match(src, /Math\.max\(8, Number\(env\?\.LENS_PARSE_KB\) \|\| 0\)/, "a floor must guard against a zero or tiny override");
 });
@@ -6048,7 +6048,7 @@ test("the parse cap is a deployment knob, not a code change", async () => {
 test("an ETag that changes between identical fetches is called what it is", async () => {
   // THE failure this tool exists for. Headers look perfect, and every
   // If-None-Match will 200 with a full body, forever.
-  const { judgeRevalidation } = await import("../src/worker/cache-lint.js");
+  const { judgeRevalidation } = await import("../src/worker/cache-lint.ts");
   const v = judgeRevalidation({
     first: { status: 200, headers: { etag: '"abc-gzip"', "cache-control": "max-age=600" } },
     second: { status: 200, headers: { etag: '"abc-br"' } },
@@ -6062,7 +6062,7 @@ test("an ETag that changes between identical fetches is called what it is", asyn
 });
 
 test("a stable ETag the origin then ignores is its own distinct failure", async () => {
-  const { judgeRevalidation } = await import("../src/worker/cache-lint.js");
+  const { judgeRevalidation } = await import("../src/worker/cache-lint.ts");
   const v = judgeRevalidation({
     first: { status: 200, headers: { etag: '"stable"' } },
     second: { status: 200, headers: { etag: '"stable"' } },
@@ -6073,7 +6073,7 @@ test("a stable ETag the origin then ignores is its own distinct failure", async 
 });
 
 test("the healthy path and the no-validator path both read correctly", async () => {
-  const { judgeRevalidation } = await import("../src/worker/cache-lint.js");
+  const { judgeRevalidation } = await import("../src/worker/cache-lint.ts");
   const healthy = judgeRevalidation({
     first: { status: 200, headers: { etag: '"v1"', "cache-control": "max-age=300" } },
     second: { status: 200, headers: { etag: '"v1"' } },
@@ -6088,7 +6088,7 @@ test("the healthy path and the no-validator path both read correctly", async () 
 test("negotiating on Accept without saying so in Vary is flagged — the #195 trap", async () => {
   // Hit in production on THIS site: markdown negotiation answered from a warm
   // URL-keyed cache as HTML, because the stored Vary named only accept-encoding.
-  const { judgeRevalidation } = await import("../src/worker/cache-lint.js");
+  const { judgeRevalidation } = await import("../src/worker/cache-lint.ts");
   const base = { status: 200, headers: { etag: '"x"', "content-type": "text/html", vary: "accept-encoding" } };
   const trapped = judgeRevalidation({
     first: base, second: base, conditional: { status: 304, headers: {} },
@@ -6169,7 +6169,7 @@ test("every tool with a route is reachable over MCP, and vice versa", async () =
   // same set — a tool with an HTTP route but no MCP entry is invisible to the
   // exact caller this whole surface is built for. dict and cache shipped that
   // way for two commits before this test existed.
-  const { TOOL_NAMES } = await import("../src/worker/terminal.js");
+  const { TOOL_NAMES } = await import("../src/worker/terminal.ts");
   const listed = (await (await handleSiteMcp(mcpPost({ jsonrpc: "2.0", id: 1, method: "tools/list", params: { ...MODERN_META } }), terminalEnv(), context())).json())
     .result.tools.map((t) => t.name);
 
@@ -6192,7 +6192,7 @@ test("the lift table is internally consistent and names its baseline", async () 
   // census runs on. What a test CAN hold is that it adds up and that the
   // baseline is a real subset — a claim like "compatibility is a weekend" is
   // only worth making if the number behind it is derived from the table.
-  const { LIFT, BASELINE, liftTotals, LIFT_CHECKED } = await import("../src/worker/agent-ready.js");
+  const { LIFT, BASELINE, liftTotals, LIFT_CHECKED } = await import("../src/worker/agent-ready.ts");
   assert.match(LIFT_CHECKED, /^\d{4}-\d{2}-\d{2}$/, "the bill must carry a checked date");
 
   const names = LIFT.map(([n]) => n);
@@ -6213,7 +6213,7 @@ test("doors are counted, and unreadable is never counted as either", async () =>
   // The rule this whole codebase keeps rediscovering. A check that could not run
   // is not a pass and not a failure, and a scorecard that collapses it into
   // either one is lying about a site it never reached.
-  const { scoreDoors } = await import("../src/worker/agent-ready.js");
+  const { scoreDoors } = await import("../src/worker/agent-ready.ts");
   const s = scoreDoors({
     llms: { ok: true }, markdown: { ok: false, why: "HTTP 404" },
     agentCard: { ok: false, unreadable: true, why: "no signing key" },
@@ -6247,7 +6247,7 @@ test("the scorecard grades other origins, and only bills its own", async () => {
 // available: 474 files this site's pipeline produced, with known properties.
 
 test("the JPEG parser agrees with the pipeline that made the files", async () => {
-  const { parseJpeg, sniff, estimateQuality } = await import("../src/worker/encode.js");
+  const { parseJpeg, sniff, estimateQuality } = await import("../src/worker/encode.ts");
   const { readdirSync } = await import("node:fs");
   const files = readdirSync("public/i").filter((f) => f.endsWith(".jpg")).slice(0, 12);
   assert.ok(files.length > 4, "expected committed thumbnails to test against");
@@ -6277,7 +6277,7 @@ test("the AVIF parser reads bit depth and subsampling, and monochrome is real", 
   // The monochrome flag is the one I nearly "fixed" while it was correct: the
   // first files sampled were the two Leica black-and-white frames, so a broken
   // parser and a right one looked identical until the sample got bigger.
-  const { parseAvif, sniff } = await import("../src/worker/encode.js");
+  const { parseAvif, sniff } = await import("../src/worker/encode.ts");
   const { readdirSync } = await import("node:fs");
   const files = readdirSync("public/i").filter((f) => f.endsWith(".avif")).slice(0, 30);
   let mono = 0, colour = 0;
@@ -6299,7 +6299,7 @@ test("the AVIF parser reads bit depth and subsampling, and monochrome is real", 
 test("encode sniffs the container from magic bytes, not content-type", async () => {
   // A mislabelled response is common, and the parse has to match the actual
   // bytes or it reads garbage confidently.
-  const { sniff } = await import("../src/worker/encode.js");
+  const { sniff } = await import("../src/worker/encode.ts");
   assert.equal(sniff(new Uint8Array([0xFF, 0xD8, 0xFF, 0xE0, 0, 0])), "jpeg");
   assert.equal(sniff(new Uint8Array([0x89, 0x50, 0x4E, 0x47, 0, 0, 0, 0, 0])), "png");
   assert.equal(sniff(new Uint8Array(4)), null);
@@ -6308,7 +6308,7 @@ test("encode sniffs the container from magic bytes, not content-type", async () 
 test("encode judges chroma and depth against this site's own measurements", async () => {
   // The verdicts are where the site's encoding work stops being prose. 4:4:4 at
   // delivery size and 8-bit AVIF are the two it should always flag.
-  const { judgeEncode } = await import("../src/worker/encode.js");
+  const { judgeEncode } = await import("../src/worker/encode.ts");
   const fat = judgeEncode({ format: "jpeg", subsampling: "4:4:4", progressive: false, scans: 1, tables: [], width: 600, height: 600, icc: true }, 90000);
   const ids = fat.warns.map((w) => w.id);
   assert.ok(ids.includes("chroma"), "4:4:4 at delivery size must be flagged");
@@ -6546,7 +6546,7 @@ test("each section advertises its feed", () => {
   }
   // /writing is Worker-rendered, so its shell carries the link for the index and
   // every post at once.
-  assert.match(readFileSync("src/worker/writing.js", "utf8"), /application\/rss\+xml[^"]*"[^"]*"\s*\+?[^"]*writing\/feed\.xml|writing\/feed\.xml/);
+  assert.match(readFileSync("src/worker/writing.ts", "utf8"), /application\/rss\+xml[^"]*"[^"]*"\s*\+?[^"]*writing\/feed\.xml|writing\/feed\.xml/);
 });
 
 // A garage card that opens by naming the upstream work is the section's best
@@ -6636,7 +6636,7 @@ test("the twin list is generated, not committed", () => {
 // it, and the middle one is a bug that shipped to a screenshot.
 
 test("the dyno series merges hand-entered history under measured rows", async () => {
-  const { mergeHistory } = await import("../src/worker/dyno.js");
+  const { mergeHistory } = await import("../src/worker/dyno.ts");
   const seeded = mergeHistory([]);
   assert.ok(seeded.length >= 4, "the seeded baseline history must survive an empty fetch");
   assert.ok(seeded.every((r) => r.source === "baseline-note"));
@@ -6654,7 +6654,7 @@ test("the dyno series merges hand-entered history under measured rows", async ()
 });
 
 test("the dyno chart draws lines, not filled regions", async () => {
-  const { mergeHistory, renderDyno } = await import("../src/worker/dyno.js");
+  const { mergeHistory, renderDyno } = await import("../src/worker/dyno.ts");
   const rows = mergeHistory([
     { ts: "2026-08-10", sha: "aaa1111", worker_gzip: 264540, pages_br: 476528, assets_br: 58186, source: "nightly" },
     { ts: "2026-08-11", sha: "bbb2222", worker_gzip: 266000, pages_br: 476000, assets_br: 58200, source: "nightly" },
@@ -6676,7 +6676,7 @@ test("the dyno chart draws lines, not filled regions", async () => {
 });
 
 test("the dyno page distinguishes measured points from hand-entered ones", async () => {
-  const { mergeHistory, renderDyno } = await import("../src/worker/dyno.js");
+  const { mergeHistory, renderDyno } = await import("../src/worker/dyno.ts");
   const html = await renderDyno(mergeHistory([
     { ts: "2026-08-10", sha: "aaa1111", worker_gzip: 264540, pages_br: 476528, assets_br: 58186, source: "nightly" },
   ])).text();
@@ -6750,7 +6750,7 @@ test("the reader Worker shares the site's SSRF guard rather than copying it", as
   // And the site's export is still the shared one, so moving it did not leave
   // lens.js with a stale private copy that only IT uses.
   const crawl = await import("../src/worker/lib/crawl.ts");
-  const lens = await import("../src/worker/lens.js");
+  const lens = await import("../src/worker/lens.ts");
   assert.equal(lens.validateLensTarget, crawl.validateLensTarget,
     "lens.js and lib/crawl.js must expose the same function object, not two copies");
 });
@@ -6788,8 +6788,8 @@ test("the reader reports what it dropped, never only what it kept", async () => 
 });
 
 test("every machine lens tab has a label, and the reader is one of them", async () => {
-  const { LENS_TAB_ORDER } = await import("../src/worker/lens.js");
-  const server = readFileSync("./src/worker/lens.js", "utf8");
+  const { LENS_TAB_ORDER } = await import("../src/worker/lens.ts");
+  const server = readFileSync("./src/worker/lens.ts", "utf8");
   const client = readFileSync("./src/client/lens.js", "utf8");
   assert.ok(LENS_TAB_ORDER.includes("reader"), "the reader tab must be in the tab order");
   // The strip renders from LENS_TAB_ORDER, so a key with no label ships an empty
@@ -6804,7 +6804,7 @@ test("every machine lens tab has a label, and the reader is one of them", async 
 });
 
 test("a ?lens= deep link works for every tab in the strip", async () => {
-  const { LENS_TAB_ORDER } = await import("../src/worker/lens.js");
+  const { LENS_TAB_ORDER } = await import("../src/worker/lens.ts");
   const client = readFileSync("./src/client/lens.js", "utf8");
   // The client validates ?lens= against its OWN allowlist before honouring it.
   // That list was hand-written and stopped at six while the strip grew to eight,
@@ -6821,7 +6821,7 @@ test("a ?lens= deep link works for every tab in the strip", async () => {
 });
 
 test("the idle Lens shell defers its full client without losing the first action", () => {
-  const server = readFileSync("./src/worker/lens.js", "utf8");
+  const server = readFileSync("./src/worker/lens.ts", "utf8");
   const boot = readFileSync("./src/client/lens-boot.js", "utf8");
   const build = readFileSync("./tools/build.mjs", "utf8");
 
@@ -6984,7 +6984,7 @@ function wireEvents(specs) {
 }
 
 test("the wire lens counts bytes on the wire, not the header preamble", async () => {
-  const { summariseWire } = await import("../src/worker/lens-wire.js");
+  const { summariseWire } = await import("../src/worker/lens-wire.ts");
   // responseReceived carries encodedDataLength for the HEADERS only. Reading it
   // instead of loadingFinished's would report a 400 KB image as 120 bytes, which
   // is the easiest way to get this lens quietly wrong: every number still
@@ -6999,7 +6999,7 @@ test("the wire lens counts bytes on the wire, not the header preamble", async ()
 });
 
 test("a redirect is counted as a hop rather than losing the request", async () => {
-  const { summariseWire } = await import("../src/worker/lens-wire.js");
+  const { summariseWire } = await import("../src/worker/lens-wire.ts");
   // Chrome re-uses the requestId and sends a SECOND requestWillBeSent carrying
   // redirectResponse. Overwriting the row blindly loses the first hop; ignoring
   // the second loses the destination. One row, one hop recorded, final URL kept.
@@ -7012,7 +7012,7 @@ test("a redirect is counted as a hop rather than losing the request", async () =
 });
 
 test("the third-party share is the headline and is computed from bytes", async () => {
-  const { summariseWire } = await import("../src/worker/lens-wire.js");
+  const { summariseWire } = await import("../src/worker/lens-wire.ts");
   const d = summariseWire(wireEvents([
     { id: "1", url: "https://news.test/", type: "Document", bytes: 10_000 },
     { id: "2", url: "https://cdn.news.test/app.js", bytes: 10_000 },   // same site, subdomain
@@ -7030,7 +7030,7 @@ test("the third-party share is the headline and is computed from bytes", async (
 });
 
 test("the wire summary never divides by a load that fetched nothing", async () => {
-  const { summariseWire } = await import("../src/worker/lens-wire.js");
+  const { summariseWire } = await import("../src/worker/lens-wire.ts");
   // A navigation that fails outright still reaches the summariser, because the
   // budget was already spent and throwing the observation away would be worse.
   // The percentages must be 0 rather than NaN, which renders as "NaN%".
@@ -7045,7 +7045,7 @@ test("the wire summary never divides by a load that fetched nothing", async () =
 });
 
 test("a beacon cancelled after its response is not reported as a failure", async () => {
-  const { summariseWire } = await import("../src/worker/lens-wire.js");
+  const { summariseWire } = await import("../src/worker/lens-wire.ts");
   // MEASURED, not hypothesised. Tracing aadhar.sh's own homepage on 2026-08-11
   // produced `failed: 1`, and the request was /hit?tick=1 — which answered 204
   // and then reported net::ERR_ABORTED, because a fire-and-forget fetch nobody
@@ -7080,7 +7080,7 @@ test("a beacon cancelled after its response is not reported as a failure", async
 });
 
 test("data: URIs are counted but kept out of the host roll call", async () => {
-  const { summariseWire } = await import("../src/worker/lens-wire.js");
+  const { summariseWire } = await import("../src/worker/lens-wire.ts");
   // An inline data: URI is a request in Chrome's event stream and is not a
   // request on the wire. Leaving them in puts a blank host in the list that
   // reads as a tracker; dropping them silently understates the count.
@@ -7094,8 +7094,8 @@ test("data: URIs are counted but kept out of the host roll call", async () => {
 });
 
 test("the KV-hit flag does not collide with the target's own cache count", async () => {
-  const { summariseWire } = await import("../src/worker/lens-wire.js");
-  const worker = readFileSync("./src/worker/lens-wire.js", "utf8");
+  const { summariseWire } = await import("../src/worker/lens-wire.ts");
+  const worker = readFileSync("./src/worker/lens-wire.ts", "utf8");
   const pane = readFileSync("./src/client/lens-wire.js", "utf8");
   // Caught in the browser 2026-08-11, rendering as "true served from cache".
   // The summary owns `cached` — how many of the TARGET's requests came from the
@@ -7114,7 +7114,7 @@ test("the KV-hit flag does not collide with the target's own cache count", async
 });
 
 test("siteOf groups subdomains without a public-suffix list, and says where it is wrong", async () => {
-  const { siteOf } = await import("../src/worker/lens-wire.js");
+  const { siteOf } = await import("../src/worker/lens-wire.ts");
   assert.equal(siteOf("cdn.news.test"), "news.test");
   assert.equal(siteOf("news.test"), "news.test");
   assert.equal(siteOf("a.b.c.example.com"), "example.com");
@@ -7124,14 +7124,14 @@ test("siteOf groups subdomains without a public-suffix list, and says where it i
   assert.equal(siteOf("shop.example.co.uk"), "example.co.uk");
   // The module must SAY it is a heuristic. This lens is about honest numbers, so
   // an approximation presented as a fact is the failure mode that matters.
-  const src = readFileSync("./src/worker/lens-wire.js", "utf8");
+  const src = readFileSync("./src/worker/lens-wire.ts", "utf8");
   assert.match(src, /NOT a public-suffix list/, "the heuristic must be labelled as one in the source");
   const pane = readFileSync("./src/client/lens-wire.js", "utf8");
   assert.match(pane, /last two labels of the hostname/, "the pane must disclose the grouping rule to the reader");
 });
 
 test("the wire lens shares the SSRF guard and reaches the browser with nothing but the URL", () => {
-  const src = readFileSync("./src/worker/lens-wire.js", "utf8");
+  const src = readFileSync("./src/worker/lens-wire.ts", "utf8");
   // The rule lens-recipes.js is built around: this route points a real browser
   // at a visitor-supplied address, so the ONLY caller byte that may reach it is
   // the URL, after the shared guard has passed it.
@@ -7149,7 +7149,7 @@ test("the wire lens shares the SSRF guard and reaches the browser with nothing b
 });
 
 test("a CDP session is deleted on every exit path", () => {
-  const src = readFileSync("./src/worker/lens-wire.js", "utf8");
+  const src = readFileSync("./src/worker/lens-wire.ts", "utf8");
   // Structural, and it has to be: exercising this needs workerd and a real
   // browser binding, so `node --test` can only read the shape. A leaked session
   // holds one of the free plan's three concurrent browsers until it times out,
@@ -7166,7 +7166,7 @@ test("a CDP session is deleted on every exit path", () => {
 });
 
 test("the wire lens reports a spent browser budget as ours, not as the target failing", () => {
-  const src = readFileSync("./src/worker/lens-wire.js", "utf8");
+  const src = readFileSync("./src/worker/lens-wire.ts", "utf8");
   // The correction /lens/shot already made, worth repeating because on the free
   // plan a refused session is the most likely non-success here, and dressing it
   // as a 502 points whoever debugs it at the scanned site instead of at our own
@@ -7298,7 +7298,7 @@ test("both execution checks are declared in the category the rubric scores", () 
     assert.ok(meta.label && meta.label.length > 0, `${key} needs a label the grid can render`);
     assert.ok(meta.countInScore !== false, `${key} must count once it has evidence`);
   }
-  const lens = readFileSync("./src/worker/lens.js", "utf8");
+  const lens = readFileSync("./src/worker/lens.ts", "utf8");
   assert.match(lens, /\.\.\.EXECUTION_META/, "lens.js must spread the shared meta rather than restate it");
   assert.match(lens, /key: "execution"/, "the execution category has to exist in LENS_READINESS_CATEGORIES");
   // The drift this whole module exists to prevent.
@@ -7376,7 +7376,7 @@ test("robots.txt decides where the sitemap is, not the /sitemap.xml convention",
   assert.equal(lensSitemapDeclared(robots("Sitemap: file:///etc/passwd"), "https://x.test"), null, "a non-http scheme is refused");
   assert.equal(lensSitemapDeclared({ ok: false, status: 404 }, "https://x.test"), null, "no robots.txt means nothing is declared");
 
-  const lens = readFileSync("./src/worker/lens.js", "utf8");
+  const lens = readFileSync("./src/worker/lens.ts", "utf8");
   assert.match(lens, /if \(!lensSitemapVerdict\(sitemap\)\.valid\) \{/,
     "the follow-up probe must be CONDITIONAL, so the common path keeps its parallel fan-out");
 });
@@ -7405,7 +7405,7 @@ test("a door that never answered is not an action surface", () => {
   // earned the top rung from an /ask that answered 410, 412, 429 or 401 — a
   // dead API and three bot walls. lensProbeNlweb returned "maybe" for ANY
   // non-404 JSON, and an NLWeb door is an ACTION surface.
-  const lens = readFileSync("./src/worker/lens.js", "utf8");
+  const lens = readFileSync("./src/worker/lens.ts", "utf8");
   assert.match(lens, /if \(json && res\.ok\) return \{ verdict: "maybe"/,
     "an NLWeb candidate has to have ANSWERED, not merely returned JSON");
   assert.match(lens, /json && res\.status === 401 && www/,
@@ -7427,7 +7427,7 @@ test("a capped level explains itself on every surface that shows the level", () 
   // `levelNote`, the JSON carries it, and nothing renders it — so a visitor
   // sees 13/100 beside "Level 1" with no account of why the ladder was held.
   // It shipped that way once already, surfaced only in the SSR floor.
-  const worker = readFileSync("./src/worker/lens.js", "utf8");
+  const worker = readFileSync("./src/worker/lens.ts", "utf8");
   const client = readFileSync("./src/client/lens.js", "utf8");
 
   assert.match(worker, /levelNote: readiness\.levelNote/, "the observation summary has to carry the note, or compare mode cannot show it");
@@ -7642,7 +7642,7 @@ test("the Tools lens reads a catalogue and has NO path to calling a tool", () =>
   assert.equal(fetches.length, 1, "the pane makes exactly one request, to our own route");
   assert.ok(client.includes('fetch("/lens/tools?url="'), "and that request is /lens/tools");
 
-  const worker = readFileSync("./src/worker/lens-tools.js", "utf8");
+  const worker = readFileSync("./src/worker/lens-tools.ts", "utf8");
   assert.ok(worker.includes("foreignMcpTools"), "the route reaches the network only through lib/doors.js");
   assert.ok(!/["'`]tools\/call["'`]/.test(worker), "the route must never name tools/call");
   assert.ok(!/\bfetch\(/.test(worker), "the route adds no new way out to the network");
@@ -7855,4 +7855,36 @@ test("around renders an honest empty panel rather than a fabricated table", asyn
   for (const n of NEIGHBORS.slice(0, 3)) {
     assert.ok(!empty.includes(`>${n.name}<`), `${n.name} must not appear as a row when there is no data`);
   }
+});
+
+// ── the TypeScript quarantine ───────────────────────────────────────────────
+// config/ts-migration.json names the Worker modules that were not type-clean
+// when src/worker became TypeScript. Each carries @ts-nocheck. The declaration
+// says the list "may only shrink", and this is what makes that true rather than
+// aspirational: without it, adding @ts-nocheck to a module is a silent opt-out
+// of the checker, which is the one thing the conversion was for.
+test("every @ts-nocheck in the Worker is declared, and every declaration is real", async () => {
+  const declared = JSON.parse(await readFile(new URL("config/ts-migration.json", ROOT), "utf8"));
+  const names = Object.keys(declared.modules);
+
+  const actual = [];
+  for (const rel of await readdir(new URL("src/worker", ROOT), { recursive: true })) {
+    if (!rel.endsWith(".ts")) continue;
+    const source = await readFile(new URL(`src/worker/${rel}`, ROOT), "utf8");
+    if (/^\/\/ @ts-nocheck\b/m.test(source)) actual.push(`src/worker/${rel}`);
+  }
+
+  assert.deepEqual(actual.sort(), names.sort(),
+    "the set of modules carrying @ts-nocheck must equal config/ts-migration.json's list — " +
+    "add an entry deliberately, or delete one when you fix a module");
+
+  // The counts are the progress record. A module that is fixed but left in the
+  // list would keep claiming errors it no longer has, so require them positive
+  // and require the totals to agree with the entries.
+  for (const [file, count] of Object.entries(declared.modules)) {
+    assert.ok(Number.isInteger(count) && count > 0, `${file} declares a non-positive error count`);
+  }
+  assert.equal(declared.totals.quarantined, names.length, "totals.quarantined disagrees with the list");
+  assert.equal(declared.totals.errors_at_conversion,
+    Object.values(declared.modules).reduce((a, b) => a + b, 0), "totals.errors_at_conversion disagrees with the entries");
 });

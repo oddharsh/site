@@ -19,21 +19,35 @@
     "is what this buys immediately, and it is why the answer was not to relax the",
     "compiler for the whole directory.",
     "",
-    "THE CALLERS ARE A SEPARATE, TEMPORARY GROUP. Typing lib/ made TypeScript",
     "check its call sites strictly, and 12 Worker modules that are still",
     "JavaScript now fail against the signatures it infers. Their entries below",
     "carry a .js extension and disappear as each module converts, so this half of",
-    "the list shrinks by construction rather than by anybody remembering."
+    "the list shrinks by construction rather than by anybody remembering.",
+    "",
+    "The list was two sections for one commit, while lib/ was TypeScript and its",
+    "callers were not. They are all .ts modules now, so it is one list again.",
+    "",
+    "ENFORCED by a contract test: the set of files carrying @ts-nocheck must equal",
+    "the set named here. #459 claimed that and shipped without the test, which is",
+    "the kind of promise this repo is supposed to make mechanical."
   ],
   "generated_on": "2026-08-18",
   "totals": {
-    "modules_converted": 27,
-    "modules_clean": 19,
-    "modules_quarantined": 8,
-    "errors_at_conversion": 45,
-    "callers_quarantined": 12
+    "worker_modules": 67,
+    "quarantined": 20,
+    "fully_checked": 47,
+    "errors_at_conversion": 96
   },
   "modules": {
+    "src/worker/agent-ready.ts": 1,
+    "src/worker/around.ts": 4,
+    "src/worker/census.ts": 2,
+    "src/worker/dyno.ts": 1,
+    "src/worker/home.ts": 5,
+    "src/worker/index.ts": 1,
+    "src/worker/lens-tools.ts": 7,
+    "src/worker/lens-wire.ts": 3,
+    "src/worker/lens.ts": 11,
     "src/worker/lib/assets.ts": 7,
     "src/worker/lib/botauth.ts": 6,
     "src/worker/lib/cache.ts": 7,
@@ -41,20 +55,9 @@
     "src/worker/lib/doors.ts": 12,
     "src/worker/lib/mcp-tools.ts": 2,
     "src/worker/lib/security.ts": 3,
-    "src/worker/lib/tui.ts": 5
-  },
-  "callers": {
-    "src/worker/agent-ready.js": 1,
-    "src/worker/around.js": 4,
-    "src/worker/census.js": 2,
-    "src/worker/dyno.js": 1,
-    "src/worker/home.js": 5,
-    "src/worker/index.js": 1,
-    "src/worker/lens-tools.js": 7,
-    "src/worker/lens-wire.js": 3,
-    "src/worker/lens.js": 11,
-    "src/worker/mcp.js": 4,
-    "src/worker/rn.js": 7,
-    "src/worker/webmention-send.js": 5
+    "src/worker/lib/tui.ts": 5,
+    "src/worker/mcp.ts": 4,
+    "src/worker/rn.ts": 7,
+    "src/worker/webmention-send.ts": 5
   }
 }

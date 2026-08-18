@@ -1,6 +1,7 @@
 // photos.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
 import { cachedRender } from "./lib/cache.ts";
+import { asScalarText } from "./lib/parse.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { ARCHIVE_VERSION } from "./lib/const.ts";
 import { errorResp, escAttr, escHtml, jsonResp } from "./lib/http.ts";
@@ -331,7 +332,7 @@ function photoFields(stem, record, alt, expansion) {
     lens: String(record.lens || ""),
     expansion: String(expansion || ""),
     year: date.slice(0, 4),
-    recipe: Object.entries(record.recipe || {}).map(([k, v]) => `${k}: ${v}`).join(" "),
+    recipe: Object.entries(record.recipe || {}).map(([k, v]) => `${k}: ${asScalarText(v)}`).join(" "),
     stem: String(stem),
   };
 }
@@ -370,7 +371,7 @@ export async function queryPhotos(env, options = {}, ctx = null) {
     if (lens && !String(record.lens || "").toLowerCase().includes(lens)) return false;
     if (film && !String(record.film || "").toLowerCase().includes(film)) return false;
     if (recipe) {
-      const card = Object.entries(record.recipe || {}).map(([k, v]) => `${k}: ${v}`).join("\n").toLowerCase();
+      const card = Object.entries(record.recipe || {}).map(([k, v]) => `${k}: ${asScalarText(v)}`).join("\n").toLowerCase();
       if (!card.includes(recipe)) return false;
     }
     const date = String(record.date || "").slice(0, 10).replaceAll(":", "-");

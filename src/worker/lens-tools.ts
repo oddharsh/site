@@ -34,7 +34,7 @@ import { validateLensTarget } from "./lib/crawl.ts";
 import { jsonResponse } from "./lib/http.ts";
 import { span } from "./lib/trace.ts";
 import { foreignMcpTools } from "./lib/doors.ts";
-import { LENS_BUDGETS, lensSha256Hex, overLensBudget } from "./lens.js";
+import { LENS_BUDGETS, lensSha256Hex, overLensBudget } from "./lens.ts";
 
 // A catalogue read is one POST that a foreign server answers from memory, so
 // this is cached to be POLITE rather than to be fast. A public button pointed at

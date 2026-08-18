@@ -13,12 +13,12 @@
 // pulling them in here would make lib/tools.js -> terminal.js -> ask.js ->
 // lib/tools.js a cycle. The ask loop has no use for them either: it wants
 // records to reason over, not a rendered 80-column screen.
-import { readAroundChanges } from "../around.js";
-import { readCoffeeAvailability } from "../coffee.js";
-import { LENS_BUDGETS, compareLensTargets, lensInspect, lensObservationSummary, overLensBudget, validateLensTarget } from "../lens.js";
-import { queryPhotos } from "../photos.js";
-import { RN_FALLBACK, getTracksSWR } from "../rn.js";
-import { searchSite } from "../search.js";
+import { readAroundChanges } from "../around.ts";
+import { readCoffeeAvailability } from "../coffee.ts";
+import { LENS_BUDGETS, compareLensTargets, lensInspect, lensObservationSummary, overLensBudget, validateLensTarget } from "../lens.ts";
+import { queryPhotos } from "../photos.ts";
+import { RN_FALLBACK, getTracksSWR } from "../rn.ts";
+import { searchSite } from "../search.ts";
 import { mcpTool } from "./mcp-tools.ts";
 // holding -> serendipity, which is the reverse of the established direction
 // (serendipity already imports lib/desktop.js, lib/crawl.js, lib/mcp-protocol.js).

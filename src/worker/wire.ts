@@ -17,7 +17,7 @@
 //
 // Lives outside terminal.js because mcp.js imports terminal.js, and reaching
 // back the other way would be a cycle.
-import { handleSiteMcp } from "./mcp.js";
+import { handleSiteMcp } from "./mcp.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { escHtml } from "./lib/http.ts";
 

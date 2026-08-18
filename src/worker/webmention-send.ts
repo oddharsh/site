@@ -23,7 +23,7 @@
 // docs sites) advertise no endpoint, so the send is a silent no-op. That means
 // there is no allowlist to maintain: send to every real citation, and only the
 // webmention-aware ones light up.
-import { validateLensTarget } from "./lens.js";
+import { validateLensTarget } from "./lens.ts";
 import { privateHostBlocked, readResponseCapped } from "./lib/crawl.ts";
 import { WEBMENTION_PATHS, WEBMENTION_SECTIONS } from "./lib/site-manifest.ts";
 import { span } from "./lib/trace.ts";

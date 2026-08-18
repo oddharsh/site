@@ -26,7 +26,7 @@
 //
 // This encodes them, measured on this site (see CLAUDE.md and the local probe
 // recipe in MAINTENANCE.md) rather than inferred from the spec.
-import { lensProbe } from "./lens.js";
+import { lensProbe } from "./lens.ts";
 
 // The verdicts a single rule can return. `veto` means the dictionary is dead;
 // `warn` means it works but not the way you probably intended.

@@ -10,7 +10,7 @@
 // where the web is going — the point the rest of /lens argues one URL at a time.
 import { lunaPage } from "./lib/chrome.ts";
 import { escHtml, escAttr, jsonResponse, timingSafeEqual } from "./lib/http.ts";
-import { lensInspect } from "./lens.js";
+import { lensInspect } from "./lens.ts";
 import { span } from "./lib/trace.ts";
 
 // The roster: 16 sites chosen to span the open → agent-native spectrum a

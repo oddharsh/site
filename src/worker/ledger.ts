@@ -160,7 +160,11 @@ async function queryBillableUsage(env) {
     }
     return {
       ok: true, totalUsd: +totalUsd.toFixed(2), currency,
-      services: [...services].sort(), from: ymd(start), to: ymd(end),
+      // An EXPLICIT code-unit comparator, which is exactly what a bare .sort()
+      // does to strings. Spelling it out satisfies require-array-sort-compare
+      // without changing the order: localeCompare would have been the reflexive
+      // fix and would quietly re-order anything non-ASCII.
+      services: [...services].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)), from: ymd(start), to: ymd(end),
     };
   } catch (e) {
     return { ok: false, reason: (e && e.message) || String(e) };

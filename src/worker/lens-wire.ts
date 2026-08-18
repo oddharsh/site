@@ -59,7 +59,7 @@ import { BOT_UA } from "./lib/botauth.ts";
 // lens.js does not import this file, so the edge runs one way and there is no
 // cycle. Budgets live there because that is where every other lens route reads
 // them, and a second copy is the drift the LENS_BUDGETS contract test refuses.
-import { BROWSER_FREE_PLAN, LENS_BUDGETS, lensSha256Hex, overLensBudget } from "./lens.js";
+import { BROWSER_FREE_PLAN, LENS_BUDGETS, lensSha256Hex, overLensBudget } from "./lens.ts";
 import { EXECUTION_PROBE } from "./lib/agent-execution.ts";
 import { isCallable } from "./lib/parse.ts";
 import { asText } from "./lib/parse.ts";
