@@ -2644,6 +2644,25 @@ pnpm run deploy:direct
     never trusted from source, because this minifier's job is to normalize
     exactly the prefix the query depends on.
 
+    **The trigger is the COMPOUND condition, and that is why a minimal repro
+    reads as fixed.** Measured on the pinned 1.33.0, 2026-08-18: `@supports
+    (-moz-appearance:none)` on its own comes back untouched, while the same
+    condition as an operand of `and` or `or` comes back as `(appearance:none)`.
+    A lone condition appears to round-trip as an opaque blob, since it gains a
+    second pair of parens, and each operand of a compound goes through the parser
+    that applies prefix handling. So reducing this to one condition to check
+    whether it still happens answers NO on a build that is still broken. The
+    six-candidate survey above found it only because the real shape was compound,
+    which is luck rather than method.
+
+    Upstream is [parcel-bundler/lightningcss#710](https://github.com/parcel-bundler/lightningcss/issues/710),
+    open since 2024-04-03 and reproducing on 1.33.0. The compound trigger and the
+    survey live in a comment there. Worth knowing that the two failure directions
+    differ in how loud they are: `-webkit-box-orient` becomes `box-orient`, which
+    no browser implements, so the styles never apply and somebody notices;
+    `-moz-appearance` becomes `appearance`, which Chromium implements, so a
+    Firefox-only arm quietly applies everywhere. This site's is the quiet one.
+
 19. **A backtick inside a CSS comment inside a `/*min*/` literal ends the JS
     template literal.** The worker's static CSS lives in backtick literals that
     `build.mjs` step 8 minifies in place, and prose in a CSS comment is still
