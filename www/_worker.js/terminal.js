@@ -109,6 +109,13 @@ export function tokenizeKeys(input) {
 // ── state ─────────────────────────────────────────────────────────────────
 const FINGER_PANES = ["overview", "writing", "reading", "listening", "photos", "around", "coffee", "deploys", "search"];
 
+// "plan" is a real finger daemon's .plan file, not one of the nine numbered
+// panes: no digit key reaches it, help doesn't list it, and it never appears in
+// FINGER_PANES. That is the accurate behavior — the original protocol had no
+// menu either, you fingered a name and got whatever was in the file. Reachable
+// only by already knowing to ask: ?pane=plan.
+const HIDDEN_PANES = ["plan"];
+
 const clampInt = (raw, min, max, fallback) => {
   const n = Number.parseInt(raw ?? "", 10);
   return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
@@ -120,7 +127,7 @@ export function readState(url, app) {
   const pane = str(params.get("pane"), 24);
   return {
     app,
-    pane: FINGER_PANES.includes(pane) ? pane : FINGER_PANES[0],
+    pane: FINGER_PANES.includes(pane) || HIDDEN_PANES.includes(pane) ? pane : FINGER_PANES[0],
     cursor: clampInt(params.get("cursor"), 0, 4999, 0),
     open: str(params.get("open"), 160),
     q: str(params.get("q"), 120),
@@ -234,6 +241,9 @@ const PANES = {
     const found = await searchSite(env, state.q, 30).catch(() => null);
     const results = found?.results || [];
     return { results, total: found?.total ?? 0, list: results.map((r, i) => ({ id: String(i), label: r.title, meta: r.kind || "" })) };
+  },
+  async plan() {
+    return { list: [] };
   },
 };
 
@@ -441,10 +451,30 @@ function renderSearch(data, state) {
   );
 }
 
+function renderPlan() {
+  return rows(
+    rule(INNER, ".plan"),
+    kv("last edited", "2026-08-18", INNER),
+    blank(),
+    ...wrap("Most finger daemons died with the machines they ran on. This one didn't, because the daemon is an HTTP handler now and a .plan file is a function that returns a string — same convention, different transport.", INNER).map((row) => [s(row)]),
+    blank(),
+    ...wrap("Nothing on this host links here, and that's correct: a real .plan was never in a menu. You fingered a name and got whatever was in the file. If you're reading this you read the source, guessed ?pane=plan, or someone told you — all three are the protocol working as intended.", INNER).map((row) => [s(row)]),
+    blank(),
+    rule(INNER, "still true"),
+    [s("  still writing at /writing", "dim")],
+    [s("  still shooting on the X-T50", "dim")],
+    [s("  still investing crypto at Archetype", "dim")],
+    ...wrap("the deploy log at ?pane=deploys is more honest than this file, since a machine writes that one and I write this one", INNER).map((row) => [s("  " + row, "dim")]),
+    blank(),
+    [s("-- aadharsh", "strong")],
+  );
+}
+
 const RENDER = {
   overview: renderOverview, writing: renderWriting, reading: renderReading,
   listening: renderListening, photos: renderPhotoFacets, around: renderAround,
   coffee: renderCoffee, deploys: renderDeploys, search: renderSearch,
+  plan: renderPlan,
 };
 
 // ── the key loop ──────────────────────────────────────────────────────────
@@ -488,9 +518,10 @@ function fingerStatus(state, data) {
   const hints = state.open
     ? [["h", "back"], ["j/k", "move"], ["1-9", "pane"], ["q", "quit"]]
     : [["1-9", "pane"], ["j/k", "move"], ["<cr>", "open"], ["/", "search"], ["?", "help"], ["q", "quit"]];
+  const trailer = index ? `pane ${index}/${FINGER_PANES.length} · ${state.pane}` : `.plan · not one of the 9`;
   return [
     keyHints(hints),
-    stateLine(state, `pane ${index}/${FINGER_PANES.length} · ${state.pane}`),
+    stateLine(state, trailer),
   ];
 }
 

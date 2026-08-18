@@ -5129,6 +5129,7 @@ const TERMINAL_STATES = [
   "/finger?pane=writing&keys=jj", "/finger?pane=writing&cursor=1&open=two",
   "/finger?pane=search&q=lattice", "/finger?pane=search&q=lattice&open=0",
   "/finger?pane=deploys&keys=G", "/finger?pane=photos",
+  "/finger?pane=plan",
   "/photos", "/photos?film=acros", "/photos?keys=j%3Ccr%3E", "/photos?open=A_1",
   "/photos?q=nothingmatchesthis", "/lens", "/lens?url=javascript%3Aalert(1)",
 ];
@@ -5199,6 +5200,23 @@ test("key sequences are bounded and named keys parse", () => {
   assert.equal(tokenizeKeys("j".repeat(500)).length, 32);
   assert.deepEqual(tokenizeKeys(""), []);
   assert.deepEqual(tokenizeKeys(null), []);
+});
+
+test(".plan is a real hidden finger pane: reachable, undocumented, falls back like any other bad pane", async () => {
+  // The whole point is that a real finger daemon had no menu — you asked for a
+  // name and got whatever was in its .plan file. This pins that shape: the pane
+  // works when addressed directly, never appears in the numbered list or help,
+  // and an actual typo still falls back to the overview like any other unknown
+  // pane rather than the "plan" prefix matching loosely.
+  const plan = await (await terminalGet("/finger?pane=plan")).text();
+  assert.match(plan, /-- aadharsh/);
+  assert.match(plan, /not one of the 9/);
+
+  const help = await (await terminalGet("/finger?help=1")).text();
+  assert.ok(!help.includes("plan"), "the help screen must not document the hidden pane");
+
+  const bogus = await (await terminalGet("/finger?pane=plan-typo")).text();
+  assert.ok(bogus.includes("pane 1/9 · overview"), "an unknown pane must still fall back to overview");
 });
 
 test("the tui routes refuse to be cached or indexed", async () => {
