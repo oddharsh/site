@@ -1058,3 +1058,63 @@ refuses on `packageManager: bun@…`), and a bun-shaped command would break ever
 build from `main`, which is still a pnpm tree with no bun installed. The bridge
 is a repo script that picks its invocation from the lockfile it finds, landed on
 `main` first so both trees work, with `infra.json` following the dashboard.
+
+## Decision, 2026-08-18: wait for bun 1.4 GA
+
+The branch is complete and reviewable. It is NOT waiting on itself; it is waiting
+on one upstream release, and everything below is the record of why the
+alternatives were declined rather than missed.
+
+### What is true today
+
+The build runs on released bun 1.3.14 with the 165 dictionary frames delegated to
+node 26, byte-identical across all 1499 files, and Workers Builds can install
+that. So the branch is deployable in principle. What made the alternatives
+unattractive is that each buys a little now and costs an invariant.
+
+| route | buys | costs |
+|---|---|---|
+| **A, taken** | deployable today | node runs 165 frames; `bun.lock` held at v1 by a tripwire |
+| B, skip-install | node-free, keeps the v2 lockfile | fetches a 35MB compiler inside the publish path, and a rolled canary blocks the deploy |
+| C, canary in the image | nothing, it is impossible | measured dead three ways |
+| D, npm-hosted canary | nothing, it does not exist | npm's newest bun is 1.3.14 and its `canary` tag points at a 1.3.13 canary from April |
+
+Route A is committed. Route B stays unbuilt on purpose: it is the only one that
+puts a network fetch of a COMPILER on the path that publishes production, and the
+rolling tag means it fails closed on the days it rolls, which have been most days.
+
+### What 1.4 GA collapses
+
+All of it, at once, which is the reason waiting is cheap:
+
+- `packageManager: bun@1.4.0` becomes a string the image resolves, so the
+  toolchain is one runtime again
+- the v2 lockfile is native, so the tripwire and the v1 pin come out
+- `zstdCompressSync`'s `dictionary` works in the image, so the node delegate goes
+  dormant and can be deleted with it
+- `config/bun-canary.json` and `.github/actions/setup-bun`'s digest verification
+  stop being needed, since a released version IS a pin
+
+### The checklist for that day
+
+1. `packageManager` to `bun@1.4.x`, and delete `config/bun-canary.json` plus the
+   digest step in `.github/actions/setup-bun`
+2. regenerate `bun.lock` under 1.4 (it becomes v2) and delete the lockfile
+   tripwire test, whose whole subject is gone
+3. collapse the two-pin contract test back into the single-pin assertion it used
+   to be; its comment names this
+4. keep or delete `tools/lib/zstd-batch.mjs`'s delegate on its own merits. It is
+   ~60 lines and it makes released bun a valid runtime, which is worth something
+   the next time an api lands in a canary first
+5. dashboard commands, then `infra.json`, in that order, using the bridge from
+   #445
+6. re-run the byte-identical control before any of it is believed
+
+### Do not re-derive these
+
+Three probe builds and a working day are behind the four rows above. The image
+resolves a RELEASED bun version or nothing: `BUN_VERSION=canary` is ignored when
+`packageManager` exists, `packageManager: bun@canary` silently degrades to the
+image default 1.2.15, and `bun@1.4.0-canary.1` fails outright because no release
+is tagged that. npm carries no 1.4 in any form. And released bun cannot parse a
+v2 lockfile, which is what actually stopped the first two builds.
