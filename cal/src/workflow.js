@@ -17,7 +17,7 @@
 // The instance id IS the booking id (see route_book), so the routes can address
 // the exact instance with env.BOOKING_WORKFLOW.get(bookingId).sendEvent(...).
 //
-// This class is exported from the ROOT worker entry (www/_worker.js/index.js
+// This class is exported from the ROOT worker entry (src/worker/index.js
 // re-exports it) because the `workflows` binding's class_name must resolve on
 // the deployed Worker, the same way the Counter Durable Object does.
 

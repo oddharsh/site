@@ -13,7 +13,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildExifIndex } from "./build-exif-index.mjs";
 import { buildHistogramIndex } from "./build-histogram-index.mjs";
-import { asRecord, asText } from "../_worker.js/lib/parse.js";
+import { asRecord, asText } from "../../src/worker/lib/parse.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const IMAGES = path.join(ROOT, "www/images");
@@ -43,7 +43,7 @@ if (JSON.stringify(stems) !== JSON.stringify(metadataStems)) {
 // hashed stem without an index entry is a published photo that silently never
 // appears. Field shape is load-bearing too: home.js reads full/size/uploaded
 // verbatim into href/data-* attributes.
-const photoIndex = await json(path.join(ROOT, "www/_worker.js/photo-index.json"));
+const photoIndex = await json(path.join(ROOT, "src/worker/photo-index.json"));
 const indexStems = Object.keys(photoIndex).sort();
 if (JSON.stringify(stems) !== JSON.stringify(indexStems)) {
   const missing = stems.filter((s) => !photoIndex[s]);

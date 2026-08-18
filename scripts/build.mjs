@@ -132,7 +132,7 @@ async function checkInvariants() {
   // become a concrete probe path). Allowlist globs are matched as patterns, never
   // required literally (a symmetric diff would false-fire on the glob entries —
   // the exact disable-magnet).
-  const idx = await read("www/_worker.js/index.js");
+  const idx = await read("src/worker/index.js");
   const wrangler = await read("wrangler.jsonc");
   const routesBlock = (idx.match(/const ROUTES = new Map\(\[([\s\S]*?)\]\);/) || [,""])[1];
   const routeKeys = [...routesBlock.matchAll(/\[\s*"([^"]+)"/g)].map((m) => m[1]);
@@ -153,7 +153,7 @@ async function checkInvariants() {
   // 2 (hard) — wherever a worker emits a CSP with a style-src, it includes
   // 'self'. cal emits no CSP and passes vacuously (this is the exact thing that
   // blanked serendipity's taskbar).
-  for (const f of ["www/_headers", "www/_worker.js/lib/security.js", "serendipity/serendipity.js", "cal/src/templates.js", "cal/src/index.js"]) {
+  for (const f of ["www/_headers", "src/worker/lib/security.js", "serendipity/serendipity.js", "cal/src/templates.js", "cal/src/index.js"]) {
     let s; try { s = await read(f); } catch { continue; }
     for (const m of s.matchAll(/style-src([^;'"]*(?:'[^']*')?[^;'"]*)*/g)) {
       const dir = m[0];
@@ -213,7 +213,7 @@ async function checkInvariants() {
   // canonical artifacts in memory and compare every consumer byte-for-byte.
   try {
     const artifacts = renderDesktopArtifacts();
-    if (await read("www/_worker.js/lib/desktop.js") !== artifacts.moduleSource) {
+    if (await read("src/worker/lib/desktop.js") !== artifacts.moduleSource) {
       hard.push("lib/desktop.js drifted from shell-data.mjs/site-manifest.json — run pnpm run gen:shell");
     }
     if (await read("www/icons.svg") !== artifacts.sprite) {
@@ -238,7 +238,7 @@ async function checkInvariants() {
   // file that carries the calc must agree with luna.css, or first paint lands
   // a different window height than the final.
   const floors = new Map();
-  for (const f of ["www/luna.css", "www/_worker.js/lib/chrome.js", "www/_worker.js/writing.js", "serendipity/serendipity.js"]) {
+  for (const f of ["www/luna.css", "src/worker/lib/chrome.js", "src/worker/writing.js", "serendipity/serendipity.js"]) {
     let s; try { s = await read(f); } catch { continue; }
     // the BODY floor only (`height:calc(...)`), not a window `max-height:calc(...)`
     for (const m of s.matchAll(/(?<!max-)height:calc\(100dvh - (\d+)px\)/g)) floors.set(f, m[1]);
@@ -289,7 +289,7 @@ async function checkInvariants() {
   try {
     const runtimeFiles = [
       "www/index.html",
-      "www/_worker.js/index.js",
+      "src/worker/index.js",
       "wrangler.jsonc",
       "wrangler.dev.jsonc",
     ];
@@ -300,12 +300,12 @@ async function checkInvariants() {
         if (source.includes(marker)) hard.push(`${name}: browser RUM is retired; remove ${marker}`);
       }
     }
-    if ((await readdir("www/_worker.js")).includes("rum.js")) {
-      hard.push("www/_worker.js/rum.js: browser RUM is retired; remove the proxy module");
+    if ((await readdir("src/worker")).includes("rum.js")) {
+      hard.push("src/worker/rum.js: browser RUM is retired; remove the proxy module");
     }
     for (const [name, text] of [
       ["www/_headers", await read("www/_headers")],
-      ["www/_worker.js/lib/security.js", await read("www/_worker.js/lib/security.js")],
+      ["src/worker/lib/security.js", await read("src/worker/lib/security.js")],
     ]) {
       if (containsRetiredRumHost(text)) {
         hard.push(`${name}: browser RUM is retired; remove the Cloudflare Insights CSP allowance`);
@@ -323,10 +323,10 @@ async function checkInvariants() {
   try {
     const { surfaces } = readManifest();
     const nav = await read("www/nav-run.js");
-    const desktop = await read("www/_worker.js/lib/desktop.js");
+    const desktop = await read("src/worker/lib/desktop.js");
 
     // 8a — generated projections match `pnpm run gen:manifest` output exactly.
-    const modActual = (await read("www/_worker.js/lib/site-manifest.js")).trim();
+    const modActual = (await read("src/worker/lib/site-manifest.js")).trim();
     if (modActual !== workerModule(surfaces).trim()) hard.push("lib/site-manifest.js drifted from site-manifest.json — run pnpm run gen:manifest");
     for (const [section, marker] of [["garage", "garage-pages"], ["lwe", "lwe-pages"]]) {
       if (readFenceBody(nav, marker) !== navFenceBody(surfaces, section)) hard.push(`nav-run.js generated:${marker} drifted from site-manifest.json — run pnpm run gen:manifest`);
@@ -500,7 +500,7 @@ async function checkInvariants() {
     const files = [
       ...await collect("www", /\.html$/, /^(i|images|og|cars|node_modules)$/),
       ...await flat("www", /\.(js|css)$/),
-      ...await collect("www/_worker.js", /\.js$/),
+      ...await collect("src/worker", /\.js$/),
       ...await flat("cal/src", /\.js$/),
       ...await flat("serendipity", /\.js$/),
     ];
@@ -633,6 +633,12 @@ await cp("www", `${OUT}/www`, {
   recursive: true,
   filter: (source) => !STAGE_SKIP.has(source.split(sep).join("/")),
 });
+// The Worker is a PROGRAM, not a document, so its source lives in src/worker
+// beside cal/ and serendipity/ rather than inside the tree of things a browser
+// can fetch. Its STAGED position is unchanged: wrangler.jsonc still points main
+// at .build/src/worker/index.js, and every deploy path and content hash
+// downstream is therefore untouched by the move.
+await cp("src/worker", `${OUT}/src/worker`, { recursive: true });
 await mkdir(`${OUT}/cal`, { recursive: true });
 await cp("cal/src", `${OUT}/cal/src`, { recursive: true });
 await mkdir(`${OUT}/serendipity`, { recursive: true });
@@ -698,6 +704,13 @@ await cp("serendipity/serendipity.js", `${OUT}/serendipity/serendipity.js`);
   const targets = (await readdir(`${OUT}/www`, { recursive: true }))
     .filter((f) => /\.(html|js)$/.test(f) && !/\.src\.|^(i|images|og|cars)\//.test(f))
     .map((f) => `${OUT}/www/${f}`)
+    // The Worker modules stage outside the asset tree now, and several of them
+    // RENDER pages (/bot, /lens) that carry the geometry mirror. Walking only
+    // .build/www silently dropped those two from the mirror, which the floor
+    // below did not catch because 31 still cleared it.
+    .concat((await readdir(`${OUT}/src/worker`, { recursive: true }))
+      .filter((f) => f.endsWith(".js"))
+      .map((f) => `${OUT}/src/worker/${f}`))
     .concat([`${OUT}/cal/src/templates.js`, `${OUT}/serendipity/serendipity.js`]);
 
   let mirrored = 0, skipped = 0;
@@ -711,7 +724,7 @@ await cp("serendipity/serendipity.js", `${OUT}/serendipity/serendipity.js`);
   }
   // a rename in luna.css or in the geometry mirror would silently mirror nothing
   // and cost every page a reflow, so the count is the tripwire.
-  if (mirrored < 25) throw new Error(`client edge: mirrored into only ${mirrored} pages (expected 25+) — did the geometry-mirror shape change?`);
+  if (mirrored < 32) throw new Error(`client edge: mirrored into only ${mirrored} pages (expected 32+) — did the geometry-mirror shape change, or did a walk stop reaching the Worker modules?`);
   console.log(`client edge: mirrored into ${mirrored} staged pages from luna.css (${skipped} files carry no window geometry)`);
 }
 
@@ -891,10 +904,10 @@ if (inlineProbe.includes("/* probe */") ||
 // does — which is also the only time the page's meaning changes.
 {
   const nonce = `?build=${BUILD_NONCE}`;
-  const grid = await import(pathToFileURL(resolve(OUT, "www/_worker.js/lib/photo-grid.js")).href + nonce);
-  const photos = await import(pathToFileURL(resolve(OUT, "www/_worker.js/photos.js")).href + nonce);
+  const grid = await import(pathToFileURL(resolve(OUT, "src/worker/lib/photo-grid.js")).href + nonce);
+  const photos = await import(pathToFileURL(resolve(OUT, "src/worker/photos.js")).href + nonce);
   const pool = photos.derivePhotoPool(
-    JSON.parse(await readFile(`${OUT}/www/_worker.js/photo-index.json`, "utf8")),
+    JSON.parse(await readFile(`${OUT}/src/worker/photo-index.json`, "utf8")),
     JSON.parse(await readFile(`${OUT}/www/images/hashes.json`, "utf8")),
   );
   if (!pool.length) throw new Error("homepage bake: the photo pool is empty — the grid fallback would ship as bare frames");
@@ -944,11 +957,11 @@ if (inlineProbe.includes("/* probe */") ||
 // worse than a failed deploy.
 {
   const nonce = `?build=${BUILD_NONCE}`;
-  const photos = await import(pathToFileURL(resolve(OUT, "www/_worker.js/photos.js")).href + nonce);
-  const bot = await import(pathToFileURL(resolve(OUT, "www/_worker.js/bot.js")).href + nonce);
+  const photos = await import(pathToFileURL(resolve(OUT, "src/worker/photos.js")).href + nonce);
+  const bot = await import(pathToFileURL(resolve(OUT, "src/worker/bot.js")).href + nonce);
 
   const pool = photos.derivePhotoPool(
-    JSON.parse(await readFile(`${OUT}/www/_worker.js/photo-index.json`, "utf8")),
+    JSON.parse(await readFile(`${OUT}/src/worker/photo-index.json`, "utf8")),
     JSON.parse(await readFile(`${OUT}/www/images/hashes.json`, "utf8")),
   );
   if (!pool.length) throw new Error("photos page: the pool is empty — the contact sheet would ship with no tiles");
@@ -978,8 +991,8 @@ if (inlineProbe.includes("/* probe */") ||
 // `pnpm run checkpoints:check` re-reads D1 and fails on drift.
 {
   const nonce = `?build=${BUILD_NONCE}`;
-  const updates = await import(pathToFileURL(resolve(OUT, "www/_worker.js/updates.js")).href + nonce);
-  const points = JSON.parse(await readFile(`${OUT}/www/_worker.js/checkpoints.json`, "utf8"));
+  const updates = await import(pathToFileURL(resolve(OUT, "src/worker/updates.js")).href + nonce);
+  const points = JSON.parse(await readFile(`${OUT}/src/worker/checkpoints.json`, "utf8"));
   if (!points.length) throw new Error("updates/restore: the checkpoint projection is empty — both pages would ship with no log");
   const cp = { points, state: "ok" };
 
@@ -1064,7 +1077,7 @@ let dressPage = () => { throw new Error("explorer: dressPage used before 1g2 def
 // asked for a count it answers about whichever list it happens to render. The
 // devices describe an object inside a folder, so they go where that is true.
 {
-  const { PLACES, addressBar, taskPane } = await import("../www/_worker.js/lib/explorer.js");
+  const { PLACES, addressBar, taskPane } = await import("../src/worker/lib/explorer.js");
 
   // PLACES is a literal in a Worker module (no data file at runtime), so the
   // manifest is what keeps it honest. A section registered for the taskbar and
@@ -1086,7 +1099,7 @@ let dressPage = () => { throw new Error("explorer: dressPage used before 1g2 def
   // marked line in the STAGED copy so the Worker-rendered pages advertise the
   // same twins from the same source.
   {
-    const target = `${OUT}/www/_worker.js/lib/twins.js`;
+    const target = `${OUT}/src/worker/lib/twins.js`;
     const source = await readFile(target, "utf8");
     const marker = /^export const TWIN_PATHS = .*; \/\/ build:twins$/m;
     if (!marker.test(source)) throw new Error("explorer: build:twins marker missing from lib/twins.js");
@@ -1316,7 +1329,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
 // leading /*min*/ sentinel. Dynamic page CSS stays unmarked; readable source
 // remains in www/ while only the staged worker bytes shrink on the wire.
 {
-  const dir = `${OUT}/www/_worker.js`;
+  const dir = `${OUT}/src/worker`;
   const jsFiles = (await readdir(dir, { recursive: true })).filter((f) => f.endsWith(".js"));
   const marker = /`(\/\*min\*\/[^`]*)`/g;
   let litCount = 0, saved = 0, fileCount = 0;
@@ -1329,14 +1342,14 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     for (const m of matches) {
       const cssLiteral = m[1];
       if (cssLiteral.includes("${")) throw new Error(`${rel}: a /*min*/ CSS literal carries interpolation`);
-      const min = minifyCss(`www/_worker.js/${rel}`, cssLiteral).replace(/\n+$/, "");
+      const min = minifyCss(`src/worker/${rel}`, cssLiteral).replace(/\n+$/, "");
       out += src.slice(last, m.index) + "`" + min + "`";
       last = m.index + m[0].length;
       saved += m[0].length - (min.length + 2);
       litCount++;
     }
     out += src.slice(last);
-    const parsed = minifySync(`www/_worker.js/${rel}`, out, {
+    const parsed = minifySync(`src/worker/${rel}`, out, {
       module: false,
       compress: false,
       mangle: false,
@@ -1374,10 +1387,10 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     },
   };
   const nonce = `?build=${BUILD_NONCE}`;
-  const lens = await import(pathToFileURL(resolve(OUT, "www/_worker.js/lens.js")).href + nonce);
-  const run = await import(pathToFileURL(resolve(OUT, "www/_worker.js/run.js")).href + nonce);
-  const search = await import(pathToFileURL(resolve(OUT, "www/_worker.js/search.js")).href + nonce);
-  const writing = await import(pathToFileURL(resolve(OUT, "www/_worker.js/writing.js")).href + nonce);
+  const lens = await import(pathToFileURL(resolve(OUT, "src/worker/lens.js")).href + nonce);
+  const run = await import(pathToFileURL(resolve(OUT, "src/worker/run.js")).href + nonce);
+  const search = await import(pathToFileURL(resolve(OUT, "src/worker/search.js")).href + nonce);
+  const writing = await import(pathToFileURL(resolve(OUT, "src/worker/writing.js")).href + nonce);
 
   const lensResponse = lens.renderLensShell();
   if (lensResponse.status !== 200) throw new Error(`static /lens renderer returned ${lensResponse.status}`);
@@ -1434,13 +1447,13 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     // The server-rendered idle Lens shell emits only the interaction bootstrap.
     // Phase 0 hashes the full client and rewrites its URL into this file first;
     // hashing the bootstrap here makes the complete two-step chain immutable.
-    { attr: "src",  from: "/lens-boot.js",  base: "lens-boot", ext: "js",  witness: "_worker.js/lens.js" },
+    { attr: "src",  from: "/lens-boot.js",  base: "lens-boot", ext: "js",  witness: "../src/worker/lens.js" },
     // the desktop icon sprite. Unlike the three above, every ref carries a
     // #fragment (src="/icons.svg#pin-garage"), so `frag` widens the match to
     // keep it. Its witness is the desktop partial, which is where all 12 live.
     // src= rather than href= because the refs are <img> against <view>s, not
     // <svg><use> against <symbol>s — see the WebKit note in gen-desktop-partial.mjs.
-    { attr: "src", from: "/icons.svg", base: "icons", ext: "svg", frag: true, witness: "_worker.js/lib/desktop.js" },
+    { attr: "src", from: "/icons.svg", base: "icons", ext: "svg", frag: true, witness: "../src/worker/lib/desktop.js" },
     // quiz.js + notepad.js joined 2026-07-27. Both were served unhashed at max-age=300,
     // so hashing them buys a year + immutable outright, and enrolling them in /a/ means
     // they inherit the brotli q11 twin and the dcz delta path for free.
@@ -1452,7 +1465,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     // It would silently miss those three and the witness tripwire would fail the deploy.
     // Moving them needs a different mechanism, not another line here.
     { attr: "src", from: "/quiz.js",    base: "quiz",    ext: "js", witness: "garage/encoding.html" },
-    { attr: "src", from: "/notepad.js", base: "notepad", ext: "js", witness: "_worker.js/writing.js" },
+    { attr: "src", from: "/notepad.js", base: "notepad", ext: "js", witness: "../src/worker/writing.js" },
     // Shared LWE structure is a separate warm-cache object.
     { attr: "href", from: "/lwe-base.css", base: "lwe-base", ext: "css", witness: "lwe/vigenere.html" },
   ];
@@ -1609,10 +1622,14 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     if (rel.endsWith(".js")) targets.push(`${OUT}/cal/src/${rel}`);
   }
   for (const rel of await readdir(`${OUT}/www`, { recursive: true })) {
-    if ((rel.endsWith(".html") && !rel.endsWith(".src.html")) ||
-        (rel.startsWith("_worker.js/") && rel.endsWith(".js"))) {
-      targets.push(`${OUT}/www/${rel}`);
-    }
+    if (rel.endsWith(".html") && !rel.endsWith(".src.html")) targets.push(`${OUT}/www/${rel}`);
+  }
+  // The Worker stages beside cal and serendipity now rather than inside the asset
+  // tree, so it needs its own walk. It was never served (.assetsignore listed
+  // _worker.js), and mirroring the source layout is what lets one relative
+  // specifier resolve in both the source and the staged tree.
+  for (const rel of await readdir(`${OUT}/src/worker`, { recursive: true })) {
+    if (rel.endsWith(".js")) targets.push(`${OUT}/src/worker/${rel}`);
   }
   let refCount = 0, filesTouched = 0;
   for (const path of targets) {
@@ -1710,7 +1727,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   // Point the worker's Early-Hints header and its HTML dictionary Link header at
   // the exact same content-addressed assets as the staged documents.
   {
-    const p = `${OUT}/www/_worker.js/lib/shell-assets.js`;
+    const p = `${OUT}/src/worker/lib/shell-assets.js`;
     const src = await readFile(p, "utf8");
     const line = `export const SHELL_ASSETS = { luna: ${JSON.stringify(hashedFor.luna)}, nav: ${JSON.stringify(hashedFor.nav)} }; // build:shell-assets`;
     const dictionaryLine = `export const PAGE_DICTIONARY = ${JSON.stringify(hashedFor["page-family"])}; // build:page-dictionary`;
@@ -1987,7 +2004,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   const served = new Set();
   for (const rel of await readdir(`${OUT}/www`, { recursive: true })) served.add("/" + rel);
 
-  const idxSrc = await readFile("www/_worker.js/index.js", "utf8");
+  const idxSrc = await readFile("src/worker/index.js", "utf8");
   const wranglerSrc = await readFile("wrangler.jsonc", "utf8");
   const routesSrc = (idxSrc.match(/const ROUTES = new Map\(\[([\s\S]*?)\]\);/) || [, ""])[1];
   const allowSrc = (wranglerSrc.match(/"run_worker_first"\s*:\s*\[([\s\S]*?)\]/) || [, ""])[1];
@@ -2193,7 +2210,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     throw new Error(`csp-hash: only ${covered} of ${pages.length} documents got hashes (floor is 40) — did an earlier HTML pass change shape?`);
   }
 
-  const target = `${OUT}/www/_worker.js/lib/csp-hashes.js`;
+  const target = `${OUT}/src/worker/lib/csp-hashes.js`;
   const source = await readFile(target, "utf8");
   const marker = /^export const PAGE_SCRIPT_HASHES = .*; \/\/ build:csp-hashes$/m;
   if (!marker.test(source)) throw new Error("csp-hash: build:csp-hashes marker missing from lib/csp-hashes.js");

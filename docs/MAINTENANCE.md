@@ -354,7 +354,7 @@ unservable and nothing said so.
 **A preview runs production bindings and secrets.** There is no per-version
 override in Cloudflare, so it is the same RN_KV, the same `aadhar-photos`
 bucket, the same three D1 databases, the same `RESEND_API_KEY`.
-`www/_worker.js/lib/preview.js` is what makes the URL safe to paste into a
+`src/worker/lib/preview.js` is what makes the URL safe to paste into a
 PR:
 
 - every response gets `X-Robots-Tag: noindex, nofollow`, including redirects and
@@ -838,7 +838,7 @@ Three things about the page, all about honesty rather than looks:
   carry no cross-origin assets and inline scripts need per-document CSP hashes,
   so a chart that draws itself on the server costs one `<svg>` and no exceptions.
   Point tooltips are native `<title>` elements.
-- **Hand-entered history is drawn dashed.** `www/_worker.js/dyno-seed.json`
+- **Hand-entered history is drawn dashed.** `src/worker/dyno-seed.json`
   carries the four points from `perf-budget.mjs`'s baseline comment so the page
   is useful before the series fills up. They live in the repo rather than seeded
   into the branch so every hand-entered number goes through PR review, and they
@@ -943,7 +943,7 @@ Key facts (don't hardcode these elsewhere, they drift):
 
 ## Route map (where each URL's code lives)
 
-`www/_worker.js/` is a **directory** bundled by Cloudflare at deploy. The
+`src/worker/` is a **directory** bundled by Cloudflare at deploy. The
 dispatcher lives in `index.js`; each route's handler lives in a per-section
 module (search the module name to find it). `lib/` holds shared helpers.
 Static sections (`/garage/*`, `/lwe/*`, `/cars/*`, shell JS, most discovery
@@ -1167,7 +1167,7 @@ pnpm run deploy:direct   # local fallback only; normal production is merge + CI 
   remain archive objects and also produce a full-resolution maximum-quality
   q100 JPG export as the `/images/full/<stem>.jpg` click target.
 - Emits the 600px JPG fallback, 600px AVIF, and 400px mobile AVIF tiers;
-  writes the stem's entry into `www/_worker.js/photo-index.json` (the
+  writes the stem's entry into `src/worker/photo-index.json` (the
   committed pool the worker bundles — R2 key, byte size, upload date);
   regenerates EXIF metadata; bakes the four 64-bin RGB/luminance histograms;
   and runs `pnpm run photos:check` as the final gate.
@@ -1362,7 +1362,7 @@ That is true of a real `chromium-cdp` capture too, so it is a pre-existing gap
 rather than something this introduces, and the field is in the JSON either way.
 
 Both scripts take their target list from `scripts/lib/lens-chips.mjs`, which
-reads the chips out of the shell renderer in `www/_worker.js/lens.js`. Adding a
+reads the chips out of the shell renderer in `src/worker/lens.js`. Adding a
 chip there is all it takes; nothing needs updating here.
 
 The TTL is a day rather than a week on purpose. A stale local capture outliving
@@ -1373,7 +1373,7 @@ Browser Run renders the moment the entries expire. To undo sooner, delete the
 ### Add or change a /lens interaction recipe
 
 Recipes are the fixed scripts `/lens/browser?do=<id>` runs inside a page before
-reading it. They live in `www/_worker.js/lens-recipes.js` and are published
+reading it. They live in `src/worker/lens-recipes.js` and are published
 verbatim, so anyone can check what ran:
 
 ```bash
