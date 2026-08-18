@@ -4,7 +4,7 @@ A resto-mod 2003-aesthetic personal site for Aadharsh Pannirselvam, deployed
 as a Cloudflare Worker with static assets. Cohabiting source modules in this
 directory, deployed by one site Worker:
 
-- **`public/`** — the live `aadhar.sh` site (Workers static assets + the `_worker.js/` dispatcher)
+- **`src/` + `public/`** — the live `aadhar.sh` site. `src/worker/` is the dispatcher, `src/pages/` and `src/content/` are what it serves, `public/` is the bytes that ship unchanged
 - **`cal/`** — a custom coffee/bagel booking module at `aadhar.sh/coffee`, delegated by the root Worker
 - **`serendipity/`** — the event dashboard module at `aadhar.sh/serendipity`, delegated by the root Worker
 
