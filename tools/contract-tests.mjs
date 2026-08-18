@@ -3254,10 +3254,15 @@ test("LWE pages share one base stylesheet and the build derives one site-page di
   const build = await readFile(new URL("tools/build.mjs", ROOT), "utf8");
   assert.match(build, /site-page corpus/);
   assert.match(build, /page-family\.\$\{hash8\(dictionary\)\}\.dict/);
-  assert.match(build, /www\/p-dict/);
+  assert.match(build, /src\/dict\/p-dict/);
   assert.match(build, /site-page dictionary/);
-  const assetIgnore = await readFile(new URL("www/.assetsignore", ROOT), "utf8");
-  assert.match(assetIgnore, /^p-dict$/m, "page dictionary snapshots stay build input, not public assets");
+  // The snapshots live at src/dict/ now, OUTSIDE the served tree, which is a
+  // stronger statement than the .assetsignore entry this used to assert: an
+  // ignore line keeps a file from being uploaded, while being outside www/
+  // means the build never stages it in the first place.
+  const served = await readdir(new URL("www/", ROOT));
+  assert.ok(!served.includes("p-dict") && !served.includes("a-dict"),
+    "dictionary snapshots are build input and must not sit in the served tree");
   const security = await readFile(new URL("src/worker/lib/security.js", ROOT), "utf8");
   assert.match(security, /rel="compression-dictionary"/);
   for (const name of ["index", "dac", "drivers", "encoding", "fhe", "knots", "mpc", "pcrypto", "tee", "utf8", "vigenere"]) {

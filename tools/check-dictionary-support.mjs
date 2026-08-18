@@ -32,10 +32,10 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
 {
   const home = await (await fetch("https://aadhar.sh/", { headers: { "accept-encoding": "identity" } })).text();
   const live = home.match(/\/a\/nav\.([0-9a-f]{8})\.js/)?.[1];
-  const cand = (await readdir("www/a-dict")).find((n) => n.startsWith("nav.") && !n.includes(live));
+  const cand = (await readdir("src/dict/a-dict")).find((n) => n.startsWith("nav.") && !n.includes(live));
   if (!cand) report("shell js (nav)", false, "no non-live a-dict candidate to probe with");
   else {
-    const r = await get(`https://aadhar.sh/a/nav.${live}.js`, b64(await readFile(`www/a-dict/${cand}`)));
+    const r = await get(`https://aadhar.sh/a/nav.${live}.js`, b64(await readFile(`src/dict/a-dict/${cand}`)));
     const ce = r.headers.get("content-encoding");
     report("shell js (nav)", ce === "dcz", `ce=${ce} vs candidate ${cand}`);
   }
@@ -63,7 +63,7 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
 // until a deploy fixes it. Do NOT make dcz:check a required check or it deadlocks the very
 // release that would clear it.
 {
-  const committed = (await readdir("www/a-dict")).filter((n) => /\.[0-9a-f]{8}\.(js|css)$/.test(n));
+  const committed = (await readdir("src/dict/a-dict")).filter((n) => /\.[0-9a-f]{8}\.(js|css)$/.test(n));
   const bases = new Set(committed.map((n) => n.replace(/\.[0-9a-f]{8}\.(js|css)$/, "")));
 
   // Two pages, because no single document references every dictionary-carrying asset:
@@ -84,7 +84,7 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
     // sha256, and the browser keys on the full digest of the bytes it stored, so the
     // committed copy has to be those bytes exactly.
     const served = Buffer.from(await (await fetch(`https://aadhar.sh/a/${name}`, { headers: { "accept-encoding": "identity" } })).arrayBuffer());
-    if (!served.equals(await readFile(`www/a-dict/${name}`))) missing.push(`${name} (filename matches, bytes do not)`);
+    if (!served.equals(await readFile(`src/dict/a-dict/${name}`))) missing.push(`${name} (filename matches, bytes do not)`);
   }
   const skipped = [...refs].filter(([, base]) => !bases.has(base)).map(([n]) => n);
   report("live shell is covered by a-dict", missing.length === 0,
@@ -126,7 +126,7 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
            ce === "dcz" ? `ce=dcz vs ${offered}` : `ce=${ce} — the deployed /pd/ deltas may predate this dictionary`);
   }
 
-  const candidates = (await readdir("www/p-dict").catch(() => []))
+  const candidates = (await readdir("src/dict/p-dict").catch(() => []))
     .filter((name) => name.startsWith("garage__pretext.") && name.endsWith(".html.br"));
   if (!candidates.length) {
     report("page html per-page tier", true, "no committed pretext snapshot — family tier is the only candidate");
@@ -139,7 +139,7 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
     // usable against production right now" is the property worth asserting.
     const tried = [];
     for (const name of candidates) {
-      const raw = brotliDecompressSync(await readFile(`www/p-dict/${name}`));
+      const raw = brotliDecompressSync(await readFile(`src/dict/p-dict/${name}`));
       const ce = (await get("https://aadhar.sh/garage/pretext", b64(raw))).headers.get("content-encoding");
       tried.push(`${name}=${ce}`);
       if (ce === "dcz") break;
@@ -170,7 +170,7 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
     );
     const liveDoc = await (await fetch("https://aadhar.sh/garage/pretext", { headers: { "accept-encoding": "identity" } })).text();
     const held = await Promise.all(candidates.map(async (name) =>
-      srcs(brotliDecompressSync(await readFile(`www/p-dict/${name}`)).toString("utf8"))));
+      srcs(brotliDecompressSync(await readFile(`src/dict/p-dict/${name}`)).toString("utf8"))));
     const unheld = [...srcs(liveDoc)].filter((src) => !held.some((set) => set.has(src)));
     report("committed snapshots are WIRE bytes", unheld.length === 0,
            unheld.length === 0
@@ -288,8 +288,8 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
   const url = `https://aadhar.sh/a/nav.${live}.js`;
 
   const deltas = [];
-  for (const name of (await readdir("www/a-dict")).filter((n) => n.startsWith("nav.") && !n.includes(live))) {
-    const r = await get(url, b64(await readFile(`www/a-dict/${name}`)));
+  for (const name of (await readdir("src/dict/a-dict")).filter((n) => n.startsWith("nav.") && !n.includes(live))) {
+    const r = await get(url, b64(await readFile(`src/dict/a-dict/${name}`)));
     const body = Buffer.from(await r.arrayBuffer());
     // dcz is not an encoding undici knows, so these bytes arrive raw — which is the
     // whole point here. Hash rather than compare lengths: two different deltas could

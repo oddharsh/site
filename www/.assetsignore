@@ -8,12 +8,11 @@ _worker.js
 # at that path to ignore and a stale entry would silently exclude any future
 # www/scripts from upload.
 
-# Previous shipped versions of the content-hashed shell, kept ONLY as dictionary inputs
-# for scripts/gen-shell-deltas.mjs. Uploading them would serve stale nav.js/luna.css at
-# public URLs for no reason. www/ad/ (the .dcb deltas) is deliberately NOT ignored:
-# the worker fetches those through ASSETS to answer an Available-Dictionary request.
-a-dict
-p-dict
+# The previous shipped versions of the content-hashed shell, kept only as
+# dictionary inputs, USED TO SIT HERE and be ignored. They live at src/dict/
+# now, outside the served tree, so there is nothing at this path to exclude.
+# www/ad/ (the deltas themselves) is deliberately NOT ignored: the worker
+# fetches those through ASSETS to answer an Available-Dictionary request.
 
 # Hand-authored Markdown twins for the Worker-rendered prose pages (/bot,
 # /whoareyou, /security), whose text lives in template literals no build can read.
