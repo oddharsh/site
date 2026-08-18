@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "description": "The /lens Reader lens: a third-party extractor's opinion of a page, served from its own Worker so the site bundle never carries a DOM.",
-  "$comment": "Every wrangler script passes -c wrangler.toml EXPLICITLY. Without it wrangler walks UP the tree, finds the ROOT wrangler.jsonc, and runs its build.command (`node scripts/build.mjs`) from this directory, dying with MODULE_NOT_FOUND on a file that only exists at the repo root. CI's steps for cf-garage and lwe-ask have always passed -c for that reason, so the flag looks like ceremony until you drop it: `pnpm run deploy` then fails in a way no CI run can catch, because CI never invokes these scripts.",
+  "$comment": "Every wrangler script passes -c wrangler.toml EXPLICITLY. Without it wrangler walks UP the tree, finds the ROOT wrangler.jsonc, and runs its build.command (`node tools/build.mjs`) from this directory, dying with MODULE_NOT_FOUND on a file that only exists at the repo root. CI's steps for cf-garage and lwe-ask have always passed -c for that reason, so the flag looks like ceremony until you drop it: `pnpm run deploy` then fails in a way no CI run can catch, because CI never invokes these scripts.",
   "scripts": {
     "dev": "wrangler dev -c wrangler.toml",
     "deploy": "wrangler deploy -c wrangler.toml --x-provision=false --x-auto-create=false",

@@ -6,15 +6,15 @@
 // reorg: capture a golden baseline against production, then re-run after every
 // phase. If a route's status or content-type drifts, the reorg broke something.
 //
-//   node scripts/verify-routes.mjs [baseUrl]      # default https://aadhar.sh
-//   node scripts/verify-routes.mjs http://localhost:8788
+//   node tools/verify-routes.mjs [baseUrl]      # default https://aadhar.sh
+//   node tools/verify-routes.mjs http://localhost:8788
 //
 // Exit code is non-zero if any non-flaky route fails its assertion, so it can
 // gate a deploy. Writes the observed results to verify-baseline.<host>.json.
 //
 // Cache-busted per request so we measure the deployment, not the edge cache.
 //
-// scripts/check-routes-harness.mjs points this same file at a Worker booted
+// tools/check-routes-harness.mjs points this same file at a Worker booted
 // in-process by wrangler's test harness, which is how the oracle runs BEFORE a
 // merge instead of only after a deploy. A local base drops the rows tagged
 // `remote` (see below); everything else is asserted identically.
@@ -46,7 +46,7 @@ const builtOutput = isProd || process.env.VERIFY_BUILT === "1";
 // VERIFY_REMOTE=1 keeps the `remote` rows on a LOCAL base. Same shape as
 // VERIFY_BUILT above and for the same reason: the rows are skipped locally
 // because a local Worker has empty KV/R2 and no Browser Run, and remote bindings
-// (scripts/gen-remote-config.mjs) remove exactly that limitation. Set only by
+// (tools/gen-remote-config.mjs) remove exactly that limitation. Set only by
 // `pnpm run routes:check:remote`, which boots the harness on a generated config
 // whose KV/R2/Browser bindings reach production. Never set in CI, because remote
 // bindings need a token that can write and CI holds a read-only one.
@@ -432,7 +432,7 @@ async function main() {
   if (isProd) {
     const host = base.replace(/^https?:\/\//, "").replace(/[^a-z0-9.-]/gi, "_");
     // Beside this script, which is where the committed aadhar.sh baseline lives.
-    outFile = `scripts/verify-baseline.${host}.json`;
+    outFile = `tools/verify-baseline.${host}.json`;
     writeFileSync(outFile, JSON.stringify({ base, routes: results.map(({ path, status, ct }) => ({ path, status, ct })) }, null, 2) + "\n");
   }
 

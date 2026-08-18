@@ -60,7 +60,7 @@ review policy and entry point for future agent runs.
   file says which three files it covers.
 - **esbuild is no longer a direct dependency, as of 2026-08-14.** It had left the
   minification path when Oxc took over and stayed pinned for ONE call:
-  `scripts/check-page-contracts.mjs` parsed the garage scaffold's inline CSS with
+  `tools/check-page-contracts.mjs` parsed the garage scaffold's inline CSS with
   `transform(css, { loader: "css" })`. (It parsed CSS, never JS; this line said
   "inline JS" until 2026-08-14.) That was 20MB of Go binary for one call, and the
   size was the smaller problem. **The two CSS parsers disagree in both
@@ -70,7 +70,7 @@ review policy and entry point for future agent runs.
   5 selectors `/garage/horizon` ships deliberately. So a page could pass the
   contract check and fail the build, which is the wrong way round: the build
   decides what reaches a visitor, so a pre-build check should agree with the
-  build's parser. Both now call `parseCss` in `scripts/lib/css-parse.mjs`, which
+  build's parser. Both now call `parseCss` in `tools/lib/css-parse.mjs`, which
   owns the tolerated-warning family and re-proves the pass-through on every call.
   The staged tree is byte-identical across all 1476 files.
 
@@ -117,7 +117,7 @@ covered none of them until 2026-08-14. One is its own Dependabot ecosystem, so
 it drifts on the same cadence the baseline does.
 
 **These four are checked now**, as of 2026-08-14.
-`scripts/lib/dependency-docs.mjs` reads them alongside the root `package.json`
+`tools/lib/dependency-docs.mjs` reads them alongside the root `package.json`
 and holds this prose to them in both directions: a stated version that stops
 matching fails CI, and a NEW dependency in any of the four fails CI until
 somebody either states its version or exempts it with a reason. That is what

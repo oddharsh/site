@@ -14,7 +14,7 @@
 // luna.css. It is one commented, readable line in a readable file — View Source
 // still reads as hand-written CSS, and the line says where it came from.
 //
-//   node scripts/build.mjs                                   # stage .build/
+//   node tools/build.mjs                                   # stage .build/
 //   pnpm run deploy:direct                                   # build + wrangler deploy -c .build/wrangler.jsonc
 //
 // wrangler resolves `main` and `assets.directory` relative to the config file, so the
@@ -763,7 +763,7 @@ const minifyJavaScript = (filename, sourceText) => {
 };
 
 // The tolerated-warning family and the pass-through re-proof live in
-// scripts/lib/css-parse.mjs, shared with check-page-contracts.mjs so a stylesheet
+// tools/lib/css-parse.mjs, shared with check-page-contracts.mjs so a stylesheet
 // cannot pass one CSS check and fail the other. See that file for why.
 const minifyCss = (filename, sourceText) => parseCss(filename, sourceText, { minify: true });
 

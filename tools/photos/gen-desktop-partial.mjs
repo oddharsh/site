@@ -15,7 +15,7 @@
 
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
-import { readManifest } from "../../scripts/gen-manifest.mjs";
+import { readManifest } from "../../tools/gen-manifest.mjs";
 import { DESKTOP, PROFILES, SECTION_ICONS, SPECULATION, TASKBAR, TRAY_ITEMS } from "./shell-data.mjs";
 
 const TOP_OPEN = "<!-- axp:desktop -->";

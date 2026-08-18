@@ -39,9 +39,9 @@
 // perf-budget.mjs uses, so a flaky network cannot redden an unrelated PR.
 //
 // Usage:
-//   node scripts/check-infra.mjs              tree + dns, api if a token exists
-//   node scripts/check-infra.mjs --offline    tree only
-//   node scripts/check-infra.mjs --strict     turn advisories into failures
+//   node tools/check-infra.mjs              tree + dns, api if a token exists
+//   node tools/check-infra.mjs --offline    tree only
+//   node tools/check-infra.mjs --strict     turn advisories into failures
 
 import { execFile } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile, access } from "node:fs/promises";
@@ -114,7 +114,7 @@ const pass = (m) => ok.push(m);
 
 // ---------------------------------------------------------------- JSONC ----
 
-// stripJsonc moved to scripts/lib/jsonc.mjs when gen-remote-config.mjs needed
+// stripJsonc moved to tools/lib/jsonc.mjs when gen-remote-config.mjs needed
 // the same string-aware walk. One parser, so the two cannot disagree about what
 // wrangler.jsonc says.
 async function readJsonc(rel) {
@@ -368,7 +368,7 @@ async function checkTree(infra, wrangler, lwe) {
     // On the non-production command it is worse than dead code: a feature branch
     // would take production traffic on push.
     if (!/\bversions upload\b/.test(cmd)) {
-      fail(`infra.json's release.${field} should be a \`versions upload\` so a publish does not move traffic (scripts/deploy-promote.mjs ramps it); got ${JSON.stringify(cmd)}`);
+      fail(`infra.json's release.${field} should be a \`versions upload\` so a publish does not move traffic (tools/deploy-promote.mjs ramps it); got ${JSON.stringify(cmd)}`);
     }
   }
   // Preview URLs are what makes an uploaded version worth anything before it

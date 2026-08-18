@@ -101,7 +101,7 @@ jobs:
       # on the PR that introduces it, and measuring each side with its own copy
       # would report a change to the MEASUREMENT as a change in wire size.
       - name: Stash the measurement script
-        run: cp scripts/perf-snapshot.mjs "$RUNNER_TEMP/perf-snapshot.mjs"
+        run: cp tools/perf-snapshot.mjs "$RUNNER_TEMP/perf-snapshot.mjs"
 
       - name: Record the merge base
         env:

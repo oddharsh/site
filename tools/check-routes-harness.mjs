@@ -20,7 +20,7 @@
 // answer from their fallback path. Status and content-type are real; a passing
 // /images/manifest.json here means the handler works, not that the photos exist.
 // Rows tagged `remote` in verify-routes.mjs are skipped for that reason. The
-// post-deploy `node scripts/verify-routes.mjs` sweep against production stays the check
+// post-deploy `node tools/verify-routes.mjs` sweep against production stays the check
 // that sees real content, and neither one replaces the other.
 
 import { spawn, spawnSync } from "node:child_process";
@@ -31,7 +31,7 @@ const root = fileURLToPath(new URL("..", import.meta.url));
 const args = process.argv.slice(2);
 
 // --remote boots the harness on a generated config whose KV/R2/Browser bindings
-// reach PRODUCTION (scripts/gen-remote-config.mjs), which un-skips the five rows
+// reach PRODUCTION (tools/gen-remote-config.mjs), which un-skips the five rows
 // verify-routes.mjs marks `remote` — the ones whose whole assertion is content a
 // local Worker structurally cannot have. That closes the gap this file's own
 // header admits to ("local KV/R2/D1 come up EMPTY, so data-backed routes answer
@@ -63,7 +63,7 @@ if (remote) {
   // keep resolving (see gen-remote-config.mjs).
   const gen = spawnSync(
     process.execPath,
-    ["scripts/gen-remote-config.mjs", config],
+    ["tools/gen-remote-config.mjs", config],
     { cwd: root, stdio: "inherit" },
   );
   if (gen.status !== 0) process.exit(gen.status ?? 1);
@@ -86,7 +86,7 @@ try {
   code = await new Promise((resolve, reject) => {
     const child = spawn(
       process.execPath,
-      ["scripts/verify-routes.mjs", String(url).replace(/\/$/, "")],
+      ["tools/verify-routes.mjs", String(url).replace(/\/$/, "")],
       { cwd: root, stdio: "inherit", env: childEnv },
     );
     child.on("error", reject);

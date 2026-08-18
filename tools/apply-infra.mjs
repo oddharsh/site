@@ -17,9 +17,9 @@
 // the MX/SPF/DMARC/BIMI/SVCB set, which is also the set that carries mail. That
 // is the whole reason it earns a write path.
 //
-//   node scripts/apply-infra.mjs              plan only, no credential needed
-//   node scripts/apply-infra.mjs --confirm    apply (needs the write token)
-//   node scripts/apply-infra.mjs --prune      also delete extras on declared names
+//   node tools/apply-infra.mjs              plan only, no credential needed
+//   node tools/apply-infra.mjs --confirm    apply (needs the write token)
+//   node tools/apply-infra.mjs --prune      also delete extras on declared names
 //
 // Refuses to run in CI. A write token in GitHub would undo the property the
 // whole release design rests on: that GitHub cannot reach production.

@@ -221,7 +221,7 @@ export function buildWhoareyouGroups(data, ua, rdap, version) {
   // once, so an outside prober polling this feed is how a ramp gets verified from
   // the outside: `no-store` below means every poll re-runs the worker and reports
   // the version that actually handled it. That is why the canary sampler in
-  // scripts/deploy-promote.mjs reads THIS route rather than /updates.json, which
+  // tools/deploy-promote.mjs reads THIS route rather than /updates.json, which
   // reports the D1 changelog both versions share and so cannot tell them apart.
   //
   // Omitted entirely when unbound (local dev, the contract tests) rather than

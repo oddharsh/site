@@ -28,10 +28,10 @@
 // RENDERED DOM (Browser Run makes its own, and we have no way to ask for it),
 // and `accessibilityTree` is rebuilt from CDP's flat AX node list.
 //
-//   node scripts/lens-seed.mjs --dry-run     # capture, write nothing, print sizes
-//   node scripts/lens-seed.mjs               # capture and seed production KV
-//   node scripts/lens-seed.mjs --ttl 43200   # shorter life than the 24h default
-//   node scripts/lens-seed.mjs https://foo/  # specific URLs instead of the chips
+//   node tools/lens-seed.mjs --dry-run     # capture, write nothing, print sizes
+//   node tools/lens-seed.mjs               # capture and seed production KV
+//   node tools/lens-seed.mjs --ttl 43200   # shorter life than the 24h default
+//   node tools/lens-seed.mjs https://foo/  # specific URLs instead of the chips
 //
 // TO UNDO, delete the keys it prints, or wait out the TTL. The site returns to
 // live Browser Run renders the moment these expire, which is why the TTL is a
@@ -253,7 +253,7 @@ async function capture(browser, url) {
       accessibilityTree: tree,
       screenshot: b64 && !shotTooBig ? "data:image/png;base64," + b64 : null,
       screenshotDropped: shotTooBig ? Math.round(b64.length * 0.75) : 0,
-      webmcp: { status: "lab-required", detail: "Runtime WebMCP listing requires the local Browser Run Chrome-beta lab. Use scripts/lens-webmcp.mjs." },
+      webmcp: { status: "lab-required", detail: "Runtime WebMCP listing requires the local Browser Run Chrome-beta lab. Use tools/lens-webmcp.mjs." },
       // Both of these are read by a human deciding how much to trust the pane, so
       // neither one pretends this came off the edge.
       fetchedBy: "Local headless Chrome (Cloudflare Browser Run budget exhausted)",
