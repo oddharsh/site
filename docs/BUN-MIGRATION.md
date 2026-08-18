@@ -935,3 +935,56 @@ number is picking what to test next, which #444 did by hand.
 One honesty note is built into the output: `cal/` looks uncovered here and is
 not, because its own Vitest suite runs inside workerd. Those files are counted
 out and named rather than silently hidden.
+
+## The canary is no longer required to BUILD
+
+`zstdCompressSync`'s `dictionary` option is the only api on this branch that bun
+1.4 has and released bun does not. Measured under bun 1.3.14: the build runs
+staging, minification, the `/a/` hashing, precompression and the CSP scan, and
+dies at exactly that probe. Everything else it needs, released bun already has,
+HTMLRewriter included.
+
+So `tools/lib/zstd-batch.mjs` delegates instead of demanding. When the running
+runtime ignores the option, the batch goes to `node`, which honours it from 26.
+`ZSTD_FORCE_NODE_DELEGATE=1` forces that path on a runtime that does not need
+it, which is how it gets tested rather than assumed.
+
+| control | result |
+|---|--:|
+| canary, in-process (unchanged path) | 1499 files, 0 differing |
+| canary, delegation FORCED | 1499 files, 0 differing |
+| **released bun 1.3.14, end to end** | **1499 files, 0 differing** |
+| contract suite under 1.3.14 | 318 pass |
+
+Build wall clock is 2.1s in-process and 3.1s delegated, the difference being one
+spawn per shell delta plus one for the whole page batch.
+
+### The control found a second call site, which is the point of running it
+
+The first version routed only `dczEncodeBatch`. Under released bun the build
+then SUCCEEDED and quietly shipped **21 fewer files**: the shell tier called
+`zstdCompressSync` directly, so it produced no deltas while the page tier
+produced 144. The log said only that every candidate "lost to plain brotli",
+which is the same sentence it prints when the shell genuinely has not changed.
+
+That is this repo's oldest dictionary lesson arriving through a new door. A
+runtime that ignores the option still returns a valid frame, and that frame
+still decodes against the dictionary, so nothing errors and the only signal is a
+byte count that never shrank. Both paths go through the one seam now.
+
+### What is still needed to make Workers Builds publish this
+
+The image reads `packageManager` and tries to resolve it as a RELEASE. Measured
+in a real build on 2026-08-17:
+
+```
+Detected the following tools from environment: bun@1.4.0-canary.1, nodejs@26.7.0
+Installing nodejs 26.7.0        <- succeeded
+Installing bun 1.4.0-canary.1   <- failed, no release is tagged that
+```
+
+Two useful facts in four lines. **The image honours `.node-version: 26`**, which
+is what makes the delegate available there. And `packageManager` has to name
+something the image can resolve, so pointing it at a released bun is the
+remaining repo-side step, with the dashboard commands after it and `infra.json`
+after that.

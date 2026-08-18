@@ -29,7 +29,7 @@ import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
-import { brotliCompress, brotliDecompressSync, constants as zlibConstants, zstdCompressSync } from "node:zlib";
+import { brotliCompress, brotliDecompressSync, constants as zlibConstants } from "node:zlib";
 import minifyHtml from "@minify-html/node";
 import { transform as transformCss } from "lightningcss";
 import { minifySync } from "oxc-minify";
@@ -37,7 +37,7 @@ import { readManifest, workerModule, navFenceBody, readFenceBody, runProfilesBod
 import { parseCss } from "./lib/css-parse.mjs";
 import { requireParser as cspRequireParser, scanDocument } from "./lib/csp-scan.mjs";
 import { HTML_MARKERS } from "./lib/html-markers.mjs";
-import { zstdCompressDictionaryBatch } from "./lib/zstd-batch.mjs";
+import { assertDictionaryCapable, zstdCompressDictionaryBatch } from "./lib/zstd-batch.mjs";
 import { patchStaticShell, renderDesktopArtifacts, staticShellPages } from "../tools/photos/gen-desktop-partial.mjs";
 
 const OUT = ".build";
@@ -77,11 +77,14 @@ function frameDcz(frame, dictBytes) {
   };
 }
 
-function dczEncode(bytes, dictBytes) {
-  const frame = zstdCompressSync(bytes, {
-    dictionary: dictBytes,
-    params: { [zlibConstants.ZSTD_c_compressionLevel]: 19 },
-  });
+// One frame, through the SAME seam as the batch. It used to call
+// zstdCompressSync directly, which meant the shell tier silently produced no
+// deltas under a runtime that ignores the dictionary option while the page tier
+// produced 144 of them. Caught by the byte-identical control on released bun,
+// where 21 .dcz files simply were not there and the log said only that every
+// candidate "lost to plain brotli".
+async function dczEncode(bytes, dictBytes) {
+  const [frame] = await zstdCompressDictionaryBatch([{ bytes, dictionary: dictBytes }]);
   return frameDcz(frame, dictBytes);
 }
 
@@ -1869,16 +1872,12 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     // collapse to almost nothing if the dictionary is real. Throwing is correct because
     // .node-version pins the runtime, so this firing means the pin was lost, and a silent
     // no-op is exactly the failure this whole page-worth of debugging came from.
-    const probe = Buffer.from("the quick brown fox jumps over the lazy dog ".repeat(200));
-    const withDict = zstdCompressSync(probe, { dictionary: probe, params: { [zlibConstants.ZSTD_c_compressionLevel]: 19 } });
-    const noDict = zstdCompressSync(probe, { params: { [zlibConstants.ZSTD_c_compressionLevel]: 19 } });
-    if (withDict.length >= noDict.length * 0.5) {
-      throw new Error(
-        `zstd dictionary compression is not honored by ${process.version} ` +
-        `(probe: ${withDict.length} bytes with a dictionary vs ${noDict.length} without; expected a collapse). ` +
-        `Node 24+ is required — see .node-version. Shell deltas would silently ship as no-ops.`,
-      );
-    }
+    // The probe now asks whether this BUILD can make dictionary frames, here or
+    // through the node delegate, rather than whether this runtime can. That is
+    // what lets released bun run the build: the dictionary option is the one api
+    // on this branch that bun 1.4 has and released bun does not, and node 26 has
+    // it. Still a hard stop when neither can, and the reason is unchanged.
+    console.log(`dcz: dictionary compression ${assertDictionaryCapable()}`);
 
     const dictDir = "src/dict/a-dict";
     const dicts = await readdir(dictDir).catch(() => []);
@@ -1900,7 +1899,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
         // ever request a new URL for them — a delta here could not be asked for.
         if (dictBytes.equals(targetBytes)) continue;
 
-        const { out, digest } = dczEncode(targetBytes, dictBytes);
+        const { out, digest } = await dczEncode(targetBytes, dictBytes);
 
         // A delta that lost to the plain q11 twin is worse than no delta: the worker would
         // serve more bytes AND cost the client a dictionary lookup.

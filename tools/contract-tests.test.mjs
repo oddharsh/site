@@ -8111,3 +8111,56 @@ test("the photo pool surfaces a failure rather than swallowing it", async () => 
   assert.ok(PHOTO_JOBS >= 1 && PHOTO_JOBS <= 8, `PHOTO_JOBS is capped at the measured knee, got ${PHOTO_JOBS}`);
   assert.ok(UPLOAD_JOBS >= 1, "uploads keep their own smaller number, bounded by the far end");
 });
+
+// ── zstd dictionary delegation ──────────────────────────────────────────────
+// `zstdCompressSync`'s `dictionary` option is the ONE api this branch needs that
+// bun 1.4 has and released bun does not, so tools/lib/zstd-batch.mjs delegates
+// to node when the host ignores it. The bar is byte-identical frames: /a/ is
+// content-addressed, so a moved byte re-mints a URL and orphans dictionaries.
+const ZSTD_BATCH = "./lib/zstd-batch.mjs";
+const zstdJobs = () => {
+  const dictionary = Buffer.from("the quick brown fox jumps over the lazy dog ".repeat(300));
+  return Array.from({ length: 4 }, (_, i) => ({ bytes: Buffer.from("the quick brown fox jumps over the lazy dog ".repeat(200 + i * 7)), dictionary }));
+};
+
+test("the delegated frames are byte-identical to the in-process ones", async () => {
+  const { zstdCompressDictionaryBatch } = await import(ZSTD_BATCH);
+  const jobs = zstdJobs();
+  const here = await zstdCompressDictionaryBatch(jobs);
+
+  const previous = process.env.ZSTD_FORCE_NODE_DELEGATE;
+  process.env.ZSTD_FORCE_NODE_DELEGATE = "1";
+  try {
+    const delegated = await zstdCompressDictionaryBatch(jobs);
+    assert.equal(delegated.length, here.length);
+    for (const [i, frame] of delegated.entries()) {
+      assert.ok(frame.equals(here[i]), `frame ${i} differs: ${frame.length} delegated vs ${here[i].length} in-process`);
+    }
+    // A frame that shrank is a frame the dictionary actually reached. Without
+    // this the test would pass against a runtime that ignores the option in BOTH
+    // paths, which is the silent failure the whole seam exists for.
+    assert.ok(here[0].length < jobs[0].bytes.length / 10, "the dictionary must collapse the frame, not merely produce one");
+  } finally {
+    if (previous === undefined) delete process.env.ZSTD_FORCE_NODE_DELEGATE;
+    else process.env.ZSTD_FORCE_NODE_DELEGATE = previous;
+  }
+});
+
+test("the capability check names where the compression will happen", async () => {
+  const { assertDictionaryCapable } = await import(ZSTD_BATCH);
+  assert.match(assertDictionaryCapable(), /in-process|delegated to/);
+
+  const previous = { force: process.env.ZSTD_FORCE_NODE_DELEGATE, node: process.env.ZSTD_DELEGATE_NODE };
+  process.env.ZSTD_FORCE_NODE_DELEGATE = "1";
+  process.env.ZSTD_DELEGATE_NODE = "definitely-not-a-node-xyz";
+  try {
+    // Teeth: with neither a capable host nor a reachable delegate, the build has
+    // to STOP. A dictionary-less "delta" still compresses and still decodes, so
+    // the only symptom of getting this wrong is a byte count that never shrank.
+    assert.throws(() => assertDictionaryCapable(), /dictionary compression is unavailable/);
+  } finally {
+    for (const [key, value] of [["ZSTD_FORCE_NODE_DELEGATE", previous.force], ["ZSTD_DELEGATE_NODE", previous.node]]) {
+      if (value === undefined) delete process.env[key]; else process.env[key] = value;
+    }
+  }
+});
