@@ -21,15 +21,17 @@ decides which one a given file belongs in:
 
 | entry | holds |
 |---|---|
-| **`public/`** | **everything the site serves.** Pages, client scripts, CSS, photos, dictionaries. If a browser can fetch it, it is in here. |
-| **`src/worker/`** | **the site Worker**, which was `public/_worker.js/` until 2026-08-16. It moved for the reason the row below already gave for cal and serendipity: it is a program with its own tests, not a document. It was never served either way (`.assetsignore` has always listed `_worker.js`), so the move changed no served byte. It STAGES to `.build/src/worker/`, mirroring its source path, and that mirroring is load-bearing rather than tidy: cal and serendipity import the Worker across the project boundary and are bundled from `.build/`, so a relative specifier has to resolve in BOTH trees, which is only possible when the two have the same shape. |
-| **`src/client/`**, **`src/styles/`** | the client islands (`nav.js`, `tooltip.js`, `lens*.js`, `quiz.js`, …) and the stylesheets (`luna.css`, `lwe-base.css`, …), moved out of `public/` on 2026-08-16. They STAGE back to the root of the served tree, so their public URLs are still `/nav.js` and `/luna.css`: source layout and URL layout are different questions, and only the first one moved. Every served byte and every `/a/` content hash is unchanged. |
-| `cal/`, `serendipity/` | the two application modules the site Worker bundles and serves at `/coffee` and `/serendipity`. They sit outside `public/` because they are programs with their own tests, not documents. |
+| **`public/`** | **the bytes a browser fetches unchanged.** Photos, the hashed `/i/` tiers, OG cards, `_headers`, `.well-known`, `llms.txt`, the static `garage/` and `lwe/` assets. No HTML: every document is authored in `src/pages/`. |
+| **`src/pages/`** | **every HTML document**, 36 of them. They STAGE into the served tree at their own paths, so `/garage/horizon` is authored at `src/pages/garage/horizon.html` and served where it always was. |
+| **`src/content/`** | authored PROSE and the registries beside it: the writing posts and their `posts.json`, the hand-written Markdown twins for the three Worker-rendered pages (`md/`), and `index.md`, `README.md`, `auth.md`, `resume.md`. Also stages back into the served tree. |
+| **`src/worker/`** | **the site Worker.** It is a program with its own tests, not a document, so it sits beside `cal/` and `serendipity/` rather than inside the tree of things a browser can fetch. It was never served either way. It STAGES to `.build/src/worker/`, mirroring its source path, and that mirroring is load-bearing rather than tidy: cal and serendipity import the Worker across the project boundary and are bundled from `.build/`, so a relative specifier has to resolve in BOTH trees, which is only possible when the two have the same shape. |
+| **`src/client/`**, **`src/styles/`** | the client islands (`nav.js`, `tooltip.js`, `lens*.js`, `quiz.js`, …) and the stylesheets (`luna.css`, `lwe-base.css`, …). They stage back to the ROOT of the served tree, so their public URLs are still `/nav.js` and `/luna.css`. Source layout and URL layout are different questions, and only the first one moved. |
+| **`src/dict/`** | `a-dict/` and `p-dict/`, the previously shipped bytes of the shell and of each page. Build INPUT that is never served: a dictionary has to be bytes a browser already holds, which no build can derive from source. Being outside the served tree is why the build no longer stages 130 files for `.assetsignore` to exclude again. |
+| `cal/`, `serendipity/` | the two application modules the site Worker bundles and serves at `/coffee` and `/serendipity`. They sit outside the served tree because they are programs with their own tests, not documents. |
 | `cf-garage/`, `lwe-ask/`, `lens-reader/` | the three SEPARATELY deployed auxiliary Workers, each with its own `wrangler.toml` and its own deploy. Nothing here reaches production through the site Worker. |
-| **`scripts/`** | **every developer tool.** The build (`build.mjs`), the test suite (`contract-tests.mjs`), the route oracle, the perf budget, and the `check-*` / `gen-*` family. Nothing in here ships. |
-| `tools/photos/` | the photo and asset pipeline, at `public/scripts/` until 2026-08-16. The split from `scripts/` is still by SUBJECT: this one touches `public/images` and `public/i`, nothing else does. It left `public/` because it is DEV TOOLING that ships nothing, so `.assetsignore` no longer needs a `scripts` entry and the build no longer stages 28 files it then excludes. Every script here resolves its root two levels up, which survives the move because `public/scripts` and `tools/photos` sit at the same depth; `gen-photo-semantics.mjs` was the one exception (it used `dirname(dirname())`, so its root was `public/` rather than the repo) and now matches its siblings. |
+| **`tools/`** | **every developer tool.** The build (`build.mjs`), the test suite (`contract-tests.mjs`), the route oracle, the perf budget, the `check-*` / `gen-*` family, plus `photos/` (the photo and asset pipeline) and `oxlint/` (the custom rules). Nothing in here ships. |
 | **`config/`** | `infra.json` (declared Cloudflare + GitHub state), `site-manifest.json` (the surface registry), `tsconfig.json`. |
-| `pipelines/` | the page GENERATORS, one directory per section: `content/` (the shared page contract), `garage/`, `lwe/`. These author into `public/`; they are not part of the build. |
+| `pipelines/` | the page GENERATORS, one directory per section: `content/` (the shared page contract), `garage/`, `lwe/`. These author into `src/pages/`; they are not part of the build. |
 | **`docs/`** | the long-form runbooks: `MAINTENANCE.md`, `PHOTO-PIPELINE.md`, `DEPENDENCIES.md`, `UNDERSTANDING-REVIEW.md`. |
 | `design/` | the Luna design system. `tokens/` and `DESIGN.md` are canonical; the rest is history, and `design/README.md` draws that line. |
 | `migrations/`, `talks/` | D1 SQL for the site Worker, and talk material. |
@@ -52,10 +54,22 @@ moving any of them costs more than it buys:
 - `CLAUDE.md` and its `AGENTS.md` symlink, plus `README.md`.
 - `.github/`, `.gitignore`.
 
-Two naming notes worth having. `public/` was called `public/` until 2026-08-11,
-so any branch or note older than that says `holding` for the same directory.
-And the ONE path that reads as a duplicate, `scripts/` against `tools/photos/`,
-is the subject split in the table above rather than an accident.
+Three naming notes worth having, because a sweep of this size falsifies history
+if nobody stops it. The served tree has been called `holding/`, then `www/` from
+2026-08-11, and since 2026-08-18 it is not one directory at all: `public/` for
+assets, `src/pages/` for documents. So a branch or note older than that date
+says `www` or `holding` for something that no longer exists under either name,
+and the automated rewrites that moved these paths were careful NOT to rename
+those historical mentions. Where you see `www/_worker.js` or `www/scripts`
+in an old note, read `www/`.
+
+`scripts/` is gone as a top-level entry: it merged into `tools/` on 2026-08-18,
+so the duplicate-looking pair this note used to explain no longer exists.
+
+And `src/` is authored source of four different kinds (documents, prose, client,
+Worker) while `public/` is bytes. The test for which one a new file belongs in is
+whether a build step transforms it: if yes it is `src/`, if it ships byte-for-byte
+it is `public/`.
 
 ---
 
