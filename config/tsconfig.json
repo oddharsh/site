@@ -18,7 +18,7 @@
   //
   //   72   one heterogeneous ROUTES table taking its element type from the first
   //        entry, exactly as predicted. Settled by ONE annotation on the new
-  //        ROUTE_TABLE declaration in www/_worker.js/index.js.
+  //        ROUTE_TABLE declaration in src/worker/index.ts.
   //   18   serendipity/serendipity.js, which the glob never names — tsc follows
   //        imports, so widening to the Worker drags in everything it reaches.
   //   22   scattered, and all of one family: a value that coerces at runtime and
@@ -47,6 +47,13 @@
     "target": "esnext",
     "module": "esnext",
     "moduleResolution": "bundler",
+    // .ts import specifiers, which is FORCED rather than stylistic. Measured
+    // 2026-08-16: bun resolves both ./x.js and ./x.ts to x.ts, wrangler/esbuild
+    // resolves both, and node 26 resolves ONLY ./x.ts — a .js specifier naming a
+    // .ts file throws. Keeping plain node able to import these modules is the
+    // whole point of gotcha 16, so the specifier has to say .ts and this flag is
+    // what lets tsc agree. It requires noEmit, which is already set above.
+    "allowImportingTsExtensions": true,
     // Workers globals only. With the DOM lib loaded, its CacheStorage shadows
     // Cloudflare's and every `caches.default` reads as an error.
     "lib": ["esnext"],
@@ -58,5 +65,5 @@
     "strict": false
   },
   // Paths are relative to THIS file, which lives in config/ — hence the `../`.
-  "include": ["../cal/src/**/*.js", "../www/_worker.js/**/*.js"]
+  "include": ["../cal/src/**/*.js", "../src/worker/**/*.ts"]
 }

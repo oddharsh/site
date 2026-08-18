@@ -38,7 +38,7 @@ cf-garage/node_modules/
 .claude/worktrees/
 
 # zenc (JPEG thumbnail encoder) build artifacts — Cargo.lock is committed, target/ is not
-www/scripts/zenc/target/
+tools/photos/zenc/target/
 
 # verify-routes.mjs dev baselines against local servers (transient, per-port)
 scripts/verify-baseline.localhost_*.json
@@ -46,7 +46,8 @@ scripts/verify-baseline.localhost_*.json
 # dcz deltas are BUILD OUTPUT now (build.mjs generates them with node:zlib zstd), not
 # committed artifacts. Nothing to ignore here; this note exists so the directory is not
 # re-added by hand.
-www/ad/
+# (was www/ad/ — the dcz deltas are build output under .build/public/ad now, and
+# .build/ is ignored wholesale above, so this rule named nothing after the split)
 
 # wrangler check startup writes this next to the config
 worker-startup.cpuprofile
@@ -55,7 +56,7 @@ worker-startup.cpuprofile
 # uv writes a `*` .gitignore inside the venv so it self-ignores, but that only
 # holds while uv is the tool that made it; a hand-rolled `python -m venv` would
 # not. Stated explicitly so the directory stays untracked either way.
-www/scripts/.venv/
+tools/photos/.venv/
 
 # regenerated on demand and different every run (random photo grid)
 .github/social-preview-desktop.png
@@ -64,4 +65,10 @@ www/scripts/.venv/
 # and images/histograms.json, which are the committed source. Kept out of git for
 # the same reason the Markdown twins are: a pure function of committed bytes
 # should not be a second committed copy that can fall behind.
-www/images/meta/
+public/images/meta/
+
+# the composed readable tree for `bun run dev` (tools/compose-dev.mjs)
+.dev/
+
+# bun test --coverage output; tools/coverage-report.mjs reads and removes it
+coverage/

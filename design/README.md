@@ -8,7 +8,7 @@ before treating anything below as a spec.
 - **`DESIGN.md`** — the Luna brief. The canonical reference plus the
   DON'T-modernize guardrails. CLAUDE.md points here.
 - **`tokens/`** — the canonical token set (colors, bevels, fonts, typography;
-  115 custom properties). `www/luna.css` derives from these and never
+  115 custom properties). `src/styles/luna.css` derives from these and never
   redefines them. Change a token here first, then flow it into luna.css.
 - **`styles.css`** — the entry point that `@import`s the four token files.
   Nothing the site serves links it; the `aadhar-sh-design` skill package does.

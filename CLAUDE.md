@@ -21,16 +21,27 @@ decides which one a given file belongs in:
 
 | entry | holds |
 |---|---|
-| **`www/`** | **everything the site serves.** Pages, the `_worker.js/` dispatcher, client scripts, CSS, photos, dictionaries. If a browser can fetch it, it is in here. |
+| **`public/`** | **byte-for-byte served assets.** Photos, the content-hashed `i/` tiers, OG cards, icons, feeds, `_headers`, `.well-known`. Nothing here is transformed by the build; it is copied. |
+| **`src/pages/`** | **every HTML document.** `index.html` plus `garage/`, `lwe/`, `access/`, `pixel-peeper/`. A page and the photo it shows are different KINDS of thing, which is the split `www/` did not make. |
+| **`src/content/`** | authored prose and registries: the `writing/` posts, the hand-written Markdown twins in `md/`, `index.md`, `resume.md`. Text that a human wrote and the build reads. |
+| **`src/dict/`** | the committed shell and page dictionary snapshots (`a-dict/`, `p-dict/`). Build INPUT: they are never staged, which is why `.assetsignore` no longer names them. |
+| **`src/worker/`** | **the site Worker**, TypeScript since 2026-08-16 and `www/_worker.js/` before that. It moved for the reason the row below already gave for cal and serendipity: it is a program with its own tests, not a document. It was never served either way (`.assetsignore` has always listed `_worker.js`), so the move changed no served byte. It STAGES to `.build/src/worker/`, mirroring its source path, and that mirroring is load-bearing rather than tidy: cal and serendipity import the Worker across the project boundary and are bundled from `.build/`, so a relative specifier has to resolve in BOTH trees, which is only possible when the two have the same shape. Specifiers say `.ts` because that is the ONLY spelling all three runtimes accept: bun and esbuild resolve `./x.js` and `./x.ts` alike, node 26 resolves only `./x.ts`, and node has to work because contract-tests imports these modules (gotcha 16). 36 of the 67 modules are fully type-checked; the other 31 carry `// @ts-nocheck` and are declared in [`config/ts-migration.json`](config/ts-migration.json), which a contract test caps so it may only SHRINK. Those errors are not defects: the bundle is byte-identical at 666.62 KiB, and a `.js` file merely let TypeScript treat every parameter as optional. |
+| **`src/client/`**, **`src/styles/`** | the client islands (`nav.js`, `tooltip.js`, `lens*.js`, `quiz.js`, …) and the stylesheets (`luna.css`, `lwe-base.css`, …), moved out of `www/` on 2026-08-16. They STAGE back to the root of the served tree, so their public URLs are still `/nav.js` and `/luna.css`: source layout and URL layout are different questions, and only the first one moved. Every served byte and every `/a/` content hash is unchanged. |
 | `cal/`, `serendipity/` | the two application modules the site Worker bundles and serves at `/coffee` and `/serendipity`. They sit outside `www/` because they are programs with their own tests, not documents. |
 | `cf-garage/`, `lwe-ask/`, `lens-reader/` | the three SEPARATELY deployed auxiliary Workers, each with its own `wrangler.toml` and its own deploy. Nothing here reaches production through the site Worker. |
-| **`scripts/`** | **every developer tool.** The build (`build.mjs`), the test suite (`contract-tests.mjs`), the route oracle, the perf budget, and the `check-*` / `gen-*` family. Nothing in here ships. |
-| `www/scripts/` | the photo and asset pipeline specifically, kept beside the pixels it operates on. The split from `scripts/` is by SUBJECT: this one touches `www/images` and `www/i`, nothing else does. |
+| **`tools/`** | **every developer tool**, `scripts/` until 2026-08-16. The build (`build.mjs`), the test suite (`contract-tests.test.mjs`), the route oracle, the perf budget and the `check-*` / `gen-*` family, plus `photos/` (the photo pipeline) and `oxlint/` (the vendored anti-slop rules). Nothing in here ships. |
+| `tools/photos/` | the photo and asset pipeline, at `www/scripts/` until 2026-08-16. The split from `scripts/` is still by SUBJECT: this one touches `public/images` and `public/i`, nothing else does. It left `www/` because it is DEV TOOLING that ships nothing, so `.assetsignore` no longer needs a `scripts` entry and the build no longer stages 28 files it then excludes. Every script here resolves its root two levels up, which survives the move because `public/scripts` and `tools/photos` sit at the same depth; `gen-photo-semantics.mjs` was the one exception (it used `dirname(dirname())`, so its root was `www/` rather than the repo) and now matches its siblings. |
 | **`config/`** | `infra.json` (declared Cloudflare + GitHub state), `site-manifest.json` (the surface registry), `tsconfig.json`. |
 | `pipelines/` | the page GENERATORS, one directory per section: `content/` (the shared page contract), `garage/`, `lwe/`. These author into `www/`; they are not part of the build. |
 | **`docs/`** | the long-form runbooks: `MAINTENANCE.md`, `PHOTO-PIPELINE.md`, `DEPENDENCIES.md`, `UNDERSTANDING-REVIEW.md`. |
 | `design/` | the Luna design system. `tokens/` and `DESIGN.md` are canonical; the rest is history, and `design/README.md` draws that line. |
 | `migrations/`, `talks/` | D1 SQL for the site Worker, and talk material. |
+
+Three directories now compose the served URL root: `www/` plus `src/client/`
+plus `src/styles/`, merged by `build.mjs` into `.build/public`. That is why
+`config/tsconfig.browser.json` maps `/*` across all three rather than at `www/`
+alone. An absolute specifier like `import "/hoist.js"` is checkable only if the
+mapping names the directory the file actually authors in.
 
 Four things stay at the repository root because their tooling demands it, and
 moving any of them costs more than it buys:
@@ -46,7 +57,7 @@ moving any of them costs more than it buys:
 
 Two naming notes worth having. `www/` was called `www/` until 2026-08-11,
 so any branch or note older than that says `holding` for the same directory.
-And the ONE path that reads as a duplicate, `scripts/` against `www/scripts/`,
+And the ONE path that reads as a duplicate, `scripts/` against `tools/photos/`,
 is the subject split in the table above rather than an accident.
 
 ---
@@ -74,7 +85,7 @@ pnpm run deploy:promote --rollback    # 100% back to the previous version
 pnpm run deploy:direct
 
 # local dev against PRODUCTION KV/R2/Browser (D1 stays local unless you pass
-# --d1; read scripts/gen-remote-config.mjs before you do). Workstation-only.
+# --d1; read tools/gen-remote-config.mjs before you do). Workstation-only.
 pnpm run dev:remote
 
 # the route oracle with those same remote bindings, which un-skips the 5 rows a
@@ -131,16 +142,16 @@ pnpm run dict:roll
 pnpm run dcz:check
 
 # regenerate JUST the EXIF metadata (after photos are already uploaded)
-./www/scripts/extract-photo-metadata.sh "/Users/aadharsh/Downloads/to post (from ssd)"
+bun tools/photos/extract-photo-metadata.ts "/Users/aadharsh/Downloads/to post (from ssd)"
 
-# build the Python environment for gen-pixel-peeper.py (uv, into www/scripts/.venv).
+# build the Python environment for gen-pixel-peeper.py (uv, into tools/photos/.venv).
 # NOT needed for the photo pipeline: the histogram bake moved into `zenc histogram`
 # on 2026-08-14. Homebrew's python3 is PEP 668, so a plain pip install fails.
 pnpm run photos:env
 
 # build the JPEG thumbnail encoder (zenc = zenjpeg hybrid+scan). the pipeline
 # scripts auto-build it on first run; this is the explicit form.
-cargo build --release --manifest-path www/scripts/zenc/Cargo.toml
+cargo build --release --manifest-path tools/photos/zenc/Cargo.toml
 
 # bust caches via wrangler (RN_KV namespace ID hardcoded in scripts).
 # NB: the photo manifest is NOT a cache anymore — the worker bundles
@@ -335,7 +346,7 @@ worktrees may edit freely, but a worktree is not a release surface.
   same D1 changelog, so `/updates.json` structurally cannot tell them apart) and
   aborts on a non-200 or on a step that never took. `--to`, `--steps`,
   `--status`, and `--rollback` are the other modes. The old flat
-  `if (process.env.CI) die()` is gone: `scripts/lib/release-guard.mjs` asks
+  `if (process.env.CI) die()` is gone: `tools/lib/release-guard.mjs` asks
   whether the process can authenticate instead, because a blanket CI ban refused
   the gated pipeline it was meant to protect while doing nothing about a ramp
   that starts unauthenticated and dies after traffic already moved.
@@ -647,7 +658,7 @@ worktrees may edit freely, but a worktree is not a release surface.
 
   A preview runs **production bindings and secrets**. Cloudflare offers no
   per-version override, so the same RN_KV, the same photo bucket, the same three
-  D1s, the same `RESEND_API_KEY`. `www/_worker.js/lib/preview.js` is what
+  D1s, the same `RESEND_API_KEY`. `src/worker/lib/preview.ts` is what
   makes a preview URL safe to paste into a PR: every response is `noindex`
   (a byte-identical duplicate of the site on another host would otherwise compete
   with the canonical one), and writes are refused by DEFAULT-DENY on unsafe
@@ -801,27 +812,27 @@ Single-page personal site at `aadhar.sh`. A Cloudflare Worker with static assets
 
 | file | role |
 |---|---|
-| `www/index.html` | The whole page in one file. Inline CSS + JS. ~58KB uncompressed, ~15.4KB zstd (measured 2026-07-21 via live nav-timing; CF serves zstd, not brotli). Served on the shared `PAGE_CACHE_CONTROL` (`lib/const.js`) like every other document, + ETag, and still never `no-store` (the one directive that would cost the page bfcache). It held `private, no-cache, must-revalidate` through its SSR era and kept it after the SSR left; that cost two things at once, since no shared cache could store it (every front-door hit ran the worker) and Chromium refuses to keep a dictionary offered under `no-cache` (so `/` was the ONE page outside the per-page dcz tier). Changed 2026-07-31. Comments deliberately kept readable for View Source. |
-| `www/writing/` | Written content as plain `.txt` files + `posts.json` registry `[{slug,title,date}]`. The worker renders each as an XP **Notepad** window at `/writing/<slug>` (a server-rendered `<textarea>` seeded with the canonical text — editable by nature, ephemeral by nature: no save → reload restores canonical, "writing in flux"), plus a "My Writing" folder index at `/writing`. Raw `.txt` stays fetchable at `/writing/<slug>.txt`. Author a post = drop a `.txt` + a `posts.json` entry. Render code (`handleWritingIndex`/`handleWritingPost`/`NOTEPAD_CSS`) lives in `_worker.js`. |
-| `www/notepad.js` | Behavior for the `/writing` Notepad view (deferred, SW-cached): per-window `enhance()` wiring File/Edit/Format/View/Help menus, live Ln/Col + word-count status bar, Word-Wrap toggle, the classic **F5 time/date** stamp (Temporal w/ Date fallback), Select All, Print, About. Also opens folder notes as **popovers** that composite over the folder index, deliberately without touching the address bar (notes are `popover="manual"`, so several stay open at once and one URL couldn't honestly name three windows; Esc closes the topmost). The permalink stays real: each row is an `<a href="/writing/<slug>">` the worker serves standalone, and a modified click passes through to it. Chrome itself is SSR'd by `_worker.js`. No-op without a `.np-window`. |
-| `www/tooltip.js` | Rich XP hover island for photos, tracks, artists, and car references. The homepage keeps only a tiny inline loader that idle-prefetches this module and replays a cold first hover; coarse-pointer visitors never load it. |
-| `www/infotip.js` | The same trick for every OTHER hover on the site. The rule is short: **any `[title]` is an infotip, wherever it lives** — taskbar app buttons, tray icons, the clock, desktop icons, title-bar controls, form fields, and titled links and controls in page bodies. All of them already bought the OS tooltip, so this is what that tooltip was hiding: a pin's page count (from nav.js's own destination table), the tray's live colo/build (the same JSON its click-balloon fetches), the clock's full date, a citation link's destination host. It re-draws `title` rather than replacing it: emptied on hover, restored on leave, so AT still reads it at focus and a page with no JS keeps the native tooltip. `[data-tip]` is the opt-in for a control that never had one. **Four richer surfaces are skipped by name** (`.lx-term`, `.photos a`, `.np-list li`, `.np-artist-link`, `.car-link`, `.ev[data-cover]`) because each already draws its own card from the same engine; `.lx-term` is the sharp one, since those ship a `title` as their no-JS fallback and `lens.js` strips it once its own surface is live. **`nav.js` owns the matcher and passes the FUNCTION in**, not a selector each side keeps a copy of. Loads on the first hover that has a tip, never on a coarse pointer. Windows' two delays live in `hoist.js` now (`openMs` 400 cold-dwell, `autopopMs` 6s), both defaulting OFF so the content hover CARDS keep the instant show they were tuned for. |
-| `www/nav.js` | Site-wide XP **desktop shell**. The ONE shared external asset (deferred, SW-cached) — every page includes `<script src="/nav.js" defer>`; it injects its own `<style>` + builds, into `<body>`: the **Bliss desktop** wallpaper, **draggable desktop icons** (Notepad + the 5 profiles; icons drag freely within a visit but positions are DELIBERATELY not persisted, since the stored layout was read back in states that couldn't honour it and came back as a stack), the **taskbar** (Start orb → Run, first-level-subpage app buttons each with a per-section SVG icon, clock via Temporal), and the **Run** command palette (⌘K / Start). Also owns the **OS-window model**: body is a clipping flex desktop, each `.window`/`.np-window` is pinned + its content scrolls internally behind a **custom XP scrollbar**, windows are **draggable** (top is a hard boundary) + **resizable**, and Navigations hard-cut: the cross-document View Transition this file used to describe was removed 2026-07-30 (prerender already made navigation instant, so the animation was pure added latency). Sets each first-level route's **tab favicon** to its section icon. Run destinations: pages + profiles inline; 158 photos lazy-loaded from `/images/manifest.json` with `/images/alt.json` captions. Wired into homepage + all garage pages + worker-gen `/around`,`/whoareyou`,`/bot` + serendipity shell. |
-| `www/quiz.js` | The **understanding-check** widget (deferred, shared, minified at deploy with a `/quiz.src.js` twin). Every garage + LWE content page ends with an active-recall quiz rendered by this one script from an inline `<script type="application/json" id="luq-data">` block: garage pages get an XP GroupBox self-test (`<section id="luq">` mount), LWE pages get the quiz as a continuation of the MSN chat (appended into `.log`, no mount). Misconception-based distractors, deterministic option shuffle, per-page best score in localStorage. The idea is Geoffrey Litt's "Understanding is the new bottleneck" (credited in the widget footer); /lens carries the same pedagogy in copy (predict-then-check mode notes, the Delta counterfactual lab as a Papert micro-world). |
-| `www/terminal.js` | The **Windows PowerShell** console at `/terminal`, and an actual **MCP client**: typing `dict <url>` sends the same `POST /mcp` `tools/call` an agent sends, and echoes the request before making it. Deliberately no private endpoints — if the console had its own, watching it would say nothing about what an agent gets and the two could drift unnoticed. The page server-renders one frame as boot output, so the route reads with JS off. Builds output with `createTextNode`, never `innerHTML`, because frames carry photo captions and third-party page titles. |
-| `www/_worker.js/terminal.js` + `lib/tui.js` | The tools and the 80-column frame renderer. Tools are TOP-LEVEL utilities (`/finger`, `/radar`, `/dict`, `/cache`), because this site puts utilities at the root and only content nests; `/terminal` is the console that DRIVES them, not their parent. The frame is a REPRESENTATION alongside `.md`: one URL answers HTML to a browser, the frame to everything else, and `<tool>.txt` explicitly. **The MCP tool name IS the route name** — what you type in the console, what you curl, and what an agent calls are one word, and a contract test asserts every tool with a route is reachable over MCP. State is query params (small and addressable), so frames fork, bookmark and replay. `lib/tui.js` is pure, which is what lets one renderer answer HTTP, MCP and `node --test`; its palette is MID-TONES ONLY because a terminal theme belongs to the visitor. |
+| `src/pages/index.html` | The whole page in one file. Inline CSS + JS. ~58KB uncompressed, ~15.4KB zstd (measured 2026-07-21 via live nav-timing; CF serves zstd, not brotli). Served on the shared `PAGE_CACHE_CONTROL` (`lib/const.js`) like every other document, + ETag, and still never `no-store` (the one directive that would cost the page bfcache). It held `private, no-cache, must-revalidate` through its SSR era and kept it after the SSR left; that cost two things at once, since no shared cache could store it (every front-door hit ran the worker) and Chromium refuses to keep a dictionary offered under `no-cache` (so `/` was the ONE page outside the per-page dcz tier). Changed 2026-07-31. Comments deliberately kept readable for View Source. |
+| `src/content/writing/` | Written content as plain `.txt` files + `posts.json` registry `[{slug,title,date}]`. The worker renders each as an XP **Notepad** window at `/writing/<slug>` (a server-rendered `<textarea>` seeded with the canonical text — editable by nature, ephemeral by nature: no save → reload restores canonical, "writing in flux"), plus a "My Writing" folder index at `/writing`. Raw `.txt` stays fetchable at `/writing/<slug>.txt`. Author a post = drop a `.txt` + a `posts.json` entry. Render code (`handleWritingIndex`/`handleWritingPost`/`NOTEPAD_CSS`) lives in `_worker.js`. |
+| `src/client/notepad.js` | Behavior for the `/writing` Notepad view (deferred, SW-cached): per-window `enhance()` wiring File/Edit/Format/View/Help menus, live Ln/Col + word-count status bar, Word-Wrap toggle, the classic **F5 time/date** stamp (Temporal w/ Date fallback), Select All, Print, About. Also opens folder notes as **popovers** that composite over the folder index, deliberately without touching the address bar (notes are `popover="manual"`, so several stay open at once and one URL couldn't honestly name three windows; Esc closes the topmost). The permalink stays real: each row is an `<a href="/writing/<slug>">` the worker serves standalone, and a modified click passes through to it. Chrome itself is SSR'd by `_worker.js`. No-op without a `.np-window`. |
+| `src/client/tooltip.js` | Rich XP hover island for photos, tracks, artists, and car references. The homepage keeps only a tiny inline loader that idle-prefetches this module and replays a cold first hover; coarse-pointer visitors never load it. |
+| `src/client/infotip.js` | The same trick for every OTHER hover on the site. The rule is short: **any `[title]` is an infotip, wherever it lives** — taskbar app buttons, tray icons, the clock, desktop icons, title-bar controls, form fields, and titled links and controls in page bodies. All of them already bought the OS tooltip, so this is what that tooltip was hiding: a pin's page count (from nav.js's own destination table), the tray's live colo/build (the same JSON its click-balloon fetches), the clock's full date, a citation link's destination host. It re-draws `title` rather than replacing it: emptied on hover, restored on leave, so AT still reads it at focus and a page with no JS keeps the native tooltip. `[data-tip]` is the opt-in for a control that never had one. **Four richer surfaces are skipped by name** (`.lx-term`, `.photos a`, `.np-list li`, `.np-artist-link`, `.car-link`, `.ev[data-cover]`) because each already draws its own card from the same engine; `.lx-term` is the sharp one, since those ship a `title` as their no-JS fallback and `lens.js` strips it once its own surface is live. **`nav.js` owns the matcher and passes the FUNCTION in**, not a selector each side keeps a copy of. Loads on the first hover that has a tip, never on a coarse pointer. Windows' two delays live in `hoist.js` now (`openMs` 400 cold-dwell, `autopopMs` 6s), both defaulting OFF so the content hover CARDS keep the instant show they were tuned for. |
+| `src/client/nav.js` | Site-wide XP **desktop shell**. The ONE shared external asset (deferred, SW-cached) — every page includes `<script src="/nav.js" defer>`; it injects its own `<style>` + builds, into `<body>`: the **Bliss desktop** wallpaper, **draggable desktop icons** (Notepad + the 5 profiles; icons drag freely within a visit but positions are DELIBERATELY not persisted, since the stored layout was read back in states that couldn't honour it and came back as a stack), the **taskbar** (Start orb → Run, first-level-subpage app buttons each with a per-section SVG icon, clock via Temporal), and the **Run** command palette (⌘K / Start). Also owns the **OS-window model**: body is a clipping flex desktop, each `.window`/`.np-window` is pinned + its content scrolls internally behind a **custom XP scrollbar**, windows are **draggable** (top is a hard boundary) + **resizable**, and Navigations hard-cut: the cross-document View Transition this file used to describe was removed 2026-07-30 (prerender already made navigation instant, so the animation was pure added latency). Sets each first-level route's **tab favicon** to its section icon. Run destinations: pages + profiles inline; 158 photos lazy-loaded from `/images/manifest.json` with `/images/alt.json` captions. Wired into homepage + all garage pages + worker-gen `/around`,`/whoareyou`,`/bot` + serendipity shell. |
+| `src/client/quiz.js` | The **understanding-check** widget (deferred, shared, minified at deploy with a `/quiz.src.js` twin). Every garage + LWE content page ends with an active-recall quiz rendered by this one script from an inline `<script type="application/json" id="luq-data">` block: garage pages get an XP GroupBox self-test (`<section id="luq">` mount), LWE pages get the quiz as a continuation of the MSN chat (appended into `.log`, no mount). Misconception-based distractors, deterministic option shuffle, per-page best score in localStorage. The idea is Geoffrey Litt's "Understanding is the new bottleneck" (credited in the widget footer); /lens carries the same pedagogy in copy (predict-then-check mode notes, the Delta counterfactual lab as a Papert micro-world). |
+| `public/terminal.js` | The **Windows PowerShell** console at `/terminal`, and an actual **MCP client**: typing `dict <url>` sends the same `POST /mcp` `tools/call` an agent sends, and echoes the request before making it. Deliberately no private endpoints — if the console had its own, watching it would say nothing about what an agent gets and the two could drift unnoticed. The page server-renders one frame as boot output, so the route reads with JS off. Builds output with `createTextNode`, never `innerHTML`, because frames carry photo captions and third-party page titles. |
+| `src/worker/terminal.ts` + `lib/tui.js` | The tools and the 80-column frame renderer. Tools are TOP-LEVEL utilities (`/finger`, `/radar`, `/dict`, `/cache`), because this site puts utilities at the root and only content nests; `/terminal` is the console that DRIVES them, not their parent. The frame is a REPRESENTATION alongside `.md`: one URL answers HTML to a browser, the frame to everything else, and `<tool>.txt` explicitly. **The MCP tool name IS the route name** — what you type in the console, what you curl, and what an agent calls are one word, and a contract test asserts every tool with a route is reachable over MCP. State is query params (small and addressable), so frames fork, bookmark and replay. `lib/tui.js` is pure, which is what lets one renderer answer HTTP, MCP and `node --test`; its palette is MID-TONES ONLY because a terminal theme belongs to the visitor. |
 | the `/terminal` window | It is a **console window, not a page**, and the difference is entirely in what was REMOVED. `lunaPage` gained `windowClass`/`contentClass`/`windowAttrs` (all defaulting to empty, so the other nine callers are byte-identical) and the window declares `data-no-histnav`, which `nav.js` honours by skipping the site-wide Back/Forward injection — those are BROWSER controls, and a console carrying them reads as a terminal running inside Internet Explorer. Drag, resize, maximize and close all stay, because those are OS chrome. There is also nothing below the window: the explanatory paragraph that used to sit there was the single strongest tell, since real consoles do not come with a caption. Width is 624px so the console is exactly 80 columns, the size a real one opens at; left at the 760px page default it carried 136px of dead field to the right of every frame. Fonts stay on the design system — `"Lucida Console", var(--font-mono)`, one native Windows font in front of the existing token, no `@font-face`, no bytes. |
-| `www/_worker.js` | The module worker (bundled by wrangler at deploy). Owns routing, photo serving from R2, manifest building, Spotify playlist scraping, AadharshBot crawler, the `/writing` Notepad pages, cache-control overrides. |
-| `www/_headers` | Static-asset cache + security headers (CSP, Permissions-Policy, etc.). Applied to direct static-asset requests; the worker overrides cache-control for select paths. |
-| `www/sw.js` | RETIRED (v136, 2026-07-03): now a ~15-line unregister stub (skipWaiting, delete caches, claim, unregister) that must keep serving 200 for a year+ so installed copies clean themselves up. No CACHE_VERSION anymore; the deploy-log vnum is staged in `checkpoints.json` and recorded in D1 by the ramp (bump-version.sh mints the next from that projection). Repeat-visit speed comes from immutable assets + bfcache + speculation prerender. |
-| `www/llms.txt` | The llms.txt format — concise site summary for LLMs. Linked from `<link rel="alternate">`. |
-| `www/index.md` | Markdown source of homepage copy (used by `/llms.txt` and as a fallback). The one COMMITTED Markdown twin: `gen-md-twins.mjs` skips any path that already has one, so this hand-written prose is never regenerated over. |
-| `www/md/` | Hand-authored Markdown twins for the three Worker-rendered prose pages, `/bot`, `/whoareyou` and `/security`, whose text lives in template literals no build step can read. `.assetsignore`d (build input, not a public URL): the generator publishes them at `/bot.md`, `/whoareyou.md` and `/security.md`. `checkTwinFacts()` pins the load-bearing strings against the Worker in BOTH directions, so bumping `BOT_VERSION` fails the deploy until `bot.md` agrees. `security.md`'s pins read `lib/security.js` rather than the page, since a page ABOUT headers must agree with the module that SENDS them; one of them is derived from `ENFORCE_PAGE_HASHES`, so finishing the hashed-CSP rollout fails the deploy until the twin stops calling the policy report-only. |
-| `www/sitemap.xml`, `robots.txt` | Standard SEO files. robots.txt explicitly allows AadharshBot. |
+| `src/worker` | The module worker (bundled by wrangler at deploy). Owns routing, photo serving from R2, manifest building, Spotify playlist scraping, AadharshBot crawler, the `/writing` Notepad pages, cache-control overrides. |
+| `public/_headers` | Static-asset cache + security headers (CSP, Permissions-Policy, etc.). Applied to direct static-asset requests; the worker overrides cache-control for select paths. |
+| `src/client/sw.js` | RETIRED (v136, 2026-07-03): now a ~15-line unregister stub (skipWaiting, delete caches, claim, unregister) that must keep serving 200 for a year+ so installed copies clean themselves up. No CACHE_VERSION anymore; the deploy-log vnum is staged in `checkpoints.json` and recorded in D1 by the ramp (bump-version.ts mints the next from that projection). Repeat-visit speed comes from immutable assets + bfcache + speculation prerender. |
+| `public/llms.txt` | The llms.txt format — concise site summary for LLMs. Linked from `<link rel="alternate">`. |
+| `src/content/index.md` | Markdown source of homepage copy (used by `/llms.txt` and as a fallback). The one COMMITTED Markdown twin: `gen-md-twins.mjs` skips any path that already has one, so this hand-written prose is never regenerated over. |
+| `src/content/md/` | Hand-authored Markdown twins for the three Worker-rendered prose pages, `/bot`, `/whoareyou` and `/security`, whose text lives in template literals no build step can read. `.assetsignore`d (build input, not a public URL): the generator publishes them at `/bot.md`, `/whoareyou.md` and `/security.md`. `checkTwinFacts()` pins the load-bearing strings against the Worker in BOTH directions, so bumping `BOT_VERSION` fails the deploy until `bot.md` agrees. `security.md`'s pins read `lib/security.js` rather than the page, since a page ABOUT headers must agree with the module that SENDS them; one of them is derived from `ENFORCE_PAGE_HASHES`, so finishing the hashed-CSP rollout fails the deploy until the twin stops calling the policy report-only. |
+| `public/sitemap.xml`, `robots.txt` | Standard SEO files. robots.txt explicitly allows AadharshBot. |
 | `www/.well-known/http-message-signatures-directory` | JWKS for AadharshBot's Ed25519 public key (Web Bot Auth IETF draft). |
-| `www/images/` + `www/i/` | `images/` holds the photo DATA surfaces: `metadata.json` (the EXIF RECORD, long field names + the Fuji recipe card), `exif.json` (the tooltip's TEXT tier: every photo's short-key EXIF in one 2.6KB-brotli file, warmed once on idle because the homepage draws a fresh random 12 of 158 per request and a per-slot warm-up was cold nearly every visit), `meta/<stem>.json` (per-photo EXIF plus the four 64-bin histogram channels — the BARS tier, fetched only on the hover that needs them, and the self-healing fallback for a stem missing from a cached `exif.json`), `alt.json` (AI captions), `hashes.json` (stem to hash8 map). The pixel tiers (600px AVIF+JPG squares + 400px mobile AVIF) live in `i/` under content-hashed names, 474 files for 158 photos. |
-| `www/og/` | Pre-baked 1200x630 OG/Twitter cards, one per garage + lwe page (`<section>-<name>.png`): the page's live demo floated on the Bliss desktop under the page's own favicon as a brand stamp, so a shared link unfurls as the interaction rather than a bare title. **There is no route label on the card**, and this row said there was until 2026-08-15: the generator's own header comment has described a "translucent XP dock naming the route" since #55 while the card template has never rendered one, and the claim was copied here. Wired via `og:image`/`twitter:card` in each page's `<head>` (edge-direct static pages can't be worker-injected). Built by `www/scripts/gen-og-cards.mjs` (playwright-core → Chrome, captures production for live data); meta added by `www/scripts/inject-og-meta.mjs`. **Both paths read `scripts/` here until the same date**, which is the split the layout table above draws and costs a `No such file` to anyone following this row. Regen recipe in MAINTENANCE.md. Cached 30d, deploy purges the edge. |
-| `www/scripts/` | Photo-pipeline + asset scripts (see below). Beyond the core pipeline (`add-photos.sh`, `extract-photo-metadata.sh`, `check-photo-pipeline.mjs`, `zenc/` the JPEG encoder crate): `add-car-photo.sh` (one resto-mod reference photo into the dual AVIF+JPG pair the car-link tooltips expect, output `www/cars/<stem>.{avif,jpg}`, no EXIF/R2); `gen-alt-text.py` (AI alt text for every grid photo, writes `www/images/alt.json` `{stem: alt}`, resumable; run by `add-photos.sh` phase 4 — posts the committed `i/` thumbnail bytes to Workers AI when `CLOUDFLARE_API_TOKEN` is set so a brand-new photo captions pre-deploy, else falls back to the cf-garage `/garage/cf/caption` endpoint by stem, which only sees deployed photos); `gen-encoding-samples.sh` (regenerates the color sample set for the `/garage/encoding` study through every encoder, prints byte counts + bytes-per-pixel); `reencode-thumbnails.sh` (re-encodes all published grid thumbnails as pre-cropped center squares from the canonical source folder, two square tiers); `gen-pixel-peeper.py` (the one remaining Pillow consumer, a one-off generator for the /pixel-peeper comparison frames; NOT part of add-photos.sh). The four 64-bin RGB/luminance channels are baked by `zenc histogram`, inside the encoder crate, since 2026-08-14. |
+| `public/images/` + `public/i/` | `images/` holds the photo DATA surfaces: `metadata.json` (the EXIF RECORD, long field names + the Fuji recipe card), `exif.json` (the tooltip's TEXT tier: every photo's short-key EXIF in one 2.6KB-brotli file, warmed once on idle because the homepage draws a fresh random 12 of 158 per request and a per-slot warm-up was cold nearly every visit), `meta/<stem>.json` (per-photo EXIF plus the four 64-bin histogram channels — the BARS tier, fetched only on the hover that needs them, and the self-healing fallback for a stem missing from a cached `exif.json`), `alt.json` (AI captions), `hashes.json` (stem to hash8 map). The pixel tiers (600px AVIF+JPG squares + 400px mobile AVIF) live in `i/` under content-hashed names, 474 files for 158 photos. |
+| `public/og/` | Pre-baked 1200x630 OG/Twitter cards, one per garage + lwe page (`<section>-<name>.png`): the page's live demo floated on the Bliss desktop under the page's own favicon as a brand stamp, so a shared link unfurls as the interaction rather than a bare title. **There is no route label on the card**, and this row said there was until 2026-08-15: the generator's own header comment has described a "translucent XP dock naming the route" since #55 while the card template has never rendered one, and the claim was copied here. Wired via `og:image`/`twitter:card` in each page's `<head>` (edge-direct static pages can't be worker-injected). Built by `tools/photos/gen-og-cards.mjs` (playwright-core → Chrome, captures production for live data); meta added by `tools/photos/inject-og-meta.mjs`. **Both paths read `scripts/` here until the same date**, which is the split the layout table above draws and costs a `No such file` to anyone following this row. Regen recipe in MAINTENANCE.md. Cached 30d, deploy purges the edge. |
+| `tools/photos/` | Photo-pipeline + asset scripts (see below). Beyond the core pipeline (`add-photos.ts`, `extract-photo-metadata.ts`, `check-photo-pipeline.mjs`, `zenc/` the JPEG encoder crate): `add-car-photo.sh` (one resto-mod reference photo into the dual AVIF+JPG pair the car-link tooltips expect, output `public/cars/<stem>.{avif,jpg}`, no EXIF/R2); `gen-alt-text.py` (AI alt text for every grid photo, writes `public/images/alt.json` `{stem: alt}`, resumable; run by `add-photos.ts` phase 4 — posts the committed `i/` thumbnail bytes to Workers AI when `CLOUDFLARE_API_TOKEN` is set so a brand-new photo captions pre-deploy, else falls back to the cf-garage `/garage/cf/caption` endpoint by stem, which only sees deployed photos); `gen-encoding-samples.ts` (regenerates the color sample set for the `/garage/encoding` study through every encoder, prints byte counts + bytes-per-pixel); `reencode-thumbnails.ts` (re-encodes all published grid thumbnails as pre-cropped center squares from the canonical source folder, two square tiers); `gen-pixel-peeper.py` (the one remaining Pillow consumer, a one-off generator for the /pixel-peeper comparison frames; NOT part of add-photos.ts). The four 64-bin RGB/luminance channels are baked by `zenc histogram`, inside the encoder crate, since 2026-08-14. |
 
 ### The photo pipeline
 
@@ -829,7 +840,7 @@ Single-page personal site at `aadhar.sh`. A Cloudflare Worker with static assets
 SOOC original (in /Users/aadharsh/Downloads/to post (from ssd)/)
    |
    v
-[add-photos.sh] — resize, rotate, encode:
+[add-photos.ts] — resize, rotate, encode:
    |   1. sips: resize to 1200px + format-convert (handles HEIF/HIF)
    |   2. jpegtran -rotate N (lossless EXIF orientation, mozjpeg's tool)
    |   3. zenc -q 84 (zenjpeg hybrid trellis + progressive scan search; ~4%
@@ -838,10 +849,10 @@ SOOC original (in /Users/aadharsh/Downloads/to post (from ssd)/)
    |      8-bit; sips formatOptions 60 fallback) — primary
    |
    v
-www/images/<stem>.{avif,jpg}  +  R2 aadhar-photos/<filename>
+public/images/<stem>.{avif,jpg}  +  R2 aadhar-photos/<filename>
    |
    v
-[extract-photo-metadata.sh] generates www/images/metadata.json
+[extract-photo-metadata.ts] generates public/images/metadata.json
    |   keyed by stem (not filename), orientation-corrected width/height.
    |   pulls Fuji recipe (FilmMode, DynamicRange, ColorChrome FX +Blue,
    |   Grain roughness + size, tone curves, saturation) plus standard
@@ -856,7 +867,7 @@ www/images/<stem>.{avif,jpg}  +  R2 aadhar-photos/<filename>
    |   that are null rather than fabricate. never guess metadata.
    |
    v
-[gen-alt-text.py] captions any stem missing one -> www/images/alt.json
+[gen-alt-text.py] captions any stem missing one -> public/images/alt.json
    |   with CLOUDFLARE_API_TOKEN set it posts the committed i/ thumbnail
    |   bytes to Workers AI, so a photo added seconds ago captions here
    |   instead of waiting for a deploy. check-photo-pipeline.mjs then
@@ -867,11 +878,11 @@ Two encoders + one transform tool, all built from source:
 
 - **mozjpeg** (`brew install mozjpeg`, keg-only at `/opt/homebrew/opt/mozjpeg/`)
   — provides `jpegtran` for lossless EXIF-orientation rotation.
-- **zenc** (`www/scripts/zenc/`, a Rust crate wrapping
+- **zenc** (`tools/photos/zenc/`, a Rust crate wrapping
   `github.com/imazen/zenjpeg`) — the JPEG universal-fallback encoder: hybrid
   trellis + 64-candidate progressive scan search + sharp_yuv chroma, ~4% under the
   retired cjpegli at equal quality. Builds with `cargo`; dependabot tracks the
-  zenjpeg pin. Replaced the from-source jpegli build (2026-07). See `www/scripts/zenc/src/main.rs`.
+  zenjpeg pin. Replaced the from-source jpegli build (2026-07). See `tools/photos/zenc/src/main.rs`.
 - **libavif** (`brew install libavif`, optional) — `avifenc` for the
   primary AVIF thumbnail. Falls back to `sips -s format avif` (macOS
   native, no extra dep) when avifenc isn't installed.
@@ -910,11 +921,11 @@ Two encoders + one transform tool, all built from source:
 - **Pillow, via uv** (`brew install uv`, then `pnpm run photos:env`) — required by
   `gen-pixel-peeper.py` alone, which is a one-off generator rather than part of
   this pipeline. The 64-bin RGB/luminance bake moved into `zenc histogram` on
-  2026-08-14, so nothing in add-photos.sh or extract-photo-metadata.sh needs it.
-  It installs into a venv at `www/scripts/.venv` rather than the system
+  2026-08-14, so nothing in add-photos.ts or extract-photo-metadata.ts needs it.
+  It installs into a venv at `tools/photos/.venv` rather than the system
   interpreter, because Homebrew's python3 is PEP 668 **externally managed** and
   refuses `pip install` outright: the documented recipe here was
-  `python3 -m pip install -r www/scripts/requirements.txt` and it had stopped
+  `python3 -m pip install -r tools/photos/requirements.txt` and it had stopped
   working, measured 2026-08-14. CI has always built its own venv in `RUNNER_TEMP`;
   this is the local half of the same idea. Since the zenc move, a missing Pillow
   costs one study page's regeneration rather than the histograms on 158 photos.
@@ -925,10 +936,10 @@ one of them was undocumented until `tools:check` went looking (2026-08-14):
 - **webp** (`brew install webp`) — `cwebp` draws the WebP point on both
   `/garage/encoding` grids.
 - **ffmpeg** (`brew install ffmpeg`) — one PNG-to-PPM conversion in
-  `gen-encoding-grids.sh`, because `cjpeg` will not read PNG and sips' BMP
+  `gen-encoding-grids.ts`, because `cjpeg` will not read PNG and sips' BMP
   output confuses it.
 - **ssimulacra2** and **butteraugli_main** — the two perceptual metrics
-  `export-for-instagram.sh` searches quality against. These are libjxl TOOLS,
+  `export-for-instagram.ts` searches quality against. These are libjxl TOOLS,
   built with `-DJPEGXL_ENABLE_TOOLS=ON`, and **`brew install jpeg-xl` does not
   ship them**, which is why the script falls back to `/opt/zerobrew/prefix/bin`.
   The error message in that script names the formula rather than the tools and
@@ -969,9 +980,9 @@ content-hashed URLs (cutover 2026-07-03):
 </a>
 ```
 
-**A URL names exact bytes.** `scripts/hash-thumbnails.sh` (run by
-add-photos.sh) sha256-hashes each tier into `www/i/` and writes
-`www/images/hashes.json`, which `buildImagesManifest` bakes into the
+**A URL names exact bytes.** `tools/hash-thumbnails.ts` (run by
+add-photos.ts) sha256-hashes each tier into `public/i/` and writes
+`public/images/hashes.json`, which `buildImagesManifest` bakes into the
 manifest's absolute `thumb_avif`/`thumb_jpg`/`thumb_small` URLs. `/i/*` is
 edge-direct + immutable-1y; a re-encode mints a new URL, so there is no
 global version bump and no way for a cached 404 to shadow real bytes.
@@ -1035,7 +1046,7 @@ Renaming or moving a page used to leave every page LINKING to it pointing at a
 TOLD about, which is the forward direction. Build invariant #1 asserts the
 Worker's routes reach `run_worker_first`. Neither one reads an href.
 
-**`scripts/lib/link-integrity.mjs`, run as a build invariant, closes that.** Every
+**`tools/lib/link-integrity.mjs`, run as a build invariant, closes that.** Every
 same-origin `href`/`src` in the minified documents has to resolve to a real staged
 file, a `<path>.html`, a Worker `ROUTES` key, a registered surface, or a dynamic
 namespace. 2645 refs across 48 documents in ~45ms, so it is COMPLETE rather than
@@ -1069,7 +1080,7 @@ What this does NOT cover, deliberately:
 - **Off-origin links.** A dead third-party URL is a different job and needs the
   network.
 
-### Markdown twins (`scripts/gen-md-twins.mjs`)
+### Markdown twins (`tools/gen-md-twins.mjs`)
 
 Every page with prose ships a Markdown twin at `<path>.md`, and the two big
 sections carry their own `llms.txt`. `/garage/encoding` and
@@ -1077,13 +1088,13 @@ sections carry their own `llms.txt`. `/garage/encoding` and
 garage pages so an agent does not have to pull the whole root index to find one.
 
 **Twins are BUILD OUTPUT, never committed.** `build.mjs` step 1c generates them
-from the readable source in `www/` into `.build/www/`. A twin is a pure
+from the readable source in `www/` into `.build/public/`. A twin is a pure
 function of the page's bytes, so there is no committed copy that can fall behind
 and no step anyone can forget. Same argument the dcz deltas won. It reads the
 SOURCE tree deliberately: the staged copy is about to be rewritten (client edge,
 hashed asset refs) and `index.html` minified, none of which belongs in a twin.
 
-Two rules the converter (`scripts/lib/html-to-md.mjs`) exists to enforce:
+Two rules the converter (`tools/lib/html-to-md.mjs`) exists to enforce:
 
 1. **`<script>` bodies never reach the tree.** Every garage/lwe page carries a
    `<script type="application/json" id="luq-data">` holding the understanding
@@ -1156,7 +1167,7 @@ per RFC 9421 + Web Bot Auth IETF draft. JWKS at
 
 ### `/mcp` — dual-era, and why both eras are served
 
-`www/_worker.js/mcp.js` speaks **2026-07-28** and the three legacy revisions
+`src/worker/mcp.ts` speaks **2026-07-28** and the three legacy revisions
 (`2025-06-18`, `2025-03-26`, `2024-11-05`) on one endpoint. The spec sanctions
 this explicitly, and the client's opening move picks the era: a request carrying
 per-request `_meta` is served statelessly under the new revision, an `initialize`
@@ -1200,7 +1211,7 @@ Three deliberate deviations, all written down at the code:
    different jobs, and the strict half of the ecosystem does require the header:
    measured 2026-08-14, `mcp.context7.com` and `docs.mcp.cloudflare.com` both
    answer 400 `-32020` without it and 200 with it. So `foreignMcpTools()` in
-   [`lib/doors.js`](www/_worker.js/lib/doors.js), the one MCP client this site
+   [`lib/doors.js`](src/worker/lib/doors.ts), the one MCP client this site
    has, SENDS `Mcp-Method` and derives it from the same constant as the body so
    the two cannot disagree. It also offers BOTH framings on `Accept`, because a
    Streamable HTTP server may answer JSON or an SSE stream at its own discretion
@@ -1265,7 +1276,7 @@ Three deliberate deviations, all written down at the code:
 (`serendipity/serendipity.js`) is a separate server with different tools and no
 shared data, but the wire rules — versions, `_meta` keys, `resultType`, cache
 hints, error codes, the header check, the version gate — live once in
-[`lib/mcp-protocol.js`](www/_worker.js/lib/mcp-protocol.js) and both import
+[`lib/mcp-protocol.js`](src/worker/lib/mcp-protocol.ts) and both import
 it. Two MCP servers on one origin speaking different dialects is a bug a client
 author reports to you rather than one you find yourself.
 
@@ -1408,7 +1419,7 @@ generic hex back.
 - **ASSETS** — the Workers static-assets binding (wrangler.jsonc `assets`), serves files from www/.
 - **RESTORE_DB** — D1 database `aadhar-restore` (id `88c8daf1-3a36-4f8e-a2ad-dba8a74e1b9f`),
   the **single source of truth for the deploy log**. One row per logged deploy
-  (written by the ramp at 100%, staged by bump-version.sh; the retired SW's
+  (written by the ramp at 100%, staged by bump-version.ts; the retired SW's
   `CACHE_VERSION` used to carry the number), seeded from git history. BOTH `/restore` (the restore-point
   scrubber + "You are here" banner) AND `/updates` (Windows Update changelog + running
   build) read this one `checkpoints` table, so they cannot drift apart. Schema:
@@ -1417,7 +1428,7 @@ generic hex back.
   **Configured in `wrangler.jsonc`** (d1_databases), like every other binding
   since the Workers migration.
   **Log a deploy** (so both pages stay current):
-  `./www/scripts/bump-version.sh <slug> "<title>"`, run INSIDE the PR being
+  `bun tools/photos/bump-version.ts <slug> "<title>"`, run INSIDE the PR being
   released, then commit the file it writes.
 
   **It writes ONE FILE and touches no D1, which is the reverse of what this said
@@ -1425,7 +1436,7 @@ generic hex back.
   MAX(vnum)` and inserts the checkpoint, no file edit") described the behaviour
   the script's own header explains it abandoned, so anyone following it went
   looking for a D1 row that nothing had written. It appends to
-  `www/_worker.js/checkpoints.json`, mints the vnum from that projection, and
+  `src/worker/checkpoints.json`, mints the vnum from that projection, and
   needs no network or credential. `deploy:promote` writes the D1 row once traffic
   actually reaches 100%, which is the only thing that knows the release shipped.
   The ordering matters: `/updates` and `/restore` render the projection at BUILD
@@ -1525,7 +1536,7 @@ generic hex back.
   **`/lens/browser?do=<recipe>` runs a FIXED script in the page before reading
   it**, which is how the Browser view answers "what does a machine see once the
   consent wall is gone". Two recipes ship, `expand` and `consent`, both
-  synchronous, in [`lens-recipes.js`](www/_worker.js/lens-recipes.js).
+  synchronous, in [`lens-recipes.js`](src/worker/lens-recipes.ts).
   `?recipes=1` publishes the whole allowlist verbatim, and a contract test pins
   the published script to the executed one.
 
@@ -1578,7 +1589,7 @@ generic hex back.
   and the receipt falls off a large page, so the run reports as never having
   happened.
 
-  `scripts/lens-inject-probe.mjs` is this feature's control, in the same idiom as
+  `tools/lens-inject-probe.mjs` is this feature's control, in the same idiom as
   `kitesurf:check`: does the engine execute an injection, is the capture after
   it, and does `waitForTimeout` land after injection. That last one is the gate
   on any future ASYNC recipe; both shipping recipes are synchronous, so v1 sends
@@ -1642,7 +1653,7 @@ of a document is the article, and how badly that goes on a page that is not one.
 Measured 2026-08-14 on the live Worker: stripe.com loses 64% of its words and its hero
 headline; Wikipedia loses 5%, which is an extractor doing its job; `/garage/horizon`
 loses 2% and hands over **3 of 26 control labels** as prose. That last number is the
-same failure `scripts/lib/html-to-md.mjs` rule 2 exists to refuse, which is why the
+same failure `tools/lib/html-to-md.mjs` rule 2 exists to refuse, which is why the
 twins still use the hand-rolled converter.
 
 **THE EXTRACTOR WAS SWAPPED FOR THAT NUMBER, and the decision came out of running both
@@ -1854,7 +1865,7 @@ from this account's IP and under AadharshBot's signature, which is the argument
 asserts the pane makes exactly one request, to our own route, and that
 `_worker.js/lens-tools.js` never names `tools/call` and never calls `fetch`.
 
-Three rules decide the planner in `www/lens-tools.js`, and the first is the one
+Three rules decide the planner in `src/client/lens-tools.js`, and the first is the one
 that keeps it honest:
 
 1. **Never lie about the schema.** `oneOf`, `anyOf`, `$ref`, type unions, tuple
@@ -1868,7 +1879,7 @@ that keeps it honest:
    blank optional is omitted rather than sent as `""`.
 3. **Bounded and untrusting.** Depth, property and option caps, and the controls
    are built with `createElement` and `textContent`, because every string in
-   them came from a stranger's server. Same rule `www/terminal.js` follows for
+   them came from a stranger's server. Same rule `public/terminal.js` follows for
    third-party page titles.
 
 `foreignMcpTools` grew an `opts.schemas` flag, OFF by default: the three
@@ -2032,7 +2043,7 @@ it before treating anything in there as a target.
    and stale HTML.
 
    `wrangler.jsonc` self-builds and points both `main` and `assets` at
-   `.build/www`, so no deploy path can ship the readable originals. Local
+   `.build/public`, so no deploy path can ship the readable originals. Local
    development uses `wrangler.dev.jsonc` against readable `www/`. Never bundle
    or extend the build without the owner's say-so. `luna.css` was owner-approved
    for its measured render-blocking win; the `/a/` content hashing was approved to
@@ -2146,7 +2157,7 @@ pnpm run deploy:direct
    content-addressed `/i/` URL by itself, so there is no version to bump.
 
 2. **zsh doesn't word-split unquoted parameters** — bash does. The
-   `add-photos.sh` script uses `#!/usr/bin/env bash` so this isn't a problem
+   `add-photos.ts` script uses `#!/usr/bin/env bash` so this isn't a problem
    inside the script, but **ad-hoc shell snippets** run in interactive zsh
    need `${=flag}` to force splitting. Caught this when `jpegtran -copy none $flag`
    passed `"-rotate 270"` as a single argv element.
@@ -2343,7 +2354,7 @@ pnpm run deploy:direct
     step to forget, and no staleness tripwire needed, because a delta is a pure
     function of bytes the build just produced.
 
-    What still has to be committed is `www/a-dict/`, the SHELL dictionary set,
+    What still has to be committed is `src/dict/a-dict/`, the SHELL dictionary set,
     because an `/a/` asset is content-addressed: a change mints a new URL, so its
     dictionary must be bytes the BROWSER already holds and no build can derive that
     from source. `pnpm run shell:roll` adopts the current shell and prunes to 3 per
@@ -2370,7 +2381,7 @@ pnpm run deploy:direct
     from the staged documents, ships it at an immutable `/a/page-family.<hash8>.dict`,
     and every HTML response advertises it via `Link: rel="compression-dictionary"`
     (`lib/security.js`). It also diffs the current page against the committed
-    `www/p-dict` snapshots from the previous release. The worker tries the
+    `public/p-dict` snapshots from the previous release. The worker tries the
     `Available-Dictionary` tag it receives. The family offer deliberately uses a
     longer site-wide URLPattern than an exact page path, so RFC 9842 makes it the
     preferred dictionary whenever both are cached; this prevents an uncaptured old
@@ -2386,7 +2397,7 @@ pnpm run deploy:direct
     works.** `p-dict` has always fetched the LIVE pages, because an edge feature can
     rewrite a document after this Worker and a snapshot derived from source then
     matches nothing (gotcha 20, the WebMCP instance and the measurement). `a-dict`
-    adopted from `.build/www/a`, which was never WRONG the same way (nothing
+    adopted from `.build/public/a`, which was never WRONG the same way (nothing
     rewrites js/css at the edge) but forced the roll to run from the deployed
     commit. `pnpm run dict:roll` passes `--live` so the shell half reads production
     too. That buys two things: a roll can run from anywhere, including a scheduled
@@ -2409,12 +2420,12 @@ pnpm run deploy:direct
     server-side proven (149-byte page delta decodes to the live page), svg OFF by
     design (Chromium's image loader chokes). `pnpm run dcz:check` asserts both page
     tiers against production, reading the family dictionary out of the live `Link`
-    header and the per-page candidate from `www/p-dict`. With `pnpm run dict:roll`
+    header and the per-page candidate from `public/p-dict`. With `pnpm run dict:roll`
     the source is production for both halves, so the old "roll only from the deployed
     build, never from a feature branch" rule is satisfied by construction rather than
     by remembering it. Plain `shell:roll` still reads `.build/` and still carries that
-    requirement. (Either writes into `www/a-dict/` the moment it runs, so if you run one
-    to read the code, `git checkout -- www/a-dict` after.)
+    requirement. (Either writes into `src/dict/a-dict/` the moment it runs, so if you run one
+    to read the code, `git checkout -- public/a-dict` after.)
 
     **`dcz:check`'s shell probe could only ever agree with itself, and the coverage
     assertion beside it is the fix.** The probe picks an a-dict candidate that is NOT
@@ -2462,7 +2473,7 @@ pnpm run deploy:direct
     BEFORE DCL, mid-stream. Confirm any paint claim against a real window.
 
 16. **Only `_worker.js/index.js` may `import ... from "cloudflare:workers"`.**
-    Everything else in `www/_worker.js/` and `cal/src/` is ALSO imported by
+    Everything else in `src/worker/` and `cal/src/` is ALSO imported by
     `contract-tests.mjs` under plain node (`node --test`), and node's ESM loader
     rejects the `cloudflare:` scheme at LINK time with
     `ERR_UNSUPPORTED_ESM_URL_SCHEME`. That kills the entire 57-test suite at
@@ -2660,7 +2671,7 @@ pnpm run deploy:direct
     claim that "the edge cannot rewrite HTML it did not compress" is true of the
     zone-side Web Analytics injector and NOT true in general. Verify per feature.
 
-    What broke: `www/p-dict` snapshots were adopted from `.build/www/*.html`,
+    What broke: `public/p-dict` snapshots were adopted from `.build/public/*.html`,
     and a shared dictionary is matched by the SHA-256 a BROWSER computes over the
     body it stored. The staged file has no injected tag, so every snapshot hashed to
     bytes nobody held and the 93-97% per-page tier fell back to the family
@@ -2801,8 +2812,8 @@ pnpm run deploy:direct
 
 24. **The ramp writes the changelog from YOUR WORKING TREE, so pull `main` before
     you ramp.** `deploy:promote` decides what to log by reading the local
-    `www/_worker.js/checkpoints.json` and diffing it against D1
-    (`scripts/deploy-promote.mjs`, the `steps[last] === 100` block). Ramp from a
+    `src/worker/checkpoints.json` and diffing it against D1
+    (`tools/deploy-promote.mjs`, the `steps[last] === 100` block). Ramp from a
     tree that has not pulled the merge and the file it reads still ends at the
     previous release, so the diff is empty and the row is never written.
 
@@ -2849,7 +2860,7 @@ pnpm run deploy:direct
     A secret is a version (see the `versions secret put` note above), so
     `wrangler versions secret put|delete` mints one. That version is created by
     `create_version_api` and therefore carries **no `workers/alias`**. And since
-    #259, `newestVersion()` in `scripts/deploy-promote.mjs` filters candidates to
+    #259, `newestVersion()` in `tools/deploy-promote.mjs` filters candidates to
     the production alias, because ramping the newest version outright was a live
     way to walk another agent's branch build to 100%.
 
@@ -3538,7 +3549,7 @@ pnpm run deploy:direct
     by field path:
 
     ```
-    www/lwe/vigenere.html.understanding.questions[5].options[2].why:
+    public/lwe/vigenere.html.understanding.questions[5].options[2].why:
     contains not X, Y negation
     ```
 
@@ -3591,7 +3602,7 @@ pnpm run deploy:direct
     reported `visibilityState: "hidden"` between tool calls; a screenshot flips a
     tab visible just long enough to photograph it and it reverts. So a hover that
     lands on a real anchor and dwells four seconds produces nothing, which reads
-    exactly like a broken rule. `scripts/speculation-probe.mjs` exists because of
+    exactly like a broken rule. `tools/speculation-probe.mjs` exists because of
     this: it launches a real headful window through playwright-core, attaches no
     CDP session (gotcha 15), and prints a CONTROL line first.
 
@@ -3637,7 +3648,7 @@ pnpm run deploy:direct
 
 35. **A cosmetic lint fix to a CONTENT-HASHED asset costs 1400 files, and a
     comment costs nothing.** The same 2026-08-14 run wanted two useless escapes
-    out of `www/nav-run.js`. Correcting them moved `/a/nav-run.e943e545.js` to
+    out of `src/client/nav-run.js`. Correcting them moved `/a/nav-run.e943e545.js` to
     `/a/nav-run.b5389c82.js`, which re-minted every page referencing it, every
     per-page dictionary, `_headers`, and `shell-assets.js`.
 
@@ -3649,8 +3660,8 @@ pnpm run deploy:direct
     | edited | rebuilds |
     |---|---|
     | `scripts/**` | nothing |
-    | `www/_worker.js/**`, `cal/src/**`, `serendipity/` | that module alone |
-    | an unhashed client asset (`www/lwe/ask.js`) | that asset alone |
+    | `src/worker/**`, `cal/src/**`, `serendipity/` | that module alone |
+    | an unhashed client asset (`public/lwe/ask.js`) | that asset alone |
     | a HASHED client asset (`nav`, `nav-run`, `tooltip`, `lens*`, `hoist`, `quiz`, `notepad`, `luna.css`, …) | itself, every page, every page dictionary, `_headers` |
 
     **A comment is free on all of them**, because oxc-minify strips it and the
@@ -3805,7 +3816,7 @@ pnpm run deploy:direct
 
 The local mirror of the R2 originals lives at
 `/Users/aadharsh/Downloads/to post (from ssd)/` — that's what
-`extract-photo-metadata.sh` reads from, and what `add-photos.sh` accepts as
+`extract-photo-metadata.ts` reads from, and what `add-photos.ts` accepts as
 input. **Privacy rule: nothing else from elsewhere on disk.** The user has
 curated this folder; treat it as the canonical photo source.
 

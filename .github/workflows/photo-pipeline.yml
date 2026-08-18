@@ -50,18 +50,15 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Install pnpm
-        # No action, no digest to maintain: package.json's packageManager
-        # field is the source of truth and this pins the same version.
-        # Must precede setup-node, whose `cache: pnpm` needs pnpm on PATH.
-        run: npm install -g pnpm@11.21.0
+      - name: Set up bun
+        # config/bun-canary.json is the source of truth: the canary tag ROLLS,
+        # so the pin is the binary SHA-256 rather than the version string.
+        uses: ./.github/actions/setup-bun
 
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .node-version
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
 
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -87,12 +84,12 @@ jobs:
           echo "$RUNNER_TEMP/photo-venv/bin" >> "$GITHUB_PATH"
 
       - name: Install repository dependencies
-        run: pnpm install --frozen-lockfile
+        run: bun install --frozen-lockfile
 
       - name: Build the JPEG encoder (zenc)
         # zenjpeg hybrid + progressive scan search; Cargo.lock pins the graph,
         # dependabot tracks the zenjpeg version. macOS runners ship cargo.
-        run: cargo build --release --manifest-path www/scripts/zenc/Cargo.toml
+        run: cargo build --release --manifest-path tools/photos/zenc/Cargo.toml
 
       - name: Validate routine inputs
         run: |
@@ -123,7 +120,7 @@ jobs:
         run: |
           set -euo pipefail
           printf '%s\n' "$SOURCE_KEYS" > "$RUNNER_TEMP/photo-source-keys.txt"
-          ./www/scripts/download-remote-photos.sh \
+          bun tools/photos/download-remote-photos.ts \
             "$RUNNER_TEMP/photo-source-keys.txt" \
             "$RUNNER_TEMP/photo-source"
 
@@ -135,26 +132,26 @@ jobs:
           source_dir="$RUNNER_TEMP/photo-source"
           case "$ROUTINE" in
             add-photo)
-              pnpm run photos "$source_dir"
+              bun run photos "$source_dir"
               ;;
             reencode-thumbnails)
-              ./www/scripts/reencode-thumbnails.sh "$source_dir"
-              ./www/scripts/hash-thumbnails.sh
-              ./www/scripts/zenc/target/release/zenc histogram --root www
-              pnpm run photos:check
+              bun tools/photos/reencode-thumbnails.ts "$source_dir"
+              bun tools/photos/hash-thumbnails.ts
+              ./tools/photos/zenc/target/release/zenc histogram --root www
+              bun run photos:check
               ;;
             refresh-metadata)
-              ./www/scripts/extract-photo-metadata.sh --merge "$source_dir"
-              pnpm run photos:check
+              bun tools/photos/extract-photo-metadata.ts --merge "$source_dir"
+              bun run photos:check
               ;;
             add-car-photo)
               key="$(find "$source_dir" -type f -print -quit)"
               [ -n "$key" ] || { echo "no downloaded car source" >&2; exit 1; }
-              ./www/scripts/add-car-photo.sh "$CAR_STEM" "$key"
+              bun tools/photos/add-car-photo.ts "$CAR_STEM" "$key"
               ;;
             regenerate-encoding-study)
-              ./www/scripts/gen-encoding-samples.sh
-              ./www/scripts/gen-encoding-grids.sh
+              bun tools/photos/gen-encoding-samples.ts
+              bun tools/photos/gen-encoding-grids.ts
               ;;
           esac
 
@@ -167,11 +164,11 @@ jobs:
         run: |
           set -euo pipefail
           case "$ROUTINE" in
-            add-photo) paths=(www/images www/i); title="photos: process remote source batch";;
-            reencode-thumbnails) paths=(www/images www/i); title="photos: re-encode remote thumbnails";;
-            refresh-metadata) paths=(www/images); title="photos: refresh remote metadata";;
-            add-car-photo) paths=(www/cars); title="photos: update remote car image";;
-            regenerate-encoding-study) paths=(www/garage/enc); title="garage: regenerate remote encoding study";;
+            add-photo) paths=(public/images public/i); title="photos: process remote source batch";;
+            reencode-thumbnails) paths=(public/images public/i); title="photos: re-encode remote thumbnails";;
+            refresh-metadata) paths=(public/images); title="photos: refresh remote metadata";;
+            add-car-photo) paths=(public/cars); title="photos: update remote car image";;
+            regenerate-encoding-study) paths=(public/garage/enc); title="garage: regenerate remote encoding study";;
           esac
 
           branch="photos/remote-$GITHUB_RUN_ID"
@@ -196,6 +193,6 @@ jobs:
               '' \
               "Routine: $ROUTINE" \
               'Source: R2-backed public photo route' \
-              'Encoder: zenjpeg via www/scripts/zenc (Cargo-pinned, dependabot-tracked)' \
+              'Encoder: zenjpeg via tools/photos/zenc (Cargo-pinned, dependabot-tracked)' \
               '' \
               'The source files were downloaded to ephemeral runner storage only. Merge this PR through the normal CI and production-promotion path.')"

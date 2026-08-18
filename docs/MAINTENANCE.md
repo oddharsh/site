@@ -5,7 +5,7 @@ with the exact command and the gotcha that bit me last time. Deep design notes
 and the full conventions list live in [CLAUDE.md](CLAUDE.md); this is the ops sheet.
 
 One site Worker, with three source islands:
-- **www/** (aadhar.sh): the **Cloudflare Worker with static assets** (migrated off Pages 2026-06-30). Config is `wrangler.jsonc` at the repo root: it points `main` + `assets.directory` at `.build/www` and runs `build.mjs` via its `build.command`, so `assets.run_worker_first` (an allowlist mirroring the `ROUTES`/`PREFIX` tables in `index.js`; static is the default) applies to the built tree; `workers_dev:false` (custom domain only). **Production deploy: merge to `main`; GitHub CI promotes the exact tested commit to the machine-owned `production` branch, then Cloudflare Workers Builds deploys it.** The config self-builds, so the Workers Build Deploy command ships the minified tree; local dev uses `wrangler.dev.jsonc` (readable `www/`, fast reload). A local `wrangler deploy` is fallback-only. Verify after every deploy with `node scripts/verify-routes.mjs https://aadhar.sh` (now also asserts `/nav.js` minified + `.src` twins resolve). All site bindings live in `wrangler.jsonc`; secrets via `wrangler versions secret put`.
+- **www/** (aadhar.sh): the **Cloudflare Worker with static assets** (migrated off Pages 2026-06-30). Config is `wrangler.jsonc` at the repo root: it points `main` + `assets.directory` at `.build/public` and runs `build.mjs` via its `build.command`, so `assets.run_worker_first` (an allowlist mirroring the `ROUTES`/`PREFIX` tables in `index.js`; static is the default) applies to the built tree; `workers_dev:false` (custom domain only). **Production deploy: merge to `main`; GitHub CI promotes the exact tested commit to the machine-owned `production` branch, then Cloudflare Workers Builds deploys it.** The config self-builds, so the Workers Build Deploy command ships the minified tree; local dev uses `wrangler.dev.jsonc` (readable `www/`, fast reload). A local `wrangler deploy` is fallback-only. Verify after every deploy with `node tools/verify-routes.mjs https://aadhar.sh` (now also asserts `/nav.js` minified + `.src` twins resolve). All site bindings live in `wrangler.jsonc`; secrets via `wrangler versions secret put`.
 - **cal/** (coffee booking module): **LIVE** at `aadhar.sh/coffee`, dispatched by the same `aadhar-sh` Worker. Availability still serves from an SWR calendar snapshot (KV `cal:busy`, 2s upstream deadline, stale fallback); the GET page edge-caches 30s; booking fails closed if the calendar can't be vouched for. See [cal/README.md](cal/README.md). `cal/wrangler.test.toml` is test-only; it is not a deployment target.
 - **serendipity/** (event dashboard module): **LIVE** at `aadhar.sh/serendipity`, dispatched by the same `aadhar-sh` Worker. Its D1, secrets, route-specific CSP, and dashboard cache policy remain isolated in the module and shared root bindings.
 
@@ -207,8 +207,8 @@ neither `queries:` nor a threat model, so CodeQL's own defaults (`default` suite
 below depends on it.
 
 `rust` and `python` were dropped 2026-08-06. Between them they cost about 3 of the
-scan's 4 minutes to analyze four files: `www/scripts/zenc/src/main.rs` and the
-three `www/scripts/*.py` pipeline scripts. Every one of them is workstation and
+scan's 4 minutes to analyze four files: `tools/photos/zenc/src/main.rs` and the
+three `tools/photos/*.py` pipeline scripts. Every one of them is workstation and
 CI build tooling that runs before a deploy and never answers a request, while the
 configured threat model is `remote`. The Worker, which is the code an attacker can
 actually reach, is JavaScript and stays covered.
@@ -354,7 +354,7 @@ unservable and nothing said so.
 **A preview runs production bindings and secrets.** There is no per-version
 override in Cloudflare, so it is the same RN_KV, the same `aadhar-photos`
 bucket, the same three D1 databases, the same `RESEND_API_KEY`.
-`www/_worker.js/lib/preview.js` is what makes the URL safe to paste into a
+`src/worker/lib/preview.ts` is what makes the URL safe to paste into a
 PR:
 
 - every response gets `X-Robots-Tag: noindex, nofollow`, including redirects and
@@ -377,7 +377,7 @@ pnpm run dev:remote            # wrangler dev, KV/R2/Browser bindings remote
 pnpm run routes:check:remote   # the oracle, with those bindings
 ```
 
-Both derive a config with `scripts/gen-remote-config.mjs` and never commit it
+Both derive a config with `tools/gen-remote-config.mjs` and never commit it
 (`.wrangler.remote.jsonc`, gitignored). Your Worker code still runs locally; the
 binding calls hop to the real resource.
 
@@ -507,7 +507,7 @@ render, wider than the effect being measured):
 *Hole.* Cloudflare's default content-type list carries `text/x-markdown`, the
 pre-RFC name, and **not** `text/markdown`, the RFC 7763 type this site correctly
 serves. So every Markdown surface shipped uncompressed — `/index.md`, `/auth.md`,
-`/whoareyou.md`, `/bot.md`, and the `www/md/` twins. 12,302 bytes that brotli
+`/whoareyou.md`, `/bot.md`, and the `src/content/md/` twins. 12,302 bytes that brotli
 takes to 5,943, a 52% loss on exactly the surfaces built for agents and LLM
 crawlers, which prefer the `.md` representation. Serving `text/x-markdown` to win
 compression is the wrong fix: that is a deprecated type, and agents expect the
@@ -770,7 +770,7 @@ constant rots, and the baseline history in `perf-budget.mjs` is the receipt — 
 printed "hard checks green" over it. The 204.24 baseline set on 2026-08-04 was
 itself already firing by 2026-08-08 (258.34 KiB observed at `295ee97`).
 
-`scripts/perf-snapshot.mjs` is the other half, and it has no constants to rot:
+`tools/perf-snapshot.mjs` is the other half, and it has no constants to rot:
 
 ```bash
 pnpm run perf:snapshot record base.json --label main   # self-builds via the dry-run
@@ -838,7 +838,7 @@ Three things about the page, all about honesty rather than looks:
   carry no cross-origin assets and inline scripts need per-document CSP hashes,
   so a chart that draws itself on the server costs one `<svg>` and no exceptions.
   Point tooltips are native `<title>` elements.
-- **Hand-entered history is drawn dashed.** `www/_worker.js/dyno-seed.json`
+- **Hand-entered history is drawn dashed.** `src/worker/dyno-seed.json`
   carries the four points from `perf-budget.mjs`'s baseline comment so the page
   is useful before the series fills up. They live in the repo rather than seeded
   into the branch so every hand-entered number goes through PR review, and they
@@ -933,8 +933,8 @@ and keeps the understanding check diagnostic rather than a gate. Read the
 Key facts (don't hardcode these elsewhere, they drift):
 - RN_KV namespace id: `3cb8a107c58e47dc9244e75b33401f36`
 - R2 bucket: `aadhar-photos` (SOOC originals + full-res JPGs)
-- Thumbnails are content-addressed at `/i/<stem>.<hash8>.<ext>` (hashes.json via `hash-thumbnails.sh`); `THUMB_VERSION` is gone entirely (retired with the last legacy fallback — `lib/const.js` keeps only `CANONICAL_HOST` + `ARCHIVE_VERSION`).
-- The service worker RETIRED in v136 (2026-07-03): `www/sw.js` is an unregister stub that must keep serving 200 for a year+. There is no `CACHE_VERSION`; the deploy-log number lives in D1 (`bump-version.sh` derives the next from `MAX(vnum)`).
+- Thumbnails are content-addressed at `/i/<stem>.<hash8>.<ext>` (hashes.json via `hash-thumbnails.ts`); `THUMB_VERSION` is gone entirely (retired with the last legacy fallback — `lib/const.js` keeps only `CANONICAL_HOST` + `ARCHIVE_VERSION`).
+- The service worker RETIRED in v136 (2026-07-03): `src/client/sw.js` is an unregister stub that must keep serving 200 for a year+. There is no `CACHE_VERSION`; the deploy-log number lives in D1 (`bump-version.ts` derives the next from `MAX(vnum)`).
 - Canonical photo source: the aadhar-photos R2 bucket. Raw source files are
   never committed to GitHub; the Actions workflow downloads only the requested
   object keys into disposable runner storage.
@@ -943,7 +943,7 @@ Key facts (don't hardcode these elsewhere, they drift):
 
 ## Route map (where each URL's code lives)
 
-`www/_worker.js/` is a **directory** bundled by Cloudflare at deploy. The
+`src/worker/` is a **directory** bundled by Cloudflare at deploy. The
 dispatcher lives in `index.js`; each route's handler lives in a per-section
 module (search the module name to find it). `lib/` holds shared helpers.
 Static sections (`/garage/*`, `/lwe/*`, `/cars/*`, shell JS, most discovery
@@ -964,7 +964,7 @@ files) are served straight from disk. Worker-owned routes are enumerated in
 | `/lens`, `/lens/`, `/lens/fetch`, `/lens/shot` | `handleLens` / `handleLensFetch` / `handleLensShot` | `lens.js` |
 | `/coffee`, `/coffee/*` | Cal booking module delegation | `../cal/src/index.js` |
 | `/serendipity`, `/serendipity/*` | Serendipity module delegation + local CSP | `../serendipity/serendipity.js` |
-| `/lens.js` | static client renderer | `www/lens.js` (served asset) |
+| `/lens.js` | static client renderer | `src/client/lens.js` (served asset) |
 | `/llms-full.txt` | `handleLlmsFull` (x402 bot paywall; free until `X402_PAY_TO` is set) | `x402.js` |
 | `/ledger`, `/ledger.json` | `handleLedger` / `handleLedgerJson` (AI-crawler invoice from Analytics Engine; counting via `countCrawlerHit` in `index.js`) | `ledger.js` |
 | `/writing`, `/writing/`, `/writing/<slug>` | `handleWritingIndex` / `handleWritingPost` (Notepad) | `writing.js` |
@@ -1018,7 +1018,7 @@ Two files have zero inbound references in the tree, so a reference sweep reads
 them as detritus. Both have real consumers. Leave them, and re-run the checks
 below whenever they look unreferenced again:
 
-- **`www/bimi.svg`** is the BIMI logo (SVG Tiny-PS, square and full-bleed
+- **`public/bimi.svg`** is the BIMI logo (SVG Tiny-PS, square and full-bleed
   because inboxes circle-crop it). Its consumer is a Cloudflare DNS record, so
   deleting the file breaks mail rather than the site.
 
@@ -1044,7 +1044,7 @@ below whenever they look unreferenced again:
 
 ### Verify the whole route surface
 
-`node scripts/verify-routes.mjs [baseUrl]` curls every route and asserts status +
+`node tools/verify-routes.mjs [baseUrl]` curls every route and asserts status +
 content-type (+ markers). All-green ("0 hard failure(s)") is the gate before and
 after any deploy. The skeuomorphic `_worker.js/` module tree was extracted with
 this as the regression tripwire; keep it green on every future change.
@@ -1116,7 +1116,7 @@ the job ends. The runner is the only execution host; nothing on the author's
 machine is part of the contract.
 
 Dependabot covers the encoder now: its cargo ecosystem tracks the zenjpeg pin in
-`www/scripts/zenc`, opening a version-bump PR on the weekly cadence alongside
+`tools/photos/zenc`, opening a version-bump PR on the weekly cadence alongside
 the Actions, npm, and Pillow layers. This retired the old `Refresh image toolchain`
 workflow that hand-tracked the from-source jpegli commit. Only Homebrew formulas
 (mozjpeg, libavif) fall outside Dependabot and update on their own cadence.
@@ -1128,7 +1128,7 @@ workflow that hand-tracked the from-source jpegli commit. Only Homebrew formulas
 brew install jq mozjpeg libavif              # mozjpeg = jpegtran + cjpeg; libavif = avifenc (optional, sips falls back)
 brew install uv && pnpm run photos:env               # Pillow, for gen-pixel-peeper.py only (brew's python3 is PEP 668; pip into it fails)
 # the JPEG encoder (zenc) builds itself on first pipeline run; needs rust (rustup.rs)
-cargo build --release --manifest-path www/scripts/zenc/Cargo.toml
+cargo build --release --manifest-path tools/photos/zenc/Cargo.toml
 pnpm exec wrangler login                                         # Cloudflare auth (deploys + KV + R2 all use it)
 
 # the study pages, which are NOT needed to add a photo
@@ -1137,7 +1137,7 @@ brew install webp ffmpeg                              # cwebp for the encoding g
 This is an emergency fallback only. sips is macOS-native (no install), and the
 normal path is the remote workflow above.
 
-`export-for-instagram.sh` additionally wants **ssimulacra2** and
+`export-for-instagram.ts` additionally wants **ssimulacra2** and
 **butteraugli_main**, the two perceptual metrics it searches quality against.
 Those are libjxl tools built with `-DJPEGXL_ENABLE_TOOLS=ON`, and Homebrew's
 `jpeg-xl` formula does not ship them, so there is no brew line for this row. The
@@ -1159,7 +1159,7 @@ until it was written.
 ```bash
 # The normal remote path is the Remote photo pipeline workflow above.
 # This local command remains for recovery when Actions or R2 ingress is unavailable.
-./www/scripts/add-photos.sh "/path/to/photo.HIF" [more files...]
+bun tools/photos/add-photos.ts "/path/to/photo.HIF" [more files...]
 # then it prints the deploy line; run it:
 pnpm run deploy:direct   # local fallback only; normal production is merge + CI promotion
 ```
@@ -1167,13 +1167,13 @@ pnpm run deploy:direct   # local fallback only; normal production is merge + CI 
   remain archive objects and also produce a full-resolution maximum-quality
   q100 JPG export as the `/images/full/<stem>.jpg` click target.
 - Emits the 600px JPG fallback, 600px AVIF, and 400px mobile AVIF tiers;
-  writes the stem's entry into `www/_worker.js/photo-index.json` (the
+  writes the stem's entry into `src/worker/photo-index.json` (the
   committed pool the worker bundles — R2 key, byte size, upload date);
   regenerates EXIF metadata; bakes the four 64-bin RGB/luminance histograms;
   and runs `pnpm run photos:check` as the final gate.
 - A photo appears in the grid at DEPLOY, when its index entry ships with the
   worker. There is no KV manifest and nothing to bust.
-- A thumbnail can't go stale anymore: its URL is its bytes (`/i/<stem>.<hash8>`). If one looks wrong, re-run `hash-thumbnails.sh`, commit, deploy; a changed file gets a new URL automatically.
+- A thumbnail can't go stale anymore: its URL is its bytes (`/i/<stem>.<hash8>`). If one looks wrong, re-run `hash-thumbnails.ts`, commit, deploy; a changed file gets a new URL automatically.
 - To REMOVE a photo: delete its `photo-index.json` entry, its `hashes.json`
   entry, its `/i/` tiers, metadata, and caption, then deploy (photos:check
   enforces the bijection). Delete the R2 object separately if the original
@@ -1181,7 +1181,7 @@ pnpm run deploy:direct   # local fallback only; normal production is merge + CI 
 
 ### Regenerate just the EXIF metadata (photos already uploaded)
 ```bash
-./www/scripts/extract-photo-metadata.sh "/path/to/sooc-originals"
+bun tools/photos/extract-photo-metadata.ts "/path/to/sooc-originals"
 ```
 The normal remote equivalent is the `refresh-metadata` routine in the Remote
 photo pipeline workflow. Local `--merge` mode updates only a selected batch;
@@ -1190,28 +1190,28 @@ the tooltip skips nulls rather than guess.
 
 ### Re-encode ALL thumbnails (e.g. a new resolution/quality)
 ```bash
-./www/scripts/reencode-thumbnails.sh           # re-encodes every grid thumb as pre-cropped center squares
-./www/scripts/hash-thumbnails.sh               # re-hash the tiers into /i/ + rewrite hashes.json
+bun tools/photos/reencode-thumbnails.ts           # re-encodes every grid thumb as pre-cropped center squares
+bun tools/photos/hash-thumbnails.ts               # re-hash the tiers into /i/ + rewrite hashes.json
 # commit + deploy (new bytes = new URLs; the worker bundles the index + hashes, so the deploy is the bust)
 ```
-`SQ_SM` (mobile tier) must match `THUMB_SMALL_PX` in `_worker.js` (the `-<N>.avif` suffix). add-photos.sh mirrors this script's two encode paths; keep them in sync.
+`SQ_SM` (mobile tier) must match `THUMB_SMALL_PX` in `_worker.js` (the `-<N>.avif` suffix). add-photos.ts mirrors this script's two encode paths; keep them in sync.
 
 ### Add a car reference photo (homepage tooltip)
 ```bash
-./www/scripts/add-car-photo.sh <stem> <input-image>   # stem: singer | tuthill | hwa-evo | f355
+bun tools/photos/add-car-photo.ts <stem> <input-image>   # stem: singer | tuthill | hwa-evo | f355
 ```
-Outputs `www/cars/<stem>.{avif,jpg}` (no EXIF, no R2). Bump the `?v=` on that car image in `index.html` if you replace one in place, then deploy.
+Outputs `public/cars/<stem>.{avif,jpg}` (no EXIF, no R2). Bump the `?v=` on that car image in `index.html` if you replace one in place, then deploy.
 
 ### Generate AI alt text for the grid
-`add-photos.sh` already does this in phase 4, so a normal add needs nothing here.
+`add-photos.ts` already does this in phase 4, so a normal add needs nothing here.
 Run it by hand to backfill or to retry after a rate limit:
 ```bash
-pnpm run captions                            # writes www/images/alt.json {stem: alt}
+pnpm run captions                            # writes public/images/alt.json {stem: alt}
 ```
 Resumable: only fills uncaptioned stems, so a 429 (Workers-AI neuron budget) just means run again later.
 
 **Set a token once and captions work pre-deploy.** With `CLOUDFLARE_API_TOKEN` in
-the environment, the script reads the committed `www/i/<stem>.<hash8>.jpg` and
+the environment, the script reads the committed `public/i/<stem>.<hash8>.jpg` and
 posts those bytes straight to Workers AI, so a photo added seconds ago gets
 captioned in the same run. Without one it falls back to handing a stem to
 `/garage/cf/caption`, which fetches the thumbnail from production and therefore
@@ -1231,7 +1231,7 @@ run mid-ramp.
 
 The changelog entry is staged **in the PR**, alongside the change it describes:
 ```bash
-./www/scripts/bump-version.sh <slug> "<title>"
+bun tools/photos/bump-version.ts <slug> "<title>"
 ```
 That writes one file and touches no network — the vnum comes from the committed
 projection, so it needs no D1, no wrangler and no account selection. Commit it
@@ -1310,8 +1310,8 @@ EARLIER rather than asking for a bigger one. Run this within 6 hours of the
 demo, because an expired warm is the same as no warm:
 
 ```bash
-node scripts/lens-warm.mjs                 # the seeded /lens chips, production
-node scripts/lens-warm.mjs https://foo/    # specific URLs instead
+node tools/lens-warm.mjs                 # the seeded /lens chips, production
+node tools/lens-warm.mjs https://foo/    # specific URLs instead
 ```
 
 It performs REAL Browser Run calls, away from an audience. Re-running it is also
@@ -1324,8 +1324,8 @@ The allowance resets at 00:00 UTC and not before, so a demo landing after that
 ceiling needs the other script:
 
 ```bash
-node scripts/lens-seed.mjs --dry-run   # capture locally, write nothing, print sizes
-node scripts/lens-seed.mjs             # capture and seed production KV (24h TTL)
+node tools/lens-seed.mjs --dry-run   # capture locally, write nothing, print sizes
+node tools/lens-seed.mjs             # capture and seed production KV (24h TTL)
 ```
 
 That drives real headless Chrome on this machine (playwright-core, channel
@@ -1361,8 +1361,8 @@ captured waterfall does not announce itself there the way the Browser pane does.
 That is true of a real `chromium-cdp` capture too, so it is a pre-existing gap
 rather than something this introduces, and the field is in the JSON either way.
 
-Both scripts take their target list from `scripts/lib/lens-chips.mjs`, which
-reads the chips out of the shell renderer in `www/_worker.js/lens.js`. Adding a
+Both scripts take their target list from `tools/lib/lens-chips.mjs`, which
+reads the chips out of the shell renderer in `src/worker/lens.ts`. Adding a
 chip there is all it takes; nothing needs updating here.
 
 The TTL is a day rather than a week on purpose. A stale local capture outliving
@@ -1373,7 +1373,7 @@ Browser Run renders the moment the entries expire. To undo sooner, delete the
 ### Add or change a /lens interaction recipe
 
 Recipes are the fixed scripts `/lens/browser?do=<id>` runs inside a page before
-reading it. They live in `www/_worker.js/lens-recipes.js` and are published
+reading it. They live in `src/worker/lens-recipes.ts` and are published
 verbatim, so anyone can check what ran:
 
 ```bash
@@ -1399,7 +1399,7 @@ recipes are synchronous. Anything whose effect lands after a tick needs
 lands after injection is exactly what the probe measures:
 
 ```bash
-BROWSER_RUN_TOKEN=... node scripts/lens-inject-probe.mjs
+BROWSER_RUN_TOKEN=... node tools/lens-inject-probe.mjs
 ```
 
 Seven cases, one render each, spaced 11s apart against the 6/min account-wide
@@ -1421,8 +1421,8 @@ A binding that refuses `addScriptTag` surfaces as the existing `upstream_not_ok`
 `images/semantics.json` is what `photo_query` ranks against beyond the caption and
 the EXIF. Two tiers, and every stem records which it got:
 ```bash
-node www/scripts/gen-photo-semantics.mjs            # derived tier only
-node www/scripts/gen-photo-semantics.mjs --vision   # + model-written terms
+node tools/photos/gen-photo-semantics.mjs            # derived tier only
+node tools/photos/gen-photo-semantics.mjs --vision   # + model-written terms
 ```
 The **derived** tier needs no network and no credential — it is vocabulary repair,
 mapping what the camera writes to what a person types (`Nostalgic Neg` →
@@ -1444,7 +1444,7 @@ zero credentials and zero subrequests, and it still works on the free plan. Dele
 
 ### Regenerate the /garage/encoding study samples
 ```bash
-./www/scripts/gen-encoding-samples.sh [STEM] [SRC_DIR]
+bun tools/photos/gen-encoding-samples.ts [STEM] [SRC_DIR]
 ```
 Prints byte counts + bytes-per-pixel so the figcaptions on `/garage/encoding` can be updated to match. The grayscale (`g-*`) set is generated separately and is not touched.
 
@@ -1453,7 +1453,7 @@ Prints byte counts + bytes-per-pixel so the figcaptions on `/garage/encoding` ca
 ## Regenerate the OG / Twitter cards
 
 Every garage + lwe page unfurls as a 1200x630 card showing its live demo floated
-on the Bliss desktop (`www/og/<section>-<name>.png`), wired via
+on the Bliss desktop (`public/og/<section>-<name>.png`), wired via
 `og:image`/`twitter:card` in each page's `<head>`. Regenerate when a demo's look
 changes or a new page lands:
 
@@ -1472,7 +1472,7 @@ By hand:
 
 ```bash
 pnpm run og-cards                    # captures LIVE aadhar.sh (data-driven demos render populated)
-node www/scripts/inject-og-meta.mjs   # add the meta to any page missing it (idempotent)
+node tools/photos/inject-og-meta.mjs   # add the meta to any page missing it (idempotent)
 # then deploy — a deploy purges the edge so the refreshed card lands.
 ```
 
@@ -1506,7 +1506,7 @@ node www/scripts/inject-og-meta.mjs   # add the meta to any page missing it (ide
 
 Separate generator, separate size, separate destination. GitHub's social preview
 is **1280x640** and it is uploaded through the repository settings, not served by
-this site, so it lives in `.github/` rather than `www/og/` and no page links it.
+this site, so it lives in `.github/` rather than `public/og/` and no page links it.
 
 ```bash
 pnpm run repo-card                        # both variants, into .github/
@@ -1528,9 +1528,9 @@ Two variants ship because the card has two honest jobs:
   `pnpm run repo-card desktop` when you want one for a talk or a post.
 
 The chips are COUNTED from `config/site-manifest.json` and
-`www/images/hashes.json` rather than typed, because a card outlives most of what
-it describes. The wallpaper and the window icon are read out of `www/luna.css`
-and `www/index.html` for the same reason, so there is no second copy of either.
+`public/images/hashes.json` rather than typed, because a card outlives most of what
+it describes. The wallpaper and the window icon are read out of `src/styles/luna.css`
+and `src/pages/index.html` for the same reason, so there is no second copy of either.
 
 Nothing in the pipeline uploads it: GitHub exposes no API for the social preview.
 Settings, then Social preview, then upload the PNG by hand.
@@ -1575,7 +1575,7 @@ pnpm exec wrangler kv key delete --namespace-id="$NS" "tracks:<id>:fresh" --remo
 ```
 
 ### Bump THUMB_VERSION (retired — nothing to bump)
-Fully retired (hash cutover 2026-07-03): thumbnails are content-addressed at `/i/<stem>.<hash8>.<ext>`, so a re-encode mints new URLs by itself — run `./www/scripts/hash-thumbnails.sh` after re-encoding, commit, deploy (the bundled index/hashes make the deploy the bust). The constant no longer exists in `lib/const.js`; legacy `/images/<stem>.<ext>[?v=N]` URLs just 301 into `/i/` regardless of their `?v`. The worker route still clamps unknown-thumb 404s to `max-age=0` so misses do not inherit immutable caching.
+Fully retired (hash cutover 2026-07-03): thumbnails are content-addressed at `/i/<stem>.<hash8>.<ext>`, so a re-encode mints new URLs by itself — run `bun tools/photos/hash-thumbnails.ts` after re-encoding, commit, deploy (the bundled index/hashes make the deploy the bust). The constant no longer exists in `lib/const.js`; legacy `/images/<stem>.<ext>[?v=N]` URLs just 301 into `/i/` regardless of their `?v`. The worker route still clamps unknown-thumb 404s to `max-age=0` so misses do not inherit immutable caching.
 
 ### Read the homepage perf probe
 A cron (`7,37 * * * *`) renders `/` in-process, parses its own Server-Timing,
@@ -1686,8 +1686,8 @@ What this changes day to day: a new span's NAME and ATTRIBUTES can be checked
 before it ships. Previously the cheapest way to find out whether a span was
 usefully named was to deploy it and open the dashboard.
 
-### Log a deploy (bump-version.sh)
-`./www/scripts/bump-version.sh <slug> "<title>"`, then deploy. Inserts the next checkpoint into D1 (vnum from `SELECT MAX(vnum)`), which is what `/updates` and `/restore` render. Nothing edits sw.js anymore: the service worker retired in v136, `nav.js`/`notepad.js` updates land via their short `_headers` max-age plus the per-deploy edge purge, and the stub at `/sw.js` cleans up old installs.
+### Log a deploy (bump-version.ts)
+`bun tools/photos/bump-version.ts <slug> "<title>"`, then deploy. Inserts the next checkpoint into D1 (vnum from `SELECT MAX(vnum)`), which is what `/updates` and `/restore` render. Nothing edits sw.js anymore: the service worker retired in v136, `nav.js`/`notepad.js` updates land via their short `_headers` max-age plus the per-deploy edge purge, and the stub at `/sw.js` cleans up old installs.
 
 ---
 
@@ -1713,7 +1713,7 @@ curl -s https://aadhar.sh/garage/llms.txt | head
 
 The first two must both answer `text/markdown`; a browser `Accept` header and a
 bare `*/*` must both still get `text/html`. `/bot` and `/whoareyou` are the two
-twins written BY HAND (in `www/md/`), because those pages render from Worker
+twins written BY HAND (in `src/content/md/`), because those pages render from Worker
 template literals no build step can read. Edit either page and the deploy fails
 until its twin agrees: `checkTwinFacts()` recomposes the User-Agent from
 `botauth.js`'s own constants and requires it verbatim in `bot.md`, so a
@@ -1721,29 +1721,29 @@ until its twin agrees: `checkTwinFacts()` recomposes the User-Agent from
 
 ---
 
-## The scripts (`www/scripts/`)
+## The scripts (`tools/photos/`)
 
 | script | what it does |
 |---|---|
-| `add-photos.sh` | Full pipeline for new photos: resize, EXIF-rotate, encode AVIF+JPG center-square thumbs, upload the full-resolution browser copy to R2, write the stem's `photo-index.json` entry, regenerate metadata, bake histograms, and validate the artifact graph. |
+| `add-photos.ts` | Full pipeline for new photos: resize, EXIF-rotate, encode AVIF+JPG center-square thumbs, upload the full-resolution browser copy to R2, write the stem's `photo-index.json` entry, regenerate metadata, bake histograms, and validate the artifact graph. |
 | `check-photo-pipeline.mjs` | CI-safe invariant check: every metadata stem has all three hashed tiers, per-photo metadata, and four 64-bin histogram channels, with no orphaned pixel files. Also walks the authored HTML/JS for hardcoded `/i/<stem>.<hash>` URLs (the `/garage/tooltips` demo slots have three) and fails if a re-encode has pruned the bytes one of them names. |
-| `extract-photo-metadata.sh` | Read EXIF from the SOOC folder, emit `images/metadata.json` + per-photo `images/meta/<stem>.json`. Pulls the Fuji recipe fields too. Requires exif-sooc + jq. **Two schemas, on purpose:** `metadata.json` is the RECORD (long, self-documenting field names, plus the derived `recipe` card) and the per-photo files are the tooltip's RENDER CACHE (short keys, tooltip-only fields, nulls dropped, ~28% smaller compressed because one is fetched per hover). Bump `META_V` in `tooltip.js` when the per-photo shape changes. |
-| `build-exif-index.mjs` | Roll every per-photo `images/meta/<stem>.json` MINUS its histogram into one `images/exif.json` (158 photos, 2.6KB brotli). Called by `extract-photo-metadata.sh`, so `pnpm run photos` keeps it current, and `check-photo-pipeline.mjs` rebuilds it to fail on drift. **Why it exists:** the homepage draws a random 12 of 158 per request, so warming metadata per visible slot was 12 cold requests on nearly every visit (a given slot repeats ~7.6% of the time). One immutable index is smaller than that on the first visit and free after. Histograms stay per-photo because they are 623 of a meta file's ~977 bytes, so folding them in would take the index from 2.6KB to 24KB for bars most visitors never see. |
+| `extract-photo-metadata.ts` | Read EXIF from the SOOC folder, emit `images/metadata.json` + per-photo `images/meta/<stem>.json`. Pulls the Fuji recipe fields too. Requires exif-sooc + jq. **Two schemas, on purpose:** `metadata.json` is the RECORD (long, self-documenting field names, plus the derived `recipe` card) and the per-photo files are the tooltip's RENDER CACHE (short keys, tooltip-only fields, nulls dropped, ~28% smaller compressed because one is fetched per hover). Bump `META_V` in `tooltip.js` when the per-photo shape changes. |
+| `build-exif-index.mjs` | Roll every per-photo `images/meta/<stem>.json` MINUS its histogram into one `images/exif.json` (158 photos, 2.6KB brotli). Called by `extract-photo-metadata.ts`, so `pnpm run photos` keeps it current, and `check-photo-pipeline.mjs` rebuilds it to fail on drift. **Why it exists:** the homepage draws a random 12 of 158 per request, so warming metadata per visible slot was 12 cold requests on nearly every visit (a given slot repeats ~7.6% of the time). One immutable index is smaller than that on the first visit and free after. Histograms stay per-photo because they are 623 of a meta file's ~977 bytes, so folding them in would take the index from 2.6KB to 24KB for bars most visitors never see. |
 | `build-recipes.py` | **RETIRED 2026-08-14.** The Fujifilm recipe card is derived during extraction now, by `exif-sooc --keyed`, from the Fuji tags rather than from the flattened record this script re-read. Same idiom and same output: all 158 committed cards regenerate byte-identical. One behaviour change worth knowing, since the old script rewrote every card on every run: a `--merge` run now refreshes the BATCH only, so re-run a full extraction after an exif-sooc upgrade that changes the card. Query it with `/photos/query.json?recipe=DR400` as before. |
-| `reencode-thumbnails.sh` | Re-encode every published grid thumb from the source folder at a new resolution (pre-cropped squares, two tiers). Follow with `hash-thumbnails.sh`, then commit + deploy. |
-| `add-car-photo.sh` | One resto-mod reference photo -> `cars/<stem>.{avif,jpg}` for the homepage car tooltips. No EXIF, no R2. |
+| `reencode-thumbnails.ts` | Re-encode every published grid thumb from the source folder at a new resolution (pre-cropped squares, two tiers). Follow with `hash-thumbnails.ts`, then commit + deploy. |
+| `add-car-photo.ts` | One resto-mod reference photo -> `cars/<stem>.{avif,jpg}` for the homepage car tooltips. No EXIF, no R2. |
 | `zenc/` | The JPEG thumbnail encoder: a Rust crate wrapping zenjpeg (hybrid trellis + progressive scan search). `cargo build --release` (auto-built on first pipeline run). `zenc <in> <out> -q 84`. dependabot tracks the zenjpeg pin; replaced the from-source jpegli build in 2026-07. |
-| `download-remote-photos.sh` | Download selected R2 object keys into disposable runner storage for the GitHub Actions photo workflow; accepts `all` for the public manifest. |
-| `gen-alt-text.py` | AI alt text for grid photos -> `images/alt.json`. Run by `add-photos.sh` phase 4. Posts the committed `i/` thumbnail to Workers AI when `CLOUDFLARE_API_TOKEN` is set (captions pre-deploy), else asks `/garage/cf/caption` by stem (deployed photos only). Resumable. |
+| `download-remote-photos.ts` | Download selected R2 object keys into disposable runner storage for the GitHub Actions photo workflow; accepts `all` for the public manifest. |
+| `gen-alt-text.py` | AI alt text for grid photos -> `images/alt.json`. Run by `add-photos.ts` phase 4. Posts the committed `i/` thumbnail to Workers AI when `CLOUDFLARE_API_TOKEN` is set (captions pre-deploy), else asks `/garage/cf/caption` by stem (deployed photos only). Resumable. |
 | `gen-photo-semantics.mjs` | Retrieval terms for `photo_query` -> `images/semantics.json`. Derived tier (EXIF vocabulary repair) needs nothing; `--vision` adds model-written keywords and needs `CLOUDFLARE_API_TOKEN`. Deliberately offline so the Worker keeps zero AI credentials. Resumable. |
-| `gen-encoding-samples.sh` | Regenerate the color sample set for `/garage/encoding` through every encoder; defaults to the committed `garage/enc/c-png.png` fixture and prints byte counts. |
-| `zenc histogram --root www` | Bakes four 64-bin RGB/luminance histogram channels into each per-photo `images/meta/<stem>.json` from the shipped hashed JPG tier. A subcommand of the encoder crate since 2026-08-14 (it was `photo-histograms.py` + Pillow), called by both metadata extraction and `add-photos.sh`. `--check` compares against what is on disk and writes nothing, which is how you tell a decoder bump from an edit. |
-| `gen-og-cards.mjs` | Render the 1200x630 OG/Twitter card per garage + lwe page (live demo on the Bliss desktop) into `www/og/`. `pnpm run og-cards`. Drives the installed Chrome via `playwright-core`; captures production so data-driven demos render full. Hero selectors + presets in the `HERO{}` map. See "Regenerate the OG / Twitter cards". |
+| `gen-encoding-samples.ts` | Regenerate the color sample set for `/garage/encoding` through every encoder; defaults to the committed `garage/enc/c-png.png` fixture and prints byte counts. |
+| `zenc histogram --root www` | Bakes four 64-bin RGB/luminance histogram channels into each per-photo `images/meta/<stem>.json` from the shipped hashed JPG tier. A subcommand of the encoder crate since 2026-08-14 (it was `photo-histograms.py` + Pillow), called by both metadata extraction and `add-photos.ts`. `--check` compares against what is on disk and writes nothing, which is how you tell a decoder bump from an edit. |
+| `gen-og-cards.mjs` | Render the 1200x630 OG/Twitter card per garage + lwe page (live demo on the Bliss desktop) into `public/og/`. `pnpm run og-cards`. Drives the installed Chrome via `playwright-core`; captures production so data-driven demos render full. Hero selectors + presets in the `HERO{}` map. See "Regenerate the OG / Twitter cards". |
 | `inject-og-meta.mjs` | Idempotently add `og:image`/`twitter:card` meta to any garage + lwe page missing it, pointing at `/og/<section>-<name>.png`. `--check` reports gaps without writing. |
-| `hash-thumbnails.sh` | sha256 each pixel tier into `www/i/<stem>.<hash8>.<ext>`, write `images/hashes.json`, and prune tiers no longer named by it. Run by `add-photos.sh`; a re-encode mints new URLs, so there is no version to bump. |
-| `gen-encoding-grids.sh` | Regenerate the ZOOMED 96px comparison crops (`garage/enc/z-*`) that `/lwe/encoding` fetches. Run by the `regenerate-encoding-study` routine of the photo workflow. |
+| `hash-thumbnails.ts` | sha256 each pixel tier into `public/i/<stem>.<hash8>.<ext>`, write `images/hashes.json`, and prune tiers no longer named by it. Run by `add-photos.ts`; a re-encode mints new URLs, so there is no version to bump. |
+| `gen-encoding-grids.ts` | Regenerate the ZOOMED 96px comparison crops (`garage/enc/z-*`) that `/lwe/encoding` fetches. Run by the `regenerate-encoding-study` routine of the photo workflow. |
 | `gen-desktop-partial.mjs` | Bake the XP desktop shell into `_worker.js/lib/desktop.js` and patch it into the 28 static pages, generated from nav.js's own `PROFILES`/`SUBPAGES`/`SECTION_ICONS`/tray template so the two cannot drift. Re-run after editing any of those. A run on an unchanged tree is a byte-exact no-op. |
-| `bump-version.sh` | Insert one `checkpoints` row into the `aadhar-restore` D1 database, deriving the next vnum from `MAX(vnum)`. Both `/restore` and `/updates` read that table, so this is the only place a deploy gets logged. `./www/scripts/bump-version.sh <slug> "<title>"`. |
+| `bump-version.ts` | Insert one `checkpoints` row into the `aadhar-restore` D1 database, deriving the next vnum from `MAX(vnum)`. Both `/restore` and `/updates` read that table, so this is the only place a deploy gets logged. `bun tools/photos/bump-version.ts <slug> "<title>"`. |
 
 ---
 
@@ -1752,7 +1752,7 @@ until its twin agrees: `checkTwinFacts()` recomposes the User-Agent from
 - **Thumbnail 404s must be uncacheable.** Workers static assets no longer return homepage HTML for missing files, but a real miss under `/images/*` can still inherit the immutable cache rule unless the worker clamps it. Keep the thumbnail route worker-first; a re-encode mints a fresh `/i/` URL by itself, so there is no version to bump.
 - **zsh eats `${var}:something`.** Brace-quote KV key names with colons (`"tracks:${OLD}:fresh"`), and use `${=flag}` if you need word-splitting in ad-hoc snippets (the scripts use `#!/usr/bin/env bash` so they are safe internally).
 - **`jpegtran` / mozjpeg strip EXIF.** Rotate losslessly with `jpegtran -copy none -rotate N` *before* recompressing, and send its binary stdout to a file (`2>/dev/null > out.jpg`), not through a pipe that could mix in stderr.
-- **Production deploy = merge to `main`, CI promotion to `production`, then Workers Builds**; the single site Worker deploys the root `wrangler.jsonc`, bundling `www/`, `cal/src/`, and `serendipity/` from that exact release branch. The deploy config points `main` + `assets` at `.build/www` and runs `build.mjs` first through its `build.command`, so the production path self-builds and ships the minified client scripts + `luna.css`. Local dev is the exception: `wrangler dev -c wrangler.dev.jsonc` (`pnpm run dev`, wired into `.claude/launch.json`) serves the readable tree directly. Before merging, CI runs `pnpm run perf-budget`; after configuring Workers Builds, verify its release status and run `node scripts/verify-routes.mjs https://aadhar.sh` plus the `/coffee` and `/serendipity` route smoke checks.
+- **Production deploy = merge to `main`, CI promotion to `production`, then Workers Builds**; the single site Worker deploys the root `wrangler.jsonc`, bundling `www/`, `cal/src/`, and `serendipity/` from that exact release branch. The deploy config points `main` + `assets` at `.build/public` and runs `build.mjs` first through its `build.command`, so the production path self-builds and ships the minified client scripts + `luna.css`. Local dev is the exception: `wrangler dev -c wrangler.dev.jsonc` (`pnpm run dev`, wired into `.claude/launch.json`) serves the readable tree directly. Before merging, CI runs `pnpm run perf-budget`; after configuring Workers Builds, verify its release status and run `node tools/verify-routes.mjs https://aadhar.sh` plus the `/coffee` and `/serendipity` route smoke checks.
 - **`_playlistId` is module-cached per isolate.** After changing `playlist-id`, redeploy to flush it (see the playlist section).
 - **The worker is bundled, not hand-concatenated.** `_worker.js/` imports sibling modules; wrangler bundles them at deploy via built-in esbuild.
 - **Authoring is buildless; SERVING is minified.** `build.mjs` (repo root; minifier devDependencies: `@minify-html/node`, `lightningcss`, `oxc-minify`) copies `www/` to `.build/` and minifies: `index.html` (structure via minify-html, inline CSS/JS through the same Lightning CSS + Oxc settings, with marker tripwires and a readable `/index.src.html` twin), the six client scripts (`nav.js`, `notepad.js`, `lens.js`, `lens-browser.js`, `quiz.js`, `tooltip.js`), `luna.css` (owner-approved 2026-07), and the worker modules' `/*min*/` CSS literals — each with a readable `/<name>.src.*` twin (the banner in each minified file points there). It hard-fails the deploy if `luna.css` doesn't parse as valid CSS (the v143 corruption slipped through for three releases), and content-hashes `nav.js` + `luna.css` into immutable `/a/` URLs. Garage/lwe HTML, images, and `_headers` ship byte-identical to git (View Source is part of the design). Do NOT extend the build into bundling or version auto-bumps; the scripts remain independently readable islands.

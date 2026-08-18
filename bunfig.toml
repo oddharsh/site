@@ -1,0 +1,64 @@
+# bun's settings file, and the second half of what pnpm-workspace.yaml used to
+# carry. The package list moved to package.json's `workspaces` field (bun reads it,
+# pnpm did not); `overrides` and `trustedDependencies` moved to package.json too.
+# What is left is install POLICY, and it lives here.
+
+[install]
+
+# pnpm's isolated node_modules, kept deliberately rather than taking bun's
+# hoisted default. A hoisted tree lets any package import something it never
+# declared, and this repo has five workspace projects whose dependency sets are
+# meant to stay separate — lens-reader's whole reason for sitting OUTSIDE the
+# workspace is that readability + linkedom are megabytes only that Worker
+# bundles. Hoisting would blur exactly the line that split is drawing.
+#
+# It also preserves the shape the undici note in package.json reasons about,
+# with one correction recorded there: that note was written for a HOISTED
+# layout and talks about winning a race for "the hoisted position". Under an
+# isolated linker there is no single such position. The floors still hold.
+linker = "isolated"
+
+# A package published in the last 24 hours is REFUSED — the window in which a
+# compromised release is most dangerous and least likely to have been noticed.
+# Stated explicitly rather than left to a default, so the number stays a
+# decision somebody made instead of a behaviour that arrived with a version.
+#
+# UNIT TRAP, and it is the whole reason this line is commented: pnpm counted
+# MINUTES and wrote 1440. bun counts SECONDS. The same policy is 86400 here.
+# Copying 1440 across would have quietly cut the window from 24 hours to 24
+# minutes while looking like a faithful port.
+minimumReleaseAge = 86400
+
+# The escape hatch, and the cost lands on CI rather than locally: a frozen
+# install re-checks the policy against the COMMITTED lockfile, so a dependabot
+# PR opened minutes after a release fails to install until the package turns 24
+# hours old or is listed here.
+#
+# SECOND FIDELITY LOSS: pnpm excluded by name@VERSION, so an entry expired on
+# its own the moment the dependency moved past it. bun excludes by NAME, so
+# every entry below now exempts that package FOREVER, at any version. Prune
+# this list when a bump lands rather than letting it grow — an unpruned entry
+# is a permanently disabled check, not a stale one.
+minimumReleaseAgeExcludes = [
+  "@cloudflare/workers-types",
+  "@oxc-minify/binding-android-arm-eabi",
+  "@oxc-minify/binding-android-arm64",
+  "@oxc-minify/binding-darwin-arm64",
+  "@oxc-minify/binding-darwin-x64",
+  "@oxc-minify/binding-freebsd-x64",
+  "@oxc-minify/binding-linux-arm-gnueabihf",
+  "@oxc-minify/binding-linux-arm-musleabihf",
+  "@oxc-minify/binding-linux-arm64-gnu",
+  "@oxc-minify/binding-linux-arm64-musl",
+  "@oxc-minify/binding-linux-ppc64-gnu",
+  "@oxc-minify/binding-linux-riscv64-gnu",
+  "@oxc-minify/binding-linux-riscv64-musl",
+  "@oxc-minify/binding-linux-s390x-gnu",
+  "@oxc-minify/binding-linux-x64-gnu",
+  "@oxc-minify/binding-linux-x64-musl",
+  "@oxc-minify/binding-openharmony-arm64",
+  "@oxc-minify/binding-win32-arm64-msvc",
+  "@oxc-minify/binding-win32-ia32-msvc",
+  "@oxc-minify/binding-win32-x64-msvc",
+  "oxc-minify",
+]

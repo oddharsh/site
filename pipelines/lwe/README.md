@@ -11,7 +11,7 @@ Turn a chat about a topic into a deployed Learning With Errors page, without han
 ## Commands
 
 ```bash
-node pipelines/lwe/generate.mjs page <id>   # specs/<id>.json -> www/lwe/<id>.html
+node pipelines/lwe/generate.mjs page <id>   # specs/<id>.json -> public/lwe/<id>.html
 node pipelines/lwe/generate.mjs wire        # rewrite the registry-driven regions (sitemap, buddy list, nav, ask.js CONCEPTS)
 node pipelines/lwe/build-corpus.mjs         # rebuild the ask corpus from lwe-ask/corpus/<concept>.json
 node pipelines/lwe/publish.mjs <id>         # one command: page -> corpus -> wire -> print the deploy steps

@@ -3,15 +3,17 @@
   "private": true,
   "type": "module",
   "description": "The /lens Reader lens: a third-party extractor's opinion of a page, served from its own Worker so the site bundle never carries a DOM.",
-  "$comment": "Every wrangler script passes -c wrangler.toml EXPLICITLY. Without it wrangler walks UP the tree, finds the ROOT wrangler.jsonc, and runs its build.command (`node scripts/build.mjs`) from this directory, dying with MODULE_NOT_FOUND on a file that only exists at the repo root. CI's steps for cf-garage and lwe-ask have always passed -c for that reason, so the flag looks like ceremony until you drop it: `pnpm run deploy` then fails in a way no CI run can catch, because CI never invokes these scripts.",
+  "$comment": "Every wrangler script passes -c wrangler.toml EXPLICITLY. Without it wrangler walks UP the tree, finds the ROOT wrangler.jsonc, and runs its build.command (`bun tools/build.mjs`) from this directory, dying with MODULE_NOT_FOUND on a file that only exists at the repo root. CI's steps for cf-garage and lwe-ask have always passed -c for that reason, so the flag looks like ceremony until you drop it: `bun run deploy` then fails in a way no CI run can catch, because CI never invokes these scripts.",
   "scripts": {
     "dev": "wrangler dev -c wrangler.toml",
     "deploy": "wrangler deploy -c wrangler.toml --x-provision=false --x-auto-create=false",
     "tail": "wrangler tail -c wrangler.toml",
-    "test": "node --test test/*.test.mjs"
+    "test": "bun test test/",
+    "test:node": "node --test test/*.test.mjs"
   },
   "dependencies": {
     "@mozilla/readability": "0.6.0",
     "linkedom": "0.18.13"
-  }
+  },
+  "$comment:workspace": "lens-reader stays OUT of the root package.json `workspaces` array on purpose: readability + linkedom are megabytes that only this Worker bundles. Under pnpm that required `pnpm install --ignore-workspace`, because a bare install walked UP to pnpm-workspace.yaml, installed the five workspace projects, and never created lens-reader/node_modules at all — its tests then died on ERR_MODULE_NOT_FOUND (gotcha 29). bun HAS NO SUCH FLAG and does not need one: measured 2026-08-16, a plain `bun install` here resolved this package.json alone, wrote lens-reader/bun.lock, and installed 21 packages into lens-reader/node_modules. Do not add a flag looking for parity; there is nothing to preserve."
 }

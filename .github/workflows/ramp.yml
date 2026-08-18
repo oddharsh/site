@@ -31,12 +31,12 @@ name: Ramp production
 # The six-read-scope `CLOUDFLARE_API_TOKEN` that infra:check uses is a DIFFERENT,
 # read-only credential and this must not widen it.
 #
-# Ramp steps run through `pnpm run` to match the documented interface, and that
+# Ramp steps run through `bun run` to match the documented interface, and that
 # used to be load-bearing rather than cosmetic: deploy-promote.mjs shelled out to
 # `npx wrangler`, and npx resolves whatever it can find. Measured 2026-08-12 in a
 # tree with no `node_modules`, `npx wrangler --version` answered 4.105.0 while this
 # repo pins 4.120.0, so the wrangler that moved production traffic depended on how
-# the script was invoked. It calls `pnpm exec wrangler` now, which resolves the pin
+# the script was invoked. It calls `bun x --no-install wrangler` now, which resolves the pin
 # on its own, so the choice here is consistency rather than a guardrail.
 
 on:
@@ -139,7 +139,7 @@ jobs:
 
     steps:
       # The PRODUCTION branch, not main. The ramp writes the D1 changelog by
-      # diffing the checked-out www/_worker.js/checkpoints.json against D1, so the
+      # diffing the checked-out src/worker/checkpoints.json against D1, so the
       # tree has to be the one that was actually built and uploaded. Reading
       # main's tip would diff against a tree AHEAD of what is serving, which is
       # gotcha 24 with the staleness pointing the other way.
@@ -148,23 +148,21 @@ jobs:
         with:
           ref: production
 
-      - name: Install pnpm
-        # package.json's packageManager field is the source of truth; this pins the
-        # same version so no self-switch is attempted (gotcha 30).
-        run: npm install -g pnpm@11.21.0
+      - name: Set up bun
+        # config/bun-canary.json is the source of truth: the canary tag ROLLS,
+        # so the pin is the binary SHA-256 rather than the version string.
+        uses: ./.github/actions/setup-bun
 
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .node-version
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: bun install --frozen-lockfile
 
       - name: Resolve the account id from wrangler.jsonc
-        run: node scripts/print-account-id.mjs >> "$GITHUB_ENV"
+        run: node tools/print-account-id.mjs >> "$GITHUB_ENV"
 
       # Workers Builds is still building when the promotion workflow finishes, so
       # the version this wants to ramp does not exist yet. deploy:promote's own
@@ -175,7 +173,7 @@ jobs:
         run: |
           set -uo pipefail
           for attempt in $(seq 1 20); do
-            out="$(pnpm run --silent deploy:promote -- --dry-run ${VERSION_INPUT:+--version "$VERSION_INPUT"} 2>&1 || true)"
+            out="$(bun run --silent deploy:promote -- --dry-run ${VERSION_INPUT:+--version "$VERSION_INPUT"} 2>&1 || true)"
             printf '%s\n' "$out"
             target="$(printf '%s\n' "$out" | sed -n 's/^target version: *\([0-9a-f]\{8\}\).*/\1/p' | head -1)"
             serving="$(printf '%s\n' "$out" | sed -n 's/^serving now: *//p' | head -1)"
@@ -193,7 +191,7 @@ jobs:
         id: ramp
         run: |
           set -euo pipefail
-          out="$(pnpm run --silent deploy:promote -- --to 10 ${VERSION_INPUT:+--version "$VERSION_INPUT"} 2>&1 | tee /dev/stderr)"
+          out="$(bun run --silent deploy:promote -- --to 10 ${VERSION_INPUT:+--version "$VERSION_INPUT"} 2>&1 | tee /dev/stderr)"
           target="$(printf '%s\n' "$out" | sed -n 's/^target version: *\([0-9a-f]\{8\}\).*/\1/p' | head -1)"
           if [ -z "$target" ]; then
             echo "::error::could not read the ramped version out of deploy:promote's output"
@@ -240,23 +238,21 @@ jobs:
         with:
           ref: production
 
-      - name: Install pnpm
-        # package.json's packageManager field is the source of truth; this pins the
-        # same version so no self-switch is attempted (gotcha 30).
-        run: npm install -g pnpm@11.21.0
+      - name: Set up bun
+        # config/bun-canary.json is the source of truth: the canary tag ROLLS,
+        # so the pin is the binary SHA-256 rather than the version string.
+        uses: ./.github/actions/setup-bun
 
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .node-version
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: bun install --frozen-lockfile
 
       - name: Resolve the account id from wrangler.jsonc
-        run: node scripts/print-account-id.mjs >> "$GITHUB_ENV"
+        run: node tools/print-account-id.mjs >> "$GITHUB_ENV"
 
       # THE GUARD THIS JOB EXISTS AROUND. Approval is asynchronous, so minutes or
       # hours pass between the canary and this step, and Workers Builds uploads a
@@ -269,7 +265,7 @@ jobs:
       - name: Refuse to ramp a version the canary never saw
         run: |
           set -euo pipefail
-          out="$(pnpm run --silent deploy:promote -- --dry-run 2>&1 | tee /dev/stderr)"
+          out="$(bun run --silent deploy:promote -- --dry-run 2>&1 | tee /dev/stderr)"
           now="$(printf '%s\n' "$out" | sed -n 's/^target version: *\([0-9a-f]\{8\}\).*/\1/p' | head -1)"
           if [ "$now" != "$CANARY" ]; then
             echo "::error::newest production version is ${now}, but ${CANARY} was canaried."
@@ -286,11 +282,11 @@ jobs:
       # for this release. Because this checked out `production`, the
       # checkpoints.json it diffs is the one that actually shipped.
       - name: Ramp 50% then 100%
-        run: pnpm run deploy:promote -- --steps 50,100
+        run: bun run deploy:promote -- --steps 50,100
 
       - name: Show what is serving
         if: always()
-        run: pnpm run deploy:promote -- --status
+        run: bun run deploy:promote -- --status
 
   verify:
     name: Post-ramp checks
@@ -307,20 +303,18 @@ jobs:
         with:
           ref: production
 
-      - name: Install pnpm
-        # package.json's packageManager field is the source of truth; this pins the
-        # same version so no self-switch is attempted (gotcha 30).
-        run: npm install -g pnpm@11.21.0
+      - name: Set up bun
+        # config/bun-canary.json is the source of truth: the canary tag ROLLS,
+        # so the pin is the binary SHA-256 rather than the version string.
+        uses: ./.github/actions/setup-bun
 
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .node-version
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: bun install --frozen-lockfile
 
       # The committed dictionaries have to match the bytes production is NOW
       # serving. dictionary-roll.yml opens a PR when they drift; this is the half
@@ -330,7 +324,7 @@ jobs:
       # 100% helps nobody.
       - name: Dictionary tiers against live production
         continue-on-error: true
-        run: pnpm run dcz:check
+        run: bun run dcz:check
 
       # Through `env:` rather than `${{ }}` inside the script, for the same reason
       # og-cards.yml does it: an expression is substituted into the script text

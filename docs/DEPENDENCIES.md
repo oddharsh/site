@@ -8,8 +8,8 @@ Dependabot watches FIVE ecosystems, and this paragraph named two of them until
 | npm | `/` | the shared deploy toolchain and the one shipped dependency |
 | npm | `/lens-reader` | the Reader lens Worker, which is outside the workspace on purpose |
 | github-actions | `/` | the five digest-pinned actions |
-| cargo | `/www/scripts/zenc` | the JPEG thumbnail encoder's zenjpeg pin |
-| pip | `/www/scripts` | Pillow, for one page generator |
+| cargo | `/tools/photos/zenc` | the JPEG thumbnail encoder's zenjpeg pin |
+| pip | `/tools/photos` | Pillow, for one page generator |
 
 Each update PR keeps the upstream release notes/changelog in its Dependabot
 description and gets a persistent site-review comment containing the exact
@@ -60,7 +60,7 @@ review policy and entry point for future agent runs.
   file says which three files it covers.
 - **esbuild is no longer a direct dependency, as of 2026-08-14.** It had left the
   minification path when Oxc took over and stayed pinned for ONE call:
-  `scripts/check-page-contracts.mjs` parsed the garage scaffold's inline CSS with
+  `tools/check-page-contracts.mjs` parsed the garage scaffold's inline CSS with
   `transform(css, { loader: "css" })`. (It parsed CSS, never JS; this line said
   "inline JS" until 2026-08-14.) That was 20MB of Go binary for one call, and the
   size was the smaller problem. **The two CSS parsers disagree in both
@@ -70,7 +70,7 @@ review policy and entry point for future agent runs.
   5 selectors `/garage/horizon` ships deliberately. So a page could pass the
   contract check and fail the build, which is the wrong way round: the build
   decides what reaches a visitor, so a pre-build check should agree with the
-  build's parser. Both now call `parseCss` in `scripts/lib/css-parse.mjs`, which
+  build's parser. Both now call `parseCss` in `tools/lib/css-parse.mjs`, which
   owns the tolerated-warning family and re-proves the pass-through on every call.
   The staged tree is byte-identical across all 1476 files.
 
@@ -92,9 +92,9 @@ review policy and entry point for future agent runs.
   on unchanged code, and workers-types for binding-shape changes.
 - playwright-core is a scripts-only devDep (caret-ranged, not pinned: it drives
   the locally installed Google Chrome rather than a bundled browser). Only
-  `www/scripts/gen-og-cards.mjs` uses it, and only on demand; no CI job and
+  `tools/photos/gen-og-cards.mjs` uses it, and only on demand; no CI job and
   no deploy path touches it.
-- Pillow 12.3.0 is pinned in `www/scripts/requirements.txt` for
+- Pillow 12.3.0 is pinned in `tools/photos/requirements.txt` for
   `gen-pixel-peeper.py`, a one-off generator for the /pixel-peeper comparison
   frames. It baked the photo histograms until 2026-08-14, when that moved into
   `zenc histogram` and left the core photo pipeline with no Pillow dependency at
@@ -117,7 +117,7 @@ covered none of them until 2026-08-14. One is its own Dependabot ecosystem, so
 it drifts on the same cadence the baseline does.
 
 **These four are checked now**, as of 2026-08-14.
-`scripts/lib/dependency-docs.mjs` reads them alongside the root `package.json`
+`tools/lib/dependency-docs.mjs` reads them alongside the root `package.json`
 and holds this prose to them in both directions: a stated version that stops
 matching fails CI, and a NEW dependency in any of the four fails CI until
 somebody either states its version or exempts it with a reason. That is what
@@ -159,7 +159,7 @@ the reason, rather than written here with the caret quietly dropped.
   import from `lens-reader/src/` fails in CI with `ERR_MODULE_NOT_FOUND` while
   passing on any workstation that has installed there.
 
-- **`www/scripts/zenc/`** pins `zenjpeg` 0.8.4, `image` and `serde_json` through Cargo. zenjpeg is
+- **`tools/photos/zenc/`** pins `zenjpeg` 0.8.4, `image` and `serde_json` through Cargo. zenjpeg is
   the production JPEG thumbnail encoder, so a bump changes the BYTES of every
   photo re-encoded after it. Nothing re-encodes automatically, so the risk is
   deferred rather than absent: the next `pnpm run photos` run mints new

@@ -1,0 +1,19 @@
+# The histogram bake is BUILD-DEPENDENT, so the toolchain is part of the input.
+#
+# `zenc histogram` decodes each shipped JPG tier and packs 64 bins per channel.
+# The decode is not bit-exact across builds (histogram.rs's own header measures
+# zune-jpeg against libjpeg-turbo at ~0.07% of pixels differing by one level),
+# and the pack then NORMALISES BY THE PEAK BIN: `100 * b / peak`. So a decoder
+# difference that nudges the peak rescales all 64 bars at once.
+#
+# Measured 2026-08-17 rebuilding on rustc 1.93.0 against the committed set, with
+# Cargo.lock unchanged and the input JPGs byte-identical: 31.2% of 40,448 bins
+# moved. 82% of those moved by one or two levels, which is the decoder noise the
+# header says binning absorbs — but the tail reached 37 levels, which is the
+# peak rescaling and is not absorbed by anything.
+#
+# Pinning rustc removes the largest remaining variable. It does NOT retroactively
+# reproduce the committed histograms, which came from an unrecorded build; that
+# needs one deliberate rebake, and it moves served bytes for all 158 photos.
+[toolchain]
+channel = "1.93.0"

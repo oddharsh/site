@@ -13,7 +13,7 @@
 // three callers (the Worker, the tests, and anything that wants the numbers).
 import { Readability } from "@mozilla/readability";
 import { parseHTML } from "linkedom";
-import { privateHostBlocked, validateLensTarget } from "../../www/_worker.js/lib/crawl.js";
+import { privateHostBlocked, validateLensTarget } from "../../src/worker/lib/crawl.ts";
 
 // Errors whose MESSAGE is deliberately written for the visitor. Everything else
 // that escapes `read()` is an internal failure whose text is not ours to publish:
@@ -153,7 +153,7 @@ export async function read(targetUrl) {
     // The readout this lens exists for, beyond the word gap. An extractor that
     // hands a live demo's control labels over as prose gives an agent no way to
     // tell a label from a sentence, which is exactly the failure
-    // `scripts/lib/html-to-md.mjs` rule 2 refuses.
+    // `tools/lib/html-to-md.mjs` rule 2 refuses.
     //
     // Measured 2026-08-14 over the same five-page corpus, this is where the
     // extractor swap paid: on /garage/horizon Defuddle leaked 14 of 26 distinct
@@ -176,7 +176,7 @@ export async function read(targetUrl) {
 // vocabulary an article can carry without cloning the tree or bringing a second
 // DOM implementation into node_modules. Unknown elements are transparent, so a
 // new semantic wrapper keeps its text instead of disappearing.
-// `scripts/lib/html-to-md.mjs` is intentionally not shared: it parses this
+// `tools/lib/html-to-md.mjs` is intentionally not shared: it parses this
 // repository's closed authored-HTML set and applies site-specific CSS/chrome
 // rules, while this boundary receives arbitrary DOM already reduced by
 // Readability. Importing it would add a second parser and the wrong policy.

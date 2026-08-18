@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // LWE page generator — Phase 1 of the lwe-publish pipeline.
 //
-//   node pipelines/lwe/generate.mjs page <id>   # specs/<id>.json -> www/lwe/<id>.html
+//   node pipelines/lwe/generate.mjs page <id>   # specs/<id>.json -> public/lwe/<id>.html
 //   node pipelines/lwe/generate.mjs wire         # rewrite the registry-driven regions
 //                                               #   (sitemap urls now; prints buddy + nav blocks)
 //
@@ -31,11 +31,11 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 import { renderUnderstanding, validatePageSpec } from "../content/page-contract.mjs";
-import { DESKTOP_CHROME, DESKTOP_TOP } from "../../www/_worker.js/lib/desktop.js";
+import { DESKTOP_CHROME, DESKTOP_TOP } from "../../src/worker/lib/desktop.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..", "..");   // pipelines/<name>/ -> repo root
-const HOLDING = join(ROOT, "www");
+const HOLDING = join(ROOT, "src", "pages");
 const REGISTRY = JSON.parse(readFileSync(join(HERE, "concepts.json"), "utf8")).concepts;
 const byId = (id) => REGISTRY.find((c) => c.id === id);
 
@@ -170,7 +170,7 @@ function sitemapBlock(concepts) {
   const rows = online.map((c) => `  <url>\n    <loc>https://aadhar.sh${c.path}</loc>\n    <lastmod>${c.lastmod}</lastmod>\n    <changefreq>monthly</changefreq>\n    <priority>0.3</priority>\n  </url>`);
   return rows.join("\n");
 }
-// The buddy list (www/lwe/index.html): the full Online group, count + list,
+// The buddy list (src/pages/lwe/index.html): the full Online group, count + list,
 // emitted to match the hand-authored markup exactly. Status badge per concept
 // (chat = live ask box, read = page only). The per-buddy .pic CSS stays hand-authored.
 function buddyGroup(concepts) {

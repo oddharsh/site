@@ -1,0 +1,58 @@
+{
+  "$comment": [
+    "The identity of the bun this repo builds with, declared once because the",
+    "version STRING cannot carry it.",
+    "",
+    "THE PROBLEM, measured 2026-08-16. bun 1.4 is not released. It is not on npm",
+    "in any form: the registry's newest bun is 1.3.14 (2026-05-13) and its",
+    "`canary` dist-tag points at a 1.3.13 canary. The 1.4 line exists only as a",
+    "GitHub release asset under the tag `canary`, and THAT TAG ROLLS — the",
+    "darwin-aarch64 asset reported updated_at 2026-08-16T11:26:46Z while the",
+    "release itself is titled after a different commit than the binary reports.",
+    "There is no immutable per-canary tag (bun-v1.4.0-canary.1 answers 404).",
+    "",
+    "So `1.4.0-canary.1` names a MOVING TARGET. package.json's packageManager",
+    "field holds that string and looks like a pin; it is a label that will stay",
+    "constant while the binary under it changes daily. Pinning by version here",
+    "would be the same class of mistake as trusting a flag --help omits.",
+    "",
+    "WHAT IS PINNED INSTEAD is the binary's SHA-256, plus the capability the",
+    "repo actually depends on. check-bun-canary.mjs asserts both. When bun rolls",
+    "the canary the sha stops matching and CI goes red by name, which is the",
+    "point: a bump becomes a deliberate, visible commit rather than a silent",
+    "change of compiler underneath a content-addressed artifact graph.",
+    "",
+    "THE CAPABILITY is not a preference. bun 1.3.14 accepts zstdCompressSync's",
+    "`dictionary` option and silently ignores it (measured: none=65 good=65",
+    "wrong=65, against node's 65/18/64), which ships no-op dcz deltas — gotcha",
+    "28. build.mjs feature-detects it and throws, but 40 seconds into a build.",
+    "The probe below is the same control run first and named.",
+    "",
+    "Re-verify with: bun run bun:canary:check",
+    "",
+    "BOTH platforms are declared because they are BOTH used: darwin-aarch64 is the",
+    "workstation and linux-x64 is every GitHub runner. Declaring only the one you",
+    "develop on fails CI at the first step with a TypeError rather than a message,",
+    "because .github/actions/setup-bun indexes this map by platform."
+  ],
+  "version": "1.4.0-canary.1",
+  "revision": "1.4.0-canary.1+7aad38741",
+  "platforms": {
+    "darwin-aarch64": {
+      "url": "https://github.com/oven-sh/bun/releases/download/canary/bun-darwin-aarch64.zip",
+      "binary_sha256": "d4f385f1be3be4e654e4a07b11201a622441842475ed7b5584487e9e6f81b865"
+    },
+    "linux-x64": {
+      "url": "https://github.com/oven-sh/bun/releases/download/canary/bun-linux-x64.zip",
+      "binary_sha256": "fef4eaaacb904d605192426e7c72b5a053053c5c8cd81a2621dff0732ec9c9ba"
+    }
+  },
+  "verified": {
+    "on": "2026-08-17",
+    "build_bytes_identical_to_node": true,
+    "build_files": 1499,
+    "build_bytes_identical_to_previous_canary": "1.4.0-canary.1+8bc4d2a88, all 1499 files",
+    "contract_tests": "316 across 1 file",
+    "zstd_dictionary": "none=65 good=18 wrong=64 (honours it, same as node v26.7.0)"
+  }
+}

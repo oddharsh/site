@@ -76,7 +76,7 @@ never the copy).
 | trick | today | in the rewrite |
 |---|---|---|
 | The route oracle: 43 curl assertions (status + content-type + body markers) gating every deploy | verify-routes.mjs | ported; grows the constitution greps (motion, GET purity, byte ceilings) |
-| bump-version.sh: one script bumps the version AND inserts the D1 checkpoint both /updates and /restore read, so the changelog cannot drift | scripts/bump-version.sh | keeps only the deploy-log insert (no SW to bump); the D1 table IS content, port the history |
+| bump-version.sh: one script bumps the version AND inserts the D1 checkpoint both /updates and /restore read, so the changelog cannot drift | tools/bump-version.sh | keeps only the deploy-log insert (no SW to bump); the D1 table IS content, port the history |
 | Build tripwires: the deploy fails if minification eats a load-bearing string | build.mjs | ported; every transform gets a tripwire |
 | Readable-source twins + banner pointers (`/nav.src.js`) | build.mjs | ported (`/shell.src.js`) |
 | Measure at the compression the page actually gets (q11 for static, ~gzip for per-request) before believing any byte win | this session's lab | doctrine |
@@ -186,7 +186,7 @@ edge-direct again permanently.
    (old SWR caches return the cached copy on 404 forever); 410 only after.
 4. DONE for the hash half (2026-07-03): /i/<stem>.<hash8>.<ext> serves the 438
    tier files immutable + edge-direct (OUT of the allowlist), hashes.json +
-   scripts/hash-thumbnails.sh feed the manifest bake, /images/<thumb> is the
+   tools/hash-thumbnails.sh feed the manifest bake, /images/<thumb> is the
    301 layer (worker-first, known stems redirect, unknown still 404-clamp),
    every consumer (home SSR + inline fallback + /photos + masonry) reads
    manifest URLs verbatim with an abs() shim so a stale pre-hash manifest
@@ -245,7 +245,7 @@ Firefox, ~0ms prerendered on Chromium, back/forward ~0ms bfcache everywhere.
   stale HTML. Parity verified on every page class; oracle 54/54.
 - PHASE B SHIPPED (v141): the desktop is static markup in every document
   (wallpaper div after <body>, icons + full taskbar before </body>), CLS 0,
-  curl-able, JS-off visible. scripts/gen-desktop-partial.mjs GENERATES the
+  curl-able, JS-off visible. tools/gen-desktop-partial.mjs GENERATES the
   partial from nav.js's own data blocks (evaled from source, so no silent
   drift), writes lib/desktop.js for lunaPage + writing, and patches the 27
   static pages between idempotent markers. nav.js builders are

@@ -63,18 +63,18 @@ jobs:
       - name: Check out main
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Install pnpm
-        run: npm install -g pnpm@11.21.0
+      - name: Set up bun
+        # config/bun-canary.json is the source of truth: the canary tag ROLLS,
+        # so the pin is the binary SHA-256 rather than the version string.
+        uses: ./.github/actions/setup-bun
 
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .node-version
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: bun install --frozen-lockfile
 
       # playwright-core drives the INSTALLED Chrome (`channel: "chrome"`) rather
       # than downloading a browser, which is why there is no `playwright install`
@@ -94,25 +94,25 @@ jobs:
         env:
           OG_ONLY: ${{ inputs.only }}
           OG_BASE: ${{ inputs.base }}
-        run: pnpm run og-cards
+        run: bun run og-cards
 
       # Idempotent, and separate from the bake on purpose: a new page needs its
       # <head> meta as well as its PNG, and a re-bake of an existing card needs
       # only the PNG. Running it always keeps a newly added page from shipping a
       # card nothing references.
       - name: Add meta to any page missing it
-        run: node www/scripts/inject-og-meta.mjs
+        run: node tools/photos/inject-og-meta.mjs
 
       - name: Anything to propose?
         id: diff
         run: |
           set -euo pipefail
-          if [ -z "$(git status --porcelain www/og www/garage www/lwe www/pixel-peeper)" ]; then
+          if [ -z "$(git status --porcelain public/og public/garage public/lwe public/pixel-peeper)" ]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "Every card already matches what production renders; nothing to do."
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
-            git status --short www/og www/garage www/lwe www/pixel-peeper | head -40
+            git status --short public/og public/garage public/lwe public/pixel-peeper | head -40
           fi
 
       - name: Open or update the card PR
@@ -127,14 +127,14 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          CARDS=$(git status --porcelain www/og | wc -l | tr -d ' ')
-          PAGES=$(git status --porcelain www/garage www/lwe www/pixel-peeper | wc -l | tr -d ' ')
+          CARDS=$(git status --porcelain public/og | wc -l | tr -d ' ')
+          PAGES=$(git status --porcelain public/garage public/lwe public/pixel-peeper | wc -l | tr -d ' ')
 
           # One long-lived branch, force-pushed, same as dictionary-roll. A fresh
           # branch per run would leave a trail of superseded PRs, and only the
           # newest bake describes what production renders now.
           git checkout -B "$BRANCH"
-          git add www/og www/garage www/lwe www/pixel-peeper
+          git add public/og public/garage public/lwe public/pixel-peeper
           git commit -m "chore(og): re-bake the social cards from production
 
           ${CARDS} card(s) and ${PAGES} page head(s) changed. Captured from

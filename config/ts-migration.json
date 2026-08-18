@@ -1,0 +1,250 @@
+{
+  "$comment": [
+    "Modules that were NOT type-clean when the Worker became TypeScript on",
+    "2026-08-16. Each carries a `// @ts-nocheck` header pointing here.",
+    "",
+    "THIS LIST MAY ONLY SHRINK. A contract test asserts that the set of files",
+    "carrying @ts-nocheck is exactly the set named here, so adding one is a",
+    "deliberate edit somebody reviews rather than a quiet opt-out, and fixing one",
+    "means deleting its entry. The counts are what tsc reported on the day the",
+    "conversion landed, kept so progress is measurable rather than asserted.",
+    "",
+    "The errors are NOT new defects. The code is byte-for-byte what shipped as",
+    "JavaScript and the bundle is byte-identical. What changed is the checker: a",
+    ".js file lets TypeScript treat every parameter as optional and infer object",
+    "shapes loosely, so TS2554 (arity) and TS2339 (unknown property) were",
+    "structurally invisible before. They are the two systemic classes here and",
+    "together they are 364 of the 381.",
+    "",
+    "36 of the 67 Worker modules are clean and ARE fully checked. That is the",
+    "half of the migration this buys immediately."
+  ],
+  "generated_on": "2026-08-16",
+  "totals": {
+    "modules": 31,
+    "errors": 381,
+    "by_code": {
+      "TS2365": 3,
+      "TS2345": 8,
+      "TS2556": 1,
+      "TS2339": 269,
+      "TS2554": 92,
+      "TS2353": 1,
+      "TS2769": 2,
+      "TS2741": 1,
+      "TS2739": 1,
+      "TS2698": 1,
+      "TS2538": 2
+    }
+  },
+  "modules": {
+    "src/worker/agent-ready.ts": {
+      "total": 5,
+      "codes": {
+        "TS2365": 3,
+        "TS2345": 1,
+        "TS2556": 1
+      }
+    },
+    "src/worker/agent.ts": {
+      "total": 1,
+      "codes": {
+        "TS2339": 1
+      }
+    },
+    "src/worker/around.ts": {
+      "total": 5,
+      "codes": {
+        "TS2345": 1,
+        "TS2554": 4
+      }
+    },
+    "src/worker/cache-lint.ts": {
+      "total": 9,
+      "codes": {
+        "TS2339": 9
+      }
+    },
+    "src/worker/census.ts": {
+      "total": 11,
+      "codes": {
+        "TS2554": 2,
+        "TS2339": 9
+      }
+    },
+    "src/worker/counter.ts": {
+      "total": 5,
+      "codes": {
+        "TS2339": 5
+      }
+    },
+    "src/worker/dict.ts": {
+      "total": 3,
+      "codes": {
+        "TS2339": 2,
+        "TS2554": 1
+      }
+    },
+    "src/worker/dyno.ts": {
+      "total": 1,
+      "codes": {
+        "TS2554": 1
+      }
+    },
+    "src/worker/home.ts": {
+      "total": 4,
+      "codes": {
+        "TS2554": 4
+      }
+    },
+    "src/worker/image-tools.ts": {
+      "total": 17,
+      "codes": {
+        "TS2339": 16,
+        "TS2353": 1
+      }
+    },
+    "src/worker/index.ts": {
+      "total": 2,
+      "codes": {
+        "TS2554": 1,
+        "TS2769": 1
+      }
+    },
+    "src/worker/lens-tools.ts": {
+      "total": 7,
+      "codes": {
+        "TS2554": 2,
+        "TS2339": 5
+      }
+    },
+    "src/worker/lens-wire.ts": {
+      "total": 11,
+      "codes": {
+        "TS2339": 6,
+        "TS2554": 5
+      }
+    },
+    "src/worker/lens.ts": {
+      "total": 170,
+      "codes": {
+        "TS2554": 40,
+        "TS2339": 127,
+        "TS2741": 1,
+        "TS2739": 1,
+        "TS2698": 1
+      }
+    },
+    "src/worker/lib/assets.ts": {
+      "total": 7,
+      "codes": {
+        "TS2339": 6,
+        "TS2345": 1
+      }
+    },
+    "src/worker/lib/botauth.ts": {
+      "total": 6,
+      "codes": {
+        "TS2339": 6
+      }
+    },
+    "src/worker/lib/cache.ts": {
+      "total": 7,
+      "codes": {
+        "TS2339": 7
+      }
+    },
+    "src/worker/lib/crawl.ts": {
+      "total": 3,
+      "codes": {
+        "TS2339": 3
+      }
+    },
+    "src/worker/lib/doors.ts": {
+      "total": 12,
+      "codes": {
+        "TS2339": 12
+      }
+    },
+    "src/worker/lib/mcp-tools.ts": {
+      "total": 2,
+      "codes": {
+        "TS2339": 2
+      }
+    },
+    "src/worker/lib/security.ts": {
+      "total": 3,
+      "codes": {
+        "TS2554": 1,
+        "TS2339": 2
+      }
+    },
+    "src/worker/lib/tui.ts": {
+      "total": 5,
+      "codes": {
+        "TS2339": 4,
+        "TS2554": 1
+      }
+    },
+    "src/worker/mcp.ts": {
+      "total": 4,
+      "codes": {
+        "TS2554": 4
+      }
+    },
+    "src/worker/photos.ts": {
+      "total": 29,
+      "codes": {
+        "TS2339": 29
+      }
+    },
+    "src/worker/rn.ts": {
+      "total": 12,
+      "codes": {
+        "TS2345": 1,
+        "TS2554": 7,
+        "TS2339": 2,
+        "TS2538": 2
+      }
+    },
+    "src/worker/search.ts": {
+      "total": 2,
+      "codes": {
+        "TS2345": 2
+      }
+    },
+    "src/worker/terminal.ts": {
+      "total": 14,
+      "codes": {
+        "TS2554": 12,
+        "TS2339": 2
+      }
+    },
+    "src/worker/webmention-send.ts": {
+      "total": 7,
+      "codes": {
+        "TS2554": 5,
+        "TS2345": 2
+      }
+    },
+    "src/worker/whoareyou.ts": {
+      "total": 12,
+      "codes": {
+        "TS2339": 12
+      }
+    },
+    "src/worker/wire.ts": {
+      "total": 2,
+      "codes": {
+        "TS2339": 2
+      }
+    },
+    "src/worker/writing.ts": {
+      "total": 3,
+      "codes": {
+        "TS2554": 2,
+        "TS2769": 1
+      }
+    }
+  }
+}

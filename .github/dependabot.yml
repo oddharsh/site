@@ -32,7 +32,7 @@ updates:
   # The histogram bake is a small, reproducible Python toolchain. Keep its
   # decoder pin current and send it through the same release-note review.
   - package-ecosystem: pip
-    directory: "/www/scripts"
+    directory: "/tools/photos"
     schedule:
       interval: daily
       time: "09:00"
@@ -42,11 +42,11 @@ updates:
       prefix: chore
       include: scope
 
-  # The JPEG thumbnail encoder (www/scripts/zenc) pins zenjpeg via Cargo.
+  # The JPEG thumbnail encoder (tools/photos/zenc) pins zenjpeg via Cargo.
   # This is what retired the hand-rolled jpegli refresh workflow: dependabot now
   # owns the production encoder's update cadence, same as every other toolchain.
   - package-ecosystem: cargo
-    directory: "/www/scripts/zenc"
+    directory: "/tools/photos/zenc"
     schedule:
       interval: daily
       time: "09:00"
