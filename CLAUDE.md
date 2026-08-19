@@ -2253,7 +2253,7 @@ pnpm run deploy:direct
     compression was OURS, not the platform's. `encodeBody` is **write-only**
     Response init, so rebuilding a response drops it while leaving the
     `content-encoding` header visible, and the runtime then compresses the body a
-    second time to match. `withSecurityHeaders` (`lib/security.js`) rebuilds
+    second time to match. `withSecurityHeaders` (`lib/security.ts`) rebuilds
     EVERY worker response, which made `encodeBody: "manual"` a no-op site-wide.
     It now carries the flag forward whenever a content-encoding is present.
 
@@ -2265,6 +2265,45 @@ pnpm run deploy:direct
     **Anything that rebuilds a Response must preserve `encodeBody`.** There is no
     getter for it, so the loss is silent and the symptom (a body that decodes once
     into more compressed bytes) looks like a platform bug. Check this FIRST.
+
+    **"Rebuilding drops it" is too broad, and the SHAPE of the init decides.**
+    Measured on workerd 1.20260811.1, 2026-08-18, against a 55-byte brotli payload
+    that decodes to 17,600 bytes:
+
+    | how the response is rebuilt | wire | brotli layers |
+    |---|--:|--:|
+    | not rebuilt | 55 B | 1 |
+    | `new Response(r.body, r)` | 55 B | 1 |
+    | `new Response(r.body, { status, headers })` | 59 B | **2** |
+    | the same, plus one added header | 59 B | **2** |
+    | `new Response(r.body, r)`, then `out.headers.set(...)` | 55 B | 1 |
+
+    So passing the RESPONSE as init preserves the flag and building an init OBJECT
+    loses it, which is the shape you reach for the moment you want to add a header.
+    The last row is the workaround worth knowing: rebuild with the response as
+    init, then mutate the headers on the result. `photos.ts`, `rn.ts`, `cache.ts`
+    and `cal/src/index.js` already do exactly that, in five places, so the codebase
+    has been relying on this asymmetry without it being written down anywhere.
+
+    The double-encoded body is genuinely broken rather than merely fat: decoded
+    once, as the `content-encoding: br` header instructs, the object-init rows give
+    back 55 bytes of compressed noise where the correct response gives 17,600 bytes
+    of text. The byte counts move by single digits, so size never reveals it.
+
+    There is still NO getter, re-verified the same day:
+    `{ encodeBody_own: false, encodeBody_value: null, in_prototype: false, keys: [] }`.
+    That is why [cloudflare/workerd#7066](https://github.com/cloudflare/workerd/issues/7066)
+    asks for a readable property before it asks for a behaviour change: a getter is
+    what would let a wrapper carry the flag on purpose and let a test assert it did.
+
+    **The contract test for this can only agree with itself.** It builds a response
+    carrying `content-encoding: br`, runs `withSecurityHeaders`, and asserts the
+    header survived. The header survives whether or not the flag was carried, and
+    `node --test` runs undici, which does not implement `encodeBody` at all, so no
+    assertion written there can see the thing it claims to cover. Same shape as the
+    Turndown structural test and gotcha 24's stale-projection check. A test with
+    teeth has to either run in workerd or assert on the SOURCE, the way the
+    Turndown one settled for.
 
     Three suspects were investigated and exonerated. Two of the three are real
     facts worth keeping, they just weren't the cause: (1) a worker cannot read the
