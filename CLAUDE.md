@@ -3899,6 +3899,55 @@ pnpm run deploy:direct
     branch between the two, which is why it is a check rather than a rule of
     thumb.
 
+37. **`Bun.Image` wraps the OS imaging stack, so it replaces `sips` rather than
+    `sharp`, and its `backend` field is what says which.** Probed on the canary
+    this repo pins (`1.4.0-canary.1+7aad38741`), so it is a real API rather than
+    a roadmap item. `Bun.image` does not exist; `Bun.Image` does, and it carries
+    `resize`, `rotate`, `flip`, `flop`, `modulate`, `placeholder`, `metadata`,
+    encoders for `avif`/`jpeg`/`png`/`webp`/`heic`, and clipboard statics.
+
+    **`Bun.Image.backend === "system"` is the whole comparison.** It calls the
+    operating system's imaging stack; sharp bundles libvips and therefore
+    produces the same pixels on every platform. For a repository whose output is
+    CONTENT-ADDRESSED, that difference is disqualifying on its own: macOS and a
+    Linux runner would mint different `/i/` URLs for the same photo, and the
+    failure would look like a dictionary tier that quietly stopped matching
+    rather than like an error.
+
+    Measured against one real photo (`L1000069_3`, 5976x3992), one run:
+
+    | tier | this pipeline | Bun.Image |
+    |---|--:|--:|
+    | 600px JPG | **21,232 B** (zenc q84) | 35,682 B (q84) |
+    | 600px AVIF | **10,804 B** (avifenc q63, 10-bit) | 12,776 B (q63) |
+    | 3 tiers, wall clock | ~1.05 s across 10 spawns | **~0.36 s in-process** |
+
+    So about 3x faster and 30-65% fatter. That trade is backwards here, and the
+    file that records why is this one: zenc exists because it beat cjpegli by
+    4%, and 10-bit AVIF was adopted for 6%. Handing back 66% on the JPG tier to
+    save 700ms on a script that runs when photos are added is not a trade this
+    site makes.
+
+    **Two smaller traps, both worth knowing before anyone benchmarks it again.**
+    `resize(600, 600)` STRETCHES to those dimensions; the square tiles here come
+    from an explicit `sips -c` centre crop, so a naive comparison is measuring
+    two different pictures. And feeding it the original JPEG compares one encode
+    against a pipeline that encodes from a LOSSLESS intermediate, which is the
+    generational-loss point the thumbnail work already settled.
+
+    **Where it would genuinely fit is the plumbing.** Phase 1 spends six `sips`
+    spawns per photo on decode, resize, crop and format conversion, and
+    `Bun.Image` does all four in-process with no dependency. It competes with
+    that half and loses to the encoders, which are the half this site cares
+    about. Reach for it for a throwaway thumbnail, a placeholder, or a clipboard
+    image, never for a served tier.
+
+    The general rule, which outlives this API: **compare encoders on BYTES at
+    matched output, because a quality number means something different in each.**
+    `q84` meant 21 KB in one and 36 KB in the other on the same input, and
+    reading those two 84s as the same setting is how a "faster and equivalent"
+    swap gets proposed.
+
 ---
 
 ## Source folder for new photos
