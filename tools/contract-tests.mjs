@@ -5635,6 +5635,11 @@ test("/ask streams by default and answers JSON only when asked", async () => {
 test("/ask returns NLWeb's six result fields, with a real schema.org object", async () => {
   const payload = await (await askGet(`?query=${NLWEB_HIT}&streaming=0`)).json();
   assert.ok(payload.query_id, "every answer carries a query_id");
+  // The revision the server speaks and the dialect this request was read as are
+  // two claims. A legacy GET is answered by a server that does speak 0.55, so
+  // one field carrying both would be ambiguous exactly where it matters most.
+  assert.equal(payload._meta.version, "0.55");
+  assert.equal(payload._meta.dialect, "legacy");
   assert.ok(payload.results.length >= 1, "the cached corpus must answer this query");
   for (const row of payload.results) {
     for (const field of ["url", "name", "site", "score", "description", "schema_object"]) {

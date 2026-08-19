@@ -224,7 +224,12 @@ export async function nlwebAsk(env, params) {
     total: ranked.total,
     results,
     _meta: {
+      // The revision this SERVER speaks, and separately the dialect this
+      // REQUEST was read as. One field carrying both would be ambiguous on the
+      // common case: a legacy GET is answered by a server that does speak 0.55,
+      // and "version: 0.55" alone reads as a claim about the response.
       version: NLWEB_VERSION,
+      dialect: params.structured ? "0.55" : "legacy",
       // Every one of these is a claim this origin can actually back. `retrieval`
       // and `description` are named because NLWeb's own field annotation says
       // descriptions are LLM-generated, and ours are not.
