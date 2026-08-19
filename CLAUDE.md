@@ -1504,6 +1504,29 @@ four of six origins on the top rung refuse the REQUEST and never name a
 parameter they have no concept of, and none of them stream. Tests pin all
 three statuses plus a bare 401 and a generic 400 as still absent.
 
+**The doors tier caches its whole fan-out for six hours, and for THIS origin
+that TTL cannot see the one thing that invalidates it.** Every probe against
+aadhar.sh self-dispatches in-process, so the answers ARE this Worker and a
+deploy changes them the instant it lands. Measured the day /ask shipped:
+production answered /ask correctly while the site's own doors row went on saying
+`no /ask`.
+
+The proof is worth copying, because the VERDICT could not settle it. "no /ask"
+is what a stale cache and a broken probe both look like. What separated them was
+a field nobody looks at: the cached blob's llms.txt was 12,860 bytes against the
+13,946 production was serving, exactly the 1,086-byte /ask section missing. When
+a cache is the suspect, find a field that MUST have changed rather than
+re-reading the one you are arguing about.
+
+`discoveryScope` keys the self blob on `CF_VERSION_METADATA.id` so a release
+invalidates it exactly once per colo, and a foreign origin keeps the origin-only
+key it always had, because busting a stranger's entry on our deploy means
+re-asking them 23 questions for nothing. With no version to key on the self blob
+is not cached at all, which is local dev, where the fan-out never leaves the
+isolate. Note that lens.ts's shell-key comment says production "may not expose
+CF_VERSION_METADATA"; measured 2026-08-19, it does, and `/whoareyou.json` reads
+it straight off the binding.
+
 Read this as a caution about the whole doors tier rather than about one probe.
 The correction to over-counting was a status-code rule written from the false
 positives in hand, and it was never checked against a server that WORKS, because

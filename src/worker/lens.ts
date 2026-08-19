@@ -2793,6 +2793,11 @@ async function lensProbeEch(hostname) {
 // Six hours because these files change on the order of deploys, not requests,
 // and a stale llms.txt is a far smaller error than a lens nobody can afford to
 // run. `fresh` bypasses for a caller that needs the live answer.
+//
+// That reasoning holds for every origin except THIS one, where "on the order of
+// deploys" is the problem rather than the justification: our own deploys are
+// exactly what the TTL cannot see. discoveryScope below keys the self blob on
+// the Worker version so a release invalidates it at the moment it lands.
 const DISCOVERY_TTL = 21600;
 // Bodies are capped at 256KB each by lensProbe, so a pathological origin could
 // serialize to megabytes. Skip caching rather than truncate: truncating would
@@ -2800,7 +2805,47 @@ const DISCOVERY_TTL = 21600;
 // code paid every time.
 const DISCOVERY_MAX_BYTES = 1_000_000;
 
-const discoveryKey = (origin) => new Request(`https://lens-discovery.invalid/v1/${encodeURIComponent(origin)}`);
+const discoveryKey = (origin, scope) =>
+  new Request(`https://lens-discovery.invalid/v1/${encodeURIComponent(origin)}${scope ? `/${encodeURIComponent(scope)}` : ""}`);
+
+/**
+ * How one origin's discovery blob is scoped in the cache.
+ *
+ * A FOREIGN origin's answers have nothing to do with which version of this
+ * Worker is running, so the origin alone is the key and a deploy must not throw
+ * that entry away: refilling it means re-asking a stranger 23 questions, which
+ * is both slow and rude.
+ *
+ * OUR OWN origin is the opposite case, because every probe against it
+ * self-dispatches in-process. The answers ARE this Worker, so a deploy changes
+ * them at the instant it lands, and the six-hour TTL cannot see the one input
+ * that actually invalidated them.
+ *
+ * Measured 2026-08-19, the day /ask shipped: production answered /ask correctly
+ * while this site's own doors row went on reporting `no /ask`. The blob was
+ * pre-deploy, and the proof was a field nobody looks at — its cached llms.txt
+ * was 12,860 bytes against the 13,946 production was serving, exactly the
+ * /ask section missing. Worth keeping, because the VERDICT could not settle
+ * this on its own: "no /ask" is what a stale cache and a broken probe both look
+ * like, and only a field that must have changed tells them apart.
+ *
+ * So the version rides in the key for self. A deploy mints a new one, the next
+ * self-scan refills once per colo, and every scan after that hits cache exactly
+ * as before. Skipping the cache outright was the obvious fix and the wrong one:
+ * the self-scan is the first thing anyone tries here, and it would pay the full
+ * fan-out every time.
+ *
+ * With no version to key on there is no safe cache, so it is skipped entirely.
+ * That state is local dev, where the fan-out never leaves the isolate and where
+ * a stale entry in .wrangler/state is a documented way to lose an afternoon.
+ */
+export function discoveryScope(origin, env) {
+  let host;
+  try { host = new URL(origin).hostname.toLowerCase(); } catch { return { scope: null, cacheable: true }; }
+  if (host !== CANONICAL_HOST) return { scope: null, cacheable: true };
+  const version = env?.CF_VERSION_METADATA?.id;
+  return version ? { scope: version, cacheable: true } : { scope: null, cacheable: false };
+}
 
 export async function originDiscovery(origin, hostname, env, opts = {}) {
   // `caches` is a Workers global and does not exist under plain node, where the
@@ -2811,9 +2856,10 @@ export async function originDiscovery(origin, hostname, env, opts = {}) {
   // can ask. The one class lib/parse.js cannot cover.
   // oxlint-disable-next-line anti-slop/no-runtime-typeof
   const cache = typeof caches !== "undefined" ? caches.default : null;
-  const key = discoveryKey(origin);
+  const { scope, cacheable } = discoveryScope(origin, env);
+  const key = discoveryKey(origin, scope);
 
-  if (cache && !opts.fresh) {
+  if (cache && cacheable && !opts.fresh) {
     try {
       const hit = await cache.match(key);
       if (hit) {
@@ -2885,7 +2931,7 @@ export async function originDiscovery(origin, hostname, env, opts = {}) {
     };
   });
 
-  if (cache) {
+  if (cache && cacheable) {
     try {
       const body = JSON.stringify(result);
       if (body.length <= DISCOVERY_MAX_BYTES) {

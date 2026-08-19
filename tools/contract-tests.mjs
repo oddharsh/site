@@ -5931,6 +5931,57 @@ test("the NLWeb lens sends the cheapest mode and never a caller's own script", a
 });
 
 
+test("discovery caching is scoped by Worker version for THIS origin only", async () => {
+  // Pure and tested directly, the way classifyDoor is. The whole claim is which
+  // origin gets version-scoped and which does not, and driving it through the
+  // Cache API would test workerd rather than the rule.
+  const { discoveryScope } = await import("../src/worker/lens.ts");
+  const withVersion = { CF_VERSION_METADATA: { id: "006569fd-44df-4ddd-bb15-0a0339ebd2d2" } };
+
+  // A stranger's discovery answers have nothing to do with our deploys, and
+  // busting their entry means re-asking them 23 questions.
+  for (const foreign of ["https://example.com", "https://stripe.com", "http://nlweb.ai"]) {
+    const s = discoveryScope(foreign, withVersion);
+    assert.equal(s.scope, null, `${foreign} must not be version-scoped`);
+    assert.equal(s.cacheable, true);
+  }
+
+  // Ours is the opposite: every probe self-dispatches, so the answers ARE this
+  // Worker and a deploy changes them at the instant it lands.
+  const self = discoveryScope("https://aadhar.sh", withVersion);
+  assert.equal(self.scope, "006569fd-44df-4ddd-bb15-0a0339ebd2d2");
+  assert.equal(self.cacheable, true);
+  // Case in the host must not decide it.
+  assert.equal(discoveryScope("https://AADHAR.SH", withVersion).scope, self.scope);
+
+  // Two versions must not share an entry — this is the whole fix. Measured
+  // behaviourally against a booted Worker on 2026-08-19: across a restart that
+  // moved the version from b1a93186 to 6b366f05, the first self-scan reported
+  // phases.discoveryCached false and the second reported true.
+  const otherVersion = { CF_VERSION_METADATA: { id: "deadbeef-0000-0000-0000-000000000000" } };
+  assert.notEqual(discoveryScope("https://aadhar.sh", otherVersion).scope, self.scope);
+
+  // And the other half, which is the one a regression would silently break: a
+  // FOREIGN origin must keep its entry across our deploys. Busting it on every
+  // release means re-asking a stranger 23 questions for no reason.
+  assert.equal(discoveryScope("https://example.com", otherVersion).scope,
+    discoveryScope("https://example.com", withVersion).scope,
+    "a deploy must not invalidate a foreign origin's discovery cache");
+
+  // No version to key on means no safe cache: that is exactly the state where a
+  // stale entry outlives the change that should have invalidated it.
+  for (const env of [{}, undefined, { CF_VERSION_METADATA: {} }, { CF_VERSION_METADATA: null }]) {
+    assert.equal(discoveryScope("https://aadhar.sh", env).cacheable, false, "an unversioned self-scan must not cache");
+  }
+  // A foreign origin still caches with no version, because its scope never
+  // depended on one.
+  assert.equal(discoveryScope("https://example.com", {}).cacheable, true);
+
+  // An origin that does not parse falls back to the foreign path rather than
+  // throwing: a scan must not die on a malformed target it was going to refuse.
+  assert.equal(discoveryScope("not a url at all", withVersion).cacheable, true);
+});
+
 test("the /ask door probe reads a real NLWeb server as present", async () => {
   // This probe KNOCKS: it sends no query, so it has to classify whatever a
   // server says to a bare request. Two shapes a CONFORMING instance returns
