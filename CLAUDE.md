@@ -2979,33 +2979,53 @@ pnpm run deploy:direct
     branch satisfies a `git pull` and still reads the wrong `checkpoints.json`.
     Ramp from a fresh worktree at `origin/main`.
 
-26. **`run_worker_first` caps at 100 RULES and this repo sits at exactly 100.**
-    There is no headroom. Adding two paths for `/garage/dyno` on 2026-08-08 took
-    it to 102 and wrangler refused to start the Worker at all:
+26. **`run_worker_first` caps at 100 RULES, and the count is RAW.** Adding two
+    paths for `/garage/dyno` on 2026-08-08 took the list past it and wrangler
+    refused to start the Worker at all:
 
     ```
     Error: Too many `run_worker_first` rules were provided;
     102 rules provided exceeds max of 100.
     ```
 
-    **Neither `pnpm run build` nor `wrangler deploy --dry-run` catches this**,
-    which is the part worth knowing before you spend an afternoon on it. Both
-    passed on the config that could not boot; `parseStaticRouting` runs at
-    session creation, so the failure needs a real Worker. `pnpm run routes:check`
-    is what found it, because `createTestHarness()` starts one. That is a second
-    reason the route oracle exists beyond the routes it sweeps: it is the only
-    pre-merge step that instantiates the asset-routing config.
+    **Three things this entry used to claim are wrong.** Measured 2026-08-19 on
+    wrangler 4.123.0, and re-checked on 4.118.0, which is the version pinned when
+    the entry was written, so these were wrong on the day rather than gone stale:
 
-    Two things follow. **Check whether a wildcard already covers your path before
-    adding a rule** — `/garage/*`, `/lwe/*`, `/pixel-peeper/*`, `/access/*`,
-    `/coffee/*`, `/serendipity/*`, `/writing/*` and several `/images/*.<ext>`
-    entries are already there, and the two `/garage/dyno` rules turned out to be
-    redundant, which is how that change shipped at 100 rather than 102. And
-    **deduping will not buy you room**: the list holds 107 raw entries of which 7
-    are exact duplicates (`/garage/*`, `/garage`, `/lens`, `/lens/`, `/photos`,
-    `/photos/`, `/rn.md` each appear twice), and wrangler counts the 100 UNIQUE
-    ones. Real headroom means folding individual paths onto wildcards, which
-    changes what the Worker sees and is not a cosmetic edit.
+    | config | `deploy --dry-run` | real Worker boot |
+    |---|---|---|
+    | 100 raw, 100 distinct | exit 0 | starts |
+    | 102 raw, 102 distinct | exit 1, names 102 | same error |
+    | 104 raw, **99 distinct** | exit 1, names **104** | same error, names 104 |
+
+    **Deduping DOES buy room, because the cap counts entries rather than distinct
+    patterns.** The old text said wrangler counts the distinct ones and that
+    deduping would not help, which points you at the expensive fix (folding paths
+    onto wildcards, which changes what the Worker sees) and away from the free
+    one. The third row is the proof: 99 distinct patterns, rejected for carrying
+    104 entries.
+
+    **`wrangler deploy --dry-run` catches it**, exit 1, naming the count. The old
+    text said neither the build nor the dry-run did, and concluded that the route
+    oracle was the only pre-merge step to instantiate the asset-routing config.
+    The oracle still earns its keep on the routes it sweeps, and it is not the
+    only thing between this config and a Worker that cannot boot.
+
+    **The repo is not at the cap.** `wrangler.jsonc` carries 92 entries, all 92
+    distinct, 8 short of the limit. There were duplicates when this was written;
+    there are none now.
+
+    What survives is the first thing to do anyway: **check whether a wildcard
+    already covers your path before adding a rule.** `/garage/*`, `/lwe/*`,
+    `/pixel-peeper/*`, `/access/*`, `/coffee/*`, `/serendipity/*`, `/writing/*`
+    and several `/images/*.<ext>` entries are already there, and the two
+    `/garage/dyno` rules that started all this turned out to be redundant.
+
+    The general lesson is the one this entry now demonstrates. Every wrong claim
+    in it was inferred from a single incident rather than measured: nobody ran the
+    dry-run against an over-cap config, and nobody built a config with duplicates
+    to see which number came back. Both take about a minute, and the guidance that
+    grew out of skipping them pointed the wrong way for ten days.
 
 27. **A `github-advanced-security` failure is usually GitHub's own Copilot
     Autofix falling over, not your diff.** Seen six times across three days: on
