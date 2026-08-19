@@ -75,28 +75,23 @@ allowBuilds:
 # --frozen-lockfile install re-checks the policy against the COMMITTED lockfile,
 # so a dependabot PR opened minutes after a release fails to install until
 # either the package turns 24 hours old or its version is listed below.
-# `pnpm install` regenerates the list; do not hand-edit it.
+# `pnpm install` APPENDS to `minimumReleaseAgeExclude` when it needs to, and
+# that key is absent here because the list is currently empty rather than
+# because it is unused.
+#
+# It does NOT prune, which is the half this note used to get wrong by saying
+# pnpm "regenerates the list". Measured 2026-08-19: the list held 20 entries
+# (one workers-types version no longer installed, plus oxc-minify 0.144.0 and
+# its 19 platform bindings) and a full `pnpm install` that moved five packages
+# left every one of them in place. An append-only list under a comment saying
+# do not hand-edit it is a list that grows forever, and each dead entry is a
+# standing exemption from the 24-hour policy for a version nobody is installing.
+#
+# Emptying it was verified rather than assumed, under the condition that
+# actually matters: `node_modules` deleted, then `pnpm install
+# --frozen-lockfile`, which is what CI runs. Exit 0. Every excluded version had
+# long since aged past 1440 minutes, so the exclusions were inert.
+#
+# So DO hand-edit it, in one direction only: an entry may be removed once its
+# version is over 24 hours old, and entries are only ever added by pnpm.
 minimumReleaseAge: 1440
-
-minimumReleaseAgeExclude:
-  - '@cloudflare/workers-types@5.20260810.1'
-  - '@oxc-minify/binding-android-arm-eabi@0.144.0'
-  - '@oxc-minify/binding-android-arm64@0.144.0'
-  - '@oxc-minify/binding-darwin-arm64@0.144.0'
-  - '@oxc-minify/binding-darwin-x64@0.144.0'
-  - '@oxc-minify/binding-freebsd-x64@0.144.0'
-  - '@oxc-minify/binding-linux-arm-gnueabihf@0.144.0'
-  - '@oxc-minify/binding-linux-arm-musleabihf@0.144.0'
-  - '@oxc-minify/binding-linux-arm64-gnu@0.144.0'
-  - '@oxc-minify/binding-linux-arm64-musl@0.144.0'
-  - '@oxc-minify/binding-linux-ppc64-gnu@0.144.0'
-  - '@oxc-minify/binding-linux-riscv64-gnu@0.144.0'
-  - '@oxc-minify/binding-linux-riscv64-musl@0.144.0'
-  - '@oxc-minify/binding-linux-s390x-gnu@0.144.0'
-  - '@oxc-minify/binding-linux-x64-gnu@0.144.0'
-  - '@oxc-minify/binding-linux-x64-musl@0.144.0'
-  - '@oxc-minify/binding-openharmony-arm64@0.144.0'
-  - '@oxc-minify/binding-win32-arm64-msvc@0.144.0'
-  - '@oxc-minify/binding-win32-ia32-msvc@0.144.0'
-  - '@oxc-minify/binding-win32-x64-msvc@0.144.0'
-  - oxc-minify@0.144.0
