@@ -47,6 +47,11 @@ export const DOOR_LIMITS = {
   // descriptions over a kilobyte on their own — so it is bounded like every
   // other foreign string here rather than trusted to be small.
   schemaBytes: 6000,
+  // An /ask answer. Results are bounded because a foreign server chooses how
+  // many to send, and each one carries a schema.org object of no stated size.
+  askResults: 10,
+  askText: 240,      // characters per foreign name/description
+  askSchemaBytes: 4000,
 };
 
 /**
@@ -351,6 +356,213 @@ export async function foreignMcpTools(origin, env, opts = {}) {
     // and is reported as a shut door above rather than as an unreadable one.
     return { ok: false, unreadable: true, detail: String(error?.message || error).slice(0, 80) };
   } finally { clearTimeout(timer); }
+}
+
+
+// ── NLWeb: reading an /ask answer ───────────────────────────────────────────
+// The catalogue read above asks an MCP server to DESCRIBE itself, which costs
+// it a lookup in memory. This one asks a stranger's retrieval endpoint an
+// actual question, and that is a materially different favour to ask: on an
+// NLWeb instance backed by a vector store and an LLM, one call spends their
+// embedding budget and possibly a model call.
+//
+// So three politenesses are structural rather than optional. `mode=list` is
+// sent EXPLICITLY, because it is the one mode the spec defines as pure
+// retrieval and the default could be reconfigured server-side. `streaming=0`
+// asks for a single JSON body. And the route above this caches, so a public
+// button cannot re-ask the same origin the same question on every click.
+//
+// What comes back is reported as SHAPE rather than as an answer. The interesting
+// question about a foreign /ask is not what it said, it is whether what it said
+// carries the six fields NLWeb's result contract names — a server can return
+// beautiful prose and no `schema_object` at all, and then an agent has a
+// paragraph where it was promised structured data.
+const ASK_CAP = 512 * 1024;
+const ASK_FIELDS = ["url", "name", "site", "score", "description", "schema_object"];
+
+/**
+ * Read one foreign origin's /ask endpoint.
+ *
+ * Returns the same three-state shape as foreignMcpTools, for the same reason:
+ * shut (there is no endpoint), unreadable (we never got to look), or ok.
+ */
+export async function foreignNlwebAsk(origin, env, opts = {}) {
+  const base = origin.replace(/\/+$/, "") + "/ask";
+  const query = String(opts.query || "").trim().slice(0, 200) || "what is this site about";
+  const url = `${base}?query=${encodeURIComponent(query)}&streaming=0&mode=list`;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+
+  // Same loopback escape as the catalogue read: over the network a request to
+  // our own hostname is killed with a 522, so a self-scan would report this
+  // origin's own /ask as down.
+  let isSelf = false;
+  try { isSelf = new URL(url).hostname.toLowerCase() === CANONICAL_HOST && !!(env.SELF_FETCH || env.ASSETS); } catch { /* not self */ }
+
+  try {
+    // Both framings on Accept. A server is entitled to stream even when asked
+    // not to, and one that does is answering rather than failing.
+    const headers = await botHeaders(url, env, {
+      headers: { accept: "application/json, text/event-stream" },
+      method: "GET",
+      sign: !isSelf,
+    });
+
+    let res;
+    if (isSelf) {
+      const selfReq = new Request(url, { method: "GET", headers });
+      res = await (env.SELF_FETCH ? env.SELF_FETCH(selfReq) : env.ASSETS.fetch(selfReq));
+    } else {
+      const followed = await fetchFollowingPublicRedirects(
+        url,
+        { method: "GET", headers, signal: controller.signal, cf: { cacheTtl: 0 } },
+        (candidate) => validateLensTarget(candidate),
+      );
+      if (!followed.ok) return { ok: false, unreadable: true, detail: "redirected somewhere this reader will not follow" };
+      res = followed.response;
+    }
+
+    if (res.status === 401 || res.status === 403) return gatedDoor(res);
+    if (res.status === 404) return { ok: false, detail: "no /ask" };
+
+    const contentType = String(res.headers.get("content-type") || "").toLowerCase();
+    // An /ask that answers HTML is a PAGE at that path, not an endpoint. This is
+    // the single most common false positive in the door probe, and calling it a
+    // shut door rather than a broken one is the honest reading.
+    if (/text\/html/.test(contentType)) return { ok: false, detail: "HTML at /ask (a page, not an endpoint)" };
+
+    const got = await readResponseCapped(res, ASK_CAP);
+    if (got.truncated) return { ok: false, unreadable: true, detail: `answer over ${ASK_CAP / 1024} KB — not read` };
+
+    const framing = /event-stream/.test(contentType) || /^\s*(event|data):/m.test(got.text) ? "sse" : "json";
+    const parsed = framing === "sse" ? parseAskStream(got.text) : parseAskJson(got.text);
+    if (!parsed.ok) {
+      // A non-2xx that also failed to parse is reported by STATUS, because "not
+      // JSON" describes an error page rather than the server's behaviour.
+      if (!res.ok) return { ok: false, detail: `HTTP ${res.status}` };
+      return { ok: false, detail: parsed.detail };
+    }
+    if (!res.ok && !parsed.results.length) return { ok: false, detail: `HTTP ${res.status}` };
+
+    return { ok: true, endpoint: base, query, framing, dialect: parsed.dialect, ...gradeAskResults(parsed) };
+  } catch (error) {
+    return { ok: false, unreadable: true, detail: String(error?.message || error).slice(0, 80) };
+  } finally { clearTimeout(timer); }
+}
+
+/** The single-body answer: `{query_id, ...attrs, results:[...]}`. */
+function parseAskJson(text) {
+  let payload;
+  try { payload = JSON.parse(text); } catch { return { ok: false, detail: "that is not JSON" }; }
+  const record = asRecord(payload);
+  if (!record) return { ok: false, detail: "the answer is not a JSON object" };
+  const results = Array.isArray(record.results) ? record.results
+    // ItemList is the richer structure the spec says results are moving to, so
+    // a server that has already moved is read rather than called malformed.
+    : Array.isArray(record.itemListElement) ? record.itemListElement
+      : null;
+  if (!results) return { ok: false, detail: "no `results` array in the answer" };
+  return { ok: true, dialect: "json", queryId: asText(record.query_id), results, attributes: Object.keys(record).filter((k) => k !== "results") };
+}
+
+/**
+ * The streamed answer, in either of the two dialects the reference server
+ * emits. They are genuinely different wire formats and which one arrives says
+ * something real about the server, so the dialect is reported rather than
+ * normalised away:
+ *
+ *   legacy  data: {"message_type":"result","content":[...]}
+ *   v0.55   event: result\n data: {"index":0,"item":{...}}
+ */
+function parseAskStream(text) {
+  const results = [];
+  const seen = new Set();
+  let queryId;
+  let named = false;
+
+  for (const block of text.split(/\n\n+/)) {
+    const eventName = (block.match(/^event:\s*(.+)$/m) || [])[1]?.trim();
+    const data = block.split("\n").filter((l) => l.startsWith("data:")).map((l) => l.slice(5).trim()).join("");
+    if (!data) continue;
+    let frame;
+    try { frame = JSON.parse(data); } catch { continue; }
+    const record = asRecord(frame);
+    if (!record) continue;
+    if (eventName) { named = true; seen.add(eventName); }
+    const type = asText(record.message_type);
+    if (type) seen.add(type);
+    queryId = queryId || asText(record.query_id) || asText(record.conversation_id);
+    if (eventName === "result" && asRecord(record.item)) results.push(record.item);
+    else if (Array.isArray(record.content)) results.push(...record.content);
+    else if (Array.isArray(record.results)) results.push(...record.results);
+  }
+
+  if (!results.length && !seen.size) return { ok: false, detail: "no readable SSE frames" };
+  return { ok: true, dialect: named ? "v0.55" : "legacy", queryId, results, events: [...seen].slice(0, 12), attributes: [] };
+}
+
+/**
+ * Grade the results against NLWeb's own contract, per field.
+ *
+ * Counting per FIELD rather than reporting a pass is the point: partial
+ * conformance is the normal case, and "8 of 10 results carry a schema_object"
+ * is the sentence an agent author actually needs.
+ */
+function gradeAskResults(parsed) {
+  const coverage = Object.fromEntries(ASK_FIELDS.map((f) => [f, 0]));
+  const types = new Map();
+  let schemaBytes = 0;
+
+  for (const raw of parsed.results) {
+    const item = asRecord(raw) || {};
+    for (const field of ASK_FIELDS) if (item[field] !== undefined && item[field] !== null && item[field] !== "") coverage[field] += 1;
+    const schema = asRecord(item.schema_object);
+    if (schema) {
+      const t = schema["@type"] ?? schema.type;
+      for (const name of (Array.isArray(t) ? t : [t]).filter(Boolean)) {
+        const key = String(name).slice(0, 40);
+        types.set(key, (types.get(key) || 0) + 1);
+      }
+      try { schemaBytes += JSON.stringify(schema).length; } catch { /* unserializable, counted as none */ }
+    }
+  }
+
+  return {
+    queryId: parsed.queryId,
+    total: parsed.results.length,
+    // The full set is graded; only a bounded slice is carried back, and the two
+    // numbers are reported separately so a reader is never shown 10 of 10 for a
+    // server that sent 400.
+    shown: Math.min(parsed.results.length, DOOR_LIMITS.askResults),
+    coverage,
+    conformant: ASK_FIELDS.every((f) => coverage[f] === parsed.results.length) && parsed.results.length > 0,
+    schemaTypes: [...types.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([name, count]) => ({ name, count })),
+    schemaBytes,
+    attributes: (parsed.attributes || []).slice(0, 12),
+    events: parsed.events,
+    results: parsed.results.slice(0, DOOR_LIMITS.askResults).map((raw) => {
+      const item = asRecord(raw) || {};
+      const row = {
+        url: asText(item.url)?.slice(0, 300),
+        name: trim(item.name, DOOR_LIMITS.askText),
+        site: asText(item.site)?.slice(0, 80),
+        description: trim(item.description, DOOR_LIMITS.askText),
+      };
+      const score = Number(item.score);
+      if (Number.isFinite(score)) row.score = score;
+      const schema = asRecord(item.schema_object);
+      if (schema) {
+        // All-or-nothing, exactly like capSchema above: half a schema.org object
+        // describes something that does not exist.
+        let json;
+        try { json = JSON.stringify(schema); } catch { json = null; }
+        if (json && json.length <= DOOR_LIMITS.askSchemaBytes) row.schema_object = schema;
+        else row.schemaOversize = json ? json.length : 0;
+      }
+      return row;
+    }),
+  };
 }
 
 /**

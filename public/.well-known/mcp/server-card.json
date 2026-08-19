@@ -22,6 +22,62 @@
   "documentationUrl": "https://aadhar.sh/llms.txt",
   "tools": [
     {
+      "name": "ask",
+      "title": "Ask",
+      "description": "Ask aadhar.sh a natural-language question and get NLWeb-shaped results: for each match a url, name, site, score (0-100), description, and a schema.org schema_object. Retrieval is lexical over the site's own corpus and descriptions are extractive, so this returns the passages that answer the question rather than a written answer. mode=summarize and mode=generate are refused by name: this origin runs no language model.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "the question, in natural language"
+          },
+          "site": {
+            "type": "string",
+            "description": "NLWeb site token; this origin serves one site, so \"aadhar.sh\" or \"all\""
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "list",
+              "summarize",
+              "generate"
+            ],
+            "description": "list (the only one served here); summarize and generate are refused rather than degraded"
+          },
+          "prev": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "previous queries. Received and NOT resolved, since decontextualization needs a model; send decontextualized_query instead"
+          },
+          "decontextualized_query": {
+            "type": "string",
+            "description": "the fully self-contained form of a follow-up question. When present this is what gets searched"
+          },
+          "top_k": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50
+          }
+        },
+        "required": [
+          "query"
+        ]
+      },
+      "outputSchema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false
+      }
+    },
+    {
       "name": "search_site",
       "title": "Search Site",
       "description": "Search the public pages, writing, garage notes, and utility descriptions on aadhar.sh.",

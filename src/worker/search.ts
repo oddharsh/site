@@ -29,13 +29,24 @@ function snippet(text, queryTerms) {
   return (start ? "…" : "") + source.slice(start, start + 220).trim() + (start + 220 < source.length ? "…" : "");
 }
 
+// The per-term ceiling: a term that hits the title, the description AND the
+// body scores 8 + 4 + 1. Exported because a raw additive score is meaningless
+// without it — /ask reports NLWeb's `score` as a percentage of what the query
+// could possibly have scored, and that denominator is terms x this.
+export const SEARCH_TERM_MAX = 13;
+
 /**
+ * The ranking pass, with the score and the terms it was scored against still
+ * attached. searchSite drops both, correctly: its two callers render a list for
+ * a human, and "39" tells a reader nothing. /ask cannot drop them, because
+ * NLWeb's result contract carries a `score` and a relevance number is only
+ * honest when you can say what its ceiling was.
+ *
  * @param {any} env
  * @param {string} query
- * @param {string|number|null} [limit] the raw ?limit param, coerced and clamped
- *   below — callers pass searchParams.get(), which is string|null.
+ * @param {string|number|null} [limit]
  */
-export async function searchSite(env, query, limit = 20) {
+export async function searchSiteRanked(env, query, limit = 20) {
   const q = String(query || "").trim().slice(0, 160);
   // Agents ask this in sentences ("what does he think about agents"), and every
   // stopword in one scores against the body text of nearly every page at +1.
@@ -45,7 +56,7 @@ export async function searchSite(env, query, limit = 20) {
   const queryTerms = meaningful.length ? meaningful : terms(q);
   const max = Math.min(50, Math.max(1, Number(limit) || 20));
   const records = (await getSearchIndex(env)).records || [];
-  if (!queryTerms.length) return { query: q, total: 0, returned: 0, results: [] };
+  if (!queryTerms.length) return { query: q, terms: [], total: 0, returned: 0, results: [] };
   const results = records.map((record) => {
     const title = String(record.title || "");
     const description = String(record.description || "");
@@ -61,9 +72,26 @@ export async function searchSite(env, query, limit = 20) {
   }).filter(Boolean).sort((a, b) => b.score - a.score || a.url.localeCompare(b.url));
   return {
     query: q,
+    terms: queryTerms,
     total: results.length,
     returned: Math.min(max, results.length),
-    results: results.slice(0, max).map(({ url, title, description, kind, snippet: excerpt }) => ({ url, title, description, kind, snippet: excerpt })),
+    results: results.slice(0, max),
+  };
+}
+
+/**
+ * @param {any} env
+ * @param {string} query
+ * @param {string|number|null} [limit] the raw ?limit param, coerced and clamped
+ *   below — callers pass searchParams.get(), which is string|null.
+ */
+export async function searchSite(env, query, limit = 20) {
+  const ranked = await searchSiteRanked(env, query, limit);
+  return {
+    query: ranked.query,
+    total: ranked.total,
+    returned: ranked.returned,
+    results: ranked.results.map(({ url, title, description, kind, snippet: excerpt }) => ({ url, title, description, kind, snippet: excerpt })),
   };
 }
 

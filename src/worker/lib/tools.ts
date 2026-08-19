@@ -1,12 +1,17 @@
 // lib/tools.js — the site's tool registry: what a caller can ASK this origin to
 // do, and the one function that does it.
 //
-// Extracted from mcp.js when /ask arrived. There are now TWO doors onto
-// the same seven tools — JSON-RPC at /mcp, and the natural-language loop at
-// /ask, which hands these very schemas to a model as its function
-// catalog — and a second copy of the list would have drifted the first time one
+// Extracted from mcp.js when the natural-language ask loop arrived, so that a
+// second door onto the same tools could not drift from the first the moment one
 // description was reworded. Same argument as site-manifest.json: one registry,
 // projected outward, never transcribed.
+//
+// That loop was cut, and the reason this file survived it is worth stating: the
+// registry outlived its second consumer and then gained several more (the MCP
+// server, the terminal programs, and every page's WebMCP catalog). /ask is back
+// as of the NLWeb work, and it is a DIFFERENT thing wearing the old path — a
+// retrieval endpoint, not a model handed a function catalog. It reads one tool
+// here rather than all of them.
 //
 // Deliberately only the DATA tools. The three frame-returning terminal_* tools
 // stay declared in mcp.js, because they are implemented in terminal.js and
@@ -18,6 +23,7 @@ import { readCoffeeAvailability } from "../coffee.ts";
 import { LENS_BUDGETS, compareLensTargets, lensInspect, lensObservationSummary, overLensBudget, validateLensTarget } from "../lens.ts";
 import { queryPhotos } from "../photos.ts";
 import { RN_FALLBACK, getTracksSWR } from "../rn.ts";
+import { NLWEB_MODES, nlwebAsk, parseAskRequest } from "../nlweb.ts";
 import { searchSite } from "../search.ts";
 import { mcpTool } from "./mcp-tools.ts";
 // holding -> serendipity, which is the reverse of the established direction
@@ -40,6 +46,28 @@ export function toolError(message) { return { _error: String(message).slice(0, 4
 // whichever door you knock on — and /ask, being a third door onto the
 // same functions, inherits that property for free by calling through here.
 const DATA_TOOL_DEFINITIONS = [
+  {
+    // The MCP half of NLWeb. The protocol specifies BOTH doors, /ask and /mcp,
+    // carrying the same arguments and the same answer, so this is deliberately
+    // the same function the REST route calls rather than a second ranking with
+    // the same name. A client that finds one door and not the other still gets
+    // the same origin's answer.
+    //
+    // It overlaps search_site on purpose and does not replace it: search_site
+    // returns this site's own record shape, and `ask` returns NLWeb's
+    // (`url`/`name`/`site`/`score`/`description`/`schema_object`). A caller who
+    // wants a schema.org object per hit wants this one.
+    name: "ask",
+    description: "Ask aadhar.sh a natural-language question and get NLWeb-shaped results: for each match a url, name, site, score (0-100), description, and a schema.org schema_object. Retrieval is lexical over the site's own corpus and descriptions are extractive, so this returns the passages that answer the question rather than a written answer. mode=summarize and mode=generate are refused by name: this origin runs no language model.",
+    inputSchema: { type: "object", properties: {
+      query: { type: "string", description: "the question, in natural language" },
+      site: { type: "string", description: "NLWeb site token; this origin serves one site, so \"aadhar.sh\" or \"all\"" },
+      mode: { type: "string", enum: NLWEB_MODES.known, description: "list (the only one served here); summarize and generate are refused rather than degraded" },
+      prev: { type: "array", items: { type: "string" }, description: "previous queries. Received and NOT resolved, since decontextualization needs a model; send decontextualized_query instead" },
+      decontextualized_query: { type: "string", description: "the fully self-contained form of a follow-up question. When present this is what gets searched" },
+      top_k: { type: "integer", minimum: 1, maximum: 50 },
+    }, required: ["query"] },
+  },
   {
     name: "search_site",
     description: "Search the public pages, writing, garage notes, and utility descriptions on aadhar.sh.",
@@ -109,6 +137,16 @@ export const DATA_TOOL_NAMES = new Set(DATA_TOOLS.map((t) => t.name));
 
 export async function callDataTool(name, args, request, env, ctx) {
   args = asRecord(args) || {};
+  if (name === "ask") {
+    // Validated through the ROUTE's parser, with a synthetic URL standing in for
+    // the query string. Site tokens, mode refusals, `prev` handling and the
+    // query_id default are one implementation, so the two doors cannot disagree
+    // about what a request means — which is the whole reason the protocol
+    // specifies them together.
+    const parsed = parseAskRequest(new URL("https://aadhar.sh/ask"), args);
+    if (!parsed.ok) return toolError(parsed.error.error);
+    return nlwebAsk(env, parsed.params);
+  }
   if (name === "search_site") return searchSite(env, args.q, args.limit);
   if (name === "photo_query") return queryPhotos(env, args, ctx);
   if (name === "coffee_availability") return readCoffeeAvailability(env, ctx);

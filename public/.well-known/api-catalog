@@ -10,6 +10,15 @@
       ]
     },
     {
+      "anchor": "https://aadhar.sh/ask",
+      "service-desc": [
+        { "href": "https://aadhar.sh/ask?query=what%20is%20this%20site%20about&streaming=0", "type": "application/json", "title": "NLWeb /ask, natural-language query over this site's corpus" }
+      ],
+      "service-doc": [
+        { "href": "https://aadhar.sh/llms.txt", "type": "text/plain", "title": "NLWeb endpoint parameters, response shape, and served modes" }
+      ]
+    },
+    {
       "anchor": "https://aadhar.sh/serendipity/mcp",
       "service-desc": [
         { "href": "https://aadhar.sh/.well-known/mcp/serendipity.json", "type": "application/json", "title": "Serendipity MCP server card" }

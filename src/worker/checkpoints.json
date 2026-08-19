@@ -873,5 +873,12 @@
     "version": "aadhar-v189-csp-hashes",
     "vnum": 189,
     "ymd": "2026-08-16"
+  },
+  {
+    "slug": "nlweb",
+    "title": "The site answers natural language at /ask now, and The Other Web can read that door on any origin. NLWeb specifies a question endpoint and a schema.org answer per result; this serves it over the same corpus the search box reads, refuses by name the two modes that would need a language model rather than faking them, and grades what other origins return field by field",
+    "version": "aadhar-v190-nlweb",
+    "vnum": 190,
+    "ymd": "2026-08-19"
   }
 ]

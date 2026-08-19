@@ -150,8 +150,23 @@ async function checkInvariants() {
   // the exact disable-magnet).
   const idx = await read("src/worker/index.ts");
   const wrangler = await read("wrangler.jsonc");
-  const routesBlock = (idx.match(/const ROUTES = new Map\(\[([\s\S]*?)\]\);/) || [,""])[1];
+  // Reads ROUTE_TABLE, which is where the dispatch keys live. This matched
+  // `const ROUTES = new Map([...])` until 2026-08-19, and that form stopped
+  // existing when the table was extracted into its own const so the @type
+  // annotation could sit on a declaration. The regex then captured nothing, so
+  // routeKeys was EMPTY and this hard invariant asserted nothing about any of
+  // the 85 exact routes — silently, because the PREFIX half below still found
+  // its 13 and the summary line kept printing a plausible number.
+  //
+  // Two general lessons, both cheap to act on. A check that scrapes source text
+  // is coupled to the shape of that source, so a refactor can retire it without
+  // touching it. And a scanner that finds ZERO of something must say so rather
+  // than pass: the floor below is what turns this class of failure back into a
+  // red build, and it is the same guard tools/check-tools.mjs puts on its own
+  // scanners for the same reason.
+  const routesBlock = (idx.match(/const ROUTE_TABLE = \[([\s\S]*?)\n\];/) || [, ""])[1];
   const routeKeys = [...routesBlock.matchAll(/\[\s*"([^"]+)"/g)].map((m) => m[1]);
+  if (routeKeys.length < 60) hard.push(`route invariant scanned only ${routeKeys.length} ROUTE_TABLE keys — the scanner has lost the table, not the site its routes`);
   const allowBlock = (wrangler.match(/"run_worker_first"\s*:\s*\[([\s\S]*?)\]/) || [,""])[1];
   const allow = [...allowBlock.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
   const globRe = (g) => new RegExp("^" + g.replace(/[\\.+?^${}()|[\]]/g, "\\$&").replace(/\*/g, ".*") + "$");
@@ -588,6 +603,7 @@ const SHELLS = [
   ["lens-reader.js", "/lens-reader.src.js", "LensReader"],
   ["lens-wire.js",   "/lens-wire.src.js",   "LensWire"],
   ["lens-tools.js",  "/lens-tools.src.js",  "LensTools"],
+  ["lens-nlweb.js",  "/lens-nlweb.src.js",  "LensNlweb"],
   ["quiz.js",    "/quiz.src.js",    "luq-data"],       // the understanding-check widget
   ["tooltip.js", "/tooltip.src.js", "function start"],
   ["infotip.js", "/infotip.src.js", "axp-infotip"],   // the shell's own tooltips
@@ -1554,7 +1570,9 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
       [/(["'`])\/lens-wire\.js\?v=1\1/g, `$1${to}$1`] ] },
     { file: "/lens-tools.js",   base: "lens-tools",   mk: (to) => [
       [/(["'`])\/lens-tools\.js\?v=1\1/g, `$1${to}$1`] ] },
-    // The full Lens application depends on all four feature modules above. It
+    { file: "/lens-nlweb.js",   base: "lens-nlweb",   mk: (to) => [
+      [/(["'`])\/lens-nlweb\.js\?v=1\1/g, `$1${to}$1`] ] },
+    // The full Lens application depends on all five feature modules above. It
     // must be hashed after they rewrite it, and before lens-boot.js is hashed by
     // ASSETS below, so every URL names the final bytes of its complete subtree.
     { file: "/lens.js",         base: "lens",         mk: (to) => [
@@ -1610,6 +1628,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     if (!lens.includes(hashedFor["lens-reader"])) throw new Error("lens.js was not repointed to hashed lens-reader.js");
     if (!lens.includes(hashedFor["lens-wire"])) throw new Error("lens.js was not repointed to hashed lens-wire.js");
     if (!lens.includes(hashedFor["lens-tools"])) throw new Error("lens.js was not repointed to hashed lens-tools.js");
+    if (!lens.includes(hashedFor["lens-nlweb"])) throw new Error("lens.js was not repointed to hashed lens-nlweb.js");
     const lensBoot = await readFile(`${OUT}/public/lens-boot.js`, "utf8");
     if (!lensBoot.includes(hashedFor.lens)) throw new Error("lens-boot.js was not repointed to hashed lens.js");
     // the SERVED tooltip bytes, not the staged source: this is the copy the browser gets,

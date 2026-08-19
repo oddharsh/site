@@ -255,6 +255,28 @@ const ROUTES = [
 
   { path: "/search", status: 200, ct: "text/html", marker: "Search aadhar.sh", fullPage: true },
   { path: "/search.json?q=photo", status: 200, ct: "application/json" },
+
+  // /ask — NLWeb. Four rows, because the ways this endpoint can be wrong are not
+  // reachable from one request. Streaming DEFAULTS ON, so the bare row asserts
+  // an event stream and the JSON row has to ask for it off; a regression that
+  // flipped that default would otherwise pass both. The 501 row is the honesty
+  // check: mode=generate needs a model this origin does not run, and answering
+  // it as `list` would be a 200 nobody could tell was wrong.
+  { path: "/ask?query=photos&streaming=0", status: 200, ct: "application/json", marker: "schema_object" },
+  { path: "/ask?query=photos", status: 200, ct: "text/event-stream", marker: "message_type" },
+  { path: "/ask", status: 400, ct: "application/json", marker: "query is required" },
+  { path: "/ask?query=photos&mode=generate&streaming=0", status: 501, ct: "application/json", marker: "supported_modes" },
+
+  // The NLWeb lens, pointed at THIS origin. A self-scan dispatches in-process
+  // rather than over the network, so it needs no bot signature and works on a
+  // local base — which makes this one row an end-to-end proof that /ask answers
+  // and that the reader grades what it answers.
+  { path: "/lens/nlweb?url=https://aadhar.sh&q=photos", status: 200, ct: "application/json", marker: "schema_object" },
+  // The SSRF guard, on the new route specifically. `not-a-url` would NOT do:
+  // validateLensTarget prepends https:// to a bare token, so it parses as a
+  // hostname and the row would assert nothing. A blocked host is refused before
+  // any fetch, which is the property worth pinning here.
+  { path: "/lens/nlweb?url=http://localhost", status: 400, ct: "application/json", marker: "no-fetch list" },
   // 200 text/plain when the x402 gate is unconfigured; 402 json once X402_PAY_TO is set
   { path: "/llms-full.txt", status: [200, 402], ct: ["text/plain", "application/json"] },
   { path: "/ledger", status: 200, ct: "text/html", marker: "Crawl Ledger" },

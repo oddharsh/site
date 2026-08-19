@@ -146,7 +146,7 @@
       // ceiling on how many surfaces you can add this way.
       "/finger*", "/radar*", "/dict*", "/cache*", "/agent-ready*", "/encode*",
       "/photos.txt", "/lens.txt",
-      "/search", "/search.json",
+      "/search", "/search.json", "/ask",
       "/coffee", "/coffee/*", "/serendipity", "/serendipity/*",
       "/slots", "/book", "/approve", "/decline",
       "/llms-full.txt", "/ledger", "/ledger.json",
@@ -318,7 +318,10 @@
     // for us and cheap for them, so the per-caller ceiling is generous. The real
     // control is the 1h KV cache in lens-tools.js, which exists to stop a public
     // button re-asking a stranger the same question on every click.
-    { "name": "LENS_RL_TOOLS", "namespace_id": "1007", "simple": { "limit": 10, "period": 60 } }
+    { "name": "LENS_RL_TOOLS", "namespace_id": "1007", "simple": { "limit": 10, "period": 60 } },
+    // /lens/nlweb asks a foreign origin a real question rather than asking it to
+    // describe itself, so it is metered harder than the catalogue read above.
+    { "name": "LENS_RL_NLWEB", "namespace_id": "1008", "simple": { "limit": 4, "period": 60 } }
   ],
   "vars": {
     // Not a secret: an account id is an identifier, and this one is already
