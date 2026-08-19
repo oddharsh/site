@@ -146,6 +146,20 @@ document is [/llms-full.txt](https://aadhar.sh/llms-full.txt).
   [Serendipity MCP](https://aadhar.sh/.well-known/mcp/serendipity.json); the
   live `server/discover` and `tools/list` responses at each endpoint remain the
   protocol source of truth.
+- [/ask](https://aadhar.sh/ask): NLWeb's REST endpoint, over the same corpus
+  [/search.json](https://aadhar.sh/search.json) reads. Takes `query` (required),
+  plus `site`, `prev`, `decontextualized_query`, `streaming`, `query_id` and
+  `mode`. Returns `query_id` and a `results` array, each result carrying `url`,
+  `name`, `site`, `score` (0-100), `description` and a schema.org
+  `schema_object`. STREAMING IS ON BY DEFAULT, per the protocol: a bare
+  `GET /ask?query=...` is an event stream, and `streaming=0` returns one JSON
+  body. A structured POST body (`{"query":{"text":...},"prefer":{...}}`) selects
+  the v0.55 dialect and answers in named SSE events. Only `mode=list` is served:
+  `summarize` and `generate` need a language model this origin does not run, so
+  they are refused by name with `supported_modes` attached rather than quietly
+  answered as a list. Descriptions are extractive rather than model-written, and
+  `_meta` says so on every answer. The same answer is available as the `ask`
+  tool on [/mcp](https://aadhar.sh/mcp).
 
 ## Redirects
 

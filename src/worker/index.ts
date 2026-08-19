@@ -24,6 +24,7 @@ import { countCrawlerHit, handleLedger, handleLedgerJson } from "./ledger.ts";
 import { countSpeculativeLoad, handlePrefetchActivation } from "./speculation.ts";
 import { handleLens, handleLensBrowser, handleLensCompare, handleLensFetch, handleLensShot } from "./lens.ts";
 import { handleLensWire } from "./lens-wire.ts";
+import { handleLensNlweb } from "./lens-nlweb.ts";
 import { handleLensTools } from "./lens-tools.ts";
 import { serveAssetWith404Clamp, serveFreshAsset, servePrecompressedShell, serveStaticPage } from "./lib/assets.ts";
 import { BOT_UA } from "./lib/botauth.ts";
@@ -43,6 +44,7 @@ import { handleRun } from "./run.ts";
 import { cronEnrichTracks, handleRn, handleRnAdmin, handleRnArt, handleRnMarkdown, handleRnSet, handleRnTracks, handleRnTracksHtml } from "./rn.ts";
 import { cronHomeProbe } from "./perf-probe.ts";
 import { handleDyno, handleDynoJson } from "./dyno.ts";
+import { handleAsk } from "./nlweb.ts";
 import { handleSearch, handleSearchJson } from "./search.ts";
 import { handleSecurityCenter } from "./security.ts";
 import { handleTool } from "./terminal.ts";
@@ -370,6 +372,7 @@ const ROUTE_TABLE = [
   ["/lens/browser", handleLensBrowser],
   ["/lens/wire", handleLensWire],
   ["/lens/tools", handleLensTools],
+  ["/lens/nlweb", handleLensNlweb],
   ["/lens/compare.json", handleLensCompare],
   ["/lens/census", handleCensus],
   ["/lens/census.json", handleCensusJson],
@@ -404,6 +407,12 @@ const ROUTE_TABLE = [
 
   ["/search", routeSearch],
   ["/search.json", handleSearchJson],
+
+  // /ask — NLWeb's REST convention, over the same corpus /search reads. It sits
+  // beside search rather than under /terminal because NLWeb specifies the path:
+  // a client knocks on <origin>/ask and nothing else, so this is one of the few
+  // routes here whose SPELLING is load-bearing.
+  ["/ask", handleAsk],
 
   // the x402 bot paywall: llms.txt's map is free, the full corpus costs $0.01
   // by machine payment (ungated until X402_PAY_TO is set).

@@ -382,6 +382,10 @@ export const LENS_BUDGETS = {
   browser: { binding: "LENS_RL_BROWSER", max: 3  },
   wire:    { binding: "LENS_RL_WIRE",    max: 2  },
   tools:   { binding: "LENS_RL_TOOLS",   max: 10 },
+  // Tighter than the catalogue read it sits beside, and deliberately so: a
+  // catalogue read costs a foreign server a lookup, and an /ask costs it a
+  // retrieval and possibly a model call.
+  nlweb:   { binding: "LENS_RL_NLWEB",   max: 4  },
   // The shared ceiling. Keyed on a CONSTANT rather than the caller's IP, so
   // every browser-consuming route bills against one bucket and no single
   // visitor can spend the account's allowance.
@@ -497,6 +501,7 @@ const LENS_TAB_LABELS = {
   terms: "Who's allowed",
   discovery: "Agent doors",
   tools: "What it accepts",
+  nlweb: "What it answers",
 };
 
 // Tab ORDER is evidence to verdict: raw observation first (the default lens, so
@@ -514,7 +519,13 @@ const LENS_TAB_LABELS = {
 // argue about what the DOCUMENT is; wire is the first tab that is not about the
 // document at all, and putting it directly after them is what makes "all of that
 // argument was 4% of what the page actually cost you" land.
-export const LENS_TAB_ORDER = ["anatomy", "reader", "wire", "structured", "ai", "terms", "discovery", "tools", "readiness"];
+//
+// `nlweb` completes that pairing rather than starting a new one. `discovery`
+// knocks on /ask and reads a status code, `tools` walks through /mcp, and this
+// walks through /ask: door, room, room. It sits last before the capstone because
+// it is the only tab that asks the origin a QUESTION, which is also why it is
+// the only one that never fires on its own.
+export const LENS_TAB_ORDER = ["anatomy", "reader", "wire", "structured", "ai", "terms", "discovery", "tools", "nlweb", "readiness"];
 
 function lensState(url) {
   const validViews = ["both", "human", "machine", "browser", "delta"];
@@ -1154,6 +1165,38 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 .lx-tf-json { font-family:"Courier New",monospace; font-size:9pt; }
 .lx-tf-check { display:flex; align-items:center; gap:5px; font-size:9pt; }
 .lx-tf-multi { background:oklch(100% 0 0); border:1px solid oklch(66% 0.04 250); box-shadow:inset 1px 1px 0 oklch(0% 0 0/0.18); padding:3px 6px; max-height:130px; overflow:auto; }
+/* ── the NLWeb lens: one question, and how much of the answer is usable ────
+   Reuses the Tools lens's intro card and opt-in button (.lx-tools-intro,
+   .lx-browser-run) because it is the same affordance doing the same job: an
+   explanation, then a button that costs somebody else a request. Hue shifts to
+   green so the two panes are distinguishable at a glance without being a second
+   design. */
+.lx-nlweb-ask { display:flex; gap:6px; align-items:center; margin-top:8px; flex-wrap:wrap; }
+.lx-nlweb-ask input { flex:1 1 200px; min-width:0; box-sizing:border-box; font-family:Tahoma,Verdana,sans-serif; font-size:9.5pt; color:oklch(18% 0.01 260); background:oklch(100% 0 0); padding:3px 5px; border:1px solid oklch(66% 0.04 250); box-shadow:inset 1px 1px 0 oklch(0% 0 0/0.18), inset -1px -1px 0 oklch(100% 0 0); }
+.lx-nlweb-ask input:focus { outline:none; border-color:oklch(52% 0.16 262); box-shadow:inset 1px 1px 0 oklch(0% 0 0/0.18), 0 0 0 1px oklch(52% 0.16 262); }
+.lx-nlweb-ask .lx-browser-run { margin-top:0; }
+.lx-nlweb-verdict { padding:6px 8px; margin-bottom:7px; border:1px solid oklch(80% 0.05 150); background:oklch(97% 0.02 150); color:oklch(34% 0.07 150); font-size:9pt; line-height:1.45; }
+.lx-nlweb-shut { padding:6px 8px; border:1px solid oklch(80% 0.02 260); background:oklch(97% 0.005 260); color:oklch(40% 0.02 260); font-size:9pt; line-height:1.45; }
+.lx-nlweb-cov { width:100%; border-collapse:collapse; font-size:8.6pt; margin-bottom:6px; }
+.lx-nlweb-cov th { text-align:left; font-weight:normal; color:oklch(48% 0.02 250); border-bottom:1px solid oklch(85% 0.01 250); padding:2px 6px 3px; }
+.lx-nlweb-cov td { padding:3px 6px; border-bottom:1px solid oklch(92% 0.008 250); vertical-align:middle; }
+.lx-nlweb-cov code { font:8.4pt "Courier New",monospace; color:oklch(30% 0.07 262); }
+.lx-nlweb-n { white-space:nowrap; font-variant-numeric:tabular-nums; }
+.lx-nlweb-bar { width:88px; }
+.lx-nlweb-bar i { display:block; height:8px; background:linear-gradient(180deg,oklch(78% 0.11 150),oklch(62% 0.14 152)); border:1px solid oklch(70% 0.06 150); }
+/* The results can outgrow the pane, so they scroll inside their own box rather
+   than widening the window. Site-wide rule. */
+.lx-nlweb-results { max-height:360px; overflow:auto; border:1px solid oklch(84% 0.01 250); }
+.lx-nlweb-results:empty { display:none; }
+.lx-nlweb-row { padding:6px 8px; border-bottom:1px solid oklch(92% 0.008 250); }
+.lx-nlweb-row:last-child { border-bottom:0; }
+.lx-nlweb-head { display:flex; align-items:baseline; gap:6px; flex-wrap:wrap; }
+.lx-nlweb-idx { font:8pt "Courier New",monospace; color:oklch(58% 0.02 250); }
+.lx-nlweb-name { font-weight:bold; font-size:9pt; color:oklch(30% 0.07 262); }
+.lx-nlweb-url { font:8.2pt "Courier New",monospace; color:oklch(45% 0.09 250); word-break:break-all; margin-top:1px; }
+.lx-nlweb-desc { font-size:8.7pt; line-height:1.45; color:oklch(38% 0.015 260); margin-top:3px; }
+.lx-nlweb-schema pre { margin:4px 0 0; padding:6px 7px; background:oklch(24% 0.02 258); color:oklch(92% 0.03 150); font:8.2pt/1.45 "Courier New",monospace; white-space:pre-wrap; word-break:break-word; overflow:auto; max-height:170px; }
+.lx-nlweb-missing { margin-top:4px; padding:4px 7px; font-size:8.4pt; color:oklch(46% 0.11 45); background:oklch(97% 0.02 60); border:1px solid oklch(82% 0.06 60); }
 .lx-tf-multi-row { display:flex; align-items:center; gap:5px; padding:1px 0; font-size:9pt; }
 .lx-tf-row { display:flex; gap:6px; align-items:flex-start; padding:6px; margin-bottom:5px; background:oklch(96% 0.006 260); border:1px solid oklch(84% 0.015 260); }
 .lx-tf-row > *:first-child { flex:1; min-width:0; }

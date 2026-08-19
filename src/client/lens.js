@@ -57,13 +57,16 @@
 
   // Must match LENS_TAB_LABELS in www/_worker.js/lens.js: the tab labels are
   // phrased as the question each lens answers, so the tab row reads as a menu.
-  var LENS_LABEL = { readiness: "Agent-ready?", anatomy: "Raw response", reader: "Reader's guess", wire: "What it costs", structured: "What it claims", ai: "Model cost", terms: "Who's allowed", discovery: "Agent doors", tools: "What it accepts" };
+  var LENS_LABEL = { readiness: "Agent-ready?", anatomy: "Raw response", reader: "Reader's guess", wire: "What it costs", structured: "What it claims", ai: "Model cost", terms: "Who's allowed", discovery: "Agent doors", tools: "What it accepts", nlweb: "What it answers" };
   var readerData = null;   // last /lens/read extraction, null until asked for
   var readerBusy = false;
   var wireData = null;     // last /lens/wire trace, null until asked for
   var wireBusy = false;
   var toolsData = null;    // last /lens/tools catalogue, null until asked for
   var toolsBusy = false;
+  var nlwebData = null;    // last /lens/nlweb answer, null until asked for
+  var nlwebBusy = false;
+  var nlwebQuery = "";     // the visitor's question, kept across re-renders
   var cloudflareData = null; // normalized result from Cloudflare's public scanner
   var cloudflareBusy = false;
 
@@ -1395,6 +1398,7 @@
     LENS_FN.terms = lensTerms;
     LENS_FN.discovery = lensDiscovery;
     LENS_FN.tools = lensTools;
+    LENS_FN.nlweb = lensNlweb;
     var candidate = Object.prototype.hasOwnProperty.call(LENS_FN, lens) ? LENS_FN[lens] : null;
   // Capability probe on a caller-supplied callback, not a parsed value.
   // oxlint-disable-next-line anti-slop/no-runtime-typeof
@@ -1419,10 +1423,15 @@
     if (wireBtn) wireBtn.addEventListener("click", runWire);
     var toolsBtn = machineBody.querySelector("#lx-tools-run");
     if (toolsBtn) toolsBtn.addEventListener("click", runTools);
+    var nlwebBtn = machineBody.querySelector("#lx-nlweb-run");
+    if (nlwebBtn) nlwebBtn.addEventListener("click", runNlweb);
     // The catalogue's controls are real nodes rather than markup, because they
     // carry a stranger's tool names and enum labels. Built after the pane's HTML
     // lands, exactly like bindCounterfactuals.
     if (lens === "tools" && window.LensTools) window.LensTools.bind(machineBody, toolsData, renderMachine);
+    // Same reason as the line above: the result rows carry a stranger's strings
+    // and are built as nodes after the pane's HTML lands.
+    if (lens === "nlweb" && window.LensNlweb) window.LensNlweb.bind(machineBody);
     // The strip sits in machineTop in Machine view and inside the body in every
     // other one, so look in both rather than in whichever was true last week.
     var scoreBtn = machineBody.querySelector(".lx-verdict-score") ||
@@ -1567,6 +1576,57 @@
     script.onerror = function () {
       if (!data || (data.finalUrl || data.url) !== targetUrl) return;
       toolsBusy = false; renderMachine();
+    };
+    document.head.appendChild(script);
+  }
+
+  // The NLWeb lens. Opt-in like Reader and Tools, and for a stronger reason than
+  // either: a run is a real question put to somebody else's retrieval endpoint,
+  // which costs them a lookup and, on an LLM-backed instance, a model call.
+  function lensNlweb() {
+    if (window.LensNlweb) return window.LensNlweb.render(nlwebBusy ? { pending: true } : nlwebData);
+    // Pre-module fallback, self-contained because the module may never arrive.
+    return section("What it answers", { text: "not run" },
+      "Asks this origin's /ask endpoint one real question and grades the answer against NLWeb's result contract.",
+      '<div class="lx-tools-intro"><b>Agent doors knocks. This walks through.</b> ' +
+      'A door that answers 200 can still answer with nothing an agent can use.' +
+      '<button class="lx-browser-run" type="button" id="lx-nlweb-run">Ask it</button></div>');
+  }
+
+  function runNlweb() {
+    if (nlwebBusy || !data) return;
+    var targetUrl = data.finalUrl || data.url;
+    // Read the box BEFORE the pane repaints into its pending state, or the
+    // visitor's question is gone by the time the request is built.
+    if (window.LensNlweb && window.LensNlweb._question) {
+      nlwebQuery = window.LensNlweb._question(machineBody) || nlwebQuery;
+    }
+    var askedFor = nlwebQuery;
+    nlwebBusy = true;
+    renderMachine();
+    function loaded() {
+      // Same staleness guard as runTools, with one more thing to guard: a
+      // visitor may change the QUESTION as well as the URL while a request is in
+      // flight, and a late reply must not be labelled with the new question.
+      if (!data || (data.finalUrl || data.url) !== targetUrl) return;
+      if (!window.LensNlweb) { nlwebBusy = false; renderMachine(); return; }
+      window.LensNlweb.run(targetUrl, askedFor, function (json) {
+        if (!data || (data.finalUrl || data.url) !== targetUrl || askedFor !== nlwebQuery) return;
+        nlwebBusy = false; nlwebData = json; renderMachine();
+      }, function () {
+        if (!data || (data.finalUrl || data.url) !== targetUrl || askedFor !== nlwebQuery) return;
+        nlwebBusy = false;
+        nlwebData = { ok: false, unreadable: true, error: "the /ask request did not complete" };
+        renderMachine();
+      });
+    }
+    if (window.LensNlweb) { loaded(); return; }
+    var script = document.createElement("script");
+    script.src = "/lens-nlweb.js?v=1";
+    script.onload = loaded;
+    script.onerror = function () {
+      if (!data || (data.finalUrl || data.url) !== targetUrl) return;
+      nlwebBusy = false; renderMachine();
     };
     document.head.appendChild(script);
   }

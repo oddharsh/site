@@ -156,6 +156,19 @@
           "serverCard": "https://aadhar.sh/.well-known/mcp/serendipity.json"
         }
       ],
+      "nlweb": [
+        {
+          "name": "Aadharsh Site NLWeb",
+          "url": "https://aadhar.sh/ask",
+          "transport": "http",
+          "streaming": "server-sent events, on by default; streaming=0 returns one JSON body",
+          "dialects": ["legacy", "0.55"],
+          "modes": { "served": ["list"], "refused": ["summarize", "generate"] },
+          "authentication": "anonymous",
+          "documentationUrl": "https://aadhar.sh/llms.txt",
+          "note": "Retrieval is lexical and descriptions are extractive. summarize and generate are refused by name rather than degraded to list, because this origin runs no language model."
+        }
+      ],
       "httpJson": [
         {
           "name": "Current playlist",

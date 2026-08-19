@@ -1471,7 +1471,7 @@ test("MCP tools publish honest client metadata for calling and WebMCP", async ()
   }), {}, context());
   const listed = (await response.json()).result.tools;
   assert.deepEqual(listed, SITE_MCP_TOOLS, "tools/list must expose the canonical decorated registry");
-  assert.equal(listed.length, 24);
+  assert.equal(listed.length, 25);
   for (const tool of listed) {
     assert.ok(tool.title, `${tool.name} needs a human-readable title`);
     const writes = MCP_WRITE_TOOLS.has(tool.name);
@@ -5598,6 +5598,287 @@ test("the MCP client reads both Streamable HTTP framings", async () => {
   const html = parseMcpBody("<!doctype html>", "text/html; charset=utf-8");
   assert.equal(html.ok, false);
   assert.match(html.detail, /text\/html/, "a shut door should name what it answered instead");
+});
+
+// ── NLWeb ───────────────────────────────────────────────────────────────────
+// The endpoint half. These drive the real handler; where a specific record
+// matters they test the pure projections instead, because search.ts caches its
+// index in a MODULE-LEVEL singleton with no reset, so the first test in this
+// file to touch it pins the corpus for every test after. Stubbing a fourth one
+// here would quietly assert against somebody else's records.
+const nlwebEnv = () => ({ ASSETS: { fetch: async () => new Response(JSON.stringify({ version: 1, records: [
+  { url: "/writing/agents", title: "Agents", description: "Notes on agents", text: "Cloudflare agents and tools", kind: "writing" },
+] })) } });
+const NLWEB_HIT = "cloudflare";
+const askGet = async (query) => {
+  const { handleAsk } = await import("../src/worker/nlweb.ts");
+  return handleAsk(new Request("https://aadhar.sh/ask" + query), nlwebEnv());
+};
+
+test("/ask streams by default and answers JSON only when asked", async () => {
+  // The spec's own default, and the one thing about this endpoint that reads as
+  // a bug the first time somebody curls it. A regression flipping it would
+  // leave every other assertion here passing.
+  const streamed = await askGet(`?query=${NLWEB_HIT}`);
+  assert.equal(streamed.status, 200);
+  assert.match(streamed.headers.get("content-type"), /text\/event-stream/);
+
+  for (const off of ["0", "false", "FALSE", "off"]) {
+    const res = await askGet(`?query=${NLWEB_HIT}&streaming=${off}`);
+    assert.match(res.headers.get("content-type"), /application\/json/, `streaming=${off} must turn streaming off`);
+  }
+  // Anything that is not an off-switch is streaming, per the spec's wording.
+  const odd = await askGet(`?query=${NLWEB_HIT}&streaming=yes-please`);
+  assert.match(odd.headers.get("content-type"), /text\/event-stream/);
+});
+
+test("/ask returns NLWeb's six result fields, with a real schema.org object", async () => {
+  const payload = await (await askGet(`?query=${NLWEB_HIT}&streaming=0`)).json();
+  assert.ok(payload.query_id, "every answer carries a query_id");
+  assert.ok(payload.results.length >= 1, "the cached corpus must answer this query");
+  for (const row of payload.results) {
+    for (const field of ["url", "name", "site", "score", "description", "schema_object"]) {
+      assert.ok(row[field] !== undefined && row[field] !== "", `result is missing ${field}`);
+    }
+    // Absolute, because a result travels away from this origin and a relative
+    // URL in somebody else's agent is not resolvable.
+    assert.match(row.url, /^https:\/\/aadhar\.sh\//);
+    assert.equal(row.site, "aadhar.sh");
+    assert.equal(row.schema_object["@context"], "https://schema.org");
+    assert.equal(row.schema_object["@id"], row.url);
+    assert.ok(row.score >= 1 && row.score <= 100, `score ${row.score} out of range`);
+  }
+  // A query nothing answers is still a well-formed NLWeb answer rather than an
+  // error: zero results is a result.
+  const empty = await (await askGet("?query=zzzqqqxxnothingmatches&streaming=0")).json();
+  assert.equal(empty.results.length, 0);
+  assert.equal(empty.total, 0);
+  assert.ok(empty.query_id);
+});
+
+test("/ask maps a record kind to the schema.org type it actually is", async () => {
+  // Pure and tested directly, the way classifyDoor is: this mapping is the whole
+  // claim `schema_object` makes, and a wrong @type publishes structured data
+  // that is confidently mislabelled.
+  const { askSchemaObject } = await import("../src/worker/nlweb.ts");
+  const typeOf = (kind) => askSchemaObject({ url: "/x", title: "T", description: "D", kind })["@type"];
+  assert.equal(typeOf("page"), "WebPage");
+  assert.equal(typeOf("writing"), "BlogPosting");
+  assert.equal(typeOf("document"), "DigitalDocument");
+  assert.equal(typeOf("utility"), "WebAPI");
+  // An unknown kind falls back rather than emitting an undefined @type, which
+  // would be invalid structured data.
+  assert.equal(typeOf("something-new-later"), "WebPage");
+
+  const node = askSchemaObject({ url: "/lwe/fhe", title: "FHE", description: "d", kind: "page" });
+  assert.equal(node["@id"], "https://aadhar.sh/lwe/fhe");
+  assert.equal(node.url, "https://aadhar.sh/lwe/fhe");
+  // Joined by @id to the WebSite node the homepage's own JSON-LD declares, so a
+  // crawler that has read both can connect them. Asserted against the homepage
+  // rather than trusted, because a dangling @id is a silent dead reference.
+  assert.equal(node.isPartOf["@id"], "https://aadhar.sh/#website");
+  const homepage = readFileSync(new URL("../src/pages/index.html", import.meta.url), "utf8");
+  assert.ok(homepage.includes('"@id": "https://aadhar.sh/#website"'), "the WebSite node this points at must exist");
+});
+
+test("/ask scores against what the query could have scored, not against the set", async () => {
+  // Normalising against the response's own top score would hand every query a
+  // 100 and make the number comparable only inside one answer. This is
+  // absolute: the same raw score means less when the query had more to satisfy.
+  const { askRelevance } = await import("../src/worker/nlweb.ts");
+  assert.equal(askRelevance(13, 1), 100, "one term hitting title, description and body is a perfect match");
+  assert.equal(askRelevance(13, 2), 50, "the same raw score is half as good against twice the query");
+  assert.equal(askRelevance(8, 1), 62);
+  // Bounded at both ends: never 0, because a returned result did match
+  // something, and never over 100, which would be a nonsense relevance.
+  assert.equal(askRelevance(0, 3), 1);
+  assert.equal(askRelevance(999, 1), 100);
+  assert.equal(askRelevance(5, 0), 38, "a zero term count must not divide by zero");
+});
+
+test("/ask refuses the modes it cannot serve instead of degrading to list", async () => {
+  for (const mode of ["summarize", "generate"]) {
+    const res = await askGet(`?query=${NLWEB_HIT}&mode=${mode}&streaming=0`);
+    assert.equal(res.status, 501, `${mode} must be refused`);
+    const body = await res.json();
+    assert.deepEqual(body.supported_modes, ["list"]);
+    assert.ok(body.known_modes.includes(mode), "the refusal names the mode as one the protocol defines");
+    assert.equal(body.results.length, 0, "a refusal carries no results");
+  }
+  // A mode the protocol never defined is a different error from one it defines
+  // and this origin cannot serve.
+  assert.equal((await askGet("?query=x&mode=interpretive-dance&streaming=0")).status, 400);
+});
+
+test("/ask says when it took a follow-up query literally", async () => {
+  const plain = await (await askGet(`?query=${NLWEB_HIT}&streaming=0`)).json();
+  assert.ok(!plain._meta.decontextualization, "a query with no history says nothing about history");
+  assert.equal(plain.decontextualized_query, NLWEB_HIT, "the searched string is always reported");
+
+  const followUp = await (await askGet(`?query=${NLWEB_HIT}&prev=tell%20me%20about%20it&streaming=0`)).json();
+  assert.match(followUp._meta.decontextualization, /no language model/i);
+
+  // A caller who resolved the follow-up themselves is believed, and the searched
+  // string is reported either way so the two can be compared.
+  const resolved = await (await askGet(`?query=what%20about%20it&prev=x&decontextualized_query=${NLWEB_HIT}&streaming=0`)).json();
+  assert.equal(resolved.decontextualized_query, NLWEB_HIT);
+  assert.ok(!resolved._meta.decontextualization);
+  assert.ok(resolved.results.length, "the resolved query is what actually gets searched");
+});
+
+test("/ask accepts the v0.55 structured body and answers in named SSE events", async () => {
+  // The dialect is selected by `query` arriving as an OBJECT and by nothing
+  // else: not a header, not a parameter. A server that emits named events to a
+  // legacy caller is talking to nobody, so the two must not be reachable from
+  // the same request shape.
+  const { handleAsk } = await import("../src/worker/nlweb.ts");
+  const res = await handleAsk(new Request("https://aadhar.sh/ask", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ query: { text: NLWEB_HIT, site: "aadhar.sh" }, prefer: { mode: "list" }, meta: { version: "0.55" } }),
+  }), nlwebEnv());
+  const body = await res.text();
+  assert.match(body, /^event: start\n/);
+  assert.match(body, /\nevent: result\ndata: \{"index":0,"item":\{/);
+  assert.match(body, /event: complete/);
+
+  // The legacy GET must not gain named events from this change.
+  const legacy = await (await askGet(`?query=${NLWEB_HIT}`)).text();
+  assert.ok(!legacy.includes("event: "), "a legacy caller gets unnamed frames");
+  assert.match(legacy, /"message_type":"result"/);
+});
+
+test("/ask refuses a site token it does not serve", async () => {
+  for (const token of ["", "&site=all", "&site=aadhar.sh", "&site=AADHAR.SH"]) {
+    const res = await askGet(`?query=${NLWEB_HIT}&streaming=0${token}`);
+    assert.equal(res.status, 200, `site "${token}" should resolve to this origin`);
+  }
+  const res = await askGet(`?query=${NLWEB_HIT}&site=example.com&streaming=0`);
+  assert.equal(res.status, 400);
+  assert.deepEqual((await res.json()).available_sites, ["aadhar.sh", "all"]);
+});
+
+test("the ask MCP tool and /ask are the same answer", async () => {
+  // The protocol specifies both doors carrying the same arguments and the same
+  // result. Two rankings under one name is the drift this asserts against.
+  const { callDataTool, DATA_TOOL_NAMES } = await import("../src/worker/lib/tools.ts");
+  assert.ok(DATA_TOOL_NAMES.has("ask"));
+  const req = new Request("https://aadhar.sh/mcp");
+  const viaTool = await callDataTool("ask", { query: NLWEB_HIT, top_k: 5 }, req, nlwebEnv(), undefined);
+  const viaRoute = await (await askGet(`?query=${NLWEB_HIT}&top_k=5&streaming=0`)).json();
+  // query_id is per-call by design, so it is the one field that must differ.
+  assert.notEqual(viaTool.query_id, viaRoute.query_id);
+  assert.deepEqual(viaTool.results, viaRoute.results);
+  // The tool inherits the route's refusals rather than re-implementing them.
+  const refused = await callDataTool("ask", { query: NLWEB_HIT, mode: "generate" }, req, nlwebEnv(), undefined);
+  assert.match(refused._error, /language model/i);
+});
+
+// The lens half. foreignNlwebAsk reaches a foreign origin, which no test can do
+// (every external probe fails at signing before a stub could answer), so these
+// drive it through the SELF_FETCH loopback the self-scan already uses. That is
+// the same door a visitor scanning aadhar.sh goes through, so it is the real
+// path rather than a mock of one.
+const lensNlweb = async (env, url = "https://aadhar.sh/lens/nlweb?url=https://aadhar.sh") => {
+  const { handleLensNlweb } = await import("../src/worker/lens-nlweb.ts");
+  return (await handleLensNlweb(new Request(url), env)).json();
+};
+const sseEnv = (body) => ({ SELF_FETCH: async () => new Response(body, { headers: { "content-type": "text/event-stream" } }) });
+const jsonEnv = (payload) => ({ SELF_FETCH: async () => new Response(JSON.stringify(payload), { headers: { "content-type": "application/json" } }) });
+const askItem = (url, extra = {}) => ({
+  url, name: "N", site: "example.com", score: 71, description: "d",
+  schema_object: { "@context": "https://schema.org", "@type": "Recipe", name: "R" }, ...extra,
+});
+
+test("the NLWeb lens reads both streaming dialects and names which one it got", async () => {
+  const legacy = await lensNlweb(sseEnv(
+    `data: ${JSON.stringify({ message_type: "begin-nlweb-response", conversation_id: "c1" })}\n\n` +
+    `data: ${JSON.stringify({ message_type: "result", query_id: "c1", content: [askItem("/a"), askItem("/b")] })}\n\n` +
+    `data: ${JSON.stringify({ message_type: "end-nlweb-response", conversation_id: "c1" })}\n\n`));
+  assert.equal(legacy.ok, true);
+  assert.equal(legacy.framing, "sse");
+  assert.equal(legacy.dialect, "legacy");
+  assert.equal(legacy.total, 2);
+  assert.equal(legacy.conformant, true);
+
+  const modern = await lensNlweb(sseEnv(
+    `event: start\ndata: ${JSON.stringify({ _meta: { version: "0.55" } })}\n\n` +
+    `event: result\ndata: ${JSON.stringify({ index: 0, item: askItem("/x") })}\n\n` +
+    `event: result\ndata: ${JSON.stringify({ index: 1, item: { url: "/y", name: "bare" } })}\n\n` +
+    `event: complete\ndata: ${JSON.stringify({ _meta: { version: "0.55" } })}\n\n`));
+  assert.equal(modern.dialect, "v0.55");
+  assert.deepEqual(modern.events, ["start", "result", "complete"]);
+  // The whole point of this lens: partial conformance is reported per FIELD
+  // rather than as a pass. One of these two results is a link with prose on it,
+  // and a knock at the door cannot tell you that.
+  assert.equal(modern.total, 2);
+  assert.equal(modern.coverage.url, 2);
+  assert.equal(modern.coverage.schema_object, 1);
+  assert.equal(modern.conformant, false);
+  assert.deepEqual(modern.schemaTypes, [{ name: "Recipe", count: 1 }]);
+});
+
+test("the NLWeb lens keeps a shut door, an unreadable one and a locked one apart", async () => {
+  const shut = await lensNlweb({ SELF_FETCH: async () => new Response("", { status: 404 }) });
+  assert.equal(shut.ok, false);
+  assert.equal(shut.unreadable, false, "404 is a door that is not there, which we did establish");
+  assert.match(shut.error, /no \/ask/);
+
+  // The most common false positive in a knock-only probe: a PAGE at /ask. It is
+  // a shut door rather than a broken one.
+  const page = await lensNlweb({ SELF_FETCH: async () => new Response("<!doctype html><p>hi", { headers: { "content-type": "text/html" } }) });
+  assert.equal(page.ok, false);
+  assert.equal(page.unreadable, false);
+  assert.match(page.error, /a page, not an endpoint/);
+
+  const locked = await lensNlweb({ SELF_FETCH: async () => new Response("", { status: 401, headers: { "www-authenticate": 'Bearer resource_metadata="x"' } }) });
+  assert.equal(locked.gated, true);
+  assert.equal(locked.unreadable, true, "a locked door is one we never got to look through");
+
+  const broken = await lensNlweb({ SELF_FETCH: async () => { throw new Error("connection reset"); } });
+  assert.equal(broken.unreadable, true, "a transport failure says nothing about whether the endpoint exists");
+});
+
+test("the NLWeb lens grades every result and carries back only a bounded slice", async () => {
+  const many = Array.from({ length: 40 }, (_, i) => askItem(`/r${i}`));
+  const read = await lensNlweb(jsonEnv({ query_id: "q", results: many }));
+  // A reader must never be shown "10 of 10" for a server that sent 40.
+  assert.equal(read.total, 40);
+  assert.equal(read.shown, 10);
+  assert.equal(read.results.length, 10);
+  assert.equal(read.coverage.schema_object, 40, "coverage grades the whole answer, not the slice");
+
+  // An oversize schema is DROPPED and reported, never truncated: half a
+  // schema.org object describes something that does not exist.
+  const capped = await lensNlweb(jsonEnv({ results: [askItem("/big", { schema_object: { "@type": "Thing", blob: "x".repeat(9000) } })] }));
+  assert.equal(capped.results[0].schema_object, undefined);
+  assert.ok(capped.results[0].schemaOversize > 4000);
+
+  // ItemList is the richer structure the spec says results are moving to, so a
+  // server that has already moved is read rather than called malformed.
+  const itemList = await lensNlweb(jsonEnv({ query_id: "q", itemListElement: [askItem("/one")] }));
+  assert.equal(itemList.ok, true);
+  assert.equal(itemList.total, 1);
+});
+
+test("the NLWeb lens sends the cheapest mode and never a caller's own script", async () => {
+  // Asking a stranger's retrieval endpoint a question costs them compute, and
+  // `generate` costs them a model call. mode=list is pinned EXPLICITLY rather
+  // than left to whatever their default happens to be.
+  let seen;
+  await lensNlweb(
+    { SELF_FETCH: async (req) => { seen = req.url; return new Response(JSON.stringify({ results: [] }), { headers: { "content-type": "application/json" } }); } },
+    "https://aadhar.sh/lens/nlweb?url=https://aadhar.sh&q=" + encodeURIComponent("what is this"));
+  const sent = new URL(seen);
+  assert.equal(sent.pathname, "/ask");
+  assert.equal(sent.searchParams.get("mode"), "list");
+  assert.equal(sent.searchParams.get("streaming"), "0");
+  assert.equal(sent.searchParams.get("query"), "what is this");
+  // Exactly one caller-supplied value reaches the target, and it is a search
+  // string. Same boundary lens-recipes.js draws against a `js=` parameter.
+  assert.deepEqual([...sent.searchParams.keys()].sort(), ["mode", "query", "streaming"]);
+
+  const source = await readFile(new URL("../src/worker/lens-nlweb.ts", import.meta.url), "utf8");
+  assert.equal((source.match(/params\.get\(/g) || []).length, 2, "only `url` and `q` may be read from the caller");
 });
 
 test("the MCP client sends Mcp-Method, and it agrees with the body", async () => {
