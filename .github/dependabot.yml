@@ -2,18 +2,82 @@ version: 2
 updates:
   # The root npm workspace owns the shared deploy toolchain (including Wrangler,
   # Oxc Minify, and Lightning CSS) and all workspace dependency resolution.
-  # Keep one update PR open at a time so its release notes and site-leverage
-  # review stay legible.
+  #
+  # This block used to carry `open-pull-requests-limit: 1` and no groups, so
+  # every pin queued behind one PR. That is why seven packages were outdated at
+  # once on 2026-08-19 with ZERO dependabot PRs open: the four packages here
+  # that cut releases most often (wrangler, workers-types, oxlint, oxc-minify)
+  # generate new versions faster than a serialized queue can drain, so the
+  # backlog grew while the config reported itself as busy. A limit of 1 is a
+  # throughput cap masquerading as a review policy.
+  #
+  # GROUPS are what replace it, and they buy correctness rather than tidiness.
+  # Dependabot assigns each dependency to the FIRST group whose patterns match,
+  # so order below is load-bearing; anything unmatched falls through to the
+  # catch-all and a MAJOR arrives on its own.
   - package-ecosystem: npm
     directory: "/"
     schedule:
       interval: daily
       time: "09:00"
       timezone: America/New_York
-    open-pull-requests-limit: 1
+    open-pull-requests-limit: 10
     commit-message:
       prefix: chore
       include: scope
+    groups:
+      # The linter ABI, and the one group that exists to prevent a BREAKAGE.
+      # `@oxlint/plugins` is the interface between oxlint and the three rules
+      # vendored at tools/oxlint/anti-slop; the two ship one version number and
+      # a mismatch fails at PLUGIN LOAD rather than at install, so a serialized
+      # queue that merged one without the other would red `validate` on
+      # unchanged code. DEPENDENCIES.md states the lockstep rule in prose; this
+      # is the machine-enforced half.
+      oxlint:
+        patterns:
+          - "oxlint"
+          - "@oxlint/plugins"
+      # tsgolint tracks the TYPESCRIPT pin, not the oxlint one. TypeScript 7.0
+      # ships no stable programmatic API, so typescript-eslint cannot run on it
+      # and tsgolint is the only door to the type-aware rules; a tsgolint
+      # release is paired with a TypeScript one by construction, which is why
+      # it groups here rather than with oxlint above.
+      typescript:
+        patterns:
+          - "typescript"
+          - "oxlint-tsgolint"
+      # One resolved Cloudflare stack, verified by the lockfile carrying
+      # exactly one miniflare, one workerd and one undici. `cal`'s
+      # vitest-pool-workers pulls its own wrangler/miniflare/workerd, so
+      # bumping it apart from wrangler is what splits that stack in two and
+      # silently re-hoists the undici 7.28.0 pin the floors exist to keep out.
+      cloudflare-toolchain:
+        patterns:
+          - "wrangler"
+          - "@cloudflare/*"
+      # The three packages that REWRITE BUILT BYTES. They get their own lane so
+      # a content-hash re-mint is always one identifiable PR rather than a side
+      # effect of a batch. Measured 2026-08-19 on oxc-minify 0.144.0 -> 0.145.0:
+      # 10 hashed /a/ assets re-minted, 752 staged files changed, for 22 bytes
+      # of brotli across all of them, and 7 of the 9 scripts changed hash at
+      # IDENTICAL size. A new hash orphans every a-dict snapshot naming the old
+      # one, which costs a returning visitor the shell dictionary tier on the
+      # render-blocking path until dictionary-roll.yml catches up that night.
+      # So these are never a free bump, and the PR should say what it cost.
+      minifiers:
+        patterns:
+          - "oxc-minify"
+          - "lightningcss"
+          - "@minify-html/node"
+      # Everything else, batched by RISK rather than by package. A minor or
+      # patch lands as one PR; a MAJOR is deliberately excluded so it arrives
+      # alone and its surgery stays legible. That is the "flag what we cannot
+      # do in one shot" half: the major still opens, `validate` still gates it,
+      # and nothing merges on a red check.
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
 
   # Keep the action toolchain current too; its PRs get the same review note.
   - package-ecosystem: github-actions
@@ -22,9 +86,19 @@ updates:
       interval: daily
       time: "09:00"
       timezone: America/New_York
-    open-pull-requests-limit: 1
+    open-pull-requests-limit: 5
     labels:
       - github-actions
+    groups:
+      # Actions are SHA-pinned, so a bump is a 40-char diff with no semantics to
+      # read per action. Batching them is strictly less review for the same
+      # coverage. Verified 2026-08-19: all six pins were already current, and
+      # the codeql-action pin is NEWER than the latest tagged bundle, so read a
+      # "behind" reading from a tag comparison with suspicion - `git/ref/tags`
+      # returns the TAG OBJECT sha for an annotated tag, never the commit.
+      actions:
+        patterns:
+          - "*"
     commit-message:
       prefix: chore
       include: scope
@@ -51,7 +125,7 @@ updates:
       interval: daily
       time: "09:00"
       timezone: America/New_York
-    open-pull-requests-limit: 1
+    open-pull-requests-limit: 3
     commit-message:
       prefix: chore
       include: scope
@@ -92,7 +166,7 @@ updates:
       interval: daily
       time: "09:00"
       timezone: America/New_York
-    open-pull-requests-limit: 1
+    open-pull-requests-limit: 3
     commit-message:
       prefix: chore
       include: scope

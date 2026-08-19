@@ -50,16 +50,16 @@
     "release": "node tools/release-status.mjs"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "5.20260816.1",
+    "@cloudflare/workers-types": "5.20260818.1",
     "@minify-html/node": "0.18.1",
-    "@oxlint/plugins": "1.78.0",
+    "@oxlint/plugins": "1.79.0",
     "lightningcss": "1.33.0",
     "oxc-minify": "0.144.0",
-    "oxlint": "1.78.0",
+    "oxlint": "1.79.0",
     "oxlint-tsgolint": "7.0.2001",
     "playwright-core": "^1.62.1",
     "typescript": "7.0.2",
-    "wrangler": "4.123.0"
+    "wrangler": "4.124.0"
   },
   "engines": {
     "node": ">=24.0.0"
