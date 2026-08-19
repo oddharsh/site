@@ -3369,7 +3369,24 @@ export async function lensProbeNlweb(origin, env) {
     // 4 of the 6 sites this rubric called Agent-Native earned the top rung from
     // a /ask that answered 410, 412, 429 or 401. One decade-dead API and three
     // bot walls, scored as a working agent interface.
+    // SSE is the protocol's DEFAULT framing (streaming defaults to true), so an
+    // origin that streams here is answering as an NLWeb server rather than
+    // failing. This probe demanded JSON and therefore graded a correctly
+    // behaving instance ABSENT — and a bot wall does not stream, so accepting
+    // this reopens none of the false positives the tightening below closed.
+    const streamed = /^text\/event-stream$/i.test(ct) || /^\s*(event|data):/m.test(head);
+    if (streamed && res.ok) return { verdict: "likely", detail: "event stream at /ask (NLWeb streams by default)" };
     if (json && res.ok) return { verdict: "maybe", detail: "JSON at /ask (HTTP " + res.status + ") — NLWeb-shaped" };
+    // A refusal that NAMES the required parameter is the strongest evidence this
+    // probe can get without sending a query, and it was being read as absence.
+    // `query` is required by the spec, so a conforming server has to refuse a
+    // bare knock; ours answers 400 with `"parameter": "query"` and its own lens
+    // called that no endpoint at all. The discriminator against the 410/412/429
+    // bot walls in the note above is that they refuse the REQUEST and never
+    // mention a parameter they have no concept of.
+    if (json && (res.status === 400 || res.status === 422) && /\bquery\b/.test(head)) {
+      return { verdict: "likely", detail: "HTTP " + res.status + " at /ask asking for `query` by name" };
+    }
     // 401 is the one refusal that still evidences a door, and only when the
     // origin says how to open it. Same rule lensProbeMcp already applies to a
     // 401 at /mcp, so the two door probes agree about what a locked door is.

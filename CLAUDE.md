@@ -1483,6 +1483,33 @@ The cache key includes the QUESTION. Keying on origin alone would show one
 visitor's answer to another visitor's question, on the one surface whose entire
 claim is "this is what the machine actually got".
 
+**Building this found the door probe grading a REAL NLWeb server as absent, in
+two ways, and both were ours to fix.** `lensProbeNlweb` knocks without a query,
+so it has to classify whatever a server says to a bare request, and it required
+JSON with a 2xx:
+
+- **The protocol streams by default**, so a conforming instance answers a bare
+  knock with `text/event-stream`. That read as "HTTP 200 text/event-stream" and
+  fell through to absent.
+- **`query` is REQUIRED**, so a conforming server must refuse that knock. Ours
+  answers `400 {"parameter":"query","endpoint":"/ask"}`, which is the most
+  identifying response the probe could possibly receive, and it was graded as no
+  endpoint at all. A contract test now runs the real handler against the real
+  probe, because "this site serves NLWeb and its own lens says it does not" is
+  the one result this surface must never produce.
+
+Both now read `likely`. The tightening in that function's own comment survives
+intact, and the discriminator is why: the 410, 412 and 429 bot walls that put
+four of six origins on the top rung refuse the REQUEST and never name a
+parameter they have no concept of, and none of them stream. Tests pin all
+three statuses plus a bare 401 and a generic 400 as still absent.
+
+Read this as a caution about the whole doors tier rather than about one probe.
+The correction to over-counting was a status-code rule written from the false
+positives in hand, and it was never checked against a server that WORKS, because
+there was no NLWeb server on this origin to check it against. A rubric tuned only
+on the failures it caught will quietly start failing the successes.
+
 ### DNS-AID (agent discovery)
 
 A DNS record, so it lives in Cloudflare DNS rather than in a Worker config.

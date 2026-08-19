@@ -5881,6 +5881,64 @@ test("the NLWeb lens sends the cheapest mode and never a caller's own script", a
   assert.equal((source.match(/params\.get\(/g) || []).length, 2, "only `url` and `q` may be read from the caller");
 });
 
+
+test("the /ask door probe reads a real NLWeb server as present", async () => {
+  // This probe KNOCKS: it sends no query, so it has to classify whatever a
+  // server says to a bare request. Two shapes a CONFORMING instance returns
+  // were both being graded absent, which undercounts the census the /lens
+  // spectrum is built from. Driven through the SELF_FETCH loopback, the same
+  // path a self-scan takes.
+  const { lensProbeNlweb } = await import("../src/worker/lens.ts");
+  const probe = (body, init) => lensProbeNlweb("https://aadhar.sh", { SELF_FETCH: async () => new Response(body, init) });
+
+  // 1. The protocol streams by DEFAULT, so a server answering a bare knock with
+  // an event stream is behaving correctly. A bot wall does not stream.
+  const streamed = await probe('data: {"message_type":"begin-nlweb-response"}\n\n', { headers: { "content-type": "text/event-stream" } });
+  assert.equal(streamed.verdict, "likely");
+  assert.match(streamed.detail, /event stream/);
+
+  // 2. `query` is REQUIRED, so a conforming server must refuse a bare knock.
+  // Ours answers exactly this, and its own lens called it no endpoint at all.
+  const asks = await probe(JSON.stringify({ error: "query is required", parameter: "query", endpoint: "/ask", results: [] }),
+    { status: 400, headers: { "content-type": "application/json" } });
+  assert.equal(asks.verdict, "likely");
+  assert.match(asks.detail, /asking for `query` by name/);
+
+  // The tightening this probe already carried must survive both: a bot wall
+  // refuses the REQUEST and never names a parameter it has no concept of.
+  // These four are the exact statuses that put 4 of 6 origins on the top rung.
+  for (const status of [410, 412, 429]) {
+    const wall = await probe(JSON.stringify({ error: "Gone" }), { status, headers: { "content-type": "application/json" } });
+    assert.equal(wall.verdict, "no", `HTTP ${status} must not read as a door`);
+  }
+  const bare401 = await probe("", { status: 401, headers: { "content-type": "application/json" } });
+  assert.equal(bare401.verdict, "no", "a 401 with no WWW-Authenticate does not say how to open the door");
+
+  // And a 400 that is merely a 400 stays absent: the parameter name is the
+  // whole discriminator, not the status.
+  const generic = await probe(JSON.stringify({ error: "bad request" }), { status: 400, headers: { "content-type": "application/json" } });
+  assert.equal(generic.verdict, "no");
+
+  // Unchanged rungs.
+  assert.equal((await probe("{}", { headers: { "content-type": "application/json" } })).verdict, "maybe");
+  assert.equal((await probe("<!doctype html>", { headers: { "content-type": "text/html" } })).verdict, "no");
+  assert.equal((await probe("", { status: 404 })).verdict, "no");
+  assert.equal((await probe("", { status: 503 })).verdict, "unknown");
+  assert.equal((await probe("{}", { status: 401, headers: { "content-type": "application/json", "www-authenticate": "Bearer" } })).verdict, "likely");
+});
+
+test("this origin's own /ask is not graded absent by its own door probe", async () => {
+  // The control that motivated the change above, wired end to end: the real
+  // handler answers the real probe. A site that serves NLWeb and reports itself
+  // as not serving it is the one result this lens must never produce.
+  const { lensProbeNlweb } = await import("../src/worker/lens.ts");
+  const { handleAsk } = await import("../src/worker/nlweb.ts");
+  const env = { ASSETS: { fetch: async () => new Response(JSON.stringify({ version: 1, records: [] })) } };
+  env.SELF_FETCH = async (req) => handleAsk(req, env);
+  const verdict = await lensProbeNlweb("https://aadhar.sh", env);
+  assert.equal(verdict.verdict, "likely");
+});
+
 test("the MCP client sends Mcp-Method, and it agrees with the body", async () => {
   // Being a permissive SERVER does not license being a lax CLIENT. /mcp
   // validates this header only when present, because requiring it would reject

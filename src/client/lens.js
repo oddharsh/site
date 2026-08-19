@@ -1919,8 +1919,16 @@
       mcp.verdict === "yes" ? "found" : mcp.verdict === "likely" ? "likely" : mcp.verdict === "maybe" ? "maybe" : "absent",
       mcp.verdict === "yes" || mcp.verdict === "likely" ? "ok" : mcp.verdict === "maybe" ? "warn" : "off", mcp.detail);
     var nl = ag.nlweb || {};
+    // Four verdicts, four readings. This row printed "absent" for everything
+    // that was not "maybe", which folded an auth-gated door AND a probe that
+    // never got an answer into "there is nothing here" — the one claim this
+    // module refuses to make anywhere else (classifyDoor keeps shut and
+    // unreadable apart for exactly this reason, and the /mcp row above already
+    // reads all four). "What it answers" is the tab that settles it, since a
+    // knock cannot tell NLWeb-shaped from NLWeb.
     row("/ask", "NLWeb (Microsoft, 2025) — the site as a natural-language endpoint",
-      nl.verdict === "maybe" ? "NLWeb-shaped" : "absent", nl.verdict === "maybe" ? "warn" : "off", nl.detail);
+      nl.verdict === "likely" ? "likely" : nl.verdict === "maybe" ? "NLWeb-shaped" : nl.verdict === "unknown" ? "no answer" : "absent",
+      nl.verdict === "likely" ? "ok" : nl.verdict === "maybe" || nl.verdict === "unknown" ? "warn" : "off", nl.detail);
     var wm = ag.webmcp || {};
     row("WebMCP", "in-page tools for browser agents (Chrome/W3C draft)",
       wm.found ? (wm.kind === "bridge" ? "CDN bridge" : "markers found") : "absent",
