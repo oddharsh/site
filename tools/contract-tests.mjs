@@ -3804,6 +3804,155 @@ test("the activation header lands on navigable HTML only", async () => {
   assert.equal(withSecurityHeaders(encoded, "/").headers.get("content-encoding"), "br");
 });
 
+// Walk a `new Response(` call to its matching close paren, skipping strings,
+// template literals and line comments, and return the rebuild sites: the ones
+// whose FIRST argument is another response's `.body`. Those are the only calls
+// that can inherit a content-encoding they did not set themselves.
+export function responseRebuilds(src) {
+  const out = [];
+  const NEEDLE = "new Response(";
+  for (let i = src.indexOf(NEEDLE); i !== -1; i = src.indexOf(NEEDLE, i + 1)) {
+    const open = i + NEEDLE.length - 1;
+    let depth = 0, quote = "", args = [], start = open + 1, j = open;
+    for (; j < src.length; j++) {
+      const c = src[j];
+      if (quote) {
+        if (c === quote && src[j - 1] !== "\\") quote = "";
+        continue;
+      }
+      if (c === '"' || c === "'" || c === "`") { quote = c; continue; }
+      if (c === "/" && src[j + 1] === "/") { j = src.indexOf("\n", j); if (j === -1) break; continue; }
+      if ("([{".includes(c)) depth++;
+      else if (")]}".includes(c)) {
+        depth--;
+        if (depth === 0) { args.push(src.slice(start, j)); break; }
+      } else if (c === "," && depth === 1) { args.push(src.slice(start, j)); start = j + 1; }
+    }
+    if (depth !== 0) continue;
+    const body = (args[0] || "").trim();
+    if (!body.endsWith(".body")) continue;
+    const init = (args[1] || "").trim();
+
+    // An identifier init is AMBIGUOUS and getting it wrong is the whole failure
+    // this test exists to catch. `new Response(r.body, hit)` passes a RESPONSE,
+    // which preserves encodeBody; `new Response(r.body, init)` passes a plain
+    // object built earlier, which does not. Resolve it by looking for a
+    // `const <ident> = {` declaration in the same file. A first draft of this
+    // scanner skipped that step and reported both security.ts sites as safe by
+    // the wrong reasoning, which is the shape of a check that only agrees with
+    // itself.
+    // `preserves` means the runtime keeps the flag on its own because the init is
+    // another Response; `carries` means this call sets it explicitly.
+    let preserves, carries;
+    if (init === "") { preserves = false; carries = false; }
+    else if (init.startsWith("{")) { preserves = false; carries = /\bencodeBody\b/.test(init); }
+    else if (/^[A-Za-z_$][\w$]*$/.test(init)) {
+      // Scope BOTH lookups to the nearest declaration before this call, never to
+      // the whole file. security.ts has two rebuild sites that both name their
+      // init `init`, so a file-wide search lets one site's carry vouch for the
+      // other: deleting the flag from one of them left this test green, which is
+      // precisely the regression it is here to catch.
+      const decl = new RegExp(`(?:const|let|var)\\s+${init}\\s*=\\s*\\{`, "g");
+      let declAt = -1, m;
+      while ((m = decl.exec(src)) !== null && m.index < i) declAt = m.index;
+      preserves = declAt === -1;
+      carries = declAt !== -1
+        && new RegExp(`\\b${init}\\.encodeBody\\b`).test(src.slice(declAt, i));
+    } else { preserves = false; carries = /\bencodeBody\b/.test(init); }
+
+    out.push({ line: src.slice(0, i).split("\n").length, body, preserves, carries });
+  }
+  return out;
+}
+
+test("every Response rebuilt from another response's body either preserves encodeBody or is recorded as not needing it", async () => {
+  // gotcha 13, and the assertion above is why this one exists. That one builds a
+  // response carrying `content-encoding: br`, runs it through withSecurityHeaders
+  // and checks the header survived. The header survives whether or not the flag
+  // was carried, and `node --test` runs undici, which does not implement
+  // `encodeBody` at all, so nothing written there can observe the thing it claims
+  // to cover. workerd exposes no getter either (measured 2026-08-18:
+  // `{encodeBody_own: false, in_prototype: false, keys: []}`), so the only place
+  // this invariant can be checked without booting a Worker is the SOURCE.
+  //
+  // What makes it worth checking: the loss depends on the SHAPE of the init.
+  // Measured on workerd 1.20260811.1, `new Response(r.body, r)` preserves the
+  // flag and `new Response(r.body, {status, headers})` drops it while leaving
+  // `content-encoding` on the response, so the runtime encodes the body twice.
+  // A client that decodes once, as the header instructs, gets compressed noise.
+  // Upstream: https://github.com/cloudflare/workerd/issues/7066
+  //
+  // This is a TRIPWIRE rather than a proof. It cannot know whether a given path
+  // carries a content-encoding, so it records the object-init sites that exist
+  // today with the reason each is believed safe, and fails when that set moves.
+  // A new object-init rebuild is then a decision somebody makes on purpose.
+  const RECORDED = {
+    "src/worker/lib/assets.ts": {
+      count: 2,
+      why: "rebuilds an env.ASSETS.fetch() response. MEASURED 2026-08-18: the binding "
+         + "hands the Worker decoded bytes with content-encoding: null, so there is no "
+         + "flag to lose. The three sites in this file that DO build encoded responses "
+         + "from .br bytes set encodeBody themselves.",
+    },
+    "src/worker/photos.ts": {
+      count: 2,
+      why: "rebuilds an R2 object body. R2 sets content-encoding only when the upload "
+         + "set httpMetadata.contentEncoding, and the photo pipeline never does. Note "
+         + "this is an upload-time property rather than anything the code enforces.",
+    },
+    "src/worker/rn.ts": {
+      count: 1,
+      why: "rebuilds an image-transform response; the body is image bytes and the path "
+         + "sets no content-encoding.",
+    },
+    "serendipity/serendipity.js": {
+      count: 4,
+      why: "three rebuild locally-built HTML or add a cookie, and one is this file's own "
+         + "withSecurityHeaders twin. None of them is a precompressed path today. NOT "
+         + "measured the way the assets.ts entry was: if serendipity ever serves "
+         + "precompressed bytes, that twin needs the same conditional carry security.ts has.",
+    },
+  };
+
+  const files = [];
+  for (const dir of ["src/worker", "cal/src", "serendipity"]) {
+    for (const name of await readdir(new URL(`${dir}/`, ROOT), { recursive: true })) {
+      if (/\.(ts|js)$/.test(name)) files.push(`${dir}/${name}`);
+    }
+  }
+
+  let scanned = 0;
+  const unrecorded = [];
+  const seen = {};
+  for (const file of files.sort()) {
+    for (const hit of responseRebuilds(await readFile(new URL(file, ROOT), "utf8"))) {
+      scanned++;
+      if (hit.preserves || hit.carries) continue;
+      seen[file] = (seen[file] || 0) + 1;
+      if (!RECORDED[file]) unrecorded.push(`${file}:${hit.line} (${hit.body})`);
+    }
+  }
+
+  // A scanner that matches nothing reports a pass, so pin the floor. 20 sites on
+  // 2026-08-18; this only has to catch a collapse, not track the exact number.
+  assert.ok(scanned >= 15,
+    `the rebuild scanner found ${scanned} sites, so it has probably stopped matching`);
+
+  assert.deepEqual(unrecorded, [],
+    "a Response rebuilt from another response's body with an object init drops "
+  + "encodeBody. Either pass the response itself as init (and mutate headers on the "
+  + "result), set encodeBody when a content-encoding is present the way security.ts "
+  + "does, or add an entry to RECORDED above saying why this path cannot carry one.");
+
+  // A stale entry is the other direction: if a file stops having these sites, the
+  // recorded reason outlives what it described and the next reader trusts it.
+  for (const [file, { count }] of Object.entries(RECORDED)) {
+    assert.equal(seen[file] || 0, count,
+      `RECORDED says ${file} has ${count} object-init rebuild(s) and the scan found ${seen[file] || 0}. `
+    + "Re-check the reason, then update the count.");
+  }
+});
+
 test("the homepage's Link header carries the shell preloads, or it gets no Early Hints 103", async () => {
   // Cloudflare Early Hints harvests ONLY the rel=preload entries out of a Link
   // header. `/` had none between the serveStaticPage refactor and this test, so
