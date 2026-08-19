@@ -2304,14 +2304,23 @@ pnpm run deploy:direct
     asks for a readable property before it asks for a behaviour change: a getter is
     what would let a wrapper carry the flag on purpose and let a test assert it did.
 
-    **The contract test for this can only agree with itself.** It builds a response
-    carrying `content-encoding: br`, runs `withSecurityHeaders`, and asserts the
-    header survived. The header survives whether or not the flag was carried, and
-    `node --test` runs undici, which does not implement `encodeBody` at all, so no
-    assertion written there can see the thing it claims to cover. Same shape as the
-    Turndown structural test and gotcha 24's stale-projection check. A test with
-    teeth has to either run in workerd or assert on the SOURCE, the way the
-    Turndown one settled for.
+    **The first contract test for this could only agree with itself, and the one
+    that replaced it asserts on the SOURCE.** The old assertion built a response
+    carrying `content-encoding: br`, ran `withSecurityHeaders`, and checked that
+    the header survived. That header survives whether or not the flag was carried,
+    and `node --test` runs undici, which does not implement `encodeBody` at all, so
+    nothing written there could see the thing it claimed to cover. Same shape as
+    the Turndown structural test and gotcha 24's stale-projection check.
+
+    What replaced it walks every `new Response(` across `src/worker`, `cal/src` and
+    `serendipity` with a brace matcher, decides which ones rebuild another
+    response's body, and requires each of those either to use a preserving shape or
+    to be RECORDED with the measurement saying it needs nothing. `assets.ts` is
+    recorded for the reason above: its two object-init rebuilds take an
+    `env.ASSETS.fetch()` response, and that binding hands the Worker decoded bytes
+    with `content-encoding: null`. A regex could not do this job, for the reason
+    every naive scanner in this file has failed: the init is an expression, and
+    finding its end needs balanced parentheses.
 
     Three suspects were investigated and exonerated. Two of the three are real
     facts worth keeping, they just weren't the cause: (1) a worker cannot read the
