@@ -66,14 +66,47 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
   const committed = (await readdir("src/dict/a-dict")).filter((n) => /\.[0-9a-f]{8}\.(js|css)$/.test(n));
   const bases = new Set(committed.map((n) => n.replace(/\.[0-9a-f]{8}\.(js|css)$/, "")));
 
-  // Two pages, because no single document references every dictionary-carrying asset:
-  // the homepage pulls nav + luna, /lens pulls lens.js on top of them.
+  // Discovery has to match the ROLL's, or this assertion grades a different set from the
+  // one the nightly job adopts. It walks the same four documents and then closes over the
+  // /a/ graph, because an asset loaded lazily from JavaScript appears in no document.
+  //
+  // This check shipped with an HTML-only scan of two pages, and that is the same gap the
+  // roll had until it grew `liveShell()`; the fix landed there and was never mirrored
+  // here. Measured 2026-08-19: documents alone found 5 of 17 live assets and the 12 it
+  // could not see included lens.js, the largest script on the site at 22,807 B brotli. It
+  // reported one uncovered asset that day when there were two. A coverage assertion that
+  // cannot see the asset it is covering is the same "could only ever agree with itself"
+  // failure this block was written to fix, one layer out.
+  //
+  // Bodies are CACHED so the byte comparison below reuses what the walk already read. That
+  // is not only a saved request: re-fetching opens a window for a deploy to land between
+  // the scan and the compare, which would grade bytes this run never saw.
+  const body = new Map();
+  const assetRefs = (buf) => [...buf.toString("utf8").matchAll(/\/a\/([\w-]+\.[0-9a-f]{8}\.(?:js|css))/g)].map(([, n]) => n);
+  const fetchLive = async (path) => {
+    let r;
+    try { r = await fetch(`https://aadhar.sh${path}`, { headers: { "accept-encoding": "identity" } }); }
+    catch { return null; }
+    return r.ok ? Buffer.from(await r.arrayBuffer()) : null;
+  };
+
   const refs = new Map();
-  for (const path of ["/", "/lens"]) {
-    const html = await (await fetch(`https://aadhar.sh${path}`, { headers: { "accept-encoding": "identity" } })).text();
-    for (const [, name] of html.matchAll(/\/a\/([\w-]+\.[0-9a-f]{8}\.(?:js|css))/g)) {
-      refs.set(name, name.replace(/\.[0-9a-f]{8}\.(js|css)$/, ""));
-    }
+  const see = (name) => refs.set(name, name.replace(/\.[0-9a-f]{8}\.(js|css)$/, ""));
+  for (const path of ["/", "/lens", "/lwe/utf8", "/writing"]) {
+    const doc = await fetchLive(path);
+    if (doc) for (const n of assetRefs(doc)) see(n);
+  }
+  // Only .js can name another asset, and the visited set is the termination proof: the
+  // /a/ namespace is finite and each name is fetched at most once.
+  const queue = [...refs.keys()], walked = new Set();
+  while (queue.length) {
+    const name = queue.shift();
+    if (!name.endsWith(".js") || walked.has(name)) continue;
+    walked.add(name);
+    const buf = await fetchLive(`/a/${name}`);
+    if (!buf) continue;
+    body.set(name, buf);
+    for (const n of assetRefs(buf)) if (!refs.has(n)) { see(n); queue.push(n); }
   }
 
   const tracked = [...refs].filter(([, base]) => bases.has(base));
@@ -83,9 +116,13 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
     // A matching FILENAME is not a matching dictionary. The hash is only 8 hex of a
     // sha256, and the browser keys on the full digest of the bytes it stored, so the
     // committed copy has to be those bytes exactly.
-    const served = Buffer.from(await (await fetch(`https://aadhar.sh/a/${name}`, { headers: { "accept-encoding": "identity" } })).arrayBuffer());
+    const served = body.get(name) ?? await fetchLive(`/a/${name}`);
+    if (!served) { missing.push(`${name} (could not be read from production)`); continue; }
     if (!served.equals(await readFile(`src/dict/a-dict/${name}`))) missing.push(`${name} (filename matches, bytes do not)`);
   }
+  // An empty read means production is down or the ref shape moved, and reporting PASS on
+  // nothing is exactly the false green this assertion exists to prevent.
+  if (!refs.size) missing.push("no /a/ references found at aadhar.sh");
   const skipped = [...refs].filter(([, base]) => !bases.has(base)).map(([n]) => n);
   report("live shell is covered by a-dict", missing.length === 0,
          missing.length
