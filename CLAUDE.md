@@ -2192,8 +2192,31 @@ it before treating anything in there as a target.
 
    `wrangler.jsonc` self-builds and points both `main` and `assets` at
    `.build/public`, so no deploy path can ship the readable originals. Local
-   development uses `wrangler.dev.jsonc` against readable `public/`. Never bundle
-   or extend the build without the owner's say-so. `luna.css` was owner-approved
+   development uses `wrangler.dev.jsonc` against a SYMLINK FARM at `.dev-assets`,
+   staged by `tools/dev-stage.mjs`, which `pnpm run dev` and `pnpm run dev:remote`
+   run first. It reads "against readable `public/`" above this line until
+   2026-08-19, and by then that was two errors rather than one: the field named
+   `www`, which the 2026-08-18 split had deleted, so dev did not start at all; and
+   no single directory has been the served root since that split, so the obvious
+   repair (point it at `public/`) starts the server and 404s all 36 documents,
+   because those author in `src/pages/`.
+
+   A farm rather than a build because the loop is the point. `.build/public` costs
+   a 2.8s rebuild per edit and serves minified bytes, and it drags `main` along
+   with it: the staged `shell-assets.ts` and `csp-hashes.ts` maps only agree with
+   the hashed asset refs in built pages, so a readable Worker against a built tree
+   404s its own shell. Wrangler serves through file and directory symlinks and an
+   edit to a TARGET is picked up live, measured 2026-08-19 on wrangler 4.123.0,
+   with wrangler reloading on its own. So dev still serves the bytes in git, and
+   there is no watcher and no second build path.
+
+   What the farm cannot see is a file CREATED in one of the four directories more
+   than one root contributes to (the root, `garage`, `lwe`, `pixel-peeper`);
+   restart dev and it is there. Everything deeper is a whole-directory symlink and
+   needs nothing. A contract test pins the farm's roots to `build.mjs` step 1, so
+   the quiet version of this failure (a sixth root reaching production while dev
+   composes five) cannot ship. Never bundle or extend the build without the
+   owner's say-so. `luna.css` was owner-approved
    for its measured render-blocking win; the `/a/` content hashing was approved to
    clear the cache-lifetime audit; and whole-site HTML minification was approved
    because the same-program readable twin keeps View Source honest.

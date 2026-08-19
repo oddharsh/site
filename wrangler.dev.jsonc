@@ -2,10 +2,10 @@
   // LOCAL DEV ONLY — `wrangler dev -c wrangler.dev.jsonc` (see .claude/launch.json).
   //
   // This is the twin of wrangler.jsonc. The two differ in exactly six places:
-  //   - main:             public/... here vs .build/public/... in wrangler.jsonc
-  //   - assets.directory: www        here vs .build/public    in wrangler.jsonc
-  //   - no "build" block here (dev serves the readable public/ tree directly, so
-  //     the fast edit->reload loop never pays the full public/ -> .build copy)
+  //   - main:             src/worker/... here vs .build/src/worker/... in wrangler.jsonc
+  //   - assets.directory: .dev-assets here vs .build/public in wrangler.jsonc
+  //   - no "build" block here (dev serves READABLE source, so the fast
+  //     edit->reload loop never pays the full minify/hash/precompress build)
   //   - no deploy-time minification here; local code stays readable
   //   - no uploaded source maps; local stack locations already point at source
   //   - Workers Cache is disabled for both local entrypoints, so edit->reload
@@ -14,13 +14,37 @@
   // build.mjs warns if a binding name drifts between the two. Deploys never use
   // this file — wrangler.jsonc self-builds via its build.command and ships the
   // minified .build/public tree.
+  //
+  // assets.directory IS NOT A SOURCE DIRECTORY, and that changed on 2026-08-19.
+  // The served URL root is composed from FIVE authored directories (public/,
+  // src/pages/, src/content/, src/client/, src/styles/) since the 2026-08-18
+  // split, so no single one of them can be pointed at: this field named `www`
+  // for a day after that split, and `www` no longer existed, so dev did not
+  // start at all. `.dev-assets` is a SYMLINK FARM over those five, rebuilt by
+  // tools/dev-stage.mjs which `pnpm run dev` runs first. It is gitignored and
+  // costs no copy.
+  //
+  // The readable loop survives intact, which is the whole reason for a farm
+  // rather than pointing this at .build/public: wrangler serves through the
+  // symlinks and an edit to a TARGET is picked up live. What a farm cannot do is
+  // notice a file CREATED in one of the four merged directories (the root,
+  // garage, lwe, pixel-peeper — the paths more than one root contributes to);
+  // restart dev and the new file is there. Anywhere deeper is free, because
+  // those are whole-directory symlinks. dev-stage.mjs's header has the rule.
   "name": "aadhar-sh",
   // Same pin as wrangler.jsonc, and NOT a fifth difference between the two —
   // it is one of the values that must match. Plain `pnpm run dev` is local and
-  // never needs an account, but `pnpm run dev:remote` and
-  // `pnpm run routes:check:remote` both reach production bindings through this
-  // config, so they hit the same "more than one account available" wall that
-  // wrangler.jsonc's comment describes.
+  // never needs an account, but `pnpm run dev:remote` reaches production
+  // bindings through this config, so it hits the same "more than one account
+  // available" wall that wrangler.jsonc's comment describes.
+  //
+  // `pnpm run routes:check:remote` does NOT, and this comment said it did until
+  // 2026-08-19. check-routes-harness.mjs defaults its config to ./wrangler.jsonc
+  // and the package script passes no positional, so the remote oracle derives
+  // its twin from the PRODUCTION config and self-builds. That is worth keeping
+  // straight in both directions: it means the oracle is untouched by anything
+  // done to this file, and it means a change meant to reach the oracle has to be
+  // made in wrangler.jsonc.
   "account_id": "1c99acdb6141579023fb97d24261ea58",
   "main": "src/worker/index.ts",
   "compatibility_date": "2026-06-01",
@@ -37,7 +61,7 @@
     { "pattern": "cal.aadhar.sh/*", "zone_name": "aadhar.sh" }
   ],
   "assets": {
-    "directory": "www",
+    "directory": ".dev-assets",
     "binding": "ASSETS",
     // MUST match wrangler.jsonc: canonical URLs carry no trailing slash.
     "html_handling": "drop-trailing-slash",

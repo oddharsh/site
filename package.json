@@ -7,8 +7,8 @@
   "comment:workspaces": "pnpm does not read npm's `workspaces` field; the package list and the build allowlist live in pnpm-workspace.yaml. See that file, and CLAUDE.md gotcha 29 for why the release script is `deploy:direct` rather than `deploy`.",
   "scripts": {
     "build": "node tools/build.mjs",
-    "dev": "wrangler dev -c wrangler.dev.jsonc",
-    "dev:remote": "node tools/gen-remote-config.mjs wrangler.dev.jsonc && wrangler dev -c .wrangler.remote.jsonc",
+    "dev": "node tools/dev-stage.mjs && wrangler dev -c wrangler.dev.jsonc",
+    "dev:remote": "node tools/dev-stage.mjs && node tools/gen-remote-config.mjs wrangler.dev.jsonc && wrangler dev -c .wrangler.remote.jsonc",
     "deploy:direct": "wrangler deploy --x-provision=false --x-auto-create=false --strict",
     "deploy:version": "wrangler versions upload --x-provision=false --x-auto-create=false --strict",
     "deploy:promote": "node tools/deploy-promote.mjs",
