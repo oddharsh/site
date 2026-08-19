@@ -2751,6 +2751,50 @@ test("browser RUM and its ledger proxy stay fully removed", async () => {
     "/security must keep describing the browser-facing CSP accurately");
 });
 
+// Local dev serves a SYMLINK FARM (tools/dev-stage.mjs) because the served URL
+// root is composed from five authored directories and assets.directory can only
+// name one. That makes the farm a second definition of "the served tree", and a
+// second definition is a thing that drifts: this config named a directory that
+// had been deleted for a day after the 2026-08-18 split, and dev simply did not
+// start. The failure this test guards is the QUIET version of that — a sixth
+// root reaching production while dev keeps composing five, where dev starts fine
+// and merely 404s whatever the new root holds.
+test("local dev composes the same served tree the build stages", async () => {
+  const { parseJsonc } = await import("./lib/jsonc.mjs");
+  const { ASSET_ROOTS, FARM } = await import("./dev-stage.mjs");
+  const build = await readFile(new URL("tools/build.mjs", ROOT), "utf8");
+  const devConfig = parseJsonc(await readFile(new URL("wrangler.dev.jsonc", ROOT), "utf8"));
+  const pkg = JSON.parse(await readFile(new URL("package.json", ROOT), "utf8"));
+
+  // Step 1's cp calls into .build/public ARE the production definition of the
+  // served root. Read them rather than restating the list, so this test cannot
+  // agree with a copy of itself (the failure mode gotcha 24 names).
+  const staged = [...build.matchAll(/await cp\("([^"]+)",\s*`\$\{OUT\}\/public`/g)].map((m) => m[1]);
+  assert.ok(staged.length >= 3, "build.mjs step 1 should still stage several roots into .build/public");
+  assert.ok(staged.includes("public"), "the byte-for-byte asset root must still be staged");
+  // public/ is the cp with the STAGE_SKIP filter, so it matches a different
+  // shape above; assert it explicitly rather than loosening the regex.
+  assert.match(build, /await cp\("public", `\$\{OUT\}\/public`/, "build.mjs must still stage public/ into the served root");
+  assert.deepEqual(ASSET_ROOTS, staged,
+    "dev-stage.mjs's roots must equal build.mjs step 1's, in the same order — a later root wins a colliding path in both");
+
+  assert.equal(devConfig.assets.directory, FARM,
+    "wrangler.dev.jsonc must serve the farm, not one authored root (pointing it at any single root 404s every document the others hold)");
+
+  // The farm is BUILD OUTPUT with no watcher: nothing regenerates it except the
+  // dev scripts, so a script that skips the stager serves whatever the last run
+  // left behind, or fails to start on a clean checkout.
+  for (const script of ["dev", "dev:remote"]) {
+    assert.match(pkg.scripts[script], /node tools\/dev-stage\.mjs/,
+      `${script} must stage the farm before booting wrangler`);
+  }
+
+  // It must never be committed: it is a tree of symlinks into the source, so a
+  // checkout that carried it would go stale silently rather than break.
+  const ignored = await readFile(new URL(".gitignore", ROOT), "utf8");
+  assert.match(ignored, new RegExp(`^${FARM}$`, "m"), `${FARM} must be gitignored`);
+});
+
 test("production minifies the Worker without obscuring deployed stack traces", async () => {
   const { parseJsonc } = await import("./lib/jsonc.mjs");
   const production = parseJsonc(await readFile(new URL("wrangler.jsonc", ROOT), "utf8"));
