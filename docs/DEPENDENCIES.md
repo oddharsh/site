@@ -29,8 +29,8 @@ review policy and entry point for future agent runs.
 
 ## Current baseline
 
-- Wrangler 4.123.0 is the exact root pin shared by all Worker projects.
-  `cal`'s @cloudflare/vitest-pool-workers floor is 0.21.3, which resolves the
+- Wrangler 4.124.0 is the exact root pin shared by all Worker projects.
+  `cal`'s @cloudflare/vitest-pool-workers floor is 0.22.0, which resolves the
   same Wrangler, Miniflare, and Workerd stack as the root. Measured on
   2026-08-15 across five warm-store, clean installs, that alignment cut median
   install time from 4.62 s to 3.03 s and `node_modules` from 781 MiB to 562 MiB.
@@ -41,7 +41,7 @@ review policy and entry point for future agent runs.
   packages run only in the build environment; they add no browser or Worker
   runtime dependency. Dependabot should review their release notes for output,
   target-browser, and native-install changes.
-- Oxlint 1.78.0 and oxlint-tsgolint 7.0.2001 are exact root pins for
+- Oxlint 1.79.0 and oxlint-tsgolint 7.0.2001 are exact root pins for
   `pnpm run lint`, a required step in `validate`. The tsgolint version tracks the
   TypeScript pin below on purpose: TypeScript 7.0 ships no stable programmatic
   API, so typescript-eslint cannot run on it, and tsgolint is the door oxlint
@@ -50,7 +50,7 @@ review policy and entry point for future agent runs.
   unchanged code, and should treat any tsgolint release as paired with a
   TypeScript one. Every rule this repo turns off is turned off in
   `.oxlintrc.json` beside the measurement that decided it.
-- @oxlint/plugins 1.78.0 is the runtime for the three rules vendored from
+- @oxlint/plugins 1.79.0 is the runtime for the three rules vendored from
   anti-slop at `tools/oxlint/anti-slop`. **Bump it in lockstep with oxlint and
   never on its own**: it is the ABI between the linter and a JS plugin, the two
   ship one version number, and a mismatch would fail at plugin load rather than
@@ -243,5 +243,5 @@ now lists all five explicitly with that measurement at the array.
 
 To re-run the whole evaluation, clone the repo, `pnpm install` inside it, and
 point a scratch config at `src/index.ts` through `jsPlugins`. The pinned Oxlint
-1.78.0 does support custom JS plugins and `@oxlint/plugins` is published at a
-matching 1.78.0, so feasibility was never the blocker; applicability was.
+1.79.0 does support custom JS plugins and `@oxlint/plugins` is published at a
+matching 1.79.0, so feasibility was never the blocker; applicability was.
