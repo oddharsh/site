@@ -574,18 +574,46 @@ worktrees may edit freely, but a worktree is not a release surface.
   Builds uploads a version containing the feature, then set the secret on top of
   it, then ramp. Setting it first attaches a credential to a version whose code
   predates the thing that reads it, which is harmless and pointless.
-- **A DURABLE OBJECT LIFECYCLE CHANGE is the one thing this release path cannot
-  publish, and `--dry-run` cannot see it.** Adding, renaming, transferring, or
-  deleting a DO class needs a `[[migrations]]` entry, and `wrangler versions
-  upload` refuses to apply one: a migration mutates account-level namespace state,
-  which is exactly what an upload-without-traffic is defined not to do. So the
-  normal path (merge, then Workers Builds, then ramp) publishes everything
-  EXCEPT this.
+- **A DURABLE OBJECT LIFECYCLE CHANGE is the thing `--dry-run` structurally
+  cannot check.** Adding, renaming, transferring, or deleting a DO class needs a
+  `[[migrations]]` entry, and a migration mutates account-level namespace state,
+  which is exactly what an upload-without-traffic is defined not to do.
 
   What makes it worth a note is that nothing warns you. `wrangler deploy
   --dry-run` never contacts the API, so CI's three dry-run steps pass on a config
-  whose migration has never been applied. The failure shows up at the one moment
-  you least want it, on the real publish.
+  whose migration has never been applied. The failure, if there is one, shows up
+  at the one moment you least want it, on the real publish.
+
+  **This entry used to say `wrangler versions upload` REFUSES to apply a
+  migration. Wrangler's own code contradicts that, read on the pinned 4.123.0 on
+  2026-08-19.** For a real upload it computes the delta in
+  `getMigrationsToUpload` (which fetches the live script's `migration_tag` and
+  diffs it against the config), and `createWorkerUploadForm` folds the result
+  into the metadata with `...migrations && { migrations }`. That is the same
+  `workerBundle` POSTed to `/accounts/<id>/workers/scripts/<name>/versions`. No
+  branch excludes it and no warning fires: searching every string literal in the
+  18MB bundle for one naming both migrations and versions or upload returns five
+  hits, all of them function names or a D1 filename help string.
+
+  The dry-run half of this entry IS verified by the same read, and the mechanism
+  is one line:
+
+  ```js
+  const migrations = !props.isDryRun ? await getMigrationsToUpload(...) : undefined
+  ```
+
+  A dry run never computes a migration, so it cannot report on one.
+
+  **What is still untested is whether the API accepts it.** If a refusal exists
+  it lives server-side, and this entry attributed it to the wrong layer for
+  months. Settling it needs a real authenticated `versions upload` carrying a
+  `[[migrations]]` entry, which creates account state, so it wants a throwaway
+  Worker rather than `aadhar-sh`: declare one new class, upload a version, read
+  the response, then delete the Worker and its namespace.
+
+  The advice below is unchanged either way, because it is safe whether the
+  endpoint accepts the migration or rejects it. That is the reason to keep it
+  while the question is open, rather than to act on a guess about which.
 
   Two consequences, both load-bearing:
 
