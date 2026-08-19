@@ -54,7 +54,7 @@
     "@minify-html/node": "0.18.1",
     "@oxlint/plugins": "1.79.0",
     "lightningcss": "1.33.0",
-    "oxc-minify": "0.144.0",
+    "oxc-minify": "0.145.0",
     "oxlint": "1.79.0",
     "oxlint-tsgolint": "7.0.2001",
     "playwright-core": "^1.62.1",
