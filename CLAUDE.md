@@ -60,8 +60,16 @@ if nobody stops it. The served tree has been called `holding/`, then `www/` from
 assets, `src/pages/` for documents. So a branch or note older than that date
 says `www` or `holding` for something that no longer exists under either name,
 and the automated rewrites that moved these paths were careful NOT to rename
-those historical mentions. Where you see `www/_worker.js` or `www/scripts`
-in an old note, read `www/`.
+those historical mentions. Where you see `www/_worker.js` in an old note, read
+`src/worker/`, and `www/scripts` is `tools/photos/`.
+
+Read that last sentence as evidence for the rule above it, since both of its
+earlier versions were mangled by the very rewrites it warns about. The one before
+2026-08-18 came out as "`public/` was called `public/` until 2026-08-11", because
+the www-to-public rewrite caught both halves of a sentence whose whole point was
+the old name. Its replacement in #458 then said to read `www/`, which #458 itself
+was the commit that deleted. A note about stale paths is the one place a path
+rewrite cannot be run blind.
 
 `scripts/` is gone as a top-level entry: it merged into `tools/` on 2026-08-18,
 so the duplicate-looking pair this note used to explain no longer exists.
@@ -823,22 +831,22 @@ Single-page personal site at `aadhar.sh`. A Cloudflare Worker with static assets
 
 | file | role |
 |---|---|
-| `src/pages/index.html` | The whole page in one file. Inline CSS + JS. ~58KB uncompressed, ~15.4KB zstd (measured 2026-07-21 via live nav-timing; CF serves zstd, not brotli). Served on the shared `PAGE_CACHE_CONTROL` (`lib/const.js`) like every other document, + ETag, and still never `no-store` (the one directive that would cost the page bfcache). It held `private, no-cache, must-revalidate` through its SSR era and kept it after the SSR left; that cost two things at once, since no shared cache could store it (every front-door hit ran the worker) and Chromium refuses to keep a dictionary offered under `no-cache` (so `/` was the ONE page outside the per-page dcz tier). Changed 2026-07-31. Comments deliberately kept readable for View Source. |
+| `src/pages/index.html` | The whole page in one file. Inline CSS + JS. ~58KB uncompressed, ~15.4KB zstd (measured 2026-07-21 via live nav-timing; CF serves zstd, not brotli). Served on the shared `PAGE_CACHE_CONTROL` (`lib/const.ts`) like every other document, + ETag, and still never `no-store` (the one directive that would cost the page bfcache). It held `private, no-cache, must-revalidate` through its SSR era and kept it after the SSR left; that cost two things at once, since no shared cache could store it (every front-door hit ran the worker) and Chromium refuses to keep a dictionary offered under `no-cache` (so `/` was the ONE page outside the per-page dcz tier). Changed 2026-07-31. Comments deliberately kept readable for View Source. |
 | `public/writing/` | Written content as plain `.txt` files + `posts.json` registry `[{slug,title,date}]`. The worker renders each as an XP **Notepad** window at `/writing/<slug>` (a server-rendered `<textarea>` seeded with the canonical text — editable by nature, ephemeral by nature: no save → reload restores canonical, "writing in flux"), plus a "My Writing" folder index at `/writing`. Raw `.txt` stays fetchable at `/writing/<slug>.txt`. Author a post = drop a `.txt` + a `posts.json` entry. Render code (`handleWritingIndex`/`handleWritingPost`/`NOTEPAD_CSS`) lives in `_worker.js`. |
 | `src/client/notepad.js` | Behavior for the `/writing` Notepad view (deferred, SW-cached): per-window `enhance()` wiring File/Edit/Format/View/Help menus, live Ln/Col + word-count status bar, Word-Wrap toggle, the classic **F5 time/date** stamp (Temporal w/ Date fallback), Select All, Print, About. Also opens folder notes as **popovers** that composite over the folder index, deliberately without touching the address bar (notes are `popover="manual"`, so several stay open at once and one URL couldn't honestly name three windows; Esc closes the topmost). The permalink stays real: each row is an `<a href="/writing/<slug>">` the worker serves standalone, and a modified click passes through to it. Chrome itself is SSR'd by `_worker.js`. No-op without a `.np-window`. |
 | `src/client/tooltip.js` | Rich XP hover island for photos, tracks, artists, and car references. The homepage keeps only a tiny inline loader that idle-prefetches this module and replays a cold first hover; coarse-pointer visitors never load it. |
-| `src/client/infotip.js` | The same trick for every OTHER hover on the site. The rule is short: **any `[title]` is an infotip, wherever it lives** — taskbar app buttons, tray icons, the clock, desktop icons, title-bar controls, form fields, and titled links and controls in page bodies. All of them already bought the OS tooltip, so this is what that tooltip was hiding: a pin's page count (from nav.js's own destination table), the tray's live colo/build (the same JSON its click-balloon fetches), the clock's full date, a citation link's destination host. It re-draws `title` rather than replacing it: emptied on hover, restored on leave, so AT still reads it at focus and a page with no JS keeps the native tooltip. `[data-tip]` is the opt-in for a control that never had one. **Four richer surfaces are skipped by name** (`.lx-term`, `.photos a`, `.np-list li`, `.np-artist-link`, `.car-link`, `.ev[data-cover]`) because each already draws its own card from the same engine; `.lx-term` is the sharp one, since those ship a `title` as their no-JS fallback and `lens.js` strips it once its own surface is live. **`nav.js` owns the matcher and passes the FUNCTION in**, not a selector each side keeps a copy of. Loads on the first hover that has a tip, never on a coarse pointer. Windows' two delays live in `hoist.js` now (`openMs` 400 cold-dwell, `autopopMs` 6s), both defaulting OFF so the content hover CARDS keep the instant show they were tuned for. |
+| `src/client/infotip.js` | The same trick for every OTHER hover on the site. The rule is short: **any `[title]` is an infotip, wherever it lives** — taskbar app buttons, tray icons, the clock, desktop icons, title-bar controls, form fields, and titled links and controls in page bodies. All of them already bought the OS tooltip, so this is what that tooltip was hiding: a pin's page count (from nav.js's own destination table), the tray's live colo/build (the same JSON its click-balloon fetches), the clock's full date, a citation link's destination host. It re-draws `title` rather than replacing it: emptied on hover, restored on leave, so AT still reads it at focus and a page with no JS keeps the native tooltip. `[data-tip]` is the opt-in for a control that never had one. **Four richer surfaces are skipped by name** (`.lx-term`, `.photos a`, `.np-list li`, `.np-artist-link`, `.car-link`, `.ev[data-cover]`) because each already draws its own card from the same engine; `.lx-term` is the sharp one, since those ship a `title` as their no-JS fallback and `lens.ts` strips it once its own surface is live. **`nav.js` owns the matcher and passes the FUNCTION in**, not a selector each side keeps a copy of. Loads on the first hover that has a tip, never on a coarse pointer. Windows' two delays live in `hoist.js` now (`openMs` 400 cold-dwell, `autopopMs` 6s), both defaulting OFF so the content hover CARDS keep the instant show they were tuned for. |
 | `src/client/nav.js` | Site-wide XP **desktop shell**. The ONE shared external asset (deferred, SW-cached) — every page includes `<script src="/nav.js" defer>`; it injects its own `<style>` + builds, into `<body>`: the **Bliss desktop** wallpaper, **draggable desktop icons** (Notepad + the 5 profiles; icons drag freely within a visit but positions are DELIBERATELY not persisted, since the stored layout was read back in states that couldn't honour it and came back as a stack), the **taskbar** (Start orb → Run, first-level-subpage app buttons each with a per-section SVG icon, clock via Temporal), and the **Run** command palette (⌘K / Start). Also owns the **OS-window model**: body is a clipping flex desktop, each `.window`/`.np-window` is pinned + its content scrolls internally behind a **custom XP scrollbar**, windows are **draggable** (top is a hard boundary) + **resizable**, and Navigations hard-cut: the cross-document View Transition this file used to describe was removed 2026-07-30 (prerender already made navigation instant, so the animation was pure added latency). Sets each first-level route's **tab favicon** to its section icon. Run destinations: pages + profiles inline; 158 photos lazy-loaded from `/images/manifest.json` with `/images/alt.json` captions. Wired into homepage + all garage pages + worker-gen `/around`,`/whoareyou`,`/bot` + serendipity shell. |
 | `src/client/quiz.js` | The **understanding-check** widget (deferred, shared, minified at deploy with a `/quiz.src.js` twin). Every garage + LWE content page ends with an active-recall quiz rendered by this one script from an inline `<script type="application/json" id="luq-data">` block: garage pages get an XP GroupBox self-test (`<section id="luq">` mount), LWE pages get the quiz as a continuation of the MSN chat (appended into `.log`, no mount). Misconception-based distractors, deterministic option shuffle, per-page best score in localStorage. The idea is Geoffrey Litt's "Understanding is the new bottleneck" (credited in the widget footer); /lens carries the same pedagogy in copy (predict-then-check mode notes, the Delta counterfactual lab as a Papert micro-world). |
-| `public/terminal.js` | The **Windows PowerShell** console at `/terminal`, and an actual **MCP client**: typing `dict <url>` sends the same `POST /mcp` `tools/call` an agent sends, and echoes the request before making it. Deliberately no private endpoints — if the console had its own, watching it would say nothing about what an agent gets and the two could drift unnoticed. The page server-renders one frame as boot output, so the route reads with JS off. Builds output with `createTextNode`, never `innerHTML`, because frames carry photo captions and third-party page titles. |
-| `src/worker/terminal.js` + `lib/tui.js` | The tools and the 80-column frame renderer. Tools are TOP-LEVEL utilities (`/finger`, `/radar`, `/dict`, `/cache`), because this site puts utilities at the root and only content nests; `/terminal` is the console that DRIVES them, not their parent. The frame is a REPRESENTATION alongside `.md`: one URL answers HTML to a browser, the frame to everything else, and `<tool>.txt` explicitly. **The MCP tool name IS the route name** — what you type in the console, what you curl, and what an agent calls are one word, and a contract test asserts every tool with a route is reachable over MCP. State is query params (small and addressable), so frames fork, bookmark and replay. `lib/tui.js` is pure, which is what lets one renderer answer HTTP, MCP and `node --test`; its palette is MID-TONES ONLY because a terminal theme belongs to the visitor. |
+| `src/worker/wire.ts` | **`/terminal`: what an agent sees when it points at this site.** Server-rendered, with no client script and nothing to type into. It performs a real `POST /mcp` JSON-RPC exchange and shows the request beside the response, because that is what an agent does. It replaced a Windows PowerShell emulator in #266 and the reason is worth keeping: the console had grown to roughly 2,000 lines to explain an MCP server of 433, and it drew `[_][#][X]` window controls in ASCII inside a real XP window that already had them, which is the "terminal running inside Internet Explorer" mistake rebuilt one layer down. An agent never types, it POSTs JSON-RPC and reads JSON back, so emulating a shell faithfully made the demo LESS honest the better it got. `?plain=1` is inert rather than removed, so old links keep working. |
+| `src/worker/terminal.ts` + `lib/tui.ts` | The tools and the 80-column frame renderer. Tools are TOP-LEVEL utilities (`/finger`, `/radar`, `/dict`, `/cache`), because this site puts utilities at the root and only content nests; `/terminal` is the page that SHOWS them rather than their parent. The frame is a REPRESENTATION alongside `.md`: one URL answers HTML to a browser, the frame to everything else, and `<tool>.txt` explicitly. **The MCP tool name IS the route name** — what `/terminal` renders, what you curl, and what an agent calls are one word, and a contract test asserts every tool with a route is reachable over MCP. State is query params (small and addressable), so frames fork, bookmark and replay. `lib/tui.ts` is pure, which is what lets one renderer answer HTTP, MCP and `node --test`; its palette is MID-TONES ONLY because a terminal theme belongs to the visitor. |
 | the `/terminal` window | It is a **console window, not a page**, and the difference is entirely in what was REMOVED. `lunaPage` gained `windowClass`/`contentClass`/`windowAttrs` (all defaulting to empty, so the other nine callers are byte-identical) and the window declares `data-no-histnav`, which `nav.js` honours by skipping the site-wide Back/Forward injection — those are BROWSER controls, and a console carrying them reads as a terminal running inside Internet Explorer. Drag, resize, maximize and close all stay, because those are OS chrome. There is also nothing below the window: the explanatory paragraph that used to sit there was the single strongest tell, since real consoles do not come with a caption. Width is 624px so the console is exactly 80 columns, the size a real one opens at; left at the 760px page default it carried 136px of dead field to the right of every frame. Fonts stay on the design system — `"Lucida Console", var(--font-mono)`, one native Windows font in front of the existing token, no `@font-face`, no bytes. |
 | `src/worker` | The module worker (bundled by wrangler at deploy). Owns routing, photo serving from R2, manifest building, Spotify playlist scraping, AadharshBot crawler, the `/writing` Notepad pages, cache-control overrides. |
 | `public/_headers` | Static-asset cache + security headers (CSP, Permissions-Policy, etc.). Applied to direct static-asset requests; the worker overrides cache-control for select paths. |
 | `src/client/sw.js` | RETIRED (v136, 2026-07-03): now a ~15-line unregister stub (skipWaiting, delete caches, claim, unregister) that must keep serving 200 for a year+ so installed copies clean themselves up. No CACHE_VERSION anymore; the deploy-log vnum is staged in `checkpoints.json` and recorded in D1 by the ramp (bump-version.sh mints the next from that projection). Repeat-visit speed comes from immutable assets + bfcache + speculation prerender. |
 | `public/llms.txt` | The llms.txt format — concise site summary for LLMs. Linked from `<link rel="alternate">`. |
 | `public/index.md` | Markdown source of homepage copy (used by `/llms.txt` and as a fallback). The one COMMITTED Markdown twin: `gen-md-twins.mjs` skips any path that already has one, so this hand-written prose is never regenerated over. |
-| `public/md/` | Hand-authored Markdown twins for the three Worker-rendered prose pages, `/bot`, `/whoareyou` and `/security`, whose text lives in template literals no build step can read. `.assetsignore`d (build input, not a public URL): the generator publishes them at `/bot.md`, `/whoareyou.md` and `/security.md`. `checkTwinFacts()` pins the load-bearing strings against the Worker in BOTH directions, so bumping `BOT_VERSION` fails the deploy until `bot.md` agrees. `security.md`'s pins read `lib/security.js` rather than the page, since a page ABOUT headers must agree with the module that SENDS them; one of them is derived from `ENFORCE_PAGE_HASHES`, so finishing the hashed-CSP rollout fails the deploy until the twin stops calling the policy report-only. |
+| `public/md/` | Hand-authored Markdown twins for the three Worker-rendered prose pages, `/bot`, `/whoareyou` and `/security`, whose text lives in template literals no build step can read. `.assetsignore`d (build input, not a public URL): the generator publishes them at `/bot.md`, `/whoareyou.md` and `/security.md`. `checkTwinFacts()` pins the load-bearing strings against the Worker in BOTH directions, so bumping `BOT_VERSION` fails the deploy until `bot.md` agrees. `security.md`'s pins read `lib/security.ts` rather than the page, since a page ABOUT headers must agree with the module that SENDS them; one of them is derived from `ENFORCE_PAGE_HASHES`, so finishing the hashed-CSP rollout fails the deploy until the twin stops calling the policy report-only. |
 | `public/sitemap.xml`, `robots.txt` | Standard SEO files. robots.txt explicitly allows AadharshBot. |
 | `public/.well-known/http-message-signatures-directory` | JWKS for AadharshBot's Ed25519 public key (Web Bot Auth IETF draft). |
 | `public/images/` + `public/i/` | `images/` holds the photo DATA surfaces: `metadata.json` (the EXIF RECORD, long field names + the Fuji recipe card), `exif.json` (the tooltip's TEXT tier: every photo's short-key EXIF in one 2.6KB-brotli file, warmed once on idle because the homepage draws a fresh random 12 of 158 per request and a per-slot warm-up was cold nearly every visit), `meta/<stem>.json` (per-photo EXIF plus the four 64-bin histogram channels — the BARS tier, fetched only on the hover that needs them, and the self-healing fallback for a stem missing from a cached `exif.json`), `alt.json` (AI captions), `hashes.json` (stem to hash8 map). The pixel tiers (600px AVIF+JPG squares + 400px mobile AVIF) live in `i/` under content-hashed names, 474 files for 158 photos. |
@@ -1025,7 +1033,7 @@ and uses `HTMLRewriter` to inject them into the static HTML:
    nulls. That renders as a tracklist whose album art has quietly stopped
    appearing, which is why it went unnoticed twice (gotcha 36).
 
-   `cronEnrichTracks` (rn.js) owns them now. It rides the existing `7,37 * * * *`
+   `cronEnrichTracks` (rn.ts) owns them now. It rides the existing `7,37 * * * *`
    tick rather than spending the last of the five triggers Workers Free allows,
    fills a bounded batch per run into one `trackmeta:v1` KV map, and converges in
    `ceil(tracks / 6)` ticks. The inline build is 1 fetch + 1 KV read, and covers
@@ -1137,7 +1145,7 @@ cacheable representation.
 in front of the Worker revokes it silently.** `/` joined `WORKERS_CACHEABLE_PATHS` in
 #189 and production then answered a markdown ask with `text/html` on a `cf-cache-status:
 HIT`, because Workers Cache keys the URL and the HTML response's Vary names only
-`accept-encoding, available-dictionary`. `shouldUseWorkersCache` (`lib/cache.js`, #195)
+`accept-encoding, available-dictionary`. `shouldUseWorkersCache` (`lib/cache.ts`, #195)
 bails on `wantsMarkdown` for that reason, and the long argument for bailing over
 `Vary: accept` lives with it. What generalizes past markdown: a route that answers more
 than one representation at one URL cannot sit behind a URL-keyed cache without a bail,
@@ -1178,7 +1186,7 @@ per RFC 9421 + Web Bot Auth IETF draft. JWKS at
 
 ### `/mcp` — dual-era, and why both eras are served
 
-`src/worker/mcp.js` speaks **2026-07-28** and the three legacy revisions
+`src/worker/mcp.ts` speaks **2026-07-28** and the three legacy revisions
 (`2025-06-18`, `2025-03-26`, `2024-11-05`) on one endpoint. The spec sanctions
 this explicitly, and the client's opening move picks the era: a request carrying
 per-request `_meta` is served statelessly under the new revision, an `initialize`
@@ -1190,7 +1198,7 @@ identity, and capabilities into `_meta` on every request. **Legacy clients have
 no fall-forward mechanism** — pointed at a modern-only server they simply fail —
 which is the whole reason both eras stay.
 
-The site was well placed for it. `mcp.js` has said "intentionally stateless"
+The site was well placed for it. `mcp.ts` has said "intentionally stateless"
 since it was written, and statelessness is exactly what the new revision assumes.
 There was nothing to unwind.
 
@@ -1222,7 +1230,7 @@ Three deliberate deviations, all written down at the code:
    different jobs, and the strict half of the ecosystem does require the header:
    measured 2026-08-14, `mcp.context7.com` and `docs.mcp.cloudflare.com` both
    answer 400 `-32020` without it and 200 with it. So `foreignMcpTools()` in
-   [`lib/doors.js`](src/worker/lib/doors.ts), the one MCP client this site
+   [`lib/doors.ts`](src/worker/lib/doors.ts), the one MCP client this site
    has, SENDS `Mcp-Method` and derives it from the same constant as the body so
    the two cannot disagree. It also offers BOTH framings on `Accept`, because a
    Streamable HTTP server may answer JSON or an SSE stream at its own discretion
@@ -1251,7 +1259,7 @@ Three deliberate deviations, all written down at the code:
    they refuse in two dialects: an EMPTY body (Cloudflare's six) and an OAuth
    challenge body (Notion, Sentry, Linear, PayPal, Neon, Webflow, Canva,
    Grafana, Wix). Those used to render as "not JSON" and as the literal string
-   "undefined: undefined", while `lens.js` was already calling the same status an
+   "undefined: undefined", while `lens.ts` was already calling the same status an
    OAuth-protected server at the knock, so two halves of one page disagreed about
    one origin. A locked door is reported as UNREADABLE with the scheme named,
    because the door is there and we did not get to look.
@@ -1273,8 +1281,8 @@ Three deliberate deviations, all written down at the code:
    requires is enforced against callers who made it.**
 
    **Enforcing it broke two of our own clients, which is the transferable
-   lesson.** `wire.js` (the `/terminal` page, which renders a real `/mcp`
-   exchange) and `foreignMcpTools()` in `lib/doors.js` (the `/lens` door probe,
+   lesson.** `wire.ts` (the `/terminal` page, which renders a real `/mcp`
+   exchange) and `foreignMcpTools()` in `lib/doors.ts` (the `/lens` door probe,
    whose self-scan loops back into our own `/mcp`) both sent `protocolVersion`
    alone. Neither would have errored visibly: `/terminal` degrades to "the tool
    list could not be read just now" and the door probe reports the origin's MCP
@@ -1287,15 +1295,15 @@ Three deliberate deviations, all written down at the code:
 (`serendipity/serendipity.js`) is a separate server with different tools and no
 shared data, but the wire rules — versions, `_meta` keys, `resultType`, cache
 hints, error codes, the header check, the version gate — live once in
-[`lib/mcp-protocol.js`](src/worker/lib/mcp-protocol.ts) and both import
+[`lib/mcp-protocol.ts`](src/worker/lib/mcp-protocol.ts) and both import
 it. Two MCP servers on one origin speaking different dialects is a bug a client
 author reports to you rather than one you find yourself.
 
-Sharing is correct here even though `lib/trace.js` and `cal/src/trace.js` are
+Sharing is correct here even though `lib/trace.ts` and `cal/src/trace.js` are
 near-duplicates ON PURPOSE (gotcha 16). The cal duplication exists because cal's
 Vitest pool boots from `cal/src/index.js` alone, so a cal → holding import would
 make cal untestable without the site tree. Serendipity has no such constraint
-and already imports `lib/desktop.js` and `lib/crawl.js`; that direction is
+and already imports `lib/desktop.ts` and `lib/crawl.ts`; that direction is
 established. **Check which of those two situations you are in before copying
 either precedent.**
 
@@ -1309,7 +1317,7 @@ there.** Cloudflare's WebMCP bridge (gotcha 20) reads ONE endpoint per origin,
 `data-mcp-url`, defaulting to `/mcp`, and registers whatever `tools/list` returns
 into `document.modelContext`. Two servers on one origin is right for an agent that
 reads the agent card and picks a door, and invisible to an agent that only ever
-knocks on one. So `lib/tools.js` hoists exactly one Serendipity tool through
+knocks on one. So `lib/tools.ts` hoists exactly one Serendipity tool through
 `serendipityFindEvents()` in `serendipity/serendipity.js`, which dispatches into the
 same `mcpCallTool` that `/serendipity/mcp` uses — one implementation, one schema per
 door, no drift. It is deliberately ONE tool and not a proxy: `get_event` and
@@ -1341,7 +1349,7 @@ of the bytes" argument the Markdown twins won.
 | `.well-known/mcp.json` | Serendipity, compatibility alias |
 
 `server-card.json` served SERENDIPITY until #243. Both the api-catalog and
-`lens.js` probe that path on any origin, so on our own origin it was answering
+`lens.ts` probe that path on any origin, so on our own origin it was answering
 with the wrong server; a root server-card should describe the server at the root.
 `.well-known/mcp.json` stays as the alias for clients holding the old anchor.
 
@@ -1356,7 +1364,7 @@ Weigh that before repointing any long-cached well-known path again.
 `.well-known/agent-card.json` carries both interfaces and now names each one's
 card. All of them advertise 2026-07-28.
 
-**Tool annotations are a CLAIM, and the default is read-only.** `lib/mcp-tools.js`
+**Tool annotations are a CLAIM, and the default is read-only.** `lib/mcp-tools.ts`
 decorates every tool with a title, an object output schema, and
 `readOnlyHint/destructiveHint/idempotentHint/openWorldHint`. Its defaults describe
 what most tools here actually are (read a public thing, change nothing), and a
@@ -1365,7 +1373,7 @@ makes it untrue: `representation_capture` and `representation_compare` each INSE
 a vault row, so both declare `readOnlyHint: false, idempotentHint: false` beside
 that INSERT. The decorator takes the definition's annotations over its defaults,
 which also makes it idempotent, and it has to be: `DATA_TOOLS` is decorated once
-in `lib/tools.js` and then composed into two servers that decorate again.
+in `lib/tools.ts` and then composed into two servers that decorate again.
 
 The contract test used to assert one annotation shape across every tool. That
 passed right up until a writing tool existed and would have kept passing while
@@ -1417,7 +1425,7 @@ generic hex back.
   inspect 30/min, shot 3/min, compare 4/min, browser 3/min, wire 2/min, tools
   10/min. A seventh, `LENS_RL_BROWSER_ALL` at 4/min, is keyed on a CONSTANT
   rather than on the caller, so every browser-consuming route bills against one
-  bucket. Counters are per-colo and cost no write. `LENS_BUDGETS` in `lens.js`
+  bucket. Counters are per-colo and cost no write. `LENS_BUDGETS` in `lens.ts`
   mirrors the ceilings because that is what the 429 message quotes, and a
   contract test pins the two configs and the code together so a message cannot
   outlive its limit. **This prose is a THIRD copy that the test does not cover**,
@@ -1476,7 +1484,7 @@ generic hex back.
   Action, and whose `deltaStrip` already computed the HTTP-versus-rendered word
   gap. Read `lens-browser.js` before adding a rendering surface.
 
-  What survives in `lens-render.js` is the engine seam. **Kitesurf cannot be
+  What survives in `lens-render.ts` is the engine seam. **Kitesurf cannot be
   reached from the binding**: probed 2026-08-06, passing `browser` to
   `quickAction` returns `{"code":"unrecognized_keys","keys":["browser"]}`, and an
   invented engine name returns the byte-identical error — the payload schema is
@@ -1498,7 +1506,7 @@ generic hex back.
   opt-in. Cloudflare's Kitesurf page documents the selector on `browser-run`
   alone while the older Quick Actions reference pages still show
   `browser-rendering`, so reading either one in isolation gets you a path that
-  looks right. `restUrl()` is exported from `lens-render.js` and asserted in a
+  looks right. `restUrl()` is exported from `lens-render.ts` and asserted in a
   contract test for exactly this reason: a one-word difference with no symptom
   survives review.
 
@@ -1547,7 +1555,7 @@ generic hex back.
   **`/lens/browser?do=<recipe>` runs a FIXED script in the page before reading
   it**, which is how the Browser view answers "what does a machine see once the
   consent wall is gone". Two recipes ship, `expand` and `consent`, both
-  synchronous, in [`lens-recipes.js`](src/worker/lens-recipes.js).
+  synchronous, in [`lens-recipes.ts`](src/worker/lens-recipes.ts).
   `?recipes=1` publishes the whole allowlist verbatim, and a contract test pins
   the published script to the executed one.
 
@@ -1695,7 +1703,7 @@ which is why it did not ship with the swap.
 
 So the payload never claims to be what the machine got. It names the extractor and
 version, reports `source` / `kept` / `dropped`, and both word counts come from ONE
-function on ONE fetch, because comparing against a number `lens.js` computed would be
+function on ONE fetch, because comparing against a number `lens.ts` computed would be
 comparing two definitions of "word" and calling the difference an extraction loss.
 
 **It is a separate Worker, and only ONE of the two original reasons still holds.**
@@ -1708,7 +1716,7 @@ when the eight exact `/lens` rows were folded to `/lens` + `/lens/*` and the con
 dropped to 94. Do not cite it again. Same shape as `cf-garage` owning `/garage/cf/*`.
 
 What it DOES share with the site tree is exactly one thing: the SSRF guard.
-`validateLensTarget` moved from `lens.js` into `lib/crawl.js`, beside the
+`validateLensTarget` moved from `lens.ts` into `lib/crawl.ts`, beside the
 `privateHostBlocked` floor it wraps, and both Workers import it. A second Worker aiming
 a visitor-supplied URL at the public internet is the same surface `/lens/fetch` has, and
 two copies of an allowlist pass review on the day they are written. A contract test
@@ -1810,7 +1818,7 @@ package Cloudflare's browser-agent example wraps.
 **We deliberately did NOT take that package.** Its `createBrowserTools` hands an
 LLM a `browser_execute` that writes its own CDP JavaScript and runs it in a
 Worker Loader sandbox, which is exactly the model-authored-code door
-`lens-recipes.js` exists to refuse, and it costs a `worker_loaders` binding plus
+`lens-recipes.ts` exists to refuse, and it costs a `worker_loaders` binding plus
 a per-load fee on a public endpoint. The transport here is ~60 lines and the
 script is ours. A contract test asserts exactly one `params.get()` in the module,
 because a second one is how a `js=` or `selector=` parameter would arrive.
@@ -1872,7 +1880,7 @@ carry, so the pane renders that plus a copyable curl and stops.
 Execution moving to the visitor's own machine is the SAFETY property rather than
 a consolation prize. A public button that fired strangers' tools would do it
 from this account's IP and under AadharshBot's signature, which is the argument
-`lens-recipes.js` already makes for refusing a `js=` parameter. A contract test
+`lens-recipes.ts` already makes for refusing a `js=` parameter. A contract test
 asserts the pane makes exactly one request, to our own route, and that
 `_worker.js/lens-tools.js` never names `tools/call` and never calls `fetch`.
 
@@ -1890,8 +1898,8 @@ that keeps it honest:
    blank optional is omitted rather than sent as `""`.
 3. **Bounded and untrusting.** Depth, property and option caps, and the controls
    are built with `createElement` and `textContent`, because every string in
-   them came from a stranger's server. Same rule `public/terminal.js` follows for
-   third-party page titles.
+   them came from a stranger's server. Same reason `src/worker/terminal.ts` runs third-party
+   page titles through `escHtml`.
 
 `foreignMcpTools` grew an `opts.schemas` flag, OFF by default: the three
 existing callers render a catalogue as prose and a schema is dead weight in a
@@ -1922,15 +1930,15 @@ Three layers, deliberately not redundant:
    has errors". `deploy:promote` checks status codes and then tells you to come
    here, because status codes are all it can check.
 2. **Analytics Engine** — `BOT_LEDGER` (identified crawler hits, priced by
-   `/ledger`) and `PERF_PROBE` (`perf-probe.js`, the :07/:37 homepage-fragment
+   `/ledger`) and `PERF_PROBE` (`perf-probe.ts`, the :07/:37 homepage-fragment
    latency series). Both are long-retention, low-cardinality COUNTERS.
 3. **Workers Traces** (`observability.traces`, added 2026-07-29) — the span
    tree. Auto-instruments every outbound fetch, binding call, and handler
-   invocation; `lib/trace.js` hangs named spans off that so the children have a
+   invocation; `lib/trace.ts` hangs named spans off that so the children have a
    parent worth grouping by. This is the layer for "why was it slow" and, more
    often here, "which quiet thing has been failing".
 
-Spans go through `lib/trace.js` (`span(name, fn, attrs)`), never
+Spans go through `lib/trace.ts` (`span(name, fn, attrs)`), never
 `tracing.enterSpan` directly. Names are `<surface>.<phase>`, lowercase and
 dot-separated; the dispatcher is the one exception, naming its spans
 `route <template>` off the ROUTES/PREFIX tables so a tree reads as a route
@@ -1953,7 +1961,7 @@ markdown. So `home.grid.render` and `lens.inspect.parse` read 0 by design; they
 are kept for their attributes, which record how much work the phase was handed.
 Read `cpuTime` off the tail/log event for actual CPU (193ms on that same request).
 This corrects the original premise of this work, which assumed spans would see
-what `perf-probe.js` cannot.
+what `perf-probe.ts` cannot.
 
 **The frozen clock holds in LOCAL dev too, which is worth knowing before you go
 looking for CPU there.** Verified 2026-08-04 against `wrangler dev`: exercising
@@ -1968,8 +1976,8 @@ spans real I/O.
 
 **Spans are readable in `wrangler dev` as of 2026-08-04, with no config, no
 dependency, and no version bump** (Wrangler 4.118.0 already has it). The tracer
-reaches local dev for free because of the injection in `lib/trace.js`:
-`installTracing(tracing)` runs at module scope in `index.js`, which workerd loads
+reaches local dev for free because of the injection in `lib/trace.ts`:
+`installTracing(tracing)` runs at module scope in `index.ts`, which workerd loads
 locally too, so `pnpm run dev` gets the real tracer and the named spans rather
 than the degraded direct calls the contract tests get under plain node.
 
@@ -1991,7 +1999,7 @@ the existing layers structurally could not reach:
 | span | the question it answers |
 |---|---|
 | `route <template>` | which route owns this fetch/KV child; `route.self_fetch` marks a `/lens` self-scan's inner dispatch |
-| `home.grid.*`, `rn.tracks.*` | the two hydration fragments. Splits manifest-vs-alt, which `perf-probe.js` fuses into one positional AE double. `home.grid.render` reads 0ms (see the CPU note above) and earns its place on attributes alone |
+| `home.grid.*`, `rn.tracks.*` | the two hydration fragments. Splits manifest-vs-alt, which `perf-probe.ts` fuses into one positional AE double. `home.grid.render` reads 0ms (see the CPU note above) and earns its place on attributes alone |
 | `rn.scrape.{playlist,tracks,artists}` | the 3-tier Spotify scrape, cold-miss only. `rn.artists_cached` vs `_scraped` says whether the artist KV cache is actually saving the network |
 | `lens.inspect.{fetch,parse}`, `lens.discovery` | `out.elapsedMs` is fixed BEFORE the 28-probe fan-out (botViews is 6 of its own), so a scan's discovery phase was entirely unmeasured. Production, 752KB page: 782ms total, `elapsedMs` reported 29. `lens.inspect.parse` reads 0ms (CPU note above) and is kept for its byte/word attributes |
 | `lens.shot`, `lens.browser` | Browser Run. Same span name on hit and miss (differing on `lens.cache`) so hit rate is a group-by, not a join; the four distinct 502 shapes are separated by `lens.outcome` |
@@ -2334,7 +2342,7 @@ pnpm run deploy:direct
       dictionary/target pairs: dcz 3,589 bytes total against dcb 3,344, so dcb by
       245 (6.8%), winning 11 of 12. The deltas grew into exactly the regime this
       note predicted the 5-8% brotli edge would appear in. Widest single gaps:
-      lens.js 816 vs 756, nav.js 729 vs 685.
+      lens.ts 816 vs 756, nav.js 729 vs 685.
     - *Decode favours dcz far harder than 2x.* With an actual dictionary, nav.js
       reconstruction (47,615 bytes either way) is **0.0165ms dcz against 0.1368ms
       brotli, or 8.3x**. Dictionary decode is where zstd pulls away: it seeds the
@@ -2430,7 +2438,7 @@ pnpm run deploy:direct
     **PAGES use two dictionary tiers.** build.mjs derives ONE raw 64KB family corpus
     from the staged documents, ships it at an immutable `/a/page-family.<hash8>.dict`,
     and every HTML response advertises it via `Link: rel="compression-dictionary"`
-    (`lib/security.js`). It also diffs the current page against the committed
+    (`lib/security.ts`). It also diffs the current page against the committed
     `src/dict/p-dict` snapshots from the previous release. The worker tries the
     `Available-Dictionary` tag it receives. The family offer deliberately uses a
     longer site-wide URLPattern than an exact page path, so RFC 9842 makes it the
@@ -2511,7 +2519,7 @@ pnpm run deploy:direct
     The payoff scales with the 103-to-200 window, which is worker think-time, so
     it only shows on a cold isolate or a slow KV read. Measured: a ~280ms window
     preloaded fully (0.8ms recorded fetch); windows under ~100ms did not (26-35ms
-    real fetches). That is `shell-assets.js` working as its own comment describes,
+    real fetches). That is `shell-assets.ts` working as its own comment describes,
     not a defect. Ruled out along the way and worth not re-testing:
     `Network.setCacheDisabled`, `Emulation.setCPUThrottlingRate`, headless vs
     headful, and an explicit `--enable-features=EarlyHintsPreloadForNavigation`.
@@ -2528,14 +2536,14 @@ pnpm run deploy:direct
     rejects the `cloudflare:` scheme at LINK time with
     `ERR_UNSUPPORTED_ESM_URL_SCHEME`. That kills the entire 57-test suite at
     import, before one assertion runs — not a single failing test, a suite that
-    never starts. It is why `counter.js` hand-rolls its Durable Object instead of
+    never starts. It is why `counter.ts` hand-rolls its Durable Object instead of
     importing the base class, and it bit the Workers Traces work on 2026-07-29:
-    a static `tracing` import inside `lib/trace.js` took the suite down through
+    a static `tracing` import inside `lib/trace.ts` took the suite down through
     six transitive importers.
 
-    The fix is INJECTION, not a dynamic import. `lib/trace.js` and
+    The fix is INJECTION, not a dynamic import. `lib/trace.ts` and
     `cal/src/trace.js` both export `installTracing(candidate)` and hold a
-    module-level `null` until `index.js` — the one module only workerd ever loads
+    module-level `null` until `index.ts` — the one module only workerd ever loads
     — calls it at module scope, which completes at isolate init before any handler
     runs. Under node nothing installs it and every span degrades to a direct call.
     A top-level `await import("cloudflare:workers")` would also work but is worse:
@@ -2543,15 +2551,15 @@ pnpm run deploy:direct
     nothing the injection doesn't already give.
 
     Corollary: the two trace helpers are near-duplicates ON PURPOSE. Dependency
-    direction is holding -> cal (`index.js` imports `cal/src/index.js`), and cal's
+    direction is holding -> cal (`index.ts` imports `cal/src/index.js`), and cal's
     Vitest pool boots from `cal/src/index.js` alone, so a cal -> holding import
     would make cal untestable without the site tree. Do not consolidate them.
 
 17. **`script-src` is per-document sha256 hashes, and the committed map is EMPTY
-    on purpose.** `lib/csp-hashes.js` ships `PAGE_SCRIPT_HASHES = {}` with a
+    on purpose.** `lib/csp-hashes.ts` ships `PAGE_SCRIPT_HASHES = {}` with a
     `// build:csp-hashes` marker; build step 7c rewrites that line in the staged
     copy from the FINAL bytes (after minification and the `/a/` ref rewrite, before
-    step 8 compresses). Same generated-module convention as `shell-assets.js`.
+    step 8 compresses). Same generated-module convention as `shell-assets.ts`.
 
     Empty is correct for `pnpm run dev`, which serves the readable unminified tree
     whose blocks hash differently. A path with NO entry falls back to
@@ -2621,7 +2629,7 @@ pnpm run deploy:direct
        inert. Flipping the flag alone would have been a silent no-op, dropping the
        twin and the console warning and delivering no protection. The bail now
        compares against `CSP_LOOSE`, which separates "no opinion" from an opinion
-       (lens.js's framed view keeps its own), and a contract test pins both arms.
+       (lens.ts's framed view keeps its own), and a contract test pins both arms.
 
     **`pnpm run csp:sweep` is the evidence, and it needs its control read first.**
     It drives a real Chrome over every hashed document against a locally built
@@ -3710,7 +3718,7 @@ pnpm run deploy:direct
 34. **A linter's `--fix` is a code change nobody reviewed, and one of them was
     wrong here on the first run.** oxlint landed 2026-08-14 (`pnpm run lint`, a
     required step in `validate`). `oxlint --fix` rewrote 18 findings across 8
-    files, and `unicorn/no-useless-spread` silently broke `webmention.js`:
+    files, and `unicorn/no-useless-spread` silently broke `webmention.ts`:
 
     ```js
     // before, correct
@@ -3739,7 +3747,7 @@ pnpm run deploy:direct
     comment costs nothing.** The same 2026-08-14 run wanted two useless escapes
     out of `src/client/nav-run.js`. Correcting them moved `/a/nav-run.e943e545.js` to
     `/a/nav-run.b5389c82.js`, which re-minted every page referencing it, every
-    per-page dictionary, `_headers`, and `shell-assets.js`.
+    per-page dictionary, `_headers`, and `shell-assets.ts`.
 
     Measured by reverting that one file and rebuilding: the diff against the
     baseline collapsed from thousands of lines to exactly the 3 Worker modules
