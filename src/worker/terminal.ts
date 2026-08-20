@@ -150,7 +150,7 @@ export function readState(url, app) {
 /** The canonical URL for a state: what the frame tells the caller to send next. */
 export function stateUrl(state, extra = {}) {
   const params = new URLSearchParams();
-  const put = (key, value, skip) => { if (value !== undefined && value !== null && value !== "" && value !== skip) params.set(key, String(value)); };
+  const put = (key, value, skip?) => { if (value !== undefined && value !== null && value !== "" && value !== skip) params.set(key, String(value)); };
   if (state.app === "finger") {
     put("pane", state.pane, FINGER_PANES[0]);
     put("cursor", state.cursor, 0);
@@ -998,11 +998,11 @@ export async function encodeFrame(env, request, state, ctx) {
       status: stateLine(state),
     };
   }
-  if (got.truncated) info.truncated = true;
+  const inspected = got.truncated ? { ...info, truncated: true } : info;
 
   return {
     title: `encode — ${target.url}`,
-    body: encodeReadout(info, got.declaredLength),
+    body: encodeReadout(inspected, got.declaredLength),
     status: [
       [s("read ", "label"), s(`${Math.min(got.bytes.length, ENCODE_CAP).toLocaleString()} bytes of container`, "dim"),
         s("  no pixels decoded", "dim")],

@@ -8,11 +8,11 @@ export async function handleAgentAuthRegister(request) {
   if (request.method === "OPTIONS") return methodResponse(null, 204, "POST, OPTIONS");
   if (request.method !== "POST") return methodResponse({ error: "method_not_allowed" }, 405, "POST, OPTIONS");
 
-  let payload = {};
+  let payload: { type?: string } = {};
   const ct = request.headers.get("content-type") || "";
   if (ct.includes("application/json")) {
     try {
-      payload = await request.json();
+      payload = await request.json() as { type?: string };
     } catch {
       return jsonResponse({ error: "invalid_request", error_description: "Request body must be valid JSON." }, 400);
     }

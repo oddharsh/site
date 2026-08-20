@@ -123,7 +123,7 @@ export function writingShell(o) {
 
 // popId (optional): render the window as an inline popover (id + popover="auto")
 // so it can composite over the folder index instead of being its own page.
-export function notepadWindow(filename, text, closeHref, date, popId) {
+export function notepadWindow(filename, text, closeHref, date?, popId?) {
   var open = popId
     ? "<div class=\"np-window np-note\" id=\"" + escAttr(popId) + "\" popover=\"manual\">"
     : "<div class=\"np-window\">";
@@ -221,7 +221,7 @@ export async function renderWritingIndex(env) {
         // glyph is optional (taskPane defaults it to "≡"), so the literal is
         // annotated rather than inferred — concat() types against the first
         // array, which would otherwise make the glyph mandatory.
-        tasks: /** @type {{href: string, label: string, glyph?: string}[]} */ ([{ href: "/writing/posts.json", label: "Open the post registry", glyph: "{" }])
+        tasks: ([{ href: "/writing/posts.json", label: "Open the post registry", glyph: "{" }] as { href: string; label: string; glyph?: string }[])
           .concat(twinFor("/writing") ? [{ href: twinFor("/writing"), label: "Read this as Markdown" }] : []),
       details: [{ term: "Contains", value: posts.length + (posts.length === 1 ? " document" : " documents") }],
     }) +

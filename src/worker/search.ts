@@ -46,7 +46,7 @@ export const SEARCH_TERM_MAX = 13;
  * @param {string} query
  * @param {string|number|null} [limit]
  */
-export async function searchSiteRanked(env, query, limit = 20) {
+export async function searchSiteRanked(env, query, limit: string | number | null = 20) {
   const q = String(query || "").trim().slice(0, 160);
   // Agents ask this in sentences ("what does he think about agents"), and every
   // stopword in one scores against the body text of nearly every page at +1.
@@ -85,7 +85,7 @@ export async function searchSiteRanked(env, query, limit = 20) {
  * @param {string|number|null} [limit] the raw ?limit param, coerced and clamped
  *   below — callers pass searchParams.get(), which is string|null.
  */
-export async function searchSite(env, query, limit = 20) {
+export async function searchSite(env, query, limit: string | number | null = 20) {
   const ranked = await searchSiteRanked(env, query, limit);
   return {
     query: ranked.query,

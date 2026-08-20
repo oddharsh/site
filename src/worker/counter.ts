@@ -24,7 +24,9 @@ import { asNumber } from "./lib/parse.ts";
 // storage interface, so it is tested without a runtime. See that file for why
 // the pair has to be atomic at all.
 export class Counter {
-  constructor(state) {
+  state: DurableObjectState;
+
+  constructor(state: DurableObjectState) {
     this.state = state;
   }
 
@@ -48,7 +50,7 @@ export class Counter {
       return Response.json({ claimed });
     }
 
-    let n = (await this.state.storage.get("n")) || 0;
+    let n = (await this.state.storage.get<number>("n")) || 0;
 
     // read-only: bots + speculative prerenders see the value without bumping it
     if (url.searchParams.has("peek")) return Response.json({ n });

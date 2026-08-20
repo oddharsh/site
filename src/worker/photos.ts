@@ -22,6 +22,34 @@ import { commonPairs, queryTerms, scoreFields } from "./lib/text.ts";
 import photoIndex from "./photo-index.json" with { type: "json" };
 import thumbHashes from "../../public/images/hashes.json" with { type: "json" };
 
+type PhotoRecord = {
+  full?: string;
+  size?: number;
+  uploaded?: string | null;
+  camera?: string | number | null;
+  lens?: string | number | null;
+  film?: string | number | null;
+  date?: string | number | null;
+  recipe?: Record<string, string | number | boolean | null>;
+  [field: string]: unknown;
+};
+
+type ThumbHash = { a?: string; j?: string; s?: string; x?: string };
+type ThumbHashMap = Record<string, ThumbHash>;
+type PhotoIndexMap = Record<string, PhotoRecord>;
+type PhotoQueryValue = string | number | null;
+type PhotoQueryOptions = {
+  q?: PhotoQueryValue;
+  camera?: PhotoQueryValue;
+  lens?: PhotoQueryValue;
+  film?: PhotoQueryValue;
+  recipe?: PhotoQueryValue;
+  from?: PhotoQueryValue;
+  to?: PhotoQueryValue;
+  limit?: PhotoQueryValue;
+  offset?: PhotoQueryValue;
+};
+
 // ── /images/full/<key> → R2 ─────────────────────────────────────────
 // proxies an R2 GET through the worker. supports If-None-Match (304s on
 // cache hit) and Range requests. UNLIKE the /i/ thumbnails, these originals are
@@ -73,7 +101,7 @@ export async function servePhotoFromR2(request, env, ctx) {
 
   // R2's onlyIf conditional GET returns a body-less object when the etag
   // matches — translates directly to a 304 response.
-  const getOpts = {};
+  const getOpts: R2GetOptions = {};
   if (ifNoneMatch) getOpts.onlyIf = { etagDoesNotMatch: ifNoneMatch.replace(/^W\//, "").replace(/"/g, "") };
   if (range) {
     const m = range.match(/^bytes=(\d+)-(\d*)$/);
@@ -178,7 +206,7 @@ export async function servePhotoFromR2(request, env, ctx) {
 // candidate here.
 // slim hot-path rows: ONLY the fields the SSR slot-builder reads
 // (EXIF rides /images/meta/<stem>.json, fetched per photo on hover).
-export function derivePhotoPool(index, hashes) {
+export function derivePhotoPool(index: PhotoIndexMap, hashes: ThumbHashMap) {
   return Object.entries(index || {}).flatMap(([stem, p]) => {
     const h = hashes?.[stem];
     if (!h || !h.a || !h.j || !h.s) {
@@ -292,10 +320,10 @@ const PHOTO_PUBLIC_FIELDS = [
   "recipe",
 ];
 
-async function getStaticPhotoJson(env, path, fallback) {
+async function getStaticPhotoJson<T>(env, path, fallback: T): Promise<T> {
   try {
     const r = await env.ASSETS.fetch(`https://assets.local/${path}`);
-    return r.ok ? await r.json() : fallback;
+    return r.ok ? await r.json() as T : fallback;
   } catch { return fallback; }
 }
 
@@ -340,7 +368,7 @@ function photoFields(stem, record, alt, expansion) {
 // Shared photo query used by /photos/query.json and the site MCP tool. GPS and
 // other unlisted EXIF fields never cross this boundary, even if the source
 // metadata grows later.
-export async function queryPhotos(env, options = {}, ctx = null) {
+export async function queryPhotos(env, options: PhotoQueryOptions = {}, ctx = null) {
   const q = String(options.q || "").trim().slice(0, 120).toLowerCase();
   const camera = String(options.camera || "").trim().slice(0, 120).toLowerCase();
   const lens = String(options.lens || "").trim().slice(0, 120).toLowerCase();
@@ -353,10 +381,10 @@ export async function queryPhotos(env, options = {}, ctx = null) {
   const limit = Math.min(100, Math.max(1, Number(options.limit) || 25));
   const offset = Math.min(10000, Math.max(0, Number(options.offset) || 0));
   const [metadata, altMap, hashes, semantics] = await Promise.all([
-    getStaticPhotoJson(env, "images/metadata.json", {}),
+    getStaticPhotoJson<Record<string, PhotoRecord>>(env, "images/metadata.json", {}),
     getAltMap(env),
     getThumbHashes(env),
-    getStaticPhotoJson(env, "images/semantics.json", null),
+    getStaticPhotoJson<Record<string, { terms?: unknown }> | null>(env, "images/semantics.json", null),
   ]);
   let manifest = [];
   try { manifest = await getImagesManifest(env, ctx); } catch { manifest = []; }
@@ -428,7 +456,15 @@ export async function queryPhotos(env, options = {}, ctx = null) {
   const rows = ranked.map(({ stem, record, scored }) => {
     const manifestPhoto = manifestByStem.get(stem);
     const hash = hashes?.[stem] || {};
-    const row = {
+    const row: {
+      stem: string;
+      alt: string;
+      full: string | null;
+      thumb: { avif: string | null; jpg: string | null; small: string | null; xs: string | null };
+      metadata: Record<string, unknown>;
+      score?: number;
+      matched?: string[];
+    } = {
       stem,
       alt: String(altMap?.[stem] || "").slice(0, 240),
       full: manifestPhoto?.full ? `/images/full/${encodeURIComponent(manifestPhoto.full).replace(/%2F/g, "/")}` : null,
@@ -453,7 +489,7 @@ export async function queryPhotos(env, options = {}, ctx = null) {
   // `dropped` and `common` are omitted rather than sent empty, so a caller can
   // tell "no terms were dropped" from "this build does not report drops". Built
   // in order so the JSON reads exactly as it always did.
-  const ranking = { mode, terms: queryTermList };
+  const ranking: { mode: string; terms: string[]; dropped?: string[]; common?: string[]; semantic?: boolean } = { mode, terms: queryTermList };
   if (dropped.length) ranking.dropped = dropped;
   if (common.length) ranking.common = common;
   ranking.semantic = Boolean(semantics);
@@ -481,7 +517,7 @@ export async function queryPhotos(env, options = {}, ctx = null) {
 // archive outgrows the second one. Facets are also the one question where the
 // public-field projection doesn't apply: these are counts, not records.
 export async function photoFacets(env) {
-  const metadata = await getStaticPhotoJson(env, "images/metadata.json", {});
+  const metadata = await getStaticPhotoJson<Record<string, PhotoRecord>>(env, "images/metadata.json", {});
   const tally = { camera: new Map(), lens: new Map(), film: new Map(), year: new Map() };
   const bump = (map, key) => { if (key) map.set(key, (map.get(key) || 0) + 1); };
   const records = Object.values(metadata || {});

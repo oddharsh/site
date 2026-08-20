@@ -17,6 +17,42 @@ const PRESETS = {
   og: { width: 1200, height: 630, fit: "cover", format: "jpeg", quality: 82 },
 };
 
+type ImageToolArgs = {
+  preset?: string;
+  format?: string;
+  fit?: string;
+  rotate?: string | number | null;
+  width?: string | number | null;
+  height?: string | number | null;
+  quality?: string | number | null;
+  image_data?: string | null;
+  mime_type?: string | null;
+  source_url?: string | null;
+  formats?: unknown[];
+  [field: string]: unknown;
+};
+
+type ImageFailure = { error: string };
+type ImageInput = {
+  bytes: Uint8Array;
+  mime: string;
+  source: string;
+  url?: string;
+  sha256?: string;
+};
+type TransformedImage = {
+  bytes: Uint8Array;
+  mime: string;
+  quality: number;
+  sha256?: string;
+};
+type TransformSpec = {
+  options: { width?: number; height?: number; fit?: string; rotate?: number };
+  output: { format: string; quality: number };
+  preset: string | null;
+};
+type ImagePreset = { width?: number; height?: number; fit?: string; format?: string; quality?: number };
+
 const PHOTO_FIELDS = [
   "camera", "lens", "aperture", "shutter", "iso", "focal", "ev", "date",
   "width", "height", "color_space", "white_balance", "color_temp", "wb_shift",
@@ -95,8 +131,9 @@ function safeNumber(value, min, max, fallback) {
   return Number.isFinite(n) ? Math.min(max, Math.max(min, Math.round(n))) : fallback;
 }
 
-function transformOptions(args = {}) {
-  const preset = PRESETS[args.preset] || {};
+function transformOptions(args: ImageToolArgs = {}): TransformSpec | ImageFailure {
+  const presetKey = args.preset && args.preset in PRESETS ? args.preset as keyof typeof PRESETS : null;
+  const preset: ImagePreset = presetKey ? PRESETS[presetKey] : {};
   const format = normalizeFormat(args.format || preset.format, "avif");
   if (!MIME_BY_FORMAT[format]) return { error: "format must be avif, webp, or jpeg" };
   const fit = args.fit || preset.fit;
@@ -113,11 +150,11 @@ function transformOptions(args = {}) {
       rotate,
     },
     output: { format: MIME_BY_FORMAT[format], quality: safeNumber(args.quality ?? preset.quality, 1, 100, 84) },
-    preset: args.preset && PRESETS[args.preset] ? args.preset : null,
+    preset: presetKey,
   };
 }
 
-async function resolveImageInput(args, env) {
+async function resolveImageInput(args: ImageToolArgs, env): Promise<ImageInput | ImageFailure> {
   const encoded = decodeBase64(args.image_data);
   if (args.image_data !== undefined && !encoded) return { error: "image_data must be valid base64 and no larger than 8 MiB" };
   if (encoded) {
@@ -147,7 +184,7 @@ async function imageInfo(env, bytes) {
   try { return await env.IMAGES.info(bytes); } catch { return null; }
 }
 
-async function transformBytes(env, bytes, spec) {
+async function transformBytes(env, bytes, spec: TransformSpec): Promise<TransformedImage | ImageFailure> {
   if (!env.IMAGES?.input) return { error: "Image binding is not configured on this deployment." };
   try {
     let pipeline = env.IMAGES.input(bytes);
@@ -161,7 +198,7 @@ async function transformBytes(env, bytes, spec) {
   } catch { return { error: "Image binding could not transform the image." }; }
 }
 
-function imageReceipt(input, info, output) {
+function imageReceipt(input: ImageInput, info, output: TransformedImage | null) {
   return {
     input: { source: input.source, url: input.url || null, bytes: input.bytes.byteLength, mimeType: input.mime, sha256: input.sha256 },
     output: output ? { bytes: output.bytes.byteLength, mimeType: output.mime, sha256: output.sha256, quality: output.quality } : null,
@@ -171,42 +208,42 @@ function imageReceipt(input, info, output) {
   };
 }
 
-function mcpOutput(receipt, images = []) {
+function mcpOutput(receipt, images: TransformedImage[] = []) {
   // MCP content is a union of block shapes; without the annotation the array
   // infers as text-only off its first element and refuses the image blocks.
-  /** @type {({type: "text", text: string} | {type: "image", data: string, mimeType: string})[]} */
-  const content = [{ type: "text", text: JSON.stringify(receipt, null, 2) }];
+  const content: ({ type: "text"; text: string } | { type: "image"; data: string; mimeType: string })[] =
+    [{ type: "text", text: JSON.stringify(receipt, null, 2) }];
   for (const image of images) content.push({ type: "image", data: base64(image.bytes), mimeType: image.mime });
   return { _mcp: { structured: receipt, content } };
 }
 
-export async function imageInspect(args, env) {
+export async function imageInspect(args: ImageToolArgs, env) {
   const input = await resolveImageInput(args, env);
-  if (input.error) return error(input.error);
+  if ("error" in input) return error(input.error);
   input.sha256 = await sha256(input.bytes);
   const info = await imageInfo(env, input.bytes);
   if (!info) return error("Image binding is not configured on this deployment.");
   return { ...imageReceipt(input, info, null), operation: "inspect" };
 }
 
-export async function imageTransform(args, env) {
+export async function imageTransform(args: ImageToolArgs, env) {
   const spec = transformOptions(args);
-  if (spec.error) return error(spec.error);
+  if ("error" in spec) return error(spec.error);
   const input = await resolveImageInput(args, env);
-  if (input.error) return error(input.error);
+  if ("error" in input) return error(input.error);
   input.sha256 = await sha256(input.bytes);
   const info = await imageInfo(env, input.bytes);
   if (!info) return error("Image binding is not configured on this deployment.");
   const output = await transformBytes(env, input.bytes, spec);
-  if (output.error) return error(output.error);
+  if ("error" in output) return error(output.error);
   output.sha256 = await sha256(output.bytes);
   const receipt = { ...imageReceipt(input, info, output), operation: "transform", preset: spec.preset, transform: spec.options };
   return mcpOutput(receipt, [output]);
 }
 
-export async function imageCompare(args, env) {
+export async function imageCompare(args: ImageToolArgs, env) {
   const input = await resolveImageInput(args, env);
-  if (input.error) return error(input.error);
+  if ("error" in input) return error(input.error);
   const formats = Array.isArray(args.formats) && args.formats.length ? args.formats : ["avif", "webp", "jpeg"];
   if (formats.length > 3) return error("formats is limited to three variants");
   const normalized = formats.map((format) => normalizeFormat(format, "avif"));
@@ -218,9 +255,9 @@ export async function imageCompare(args, env) {
   let total = 0;
   for (const format of normalized) {
     const spec = transformOptions({ ...args, format });
-    if (spec.error) return error(spec.error);
+    if ("error" in spec) return error(spec.error);
     const output = await transformBytes(env, input.bytes, spec);
-    if (output.error) return error(output.error);
+    if ("error" in output) return error(output.error);
     output.sha256 = await sha256(output.bytes);
     total += output.bytes.byteLength;
     if (total > TOTAL_COMPARE_CAP) return error("combined comparison output exceeds the 8 MiB limit");

@@ -8456,8 +8456,10 @@ test("every @ts-nocheck in the Worker is declared, and every declaration is real
   const declared = JSON.parse(await readFile(new URL("config/ts-migration.json", ROOT), "utf8"));
   const names = Object.keys(declared.modules);
 
+  const workerModules = (await readdir(new URL("src/worker", ROOT), { recursive: true }))
+    .filter((rel) => rel.endsWith(".ts"));
   const actual = [];
-  for (const rel of await readdir(new URL("src/worker", ROOT), { recursive: true })) {
+  for (const rel of workerModules) {
     if (!rel.endsWith(".ts")) continue;
     const source = await readFile(new URL(`src/worker/${rel}`, ROOT), "utf8");
     if (/^\/\/ @ts-nocheck\b/m.test(source)) actual.push(`src/worker/${rel}`);
@@ -8474,8 +8476,25 @@ test("every @ts-nocheck in the Worker is declared, and every declaration is real
     assert.ok(Number.isInteger(count) && count > 0, `${file} declares a non-positive error count`);
   }
   assert.equal(declared.totals.quarantined, names.length, "totals.quarantined disagrees with the list");
+  assert.equal(declared.totals.worker_modules, workerModules.length, "totals.worker_modules disagrees with the Worker tree");
+  assert.equal(declared.totals.fully_checked, workerModules.length - names.length, "totals.fully_checked disagrees with the Worker tree and quarantine");
   assert.equal(declared.totals.errors_at_conversion,
     Object.values(declared.modules).reduce((a, b) => a + b, 0), "totals.errors_at_conversion disagrees with the entries");
+});
+
+test("the TypeScript compiler program includes every Worker module", async () => {
+  const { execFileSync } = await import("node:child_process");
+  const { fileURLToPath } = await import("node:url");
+  const tsc = fileURLToPath(new URL("node_modules/typescript/bin/tsc", ROOT));
+  const config = fileURLToPath(new URL("config/tsconfig.json", ROOT));
+  const output = execFileSync(process.execPath, [tsc, "-p", config, "--listFilesOnly"], { encoding: "utf8" });
+  const compiled = new Set(output.trim().split(/\r?\n/));
+  const workerModules = (await readdir(new URL("src/worker", ROOT), { recursive: true }))
+    .filter((rel) => rel.endsWith(".ts"))
+    .map((rel) => fileURLToPath(new URL(`src/worker/${rel}`, ROOT)));
+  const missing = workerModules.filter((file) => !compiled.has(file));
+
+  assert.deepEqual(missing, [], `tsc skipped Worker modules:\n  ${missing.join("\n  ")}`);
 });
 
 // A TOOL MAY NOT SPAWN A PACKAGE MANAGER. Every script in tools/ runs under

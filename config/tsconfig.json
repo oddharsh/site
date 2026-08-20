@@ -1,45 +1,13 @@
 {
-  // Type checking WITHOUT TypeScript.
+  // One no-emit check over the two server-side runtime surfaces: the booking
+  // module remains checked JavaScript, while the site Worker is TypeScript that
+  // both Node's type stripper and Wrangler can load directly.
   //
-  // The site stays JavaScript on purpose: authoring is buildless, View Source
-  // shows the same program that runs, and every module here is imported by
-  // contract-tests.test.mjs under plain node. Types erase at build time, so a
-  // conversion would buy nothing at runtime — workerd executes identical
-  // JavaScript either way. What IS worth having is the CHECKER, which reads the
-  // JSDoc already in these files and the generated Workers types, and emits
-  // nothing.
-  //
-  // The scope was cal/src alone when this landed and was meant to GROW; it now
-  // covers the site Worker too, which is the whole request path. Booking is
-  // still the highest-stakes code here (it moves real meetings, sends real mail,
-  // and signs its own approval links), so it stays first in the include.
-  //
-  // Widening it on 2026-08-10 cost 112 errors, resolved as:
-  //
-  //   72   one heterogeneous ROUTES table taking its element type from the first
-  //        entry, exactly as predicted. Settled by ONE annotation on the new
-  //        ROUTE_TABLE declaration in src/worker/index.ts.
-  //   18   serendipity/serendipity.js, which the glob never names — tsc follows
-  //        imports, so widening to the Worker drags in everything it reaches.
-  //   22   scattered, and all of one family: a value that coerces at runtime and
-  //        does not typecheck. Date subtraction, boolean subtraction, isNaN(Date),
-  //        Response.redirect(URL), searchParams.get() into a numeric param.
-  //
-  // NONE of the 112 was a live bug, same as the 2026-08-07 measurement. That is
-  // still the honest case for this check: it is here to catch the NEXT one, of
-  // the shape where a property is read that the object never had and the value
-  // silently becomes 0 or undefined, which no test in this repo would notice.
-  //
-  // The coercion family is worth a note, because "harmless at runtime" is what
-  // makes it worth fixing rather than suppressing. Every one of those 22 now says
-  // its units out loud (.getTime(), Number(), .href), which is the same argument
-  // the original yw() fix made.
-  //
-  // What this check can see is narrower than it looks, and it has not changed:
-  // in a .js file an unannotated object literal stays expandable, so `x.nope` is
-  // NOT an error. The checker enforces the JSDoc you write. Widening the include
-  // buys the CALL-SITE and inference errors above; it does not retro-fit shapes
-  // onto 90 unannotated modules, and nobody should read a green run as if it had.
+  // The Worker conversion initially left this include on `**/*.js`, so tsc saw
+  // cal plus one transitively imported Worker module and skipped the other 68.
+  // contract-tests now executes `tsc --listFilesOnly` and compares the program
+  // with the directory, making the scope part of the contract rather than a
+  // comment. The remaining explicit quarantine lives in ts-migration.json.
   "compilerOptions": {
     "noEmit": true,
     "allowJs": true,
@@ -58,10 +26,10 @@
     "types": ["@cloudflare/workers-types"],
     "resolveJsonModule": true,
     "skipLibCheck": true,
-    // Not `strict`. The goal is finding real mistakes in working JavaScript, not
-    // relitigating every implicit any in a codebase that was never annotated.
+    // Not `strict` yet. The Worker was converted from unannotated JavaScript and
+    // the explicit quarantine must shrink before a global strictness migration.
     "strict": false
   },
   // Paths are relative to THIS file, which lives in config/ — hence the `../`.
-  "include": ["../cal/src/**/*.js", "../src/worker/**/*.js"]
+  "include": ["../cal/src/**/*.js", "../src/worker/**/*.ts"]
 }
