@@ -1,13 +1,3 @@
-// @ts-nocheck — TEMPORARY, declared in config/ts-migration.json under "callers".
-// This module is still JavaScript and calls into src/worker/lib, which became
-// TypeScript on 2026-08-18. tsc now checks those call sites strictly and this
-// file does not pass yet. The entry goes away when this module converts.
-// The canonical site-level MCP surface. It is intentionally stateless: one
-// JSON-RPC request in, one JSON response out, with the same functions used by
-// the corresponding HTTP endpoints. Almost every tool is read-only too, but the
-// two representation-vault tools INSERT a D1 row, so this header no longer
-// claims otherwise — a header that said "read-only" is what let /mcp sit on the
-// preview guard's safe list long after it stopped being true.
 import { jsonResponse } from "./lib/http.ts";
 import { imageCompare, imageInspect, imageTransform, photoRecipe } from "./image-tools.ts";
 import { DATA_TOOLS, DATA_TOOL_NAMES, callDataTool } from "./lib/tools.ts";
@@ -289,7 +279,19 @@ async function overMcpBudget(name, max, request, env, ctx) {
 // 4, so the cheaper door was the expensive operation. One bucket, one ceiling,
 // whichever door you knock on.
 
-async function callTool(name, args, request, env, ctx) {
+// The three underscore fields are the CONTRACT between this function and the
+// dispatcher above: _unknown means no such tool, _error means the tool ran and
+// failed (a result with isError, never a JSON-RPC error), and _mcp means the
+// tool already shaped its own MCP content. Declared here because a tool that
+// returns a plain payload returns none of them, so inference sees only the
+// happy shape and the dispatcher's reads look like typos.
+type ToolOutcome = Record<string, any> & {
+  _unknown?: boolean;
+  _error?: string;
+  _mcp?: { content: unknown; structured?: unknown };
+};
+
+async function callTool(name, args, request, env, ctx): Promise<ToolOutcome> {
   args = asRecord(args) || {};
   // The seven data tools live in lib/tools.js, because /ask calls the
   // same seven through the same function. Dispatching them here would mean two

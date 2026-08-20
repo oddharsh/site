@@ -1,9 +1,3 @@
-// @ts-nocheck — TEMPORARY, declared in config/ts-migration.json under "callers".
-// This module is still JavaScript and calls into src/worker/lib, which became
-// TypeScript on 2026-08-18. tsc now checks those call sites strictly and this
-// file does not pass yet. The entry goes away when this module converts.
-// rn.js — extracted from the worker (no-build reorg). Bundled by
-// wrangler/Cloudflare at deploy; not served (inside _worker.js/).
 import { signedFetch } from "./lib/botauth.ts";
 import { deleteSWRKV, swrKV } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
@@ -372,7 +366,7 @@ export const WARM_MAX_URLS = 40;
 // the head of the list for when the cap bites.
 export function artWarmList(payload, origin) {
   const tracks = Array.isArray(payload?.tracks) ? payload.tracks : [];
-  const seen = new Set();
+  const seen = new Set<string>();
   const add = (raw) => {
     const art = artUrls(raw);
     // No hash means no re-hosted URL to warm: a mosaic collage cover, or a shape
@@ -640,7 +634,9 @@ const mdText = (s) => String(s ?? "").replace(/([\\`*_[\]])/g, "\\$1");
 export async function handleRnMarkdown(request, env, ctx) {
   const [result, target] = await Promise.all([loadRnTracks(request, env, ctx), playlistUrl(env)]);
   const negotiated = wantsMarkdown(request) && !new URL(request.url).pathname.endsWith(".md");
-  const headers = {
+  // Record<string, string> because `vary` is added conditionally below. A bare
+  // literal freezes the key set at the three declared here.
+  const headers: Record<string, string> = {
     "content-type":           "text/markdown; charset=utf-8",
     "cache-control":          negotiated ? "no-store, must-revalidate" : "public, max-age=300, s-maxage=600",
     "x-content-type-options": "nosniff",
@@ -684,7 +680,7 @@ function fmtDuration(ms) {
 // carries the freshness window. lapsed sentinel → serve stale now, rescrape
 // on ctx.waitUntil. used by both /rn/tracks and the homepage prerender, so
 // whichever gets hit keeps the payload warm.
-export async function getTracksSWR(env, ctx, pid, opts = {}) {
+export async function getTracksSWR(env, ctx, pid, opts: { buildOnMiss?: boolean } = {}) {
   // cacheTtl 1800: this is the homepage's slowest TTFB-gating read (204ms cold on
   // 2026-07-27), and the key is write-rarely by construction. A playlist swap
   // mints a whole new `tracks:<pid>` key, so a rollover never waits on this one
@@ -833,7 +829,7 @@ export async function cronEnrichTracks(env, ctx) {
     }
 
     const meta = { ...asRecord(storedMeta) };
-    const live = payload.tracks.map(t => t.id).filter(Boolean);
+    const live: string[] = payload.tracks.map((t) => t.id).filter(Boolean);
 
     // PRUNE BY AGE, never by absence from one read. The first version of this
     // deleted any entry missing from `payload.tracks`, which treats a single

@@ -24,17 +24,9 @@
   "generated_on": "2026-08-20",
   "totals": {
     "worker_modules": 69,
-    "quarantined": 7,
-    "fully_checked": 62,
-    "errors_at_conversion": 43
+    "quarantined": 0,
+    "fully_checked": 69,
+    "errors_at_conversion": 0
   },
-  "modules": {
-    "src/worker/around.ts": 4,
-    "src/worker/home.ts": 5,
-    "src/worker/lens-tools.ts": 7,
-    "src/worker/lens.ts": 11,
-    "src/worker/mcp.ts": 4,
-    "src/worker/rn.ts": 7,
-    "src/worker/webmention-send.ts": 5
-  }
+  "modules": {}
 }

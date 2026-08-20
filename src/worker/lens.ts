@@ -1,9 +1,3 @@
-// @ts-nocheck — TEMPORARY, declared in config/ts-migration.json under "callers".
-// This module is still JavaScript and calls into src/worker/lib, which became
-// TypeScript on 2026-08-18. tsc now checks those call sites strictly and this
-// file does not pass yet. The entry goes away when this module converts.
-// lens.js — extracted from the worker (no-build reorg). Bundled by
-// wrangler/Cloudflare at deploy; not served (inside _worker.js/).
 import { BOT_UA, botHeaders } from "./lib/botauth.ts";
 import { cachedRender } from "./lib/cache.ts";
 import { CANONICAL_HOST } from "./lib/const.ts";
@@ -318,7 +312,7 @@ const LENS_SPELLINGS = Object.keys(LENS_GLOSSARY)
 // Semantics kept: one definition per key per string, leftmost match wins, and on
 // a tie the longer spelling wins (LENS_SPELLINGS is sorted longest-first, so the
 // longer one claims the position before the shorter one is tried).
-export function glossify(escaped, only) {
+export function glossify(escaped, only?) {
   const src = String(escaped);
   const pairs = only
     ? LENS_SPELLINGS.filter(([key]) => only.indexOf(key) !== -1)
@@ -560,7 +554,7 @@ function lensHttpText(status) {
   return "";
 }
 
-function lensReaderFragment(data, note) {
+function lensReaderFragment(data, note?) {
   if (!data || !data.ok) return '<div class="lx-empty">' + escHtml((data && data.error) || "No page to show.") + "</div>";
   const a = data.anatomy;
   let out = note ? '<div class="lx-fallback-note">' + escHtml(note) + "</div>" : "";
@@ -885,7 +879,7 @@ function lensAboutPanel() {
     "</div></dialog>";
 }
 
-export function renderLensShell(initial, state, inputValue, compare) {
+export function renderLensShell(initial?, state?, inputValue?, compare?) {
   // defaults must match the client (lens.js) and lensState(), or a plain /lens
   // SSRs one tab and the deferred script silently flips to another on hydrate.
   state = state || { view: "both", lens: "anatomy", counterfactuals: { markdown: false, semantic: false, contract: false, authority: false, receipt: false, dictionary: false, ech: false } };
@@ -2017,7 +2011,7 @@ export async function handleLensBrowser(request, env, ctx) {
   // Fresh per request. The page is being rendered right now and must not be
   // able to guess this; it does not have to survive the request.
   const nonce = recipe ? lensRecipeNonce() : "";
-  const payload = {
+  const payload: Record<string, any> = {
     url: v.url,
     formats: ["content", "screenshot", "markdown", "accessibilityTree"],
     viewport: { width: 1280, height: 800, deviceScaleFactor: 1 },
@@ -2106,7 +2100,7 @@ export async function handleLensBrowser(request, env, ctx) {
   // and the client receives Cloudflare's HTML error page instead of JSON.
   const rawShot = String(result.screenshot || "");
   const shotTooBig = rawShot.length > LENS_BROWSER_SHOT_MAX;
-  const output = {
+  const output: Record<string, any> = {
     ok: true,
     url: v.url,
     finalUrl: meta.url || v.url,
@@ -2277,7 +2271,7 @@ export function compareLensObservations(left, right) {
   return changes;
 }
 
-export async function compareLensTargets(leftUrl, rightUrl, env, opts = {}) {
+export async function compareLensTargets(leftUrl, rightUrl, env, opts: { skipBotViews?: boolean } = {}) {
   const [left, right] = await Promise.all([
     lensInspect(leftUrl, env, { skipBotViews: opts.skipBotViews !== false }),
     lensInspect(rightUrl, env, { skipBotViews: opts.skipBotViews !== false }),
@@ -2387,10 +2381,18 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
   sInspect.setAttribute("lens.is_html", isHtml);
 
   const finalUrl = res.url || targetUrl;
-  const headers = {};
+  const headers: Record<string, string> = {};
   for (const [k, val] of res.headers) headers[k] = val;
 
-  const out = {
+  // ASSEMBLED IN STAGES, which is why the type is open rather than the literal
+  // tsc would infer. What follows attaches a dozen optional tiers as each one
+  // succeeds or is skipped (bodyUnreadable, framable, anatomy, structured, ai,
+  // cost, phases, discovery, wire, agent, botViews, readiness, terms, spectrum),
+  // and every one of them is legitimately absent on some target. Declaring the
+  // closed literal would mean listing fourteen optional members whose real
+  // shapes live in the functions that produce them, which is a second copy that
+  // rots; the alternative here is one honest boundary at the accumulator.
+  const out: Record<string, any> = {
     ok: true, url: targetUrl, finalUrl, redirected: finalUrl !== targetUrl,
     status: res.status, contentType: ct, binary: !isTextual, truncated,
     elapsedMs: Date.now() - started, fetchedBy: BOT_UA, headers,
@@ -2647,7 +2649,7 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
 // signature for external targets, the same identity the rest of the site
 // crawls under. Self-dispatch stays local and therefore has no wire signature.
 // `accept` override: the md-negotiation and MCP probes speak different Accepts.
-export async function lensFetch(targetUrl, env, signal, accept) {
+export async function lensFetch(targetUrl, env, signal?, accept?) {
   env = env || {};
   const baseHeaders = {
     "user-agent": BOT_UA,
@@ -2759,7 +2761,7 @@ async function lensProbeEch(hostname) {
   try {
     const url = "https://cloudflare-dns.com/dns-query?name=" + encodeURIComponent(hostname) + "&type=HTTPS&do=1";
     const res = await fetch(url, { headers: { accept: "application/dns-json" }, signal: ctrl.signal, cf: { cacheTtl: 0 } });
-    const body = await res.json();
+    const body = await res.json() as { Answer?: any[]; AD?: boolean };
     const answers = Array.isArray(body.Answer) ? body.Answer : [];
     const https = answers.filter((a) => a.type === 65).map((a) => svcbHasEch(a.data));
     return {
@@ -2847,7 +2849,11 @@ export function discoveryScope(origin, env) {
   return version ? { scope: version, cacheable: true } : { scope: null, cacheable: false };
 }
 
-export async function originDiscovery(origin, hostname, env, opts = {}) {
+// NB: selfLens is PASSED by the /lens scan path and read by nothing in here —
+// only opts.fresh is. Typing the bag is what surfaced it. Left in place rather
+// than deleted, because an ignored option is either a caller's leftover or a
+// scoping intent that was never wired, and those want different fixes.
+export async function originDiscovery(origin, hostname, env, opts: { fresh?: boolean; selfLens?: boolean } = {}) {
   // `caches` is a Workers global and does not exist under plain node, where the
   // contract tests import this module. Absent cache means every call is a live
   // fan-out, which is exactly the previous behaviour.
@@ -2863,7 +2869,7 @@ export async function originDiscovery(origin, hostname, env, opts = {}) {
     try {
       const hit = await cache.match(key);
       if (hit) {
-        const cached = await hit.json();
+        const cached = await hit.json() as Record<string, unknown>;
         return { ...cached, cached: true };
       }
     } catch { /* a cache read must never cost the scan */ }
@@ -2911,7 +2917,7 @@ export async function originDiscovery(origin, hostname, env, opts = {}) {
       const declared = lensSitemapDeclared(robots, origin);
       if (declared) {
         s.setAttribute("lens.sitemap_declared", true);
-        const probe = await lensProbe(declared, env);
+        const probe: Record<string, any> = await lensProbe(declared, env);
         // Count first, then TRIM. This whole result is cached as one JSON blob
         // under DISCOVERY_MAX_BYTES, and a large sitemap kept whole would push
         // the blob over that ceiling — which does not error, it just stops
@@ -2953,7 +2959,7 @@ export async function lensProbeDnsAid(hostname) {
       try {
         const url = "https://cloudflare-dns.com/dns-query?name=" + encodeURIComponent(name) + "&type=SVCB&do=1";
         const res = await fetch(url, { headers: { accept: "application/dns-json" }, signal: ctrl.signal, cf: { cacheTtl: 0 } });
-        const body = await res.json();
+        const body = await res.json() as { Answer?: any[]; AD?: boolean };
         const answers = Array.isArray(body.Answer) ? body.Answer : [];
         return { name, status: res.status, dnssecValidated: body.AD === true, answers: answers.filter((a) => a.type === 64 || a.type === 65).length };
       } finally { clearTimeout(to); }
@@ -3264,7 +3270,12 @@ export function lensParseContentSignal(raw) {
 export function lensTerms({ finalUrl, status, headers, body, robots, tdmrep, metaRobots }) {
   let path = "/";
   try { const u = new URL(finalUrl); path = u.pathname + u.search; } catch (_e) {}
-  const t = { path, robotsPresent: !!(robots && robots.ok) };
+  // The terms envelope is assembled tier by tier below (scoreboard, signals,
+  // paid, enforcement, directives, tdmrep, spectrum), and each tier is skipped
+  // when the site does not carry it. Same reason the inspect accumulator is
+  // open: the alternative is a second copy of seven shapes that already exist
+  // where they are produced.
+  const t: Record<string, any> = { path, robotsPresent: !!(robots && robots.ok) };
 
   // "absent" (a clean 404) and "unreachable" (timeout / 403 / 5xx) are very
   // different claims — never report unknown terms as no terms.
@@ -3352,7 +3363,9 @@ const LENS_RATES = [
  * non-HTML text body prices raw alone, and add() skips whatever is absent.
  * @param {{html?: number, text?: number, markdown?: number, headings?: {level: number, text: string}[], raw?: number}} sizes
  */
-export function lensCost({ html, text, markdown, headings, raw }) {
+export function lensCost({ html, text, markdown, headings, raw }: {
+  html?: number; text?: number; markdown?: number; headings?: Array<{ level: number; text: string }>; raw?: number;
+}) {
   const tiers = [];
   const add = (key, label, note, chars, cpt) => {
     if (chars > 0) tiers.push({ key, label, note, chars, tokens: Math.round(chars / cpt) });
@@ -3516,7 +3529,7 @@ function lensJsonDoor(probe, validate, label) {
 }
 
 export function lensAgentDoors({ llmsTxt, mdNego, mcp, nlweb, webmcp, agentCard, openapi, aiPlugin, apiCatalog }) {
-  const doors = {
+  const doors: Record<string, any> = {
     mcp: mcp || { verdict: "unknown" },
     nlweb: nlweb || { verdict: "unknown" },
     webmcp: webmcp || { found: false },
@@ -3750,7 +3763,11 @@ export function lensFieldEvidence({ status, bodyUnreadable, anatomy, agent, botV
 }
 
 export function lensReadiness({ headers, robots, sitemap, sitemapDeclared, terms, discovery, agent, openapi, botViews, execution }) {
-  const items = {};
+  // Keyed by check name, valued by whatever lensReadinessItem produces. Derived
+  // from the producer rather than hand-written, so adding a field there cannot
+  // leave a second copy here describing the old shape. Without it Object.values
+  // below yields unknown[] and every `item.status` read fails.
+  const items: Record<string, ReturnType<typeof lensReadinessItem>> = {};
   const robotsParsed = robots && robots.ok ? lensParseRobots(robots.body || "") : null;
   const robotsRules = robotsParsed && robotsParsed.groups.length > 0;
   // Gate the "AI bot rules" STATUS on actually-named agents. Keying it on
