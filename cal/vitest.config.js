@@ -5,7 +5,7 @@
 // WebCrypto, and the env vars behave exactly as in production.
 //
 //   pnpm test            # run once
-//   pnpm run test:watch  # watch mode
+//   bun run test:watch  # watch mode
 //
 // vitest-pool-workers v0.16 / vitest 4 model: the pool is wired as a Vite
 // plugin — `cloudflareTest({ wrangler })` — rather than via test.poolOptions

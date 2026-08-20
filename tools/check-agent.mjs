@@ -12,10 +12,10 @@
 // which is the interesting part: the missing 3% is where a page breaks for
 // every agent while staying perfect in Chrome.
 //
-//     pnpm run agent:check                  # the sample, against Kitesurf
-//     pnpm run agent:check --all            # every page in site-manifest.json
-//     pnpm run agent:check --control        # add the Chrome control (see below)
-//     pnpm run agent:check --json           # machine output
+//     bun run agent:check                  # the sample, against Kitesurf
+//     bun run agent:check --all            # every page in site-manifest.json
+//     bun run agent:check --control        # add the Chrome control (see below)
+//     bun run agent:check --json           # machine output
 //
 // ── cost ──────────────────────────────────────────────────────────────────
 // FREE, and deliberately so. This talks to the public Kitesurf playground at

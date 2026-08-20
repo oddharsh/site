@@ -26,7 +26,7 @@
 // Q1 asks about `env.BROWSER.quickAction`, which exists only inside a Worker.
 // Run it separately, once:
 //
-//     pnpm run dev:remote          # local Worker, production Browser binding
+//     bun run dev:remote          # local Worker, production Browser binding
 //     curl -s 'http://localhost:8787/lens/browser?url=https://aadhar.sh/garage&do=expand' | jq .interaction
 //
 // A payload rejection surfaces as the existing `upstream_not_ok` 502 carrying

@@ -1115,7 +1115,7 @@ async function checkCodeScanning(repo, slug, token) {
   } catch (e) {
     warn(
       /401|403/.test(e.message)
-        ? `CodeQL default setup: not verifiable here, the endpoint needs the repository Administration permission and no GITHUB_TOKEN can hold it. Run \`GITHUB_TOKEN=$(gh auth token) pnpm run infra:check\` on a workstation (any credential with the \`repo\` scope; being logged in is not enough, the script reads GITHUB_TOKEN) to assert it (${e.message})`
+        ? `CodeQL default setup: not verifiable here, the endpoint needs the repository Administration permission and no GITHUB_TOKEN can hold it. Run \`GITHUB_TOKEN=$(gh auth token) bun run infra:check\` on a workstation (any credential with the \`repo\` scope; being logged in is not enough, the script reads GITHUB_TOKEN) to assert it (${e.message})`
         : `CodeQL default setup could not be read: ${e.message}`,
     );
     return;

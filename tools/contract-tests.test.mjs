@@ -1987,7 +1987,7 @@ test("a section's favicon is in its own <head>, never set by script", async () =
   //    generated map the worker actually reads. A route added to TASKBAR without
   //    its tile would otherwise ship a 404 favicon.
   assert.deepEqual(SECTION_FAVICONS, sectionFavicons(),
-    "lib/desktop.js drifted from shell-data.mjs — run pnpm run gen:shell");
+    "lib/desktop.js drifted from shell-data.mjs — run bun run gen:shell");
   for (const item of TASKBAR) {
     const href = SECTION_FAVICONS[item.path];
     assert.equal(href, faviconHref(item.label), `${item.path} favicon href`);
@@ -2024,7 +2024,7 @@ test("the speculation ruleset has exactly one author", async () => {
     if (!blocks.length) continue;
     carrying++;
     assert.equal(blocks.length, 1, `${relative} carries ${blocks.length} rulesets; the browser unions them`);
-    assert.ok(html.includes(canonical), `${relative} has a ruleset that is not the projection of SPECULATION; run pnpm run gen:shell`);
+    assert.ok(html.includes(canonical), `${relative} has a ruleset that is not the projection of SPECULATION; run bun run gen:shell`);
   }
   assert.ok(carrying >= 30, `only ${carrying} pages carry the ruleset; the projection has collapsed`);
 
@@ -2171,15 +2171,15 @@ test("site-manifest.json is a well-formed registry with unique paths", async () 
 
 test("committed manifest projections match a fresh generation", async () => {
   // guards against a commit that edits site-manifest.json but forgets
-  // `pnpm run gen:manifest` — the same drift build.mjs #8 blocks, checked here too.
+  // `bun run gen:manifest` — the same drift build.mjs #8 blocks, checked here too.
   const { surfaces } = readManifest();
   const mod = await readFile("src/worker/lib/site-manifest.ts", "utf8");
-  assert.equal(mod.trim(), workerModule(surfaces).trim(), "lib/site-manifest.js is stale — run pnpm run gen:manifest");
+  assert.equal(mod.trim(), workerModule(surfaces).trim(), "lib/site-manifest.js is stale — run bun run gen:manifest");
   const nav = await readFile("src/client/nav-run.js", "utf8");
   for (const [section, marker] of [["garage", "garage-pages"], ["lwe", "lwe-pages"]]) {
-    assert.equal(readFenceBody(nav, marker), navFenceBody(surfaces, section), `nav-run.js generated:${marker} is stale — run pnpm run gen:manifest`);
+    assert.equal(readFenceBody(nav, marker), navFenceBody(surfaces, section), `nav-run.js generated:${marker} is stale — run bun run gen:manifest`);
   }
-  assert.equal(readFenceBody(nav, "run-profiles"), runProfilesBody(), "nav-run.js profiles are stale — run pnpm run gen:manifest");
+  assert.equal(readFenceBody(nav, "run-profiles"), runProfilesBody(), "nav-run.js profiles are stale — run bun run gen:manifest");
 });
 
 test("site MCP lists the agent surfaces as resources", async () => {
@@ -4259,7 +4259,7 @@ test("every inline script in the STAGED tree is covered by the emitted hash map"
   // deliberately different parser and compares. Same-code-twice would prove
   // nothing, and the failure this guards against (a blocked script leaves the
   // page rendering and merely dead) is invisible without it.
-  if (!existsSync("./.build/public/_worker.js/lib/csp-hashes.js")) return; // no staged tree; `pnpm run build` first
+  if (!existsSync("./.build/public/_worker.js/lib/csp-hashes.js")) return; // no staged tree; `bun run build` first
   const { createHash } = await import("node:crypto");
   const { readdir } = await import("node:fs/promises");
 
@@ -4932,7 +4932,7 @@ test("a 200 is not evidence that kitesurf rendered, and is not reported as if it
     );
     const run = await runBrowserAction("snapshot", { url: "https://example.com" }, { CF_ACCOUNT_ID: "acct", BROWSER_RUN_TOKEN: "tok" });
     assert.equal(run.engine, "kitesurf-requested", "a 200 means the call worked, not that Kitesurf served it");
-    assert.notEqual(run.engine, "kitesurf", "only pnpm run kitesurf:check can promote this label");
+    assert.notEqual(run.engine, "kitesurf", "only bun run kitesurf:check can promote this label");
   } finally {
     globalThis.fetch = realFetch;
     _resetKitesurfProbe();
@@ -6922,7 +6922,7 @@ test("the ramp never double-parses wrangler's already-parsed JSON", async () => 
   // helper ALREADY parses when json is set, so the second parse received an
   // object, stringified it to "[object Object]", and threw. Every ramp then
   // reported that D1 was unreachable and skipped its own write. D1 was answering
-  // the whole time; `pnpm run checkpoints:check` queried it fine minutes later.
+  // the whole time; `bun run checkpoints:check` queried it fine minutes later.
   //
   // Asserted as source text because the alternative is spawning wrangler against
   // production D1 from the test suite, which no contract test should ever do.

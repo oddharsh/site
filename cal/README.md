@@ -46,13 +46,13 @@ Set these on the root Worker (from the repository root):
 
 ```sh
 # the public/secret iCal URL of your calendar (read-only)
-pnpm exec wrangler versions secret put -c wrangler.jsonc ICAL_URL
+bun run wrangler versions secret put -c wrangler.jsonc ICAL_URL
 
 # resend.com API key — verify aadhar.sh via DKIM first
-pnpm exec wrangler versions secret put -c wrangler.jsonc RESEND_API_KEY
+bun run wrangler versions secret put -c wrangler.jsonc RESEND_API_KEY
 
 # HMAC signing secret — generate once and keep it stable
-openssl rand -hex 32 | pnpm exec wrangler versions secret put -c wrangler.jsonc SIGNING_SECRET
+openssl rand -hex 32 | bun run wrangler versions secret put -c wrangler.jsonc SIGNING_SECRET
 ```
 
 Set up Resend as usual: add `aadhar.sh`, publish its DKIM/SPF records in
@@ -78,7 +78,7 @@ the optional unlisted work-calendar redirect (`WORK_CALENDAR_URL`):
 
 ```sh
 # Google Calendar: create a new "secret address in iCal format" first.
-pnpm exec wrangler versions secret put -c wrangler.jsonc ICAL_URL
+bun run wrangler versions secret put -c wrangler.jsonc ICAL_URL
 ```
 
 The calendar snapshot is normally freshened within five minutes. For an
@@ -86,15 +86,15 @@ immediate refresh, delete only the derived snapshot and check the live JSON:
 
 ```sh
 BOOKINGS_NS="37acb65118fe485583a90a94cb89365e"
-pnpm exec wrangler kv key delete --namespace-id="$BOOKINGS_NS" "cal:busy" --remote
+bun run wrangler kv key delete --namespace-id="$BOOKINGS_NS" "cal:busy" --remote
 curl -fsS https://aadhar.sh/coffee/slots | jq .
 ```
 
 To rotate the unlisted redirect, set its destination before its path segment:
 
 ```sh
-pnpm exec wrangler versions secret put -c wrangler.jsonc WORK_CALENDAR_URL
-pnpm exec wrangler versions secret put -c wrangler.jsonc WORK_CALENDAR_SLUG
+bun run wrangler versions secret put -c wrangler.jsonc WORK_CALENDAR_URL
+bun run wrangler versions secret put -c wrangler.jsonc WORK_CALENDAR_SLUG
 curl -fsSI "https://cal.aadhar.sh/<new-slug>"
 ```
 
@@ -105,7 +105,7 @@ Git.
 The random HMAC value is `SIGNING_SECRET`:
 
 ```sh
-openssl rand -hex 32 | pnpm exec wrangler versions secret put -c wrangler.jsonc SIGNING_SECRET
+openssl rand -hex 32 | bun run wrangler versions secret put -c wrangler.jsonc SIGNING_SECRET
 ```
 
 Rotating it invalidates all outstanding approval and decline links but does not

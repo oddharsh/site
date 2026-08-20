@@ -14,12 +14,14 @@
   //
   // UNBYPASSABLE BUILD: main + assets point at .build/public (the minified
   // tree), and the "build" block below runs build.mjs FIRST on every deploy.
-  // So `wrangler deploy` (bare), `pnpm run deploy:direct`, and Workers Builds all ship
+  // So `wrangler deploy` (bare), `bun run deploy:direct`, and Workers Builds all ship
   // the minified shells + luna.css — there is no longer a path that serves the
   // readable originals by accident (which is exactly how prod ended up on an
   // unminified 78KB nav.js). In Workers Builds, leave the dashboard's separate
-  // Build command blank and set its Deploy command to the `pnpm exec wrangler
-  // versions upload` recorded in config/infra.json under `release`;
+  // Build command blank and set its Deploy command to the
+  // `bash .github/deploy-wrangler.sh versions upload` recorded in
+  // config/infra.json under `release`. That wrapper picks wrangler's invocation
+  // for the tree being built and runs it under node, which wrangler requires;
   // Wrangler then owns this one build instead of running it twice. Local dev
   // must NOT use this config (it would pay the full public/ -> .build copy on
   // every reload); it uses wrangler.dev.jsonc, which points at public/ directly.

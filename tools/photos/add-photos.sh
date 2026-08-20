@@ -481,7 +481,7 @@ fi
 # check-photo-pipeline.mjs below.
 if command -v python3 >/dev/null 2>&1; then
   python3 "$SCRIPT_DIR/gen-alt-text.py" || \
-    echo "  captions incomplete — re-run 'pnpm run captions' before deploying"
+    echo "  captions incomplete — re-run 'bun run captions' before deploying"
 else
   echo "  python3 missing — skipping alt-text generation"
 fi
@@ -490,4 +490,4 @@ node "$PROJECT_DIR/tools/photos/check-photo-pipeline.mjs"
 echo ""
 
 echo "✓ done. deploy with:"
-echo "    pnpm run deploy:direct"
+echo "    bun run deploy:direct"

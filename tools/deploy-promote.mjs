@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 // deploy-promote.mjs — ramp an uploaded version onto production traffic.
 //
-//   pnpm run deploy:promote                  # newest PRODUCTION build, 10% -> 50% -> 100%
-//   pnpm run deploy:promote --to 25       # one step, park it at 25%
-//   pnpm run deploy:promote --version <id>
-//   pnpm run deploy:promote --dry-run     # resolve the target, move nothing
-//   pnpm run deploy:promote --steps 5,25,100
-//   pnpm run deploy:promote --rollback    # 100% back to the previously active version
-//   pnpm run deploy:promote --status      # what is serving right now, and nothing else
+//   bun run deploy:promote                  # newest PRODUCTION build, 10% -> 50% -> 100%
+//   bun run deploy:promote --to 25       # one step, park it at 25%
+//   bun run deploy:promote --version <id>
+//   bun run deploy:promote --dry-run     # resolve the target, move nothing
+//   bun run deploy:promote --steps 5,25,100
+//   bun run deploy:promote --rollback    # 100% back to the previously active version
+//   bun run deploy:promote --status      # what is serving right now, and nothing else
 //
 // WHY THIS EXISTS. Merging used to publish: Workers Builds ran `wrangler deploy`
 // off the `production` branch and 100% of traffic moved in one step. That is a
@@ -138,7 +138,7 @@ async function wrangler(args, { json = false } = {}) {
       .split("\n").map((l) => l.trim()).filter(Boolean)
       .filter((l) => !l.startsWith("🪵"))
       .slice(0, 6).join("\n    ");
-    die(`\`wrangler ${args.slice(0, 2).join(" ")}\` failed:\n    ${said}\n\n  Nothing was changed — wrangler validates before it moves traffic.\n  Check \`pnpm run deploy:promote --status\` to confirm.`);
+    die(`\`wrangler ${args.slice(0, 2).join(" ")}\` failed:\n    ${said}\n\n  Nothing was changed — wrangler validates before it moves traffic.\n  Check \`bun run deploy:promote --status\` to confirm.`);
   }
 }
 
@@ -185,7 +185,7 @@ async function productionAlias() {
 // branches to this repo all day. Observed minutes before a real ramp: of the
 // three newest versions, the top was aliased `codex-site-cleanup-foundations`
 // and the second `fix-pin-cloudflare-account-id`, with the production build
-// third. A bare `pnpm run deploy:promote` at that moment would have walked a
+// third. A bare `bun run deploy:promote` at that moment would have walked a
 // feature branch to 100%.
 //
 // It would also have LOOKED fine. The sampler checks that traffic moved and
@@ -237,7 +237,7 @@ async function newestVersion() {
       `  wrangler lists only the 10 newest and cannot page, so a run of branch\n` +
       `  builds can push the production one off the end. What is listed:\n\n${seen}\n\n` +
       `  Pick the one you mean and pass it explicitly:\n` +
-      `    pnpm run deploy:promote --version <id>`,
+      `    bun run deploy:promote --version <id>`,
     );
   }
 
@@ -528,7 +528,7 @@ if (has("rollback")) {
   const newest = await newestVersion();
   const older = active.filter((v) => v.id.slice(0, 8) !== newest.slice(0, 8));
   if (!older.length) {
-    die(`nothing to roll back to: ${newest.slice(0, 8)} already holds all traffic. Pick a version explicitly with \`pnpm exec wrangler versions deploy <id>@100 --yes\`, or re-upload the previous commit.`);
+    die(`nothing to roll back to: ${newest.slice(0, 8)} already holds all traffic. Pick a version explicitly with \`bun run wrangler versions deploy <id>@100 --yes\`, or re-upload the previous commit.`);
   }
   const to = older.sort((a, b) => b.pct - a.pct)[0];
   console.log(`rolling back: 100% to ${to.id.slice(0, 8)}`);
@@ -630,7 +630,7 @@ for (const pct of steps) {
     console.error(`   FAILED: ${pinned.errors} non-200 with traffic pinned to ${target.slice(0, 8)}: ${[...new Set(pinned.errorDetail)].join(", ")}`);
     console.error(`   every one of those was handled by the version being ramped, so this is not sampling noise.`);
     console.error(`   traffic is CURRENTLY SPLIT at ${pct}% — this script does not roll back for you.`);
-    console.error(`   roll back with: pnpm run deploy:promote --rollback`);
+    console.error(`   roll back with: bun run deploy:promote --rollback`);
     process.exit(1);
   }
   // The override not applying is an INSTRUMENT failure, not a fault in the
@@ -666,7 +666,7 @@ for (const pct of steps) {
   if (s.errors) {
     console.error(`   FAILED: ${s.errors} non-200 response(s): ${[...new Set(s.errorVersions)].join(", ")}`);
     console.error(`   traffic is CURRENTLY SPLIT at ${pct}% — this script does not roll back for you.`);
-    console.error(`   roll back with: pnpm run deploy:promote --rollback`);
+    console.error(`   roll back with: bun run deploy:promote --rollback`);
     process.exit(1);
   }
   // Nothing came back at all. Distinct from an origin error and reported as
@@ -678,7 +678,7 @@ for (const pct of steps) {
   if (!s.answered) {
     console.error(`   FAILED: not one of ${s.total} samples completed from this machine (${[...new Set(s.stallReasons)][0]}).`);
     console.error(`   this says nothing about the deploy — it could not be measured. Traffic IS at ${pct}%.`);
-    console.error(`   check your network, then:  pnpm run deploy:promote --status`);
+    console.error(`   check your network, then:  bun run deploy:promote --status`);
     process.exit(1);
   }
   if (pct < 100 && s.onTarget === 0) {
@@ -694,11 +694,11 @@ for (const pct of steps) {
       console.error(`   and something is stopping the SPLIT from routing. Likeliest cause: the version-affinity`);
       console.error(`   Transform Rule is overwriting the per-request keys this script sends. Its expression must`);
       console.error(`   exempt requests that already carry Cloudflare-Workers-Version-Key. Check it with:`);
-      console.error(`     pnpm run infra:check      (the "version affinity" section)`);
+      console.error(`     bun run infra:check      (the "version affinity" section)`);
     }
     console.error(`   traffic is CURRENTLY SPLIT at ${pct}% — this script does not roll back for you.`);
-    console.error(`   check it with:  pnpm run deploy:promote --status`);
-    console.error(`   roll back with: pnpm run deploy:promote --rollback`);
+    console.error(`   check it with:  bun run deploy:promote --status`);
+    console.error(`   roll back with: bun run deploy:promote --rollback`);
     process.exit(1);
   }
   if (pct === 100 && s.onPrevious > 0) {
@@ -742,7 +742,7 @@ if (steps[steps.length - 1] === 100) {
     // spawn, and the shape of what comes back; asserting "D1 is unreachable" sent
     // the one person reading it to check a database that was answering fine.
     console.log(`\ncould not work out what to log (${String(e.message || e).slice(0, 90)}).`);
-    console.log("traffic is ramped; run `pnpm run checkpoints:check` to see what is still staged.");
+    console.log("traffic is ramped; run `bun run checkpoints:check` to see what is still staged.");
   }
   for (const row of staged) {
     const ts = Math.floor(Date.now() / 1000);

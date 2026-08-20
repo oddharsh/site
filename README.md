@@ -19,5 +19,5 @@ for instance:
 both wrangler configs stay at the root because workers builds runs from there.
 
 ```bash
-pnpm install && pnpm run dev
+pnpm install && bun run dev
 ```

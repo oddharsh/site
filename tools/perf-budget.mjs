@@ -15,7 +15,7 @@
 // derive a user-centered threshold. A deferred page island is not allowed to veto a
 // homepage feature merely because its raw source grew.
 //
-//   node tools/perf-budget.mjs        (or: pnpm run perf-budget)
+//   node tools/perf-budget.mjs        (or: bun run perf-budget)
 //
 // Not measured here (needs a real browser): LCP/FCP/INP/CLS, TTFB by field
 // cohort, and the per-viewport photo-transfer delta. A controlled 4G lab run is

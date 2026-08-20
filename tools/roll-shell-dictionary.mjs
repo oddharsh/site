@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // roll-shell-dictionary.mjs — adopt the CURRENT built shell as a dictionary candidate.
 //
-//   pnpm run shell:roll
+//   bun run shell:roll
 //
 // This is all that remains of the old gen-shell-deltas.mjs. The deltas themselves moved
 // into build.mjs once it turned out node:zlib's zstd takes a `dictionary` option (the

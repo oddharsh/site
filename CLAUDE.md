@@ -94,31 +94,31 @@ it is `public/`.
 # is what carries it 50% -> 100%. Approve it there, or run the commands below.
 #
 # By hand (still supported, and the only way to roll back):
-pnpm run deploy:promote --dry-run     # which version WOULD ramp. run this first
-pnpm run deploy:promote
-pnpm run deploy:promote --status      # what is serving right now
-pnpm run deploy:promote --rollback    # 100% back to the previous version
+bun run deploy:promote --dry-run     # which version WOULD ramp. run this first
+bun run deploy:promote
+bun run deploy:promote --status      # what is serving right now
+bun run deploy:promote --rollback    # 100% back to the previous version
 
 # straight to 100%, no ramp. the fallback for the infra:check deadlock below,
 # and for anything where an extra step is the risk rather than the safety net.
-pnpm run deploy:direct
+bun run deploy:direct
 
 # local dev against PRODUCTION KV/R2/Browser (D1 stays local unless you pass
 # --d1; read tools/gen-remote-config.mjs before you do). Workstation-only.
-pnpm run dev:remote
+bun run dev:remote
 
 # the route oracle with those same remote bindings, which un-skips the 5 rows a
 # local Worker cannot assert. 3 of them go green on remote KV/R2 alone; the two
 # /lens rows also want a SECRET, and secrets are not remotable. CI cannot run this.
-pnpm run routes:check:remote
+bun run routes:check:remote
 
 # add new photos (resize, EXIF-rotate, encode to AVIF+JPG, upload to R2,
 # write the photo-index entry, bake histograms, validate artifacts; the
 # photo goes live at the next deploy — no cache bust exists or is needed)
-pnpm run photos "/path/to/photo.HIF" "/path/to/folder/"
+bun run photos "/path/to/photo.HIF" "/path/to/folder/"
 
 # validate the committed photo artifact graph without uploading anything
-pnpm run photos:check
+bun run photos:check
 
 # lint, syntax plus TYPE-AWARE, in one 0.6s pass. the type half runs on tsgolint,
 # which tracks the exact TypeScript 7.0.2 pinned here; that pairing matters
@@ -126,39 +126,39 @@ pnpm run photos:check
 # run on it at all. config + every suppression's reason: .oxlintrc.json.
 # NB: read gotcha 34 before running `oxlint --fix`, and 35 before "fixing" a
 # finding inside a content-hashed client asset.
-pnpm run lint
+bun run lint
 
 # the wire-size DIFF. perf-budget checks numbers against constants that rot;
 # this compares two builds and has no constants. CI runs it against the merge
 # base on every PR touching served code and comments the delta, gating nothing.
 # each record self-builds through the wrangler dry-run (~12s).
-pnpm run perf:snapshot record base.json --label main
-pnpm run perf:snapshot record head.json --label mine
-pnpm run perf:snapshot compare base.json head.json
+bun run perf:snapshot record base.json --label main
+bun run perf:snapshot record head.json --label mine
+bun run perf:snapshot compare base.json head.json
 
 # the TREND, which is what the diff structurally cannot see. one compact JSONL
 # row per snapshot; .github/workflows/perf-history.yml appends these nightly to
 # the machine-owned `perf-history` branch and /garage/dyno charts them.
-pnpm run perf:snapshot row base.json
+bun run perf:snapshot row base.json
 
 # diff infra.json (DNS, zone/edge settings, account resources, Workers) against
 # reality. read-only; never mutates Cloudflare. add CLOUDFLARE_API_TOKEN for
 # the account tier, or --offline for the no-network tier.
-pnpm run infra:check
+bun run infra:check
 
 # the rebuild path, and the ONLY thing here that can mutate Cloudflare. plans
 # for free (public DNS, no credential); --confirm writes and needs the separate
 # CLOUDFLARE_API_TOKEN_WRITE. refuses to run in CI, by design.
-pnpm run infra:apply
+bun run infra:apply
 
 # roll the shared-compression dictionaries onto what production is SERVING.
 # .github/workflows/dictionary-roll.yml does this nightly and opens a PR; this is
 # the manual form. Sourced from the wire, so it is correct from any checkout.
-pnpm run dict:roll
+bun run dict:roll
 
 # is the dictionary tier actually operational, per surface class, in production?
 # advisory: it reads production, so never make it a required check.
-pnpm run dcz:check
+bun run dcz:check
 
 # regenerate JUST the EXIF metadata (after photos are already uploaded)
 ./tools/photos/extract-photo-metadata.sh "/Users/aadharsh/Downloads/to post (from ssd)"
@@ -166,7 +166,7 @@ pnpm run dcz:check
 # build the Python environment for gen-pixel-peeper.py (uv, into tools/photos/.venv).
 # NOT needed for the photo pipeline: the histogram bake moved into `zenc histogram`
 # on 2026-08-14. Homebrew's python3 is PEP 668, so a plain pip install fails.
-pnpm run photos:env
+bun run photos:env
 
 # build the JPEG thumbnail encoder (zenc = zenjpeg hybrid+scan). the pipeline
 # scripts auto-build it on first run; this is the explicit form.
@@ -177,8 +177,8 @@ cargo build --release --manifest-path tools/photos/zenc/Cargo.toml
 # photo-index.json + hashes.json, so a deploy replaces the pool atomically
 # and there are no manifest:* keys. Tracks remain KV (two-key SWR):
 NS="3cb8a107c58e47dc9244e75b33401f36"
-pnpm exec wrangler kv key delete --namespace-id="$NS" "tracks:4IRq9W1N2tOWHhH0O3vXiF" --remote
-pnpm exec wrangler kv key delete --namespace-id="$NS" "tracks:4IRq9W1N2tOWHhH0O3vXiF:fresh" --remote
+bun run wrangler kv key delete --namespace-id="$NS" "tracks:4IRq9W1N2tOWHhH0O3vXiF" --remote
+bun run wrangler kv key delete --namespace-id="$NS" "tracks:4IRq9W1N2tOWHhH0O3vXiF:fresh" --remote
 ```
 
 ## Collaboration and release discipline
@@ -196,11 +196,11 @@ worktrees may edit freely, but a worktree is not a release surface.
   your branch out from under you.
 - Keep each change on its own branch, commit it, push it, and open a PR. Do
   not deploy from a dirty worktree or push agent work directly to `main`.
-- PR CI lints (`pnpm run lint`, oxlint including its type-aware rules), builds
+- PR CI lints (`bun run lint`, oxlint including its type-aware rules), builds
   the site, enforces the performance budget, dry-runs the single
   site Worker plus the auxiliary Garage/LWE configs (`cf-garage/`, `lwe-ask/`),
   runs the coffee tests, and sweeps the route oracle against a Worker booted
-  in-process (`pnpm run routes:check`, wrangler's `createTestHarness()`), so a
+  in-process (`bun run routes:check`, wrangler's `createTestHarness()`), so a
   broken route fails the PR instead of the deploy. All of that lives in the ONE
   `validate` job, because `validate` is the one required check on `main` and a
   gate that is not required is not a gate.
@@ -267,7 +267,7 @@ worktrees may edit freely, but a worktree is not a release surface.
   govern which commit is allowed to become a release.
 
   **Both rulesets are DECLARED in [`infra.json`](config/infra.json) under `repository`,
-  and `pnpm run infra:check` fails on drift**, for the same reason the Workers
+  and `bun run infra:check` fails on drift**, for the same reason the Workers
   Builds block is declared there: dashboard state that no config in this repo can
   derive, load-bearing for what reaches production, and silent when it changes.
   The table above is now the readable copy of a machine-checked declaration
@@ -327,7 +327,7 @@ worktrees may edit freely, but a worktree is not a release surface.
   explicitly:
 
   ```bash
-  GITHUB_TOKEN=$(gh auth token) pnpm run infra:check
+  GITHUB_TOKEN=$(gh auth token) bun run infra:check
   ```
 
   Measured on the same machine minutes apart: a bare run printed the "not
@@ -357,7 +357,7 @@ worktrees may edit freely, but a worktree is not a release surface.
   ramps it:
 
   ```bash
-  pnpm run deploy:promote
+  bun run deploy:promote
   ```
 
   That walks 10% → 50% → 100%, and between steps it samples `/whoareyou.json`
@@ -447,7 +447,7 @@ worktrees may edit freely, but a worktree is not a release surface.
 
   An approvable row means click it. Note also that `gh run view --log` refuses a
   run that has not finished, so the canary's own output is unreadable until the
-  `full` job resolves; `pnpm run deploy:promote -- --status` answers what is
+  `full` job resolves; `bun run deploy:promote -- --status` answers what is
   serving regardless and does not depend on the run at all.
 
   Three things about it that are load-bearing rather than incidental:
@@ -506,7 +506,7 @@ worktrees may edit freely, but a worktree is not a release surface.
   `Cloudflare-Workers-Version-Key` came back 19/5. Random per-request routing
   cannot produce the first result, so something is supplying a stable key per
   client, which is what this rule does and nothing else here would. Confirm the
-  RULE itself with `pnpm run infra:check` on a workstation, since that tier is
+  RULE itself with `bun run infra:check` on a workstation, since that tier is
   zone-scoped and unreachable from CI.
 
   **The consequence is a trap, and it cost two wrong readings before the header
@@ -542,7 +542,7 @@ worktrees may edit freely, but a worktree is not a release surface.
   looking for it. Cloudflare honours the override only for a version already in the
   deployment, so the probe runs after each step and never before.
 
-  `pnpm run deploy:direct` still exists and still goes straight to 100%. Keep it: the
+  `bun run deploy:direct` still exists and still goes straight to 100%. Keep it: the
   `infra:check` deadlock below is exactly the case where a ramp's extra step is
   a liability rather than a safety net.
 - **A SECRET is a version too, so `wrangler secret put` no longer works here.**
@@ -562,10 +562,10 @@ worktrees may edit freely, but a worktree is not a release surface.
   Use the versions form, which mints a new version and moves no traffic:
 
   ```bash
-  pnpm exec wrangler versions secret put -c wrangler.jsonc <NAME>
+  bun run wrangler versions secret put -c wrangler.jsonc <NAME>
   ```
 
-  Then ramp it like any other version (`pnpm run deploy:promote`). Every secret
+  Then ramp it like any other version (`bun run deploy:promote`). Every secret
   command in this file, MAINTENANCE.md and `cal/README.md` was the old form and
   is now the new one; they had been unrunnable since gradual deployments landed
   and nobody noticed, because secrets are set about once a year.
@@ -658,7 +658,7 @@ worktrees may edit freely, but a worktree is not a release surface.
   every `Promote production` run after it skipped). It stays red on every branch
   until someone breaks the cycle from outside, by publishing the merged commit:
   push `main` to `production` so Workers Builds picks it up, or run the local
-  `pnpm run deploy:direct` fallback. Neither is automatic and neither should be — a
+  `bun run deploy:direct` fallback. Neither is automatic and neither should be — a
   deploy is the owner's call. Just know that merging is not the last step for
   this class of fix, and CI will not tell you so.
 
@@ -717,7 +717,7 @@ worktrees may edit freely, but a worktree is not a release surface.
 - **No deploy path may create Cloudflare resources.** Wrangler's
   `--x-provision` and `--x-auto-create` are hidden flags that both default to
   TRUE, and they provision real KV/R2/D1 for any binding declared without an
-  id. `pnpm run deploy:direct`, `pnpm run deploy:version`, and **both** Workers Builds
+  id. `bun run deploy:direct`, `bun run deploy:version`, and **both** Workers Builds
   commands (the Deploy command AND the Non-production branch deploy command)
   pin them off, so resource creation stays with `pnpm run
   infra:apply` and a missing id fails loudly. **That list read "the Workers
@@ -736,7 +736,7 @@ worktrees may edit freely, but a worktree is not a release surface.
   fails if EITHER recorded deploy command drops EITHER flag, in the tree tier
   (the declared string, no credential, every PR) and again in the API tier
   (the live dashboard value, when the token carries `Workers Builds
-  Configuration:Read`). `pnpm run deploy:direct` additionally passes `--strict`, which aborts rather
+  Configuration:Read`). `bun run deploy:direct` additionally passes `--strict`, which aborts rather
   than prompting when the Worker's last deployment came from the dashboard and
   its remote config has drifted from this repo. Workers Builds deliberately
   does NOT pass `--strict`: it is the authoritative publisher, and a release
@@ -795,7 +795,7 @@ worktrees may edit freely, but a worktree is not a release surface.
   The control, which moves nothing:
 
   ```bash
-  CI=1 CLOUDFLARE_API_TOKEN=<token> CLOUDFLARE_ACCOUNT_ID=<id> pnpm run deploy:promote -- --dry-run
+  CI=1 CLOUDFLARE_API_TOKEN=<token> CLOUDFLARE_ACCOUNT_ID=<id> bun run deploy:promote -- --dry-run
   ```
 
   `CI=1` is load-bearing: `release-guard.mjs` ignores the token entirely when `CI`
@@ -837,7 +837,7 @@ worktrees may edit freely, but a worktree is not a release surface.
   granting it buys drift detection on the release path and grants nothing that
   can publish. **This one is Read, never Edit** — the ramp token above is a
   separate, narrower credential and does not widen this one.
-- The one write path, `pnpm run infra:apply`, is **workstation-only** and reads a
+- The one write path, `bun run infra:apply`, is **workstation-only** and reads a
   different variable (`CLOUDFLARE_API_TOKEN_WRITE`, scoped to DNS on this zone
   alone). It refuses to run in CI and cannot touch the Worker, and that refusal
   is NOT covered by the 2026-08-06 change: it can create and destroy zone-level
@@ -965,7 +965,7 @@ Two encoders + one transform tool, all built from source:
   `-TagsFromFile` copies APP1 segments verbatim where ExifTool rebuilds them,
   keeping 165 tags to its 163 at the cost of the source's padding. jq is still
   wanted by the per-stem split.
-- **Pillow, via uv** (`brew install uv`, then `pnpm run photos:env`) — required by
+- **Pillow, via uv** (`brew install uv`, then `bun run photos:env`) — required by
   `gen-pixel-peeper.py` alone, which is a one-off generator rather than part of
   this pipeline. The 64-bin RGB/luminance bake moved into `zenc histogram` on
   2026-08-14, so nothing in add-photos.sh or extract-photo-metadata.sh needs it.
@@ -993,7 +993,7 @@ one of them was undocumented until `tools:check` went looking (2026-08-14):
   is misleading; the binaries are what to go find.
 
 > **The whole list is DECLARED in [`config/tools.json`](config/tools.json) and
-> `pnpm run tools:check` fails on drift.** It sits outside `infra.json` on
+> `bun run tools:check` fails on drift.** It sits outside `infra.json` on
 > purpose: that file declares Cloudflare and GitHub state and diffs it against
 > those APIs, while nothing here is remote and nothing here has an API.
 >
@@ -1363,7 +1363,7 @@ now lights up four doors at once (JSON-RPC, `/terminal/ask`, the terminal progra
 and every page's browser-local catalog), so weigh new entries accordingly.
 
 **Cards are GENERATED, and one of their paths changed meaning on 2026-08-07.**
-`pnpm run gen:mcp-cards` projects both servers' live registries into three files,
+`bun run gen:mcp-cards` projects both servers' live registries into three files,
 and a contract test deep-equals each card against that server's own `tools/list`,
 so a card cannot quietly acquire a tool the Worker does not serve. They are
 committed rather than built into `.build/` because they are read by scripts and
@@ -1537,7 +1537,7 @@ on the failures it caught will quietly start failing the successes.
 
 A DNS record, so it lives in Cloudflare DNS rather than in a Worker config.
 Its intended value IS declared here, in [`infra.json`](config/infra.json), and
-`pnpm run infra:check` fails if the live record stops matching.
+`bun run infra:check` fails if the live record stops matching.
 `_index._agents.aadhar.sh` is a ServiceMode SVCB record
 (`1 aadhar.sh. alpn="h2,h3" port=443 mandatory=alpn,port`, TTL 3600) per
 draft-mozleywilliams-dnsop-dnsaid + RFC 9460. It points agents at this
@@ -1551,7 +1551,7 @@ passes a scanner but breaks any agent that connects. Same honesty rule
 as the `/whoareyou` "no third party" claim — don't advertise capability
 the site doesn't actually serve.
 
-To verify, use `pnpm run infra:check`, NOT `dig ... SVCB`. macOS ships dig
+To verify, use `bun run infra:check`, NOT `dig ... SVCB`. macOS ships dig
 9.10.6, which doesn't know the `SVCB` mnemonic and silently degrades the
 query to an `A` lookup, so it prints nothing and the record reads as
 missing when it's fine. If you want the raw answer, ask for the type by
@@ -1686,7 +1686,7 @@ generic hex back.
   than as a verdict for Chromium.
 
   **Promoting it takes one control: does the endpoint REJECT an invented engine
-  name?** `pnpm run kitesurf:check` runs that control and prints a verdict — same
+  name?** `bun run kitesurf:check` runs that control and prints a verdict — same
   shape as the `--x-bogus-flag` control on wrangler and
   `definitely-not-a-real-gateway-xyz` on AI Gateway, and worth running before
   trusting any beta selector the docs describe but do not specify the failure
@@ -1767,7 +1767,7 @@ generic hex back.
   `addScriptTag` and nothing else.
 
   **The two GATING questions are answered, measured 2026-08-08 against the real
-  binding through `pnpm run dev:remote`.** `env.BROWSER.quickAction` accepts
+  binding through `bun run dev:remote`.** `env.BROWSER.quickAction` accepts
   `addScriptTag`, and the capture happens after the injected script's
   synchronous mutations. Both were live risks rather than paranoia: the
   binding's payload schema is CLOSED, and the Kitesurf probe had already caught
@@ -2007,7 +2007,7 @@ scripts are top-level, and `/lens/read` belongs to the `lens-reader` Worker via 
 zone route matched before this config is read.
 
 **`/lens`'s bare shell is a generated page that lives only in `.build/`, so it
-404s under `pnpm run dev`.** That is by design and costs an hour if you meet it
+404s under `bun run dev`.** That is by design and costs an hour if you meet it
 cold: `?url=` takes the live Worker path and works, while the empty shell is a
 built static page the readable tree has no file for. A stale `caches.default`
 entry in `.wrangler/state` can make it appear to work and then stop, which is
@@ -2066,7 +2066,7 @@ stranger the same question on every click, and rate-limited by `LENS_RL_TOOLS`.
 **Local dev can only scan THIS origin.** An external probe fails at signing
 before it leaves, since the AadharshBot key is a secret and secrets are not
 remotable, so `?url=https://aadhar.sh` is the one target that works under
-`pnpm run dev` (self-dispatch needs no wire signature). Everything else needs a
+`bun run dev` (self-dispatch needs no wire signature). Everything else needs a
 deployed version.
 
 ### Observability: Workers Traces + the span vocabulary
@@ -2130,7 +2130,7 @@ spans real I/O.
 dependency, and no version bump** (Wrangler 4.118.0 already has it). The tracer
 reaches local dev for free because of the injection in `lib/trace.ts`:
 `installTracing(tracing)` runs at module scope in `index.ts`, which workerd loads
-locally too, so `pnpm run dev` gets the real tracer and the named spans rather
+locally too, so `bun run dev` gets the real tracer and the named spans rather
 than the degraded direct calls the contract tests get under plain node.
 
 The recipe is in MAINTENANCE.md under "Read a trace". Short version: the Local
@@ -2216,7 +2216,7 @@ it before treating anything in there as a target.
    `wrangler.jsonc` self-builds and points both `main` and `assets` at
    `.build/public`, so no deploy path can ship the readable originals. Local
    development uses `wrangler.dev.jsonc` against a SYMLINK FARM at `.dev-assets`,
-   staged by `tools/dev-stage.mjs`, which `pnpm run dev` and `pnpm run dev:remote`
+   staged by `tools/dev-stage.mjs`, which `bun run dev` and `bun run dev:remote`
    run first. It reads "against readable `public/`" above this line until
    2026-08-19, and by then that was two errors rather than one: the field named
    `www`, which the 2026-08-18 split had deleted, so dev did not start at all; and
@@ -2322,13 +2322,13 @@ cal/
 
 ```bash
 pnpm install
-pnpm exec wrangler versions secret put -c wrangler.jsonc ICAL_URL        # Google Calendar → "secret ICS"
-pnpm exec wrangler versions secret put -c wrangler.jsonc RESEND_API_KEY  # resend.com, DKIM-verify aadhar.sh
-openssl rand -hex 32 | pnpm exec wrangler versions secret put -c wrangler.jsonc SIGNING_SECRET
+bun run wrangler versions secret put -c wrangler.jsonc ICAL_URL        # Google Calendar → "secret ICS"
+bun run wrangler versions secret put -c wrangler.jsonc RESEND_API_KEY  # resend.com, DKIM-verify aadhar.sh
+openssl rand -hex 32 | bun run wrangler versions secret put -c wrangler.jsonc SIGNING_SECRET
 
 # Production still ships through merge -> CI -> production -> Workers Builds.
 # Local fallback, from the repository root only:
-pnpm run deploy:direct
+bun run deploy:direct
 ```
 
 ### Visual notes (XP reskin lives in `cal/src/templates.js`)
@@ -2390,7 +2390,7 @@ pnpm run deploy:direct
 
 9. **HISTORICAL (Pages era): `wrangler pages deploy holding`** is retired.
    Production is merge → CI promotion to `production` → Workers Builds; the
-   local fallback is `pnpm run deploy:direct` from the repository root.
+   local fallback is `bun run deploy:direct` from the repository root.
 
 10. **Hover-only features need `(hover: none)` gating.** Touch devices fire
     synthetic `mouseover`/`mouseout` on long-press, which was causing
@@ -2599,7 +2599,7 @@ pnpm run deploy:direct
     What still has to be committed is `src/dict/a-dict/`, the SHELL dictionary set,
     because an `/a/` asset is content-addressed: a change mints a new URL, so its
     dictionary must be bytes the BROWSER already holds and no build can derive that
-    from source. `pnpm run shell:roll` adopts the current shell and prunes to 3 per
+    from source. `bun run shell:roll` adopts the current shell and prunes to 3 per
     asset; it writes into the source tree, which build.mjs must never do, so it can
     only ever land as a separate commit.
 
@@ -2633,7 +2633,7 @@ pnpm run deploy:direct
     tails from its four outlier layouts and now beats q11 on all 46 deterministic
     pages (428,238 B vs 494,073 B across the set). Both candidates are emitted only
     when they beat plain q11.
-    `pnpm run shell:roll` rolls both `a-dict` and `p-dict`; page snapshots are Brotli'd
+    `bun run shell:roll` rolls both `a-dict` and `p-dict`; page snapshots are Brotli'd
     in the repo, ignored by the asset upload, and decompressed only at build time.
     **BOTH halves can read the wire now, and `--live` is how the scheduled roll
     works.** `p-dict` has always fetched the LIVE pages, because an edge feature can
@@ -2641,7 +2641,7 @@ pnpm run deploy:direct
     matches nothing (gotcha 20, the WebMCP instance and the measurement). `a-dict`
     adopted from `.build/public/a`, which was never WRONG the same way (nothing
     rewrites js/css at the edge) but forced the roll to run from the deployed
-    commit. `pnpm run dict:roll` passes `--live` so the shell half reads production
+    commit. `bun run dict:roll` passes `--live` so the shell half reads production
     too. That buys two things: a roll can run from anywhere, including a scheduled
     job on an unramped `main`, and it captures what browsers are holding rather than
     what this checkout happens to build. Adopting from a build can only ever capture
@@ -2649,7 +2649,7 @@ pnpm run deploy:direct
     and on an unramped tree it adopts bytes nobody holds while evicting one still in
     use (KEEP is 3). It refuses outright if production reads empty, because an empty
     read hands the prune an empty `current` set, which is exactly when it is free to
-    evict what is live. `pnpm run pages:roll` still rolls the page half alone.
+    evict what is live. `bun run pages:roll` still rolls the page half alone.
     RFC 9842 requires RAW bytes here: a `zstd --train` artifact is self-describing,
     the server library reads its tables, Chrome reads the same bytes as content, and
     the navigation dies on `ERR_CONTENT_DECODING_FAILED`.
@@ -2660,9 +2660,9 @@ pnpm run deploy:direct
     which doubles as proof the client speaks dcz. So "zstd where it wins" IS the
     delta path. Loader classes differ (#119): js/css dcz proven in production, html
     server-side proven (149-byte page delta decodes to the live page), svg OFF by
-    design (Chromium's image loader chokes). `pnpm run dcz:check` asserts both page
+    design (Chromium's image loader chokes). `bun run dcz:check` asserts both page
     tiers against production, reading the family dictionary out of the live `Link`
-    header and the per-page candidate from `src/dict/p-dict`. With `pnpm run dict:roll`
+    header and the per-page candidate from `src/dict/p-dict`. With `bun run dict:roll`
     the source is production for both halves, so the old "roll only from the deployed
     build, never from a feature branch" rule is satisfied by construction rather than
     by remembering it. Plain `shell:roll` still reads `.build/` and still carries that
@@ -2745,7 +2745,7 @@ pnpm run deploy:direct
     copy from the FINAL bytes (after minification and the `/a/` ref rewrite, before
     step 8 compresses). Same generated-module convention as `shell-assets.ts`.
 
-    Empty is correct for `pnpm run dev`, which serves the readable unminified tree
+    Empty is correct for `bun run dev`, which serves the readable unminified tree
     whose blocks hash differently. A path with NO entry falls back to
     `'unsafe-inline'`, which is why the build hard-fails below 40 covered documents:
     a collapsed map is otherwise silent, since every page just quietly goes loose.
@@ -2815,7 +2815,7 @@ pnpm run deploy:direct
        compares against `CSP_LOOSE`, which separates "no opinion" from an opinion
        (lens.ts's framed view keeps its own), and a contract test pins both arms.
 
-    **`pnpm run csp:sweep` is the evidence, and it needs its control read first.**
+    **`bun run csp:sweep` is the evidence, and it needs its control read first.**
     It drives a real Chrome over every hashed document against a locally built
     Worker and reports blocked scripts. Two ways it reports a clean sweep while
     measuring nothing, both hit while writing it: a stale `caches.default` in
@@ -2939,7 +2939,7 @@ pnpm run deploy:direct
     dictionary. Nothing errored. Proven on `/garage/pretext`: offering the committed
     tag answered `dcz`, offering the tag of the live body answered `br`.
 
-    `shell:roll`'s page half reads PRODUCTION now, and `pnpm run pages:roll` rolls
+    `shell:roll`'s page half reads PRODUCTION now, and `bun run pages:roll` rolls
     that half alone (the shell half still reads the local built tree, so it is still
     deployed-commit-only — that is why they split). `dcz:check` grew a
     **committed snapshots are WIRE bytes** assertion: a script the live document
@@ -3000,7 +3000,7 @@ pnpm run deploy:direct
     noticed when it happens, and a one-line fix — sort by `pct` and take the largest
     — if someone decides it is worth touching the release path for.
 
-    **Run `pnpm run deploy:promote --dry-run` before any ramp.** It resolves and
+    **Run `bun run deploy:promote --dry-run` before any ramp.** It resolves and
     prints the target and moves nothing, and it exists (#259) because the target is
     no longer simply "the newest version": Workers Builds uploads one for EVERY
     branch push, so a bare ramp used to be a live way to walk another agent's branch
@@ -3100,8 +3100,8 @@ pnpm run deploy:direct
 
     ```bash
     git pull --ff-only
-    pnpm run deploy:promote --dry-run    # target must be the version now serving
-    pnpm run deploy:promote --to 100     # moves no traffic; runs the logging block
+    bun run deploy:promote --dry-run    # target must be the version now serving
+    bun run deploy:promote --to 100     # moves no traffic; runs the logging block
     ```
 
     Two lessons worth keeping past this bug. **A check that compares two values
@@ -3150,7 +3150,7 @@ pnpm run deploy:direct
 
     The rule is short: **after changing a secret, do not ramp a production
     version that predates the change.** Check with
-    `pnpm exec wrangler versions view <id>`, which prints `Secrets:` by name. If the
+    `bun run wrangler versions view <id>`, which prints `Secrets:` by name. If the
     only production build is older than your change, wait for the next one;
     re-applying the change on top after ramping is the fallback rather than the
     default, since a secret PUT needs the value again and those live on a
@@ -3514,7 +3514,7 @@ pnpm run deploy:direct
     `\$\{\{` inside `run:` and route values through `env:` instead.
 
 28. **Bun runs this build byte-identically and about twice as fast, and it is
-    still not adopted.** `pnpm run bun:check` is the control, in the same idiom as
+    still not adopted.** `bun run bun:check` is the control, in the same idiom as
     `kitesurf:check`: it probes the zstd dictionary option, diffs a full node
     build against a full bun build file by file, and runs the contract suite
     under `bun test`. Measured 2026-08-10, node v26.7.0 against bun
@@ -3822,7 +3822,7 @@ pnpm run deploy:direct
     map, `run_worker_first`) does let the specific entry win, and this one reads
     exactly like it should too.
 
-32. **`pnpm run pages:check` lints AUTHORED PAGE TEXT against the house voice,
+32. **`bun run pages:check` lints AUTHORED PAGE TEXT against the house voice,
     and it is a required check.** `pipelines/content/page-contract.mjs` bans em
     dashes, AI filler (`delve`, `leverage`, `utilize`, `robust`, `game-changer`,
     `cutting-edge`), dead transitions (`furthermore`, `additionally`, `moreover`,
@@ -3873,7 +3873,7 @@ pnpm run deploy:direct
     **Resource Timing never sees a speculation fetch.** The browser's preloading
     machinery issues it, not the document, so
     `performance.getEntriesByType("resource")` reports nothing on a page whose
-    rule is firing perfectly. Measure at the ORIGIN instead: `pnpm run dev` logs
+    rule is firing perfectly. Measure at the ORIGIN instead: `bun run dev` logs
     every request, and a speculated one also carries `Sec-Purpose`, which is what
     `countSpeculativeLoad` (`_worker.js/speculation.js`) already counts in
     production.
@@ -3900,7 +3900,7 @@ pnpm run deploy:direct
     browser could have shown something.
 
 34. **A linter's `--fix` is a code change nobody reviewed, and one of them was
-    wrong here on the first run.** oxlint landed 2026-08-14 (`pnpm run lint`, a
+    wrong here on the first run.** oxlint landed 2026-08-14 (`bun run lint`, a
     required step in `validate`). `oxlint --fix` rewrote 18 findings across 8
     files, and `unicorn/no-useless-spread` silently broke `webmention.ts`:
 
@@ -4048,7 +4048,7 @@ pnpm run deploy:direct
     and nothing you control. The rule is about the WINDOW rather than the
     sequence. Let a parked ramp finish before merging, and if a merge has already
     gone in, expect the cancellation and confirm the split with
-    `pnpm run deploy:promote -- --status` rather than reading the run's
+    `bun run deploy:promote -- --status` rather than reading the run's
     conclusion.
 
     **Recency cannot find a parked ramp, and `--limit 3` hides one as reliably
