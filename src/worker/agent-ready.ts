@@ -1,29 +1,3 @@
-// @ts-nocheck — TEMPORARY, declared in config/ts-migration.json under "callers".
-// This module is still JavaScript and calls into src/worker/lib, which became
-// TypeScript on 2026-08-18. tsc now checks those call sites strictly and this
-// file does not pass yet. The entry goes away when this module converts.
-// agent-ready.js — how much of this origin can a machine actually use, and what
-// did that cost to build?
-//
-// ── why this exists ───────────────────────────────────────────────────────
-// Every other tool here points OUTWARD. This one points at the host that serves
-// it, publishes the result whether or not it flatters, and prints the bill.
-//
-// The bet this site is testing is that hosting tools for agents is worth doing
-// and cheaper than people assume. That is an empirical claim, and nobody has
-// published the numbers. Plenty of writing exists about whether sites SHOULD be
-// agent-readable; almost none about what it costs in files and lines, which is
-// the only figure anyone deciding actually needs.
-//
-// It grades any origin, not just this one, because a scorecard that can only
-// flatter its author is marketing. Point it at a competitor, or at this site.
-//
-// ── what it does NOT do ───────────────────────────────────────────────────
-// No letter grade dressed up as objective. The doors are counted because a door
-// is a fact — it opened, it did not, or we could not tell. Weighting those into
-// a single number would invent a precision the observation cannot support, and
-// this codebase has spent a lot of effort not doing that (see lib/doors.js on
-// shut-versus-unread, and lens on absent-versus-zero).
 import { COLS, blank, fit, kv, rows, rule, s, table, wrap } from "./lib/tui.ts";
 import { readDoors } from "./lib/doors.ts";
 
@@ -39,7 +13,11 @@ const INNER = COLS - 4;
 // Recount with: the groups below map to real paths; `wc -l` them.
 export const LIFT_CHECKED = "2026-08-05";
 /** @type {[name: string, files: number, lines: number, note: string][]} */
-export const LIFT = [
+// Typed as a TUPLE rather than left to inference. Without it tsc widens the
+// element type to (string | number)[], every `lines` reads as string | number,
+// and the sum below stops type-checking for a reason that has nothing to do
+// with the arithmetic.
+export const LIFT: Array<[name: string, files: number, lines: number, what: string]> = [
   // [capability, files, lines, what it buys]
   ["MCP server", 3, 574, "tools/list + tools/call, stateless 2026-07-28"],
   ["llms.txt", 1, 208, "a readable map, hand-written"],
@@ -98,7 +76,9 @@ export async function agentReadyFrame(target, env, { self = false } = {}) {
   const score = scoreDoors(doors);
   const totals = liftTotals();
 
-  const mark = (probe) => (probe.ok ? ["  open ", "ok"] : probe.unreadable ? ["unread ", "warn"] : ["  shut ", "dim"]);
+  // The return is a TUPLE because it is spread into s(text, style); an array
+  // type would make the spread a rest-argument error.
+  const mark = (probe): [string, string] => (probe.ok ? ["  open ", "ok"] : probe.unreadable ? ["unread ", "warn"] : ["  shut ", "dim"]);
   const doorRows = score.checks.map(([label, probe]) => [
     s(...mark(probe)),
     ...fit([s(label)], 22),

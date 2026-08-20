@@ -1,57 +1,3 @@
-// @ts-nocheck — TEMPORARY, declared in config/ts-migration.json under "callers".
-// This module is still JavaScript and calls into src/worker/lib, which became
-// TypeScript on 2026-08-18. tsc now checks those call sites strictly and this
-// file does not pass yet. The entry goes away when this module converts.
-// lens-wire.js — the WIRE lens: every request a page actually makes.
-//
-// The eighth machine tab answers the one question /lens could not. Every other
-// lens reads a DOCUMENT: the HTTP response, the rendered DOM, an extractor's
-// guess at the article. None of them can say that loading a 900-word news story
-// fired 312 requests at 84 hosts and that 71% of the bytes belonged to nobody
-// who wrote a word of it. That number is the page's actual cost, and it is
-// invisible to every representation we already serve.
-//
-// ── why this needs a different engine, and why that is not a second /lens/rendered
-// lens-render.js carries a warning about second rendering routes, earned when a
-// /lens/rendered turned out to be a thinner copy of /lens/browser. Read that
-// warning before adding a render surface; this is the case it does not cover.
-// Quick Actions expose exactly the four artifacts they expose (content,
-// screenshot, markdown, accessibility tree) through a CLOSED payload schema, and
-// the request waterfall is not one of them, so no parameter to the existing
-// route can produce this. The engine below is genuinely different rather than a
-// second spelling of the same call.
-//
-// ── the door, which the binding has had all along ──────────────────────────
-// `env.BROWSER` is a Fetcher, and behind it sits the full Chrome DevTools
-// Protocol. Measured 2026-08-11 against the production binding through remote
-// bindings: 54 domains, Chrome/128.0.6613.137, and a live WebSocket.
-//
-//   POST   https://localhost/v1/devtools/browser              -> { sessionId }
-//   GET    https://localhost/v1/devtools/browser/<id>/json/protocol
-//   fetch(<id>, { headers: { Upgrade: "websocket" } })        -> response.webSocket
-//   DELETE https://localhost/v1/devtools/browser/<id>
-//
-// Read out of agents@0.20.1 (dist/connector-*.js) rather than invented. We do
-// NOT take the `agents` dependency: it wraps those four calls in an LLM tool
-// that writes its own CDP JavaScript, which is precisely the model-authored-code
-// door lens-recipes.js exists to refuse. The transport is ~60 lines and the
-// script is ours.
-//
-// ── what this costs, which is the whole design constraint ──────────────────
-// A CDP session is a real browser INSTANCE, on the same 10-browser-minutes-a-day
-// account-wide allowance /lens/shot and /lens/browser already share. The free
-// plan also caps new instances at one per 20 seconds: measured live, a second
-// session opened 20s after the first answered `429 Rate limit exceeded` on the
-// create. So this route is rationed three ways — a per-IP budget, the shared
-// browserAll ceiling every browser route bills against, and a 6h KV cache that
-// is the real control. A 429 from the create is a NORMAL outcome here, reported
-// as our own budget rather than dressed up as the target site failing, the same
-// correction /lens/shot already made.
-//
-// The session is deleted in a `finally`. A leaked session holds one of three
-// concurrent slots until it times out, which would black out every browser lens
-// on the site, so cleanup is not tidiness.
-
 import { validateLensTarget } from "./lib/crawl.ts";
 import { jsonResponse } from "./lib/http.ts";
 import { span } from "./lib/trace.ts";
@@ -298,11 +244,19 @@ function cdpClient(ws) {
   ws.addEventListener("close", () => die("CDP socket closed"));
   ws.addEventListener("error", () => die("CDP socket error"));
 
-  const send = (method, params, sessionId) => new Promise((resolve, reject) => {
+  // The result is Record<string, any> rather than a narrower shape, on purpose.
+  // CDP returns a different payload per method across 54 domains, so the honest
+  // alternatives are hand-written types for each one (fiction that rots the
+  // first time Chrome revises a domain) or an open record at the boundary. The
+  // callers below read one or two fields each and guard for absence.
+  const send = (method: string, params?: unknown, sessionId?: string): Promise<Record<string, any>> =>
+    new Promise<Record<string, any>>((resolve, reject) => {
     if (closed) return reject(closed);
     const id = nextId++;
     pending.set(id, { resolve, reject });
-    const frame = { id, method, params: params || {} };
+    // sessionId is OPTIONAL on the wire: a browser-level command carries none,
+    // and a page-level one must. Declared so the conditional assign type-checks.
+    const frame: { id: number; method: string; params: unknown; sessionId?: string } = { id, method, params: params || {} };
     if (sessionId) frame.sessionId = sessionId;
     try { ws.send(JSON.stringify(frame)); } catch (e) { pending.delete(id); return reject(e); }
     setTimeout(() => { if (pending.delete(id)) reject(new Error(`CDP timeout: ${method}`)); }, WIRE_TIMING.cdpCommandMs);

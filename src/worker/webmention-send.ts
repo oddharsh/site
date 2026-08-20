@@ -1,28 +1,3 @@
-// @ts-nocheck — TEMPORARY, declared in config/ts-migration.json under "callers".
-// This module is still JavaScript and calls into src/worker/lib, which became
-// TypeScript on 2026-08-18. tsc now checks those call sites strictly and this
-// file does not pass yet. The entry goes away when this module converts.
-// webmention-send.js — the OUTBOUND half: this site telling the sources it
-// cites that it linked to them. The mirror of webmention.js, and the reason the
-// pair is worth having: a site that accepts mentions but never sends them is
-// taking from the commons without paying in. Same good-citizenship instinct as
-// llms.txt and the signed crawler.
-//
-// Runs on cron, never on a visitor request — the same discipline /around
-// follows. A page render must never fan out to N third-party hosts.
-//
-// WHAT COUNTS AS A CITATION (the one real design question here):
-// these pages mix two kinds of external link. Citations sit in the content
-// ("concepts credit officialunofficial/mkit", a link to the iroh repo). Chrome
-// links are stamped on every page by the desktop shell — my own GitHub, Spotify,
-// Instagram. Webmentioning my own Spotify from 15 garage pages would be absurd,
-// so the filter is: in-content links only, minus same-origin, minus my own
-// profile domains.
-//
-// Discovery does the rest of the filtering for free. Most cited sources (repos,
-// docs sites) advertise no endpoint, so the send is a silent no-op. That means
-// there is no allowlist to maintain: send to every real citation, and only the
-// webmention-aware ones light up.
 import { validateLensTarget } from "./lens.ts";
 import { privateHostBlocked, readResponseCapped } from "./lib/crawl.ts";
 import { WEBMENTION_PATHS, WEBMENTION_SECTIONS } from "./lib/site-manifest.ts";
@@ -204,7 +179,7 @@ export function contentOf(html) {
 // Every external link in the page's own content, deduped, minus my own profiles
 // and anything the SSRF guard won't touch.
 export function citationsIn(html, origin) {
-  const out = new Set();
+  const out = new Set<string>();
   for (const m of contentOf(html).matchAll(/<a\b[^>]*>/gi)) {
     const tag = m[0];
     // An anchor whose job is to open a hover card is chrome, not a citation:

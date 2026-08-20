@@ -164,7 +164,14 @@ async function checkInvariants() {
   // than pass: the floor below is what turns this class of failure back into a
   // red build, and it is the same guard tools/check-tools.mjs puts on its own
   // scanners for the same reason.
-  const routesBlock = (idx.match(/const ROUTE_TABLE = \[([\s\S]*?)\n\];/) || [, ""])[1];
+  // The type annotation is OPTIONAL in this pattern because the declaration form
+  // has now moved under this scanner TWICE: once when the table was extracted
+  // into its own const (above), and again on 2026-08-20 when it gained
+  // `: Array<[path: string, handler: Function]>` so tsc could resolve
+  // `new Map(ROUTE_TABLE)`. Both times the regex captured nothing. The floor
+  // below is the only reason either was noticed, and it caught this one before
+  // the change left the worktree, which is what a floor is for.
+  const routesBlock = (idx.match(/const ROUTE_TABLE(?::[^=]*)? = \[([\s\S]*?)\n\];/) || [, ""])[1];
   const routeKeys = [...routesBlock.matchAll(/\[\s*"([^"]+)"/g)].map((m) => m[1]);
   if (routeKeys.length < 60) hard.push(`route invariant scanned only ${routeKeys.length} ROUTE_TABLE keys — the scanner has lost the table, not the site its routes`);
   const allowBlock = (wrangler.match(/"run_worker_first"\s*:\s*\[([\s\S]*?)\]/) || [,""])[1];

@@ -173,7 +173,12 @@ export const HOMEPAGE_DISCOVERY_LINK = HOMEPAGE_DISCOVERY_LINKS.join(", ");
 // `opts.noindex` marks the whole response as unindexable. Set by the dispatcher
 // for Workers preview URLs, which serve a byte-identical copy of the site from a
 // *.workers.dev host (lib/preview.js explains why that must never be indexed).
-export function withSecurityHeaders(response, pathname, opts) {
+// pathname and opts are OPTIONAL, which describes what the body already did
+// rather than loosening anything: opts is read as `opts && opts.noindex`, and an
+// absent pathname falls through cspHeadersFor to CSP_LOOSE and skips the
+// prefetch-activation header. index.ts's self-fetch wrapper has always called it
+// with the response alone.
+export function withSecurityHeaders(response, pathname?, opts?) {
   const noindex = !!(opts && opts.noindex);
 
   // The two early returns below skip document headers, which is right for a

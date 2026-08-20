@@ -1,35 +1,3 @@
-// @ts-nocheck — TEMPORARY, declared in config/ts-migration.json under "callers".
-// This module is still JavaScript and calls into src/worker/lib, which became
-// TypeScript on 2026-08-18. tsc now checks those call sites strictly and this
-// file does not pass yet. The entry goes away when this module converts.
-// lens-tools.js — the Tools lens: a foreign MCP server's catalogue, WITH the
-// argument schemas, so the pane can draw a form per tool.
-//
-// The idea is a block explorer's contract page. Etherscan hands you a verified
-// contract's ABI and builds a form from it, and the form is what turns "this
-// address has code" into something you can actually reason about. `tools/list`
-// hands out the same thing under a different name: `inputSchema` IS the ABI.
-//
-// Where the analogy STOPS is the whole reason this route reads and never calls.
-// Etherscan can preview a call because the EVM is a deterministic machine whose
-// entire state is public and forkable, so `eth_call` at a block height is
-// reproducible by anyone. An MCP server is an opaque RPC into somebody's private
-// database. There is no fork, no state override, no revert, and the protocol has
-// no dry-run primitive — no `dryRun` flag, no simulate method, nothing in
-// `_meta`. So "what would send_invoice do" is unanswerable without the server
-// volunteering an answer, and none of them do.
-//
-// What IS answerable is the exact frame a call would carry. The pane renders
-// that and hands the visitor a curl. Execution moving to the visitor's own
-// machine is not a consolation prize: it is what keeps a public button from
-// being an open proxy that fires strangers' tools from this account's IP and
-// under AadharshBot's signature, which is the same argument lens-recipes.js
-// makes for refusing a `js=` parameter.
-//
-// Everything reaches the network through foreignMcpTools in lib/doors.js, so
-// this route adds no new way out. It inherits that module's SSRF guards, its
-// 8s timeout, its byte caps and its bot signature, and it inherits the wire
-// rules (framing, headers, protocol revision) rather than restating them.
 import { validateLensTarget } from "./lib/crawl.ts";
 import { jsonResponse } from "./lib/http.ts";
 import { span } from "./lib/trace.ts";

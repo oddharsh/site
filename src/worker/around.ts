@@ -1,9 +1,3 @@
-// @ts-nocheck — TEMPORARY, declared in config/ts-migration.json under "callers".
-// This module is still JavaScript and calls into src/worker/lib, which became
-// TypeScript on 2026-08-18. tsc now checks those call sites strictly and this
-// file does not pass yet. The entry goes away when this module converts.
-// around.js — extracted from the worker (no-build reorg). Bundled by
-// wrangler/Cloudflare at deploy; not served (inside _worker.js/).
 import { BOT_NAME, BOT_UA, SIG_AGENT, signedFetch } from "./lib/botauth.ts";
 import { cachedRender, deleteSWRKV } from "./lib/cache.ts";
 import { crawlDocument, mapWithConcurrency, readResponseCapped } from "./lib/crawl.ts";
@@ -233,7 +227,10 @@ export function diffAroundRows(current, previous) {
  * @param {string|number|null} [requestedLimit] the raw ?limit param, coerced and
  *   clamped below — callers pass searchParams.get(), which is string|null.
  */
-export async function readAroundChanges(env, requestedLimit = 50) {
+// requestedLimit takes whatever a query string hands over, which is why the
+// body coerces with `Number(x) || 50`. The annotation says so; the default
+// alone would have tsc infer number and reject its only caller.
+export async function readAroundChanges(env, requestedLimit: string | number | null = 50) {
   const limit = Math.min(100, Math.max(1, Number(requestedLimit) || 50));
   if (!env.RESTORE_DB) {
     return { ok: true, available: false, changes: [], note: "change history is not configured on this deployment" };
