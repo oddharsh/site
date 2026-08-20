@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// contract-tests.mjs — representation-boundary tests for the homepage Worker.
+// contract-tests.test.mjs — representation-boundary tests for the homepage Worker.
 //
 // These are deliberately dependency-free and deterministic. They test the
 // public shape of the page/fragment and JSON/HTML handlers without starting a
@@ -1902,70 +1902,68 @@ test("the shell infotip ships minified, hashed, and with a readable twin", async
     "hoist must be hashed before infotip, or infotip's /a/ copy keeps the unhashed specifier");
 });
 
-test("every workflow bootstraps the pnpm that package.json pins", async () => {
-  // Each workflow comments that package.json's packageManager field is the source of
-  // truth, and four of them had drifted to 11.20.0 within two days of #310 moving it to
-  // 11.21.0. Harmless there, because self-switching is on by default and the older
-  // binary fetches the pinned one at every run. It stops being harmless the moment the
-  // gap crosses a major: pnpm 12 ships its CLI as a per-platform native executable that
-  // a postinstall swaps in, so an older pnpm downloads it, finds a placeholder with no
-  // shebang, and dies with ENOEXEC before it ever reads the lockfile (gotcha 30).
-  const pinned = JSON.parse(await readFile(new URL("package.json", ROOT), "utf8")).packageManager;
-  assert.match(pinned, /^pnpm@\d+\.\d+\.\d+$/);
-  const version = pinned.split("@")[1];
+test("every workflow bootstraps the bun that package.json pins", async () => {
+  // Inherited from the pnpm era, and the reasoning survives the swap with one
+  // change: pnpm self-switched, so a workflow naming the wrong version merely
+  // wasted time. Nothing self-switches here. A workflow that installs some
+  // other bun builds this repo with a compiler nobody declared, and the output
+  // is content-addressed, so that re-mints URLs rather than erroring.
+  //
+  // The 1.4 release retired the digest pin this test used to assert. A released
+  // tag is immutable, so the VERSION is the guarantee the SHA-256 provided while
+  // the canary tag was rolling daily. config/bun-canary.json is gone with it.
+  const pkg = JSON.parse(await readFile(new URL("package.json", ROOT), "utf8"));
+  assert.match(pkg.packageManager, /^bun@\d+\.\d+\.\d+$/,
+    `packageManager is ${pkg.packageManager}; it must name a RELEASED bun, since that is the only string Cloudflare's build image resolves`);
 
   const dir = new URL(".github/workflows/", ROOT);
   const files = (await readdir(dir)).filter((n) => n.endsWith(".yml"));
   assert.ok(files.length >= 5, `expected the workflow set, found ${files.length}`);
+
   let checked = 0;
   for (const file of files) {
     const body = await readFile(new URL(file, dir), "utf8");
-    for (const [, found] of body.matchAll(/npm install -g pnpm@(\d+\.\d+\.\d+)/g)) {
-      assert.equal(found, version, `.github/workflows/${file} bootstraps pnpm@${found}, package.json pins ${version}`);
-      checked++;
-    }
-  }
-  // Counted, because a regex that stops matching would otherwise assert nothing and
-  // still report a pass, the failure mode the Markdown-twin test had (gotcha 24).
-  assert.ok(checked >= 4, `expected several pnpm bootstraps, matched ${checked}`);
-});
-
-test("every allowBuilds entry is a decision, never a placeholder pnpm wrote", async () => {
-  // When pnpm 11 meets a package whose build script nobody has ruled on, it
-  // writes the literal string `set this to true or false` INTO
-  // pnpm-workspace.yaml. That reads as a filled-in field and answers nothing:
-  // pnpm stores it verbatim and still counts the package as un-decided, so the
-  // hard error stays armed against `pnpm run` as well as `pnpm install`.
-  //
-  // `sharp` sat that way until #380 answered it. Nothing caught it for the
-  // whole time, because the error only fires on an install that has to
-  // RE-EVALUATE the build, and a clean install never does — so CI and every
-  // fresh clone stayed green while any tree needing a re-install broke. It had
-  // reached a release path by then: `deploy-promote.mjs` shells to `pnpm exec
-  // wrangler` (gotcha 29), so the command that broke was the one you would
-  // reach for during a rollback.
-  //
-  // This is the guard rather than the fix. The next dependency that ships a
-  // build script gets the same placeholder written into the same file, and the
-  // only reason anyone noticed this one was a rollback that needed a
-  // workaround.
-  const ws = await readFile(new URL("pnpm-workspace.yaml", ROOT), "utf8");
-  const block = ws.match(/^allowBuilds:\n((?:[ \t]+.*\n)+)/m);
-  assert.ok(block, "pnpm-workspace.yaml no longer has an allowBuilds block");
-
-  let checked = 0;
-  for (const line of block[1].split("\n")) {
-    if (!line.trim() || /^\s*#/.test(line)) continue;   // the block is commented
-    const entry = line.match(/^\s+([\w@/-]+):\s*(.+?)\s*$/);
-    assert.ok(entry, `unparseable allowBuilds line: ${line}`);
-    const [, pkg, value] = entry;
-    assert.match(value, /^(true|false)$/,
-      `allowBuilds.${pkg} is "${value}", which is pnpm's placeholder rather than a decision; run \`pnpm approve-builds\` or set a boolean`);
+    // EXECUTION, not mention. promote-production.yml prints "bun run
+    // deploy:promote" as advice in an echo and runs no bun at all; a scanner
+    // that reads the string demands a bootstrap that workflow does not need.
+    // Same shape as every other naive scanner this repo has had to sharpen.
+    const commands = body.split("\n").filter((l) => !/\becho\b/.test(l)).join("\n");
+    if (!/^\s*bun\s+(install|run|test|x)\b/m.test(commands)) continue;
+    // ONE bootstrap, and it reads packageManager itself. A workflow that curls
+    // its own bun, or names a version inline, is a second declaration that can
+    // drift from the first.
+    assert.match(body, /uses: \.\/\.github\/actions\/setup-bun/,
+      `.github/workflows/${file} runs bun without going through the shared setup-bun action`);
+    assert.ok(!/bun-version:|oven-sh\/setup-bun/.test(body),
+      `.github/workflows/${file} names a bun version inline instead of reading packageManager`);
     checked++;
   }
-  // Counted, because a matcher that stops matching asserts nothing and still
-  // reports a pass. Three entries today: esbuild, sharp, workerd.
-  assert.ok(checked >= 3, `expected the declared build allowlist, checked ${checked}`);
+  assert.ok(checked >= 4, `expected several bun bootstraps, matched ${checked}`);
+
+  // The action is the single place the version is read, so it must read it.
+  const action = await readFile(new URL(".github/actions/setup-bun/action.yml", ROOT), "utf8");
+  assert.match(action, /packageManager/, "setup-bun must read the version from packageManager");
+  assert.match(action, /zstd/, "setup-bun must probe the dictionary capability before a build spends 40s discovering it");
+});
+
+test("every trustedDependencies entry is a live approval, never a dead one", async () => {
+  // bun's answer to pnpm's allowBuilds, and the failure mode this guards is the
+  // same one: an entry for a package the tree no longer has reads as a reviewed
+  // decision and is actually nothing. It also cannot be caught by a clean
+  // install, which is why it needs asserting rather than noticing.
+  //
+  // Declaring this key REPLACES bun's built-in default allowlist rather than
+  // adding to it, so the moment it exists, a dependency that genuinely needs a
+  // postinstall and is absent here silently does not run one.
+  const pkg = JSON.parse(await readFile(new URL("package.json", ROOT), "utf8"));
+  const trusted = pkg.trustedDependencies || [];
+  assert.ok(trusted.length >= 1, "trustedDependencies is declared, so it should name something");
+
+  const lock = await readFile(new URL("bun.lock", ROOT), "utf8");
+  for (const name of trusted) {
+    assert.ok(lock.includes(`"${name}@`) || lock.includes(`"${name}"`),
+      `trustedDependencies names ${name}, which is not in bun.lock — a dead approval`);
+  }
 });
 
 test("a section's favicon is in its own <head>, never set by script", async () => {
@@ -2785,7 +2783,10 @@ test("local dev composes the same served tree the build stages", async () => {
   // dev scripts, so a script that skips the stager serves whatever the last run
   // left behind, or fails to start on a clean checkout.
   for (const script of ["dev", "dev:remote"]) {
-    assert.match(pkg.scripts[script], /node tools\/dev-stage\.mjs/,
+    // The RUNNER is not the point of this assertion; staging before wrangler
+    // boots is. Pinning it to one interpreter is what made a toolchain swap
+    // fail a test about dev-server ordering.
+    assert.match(pkg.scripts[script], /(node|bun) tools\/dev-stage\.mjs/,
       `${script} must stage the farm before booting wrangler`);
   }
 

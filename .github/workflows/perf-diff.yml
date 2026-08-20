@@ -26,7 +26,7 @@ on:
       - "serendipity/**"
       - "scripts/**"
       - "wrangler.jsonc"
-      - "pnpm-lock.yaml"
+      - "bun.lock"
       - ".github/workflows/perf-diff.yml"
       # The photo tiers are content-addressed binaries served straight from the
       # edge. They are real bytes, they are just not bytes this measures.
@@ -66,21 +66,18 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Install pnpm
-        # No action, no digest to maintain: package.json's packageManager
-        # field is the source of truth and this pins the same version.
-        # Must precede setup-node, whose `cache: pnpm` needs pnpm on PATH.
-        run: npm install -g pnpm@11.21.0
+      - name: Set up bun
+        # config/... no longer applies: the version lives in packageManager and the
+        # action reads it, so there is one declaration of which bun this repo runs.
+        uses: ./.github/actions/setup-bun
 
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .node-version
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: bun install --frozen-lockfile
 
       - name: Resolve the merge base
         id: base
@@ -111,8 +108,8 @@ jobs:
           git switch --detach "$MERGE_BASE"
           # Only reinstall when the lockfile actually moved. On the common PR it
           # did not, and a second `pnpm install` is a minute of nothing.
-          if ! git diff --quiet "$MERGE_BASE" "$HEAD_SHA" -- pnpm-lock.yaml; then
-            pnpm install --frozen-lockfile
+          if ! git diff --quiet "$MERGE_BASE" "$HEAD_SHA" -- bun.lock; then
+            bun install --frozen-lockfile
           fi
           node "$RUNNER_TEMP/perf-snapshot.mjs" record "$RUNNER_TEMP/base.json" \
             --label "$(git rev-parse --short HEAD)"
@@ -123,8 +120,8 @@ jobs:
           HEAD_SHA: ${{ steps.base.outputs.head }}
         run: |
           git switch --detach "$HEAD_SHA"
-          if ! git diff --quiet "$MERGE_BASE" "$HEAD_SHA" -- pnpm-lock.yaml; then
-            pnpm install --frozen-lockfile
+          if ! git diff --quiet "$MERGE_BASE" "$HEAD_SHA" -- bun.lock; then
+            bun install --frozen-lockfile
           fi
           node "$RUNNER_TEMP/perf-snapshot.mjs" record "$RUNNER_TEMP/head.json" \
             --label "$(git rev-parse --short HEAD)"

@@ -3,7 +3,7 @@
   //
   // The site stays JavaScript on purpose: authoring is buildless, View Source
   // shows the same program that runs, and every module here is imported by
-  // contract-tests.mjs under plain node. Types erase at build time, so a
+  // contract-tests.test.mjs under plain node. Types erase at build time, so a
   // conversion would buy nothing at runtime — workerd executes identical
   // JavaScript either way. What IS worth having is the CHECKER, which reads the
   // JSDoc already in these files and the generated Workers types, and emits
