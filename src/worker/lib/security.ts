@@ -1,8 +1,3 @@
-// @ts-nocheck — declared in config/ts-migration.json, which may only SHRINK.
-// This module carried type errors when src/worker/lib became TypeScript. The
-// code is unchanged and runs identically; what changed is that tsc stopped
-// being lenient. Remove this line, fix what tsc then reports, and delete the
-// entry from that file. A contract test fails if the two disagree.
 // lib/security.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
 // security headers applied to every worker-generated response. mirrors
@@ -116,7 +111,7 @@ const CSP_LOOSE = cspWith(CSP_SCRIPT_SRC_LOOSE);
 // script at all gets a bare `script-src 'self'`, which is the strictest this policy
 // can be. Do not confuse it with "no entry", which means the build could not speak
 // for this document and falls back to the loose policy.
-const cspHashed = (hashes, tail) =>
+const cspHashed = (hashes, tail = CSP_TAIL) =>
   cspWith(["'self'", ...hashes.map((h) => `'sha256-${h}'`)].join(" "), tail);
 
 // Returns the CSP header pair for a document. A path with no hash entry (every
@@ -190,7 +185,7 @@ export function withSecurityHeaders(response, pathname, opts) {
   if (noindex && !response.headers.has("x-robots-tag")) {
     const h = new Headers(response.headers);
     h.set("x-robots-tag", PREVIEW_ROBOTS);
-    const init = { status: response.status, statusText: response.statusText, headers: h };
+    const init: ResponseInit = { status: response.status, statusText: response.statusText, headers: h };
     if (response.headers.has("content-encoding")) init.encodeBody = "manual";
     response = new Response(response.body, init);
   }
@@ -246,7 +241,7 @@ export function withSecurityHeaders(response, pathname, opts) {
       headers.set("link", current ? `${current}, ${dictionaryLink}` : dictionaryLink);
     }
   }
-  const init = { status: response.status, statusText: response.statusText, headers };
+  const init: ResponseInit = { status: response.status, statusText: response.statusText, headers };
   // `encodeBody` is write-only Response init, so rebuilding a response SILENTLY
   // drops it, and the runtime then compresses the body a second time to match the
   // content-encoding header it can still see. Because every worker response passes

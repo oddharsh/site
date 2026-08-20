@@ -1,13 +1,14 @@
-// @ts-nocheck — declared in config/ts-migration.json, which may only SHRINK.
-// This module carried type errors when src/worker/lib became TypeScript. The
-// code is unchanged and runs identically; what changed is that tsc stopped
-// being lenient. Remove this line, fix what tsc then reports, and delete the
-// entry from that file. A contract test fails if the two disagree.
 // lib/assets.js: the ways this worker hands out a static file when the default
 // asset path would lie.
 import { wantsMarkdown } from "./http.ts";
 import { notModifiedIfFresh } from "./cache.ts";
 //
+
+type AssetOptions = {
+  notFoundBody?: BodyInit | null;
+  notFoundType?: string;
+  headers?: Record<string, string>;
+};
 // serveFreshAsset: fetch the asset under a unique query (which busts the
 // read-through asset cache), then re-emit it at the canonical URL with an honest
 // content-type and a short edge TTL. Exists because a long Cache-Control once
@@ -95,7 +96,7 @@ export async function serveMarkdownTwin(request, env, twinPath, extraHeaders = {
 // to max-age=0, because a miss under /images/* would otherwise inherit the
 // 1-year immutable rule and pin itself at the edge. This one clamp is all that
 // survives of the Pages-era content sniffing; Workers 404s are honest now.
-export async function serveAssetWith404Clamp(request, env, opts = {}) {
+export async function serveAssetWith404Clamp(request, env, opts: AssetOptions = {}) {
   const res = await env.ASSETS.fetch(request);
   if (res.status === 404) {
     try { await res.body?.cancel(); } catch {}
@@ -455,7 +456,7 @@ export async function servePrecompressedShell(request, env) {
 // arrived. Once both exist, PAGE_FAMILY_MATCH deliberately wins RFC 9842's longest-
 // match selection so an uncaptured exact snapshot cannot shadow a usable family delta.
 // Dynamic Worker pages keep the family Link but never enter this precomputed route.
-export async function serveStaticPage(request, env, opts = {}) {
+export async function serveStaticPage(request, env, opts: AssetOptions = {}) {
   const url = new URL(request.url);
   // HEAD walks the GET path far enough to answer with the SAME headers, then drops
   // the body. RFC 9110 asks a HEAD to carry the fields its GET would send, and

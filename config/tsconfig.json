@@ -20,6 +20,13 @@
     // Nothing is emitted anyway (noEmit above).
     "allowImportingTsExtensions": true,
     "moduleResolution": "bundler",
+    // Node strips these files directly in contract tests and Wrangler bundles
+    // the same source for workerd. Keep syntax inside the erasable intersection
+    // so neither path depends on a TypeScript transform the other does not run.
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "noFallthroughCasesInSwitch": true,
     // Workers globals only. With the DOM lib loaded, its CacheStorage shadows
     // Cloudflare's and every `caches.default` reads as an error.
     "lib": ["esnext"],

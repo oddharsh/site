@@ -1,8 +1,3 @@
-// @ts-nocheck — declared in config/ts-migration.json, which may only SHRINK.
-// This module carried type errors when src/worker/lib became TypeScript. The
-// code is unchanged and runs identically; what changed is that tsc stopped
-// being lenient. Remove this line, fix what tsc then reports, and delete the
-// entry from that file. A contract test fails if the two disagree.
 // tui.js — the frame renderer behind /terminal/*. Box-drawing, ANSI SGR, and the
 // width math that keeps an 80-column frame actually 80 columns wide.
 //
@@ -182,7 +177,7 @@ export function rule(w, label = "") {
 }
 
 /** `label ....... value`, the field row every pane is mostly made of. */
-export function kv(label, value, w, opts = {}) {
+export function kv(label, value, w, opts: { gutter?: number; style?: string | null } = {}) {
   const lab = String(label);
   const gutter = opts.gutter ?? 18;
   const valSpans = Array.isArray(value) ? value : [s(value ?? "—", value == null ? "dim" : opts.style || null)];
@@ -194,7 +189,7 @@ export function kv(label, value, w, opts = {}) {
  * A meter: `Classic Chrome  ▇▇▇▇▇▇▁▁▁▁  42`. Used for facet counts, where the
  * shape of the distribution is the answer and the exact number is a footnote.
  */
-export function meter(label, value, max, w, opts = {}) {
+export function meter(label, value, max, w, opts: { labelWidth?: number; labelStyle?: string | null } = {}) {
   const labW = opts.labelWidth ?? 20;
   const numW = String(max).length;
   // labW + barW + one space + numW must total exactly w, or the bars in a stack
@@ -222,7 +217,7 @@ export function table({ cols, rows, width: w = COLS, header = true }) {
   const flexW = flexCount ? Math.max(6, Math.floor((w - fixed - gaps) / flexCount)) : 0;
   const widths = cols.map((c) => c.width || flexW);
 
-  const layRow = (cells, style) => {
+  const layRow = (cells, style?) => {
     const out = [];
     cells.forEach((cell, i) => {
       const spans = Array.isArray(cell) && Array.isArray(cell[0]) ? cell
