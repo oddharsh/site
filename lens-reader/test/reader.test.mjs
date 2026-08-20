@@ -12,8 +12,33 @@
 //   here — everything that has to actually RUN.
 import test from "node:test";
 import assert from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
 import { parseHTML } from "linkedom";
 import { collectControlLabels, countControls, countWords, read, scoreExtraction, tally, toMarkdown } from "../src/reader.js";
+
+test("linkedom resolves one parser dependency generation", () => {
+  const manifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+  const parser = JSON.parse(readFileSync(new URL("../node_modules/htmlparser2/package.json", import.meta.url), "utf8"));
+
+  assert.equal(manifest.overrides?.htmlparser2, "11.0.0",
+    "removing the override restores three generations of the DOM stack and ~33 KiB gzip");
+  assert.equal(parser.version, "11.0.0", "the installed parser must honor the measured override");
+  assert.equal(
+    existsSync(new URL("../node_modules/htmlparser2/node_modules/domutils/package.json", import.meta.url)),
+    false,
+    "htmlparser2 should share linkedom's domutils generation rather than carrying another tree",
+  );
+});
+
+test("the aligned parser preserves linkedom's self-closing script serialization", () => {
+  const source = '<html><script src="./main.js" type="module"/></html>';
+  const { document } = parseHTML(source);
+  assert.equal(
+    document.documentElement.firstElementChild?.toString(),
+    '<script src="./main.js" type="module"></script>',
+    "htmlparser2 v12's raw-text parsing leaves the document close inside the script",
+  );
+});
 
 test("the focused Markdown walk covers the article vocabulary", () => {
   const md = toMarkdown("<h2>Title</h2><p>Body <strong>text</strong>.</p>");
