@@ -64,6 +64,11 @@ export const DOC_ALIASES = [
   { prose: "@oxlint/plugins", pkg: "@oxlint/plugins" },
   { prose: "minify-html", pkg: "@minify-html/node" },
   { prose: "TypeScript", pkg: "typescript" },
+  // Another entry whose prose name is the package name, for the same reason as
+  // @oxlint/plugins: nobody writes "@types/bun" in a sentence any other way. It
+  // is the type program for tools/, added 2026-08-20 with
+  // config/tsconfig.tools.json.
+  { prose: "@types/bun", pkg: "@types/bun" },
   // @noble/post-quantum sat here as the one entry whose prose name WAS the
   // package name, because it was the only package this repo shipped to a
   // visitor rather than used as a tool. It left with sig2 on 2026-08-15, so

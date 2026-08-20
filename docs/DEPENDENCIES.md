@@ -90,6 +90,23 @@ review policy and entry point for future agent runs.
   the checker can read the annotations; they add no runtime and no served byte.
   Dependabot should review TypeScript releases for new checks that could fail CI
   on unchanged code, and workers-types for binding-shape changes.
+- @types/bun 1.3.14 is the exact root pin for the SECOND type program,
+  `config/tsconfig.tools.json`, which checks `tools/`. It carries the node globals
+  as well, so it is one entry rather than two, and it declares the bun-only
+  globals the tools now use directly (HTMLRewriter among them). Types only: no
+  runtime, no served byte, same standing as workers-types above.
+
+  It exists because tools/ CANNOT be checked by the Worker's program. Point
+  tsconfig.json at both and 169 of 337 errors are `Cannot find name 'process'`:
+  node programs judged against a Workers global scope. Two programs is what
+  separates a real finding from a missing global.
+
+  **It is pinned at 1.3.14 while bun runs 1.4.0, and that gap is the release-age
+  policy working rather than an oversight.** `minimumReleaseAge: 86400` in
+  bunfig.toml refused the same-day 1.4.0 publish, so `bun add` resolved the
+  previous version. It will catch up on its own once 1.4.0 turns a day old;
+  nothing here needs the newer types today, and forcing it would mean an
+  exclude entry that outlives its reason.
 - playwright-core is a scripts-only devDep (caret-ranged, not pinned: it drives
   the locally installed Google Chrome rather than a bundled browser). Only
   `tools/photos/gen-og-cards.mjs` uses it, and only on demand; no CI job and
