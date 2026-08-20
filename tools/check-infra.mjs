@@ -60,7 +60,22 @@ const execFileP = promisify(execFile);
 // edge accepted it. The first connection is held open ~2s on purpose: TLS 1.3
 // delivers NewSessionTicket AFTER the handshake, so a connect-and-hangup saves
 // no ticket and the test reads as a false "rejected" (cost one debugging round
-// to learn). One retry on rejection, because a ticket can transiently miss.
+// to learn).
+//
+// It retries on rejection, and the SPACING is the load-bearing part rather than
+// the count. Two back-to-back attempts are close to one sample: same second,
+// same edge node, same ticket-issuance conditions, so a transient refusal fails
+// both and the zone reads as 0-RTT off. That is what happened on 2026-08-20,
+// when five concurrent CI jobs probed production at once and one job's pair of
+// attempts both missed, failing `validate` on a PR that changed a tsconfig
+// include. The same probe run 5 times from a workstation minutes later was
+// accepted 5 times.
+//
+// Cloudflare is ENTITLED to refuse early data on any given resumption, since
+// anti-replay is the whole reason 0-RTT is hedged, so a single rejection is not
+// evidence the zone setting is off. Three attempts, spaced, is: the drift is
+// reported only when every spaced sample missed, and it names the count so a
+// future failure says how much evidence is behind it.
 async function probeEarlyData(host) {
   let ossl = null;
   for (const c of [process.env.OPENSSL_BIN, "/opt/homebrew/opt/openssl@3/bin/openssl",
@@ -80,16 +95,21 @@ async function probeEarlyData(host) {
     const sess = join(dir, "sess.pem");
     const req = join(dir, "req.txt");
     await writeFile(req, `GET /favicon.ico HTTP/1.1\r\nHost: ${host}\r\nConnection: close\r\n\r\n`);
-    for (let attempt = 0; attempt < 2; attempt++) {
+    // Spacing between attempts, never before the first: a healthy zone answers on
+    // attempt 1 and pays none of this. Only a probe already heading for a drift
+    // report spends the extra seconds, which is the run where being right matters.
+    const BACKOFF_MS = [0, 1500, 4000];
+    for (let attempt = 0; attempt < BACKOFF_MS.length; attempt++) {
+      if (BACKOFF_MS[attempt]) await new Promise((r) => setTimeout(r, BACKOFF_MS[attempt]));
       await execFileP("sh", ["-c",
         `{ cat "${req}"; sleep 2; } | "${ossl}" s_client -connect "${host}:443" -servername "${host}" -sess_out "${sess}" >/dev/null 2>&1`,
       ], { timeout: 20000 }).catch(() => {});
       const out = await execFileP("sh", ["-c",
         `"${ossl}" s_client -connect "${host}:443" -servername "${host}" -sess_in "${sess}" -early_data "${req}" </dev/null 2>&1`,
       ], { timeout: 20000 }).catch((e) => ({ stdout: `${e.stdout || ""}${e.stderr || ""}` }));
-      if (/early data was accepted/i.test(out.stdout || "")) return { accepted: true };
+      if (/early data was accepted/i.test(out.stdout || "")) return { accepted: true, attempts: attempt + 1 };
     }
-    return { accepted: false };
+    return { accepted: false, attempts: BACKOFF_MS.length };
   } finally {
     await rm(dir, { recursive: true, force: true }).catch(() => {});
   }
@@ -600,7 +620,7 @@ async function checkEdge(infra) {
         const r = await probeEarlyData(new URL(url).hostname);
         if (r.skip) warn(`edge check ${check.id} skipped: ${r.skip}`);
         else if (r.accepted) pass(`edge ${check.id}: TLS early data accepted (0-RTT on)`);
-        else drift(`${check.id}: TLS early data rejected on a fresh resumption — ${check.why.split(".")[0]}`);
+        else drift(`${check.id}: TLS early data rejected on ${r.attempts} spaced resumptions — ${check.why.split(".")[0]}`);
         continue;
       }
 
