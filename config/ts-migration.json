@@ -13,7 +13,7 @@
     "treated parameters as optional and inferred object shapes loosely; TypeScript",
     "made those call-arity and unknown-property assumptions visible.",
     "",
-    "49 of 69 Worker modules are fully checked. The other 20 are named below; the",
+    "57 of 69 Worker modules are fully checked. The other 12 are named below; the",
     "answer was not to relax the compiler for the whole directory.",
     "",
     "ENFORCED by a contract test: the set of files carrying @ts-nocheck must equal",
@@ -24,9 +24,9 @@
   "generated_on": "2026-08-20",
   "totals": {
     "worker_modules": 69,
-    "quarantined": 20,
-    "fully_checked": 49,
-    "errors_at_conversion": 96
+    "quarantined": 12,
+    "fully_checked": 57,
+    "errors_at_conversion": 51
   },
   "modules": {
     "src/worker/agent-ready.ts": 1,
@@ -38,14 +38,6 @@
     "src/worker/lens-tools.ts": 7,
     "src/worker/lens-wire.ts": 3,
     "src/worker/lens.ts": 11,
-    "src/worker/lib/assets.ts": 7,
-    "src/worker/lib/botauth.ts": 6,
-    "src/worker/lib/cache.ts": 7,
-    "src/worker/lib/crawl.ts": 3,
-    "src/worker/lib/doors.ts": 12,
-    "src/worker/lib/mcp-tools.ts": 2,
-    "src/worker/lib/security.ts": 3,
-    "src/worker/lib/tui.ts": 5,
     "src/worker/mcp.ts": 4,
     "src/worker/rn.ts": 7,
     "src/worker/webmention-send.ts": 5

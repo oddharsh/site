@@ -1,8 +1,3 @@
-// @ts-nocheck — declared in config/ts-migration.json, which may only SHRINK.
-// This module carried type errors when src/worker/lib became TypeScript. The
-// code is unchanged and runs identically; what changed is that tsc stopped
-// being lenient. Remove this line, fix what tsc then reports, and delete the
-// entry from that file. A contract test fails if the two disagree.
 import { isCanonicalHost } from "./const.ts";
 import { wantsMarkdown } from "./http.ts";
 
@@ -19,6 +14,15 @@ import { wantsMarkdown } from "./http.ts";
 //   front of these routes, so a Workers Cache hit skips the worker entirely;
 //   this fallback still covers local dev, internal self-dispatch, and a miss
 //   where the per-colo response is already warm.
+
+type SwrOptions<T> = {
+  type?: "text" | "json" | "arrayBuffer" | "stream";
+  freshKey?: string;
+  isValid?: (value: T | null) => boolean;
+  shouldStore?: (value: T | null) => boolean;
+  buildOnMiss?: boolean;
+  cacheTtl?: number;
+};
 
 // opts.cacheTtl (seconds, KV floor 30) keeps the value cached at the colo that
 // read it. Without it KV's default is 60s, and this site's traffic is thin
@@ -37,7 +41,7 @@ import { wantsMarkdown } from "./http.ts";
 //     stretches to ttl + cacheTtl, and a lapsed sentinel reads as absent for up
 //     to cacheTtl, so a colo can fire an extra background rebuild or two before
 //     its own write settles. Both are bounded; neither touches the response.
-export async function swrKV(env, ctx, key, ttl, buildFn, opts = {}) {
+export async function swrKV<T>(env, ctx, key, ttl, buildFn: () => T | Promise<T>, opts: SwrOptions<T> = {}): Promise<T | null> {
   const kv = env && env.RN_KV;
   const type = opts.type || "json";
   const freshKey = opts.freshKey || `${key}:fresh`;
@@ -46,7 +50,7 @@ export async function swrKV(env, ctx, key, ttl, buildFn, opts = {}) {
   const buildOnMiss = opts.buildOnMiss !== false;
   const cacheTtl = opts.cacheTtl;
 
-  const store = async (value) => {
+  const store = async (value: T) => {
     if (!kv || !shouldStore(value)) return value;
     const body = type === "json" ? JSON.stringify(value) : value;
     await Promise.all([
@@ -57,7 +61,7 @@ export async function swrKV(env, ctx, key, ttl, buildFn, opts = {}) {
   };
 
   if (kv) {
-    let value = null, fresh = null;
+    let value: T | null = null, fresh = null;
     try {
       [value, fresh] = await Promise.all([
         kv.get(key, cacheTtl ? { type, cacheTtl } : type),
@@ -115,7 +119,7 @@ export function deadline(promise, ms, fallback, onTimeout) {
   ]);
 }
 
-export async function deleteSWRKV(env, key, opts = {}) {
+export async function deleteSWRKV(env, key, opts: { freshKey?: string } = {}) {
   if (!env || !env.RN_KV) return;
   const freshKey = opts.freshKey || `${key}:fresh`;
   await Promise.all([

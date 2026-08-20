@@ -1,8 +1,3 @@
-// @ts-nocheck — declared in config/ts-migration.json, which may only SHRINK.
-// This module carried type errors when src/worker/lib became TypeScript. The
-// code is unchanged and runs identically; what changed is that tsc stopped
-// being lenient. Remove this line, fix what tsc then reports, and delete the
-// entry from that file. A contract test fails if the two disagree.
 // lib/doors.js — read what is actually BEHIND another origin's agent doors.
 //
 // /lens knocks: it reports that a site has an llms.txt, that /mcp answers
@@ -139,7 +134,7 @@ export function wantsProtocolHeader(payload) {
  * The scheme is read from WWW-Authenticate when the server sends one, because
  * "needs OAuth" tells a reader what to go and get while "HTTP 401" does not.
  */
-export function gatedDoor(res) {
+export function gatedDoor(res): { ok: false; unreadable: true; gated: true; detail: string } {
   const challenge = String((res.headers && res.headers.get("www-authenticate")) || "").trim();
   const how = /oauth|resource_metadata/i.test(challenge)
     ? "OAuth"
@@ -210,7 +205,7 @@ export function parseMcpBody(text, contentType) {
  * catalogue as prose and a schema would be dead weight in a terminal frame. The
  * Tools lens turns it on: a schema is the only thing a form can be built from.
  */
-export async function foreignMcpTools(origin, env, opts = {}) {
+export async function foreignMcpTools(origin, env, opts: { schemas?: boolean } = {}) {
   const url = origin.replace(/\/+$/, "") + "/mcp";
   // Both `_meta` keys are REQUIRED on a modern request. `clientCapabilities` is
   // empty because this probe reads a catalogue and offers the server nothing:
@@ -299,7 +294,7 @@ export async function foreignMcpTools(origin, env, opts = {}) {
     if (res.status === 401 || res.status === 403) return gatedDoor(res);
 
     let parsed = await read(res);
-    if (parsed.over) return { ok: false, unreadable: true, detail: `catalogue over ${CATALOG_CAP / 1024} KB — not read` };
+    if ("over" in parsed) return { ok: false, unreadable: true, detail: `catalogue over ${CATALOG_CAP / 1024} KB — not read` };
 
     // Some servers require the revision as a HEADER as well as in `_meta` and
     // refuse without it (mcp.svelte.dev: -32020 "MCP-Protocol-Version is
@@ -317,7 +312,7 @@ export async function foreignMcpTools(origin, env, opts = {}) {
       res = sent.res;
       if (res.status === 401 || res.status === 403) return gatedDoor(res);
       parsed = await read(res);
-      if (parsed.over) return { ok: false, unreadable: true, detail: `catalogue over ${CATALOG_CAP / 1024} KB — not read` };
+      if ("over" in parsed) return { ok: false, unreadable: true, detail: `catalogue over ${CATALOG_CAP / 1024} KB — not read` };
     }
 
     if (!parsed.ok) return { ok: false, detail: parsed.detail };
@@ -333,19 +328,28 @@ export async function foreignMcpTools(origin, env, opts = {}) {
       ok: true,
       count: tools.length,
       tools: tools.slice(0, DOOR_LIMITS.tools).map((tool) => {
-        const row = {
-          name: String(tool?.name || "").slice(0, 60),
-          description: trim(tool?.description, DOOR_LIMITS.toolDesc),
+        const toolRecord = asRecord(tool) || {};
+        const row: {
+          name: string;
+          description: string;
+          inputSchema?: unknown;
+          schemaOversize?: number;
+          title?: string;
+          annotations?: Record<string, unknown>;
+        } = {
+          name: String(toolRecord.name || "").slice(0, 60),
+          description: trim(toolRecord.description, DOOR_LIMITS.toolDesc),
         };
         if (!opts.schemas) return row;
-        const capped = capSchema(tool?.inputSchema);
+        const capped = capSchema(toolRecord.inputSchema);
         row.inputSchema = capped.schema;
         if (capped.oversize) row.schemaOversize = capped.bytes;
-        if (tool?.title) row.title = String(tool.title).slice(0, 80);
+        if (toolRecord.title) row.title = String(toolRecord.title).slice(0, 80);
         // Annotations are forwarded as the server WROTE them, including the
         // absence of any. The pane labels them as claims; normalising a missing
         // set into a default here would manufacture a claim nobody made.
-        if (asRecord(tool?.annotations)) row.annotations = tool.annotations;
+        const annotations = asRecord(toolRecord.annotations);
+        if (annotations) row.annotations = annotations;
         return row;
       }),
     };
@@ -380,13 +384,24 @@ export async function foreignMcpTools(origin, env, opts = {}) {
 const ASK_CAP = 512 * 1024;
 const ASK_FIELDS = ["url", "name", "site", "score", "description", "schema_object"];
 
+export type ForeignNlwebProbe =
+  | { ok: false; unreadable?: boolean; gated?: boolean; detail: string }
+  | {
+      ok: true;
+      total: number;
+      framing: string;
+      dialect: string;
+      coverage: Record<string, number>;
+      [field: string]: unknown;
+    };
+
 /**
  * Read one foreign origin's /ask endpoint.
  *
  * Returns the same three-state shape as foreignMcpTools, for the same reason:
  * shut (there is no endpoint), unreadable (we never got to look), or ok.
  */
-export async function foreignNlwebAsk(origin, env, opts = {}) {
+export async function foreignNlwebAsk(origin, env, opts: { query?: string } = {}): Promise<ForeignNlwebProbe> {
   const base = origin.replace(/\/+$/, "") + "/ask";
   const query = String(opts.query || "").trim().slice(0, 200) || "what is this site about";
   const url = `${base}?query=${encodeURIComponent(query)}&streaming=0&mode=list`;
@@ -543,7 +558,15 @@ function gradeAskResults(parsed) {
     events: parsed.events,
     results: parsed.results.slice(0, DOOR_LIMITS.askResults).map((raw) => {
       const item = asRecord(raw) || {};
-      const row = {
+      const row: {
+        url?: string;
+        name: string;
+        site?: string;
+        description: string;
+        score?: number;
+        schema_object?: Record<string, unknown>;
+        schemaOversize?: number;
+      } = {
         url: asText(item.url)?.slice(0, 300),
         name: trim(item.name, DOOR_LIMITS.askText),
         site: asText(item.site)?.slice(0, 80),
@@ -641,4 +664,3 @@ export async function readDoors(target, env) {
     mcp,
   };
 }
-

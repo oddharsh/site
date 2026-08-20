@@ -1,12 +1,8 @@
-// @ts-nocheck — declared in config/ts-migration.json, which may only SHRINK.
-// This module carried type errors when src/worker/lib became TypeScript. The
-// code is unchanged and runs identically; what changed is that tsc stopped
-// being lenient. Remove this line, fix what tsc then reports, and delete the
-// entry from that file. A contract test fails if the two disagree.
 // lib/crawl.js — bounded, identified document reads shared by AadharshBot
 // utilities. This module never stores a response body; callers receive only the
 // bounded text needed to extract evidence plus a digest of the bytes observed.
 import { signedFetch } from "./botauth.ts";
+import type { BotRequestOptions } from "./botauth.ts";
 import { extractMeta, extractTitle } from "./http.ts";
 
 export const DEFAULT_CRAWL_BODY_CAP = 200 * 1024;
@@ -208,7 +204,7 @@ export async function sha256Hex(value) {
 // Fetch one bounded HTML-ish document as AadharshBot. The body is deliberately
 // returned only for the current parser; persistence callers should keep the
 // digest and normalized signals, not the raw third-party text.
-export async function crawlDocument(targetUrl, env, opts = {}) {
+export async function crawlDocument(targetUrl, env, opts: BotRequestOptions & { maxBytes?: number; timeoutMs?: number } = {}) {
   const {
     maxBytes = DEFAULT_CRAWL_BODY_CAP,
     timeoutMs = 4000,
