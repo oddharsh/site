@@ -207,7 +207,7 @@ try {
 // path: an older version did that after the source was renamed and unlinked the
 // real tracked file before the test runner started.
 {
-  const out = run(bun, ["test", "tools/contract-tests.test.mjs"]);
+  const out = run(bun, ["test", "tools/"]);
   const text = `${out.stdout}\n${out.stderr}`;
   const pass = Number(text.match(/(\d+) pass/)?.[1] ?? 0);
   const fail = Number(text.match(/(\d+) fail/)?.[1] ?? -1);
