@@ -16,7 +16,7 @@
 // file and directory symlinks, and an edit to a symlink TARGET is picked up
 // live — measured 2026-08-19 against wrangler 4.123.0 / workerd 1.20260811.1,
 // including wrangler noticing the change and reloading on its own. So the farm
-// is built once at `pnpm run dev` startup and then gets out of the way; there is
+// is built once at `bun run dev` startup and then gets out of the way; there is
 // no watcher, no second build path, and no dependency.
 //
 // THE MERGE RULE, and the one thing worth knowing before adding a page:
@@ -45,7 +45,7 @@ export const ASSET_ROOTS = ["public", "src/pages", "src/content", "src/client", 
 // histograms.json instead, so copying whatever is on the local disk would make
 // the tree depend on pipeline leftovers. Dev derives nothing, so /images/meta/*
 // is a build-only surface here — the same standing as the generated /lens shell
-// and /run, which CLAUDE.md already records as 404ing under `pnpm run dev`. The
+// and /run, which CLAUDE.md already records as 404ing under `bun run dev`. The
 // tooltip's primary tier is /images/exif.json, which is committed and staged.
 const SKIP = new Set(["public/images/meta"]);
 

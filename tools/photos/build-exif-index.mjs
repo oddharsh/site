@@ -22,7 +22,7 @@
 // text from the index immediately and fetches the one histogram it needs when a
 // hover actually happens.
 //
-// Run by extract-photo-metadata.sh (so `pnpm run photos` keeps it current) and
+// Run by extract-photo-metadata.sh (so `bun run photos` keeps it current) and
 // verified by check-photo-pipeline.mjs, which fails on a stale or partial index.
 //
 // images/meta/ IS A LOCAL PIPELINE ARTIFACT as of 2026-08-17, not a committed

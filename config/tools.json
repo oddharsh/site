@@ -1,7 +1,7 @@
 {
   "$comment": [
     "The external binaries the photo and encoding pipelines shell out to, declared",
-    "once so `pnpm run tools:check` can verify them. NOT in infra.json on purpose:",
+    "once so `bun run tools:check` can verify them. NOT in infra.json on purpose:",
     "that file declares Cloudflare and GitHub state and `infra:check` diffs it",
     "against those APIs, while nothing here is remote and nothing here has an API.",
     "Mixing them would give one file two unrelated contracts.",

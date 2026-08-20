@@ -7,7 +7,7 @@
 // boots this repo's Worker in-process on a real loopback port, so the same table
 // can gate a PR instead of only auditing a deployment.
 //
-//   pnpm run routes:check                 # boot .build/public, sweep, exit non-zero on failure
+//   bun run routes:check                 # boot .build/public, sweep, exit non-zero on failure
 //
 // It points at wrangler.jsonc, NOT wrangler.dev.jsonc, deliberately: that config
 // carries `build.command`, so the harness runs build.mjs itself and serves the
@@ -47,7 +47,7 @@ const args = process.argv.slice(2);
 // Workstation-only, and CI must never pass it. Remote bindings stand up a proxy
 // Worker in the account, which takes a token that can write; the read-only token
 // CI holds cannot do it, and widening that token is the one thing this repo's
-// release design will not trade away. `pnpm run routes:check` stays the CI gate
+// release design will not trade away. `bun run routes:check` stays the CI gate
 // and stays honest about what it does not see.
 const remote = args.includes("--remote");
 const positional = args.find((a) => !a.startsWith("--"));

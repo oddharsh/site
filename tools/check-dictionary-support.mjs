@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // check-dictionary-support.mjs — is shared-dictionary compression OPERATIONAL, per
-// surface class, against PRODUCTION? (pnpm run dcz:check)
+// surface class, against PRODUCTION? (bun run dcz:check)
 //
 // Synthesizes Available-Dictionary from the committed dictionary sets, exactly the way a
 // returning Chromium visitor would send it, and asserts the wire answer. Local builds
@@ -55,7 +55,7 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
 // absent while a-dict still held the three candidates from #178 on 2026-07-30.
 //
 // Bases with no a-dict entry at all are SKIPPED, not failed: a newly shipped asset cannot
-// have a dictionary until it has been served once, and `pnpm run shell:roll` adopts it on the
+// have a dictionary until it has been served once, and `bun run shell:roll` adopts it on the
 // next roll. What this catches is a base that HAS a history and whose live bytes are missing
 // from it, which is the drift that matters.
 //
@@ -126,7 +126,7 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
   const skipped = [...refs].filter(([, base]) => !bases.has(base)).map(([n]) => n);
   report("live shell is covered by a-dict", missing.length === 0,
          missing.length
-           ? `run \`pnpm run shell:roll\` from the DEPLOYED commit. Uncovered: ${missing.join(", ")}`
+           ? `run \`bun run shell:roll\` from the DEPLOYED commit. Uncovered: ${missing.join(", ")}`
            : `${tracked.length} live asset(s) present in a-dict${skipped.length ? `; ${skipped.length} untracked base(s) skipped: ${skipped.join(", ")}` : ""}`);
 }
 
@@ -212,7 +212,7 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
     report("committed snapshots are WIRE bytes", unheld.length === 0,
            unheld.length === 0
              ? `every script the live page loads appears in a snapshot (${candidates.length} candidates)`
-             : `no snapshot carries ${unheld.join(", ")} — an edge feature is rewriting HTML after the Worker, so re-run pnpm run shell:roll (it reads production)`);
+             : `no snapshot carries ${unheld.join(", ")} — an edge feature is rewriting HTML after the Worker, so re-run bun run shell:roll (it reads production)`);
   }
 }
 // 3. svg — must NOT offer a dictionary (the #119 rule)

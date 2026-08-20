@@ -38,7 +38,7 @@ For every input, the pipeline:
 3. content-addresses those three tiers under `public/i/`;
 4. regenerates nullable EXIF/Fuji-recipe metadata;
 5. bakes four 64-bin RGB/luminance histograms from the shipped hashed JPG;
-6. validates the complete artifact graph with `pnpm run photos:check`;
+6. validates the complete artifact graph with `bun run photos:check`;
 7. opens a PR containing the public files.
 
 After reviewing the generated diff, merge through the normal release path.
@@ -58,5 +58,5 @@ Homebrew formulas (mozjpeg for `jpegtran`, libavif for `avifenc`) stay outside D
 To validate without rerunning ingestion:
 
 ```bash
-pnpm run photos:check
+bun run photos:check
 ```

@@ -47,7 +47,7 @@
 // error, and the SVG this feeds is 32 units tall, so one level is half a pixel.
 // Decoding is charCodeAt minus 63, with no atob, no Buffer and no typed array.
 //
-// Run by extract-photo-metadata.sh so `pnpm run photos` keeps it current, and
+// Run by extract-photo-metadata.sh so `bun run photos` keeps it current, and
 // rebuilt by check-photo-pipeline.mjs, which fails on any drift.
 //
 // images/meta/ IS A LOCAL PIPELINE ARTIFACT as of 2026-08-17, not a committed

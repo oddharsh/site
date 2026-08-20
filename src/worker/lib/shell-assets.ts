@@ -20,7 +20,7 @@
 // build.mjs OVERWRITES the SHELL_ASSETS line below in the staged .build/ copy
 // with the immutable /a/<name>.<hash8> URLs (matching the refs it rewrites into
 // the HTML). The values here are the readable-dev fallbacks: wrangler.dev.jsonc
-// serves the unhashed files, so `pnpm run dev` preloads exactly the URLs its
+// serves the unhashed files, so `bun run dev` preloads exactly the URLs its
 // (un-rewritten) HTML references. Keep the `// build:shell-assets` marker.
 export const SHELL_ASSETS = { luna: "/luna.css", nav: "/nav.js" }; // build:shell-assets
 // Empty in readable local development: the page dictionary is derived from the

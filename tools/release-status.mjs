@@ -8,7 +8,7 @@
 // none of them was visible in one place, so the honest answer to "what do I run
 // now" was to remember six commands and their order.
 //
-//   pnpm run release
+//   bun run release
 //
 // READ-ONLY, always. It runs git fetch and some list calls and changes nothing,
 // so it is safe to run at any point, including in the middle of a ramp. Every
@@ -120,11 +120,11 @@ if (dirty) {
 } else if (prodSha && mainSha && prodSha !== mainSha) {
   console.log(`  ${bold("next")}  wait for CI to promote main to production (or re-run the Promote workflow)`);
 } else if (newest && !newestLive) {
-  console.log(`  ${bold("next")}  pnpm run deploy:promote          ${dim("ramp the newest version 10 -> 50 -> 100")}`);
+  console.log(`  ${bold("next")}  bun run deploy:promote          ${dim("ramp the newest version 10 -> 50 -> 100")}`);
 } else if (newestLive && newestLive.pct < 100) {
-  console.log(`  ${bold("next")}  pnpm run deploy:promote          ${dim(`finish the ramp from ${newestLive.pct}%`)}`);
+  console.log(`  ${bold("next")}  bun run deploy:promote          ${dim(`finish the ramp from ${newestLive.pct}%`)}`);
 } else if (staged.length) {
-  console.log(`  ${bold("next")}  pnpm run deploy:promote          ${dim("at 100% already; this records the staged changelog rows in D1")}`);
+  console.log(`  ${bold("next")}  bun run deploy:promote          ${dim("at 100% already; this records the staged changelog rows in D1")}`);
 } else {
   console.log(`  ${bold("next")}  nothing. main is promoted, the newest version is fully live, the log is recorded.`);
 }

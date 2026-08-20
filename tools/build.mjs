@@ -15,7 +15,7 @@
 // still reads as hand-written CSS, and the line says where it came from.
 //
 //   node tools/build.mjs                                   # stage .build/
-//   pnpm run deploy:direct                                   # build + wrangler deploy -c .build/wrangler.jsonc
+//   bun run deploy:direct                                   # build + wrangler deploy -c .build/wrangler.jsonc
 //
 // wrangler resolves `main` and `assets.directory` relative to the config file, so the
 // root wrangler.jsonc is copied verbatim into .build/ and just works against the copy.
@@ -133,7 +133,7 @@ const servedFiles = async (filter) => {
 
 // ── deploy-time invariant tripwires (explore-unknowns, phase A) ──────────────
 // Silent-failure classes this codebase has hit or is one careless edit from
-// hitting. They live here because build.mjs runs on every `pnpm run deploy:direct`, the
+// hitting. They live here because build.mjs runs on every `bun run deploy:direct`, the
 // one reliable path (Workers Builds CI has silently skipped pushes). The three
 // deterministic checks HARD-BLOCK the deploy; the two that compare derived or
 // duplicated text only WARN (exit 0), because a false positive on the one
@@ -245,20 +245,20 @@ async function checkInvariants() {
   try {
     const artifacts = renderDesktopArtifacts();
     if (await read("src/worker/lib/desktop.ts") !== artifacts.moduleSource) {
-      hard.push("lib/desktop.js drifted from shell-data.mjs/site-manifest.json — run pnpm run gen:shell");
+      hard.push("lib/desktop.js drifted from shell-data.mjs/site-manifest.json — run bun run gen:shell");
     }
     if (await read("public/icons.svg") !== artifacts.sprite) {
-      hard.push("icons.svg drifted from shell-data.mjs — run pnpm run gen:shell");
+      hard.push("icons.svg drifted from shell-data.mjs — run bun run gen:shell");
     }
     for (const [name, svg] of Object.entries(artifacts.favicons)) {
       if (await read(`public/section-icons/${name}.svg`) !== svg) {
-        hard.push(`section-icons/${name}.svg drifted from shell-data.mjs — run pnpm run gen:shell`);
+        hard.push(`section-icons/${name}.svg drifted from shell-data.mjs — run bun run gen:shell`);
       }
     }
     for (const file of staticShellPages()) {
       const source = await read(file);
       if (patchStaticShell(source, artifacts) !== source) {
-        hard.push(`${file}: static desktop partial drifted — run pnpm run gen:shell`);
+        hard.push(`${file}: static desktop partial drifted — run bun run gen:shell`);
       }
     }
   } catch (e) { hard.push(`desktop generator freshness check could not run: ${e.message}`); }
@@ -358,13 +358,13 @@ async function checkInvariants() {
     const nav = await read("src/client/nav-run.js");
     const desktop = await read("src/worker/lib/desktop.ts");
 
-    // 8a — generated projections match `pnpm run gen:manifest` output exactly.
+    // 8a — generated projections match `bun run gen:manifest` output exactly.
     const modActual = (await read("src/worker/lib/site-manifest.ts")).trim();
-    if (modActual !== workerModule(surfaces).trim()) hard.push("lib/site-manifest.js drifted from site-manifest.json — run pnpm run gen:manifest");
+    if (modActual !== workerModule(surfaces).trim()) hard.push("lib/site-manifest.js drifted from site-manifest.json — run bun run gen:manifest");
     for (const [section, marker] of [["garage", "garage-pages"], ["lwe", "lwe-pages"]]) {
-      if (readFenceBody(nav, marker) !== navFenceBody(surfaces, section)) hard.push(`nav-run.js generated:${marker} drifted from site-manifest.json — run pnpm run gen:manifest`);
+      if (readFenceBody(nav, marker) !== navFenceBody(surfaces, section)) hard.push(`nav-run.js generated:${marker} drifted from site-manifest.json — run bun run gen:manifest`);
     }
-    if (readFenceBody(nav, "run-profiles") !== runProfilesBody()) hard.push("nav-run.js profiles drifted from shell-data.mjs — run pnpm run gen:manifest");
+    if (readFenceBody(nav, "run-profiles") !== runProfilesBody()) hard.push("nav-run.js profiles drifted from shell-data.mjs — run bun run gen:manifest");
 
     // parse the live surfaces out of each hand-authored consumer.
     const navPagesBlock = (nav.match(/var PAGES = \[([\s\S]*?)\n {2}\];/) || [, ""])[1];
@@ -959,7 +959,7 @@ if (inlineProbe.includes("/* probe */") ||
   // A silent {} here would ship a grid whose tiles all fall back to the per-hover
   // fetch, which is the pre-#440 behaviour and looks like nothing is wrong.
   const histed = twelve.filter((p) => histograms[p.stem]).length;
-  if (histed !== 12) throw new Error(`homepage bake: ${histed} of 12 baked tiles carry a histogram — run pnpm run photos or node public/scripts/build-histogram-index.mjs`);
+  if (histed !== 12) throw new Error(`homepage bake: ${histed} of 12 baked tiles carry a histogram — run bun run photos or node public/scripts/build-histogram-index.mjs`);
   const slots = grid.renderPhotoSlots(twelve, altMap, { histograms });
 
   let html = await readFile(`${OUT}/public/index.html`, "utf8");
@@ -1022,14 +1022,14 @@ if (inlineProbe.includes("/* probe */") ||
 // 1f) /updates and /restore as deploy-time documents.
 //
 // The only two dynamic pages whose data changes solely AT DEPLOY: bump-version.sh
-// inserts the checkpoint row moments before `pnpm run deploy:direct`, and nothing else
+// inserts the checkpoint row moments before `bun run deploy:direct`, and nothing else
 // writes that table. So baking them costs no freshness at all — unlike /reading
 // (6h Curius refresh) or /around (30m crawl), whose feeds move on their own and
 // which are deliberately left dynamic for exactly that reason.
 //
 // D1 remains the source of truth. checkpoints.json is its committed projection,
 // written by bump-version.sh right after a successful insert, and
-// `pnpm run checkpoints:check` re-reads D1 and fails on drift.
+// `bun run checkpoints:check` re-reads D1 and fails on drift.
 {
   const nonce = `?build=${BUILD_NONCE}`;
   const updates = await import(pathToFileURL(resolve(OUT, "src/worker/updates.ts")).href + nonce);
@@ -1873,7 +1873,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   // browser, not Node.
   //
   // Consequences worth naming: no zstd CLI in the deploy path, no committed .dcz artifacts,
-  // no `pnpm run shell:deltas` step to forget, and no staleness tripwire needed at all,
+  // no `bun run shell:deltas` step to forget, and no staleness tripwire needed at all,
   // because a delta is now a pure function of bytes this build just produced.
   //
   // Still committed, and unavoidably so: src/dict/a-dict/, the DICTIONARY set. A dictionary
@@ -2087,7 +2087,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
       + lines.join("\n")
       + (dangling.size > 12 ? `\n  … and ${dangling.size - 12} more` : "")
       + "\n  A moved or renamed page leaves its inbound links behind. Fix the href, or"
-      + "\n  register the new path in config/site-manifest.json (pnpm run gen:manifest).",
+      + "\n  register the new path in config/site-manifest.json (bun run gen:manifest).",
     );
   }
   console.log(`links: ${refs} internal refs across ${docs.length} documents all resolve`);
@@ -2359,4 +2359,4 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     : `page-delta: none (no dictionary candidate beat plain brotli)`);
 }
 
-console.log(`staged ${OUT}/ - deploy with: wrangler deploy (self-builds via build.command) or pnpm run deploy:direct`);
+console.log(`staged ${OUT}/ - deploy with: wrangler deploy (self-builds via build.command) or bun run deploy:direct`);

@@ -21,7 +21,7 @@
   // split, so no single one of them can be pointed at: this field named `www`
   // for a day after that split, and `www` no longer existed, so dev did not
   // start at all. `.dev-assets` is a SYMLINK FARM over those five, rebuilt by
-  // tools/dev-stage.mjs which `pnpm run dev` runs first. It is gitignored and
+  // tools/dev-stage.mjs which `bun run dev` runs first. It is gitignored and
   // costs no copy.
   //
   // The readable loop survives intact, which is the whole reason for a farm
@@ -33,12 +33,12 @@
   // those are whole-directory symlinks. dev-stage.mjs's header has the rule.
   "name": "aadhar-sh",
   // Same pin as wrangler.jsonc, and NOT a fifth difference between the two —
-  // it is one of the values that must match. Plain `pnpm run dev` is local and
-  // never needs an account, but `pnpm run dev:remote` reaches production
+  // it is one of the values that must match. Plain `bun run dev` is local and
+  // never needs an account, but `bun run dev:remote` reaches production
   // bindings through this config, so it hits the same "more than one account
   // available" wall that wrangler.jsonc's comment describes.
   //
-  // `pnpm run routes:check:remote` does NOT, and this comment said it did until
+  // `bun run routes:check:remote` does NOT, and this comment said it did until
   // 2026-08-19. check-routes-harness.mjs defaults its config to ./wrangler.jsonc
   // and the package script passes no positional, so the remote oracle derives
   // its twin from the PRODUCTION config and self-builds. That is worth keeping
@@ -140,7 +140,7 @@
     { "binding": "RESTORE_DB", "database_name": "aadhar-restore", "database_id": "88c8daf1-3a36-4f8e-a2ad-dba8a74e1b9f" },
     { "binding": "SERENDIPITY_DB", "database_name": "serendipity", "database_id": "d3aa3215-17c3-4389-b224-cf465ddbb786" },
     // webmentions (see wrangler.jsonc). Local dev gets its own local D1 file from
-    // this name, so /inbox and the endpoint work end-to-end under `pnpm run dev`
+    // this name, so /inbox and the endpoint work end-to-end under `bun run dev`
     // without touching the remote database.
     { "binding": "SOCIAL_DB", "database_name": "aadhar-social", "database_id": "b3ab51c4-da04-40ec-9b36-c7e06611f4ab" }
   ],

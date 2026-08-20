@@ -21,7 +21,7 @@ routes = [
 binding = "AI"
 
 # Vectorize — the passage index. create with:
-#   pnpm exec wrangler vectorize create lwe-passages --dimensions=768 --metric=cosine
+#   bun run wrangler vectorize create lwe-passages --dimensions=768 --metric=cosine
 [[vectorize]]
 binding = "VECTORIZE"
 index_name = "lwe-passages"

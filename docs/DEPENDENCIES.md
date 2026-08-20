@@ -42,7 +42,7 @@ review policy and entry point for future agent runs.
   runtime dependency. Dependabot should review their release notes for output,
   target-browser, and native-install changes.
 - Oxlint 1.79.0 and oxlint-tsgolint 7.0.2001 are exact root pins for
-  `pnpm run lint`, a required step in `validate`. The tsgolint version tracks the
+  `bun run lint`, a required step in `validate`. The tsgolint version tracks the
   TypeScript pin below on purpose: TypeScript 7.0 ships no stable programmatic
   API, so typescript-eslint cannot run on it, and tsgolint is the door oxlint
   uses to reach the same type-aware rules. Dependabot should review oxlint
@@ -82,7 +82,7 @@ review policy and entry point for future agent runs.
 - minify-html 0.18.1 is the exact root pin for the deploy-time HTML pass over
   `index.html` and the worker shells.
 - TypeScript 7.0.2 and @cloudflare/workers-types are exact root pins for
-  `pnpm run typecheck`, which runs `tsc --noEmit` over JSDoc-annotated JavaScript.
+  `bun run typecheck`, which runs `tsc --noEmit` over JSDoc-annotated JavaScript.
   **Nothing is compiled and no source is converted.** The site stays JavaScript:
   types erase at build time, so workerd runs identical bytes either way, and a
   conversion would cost the buildless authoring, the honest View Source, and the
@@ -108,7 +108,7 @@ review policy and entry point for future agent runs.
   request against a 10ms CPU budget, which was taking down the playlist scrape
   and `/lens`. `/garage/pqc` carries the measurements and the retirement note.
 - The root workspace lockfile is authoritative; workspace-local Wrangler pins
-  are rejected by `pnpm run check-wrangler`.
+  are rejected by `bun run check-wrangler`.
 
 ## Outside the root manifest
 
@@ -162,7 +162,7 @@ the reason, rather than written here with the caret quietly dropped.
 - **`tools/photos/zenc/`** pins `zenjpeg` 0.8.4, `image` and `serde_json` through Cargo. zenjpeg is
   the production JPEG thumbnail encoder, so a bump changes the BYTES of every
   photo re-encoded after it. Nothing re-encodes automatically, so the risk is
-  deferred rather than absent: the next `pnpm run photos` run mints new
+  deferred rather than absent: the next `bun run photos` run mints new
   content-hashed URLs. Read its releases for encoder output changes, and treat
   a quality or scan-search change as a reason to re-measure rather than to
   trust the version number.

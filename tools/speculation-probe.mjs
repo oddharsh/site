@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // speculation-probe.mjs — does a speculation rule actually fetch anything?
 //
-//   pnpm run dev            # in another shell, then
-//   BASE=http://localhost:8787 pnpm run speculation:probe
+//   bun run dev            # in another shell, then
+//   BASE=http://localhost:8787 bun run speculation:probe
 //
 // Written to settle whether the eager /garage/* + /lwe/* prefetch rule earned its
 // place (#338). It did not: zero documents when /lwe offered it 12 matching
