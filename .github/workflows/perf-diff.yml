@@ -20,11 +20,23 @@ on:
     # Wire size is a function of the served tree and the things that transform
     # it. A README edit or a new photo cannot move a byte the browser downloads,
     # and a job that runs anyway teaches people its result is noise.
+    #
+    # THIS LIST NAMED `scripts/**` AND ONLY `public/**` UNTIL 2026-08-20, which
+    # is the 2026-08-18 layout split arriving here two days late and reading as
+    # a job nobody had broken. `scripts/` merged into `tools/`, so the entry
+    # matched nothing and a change to build.mjs stopped triggering the diff;
+    # every HTML document moved to `src/pages/` and the client assets to
+    # `src/client/` + `src/styles/`, so the changes that move the MOST wire
+    # bytes stopped triggering it too. A filter that has gone stale fails by
+    # going quiet, which is worse than the ERR_MODULE_NOT_FOUND below: nobody
+    # investigates a job that did not run.
     paths:
       - "public/**"
+      - "src/**"
       - "cal/**"
       - "serendipity/**"
-      - "scripts/**"
+      - "tools/**"
+      - "config/site-manifest.json"
       - "wrangler.jsonc"
       - "bun.lock"
       - ".github/workflows/perf-diff.yml"
@@ -93,12 +105,56 @@ jobs:
           echo "head=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       # BOTH sides get measured by HEAD's copy of the script, which is why it is
-      # stashed outside the tree before the first switch. Two reasons, and the
-      # second is the one that bites: the script does not exist at the merge base
-      # on the PR that introduces it, and measuring each side with its own copy
-      # would report a change to the MEASUREMENT as a change in wire size.
+      # stashed before the first switch. Two reasons, and the second is the one
+      # that bites: the script does not exist at the merge base on the PR that
+      # introduces it, and measuring each side with its own copy would report a
+      # change to the MEASUREMENT as a change in wire size.
+      #
+      # THE STASH SITS INSIDE THE REPO, one directory down, and every word of
+      # that is load-bearing. Inside, because `tools/lib/wrangler-bin.mjs`
+      # resolves the pinned wrangler from its OWN path, so a copy under
+      # $RUNNER_TEMP points at a node_modules that is not there. One down,
+      # because that resolution counts directories and `tools/` is one down.
+      # UNTRACKED, because an untracked directory survives both switches, while
+      # copying over `tools/` would dirty the tree and abort the switch back to
+      # HEAD on "local changes would be overwritten", which is the failure the
+      # install note below already records this job hitting once.
+      #
+      # The whole of `tools/lib` comes along rather than the one file the script
+      # imports today, because naming the file is precisely what broke: #481
+      # factored the wrangler spawn out into `lib/wrangler-bin.mjs`, the stash
+      # went on carrying one file, and every PR after it died on
+      # ERR_MODULE_NOT_FOUND before measuring a byte.
       - name: Stash the measurement script
-        run: cp tools/perf-snapshot.mjs "$RUNNER_TEMP/perf-snapshot.mjs"
+        run: |
+          rm -rf .perf-measure
+          mkdir .perf-measure
+          cp tools/perf-snapshot.mjs .perf-measure/perf-snapshot.mjs
+          cp -R tools/lib .perf-measure/lib
+
+          # Prove the stash before the first switch, because both ways it can be
+          # wrong are worse than a failure here. With no arguments the script
+          # prints usage and exits 2, so a 2 means every import in its graph
+          # resolved and anything else means the copy is short a file.
+          status=0
+          node .perf-measure/perf-snapshot.mjs >/dev/null 2>&1 || status=$?
+          if [ "$status" -ne 2 ]; then
+            echo "::error title=incomplete stash::the stashed measurement script does not import cleanly (exit $status)"
+            exit 1
+          fi
+
+          # And prove the DEPTH, which is the quiet half: a wrong repo root
+          # still imports, then spawns a wrangler that is not there, and the
+          # script's own catch turns that into "No change, 0 files" in green.
+          node --input-type=module -e '
+            import { existsSync } from "node:fs";
+            const { WRANGLER_ENTRY } = await import("./.perf-measure/lib/wrangler-bin.mjs");
+            if (!existsSync(WRANGLER_ENTRY)) {
+              console.error(`::error title=stash depth::the stash resolves wrangler at ${WRANGLER_ENTRY}, which does not exist`);
+              process.exit(1);
+            }
+            console.log(`stash resolves the pinned wrangler at ${WRANGLER_ENTRY}`);
+          '
 
       # Install with whatever the CHECKED-OUT commit asks for. This workflow
       # builds two different commits in one job, and during a package-manager
@@ -140,7 +196,7 @@ jobs:
           if ! git diff --quiet "$MERGE_BASE" "$HEAD_SHA" -- bun.lock pnpm-lock.yaml; then
             source /tmp/installer.sh && install_for_tree
           fi
-          node "$RUNNER_TEMP/perf-snapshot.mjs" record "$RUNNER_TEMP/base.json" \
+          node .perf-measure/perf-snapshot.mjs record "$RUNNER_TEMP/base.json" \
             --label "$(git rev-parse --short HEAD)"
 
       - name: Record HEAD
@@ -150,17 +206,24 @@ jobs:
         run: |
           # The install above may have dirtied the base tree with a lockfile
           # that commit never had. Discard it rather than carry it across.
-          git checkout -- . && git clean -qfd -e node_modules
+          #
+          # `.perf-measure` is excluded BY NAME rather than left to .gitignore.
+          # The clean runs while the tree is at the MERGE BASE, and a base older
+          # than the commit that added that ignore rule does not carry it, so
+          # the stash reads as ordinary untracked cruft and gets deleted between
+          # the two records. Measured on this PR's own first run: the base
+          # recorded 69 files and HEAD then died on MODULE_NOT_FOUND.
+          git checkout -- . && git clean -qfd -e node_modules -e .perf-measure
           git switch --detach "$HEAD_SHA"
           if ! git diff --quiet "$MERGE_BASE" "$HEAD_SHA" -- bun.lock pnpm-lock.yaml; then
             source /tmp/installer.sh && install_for_tree
           fi
-          node "$RUNNER_TEMP/perf-snapshot.mjs" record "$RUNNER_TEMP/head.json" \
+          node .perf-measure/perf-snapshot.mjs record "$RUNNER_TEMP/head.json" \
             --label "$(git rev-parse --short HEAD)"
 
       - name: Compare
         run: |
-          node "$RUNNER_TEMP/perf-snapshot.mjs" compare \
+          node .perf-measure/perf-snapshot.mjs compare \
             "$RUNNER_TEMP/base.json" "$RUNNER_TEMP/head.json" \
             --out "$RUNNER_TEMP/wire-size.md"
           cat "$RUNNER_TEMP/wire-size.md" >> "$GITHUB_STEP_SUMMARY"
