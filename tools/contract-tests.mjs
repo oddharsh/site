@@ -8476,3 +8476,72 @@ test("every @ts-nocheck in the Worker is declared, and every declaration is real
   assert.equal(declared.totals.errors_at_conversion,
     Object.values(declared.modules).reduce((a, b) => a + b, 0), "totals.errors_at_conversion disagrees with the entries");
 });
+
+// ── the Workers Builds bridge ───────────────────────────────────────────────
+// .github/deploy-wrangler.sh is the ONE command the dashboard runs, and it has
+// to suit whichever shape the branch being built has. `pnpm exec wrangler`
+// refuses on a bun tree (pnpm reads packageManager and exits "This project is
+// configured to use bun"), and the bun invocation cannot run on a pnpm tree in
+// the build image. Tested by RUNNING it against fixture trees with stub
+// binaries, because the failure it guards is a broken production deploy.
+test("the deploy bridge picks its invocation from the lockfile", async () => {
+  const { execFileSync } = await import("node:child_process");
+  const { mkdtempSync, mkdirSync, writeFileSync, chmodSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+
+  const script = new URL(".github/deploy-wrangler.sh", ROOT).pathname;
+  const root = mkdtempSync(join(tmpdir(), "bridge-"));
+  const stub = join(root, "stub");
+  mkdirSync(stub);
+  for (const name of ["bun", "pnpm"]) {
+    writeFileSync(join(stub, name), `#!/bin/sh\necho "${name} ran: $*"\n`);
+    chmodSync(join(stub, name), 0o755);
+  }
+  const run = (cwd, args) => execFileSync("bash", [script, ...args], {
+    cwd, encoding: "utf8", env: { ...process.env, PATH: `${stub}:${process.env.PATH}` },
+  });
+
+  const bunTree = join(root, "bun-tree");
+  mkdirSync(join(bunTree, "node_modules/wrangler/bin"), { recursive: true });
+  writeFileSync(join(bunTree, "bun.lock"), "{}");
+  writeFileSync(join(bunTree, "node_modules/wrangler/bin/wrangler.js"), "");
+  const fromBun = run(bunTree, ["versions", "upload", "--x-provision=false"]);
+  // The ENTRY FILE, never `bun x wrangler`: measured 2026-08-18 with node
+  // replaced by a stub exiting 127, `bun x --no-install wrangler` invokes node
+  // through the shebang and fails. Running the entry stays inside bun.
+  assert.match(fromBun, /bun ran: node_modules\/wrangler\/bin\/wrangler\.js versions upload --x-provision=false/);
+
+  const pnpmTree = join(root, "pnpm-tree");
+  mkdirSync(pnpmTree);
+  writeFileSync(join(pnpmTree, "pnpm-lock.yaml"), "");
+  assert.match(run(pnpmTree, ["versions", "upload"]), /pnpm ran: exec wrangler versions upload/);
+
+  // Both failure modes are LOUD, because a deploy command that half-works is
+  // worse than one that stops: a missing entry means the install did not finish,
+  // and no lockfile at all means the script cannot know what the tree wants.
+  const bare = join(root, "bare");
+  mkdirSync(bare);
+  assert.throws(() => run(bare, ["versions", "upload"]), /Command failed/, "no lockfile must exit non-zero");
+
+  const halfInstalled = join(root, "half");
+  mkdirSync(halfInstalled);
+  writeFileSync(join(halfInstalled, "bun.lock"), "{}");
+  assert.throws(() => run(halfInstalled, ["versions", "upload"]), /Command failed/, "a missing wrangler entry must exit non-zero");
+  assert.throws(() => run(pnpmTree, []), /Command failed/, "no arguments must exit non-zero rather than run a bare wrangler");
+});
+
+test("the deploy bridge never resolves wrangler from the registry", async () => {
+  const script = await readFile(new URL(".github/deploy-wrangler.sh", ROOT), "utf8");
+  // npx/bunx/dlx fetch what they cannot resolve locally (gotcha 29). On the one
+  // path that publishes production that would mean deploying with a wrangler
+  // nobody pinned, and the sweep that closed this hole missed `npx` as a quoted
+  // argument, so grep for the tokens rather than for a phrase.
+  for (const fetcher of ["npx", "bunx", "dlx", "bun x"]) {
+    assert.ok(!script.includes(` ${fetcher} `), `deploy-wrangler.sh must not reach for ${fetcher}`);
+  }
+  // The wrangler ARGUMENTS stay in the dashboard string, where check-infra.mjs
+  // reads them; the script must not smuggle its own.
+  assert.ok(!/versions\s+upload/.test(script.replace(/^\s*#.*$/gm, "")),
+    "the script takes no opinion on wrangler's arguments outside comments");
+});
