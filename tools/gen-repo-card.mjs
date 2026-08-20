@@ -12,24 +12,25 @@
 //             of subtitle, four measured facts. Reads at thumbnail size, where
 //             a screenshot of a whole desktop reads as blue mush.
 //
-//     node tools/gen-repo-card.mjs                 # both, into .github/
-//     node tools/gen-repo-card.mjs desktop         # one variant
-//     node tools/gen-repo-card.mjs --out /tmp/x    # somewhere else
+//     bun tools/gen-repo-card.mjs                 # both, into .github/
+//     bun tools/gen-repo-card.mjs desktop         # one variant
+//     bun tools/gen-repo-card.mjs --out /tmp/x    # somewhere else
 //
-// Same idiom as tools/photos/gen-og-cards.mjs: playwright-core driving the
-// installed Chrome, the wallpaper read straight out of luna.css so the card
-// background is pixel-identical to the real desktop (no second asset), and the
-// screenshot supersampled at DSF 2 then downscaled into a 1x card.
+// Bun.WebView drives the installed Chrome directly. The wallpaper is read
+// straight out of luna.css so the card background is pixel-identical to the
+// real desktop (no second asset), and the screenshot is supersampled at DSF 2
+// then downscaled into a 1x card.
 //
 // The FACTS row is derived, never typed: a number nobody re-counts is a number
 // that rots, and this card outlives most of what it describes.
 
-import { chromium } from "playwright-core";
 import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
-const WWW = path.join(ROOT, "www");
+const PAGES = path.join(ROOT, "src/pages");
+const STYLES = path.join(ROOT, "src/styles");
+const PUBLIC = path.join(ROOT, "public");
 const BASE = (process.env.CARD_BASE || "https://aadhar.sh").replace(/\/$/, "");
 const CARD_W = 1280, CARD_H = 640;
 
@@ -39,17 +40,58 @@ const OUT = outIdx === -1 ? path.join(ROOT, ".github") : path.resolve(argv[outId
 const want = argv.filter((a, i) => !a.startsWith("--") && i !== outIdx + 1);
 const VARIANTS = want.length ? want : ["desktop", "card"];
 
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function navigate(view, url, timeout = 30_000) {
+  let timer;
+  try {
+    await Promise.race([
+      view.navigate(url),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`navigation timed out after ${timeout}ms: ${url}`)), timeout);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Chrome's initial WebView viewport is shorter than the requested outer-window
+// height in Bun 1.4.0. resize() applies the dimensions to the viewport itself.
+// DSF is intentionally the one raw-CDP setting: WebView exposes viewport size
+// but not deviceScaleFactor at the high level.
+async function openView(width, height, deviceScaleFactor = 1) {
+  const view = new Bun.WebView({ backend: { type: "chrome", argv: ["--hide-scrollbars"] }, width, height });
+  await view.navigate("data:text/html,<title>ready</title>");
+  await view.resize(width, height);
+  if (deviceScaleFactor !== 1) {
+    await view.cdp("Emulation.setDeviceMetricsOverride", {
+      width,
+      height,
+      deviceScaleFactor,
+      mobile: false,
+    });
+  }
+  return view;
+}
+
+async function setContent(view, html) {
+  const { frameTree } = await view.cdp("Page.getFrameTree");
+  await view.cdp("Page.setDocumentContent", { frameId: frameTree.frame.id, html });
+  await view.evaluate('document.readyState === "complete" ? true : new Promise(resolve => addEventListener("load", () => resolve(true), { once: true }))');
+}
+
 // The homepage favicon, reused as the window icon so the card carries the same
 // brand stamp the tab does. Lifted from index.html rather than re-drawn.
 async function favicon() {
-  const html = await readFile(path.join(WWW, "index.html"), "utf8");
+  const html = await readFile(path.join(PAGES, "index.html"), "utf8");
   const m = html.match(/<link rel="icon"[^>]*href="([^"]+)"/);
   if (!m) throw new Error("no favicon in src/pages/index.html");
   return m[1];
 }
 
 async function bliss() {
-  const css = await readFile(path.join(WWW, "luna.css"), "utf8");
+  const css = await readFile(path.join(STYLES, "luna.css"), "utf8");
   const m = css.match(/#axp-desktop\s*\{[^}]*?background:\s*url\("([^"]+)"\)/);
   if (!m) throw new Error("could not find the Bliss wallpaper in luna.css");
   return m[1];
@@ -67,7 +109,7 @@ async function tokens() {
 async function facts() {
   const [manifest, hashes] = await Promise.all([
     readFile(path.join(ROOT, "config/site-manifest.json"), "utf8"),
-    readFile(path.join(WWW, "images/hashes.json"), "utf8"),
+    readFile(path.join(PUBLIC, "images/hashes.json"), "utf8"),
   ]);
   return [
     `${JSON.parse(manifest).surfaces.length} surfaces`,
@@ -140,44 +182,38 @@ function cardHtml({ wallpaper, icon, tokenCss, chips }) {
 // and downscaled into the 1280x640 frame (the same supersample the OG cards use).
 // The viewport is the composition: at 1600 wide the window swims in wallpaper,
 // because it is centered at a fixed max-width and the desktop takes the slack.
-async function shootDesktop(browser) {
-  const ctx = await browser.newContext({ deviceScaleFactor: 2, viewport: { width: 1400, height: 700 } });
-  const page = await ctx.newPage();
-  await page.goto(BASE, { waitUntil: "networkidle", timeout: 30000 });
-  await page.waitForTimeout(2200); // photo grid decode + the taskbar clock
-  const buf = await page.screenshot({ type: "png" });
-  await ctx.close();
+async function shootDesktop() {
+  await using view = await openView(1400, 700, 2);
+  await navigate(view, BASE);
+  await wait(2200); // photo grid decode + the taskbar clock
+  const buf = await view.screenshot({ format: "png", encoding: "buffer" });
   return "data:image/png;base64," + buf.toString("base64");
 }
 
 async function main() {
   await mkdir(OUT, { recursive: true });
   const [wallpaper, icon, tokenCss, chips] = await Promise.all([bliss(), favicon(), tokens(), facts()]);
-  const browser = await chromium.launch({ channel: "chrome", headless: true, args: ["--hide-scrollbars"] });
-  const ctx = await browser.newContext({ deviceScaleFactor: 1, viewport: { width: CARD_W, height: CARD_H } });
-  const page = await ctx.newPage();
-  try {
-    for (const v of VARIANTS) {
-      let html;
-      if (v === "desktop") {
-        const shot = await shootDesktop(browser);
-        html = `<!doctype html><html><head><meta charset="utf-8"><style>
-          *{margin:0}html,body{width:${CARD_W}px;height:${CARD_H}px;overflow:hidden}
-          img{width:${CARD_W}px;height:${CARD_H}px;display:block}
-        </style></head><body><img src="${shot}"></body></html>`;
-      } else if (v === "card") {
-        html = cardHtml({ wallpaper, icon, tokenCss, chips });
-      } else {
-        console.log(`  ? ${v}  unknown variant (desktop | card)`);
-        continue;
-      }
-      await page.setContent(html, { waitUntil: "load" });
-      await page.waitForTimeout(200);
-      const out = path.join(OUT, `social-preview-${v}.png`);
-      await page.screenshot({ path: out, clip: { x: 0, y: 0, width: CARD_W, height: CARD_H }, type: "png" });
-      console.log(`  ok ${path.relative(process.cwd(), out)}`);
+  await using view = await openView(CARD_W, CARD_H);
+  for (const v of VARIANTS) {
+    let html;
+    if (v === "desktop") {
+      const shot = await shootDesktop();
+      html = `<!doctype html><html><head><meta charset="utf-8"><style>
+        *{margin:0}html,body{width:${CARD_W}px;height:${CARD_H}px;overflow:hidden}
+        img{width:${CARD_W}px;height:${CARD_H}px;display:block}
+      </style></head><body><img src="${shot}"></body></html>`;
+    } else if (v === "card") {
+      html = cardHtml({ wallpaper, icon, tokenCss, chips });
+    } else {
+      console.log(`  ? ${v}  unknown variant (desktop | card)`);
+      continue;
     }
-  } finally { await browser.close(); }
+    await setContent(view, html);
+    await wait(200);
+    const out = path.join(OUT, `social-preview-${v}.png`);
+    await Bun.write(out, await view.screenshot({ format: "png", encoding: "buffer" }));
+    console.log(`  ok ${path.relative(process.cwd(), out)}`);
+  }
   console.log(`\nchips: ${chips.join(" · ")}`);
 }
 
