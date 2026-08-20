@@ -42,6 +42,7 @@ import { readFile, readdir, stat } from "node:fs/promises";
 import { brotliCompressSync, constants as zlibConstants, gzipSync } from "node:zlib";
 import { transform as transformCss } from "lightningcss";
 import { HTML_MARKERS } from "./lib/html-markers.mjs";
+import { wranglerCommand } from "./lib/wrangler-bin.mjs";
 
 // Wire-size envelopes, not raw-source ceilings. These start from the current
 // built output with enough room for ordinary feature work; they are deliberately
@@ -237,12 +238,27 @@ try {
 
 // 2) worker bundle gzip via wrangler dry-run (self-builds .build/public) -----
 let dryOut = "";
+let dryRunFailed = false;
 try {
   // --outfile writes the single prebuilt bundle that `check startup` consumes
   // below, so the startup profile costs no second build.
-  dryOut = execFileSync("pnpm", ["exec", "wrangler", "deploy", "--dry-run", "--outdir", ".build/.perfbudget", "--outfile", ".build/.perfbudget/worker.bundle", "--metafile"], { encoding: "utf8" });
+  dryOut = execFileSync(...wranglerCommand(["deploy", "--dry-run", "--outdir", ".build/.perfbudget", "--outfile", ".build/.perfbudget/worker.bundle", "--metafile"]), { encoding: "utf8" });
 } catch (e) {
   dryOut = (e.stdout || "") + "\n" + (e.stderr || "");
+  dryRunFailed = true;
+}
+
+// A dry-run that could not RUN is a broken gate, never an advisory condition.
+// Everything below reads numbers out of its output, so a refusal leaves every
+// budget unmeasured while the script goes on to print "hard checks green".
+//
+// It is not hypothetical. This spawned `pnpm exec wrangler` until 2026-08-20,
+// and pnpm REFUSES on a bun tree ("This project is configured to use bun"), so
+// the day the toolchain moved, this required check passed on every PR without
+// measuring one byte. Its sibling perf-snapshot had the identical bug and
+// reported "No change, 0 files" for a full run.
+if (dryRunFailed) {
+  bad(`wrangler dry-run failed, so NO budget below was measured. Its output ended:\n        ${dryOut.trim().split("\n").slice(-6).join("\n        ")}`);
 }
 const gz = dryOut.match(/gzip:\s*([\d.]+)\s*KiB/);
 let overBudget = false;
@@ -270,11 +286,11 @@ if (gz) {
 //
 // Runs on the prebuilt bundle from the dry-run above, so it adds no build.
 try {
-  const startOut = execFileSync("pnpm", ["exec",
-    "wrangler", "check", "startup",
+  const startOut = execFileSync(...wranglerCommand([
+    "check", "startup",
     "--workerBundle", ".build/.perfbudget/worker.bundle",
     "--outfile", ".build/.perfbudget/worker-startup.cpuprofile",
-  ], { encoding: "utf8" });
+  ]), { encoding: "utf8" });
   // "│   Active: 9.6 ms (including 0.0 ms garbage collection)"
   const active = startOut.match(/Active:\s*([\d.]+)\s*ms/);
   if (active) {

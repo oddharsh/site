@@ -48,6 +48,7 @@
 import { execFileSync } from "node:child_process";
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import { brotliCompressSync, constants as zlibConstants, gzipSync } from "node:zlib";
+import { wranglerCommand } from "./lib/wrangler-bin.mjs";
 
 const BUILD = ".build/public";
 const DRYRUN_OUT = ".build/.perfsnap";
@@ -110,13 +111,12 @@ async function record(outPath, label) {
   // "No change" on every category, and the check went GREEN while measuring
   // nothing. It is also manager-agnostic now, which this job needs because it
   // builds two commits that can disagree about which manager exists.
-  const WRANGLER = "node_modules/wrangler/bin/wrangler.js";
   let dryOut = "";
   try {
-    dryOut = execFileSync(process.execPath, [WRANGLER, "deploy", "--dry-run",
+    dryOut = execFileSync(...wranglerCommand(["deploy", "--dry-run",
       "--outdir", DRYRUN_OUT,
       "--metafile",
-    ], { encoding: "utf8" });
+    ]), { encoding: "utf8" });
   } catch (e) {
     dryOut = `${e.stdout || ""}\n${e.stderr || ""}`;
   }

@@ -26,6 +26,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { promisify } from "node:util";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { wranglerCommand } from "./lib/wrangler-bin.mjs";
 
 const run = promisify(execFile);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -40,9 +41,9 @@ const QUERY = "SELECT vnum, ymd, version, slug, title FROM checkpoints ORDER BY 
 
 let live;
 try {
-  const { stdout } = await run("pnpm", ["exec",
-    "wrangler", "d1", "execute", "aadhar-restore", "--remote", "--json", "--command", QUERY,
-  ], { cwd: ROOT, maxBuffer: 32 * 1024 * 1024 });
+  const { stdout } = await run(...wranglerCommand([
+    "d1", "execute", "aadhar-restore", "--remote", "--json", "--command", QUERY,
+  ]), { cwd: ROOT, maxBuffer: 32 * 1024 * 1024 });
   live = JSON.parse(stdout)[0].results;
 } catch (e) {
   // An unreachable D1 is an availability problem, not drift. Say so and do not

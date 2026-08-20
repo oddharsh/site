@@ -4139,6 +4139,53 @@ pnpm run deploy:direct
     `q84` meant 21 KB in one and 36 KB in the other on the same input, and
     reading those two 84s as the same setting is how a "faster and equivalent"
     swap gets proposed.
+38. **The toolchain moved to bun and TWO things had to stay on node: wrangler,
+    and every gzip measurement.** Both were found the same afternoon (2026-08-20)
+    by the merge that made `main` a bun tree, and neither announces itself.
+
+    **Wrangler refuses bun, per COMMAND rather than globally**, which is the
+    trap. Measured on 4.124.0:
+
+    ```
+    $ bun node_modules/wrangler/bin/wrangler.js check startup --workerBundle ...
+    ▲ WARNING  Wrangler does not support the Bun runtime. Please try this
+      command again using Node.js via `npm` or `pnpm`.
+    ```
+
+    It then does no work, while the byte-identical call under node returns a CPU
+    profile. Meanwhile `deploy --dry-run` under bun returns a perfectly correct
+    bundle, and the production deploy through `.github/deploy-wrangler.sh` runs
+    wrangler under bun and succeeds. So a spot check passes and one subcommand
+    silently stops measuring. `tools/lib/wrangler-bin.mjs` names node for every
+    tool, and a contract test pins it.
+
+    **Bun 1.4 ships zlib-ng, so its gzip is ~0.55% larger than node's on
+    identical bytes.** One 2,803,501-byte input: node 893,610 bytes, bun 898,553.
+    The same difference shows through wrangler, deterministically across repeated
+    runs: the SAME dry-run reports 234.81 KiB gzip under node and 237.09 under
+    bun, and the two bundles are byte-identical once undici's random multipart
+    boundary is normalized.
+
+    That matters here because `perf-budget.mjs` compares against constants
+    somebody typed under node's zlib, and `perf-history` is a nightly series of
+    the same. Running those tools under bun re-reads the whole record about 1%
+    heavier for free, which is precisely the phantom step the perf-history branch
+    exists to detect. Both scripts are pinned to `node` in package.json with a
+    test asserting it. `perf-diff.yml` and `perf-history.yml` already invoked
+    node explicitly and were never affected.
+
+    **SHIPPED bytes are untouched, and the proof is Cloudflare's rather than
+    ours.** Brotli and zstd did not move, so the first bun-built deploy uploaded
+    **0 of 1443 files**: the asset store is content-addressed, so that line is the
+    platform reporting byte-identical output to the previous node build, `.br`
+    and `.dcz` artifacts included. Only the measuring instrument changed.
+
+    The general rule is worth more than either instance. **A runtime swap is a
+    change to every number the toolchain reports, even when it is not a change to
+    a single shipped byte.** Ask what your baselines were measured with before
+    trusting a comparison across one, and check support per COMMAND rather than
+    per tool.
+
 
 ---
 

@@ -8485,6 +8485,80 @@ test("every @ts-nocheck in the Worker is declared, and every declaration is real
 // configured to use bun"), and the bun invocation cannot run on a pnpm tree in
 // the build image. Tested by RUNNING it against fixture trees with stub
 // binaries, because the failure it guards is a broken production deploy.
+// A TOOL MAY NOT SPAWN A PACKAGE MANAGER. Every script in tools/ runs under
+// whichever runtime invoked it, in a tree that is bun today and was pnpm last
+// week, so a hardcoded manager is wrong half the time. pnpm reads
+// package.json's `packageManager` and REFUSES outright on a bun tree.
+//
+// Five tools carried `execFileSync("pnpm", ["exec", "wrangler", ...])` into the
+// bun merge on 2026-08-20 and every one of them broke, including
+// deploy-promote.mjs, which is the release path. Two broke SILENTLY, because
+// they wrap the spawn in a catch and then regex the output for a number: the
+// wire-size job reported "No change, 0 files" and perf-budget printed "hard
+// checks green" without measuring a byte.
+//
+// They survived gotcha 29's pnpm sweep for the reason that gotcha records: the
+// manager is a QUOTED ARGUMENT, so no search for `pnpm exec` as a phrase can
+// see it. This test searches for the quoted token instead, which is the shape
+// that sweep needed and did not have.
+test("no tool spawns a package manager by name", async () => {
+  const { readdirSync, readFileSync } = await import("node:fs");
+  const dir = new URL("tools/", ROOT).pathname;
+  const files = readdirSync(dir).filter((f) => f.endsWith(".mjs") && f !== "contract-tests.test.mjs");
+  assert.ok(files.length >= 20, `expected the tools directory, got ${files.length} files`);
+
+  // check-bun.mjs and lens-seed.mjs are the two RECORDED exceptions, and both
+  // spawn a manager as the SUBJECT of what they do rather than as a way to
+  // reach some other binary: check-bun compares bun against the published
+  // release, and lens-seed drives a script through the tree's own runner.
+  const RECORDED = new Set(["check-bun.mjs", "lens-seed.mjs"]);
+  const offenders = [];
+  for (const f of files) {
+    if (RECORDED.has(f)) continue;
+    const src = readFileSync(dir + f, "utf8");
+    for (const m of src.matchAll(/(?:execFile|execFileSync|exec|spawn|spawnSync|run)\(\s*"(pnpm|npm|npx|bunx|yarn|corepack)"/g)) {
+      offenders.push(`${f}: spawns "${m[1]}"`);
+    }
+  }
+  assert.deepEqual(offenders, [], `a tool spawns a package manager:\n  ${offenders.join("\n  ")}\n  Use wranglerCommand() from tools/lib/wrangler-bin.mjs, which names the runtime instead.`);
+});
+
+// The helper those tools use has to run wrangler under NODE, name no package
+// manager, and resolve the PINNED entry rather than whatever a PATH lookup
+// finds. Node is not a leftover: wrangler says "Wrangler does not support the
+// Bun runtime" and `check startup` does no work under it, measured 2026-08-20
+// on 4.124.0, while `deploy --dry-run` under bun returns a correct number. The
+// refusal is per-command, so one working subcommand proves nothing.
+test("wranglerCommand runs the pinned wrangler under node", async () => {
+  const { wranglerCommand, WRANGLER_ENTRY } = await import("./lib/wrangler-bin.mjs");
+  const [cmd, argv] = wranglerCommand(["versions", "list"]);
+
+  const expected = process.versions.bun ? "node" : process.execPath;
+  assert.equal(cmd, expected, "wrangler runs under node, never under bun and never through a manager");
+  assert.doesNotMatch(cmd, /pnpm|npx|bunx|yarn|corepack/, "a manager would fetch, or refuse on the wrong tree");
+  if (!process.versions.bun) assert.doesNotMatch(cmd, /\/bun$/);
+
+  assert.equal(argv[0], WRANGLER_ENTRY);
+  assert.match(WRANGLER_ENTRY, /node_modules\/wrangler\/bin\/wrangler\.js$/);
+  assert.ok(WRANGLER_ENTRY.startsWith("/"), "absolute, so a tool run from a subdirectory still finds the pin");
+  assert.deepEqual(argv.slice(1), ["versions", "list"], "arguments pass through untouched");
+});
+
+// The two perf tools must stay on node for a different reason: the MEASUREMENT
+// must not move with the toolchain. bun 1.4 ships zlib-ng, which gzips one
+// byte-identical 2.8MB input to 898,553 bytes against node's 893,610 (0.55%
+// larger, measured 2026-08-20). Every baseline constant in perf-budget.mjs was
+// set under node's zlib, and perf-history's nightly series is years of the same,
+// so running these under bun would re-read the whole series ~1% heavier with no
+// code change. Shipped bytes are untouched, since brotli and zstd did not move.
+test("the perf tools run under node so their numbers stay comparable", async () => {
+  const { readFileSync } = await import("node:fs");
+  const pkg = JSON.parse(readFileSync(new URL("package.json", ROOT).pathname, "utf8"));
+  for (const name of ["perf-budget", "perf:snapshot"]) {
+    assert.match(pkg.scripts[name], /^node /, `${name} must run under node (bun's zlib-ng shifts every gzip number ~1%)`);
+  }
+});
+
 test("the deploy bridge picks its invocation from the lockfile", async () => {
   const { execFileSync } = await import("node:child_process");
   const { mkdtempSync, mkdirSync, writeFileSync, chmodSync } = await import("node:fs");
