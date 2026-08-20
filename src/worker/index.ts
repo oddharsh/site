@@ -1,12 +1,3 @@
-// @ts-nocheck — TEMPORARY, declared in config/ts-migration.json under "callers".
-// This module is still JavaScript and calls into src/worker/lib, which became
-// TypeScript on 2026-08-18. tsc now checks those call sites strictly and this
-// file does not pass yet. The entry goes away when this module converts.
-// _worker.js/index.js: the dispatcher. Handlers live in sibling modules;
-// wrangler bundles this directory at deploy (its build, not ours). The ROUTES
-// and PREFIX tables below mirror wrangler.jsonc's allowlist one-to-one; keep
-// them in sync or a route silently goes static. Map in MAINTENANCE.md.
-
 import { WorkerEntrypoint, tracing } from "cloudflare:workers";
 import calWorker from "../../cal/src/index.js";
 import { handleAgentAuthClaim, handleAgentAuthRegister, handleAgentAuthRevoke, handleAgentAuthToken } from "./agent.ts";
@@ -333,7 +324,10 @@ export default {
 // 200})]`: the cast form accepted it, `@satisfies` caught it but left all 72
 // errors standing, and only the declaration form does both.
 /** @type {[string, RouteHandler][]} */
-const ROUTE_TABLE = [
+// Typed as an array of TUPLES so `new Map(ROUTE_TABLE)` resolves. Left to
+// inference the elements widen to (string | Function)[], which matches no Map
+// constructor overload, and the error lands on the Map rather than on the table.
+const ROUTE_TABLE: Array<[path: string, handler: Function]> = [
   ["/favicon.ico", routeFavicon],
 
   ["/auth.md", routeAuthMd],

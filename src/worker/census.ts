@@ -1,13 +1,3 @@
-// @ts-nocheck — TEMPORARY, declared in config/ts-migration.json under "callers".
-// This module is still JavaScript and calls into src/worker/lib, which became
-// TypeScript on 2026-08-18. tsc now checks those call sites strictly and this
-// file does not pass yet. The entry goes away when this module converts.
-// census.js — the longitudinal chip census. Once a week (cron), Lens re-scans a
-// fixed roster of representative sites and records each one's spectrum tier,
-// agent-readiness score, and agent-door count into D1. /lens/census renders the
-// trend over time. Nobody else publishes agent-readiness as a time series for
-// named sites, so even a few months of this is original, citable evidence about
-// where the web is going — the point the rest of /lens argues one URL at a time.
 import { lunaPage } from "./lib/chrome.ts";
 import { escHtml, escAttr, jsonResponse, timingSafeEqual } from "./lib/http.ts";
 import { lensInspect } from "./lens.ts";
@@ -84,6 +74,8 @@ function censusMetrics(site, r, ts, ymd) {
 // Now the sweep records roster size against rows written, and each failed host
 // names itself. The lensInspect spans nest underneath, so a host that failed
 // because its own fetch timed out shows exactly that.
+type CensusOpts = { oneBatch?: boolean };
+
 // opts.oneBatch: process a single 4-host slice and advance a KV cursor, for
 // callers whose invocation cannot outlive the runtime's post-response grace.
 // The Monday cron is now AWAITED by scheduled() and sweeps the whole roster in
@@ -95,11 +87,11 @@ function censusMetrics(site, r, ts, ymd) {
 // through refresh still yields a single census day.
 const CENSUS_CURSOR_KEY = "lens:census:cursor";
 
-export async function cronCensus(env, opts = {}) {
+export async function cronCensus(env, opts: CensusOpts = {}) {
   return span("census.sweep", (s) => cronCensusInner(env, s, opts), { "census.roster": CENSUS_ROSTER.length });
 }
 
-async function cronCensusInner(env, sSweep, opts = {}) {
+async function cronCensusInner(env, sSweep, opts: CensusOpts = {}) {
   if (!env.RESTORE_DB) {
     sSweep.setAttribute("census.outcome", "no_binding");
     return { ok: false, error: "no RESTORE_DB binding" };
@@ -209,7 +201,9 @@ export function censusExhibitHtml(grouped) {
     const tier = last.tier || "unknown";
     const scoreTxt = last.score == null ? "—" : last.score;
     const arrow = h.delta > 0 ? '<span class="cx-up">▲' + h.delta + "</span>" : h.delta < 0 ? '<span class="cx-down">▼' + Math.abs(h.delta) + "</span>" : (h.series.length > 1 ? '<span class="cx-flat">•</span>' : "");
-    let surf = {};
+    // The stored column is JSON of whatever the sweep recorded, so the shape is
+    // declared here rather than inferred from an empty initializer.
+    let surf: Partial<Record<"llms" | "md" | "mcp" | "agents" | "jsonld" | "webBotAuth", unknown>> = {};
     try { surf = JSON.parse(last.surfaces || "{}"); } catch (_e) {}
     const chips = [
       surf.llms ? "llms.txt" : "", surf.md ? "markdown" : "", surf.mcp ? "MCP" : "",

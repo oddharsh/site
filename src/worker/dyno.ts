@@ -1,28 +1,3 @@
-// @ts-nocheck — TEMPORARY, declared in config/ts-migration.json under "callers".
-// This module is still JavaScript and calls into src/worker/lib, which became
-// TypeScript on 2026-08-18. tsc now checks those call sites strictly and this
-// file does not pass yet. The entry goes away when this module converts.
-// dyno.js — /garage/dyno, the site's own performance history as a chart.
-//
-// A dyno tells you what an engine actually puts down. This one straps the site
-// to the rollers once a night and records a pull.
-//
-// The third tier of the performance story, and the one that would actually have
-// caught this repo's real failure. perf-budget.mjs checks a number against a
-// constant (catches a number being over a line). perf-snapshot.mjs diffs the
-// merge base (catches the STEP a single PR makes). Neither can see DRIFT: the
-// worker bundle went 86 -> 129.23 -> 204.24 -> 258.34 -> 261.74 KiB gzip and
-// every one of those numbers was discovered by somebody tripping over a stale
-// constant. Nobody ever saw the slope, because nothing drew it.
-//
-// Shape borrowed from commonwarexyz, who run exactly this split: a per-PR gate
-// on a deterministic metric, plus a nightly wall-clock series published for
-// trend. Theirs goes to a separate repo rendered by a third-party charting
-// action. This site is a website, so it renders its own.
-//
-// SERVER-RENDERED SVG, zero client JS. Not a style choice: the served pages here
-// carry no cross-origin assets and inline scripts need per-document CSP hashes,
-// so a chart that draws itself on the server costs one <svg> and no exceptions.
 import { BOT_UA } from "./lib/botauth.ts";
 import { swrKV } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
