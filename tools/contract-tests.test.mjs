@@ -8478,13 +8478,6 @@ test("every @ts-nocheck in the Worker is declared, and every declaration is real
     Object.values(declared.modules).reduce((a, b) => a + b, 0), "totals.errors_at_conversion disagrees with the entries");
 });
 
-// ── the Workers Builds bridge ───────────────────────────────────────────────
-// .github/deploy-wrangler.sh is the ONE command the dashboard runs, and it has
-// to suit whichever shape the branch being built has. `pnpm exec wrangler`
-// refuses on a bun tree (pnpm reads packageManager and exits "This project is
-// configured to use bun"), and the bun invocation cannot run on a pnpm tree in
-// the build image. Tested by RUNNING it against fixture trees with stub
-// binaries, because the failure it guards is a broken production deploy.
 // A TOOL MAY NOT SPAWN A PACKAGE MANAGER. Every script in tools/ runs under
 // whichever runtime invoked it, in a tree that is bun today and was pnpm last
 // week, so a hardcoded manager is wrong half the time. pnpm reads
@@ -8559,7 +8552,20 @@ test("the perf tools run under node so their numbers stay comparable", async () 
   }
 });
 
-test("the deploy bridge picks its invocation from the lockfile", async () => {
+// THE DEPLOY BRIDGE. The dashboard holds one command string per trigger and it
+// has to work on whatever branch is being built, so the wrapper is what lets a
+// pnpm branch and a bun branch share it.
+//
+// It runs wrangler under NODE for both, and that is the whole point rather than
+// an implementation detail. WRANGLER DOES NOT SUPPORT BUN, measured 2026-08-20
+// on 4.124.0: `check startup` under bun answers "Wrangler does not support the
+// Bun runtime" and does no work, while `deploy --dry-run` under the same bun
+// returns a correct bundle. The refusal is per-COMMAND, which is exactly why the
+// first bun-built deploy looked fine.
+//
+// Tested by RUNNING it against fixture trees with stub binaries, because the
+// failure it guards is a broken production deploy.
+test("the deploy bridge runs the pinned wrangler under node, on either tree", async () => {
   const { execFileSync } = await import("node:child_process");
   const { mkdtempSync, mkdirSync, writeFileSync, chmodSync } = await import("node:fs");
   const { tmpdir } = await import("node:os");
@@ -8567,43 +8573,69 @@ test("the deploy bridge picks its invocation from the lockfile", async () => {
 
   const script = new URL(".github/deploy-wrangler.sh", ROOT).pathname;
   const root = mkdtempSync(join(tmpdir(), "bridge-"));
+  // A HERMETIC PATH: the stub directory is the whole of it, so nothing can fall
+  // through to a real binary and pass this test for the wrong reason. bash has
+  // to be linked in, since the parent resolves it through this same PATH.
+  const { symlinkSync } = await import("node:fs");
+  const bash = execFileSync("bash", ["-c", "command -v bash"], { encoding: "utf8" }).trim();
   const stub = join(root, "stub");
   mkdirSync(stub);
-  for (const name of ["bun", "pnpm"]) {
+  symlinkSync(bash, join(stub, "bash"));
+  // A stub for each, so the test can tell WHICH ran. bun and the managers are
+  // present and must go unused: their absence would pass this test for the
+  // wrong reason.
+  for (const name of ["node", "bun", "pnpm", "npx", "bunx"]) {
     writeFileSync(join(stub, name), `#!/bin/sh\necho "${name} ran: $*"\n`);
     chmodSync(join(stub, name), 0o755);
   }
   const run = (cwd, args) => execFileSync("bash", [script, ...args], {
-    cwd, encoding: "utf8", env: { ...process.env, PATH: `${stub}:${process.env.PATH}` },
+    cwd, encoding: "utf8", env: { PATH: stub, HOME: process.env.HOME || root },
   });
 
-  const bunTree = join(root, "bun-tree");
-  mkdirSync(join(bunTree, "node_modules/wrangler/bin"), { recursive: true });
-  writeFileSync(join(bunTree, "bun.lock"), "{}");
-  writeFileSync(join(bunTree, "node_modules/wrangler/bin/wrangler.js"), "");
-  const fromBun = run(bunTree, ["versions", "upload", "--x-provision=false"]);
-  // The ENTRY FILE, never `bun x wrangler`: measured 2026-08-18 with node
-  // replaced by a stub exiting 127, `bun x --no-install wrangler` invokes node
-  // through the shebang and fails. Running the entry stays inside bun.
-  assert.match(fromBun, /bun ran: node_modules\/wrangler\/bin\/wrangler\.js versions upload --x-provision=false/);
+  const withEntry = (dir, lockfile) => {
+    mkdirSync(join(dir, "node_modules/wrangler/bin"), { recursive: true });
+    writeFileSync(join(dir, lockfile), "");
+    writeFileSync(join(dir, "node_modules/wrangler/bin/wrangler.js"), "");
+    return dir;
+  };
 
-  const pnpmTree = join(root, "pnpm-tree");
-  mkdirSync(pnpmTree);
-  writeFileSync(join(pnpmTree, "pnpm-lock.yaml"), "");
-  assert.match(run(pnpmTree, ["versions", "upload"]), /pnpm ran: exec wrangler versions upload/);
+  // BOTH trees take the same path. The entry file rather than npx/bunx, which
+  // FETCH what they cannot resolve (gotcha 29) and would let the one command
+  // that publishes production deploy with a wrangler nobody pinned.
+  for (const [tree, lockfile] of [["bun-tree", "bun.lock"], ["pnpm-tree", "pnpm-lock.yaml"]]) {
+    const out = run(withEntry(join(root, tree), lockfile), ["versions", "upload", "--x-provision=false"]);
+    assert.match(out, /node ran: node_modules\/wrangler\/bin\/wrangler\.js versions upload --x-provision=false/,
+      `${tree} must run wrangler under node`);
+    assert.doesNotMatch(out, /^bun ran:/m, `${tree} must not reach bun, which wrangler refuses`);
+    assert.doesNotMatch(out, /(pnpm|npx|bunx) ran:/, `${tree} must not go through a package manager`);
+  }
 
-  // Both failure modes are LOUD, because a deploy command that half-works is
-  // worse than one that stops: a missing entry means the install did not finish,
-  // and no lockfile at all means the script cannot know what the tree wants.
-  const bare = join(root, "bare");
-  mkdirSync(bare);
-  assert.throws(() => run(bare, ["versions", "upload"]), /Command failed/, "no lockfile must exit non-zero");
+  // Every failure is LOUD, because a deploy command that half-works is worse
+  // than one that stops.
+  const half = join(root, "half");
+  mkdirSync(half);
+  assert.throws(() => run(half, ["versions", "upload"]), /Command failed/,
+    "a missing wrangler entry means the install did not finish");
+  assert.throws(() => run(withEntry(join(root, "noargs"), "bun.lock"), []), /Command failed/,
+    "no arguments must exit rather than run a bare wrangler");
 
-  const halfInstalled = join(root, "half");
-  mkdirSync(halfInstalled);
-  writeFileSync(join(halfInstalled, "bun.lock"), "{}");
-  assert.throws(() => run(halfInstalled, ["versions", "upload"]), /Command failed/, "a missing wrangler entry must exit non-zero");
-  assert.throws(() => run(pnpmTree, []), /Command failed/, "no arguments must exit non-zero rather than run a bare wrangler");
+  // A missing node FAILS rather than falling back to bun. A quiet fallback would
+  // ship a production deploy from the runtime wrangler disclaims.
+  const noNode = join(root, "stub-no-node");
+  mkdirSync(noNode);
+  symlinkSync(bash, join(noNode, "bash"));
+  for (const name of ["bun", "pnpm"]) {
+    writeFileSync(join(noNode, name), `#!/bin/sh\necho "${name} ran: $*"\n`);
+    chmodSync(join(noNode, name), 0o755);
+  }
+  assert.throws(
+    () => execFileSync("bash", [script, "versions", "upload"], {
+      cwd: withEntry(join(root, "nonode-tree"), "bun.lock"),
+      encoding: "utf8", env: { PATH: noNode, HOME: process.env.HOME || root },
+    }),
+    /Command failed/,
+    "no node must exit non-zero rather than deploy under bun",
+  );
 });
 
 test("the deploy bridge never resolves wrangler from the registry", async () => {

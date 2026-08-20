@@ -18,6 +18,23 @@
 # migration would need the dashboard edited at the exact moment it merges, with
 # every other branch's build broken on whichever side of the switch it sat.
 #
+# WHAT CHANGED, 2026-08-20. It used to branch on the lockfile and run wrangler
+# under bun for a bun tree. It runs wrangler under NODE for both, because
+# WRANGLER DOES NOT SUPPORT BUN and says so itself on 4.124.0:
+#
+#     Wrangler does not support the Bun runtime. Please try this command again
+#     using Node.js via `npm` or `pnpm`.
+#
+# The refusal is per-COMMAND, which is why the first bun deploy looked fine:
+# `versions upload` under bun published a version whose assets Cloudflare
+# deduplicated to 0 of 1443 changed files, while `check startup` under the same
+# bun did no work at all. A deploy path should not sit one subcommand away from
+# a runtime the vendor disclaims.
+#
+# One invocation now serves both trees, so the lockfile branch is gone. Node
+# runs wrangler's entry the same way on a pnpm tree and a bun tree, since both
+# put the package at node_modules/wrangler.
+#
 # WHAT IT DOES NOT DO. It takes no opinion on wrangler's arguments: everything
 # after the script name is passed through untouched, so the two provisioning
 # flags and the `versions upload` form still live in the dashboard string where
@@ -31,27 +48,25 @@ if [ "$#" -eq 0 ]; then
   exit 2
 fi
 
-# The LOCKFILE decides, not what happens to be on PATH. The build image
-# preinstalls a bun of its own, so probing `command -v bun` would quietly run
-# main's production deploy under a bun that tree never asked for.
-if [ -f bun.lock ]; then
-  entry=node_modules/wrangler/bin/wrangler.js
-  if [ ! -f "$entry" ]; then
-    echo "deploy-wrangler.sh: $entry is missing; the install step did not complete" >&2
-    exit 1
-  fi
-  # Wrangler's own entry rather than `bun x wrangler`: measured 2026-08-18 with
-  # node replaced by a stub exiting 127, `bun x --no-install wrangler` INVOKES
-  # NODE through the `#!/usr/bin/env node` shebang and fails, while running the
-  # entry directly stays inside bun.
-  echo "deploy-wrangler.sh: bun tree, running $entry"
-  exec bun "$entry" "$@"
+entry=node_modules/wrangler/bin/wrangler.js
+if [ ! -f "$entry" ]; then
+  echo "deploy-wrangler.sh: $entry is missing; the install step did not complete" >&2
+  exit 1
 fi
 
-if [ -f pnpm-lock.yaml ]; then
-  echo "deploy-wrangler.sh: pnpm tree, running pnpm exec wrangler"
-  exec pnpm exec wrangler "$@"
+# NODE IS REQUIRED, and a missing one FAILS rather than falling back to bun.
+# The build image installs node because `.node-version` is in the tree, so this
+# fires only if that file is deleted, and a loud failure there costs a deploy
+# that never shipped while a quiet fallback ships one from a runtime wrangler
+# refuses. The message names the cause because nothing else in the log would.
+if ! command -v node >/dev/null 2>&1; then
+  echo "deploy-wrangler.sh: node is not on PATH. Wrangler does not support bun, so this needs node." >&2
+  echo "deploy-wrangler.sh: the build image installs it from .node-version; check that file still exists." >&2
+  exit 1
 fi
 
-echo "deploy-wrangler.sh: no bun.lock or pnpm-lock.yaml at $(pwd); cannot tell which toolchain this tree wants" >&2
-exit 1
+# The ENTRY FILE, never `npx`/`bunx`, which FETCH what they cannot resolve
+# (gotcha 29) and would let the one path that publishes production deploy with
+# a wrangler nobody pinned.
+echo "deploy-wrangler.sh: running $entry under $(node --version)"
+exec node "$entry" "$@"
