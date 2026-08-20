@@ -206,7 +206,14 @@ jobs:
         run: |
           # The install above may have dirtied the base tree with a lockfile
           # that commit never had. Discard it rather than carry it across.
-          git checkout -- . && git clean -qfd -e node_modules
+          #
+          # `.perf-measure` is excluded BY NAME rather than left to .gitignore.
+          # The clean runs while the tree is at the MERGE BASE, and a base older
+          # than the commit that added that ignore rule does not carry it, so
+          # the stash reads as ordinary untracked cruft and gets deleted between
+          # the two records. Measured on this PR's own first run: the base
+          # recorded 69 files and HEAD then died on MODULE_NOT_FOUND.
+          git checkout -- . && git clean -qfd -e node_modules -e .perf-measure
           git switch --detach "$HEAD_SHA"
           if ! git diff --quiet "$MERGE_BASE" "$HEAD_SHA" -- bun.lock pnpm-lock.yaml; then
             source /tmp/installer.sh && install_for_tree
