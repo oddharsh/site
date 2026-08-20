@@ -70,6 +70,9 @@ jobs:
       - name: Install homepage dependencies
         run: bun install --frozen-lockfile
 
+      - name: Check deduplicated dependency graph
+        run: bun run deps:dedupe
+
       - name: Check Wrangler versions and lockfiles
         run: bun run check-wrangler
 
