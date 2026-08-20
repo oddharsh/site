@@ -49,6 +49,7 @@ import { faviconHref, sectionFavicons, speculationHtml } from "../tools/photos/g
 import { TASKBAR } from "../tools/photos/shell-data.mjs";
 import { SECTION_FAVICONS } from "../src/worker/lib/desktop.ts";
 import { collectBlockClasses, readDocument } from "./lib/html-to-md.mjs";
+import { remainderHolder } from "./lib/ramp-split.mjs";
 import {
   SERENDIPITY_MCP_SERVER_INFO,
   SERENDIPITY_SYNC_LIMITS,
@@ -8684,4 +8685,36 @@ test("the deploy bridge never resolves wrangler from the registry", async () => 
   // reads them; the script must not smuggle its own.
   assert.ok(!/versions\s+upload/.test(script.replace(/^\s*#.*$/gm, "")),
     "the script takes no opinion on wrangler's arguments outside comments");
+});
+
+test("a ramp step hands the remainder to the LARGEST incumbent", () => {
+  // The real 2026-08-20 split, in the order the API returned it: the 10% version
+  // came first, so `find` picked it and 90% of traffic moved to a build nobody
+  // canaried. This is the regression that change exists to prevent.
+  const active = [
+    { id: "863a5873-ecb6-4153-9e5a-afba4e824f38", pct: 10 },
+    { id: "c649f1fc-0000-0000-0000-000000000000", pct: 90 },
+  ];
+  assert.equal(
+    remainderHolder(active, "7634b9d8-fc15-48e0-9821-b384373a490e"),
+    "c649f1fc-0000-0000-0000-000000000000",
+    "the 90% incumbent must hold the remainder, whatever order the API listed",
+  );
+
+  // Order must not decide it, so the reversed list has to give the same answer.
+  assert.equal(
+    remainderHolder([...active].reverse(), "7634b9d8-fc15-48e0-9821-b384373a490e"),
+    "c649f1fc-0000-0000-0000-000000000000",
+  );
+
+  // The target is never its own remainder holder, compared on the 8-char prefix
+  // because that is what the ramp and its logs use.
+  assert.equal(remainderHolder([{ id: "7634b9d8-fc15-48e0-9821-b384373a490e", pct: 100 }],
+    "7634b9d8-fc15-48e0-9821-b384373a490e"), null);
+
+  // One incumbent is the ordinary case and still works.
+  assert.equal(remainderHolder([{ id: "c649f1fc-aaaa", pct: 100 }], "7634b9d8-fc15"), "c649f1fc-aaaa");
+
+  // Nothing serving yet: a first deploy has no remainder to hand out.
+  assert.equal(remainderHolder([], "7634b9d8-fc15"), null);
 });
