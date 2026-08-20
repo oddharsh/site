@@ -132,10 +132,9 @@ honestly state**, so those are exempted by name in `SUB_MANIFEST_POLICY` with
 the reason, rather than written here with the caret quietly dropped.
 
 - **`lens-reader/`** is its own npm ecosystem with its OWN lockfile, and it is
-  outside the pnpm workspace deliberately: its dependencies are megabytes only
-  that Worker bundles. Install it with `pnpm install --ignore-workspace`, since
-  a bare `pnpm install` there walks up to the root workspace and never creates
-  `lens-reader/node_modules` at all (gotcha 29).
+  outside the Bun workspace deliberately: its dependencies are megabytes only
+  that Worker bundles. Install it with a bare `bun install` from that directory;
+  Bun resolves the local manifest without walking up into the root workspace.
 
   Two dependencies, and each carries a trap worth knowing before reviewing a
   bump. `@mozilla/readability` 0.6.0 is the extractor, swapped in from Defuddle on
@@ -145,6 +144,21 @@ the reason, rather than written here with the caret quietly dropped.
   lens's whole artifact. `linkedom` 0.18.13 exists only to supply the DOM that Workers
   lack and is several times the weight of the extractor it serves, so its
   releases matter for bundle size more than for behaviour.
+
+  `htmlparser2` 11.0.0 is a deliberate transitive override beyond linkedom's
+  declared `^10.1.0` range. Version 10 carried domhandler 5, domutils 3,
+  dom-serializer 2, and two older entity-table generations beside the newer
+  stack linkedom already receives through css-select. Version 11 uses that same
+  newer generation. Version 12 is deliberately NOT selected: its WHATWG raw-text
+  change breaks linkedom 0.18.13's self-closing-script serialization in its own
+  upstream suite. Version 11 passes that full suite. Measured 2026-08-20, it moves
+  the minified Worker from 113.30 -> 80.56 KiB gzip (28.9% less); a fixed
+  four-page corpus produced byte-identical extraction payloads. Nine 20-conversion
+  trials moved the median 1112.5 -> 1084.9 ms (2.5%, within the run-to-run spread),
+  so the supported claim is no conversion regression rather than a CPU win. Its
+  local tests also pin the self-closing-script behavior and assert the resolved
+  tree has no nested domutils under htmlparser2. Re-evaluate the override when
+  linkedom changes its parser range rather than carrying it by inertia.
 
   Markdown is a focused first-party walk over Readability's finished article
   node. It replaced `turndown` 7.2.4 after a 36-document corpus preserved every
