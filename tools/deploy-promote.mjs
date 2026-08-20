@@ -74,6 +74,7 @@ import { readFile } from "node:fs/promises";
 import { releaseCredentialError } from "./lib/release-guard.mjs";
 import { promisify } from "node:util";
 import { wranglerCommand } from "./lib/wrangler-bin.mjs";
+import { remainderHolder } from "./lib/ramp-split.mjs";
 
 const exec = promisify(execFile);
 
@@ -538,7 +539,9 @@ if (has("rollback")) {
 }
 
 const target = flag("version") || await newestVersion();
-const previous = active.find((v) => v.id.slice(0, 8) !== target.slice(0, 8))?.id || null;
+// The remainder holder is the LARGEST incumbent; see tools/lib/ramp-split.mjs
+// for the measurement that made an arbitrary pick a real hazard.
+const previous = remainderHolder(active, target);
 
 const steps = flag("to")
   ? [Number(flag("to"))]
