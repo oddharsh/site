@@ -116,7 +116,7 @@ export function parseCacheControl(value) {
  * at signing in a test environment.
  */
 export function auditDictionary(headers) {
-  const lower = {};
+  const lower: Record<string, string> = {};
   for (const [key, value] of Object.entries(headers || {})) lower[String(key).toLowerCase()] = String(value);
   const cc = parseCacheControl(lower["cache-control"]);
   const results = RULES.map((rule) => ({ id: rule.id, title: rule.title, ...rule.check(cc, lower) }));
@@ -140,7 +140,7 @@ export function auditDictionary(headers) {
  * slow page, it is ERR_CONTENT_DECODING_FAILED.
  */
 export function auditConsumer(headers) {
-  const lower = {};
+  const lower: Record<string, string> = {};
   for (const [key, value] of Object.entries(headers || {})) lower[String(key).toLowerCase()] = String(value);
   const vary = (lower.vary || "").toLowerCase();
   const encoding = (lower["content-encoding"] || "").toLowerCase();

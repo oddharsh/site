@@ -5,7 +5,7 @@ import { BOT_UA } from "./lib/botauth.ts";
 import { deadline } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { esc, wantsMarkdown } from "./lib/http.ts";
-import { asNumber, asText } from "./lib/parse.ts";
+import { asNumber, asRecord, asText } from "./lib/parse.ts";
 
 const RDAP_BUDGET_MS = 250;
 
@@ -41,53 +41,57 @@ export async function fetchRdap(ip) {
       cf: { cacheTtl: 86400, cacheEverything: true },  // 24h CF edge cache, keyed by URL
     });
     if (!res.ok) return null;
-    const data = await res.json();
+    const data = asRecord(await res.json());
+    if (!data) return null;
 
     // network name — short identifier for the allocated block (e.g.
     // "COMCAST-1", "COLUMBIA-UNIV"). `handle` falls back to ARIN's
     // internal NET- handle if `name` isn't populated.
-    const networkName = data.name || data.handle || null;
+    const networkName = asText(data.name) || asText(data.handle) || null;
 
     // CIDR — prefer the structured cidr0_cidrs[0]; otherwise compose
     // from startAddress/endAddress (less precise but always present).
     let cidr = null;
-    const c = Array.isArray(data.cidr0_cidrs) ? data.cidr0_cidrs[0] : null;
+    const c = asRecord(Array.isArray(data.cidr0_cidrs) ? data.cidr0_cidrs[0] : null);
     if (c) {
-      const prefix = c.v4prefix || c.v6prefix;
+      const prefix = asText(c.v4prefix) || asText(c.v6prefix);
       if (prefix && asNumber(c.length) !== null) cidr = `${prefix}/${c.length}`;
     }
-    if (!cidr && data.startAddress && data.endAddress) {
-      cidr = `${data.startAddress} – ${data.endAddress}`;
+    const startAddress = asText(data.startAddress);
+    const endAddress = asText(data.endAddress);
+    if (!cidr && startAddress && endAddress) {
+      cidr = `${startAddress} – ${endAddress}`;
     }
 
     // registered owner — pulled from the entity with role "registrant".
     // RDAP encodes entity contact info as a vCard 4.0 jCard structure;
     // the "fn" (formatted name) property is the human-readable owner.
     let owner = null;
-    const registrant = (data.entities || []).find(e =>
-      Array.isArray(e.roles) && e.roles.includes("registrant")
+    const entities = Array.isArray(data.entities) ? data.entities.map(asRecord).filter(Boolean) : [];
+    const registrant = entities.find((entity) =>
+      Array.isArray(entity.roles) && entity.roles.includes("registrant")
     );
     const vcard = registrant?.vcardArray;
     if (Array.isArray(vcard) && Array.isArray(vcard[1])) {
       const fn = vcard[1].find(v => Array.isArray(v) && v[0] === "fn");
-      if (fn && asText(fn[3]) !== null) owner = fn[3];
+      if (fn && asText(fn[3]) !== null) owner = asText(fn[3]);
     }
 
     // events — registration date + last changed are most interesting.
-    const events = Array.isArray(data.events) ? data.events : [];
-    const regEvent = events.find(e => e.eventAction === "registration");
-    const lastChanged = events.find(e => e.eventAction === "last changed");
+    const events = Array.isArray(data.events) ? data.events.map(asRecord).filter(Boolean) : [];
+    const regEvent = events.find((event) => event.eventAction === "registration");
+    const lastChanged = events.find((event) => event.eventAction === "last changed");
 
     // allocation type — "DIRECT ASSIGNMENT", "REASSIGNED", "ALLOCATED PORTABLE", etc.
-    const allocType = data.type || null;
+    const allocType = asText(data.type);
 
     return {
       networkName,
       owner,
       cidr,
       allocType,
-      registered:  regEvent?.eventDate || null,
-      lastChanged: lastChanged?.eventDate || null,
+      registered:  asText(regEvent?.eventDate),
+      lastChanged: asText(lastChanged?.eventDate),
     };
   } catch (_e) {
     return null;

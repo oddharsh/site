@@ -20,6 +20,7 @@
 import { handleSiteMcp } from "./mcp.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { escHtml } from "./lib/http.ts";
+import { asRecord } from "./lib/parse.ts";
 
 const WIRE_CSS = `/*min*/
 .wire{font:12px/1.5 var(--font-mono)}
@@ -66,12 +67,16 @@ export async function handleTerminal(request, env, ctx) {
 
   // The catalogue, compacted. A model reads every inputSchema; a person reading
   // this page needs the SHAPE, and forty schemas would bury it.
-  const tools = (listRes?.result?.tools || [])
-    .map((t) => `${String(t.name).padEnd(22)} ${String(t.description || "").slice(0, 84)}`);
+  const listResult = asRecord(asRecord(listRes)?.result);
+  const toolRecords = Array.isArray(listResult?.tools) ? listResult.tools.map(asRecord).filter(Boolean) : [];
+  const tools = toolRecords
+    .map((tool) => `${String(tool.name).padEnd(22)} ${String(tool.description || "").slice(0, 84)}`);
   const catalogue = tools.length
     ? `${tools.length} tools\n\n${tools.join("\n")}`
     : "the tool list could not be read just now";
-  const callText = String(callRes?.result?.content?.[0]?.text || "").slice(0, 800)
+  const callResult = asRecord(asRecord(callRes)?.result);
+  const firstContent = asRecord(Array.isArray(callResult?.content) ? callResult.content[0] : null);
+  const callText = String(firstContent?.text || "").slice(0, 800)
     || "(no content — the cache is cold)";
 
   return lunaPage({

@@ -31,8 +31,12 @@ import { parseCacheControl } from "./dict.ts";
 
 const FETCH_TIMEOUT = 8000;
 
+type HeaderProbe =
+  | { status: number; headers: Record<string, string>; error?: never }
+  | { error: string; status?: never; headers?: never };
+
 /** One bounded, signed fetch that reads only headers (body cancelled). */
-async function probeHeaders(url, env, extraHeaders = {}) {
+async function probeHeaders(url, env, extraHeaders = {}): Promise<HeaderProbe> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
   try {
@@ -48,10 +52,10 @@ async function probeHeaders(url, env, extraHeaders = {}) {
     const res = isSelf
       ? await (env.SELF_FETCH ? env.SELF_FETCH(req) : env.ASSETS.fetch(req))
       : await fetch(url, { headers, redirect: "follow", signal: controller.signal, cf: { cacheTtl: 0 } });
-    const out = { status: res.status, headers: {} };
-    for (const [key, value] of res.headers) out.headers[key.toLowerCase()] = value;
+    const responseHeaders: Record<string, string> = {};
+    for (const [key, value] of res.headers) responseHeaders[key.toLowerCase()] = value;
     try { await res.body?.cancel(); } catch { /* already drained */ }
-    return out;
+    return { status: res.status, headers: responseHeaders };
   } catch (error) {
     return { error: String(error?.message || error).slice(0, 80) };
   } finally { clearTimeout(timer); }
@@ -139,7 +143,7 @@ export function judgeRevalidation({ first, second, conditional, negotiated }) {
  */
 export async function probeRevalidation(url, env) {
   const first = await probeHeaders(url, env);
-  if (first.error) return { ok: false, unreadable: true, why: first.error };
+  if ("error" in first) return { ok: false, unreadable: true, why: first.error };
   if (!first.headers) return { ok: false, why: "no headers came back" };
 
   const second = await probeHeaders(url, env);

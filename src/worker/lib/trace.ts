@@ -67,7 +67,7 @@ function apply(span, attrs) {
 // span(name, fn, attrs?) — run fn inside a span that ends when fn settles.
 // Returns whatever fn returns (a promise stays a promise), so this can be
 // dropped around an existing expression without changing its shape.
-export function span(name, fn, attrs) {
+export function span(name, fn, attrs?) {
   const t = tracing;
   if (!t) return fn(INERT);
   return t.enterSpan(name, (s) => {

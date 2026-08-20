@@ -3038,7 +3038,7 @@ export function lensProbeBotViews(targetUrl, env) {
 // `accept` is optional and forwards to lensFetch, which has always taken one.
 // lib/doors.js needs it to ask a page for its Markdown twin at the page's own
 // URL; every existing caller omits it and gets the previous default.
-export async function lensProbe(url, env, accept) {
+export async function lensProbe(url, env, accept?) {
   try {
     const ctrl = new AbortController();
     const to = setTimeout(() => ctrl.abort(), 5000);

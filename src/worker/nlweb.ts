@@ -212,6 +212,26 @@ export async function nlwebAsk(env, params) {
     schema_object: askSchemaObject(record),
   }));
 
+  // The revision this SERVER speaks, and separately the dialect this REQUEST
+  // was read as. `decontextualization` is absent unless it is true of this
+  // response, so it is explicitly optional rather than widening the whole
+  // payload after inference.
+  const responseMeta: {
+    version: string;
+    dialect: string;
+    retrieval: string;
+    description: string;
+    score: string;
+    modes_supported: string[];
+    decontextualization?: string;
+  } = {
+    version: NLWEB_VERSION,
+    dialect: params.structured ? "0.55" : "legacy",
+    retrieval: "lexical",
+    description: "extractive",
+    score: `0-100, relevance as a percentage of the maximum a ${ranked.terms.length}-term query could score`,
+    modes_supported: NLWEB_MODES.supported,
+  };
   const payload = {
     query_id: params.queryId,
     query: params.query,
@@ -223,21 +243,7 @@ export async function nlwebAsk(env, params) {
     decontextualized_query: params.searched,
     total: ranked.total,
     results,
-    _meta: {
-      // The revision this SERVER speaks, and separately the dialect this
-      // REQUEST was read as. One field carrying both would be ambiguous on the
-      // common case: a legacy GET is answered by a server that does speak 0.55,
-      // and "version: 0.55" alone reads as a claim about the response.
-      version: NLWEB_VERSION,
-      dialect: params.structured ? "0.55" : "legacy",
-      // Every one of these is a claim this origin can actually back. `retrieval`
-      // and `description` are named because NLWeb's own field annotation says
-      // descriptions are LLM-generated, and ours are not.
-      retrieval: "lexical",
-      description: "extractive",
-      score: `0-100, relevance as a percentage of the maximum a ${ranked.terms.length}-term query could score`,
-      modes_supported: NLWEB_MODES.supported,
-    },
+    _meta: responseMeta,
   };
 
   // Only ever present when it is TRUE of this response: a caller who sent no

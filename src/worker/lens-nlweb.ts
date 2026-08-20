@@ -45,6 +45,17 @@ const NLWEB_CACHE_SECONDS = 3600;
 const MAX_QUERY = 200;
 const DEFAULT_QUERY = "what is this site about";
 
+type ForeignNlwebProbe =
+  | { ok: false; unreadable?: boolean; gated?: boolean; detail: string }
+  | {
+      ok: true;
+      total: number;
+      framing: string;
+      dialect: string;
+      coverage: { schema_object: number; [field: string]: number };
+      [field: string]: unknown;
+    };
+
 export async function handleLensNlweb(request, env) {
   const params = new URL(request.url).searchParams;
 
@@ -79,7 +90,10 @@ export async function handleLensNlweb(request, env) {
     s.setAttribute("lens.target_host", host);
     s.setAttribute("lens.cache", "miss");
 
-    const probe = await foreignNlwebAsk(origin, env, { query });
+    // doors.ts is still in the explicit TypeScript quarantine. State its public
+    // result here so this checked caller cannot confuse a shut/unreadable door
+    // with the successful shape it renders below.
+    const probe = await foreignNlwebAsk(origin, env, { query }) as ForeignNlwebProbe;
 
     if (!probe.ok) {
       // SHUT and UNREADABLE stay apart, same as the catalogue read: "this origin
