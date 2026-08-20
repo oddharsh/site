@@ -46,16 +46,37 @@
      switched off. That is exactly what a passed-over access looks like. */
   --st-shipped:#3a6ea5; --st-partial:#e8c14a; --st-frontier:#7b6ea5;
   --st-passed:#c8402f; --st-phantom:#9d9d95;
+  /* --sc SCALES THE CHROME WITH THE SCREEN, and only the chrome. XP chrome is
+     small by design and 9.5pt Tahoma is right at a laptop's reading distance;
+     the same 9.5pt is 12.7px on a projector across a room, and what Meet's
+     encoder leaves of it is less. The graph text scales on its own, because the
+     board is an SVG that now fills its box, so this covers what does not: the
+     toolbar, the tree, the status counts, the legend, and the two surfaces a
+     presenter actually reads out, which are the hover card and the properties
+     sheet. Prose is untouched. Nobody reads the essay off a projector. */
+  --sc:1;
 }
+@media (min-width:1600px){:root{--sc:1.12}}
+@media (min-width:1900px){:root{--sc:1.26}}
 *{box-sizing:border-box}
 /* the page's own chrome lives on .window below, but body needs the family too:
    anything the shell injects OUTSIDE .window inherits from here. */
 body{font-family:var(--font-ui)}
-.window{--axp-maxw:1440px; max-width:var(--axp-maxw);font-family:var(--font-ui);font-size:10.5pt;color:var(--ink)}
+/* MAXIMIZED, because the artifact on this page is 1002 CSS px of board and the
+   window used to cap at 1440 on a screen that had 1920. That left 480px of
+   wallpaper either side and the graph rendering at 1:1 in an 1188px canvas, so
+   half the pixels of a projector went to Bliss. A maximized MMC console is also
+   what the title bar's box glyph has always claimed this window is. */
+.window{--axp-maxw:1880px; max-width:var(--axp-maxw);font-family:var(--font-ui);font-size:10.5pt;color:var(--ink)}
 h1{font-family:var(--font-caption);font-size:17pt;font-weight:700;color:var(--navy);margin:0 0 2px;letter-spacing:-.01em;text-wrap:balance}
 h2{font-family:var(--font-caption);font-size:12.5pt;font-weight:700;color:var(--navy2);margin:22px 0 6px}
 h3{font-family:var(--font-caption);font-size:10.5pt;font-weight:700;color:var(--navy);margin:14px 0 4px}
 p{margin:0 0 10px;line-height:1.52;color:var(--ink-soft)}
+/* Widening the window widened the PROSE with it, to about 190 characters a line.
+   The console wants the whole screen and a paragraph wants 80 characters, so the
+   measure is declared on the text rather than inherited from the frame. Direct
+   children only: the panel, the legend, the table and the console set their own. */
+.content>p,.content>h2,.content>h3,.content>ul,.content>ol,.gb,footer{max-width:82ch}
 .lede{color:var(--ink);font-size:11pt;max-width:74ch}
 b{color:var(--ink)}
 a{color:var(--link)}
@@ -63,43 +84,95 @@ small,.meta{font-size:9pt;color:var(--ink-dim);font-family:var(--font-mono)}
 
 /* ---- the MMC console ------------------------------------------------- */
 .mmc{position:relative;border:1px solid var(--sh);box-shadow:var(--bevel-sunken);background:var(--face);margin:14px 0 6px}
-.mmc-menu{display:flex;gap:2px;padding:2px 3px;border-bottom:1px solid var(--face);background:var(--face-light);font-size:9.5pt}
-.mmc-menu span,.mmc-menu button{font:inherit;font-size:9.5pt;padding:2px 8px;border:1px solid transparent;border-radius:2px;color:var(--ink-soft);background:transparent}
+.mmc-menu{display:flex;gap:2px;padding:2px 3px;border-bottom:1px solid var(--face);background:var(--face-light);font-size:calc(9.5pt * var(--sc))}
+.mmc-menu span,.mmc-menu button{font:inherit;font-size:calc(9.5pt * var(--sc));padding:2px 8px;border:1px solid transparent;border-radius:2px;color:var(--ink-soft);background:transparent}
 .mmc-menu span:first-child{color:var(--ink)}
 .mmc-menu button{color:var(--ink);cursor:pointer}
 .mmc-menu button:hover,.mmc-menu button[aria-expanded=true]{background:var(--sel);color:#fff;border-color:var(--sel)}
 .mmc-menu button:focus-visible{outline:1px dotted var(--navy);outline-offset:1px}
 /* the one real dropdown. XP menus really did drop a soft shadow. */
 .menu-pop{position:absolute;z-index:30;top:24px;left:96px;min-width:196px;background:var(--face-light);border:1px solid var(--dsh);box-shadow:2px 3px 7px rgba(0,20,90,.28);padding:2px}
-.menu-pop button{font:inherit;font-size:9.5pt;display:flex;align-items:center;gap:7px;width:100%;text-align:left;background:transparent;border:0;padding:4px 10px 4px 6px;cursor:pointer;color:var(--ink)}
+.menu-pop button{font:inherit;font-size:calc(9.5pt * var(--sc));display:flex;align-items:center;gap:7px;width:100%;text-align:left;background:transparent;border:0;padding:4px 10px 4px 6px;cursor:pointer;color:var(--ink)}
 .menu-pop button:hover{background:var(--sel);color:#fff}
 .menu-pop .tick{width:13px;flex:0 0 13px;font-family:var(--font-ui);font-weight:700;font-size:10pt;line-height:1}
 .mmc-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:5px 6px;border-top:1px solid var(--hi);border-bottom:1px solid var(--sh);background:var(--face)}
+/* a caption and the control it names wrap as one item, so a narrow toolbar
+   cannot leave the word ZOOM stranded on a row above its own buttons */
+.bar-grp{display:flex;gap:8px;align-items:center}
 .seg{display:flex;box-shadow:var(--bevel-raised);border:1px solid var(--dsh);background:var(--grad-button)}
-.seg button{font:inherit;font-size:9.5pt;color:var(--ink);background:transparent;border:0;padding:4px 11px;cursor:pointer}
+.seg button{font:inherit;font-size:calc(9.5pt * var(--sc));color:var(--ink);background:transparent;border:0;padding:4px 11px;cursor:pointer}
 .seg button+button{border-left:1px solid var(--sh)}
 .seg button[aria-pressed=true]{background:linear-gradient(180deg,#c9d9f0,#e4ecf9);box-shadow:var(--bevel-sunken);font-weight:700}
 .seg button:hover{background:var(--grad-btn-hover)}
-.btn{font:inherit;font-size:9.5pt;color:var(--ink);background:var(--grad-button);border:1px solid var(--dsh);box-shadow:var(--bevel-raised);padding:4px 11px;cursor:pointer;border-radius:2px}
+.btn{font:inherit;font-size:calc(9.5pt * var(--sc));color:var(--ink);background:var(--grad-button);border:1px solid var(--dsh);box-shadow:var(--bevel-raised);padding:4px 11px;cursor:pointer;border-radius:2px}
 .btn:hover{background:var(--grad-btn-hover);border-color:var(--navy2)}
 .btn:active{box-shadow:var(--bevel-sunken)}
 .btn[aria-pressed=true]{background:linear-gradient(180deg,#f6d9d3,#fbeae6);box-shadow:var(--bevel-sunken);border-color:var(--danger);font-weight:700}
 .btn:focus-visible,.seg button:focus-visible{outline:1px dotted var(--navy);outline-offset:1px}
-.bar-lab{font-size:9pt;color:var(--ink-dim);text-transform:uppercase;letter-spacing:.05em}
-select{font:inherit;font-size:9.5pt;border:1px solid var(--dsh);box-shadow:var(--bevel-sunken);background:var(--win);padding:3px 4px}
+.bar-lab{font-size:calc(9pt * var(--sc));color:var(--ink-dim);text-transform:uppercase;letter-spacing:.05em}
+select{font:inherit;font-size:calc(9.5pt * var(--sc));border:1px solid var(--dsh);box-shadow:var(--bevel-sunken);background:var(--win);padding:3px 4px}
 
-.mmc-split{display:flex;align-items:stretch;min-height:380px}
-.mmc-tree{flex:0 0 186px;border-right:1px solid var(--sh);background:var(--win);overflow:auto;max-height:580px;padding:5px 0}
-.mmc-canvas{flex:1 1 auto;overflow:auto;max-height:580px;background:var(--win);position:relative}
-.mmc-status{display:flex;gap:0;border-top:1px solid var(--hi);background:var(--face);font-size:9pt;color:var(--ink-soft);flex-wrap:wrap}
+/* THE SPLIT IS SIZED OFF THE VIEWPORT, never off a constant. A 380px floor and a
+   580px ceiling showed 42% of a 1385px board through a scroller nested inside
+   .content's scroller, and on a 720p share the console opened below the fold
+   entirely. luna.css already makes .window viewport-tall with .content as the
+   scroll pane, so the room was there and the console only had to ask for it. */
+.mmc-split{display:flex;align-items:stretch;height:clamp(340px,calc(100vh - 330px),1180px);min-height:0}
+.mmc.no-tree .mmc-tree{display:none}
+.mmc-tree{flex:0 0 calc(186px * var(--sc));border-right:1px solid var(--sh);background:var(--win);overflow-y:auto;padding:5px 0}
+.mmc-canvas{flex:1 1 0;min-width:0;min-height:0;background:var(--win);position:relative;overscroll-behavior:contain}
+/* A wheel over the board must not reach the document once the board bottoms out:
+   scrolling the essay away mid-sentence is the one thing a presenter cannot undo
+   gracefully in front of a room. overscroll-behavior above; the reserved gutter
+   below keeps the graph from resizing by a scrollbar width as one appears. */
+.mmc-canvas{overflow-x:auto;overflow-y:scroll}
+.mmc-canvas.z-fit{overflow:hidden}
+.mmc-status{display:flex;gap:0;border-top:1px solid var(--hi);background:var(--face);font-size:calc(9pt * var(--sc));color:var(--ink-soft);flex-wrap:wrap}
 .mmc-status span{padding:3px 8px;box-shadow:var(--bevel-sunken);flex:0 0 auto}
 .mmc-status span:last-child{flex:1 1 auto;color:var(--ink-dim);min-width:180px}
+
+/* The board always scrolls now, so its scrollbar is the one mark saying there is
+   more below, and it gets painted rather than left to the platform.
+
+   The scrollbar-color:auto reset is DEFENSIVE and is inert as things stand: the
+   value inherits, luna.css already resets it on .window>.content, and this page
+   inherits that. It is here because the failure it guards is silent and the
+   guard is one declaration. Measured on this canvas 2026-08-20, changing only
+   that property: a non-auto value gives a 0px gutter and an auto value gives
+   16px, which is gotcha 18 reproducing in place, so any future rule up this tree
+   deletes the bar without touching a line of this file. The Firefox arm is the
+   compound-safe spelling; :-moz-appearance would be un-prefixed by the minifier
+   and flip true in Chromium. */
+.mmc-canvas,.mmc-tree{scrollbar-color:auto}
+.mmc-canvas::-webkit-scrollbar,.mmc-tree::-webkit-scrollbar{width:16px;height:16px}
+.mmc-canvas::-webkit-scrollbar-track,.mmc-tree::-webkit-scrollbar-track{background:#e8edf6;box-shadow:inset 1px 0 0 #a9bcd8,inset -1px 0 0 #fff}
+.mmc-canvas::-webkit-scrollbar-thumb,.mmc-tree::-webkit-scrollbar-thumb{border:1px solid;border-color:#c3d4ef #29529c #29529c #c3d4ef;background:linear-gradient(90deg,#a8c0e6,#5a83c8);box-shadow:inset 1px 1px 0 #dae6f8}
+.mmc-canvas::-webkit-scrollbar-thumb:hover,.mmc-tree::-webkit-scrollbar-thumb:hover{background:linear-gradient(90deg,#b6cbec,#6b91d2)}
+.mmc-canvas::-webkit-scrollbar-corner,.mmc-tree::-webkit-scrollbar-corner{background:#e8edf6}
+@supports (not selector(::-webkit-scrollbar)) or selector(:-moz-focusring){
+  .mmc-canvas,.mmc-tree{scrollbar-color:#5a83c8 #e8edf6;scrollbar-width:auto}
+}
+
+/* THE COLUMN HEADS LEFT THE BOARD AND BECAME A STRIP. They were drawn once at
+   the top of the SVG, so the branch names scrolled away with it and the audience
+   lost the key to seven columns. The board always scrolls now, because filling
+   the width makes it about 1950px tall, so that went from an edge case to every
+   session. The strip draws at the board's own scale and never moves, and it is
+   aria-hidden because the tree pane names every branch already.
+
+   flex:0 0 auto is load-bearing: the canvas beside it is a flex item whose
+   content is the whole 1950px board, so a shrinkable strip gets squeezed to a
+   fraction of its height and clips its labels to a sliver. Measured at 15px of
+   a 41px strip before this line existed. */
+.mmc-head{flex:0 0 auto;background:var(--face-light);border-bottom:1px solid var(--sh);overflow:hidden}
+.mmc-head svg{display:block;margin:0 auto}
+.mmc-board{display:flex;flex-direction:column;flex:1 1 auto;min-width:0;min-height:0}
 
 /* left pane: the tree, as a tree */
 .tree,.tree ul{list-style:none;margin:0;padding:0}
 .tree ul{margin-left:15px;border-left:1px dotted var(--sh)}
-.tree li{font-size:9.5pt;line-height:1.35}
-.tree button{font:inherit;font-size:9.5pt;display:flex;align-items:center;gap:5px;width:100%;text-align:left;background:transparent;border:0;padding:2px 6px 2px 4px;cursor:pointer;color:var(--ink)}
+.tree li{font-size:calc(9.5pt * var(--sc));line-height:1.35}
+.tree button{font:inherit;font-size:calc(9.5pt * var(--sc));display:flex;align-items:center;gap:5px;width:100%;text-align:left;background:transparent;border:0;padding:2px 6px 2px 4px;cursor:pointer;color:var(--ink)}
 .tree button:hover{background:var(--sel-soft)}
 .tree button[aria-current=true]{background:var(--sel);color:#fff}
 .tree .tw{width:9px;flex:0 0 9px;font-family:var(--font-mono);font-size:8pt;color:var(--ink-dim)}
@@ -112,21 +185,27 @@ select{font:inherit;font-size:9.5pt;border:1px solid var(--dsh);box-shadow:var(-
 /* the graph */
 svg.graph{display:block}
 svg.graph text{font-family:var(--font-ui);fill:var(--ink)}
-.band rect{fill:#f5f6f9}
-.band.alt rect{fill:#fdfdfd}
-.band text,.lane text{font-family:var(--font-mono);font-size:8px;fill:#9a9684;letter-spacing:.04em}
-.bandline{stroke:#e4e6ec;stroke-width:1}
-.colhead text{font-family:var(--font-caption);font-size:10px;font-weight:700;fill:var(--navy2);letter-spacing:.02em}
+/* Every value below moved for ONE reason: a screenshare re-encodes this page as
+   video, and low-contrast hairlines are exactly what a video codec spends no
+   bits on. #f5f6f9 against #fdfdfd is a 2% band alternation that survives a
+   laptop and does not survive Meet. Sizes here are SVG user units, so they ride
+   the board's scale; the colours do not, which is why only the colours moved far. */
+svg.graph{margin:0 auto}
+.band rect{fill:#eef1f7}
+.band.alt rect{fill:#ffffff}
+.band text,.lane text{font-family:var(--font-mono);font-size:9px;fill:#7a7765;letter-spacing:.04em}
+.bandline{stroke:#c6ccd9;stroke-width:1.2}
+.colhead text{font-family:var(--font-caption);font-size:11.5px;font-weight:700;fill:var(--navy2);letter-spacing:.02em}
 /* time view furniture */
 .axis line{stroke:#c9ccd4;stroke-width:1}
-.axis text{font-family:var(--font-mono);font-size:8px;fill:#8d8a7c}
+.axis text{font-family:var(--font-mono);font-size:9px;fill:#6f6c5f}
 .region rect{fill:#f6f5f1}
 .region.spec rect{fill:#faf7ee}
-.region text{font-family:var(--font-mono);font-size:8px;fill:#9a9684}
+.region text{font-family:var(--font-mono);font-size:9px;fill:#7a7765}
 .brk{stroke:#b9bfcb;stroke-width:1.2}
 .nowline{stroke:var(--navy2);stroke-width:1;stroke-dasharray:3 3}
-.nowline-lab{font-family:var(--font-mono);font-size:8px;fill:var(--navy2)}
-.edge{fill:none;stroke:#b9bfcb;stroke-width:1.2}
+.nowline-lab{font-family:var(--font-mono);font-size:9px;fill:var(--navy2)}
+.edge{fill:none;stroke:#97a2b6;stroke-width:1.3}
 .edge.lit{stroke:var(--navy);stroke-width:2}
 /* zero-sum: amber, dashed, dotted at both ends because it points both ways */
 .rival{fill:none;stroke:#b8860b;stroke-width:1.4;stroke-dasharray:6 3;opacity:.75}
@@ -139,7 +218,7 @@ svg.graph text{font-family:var(--font-ui);fill:var(--ink)}
 .dev:hover .box{fill:#eef3fc;stroke:var(--navy2)}
 .dev.sel .box{fill:#dbe7fa;stroke:var(--navy);stroke-width:2}
 .dev .nm{font-size:9.5px;fill:var(--ink)}
-.dev .sub{font-family:var(--font-mono);font-size:7.5px;fill:var(--ink-dim)}
+.dev .sub{font-family:var(--font-mono);font-size:8px;fill:#55554e}
 .dev.dim{opacity:.22}
 .dev.junction .box{fill:#fdf3d6;stroke:var(--gold);stroke-width:2}
 .dev:focus-visible .box{stroke:var(--navy);stroke-width:2}
@@ -161,10 +240,10 @@ svg.graph text{font-family:var(--font-ui);fill:var(--ink)}
 .gl-ghost circle{fill:none;stroke:#a9a9a0;stroke-width:1;stroke-dasharray:2 2}
 
 /* tooltip */
-#tip{position:fixed;z-index:60;max-width:342px;display:none;background:#ffffe1;border:1px solid #000;box-shadow:2px 2px 4px rgba(0,0,0,.3);padding:6px 8px;font-size:9.5pt;line-height:1.42;color:#1a1a1a;pointer-events:none}
+#tip{position:fixed;z-index:60;max-width:calc(342px * var(--sc));display:none;background:#ffffe1;border:1px solid #000;box-shadow:2px 2px 4px rgba(0,0,0,.3);padding:6px 8px;font-size:calc(9.5pt * var(--sc));line-height:1.42;color:#1a1a1a;pointer-events:none}
 #tip .t{font-weight:700;color:var(--navy);display:block;margin-bottom:2px}
-#tip .st{display:block;font-family:var(--font-mono);font-size:8.5pt;color:#5a5a52;margin-bottom:4px}
-#tip .x{display:block;margin-top:4px;font-family:var(--font-mono);font-size:8.5pt;color:#4a4a4a}
+#tip .st{display:block;font-family:var(--font-mono);font-size:calc(8.5pt * var(--sc));color:#5a5a52;margin-bottom:4px}
+#tip .x{display:block;margin-top:4px;font-family:var(--font-mono);font-size:calc(8.5pt * var(--sc));color:#4a4a4a}
 #tip .bl{display:block;margin-top:4px;color:#8a2f20}
 #tip .bet{display:block;margin-top:4px;color:#4a3b7a}
 /* the skill-tooltip pair: what the pick buys, what it spends */
@@ -176,23 +255,23 @@ svg.graph text{font-family:var(--font-ui);fill:var(--ink)}
 #tip .riv b{color:#8a6410}
 
 /* properties sheet */
-dialog.props{border:2px solid var(--navy);padding:0;background:var(--face);max-width:530px;width:calc(100vw - 32px);box-shadow:3px 4px 12px rgba(0,20,90,.4);color:var(--ink)}
+dialog.props{border:2px solid var(--navy);padding:0;background:var(--face);max-width:calc(530px * var(--sc));width:calc(100vw - 32px);box-shadow:3px 4px 12px rgba(0,20,90,.4);color:var(--ink)}
 dialog.props::backdrop{background:rgba(10,36,106,.28)}
-.props .tb{display:flex;align-items:center;gap:6px;padding:4px 5px 4px 8px;color:#fff;font-family:var(--font-caption);font-weight:700;font-size:11pt;text-shadow:1px 1px #0f1089;background:linear-gradient(180deg,#5a86d8,#2f55b8 60%,#3f66c4)}
+.props .tb{display:flex;align-items:center;gap:6px;padding:4px 5px 4px 8px;color:#fff;font-family:var(--font-caption);font-weight:700;font-size:calc(11pt * var(--sc));text-shadow:1px 1px #0f1089;background:linear-gradient(180deg,#5a86d8,#2f55b8 60%,#3f66c4)}
 .props .tb .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .props .tb .x{width:19px;height:17px;display:grid;place-items:center;border:1px solid #d8401c;border-radius:3px;background:linear-gradient(180deg,#e8795f,#ae3110);font-size:9px;color:#fff;cursor:pointer;font-family:var(--font-ui)}
 .props .tb .x:hover{filter:brightness(1.12)}
 .props .tabs{display:flex;gap:2px;padding:6px 8px 0;background:var(--face)}
-.props .tabs button{font:inherit;font-size:9.5pt;padding:3px 11px;border:1px solid var(--sh);border-bottom:0;border-radius:3px 3px 0 0;background:linear-gradient(180deg,#e3e0d2,#d7d4c6);color:var(--ink-soft);cursor:pointer;position:relative;top:1px}
+.props .tabs button{font:inherit;font-size:calc(9.5pt * var(--sc));padding:3px 11px;border:1px solid var(--sh);border-bottom:0;border-radius:3px 3px 0 0;background:linear-gradient(180deg,#e3e0d2,#d7d4c6);color:var(--ink-soft);cursor:pointer;position:relative;top:1px}
 .props .tabs button[aria-selected=true]{background:var(--face);color:var(--ink);font-weight:700;top:0;padding-bottom:5px;z-index:2}
-.props .sheet{border:1px solid var(--sh);box-shadow:var(--bevel-raised);background:var(--face);margin:0 8px 8px;padding:11px 12px;min-height:186px}
-.props dl{margin:0;font-size:9.5pt}
+.props .sheet{border:1px solid var(--sh);box-shadow:var(--bevel-raised);background:var(--face);margin:0 8px 8px;padding:11px 12px;min-height:calc(186px * var(--sc))}
+.props dl{margin:0;font-size:calc(9.5pt * var(--sc))}
 .props dt{font-weight:700;color:var(--navy);margin-top:8px}
 .props dt:first-child{margin-top:0}
 .props dd{margin:2px 0 0;color:var(--ink-soft);line-height:1.48}
 .props dd.spec{color:#4a3b7a}
 .props ul.ex{margin:2px 0 0;padding-left:17px;color:var(--ink-soft);line-height:1.5}
-.props .conf{font-family:var(--font-mono);font-size:8.5pt;color:var(--ink-dim)}
+.props .conf{font-family:var(--font-mono);font-size:calc(8.5pt * var(--sc));color:var(--ink-dim)}
 .props .foot{display:flex;justify-content:flex-end;gap:6px;padding:0 8px 9px}
 
 /* the flat table */
@@ -212,7 +291,7 @@ table.devs .st-passed{color:var(--danger)}
 table.devs .st-phantom{color:#71716a}
 table.devs .seen{font-family:var(--font-mono);font-size:8.5pt;white-space:nowrap}
 table.devs td.ex{font-size:8.5pt}
-.legend{display:flex;gap:13px;flex-wrap:wrap;margin:8px 0 2px;font-size:9pt;color:var(--ink-soft)}
+.legend{display:flex;gap:13px;flex-wrap:wrap;margin:8px 0 2px;font-size:calc(9pt * var(--sc));color:var(--ink-soft)}
 .legend span{display:flex;align-items:center;gap:5px}
 .legend i{width:11px;height:11px;display:inline-block;border:1px solid var(--sh)}
 .legend i.gh{border-style:dashed;background:#f8f8f5}
@@ -221,8 +300,12 @@ table.devs td.ex{font-size:8.5pt}
 .gb-legend{position:absolute;top:-9px;left:9px;background:var(--face);padding:0 5px;font-size:9pt;color:var(--ink-dim);font-weight:700;text-transform:uppercase;letter-spacing:.05em}
 footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:9pt;color:var(--ink-dim)}
 @media (max-width:820px){
-  .mmc-split{flex-direction:column}
-  .mmc-tree{flex:0 0 auto;max-height:200px;border-right:0;border-bottom:1px solid var(--sh)}
+  /* Stacked, so the split's height is now shared rather than spent on one pane,
+     and the tree gives most of it back to the board. Fill scales the graph down
+     to whatever width is left, which is what finally retires the horizontal
+     scroll a phone used to get from a 1002px board in a 360px canvas. */
+  .mmc-split{flex-direction:column;height:clamp(380px,calc(100vh - 250px),760px)}
+  .mmc-tree{flex:0 0 auto;max-height:132px;border-right:0;border-bottom:1px solid var(--sh)}
 }
 </style>
 <link rel="stylesheet" href="/luna.css">
@@ -241,49 +324,74 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
 <p class="lede">What a model is allowed to touch has shaped AI as we use it more than the weights or the benchmarks have. Here is that whole surface, drawn as the one Windows app that was already a tree of what a machine can reach.</p>
 <!-- ══ /FLAVORTEXT: lede ══════════════════════════════════════════════════ -->
 
-<!-- ══ FLAVORTEXT: how to read it ═════════════════════════════════════════ -->
-<p>Sixty-eight nodes. Each one is a <b>flavor of access</b>, not a product, so a node outlives the vendor that currently occupies it. Products hang off the nodes as examples, and every node that isn't finished carries a dated bet.</p>
-<p>Five states, all of them Device Manager's own. <b>Installed</b> works and something depends on it. A <b>yellow bang</b> works badly enough to matter. An <b>unknown device</b> is present on the bus with no driver, which is where somebody is actively building. <b>Disabled</b> is the one worth reading twice: in Device Manager a red X never meant missing, it meant switched off, which is exactly what an access looks like after the ecosystem passed it over. And a device can be <b>not present</b> at all, describable but attached to nothing, which is where the speculation lives. Those are hidden until you ask for them, under <b>View</b>.</p>
-<p>Dates are month-level where the month is establishable and year-level where it isn't, marked with a <b>~</b>. I would rather show you a coarse date than a confident wrong one.</p>
-
-<p>Read it the way you'd read a tech tree in a game, because the branches behave like one. Some are <b>sequential</b>: you cannot take the file system before code execution, and the Properties sheet on any device shows its full prerequisite chain. Some are <b>zero-sum</b>, drawn as amber double-ended lines, where investment in one branch is exactly what stops the other being maintained. Some are <b>unexplored</b>, the phantoms nobody has attached. And some are <b>ignored</b>, already built and switched off. Every device previews what it buys <b>and</b> what it costs on hover, because a pick with no downside is a pick nobody had to think about.</p>
-<!-- ══ /FLAVORTEXT: how to read it ════════════════════════════════════════ -->
-
+<!-- THE CONSOLE COMES FIRST. It used to open 449px down, under five paragraphs,
+     so a 720p screenshare landed on prose and showed the menu bar of the thing
+     the page is about. The reading order that put "how to read it" first is the
+     right order for a reader who is scrolling and the wrong one for a room that
+     is looking, and only one of those two can have the first screen. The prose
+     that explained the five states now sits under the board it explains, next to
+     a legend that says the same thing in colour. -->
 <div class="mmc">
   <div class="mmc-menu">
     <span aria-hidden="true">File</span><span aria-hidden="true">Action</span><button type="button" id="m-view" aria-haspopup="true" aria-expanded="false" aria-controls="view-menu">View</button><span aria-hidden="true">Help</span>
   </div>
   <div class="menu-pop" id="view-menu" role="menu" hidden>
     <button type="button" role="menuitemcheckbox" id="m-hidden" aria-checked="false"><span class="tick" aria-hidden="true"></span>Show hidden devices</button>
+    <!-- MMC keeps the console tree under View, and here it buys the board 234px
+         it has nowhere else to get. At 1280, which is what a shared browser
+         window usually is, that is the difference between a node label rendering
+         at 9.9px and at 11.7px. Shown by default, because a reader who is not
+         presenting wants the tree. -->
+    <button type="button" role="menuitemcheckbox" id="m-tree" aria-checked="true"><span class="tick" aria-hidden="true">✓</span>Console tree</button>
   </div>
   <div class="mmc-bar">
-    <!-- The two toolbar captions are decorative: the group and the select already
-         carry their own accessible names, so a screen reader would hear each label
-         twice. aria-hidden fixes that AND keeps them out of the Markdown twin,
-         where "View by" and "Show" would otherwise land as two stray paragraphs. -->
-    <span class="bar-lab" aria-hidden="true">View by</span>
-    <span class="seg" role="group" aria-label="layout">
-      <button type="button" id="v-blast" aria-pressed="true">Blast radius</button><button type="button" id="v-time" aria-pressed="false">Timeline</button>
+    <!-- The three toolbar captions are decorative: each group and the select
+         already carry their own accessible names, so a screen reader would hear
+         every label twice. aria-hidden fixes that AND keeps them out of the
+         Markdown twin, where "View by", "Show" and "Zoom" would otherwise land as
+         three stray paragraphs. -->
+    <span class="bar-grp">
+      <span class="bar-lab" aria-hidden="true">View by</span>
+      <span class="seg" role="group" aria-label="layout">
+        <button type="button" id="v-blast" aria-pressed="true">Blast radius</button><button type="button" id="v-time" aria-pressed="false">Timeline</button>
+      </span>
     </span>
-    <span class="bar-lab" aria-hidden="true">Show</span>
-    <!-- aria-label rather than a visually-hidden <label>: a clipped label is still
-         DOM text, and the Markdown twin would publish it as a stray line of prose. -->
-    <select id="filter" aria-label="Filter by device state">
-      <option value="all">All devices</option>
-      <option value="gaps">Only the gaps</option>
-      <option value="shipped">Installed</option>
-      <option value="partial">Yellow bang</option>
-      <option value="frontier">Unknown device</option>
-      <option value="passed">Disabled, passed over</option>
-      <option value="phantom">Not present, speculative</option>
-    </select>
+    <span class="bar-grp">
+      <span class="bar-lab" aria-hidden="true">Show</span>
+      <!-- aria-label rather than a visually-hidden <label>: a clipped label is
+           still DOM text, and the Markdown twin would publish it as a stray line
+           of prose. -->
+      <select id="filter" aria-label="Filter by device state">
+        <option value="all">All devices</option>
+        <option value="gaps">Only the gaps</option>
+        <option value="shipped">Installed</option>
+        <option value="partial">Yellow bang</option>
+        <option value="frontier">Unknown device</option>
+        <option value="passed">Disabled, passed over</option>
+        <option value="phantom">Not present, speculative</option>
+      </select>
+    </span>
+    <!-- Zoom exists because the board is portrait and the screen is not. 1002 by
+         1385 against a 16:9 frame means fitting the whole thing shrinks a node
+         label to about 5px, so there is no single scale that is both complete and
+         readable. Fill is the default: it spends the width, which is the axis a
+         projector has spare, and lets the presenter scroll the tiers. -->
+    <span class="bar-grp">
+      <span class="bar-lab" aria-hidden="true">Zoom</span>
+      <span class="seg" role="group" aria-label="zoom">
+        <button type="button" id="z-fit" aria-pressed="false" title="the whole board at once, small">Fit</button><button type="button" id="z-fill" aria-pressed="true" title="fill the width, which is the biggest the labels get">Fill</button><button type="button" id="z-100" aria-pressed="false" title="actual size">100%</button>
+      </span>
+    </span>
     <button class="btn" type="button" id="tradeoff" aria-pressed="true">Zero-sum picks</button>
     <button class="btn" type="button" id="inject" aria-pressed="false">Trace the injection path</button>
     <button class="btn" type="button" id="reset">Reset</button>
   </div>
   <div class="mmc-split">
     <div class="mmc-tree"><ul class="tree" id="tree"></ul></div>
-    <div class="mmc-canvas" id="canvas"></div>
+    <div class="mmc-board">
+      <div class="mmc-head" id="colhead" aria-hidden="true"></div>
+      <div class="mmc-canvas" id="canvas"></div>
+    </div>
   </div>
   <!-- The placeholder cells are aria-hidden so the twin does not publish the word
        "loading" as prose. tally() replaces the whole subtree on first draw, so the
@@ -299,6 +407,14 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
   <span><i class="rv"></i>zero-sum: points spent here are points not spent there</span>
 </div>
 <p><small>Click a device for its properties. The graph is drawn from the table further down this page, so it degrades to that table with scripting off, and an agent reading <a href="/access.md">/access.md</a> gets the whole thing as prose, bets included.</small></p>
+
+<!-- ══ FLAVORTEXT: how to read it ═════════════════════════════════════════ -->
+<p>Sixty-eight nodes. Each one is a <b>flavor of access</b>, not a product, so a node outlives the vendor that currently occupies it. Products hang off the nodes as examples, and every node that isn't finished carries a dated bet.</p>
+<p>Five states, all of them Device Manager's own. <b>Installed</b> works and something depends on it. A <b>yellow bang</b> works badly enough to matter. An <b>unknown device</b> is present on the bus with no driver, which is where somebody is actively building. <b>Disabled</b> is the one worth reading twice: in Device Manager a red X never meant missing, it meant switched off, which is exactly what an access looks like after the ecosystem passed it over. And a device can be <b>not present</b> at all, describable but attached to nothing, which is where the speculation lives. Those are hidden until you ask for them, under <b>View</b>.</p>
+<p>Dates are month-level where the month is establishable and year-level where it isn't, marked with a <b>~</b>. I would rather show you a coarse date than a confident wrong one.</p>
+
+<p>Read it the way you'd read a tech tree in a game, because the branches behave like one. Some are <b>sequential</b>: you cannot take the file system before code execution, and the Properties sheet on any device shows its full prerequisite chain. Some are <b>zero-sum</b>, drawn as amber double-ended lines, where investment in one branch is exactly what stops the other being maintained. Some are <b>unexplored</b>, the phantoms nobody has attached. And some are <b>ignored</b>, already built and switched off. Every device previews what it buys <b>and</b> what it costs on hover, because a pick with no downside is a pick nobody had to think about.</p>
+<!-- ══ /FLAVORTEXT: how to read it ════════════════════════════════════════ -->
 
 <!-- ══ FLAVORTEXT: why access ═════════════════════════════════════════════ -->
 <h2>Why access, and not capability</h2>
@@ -1105,10 +1221,70 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
   }
 
   var canvas = document.getElementById("canvas");
+  var head = document.getElementById("colhead");
+  var board = canvas.parentNode;
+
+  /* --- scale ------------------------------------------------------------
+     The board is authored once, in user units, and DISPLAYED at whatever size
+     the box allows. It used to carry width and height attributes equal to its
+     own viewBox, which pinned it at 1:1 forever: on a 1920 screen the canvas was
+     1188px wide and the graph drew 1002 of them, so the biggest display anyone
+     would ever point at this page bought nothing at all.
+
+     Three scales, because one does not exist. The board is 1002 by 1385 and a
+     screen is 16:9, so fitting all of it puts a node label near 5px. `fill`
+     spends the width instead and lets the tiers scroll, which is the trade that
+     keeps the labels readable at the back of a room. */
+  var zoom = "fill";
+  var GW = 0, GH = 0, HV = 0;
+  var split = document.querySelector(".mmc-split"),
+      pane = document.querySelector(".window>.content"),
+      statusBar = document.getElementById("status"),
+      legend = document.querySelector(".legend");
+
+  /* THE SPLIT'S HEIGHT IS MEASURED, and the CSS clamp above is only what holds
+     until this runs. A constant cannot survive here: the built page carries an
+     Explorer task rail and an address bar that the readable tree does not, both
+     injected at build time, so a number tuned against `pnpm run dev` is short by
+     a row in production and pushes the status bar off the bottom. That is a
+     difference no amount of care in a stylesheet can see.
+
+     Read from the scroll ORIGIN rather than from the viewport, so a reader who
+     has scrolled the essay does not get a resized board as a souvenir. */
+  function fitSplit(){
+    if (!split || !pane) return;
+    var top = split.getBoundingClientRect().top - pane.getBoundingClientRect().top + pane.scrollTop;
+    var reserve = (statusBar ? statusBar.offsetHeight : 22) + (legend ? legend.offsetHeight : 16) + 20;
+    var avail = pane.clientHeight - top - reserve;
+    split.style.height = Math.max(300, Math.min(1180, Math.round(avail))) + "px";
+  }
+
+  function syncScale(){
+    var g = canvas.querySelector("svg.graph"), h = head.firstChild;
+    if (!g || !GW) return;
+    /* before the scale, because it is what decides the box the scale fits into.
+       It cannot feed back: the split's top is fixed by what sits above it. */
+    fitSplit();
+    var w;
+    /* Closed form on purpose. The head strip scales with the board, so a fit that
+       measured the canvas would be measuring a height its own answer changes.
+       Solving w*GH/GW + w*HV/GW <= boardH once avoids the loop entirely. */
+    if (zoom === "fit")       w = Math.min(canvas.clientWidth, board.clientHeight * GW / (GH + HV));
+    else if (zoom === "100")  w = GW;
+    else                      w = canvas.clientWidth;
+    w = Math.max(160, Math.round(w));
+    g.setAttribute("width", w);
+    g.setAttribute("height", Math.round(w * GH / GW));
+    if (h) { h.setAttribute("width", w); h.setAttribute("height", Math.round(w * HV / GW)); }
+  }
 
   function draw(){
     var list = canvasList();
     var box = mode === "time" ? timeLayout(list) : blastLayout(list);
+    /* hs is the strip above the board: whatever a reader needs while scrolled
+       past it. Those marks are BUILT here rather than duplicated, so the board
+       never carries a second copy of its own column heads. */
+    var hs = "";
     var s = '<svg class="graph" viewBox="0 0 ' + box.width + ' ' + box.height + '" width="' + box.width +
             '" height="' + box.height + '" role="img" aria-label="Dependency graph of ' + list.length +
             ' flavors of model access, arranged by ' + (mode === "time" ? "date" : "blast radius") + '">' +
@@ -1121,33 +1297,42 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
              '<text x="6" y="' + (b.y + 11) + '">' + esc(b.label) + '</text></g>' +
              '<line class="bandline" x1="0" y1="' + b.y + '" x2="' + box.width + '" y2="' + b.y + '"/>';
       });
-      s += '<g class="colhead">';
+      HV = HEAD_H;
+      hs = '<g class="colhead">';
       BRANCHES.forEach(function(b, i){
-        s += '<text x="' + (LEFT + i * COL_W + COL_W / 2) + '" y="16" text-anchor="middle">' + esc(b[1]) + '</text>';
+        hs += '<text x="' + (LEFT + i * COL_W + COL_W / 2) + '" y="17" text-anchor="middle">' + esc(b[1]) + '</text>';
       });
-      s += "</g>";
+      hs += "</g>";
     } else {
       var ax = box.axisX, sp = box.span;
-      s += '<g class="region"><rect x="' + PRE_X + '" y="30" width="' + PRE_W + '" height="' + (box.height - 34) + '"/>' +
-           '<text x="' + (PRE_X + 3) + '" y="26">before 2022</text></g>';
-      s += '<g class="region spec"><rect x="' + box.specX + '" y="30" width="' + SPEC_W + '" height="' + (box.height - 34) + '"/>' +
-           '<text x="' + (box.specX + 3) + '" y="26">not yet · speculative</text></g>';
+      /* The MONTH AXIS is what the strip carries in this mode, and it is the
+         stronger case of the two: a year label that has scrolled off leaves a
+         node sitting at an x coordinate that means nothing. Rects and gridlines
+         stay on the board; only the captions and the ruler move up. */
+      HV = 34;
+      s += '<g class="region"><rect x="' + PRE_X + '" y="30" width="' + PRE_W + '" height="' + (box.height - 34) + '"/></g>';
+      s += '<g class="region spec"><rect x="' + box.specX + '" y="30" width="' + SPEC_W + '" height="' + (box.height - 34) + '"/></g>';
+      hs = '<g class="region"><text x="' + (PRE_X + 3) + '" y="30">before 2022</text></g>' +
+           '<g class="region spec"><text x="' + (box.specX + 3) + '" y="30">not yet · speculative</text></g>';
       /* the axis break: two slashes, so the left bucket is never misread as 2022 */
       var bx = PRE_X + PRE_W + GAP / 2;
-      s += '<path class="brk" d="M' + (bx - 3) + ' 34 l6 -9M' + (bx + 1) + ' 34 l6 -9"/>';
-      s += '<g class="axis"><line x1="' + ax + '" y1="30" x2="' + (ax + AXIS_W) + '" y2="30"/>';
+      hs += '<path class="brk" d="M' + (bx - 3) + ' 34 l6 -9M' + (bx + 1) + ' 34 l6 -9"/>';
+      hs += '<g class="axis"><line x1="' + ax + '" y1="33" x2="' + (ax + AXIS_W) + '" y2="33"/>';
+      s += '<g class="axis">';
       for (var yr = 2023; yr <= 2026; yr++) {
         var mi = (yr - ORIGIN_Y) * 12 + (1 - ORIGIN_M);
         var tx = ax + (mi / NOW) * sp;
-        s += '<line x1="' + tx + '" y1="26" x2="' + tx + '" y2="' + (box.height - 4) + '" stroke="#eceef3"/>' +
-             '<text x="' + (tx + 3) + '" y="26">' + yr + '</text>';
+        s += '<line x1="' + tx + '" y1="0" x2="' + tx + '" y2="' + (box.height - 4) + '" stroke="#e0e4ee"/>';
+        hs += '<text x="' + (tx + 3) + '" y="30">' + yr + '</text>';
       }
+      s += "</g>";
       /* The origin sits two months left of the 2023 tick, so its label cannot share
          a baseline with the year ticks. It gets the row above instead. */
-      s += '<text x="' + ax + '" y="16">Nov 2022</text></g>';
+      hs += '<text x="' + ax + '" y="17">Nov 2022</text></g>';
       var nx = ax + sp;
-      s += '<line class="nowline" x1="' + nx + '" y1="26" x2="' + nx + '" y2="' + (box.height - 4) + '"/>' +
+      s += '<line class="nowline" x1="' + nx + '" y1="0" x2="' + nx + '" y2="' + (box.height - 4) + '"/>' +
            '<text class="nowline-lab" x="' + (nx - 20) + '" y="' + (box.height - 6) + '">now</text>';
+      hs += '<line class="nowline" x1="' + nx + '" y1="20" x2="' + nx + '" y2="34"/>';
       s += '<g class="lane">';
       box.lanes.forEach(function(l){
         s += '<line class="bandline" x1="0" y1="' + l.y + '" x2="' + box.width + '" y2="' + l.y + '"/>' +
@@ -1205,6 +1390,10 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
 
     s += "</svg>";
     canvas.innerHTML = s;
+    head.innerHTML = '<svg class="graph" viewBox="0 0 ' + box.width + ' ' + HV + '" width="' + box.width +
+                     '" height="' + HV + '" aria-hidden="true">' + hs + "</svg>";
+    GW = box.width; GH = box.height;
+    syncScale();
     canvas.firstChild.classList.toggle("flowing", injecting);
     wire();
     paintTree();
@@ -1408,6 +1597,31 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
   }
   document.getElementById("v-blast").addEventListener("click", function(){ setMode("blast"); });
   document.getElementById("v-time").addEventListener("click", function(){ setMode("time"); });
+
+  var ZOOMS = { fit: "z-fit", fill: "z-fill", "100": "z-100" };
+  function setZoom(z){
+    zoom = z;
+    Object.keys(ZOOMS).forEach(function(k){
+      document.getElementById(ZOOMS[k]).setAttribute("aria-pressed", k === z ? "true" : "false");
+    });
+    /* fit is the one scale with nothing to scroll to, so it drops the reserved
+       gutter as well as the overflow. Everything else keeps it, because a
+       scrollbar that appears once the height is known would resize the board it
+       just measured. */
+    canvas.classList.toggle("z-fit", z === "fit");
+    syncScale();
+  }
+  Object.keys(ZOOMS).forEach(function(k){
+    document.getElementById(ZOOMS[k]).addEventListener("click", function(){ setZoom(k); });
+  });
+  /* Rotating a laptop into a projector, or Meet resizing a shared window, is a
+     resize and nothing else: the layout is unchanged and only the display size
+     of one SVG has to follow. */
+  var rsz;
+  window.addEventListener("resize", function(){
+    clearTimeout(rsz);
+    rsz = setTimeout(syncScale, 120);
+  });
   document.getElementById("filter").addEventListener("change", function(ev){ filter = ev.target.value; draw(); });
   document.getElementById("inject").addEventListener("click", function(ev){
     injecting = !injecting;
@@ -1428,6 +1642,17 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
     viewBtn.setAttribute("aria-expanded", open ? "true" : "false");
   }
   viewBtn.addEventListener("click", function(ev){ ev.stopPropagation(); openMenu(viewMenu.hidden); });
+  var treeItem = document.getElementById("m-tree");
+  function setTree(on){
+    treeItem.setAttribute("aria-checked", on ? "true" : "false");
+    treeItem.querySelector(".tick").textContent = on ? "✓" : "";
+    document.querySelector(".mmc").classList.toggle("no-tree", !on);
+    syncScale();
+  }
+  treeItem.addEventListener("click", function(){
+    setTree(treeItem.getAttribute("aria-checked") !== "true");
+    openMenu(false);
+  });
   hiddenItem.addEventListener("click", function(){
     setHidden(!showHidden);
     openMenu(false);
@@ -1453,6 +1678,8 @@ footer{margin-top:22px;padding-top:9px;border-top:1px solid var(--sh);font-size:
     document.getElementById("inject").setAttribute("aria-pressed", "false");
     document.getElementById("tradeoff").setAttribute("aria-pressed", "true");
     setHidden(false);
+    setTree(true);
+    setZoom("fill");
     setMode("blast");
   });
   window.addEventListener("scroll", hideTip, { passive: true });
