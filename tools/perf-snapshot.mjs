@@ -99,10 +99,21 @@ async function record(outPath, label) {
   // perf-budget.mjs runs the same command; they are separate processes because
   // one gates the deploy and the other reports on it, and coupling them would
   // mean a snapshot failure could redden a PR.
+  // WRANGLER'S ENTRY DIRECTLY, through whatever node is running this file, so
+  // the invocation does not name a package manager at all. It used to spawn
+  // "pnpm" as a quoted argument, which is invisible to any sweep looking for
+  // `pnpm exec` as a phrase (gotcha 29's blind spot), so it survived the swap
+  // and then failed instantly on a tree with no pnpm.
+  //
+  // The failure was SILENT and that is the part worth fixing: the catch turned
+  // it into an empty snapshot, the comparison of two empty snapshots reported
+  // "No change" on every category, and the check went GREEN while measuring
+  // nothing. It is also manager-agnostic now, which this job needs because it
+  // builds two commits that can disagree about which manager exists.
+  const WRANGLER = "node_modules/wrangler/bin/wrangler.js";
   let dryOut = "";
   try {
-    dryOut = execFileSync("pnpm", ["exec",
-      "wrangler", "deploy", "--dry-run",
+    dryOut = execFileSync(process.execPath, [WRANGLER, "deploy", "--dry-run",
       "--outdir", DRYRUN_OUT,
       "--metafile",
     ], { encoding: "utf8" });
@@ -166,9 +177,26 @@ async function record(outPath, label) {
     snapshot.dcz.bytes += (await readFile(`${BUILD}/pd/${name}`)).length;
   }
 
-  await writeFile(outPath, `${JSON.stringify(snapshot, null, 2)}\n`);
   const n = Object.keys(snapshot.assets).length + Object.keys(snapshot.pages).length;
-  console.log(`perf-snapshot: recorded ${snapshot.label} — ${n} files, ${Object.keys(snapshot.worker.modules).length} modules -> ${outPath}`);
+  // A snapshot of nothing is never legitimate: this repo ships 40+ documents and
+  // the dry-run self-builds, so 0 files means the build never ran. It FAILS here
+  // rather than writing the file, because the comparison downstream cannot tell
+  // an empty snapshot from an unchanged one and renders two of them as "No
+  // change. 0 files" on every category. That is the exact shape this repo keeps
+  // catching elsewhere (a scanner matching nothing reporting a pass), and it hid
+  // a broken dry-run behind a green check for one full run.
+  //
+  // MODULES is the honest half, and the file count alone is NOT enough: a failed
+  // dry-run in a tree still holding a `.build` from an earlier run counts 69
+  // files off those stale bytes while reporting 0 modules. Measured both ways on
+  // 2026-08-20, which is why both halves are checked.
+  const mods = Object.keys(snapshot.worker.modules).length;
+  if (n === 0 || mods === 0) {
+    console.error(`perf-snapshot: FAILED — recorded ${n} files and ${mods} modules, so the dry-run did not build. Its output ended:\n${dryOut.trim().slice(-800)}`);
+    process.exit(1);
+  }
+  await writeFile(outPath, `${JSON.stringify(snapshot, null, 2)}\n`);
+  console.log(`perf-snapshot: recorded ${snapshot.label} — ${n} files, ${mods} modules -> ${outPath}`);
 }
 
 // ---------------------------------------------------------------------------
