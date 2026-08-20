@@ -73,6 +73,7 @@ import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { releaseCredentialError } from "./lib/release-guard.mjs";
 import { promisify } from "node:util";
+import { wranglerCommand } from "./lib/wrangler-bin.mjs";
 
 const exec = promisify(execFile);
 
@@ -120,7 +121,8 @@ if (credentialError) die(credentialError);
 
 async function wrangler(args, { json = false } = {}) {
   try {
-    const { stdout } = await exec("pnpm", ["exec", "wrangler", ...args], {
+    const [cmd, argv] = wranglerCommand(args);
+    const { stdout } = await exec(cmd, argv, {
       maxBuffer: 16 * 1024 * 1024,
       env: process.env,
     });
