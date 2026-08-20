@@ -1,0 +1,71 @@
+name: Set up bun
+description: >-
+  Install the exact bun that package.json's packageManager field names, read
+  from that field rather than repeated per workflow. One action because the
+  version is a pin every job has to agree on.
+
+# WHY A LOCAL ACTION RATHER THAN `oven-sh/setup-bun`.
+#
+# Every third-party action in this repository is SHA-pinned, and CodeQL's
+# advanced setup asserts that on every PR. Adding one more supply-chain edge to
+# download a binary from a URL we could curl ourselves is the wrong trade when
+# the whole job is four lines of shell.
+#
+# THE VERSION IS THE PIN, and it is enough now in a way it was not before.
+# During the 1.4 canary era this repo verified a SHA-256, because the `canary`
+# release tag ROLLS and the binary under it changed daily, which is intolerable
+# for a build whose output is content-addressed. A released tag is immutable, so
+# the version string is the guarantee the digest used to provide.
+#
+# It reads packageManager instead of taking an input so there is ONE declaration
+# of which bun this repo runs. A contract test asserts every workflow reaches
+# this action rather than installing bun some other way.
+
+runs:
+  using: composite
+  steps:
+    - name: Install the pinned bun
+      shell: bash
+      run: |
+        set -euo pipefail
+        want=$(node -e "process.stdout.write(require('./package.json').packageManager)")
+        case "$want" in
+          bun@*) version="${want#bun@}" ;;
+          *) echo "::error title=packageManager is not bun::package.json says '$want'"; exit 1 ;;
+        esac
+
+        curl -fsSL -o /tmp/bun.zip \
+          "https://github.com/oven-sh/bun/releases/download/bun-v${version}/bun-linux-x64.zip"
+        unzip -qo /tmp/bun.zip -d /tmp/bun-install
+        bin=$(find /tmp/bun-install -type f -name bun | head -1)
+        install -m 0755 "$bin" "$HOME/.bun/bin/bun" 2>/dev/null \
+          || { mkdir -p "$HOME/.bun/bin" && install -m 0755 "$bin" "$HOME/.bun/bin/bun"; }
+        echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
+
+        got=$("$HOME/.bun/bin/bun" --version)
+        if [ "$got" != "$version" ]; then
+          echo "::error title=bun version mismatch::asked for $version, the asset reports $got"
+          exit 1
+        fi
+        echo "bun $got, from packageManager"
+
+    - name: Probe the capability the build depends on
+      shell: bash
+      run: |
+        set -euo pipefail
+        # zstdCompressSync's `dictionary` option is the ONE api this build cannot
+        # ship without, and every bun before 1.4 ACCEPTS it and silently ignores
+        # it: the frame still decodes, nothing throws, and the only signal is a
+        # byte count that never shrank. build.mjs feature-detects it too, but 40
+        # seconds into a build. This is the same control, run first and named.
+        bun -e '
+          const { constants, zstdCompressSync } = require("node:zlib");
+          const p = Buffer.from("the quick brown fox jumps over the lazy dog ".repeat(200));
+          const at = (o) => zstdCompressSync(p, { ...o, params: { [constants.ZSTD_c_compressionLevel]: 19 } }).length;
+          const none = at({}), dict = at({ dictionary: p });
+          if (dict >= none * 0.5) {
+            console.error(`::error title=zstd dictionary ignored::none=${none} dict=${dict}; this bun would ship no-op dcz deltas`);
+            process.exit(1);
+          }
+          console.log(`zstd dictionary honoured: none=${none} dict=${dict}`);
+        '

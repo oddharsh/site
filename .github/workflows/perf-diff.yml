@@ -26,7 +26,7 @@ on:
       - "serendipity/**"
       - "scripts/**"
       - "wrangler.jsonc"
-      - "pnpm-lock.yaml"
+      - "bun.lock"
       - ".github/workflows/perf-diff.yml"
       # The photo tiers are content-addressed binaries served straight from the
       # edge. They are real bytes, they are just not bytes this measures.
@@ -66,21 +66,18 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Install pnpm
-        # No action, no digest to maintain: package.json's packageManager
-        # field is the source of truth and this pins the same version.
-        # Must precede setup-node, whose `cache: pnpm` needs pnpm on PATH.
-        run: npm install -g pnpm@11.21.0
+      - name: Set up bun
+        # config/... no longer applies: the version lives in packageManager and the
+        # action reads it, so there is one declaration of which bun this repo runs.
+        uses: ./.github/actions/setup-bun
 
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .node-version
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: bun install --frozen-lockfile
 
       - name: Resolve the merge base
         id: base
@@ -103,6 +100,28 @@ jobs:
       - name: Stash the measurement script
         run: cp tools/perf-snapshot.mjs "$RUNNER_TEMP/perf-snapshot.mjs"
 
+      # Install with whatever the CHECKED-OUT commit asks for. This workflow
+      # builds two different commits in one job, and during a package-manager
+      # migration those two want different installers.
+      # Install with whatever the CHECKED-OUT commit asks for. This job builds
+      # two different commits, and across a package-manager migration those two
+      # want different installers. Written to a file the later steps SOURCE,
+      # rather than exported through BASH_ENV, because sourcing is visible at
+      # the point of use and does not depend on how Actions invokes bash.
+      - name: Define the installer
+        run: |
+          cat > /tmp/installer.sh <<'SH'
+          install_for_tree() {
+            if [ -f bun.lock ]; then
+              bun install --frozen-lockfile
+            elif [ -f pnpm-lock.yaml ]; then
+              corepack pnpm install --frozen-lockfile
+            else
+              echo "::warning title=no lockfile::no lockfile at $(git rev-parse --short HEAD), skipping install"
+            fi
+          }
+          SH
+
       - name: Record the merge base
         env:
           MERGE_BASE: ${{ steps.base.outputs.sha }}
@@ -110,9 +129,16 @@ jobs:
         run: |
           git switch --detach "$MERGE_BASE"
           # Only reinstall when the lockfile actually moved. On the common PR it
-          # did not, and a second `pnpm install` is a minute of nothing.
-          if ! git diff --quiet "$MERGE_BASE" "$HEAD_SHA" -- pnpm-lock.yaml; then
-            pnpm install --frozen-lockfile
+          # did not, and a second install is a minute of nothing.
+          #
+          # ACROSS THE TOOLCHAIN SWAP the two commits disagree about which
+          # installer exists at all, so the lockfile in the CHECKED-OUT tree
+          # decides. A bun install against a pnpm base writes an untracked
+          # bun.lock and edits package.json, and the switch back to HEAD then
+          # aborts on "local changes would be overwritten" — which is how this
+          # job failed rather than by anything the diff measured.
+          if ! git diff --quiet "$MERGE_BASE" "$HEAD_SHA" -- bun.lock pnpm-lock.yaml; then
+            source /tmp/installer.sh && install_for_tree
           fi
           node "$RUNNER_TEMP/perf-snapshot.mjs" record "$RUNNER_TEMP/base.json" \
             --label "$(git rev-parse --short HEAD)"
@@ -122,9 +148,12 @@ jobs:
           MERGE_BASE: ${{ steps.base.outputs.sha }}
           HEAD_SHA: ${{ steps.base.outputs.head }}
         run: |
+          # The install above may have dirtied the base tree with a lockfile
+          # that commit never had. Discard it rather than carry it across.
+          git checkout -- . && git clean -qfd -e node_modules
           git switch --detach "$HEAD_SHA"
-          if ! git diff --quiet "$MERGE_BASE" "$HEAD_SHA" -- pnpm-lock.yaml; then
-            pnpm install --frozen-lockfile
+          if ! git diff --quiet "$MERGE_BASE" "$HEAD_SHA" -- bun.lock pnpm-lock.yaml; then
+            source /tmp/installer.sh && install_for_tree
           fi
           node "$RUNNER_TEMP/perf-snapshot.mjs" record "$RUNNER_TEMP/head.json" \
             --label "$(git rev-parse --short HEAD)"

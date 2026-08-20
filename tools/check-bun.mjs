@@ -197,11 +197,11 @@ try {
 // 3. the contract suite
 // ---------------------------------------------------------------------------
 // `bun test` filters on `.test`/`_test_`/`.spec` in the filename and the suite
-// is `contract-tests.mjs`, so it needs a symlink. It lives beside the real file
+// is `contract-tests.test.mjs`, so it needs a symlink. It lives beside the real file
 // because the tests resolve fixtures off `import.meta.url`.
 try {
   if (existsSync(TEST_LINK)) unlinkSync(TEST_LINK);
-  symlinkSync("contract-tests.mjs", TEST_LINK);
+  symlinkSync("contract-tests.test.mjs", TEST_LINK);
   const out = run(bun, ["test", "tools/contract-tests.test.mjs"]);
   const text = `${out.stdout}\n${out.stderr}`;
   const pass = Number(text.match(/(\d+) pass/)?.[1] ?? 0);

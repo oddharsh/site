@@ -80,7 +80,7 @@ jobs:
           echo "Promoted ${RELEASE_SHA} to ${ref}."
           echo "Cloudflare Workers Builds will now UPLOAD this commit as a Worker version."
           echo "It does NOT move traffic: the deploy command is 'wrangler versions upload'."
-          echo "Ramp it from the workstation with: pnpm run deploy:promote"
+          echo "Ramp it from the workstation with: bun run deploy:promote"
 
       - name: Publish promotion record
         if: always()
@@ -99,7 +99,7 @@ jobs:
             echo "was already serving until someone ramps the new version:"
             echo ""
             echo '```bash'
-            echo "pnpm run deploy:promote"
+            echo "bun run deploy:promote"
             echo '```'
             echo ""
             echo "Traffic can only be moved from the workstation — GitHub holds no"

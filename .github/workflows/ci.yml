@@ -57,36 +57,33 @@ jobs:
           # Only a manual run can name a ref, and then it is the point.
           ref: ${{ inputs.ref || '' }}
 
-      - name: Install pnpm
-        # No action, no digest to maintain: package.json's packageManager
-        # field is the source of truth and this pins the same version.
-        # Must precede setup-node, whose `cache: pnpm` needs pnpm on PATH.
-        run: npm install -g pnpm@11.21.0
+      - name: Set up bun
+        # config/... no longer applies: the version lives in packageManager and the
+        # action reads it, so there is one declaration of which bun this repo runs.
+        uses: ./.github/actions/setup-bun
 
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .node-version
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install homepage dependencies
-        run: pnpm install --frozen-lockfile
+        run: bun install --frozen-lockfile
 
       - name: Check Wrangler versions and lockfiles
-        run: pnpm run check-wrangler
+        run: bun run check-wrangler
 
       - name: Build homepage
-        run: pnpm run build
+        run: bun run build
 
       - name: Check photo asset invariants
-        run: pnpm run photos:check
+        run: bun run photos:check
 
       - name: Enforce homepage performance budget
-        run: pnpm run perf-budget
+        run: bun run perf-budget
 
       - name: Validate site Worker config
-        run: pnpm exec wrangler deploy --dry-run
+        run: bun x --no-install wrangler deploy --dry-run
 
       # Lint, syntax AND type-aware, in one pass. tsgolint (the Go type checker
       # behind `--type-aware`) tracks TypeScript 7.0.2, which is the version
@@ -98,7 +95,7 @@ jobs:
       # against 1.1s for the typecheck it precedes) and because a dead binding is
       # a cheaper thing to read than whatever it causes further down.
       - name: Lint
-        run: pnpm run lint
+        run: bun run lint
 
       # Type checking WITHOUT TypeScript: tsc reads the JSDoc already in these
       # files, emits nothing, and never touches a served byte. Scoped to cal/src
@@ -106,10 +103,10 @@ jobs:
       # is meant to grow into). It runs BEFORE the tests because a type error is
       # cheaper to read than the failure it would cause downstream.
       - name: Typecheck annotated JavaScript
-        run: pnpm run typecheck
+        run: bun run typecheck
 
       - name: Test homepage representation contracts
-        run: pnpm test
+        run: bun run test
 
       # The route oracle, pre-merge. createTestHarness() boots the site Worker
       # in-process (honouring wrangler.jsonc's build.command, so it serves the
@@ -118,48 +115,47 @@ jobs:
       # local KV/R2/D1 come up empty. See MAINTENANCE.md "Verify the whole route
       # surface" for what the `remote: true` rows sit out and why.
       - name: Verify route surface against a local Worker
-        run: pnpm run routes:check
+        run: bun run routes:check
 
       - name: Validate LWE and Garage page contracts
-        run: pnpm run pages:check
+        run: bun run pages:check
 
       # Only the DECLARATION tier gates here. It reads shell source and needs no
       # binary present, so it runs anywhere. The presence tier prints what is
       # absent and passes, because a hosted runner carries none of the photo
       # toolchain and never runs the pipeline that wants it.
       - name: Check system tool declaration
-        run: pnpm run tools:check
+        run: bun run tools:check
 
       - name: Test coffee Worker
-        run: pnpm --filter cal-aadhar-sh test
+        run: bun run --filter cal-aadhar-sh test
 
       - name: Validate Cloudflare garage Worker config
         working-directory: cf-garage
         run: |
-          pnpm test
-          pnpm exec wrangler deploy --dry-run -c wrangler.toml
+          bun test
+          bun x --no-install wrangler deploy --dry-run -c wrangler.toml
 
       - name: Validate LWE ask Worker config
         working-directory: lwe-ask
-        run: pnpm exec wrangler deploy --dry-run -c wrangler.toml
+        run: bun x --no-install wrangler deploy --dry-run -c wrangler.toml
 
       # The Reader lens Worker. It installs its OWN deps rather than riding the
       # root workspace: defuddle + linkedom are ~22 MB of node_modules that only
       # this Worker bundles, and keeping them out of the root install is what
       # stops them drifting onto the site Worker's dependency surface.
       #
-      # --ignore-workspace is what preserves that under pnpm, and it is load
-      # bearing rather than decoration. A bare `pnpm install` here walks UP to
-      # the root pnpm-workspace.yaml, installs the five workspace projects, and
-      # never creates lens-reader/node_modules at all, so the tests then die on
-      # ERR_MODULE_NOT_FOUND with a `node_modules missing` warning as the only
-      # clue. npm had no such behaviour: it installed the local package.json.
+      # pnpm needed --ignore-workspace here and bun needs NOTHING, measured on
+      # the parked branch: a bare `bun install` in this directory resolved this
+      # package.json alone and created lens-reader/node_modules locally. Do not
+      # add a flag looking for parity with the pnpm era; there is nothing left to
+      # preserve, and the flag pnpm wanted does not exist here.
       - name: Validate Reader lens Worker config and run its tests
         working-directory: lens-reader
         run: |
-          pnpm install --ignore-workspace
-          pnpm test
-          pnpm exec wrangler deploy --dry-run -c wrangler.toml
+          bun install
+          bun test
+          bun x --no-install wrangler deploy --dry-run -c wrangler.toml
 
       # infra.json against reality. The tree and DNS tiers need no credential;
       # the account tier runs only when the read-only token secret exists and
@@ -185,7 +181,7 @@ jobs:
       # a PR whose whole purpose is to FIX production drift cannot turn its own check
       # green before it deploys, because the thing it asserts against is the thing it
       # repairs. That happened the same day (#195) and the documented way out is the
-      # local fallback, `pnpm run deploy`, followed by a re-run.
+      # local fallback, `bun run deploy`, followed by a re-run.
       # The account id is read out of wrangler.jsonc rather than from a repo
       # variable. This step said `vars.CLOUDFLARE_ACCOUNT_ID` until 2026-08-12 and
       # NO repository variable of that name has ever existed, so it expanded to the
@@ -276,8 +272,8 @@ jobs:
           chmod +x /tmp/osv-scanner
           set +e
           /tmp/osv-scanner scan source \
-            --lockfile pnpm-lock.yaml \
-            --lockfile lens-reader/pnpm-lock.yaml \
+            --lockfile bun.lock \
+            --lockfile lens-reader/bun.lock \
             --lockfile tools/photos/zenc/Cargo.lock \
             --lockfile tools/photos/requirements.txt
           status=$?
@@ -303,7 +299,7 @@ jobs:
           # advisory rather than a failure either way. It does NOT unlock the
           # CodeQL assertion; see the permissions note at the top of this file.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: pnpm run infra:check
+        run: bun run infra:check
 
       # TRIPWIRE: a ramp parked on the reviewer gate. It lives HERE, outside
       # ramp.yml's concurrency group, because a jam inside that group cannot be
@@ -396,4 +392,4 @@ jobs:
             echo "::notice::no CLOUDFLARE_API_TOKEN (fork PR) — skipping the D1 changelog comparison"
             exit 0
           fi
-          pnpm run checkpoints:check
+          bun run checkpoints:check
