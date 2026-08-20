@@ -1323,7 +1323,7 @@ window.__horizonCaps = (function () {
         so even in a perfect world the cursor-following <code>--x/--y</code>
         loop stays. Strictly a forward-look.
       </p>
-      <details>
+      <details name="sketch">
         <summary class="note" style="cursor:pointer">what it would replace (today &rarr; declarative)</summary>
 <pre>// today: ~70 lines of JS
 pointerover  -&gt; findTarget -&gt; buildContent -&gt; showPopover()
@@ -1983,7 +1983,7 @@ for (const t of tracks) {
         the homepage cannot depend on it for anything Safari/Firefox visitors
         need to see.
       </p>
-      <details>
+      <details name="sketch">
         <summary class="note" style="cursor:pointer">the call (what the canvas on the right is doing)</summary>
 <pre>const el  = document.getElementById("hic-source");
 const ctx = canvas.getContext("2d");
@@ -2076,7 +2076,7 @@ ctx.drawElementImage(el, 0, 0);            // &lt;- the new primitive (el has la
         it&apos;s behind <code>chrome://flags#enable-experimental-web-platform-features</code>
         (the <code>#css-grid-lanes-layout</code> entry). Everywhere else: the mockup above.
       </p>
-      <details>
+      <details name="sketch">
         <summary class="note" style="cursor:pointer">Grid Lanes syntax (vs. today&apos;s fixed 3&times;3)</summary>
 <pre>/* today on aadhar.sh — rigid, every frame the same box */
 .photos {
@@ -2162,7 +2162,7 @@ ctx.drawElementImage(el, 0, 0);            // &lt;- the new primitive (el has la
         <li><strong>High-fidelity sweet spot</strong>: at the q82-ish quality this site targets, JXL keeps grain and tonal gradients that AVIF starts to smear.</li>
       </ul>
 
-      <details>
+      <details name="sketch">
         <summary class="note" style="cursor:pointer">how it&apos;d slot into the &lt;picture&gt; ladder (a 4th, top-priority source)</summary>
 <pre>&lt;!-- add jxl ABOVE avif; browser picks the first type it claims to support.
      Safari takes jxl, Chrome/FF skip to avif, ancient takes the jpg src. --&gt;
@@ -2243,7 +2243,7 @@ cjxl -q 90 -e 7 &lt;stem&gt;.png &lt;stem&gt;.jxl</pre>
         </div>
       </div>
       <div class="hdr-room" aria-hidden="true"><span class="head"></span></div>
-      <details>
+      <details name="sketch">
         <summary class="note" style="cursor:pointer">pipeline sketch (what add-photos.sh would gain)</summary>
 <pre># today: SOOC -&gt; sips resize -&gt; jpegtran rotate -&gt; cjpegli q82 -&gt; avifenc CQ30
 #         single SDR-tonemapped AVIF + JPG, P3-tagged.
@@ -2317,7 +2317,7 @@ ultrahdr_app -m 0 -i base.jpg -g gainmap.jpg -o photo-uhdr.jpg
         </p>
       </div>
 
-      <details>
+      <details name="sketch">
         <summary class="note" style="cursor:pointer">code sketch (today&apos;s primitives &rarr; the declarative dream)</summary>
 <pre>// TODAY, cross-browser: URLPattern + Navigation API, ~a dozen lines of JS.
 // This is what aadhar.sh would actually use right now.
@@ -2548,11 +2548,12 @@ navigation.addEventListener("navigate", (e) =&gt; {
       </p>
     </section>
 
-    <section class="demo" data-cap="details-name">
+    <section class="demo shipped" data-cap="details-name">
       <h2>
         <span>Grouped <code>&lt;details&gt;</code> <span class="mono">name=</span></span>
         <span class="stat cross">Chrome 120 &middot; Safari 17.2 &middot; FF 130</span>
       </h2>
+      <p class="ship-tag">✓ shipped on the site</p>
       <p class="note">
         A shared <code>name</code> turns a set of <code>&lt;details&gt;</code> into an
         exclusive accordion: open one and the browser closes the rest. Radio-button
@@ -2575,10 +2576,15 @@ navigation.addEventListener("navigate", (e) =&gt; {
         </details>
       </div>
       <p class="replaces">
-        On the site: the &quot;what it would replace&quot; disclosures scattered through
-        this page are the natural group. Give them one <code>name</code> and digging into
-        a second folds the first, so a long sweep page stops growing under you. Today each
-        one is independent, which is the browser default and 3 lines of JS to change.
+        On the site: the six &quot;what it would replace&quot; sketches on this page all
+        carry <code>name="sketch"</code>, so opening one folds whichever was open before
+        and a 3,600-line sweep stops growing under you as you dig. They sit in six
+        different cards, which is fine: the group is every <code>&lt;details&gt;</code>
+        sharing that name in the document, so siblinghood was never the requirement.
+        Measured in Chrome at 1280&times;900, folding a panel that sits 10,000px above
+        the reading position moves the page <strong>0px</strong>, because every
+        <code>.demo</code> card here is <code>content-visibility: auto</code> and a
+        skipped card keeps its remembered height while the panel inside it closes.
       </p>
       <p class="unsupported">
         Your browser ignores <code>name</code> on <code>&lt;details&gt;</code>, so the
