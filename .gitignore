@@ -60,6 +60,13 @@ public/ad/
 # wrangler check startup writes this next to the config
 worker-startup.cpuprofile
 
+# perf-diff.yml's copy of HEAD's measurement script, so both sides of the diff
+# are measured by the same code. It lives INSIDE the repo because
+# tools/lib/wrangler-bin.mjs resolves the pinned wrangler from its own path, and
+# it stays UNTRACKED because that is what lets it survive the two `git switch`
+# calls the job makes. CI-only; nothing creates it on a workstation.
+.perf-measure
+
 # The Python environment for gen-pixel-peeper.py, built by `bun run photos:env`.
 # uv writes a `*` .gitignore inside the venv so it self-ignores, but that only
 # holds while uv is the tool that made it; a hand-rolled `python -m venv` would
