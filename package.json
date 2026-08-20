@@ -43,7 +43,7 @@
     "dcz:check": "bun tools/check-dictionary-support.mjs",
     "kitesurf:check": "bun tools/check-kitesurf.mjs",
     "agent:check": "bun tools/check-agent.mjs",
-    "bun:check": "bun tools/check-bun.mjs",
+    "bun:check": "node tools/check-bun.mjs",
     "speculation:probe": "bun tools/speculation-probe.mjs",
     "csp:sweep": "bun tools/csp-sweep.mjs",
     "checkpoints:check": "bun tools/check-checkpoints.mjs",

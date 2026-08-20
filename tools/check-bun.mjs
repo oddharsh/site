@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // bun run bun:check [--bun /path/to/bun]
 //
-// The control for "could this repo's build run on bun instead of node?".
+// The cross-runtime control for the build Bun runs in normal development.
 //
 // It is a SCRIPT and not a CI step for the same reason `kitesurf:check` is: the
 // answer only changes when someone ships a new bun, and the run costs two full
@@ -31,24 +31,27 @@
 //      hash, and changes the CSP hashes the documents are served under. A build
 //      that is 2x faster and 1 byte different is not a faster build.
 //
-//   3. Does the contract suite pass? Bun's test runner needs `.test` in the
-//      filename, so this stands up a symlink and takes it down again.
+//   3. Does the contract suite pass under Bun as well as under its normal Node
+//      control? The suite already carries Bun's required `.test` filename.
 //
-// The verdict this printed on 2026-08-10, node v26.7.0 vs bun 1.4.0-canary.1:
-// all three green, 1975 files identical, 17.0s -> 8.3s. The blocker is release
-// timing rather than behaviour, because 1.3.14 is the newest STABLE bun and it
-// fails question 1.
+// This file MUST run under node. It uses process.execPath for the Node baseline;
+// invoking it through Bun turns that into Bun and compares the runtime with
+// itself, which is a green result with no control at all.
 
-import { execFileSync, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, readdirSync, readFileSync, renameSync, rmSync, statSync, symlinkSync, unlinkSync } from "node:fs";
-import { join, relative } from "node:path";
+import { accessSync, constants as fsConstants, existsSync, readdirSync, readFileSync, renameSync, rmSync } from "node:fs";
+import { delimiter, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const BUILD = join(ROOT, ".build");
 const SHADOW = join(ROOT, ".build.node-baseline");
-const TEST_LINK = join(ROOT, "tools", "contract-tests.test.mjs");
+
+if (process.versions.bun) {
+  console.error("bun:check must be controlled by Node; run `bun run bun:check`, which dispatches this script through node");
+  process.exit(2);
+}
 
 const argv = process.argv.slice(2);
 const flag = (name) => {
@@ -59,13 +62,17 @@ const flag = (name) => {
 function resolveBun() {
   const explicit = flag("--bun") || process.env.BUN;
   if (explicit) return explicit;
-  const found = spawnSync("command", ["-v", "bun"], { shell: true, encoding: "utf8" });
-  const path = found.stdout?.trim();
-  if (!path) {
-    console.error("no bun found. install one, or point at a build:\n  bun run bun:check --bun /path/to/bun");
-    process.exit(2);
+  for (const dir of (process.env.PATH || "").split(delimiter)) {
+    const candidate = join(dir, "bun");
+    try {
+      accessSync(candidate, fsConstants.X_OK);
+      return candidate;
+    } catch {
+      // Keep walking PATH.
+    }
   }
-  return path;
+  console.error("no bun found. install one, or point at a build:\n  bun run bun:check --bun /path/to/bun");
+  process.exit(2);
 }
 
 const bun = resolveBun();
@@ -196,12 +203,10 @@ try {
 // ---------------------------------------------------------------------------
 // 3. the contract suite
 // ---------------------------------------------------------------------------
-// `bun test` filters on `.test`/`_test_`/`.spec` in the filename and the suite
-// is `contract-tests.test.mjs`, so it needs a symlink. It lives beside the real file
-// because the tests resolve fixtures off `import.meta.url`.
-try {
-  if (existsSync(TEST_LINK)) unlinkSync(TEST_LINK);
-  symlinkSync("contract-tests.test.mjs", TEST_LINK);
+// The suite already has a Bun-discoverable name. Never stage a link over this
+// path: an older version did that after the source was renamed and unlinked the
+// real tracked file before the test runner started.
+{
   const out = run(bun, ["test", "tools/contract-tests.test.mjs"]);
   const text = `${out.stdout}\n${out.stderr}`;
   const pass = Number(text.match(/(\d+) pass/)?.[1] ?? 0);
@@ -210,8 +215,6 @@ try {
   if (fail > 0) {
     for (const line of text.split("\n").filter((l) => l.includes("(fail)"))) console.log(`         ${line.trim()}`);
   }
-} finally {
-  if (existsSync(TEST_LINK) && statSync(TEST_LINK, { throwIfNoEntry: false })) unlinkSync(TEST_LINK);
 }
 
 // ---------------------------------------------------------------------------
@@ -221,18 +224,5 @@ if (failed.length) {
   console.log(`bun:check: NOT viable — ${failed.map((r) => r.name).join("; ")}`);
   process.exit(1);
 }
-console.log("bun:check: all green on this build. Note that VIABLE is not ADOPTED:");
-console.log("  wrangler + miniflare + workerd is the deploy and route-oracle path and is node-pinned,");
-console.log("  and a canary is not something the build path may depend on. See gotcha 28.");
-try {
-  // `pnpm` rather than `npm` since #306: this repo pins `packageManager`, and the
-  // one stray npm invocation here was the only thing left asking for the other
-  // client. stderr is dropped because pnpm warns about workspace configuration on
-  // stdout-only reads, and a registry lookup's grumbling should not land in the
-  // middle of a verdict. The registry is still npm's — only the client changed.
-  const stable = execFileSync("pnpm", ["view", "bun", "version"], {
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "ignore"],
-  }).trim();
-  console.log(`  newest STABLE bun on npm: ${stable}`);
-} catch { /* offline, or no pnpm on PATH; the verdict above does not depend on it */ }
+console.log("bun:check: all green on this build.");
+console.log("  Node remains the control because wrangler, the route oracle, and historical gzip measurements are node-pinned.");

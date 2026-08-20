@@ -8519,11 +8519,10 @@ test("no tool spawns a package manager by name", async () => {
   const files = readdirSync(dir).filter((f) => f.endsWith(".mjs") && f !== "contract-tests.test.mjs");
   assert.ok(files.length >= 20, `expected the tools directory, got ${files.length} files`);
 
-  // check-bun.mjs and lens-seed.mjs are the two RECORDED exceptions, and both
-  // spawn a manager as the SUBJECT of what they do rather than as a way to
-  // reach some other binary: check-bun compares bun against the published
-  // release, and lens-seed drives a script through the tree's own runner.
-  const RECORDED = new Set(["check-bun.mjs", "lens-seed.mjs"]);
+  // lens-seed.mjs is the one RECORDED exception: it drives a package script as
+  // the subject of the browser recording rather than using a manager to reach
+  // another binary.
+  const RECORDED = new Set(["lens-seed.mjs"]);
   const offenders = [];
   for (const f of files) {
     if (RECORDED.has(f)) continue;
@@ -8533,6 +8532,21 @@ test("no tool spawns a package manager by name", async () => {
     }
   }
   assert.deepEqual(offenders, [], `a tool spawns a package manager:\n  ${offenders.join("\n  ")}\n  Use wranglerCommand() from tools/lib/wrangler-bin.mjs, which names the runtime instead.`);
+});
+
+// check-bun uses process.execPath as the Node half of its comparison. Running
+// the controller itself under Bun therefore compares Bun with Bun and produces
+// a meaningless green result. Keep both halves mechanical: the package script
+// selects Node, and the tool refuses a direct Bun invocation.
+test("bun:check compares bun against a real node control", async () => {
+  const { readFileSync } = await import("node:fs");
+  const pkg = JSON.parse(readFileSync(new URL("package.json", ROOT), "utf8"));
+  const source = readFileSync(new URL("tools/check-bun.mjs", ROOT), "utf8");
+
+  assert.match(pkg.scripts["bun:check"], /^node /, "the controller must run under Node");
+  assert.match(source, /if \(process\.versions\.bun\)/, "the tool must reject a direct Bun invocation");
+  assert.match(source, /timedBuild\("node", process\.execPath,/, "the Node baseline must use the controlling Node executable");
+  assert.doesNotMatch(source, /unlinkSync|symlinkSync/, "the checker must not replace the real contract suite with a temporary link");
 });
 
 // The helper those tools use has to run wrangler under NODE, name no package
