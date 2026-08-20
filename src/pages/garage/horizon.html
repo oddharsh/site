@@ -997,6 +997,7 @@ window.__horizonCaps = (function () {
       "css-scope": function () { return ("CSSScopeRule" in window); },
       "custom-highlight": function () { return (("highlights" in CSS) && (typeof Highlight !== "undefined")); },
       "hidden-until-found": function () { return ("onbeforematch" in window); },
+      "details-name": function () { return ("name" in HTMLDetailsElement.prototype); },
       "relative-color": function () { return CSS.supports("color: rgb(from white r g b)"); },
       "at-property": function () { return ("registerProperty" in CSS); },
       "starting-style": function () { return CSS.supports("transition-behavior: allow-discrete"); },
@@ -2393,6 +2394,12 @@ navigation.addEventListener("navigate", (e) =&gt; {
       ::highlight(frontier) { background: oklch(88% 0.17 95); color: oklch(28% 0.10 60); text-shadow: 0 1px 0 rgba(255,255,255,.5); }
       /* --- hidden=until-found --- */
       .huf { font-size: 9.5pt; color: oklch(30% 0.06 145); background: oklch(96% 0.04 145); border-left: 3px solid oklch(50% 0.15 145); padding: 8px 12px; border-radius: 0 3px 3px 0; margin: 8px 0 0; }
+      /* --- grouped <details name> --- */
+      .dgroup { margin: 8px 0 0; border: 1px solid oklch(80% 0.02 250); border-radius: 4px; overflow: hidden; }
+      .dgroup details + details { border-top: 1px solid oklch(86% 0.02 250); }
+      .dgroup summary { cursor: pointer; padding: 7px 10px; font: bold 9.5pt Tahoma, Verdana, sans-serif; color: oklch(35% 0.08 255); background: linear-gradient(180deg, #fff, #f4f3ee); }
+      .dgroup summary:hover { color: oklch(45% 0.16 30); }
+      .dgroup details p { margin: 0; padding: 8px 10px; font-size: 9.5pt; color: oklch(30% 0 0); background: oklch(99% 0.006 250); }
       kbd { font: 8.5pt "Courier New", monospace; background: oklch(96% 0 0); border: 1px solid oklch(80% 0 0); border-bottom-width: 2px; border-radius: 3px; padding: 0 4px; }
     </style>
 
@@ -2538,6 +2545,45 @@ navigation.addEventListener("navigate", (e) =&gt; {
       <p class="unsupported">
         Your browser doesn&apos;t support <code>hidden=until-found</code>, the
         line above stays hidden and find-in-page can&apos;t reveal it.
+      </p>
+    </section>
+
+    <section class="demo" data-cap="details-name">
+      <h2>
+        <span>Grouped <code>&lt;details&gt;</code> <span class="mono">name=</span></span>
+        <span class="stat cross">Chrome 120 &middot; Safari 17.2 &middot; FF 130</span>
+      </h2>
+      <p class="note">
+        A shared <code>name</code> turns a set of <code>&lt;details&gt;</code> into an
+        exclusive accordion: open one and the browser closes the rest. Radio-button
+        semantics for disclosures, with no <code>toggle</code> listener and no open
+        state to track. They don&apos;t have to be siblings, only in the same document.
+        Open the second one and watch the first fold:
+      </p>
+      <div class="dgroup">
+        <details name="dn-demo" open>
+          <summary>964 &rarr; Singer</summary>
+          <p>Keep the chassis, rebuild everything hung off it. The soul survives because the bones did.</p>
+        </details>
+        <details name="dn-demo">
+          <summary>Luna &rarr; this site</summary>
+          <p>Same move, different chassis: 2003 chrome over OKLCH, native fonts, and a Worker.</p>
+        </details>
+        <details name="dn-demo">
+          <summary>Why exclusive?</summary>
+          <p>Because a stack of independently open panels is a page that only ever grows taller.</p>
+        </details>
+      </div>
+      <p class="replaces">
+        On the site: the &quot;what it would replace&quot; disclosures scattered through
+        this page are the natural group. Give them one <code>name</code> and digging into
+        a second folds the first, so a long sweep page stops growing under you. Today each
+        one is independent, which is the browser default and 3 lines of JS to change.
+      </p>
+      <p class="unsupported">
+        Your browser ignores <code>name</code> on <code>&lt;details&gt;</code>, so the
+        panels above open independently and stay open. That is the graceful case: the
+        disclosures still work, they just stop being exclusive.
       </p>
     </section>
 
@@ -5279,6 +5325,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     "css-scope": "@scope",
     "custom-highlight": "::highlight()",
     "hidden-until-found": "until-found",
+    "details-name": "details name",
     "relative-color": "oklch(from)",
     "at-property": "@property",
     "starting-style": "@starting-style",
