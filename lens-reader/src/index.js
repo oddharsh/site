@@ -14,14 +14,15 @@
 // extractor by name and version, what it kept, and what it threw away.
 //
 // WHY ITS OWN WORKER, and this is the load-bearing part. Readability needs a DOM
-// `Document`; Workers have HTMLRewriter. Supplying one costs linkedom at 94.6 KB
-// gzip, against a site Worker budget of 204.24 KiB that is already in breach, so
-// this cannot live there. A second Worker on a zone route costs it nothing.
+// `Document`; Workers have HTMLRewriter. Supplying one used to cost linkedom at
+// 94.6 KB gzip, against a site Worker budget of 204.24 KiB that was already in
+// breach, so this cannot live there. A second Worker on a zone route costs it
+// nothing.
 //
-// Worth seeing plainly after the 2026-08-14 extractor swap: linkedom is now 8x
-// the size of the extractor it exists to serve (94.6 KB against Readability's
-// 11.4), so most of what keeps this Worker separate is scaffolding rather than
-// extraction. A DOM-free extractor would collapse the split entirely.
+// Worth seeing plainly after the 2026-08-14 extractor swap: even after aligning
+// linkedom's parser stack removed 32.74 KiB gzip on 2026-08-20, the DOM remains
+// most of this 80.56 KiB Worker rather than the extraction policy. A DOM-free
+// extractor would collapse the split entirely.
 //
 // The SECOND reason this comment used to give has EXPIRED. `run_worker_first`
 // capped at 100 rules with the repo at exactly 100 (CLAUDE.md gotcha 26), but

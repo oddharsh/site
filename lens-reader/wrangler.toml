@@ -3,7 +3,8 @@ main = "src/index.js"
 compatibility_date = "2026-07-02"
 compatibility_flags = ["nodejs_compat"]
 
-# Deploy-only. Measured 2026-08-16: 148.92 -> 113.09 KiB gzip (24.1% off).
+# Deploy-only. Minification measured 2026-08-16: 148.92 -> 113.09 KiB gzip.
+# The aligned parser dependency graph measured 80.56 KiB gzip on 2026-08-20.
 # Source maps preserve original stack locations in Workers Logs; local Wrangler
 # development still reads the authored modules.
 minify = true
