@@ -224,8 +224,10 @@ exact tested SHA. Cloudflare Workers Builds watches that branch and is the only
 production publisher. Configure one Workers Build project for the site Worker
 with `production` as the production branch and monorepo root `.`, leave its
 dashboard Build command blank, and use
-`pnpm exec wrangler versions upload --x-provision=false --x-auto-create=false` as the
-Deploy command. GitHub never holds a Cloudflare token that can write, so it
+`bash .github/deploy-wrangler.sh versions upload --x-provision=false
+--x-auto-create=false` as the Deploy command. That wrapper picks wrangler's
+invocation from the lockfile in the tree being built, so one dashboard string
+serves both a pnpm branch and a bun one. GitHub never holds a Cloudflare token that can write, so it
 cannot publish to production even if the workflow guard is defeated.
 
 ### Ramp a release (`pnpm run deploy:promote`)
