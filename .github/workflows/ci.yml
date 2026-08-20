@@ -106,7 +106,7 @@ jobs:
         run: bun run typecheck
 
       - name: Test homepage representation contracts
-        run: bun test
+        run: bun run test
 
       # The route oracle, pre-merge. createTestHarness() boots the site Worker
       # in-process (honouring wrangler.jsonc's build.command, so it serves the
