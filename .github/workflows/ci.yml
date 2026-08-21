@@ -170,6 +170,7 @@ jobs:
         working-directory: lens-reader
         run: |
           bun install
+          bun run typecheck
           bun test
           bun x --no-install wrangler deploy --dry-run -c wrangler.toml
 
