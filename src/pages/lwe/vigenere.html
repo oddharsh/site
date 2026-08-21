@@ -49,7 +49,15 @@
 .preset { font-family: var(--font-ui); font-size: 8.5pt; padding: 2px 8px; cursor: pointer; background: linear-gradient(to bottom,#fff,#e9edf5); border: 1px solid #7d8aa3; }
 .preset:hover { border-color: var(--accent); background: linear-gradient(to bottom,#fff,#f6efdc); }
 /* workbench alignment */
-.wb-out { font-family: var(--font-mono); font-size: 10pt; line-height: 1.5; margin-top: 9px; overflow-x: auto; white-space: pre; padding: 8px 10px; background: #1a2030; border-radius: 4px; }
+.wb-out { font-family: var(--font-mono); font-size: 10pt; line-height: 1.5; margin-top: 9px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-color: auto; white-space: pre; padding: 8px 10px; background: #1a2030; border-radius: 4px; }
+/* A ciphertext run is four times the width of this box, and the macOS overlay scrollbar is
+ * invisible at rest, so the bar is dressed to stay visible. Same Firefox guard as .lean on
+ * /lwe/lean: Chromium drops every ::-webkit-scrollbar rule when scrollbar-color is not auto. */
+@supports (not selector(::-webkit-scrollbar)) or selector(:-moz-focusring) { .wb-out { scrollbar-width: thin; scrollbar-color: #5a6b85 #101722; } }
+.wb-out::-webkit-scrollbar { height: 9px; }
+.wb-out::-webkit-scrollbar-track { background: #101722; border-top: 1px solid #2a3444; }
+.wb-out::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #5a6b85, #3d4b60); border: 1px solid #2a3444; border-radius: 4px; }
+.wb-out::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, #6d7f9b, #4c5c74); }
 .wb-out .lbl { color: #6b7d93; } .wb-out .pt { color: #cfe3ff; } .wb-out .ks { color: #f0c674; } .wb-out .ct { color: #7ee0a0; }
 .wb-note { font-size: 8pt; color: #9a6a16; margin-top: 5px; }
 /* cranking pipeline */

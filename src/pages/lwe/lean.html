@@ -42,7 +42,18 @@
 .msg.ai-note .tagai { display: inline-block; font-size: 7.5pt; font-weight: bold; color: #6b4ec2; background: #ece5fb; border: 1px solid #d0c3f0; border-radius: 9px; padding: 0 6px; margin-bottom: 4px; letter-spacing: .03em; }
 
 /* code blocks: this page is mostly Lean, so they carry real weight */
-.lean { font-family: var(--font-mono); font-size: 8.5pt; line-height: 1.5; background: #fbfbfe; border: 1px solid #c9c5e6; border-left: 3px solid var(--accent); border-radius: 3px; padding: 7px 9px; margin: 6px 0; overflow-x: auto; white-space: pre; color: #1a2030; }
+.lean { font-family: var(--font-mono); font-size: 8.5pt; line-height: 1.5; background: #fbfbfe; border: 1px solid #c9c5e6; border-left: 3px solid var(--accent); border-radius: 3px; padding: 7px 9px; margin: 6px 0; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-color: auto; white-space: pre; color: #1a2030; }
+/* Lean's indentation and its goal displays carry meaning, so a long line scrolls rather than
+ * soft-wraps into a line the reader cannot tell from a real one. macOS draws an overlay
+ * scrollbar that is invisible at rest, which would leave a clipped line looking like the whole
+ * line, so the bar is dressed to stay visible. Chromium discards every ::-webkit-scrollbar rule
+ * on an element whose used scrollbar-color is not auto, so the standard properties sit behind
+ * the Firefox-only guard luna.css already uses. */
+@supports (not selector(::-webkit-scrollbar)) or selector(:-moz-focusring) { .lean { scrollbar-width: thin; scrollbar-color: #8b86c6 #eceafa; } }
+.lean::-webkit-scrollbar { height: 9px; }
+.lean::-webkit-scrollbar-track { background: #eceafa; border-top: 1px solid #dcd8f0; }
+.lean::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #918cca, #6b66ad); border: 1px solid #5b56a0; border-radius: 4px; }
+.lean::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, #a39ed8, #7b76d0); }
 .lean .kw { color: #6b21a8; font-weight: bold; }
 .lean .cm { color: #6b7280; font-style: italic; }
 .lean .er { color: #b91c1c; }
