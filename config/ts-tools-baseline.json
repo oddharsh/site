@@ -1,8 +1,6 @@
 {
   "files": {
-    "tools/build.mjs": 10,
     "tools/check-checkpoints.mjs": 1,
-    "tools/check-infra.mjs": 25,
     "tools/check-routes-harness.mjs": 1,
     "tools/contract-cache-the-behavioral-revalidation-lint.test.mjs": 4,
     "tools/contract-lens-browser-do-recipe-interaction-recipes.test.mjs": 1,
@@ -14,7 +12,7 @@
     "tools/contract-rn-the-track-meta-map-must-survive-a-short-playlist-.test.mjs": 6,
     "tools/contract-shell-infotips.test.mjs": 3,
     "tools/contract-the-bundled-photo-pool.test.mjs": 1,
-    "tools/contract-the-execution-half-of-the-readiness-rubric.test.mjs": 8,
+    "tools/contract-the-execution-half-of-the-readiness-rubric.test.mjs": 1,
     "tools/contract-the-perf-probe.test.mjs": 2,
     "tools/contract-the-speculation-ledger.test.mjs": 1,
     "tools/contract-the-ssr-deadline.test.mjs": 1,
@@ -22,9 +20,8 @@
     "tools/contract-webmention-inbound.test.mjs": 4,
     "tools/csp-sweep.mjs": 5,
     "tools/deploy-promote.mjs": 1,
-    "tools/inp-lab.mjs": 16,
     "tools/lens-webmcp.mjs": 3,
-    "tools/perf-budget.mjs": 3,
+    "tools/perf-budget.mjs": 2,
     "tools/perf-snapshot.mjs": 1,
     "tools/photos/gen-desktop-partial.mjs": 1,
     "tools/photos/gen-og-cards.mjs": 1,
@@ -32,5 +29,5 @@
     "tools/photos/radar-sample.mjs": 1,
     "tools/release-status.mjs": 2
   },
-  "total": 124
+  "total": 65
 }
