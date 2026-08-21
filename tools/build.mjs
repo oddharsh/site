@@ -2082,7 +2082,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   const dangling = new Map();
   let refs = 0;
   for (const doc of docs) {
-    for (const path of internalRefs(await readFile(`${OUT}/public${doc}`, "utf8"))) {
+    for (const path of await internalRefs(await readFile(`${OUT}/public${doc}`, "utf8"))) {
       refs++;
       if (resolves(path)) continue;
       if (!dangling.has(path)) dangling.set(path, new Set());
