@@ -23,7 +23,7 @@
   "use strict";
   var D = document;
 
-  function el(h) { var t = D.createElement("template"); t.innerHTML = h.trim(); return t.content.firstChild; }
+  function el(h) { var t = D.createElement("template"); t.innerHTML = h.trim(); return /** @type {HTMLElement} */ (t.content.firstChild); }
   // Intentional twins of nav.js's el()/esc(). nav.js and notepad.js are separate
   // top-level scripts, each minified on its own (build.mjs runs esbuild `transform`,
   // never `bundle`), so sharing these ~250 bytes would cost either an import (a
@@ -121,7 +121,7 @@
       box.querySelector(".close").addEventListener("click", close);
       box.querySelector(".np-btn").addEventListener("click", close);
       D.body.appendChild(back); D.body.appendChild(box);
-      box.querySelector(".np-btn").focus();
+      /** @type {HTMLElement} */ (box.querySelector(".np-btn")).focus();
     }
 
     var MENUS = [
@@ -194,12 +194,12 @@
     var files = D.querySelector(".np-files");
     if (!files || !("showPopover" in HTMLElement.prototype)) return;   // no-JS / old → follow links
 
-    files.addEventListener("click", function (e) {
+    files.addEventListener("click", function (/** @type {MouseEvent} */ e) {
       // let a modified / non-primary click through so the real /writing/<slug>
       // permalink still opens (Cmd/Ctrl-click new tab, middle-click, etc.).
       if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
-      var a = e.target.closest("a[data-note]"); if (!a) return;
-      var pop = D.getElementById("note-" + a.dataset.note); if (!pop) return;
+      var a = /** @type {Element} */ (e.target).closest("a[data-note]"); if (!a) return;
+      var pop = D.getElementById("note-" + /** @type {HTMLElement} */ (a).dataset.note); if (!pop) return;
       e.preventDefault();
       openNote(pop);
     });
@@ -211,7 +211,7 @@
     D.addEventListener("keydown", function (e) {
       if (e.key !== "Escape") return;
       if (D.querySelector(".np-drop")) return;
-      var open = D.querySelectorAll(".np-note:popover-open");
+      var open = /** @type {NodeListOf<HTMLElement>} */ (D.querySelectorAll(".np-note:popover-open"));
       if (open.length) {
         e.preventDefault();
         open[open.length - 1].hidePopover();

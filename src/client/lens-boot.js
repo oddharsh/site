@@ -13,6 +13,13 @@
 
   function load() {
     if (!app) {
+      // @ts-expect-error — a CACHE-BUSTED specifier. "/lens.js?v=1" is a real URL
+      // the browser resolves and no path mapping can match. Pointing tsc at the
+      // file instead answers "is not a module", because lens.js is a classic
+      // script IIFE, and the fix for THAT would be adding an `export {}` that
+      // changes it from script scope to module scope for a type checker. This is
+      // a side-effect import. @ts-expect-error rather than @ts-ignore so it fails
+      // the day the situation changes.
       app = import("/lens.js?v=1").then(function () {
         ready = true;
       }, function (error) {
