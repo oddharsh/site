@@ -82,6 +82,7 @@ export function createRun(options) {
     { label: "lwe · drivers", path: "/lwe/drivers", hint: "headphone drivers: planar magnetic vs dynamic, force and breakup" },
     { label: "lwe · knots", path: "/lwe/knots", hint: "knots: granny vs square, the Ian knot, why laces come undone" },
     { label: "lwe · lean", path: "/lwe/lean", hint: "lean, formal verification, specs, verified compilers, kernel soundness, openai ten-proofs" },
+    { label: "lwe · efuses", path: "/lwe/fuse", hint: "efuses, anti-rollback, and why a phone refuses old firmware" },
 // generated:lwe-pages:end
     // generated:garage-pages:start
     { label: "garage · blueprint", path: "/garage/blueprint", hint: "the repo, blueprinted by Fable 5" },

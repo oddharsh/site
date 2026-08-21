@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#2D78BD">
+<link rel="preload" as="style" href="/luna.css">
+<title>aadhar.sh/lwe/fuse</title>
+<meta name="description" content="eFuses and anti-rollback explained at the pace of a 2009 MSN chat: why a signature cannot refuse yesterday's firmware, how Qualcomm's Qfprom turns a version floor into a one-way ratchet, and what that costs the owner. With a fuse bank you can blow and cannot un-blow.">
+<link rel="canonical" href="https://aadhar.sh/lwe/fuse">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='7'%20fill='%23b0311d'/%3E%3Ctext%20x='16'%20y='23'%20font-size='20'%20font-family='Courier%20New,Courier,monospace'%20fill='%23fff'%20text-anchor='middle'%3E1%3C/text%3E%3C/svg%3E">
+<meta property="og:type" content="article">
+<meta property="og:title" content="aadhar.sh/lwe/fuse · eFuses">
+<meta property="og:url" content="https://aadhar.sh/lwe/fuse">
+<meta name="twitter:card" content="summary_large_image">
+<meta property="og:image" content="https://aadhar.sh/og/lwe-fuse.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="aadhar.sh/lwe/fuse · eFuses, live demo screenshotted">
+<meta name="twitter:image" content="https://aadhar.sh/og/lwe-fuse.png">
+
+<link rel="stylesheet" href="/lwe-base.css">
+<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace; --accent:#b0311d; --accent-soft:#fae9e4}
+.title-bar { background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%); color: #fff; font-family: var(--font-caption); font-weight: bold; font-size: 10pt; padding: 4px 5px 4px 8px; display: flex; align-items: center; gap: 6px; text-shadow: 1px 1px #0f1089; user-select: none; }
+.title-bar .icon { width: 14px; height: 14px; flex: 0 0 14px; background: #fff; border: 1px solid #8a2413; position: relative; }
+.title-bar .icon::before { content: "1"; position: absolute; inset: 0; display: grid; place-items: center; font-size: 10px; color: var(--accent); font-weight: bold; text-shadow: none; }
+.window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 12px; }
+.msgr-head { display: flex; align-items: center; gap: 9px; padding: 8px 12px; background: linear-gradient(180deg, #fffdf6, #f6edd6); border-bottom: 1px solid #e0cf9e; }
+.msgr-head .ava { width: 34px; height: 34px; flex: 0 0 34px; border-radius: 4px; border: 1px solid #8a2413; background: linear-gradient(180deg,#d9614a,#b0311d); position: relative; }
+.msgr-head .ava::before { content: "1"; position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-weight: bold; font-size: 19px; font-family: Courier New,Courier,monospace; }
+.msgr-head .who b { font-family: var(--font-caption); font-size: 11pt; color: #8a2413; }
+.disclosure b { color: #8a2413; } .disclosure a { color: #1a4fc4; }
+.msg.bot .pic { background: linear-gradient(180deg,#d9614a,#b0311d); border-color:#8a2413; }
+.msg.bot .pic::before { content: "1"; position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-weight: bold; font-size: 13px; font-family: Courier New,Courier,monospace; }
+.msg.bot .who b { color: #8a2413; }
+.msg .who time { color:#66707d; font-family: var(--font-mono); font-size: 8pt; margin-left: 5px; }
+.msg .bubble code { font-family: var(--font-mono); font-size: 9.5pt; background: #f1ece0; padding: 0 3px; border-radius: 2px; }
+.demo { grid-column: 1 / -1; border: 1px solid var(--accent); border-radius: 4px; background: var(--accent-soft); margin: 2px 0; overflow: hidden; box-shadow: inset 0 1px 0 #fff; }
+.demo > .bar { display: flex; align-items: center; gap: 6px; padding: 4px 8px; font-size: 8.5pt; color: #8a2413; background: linear-gradient(180deg,#f6edd6,#ecdfb8); border-bottom: 1px solid var(--accent); font-weight: bold; }
+.demo > .pad { padding: 11px 12px 13px; background:#fff; }
+.btn { font-family: var(--font-ui); font-size: 9pt; padding: 3px 9px; cursor: pointer; background: linear-gradient(to bottom,#fff,#e9edf5); border: 1px solid #7d8aa3; border-radius: 2px; box-shadow: inset 1px 1px 0 #fff; }
+.btn:hover { border-color: var(--accent); }
+.scrollnote { text-align: center; font-size: 8pt; color:#66707d; padding: 3px 0 9px; }
+.compose { border-top: 1px solid #e0cf9e; background: linear-gradient(180deg,#fffdf6,#f3ead0); padding: 7px 10px; }
+.compose .ta { flex: 1; min-height: 30px; border: 1px solid #7d8aa3; background: #fff; box-shadow: inset 1px 1px 0 #c3cbdb; padding: 4px 6px; font-family: var(--font-ui); font-size: 9.5pt; color:#66707d; }
+@media (max-width: 520px){ body { padding: 8px 4px 32px; } .msgr-head .pets { display:none } }
+.fz-bank{display:flex;gap:3px;flex-wrap:wrap;margin:0 0 7px}.fz-cell{width:19px;height:24px;display:grid;place-items:center;font-family:var(--font-mono);font-size:10pt;color:#8d96a6;background:#f7f8fa;border:1px solid #c3cbdb;box-shadow:inset 1px 1px 0 #fff}.fz-cell.on{color:#fff;background:linear-gradient(180deg,#d9614a,#b0311d);border-color:#8a2413;box-shadow:inset 0 1px 0 #e79683}.fz-meta{font-size:8.5pt;color:#6b7280;margin-bottom:9px}.fz-meta b{font-family:var(--font-mono);font-size:10pt;color:#8a2413}.fz-row{display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap}.fz-row label{font-size:8.5pt;color:#6b7280}.fz-slide{flex:1;min-width:120px;max-width:230px;accent-color:#b0311d}.fz-row>b{font-family:var(--font-mono);font-size:10pt;color:#8a2413;min-width:16px}.fz-log{font-size:8.5pt;color:#6b7280;background:#faf6f4;border:1px solid #e8d5cf;border-radius:3px;padding:6px 8px;min-height:15px}.fz-log.ok{color:#245c36;background:#f0f7f1;border-color:#c8e0ce}.fz-log.bad{color:#8a2413;background:#fbeeea;border-color:#e8c4b9}.fz-imgs{margin-bottom:10px}.fz-imgs .btn.sel{border-color:#b0311d;background:linear-gradient(180deg,#fff,#fae9e4)}.fz-pair{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:8px}.fz-pane{flex:1 1 190px;border:1px solid #c3cbdb;border-radius:3px;overflow:hidden;background:#fff}.fz-pane-h{font-size:8pt;color:#4b5563;background:linear-gradient(180deg,#f7f8fa,#eceff4);border-bottom:1px solid #c3cbdb;padding:3px 7px;font-weight:bold}.fz-verdict{font-size:9pt;padding:8px 9px;color:#6b7280;min-height:34px}.fz-verdict.ok{color:#245c36}.fz-verdict.bad{color:#8a2413}@media(max-width:520px){.fz-pair{flex-direction:column}}
+</style>
+<link rel="stylesheet" href="/luna.css">
+</head>
+<body>
+<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<div class="window">
+  <div class="title-bar" aria-hidden="true">
+    <span class="title-text"><span class="icon"></span>aadhar.sh/lwe &middot; eFuses</span>
+    <span class="controls"><span class="min" title="minimize"></span><span class="max" title="maximize"></span><a class="close" href="/lwe" title="back to Learning With Errors" aria-label="back to Learning With Errors"></a></span>
+  </div>
+  <div class="content">
+    <div class="msgr">
+
+      <div class="msgr-head">
+        <div class="ava" aria-hidden="true"></div>
+        <div class="who"><b>eFuses</b><span class="stat">Online, one-way bits</span></div>
+        <div class="pets">Learning&nbsp;With&nbsp;Errors<br>0 goes to 1, once</div>
+      </div>
+
+      <p class="disclosure"><b>First-pass draft.</b> The incident reporting comes from the <a href="https://consumerrights.wiki/w/Oneplus_phone_update_introduces_hardware_anti-rollback" rel="external">Consumer Rights Wiki writeup</a> of the January 2026 OnePlus ColorOS 16.0.3.501 anti-rollback fuse incident, which collects the XDA and Android Authority coverage; the requirement is quoted from <a href="https://source.android.com/docs/security/features/verifiedboot/verified-boot" rel="external">AOSP Verified Boot</a>. Quoted lines are verbatim, the learner lines and pacing are AI. Both demos are simulations that run real arithmetic on a model of the counter, and neither one reads hardware.</p>
+
+      <div class="log">
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>00:41</time></div>
+        <div class="bubble"><p>oneplus pushed an update in january and the people who tried to go back to the old build ended up with a dead phone. every thread says the same three words: the fuse blew. is there an actual fuse in there?</p></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>eFuses</b><time>00:41</time></div>
+        <div class="bubble"><p>There is, and it sits on the SoC. Qualcomm chips carry a region called <b>Qfprom</b>, Fuse Programmable Read-Only Memory: a bank of one-time programmable electronic fuses. A controlled voltage pulse moves a fuse from <code>0</code> to <code>1</code>, and that change is physical, so no software can move it back.</p> <a href="https://consumerrights.wiki/w/Oneplus_phone_update_introduces_hardware_anti-rollback" rel="external" title="OnePlus ColorOS 16.0.3.501 Anti-Rollback Fuse Incident (Consumer Rights Wiki)">[src]</a></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>eFuses</b><time>00:42</time></div>
+        <div class="bubble"><p>The XDA thread is careful with the word. A fuse gets electrically switched rather than burned through, so when somebody says <em>blown</em> they mean a bit that is now stuck at one.</p> <a href="https://consumerrights.wiki/w/Oneplus_phone_update_introduces_hardware_anti-rollback" rel="external" title="OnePlus ColorOS 16.0.3.501 Anti-Rollback Fuse Incident (Consumer Rights Wiki)">[src]</a></div></div></div>
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>00:42</time></div>
+        <div class="bubble"><p>fine. but why would a phone want a bit it can never clear? that reads like a bug somebody shipped on purpose.</p></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>eFuses</b><time>00:43</time></div>
+        <div class="bubble"><p>Start with what a signature can tell you. Secure boot checks that an image was signed by the vendor, so a forged image fails. Last year's image was also signed by the vendor, so it passes the identical check, and last year's image is the one carrying the hole somebody has already published an exploit for.</p></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>eFuses</b><time>00:43</time></div>
+        <div class="bubble"><p>That is a <b>downgrade attack</b>: flash a real, properly signed, older build, then use the bug it still has. Signature checking cannot stop it, because signature checking keeps no memory. Every boot asks the same question and gets the same honest answer.</p></div></div></div>
+
+      <div class="demo" id="demo-check">
+        <div class="bar">two verifiers &middot; where they disagree</div>
+        <div class="pad"><p class="lead">Two verifiers, three images, one floor of 6. The left verifier checks the signature and stops. The right verifier checks the signature and then the version. Click an image and read both verdicts.</p>
+<div class="fz-row fz-imgs" id="fz-imgs"><button class="btn" type="button" data-k="cur">this year's build (v7, signed)</button><button class="btn" type="button" data-k="old">last year's build (v4, signed)</button><button class="btn" type="button" data-k="mod">a modified build (v7, unsigned)</button></div>
+<div class="fz-pair"><div class="fz-pane"><div class="fz-pane-h">signature only</div><div class="fz-verdict" id="fz-sig">pick an image</div></div><div class="fz-pane"><div class="fz-pane-h">signature plus rollback floor</div><div class="fz-verdict" id="fz-rb">pick an image</div></div></div>
+<div class="fz-log" id="fz-note">the two verifiers disagree about exactly one of these three.</div></div>
+      </div>
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>00:44</time></div>
+        <div class="bubble"><p>ok, so the middle row is the whole problem. the signature is real and the build is still the one i should not be running.</p></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>eFuses</b><time>00:44</time></div>
+        <div class="bubble"><p>That is the gap, and closing it needs the phone to remember how far it has already come. Android's docs put the requirement in one sentence: <em>"Rollback protection is typically implemented by using tamper-evident storage to record the most recent version of the Android and refusing to boot Android if it's lower than the recorded version."</em></p> <a href="https://source.android.com/docs/security/features/verifiedboot/verified-boot" rel="external" title="Verified Boot (Android Open Source Project)">[src]</a></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>eFuses</b><time>00:45</time></div>
+        <div class="bubble"><p>The hard part is <em>where</em> that number lives. Anyone who can flash firmware can rewrite ordinary storage, so a counter kept in flash is a counter the attacker edits on the way past. Qualcomm's answer is to keep it in silicon, as fuses. Drag the version and watch the floor move:</p></div></div></div>
+
+      <div class="demo" id="demo-ratchet">
+        <div class="bar">the ratchet &middot; blow a fuse, then try to undo it</div>
+        <div class="pad"><p class="lead">A <b>simulated</b> fuse bank, 12 bits wide. No hardware is touched here; the point is the arithmetic. The floor starts at 3 because the factory already blew three. Pick a firmware version, flash it, and watch what the bank will and will not do.</p>
+<div class="fz-bank" id="fz-bank" role="img" aria-label="a bank of 12 fuses, blown ones reading 1"></div>
+<div class="fz-meta">anti-rollback floor: <b id="fz-floor">3</b></div>
+<div class="fz-row"><label for="fz-ver">firmware version</label><input id="fz-ver" class="fz-slide" type="range" min="0" max="12" value="7"><b id="fz-verout">7</b></div>
+<div class="fz-row"><button class="btn" id="fz-flash" type="button">flash this build</button><button class="btn" id="fz-undo" type="button">put the fuses back</button></div>
+<div class="fz-log" id="fz-log">pick a firmware version and flash it.</div></div>
+      </div>
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>00:46</time></div>
+        <div class="bubble"><p>the floor only ever goes up. the undo button just tells me off.</p></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>eFuses</b><time>00:46</time></div>
+        <div class="bubble"><p>That is the property, and physics is what buys it. A fuse bank counts by blowing more fuses, so the counter is a ratchet: every operation adds a one, and the instruction set contains nothing that removes one.</p></div></div></div>
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>00:47</time></div>
+        <div class="bubble"><p>walk me through what the phone actually does at power on.</p></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>eFuses</b><time>00:47</time></div>
+        <div class="bubble"><p>The <b>PBL</b>, the primary bootloader burned into the processor's ROM, comes up first and verifies the next stage, the <b>XBL</b>. Before it hands over, the PBL reads the anti-rollback version out of Qfprom and compares it against the version embedded in the firmware. Come in lower than the fuse value and boot stops there. When a newer build boots cleanly, the bootloader goes through <b>TrustZone</b> to blow more fuses, which writes the new minimum down for good.</p> <a href="https://consumerrights.wiki/w/Oneplus_phone_update_introduces_hardware_anti-rollback" rel="external" title="OnePlus ColorOS 16.0.3.501 Anti-Rollback Fuse Incident (Consumer Rights Wiki)">[src]</a></div></div></div>
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>00:48</time></div>
+        <div class="bubble"><p>what about 9008. EDL is supposed to be the last resort, it talks straight to storage.</p></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>eFuses</b><time>00:48</time></div>
+        <div class="bubble"><p>It does, and it still loses. EDL runs out of that same PBL ROM and can write your storage directly, while the fuses sit in processor silicon where a storage write cannot reach. The Firehose programmers EDL loads have to be OEM-signed and they carry anti-rollback versions of their own, so unbrick tools that worked last year now fail on exactly these devices. The remedy people report is a new motherboard.</p> <a href="https://consumerrights.wiki/w/Oneplus_phone_update_introduces_hardware_anti-rollback" rel="external" title="OnePlus ColorOS 16.0.3.501 Anti-Rollback Fuse Incident (Consumer Rights Wiki)">[src]</a></div></div></div>
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>00:49</time></div>
+        <div class="bubble"><p>is this a oneplus thing or does everyone do it?</p></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>eFuses</b><time>00:49</time></div>
+        <div class="bubble"><p>The substrate is everywhere; the job it gets given is what differs. Samsung's Knox bit is the same kind of eFuse on the same kind of board, and it gates no boot at all. It records that you flashed something Samsung never signed, and once it trips, Samsung Pay and Secure Folder stay off for the life of the device. One fuse used as a gate, one used as a witness.</p> <a href="https://consumerrights.wiki/w/Oneplus_phone_update_introduces_hardware_anti-rollback" rel="external" title="OnePlus ColorOS 16.0.3.501 Anti-Rollback Fuse Incident (Consumer Rights Wiki)">[src]</a></div></div></div>
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>00:50</time></div>
+        <div class="bubble"><p>hang on. the android doc you quoted said tamper-evident. evident means i can tell. it never said i should be unable to go back.</p></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>eFuses</b><time>00:50</time></div>
+        <div class="bubble"><p>That is the sharpest thing on this page. <b>Evident</b> is a detection property: the device can tell that state moved and can decide what to do about it. Qualcomm shipped something strictly stronger, an <b>irreversible</b> one, and the extra strength is exactly what the owner pays for. Whoever writes a detection rule can relax it later. A blown fuse leaves no author to appeal to.</p></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>eFuses</b><time>00:51</time></div>
+        <div class="bubble"><p>OnePlus said as much without meaning to. Nine days after the reports started they told Android Authority they had <em>"temporarily paused the ability to downgrade"</em> and <em>"will be restoring the ability to downgrade software builds in our next routine software update."</em></p> <a href="https://consumerrights.wiki/w/Oneplus_phone_update_introduces_hardware_anti-rollback" rel="external" title="OnePlus ColorOS 16.0.3.501 Anti-Rollback Fuse Incident (Consumer Rights Wiki)">[src]</a></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>eFuses</b><time>00:51</time></div>
+        <div class="bubble"><p>Both halves are true, and they act on different layers. The pause is policy, so a future build can lift it. The fuses are already blown on every phone that took the update, so the handsets that hard-bricked in January are waiting on nothing that a routine software update can deliver.</p></div></div></div>
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>00:52</time></div>
+        <div class="bubble"><p>so: a signature says who made this, a fuse says how far this phone has already gone, and only the second one can refuse yesterday.</p></div></div></div>
+
+      <div class="msg bot"><div class="pic"></div><div><div class="who"><b>eFuses</b><time>00:52</time></div>
+        <div class="bubble"><p>That is the model. Carry one blind spot out with it: the counter compares two numbers and cannot see who is asking. An attacker rolling you back to an exploitable build and an owner rolling back to the build where the camera worked send the identical request, so any mechanism that stops the first stops the second by construction.</p></div></div></div>
+
+      <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>00:53</time></div>
+        <div class="bubble"><p>got it. thanks.</p><p>→ <a href="https://consumerrights.wiki/w/Oneplus_phone_update_introduces_hardware_anti-rollback" rel="external">the Consumer Rights Wiki writeup</a> &middot; <a href="https://source.android.com/docs/security/features/verifiedboot/verified-boot" rel="external">AOSP Verified Boot</a> &middot; <a href="/lwe/tee">TEEs</a> &middot; <a href="/lwe/">back to Learning With Errors</a></p></div></div></div>
+
+      <div class="scrollnote">end of first pass</div>
+
+      </div>
+      <div class="compose"><div class="box"><div class="ta">This is a recorded conversation. The fuse bank above ratchets, and no button puts it back.</div></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+var bank=document.getElementById('fz-bank');
+if(bank){
+  var floorEl=document.getElementById('fz-floor'),ver=document.getElementById('fz-ver'),
+      verOut=document.getElementById('fz-verout'),flash=document.getElementById('fz-flash'),
+      undo=document.getElementById('fz-undo'),log=document.getElementById('fz-log'),N=12,floor=3;
+  function draw(){
+    while(bank.firstChild)bank.removeChild(bank.firstChild);
+    for(var i=0;i<N;i++){
+      var c=document.createElement('span');
+      c.className='fz-cell'+(i<floor?' on':'');
+      c.textContent=i<floor?'1':'0';
+      bank.appendChild(c);
+    }
+    floorEl.textContent=floor;
+  }
+  function say(t,k){log.textContent=t;log.className='fz-log'+(k?' '+k:'');}
+  ver.addEventListener('input',function(){verOut.textContent=ver.value;});
+  flash.addEventListener('click',function(){
+    var v=+ver.value;
+    if(v<floor){say('boot rejected. image version '+v+' is below the anti-rollback floor of '+floor+'.','bad');return;}
+    var was=floor;floor=v;draw();
+    if(was===v){say('booted. version '+v+' matches the floor, so no new fuse was blown.','ok');}
+    else{var d=v-was;say('booted. '+d+' more fuse'+(d===1?'':'s')+' blown. the floor is now '+v+'.','ok');}
+  });
+  undo.addEventListener('click',function(){
+    say('there is no such operation. blowing a fuse adds a one, and nothing in the instruction set turns a one back into a zero.','bad');
+  });
+  draw();
+}
+var imgs=document.getElementById('fz-imgs');
+if(imgs){
+  var sig=document.getElementById('fz-sig'),rb=document.getElementById('fz-rb'),FLOOR=6,
+      IMG={cur:{v:7,ok:true},old:{v:4,ok:true},mod:{v:7,ok:false}};
+  function set(el,txt,k){el.textContent=txt;el.className='fz-verdict '+k;}
+  imgs.addEventListener('click',function(e){
+    var b=e.target.closest?e.target.closest('button[data-k]'):null;
+    if(!b)return;
+    var m=IMG[b.getAttribute('data-k')];if(!m)return;
+    var all=imgs.querySelectorAll('button[data-k]');
+    for(var i=0;i<all.length;i++)all[i].classList.toggle('sel',all[i]===b);
+    if(!m.ok){
+      set(sig,'rejected. the signature does not verify.','bad');
+      set(rb,'rejected. the signature does not verify.','bad');
+    }else if(m.v<FLOOR){
+      set(sig,'accepted. signed by the vendor, so it boots.','ok');
+      set(rb,'rejected. version '+m.v+' is below the floor of '+FLOOR+'.','bad');
+    }else{
+      set(sig,'accepted. signed by the vendor, so it boots.','ok');
+      set(rb,'accepted. signed, and version '+m.v+' is at or above the floor of '+FLOOR+'.','ok');
+    }
+  });
+}
+})();
+</script>
+<script type="application/json" id="luq-data">
+{
+  "skin": "lwe",
+  "intro": "Before you close the window: 5 questions, no grades. Both demos above still run if you want to check an answer against them.",
+  "questions": [
+    {
+      "q": "A downgrade attack flashes last year's build and then exploits the bug it still carries. Why can secure boot's signature check do nothing about it?",
+      "options": [
+        {
+          "t": "last year's build carries a real vendor signature, and the check keeps no memory of what already ran",
+          "ok": true,
+          "why": "Right, and both halves matter. The signature verifies today exactly as it did on release day, and a stateless check has no way to know that a newer build has since existed."
+        },
+        {
+          "t": "the signing key rotates, so old signatures stop verifying and the phone falls back to trusting anything",
+          "why": "Nothing expires here. That old image verifies cleanly, which is precisely what makes the attack work; a failed signature would have been the easy case."
+        },
+        {
+          "t": "the attacker forges a signature for the old build",
+          "why": "Forgery is the one thing signatures do stop. The downgrade attack forges nothing at all, which is why it walks straight through."
+        },
+        {
+          "t": "secure boot only verifies the kernel and skips the bootloader stages",
+          "why": "Scope is a different worry. Even a check covering every stage would pass a genuinely signed old image, because the question it asks has no version in it."
+        }
+      ]
+    },
+    {
+      "q": "In the ratchet demo the floor climbs and never falls. What makes that one-way, mechanically?",
+      "options": [
+        {
+          "t": "the counter is stored as blown fuses, so raising it adds ones and no operation clears one",
+          "ok": true,
+          "why": "That is the ratchet. The counter is unary in the silicon: recording a higher minimum means blowing more fuses, and the hardware offers no inverse."
+        },
+        {
+          "t": "the bootloader policy forbids lowering it, and the bootloader is signed",
+          "why": "A policy is what the vendor can rewrite in the next build. The fuse holds even against the vendor, which is the property that separates the two."
+        },
+        {
+          "t": "the value is signed, so editing it breaks the signature and the phone notices",
+          "why": "You have described tamper-evident storage, which the Android docs actually ask for. It detects an edit and still leaves whoever holds the key able to write a lower number."
+        },
+        {
+          "t": "the fuses live inside TrustZone, so only trusted code is allowed to lower them",
+          "why": "TrustZone is the path that blows fuses rather than a guard on lowering them. No caller of any privilege gets a fuse back."
+        }
+      ]
+    },
+    {
+      "q": "EDL mode talks straight to storage and has been the classic last-resort rescue. Why does it fail on a device whose fuse has blown?",
+      "options": [
+        {
+          "t": "the fuses are in processor silicon, so a storage write cannot reach them, and Firehose programmers are OEM-signed with their own anti-rollback versions",
+          "ok": true,
+          "why": "Both doors are shut. EDL writes the wrong medium, and the loader it would need to run is itself gated by the same counter."
+        },
+        {
+          "t": "OnePlus pulled the downgrade packages, so there is no image left to flash",
+          "why": "The removal happened and it is a supply problem. Hand the device a perfect copy of the old image and the PBL still rejects it on the version compare."
+        },
+        {
+          "t": "EDL needs an unlocked bootloader, and the update relocks it",
+          "why": "EDL exists for a device that will not boot at all, which is why people reach for it here. Its problem is the fuse, not the lock state."
+        },
+        {
+          "t": "blowing a fuse disables the USB stack, so the phone stops enumerating",
+          "why": "The reports describe the phone showing up as Qualcomm HS-USB QDLoader 9008, which is how people diagnosed it. It enumerates fine and refuses to boot."
+        }
+      ]
+    },
+    {
+      "q": "Samsung's Knox bit and Qualcomm's anti-rollback fuses sit on the same silicon substrate. What separates them?",
+      "options": [
+        {
+          "t": "Knox records that unsigned firmware was flashed and permanently withdraws features, while anti-rollback gates boot on a version number",
+          "ok": true,
+          "why": "One fuse is a gate and one is a witness. Knox lets the phone boot and takes Samsung Pay and Secure Folder away for good; anti-rollback refuses the boot outright."
+        },
+        {
+          "t": "Knox is reversible by a Samsung service centre, anti-rollback is permanent",
+          "why": "Both are eFuses on the board, and the reporting is consistent on the remedy: a new motherboard. Neither one has a software reset."
+        },
+        {
+          "t": "Knox is a software flag in the bootloader, anti-rollback is hardware",
+          "why": "Knox trips an eFuse too, which is why a flashed device stays flagged after a full wipe and reflash."
+        },
+        {
+          "t": "Knox blocks downgrades and anti-rollback blocks unsigned builds",
+          "why": "That swaps their jobs. Anti-rollback is the version floor; Knox is the record that something unsigned was flashed."
+        }
+      ]
+    },
+    {
+      "q": "Android's docs ask for tamper-evident storage. Qualcomm shipped something irreversible. What does the stronger choice buy, and what does it cost?",
+      "options": [
+        {
+          "t": "it buys a floor that nobody can lower, including the vendor, and it costs any path back for an owner whose device already recorded the higher number",
+          "ok": true,
+          "why": "That is the trade in one line. Strength here means removing the appeal, and the appeal was the owner's too."
+        },
+        {
+          "t": "nothing changes, evident and irreversible are two names for the same guarantee",
+          "why": "Evident means the device can detect a change and choose a response. Irreversible removes the choice from everyone, which is a strictly different and stronger claim."
+        },
+        {
+          "t": "it buys speed, because reading a fuse at boot is cheaper than verifying signed storage",
+          "why": "A fuse read is cheap, and cost was never the argument. The property being bought is that no key holder can write a lower value."
+        },
+        {
+          "t": "it buys protection against physical attackers at no cost to the owner",
+          "why": "The owner pays the whole cost, because the counter cannot tell an owner from an attacker. Both ask to run an older build, in the same words."
+        }
+      ]
+    }
+  ]
+}
+</script>
+<script src="/quiz.js" defer></script>
+<script src="/lwe/ask.js" defer></script>
+<script src="/nav.js" defer></script>
+<!-- axp:shell --><nav id="axp-icons" aria-label="desktop shortcuts"><a class="axp-ico" title="writing, in flux" href="/writing" data-key="Notepad" style="left:9px;top:9px"><span class="ic note" aria-hidden="true"></span><span class="t">Notepad</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="GitHub (opens in a new tab)" href="https://github.com/oddharsh" data-key="GitHub" style="left:9px;top:95px"><span class="ic " style="background:linear-gradient(180deg,oklch(72% 0.05 255),oklch(60% 0.07 257))" aria-hidden="true">G</span><span class="t">GitHub</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Twitter (opens in a new tab)" href="https://x.com/oddhash" data-key="Twitter" style="left:9px;top:181px"><span class="ic " style="background:linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))" aria-hidden="true">@</span><span class="t">Twitter</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Instagram (opens in a new tab)" href="https://www.instagram.com/aadharsh.hif" data-key="Photos" style="left:9px;top:267px"><span class="ic " style="background:linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))" aria-hidden="true"><i class="cam" aria-hidden="true"></i></span><span class="t">Photos</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Curius (opens in a new tab)" href="https://curius.app/aadharsh-pannirselvam" data-key="Curius" style="left:9px;top:353px"><span class="ic " style="background:linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))" aria-hidden="true">C</span><span class="t">Curius</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Beli (opens in a new tab)" href="https://beliapp.com/users/aadharsh" data-key="Beli" style="left:9px;top:439px"><span class="ic " style="background:linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))" aria-hidden="true">B</span><span class="t">Beli</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Spotify (opens in a new tab)" href="https://open.spotify.com/user/aadharsh2010" data-key="Music" style="left:9px;top:525px"><span class="ic " style="background:linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))" aria-hidden="true">♪</span><span class="t">Music</span></a></nav><div id="axp-taskbar" role="navigation" aria-label="taskbar"><a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a><div id="axp-pins"><a class="axp-pin" title="prototypes + experiments" href="/garage" data-count="20"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-garage" alt=""></span><span class="lbl">garage</span></a><a class="axp-pin" title="chat-style explainers + live demos" href="/lwe" data-count="12"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lwe" alt=""></span><span class="lbl">lwe</span></a><a class="axp-pin" title="notes, in flux: an editable notepad" href="/writing" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-writing" alt=""></span><span class="lbl">writing</span></a><a class="axp-pin" title="what I've been reading, from Curius" href="/reading" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-reading" alt=""></span><span class="lbl">reading</span></a><a class="axp-pin" title="events worth going to" href="/serendipity" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-serendipity" alt=""></span><span class="lbl">serendipity</span></a><a class="axp-pin" title="the crypto-VC neighborhood" href="/around" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-around" alt=""></span><span class="lbl">around</span></a><a class="axp-pin" title="the other web: how machines read a URL" href="/lens" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lens" alt=""></span><span class="lbl">lens</span></a><a class="axp-pin" title="terminal utilities, drivable by keypress" href="/terminal" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-terminal" alt=""></span><span class="lbl">terminal</span></a><a class="axp-pin" title="a compression vision test — whose eye do you have?" href="/pixel-peeper" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-pixel-peeper" alt=""></span><span class="lbl">pixel peeper</span></a><a class="axp-pin" title="what I'm listening to right now" href="/rn" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-music" alt=""></span><span class="lbl">music</span></a><a class="axp-pin" title="book a coffee / bagel" href="/coffee" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-coffee" alt=""></span><span class="lbl">coffee</span></a></div><div id="axp-spacer"></div><div id="axp-tray"><button id="axp-sound" type="button" hidden></button><a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><img src="/icons.svg#tray-sysprop" alt=""></a><a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><img src="/icons.svg#tray-security" alt=""></a><a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><img src="/icons.svg#tray-updates" alt=""></a><span id="axp-clock" aria-hidden="true"></span></div></div><script type="speculationrules">{"prerender":[{"where":{"and":[{"href_matches":"/*"},{"not":{"href_matches":"/whoareyou*"}},{"not":{"href_matches":"/run"}},{"not":{"href_matches":"/rn*"}},{"not":{"href_matches":"/images*"}},{"not":{"href_matches":"/index.md"}},{"not":{"href_matches":"/llms.txt"}}]},"eagerness":"moderate"}]}</script><!-- /axp:shell -->
+</body>
+</html>
