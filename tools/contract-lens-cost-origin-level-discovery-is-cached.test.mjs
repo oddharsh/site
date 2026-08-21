@@ -1,6 +1,7 @@
 // ── lens cost: origin-level discovery is cached ──────────────────────────
 // Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
 import {
+  testGlobals,
   assert,
   readFileSync,
   test,
@@ -16,7 +17,7 @@ test("a second scan of the same origin reuses discovery instead of re-probing", 
   const { originDiscovery } = await import("../src/worker/lens.ts");
   const store = new Map();
   const realCaches = globalThis.caches;
-  globalThis.caches = {
+  testGlobals.caches = {
     default: {
       async match(req) { const hit = store.get(req.url); return hit ? new Response(hit) : undefined; },
       async put(req, res) { store.set(req.url, await res.text()); },
@@ -44,7 +45,7 @@ test("a second scan of the same origin reuses discovery instead of re-probing", 
     const forced = await originDiscovery("https://example.com", "example.com", {}, { fresh: true });
     assert.equal(forced.cached, false);
   } finally {
-    if (realCaches === undefined) delete globalThis.caches; else globalThis.caches = realCaches;
+    if (realCaches === undefined) delete globalThis.caches; else testGlobals.caches = realCaches;
   }
 });
 
@@ -58,7 +59,7 @@ test("discovery still works with no cache at all", async () => {
     const out = await originDiscovery("https://example.com", "example.com", {});
     assert.equal(out.cached, false);
     assert.ok("robots" in out && "llms" in out && "mcp" in out);
-  } finally { if (realCaches !== undefined) globalThis.caches = realCaches; }
+  } finally { if (realCaches !== undefined) testGlobals.caches = realCaches; }
 });
 
 test("readDoors reads lens's discovery rather than re-probing the same files", async () => {

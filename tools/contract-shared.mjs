@@ -319,7 +319,21 @@ const terminalReq = (path) => new Request(`https://aadhar.sh${path}`);
 const terminalGet = (path) => handleTool(terminalReq(path), terminalEnv(), context());
 
 
+// The globals, typed loosely for TEST DOUBLES, and this is the only cast in the
+// suite that exists for typing rather than for behaviour.
+//
+// bun types `globalThis.fetch` as `typeof fetch`, which carries a `preconnect`
+// method. A double that answers three URLs has no business implementing it, and
+// adding a stub `preconnect` to sixteen arrow functions would be inventing
+// conformance rather than testing anything. Assigning through here says what is
+// happening once: a partial stand-in is being installed on the global.
+//
+// It is deliberately NOT a general escape hatch. Reach for it to install a
+// double; anything else wants a real type.
+const testGlobals = /** @type {any} */ (globalThis);
+
 export {
+  testGlobals,
   AGENT_SURFACES,
   ART_VERSION,
   BASELINE_HEADING,

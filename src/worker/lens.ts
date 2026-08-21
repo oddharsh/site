@@ -3712,7 +3712,13 @@ function lensReadinessItem(key, status, detail) {
 // usable answer, whether six named crawler identities got one too, and whether
 // the site offered a machine door. Cloudflare supplies the standards opinion in
 // the composite; counting this local mirror again would double-weight it.
-export function lensFieldEvidence({ status, bodyUnreadable, anatomy, agent, botViews }) {
+// Every field optional, for the same reason lensReadiness's are: each is read
+// behind a guard and a scan legitimately produces none of them when the body
+// could not be decoded. Required destructuring made a caller that supplies four
+// of five fail on the shape rather than the behaviour.
+export function lensFieldEvidence({ status, bodyUnreadable, anatomy, agent, botViews }: {
+  status?: any; bodyUnreadable?: any; anatomy?: any; agent?: any; botViews?: any;
+}) {
   const components = [];
   const add = (key, label, score, detail) => components.push({ key, label, score, detail });
 

@@ -36,5 +36,5 @@
     "types": ["bun"]
   },
   // The .d.ts declares Event Timing members lib.dom still lacks; see its header.
-  "include": ["../tools/**/*.mjs", "../tools/lib/browser-lab.d.ts"]
+  "include": ["../tools/**/*.mjs", "../tools/**/*.d.ts"]
 }

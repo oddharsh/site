@@ -1,6 +1,7 @@
 // ── rn: the track-meta map must survive a SHORT playlist read ────────
 // Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
 import {
+  testGlobals,
   ART_VERSION,
   ROOT,
   TRACKS,
@@ -344,13 +345,13 @@ test("the art warm attempts every URL even when one is already cached", async ()
   const store = new Map();
   const realFetch = globalThis.fetch;
   const hadCaches = "caches" in globalThis;
-  globalThis.caches = {
+  testGlobals.caches = {
     default: {
       async match(req) { const r = store.get(req.url); return r ? r.clone() : undefined; },
       async put(req, res) { store.set(req.url, res); },
     },
   };
-  globalThis.fetch = async () =>
+  testGlobals.fetch = async () =>
     new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { "content-type": "image/jpeg" } });
 
   try {
@@ -375,7 +376,7 @@ test("the art warm attempts every URL even when one is already cached", async ()
     assert.equal(res.warmed, 2, "a warm colo entry must not stop the other URLs from being warmed");
     for (const u of urls) assert.ok(store.has(u), `${u} was never warmed`);
   } finally {
-    globalThis.fetch = realFetch;
+    testGlobals.fetch = realFetch;
     if (!hadCaches) delete globalThis.caches;
   }
 });
@@ -517,7 +518,7 @@ test("Lens proxies Cloudflare's public scanner but stores only the normalized sc
   const writes = [];
   let upstream = null;
   try {
-    globalThis.fetch = async (url, init) => {
+    testGlobals.fetch = async (url, init) => {
       upstream = { url: String(url), body: JSON.parse(init.body) };
       return new Response('data: ' + JSON.stringify({
         jsonrpc: "2.0", id: "lens-cloudflare-score",
@@ -542,7 +543,7 @@ test("Lens proxies Cloudflare's public scanner but stores only the normalized sc
     });
     assert.doesNotMatch(writes[0].value, /private report details/);
   } finally {
-    globalThis.fetch = realFetch;
+    testGlobals.fetch = realFetch;
   }
 });
 
@@ -597,7 +598,11 @@ test("both browser routes report an upstream 429 as a 429, not a bad gateway", a
   const env = { BROWSER: { quickAction: async () => new Response('{"errors":[{"code":2001}]}', { status: 429 }) } };
   const url = "?url=https%3A%2F%2Fexample.com%2F";
 
-  for (const [name, handler] of [["shot", handleLensShot], ["browser", handleLensBrowser]]) {
+  // TUPLES: inference widens the rows to (string | Function)[], so `handler` is
+  // a union that includes string and stops being callable.
+  /** @type {Array<[name: string, handler: (req: Request, env: any, ctx: any) => Promise<Response>]>} */
+  const lensHandlers = [["shot", handleLensShot], ["browser", handleLensBrowser]];
+  for (const [name, handler] of lensHandlers) {
     const response = await handler(new Request(`https://aadhar.sh/lens/${name}${url}`), env, context());
     assert.equal(response.status, 429, `/lens/${name} must pass the upstream 429 through as a 429`);
     const body = await response.json();

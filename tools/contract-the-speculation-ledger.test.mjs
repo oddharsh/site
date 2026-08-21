@@ -33,7 +33,10 @@ test("the speculation denominator counts real speculations and nothing else", as
   ];
   for (const [purpose, kind, expected] of cases) {
     const { env, points } = speculationEnv();
-    const headers = purpose ? { "sec-purpose": purpose } : {};
+    // Record<string, string>, because the two arms otherwise infer as a union
+    // whose second member has no "sec-purpose" and matches no HeadersInit.
+    /** @type {Record<string, string>} */
+    const headers = purpose ? { "sec-purpose": String(purpose) } : {};
     countSpeculativeLoad(env, new Request("https://aadhar.sh/garage", { headers }), ok, "/garage");
     assert.equal(points.length, expected, `sec-purpose: "${purpose}" should write ${expected}`);
     if (expected) {
