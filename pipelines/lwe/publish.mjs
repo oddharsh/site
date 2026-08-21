@@ -61,5 +61,14 @@ console.log(`  2) merge it — CI promotes the tested commit to production and W
 console.log(`     Builds deploys the site Worker. Nothing to bump by hand.`);
 if (existsSync(corpusFile)) {
   console.log(`  3) cd lwe-ask && bun run wrangler deploy        # the auxiliary ask Worker`);
-  console.log(`  4) curl -X POST https://aadhar.sh/lwe/ask/reindex -H "x-reindex-secret: $REINDEX_SECRET"  # embed it`);
+  // ${REINDEX_SECRET:?...} and -w are BOTH load-bearing. curl DROPS a header whose
+  // value is empty rather than sending it blank, so the previous form here quietly
+  // sent no header at all when the variable was unset, and the Worker's honest 401
+  // was then swallowed by -s. That combination cost four rounds of "it worked" on
+  // 2026-08-21 against an index that never moved. The :? guard makes the shell fail
+  // before curl runs, and -w prints the status even when the body is piped away.
+  console.log(`  4) embed it (the guard makes an unset secret fail loudly rather than send no header):`);
+  console.log(`     curl -w '\\nHTTP %{http_code}\\n' -X POST https://aadhar.sh/lwe/ask/reindex \\`);
+  console.log(`       -H "x-reindex-secret: \${REINDEX_SECRET:?export REINDEX_SECRET first}"`);
+  console.log(`     expect HTTP 200 + {"ok":true,"upserted":<n>}; verify with vectorize info.`);
 }
