@@ -1810,6 +1810,43 @@ generic hex back.
   as AadharshBot. Framability is read from the target's `X-Frame-Options` /
   `Content-Security-Policy: frame-ancestors` in the `/lens/fetch` pass, so no extra probe.
 
+### `/lens` bot views, and the control rows that make them readable
+
+`LENS_BOT_VIEWS` refetches the scanned URL as ten identities. Eight are crawler
+tokens; **two are CONTROLS (Chrome, curl) and they are what the table rests on.**
+Added 2026-08-21, alongside `/garage/useragent`, which is the measurement that
+forced them.
+
+A crawler row answering 403 has two explanations that look identical from one
+sample: the origin refuses that NAME, or the origin refuses THIS INSTRUMENT (our
+datacenter address, our TLS fingerprint, our missing cookie) and would refuse
+anything. Without a control, every scan of a hard-walled origin rendered as
+"blocks all AI crawlers" when the honest answer was "we never got in". Measured
+the day they landed: `medium.com` and `quora.com` answer 403 to Chrome too, so
+every AI-crawler row on those hosts is uninterpretable, and `stackoverflow.com`
+joins them once you have sampled it a few times.
+
+**Controls are DISPLAYED and never SCORED**, which is the part that is easy to
+get wrong. `lensFieldEvidence` computes `sampledBots` as successful over total,
+so leaving a browser in that set would reward precisely the origin that serves
+humans and refuses every machine. Controls are filtered out of the numerator and
+the denominator, and they gate the component instead: with no control admitted,
+`sampledBots` is `null` and says why, rather than reporting a confident 0. Robots
+policy renders `n/a` for a control, since robots.txt does not govern a browser.
+
+**ONE control getting in is enough, and requiring all of them is a real bug.**
+`linkedin.com` answers `999` to curl unconditionally, so an all-must-pass gate
+marks a target unmeasurable that Chrome reads perfectly. The question a control
+answers is whether the instrument could retrieve anything at all.
+
+**The About dialog used to claim this never happened.** Its rule read "Every
+fetch is identified and cryptographically signed as AadharshBot. Lens never wears
+another bot's user-agent to get past a wall", and both halves were false for
+these probes: `lensFetchAsBot` is the one fetch path that skips `botHeaders()`,
+so it sends a bare UA and no signature. The Terms-lens comment nearby was always
+narrower and survives, since Terms verdicts really are read from published policy.
+The copy now states the exception and what it buys. Corrected 2026-08-21.
+
 ### `lens-reader/` — the Reader lens, and the first auxiliary Worker the site calls
 
 The seventh machine tab on `/lens` ("Reader's guess") runs a THIRD-PARTY reader-mode
@@ -2153,7 +2190,7 @@ the existing layers structurally could not reach:
 | `route <template>` | which route owns this fetch/KV child; `route.self_fetch` marks a `/lens` self-scan's inner dispatch |
 | `home.grid.*`, `rn.tracks.*` | the two hydration fragments. Splits manifest-vs-alt, which `perf-probe.ts` fuses into one positional AE double. `home.grid.render` reads 0ms (see the CPU note above) and earns its place on attributes alone |
 | `rn.scrape.{playlist,tracks,artists}` | the 3-tier Spotify scrape, cold-miss only. `rn.artists_cached` vs `_scraped` says whether the artist KV cache is actually saving the network |
-| `lens.inspect.{fetch,parse}`, `lens.discovery` | `out.elapsedMs` is fixed BEFORE the 28-probe fan-out (botViews is 6 of its own), so a scan's discovery phase was entirely unmeasured. Production, 752KB page: 782ms total, `elapsedMs` reported 29. `lens.inspect.parse` reads 0ms (CPU note above) and is kept for its byte/word attributes |
+| `lens.inspect.{fetch,parse}`, `lens.discovery` | `out.elapsedMs` is fixed BEFORE the 28-probe fan-out (botViews is 10 of its own), so a scan's discovery phase was entirely unmeasured. Production, 752KB page: 782ms total, `elapsedMs` reported 29. `lens.inspect.parse` reads 0ms (CPU note above) and is kept for its byte/word attributes |
 | `lens.shot`, `lens.browser` | Browser Run. Same span name on hit and miss (differing on `lens.cache`) so hit rate is a group-by, not a join; the four distinct 502 shapes are separated by `lens.outcome` |
 | `cron.*` | a cron has no response, no status, and no visitor to complain |
 | `around.neighbor` | every degradation here is designed to be quiet (a disallowing robots.txt is a legitimate skip). The rollup makes "3 of 20 neighbors dark for a month" one number |

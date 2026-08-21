@@ -245,6 +245,11 @@
       "hint": "what a PQ signature costs in bytes and milliseconds",
       "flags": { "run": true, "taskbar": false, "sitemap": true, "gallery": true, "agents": true, "searchIndex": false, "webmention": true } },
 
+    { "path": "/garage/useragent", "title": "What a crawler name is worth", "section": "garage", "kind": "content", "short": "user-agent",
+      "description": "Sixteen identities against eleven sites: two invented user-agent strings cleared a wall four documented crawler tokens could not, one site caught the lie, and Reddit served a link-preview bot 1,640 words where a browser got one.",
+      "hint": "what a crawler name is worth when nothing verifies it",
+      "flags": { "run": true, "taskbar": false, "sitemap": true, "gallery": true, "agents": true, "searchIndex": false, "webmention": true } },
+
     { "path": "/garage/safari27", "title": "Safari 27", "section": "garage", "kind": "content", "short": "safari 27",
       "description": "What WWDC26's Safari 27 ships that this site already leans on: base-select, anchor-positioning, more.",
       "hint": "WWDC26 Safari 27 features, through this site's lens",
