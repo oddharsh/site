@@ -261,6 +261,28 @@ test("a flex item is its own box, and promoting one never eats an image", () => 
   assert.ok(collectBlockClasses("<style>.x{display:block}.y{float:right}.z{flex:1}</style>").size >= 3);
 });
 
+// A twin is the agent-facing copy of a page, so an href it emits is a citation a
+// reader may follow. The converter dropped `javascript:` and nothing else, which
+// left three schemes that execute rather than address: `data:`, `vbscript:`, and
+// `JavaScript:`, since the old check was a case-SENSITIVE startsWith and a browser
+// reads a scheme case-insensitively after stripping leading control characters.
+// No page here authors one, so this asserts the floor rather than a fixed bug.
+test("a twin never emits a link on a scheme that executes", () => {
+  const link = (href) =>
+    readDocument(`<html><body><main><p><a href="${href}">CLICKME</a></p></main></body></html>`,
+      { origin: "https://aadhar.sh" }).body;
+
+  // the text survives; only the href is refused, so the prose is never lost
+  for (const href of ["javascript:alert(1)", "JavaScript:alert(1)", "vbscript:msgbox(1)",
+                      "data:text/html,<script>alert(1)</script>", "\tdata:text/html;base64,PHM+"]) {
+    assert.equal(link(href), "CLICKME", `${href} must render as text, never as a link`);
+  }
+
+  // and an ordinary href still resolves, so the guard above is not just strictness
+  assert.equal(link("https://example.com/real"), "[CLICKME](https://example.com/real)");
+  assert.equal(link("/garage/horizon"), "[CLICKME](https://aadhar.sh/garage/horizon)");
+});
+
 // RFC 9110 asks a HEAD to send the header fields its GET would send. serveStaticPage
 // bailed on the method before reaching the Markdown branch, so HEAD answered
 // text/html on pages whose GET answers text/markdown. Verified on production
