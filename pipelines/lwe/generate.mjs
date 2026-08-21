@@ -196,11 +196,17 @@ function conceptsBlock(concepts) {
 
 // Replace the text between an explicit start/end marker pair. Markers are passed
 // in full so each file can use its own comment syntax (HTML for .xml/.html, // for .js).
+//
+// `file` is REPO-ROOT relative, never relative to the served tree. Three of the four
+// targets left src/pages/ in the 2026-08-18 layout split (sitemap.xml to public/,
+// ask.js to public/lwe/, nav.js to src/client/nav-run.js) and this resolved them
+// against HOLDING for months afterwards, so `wire` silently rewrote one file of four
+// and every later concept got hand-wired into regions this script owns.
 function injectBetween(file, start, end, content) {
-  const path = join(HOLDING, file);
+  const path = join(ROOT, file);
   const src = readFileSync(path, "utf8");
   const i = src.indexOf(start), j = src.indexOf(end);
-  if (i === -1 || j === -1) { console.log(`  · ${file}: markers not found, skipped (${start})`); return false; }
+  if (i === -1 || j === -1) { console.log(`  · ${file}: markers not found, SKIPPED (${start})`); return false; }
   const next = src.slice(0, i + start.length) + "\n" + content + "\n" + src.slice(j);
   writeFileSync(path, next);
   console.log(`  · ${file}: rewrote ${start.replace(/[^\w:-]+/g, " ").replace(/^[\s-]+|[\s-]+$/g, "")} region`);
@@ -219,10 +225,19 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     console.log(`wrote ${out}`);
   } else if (cmd === "wire") {
     console.log("wiring from concepts.json:");
-    injectBetween("sitemap.xml", "<!-- generated:lwe:start -->", "<!-- generated:lwe:end -->", sitemapBlock(REGISTRY));
-    injectBetween("lwe/index.html", "<!-- generated:buddies:start -->", "<!-- generated:buddies:end -->", buddyGroup(REGISTRY));
-    injectBetween("nav.js", "// generated:lwe-pages:start", "// generated:lwe-pages:end", navBlock(REGISTRY));
-    injectBetween("lwe/ask.js", "// generated:concepts:start", "// generated:concepts:end", conceptsBlock(REGISTRY));
+    const wired = [
+      injectBetween("public/sitemap.xml", "<!-- generated:lwe:start -->", "<!-- generated:lwe:end -->", sitemapBlock(REGISTRY)),
+      injectBetween("src/pages/lwe/index.html", "<!-- generated:buddies:start -->", "<!-- generated:buddies:end -->", buddyGroup(REGISTRY)),
+      injectBetween("src/client/nav-run.js", "// generated:lwe-pages:start", "// generated:lwe-pages:end", navBlock(REGISTRY)),
+      injectBetween("public/lwe/ask.js", "// generated:concepts:start", "// generated:concepts:end", conceptsBlock(REGISTRY)),
+    ];
+    // A skipped target is the failure this script had for months, and it was silent
+    // because a soft skip prints beside three successes and reads as noise. Exit
+    // non-zero so a moved file fails the run that depends on it.
+    if (wired.some((ok) => !ok)) {
+      console.error(`wire: ${wired.filter((ok) => !ok).length} of ${wired.length} target(s) skipped, see above`);
+      process.exit(1);
+    }
   } else {
     console.log("usage: generate.mjs page <id> | generate.mjs wire");
   }
