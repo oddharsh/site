@@ -880,5 +880,12 @@
     "version": "aadhar-v190-nlweb",
     "vnum": 190,
     "ymd": "2026-08-19"
+  },
+  {
+    "slug": "lean-second-machine",
+    "title": "The Lean explainer now covers the other half of formal verification: the machine that never writes a proof, walks the program symbolically and hands the constraints to an SMT solver, and reads bytecode because a source-level model can drift from what actually executes. Also why the practice found its first routine home on chains, what a loop full of machine-generated invariants still cannot fix, and the FRI soundness formalization read for the gaps it published rather than the result it claims.",
+    "version": "aadhar-v191-lean-second-machine",
+    "vnum": 191,
+    "ymd": "2026-08-21"
   }
 ]
