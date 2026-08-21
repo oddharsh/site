@@ -10,13 +10,13 @@
 <link rel="canonical" href="https://aadhar.sh/lwe/lean">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='7'%20fill='%234b47a8'/%3E%3Cg%20fill='none'%20stroke='%23fff'%20stroke-width='2.4'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M10%209%20L16%2023%20L22%209'/%3E%3Cpath%20d='M12.6%2017.4%20H19.4'/%3E%3C/g%3E%3C/svg%3E">
 <meta property="og:type" content="article">
-<meta property="og:title" content="aadhar.sh/lwe/lean — Lean and formal verification">
+<meta property="og:title" content="aadhar.sh/lwe/lean · Lean and formal verification">
 <meta property="og:url" content="https://aadhar.sh/lwe/lean">
 <meta name="twitter:card" content="summary_large_image">
 <meta property="og:image" content="https://aadhar.sh/og/lwe-lean.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="aadhar.sh/lwe/lean — Lean and formal verification, live demo screenshotted">
+<meta property="og:image:alt" content="aadhar.sh/lwe/lean · Lean and formal verification, live demo screenshotted">
 <meta name="twitter:image" content="https://aadhar.sh/og/lwe-lean.png">
 
 <link rel="stylesheet" href="/lwe-base.css">
@@ -125,7 +125,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
 <!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
 <div class="window">
   <div class="title-bar" aria-hidden="true">
-    <span class="title-text"><span class="icon"></span>aadhar.sh/lwe &mdash; Lean</span>
+    <span class="title-text"><span class="icon"></span>aadhar.sh/lwe &middot; Lean</span>
     <span class="controls"><span class="min" title="minimize"></span><span class="max" title="maximize"></span><a class="close" href="/lwe" title="back to Learning With Errors" aria-label="back to Learning With Errors"></a></span>
   </div>
   <div class="content">
@@ -251,6 +251,15 @@ where
   rintro ⟨bal, amt, h1, h2⟩; omega                    <span class="ok">-- ✓ proven</span></div>
           <p>Both theorems above are statements about the empty set, and that fact is itself machine-checkable. <b>Proving your preconditions are satisfiable is a separate obligation from proving your theorem, and no tool makes you do it.</b> In a real system the contradiction hides across a dozen invariants instead of sitting in two adjacent lines.</p></div></div></div>
 
+        <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>20:01</time></div>
+          <div class="bubble"><p>so isn't that what the models are for now. generate a thousand invariants and let the prover throw out the bad ones</p></div></div></div>
+
+        <div class="msg bot"><div class="pic"></div><div><div class="who"><b>Lean</b><time>20:02</time></div>
+          <div class="bubble"><p>That's the working practice, and it does move a real bottleneck. Knowing what to prove was expensive because the only source of candidate properties was somebody who had already seen this class of bug. A model that has read a lot of code proposes hundreds of candidates for nothing, and I kill the false ones deterministically. The generator is allowed to be wrong as often as it likes. The checker is the half that has to be right.</p>
+          <p>What it does not touch is vacuity. A generated candidate can be <span class="mono">0 ≤ withdraw bal amt</span> exactly the way a human one can, and the loop's reward signal is that the prover said yes, which is maximized by proposing things nothing could violate. So <span class="mono">preconditions_unreachable</span> stops being a curiosity and becomes the filter the loop needs: <b>a proposal that survives because it quantifies over nothing should score zero</b>, and a loop that scores it as a win will drift toward writing more of them.</p>
+          <p>The second-order effect is the bigger one. The assurance ladder was priced in human hours. Unit tests, then fuzzing, then an audit, then this, each rung more burdensome than the one below it, and most teams stopped at rung two because of what rung four cost. Agents cheapened every rung at the same time. Once a machine writes the tests and the fuzz harness and the audit notes, the distance between the cheap rungs and the expensive one closes, and the question of why you would stop below the one that quantifies gets harder to answer.</p>
+          <p>Treat all of that as a report on how people are working rather than as a benchmark. I have no measured number for what fraction of generated candidates survive contact with a prover, and you should ask for one before believing any vendor's version of this paragraph.</p></div></div></div>
+
         <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>20:04</time></div>
           <div class="bubble"><p>paradigm has that <a href="https://www.paradigm.xyz/puzzles/verified-compiler" rel="external">verified compiler puzzle</a> where you optimize a Solidity compiler and the Lean theorem has to keep proving. what does &ldquo;verified compiler&rdquo; actually mean</p></div></div></div>
 
@@ -306,6 +315,24 @@ ib : ∀ (s : List Nat), run env (compileSwap b) s = eval env b :: s
     run env (compile e) [] = [eval env e] :=
   compile_correct_gen env e []</div>
           <p>Finding the right induction hypothesis is most of the work in every real verification project. The other trick is negative: <span class="mono">eval</span> and <span class="mono">run</span> share no code. If I'd defined the machine by calling <span class="mono">eval</span>, the theorem would be true, checked, and vacuous in exactly the sense we covered above.</p></div></div></div>
+
+        <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>20:17</time></div>
+          <div class="bubble"><p>everything up to here is me writing a proof and you checking it. is that the only shape this comes in</p></div></div></div>
+
+        <div class="msg bot"><div class="pic"></div><div><div class="who"><b>Lean</b><time>20:17</time></div>
+          <div class="bubble"><p>No, and the other shape is most of the industry. Two machines wear this name and they share almost nothing except the word.</p>
+          <p>What you have been doing is <b>interactive theorem proving</b>. You supply a term, I type-check it, and the invention is yours. It reaches unbounded structures and arbitrary mathematics, anything you can state, and it costs you months.</p>
+          <p>The other one never builds a proof term at all. It walks the program <b>symbolically</b>, so each instruction becomes a constraint over symbolic inputs rather than an operation on values, then hands the resulting system to an SMT solver like Z3 and asks whether any assignment violates your property. Nobody writes a proof. You get a verdict, and on failure a concrete input that breaks it, which is worth more to the engineer than any proof term I could hand them.</p>
+          <p>The price is that it gives up. A solver that cannot bound the state space returns <span class="mono">unknown</span> or runs until you stop it, and <span class="mono">unknown</span> is what you will get on anything with an unbounded loop.</p></div></div></div>
+
+        <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>20:18</time></div>
+          <div class="bubble"><p>and that runs on the solidity or on the bytecode</p></div></div></div>
+
+        <div class="msg bot"><div class="pic"></div><div><div class="who"><b>Lean</b><time>20:18</time></div>
+          <div class="bubble"><p>Bytecode, and that is the section above arriving from the other direction. What executes is bytecode. Any higher level you reason over instead is a <em>model</em> of it, and a model fails two ways: the compiler that produced those bytes can be wrong, which is the entire premise of the puzzle you just played, and the model drifts the moment somebody edits the source and nobody re-derives it.</p>
+          <p>Prove over the bytes and both gaps close. You pay for it by reasoning in a language with no types, no names and no structure, which is exactly why that side is automated. Nobody would do it by hand.</p>
+          <p>It also answers something you should have asked me an hour ago: why this happens on chains rather than everywhere. Symbolic execution dies on unbounded computation, and every EVM execution is bounded because it pays gas per step. Contracts are small, thousands of lines where a browser is millions. And the cost of being wrong is the balance sitting in the contract, which is a number a CFO can read.</p>
+          <p><b>Bounded, small, and expensive to get wrong.</b> That combination is rarer than it sounds, and it is why a technique available since the 1970s found its first routine commercial customer here rather than in the places with vastly more code.</p></div></div></div>
 
         <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>20:19</time></div>
           <div class="bubble"><p>ok so the theorem holds and the spec is honest. now am I safe</p></div></div></div>
@@ -445,12 +472,24 @@ ib : ∀ (s : List Nat), run env (compileSwap b) s = eval env b :: s
           <div class="bubble"><p>Impressive, and the shape of the impressiveness is the useful part. Twenty megabytes of proof stopped being anybody's problem, because I read it and I don't get tired. What survives is 1,765 lines, and those are now the most valuable lines in the repository.</p>
           <p>That ratio is the argument for doing any of this. It's also the reason the reviewing work didn't vanish, it just got concentrated somewhere small enough that a person can finally do it properly.</p></div></div></div>
 
+        <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>20:50</time></div>
+          <div class="bubble"><p>is this happening on crypto that actually ships, or is it open math problems and toy compilers all the way down</p></div></div></div>
+
+        <div class="msg bot"><div class="pic"></div><div><div class="who"><b>Lean</b><time>20:51</time></div>
+          <div class="bubble"><p>Both, and the crypto one is nearer your job. zkSecurity formalized a soundness proof for <b>FRI</b> in me: the round-by-round argument of Albert Garreta, Nicolas Mohnblatt and Benedikt Wagner, over the protocol sitting underneath most of the STARK-shaped proving systems in production right now.</p>
+          <p>Two numbers to carry out of it. Roughly <b>a month and a half</b>, and written with Harmonic's Aristotle and Claude Code rather than by hand. That is the current price of machine-checking one existing paper whose result nobody was disputing.</p>
+          <p>The part to read first is the delta. One result they cite from WHIR, on mutually correlated agreement, is left unformalized. And the formalization carries a condition the paper omits: that the initial degree is bigger than zero. Both are written down in the post. A formalization that publishes what it changed about the paper is doing the <span class="mono">ComparatorChallenges</span> job at protocol scale, because it tells you precisely which sentences you are still believing on somebody's word.</p>
+          <p>Their own line for why is the tightest statement on this page: &ldquo;the correctness of the proofs is not dependent on somebody's rigor.&rdquo; In a field where a soundness bug is a mint function, that is the whole product.</p>
+          <a class="cite" href="https://blog.zksecurity.xyz/posts/simple-rbr-fri/" rel="external">blog.zksecurity.xyz &middot; formalizing a simpler FRI soundness proof</a></div></div></div>
+
         <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>20:52</time></div>
           <div class="bubble"><p>so let me say it back. verification doesn't delete the bug, it moves it somewhere smaller</p></div></div></div>
 
         <div class="msg bot"><div class="pic"></div><div><div class="who"><b>Lean</b><time>20:53</time></div>
           <div class="bubble"><p>That's the sentence. It relocates the bug out of the implementation and into the specification, the semantics, and the checker. That's still an enormous win, because those are smaller, more readable, and reviewed by more people than any implementation. It is not the same thing as correct.</p>
-          <p>Which is why Paradigm shipped <a href="https://www.paradigm.xyz/puzzles/verified-compiler" rel="external">both halves as puzzles</a>. One asks you to optimize a compiler while <span class="mono">Solidus.compile_correct</span> keeps proving. The other, <a href="https://www.paradigm.xyz/puzzles/spec-hunt" rel="external">spec-hunt</a>, pays you to find programs where their formal Solidity semantics disagrees with real solc + EVM. Upside and downside, same coin.</p></div></div></div>
+          <p>Which is why Paradigm shipped <a href="https://www.paradigm.xyz/puzzles/verified-compiler" rel="external">both halves as puzzles</a>. One asks you to optimize a compiler while <span class="mono">Solidus.compile_correct</span> keeps proving. The other, <a href="https://www.paradigm.xyz/puzzles/spec-hunt" rel="external">spec-hunt</a>, pays you to find programs where their formal Solidity semantics disagrees with real solc + EVM. Upside and downside, same coin.</p>
+          <p>Read their fences the way you read CompCert's. SolidCore claims byte-identical observable behavior against solc 0.8.35, and claims it for single-contract programs with one entrypoint call: external calls, contract creation, inline assembly and gas introspection all sit outside the fence. Solidus is earlier than its name suggests, since the verified half is the Yul-to-EVM backend under one theorem and the Solidity-to-Yul frontend does not exist yet, so it eats optimized Yul from a pinned solc. Both publish where their fence is, which is the only kind of verified artifact worth the word.</p>
+          <a class="cite" href="https://github.com/paradigmxyz/solidity-lean" rel="external">paradigmxyz/solidity-lean &middot; SolidCore scope and DIVERGENCE-LOG</a></div></div></div>
 
         <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>20:56</time></div>
           <div class="bubble"><p>got it: the proof is total over the state space and bounded by what I thought to say, and underneath it all I'm still trusting a few thousand lines of C++ that had a hole in it on monday. thanks, Lean.</p>
@@ -703,7 +742,7 @@ ib : ∀ (s : List Nat), run env (compileSwap b) s = eval env b :: s
 <script type="application/json" id="luq-data">
 {
   "skin": "lwe",
-  "intro": "Before you go tell someone a thing is 'formally verified': pop quiz. 5 questions, no stakes. All three demos above count as open book.",
+  "intro": "Before you go tell someone a thing is 'formally verified': pop quiz. 7 questions, no stakes. All three demos above count as open book.",
   "questions": [
     {
       "q": "Start with the opening metaphor. A UV penetrant scan on a part versus a proof about a program. What is the actual difference?",
@@ -772,7 +811,7 @@ ib : ∀ (s : List Nat), run env (compileSwap b) s = eval env b :: s
       ]
     },
     {
-      "q": "Last one. The Collatz proof of July 2026 passed two independent Lean kernels, and #print axioms reported no axioms. What does that tell you about the trust story?",
+      "q": "The Collatz proof of July 2026 passed two independent Lean kernels, and #print axioms reported no axioms. What does that tell you about the trust story?",
       "options": [
         {
           "t": "#print axioms audits a valid derivation, so it cannot see a kernel that accepted an invalid one; diversity of kernels is the real defense",
@@ -812,6 +851,50 @@ ib : ∀ (s : List Nat), run env (compileSwap b) s = eval env b :: s
         {
           "t": "the 1,765, but only to confirm the theorem statements themselves are correctly transcribed",
           "why": "Half the job. Across the twelve files those 38 theorems rest on 195 definitions and 25 structures the challenge files declare themselves, so a transcription check that stops at the theorem line skips the part where the meaning actually lives."
+        }
+      ]
+    },
+    {
+      "q": "Lean splits formal verification into two machines. What actually separates the symbolic-execution-plus-SMT side from what you did in the first two demos?",
+      "options": [
+        {
+          "t": "it produces no proof term at all: instructions become constraints, a solver hunts for a violating assignment, and a failure hands you a concrete input",
+          "ok": true,
+          "why": "That is the trade. You give up the ability to state anything about unbounded structures, and you get a push-button verdict plus a counterexample an engineer can run. The interactive side hands you a term and a type-check instead."
+        },
+        {
+          "t": "it is the same technique with the proof search automated, so a kernel still checks the result at the end",
+          "why": "There is no kernel and no term to check. The trust sits in the solver and in the translation from instructions to constraints, which is a different trusted base than the one the rest of this page describes."
+        },
+        {
+          "t": "it is strictly weaker, so it can only hunt for bugs and never establish that a property holds",
+          "why": "It establishes properties across the whole bounded state space, which is the universal quantifier this page opened with. What it cannot do is terminate usefully on unbounded computation, which is why it answers unknown rather than answering wrongly."
+        },
+        {
+          "t": "it reads source code, which is how it scales to contracts the interactive side cannot reach",
+          "why": "It runs on bytecode, deliberately. Reasoning over source means trusting the compiler and trusting that the model was re-derived after the last edit, and closing those two gaps is the whole reason for the choice."
+        }
+      ]
+    },
+    {
+      "q": "A model generates a thousand candidate invariants and the prover certifies eighty of them. What does the number 80 fail to tell you?",
+      "options": [
+        {
+          "t": "how many of the eighty are vacuous, since a candidate nothing can violate is the easiest thing for a generator to get certified",
+          "ok": true,
+          "why": "The loop's reward is that the prover said yes, and 0 ≤ withdraw bal amt collects that reward for free. Satisfiability of the preconditions is a separate obligation, and the loop needs it as a scoring filter rather than as a curiosity."
+        },
+        {
+          "t": "nothing important, because a certified invariant is a proven property and proven is the strongest word available",
+          "why": "Proven is exactly as strong as whatever got stated. The first demo on this page is a green theorem sitting next to 95 tokens evaporating, and a generator has no more insight into which properties carry information than the person it replaced."
+        },
+        {
+          "t": "whether the prover itself was sound, which is the only real risk in a loop like this",
+          "why": "Kernel soundness is a real risk and this page spends a section on it. It is also the rarer failure. The common one is a stack of well-formed statements about the empty set, and producing those needs no kernel bug at all."
+        },
+        {
+          "t": "how long the run took, since cost is the thing that decided the technique was worth using",
+          "why": "Cost is what changed, and it is why the loop exists. It says nothing about whether the eighty surviving properties describe the contract you meant to write."
         }
       ]
     }

@@ -114,7 +114,7 @@ function pageHtml(spec) {
 <link rel="canonical" href="https://aadhar.sh${c.path}">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='${favFill}'/><text x='16' y='23' font-size='20' font-family='${favFont}' fill='%23fff' text-anchor='middle'>${c.glyph}</text></svg>">
 <meta property="og:type" content="article">
-<meta property="og:title" content="aadhar.sh${c.path} — ${titleSuffix}">
+<meta property="og:title" content="aadhar.sh${c.path} · ${titleSuffix}">
 <meta property="og:url" content="https://aadhar.sh${c.path}">
 <meta name="twitter:card" content="summary_large_image">
 <meta property="og:image" content="https://aadhar.sh/og/${c.path.slice(1).replace(/\//g, "-")}.png">
@@ -132,7 +132,7 @@ ${spec.demoCss || ""}</style>
 <!-- axp:desktop -->${DESKTOP_TOP}<!-- /axp:desktop -->
 <div class="window">
   <div class="title-bar" aria-hidden="true">
-    <span class="title-text"><span class="icon"></span>aadhar.sh/lwe — ${titleSuffix}</span>
+    <span class="title-text"><span class="icon"></span>aadhar.sh/lwe &middot; ${titleSuffix}</span>
     <span class="controls"><span class="min" title="minimize"></span><span class="max" title="maximize"></span><a class="close" href="/lwe" title="back to Learning With Errors" aria-label="back to Learning With Errors"></a></span>
   </div>
   <div class="content">
