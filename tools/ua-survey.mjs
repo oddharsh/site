@@ -80,9 +80,17 @@ const TARGETS = [
 
 const TIMEOUT_MS = 20000;
 const SHELL_WORDS = 50; // below this, a 200 is a frame rather than a document
+// `</script >` with whitespace before the bracket is a VALID end tag, and a
+// `<\/script>` pattern misses it, so the script body survives the strip and its
+// source is counted as prose. Nothing here is sanitizing for render, so the
+// security reading of CodeQL's js/bad-tag-filter does not apply; the reason it
+// is worth fixing is that this function produces the numbers the page publishes,
+// and a page about silently corrupted measurements should not ship one.
+// Checked against all 7 measurable targets before changing it: every count is
+// identical either way, so the published run stands.
 /** @param {string} s */
-const words = (s) => s.replace(/<script[\s\S]*?<\/script>/gi, " ")
-                      .replace(/<style[\s\S]*?<\/style>/gi, " ")
+const words = (s) => s.replace(/<script[\s\S]*?<\/script\s*>/gi, " ")
+                      .replace(/<style[\s\S]*?<\/style\s*>/gi, " ")
                       .replace(/<[^>]*>/g, " ").split(/\s+/).filter(Boolean).length;
 
 /**
