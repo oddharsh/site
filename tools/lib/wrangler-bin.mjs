@@ -51,7 +51,15 @@ export const WRANGLER_ENTRY = join(REPO, "node_modules", "wrangler", "bin", "wra
 // Builds image both install from.
 const NODE = process.versions.bun ? "node" : process.execPath;
 
-/** [command, argv] for spawning the pinned wrangler under node. */
+// The return is a TUPLE. Every caller spreads it into an exec (`exec(...wranglerCommand([...]))`),
+// and inference widens the pair to (string | string[])[], which has no arity, so
+// each of those spreads reads as "A spread argument must either have a tuple
+// type or be passed to a rest parameter". Six of them, across four tools.
+/**
+ * [command, argv] for spawning the pinned wrangler under node.
+ * @param {string[]} args
+ * @returns {[cmd: string, argv: string[]]}
+ */
 export function wranglerCommand(args = []) {
   return [NODE, [WRANGLER_ENTRY, ...args]];
 }

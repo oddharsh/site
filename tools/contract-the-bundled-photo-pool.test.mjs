@@ -1,6 +1,7 @@
 // ── the bundled photo pool ──────────────────────────────────────────
 // Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
 import {
+  testGlobals,
   ROOT,
   assert,
   cachedRender,
@@ -472,7 +473,7 @@ test("weak validators turn unchanged rendered HTML into an empty 304", async () 
 test("cached renders stream the first miss while tagging the background copy", async () => {
   const priorCaches = globalThis.caches;
   const stored = [];
-  globalThis.caches = {
+  testGlobals.caches = {
     default: {
       match: async () => undefined,
       put: async (_key, response) => {
@@ -497,7 +498,7 @@ test("cached renders stream the first miss while tagging the background copy", a
     assert.equal(stored[0].body, "rendered");
   } finally {
     if (priorCaches === undefined) delete globalThis.caches;
-    else globalThis.caches = priorCaches;
+    else testGlobals.caches = priorCaches;
   }
 });
 

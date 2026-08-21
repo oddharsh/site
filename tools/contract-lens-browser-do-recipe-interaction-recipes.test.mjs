@@ -1,6 +1,7 @@
 // ── /lens/browser?do=<recipe> — interaction recipes ────────────────────────
 // Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
 import {
+  testGlobals,
   MODERN_META,
   SITE_MCP_TOOLS,
   _resetPhotoCaches,
@@ -624,7 +625,7 @@ test("representation vault stores normalized snapshots and compares digests", as
   const db = representationD1();
   const realFetch = globalThis.fetch;
   let version = "one";
-  globalThis.fetch = async () => new Response(`<!doctype html><title>${version}</title><p>${version}</p>`, { headers: { "content-type": "text/html; charset=utf-8", etag: `"${version}"`, "cache-control": "public, max-age=60" } });
+  testGlobals.fetch = async () => new Response(`<!doctype html><title>${version}</title><p>${version}</p>`, { headers: { "content-type": "text/html; charset=utf-8", etag: `"${version}"`, "cache-control": "public, max-age=60" } });
   try {
     const env = { RESTORE_DB: db };
     const capture = await handleSiteMcp(new Request("https://aadhar.sh/mcp", { method: "POST", body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "representation_capture", arguments: { url: "https://example.com/page", profiles: ["browser"] } } }), headers: { "content-type": "application/json" } }), env, context());
@@ -638,5 +639,5 @@ test("representation vault stores normalized snapshots and compares digests", as
     const compared = (await compare.json()).result.structuredContent;
     assert.equal(compared.changed, true);
     assert.ok(compared.changes.body_hash);
-  } finally { globalThis.fetch = realFetch; }
+  } finally { testGlobals.fetch = realFetch; }
 });

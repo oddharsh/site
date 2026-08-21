@@ -36,7 +36,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createHash } from "node:crypto";
-import { asRecord } from "../_worker.js/lib/parse.js";
+import { asRecord } from "../../src/worker/lib/parse.ts";
 
 const run = promisify(execFile);
 const args = process.argv.slice(2);

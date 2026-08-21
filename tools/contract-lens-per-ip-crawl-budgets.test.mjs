@@ -1,6 +1,7 @@
 // ── /lens per-IP crawl budgets ──────────────────────────────────────
 // Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
 import {
+  testGlobals,
   assert,
   readFile,
   readFileSync,
@@ -156,7 +157,7 @@ test("the kitesurf selector is tried, and a rejection is remembered rather than 
     // surface as "the scanned site is broken", which is what hard-coding the
     // parameter would have produced on every single render.
     _resetKitesurfProbe();
-    globalThis.fetch = async (url) => {
+    testGlobals.fetch = async (url) => {
       calls.push(String(url));
       return new Response("{}", { status: String(url).includes("browser=kitesurf") ? 400 : 200 });
     };
@@ -174,7 +175,7 @@ test("the kitesurf selector is tried, and a rejection is remembered rather than 
     assert.equal(calls.length, 1, "the known-dead selector is not retried");
     assert.equal(second.engine, "chromium-rest", "REST still serves, just without the dead selector");
   } finally {
-    globalThis.fetch = realFetch;
+    testGlobals.fetch = realFetch;
     _resetKitesurfProbe();
   }
 });
@@ -201,11 +202,11 @@ test("the selector rides the browser-run path, which is the only one it works on
   const calls = [];
   try {
     _resetKitesurfProbe();
-    globalThis.fetch = async (u) => { calls.push(String(u)); return new Response("{}", { status: 200 }); };
+    testGlobals.fetch = async (u) => { calls.push(String(u)); return new Response("{}", { status: 200 }); };
     await runBrowserAction("snapshot", { url: "https://example.com" }, { CF_ACCOUNT_ID: "acct", BROWSER_RUN_TOKEN: "tok" });
     assert.ok(calls[0].includes("/browser-run/snapshot?browser=kitesurf"), calls[0]);
   } finally {
-    globalThis.fetch = realFetch;
+    testGlobals.fetch = realFetch;
     _resetKitesurfProbe();
   }
 });
@@ -222,7 +223,7 @@ test("a 200 is not evidence that kitesurf rendered, and is not reported as if it
     // The old code read that as confirmation and labelled the render `kitesurf`,
     // so a Chromium render was reported as Kitesurf on the one page whose entire
     // premise is showing what a machine actually saw.
-    globalThis.fetch = async () => new Response(
+    testGlobals.fetch = async () => new Response(
       JSON.stringify({ success: true, result: { content: "<html></html>" }, meta: { status: 200, title: "x" } }),
       { status: 200, headers: { "content-type": "application/json" } },
     );
@@ -230,7 +231,7 @@ test("a 200 is not evidence that kitesurf rendered, and is not reported as if it
     assert.equal(run.engine, "kitesurf-requested", "a 200 means the call worked, not that Kitesurf served it");
     assert.notEqual(run.engine, "kitesurf", "only bun run kitesurf:check can promote this label");
   } finally {
-    globalThis.fetch = realFetch;
+    testGlobals.fetch = realFetch;
     _resetKitesurfProbe();
   }
 });

@@ -72,7 +72,7 @@ test("both execution checks are declared in the category the rubric scores", () 
   for (const [key, meta] of Object.entries(EXECUTION_META)) {
     assert.equal(meta.category, "execution", `${key} must sit in the execution category`);
     assert.ok(meta.label && meta.label.length > 0, `${key} needs a label the grid can render`);
-    assert.ok(meta.countInScore !== false, `${key} must count once it has evidence`);
+    assert.ok(/** @type {any} */ (meta).countInScore !== false, `${key} must count once it has evidence`);
   }
   const lens = readFileSync("./src/worker/lens.ts", "utf8");
   assert.match(lens, /\.\.\.EXECUTION_META/, "lens.js must spread the shared meta rather than restate it");

@@ -67,7 +67,12 @@ async function probeHeaders(url, env, extraHeaders = {}): Promise<HeaderProbe> {
  * same argument dict.js and doors.js already made, and the same reason: every
  * external fetch here dies at signing under plain node.
  */
-export function judgeRevalidation({ first, second, conditional, negotiated }) {
+// negotiated is OPTIONAL: it marks a response that varied on Accept, which most
+// callers have no opinion about. The body reads it behind a guard, and the lint's
+// own tests pass three of the four fields.
+export function judgeRevalidation({ first, second, conditional, negotiated }: {
+  first?: any; second?: any; conditional?: any; negotiated?: any;
+}) {
   const findings = [];
   const add = (id, verdict, detail) => findings.push({ id, verdict, detail });
 

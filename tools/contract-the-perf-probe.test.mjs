@@ -1,6 +1,7 @@
 // ── the perf probe ──────────────────────────────────────────────────
 // Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
 import {
+  testGlobals,
   assert,
   cronHomeProbe,
   cronJob,
@@ -185,7 +186,7 @@ test("redirect following validates every hop, not just the landing", async () =>
     "https://example.com/ok": { status: 200 },
   };
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = async (url) => {
+  testGlobals.fetch = async (url) => {
     seen.push(String(url));
     const hop = chain[String(url)] ?? { status: 200 };
     return new Response(null, { status: hop.status, headers: hop.location ? { location: hop.location } : {} });
@@ -201,11 +202,11 @@ test("redirect following validates every hop, not just the landing", async () =>
     assert.equal(fine.ok, true);
     assert.equal(fine.finalUrl, "https://example.com/ok");
 
-    globalThis.fetch = async (url) => new Response(null, { status: 302, headers: { location: `${url}x` } });
+    testGlobals.fetch = async (url) => new Response(null, { status: 302, headers: { location: `${url}x` } });
     const looping = await fetchFollowingPublicRedirects("https://example.com/loop", {}, check, 3);
     assert.equal(looping.ok, false, "an endless redirect chain is bounded");
   } finally {
-    globalThis.fetch = originalFetch;
+    testGlobals.fetch = originalFetch;
   }
 });
 

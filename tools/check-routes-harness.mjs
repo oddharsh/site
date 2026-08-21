@@ -80,6 +80,9 @@ try {
 
   // VERIFY_REMOTE is left UNSET rather than set to "" on a local run, since
   // verify-routes.mjs reads presence rather than value.
+  // Spread from process.env, so inference freezes the key set at what was
+  // spread plus VERIFY_BUILT; VERIFY_REMOTE is added conditionally below.
+  /** @type {Record<string, string | undefined>} */
   const childEnv = { ...process.env, VERIFY_BUILT: "1" };
   if (remote) childEnv.VERIFY_REMOTE = "1";
 

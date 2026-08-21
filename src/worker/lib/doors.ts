@@ -205,7 +205,12 @@ export function parseMcpBody(text, contentType) {
  * catalogue as prose and a schema would be dead weight in a terminal frame. The
  * Tools lens turns it on: a schema is the only thing a form can be built from.
  */
-export async function foreignMcpTools(origin, env, opts: { schemas?: boolean } = {}) {
+// The result is one of several shapes: a tool list, an unreadable door with a
+// reason, or a GATED one carrying `gated: true` and the scheme. Declaring the
+// open record is what lets a caller read `gated` without tsc picking one arm of
+// the union and calling the others typos. The probe's whole job is reporting
+// WHICH of those happened, so every caller reads a field some arm lacks.
+export async function foreignMcpTools(origin, env, opts: { schemas?: boolean } = {}): Promise<Record<string, any>> {
   const url = origin.replace(/\/+$/, "") + "/mcp";
   // Both `_meta` keys are REQUIRED on a modern request. `clientCapabilities` is
   // empty because this probe reads a catalogue and offers the server nothing:
