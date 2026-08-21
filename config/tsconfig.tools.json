@@ -1,0 +1,39 @@
+{
+  // tsconfig.tools.json — type checking for tools/, which the Worker's program
+  // cannot do.
+  //
+  // WHY A SECOND PROGRAM. tsconfig.json declares `types: ["@cloudflare/workers-types"]`
+  // because that is what the Worker runs against. Point it at tools/ as well and
+  // 169 of the 337 errors are `Cannot find name 'process'` and `'console'`: the
+  // tools are node/bun programs being checked against a Workers global scope.
+  // Splitting the program is what separates a real finding from a missing global.
+  //
+  // The tools stay .mjs. Renaming 58 files to .ts would churn every import
+  // specifier that names them, and the value here is the CHECKING rather than
+  // the extension — `checkJs` already reads plain JavaScript.
+  //
+  // `strict` is false to match tsconfig.json. These files were written without
+  // types, so strict mode would bury the real findings under null checks; raise
+  // it later, per directory, once the current tail is cleared.
+  "compilerOptions": {
+    "target": "esnext",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "strict": false,
+    "checkJs": true,
+    "allowJs": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    // The tools import the Worker by its real filename (`../src/worker/lens.ts`),
+    // which is what bun and the build both resolve. Without this tsc rejects all
+    // 344 of those specifiers outright and never reaches a real finding.
+    "allowImportingTsExtensions": true,
+    "lib": ["esnext", "dom"],
+    // bun-types carries the node globals too, so this is one entry rather than
+    // two. It also declares the bun-only globals the tools now use directly,
+    // HTMLRewriter among them.
+    "types": ["bun"]
+  },
+  "include": ["../tools/**/*.mjs"]
+}
