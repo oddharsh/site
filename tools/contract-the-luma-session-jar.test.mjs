@@ -5,7 +5,12 @@ import {
   SERENDIPITY_SYNC_LIMITS,
   assert,
   cookieJar,
+  fetchBudget,
+  fetchEventGuests,
+  guestSweepBudget,
+  mayPruneRoster,
   parseCookies,
+  parseGuestSyncMark,
   readFile,
   staleGuestIds,
   test,
@@ -102,6 +107,92 @@ test("serendipity keeps historical feed and roster backfills alive", () => {
     ["cancelled", "self"],
     "a fresh roster removes stale links and never retains the contributor as their own attendee",
   );
+});
+
+
+// ── the roster sweep's fetch budget ─────────────────────────────────
+// Seven past events sat parked on "Too many subrequests by single Worker
+// invocation" (last written 2026-08-21 12:24:07) because fetchEventGuests
+// paginated `while (true)` with no cap: one 1,932-person roster costs 20 fetches
+// at 100 a page, which is most of a Workers Free invocation on its own. These
+// pin the budget, the resume, and above all the prune gate.
+
+test("a budget-limited roster walk stops on the budget and hands back its cursor", async () => {
+  const pages = [
+    { entries: [{ api_id: "g1", user: {} }], has_more: true, next_cursor: "c1" },
+    { entries: [{ api_id: "g2", user: {} }], has_more: true, next_cursor: "c2" },
+    { entries: [{ api_id: "g3", user: {} }], has_more: false, next_cursor: null },
+  ];
+  const seenCursors = [];
+  const real = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    const cursor = new URL(url).searchParams.get("pagination_cursor");
+    seenCursors.push(cursor);
+    const idx = cursor === null ? 0 : Number(String(cursor).slice(1));
+    return { ok: true, json: async () => pages[idx] };
+  };
+  try {
+    const budget = fetchBudget(2);
+    const first = await fetchEventGuests("evt-x", null, "cookie=1", { budget });
+    assert.equal(first.done, false, "a walk that ran out of budget has not finished");
+    assert.equal(first.cursor, "c2", "an unfinished walk must return where to resume");
+    assert.equal(first.guests.length, 2);
+    assert.equal(budget.spent, 2, "it spends exactly the budget it was given");
+    assert.equal(budget.left, 0);
+
+    // the resumed pass picks up at the cursor rather than re-buying page one
+    const rest = await fetchEventGuests("evt-x", null, "cookie=1", {
+      budget: fetchBudget(10), cursor: first.cursor,
+    });
+    assert.equal(rest.done, true);
+    assert.equal(rest.guests.length, 1, "resuming returns the tail, never the whole roster");
+    assert.deepEqual(seenCursors, [null, "c1", "c2"], "no page is fetched twice across the two passes");
+  } finally { globalThis.fetch = real; }
+});
+
+test("an unbudgeted roster walk still finishes, so the manual path is unchanged", async () => {
+  const real = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: true, json: async () => ({ entries: [{ api_id: "g1", user: {} }], has_more: false, next_cursor: null }) });
+  try {
+    const out = await fetchEventGuests("evt-x", null, "cookie=1");
+    assert.equal(out.done, true);
+    assert.equal(out.guests.length, 1);
+  } finally { globalThis.fetch = real; }
+});
+
+test("a roster is only pruned by a pass that saw all of it in one invocation", () => {
+  // THE regression this whole change exists to prevent. syncGuests deletes every
+  // stored link absent from the response, so pruning against a partial page (or
+  // against a resumed pass, which holds only the tail) would delete the guests
+  // the earlier pages already stored: 1,932 rows down to 100 on a real event.
+  assert.equal(mayPruneRoster({ done: true }, null), true,
+    "a complete walk from the start is the one authoritative case");
+  assert.equal(mayPruneRoster({ done: false, cursor: "c1" }, null), false,
+    "a budget-limited pass holds one page and must never prune");
+  assert.equal(mayPruneRoster({ done: true }, "c1"), false,
+    "a RESUMED pass ends done while holding only the tail -- done alone is not enough");
+  assert.equal(mayPruneRoster({ done: false }, "c1"), false);
+  assert.equal(mayPruneRoster(null, null), false, "no page means nothing was learned");
+});
+
+test("a parked cursor round-trips through the guest-sync marker", () => {
+  assert.deepEqual(parseGuestSyncMark("partial:250@cur-abc"), { cursor: "cur-abc", seen: 250 });
+  // Luma cursors are opaque: splitting on every "@" would truncate one that
+  // contains its own separator, so only the first is a separator.
+  assert.deepEqual(parseGuestSyncMark("partial:100@cur@with@ats"), { cursor: "cur@with@ats", seen: 100 });
+  // everything else starts from the top rather than resuming into nonsense
+  for (const v of ["ok:1932", "error:GUEST_LIST_RESTRICTED", "partial:5@", "partial:nope", "", null, undefined]) {
+    assert.deepEqual(parseGuestSyncMark(v), { cursor: null, seen: 0 }, `"${v}" must not resume`);
+  }
+});
+
+test("the sweep budget leaves room for the two passes that bracket it", () => {
+  const perSet = SERENDIPITY_SYNC_LIMITS.futurePages + SERENDIPITY_SYNC_LIMITS.pastPages;
+  const one = guestSweepBudget(1, 50);
+  assert.ok(one > 0, "one contributor must still get a workable sweep budget");
+  assert.ok(one + perSet + 10 <= 50, "the sweep may not claim what syncEvents and syncDescriptions will spend");
+  assert.ok(guestSweepBudget(2, 50) < one, "a second cookie set costs the sweep its own page allowance");
+  assert.equal(guestSweepBudget(99, 50), 0, "an impossible reservation floors at zero rather than going negative");
 });
 
 test("serendipity hides collapsed description chrome and uses the Luna scrollbar", async () => {
