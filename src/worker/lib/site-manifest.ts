@@ -211,6 +211,12 @@ export const AGENT_SURFACES = [
     "description": "Lean and formal verification: why a proof is not an inspection, how a vacuous spec passes, a toy verified compiler you can break, and the 1,765 lines of statement holding up OpenAI's ten proofs."
   },
   {
+    "path": "/lwe/fuse",
+    "title": "eFuses",
+    "kind": "content",
+    "description": "eFuses and anti-rollback: why a signature cannot refuse yesterday's firmware, how a version floor kept in silicon becomes a one-way ratchet, and what that costs the owner."
+  },
+  {
     "path": "/garage/blueprint",
     "title": "Blueprint",
     "kind": "content",
@@ -377,6 +383,7 @@ export const WEBMENTION_PATHS = [
   "/lwe/drivers",
   "/lwe/knots",
   "/lwe/lean",
+  "/lwe/fuse",
   "/garage/blueprint",
   "/garage/chunks",
   "/garage/cloudflare",

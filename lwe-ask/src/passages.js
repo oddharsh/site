@@ -17,7 +17,7 @@ export const SOURCE_TITLE = "Privacy 2.0: PETs and the Promise of Private Shared
 // A content hash of the whole corpus, maintained by pipelines/lwe/build-corpus.mjs.
 // Folded into the ask cache key, so changing any passage (then reindexing) bumps the
 // version and busts every stale cached answer.
-export const CORPUS_VERSION = "2ed13e508a";
+export const CORPUS_VERSION = "4506c8c01b";
 
 export const PASSAGES = [
   // ── FHE ──────────────────────────────────────────────────────────────────
@@ -123,6 +123,32 @@ export const PASSAGES = [
     "AVIF (AV1 Image File Format) is an image format that stores images or image sequences compressed with the AV1 video codec inside the ISOBMFF container. Because it reuses AV1's intra-frame coding tools, it generally achieves smaller files than JPEG and WebP at comparable quality, and it supports features such as high dynamic range, wide color gamut, alpha transparency, and both lossy and lossless compression. Browser support arrived around 2020 in Chrome and 2022 in Safari.", source: "https://en.wikipedia.org/wiki/AVIF", title: "AVIF (Wikipedia)" },
   { id: "encoding-9", concept: "encoding", text:
     "JPEG is a widely used lossy compression method for digital images, standardized in 1992, that works by transforming 8x8 pixel blocks with a discrete cosine transform and then quantizing the resulting frequency coefficients. The degree of quantization sets a tunable tradeoff between file size and image quality, and the format commonly applies chroma subsampling to reduce color data. Its near-universal decoder support is the main reason it remains a default web image format decades later.", source: "https://en.wikipedia.org/wiki/JPEG", title: "JPEG (Wikipedia)" },
+
+  // fuse (12)
+  { id: "fuse-1", concept: "fuse", text:
+    "An eFuse is a one-time programmable bit built into the chip itself. Qualcomm SoCs carry a region called Qfprom, Fuse Programmable Read-Only Memory, holding a bank of them. A controlled voltage pulse moves one fuse from 0 to 1, and because the change is physical rather than stored state, no software of any privilege can move it back. People say a fuse was blown, and what they mean is that a bit is now stuck at one.", source: "https://aadhar.sh/lwe/fuse", title: "aadhar.sh: fuse" },
+  { id: "fuse-2", concept: "fuse", text:
+    "Secure boot verifies that a firmware image carries the vendor's signature, which stops a forged image cold. It cannot stop an old image, because last year's build was signed by the same vendor and verifies today exactly as it did on release day. Signature verification is stateless: every boot asks the same question and gets the same honest answer, with no notion of what has run since.", source: "https://aadhar.sh/lwe/fuse", title: "aadhar.sh: fuse" },
+  { id: "fuse-3", concept: "fuse", text:
+    "A downgrade attack flashes a real, properly signed, older build and then exploits a vulnerability that build still carries and that the current build fixed. Nothing is forged, so signature checking has nothing to object to. Closing the hole requires the device to remember how far forward it has already come, which means adding state to a check that had none.", source: "https://aadhar.sh/lwe/fuse", title: "aadhar.sh: fuse" },
+  { id: "fuse-4", concept: "fuse", text:
+    "Android's Verified Boot documentation states the requirement plainly: rollback protection is typically implemented by using tamper-evident storage to record the most recent version of the Android and refusing to boot Android if it is lower than the recorded version. The specification names a version floor and the storage class it should live in, and it leaves the choice of medium to the implementer.", source: "https://aadhar.sh/lwe/fuse", title: "aadhar.sh: fuse" },
+  { id: "fuse-5", concept: "fuse", text:
+    "The hard question in rollback protection is where the recorded version lives. Anyone able to flash firmware can also rewrite ordinary storage, so a counter kept in flash is a counter the attacker edits along the way. Qualcomm's answer is to keep the counter in silicon as blown fuses, which is the one copy an attacker holding full write access to storage still cannot lower.", source: "https://aadhar.sh/lwe/fuse", title: "aadhar.sh: fuse" },
+  { id: "fuse-6", concept: "fuse", text:
+    "A fuse-backed counter is a ratchet. Recording a higher minimum version means blowing more fuses, so every operation adds a one, and the hardware exposes no operation that returns a one to a zero. That is why the anti-rollback floor climbs and never falls: the monotonicity is a property of the medium rather than a rule enforced by code that could later be changed.", source: "https://aadhar.sh/lwe/fuse", title: "aadhar.sh: fuse" },
+  { id: "fuse-7", concept: "fuse", text:
+    "At power on the primary bootloader, the PBL, runs from ROM inside the processor and verifies the next stage, the XBL. Before handing over, the PBL reads the anti-rollback version out of Qfprom and compares it against the version embedded in the firmware. An image below the fuse value is refused and boot stops there. When a newer build boots cleanly, the bootloader goes through TrustZone to blow additional fuses, writing the new minimum down permanently.", source: "https://aadhar.sh/lwe/fuse", title: "aadhar.sh: fuse" },
+  { id: "fuse-8", concept: "fuse", text:
+    "EDL, the Emergency Download mode that appears over USB as Qualcomm HS-USB QDLoader 9008, has long been the last-resort rescue for a phone that will not boot. It fails against anti-rollback for two reasons. It writes storage, while the fuses sit in processor silicon that a storage write cannot reach. And the Firehose programmers it loads must themselves be OEM-signed and carry anti-rollback versions of their own, so rescue tools that worked against an earlier firmware base stop working against a fused device.", source: "https://aadhar.sh/lwe/fuse", title: "aadhar.sh: fuse" },
+  { id: "fuse-9", concept: "fuse", text:
+    "Samsung's Knox bit and Qualcomm's anti-rollback fuses use the same silicon substrate for different jobs. Knox gates no boot at all: it records that unsigned firmware was flashed, and once tripped it permanently withdraws features such as Samsung Pay and Secure Folder. Anti-rollback fuses instead hold a version floor and refuse the boot outright. One fuse is a witness, the other is a gate.", source: "https://aadhar.sh/lwe/fuse", title: "aadhar.sh: fuse" },
+  { id: "fuse-10", concept: "fuse", text:
+    "Tamper-evident and irreversible are different guarantees, and the gap between them is where the cost to owners lives. Evident means the device can detect that state moved and choose a response, which leaves whoever writes the policy able to relax it later. Irreversible removes the choice from everyone, including the vendor. The stronger property buys a floor nobody can lower and pays for it with the loss of any path back.", source: "https://aadhar.sh/lwe/fuse", title: "aadhar.sh: fuse" },
+  { id: "fuse-11", concept: "fuse", text:
+    "In January 2026 OnePlus shipped ColorOS builds that blow anti-rollback fuses, and owners of the OnePlus 13, 13T and 15 who then flashed an older build reported permanently unusable devices, with a motherboard replacement as the only reported remedy. OnePlus later said it had temporarily paused the ability to downgrade and would restore it in a routine software update. Both statements can be true at once because they act on different layers: a pause is policy and a future build can lift it, while a fuse already blown is beyond the reach of any update.", source: "https://aadhar.sh/lwe/fuse", title: "aadhar.sh: fuse" },
+  { id: "fuse-12", concept: "fuse", text:
+    "A version counter compares two numbers and cannot see who is asking. An attacker rolling a phone back to an exploitable build and an owner rolling back to the build where their camera worked submit the identical request in the identical words. Any mechanism that refuses the first refuses the second by construction, which is why rollback protection cannot be designed to protect owners from attackers without also binding owners.", source: "https://aadhar.sh/lwe/fuse", title: "aadhar.sh: fuse" },
 
   // knots (7)
   { id: "knots-1", concept: "knots", text:

@@ -1,0 +1,305 @@
+{
+  "id": "fuse",
+  "description": "eFuses and anti-rollback explained at the pace of a 2009 MSN chat: why a signature cannot refuse yesterday's firmware, how Qualcomm's Qfprom turns a version floor into a one-way ratchet, and what that costs the owner. With a fuse bank you can blow and cannot un-blow.",
+  "buddyStat": "one-way bits",
+  "petsLine": "Learning&nbsp;With&nbsp;Errors<br>0 goes to 1, once",
+  "composeNote": "This is a recorded conversation. The fuse bank above ratchets, and no button puts it back.",
+  "hasAsk": true,
+  "disclosure": "<b>First-pass draft.</b> The incident reporting comes from the <a href=\"https://consumerrights.wiki/w/Oneplus_phone_update_introduces_hardware_anti-rollback\" rel=\"external\">Consumer Rights Wiki writeup</a> of the January 2026 OnePlus ColorOS 16.0.3.501 anti-rollback fuse incident, which collects the XDA and Android Authority coverage; the requirement is quoted from <a href=\"https://source.android.com/docs/security/features/verifiedboot/verified-boot\" rel=\"external\">AOSP Verified Boot</a>. Quoted lines are verbatim, the learner lines and pacing are AI. Both demos are simulations that run real arithmetic on a model of the counter, and neither one reads hardware.",
+  "editorial": {
+    "reader": "Someone who saw the January 2026 OnePlus bricking threads, understood that a fuse was involved, and cannot yet say why a phone would want a bit it can never clear.",
+    "problem": "The reader treats secure boot as one undifferentiated check, so a permanent hardware counter reads as vendor spite rather than as the answer to a specific hole that signatures structurally cannot close.",
+    "thesis": "Signature verification is stateless, so it accepts any genuinely signed build including the vulnerable one it shipped last year. Rollback protection closes that by adding state, and a counter kept in silicon is the one copy an attacker with full flash access cannot rewrite. The owner loses the same downgrade the attacker does, because the counter compares versions and cannot see who is asking.",
+    "evidence": [
+      "The Qfprom mechanism, the PBL version compare, the TrustZone path that blows further fuses, and the EDL dead end are all reported in the Consumer Rights Wiki writeup and cited in the chat.",
+      "AOSP states the requirement as tamper-evident storage, which the page contrasts against the irreversible fuse Qualcomm actually shipped.",
+      "OnePlus said it had paused downgrades and would restore them, which separates the policy layer that can be lifted from the fuse layer that cannot.",
+      "The two demos make the model testable: the paired verifiers isolate the single case where signatures and version floors disagree, and the fuse bank refuses to lower its floor."
+    ],
+    "uncertainty": "Whether every affected handset is truly unrecoverable rests on community reports and paid unbrick services rather than a vendor teardown, and Qualcomm publishes no detail on how many fuses the counter spends or how it encodes a version, so the demo models it as a unary ratchet."
+  },
+  "understanding": {
+    "intro": "Before you close the window: 5 questions, no grades. Both demos above still run if you want to check an answer against them.",
+    "questions": [
+      {
+        "q": "A downgrade attack flashes last year's build and then exploits the bug it still carries. Why can secure boot's signature check do nothing about it?",
+        "options": [
+          {
+            "t": "last year's build carries a real vendor signature, and the check keeps no memory of what already ran",
+            "ok": true,
+            "why": "Right, and both halves matter. The signature verifies today exactly as it did on release day, and a stateless check has no way to know that a newer build has since existed."
+          },
+          {
+            "t": "the signing key rotates, so old signatures stop verifying and the phone falls back to trusting anything",
+            "why": "Nothing expires here. That old image verifies cleanly, which is precisely what makes the attack work; a failed signature would have been the easy case."
+          },
+          {
+            "t": "the attacker forges a signature for the old build",
+            "why": "Forgery is the one thing signatures do stop. The downgrade attack forges nothing at all, which is why it walks straight through."
+          },
+          {
+            "t": "secure boot only verifies the kernel and skips the bootloader stages",
+            "why": "Scope is a different worry. Even a check covering every stage would pass a genuinely signed old image, because the question it asks has no version in it."
+          }
+        ]
+      },
+      {
+        "q": "In the ratchet demo the floor climbs and never falls. What makes that one-way, mechanically?",
+        "options": [
+          {
+            "t": "the counter is stored as blown fuses, so raising it adds ones and no operation clears one",
+            "ok": true,
+            "why": "That is the ratchet. The counter is unary in the silicon: recording a higher minimum means blowing more fuses, and the hardware offers no inverse."
+          },
+          {
+            "t": "the bootloader policy forbids lowering it, and the bootloader is signed",
+            "why": "A policy is what the vendor can rewrite in the next build. The fuse holds even against the vendor, which is the property that separates the two."
+          },
+          {
+            "t": "the value is signed, so editing it breaks the signature and the phone notices",
+            "why": "You have described tamper-evident storage, which the Android docs actually ask for. It detects an edit and still leaves whoever holds the key able to write a lower number."
+          },
+          {
+            "t": "the fuses live inside TrustZone, so only trusted code is allowed to lower them",
+            "why": "TrustZone is the path that blows fuses rather than a guard on lowering them. No caller of any privilege gets a fuse back."
+          }
+        ]
+      },
+      {
+        "q": "EDL mode talks straight to storage and has been the classic last-resort rescue. Why does it fail on a device whose fuse has blown?",
+        "options": [
+          {
+            "t": "the fuses are in processor silicon, so a storage write cannot reach them, and Firehose programmers are OEM-signed with their own anti-rollback versions",
+            "ok": true,
+            "why": "Both doors are shut. EDL writes the wrong medium, and the loader it would need to run is itself gated by the same counter."
+          },
+          {
+            "t": "OnePlus pulled the downgrade packages, so there is no image left to flash",
+            "why": "The removal happened and it is a supply problem. Hand the device a perfect copy of the old image and the PBL still rejects it on the version compare."
+          },
+          {
+            "t": "EDL needs an unlocked bootloader, and the update relocks it",
+            "why": "EDL exists for a device that will not boot at all, which is why people reach for it here. Its problem is the fuse, not the lock state."
+          },
+          {
+            "t": "blowing a fuse disables the USB stack, so the phone stops enumerating",
+            "why": "The reports describe the phone showing up as Qualcomm HS-USB QDLoader 9008, which is how people diagnosed it. It enumerates fine and refuses to boot."
+          }
+        ]
+      },
+      {
+        "q": "Samsung's Knox bit and Qualcomm's anti-rollback fuses sit on the same silicon substrate. What separates them?",
+        "options": [
+          {
+            "t": "Knox records that unsigned firmware was flashed and permanently withdraws features, while anti-rollback gates boot on a version number",
+            "ok": true,
+            "why": "One fuse is a gate and one is a witness. Knox lets the phone boot and takes Samsung Pay and Secure Folder away for good; anti-rollback refuses the boot outright."
+          },
+          {
+            "t": "Knox is reversible by a Samsung service centre, anti-rollback is permanent",
+            "why": "Both are eFuses on the board, and the reporting is consistent on the remedy: a new motherboard. Neither one has a software reset."
+          },
+          {
+            "t": "Knox is a software flag in the bootloader, anti-rollback is hardware",
+            "why": "Knox trips an eFuse too, which is why a flashed device stays flagged after a full wipe and reflash."
+          },
+          {
+            "t": "Knox blocks downgrades and anti-rollback blocks unsigned builds",
+            "why": "That swaps their jobs. Anti-rollback is the version floor; Knox is the record that something unsigned was flashed."
+          }
+        ]
+      },
+      {
+        "q": "Android's docs ask for tamper-evident storage. Qualcomm shipped something irreversible. What does the stronger choice buy, and what does it cost?",
+        "options": [
+          {
+            "t": "it buys a floor that nobody can lower, including the vendor, and it costs any path back for an owner whose device already recorded the higher number",
+            "ok": true,
+            "why": "That is the trade in one line. Strength here means removing the appeal, and the appeal was the owner's too."
+          },
+          {
+            "t": "nothing changes, evident and irreversible are two names for the same guarantee",
+            "why": "Evident means the device can detect a change and choose a response. Irreversible removes the choice from everyone, which is a strictly different and stronger claim."
+          },
+          {
+            "t": "it buys speed, because reading a fuse at boot is cheaper than verifying signed storage",
+            "why": "A fuse read is cheap, and cost was never the argument. The property being bought is that no key holder can write a lower value."
+          },
+          {
+            "t": "it buys protection against physical attackers at no cost to the owner",
+            "why": "The owner pays the whole cost, because the counter cannot tell an owner from an attacker. Both ask to run an older build, in the same words."
+          }
+        ]
+      }
+    ]
+  },
+  "messages": [
+    {
+      "who": "you",
+      "time": "00:41",
+      "html": "<p>oneplus pushed an update in january and the people who tried to go back to the old build ended up with a dead phone. every thread says the same three words: the fuse blew. is there an actual fuse in there?</p>"
+    },
+    {
+      "who": "bot",
+      "time": "00:41",
+      "html": "<p>There is, and it sits on the SoC. Qualcomm chips carry a region called <b>Qfprom</b>, Fuse Programmable Read-Only Memory: a bank of one-time programmable electronic fuses. A controlled voltage pulse moves a fuse from <code>0</code> to <code>1</code>, and that change is physical, so no software can move it back.</p>",
+      "cite": {
+        "url": "https://consumerrights.wiki/w/Oneplus_phone_update_introduces_hardware_anti-rollback",
+        "title": "OnePlus ColorOS 16.0.3.501 Anti-Rollback Fuse Incident (Consumer Rights Wiki)"
+      }
+    },
+    {
+      "who": "bot",
+      "time": "00:42",
+      "html": "<p>The XDA thread is careful with the word. A fuse gets electrically switched rather than burned through, so when somebody says <em>blown</em> they mean a bit that is now stuck at one.</p>",
+      "cite": {
+        "url": "https://consumerrights.wiki/w/Oneplus_phone_update_introduces_hardware_anti-rollback",
+        "title": "OnePlus ColorOS 16.0.3.501 Anti-Rollback Fuse Incident (Consumer Rights Wiki)"
+      }
+    },
+    {
+      "who": "you",
+      "time": "00:42",
+      "html": "<p>fine. but why would a phone want a bit it can never clear? that reads like a bug somebody shipped on purpose.</p>"
+    },
+    {
+      "who": "bot",
+      "time": "00:43",
+      "html": "<p>Start with what a signature can tell you. Secure boot checks that an image was signed by the vendor, so a forged image fails. Last year's image was also signed by the vendor, so it passes the identical check, and last year's image is the one carrying the hole somebody has already published an exploit for.</p>"
+    },
+    {
+      "who": "bot",
+      "time": "00:43",
+      "html": "<p>That is a <b>downgrade attack</b>: flash a real, properly signed, older build, then use the bug it still has. Signature checking cannot stop it, because signature checking keeps no memory. Every boot asks the same question and gets the same honest answer.</p>"
+    },
+    {
+      "demo": {
+        "id": "demo-check",
+        "bar": "two verifiers &middot; where they disagree",
+        "html": "<p class=\"lead\">Two verifiers, three images, one floor of 6. The left verifier checks the signature and stops. The right verifier checks the signature and then the version. Click an image and read both verdicts.</p>\n<div class=\"fz-row fz-imgs\" id=\"fz-imgs\"><button class=\"btn\" type=\"button\" data-k=\"cur\">this year's build (v7, signed)</button><button class=\"btn\" type=\"button\" data-k=\"old\">last year's build (v4, signed)</button><button class=\"btn\" type=\"button\" data-k=\"mod\">a modified build (v7, unsigned)</button></div>\n<div class=\"fz-pair\"><div class=\"fz-pane\"><div class=\"fz-pane-h\">signature only</div><div class=\"fz-verdict\" id=\"fz-sig\">pick an image</div></div><div class=\"fz-pane\"><div class=\"fz-pane-h\">signature plus rollback floor</div><div class=\"fz-verdict\" id=\"fz-rb\">pick an image</div></div></div>\n<div class=\"fz-log\" id=\"fz-note\">the two verifiers disagree about exactly one of these three.</div>"
+      }
+    },
+    {
+      "who": "you",
+      "time": "00:44",
+      "html": "<p>ok, so the middle row is the whole problem. the signature is real and the build is still the one i should not be running.</p>"
+    },
+    {
+      "who": "bot",
+      "time": "00:44",
+      "html": "<p>That is the gap, and closing it needs the phone to remember how far it has already come. Android's docs put the requirement in one sentence: <em>\"Rollback protection is typically implemented by using tamper-evident storage to record the most recent version of the Android and refusing to boot Android if it's lower than the recorded version.\"</em></p>",
+      "cite": {
+        "url": "https://source.android.com/docs/security/features/verifiedboot/verified-boot",
+        "title": "Verified Boot (Android Open Source Project)"
+      }
+    },
+    {
+      "who": "bot",
+      "time": "00:45",
+      "html": "<p>The hard part is <em>where</em> that number lives. Anyone who can flash firmware can rewrite ordinary storage, so a counter kept in flash is a counter the attacker edits on the way past. Qualcomm's answer is to keep it in silicon, as fuses. Drag the version and watch the floor move:</p>"
+    },
+    {
+      "demo": {
+        "id": "demo-ratchet",
+        "bar": "the ratchet &middot; blow a fuse, then try to undo it",
+        "html": "<p class=\"lead\">A <b>simulated</b> fuse bank, 12 bits wide. No hardware is touched here; the point is the arithmetic. The floor starts at 3 because the factory already blew three. Pick a firmware version, flash it, and watch what the bank will and will not do.</p>\n<div class=\"fz-bank\" id=\"fz-bank\" role=\"img\" aria-label=\"a bank of 12 fuses, blown ones reading 1\"></div>\n<div class=\"fz-meta\">anti-rollback floor: <b id=\"fz-floor\">3</b></div>\n<div class=\"fz-row\"><label for=\"fz-ver\">firmware version</label><input id=\"fz-ver\" class=\"fz-slide\" type=\"range\" min=\"0\" max=\"12\" value=\"7\"><b id=\"fz-verout\">7</b></div>\n<div class=\"fz-row\"><button class=\"btn\" id=\"fz-flash\" type=\"button\">flash this build</button><button class=\"btn\" id=\"fz-undo\" type=\"button\">put the fuses back</button></div>\n<div class=\"fz-log\" id=\"fz-log\">pick a firmware version and flash it.</div>"
+      }
+    },
+    {
+      "who": "you",
+      "time": "00:46",
+      "html": "<p>the floor only ever goes up. the undo button just tells me off.</p>"
+    },
+    {
+      "who": "bot",
+      "time": "00:46",
+      "html": "<p>That is the property, and physics is what buys it. A fuse bank counts by blowing more fuses, so the counter is a ratchet: every operation adds a one, and the instruction set contains nothing that removes one.</p>"
+    },
+    {
+      "who": "you",
+      "time": "00:47",
+      "html": "<p>walk me through what the phone actually does at power on.</p>"
+    },
+    {
+      "who": "bot",
+      "time": "00:47",
+      "html": "<p>The <b>PBL</b>, the primary bootloader burned into the processor's ROM, comes up first and verifies the next stage, the <b>XBL</b>. Before it hands over, the PBL reads the anti-rollback version out of Qfprom and compares it against the version embedded in the firmware. Come in lower than the fuse value and boot stops there. When a newer build boots cleanly, the bootloader goes through <b>TrustZone</b> to blow more fuses, which writes the new minimum down for good.</p>",
+      "cite": {
+        "url": "https://consumerrights.wiki/w/Oneplus_phone_update_introduces_hardware_anti-rollback",
+        "title": "OnePlus ColorOS 16.0.3.501 Anti-Rollback Fuse Incident (Consumer Rights Wiki)"
+      }
+    },
+    {
+      "who": "you",
+      "time": "00:48",
+      "html": "<p>what about 9008. EDL is supposed to be the last resort, it talks straight to storage.</p>"
+    },
+    {
+      "who": "bot",
+      "time": "00:48",
+      "html": "<p>It does, and it still loses. EDL runs out of that same PBL ROM and can write your storage directly, while the fuses sit in processor silicon where a storage write cannot reach. The Firehose programmers EDL loads have to be OEM-signed and they carry anti-rollback versions of their own, so unbrick tools that worked last year now fail on exactly these devices. The remedy people report is a new motherboard.</p>",
+      "cite": {
+        "url": "https://consumerrights.wiki/w/Oneplus_phone_update_introduces_hardware_anti-rollback",
+        "title": "OnePlus ColorOS 16.0.3.501 Anti-Rollback Fuse Incident (Consumer Rights Wiki)"
+      }
+    },
+    {
+      "who": "you",
+      "time": "00:49",
+      "html": "<p>is this a oneplus thing or does everyone do it?</p>"
+    },
+    {
+      "who": "bot",
+      "time": "00:49",
+      "html": "<p>The substrate is everywhere; the job it gets given is what differs. Samsung's Knox bit is the same kind of eFuse on the same kind of board, and it gates no boot at all. It records that you flashed something Samsung never signed, and once it trips, Samsung Pay and Secure Folder stay off for the life of the device. One fuse used as a gate, one used as a witness.</p>",
+      "cite": {
+        "url": "https://consumerrights.wiki/w/Oneplus_phone_update_introduces_hardware_anti-rollback",
+        "title": "OnePlus ColorOS 16.0.3.501 Anti-Rollback Fuse Incident (Consumer Rights Wiki)"
+      }
+    },
+    {
+      "who": "you",
+      "time": "00:50",
+      "html": "<p>hang on. the android doc you quoted said tamper-evident. evident means i can tell. it never said i should be unable to go back.</p>"
+    },
+    {
+      "who": "bot",
+      "time": "00:50",
+      "html": "<p>That is the sharpest thing on this page. <b>Evident</b> is a detection property: the device can tell that state moved and can decide what to do about it. Qualcomm shipped something strictly stronger, an <b>irreversible</b> one, and the extra strength is exactly what the owner pays for. Whoever writes a detection rule can relax it later. A blown fuse leaves no author to appeal to.</p>"
+    },
+    {
+      "who": "bot",
+      "time": "00:51",
+      "html": "<p>OnePlus said as much without meaning to. Nine days after the reports started they told Android Authority they had <em>\"temporarily paused the ability to downgrade\"</em> and <em>\"will be restoring the ability to downgrade software builds in our next routine software update.\"</em></p>",
+      "cite": {
+        "url": "https://consumerrights.wiki/w/Oneplus_phone_update_introduces_hardware_anti-rollback",
+        "title": "OnePlus ColorOS 16.0.3.501 Anti-Rollback Fuse Incident (Consumer Rights Wiki)"
+      }
+    },
+    {
+      "who": "bot",
+      "time": "00:51",
+      "html": "<p>Both halves are true, and they act on different layers. The pause is policy, so a future build can lift it. The fuses are already blown on every phone that took the update, so the handsets that hard-bricked in January are waiting on nothing that a routine software update can deliver.</p>"
+    },
+    {
+      "who": "you",
+      "time": "00:52",
+      "html": "<p>so: a signature says who made this, a fuse says how far this phone has already gone, and only the second one can refuse yesterday.</p>"
+    },
+    {
+      "who": "bot",
+      "time": "00:52",
+      "html": "<p>That is the model. Carry one blind spot out with it: the counter compares two numbers and cannot see who is asking. An attacker rolling you back to an exploitable build and an owner rolling back to the build where the camera worked send the identical request, so any mechanism that stops the first stops the second by construction.</p>"
+    },
+    {
+      "who": "you",
+      "time": "00:53",
+      "html": "<p>got it. thanks.</p><p>→ <a href=\"https://consumerrights.wiki/w/Oneplus_phone_update_introduces_hardware_anti-rollback\" rel=\"external\">the Consumer Rights Wiki writeup</a> &middot; <a href=\"https://source.android.com/docs/security/features/verifiedboot/verified-boot\" rel=\"external\">AOSP Verified Boot</a> &middot; <a href=\"/lwe/tee\">TEEs</a> &middot; <a href=\"/lwe/\">back to Learning With Errors</a></p>"
+    },
+    {
+      "scrollnote": "end of first pass"
+    }
+  ],
+  "demoCss": ".fz-bank{display:flex;gap:3px;flex-wrap:wrap;margin:0 0 7px}.fz-cell{width:19px;height:24px;display:grid;place-items:center;font-family:var(--font-mono);font-size:10pt;color:#8d96a6;background:#f7f8fa;border:1px solid #c3cbdb;box-shadow:inset 1px 1px 0 #fff}.fz-cell.on{color:#fff;background:linear-gradient(180deg,#d9614a,#b0311d);border-color:#8a2413;box-shadow:inset 0 1px 0 #e79683}.fz-meta{font-size:8.5pt;color:#6b7280;margin-bottom:9px}.fz-meta b{font-family:var(--font-mono);font-size:10pt;color:#8a2413}.fz-row{display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap}.fz-row label{font-size:8.5pt;color:#6b7280}.fz-slide{flex:1;min-width:120px;max-width:230px;accent-color:#b0311d}.fz-row>b{font-family:var(--font-mono);font-size:10pt;color:#8a2413;min-width:16px}.fz-log{font-size:8.5pt;color:#6b7280;background:#faf6f4;border:1px solid #e8d5cf;border-radius:3px;padding:6px 8px;min-height:15px}.fz-log.ok{color:#245c36;background:#f0f7f1;border-color:#c8e0ce}.fz-log.bad{color:#8a2413;background:#fbeeea;border-color:#e8c4b9}.fz-imgs{margin-bottom:10px}.fz-imgs .btn.sel{border-color:#b0311d;background:linear-gradient(180deg,#fff,#fae9e4)}.fz-pair{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:8px}.fz-pane{flex:1 1 190px;border:1px solid #c3cbdb;border-radius:3px;overflow:hidden;background:#fff}.fz-pane-h{font-size:8pt;color:#4b5563;background:linear-gradient(180deg,#f7f8fa,#eceff4);border-bottom:1px solid #c3cbdb;padding:3px 7px;font-weight:bold}.fz-verdict{font-size:9pt;padding:8px 9px;color:#6b7280;min-height:34px}.fz-verdict.ok{color:#245c36}.fz-verdict.bad{color:#8a2413}@media(max-width:520px){.fz-pair{flex-direction:column}}",
+  "demoJs": "(function(){\nvar bank=document.getElementById('fz-bank');\nif(bank){\n  var floorEl=document.getElementById('fz-floor'),ver=document.getElementById('fz-ver'),\n      verOut=document.getElementById('fz-verout'),flash=document.getElementById('fz-flash'),\n      undo=document.getElementById('fz-undo'),log=document.getElementById('fz-log'),N=12,floor=3;\n  function draw(){\n    while(bank.firstChild)bank.removeChild(bank.firstChild);\n    for(var i=0;i<N;i++){\n      var c=document.createElement('span');\n      c.className='fz-cell'+(i<floor?' on':'');\n      c.textContent=i<floor?'1':'0';\n      bank.appendChild(c);\n    }\n    floorEl.textContent=floor;\n  }\n  function say(t,k){log.textContent=t;log.className='fz-log'+(k?' '+k:'');}\n  ver.addEventListener('input',function(){verOut.textContent=ver.value;});\n  flash.addEventListener('click',function(){\n    var v=+ver.value;\n    if(v<floor){say('boot rejected. image version '+v+' is below the anti-rollback floor of '+floor+'.','bad');return;}\n    var was=floor;floor=v;draw();\n    if(was===v){say('booted. version '+v+' matches the floor, so no new fuse was blown.','ok');}\n    else{var d=v-was;say('booted. '+d+' more fuse'+(d===1?'':'s')+' blown. the floor is now '+v+'.','ok');}\n  });\n  undo.addEventListener('click',function(){\n    say('there is no such operation. blowing a fuse adds a one, and nothing in the instruction set turns a one back into a zero.','bad');\n  });\n  draw();\n}\nvar imgs=document.getElementById('fz-imgs');\nif(imgs){\n  var sig=document.getElementById('fz-sig'),rb=document.getElementById('fz-rb'),FLOOR=6,\n      IMG={cur:{v:7,ok:true},old:{v:4,ok:true},mod:{v:7,ok:false}};\n  function set(el,txt,k){el.textContent=txt;el.className='fz-verdict '+k;}\n  imgs.addEventListener('click',function(e){\n    var b=e.target.closest?e.target.closest('button[data-k]'):null;\n    if(!b)return;\n    var m=IMG[b.getAttribute('data-k')];if(!m)return;\n    var all=imgs.querySelectorAll('button[data-k]');\n    for(var i=0;i<all.length;i++)all[i].classList.toggle('sel',all[i]===b);\n    if(!m.ok){\n      set(sig,'rejected. the signature does not verify.','bad');\n      set(rb,'rejected. the signature does not verify.','bad');\n    }else if(m.v<FLOOR){\n      set(sig,'accepted. signed by the vendor, so it boots.','ok');\n      set(rb,'rejected. version '+m.v+' is below the floor of '+FLOOR+'.','bad');\n    }else{\n      set(sig,'accepted. signed by the vendor, so it boots.','ok');\n      set(rb,'accepted. signed, and version '+m.v+' is at or above the floor of '+FLOOR+'.','ok');\n    }\n  });\n}\n})();"
+}
