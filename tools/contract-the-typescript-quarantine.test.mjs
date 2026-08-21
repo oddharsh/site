@@ -60,6 +60,65 @@ test("the TypeScript compiler program includes every Worker module", async () =>
   assert.deepEqual(missing, [], `tsc skipped Worker modules:\n  ${missing.join("\n  ")}`);
 });
 
+// EVERY DEPLOYABLE WORKER IS IN SOME TSC PROGRAM. The three auxiliary Workers
+// (cf-garage, lwe-ask, lens-reader) reach production on their own deploys, and
+// until 2026-08-21 no tsc program held a line of them: 6 files of live runtime
+// code, checked by nothing. They were invisible for the ordinary reason an
+// allowlist goes stale, which is that config/tsconfig.json's include names the
+// site Worker and cal and has no way to notice a fourth project appearing.
+//
+// So the wrangler.toml is the registry rather than a list anybody maintains. A
+// new auxiliary Worker joins this assertion by being deployable, and the test
+// fails until it has a program and that program is wired into `typecheck`.
+// Text-only on purpose: a tsc run per project would put seconds on the suite to
+// re-prove what the package script already states.
+test("every auxiliary Worker has a tsc program, and typecheck runs it", async () => {
+  const { readdirSync, existsSync } = await import("node:fs");
+  const root = new URL("./", ROOT).pathname;
+
+  // A directory holding a wrangler.toml is a separately deployed Worker. The
+  // ROOT config is wrangler.jsonc, so it is excluded by extension rather than
+  // by name, and cal/ and serendipity/ are correctly absent: they carry no
+  // wrangler config because the site Worker bundles them.
+  const projects = readdirSync(root, { withFileTypes: true })
+    .filter((e) => e.isDirectory() && !e.name.startsWith(".") && e.name !== "node_modules")
+    .map((e) => e.name)
+    .filter((name) => existsSync(`${root}${name}/wrangler.toml`))
+    .sort();
+
+  // A FLOOR, because a test that scanned nothing looks exactly like a clean run.
+  assert.ok(projects.length >= 3,
+    `expected at least the three auxiliary Workers, found ${projects.length}: ${projects.join(", ")}`);
+
+  const pkg = JSON.parse(await readFile(new URL("package.json", ROOT), "utf8"));
+  const typecheck = pkg.scripts.typecheck;
+  const missing = [];
+  for (const name of projects) {
+    const config = `config/tsconfig.${name}.json`;
+    if (!existsSync(`${root}${config}`)) {
+      missing.push(`${name}: no ${config}`);
+      continue;
+    }
+    if (!typecheck.includes(config)) missing.push(`${name}: ${config} exists but typecheck does not run it`);
+  }
+  assert.deepEqual(missing, [],
+    `an auxiliary Worker is unchecked:\n  ${missing.join("\n  ")}`);
+
+  // The other direction, so a program cannot be written and left unwired. Every
+  // tsconfig in config/ has to appear in the script that is supposed to run
+  // them all, which is the failure that made the aux Workers orphans in the
+  // first place, one level up.
+  const orphaned = readdirSync(`${root}config`)
+    .filter((f) => /^tsconfig\..+\.json$/.test(f))
+    .filter((f) => !typecheck.includes(`config/${f}`))
+    // tsconfig.tools.json runs through check-tool-types.mjs, which the script
+    // invokes by tool name rather than by config path. That wrapper exists so
+    // diagnostics can be filtered to tools/; see its header.
+    .filter((f) => f !== "tsconfig.tools.json");
+  assert.deepEqual(orphaned, [],
+    `a tsconfig exists that typecheck never runs: ${orphaned.join(", ")}`);
+});
+
 // A TOOL MAY NOT SPAWN A PACKAGE MANAGER. Every script in tools/ runs under
 // whichever runtime invoked it, in a tree that is bun today and was pnpm last
 // week, so a hardcoded manager is wrong half the time. pnpm reads
