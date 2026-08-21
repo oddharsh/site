@@ -162,7 +162,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
           <p>Here's the unifying trick: a <b>Caesar is just a Vigenère with a one-letter key</b>. Key <code>J</code> repeats into the keystream <code>JJJJJJ…</code>, shifting every letter by the same 9, exactly a Caesar shift of 9. Key <code>JJJ</code> is identical, since it repeats into the same stream. A Caesar is the period-1 case; Vigenère is what you get once the key has more than one letter. Try it:</p></div></div></div>
 
         <!-- DEMO A: workbench -->
-        <div class="msg bot"><div class="pic"></div><div style="min-width:0"><div class="who"><b>Vigen&egrave;re</b><time>23:02</time></div>
+        <div class="msg bot"><div class="pic"></div><div><div class="who"><b>Vigen&egrave;re</b><time>23:02</time></div>
           <div class="demo" id="demo-wb">
             <div class="bar">Vigen&egrave;re shared a demo: keystream workbench</div>
             <div class="pad">
@@ -213,7 +213,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
         <div class="msg you"><div class="pic"></div><div><div class="who"><b>aadharsh</b><time>23:07</time></div>
           <div class="bubble"><p>let me actually try that, stack a couple of those ops, paste a ciphertext, and crank it by hand.</p></div></div></div>
 
-        <div class="msg bot"><div class="pic"></div><div style="min-width:0"><div class="who"><b>Vigen&egrave;re</b><time>23:07</time></div>
+        <div class="msg bot"><div class="pic"></div><div><div class="who"><b>Vigen&egrave;re</b><time>23:07</time></div>
           <div class="bubble"><p>Here's the workbench. Each <b>stage</b> is one operation, a <b>transposition</b>, a <b>substitution</b>, a <b>Vigenère</b>, or a plain <b>Caesar</b> shift, set to encrypt or decrypt. The pipeline runs top to bottom, so the <em>order</em> is yours: a Vigenère above a transposition is "Vig first," below it is "Vig last," and the two give different ciphertext. Watch a <b>transposition</b> keep every letter but shuffle the order, and a <b>substitution</b> swap the letters but keep the order.</p></div>
           <div class="demo" id="demo-crank">
             <div class="bar">Vigen&egrave;re shared a demo: the cranking workbench</div>
@@ -239,7 +239,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
           <div class="bubble"><p>By the <b>statistical shape</b> of the letters. Random, polyalphabetic text reads <em>flat</em>, every letter roughly equally likely. Real language reads <em>lumpy</em>, with E, T, A spiking. The single number that captures this is the <b>Index of Coincidence</b>: the chance two random letters of the text match. English ≈ <b>0.067</b>; uniform random ≈ <b>0.038</b>. A correct (mono-alphabetic) decrypt jumps to ~0.067; a wrong, polyalphabetic one sits near 0.04. Paste candidates in and watch the noise:</p></div></div></div>
 
         <!-- DEMO B: statistics -->
-        <div class="msg bot"><div class="pic"></div><div style="min-width:0"><div class="who"><b>Vigen&egrave;re</b><time>23:08</time></div>
+        <div class="msg bot"><div class="pic"></div><div><div class="who"><b>Vigen&egrave;re</b><time>23:08</time></div>
           <div class="demo" id="demo-stat">
             <div class="bar">Vigen&egrave;re shared a demo: the statistical shape of noise</div>
             <div class="pad">
@@ -267,7 +267,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
           <div class="bubble"><p>It can, and the whole attack is four steps. <b>One:</b> find the <b>period</b>. Slice the ciphertext into every-<em>k</em>th letter for each candidate key length and measure each slice's Index of Coincidence. At the wrong length the slices are still polyalphabetic and read flat (~.038); at the <em>right</em> one each slice is a single Caesar, so it reads English-lumpy (~.067). The period pops out of the chart. <b>Two:</b> at that length you no longer have a Vigenère, you have <em>k</em> independent Caesars, so solve each one by picking the shift whose χ² against English letter frequencies is lowest. That gets most of the key. <b>Three:</b> hill-climb the rest, because χ² only sees one column at a time and can't tell that column 3's guess makes <code>THEQ</code> where <code>THER</code> was available. Try all 26 shifts at each position, keep any that improves the <b>quadgram score of the whole plaintext</b>, repeat until nothing improves. Cross-column context is what recovers the last letters. <b>Four:</b> report a verdict, because a solver that always answers is useless. Type your own message and key:</p></div></div></div>
 
         <!-- DEMO D: the cracker -->
-        <div class="msg bot"><div class="pic"></div><div style="min-width:0"><div class="who"><b>Vigen&egrave;re</b><time>23:10</time></div>
+        <div class="msg bot"><div class="pic"></div><div><div class="who"><b>Vigen&egrave;re</b><time>23:10</time></div>
           <div class="demo" id="demo-solve">
             <div class="bar">Vigen&egrave;re shared a demo: the cracker</div>
             <div class="pad">
@@ -314,7 +314,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
         <div class="msg bot"><div class="pic"></div><div><div class="who"><b>Vigen&egrave;re</b><time>23:09</time></div>
           <div class="bubble"><p>Right: in K3 no letter ever changes, only its <em>position</em>. Columnar is the workhorse. Write the message into a grid <b>row by row</b> under a keyword, then read it back <b>column by column</b>, taking the columns in the <b>alphabetical order of the keyword's letters</b>. <code>KRYPTOS</code> ranks its seven columns <code>1&nbsp;4&nbsp;7&nbsp;3&nbsp;6&nbsp;2&nbsp;5</code>, so you read the <b>K</b> column first, then <b>O</b>, then <b>P</b>, and so on. Same letters, new order, and a ragged last row is the only bookkeeping. <b>Double</b> columnar just runs that twice, the first ciphertext poured into a fresh grid under a second keyword; the two passes scramble the column structure enough that the hand version resisted cryptanalysis for decades. There's a clean step-by-step <a href="https://mathweb.ucsd.edu/~crypto/Projects/KarlWang/index2.html" rel="external">walkthrough here</a>. Drag the grid:</p></div></div></div>
 
-        <div class="msg bot"><div class="pic"></div><div style="min-width:0"><div class="who"><b>Vigen&egrave;re</b><time>23:09</time></div>
+        <div class="msg bot"><div class="pic"></div><div><div class="who"><b>Vigen&egrave;re</b><time>23:09</time></div>
           <div class="demo" id="demo-colt">
             <div class="bar">Vigen&egrave;re shared a demo: columnar transposition</div>
             <div class="pad">

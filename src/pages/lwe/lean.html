@@ -73,7 +73,16 @@
 .dial { display: flex; align-items: center; gap: 6px; font-size: 8.5pt; color: #4a5568; }
 .dial b { font-family: var(--font-mono); font-size: 10pt; color: #15243f; min-width: 2.4em; text-align: right; display: inline-block; }
 .dial input[type=range] { width: 118px; accent-color: var(--accent); }
-.tape { font-family: var(--font-mono); font-size: 10.5pt; text-align: center; padding: 9px 6px; margin: 4px 0 11px; background: #1a2030; color: #d8f3d8; border-radius: 3px; overflow-x: auto; white-space: nowrap; }
+.tape { font-family: var(--font-mono); font-size: 10.5pt; text-align: center; padding: 9px 6px; margin: 4px 0 11px; background: #1a2030; color: #d8f3d8; border-radius: 3px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-color: auto; white-space: nowrap; }
+/* Only overflows on a narrow viewport, where the readout runs 281px in a 231px box, so the
+ * dressing is what a phone sees rather than decoration. Same guard and palette as .lean above.
+ * text-align: center needs no companion fix: Chrome aligns overflowing nowrap content to the
+ * start, measured, so the leading `withdraw` is reachable at scrollLeft 0 rather than stranded. */
+@supports (not selector(::-webkit-scrollbar)) or selector(:-moz-focusring) { .tape { scrollbar-width: thin; scrollbar-color: #5a6b85 #101722; } }
+.tape::-webkit-scrollbar { height: 9px; }
+.tape::-webkit-scrollbar-track { background: #101722; border-top: 1px solid #2a3444; }
+.tape::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #5a6b85, #3d4b60); border: 1px solid #2a3444; border-radius: 4px; }
+.tape::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, #6d7f9b, #4c5c74); }
 .tape .hi { color: #ffd97a; font-weight: bold; }
 .specs { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
 .spec { border: 1px solid #c3cbdb; border-radius: 4px; padding: 7px 9px; background: #f7f9fc; }
@@ -197,7 +206,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
           <div class="bubble"><p>&ldquo;Write down what the code should do&rdquo; is doing an enormous amount of work in that sentence. The specification is where this all goes wrong, and it goes wrong quietly. Here, play with one.</p></div></div></div>
 
         <!-- DEMO 1: the vacuous spec -->
-        <div class="msg bot"><div class="pic"></div><div style="min-width:0"><div class="who"><b>Lean</b><time>19:50</time></div>
+        <div class="msg bot"><div class="pic"></div><div><div class="who"><b>Lean</b><time>19:50</time></div>
           <div class="demo" id="demo-spec">
             <div class="bar">Lean shared a demo: the invariant that proves nothing</div>
             <div class="pad">
@@ -280,7 +289,7 @@ where
           <p>Here's a whole one, small enough to fit on a screen.</p></div></div></div>
 
         <!-- DEMO 2: the toy verified compiler -->
-        <div class="msg bot"><div class="pic"></div><div style="min-width:0"><div class="who"><b>Lean</b><time>20:06</time></div>
+        <div class="msg bot"><div class="pic"></div><div><div class="who"><b>Lean</b><time>20:06</time></div>
           <div class="demo" id="demo-compile">
             <div class="bar">Lean shared a demo: compile it, optimize it, break it</div>
             <div class="pad">
@@ -388,7 +397,7 @@ ib : ∀ (s : List Nat), run env (compileSwap b) s = eval env b :: s
           <p>Now look at what a mathematician has to read to know <em>what was proved</em>.</p></div></div></div>
 
         <!-- DEMO 3: the audit surface -->
-        <div class="msg bot"><div class="pic"></div><div style="min-width:0"><div class="who"><b>Lean</b><time>20:33</time></div>
+        <div class="msg bot"><div class="pic"></div><div><div class="who"><b>Lean</b><time>20:33</time></div>
           <div class="demo" id="demo-surface">
             <div class="bar">Lean shared a demo: the part addressed to you</div>
             <div class="pad">
