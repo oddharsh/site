@@ -80,17 +80,46 @@ const TARGETS = [
 
 const TIMEOUT_MS = 20000;
 const SHELL_WORDS = 50; // below this, a 200 is a frame rather than a document
-// `</script >` with whitespace before the bracket is a VALID end tag, and a
-// `<\/script>` pattern misses it, so the script body survives the strip and its
-// source is counted as prose. Nothing here is sanitizing for render, so the
-// security reading of CodeQL's js/bad-tag-filter does not apply; the reason it
-// is worth fixing is that this function produces the numbers the page publishes,
-// and a page about silently corrupted measurements should not ship one.
-// Checked against all 7 measurable targets before changing it: every count is
-// identical either way, so the published run stands.
+// Raw text elements are REMOVED BY SCAN rather than by one regex, and the third
+// attempt is what earned it. HTML lets an end tag carry whitespace and junk
+// before the bracket, so `</script >`, `</script\t\n bar>` and `</script/>` are
+// all valid closes that a `<\/script>` pattern misses, leaving the script body to
+// be counted as prose. CodeQL flagged two of those three shapes in successive
+// runs, which is the usual argument against parsing HTML with a regular
+// expression. The security reading of js/bad-tag-filter does not apply here,
+// since nothing is sanitized for render; what makes it worth doing properly is
+// that this function produces the numbers /garage/useragent publishes.
+//
+// Verified against all 7 measurable targets before and after: every count is
+// identical, so the published run stands.
+/**
+ * @param {string} s
+ * @param {string} tag
+ */
+export const stripRawText = (s, tag) => {
+  const open = new RegExp("<" + tag + "(?=[\\s/>])", "i");
+  const close = new RegExp("</" + tag + "(?=[\\s/>])", "i");
+  const kept = [];
+  let rest = s;
+  for (;;) {
+    const i = rest.search(open);
+    if (i < 0) { kept.push(rest); break; }
+    kept.push(rest.slice(0, i));
+    const after = rest.slice(i);
+    const c = after.search(close);
+    // An unterminated raw-text element runs to end of document by the parser's
+    // own rule, so dropping the remainder is the correct reading rather than a
+    // giving-up branch.
+    if (c < 0) break;
+    const gt = after.indexOf(">", c);
+    if (gt < 0) break;
+    rest = after.slice(gt + 1);
+  }
+  return kept.join(" ");
+};
+
 /** @param {string} s */
-const words = (s) => s.replace(/<script[\s\S]*?<\/script\s*>/gi, " ")
-                      .replace(/<style[\s\S]*?<\/style\s*>/gi, " ")
+export const words = (s) => stripRawText(stripRawText(s, "script"), "style")
                       .replace(/<[^>]*>/g, " ").split(/\s+/).filter(Boolean).length;
 
 /**
@@ -223,7 +252,10 @@ async function main() {
   }
   process.stdout.write(JSON.stringify(report, null, 2) + "\n");
 }
-main().catch((e) => {
+// Importing this module must not fire a survey. The contract test exercises
+// `words` directly, and a bare import that made 500 outbound requests would be
+// a memorable way to find that out.
+if (import.meta.main) main().catch((e) => {
   // A survey that dies half way must not leave a truncated JSON body looking
   // like a complete result. Fail loudly and write nothing usable.
   process.stderr.write(`ua-survey failed: ${(e && e.stack) || e}\n`);
