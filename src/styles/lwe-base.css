@@ -28,6 +28,13 @@ body::after { content: ""; position: fixed; left: 0; right: 0; bottom: 0; height
 .disclosure { font-size: 8.5pt; color: #5a6679; background: #fcfbe9; border-bottom: 1px solid #e6dfa8; padding: 5px 12px; }
 .log { padding: 10px 12px 4px; display: flex; flex-direction: column; gap: 11px; }
 .msg { display: grid; grid-template-columns: 26px 1fr; gap: 8px; align-items: start; content-visibility: auto; contain-intrinsic-size: auto 90px; }
+/* A grid item's automatic minimum size is its min-content width, and a `white-space: pre`
+ * code block's min-content width is its longest line. Without this the message column
+ * widens past the 640px window, `.window { overflow: hidden }` clips the excess, and the
+ * block's own `overflow-x: auto` never engages because the block was never constrained.
+ * Measured on /lwe/lean before this line: a 743px block in a 640px window, 157px gone,
+ * no scrollbar anywhere. */
+.msg > * { min-width: 0; }
 .msg .pic { width: 26px; height: 26px; border-radius: 4px; border: 1px solid #99a; position: relative; overflow: hidden; }
 .msg.you .pic { background: linear-gradient(180deg,#ffb35a,#f08a25); border-color:#c96a10; }
 .msg.you .pic::before { content: ":)"; position: absolute; inset: 0; display: grid; place-items: center; color: #7a3d00; font-weight: bold; font-size: 9px; transform: rotate(90deg); }

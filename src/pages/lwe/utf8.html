@@ -103,7 +103,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
           <div class="bubble"><p>Step one is <b>Unicode</b>: give every character one universal number, a <em>code point</em>, written <code>U+XXXX</code>. <code>A</code> is U+0041, <code>中</code> is U+4E2D, <code>😀</code> is U+1F600. That's about 150,000 characters and counting. A code point is still just a <em>number</em>, so you have to decide how to store it as <b>bytes</b>, and that choice is the encoding. Poke at it:</p></div></div></div>
 
         <!-- DEMO 1 -->
-        <div class="msg bot"><div class="pic"></div><div style="min-width:0"><div class="who"><b>UTF-8</b><time>22:11</time></div>
+        <div class="msg bot"><div class="pic"></div><div><div class="who"><b>UTF-8</b><time>22:11</time></div>
           <div class="demo" id="demo-enc">
             <div class="bar">UTF-8 shared a demo: same text, different bytes</div>
             <div class="pad">
@@ -134,7 +134,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
           <div class="bubble"><p>Exactly. UTF-8 is <b>variable-width</b>: 1 byte for ASCII (so old English text stays byte-for-byte identical, backwards compatibility for free), 2 bytes for most Latin and accented letters, 3 for most CJK like <code>中</code>, 4 for emoji and rare scripts. It's also <b>self-synchronizing</b>: every byte announces whether it's a start byte or a continuation, so you can drop into the middle of a stream and still find the next character. That combination is why it ate the web. Look at how the bits actually pack:</p></div></div></div>
 
         <!-- DEMO 2 -->
-        <div class="msg bot"><div class="pic"></div><div style="min-width:0"><div class="who"><b>UTF-8</b><time>22:14</time></div>
+        <div class="msg bot"><div class="pic"></div><div><div class="who"><b>UTF-8</b><time>22:14</time></div>
           <div class="demo" id="demo-anat">
             <div class="bar">UTF-8 shared a demo: how the bits pack</div>
             <div class="pad">
