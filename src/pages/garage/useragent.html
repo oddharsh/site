@@ -77,6 +77,29 @@ body{background:transparent;font-family:var(--font-ui);font-size:10.5pt;line-hei
 .ua-wba .verdict{padding:6px 10px;font-size:8.6pt;color:#33455f;border-top:1px solid #ccd6e4;background:#eef3fa}
 @media(max-width:620px){.ua-wba .r{grid-template-columns:1fr}}
 
+.ua-sep{display:inline-block;width:1px;height:13px;background:#b6c2d4;margin:0 3px;vertical-align:-2px}
+.ua-matrix.compact{width:auto;min-width:100%}
+.ua-scroll{padding-right:2.2em}
+.ua-matrix.compact td.c{text-align:center;width:1.75em;padding:3px 1px;font-size:10.5pt;line-height:1.15;font-family:var(--font-ui)}
+.ua-matrix.compact td.c .s{display:block;font-family:var(--font-mono);font-size:6.6pt;line-height:1;color:inherit;opacity:.72}
+.ua-matrix.compact .ok{color:#1d6b1d}
+.ua-matrix.compact .no{color:#a32b13}
+.ua-matrix.compact .sh{color:#9a6a08}
+/* The header turns on its side, which is what gives 16 identity columns the room
+   to fit a 760px window. A horizontal header needs ~7em a column and there is not
+   7em x 16 anywhere on this page. */
+.ua-matrix.compact th.rot{height:7em;vertical-align:bottom;padding:0 0 4px;width:1.75em;position:relative}
+.ua-matrix.compact th.rot>span{display:block;transform-origin:left bottom;transform:translateX(1.35em) rotate(-60deg);white-space:nowrap;font-size:7.8pt;text-align:left;width:0}
+.ua-matrix.compact th.hsite{vertical-align:bottom}
+.ua-matrix.compact th.ctl>span{font-weight:bold;color:#20406e}
+.ua-matrix.compact td.site{max-width:11em}
+.ua-matrix.compact td,.ua-matrix.compact th{padding-left:2px;padding-right:2px}
+@media(max-width:620px){
+  .ua-matrix.compact th.rot{height:6.4em}
+  .ua-matrix.compact th.rot>span{font-size:7pt}
+  .ua-matrix.compact td.c{width:1.85em;font-size:9.5pt}
+}
+
 </style>
 <link rel="stylesheet" href="/luna.css">
 </head>
@@ -107,12 +130,15 @@ body{background:transparent;font-family:var(--font-ui);font-size:10.5pt;line-hei
   <div class="ua-demo-head">
     <span>What each identity was served</span>
     <span class="ua-toggle" id="ua-toggle">
+      <button type="button" data-m="compact" class="on">compact</button>
+      <button type="button" data-m="detail">with counts</button>
+      <span class="ua-sep"></span>
       <button type="button" data-f="all" class="on">every target</button>
       <button type="button" data-f="measurable">measurable only</button>
     </span>
   </div>
   <div class="ua-scroll"><table class="ua-matrix" id="ua-matrix"></table></div>
-  <p class="ua-legend"><b>ok</b> a readable document &middot; <b>blocked</b> refused &middot; <b>shell</b> a 200 carrying under 50 words &middot; word counts are the median of three trials with scripts and styles stripped</p>
+  <p class="ua-legend"><b>&#10003;</b> served a readable document &middot; <b>&#215;</b> refused, with the status beside it &middot; <b>&#9680;</b> a 200 carrying under 50 words, so the request was allowed and the content is still absent &middot; hover any cell for its status and word count, or switch to <b>with counts</b>. Counts are the median of three trials with scripts and styles stripped.</p>
 </div>
 
 <h2>Answer one: a list of names, and it fails open</h2>
@@ -180,6 +206,13 @@ body{background:transparent;font-family:var(--font-ui);font-size:10.5pt;line-hei
   var matrix = document.getElementById("ua-matrix");
   var toggle = document.getElementById("ua-toggle");
   if (!ids || !matrix) return;
+  // The compact header rotates, so a long label costs HEIGHT rather than width and
+  // "Signature-Agent, unsigned" clipped to "Signat-" at any header size worth
+  // having. Abbreviations are for the rotated header alone; the identity list
+  // above the matrix and every cell title still carry the full name and the exact
+  // user-agent string, so nothing is only ever shown in short form.
+  var SHORT = { honest: "ua-survey", facebookbot: "facebook", perplexity: "Perplexity",
+                wba_unsigned: "sig-agent", oai_fd: "OpenAI FD", xai_img: "xAI" };
   var esc = function (s) { return String(s).replace(/[&<>"]/g, function (c) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]; }); };
 
   ids.innerHTML = D.ids.map(function (i) {
@@ -188,23 +221,41 @@ body{background:transparent;font-family:var(--font-ui);font-size:10.5pt;line-hei
       '</span><span class="ua">' + esc(i.ua) + "</span></div>";
   }).join("");
 
-  function cell(v) {
-    if (!v || v[0] == null) return '<td class="no">no answer</td>';
+  // Two densities, and COMPACT is the default on purpose. The detail view is
+  // 16 columns of "200 ok 1,255w", which overflows the window and hides the AI
+  // crawlers and the two invented names behind a horizontal scroll. Those are
+  // the columns the page is about, so the default has to fit them on screen.
+  // One glyph per cell answers "was this identity served" at a glance; the
+  // numbers stay one click away, and on the title of every glyph.
+  function cell(v, mode) {
+    if (!v || v[0] == null) return mode === "compact"
+      ? '<td class="no c" title="no answer">&middot;</td>'
+      : '<td class="no">no answer</td>';
     var status = v[0], words = v[1], blocked = v[2], shell = v[3];
     var cls = blocked ? "no" : shell ? "sh" : "ok";
     var what = blocked ? "blocked" : shell ? "shell" : "ok";
+    if (mode === "compact") {
+      var glyph = blocked ? "\u00d7" : shell ? "\u25d0" : "\u2713";
+      return '<td class="' + cls + ' c" title="' + status + " " + what + ", " +
+        (words == null ? "-" : words.toLocaleString()) + ' words">' + glyph +
+        (blocked ? '<span class="s">' + status + "</span>" : "") + "</td>";
+    }
     return '<td class="' + cls + '">' + status + " " + what + "<br>" + (words == null ? "-" : words.toLocaleString()) + "w</td>";
   }
 
-  function draw(filter) {
+  function draw(filter, mode) {
     var rows = D.tg.filter(function (t) { return filter === "all" || t.v === "measurable"; });
-    var head = '<tr><th>target</th>' + D.ids.map(function (i) {
-      return '<th' + (i.r === "control" ? ' class="ctl"' : "") + ">" + esc(i.l) + "</th>";
+    var head = '<tr><th class="hsite">target</th>' + D.ids.map(function (i) {
+      // Compact turns the header on its side, which is what buys 16 columns the
+      // room to fit. The full label stays on the title for a hover and for AT.
+      return '<th class="' + (i.r === "control" ? "ctl" : "") + (mode === "compact" ? " rot" : "") +
+        '" title="' + esc(i.l) + " \u2014 " + esc(i.ua) + '"><span>' +
+        esc(mode === "compact" ? (SHORT[i.k] || i.l) : i.l) + "</span></th>";
     }).join("") + "</tr>";
     matrix.innerHTML = head + rows.map(function (t) {
       return '<tr class="' + t.v + '"><td class="site"><b>' + esc(t.k) + '</b><span>' + esc(t.n) +
         '</span><span class="ua-verdict">' + t.v + "</span></td>" +
-        D.ids.map(function (i) { return cell(t.r[i.k]); }).join("") + "</tr>";
+        D.ids.map(function (i) { return cell(t.r[i.k], mode); }).join("") + "</tr>";
     }).join("");
     // Control COLUMNS are marked here rather than in the cell builder, because the
     // builder returns one cell without knowing which column it lands in.
@@ -238,15 +289,23 @@ body{background:transparent;font-family:var(--font-ui);font-size:10.5pt;line-hei
         : "Something parsed the header, so the reading above needs revisiting against those rows.") + "</div>";
   }
 
+  var filter = "all", mode = "compact";
   if (toggle) {
     toggle.addEventListener("click", function (e) {
       var b = e.target.closest("button");
       if (!b) return;
-      Array.prototype.forEach.call(toggle.querySelectorAll("button"), function (x) { x.classList.toggle("on", x === b); });
-      draw(b.getAttribute("data-f"));
+      var group = b.getAttribute("data-f") ? "f" : "m";
+      Array.prototype.forEach.call(toggle.querySelectorAll("button"), function (x) {
+        var same = (x.getAttribute("data-f") ? "f" : "m") === group;
+        if (same) x.classList.toggle("on", x === b);
+      });
+      if (group === "f") filter = b.getAttribute("data-f"); else mode = b.getAttribute("data-m");
+      matrix.className = mode === "compact" ? "ua-matrix compact" : "ua-matrix";
+      draw(filter, mode);
     });
   }
-  draw("all");
+  matrix.className = "ua-matrix compact";
+  draw(filter, mode);
 })();
 </script>
 <script type="application/json" id="luq-data">
