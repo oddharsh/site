@@ -1,4 +1,4 @@
-// ask.js — the live "ask a follow-up" widget for the LWE concept pages.
+// ask.js: the live "ask a follow-up" widget for the LWE concept pages.
 //
 // Shared, deferred, edge-cached. Derives the concept from the URL, turns the
 // page's decorative compose bar into an ask box gated by a homemade
@@ -60,7 +60,7 @@
     '<div class="lwe-ask">' +
       '<div class="lwe-row"><input class="lwe-q" type="text" maxlength="400" placeholder="ask ' + esc(BOT) + ' a follow-up…" disabled>' +
       '<button class="lwe-btn lwe-go" disabled>ask</button></div>' +
-      '<div class="lwe-gate"><button class="lwe-btn lwe-verify">🚗 verify you&rsquo;re human to ask &mdash; click the cars</button></div>' +
+      '<div class="lwe-gate"><button class="lwe-btn lwe-verify">🚗 verify you\'re human to ask: click the cars</button></div>' +
       '<div class="lwe-status" role="status"></div>' +
     '</div>';
   var q = /** @type {HTMLTextAreaElement} */ (compose.querySelector(".lwe-q")),
@@ -73,7 +73,7 @@
   var dlg = D.createElement("dialog");
   dlg.className = "lwe-dlg";
   dlg.innerHTML =
-    '<form method="dialog" class="lwe-dlg-tt"><span class="ico" aria-hidden="true">🚗</span><span class="t">Verify you&rsquo;re human</span><button class="lwe-dlg-x" value="cancel" aria-label="close">✕</button></form>' +
+    '<form method="dialog" class="lwe-dlg-tt"><span class="ico" aria-hidden="true">🚗</span><span class="t">Verify you\'re human</span><button class="lwe-dlg-x" value="cancel" aria-label="close">✕</button></form>' +
     '<div class="lwe-dlg-bd">' +
       '<p class="lwe-dlg-lead">Click every photo with a <b>car</b>, then hit verify.</p>' +
       '<div class="lwe-tiles"></div>' +
@@ -118,15 +118,15 @@
         fetch("/lwe/ask/verify", { method: "POST", headers: { "content-type": "application/json" },
           body: JSON.stringify({ stems: ch.stems, exp: ch.exp, token: ch.token, selected: Object.keys(sel).map(Number) }) })
           .then(function (r) { return r.json(); }).then(function (v) {
-            if (v.ok) { askToken = v.askToken; askExp = v.askExp; dlg.close(); q.disabled = false; go.disabled = false; q.focus(); setBar("verified ✓ — ask away", "ok"); }
-            else if (v.expired) { setDlg("that set expired — fetching a fresh one…", "no"); loadChallenge(); }
-            else { setDlg(esc(v.error || "not quite — try the fresh set"), "no"); loadChallenge(); }
-          }).catch(function () { setDlg("network hiccup — try again", "no"); });
+            if (v.ok) { askToken = v.askToken; askExp = v.askExp; dlg.close(); q.disabled = false; go.disabled = false; q.focus(); setBar("verified ✓ · ask away", "ok"); }
+            else if (v.expired) { setDlg("that set expired, fetching a fresh one…", "no"); loadChallenge(); }
+            else { setDlg(esc(v.error || "not quite. try the fresh set"), "no"); loadChallenge(); }
+          }).catch(function () { setDlg("network hiccup, try again", "no"); });
       };
   // Capability probe: <dialog> support, not a value off the wire.
   // oxlint-disable-next-line anti-slop/no-runtime-typeof
       if (typeof dlg.showModal === "function") dlg.showModal(); else dlg.setAttribute("open", "");
-    }).catch(function () { setBar("couldn&rsquo;t load the challenge", "no"); });
+    }).catch(function () { setBar("couldn't load the challenge", "no"); });
   }
 
   // ── ask ──────────────────────────────────────────────────────────────────
@@ -149,6 +149,6 @@
         }
         pending.querySelector(".bubble").innerHTML = html;
         go.disabled = false; scrollLog();
-      }).catch(function () { pending.querySelector(".bubble").innerHTML = '<p>(couldn&rsquo;t reach the bot — try again)</p>'; go.disabled = false; });
+      }).catch(function () { pending.querySelector(".bubble").innerHTML = "<p>(couldn't reach the bot, try again)</p>"; go.disabled = false; });
   }
 })();
