@@ -10,7 +10,7 @@
 // No-ops on any page without a /lwe/<indexed-concept> + a .compose bar.
 (function () {
   // generated:concepts:start
-  var CONCEPTS = { "/lwe/fhe": "fhe", "/lwe/mpc": "mpc", "/lwe/tee": "tee", "/lwe/utf8": "utf8", "/lwe/vigenere": "vigenere", "/lwe/encoding": "encoding", "/lwe/pcrypto": "pcrypto", "/lwe/dac": "dac", "/lwe/drivers": "drivers", "/lwe/knots": "knots" };
+  var CONCEPTS = { "/lwe/fhe": "fhe", "/lwe/mpc": "mpc", "/lwe/tee": "tee", "/lwe/utf8": "utf8", "/lwe/vigenere": "vigenere", "/lwe/encoding": "encoding", "/lwe/pcrypto": "pcrypto", "/lwe/dac": "dac", "/lwe/drivers": "drivers", "/lwe/knots": "knots", "/lwe/lean": "lean" };
 // generated:concepts:end
   var path = location.pathname.replace(/\.html$/, "").replace(/\/$/, "");
   var concept = CONCEPTS[path];
