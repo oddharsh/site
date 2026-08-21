@@ -63,8 +63,9 @@
       '<div class="lwe-gate"><button class="lwe-btn lwe-verify">🚗 verify you&rsquo;re human to ask &mdash; click the cars</button></div>' +
       '<div class="lwe-status" role="status"></div>' +
     '</div>';
-  var q = compose.querySelector(".lwe-q"), go = compose.querySelector(".lwe-go"),
-      verifyBtn = compose.querySelector(".lwe-verify"),
+  var q = /** @type {HTMLTextAreaElement} */ (compose.querySelector(".lwe-q")),
+      go = /** @type {HTMLButtonElement} */ (compose.querySelector(".lwe-go")),
+      verifyBtn = /** @type {HTMLButtonElement} */ (compose.querySelector(".lwe-verify")),
       barStatus = compose.querySelector(".lwe-ask > .lwe-status");
   var askToken = null, askExp = 0;
 
@@ -81,7 +82,8 @@
       '<button class="lwe-btn lwe-cancel" type="button">cancel</button></div>' +
     '</div>';
   D.body.appendChild(dlg);
-  var tilesEl = dlg.querySelector(".lwe-tiles"), dlgStatus = dlg.querySelector(".lwe-dlg-foot .lwe-status");
+  var tilesEl = /** @type {HTMLElement} */ (dlg.querySelector(".lwe-tiles")),
+      dlgStatus = dlg.querySelector(".lwe-dlg-foot .lwe-status");
   dlg.querySelector(".lwe-cancel").addEventListener("click", function () { dlg.close(); });
 
   function setBar(s, cls) { barStatus.innerHTML = s || ""; barStatus.className = "lwe-status " + (cls || ""); }
@@ -108,10 +110,10 @@
       }).join("");
       setBar(""); setDlg("");
       tilesEl.onclick = function (e) {
-        var t = e.target.closest(".lwe-tile"); if (!t) return;
+        var t = /** @type {HTMLElement} */ (/** @type {Element} */ (e.target).closest(".lwe-tile")); if (!t) return;
         var i = t.dataset.i; if (sel[i]) { delete sel[i]; t.classList.remove("on"); } else { sel[i] = 1; t.classList.add("on"); }
       };
-      dlg.querySelector(".lwe-submit").onclick = function () {
+      /** @type {HTMLButtonElement} */ (dlg.querySelector(".lwe-submit")).onclick = function () {
         setDlg("checking…");
         fetch("/lwe/ask/verify", { method: "POST", headers: { "content-type": "application/json" },
           body: JSON.stringify({ stems: ch.stems, exp: ch.exp, token: ch.token, selected: Object.keys(sel).map(Number) }) })

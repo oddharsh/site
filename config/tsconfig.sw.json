@@ -1,0 +1,27 @@
+{
+  // tsconfig.sw.json — the service worker, which is neither a browser module nor
+  // a Worker module.
+  //
+  // sw.js runs in a ServiceWorkerGlobalScope: `skipWaiting`, `clients` and
+  // `registration` are globals there and exist in NO other environment, which is
+  // why it needs lib.webworker. That lib cannot share a program with lib.dom —
+  // the two declare conflicting globals, which is the same collision
+  // tsconfig.browser.json's own header documents about workers-types.
+  //
+  // A fourth program for one 15-line file looks like overkill until you name the
+  // alternative: excluding it from the glob, which is exactly the allowlist habit
+  // that let ten client islands go unchecked. One file, checked, in the only
+  // environment where its globals are real.
+  "compilerOptions": {
+    "noEmit": true,
+    "allowJs": true,
+    "checkJs": true,
+    "target": "esnext",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "lib": ["esnext", "webworker"],
+    "skipLibCheck": true,
+    "strict": false
+  },
+  "include": ["../src/client/sw.js", "../src/client/sw-globals.d.ts"]
+}

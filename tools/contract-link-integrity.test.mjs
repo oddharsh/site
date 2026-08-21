@@ -51,7 +51,12 @@ test("the link resolver rejects a page that moved", async () => {
   assert.ok(!resolves("/lwe/deleted-chat"), "same, for the other governed section");
 });
 
-test("the ref scanner reads unquoted attributes, which is how the site ships", async () => {
+// BUN ONLY, and the skip is explicit so it cannot pass quietly. internalRefs
+// parses with HTMLRewriter, a bun global; build.mjs runs under bun, so that is
+// the only runtime the function is ever called in. Under `node --test` the
+// global is absent and the import throws, which is how this test began failing
+// the node twin the day #497 landed — invisibly, because CI ran only bun.
+test("the ref scanner reads unquoted attributes, which is how the site ships", { skip: typeof HTMLRewriter === "undefined" && "needs bun's HTMLRewriter" }, async () => {
   const { internalRefs } = await import("./lib/link-integrity.mjs");
   // minify-html unquotes what it can, so the served bytes look like the first two.
   // A scanner written against href="..." reported 33 refs where there were 2645.

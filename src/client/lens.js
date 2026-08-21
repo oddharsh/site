@@ -19,7 +19,7 @@
   var form = document.getElementById("lx-form");
   if (!form) return; // not the /lens page
 
-  var urlInput = document.getElementById("lx-url");
+  var urlInput = /** @type {HTMLInputElement} */ (document.getElementById("lx-url"));
   var panes = document.getElementById("lx-panes");
   var humanBody = document.getElementById("lx-human-body");
   var machineBody = document.getElementById("lx-machine-body");
@@ -35,7 +35,7 @@
   var statusBar = document.getElementById("lx-status");
   var toolbar = document.getElementById("lx-toolbar");
   var vsRow = document.getElementById("lx-addr-vs");
-  var vsInput = document.getElementById("lx-url-vs");
+  var vsInput = /** @type {HTMLInputElement} */ (document.getElementById("lx-url-vs"));
   var vsToggle = document.getElementById("lx-vs-toggle");
   var vsCloseBtn = document.getElementById("lx-vs-close");
   var vsSection = document.getElementById("lx-vs");
@@ -167,7 +167,7 @@
       h.createHoist({
         node: node,
         anchorName: "--lx-tip",
-        findTarget: function (el) {
+        findTarget: function (/** @type {Element} */ el) {
           return el && el.closest ? el.closest(".lx-term") : null;
         },
         contentFor: function (t) {
@@ -352,7 +352,7 @@
   // only on a click now: the panel used to pop itself open once a session, which
   // meant the tool greeted you with something to dismiss. No-op with no dialog.
   function openStateWeb() {
-    var d = document.getElementById("lx-sow-dialog");
+    var d = /** @type {HTMLDialogElement} */ (document.getElementById("lx-sow-dialog"));
     if (d && !d.open && d.showModal) { try { d.showModal(); } catch (e) {} }
   }
 
@@ -2201,7 +2201,7 @@
   // "state of the machine web" dialog: close button, backdrop light-dismiss, and
   // every [data-sow-open] trigger (the rail's "?" and the footer link). The
   // backdrop listener is the fallback for browsers without dialog closedby="any".
-  var sowDialog = document.getElementById("lx-sow-dialog");
+  var sowDialog = /** @type {HTMLDialogElement} */ (document.getElementById("lx-sow-dialog"));
   if (sowDialog) {
     var sowClose = document.getElementById("lx-sow-close");
     if (sowClose) sowClose.addEventListener("click", function () { sowDialog.close(); });
@@ -2215,7 +2215,7 @@
   // Its era cards carry .lx-goto jump buttons, which close the dialog and land
   // on the lens that proves the era live — via Compare when the current view
   // hides the lens tabs, mirroring what clicking a tab from Delta does.
-  var abtDialog = document.getElementById("lx-abt-dialog");
+  var abtDialog = /** @type {HTMLDialogElement} */ (document.getElementById("lx-abt-dialog"));
   if (abtDialog) {
     var abtClose = document.getElementById("lx-abt-close");
     if (abtClose) abtClose.addEventListener("click", function () { abtDialog.close(); });
@@ -2309,7 +2309,7 @@
         showError(initialData);
       }
     } else if (qp) {
-      if (document.prerendering) {
+      if (/** @type {any} */ (document).prerendering) {
         document.addEventListener("prerenderingchange", function () { run(qp); }, { once: true });
       } else {
         run(qp);
