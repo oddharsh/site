@@ -869,7 +869,8 @@ function lensAboutPanel() {
     '<div class="lx-abt-thesis">Every page now has two audiences: people, and the machines reading over their shoulders. This instrument watches the second one. Its story runs in three acts, and each act opens the evidence beneath it.</div>' +
     eras +
     '<div class="lx-abt-rules"><b>How this instrument behaves</b><ul class="lx-why">' +
-    "<li>Every fetch is identified and cryptographically signed as AadharshBot. Lens never wears another bot's user-agent to get past a wall.</li>" +
+    "<li>Every fetch is identified and cryptographically signed as AadharshBot, apart from the bot-view samples, which are the one disclosed exception.</li>" +
+    "<li>A bot-view sample sends one crawler's published user-agent, read-only and unsigned, to record what that identity gets served. Chrome and curl ride along as controls, because a 403 on every crawler says nothing until something proves the door opens at all.</li>" +
     "<li>Every verdict stays pinned to evidence you can open. A probe that never answered reads as unknown, never as a fail.</li>" +
     "<li>Absent metadata renders as absent. Nothing is guessed or backfilled.</li>" +
     "<li>Delta's simulations stay amber. Green is reserved for signals actually observed.</li>" +
@@ -1328,6 +1329,11 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 .lx-bot-matrix th { font-size:7.5pt; font-weight:normal; color:oklch(50% 0 0); text-transform:uppercase; letter-spacing:.04em; }
 .lx-bot-matrix .ua { font-family:"Courier New",monospace; color:oklch(30% 0.05 255); white-space:nowrap; }
 .lx-bot-matrix .rule { color:oklch(47% 0 0); }
+.lx-bot-matrix tr.control td { background:oklch(97.5% 0.012 250); }
+.lx-bot-matrix tr.control .ua b { color:oklch(42% 0.03 250); }
+.lx-bot-matrix .tag { display:inline-block; margin-left:5px; padding:0 4px; border-radius:2px; font-family:Tahoma,Verdana,sans-serif; font-size:6.8pt; text-transform:uppercase; letter-spacing:.05em; color:oklch(38% 0.04 250); background:oklch(90% 0.03 250); vertical-align:1px; }
+.lx-bot-matrix .na { color:oklch(62% 0 0); }
+.lx-bot-caveat { margin:0 0 8px; padding:6px 8px; border-left:3px solid oklch(72% 0.15 75); background:oklch(97% 0.03 85); font-size:8.4pt; color:oklch(35% 0.04 60); }
 .lx-badge.no { background:oklch(52% 0.17 27); }
 .lx-kindrow td { font-family:"Trebuchet MS",Verdana,sans-serif; font-size:8.6pt; font-weight:bold; color:oklch(38% 0.07 255); padding-top:9px; }
 .lx-mult { font-family:"Courier New",monospace; font-size:7.8pt; color:oklch(38% 0.09 150); background:oklch(94% 0.04 150); border:1px solid oklch(80% 0.06 150); border-radius:8px; padding:1px 7px; white-space:nowrap; }
@@ -2539,7 +2545,7 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
     // Scanning our OWN /lens route is a fan-out trap. SELF_FETCH dispatches each probe
     // back through route() into handleLens, and every one of those re-runs a COMPLETE
     // inspection of the inner ?url= target: the main fetch, plus markdown negotiation,
-    // plus six bot identities = 8 full nested scans inside one invocation. SELF_FETCH
+    // plus ten bot identities = 12 full nested scans inside one invocation. SELF_FETCH
     // nulls itself one level down, so DEPTH was already bounded; this bounds the WIDTH.
     // Neither probe says anything meaningful about the lens itself anyway.
     const selfLens = (() => {
@@ -2563,7 +2569,7 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
     // So they move behind an origin-keyed cache (originDiscovery below) and only
     // the genuinely per-URL pair stays live: Markdown negotiation, which is a
     // property of the document rather than the site, and the bot-view sampling,
-    // which refetches THIS url as six crawlers.
+    // which refetches THIS url as ten identities (eight crawlers, two controls).
     const disco = await originDiscovery(origin, new URL(finalUrl).hostname, env, { selfLens });
     const {
       robots, sitemap, sitemapDeclared, llms, llmsFull, aiTxt, secTxt, tdmrep, agentCard, openapi, aiPlugin,
@@ -2576,7 +2582,7 @@ async function lensInspectInner(targetUrl, env, opts, sInspect) {
       s.setAttribute("lens.discovery_cached", !!disco.cached);
       return Promise.all([
         isHtml && !selfLens ? lensProbeMdNego(finalUrl, env) : Promise.resolve(null),
-        // bot-view sampling is 6 extra fetches per scan. The census
+        // bot-view sampling is 10 extra fetches per scan (8 crawlers + 2 controls). The census
         // (opts.skipBotViews) only needs tier/score/doors, so it skips them to
         // stay well under the per-invocation subrequest budget when sweeping the
         // whole roster. Its own span because it is the single heaviest entry
@@ -2974,13 +2980,34 @@ export async function lensProbeDnsAid(hostname) {
 // These are representative request identities, not claims about the exact
 // implementation each vendor uses. A bot view is a bounded GET observation;
 // the policy verdict in Terms remains the source of truth for robots.txt.
+//
+// The two `role: "control"` rows are the reason this table can be read at all,
+// and they were missing until 2026-08-21. A crawler row returning 403 has two
+// completely different explanations — the origin refuses that NAME, or the
+// origin refuses this instrument (our datacenter IP, our TLS fingerprint, our
+// missing cookie) and would refuse anything. Those are indistinguishable from
+// a crawler-only sample, so every scan of a hard-walled origin used to render
+// as "blocks all AI crawlers" when the honest answer was "we never got in".
+// Measured the day they were added: medium.com and quora.com answer 403 to
+// Chrome as well, so every AI-crawler row on those hosts is uninterpretable.
+//
+// Controls are DISPLAYED and never SCORED. `lensFieldEvidence` filters them out
+// of `sampledBots`, because counting a browser as a bot identity that received
+// an unblocked response would reward exactly the site that serves humans and
+// refuses every machine.
 const LENS_BOT_VIEWS = [
-  { key: "GPTBot", label: "GPTBot", owner: "OpenAI", ua: "GPTBot/1.0" },
-  { key: "ClaudeBot", label: "ClaudeBot", owner: "Anthropic", ua: "ClaudeBot/1.0" },
-  { key: "CCBot", label: "CCBot", owner: "Common Crawl", ua: "CCBot/2.0" },
-  { key: "Google-Extended", label: "Google-Extended", owner: "Google", ua: "Google-Extended" },
-  { key: "PerplexityBot", label: "PerplexityBot", owner: "Perplexity", ua: "PerplexityBot/1.0" },
-  { key: "ChatGPT-User", label: "ChatGPT-User", owner: "OpenAI", ua: "ChatGPT-User/1.0" },
+  { key: "Chrome", label: "Chrome", owner: "a browser", role: "control",
+    ua: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36" },
+  { key: "curl", label: "curl", owner: "a plain HTTP client", role: "control", ua: "curl/8.7.1" },
+
+  { key: "Googlebot", label: "Googlebot", owner: "Google", role: "search", ua: "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)" },
+  { key: "GPTBot", label: "GPTBot", owner: "OpenAI", role: "train", ua: "GPTBot/1.0" },
+  { key: "ClaudeBot", label: "ClaudeBot", owner: "Anthropic", role: "train", ua: "ClaudeBot/1.0" },
+  { key: "CCBot", label: "CCBot", owner: "Common Crawl", role: "train", ua: "CCBot/2.0" },
+  { key: "Google-Extended", label: "Google-Extended", owner: "Google", role: "train", ua: "Google-Extended" },
+  { key: "PerplexityBot", label: "PerplexityBot", owner: "Perplexity", role: "answers", ua: "PerplexityBot/1.0" },
+  { key: "ChatGPT-User", label: "ChatGPT-User", owner: "OpenAI", role: "answers", ua: "ChatGPT-User/1.0" },
+  { key: "Claude-User", label: "Claude-User", owner: "Anthropic", role: "answers", ua: "Claude-User/1.0" },
 ];
 
 export async function lensFetchAsBot(targetUrl, env, signal, userAgent) {
@@ -3023,7 +3050,7 @@ export async function lensProbeBotView(targetUrl, env, profile) {
     const cap = await lensReadCapped(res, 2048);
     const challenge = res.headers.get("cf-mitigated") === "challenge" || /challenge-platform|<title>Just a moment/i.test(cap.text);
     return {
-      key: profile.key, label: profile.label, owner: profile.owner, userAgent: profile.ua,
+      key: profile.key, label: profile.label, owner: profile.owner, role: profile.role || "train", userAgent: profile.ua,
       status: res.status, contentType, sampleBytes: cap.text.length,
       blocked: challenge || [401, 403, 406, 429, 451].includes(res.status), challenge,
       // res.url is "" for a same-origin response built inside the worker (SELF_FETCH /
@@ -3032,7 +3059,7 @@ export async function lensProbeBotView(targetUrl, env, profile) {
       redirected: (res.url || targetUrl) !== targetUrl,
     };
   } catch (e) {
-    return { key: profile.key, label: profile.label, owner: profile.owner, userAgent: profile.ua, status: null, contentType: "", sampleBytes: 0, blocked: false, challenge: false, error: (e && e.message) || String(e) };
+    return { key: profile.key, label: profile.label, owner: profile.owner, role: profile.role || "train", userAgent: profile.ua, status: null, contentType: "", sampleBytes: 0, blocked: false, challenge: false, error: (e && e.message) || String(e) };
   } finally { clearTimeout(to); }
 }
 
@@ -3730,15 +3757,28 @@ export function lensFieldEvidence({ status, bodyUnreadable, anatomy, agent, botV
       : "the identified fetch did not answer",
   );
 
-  const views = Array.isArray(botViews) ? botViews : [];
+  const allViews = Array.isArray(botViews) ? botViews : [];
+  // Controls (Chrome, curl) exist to prove the instrument got in at all. They are
+  // not bot identities, so scoring them here would let a site that serves browsers
+  // and refuses every crawler score as though two crawlers had succeeded.
+  const views = allViews.filter((bot) => bot && bot.role !== "control");
+  const controls = allViews.filter((bot) => bot && bot.role === "control");
   const answered = views.filter((bot) => Number.isFinite(bot && bot.status));
   const successful = answered.filter((bot) => bot.status >= 200 && bot.status < 400 && !bot.blocked && !bot.challenge);
-  const fullSample = views.length === LENS_BOT_VIEWS.length;
+  const scoredTotal = LENS_BOT_VIEWS.filter((p) => p.role !== "control").length;
+  const fullSample = views.length === scoredTotal;
+  // If no control got a readable response, a crawler 403 is not evidence about
+  // crawler policy: nothing this instrument sent got through. Report unknown.
+  const controlsPassed = controls.length === 0 || controls.some(
+    (bot) => Number.isFinite(bot.status) && bot.status >= 200 && bot.status < 400 && !bot.blocked && !bot.challenge);
   add(
-    "sampledBots", "sampled bot retrieval", fullSample ? Math.round((successful.length / views.length) * 100) : null,
-    fullSample
-      ? `${successful.length} of ${views.length} named bot identities received an unblocked response${answered.length < views.length ? `; ${views.length - answered.length} did not answer` : ""}`
-      : `${views.length} of ${LENS_BOT_VIEWS.length} bot samples ran; this component stays unknown`,
+    "sampledBots", "sampled bot retrieval",
+    fullSample && controlsPassed ? Math.round((successful.length / views.length) * 100) : null,
+    !fullSample
+      ? `${views.length} of ${scoredTotal} bot samples ran; this component stays unknown`
+      : !controlsPassed
+        ? "no control identity got a readable response, so the crawler samples cannot be read as user-agent policy"
+        : `${successful.length} of ${views.length} named bot identities received an unblocked response${answered.length < views.length ? `; ${views.length - answered.length} did not answer` : ""}`,
   );
 
   const wordCount = anatomy && Number.isFinite(anatomy.wordCount) ? anatomy.wordCount : null;

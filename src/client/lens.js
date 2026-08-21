@@ -1336,11 +1336,23 @@
     }).join("") + '</div>';
 
     var bots = r.botViews || [];
-    var botHtml = bots.length ? '<table class="lx-bot-matrix"><tr><th>bot identity</th><th>robots policy</th><th>sampled GET</th><th>what this enables</th></tr>' + bots.map(function (bot) {
-      var policy = readinessPolicy(bot);
+    // A control got in, so a crawler refusal on this origin is about the NAME.
+    // With every control refused, the instrument never got through and no row
+    // here is evidence about user-agent policy.
+    var controlIn = bots.some(function (b) {
+      return b.role === "control" && b.status >= 200 && b.status < 400 && !b.blocked && !b.challenge;
+    });
+    var anyControl = bots.some(function (b) { return b.role === "control"; });
+    var botHtml = bots.length ? (anyControl && !controlIn ? '<div class="lx-bot-caveat">No control identity got a readable response, so every row below reports this origin refusing <em>us</em> rather than refusing a crawler by name. Read them as unmeasured.</div>' : "") + '<table class="lx-bot-matrix"><tr><th>identity</th><th>robots policy</th><th>sampled GET</th><th>what this enables</th></tr>' + bots.map(function (bot) {
+      var isControl = bot.role === "control";
+      // robots.txt governs crawlers. Grading a browser against it invents a
+      // verdict, so a control shows the dash it has earned.
+      var policy = isControl ? null : readinessPolicy(bot);
       var actual = readinessBotState(bot);
-      var implication = bot.blocked ? "This identity may not retrieve the route." : policy && policy.verdict === "block" ? "Robots asks it not to read; the sampled response is not enforcement." : bot.status >= 200 && bot.status < 400 ? "It can retrieve this response; parsing and action are separate." : "Access is uncertain from this sample.";
-      return '<tr><td class="ua"><b>' + esc(bot.label) + '</b><br><span class="who">' + esc(bot.owner) + '</span></td><td>' + badge(policy ? policy.verdict : "not scored", policy && policy.verdict === "allow" ? "ok" : "warn") + '</td><td>' + badge(actual.text, actual.kind) + '</td><td class="rule">' + esc(implication) + '</td></tr>';
+      var implication = isControl
+        ? (bot.blocked ? "Control refused. This origin turns away more than crawlers." : "Control admitted. A refusal below is about the name it was given.")
+        : bot.blocked ? "This identity may not retrieve the route." : policy && policy.verdict === "block" ? "Robots asks it not to read; the sampled response is not enforcement." : bot.status >= 200 && bot.status < 400 ? "It can retrieve this response; parsing and action are separate." : "Access is uncertain from this sample.";
+      return '<tr' + (isControl ? ' class="control"' : "") + '><td class="ua"><b>' + esc(bot.label) + '</b>' + (isControl ? '<span class="tag">control</span>' : "") + '<br><span class="who">' + esc(bot.owner) + '</span></td><td>' + (isControl ? '<span class="na">n/a</span>' : badge(policy ? policy.verdict : "not scored", policy && policy.verdict === "allow" ? "ok" : "warn")) + '</td><td>' + badge(actual.text, actual.kind) + '</td><td class="rule">' + esc(implication) + '</td></tr>';
     }).join("") + '</table>' : '<div class="lx-none">Bot identity samples were unavailable.</div>';
 
     var gaps = [];
@@ -1361,7 +1373,7 @@
     if (projection) localMirror += '<div class="lx-projection"><b>Local standards projection:</b> ' + esc(projection.score + "/100 if you add " + projection.labels.join(", ") + ".") + ' <span>illustrative; the origin has not changed.</span></div>';
     return score + section("Local standards mirror", null, "The detailed checklist mirrors Cloudflare's public rubric for inspection and fixes. It is not counted again in the composite.", localMirror) +
       section("The access gap", { text: "human vs bot" }, "A browser can render a page even when an agent cannot establish what it may read or do.", gapHtml) +
-      section("Bot views", { text: bots.length + " sampled" }, "Six representative, read-only GETs show observed response behavior. Robots policy and enforcement are deliberately separate.", botHtml) +
+      section("Bot views", { text: bots.length + " sampled" }, "Read-only GETs, one per identity, reporting what each one is served. The control rows are a browser and curl: a crawler 403 is not user-agent policy until a control proves the door opens at all. Robots policy and enforcement stay deliberately separate.", botHtml) +
       section("Checks and fixes", null, "Every failed check has a concrete next move. Copy the complete implementation brief into your coding agent.", '<button class="lx-copy-all" type="button">Copy all fixes</button>' + next + checkHtml);
   }
 

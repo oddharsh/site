@@ -499,18 +499,46 @@ test("Lens parses only Cloudflare's normalized readiness level from an MCP SSE a
 });
 
 test("Lens field evidence scores observed access without borrowing the standards rubric", () => {
-  const botViews = Array.from({ length: 6 }, (_, i) => ({ status: i === 5 ? 403 : 200, blocked: i === 5, challenge: false }));
+  // Eight SCORED crawler identities, two of them refused, plus the two controls.
+  // The controls must not move this number: they answer whether the instrument
+  // got in, and a browser is not a bot identity that retrieved anything.
+  const crawlers = Array.from({ length: 8 }, (_, i) => ({ status: i < 2 ? 403 : 200, blocked: i < 2, challenge: false }));
+  const controls = [
+    { role: "control", status: 200, blocked: false, challenge: false },
+    { role: "control", status: 999, blocked: true, challenge: false },
+  ];
   const field = lensFieldEvidence({
     status: 200,
     anatomy: { wordCount: 300 },
     agent: { strategy: { action: [], readable: ["markdown negotiation"], unknowns: [] } },
-    botViews,
+    botViews: [...controls, ...crawlers],
   });
-  assert.deepEqual(field.components.map((component) => component.score), [100, 83, 100, 60]);
-  assert.equal(field.overall, 86);
+  assert.deepEqual(field.components.map((component) => component.score), [100, 75, 100, 60]);
+  assert.equal(field.overall, 84);
 
-  const partial = lensFieldEvidence({ status: 200, anatomy: { wordCount: 300 }, agent: null, botViews: botViews.slice(0, 5) });
+  const partial = lensFieldEvidence({ status: 200, anatomy: { wordCount: 300 }, agent: null, botViews: [...controls, ...crawlers.slice(0, 5)] });
   assert.equal(partial.overall, null, "missing evidence must leave the score unfinished, not reweight it");
+});
+
+test("Lens refuses to read crawler refusals as policy when no control got in", () => {
+  // Every crawler 403s, which reads as a total AI block. It is only that if
+  // something else got through: medium.com and quora.com answer 403 to Chrome
+  // too, and grading them would report our own exclusion as their policy.
+  const crawlers = Array.from({ length: 8 }, () => ({ status: 403, blocked: true, challenge: false }));
+  const shut = lensFieldEvidence({
+    status: 200, anatomy: { wordCount: 300 }, agent: null,
+    botViews: [{ role: "control", status: 403, blocked: true }, { role: "control", status: 403, blocked: true }, ...crawlers],
+  });
+  const shutBots = shut.components.find((c) => c.key === "sampledBots");
+  assert.equal(shutBots.score, null, "with every control refused, crawler rows are not user-agent policy");
+  assert.match(shutBots.detail, /no control identity/);
+
+  // One control in, and the identical crawler rows become a real 0.
+  const open = lensFieldEvidence({
+    status: 200, anatomy: { wordCount: 300 }, agent: null,
+    botViews: [{ role: "control", status: 200, blocked: false }, { role: "control", status: 403, blocked: true }, ...crawlers],
+  });
+  assert.equal(open.components.find((c) => c.key === "sampledBots").score, 0, "a control got in, so the refusals are about the name");
 });
 
 test("Lens proxies Cloudflare's public scanner but stores only the normalized score", async () => {
