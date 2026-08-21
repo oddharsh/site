@@ -60,4 +60,5 @@ const next = injected.replace(verRe, `$1${version}$2`);
 writeFileSync(PASSAGES_FILE, next);
 console.log(`build-corpus: injected ${total} passage(s) from ${files.length} concept file(s): ${files.map((f) => basename(f, ".json")).join(", ") || "(none)"}`);
 console.log(`build-corpus: corpus version -> ${version}`);
-console.log("  next: redeploy lwe-ask (wrangler deploy) + POST /lwe/ask/reindex to embed the new passages");
+console.log("  next: cd lwe-ask && bun run deploy, then embed the new passages with");
+console.log('        curl -X POST https://aadhar.sh/lwe/ask/reindex -H "x-reindex-secret: $REINDEX_SECRET"');

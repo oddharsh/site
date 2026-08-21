@@ -252,7 +252,10 @@ async function resolveWithFallback(name, type) {
 
 // ----------------------------------------------------------- tier: tree ----
 
-async function checkTree(infra, wrangler, lwe) {
+const AUX_CONFIGS = ["cf-garage/wrangler.toml", "lwe-ask/wrangler.toml", "lens-reader/wrangler.toml"];
+
+async function checkTree(infra, wrangler, aux) {
+  const lwe = aux.get("lwe-ask/wrangler.toml");
   // Binding names in infra.json must exist in the config that owns them. This
   // is the join that lets infra.json stay ID-free: wrangler.jsonc remains the
   // single source for IDs, and this stops the two describing different worlds.
@@ -330,8 +333,13 @@ async function checkTree(infra, wrangler, lwe) {
         ["wrangler.dev.jsonc account_id", devWrangler.account_id, "dev:remote and routes:check:remote reach production bindings through this config"],
         ["wrangler.dev.jsonc vars.CF_ACCOUNT_ID", devWrangler.vars?.CF_ACCOUNT_ID, "/ledger reads this account's Analytics Engine through it"],
       ] : []),
+      ...AUX_CONFIGS.map((path) => [
+        `${path} account_id`,
+        (aux.get(path).match(/^\s*account_id\s*=\s*"([^"]+)"/m) || [])[1],
+        "this Worker deploys from its own directory, so wrangler resolves the account from this file and never sees wrangler.jsonc",
+      ]),
     ];
-    // infra.json names the same three, so a copy added there without a check
+    // infra.json names the same six, so a copy added there without a check
     // here (or the reverse) is itself drift.
     const declared = infra.account?.must_agree || [];
     const named = sites.map(([where]) => where);
@@ -348,8 +356,8 @@ async function checkTree(infra, wrangler, lwe) {
         agreed++;
       }
     }
-    if (agreed === sites.length && sites.length === 3) {
-      pass(`account ${declaredAccount} agrees across all 4 declarations (account_id + vars.CF_ACCOUNT_ID, both configs)`);
+    if (agreed === sites.length && sites.length === 6) {
+      pass(`account ${declaredAccount} agrees across all 7 declarations (account_id + vars.CF_ACCOUNT_ID on both site configs, account_id on all 3 auxiliary Workers)`);
     }
   }
 
@@ -1254,9 +1262,11 @@ async function checkAgentMarkdown() {
 
 const infra = JSON.parse(await readFile(join(ROOT, "config/infra.json"), "utf8"));
 const wrangler = await readJsonc("wrangler.jsonc");
-const lweConfig = await readFile(join(ROOT, "lwe-ask/wrangler.toml"), "utf8");
+const auxConfigs = new Map(
+  await Promise.all(AUX_CONFIGS.map(async (path) => [path, await readFile(join(ROOT, path), "utf8")])),
+);
 
-await checkTree(infra, wrangler, lweConfig);
+await checkTree(infra, wrangler, auxConfigs);
 
 if (OFFLINE) {
   warn("--offline: skipped the DNS and API tiers");

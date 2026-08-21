@@ -3,6 +3,14 @@ main = "src/index.js"
 compatibility_date = "2026-07-02"
 compatibility_flags = ["nodejs_compat"]
 
+# Pinned because these deploy from their OWN directory, so wrangler resolves the
+# account from this file rather than from the root wrangler.jsonc. It auto-selects
+# only while the login sees exactly one account, and a second appeared on 2026-08-07.
+# Until this line existed the answer came from ~/.wrangler/cache/wrangler-account.json,
+# which an interactive prompt writes, so a fresh clone or a cleared cache broke the
+# deploy. Must equal wrangler.jsonc's account_id; check-infra.mjs fails on drift.
+account_id = "1c99acdb6141579023fb97d24261ea58"
+
 # Deploy-only. Minification measured 2026-08-16: 148.92 -> 113.09 KiB gzip.
 # The aligned parser dependency graph measured 80.56 KiB gzip on 2026-08-20.
 # Source maps preserve original stack locations in Workers Logs; local Wrangler
