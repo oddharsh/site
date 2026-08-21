@@ -125,12 +125,12 @@ test("a budget-limited roster walk stops on the budget and hands back its cursor
   ];
   const seenCursors = [];
   const real = globalThis.fetch;
-  globalThis.fetch = async (url) => {
+  globalThis.fetch = /** @type {any} */ (async (/** @type {string} */ url) => {
     const cursor = new URL(url).searchParams.get("pagination_cursor");
     seenCursors.push(cursor);
     const idx = cursor === null ? 0 : Number(String(cursor).slice(1));
     return { ok: true, json: async () => pages[idx] };
-  };
+  });
   try {
     const budget = fetchBudget(2);
     const first = await fetchEventGuests("evt-x", null, "cookie=1", { budget });
@@ -152,7 +152,7 @@ test("a budget-limited roster walk stops on the budget and hands back its cursor
 
 test("an unbudgeted roster walk still finishes, so the manual path is unchanged", async () => {
   const real = globalThis.fetch;
-  globalThis.fetch = async () => ({ ok: true, json: async () => ({ entries: [{ api_id: "g1", user: {} }], has_more: false, next_cursor: null }) });
+  globalThis.fetch = /** @type {any} */ (async () => ({ ok: true, json: async () => ({ entries: [{ api_id: "g1", user: {} }], has_more: false, next_cursor: null }) }));
   try {
     const out = await fetchEventGuests("evt-x", null, "cookie=1");
     assert.equal(out.done, true);
