@@ -34,8 +34,9 @@
       "same reason the deploy config does: dev:remote and routes:check:remote",
       "reach production bindings through wrangler.dev.jsonc.",
       "",
-      "The id ships FOUR times, and checkTree reads all four. Each config",
-      "carries it as the deploy-time `account_id` pin and again as the runtime",
+      "The id ships SEVEN times, and checkTree reads all seven. Each of the",
+      "two site configs carries it as the deploy-time `account_id` pin and",
+      "again as the runtime",
       "var CF_ACCOUNT_ID, which /ledger uses to query this account's own",
       "Analytics Engine. The var predates the pin, and it is the reason there",
       "is no ambiguity about WHICH account is right: the deployed Worker has",
@@ -44,6 +45,18 @@
       "cannot be removed — it can only be checked, which is what this block is",
       "for. An account_id and a CF_ACCOUNT_ID that disagree would deploy to one",
       "account and read analytics from another, with each half looking fine.",
+      "",
+      "The other three are the AUXILIARY Workers, pinned 2026-08-21 after a",
+      "non-interactive deploy of lwe-ask failed on exactly the error this block",
+      "was written about. cf-garage, lwe-ask and lens-reader each deploy from",
+      "their own directory with -c wrangler.toml, so wrangler resolves the",
+      "account from THAT file and never reads wrangler.jsonc at all. Until they",
+      "were pinned the answer came from ~/.wrangler/cache/wrangler-account.json,",
+      "which only an interactive prompt writes, so whether a deploy worked",
+      "depended on machine-local cache state rather than on anything in the",
+      "repository. Measured the same day: with that cache populated cf-garage",
+      "and lwe-ask resolved fine while lens-reader still failed, which is the",
+      "shape of a guarantee nobody has.",
       "",
       "NO ID HERE, per this file's own rule: resource ids live in wrangler.jsonc",
       "alone and the checker reads them from there, so the two can never drift",
@@ -65,7 +78,10 @@
     "must_agree": [
       "wrangler.jsonc vars.CF_ACCOUNT_ID",
       "wrangler.dev.jsonc account_id",
-      "wrangler.dev.jsonc vars.CF_ACCOUNT_ID"
+      "wrangler.dev.jsonc vars.CF_ACCOUNT_ID",
+      "cf-garage/wrangler.toml account_id",
+      "lwe-ask/wrangler.toml account_id",
+      "lens-reader/wrangler.toml account_id"
     ]
   },
   "zone": {
