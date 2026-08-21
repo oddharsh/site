@@ -35,5 +35,6 @@
     // HTMLRewriter among them.
     "types": ["bun"]
   },
-  "include": ["../tools/**/*.mjs"]
+  // The .d.ts declares Event Timing members lib.dom still lacks; see its header.
+  "include": ["../tools/**/*.mjs", "../tools/lib/browser-lab.d.ts"]
 }

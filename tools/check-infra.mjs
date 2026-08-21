@@ -224,6 +224,20 @@ async function query(resolver, name, type) {
 
 // Try each resolver in turn. A resolver that errors is an availability problem,
 // not a drift signal, so it degrades to an advisory rather than a failure.
+//
+// The two arms are DECLARED, and the `?: undefined` members on each are what
+// make them narrow. This returns either an answer or an unreachable report, and
+// callers separate them with `if (got.unreachable) … continue;`. Left to
+// inference that guard narrows nothing, because neither property exists on the
+// other arm, and every later `got.answers` reads as an error: 25 of them, which
+// was every finding in this file.
+/**
+ * @typedef {{ answers: string[], authenticated: boolean, resolver: string, unreachable?: undefined }} DnsResolved
+ * @typedef {{ unreachable: string[], answers?: undefined, authenticated?: undefined, resolver?: undefined }} DnsUnreachable
+ * @param {string} name
+ * @param {string} type
+ * @returns {Promise<DnsResolved | DnsUnreachable>}
+ */
 async function resolveWithFallback(name, type) {
   const errors = [];
   for (const resolver of RESOLVERS) {

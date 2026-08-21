@@ -11,6 +11,10 @@
 // Each entry is [label, regex]. The regexes tolerate the minifier's attribute
 // unquoting (`type=application/ld+json` as well as the quoted form), because the
 // point is to prove the STRUCTURE survived, not that its bytes went untouched.
+// Typed as TUPLES. Left to inference the elements widen to (string | RegExp)[],
+// and `marker.test(min)` in build.mjs stops type-checking for a reason that has
+// nothing to do with the regex.
+/** @type {Array<[label: string, marker: RegExp]>} */
 export const HTML_MARKERS = [
   ["JSON-LD", /<script\b[^>]*\btype=(?:"application\/ld\+json"|application\/ld\+json)(?:\s|>)/i],
   ["photos", /<section\b[^>]*\bclass=(?:"[^"]*\bphotos\b"|'[^']*\bphotos\b'|photos)(?:\s|>)/i],
@@ -29,6 +33,7 @@ export const HTML_MARKERS = [
 // be edited every time a family gains a member. Asking "did minification LOSE this"
 // is the claim the tripwire actually wants, it holds for every page without a
 // roster, and a new page family inherits it with no edit here.
+/** @type {Array<[label: string, marker: RegExp]>} */
 export const PAGE_MARKERS = [
   ["understanding-check data", /<script\b[^>]*\bid=(?:"luq-data"|luq-data)(?:\s|>)/i],
   ["understanding-check mount", /<(?:section|div)\b[^>]*\bid=(?:"luq"|luq)(?:\s|>)/i],

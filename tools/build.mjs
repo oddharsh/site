@@ -1080,6 +1080,10 @@ let twinFiles;
 // Set by 1g2: dresses one page with the Explorer chrome + its Markdown link.
 // The readable .src.html twins at step 7b call it too, so a twin never drifts
 // from the page it claims to be the source of.
+// The placeholder throws, so inference reads it as `() => never` and every later
+// call is "Expected 0 arguments, but got 2". The annotation states the shape 1g2
+// actually installs, which is also what the sole caller passes.
+/** @type {(html: string, rel: string) => { html: string, addedLink: boolean, addedChrome: boolean }} */
 let dressPage = () => { throw new Error("explorer: dressPage used before 1g2 defined it"); };
 {
   const { buildTwins, checkTwinFacts } = await import("./gen-md-twins.mjs");
