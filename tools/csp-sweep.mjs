@@ -54,7 +54,10 @@ for (const path of paths) {
   const errors = [];
   await page.addInitScript(() => {
     globalThis.__csp = [];
-    addEventListener("securitypolicyviolation", (e) => {
+    // The event IS a SecurityPolicyViolationEvent; lib.dom declares it and the
+    // listener overload does not narrow for a bare addEventListener call, so
+    // every field below reads as missing on the base Event.
+    addEventListener("securitypolicyviolation", (/** @type {SecurityPolicyViolationEvent} */ e) => {
       globalThis.__csp.push({
         directive: e.effectiveDirective,
         blocked: e.blockedURI,

@@ -135,7 +135,12 @@ export const DATA_TOOLS = DATA_TOOL_DEFINITIONS.map((tool) => mcpTool(tool));
 
 export const DATA_TOOL_NAMES = new Set(DATA_TOOLS.map((t) => t.name));
 
-export async function callDataTool(name, args, request, env, ctx) {
+// The result is Record<string, any> for the same reason mcp.ts's callTool is: one
+// function dispatches every DATA_TOOLS entry, each returns its own payload
+// shape, and the sentinel fields (_error among them) ride alongside. Inference
+// picks one arm of that union and every caller reading another arm's field looks
+// like a typo.
+export async function callDataTool(name, args, request, env, ctx): Promise<Record<string, any>> {
   args = asRecord(args) || {};
   if (name === "ask") {
     // Validated through the ROUTE's parser, with a synthetic URL standing in for

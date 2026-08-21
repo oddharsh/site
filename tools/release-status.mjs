@@ -76,7 +76,7 @@ let newest = null, serving = [];
 try {
   const list = await runJson(["versions", "list", "--json"]);
   newest = [...list].sort((a, b) =>
-    new Date(b.metadata?.created_on || 0) - new Date(a.metadata?.created_on || 0))[0];
+    new Date(b.metadata?.created_on || 0).getTime() - new Date(a.metadata?.created_on || 0).getTime())[0];
   const dep = await runJson(["deployments", "status", "--json"]);
   serving = (dep?.versions || []).map((v) => ({ id: v.version_id || v.id, pct: Number(v.percentage ?? 0) }));
   line("newest ver", newest ? newest.id.slice(0, 8) : dim("none"),

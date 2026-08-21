@@ -226,7 +226,7 @@
       // through the parse layer would assert that the parse layer works, not
       // that the surface under test returns the right type. Same scoping as the
       // no-floating-promises entry below, and for a related reason.
-      "files": ["tools/contract-tests.mjs", "**/test/**", "**/*.test.*"],
+      "files": ["**/test/**", "**/*.test.*", "tools/contract-shared.mjs"],
       "rules": { "anti-slop/no-runtime-typeof": "off" }
     },
     {
@@ -243,7 +243,7 @@
       // Scoped to test files by name so the rule keeps its teeth everywhere a
       // Worker actually runs, which is the only place a floating promise gets
       // cancelled at request teardown.
-      "files": ["tools/contract-tests.mjs", "**/test/**", "**/*.test.*"],
+      "files": ["**/test/**", "**/*.test.*", "tools/contract-shared.mjs"],
       "rules": { "typescript/no-floating-promises": "off" }
     },
     {
