@@ -4,6 +4,7 @@ import {
   assert,
   terminalGet,
   test,
+  testGlobals,
 } from "./contract-shared.mjs";
 
 // ── /agent-ready — the scorecard that grades its author too ──────────────
@@ -51,14 +52,64 @@ test("the scorecard grades other origins, and only bills its own", async () => {
   // A scorecard that can only flatter its author is marketing. And the bill is
   // meaningless for an origin whose source tree we do not have, so it is shown
   // for the self-audit alone.
-  const self = await (await terminalGet("/agent-ready?plain=1")).text();
-  assert.match(self, /what this cost to build/);
-  assert.match(self, /aadhar\.sh/);
+  //
+  // The doors are stubbed because this test never read them. Measured
+  // 2026-08-21 with a fetch counter, the three scans below made 34 real
+  // requests: 26 door probes and 4 DNS-AID lookups against production
+  // aadhar.sh for the self-audit, plus 4 more DNS lookups for example.com.
+  // Every assertion was about the frame's SHAPE, so all 34 bought no coverage.
+  //
+  // The risk they carried was the TIMEOUT, not a wrong answer, and the obvious
+  // guess is wrong here. Each probe is individually caught, so a dead network
+  // degrades every door to `unreadable` and the frame still renders: running
+  // all 47 files with `fetch` throwing gives 338 pass on this commit AND on the
+  // one before it. What a slow production costs is wall clock against bun's
+  // 5000ms per-test default, which is a hard fail rather than a slow pass.
+  // Timed cold on a healthy workstation, this body spent 3328ms of that 5000 on
+  // connection setup, then 85ms per repeat once the connection was warm. So the
+  // whole margin was TLS and DNS to a host CI has no reason to have talked to.
+  //
+  // Worth knowing why the foreign scan cost only DNS: an external probe is
+  // signed, the AadharshBot key is a secret, and secrets are unavailable under
+  // node, so every foreign HTTP door already failed before it reached a fetch.
+  // That half was never testing the network to begin with.
+  const realFetch = globalThis.fetch;
+  const seen = [];
+  try {
+    // llms.txt answers and nothing else does, so the frame has to render an
+    // open door beside four shut ones. A stub that answered everything the same
+    // way would let a scorecard that ignores its input pass.
+    testGlobals.fetch = async (input) => {
+      const url = String(typeof input === "string" ? input : input?.url ?? input);
+      seen.push(url);
+      if (new URL(url).pathname === "/llms.txt") {
+        return new Response("# a readable map\n", { status: 200, headers: { "content-type": "text/plain" } });
+      }
+      return new Response("not found", { status: 404 });
+    };
 
-  const foreign = await (await terminalGet("/agent-ready?plain=1&url=https%3A%2F%2Fexample.com")).text();
-  assert.ok(!/what this cost to build/.test(foreign), "the bill must not appear for a foreign origin");
-  assert.match(foreign, /doors a machine can walk through/);
+    const self = await (await terminalGet("/agent-ready?plain=1")).text();
+    assert.match(self, /what this cost to build/);
+    assert.match(self, /aadhar\.sh/);
+    // The scan read what it was served rather than defaulting: one door open,
+    // and a 404 reported as SHUT rather than as unreadable, which is the
+    // distinction the whole surface exists to keep.
+    assert.match(self, /open\s+llms\.txt/, "the open door the stub served is not rendered as open");
+    assert.match(self, /shut\s+agent card/, "a 404 is a shut door, never an unreadable one");
 
-  const refused = await (await terminalGet("/agent-ready?plain=1&url=http%3A%2F%2F169.254.169.254%2F")).text();
-  assert.match(refused, /refused/);
+    const foreign = await (await terminalGet("/agent-ready?plain=1&url=https%3A%2F%2Fexample.com")).text();
+    assert.ok(!/what this cost to build/.test(foreign), "the bill must not appear for a foreign origin");
+    assert.match(foreign, /doors a machine can walk through/);
+
+    // A refused target must be refused BEFORE anything leaves, which no
+    // assertion covered while the suite was making real requests anyway.
+    // 169.254.169.254 is the cloud metadata address, so a probe that escaped
+    // here would be the SSRF this guard exists to stop.
+    const before = seen.length;
+    const refused = await (await terminalGet("/agent-ready?plain=1&url=http%3A%2F%2F169.254.169.254%2F")).text();
+    assert.match(refused, /refused/);
+    assert.equal(seen.length, before, "a refused target must not reach a fetch at all");
+  } finally {
+    testGlobals.fetch = realFetch;
+  }
 });

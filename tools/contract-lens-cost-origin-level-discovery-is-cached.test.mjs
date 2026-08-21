@@ -29,6 +29,14 @@ import {
 // is the origin-keyed CACHE — and the DoH answer is discarded either way.
 const doh = () => new Response(JSON.stringify({ Status: 3 }), { headers: { "content-type": "application/dns-json" } });
 
+// COUNTING those calls is what turns the stub above into an assertion. The
+// first test is titled for a warm origin not being RE-PROBED, and nothing
+// checked it: `cached: true` is a flag the cache path sets about itself, so a
+// version that returned the flag AND fanned out anyway passed here. Once fetch
+// is a double, the count is free and it is the claim the title makes.
+let dohCalls = 0;
+const countedDoh = () => { dohCalls++; return doh(); };
+
 test("a second scan of the same origin reuses discovery instead of re-probing", async () => {
   // This is where lens's cost lived: a production trace put lens.discovery at
   // 656ms of a 685ms scan, re-asking one host the same 26 questions it had
@@ -38,7 +46,8 @@ test("a second scan of the same origin reuses discovery instead of re-probing", 
   const store = new Map();
   const realCaches = globalThis.caches;
   const realFetch = globalThis.fetch;
-  testGlobals.fetch = doh;
+  dohCalls = 0;
+  testGlobals.fetch = countedDoh;
   testGlobals.caches = {
     default: {
       async match(req) { const hit = store.get(req.url); return hit ? new Response(hit) : undefined; },
@@ -49,9 +58,12 @@ test("a second scan of the same origin reuses discovery instead of re-probing", 
     const first = await originDiscovery("https://example.com", "example.com", {});
     assert.equal(first.cached, false, "a cold origin must actually probe");
     assert.equal(store.size, 1, "the result must be cached for the next scan");
+    assert.ok(dohCalls > 0, "a cold origin that made no request did not probe at all");
 
+    const cold = dohCalls;
     const second = await originDiscovery("https://example.com", "example.com", {});
     assert.equal(second.cached, true, "a warm origin must not re-probe");
+    assert.equal(dohCalls, cold, "a warm origin re-probed the network behind the cached flag");
     // Same answers, minus the flag — a cache that returned different data would
     // make two surfaces on this site disagree about the same host.
     const { cached: _a, ...firstBody } = first;
@@ -62,10 +74,13 @@ test("a second scan of the same origin reuses discovery instead of re-probing", 
     const other = await originDiscovery("https://other.example", "other.example", {});
     assert.equal(other.cached, false);
     assert.equal(store.size, 2);
+    assert.ok(dohCalls > cold, "a different origin must actually be probed, not served a stale hit");
 
     // And `fresh` bypasses for a caller that needs the live answer.
+    const warm = dohCalls;
     const forced = await originDiscovery("https://example.com", "example.com", {}, { fresh: true });
     assert.equal(forced.cached, false);
+    assert.ok(dohCalls > warm, "`fresh` returned the cached body rather than bypassing the cache");
   } finally {
     testGlobals.fetch = realFetch;
     if (realCaches === undefined) delete globalThis.caches; else testGlobals.caches = realCaches;
