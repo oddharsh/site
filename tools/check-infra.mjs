@@ -1263,7 +1263,9 @@ async function checkAgentMarkdown() {
 const infra = JSON.parse(await readFile(join(ROOT, "config/infra.json"), "utf8"));
 const wrangler = await readJsonc("wrangler.jsonc");
 const auxConfigs = new Map(
-  await Promise.all(AUX_CONFIGS.map(async (path) => [path, await readFile(join(ROOT, path), "utf8")])),
+  await Promise.all(AUX_CONFIGS.map(
+    async (path) => /** @type {[string, string]} */ ([path, await readFile(join(ROOT, path), "utf8")]),
+  )),
 );
 
 await checkTree(infra, wrangler, auxConfigs);
