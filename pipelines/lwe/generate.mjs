@@ -27,7 +27,7 @@
 //     explicit "show me" is a demo cue. Those moments become {demo:{...}} slots, authored
 //     by hand. The pipeline flags them; a human builds the actual widget.
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 import { renderUnderstanding, validatePageSpec } from "../content/page-contract.mjs";
@@ -45,25 +45,36 @@ function chromeCss(c) {
   const soft = c.accentSoft || "#f6f1e6";
   const glyphFont = c.glyphFont || 'var(--font-caption)';
   const [g0, g1] = c.picGrad;
-  return `:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace;--accent:${c.accent};--accent-soft:${soft}}
-.title-bar{background:linear-gradient(180deg,oklch(70% .15 258),oklch(60% .20 261) 8%,oklch(51% .225 263) 18%,oklch(50% .225 263) 86%,oklch(58% .18 260));color:#fff;font-family:var(--font-caption);font-weight:bold;font-size:11pt;padding:4px 5px 4px 8px;display:flex;align-items:center;gap:6px;text-shadow:1px 1px #0f1089;user-select:none}
-.title-bar .icon{width:14px;height:14px;flex:0 0 14px;background:#fff;border:1px solid ${c.picBorder};position:relative}
-.title-bar .icon::before{content:"${c.glyph}";position:absolute;inset:0;display:grid;place-items:center;font-size:10px;color:var(--accent);font-weight:bold;text-shadow:none}
-.window>.content{flex:1 1 auto;min-height:0;overflow:auto;padding-right:28px}
-.msgr-head{display:flex;align-items:center;gap:9px;padding:8px 12px;background:linear-gradient(180deg,#fffdf6,#f6edd6);border-bottom:1px solid #e0cf9e}
-.msgr-head .ava{width:34px;height:34px;flex:0 0 34px;border-radius:4px;border:1px solid ${c.picBorder};background:linear-gradient(180deg,${g0},${g1});position:relative}
-.msgr-head .ava::before{content:"${c.glyph}";position:absolute;inset:0;display:grid;place-items:center;color:#fff;font-weight:bold;font-size:19px;font-family:${glyphFont}}
-.msgr-head .who b{font-family:var(--font-caption);font-size:11pt;color:${c.nameColor}}
-.disclosure b{color:${c.nameColor}}.disclosure a{color:#1a4fc4}
-.msg.bot .pic{background:linear-gradient(180deg,${g0},${g1});border-color:${c.picBorder}}
-.msg.bot .pic::before{content:"${c.glyph}";position:absolute;inset:0;display:grid;place-items:center;color:#fff;font-weight:bold;font-size:13px;font-family:${glyphFont}}
-.msg.bot .who b{color:${c.nameColor}}.msg .who time{color:#9aa3b2;font-family:var(--font-mono);font-size:8pt;margin-left:5px}
-.msg .bubble code{font-family:var(--font-mono);font-size:9.5pt;background:#f1ece0;padding:0 3px;border-radius:2px}
-.demo{grid-column:1/-1;border:1px solid var(--accent);border-radius:4px;background:var(--accent-soft);margin:2px 0;overflow:hidden;box-shadow:inset 0 1px 0 #fff}
-.demo>.bar{display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:8.5pt;color:${c.nameColor};background:linear-gradient(180deg,#f6edd6,#ecdfb8);border-bottom:1px solid var(--accent);font-weight:bold}.demo>.pad{padding:11px 12px 13px;background:#fff}
-.btn{font-family:var(--font-ui);font-size:9pt;padding:3px 9px;cursor:pointer;background:linear-gradient(to bottom,#fff,#e9edf5);border:1px solid #7d8aa3;border-radius:2px;box-shadow:inset 1px 1px 0 #fff}.btn:hover{border-color:var(--accent)}
-.scrollnote{text-align:center;font-size:8pt;color:#9aa3b2;padding:3px 0 9px}.compose{border-top:1px solid #e0cf9e;background:linear-gradient(180deg,#fffdf6,#f3ead0);padding:7px 10px}.compose .ta{flex:1;min-height:30px;border:1px solid #7d8aa3;background:#fff;box-shadow:inset 1px 1px 0 #c3cbdb;padding:4px 6px;font-family:var(--font-ui);font-size:9.5pt;color:#9aa3b2}
-@media(max-width:520px){body{padding:8px 4px 32px}.msgr-head .pets{display:none}}`;
+  // READABLE on purpose: src/pages is authored source and build.mjs minifies it
+  // into .build, so a minified template here only made the generated pages
+  // differ from every hand-authored one. Values track the rest of the section
+  // (10pt title bar, 12px content gutter, #66707d timestamps); the minified
+  // version this replaced was stale on all three and encoding.html was the only
+  // page still wearing them, because its spec is the one pinned byte-exact.
+  return `:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace; --accent:${c.accent}; --accent-soft:${soft}}
+.title-bar { background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%); color: #fff; font-family: var(--font-caption); font-weight: bold; font-size: 10pt; padding: 4px 5px 4px 8px; display: flex; align-items: center; gap: 6px; text-shadow: 1px 1px #0f1089; user-select: none; }
+.title-bar .icon { width: 14px; height: 14px; flex: 0 0 14px; background: #fff; border: 1px solid ${c.picBorder}; position: relative; }
+.title-bar .icon::before { content: "${c.glyph}"; position: absolute; inset: 0; display: grid; place-items: center; font-size: 10px; color: var(--accent); font-weight: bold; text-shadow: none; }
+.window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 12px; }
+.msgr-head { display: flex; align-items: center; gap: 9px; padding: 8px 12px; background: linear-gradient(180deg, #fffdf6, #f6edd6); border-bottom: 1px solid #e0cf9e; }
+.msgr-head .ava { width: 34px; height: 34px; flex: 0 0 34px; border-radius: 4px; border: 1px solid ${c.picBorder}; background: linear-gradient(180deg,${g0},${g1}); position: relative; }
+.msgr-head .ava::before { content: "${c.glyph}"; position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-weight: bold; font-size: 19px; font-family: ${glyphFont}; }
+.msgr-head .who b { font-family: var(--font-caption); font-size: 11pt; color: ${c.nameColor}; }
+.disclosure b { color: ${c.nameColor}; } .disclosure a { color: #1a4fc4; }
+.msg.bot .pic { background: linear-gradient(180deg,${g0},${g1}); border-color:${c.picBorder}; }
+.msg.bot .pic::before { content: "${c.glyph}"; position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-weight: bold; font-size: 13px; font-family: ${glyphFont}; }
+.msg.bot .who b { color: ${c.nameColor}; }
+.msg .who time { color:#66707d; font-family: var(--font-mono); font-size: 8pt; margin-left: 5px; }
+.msg .bubble code { font-family: var(--font-mono); font-size: 9.5pt; background: #f1ece0; padding: 0 3px; border-radius: 2px; }
+.demo { grid-column: 1 / -1; border: 1px solid var(--accent); border-radius: 4px; background: var(--accent-soft); margin: 2px 0; overflow: hidden; box-shadow: inset 0 1px 0 #fff; }
+.demo > .bar { display: flex; align-items: center; gap: 6px; padding: 4px 8px; font-size: 8.5pt; color: ${c.nameColor}; background: linear-gradient(180deg,#f6edd6,#ecdfb8); border-bottom: 1px solid var(--accent); font-weight: bold; }
+.demo > .pad { padding: 11px 12px 13px; background:#fff; }
+.btn { font-family: var(--font-ui); font-size: 9pt; padding: 3px 9px; cursor: pointer; background: linear-gradient(to bottom,#fff,#e9edf5); border: 1px solid #7d8aa3; border-radius: 2px; box-shadow: inset 1px 1px 0 #fff; }
+.btn:hover { border-color: var(--accent); }
+.scrollnote { text-align: center; font-size: 8pt; color:#66707d; padding: 3px 0 9px; }
+.compose { border-top: 1px solid #e0cf9e; background: linear-gradient(180deg,#fffdf6,#f3ead0); padding: 7px 10px; }
+.compose .ta { flex: 1; min-height: 30px; border: 1px solid #7d8aa3; background: #fff; box-shadow: inset 1px 1px 0 #c3cbdb; padding: 4px 6px; font-family: var(--font-ui); font-size: 9.5pt; color:#66707d; }
+@media (max-width: 520px){ body { padding: 8px 4px 32px; } .msgr-head .pets { display:none } }`;
 }
 
 // ---- message rendering ----
@@ -99,7 +110,7 @@ function pageHtml(spec) {
   const pets = spec.petsLine || "Learning&nbsp;With&nbsp;Errors";
   const favFill = c.accent.replaceAll("#", "%23");
   const favFont = c.glyphFont ? c.glyphFont.replace(/"/g, "'") : "Trebuchet MS,sans-serif";
-  const askScript = (spec.hasAsk ?? c.hasAsk) ? `<script src="/lwe/ask.js" defer></script>\n` : "";
+  const askScript = (spec.hasAsk ?? c.hasAsk) ? `\n<script src="/lwe/ask.js" defer></script>` : "";
   const demoProgram = demoSource(spec);
   const demoJs = demoProgram ? `<script>\n${demoProgram}\n</script>\n` : "";
   const understanding = renderUnderstanding(spec.understanding, "lwe");
@@ -108,11 +119,12 @@ function pageHtml(spec) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
 <title>aadhar.sh${c.path}</title>
 <meta name="description" content="${spec.description || ""}">
 <link rel="canonical" href="https://aadhar.sh${c.path}">
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='${favFill}'/><text x='16' y='23' font-size='20' font-family='${favFont}' fill='%23fff' text-anchor='middle'>${c.glyph}</text></svg>">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2032%2032'%3E%3Crect%20width='32'%20height='32'%20rx='7'%20fill='${favFill}'/%3E%3Ctext%20x='16'%20y='23'%20font-size='20'%20font-family='${favFont.replaceAll(" ", "%20")}'%20fill='%23fff'%20text-anchor='middle'%3E${c.glyph}%3C/text%3E%3C/svg%3E">
 <meta property="og:type" content="article">
 <meta property="og:title" content="aadhar.sh${c.path} · ${titleSuffix}">
 <meta property="og:url" content="https://aadhar.sh${c.path}">
@@ -120,12 +132,12 @@ function pageHtml(spec) {
 <meta property="og:image" content="https://aadhar.sh/og/${c.path.slice(1).replace(/\//g, "-")}.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="The aadhar.sh${c.path} interactive demo, screenshotted">
+<meta property="og:image:alt" content="aadhar.sh${c.path} · ${titleSuffix}, live demo screenshotted">
 <meta name="twitter:image" content="https://aadhar.sh/og/${c.path.slice(1).replace(/\//g, "-")}.png">
 
 <link rel="stylesheet" href="/lwe-base.css">
 <style>${chromeCss(c)}
-${spec.demoCss || ""}</style>
+${spec.demoCss ? spec.demoCss + "\n" : ""}</style>
 <link rel="stylesheet" href="/luna.css">
 </head>
 <body>
@@ -156,7 +168,7 @@ ${spec.messages.map((m) => renderMsg(m, c)).join("\n\n")}
   </div>
 </div>
 
-${demoJs}${askScript}${understanding}
+${demoJs}${understanding}${askScript}
 <script src="/nav.js" defer></script>
 <!-- axp:shell -->${DESKTOP_CHROME}<!-- /axp:shell -->
 </body>
@@ -221,7 +233,24 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   if (cmd === "page") {
     const spec = JSON.parse(readFileSync(join(HERE, "specs", `${arg}.json`), "utf8"));
     const out = join(HOLDING, "lwe", `${arg}.html`);
-    writeFileSync(out, pageHtml(spec));
+    const next = pageHtml(spec);
+    // REFUSE TO OVERWRITE A PAGE THAT HAS DRIFTED FROM ITS SPEC. Four of the
+    // five published pages carry work that exists only in the HTML — dac has a
+    // whole tube-distortion demo, ~15KB of it, that no spec field describes —
+    // and regenerating discards it silently, because the write succeeds and the
+    // page keeps rendering. check-page-contracts pins html === published only
+    // for a spec carrying a demoJsFile, which is encoding alone, so nothing
+    // else catches this. --force is the deliberate act, for when the spec is
+    // genuinely the newer of the two.
+    const prev = existsSync(out) ? readFileSync(out, "utf8") : null;
+    if (prev !== null && prev !== next && !process.argv.includes("--force")) {
+      const delta = prev.length - next.length;
+      console.error(`refusing to overwrite ${out}: it differs from its spec by ${delta > 0 ? "+" : ""}${delta} bytes.`);
+      console.error(`  the published page is what ships, so back-port it into specs/${arg}.json first.`);
+      console.error(`  re-run with --force only if specs/${arg}.json is the newer of the two.`);
+      process.exit(1);
+    }
+    writeFileSync(out, next);
     console.log(`wrote ${out}`);
   } else if (cmd === "wire") {
     console.log("wiring from concepts.json:");
