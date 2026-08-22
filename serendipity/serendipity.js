@@ -1315,7 +1315,7 @@ async function syncDescriptions(d, userKey, cookiesJson, limit) {
 // fills up to n (default 30, max 45) missing descriptions per call.
 async function handleSyncDescriptions(request, env, d) {
   const url = new URL(request.url);
-  if (!env.SYNC_SECRET || url.searchParams.get("key") !== env.SYNC_SECRET) {
+  if (!adminGated(request, env)) {
     return new Response("forbidden", { status: 403 });
   }
   const limit = Math.min(45, Math.max(1, parseInt(url.searchParams.get("n") || "30", 10) || 30));
@@ -1327,9 +1327,18 @@ async function handleSyncDescriptions(request, env, d) {
 }
 
 // secret-gated trigger: POST /serendipity/sync?key=SECRET[&event=<id>]
+// The three admin triggers shared this gate by copy. It now also reads the
+// secret from a HEADER, because the cron dispatches to /enrich over the wire and
+// a secret in a query string lands in request logs, where the query-string form
+// was the only option before.
+export function adminGated(request, env) {
+  const supplied = request.headers.get("x-sync-key") || new URL(request.url).searchParams.get("key");
+  return !!(env && env.SYNC_SECRET && supplied === env.SYNC_SECRET);
+}
+
 async function handleSync(request, env, d) {
   const url = new URL(request.url);
-  if (!env.SYNC_SECRET || url.searchParams.get("key") !== env.SYNC_SECRET) {
+  if (!adminGated(request, env)) {
     return new Response("forbidden", { status: 403 });
   }
   const sets = await d.prepare("SELECT user_key, cookies_json, label FROM user_cookies WHERE enabled = 1").all();
@@ -1384,6 +1393,46 @@ export function guestSweepBudget(setCount, cap = CRON_SUBREQUEST_CAP) {
   const perSet = SERENDIPITY_SYNC_LIMITS.futurePages + SERENDIPITY_SYNC_LIMITS.pastPages;
   return Math.max(0, cap - (setCount * perSet) - CRON_DESC_LIMIT - CRON_BUDGET_HEADROOM);
 }
+// Enrichment CANNOT ride this invocation. syncEvents plus the roster sweep
+// already budget the 50 subrequests, and one attendee costs up to 4 ops, so even
+// a batch of 6 would push the tick over and starve the roster -- which is the
+// half that matters more. A self-dispatch spends ONE subrequest here and runs
+// the batch in a FRESH invocation with its own ceiling. Same shape /lens uses to
+// self-scan, and it costs no cron trigger, which matters because Workers Free
+// caps an account at five and four are spent.
+//
+// The secret rides a header rather than the query string so it stays out of
+// request logs. Failure is reported and never thrown: enrichment is the
+// lower-priority half and must not redden a tick whose sweep succeeded.
+/**
+ * Declaring what this actually READS rather than `typeof fetch`: the full type
+ * drags in `preconnect`, which no caller here implements and no test should
+ * have to stub. The narrow shape is also the honest contract.
+ * @param {any} env
+ * @param {(url: string, init?: any) => Promise<{ ok: boolean, status?: number, json: () => Promise<any> }>} [fetchImpl]
+ */
+export async function dispatchEnrich(env, fetchImpl = fetch) {
+  if (!env || !env.SYNC_SECRET) return { skipped: "no SYNC_SECRET" };
+  if (!env.EXA_API_KEY) return { skipped: "EXA_API_KEY not set" };
+  const base = asText(env.HOST_PUBLIC_URL) ?? "https://aadhar.sh";
+  const limit = enrichBatchLimit(env.ENRICH_CRON_BATCH);
+  try {
+    const res = await fetchImpl(`${base}/serendipity/enrich?upcoming=1&limit=${limit}`, {
+      method: "POST", headers: { "x-sync-key": env.SYNC_SECRET },
+    });
+    if (!res.ok) return { error: `enrich ${res.status}` };
+    const body = await res.json();
+    const rows = Array.isArray(body && body.enriched) ? body.enriched : [];
+    // Count outcomes rather than echo profiles: this goes on the cron log line,
+    // and "0 attempted" for several ticks running is the number worth seeing.
+    const by = {};
+    for (const r of rows) by[r.outcome || "unknown"] = (by[r.outcome || "unknown"] || 0) + 1;
+    return { attempted: rows.length, outcomes: by };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 export async function cronSerendipity(env) {
   const d = db(env);
   const sets = await d.prepare("SELECT user_key, cookies_json, label FROM user_cookies WHERE enabled = 1").all();
@@ -1428,6 +1477,8 @@ export async function cronSerendipity(env) {
     else out.guests.push({ event: ev.id, ...r });
   }
   out.descriptions = await syncDescriptions(d, fresh[0].user_key, fresh[0].cookies_json, CRON_DESC_LIMIT);
+  // last, and in its own invocation: see dispatchEnrich.
+  out.enrich = await dispatchEnrich(env);
   // fetches + budget_exhausted are the two numbers that were missing while the
   // sweep was silently overspending. An exhausted budget is normal on a tick
   // holding a large roster; it is a problem only when it never clears.
@@ -1598,9 +1649,20 @@ const ENRICH_PROVIDERS = {
   exa:      { keyEnv: "EXA_API_KEY",      fn: enrichViaExa },
   parallel: { keyEnv: "PARALLEL_API_KEY", fn: enrichViaParallel },
 };
+// One attendee costs at most 4 ops: the already-enriched read, the Exa lookup,
+// one more Exa call when the company reads as stealth, and the upsert. Bindings
+// count against the same 50-subrequest invocation ceiling as fetches, so the
+// manual cap of 10 sits at ~41 and the cron default of 6 sits at ~25.
+const ENRICH_MAX = 10;
+const ENRICH_CRON_BATCH = 6;
+export function enrichBatchLimit(raw, fallback = ENRICH_CRON_BATCH, max = ENRICH_MAX) {
+  const n = parseInt(asText(raw) ?? "", 10);
+  return Math.min(Number.isFinite(n) && n > 0 ? n : fallback, max);
+}
+
 async function handleEnrich(request, env, d) {
   const url = new URL(request.url);
-  if (!env.SYNC_SECRET || url.searchParams.get("key") !== env.SYNC_SECRET) return new Response("forbidden", { status: 403 });
+  if (!adminGated(request, env)) return new Response("forbidden", { status: 403 });
   const jerr = (msg, code) => new Response(JSON.stringify({ error: msg }), { status: code, headers: { "content-type": "application/json" } });
   const provider = (url.searchParams.get("provider") || "exa").toLowerCase();
   const P = ENRICH_PROVIDERS[provider];
@@ -1612,13 +1674,35 @@ async function handleEnrich(request, env, d) {
   const aid = url.searchParams.get("attendee"), eid = url.searchParams.get("event");
   if (aid) targets = await d.prepare(`SELECT ${COLS} FROM attendees WHERE id = ?`).all(aid);
   else if (eid) {
-    const limit = Math.min(parseInt(url.searchParams.get("limit") || "6", 10) || 6, 10);
+    const limit = enrichBatchLimit(url.searchParams.get("limit"));
     targets = await d.prepare(`SELECT a.id, a.name, a.linkedin_handle, a.email, a.bio_short
        FROM event_attendees ea JOIN attendees a ON a.id = ea.attendee_id
        LEFT JOIN enrichments en ON en.attendee_id = a.id
       WHERE ea.event_id = ? AND ea.is_host = 0 AND en.attendee_id IS NULL
       ORDER BY (SELECT COUNT(*) FROM event_attendees seen WHERE seen.attendee_id = a.id) DESC LIMIT ?`).all(eid, limit);
-  } else return jerr("pass ?attendee= or ?event=", 400);
+  } else if (url.searchParams.get("upcoming")) {
+    // The whole pool is 16,839 attendees against a paid per-person API, and the
+    // question this data actually gets asked is "who is going to X". So the
+    // automatic tier only ever looks at events that have not happened yet.
+    //
+    // SOONEST EVENT FIRST, then how often the person turns up across the pool.
+    // The spec for this put frequency first; imminence beats it, because a
+    // regular whose next event is in five weeks can wait and a stranger at
+    // tonight's thing cannot.
+    const limit = enrichBatchLimit(url.searchParams.get("limit"));
+    targets = await d.prepare(`SELECT a.id, a.name, a.linkedin_handle, a.email, a.bio_short
+       FROM event_attendees ea
+       JOIN events e ON e.id = ea.event_id
+       JOIN attendees a ON a.id = ea.attendee_id
+       LEFT JOIN enrichments en ON en.attendee_id = a.id
+      WHERE e.user_status = 'going' AND e.start_at IS NOT NULL
+        AND datetime(e.start_at) >= datetime('now')
+        AND ea.is_host = 0 AND en.attendee_id IS NULL
+      GROUP BY a.id
+      ORDER BY datetime(MIN(e.start_at)) ASC,
+               (SELECT COUNT(*) FROM event_attendees seen WHERE seen.attendee_id = a.id) DESC
+      LIMIT ?`).all(limit);
+  } else return jerr("pass ?attendee=, ?event= or ?upcoming=1", 400);
 
   const out = [];
   for (const a of targets) out.push({ name: a.name, ...(await P.fn(d, key, a, !!aid)) });

@@ -3,8 +3,11 @@
 import {
   ROOT,
   SERENDIPITY_SYNC_LIMITS,
+  adminGated,
   assert,
   cookieJar,
+  dispatchEnrich,
+  enrichBatchLimit,
   fetchBudget,
   fetchEventGuests,
   guestSweepBudget,
@@ -193,6 +196,75 @@ test("the sweep budget leaves room for the two passes that bracket it", () => {
   assert.ok(one + perSet + 10 <= 50, "the sweep may not claim what syncEvents and syncDescriptions will spend");
   assert.ok(guestSweepBudget(2, 50) < one, "a second cookie set costs the sweep its own page allowance");
   assert.equal(guestSweepBudget(99, 50), 0, "an impossible reservation floors at zero rather than going negative");
+});
+
+
+// ── the enrichment tier ─────────────────────────────────────────────────
+// Enrichment had never run automatically: it was absent from cronSerendipity
+// entirely, and EXA_API_KEY was unset, so 86 of 16,839 attendees carried a
+// profile and the newest was 2026-05-31. These pin the automatic tier.
+
+test("the admin gate takes the secret from a header as well as the query string", () => {
+  const env = { SYNC_SECRET: "s3cret" };
+  const req = (url, headers) => new Request(url, { headers: headers || {} });
+  assert.equal(adminGated(req("https://x/serendipity/enrich?key=s3cret"), env), true, "query form still works");
+  assert.equal(adminGated(req("https://x/serendipity/enrich", { "x-sync-key": "s3cret" }), env), true, "header form works");
+  assert.equal(adminGated(req("https://x/serendipity/enrich?key=nope"), env), false);
+  assert.equal(adminGated(req("https://x/serendipity/enrich", { "x-sync-key": "nope" }), env), false);
+  assert.equal(adminGated(req("https://x/serendipity/enrich"), env), false, "no secret at all is refused");
+  // an unset SYNC_SECRET must never make the gate permissive
+  assert.equal(adminGated(req("https://x/serendipity/enrich?key=undefined"), {}), false);
+  assert.equal(adminGated(req("https://x/serendipity/enrich"), {}), false);
+});
+
+test("the enrich batch limit clamps, defaults, and refuses garbage", () => {
+  assert.equal(enrichBatchLimit("3"), 3);
+  assert.equal(enrichBatchLimit("50"), 10, "the manual ceiling is 10, ~41 ops of a 50-subrequest invocation");
+  assert.equal(enrichBatchLimit(null), 6, "the cron default is 6, ~25 ops");
+  for (const junk of ["", "abc", "0", "-4", undefined]) {
+    assert.equal(enrichBatchLimit(junk), 6, `"${junk}" falls back rather than sending 0 or a negative LIMIT`);
+  }
+});
+
+test("the cron enrich dispatch never puts the secret in the URL", async () => {
+  // A query-string secret lands in request logs. The whole reason adminGated
+  // grew a header arm is this one call, so the property is worth pinning.
+  let seen = null;
+  await dispatchEnrich(
+    { SYNC_SECRET: "s3cret", EXA_API_KEY: "k", HOST_PUBLIC_URL: "https://aadhar.sh" },
+    async (url, init) => { seen = { url, init }; return { ok: true, json: async () => ({ enriched: [] }) }; },
+  );
+  assert.ok(seen, "it dispatched");
+  assert.ok(!seen.url.includes("s3cret"), `the secret must not appear in the URL: ${seen.url}`);
+  assert.equal(seen.init.headers["x-sync-key"], "s3cret", "it travels as a header instead");
+  assert.equal(seen.init.method, "POST");
+  assert.match(seen.url, /\/serendipity\/enrich\?upcoming=1&limit=6$/, "it asks for the upcoming tier at the cron batch size");
+});
+
+test("the cron enrich dispatch skips cleanly when it is not configured", async () => {
+  // This is production's state until EXA_API_KEY is set, so the skip has to be
+  // quiet and self-describing rather than an error on every tick.
+  let called = false;
+  const spy = async () => { called = true; return { ok: true, json: async () => ({}) }; };
+  assert.deepEqual(await dispatchEnrich({ SYNC_SECRET: "s" }, spy), { skipped: "EXA_API_KEY not set" });
+  assert.deepEqual(await dispatchEnrich({ EXA_API_KEY: "k" }, spy), { skipped: "no SYNC_SECRET" });
+  assert.equal(called, false, "an unconfigured dispatch must not spend a subrequest");
+});
+
+test("the cron enrich dispatch reports outcomes and swallows its own failures", async () => {
+  const env = { SYNC_SECRET: "s", EXA_API_KEY: "k" };
+  const ok = await dispatchEnrich(env, async () => ({
+    ok: true,
+    json: async () => ({ enriched: [{ outcome: "success" }, { outcome: "success" }, { outcome: "not_found" }] }),
+  }));
+  assert.deepEqual(ok, { attempted: 3, outcomes: { success: 2, not_found: 1 } });
+
+  // enrichment is the lower-priority half: it may never redden a tick whose
+  // roster sweep succeeded, so every failure shape returns rather than throws.
+  assert.deepEqual(await dispatchEnrich(env, async () => ({ ok: false, status: 500, json: async () => ({}) })), { error: "enrich 500" });
+  assert.deepEqual(await dispatchEnrich(env, async () => { throw new Error("boom"); }), { error: "boom" });
+  const weird = await dispatchEnrich(env, async () => ({ ok: true, json: async () => ({}) }));
+  assert.deepEqual(weird, { attempted: 0, outcomes: {} }, "a body with no enriched array is 0 attempted, not a crash");
 });
 
 test("serendipity hides collapsed description chrome and uses the Luna scrollbar", async () => {
