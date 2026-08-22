@@ -9,6 +9,8 @@
     "dev": "wrangler dev -c wrangler.toml",
     "deploy": "wrangler deploy -c wrangler.toml --x-provision=false --x-auto-create=false",
     "tail": "wrangler tail -c wrangler.toml",
+    "comment:typecheck": "Runs from HERE rather than from the root `typecheck` script, because this project is deliberately out of the workspace and readability/linkedom live in lens-reader/node_modules. Wired into the root script instead, CI fails with TS2307 on both imports while every workstation that has run an install here stays green, which is the split CLAUDE.md records about the root contract suite arriving through a second door. tsc itself comes from the root install; only the dependency graph is local.",
+    "typecheck": "node ../node_modules/typescript/bin/tsc -p ../config/tsconfig.lens-reader.json",
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {

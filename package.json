@@ -37,7 +37,7 @@
     "comment:test-node": "The same suite under node, kept because a suite that passes on one runtime and fails on another is reporting a fact about the runtime. bun's spec-strict Response found a real defect this way: withSecurityHeaders rebuilds every response, which per Fetch LOCKS the body it was handed, and one test pushed the same case objects through twice. node's undici allows it and bun throws.",
     "test:node": "node --import ./tools/lib/no-network.mjs --test tools/*.test.mjs",
     "lint": "oxlint --type-aware",
-    "typecheck": "tsc -p config/tsconfig.json && tsc -p config/tsconfig.browser.json && tsc -p config/tsconfig.sw.json && node tools/check-tool-types.mjs",
+    "typecheck": "tsc -p config/tsconfig.json && tsc -p config/tsconfig.browser.json && tsc -p config/tsconfig.sw.json && tsc -p config/tsconfig.lwe-ask.json && tsc -p config/tsconfig.cf-garage.json && node tools/check-tool-types.mjs",
     "typecheck:tools": "node tools/check-tool-types.mjs",
     "typecheck:browser": "tsc -p config/tsconfig.browser.json",
     "check:fast": "bun run --parallel lint typecheck test",
