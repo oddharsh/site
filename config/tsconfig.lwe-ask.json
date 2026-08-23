@@ -1,0 +1,44 @@
+{
+  // tsconfig.lwe-ask.json — the LWE ask Worker at lwe-ask/.
+  //
+  // ONE PROGRAM PER AUXILIARY WORKER, for the reason tsconfig.tools.json's
+  // header gives about tools/: a program is only as accurate as the globals it
+  // declares. These three are separately deployed Workers with their own
+  // wrangler.toml and their own dependency sets, so they get Cloudflare's
+  // globals and nothing else.
+  //
+  // The three src trees were the last runtime code in this repo that no tsc
+  // program held. They reach production, and nothing checked them, which is the
+  // orphan case check-tool-types.mjs's floor exists to catch one directory over.
+  //
+  // TESTS ARE DELIBERATELY OUT. lwe-ask has none; the two that exist next door
+  // import their Worker's source, so a program carrying node globals for the
+  // test pulls Worker modules in transitively and checks them against the wrong
+  // environment. Measured 2026-08-21 with `types: ["bun"]` over both test files:
+  // 5 of the 11 diagnostics were that artifact (`cf` does not exist in
+  // RequestInit, `RequestInitCfProperties` not found, `innerHTML` on Node), all
+  // clean in the program whose globals match. Covering the tests wants the
+  // diagnostic filtering check-tool-types.mjs already implements, which is its
+  // own piece of work rather than a wider `include` here.
+  //
+  // `strict` is false to match every other program in config/. Raise it per
+  // directory once the existing tail is paid down.
+  "compilerOptions": {
+    "noEmit": true,
+    "allowJs": true,
+    "checkJs": true,
+    "target": "esnext",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    // Workers globals only. With lib.dom loaded, its CacheStorage shadows
+    // Cloudflare's, which is the collision tsconfig.json's header documents.
+    "lib": ["esnext"],
+    "types": ["@cloudflare/workers-types"],
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "strict": false
+  },
+  // A GLOB rather than a file list, so a new module joins the program by
+  // existing. The allowlist habit is what let ten client islands go unchecked.
+  "include": ["../lwe-ask/src/**/*.js"]
+}

@@ -1,0 +1,41 @@
+{
+  // tsconfig.lens-reader.json — the Reader lens Worker at lens-reader/, the
+  // seventh machine tab on /lens.
+  //
+  // See tsconfig.lwe-ask.json's header for why each auxiliary Worker gets its
+  // own program and why its test file is out of scope. Two things are specific
+  // to this one.
+  //
+  // IT IS OUT OF THE WORKSPACE ON PURPOSE, because readability and linkedom are
+  // megabytes only this Worker bundles, so its dependencies live in
+  // lens-reader/node_modules. tsc resolves those by walking up from the source
+  // file rather than from this config, so the split costs nothing here.
+  //
+  // `allowImportingTsExtensions` is load-bearing: reader.js imports
+  // `../../src/worker/lib/crawl.ts` by its real filename, which is the ONE
+  // specifier that resolves in both trees (tsconfig.json's header has the long
+  // version). Without it tsc rejects that import and never reaches a finding.
+  // Pulling crawl.ts in transitively is correct here rather than the artifact it
+  // would be under node globals, since both files run on Workers.
+  //
+  // The program found 6 real diagnostics on its first run, all in reader.js and
+  // all fixed with type-only annotations: 5 were `.parse() || {}` widening the
+  // Readability result so every property read failed, and 1 was workers-types
+  // declaring TextDecoderConstructorOptions.ignoreBOM REQUIRED where WHATWG has
+  // it optional and defaulted to false.
+  "compilerOptions": {
+    "noEmit": true,
+    "allowJs": true,
+    "checkJs": true,
+    "target": "esnext",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "lib": ["esnext"],
+    "types": ["@cloudflare/workers-types"],
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "strict": false
+  },
+  "include": ["../lens-reader/src/**/*.js"]
+}

@@ -60,6 +60,95 @@ test("the TypeScript compiler program includes every Worker module", async () =>
   assert.deepEqual(missing, [], `tsc skipped Worker modules:\n  ${missing.join("\n  ")}`);
 });
 
+// EVERY DEPLOYABLE WORKER IS IN SOME TSC PROGRAM. The three auxiliary Workers
+// (cf-garage, lwe-ask, lens-reader) reach production on their own deploys, and
+// until 2026-08-21 no tsc program held a line of them: 6 files of live runtime
+// code, checked by nothing. They were invisible for the ordinary reason an
+// allowlist goes stale, which is that config/tsconfig.json's include names the
+// site Worker and cal and has no way to notice a fourth project appearing.
+//
+// So the wrangler.toml is the registry rather than a list anybody maintains. A
+// new auxiliary Worker joins this assertion by being deployable, and the test
+// fails until it has a program and something runs that program.
+//
+// TWO PLACES COUNT AS RUNNING IT, and lens-reader is why. It is deliberately
+// out of the workspace, so readability and linkedom live in
+// lens-reader/node_modules; wired into the ROOT typecheck it fails in CI with
+// TS2307 on both imports while every workstation that has installed there stays
+// green. That is the split CLAUDE.md records about the root contract suite,
+// arriving through a second door, and the control for it is to hide
+// lens-reader/node_modules and re-run rather than to trust a local pass. So a
+// project may instead carry its own typecheck script, and then CI has to invoke
+// it in the step that installs its dependencies.
+//
+// Text-only on purpose: a tsc run per project would put seconds on the suite to
+// re-prove what the package scripts already state.
+test("every auxiliary Worker has a tsc program, and something runs it", async () => {
+  const { readdirSync, existsSync } = await import("node:fs");
+  const root = new URL("./", ROOT).pathname;
+
+  // A directory holding a wrangler.toml is a separately deployed Worker. The
+  // ROOT config is wrangler.jsonc, so it is excluded by extension rather than
+  // by name, and cal/ and serendipity/ are correctly absent: they carry no
+  // wrangler config because the site Worker bundles them.
+  const projects = readdirSync(root, { withFileTypes: true })
+    .filter((e) => e.isDirectory() && !e.name.startsWith(".") && e.name !== "node_modules")
+    .map((e) => e.name)
+    .filter((name) => existsSync(`${root}${name}/wrangler.toml`))
+    .sort();
+
+  // A FLOOR, because a test that scanned nothing looks exactly like a clean run.
+  assert.ok(projects.length >= 3,
+    `expected at least the three auxiliary Workers, found ${projects.length}: ${projects.join(", ")}`);
+
+  const pkg = JSON.parse(await readFile(new URL("package.json", ROOT), "utf8"));
+  const rootTypecheck = pkg.scripts.typecheck;
+  const ci = await readFile(new URL(".github/workflows/ci.yml", ROOT), "utf8");
+
+  const ranBy = new Map();
+  const missing = [];
+  for (const name of projects) {
+    const config = `config/tsconfig.${name}.json`;
+    if (!existsSync(`${root}${config}`)) {
+      missing.push(`${name}: no ${config}`);
+      continue;
+    }
+    if (rootTypecheck.includes(config)) {
+      ranBy.set(config, "root");
+      continue;
+    }
+    // The self-run arm. Both halves are required: a script nothing invokes is
+    // decoration, and this repo has the perf-budget history to prove it.
+    const own = JSON.parse(await readFile(new URL(`${name}/package.json`, ROOT), "utf8"));
+    const script = own.scripts?.typecheck;
+    if (!script?.includes(config.replace("config/", ""))) {
+      missing.push(`${name}: ${config} exists but neither the root typecheck nor ${name}/package.json runs it`);
+      continue;
+    }
+    // CI has to invoke it inside THAT project's step, which is the step that
+    // installs the dependencies the program needs.
+    const step = ci.indexOf(`working-directory: ${name}`);
+    const runs = step !== -1 && ci.slice(step, step + 800).includes("bun run typecheck");
+    if (!runs) missing.push(`${name}: has its own typecheck script, but ci.yml never runs it in its own step`);
+    else ranBy.set(config, name);
+  }
+  assert.deepEqual(missing, [],
+    `an auxiliary Worker is unchecked:\n  ${missing.join("\n  ")}`);
+
+  // The other direction, so a program cannot be written and left unwired. Every
+  // tsconfig in config/ has to be run by something, which is the failure that
+  // made the aux Workers orphans in the first place, one level up.
+  const orphaned = readdirSync(`${root}config`)
+    .filter((f) => /^tsconfig\..+\.json$/.test(f))
+    // tsconfig.tools.json runs through check-tool-types.mjs, which the script
+    // invokes by tool name rather than by config path. That wrapper exists so
+    // diagnostics can be filtered to tools/; see its header.
+    .filter((f) => f !== "tsconfig.tools.json")
+    .filter((f) => !rootTypecheck.includes(`config/${f}`) && !ranBy.has(`config/${f}`));
+  assert.deepEqual(orphaned, [],
+    `a tsconfig exists that nothing runs: ${orphaned.join(", ")}`);
+});
+
 // A TOOL MAY NOT SPAWN A PACKAGE MANAGER. Every script in tools/ runs under
 // whichever runtime invoked it, in a tree that is bun today and was pnpm last
 // week, so a hardcoded manager is wrong half the time. pnpm reads

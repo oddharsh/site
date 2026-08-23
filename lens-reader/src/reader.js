@@ -117,7 +117,7 @@ export async function read(targetUrl) {
       articleNode = element;
       return element.innerHTML;
     },
-  }).parse() || {};
+  }).parse() || /** @type {Partial<NonNullable<ReturnType<Readability["parse"]>>>} */ ({});
   const extractMs = Date.now() - t2;
 
   const contentHtml = String(result.content || "");
@@ -434,7 +434,7 @@ async function readCapped(response, maxBytes) {
     merged.set(chunk.subarray(0, merged.length - offset), offset);
     offset += chunk.length;
   }
-  return new TextDecoder("utf-8", { fatal: false }).decode(merged);
+  return new TextDecoder("utf-8", { fatal: false, ignoreBOM: false }).decode(merged);
 }
 
 function str(value, cap) {
