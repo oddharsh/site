@@ -65,7 +65,9 @@ const REST_BASE = "https://api.cloudflare.com/client/v4/accounts";
 
 // Exported so check-kitesurf.mjs probes the SAME URL this ships, rather than a
 // second copy of the path that can agree with itself while both are wrong.
-export const restUrl = (accountId, action, engine) =>
+// engine is OPTIONAL: the body already treats an absent one as "no query
+// string", and the contract test asserts exactly that by calling with two args.
+export const restUrl = (accountId, action, engine?) =>
   `${REST_BASE}/${accountId}/browser-run/${action}${engine ? `?browser=${encodeURIComponent(engine)}` : ""}`;
 
 // Either door counts. A deployment holding only a REST token still renders, so

@@ -82,6 +82,7 @@ export function createRun(options) {
     { label: "lwe · drivers", path: "/lwe/drivers", hint: "headphone drivers: planar magnetic vs dynamic, force and breakup" },
     { label: "lwe · knots", path: "/lwe/knots", hint: "knots: granny vs square, the Ian knot, why laces come undone" },
     { label: "lwe · lean", path: "/lwe/lean", hint: "lean, formal verification, specs, verified compilers, kernel soundness, openai ten-proofs" },
+    { label: "lwe · efuses", path: "/lwe/fuse", hint: "efuses, anti-rollback, and why a phone refuses old firmware" },
 // generated:lwe-pages:end
     // generated:garage-pages:start
     { label: "garage · blueprint", path: "/garage/blueprint", hint: "the repo, blueprinted by Fable 5" },
@@ -97,6 +98,7 @@ export function createRun(options) {
     { label: "garage · octane", path: "/garage/octane", hint: "what a framework's floor costs against no framework" },
     { label: "garage · pretext", path: "/garage/pretext", hint: "DOM-free text measurement" },
     { label: "garage · pqc", path: "/garage/pqc", hint: "what a PQ signature costs in bytes and milliseconds" },
+    { label: "garage · user-agent", path: "/garage/useragent", hint: "what a crawler name is worth when nothing verifies it" },
     { label: "garage · safari 27", path: "/garage/safari27", hint: "WWDC26 Safari 27 features, through this site's lens" },
     { label: "garage · scroll", path: "/garage/scroll", hint: "XP scroll chrome" },
     { label: "garage · teardown", path: "/garage/teardown", hint: "what a multi-agent audit found + fixed" },

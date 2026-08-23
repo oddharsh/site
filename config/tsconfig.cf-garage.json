@@ -1,0 +1,27 @@
+{
+  // tsconfig.cf-garage.json — the Garage demo Worker at cf-garage/, which owns
+  // /garage/cf/* and deploys on its own.
+  //
+  // See tsconfig.lwe-ask.json's header for why each auxiliary Worker gets its
+  // own program, why the globals are Cloudflare's alone, and why the test file
+  // beside this src tree is deliberately out of scope.
+  //
+  // This one is the sharpest case for Workers globals over node's. cf-garage
+  // sends `fetch(url, { cf: { ... } })`, and under bun-types that reads as
+  // `'cf' does not exist in type 'RequestInit'` (measured 2026-08-21), which is
+  // a missing global rather than a finding: the same call is clean here.
+  "compilerOptions": {
+    "noEmit": true,
+    "allowJs": true,
+    "checkJs": true,
+    "target": "esnext",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "lib": ["esnext"],
+    "types": ["@cloudflare/workers-types"],
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "strict": false
+  },
+  "include": ["../cf-garage/src/**/*.js"]
+}

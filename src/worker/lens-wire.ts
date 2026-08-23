@@ -142,7 +142,9 @@ export function summariseWire(events, pageUrl) {
   const dataUris = [...byId.values()].filter((r) => r.url && r.url.startsWith("data:")).length;
 
   const hosts = new Map();
-  const byType = {};
+  // Filled per resource type as the waterfall is walked, so the key set is not
+  // knowable from the initializer.
+  const byType: Record<string, { count: number; bytes: number }> = {};
   let bytes = 0, thirdBytes = 0, thirdCount = 0, cached = 0, failed = 0, aborted = 0;
 
   for (const r of rows) {

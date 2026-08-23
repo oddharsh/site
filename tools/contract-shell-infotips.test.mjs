@@ -1,6 +1,7 @@
 // ── shell infotips ──────────────────────────────────────────────────────────
 // Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
 import {
+  testGlobals,
   AGENT_SURFACES,
   MODERN_META,
   ROOT,
@@ -283,13 +284,13 @@ test("the excerpt survives a page full of inline SVG chrome", async () => {
     <p>The teardown at <a href="${target}" class="Link--primary">this note</a> is the useful part.</p>
     </body></html>`;
   const realFetch = globalThis.fetch;
-  globalThis.fetch = async () => new Response(page, { headers: { "content-type": "text/html" } });
+  testGlobals.fetch = async () => new Response(page, { headers: { "content-type": "text/html" } });
   try {
     const ctx = deferredContext();
     await handleWebmention(wmPost("https://gist.example/x", target), wmEnv(db), ctx);
     await ctx.settle();
   } finally {
-    globalThis.fetch = realFetch;
+    testGlobals.fetch = realFetch;
   }
   const row = db.rows[0];
   assert.ok(row, "the mention verified and stored");
@@ -305,7 +306,7 @@ test("an accepted webmention answers 202 without a Location header", async () =>
   // "helpfully" pointing at /inbox, so pin it.
   const db = fakeD1();
   const realFetch = globalThis.fetch;
-  globalThis.fetch = async () =>
+  testGlobals.fetch = async () =>
     new Response('<a href="https://aadhar.sh/writing/in-flux">x</a>', { headers: { "content-type": "text/html" } });
   try {
     const res = await handleWebmention(
@@ -316,7 +317,7 @@ test("an accepted webmention answers 202 without a Location header", async () =>
     assert.equal(res.status, 202);
     assert.equal(res.headers.get("location"), null, "202 must not carry a Location header");
   } finally {
-    globalThis.fetch = realFetch;
+    testGlobals.fetch = realFetch;
   }
 });
 
@@ -399,7 +400,7 @@ test("site MCP lists the agent surfaces as resources", async () => {
 
 test("site MCP resources/read serves listed surfaces only, same-origin", async () => {
   const realFetch = globalThis.fetch;
-  globalThis.fetch = async () => new Response("<!doctype html><title>ok</title>", { headers: { "content-type": "text/html; charset=utf-8" } });
+  testGlobals.fetch = async () => new Response("<!doctype html><title>ok</title>", { headers: { "content-type": "text/html; charset=utf-8" } });
   try {
     const read = await handleSiteMcp(new Request("https://aadhar.sh/mcp", { method: "POST", body: JSON.stringify({ jsonrpc: "2.0", id: 3, method: "resources/read", params: { uri: "https://aadhar.sh/whoareyou" } }), headers: { "content-type": "application/json" } }), {}, context());
     const content = (await read.json()).result.contents[0];
@@ -410,7 +411,7 @@ test("site MCP resources/read serves listed surfaces only, same-origin", async (
       const bad = await handleSiteMcp(new Request("https://aadhar.sh/mcp", { method: "POST", body: JSON.stringify({ jsonrpc: "2.0", id: 4, method: "resources/read", params: { uri } }), headers: { "content-type": "application/json" } }), {}, context());
       assert.equal((await bad.json()).error.code, -32602, `must reject ${uri}`);
     }
-  } finally { globalThis.fetch = realFetch; }
+  } finally { testGlobals.fetch = realFetch; }
 });
 
 // Server cards are pre-connection metadata. The live `server/discover` and

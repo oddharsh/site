@@ -111,6 +111,19 @@ jobs:
       - name: Test homepage representation contracts
         run: bun run test
 
+      # THE SAME SUITE UNDER NODE, and it is here because it was not.
+      # CLAUDE.md credits the twin with a real find (bun's spec-strict Response
+      # rejecting a body the suite reused, which undici allowed), and the script
+      # has existed since the migration — but nothing ran it, so the whole claim
+      # rested on somebody remembering. A test that only runs on a workstation
+      # protects the workstation.
+      #
+      # It caught its first regression the day it was wired: #497 moved the ref
+      # scanner onto HTMLRewriter, a bun global, and the node twin went red while
+      # CI stayed green. That test now declares its runtime and skips explicitly.
+      - name: The same contracts under Node
+        run: bun run test:node
+
       # The route oracle, pre-merge. createTestHarness() boots the site Worker
       # in-process (honouring wrangler.jsonc's build.command, so it serves the
       # minified .build/public tree) and verify-routes.mjs sweeps it. This is
@@ -157,6 +170,7 @@ jobs:
         working-directory: lens-reader
         run: |
           bun install
+          bun run typecheck
           bun test
           bun x --no-install wrangler deploy --dry-run -c wrangler.toml
 

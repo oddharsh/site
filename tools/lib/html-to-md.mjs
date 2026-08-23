@@ -17,6 +17,19 @@
 //      content; its label without its behavior is a lie an agent would read as
 //      fact. The prose AROUND the demo still converts, which is the honest part.
 
+// schemes that execute rather than address. Read the way a BROWSER reads one
+// rather than the way a source file writes one: it strips leading C0 controls
+// and space before the scheme and then matches case-insensitively, so
+// `JavaScript:` and a tab-prefixed `\tdata:` both run and both must be refused.
+// The strip is a loop rather than a `[\u0000-\u0020]*` prefix because oxlint's
+// no-control-regex refuses that class, and a suppression buys nothing here.
+const UNSAFE_SCHEME = /^(?:javascript|data|vbscript):/i;
+function executesRatherThanAddresses(href) {
+  let i = 0;
+  while (i < href.length && href.charCodeAt(i) <= 0x20) i++;
+  return UNSAFE_SCHEME.test(href.slice(i));
+}
+
 // void elements never have children and never close
 const VOID = new Set("area base br col embed hr img input link meta param source track wbr".split(" "));
 
@@ -317,8 +330,12 @@ function renderInline(nodes, ctx) {
         const inner = renderInline(n.children, ctx).trim();
         const href = n.attrs.href || "";
         if (!inner) break;
-        // in-page anchors and javascript: hrefs carry nothing for a reader
-        if (!href || href.startsWith("#") || href.startsWith("javascript:")) { out += inner; break; }
+        // in-page anchors carry nothing for a reader, and a script-bearing
+        // scheme carries worse than nothing: a twin is the agent-facing copy of
+        // a page, so a data:text/html href would hand a reader a payload dressed
+        // as a citation. No page here authors one, and the check is widened
+        // anyway because the cost is a regex and the input set only ever grows.
+        if (!href || href.startsWith("#") || executesRatherThanAddresses(href)) { out += inner; break; }
         out += `[${inner}](${absolute(href, ctx.origin)})`;
         break;
       }

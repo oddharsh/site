@@ -1,6 +1,7 @@
 // ── webmention (inbound) ────────────────────────────────────────────────────
 // Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
 import {
+  testGlobals,
   WEBMENTION_PATHS,
   WM_SECRET,
   assert,
@@ -54,7 +55,7 @@ test("webmention verifies the source really links back, then moderates before pu
   const realFetch = globalThis.fetch;
 
   // 1. a source that does NOT link back is verified away and never stored.
-  globalThis.fetch = async () => new Response("<html><a href='https://example.com'>elsewhere</a></html>", { headers: { "content-type": "text/html" } });
+  testGlobals.fetch = async () => new Response("<html><a href='https://example.com'>elsewhere</a></html>", { headers: { "content-type": "text/html" } });
   try {
     let ctx1 = deferredContext();
     let res = await handleWebmention(wmPost(source, target), env, ctx1);
@@ -63,7 +64,7 @@ test("webmention verifies the source really links back, then moderates before pu
     assert.equal(db.rows.length, 0, "an unverified mention must never be stored");
 
     // 2. a source that DOES link back is stored, but only as pending.
-    globalThis.fetch = async () => new Response(
+    testGlobals.fetch = async () => new Response(
       `<html><head><title>Resto-mod web</title><meta name="author" content="Mari"></head>
        <body><p class="e-content">A lovely note about <a class="u-in-reply-to" href="${target}">in flux</a> and its ideas.</p></body></html>`,
       { headers: { "content-type": "text/html" } });
@@ -103,13 +104,13 @@ test("webmention verifies the source really links back, then moderates before pu
     assert.ok(html.includes("/writing/in-flux"), "filed under the page it mentions");
 
     // 6. re-sending after the link is removed retracts it (the spec's delete signal).
-    globalThis.fetch = async () => new Response("<html><p>rewritten, no link anymore</p></html>", { headers: { "content-type": "text/html" } });
+    testGlobals.fetch = async () => new Response("<html><p>rewritten, no link anymore</p></html>", { headers: { "content-type": "text/html" } });
     const ctx3 = deferredContext();
     res = await handleWebmention(wmPost(source, target), env, ctx3);
     assert.equal(res.status, 202);
     await ctx3.settle();
     assert.equal(db.rows.length, 0, "a mention whose source dropped the link is retracted");
-  } finally { globalThis.fetch = realFetch; }
+  } finally { testGlobals.fetch = realFetch; }
 });
 
 test("/inbox degrades honestly when the mention store is unbound", async () => {
@@ -141,7 +142,7 @@ test("every page that accepts a mention also advertises where to send it", async
     // edge-cache wrapper that drops the header on its way out.
     assert.equal(path, "/writing", `no advertisement path known for ${path}`);
     const priorCaches = globalThis.caches;
-    globalThis.caches = { default: { match: async () => undefined, put: async () => {} } };
+    testGlobals.caches = { default: { match: async () => undefined, put: async () => {} } };
     let res;
     try {
       res = await handleWritingIndex(
@@ -151,7 +152,7 @@ test("every page that accepts a mention also advertises where to send it", async
       );
     } finally {
       if (priorCaches === undefined) delete globalThis.caches;
-      else globalThis.caches = priorCaches;
+      else testGlobals.caches = priorCaches;
     }
     assert.match(
       res.headers.get("link") || "",

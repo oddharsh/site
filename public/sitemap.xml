@@ -140,6 +140,12 @@
     <changefreq>monthly</changefreq>
     <priority>0.3</priority>
   </url>
+  <url>
+    <loc>https://aadhar.sh/lwe/fuse</loc>
+    <lastmod>2026-08-21</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
 <!-- generated:lwe:end -->
   <url>
     <loc>https://aadhar.sh/garage</loc>
@@ -156,6 +162,12 @@
   <url>
     <loc>https://aadhar.sh/garage/wire</loc>
     <lastmod>2026-07-23</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://aadhar.sh/garage/useragent</loc>
+    <lastmod>2026-08-21</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.3</priority>
   </url>

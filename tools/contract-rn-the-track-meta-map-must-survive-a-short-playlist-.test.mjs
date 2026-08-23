@@ -1,6 +1,7 @@
 // ── rn: the track-meta map must survive a SHORT playlist read ────────
 // Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
 import {
+  testGlobals,
   ART_VERSION,
   ROOT,
   TRACKS,
@@ -344,13 +345,13 @@ test("the art warm attempts every URL even when one is already cached", async ()
   const store = new Map();
   const realFetch = globalThis.fetch;
   const hadCaches = "caches" in globalThis;
-  globalThis.caches = {
+  testGlobals.caches = {
     default: {
       async match(req) { const r = store.get(req.url); return r ? r.clone() : undefined; },
       async put(req, res) { store.set(req.url, res); },
     },
   };
-  globalThis.fetch = async () =>
+  testGlobals.fetch = async () =>
     new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { "content-type": "image/jpeg" } });
 
   try {
@@ -375,7 +376,7 @@ test("the art warm attempts every URL even when one is already cached", async ()
     assert.equal(res.warmed, 2, "a warm colo entry must not stop the other URLs from being warmed");
     for (const u of urls) assert.ok(store.has(u), `${u} was never warmed`);
   } finally {
-    globalThis.fetch = realFetch;
+    testGlobals.fetch = realFetch;
     if (!hadCaches) delete globalThis.caches;
   }
 });
@@ -498,18 +499,46 @@ test("Lens parses only Cloudflare's normalized readiness level from an MCP SSE a
 });
 
 test("Lens field evidence scores observed access without borrowing the standards rubric", () => {
-  const botViews = Array.from({ length: 6 }, (_, i) => ({ status: i === 5 ? 403 : 200, blocked: i === 5, challenge: false }));
+  // Eight SCORED crawler identities, two of them refused, plus the two controls.
+  // The controls must not move this number: they answer whether the instrument
+  // got in, and a browser is not a bot identity that retrieved anything.
+  const crawlers = Array.from({ length: 8 }, (_, i) => ({ status: i < 2 ? 403 : 200, blocked: i < 2, challenge: false }));
+  const controls = [
+    { role: "control", status: 200, blocked: false, challenge: false },
+    { role: "control", status: 999, blocked: true, challenge: false },
+  ];
   const field = lensFieldEvidence({
     status: 200,
     anatomy: { wordCount: 300 },
     agent: { strategy: { action: [], readable: ["markdown negotiation"], unknowns: [] } },
-    botViews,
+    botViews: [...controls, ...crawlers],
   });
-  assert.deepEqual(field.components.map((component) => component.score), [100, 83, 100, 60]);
-  assert.equal(field.overall, 86);
+  assert.deepEqual(field.components.map((component) => component.score), [100, 75, 100, 60]);
+  assert.equal(field.overall, 84);
 
-  const partial = lensFieldEvidence({ status: 200, anatomy: { wordCount: 300 }, agent: null, botViews: botViews.slice(0, 5) });
+  const partial = lensFieldEvidence({ status: 200, anatomy: { wordCount: 300 }, agent: null, botViews: [...controls, ...crawlers.slice(0, 5)] });
   assert.equal(partial.overall, null, "missing evidence must leave the score unfinished, not reweight it");
+});
+
+test("Lens refuses to read crawler refusals as policy when no control got in", () => {
+  // Every crawler 403s, which reads as a total AI block. It is only that if
+  // something else got through: medium.com and quora.com answer 403 to Chrome
+  // too, and grading them would report our own exclusion as their policy.
+  const crawlers = Array.from({ length: 8 }, () => ({ status: 403, blocked: true, challenge: false }));
+  const shut = lensFieldEvidence({
+    status: 200, anatomy: { wordCount: 300 }, agent: null,
+    botViews: [{ role: "control", status: 403, blocked: true }, { role: "control", status: 403, blocked: true }, ...crawlers],
+  });
+  const shutBots = shut.components.find((c) => c.key === "sampledBots");
+  assert.equal(shutBots.score, null, "with every control refused, crawler rows are not user-agent policy");
+  assert.match(shutBots.detail, /no control identity/);
+
+  // One control in, and the identical crawler rows become a real 0.
+  const open = lensFieldEvidence({
+    status: 200, anatomy: { wordCount: 300 }, agent: null,
+    botViews: [{ role: "control", status: 200, blocked: false }, { role: "control", status: 403, blocked: true }, ...crawlers],
+  });
+  assert.equal(open.components.find((c) => c.key === "sampledBots").score, 0, "a control got in, so the refusals are about the name");
 });
 
 test("Lens proxies Cloudflare's public scanner but stores only the normalized score", async () => {
@@ -517,7 +546,7 @@ test("Lens proxies Cloudflare's public scanner but stores only the normalized sc
   const writes = [];
   let upstream = null;
   try {
-    globalThis.fetch = async (url, init) => {
+    testGlobals.fetch = async (url, init) => {
       upstream = { url: String(url), body: JSON.parse(init.body) };
       return new Response('data: ' + JSON.stringify({
         jsonrpc: "2.0", id: "lens-cloudflare-score",
@@ -542,7 +571,7 @@ test("Lens proxies Cloudflare's public scanner but stores only the normalized sc
     });
     assert.doesNotMatch(writes[0].value, /private report details/);
   } finally {
-    globalThis.fetch = realFetch;
+    testGlobals.fetch = realFetch;
   }
 });
 
@@ -597,7 +626,11 @@ test("both browser routes report an upstream 429 as a 429, not a bad gateway", a
   const env = { BROWSER: { quickAction: async () => new Response('{"errors":[{"code":2001}]}', { status: 429 }) } };
   const url = "?url=https%3A%2F%2Fexample.com%2F";
 
-  for (const [name, handler] of [["shot", handleLensShot], ["browser", handleLensBrowser]]) {
+  // TUPLES: inference widens the rows to (string | Function)[], so `handler` is
+  // a union that includes string and stops being callable.
+  /** @type {Array<[name: string, handler: (req: Request, env: any, ctx: any) => Promise<Response>]>} */
+  const lensHandlers = [["shot", handleLensShot], ["browser", handleLensBrowser]];
+  for (const [name, handler] of lensHandlers) {
     const response = await handler(new Request(`https://aadhar.sh/lens/${name}${url}`), env, context());
     assert.equal(response.status, 429, `/lens/${name} must pass the upstream 429 through as a 429`);
     const body = await response.json();

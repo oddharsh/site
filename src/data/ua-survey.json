@@ -1,0 +1,2349 @@
+{
+  "measuredAt": "2026-08-21",
+  "trials": 3,
+  "identities": [
+    {
+      "key": "chrome",
+      "label": "Chrome",
+      "owner": "a browser",
+      "role": "control",
+      "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36",
+      "headers": null
+    },
+    {
+      "key": "curl",
+      "label": "curl",
+      "owner": "a plain HTTP client",
+      "role": "control",
+      "ua": "curl/8.7.1",
+      "headers": null
+    },
+    {
+      "key": "honest",
+      "label": "ua-survey (ours)",
+      "owner": "aadhar.sh",
+      "role": "control",
+      "ua": "aadhar-ua-survey/1.0 (+https://aadhar.sh/garage/useragent)",
+      "headers": null
+    },
+    {
+      "key": "bingbot",
+      "label": "Bingbot",
+      "owner": "Microsoft",
+      "role": "search",
+      "ua": "Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)",
+      "headers": null
+    },
+    {
+      "key": "googlebot",
+      "label": "Googlebot",
+      "owner": "Google",
+      "role": "search",
+      "ua": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
+      "headers": null
+    },
+    {
+      "key": "applebot",
+      "label": "Applebot",
+      "owner": "Apple",
+      "role": "search",
+      "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Safari/605.1.15 (Applebot/0.1; +http://www.apple.com/go/applebot)",
+      "headers": null
+    },
+    {
+      "key": "duckduckbot",
+      "label": "DuckDuckBot",
+      "owner": "DuckDuckGo",
+      "role": "search",
+      "ua": "DuckDuckBot/1.1; (+http://duckduckgo.com/duckduckbot.html)",
+      "headers": null
+    },
+    {
+      "key": "amazonbot",
+      "label": "Amazonbot",
+      "owner": "Amazon",
+      "role": "train",
+      "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.6045.214 Safari/537.36 (compatible; Amazonbot/0.1; +https://developer.amazon.com/support/amazonbot)",
+      "headers": null
+    },
+    {
+      "key": "facebookbot",
+      "label": "facebookexternalhit",
+      "owner": "Meta",
+      "role": "answers",
+      "ua": "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)",
+      "headers": null
+    },
+    {
+      "key": "gptbot",
+      "label": "GPTBot",
+      "owner": "OpenAI",
+      "role": "train",
+      "ua": "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; GPTBot/1.1; +https://openai.com/gptbot",
+      "headers": null
+    },
+    {
+      "key": "claudebot",
+      "label": "ClaudeBot",
+      "owner": "Anthropic",
+      "role": "train",
+      "ua": "Mozilla/5.0 (compatible; ClaudeBot/1.0; +claudebot@anthropic.com)",
+      "headers": null
+    },
+    {
+      "key": "claudeuser",
+      "label": "Claude-User",
+      "owner": "Anthropic",
+      "role": "answers",
+      "ua": "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; Claude-User/1.0; +Claude-User@anthropic.com",
+      "headers": null
+    },
+    {
+      "key": "perplexity",
+      "label": "PerplexityBot",
+      "owner": "Perplexity",
+      "role": "answers",
+      "ua": "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; PerplexityBot/1.0; +https://perplexity.ai/perplexitybot",
+      "headers": null
+    },
+    {
+      "key": "wba_unsigned",
+      "label": "Signature-Agent, unsigned",
+      "owner": "aadhar.sh",
+      "role": "probe",
+      "ua": "aadhar-ua-survey/1.0 (+https://aadhar.sh/garage/useragent)",
+      "headers": {
+        "signature-agent": "\"https://aadhar.sh\""
+      }
+    },
+    {
+      "key": "oai_fd",
+      "label": "OpenAI File Downloader",
+      "owner": "OpenAI (claimed)",
+      "role": "claimed",
+      "ua": "OpenAI File Downloader",
+      "headers": null
+    },
+    {
+      "key": "xai_img",
+      "label": "XaiImageApiFetch",
+      "owner": "xAI (claimed)",
+      "role": "claimed",
+      "ua": "XaiImageApiFetch/1.0",
+      "headers": null
+    }
+  ],
+  "targets": [
+    {
+      "key": "linkedin-profile",
+      "url": "https://www.linkedin.com/in/williamhgates",
+      "note": "a public person profile, the source claim's own example",
+      "verdict": "unmeasurable",
+      "controlDetail": "chrome:blocked curl:blocked honest:blocked",
+      "results": {
+        "chrome": {
+          "status": 999,
+          "words": 0,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            0,
+            0,
+            0
+          ]
+        },
+        "curl": {
+          "status": 999,
+          "words": 0,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            0,
+            0,
+            0
+          ]
+        },
+        "honest": {
+          "status": 999,
+          "words": 0,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            0,
+            0,
+            0
+          ]
+        },
+        "bingbot": {
+          "status": 999,
+          "words": 0,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            0,
+            0,
+            0
+          ]
+        },
+        "googlebot": {
+          "status": 999,
+          "words": 0,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            0,
+            0,
+            0
+          ]
+        },
+        "applebot": {
+          "status": 999,
+          "words": 0,
+          "blocked": true,
+          "shell": false,
+          "unstable": true,
+          "spread": [
+            0,
+            0,
+            0
+          ]
+        },
+        "duckduckbot": {
+          "status": 999,
+          "words": 0,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            0,
+            0,
+            0
+          ]
+        },
+        "amazonbot": {
+          "status": 999,
+          "words": 0,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            0,
+            0,
+            0
+          ]
+        },
+        "facebookbot": {
+          "status": 200,
+          "words": 3285,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            3325,
+            3285,
+            3285
+          ]
+        },
+        "gptbot": {
+          "status": 999,
+          "words": 42,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            42,
+            42,
+            42
+          ]
+        },
+        "claudebot": {
+          "status": 999,
+          "words": 0,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            0,
+            0,
+            0
+          ]
+        },
+        "claudeuser": {
+          "status": 999,
+          "words": 0,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            0,
+            0,
+            0
+          ]
+        },
+        "perplexity": {
+          "status": 999,
+          "words": 0,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            0,
+            0,
+            0
+          ]
+        },
+        "wba_unsigned": {
+          "status": 999,
+          "words": 0,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            0,
+            0,
+            0
+          ]
+        },
+        "oai_fd": {
+          "status": 999,
+          "words": 0,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            0,
+            0,
+            0
+          ]
+        },
+        "xai_img": {
+          "status": 999,
+          "words": 0,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            0,
+            0,
+            0
+          ]
+        }
+      }
+    },
+    {
+      "key": "nytimes",
+      "url": "https://www.nytimes.com/",
+      "note": "a paywalled newsroom homepage",
+      "verdict": "measurable",
+      "controlDetail": "chrome:ok curl:ok honest:ok",
+      "results": {
+        "chrome": {
+          "status": 200,
+          "words": 1255,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            1255,
+            1255,
+            1268
+          ]
+        },
+        "curl": {
+          "status": 200,
+          "words": 1255,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            1268,
+            1255,
+            1255
+          ]
+        },
+        "honest": {
+          "status": 200,
+          "words": 1438,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            1438,
+            1438,
+            1438
+          ]
+        },
+        "bingbot": {
+          "status": 200,
+          "words": 1438,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            1438,
+            1438,
+            1438
+          ]
+        },
+        "googlebot": {
+          "status": 200,
+          "words": 1438,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            1438,
+            1438,
+            1438
+          ]
+        },
+        "applebot": {
+          "status": 200,
+          "words": 1438,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            1438,
+            1438,
+            1438
+          ]
+        },
+        "duckduckbot": {
+          "status": 200,
+          "words": 1438,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            1438,
+            1438,
+            1438
+          ]
+        },
+        "amazonbot": {
+          "status": 403,
+          "words": 21,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            21,
+            21,
+            21
+          ]
+        },
+        "facebookbot": {
+          "status": 200,
+          "words": 1438,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            1438,
+            1438,
+            1438
+          ]
+        },
+        "gptbot": {
+          "status": 403,
+          "words": 135,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            135,
+            135,
+            135
+          ]
+        },
+        "claudebot": {
+          "status": 403,
+          "words": 135,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            135,
+            135,
+            135
+          ]
+        },
+        "claudeuser": {
+          "status": 403,
+          "words": 135,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            135,
+            135,
+            135
+          ]
+        },
+        "perplexity": {
+          "status": 403,
+          "words": 135,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            135,
+            135,
+            135
+          ]
+        },
+        "wba_unsigned": {
+          "status": 200,
+          "words": 1438,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            1438,
+            1438,
+            1438
+          ]
+        },
+        "oai_fd": {
+          "status": 200,
+          "words": 1255,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            1255,
+            1255,
+            1255
+          ]
+        },
+        "xai_img": {
+          "status": 200,
+          "words": 1438,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            1438,
+            1438,
+            1438
+          ]
+        }
+      }
+    },
+    {
+      "key": "stackoverflow",
+      "url": "https://stackoverflow.com/",
+      "note": "answers 402 to some crawlers",
+      "verdict": "unmeasurable",
+      "controlDetail": "chrome:blocked curl:blocked honest:blocked",
+      "results": {
+        "chrome": {
+          "status": 403,
+          "words": 9,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            9,
+            9,
+            9
+          ]
+        },
+        "curl": {
+          "status": 403,
+          "words": 9,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            9,
+            9,
+            9
+          ]
+        },
+        "honest": {
+          "status": 403,
+          "words": 9,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            9,
+            9,
+            9
+          ]
+        },
+        "bingbot": {
+          "status": 403,
+          "words": 9,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            9,
+            9,
+            9
+          ]
+        },
+        "googlebot": {
+          "status": 403,
+          "words": 9,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            9,
+            9,
+            9
+          ]
+        },
+        "applebot": {
+          "status": 403,
+          "words": 9,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            9,
+            9,
+            9
+          ]
+        },
+        "duckduckbot": {
+          "status": 403,
+          "words": 9,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            9,
+            9,
+            9
+          ]
+        },
+        "amazonbot": {
+          "status": 403,
+          "words": 9,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            9,
+            9,
+            9
+          ]
+        },
+        "facebookbot": {
+          "status": 429,
+          "words": 9,
+          "blocked": true,
+          "shell": false,
+          "unstable": true,
+          "spread": [
+            9,
+            9,
+            9
+          ]
+        },
+        "gptbot": {
+          "status": 429,
+          "words": 9,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            9,
+            9,
+            9
+          ]
+        },
+        "claudebot": {
+          "status": 429,
+          "words": 9,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            9,
+            9,
+            9
+          ]
+        },
+        "claudeuser": {
+          "status": 429,
+          "words": 9,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            9,
+            9,
+            9
+          ]
+        },
+        "perplexity": {
+          "status": 429,
+          "words": 9,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            9,
+            9,
+            9
+          ]
+        },
+        "wba_unsigned": {
+          "status": 429,
+          "words": 9,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            9,
+            9,
+            9
+          ]
+        },
+        "oai_fd": {
+          "status": 429,
+          "words": 9,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            9,
+            9,
+            9
+          ]
+        },
+        "xai_img": {
+          "status": 429,
+          "words": 9,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            9,
+            9,
+            9
+          ]
+        }
+      }
+    },
+    {
+      "key": "wikipedia",
+      "url": "https://en.wikipedia.org/wiki/Web_crawler",
+      "note": "an open reference article",
+      "verdict": "measurable",
+      "controlDetail": "chrome:ok curl:ok honest:ok",
+      "results": {
+        "chrome": {
+          "status": 200,
+          "words": 8243,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            8243,
+            8243,
+            8243
+          ]
+        },
+        "curl": {
+          "status": 200,
+          "words": 8243,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            8243,
+            8243,
+            8243
+          ]
+        },
+        "honest": {
+          "status": 200,
+          "words": 8243,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            8243,
+            8243,
+            8243
+          ]
+        },
+        "bingbot": {
+          "status": 403,
+          "words": 10,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            10,
+            10,
+            10
+          ]
+        },
+        "googlebot": {
+          "status": 403,
+          "words": 10,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            10,
+            10,
+            10
+          ]
+        },
+        "applebot": {
+          "status": 403,
+          "words": 10,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            10,
+            10,
+            10
+          ]
+        },
+        "duckduckbot": {
+          "status": 403,
+          "words": 10,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            10,
+            10,
+            10
+          ]
+        },
+        "amazonbot": {
+          "status": 200,
+          "words": 8243,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            8243,
+            8243,
+            8243
+          ]
+        },
+        "facebookbot": {
+          "status": 403,
+          "words": 10,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            10,
+            10,
+            10
+          ]
+        },
+        "gptbot": {
+          "status": 200,
+          "words": 8243,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            8243,
+            8243,
+            8243
+          ]
+        },
+        "claudebot": {
+          "status": 403,
+          "words": 9,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            9,
+            9,
+            9
+          ]
+        },
+        "claudeuser": {
+          "status": 200,
+          "words": 8243,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            8243,
+            8243,
+            8243
+          ]
+        },
+        "perplexity": {
+          "status": 200,
+          "words": 8243,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            8243,
+            8243,
+            8243
+          ]
+        },
+        "wba_unsigned": {
+          "status": 200,
+          "words": 8243,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            8243,
+            8243,
+            8243
+          ]
+        },
+        "oai_fd": {
+          "status": 200,
+          "words": 8243,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            8243,
+            8243,
+            8243
+          ]
+        },
+        "xai_img": {
+          "status": 200,
+          "words": 8243,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            8243,
+            8243,
+            8243
+          ]
+        }
+      }
+    },
+    {
+      "key": "reddit",
+      "url": "https://www.reddit.com/r/programming/",
+      "note": "post-Google-deal access control",
+      "verdict": "measurable",
+      "controlDetail": "chrome:shell-in curl:shell-in honest:shell-in",
+      "results": {
+        "chrome": {
+          "status": 200,
+          "words": 1,
+          "blocked": false,
+          "shell": true,
+          "unstable": false,
+          "spread": [
+            1,
+            1,
+            1
+          ]
+        },
+        "curl": {
+          "status": 200,
+          "words": 1,
+          "blocked": false,
+          "shell": true,
+          "unstable": false,
+          "spread": [
+            1,
+            1,
+            1
+          ]
+        },
+        "honest": {
+          "status": 200,
+          "words": 1,
+          "blocked": false,
+          "shell": true,
+          "unstable": false,
+          "spread": [
+            1,
+            1,
+            1
+          ]
+        },
+        "bingbot": {
+          "status": 403,
+          "words": 133,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            133,
+            133,
+            133
+          ]
+        },
+        "googlebot": {
+          "status": 403,
+          "words": 132,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            132,
+            132,
+            132
+          ]
+        },
+        "applebot": {
+          "status": 200,
+          "words": 1,
+          "blocked": false,
+          "shell": true,
+          "unstable": false,
+          "spread": [
+            1,
+            1,
+            1
+          ]
+        },
+        "duckduckbot": {
+          "status": 200,
+          "words": 1,
+          "blocked": false,
+          "shell": true,
+          "unstable": false,
+          "spread": [
+            1,
+            1,
+            44
+          ]
+        },
+        "amazonbot": {
+          "status": 429,
+          "words": 0,
+          "blocked": true,
+          "shell": false,
+          "unstable": true,
+          "spread": [
+            1641,
+            0,
+            0
+          ]
+        },
+        "facebookbot": {
+          "status": 200,
+          "words": 1640,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            1640,
+            1647,
+            1629
+          ]
+        },
+        "gptbot": {
+          "status": 403,
+          "words": 133,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            133,
+            133,
+            133
+          ]
+        },
+        "claudebot": {
+          "status": 429,
+          "words": 0,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            0,
+            0,
+            0
+          ]
+        },
+        "claudeuser": {
+          "status": 200,
+          "words": 1,
+          "blocked": false,
+          "shell": true,
+          "unstable": false,
+          "spread": [
+            1,
+            1,
+            1
+          ]
+        },
+        "perplexity": {
+          "status": 200,
+          "words": 1,
+          "blocked": false,
+          "shell": true,
+          "unstable": false,
+          "spread": [
+            1,
+            1,
+            1
+          ]
+        },
+        "wba_unsigned": {
+          "status": 200,
+          "words": 1,
+          "blocked": false,
+          "shell": true,
+          "unstable": false,
+          "spread": [
+            1,
+            1,
+            1
+          ]
+        },
+        "oai_fd": {
+          "status": 200,
+          "words": 44,
+          "blocked": false,
+          "shell": true,
+          "unstable": false,
+          "spread": [
+            1,
+            44,
+            44
+          ]
+        },
+        "xai_img": {
+          "status": 200,
+          "words": 44,
+          "blocked": false,
+          "shell": true,
+          "unstable": false,
+          "spread": [
+            44,
+            44,
+            1
+          ]
+        }
+      }
+    },
+    {
+      "key": "theatlantic",
+      "url": "https://www.theatlantic.com/",
+      "note": "a second paywalled newsroom, testing whether the denylist shape repeats",
+      "verdict": "measurable",
+      "controlDetail": "chrome:ok curl:ok honest:ok",
+      "results": {
+        "chrome": {
+          "status": 200,
+          "words": 1344,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            1344,
+            1344,
+            1344
+          ]
+        },
+        "curl": {
+          "status": 200,
+          "words": 1344,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            1344,
+            1344,
+            1344
+          ]
+        },
+        "honest": {
+          "status": 200,
+          "words": 1344,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            1344,
+            1344,
+            1344
+          ]
+        },
+        "bingbot": {
+          "status": 200,
+          "words": 1344,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            1344,
+            1344,
+            1344
+          ]
+        },
+        "googlebot": {
+          "status": 200,
+          "words": 1344,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            1344,
+            1344,
+            1344
+          ]
+        },
+        "applebot": {
+          "status": 402,
+          "words": 7,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            7,
+            7,
+            7
+          ]
+        },
+        "duckduckbot": {
+          "status": 200,
+          "words": 1344,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            1344,
+            1344,
+            1344
+          ]
+        },
+        "amazonbot": {
+          "status": 200,
+          "words": 1344,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            1344,
+            1344,
+            1344
+          ]
+        },
+        "facebookbot": {
+          "status": 200,
+          "words": 1344,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            1344,
+            1344,
+            1344
+          ]
+        },
+        "gptbot": {
+          "status": 200,
+          "words": 1344,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            1344,
+            1344,
+            1344
+          ]
+        },
+        "claudebot": {
+          "status": 402,
+          "words": 7,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            7,
+            7,
+            7
+          ]
+        },
+        "claudeuser": {
+          "status": 402,
+          "words": 7,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            7,
+            7,
+            7
+          ]
+        },
+        "perplexity": {
+          "status": 402,
+          "words": 7,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            7,
+            7,
+            7
+          ]
+        },
+        "wba_unsigned": {
+          "status": 200,
+          "words": 1344,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            1344,
+            1344,
+            1344
+          ]
+        },
+        "oai_fd": {
+          "status": 200,
+          "words": 1344,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            1344,
+            1344,
+            1344
+          ]
+        },
+        "xai_img": {
+          "status": 200,
+          "words": 1344,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            1344,
+            1344,
+            1344
+          ]
+        }
+      }
+    },
+    {
+      "key": "github",
+      "url": "https://github.com/",
+      "note": "a developer platform with no AI-crawler position",
+      "verdict": "measurable",
+      "controlDetail": "chrome:ok curl:ok honest:ok",
+      "results": {
+        "chrome": {
+          "status": 200,
+          "words": 1135,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            1135,
+            1135,
+            1135
+          ]
+        },
+        "curl": {
+          "status": 200,
+          "words": 1135,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            1135,
+            1135,
+            1135
+          ]
+        },
+        "honest": {
+          "status": 200,
+          "words": 1135,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            1135,
+            1135,
+            1135
+          ]
+        },
+        "bingbot": {
+          "status": 200,
+          "words": 1135,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            1135,
+            1135,
+            1135
+          ]
+        },
+        "googlebot": {
+          "status": 200,
+          "words": 1135,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            1135,
+            1135,
+            1135
+          ]
+        },
+        "applebot": {
+          "status": 200,
+          "words": 1135,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            1135,
+            1135,
+            1135
+          ]
+        },
+        "duckduckbot": {
+          "status": 200,
+          "words": 1135,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            1135,
+            1135,
+            1135
+          ]
+        },
+        "amazonbot": {
+          "status": 200,
+          "words": 1135,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            1135,
+            1135,
+            1135
+          ]
+        },
+        "facebookbot": {
+          "status": 200,
+          "words": 1135,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            1135,
+            1135,
+            1135
+          ]
+        },
+        "gptbot": {
+          "status": 200,
+          "words": 1135,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            1135,
+            1135,
+            1135
+          ]
+        },
+        "claudebot": {
+          "status": 200,
+          "words": 1135,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            1135,
+            1135,
+            1135
+          ]
+        },
+        "claudeuser": {
+          "status": 200,
+          "words": 1135,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            1135,
+            1135,
+            1135
+          ]
+        },
+        "perplexity": {
+          "status": 200,
+          "words": 1135,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            1135,
+            1135,
+            1135
+          ]
+        },
+        "wba_unsigned": {
+          "status": 200,
+          "words": 1135,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            1135,
+            1135,
+            1135
+          ]
+        },
+        "oai_fd": {
+          "status": 200,
+          "words": 1135,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            1135,
+            1135,
+            1135
+          ]
+        },
+        "xai_img": {
+          "status": 200,
+          "words": 1135,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            1135,
+            1135,
+            1135
+          ]
+        }
+      }
+    },
+    {
+      "key": "hackernews",
+      "url": "https://news.ycombinator.com/",
+      "note": "plain HTML, no CDN bot management",
+      "verdict": "measurable",
+      "controlDetail": "chrome:ok curl:ok honest:ok",
+      "results": {
+        "chrome": {
+          "status": 200,
+          "words": 747,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            747,
+            747,
+            747
+          ]
+        },
+        "curl": {
+          "status": 200,
+          "words": 747,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            747,
+            747,
+            747
+          ]
+        },
+        "honest": {
+          "status": 200,
+          "words": 747,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            747,
+            747,
+            747
+          ]
+        },
+        "bingbot": {
+          "status": 200,
+          "words": 747,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            747,
+            747,
+            747
+          ]
+        },
+        "googlebot": {
+          "status": 200,
+          "words": 747,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            747,
+            747,
+            747
+          ]
+        },
+        "applebot": {
+          "status": 200,
+          "words": 747,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            747,
+            747,
+            747
+          ]
+        },
+        "duckduckbot": {
+          "status": 200,
+          "words": 747,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            747,
+            747,
+            747
+          ]
+        },
+        "amazonbot": {
+          "status": 200,
+          "words": 747,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            747,
+            747,
+            747
+          ]
+        },
+        "facebookbot": {
+          "status": 200,
+          "words": 747,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            747,
+            747,
+            747
+          ]
+        },
+        "gptbot": {
+          "status": 200,
+          "words": 747,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            747,
+            747,
+            747
+          ]
+        },
+        "claudebot": {
+          "status": 200,
+          "words": 747,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            747,
+            747,
+            747
+          ]
+        },
+        "claudeuser": {
+          "status": 200,
+          "words": 747,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            747,
+            747,
+            747
+          ]
+        },
+        "perplexity": {
+          "status": 200,
+          "words": 747,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            747,
+            747,
+            747
+          ]
+        },
+        "wba_unsigned": {
+          "status": 200,
+          "words": 747,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            747,
+            747,
+            747
+          ]
+        },
+        "oai_fd": {
+          "status": 200,
+          "words": 747,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            747,
+            747,
+            747
+          ]
+        },
+        "xai_img": {
+          "status": 200,
+          "words": 747,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            747,
+            747,
+            747
+          ]
+        }
+      }
+    },
+    {
+      "key": "medium",
+      "url": "https://medium.com/",
+      "note": "expected to fail its controls",
+      "verdict": "unmeasurable",
+      "controlDetail": "chrome:blocked curl:blocked honest:blocked",
+      "results": {
+        "chrome": {
+          "status": 403,
+          "words": 127,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            127,
+            127,
+            127
+          ]
+        },
+        "curl": {
+          "status": 403,
+          "words": 127,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            127,
+            127,
+            127
+          ]
+        },
+        "honest": {
+          "status": 403,
+          "words": 127,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            127,
+            127,
+            127
+          ]
+        },
+        "bingbot": {
+          "status": 403,
+          "words": 127,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            127,
+            127,
+            127
+          ]
+        },
+        "googlebot": {
+          "status": 403,
+          "words": 127,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            127,
+            127,
+            127
+          ]
+        },
+        "applebot": {
+          "status": 403,
+          "words": 127,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            127,
+            127,
+            127
+          ]
+        },
+        "duckduckbot": {
+          "status": 403,
+          "words": 127,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            127,
+            127,
+            127
+          ]
+        },
+        "amazonbot": {
+          "status": 403,
+          "words": 127,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            127,
+            127,
+            127
+          ]
+        },
+        "facebookbot": {
+          "status": 403,
+          "words": 127,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            127,
+            127,
+            127
+          ]
+        },
+        "gptbot": {
+          "status": 403,
+          "words": 127,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            127,
+            127,
+            127
+          ]
+        },
+        "claudebot": {
+          "status": 403,
+          "words": 127,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            127,
+            127,
+            127
+          ]
+        },
+        "claudeuser": {
+          "status": 403,
+          "words": 127,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            127,
+            127,
+            127
+          ]
+        },
+        "perplexity": {
+          "status": 403,
+          "words": 127,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            127,
+            127,
+            127
+          ]
+        },
+        "wba_unsigned": {
+          "status": 403,
+          "words": 127,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            127,
+            127,
+            127
+          ]
+        },
+        "oai_fd": {
+          "status": 403,
+          "words": 127,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            127,
+            127,
+            127
+          ]
+        },
+        "xai_img": {
+          "status": 403,
+          "words": 127,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            127,
+            127,
+            127
+          ]
+        }
+      }
+    },
+    {
+      "key": "quora",
+      "url": "https://www.quora.com/",
+      "note": "expected to fail its controls",
+      "verdict": "unmeasurable",
+      "controlDetail": "chrome:blocked curl:blocked honest:blocked",
+      "results": {
+        "chrome": {
+          "status": 403,
+          "words": 9,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            9,
+            9,
+            9
+          ]
+        },
+        "curl": {
+          "status": 403,
+          "words": 9,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            9,
+            9,
+            9
+          ]
+        },
+        "honest": {
+          "status": 403,
+          "words": 9,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            9,
+            9,
+            9
+          ]
+        },
+        "bingbot": {
+          "status": 403,
+          "words": 9,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            9,
+            9,
+            9
+          ]
+        },
+        "googlebot": {
+          "status": 403,
+          "words": 9,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            9,
+            9,
+            9
+          ]
+        },
+        "applebot": {
+          "status": 403,
+          "words": 9,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            9,
+            9,
+            9
+          ]
+        },
+        "duckduckbot": {
+          "status": 403,
+          "words": 9,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            9,
+            9,
+            9
+          ]
+        },
+        "amazonbot": {
+          "status": 403,
+          "words": 9,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            9,
+            9,
+            9
+          ]
+        },
+        "facebookbot": {
+          "status": 403,
+          "words": 9,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            9,
+            9,
+            9
+          ]
+        },
+        "gptbot": {
+          "status": 403,
+          "words": 9,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            9,
+            9,
+            9
+          ]
+        },
+        "claudebot": {
+          "status": 403,
+          "words": 9,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            9,
+            9,
+            9
+          ]
+        },
+        "claudeuser": {
+          "status": 403,
+          "words": 9,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            9,
+            9,
+            9
+          ]
+        },
+        "perplexity": {
+          "status": 403,
+          "words": 9,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            9,
+            9,
+            9
+          ]
+        },
+        "wba_unsigned": {
+          "status": 403,
+          "words": 9,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            9,
+            9,
+            9
+          ]
+        },
+        "oai_fd": {
+          "status": 403,
+          "words": 9,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            9,
+            9,
+            9
+          ]
+        },
+        "xai_img": {
+          "status": 403,
+          "words": 9,
+          "blocked": true,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            9,
+            9,
+            9
+          ]
+        }
+      }
+    },
+    {
+      "key": "aadharsh",
+      "url": "https://aadhar.sh/",
+      "note": "this site, which serves everyone the same document",
+      "verdict": "measurable",
+      "controlDetail": "chrome:ok curl:ok honest:ok",
+      "results": {
+        "chrome": {
+          "status": 200,
+          "words": 314,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            314,
+            314,
+            314
+          ]
+        },
+        "curl": {
+          "status": 200,
+          "words": 314,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            314,
+            314,
+            314
+          ]
+        },
+        "honest": {
+          "status": 200,
+          "words": 314,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            314,
+            314,
+            314
+          ]
+        },
+        "bingbot": {
+          "status": 200,
+          "words": 314,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            314,
+            314,
+            314
+          ]
+        },
+        "googlebot": {
+          "status": 200,
+          "words": 314,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            314,
+            314,
+            314
+          ]
+        },
+        "applebot": {
+          "status": 200,
+          "words": 314,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            314,
+            314,
+            314
+          ]
+        },
+        "duckduckbot": {
+          "status": 200,
+          "words": 314,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            314,
+            314,
+            314
+          ]
+        },
+        "amazonbot": {
+          "status": 200,
+          "words": 314,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            314,
+            314,
+            314
+          ]
+        },
+        "facebookbot": {
+          "status": 200,
+          "words": 314,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            314,
+            314,
+            314
+          ]
+        },
+        "gptbot": {
+          "status": 200,
+          "words": 314,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            314,
+            314,
+            314
+          ]
+        },
+        "claudebot": {
+          "status": 200,
+          "words": 314,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            314,
+            314,
+            314
+          ]
+        },
+        "claudeuser": {
+          "status": 200,
+          "words": 314,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            314,
+            314,
+            314
+          ]
+        },
+        "perplexity": {
+          "status": 200,
+          "words": 314,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            314,
+            314,
+            314
+          ]
+        },
+        "wba_unsigned": {
+          "status": 200,
+          "words": 314,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            314,
+            314,
+            314
+          ]
+        },
+        "oai_fd": {
+          "status": 200,
+          "words": 314,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            314,
+            314,
+            314
+          ]
+        },
+        "xai_img": {
+          "status": 200,
+          "words": 314,
+          "blocked": false,
+          "shell": false,
+          "unstable": false,
+          "spread": [
+            314,
+            314,
+            314
+          ]
+        }
+      }
+    }
+  ]
+}

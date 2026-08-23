@@ -113,10 +113,11 @@
       }
       html += '</div><div class="luq-fb" aria-live="polite"></div><div class="luq-row"><button type="button" class="luq-btn luq-check" disabled>Check</button></div>';
       qwrap.innerHTML = html;
-      var check = qwrap.querySelector(".luq-check"), fb = qwrap.querySelector(".luq-fb");
+      var check = /** @type {HTMLButtonElement} */ (qwrap.querySelector(".luq-check")),
+          fb = qwrap.querySelector(".luq-fb");
       qwrap.querySelector(".luq-opts").addEventListener("change", function () { check.disabled = false; });
       check.addEventListener("click", function () {
-        var picked = qwrap.querySelector("input:checked"); if (!picked) return;
+        var picked = /** @type {HTMLInputElement} */ (qwrap.querySelector("input:checked")); if (!picked) return;
         var pick = opts[+picked.value], hit = !!pick.ok;
         if (hit) score++;
         results.push({ q: q.q, hit: hit });
@@ -124,11 +125,11 @@
         var inputs = qwrap.querySelectorAll("input");
         for (var i = 0; i < inputs.length; i++) {
           inputs[i].disabled = true;
-          if (opts[i].ok) inputs[i].parentNode.classList.add("hit");
-          else if (inputs[i] === picked) inputs[i].parentNode.classList.add("miss");
+          if (opts[i].ok) /** @type {HTMLElement} */ (inputs[i].parentNode).classList.add("hit");
+          else if (inputs[i] === picked) /** @type {HTMLElement} */ (inputs[i].parentNode).classList.add("miss");
         }
         fb.innerHTML = '<p class="luq-why ' + (hit ? "hit" : "miss") + '"><b>' + (hit ? "Right." : "Close, and the miss is the useful part.") + "</b>" + esc(pick.why || "") + "</p>";
-        check.parentNode.innerHTML = '<button type="button" class="luq-btn luq-next">' + (idx + 1 < qs.length ? "Next &gt;" : "Finish") + "</button>";
+        /** @type {HTMLElement} */ (check.parentNode).innerHTML = '<button type="button" class="luq-btn luq-next">' + (idx + 1 < qs.length ? "Next &gt;" : "Finish") + "</button>";
         qwrap.querySelector(".luq-next").addEventListener("click", function () {
           idx++;
           if (idx < qs.length) renderQ(); else renderEnd();
@@ -190,10 +191,10 @@
       html += "</div>";
       var m = msg("bot", html);
       m.querySelector(".luq-opts").addEventListener("click", function (e) {
-        var b = e.target.closest(".luq-opt"); if (!b || b.disabled) return;
+        var b = /** @type {HTMLButtonElement} */ (/** @type {Element} */ (e.target).closest(".luq-opt")); if (!b || b.disabled) return;
         var pick = opts[+b.dataset.i], hit = !!pick.ok;
         if (hit) score++;
-        var btns = m.querySelectorAll(".luq-opt");
+        var btns = /** @type {NodeListOf<HTMLButtonElement>} */ (m.querySelectorAll(".luq-opt"));
         for (var i = 0; i < btns.length; i++) btns[i].disabled = true;
         b.classList.add("was-pick");
         msg("you", "<p>" + esc(pick.t) + "</p>");

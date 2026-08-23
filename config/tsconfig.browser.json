@@ -19,15 +19,22 @@
     "skipLibCheck": true,
     "strict": false
   },
-  // The shared hover engine and its two consumers are included together because
-  // tsc follows their static imports. The shell's Run and tray islands complete
-  // the first-interaction surface without pulling Worker modules into this graph.
+  // A GLOB, not a list. This named six files until 2026-08-20, and by then ten
+  // more client islands had shipped without joining it — including lens.js, the
+  // largest client asset the site serves. An allowlist only grows when somebody
+  // remembers, so its coverage silently stops following the code, which is the
+  // same failure shape as every scanner in this repo that lost its target.
+  //
+  // public/**/*.js is here for the one island that lives outside src/client:
+  // /lwe/ask.js ships from public/ because it is page-specific rather than part
+  // of the shell.
+  // sw.js is EXCLUDED because it is a service worker, not a browser module; it
+  // has its own program in tsconfig.sw.json, where its globals are real. This is
+  // an exclusion with a checker behind it, not a gap.
+  "exclude": ["../src/client/sw.js"],
   "include": [
-    "../src/client/hoist.js",
-    "../src/client/tooltip.js",
-    "../src/client/infotip.js",
-    "../src/client/nav.js",
-    "../src/client/nav-run.js",
-    "../src/client/nav-tray.js"
+    "../src/client/**/*.js",
+    "../src/client/**/*.d.ts",
+    "../public/**/*.js"
   ]
 }

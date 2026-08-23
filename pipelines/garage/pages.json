@@ -17,6 +17,15 @@
       "lastmod": "2026-07-31",
       "navLabel": "octane",
       "navHint": "what a framework's floor costs against no framework"
+    },
+    {
+      "id": "useragent",
+      "title": "What a crawler name is worth",
+      "summary": "Sixteen identities against eleven sites: two invented user-agent strings cleared a wall four documented crawler tokens could not, one site caught the lie, and Reddit served a link-preview bot 1,640 words where a browser got one.",
+      "status": "shipped",
+      "lastmod": "2026-08-21",
+      "navLabel": "user-agent",
+      "navHint": "what a crawler name is worth when nothing verifies it"
     }
   ]
 }

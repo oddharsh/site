@@ -211,6 +211,12 @@ export const AGENT_SURFACES = [
     "description": "Lean and formal verification: why a proof is not an inspection, how a vacuous spec passes, a toy verified compiler you can break, and the 1,765 lines of statement holding up OpenAI's ten proofs."
   },
   {
+    "path": "/lwe/fuse",
+    "title": "eFuses",
+    "kind": "content",
+    "description": "eFuses and anti-rollback: why a signature cannot refuse yesterday's firmware, how a version floor kept in silicon becomes a one-way ratchet, and what that costs the owner."
+  },
+  {
     "path": "/garage/blueprint",
     "title": "Blueprint",
     "kind": "content",
@@ -287,6 +293,12 @@ export const AGENT_SURFACES = [
     "title": "Post-quantum signatures, priced",
     "kind": "content",
     "description": "What ML-DSA-44 and the hash-based alternatives cost on the one signature this site controls: its crawler's RFC 9421 request signing, which now carries two."
+  },
+  {
+    "path": "/garage/useragent",
+    "title": "What a crawler name is worth",
+    "kind": "content",
+    "description": "Sixteen identities against eleven sites: two invented user-agent strings cleared a wall four documented crawler tokens could not, one site caught the lie, and Reddit served a link-preview bot 1,640 words where a browser got one."
   },
   {
     "path": "/garage/safari27",
@@ -371,6 +383,7 @@ export const WEBMENTION_PATHS = [
   "/lwe/drivers",
   "/lwe/knots",
   "/lwe/lean",
+  "/lwe/fuse",
   "/garage/blueprint",
   "/garage/chunks",
   "/garage/cloudflare",
@@ -383,6 +396,7 @@ export const WEBMENTION_PATHS = [
   "/garage/octane",
   "/garage/pretext",
   "/garage/pqc",
+  "/garage/useragent",
   "/garage/safari27",
   "/garage/scroll",
   "/garage/teardown",

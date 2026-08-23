@@ -61,19 +61,50 @@ export function makeResolver({ files, routeKeys, allow, surfaces }) {
 /**
  * Every same-origin reference in one document.
  *
- * Attribute-quote-aware on purpose. minify-html UNQUOTES attributes it can, so the
- * served bytes carry `href=/coffee` far more often than `href="/coffee"`, and a
- * scanner written against the quoted form reads 33 refs where there are 2645. That
- * is the third naive scanner this repo's minified output has caught; see the
- * `<script` note in CLAUDE.md's whole-site HTML pass.
+ * PARSED, not pattern-matched, since 2026-08-20. HTMLRewriter is the same
+ * lol-html the Worker runs and it is a bun global, so this costs no dependency.
+ *
+ * WHAT THE REGEX ACTUALLY COVERED, measured when it was replaced, because it is
+ * not what its own comment claimed. It matched `href=` and `src=` — and
+ * `data-src=` too, by accident, since `src=` is a SUBSTRING of it. That accident
+ * was load-bearing: this site defers photo loading through `data-src`, so 23 real
+ * URLs on the homepage were being checked by luck. It never covered `srcset` or
+ * `data-srcset` at all, because neither ends in `src=`.
+ *
+ * So the attributes are named explicitly here, and srcset is split on its
+ * descriptors rather than swallowed whole. That is strictly more coverage than
+ * the regex had, and all of it is now deliberate.
+ *
+ * The reason to be rid of the pattern stands: minify-html UNQUOTES every
+ * attribute it can, and the first draft written against `href="..."` read 33
+ * refs where there were 2645. A parser knows all three quoting forms because it
+ * is a parser rather than a description of one.
+ *
+ * Async because HTMLRewriter streams; the caller awaits per document.
  */
-export function internalRefs(html) {
+const REF_ATTRS = ["href", "src", "data-src"];
+const SET_ATTRS = ["srcset", "data-srcset"];
+
+export async function internalRefs(html) {
   const out = [];
-  for (const m of html.matchAll(/(?:href|src)=(?:"([^"]*)"|'([^']*)'|([^\s">]+))/g)) {
-    const raw = m[1] ?? m[2] ?? m[3];
-    if (!raw || !raw.startsWith("/") || raw.startsWith("//")) continue;
+  const take = (raw) => {
+    if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return;
     const path = raw.split("#")[0].split("?")[0];
     if (path) out.push(path);
-  }
+  };
+  const handler = {
+    element(el) {
+      for (const a of REF_ATTRS) take(el.getAttribute(a));
+      // `url 200w, url 400w` — the descriptor is not part of the URL.
+      for (const a of SET_ATTRS) {
+        const v = el.getAttribute(a);
+        if (v) for (const part of v.split(",")) take(part.trim().split(/\s+/)[0]);
+      }
+    },
+  };
+  await new HTMLRewriter()
+    .on("*", handler)
+    .transform(new Response(html))
+    .arrayBuffer();
   return out;
 }

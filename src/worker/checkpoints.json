@@ -880,5 +880,19 @@
     "version": "aadhar-v190-nlweb",
     "vnum": 190,
     "ymd": "2026-08-19"
+  },
+  {
+    "slug": "lean-second-machine",
+    "title": "The Lean explainer now covers the other half of formal verification: the machine that never writes a proof, walks the program symbolically and hands the constraints to an SMT solver, and reads bytecode because a source-level model can drift from what actually executes. Also why the practice found its first routine home on chains, what a loop full of machine-generated invariants still cannot fix, and the FRI soundness formalization read for the gaps it published rather than the result it claims.",
+    "version": "aadhar-v191-lean-second-machine",
+    "vnum": 191,
+    "ymd": "2026-08-21"
+  },
+  {
+    "slug": "efuses",
+    "title": "The twelfth Learning With Errors explainer covers eFuses and anti-rollback at /lwe/fuse. Secure boot verifies that an image was signed by the vendor, and the vulnerable build from last year carries that same signature, so a stateless check has no grounds to refuse it. Rollback protection adds the missing state, and a counter blown into silicon is the one copy an attacker holding full write access to storage cannot lower. The owner pays for that too, because a version counter compares two numbers and cannot see who is asking. Two demos carry the argument: paired verifiers that disagree about exactly one of three images, and a fuse bank whose floor only climbs, with a button that offers to put the fuses back and explains why no such operation exists.",
+    "version": "aadhar-v192-efuses",
+    "vnum": 192,
+    "ymd": "2026-08-22"
   }
 ]

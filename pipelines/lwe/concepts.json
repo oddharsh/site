@@ -241,6 +241,55 @@
       "badge": "chat",
       "navLabel": "knots",
       "hasAsk": true
+    },
+    {
+      "id": "lean",
+      "title": "Lean",
+      "path": "/lwe/lean",
+      "status": "online",
+      "buddyName": "Lean",
+      "pm": "formal verification: the spec is the weak point, and the kernel had a hole",
+      "navHint": "lean, formal verification, specs, verified compilers, kernel soundness, openai ten-proofs",
+      "accent": "#4b47a8",
+      "accentSoft": "#ecebf8",
+      "glyph": "∀",
+      "glyphSize": 16,
+      "picGrad": [
+        "#7b76d0",
+        "#4b47a8"
+      ],
+      "picBorder": "#37347e",
+      "nameColor": "#37347e",
+      "lastmod": "2026-07-31",
+      "buddyClass": "lean",
+      "badge": "chat",
+      "navLabel": "lean",
+      "hasAsk": true
+    },
+    {
+      "id": "fuse",
+      "title": "eFuses",
+      "path": "/lwe/fuse",
+      "status": "online",
+      "buddyName": "eFuses",
+      "pm": "a bit that goes 0 to 1 once and never comes back",
+      "navHint": "efuses, anti-rollback, and why a phone refuses old firmware",
+      "accent": "#b0311d",
+      "accentSoft": "#fae9e4",
+      "glyph": "1",
+      "glyphSize": 14,
+      "glyphFont": "Courier New,Courier,monospace",
+      "picGrad": [
+        "#d9614a",
+        "#b0311d"
+      ],
+      "picBorder": "#8a2413",
+      "nameColor": "#8a2413",
+      "lastmod": "2026-08-21",
+      "buddyClass": "fuse",
+      "badge": "chat",
+      "navLabel": "fuse",
+      "hasAsk": true
     }
   ]
 }

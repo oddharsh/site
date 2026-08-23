@@ -116,6 +116,9 @@ test("every result carries resultType and server identity, and lists carry cache
   const env = { ASSETS: staticAssets({
     "/search-index.json": { records: [{ url: "/writing/agents", title: "Agents", description: "Notes", text: "cloudflare", kind: "writing" }] },
   }) };
+  // TUPLES. Inference widens the rows to (string | object | boolean)[], after
+  // which `...params` is a spread of something that might be a boolean.
+  /** @type {Array<[method: string, params: object, cacheable: boolean]>} */
   const cases = [
     ["tools/list", {}, true],
     ["resources/list", {}, true],

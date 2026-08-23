@@ -896,6 +896,43 @@ Before merging the first revision that uses this path, change each Workers
 Build project's production branch from `main` to `production`. Otherwise the
 merge push can still trigger the old direct production build.
 
+## Re-run the user-agent survey (`/garage/useragent`)
+
+```bash
+bun run ua:survey > /tmp/ua.json          # 16 identities x 11 targets x 3 trials
+TRIALS=1 bun run ua:survey nytimes        # one target, one pass
+```
+
+It writes a JSON report to stdout and a per-request progress log to stderr. To
+publish a new run, refresh `src/data/ua-survey.json`, then re-embed the compact
+copy in `pipelines/garage/specs/useragent.json` under `pageJs` and regenerate:
+
+```bash
+node pipelines/garage/generate.mjs page useragent && bun run gen:shell
+```
+
+**Read the control rows before reading anything else.** Every target carries a
+`verdict` of `measurable` or `unmeasurable`, decided by whether ANY control
+identity (Chrome, curl, our own honest string) got a readable response. An
+`unmeasurable` row means the origin refused the instrument, so its crawler
+columns say nothing about user-agent policy and must not be quoted as though
+they did. On the 2026-08-21 run that disqualified `medium.com`, `quora.com`,
+`stackoverflow.com` and `reddit.com`.
+
+**Expect the sample to shrink as you re-run it.** `linkedin.com` served Chrome
+about 11,800 words early on and was answering `999` to all sixteen identities by
+the third pass, from the same address. A survey that keeps sampling a defended
+origin trains that origin to refuse it, so widen `TARGETS` rather than
+re-hammering one host, and treat a target that went quiet as spent rather than as
+having changed policy.
+
+**A 200 is not access.** `reddit.com` answers 200 with one word to every
+identity including browsers, so the harness scores that as `shell` rather than
+`ok`. Anything under `SHELL_WORDS` (50) is a frame instead of a document.
+
+The same control reasoning governs `/lens`'s Bot views table, which shares the
+roster shape; see the `/lens` bot views section in CLAUDE.md.
+
 ## Understanding-first review
 
 Every pull request uses the author claim card in

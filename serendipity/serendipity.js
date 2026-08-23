@@ -828,9 +828,19 @@ async function fetchMyEvents(auth, selfId) {
   }
   return all;
 }
-async function fetchEventGuests(eventId, ticketKey, auth) {
-  const all = []; let cursor = null;
-  while (true) {
+// Walk a roster, bounded by the invocation's remaining fetch budget. Returns
+// the guests it could afford, whether the walk finished, and (when it did not)
+// the cursor to resume from next tick. This looped `while (true)` with no cap
+// until 2026-08-21: one 1,932-person event costs 20 fetches at 100 a page, and
+// seven past events had parked on "Too many subrequests" because of it. The
+// sibling fetchMyEvents has carried page caps for exactly this reason all along.
+export async function fetchEventGuests(eventId, ticketKey, auth, opts = {}) {
+  const budget = opts.budget || null;
+  const all = []; let cursor = opts.cursor || null;
+  for (;;) {
+    // Stop on the budget rather than on a page count, so a roster is paced by
+    // what the invocation can actually spend instead of by a guessed constant.
+    if (budget && budget.left <= 0) return { guests: all, done: false, cursor };
     // ticket_key ONLY when we have a real one. Sending ticket_key=null (the
     // literal, which URLSearchParams produces from a null value) makes Luma
     // 403 "you don't have access to see the guest list". Omitting it lets
@@ -840,12 +850,12 @@ async function fetchEventGuests(eventId, ticketKey, auth) {
     const p = new URLSearchParams({ event_api_id: eventId, pagination_limit: "100" });
     if (ticketKey) p.set("ticket_key", ticketKey);
     if (cursor) p.set("pagination_cursor", cursor);
+    if (budget) { budget.left--; budget.spent++; }
     const data = await (await lumaFetch(`${LUMA_API}/event/get-guest-list?${p}`, auth)).json();
     for (const e of (data.entries || [])) all.push(parseGuest(e.api_id, e.user || {}));
-    if (!data.has_more || !data.next_cursor) break;
+    if (!data.has_more || !data.next_cursor) return { guests: all, done: true, cursor: null };
     cursor = data.next_cursor;
   }
-  return all;
 }
 // Luma stores the description as a ProseMirror JSON doc (top-level
 // `description_mirror`), not markdown. Walk it to plain text: text nodes
@@ -1145,6 +1155,37 @@ async function handleAddEvent(request, env, d, uid) {
 
 const GUEST_SYNC_KEY = "serendipity_guest_sync_";
 
+// One mutable counter per scheduled invocation, threaded through the roster
+// sweep. A plain object rather than a closure so a caller can read `spent`
+// afterwards and put it on the log line.
+export function fetchBudget(max) { return { left: max, spent: 0 }; }
+
+// Cancellation pruning is only correct when this pass saw the ENTIRE roster in
+// one invocation. `done` alone is not enough: a pass that RESUMED from a cursor
+// also ends done while holding only the tail. Exported for the same reason
+// staleGuestIds is, since between them they are the destructive half.
+export function mayPruneRoster(page, resumedFrom) {
+  return !!(page && page.done && !resumedFrom);
+}
+
+// A budget-limited pass parks its progress as `partial:<seen>@<cursor>`. Read it
+// back so the next tick resumes mid-roster instead of re-buying pages it already
+// paid for. Every other marker (`ok:`, `error:`, missing) starts from the top.
+// `seen` is the running total across ticks, so a resumed walk that finishes can
+// still record an honest count rather than the size of its own tail.
+export function parseGuestSyncMark(value) {
+  const mark = asText(value);
+  const rest = mark && mark.startsWith("partial:") ? mark.slice(8) : null;
+  if (!rest) return { cursor: null, seen: 0 };
+  const at = rest.indexOf("@");
+  // slice past the FIRST separator only: a Luma cursor is opaque and may hold
+  // one of its own, and splitting on every "@" would truncate it into garbage.
+  const cursor = at < 0 ? "" : rest.slice(at + 1);
+  if (!cursor) return { cursor: null, seen: 0 };
+  const seen = parseInt(rest.slice(0, at), 10);
+  return { cursor, seen: Number.isFinite(seen) && seen > 0 ? seen : 0 };
+}
+
 // The roster endpoint is authoritative. Work out which old non-host links must
 // disappear after the fresh list has been inserted; otherwise cancellations stay
 // on the public page forever. Exported because the destructive half of a roster
@@ -1161,19 +1202,34 @@ async function markGuestSync(d, eventId, value) {
   ).run(GUEST_SYNC_KEY + eventId, value);
 }
 
-// sync one event's full guest list (batched writes). Returns {synced} or {error}.
-async function syncGuests(d, eventId, userKey, cookiesJson) {
+// Sync one event's guest list (batched writes), paced by the invocation's fetch
+// budget. Returns {synced,...}, {error}, or {skipped} when there was no budget
+// left to try. A skip deliberately writes NO marker: see the catch below.
+async function syncGuests(d, eventId, userKey, cookiesJson, budget = null) {
   const jar = cookieJar(cookiesJson);
   if (!jar || !jar.header()) return { error: "bad cookie json" };
-  const ev = await d.prepare("SELECT ticket_key, user_status FROM events WHERE id = ?").get(eventId);
+  // Ahead of the row lookup, so a skip costs nothing at all.
+  if (budget && budget.left <= 0) return { skipped: "budget" };
+  // The resume marker rides the row lookup that was already happening. Binding
+  // calls count against the same per-invocation ceiling as fetches, so reading
+  // it separately would have spent one more op per event in the sweep to learn
+  // something this query is already positioned to answer.
+  const ev = await d.prepare(
+    `SELECT e.ticket_key, e.user_status, s.value AS mark
+       FROM events e LEFT JOIN settings s ON s.key = ?
+      WHERE e.id = ?`
+  ).get(GUEST_SYNC_KEY + eventId, eventId);
   if (!ev) return { error: "event not found" };
   if (ev.user_status !== "going") return { error: `status is ${ev.user_status}, not going` };
   // no ticket_key gate: events you HOST/manage (and link-added ones) have no
   // ticket_key of your own, but the list still loads over the auth session.
   // fetchEventGuests omits a missing key rather than sending null (which 403s).
   const selfId = selfIdFrom(cookiesJson);
+  const { cursor: resume, seen: alreadySeen } = parseGuestSyncMark(ev.mark);
   try {
-    const guests = await fetchEventGuests(eventId, ev.ticket_key, jar);
+    const page = await fetchEventGuests(eventId, ev.ticket_key, jar, { budget, cursor: resume });
+    const guests = page.guests;
+    const total = alreadySeen + guests.length;
     const S = [];
     for (const g of guests) {
       if (!g.id || g.id === selfId) continue;
@@ -1184,19 +1240,38 @@ async function syncGuests(d, eventId, userKey, cookiesJson) {
     // Insert first, then remove links absent from the authoritative response.
     // A failure can leave stale rows behind, but it can never erase a valid row
     // before its replacement was safely written.
-    const existing = await d.prepare(
-      "SELECT attendee_id FROM event_attendees WHERE event_id = ? AND is_host = 0"
-    ).all(eventId);
-    const stale = staleGuestIds(existing.map((r) => r.attendee_id), guests, selfId);
-    await d.batch(stale.map((id) => d.stmt(
-      "DELETE FROM event_attendees WHERE event_id = ? AND attendee_id = ? AND is_host = 0", eventId, id
-    )));
-    await markGuestSync(d, eventId, `ok:${guests.length}`);
+    //
+    // "Authoritative" holds ONLY for a walk that covered the whole roster inside
+    // one invocation. A budget-limited pass holds one page, and a RESUMED pass
+    // holds just the tail, so pruning against either would delete every guest the
+    // earlier pages had already stored -- 1,932 rows down to 100 on the event
+    // that prompted this. Both cases keep their inserts, which are upsert-only
+    // and safe per page, and defer the prune to the next full walk. The cost is
+    // that a roster too large to walk in one budget never prunes cancellations;
+    // at 100 a page and a budget of 24 that starts above ~2,400 guests.
+    const fullWalk = mayPruneRoster(page, resume);
+    let stale = [];
+    if (fullWalk) {
+      const existing = await d.prepare(
+        "SELECT attendee_id FROM event_attendees WHERE event_id = ? AND is_host = 0"
+      ).all(eventId);
+      stale = staleGuestIds(existing.map((r) => r.attendee_id), guests, selfId);
+      await d.batch(stale.map((id) => d.stmt(
+        "DELETE FROM event_attendees WHERE event_id = ? AND attendee_id = ? AND is_host = 0", eventId, id
+      )));
+    }
+    await markGuestSync(d, eventId, page.done ? `ok:${total}` : `partial:${total}@${page.cursor}`);
     await persistJar(d, userKey, jar);
-    return { synced: guests.length, removed: stale.length };
+    if (!page.done) return { synced: guests.length, total, partial: true };
+    return { synced: total, removed: stale.length, pruned: fullWalk };
   } catch (err) {
     await persistJar(d, userKey, jar).catch(() => {});
     const m = err instanceof Error ? err.message : String(err);
+    // A platform ceiling means our budget was wrong, never that this event is
+    // broken. Marking it parks a healthy roster in the past-event retry queue,
+    // which selects on `NOT LIKE 'ok:%'`, so it returns every tick, spends the
+    // budget again and fails again. That loop is what stranded seven events.
+    if (/too many subrequests/i.test(m)) return { skipped: "subrequests" };
     const error = m.includes("403") ? "GUEST_LIST_RESTRICTED" : m;
     await markGuestSync(d, eventId, `error:${error.slice(0, 180)}`).catch(() => {});
     return { error };
@@ -1260,8 +1335,13 @@ async function handleSync(request, env, d) {
   const sets = await d.prepare("SELECT user_key, cookies_json, label FROM user_cookies WHERE enabled = 1").all();
   const eventId = url.searchParams.get("event");
   const out = [];
+  // A manual sync owns its whole invocation, so it gets the cap less headroom
+  // rather than the sweep's share. Bounded all the same: an admin refresh of a
+  // 5,000-person roster would otherwise hit the same ceiling the cron did, and
+  // the marker it leaves behind lets the next tick resume where this stopped.
+  const budget = fetchBudget(Math.max(0, CRON_SUBREQUEST_CAP - CRON_BUDGET_HEADROOM));
   for (const s of sets) {
-    if (eventId) out.push({ label: s.label, event: eventId, ...(await syncGuests(d, eventId, s.user_key, s.cookies_json)) });
+    if (eventId) out.push({ label: s.label, event: eventId, ...(await syncGuests(d, eventId, s.user_key, s.cookies_json, budget)) });
     else out.push({ label: s.label, ...(await syncEvents(d, s.user_key, s.cookies_json)) });
   }
   return new Response(JSON.stringify({ ok: true, results: out }, null, 2), { headers: { "content-type": "application/json" } });
@@ -1288,11 +1368,29 @@ async function handleSync(request, env, d) {
 const CRON_UPCOMING_GUEST_EVENTS = 4;
 const CRON_PAST_GUEST_EVENTS = SERENDIPITY_SYNC_LIMITS.pastGuestEvents;
 const CRON_DESC_LIMIT = 10;
+// Workers Free allows 50 subrequests per invocation and D1 calls count toward it
+// (gotcha 36). The two passes bracketing the roster sweep are already bounded --
+// syncEvents spends futurePages + pastPages per enabled cookie set, and
+// syncDescriptions spends at most CRON_DESC_LIMIT -- so the sweep, the one
+// unbounded pass, gets what those cannot claim, less headroom for the D1 batches.
+// Reserved rather than measured, because syncEvents runs first and reports no
+// spend, and guessing low costs a deferred page while guessing high costs the
+// whole tail of the tick. The cap is a documented plan limit rather than
+// something the runtime reports: the error names no number, so re-measure this
+// against the account's plan before tuning it.
+const CRON_SUBREQUEST_CAP = 50;
+const CRON_BUDGET_HEADROOM = 6;
+export function guestSweepBudget(setCount, cap = CRON_SUBREQUEST_CAP) {
+  const perSet = SERENDIPITY_SYNC_LIMITS.futurePages + SERENDIPITY_SYNC_LIMITS.pastPages;
+  return Math.max(0, cap - (setCount * perSet) - CRON_DESC_LIMIT - CRON_BUDGET_HEADROOM);
+}
 export async function cronSerendipity(env) {
   const d = db(env);
   const sets = await d.prepare("SELECT user_key, cookies_json, label FROM user_cookies WHERE enabled = 1").all();
   if (!sets.length) { console.log(JSON.stringify({ cron: "serendipity", skipped: "no enabled cookie sets" })); return; }
-  const out = { events: [], guests: [], descriptions: null };
+  const out = { events: [], guests: [], skipped: [], descriptions: null };
+  // One budget for the whole sweep, so no single roster can spend the tick.
+  const budget = fetchBudget(guestSweepBudget(sets.length));
   for (const s of sets) out.events.push({ label: s.label, ...(await syncEvents(d, s.user_key, s.cookies_json)) });
   // Re-read the sets before the guest pass: if syncEvents absorbed a rotation,
   // the pass after it must send what Luma just issued, never the old snapshot.
@@ -1316,16 +1414,26 @@ export async function cronSerendipity(env) {
       ORDER BY (gs.updated_at IS NULL) DESC, datetime(gs.updated_at) ASC, datetime(e.start_at) DESC
       LIMIT ?`
   ).all(GUEST_SYNC_KEY, CRON_PAST_GUEST_EVENTS);
+  // Upcoming first, then past: `soon` is what someone is about to walk into and
+  // a past roster is immutable backfill nobody reads under time pressure, so the
+  // backfill takes the remainder and stops when the remainder is gone.
   for (const ev of [...soon, ...past]) {
+    if (budget.left <= 0) { out.skipped.push(ev.id); continue; }
     // first set that can read this list wins; with one contributor that is one
     // try, and a restricted list falls through to the next set rather than dying.
-    /** @type {{error?: string, synced?: number}} */
+    /** @type {{error?: string, synced?: number, skipped?: string}} */
     let r = { error: "no readable cookie set" };
-    for (const s of fresh) { r = await syncGuests(d, ev.id, s.user_key, s.cookies_json); if (!r.error) break; }
-    out.guests.push({ event: ev.id, ...r });
+    for (const s of fresh) { r = await syncGuests(d, ev.id, s.user_key, s.cookies_json, budget); if (!r.error) break; }
+    if (r.skipped) out.skipped.push(ev.id);
+    else out.guests.push({ event: ev.id, ...r });
   }
   out.descriptions = await syncDescriptions(d, fresh[0].user_key, fresh[0].cookies_json, CRON_DESC_LIMIT);
-  console.log(JSON.stringify({ cron: "serendipity", ...out }));
+  // fetches + budget_exhausted are the two numbers that were missing while the
+  // sweep was silently overspending. An exhausted budget is normal on a tick
+  // holding a large roster; it is a problem only when it never clears.
+  console.log(JSON.stringify({
+    cron: "serendipity", ...out, fetches: budget.spent, budget_exhausted: budget.left <= 0,
+  }));
 }
 
 // ════════════════════════════════════════════════════════════════════════════

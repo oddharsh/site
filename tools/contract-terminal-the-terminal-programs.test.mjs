@@ -14,6 +14,7 @@ import {
   terminalGet,
   terminalReq,
   test,
+  testGlobals,
   tokenizeKeys,
 } from "./contract-shared.mjs";
 
@@ -209,24 +210,48 @@ test("every frame tool the MCP server lists is one the server can actually call"
   for (const name of FRAME_TOOLS) assert.ok(listed.includes(name), `${name} has a route but is not an MCP tool`);
   assert.ok(!listed.some((n) => n.startsWith("terminal_")), "tool names must match their routes, not the console");
 
-  for (const name of FRAME_TOOLS) {
-    const args = name === "lens" ? { url: "https://example.com" }
-      : name === "radar" ? { samples: [{ name: "AP", rssi: -58 }] }
-      : {};
-    const res = await handleSiteMcp(mcpPost({
-      jsonrpc: "2.0", id: 2, method: "tools/call", params: { name, arguments: args, ...MODERN_META },
-    }), env, context());
-    const { result, error } = await res.json();
-    assert.ok(!error, `${name} is listed but not dispatched: ${JSON.stringify(error)}`);
-    // terminal_lens reaches a real fetch it cannot make here, so it is allowed to
-    // come back as a rendered failure — what it may NOT do is come back unknown.
-    const frame = result.structuredContent?.frame ?? "";
-    // Was `frame.includes("╔")`. The box is gone; what still has to be true is
-    // that a frame came back at all and that it names the tool that drew it.
-    assert.ok(frame.length > 20, `${name} returned no frame`);
-    assert.ok(frame.startsWith(name.replace("_", "-")) || frame.includes(name.replace("_", "-")),
-      `${name}'s frame does not say which tool drew it: ${frame.slice(0, 60)}`);
-    assert.ok(!frame.includes("\x1b"), `${name} returned ANSI escapes into a model context`);
+  // `agent_ready` with no arguments audits THIS origin, which fans out to 26
+  // door probes plus 4 DNS-AID lookups. Measured 2026-08-21 with a fetch
+  // counter, that was 30 real requests to production aadhar.sh on every run of
+  // the one required check on main, and not one assertion below reads what they
+  // answered. The doors are stubbed shut instead. Same frame, same assertions.
+  //
+  // The failure this avoids is the TIMEOUT rather than a bad answer, which is
+  // worth stating because the obvious guess is wrong. Every probe here is
+  // individually caught, so a dead network degrades to `unreadable` and the
+  // suite still passes: measured by running all 47 files with `fetch` throwing,
+  // 338 pass on this commit AND on the one before it. What a slow production
+  // costs is wall clock against bun's 5000ms per-test default, which is a hard
+  // fail. Cold, on a healthy workstation, the sibling agent-ready body spent
+  // 3328ms of that 5000 on connection setup alone. A CI runner has no warm
+  // route to aadhar.sh either.
+  //
+  // `lens` is inside the stub for symmetry alone. It fails at signing before it
+  // reaches a fetch, measured at 0 escapes with the stub and without it.
+  const realFetch = globalThis.fetch;
+  try {
+    testGlobals.fetch = async () => new Response("not found", { status: 404 });
+    for (const name of FRAME_TOOLS) {
+      const args = name === "lens" ? { url: "https://example.com" }
+        : name === "radar" ? { samples: [{ name: "AP", rssi: -58 }] }
+        : {};
+      const res = await handleSiteMcp(mcpPost({
+        jsonrpc: "2.0", id: 2, method: "tools/call", params: { name, arguments: args, ...MODERN_META },
+      }), env, context());
+      const { result, error } = await res.json();
+      assert.ok(!error, `${name} is listed but not dispatched: ${JSON.stringify(error)}`);
+      // terminal_lens reaches a real fetch it cannot make here, so it is allowed to
+      // come back as a rendered failure — what it may NOT do is come back unknown.
+      const frame = result.structuredContent?.frame ?? "";
+      // Was `frame.includes("╔")`. The box is gone; what still has to be true is
+      // that a frame came back at all and that it names the tool that drew it.
+      assert.ok(frame.length > 20, `${name} returned no frame`);
+      assert.ok(frame.startsWith(name.replace("_", "-")) || frame.includes(name.replace("_", "-")),
+        `${name}'s frame does not say which tool drew it: ${frame.slice(0, 60)}`);
+      assert.ok(!frame.includes("\x1b"), `${name} returned ANSI escapes into a model context`);
+    }
+  } finally {
+    testGlobals.fetch = realFetch;
   }
 });
 

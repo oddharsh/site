@@ -51,15 +51,30 @@ test("the link resolver rejects a page that moved", async () => {
   assert.ok(!resolves("/lwe/deleted-chat"), "same, for the other governed section");
 });
 
-test("the ref scanner reads unquoted attributes, which is how the site ships", async () => {
+// BUN ONLY, and the skip is explicit so it cannot pass quietly. internalRefs
+// parses with HTMLRewriter, a bun global; build.mjs runs under bun, so that is
+// the only runtime the function is ever called in. Under `node --test` the
+// global is absent and the import throws, which is how this test began failing
+// the node twin the day #497 landed — invisibly, because CI ran only bun.
+test("the ref scanner reads unquoted attributes, which is how the site ships", { skip: typeof HTMLRewriter === "undefined" && "needs bun's HTMLRewriter" }, async () => {
   const { internalRefs } = await import("./lib/link-integrity.mjs");
   // minify-html unquotes what it can, so the served bytes look like the first two.
   // A scanner written against href="..." reported 33 refs where there were 2645.
-  const refs = internalRefs('<a href=/coffee>x</a><img src=/i/a.avif><a href="/garage/wire">y</a>'
+  const refs = await internalRefs('<a href=/coffee>x</a><img src=/i/a.avif><a href="/garage/wire">y</a>'
     + "<a href='/terminal'>z</a><a href=/updates#now>w</a><a href=/rn?v=2>v</a>");
   assert.deepEqual(refs, ["/coffee", "/i/a.avif", "/garage/wire", "/terminal", "/updates", "/rn"]);
 
+  // data-src was covered by ACCIDENT before this parsed: `src=` is a substring
+  // of `data-src=`, and this site defers photo loading through it. srcset was
+  // never covered at all, because neither it nor data-srcset ends in `src=`.
+  // Both are named explicitly now, and the descriptor is not part of the URL.
+  assert.deepEqual(await internalRefs('<img data-src=/i/deferred.avif>'), ["/i/deferred.avif"]);
+  assert.deepEqual(
+    await internalRefs('<img srcset="/i/a-200.avif 200w, /i/a-400.avif 400w" data-srcset=/i/b.avif>'),
+    ["/i/a-200.avif", "/i/a-400.avif", "/i/b.avif"],
+  );
+
   // Off-origin and in-page refs are not this check's business.
-  assert.deepEqual(internalRefs('<a href=https://x.test/a>1</a><a href=#top>2</a>'
+  assert.deepEqual(await internalRefs('<a href=https://x.test/a>1</a><a href=#top>2</a>'
     + '<a href=mailto:a@b.test>3</a><a href=//cdn.test/x.js>4</a><a href=../rel>5</a>'), []);
 });

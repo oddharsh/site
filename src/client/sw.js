@@ -7,7 +7,7 @@
 // with no fetch handler here, pages fall straight through to the network
 // the moment it activates. The deploy log lives on at /updates.
 self.addEventListener("install", () => self.skipWaiting());
-self.addEventListener("activate", (event) => {
+self.addEventListener("activate", (/** @type {ExtendableEvent} */ event) => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
     await Promise.all(keys.map((k) => caches.delete(k)));

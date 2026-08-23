@@ -170,7 +170,7 @@ export function staticShellPages() {
   // Every HTML document is authored under src/pages now; public/ holds assets
   // and carries none. Reading the wrong root here is silent: the freshness check
   // that consumes this list would report a clean shell it never looked at.
-  return readdirSync("src/pages", { recursive: true })
+  return /** @type {string[]} */ (readdirSync("src/pages", { recursive: true }))
     .filter((relative) => relative.endsWith(".html"))
     .map((relative) => `src/pages/${relative}`)
     .filter((file) => {

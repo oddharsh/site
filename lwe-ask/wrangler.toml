@@ -2,6 +2,14 @@ name = "lwe-ask"
 main = "src/index.js"
 compatibility_date = "2026-05-01"
 
+# Pinned because these deploy from their OWN directory, so wrangler resolves the
+# account from this file rather than from the root wrangler.jsonc. It auto-selects
+# only while the login sees exactly one account, and a second appeared on 2026-08-07.
+# Until this line existed the answer came from ~/.wrangler/cache/wrangler-account.json,
+# which an interactive prompt writes, so a fresh clone or a cleared cache broke the
+# deploy. Must equal wrangler.jsonc's account_id; check-infra.mjs fails on drift.
+account_id = "1c99acdb6141579023fb97d24261ea58"
+
 # Live "ask a follow-up" for the Learning With Errors explainers. RAG over the
 # author's OWN essay passages (never third-party text): embed the question,
 # retrieve the most relevant verbatim passages from Vectorize, and have Workers
@@ -15,6 +23,20 @@ routes = [
   { pattern = "aadhar.sh/lwe/ask",   zone_name = "aadhar.sh" },
   { pattern = "aadhar.sh/lwe/ask/*", zone_name = "aadhar.sh" }
 ]
+
+# Workers Logs — the same free tier cf-garage and lens-reader already run on.
+# lwe-ask was the ONE auxiliary Worker without it, and the gap is not cosmetic:
+# /lwe/ask/reindex is a gated route that answers 401 to a request whose secret
+# header never arrived, which is exactly what a `curl -s` hides. Diagnosing that
+# on 2026-08-21 took a live `wrangler tail` running at the moment of the call,
+# because nothing here kept a record. A route that fails silently is the one that
+# most needs a log.
+[observability]
+enabled = true
+
+[observability.traces]
+enabled = true
+head_sampling_rate = 1
 
 # Workers AI — embeddings + generation.
 [ai]

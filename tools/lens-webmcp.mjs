@@ -93,7 +93,7 @@ async function probePage(wsUrl, targetUrl) {
 
 function waitForEvent(cdp, method, timeoutMs) {
   return new Promise((resolve) => {
-    const timer = setTimeout(() => { cdp.removeListener(method, onEvent); resolve(); }, timeoutMs);
+    const timer = setTimeout(() => { cdp.removeListener(method, onEvent); resolve(undefined); }, timeoutMs);
     function onEvent(value) {
       clearTimeout(timer);
       cdp.removeListener(method, onEvent);

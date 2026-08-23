@@ -41,7 +41,10 @@ const rows = readFileSync(src, "utf8")
   .split("\n")
   .map((line) => {
     const [gram, count] = line.split(/\s+/);
-    return [gram.toUpperCase(), Number(count)];
+    // A TUPLE, not a two-element array. Inference widens the pair to
+    // (string | number)[], after which `count > 0`, `b[1] - a[1]` and every
+    // later sum stop type-checking for reasons unrelated to the arithmetic.
+    return /** @type {[gram: string, count: number]} */ ([gram.toUpperCase(), Number(count)]);
   })
   .filter(([gram, count]) => /^[A-Z]{4}$/.test(gram) && count > 0)
   .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1));

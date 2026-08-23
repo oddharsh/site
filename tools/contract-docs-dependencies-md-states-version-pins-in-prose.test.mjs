@@ -261,6 +261,28 @@ test("a flex item is its own box, and promoting one never eats an image", () => 
   assert.ok(collectBlockClasses("<style>.x{display:block}.y{float:right}.z{flex:1}</style>").size >= 3);
 });
 
+// A twin is the agent-facing copy of a page, so an href it emits is a citation a
+// reader may follow. The converter dropped `javascript:` and nothing else, which
+// left three schemes that execute rather than address: `data:`, `vbscript:`, and
+// `JavaScript:`, since the old check was a case-SENSITIVE startsWith and a browser
+// reads a scheme case-insensitively after stripping leading control characters.
+// No page here authors one, so this asserts the floor rather than a fixed bug.
+test("a twin never emits a link on a scheme that executes", () => {
+  const link = (href) =>
+    readDocument(`<html><body><main><p><a href="${href}">CLICKME</a></p></main></body></html>`,
+      { origin: "https://aadhar.sh" }).body;
+
+  // the text survives; only the href is refused, so the prose is never lost
+  for (const href of ["javascript:alert(1)", "JavaScript:alert(1)", "vbscript:msgbox(1)",
+                      "data:text/html,<script>alert(1)</script>", "\tdata:text/html;base64,PHM+"]) {
+    assert.equal(link(href), "CLICKME", `${href} must render as text, never as a link`);
+  }
+
+  // and an ordinary href still resolves, so the guard above is not just strictness
+  assert.equal(link("https://example.com/real"), "[CLICKME](https://example.com/real)");
+  assert.equal(link("/garage/horizon"), "[CLICKME](https://aadhar.sh/garage/horizon)");
+});
+
 // RFC 9110 asks a HEAD to send the header fields its GET would send. serveStaticPage
 // bailed on the method before reaching the Markdown branch, so HEAD answered
 // text/html on pages whose GET answers text/markdown. Verified on production
@@ -445,7 +467,13 @@ test("LWE pages share one base stylesheet and the build derives one site-page di
     "dictionary snapshots are build input and must not sit in the served tree");
   const security = await readFile(new URL("src/worker/lib/security.ts", ROOT), "utf8");
   assert.match(security, /rel="compression-dictionary"/);
-  for (const name of ["index", "dac", "drivers", "encoding", "fhe", "knots", "mpc", "pcrypto", "tee", "utf8", "vigenere"]) {
+  // DERIVED from the directory rather than listed. The hand-written list this
+  // replaces was missing lean, so the one page that had drifted out of every
+  // other LWE registry was also the one page these assertions never covered.
+  const lwePages = (await readdir(new URL("src/pages/lwe/", ROOT)))
+    .filter((f) => f.endsWith(".html")).map((f) => f.replace(/\.html$/, ""));
+  assert.ok(lwePages.length >= 12, `expected the LWE section to hold pages, saw ${lwePages.length}`);
+  for (const name of lwePages) {
     const html = await readFile(new URL(`src/pages/lwe/${name}.html`, ROOT), "utf8");
     assert.match(html, /<link rel="stylesheet" href="\/lwe-base\.css">/);
     assert.doesNotMatch(html, /compression-dictionary/);

@@ -1,6 +1,7 @@
 // ── the SSR deadline ────────────────────────────────────────────────
 // Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
 import {
+  testGlobals,
   assert,
   deadline,
   gatherWhoareyou,
@@ -48,7 +49,7 @@ test("deadline distinguishes fallback values for slow vs missing", async () => {
 test("whoareyou lets cold RDAP finish off the critical path", async () => {
   const originalFetch = globalThis.fetch;
   let release;
-  globalThis.fetch = () => new Promise((resolve) => { release = resolve; });
+  testGlobals.fetch = () => new Promise((resolve) => { release = resolve; });
   const background = [];
   const started = Date.now();
   try {
@@ -65,6 +66,6 @@ test("whoareyou lets cold RDAP finish off the critical path", async () => {
     }));
     await background[0];
   } finally {
-    globalThis.fetch = originalFetch;
+    testGlobals.fetch = originalFetch;
   }
 });

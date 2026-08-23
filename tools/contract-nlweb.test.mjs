@@ -1,6 +1,7 @@
 // ── NLWeb ───────────────────────────────────────────────────────────────────
 // Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
 import {
+  testGlobals,
   assert,
   readFile,
   readFileSync,
@@ -528,14 +529,14 @@ test("a redirect off a vetted origin is validated per hop, not followed blindly"
   const realFetch = globalThis.fetch;
   const run = async (location, second) => {
     const hops = [];
-    globalThis.fetch = async (url) => {
+    testGlobals.fetch = async (url) => {
       hops.push(String(url));
       return hops.length === 1
         ? new Response(null, { status: 302, headers: { location } })
         : second();
     };
     try { return { out: await foreignMcpTools("https://example.com", env), hops }; }
-    finally { globalThis.fetch = realFetch; }
+    finally { testGlobals.fetch = realFetch; }
   };
 
   const blocked = await run("http://169.254.169.254/mcp", () => new Response(

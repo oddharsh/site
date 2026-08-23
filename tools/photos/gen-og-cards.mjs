@@ -305,7 +305,7 @@ function waitForPort(port, ms = 8000) {
   return new Promise((resolve, reject) => {
     (function tick() {
       const s = net.connect(port, "127.0.0.1");
-      s.once("connect", () => { s.destroy(); resolve(); });
+      s.once("connect", () => { s.destroy(); resolve(undefined); });
       s.once("error", () => { s.destroy(); Date.now() > deadline ? reject(new Error(`static server never came up on :${port}`)) : setTimeout(tick, 150); });
     })();
   });
