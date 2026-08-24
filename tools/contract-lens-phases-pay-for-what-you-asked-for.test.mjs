@@ -4,7 +4,7 @@ import {
   assert,
   readFileSync,
   test,
-} from "./contract-shared.mjs";
+} from "./contract-shared.ts";
 
 // ── lens phases: pay for what you asked for ──────────────────────────────
 

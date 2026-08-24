@@ -15,7 +15,7 @@
 // derive a user-centered threshold. A deferred page island is not allowed to veto a
 // homepage feature merely because its raw source grew.
 //
-//   node tools/perf-budget.mjs        (or: bun run perf-budget)
+//   node tools/perf-budget.ts        (or: bun run perf-budget)
 //
 // Not measured here (needs a real browser): LCP/FCP/INP/CLS, TTFB by field
 // cohort, and the per-viewport photo-transfer delta. A controlled 4G lab run is
@@ -26,7 +26,7 @@
 // against a constant somebody typed, and the baseline history at
 // WORKER_BASELINE_GZIP_KIB is the record of what that costs — a number that sat
 // 58% stale for months while CI printed "hard checks green" over it every run.
-// The differential half now lives in `tools/perf-snapshot.mjs`, run by
+// The differential half now lives in `tools/perf-snapshot.ts`, run by
 // .github/workflows/perf-diff.yml, which builds the merge base and HEAD and
 // posts the delta as a PR comment. It has no constants, so it cannot go stale.
 //
@@ -179,7 +179,7 @@ const WORKER_BASELINE_SOURCE_KIB = 1376.65;
 // 7.6 and 6.4 ms, a 50% spread on no change at all, and a fourth on 2026-08-08
 // read 16.4 ms — 2.6x the low, still on bytes nobody had touched. The tripwire is the bundle
 // gzip above and the per-module attribution below, both deterministic, and the
-// per-PR movement in those is what tools/perf-snapshot.mjs reports.
+// per-PR movement in those is what tools/perf-snapshot.ts reports.
 //
 // That is also why the snapshot deliberately does NOT record this number.
 // Diffing two draws from a noisy distribution manufactures findings: a run that
@@ -312,9 +312,10 @@ try {
 // prints when the advisory fires: on a green run it is noise.
 try {
   const meta = JSON.parse(await readFile(".build/.perfbudget/bundle-meta.json", "utf8"));
-  const entry = Object.entries(meta.outputs).find(([name]) => name.endsWith(".js") && !name.endsWith(".map"));
+  const entry = (Object.entries(meta.outputs) as [string, { inputs?: Record<string, { bytesInOutput?: number }> }][])
+    .find(([name]) => name.endsWith(".js") && !name.endsWith(".map"));
   const inputs = Object.entries(entry?.[1]?.inputs ?? {})
-    .map(([name, v]) => [name, v.bytesInOutput ?? 0])
+    .map(([name, v]): [string, number] => [name, v.bytesInOutput ?? 0])
     .sort((a, b) => b[1] - a[1]);
   if (!inputs.length) warn("metafile carried no input attribution; skipping bundle breakdown");
   else if (overBudget) {
@@ -331,7 +332,8 @@ try {
   // A collapsed count is the failure mode worth guarding: an empty or tiny
   // metafile would otherwise report a huge improvement. Floor it at the module
   // count the bundle is known to carry.
-  const sourceKib = kib(Object.values(meta.inputs ?? {}).reduce((sum, input) => sum + (input.bytes ?? 0), 0));
+  const sourceKib = kib((Object.values(meta.inputs ?? {}) as { bytes?: number }[])
+    .reduce((sum, input) => sum + (input.bytes ?? 0), 0));
   const sourceAlertAt = WORKER_BASELINE_SOURCE_KIB * (1 + WORKER_ALERT_GROWTH);
   const modules = Object.keys(meta.inputs ?? {}).length;
   if (modules < 40) {

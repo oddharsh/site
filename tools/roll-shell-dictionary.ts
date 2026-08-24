@@ -111,7 +111,7 @@ const parse = (n) => {
 };
 
 if (!live && !existsSync(BUILT)) {
-  console.error(`shell:roll — ${BUILT} is missing. Run \`node tools/build.mjs\` first: the /a/ hashes`);
+  console.error(`shell:roll — ${BUILT} is missing. Run \`node tools/build.ts\` first: the /a/ hashes`);
   console.error("  come from the MINIFIED bytes, so the built tree is the only place they exist.");
   console.error("  Or pass --live to adopt what production is serving instead, which needs no build.");
   process.exit(1);
@@ -145,14 +145,14 @@ async function fetchLive(path) {
 }
 
 async function liveShell() {
-  const names = new Set();
+  const names = new Set<string>();
   for (const path of ["/", "/lens", "/lwe/utf8", "/writing"]) {
     const body = await fetchLive(path);
     if (body) for (const n of assetRefs(body)) names.add(n);
   }
   // Close over the graph. Only .js can name another asset, and the visited set is the
   // termination proof: the /a/ namespace is finite and each name is fetched at most once.
-  const queue = [...names];
+  const queue: string[] = [...names];
   const walked = new Set();
   while (queue.length) {
     const name = queue.shift();

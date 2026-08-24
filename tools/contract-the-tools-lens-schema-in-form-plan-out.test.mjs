@@ -4,7 +4,7 @@ import {
   assert,
   readFileSync,
   test,
-} from "./contract-shared.mjs";
+} from "./contract-shared.ts";
 
 // ── the Tools lens: schema in, form plan out ────────────────────────────────
 //

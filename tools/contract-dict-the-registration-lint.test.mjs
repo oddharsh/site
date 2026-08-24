@@ -4,7 +4,7 @@ import {
   assert,
   terminalGet,
   test,
-} from "./contract-shared.mjs";
+} from "./contract-shared.ts";
 
 // ── /dict — the registration lint ───────────────────────────────
 // The rules ARE the product, and they are asserted as pure functions because

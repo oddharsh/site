@@ -4,7 +4,7 @@ import {
   assert,
   test,
   tui,
-} from "./contract-shared.mjs";
+} from "./contract-shared.ts";
 
 // ── lib/tui.js ───────────────────────────────────────────────────────────────
 // A fixed-80-column renderer fails SILENTLY. A frame one column wide or narrow

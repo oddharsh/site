@@ -16,7 +16,7 @@ import {
   test,
   testGlobals,
   tokenizeKeys,
-} from "./contract-shared.mjs";
+} from "./contract-shared.ts";
 
 // ── /terminal — the terminal programs ─────────────────────────────────────────
 // The renderer is pure and the apps are readers, so these run with stub assets

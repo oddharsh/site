@@ -17,7 +17,7 @@ import {
   readFile,
   staleGuestIds,
   test,
-} from "./contract-shared.mjs";
+} from "./contract-shared.ts";
 
 // ── the Luma session jar ────────────────────────────────────────────
 // Two failure modes these guard. (1) A whole-domain browser export drags in

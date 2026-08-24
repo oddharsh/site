@@ -1,6 +1,6 @@
 // dev-stage.mjs: compose the served URL root for LOCAL DEV, as a symlink farm.
 //
-//   node tools/dev-stage.mjs        # (re)build .dev-assets/, then wrangler dev
+//   node tools/dev-stage.ts        # (re)build .dev-assets/, then wrangler dev
 //
 // WHY THIS EXISTS. The served tree is authored across five directories now
 // (public/, src/pages/, src/content/, src/client/, src/styles/) and merged into

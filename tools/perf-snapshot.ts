@@ -19,9 +19,9 @@
 // comment, and fail on nothing. A perf number that fails a PR teaches people to
 // widen the threshold. A perf number in a comment gets read.
 //
-//   node tools/perf-snapshot.mjs record <out.json> [--label <name>]
-//   node tools/perf-snapshot.mjs compare <base.json> <head.json> [--out <file.md>]
-//   node tools/perf-snapshot.mjs row <snapshot.json> [--date YYYY-MM-DD]
+//   node tools/perf-snapshot.ts record <out.json> [--label <name>]
+//   node tools/perf-snapshot.ts compare <base.json> <head.json> [--out <file.md>]
+//   node tools/perf-snapshot.ts row <snapshot.json> [--date YYYY-MM-DD]
 //
 // `row` is the TREND half, and it exists because a per-PR diff catches the STEP
 // while only a series catches the DRIFT. This repo's worker bundle went 86 ->
@@ -121,7 +121,17 @@ async function record(outPath, label) {
     dryOut = `${e.stdout || ""}\n${e.stderr || ""}`;
   }
 
-  const snapshot = {
+  // Each measured file records its raw and compressed sizes; assets/pages/wire
+  // are filled per file as the staged tree is walked, so the keys are whatever
+  // the build produced.
+  type Sizes = { raw?: number; gzip?: number; brotli?: number; br?: number };
+  const snapshot: {
+    schema: typeof SCHEMA; label: string; subject: string;
+    worker: { gzipBytes: number | null; modules: Record<string, number> };
+    assets: Record<string, Sizes>; pages: Record<string, Sizes>; wire: Record<string, Sizes>;
+    dcz: { count: number; bytes: number };
+    [more: string]: any;
+  } = {
     schema: SCHEMA,
     label: label || git("rev-parse", "--short", "HEAD") || "unknown",
     subject: git("log", "-1", "--format=%s"),
@@ -140,7 +150,8 @@ async function record(outPath, label) {
   // gzip total alone can only pose as a question.
   try {
     const meta = JSON.parse(await readFile(`${DRYRUN_OUT}/bundle-meta.json`, "utf8"));
-    const entry = Object.entries(meta.outputs).find(([n]) => n.endsWith(".js") && !n.endsWith(".map"));
+    const entry = (Object.entries(meta.outputs) as [string, { inputs?: Record<string, { bytesInOutput?: number }> }][])
+      .find(([n]) => n.endsWith(".js") && !n.endsWith(".map"));
     for (const [name, v] of Object.entries(entry?.[1]?.inputs ?? {})) {
       snapshot.worker.modules[name] = v.bytesInOutput ?? 0;
     }
@@ -244,7 +255,9 @@ function diffRows(base, head, pick) {
   return rows.sort((x, y) => Math.abs(y.delta) - Math.abs(x.delta));
 }
 
-const total = (set, pick) => Object.values(set).reduce((n, v) => n + (pick(v) ?? 0), 0);
+// The set is a record of measured files; pick() pulls one size field off each.
+const total = (set: Record<string, unknown>, pick: (v: any) => number | undefined): number =>
+  Object.values(set).reduce<number>((n, v) => n + (pick(v) ?? 0), 0);
 
 function table(rows, { limit = 20 } = {}) {
   const out = ["| file | base | head | Δ |", "|---|--:|--:|--:|"];
@@ -307,8 +320,9 @@ async function compare(basePath, headPath, outPath) {
   // loads. Reporting both gave two near-identical tables with the same numbers in
   // them. Merge on the logical name, preferring the `/a/` `.br` the build emitted,
   // because that is the byte count that leaves the edge.
-  const merge = (snap) => {
-    const out = {};
+  type Recorded = Record<string, { raw?: number; gzip?: number; brotli?: number; br?: number }>;
+  const merge = (snap: { assets: Recorded; wire: Recorded }) => {
+    const out: Record<string, number | undefined> = {};
     for (const [name, v] of Object.entries(snap.assets)) out[name] = v.brotli;
     for (const [name, v] of Object.entries(snap.wire)) out[name] = v.br ?? v.raw;
     return out;
@@ -379,9 +393,10 @@ async function row(snapshotPath, date) {
 
   // Same merge the diff uses: prefer the `/a/` precompressed bytes, which are
   // what actually leaves the edge, and fall back to the computed brotli.
-  const assets = {};
-  for (const [name, v] of Object.entries(snap.assets)) assets[name] = v.brotli;
-  for (const [name, v] of Object.entries(snap.wire)) assets[name] = v.br ?? v.raw;
+  const assets: Record<string, number | undefined> = {};
+  type Sized = { raw?: number; brotli?: number; br?: number };
+  for (const [name, v] of Object.entries(snap.assets) as [string, Sized][]) assets[name] = v.brotli;
+  for (const [name, v] of Object.entries(snap.wire) as [string, Sized][]) assets[name] = v.br ?? v.raw;
 
   const line = {
     ts: date || new Date().toISOString().slice(0, 10),

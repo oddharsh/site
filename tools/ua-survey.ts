@@ -122,25 +122,23 @@ export const stripRawText = (s, tag) => {
 export const words = (s) => stripRawText(stripRawText(s, "script"), "style")
                       .replace(/<[^>]*>/g, " ").split(/\s+/).filter(Boolean).length;
 
-/**
- * @typedef {Object} Sample
- * @property {number|null} status
- * @property {number} [bytes]
- * @property {number} [words]
- * @property {string} [contentType]
- * @property {boolean} challenge
- * @property {boolean} blocked
- * @property {boolean} [shell]
- * @property {Record<string, number>|null} [markers]
- * @property {string} [error]
- */
+// One measured fetch of one URL as one identity.
+type Sample = {
+  status: number | null;
+  bytes?: number;
+  words?: number;
+  contentType?: string;
+  challenge: boolean;
+  blocked: boolean;
+  shell?: boolean;
+  markers?: Record<string, number> | null;
+  error?: string;
+};
 
-/**
- * @param {{ url: string, markers?: Record<string, RegExp> }} target
- * @param {{ ua: string, headers?: Record<string,string> }} identity
- * @returns {Promise<Sample>}
- */
-async function sample(target, identity) {
+async function sample(
+  target: { url: string; markers?: Record<string, RegExp> },
+  identity: { ua: string; headers?: Record<string, string> },
+): Promise<Sample> {
   const ctrl = new AbortController();
   const to = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
   try {

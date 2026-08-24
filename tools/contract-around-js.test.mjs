@@ -6,7 +6,7 @@ import {
   diffAroundRows,
   renderAroundHtml,
   test,
-} from "./contract-shared.mjs";
+} from "./contract-shared.ts";
 
 // ── around.js ────────────────────────────────────────────────────────────────
 // Every degradation in the neighbourhood crawler is designed to be QUIET: a

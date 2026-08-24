@@ -12,9 +12,9 @@
 //             of subtitle, four measured facts. Reads at thumbnail size, where
 //             a screenshot of a whole desktop reads as blue mush.
 //
-//     bun tools/gen-repo-card.mjs                 # both, into .github/
-//     bun tools/gen-repo-card.mjs desktop         # one variant
-//     bun tools/gen-repo-card.mjs --out /tmp/x    # somewhere else
+//     bun tools/gen-repo-card.ts                 # both, into .github/
+//     bun tools/gen-repo-card.ts desktop         # one variant
+//     bun tools/gen-repo-card.ts --out /tmp/x    # somewhere else
 //
 // Bun.WebView drives the installed Chrome directly. The wallpaper is read
 // straight out of luna.css so the card background is pixel-identical to the

@@ -28,10 +28,10 @@
 // RENDERED DOM (Browser Run makes its own, and we have no way to ask for it),
 // and `accessibilityTree` is rebuilt from CDP's flat AX node list.
 //
-//   node tools/lens-seed.mjs --dry-run     # capture, write nothing, print sizes
-//   node tools/lens-seed.mjs               # capture and seed production KV
-//   node tools/lens-seed.mjs --ttl 43200   # shorter life than the 24h default
-//   node tools/lens-seed.mjs https://foo/  # specific URLs instead of the chips
+//   node tools/lens-seed.ts --dry-run     # capture, write nothing, print sizes
+//   node tools/lens-seed.ts               # capture and seed production KV
+//   node tools/lens-seed.ts --ttl 43200   # shorter life than the 24h default
+//   node tools/lens-seed.ts https://foo/  # specific URLs instead of the chips
 //
 // TO UNDO, delete the keys it prints, or wait out the TTL. The site returns to
 // live Browser Run renders the moment these expire, which is why the TTL is a
@@ -100,8 +100,8 @@ function axTree(nodes) {
     } else if (!root) root = n;
   }
   let budget = AX_NODE_MAX;
-  const convert = (node) => {
-    const children = [];
+  const convert = (node): { role: any; name?: any; children?: any[] } => {
+    const children: any[] = [];
     for (const child of kids.get(node.nodeId) || []) {
       if (budget <= 0) break;
       const built = child.ignored ? null : convert(child);
@@ -109,7 +109,7 @@ function axTree(nodes) {
       else for (const hoisted of convert(child).children || []) children.push(hoisted);
     }
     budget--;
-    const out = { role: node.role?.value ?? "unknown" };
+    const out: { role: any; name?: any; children?: any[] } = { role: node.role?.value ?? "unknown" };
     const name = node.name?.value;
     if (name) out.name = name;
     if (children.length) out.children = children;
@@ -254,7 +254,7 @@ async function capture(browser, url) {
       accessibilityTree: tree,
       screenshot: b64 && !shotTooBig ? "data:image/png;base64," + b64 : null,
       screenshotDropped: shotTooBig ? Math.round(b64.length * 0.75) : 0,
-      webmcp: { status: "lab-required", detail: "Runtime WebMCP listing requires the local Browser Run Chrome-beta lab. Use tools/lens-webmcp.mjs." },
+      webmcp: { status: "lab-required", detail: "Runtime WebMCP listing requires the local Browser Run Chrome-beta lab. Use tools/lens-webmcp.ts." },
       // Both of these are read by a human deciding how much to trust the pane, so
       // neither one pretends this came off the edge.
       fetchedBy: "Local headless Chrome (Cloudflare Browser Run budget exhausted)",

@@ -4,7 +4,7 @@ import {
   assert,
   readFileSync,
   test,
-} from "./contract-shared.mjs";
+} from "./contract-shared.ts";
 import { escaped } from "./lib/no-network.ts";
 
 // ── the network tripwire ─────────────────────────────────────────────────

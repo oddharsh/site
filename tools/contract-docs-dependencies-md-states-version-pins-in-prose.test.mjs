@@ -18,7 +18,7 @@ import {
   serveMarkdown,
   serveStaticPage,
   test,
-} from "./contract-shared.mjs";
+} from "./contract-shared.ts";
 
 // ── docs/DEPENDENCIES.md states version pins in prose ─────────────────────────
 // and dependabot rewrites those pins daily, so the file goes stale on a cadence
@@ -453,7 +453,7 @@ test("static page negotiation prefers 304, then DCZ with the current validator",
 test("LWE pages share one base stylesheet and the build derives one site-page dictionary", async () => {
   const base = await readFile(new URL("src/styles/lwe-base.css", ROOT), "utf8");
   assert.match(base, /\.controls \{ display: inline-flex/);
-  const build = await readFile(new URL("tools/build.mjs", ROOT), "utf8");
+  const build = await readFile(new URL("tools/build.ts", ROOT), "utf8");
   assert.match(build, /site-page corpus/);
   assert.match(build, /page-family\.\$\{hash8\(dictionary\)\}\.dict/);
   assert.match(build, /src\/dict\/p-dict/);

@@ -4,7 +4,7 @@ import {
   assert,
   readFileSync,
   test,
-} from "./contract-shared.mjs";
+} from "./contract-shared.ts";
 
 // ── /lens/wire — the request waterfall ──────────────────────────────────────
 // The Wire lens is the only surface here that opens a real CDP browser session,

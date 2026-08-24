@@ -3,7 +3,7 @@
 import {
   assert,
   test,
-} from "./contract-shared.mjs";
+} from "./contract-shared.ts";
 
 // ── /garage/dyno, the wire-size trend ───────────────────────────────────────
 //

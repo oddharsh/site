@@ -10,7 +10,7 @@ import {
   readFileSync,
   terminalEnv,
   test,
-} from "./contract-shared.mjs";
+} from "./contract-shared.ts";
 
 // ── /ask — the natural-language door ────────────────────────────
 // Every test here runs the ROUTER path (no AI binding), which is the mode CI

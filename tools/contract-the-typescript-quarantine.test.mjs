@@ -7,7 +7,7 @@ import {
   readdir,
   remainderHolder,
   test,
-} from "./contract-shared.mjs";
+} from "./contract-shared.ts";
 
 // ── the TypeScript quarantine ───────────────────────────────────────────────
 // config/ts-migration.json names the Worker modules that were not type-clean
@@ -168,7 +168,7 @@ test("every auxiliary Worker has a tsc program, and something runs it", async ()
   }))].join(" ");
 
   const wrappedBy = new Map();
-  for (const file of readdirSync(`${root}tools`).filter((f) => f.startsWith("check-") && f.endsWith(".mjs"))) {
+  for (const file of readdirSync(`${root}tools`).filter((f) => f.startsWith("check-") && f.endsWith(".ts"))) {
     const source = await readFile(new URL(`tools/${file}`, ROOT), "utf8");
     for (const config of configs) {
       if (source.includes(`config/${config}`) && scripts.includes(`tools/${file}`)) wrappedBy.set(config, file);
@@ -183,7 +183,7 @@ test("every auxiliary Worker has a tsc program, and something runs it", async ()
   // The wrapper arm has to have MATCHED something, or a rename in tools/ turns
   // it into a filter that exempts nothing while this test still reports green.
   assert.ok(wrappedBy.size >= 1,
-    "no tsconfig resolved through a tools/check-*.mjs wrapper — the wrapper scan has lost its target");
+    "no tsconfig resolved through a tools/check-*.ts wrapper — the wrapper scan has lost its target");
 });
 
 // A TOOL MAY NOT SPAWN A PACKAGE MANAGER. Every script in tools/ runs under
@@ -209,7 +209,8 @@ test("no tool spawns a package manager by name", async () => {
   // tools; a test that asserts about `pnpm` necessarily contains the word, and
   // the suite split on 2026-08-20 turned that one exclusion into 47 files.
   const files = readdirSync(dir).filter((f) =>
-    f.endsWith(".mjs") && !f.endsWith(".test.mjs") && f !== "contract-shared.mjs");
+    (f.endsWith(".ts") || f.endsWith(".mjs")) && !f.endsWith(".test.mjs")
+    && !f.endsWith(".d.ts") && f !== "contract-shared.ts");
   assert.ok(files.length >= 20, `expected the tools directory, got ${files.length} files`);
 
   // There is NO exception list, and there was one until 2026-08-23. It held
@@ -239,7 +240,7 @@ test("no tool spawns a package manager by name", async () => {
 test("bun:check compares bun against a real node control", async () => {
   const { readFileSync } = await import("node:fs");
   const pkg = JSON.parse(readFileSync(new URL("package.json", ROOT), "utf8"));
-  const source = readFileSync(new URL("tools/check-bun.mjs", ROOT), "utf8");
+  const source = readFileSync(new URL("tools/check-bun.ts", ROOT), "utf8");
 
   assert.match(pkg.scripts["bun:check"], /^node /, "the controller must run under Node");
   assert.match(source, /if \(process\.versions\.bun\)/, "the tool must reject a direct Bun invocation");

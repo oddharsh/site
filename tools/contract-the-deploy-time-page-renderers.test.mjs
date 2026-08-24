@@ -7,7 +7,7 @@ import {
   readFile,
   renderPhotosPage,
   test,
-} from "./contract-shared.mjs";
+} from "./contract-shared.ts";
 
 // ── the deploy-time page renderers ──────────────────────────────────
 // build.mjs step 1e runs these in Node and writes photos.html / bot.html, which

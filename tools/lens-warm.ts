@@ -17,9 +17,9 @@
 // RUN IT WITHIN 6 HOURS OF THE DEMO. Entries expire, and an expired warm is
 // the same as no warm.
 //
-//   node tools/lens-warm.mjs                 # the 7 seeded chips, production
-//   node tools/lens-warm.mjs <url> [url...]  # specific URLs instead
-//   node tools/lens-warm.mjs --origin http://localhost:8796
+//   node tools/lens-warm.ts                 # the 7 seeded chips, production
+//   node tools/lens-warm.ts <url> [url...]  # specific URLs instead
+//   node tools/lens-warm.ts --origin http://localhost:8796
 //
 // THERE IS DELIBERATELY NO --check MODE. A cache hit costs nothing and a cache
 // MISS costs a full render, so any probe that reports "is this warm?" warms it

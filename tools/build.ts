@@ -14,7 +14,7 @@
 // luna.css. It is one commented, readable line in a readable file — View Source
 // still reads as hand-written CSS, and the line says where it came from.
 //
-//   node tools/build.mjs                                   # stage .build/
+//   node tools/build.ts                                   # stage .build/
 //   bun run deploy:direct                                   # build + wrangler deploy -c .build/wrangler.jsonc
 //
 // wrangler resolves `main` and `assets.directory` relative to the config file, so the
@@ -33,7 +33,7 @@ import { brotliCompress, brotliDecompressSync, constants as zlibConstants, zstdC
 import minifyHtml from "@minify-html/node";
 import { transform as transformCss } from "lightningcss";
 import { minifySync } from "oxc-minify";
-import { readManifest, workerModule, navFenceBody, readFenceBody, runProfilesBody } from "./gen-manifest.mjs";
+import { readManifest, workerModule, navFenceBody, readFenceBody, runProfilesBody } from "./gen-manifest.ts";
 import { parseCss } from "./lib/css-parse.ts";
 import { HTML_MARKERS } from "./lib/html-markers.ts";
 import { zstdCompressDictionaryBatch } from "./lib/zstd-batch.ts";
@@ -120,8 +120,8 @@ function containsRetiredRumHost(source) {
 // walks only some of the roots reports a clean tree it never fully read, which
 // is the quietest way for one of these tripwires to stop meaning anything.
 const SERVED_SOURCES = ["public", "src/pages", "src/content"];
-const servedFiles = async (filter) => {
-  const out = [];
+const servedFiles = async (filter?: (rel: string) => boolean): Promise<string[]> => {
+  const out: string[] = [];
   for (const root of SERVED_SOURCES) {
     for (const rel of await readdir(root, { recursive: true })) {
       if (filter && !filter(rel)) continue;
@@ -162,7 +162,7 @@ async function checkInvariants() {
   // is coupled to the shape of that source, so a refactor can retire it without
   // touching it. And a scanner that finds ZERO of something must say so rather
   // than pass: the floor below is what turns this class of failure back into a
-  // red build, and it is the same guard tools/check-tools.mjs puts on its own
+  // red build, and it is the same guard tools/check-tools.ts puts on its own
   // scanners for the same reason.
   // The type annotation is OPTIONAL in this pattern because the declaration form
   // has now moved under this scanner TWICE: once when the table was extracted
@@ -390,8 +390,8 @@ async function checkInvariants() {
     // 8b — each flag is the registry's contract with exactly one surface; assert
     // both directions so neither the registry nor the surface can drift alone.
     const want = (f) => surfaces.filter((s) => s.flags[f]).map((s) => s.path);
-    const bidi = (label, wantPaths, have, opts = {}) => {
-      const w = new Set(wantPaths);
+    const bidi = (label, wantPaths, have, opts: { subsetOnly?: boolean } = {}) => {
+      const w = new Set(wantPaths) as Set<string>;
       for (const p of w) if (!have.has(p)) hard.push(`${label}: ${p} is flagged in site-manifest.json but missing from the surface`);
       if (!opts.subsetOnly) for (const p of have) if (!w.has(p)) hard.push(`${label}: ${p} is in the surface but not flagged in site-manifest.json`);
     };
@@ -732,7 +732,7 @@ await cp("serendipity/serendipity.ts", `${OUT}/serendipity/serendipity.ts`);
     }
     return hi;
   };
-  for (const [stem, record] of Object.entries(exif)) {
+  for (const [stem, record] of Object.entries(exif) as [string, Record<string, any>][]) {
     const out = { ...record };
     const hi = unpackChannels(packed[stem]);
     if (hi) out.hi = hi;
@@ -1088,9 +1088,11 @@ let twinFiles;
 // call is "Expected 0 arguments, but got 2". The annotation states the shape 1g2
 // actually installs, which is also what the sole caller passes.
 /** @type {(html: string, rel: string) => { html: string, addedLink: boolean, addedChrome: boolean }} */
-let dressPage = () => { throw new Error("explorer: dressPage used before 1g2 defined it"); };
+/** Installed by step 1g2; the placeholder exists so a mis-ordered call fails loudly. */
+let dressPage: (html: string, rel: string) => { html: string; addedLink: boolean; addedChrome: boolean } =
+  () => { throw new Error("explorer: dressPage used before 1g2 defined it"); };
 {
-  const { buildTwins, checkTwinFacts } = await import("./gen-md-twins.mjs");
+  const { buildTwins, checkTwinFacts } = await import("./gen-md-twins.ts");
   const drift = checkTwinFacts(".");
   if (drift.length) {
     throw new Error("md twins: a hand-authored twin disagrees with the Worker that renders its page:\n  - " + drift.join("\n  - "));
@@ -1149,7 +1151,7 @@ let dressPage = () => { throw new Error("explorer: dressPage used before 1g2 def
   const twinPaths = [...twinFiles.keys()]
     .filter((rel) => rel.endsWith(".md"))
     .map((rel) => (rel === "/index.md" ? "/" : rel.slice(0, -3)))
-    .sort();
+    .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 
   // Generated-module convention (shell-assets.js, csp-hashes.js): rewrite the
   // marked line in the STAGED copy so the Worker-rendered pages advertise the
@@ -1273,7 +1275,7 @@ let dressPage = () => { throw new Error("explorer: dressPage used before 1g2 def
 // The count is asserted for the same reason the twin count is: losing a feed is
 // silent, since the pages keep serving and only subscribers notice.
 {
-  const { buildFeeds, FEEDS } = await import("./gen-feeds.mjs");
+  const { buildFeeds, FEEDS } = await import("./gen-feeds.ts");
   const feeds = buildFeeds(".");
   if (feeds.size !== FEEDS.length) {
     throw new Error(`feeds: generated ${feeds.size} of ${FEEDS.length} declared feeds`);
@@ -1525,7 +1527,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     // Shared LWE structure is a separate warm-cache object.
     { attr: "href", from: "/lwe-base.css", base: "lwe-base", ext: "css", witness: "lwe/vigenere.html" },
   ];
-  const hashedFor = {};
+  const hashedFor: Record<string, string> = {};
   // ── phase 0: the three JS-STRING-loaded islands (tooltip, hoist, lens-browser) ──
   // These load via `import("/hoist.js")` / `script.src = "/lens-browser.js?v=1"`, which
   // the attribute-scoped repointer below cannot touch. They are hashed FIRST, and their
@@ -2066,7 +2068,8 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
 {
   const { makeResolver, internalRefs } = await import("./lib/link-integrity.ts");
 
-  const served = new Set();
+  // every served path in the staged tree, each carrying a leading slash
+  const served = new Set<string>();
   for (const rel of await readdir(`${OUT}/public`, { recursive: true })) served.add("/" + rel);
 
   const idxSrc = await readFile("src/worker/index.ts", "utf8");
@@ -2284,7 +2287,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     `export const PAGE_SCRIPT_HASHES = ${JSON.stringify(map)}; // build:csp-hashes`,
   ));
 
-  const bytes = Object.values(map).reduce((n, h) => n + h.length * 72, 0);
+  const bytes = (Object.values(map) as string[][]).reduce((n, h) => n + h.length * 72, 0);
   console.log(`csp-hash: ${blocks} inline blocks across ${covered} documents, ${Object.values(map).flat().length} hashes (~${Math.round(bytes / covered)} B/page of header)`);
 }
 

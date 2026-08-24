@@ -17,9 +17,9 @@
 // the MX/SPF/DMARC/BIMI/SVCB set, which is also the set that carries mail. That
 // is the whole reason it earns a write path.
 //
-//   node tools/apply-infra.mjs              plan only, no credential needed
-//   node tools/apply-infra.mjs --confirm    apply (needs the write token)
-//   node tools/apply-infra.mjs --prune      also delete extras on declared names
+//   node tools/apply-infra.ts              plan only, no credential needed
+//   node tools/apply-infra.ts --confirm    apply (needs the write token)
+//   node tools/apply-infra.ts --prune      also delete extras on declared names
 //
 // Refuses to run in CI. A write token in GitHub would undo the property the
 // whole release design rests on: that GitHub cannot reach production.
@@ -67,7 +67,7 @@ const OWNER = {
 // is how the HTTPS RR looked after the `contains` mode arrived in a later
 // change than this map. Fail loudly instead, so the next new mode cannot
 // quietly degrade the one list whose entire job is explaining what is skipped.
-for (const mode of new Set(infra.dns.map((r) => r.match))) {
+for (const mode of new Set(infra.dns.map((r) => r.match)) as Set<string>) {
   if (mode !== "exact" && !OWNER[mode]) {
     console.error(`infra.json uses match mode ${JSON.stringify(mode)}, which has no owner explanation in apply-infra.mjs.`);
     console.error(`Add one to OWNER so the out-of-scope list says who owns those records instead of naming the mode.`);
@@ -201,7 +201,12 @@ function payload(record, value) {
 // the difference between a correct apply and a duplicate-creating one.
 const token = process.env[policy.token.env];
 
-async function cf(path, init = {}) {
+// headers is narrowed to a plain record on purpose. RequestInit allows a Headers
+// instance or an array of pairs, and `{ ...init.headers }` silently yields index
+// keys or nothing for those — the same spread-on-the-wrong-shape class that
+// broke webmention ids (gotcha 34). Every caller here passes an object literal,
+// so the signature now says only that is accepted.
+async function cf(path, init: Omit<RequestInit, "headers"> & { headers?: Record<string, string> } = {}) {
   const res = await fetch(`${API}${path}`, {
     ...init,
     headers: { authorization: `Bearer ${token}`, "content-type": "application/json", ...init.headers },
@@ -227,9 +232,12 @@ if (token) {
 
 // ------------------------------------------------------------------- plan --
 
-const create = [];
-const update = [];
-const prune = [];
+// The plan, as three lists of what would change. `value`, `from` and `to` are
+// record contents, which is what the printer below interpolates.
+type PlanEntry = { record: any; value?: string; from?: string; to?: string; id?: string };
+const create: PlanEntry[] = [];
+const update: PlanEntry[] = [];
+const prune: PlanEntry[] = [];
 const blocked = [];
 
 for (const record of managed) {
@@ -243,8 +251,8 @@ for (const record of managed) {
   // Both sides through the same normaliser. Comparing a declared value against
   // a normalised live one would be an asymmetry, and for SVCB that asymmetry is
   // the whole bug: the declaration's param order is not the API's.
-  const want = new Set(record.expect.map((v) => normalize(record.type, v)));
-  const have = new Set(live);
+  const want = new Set(record.expect.map((v) => normalize(record.type, v))) as Set<string>;
+  const have = new Set(live) as Set<string>;
 
   for (const value of want) if (!have.has(value)) create.push({ record, value });
   for (const value of have) if (!want.has(value)) prune.push({ record, value });

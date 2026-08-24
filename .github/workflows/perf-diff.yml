@@ -129,7 +129,7 @@ jobs:
         run: |
           rm -rf .perf-measure
           mkdir .perf-measure
-          cp tools/perf-snapshot.mjs .perf-measure/perf-snapshot.mjs
+          cp tools/perf-snapshot.ts .perf-measure/perf-snapshot.mjs
           cp -R tools/lib .perf-measure/lib
 
           # Prove the stash before the first switch, because both ways it can be

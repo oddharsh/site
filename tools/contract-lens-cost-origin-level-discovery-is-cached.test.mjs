@@ -5,7 +5,7 @@ import {
   assert,
   readFileSync,
   test,
-} from "./contract-shared.mjs";
+} from "./contract-shared.ts";
 
 // ── lens cost: origin-level discovery is cached ──────────────────────────
 

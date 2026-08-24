@@ -6,7 +6,7 @@ import {
   assert,
   citationsIn,
   test,
-} from "./contract-shared.mjs";
+} from "./contract-shared.ts";
 
 // ── webmention (outbound) ───────────────────────────────────────────────────
 test("outbound citations exclude the shell, self-links, and non-public URLs", () => {

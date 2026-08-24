@@ -11,7 +11,7 @@ import {
   terminalEnv,
   terminalGet,
   test,
-} from "./contract-shared.mjs";
+} from "./contract-shared.ts";
 
 // ── the tools are SERVICES, the frame is a representation ────────────────
 

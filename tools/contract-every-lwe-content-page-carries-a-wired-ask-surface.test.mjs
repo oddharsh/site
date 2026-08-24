@@ -6,7 +6,7 @@ import {
   readFile,
   readdir,
   test,
-} from "./contract-shared.mjs";
+} from "./contract-shared.ts";
 
 test("every LWE content page carries a wired ask surface", async () => {
   // "All LWE pages have an ask surface" is a definition rather than a habit, and it

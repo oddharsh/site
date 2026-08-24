@@ -5,7 +5,7 @@ import {
   assert,
   readFileSync,
   test,
-} from "./contract-shared.mjs";
+} from "./contract-shared.ts";
 
 // ── both MCP servers speak one protocol ─────────────────────────────
 // This origin publishes TWO MCP servers, /mcp and /serendipity/mcp. They share
@@ -97,7 +97,7 @@ test("both CSS checks go through the one parser, and it still tolerates the righ
   // pre-build gate on the same stylesheets. They ran DIFFERENT engines until
   // 2026-08-14 (Lightning CSS and esbuild), which disagree in both directions, so
   // a scaffold could pass the gate and fail the build. One parser, one family.
-  for (const file of ["tools/build.mjs", "tools/check-page-contracts.mjs"]) {
+  for (const file of ["tools/build.ts", "tools/check-page-contracts.ts"]) {
     const src = readFileSync(file, "utf8");
     assert.ok(/from "\.\/lib\/css-parse\.ts"/.test(src), `${file} must import the shared CSS parser`);
     assert.ok(!/from "esbuild"/.test(src), `${file} must not reach for a second CSS engine`);

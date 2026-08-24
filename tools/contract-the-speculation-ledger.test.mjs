@@ -8,7 +8,7 @@ import {
   readFileSync,
   readdir,
   test,
-} from "./contract-shared.mjs";
+} from "./contract-shared.ts";
 
 // ── the speculation ledger ────────────────────────────────────────────────────
 // Both halves are best-effort counters wrapped around a live response, so the
