@@ -111,7 +111,7 @@ const parse = (n) => {
 };
 
 if (!live && !existsSync(BUILT)) {
-  console.error(`shell:roll — ${BUILT} is missing. Run \`node tools/build.ts\` first: the /a/ hashes`);
+  console.error(`shell:roll — ${BUILT} is missing. Run \`bun run build\` first: the /a/ hashes`);
   console.error("  come from the MINIFIED bytes, so the built tree is the only place they exist.");
   console.error("  Or pass --live to adopt what production is serving instead, which needs no build.");
   process.exit(1);

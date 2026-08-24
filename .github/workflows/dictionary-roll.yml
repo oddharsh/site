@@ -81,7 +81,21 @@ jobs:
         # The page half reads `.build/public` for the page LIST (it fetches the bytes
         # from production). The shell half under --live needs no build, but the page
         # half does, so the build runs once for both.
-        run: node tools/build.ts
+        #
+        # BUN, AND THIS STEP RAN UNDER NODE UNTIL 2026-08-24, WHICH TOOK THE ROLL
+        # DOWN FOR THREE NIGHTS. `link-integrity.ts` has parsed documents with
+        # HTMLRewriter since 2026-08-20 rather than pattern-matching them, and
+        # HTMLRewriter is a bun and workerd global that node does not have, so
+        # `node tools/build.ts` now dies with `ReferenceError: HTMLRewriter is
+        # not defined` before the build writes anything. Runs 32566111066,
+        # 32632249654 and 32715546271 failed here, last success 2026-08-21.
+        #
+        # Nothing announced it, and this job is the one place where that is
+        # expensive: the header above is the record of the roll going stale for
+        # 161 commits, and a red nightly nobody is subscribed to is the same
+        # silence in a different costume. `bun run build` is what ci.yml runs, so
+        # the build now happens under the runtime that also ships it.
+        run: bun run build
 
       - name: Roll both dictionary sets against production
         # --live sources the shell half from the wire too, which is what lets this run
