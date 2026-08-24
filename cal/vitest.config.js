@@ -1,5 +1,5 @@
 // Local-only test harness for the cal/ booking worker. NOT deployed: `wrangler
-// deploy` bundles only src/index.js + its imports, so nothing under test/ (or
+// deploy` bundles only src/index.ts + its imports, so nothing under test/ (or
 // this config, or the devDependencies) ever ships. Runs the suite inside the
 // real Workers runtime (workerd via @cloudflare/vitest-pool-workers) so KV,
 // WebCrypto, and the env vars behave exactly as in production.

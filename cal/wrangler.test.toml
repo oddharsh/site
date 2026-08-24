@@ -2,14 +2,20 @@
 # root aadhar-sh Worker (`../wrangler.jsonc`); this file exists only because the
 # Vitest pool needs a small config to emulate the Cal module's KV and vars.
 name = "cal-aadhar-sh-tests"
-main = "src/index.js"
+# WRANGLER RESOLVES THIS LITERALLY, and the Vitest pool does not. Vite maps a
+# `.js` specifier onto a `.ts` file, so this said `src/index.js` from the
+# TypeScript conversion until 2026-08-23 while the suite stayed green: the pool
+# never asks wrangler to resolve it. Any real wrangler command against this
+# config died on `The entry-point file at "src/index.js" was not found`, which
+# is nothing CI runs and everything a spike runs first.
+main = "src/index.ts"
 compatibility_date = "2026-06-01"
 
 [[kv_namespaces]]
 binding = "BOOKINGS"
 id = "37acb65118fe485583a90a94cb89365e"
 
-# The per-booking expiry timer (cal/src/workflow.ts, re-exported from src/index.js).
+# The per-booking expiry timer (cal/src/workflow.ts, re-exported from src/index.ts).
 # Lets the Vitest pool create + introspect BookingWorkflow instances.
 [[workflows]]
 name = "cal-booking-expiry"
