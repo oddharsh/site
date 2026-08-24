@@ -430,7 +430,11 @@ async function checkInvariants() {
   let tasteScanned = 0, tasteOk = [];
   try {
     const served = [...await servedFiles(), "cal/src/templates.ts", "serendipity/serendipity.ts"];
-    const isDemo = (p) => /^www\/(garage|lwe)\//.test(p);
+    // Anchored on the SERVED_SOURCES roots, not on a tree name. This read
+    // /^www\/(garage|lwe)\// until 2026-08-23, and www/ stopped existing on
+    // 2026-08-18, so the exemption had been silently false for every file and
+    // the build printed 14 taste warnings on demo pages on every single run.
+    const isDemo = (p) => /^(?:public|src\/pages)\/(?:garage|lwe)\//.test(p);
     // Blank block comments before pattern-matching (luna.css discusses @font-face
     // in prose twice, and a guard that fires on its own documentation gets
     // muted). BLANK rather than delete: same length, newlines kept, so a match
@@ -966,7 +970,7 @@ if (inlineProbe.includes("/* probe */") ||
   // A silent {} here would ship a grid whose tiles all fall back to the per-hover
   // fetch, which is the pre-#440 behaviour and looks like nothing is wrong.
   const histed = twelve.filter((p) => histograms[p.stem]).length;
-  if (histed !== 12) throw new Error(`homepage bake: ${histed} of 12 baked tiles carry a histogram — run bun run photos or node public/scripts/build-histogram-index.mjs`);
+  if (histed !== 12) throw new Error(`homepage bake: ${histed} of 12 baked tiles carry a histogram — run bun run photos or node tools/photos/build-histogram-index.mjs`);
   const slots = grid.renderPhotoSlots(twelve, altMap, { histograms });
 
   let html = await readFile(`${OUT}/public/index.html`, "utf8");

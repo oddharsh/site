@@ -212,13 +212,18 @@ test("no tool spawns a package manager by name", async () => {
     f.endsWith(".mjs") && !f.endsWith(".test.mjs") && f !== "contract-shared.mjs");
   assert.ok(files.length >= 20, `expected the tools directory, got ${files.length} files`);
 
-  // lens-seed.mjs is the one RECORDED exception: it drives a package script as
-  // the subject of the browser recording rather than using a manager to reach
-  // another binary.
-  const RECORDED = new Set(["lens-seed.mjs"]);
+  // There is NO exception list, and there was one until 2026-08-23. It held
+  // lens-seed.mjs, recorded as "drives a package script as the subject of the
+  // browser recording rather than using a manager to reach another binary".
+  // That reason described no code in the file: its only spawn was
+  // `execFileSync("pnpm", ["exec", "wrangler", ...])`, which is a manager
+  // reaching another binary and is exactly what this test bans. So the one
+  // genuine offender was the one file exempted, and the suite reported green
+  // while every seed run on a bun tree died on "This project is configured to
+  // use bun". An allowlist entry whose stated reason does not match the code it
+  // exempts is worse than no test, because it looks like a considered decision.
   const offenders = [];
   for (const f of files) {
-    if (RECORDED.has(f)) continue;
     const src = readFileSync(dir + f, "utf8");
     for (const m of src.matchAll(/(?:execFile|execFileSync|exec|spawn|spawnSync|run)\(\s*"(pnpm|npm|npx|bunx|yarn|corepack)"/g)) {
       offenders.push(`${f}: spawns "${m[1]}"`);

@@ -25,9 +25,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-HOLDING="$( cd "$SCRIPT_DIR/.." && pwd )"
-SRC_DIR="$HOLDING/images"
-OUT_DIR="$HOLDING/i"
+PUBLIC_DIR="$( cd "$SCRIPT_DIR/../.." && pwd )/public"
+SRC_DIR="$PUBLIC_DIR/images"
+OUT_DIR="$PUBLIC_DIR/i"
 MAP="$SRC_DIR/hashes.json"
 
 mkdir -p "$OUT_DIR"
@@ -125,4 +125,4 @@ EOF
 
 # The short URL hash above is intentionally kept separate from the full-byte
 # fingerprint used by the exact photo_recipe matcher.
-node "$HOLDING/scripts/build-image-fingerprints.mjs"
+node "$SCRIPT_DIR/build-image-fingerprints.mjs"

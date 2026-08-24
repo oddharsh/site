@@ -133,7 +133,3 @@ export function taskPane({ path = "/", name = "", tasks = [], details = [] } = {
   return `<div class="axp-tasks"><aside class="axp-pane" aria-label="Explorer tasks">${boxes.join("")}</aside></div>`;
 }
 
-/** Both devices for one page, in the order they appear in the window. */
-export function explorerChrome(options = {}) {
-  return { address: addressBar(options), pane: taskPane(options) };
-}

@@ -40,7 +40,7 @@ const errors = [];
 
 if (!(await exists("node_modules/wrangler/package.json"))) {
   console.error("Wrangler version check failed:");
-  console.error("- node_modules/wrangler is missing. This check reads the installed tree; run `pnpm install` first.");
+  console.error("- node_modules/wrangler is missing. This check reads the installed tree; run `bun install` first.");
   process.exit(1);
 }
 
@@ -50,6 +50,13 @@ const installed = (await readJson("node_modules/wrangler/package.json")).version
 // Transitive copies live under pnpm's content-addressed store link farm, one
 // directory per resolved version (a peer-dependency suffix may follow the
 // version, hence the prefix match rather than an equality test).
+//
+// NOTE: this tree is bun since 2026-08-20 and has no node_modules/.pnpm, so the
+// catch below always fires and this count is always 0. The equality checks on
+// the root pin still hold; what is no longer checked here is a SECOND wrangler
+// version pulled in transitively. Finding one on a bun layout is a different
+// search, because bun hoists flat and a duplicate would sit at
+// node_modules/<pkg>/node_modules/wrangler. Nobody has written that yet.
 let transitiveVersions = [];
 try {
   transitiveVersions = (await readdir(path.join(ROOT, "node_modules/.pnpm")))
