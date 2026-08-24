@@ -216,7 +216,9 @@ avif_encode() {  # avif_encode <src.jpg> <out.avif>
     # 4:0:0 for grayscale (Leica Monochrom — no chroma planes), else 4:2:0.
     # strip ICC/EXIF/XMP: the grid reads EXIF from metadata.json, so embedded
     # metadata is dead weight (and avifenc copies source EXIF by default).
-    local space; space=$(sips -g space "$1" 2>/dev/null | awk '/space:/{print $2}')
+    # `|| space=""` keeps this tolerant under pipefail: a sips that cannot read
+    # the colorspace should fall through to 4:2:0, never abort the encode.
+    local space; space=$(sips -g space "$1" 2>/dev/null | awk '/space:/{print $2}') || space=""
     local yuv; [ "$space" = "Gray" ] && yuv=400 || yuv=420
     avifenc -q 63 -d 10 --ignore-icc --ignore-exif --ignore-xmp --speed 4 --jobs 4 --yuv "$yuv" "$1" "$2" >/dev/null 2>&1
   else
