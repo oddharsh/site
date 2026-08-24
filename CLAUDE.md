@@ -4246,6 +4246,49 @@ bun run deploy:direct
     trusting a comparison across one, and check support per COMMAND rather than
     per tool.
 
+39. **A dev server on the port you wanted may belong to ANOTHER CHECKOUT, and
+    everything downstream of that reads as a bug in your code.** Several agents
+    work in this tree at once (the collaboration rule at the top of this file
+    says so), each in its own worktree, and each one starts `bun run dev` for the
+    same repository. The port is the one thing they share.
+
+    Measured 2026-08-24 from `.claude/worktrees/ts-orphan-programs`. The tooling
+    reported `Server started successfully on port 8796`, the port answered, and
+    `/serendipity` came back 500 with the module's own styled error page. It was
+    the PARENT checkout's server, whose local D1 had never been migrated:
+
+    ```
+    $ lsof -ti :8796
+    80473
+    $ lsof -a -p 80473 -d cwd -Fn | grep '^n'
+    n/Users/aadharsh/noodling/site      # not the worktree this session is in
+    ```
+
+    **Declaring a port does not protect you**, which is the part that makes this
+    survive a careful setup: `.claude/launch.json` named 8799 and the server came
+    up on 8796 anyway. Bind an explicit free port yourself and check the cwd
+    before trusting a single response.
+
+    **THE TELL IS TWO OBSERVATIONS THAT CANNOT BOTH BE TRUE OF ONE PROCESS.** The
+    page served text that exists at exactly one line in the source, inside a
+    `catch`, and a `console.log` added to that same `catch` never appeared in the
+    log, across three restarts. Either the catch ran or it did not. That is the
+    signal to stop testing the code and start identifying the process, and it is
+    gotcha 15's lesson (two unrelated origins failing identically means the
+    instrument is lying) arriving through a different door.
+
+    The false trail cost most of the time and is worth naming so nobody re-walks
+    it. `CF_VERSION_METADATA.id` held at one value across restarts, which reads
+    exactly like wrangler failing to hot-reload, so the next twenty minutes went
+    into forcing a reload rather than into asking whose process it was. A version
+    id that never moves is equally consistent with "this is not your Worker".
+
+    Two smaller things confirmed the same day, both useful on their own. A
+    request logged by the running Worker proves the port is live and proves
+    nothing about WHICH tree it serves. And a cache-busting query parameter
+    (gotcha 12's move) does not separate these cases either, since the other
+    checkout answers the busted URL just as readily.
+
 
 ---
 
