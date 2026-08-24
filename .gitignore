@@ -1,6 +1,12 @@
 # wrangler local cache + state (per-deploy, regenerates)
 .wrangler/
 
+# Build Output Specification, written by `wrangler build --x-cf-build-output`
+# alongside the experimental TypeScript config (cf-garage/cloudflare.config.ts).
+# Nothing in this repo's build or deploy path emits it; it is the readout you run
+# by hand to see the config wrangler actually resolved, so it regenerates.
+.cloudflare/
+
 # deploy-time build staging (build.mjs output; regenerated every build)
 .build/
 

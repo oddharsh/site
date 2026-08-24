@@ -248,7 +248,17 @@ async function resolveWithFallback(name: string, type: string): Promise<DnsResol
 
 // ----------------------------------------------------------- tier: tree ----
 
-const AUX_CONFIGS = ["cf-garage/wrangler.toml", "lwe-ask/wrangler.toml", "lens-reader/wrangler.toml"];
+// The three auxiliary Workers, whose configs stopped being one format on
+// 2026-08-23: cf-garage moved to wrangler's experimental TypeScript config,
+// where the account pin sits on a `settings` export as `accountId` rather than
+// as a toml `account_id`. The pattern and the label travel WITH the path, so a
+// fourth format joins by adding a row instead of by widening one regex until it
+// matches every shape and asserts nothing about any of them.
+const AUX_CONFIGS = [
+  { path: "cf-garage/cloudflare.config.ts", key: "accountId", pattern: /^\s*accountId:\s*"([^"]+)"/m },
+  { path: "lwe-ask/wrangler.toml", key: "account_id", pattern: /^\s*account_id\s*=\s*"([^"]+)"/m },
+  { path: "lens-reader/wrangler.toml", key: "account_id", pattern: /^\s*account_id\s*=\s*"([^"]+)"/m },
+];
 
 async function checkTree(infra, wrangler, aux) {
   const lwe = aux.get("lwe-ask/wrangler.toml");
@@ -329,9 +339,9 @@ async function checkTree(infra, wrangler, aux) {
         ["wrangler.dev.jsonc account_id", devWrangler.account_id, "dev:remote and routes:check:remote reach production bindings through this config"],
         ["wrangler.dev.jsonc vars.CF_ACCOUNT_ID", devWrangler.vars?.CF_ACCOUNT_ID, "/ledger reads this account's Analytics Engine through it"],
       ] : []),
-      ...AUX_CONFIGS.map((path) => [
-        `${path} account_id`,
-        (aux.get(path).match(/^\s*account_id\s*=\s*"([^"]+)"/m) || [])[1],
+      ...AUX_CONFIGS.map(({ path, key, pattern }) => [
+        `${path} ${key}`,
+        (aux.get(path).match(pattern) || [])[1],
         "this Worker deploys from its own directory, so wrangler resolves the account from this file and never sees wrangler.jsonc",
       ]),
     ];
@@ -353,7 +363,7 @@ async function checkTree(infra, wrangler, aux) {
       }
     }
     if (agreed === sites.length && sites.length === 6) {
-      pass(`account ${declaredAccount} agrees across all 7 declarations (account_id + vars.CF_ACCOUNT_ID on both site configs, account_id on all 3 auxiliary Workers)`);
+      pass(`account ${declaredAccount} agrees across all 7 declarations (account_id + vars.CF_ACCOUNT_ID on both site configs, the account pin on all 3 auxiliary Workers)`);
     }
   }
 
@@ -1262,7 +1272,7 @@ const infra = JSON.parse(await readFile(join(ROOT, "config/infra.json"), "utf8")
 const wrangler = await readJsonc("wrangler.jsonc");
 const auxConfigs = new Map(
   await Promise.all(AUX_CONFIGS.map(
-    async (path): Promise<[string, string]> => [path, await readFile(join(ROOT, path), "utf8")],
+    async ({ path }): Promise<[string, string]> => [path, await readFile(join(ROOT, path), "utf8")],
   )),
 );
 
