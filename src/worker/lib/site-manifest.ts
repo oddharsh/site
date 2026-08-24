@@ -241,6 +241,12 @@ export const AGENT_SURFACES = [
     "description": "The same photo through AVIF, WebP, and JPEG (zenc), with real byte counts and quality measurements."
   },
   {
+    "path": "/garage/ig-prep",
+    "title": "Pixels Instagram has no reason to resample",
+    "kind": "content",
+    "description": "A photo converter that owns the downscale Instagram would otherwise do carelessly, and an MCP mode a model can drive against local files."
+  },
+  {
     "path": "/garage/compression",
     "title": "Compression teardown",
     "kind": "content",
@@ -400,6 +406,7 @@ export const WEBMENTION_PATHS = [
   "/garage/chunks",
   "/garage/cloudflare",
   "/garage/encoding",
+  "/garage/ig-prep",
   "/garage/compression",
   "/garage/gpt56",
   "/garage/horizon",

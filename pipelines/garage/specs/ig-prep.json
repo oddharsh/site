@@ -1,0 +1,117 @@
+{
+  "id": "ig-prep",
+  "title": "Pixels Instagram has no reason to resample",
+  "description": "A converter that performs the 40 megapixel downscale in linear light and delivers the exact width Instagram wants, plus an MCP mode that lets a model run it against photographs that stay on your machine.",
+  "status": "shipped",
+  "added": "2026-08-24",
+  "bodyHtml": "<h1>Handing Instagram pixels it has no reason to resample</h1>\n<p class=\"garage-intro\">Instagram resizes and re-encodes whatever it is given. What it does not do is resample a frame that already arrives at the size it wants. <a href=\"https://github.com/oddharsh/ig-prep\">ig-prep</a> does the destructive work here, carefully, so the platform has as little left to do as possible. It also speaks <a href=\"https://modelcontextprotocol.io\">MCP</a>, so a model can run it against photographs on your own machine without any of them moving.</p>\n\n<h2>The geometric fact the default rests on</h2>\n<p>Instagram shows frames between 4:5 and 1.91:1. A 3:2 portrait, which is most of what a Fujifilm or a Leica produces held vertically, is 0.667 and falls outside that band, so something has to give.</p>\n<p>The default gives nothing up, because <b>cropping a portrait to 4:5 removes height only</b>. A frame delivered at exactly the target width is already the right width for any vertical crop you drag in the app, so the crop costs no resample at all. You keep the framing decision. The expensive step, a 40 megapixel downscale in linear light with Lanczos3, stays here where it is done once and done carefully.</p>\n<p class=\"ig-warn\">One thing breaks it: pinch-zooming in the crop UI changes the scale and hands the resample straight back. Drag instead.</p>\n\n<h2>Rotation is stated twice, and applying both turns the picture sideways</h2>\n<p>A HEIF can say how to turn itself in two places: as a container transform (<code>irot</code> and <code>imir</code>) and as an EXIF Orientation tag. Every Fujifilm HIF writes both, saying the same thing each way. Applying either is correct. Applying both is a photograph on its side, which is why one file can look right in one app and wrong in another on the same phone.</p>\n<p>So no decoder is trusted about this. <code>sips</code> applies neither and passes the tag forward, while <code>djxl</code> bakes rotation in, and a program that believes either one plans a portrait as a landscape. ig-prep compares the decoded dimensions against the metadata's display dimensions and decides from the measurement. Across a 160-file corpus, 114 files state their rotation twice and <b>zero disagree</b>, which is the number <code>ig-prep --check</code> exists to report.</p>\n\n<h2>Point a model at it</h2>\n<p><code>ig-prep mcp</code> speaks MCP on stdin and stdout. Three tools: <code>ig_plan</code> reports what a conversion would do and writes nothing, <code>ig_convert</code> does it, and <code>ig_check_rotation</code> is the rotation report above.</p>\n<pre class=\"ig-conf\"><code>{\n  \"mcpServers\": {\n    \"ig-prep\": {\n      \"command\": \"ig-prep\",\n      \"args\": [\"mcp\", \"--root\", \"/Users/you/Pictures\"]\n    }\n  }\n}</code></pre>\n<p>Then you can ask for the conversion in a sentence, and the model reads back what happened per file.</p>\n<p><b>The photographs never move and never enter the conversation.</b> They are already on the machine the server runs on, so a result carries paths, sizes and dimensions instead of image data. That is a deliberate limit. A converted frame is a few hundred kilobytes, which is roughly a megabyte of base64, and forty of them would spend forty megabytes of a model's context on pixels it cannot look at.</p>\n<p><code>--root</code> is the boundary, and it is checked after symlinks are resolved: comparing the path string a caller wrote would let <code>root/link-to-elsewhere</code> through. One call converts at most 200 files and reports how many it left, because a result listing 200 conversions of a 900-file directory otherwise reads as a complete run.</p>\n<p>Eight 40 megapixel HEIFs through one call take 2.41 seconds of wall clock on an M-series Mac, at 354% CPU across the cores.</p>\n\n<h2>What the chroma choice costs</h2>\n<p>Instagram re-encodes to 4:2:0 regardless, so the question is not what survives on disk but what its encoder is handed. Full-resolution chroma means its subsampling step averages real detail rather than detail already halved once, and two successive halvings visibly smear saturated edges. The cost is bytes on an upload nobody sees. On one 1440x2160 frame:</p>\n<div class=\"ig-table\" id=\"ig-chroma\"></div>\n<p>A Fujifilm HIF halves chroma horizontally in its own landscape orientation, so held vertically the halved axis lands on the long edge of the portrait. Against a 1440x2160 output that is still 3.58x horizontally and 1.79x vertically of real chroma to average down, which is why 4:4:4 output is measured rather than invented. Somebody delivering at or near native size has a source that cannot fill it, and should say <code>--422</code> and mean it.</p>\n\n<h2>Three constants are guesses, and they are marked as guesses</h2>\n<p>The target width of 1440, the 4:4:4 default, and the ratio band itself are all assumptions. 1440 is chosen over 1080 because the failure modes are asymmetric: if Instagram wants 1080 it downscales cleanly from 1440, and if it wants 1440 and gets 1080 it upscales and invents detail. Guessing high costs a resample. Guessing low costs the picture.</p>\n<p>None of the three becomes a fact until a round trip measures it, which means uploading a variant grid, saving what Instagram serves back, and scoring each against its source. The upload is the one step a program cannot do for you, so that harness is still unbuilt and the constants live in one block of <code>geometry.rs</code> where calibrating means editing one place.</p>\n\n<h2>The bug that only black-and-white photographs could find</h2>\n<p>Building the MCP mode turned up a failure that had been in the tool since it was written. Every grayscale JPEG died with <code>source image: Size of buffer is smaller than required</code>, an error naming neither the file nor the cause, raised two layers away from it inside the resizer.</p>\n<p>The decoder's <code>jpeg_set_out_colorspace(RGB)</code> is a request rather than an instruction. For a single-channel source it declines and returns Luma anyway, silently, so the buffer came back at one byte per pixel while the code labelled it three. The repair reads the colourspace the decoder actually used instead of the one it was asked for, and checks the buffer length against the dimensions at the decode boundary, where the file name is still in hand. One file in a 160-file library failed before. None do now.</p>\n<p>The general shape is worth more than the instance. <b>An API that takes a preference and reports no error when it declines will be read as an instruction</b>, and the mismatch surfaces wherever the wrong assumption is first load-bearing, which is rarely where it was made.</p>",
+  "pageCss": ".ig-warn{border-left:3px solid #d98a00;background:#fffaf0;padding:6px 10px;margin:10px 0}\n.ig-conf{border:1px solid #99a8bd;background:#f3f6fa;box-shadow:inset 1px 1px 0 #fff;padding:8px 10px;overflow-x:auto;font-size:8.6pt;margin:8px 0}\n.ig-table{border:1px solid #99a8bd;background:#f3f6fa;box-shadow:inset 1px 1px 0 #fff;margin:8px 0;padding:2px 0}\n.ig-table .row{display:grid;grid-template-columns:5em 7em 1fr;gap:8px;align-items:baseline;padding:3px 10px;font-size:8.8pt;border-bottom:1px solid #e4eaf3}\n.ig-table .row:last-child{border-bottom:0}\n.ig-table .row.head{font-weight:700;background:#e8eef7}\n.ig-table .n{text-align:right;font-family:var(--font-mono)}",
+  "pageJs": "(function(){\n  // The bytes are the measurement, so they are written here once and rendered\n  // rather than restated in prose where the two copies could drift.\n  var rows = [\n    [\"4:4:4\", 1885, \"chroma at luma resolution, what this ships by default\"],\n    [\"4:2:2\", 1699, \"halved horizontally, what the camera shot\"],\n    [\"4:2:0\", 1585, \"halved on both axes, what Instagram stores anyway\"]\n  ];\n  var el = document.getElementById(\"ig-chroma\");\n  if (!el) return;\n  var html = '<div class=\"row head\"><span>chroma</span><span class=\"n\">KB</span><span>what it is</span></div>';\n  for (var i = 0; i < rows.length; i++) {\n    html += '<div class=\"row\"><span>' + rows[i][0] + '</span><span class=\"n\">' +\n            rows[i][1] + '</span><span>' + rows[i][2] + '</span></div>';\n  }\n  el.innerHTML = html;\n})();",
+  "editorial": {
+    "reader": "A photographer who has noticed their pictures look worse after posting, and who wants to know which part of that is recoverable before the upload rather than after it.",
+    "problem": "Instagram resizes and re-encodes everything it receives, so the reader can see the damage and cannot say which step caused it or which steps they still control.",
+    "thesis": "A frame that arrives at the width the platform wants gives its resampler nothing to do, so the one destructive step worth owning is the downscale, and owning it means deciding rotation from a measurement rather than from a tag.",
+    "evidence": [
+      "Cropping a portrait to 4:5 removes height only, so a frame delivered at the target width is already the target width after any vertical crop dragged in the app.",
+      "Across a 160-file corpus, 114 files state their rotation twice through both irot and EXIF Orientation, and zero disagree, so applying both would turn 114 photographs sideways.",
+      "One 1440x2160 frame costs 1885 KB at 4:4:4, 1699 KB at 4:2:2 and 1585 KB at 4:2:0, on an upload nobody sees.",
+      "Eight 40 megapixel HEIFs convert through one MCP call in 2.41 seconds of wall clock."
+    ],
+    "uncertainty": "The target width of 1440, the 4:4:4 default and the ratio band are three assumptions rather than measurements. Settling them needs a round trip that uploads a variant grid and scores what Instagram serves back, and the upload is the one step a program cannot perform."
+  },
+  "understanding": {
+    "intro": "Before you close the hood, reconstruct the mechanism in four questions.",
+    "questions": [
+      {
+        "q": "Why does delivering the whole frame at the target width cost nothing, even though Instagram will crop it?",
+        "options": [
+          {
+            "t": "Cropping a portrait to 4:5 removes height only, so the cropped frame is already the target width and has nothing left to resample.",
+            "ok": true,
+            "why": "Right. Width is unchanged by a vertical crop, so the expensive resample was already performed here."
+          },
+          {
+            "t": "Instagram skips resampling for any image above 1080 pixels wide.",
+            "why": "It resamples whatever misses the width it wants. Size alone buys no exemption."
+          },
+          {
+            "t": "The crop happens on the phone, so the pixels never reach Instagram's servers.",
+            "why": "The cropped frame is exactly what gets uploaded, and it is re-encoded on arrival."
+          }
+        ]
+      },
+      {
+        "q": "A photographer pinch-zooms while cropping in the app. What did that cost them?",
+        "options": [
+          {
+            "t": "It changed the scale, so the frame no longer arrives at the target width and Instagram resamples it after all.",
+            "ok": true,
+            "why": "Right. The guarantee holds for a drag, which moves the window, and breaks for a zoom, which changes the scale."
+          },
+          {
+            "t": "Nothing, because the source was already downscaled carefully.",
+            "why": "A careful downscale to the wrong final size still gets resampled, which is the step this was avoiding."
+          },
+          {
+            "t": "It stripped the rotation metadata.",
+            "why": "Cropping in the app does not touch how the file stated its rotation."
+          }
+        ]
+      },
+      {
+        "q": "A HEIF states its rotation through both irot and EXIF Orientation, saying the same thing. What must a converter do?",
+        "options": [
+          {
+            "t": "Apply one of them, decided by measuring what the decoder already did, since applying both turns the photograph sideways.",
+            "ok": true,
+            "why": "Right. Different decoders apply different subsets, so the only reliable signal is whether the decoded dimensions came back as the display shape or the stored one."
+          },
+          {
+            "t": "Apply both, because the file states them separately and each is a real instruction.",
+            "why": "That is the failure the redundancy causes. Two applications of one 90 degree turn is 180 degrees of wrong."
+          },
+          {
+            "t": "Apply neither, because a file saying it twice is corrupt.",
+            "why": "Saying it twice is normal and every Fujifilm HIF does it. Applying neither leaves a portrait planned as a landscape."
+          }
+        ]
+      },
+      {
+        "q": "The MCP mode returns file paths instead of image bytes. What is the reasoning?",
+        "options": [
+          {
+            "t": "The photographs are already on the machine the model can reach, so bytes in the result would spend context on pixels the model cannot look at.",
+            "ok": true,
+            "why": "Right. A converted frame is roughly a megabyte of base64, and the caller can already open the file it named."
+          },
+          {
+            "t": "MCP results cannot carry binary data at all.",
+            "why": "The protocol has image content blocks. The limit here is what a result is worth carrying, rather than what it can carry."
+          },
+          {
+            "t": "Returning bytes would let the model modify the originals.",
+            "why": "The tool writes to an output directory and never touches a source, whichever shape the result takes."
+          }
+        ]
+      },
+      {
+        "q": "Every grayscale JPEG failed inside the resizer with a message naming neither the file nor its colour. What was the underlying mistake?",
+        "options": [
+          {
+            "t": "The code read a colourspace request as a guarantee, and the decoder declined it silently for single-channel sources.",
+            "ok": true,
+            "why": "Right. The buffer came back at one byte per pixel while the code labelled it three, and the mismatch surfaced wherever that label first mattered."
+          },
+          {
+            "t": "The resizer cannot handle grayscale input at all.",
+            "why": "The resizer was handed a buffer that disagreed with the dimensions it was given. Its own capabilities were never the question."
+          },
+          {
+            "t": "Grayscale JPEGs store their dimensions in a different header field.",
+            "why": "The dimensions were read correctly. The pixel count behind them was what did not match."
+          }
+        ]
+      }
+    ]
+  }
+}
