@@ -20,9 +20,9 @@ export function createRun(options) {
   var loadPhotos = options.loadPhotos;
   var loadWriting = options.loadWriting;
   var front = options.front;
-  var run, input, list, results = [], sel = -1, lastQuery = null, semantic = { q: "", items: [] }, searchTimer = null;
-  var preview = null, previewHoist = null, previewLoading = false;
-  var PHOTOS = null, WRITING = null;
+  var run, input, list, results = /** @type {any[]} */ ([]), sel = -1, lastQuery = /** @type {string | null} */ (null), semantic = { q: "", items: /** @type {any[]} */ ([]) }, searchTimer = /** @type {any} */ (null);
+  var preview = /** @type {HTMLElement | null} */ (null), previewHoist = /** @type {any} */ (null), previewLoading = false;
+  var PHOTOS = /** @type {any[] | null} */ (null), WRITING = /** @type {any[] | null} */ (null);
 
   /** @returns {HTMLElement} */
   function el(html) {
@@ -322,7 +322,7 @@ export function createRun(options) {
   // it can never show something that pressing Enter would not open.
   function setSel(i) {
     sel = i;
-    var cur = null;
+    var cur = /** @type {HTMLElement | null} */ (null);
     [].forEach.call(list.querySelectorAll(".opt"), function (o) {
       var on = +o.dataset.i === sel;
       o.setAttribute("aria-selected", on);

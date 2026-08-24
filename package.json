@@ -37,12 +37,12 @@
     "comment:test-node": "The same suite under node, kept because a suite that passes on one runtime and fails on another is reporting a fact about the runtime. bun's spec-strict Response found a real defect this way: withSecurityHeaders rebuilds every response, which per Fetch LOCKS the body it was handed, and one test pushed the same case objects through twice. node's undici allows it and bun throws.",
     "test:node": "node --import ./tools/lib/no-network.ts --test tools/*.test.mjs",
     "lint": "oxlint --type-aware",
-    "typecheck": "node tools/check-worker-types.ts && tsc -p config/tsconfig.browser.json && tsc -p config/tsconfig.sw.json && tsc -p config/tsconfig.lwe-ask.json && tsc -p config/tsconfig.cf-garage.json && tsc -p config/tsconfig.cal-test.json && node tools/check-tool-types.ts && node tools/check-test-types.ts && node tools/check-ts-coverage.ts",
+    "typecheck": "node tools/check-worker-types.ts && node tools/check-browser-types.ts && tsc -p config/tsconfig.sw.json && tsc -p config/tsconfig.lwe-ask.json && tsc -p config/tsconfig.cf-garage.json && tsc -p config/tsconfig.cal-test.json && node tools/check-tool-types.ts && node tools/check-test-types.ts && node tools/check-ts-coverage.ts",
     "typecheck:tools": "node tools/check-tool-types.ts",
     "typecheck:worker": "node tools/check-worker-types.ts",
     "typecheck:tests": "node tools/check-test-types.ts",
     "typecheck:coverage": "node tools/check-ts-coverage.ts",
-    "typecheck:browser": "tsc -p config/tsconfig.browser.json",
+    "typecheck:browser": "node tools/check-browser-types.ts",
     "check:fast": "bun run --parallel lint typecheck test",
     "shell:roll": "bun tools/roll-shell-dictionary.ts",
     "pages:roll": "bun tools/roll-shell-dictionary.ts --pages",
@@ -70,7 +70,7 @@
     "oxlint-tsgolint": "7.0.2001",
     "playwright-core": "^1.62.1",
     "typescript": "7.0.2",
-    "wrangler": "4.124.0"
+    "wrangler": "4.125.0"
   },
   "engines": {
     "node": ">=24.0.0"

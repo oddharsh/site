@@ -17,6 +17,13 @@
     "paths": { "/*": ["../src/client/*", "../src/styles/*", "../public/*"] },
     "lib": ["esnext", "dom", "dom.iterable"],
     "skipLibCheck": true,
+    // strictNullChecks ON, against the ratchet in check-browser-types.ts. The
+    // program carried 509 diagnostics under it; 344 are fixed and the rest are
+    // recorded per file in config/ts-browser-baseline.json, where they can only
+    // fall. Every fix is JSDoc on purpose: these assets are content-hashed, a
+    // JSDoc type is a comment the minifier strips, and the hash does not move.
+    // See that wrapper for the one shape that DOES move it.
+    "strictNullChecks": true,
     "strict": false
   },
   // A GLOB, not a list. This named six files until 2026-08-20, and by then ten

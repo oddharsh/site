@@ -51,9 +51,9 @@
   // re-mints the asset and every page and page-dictionary that names it. It
   // goes on the next change to this file that is worth a new URL.
   // oxlint-disable-next-line no-unused-vars
-  var PHOTOS = null;          // lazy: [{ label, path, hint, kind:'photo' }]
-  var WRITING = null;         // lazy: [{ label, path, hint, kind:'writing' }]
-  var photosPromise = null, writingPromise = null;
+  var PHOTOS = /** @type {any[] | null} */ (null);          // lazy: [{ label, path, hint, kind:'photo' }]
+  var WRITING = /** @type {any[] | null} */ (null);         // lazy: [{ label, path, hint, kind:'writing' }]
+  var photosPromise = /** @type {Promise<any> | null} */ (null), writingPromise = /** @type {Promise<any> | null} */ (null);
 
   function tag(kind, o) { o.kind = kind; return o; }
 
@@ -109,10 +109,10 @@
   }
 
   // ── interaction islands + shared state ───────────────────────────────────────
-  var runPromise = null, runApi = null;
+  var runPromise = /** @type {Promise<any> | null} */ (null), runApi = /** @type {any} */ (null);
   // Shared readers back both the lazy tray island and the lazy infotips.
-  var sysData = null, updData = null;
-  var trayPromise = null, accZ = 40;
+  var sysData = /** @type {any} */ (null), updData = /** @type {any} */ (null);
+  var trayPromise = /** @type {Promise<any> | null} */ (null), accZ = 40;
 
   /** @returns {HTMLElement} */
   function el(html) {
@@ -257,7 +257,7 @@
       p.classList.toggle("cur", cur);
       if (cur) p.setAttribute("aria-current", "page"); else p.removeAttribute("aria-current");
     });
-    var sndBtn = D.getElementById("axp-sound");
+    var sndBtn = /** @type {HTMLElement} */ (D.getElementById("axp-sound"));
     if (sndBtn) sndBtn.hidden = false;   // the partial ships it hidden: sounds need JS
     function paintSnd() {
       var on = AXP_SND.on();
@@ -316,7 +316,7 @@
     // move, promoted by .axp-dragging's will-change), and the final left/top is
     // committed once, on release. Writing left/top per pointermove forced a
     // layout every frame — visible as judder on 120Hz variable-refresh panels.
-    var cur = null, sx = 0, sy = 0, ox = 0, oy = 0, nx = 0, ny = 0, moved = false;
+    var cur = /** @type {HTMLElement | null} */ (null), sx = 0, sy = 0, ox = 0, oy = 0, nx = 0, ny = 0, moved = false;
     function mv(e) {
       if (!cur) return;
       var dx = e.clientX - sx, dy = e.clientY - sy;
@@ -418,7 +418,7 @@
   // so it composes instead of jumping, which also makes the Run dialog draggable.
   // caption buttons + links are skipped so close/min/max keep working; touch scrolls.
   function initDrag() {
-    var win = null, sx = 0, sy = 0, base = "", r = null, topLayer = false;
+    var win = /** @type {HTMLElement | null} */ (null), sx = 0, sy = 0, base = "", r = /** @type {DOMRect | null} */ (null), topLayer = false;
     // clamp so the title bar can't leave the desktop: the TOP is a hard wall (you
     // can't retrieve a window dragged off the top — there's no menu up there), and
     // the bar can't slide under the taskbar or fully off the sides either.
@@ -736,7 +736,7 @@
   var INFOTIP_SKIP = ".lx-term,.photos a,.np-list li,.np-artist-link,.car-link,.ev[data-cover],iframe";
   function initInfotips() {
     if (!window.matchMedia || matchMedia("(hover: none)").matches || matchMedia("(pointer: coarse)").matches) return;
-    var mod = null, pending = null;
+    var mod = /** @type {any} */ (null), pending = /** @type {Promise<any> | null} */ (null);
     // ONE implementation of "what was hovered", handed to the module rather than
     // restated there. Two copies of a rule this shape is how a loader and its
     // module come to disagree about which elements have a tip — and the symptom
