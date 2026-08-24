@@ -549,7 +549,10 @@ if command -v exif-sooc >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
   # would have broken every local photo add the moment -u went on. The `:-`
   # spelling is NOT the fix: it expands to one empty-string argument, which this
   # script would hand to extract-photo-metadata.sh as a source directory.
-  "$SCRIPT_DIR/extract-photo-metadata.sh" ${META_MODE+"${META_MODE[@]}"} "$META_SRC" 2>&1 | tail -1
+  # stdout is tailed to the one summary line; stderr passes THROUGH, because the
+  # unpublished-photo notice and the missing-source warning are printed there and
+  # `2>&1` would tail them into nothing.
+  "$SCRIPT_DIR/extract-photo-metadata.sh" ${META_MODE+"${META_MODE[@]}"} "$META_SRC" | tail -1
 else
   echo "  exif-sooc or jq missing — skipping metadata regen"
 fi

@@ -138,6 +138,89 @@ if [ "$MERGE" -eq 1 ]; then
 else
   exif-sooc --keyed -q -r "$SRC_DIR" > "$OUT.tmp"
 fi
+# NOTE: "$OUT" is not replaced yet. The prune below runs on the temp file and
+# the single `mv` happens after it, so a refusal there leaves the metadata.json
+# on disk exactly as it was. Writing first and pruning second was this block's
+# first shape, and its floor reported "left untouched" over a file it had
+# already overwritten with the unpruned read.
+
+# ── scope the record to PUBLISHED photos ──────────────────────────────────────
+# SRC_DIR is an INPUT SUPERSET, not the archive. The curated source folder holds
+# every frame worth keeping; the site holds the ones somebody actually ran
+# through add-photos.sh, and the two drift apart the moment a shot is added to
+# the folder and not published. Measured 2026-08-24: 165 eligible files in the
+# folder against 158 published, so a full regen wrote 165 records and
+# check-photo-pipeline.ts failed the run on the bijection it exists to hold.
+#
+# Left unscoped this is a live defect rather than dead weight, because nothing
+# downstream re-joins against the pool. `photoFacets` in src/worker/photos.ts
+# folds over EVERY entry here, so /photos would tally cameras, lenses, films and
+# years for 7 photos that do not exist on the site, and /images/metadata.json is
+# a public URL, so it would publish their EXIF too. hashes.json is the right
+# authority: hash-thumbnails.sh writes it from the /i/ tiers that actually
+# exist, which is the same set check-photo-pipeline.ts calls published, and
+# add-photos.sh phase 4 refreshes it BEFORE calling this script.
+#
+# The prune runs in both modes. --merge reads SRC_DIR too, so it picks up the
+# same unpublished frames; it differs in preserving stems it did not read, and
+# those are already published by definition.
+HASHES_JSON="$PUBLIC_DIR/images/hashes.json"
+read_count=$(jq 'length' "$OUT.tmp")
+if [ -s "$HASHES_JSON" ] && [ "$(jq 'length' "$HASHES_JSON")" -gt 0 ]; then
+  dropped=$(jq -r --slurpfile pub "$HASHES_JSON" 'keys - ($pub[0] | keys) | .[]' "$OUT.tmp")
+  jq --slurpfile pub "$HASHES_JSON" 'with_entries(select(.key as $k | $pub[0] | has($k)))' "$OUT.tmp" > "$OUT.pruned"
+  kept_count=$(jq 'length' "$OUT.pruned")
+
+  # FLOOR. An empty intersection means SRC_DIR is not the folder this archive was
+  # built from, and writing that result would replace every record with nothing.
+  # Refuse instead, leaving the file that is on disk untouched.
+  if [ "$kept_count" -eq 0 ]; then
+    rm -f "$OUT.tmp" "$OUT.pruned"
+    echo "error: none of the $read_count photos read from $SRC_DIR are published." >&2
+    echo "  metadata.json left untouched. is that the right source folder?" >&2
+    exit 1
+  fi
+  mv "$OUT.pruned" "$OUT.tmp"
+
+  # Say what was dropped. Silence would be the same failure this pipeline keeps
+  # shipping: an operator who added a frame to the folder and never published it
+  # should read that as a fact about the folder rather than never learn it.
+  # STDERR, deliberately. add-photos.sh tails this script's stdout to keep its
+  # own output short, so a notice printed on stdout is a notice the one caller
+  # that matters never shows. Routine progress stays on stdout; anything the
+  # operator has to know goes here.
+  if [ -n "$dropped" ]; then
+    echo "  $((read_count - kept_count)) photo(s) here are not published; metadata scoped to the $kept_count that are:" >&2
+    printf '%s\n' "$dropped" | sed 's/^/    /' >&2
+  fi
+
+  # The other direction is DATA LOSS in full mode, so it refuses rather than
+  # warns. A full run REPLACES the record, so a published photo whose source file
+  # this run could not see does not merely go undescribed: its EXIF is deleted,
+  # and the tooltip renders blank lines for a photo that still ships. That is the
+  # footgun in passing a single file from a scratch directory, since META_SRC in
+  # add-photos.sh becomes that file's PARENT: pointed at a folder of one, a full
+  # regen would cut metadata.json from 158 records to 1 and report success.
+  #
+  # --merge is the mode for a partial source, which is why the remote pipeline
+  # uses it, and merge preserves stems it did not read, so this list is empty
+  # there by construction.
+  unread=$(jq -r --slurpfile meta "$OUT.tmp" 'keys - ($meta[0] | keys) | .[]' "$HASHES_JSON")
+  if [ -n "$unread" ]; then
+    unread_count=$(printf '%s\n' "$unread" | wc -l | tr -d ' ')
+    {
+      echo "error: $unread_count published photo(s) have no source file in $SRC_DIR."
+      printf '%s\n' "$unread" | head -8 | sed 's/^/    /'
+      [ "$unread_count" -gt 8 ] && echo "    (+$((unread_count - 8)) more)"
+      echo "  a full regen REPLACES metadata.json, so writing this would delete their EXIF."
+      echo "  point at the folder holding every published photo, or pass --merge to update just this batch."
+    } >&2
+    rm -f "$OUT.tmp"
+    exit 1
+  fi
+else
+  echo "  no hashes.json yet, so every photo read is kept; the prune needs a published set."
+fi
 mv "$OUT.tmp" "$OUT"
 
 # also emit one file per photo for the tooltip's per-photo lazy fetch:

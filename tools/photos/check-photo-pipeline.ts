@@ -34,7 +34,19 @@ const stems = Object.keys(hashes).sort();
 const metadataStems = Object.keys(metadata).sort();
 
 if (JSON.stringify(stems) !== JSON.stringify(metadataStems)) {
-  fail(`metadata/hash stem sets differ (${metadataStems.length} metadata, ${stems.length} hashes)`);
+  // Name the stems and the likely cause. This used to report the two COUNTS and
+  // nothing else, which says a set differs without saying how, and the usual
+  // cause is not a missing photo at all: the source folder is an input superset,
+  // so a full metadata regen used to write a record for every frame sitting in
+  // it, published or not. extract-photo-metadata.sh scopes to hashes.json now,
+  // and the message says so, because "165 metadata, 158 hashes" sent the last
+  // reader looking for 7 broken photos rather than 7 unpublished ones.
+  const unhashed = metadataStems.filter((s) => !hashes[s]);
+  const undescribed = stems.filter((s) => !metadata[s]);
+  fail(`metadata/hash stem sets differ (${metadataStems.length} metadata, ${stems.length} hashes)` +
+       `${unhashed.length ? `\n  described but not published: ${unhashed.slice(0, 8).join(", ")}${unhashed.length > 8 ? ` (+${unhashed.length - 8})` : ""}` : ""}` +
+       `${undescribed.length ? `\n  published but not described: ${undescribed.slice(0, 8).join(", ")}${undescribed.length > 8 ? ` (+${undescribed.length - 8})` : ""}` : ""}` +
+       `\n  metadata.json describes PUBLISHED photos; re-run extract-photo-metadata.sh, which scopes to hashes.json`);
 }
 
 // The photo index is the pool the worker BUNDLES (photos.js imports it): the
