@@ -80,39 +80,13 @@ const TARGETS = [
 
 const TIMEOUT_MS = 20000;
 const SHELL_WORDS = 50; // below this, a 200 is a frame rather than a document
-// Raw text elements are REMOVED BY SCAN rather than by one regex, and the third
-// attempt is what earned it. HTML lets an end tag carry whitespace and junk
-// before the bracket, so `</script >`, `</script\t\n bar>` and `</script/>` are
-// all valid closes that a `<\/script>` pattern misses, leaving the script body to
-// be counted as prose. CodeQL flagged two of those three shapes in successive
-// runs, which is the usual argument against parsing HTML with a regular
-// expression. The security reading of js/bad-tag-filter does not apply here,
-// since nothing is sanitized for render; what makes it worth doing properly is
-// that this function produces the numbers /garage/useragent publishes.
-//
-// Verified against all 7 measurable targets before and after: every count is
-// identical, so the published run stands.
-export const stripRawText = (s, tag) => {
-  const open = new RegExp("<" + tag + "(?=[\\s/>])", "i");
-  const close = new RegExp("</" + tag + "(?=[\\s/>])", "i");
-  const kept = [];
-  let rest = s;
-  for (;;) {
-    const i = rest.search(open);
-    if (i < 0) { kept.push(rest); break; }
-    kept.push(rest.slice(0, i));
-    const after = rest.slice(i);
-    const c = after.search(close);
-    // An unterminated raw-text element runs to end of document by the parser's
-    // own rule, so dropping the remainder is the correct reading rather than a
-    // giving-up branch.
-    if (c < 0) break;
-    const gt = after.indexOf(">", c);
-    if (gt < 0) break;
-    rest = after.slice(gt + 1);
-  }
-  return kept.join(" ");
-};
+// stripRawText moved to tools/lib/html-raw-text.ts on 2026-08-24, when CodeQL
+// flagged a THIRD file for the same missed end-tag shapes. The long argument for
+// the scan lives there now; it is re-exported here because this module's own
+// contract test imports through `words`, and because /garage/useragent's numbers
+// are the reason the shapes have to be right.
+import { stripRawText } from "./lib/html-raw-text.ts";
+export { stripRawText };
 
 export const words = (s: string) => stripRawText(stripRawText(s, "script"), "style")
                       .replace(/<[^>]*>/g, " ").split(/\s+/).filter(Boolean).length;

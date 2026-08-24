@@ -538,6 +538,23 @@ function renderTable(table, ctx) {
     for (const c of node.children || []) {
       if (dropped(c)) continue;
       if (c.name === "tr") {
+        // The pipe escape looks like it forgot to escape backslashes, and CodeQL's
+        // js/incomplete-sanitization reads it that way. It is correct here, and the
+        // reason is that a GFM table cell is unescaped TWICE: the table stage turns
+        // `\|` into `|` and copies every other backslash through untouched, and only
+        // then does inline parsing run, where `\\` becomes one backslash. Text nodes
+        // arrive with their backslashes already doubled by escapeMd, so one literal
+        // backslash before a pipe reaches the wire as three, which is exactly what
+        // survives both stages. Code spans arrive undoubled and are correct undoubled,
+        // since a backslash inside a code span is literal.
+        //
+        // Doubling here would therefore CREATE the bug, not fix it. Measured against
+        // GitHub's own GFM renderer on 2026-08-24 over pipes, backslash-then-pipe,
+        // double-backslash-then-pipe, lone and trailing backslashes, in both a text
+        // and a code-span cell: 10 of 10 round-tripped to the source content, no cell
+        // split and no backslash lost. contract-md-table-escapes.test.mjs pins the
+        // bytes that measurement blessed. `ctx.raw` is never set, so there is no
+        // third path that skips escapeMd.
         const cells = (c.children || [])
           .filter((d) => (d.name === "td" || d.name === "th") && !dropped(d))
           .map((d) => renderInline(d.children, ctx).replace(/\|/g, "\\|").replace(/\n/g, " ").trim());

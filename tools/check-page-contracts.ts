@@ -8,6 +8,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { parseCss } from "./lib/css-parse.ts";
+import { closeTagSource } from "./lib/html-raw-text.ts";
 import { validateUnderstanding } from "../pipelines/content/page-contract.mjs";
 import { pageHtml as renderLwePage } from "../pipelines/lwe/generate.mjs";
 import { pageHtml as renderGaragePage, validateRegistry } from "../pipelines/garage/generate.mjs";
@@ -18,11 +19,22 @@ async function filesIn(dir) {
   return (await readdir(join(ROOT, dir))).filter((file) => file.endsWith(".html")).sort();
 }
 
+// Case-insensitive, and tolerant of every shape of end tag, because HTML accepts
+// `</script >`, `</script\t\n bar>` and `</script/>` as closes while `</scriptfoo>`
+// is a different element. The close comes from tools/lib/html-raw-text.ts so the
+// three tools that answer this question answer it the same way.
+const LUQ_BLOCK = new RegExp(
+  `<script\\b[^>]*\\btype="application/json"[^>]*\\bid="luq-data"[^>]*>([\\s\\S]*?)${closeTagSource("script")}`,
+  "gi",
+);
+
 function payload(html, file) {
-  const matches = html.match(/<script type="application\/json" id="luq-data">([\s\S]*?)<\/script>/g) || [];
+  // The CAPTURE GROUP is the payload. Re-stripping the delimiters off the whole
+  // match, which is what this did, means writing the same two patterns a second
+  // time and keeping them in agreement with these.
+  const matches = [...html.matchAll(LUQ_BLOCK)];
   assert.equal(matches.length, 1, `${file}: expected exactly one luq-data block`);
-  const raw = matches[0].replace(/^<script[^>]*>\n?/, "").replace(/\n?<\/script>$/, "");
-  return JSON.parse(raw);
+  return JSON.parse(matches[0][1]);
 }
 
 async function checkPublishedPages(family, skip = new Set()) {
