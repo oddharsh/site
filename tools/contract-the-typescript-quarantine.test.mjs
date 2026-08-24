@@ -424,8 +424,8 @@ test("a ramp step hands the remainder to the LARGEST incumbent", () => {
 // code that was written without types. strictNullChecks finds places a null can
 // actually arrive, which is the half worth having.
 //
-// The programs below declare it: most are clean under it outright, and tools/
-// carries a per-file baseline that can only fall. The list may only
+// The programs below declare it: most are clean under it outright, and two
+// carry a per-file baseline that can only fall. The list may only
 // GROW: turning the flag off in one of them, or dropping a program from this
 // list while its config still has it, fails here. That is the same mechanism
 // config/ts-migration.json used for the Worker quarantine, pointed the other
@@ -439,13 +439,14 @@ test("a ramp step hands the remainder to the LARGEST incumbent", () => {
 test("every program declared null-safe still declares it", async () => {
   const { readdirSync } = await import("node:fs");
 
-  // TWO KINDS OF ENTRY, and the difference is worth knowing before adding one.
-  // Most of these are CLEAN under the flag, so `bun run typecheck` fails on a
-  // single new diagnostic. tsconfig.tools.json is RATCHETED instead: it carries
-  // 600 known diagnostics in config/ts-tools-baseline.json, and
-  // check-tool-types.mjs is what makes that number monotone. Both belong here,
-  // because what this test asserts is that the flag stays ON.
+  // TWO KINDS OF ENTRY, and the difference matters before adding one. Most of
+  // these are CLEAN under the flag, so `bun run typecheck` fails on a single new
+  // diagnostic. Two are RATCHETED instead, each against a per-file baseline that
+  // can only fall: tsconfig.tools.json through check-tool-types.ts, and
+  // tsconfig.json through check-worker-types.ts. Both kinds belong here, because
+  // what this asserts is that the flag stays ON, not that a program is clean.
   const DECLARED = [
+    "tsconfig.json",
     "tsconfig.cf-garage.json",
     "tsconfig.cf-garage-test.json",
     "tsconfig.cal-test.json",
