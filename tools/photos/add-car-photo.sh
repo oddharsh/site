@@ -49,7 +49,8 @@ fi
 "$ZENC" "$TMP/x.jpg" "$DEST/$STEM.jpg" -q 84 >/dev/null 2>&1
 
 # 3. AVIF primary. grayscale shots get yuv400; everything else yuv420.
-space=$("$SIPS" -g space "$TMP/x.jpg" 2>/dev/null | /usr/bin/awk '/space:/{print $2}')
+# tolerant under pipefail: an unreadable colorspace defaults to 4:2:0 below.
+space=$("$SIPS" -g space "$TMP/x.jpg" 2>/dev/null | /usr/bin/awk '/space:/{print $2}') || space=""
 if [ "$space" = "Gray" ]; then yuv=400; else yuv=420; fi
 "$AVIFENC" -q 63 --speed 4 --jobs 4 --ignore-icc --yuv "$yuv" \
   "$DEST/$STEM.jpg" "$DEST/$STEM.avif" >/dev/null 2>&1
