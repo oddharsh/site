@@ -307,10 +307,24 @@ while IFS= read -r f; do
   # there, so this comparison is biased TOWARD sips by construction. It needs a
   # better design before a linear-light result could be trusted either way.
   #
-  # Standing conclusion after two attempts: this is a colour-managed resampling
-  # project rather than a subcommand. Knowing the input shape (always an 8-bit
-  # upright JPEG at long edge <= 2000, Luma8 or Rgb8) removes the parsing work
-  # and none of the hard part, which is matching what CoreImage already does well.
+  # Standing conclusion after two attempts: this is a resampling project rather
+  # than a subcommand. Knowing the input shape (always an 8-bit upright JPEG at
+  # long edge <= 2000, Luma8 or Rgb8) removes the parsing work and none of the
+  # hard part, which is matching what CoreImage already does well.
+  #
+  # ONE CORRECTION TO THE ABOVE, from reading the SBOM on 2026-08-24. Both
+  # attempts treated colour management as machinery a third attempt would have to
+  # bring, and attempt 2 hand-rolled an sRGB transfer function on that basis.
+  # It is already here: `cargo tree` puts `moxcms` 0.8.1, a colour-management
+  # system, and `linear-srgb` 0.6.12 in zenc's closure, pulled in through
+  # zenjpeg. So a third attempt inherits the colour path the encoder already
+  # trusts, at no new dependency.
+  #
+  # That removes an objection rather than the problem. The measured fault was the
+  # RESAMPLER, not the colour path: `image`'s Lanczos3 is not identity at scale
+  # 1.0, and moxcms does not resample. Anyone starting attempt 3 should fix the
+  # instrument first (the bias note above), then the filter, and should expect
+  # colour management to be the cheap part.
   if ! sips -s format tiff "$work" --out "$tif" >/dev/null 2>&1; then T_FAIL=$((T_FAIL+1)); printf "✗"; continue; fi
   sips -Z "$tl" "$tif" >/dev/null 2>&1
   if ! sips -c "$SQ" "$SQ" "$tif" --out "$sqt" >/dev/null 2>&1; then T_FAIL=$((T_FAIL+1)); printf "✗"; continue; fi
