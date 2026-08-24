@@ -281,6 +281,50 @@ while IFS= read -r f; do
   # source colour type, plus a corpus-wide ssimulacra2 gate, because `/i/` is
   # content-addressed and any pixel change re-mints 632 files AND obsoletes every
   # baked histogram, which is gotcha 41's exact failure. Not worth 100ms.
+  #
+  # ATTEMPT 2, same day, aimed at BEATING sips rather than matching it, on the
+  # theory that sips resamples in encoded sRGB and averaging gamma-encoded values
+  # as though they were light is a real defect. It preserved the source colour
+  # type (fixing attempt 1's RGBA promotion) and resampled in linear f32. It lost
+  # by more than attempt 1 did.
+  #
+  # Judged by a downscale/upscale round trip against the NATIVE square crop, the
+  # same neutral ffmpeg lanczos upscale on both sides so the upscaler cancels, on
+  # RGB source L1009920:
+  #
+  #   ssimulacra2(native, sips downscale round-tripped)   50.39
+  #   ssimulacra2(native, zenc downscale round-tripped)   32.25
+  #
+  # The isolation says why, and it is not gamma. The 8-bit sRGB -> linear -> sRGB
+  # round trip is EXACTLY lossless: 0 of 256 values move. But running the tool at
+  # size == the short edge, where the resize is a 1:1 no-op, still scored 72.45
+  # against a plain sips crop of the same pixels when it should be ~100.
+  # `image`'s Lanczos3 is not identity at scale 1.0; it applies a filter pass and
+  # softens unconditionally. The resampler is the problem, not the colour path.
+  #
+  # One caveat on the instrument, for whoever designs the next one: the neutral
+  # upscale runs in encoded sRGB, which favours the candidate that also worked
+  # there, so this comparison is biased TOWARD sips by construction. It needs a
+  # better design before a linear-light result could be trusted either way.
+  #
+  # Standing conclusion after two attempts: this is a resampling project rather
+  # than a subcommand. Knowing the input shape (always an 8-bit upright JPEG at
+  # long edge <= 2000, Luma8 or Rgb8) removes the parsing work and none of the
+  # hard part, which is matching what CoreImage already does well.
+  #
+  # ONE CORRECTION TO THE ABOVE, from reading the SBOM on 2026-08-24. Both
+  # attempts treated colour management as machinery a third attempt would have to
+  # bring, and attempt 2 hand-rolled an sRGB transfer function on that basis.
+  # It is already here: `cargo tree` puts `moxcms` 0.8.1, a colour-management
+  # system, and `linear-srgb` 0.6.12 in zenc's closure, pulled in through
+  # zenjpeg. So a third attempt inherits the colour path the encoder already
+  # trusts, at no new dependency.
+  #
+  # That removes an objection rather than the problem. The measured fault was the
+  # RESAMPLER, not the colour path: `image`'s Lanczos3 is not identity at scale
+  # 1.0, and moxcms does not resample. Anyone starting attempt 3 should fix the
+  # instrument first (the bias note above), then the filter, and should expect
+  # colour management to be the cheap part.
   if ! sips -s format tiff "$work" --out "$tif" >/dev/null 2>&1; then T_FAIL=$((T_FAIL+1)); printf "✗"; continue; fi
   sips -Z "$tl" "$tif" >/dev/null 2>&1
   if ! sips -c "$SQ" "$SQ" "$tif" --out "$sqt" >/dev/null 2>&1; then T_FAIL=$((T_FAIL+1)); printf "✗"; continue; fi
