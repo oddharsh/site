@@ -4132,6 +4132,49 @@ bun run deploy:direct
     `bun run deploy:promote -- --status` rather than reading the run's
     conclusion.
 
+    **A RAMP'S CONCLUSION IS UNRELIABLE IN BOTH DIRECTIONS, and 2026-08-24
+    produced one of each an hour apart.** The paragraph above covers the first
+    flavour; the second is its mirror and reads even more like a broken release.
+
+    | run | conclusion | what actually happened |
+    |---|---|---|
+    | 32720666927 | `cancelled` | approved, went to 100%, THEN a successor cancelled the finished run |
+    | 32730567291 | `failure` | nothing to do: the version it wanted was already serving |
+
+    The second one failed on its `Wait for Workers Builds to upload the version`
+    step, after twenty attempts that each printed the same pair:
+
+    ```
+    target version:   afbf3314
+    serving now:      afbf3314 @ 100%
+    ```
+
+    ending in `Workers Builds produced no rampable production version within 10
+    minutes`. That is a ramp timing out because the PREVIOUS one already shipped
+    the commit it was firing for, which happens whenever two merges land inside
+    one build window. Nothing was wrong, and the only other version in the list
+    was a dependabot BRANCH build that `newestVersion()` correctly skipped by
+    alias (the guard from #259).
+
+    So do not read the workflow to answer "did it ship". Two commands do, and
+    they disagreed with the run both times:
+
+    ```bash
+    bun run deploy:promote -- --status   # what is serving, and at what split
+    bun run checkpoints:check            # whether the D1 changelog row was written
+    ```
+
+    The second is not optional after a cancellation, for the reason the changelog
+    paragraph above gives: the `INSERT` is the last thing a ramp does, so it is
+    the first thing a cancellation costs. On 2026-08-24 it survived and said so
+    (`projection agrees with D1, newest v192`), which is the only reason anyone
+    knew.
+
+    The general shape is worth taking past this workflow. **A job whose work is
+    performed on a REMOTE system can finish that work and still report failure**,
+    because the exit code describes the job rather than the effect. Ask the
+    system that holds the state, not the runner that asked it to change.
+
     **Recency cannot find a parked ramp, and `--limit 3` hides one as reliably
     as `--limit 1`.** The note further up says to select by `headSha` rather
     than by `--limit 1`, which reads as a warning about taking exactly one row.
