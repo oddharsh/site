@@ -22,14 +22,14 @@ decides which one a given file belongs in:
 | entry | holds |
 |---|---|
 | **`public/`** | **the bytes a browser fetches unchanged.** Photos, the hashed `/i/` tiers, OG cards, `_headers`, `.well-known`, `llms.txt`, the static `garage/` and `lwe/` assets. No HTML: every document is authored in `src/pages/`. |
-| **`src/pages/`** | **every HTML document**, 36 of them. They STAGE into the served tree at their own paths, so `/garage/horizon` is authored at `src/pages/garage/horizon.html` and served where it always was. |
+| **`src/pages/`** | **every HTML document**, 37 of them. They STAGE into the served tree at their own paths, so `/garage/horizon` is authored at `src/pages/garage/horizon.html` and served where it always was. |
 | **`src/content/`** | authored PROSE and the registries beside it: the writing posts and their `posts.json`, the hand-written Markdown twins for the three Worker-rendered pages (`md/`), and `index.md`, `README.md`, `auth.md`, `resume.md`. Also stages back into the served tree. |
 | **`src/worker/`** | **the site Worker.** It is a program with its own tests, not a document, so it sits beside `cal/` and `serendipity/` rather than inside the tree of things a browser can fetch. It was never served either way. It STAGES to `.build/src/worker/`, mirroring its source path, and that mirroring is load-bearing rather than tidy: cal and serendipity import the Worker across the project boundary and are bundled from `.build/`, so a relative specifier has to resolve in BOTH trees, which is only possible when the two have the same shape. |
 | **`src/client/`**, **`src/styles/`** | the client islands (`nav.js`, `tooltip.js`, `lens*.js`, `quiz.js`, …) and the stylesheets (`luna.css`, `lwe-base.css`, …). They stage back to the ROOT of the served tree, so their public URLs are still `/nav.js` and `/luna.css`. Source layout and URL layout are different questions, and only the first one moved. |
 | **`src/dict/`** | `a-dict/` and `p-dict/`, the previously shipped bytes of the shell and of each page. Build INPUT that is never served: a dictionary has to be bytes a browser already holds, which no build can derive from source. Being outside the served tree is why the build no longer stages 130 files for `.assetsignore` to exclude again. |
 | `cal/`, `serendipity/` | the two application modules the site Worker bundles and serves at `/coffee` and `/serendipity`. They sit outside the served tree because they are programs with their own tests, not documents. |
 | `cf-garage/`, `lwe-ask/`, `lens-reader/` | the three SEPARATELY deployed auxiliary Workers, each with its own `wrangler.toml` and its own deploy. Nothing here reaches production through the site Worker. |
-| **`tools/`** | **every developer tool.** The build (`build.mjs`), the test suite (`contract-*.test.mjs`, 46 files sharing `contract-shared.mjs`; it was ONE 8720-line file until 2026-08-20, and the split files stay at this depth rather than in `tools/test/` because 117 relative specifiers in them resolve from here), the route oracle, the perf budget, the `check-*` / `gen-*` family, plus `photos/` (the photo and asset pipeline) and `oxlint/` (the custom rules). Nothing in here ships. |
+| **`tools/`** | **every developer tool.** The build (`build.mjs`), the test suite (`contract-*.test.mjs`, 49 files sharing `contract-shared.mjs`; it was ONE 8720-line file until 2026-08-20, and the split files stay at this depth rather than in `tools/test/` because 147 relative specifiers in them resolve from here), the route oracle, the perf budget, the `check-*` / `gen-*` family, plus `photos/` (the photo and asset pipeline) and `oxlint/` (the custom rules). Nothing in here ships. |
 | **`config/`** | `infra.json` (declared Cloudflare + GitHub state), `site-manifest.json` (the surface registry), `tsconfig.json`. |
 | `pipelines/` | the page GENERATORS, one directory per section: `content/` (the shared page contract), `garage/`, `lwe/`. These author into `src/pages/`; they are not part of the build. |
 | **`docs/`** | the long-form runbooks: `MAINTENANCE.md`, `PHOTO-PIPELINE.md`, `DEPENDENCIES.md`, `UNDERSTANDING-REVIEW.md`. |
@@ -900,7 +900,7 @@ Single-page personal site at `aadhar.sh`. A Cloudflare Worker with static assets
 | `public/md/` | Hand-authored Markdown twins for the three Worker-rendered prose pages, `/bot`, `/whoareyou` and `/security`, whose text lives in template literals no build step can read. `.assetsignore`d (build input, not a public URL): the generator publishes them at `/bot.md`, `/whoareyou.md` and `/security.md`. `checkTwinFacts()` pins the load-bearing strings against the Worker in BOTH directions, so bumping `BOT_VERSION` fails the deploy until `bot.md` agrees. `security.md`'s pins read `lib/security.ts` rather than the page, since a page ABOUT headers must agree with the module that SENDS them; one of them is derived from `ENFORCE_PAGE_HASHES`, so finishing the hashed-CSP rollout fails the deploy until the twin stops calling the policy report-only. |
 | `public/sitemap.xml`, `robots.txt` | Standard SEO files. robots.txt explicitly allows AadharshBot. |
 | `public/.well-known/http-message-signatures-directory` | JWKS for AadharshBot's Ed25519 public key (Web Bot Auth IETF draft). |
-| `public/images/` + `public/i/` | `images/` holds the photo DATA surfaces: `metadata.json` (the EXIF RECORD, long field names + the Fuji recipe card), `exif.json` (the tooltip's TEXT tier: every photo's short-key EXIF in one 2.6KB-brotli file, warmed once on idle because the homepage draws a fresh random 12 of 158 per request and a per-slot warm-up was cold nearly every visit), `meta/<stem>.json` (per-photo EXIF plus the four 64-bin histogram channels — the BARS tier, fetched only on the hover that needs them, and the self-healing fallback for a stem missing from a cached `exif.json`), `alt.json` (AI captions), `hashes.json` (stem to hash8 map). The pixel tiers (600px AVIF+JPG squares + 400px mobile AVIF) live in `i/` under content-hashed names, 474 files for 158 photos. |
+| `public/images/` + `public/i/` | `images/` holds the photo DATA surfaces: `metadata.json` (the EXIF RECORD, long field names + the Fuji recipe card), `exif.json` (the tooltip's TEXT tier: every photo's short-key EXIF in one 2.6KB-brotli file, warmed once on idle because the homepage draws a fresh random 12 of 158 per request and a per-slot warm-up was cold nearly every visit), `meta/<stem>.json` (per-photo EXIF plus the four 64-bin histogram channels — the BARS tier, fetched only on the hover that needs them, and the self-healing fallback for a stem missing from a cached `exif.json`), `alt.json` (AI captions), `hashes.json` (stem to hash8 map). The pixel tiers (600px AVIF+JPG squares, plus 400px and 200px AVIF) live in `i/` under content-hashed names, 632 files for 158 photos. |
 | `public/og/` | Pre-baked 1200x630 OG/Twitter cards, one per garage + lwe page (`<section>-<name>.png`): the page's live demo floated on the Bliss desktop under the page's own favicon as a brand stamp, so a shared link unfurls as the interaction rather than a bare title. **There is no route label on the card**, and this row said there was until 2026-08-15: the generator's own header comment has described a "translucent XP dock naming the route" since #55 while the card template has never rendered one, and the claim was copied here. Wired via `og:image`/`twitter:card` in each page's `<head>` (edge-direct static pages can't be worker-injected). Built by `tools/photos/gen-og-cards.ts` (playwright-core → Chrome, captures production for live data); meta added by `tools/photos/inject-og-meta.ts`. **Both paths read `scripts/` here until the same date**, which is the split the layout table above draws and costs a `No such file` to anyone following this row. Regen recipe in MAINTENANCE.md. Cached 30d, deploy purges the edge. |
 | `tools/photos/` | Photo-pipeline + asset scripts (see below). Beyond the core pipeline (`add-photos.sh`, `extract-photo-metadata.sh`, `check-photo-pipeline.mjs`, `zenc/` the JPEG encoder crate): `add-car-photo.sh` (one resto-mod reference photo into the dual AVIF+JPG pair the car-link tooltips expect, output `public/cars/<stem>.{avif,jpg}`, no EXIF/R2); `gen-alt-text.py` (AI alt text for every grid photo, writes `public/images/alt.json` `{stem: alt}`, resumable; run by `add-photos.sh` phase 4 — posts the committed `i/` thumbnail bytes to Workers AI when `CLOUDFLARE_API_TOKEN` is set so a brand-new photo captions pre-deploy, else falls back to the cf-garage `/garage/cf/caption` endpoint by stem, which only sees deployed photos); `gen-encoding-samples.sh` (regenerates the color sample set for the `/garage/encoding` study through every encoder, prints byte counts + bytes-per-pixel); `reencode-thumbnails.sh` (re-encodes all published grid thumbnails as pre-cropped center squares from the canonical source folder, two square tiers); `gen-pixel-peeper.py` (the one remaining Pillow consumer, a one-off generator for the /pixel-peeper comparison frames; NOT part of add-photos.sh). The four 64-bin RGB/luminance channels are baked by `zenc histogram`, inside the encoder crate, since 2026-08-14. |
 
@@ -1119,7 +1119,7 @@ Worker's routes reach `run_worker_first`. Neither one reads an href.
 **`tools/lib/link-integrity.mjs`, run as a build invariant, closes that.** Every
 same-origin `href`/`src` in the minified documents has to resolve to a real staged
 file, a `<path>.html`, a Worker `ROUTES` key, a registered surface, or a dynamic
-namespace. 2645 refs across 48 documents in ~45ms, so it is COMPLETE rather than
+namespace. 2921 refs across 50 documents in ~45ms, so it is COMPLETE rather than
 scoped to the diff: a diff-scoped version would be more code and would miss the
 case where the moved page is not in the diff and its dependents are.
 
@@ -1975,10 +1975,10 @@ boundaries serialization collapses; rendered Markdown is identical. `toMarkdown(
 remains as the isolated-caller fallback; `read()` uses the node.
 
 **The root suite may not import ANYTHING from `lens-reader/src/`, and this is gotcha 16
-wearing different clothes.** `contract-tests.mjs` runs under plain node with the ROOT
-workspace's dependencies; `reader.js` imports readability and linkedom, which live
+wearing different clothes.** The root contract suite runs with the ROOT workspace's
+dependencies; `reader.js` imports readability and linkedom, which live
 only in that sub-project. Importing it fails with `ERR_MODULE_NOT_FOUND` in CI
-while passing on any workstation that has run `pnpm install` in `lens-reader/` — which
+while passing on any workstation that has installed inside `lens-reader/`, which
 is exactly how it was caught, on PR #299's first run, after a local suite that had been
 green all afternoon. The split is by CAPABILITY: everything provable from source text
 stays in the root suite, and everything that has to actually RUN lives in
@@ -2774,16 +2774,32 @@ bun run deploy:direct
     like it trailed DCL by 235ms when a real trace showed FCP landing 291ms
     BEFORE DCL, mid-stream. Confirm any paint claim against a real window.
 
-16. **Only `_worker.js/index.js` may `import ... from "cloudflare:workers"`.**
-    Everything else in `src/worker/` and `cal/src/` is ALSO imported by
-    `contract-tests.mjs` under plain node (`node --test`), and node's ESM loader
-    rejects the `cloudflare:` scheme at LINK time with
-    `ERR_UNSUPPORTED_ESM_URL_SCHEME`. That kills the entire 57-test suite at
-    import, before one assertion runs — not a single failing test, a suite that
-    never starts. It is why `counter.ts` hand-rolls its Durable Object instead of
-    importing the base class, and it bit the Workers Traces work on 2026-07-29:
-    a static `tracing` import inside `lib/trace.ts` took the suite down through
-    six transitive importers.
+16. **Only `src/worker/index.ts` may `import ... from "cloudflare:workers"`.**
+    Everything else in `src/worker/` and `cal/src/` is ALSO imported by the
+    contract suite, which runs OUTSIDE workerd, and no such runtime resolves the
+    `cloudflare:` scheme. It is why `counter.ts` hand-rolls its Durable Object
+    instead of importing the base class, and it bit the Workers Traces work on
+    2026-07-29: a static `tracing` import inside `lib/trace.ts` took the suite
+    down through six transitive importers.
+
+    **The rule stands and BOTH of its symptoms changed, so the version of this
+    note written for node sends you looking for the wrong string.** It said the
+    suite was one file, `contract-tests.mjs`, running under `node --test`, and
+    that an offending import "kills the entire 57-test suite at import, before
+    one assertion runs". The file was split into 49 on 2026-08-20 and the runner
+    moved to `bun test` (gotcha 38). Measured 2026-08-23 on the same two-file
+    fixture:
+
+    | runner | error | blast radius |
+    |---|---|---|
+    | `node --test` | `ERR_UNSUPPORTED_ESM_URL_SCHEME` | the whole run, 0 tests |
+    | `bun test` | `Cannot find package 'cloudflare:workers'` | that FILE, 1 pass 1 fail |
+
+    So a grep for the documented error finds nothing, and the failure now reads
+    as one broken test file rather than a suite that never starts. Take the
+    general lesson over the specific one: **a gotcha that names an error string
+    and a blast radius is really a claim about the RUNNER, and it expires the day
+    the runner changes even though the rule it protects does not.**
 
     The fix is INJECTION, not a dynamic import. `lib/trace.ts` and
     `cal/src/trace.js` both export `installTracing(candidate)` and hold a
@@ -4288,6 +4304,51 @@ bun run deploy:direct
     nothing about WHICH tree it serves. And a cache-busting query parameter
     (gotcha 12's move) does not separate these cases either, since the other
     checkout answers the busted URL just as readily.
+
+40. **A script that finds its output with `$SCRIPT_DIR/..` breaks when the SCRIPT
+    moves, and every path rewrite in this repo has missed those.** Found
+    2026-08-23: EIGHT sites across the photo and asset pipeline were writing to
+    directories that do not exist, and no photo had been added since the moves,
+    so nobody had run into any of it.
+
+    | site | resolved to | should be |
+    |---|---|---|
+    | `extract-photo-metadata.sh` OUT, META_DIR, `--root` | `tools/images/…` | `public/images/…` |
+    | `hash-thumbnails.sh` SRC_DIR, OUT_DIR | `tools/images`, `tools/i` | `public/images`, `public/i` |
+    | `hash-thumbnails.sh` fingerprints call | `tools/scripts/…` | `tools/photos/…` |
+    | `add-car-photo.sh` DEST | `tools/cars` | `public/cars` |
+    | `gen-encoding-{grids,samples}.sh` DEST | `tools/garage/enc` | `public/garage/enc` |
+    | `add-photos.sh` histogram `--root` | `<repo>/www` | `<repo>/public` |
+
+    **Every one of them was CORRECT when written**, because these scripts lived
+    at `www/scripts/`, where `$SCRIPT_DIR/..` was the served tree. They moved to
+    `scripts/` and then to `tools/photos/` (#452, #453), and the expression kept
+    resolving, to a different directory each time. That is what separates this
+    from an ordinary broken path: a rename sweep greps for the OLD STRING, and
+    there is no old string here, only a relative expression whose meaning is a
+    function of where the file sits.
+
+    Two things made it silent for five days rather than loud. `zenc histogram`
+    prints `cannot read …/images/hashes.json` and **exits 0**, and both callers
+    pipe it to `tail -1`, so the pipeline's status is `tail`'s and the bake is
+    skipped without failing. And `add-photos.sh` and `reencode-thumbnails.sh`
+    were the two scripts that resolve through `$PROJECT_DIR` (`$SCRIPT_DIR/../..`)
+    rather than `$SCRIPT_DIR/..`, so they WERE updated to `public/` by the split,
+    which left the pipeline looking half-migrated and plausibly fine.
+
+    The same rename left `build.mjs`'s taste-tripwire exemption
+    (`/^www\/(garage|lwe)\//`) matching nothing, so the demo pages it exists to
+    exempt lost the exemption and the build printed 14 warnings on every run
+    since 2026-08-18. A warn block nobody can clear is how a warn block gets
+    ignored, which is the same argument the perf-budget note makes about
+    thresholds.
+
+    The check is cheap and belongs in any rename that moves a script: resolve
+    every path expression and assert the target EXISTS, rather than grepping for
+    the old name. A one-line version is to run each script's path assignments in
+    a subshell and `ls` the results. Prefer an anchor that names the tree
+    (`$SCRIPT_DIR/../..` plus `/public`) over one that counts directory levels
+    from the script, because the second one is silently wrong after any move.
 
 
 ---

@@ -43,7 +43,7 @@ if [ -z "$sooc_ver" ] || [ "$(printf '%s\n%s\n' "$EXIF_SOOC_MIN" "$sooc_ver" | s
   exit 1
 fi
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-DEST="$( cd "$SCRIPT_DIR/.." && pwd )/garage/enc"
+DEST="$( cd "$SCRIPT_DIR/../.." && pwd )/public/garage/enc"
 # zenc (zenjpeg hybrid trellis + progressive scan search) is the site's shipped
 # JPEG encoder; the grids show it as the JPEG point. Auto-built via cargo.
 ZENC_DIR="$(cd "$SCRIPT_DIR/zenc" && pwd)"

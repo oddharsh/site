@@ -93,7 +93,10 @@ fi
 
 # resolve the output path relative to this script
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-OUT="$SCRIPT_DIR/../images/metadata.json"
+# The served asset tree. NOT "$SCRIPT_DIR/..": that resolved to www/ back when
+# this script lived in www/scripts/, and it resolves to tools/ now.
+PUBLIC_DIR="$( cd "$SCRIPT_DIR/../.." && pwd )/public"
+OUT="$PUBLIC_DIR/images/metadata.json"
 
 # zenc bakes the histogram channels at the end of this script (it replaced
 # photo-histograms.py + Pillow on 2026-08-14, sharing the JPEG decoder the
@@ -143,7 +146,7 @@ mv "$OUT.tmp" "$OUT"
 # repeat visits are served from the browser cache. metadata.json stays as the full
 # index (the /images/metadata.json endpoint + a fallback). bump the ?mv version
 # (META_V in tooltip.js) whenever this regenerates so caches refresh.
-META_DIR="$SCRIPT_DIR/../images/meta"
+META_DIR="$PUBLIC_DIR/images/meta"
 mkdir -p "$META_DIR"
 if [ "$MERGE" -eq 0 ]; then
   rm -f "$META_DIR"/*.json   # drop stale per-stem files (e.g. removed photos)
@@ -177,7 +180,7 @@ done
 
 # bake the 64-bin histograms back into the meta files (the full run may have
 # wiped them; the tooltip reads meta.hi instead of computing client-side)
-"$ZENC" histogram --root "$SCRIPT_DIR/.." 2>&1 | tail -1
+"$ZENC" histogram --root "$PUBLIC_DIR" 2>&1 | tail -1
 
 # roll the per-photo EXIF (minus histograms) into the one shared index the
 # tooltip warms on idle. derived data, so it MUST be rebuilt whenever the

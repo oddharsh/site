@@ -1401,7 +1401,7 @@ That is true of a real `chromium-cdp` capture too, so it is a pre-existing gap
 rather than something this introduces, and the field is in the JSON either way.
 
 Both scripts take their target list from `tools/lib/lens-chips.mjs`, which
-reads the chips out of the shell renderer in `src/worker/lens.js`. Adding a
+reads the chips out of the shell renderer in `src/worker/lens.ts`. Adding a
 chip there is all it takes; nothing needs updating here.
 
 The TTL is a day rather than a week on purpose. A stale local capture outliving
@@ -1412,7 +1412,7 @@ Browser Run renders the moment the entries expire. To undo sooner, delete the
 ### Add or change a /lens interaction recipe
 
 Recipes are the fixed scripts `/lens/browser?do=<id>` runs inside a page before
-reading it. They live in `src/worker/lens-recipes.js` and are published
+reading it. They live in `src/worker/lens-recipes.ts` and are published
 verbatim, so anyone can check what ran:
 
 ```bash
@@ -1776,7 +1776,7 @@ until its twin agrees: `checkTwinFacts()` recomposes the User-Agent from
 | `gen-alt-text.py` | AI alt text for grid photos -> `images/alt.json`. Run by `add-photos.sh` phase 4. Posts the committed `i/` thumbnail to Workers AI when `CLOUDFLARE_API_TOKEN` is set (captions pre-deploy), else asks `/garage/cf/caption` by stem (deployed photos only). Resumable. |
 | `gen-photo-semantics.mjs` | Retrieval terms for `photo_query` -> `images/semantics.json`. Derived tier (EXIF vocabulary repair) needs nothing; `--vision` adds model-written keywords and needs `CLOUDFLARE_API_TOKEN`. Deliberately offline so the Worker keeps zero AI credentials. Resumable. |
 | `gen-encoding-samples.sh` | Regenerate the color sample set for `/garage/encoding` through every encoder; defaults to the committed `garage/enc/c-png.png` fixture and prints byte counts. |
-| `zenc histogram --root www` | Bakes four 64-bin RGB/luminance histogram channels into each per-photo `images/meta/<stem>.json` from the shipped hashed JPG tier. A subcommand of the encoder crate since 2026-08-14 (it was `photo-histograms.py` + Pillow), called by both metadata extraction and `add-photos.sh`. `--check` compares against what is on disk and writes nothing, which is how you tell a decoder bump from an edit. |
+| `zenc histogram --root public` | Bakes four 64-bin RGB/luminance histogram channels into each per-photo `images/meta/<stem>.json` from the shipped hashed JPG tier. A subcommand of the encoder crate since 2026-08-14 (it was `photo-histograms.py` + Pillow), called by both metadata extraction and `add-photos.sh`. `--check` compares against what is on disk and writes nothing, which is how you tell a decoder bump from an edit. |
 | `gen-og-cards.mjs` | Render the 1200x630 OG/Twitter card per garage + lwe page (live demo on the Bliss desktop) into `public/og/`. `bun run og-cards`. Drives the installed Chrome via `playwright-core`; captures production so data-driven demos render full. Hero selectors + presets in the `HERO{}` map. See "Regenerate the OG / Twitter cards". |
 | `inject-og-meta.mjs` | Idempotently add `og:image`/`twitter:card` meta to any garage + lwe page missing it, pointing at `/og/<section>-<name>.png`. `--check` reports gaps without writing. |
 | `hash-thumbnails.sh` | sha256 each pixel tier into `public/i/<stem>.<hash8>.<ext>`, write `images/hashes.json`, and prune tiers no longer named by it. Run by `add-photos.sh`; a re-encode mints new URLs, so there is no version to bump. |

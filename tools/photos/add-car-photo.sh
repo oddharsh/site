@@ -19,7 +19,7 @@ STEM="${1:?usage: add-car-photo.sh <stem> <input-image>}"
 SRC="${2:?usage: add-car-photo.sh <stem> <input-image>}"
 [ -f "$SRC" ] || { echo "no such file: $SRC" >&2; exit 1; }
 
-DEST="$(cd "$(dirname "$0")/../cars" && pwd)"
+DEST="$(cd "$(dirname "$0")/../../public/cars" && pwd)"
 SIPS=/usr/bin/sips
 ZENC_DIR="$(cd "$(dirname "$0")/zenc" && pwd)"
 ZENC="$ZENC_DIR/target/release/zenc"

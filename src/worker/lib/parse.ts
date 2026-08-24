@@ -40,10 +40,6 @@ export const asList = (value) => (Array.isArray(value) ? value : []);
 export const asBool = (value, fallback = null) =>
 	(typeof value === "boolean" ? value : fallback);
 
-/** Is this callable? The binding-shaped question rather than the data-shaped
- *  one: `env.BROWSER.quickAction`, `ctx.waitUntil`, a rate limiter's `limit`.
- *  There is no wire format to parse, only a platform that either handed us the
- *  method or did not, so this is the honest floor for that whole class. */
 /**
  * A value going into text a human or an agent will read: a URL parameter, a
  * tooltip line, a frame cell. Primitives keep their exact spelling; anything
@@ -60,4 +56,8 @@ export const asScalarText = (value) => {
   try { return JSON.stringify(value) ?? ""; } catch { return ""; }
 };
 
+/** Is this callable? The binding-shaped question rather than the data-shaped
+ *  one: `env.BROWSER.quickAction`, `ctx.waitUntil`, a rate limiter's `limit`.
+ *  There is no wire format to parse, only a platform that either handed us the
+ *  method or did not, so this is the honest floor for that whole class. */
 export const isCallable = (value) => typeof value === "function";
