@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """gen-alt-text.py — alt text for every grid photo, written to
-www/images/alt.json as {stem: alt}. The worker bakes it into each grid
+public/images/alt.json as {stem: alt}. The worker bakes it into each grid
 <img alt> and nav.js's Run palette reads it for the photo destinations, so a
 stem with no entry ships an unlabelled image.
 
@@ -8,7 +8,7 @@ Two routes to the same model (@cf/llava-hf/llava-1.5-7b-hf) under the same
 prompt, so a caption reads identically whichever one produced it:
 
   LOCAL (preferred; needs CLOUDFLARE_API_TOKEN) reads the square thumbnail
-  already sitting in www/i/ and posts those bytes to the Workers AI REST
+  already sitting in public/i/ and posts those bytes to the Workers AI REST
   API. Because it never asks production for anything, it captions a photo that
   has never been deployed — which is the whole reason add-photos.sh can caption
   a shot in the same run that encodes it.
@@ -18,7 +18,7 @@ prompt, so a caption reads identically whichever one produced it:
   already live, so it cannot close the gap on a fresh add. It stays here so the
   script still does useful work on a machine with no token.
 
-Both routes read the SAME bytes (www/i/<stem>.<hash8>.jpg is exactly what
+Both routes read the SAME bytes (public/i/<stem>.<hash8>.jpg is exactly what
 production serves), so switching routes doesn't change what the model sees.
 
 Resumable either way: a re-run only fills stems that have no caption, so a 429
