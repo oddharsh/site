@@ -19,8 +19,7 @@
 // The --rollback path has always sorted by percentage. This is the ramp path
 // agreeing with its own neighbour rather than a new rule.
 
-/** @param {{id: string, pct: number}[]} active @param {string} targetId */
-export function remainderHolder(active, targetId) {
+export function remainderHolder(active: { id: string; pct: number }[], targetId: string) {
   const short = (id) => String(id).slice(0, 8);
   return active
     .filter((v) => short(v.id) !== short(targetId))

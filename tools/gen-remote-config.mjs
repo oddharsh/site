@@ -45,7 +45,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseJsonc } from "./lib/jsonc.mjs";
+import { parseJsonc } from "./lib/jsonc.ts";
 
 const ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
 

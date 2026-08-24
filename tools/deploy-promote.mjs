@@ -64,17 +64,17 @@
 // on the rule that GitHub never holds a Cloudflare token that can write; that
 // rule was retired, and .github/workflows/ramp.yml now drives this with a
 // narrowly scoped token held as an ENVIRONMENT secret behind required
-// reviewers. lib/release-guard.mjs is the check that replaced the flat CI ban.
+// reviewers. lib/release-guard.ts is the check that replaced the flat CI ban.
 //
 // infra:apply is NOT covered by that change and still refuses to run in CI. It
 // can create and destroy zone-level DNS, which no pipeline here needs to do.
 
 import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
-import { releaseCredentialError } from "./lib/release-guard.mjs";
+import { releaseCredentialError } from "./lib/release-guard.ts";
 import { promisify } from "node:util";
-import { wranglerCommand } from "./lib/wrangler-bin.mjs";
-import { remainderHolder } from "./lib/ramp-split.mjs";
+import { wranglerCommand } from "./lib/wrangler-bin.ts";
+import { remainderHolder } from "./lib/ramp-split.ts";
 
 const exec = promisify(execFile);
 
@@ -539,7 +539,7 @@ if (has("rollback")) {
 }
 
 const target = flag("version") || await newestVersion();
-// The remainder holder is the LARGEST incumbent; see tools/lib/ramp-split.mjs
+// The remainder holder is the LARGEST incumbent; see tools/lib/ramp-split.ts
 // for the measurement that made an arbitrary pick a real hazard.
 const previous = remainderHolder(active, target);
 

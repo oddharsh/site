@@ -44,27 +44,25 @@
 
 // State hangs off a global Symbol rather than module scope so a SECOND
 // evaluation of this file is a no-op instead of a silent disarm. Measured
-// 2026-08-21: a test importing `./lib/no-network.mjs` and the `--preload` of
-// `./tools/lib/no-network.mjs` do resolve to one instance today, under bun and
+// 2026-08-21: a test importing `./lib/no-network.ts` and the `--preload` of
+// `./tools/lib/no-network.ts` do resolve to one instance today, under bun and
 // node both. The guard is for the day they stop, because the failure would be
 // quiet in the worst direction: the second copy installs its own `fetch` and
 // its own empty array, and the exit hook reading the FIRST array then reports a
 // clean run over any number of escapes.
 const KEY = Symbol.for("aadhar.sh/test-network-tripwire");
-/** @type {any} */
-const glob = globalThis;
+const glob: any = globalThis;
 const state = glob[KEY] ?? (glob[KEY] = { escaped: [], armed: false });
-/** @type {string[]} */
-const escaped = state.escaped;
+const escaped: string[] = state.escaped;
 
 // `fetch` accepts string | URL | Request, and the platform already owns the
 // parse for that union, so this hands the input to `Request` and reads the
 // domain value off the result rather than sniffing the representation. The
 // fallback catches input `Request` itself rejects, which is still worth naming
 // in the report: an escape to something unparseable is an escape.
-/** @param {unknown} input */
+
 const urlOf = (input) => {
-  try { return new Request(/** @type {any} */ (input)).url; } catch { return String(input); }
+  try { return new Request(input as any).url; } catch { return String(input); }
 };
 
 const arm = () => {
@@ -78,20 +76,20 @@ const arm = () => {
   // a `preconnect` method, and a double that refuses every request has no
   // business implementing it. This is a partial stand-in being installed on a
   // global, and saying so once beats inventing conformance.
-  glob.fetch = async function testSuiteMayNotFetch(input) {
+  glob.fetch = async function testSuiteMayNotFetch(input: any) {
     const url = urlOf(input);
     escaped.push(url);
     throw new TypeError(
       `the test suite tried to fetch ${url}. Stub globalThis.fetch for this test ` +
-      `(see tools/lib/no-network.mjs) rather than letting a required check depend on a live host.`,
+      `(see tools/lib/no-network.ts) rather than letting a required check depend on a live host.`,
     );
   };
 
   process.on("exit", () => {
     if (escaped.length === 0) return;
 
-    /** @type {Map<string, number>} */
-    const counts = new Map();
+    // counts by host, filled as refusals arrive
+    const counts = new Map<string, number>();
     for (const url of escaped) {
       let host = "(unparseable)";
       try { host = new URL(url).host; } catch { /* keep the placeholder */ }

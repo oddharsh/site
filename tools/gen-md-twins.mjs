@@ -23,7 +23,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { readDocument } from "./lib/html-to-md.mjs";
+import { readDocument } from "./lib/html-to-md.ts";
 
 export const ORIGIN = "https://aadhar.sh";
 const MANIFEST = "config/site-manifest.json";

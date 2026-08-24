@@ -13,13 +13,13 @@
 // keeps that filter honest: a wrapper that reports nothing because it scanned
 // nothing looks identical to a clean run, which is this repo's most-repeated
 // failure (see the route invariant's own floor in build.mjs).
-// The run-and-filter half lives in tools/lib/tsc-scope.mjs, shared with
+// The run-and-filter half lives in tools/lib/tsc-scope.ts, shared with
 // check-test-types.mjs. Two copies of a diagnostic filter that each have to keep
 // their own floor honest is the drift this repo names everywhere else.
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { runScopedTsc } from "./lib/tsc-scope.mjs";
+import { runScopedTsc } from "./lib/tsc-scope.ts";
 
 const REPO = dirname(dirname(fileURLToPath(import.meta.url)));
 const TSC = join(REPO, "node_modules", "typescript", "bin", "tsc");

@@ -217,7 +217,7 @@ test("redirect following validates every hop, not just the landing", async () =>
 // the same slot again and nothing says so. This is the assertion that keeps the
 // degraded path from quietly becoming the real one.
 test("production binds the Durable Object the slot claim needs", async () => {
-  const { parseJsonc } = await import("./lib/jsonc.mjs");
+  const { parseJsonc } = await import("./lib/jsonc.ts");
   for (const config of ["wrangler.jsonc", "wrangler.dev.jsonc"]) {
     const parsed = parseJsonc(readFileSync(config, "utf8"));
     const bindings = parsed.durable_objects?.bindings ?? [];

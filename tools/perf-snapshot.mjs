@@ -48,7 +48,7 @@
 import { execFileSync } from "node:child_process";
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import { brotliCompressSync, constants as zlibConstants, gzipSync } from "node:zlib";
-import { wranglerCommand } from "./lib/wrangler-bin.mjs";
+import { wranglerCommand } from "./lib/wrangler-bin.ts";
 
 const BUILD = ".build/public";
 const DRYRUN_OUT = ".build/.perfsnap";

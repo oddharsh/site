@@ -14,7 +14,7 @@
 // CI authenticates against cannot drift from the account the deploy targets,
 // because they are one string.
 import { readFile } from "node:fs/promises";
-import { parseJsonc } from "./lib/jsonc.mjs";
+import { parseJsonc } from "./lib/jsonc.ts";
 import { asText } from "../src/worker/lib/parse.ts";
 
 const CONFIG = new URL("../wrangler.jsonc", import.meta.url);

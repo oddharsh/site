@@ -257,7 +257,7 @@ export function auditManifest({
     if (claimed.has(key) || versionless.has(key)) continue;
     problems.push(
       `${key} is ${membership} and docs/DEPENDENCIES.md does not state its version. ` +
-      `Add a line for it, or add it to ${exemptList} in tools/lib/dependency-docs.mjs with the reason.`
+      `Add a line for it, or add it to ${exemptList} in tools/lib/dependency-docs.ts with the reason.`
     );
   }
 
@@ -291,7 +291,7 @@ export function auditDependencyDocs({
   if (baseline === null) {
     problems.push(
       `docs/DEPENDENCIES.md has no "${heading}" section, so there is nothing to check. ` +
-      `If the heading was renamed, update BASELINE_HEADING in tools/lib/dependency-docs.mjs.`
+      `If the heading was renamed, update BASELINE_HEADING in tools/lib/dependency-docs.ts.`
     );
     return { claims: [], problems, pillow: null };
   }

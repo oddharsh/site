@@ -5,10 +5,10 @@ import {
   readFileSync,
   test,
 } from "./contract-shared.mjs";
-import { escaped } from "./lib/no-network.mjs";
+import { escaped } from "./lib/no-network.ts";
 
 // ── the network tripwire ─────────────────────────────────────────────────
-// `tools/lib/no-network.mjs` is preloaded by both test scripts and fails the
+// `tools/lib/no-network.ts` is preloaded by both test scripts and fails the
 // run if anything reaches the network. These are the assertions that keep it
 // armed, because the gate is a flag in package.json and a flag is one careless
 // edit from gone.
@@ -45,13 +45,13 @@ test("both test scripts arm it, and neither can drop it quietly", async () => {
   // exactly where this repo has been bitten by a check that existed and never
   // ran (CLAUDE.md's note on test:node not being in CI until it was).
   const pkg = JSON.parse(readFileSync("package.json", "utf8"));
-  const MODULE = "tools/lib/no-network.mjs";
+  const MODULE = "tools/lib/no-network.ts";
 
   // bun takes --preload, node takes --import. Asserting the FLAG and not just
   // the path is the point: the wrong flag for the runner is silently ignored.
-  assert.match(pkg.scripts.test, /--preload \.\/tools\/lib\/no-network\.mjs/,
+  assert.match(pkg.scripts.test, /--preload \.\/tools\/lib\/no-network\.ts/,
     "`test` must preload the tripwire");
-  assert.match(pkg.scripts["test:node"], /--import \.\/tools\/lib\/no-network\.mjs/,
+  assert.match(pkg.scripts["test:node"], /--import \.\/tools\/lib\/no-network\.ts/,
     "`test:node` must import the tripwire");
   for (const script of ["test", "test:node"]) {
     assert.ok(pkg.scripts[script].includes(MODULE), `${script} no longer arms ${MODULE}`);
@@ -65,7 +65,7 @@ test("the tripwire offers no way to turn itself off", async () => {
   // tools/ has a reason to leave the machine. The checks that genuinely read
   // the wire (infra:check, dcz:check, routes:check:remote) are their own
   // scripts and never run under `bun test`.
-  const src = readFileSync("tools/lib/no-network.mjs", "utf8");
+  const src = readFileSync("tools/lib/no-network.ts", "utf8");
   assert.ok(!/process\.env/.test(src), "an env-var opt-out is a way to turn a red check green");
   // It must fail the PROCESS, since the harness will happily report a green
   // suite over a swallowed refusal.

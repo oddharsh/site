@@ -26,7 +26,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { promisify } from "node:util";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { wranglerCommand } from "./lib/wrangler-bin.mjs";
+import { wranglerCommand } from "./lib/wrangler-bin.ts";
 
 const run = promisify(execFile);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");

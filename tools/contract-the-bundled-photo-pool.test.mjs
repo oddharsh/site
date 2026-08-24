@@ -385,7 +385,7 @@ test("browser RUM and its ledger proxy stay fully removed", async () => {
 // root reaching production while dev keeps composing five, where dev starts fine
 // and merely 404s whatever the new root holds.
 test("local dev composes the same served tree the build stages", async () => {
-  const { parseJsonc } = await import("./lib/jsonc.mjs");
+  const { parseJsonc } = await import("./lib/jsonc.ts");
   const { ASSET_ROOTS, FARM } = await import("./dev-stage.mjs");
   const build = await readFile(new URL("tools/build.mjs", ROOT), "utf8");
   const devConfig = parseJsonc(await readFile(new URL("wrangler.dev.jsonc", ROOT), "utf8"));
@@ -424,7 +424,7 @@ test("local dev composes the same served tree the build stages", async () => {
 });
 
 test("production minifies the Worker without obscuring deployed stack traces", async () => {
-  const { parseJsonc } = await import("./lib/jsonc.mjs");
+  const { parseJsonc } = await import("./lib/jsonc.ts");
   const production = parseJsonc(await readFile(new URL("wrangler.jsonc", ROOT), "utf8"));
   const development = parseJsonc(await readFile(new URL("wrangler.dev.jsonc", ROOT), "utf8"));
 

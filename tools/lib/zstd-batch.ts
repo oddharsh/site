@@ -15,8 +15,12 @@ if (!isMainThread) {
   parentPort.postMessage(results);
 }
 
-function runWorker(jobs) {
-  return new Promise((resolve, reject) => {
+// The worker posts back one framed result per job, each carrying the index it
+// was given so the flattened set can be re-sorted into input order.
+type Framed = { index: number; frame: Uint8Array };
+
+function runWorker(jobs): Promise<Framed[]> {
+  return new Promise<Framed[]>((resolve, reject) => {
     const worker = new Worker(new URL(import.meta.url), { workerData: jobs });
     worker.once("message", resolve);
     worker.once("error", reject);

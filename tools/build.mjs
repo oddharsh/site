@@ -34,9 +34,9 @@ import minifyHtml from "@minify-html/node";
 import { transform as transformCss } from "lightningcss";
 import { minifySync } from "oxc-minify";
 import { readManifest, workerModule, navFenceBody, readFenceBody, runProfilesBody } from "./gen-manifest.mjs";
-import { parseCss } from "./lib/css-parse.mjs";
-import { HTML_MARKERS } from "./lib/html-markers.mjs";
-import { zstdCompressDictionaryBatch } from "./lib/zstd-batch.mjs";
+import { parseCss } from "./lib/css-parse.ts";
+import { HTML_MARKERS } from "./lib/html-markers.ts";
+import { zstdCompressDictionaryBatch } from "./lib/zstd-batch.ts";
 import { patchStaticShell, renderDesktopArtifacts, staticShellPages } from "../tools/photos/gen-desktop-partial.mjs";
 
 const OUT = ".build";
@@ -811,7 +811,7 @@ const minifyJavaScript = (filename, sourceText) => {
 };
 
 // The tolerated-warning family and the pass-through re-proof live in
-// tools/lib/css-parse.mjs, shared with check-page-contracts.mjs so a stylesheet
+// tools/lib/css-parse.ts, shared with check-page-contracts.mjs so a stylesheet
 // cannot pass one CSS check and fail the other. See that file for why.
 const minifyCss = (filename, sourceText) => parseCss(filename, sourceText, { minify: true });
 
@@ -1982,7 +1982,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
 // twin is the pre-minification staged copy, which is the most readable thing that
 // ever exists for that URL.
 {
-  const { PAGE_MARKERS } = await import("./lib/html-markers.mjs");
+  const { PAGE_MARKERS } = await import("./lib/html-markers.ts");
   const pages = (await readdir(`${OUT}/public`, { recursive: true }))
     .filter((rel) => rel.endsWith(".html") && !rel.endsWith(".src.html") && rel !== "index.html")
     .sort();
@@ -2060,7 +2060,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
 // than scoped to a diff. A diff-scoped version would be more code and would miss
 // the case where the moved page is not in the diff but its dependents are.
 {
-  const { makeResolver, internalRefs } = await import("./lib/link-integrity.mjs");
+  const { makeResolver, internalRefs } = await import("./lib/link-integrity.ts");
 
   const served = new Set();
   for (const rel of await readdir(`${OUT}/public`, { recursive: true })) served.add("/" + rel);

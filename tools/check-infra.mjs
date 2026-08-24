@@ -48,7 +48,7 @@ import { mkdtemp, readFile, rm, writeFile, access } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { parseJsonc } from "./lib/jsonc.mjs";
+import { parseJsonc } from "./lib/jsonc.ts";
 
 const execFileP = promisify(execFile);
 
@@ -134,7 +134,7 @@ const pass = (m) => ok.push(m);
 
 // ---------------------------------------------------------------- JSONC ----
 
-// stripJsonc moved to tools/lib/jsonc.mjs when gen-remote-config.mjs needed
+// stripJsonc moved to tools/lib/jsonc.ts when gen-remote-config.mjs needed
 // the same string-aware walk. One parser, so the two cannot disagree about what
 // wrangler.jsonc says.
 async function readJsonc(rel) {
