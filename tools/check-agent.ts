@@ -28,7 +28,7 @@
 // ── the control, and why it is not optional in spirit ─────────────────────
 // gotcha 15 and gotcha 33 in CLAUDE.md are both the same lesson learned the
 // expensive way: an instrument that reports a browser feature as missing is
-// usually broken itself. A CDP-attached trace reported Cloudflare's own origin
+// usually broken itself. A Playwright harness reported Cloudflare's own origin
 // as ignoring Early Hints, and an agent-driven tab reported a working
 // speculation rule as dead. So a Kitesurf-only defect means nothing until the
 // identical script passes in Chrome. `--control` runs it and prints the

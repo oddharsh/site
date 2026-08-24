@@ -2741,33 +2741,60 @@ bun run deploy:direct
     `infra:check`'s edge tier it reads production, so making it required would
     deadlock the release that would clear it.
 
-15. **Attaching CDP's `Network` domain suppresses Chrome's Early-Hints preload,
-    so a devtools-driven trace reports a FALSE "the browser ignores our 103."**
-    Chrome still fires `Network.responseReceivedEarlyHints` carrying the correct
-    `link` header, then fetches the hinted assets ~5ms AFTER the 200's headers.
-    That reads exactly like the 103 buying nothing, and it cost a whole
-    investigation on 2026-07-27 before the control run gave it away: the same
-    Playwright harness pointed at `https://www.cloudflare.com/`, a known-good 103
-    origin, failed identically. Two unrelated origins failing the same way is the
-    tell that the instrument is lying, not the site.
+15. **Read a browser feature's presence off TWO signals, and suspect the
+    instrument before you suspect the origin.** The recipe below is for Early
+    Hints and the caution generalises.
 
-    **Measure it with a plain `page.goto` + `performance.getEntriesByType(
-    "resource")`, no CDP session, fresh profile for a cold cache.** Two signals,
-    and you need both. `initiatorType === "early-hints"` says the feature is
-    active. A fetch duration far too small for the byte count says the preload
-    actually completed inside the 103 window: 7632 bytes of `luna.css` in 0.8ms
-    is not a network fetch, it is a preload-cache hit. Do NOT judge by
-    `startTime`, which is stamped when the DOCUMENT consumes the resource and so
-    always looks like it lands just after the 200, whether or not the hint worked.
+    **Measure with a plain `page.goto` + `performance.getEntriesByType(
+    "resource")`, fresh profile for a cold cache.** Two signals, and you need
+    both. `initiatorType === "early-hints"` says the feature is active. A fetch
+    duration far too small for the byte count says the preload actually completed
+    inside the 103 window: 59,604 bytes off cloudflare.com in 1.8ms is a
+    preload-cache hit rather than a network fetch. Do NOT judge by `startTime`,
+    which is stamped when the DOCUMENT consumes the resource and so always looks
+    like it lands just after the 200, whether or not the hint worked.
+
+    `bun run early-hints:probe` is exactly that, run A/B against one origin with
+    and without a CDP session attached.
 
     The payoff scales with the 103-to-200 window, which is worker think-time, so
-    it only shows on a cold isolate or a slow KV read. Measured: a ~280ms window
-    preloaded fully (0.8ms recorded fetch); windows under ~100ms did not (26-35ms
-    real fetches). That is `shell-assets.ts` working as its own comment describes,
-    not a defect. Ruled out along the way and worth not re-testing:
+    it only shows on a cold isolate or a slow KV read. Measured 2026-08-24:
+    cloudflare.com preloaded its 3 hinted entries fully at ~1ms each, while
+    aadhar.sh's own two shell assets came back in 50-115ms, a real fetch, on a
+    warm isolate whose window is short. That is `shell-assets.ts` behaving as its
+    own comment describes rather than a defect.
+
+    **This entry used to open by claiming that attaching CDP's `Network` domain
+    SUPPRESSES the preload, and that does not reproduce.** Measured 2026-08-24 on
+    Chrome 151.0.7922.174 with playwright-core 1.62.1, headless and headful, fresh
+    profile per run: with `Network.enable` attached, cloudflare.com still reports
+    3 `early-hints` entries totalling 59,604 bytes at under 2ms, identical to the
+    run with no CDP session, and aadhar.sh reports its 2 the same way. Whether
+    Chromium fixed it since 2026-07-27 or the original harness had another cause
+    cannot be settled from here, because that harness was ad-hoc and never
+    committed. That is the reason the probe is committed now.
+
+    **The episode it came from did happen, and its lesson is the durable half.**
+    On 2026-07-27 a Playwright harness reported this site as getting nothing from
+    its 103, and the same harness pointed at `https://www.cloudflare.com/`, a
+    known-good 103 origin, failed identically. Two unrelated origins failing the
+    same way is the tell that the instrument is lying rather than the site.
+    Gotcha 39 is that lesson through a different door, and the version-affinity
+    note above is a third.
+
+    Ruled out during that investigation and worth not re-testing:
     `Network.setCacheDisabled`, `Emulation.setCPUThrottlingRate`, headless vs
     headful, and an explicit `--enable-features=EarlyHintsPreloadForNavigation`.
     Playwright's default `--disable-features` list never mentions Early Hints.
+
+    **An entry that names a MECHANISM expires differently from one that names a
+    METHOD.** The method here (two signals, cold profile, ignore `startTime`) held
+    for a month and cost one command to re-verify. The mechanism was one
+    investigation's best explanation, was never re-run, and came within a step of
+    sending somebody to the Chromium tracker with a bug that is not there. Gotcha
+    16 is the same shape from the other direction, where a rule survived and both
+    of its symptoms expired. Where an entry blames a specific component, commit
+    the control that would catch that component changing.
 
     The same caution applies to paint metrics from an embedded/automated browser
     pane: a tab that is not actually visible defers paint, which made FCP look
@@ -3966,7 +3993,7 @@ bun run deploy:direct
     lands on a real anchor and dwells four seconds produces nothing, which reads
     exactly like a broken rule. `tools/speculation-probe.ts` exists because of
     this: it launches a real headful window through playwright-core, attaches no
-    CDP session (gotcha 15), and prints a CONTROL line first.
+    CDP session, and prints a CONTROL line first.
 
     **Read the control before the result, every time.** The control hovers a link
     under the `moderate` rule; if that does not reach the origin, the run measured
