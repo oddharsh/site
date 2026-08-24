@@ -46,7 +46,9 @@ test("the oracle and the Worker resolve one parser generation", () => {
 test("the aligned parser preserves self-closing script serialization", () => {
   const source = '<html><script src="./main.js" type="module"/></html>';
   const expected = '<script src="./main.js" type="module"></script>';
-  const shipped = parseHTML(source).document.documentElement.firstElementChild;
+  const root = parseHTML(source).document.documentElement;
+  assert.ok(root, "the fitted DOM parsed no documentElement");
+  const shipped = root.firstElementChild;
   assert.equal(shipped?.outerHTML, expected,
     "htmlparser2 v12's raw-text parsing leaves the document close inside the script");
   assert.equal(parseLinkedom(source).document.documentElement.firstElementChild?.toString(), expected,
@@ -91,6 +93,7 @@ test("the extracted article node preserves the string path byte for byte", () =>
     <pre><code>const answer = 42;</code></pre></article>`;
   const { document } = parseHTML(html);
   const node = document.querySelector("article");
+  assert.ok(node, "the fixture has no <article> to walk");
   assert.equal(toMarkdown(node), toMarkdown(node.outerHTML));
 });
 

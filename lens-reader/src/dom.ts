@@ -352,12 +352,12 @@ class Element extends Node {
   }
   get outerHTML() { return serializeNode(this); }
 
-  getElementsByTagName(name) { return collectByTag(this, name); }
-  querySelectorAll(selector) { return querySelectorAll(this, selector); }
-  querySelector(selector) { return querySelectorAll(this, selector)[0] || null; }
-  matches(selector) { return matchesSelector(this, parseSelector(selector)); }
-  getElementById(id) {
-    let found = null;
+  getElementsByTagName(name: string): Element[] { return collectByTag(this, name); }
+  querySelectorAll(selector: string): Element[] { return querySelectorAll(this, selector); }
+  querySelector(selector: string): Element | null { return querySelectorAll(this, selector)[0] || null; }
+  matches(selector: string): boolean { return matchesSelector(this, parseSelector(selector)); }
+  getElementById(id: string): Element | null {
+    let found: Element | null = null;
     walk(this, (el) => { if (!found && el.getAttribute("id") === id) found = el; });
     return found;
   }
@@ -406,8 +406,12 @@ class Document extends Node {
   // With no documentElement at all, both throw, on both sides.
   get documentElement(): Element | null { return this.children[0] || null; }
 
-  get head() {
+  get head(): Element {
     const root = this.documentElement;
+    // linkedom throws here too, by destructuring a null documentElement, so an
+    // empty document fails on both sides. The message differs and nothing reads
+    // it; what matters is that neither one invents a <head> out of nothing.
+    if (!root) throw new TypeError("lens dom: document has no documentElement");
     let first = root.firstElementChild;
     if (!first || first.tagName !== "HEAD") {
       first = this.createElement("head");
@@ -416,35 +420,39 @@ class Document extends Node {
     return first;
   }
 
-  get body() {
+  get body(): Element {
+    // `head` is documentElement's child in both branches above, either found
+    // there or inserted there, and it throws when there is no documentElement.
+    // So by the time this line runs the parent exists.
     const head = this.head;
+    const root = head.parentNode as Element;
     let next = head.nextElementSibling;
     if (!next || next.tagName !== "BODY") {
       next = this.createElement("body");
-      head.parentNode.insertBefore(next, head.nextSibling);
+      root.insertBefore(next, head.nextSibling);
     }
     return next;
   }
 
   /** Read from HEAD alone, not from the whole tree. A <title> that the parser
    *  left in the body is invisible to linkedom too. */
-  get title() {
+  get title(): string {
     const t = this.head.getElementsByTagName("title")[0];
     return t ? t.textContent : "";
   }
 
-  getElementsByTagName(name) {
+  getElementsByTagName(name: string): Element[] {
     const root = this.documentElement;
     return root ? collectByTag(root, name, true) : [];
   }
-  querySelectorAll(selector) {
+  querySelectorAll(selector: string): Element[] {
     const root = this.documentElement;
     return root ? querySelectorAll(root, selector, true) : [];
   }
-  querySelector(selector) { return this.querySelectorAll(selector)[0] || null; }
+  querySelector(selector: string): Element | null { return this.querySelectorAll(selector)[0] || null; }
   /** INCLUSIVE of documentElement, which the element-level walk is not. The
    *  fragment fallback asks for the id on the root element itself. */
-  getElementById(id) {
+  getElementById(id: string): Element | null {
     const root = this.documentElement;
     if (!root) return null;
     return root.getAttribute("id") === id ? root : root.getElementById(id);
@@ -464,9 +472,11 @@ class Document extends Node {
  * survives Readability's style-stripping pass. Walk into it and the payload
  * loses 226 bytes of that page.
  */
-function walk(node, visit, skipTemplates = false) {
+function walk(node: Node, visit: (el: Element) => void, skipTemplates = false): void {
   for (const child of node.childNodes) {
-    if (child.nodeType !== ELEMENT_NODE) continue;
+    // instanceof rather than a nodeType compare, so the narrowing survives into
+    // visit() and the template check below.
+    if (!(child instanceof Element)) continue;
     visit(child);
     if (skipTemplates && child.localName.toLowerCase() === "template") continue;
     walk(child, visit, skipTemplates);
@@ -474,24 +484,27 @@ function walk(node, visit, skipTemplates = false) {
 }
 
 /** Case-SENSITIVE on localName, matching linkedom. See createElement above. */
-function collectByTag(root, name, includeRoot = false) {
+function collectByTag(root: Node, name: string, includeRoot = false): Element[] {
   const want = String(name);
   const all = want === "*";
-  const out = [];
-  if (includeRoot && root.nodeType === ELEMENT_NODE && (all || root.localName === want)) out.push(root);
+  const out: Element[] = [];
+  if (includeRoot && root instanceof Element && (all || root.localName === want)) out.push(root);
   walk(root, (el) => { if (all || el.localName === want) out.push(el); });
   return out;
 }
 
 // ── the selector grammar, which is as small as the workload ─────────────────
 //
+/** One arm of the comma list: a tag, an attribute test, or both. */
+type Compound = { tag: string | null; attr: string | null; value: string | null };
+
 // Supported: a comma list of `tag`, `[attr]`, `[attr=value]`, and `tag[attr=value]`.
 // That covers every selector Readability builds (tag lists, via
 // _getAllNodesWithTag) and collectControlLabels' one richer query. An
 // unsupported selector THROWS rather than silently matching nothing, because a
 // selector that quietly returns [] reads as a page with no controls.
 
-function parseSelector(selector) {
+function parseSelector(selector: string): Compound[] {
   return String(selector).split(",").map((part) => {
     const raw = part.trim();
     const m = /^([a-zA-Z][\w-]*)?(?:\[([\w-]+)(?:=["']?([^\]"']*)["']?)?\])?$/.exec(raw);
@@ -502,7 +515,7 @@ function parseSelector(selector) {
   });
 }
 
-function matchesSelector(el, compounds) {
+function matchesSelector(el: Element, compounds: Compound[]): boolean {
   return compounds.some((c) => {
     // Case-INSENSITIVE here, where getElementsByTagName is not. This is the
     // asymmetry linkedom has and Readability relies on: _getAllNodesWithTag
@@ -516,10 +529,10 @@ function matchesSelector(el, compounds) {
   });
 }
 
-function querySelectorAll(root, selector, includeRoot = false) {
+function querySelectorAll(root: Node, selector: string, includeRoot = false): Element[] {
   const compounds = parseSelector(selector);
-  const out = [];
-  if (includeRoot && root.nodeType === ELEMENT_NODE && matchesSelector(root, compounds)) out.push(root);
+  const out: Element[] = [];
+  if (includeRoot && root instanceof Element && matchesSelector(root, compounds)) out.push(root);
   walk(root, (el) => { if (matchesSelector(el, compounds)) out.push(el); }, true);
   return out;
 }
@@ -569,7 +582,7 @@ const PARSER_OPTIONS = { lowerCaseAttributeNames: false, decodeEntities: true, x
 
 function parseInto(html, root, ownerDocument) {
   let current = root;
-  let svgRoot = null;
+  let svgRoot: Element | null = null;
   const parser = new Parser({
     onopentag(name, attribs) {
       const svg = svgRoot !== null || name === "svg" || name === "SVG";

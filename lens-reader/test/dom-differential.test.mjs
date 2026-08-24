@@ -115,8 +115,14 @@ test("fitted DOM parses real-world pages into an identical tree", () => {
   assert.ok(files.length >= 5, `real-world corpus collapsed to ${files.length} pages`);
   for (const file of files) {
     const html = readDoc(file);
-    const a = parseLinkedom(html).document.documentElement.outerHTML;
-    const b = parseFitted(html).document.documentElement.outerHTML;
+    // Asserted rather than optional-chained. A capture that parses to no
+    // documentElement is a broken fixture, and reading it as "" would compare
+    // two empty strings and pass.
+    const rootA = parseLinkedom(html).document.documentElement;
+    const rootB = parseFitted(html).document.documentElement;
+    assert.ok(rootA, `linkedom parsed no documentElement from ${file}`);
+    assert.ok(rootB, `the fitted DOM parsed no documentElement from ${file}`);
+    const a = rootA.outerHTML, b = rootB.outerHTML;
     assert.equal(b, a, `tree differs for ${file}\n${firstDiff(a, b)}`);
   }
 });

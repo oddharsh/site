@@ -166,7 +166,7 @@ the reason, rather than written here with the caret quietly dropped.
   bundling each package alone under that project's wrangler config.
   `src/dom.ts` replaced it with a first-party DOM over the same htmlparser2,
   fitted to the 39 members Readability touches and the 11 reader.ts touches.
-  The swap measured 80.57 -> 46.13 KiB gzip (42.7% less) and, over nine
+  The swap measured 80.57 -> 46.18 KiB gzip (42.7% less) and, over nine
   alternating trials on a 5754 KiB corpus, a 614.5 -> 299.4 ms median for the
   full parse-extract-markdown pipeline (51.3% less CPU, 12.80 -> 6.24 ms/doc).
 

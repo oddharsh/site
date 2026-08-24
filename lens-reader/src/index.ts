@@ -20,7 +20,7 @@
 // 204.24 KiB already in breach. That made the split obvious.
 //
 // src/dom.ts replaced linkedom on 2026-08-23 with a first-party DOM over the
-// same htmlparser2, and this Worker went 80.57 -> 46.13 KiB gzip. The DOM is no
+// same htmlparser2, and this Worker went 80.57 -> 46.18 KiB gzip. The DOM is no
 // longer most of it: the parser is ~26.6 and the extractor ~11.6, so the split
 // now rests on adding ~46 KiB to a budget that is still in breach rather than
 // on ~95. That is a real reason and a much smaller one. If the site Worker ever
