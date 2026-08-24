@@ -33,6 +33,11 @@
     // Workers globals only. With lib.dom loaded, its CacheStorage shadows
     // Cloudflare's, which is the collision tsconfig.json's header documents.
     "lib": ["esnext"],
+    // index.ts imports its two sibling modules by their real `.ts` filenames,
+    // which is the one specifier that resolves in both trees (tsconfig.json's
+    // header has the long version). Without this tsc rejects them outright and
+    // never reaches a real finding.
+    "allowImportingTsExtensions": true,
     "types": ["@cloudflare/workers-types"],
     "resolveJsonModule": true,
     "skipLibCheck": true,
@@ -40,5 +45,5 @@
   },
   // A GLOB rather than a file list, so a new module joins the program by
   // existing. The allowlist habit is what let ten client islands go unchecked.
-  "include": ["../lwe-ask/src/**/*.js"]
+  "include": ["../lwe-ask/src/**/*.ts"]
 }

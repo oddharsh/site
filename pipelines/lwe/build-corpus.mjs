@@ -4,7 +4,7 @@
 //   node pipelines/lwe/build-corpus.mjs
 //
 // Reads lwe-ask/corpus/<concept>.json (each: [{ text, source, title }]) and injects
-// the passages into lwe-ask/src/passages.js between the generated:corpus markers,
+// the passages into lwe-ask/src/passages.ts between the generated:corpus markers,
 // tagged by concept with their own source/title. The hand-written essay passages
 // (fhe/mpc/tee) above the markers are left untouched.
 //
@@ -21,7 +21,7 @@ import { createHash } from "node:crypto";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..", "..");   // pipelines/<name>/ -> repo root
 const CORPUS_DIR = join(ROOT, "lwe-ask", "corpus");
-const PASSAGES_FILE = join(ROOT, "lwe-ask", "src", "passages.js");
+const PASSAGES_FILE = join(ROOT, "lwe-ask", "src", "passages.ts");
 const START = "// generated:corpus:start";
 const END = "// generated:corpus:end";
 
@@ -48,7 +48,7 @@ for (const file of files) {
 const src = readFileSync(PASSAGES_FILE, "utf8");
 const i = src.indexOf(START), j = src.indexOf(END);
 if (i === -1 || j === -1) {
-  console.error("build-corpus: markers not found in passages.js — add the generated:corpus markers first");
+  console.error("build-corpus: markers not found in passages.ts — add the generated:corpus markers first");
   process.exit(1);
 }
 const injected = src.slice(0, i + START.length) + "\n" + block + "  " + src.slice(j);

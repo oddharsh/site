@@ -26,7 +26,7 @@ test("every LWE content page carries a wired ask surface", async () => {
   const concepts = JSON.parse(askJs.match(/var CONCEPTS = (\{[^;]*?\});/)[1]);
   const registry = JSON.parse(
     await readFile(new URL("pipelines/lwe/concepts.json", ROOT), "utf8")).concepts;
-  const passages = await readFile(new URL("lwe-ask/src/passages.js", ROOT), "utf8");
+  const passages = await readFile(new URL("lwe-ask/src/passages.ts", ROOT), "utf8");
 
   const pages = (await readdir(new URL("src/pages/lwe/", ROOT)))
     .filter((f) => f.endsWith(".html") && f !== "index.html")

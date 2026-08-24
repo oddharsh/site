@@ -23,5 +23,5 @@
     "skipLibCheck": true,
     "strict": false
   },
-  "include": ["../cf-garage/src/**/*.js"]
+  "include": ["../cf-garage/src/**/*.ts"]
 }
