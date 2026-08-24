@@ -42,8 +42,20 @@ import path from "node:path";
 import { OG_PAGE_DIRS } from "./og-pages.ts";
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
-const HOLDING = path.join(ROOT, "www");
-const OUT = path.join(HOLDING, "og");
+// THE SERVED TREE IS THREE DIRECTORIES, so no single constant can name it. This
+// read `const HOLDING = path.join(ROOT, "www")` until 2026-08-24, and www/ was
+// deleted by the 2026-08-18 split (#457), which broke every path below at once:
+// the cards were written to a www/og that mkdir created and nothing serves, the
+// wallpaper read missed luna.css, and the section walk found no documents. It
+// went unnoticed because nobody adds a page most weeks — /garage/useragent
+// shipped on 2026-08-21 with no card and nothing said so. Same family as gotcha
+// 40, and the same repair: name the tree each use actually wants, so the next
+// rename breaks loudly at the constant instead of silently at the output.
+const PUBLIC = path.join(ROOT, "public");        // bytes that ship unchanged; the cards land here
+const PAGES = path.join(ROOT, "src/pages");      // the documents the section walk enumerates
+const STYLES = path.join(ROOT, "src/styles");    // luna.css authors here, and stages to the URL root
+const SERVE = path.join(ROOT, ".build/public");  // the merged URL root exists only as build output
+const OUT = path.join(PUBLIC, "og");
 const BASE = (process.env.OG_BASE || "https://aadhar.sh").replace(/\/$/, "");
 const LOCAL = /^https?:\/\/(localhost|127\.0\.0\.1)/.test(BASE);
 const CARD_W = 1200, CARD_H = 630;
@@ -71,6 +83,14 @@ const HERO = {
   "garage-octane":    { hero: [".oct-demo"] },
   "garage-pqc":       { hero: [".pqc-demo"] },
   "garage-encoding":  { hero: [".demo", ".sample-grid"] },
+  // Three more that name their own demo wrapper, for the reason above. All three
+  // shipped while the card pipeline was pointing at a deleted www/, so they had
+  // no card at all until 2026-08-24 and the fallback had never been exercised on
+  // them. hidden-flags has two .hf-demo blocks and the first is the inventory,
+  // which is the one worth unfurling.
+  "garage-hidden-flags": { hero: [".hf-demo"] },
+  "garage-typed-config": { hero: [".tc-demo"] },
+  "garage-useragent":  { hero: [".ua-demo"] },
   "garage-gpt56":     { hero: [".workbench"] },
   "garage-horizon":   { hero: [".demo"] },
   "garage-iroh":      { hero: [".demo", ".idlabel"] },
@@ -168,10 +188,19 @@ const ONLY = process.env.OG_ONLY ? new Set(process.env.OG_ONLY.split(",").map((s
 async function blissBackground() {
   // Reuse the exact wallpaper the live desktop paints, straight out of luna.css,
   // so the card background is pixel-identical to the real site (no second asset).
-  const css = await readFile(path.join(HOLDING, "luna.css"), "utf8");
+  const css = await readFile(path.join(STYLES, "luna.css"), "utf8");
   const m = css.match(/#axp-desktop\s*\{[^}]*?background:\s*url\("([^"]+)"\)/);
   if (!m) throw new Error("could not find the Bliss wallpaper in luna.css");
   return m[1];
+}
+
+// The section's taskbar mark, inlined as a data URI so it resolves inside a
+// document built with setContent. Returns null when a section has no icon on
+// disk, which keeps the blue-square fallback rather than rendering an empty box.
+async function sectionIcon(section) {
+  const file = path.join(PUBLIC, "section-icons", `${section}.svg`);
+  if (!existsSync(file)) return null;
+  return `data:image/svg+xml,${encodeURIComponent(await readFile(file, "utf8"))}`;
 }
 
 function cardHtml({ bliss, shot, favicon }) {
@@ -204,7 +233,7 @@ function cardHtml({ bliss, shot, favicon }) {
 async function listPages() {
   const out = [];
   for (const section of ["garage", "lwe"]) {
-    const dir = path.join(HOLDING, section);
+    const dir = path.join(PAGES, section);
     for (const f of (await readdir(dir)).sort()) {
       if (!f.endsWith(".html")) continue;
       const name = f.slice(0, -5);
@@ -245,7 +274,21 @@ async function capture(page, cardPage, p, bliss) {
   // route label: reuse the page's own title-bar text (already "aadhar.sh/…").
   const route = (await page.locator(".window .title-bar .title-text").first().textContent().catch(() => null))
     ?.replace(/\s+/g, " ").trim() || (p.section ? `aadhar.sh/${p.section}/${p.name}` : `aadhar.sh${p.url.replace(BASE, "")}`);
-  const favicon = await page.getAttribute('link[rel="icon"]', "href").catch(() => null);
+  // The generated pages (pipelines/garage, pipelines/lwe) ship no `rel="icon"`,
+  // so this read comes back null for every one of them and the card falls through
+  // to a blank blue square, where a hand-authored page's card carries a glyph.
+  // The section icon is the honest stamp there: the same mark the taskbar tile
+  // carries, so a garage card reads as garage rather than as nothing. A page that
+  // DOES declare an icon keeps its own, which is why this is a fallback.
+  //
+  // IT HAS TO BE INLINED, and the first attempt at this shipped `/section-icons/
+  // <section>.svg` as the src and rendered an EMPTY WHITE BOX, which is worse
+  // than the blue square it replaced. The card is built with `setContent`, so the
+  // document has no base URL and a root-relative path resolves against nothing.
+  // Every page whose icon works declares it as `data:image/svg+xml,...` for the
+  // same reason. Measured 2026-08-24, twice, because the first fix looked right.
+  const declared = await page.getAttribute('link[rel="icon"]', "href").catch(() => null);
+  const favicon = declared || (p.section ? await sectionIcon(p.section) : null);
 
   // pick the crop: a span (top of A to bottom of B) beats single-hero sweeps,
   // because pages like /lens tell their story across stacked rows — address
@@ -313,9 +356,16 @@ function waitForPort(port, ms = 8000) {
 async function maybeStartServer() {
   if (!LOCAL) return null; // capturing a remote origin (production) — nothing to boot
   const port = 8787;
-  const srv = spawn("python3", ["-m", "http.server", String(port), "--directory", HOLDING], { stdio: "ignore" });
+  // The merged URL root (public/ + src/pages/ + src/client/ + src/styles/) is
+  // assembled by the build, so a local capture has to serve .build/public and
+  // nothing else composes it. Fail by name rather than serving an empty tree,
+  // which reads as every page having lost its demo.
+  if (!existsSync(SERVE)) {
+    throw new Error(`${SERVE} is missing — run \`bun run build\` before capturing against a local server`);
+  }
+  const srv = spawn("python3", ["-m", "http.server", String(port), "--directory", SERVE], { stdio: "ignore" });
   await waitForPort(port);
-  console.log(`static server up on :${port} (serving public/)`);
+  console.log(`static server up on :${port} (serving .build/public)`);
   return srv;
 }
 
