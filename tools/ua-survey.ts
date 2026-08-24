@@ -92,10 +92,6 @@ const SHELL_WORDS = 50; // below this, a 200 is a frame rather than a document
 //
 // Verified against all 7 measurable targets before and after: every count is
 // identical, so the published run stands.
-/**
- * @param {string} s
- * @param {string} tag
- */
 export const stripRawText = (s, tag) => {
   const open = new RegExp("<" + tag + "(?=[\\s/>])", "i");
   const close = new RegExp("</" + tag + "(?=[\\s/>])", "i");
@@ -118,8 +114,7 @@ export const stripRawText = (s, tag) => {
   return kept.join(" ");
 };
 
-/** @param {string} s */
-export const words = (s) => stripRawText(stripRawText(s, "script"), "style")
+export const words = (s: string) => stripRawText(stripRawText(s, "script"), "style")
                       .replace(/<[^>]*>/g, " ").split(/\s+/).filter(Boolean).length;
 
 // One measured fetch of one URL as one identity.
@@ -162,8 +157,7 @@ async function sample(
     const challengeMarker = /just a moment|challenge-platform|cf-browser-verification|enable javascript and cookies/i.test(body);
     const challenge = res.headers.get("cf-mitigated") === "challenge" || (challengeMarker && wordCount < 200);
     const blocked = challenge || [401, 402, 403, 406, 429, 451, 999].includes(res.status);
-    /** @type {Record<string, number>|null} */
-    let markers = null;
+    let markers: Record<string, number> | null = null;
     if (target.markers) {
       markers = {};
       for (const [name, re] of Object.entries(target.markers)) markers[name] = (body.match(re) || []).length;
@@ -187,8 +181,7 @@ async function sample(
   } finally { clearTimeout(to); }
 }
 
-/** @param {number[]} xs */
-const median = (xs) => { const s = [...xs].sort((a, b) => a - b); return s.length ? s[(s.length - 1) >> 1] : null; };
+const median = (xs: number[]) => { const s = [...xs].sort((a, b) => a - b); return s.length ? s[(s.length - 1) >> 1] : null; };
 
 async function main() {
   const trials = Number(process.env.TRIALS || 3);
@@ -197,8 +190,7 @@ async function main() {
   const report = { measuredAt: new Date().toISOString().slice(0, 10), trials, identities: IDENTITIES, targets: [] };
 
   for (const target of targets) {
-    /** @type {Record<string, any>} */
-    const results = {};
+    const results: Record<string, any> = {};
     for (const identity of IDENTITIES) {
       const runs = [];
       for (let i = 0; i < trials; i++) {

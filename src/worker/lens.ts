@@ -3388,7 +3388,6 @@ const LENS_RATES = [
 /**
  * Every tier is optional: an HTML page prices html/text/markdown/outline, a
  * non-HTML text body prices raw alone, and add() skips whatever is absent.
- * @param {{html?: number, text?: number, markdown?: number, headings?: {level: number, text: string}[], raw?: number}} sizes
  */
 export function lensCost({ html, text, markdown, headings, raw }: {
   html?: number; text?: number; markdown?: number; headings?: Array<{ level: number; text: string }>; raw?: number;

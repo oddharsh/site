@@ -494,3 +494,52 @@ test("every program declared null-safe still declares it", async () => {
   assert.deepEqual(undeclared, [],
     `these programs set strictNullChecks but are not in the declared list: ${undeclared.join(", ")} — add them`);
 });
+
+// ── a JSDoc TYPE in a .ts file is inert, and this repo keeps writing them ────
+// TypeScript ignores `@type`, `@param {T}`, `@returns {T}` and `@typedef` in a
+// .ts file. The annotation still LOOKS like it types something, so it survives
+// review, and what it typed silently stops being checked.
+//
+// It has fired six times during this migration, every time the same way: a
+// correct JSDoc fix, and a correct .js -> .ts rename, landing in either order.
+// The damage measured on 2026-08-24, when the survivors were finally converted:
+//   nlweb.ts        10 → 2 diagnostics   (an inert @returns)
+//   ua-survey.ts    21 → 19              (two inert @type)
+//   cal/test         0 → 8 → 0           (booking.ts's signatures typed nothing,
+//                                         so three tests read through a
+//                                         `Booking | null` unchecked)
+// and two more had DRIFTED from the real annotation they shadowed, documenting
+// a `note` field where the tuple says `what` and a `RouteHandler` where the
+// table says `Function`.
+//
+// PROSE IS NOT AN ANNOTATION, which is why this matches only tags that open a
+// comment line. The notes written ABOUT this trap all mention `@type` inside a
+// `//` line and must survive; a test that failed on them would be unfixable
+// without deleting its own explanation.
+test("no .ts file carries a JSDoc type annotation, which TypeScript ignores", async () => {
+  const { execFileSync } = await import("node:child_process");
+  const { fileURLToPath } = await import("node:url");
+
+  const root = fileURLToPath(new URL("./", ROOT));
+  const files = execFileSync("git", ["ls-files", "*.ts"], { cwd: root, encoding: "utf8" })
+    .split("\n").filter((f) => f && !f.endsWith(".d.ts"));
+
+  // A FLOOR, because a test that scanned nothing would agree with any tree.
+  assert.ok(files.length >= 100, `only ${files.length} .ts files found — the enumeration is broken`);
+
+  const tag = /@(type|param|returns|typedef)\s*\{/;
+  const offenders = [];
+  for (const rel of files) {
+    const lines = (await readFile(new URL(rel, ROOT), "utf8")).split("\n");
+    lines.forEach((line, i) => {
+      if (!tag.test(line)) return;
+      if (line.trimStart().startsWith("//")) return;   // prose about this very trap
+      offenders.push(`${rel}:${i + 1}`);
+    });
+  }
+
+  assert.deepEqual(offenders, [],
+    `JSDoc types in .ts files, where they are ignored:\n  ${offenders.join("\n  ")}\n` +
+    "Write a real annotation instead. If it is only documentation, drop the {braces} " +
+    "so it reads as prose rather than as a type nothing enforces.");
+});

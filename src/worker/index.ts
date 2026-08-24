@@ -300,11 +300,11 @@ export default {
   },
 };
 
-/**
- * A worker-owned route handler, as dispatchTraced() calls one.
- *
- * @typedef {(request: Request, env: any, ctx: any, url: URL) => Response | Promise<Response>} RouteHandler
- */
+// A worker-owned route handler, as dispatchTraced() calls one. This was a
+// `@typedef` a .ts file ignores, so the ROUTE_TABLE below fell back to the
+// `Function` its annotation names — a precise signature documented and an
+// imprecise one enforced.
+type RouteHandler = (request: Request, env: any, ctx: any, url: URL) => Response | Promise<Response>;
 
 // Exact worker-owned routes. This table mirrors wrangler.jsonc's
 // assets.run_worker_first allowlist: static is the default, and each entry here
@@ -323,11 +323,10 @@ export default {
 // passes silently. Measured 2026-08-10 by planting `["/bogus", () => ({status:
 // 200})]`: the cast form accepted it, `@satisfies` caught it but left all 72
 // errors standing, and only the declaration form does both.
-/** @type {[string, RouteHandler][]} */
 // Typed as an array of TUPLES so `new Map(ROUTE_TABLE)` resolves. Left to
 // inference the elements widen to (string | Function)[], which matches no Map
 // constructor overload, and the error lands on the Map rather than on the table.
-const ROUTE_TABLE: Array<[path: string, handler: Function]> = [
+const ROUTE_TABLE: Array<[path: string, handler: RouteHandler]> = [
   ["/favicon.ico", routeFavicon],
 
   ["/auth.md", routeAuthMd],

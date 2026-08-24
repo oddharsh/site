@@ -1087,7 +1087,6 @@ let twinFiles;
 // The placeholder throws, so inference reads it as `() => never` and every later
 // call is "Expected 0 arguments, but got 2". The annotation states the shape 1g2
 // actually installs, which is also what the sole caller passes.
-/** @type {(html: string, rel: string) => { html: string, addedLink: boolean, addedChrome: boolean }} */
 /** Installed by step 1g2; the placeholder exists so a mis-ordered call fails loudly. */
 let dressPage: (html: string, rel: string) => { html: string; addedLink: boolean; addedChrome: boolean } =
   () => { throw new Error("explorer: dressPage used before 1g2 defined it"); };

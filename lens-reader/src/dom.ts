@@ -272,9 +272,9 @@ class Element extends Node {
     // Tracked for SERIALIZATION alone: an SVG element with no children
     // self-closes. Nothing else branches on it.
     this.svg = svg;
-    /** @type {Attr[]} Real array: Readability indexes it, reads .length, and
-     *  passes it to Array.from, all of which an array already satisfies. */
-    this.attributes = [];
+    // Real array: Readability indexes it, reads .length, and passes it to
+    // Array.from, all of which an array already satisfies.
+    this.attributes = [] as any;
   }
 
   get nodeName() { return this.tagName; }

@@ -23,6 +23,16 @@ beforeEach(async () => {
   await Promise.all(keys.map((k) => env.BOOKINGS.delete(k.name)));
 });
 
+// getBooking and setStatus both answer `Booking | null`, and every assertion
+// below reads through the result. A miss means the record was not written,
+// which is worth saying out loud rather than surfacing as a TypeError on the
+// next property access.
+/** @param {Awaited<ReturnType<typeof getBooking>>} b */
+const must = (b) => {
+  if (!b) throw new Error("expected a booking record, got null");
+  return b;
+};
+
 const HOUR = 3600_000;
 // a slot a comfortable distance in the future, so held-key absolute expiration
 // is always valid (KV rejects expirations under 60s out).
@@ -65,10 +75,10 @@ describe("booking record CRUD", () => {
 
   it("setStatus patches status + acted_at and persists it", async () => {
     const b = await createBooking(env, pending());
-    const updated = await setStatus(env, b.id, "confirmed");
+    const updated = must(await setStatus(env, b.id, "confirmed"));
     expect(updated.status).toBe("confirmed");
     expect(updated.acted_at).toBeTypeOf("number");
-    expect((await getBooking(env, b.id)).status).toBe("confirmed");
+    expect(must(await getBooking(env, b.id)).status).toBe("confirmed");
   });
 
   it("setStatus on a missing booking returns null (no throw)", async () => {
@@ -107,7 +117,7 @@ describe("held slots (per-slot keys)", () => {
     await setStatus(env, b.id, "declined");
     await releaseSlot(env, b);
     // the record still exists (kept 90d) even though the slot is free again
-    expect((await getBooking(env, b.id)).status).toBe("declined");
+    expect(must(await getBooking(env, b.id)).status).toBe("declined");
     expect(await listHeld(env)).toHaveLength(0);
   });
 });

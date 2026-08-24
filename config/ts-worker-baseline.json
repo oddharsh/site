@@ -21,11 +21,10 @@
     "src/worker/lib/preview.ts": 2,
     "src/worker/lib/robots.ts": 13,
     "src/worker/lib/text.ts": 4,
-    "src/worker/lib/tools.ts": 1,
     "src/worker/lib/trace.ts": 1,
     "src/worker/lib/tui.ts": 17,
     "src/worker/lib/twins.ts": 1,
-    "src/worker/nlweb.ts": 10,
+    "src/worker/nlweb.ts": 2,
     "src/worker/perf-probe.ts": 1,
     "src/worker/photos.ts": 14,
     "src/worker/radar.ts": 11,
@@ -41,5 +40,5 @@
     "src/worker/writing.ts": 4,
     "src/worker/x402.ts": 3
   },
-  "total": 308
+  "total": 299
 }

@@ -134,8 +134,14 @@ const statusOf = async (id) => (await getBooking(env, id))?.status;
 // there's no pending-index to scan anymore, so tests read the id the same way
 // the host does — off the signed link in the mail we just captured.
 const lastBookingId = () => {
-  const link = mailCalls.at(-1).body.html.match(/href="([^"]*\/approve[^"]*)"/)[1];
-  return new URL(link).searchParams.get("t");
+  // Both steps can miss, and both used to fail as a bare TypeError pointing at
+  // the assertion rather than at the mail that never carried an approve link.
+  const html = mailCalls.at(-1).body.html;
+  const link = html.match(/href="([^"]*\/approve[^"]*)"/);
+  if (!link) throw new Error("the last mail carried no approve link");
+  const id = new URL(link[1]).searchParams.get("t");
+  if (!id) throw new Error(`approve link carried no booking id: ${link[1]}`);
+  return id;
 };
 
 describe("routing", () => {

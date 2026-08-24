@@ -12,7 +12,6 @@ const INNER = COLS - 4;
 //
 // Recount with: the groups below map to real paths; `wc -l` them.
 export const LIFT_CHECKED = "2026-08-05";
-/** @type {[name: string, files: number, lines: number, note: string][]} */
 // Typed as a TUPLE rather than left to inference. Without it tsc widens the
 // element type to (string | number)[], every `lines` reads as string | number,
 // and the sum below stops type-checking for a reason that has nothing to do

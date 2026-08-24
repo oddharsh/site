@@ -43,11 +43,6 @@ export const EXECUTION_META = {
 /**
  * Turn one agent-browser observation into check statuses.
  *
- * @param {null|undefined|{ran?:boolean, engine?:string, consoleErrors?:number,
- *   pageErrors?:number, totalImages?:number, brokenImages?:number,
- *   imagesWithAlt?:number, imagesDecorative?:number, imagesMissingAlt?:number,
- *   firstError?:string, brokenSample?:string[]}} ev
- * @returns {{agentScripts:{status:string,detail:string}, agentMedia:{status:string,detail:string}}}
  */
 export function executionChecks(ev) {
   if (!ev || ev.ran !== true) {
