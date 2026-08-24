@@ -18,7 +18,7 @@ import {
   MCP_TOOLS as SERENDIPITY_TOOLS,
   SERENDIPITY_MCP_CAPABILITIES,
   SERENDIPITY_MCP_SERVER_INFO,
-} from "../serendipity/serendipity.js";
+} from "../serendipity/serendipity.ts";
 import { MCP_MODERN } from "../src/worker/lib/mcp-protocol.ts";
 
 const ROOT = "https://aadhar.sh";

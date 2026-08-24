@@ -15,7 +15,7 @@ import {
 // conformance assertions run against both rather than against the site one.
 
 test("the site and serendipity MCP servers agree on the 2026-07-28 wire rules", async () => {
-  const { handleMcp } = await import("../serendipity/serendipity.js");
+  const { handleMcp } = await import("../serendipity/serendipity.ts");
   const post = (body, headers = {}) => new Request("https://aadhar.sh/serendipity/mcp", {
     method: "POST", body: JSON.stringify(body),
     headers: { "content-type": "application/json", ...headers },
@@ -84,7 +84,7 @@ test("neither MCP server keeps a private copy of the protocol constants", async 
   // The whole point of lib/mcp-protocol.js is that there is ONE answer to "what
   // does this origin speak". A server that re-declares MCP_SUPPORTED locally
   // would pass every test above on the day it was written and drift later.
-  for (const file of ["src/worker/mcp.ts", "serendipity/serendipity.js"]) {
+  for (const file of ["src/worker/mcp.ts", "serendipity/serendipity.ts"]) {
     const src = readFileSync(file, "utf8");
     assert.ok(/from ".*lib\/mcp-protocol\.(js|ts)"/.test(src), `${file} must import the shared protocol module`);
     assert.ok(!/^const MCP_SUPPORTED\s*=/m.test(src), `${file} re-declares MCP_SUPPORTED instead of importing it`);

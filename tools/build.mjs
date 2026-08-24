@@ -191,7 +191,7 @@ async function checkInvariants() {
   // 2 (hard) — wherever a worker emits a CSP with a style-src, it includes
   // 'self'. cal emits no CSP and passes vacuously (this is the exact thing that
   // blanked serendipity's taskbar).
-  for (const f of ["public/_headers", "src/worker/lib/security.ts", "serendipity/serendipity.js", "cal/src/templates.ts", "cal/src/index.ts"]) {
+  for (const f of ["public/_headers", "src/worker/lib/security.ts", "serendipity/serendipity.ts", "cal/src/templates.ts", "cal/src/index.ts"]) {
     let s; try { s = await read(f); } catch { continue; }
     for (const m of s.matchAll(/style-src([^;'"]*(?:'[^']*')?[^;'"]*)*/g)) {
       const dir = m[0];
@@ -214,7 +214,7 @@ async function checkInvariants() {
     ...(await servedFiles((r) => /\.(html|css|js)$/.test(r) && !VT_DIAGNOSTIC.test(r))),
     ...(await readdir("src/client")).filter((r) => r.endsWith(".js")).map((r) => `src/client/${r}`),
     ...(await readdir("src/styles")).filter((r) => r.endsWith(".css")).map((r) => `src/styles/${r}`),
-    "cal/src/templates.ts", "serendipity/serendipity.js", "pipelines/lwe/generate.mjs",
+    "cal/src/templates.ts", "serendipity/serendipity.ts", "pipelines/lwe/generate.mjs",
   ];
   for (const f of vtSources) {
     let s; try { s = await read(f); } catch { continue; }
@@ -276,7 +276,7 @@ async function checkInvariants() {
   // file that carries the calc must agree with luna.css, or first paint lands
   // a different window height than the final.
   const floors = new Map();
-  for (const f of ["src/styles/luna.css", "src/worker/lib/chrome.ts", "src/worker/writing.ts", "serendipity/serendipity.js"]) {
+  for (const f of ["src/styles/luna.css", "src/worker/lib/chrome.ts", "src/worker/writing.ts", "serendipity/serendipity.ts"]) {
     let s; try { s = await read(f); } catch { continue; }
     // the BODY floor only (`height:calc(...)`), not a window `max-height:calc(...)`
     for (const m of s.matchAll(/(?<!max-)height:calc\(100dvh - (\d+)px\)/g)) floors.set(f, m[1]);
@@ -429,7 +429,7 @@ async function checkInvariants() {
   // frontier CSS in them is the point, while a web font anywhere is still fatal.
   let tasteScanned = 0, tasteOk = [];
   try {
-    const served = [...await servedFiles(), "cal/src/templates.ts", "serendipity/serendipity.js"];
+    const served = [...await servedFiles(), "cal/src/templates.ts", "serendipity/serendipity.ts"];
     const isDemo = (p) => /^www\/(garage|lwe)\//.test(p);
     // Blank block comments before pattern-matching (luna.css discusses @font-face
     // in prose twice, and a guard that fires on its own documentation gets
@@ -690,7 +690,7 @@ await cp("src/styles", `${OUT}/public`, { recursive: true });
 await mkdir(`${OUT}/cal`, { recursive: true });
 await cp("cal/src", `${OUT}/cal/src`, { recursive: true });
 await mkdir(`${OUT}/serendipity`, { recursive: true });
-await cp("serendipity/serendipity.js", `${OUT}/serendipity/serendipity.js`);
+await cp("serendipity/serendipity.ts", `${OUT}/serendipity/serendipity.ts`);
 // 1a) /images/meta/<stem>.json, DERIVED rather than copied.
 //
 // These are the tooltip's per-photo self-heal: a stem missing from the shared
@@ -759,7 +759,7 @@ await cp("serendipity/serendipity.js", `${OUT}/serendipity/serendipity.js`);
     .concat((await readdir(`${OUT}/src/worker`, { recursive: true }))
       .filter((f) => f.endsWith(".js") || f.endsWith(".ts"))
       .map((f) => `${OUT}/src/worker/${f}`))
-    .concat([`${OUT}/cal/src/templates.ts`, `${OUT}/serendipity/serendipity.js`]);
+    .concat([`${OUT}/cal/src/templates.ts`, `${OUT}/serendipity/serendipity.ts`]);
 
   let mirrored = 0, skipped = 0;
   for (const f of targets) {
@@ -1600,7 +1600,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     // scripts themselves (nav.js imports hoist), worker modules, serendipity. NOT the
     // .src twins, and NOT `a/` — the hashed copies are already-final bytes, which is
     // precisely why each asset must be rewritten before the next one is hashed.
-    const stringTargets = [`${OUT}/serendipity/serendipity.js`];
+    const stringTargets = [`${OUT}/serendipity/serendipity.ts`];
     for (const rel of await readdir(`${OUT}/public`, { recursive: true })) {
       if (rel.includes(".src.")) continue;
       if (rel.endsWith(".html") || (rel.endsWith(".js") && !rel.startsWith("a/"))) {
@@ -1672,7 +1672,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   // whole reason the unhashed fallbacks existed. Their nav ref is attribute-shaped so
   // the ordinary reps catch it; the luna refs are ABSOLUTE (cal.aadhar.sh serves the
   // same templates, where a relative /luna.css would 404) and get their own pass below.
-  const targets = [`${OUT}/serendipity/serendipity.js`];
+  const targets = [`${OUT}/serendipity/serendipity.ts`];
   for (const rel of await readdir(`${OUT}/cal/src`).catch(() => [])) {
     if (rel.endsWith(".ts")) targets.push(`${OUT}/cal/src/${rel}`);
   }

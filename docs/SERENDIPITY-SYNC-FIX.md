@@ -84,7 +84,11 @@ degradation rather than a throw.
 
 ### P2. Nothing reports on any of this
 
-`grep -c 'span(' serendipity/serendipity.js` returns **0**. The module imports
+`grep -c 'span(' serendipity/serendipity.js` returns **0**. (The module became
+`serendipity.ts` on 2026-08-24. The filename is left as measured here, since
+every number in this document is a reading taken on 2026-08-21 and rewriting
+one would make the record claim a measurement nobody took. Re-run it against
+`serendipity.ts`.) The module imports
 five things from `src/worker/lib/` already, so the direction is established and
 `lib/trace.ts` is simply unused here.
 

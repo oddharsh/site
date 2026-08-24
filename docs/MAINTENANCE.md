@@ -1002,7 +1002,7 @@ files) are served straight from disk. Worker-owned routes are enumerated in
 | `/updates`, `/updates.json`, `/restore` | `handleWindowsUpdate` / `handleUpdatesJson` / `handleSystemRestore` (D1) | `updates.js` |
 | `/lens`, `/lens/`, `/lens/fetch`, `/lens/shot` | `handleLens` / `handleLensFetch` / `handleLensShot` | `lens.js` |
 | `/coffee`, `/coffee/*` | Cal booking module delegation | `../cal/src/index.js` |
-| `/serendipity`, `/serendipity/*` | Serendipity module delegation + local CSP | `../serendipity/serendipity.js` |
+| `/serendipity`, `/serendipity/*` | Serendipity module delegation + local CSP | `../serendipity/serendipity.ts` |
 | `/lens.js` | static client renderer | `src/client/lens.js` (served asset) |
 | `/llms-full.txt` | `handleLlmsFull` (x402 bot paywall; free until `X402_PAY_TO` is set) | `x402.js` |
 | `/ledger`, `/ledger.json` | `handleLedger` / `handleLedgerJson` (AI-crawler invoice from Analytics Engine; counting via `countCrawlerHit` in `index.js`) | `ledger.js` |
