@@ -23,7 +23,7 @@ decides which one a given file belongs in:
 |---|---|
 | **`public/`** | **the bytes a browser fetches unchanged.** Photos, the hashed `/i/` tiers, OG cards, `_headers`, `.well-known`, `llms.txt`, the static `garage/` and `lwe/` assets. No HTML: every document is authored in `src/pages/`. |
 | **`src/pages/`** | **every HTML document**, 37 of them. They STAGE into the served tree at their own paths, so `/garage/horizon` is authored at `src/pages/garage/horizon.html` and served where it always was. |
-| **`src/content/`** | authored PROSE and the registries beside it: the writing posts and their `posts.json`, the hand-written Markdown twins for the three Worker-rendered pages (`md/`), and `index.md`, `README.md`, `auth.md`, `resume.md`. Also stages back into the served tree. |
+| **`src/content/`** | authored PROSE and the registries beside it: the writing posts and their `posts.json`, the hand-written Markdown twins for the seven Worker-rendered pages (`md/`), and `index.md`, `README.md`, `auth.md`, `resume.md`. Also stages back into the served tree. |
 | **`src/worker/`** | **the site Worker.** It is a program with its own tests, not a document, so it sits beside `cal/` and `serendipity/` rather than inside the tree of things a browser can fetch. It was never served either way. It STAGES to `.build/src/worker/`, mirroring its source path, and that mirroring is load-bearing rather than tidy: cal and serendipity import the Worker across the project boundary and are bundled from `.build/`, so a relative specifier has to resolve in BOTH trees, which is only possible when the two have the same shape. |
 | **`src/client/`**, **`src/styles/`** | the client islands (`nav.js`, `tooltip.js`, `lens*.js`, `quiz.js`, …) and the stylesheets (`luna.css`, `lwe-base.css`, …). They stage back to the ROOT of the served tree, so their public URLs are still `/nav.js` and `/luna.css`. Source layout and URL layout are different questions, and only the first one moved. |
 | **`src/dict/`** | `a-dict/` and `p-dict/`, the previously shipped bytes of the shell and of each page. Build INPUT that is never served: a dictionary has to be bytes a browser already holds, which no build can derive from source. Being outside the served tree is why the build no longer stages 130 files for `.assetsignore` to exclude again. |
@@ -50,7 +50,8 @@ moving any of them costs more than it buys:
   config file, so relocating these means editing the Cloudflare dashboard
   FIRST (the deploy command is mirrored in `config/infra.json` and `infra:check`
   fails on drift it would otherwise invent itself).
-- `package.json`, `pnpm-workspace.yaml`, `pnpm-lock.yaml`, `.node-version`.
+- `package.json` (which carries the four workspaces itself, so there is no
+  separate workspace file), `bun.lock`, `.node-version`.
 - `CLAUDE.md` and its `AGENTS.md` symlink, plus `README.md`.
 - `.github/`, `.gitignore`.
 
@@ -491,10 +492,14 @@ worktrees may edit freely, but a worktree is not a release surface.
     resolves whatever it can find: measured 2026-08-12 in a tree with no
     `node_modules`, `npx wrangler --version` answered **4.105.0** from its own
     cache while this repo pins 4.120.0. So the wrangler that moved production
-    traffic depended on how the script happened to be invoked. It calls `pnpm
-    exec wrangler` now (see gotcha 29), which resolves the pin itself. Ramp steps
-    still go through `pnpm run` to match the documented interface, but that is
-    consistency now rather than the guardrail it briefly was.
+    traffic depended on how the script happened to be invoked. It goes through
+    `wranglerCommand()` in `tools/lib/wrangler-bin.ts` now, which NAMES NO
+    PACKAGE MANAGER and runs the pinned entry file under node. The `pnpm exec`
+    that replaced npx was itself wrong the day the tree became bun, since pnpm
+    reads `packageManager` and refuses outright; read that module's header
+    before touching any spawn here. Ramp steps still go through `bun run` to
+    match the documented interface, but that is consistency now rather than the
+    guardrail it briefly was.
 
   `--to`, `--steps`, `--status`, `--rollback` and `--dry-run` all still work by
   hand, and a rollback is still a workstation command on purpose.
@@ -646,7 +651,7 @@ worktrees may edit freely, but a worktree is not a release surface.
      for a second class only when the two really need different code, and assert
      the declared class list in a contract test when you do, so adding one is a
      deliberate act rather than a surprise at deploy time.
-  2. **When a class genuinely must appear or disappear, publish it with `pnpm run
+  2. **When a class genuinely must appear or disappear, publish it with `bun run
      deploy:direct` once** (straight to 100%, migration applied), then go back to the
      ramp for everything after. Deleting also needs its own entry, and the
      migration list is CUMULATIVE: keep the old tags and append.
@@ -742,7 +747,7 @@ worktrees may edit freely, but a worktree is not a release surface.
   TRUE, and they provision real KV/R2/D1 for any binding declared without an
   id. `bun run deploy:direct`, `bun run deploy:version`, and **both** Workers Builds
   commands (the Deploy command AND the Non-production branch deploy command)
-  pin them off, so resource creation stays with `pnpm run
+  pin them off, so resource creation stays with `bun run
   infra:apply` and a missing id fails loudly. **That list read "the Workers
   Builds Deploy command" until 2026-08-04, and the branch build it left out was
   running bare** — every push to every feature branch published with both flags
@@ -883,7 +888,7 @@ Single-page personal site at `aadhar.sh`. A Cloudflare Worker with static assets
 | file | role |
 |---|---|
 | `src/pages/index.html` | The whole page in one file. Inline CSS + JS. ~58KB uncompressed, ~15.4KB zstd (measured 2026-07-21 via live nav-timing; CF serves zstd, not brotli). Served on the shared `PAGE_CACHE_CONTROL` (`lib/const.ts`) like every other document, + ETag, and still never `no-store` (the one directive that would cost the page bfcache). It held `private, no-cache, must-revalidate` through its SSR era and kept it after the SSR left; that cost two things at once, since no shared cache could store it (every front-door hit ran the worker) and Chromium refuses to keep a dictionary offered under `no-cache` (so `/` was the ONE page outside the per-page dcz tier). Changed 2026-07-31. Comments deliberately kept readable for View Source. |
-| `public/writing/` | Written content as plain `.txt` files + `posts.json` registry `[{slug,title,date}]`. The worker renders each as an XP **Notepad** window at `/writing/<slug>` (a server-rendered `<textarea>` seeded with the canonical text — editable by nature, ephemeral by nature: no save → reload restores canonical, "writing in flux"), plus a "My Writing" folder index at `/writing`. Raw `.txt` stays fetchable at `/writing/<slug>.txt`. Author a post = drop a `.txt` + a `posts.json` entry. Render code (`handleWritingIndex`/`handleWritingPost`/`NOTEPAD_CSS`) lives in `_worker.js`. |
+| `src/content/writing/` | Written content as plain `.txt` files + `posts.json` registry `[{slug,title,date}]`. The worker renders each as an XP **Notepad** window at `/writing/<slug>` (a server-rendered `<textarea>` seeded with the canonical text — editable by nature, ephemeral by nature: no save → reload restores canonical, "writing in flux"), plus a "My Writing" folder index at `/writing`. Raw `.txt` stays fetchable at `/writing/<slug>.txt`. Author a post = drop a `.txt` + a `posts.json` entry. Render code (`handleWritingIndex`/`handleWritingPost`/`NOTEPAD_CSS`) lives in `src/worker/`. |
 | `src/client/notepad.js` | Behavior for the `/writing` Notepad view (deferred, SW-cached): per-window `enhance()` wiring File/Edit/Format/View/Help menus, live Ln/Col + word-count status bar, Word-Wrap toggle, the classic **F5 time/date** stamp (Temporal w/ Date fallback), Select All, Print, About. Also opens folder notes as **popovers** that composite over the folder index, deliberately without touching the address bar (notes are `popover="manual"`, so several stay open at once and one URL couldn't honestly name three windows; Esc closes the topmost). The permalink stays real: each row is an `<a href="/writing/<slug>">` the worker serves standalone, and a modified click passes through to it. Chrome itself is SSR'd by `_worker.js`. No-op without a `.np-window`. |
 | `src/client/tooltip.js` | Rich XP hover island for photos, tracks, artists, and car references. The homepage keeps only a tiny inline loader that idle-prefetches this module and replays a cold first hover; coarse-pointer visitors never load it. |
 | `src/client/infotip.js` | The same trick for every OTHER hover on the site. The rule is short: **any `[title]` is an infotip, wherever it lives** — taskbar app buttons, tray icons, the clock, desktop icons, title-bar controls, form fields, and titled links and controls in page bodies. All of them already bought the OS tooltip, so this is what that tooltip was hiding: a pin's page count (from nav.js's own destination table), the tray's live colo/build (the same JSON its click-balloon fetches), the clock's full date, a citation link's destination host. It re-draws `title` rather than replacing it: emptied on hover, restored on leave, so AT still reads it at focus and a page with no JS keeps the native tooltip. `[data-tip]` is the opt-in for a control that never had one. **Four richer surfaces are skipped by name** (`.lx-term`, `.photos a`, `.np-list li`, `.np-artist-link`, `.car-link`, `.ev[data-cover]`) because each already draws its own card from the same engine; `.lx-term` is the sharp one, since those ship a `title` as their no-JS fallback and `lens.ts` strips it once its own surface is live. **`nav.js` owns the matcher and passes the FUNCTION in**, not a selector each side keeps a copy of. Loads on the first hover that has a tip, never on a coarse pointer. Windows' two delays live in `hoist.js` now (`openMs` 400 cold-dwell, `autopopMs` 6s), both defaulting OFF so the content hover CARDS keep the instant show they were tuned for. |
@@ -896,8 +901,8 @@ Single-page personal site at `aadhar.sh`. A Cloudflare Worker with static assets
 | `public/_headers` | Static-asset cache + security headers (CSP, Permissions-Policy, etc.). Applied to direct static-asset requests; the worker overrides cache-control for select paths. |
 | `src/client/sw.js` | RETIRED (v136, 2026-07-03): now a ~15-line unregister stub (skipWaiting, delete caches, claim, unregister) that must keep serving 200 for a year+ so installed copies clean themselves up. No CACHE_VERSION anymore; the deploy-log vnum is staged in `checkpoints.json` and recorded in D1 by the ramp (bump-version.sh mints the next from that projection). Repeat-visit speed comes from immutable assets + bfcache + speculation prerender. |
 | `public/llms.txt` | The llms.txt format — concise site summary for LLMs. Linked from `<link rel="alternate">`. |
-| `public/index.md` | Markdown source of homepage copy (used by `/llms.txt` and as a fallback). The one COMMITTED Markdown twin: `gen-md-twins.mjs` skips any path that already has one, so this hand-written prose is never regenerated over. |
-| `public/md/` | Hand-authored Markdown twins for the three Worker-rendered prose pages, `/bot`, `/whoareyou` and `/security`, whose text lives in template literals no build step can read. `.assetsignore`d (build input, not a public URL): the generator publishes them at `/bot.md`, `/whoareyou.md` and `/security.md`. `checkTwinFacts()` pins the load-bearing strings against the Worker in BOTH directions, so bumping `BOT_VERSION` fails the deploy until `bot.md` agrees. `security.md`'s pins read `lib/security.ts` rather than the page, since a page ABOUT headers must agree with the module that SENDS them; one of them is derived from the header set `cspHeadersFor` actually emits, so reintroducing a report-only twin fails the deploy until `security.md` stops claiming `'unsafe-inline'` is gone. It read the `ENFORCE_PAGE_HASHES` flag until that flag was deleted on 2026-08-23; reading the emitted headers is the better check, since a flag states an intention and the headers state what ships. |
+| `src/content/index.md` | Markdown source of homepage copy (used by `/llms.txt` and as a fallback). The one hand twin that SHIPS as an ordinary static asset rather than being `.assetsignore`d like `md/`: `gen-md-twins.ts` skips any surface whose twin path already exists under `src/content/`, so this prose is never regenerated over. It looked in `public/` until the prose moved, and the symptom of reading the old location was silent, since the hand-written twin was simply overwritten by a generated one 472 bytes shorter. |
+| `src/content/md/` | Hand-authored Markdown twins for the Worker-rendered prose pages, whose text lives in template literals no build step can read. SEVEN of them: `/around`, `/bot`, `/coffee`, `/lens`, `/security`, `/terminal`, `/whoareyou`. It was three when this row was written; `/terminal` joined in #227 and the other three in #354, and nothing here noticed either time, because the set is not a list anywhere in the code. `buildTwins` looks for `<path>.md` in this directory per SURFACE, so any page gets a hand twin by dropping a file in, and a hand twin OUTRANKS the generated tier. `.assetsignore`d (build input, not a public URL) and staged into the served tree: the generator publishes each at its page's own path, `/bot.md` and so on. `checkTwinFacts()` pins THREE of the seven (`bot`, `whoareyou`, `security`) against the Worker in BOTH directions, so bumping `BOT_VERSION` fails the deploy until `bot.md` agrees; the other four carry no pins and can drift from the page silently. `security.md`'s pins read `lib/security.ts` rather than the page, since a page ABOUT headers must agree with the module that SENDS them; one of them is derived from the header set `cspHeadersFor` actually emits, so reintroducing a report-only twin fails the deploy until `security.md` stops claiming `'unsafe-inline'` is gone. It read the `ENFORCE_PAGE_HASHES` flag until that flag was deleted on 2026-08-23; reading the emitted headers is the better check, since a flag states an intention and the headers state what ships. |
 | `public/sitemap.xml`, `robots.txt` | Standard SEO files. robots.txt explicitly allows AadharshBot. |
 | `public/.well-known/http-message-signatures-directory` | JWKS for AadharshBot's Ed25519 public key (Web Bot Auth IETF draft). |
 | `public/images/` + `public/i/` | `images/` holds the photo DATA surfaces: `metadata.json` (the EXIF RECORD, long field names + the Fuji recipe card), `exif.json` (the tooltip's TEXT tier: every photo's short-key EXIF in one 2.6KB-brotli file, warmed once on idle because the homepage draws a fresh random 12 of 158 per request and a per-slot warm-up was cold nearly every visit), `meta/<stem>.json` (per-photo EXIF plus the four 64-bin histogram channels — the BARS tier, fetched only on the hover that needs them, and the self-healing fallback for a stem missing from a cached `exif.json`), `alt.json` (AI captions), `hashes.json` (stem to hash8 map). The pixel tiers (600px AVIF+JPG squares, plus 400px and 200px AVIF) live in `i/` under content-hashed names, 632 files for 158 photos. |
@@ -1990,7 +1995,7 @@ route is a dead end.
 Keep the paragraph. The dependency is gone and the trap is a property of
 wrangler's condition resolution, so the next package with an `exports` map that
 branches on `browser` inherits it whole, and the failure is invisible to a node
-suite by construction. Turndown is no longer in this repository: `pnpm test`
+suite by construction. Turndown is no longer in this repository: `bun test`
 asserts the manifest cannot carry it and that `reader.js` names neither it nor
 `TurndownService`.
 
@@ -2423,7 +2428,7 @@ cal/
 ### Required secrets (before deploy)
 
 ```bash
-pnpm install
+bun install
 bun run wrangler versions secret put -c wrangler.jsonc ICAL_URL        # Google Calendar → "secret ICS"
 bun run wrangler versions secret put -c wrangler.jsonc RESEND_API_KEY  # resend.com, DKIM-verify aadhar.sh
 openssl rand -hex 32 | bun run wrangler versions secret put -c wrangler.jsonc SIGNING_SECRET
@@ -3801,8 +3806,11 @@ bun run deploy:direct
     would publish production with a registry download and say nothing, which is
     precisely what this gotcha's own sweep measured in `deploy-promote.mjs`
     (4.105.0 against a pinned 4.120.0). `pnpm exec` turns that silent
-    wrong-version publish into a loud failure. Both commands are `pnpm exec
-    wrangler versions upload` now.
+    wrong-version publish into a loud failure. Both commands moved ONCE MORE
+    when the tree became bun, because `pnpm exec` reads `packageManager` and
+    refuses on a bun tree outright: they are `bash .github/deploy-wrangler.sh
+    versions upload` now, and that wrapper runs the pinned entry file under node
+    and fetches nothing, which is the same property `pnpm exec` was picked for.
 
     **The ORDER survives the migration and is the part to keep.** Those two
     strings in `infra.json`, plus the mirrored copies in `wrangler.jsonc` and
@@ -3819,7 +3827,12 @@ bun run deploy:direct
     future change to these two: it is the only trigger whose failure costs no
     release.
 
-    **`lens-reader` needs `pnpm install --ignore-workspace`.** It deliberately
+    **`lens-reader` NEEDED `pnpm install --ignore-workspace`, and under bun it
+    needs nothing.** A bare `bun install` in that directory resolves its own
+    `package.json` and creates `lens-reader/node_modules`, which is what CI runs;
+    do not add a flag looking for parity with the era below, since the flag pnpm
+    wanted does not exist here. The pnpm behaviour, kept because the reason the
+    directory sits outside the workspace has not changed: it deliberately
     stays out of the workspace (readability + linkedom are megabytes that only that
     Worker bundles), and under pnpm a bare `pnpm install` inside it walks UP to
     the root `pnpm-workspace.yaml`, installs the five workspace projects, and
