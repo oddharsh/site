@@ -256,6 +256,31 @@ while IFS= read -r f; do
   # 159 of 159 photos, for 1.1% more bytes. TIFF for the geometry because it is
   # what sips writes fastest (a PNG of the same frame costs 13x), then one PNG
   # because that is what zenc and avifenc read.
+  #
+  # MOVING THIS GEOMETRY INTO zenc WAS TRIED AND DECLINED, 2026-08-24. The four
+  # spawns below are 135ms of which 108ms is the TIFF round trip, and zenc
+  # already links `image` with jpeg+png, so a `zenc square` subcommand needed no
+  # new dependency and ran the same crop in 38ms. 3.5x, one spawn instead of
+  # four, and it still does not ship, because it does not reproduce these pixels:
+  #
+  #   ssimulacra2(sips crop, zenc crop)   42.2  grayscale source
+  #                                       69.5  grayscale source
+  #                                       49.1  RGB source
+  #
+  # For scale, the lossless-intermediate change above moved the corpus median
+  # from 68.97 to 80.20 and was worth doing, so 49 between two crops meant to be
+  # the SAME crop is a visible difference rather than kernel noise. Two causes,
+  # and only the first is a bug in the attempt: `image::open` then `save`
+  # promotes a grayscale JPEG to RGBA where sips keeps one channel, and sips is
+  # colour-managed (`space: Gray, profile: Gray Gamma 2.2` on the frame measured)
+  # while `image` decodes raw samples and resamples in encoded sRGB rather than
+  # linear light. Isolating it settles which: with NO resize at all a plain
+  # decode already diverges, so the resampling kernel is not the story.
+  #
+  # Reviving it needs colour-managed, gamma-correct resampling that preserves the
+  # source colour type, plus a corpus-wide ssimulacra2 gate, because `/i/` is
+  # content-addressed and any pixel change re-mints 632 files AND obsoletes every
+  # baked histogram, which is gotcha 41's exact failure. Not worth 100ms.
   if ! sips -s format tiff "$work" --out "$tif" >/dev/null 2>&1; then T_FAIL=$((T_FAIL+1)); printf "✗"; continue; fi
   sips -Z "$tl" "$tif" >/dev/null 2>&1
   if ! sips -c "$SQ" "$SQ" "$tif" --out "$sqt" >/dev/null 2>&1; then T_FAIL=$((T_FAIL+1)); printf "✗"; continue; fi
