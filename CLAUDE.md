@@ -4436,6 +4436,20 @@ bun run deploy:direct
     | `add-car-photo.sh` DEST | `tools/cars` | `public/cars` |
     | `gen-encoding-{grids,samples}.sh` DEST | `tools/garage/enc` | `public/garage/enc` |
     | `add-photos.sh` histogram `--root` | `<repo>/www` | `<repo>/public` |
+    | `gen-alt-text.py` ROOT | `tools/images`, `tools/i` | `public/images`, `public/i` |
+
+    **A NINTH site, and it was found by RUNNING the pipeline rather than by
+    reading it** (2026-08-24, while putting `pipefail` on the two scripts below).
+    `gen-alt-text.py` is Python, so it was outside the shell sweep that caught
+    the other eight, and its caller is `python3 … || echo "captions incomplete"`,
+    which excuses a traceback by design. Net effect: every photo add since the
+    move captioned nothing, printed a `FileNotFoundError` on a `tools/images`
+    path, and carried on. `check-photo-pipeline.ts` would have failed the run on
+    an uncaptioned stem, so this stayed invisible only because no photo has been
+    added since. The general lesson is the same one this gotcha already teaches
+    from the other direction: the sweep that fixes a rename has to cover every
+    LANGUAGE that resolves a path, and `dirname(dirname(__file__))` is the same
+    arithmetic as `$SCRIPT_DIR/..` wearing different syntax.
 
     **Every one of them was CORRECT when written**, because these scripts lived
     at `www/scripts/`, where `$SCRIPT_DIR/..` was the served tree. They moved to
@@ -4446,12 +4460,20 @@ bun run deploy:direct
     function of where the file sits.
 
     Two things made it silent for five days rather than loud. `zenc histogram`
-    prints `cannot read …/images/hashes.json` and **exits 0**, and both callers
-    pipe it to `tail -1`, so the pipeline's status is `tail`'s and the bake is
-    skipped without failing. And `add-photos.sh` and `reencode-thumbnails.sh`
+    prints `cannot read …/images/hashes.json` and both callers pipe it to
+    `tail -1`, so the pipeline's status is `tail`'s and the bake is skipped
+    without failing. And `add-photos.sh` and `reencode-thumbnails.sh`
     were the two scripts that resolve through `$PROJECT_DIR` (`$SCRIPT_DIR/../..`)
     rather than `$SCRIPT_DIR/..`, so they WERE updated to `public/` by the split,
     which left the pipeline looking half-migrated and plausibly fine.
+
+    **This entry used to say `zenc histogram` ALSO exits 0 there. It returns 2,
+    and has done since the day it was written** (#373, 2026-08-14). Measured 2026-08-24 on that same call: 2 run bare, 0 through
+    `| tail -1`, 2 through that pipe under `pipefail`. So the pipe was the whole
+    mechanism and the repair was entirely in the shell. Worth keeping as a
+    correction rather than a quiet edit, because blaming the tool sends the next
+    reader to patch an exit code that is already correct, which is the more
+    expensive of the two mistakes and the harder one to notice finishing.
 
     The same rename left `build.mjs`'s taste-tripwire exemption
     (`/^www\/(garage|lwe)\//`) matching nothing, so the demo pages it exists to
@@ -4496,10 +4518,32 @@ bun run deploy:direct
     The cheapest habit is to redirect to a file, read `$?`, and pipe the file
     afterwards, which is what settled the wrangler question.
 
-    **The instance this gotcha already names is still unguarded.** Of the 11
-    committed shell scripts, 9 carry `set -euo pipefail` and 2 carry a bare
-    `set -e`, and `add-photos.sh:503` (the `zenc histogram … | tail -1` above)
-    sits in one of the two.
+    **The instance this gotcha already names is GUARDED now**, and the 9-versus-2
+    split is gone: all 11 committed shell scripts carry `set -euo pipefail`, and
+    `tools/contract-committed-shell-scripts-fail-loudly.test.mjs` fails on a
+    twelfth that does not. The `zenc histogram` call is also no longer piped at
+    all, because zenc writes one summary line to stderr on the happy path, so
+    `tail -1` was buying no quiet while costing the status and the per-stem
+    warnings that name WHICH stem was skipped.
+
+    **Adopting `-u` alongside it cost one real fix, and the way it failed is the
+    part to carry forward.** `"${META_MODE[@]}"` on an EMPTY array is an unbound
+    variable under bash 3.2, which is the bash macOS ships and therefore the one
+    `#!/usr/bin/env bash` finds here. It sits on the DEFAULT path, so a blind
+    `-u` would have broken every local photo add. What makes it worth a note is
+    that it does not fail loudly: measured in the real script on 2026-08-24, with
+    `-u` on and `pipefail` on, the expansion died inside a `| tail -1` pipeline
+    and the pipeline still reported **0**, so `set -e` never fired and the script
+    ran on with the metadata regeneration silently skipped. A synthetic
+    reproduction needs a background job earlier in the script to show it; a
+    normal non-zero child exit propagates through the same pipe correctly, which
+    is why the rest of this fix has teeth.
+
+    So `-u` is not a free consistency win on a script that pipes: it can
+    introduce the very silence this gotcha is about. The expansion to reach for
+    is `${META_MODE+"${META_MODE[@]}"}`, which produces no word at all when the
+    array is empty. **`${META_MODE[@]:-}` is NOT the fix**, since it expands to
+    one empty-string argument, which the callee then reads as a path.
 
 41. **cf-garage runs wrangler's EXPERIMENTAL TypeScript config, and it is the
     trial rather than the standard.** Converted 2026-08-23:
