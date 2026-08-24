@@ -66,7 +66,7 @@
     "@oxlint/plugins": "1.79.0",
     "@types/bun": "1.4.0",
     "lightningcss": "1.33.0",
-    "oxc-minify": "0.145.0",
+    "oxc-minify": "0.146.0",
     "oxlint": "1.79.0",
     "oxlint-tsgolint": "7.0.2001",
     "playwright-core": "^1.62.1",
