@@ -1225,6 +1225,48 @@ Adding a page needs no work here: register it in `site-manifest.json` as usual
 and the twin appears. `build.mjs` fails the deploy if fewer than 30 generate,
 since losing them would otherwise be silent (pages keep serving HTML).
 
+### The search corpus (`tools/generate-search-index.ts`)
+
+`/search-index.json` is the corpus `/search` ranks and `/ask` publishes as
+schema.org objects. It is generated from three source roots (`src/pages` for
+documents, `src/content` for prose, `public/llms.txt`) plus the surfaces
+`site-manifest.json` flags `searchIndex`, which is the only way in for a
+worker-rendered page the walk cannot see.
+
+**It is BUILD OUTPUT, never committed, since 2026-08-24.** `build.ts` step 1i
+writes it into `.build/public/`, on the twins' argument above: a pure function of
+committed source bytes should be built, because then no second copy can fall
+behind. It became build output only after being committed long enough to freeze
+TWICE, and the pair is the argument:
+
+| | cause | what shipped |
+|---|---|---|
+| 2026-08-18 | the `src/pages` split deleted the `www` the walk read, so the script exited ENOENT | the index froze at its last good run |
+| 2026-08-24 | the roots were correct and nobody ran the script | #542's three new pages were missing for the 3 days they existed |
+
+Two unrelated causes, one shape: a checked-in derivative with nothing diffing it
+against the source. Both were silent, and could only be silent, because
+`getSearchIndex` in `search.ts` falls back to `{ records: [] }`. A stale corpus
+is a working `/search` missing three results, and `/ask` answers with a page an
+agent simply cannot find. Neither raises anything. Generating it retires the
+shape rather than the cause, which is why this was not a third fix to the walk.
+
+Three floors, because every failure here is an absence. The build throws below 50
+records, and again if the registry contributes none; the ENOENT that caused the
+first freeze now fails the build outright rather than declining to write. The
+registry floor is currently UNREACHABLE (46 walked records, so emptying the
+registry trips the count floor first) and is kept because the walk is 4 pages off
+that number and grows every time somebody adds a page.
+
+**`/search` is a build-only surface under `bun run dev`, and it degrades
+SILENTLY.** The farm derives nothing (`dev-stage.ts` says so), so there is no
+index and the page renders perfectly while finding nothing, the same standing as
+the generated `/lens` shell and `/images/meta/*`, except that those 404 and this
+one looks like it works. `bun run search:index .dev-assets` fills it in for a
+session. It refuses to write into `public/` or `src/`, which is not paranoia: the
+farm still holds a symlink to the committed file from before it was removed, and
+writing through that dangling link recreates the artifact in the source tree.
+
 ### AadharshBot — the branded crawler
 
 Lives in `_worker.js` (search for `BOT_NAME`). Signs all outbound requests

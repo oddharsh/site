@@ -1302,6 +1302,48 @@ let dressPage: (html: string, rel: string) => { html: string; addedLink: boolean
 }
 
 
+// 1i) /search-index.json, the corpus /search ranks and /ask publishes.
+//
+// Build output on the twins' argument, and it earned the move the hard way: the
+// index was a COMMITTED file and froze twice, on 2026-08-18 (the roots walked a
+// `www` the src/pages split had deleted, so the script exited ENOENT) and again
+// on 2026-08-24 (the roots were right and nobody ran the script). Two different
+// causes, one shape — a checked-in derivative with nothing diffing it against
+// the source it derives from. Generating it here retires the shape rather than
+// the cause, which is why this is not a third fix to the generator.
+//
+// The walk reads SOURCE, never the staged tree, so this may sit anywhere in
+// step 1. That is deliberate and is NOT the ordering bug 1g records: a page
+// rendered at 1e/1f has no prose file to index, and the surface registry's
+// `searchIndex` flag is the declared way in for exactly those (all 11 of them
+// today), which is what MANUAL injects. A generated page is missing from search
+// because nobody set its flag, never because this step ran too early.
+{
+  const { buildSearchIndex } = await import("./generate-search-index.ts");
+  const index = await buildSearchIndex(".");
+  // Both floors guard a SILENT failure, which is the only kind this artifact
+  // has. getSearchIndex() in search.ts falls back to `{ records: [] }` on a
+  // missing or unreadable file, so a collapsed index renders /search perfectly
+  // and finds nothing, and /ask answers with an empty result set rather than an
+  // error. Neither reaches a log. A number that must not fall is the only
+  // tripwire available.
+  if (index.records.length < 50) {
+    throw new Error(`search index: only ${index.records.length} records (expected 50+) — did a ROOTS directory move, or site-manifest.json change shape?`);
+  }
+  // The registry is a SECOND input and gets its own floor, because a corpus can
+  // be the right size and still have lost every worker-rendered surface. Note
+  // what the controls actually showed: emptying the registry today trips the
+  // count floor first (46 walked records, so 46 < 50), which makes this line
+  // unreachable at the moment. Keep it anyway — the walk is 4 pages off that
+  // floor and grows every time somebody adds a page, and on the day it passes
+  // 50 this is the only thing left watching the registry half.
+  const manual = index.records.filter((r) => r.kind === "utility").length;
+  if (!manual) throw new Error("search index: no manifest-injected records — is site-manifest.json readable and are any surfaces still flagged searchIndex?");
+  await writeFile(`${OUT}/public/search-index.json`, JSON.stringify(index, null, 2) + "\n");
+  console.log(`search index: ${index.records.length} records staged (${manual} from the surface registry)`);
+}
+
+
 // 2) homepage HTML: deploy the readable original as /index.src.html and
 // minify only the served copy. The worker rewrites this response as a stream,
 // so doing this before ASSETS.fetch keeps the rewriter path allocation-free.

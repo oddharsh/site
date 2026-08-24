@@ -33,7 +33,6 @@
     "tools/gen-manifest.ts": 1,
     "tools/gen-md-twins.ts": 12,
     "tools/gen-remote-config.ts": 2,
-    "tools/generate-search-index.ts": 6,
     "tools/inp-lab.ts": 26,
     "tools/lens-inject-probe.ts": 15,
     "tools/lens-seed.ts": 8,
@@ -57,5 +56,5 @@
     "tools/ua-survey.ts": 17,
     "tools/verify-routes.ts": 27
   },
-  "total": 591
+  "total": 585
 }
