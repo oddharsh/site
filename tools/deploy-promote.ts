@@ -199,7 +199,7 @@ async function productionAlias() {
 // Memoized, because two things read it now: the alias filter below, and the
 // freshness check, which needs `created_on` for whatever target was resolved —
 // including one passed as `--version`, where newestVersion() never runs.
-let versionListCache = null;
+let versionListCache: any[] | null = null;
 async function versionList() {
   if (!versionListCache) {
     const list = await wrangler(["versions", "list", "--json"], { json: true });
@@ -289,8 +289,8 @@ async function workerName() {
 async function sample(target, previous) {
   const seen = new Map();
   let errors = 0, stalls = 0;
-  const errorVersions = [];
-  const stallReasons = [];
+  const errorVersions: string[] = [];
+  const stallReasons: string[] = [];
 
   for (let i = 0; i < SAMPLES; i++) {
     try {
@@ -368,7 +368,7 @@ async function sample(target, previous) {
 async function probePinned(versionId, worker) {
   const override = `${worker}="${versionId}"`;
   let onTarget = 0, offTarget = 0, errors = 0, stalls = 0;
-  const errorDetail = [], stallReasons = [], strayVersions = new Set();
+  const errorDetail: string[] = [], stallReasons: string[] = [], strayVersions = new Set();
 
   for (let i = 0; i < PINNED_PROBES; i++) {
     try {
@@ -501,7 +501,16 @@ async function reportTargetFreshness(targetId) {
 
 // ------------------------------------------------------------------ run ----
 
-function die(message) {
+// `: never` is load-bearing rather than documentation. Every caller uses this as
+// control flow ("bail unless X"), and without the annotation TypeScript keeps the
+// impossible branch alive and reports the value the caller just refused as still
+// nullable. Declaring it never is what makes those guards narrow, which is how a
+// guard is meant to read.
+//
+// An ANNOTATION rather than the `@returns {never}` this carried until #532
+// renamed the file: a .ts file ignores JSDoc types, so that form went inert the
+// moment the extension changed and every diagnostic it had cleared came back.
+function die(message: string): never {
   console.error(`deploy:promote: ${message}`);
   process.exit(1);
 }
@@ -543,9 +552,14 @@ const target = flag("version") || await newestVersion();
 // for the measurement that made an arbitrary pick a real hazard.
 const previous = remainderHolder(active, target);
 
-const steps = flag("to")
-  ? [Number(flag("to"))]
-  : (flag("steps") ? flag("steps").split(",").map(Number) : DEFAULT_STEPS);
+// Read once each. `flag("steps") ? flag("steps").split(…)` calls the function
+// twice, so the guard narrows nothing and the second call is still nullable —
+// which is also a (harmless) second scan of argv on the release path.
+const toFlag = flag("to");
+const stepsFlag = flag("steps");
+const steps = toFlag
+  ? [Number(toFlag)]
+  : (stepsFlag ? stepsFlag.split(",").map(Number) : DEFAULT_STEPS);
 if (steps.some((s) => !Number.isFinite(s) || s <= 0 || s > 100)) die(`bad steps: ${steps.join(",")}`);
 
 console.log(`target version:   ${target.slice(0, 8)}`);
@@ -648,7 +662,9 @@ for (const pct of steps) {
     console.log(`         the pinned check proved nothing this step; the sampled one below is carrying it.`);
   }
 
-  let s = null;
+  // Null until the first attempt runs, and read after the loop, so the type has
+  // to admit both. Inside the loop the assignment narrows it for free.
+  let s: Awaited<ReturnType<typeof sample>> | null = null;
   for (let attempt = 1; attempt <= SAMPLE_ATTEMPTS; attempt++) {
     if (attempt > 1) await sleep(RESAMPLE_MS);
     s = await sample(target, previous);
@@ -665,6 +681,13 @@ for (const pct of steps) {
       console.log(`   nothing on target yet — waiting ${RESAMPLE_MS / 1000}s for the split to propagate and re-sampling.`);
     }
   }
+
+  // The loop runs at least once for any sane SAMPLE_ATTEMPTS, so this is a
+  // guard on the CONSTANT rather than on the network. It is worth having anyway:
+  // every check below reads `s`, and a zero there would otherwise ramp to the
+  // next step having verified nothing, which is the one outcome this script
+  // exists to prevent.
+  if (!s) die(`SAMPLE_ATTEMPTS is ${SAMPLE_ATTEMPTS}, so the ${pct}% step was never sampled`);
 
   if (s.errors) {
     console.error(`   FAILED: ${s.errors} non-200 response(s): ${[...new Set(s.errorVersions)].join(", ")}`);
@@ -726,7 +749,9 @@ console.log(`\ndone. ${target.slice(0, 8)} is at ${steps[steps.length - 1]}%.`);
 // 10% leaves the entry staged, which is exactly what it is.
 if (steps[steps.length - 1] === 100) {
   const file = new URL("../src/worker/checkpoints.json", import.meta.url);
-  let staged = [];
+  // The changelog rows this release adds: whatever checkpoints.json carries
+  // beyond what D1 already holds.
+  let staged: { vnum: number, ymd: string, version: string, slug: string, title: string }[] = [];
   try {
     const committed = JSON.parse(await readFile(file, "utf8"));
     // `wrangler(..., { json: true })` already returns parsed JSON. Wrapping it in
