@@ -37,7 +37,7 @@ import { readManifest, workerModule, navFenceBody, readFenceBody, runProfilesBod
 import { parseCss } from "./lib/css-parse.ts";
 import { HTML_MARKERS } from "./lib/html-markers.ts";
 import { zstdCompressDictionaryBatch } from "./lib/zstd-batch.ts";
-import { patchStaticShell, renderDesktopArtifacts, staticShellPages } from "../tools/photos/gen-desktop-partial.mjs";
+import { patchStaticShell, renderDesktopArtifacts, staticShellPages } from "../tools/photos/gen-desktop-partial.ts";
 
 const OUT = ".build";
 const brotliCompressAsync = promisify(brotliCompress);
@@ -245,21 +245,21 @@ async function checkInvariants() {
   }
 
   // 4 (hard) — the checked-in desktop shell is the exact projection of
-  // shell-data.mjs + site-manifest.json. The old count proxy let a whole page
+  // shell-data.ts + site-manifest.json. The old count proxy let a whole page
   // keep an older taskbar as long as the central partial had the right number
   // of pins; /access did exactly that and silently missed /terminal. Render the
   // canonical artifacts in memory and compare every consumer byte-for-byte.
   try {
     const artifacts = renderDesktopArtifacts();
     if (await read("src/worker/lib/desktop.ts") !== artifacts.moduleSource) {
-      hard.push("lib/desktop.js drifted from shell-data.mjs/site-manifest.json — run bun run gen:shell");
+      hard.push("lib/desktop.js drifted from shell-data.ts/site-manifest.json — run bun run gen:shell");
     }
     if (await read("public/icons.svg") !== artifacts.sprite) {
-      hard.push("icons.svg drifted from shell-data.mjs — run bun run gen:shell");
+      hard.push("icons.svg drifted from shell-data.ts — run bun run gen:shell");
     }
     for (const [name, svg] of Object.entries(artifacts.favicons)) {
       if (await read(`public/section-icons/${name}.svg`) !== svg) {
-        hard.push(`section-icons/${name}.svg drifted from shell-data.mjs — run bun run gen:shell`);
+        hard.push(`section-icons/${name}.svg drifted from shell-data.ts — run bun run gen:shell`);
       }
     }
     for (const file of staticShellPages()) {
@@ -371,7 +371,7 @@ async function checkInvariants() {
     for (const [section, marker] of [["garage", "garage-pages"], ["lwe", "lwe-pages"]]) {
       if (readFenceBody(nav, marker) !== navFenceBody(surfaces, section)) hard.push(`nav-run.js generated:${marker} drifted from site-manifest.json — run bun run gen:manifest`);
     }
-    if (readFenceBody(nav, "run-profiles") !== runProfilesBody()) hard.push("nav-run.js profiles drifted from shell-data.mjs — run bun run gen:manifest");
+    if (readFenceBody(nav, "run-profiles") !== runProfilesBody()) hard.push("nav-run.js profiles drifted from shell-data.ts — run bun run gen:manifest");
 
     // parse the live surfaces out of each hand-authored consumer.
     const navPagesBlock = (nav.match(/var PAGES = \[([\s\S]*?)\n {2}\];/) || [, ""])[1];
@@ -653,7 +653,7 @@ await mkdir(OUT, { recursive: true });
 // What still catches a page that starts referencing it is LINK-INTEGRITY, which
 // resolves every same-origin href/src against the staged tree and finds no
 // /scripts/ there. Verified rather than assumed, with a link to
-// /scripts/shell-data.mjs injected into a page's prose: link-integrity reported
+// /scripts/shell-data.ts injected into a page's prose: link-integrity reported
 // 1 internal reference pointing at nothing this site serves.
 //
 // The served tree is COMPOSED from four source directories now, and its shape

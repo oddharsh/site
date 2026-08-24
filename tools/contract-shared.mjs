@@ -50,9 +50,9 @@ import { BASELINE_HEADING, FLOOR_CLAIMS, auditDependencyDocs, baselineSection, c
 import { PAGE_FAMILY_MATCH, serveStaticPage } from "../src/worker/lib/assets.ts";
 import { serveMarkdown } from "../src/worker/home.ts";
 import { readManifest, workerModule, navFenceBody, readFenceBody, runProfilesBody } from "./gen-manifest.mjs";
-import { PROFILES } from "../tools/photos/shell-data.mjs";
-import { faviconHref, sectionFavicons, speculationHtml } from "../tools/photos/gen-desktop-partial.mjs";
-import { TASKBAR } from "../tools/photos/shell-data.mjs";
+import { PROFILES } from "../tools/photos/shell-data.ts";
+import { faviconHref, sectionFavicons, speculationHtml } from "../tools/photos/gen-desktop-partial.ts";
+import { TASKBAR } from "../tools/photos/shell-data.ts";
 import { SECTION_FAVICONS } from "../src/worker/lib/desktop.ts";
 import { collectBlockClasses, readDocument } from "./lib/html-to-md.ts";
 import { remainderHolder } from "./lib/ramp-split.ts";

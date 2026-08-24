@@ -6,14 +6,14 @@
 // that already has twitter:card, and re-points og:image if the card path changed.
 // Anchored after the page's existing og:url line (every page has one).
 //
-//     node tools/photos/inject-og-meta.mjs          # write
-//     node tools/photos/inject-og-meta.mjs --check   # report only, non-zero if any page is missing tags
+//     node tools/photos/inject-og-meta.ts          # write
+//     node tools/photos/inject-og-meta.ts --check   # report only, non-zero if any page is missing tags
 
 import { readFile, writeFile, readdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 
-import { OG_PAGE_DIRS } from "./og-pages.mjs";
+import { OG_PAGE_DIRS } from "./og-pages.ts";
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
 const HOLDING = path.join(ROOT, "www");
@@ -45,7 +45,7 @@ let missing = 0, wrote = 0, skipped = 0;
 
 // One page, one card, whatever shape of directory it came from. `alt` overrides
 // the synthesised line for pages whose card is not a demo screenshot.
-async function wire(file, id, alt) {
+async function wire(file, id, alt?) {
   let html = await readFile(file, "utf8");
 
   if (!existsSync(path.join(HOLDING, "og", `${id}.png`))) {

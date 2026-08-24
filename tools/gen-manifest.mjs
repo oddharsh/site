@@ -23,7 +23,7 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
-import { PROFILES } from "../tools/photos/shell-data.mjs";
+import { PROFILES } from "../tools/photos/shell-data.ts";
 
 export const MANIFEST = "config/site-manifest.json";
 const NAV = "src/client/nav-run.js";

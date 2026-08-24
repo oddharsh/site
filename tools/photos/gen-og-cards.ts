@@ -22,7 +22,7 @@
 // and serve immutable. Regenerate when a demo's look changes:
 //
 //     bun run og-cards                                  # captures the LIVE site (aadhar.sh)
-//     OG_BASE=http://localhost:8787 node tools/photos/gen-og-cards.mjs   # local static server instead
+//     OG_BASE=http://localhost:8787 node tools/photos/gen-og-cards.ts   # local static server instead
 //
 // Captures production by default so data-driven demos (the photo grid, the live
 // counters, the routing prober) render populated, not empty — which is exactly
@@ -39,7 +39,7 @@ import { spawn } from "node:child_process";
 import net from "node:net";
 import path from "node:path";
 
-import { OG_PAGE_DIRS } from "./og-pages.mjs";
+import { OG_PAGE_DIRS } from "./og-pages.ts";
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
 const HOLDING = path.join(ROOT, "www");

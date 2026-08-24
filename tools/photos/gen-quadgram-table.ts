@@ -22,7 +22,7 @@
 // diid), src/buttcrack/data/english_quadgrams.txt, itself the standard
 // practicalcryptography.com English quadgram counts.
 //
-// Usage: node tools/photos/gen-quadgram-table.mjs <path-to-english_quadgrams.txt>
+// Usage: node tools/photos/gen-quadgram-table.ts <path-to-english_quadgrams.txt>
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { brotliCompressSync, constants } from "node:zlib";
@@ -44,7 +44,7 @@ const rows = readFileSync(src, "utf8")
     // A TUPLE, not a two-element array. Inference widens the pair to
     // (string | number)[], after which `count > 0`, `b[1] - a[1]` and every
     // later sum stop type-checking for reasons unrelated to the arithmetic.
-    return /** @type {[gram: string, count: number]} */ ([gram.toUpperCase(), Number(count)]);
+    return [gram.toUpperCase(), Number(count)] as [gram: string, count: number];
   })
   .filter(([gram, count]) => /^[A-Z]{4}$/.test(gram) && count > 0)
   .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1));

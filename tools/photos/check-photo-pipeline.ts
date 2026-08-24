@@ -11,8 +11,8 @@ import { createHash } from "node:crypto";
 import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildExifIndex } from "./build-exif-index.mjs";
-import { buildHistogramIndex } from "./build-histogram-index.mjs";
+import { buildExifIndex } from "./build-exif-index.ts";
+import { buildHistogramIndex } from "./build-histogram-index.ts";
 import { asRecord, asText } from "../../src/worker/lib/parse.ts";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -43,7 +43,11 @@ if (JSON.stringify(stems) !== JSON.stringify(metadataStems)) {
 // hashed stem without an index entry is a published photo that silently never
 // appears. Field shape is load-bearing too: home.js reads full/size/uploaded
 // verbatim into href/data-* attributes.
-const photoIndex = await json(path.join(ROOT, "src/worker/photo-index.json"));
+// One entry per photo stem: the R2 key, its byte size, and the upload stamp.
+// Named here because `json()` answers unknown and this file's whole job is
+// asserting the shape of that record.
+const photoIndex: Record<string, { full?: string; size?: number; uploaded?: string }> =
+  await json(path.join(ROOT, "src/worker/photo-index.json"));
 const indexStems = Object.keys(photoIndex).sort();
 if (JSON.stringify(stems) !== JSON.stringify(indexStems)) {
   const missing = stems.filter((s) => !photoIndex[s]);
@@ -175,12 +179,12 @@ const metaPresent = await stat(META).then((s) => s.isDirectory(), () => false);
 const missing = stems.filter((stem) => !exifIndex[stem]);
 if (missing.length) {
   fail(`${missing.length} photo(s) absent from images/exif.json: ${missing.slice(0, 8).join(", ")}` +
-       `${missing.length > 8 ? " …" : ""}\n  fix with: node tools/photos/build-exif-index.mjs`);
+       `${missing.length > 8 ? " …" : ""}\n  fix with: node tools/photos/build-exif-index.ts`);
 }
 const histMissing = stems.filter((stem) => !histIndex[stem]);
 if (histMissing.length) {
   fail(`${histMissing.length} photo(s) absent from images/histograms.json: ${histMissing.slice(0, 8).join(", ")}` +
-       `${histMissing.length > 8 ? " …" : ""}\n  fix with: node tools/photos/build-histogram-index.mjs`);
+       `${histMissing.length > 8 ? " …" : ""}\n  fix with: node tools/photos/build-histogram-index.ts`);
 }
 
 if (metaPresent) {
@@ -188,13 +192,13 @@ if (metaPresent) {
   const stale = stems.filter((stem) => JSON.stringify(exifIndex[stem]) !== JSON.stringify(rebuilt[stem]));
   if (stale.length) {
     fail(`images/exif.json disagrees with images/meta/ for ${stale.length} photo(s): ${stale.slice(0, 8).join(", ")}` +
-         `${stale.length > 8 ? " …" : ""}\n  fix with: node tools/photos/build-exif-index.mjs`);
+         `${stale.length > 8 ? " …" : ""}\n  fix with: node tools/photos/build-exif-index.ts`);
   }
   const rebuiltHist = (await buildHistogramIndex()).index;
   const histStale = stems.filter((stem) => histIndex[stem] !== rebuiltHist[stem]);
   if (histStale.length) {
     fail(`images/histograms.json disagrees with images/meta/ for ${histStale.length} photo(s): ${histStale.slice(0, 8).join(", ")}` +
-         `${histStale.length > 8 ? " …" : ""}\n  fix with: node tools/photos/build-histogram-index.mjs`);
+         `${histStale.length > 8 ? " …" : ""}\n  fix with: node tools/photos/build-histogram-index.ts`);
   }
 } else {
   console.log("photo-pipeline: images/meta/ absent (build output), so the index drift checks are skipped here");

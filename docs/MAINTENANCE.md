@@ -1460,8 +1460,8 @@ A binding that refuses `addScriptTag` surfaces as the existing `upstream_not_ok`
 `images/semantics.json` is what `photo_query` ranks against beyond the caption and
 the EXIF. Two tiers, and every stem records which it got:
 ```bash
-node tools/photos/gen-photo-semantics.mjs            # derived tier only
-node tools/photos/gen-photo-semantics.mjs --vision   # + model-written terms
+node tools/photos/gen-photo-semantics.ts            # derived tier only
+node tools/photos/gen-photo-semantics.ts --vision   # + model-written terms
 ```
 The **derived** tier needs no network and no credential — it is vocabulary repair,
 mapping what the camera writes to what a person types (`Nostalgic Neg` →
@@ -1511,7 +1511,7 @@ By hand:
 
 ```bash
 bun run og-cards                    # captures LIVE aadhar.sh (data-driven demos render populated)
-node tools/photos/inject-og-meta.mjs   # add the meta to any page missing it (idempotent)
+node tools/photos/inject-og-meta.ts   # add the meta to any page missing it (idempotent)
 # then deploy — a deploy purges the edge so the refreshed card lands.
 ```
 

@@ -73,7 +73,9 @@ export const TASKBAR = [
   { label: "coffee", path: "/coffee", hint: "book a coffee / bagel" },
 ];
 
-const ICON_DEFS = {
+// TUPLES: each entry is spread into sectionTile(prefix, colors, art), and a
+// widened (string | string[])[] has no arity for the spread to satisfy.
+const ICON_DEFS: Record<string, [prefix: string, colors: string[], art: string]> = {
   garage: ["garage", ["#ffb45a", "#ef8f24", "#c2660a", "#8f4d06"], '<g fill="#fff"><rect x="14" y="5" width="4" height="22" rx="1.5"/><rect x="5" y="14" width="22" height="4" rx="1.5"/><rect x="14" y="5" width="4" height="22" rx="1.5" transform="rotate(45 16 16)"/><rect x="14" y="5" width="4" height="22" rx="1.5" transform="rotate(-45 16 16)"/><circle cx="16" cy="16" r="6.5"/></g><circle cx="16" cy="16" r="2.8" fill="#ef8f24"/>'],
   writing: ["writing", ["#6fa0ee", "#2f6bd6", "#1a4ba8", "#143c86"], '<g fill="#fff"><rect x="8" y="8" width="16" height="2.6" rx="1.3"/><rect x="8" y="14.7" width="16" height="2.6" rx="1.3"/><rect x="8" y="21.4" width="10" height="2.6" rx="1.3"/></g>'],
   reading: ["reading", ["#de8186", "#c1545a", "#93333a", "#732830"], '<g fill="#fff"><path d="M16 9 C13 7.2 9 7 6 7.6 V24 C9 23.4 13 23.6 16 25 Z"/><path d="M16 9 C19 7.2 23 7 26 7.6 V24 C23 23.4 19 23.6 16 25 Z" opacity=".82"/></g><path d="M16 9 V25" stroke="#c1545a" stroke-width="1.4"/>'],
