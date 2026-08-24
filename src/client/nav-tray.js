@@ -6,7 +6,7 @@ export function createTray(options) {
   var sound = options.sound;
   var loadSys = options.loadSys;
   var loadUpd = options.loadUpd;
-  var balloon = null, balloonKind = null;
+  var balloon = /** @type {HTMLElement | null} */ (null), balloonKind = /** @type {string | null} */ (null);
 
   /** @returns {HTMLElement} */
   function el(html) {
