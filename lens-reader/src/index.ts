@@ -13,16 +13,18 @@
 // So the response NEVER claims to be what the machine got. It reports the
 // extractor by name and version, what it kept, and what it threw away.
 //
-// WHY ITS OWN WORKER, and this is the load-bearing part. Readability needs a DOM
-// `Document`; Workers have HTMLRewriter. Supplying one used to cost linkedom at
-// 94.6 KB gzip, against a site Worker budget of 204.24 KiB that was already in
-// breach, so this cannot live there. A second Worker on a zone route costs it
-// nothing.
+// WHY ITS OWN WORKER, and the argument is WEAKER than it was, so read the
+// numbers rather than the habit. Readability needs a DOM `Document`; Workers
+// have HTMLRewriter. Supplying one cost linkedom at 94.6 KB gzip, then 65.27
+// after the 2026-08-20 parser alignment, against a site Worker budget of
+// 204.24 KiB already in breach. That made the split obvious.
 //
-// Worth seeing plainly after the 2026-08-14 extractor swap: even after aligning
-// linkedom's parser stack removed 32.74 KiB gzip on 2026-08-20, the DOM remains
-// most of this 80.56 KiB Worker rather than the extraction policy. A DOM-free
-// extractor would collapse the split entirely.
+// src/dom.ts replaced linkedom on 2026-08-23 with a first-party DOM over the
+// same htmlparser2, and this Worker went 80.57 -> 46.13 KiB gzip. The DOM is no
+// longer most of it: the parser is ~26.6 and the extractor ~11.6, so the split
+// now rests on adding ~46 KiB to a budget that is still in breach rather than
+// on ~95. That is a real reason and a much smaller one. If the site Worker ever
+// comes back under budget, re-open this rather than assuming it is settled.
 //
 // The SECOND reason this comment used to give has EXPIRED. `run_worker_first`
 // capped at 100 rules with the repo at exactly 100 (CLAUDE.md gotcha 26), but
@@ -30,7 +32,7 @@
 // size argument is carrying this alone now; do not cite the cap again.
 //
 // This module is the ENTRYPOINT and nothing else. Everything testable lives in
-// reader.js, because a Worker entrypoint may export only the default handler
+// reader.ts, because a Worker entrypoint may export only the default handler
 // and Durable Object / Workflow classes — workerd rejects a named value export
 // with "Incorrect type for map entry '<name>': the provided value is not of
 // type 'function or ExportedHandler'", which is how that rule was learned here.
