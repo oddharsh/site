@@ -1,13 +1,18 @@
 // The bun this repository runs is declared ONCE, in package.json's
 // `packageManager`, and this module exists to keep it that way.
 //
-// Three consumers read that one string and none of them may carry a copy:
-// `.github/actions/setup-bun` reads the field in shell, `check-bun.ts` probes a
-// candidate runtime with it, and `bump-bun-pin.ts` proposes moving it. The
-// capability probe below is shared for the same reason `MCP_SUPPORTED` is
+// Two consumers read that one string and neither may carry a copy:
+// `.github/actions/setup-bun` reads the field in shell, and `bump-bun-pin.ts`
+// proposes moving it. There were three until 2026-08-24, when `check-bun.ts`
+// was retired: node cannot build this repo any more, so its node-versus-bun
+// comparison had no second side.
+//
+// The capability probe below is shared for the same reason `MCP_SUPPORTED` is
 // shared between the two MCP servers: two copies of a probe agree on the day
-// they are written and rot separately after. A contract test fails if either
-// caller re-declares it.
+// they are written and rot separately after. A contract test fails if a caller
+// re-declares it, and that assertion is worth keeping at one consumer, because
+// the next runtime control to want this probe is exactly when a second copy
+// gets pasted.
 //
 // WHY THE PIN MATTERS MORE THAN IT LOOKS. wrangler.jsonc's build command is
 // `bun tools/build.ts`, so the bun this field names is the compiler that mints

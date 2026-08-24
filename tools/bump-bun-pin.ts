@@ -91,8 +91,9 @@ const note = (text: string) => console.log(`       ${text}`);
 // ---------------------------------------------------------------------------
 // The running runtime IS the baseline, so it has to BE the pin. A stale bun on
 // PATH would compare the candidate against a third runtime and report a
-// byte-identical build that says nothing about production, which is the same
-// trap check-bun.ts guards when it refuses to be invoked through bun.
+// byte-identical build that says nothing about production. This is the mirror
+// image of the guard the retired check-bun.ts carried, which refused to be
+// invoked through bun because that compared bun with bun.
 const pin = readPin(ROOT);
 const pretend = flag("--from");
 const baselineVersion = process.versions.bun;
@@ -348,8 +349,10 @@ function hashTree(dir: string) {
 }
 
 // THROWS rather than exits, because `process.exit()` skips `finally` and the
-// finally is what puts `.build/` back. check-bun.ts learned this the hard way,
-// leaving a half-written build beside an orphan baseline.
+// finally is what puts `.build/` back. Inherited from the retired check-bun.ts,
+// which learned it the hard way: the first run against a bun old enough to fail
+// the build left the tree holding a half-written `.build/` beside an orphan
+// baseline.
 const build = (label: string, exe: string) => {
   const started = process.hrtime.bigint();
   const out = run(exe, ["tools/build.ts"], { stdio: ["ignore", "pipe", "pipe"] });

@@ -51,11 +51,14 @@ test("the zstd capability probe is declared once", async () => {
   const lib = await readFile(new URL("tools/lib/bun-pin.ts", ROOT), "utf8");
   assert.match(lib, /zstdCompressSync/, "lib/bun-pin.ts is supposed to be the one that holds the probe");
 
-  for (const file of ["tools/check-bun.ts", "tools/bump-bun-pin.ts"]) {
+  // ONE consumer today, and the list stays a list. check-bun.ts was the second
+  // until it was retired on 2026-08-24, and the next runtime control to want
+  // this probe should join this array rather than paste the three compressions.
+  for (const file of ["tools/bump-bun-pin.ts"]) {
     const body = await readFile(new URL(file, ROOT), "utf8");
-    // CODE, not mention. Both files EXPLAIN the probe in prose, and the first
-    // draft of this assertion read `zstdCompressSync({ dictionary })` inside
-    // check-bun.ts's own header comment and failed on it. Same shape as the
+    // CODE, not mention. These files EXPLAIN the probe in prose, and the first
+    // draft of this assertion read `zstdCompressSync({ dictionary })` out of a
+    // header comment and failed on it. Same shape as the
     // workflow test stripping `echo` lines, and as every other naive scanner
     // this repo has had to sharpen: searching source text for a token finds the
     // paragraph describing it too.
@@ -120,8 +123,9 @@ test("only a stable release can ever be proposed", async () => {
 
   // The baseline guard. Without it a stale bun on PATH compares the candidate
   // against a third runtime and reports a byte-identical build that says nothing
-  // about what production ships, which is the trap check-bun.ts refuses by
-  // declining to be invoked through bun at all.
+  // about what production ships. check-bun.ts refused the mirror image of this
+  // (being invoked through bun, which would have compared bun with bun) and the
+  // assertion moved here when it was retired.
   assert.match(body, /baselineVersion !== pin\.version/, "the bumper must refuse a baseline that is not the pin");
 });
 
