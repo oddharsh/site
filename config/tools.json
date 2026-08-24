@@ -20,7 +20,30 @@
     "`path` is for a binary a script resolves by absolute location rather than",
     "PATH. jpegtran is the only one: mozjpeg is keg-only, so `command -v jpegtran`",
     "can find libjpeg-turbo's copy while the scripts use mozjpeg's, and probing",
-    "PATH would report a pass on the wrong binary."
+    "PATH would report a pass on the wrong binary.",
+    "",
+    "`version` is how to ASK a binary what it is, per tool, because there is no",
+    "convention: exif-sooc answers `exif-sooc 0.2.0`, jq answers `jq-1.7.1-apple`,",
+    "sips answers `sips-316`, avifenc answers `Version: 1.4.2 (...)`, cwebp answers",
+    "a bare `1.6.0`, and mozjpeg's two answer `mozjpeg version 4.1.5 (build ...)` on",
+    "stderr. Two of them answer nothing at all, so they say so rather than being",
+    "quietly skipped.",
+    "",
+    "`bytes` marks a tool whose version decides SHIPPED BYTES, and `recorded` is the",
+    "version that made the ones committed today. That pairing is the point of this",
+    "block: /i/ is content-addressed, so re-encoding under a different encoder mints",
+    "new URLs, orphans every a-dict snapshot naming the old hash, and (gotcha 41) can",
+    "leave derived data like the histograms describing pixels nobody serves. So the",
+    "question worth asking here is whether the avifenc on this machine is the one",
+    "that baked the library. Whether a newer one exists is brew's job, and brew",
+    "already answers it.",
+    "",
+    "`recorded` is a BASELINE OBSERVED ON 2026-08-24, not a reconstruction. Nothing",
+    "recorded which encoder made the 632 files in public/i, and #394 re-encoded 316",
+    "of them on 2026-08-14, so claiming these versions produced them would be",
+    "inventing provenance. What is true is that they are the versions the next run",
+    "will use, and that a future re-encode updates them. It becomes a real record",
+    "going forward rather than being one already."
   ],
   "tools": [
     {
@@ -36,7 +59,13 @@
         "tools/photos/gen-encoding-samples.sh",
         "tools/photos/reencode-thumbnails.sh"
       ],
-      "min_version": "0.2.0"
+      "min_version": "0.2.0",
+      "version": {
+        "flag": "--version",
+        "match": "exif-sooc (\\d+\\.\\d+\\.\\d+)"
+      },
+      "bytes": true,
+      "recorded": "0.2.0"
     },
     {
       "bin": "jq",
@@ -45,7 +74,13 @@
       "required_by": [
         "tools/photos/extract-photo-metadata.sh",
         "tools/photos/download-remote-photos.sh"
-      ]
+      ],
+      "version": {
+        "flag": "--version",
+        "match": "jq-(\\d+\\.\\d+(?:\\.\\d+)?)"
+      },
+      "bytes": false,
+      "bytes_why": "assembles JSON, so its output is the same text at any version"
     },
     {
       "bin": "sips",
@@ -57,7 +92,13 @@
         "tools/photos/gen-encoding-grids.sh",
         "tools/photos/gen-encoding-samples.sh",
         "tools/photos/reencode-thumbnails.sh"
-      ]
+      ],
+      "version": {
+        "flag": "--version",
+        "match": "sips-(\\d+)"
+      },
+      "bytes": true,
+      "recorded": "316"
     },
     {
       "bin": "curl",
@@ -65,7 +106,13 @@
       "why": "pulls the R2 originals back down",
       "required_by": [
         "tools/photos/download-remote-photos.sh"
-      ]
+      ],
+      "version": {
+        "flag": "--version",
+        "match": "curl (\\d+\\.\\d+\\.\\d+)"
+      },
+      "bytes": false,
+      "bytes_why": "moves bytes it did not make"
     },
     {
       "bin": "cargo",
@@ -78,7 +125,13 @@
         "tools/photos/gen-encoding-grids.sh",
         "tools/photos/gen-encoding-samples.sh",
         "tools/photos/reencode-thumbnails.sh"
-      ]
+      ],
+      "version": {
+        "flag": "--version",
+        "match": "cargo (\\d+\\.\\d+\\.\\d+)"
+      },
+      "bytes": false,
+      "bytes_why": "builds zenc, and zenjpeg's encode is deterministic for a given pin, which dependabot owns in tools/photos/zenc/Cargo.toml. A compiler bump does not move a JPEG"
     },
     {
       "bin": "jpegtran",
@@ -88,7 +141,13 @@
       "required_by": [
         "tools/photos/add-photos.sh",
         "tools/photos/reencode-thumbnails.sh"
-      ]
+      ],
+      "version": {
+        "flag": "-version",
+        "match": "version (\\d+\\.\\d+\\.\\d+)"
+      },
+      "bytes": true,
+      "recorded": "4.1.5"
     },
     {
       "bin": "cjpeg",
@@ -97,7 +156,13 @@
       "why": "the chroma-subsampling row of the /garage/encoding grids",
       "required_by": [
         "tools/photos/gen-encoding-grids.sh"
-      ]
+      ],
+      "version": {
+        "flag": "-version",
+        "match": "version (\\d+\\.\\d+\\.\\d+)"
+      },
+      "bytes": true,
+      "recorded": "4.1.5"
     },
     {
       "bin": "avifenc",
@@ -107,7 +172,13 @@
       "required_by": [
         "tools/photos/gen-encoding-grids.sh",
         "tools/photos/gen-encoding-samples.sh"
-      ]
+      ],
+      "version": {
+        "flag": "--version",
+        "match": "Version: (\\d+\\.\\d+\\.\\d+)"
+      },
+      "bytes": true,
+      "recorded": "1.4.2"
     },
     {
       "bin": "cwebp",
@@ -116,7 +187,13 @@
       "required_by": [
         "tools/photos/gen-encoding-grids.sh",
         "tools/photos/gen-encoding-samples.sh"
-      ]
+      ],
+      "version": {
+        "flag": "-version",
+        "match": "^(\\d+\\.\\d+\\.\\d+)"
+      },
+      "bytes": true,
+      "recorded": "1.6.0"
     },
     {
       "bin": "ffmpeg",
@@ -124,7 +201,13 @@
       "why": "PNG to PPM, because cjpeg will not read PNG and sips BMP confuses it",
       "required_by": [
         "tools/photos/gen-encoding-grids.sh"
-      ]
+      ],
+      "version": {
+        "flag": "-version",
+        "match": "ffmpeg version (\\d+\\.\\d+\\.\\d+)"
+      },
+      "bytes": true,
+      "recorded": "8.0.1"
     },
     {
       "bin": "ssimulacra2",
@@ -132,7 +215,12 @@
       "why": "the perceptual metric the Instagram export searches quality against",
       "required_by": [
         "tools/photos/export-for-instagram.sh"
-      ]
+      ],
+      "version": {
+        "reports": false,
+        "why": "a libjxl tool: it takes no version flag and prints usage instead. It is a METRIC rather than an encoder, so it never touches a shipped byte, and the build that produced it is the only record there is"
+      },
+      "bytes": false
     },
     {
       "bin": "butteraugli_main",
@@ -140,7 +228,12 @@
       "why": "the second metric bounding that same search",
       "required_by": [
         "tools/photos/export-for-instagram.sh"
-      ]
+      ],
+      "version": {
+        "reports": false,
+        "why": "the same libjxl build, the same absence, and the same reason it does not matter: it bounds a quality search rather than encoding anything"
+      },
+      "bytes": false
     },
     {
       "bin": "python3",
@@ -148,7 +241,13 @@
       "why": "alt text in add-photos.sh, plus gen-pixel-peeper.py; only the last of those wants Pillow, from tools/photos/requirements.txt. build-recipes.py was the third consumer and was deleted on 2026-08-14 when exif-sooc took over the recipe card",
       "required_by": [
         "tools/photos/add-photos.sh"
-      ]
+      ],
+      "version": {
+        "flag": "--version",
+        "match": "Python (\\d+\\.\\d+\\.\\d+)"
+      },
+      "bytes": false,
+      "bytes_why": "captions and one study-page generator. What would move those is Pillow, which tools/photos/requirements.txt pins and dependabot owns"
     }
   ]
 }

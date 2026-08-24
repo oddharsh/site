@@ -160,6 +160,47 @@ So `engines.node: ">=24.0.0"` and build.ts's "Node 24+ is required" were both
 right. The surrounding comments had only ever measured 22 as broken and 26 as
 working, which left 24 as the one number in that sentence nobody had checked.
 
+### the system binaries, in `config/tools.json`
+
+A third shape again, and the reason is worth stating because it inverts the two
+above. bun and node are versions you want CURRENT. The encoders here are versions
+you want RECORDED.
+
+Seven of the thirteen declared binaries produce bytes that ship: `exif-sooc`,
+`sips`, `jpegtran`, `cjpeg`, `avifenc`, `cwebp`, `ffmpeg`. `public/i` is
+content-addressed, so re-encoding under a different encoder mints 632 new URLs,
+orphans every `src/dict/a-dict` snapshot naming the old hash, and can leave
+derived data describing pixels nobody serves. That last one is not hypothetical:
+gotcha 41 is the record of exactly it, where #394 re-encoded 316 thumbnails and
+the histograms went on describing the old pixels for nine days.
+
+So `tools:check` gained a VERSION tier that reads each binary's version and
+compares it against a `recorded` field, and drift is a NOTICE rather than a
+failure. Taking a newer encoder is a deliberate job (re-encode, re-hash,
+`bun run dict:roll`) rather than a side effect, and `brew outdated` already
+answers whether one exists. What nothing answered before is whether the binary on
+this machine is the one the committed bytes came from.
+
+**`recorded` is a baseline observed on 2026-08-24, not a reconstruction.** Nothing
+recorded which encoder made the current artifacts, so claiming these versions
+produced them would be inventing provenance. What is true is that they are the
+versions the next run will use, and a future re-encode updates them.
+
+Reading a version has no convention, so each tool declares its own flag and
+pattern: `exif-sooc 0.2.0`, `jq-1.7.1-apple`, `sips-316`, `Version: 1.4.2 (...)`,
+a bare `1.6.0`, and mozjpeg's two answering `mozjpeg version 4.1.5` on stderr.
+`ssimulacra2` and `butteraugli_main` report nothing at all and say so with a
+reason; both are metrics rather than encoders, so no shipped byte depends on
+them. A declared pattern that stops matching FAILS, because a version tier that
+silently reads nothing is the rot the floors exist to catch.
+
+**One number lived in six places and the canonical one was unread.**
+`EXIF_SOOC_MIN=0.2.0` is written out in five shell scripts, and
+`config/tools.json` carried `min_version` that nothing consulted, which is the
+failure that file's own header says it was created to fix, one field further in.
+The declaration tier now asserts both directions: a guard must match the
+declaration, and a declared minimum nothing enforces is an error.
+
 ## Current baseline
 
 - Wrangler 4.125.0 is the exact root pin shared by all Worker projects.
