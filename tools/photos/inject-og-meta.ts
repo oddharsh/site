@@ -16,7 +16,11 @@ import path from "node:path";
 import { OG_PAGE_DIRS } from "./og-pages.ts";
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
-const HOLDING = path.join(ROOT, "www");
+// Same split as gen-og-cards.ts: www/ is gone, and the cards and the documents
+// live in different trees now. See that file's header for what the stale
+// constant cost.
+const PUBLIC = path.join(ROOT, "public");    // the baked cards
+const PAGES = path.join(ROOT, "src/pages");  // the documents whose <head> gets the meta
 const SITE = "https://aadhar.sh";
 const CHECK = process.argv.includes("--check");
 // diagnostic/test harnesses that get no card (must match gen-og-cards.mjs)
@@ -48,7 +52,7 @@ let missing = 0, wrote = 0, skipped = 0;
 async function wire(file, id, alt?) {
   let html = await readFile(file, "utf8");
 
-  if (!existsSync(path.join(HOLDING, "og", `${id}.png`))) {
+  if (!existsSync(path.join(PUBLIC, "og", `${id}.png`))) {
     console.log(`  ! ${id}: no card PNG yet — run og-cards first`);
     missing++;
     return;
@@ -68,7 +72,7 @@ async function wire(file, id, alt?) {
 
 // sections: many pages per directory
 for (const section of ["garage", "lwe"]) {
-  const dir = path.join(HOLDING, section);
+  const dir = path.join(PAGES, section);
   for (const f of (await readdir(dir)).sort()) {
     if (!f.endsWith(".html") || f === "index.html") continue;
     const id = `${section}-${f.slice(0, -5)}`;
@@ -79,7 +83,7 @@ for (const section of ["garage", "lwe"]) {
 
 // page directories: one index.html at a top-level route (see og-pages.mjs)
 for (const p of OG_PAGE_DIRS) {
-  await wire(path.join(HOLDING, p.dir, "index.html"), p.id, p.alt);
+  await wire(path.join(PAGES, p.dir, "index.html"), p.id, p.alt);
 }
 console.log(`\n${wrote} pages wired, ${skipped} already had tags, ${missing} pending.`);
 if (CHECK && missing) process.exit(1);
