@@ -163,8 +163,30 @@ export function decodeEntities(s) {
 // early. That single case is why the naive /<[^>]*>/ used by the search index
 // is fine for flattening text and wrong for building a tree.
 
+type Attrs = Record<string, string>;
+
+// What the tokenizer emits. Written down rather than inferred because the
+// accumulator below is an empty literal, which infers `never[]` once
+// strictNullChecks turns off evolving-array inference.
+//
+// `raw` and `owner` are one fact rather than two optional ones: a raw-text run
+// always knows which element produced it, and that pairing is what lets the tree
+// builder drop a <script> body by owner without proving the field is there.
+type Token =
+  | { t: "text", v: string, raw?: false, owner?: undefined }
+  | { t: "text", v: string, raw: true, owner: string }
+  | { t: "open", name: string, attrs: Attrs, self: boolean }
+  | { t: "close", name: string };
+
+// The tree. A text node carries a value and no children; everything else is an
+// element. The stack only ever holds elements, which is why `top().children` is
+// safe to push into.
+type TextNode = { name: "#text", value: string };
+type ElementNode = { name: string, attrs: Attrs, children: Node[] };
+type Node = TextNode | ElementNode;
+
 function tokenize(html) {
-  const tokens = [];
+  const tokens: Token[] = [];
   let i = 0;
   while (i < html.length) {
     const lt = html.indexOf("<", i);
@@ -237,9 +259,11 @@ function readTag(html, start) {
       attrs[attr] = decodeEntities(html.slice(i + 1, end === -1 ? html.length : end));
       i = end === -1 ? html.length : end + 1;
     } else {
-      const uv = /^[^\s>]*/.exec(html.slice(i));
-      attrs[attr] = decodeEntities(uv[0]);
-      i += uv[0].length;
+      // `[^\s>]*` cannot fail (it matches empty), but `exec` is typed nullable
+      // and the reader should not have to prove that to themselves twice.
+      const uv = /^[^\s>]*/.exec(html.slice(i))?.[0] ?? "";
+      attrs[attr] = decodeEntities(uv);
+      i += uv.length;
     }
   }
   return { name, attrs, self, end: i };
@@ -248,8 +272,10 @@ function readTag(html, start) {
 // ── tree ────────────────────────────────────────────────────────────────────
 
 function parse(html) {
-  const root = { name: "#root", attrs: {}, children: [] };
-  const stack = [root];
+  const root: ElementNode = { name: "#root", attrs: {}, children: [] };
+  // Elements only. A text node is pushed into a parent's children and never
+  // becomes one, which is the invariant that makes `top().children` total.
+  const stack: ElementNode[] = [root];
   const top = () => stack[stack.length - 1];
 
   for (const tk of tokenize(html)) {
@@ -376,11 +402,11 @@ export function absolute(href, origin) {
 }
 
 function renderBlocks(nodes, ctx, depth = 0) {
-  const out = [];
+  const out: string[] = [];
   // consecutive inline-level siblings belong to one paragraph. Buffer them and
   // flush at the next block boundary, so a bold lead-in and the sentence that
   // follows it do not become two blocks.
-  let run = [];
+  let run: string[] = [];
   const flush = () => {
     if (!run.length) return;
     const s = renderInline(run, ctx).replace(/[ \t]+\n/g, "  \n").trim();
@@ -454,7 +480,7 @@ function renderBlocks(nodes, ctx, depth = 0) {
         break;
       }
       case "dl": {
-        const lines = [];
+        const lines: string[] = [];
         for (const c of n.children) {
           if (dropped(c)) continue;
           if (c.name === "dt") lines.push(`- **${renderInline(c.children, ctx).trim()}**`);
@@ -483,7 +509,7 @@ function renderBlocks(nodes, ctx, depth = 0) {
         // As blocks they read as a column of orphan words; as one line they
         // read as what they are.
         if (hasClass(n, "cap-strip")) {
-          const chips = [];
+          const chips: string[] = [];
           const collect = (x) => {
             if (isText(x)) return;
             if (hasClass(x, "chip")) chips.push(textOf(x).trim());
@@ -506,7 +532,8 @@ function renderBlocks(nodes, ctx, depth = 0) {
 }
 
 function renderTable(table, ctx) {
-  const rows = [];
+  // One rendered table row: its cells, and whether it was the header row.
+  const rows: { cells: string[], head: boolean }[] = [];
   const walk = (node) => {
     for (const c of node.children || []) {
       if (dropped(c)) continue;
@@ -549,7 +576,8 @@ export function readDocument(html, { origin = "https://aadhar.sh" } = {}) {
 }
 
 function collectMeta(root) {
-  const out = { title: "", description: "", canonical: "", status: [] };
+  const out: { title: string, description: string, canonical: string, status: string[] } =
+    { title: "", description: "", canonical: "", status: [] };
   const visit = (n) => {
     if (isText(n)) return;
     if (n.name === "title" && !out.title) out.title = textOf(n).trim();
