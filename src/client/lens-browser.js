@@ -150,7 +150,7 @@
   }
 
   // ── after interaction ────────────────────────────────────────────────────
-  // Mirrors the server registry in www/_worker.js/lens-recipes.js. Kept as
+  // Mirrors the server registry in src/worker/lens-recipes.ts. Kept as
   // labels only: the SCRIPTS live server-side and are published at
   // /lens/browser?recipes=1, so nothing here can imply a capability the server
   // will not actually run. An id the server has retired simply 400s and lands in

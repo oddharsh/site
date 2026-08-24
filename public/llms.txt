@@ -110,6 +110,50 @@ document is [/llms-full.txt](https://aadhar.sh/llms-full.txt).
   "ask a follow-up" box (Workers AI + Vectorize RAG, grounded in the
   source, gated by a homemade photo-CAPTCHA at `/lwe/ask`).
 
+## Tools you can run
+
+Software published from this site that you can install and drive yourself. The
+site hosts the explanation; the tool runs on the machine your files are already
+on, which is the only arrangement where photographs never have to move.
+
+- [ig-prep](https://github.com/oddharsh/ig-prep): prepares photographs for
+  Instagram's compression. Reads JPEG, HEIF/HEIC/HIF, JPEG XL and PNG; writes
+  sRGB JPEG at the width the platform wants, so its own resampler has nothing
+  left to do. Rotation is decided by measurement rather than by trusting a
+  decoder, which matters because a HEIF states its rotation twice and applying
+  both turns the picture sideways. Written up at
+  [/garage/ig-prep](https://aadhar.sh/garage/ig-prep).
+
+  Install, then point an MCP client at it:
+
+  ```sh
+  cargo install --git https://github.com/oddharsh/ig-prep ig-prep
+  ```
+
+  ```jsonc
+  {
+    "mcpServers": {
+      "ig-prep": {
+        "command": "ig-prep",
+        "args": ["mcp", "--root", "/Users/you/Pictures"]
+      }
+    }
+  }
+  ```
+
+  Three tools. `ig_plan` reports what a conversion would do and writes nothing,
+  so run it first. `ig_convert` performs it and writes JPEGs to an output
+  directory. `ig_check_rotation` reports files whose two statements of their own
+  rotation disagree. Results carry paths, sizes and dimensions rather than image
+  bytes, because the files are already reachable by whoever called the tool and a
+  converted frame is roughly a megabyte of base64. `--root` confines every path
+  argument, inputs and output directory alike.
+
+  There is no upload endpoint on this origin for this, and that is a limit rather
+  than an oversight: one 40 megapixel frame decodes to 119.5 MB against a 128 MB
+  Worker isolate, so a server-side converter here could not hold a single
+  photograph.
+
 ## JSON endpoints
 
 - [/rn/tracks](https://aadhar.sh/rn/tracks): Current Spotify "rn" playlist

@@ -1032,6 +1032,34 @@ one of them was undocumented until `tools:check` went looking (2026-08-14):
 > PRESENCE tier probes the machine and is ADVISORY in CI, because a hosted runner
 > has none of these and is not meant to.
 >
+> **A third tier landed 2026-08-24: VERSION, and it is a RECORD rather than an
+> updater.** Presence answers "is avifenc here". The question that costs
+> something is "is it the avifenc that baked the library", because `/i/` is
+> content-addressed: re-encoding under a different encoder mints new URLs,
+> orphans every `a-dict` snapshot naming the old hash, and can leave derived data
+> describing pixels nobody serves, which is gotcha 41 as a check instead of a
+> postmortem. So each tool declares how to ASK its version (there is no
+> convention: `exif-sooc 0.2.0`, `jq-1.7.1-apple`, `sips-316`, `Version: 1.4.2`,
+> a bare `1.6.0`, and mozjpeg answering on stderr), the seven whose output ships
+> carry `bytes: true` and a `recorded` version, and drift from `recorded` is a
+> NOTICE rather than a failure. For an encoder, "newer" is not "take it": a bump
+> means re-encoding 632 files, re-hashing, and rolling the dictionaries, so the
+> signal is deliberately the local one. `brew outdated` already answers the other
+> question and this does not duplicate it.
+>
+> Two of the thirteen report no version at all, and they say so with a reason
+> rather than being skipped. A tool whose declared pattern stops matching FAILS,
+> because a version tier that silently reads nothing is the same rot the floors
+> below exist to catch.
+>
+> **`min_version` was declared and unread until the same day, which is this
+> file's own lesson arriving one field further in.** `EXIF_SOOC_MIN=0.2.0` is
+> written out in five shell scripts and `config/tools.json` carried a sixth copy
+> that nothing consulted, so the one place designed to be the single declaration
+> was the only one nobody read. The declaration tier now asserts both directions:
+> every `<TOOL>_MIN=` guard must equal the declared `min_version`, and a declared
+> `min_version` that no script enforces is an error.
+>
 > The guard scanner is the load-bearing part, and it is why four prerequisites
 > could stay undocumented. Most of these preconditions are written `for cmd in
 > sips exif-sooc`, so the binary name exists only as a loop word and a grep for the
@@ -2678,6 +2706,27 @@ bun run deploy:direct
     the right dictionary alone, and an engine that ignores it prints the same
     number three times.
 
+    **The NODE floor is 24, measured 2026-08-24 rather than inferred.** This
+    paragraph said "Node 26 honours it" and the surrounding code had only ever
+    measured the two ends: build.ts's comment records Node 22 accepting and
+    ignoring the option, and local Node 26 honouring it. Its thrown message and
+    `engines.node` both name 24, which left the actual floor as the one number in
+    that sentence nobody had checked. Running the four-line control above on one
+    8800-byte buffer at level 19, darwin-arm64:
+
+    | node | none | dictionary | honours it |
+    |---|--:|--:|---|
+    | v23.11.1 | 63 | 63 | no, silently |
+    | v24.19.0 | 63 | 19 | yes |
+    | v26.7.0 | 63 | 19 | yes |
+
+    So both claims were right and are now evidence. Take the general point past
+    this option, because it is the same one the paragraph above makes from the
+    other side: a floor stated as `>=N` is a claim about N-1 as much as about N,
+    and measuring only the versions you happen to have running leaves the
+    boundary untested. `bun run node:pin` is what watches the pin now, and a
+    contract test holds `engines.node` and build.ts's message to each other.
+
     **zstd above level 19 is dead weight here.** Levels 19, 20, 21, 22, 22+long-
     distance-matching and 22+btultra2 produce BYTE-IDENTICAL output on all 9 shell
     assets and all 12 deltas. What separates 20-22 is window size and long-range
@@ -3668,10 +3717,38 @@ bun run deploy:direct
     injection class in workflow code is on you to read for. Grep new workflows for
     `\$\{\{` inside `run:` and route values through `env:` instead.
 
-28. **Bun runs this build byte-identically and about twice as fast, and it is
-    still not adopted.** `bun run bun:check` is the control, in the same idiom as
-    `kitesurf:check`: it probes the zstd dictionary option, diffs a full node
-    build against a full bun build file by file, and runs the contract suite
+28. **EVERYTHING BELOW IS THE PRE-ADOPTION RECORD, and the tool it describes was
+    RETIRED on 2026-08-24.** `bun run bun:check` no longer exists. Bun was
+    adopted on 2026-08-20 (gotcha 38), so "still not adopted" is history, and the
+    control died of something narrower: node cannot build this repo at all any
+    more. `lib/link-integrity.ts` parses documents with HTMLRewriter, which is a
+    bun and workerd global, so `node tools/build.ts` dies with `ReferenceError:
+    HTMLRewriter is not defined` and the NODE half of a node-versus-bun diff has
+    no second side. The same line took the nightly dictionary roll down for three
+    nights (#567).
+
+    **`bun run bun:pin` is what replaced it**, and it asks the question that
+    replaced this one: whether to move `packageManager` to the bun that shipped
+    this week. Node was the right baseline while adoption was the question. Now
+    that production builds with `bun tools/build.ts`, bun-against-bun is the pair
+    that decides whether a content-addressed URL moves. The byte-identical
+    paragraph below is its gate 5, unchanged and still the bar, and the zstd
+    probe moved to `tools/lib/bun-pin.ts` rather than being rewritten.
+
+    Two invariants left with the file and are asserted elsewhere rather than
+    lost. A comparison whose two halves are the same runtime is a green result
+    with no control, which check-bun.ts enforced by refusing to run under bun and
+    bump-bun-pin.ts enforces from the other side by refusing a baseline that is
+    not the pin. And a build comparison must restore `.build/` through a
+    `finally`, since `process.exit()` skips one.
+
+    Keep the rest for the measurements and for the `Response` finding at the
+    end, which is about runtimes rather than about which one this repo runs.
+
+    **Bun runs this build byte-identically and about twice as fast, and it is
+    still not adopted.** `bun run bun:check` WAS the control, in the same idiom as
+    `kitesurf:check`: it probed the zstd dictionary option, diffed a full node
+    build against a full bun build file by file, and ran the contract suite
     under `bun test`. Measured 2026-08-10, node v26.7.0 against bun
     `1.4.0-canary.1+827475e21`:
 

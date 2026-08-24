@@ -7,7 +7,8 @@
 // `// build:csp-hashes` marker — the build replaces that whole line.
 //
 // Empty here on purpose. `bun run dev` (wrangler.dev.jsonc) serves the readable
-// unminified www/ tree, whose inline blocks hash differently from the staged
+// unminified source tree through the .dev-assets farm, whose inline blocks
+// hash differently from the staged
 // ones, so a committed map would be wrong for exactly the surface it claims to
 // protect. An empty map means every path falls back to the loose policy, which is
 // what dev wants and what production must never silently get — build.mjs hard-fails

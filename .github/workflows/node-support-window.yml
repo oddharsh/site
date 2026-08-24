@@ -1,0 +1,146 @@
+name: Node support window
+
+# `.node-version` is the other version string no updater owns, and it needs a
+# DIFFERENT tool from the bun pin rather than the same one pointed elsewhere.
+#
+# bun-pin.yml opens a PR because `packageManager` names an exact bun that
+# nothing updates and that compiles the site. Neither holds here. This file
+# holds a bare MAJOR, so `actions/setup-node` resolves the newest release of it
+# on every run and every patch and minor is already current. The only decision
+# left is the major, node ships one every April and October, half of them never
+# become LTS, and node builds nothing here: it runs wrangler on the path that
+# publishes production, the route oracle, and the gzip measurements.
+#
+# So there is nothing to bump and something real to watch. A major has published
+# dates for entering maintenance and for end of life, nothing here reads them,
+# and an end-of-life node in the deploy path is obvious in hindsight and
+# invisible in advance.
+#
+# ADVISORY BY CONSTRUCTION, and it files an ISSUE rather than opening a PR,
+# which is the shape bun-release-watch.yml had before its one question was
+# answered. A PR would be asserting that the move is right, and choosing a major
+# is a policy call: wait for Active LTS, and take the gates the issue lists.
+#
+# WEEKLY, because the events are years apart. Node 26 was Current when this was
+# written, becomes Active LTS on 2026-10-28, enters maintenance on 2027-10-20
+# and ends on 2029-04-30. A nightly job for three events in three years is a
+# nightly job nobody reads.
+
+on:
+  schedule:
+    - cron: "23 9 * * 1" # Mondays, off the hour so it does not pile onto the :00 rush
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: node-support-window
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    name: Is the pinned node major still supported?
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write # the only write it has, and only to say a decision is due
+
+    steps:
+      - name: Check out main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up bun
+        uses: ./.github/actions/setup-bun
+
+      - name: Read the support window
+        id: window
+        run: |
+          set -euo pipefail
+
+          # gotcha 40: no pipe in front of the thing whose status is the answer.
+          # `node:pin` exits 1 to mean "a decision is due", which is a normal
+          # outcome here rather than a fault, so the status is data.
+          # `verdict` rather than `status`: zsh reserves `status` as a read-only
+          # alias for `$?`, so this block cannot be pasted into a zsh prompt to
+          # debug it. Runners are bash, so this is portability for the human.
+          set +e
+          bun run node:pin > window.txt 2>&1
+          verdict=$?
+          set -e
+          cat window.txt
+
+          # NO `2>&1` HERE, and it is not a style preference. `bun run` prints
+          # its `$ bun tools/...` banner on stderr, so folding stderr into this
+          # redirect puts a non-JSON first line in the file and every read below
+          # fails. Measured before writing it this way.
+          bun run node:pin --json > window.json || true
+
+          {
+            echo "status=$verdict"
+            echo "pinned=$(bun -e 'process.stdout.write(String(require("./window.json").pinned))')"
+            echo "phase=$(bun -e 'process.stdout.write(require("./window.json").phase)')"
+          } >> "$GITHUB_OUTPUT"
+
+          # Anything other than 0 or 1 is the check itself failing (no network,
+          # a schedule that moved, a pin that names a major node never shipped),
+          # and that IS worth a red run, because it means the window is going
+          # unwatched rather than being fine.
+          if [ "$verdict" -ne 0 ] && [ "$verdict" -ne 1 ]; then
+            echo "::error title=node:pin could not run::exit $verdict"
+            exit "$verdict"
+          fi
+
+      - name: Say so, once per phase
+        if: steps.window.outputs.status == '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PINNED: ${{ steps.window.outputs.pinned }}
+          PHASE: ${{ steps.window.outputs.phase }}
+        run: |
+          set -euo pipefail
+
+          # The title carries the PHASE, so the dedupe below suppresses a repeat
+          # of the same news and lets the next, more urgent state through. A
+          # title carrying only the major would file "maintenance" once and then
+          # silently swallow "end of life" eighteen months later, which is the
+          # one message this job exists to deliver.
+          title="node $PINNED support window: $PHASE"
+
+          if gh issue list --state all --search "$title in:title" --json title \
+            --jq '.[].title' | grep -Fqx "$title"; then
+            echo "already filed for this phase; nothing to do"
+            exit 0
+          fi
+
+          gh issue create --title "$title" --body "$(cat <<BODY
+          \`\`\`
+          $(cat window.txt)
+          \`\`\`
+
+          \`.node-version\` holds a bare major, so patches and minors are already current on every run. This is about the major.
+
+          Node runs wrangler here, which is the path that publishes production, plus the route oracle and the gzip measurements. It builds nothing: \`node tools/build.ts\` cannot run since \`lib/link-integrity.ts\` began parsing with HTMLRewriter.
+
+          Gates before taking a new major:
+
+          - wrangler runs under it, per COMMAND rather than per tool (gotcha 38: \`deploy --dry-run\` worked under bun while \`check startup\` silently did nothing).
+          - \`bun run test:node\` and \`bun run typecheck\`, both of which run under node.
+          - **gzip continuity.** \`perf-budget\`'s constants and every \`perf-history\` row were measured under this major. A zlib change re-reads the whole series as a step nobody took, which is exactly the phantom the perf-history branch exists to detect. Compress one fixed buffer under both majors and compare before believing any number after the move.
+          - the zstd \`dictionary\` floor, which \`build.ts\` throws on. Measured 2026-08-24: v23.11.1 ignores it (63 none / 63 dict), v24.19.0 and v26.7.0 honour it (63 / 19).
+
+          Filed by [\`node-support-window.yml\`](.github/workflows/node-support-window.yml). Reproduce with \`bun run node:pin\`; the permanent controls are \`--pretend 23\` (end of life) and \`--pretend 22\` (maintenance).
+          BODY
+          )"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Node support window"
+            echo
+            echo '```'
+            cat window.txt 2>/dev/null || echo "(node:pin did not run)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

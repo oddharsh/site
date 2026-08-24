@@ -18,6 +18,7 @@
 // months on the wrong field names.
 import { readFile, readdir, access } from "node:fs/promises";
 import { constants as fsConstants } from "node:fs";
+import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -30,11 +31,28 @@ const IN_CI = Boolean(process.env.CI) && !STRICT;
 // edits never trip them and a scanner that stops matching always does.
 const FLOOR_GUARD_LISTS = 4;
 const FLOOR_BREW_HINTS = 4;
+const FLOOR_MIN_GUARDS = 5;
 
-const errors = [];
+/** One entry of config/tools.json. Declared rather than inferred from JSON.parse,
+ *  which hands back `any` and takes every downstream field with it. */
+type Tool = {
+  bin: string;
+  path?: string;
+  install: string;
+  why: string;
+  optional?: boolean;
+  required_by?: string[];
+  min_version?: string;
+  bytes?: boolean;
+  bytes_why?: string;
+  recorded?: string;
+  version?: { flag?: string; match?: string; reports?: boolean; why?: string };
+};
+
+const errors: string[] = [];
 
 const declaration = JSON.parse(await readFile(path.join(ROOT, "config/tools.json"), "utf8"));
-const tools = declaration.tools ?? [];
+const tools: Tool[] = declaration.tools ?? [];
 if (tools.length === 0) {
   console.error("config/tools.json declares no tools");
   process.exit(1);
@@ -53,9 +71,9 @@ const NOT_SYSTEM = new Set(["wrangler"]);
 // ── the shell corpus ─────────────────────────────────────────────────────────
 async function shellScripts() {
   const dirs = ["tools/photos", "scripts"];
-  const found = [];
+  const found: string[] = [];
   for (const dir of dirs) {
-    let entries = [];
+    let entries: string[] = [];
     try {
       entries = await readdir(path.join(ROOT, dir));
     } catch {
@@ -176,13 +194,67 @@ for (const tool of tools) {
   }
 }
 
+// ── tier 1d: every `<TOOL>_MIN=` guard agrees with the declaration ───────────
+//
+// THE LIST WAS CONSOLIDATED HERE AND THE VERSION WAS NOT. `EXIF_SOOC_MIN=0.2.0`
+// is written out in five shell scripts, config/tools.json carries a sixth copy
+// as `min_version`, and until this scanner nothing read that field at all: the
+// one place designed to be the single declaration was the only one nobody
+// consulted. That is the same failure the $comment at the top of tools.json
+// says the file was created to fix, one field further in.
+//
+// The shape is `<NAME>_MIN=<version>` on its own line, and the tool it governs
+// is the name lowercased with underscores as dashes, so EXIF_SOOC_MIN governs
+// exif-sooc. Bounded, like every other scanner here, and floored for the same
+// reason: one that stops matching reports a pass while checking nothing.
+//
+// Note it asserts AGREEMENT where a guard exists rather than requiring one
+// everywhere. download-remote-photos.sh uses exif-sooc to READ two dimensions
+// and needs no write-capability floor, which is why it correctly has none.
+let minGuards = 0;
+const minPattern = /^[ \t]*([A-Z][A-Z0-9_]*)_MIN=([0-9][0-9A-Za-z.-]*)[ \t]*$/gm;
+for (const [rel, text] of source) {
+  for (const match of text.matchAll(minPattern)) {
+    const [, name, declared] = match;
+    const bin = name.toLowerCase().replace(/_/g, "-");
+    const tool = byBin.get(bin);
+    if (!tool) {
+      errors.push(`${rel}: guards a minimum for \`${bin}\`, which config/tools.json does not declare`);
+      continue;
+    }
+    minGuards += 1;
+    if (!tool.min_version) {
+      errors.push(`${rel}: floors ${bin} at ${declared}, and config/tools.json declares no min_version for it`);
+    } else if (tool.min_version !== declared) {
+      errors.push(`${rel}: floors ${bin} at ${declared} while config/tools.json declares ${tool.min_version}`);
+    }
+  }
+}
+// The other direction, so a declared floor cannot become decorative the way
+// min_version already had: something must actually enforce it.
+for (const tool of tools) {
+  if (!tool.min_version) continue;
+  const enforced = [...source.values()].some((text) =>
+    new RegExp(`^[ \t]*${tool.bin.toUpperCase().replace(/-/g, "_")}_MIN=`, "m").test(text),
+  );
+  if (!enforced) {
+    errors.push(`config/tools.json: ${tool.bin} declares min_version ${tool.min_version}, and no script enforces it`);
+  }
+}
+if (minGuards < FLOOR_MIN_GUARDS) {
+  errors.push(
+    `minimum-version scanner matched ${minGuards} guards, below the floor of ${FLOOR_MIN_GUARDS}. ` +
+      `The shell changed shape and this scanner is now checking nothing.`,
+  );
+}
+
 // ── tier 2: presence ─────────────────────────────────────────────────────────
 // Walk PATH directly rather than shelling out to `command -v`. Passing an
 // argument array with `shell: true` concatenates instead of escaping, which
 // node 26 deprecates (DEP0190), and a lookup needs no shell anyway.
 const PATH_DIRS = (process.env.PATH ?? "").split(path.delimiter).filter(Boolean);
 
-async function present(tool) {
+async function present(tool: Tool): Promise<string | null> {
   const candidates = tool.path ? [tool.path] : PATH_DIRS.map((dir) => path.join(dir, tool.bin));
   for (const candidate of candidates) {
     try {
@@ -195,12 +267,94 @@ async function present(tool) {
   return null;
 }
 
-const missing = [];
-const found = [];
+const missing: Tool[] = [];
+const found: [string, string][] = [];
 for (const tool of tools) {
   const where = await present(tool);
   if (where) found.push([tool.bin, where]);
   else missing.push(tool);
+}
+
+// ── tier 3: version, and what the version DECIDES ────────────────────────────
+//
+// The tier the other two could not reach. Presence answers "is avifenc here",
+// and the question that actually costs something is "is it the avifenc that
+// baked the library". `/i/` is content-addressed, so re-encoding under a
+// different encoder mints new URLs, orphans every a-dict snapshot naming the
+// old hash, and can leave derived data describing pixels nobody serves, which
+// is gotcha 41 written down as a check instead of a postmortem.
+//
+// So this is a RECORD rather than an updater, and that is deliberate. For an
+// encoder whose output ships, "newer" is not "take it": a bump means re-encoding
+// 632 files, re-hashing them, and rolling the dictionaries. `brew outdated`
+// already answers whether something newer exists. What nothing answered until
+// now is whether the binary on this machine is the one the committed bytes came
+// from, and that question only has a local answer.
+const versionErrors: string[] = [];
+const versionNotices: string[] = [];
+const versionLines: string[] = [];
+const noVersion: string[] = [];
+
+/** Numeric per component, so 1.10.0 reads as newer than 1.4.0. */
+function olderThan(have: string, want: string): boolean {
+  const a = String(have).split(".").map(Number);
+  const b = String(want).split(".").map(Number);
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const x = a[i] ?? 0;
+    const y = b[i] ?? 0;
+    if (x !== y) return x < y;
+  }
+  return false;
+}
+
+for (const [bin, where] of found) {
+  const tool = byBin.get(bin);
+  const spec = tool?.version;
+  if (!spec) continue;
+  if (spec.reports === false) {
+    noVersion.push(`${bin} — ${spec.why}`);
+    continue;
+  }
+
+  // A spec that neither reports nor says how to ask is a malformed declaration,
+  // and saying so beats narrowing it away: the alternative is a tool that is
+  // silently never version-checked, which is the shape of every absence here.
+  if (!spec.flag || !spec.match) {
+    versionErrors.push(`config/tools.json: ${bin} declares a version block with no flag or match, and does not say it reports none`);
+    continue;
+  }
+
+  // Both streams, because mozjpeg answers on stderr, and only the first few
+  // lines, because ffmpeg follows its version with a wall of build flags.
+  const out = spawnSync(where, [spec.flag], { encoding: "utf8" });
+  const text = `${out.stdout ?? ""}\n${out.stderr ?? ""}`.split("\n").slice(0, 4).join("\n").trim();
+  const found_ = new RegExp(spec.match, "m").exec(text);
+
+  if (!found_) {
+    // NOT a skip. A declared pattern that stops matching is the naive-scanner
+    // rot this file's own header warns about: the tier would go on reporting a
+    // pass while reading nothing. The tool changed its output, and that is worth
+    // knowing on the day it happens rather than on the day bytes move.
+    versionErrors.push(
+      `${bin}: \`${spec.flag}\` no longer matches its declared pattern. It answered: ${JSON.stringify(text.split("\n")[0] ?? "")}`,
+    );
+    continue;
+  }
+
+  const version = found_[1];
+  const marks: string[] = [];
+  if (tool.min_version && olderThan(version, tool.min_version)) {
+    versionErrors.push(`${bin} ${version} is older than the declared minimum ${tool.min_version}`);
+    marks.push(`BELOW ${tool.min_version}`);
+  }
+  if (tool.bytes && tool.recorded && tool.recorded !== version) {
+    versionNotices.push(
+      `${bin} is ${version} and the committed artifacts are recorded against ${tool.recorded}. ` +
+        `Re-running the pipeline now encodes under a different ${bin} from the rest of the library.`,
+    );
+    marks.push(`RECORDED ${tool.recorded}`);
+  }
+  versionLines.push(`  ${bin.padEnd(18)} ${version}${tool.bytes ? "  (bytes)" : ""}${marks.length ? `  <-- ${marks.join(", ")}` : ""}`);
 }
 
 // ── report ───────────────────────────────────────────────────────────────────
@@ -214,8 +368,26 @@ if (errors.length) {
 }
 console.log("declaration: every guarded binary is declared, and every declared binary is documented");
 
+if (versionLines.length) {
+  console.log(`version: ${versionLines.length} read${noVersion.length ? `, ${noVersion.length} report none` : ""}`);
+  for (const line of versionLines) console.log(line);
+  for (const line of noVersion) console.log(`  ${line}`);
+}
+if (versionErrors.length) {
+  console.error("\nversion check FAILED:");
+  for (const e of versionErrors) console.error(`  - ${e}`);
+  process.exit(1);
+}
+if (versionNotices.length) {
+  console.log("\nversion: the recorded provenance has drifted.");
+  for (const n of versionNotices) console.log(`  - ${n}`);
+  console.log("  This is a NOTICE rather than a failure: a newer encoder is normal, and taking it");
+  console.log("  is a deliberate job (re-encode, re-hash, `bun run dict:roll`), not a side effect.");
+  console.log("  Update `recorded` in config/tools.json in the commit that re-encodes.");
+}
+
 if (missing.length === 0) {
-  console.log(`presence: all ${found.length} present`);
+  console.log(`\npresence: all ${found.length} present`);
   process.exit(0);
 }
 

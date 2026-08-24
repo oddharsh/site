@@ -1,5 +1,5 @@
 // histogram.rs — the 64-bin RGB + luminance bake that rides in each per-photo
-// meta file (www/images/meta/<stem>.json) under "hi".
+// meta file (public/images/meta/<stem>.json) under "hi".
 //
 // Ported from photo-histograms.py on 2026-08-14, which retired Pillow and with
 // it the whole python3 + pip prerequisite of the photo pipeline. The port has to

@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#2D78BD">
+<link rel="preload" as="style" href="/luna.css">
+<title>aadhar.sh/garage/ig-prep: Pixels Instagram has no reason to resample</title>
+<meta name="description" content="A converter that performs the 40 megapixel downscale in linear light and delivers the exact width Instagram wants, plus an MCP mode that lets a model run it against photographs that stay on your machine.">
+<link rel="canonical" href="https://aadhar.sh/garage/ig-prep">
+<meta property="og:type" content="article">
+<meta property="og:title" content="aadhar.sh/garage/ig-prep: Pixels Instagram has no reason to resample">
+<meta property="og:description" content="A converter that performs the 40 megapixel downscale in linear light and delivers the exact width Instagram wants, plus an MCP mode that lets a model run it against photographs that stay on your machine.">
+<meta property="og:url" content="https://aadhar.sh/garage/ig-prep">
+<meta name="twitter:card" content="summary_large_image">
+<meta property="og:image" content="https://aadhar.sh/og/garage-ig-prep.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The aadhar.sh/garage/ig-prep interactive demo, screenshotted">
+<meta name="twitter:image" content="https://aadhar.sh/og/garage-ig-prep.png">
+<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}html{background:linear-gradient(180deg,oklch(56% .13 250),oklch(73% .10 236) 50%,oklch(88% .05 232) 60%,oklch(60% .16 140))}
+body{background:transparent;font-family:var(--font-ui);font-size:10.5pt;line-height:1.5;color:#181818;padding:24px 12px 60px;min-height:100vh}
+.window{max-width:820px;margin:0 auto;background:#fff;border:2px solid #0831d9;border-right-color:#001ea0;border-bottom-color:#001ea0;border-radius:8px 8px 0 0;overflow:hidden;box-shadow:inset 1px 1px 0 #166aee,inset -1px -1px 0 #00138c,4px 4px 0 rgba(0,30,160,.35)}
+.title-bar{background:linear-gradient(180deg,oklch(70% .15 258),oklch(60% .20 261) 8%,oklch(51% .225 263) 18%,oklch(50% .225 263) 86%,oklch(58% .18 260));color:#fff;font-family:var(--font-caption);font-weight:bold;font-size:11pt;padding:4px 5px 4px 8px;display:flex;align-items:center;gap:6px;text-shadow:1px 1px #0f1089;user-select:none}
+.title-bar .title-text{flex:1;min-width:0;display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.title-bar .icon{width:14px;height:14px;flex:0 0 14px;background:#fff;border:1px solid #8f4d06;position:relative}.title-bar .icon:before{content:"✦";position:absolute;inset:0;display:grid;place-items:center;font-size:10px;color:#ef8f24;text-shadow:none}
+.controls{display:inline-flex;align-items:center;gap:2px}.controls span,.controls a{position:relative;box-sizing:border-box;width:21px;height:21px;display:inline-block;overflow:hidden;font-size:0;color:transparent;border:1px solid #6696eb;border-radius:3px;text-decoration:none;cursor:pointer;background:linear-gradient(180deg,#5f8cf7,#3a71f5 22%,#3e73f5 55%,#2a70f2 82%,#1045be)}.controls .close{border-color:#d8401c;background:linear-gradient(180deg,#e8795f,#e45f40 30%,#e45d3d 52%,#e2552a 80%,#ae3110)}.controls .min:before{content:"";position:absolute;left:5px;right:5px;bottom:5px;height:2px;background:#fff}.controls .max:before{content:"";position:absolute;left:5px;top:5px;width:11px;height:9px;border:1px solid #fff;border-top-width:2px}.controls .close:before,.controls .close:after{content:"";position:absolute;left:50%;top:50%;width:13px;height:2px;margin:-1px 0 0 -6.5px;background:#fff}.controls .close:before{transform:rotate(45deg)}.controls .close:after{transform:rotate(-45deg)}
+.content{padding:18px 20px 8px;background:#fffdf6;border-top:1px solid #8d9bb0}.content h1,.content h2,.content h3{font-family:var(--font-caption);color:#0831d9;line-height:1.25}.content h1{font-size:18pt;margin:0 0 7px}.content h2{font-size:13pt;margin:18px 0 5px}.content h3{font-size:11pt;margin:13px 0 4px}.content p{margin:0 0 12px}.content a{color:#153eab}.content code,.content pre{font-family:var(--font-mono)}
+.garage-intro{font-size:11pt;color:#444;max-width:70ch}.garage-meta{font-size:8.5pt;color:#69758a;border-top:1px solid #d8dfeb;margin-top:18px;padding-top:6px}.status{border-top:1px solid #d1d9e4;background:#f1f4f8;padding:4px 10px;display:flex;gap:8px;flex-wrap:wrap;font-size:8.5pt;color:#586579}.status span:after{content:"·";margin-left:8px;color:#9ca8b8}.status span:last-child:after{content:""}
+@media(max-width:620px){body{padding:8px 5px 42px}.content{padding:14px 12px 6px}.window{border-radius:5px 5px 0 0}}
+
+.ig-warn{border-left:3px solid #d98a00;background:#fffaf0;padding:6px 10px;margin:10px 0}
+.ig-conf{border:1px solid #99a8bd;background:#f3f6fa;box-shadow:inset 1px 1px 0 #fff;padding:8px 10px;overflow-x:auto;font-size:8.6pt;margin:8px 0}
+.ig-table{border:1px solid #99a8bd;background:#f3f6fa;box-shadow:inset 1px 1px 0 #fff;margin:8px 0;padding:2px 0}
+.ig-table .row{display:grid;grid-template-columns:5em 7em 1fr;gap:8px;align-items:baseline;padding:3px 10px;font-size:8.8pt;border-bottom:1px solid #e4eaf3}
+.ig-table .row:last-child{border-bottom:0}
+.ig-table .row.head{font-weight:700;background:#e8eef7}
+.ig-table .n{text-align:right;font-family:var(--font-mono)}
+</style>
+<link rel="stylesheet" href="/luna.css">
+</head>
+<body>
+<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<div class="window">
+  <div class="title-bar" aria-hidden="true">
+    <span class="title-text"><span class="icon"></span>aadhar.sh/garage/ig-prep</span>
+    <span class="controls"><span class="min"></span><span class="max"></span><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
+  </div>
+  <div class="content">
+<h1>Handing Instagram pixels it has no reason to resample</h1>
+<p class="garage-intro">Instagram resizes and re-encodes whatever it is given. What it does not do is resample a frame that already arrives at the size it wants. <a href="https://github.com/oddharsh/ig-prep">ig-prep</a> does the destructive work here, carefully, so the platform has as little left to do as possible. It also speaks <a href="https://modelcontextprotocol.io">MCP</a>, so a model can run it against photographs on your own machine without any of them moving.</p>
+
+<h2>The geometric fact the default rests on</h2>
+<p>Instagram shows frames between 4:5 and 1.91:1. A 3:2 portrait, which is most of what a Fujifilm or a Leica produces held vertically, is 0.667 and falls outside that band, so something has to give.</p>
+<p>The default gives nothing up, because <b>cropping a portrait to 4:5 removes height only</b>. A frame delivered at exactly the target width is already the right width for any vertical crop you drag in the app, so the crop costs no resample at all. You keep the framing decision. The expensive step, a 40 megapixel downscale in linear light with Lanczos3, stays here where it is done once and done carefully.</p>
+<p class="ig-warn">One thing breaks it: pinch-zooming in the crop UI changes the scale and hands the resample straight back. Drag instead.</p>
+
+<h2>Rotation is stated twice, and applying both turns the picture sideways</h2>
+<p>A HEIF can say how to turn itself in two places: as a container transform (<code>irot</code> and <code>imir</code>) and as an EXIF Orientation tag. Every Fujifilm HIF writes both, saying the same thing each way. Applying either is correct. Applying both is a photograph on its side, which is why one file can look right in one app and wrong in another on the same phone.</p>
+<p>So no decoder is trusted about this. <code>sips</code> applies neither and passes the tag forward, while <code>djxl</code> bakes rotation in, and a program that believes either one plans a portrait as a landscape. ig-prep compares the decoded dimensions against the metadata's display dimensions and decides from the measurement. Across a 160-file corpus, 114 files state their rotation twice and <b>zero disagree</b>, which is the number <code>ig-prep --check</code> exists to report.</p>
+
+<h2>Point a model at it</h2>
+<p><code>ig-prep mcp</code> speaks MCP on stdin and stdout. Three tools: <code>ig_plan</code> reports what a conversion would do and writes nothing, <code>ig_convert</code> does it, and <code>ig_check_rotation</code> is the rotation report above.</p>
+<pre class="ig-conf"><code>{
+  "mcpServers": {
+    "ig-prep": {
+      "command": "ig-prep",
+      "args": ["mcp", "--root", "/Users/you/Pictures"]
+    }
+  }
+}</code></pre>
+<p>Then you can ask for the conversion in a sentence, and the model reads back what happened per file.</p>
+<p><b>The photographs never move and never enter the conversation.</b> They are already on the machine the server runs on, so a result carries paths, sizes and dimensions instead of image data. That is a deliberate limit. A converted frame is a few hundred kilobytes, which is roughly a megabyte of base64, and forty of them would spend forty megabytes of a model's context on pixels it cannot look at.</p>
+<p><code>--root</code> is the boundary, and it is checked after symlinks are resolved: comparing the path string a caller wrote would let <code>root/link-to-elsewhere</code> through. One call converts at most 200 files and reports how many it left, because a result listing 200 conversions of a 900-file directory otherwise reads as a complete run.</p>
+<p>Eight 40 megapixel HEIFs through one call take 2.41 seconds of wall clock on an M-series Mac, at 354% CPU across the cores.</p>
+
+<h2>What the chroma choice costs</h2>
+<p>Instagram re-encodes to 4:2:0 regardless, so the question is not what survives on disk but what its encoder is handed. Full-resolution chroma means its subsampling step averages real detail rather than detail already halved once, and two successive halvings visibly smear saturated edges. The cost is bytes on an upload nobody sees. On one 1440x2160 frame:</p>
+<div class="ig-table" id="ig-chroma"></div>
+<p>A Fujifilm HIF halves chroma horizontally in its own landscape orientation, so held vertically the halved axis lands on the long edge of the portrait. Against a 1440x2160 output that is still 3.58x horizontally and 1.79x vertically of real chroma to average down, which is why 4:4:4 output is measured rather than invented. Somebody delivering at or near native size has a source that cannot fill it, and should say <code>--422</code> and mean it.</p>
+
+<h2>Three constants are guesses, and they are marked as guesses</h2>
+<p>The target width of 1440, the 4:4:4 default, and the ratio band itself are all assumptions. 1440 is chosen over 1080 because the failure modes are asymmetric: if Instagram wants 1080 it downscales cleanly from 1440, and if it wants 1440 and gets 1080 it upscales and invents detail. Guessing high costs a resample. Guessing low costs the picture.</p>
+<p>None of the three becomes a fact until a round trip measures it, which means uploading a variant grid, saving what Instagram serves back, and scoring each against its source. The upload is the one step a program cannot do for you, so that harness is still unbuilt and the constants live in one block of <code>geometry.rs</code> where calibrating means editing one place.</p>
+
+<h2>The bug that only black-and-white photographs could find</h2>
+<p>Building the MCP mode turned up a failure that had been in the tool since it was written. Every grayscale JPEG died with <code>source image: Size of buffer is smaller than required</code>, an error naming neither the file nor the cause, raised two layers away from it inside the resizer.</p>
+<p>The decoder's <code>jpeg_set_out_colorspace(RGB)</code> is a request rather than an instruction. For a single-channel source it declines and returns Luma anyway, silently, so the buffer came back at one byte per pixel while the code labelled it three. The repair reads the colourspace the decoder actually used instead of the one it was asked for, and checks the buffer length against the dimensions at the decode boundary, where the file name is still in hand. One file in a 160-file library failed before. None do now.</p>
+<p>The general shape is worth more than the instance. <b>An API that takes a preference and reports no error when it declines will be read as an instruction</b>, and the mismatch surfaces wherever the wrong assumption is first load-bearing, which is rarely where it was made.</p>
+    <section id="luq" aria-label="understanding check"></section>
+    <p class="garage-meta">shipped · the understanding check is part of the page, not a gate</p>
+  </div>
+  <div class="status"><span>garage</span><span>shipped</span><span>2026-08-24</span></div>
+</div>
+
+<script>
+(function(){
+  // The bytes are the measurement, so they are written here once and rendered
+  // rather than restated in prose where the two copies could drift.
+  var rows = [
+    ["4:4:4", 1885, "chroma at luma resolution, what this ships by default"],
+    ["4:2:2", 1699, "halved horizontally, what the camera shot"],
+    ["4:2:0", 1585, "halved on both axes, what Instagram stores anyway"]
+  ];
+  var el = document.getElementById("ig-chroma");
+  if (!el) return;
+  var html = '<div class="row head"><span>chroma</span><span class="n">KB</span><span>what it is</span></div>';
+  for (var i = 0; i < rows.length; i++) {
+    html += '<div class="row"><span>' + rows[i][0] + '</span><span class="n">' +
+            rows[i][1] + '</span><span>' + rows[i][2] + '</span></div>';
+  }
+  el.innerHTML = html;
+})();
+</script>
+<script type="application/json" id="luq-data">
+{
+  "skin": "garage",
+  "intro": "Before you close the hood, reconstruct the mechanism in four questions.",
+  "questions": [
+    {
+      "q": "Why does delivering the whole frame at the target width cost nothing, even though Instagram will crop it?",
+      "options": [
+        {
+          "t": "Cropping a portrait to 4:5 removes height only, so the cropped frame is already the target width and has nothing left to resample.",
+          "ok": true,
+          "why": "Right. Width is unchanged by a vertical crop, so the expensive resample was already performed here."
+        },
+        {
+          "t": "Instagram skips resampling for any image above 1080 pixels wide.",
+          "why": "It resamples whatever misses the width it wants. Size alone buys no exemption."
+        },
+        {
+          "t": "The crop happens on the phone, so the pixels never reach Instagram's servers.",
+          "why": "The cropped frame is exactly what gets uploaded, and it is re-encoded on arrival."
+        }
+      ]
+    },
+    {
+      "q": "A photographer pinch-zooms while cropping in the app. What did that cost them?",
+      "options": [
+        {
+          "t": "It changed the scale, so the frame no longer arrives at the target width and Instagram resamples it after all.",
+          "ok": true,
+          "why": "Right. The guarantee holds for a drag, which moves the window, and breaks for a zoom, which changes the scale."
+        },
+        {
+          "t": "Nothing, because the source was already downscaled carefully.",
+          "why": "A careful downscale to the wrong final size still gets resampled, which is the step this was avoiding."
+        },
+        {
+          "t": "It stripped the rotation metadata.",
+          "why": "Cropping in the app does not touch how the file stated its rotation."
+        }
+      ]
+    },
+    {
+      "q": "A HEIF states its rotation through both irot and EXIF Orientation, saying the same thing. What must a converter do?",
+      "options": [
+        {
+          "t": "Apply one of them, decided by measuring what the decoder already did, since applying both turns the photograph sideways.",
+          "ok": true,
+          "why": "Right. Different decoders apply different subsets, so the only reliable signal is whether the decoded dimensions came back as the display shape or the stored one."
+        },
+        {
+          "t": "Apply both, because the file states them separately and each is a real instruction.",
+          "why": "That is the failure the redundancy causes. Two applications of one 90 degree turn is 180 degrees of wrong."
+        },
+        {
+          "t": "Apply neither, because a file saying it twice is corrupt.",
+          "why": "Saying it twice is normal and every Fujifilm HIF does it. Applying neither leaves a portrait planned as a landscape."
+        }
+      ]
+    },
+    {
+      "q": "The MCP mode returns file paths instead of image bytes. What is the reasoning?",
+      "options": [
+        {
+          "t": "The photographs are already on the machine the model can reach, so bytes in the result would spend context on pixels the model cannot look at.",
+          "ok": true,
+          "why": "Right. A converted frame is roughly a megabyte of base64, and the caller can already open the file it named."
+        },
+        {
+          "t": "MCP results cannot carry binary data at all.",
+          "why": "The protocol has image content blocks. The limit here is what a result is worth carrying, rather than what it can carry."
+        },
+        {
+          "t": "Returning bytes would let the model modify the originals.",
+          "why": "The tool writes to an output directory and never touches a source, whichever shape the result takes."
+        }
+      ]
+    },
+    {
+      "q": "Every grayscale JPEG failed inside the resizer with a message naming neither the file nor its colour. What was the underlying mistake?",
+      "options": [
+        {
+          "t": "The code read a colourspace request as a guarantee, and the decoder declined it silently for single-channel sources.",
+          "ok": true,
+          "why": "Right. The buffer came back at one byte per pixel while the code labelled it three, and the mismatch surfaced wherever that label first mattered."
+        },
+        {
+          "t": "The resizer cannot handle grayscale input at all.",
+          "why": "The resizer was handed a buffer that disagreed with the dimensions it was given. Its own capabilities were never the question."
+        },
+        {
+          "t": "Grayscale JPEGs store their dimensions in a different header field.",
+          "why": "The dimensions were read correctly. The pixel count behind them was what did not match."
+        }
+      ]
+    }
+  ]
+}
+</script>
+<script src="/quiz.js" defer></script>
+<script src="/nav.js" defer></script>
+<!-- axp:shell --><nav id="axp-icons" aria-label="desktop shortcuts"><a class="axp-ico" title="writing, in flux" href="/writing" data-key="Notepad" style="left:9px;top:9px"><span class="ic note" aria-hidden="true"></span><span class="t">Notepad</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="GitHub (opens in a new tab)" href="https://github.com/oddharsh" data-key="GitHub" style="left:9px;top:95px"><span class="ic " style="background:linear-gradient(180deg,oklch(72% 0.05 255),oklch(60% 0.07 257))" aria-hidden="true">G</span><span class="t">GitHub</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Twitter (opens in a new tab)" href="https://x.com/oddhash" data-key="Twitter" style="left:9px;top:181px"><span class="ic " style="background:linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))" aria-hidden="true">@</span><span class="t">Twitter</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Instagram (opens in a new tab)" href="https://www.instagram.com/aadharsh.hif" data-key="Photos" style="left:9px;top:267px"><span class="ic " style="background:linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))" aria-hidden="true"><i class="cam" aria-hidden="true"></i></span><span class="t">Photos</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Curius (opens in a new tab)" href="https://curius.app/aadharsh-pannirselvam" data-key="Curius" style="left:9px;top:353px"><span class="ic " style="background:linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))" aria-hidden="true">C</span><span class="t">Curius</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Beli (opens in a new tab)" href="https://beliapp.com/users/aadharsh" data-key="Beli" style="left:9px;top:439px"><span class="ic " style="background:linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))" aria-hidden="true">B</span><span class="t">Beli</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Spotify (opens in a new tab)" href="https://open.spotify.com/user/aadharsh2010" data-key="Music" style="left:9px;top:525px"><span class="ic " style="background:linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))" aria-hidden="true">♪</span><span class="t">Music</span></a></nav><div id="axp-taskbar" role="navigation" aria-label="taskbar"><a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a><div id="axp-pins"><a class="axp-pin" title="prototypes + experiments" href="/garage" data-count="23"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-garage" alt=""></span><span class="lbl">garage</span></a><a class="axp-pin" title="chat-style explainers + live demos" href="/lwe" data-count="12"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lwe" alt=""></span><span class="lbl">lwe</span></a><a class="axp-pin" title="notes, in flux: an editable notepad" href="/writing" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-writing" alt=""></span><span class="lbl">writing</span></a><a class="axp-pin" title="what I've been reading, from Curius" href="/reading" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-reading" alt=""></span><span class="lbl">reading</span></a><a class="axp-pin" title="events worth going to" href="/serendipity" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-serendipity" alt=""></span><span class="lbl">serendipity</span></a><a class="axp-pin" title="the crypto-VC neighborhood" href="/around" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-around" alt=""></span><span class="lbl">around</span></a><a class="axp-pin" title="the other web: how machines read a URL" href="/lens" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lens" alt=""></span><span class="lbl">lens</span></a><a class="axp-pin" title="terminal utilities, drivable by keypress" href="/terminal" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-terminal" alt=""></span><span class="lbl">terminal</span></a><a class="axp-pin" title="a compression vision test — whose eye do you have?" href="/pixel-peeper" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-pixel-peeper" alt=""></span><span class="lbl">pixel peeper</span></a><a class="axp-pin" title="what I'm listening to right now" href="/rn" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-music" alt=""></span><span class="lbl">music</span></a><a class="axp-pin" title="book a coffee / bagel" href="/coffee" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-coffee" alt=""></span><span class="lbl">coffee</span></a></div><div id="axp-spacer"></div><div id="axp-tray"><button id="axp-sound" type="button" hidden></button><a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><img src="/icons.svg#tray-sysprop" alt=""></a><a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><img src="/icons.svg#tray-security" alt=""></a><a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><img src="/icons.svg#tray-updates" alt=""></a><span id="axp-clock" aria-hidden="true"></span></div></div><script type="speculationrules">{"prerender":[{"where":{"and":[{"href_matches":"/*"},{"not":{"href_matches":"/whoareyou*"}},{"not":{"href_matches":"/run"}},{"not":{"href_matches":"/rn*"}},{"not":{"href_matches":"/images*"}},{"not":{"href_matches":"/index.md"}},{"not":{"href_matches":"/llms.txt"}}]},"eagerness":"moderate"}]}</script><!-- /axp:shell -->
+</body>
+</html>

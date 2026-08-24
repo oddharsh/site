@@ -39,7 +39,7 @@
 // It does not gate CI. This reaches a third-party playground over the network
 // on every run, so as a required check it would redden PRs on somebody else's
 // outage. It is a workstation control in the same idiom as kitesurf:check and
-// bun:check. Run it when touching client JavaScript, the photo pipeline, or
+// bun:pin. Run it when touching client JavaScript, the photo pipeline, or
 // anything the shell projects into every document.
 
 import { readFile } from "node:fs/promises";

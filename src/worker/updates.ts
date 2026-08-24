@@ -20,7 +20,7 @@ export async function handleWindowsUpdate(request, env, ctx) {
 // previously each ran its own SELECT with its own LIMIT and its own error handling.
 //
 // It also makes the three renderers PURE, so build.mjs can call them in Node against
-// the committed projection (www/_worker.js/checkpoints.json, written by
+// the committed projection (src/worker/checkpoints.json, written by
 // bump-version.sh) and emit updates.html + restore.html at deploy time. Those two
 // pages are the only dynamic surfaces whose data changes ONLY at deploy — the
 // checkpoint row is inserted moments before it — so baking them costs no freshness

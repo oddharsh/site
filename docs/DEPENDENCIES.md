@@ -7,13 +7,32 @@ Dependabot watches FIVE ecosystems, and this paragraph named two of them until
 |---|---|---|
 | npm | `/` | the shared deploy toolchain and the one shipped dependency |
 | npm | `/lens-reader` | the Reader lens Worker, which is outside the workspace on purpose |
-| github-actions | `/` | the five digest-pinned actions |
+| github-actions | `/`, `/.github/actions/*` | the six digest-pinned actions |
 | cargo | `/tools/photos/zenc` | the JPEG thumbnail encoder's zenjpeg pin |
 | pip | `/tools/photos` | Pillow, for one page generator |
 
 Each update PR keeps the upstream release notes/changelog in its Dependabot
 description and gets a persistent site-review comment containing the exact
 version change, update type, and questions for the site.
+
+Two of those cells were wrong until 2026-08-24, in the same direction: they
+described coverage the config did not have. The count read five while six
+distinct third-party action repositories are pinned across `.github/`, because
+`codeql.yml` arrived with the move to CodeQL advanced setup and nobody re-counted.
+And the glob is new, because `directory: "/"` reaches `action.yml` at the
+REPOSITORY ROOT plus everything in `.github/workflows`, and never a composite
+action in a subdirectory, so `.github/actions/setup-bun` was unwatched from the
+day it was written. That one costs nothing yet: the action is pure shell and
+names no `uses:`, which is also why it was invisible.
+
+Every ecosystem carries `cooldown: default-days: 1`, which is the same 24 hours
+`bunfig.toml` sets as `minimumReleaseAge = 86400`. For the two npm blocks it is
+load-bearing rather than tidy, since bun refuses to RESOLVE a pin younger than
+that window and an exact pin gets no fallback: measured 2026-08-24 on bun 1.4.0,
+`bun install` exits 1 with `failed to resolve`, and exits 0 on the same tree with
+the policy off. A dependency PR opened inside the window is therefore one nobody
+can carry into `bun.lock` until the package turns a day old. Cooldown governs
+version updates alone and never security updates, so it delays no advisory.
 
 Before merging a dependency PR, future agents should record whether the new
 release changes any of these surfaces:
@@ -26,6 +45,161 @@ release changes any of these surfaces:
 If there is no useful leverage, say so explicitly in the PR review. The merged
 PR and its review comment are the changelog record; this file is the durable
 review policy and entry point for future agent runs.
+
+## The two versions no ecosystem owns
+
+### bun, in `packageManager`
+
+`package.json`'s `packageManager` field names the bun this repository runs, and
+none of the five ecosystems above reaches it. The npm updater bumps `@types/bun`
+and leaves the runtime alone. Dependabot's own `bun` ecosystem would not help
+either: it reads `bun.lock` rather than the field, and it cannot run here at all
+while dependabot-core pins `MAX_SUPPORTED_LOCKFILE_VERSION = 1` against our v2
+lockfiles.
+
+That is the worst version to leave unowned, because it is the one that compiles
+the site. `wrangler.jsonc`'s build command is `bun tools/build.ts`, so the pinned
+bun mints every content-addressed `/a/` and `/i/` URL production serves. A bump
+that changes one output byte is a dictionary roll and a CSP hash change wearing a
+version string.
+
+`bun run bun:pin` is what owns it, and
+[`.github/workflows/bun-pin.yml`](../.github/workflows/bun-pin.yml) runs it
+nightly and opens a PR when a candidate earns one. Five gates, ordered so the
+cheapest disqualifier runs first:
+
+| gate | refuses |
+|---|---|
+| newest STABLE release, carried by npm too | a rolling `canary`, and a version only half the resolvers can see |
+| older than `minimumReleaseAge` | a runtime younger than the window bunfig applies to a lightningcss patch |
+| zstd honours `dictionary` | the silent one: a runtime that accepts the option and ignores it ships plain zstd as every dcz delta |
+| reads the committed lockfile, writes the same `lockfileVersion` | a format change, which is what 1.4 actually did and what broke dependabot's bun updater |
+| byte-identical build, and the suite | a differing byte, which mints a URL and orphans every `a-dict` snapshot naming the old hash |
+
+The control is permanent, because the previous bun is a known-bad runtime:
+
+```bash
+bun run bun:pin --from 1.3.13 --to 1.3.14
+```
+
+That must fail at the zstd gate with `73 none / 73 good / 73 wrong`, the collapse
+that means the option was ignored. Without it, a run reporting "nothing to do" on
+a day when the pin is already current proves only that the comparison ran.
+
+`@types/bun` stays dependabot's, and the two are allowed to disagree for a day.
+The baseline below already worked that through: the release-age policy once held
+the types pin a release behind the runtime and it caught up on its own, which is
+a wait rather than a fork.
+
+### node, in `.node-version`
+
+Also unowned, and it needs a DIFFERENT tool rather than the same one pointed
+elsewhere. Three facts make the bun design wrong here:
+
+- **The file holds a bare major** (`26`), and `actions/setup-node` resolves the
+  newest release of it on every run. Patches and minors are already current
+  everywhere, with no PR and nothing to remember. There is no drift to close.
+- **The only decision left is the major**, which is a policy call rather than a
+  version comparison. Node ships one every April and October and half of them
+  never become LTS, so a job proposing node 27 the day it lands would be
+  proposing to leave the LTS line.
+- **Node builds nothing here.** `node tools/build.ts` cannot run at all since
+  `lib/link-integrity.ts` began parsing with HTMLRewriter. What node does is run
+  wrangler, on the path that publishes production, plus the route oracle and the
+  gzip measurements.
+
+What is unowned is therefore the SUPPORT WINDOW. A major has published dates for
+entering maintenance and for end of life, nothing here read them, and an
+end-of-life node in the deploy path is obvious in hindsight and invisible in
+advance.
+
+`bun run node:pin` reads those dates from nodejs/Release's own `schedule.json`
+rather than from a copy in this repository, which would go stale in exactly the
+way the check exists to catch. It reports the phase and escalates on three
+states, and only three:
+
+| state | why it is escalated |
+|---|---|
+| end of life | the runtime on the publish path takes no fixes at all |
+| within 180 days of end of life | enough runway to take the gates below deliberately |
+| entered maintenance | security fixes only, so the clock is running |
+
+A pin sitting on a pre-LTS **Current** release is reported and never escalated,
+because it resolves itself on a date already in the schedule. That is the state
+today: node 26 became Current on 2026-05-05 and enters Active LTS on 2026-10-28.
+
+[`.github/workflows/node-support-window.yml`](../.github/workflows/node-support-window.yml)
+runs it weekly, since the events are years apart, and files an ISSUE rather than
+opening a PR. The title carries the phase, so a repeat of the same news is
+suppressed while the next, more urgent state still gets through.
+
+The controls are permanent too, because node's schedule keeps every major it has
+ever shipped and each retired one is frozen in a state this must catch:
+
+```bash
+bun run node:pin --pretend 23   # never became LTS, ended 2025-06-01
+bun run node:pin --pretend 22   # in maintenance since 2025-10-21
+```
+
+The tree half of the check has no network and lives in
+`contract-the-node-pin-is-declared-once.test.mjs`, so `validate` already runs it:
+the pin is a bare major, the `engines.node` floor agrees with it and with the
+version `build.ts`'s zstd tripwire names, and every workflow reads the file
+rather than naming a version inline.
+
+**That floor is measured rather than asserted**, as of 2026-08-24. One 8800-byte
+buffer compressed against itself at level 19, on darwin-arm64:
+
+| node | no dictionary | with dictionary | honours it |
+|---|--:|--:|---|
+| v23.11.1 | 63 | 63 | no, silently |
+| v24.19.0 | 63 | 19 | yes |
+| v26.7.0 | 63 | 19 | yes |
+
+So `engines.node: ">=24.0.0"` and build.ts's "Node 24+ is required" were both
+right. The surrounding comments had only ever measured 22 as broken and 26 as
+working, which left 24 as the one number in that sentence nobody had checked.
+
+### the system binaries, in `config/tools.json`
+
+A third shape again, and the reason is worth stating because it inverts the two
+above. bun and node are versions you want CURRENT. The encoders here are versions
+you want RECORDED.
+
+Seven of the thirteen declared binaries produce bytes that ship: `exif-sooc`,
+`sips`, `jpegtran`, `cjpeg`, `avifenc`, `cwebp`, `ffmpeg`. `public/i` is
+content-addressed, so re-encoding under a different encoder mints 632 new URLs,
+orphans every `src/dict/a-dict` snapshot naming the old hash, and can leave
+derived data describing pixels nobody serves. That last one is not hypothetical:
+gotcha 41 is the record of exactly it, where #394 re-encoded 316 thumbnails and
+the histograms went on describing the old pixels for nine days.
+
+So `tools:check` gained a VERSION tier that reads each binary's version and
+compares it against a `recorded` field, and drift is a NOTICE rather than a
+failure. Taking a newer encoder is a deliberate job (re-encode, re-hash,
+`bun run dict:roll`) rather than a side effect, and `brew outdated` already
+answers whether one exists. What nothing answered before is whether the binary on
+this machine is the one the committed bytes came from.
+
+**`recorded` is a baseline observed on 2026-08-24, not a reconstruction.** Nothing
+recorded which encoder made the current artifacts, so claiming these versions
+produced them would be inventing provenance. What is true is that they are the
+versions the next run will use, and a future re-encode updates them.
+
+Reading a version has no convention, so each tool declares its own flag and
+pattern: `exif-sooc 0.2.0`, `jq-1.7.1-apple`, `sips-316`, `Version: 1.4.2 (...)`,
+a bare `1.6.0`, and mozjpeg's two answering `mozjpeg version 4.1.5` on stderr.
+`ssimulacra2` and `butteraugli_main` report nothing at all and say so with a
+reason; both are metrics rather than encoders, so no shipped byte depends on
+them. A declared pattern that stops matching FAILS, because a version tier that
+silently reads nothing is the rot the floors exist to catch.
+
+**One number lived in six places and the canonical one was unread.**
+`EXIF_SOOC_MIN=0.2.0` is written out in five shell scripts, and
+`config/tools.json` carried `min_version` that nothing consulted, which is the
+failure that file's own header says it was created to fix, one field further in.
+The declaration tier now asserts both directions: a guard must match the
+declaration, and a declared minimum nothing enforces is an error.
 
 ## Current baseline
 
