@@ -14,8 +14,16 @@
 // luna.css. It is one commented, readable line in a readable file — View Source
 // still reads as hand-written CSS, and the line says where it came from.
 //
-//   node tools/build.ts                                   # stage .build/
+//   bun run build                                         # stage .build/
 //   bun run deploy:direct                                   # build + wrangler deploy -c .build/wrangler.jsonc
+//
+// THIS BUILD REQUIRES BUN. `lib/link-integrity.ts` parses each document with
+// HTMLRewriter, which bun and workerd have and node does not, so `node
+// tools/build.ts` dies with `ReferenceError: HTMLRewriter is not defined`
+// before anything is written. That line read `node tools/build.ts` until
+// 2026-08-24 and had been wrong since 2026-08-20; copying it took the nightly
+// dictionary roll down for three nights. wrangler.jsonc's build command is
+// `bun tools/build.ts`, so the pinned bun is what compiles production too.
 //
 // wrangler resolves `main` and `assets.directory` relative to the config file, so the
 // root wrangler.jsonc is copied verbatim into .build/ and just works against the copy.
