@@ -13,7 +13,7 @@ for instance:
 * `scripts/` is every dev tool, including the build and the test suite. none of it ships
 * `config/` is wrangler's neighbours: declared infra, the surface registry, tsconfig
 * `docs/` is the long runbooks. `CLAUDE.md` is the architecture doc and the thing agents read
-* `cal/` and `serendipity/` are apps the site worker bundles; `cf-garage/`, `lwe-ask/` and `lens-reader/` deploy on their own
+* `cal/` and `serendipity/` are apps the site worker bundles; `cf-garage/`, `lwe-ask/` and `lens-reader/` deploy on their own (`cf-garage/` on wrangler's experimental TypeScript config, so its commands want `--x-new-config`)
 * `pipelines/` generates the garage and lwe pages, `design/` is the luna design system
 
 both wrangler configs stay at the root because workers builds runs from there.

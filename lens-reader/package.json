@@ -13,8 +13,12 @@
     "typecheck": "node ../node_modules/typescript/bin/tsc -p ../config/tsconfig.lens-reader.json && node ../tools/check-test-types.ts --only lens-reader",
     "test": "node --test test/*.test.mjs"
   },
+  "$comment:dom": "linkedom is a DEV dependency now. src/dom.ts is a first-party DOM over the same htmlparser2 linkedom wrapped, fitted to the 39 members Readability touches and the 11 reader.ts touches. linkedom stays installed as the ORACLE for test/dom-differential.test.mjs, which holds the fitted DOM to it byte-for-byte across 48 documents and asserts an identical parse tree on the 10 captured real-world pages. Deleting linkedom outright would delete the only thing that can prove the replacement is faithful. Measured 2026-08-23 on the swap: 80.57 -> 46.18 KiB gzip (42.7% less) and, over nine alternating trials on a 5754 KiB corpus, a 614.5 -> 299.4 ms median for the full parse-extract-markdown pipeline (51.3% less CPU, 12.80 -> 6.24 ms/doc).",
   "dependencies": {
     "@mozilla/readability": "0.6.0",
+    "htmlparser2": "11.0.0"
+  },
+  "devDependencies": {
     "linkedom": "0.18.13"
   },
   "overrides": {

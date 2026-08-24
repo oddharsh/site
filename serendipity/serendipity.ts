@@ -30,7 +30,10 @@ import { asRecord, asText } from "../src/worker/lib/parse.ts";
 // ── tiny helpers ────────────────────────────────────────────────────────────
 const esc = (v) =>
   String(v == null ? "" : v).replace(/[&<>"']/g, (c) =>
-    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    // The regex can only produce these five, so the lookup is total. The
+    // annotation is what says so; without it the literal has no index
+    // signature and `[c]` reads as possibly undefined.
+    (({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" } as Record<string, string>)[c]));
 
 const html = (status, body) =>
   new Response(body, { status, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
@@ -382,7 +385,7 @@ function eventCard(e, isPast) {
   // everything else was synced from browsing a feed — demote it (dimmed + a
   // "browsed" badge) so the real events stand out.
   const going = e.user_status === "going";
-  const counts = [];
+  const counts: string[] = [];
   if (Number(e.host_count) > 0) counts.push(`${e.host_count} host${e.host_count == 1 ? "" : "s"}`);
   if (Number(e.attendee_count) > 0) counts.push(`${e.attendee_count} going`);
   const d = e.start_at ? new Date(e.start_at) : null;
@@ -500,7 +503,7 @@ async function renderDashboard(d, path, msg, env) {
 
 function attendeeRow(a) {
   const sub = [a.role, a.company].filter(Boolean).join(" · ") || a.bio_short || (a.location ? `📍 ${a.location}` : "");
-  const soc = [];
+  const soc: string[] = [];
   if (a.twitter_handle) soc.push(`<a href="https://x.com/${esc(a.twitter_handle.replace(/^@/, ""))}" rel="noopener external">𝕏</a>`);
   if (a.linkedin_url) soc.push(`<a href="${esc(a.linkedin_url)}" rel="noopener external">in</a>`);
   else if (a.linkedin_handle) soc.push(`<a href="https://linkedin.com/in/${esc(a.linkedin_handle)}" rel="noopener external">in</a>`);
@@ -788,11 +791,11 @@ function parseEvents(data, selfId) {
     const hosts = (entry.hosts || []);
     const isHost = isManager || roleType === "host" || (selfId != null && hosts.some((h) => h.api_id === selfId));
     const userStatus = mapStatus(approval, ticketKey, gi.role || gi.user_role || null, isHost);
-    const preview = [];
+    const preview: any[] = [];
     for (const g of (entry.guests || entry.attending_guests || entry.preview_guests || event.guests || [])) {
       const u = g.user || g, gid = g.api_id || u.api_id; if (gid) preview.push(parseGuest(gid, u));
     }
-    const parsedHosts = [];
+    const parsedHosts: any[] = [];
     for (const h of hosts) { if (h.api_id) parsedHosts.push(parseGuest(h.api_id, h)); }
     return {
       id, name: event.name || event.title || "", description: event.description || event.description_md || null,
@@ -806,7 +809,7 @@ function parseEvents(data, selfId) {
 export const SERENDIPITY_SYNC_LIMITS = Object.freeze({ futurePages: 6, pastPages: 4, pastGuestEvents: 4 });
 
 async function fetchMyEvents(auth, selfId) {
-  const all = [];
+  const all: any[] = [];
   for (const period of ["future", "past"]) {
     // page caps kept low: Cloudflare limits subrequests (fetch calls) per Worker
     // invocation. Ten fetches total stays well under the cap. Four past pages
@@ -839,10 +842,10 @@ type FetchBudget = { left: number, spent: number };
 
 export async function fetchEventGuests(
   eventId, ticketKey, auth,
-  opts: { budget?: FetchBudget, cursor?: string | null } = {},
+  opts: { budget?: FetchBudget | null, cursor?: string | null } = {},
 ) {
   const budget = opts.budget || null;
-  const all = []; let cursor = opts.cursor || null;
+  const all: any[] = []; let cursor = opts.cursor || null;
   for (;;) {
     // Stop on the budget rather than on a page count, so a roster is paced by
     // what the invocation can actually spend instead of by a guessed constant.
@@ -1002,7 +1005,7 @@ async function resolveLumaSource(input) {
 // newinterfaces, whose run is over) instead of returning empty. Stops at `cap`
 // (subrequest budget).
 async function fetchCalendarEvents(calId, cap) {
-  const all = [];
+  const all: any[] = [];
   for (const period of ["future", "past"]) {
     if (all.length >= cap) break;
     let cursor = null;
@@ -1026,7 +1029,7 @@ async function fetchCalendarEvents(calId, cap) {
 // the pool isn't seeded with stale events.
 async function fetchDiscoverEvents(slug, cap) {
   const cutoff = Date.now() - 12 * 3600 * 1000;
-  const all = []; let cursor = null, pages = 0;
+  const all: any[] = []; let cursor = null, pages = 0;
   while (all.length < cap && pages < 3) {
     pages++;
     const p = new URLSearchParams({ slug, pagination_limit: "50" });
@@ -1073,7 +1076,7 @@ async function syncEvents(d, userKey, cookiesJson) {
   try {
     const selfId = selfIdFrom(cookiesJson);
     const events = await fetchMyEvents(jar, selfId);
-    const S = [];
+    const S: any[] = [];
     if (selfId) {
       S.push(d.stmt(`INSERT INTO settings (key,value,updated_at) VALUES (?,?,datetime('now')) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=datetime('now')`, `luma_user_id_${userKey}`, selfId));
       S.push(d.stmt(`INSERT INTO contributors (luma_user_id,first_seen_at,last_seen_at) VALUES (?,datetime('now'),datetime('now')) ON CONFLICT(luma_user_id) DO UPDATE SET last_seen_at=datetime('now')`, selfId));
@@ -1101,7 +1104,7 @@ async function syncEvents(d, userKey, cookiesJson) {
 // featured guests + a contribution by this uid. Returns {added,names,sources,failed}.
 async function addEventsByLink(d, uid, raw) {
   const urls = (raw || "").split(/[\s,]+/).map((s) => s.trim()).filter(Boolean).slice(0, 8);
-  const S = [], names = [], sources = [], failed = [];
+  const S: any[] = [], names: string[] = [], sources: string[] = [], failed: string[] = [];
   let total = 0;
   for (const u of urls) {
     if (total >= POOL_CAP) break;
@@ -1109,7 +1112,7 @@ async function addEventsByLink(d, uid, raw) {
     try { src = await resolveLumaSource(u); } catch { src = null; }
     if (!src) { failed.push(u.replace(/^https?:\/\//, "").slice(0, 32)); continue; }
     const room = POOL_CAP - total;
-    let events = [];
+    let events: any[] = [];
     try {
       // pass the resolved evt- id (not the URL) so fetchEventByLink skips a re-scrape.
       if (src.kind === "event") { const r = await fetchEventByLink(src.id); if (r && r.event) events = [r.event]; }
@@ -1211,7 +1214,7 @@ async function markGuestSync(d, eventId, value) {
 // Sync one event's guest list (batched writes), paced by the invocation's fetch
 // budget. Returns {synced,...}, {error}, or {skipped} when there was no budget
 // left to try. A skip deliberately writes NO marker: see the catch below.
-async function syncGuests(d, eventId, userKey, cookiesJson, budget = null) {
+async function syncGuests(d, eventId, userKey, cookiesJson, budget: FetchBudget | null = null) {
   const jar = cookieJar(cookiesJson);
   if (!jar || !jar.header()) return { error: "bad cookie json" };
   // Ahead of the row lookup, so a skip costs nothing at all.
@@ -1236,7 +1239,7 @@ async function syncGuests(d, eventId, userKey, cookiesJson, budget = null) {
     const page = await fetchEventGuests(eventId, ev.ticket_key, jar, { budget, cursor: resume });
     const guests = page.guests;
     const total = alreadySeen + guests.length;
-    const S = [];
+    const S: any[] = [];
     for (const g of guests) {
       if (!g.id || g.id === selfId) continue;
       S.push(attendeeStmt(d, g));
@@ -1256,7 +1259,7 @@ async function syncGuests(d, eventId, userKey, cookiesJson, budget = null) {
     // that a roster too large to walk in one budget never prunes cancellations;
     // at 100 a page and a budget of 24 that starts above ~2,400 guests.
     const fullWalk = mayPruneRoster(page, resume);
-    let stale = [];
+    let stale: any[] = [];
     if (fullWalk) {
       const existing = await d.prepare(
         "SELECT attendee_id FROM event_attendees WHERE event_id = ? AND is_host = 0"
@@ -1299,7 +1302,7 @@ async function syncDescriptions(d, userKey, cookiesJson, limit) {
       `SELECT id FROM events WHERE description IS NULL AND desc_synced_at IS NULL ORDER BY start_at DESC LIMIT ?`
     ).all(limit);
     let filled = 0;
-    const S = [];
+    const S: any[] = [];
     for (const row of todo) {
       let desc = null;
       try { desc = await fetchEventDescription(row.id, jar); } catch { desc = null; }  // never let one event abort the batch
@@ -1349,7 +1352,7 @@ async function handleSync(request, env, d) {
   }
   const sets = await d.prepare("SELECT user_key, cookies_json, label FROM user_cookies WHERE enabled = 1").all();
   const eventId = url.searchParams.get("event");
-  const out = [];
+  const out: any[] = [];
   // A manual sync owns its whole invocation, so it gets the cap less headroom
   // rather than the sweep's share. Bounded all the same: an admin refresh of a
   // 5,000-person roster would otherwise hit the same ceiling the cron did, and
@@ -1536,7 +1539,7 @@ function parseStructured(text) {
   const kv = m ? text.slice(proseEnd) : "";
   const line = (k) => { const lm = kv.match(new RegExp(`^\\s*${k}\\s*:\\s*(.+)$`, "im")); return cleanVal(lm?.[1]); };
   const role = line("ROLE"), company = line("COMPANY"), location = line("LOCATION"), past = line("PAST");
-  const work = [];
+  const work: any[] = [];
   if (role || company) work.push({ title: role, company_name: company, current: true });
   if (past) for (const c of past.split(/\s*,\s*/).slice(0, 3)) { const [t, co] = c.split(/\s+at\s+/i).map(cleanVal); if (t || co) work.push({ title: t ?? null, company_name: co ?? null }); }
   return { role, company, location, bio, work_history: work };
@@ -1593,7 +1596,7 @@ async function enrichViaExa(d, key, attendee, force) {
   const p = parseStructured(summary ?? text);
   const freeform = (summary ?? text ?? "").replace(/\s+/g, " ").trim();
   let company = p.company, bio = p.bio ?? (freeform ? freeform.slice(0, 600) : null);
-  let stealth = null;
+  let stealth: (ReturnType<typeof parseStealth> & { sources?: string[] }) | null = null;
   if (isStealth(company)) {
     stealth = await drillStealth(key, attendee, linkedinUrl);
     if (stealth && (stealth.domain || stealth.thesis)) {
@@ -1720,7 +1723,7 @@ async function handleEnrich(request, env, d) {
       LIMIT ?`).all(limit);
   } else return jerr("pass ?attendee=, ?event= or ?upcoming=1", 400);
 
-  const out = [];
+  const out: any[] = [];
   for (const a of targets) out.push({ name: a.name, ...(await P.fn(d, key, a, !!aid)) });
   return new Response(JSON.stringify({ ok: true, provider, enriched: out }, null, 2), { headers: { "content-type": "application/json" } });
 }
@@ -2019,7 +2022,7 @@ async function mcpResolvePerson(d, q) {
 
 // who shows up across the most events (who you're seeing a lot); optional slice.
 async function mcpFrequentPeople(d, when, limit) {
-  let filter = "", binds = [];
+  let filter = "", binds: any[] = [];
   if (when === "upcoming" || when === "past") {
     const nowIso = new Date().toISOString();
     filter = when === "upcoming"
@@ -2437,7 +2440,7 @@ export async function handleSerendipity(request, env, ctx) {
   let path = url.pathname.replace(/\/+$/, "") || PREFIX;
 
   // stable per-browser uid (keys a contributor's cookie set); mint if absent
-  let uid = readUid(request), setCookie = null;
+  let uid = readUid(request), setCookie: string | null = null;
   if (!uid) { uid = mintUid(); setCookie = uidCookie(uid); }
 
   if (!env.SERENDIPITY_DB) {

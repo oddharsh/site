@@ -29,7 +29,7 @@ review policy and entry point for future agent runs.
 
 ## Current baseline
 
-- Wrangler 4.124.0 is the exact root pin shared by all Worker projects.
+- Wrangler 4.125.0 is the exact root pin shared by all Worker projects.
   `cal`'s @cloudflare/vitest-pool-workers floor is 0.22.0, which resolves the
   same Wrangler, Miniflare, and Workerd stack as the root. Measured on
   2026-08-15 across five warm-store, clean installs, that alignment cut median
@@ -158,12 +158,42 @@ the reason, rather than written here with the caret quietly dropped.
   2026-08-14 on a measured control-label win; the argument and the numbers are
   in CLAUDE.md under the `lens-reader/` section, and a bump should be read for
   whether it changes what the extractor DISCARDS, since the discard is the
-  lens's whole artifact. `linkedom` 0.18.13 exists only to supply the DOM that Workers
-  lack and is several times the weight of the extractor it serves, so its
-  releases matter for bundle size more than for behaviour.
+  lens's whole artifact.
 
-  `htmlparser2` 11.0.0 is a deliberate transitive override beyond linkedom's
-  declared `^10.1.0` range. Version 10 carried domhandler 5, domutils 3,
+  `linkedom` 0.18.13 is a DEV dependency as of 2026-08-23 and ships in nothing.
+  It supplied the DOM that Workers lack, and it was several times the weight of
+  the extractor it served: 65.27 KiB gzip of an 80.57 KiB Worker, measured by
+  bundling each package alone under that project's wrangler config.
+  `src/dom.ts` replaced it with a first-party DOM over the same htmlparser2,
+  fitted to the 39 members Readability touches and the 11 reader.ts touches.
+  The swap measured 80.57 -> 46.18 KiB gzip (42.7% less) and, over nine
+  alternating trials on a 5754 KiB corpus, a 614.5 -> 299.4 ms median for the
+  full parse-extract-markdown pipeline (51.3% less CPU, 12.80 -> 6.24 ms/doc).
+
+  It stays INSTALLED because it is the oracle.
+  `test/dom-differential.test.mjs` runs the real pipeline twice over 48
+  documents, once on each DOM, and compares title, byline, content, markdown and
+  control labels byte for byte; a second gate compares the serialized parse tree
+  on the 10 captured real-world pages, and a third pins the SVG rules no capture
+  can reach. Deleting linkedom would delete the only
+  thing that can prove the replacement is faithful, so treat a bump as a change
+  to the reference rather than to the product, and expect it to surface as a
+  parity failure rather than as a payload change.
+
+  What was tried first and failed is worth knowing before anyone repeats it.
+  `@mozilla/readability` ships `JSDOMParser.js`, 1278 lines, described in its own
+  header as the minimal DOM Readability needs, and Readability guards for it
+  (`_getAllNodesWithTag` falls back to `getElementsByTagName`). Bundled, it took
+  a probe from 105.68 to 27.07 KiB gzip. It also failed on 36 of this
+  repository's 38 documents with `expected '</meta>' and got </head>`, because
+  it is an XHTML parser and HTML5 void elements are not XHTML. Tolerant parsing
+  is not the separable part.
+
+  `htmlparser2` 11.0.0 is a DIRECT dependency now, and also still an override on
+  linkedom's declared `^10.1.0` range so the oracle resolves the same parser the
+  Worker bundles. A parity gate whose reference parses differently proves
+  nothing. The version reasoning below is unchanged and is why 11 rather than
+  12 is pinned in both places. Version 10 carried domhandler 5, domutils 3,
   dom-serializer 2, and two older entity-table generations beside the newer
   stack linkedom already receives through css-select. Version 11 uses that same
   newer generation. Version 12 is deliberately NOT selected: its WHATWG raw-text

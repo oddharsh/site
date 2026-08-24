@@ -20,31 +20,34 @@
   if (!form) return; // not the /lens page
 
   var urlInput = /** @type {HTMLInputElement} */ (document.getElementById("lx-url"));
-  var panes = document.getElementById("lx-panes");
-  var humanBody = document.getElementById("lx-human-body");
-  var machineBody = document.getElementById("lx-machine-body");
-  var machineTop = document.getElementById("lx-machine-top");
+  var panes = /** @type {HTMLElement} */ (document.getElementById("lx-panes"));
+  var humanBody = /** @type {HTMLElement} */ (document.getElementById("lx-human-body"));
+  var machineBody = /** @type {HTMLElement} */ (document.getElementById("lx-machine-body"));
+  var machineTop = /** @type {HTMLElement} */ (document.getElementById("lx-machine-top"));
   // The machine pane's single scroller, wrapping the static block, the tab
   // strip and the lens report. Null on any older cached shell, which every use
   // guards for.
   var machineScroll = document.getElementById("lx-machine-scroll");
-  var browserBody = document.getElementById("lx-browser-body");
-  var machineH = document.getElementById("lx-machine-h");
-  var humanH = document.getElementById("lx-human-h");
-  var modeNote = document.getElementById("lx-mode-note");
-  var statusBar = document.getElementById("lx-status");
-  var toolbar = document.getElementById("lx-toolbar");
-  var vsRow = document.getElementById("lx-addr-vs");
+  var browserBody = /** @type {HTMLElement} */ (document.getElementById("lx-browser-body"));
+  var machineH = /** @type {HTMLElement} */ (document.getElementById("lx-machine-h"));
+  var humanH = /** @type {HTMLElement} */ (document.getElementById("lx-human-h"));
+  var modeNote = /** @type {HTMLElement} */ (document.getElementById("lx-mode-note"));
+  var statusBar = /** @type {HTMLElement} */ (document.getElementById("lx-status"));
+  var toolbar = /** @type {HTMLElement} */ (document.getElementById("lx-toolbar"));
+  var vsRow = /** @type {HTMLElement} */ (document.getElementById("lx-addr-vs"));
   var vsInput = /** @type {HTMLInputElement} */ (document.getElementById("lx-url-vs"));
-  var vsToggle = document.getElementById("lx-vs-toggle");
-  var vsCloseBtn = document.getElementById("lx-vs-close");
-  var vsSection = document.getElementById("lx-vs");
+  var vsToggle = /** @type {HTMLElement} */ (document.getElementById("lx-vs-toggle"));
+  var vsCloseBtn = /** @type {HTMLElement} */ (document.getElementById("lx-vs-close"));
+  var vsSection = /** @type {HTMLElement} */ (document.getElementById("lx-vs"));
 
+  /** @type {any} */
   var data = null;       // last successful HTTP envelope
+  /** @type {any} */
   var browserData = null; // last opt-in Browser Run snapshot
   // The post-interaction snapshot lives BESIDE the plain one, never on top of
   // it: overwriting browserData would destroy the "before" half of the only
   // comparison this feature exists to make.
+  /** @type {any} */
   var browserRecipeData = null;
   var view = "both";     // both | human | machine | browser | delta
   var lens = "anatomy";  // default = the raw observation; must match lensState() in _worker.js/lens.js
@@ -53,20 +56,26 @@
   var browserBusy = false;
   var vsMode = false;    // head-to-head: #lx-vs shown, single-scan chrome .lx-off
   var vsBusy = false;
+  /** @type {any} */
   var lastShotUrl = null;   // the live snapshot object URL, revoked before the next mint / on decode
 
   // Must match LENS_TAB_LABELS in www/_worker.js/lens.js: the tab labels are
   // phrased as the question each lens answers, so the tab row reads as a menu.
   var LENS_LABEL = { readiness: "Agent-ready?", anatomy: "Raw response", reader: "Reader's guess", wire: "What it costs", structured: "What it claims", ai: "Model cost", terms: "Who's allowed", discovery: "Agent doors", tools: "What it accepts", nlweb: "What it answers" };
+  /** @type {any} */
   var readerData = null;   // last /lens/read extraction, null until asked for
   var readerBusy = false;
+  /** @type {any} */
   var wireData = null;     // last /lens/wire trace, null until asked for
   var wireBusy = false;
+  /** @type {any} */
   var toolsData = null;    // last /lens/tools catalogue, null until asked for
   var toolsBusy = false;
+  /** @type {any} */
   var nlwebData = null;    // last /lens/nlweb answer, null until asked for
   var nlwebBusy = false;
   var nlwebQuery = "";     // the visitor's question, kept across re-renders
+  /** @type {any} */
   var cloudflareData = null; // normalized result from Cloudflare's public scanner
   var cloudflareBusy = false;
 
@@ -87,6 +96,7 @@
   // Flattened [key, spelling] pairs, longest spelling first so "llms.txt" is
   // never eaten by a shorter overlap. A term may carry alt spellings because the
   // checks say "Link relations" where the glossary says "Link headers".
+  /** @type {[any, string][]} */
   var GLOSS_SPELLINGS = [];
   Object.keys(GLOSS).forEach(function (key) {
     [GLOSS[key].label].concat(GLOSS[key].alt || []).forEach(function (s) {
@@ -131,6 +141,7 @@
     var out = "";
     var pos = 0;
     for (;;) {
+      /** @type {{at: number, key: any, text: string} | null} */
       var best = null;
       for (var i = 0; i < GLOSS_SPELLINGS.length; i++) {
         var key = GLOSS_SPELLINGS[i][0], spelling = GLOSS_SPELLINGS[i][1];
@@ -810,6 +821,7 @@
     var micro = s.microdata && s.microdata.itemtypes ? s.microdata.itemtypes.length : 0;
     var rdfa = s.rdfa && s.rdfa.typeof ? s.rdfa.typeof.length : 0;
     var mf = s.microformats ? s.microformats.length : 0;
+    /** @type {string[]} */
     var entityTypes = [];
     (s.jsonld || []).forEach(function (b) {
       (b.types || []).forEach(function (x) { if (entityTypes.indexOf(x) < 0) entityTypes.push(x); });
@@ -915,6 +927,7 @@
     var st = ag.strategy || {};
     var c = data.cost && data.cost.tiers && data.cost.tiers[0];
     var rate = (data.cost && data.cost.rates && data.cost.rates[0]) || { usdPerMtok: 3 };
+    /** @type {string[]} */
     var lines = [];
     function line(kind, text) { lines.push({ kind: kind, text: text }); }
 
@@ -928,6 +941,7 @@
     // UNDERSTAND
     var jsonld = (s.jsonld || []).length;
     if (jsonld) {
+      /** @type {string[]} */
       var types = [];
       (s.jsonld || []).forEach(function (b) { (b.types || []).forEach(function (x) { if (types.indexOf(x) < 0) types.push(x); }); });
       line("ok", "Parsed structured data → " + jsonld + " JSON-LD block" + (jsonld === 1 ? "" : "s") + (types.length ? " (" + types.slice(0, 4).join(", ") + ")" : "") + ". Entities without guessing.");
@@ -1355,6 +1369,7 @@
       return '<tr' + (isControl ? ' class="control"' : "") + '><td class="ua"><b>' + esc(bot.label) + '</b>' + (isControl ? '<span class="tag">control</span>' : "") + '<br><span class="who">' + esc(bot.owner) + '</span></td><td>' + (isControl ? '<span class="na">n/a</span>' : badge(policy ? policy.verdict : "not scored", policy && policy.verdict === "allow" ? "ok" : "warn")) + '</td><td>' + badge(actual.text, actual.kind) + '</td><td class="rule">' + esc(implication) + '</td></tr>';
     }).join("") + '</table>' : '<div class="lx-none">Bot identity samples were unavailable.</div>';
 
+    /** @type {any[]} */
     var gaps = [];
     var c = r.checks || {};
     if (c.markdownNegotiation && c.markdownNegotiation.status !== "pass") gaps.push("Agents pay the HTML/token tax because this URL does not negotiate a clean machine representation.");
@@ -2024,6 +2039,7 @@
 
   // ---- status bar -------------------------------------------------------
   function renderStatus() {
+    /** @type {string[]} */
     var parts = [];
     parts.push("<span><b>" + data.status + "</b> " + esc(httpText(data.status)) + "</span>");
     parts.push("<span>" + esc(modeLabel()) + "</span>");

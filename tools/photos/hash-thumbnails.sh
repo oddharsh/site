@@ -66,6 +66,17 @@ if os.path.exists(map_path):
             hashes = json.load(f)
     except Exception:
         hashes = {}
+
+# The j-tier hash each histogram was computed from, snapshotted before this run
+# mutates `hashes`. images/histograms.json is a pure function of those exact JPEG
+# bytes, and a re-encode mints a NEW hash, so a run that moves any j leaves the
+# committed bars describing pixels nobody is served.
+#
+# Not hypothetical: #394 re-encoded 316 thumbnails on 2026-08-14 and re-baked
+# nothing, and it went unseen for nine days because check-photo-pipeline compares
+# histograms.json against images/meta/, which build.mjs derives FROM
+# histograms.json. Those two agree no matter what the JPEGs say.
+prev_j = {st: e.get("j") for st, e in hashes.items() if isinstance(e, dict)}
 copied = 0
 for stem in stems:
     tiers = {
@@ -121,6 +132,17 @@ for f in os.listdir(out_dir):
 print(f"hashed {len(hashes)} stems, copied {copied} new files -> {out_dir}")
 print(f"pruned {pruned_src} un-hashed source tiers, {pruned_i} superseded /i/ files")
 print(f"map: {map_path}")
+
+restale = sorted(st for st, e in hashes.items()
+                 if prev_j.get(st) and isinstance(e, dict) and e.get("j") != prev_j[st])
+if restale:
+    shown = ", ".join(restale[:8]) + (" ..." if len(restale) > 8 else "")
+    print("")
+    print(f"WARNING: the JPEG tier changed for {len(restale)} photo(s): {shown}")
+    print("  images/histograms.json is computed from those exact bytes, so the")
+    print("  tooltip bars are now stale. Re-bake before committing:")
+    print("    ./tools/photos/extract-photo-metadata.sh /path/to/sooc-originals/")
+    print("  add-photos.sh already runs that; a standalone re-encode does not.")
 EOF
 
 # The short URL hash above is intentionally kept separate from the full-byte
