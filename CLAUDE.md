@@ -4467,6 +4467,40 @@ bun run deploy:direct
     (`$SCRIPT_DIR/../..` plus `/public`) over one that counts directory levels
     from the script, because the second one is silently wrong after any move.
 
+    **The `tail -1` half of that generalizes past scripts, and on 2026-08-24 it
+    cost a wrong bug report to Cloudflare.** `$?` after a pipeline is the LAST
+    command's status, so a pipe added for READABILITY quietly throws away the
+    status of the thing being measured. Filed as workers-sdk#15335, claiming
+    `wrangler check startup` exits 0 under bun while producing no profile. A
+    maintainer could not reproduce it, and neither could a fresh repro: across 8
+    invocation shapes on wrangler 4.125.0 and 4.124.0, every one exits 1 except
+    `bun … check startup 2>&1 | tail -3`, which exits 0 because `tail` does.
+    The claim was withdrawn.
+
+    **The interactive version is worse than the committed one, because nobody
+    reads the pipe as part of the measurement.** In a script the pipe is at
+    least on the page, which is where this gotcha eventually found it. At a
+    prompt it is punctuation you added so the output would fit, and the number
+    you then copy into a bug report, or into this file, looks like it came
+    from the command.
+
+    Guards, measured 2026-08-24 in both shells this repo uses:
+
+    | want | bash | zsh |
+    |---|---|---|
+    | fail the whole pipeline | `set -o pipefail` | `set -o pipefail` |
+    | read the first stage | `${PIPESTATUS[0]}` | `$pipestatus[1]` |
+
+    Mind the index, since bash counts from 0 and zsh counts from 1, so the
+    reflexive `${PIPESTATUS[0]}` typed at a zsh prompt reads the SECOND stage.
+    The cheapest habit is to redirect to a file, read `$?`, and pipe the file
+    afterwards, which is what settled the wrangler question.
+
+    **The instance this gotcha already names is still unguarded.** Of the 11
+    committed shell scripts, 9 carry `set -euo pipefail` and 2 carry a bare
+    `set -e`, and `add-photos.sh:503` (the `zenc histogram … | tail -1` above)
+    sits in one of the two.
+
 41. **cf-garage runs wrangler's EXPERIMENTAL TypeScript config, and it is the
     trial rather than the standard.** Converted 2026-08-23:
     `cf-garage/wrangler.toml` is gone and `cf-garage/cloudflare.config.ts` is the
