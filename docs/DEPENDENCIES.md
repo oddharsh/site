@@ -7,13 +7,32 @@ Dependabot watches FIVE ecosystems, and this paragraph named two of them until
 |---|---|---|
 | npm | `/` | the shared deploy toolchain and the one shipped dependency |
 | npm | `/lens-reader` | the Reader lens Worker, which is outside the workspace on purpose |
-| github-actions | `/` | the five digest-pinned actions |
+| github-actions | `/`, `/.github/actions/*` | the six digest-pinned actions |
 | cargo | `/tools/photos/zenc` | the JPEG thumbnail encoder's zenjpeg pin |
 | pip | `/tools/photos` | Pillow, for one page generator |
 
 Each update PR keeps the upstream release notes/changelog in its Dependabot
 description and gets a persistent site-review comment containing the exact
 version change, update type, and questions for the site.
+
+Two of those cells were wrong until 2026-08-24, in the same direction: they
+described coverage the config did not have. The count read five while six
+distinct third-party action repositories are pinned across `.github/`, because
+`codeql.yml` arrived with the move to CodeQL advanced setup and nobody re-counted.
+And the glob is new, because `directory: "/"` reaches `action.yml` at the
+REPOSITORY ROOT plus everything in `.github/workflows`, and never a composite
+action in a subdirectory, so `.github/actions/setup-bun` was unwatched from the
+day it was written. That one costs nothing yet: the action is pure shell and
+names no `uses:`, which is also why it was invisible.
+
+Every ecosystem carries `cooldown: default-days: 1`, which is the same 24 hours
+`bunfig.toml` sets as `minimumReleaseAge = 86400`. For the two npm blocks it is
+load-bearing rather than tidy, since bun refuses to RESOLVE a pin younger than
+that window and an exact pin gets no fallback: measured 2026-08-24 on bun 1.4.0,
+`bun install` exits 1 with `failed to resolve`, and exits 0 on the same tree with
+the policy off. A dependency PR opened inside the window is therefore one nobody
+can carry into `bun.lock` until the package turns a day old. Cooldown governs
+version updates alone and never security updates, so it delays no advisory.
 
 Before merging a dependency PR, future agents should record whether the new
 release changes any of these surfaces:

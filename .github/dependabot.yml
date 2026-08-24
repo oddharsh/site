@@ -24,9 +24,25 @@ updates:
   # Two smaller reasons the switch is not close. The bun updater serves version
   # updates only, so security updates would be LOST, and bun-plus-workspaces has
   # been open as a known bug since 2026-02-19 while this repo has five workspace
-  # projects. Revisit when that updater's bundled bun reaches 1.4; until then the
-  # lockfile is a hand commit on each dependency PR, and `validate` failing at
-  # install is the expected first state of one rather than a broken branch.
+  # projects.
+  #
+  # RE-CHECKED 2026-08-24, and THE NUMBER TO WATCH IS NOT THE ONE THIS COMMENT
+  # USED TO NAME. It said to revisit when the updater's bundled bun reaches 1.4.
+  # The ceiling is a CONSTANT in the Ruby instead, and dependabot-core#15896
+  # moved the two independently on 2026-08-14: it bumped `BUN_VERSION` from
+  # 1.3.5 to 1.3.14 AND added `BunPackageManager::MAX_SUPPORTED_LOCKFILE_VERSION
+  # = 1`, calling the bun bump routine and saying outright that it does not
+  # change the ceiling. So an image carrying bun 1.4 still refuses a v2 lockfile
+  # until somebody raises that constant, and watching the bundled version would
+  # have read a fixed gate as an open one.
+  #
+  # Nothing upstream is moving on it. dependabot-core#16026 ("Bun 1.4 uses
+  # lockfile v2 which dependabot currently does not support") was opened by
+  # another user on 2026-08-24, carries `help-wanted`, and has zero comments;
+  # #15897, asking for per-repository bun versions in the updater image, is open
+  # as well. Until the constant reaches 2 the lockfile is a hand commit on each
+  # dependency PR, and `validate` failing at install is the expected first state
+  # of one rather than a broken branch.
   #
   # The root workspace owns the shared deploy toolchain (including Wrangler,
   # Oxc Minify, and Lightning CSS) and all workspace dependency resolution.
@@ -50,6 +66,23 @@ updates:
       time: "09:00"
       timezone: America/New_York
     open-pull-requests-limit: 10
+    # COOLDOWN MIRRORS `minimumReleaseAge = 86400` IN bunfig.toml, and without it
+    # dependabot opens pull requests this repo cannot finish. bun refuses to
+    # RESOLVE a version published inside that window, and an exact pin gets no
+    # fallback the way a range does: measured 2026-08-24 on bun 1.4.0, an
+    # `bun install` whose exact devDependency the policy rejects exits 1 with
+    # `failed to resolve`, where the same tree with the policy off exits 0. The
+    # whole cost of staying on the npm ecosystem is the hand `bun install` that
+    # carries the bump into bun.lock, so a PR opened inside that window is one
+    # nobody can relock until the package turns a day old.
+    #
+    # It buys that for no advisory latency, because cooldown governs VERSION
+    # updates alone and is documented as never applying to security updates.
+    # One day rather than a rounder number, because the number is the install
+    # policy's number: a second, larger source of truth for the same window is
+    # how the two quietly drift apart.
+    cooldown:
+      default-days: 1
     commit-message:
       prefix: chore
       include: scope
@@ -108,8 +141,27 @@ updates:
           - "patch"
 
   # Keep the action toolchain current too; its PRs get the same review note.
+  #
+  # `directories` RATHER THAN `directory`, BECAUSE "/" DOES NOT REACH A COMPOSITE
+  # ACTION IN A SUBDIRECTORY. Read out of dependabot-core's own fetcher
+  # (github_actions/lib/dependabot/github_actions/file_fetcher.rb) on 2026-08-24
+  # rather than inferred from the docs, which say only "set the directory to /
+  # to check for workflow files in .github/workflows" and leave the rest open:
+  # at "/" it fetches `action.yml` and `action.yaml` AT THE REPOSITORY ROOT plus
+  # every `*.yml` under `.github/workflows`, and for any other directory it
+  # fetches the yaml in that one directory. `.github/actions/setup-bun` is in
+  # neither set, so it has never been watched.
+  #
+  # It costs nothing TODAY, which is the argument for closing it now rather than
+  # when it bites. That action is four lines of shell and names no `uses:`, so
+  # the gap has no symptom to notice, and the first symptom available to it is
+  # an unpinned third-party action sitting in CI that nobody was updating. The
+  # glob is what makes this coverage instead of one more hand-maintained entry,
+  # and globbing is supported by `directories` where `directory` refuses it.
   - package-ecosystem: github-actions
-    directory: "/"
+    directories:
+      - "/"
+      - "/.github/actions/*"
     schedule:
       interval: daily
       time: "09:00"
@@ -117,6 +169,16 @@ updates:
     open-pull-requests-limit: 5
     labels:
       - github-actions
+    # The same 24h window, on the weaker of the two arguments. No bun install
+    # relocks an action pin, so nothing here fails the way the npm blocks do;
+    # what carries it is the half of the bunfig comment that is not about bun at
+    # all, that a release is most dangerous and least noticed on its first day.
+    # An action is the most attractive target in this repository, since it runs
+    # with a token in CI on every push. `semver-*-days` is NOT supported for
+    # this ecosystem, unlike npm, cargo and pip, so `default-days` is the whole
+    # vocabulary available here.
+    cooldown:
+      default-days: 1
     groups:
       # Actions are SHA-pinned, so a bump is a 40-char diff with no semantics to
       # read per action. Batching them is strictly less review for the same
@@ -140,6 +202,8 @@ updates:
       time: "09:00"
       timezone: America/New_York
     open-pull-requests-limit: 1
+    cooldown:
+      default-days: 1
     commit-message:
       prefix: chore
       include: scope
@@ -154,6 +218,8 @@ updates:
       time: "09:00"
       timezone: America/New_York
     open-pull-requests-limit: 3
+    cooldown:
+      default-days: 1
     commit-message:
       prefix: chore
       include: scope
@@ -196,6 +262,10 @@ updates:
       time: "09:00"
       timezone: America/New_York
     open-pull-requests-limit: 3
+    # Its own bun.lock, so its own instance of the resolve failure the root
+    # block measures.
+    cooldown:
+      default-days: 1
     commit-message:
       prefix: chore
       include: scope
