@@ -90,7 +90,7 @@ review policy and entry point for future agent runs.
   the checker can read the annotations; they add no runtime and no served byte.
   Dependabot should review TypeScript releases for new checks that could fail CI
   on unchanged code, and workers-types for binding-shape changes.
-- @types/bun 1.3.14 is the exact root pin for the SECOND type program,
+- @types/bun 1.4.0 is the exact root pin for the SECOND type program,
   `config/tsconfig.tools.json`, which checks `tools/`. It carries the node globals
   as well, so it is one entry rather than two, and it declares the bun-only
   globals the tools now use directly (HTMLRewriter among them). Types only: no
