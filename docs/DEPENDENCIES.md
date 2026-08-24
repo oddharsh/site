@@ -89,7 +89,7 @@ review policy and entry point for future agent runs.
   5 selectors `/garage/horizon` ships deliberately. So a page could pass the
   contract check and fail the build, which is the wrong way round: the build
   decides what reaches a visitor, so a pre-build check should agree with the
-  build's parser. Both now call `parseCss` in `tools/lib/css-parse.mjs`, which
+  build's parser. Both now call `parseCss` in `tools/lib/css-parse.ts`, which
   owns the tolerated-warning family and re-proves the pass-through on every call.
   The staged tree is byte-identical across all 1476 files.
 
@@ -166,7 +166,7 @@ review policy and entry point for future agent runs.
   @types/bun at every future version.
 - playwright-core is a scripts-only devDep (caret-ranged, not pinned: it drives
   the locally installed Google Chrome rather than a bundled browser). Only
-  `tools/photos/gen-og-cards.mjs` uses it, and only on demand; no CI job and
+  `tools/photos/gen-og-cards.ts` uses it, and only on demand; no CI job and
   no deploy path touches it.
 - Pillow 12.3.0 is pinned in `tools/photos/requirements.txt` for
   `gen-pixel-peeper.py`, a one-off generator for the /pixel-peeper comparison
@@ -191,7 +191,7 @@ covered none of them until 2026-08-14. One is its own Dependabot ecosystem, so
 it drifts on the same cadence the baseline does.
 
 **These four are checked now**, as of 2026-08-14.
-`tools/lib/dependency-docs.mjs` reads them alongside the root `package.json`
+`tools/lib/dependency-docs.ts` reads them alongside the root `package.json`
 and holds this prose to them in both directions: a stated version that stops
 matching fails CI, and a NEW dependency in any of the four fails CI until
 somebody either states its version or exempts it with a reason. That is what

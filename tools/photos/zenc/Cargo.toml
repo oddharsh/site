@@ -11,9 +11,28 @@ name = "zenc"
 path = "src/main.rs"
 
 [dependencies]
-# The encoder. hybrid trellis (auto_optimize) needs `trellis`; `parallel` speeds
-# the 2000px square inputs. dependabot (cargo ecosystem) owns the version pin.
-zenjpeg = { version = "0.8.4", features = ["parallel", "trellis"] }
+# The encoder. hybrid trellis (auto_optimize) needs `trellis`.
+#
+# `parallel` CAME OUT on 2026-08-24, measured rather than reasoned about. It was
+# carried on the claim that it "speeds the 2000px square inputs", which was never
+# a number, and on the tier it named it is worth 1.1%:
+#
+#   600px thumbnail, q84         +2.7%   (+1.5 ms/photo, 9 alternating trials)
+#   2000px archive, q100 4:2:2   +1.1%   (+11 ms/image, 5 alternating trials)
+#
+# For that it cost SIX crates (rayon, rayon-core, crossbeam-deque, -epoch,
+# -utils, either) and 194,704 bytes of binary, 10.8% of it. zenc's own source
+# never touches rayon; the feature only reaches zenjpeg's internals, which is
+# why it buys so little on images this size.
+#
+# The reason it is safe to drop is that OUTPUT DOES NOT MOVE: byte-identical on
+# 6 of 6 thumbnails and 4 of 4 archives. `/i/` is content-addressed, so a
+# changed byte would re-mint 632 files and obsolete every baked histogram
+# (gotcha 41). It changes nothing.
+#
+# Re-add it only with a measurement on the tier that motivates it, and check
+# byte-identity in the same run. dependabot (cargo ecosystem) owns the pin.
+zenjpeg = { version = "0.8.4", features = ["trellis"] }
 # Input decode only. The pipeline hands us an already-upright, metadata-stripped
 # PNG/JPG, so keep image lean: no extra format decoders to widen the dep graph.
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
