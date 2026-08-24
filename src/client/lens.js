@@ -59,7 +59,7 @@
   /** @type {any} */
   var lastShotUrl = null;   // the live snapshot object URL, revoked before the next mint / on decode
 
-  // Must match LENS_TAB_LABELS in www/_worker.js/lens.js: the tab labels are
+  // Must match LENS_TAB_LABELS in src/worker/lens.ts: the tab labels are
   // phrased as the question each lens answers, so the tab row reads as a menu.
   var LENS_LABEL = { readiness: "Agent-ready?", anatomy: "Raw response", reader: "Reader's guess", wire: "What it costs", structured: "What it claims", ai: "Model cost", terms: "Who's allowed", discovery: "Agent doors", tools: "What it accepts", nlweb: "What it answers" };
   /** @type {any} */
