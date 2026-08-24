@@ -418,7 +418,7 @@ test("site MCP resources/read serves listed surfaces only, same-origin", async (
 // `tools/list` responses remain the protocol source of truth, so the cards are
 // generated projections rather than a second hand-maintained tool catalog.
 test("published MCP server cards and discovery files stay aligned with both live servers", async () => {
-  const { handleMcp } = await import("../serendipity/serendipity.js");
+  const { handleMcp } = await import("../serendipity/serendipity.ts");
   const siteLive = await (await handleSiteMcp(mcpPost({
     jsonrpc: "2.0", id: "site-tools", method: "tools/list", params: { ...MODERN_META },
   }), {}, context())).json();

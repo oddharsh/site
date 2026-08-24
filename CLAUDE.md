@@ -1343,7 +1343,7 @@ Three deliberate deviations, all written down at the code:
    that way until a tool actually requires a client capability.
 
 **BOTH servers on this origin speak it, through one module.** `/serendipity/mcp`
-(`serendipity/serendipity.js`) is a separate server with different tools and no
+(`serendipity/serendipity.ts`) is a separate server with different tools and no
 shared data, but the wire rules — versions, `_meta` keys, `resultType`, cache
 hints, error codes, the header check, the version gate — live once in
 [`lib/mcp-protocol.ts`](src/worker/lib/mcp-protocol.ts) and both import
@@ -1369,7 +1369,7 @@ there.** Cloudflare's WebMCP bridge (gotcha 20) reads ONE endpoint per origin,
 into `document.modelContext`. Two servers on one origin is right for an agent that
 reads the agent card and picks a door, and invisible to an agent that only ever
 knocks on one. So `lib/tools.ts` hoists exactly one Serendipity tool through
-`serendipityFindEvents()` in `serendipity/serendipity.js`, which dispatches into the
+`serendipityFindEvents()` in `serendipity/serendipity.ts`, which dispatches into the
 same `mcpCallTool` that `/serendipity/mcp` uses — one implementation, one schema per
 door, no drift. It is deliberately ONE tool and not a proxy: `get_event` and
 `search_people` are drill-downs that only make sense inside the pool, and hoisting

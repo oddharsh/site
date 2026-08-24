@@ -17,7 +17,7 @@
 // instead of the day somebody thinks to look.
 //
 // IT ASKS "IS THIS FILE IN SOME PROGRAM", never "which one". A file can be
-// covered by an include glob or pulled in transitively — serendipity.js is 2,408
+// covered by an include glob or pulled in transitively — serendipity.ts is 2,546
 // lines reached entirely through the site Worker's imports — and both are real
 // coverage. Which program a file belongs in is the individual tsconfig headers'
 // argument to make.

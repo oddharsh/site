@@ -268,7 +268,7 @@ test("the cron enrich dispatch reports outcomes and swallows its own failures", 
 });
 
 test("serendipity hides collapsed description chrome and uses the Luna scrollbar", async () => {
-  const serendipity = await readFile(new URL("serendipity/serendipity.js", ROOT), "utf8");
+  const serendipity = await readFile(new URL("serendipity/serendipity.ts", ROOT), "utf8");
   const luna = await readFile(new URL("src/styles/luna.css", ROOT), "utf8");
 
   assert.match(

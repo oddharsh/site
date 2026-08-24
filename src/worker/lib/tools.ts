@@ -33,7 +33,7 @@ import { mcpTool } from "./mcp-tools.ts";
 // imports BOTH this file and serendipity.js under plain node, so a `cloudflare:`
 // import appearing in either would take the whole suite down at link time
 // (gotcha 16).
-import { serendipityFindEvents } from "../../../serendipity/serendipity.js";
+import { serendipityFindEvents } from "../../../serendipity/serendipity.ts";
 import { asRecord } from "./parse.ts";
 
 export function toolError(message) { return { _error: String(message).slice(0, 400) }; }

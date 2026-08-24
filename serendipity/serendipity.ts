@@ -71,10 +71,8 @@ function relativeTime(date) {
 
 function fmtDateTime(s) {
   if (!s) return "";
-  /** @type {Intl.DateTimeFormatOptions} */
-  const opt = { weekday: "short", month: "short", day: "numeric" };
-  /** @type {Intl.DateTimeFormatOptions} */
-  const topt = { hour: "numeric", minute: "2-digit" };
+  const opt: Intl.DateTimeFormatOptions = { weekday: "short", month: "short", day: "numeric" };
+  const topt: Intl.DateTimeFormatOptions = { hour: "numeric", minute: "2-digit" };
   // Temporal when available: a wall-clock string shows as recorded; an instant
   // shows in UTC (matching this Worker's clock). falls back to Date otherwise.
   try {
@@ -606,7 +604,7 @@ export function parseCookies(raw) {
 
 // POST /serendipity/cookies — public contribute: save this uid's cookies + sync.
 async function handleCookies(request, env, d, uid) {
-  const back = (msg, toDash) => new Response(null, { status: 303, headers: { location: `${PREFIX}${toDash ? "" : "/contribute"}?msg=${encodeURIComponent(msg)}` } });
+  const back = (msg, toDash?) => new Response(null, { status: 303, headers: { location: `${PREFIX}${toDash ? "" : "/contribute"}?msg=${encodeURIComponent(msg)}` } });
   let form;
   try { form = await request.formData(); } catch { return back("Couldn't read the form"); }
   const label = (form.get("label") || "").toString().trim().slice(0, 40) || null;
@@ -820,7 +818,7 @@ async function fetchMyEvents(auth, selfId) {
       page++;
       const p = new URLSearchParams({ pagination_limit: "50", period });
       if (cursor) p.set("pagination_cursor", cursor);
-      const data = await (await lumaFetch(`${LUMA_API}/home/get-events?${p}`, auth)).json();
+      const data = asRecord(await (await lumaFetch(`${LUMA_API}/home/get-events?${p}`, auth)).json()) ?? {};
       all.push(...parseEvents(data, selfId));
       if (!data.has_more || !data.next_cursor) break;
       cursor = data.next_cursor;
@@ -834,7 +832,15 @@ async function fetchMyEvents(auth, selfId) {
 // until 2026-08-21: one 1,932-person event costs 20 fetches at 100 a page, and
 // seven past events had parked on "Too many subrequests" because of it. The
 // sibling fetchMyEvents has carried page caps for exactly this reason all along.
-export async function fetchEventGuests(eventId, ticketKey, auth, opts = {}) {
+// The invocation-wide fetch allowance the sweep paces itself against. `left` is
+// what remains and `spent` is what the log reports; both are mutated in place so
+// every roster walk in one tick draws on the same pool.
+type FetchBudget = { left: number, spent: number };
+
+export async function fetchEventGuests(
+  eventId, ticketKey, auth,
+  opts: { budget?: FetchBudget, cursor?: string | null } = {},
+) {
   const budget = opts.budget || null;
   const all = []; let cursor = opts.cursor || null;
   for (;;) {
@@ -851,7 +857,7 @@ export async function fetchEventGuests(eventId, ticketKey, auth, opts = {}) {
     if (ticketKey) p.set("ticket_key", ticketKey);
     if (cursor) p.set("pagination_cursor", cursor);
     if (budget) { budget.left--; budget.spent++; }
-    const data = await (await lumaFetch(`${LUMA_API}/event/get-guest-list?${p}`, auth)).json();
+    const data = asRecord(await (await lumaFetch(`${LUMA_API}/event/get-guest-list?${p}`, auth)).json()) ?? {};
     for (const e of (data.entries || [])) all.push(parseGuest(e.api_id, e.user || {}));
     if (!data.has_more || !data.next_cursor) return { guests: all, done: true, cursor: null };
     cursor = data.next_cursor;
@@ -1138,7 +1144,7 @@ async function addEventsByLink(d, uid, raw) {
 
 // POST /serendipity/add-event — public: add events to the pool by Luma link.
 async function handleAddEvent(request, env, d, uid) {
-  const back = (msg, toDash) => new Response(null, { status: 303, headers: { location: `${PREFIX}${toDash ? "" : "/contribute"}?msg=${encodeURIComponent(msg)}` } });
+  const back = (msg, toDash?) => new Response(null, { status: 303, headers: { location: `${PREFIX}${toDash ? "" : "/contribute"}?msg=${encodeURIComponent(msg)}` } });
   let form;
   try { form = await request.formData(); } catch { return back("Couldn't read the form"); }
   const raw = (form.get("links") || "").toString();
@@ -1404,14 +1410,13 @@ export function guestSweepBudget(setCount, cap = CRON_SUBREQUEST_CAP) {
 // The secret rides a header rather than the query string so it stays out of
 // request logs. Failure is reported and never thrown: enrichment is the
 // lower-priority half and must not redden a tick whose sweep succeeded.
-/**
- * Declaring what this actually READS rather than `typeof fetch`: the full type
- * drags in `preconnect`, which no caller here implements and no test should
- * have to stub. The narrow shape is also the honest contract.
- * @param {any} env
- * @param {(url: string, init?: any) => Promise<{ ok: boolean, status?: number, json: () => Promise<any> }>} [fetchImpl]
- */
-export async function dispatchEnrich(env, fetchImpl = fetch) {
+// Declaring what this actually READS rather than `typeof fetch`: the full type
+// drags in `preconnect`, which no caller here implements and no test should
+// have to stub. The narrow shape is also the honest contract.
+type EnrichFetch = (url: string, init?: any) =>
+  Promise<{ ok: boolean, status?: number, json: () => Promise<any> }>;
+
+export async function dispatchEnrich(env, fetchImpl: EnrichFetch = fetch) {
   if (!env || !env.SYNC_SECRET) return { skipped: "no SYNC_SECRET" };
   if (!env.EXA_API_KEY) return { skipped: "EXA_API_KEY not set" };
   const base = asText(env.HOST_PUBLIC_URL) ?? "https://aadhar.sh";
@@ -1437,7 +1442,13 @@ export async function cronSerendipity(env) {
   const d = db(env);
   const sets = await d.prepare("SELECT user_key, cookies_json, label FROM user_cookies WHERE enabled = 1").all();
   if (!sets.length) { console.log(JSON.stringify({ cron: "serendipity", skipped: "no enabled cookie sets" })); return; }
-  const out = { events: [], guests: [], skipped: [], descriptions: null };
+  // `descriptions` and `enrich` are filled after the roster loop, so both are
+  // declared here rather than bolted on: an object literal's shape is fixed at
+  // the literal in TypeScript, and this is the log line's whole schema.
+  const out: {
+    events: any[], guests: any[], skipped: any[],
+    descriptions: any, enrich?: any,
+  } = { events: [], guests: [], skipped: [], descriptions: null };
   // One budget for the whole sweep, so no single roster can spend the tick.
   const budget = fetchBudget(guestSweepBudget(sets.length));
   for (const s of sets) out.events.push({ label: s.label, ...(await syncEvents(d, s.user_key, s.cookies_json)) });
@@ -1470,8 +1481,7 @@ export async function cronSerendipity(env) {
     if (budget.left <= 0) { out.skipped.push(ev.id); continue; }
     // first set that can read this list wins; with one contributor that is one
     // try, and a restricted list falls through to the next set rather than dying.
-    /** @type {{error?: string, synced?: number, skipped?: string}} */
-    let r = { error: "no readable cookie set" };
+    let r: { error?: string, synced?: number, skipped?: string } = { error: "no readable cookie set" };
     for (const s of fresh) { r = await syncGuests(d, ev.id, s.user_key, s.cookies_json, budget); if (!r.error) break; }
     if (r.skipped) out.skipped.push(ev.id);
     else out.guests.push({ event: ev.id, ...r });
@@ -1540,7 +1550,12 @@ const isStealth = (c) => !!c && (/\bstealth\b/i.test(c) || /^(undisclosed|confid
 async function exaPost(key, path, body) {
   const res = await fetch(`${EXA}${path}`, { method: "POST", headers: { "Content-Type": "application/json", "x-api-key": key }, body: JSON.stringify(body) });
   if (!res.ok) throw new Error(`Exa ${res.status}: ${(await res.text().catch(() => "")).slice(0, 200)}`);
-  return res.json();
+  // Parsed HERE rather than at each of the four call sites, which is what
+  // lib/parse.ts's header asks for: one place asks whether Exa sent an object,
+  // and every reader downstream branches on a value it can trust. A non-object
+  // body reaches them as `{}` and its `.results` as undefined, which every
+  // caller already handles with `?? []`.
+  return asRecord(await res.json()) ?? {};
 }
 const pickLinkedIn = (results) => results?.find((r) => r.url?.includes("linkedin.com/in/")) ?? null;
 async function drillStealth(key, attendee, knownLinkedIn) {
@@ -1609,7 +1624,8 @@ async function parallelSearch(key, objective, queries) {
     body: JSON.stringify({ objective, search_queries: queries, max_results: 5, max_chars_per_result: 1500 }),
   });
   if (!r.ok) throw new Error(`Parallel ${r.status}: ${(await r.text().catch(() => "")).slice(0, 160)}`);
-  return r.json();
+  // Parsed at the boundary, same as exaPost above.
+  return asRecord(await r.json()) ?? {};
 }
 function guessRoleCompany(text) {
   if (!text) return { role: null, company: null };
@@ -1834,14 +1850,39 @@ const MCP = mcpServer({
 // public-safe projection of an attendee row — mirrors what attendeeRow renders.
 // NO email / phone / raw_json: those columns aren't even SELECT'd by the query
 // layer, and this mapper is the second guardrail.
-function mcpAttendee(a) {
-  const socials = {};
+//
+// THE TYPE IS THE PUBLIC SCHEMA, so it is worth reading as one. The first block
+// is what every caller gets; the second is what mcpAttendee itself adds when the
+// row carries it; the third is the per-query extensions four callers bolt on
+// after the fact, which is why they are declared here rather than at each site.
+// A projection whose shape is stated in one place is also the easier guardrail
+// to audit against the no-email/no-phone rule above.
+type McpAttendee = {
+  name: any,
+  role: any,
+  company: any,
+  location: any,
+  bio: any,
+  times_seen: number | null,
+
+  is_host?: boolean,
+  socials?: Record<string, string>,
+
+  going_to?: any[],       // mcpSearchPeople: upcoming events, ascending
+  been_to?: any[],        // mcpSearchPeople: past events, already descending
+  events?: number,        // mcpFrequentPeople: how many events they turned up at
+  shared?: number,        // mcpCoAttendees: events shared with the subject
+  shared_events?: string[],
+};
+
+function mcpAttendee(a): McpAttendee {
+  const socials: Record<string, string> = {};
   if (a.twitter_handle) socials.x = "https://x.com/" + String(a.twitter_handle).replace(/^@/, "");
   if (a.linkedin_url) socials.linkedin = a.linkedin_url;
   else if (a.linkedin_handle) socials.linkedin = "https://linkedin.com/in/" + a.linkedin_handle;
   if (a.instagram_handle) socials.instagram = "https://www.instagram.com/" + String(a.instagram_handle).replace(/^@/, "");
   if (a.website) socials.website = a.website;
-  const o = {
+  const o: McpAttendee = {
     name: a.name,
     role: a.role || null,
     company: a.company || null,
@@ -2172,7 +2213,19 @@ export const MCP_TOOLS = MCP_TOOL_DEFINITIONS.map((tool) => mcpTool(tool));
 
 // run a tool. returns a plain object on success, or { _error } for a tool-level
 // error (bad args / not found) the caller surfaces as an MCP isError result.
-async function mcpCallTool(d, name, args) {
+// The dispatcher's contract with its two callers (/serendipity/mcp below, and
+// the site Worker through serendipityFindEvents). The payload is whatever the
+// tool answers, so it is deliberately open; the two UNDERSCORED fields are the
+// control channel and are the reason this type is written down at all. Both
+// callers branch on them, and an unnamed union of a dozen result literals could
+// not say so.
+type McpToolResult = {
+  _unknown?: true,          // no tool by that name — the caller answers -32602
+  _error?: string,          // the tool ran and refused — an isError RESULT, not an RPC error
+  [field: string]: any,
+};
+
+async function mcpCallTool(d, name, args): Promise<McpToolResult> {
   args = args || {};
   if (name === "list_events") {
     const when = ["upcoming", "past", "all"].includes(args.when) ? args.when : "upcoming";
@@ -2197,7 +2250,8 @@ async function mcpCallTool(d, name, args) {
     else rows = rows.slice().sort((a, b) => Number(b.user_status === "going") - Number(a.user_status === "going")); // stable: first-class first, date order kept within tier
     const total = rows.length;
     const events = rows.slice(0, limit).map(mcpEventSummary);
-    const out = { when, rsvp, total, returned: events.length, events };
+    const out: { when: any, rsvp: any, total: number, returned: number, events: any[], discovered_hidden?: number } =
+      { when, rsvp, total, returned: events.length, events };
     if (rsvp === "going") out.discovered_hidden = matched - goingCount;      // transparency: not-RSVP'd events omitted from this view
     return out;
   }

@@ -44,7 +44,7 @@ import { handleSystemRestore, handleUpdatesJson, handleWindowsUpdate } from "./u
 import { handleWhoareyou, handleWhoareyouJson } from "./whoareyou.ts";
 import { handleWritingIndex, handleWritingPost } from "./writing.ts";
 import { handleLlmsFull } from "./x402.ts";
-import { cronSerendipity, handleSerendipity, withSerendipitySecurityHeaders } from "../../serendipity/serendipity.js";
+import { cronSerendipity, handleSerendipity, withSerendipitySecurityHeaders } from "../../serendipity/serendipity.ts";
 
 // Hand the runtime's tracer to both span helpers. THIS is the only module that
 // may import it: the rest of the worker is also imported by contract-tests.mjs

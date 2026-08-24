@@ -219,7 +219,7 @@ test("every Response rebuilt from another response's body either preserves encod
       why: "rebuilds an image-transform response; the body is image bytes and the path "
          + "sets no content-encoding.",
     },
-    "serendipity/serendipity.js": {
+    "serendipity/serendipity.ts": {
       count: 4,
       why: "three rebuild locally-built HTML or add a cookie, and one is this file's own "
          + "withSecurityHeaders twin. None of them is a precompressed path today. NOT "

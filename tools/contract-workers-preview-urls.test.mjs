@@ -128,7 +128,7 @@ test("every preview-guarded GET write names a path the site really routes", asyn
 // itself. Swept over BOTH servers on this origin, which is what keeps the
 // serendipity call site honest while it still has nothing to refuse.
 test("MCP tools that write are refused on a preview host, and reads still run", async () => {
-  const { handleMcp: handleSerendipityMcp, MCP_TOOLS: SERENDIPITY_TOOLS } = await import("../serendipity/serendipity.js");
+  const { handleMcp: handleSerendipityMcp, MCP_TOOLS: SERENDIPITY_TOOLS } = await import("../serendipity/serendipity.ts");
   const servers = [
     { what: "/mcp", handle: (r) => handleSiteMcp(r, {}, context()), tools: SITE_MCP_TOOLS, path: "/mcp" },
     { what: "/serendipity/mcp", handle: (r) => handleSerendipityMcp(r, {}, null), tools: SERENDIPITY_TOOLS, path: "/serendipity/mcp" },
