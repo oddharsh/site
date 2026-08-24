@@ -20,7 +20,7 @@
 // That also means there's nothing to sweep: the weekly cron is gone (the
 // per-booking BookingWorkflow reclaims abandoned pending slots on timeout).
 
-import { v4 as uuid } from "./uuid.js";
+import { v4 as uuid } from "./uuid.ts";
 
 // The booking record, written to KV and read back by every route that acts on
 // one. Declared so `bun run typecheck` has a shape to enforce: in a .js file
@@ -30,20 +30,30 @@ import { v4 as uuid } from "./uuid.js";
 // `status` is a union rather than a string because the whole approve/decline
 // flow turns on it, and `expired` in particular is the value that makes a record
 // unactionable.
-/**
- * @typedef {object} Booking
- * @property {string} id
- * @property {string} name
- * @property {string} email
- * @property {string} topic
- * @property {number} start          epoch ms
- * @property {number} end            epoch ms
- * @property {number} created        epoch ms
- * @property {"pending"|"confirmed"|"declined"|"expired"} status
- * @property {number} [acted_at]     epoch ms, set when the host decides
- */
+// REAL TYPE DECLARATIONS, not JSDoc @typedef. TypeScript reads JSDoc types in
+// .js files only, so the moment this module became .ts both of these went inert
+// and `import("./booking.ts").Booking` resolved to nothing — which is how
+// cal/test/booking.test.js caught the conversion.
+export type Booking = {
+  id: string;
+  name: string;
+  email: string;
+  topic: string;
+  /** epoch ms */
+  start: number;
+  /** epoch ms */
+  end: number;
+  /** epoch ms */
+  created: number;
+  // A union rather than a string because the whole approve/decline flow turns on
+  // it, and `expired` in particular is the value that makes a record unactionable.
+  status: "pending" | "confirmed" | "declined" | "expired";
+  /** epoch ms, set when the host decides */
+  acted_at?: number;
+};
 
-/** A half-open interval on the calendar. @typedef {{start:number,end:number}} Slot */
+/** A half-open interval on the calendar. */
+export type Slot = { start: number; end: number };
 
 const TTL_BOOKING_DAYS = 90; // booking records expire after 90d for cleanup
 

@@ -9,7 +9,7 @@ compatibility_date = "2026-06-01"
 binding = "BOOKINGS"
 id = "37acb65118fe485583a90a94cb89365e"
 
-# The per-booking expiry timer (cal/src/workflow.js, re-exported from src/index.js).
+# The per-booking expiry timer (cal/src/workflow.ts, re-exported from src/index.js).
 # Lets the Vitest pool create + introspect BookingWorkflow instances.
 [[workflows]]
 name = "cal-booking-expiry"

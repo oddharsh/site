@@ -30,8 +30,8 @@
 import { validateLensTarget } from "./lens.ts";
 import { fetchFollowingPublicRedirects, privateHostBlocked, readResponseCapped } from "./lib/crawl.ts";
 import { esc, extractMeta, extractTitle } from "./lib/http.ts";
-import { sign, verify } from "../../cal/src/sign.js";
-import { resendSend } from "../../cal/src/email.js";
+import { sign, verify } from "../../cal/src/sign.ts";
+import { resendSend } from "../../cal/src/email.ts";
 import { WEBMENTION_PATHS, WEBMENTION_SECTIONS } from "./lib/site-manifest.ts";
 
 // One bucket, one ceiling, matching the /lens posture. Fails OPEN without KV

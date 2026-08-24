@@ -38,5 +38,5 @@
     "strict": false
   },
   // Paths are relative to THIS file, which lives in config/ — hence the `../`.
-  "include": ["../cal/src/**/*.js", "../src/worker/**/*.ts"]
+  "include": ["../cal/src/**/*.ts", "../src/worker/**/*.ts"]
 }

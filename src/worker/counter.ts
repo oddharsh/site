@@ -1,4 +1,4 @@
-import { claimReservation, dropReservation } from "../../cal/src/reservation.js";
+import { claimReservation, dropReservation } from "../../cal/src/reservation.ts";
 import { asNumber } from "./lib/parse.ts";
 
 // counter.js — the homepage visit counter: an in-house Durable Object, read by
@@ -20,7 +20,7 @@ import { asNumber } from "./lib/parse.ts";
 // release path publishes with `wrangler versions upload`, which cannot apply
 // one. Instances are isolated by name, so a slot shares nothing with
 // "homepage-visits", and the storage keys differ as well ("reservation" vs "n").
-// The reservation logic itself lives in cal/src/reservation.js, pure over a
+// The reservation logic itself lives in cal/src/reservation.ts, pure over a
 // storage interface, so it is tested without a runtime. See that file for why
 // the pair has to be atomic at all.
 export class Counter {

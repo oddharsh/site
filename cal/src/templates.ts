@@ -392,7 +392,8 @@ export function bookingPage(slots, env) {
   const base = env.BASE_PATH || "";
 
   // group slots by local day (long weekday + month/day)
-  const groups = {};
+  // Slots bucketed by day label, so the keys are dates the feed supplied.
+  const groups: Record<string, any[]> = {};
   for (const s of slots) {
     const dayKey = new Date(s.start).toLocaleDateString("en-US", {
       timeZone: env.HOST_TIMEZONE, weekday: "long", month: "long", day: "numeric",

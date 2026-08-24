@@ -213,7 +213,7 @@
       "type": "TXT",
       "match": "present",
       "why": "Resend's DKIM key, which signs the /coffee confirmation and invite mail. Presence-matched, not exact: Resend owns rotation, so pinning the key would turn a routine rotation into a CI failure. Deletion still fails, which is the case that matters under adkim=s.",
-      "consumer": "cal/src/email.js"
+      "consumer": "cal/src/email.ts"
     },
     {
       "name": "default._bimi.aadhar.sh",

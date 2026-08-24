@@ -20,25 +20,25 @@
 //   - abandoned bookings expire via a durable per-booking Workflow, not a cron:
 //     /book spins up one instance (id = booking id) that waits PENDING_TTL_DAYS
 //     for a "host-decision" event; approve/decline fire that event to end it
-//     early, and a timeout reclaims the slot (see cal/src/workflow.js).
+//     early, and a timeout reclaims the slot (see cal/src/workflow.ts).
 
-import { BOOK_MAX_STALE_MS }               from "./availability.js";
-import { listOpenSlots }                   from "./slots.js";
+import { BOOK_MAX_STALE_MS }               from "./availability.ts";
+import { listOpenSlots }                   from "./slots.ts";
 import { createBooking, getBooking, setStatus,
-         holdSlot, releaseSlot }           from "./booking.js";
-import { releaseSlotClaim, reserveSlot }  from "./reservation.js";
+         holdSlot, releaseSlot }           from "./booking.ts";
+import { releaseSlotClaim, reserveSlot }  from "./reservation.ts";
 import { sendApprovalRequest, sendInvite,
-         sendDecline }                     from "./email.js";
-import { sign, verify }                    from "./sign.js";
+         sendDecline }                     from "./email.ts";
+import { sign, verify }                    from "./sign.ts";
 import { bookingPage, successPage,
          confirmedPage, declinedPage,
-         errorPage }                       from "./templates.js";
+         errorPage }                       from "./templates.ts";
 
 // Re-export the expiry-timer Workflow so it resolves as a class_name both from
 // the root worker (which imports this module) and from the Vitest pool, whose
 // `main` is this file. Production's BOOKING_WORKFLOW binding is defined on the
 // root aadhar-sh Worker; this named export just keeps the class reachable here.
-export { BookingWorkflow } from "./workflow.js";
+export { BookingWorkflow } from "./workflow.ts";
 
 export default {
   async fetch(req, env, ctx) {
@@ -81,7 +81,10 @@ async function route_index(req, env, ctx) {
   const hit = await cache.match(key);
   if (hit) { const r = new Response(hit.body, hit); r.headers.set("x-cal-cache", "hit"); return r; }
 
-  const timings = {};
+  // Filled phase by phase as the page is assembled (render, total, and the
+  // fetch timings listOpenSlots adds), so the key set is not knowable here.
+  /** @type {Record<string, number>} */
+  const timings: Record<string, number> = {};
   const t0 = Date.now();
   const { slots, cal } = await listOpenSlots(env, ctx, timings, { allowStale: true });
   const rs = Date.now();
@@ -167,7 +170,7 @@ async function route_book(req, env, ctx) {
   // never closed that, because the check and the write still interleave (and KV
   // is eventually consistent between colos besides). The result was two
   // approvable bookings for one half hour. A per-slot Durable Object serializes
-  // the pair, so exactly one of the two callers wins. See cal/src/reservation.js.
+  // the pair, so exactly one of the two callers wins. See cal/src/reservation.ts.
   if (!(await reserveSlot(env, booking))) {
     // The record was already minted, so retire it rather than leaving a pending
     // booking nobody can act on: `expired` is the one status the approve path
@@ -285,7 +288,10 @@ function calIndexKey(req, env) {
   return new Request(`${url.origin}${env.BASE_PATH || ""}/__cal_index`, { method: "GET" });
 }
 
-function fmtServerTiming(t) {
+// Typed because the values are interpolated into a Server-Timing header, and
+// Object.entries over an untyped bag yields unknown. This is the timings record
+// assembled above; durations are milliseconds.
+function fmtServerTiming(t: Record<string, number>) {
   return Object.entries(t).map(([k, v]) => `${k};dur=${v}`).join(", ");
 }
 

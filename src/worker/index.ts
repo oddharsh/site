@@ -1,5 +1,5 @@
 import { WorkerEntrypoint, tracing } from "cloudflare:workers";
-import calWorker from "../../cal/src/index.js";
+import calWorker from "../../cal/src/index.ts";
 import { handleAgentAuthClaim, handleAgentAuthRegister, handleAgentAuthRevoke, handleAgentAuthToken } from "./agent.ts";
 import { cronAround, handleAround, handleAroundChangesJson, handleAroundJson } from "./around.ts";
 import { handleBotPage } from "./bot.ts";
@@ -28,7 +28,7 @@ import { withSecurityHeaders } from "./lib/security.ts";
 import { SHELL_PRELOAD_LINK } from "./lib/shell-assets.ts";
 import { cronJob } from "./lib/cron.ts";
 import { installTracing, span } from "./lib/trace.ts";
-import { installTracing as installCalTracing } from "../../cal/src/trace.js";
+import { installTracing as installCalTracing } from "../../cal/src/trace.ts";
 import { getThumbHashes, handleImagesManifest, handlePhotoQuery, handlePhotos, servePhotoFromR2 } from "./photos.ts";
 import { handleReading } from "./reading.ts";
 import { handleRun } from "./run.ts";
@@ -62,8 +62,8 @@ export { Counter } from "./counter.ts";
 
 // the coffee-booking expiry timer (Workflows). One durable instance per pending
 // booking replaces the old weekly cron sweep; its class_name must resolve on
-// this entry so the BOOKING_WORKFLOW binding can find it (see cal/src/workflow.js).
-export { BookingWorkflow } from "../../cal/src/workflow.js";
+// this entry so the BOOKING_WORKFLOW binding can find it (see cal/src/workflow.ts).
+export { BookingWorkflow } from "../../cal/src/workflow.ts";
 
 // Workers Cache only fronts responses whose route contract is already public
 // and reusable. Keep the default export as an uncached gateway: it handles
@@ -296,7 +296,7 @@ export default {
       await cron("cron.unmatched", async () => ({ ok: false, cron: event.cron }));
     }
     // NOTE: the weekly coffee-booking sweep (0 4 * * 7) is gone — each pending
-    // booking now carries its own BookingWorkflow expiry timer (cal/src/workflow.js).
+    // booking now carries its own BookingWorkflow expiry timer (cal/src/workflow.ts).
   },
 };
 
