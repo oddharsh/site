@@ -82,14 +82,41 @@ review policy and entry point for future agent runs.
 - minify-html 0.18.1 is the exact root pin for the deploy-time HTML pass over
   `index.html` and the worker shells.
 - TypeScript 7.0.2 and @cloudflare/workers-types are exact root pins for
-  `bun run typecheck`, which runs `tsc --noEmit` over JSDoc-annotated JavaScript.
-  **Nothing is compiled and no source is converted.** The site stays JavaScript:
-  types erase at build time, so workerd runs identical bytes either way, and a
-  conversion would cost the buildless authoring, the honest View Source, and the
-  plain-node imports contract-tests.mjs depends on. These two packages exist so
-  the checker can read the annotations; they add no runtime and no served byte.
+  `bun run typecheck`, which runs TEN programs, every one of them `noEmit`.
+  **The type checker never writes a file**, so nothing here is tsc-compiled and
+  no config can start emitting one by accident.
+
+  That is the claim worth making, and it is narrower than the one this entry
+  carried until 2026-08-24. That version said the checker runs "over
+  JSDoc-annotated JavaScript", that "nothing is compiled and no source is
+  converted", and that "the site stays JavaScript", with a conversion listed as
+  a cost the repo declined to pay. The conversion happened: `src/worker/` is 69
+  TypeScript files and no JavaScript, and `wrangler.jsonc` points `main`
+  straight at `.build/src/worker/index.ts`, so esbuild erases the types while
+  bundling. A paragraph arguing against a move the tree had already made is
+  worse than no paragraph, because it reads as current policy.
+
+  Two of the three things that conversion was supposed to cost were never
+  charged, which is why it is worth naming them rather than deleting the
+  sentence. **View Source is untouched**: `src/client/` is 16 JavaScript
+  islands and the only two `.ts` files in it are `.d.ts` declarations that ship
+  nothing, and the build still writes a readable `/<name>.src.js` twin beside
+  every minified one. And types still erase, so they add no runtime and no
+  served byte; that half of the old argument survives intact and is the reason
+  these two packages cost the visitor nothing.
+
+  The third did change. The suite no longer runs on plain node and
+  `contract-tests.mjs` no longer exists: it was split into 50 files on
+  2026-08-20 and `bun test` runs them, which is what made a TypeScript import
+  in a test a non-question. Read gotcha 16 in CLAUDE.md alongside this, since
+  the `cloudflare:workers` rule it protects is unchanged while both symptoms it
+  described expired with that same move.
+
   Dependabot should review TypeScript releases for new checks that could fail CI
-  on unchanged code, and workers-types for binding-shape changes.
+  on unchanged code, and workers-types for binding-shape changes. The ten
+  programs are not decoration: three go through a wrapper because they hold
+  files from two runtimes at once, and `bun run typecheck:coverage` asserts
+  every file this repo owns belongs to one of them.
 - @types/bun 1.4.0 is the exact root pin for the SECOND type program,
   `config/tsconfig.tools.json`, which checks `tools/`. It carries the node globals
   as well, so it is one entry rather than two, and it declares the bun-only
@@ -101,12 +128,23 @@ review policy and entry point for future agent runs.
   node programs judged against a Workers global scope. Two programs is what
   separates a real finding from a missing global.
 
-  **It is pinned at 1.3.14 while bun runs 1.4.0, and that gap is the release-age
-  policy working rather than an oversight.** `minimumReleaseAge: 86400` in
-  bunfig.toml refused the same-day 1.4.0 publish, so `bun add` resolved the
-  previous version. It will catch up on its own once 1.4.0 turns a day old;
-  nothing here needs the newer types today, and forcing it would mean an
-  exclude entry that outlives its reason.
+  **It reached 1.4.0 on 2026-08-24 and now matches the runtime**, which is the
+  release-age policy resolving exactly as this entry predicted it would. The
+  block here used to record a pin one release BEHIND the runtime, because
+  `minimumReleaseAge: 86400` in bunfig.toml refused the same-day 1.4.0 publish
+  and `bun add` took the previous version. It said that would catch up on its
+  own once 1.4.0 turned a day old. It did, dependabot opened the bump, and the
+  types program now reads the bun it actually runs under. The superseded number
+  is deliberately not restated: a stale version inside its own correction is
+  still a greppable stale version.
+
+  Worth keeping as a worked example rather than deleting, because the prediction
+  is the part that was uncertain: a delayed pin under that policy is a wait, not
+  a fork, and it needs no exclude entry to clear. The alternative on offer at the
+  time was an entry in `minimumReleaseAgeExcludes`, which would have outlived its
+  reason the moment the bump landed. bun excludes by NAME rather than
+  name@version, so that entry would still be sitting there today exempting
+  @types/bun at every future version.
 - playwright-core is a scripts-only devDep (caret-ranged, not pinned: it drives
   the locally installed Google Chrome rather than a bundled browser). Only
   `tools/photos/gen-og-cards.mjs` uses it, and only on demand; no CI job and
@@ -333,7 +371,7 @@ Adding it surfaced a trap worth more than the rule. **Naming any plugin in
 tree read as clean because most of the rules checking it were gone. The config
 now lists all five explicitly with that measurement at the array.
 
-To re-run the whole evaluation, clone the repo, `pnpm install` inside it, and
+To re-run the whole evaluation, clone the repo, `bun install` inside it, and
 point a scratch config at `src/index.ts` through `jsPlugins`. The pinned Oxlint
 1.79.0 does support custom JS plugins and `@oxlint/plugins` is published at a
 matching 1.79.0, so feasibility was never the blocker; applicability was.
