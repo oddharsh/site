@@ -13,7 +13,10 @@
 # here and cropped at render — no distortion.
 #
 # No EXIF, no R2: these are small static reference images, not gallery photos.
-set -e
+#
+# pipefail because every measurement below reads through a pipe into awk, and
+# without it a failed sips reports awk's status instead of its own.
+set -euo pipefail
 
 STEM="${1:?usage: add-car-photo.sh <stem> <input-image>}"
 SRC="${2:?usage: add-car-photo.sh <stem> <input-image>}"
@@ -32,8 +35,15 @@ if [ ! -x "$ZENC" ]; then
   cargo build --release --manifest-path "$ZENC_DIR/Cargo.toml" >&2 || { echo "error: zenc build failed" >&2; exit 1; }
 fi
 
-# 1. downscale (preserve aspect), strip to a clean sRGB JPG
-"$SIPS" -Z 480 "$SRC" --out "$TMP/x.jpg" >/dev/null 2>&1
+# 1. downscale (preserve aspect), strip to a clean sRGB JPG.
+# `-s format jpeg` is load-bearing rather than belt-and-braces: `-Z` RESIZES and
+# does not convert, so a HEIC/PNG/WEBP source came out still in its own format
+# under a .jpg name, and zenc refused it ("Illegal start bytes"). That made the
+# HEIC/WEBP/AVIF half of this script's own usage line above dead, silently, since
+# every step here is >/dev/null. Measured 2026-08-24: byte-identical output for a
+# JPEG source (so no committed car photo moves), and exit 0 instead of 1 for a
+# .HIF. add-photos.sh has always passed the flag; this script never did.
+"$SIPS" -Z 480 -s format jpeg "$SRC" --out "$TMP/x.jpg" >/dev/null 2>&1
 
 # 2. JPG fallback via zenc (zenjpeg hybrid+scan, q84 ≈ old jpegli q82)
 "$ZENC" "$TMP/x.jpg" "$DEST/$STEM.jpg" -q 84 >/dev/null 2>&1

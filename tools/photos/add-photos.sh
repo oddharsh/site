@@ -62,7 +62,19 @@
 #   ./tools/photos/add-photos.sh /path/to/folder/
 #   ./tools/photos/add-photos.sh /path/a.jpg /path/b.HIF /path/folder/
 
-set -e
+# pipefail is load-bearing here rather than housekeeping, and gotcha 40 is the
+# bill for its absence. Three steps below run a tool into `| tail -1` to keep
+# the summary and drop the chatter, and a pipeline's status is its LAST
+# command's, so `tail` reported 0 over every one of them. `zenc histogram`
+# returning 2 on an unreadable hashes.json read as success for five days, which
+# is how a re-encode shipped 316 thumbnails whose histograms were never re-baked.
+# Measured 2026-08-24: the same call is 0 piped, 2 piped under pipefail.
+#
+# -u is the same consistency the other 9 committed scripts already have. It cost
+# one real fix to adopt: `"${META_MODE[@]}"` on an EMPTY array is an unbound
+# variable on bash 3.2, which is the bash macOS ships and therefore the one
+# `#!/usr/bin/env bash` finds here. See the expansion at the metadata regen.
+set -euo pipefail
 
 # resolve from anywhere — assumes script lives at tools/photos/
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
@@ -530,7 +542,14 @@ fi
 if command -v exif-sooc >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
   META_MODE=()
   if [ "${REMOTE_RENDER_ONLY:-0}" = "1" ]; then META_MODE=(--merge); fi
-  "$SCRIPT_DIR/extract-photo-metadata.sh" "${META_MODE[@]}" "$META_SRC" 2>&1 | tail -1
+  # `${META_MODE+"${META_MODE[@]}"}` rather than a bare `"${META_MODE[@]}"`,
+  # because bash 3.2 (the bash macOS ships, and the one `env bash` finds here)
+  # treats an EMPTY array as unbound and dies under `set -u`. This is the default
+  # path (META_MODE is only non-empty under REMOTE_RENDER_ONLY), so the bare form
+  # would have broken every local photo add the moment -u went on. The `:-`
+  # spelling is NOT the fix: it expands to one empty-string argument, which this
+  # script would hand to extract-photo-metadata.sh as a source directory.
+  "$SCRIPT_DIR/extract-photo-metadata.sh" ${META_MODE+"${META_MODE[@]}"} "$META_SRC" 2>&1 | tail -1
 else
   echo "  exif-sooc or jq missing — skipping metadata regen"
 fi
@@ -544,7 +563,13 @@ fi
 # zenc does this now (2026-08-14, was photo-histograms.py + Pillow), which is why
 # there is no longer a conditional here: $ZENC is built above and is not optional,
 # so the bake either runs or the whole script has already failed.
-"$ZENC" histogram --root "$PROJECT_DIR/public" 2>&1 | tail -1
+#
+# NOT piped into `tail -1`, which is what gotcha 40's five silent days were.
+# zenc writes only to stderr and only one summary line on the happy path, so the
+# pipe was buying no quiet; what it bought was `tail`'s exit status over zenc's.
+# Unpiped, a bad root (2) or a skipped stem (1) stops the run under `set -e`, and
+# the per-stem warnings that name WHICH stem are visible instead of dropped.
+"$ZENC" histogram --root "$PROJECT_DIR/public"
 
 # caption anything still missing alt text. runs AFTER hash-thumbnails.sh because
 # it reads the committed public/i/ square via hashes.json and posts those exact

@@ -33,7 +33,18 @@ empty alt.
 """
 import json, os, sys, time, urllib.error, urllib.request
 
-ROOT   = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# ANCHOR ON THE TREE, not on a count of directories above this file. This read
+# `dirname(dirname(__file__))`, which was the served root when the pipeline lived
+# at www/scripts/ and became `tools/` when it moved to tools/photos/ (#452, #453).
+# Nothing failed: the script is invoked as `python3 … || echo "captions
+# incomplete"`, so a FileNotFoundError on tools/images/metadata.json printed a
+# traceback the caller immediately excused, and every photo add since the move
+# has captioned nothing. Same class as the eight shell sites in gotcha 40, which
+# a grep for the old path could not find because the path is arithmetic.
+ROOT   = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    "public",
+)
 META   = os.path.join(ROOT, "images", "metadata.json")
 HASHES = os.path.join(ROOT, "images", "hashes.json")
 HASHED = os.path.join(ROOT, "i")
