@@ -1,6 +1,34 @@
 version: 2
 updates:
-  # The root npm workspace owns the shared deploy toolchain (including Wrangler,
+  # THE ECOSYSTEM IS `npm` AND THE TREE IS BUN, WHICH IS DELIBERATE AND COSTS A
+  # MANUAL COMMIT PER PR. Read this before "fixing" it, because the obvious fix
+  # is measurably worse.
+  #
+  # This block writes package.json and NOTHING ELSE. The npm updater maintains
+  # package-lock, yarn.lock and pnpm-lock; it has never written a bun.lock, and
+  # this tree has kept one since the 2026-08-20 toolchain move. So every
+  # dependency PR since that date has died at `bun install --frozen-lockfile`
+  # with "lockfile had changes, but lockfile is frozen", before `validate`
+  # reached a single check. Three were open at once on 2026-08-24 and all three
+  # failed at that same step.
+  #
+  # Dependabot HAS a bun updater, GA since 2025-02-13, and switching to
+  # `package-ecosystem: bun` is the reflex. It would be a downgrade from red PRs
+  # to no PRs: its bundled bun is 1.3.14, which caps at `lockfileVersion` 1, and
+  # both lockfiles here are version 2 because bun 1.4 raised the default.
+  # Over that ceiling the updater raises DependencyFileNotSupported rather than
+  # opening anything. Worth knowing that this used to be SILENT, where the old
+  # bun discarded the lockfile it could not read, re-resolved, and wrote v1
+  # back; dependabot-core made it a loud refusal on 2026-08-14.
+  #
+  # Two smaller reasons the switch is not close. The bun updater serves version
+  # updates only, so security updates would be LOST, and bun-plus-workspaces has
+  # been open as a known bug since 2026-02-19 while this repo has five workspace
+  # projects. Revisit when that updater's bundled bun reaches 1.4; until then the
+  # lockfile is a hand commit on each dependency PR, and `validate` failing at
+  # install is the expected first state of one rather than a broken branch.
+  #
+  # The root workspace owns the shared deploy toolchain (including Wrangler,
   # Oxc Minify, and Lightning CSS) and all workspace dependency resolution.
   #
   # This block used to carry `open-pull-requests-limit: 1` and no groups, so
@@ -130,8 +158,8 @@ updates:
       prefix: chore
       include: scope
 
-  # `lens-reader` keeps its own package.json and lockfile OUTSIDE the pnpm
-  # workspace (defuddle + linkedom are ~22 MB that only that Worker bundles, and
+  # `lens-reader` keeps its own package.json and lockfile OUTSIDE the bun
+  # workspace (readability + linkedom are megabytes only that Worker bundles, and
   # the root suite may not import from it at all, gotcha 29), so the npm entry
   # at "/" above never reaches it. Without this block its three dependencies get
   # no update PRs at all.
@@ -157,9 +185,10 @@ updates:
   # unnoticed because every pin in that project was current, so nothing had
   # drifted yet to reveal it.
   #
-  # Anyone editing that project by hand needs `pnpm install --ignore-workspace`;
+  # Anyone editing that project by hand needs `bun install --ignore-workspace`;
   # a bare install walks UP to the root workspace and never creates
-  # lens-reader/node_modules at all.
+  # lens-reader/node_modules at all. It carries its own bun.lock, so it needs
+  # the same hand commit the root block describes above.
   - package-ecosystem: npm
     directory: "/lens-reader"
     schedule:
