@@ -79,7 +79,7 @@
       "wrangler.jsonc vars.CF_ACCOUNT_ID",
       "wrangler.dev.jsonc account_id",
       "wrangler.dev.jsonc vars.CF_ACCOUNT_ID",
-      "cf-garage/wrangler.toml account_id",
+      "cf-garage/cloudflare.config.ts accountId",
       "lwe-ask/wrangler.toml account_id",
       "lens-reader/wrangler.toml account_id"
     ]
@@ -248,7 +248,7 @@
     "$comment": "Worker inventory. `retired` is the interesting half: a Worker that should be gone but is not still holds its routes, and that is invisible from inside this repo.",
     "expected": [
       { "name": "aadhar-sh", "config": "wrangler.jsonc", "why": "The site Worker: homepage, Lens, coffee, Serendipity." },
-      { "name": "cf-garage", "config": "cf-garage/wrangler.toml", "why": "Intercepts /garage/cf/* ahead of the site Worker." },
+      { "name": "cf-garage", "config": "cf-garage/cloudflare.config.ts", "why": "Intercepts /garage/cf/* ahead of the site Worker." },
       { "name": "lwe-ask", "config": "lwe-ask/wrangler.toml", "why": "The /lwe/ask RAG endpoints." },
       { "name": "lens-reader", "config": "lens-reader/wrangler.toml", "why": "Intercepts /lens/read* ahead of the site Worker and serves the /lens Reader lens. SEPARATE because Readability needs a DOM Document, and linkedom supplying one costs 94.6 KB gzip on its own against a site bundle already over its 204.24 KiB budget. The second reason this note used to give, run_worker_first's 100-rule cap, EXPIRED when the eight exact /lens rows were folded to /lens + /lens/* and the config dropped to 94; the size reason is doing the work alone now. If this Worker goes missing, /lens keeps working and the Reader tab reports the extractor as unreachable." }
     ],
