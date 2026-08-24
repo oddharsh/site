@@ -3,6 +3,7 @@
 // actual words without making the homepage pay for a client-side search bundle.
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join, relative } from "node:path";
+import { stripRawText } from "./lib/html-raw-text.ts";
 
 // The served tree stopped being ONE directory on 2026-08-18: documents author in
 // src/pages, prose in src/content, and only the bytes a browser fetches
@@ -66,9 +67,12 @@ const ENTITIES = {
 };
 
 function stripMarkup(value) {
-  return String(value || "")
-    .replace(/<script\b[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style\b[\s\S]*?<\/style>/gi, " ")
+  // script and style are removed by SCAN rather than by a regex per element,
+  // because a `<\/script>` pattern misses `</script >`, `</script\t\n bar>` and
+  // `</script/>`, and a missed close spills a script body into the indexed text
+  // of a record that /ask now publishes as a schema.org description. The scan
+  // and the shapes it accepts are argued at tools/lib/html-raw-text.ts.
+  return stripRawText(stripRawText(String(value || ""), "script"), "style")
     // comments BEFORE tags. this site's HTML is deliberately comment-heavy for
     // View Source, and a `>` inside a comment (an arrow, a shell redirect, a
     // nested tag name) made the tag pattern below match only as far as that

@@ -54,8 +54,8 @@
     "tools/photos/radar-sample.ts": 2,
     "tools/release-status.ts": 18,
     "tools/roll-shell-dictionary.ts": 16,
-    "tools/ua-survey.ts": 19,
+    "tools/ua-survey.ts": 17,
     "tools/verify-routes.ts": 27
   },
-  "total": 593
+  "total": 591
 }
