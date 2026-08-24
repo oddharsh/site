@@ -2678,6 +2678,27 @@ bun run deploy:direct
     the right dictionary alone, and an engine that ignores it prints the same
     number three times.
 
+    **The NODE floor is 24, measured 2026-08-24 rather than inferred.** This
+    paragraph said "Node 26 honours it" and the surrounding code had only ever
+    measured the two ends: build.ts's comment records Node 22 accepting and
+    ignoring the option, and local Node 26 honouring it. Its thrown message and
+    `engines.node` both name 24, which left the actual floor as the one number in
+    that sentence nobody had checked. Running the four-line control above on one
+    8800-byte buffer at level 19, darwin-arm64:
+
+    | node | none | dictionary | honours it |
+    |---|--:|--:|---|
+    | v23.11.1 | 63 | 63 | no, silently |
+    | v24.19.0 | 63 | 19 | yes |
+    | v26.7.0 | 63 | 19 | yes |
+
+    So both claims were right and are now evidence. Take the general point past
+    this option, because it is the same one the paragraph above makes from the
+    other side: a floor stated as `>=N` is a claim about N-1 as much as about N,
+    and measuring only the versions you happen to have running leaves the
+    boundary untested. `bun run node:pin` is what watches the pin now, and a
+    contract test holds `engines.node` and build.ts's message to each other.
+
     **zstd above level 19 is dead weight here.** Levels 19, 20, 21, 22, 22+long-
     distance-matching and 22+btultra2 produce BYTE-IDENTICAL output on all 9 shell
     assets and all 12 deltas. What separates 20-22 is window size and long-range
