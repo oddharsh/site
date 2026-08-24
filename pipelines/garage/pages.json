@@ -44,6 +44,15 @@
       "lastmod": "2026-08-24",
       "navLabel": "hidden flags",
       "navHint": "how to tell an ignored option from an honoured one"
+    },
+    {
+      "id": "ig-prep",
+      "title": "Pixels Instagram has no reason to resample",
+      "summary": "A converter that owns the 40 megapixel downscale so the platform arrives with nothing to do, and an MCP mode that lets a model run it against photographs that stay on your machine.",
+      "status": "shipped",
+      "lastmod": "2026-08-24",
+      "navLabel": "ig-prep",
+      "navHint": "hand Instagram pixels it has no reason to resample"
     }
   ]
 }
