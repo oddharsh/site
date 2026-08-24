@@ -39,7 +39,7 @@ HASHES = os.path.join(ROOT, "images", "hashes.json")
 HASHED = os.path.join(ROOT, "i")
 OUT    = os.path.join(ROOT, "images", "alt.json")
 
-# keep in sync with cf-garage/src/index.js's ?mode=alt branch — that endpoint is
+# keep in sync with cf-garage/src/index.ts's ?mode=alt branch — that endpoint is
 # the public /garage/cf demo and carries its own copy of this prompt.
 PROMPT = ("Write alt text for this photo: one plain, factual sentence naming only "
           "what is clearly visible (main subject and setting). No mood, no "

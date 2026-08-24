@@ -14,8 +14,8 @@
 // by actually picking the cars. A pass mints a short-lived askToken that /ask
 // requires. No KV, no third-party widget — the lightest possible Turnstile.
 
-import { PASSAGES, SOURCE_URL, SOURCE_TITLE, CORPUS_VERSION } from "./passages.js";
-import { CAR_STEMS, NONCAR_STEMS } from "./captcha-data.js";
+import { PASSAGES, SOURCE_URL, SOURCE_TITLE, CORPUS_VERSION } from "./passages.ts";
+import { CAR_STEMS, NONCAR_STEMS } from "./captcha-data.ts";
 
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" };
 const json = (o, s = 200) => new Response(JSON.stringify(o), { status: s, headers: JSON_HEADERS });
@@ -90,7 +90,10 @@ async function verifyCaptcha(req, env) {
   const exp = +b.exp;
   if (!stems.length || !Number.isFinite(exp) || !b.token) return json({ ok: false, error: "bad request" }, 400);
   if (Date.now() > exp) return json({ ok: false, error: "expired", expired: true });
-  const sel = [...new Set((b.selected || []).map(Number))].filter(n => n >= 0 && n < stems.length).sort((a, b) => a - b);
+  // `new Set(x)` where x is `any` yields a Set<unknown>, so without the type
+  // argument the filter below compares an unknown against a number. The values
+  // really are numbers by then: `.map(Number)` is what put them there.
+  const sel = [...new Set<number>((b.selected || []).map(Number))].filter(n => n >= 0 && n < stems.length).sort((a, b) => a - b);
   const candidate = await hmac(env.SIGNING_SECRET, stems.join(",") + "|" + exp + "|" + sel.join(","));
   if (!timingSafeEq(candidate, String(b.token))) return json({ ok: false, error: "not quite — pick exactly the cars" });
   const askExp = Date.now() + 600_000; // 10 min of asking per solve
@@ -185,7 +188,8 @@ async function reindex(req, env) {
   // metadata is queryable, and an empty string is a value that matches filters a
   // missing key does not.
   const passageMetadata = (p) => {
-    const metadata = { concept: p.concept, text: p.text };
+    const metadata: { concept: any, text: any, source?: any, title?: any } =
+      { concept: p.concept, text: p.text };
     if (p.source) metadata.source = p.source;
     if (p.title) metadata.title = p.title;
     return metadata;

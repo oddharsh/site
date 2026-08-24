@@ -1,5 +1,5 @@
 // The BEHAVIOURAL half of the Reader lens's tests. It lives here rather than in
-// the root contract-tests.mjs because it imports ../src/reader.js, which imports
+// the root contract-tests.mjs because it imports ../src/reader.ts, which imports
 // readability and linkedom — dependencies of THIS project alone. The root
 // suite runs under plain node with the root workspace's deps, so importing this
 // module there fails with ERR_MODULE_NOT_FOUND in CI while passing on a
@@ -14,7 +14,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { parseHTML } from "linkedom";
-import { collectControlLabels, countControls, countWords, read, scoreExtraction, tally, toMarkdown } from "../src/reader.js";
+import { collectControlLabels, countControls, countWords, read, scoreExtraction, tally, toMarkdown } from "../src/reader.ts";
 
 test("linkedom resolves one parser dependency generation", () => {
   const manifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
@@ -155,8 +155,8 @@ test("control leakage and an empty title reduce recovery without inventing parti
 });
 
 test("only messages written for the visitor are publishable", async () => {
-  const { ReaderError } = await import("../src/reader.js");
-  const entry = await import("node:fs").then((fs) => fs.readFileSync(new URL("../src/index.js", import.meta.url), "utf8"));
+  const { ReaderError } = await import("../src/reader.ts");
+  const entry = await import("node:fs").then((fs) => fs.readFileSync(new URL("../src/index.ts", import.meta.url), "utf8"));
   // CodeQL flagged the old blanket `String(error.message)` return as information
   // exposure through a stack trace. The fix is a marker class, so the guard is
   // that the entrypoint gates on it and never falls back to raw message text.

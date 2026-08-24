@@ -1991,8 +1991,8 @@ two have different dependency sets.** The cheap control is to hide the sub-proje
 Two smaller rules learned here. **A Worker entrypoint may export ONLY the default
 handler and DO/Workflow classes**; a named value export fails at startup with
 `Incorrect type for map entry '<name>': the provided value is not of type 'function or
-ExportedHandler'`, which is why the testable half lives in `src/reader.js` and
-`src/index.js` is the handler alone. And the lens is **opt-in rather than auto-firing**
+ExportedHandler'`, which is why the testable half lives in `src/reader.ts` and
+`src/index.ts` is the handler alone. And the lens is **opt-in rather than auto-firing**
 the way Browser Run is: Browser Run auto-fires because an empty third pane makes Compare
 read as broken, while this is a tab, and every run is a second full fetch of the target
 from our IP (10/min/visitor, `READER_RL`).

@@ -1,4 +1,4 @@
-// lens-reader/src/reader.js — the extraction itself, kept free of any Worker
+// lens-reader/src/reader.ts — the extraction itself, kept free of any Worker
 // entrypoint concern so `node --test` can import it directly.
 //
 // The split is not stylistic. A Worker entrypoint module may export ONLY the
@@ -25,6 +25,11 @@ import { privateHostBlocked, validateLensTarget } from "../../src/worker/lib/cra
 // failure was, so collapsing everything to "something went wrong" would cost the
 // feature its point; publishing raw internals would cost more.
 export class ReaderError extends Error {
+  // The flag index.ts reads to decide whether a message may be shown. Declared
+  // rather than left implicit, which is what a .ts file needs; same shape as the
+  // site Worker's counter.ts, and a bare field declaration erases.
+  visitorFacing: boolean;
+
   constructor(message) { super(message); this.name = "ReaderError"; this.visitorFacing = true; }
 }
 
@@ -117,7 +122,12 @@ export async function read(targetUrl) {
       articleNode = element;
       return element.innerHTML;
     },
-  }).parse() || /** @type {Partial<NonNullable<ReturnType<Readability["parse"]>>>} */ ({});
+  // A REAL cast rather than the JSDoc one this line carried until 2026-08-24.
+  // #514 fixed the five `.parse()` property reads below with `@type`, and a .ts
+  // file ignores JSDoc, so the rename made that fix inert and every one of them
+  // came back. That is the trap in converting a file that already documented its
+  // types: the better-annotated module is the one that regresses.
+  }).parse() || ({} as Partial<NonNullable<ReturnType<Readability["parse"]>>>);
   const extractMs = Date.now() - t2;
 
   const contentHtml = String(result.content || "");

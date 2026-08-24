@@ -37,5 +37,5 @@
     "skipLibCheck": true,
     "strict": false
   },
-  "include": ["../lens-reader/src/**/*.js"]
+  "include": ["../lens-reader/src/**/*.ts"]
 }

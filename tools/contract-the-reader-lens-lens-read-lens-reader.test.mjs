@@ -16,7 +16,7 @@ import {
 //
 // EVERY assertion below reads SOURCE TEXT and imports nothing from lens-reader/.
 // That is a hard constraint, not a style: this suite runs under plain node with
-// the ROOT workspace's dependencies, and lens-reader/src/reader.js imports
+// the ROOT workspace's dependencies, and lens-reader/src/reader.ts imports
 // readability and linkedom, which live only in that sub-project. Importing
 // it here fails with ERR_MODULE_NOT_FOUND in CI while passing on any workstation
 // that happens to have run `pnpm install` in lens-reader/ — which is exactly how
@@ -27,7 +27,7 @@ import {
 // step that installs those dependencies.
 
 test("the reader's rate-limit message quotes the ceiling wrangler declares", async () => {
-  const src = readFileSync("./lens-reader/src/reader.js", "utf8");
+  const src = readFileSync("./lens-reader/src/reader.ts", "utf8");
   const constant = src.match(/export const READER_LIMIT_PER_MIN = (\d+)/);
   assert.ok(constant, "reader.js no longer exports READER_LIMIT_PER_MIN");
   const READER_LIMIT_PER_MIN = Number(constant[1]);
@@ -50,13 +50,13 @@ test("the reader minifies its dependency-heavy deploy without losing source loca
 });
 
 test("the reader Worker shares the site's SSRF guard rather than copying it", async () => {
-  const reader = readFileSync("./lens-reader/src/reader.js", "utf8");
-  const entry = readFileSync("./lens-reader/src/index.js", "utf8");
+  const reader = readFileSync("./lens-reader/src/reader.ts", "utf8");
+  const entry = readFileSync("./lens-reader/src/index.ts", "utf8");
   // A second Worker aiming a visitor-supplied URL at the public internet is the
   // same SSRF surface /lens/fetch has. Two copies of an allowlist pass review on
   // the day they are written and diverge quietly afterwards, so this asserts the
   // import exists AND that no local redefinition shadows it.
-  for (const [name, src] of [["reader.js", reader], ["index.js", entry]]) {
+  for (const [name, src] of [["reader.ts", reader], ["index.ts", entry]]) {
     assert.match(src, /from "\.\.\/\.\.\/src\/worker\/lib\/crawl\.(js|ts)"/,
       `lens-reader/src/${name} must import the shared guard, not reimplement it`);
     assert.doesNotMatch(src, /function\s+validateLensTarget|function\s+privateHostBlocked/,
@@ -71,7 +71,7 @@ test("the reader Worker shares the site's SSRF guard rather than copying it", as
 });
 
 test("the reader owns one focused Markdown walk over Readability's node", async () => {
-  const src = readFileSync("./lens-reader/src/reader.js", "utf8");
+  const src = readFileSync("./lens-reader/src/reader.ts", "utf8");
   const manifest = JSON.parse(readFileSync("./lens-reader/package.json", "utf8"));
   assert.equal(manifest.dependencies.turndown, undefined,
     "a general HTML-to-Markdown dependency would restore a second traversal and tree clone");
@@ -86,7 +86,7 @@ test("the reader owns one focused Markdown walk over Readability's node", async 
 });
 
 test("the reader reports what it dropped, never only what it kept", async () => {
-  const reader = readFileSync("./lens-reader/src/reader.js", "utf8");
+  const reader = readFileSync("./lens-reader/src/reader.ts", "utf8");
   const client = readFileSync("./src/client/lens-reader.js", "utf8");
   // The whole point of this lens is the GAP. A payload that reported only the
   // extraction would read as "here is the page", which is the claim /lens exists

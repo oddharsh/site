@@ -38,10 +38,19 @@ async function timedSpan(tr, name, t0, spans, fn) {
 // homepage (eventually consistent + 1k writes/day cap), this increments exactly
 // once per call with no race — the canonical DO use case.
 export class Counter {
-  constructor(state) { this.state = state; }
+  // Declared rather than left implicit, which is what a .ts file needs and a
+  // .js file inferred. Same shape as the site Worker's own counter.ts, and the
+  // bare field declaration is inside the erasable subset: that file lives under
+  // `erasableSyntaxOnly` and compiles.
+  state: DurableObjectState;
+
+  constructor(state: DurableObjectState) { this.state = state; }
   async fetch(request) {
     const url = new URL(request.url);
-    let n = (await this.state.storage.get("n")) || 0;
+    // The type argument is what makes `n += 1` below legal: DO storage answers
+    // `unknown` for a key it cannot know the shape of, and this one holds the
+    // count it was written with.
+    let n = (await this.state.storage.get<number>("n")) || 0;
     // one-time idempotent seed — migrate a starting value (e.g. the old KV count)
     // in without ever clobbering a counter that's already live.
     if (url.searchParams.has("seed")) {
@@ -216,7 +225,9 @@ export default {
         const available = !!(tr && typeof tr.enterSpan === "function");
         const tt = Date.now();
         const spans = [];
-        const facts = {};
+        // The three probes below fill this one key at a time, so its shape is
+        // declared here rather than inferred from an empty literal.
+        const facts: { counter?: any, bytes?: number, checksum?: number } = {};
         const out = await inSpan(tr, "handleTrace", async (root) => {
           if (root.setAttribute) root.setAttribute("url.path", path);
           // 1 — Durable Object peek (read-only, no increment)

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import worker from "../src/index.js";
+import worker from "../src/index.ts";
 
 const context = () => ({ waitUntil() {}, tracing: null });
 
