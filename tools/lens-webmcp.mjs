@@ -8,7 +8,7 @@
 
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { wranglerCommand } from "./lib/wrangler-bin.mjs";
+import { wranglerCommand } from "./lib/wrangler-bin.ts";
 
 const execFileAsync = promisify(execFile);
 const args = process.argv.slice(2);

@@ -41,8 +41,8 @@ import { createHash } from "node:crypto";
 import { readFile, readdir, stat } from "node:fs/promises";
 import { brotliCompressSync, constants as zlibConstants, gzipSync } from "node:zlib";
 import { transform as transformCss } from "lightningcss";
-import { HTML_MARKERS } from "./lib/html-markers.mjs";
-import { wranglerCommand } from "./lib/wrangler-bin.mjs";
+import { HTML_MARKERS } from "./lib/html-markers.ts";
+import { wranglerCommand } from "./lib/wrangler-bin.ts";
 
 // Wire-size envelopes, not raw-source ceilings. These start from the current
 // built output with enough room for ordinary feature work; they are deliberately

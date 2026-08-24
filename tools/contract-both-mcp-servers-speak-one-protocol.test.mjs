@@ -99,12 +99,12 @@ test("both CSS checks go through the one parser, and it still tolerates the righ
   // a scaffold could pass the gate and fail the build. One parser, one family.
   for (const file of ["tools/build.mjs", "tools/check-page-contracts.mjs"]) {
     const src = readFileSync(file, "utf8");
-    assert.ok(/from "\.\/lib\/css-parse\.mjs"/.test(src), `${file} must import the shared CSS parser`);
+    assert.ok(/from "\.\/lib\/css-parse\.ts"/.test(src), `${file} must import the shared CSS parser`);
     assert.ok(!/from "esbuild"/.test(src), `${file} must not reach for a second CSS engine`);
     assert.ok(!/UNKNOWN_SELECTOR\s*=/.test(src), `${file} re-declares the tolerated warning family instead of importing it`);
   }
 
-  const { parseCss, UNKNOWN_SELECTOR } = await import("../tools/lib/css-parse.mjs");
+  const { parseCss, UNKNOWN_SELECTOR } = await import("../tools/lib/css-parse.ts");
 
   // The family is tolerated AND preserved verbatim, which is the whole bargain.
   const carousel = "ul::scroll-marker-group{display:flex}li::scroll-marker{content:\"\"}";

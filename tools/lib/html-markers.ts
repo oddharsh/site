@@ -14,8 +14,7 @@
 // Typed as TUPLES. Left to inference the elements widen to (string | RegExp)[],
 // and `marker.test(min)` in build.mjs stops type-checking for a reason that has
 // nothing to do with the regex.
-/** @type {Array<[label: string, marker: RegExp]>} */
-export const HTML_MARKERS = [
+export const HTML_MARKERS: Array<[label: string, marker: RegExp]> = [
   ["JSON-LD", /<script\b[^>]*\btype=(?:"application\/ld\+json"|application\/ld\+json)(?:\s|>)/i],
   ["photos", /<section\b[^>]*\bclass=(?:"[^"]*\bphotos\b"|'[^']*\bphotos\b'|photos)(?:\s|>)/i],
   ["playlist", /<(?:ol|ul)\b[^>]*\bid=(?:"np-list"|np-list)(?:\s|>)/i],
@@ -33,8 +32,7 @@ export const HTML_MARKERS = [
 // be edited every time a family gains a member. Asking "did minification LOSE this"
 // is the claim the tripwire actually wants, it holds for every page without a
 // roster, and a new page family inherits it with no edit here.
-/** @type {Array<[label: string, marker: RegExp]>} */
-export const PAGE_MARKERS = [
+export const PAGE_MARKERS: Array<[label: string, marker: RegExp]> = [
   ["understanding-check data", /<script\b[^>]*\bid=(?:"luq-data"|luq-data)(?:\s|>)/i],
   ["understanding-check mount", /<(?:section|div)\b[^>]*\bid=(?:"luq"|luq)(?:\s|>)/i],
   ["quiz runtime", /<script\b[^>]*\bsrc=(?:"[^"]*\/(?:a\/)?quiz[.\w]*\.js"|[^\s>]*\/(?:a\/)?quiz[.\w]*\.js)/i],

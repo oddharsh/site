@@ -111,7 +111,7 @@ jobs:
       # change to the MEASUREMENT as a change in wire size.
       #
       # THE STASH SITS INSIDE THE REPO, one directory down, and every word of
-      # that is load-bearing. Inside, because `tools/lib/wrangler-bin.mjs`
+      # that is load-bearing. Inside, because `tools/lib/wrangler-bin.ts`
       # resolves the pinned wrangler from its OWN path, so a copy under
       # $RUNNER_TEMP points at a node_modules that is not there. One down,
       # because that resolution counts directories and `tools/` is one down.
@@ -122,7 +122,7 @@ jobs:
       #
       # The whole of `tools/lib` comes along rather than the one file the script
       # imports today, because naming the file is precisely what broke: #481
-      # factored the wrangler spawn out into `lib/wrangler-bin.mjs`, the stash
+      # factored the wrangler spawn out into `lib/wrangler-bin.ts`, the stash
       # went on carrying one file, and every PR after it died on
       # ERR_MODULE_NOT_FOUND before measuring a byte.
       - name: Stash the measurement script
@@ -148,7 +148,7 @@ jobs:
           # script's own catch turns that into "No change, 0 files" in green.
           node --input-type=module -e '
             import { existsSync } from "node:fs";
-            const { WRANGLER_ENTRY } = await import("./.perf-measure/lib/wrangler-bin.mjs");
+            const { WRANGLER_ENTRY } = await import("./.perf-measure/lib/wrangler-bin.ts");
             if (!existsSync(WRANGLER_ENTRY)) {
               console.error(`::error title=stash depth::the stash resolves wrangler at ${WRANGLER_ENTRY}, which does not exist`);
               process.exit(1);

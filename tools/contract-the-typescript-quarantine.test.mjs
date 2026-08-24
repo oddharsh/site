@@ -224,7 +224,7 @@ test("no tool spawns a package manager by name", async () => {
       offenders.push(`${f}: spawns "${m[1]}"`);
     }
   }
-  assert.deepEqual(offenders, [], `a tool spawns a package manager:\n  ${offenders.join("\n  ")}\n  Use wranglerCommand() from tools/lib/wrangler-bin.mjs, which names the runtime instead.`);
+  assert.deepEqual(offenders, [], `a tool spawns a package manager:\n  ${offenders.join("\n  ")}\n  Use wranglerCommand() from tools/lib/wrangler-bin.ts, which names the runtime instead.`);
 });
 
 // check-bun uses process.execPath as the Node half of its comparison. Running
@@ -249,7 +249,7 @@ test("bun:check compares bun against a real node control", async () => {
 // on 4.124.0, while `deploy --dry-run` under bun returns a correct number. The
 // refusal is per-command, so one working subcommand proves nothing.
 test("wranglerCommand runs the pinned wrangler under node", async () => {
-  const { wranglerCommand, WRANGLER_ENTRY } = await import("./lib/wrangler-bin.mjs");
+  const { wranglerCommand, WRANGLER_ENTRY } = await import("./lib/wrangler-bin.ts");
   const [cmd, argv] = wranglerCommand(["versions", "list"]);
 
   const expected = process.versions.bun ? "node" : process.execPath;

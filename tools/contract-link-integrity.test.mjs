@@ -11,7 +11,7 @@ import {
 // zero dangling refs, so a test that only asserted "the real site passes" would
 // keep passing after the resolver was accidentally reduced to `() => true`.
 test("the link resolver accepts what the site serves", async () => {
-  const { makeResolver } = await import("./lib/link-integrity.mjs");
+  const { makeResolver } = await import("./lib/link-integrity.ts");
   const resolves = makeResolver({
     files: new Set(["/index.html", "/luna.css", "/garage/horizon.html", "/i/x.avif"]),
     routeKeys: new Set(["/whoareyou", "/updates"]),
@@ -28,7 +28,7 @@ test("the link resolver accepts what the site serves", async () => {
 });
 
 test("the link resolver rejects a page that moved", async () => {
-  const { makeResolver } = await import("./lib/link-integrity.mjs");
+  const { makeResolver } = await import("./lib/link-integrity.ts");
   const resolves = makeResolver({
     files: new Set(["/index.html", "/garage/horizon.html"]),
     routeKeys: new Set(["/whoareyou"]),
@@ -57,7 +57,7 @@ test("the link resolver rejects a page that moved", async () => {
 // global is absent and the import throws, which is how this test began failing
 // the node twin the day #497 landed — invisibly, because CI ran only bun.
 test("the ref scanner reads unquoted attributes, which is how the site ships", { skip: typeof HTMLRewriter === "undefined" && "needs bun's HTMLRewriter" }, async () => {
-  const { internalRefs } = await import("./lib/link-integrity.mjs");
+  const { internalRefs } = await import("./lib/link-integrity.ts");
   // minify-html unquotes what it can, so the served bytes look like the first two.
   // A scanner written against href="..." reported 33 refs where there were 2645.
   const refs = await internalRefs('<a href=/coffee>x</a><img src=/i/a.avif><a href="/garage/wire">y</a>'

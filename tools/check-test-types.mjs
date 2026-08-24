@@ -16,7 +16,7 @@
 //
 // This is the piece config/tsconfig.lwe-ask.json's header named as the
 // prerequisite for covering the tests at all. The filter itself lives in
-// tools/lib/tsc-scope.mjs, shared with check-tool-types.mjs.
+// tools/lib/tsc-scope.ts, shared with check-tool-types.mjs.
 //
 // THE FLOOR IS STRICTER HERE THAN check-tool-types', on purpose. That one counts
 // files against a threshold because it holds 124 of them. These hold one apiece,
@@ -31,7 +31,7 @@
 import { readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { runScopedTsc } from "./lib/tsc-scope.mjs";
+import { runScopedTsc } from "./lib/tsc-scope.ts";
 
 const REPO = dirname(dirname(fileURLToPath(import.meta.url)));
 const TSC = join(REPO, "node_modules", "typescript", "bin", "tsc");

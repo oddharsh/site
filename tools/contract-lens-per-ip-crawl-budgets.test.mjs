@@ -16,7 +16,7 @@ import {
 
 test("every rate-limit ceiling matches the ratelimits declared in both wrangler configs", async () => {
   const { LENS_BUDGETS } = await import("../src/worker/lens.ts");
-  const { parseJsonc } = await import("./lib/jsonc.mjs");
+  const { parseJsonc } = await import("./lib/jsonc.ts");
 
   // EVERY per-IP budget on the site, not just Lens's. The orphan check at the
   // bottom is the reason this has to be exhaustive: it fails on any declared
@@ -237,7 +237,7 @@ test("a 200 is not evidence that kitesurf rendered, and is not reported as if it
 });
 
 test("the ramp guard asks whether it can authenticate, not whether it is CI", async () => {
-  const { releaseCredentialError } = await import("./lib/release-guard.mjs");
+  const { releaseCredentialError } = await import("./lib/release-guard.ts");
 
   // Interactive: wrangler's stored OAuth login IS the credential. Demanding an
   // env var here would break every workstation ramp this repo has ever done.

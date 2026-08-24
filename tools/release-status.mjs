@@ -18,7 +18,7 @@
 import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { promisify } from "node:util";
-import { wranglerCommand } from "./lib/wrangler-bin.mjs";
+import { wranglerCommand } from "./lib/wrangler-bin.ts";
 
 const exec = promisify(execFile);
 const ROOT = new URL("..", import.meta.url).pathname;

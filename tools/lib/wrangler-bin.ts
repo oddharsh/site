@@ -57,9 +57,7 @@ const NODE = process.versions.bun ? "node" : process.execPath;
 // type or be passed to a rest parameter". Six of them, across four tools.
 /**
  * [command, argv] for spawning the pinned wrangler under node.
- * @param {string[]} args
- * @returns {[cmd: string, argv: string[]]}
  */
-export function wranglerCommand(args = []) {
+export function wranglerCommand(args: string[] = []): [cmd: string, argv: string[]] {
   return [NODE, [WRANGLER_ENTRY, ...args]];
 }

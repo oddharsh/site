@@ -29,14 +29,16 @@
 /** Turn a run_worker_first entry into a matcher. */
 const globRe = (g) => new RegExp("^" + g.replace(/[\\.+?^${}()|[\]]/g, "\\$&").replace(/\*/g, ".*") + "$");
 
-/**
- * @param {object} o
- * @param {Set<string>} o.files      served paths in the staged tree, each leading "/"
- * @param {Set<string>} o.routeKeys  exact paths from the Worker's ROUTES map
- * @param {string[]} o.allow         run_worker_first entries (negations already dropped)
- * @param {Set<string>} o.surfaces   registered surface paths from site-manifest.json
- */
-export function makeResolver({ files, routeKeys, allow, surfaces }) {
+export function makeResolver({ files, routeKeys, allow, surfaces }: {
+  /** served paths in the staged tree, each leading "/" */
+  files: Set<string>;
+  /** exact paths from the Worker's ROUTES map */
+  routeKeys: Set<string>;
+  /** run_worker_first entries (negations already dropped) */
+  allow: string[];
+  /** registered surface paths from site-manifest.json */
+  surfaces: Set<string>;
+}) {
   const globs = allow.filter((a) => a.includes("*")).map(globRe);
   const exact = new Set(allow.filter((a) => !a.includes("*")));
   const workerOwned = (p) => exact.has(p) || globs.some((re) => re.test(p));

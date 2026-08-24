@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { parseCss } from "./lib/css-parse.mjs";
+import { parseCss } from "./lib/css-parse.ts";
 import { validateUnderstanding } from "../pipelines/content/page-contract.mjs";
 import { pageHtml as renderLwePage } from "../pipelines/lwe/generate.mjs";
 import { pageHtml as renderGaragePage, validateRegistry } from "../pipelines/garage/generate.mjs";

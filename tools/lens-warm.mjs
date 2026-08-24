@@ -30,7 +30,7 @@
 //
 // Exit code is 0 when every target ended up cached, 1 otherwise.
 
-import { lensChipTargets } from "./lib/lens-chips.mjs";
+import { lensChipTargets } from "./lib/lens-chips.ts";
 
 const args = process.argv.slice(2);
 const valueOf = (name, fallback) => {
