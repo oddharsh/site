@@ -6,6 +6,9 @@
       "name": "lens-reader",
       "dependencies": {
         "@mozilla/readability": "0.6.0",
+        "htmlparser2": "11.0.0",
+      },
+      "devDependencies": {
         "linkedom": "0.18.13",
       },
     },
