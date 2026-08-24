@@ -17,7 +17,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-DEST="$( cd "$SCRIPT_DIR/.." && pwd )/garage/enc"
+DEST="$( cd "$SCRIPT_DIR/../.." && pwd )/public/garage/enc"
 STEM="${1:-XT509338}"
 SOURCE_ARG="${2:-$DEST/c-png.png}"
 # zenc (zenjpeg hybrid trellis + progressive scan search) is the site's shipped

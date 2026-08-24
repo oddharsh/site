@@ -470,7 +470,7 @@ fi
 # zenc does this now (2026-08-14, was photo-histograms.py + Pillow), which is why
 # there is no longer a conditional here: $ZENC is built above and is not optional,
 # so the bake either runs or the whole script has already failed.
-"$ZENC" histogram --root "$PROJECT_DIR/www" 2>&1 | tail -1
+"$ZENC" histogram --root "$PROJECT_DIR/public" 2>&1 | tail -1
 
 # caption anything still missing alt text. runs AFTER hash-thumbnails.sh because
 # it reads the committed public/i/ square via hashes.json and posts those exact

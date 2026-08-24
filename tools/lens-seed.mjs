@@ -44,6 +44,7 @@ import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { chromium } from "playwright-core";
+import { wranglerCommand } from "./lib/wrangler-bin.ts";
 import { lensChipTargets } from "./lib/lens-chips.ts";
 import { readDocument } from "./lib/html-to-md.ts";
 import { documentTally } from "../src/worker/lens-render.ts";
@@ -290,9 +291,16 @@ async function keyUrl(url) {
 }
 
 function kvPut(key, file, label) {
-  const argv = ["exec", "wrangler", "kv", "key", "put", key, "--path", file,
-    "--namespace-id", NAMESPACE, "--remote", "--ttl", String(TTL)];
-  execFileSync("pnpm", argv, { stdio: ["ignore", "ignore", "inherit"] });
+  // Through wranglerCommand, which names the RUNTIME rather than a package
+  // manager. This spawned "pnpm" until 2026-08-23, three days after main became
+  // a bun tree, so every seed run died on "This project is configured to use
+  // bun". It is the same quoted-argument blind spot gotcha 29 records, and the
+  // guard that catches it (contract-the-typescript-quarantine) had this file as
+  // its one recorded exception, on a reason that described driving a package
+  // SCRIPT while the code reached through a manager to another binary.
+  execFileSync(...wranglerCommand(["kv", "key", "put", key, "--path", file,
+    "--namespace-id", NAMESPACE, "--remote", "--ttl", String(TTL)]),
+    { stdio: ["ignore", "ignore", "inherit"] });
   process.stdout.write(`      wrote ${label} -> ${key}\n`);
 }
 
