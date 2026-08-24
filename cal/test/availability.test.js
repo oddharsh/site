@@ -31,9 +31,17 @@ const localParts = (ms) => {
     timeZone: TZ, weekday: "short", hour: "numeric", hour12: false,
   }).formatToParts(new Date(ms));
   const wk = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  // `find` can miss, and the old `.value` on the result would have thrown a bare
+  // TypeError naming neither the part nor the formatter. Both parts are requested
+  // above, so a miss means Intl changed under us — worth saying so out loud.
+  const part = (type) => {
+    const hit = p.find((x) => x.type === type);
+    if (!hit) throw new Error(`Intl.DateTimeFormat produced no "${type}" part for ${TZ}`);
+    return hit.value;
+  };
   return {
-    dow: wk[p.find((x) => x.type === "weekday").value],
-    hour: +p.find((x) => x.type === "hour").value % 24,
+    dow: wk[part("weekday")],
+    hour: +part("hour") % 24,
   };
 };
 

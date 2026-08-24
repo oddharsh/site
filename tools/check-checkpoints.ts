@@ -65,7 +65,7 @@ let committed;
 try { committed = JSON.parse(await readFile(FILE, "utf8")); }
 catch { fail("src/worker/checkpoints.json is missing or unparseable — run: bun run checkpoints:sync"); }
 
-const byVnum = (rows) => new Map(rows.map((r) => [r.vnum, r]));
+const byVnum = (rows): Map<number, any> => new Map(rows.map((r) => [r.vnum, r]));
 const c = byVnum(committed), l = byVnum(live);
 const liveMax = live.length ? Math.max(...l.keys()) : 0;
 

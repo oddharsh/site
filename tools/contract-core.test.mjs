@@ -3,7 +3,7 @@ import {
   assert,
   botHeaders,
   test,
-} from "./contract-shared.mjs";
+} from "./contract-shared.ts";
 
 // contract-tests.test.mjs — representation-boundary tests for the homepage Worker.
 //

@@ -58,7 +58,7 @@ for (const path of paths) {
     // The event IS a SecurityPolicyViolationEvent; lib.dom declares it and the
     // listener overload does not narrow for a bare addEventListener call, so
     // every field below reads as missing on the base Event.
-    addEventListener("securitypolicyviolation", (/** @type {SecurityPolicyViolationEvent} */ e) => {
+    addEventListener("securitypolicyviolation", (e: SecurityPolicyViolationEvent) => {
       globalThis.__csp.push({
         directive: e.effectiveDirective,
         blocked: e.blockedURI,

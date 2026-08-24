@@ -12,7 +12,7 @@ import {
   reservationName,
   test,
   validateLensTarget,
-} from "./contract-shared.mjs";
+} from "./contract-shared.ts";
 
 // ── the perf probe ──────────────────────────────────────────────────
 // The probe's value is that its numbers mean what home.js's Server-Timing

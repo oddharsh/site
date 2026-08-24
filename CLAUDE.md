@@ -104,7 +104,7 @@ bun run deploy:promote --rollback    # 100% back to the previous version
 bun run deploy:direct
 
 # local dev against PRODUCTION KV/R2/Browser (D1 stays local unless you pass
-# --d1; read tools/gen-remote-config.mjs before you do). Workstation-only.
+# --d1; read tools/gen-remote-config.ts before you do). Workstation-only.
 bun run dev:remote
 
 # the route oracle with those same remote bindings, which un-skips the 5 rows a
@@ -1150,7 +1150,7 @@ What this does NOT cover, deliberately:
 - **Off-origin links.** A dead third-party URL is a different job and needs the
   network.
 
-### Markdown twins (`tools/gen-md-twins.mjs`)
+### Markdown twins (`tools/gen-md-twins.ts`)
 
 Every page with prose ships a Markdown twin at `<path>.md`, and the two big
 sections carry their own `llms.txt`. `/garage/encoding` and
@@ -1783,7 +1783,7 @@ generic hex back.
   and the receipt falls off a large page, so the run reports as never having
   happened.
 
-  `tools/lens-inject-probe.mjs` is this feature's control, in the same idiom as
+  `tools/lens-inject-probe.ts` is this feature's control, in the same idiom as
   `kitesurf:check`: does the engine execute an injection, is the capture after
   it, and does `waitForTimeout` land after injection. That last one is the gate
   on any future ASYNC recipe; both shipping recipes are synchronous, so v1 sends
@@ -2276,7 +2276,7 @@ it before treating anything in there as a target.
    `wrangler.jsonc` self-builds and points both `main` and `assets` at
    `.build/public`, so no deploy path can ship the readable originals. Local
    development uses `wrangler.dev.jsonc` against a SYMLINK FARM at `.dev-assets`,
-   staged by `tools/dev-stage.mjs`, which `bun run dev` and `bun run dev:remote`
+   staged by `tools/dev-stage.ts`, which `bun run dev` and `bun run dev:remote`
    run first. It reads "against readable `public/`" above this line until
    2026-08-19, and by then that was two errors rather than one: the field named
    `www`, which the 2026-08-18 split had deleted, so dev did not start at all; and
@@ -3155,7 +3155,7 @@ bun run deploy:direct
 24. **The ramp writes the changelog from YOUR WORKING TREE, so pull `main` before
     you ramp.** `deploy:promote` decides what to log by reading the local
     `src/worker/checkpoints.json` and diffing it against D1
-    (`tools/deploy-promote.mjs`, the `steps[last] === 100` block). Ramp from a
+    (`tools/deploy-promote.ts`, the `steps[last] === 100` block). Ramp from a
     tree that has not pulled the merge and the file it reads still ends at the
     previous release, so the diff is empty and the row is never written.
 
@@ -3202,7 +3202,7 @@ bun run deploy:direct
     A secret is a version (see the `versions secret put` note above), so
     `wrangler versions secret put|delete` mints one. That version is created by
     `create_version_api` and therefore carries **no `workers/alias`**. And since
-    #259, `newestVersion()` in `tools/deploy-promote.mjs` filters candidates to
+    #259, `newestVersion()` in `tools/deploy-promote.ts` filters candidates to
     the production alias, because ramping the newest version outright was a live
     way to walk another agent's branch build to 100%.
 
@@ -3964,7 +3964,7 @@ bun run deploy:direct
     reported `visibilityState: "hidden"` between tool calls; a screenshot flips a
     tab visible just long enough to photograph it and it reverts. So a hover that
     lands on a real anchor and dwells four seconds produces nothing, which reads
-    exactly like a broken rule. `tools/speculation-probe.mjs` exists because of
+    exactly like a broken rule. `tools/speculation-probe.ts` exists because of
     this: it launches a real headful window through playwright-core, attaches no
     CDP session (gotcha 15), and prints a CONTROL line first.
 
@@ -4354,6 +4354,47 @@ bun run deploy:direct
     a subshell and `ls` the results. Prefer an anchor that names the tree
     (`$SCRIPT_DIR/../..` plus `/public`) over one that counts directory levels
     from the script, because the second one is silently wrong after any move.
+
+
+41. **A re-encode changes the pixels the HISTOGRAMS were computed from, and the
+    check that should have caught that compares two files derived from each
+    other.** Found 2026-08-23. #394 re-encoded 316 JPEG thumbnails on 2026-08-14,
+    minting a new content hash for each, and re-baked ZERO histograms. So
+    `images/histograms.json` described thumbnails nobody had been served for nine
+    days. Corrected here: 158 of 158 photos moved, 31.2% of bins, mean 0.95 of
+    100 but with 65 photos carrying at least one bin past 15 and a worst case of
+    59, which is a visible bar rather than decoder noise.
+
+    **`photos:check` cannot see this and never could.** It compares
+    `histograms.json` against `images/meta/`, and since #441 made `meta/` build
+    OUTPUT that `build.mjs` derives FROM `histograms.json`, the two agree no
+    matter what the JPEGs contain. That is gotcha 24's shape exactly: a check
+    whose two sides come from one source proves only that copying works.
+
+    **`zenc histogram --check` is the only thing that reads the pixels, and
+    pointing it at a built tree is guaranteed to lie.** The index packs each bin
+    into ONE character over 64 levels (`HIST_BASE` 63, `HIST_LEVELS` 64) while
+    zenc computes 0..100, so a build-derived `meta/` has been through a lossy
+    101 → 64 → 101 round trip and can never equal a fresh bake. Measured: the
+    derived tree reproduces `roundTrip(committed)` on 100.00% of 40,448 bins, so
+    the packing is faithful and the drift `--check` reports against it is an
+    artifact. Run it against a tree ZENC ITSELF wrote, which is what
+    `extract-photo-metadata.sh` produces mid-pipeline, and a healthy library
+    answers `histograms match on disk for 158 photos`.
+
+    The decoder was the obvious suspect and was innocent: `image` 0.25.10 and
+    `zune-jpeg` 0.5.15 are pinned identically at every commit involved. What
+    changed was the INPUT, which is the thing a version pin cannot hold still.
+
+    `hash-thumbnails.sh` now snapshots each stem's `j` hash and warns when one
+    moves, because that script is the choke point where new bytes become served
+    bytes. `add-photos.sh` re-bakes the whole library on every run and was never
+    at risk; the gap is a STANDALONE `reencode-thumbnails.sh`, whose own header
+    told you to re-run `hash-thumbnails.sh` and stopped there.
+
+    Generalise past histograms: **anything derived from a content-addressed file
+    has to be regenerated when the hash moves, and a hash moving is exactly the
+    event that leaves no diff in the derived file to notice.**
 
 
 ---

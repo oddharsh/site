@@ -18,7 +18,7 @@ import {
   test,
   wmEnv,
   wmPost,
-} from "./contract-shared.mjs";
+} from "./contract-shared.ts";
 
 // ── webmention (inbound) ────────────────────────────────────────────────────
 // A tiny in-memory D1 stand-in: enough SQL surface for the handful of statements

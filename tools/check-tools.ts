@@ -42,7 +42,7 @@ if (tools.length === 0) {
 
 const byBin = new Map(tools.map((t) => [t.bin, t]));
 const declaredBins = new Set(byBin.keys());
-const declaredInstalls = new Set(tools.map((t) => t.install).filter(Boolean));
+const declaredInstalls = new Set(tools.map((t) => t.install).filter(Boolean)) as Set<string>;
 
 // wrangler is guarded like a system binary and is not one: it comes from the
 // workspace install, is pinned exactly at the root, and check-wrangler.mjs

@@ -6,7 +6,7 @@ import {
   readFile,
   readFileSync,
   test,
-} from "./contract-shared.mjs";
+} from "./contract-shared.ts";
 
 // ── NLWeb ───────────────────────────────────────────────────────────────────
 // The endpoint half. These drive the real handler; where a specific record

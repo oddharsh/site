@@ -4,7 +4,7 @@ import {
   assert,
   handleHit,
   test,
-} from "./contract-shared.mjs";
+} from "./contract-shared.ts";
 
 // ── the /hit beacon ─────────────────────────────────────────────────
 // The counter's Durable Object is a single global instance, so reaching it costs

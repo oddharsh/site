@@ -4,7 +4,7 @@ import {
   assert,
   readFileSync,
   test,
-} from "./contract-shared.mjs";
+} from "./contract-shared.ts";
 
 // ── Explorer chrome ──────────────────────────────────────────────────────────
 // The address bar and task pane are markup, so the things worth pinning are the

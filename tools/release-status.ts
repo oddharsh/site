@@ -44,7 +44,7 @@ const bold = (s) => `\x1b[1m${s}\x1b[0m`;
 const ok = (s) => `\x1b[32m${s}\x1b[0m`;
 const warn = (s) => `\x1b[33m${s}\x1b[0m`;
 
-const line = (label, value, note) =>
+const line = (label, value, note?) =>
   console.log(`  ${label.padEnd(13)} ${value}${note ? dim(`  ${note}`) : ""}`);
 
 console.log(bold("\nrelease status\n"));

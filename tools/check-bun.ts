@@ -167,10 +167,10 @@ if (existsSync(SHADOW)) rmSync(SHADOW, { recursive: true, force: true });
 let restored = false;
 try {
   rmSync(BUILD, { recursive: true, force: true });
-  const nodeMs = timedBuild("node", process.execPath, ["tools/build.mjs"]);
+  const nodeMs = timedBuild("node", process.execPath, ["tools/build.ts"]);
   renameSync(BUILD, SHADOW);
 
-  const bunMs = timedBuild("bun", bun, ["tools/build.mjs"]);
+  const bunMs = timedBuild("bun", bun, ["tools/build.ts"]);
 
   const a = hashTree(SHADOW);
   const b = hashTree(BUILD);

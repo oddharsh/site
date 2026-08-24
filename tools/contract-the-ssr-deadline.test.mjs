@@ -6,7 +6,7 @@ import {
   deadline,
   gatherWhoareyou,
   test,
-} from "./contract-shared.mjs";
+} from "./contract-shared.ts";
 
 // ── the SSR deadline ────────────────────────────────────────────────
 // deadline() is what keeps a KV eviction (100-200ms, untunable) from gating

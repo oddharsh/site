@@ -6,20 +6,20 @@
 // reorg: capture a golden baseline against production, then re-run after every
 // phase. If a route's status or content-type drifts, the reorg broke something.
 //
-//   node tools/verify-routes.mjs [baseUrl]      # default https://aadhar.sh
-//   node tools/verify-routes.mjs http://localhost:8788
+//   node tools/verify-routes.ts [baseUrl]      # default https://aadhar.sh
+//   node tools/verify-routes.ts http://localhost:8788
 //
 // Exit code is non-zero if any non-flaky route fails its assertion, so it can
-// gate a deploy. Writes the observed results to verify-baseline.<host>.json.
+// gate a deploy. It writes nothing: the assertions live in ROUTES.
 //
 // Cache-busted per request so we measure the deployment, not the edge cache.
 //
-// tools/check-routes-harness.mjs points this same file at a Worker booted
+// tools/check-routes-harness.ts points this same file at a Worker booted
 // in-process by wrangler's test harness, which is how the oracle runs BEFORE a
 // merge instead of only after a deploy. A local base drops the rows tagged
 // `remote` (see below); everything else is asserted identically.
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 
 // Every path lookup below is relative to the REPO ROOT, not to this file.
 // Naming it means moving this script again costs one line instead of 57.
@@ -46,7 +46,7 @@ const builtOutput = isProd || process.env.VERIFY_BUILT === "1";
 // VERIFY_REMOTE=1 keeps the `remote` rows on a LOCAL base. Same shape as
 // VERIFY_BUILT above and for the same reason: the rows are skipped locally
 // because a local Worker has empty KV/R2 and no Browser Run, and remote bindings
-// (tools/gen-remote-config.mjs) remove exactly that limitation. Set only by
+// (tools/gen-remote-config.ts) remove exactly that limitation. Set only by
 // `bun run routes:check:remote`, which boots the harness on a generated config
 // whose KV/R2/Browser bindings reach production. Never set in CI, because remote
 // bindings need a token that can write and CI holds a read-only one.
@@ -447,19 +447,25 @@ async function main() {
     console.log(`${tag.padEnd(5)} ${String(r.status).padEnd(4)} ${r.path}${why ? "   <- " + why : ""}`);
   }
 
-  // The baseline is a record of a DEPLOYMENT's shape, so only a real deploy
-  // produces one. A local harness run would otherwise drop an ephemeral
-  // verify-baseline.127.0.0.1.json (a different port every boot) into the repo.
-  let outFile = null;
-  if (isProd) {
-    const host = base.replace(/^https?:\/\//, "").replace(/[^a-z0-9.-]/gi, "_");
-    // Beside this script, which is where the committed aadhar.sh baseline lives.
-    outFile = `tools/verify-baseline.${host}.json`;
-    writeFileSync(outFile, JSON.stringify({ base, routes: results.map(({ path, status, ct }) => ({ path, status, ct })) }, null, 2) + "\n");
-  }
-
+  // NO BASELINE FILE. A production run used to write tools/verify-baseline.<host>.json
+  // and nothing ever read it, in this repo or in CI, from the day it was added.
+  // Deleted 2026-08-23 along with the committed aadhar.sh copy, on this evidence:
+  //
+  //   - the ROUTES table is the expectation and it is strictly richer. Every row
+  //     asserts a status, the only four without a content-type are 301s where it
+  //     is meaningless, and rows carry things a recording cannot (status UNIONS
+  //     like [200, 503], `flaky`, body markers, byte caps).
+  //   - regenerating it against production after eight months found 52 new rows,
+  //     0 removed, and exactly ONE differing row: /coffee/availability.json at
+  //     503 rather than 200, which is the calendar fail-closed path the table
+  //     itself already declares as `status: [200, 503], flaky: true`.
+  //
+  // So its whole recorded lifetime of drift was one row the oracle calls
+  // transient by design. A recording of observed production BLESSES whatever
+  // production did at capture time, including a downstream outage, which is the
+  // opposite of what an assertion does. Add a row to ROUTES instead.
   console.log("=".repeat(60));
-  console.log(`${results.length} routes, ${hardFails} hard failure(s).` + (outFile ? ` Baseline -> ${outFile}` : ""));
+  console.log(`${results.length} routes, ${hardFails} hard failure(s).`);
   process.exit(hardFails ? 1 : 0);
 }
 

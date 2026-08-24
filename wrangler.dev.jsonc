@@ -21,7 +21,7 @@
   // split, so no single one of them can be pointed at: this field named `www`
   // for a day after that split, and `www` no longer existed, so dev did not
   // start at all. `.dev-assets` is a SYMLINK FARM over those five, rebuilt by
-  // tools/dev-stage.mjs which `bun run dev` runs first. It is gitignored and
+  // tools/dev-stage.ts which `bun run dev` runs first. It is gitignored and
   // costs no copy.
   //
   // The readable loop survives intact, which is the whole reason for a farm

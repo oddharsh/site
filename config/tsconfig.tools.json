@@ -19,6 +19,15 @@
     "target": "esnext",
     "module": "esnext",
     "moduleResolution": "bundler",
+    // strictNullChecks ON, against a RATCHET rather than a wall. tools/ carried
+    // 395 diagnostics under it when this landed and carries 600 now, after
+    // #532 converted 39 more scripts to .ts and JS-mode leniency withdrew with
+    // the extension; check-tool-types.mjs holds
+    // the per-file count and fails on a new file, a worse file, or a better file
+    // whose baseline was not updated. `strict` stays off for the reason
+    // tsconfig.cal-test.json's header gives: noImplicitAny is 7,197 diagnostics
+    // of annotation labour and would bury this.
+    "strictNullChecks": true,
     "strict": false,
     "checkJs": true,
     "allowJs": true,

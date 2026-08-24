@@ -126,7 +126,7 @@ function buildICS(env, booking) {
 function foldLine(line) {
   const enc = new TextEncoder();
   if (enc.encode(line).length <= 75) return [line];
-  const out = [];
+  const out: string[] = [];
   let cur = "", curBytes = 0, first = true;
   for (const ch of line) {                 // iterate by code point, not UTF-16 unit
     const chBytes = enc.encode(ch).length;

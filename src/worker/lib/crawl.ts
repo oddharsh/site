@@ -153,7 +153,10 @@ export async function readResponseCapped(response, maxBytes = DEFAULT_CRAWL_BODY
     : null;
   if (!reader) return { text: "", bytesRead: 0, truncated: false, digest: "" };
 
-  const chunks = [];
+  // Annotated because an empty literal infers `never[]` under strictNullChecks,
+  // which the lens-reader Worker's program turns on: TypeScript only lets an
+  // array evolve from its pushes while that flag is off.
+  const chunks: Uint8Array[] = [];
   let bytesRead = 0;
   let truncated = false;
   try {

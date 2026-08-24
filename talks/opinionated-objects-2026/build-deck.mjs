@@ -76,6 +76,17 @@ function addText(slide, value, frame, style = {}) {
   return box;
 }
 
+// `line: null` draws a borderless rect and `radius` names a rounding token, so
+// both are nullable. Left to the defaults they infer `string` and `null`
+// respectively, which is backwards from how every bevel helper below calls this.
+//
+// JSDoc rather than a TypeScript annotation because this is a .mjs file, where
+// an annotation is a syntax error (TS8010). The rule is the exact inverse of the
+// .ts side of this repo, where JSDoc types are ignored instead.
+/**
+ * @param {string | null} [line]
+ * @param {string | null} [radius]
+ */
 function addRect(slide, frame, fill, line = C.line, radius = null) {
   return slide.shapes.add({
     geometry: radius ? "roundRect" : "rect",

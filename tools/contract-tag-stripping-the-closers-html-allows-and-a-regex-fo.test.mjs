@@ -3,7 +3,7 @@
 import {
   assert,
   test,
-} from "./contract-shared.mjs";
+} from "./contract-shared.ts";
 
 // ── tag stripping: the closers HTML allows and a regex forgets ───────────
 

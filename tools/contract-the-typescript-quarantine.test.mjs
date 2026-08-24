@@ -7,7 +7,7 @@ import {
   readdir,
   remainderHolder,
   test,
-} from "./contract-shared.mjs";
+} from "./contract-shared.ts";
 
 // ── the TypeScript quarantine ───────────────────────────────────────────────
 // config/ts-migration.json names the Worker modules that were not type-clean
@@ -168,7 +168,7 @@ test("every auxiliary Worker has a tsc program, and something runs it", async ()
   }))].join(" ");
 
   const wrappedBy = new Map();
-  for (const file of readdirSync(`${root}tools`).filter((f) => f.startsWith("check-") && f.endsWith(".mjs"))) {
+  for (const file of readdirSync(`${root}tools`).filter((f) => f.startsWith("check-") && f.endsWith(".ts"))) {
     const source = await readFile(new URL(`tools/${file}`, ROOT), "utf8");
     for (const config of configs) {
       if (source.includes(`config/${config}`) && scripts.includes(`tools/${file}`)) wrappedBy.set(config, file);
@@ -183,7 +183,7 @@ test("every auxiliary Worker has a tsc program, and something runs it", async ()
   // The wrapper arm has to have MATCHED something, or a rename in tools/ turns
   // it into a filter that exempts nothing while this test still reports green.
   assert.ok(wrappedBy.size >= 1,
-    "no tsconfig resolved through a tools/check-*.mjs wrapper — the wrapper scan has lost its target");
+    "no tsconfig resolved through a tools/check-*.ts wrapper — the wrapper scan has lost its target");
 });
 
 // A TOOL MAY NOT SPAWN A PACKAGE MANAGER. Every script in tools/ runs under
@@ -209,7 +209,8 @@ test("no tool spawns a package manager by name", async () => {
   // tools; a test that asserts about `pnpm` necessarily contains the word, and
   // the suite split on 2026-08-20 turned that one exclusion into 47 files.
   const files = readdirSync(dir).filter((f) =>
-    f.endsWith(".mjs") && !f.endsWith(".test.mjs") && f !== "contract-shared.mjs");
+    (f.endsWith(".ts") || f.endsWith(".mjs")) && !f.endsWith(".test.mjs")
+    && !f.endsWith(".d.ts") && f !== "contract-shared.ts");
   assert.ok(files.length >= 20, `expected the tools directory, got ${files.length} files`);
 
   // There is NO exception list, and there was one until 2026-08-23. It held
@@ -239,7 +240,7 @@ test("no tool spawns a package manager by name", async () => {
 test("bun:check compares bun against a real node control", async () => {
   const { readFileSync } = await import("node:fs");
   const pkg = JSON.parse(readFileSync(new URL("package.json", ROOT), "utf8"));
-  const source = readFileSync(new URL("tools/check-bun.mjs", ROOT), "utf8");
+  const source = readFileSync(new URL("tools/check-bun.ts", ROOT), "utf8");
 
   assert.match(pkg.scripts["bun:check"], /^node /, "the controller must run under Node");
   assert.match(source, /if \(process\.versions\.bun\)/, "the tool must reject a direct Bun invocation");
@@ -414,4 +415,70 @@ test("a ramp step hands the remainder to the LARGEST incumbent", () => {
 
   // Nothing serving yet: a first deploy has no remainder to hand out.
   assert.equal(remainderHolder([], "7634b9d8-fc15"), null);
+});
+
+// ── strictNullChecks is a RATCHET, and it only ever tightens ────────────────
+// `strict` is off everywhere and stays off: it bundles noImplicitAny, measured
+// at 7,197 diagnostics across this repo against strictNullChecks' 1,544, and the
+// two answer different questions. noImplicitAny finds missing annotations on
+// code that was written without types. strictNullChecks finds places a null can
+// actually arrive, which is the half worth having.
+//
+// The programs below declare it: most are clean under it outright, and two
+// carry a per-file baseline that can only fall. The list may only
+// GROW: turning the flag off in one of them, or dropping a program from this
+// list while its config still has it, fails here. That is the same mechanism
+// config/ts-migration.json used for the Worker quarantine, pointed the other
+// way — that one could only shrink, this one can only grow.
+//
+// TEXT-BASED on purpose. Proving a program is clean means RUNNING tsc against
+// it, which is what `bun run typecheck` already does on every one of these; a
+// second run per program here would put ~8 compilations on a suite that answers
+// in about a second. What this asserts is the declaration, and typecheck is what
+// makes the declaration true.
+test("every program declared null-safe still declares it", async () => {
+  const { readdirSync } = await import("node:fs");
+
+  // TWO KINDS OF ENTRY, and the difference matters before adding one. Most of
+  // these are CLEAN under the flag, so `bun run typecheck` fails on a single new
+  // diagnostic. Two are RATCHETED instead, each against a per-file baseline that
+  // can only fall: tsconfig.tools.json through check-tool-types.ts, and
+  // tsconfig.json through check-worker-types.ts. Both kinds belong here, because
+  // what this asserts is that the flag stays ON, not that a program is clean.
+  const DECLARED = [
+    "tsconfig.json",
+    "tsconfig.cf-garage.json",
+    "tsconfig.cf-garage-test.json",
+    "tsconfig.cal-test.json",
+    "tsconfig.lens-reader.json",
+    "tsconfig.lens-reader-test.json",
+    "tsconfig.lwe-ask.json",
+    "tsconfig.tools.json",
+  ].sort();
+
+  const configs = readdirSync(new URL("config/", ROOT).pathname)
+    .filter((f) => /^tsconfig\..+\.json$/.test(f) || f === "tsconfig.json");
+
+  // A FLOOR on the scan itself, because a test that read no configs would agree
+  // with an empty declaration list and report a clean run.
+  assert.ok(configs.length >= 8,
+    `only ${configs.length} tsconfigs found — this is reading the wrong directory`);
+
+  const strict = [];
+  for (const name of configs) {
+    const source = await readFile(new URL(`config/${name}`, ROOT), "utf8");
+    if (/"strictNullChecks"\s*:\s*true/.test(source)) strict.push(name);
+  }
+
+  const missing = DECLARED.filter((name) => !strict.includes(name));
+  assert.deepEqual(missing, [],
+    `these programs are declared null-safe but no longer set strictNullChecks:\n  ${missing.join("\n  ")}\n` +
+    "The flag comes off only by fixing whatever made it fail, never by editing this list down.");
+
+  // The other direction, so a program that gains the flag joins the record
+  // rather than sitting outside it: a config can be ahead of this list only by
+  // somebody forgetting to add it.
+  const undeclared = strict.filter((name) => !DECLARED.includes(name));
+  assert.deepEqual(undeclared, [],
+    `these programs set strictNullChecks but are not in the declared list: ${undeclared.join(", ")} — add them`);
 });

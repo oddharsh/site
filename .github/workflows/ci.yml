@@ -303,7 +303,7 @@ jobs:
           esac
 
       - name: Resolve the account id from wrangler.jsonc
-        run: node tools/print-account-id.mjs >> "$GITHUB_ENV"
+        run: node tools/print-account-id.ts >> "$GITHUB_ENV"
 
       - name: Check infrastructure declaration
         env:

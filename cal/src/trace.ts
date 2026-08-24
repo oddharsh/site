@@ -19,7 +19,11 @@
 // its unit tests. That is correct: those tests assert booking policy, not
 // telemetry, and fetchBusySWR is legitimately called with a null ctx there.
 
-let tracing = null;
+// The injected tracer, or null under plain node. Typed by the ONE method this
+// module calls rather than by importing Cloudflare's shape: `cloudflare:workers`
+// may not be imported here (gotcha 16), and the whole point of the injection is
+// that this file never names that module.
+let tracing: { enterSpan: (name: string, fn: (span: any) => any) => any } | null = null;
 
 export function installTracing(candidate) {
   // cal cannot import src/worker/lib/parse.ts: its Vitest pool boots from

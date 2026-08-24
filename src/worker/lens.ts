@@ -321,7 +321,7 @@ export function glossify(escaped, only?) {
   let out = "";
   let pos = 0;
   for (;;) {
-    let best = null;
+    let best: { key: any, spelling: string, index: number, m: RegExpMatchArray } | null = null;
     for (const [key, spelling] of pairs) {
       if (seen.has(key)) continue;       // one definition per string, not one per spelling
       const re = new RegExp("(^|[^\\w.-])(" + spelling.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ")(?!\\w)(?!\\.\\w)");
@@ -1672,7 +1672,7 @@ const CLOUDFLARE_SCORE_TTL = 6 * 60 * 60;
 // and retain only the normalized level: a third party's complete report neither
 // belongs in our response contract nor in KV.
 export function lensParseCloudflareAgentScore(body) {
-  const messages = [];
+  const messages: any[] = [];
   for (const line of String(body || "").split(/\r?\n/)) {
     if (!line.startsWith("data:")) continue;
     try { messages.push(JSON.parse(line.slice(5).trim())); } catch (_e) {}
@@ -2123,7 +2123,7 @@ export async function handleLensBrowser(request, env, ctx) {
     // WebMCP discovery is currently a Chrome-beta lab capability, not a
     // production Browser Run binding capability. The local helper performs
     // the real runtime listing; this field keeps that boundary explicit.
-    webmcp: { status: "lab-required", detail: "Runtime WebMCP listing requires the local Browser Run Chrome-beta lab. Use tools/lens-webmcp.mjs." },
+    webmcp: { status: "lab-required", detail: "Runtime WebMCP listing requires the local Browser Run Chrome-beta lab. Use tools/lens-webmcp.ts." },
     fetchedBy: "Cloudflare Browser Run",
     // WHICH engine rendered this. A reader comparing two snapshots needs to know
     // whether they came from the same one, and "Browser Run" alone stopped being
@@ -2918,7 +2918,7 @@ export async function originDiscovery(origin, hostname, env, opts: { fresh?: boo
     // cannot be known until robots.txt has been read, and skipped entirely on
     // the common path, so the fan-out above keeps its shape for every site
     // whose sitemap sits where the convention says.
-    let sitemapDeclared = null;
+    let sitemapDeclared: any = null;
     if (!lensSitemapVerdict(sitemap).valid) {
       const declared = lensSitemapDeclared(robots, origin);
       if (declared) {
@@ -3118,7 +3118,7 @@ export async function lensExtractAttrs(html) {
     microItemtypes: new Set(), microProps: new Set(), mf: new Set(),
     rdfaTypeof: new Set(), rdfaProps: new Set(), imgTotal: 0, imgNoAlt: 0,
   };
-  let jbuf = null;
+  let jbuf: string[] | null = null;
   const MF = /^(h|p|u|dt|e)-[a-z0-9]+(?:-[a-z0-9]+)*$/;
   const MF_CLASSIC = /^(vcard|hcard|hcalendar|hentry|hfeed|hreview|hrecipe|hatom|hresume|hproduct|adr|geo)$/;
   const rw = new HTMLRewriter()
@@ -3167,7 +3167,7 @@ export function lensParseJsonld(raw) {
 }
 
 export function lensHeadings(html) {
-  const out = []; const re = /<h([1-6])[^>]*>([\s\S]*?)<\/h\1>/gi; let m;
+  const out: { level: number, text: string }[] = []; const re = /<h([1-6])[^>]*>([\s\S]*?)<\/h\1>/gi; let m;
   while ((m = re.exec(html)) && out.length < 250) { const txt = lensStripInline(m[2]).trim(); if (txt) out.push({ level: +m[1], text: txt.slice(0, 300) }); }
   return out;
 }
@@ -3338,7 +3338,7 @@ export function lensTerms({ finalUrl, status, headers, body, robots, tdmrep, met
   // the spectrum: strongest tier present wins; reasons list everything found.
   // Nuance: an all-yes Content-Signal (or naming bots only to allow them) is an
   // explicit GRANT — that keeps the site at "open", just deliberately so.
-  const reasons = [];
+  const reasons: string[] = [];
   const named = t.scoreboard.filter((b) => b.matchedUa && b.matchedUa !== "*");
   const blocked = t.scoreboard.filter((b) => b.verdict === "block");
   const restrictiveSignals = t.signals.some((s) => Object.values(s.parsed).some((v) => v !== "yes"));
@@ -3393,7 +3393,7 @@ const LENS_RATES = [
 export function lensCost({ html, text, markdown, headings, raw }: {
   html?: number; text?: number; markdown?: number; headings?: Array<{ level: number; text: string }>; raw?: number;
 }) {
-  const tiers = [];
+  const tiers: { key: any, label: any, note: any, chars: number, tokens: number }[] = [];
   const add = (key, label, note, chars, cpt) => {
     if (chars > 0) tiers.push({ key, label, note, chars, tokens: Math.round(chars / cpt) });
   };
@@ -3549,7 +3549,7 @@ function lensJsonDoor(probe, validate, label) {
   if (!probe || !probe.ok) {
     return { present: false, status: probe ? probe.status : null, unknown: lensProbeUnanswered(probe) };
   }
-  let j = null;
+  let j: any = null;
   try { j = JSON.parse(probe.body); } catch (_e) { return { present: false, note: "answered, but not JSON (SPA fallback?)" }; }
   if (!asRecord(j) || !validate(j)) return { present: false, note: "JSON, but not " + label + "-shaped" };
   return { present: true, json: j };
@@ -3577,19 +3577,19 @@ export function lensAgentDoors({ llmsTxt, mdNego, mcp, nlweb, webmcp, agentCard,
   for (const k of ["agentCard", "openapi", "aiPlugin", "apiCatalog"]) delete doors[k].json;
 
   // the verdict: action surfaces beat readable ones beat nothing.
-  const action = [];
+  const action: string[] = [];
   if (doors.mcp.verdict === "yes" || doors.mcp.verdict === "likely") action.push("an MCP endpoint");
   if (doors.nlweb.verdict === "maybe" || doors.nlweb.verdict === "likely") action.push("an NLWeb-shaped /ask");
   if (doors.webmcp.found) action.push("in-page WebMCP tools");
   if (doors.agentCard.present) action.push("an A2A agent card");
-  const readable = [];
+  const readable: string[] = [];
   if (doors.llmsTxt.present) readable.push("llms.txt");
   if (doors.mdNegotiation.supported) readable.push("markdown negotiation");
   if (doors.apiCatalog.present) readable.push("an RFC 9264 API catalog");
   if (doors.openapi.present) readable.push("OpenAPI");
   if (doors.aiPlugin.present) readable.push("a legacy ai-plugin manifest");
   // probes that never answered can't vote — say so rather than undercount.
-  const unknowns = [];
+  const unknowns: string[] = [];
   if (doors.llmsTxt.unknown) unknowns.push("llms.txt");
   if (doors.mcp.verdict === "unknown") unknowns.push("/mcp");
   if (doors.nlweb.verdict === "unknown") unknowns.push("/ask");
@@ -3746,7 +3746,7 @@ function lensReadinessItem(key, status, detail) {
 export function lensFieldEvidence({ status, bodyUnreadable, anatomy, agent, botViews }: {
   status?: any; bodyUnreadable?: any; anatomy?: any; agent?: any; botViews?: any;
 }) {
-  const components = [];
+  const components: { key: any, label: any, score: any, detail: any }[] = [];
   const add = (key, label, score, detail) => components.push({ key, label, score, detail });
 
   const identifiedOk = Number.isFinite(status) && status >= 200 && status < 400 && !bodyUnreadable;

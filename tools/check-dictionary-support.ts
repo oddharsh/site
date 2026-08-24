@@ -16,7 +16,7 @@ import { createHash } from "node:crypto";
 import { PAGE_FAMILY_MATCH } from "../src/worker/lib/assets.ts";
 
 const b64 = (buf) => `:${createHash("sha256").update(buf).digest("base64")}:`;
-const get = (url, dict) => {
+const get = (url, dict?) => {
   // The header is ABSENT on the control arm rather than empty: an empty
   // `available-dictionary` is a different request from one that never offered a
   // dictionary, and the control depends on the second.

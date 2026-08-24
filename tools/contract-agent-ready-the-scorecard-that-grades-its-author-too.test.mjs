@@ -5,7 +5,7 @@ import {
   terminalGet,
   test,
   testGlobals,
-} from "./contract-shared.mjs";
+} from "./contract-shared.ts";
 
 // ── /agent-ready — the scorecard that grades its author too ──────────────
 

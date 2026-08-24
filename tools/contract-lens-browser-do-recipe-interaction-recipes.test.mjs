@@ -28,7 +28,7 @@ import {
   searchSite,
   staticAssets,
   test,
-} from "./contract-shared.mjs";
+} from "./contract-shared.ts";
 
 // ── /lens/browser?do=<recipe> — interaction recipes ────────────────────────
 // The feature runs JavaScript inside somebody else's page. Almost every test

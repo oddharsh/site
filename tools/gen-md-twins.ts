@@ -2,7 +2,7 @@
 // gen-md-twins.mjs — the Markdown twin for every page on the site that has prose,
 // plus the per-section llms.txt indexes.
 //
-//   node tools/gen-md-twins.mjs [outDir]     # default: .build/public
+//   node tools/gen-md-twins.ts [outDir]     # default: .build/public
 //
 // WHY THIS IS BUILD OUTPUT, NOT COMMITTED SOURCE
 // A twin is a pure function of the HTML the build just produced, so generating
@@ -179,7 +179,7 @@ export function renderWritingIndex(root = ".") {
   ].join("\n");
 }
 
-export function buildTwins(root = ".", opts = {}) {
+export function buildTwins(root = ".", opts: { generatedRoot?: string } = {}) {
   const manifest = readManifest(root);
   const lastmod = readLastmod(root);
   const files = new Map();

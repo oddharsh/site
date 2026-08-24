@@ -195,7 +195,11 @@ async function reindex(req, env) {
     return metadata;
   };
 
-  const BATCH = 25, vectors = [];
+  // Vectorize's upsert shape, stated because an empty literal infers `never[]`
+  // once strictNullChecks turns off evolving-array inference, and every push
+  // below would then be assigning to `never`.
+  const BATCH = 25;
+  const vectors: { id: any, values: any, metadata: ReturnType<typeof passageMetadata> }[] = [];
   for (let i = 0; i < PASSAGES.length; i += BATCH) {
     const chunk = PASSAGES.slice(i, i + BATCH);
     const { data } = await env.AI.run(env.EMBED_MODEL, { text: chunk.map((p) => p.text) });

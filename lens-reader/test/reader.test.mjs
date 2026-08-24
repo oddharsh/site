@@ -117,6 +117,10 @@ test("read publishes Markdown from Readability's finished article node", async (
       parseHTML(html).document,
       { charThreshold: 500 },
     ).parse();
+    // `parse()` answers null on a document it cannot extract. The old
+    // `baseline.content` would have thrown a bare TypeError there, blaming the
+    // assertion rather than the fixture.
+    if (!baseline) throw new Error("Readability extracted nothing from the fixture");
     assert.equal(result.title, "Direct Article");
     assert.equal(result.markdown, toMarkdown(baseline.content));
   } finally {
@@ -200,13 +204,24 @@ test("the extractor actually extracts, which no other test here proved", async (
   </body></html>`;
 
   const result = new Readability(parseHTML(html).document, { charThreshold: 500 }).parse();
-  assert.ok(result, "extractor returned nothing at all");
+  // A THROW rather than `assert.ok`, which reads identically and does not narrow:
+  // TypeScript only applies an `asserts` signature when every name in the call
+  // target carries an explicit type, and `assert.ok` reached through a namespace
+  // import does not qualify. The four reads below are what needs the narrowing.
+  if (!result) throw new Error("extractor returned nothing at all");
+  // Both fields are independently nullable on Readability's result, and a null
+  // reaching `assert.match` fails on the argument type rather than on the thing
+  // this test is about. Named here so the failure says which field was missing.
+  const { title, content } = result;
+  if (title == null || content == null) {
+    throw new Error(`extractor returned no ${title == null ? "title" : "content"}`);
+  }
   // Readability takes the title from <title>, not <h1>, so the fixture agrees
   // on both rather than pinning which source wins.
-  assert.match(result.title, /The Real Article/);
-  assert.match(result.content, /genuine body prose/);
-  assert.doesNotMatch(result.content, /Advert copy/, "the aside survived extraction");
-  assert.doesNotMatch(result.content, /Subscribe now/, "a control label survived as prose");
+  assert.match(title, /The Real Article/);
+  assert.match(content, /genuine body prose/);
+  assert.doesNotMatch(content, /Advert copy/, "the aside survived extraction");
+  assert.doesNotMatch(content, /Subscribe now/, "a control label survived as prose");
 });
 
 test("the control census survives Readability mutation without a second DOM", async () => {
@@ -230,6 +245,7 @@ test("the control census survives Readability mutation without a second DOM", as
   const labels = collectControlLabels(document);
   const beforeBytes = document.body.innerHTML.length;
   const result = new Readability(document, { charThreshold: 500 }).parse();
+  if (!result?.content) throw new Error("Readability extracted nothing from the control fixture");
 
   assert.ok(document.body.innerHTML.length < beforeBytes / 2,
     "Readability left the document intact, so the mutation boundary is no longer exercised");

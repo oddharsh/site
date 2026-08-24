@@ -35,6 +35,12 @@
     "types": ["@cloudflare/workers-types"],
     "resolveJsonModule": true,
     "skipLibCheck": true,
+    // strictNullChecks ON. `strict` stays off: it bundles noImplicitAny,
+    // which is 7,197 diagnostics of annotation labour across this repo, and
+    // raising the two together buries the checks that find bugs under the
+    // ones that find missing annotations. This program is clean under it,
+    // and a contract test keeps the set of clean programs from shrinking.
+    "strictNullChecks": true,
     "strict": false
   },
   "include": ["../lens-reader/src/**/*.ts"]

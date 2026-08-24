@@ -16,7 +16,7 @@ import { listHeld } from "./booking.ts";
 // ok, source). Callers that only need the listing destructure { slots };
 // route_book also reads { cal } to fail closed on an unvouchable calendar.
 // timings (optional) collects per-step durations for a Server-Timing header.
-export async function listOpenSlots(env, ctx, timings = null, options = {}) {
+export async function listOpenSlots(env, ctx, timings: Record<string, number> | null = null, options = {}) {
   const mark = (name, p) => {
     if (!timings) return p;
     const s = Date.now();
