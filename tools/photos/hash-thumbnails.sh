@@ -125,4 +125,4 @@ EOF
 
 # The short URL hash above is intentionally kept separate from the full-byte
 # fingerprint used by the exact photo_recipe matcher.
-node "$SCRIPT_DIR/build-image-fingerprints.mjs"
+node "$SCRIPT_DIR/build-image-fingerprints.ts"
