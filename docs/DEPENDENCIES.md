@@ -36,7 +36,7 @@ review policy and entry point for future agent runs.
   install time from 4.62 s to 3.03 s and `node_modules` from 781 MiB to 562 MiB.
   Review these two updates together when either package changes its Cloudflare
   toolchain dependencies.
-- Oxc Minify 0.145.0 and Lightning CSS 1.33.0 are exact root pins for the
+- Oxc Minify 0.146.0 and Lightning CSS 1.33.0 are exact root pins for the
   deploy-time JavaScript and CSS minifiers. Their platform-specific optional
   packages run only in the build environment; they add no browser or Worker
   runtime dependency. Dependabot should review their release notes for output,
