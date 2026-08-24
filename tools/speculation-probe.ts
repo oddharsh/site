@@ -21,8 +21,9 @@
 // And Chrome gates speculation on VISIBILITY. Every agent-driven browser surface
 // here backgrounds its tab between calls, which disables the feature silently:
 // measured hidden in both, with a hover landing on a real anchor and dwelling
-// four seconds for nothing. Hence a real headful window, and no CDP session
-// attached, for the reason in CLAUDE.md gotcha 15.
+// four seconds for nothing. Hence a real headful window. It also attaches no CDP
+// session, which gotcha 15 used to give a reason for; that reason did not survive
+// re-measurement, so treat it as one less variable rather than a known hazard.
 //
 // So read the CONTROL line first every time. If hovering a link produces no
 // origin hit, the run measured the instrument and says nothing about the rules.

@@ -214,8 +214,10 @@ prepare_reference() {  # prepare_reference <src> <out.png>
   local src="$1" ref="$2" o ops axis cur w h
   o=$(exif-sooc -s -s -s -n -Orientation "$src" 2>/dev/null || echo "")
   ops=$(orient_ops "$src")
-  w=$(sips -g pixelWidth "$src" 2>/dev/null | awk '/pixelWidth/{print $2}')
-  h=$(sips -g pixelHeight "$src" 2>/dev/null | awk '/pixelHeight/{print $2}')
+  # One spawn for both, the same shape dims() below already used.
+  srcdims=$(sips -g pixelWidth -g pixelHeight "$src" 2>/dev/null)
+  w=$(printf '%s\n' "$srcdims" | awk '/pixelWidth/{print $2}')
+  h=$(printf '%s\n' "$srcdims" | awk '/pixelHeight/{print $2}')
   # sips answers `<nil>` rather than failing when handed something that is not
   # an image, and `<nil>` is non-empty, so an emptiness check passes it straight
   # into an integer comparison and spills a bash error over the report.
