@@ -46,7 +46,9 @@ If there is no useful leverage, say so explicitly in the PR review. The merged
 PR and its review comment are the changelog record; this file is the durable
 review policy and entry point for future agent runs.
 
-## The one version no ecosystem owns
+## The two versions no ecosystem owns
+
+### bun, in `packageManager`
 
 `package.json`'s `packageManager` field names the bun this repository runs, and
 none of the five ecosystems above reaches it. The npm updater bumps `@types/bun`
@@ -88,6 +90,75 @@ a day when the pin is already current proves only that the comparison ran.
 The baseline below already worked that through: the release-age policy once held
 the types pin a release behind the runtime and it caught up on its own, which is
 a wait rather than a fork.
+
+### node, in `.node-version`
+
+Also unowned, and it needs a DIFFERENT tool rather than the same one pointed
+elsewhere. Three facts make the bun design wrong here:
+
+- **The file holds a bare major** (`26`), and `actions/setup-node` resolves the
+  newest release of it on every run. Patches and minors are already current
+  everywhere, with no PR and nothing to remember. There is no drift to close.
+- **The only decision left is the major**, which is a policy call rather than a
+  version comparison. Node ships one every April and October and half of them
+  never become LTS, so a job proposing node 27 the day it lands would be
+  proposing to leave the LTS line.
+- **Node builds nothing here.** `node tools/build.ts` cannot run at all since
+  `lib/link-integrity.ts` began parsing with HTMLRewriter. What node does is run
+  wrangler, on the path that publishes production, plus the route oracle and the
+  gzip measurements.
+
+What is unowned is therefore the SUPPORT WINDOW. A major has published dates for
+entering maintenance and for end of life, nothing here read them, and an
+end-of-life node in the deploy path is obvious in hindsight and invisible in
+advance.
+
+`bun run node:pin` reads those dates from nodejs/Release's own `schedule.json`
+rather than from a copy in this repository, which would go stale in exactly the
+way the check exists to catch. It reports the phase and escalates on three
+states, and only three:
+
+| state | why it is escalated |
+|---|---|
+| end of life | the runtime on the publish path takes no fixes at all |
+| within 180 days of end of life | enough runway to take the gates below deliberately |
+| entered maintenance | security fixes only, so the clock is running |
+
+A pin sitting on a pre-LTS **Current** release is reported and never escalated,
+because it resolves itself on a date already in the schedule. That is the state
+today: node 26 became Current on 2026-05-05 and enters Active LTS on 2026-10-28.
+
+[`.github/workflows/node-support-window.yml`](../.github/workflows/node-support-window.yml)
+runs it weekly, since the events are years apart, and files an ISSUE rather than
+opening a PR. The title carries the phase, so a repeat of the same news is
+suppressed while the next, more urgent state still gets through.
+
+The controls are permanent too, because node's schedule keeps every major it has
+ever shipped and each retired one is frozen in a state this must catch:
+
+```bash
+bun run node:pin --pretend 23   # never became LTS, ended 2025-06-01
+bun run node:pin --pretend 22   # in maintenance since 2025-10-21
+```
+
+The tree half of the check has no network and lives in
+`contract-the-node-pin-is-declared-once.test.mjs`, so `validate` already runs it:
+the pin is a bare major, the `engines.node` floor agrees with it and with the
+version `build.ts`'s zstd tripwire names, and every workflow reads the file
+rather than naming a version inline.
+
+**That floor is measured rather than asserted**, as of 2026-08-24. One 8800-byte
+buffer compressed against itself at level 19, on darwin-arm64:
+
+| node | no dictionary | with dictionary | honours it |
+|---|--:|--:|---|
+| v23.11.1 | 63 | 63 | no, silently |
+| v24.19.0 | 63 | 19 | yes |
+| v26.7.0 | 63 | 19 | yes |
+
+So `engines.node: ">=24.0.0"` and build.ts's "Node 24+ is required" were both
+right. The surrounding comments had only ever measured 22 as broken and 26 as
+working, which left 24 as the one number in that sentence nobody had checked.
 
 ## Current baseline
 
