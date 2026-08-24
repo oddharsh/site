@@ -60,7 +60,7 @@ review policy and entry point for future agent runs.
   file says which three files it covers.
 - **esbuild is no longer a direct dependency, as of 2026-08-14.** It had left the
   minification path when Oxc took over and stayed pinned for ONE call:
-  `tools/check-page-contracts.mjs` parsed the garage scaffold's inline CSS with
+  `tools/check-page-contracts.ts` parsed the garage scaffold's inline CSS with
   `transform(css, { loader: "css" })`. (It parsed CSS, never JS; this line said
   "inline JS" until 2026-08-14.) That was 20MB of Go binary for one call, and the
   size was the smaller problem. **The two CSS parsers disagree in both

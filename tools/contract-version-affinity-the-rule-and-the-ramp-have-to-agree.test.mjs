@@ -4,7 +4,7 @@ import {
   assert,
   readFile,
   test,
-} from "./contract-shared.mjs";
+} from "./contract-shared.ts";
 
 // ── version affinity: the rule and the ramp have to agree ────────────────────
 //
@@ -47,7 +47,7 @@ test("the affinity rule exempts the header the ramp sampler sends", async () => 
   // And the ramp has to actually send it. If this line ever goes, the exemption
   // above is exempting nothing and the affinity rule silently governs the
   // sampler again.
-  const ramp = await readFile(new URL("./deploy-promote.mjs", import.meta.url), "utf8");
+  const ramp = await readFile(new URL("./deploy-promote.ts", import.meta.url), "utf8");
   assert.match(ramp, new RegExp(`"${header}"\\s*:`), "deploy-promote.mjs must send a per-request affinity key");
   assert.match(ramp, /"cloudflare-workers-version-overrides"\s*:/, "deploy-promote.mjs must pin its health probe to one version");
 

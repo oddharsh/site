@@ -69,7 +69,7 @@
       inner += '<div class="lx-cap" style="margin-top:6px">Discovery only. Lens does not call WebMCP tools.</div>';
     } else {
       inner += '<div class="lx-none">' + esc(webmcp.detail || "No runtime WebMCP tools were observed.") + "</div>";
-      inner += '<div class="lx-cap" style="margin-top:6px">Use <span class="lx-tag">node tools/lens-webmcp.mjs ' + esc(data.finalUrl || data.url) + "</span> on the current machine for a Chrome-beta lab probe.</div>";
+      inner += '<div class="lx-cap" style="margin-top:6px">Use <span class="lx-tag">node tools/lens-webmcp.ts ' + esc(data.finalUrl || data.url) + "</span> on the current machine for a Chrome-beta lab probe.</div>";
     }
     return section("Runtime WebMCP", status, "What a browser session can discover after the page runs.", inner);
   }

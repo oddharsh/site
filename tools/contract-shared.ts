@@ -30,7 +30,7 @@ import {
   validateLensTarget,
 } from "../src/worker/lens.ts";
 import { EXECUTION_META, EXECUTION_PROBE, executionChecks } from "../src/worker/lib/agent-execution.ts";
-import { httpWords } from "./check-agent.mjs";
+import { httpWords } from "./check-agent.ts";
 import { lensReadiness, lensSitemapVerdict, lensSitemapDeclared, lensAgentDoors } from "../src/worker/lens.ts";
 import { lensRecipe, lensRecipeIds, lensRecipeScript } from "../src/worker/lens-recipes.ts";
 import { handleCoffeeAvailability } from "../src/worker/coffee.ts";
@@ -49,7 +49,7 @@ import { cronJob } from "../src/worker/lib/cron.ts";
 import { BASELINE_HEADING, FLOOR_CLAIMS, auditDependencyDocs, baselineSection, checkDependencyDocs, findClaims, parseCargoDeps } from "./lib/dependency-docs.ts";
 import { PAGE_FAMILY_MATCH, serveStaticPage } from "../src/worker/lib/assets.ts";
 import { serveMarkdown } from "../src/worker/home.ts";
-import { readManifest, workerModule, navFenceBody, readFenceBody, runProfilesBody } from "./gen-manifest.mjs";
+import { readManifest, workerModule, navFenceBody, readFenceBody, runProfilesBody } from "./gen-manifest.ts";
 import { PROFILES } from "../tools/photos/shell-data.ts";
 import { faviconHref, sectionFavicons, speculationHtml } from "../tools/photos/gen-desktop-partial.ts";
 import { TASKBAR } from "../tools/photos/shell-data.ts";
@@ -338,7 +338,7 @@ const terminalGet = (path) => handleTool(terminalReq(path), terminalEnv(), conte
 //
 // It is deliberately NOT a general escape hatch. Reach for it to install a
 // double; anything else wants a real type.
-const testGlobals = /** @type {any} */ (globalThis);
+const testGlobals: any = globalThis;
 
 export {
   testGlobals,

@@ -3,7 +3,7 @@
 import {
   assert,
   test,
-} from "./contract-shared.mjs";
+} from "./contract-shared.ts";
 
 // ── /cache — the behavioral revalidation lint ───────────────────
 // judgeRevalidation is pure: the whole product is the rules, and the network

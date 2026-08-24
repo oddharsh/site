@@ -5,7 +5,7 @@ import {
   botHeaders,
   labels,
   test,
-} from "./contract-shared.mjs";
+} from "./contract-shared.ts";
 
 // ── Web Bot Auth: the post-quantum second label, retired ─────────────
 // sig2 shipped 2026-07-27 and came out 2026-08-15 because ~8.5ms of pure-JS

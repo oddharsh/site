@@ -21,7 +21,7 @@
 // STILL UNMEASURED: whether `waitForTimeout` is accepted and whether it delays
 // capture past an injection's ASYNC work. Nothing shipping needs it (both
 // recipes below are synchronous, and v1 sends `addScriptTag` alone), but any
-// future async recipe does. tools/lens-inject-probe.mjs cases 3 and 4 are
+// future async recipe does. tools/lens-inject-probe.ts cases 3 and 4 are
 // that question, and they need a REST token.
 //
 // ── why this is a fixed allowlist and always will be ──────────────────────

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "$comment": "-c wrangler.toml is REQUIRED on every one of these, not decoration. Without it wrangler walks UP the tree, finds the root wrangler.jsonc, and runs its build.command (`node tools/build.mjs`) from this directory, which dies with MODULE_NOT_FOUND. CI has always passed -c explicitly, so these scripts were broken without any run being able to notice. Found 2026-08-10 when lens-reader hit it on a real deploy.",
+  "$comment": "-c wrangler.toml is REQUIRED on every one of these, not decoration. Without it wrangler walks UP the tree, finds the root wrangler.jsonc, and runs its build.command (`node tools/build.ts`) from this directory, which dies with MODULE_NOT_FOUND. CI has always passed -c explicitly, so these scripts were broken without any run being able to notice. Found 2026-08-10 when lens-reader hit it on a real deploy.",
   "scripts": {
     "dev": "wrangler dev -c wrangler.toml",
     "deploy": "wrangler deploy -c wrangler.toml --x-provision=false --x-auto-create=false",

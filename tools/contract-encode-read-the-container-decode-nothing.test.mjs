@@ -6,7 +6,7 @@ import {
   readFile,
   readFileSync,
   test,
-} from "./contract-shared.mjs";
+} from "./contract-shared.ts";
 
 // ── /encode — read the container, decode nothing ─────────────────────────
 // These parse the repo's OWN committed encodes, which is the strongest test
@@ -103,7 +103,7 @@ test("the ramp never double-parses wrangler's already-parsed JSON", async () => 
   //
   // Asserted as source text because the alternative is spawning wrangler against
   // production D1 from the test suite, which no contract test should ever do.
-  const src = await readFile(new URL("./tools/deploy-promote.mjs", ROOT), "utf8");
+  const src = await readFile(new URL("./tools/deploy-promote.ts", ROOT), "utf8");
 
   assert.ok(/const rows = \(await wrangler\(/.test(src),
     "the D1 read must consume wrangler's parsed result directly");
@@ -151,7 +151,7 @@ test("no ramp sample can hang, and a stall is never reported as an origin error"
   //
   // Source text for the same reason as the test above: the alternative is
   // spawning wrangler against production from the suite.
-  const src = await readFile(new URL("./tools/deploy-promote.mjs", ROOT), "utf8");
+  const src = await readFile(new URL("./tools/deploy-promote.ts", ROOT), "utf8");
 
   // Counted rather than matched once, so a SECOND fetch added later without a
   // timeout fails this instead of riding the first one's signal.

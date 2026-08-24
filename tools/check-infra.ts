@@ -39,9 +39,9 @@
 // perf-budget.mjs uses, so a flaky network cannot redden an unrelated PR.
 //
 // Usage:
-//   node tools/check-infra.mjs              tree + dns, api if a token exists
-//   node tools/check-infra.mjs --offline    tree only
-//   node tools/check-infra.mjs --strict     turn advisories into failures
+//   node tools/check-infra.ts              tree + dns, api if a token exists
+//   node tools/check-infra.ts --offline    tree only
+//   node tools/check-infra.ts --strict     turn advisories into failures
 
 import { execFile } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile, access } from "node:fs/promises";
@@ -219,7 +219,7 @@ async function query(resolver, name, type) {
   const answers = (body.Answer || [])
     .filter((a) => a.type === RRTYPE[type])
     .map((a) => normalize(type, a.data));
-  return { answers: answers.sort(), authenticated: body.AD === true };
+  return { answers: answers.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)), authenticated: body.AD === true };
 }
 
 // Try each resolver in turn. A resolver that errors is an availability problem,
@@ -231,14 +231,10 @@ async function query(resolver, name, type) {
 // inference that guard narrows nothing, because neither property exists on the
 // other arm, and every later `got.answers` reads as an error: 25 of them, which
 // was every finding in this file.
-/**
- * @typedef {{ answers: string[], authenticated: boolean, resolver: string, unreachable?: undefined }} DnsResolved
- * @typedef {{ unreachable: string[], answers?: undefined, authenticated?: undefined, resolver?: undefined }} DnsUnreachable
- * @param {string} name
- * @param {string} type
- * @returns {Promise<DnsResolved | DnsUnreachable>}
- */
-async function resolveWithFallback(name, type) {
+type DnsResolved = { answers: string[]; authenticated: boolean; resolver: string; unreachable?: undefined };
+type DnsUnreachable = { unreachable: string[]; answers?: undefined; authenticated?: undefined; resolver?: undefined };
+
+async function resolveWithFallback(name: string, type: string): Promise<DnsResolved | DnsUnreachable> {
   const errors = [];
   for (const resolver of RESOLVERS) {
     try {
@@ -410,7 +406,7 @@ async function checkTree(infra, wrangler, aux) {
     // On the non-production command it is worse than dead code: a feature branch
     // would take production traffic on push.
     if (!/\bversions upload\b/.test(cmd)) {
-      fail(`infra.json's release.${field} should be a \`versions upload\` so a publish does not move traffic (tools/deploy-promote.mjs ramps it); got ${JSON.stringify(cmd)}`);
+      fail(`infra.json's release.${field} should be a \`versions upload\` so a publish does not move traffic (tools/deploy-promote.ts ramps it); got ${JSON.stringify(cmd)}`);
     }
   }
   // Preview URLs are what makes an uploaded version worth anything before it
@@ -455,8 +451,8 @@ async function checkCodeqlWorkflow(repo) {
   // skimmed.
   const before = hard.length;
 
-  const got = [...text.matchAll(/^\s*-\s*language:\s*(\S+)\s*$/gm)].map((m) => m[1]).sort();
-  const declared = [...want.languages].sort();
+  const got = [...text.matchAll(/^\s*-\s*language:\s*(\S+)\s*$/gm)].map((m) => m[1]).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+  const declared = [...want.languages].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
   if (got.join(",") !== declared.join(",")) {
     const added = got.filter((l) => !declared.includes(l));
     const dropped = declared.filter((l) => !got.includes(l));
@@ -486,7 +482,7 @@ async function checkCodeqlWorkflow(repo) {
 // ------------------------------------------------------------ tier: dns ----
 
 async function checkDns(infra) {
-  const apex = {};
+  const apex: Record<string, string[]> = {};
 
   for (const record of infra.dns) {
     const { name, type, match } = record;
@@ -500,7 +496,7 @@ async function checkDns(infra) {
     if (name === "aadhar.sh" && type === "A") apex.A = got.answers;
 
     if (match === "exact") {
-      const want = [...record.expect].sort();
+      const want = [...record.expect].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
       const same = want.length === got.answers.length && want.every((v, i) => v === got.answers[i]);
       if (same) pass(`${type} ${name} matches (${got.resolver})`);
       else fail(`${type} ${name} drifted\n      declared: ${want.join(" | ") || "(none)"}\n      live:     ${got.answers.join(" | ") || "(none)"}`);
@@ -538,7 +534,7 @@ async function checkDns(infra) {
   const ns = await resolveWithFallback(infra.zone.name, "NS");
   if (ns.unreachable) warn(`could not resolve NS ${infra.zone.name}`);
   else {
-    const want = [...infra.zone.nameservers].sort();
+    const want = [...infra.zone.nameservers].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
     const same = want.length === ns.answers.length && want.every((v, i) => v === ns.answers[i]);
     same ? pass(`nameservers match (${want.join(", ")})`)
          : fail(`nameservers drifted\n      declared: ${want.join(" | ")}\n      live:     ${ns.answers.join(" | ")}`);
@@ -552,7 +548,7 @@ async function checkDns(infra) {
 
 // ----------------------------------------------------------- tier: edge ----
 
-async function fetchEdge(url, headers = {}, opts = {}) {
+async function fetchEdge(url, headers: Record<string, string> = {}, opts: { redirect?: RequestRedirect } = {}) {
   const res = await fetch(url, {
     headers: { "user-agent": `${BOT_UA}`, ...headers },
     redirect: opts.redirect || "follow",
@@ -669,7 +665,7 @@ async function checkEdge(infra) {
         const got = (res.headers.get(name) || "").trim();
         if (got !== expected) problems.push(`${name} is ${JSON.stringify(got || "(absent)")}, declared ${JSON.stringify(expected)}`);
       }
-      for (const [name, needle] of Object.entries(want.headerContains || {})) {
+      for (const [name, needle] of Object.entries(want.headerContains || {}) as [string, string][]) {
         const got = res.headers.get(name) || "";
         if (!got.includes(needle)) problems.push(`${name} does not contain ${JSON.stringify(needle)} (got ${JSON.stringify(got || "(absent)")})`);
       }
@@ -758,7 +754,7 @@ async function checkApi(infra, wrangler, token) {
 
   await section("D1 databases", "D1:Read", async () => {
     const d1 = await cf(token, `/accounts/${accountId}/d1/database?per_page=100`);
-    const dbs = new Map(d1.map((d) => [d.uuid, d.name]));
+    const dbs = new Map(d1.map((d) => [d.uuid, d.name])) as Map<string, string>;
     for (const d of wrangler.d1_databases || []) {
       if (!dbs.has(d.database_id)) fail(`D1 binding ${d.binding} points at database ${d.database_id}, which does not exist`);
       else if (dbs.get(d.database_id) !== d.database_name) fail(`D1 binding ${d.binding} expects ${d.database_name} but ${d.database_id} is named ${dbs.get(d.database_id)}`);
@@ -877,7 +873,7 @@ async function checkApi(infra, wrangler, token) {
   // which is invisible from inside this repo.
   await section("Worker inventory", "Workers Scripts:Read", async () => {
     const scripts = await cf(token, `/accounts/${accountId}/workers/scripts`);
-    const live = new Set(scripts.map((s) => s.id));
+    const live = new Set(scripts.map((s) => s.id)) as Set<string>;
     for (const w of infra.workers.expected) {
       live.has(w.name) ? pass(`Worker ${w.name} deployed`) : fail(`Worker ${w.name} is declared but not deployed`);
     }
@@ -946,7 +942,8 @@ async function checkApi(infra, wrangler, token) {
       return;
     }
 
-    const entry = Object.entries(rule.action_parameters.headers).find(([h]) => h.toLowerCase() === wanted)[1];
+    const entry = Object.entries(rule.action_parameters.headers)
+      .find(([h]) => h.toLowerCase() === wanted)[1] as { value?: string; expression?: string };
 
     // "Set dynamic" comes back as an `expression`; "Set static" comes back as a
     // `value`. The difference is not cosmetic here: a static key is the SAME key
@@ -994,7 +991,8 @@ async function checkApi(infra, wrangler, token) {
 // Anything we could not READ is an advisory, so GitHub being down cannot redden
 // a PR that only touched CSS. Anything we read and found wrong is fatal.
 async function ghFetch(path, token) {
-  const headers = {
+  // authorization is added below when a token is present.
+  const headers: Record<string, string> = {
     accept: "application/vnd.github+json",
     "x-github-api-version": "2022-11-28",
     "user-agent": BOT_UA,
@@ -1044,14 +1042,14 @@ async function checkRepo(infra) {
 
   const byName = new Map(live.map((r) => [r.name, r]));
   for (const want of repo.rulesets) {
-    const found = byName.get(want.name);
+    const found = byName.get(want.name) as { id?: string } | undefined;
     byName.delete(want.name);
     if (!found) {
       fail(`${slug} has no ruleset named ${JSON.stringify(want.name)}: the ${want.name} branch is unprotected`);
       continue;
     }
 
-    let detail;
+    let detail: any;
     try {
       detail = await ghFetch(`/repos/${slug}/rulesets/${found.id}`, token);
     } catch (e) {
@@ -1185,8 +1183,8 @@ async function checkCodeScanning(repo, slug, token) {
 
   // The curated list. Compared as a SET, because the API's ordering is not a
   // documented guarantee and reordering is not drift worth failing on.
-  const got = [...(live.languages || [])].sort();
-  const declared = [...want.languages].sort();
+  const got = [...(live.languages || [])].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+  const declared = [...want.languages].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
   if (got.join(",") !== declared.join(",")) {
     const added = got.filter((l) => !declared.includes(l));
     const dropped = declared.filter((l) => !got.includes(l));
@@ -1264,7 +1262,7 @@ const infra = JSON.parse(await readFile(join(ROOT, "config/infra.json"), "utf8")
 const wrangler = await readJsonc("wrangler.jsonc");
 const auxConfigs = new Map(
   await Promise.all(AUX_CONFIGS.map(
-    async (path) => /** @type {[string, string]} */ ([path, await readFile(join(ROOT, path), "utf8")]),
+    async (path): Promise<[string, string]> => [path, await readFile(join(ROOT, path), "utf8")],
   )),
 );
 

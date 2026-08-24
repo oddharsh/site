@@ -6,7 +6,7 @@ import {
   readFile,
   readFileSync,
   test,
-} from "./contract-shared.mjs";
+} from "./contract-shared.ts";
 
 // ── /lens per-IP crawl budgets ──────────────────────────────────────
 // These moved off KV counters and onto the Rate Limiting binding on 2026-08-04.

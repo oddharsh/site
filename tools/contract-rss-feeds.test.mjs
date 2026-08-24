@@ -5,16 +5,16 @@ import {
   existsSync,
   readFileSync,
   test,
-} from "./contract-shared.mjs";
+} from "./contract-shared.ts";
 
 // ── RSS feeds ────────────────────────────────────────────────────────
-// Feeds are BUILD OUTPUT (tools/gen-feeds.mjs), like the Markdown twins and
+// Feeds are BUILD OUTPUT (tools/gen-feeds.ts), like the Markdown twins and
 // the dcz deltas: a pure function of site-manifest.json, the sitemap's lastmod
 // dates, and posts.json, so no committed copy can fall behind. These tests pin
 // the properties a subscriber depends on, none of which the build's own count
 // check can see.
 test("every feed is well-formed, dated, and newest-first", async () => {
-  const { buildFeeds, FEEDS, rfc822 } = await import("./gen-feeds.mjs");
+  const { buildFeeds, FEEDS, rfc822 } = await import("./gen-feeds.ts");
   const feeds = buildFeeds(".");
   assert.equal(feeds.size, FEEDS.length);
 
@@ -64,7 +64,7 @@ test("every feed is well-formed, dated, and newest-first", async () => {
 // a page changed. That is the reason for reading it rather than minting a second
 // date source next to it.
 test("feed dates come from the sitemap the crawler already reads", async () => {
-  const { buildFeeds, sitemapDates } = await import("./gen-feeds.mjs");
+  const { buildFeeds, sitemapDates } = await import("./gen-feeds.ts");
   const dates = sitemapDates(readFileSync("public/sitemap.xml", "utf8"));
   assert.ok(dates.size >= 40, `expected the sitemap to carry lastmod dates, found ${dates.size}`);
 

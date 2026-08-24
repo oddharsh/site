@@ -10,7 +10,7 @@
 // version of this function.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { words } from "./ua-survey.mjs";
+import { words } from "./ua-survey.ts";
 
 test("raw-text elements are stripped whatever shape their end tag takes", () => {
   /** @type {[string, string, number][]} */

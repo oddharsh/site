@@ -6,7 +6,7 @@ import {
   handleTool,
   terminalEnv,
   test,
-} from "./contract-shared.mjs";
+} from "./contract-shared.ts";
 
 // ── /radar — the instrument for somebody else's antenna ─────────
 

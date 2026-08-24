@@ -12,7 +12,7 @@ import {
   lensSitemapVerdict,
   readFileSync,
   test,
-} from "./contract-shared.mjs";
+} from "./contract-shared.ts";
 
 // ── the execution half of the readiness rubric ──────────────────────────────
 // /lens has scored agent readiness since it was built and every one of those

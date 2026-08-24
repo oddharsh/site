@@ -16,7 +16,7 @@ import {
   renderPhotoSlots,
   test,
   withWeakEtag,
-} from "./contract-shared.mjs";
+} from "./contract-shared.ts";
 
 // ── the bundled photo pool ──────────────────────────────────────────
 // The pool is BUILD DATA: photos.js imports photo-index.json + hashes.json and
@@ -88,7 +88,7 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   const hoist = await readFile(new URL("src/client/hoist.js", ROOT), "utf8");
   const tooltip = await readFile(new URL("src/client/tooltip.js", ROOT), "utf8");
 
-  const build = await readFile(new URL("tools/build.mjs", ROOT), "utf8");
+  const build = await readFile(new URL("tools/build.ts", ROOT), "utf8");
   assert.match(worker, /pickRandom\(pool,\s*12\)/, "the per-request random draw must remain 12");
   assert.match(build, /deterministicTwelve/, "the document must carry a baked fallback grid, or `/` stops being crawlable without JS");
   // The two renderings differ in exactly one way, so assert on the OUTPUT
@@ -376,7 +376,7 @@ test("browser RUM and its ledger proxy stay fully removed", async () => {
     "/security must keep describing the browser-facing CSP accurately");
 });
 
-// Local dev serves a SYMLINK FARM (tools/dev-stage.mjs) because the served URL
+// Local dev serves a SYMLINK FARM (tools/dev-stage.ts) because the served URL
 // root is composed from five authored directories and assets.directory can only
 // name one. That makes the farm a second definition of "the served tree", and a
 // second definition is a thing that drifts: this config named a directory that
@@ -386,8 +386,8 @@ test("browser RUM and its ledger proxy stay fully removed", async () => {
 // and merely 404s whatever the new root holds.
 test("local dev composes the same served tree the build stages", async () => {
   const { parseJsonc } = await import("./lib/jsonc.ts");
-  const { ASSET_ROOTS, FARM } = await import("./dev-stage.mjs");
-  const build = await readFile(new URL("tools/build.mjs", ROOT), "utf8");
+  const { ASSET_ROOTS, FARM } = await import("./dev-stage.ts");
+  const build = await readFile(new URL("tools/build.ts", ROOT), "utf8");
   const devConfig = parseJsonc(await readFile(new URL("wrangler.dev.jsonc", ROOT), "utf8"));
   const pkg = JSON.parse(await readFile(new URL("package.json", ROOT), "utf8"));
 
@@ -413,7 +413,7 @@ test("local dev composes the same served tree the build stages", async () => {
     // The RUNNER is not the point of this assertion; staging before wrangler
     // boots is. Pinning it to one interpreter is what made a toolchain swap
     // fail a test about dev-server ordering.
-    assert.match(pkg.scripts[script], /(node|bun) tools\/dev-stage\.mjs/,
+    assert.match(pkg.scripts[script], /(node|bun) tools\/dev-stage\.ts/,
       `${script} must stage the farm before booting wrangler`);
   }
 
@@ -442,7 +442,7 @@ test("production minifies the Worker without obscuring deployed stack traces", a
   // constant in perf-budget.mjs holds still. The guard is a source-bytes twin
   // that a minifier cannot move, and it is asserted HERE, beside the setting
   // that made it necessary, so removing one while keeping the other fails.
-  const budget = await readFile(new URL("tools/perf-budget.mjs", ROOT), "utf8");
+  const budget = await readFile(new URL("tools/perf-budget.ts", ROOT), "utf8");
   assert.match(budget, /const WORKER_BASELINE_SOURCE_KIB = [\d.]+;/,
     "a minified production bundle needs a source-bytes baseline the minifier cannot move");
   assert.match(budget, /worker source \$\{sourceKib/,

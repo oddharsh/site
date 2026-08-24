@@ -8,7 +8,7 @@ import {
   mcpPost,
   staticAssets,
   test,
-} from "./contract-shared.mjs";
+} from "./contract-shared.ts";
 
 // ── /mcp: the 2026-07-28 dual-era contract ──────────────────────────────
 // 2026-07-28 deleted the initialize handshake and moved version, identity and

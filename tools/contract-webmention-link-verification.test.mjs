@@ -5,7 +5,7 @@ import {
   documentContent,
   linksTo,
   test,
-} from "./contract-shared.mjs";
+} from "./contract-shared.ts";
 
 // ── webmention link verification ────────────────────────────────────
 // The verify step is the ONLY thing standing between "someone sent a POST" and

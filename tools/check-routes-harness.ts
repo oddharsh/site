@@ -20,7 +20,7 @@
 // answer from their fallback path. Status and content-type are real; a passing
 // /images/manifest.json here means the handler works, not that the photos exist.
 // Rows tagged `remote` in verify-routes.mjs are skipped for that reason. The
-// post-deploy `node tools/verify-routes.mjs` sweep against production stays the check
+// post-deploy `node tools/verify-routes.ts` sweep against production stays the check
 // that sees real content, and neither one replaces the other.
 
 import { spawn, spawnSync } from "node:child_process";
@@ -31,7 +31,7 @@ const root = fileURLToPath(new URL("..", import.meta.url));
 const args = process.argv.slice(2);
 
 // --remote boots the harness on a generated config whose KV/R2/Browser bindings
-// reach PRODUCTION (tools/gen-remote-config.mjs), which un-skips the five rows
+// reach PRODUCTION (tools/gen-remote-config.ts), which un-skips the five rows
 // verify-routes.mjs marks `remote` — the ones whose whole assertion is content a
 // local Worker structurally cannot have. That closes the gap this file's own
 // header admits to ("local KV/R2/D1 come up EMPTY, so data-backed routes answer
@@ -63,7 +63,7 @@ if (remote) {
   // keep resolving (see gen-remote-config.mjs).
   const gen = spawnSync(
     process.execPath,
-    ["tools/gen-remote-config.mjs", config],
+    ["tools/gen-remote-config.ts", config],
     { cwd: root, stdio: "inherit" },
   );
   if (gen.status !== 0) process.exit(gen.status ?? 1);
@@ -82,14 +82,13 @@ try {
   // verify-routes.mjs reads presence rather than value.
   // Spread from process.env, so inference freezes the key set at what was
   // spread plus VERIFY_BUILT; VERIFY_REMOTE is added conditionally below.
-  /** @type {Record<string, string | undefined>} */
-  const childEnv = { ...process.env, VERIFY_BUILT: "1" };
+  const childEnv: Record<string, string | undefined> = { ...process.env, VERIFY_BUILT: "1" };
   if (remote) childEnv.VERIFY_REMOTE = "1";
 
   code = await new Promise((resolve, reject) => {
     const child = spawn(
       process.execPath,
-      ["tools/verify-routes.mjs", String(url).replace(/\/$/, "")],
+      ["tools/verify-routes.ts", String(url).replace(/\/$/, "")],
       { cwd: root, stdio: "inherit", env: childEnv },
     );
     child.on("error", reject);

@@ -10,7 +10,7 @@ import {
   readFile,
   readFileSync,
   test,
-} from "./contract-shared.mjs";
+} from "./contract-shared.ts";
 
 // ── Workers preview URLs ────────────────────────────────────────────
 // A preview version runs PRODUCTION bindings and secrets (lib/preview.js says

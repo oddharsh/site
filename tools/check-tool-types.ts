@@ -55,8 +55,11 @@ if (listed < 50) {
 // Same mechanism config/ts-migration.json used for the Worker, which reached
 // zero and was deleted. This one is expected to go the same way.
 const BASELINE = join(REPO, "config/ts-tools-baseline.json");
-const declared = JSON.parse(readFileSync(BASELINE, "utf8"));
-const actual = Object.fromEntries([...byFile].sort());
+const declared: { files: Record<string, number>; total: number } =
+  JSON.parse(readFileSync(BASELINE, "utf8"));
+// error counts per file, sorted by path so the baseline is stable
+const actual: Record<string, number> =
+  Object.fromEntries([...byFile].sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)));
 
 if (process.argv.includes("--update")) {
   writeFileSync(BASELINE, `${JSON.stringify({ files: actual, total: mine.length }, null, 2)}\n`);

@@ -6,7 +6,7 @@ import {
   readFileSync,
   test,
   zlibConstants,
-} from "./contract-shared.mjs";
+} from "./contract-shared.ts";
 
 // ── the Reader lens (/lens/read, lens-reader/) ───────────────────────────────
 // The Reader lens is the one /lens surface that lives in a DIFFERENT Worker, so
@@ -138,7 +138,7 @@ test("a ?lens= deep link works for every tab in the strip", async () => {
 test("the idle Lens shell defers its full client without losing the first action", () => {
   const server = readFileSync("./src/worker/lens.ts", "utf8");
   const boot = readFileSync("./src/client/lens-boot.js", "utf8");
-  const build = readFileSync("./tools/build.mjs", "utf8");
+  const build = readFileSync("./tools/build.ts", "utf8");
 
   assert.match(server, /scripts: `<script src="\/lens-boot\.js" defer><\/script>`/,
     "the server-rendered idle shell must load only the bootstrap");

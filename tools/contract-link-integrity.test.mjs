@@ -3,7 +3,7 @@
 import {
   assert,
   test,
-} from "./contract-shared.mjs";
+} from "./contract-shared.ts";
 
 // ── link integrity ──────────────────────────────────────────────────────────
 // The resolver behind build.mjs's link-integrity invariant. Tested for TEETH

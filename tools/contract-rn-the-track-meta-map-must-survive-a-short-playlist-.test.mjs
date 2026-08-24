@@ -34,7 +34,7 @@ import {
   spotifyArtHash,
   test,
   warmArtCache,
-} from "./contract-shared.mjs";
+} from "./contract-shared.ts";
 
 // ── rn: the track-meta map must survive a SHORT playlist read ────────
 // Regression, 2026-08-15. The prune deleted any entry missing from

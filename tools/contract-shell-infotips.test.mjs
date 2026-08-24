@@ -30,7 +30,7 @@ import {
   wmEnv,
   wmPost,
   workerModule,
-} from "./contract-shared.mjs";
+} from "./contract-shared.ts";
 
 // ── shell infotips ──────────────────────────────────────────────────────────
 // infotip.js cannot be imported here: it reaches /hoist.js by absolute
@@ -95,7 +95,7 @@ test("an infotip row is dropped rather than filled in", async () => {
 });
 
 test("the shell infotip ships minified, hashed, and with a readable twin", async () => {
-  const build = await readFile(new URL("tools/build.mjs", ROOT), "utf8");
+  const build = await readFile(new URL("tools/build.ts", ROOT), "utf8");
   // Missing from SHELLS it would ship unminified with no /infotip.src.js twin;
   // missing from STRING_ASSETS its import specifier would stay unhashed and
   // the module would serve at max-age=300 forever beside its immutable peers.
