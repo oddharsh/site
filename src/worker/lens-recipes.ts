@@ -172,7 +172,7 @@ export const LENS_RECIPES = Object.freeze([
 
 // Keyed by plain string, deliberately wider than the two literal ids: lensRecipe()
 // is handed unvalidated caller input and has to be able to MISS.
-const BY_ID = new Map(/** @type {[string, (typeof LENS_RECIPES)[number]][]} */ (LENS_RECIPES.map((r) => [r.id, r])));
+const BY_ID = new Map(LENS_RECIPES.map((r) => [r.id, r] as const));
 
 // Exact match only. No normalising, no trimming, no case folding: a caller that
 // sends "EXPAND" or " expand" gets a 400 naming the real ids, which is more

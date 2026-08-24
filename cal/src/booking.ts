@@ -57,24 +57,14 @@ export type Slot = { start: number; end: number };
 
 const TTL_BOOKING_DAYS = 90; // booking records expire after 90d for cleanup
 
-/**
- * @param {any} env
- * @param {Omit<Booking, "id">} fields
- * @returns {Promise<Booking>}
- */
-export async function createBooking(env, fields) {
+export async function createBooking(env, fields: Omit<Booking, "id">): Promise<Booking> {
   const id = await uuid();
   const booking = { id, ...fields };
   await putBooking(env, booking);
   return booking;
 }
 
-/**
- * @param {any} env
- * @param {string} id
- * @returns {Promise<Booking|null>}
- */
-export async function getBooking(env, id) {
+export async function getBooking(env, id: string): Promise<Booking | null> {
   const raw = await env.BOOKINGS.get(`booking:${id}`);
   return raw ? JSON.parse(raw) : null;
 }
@@ -82,13 +72,7 @@ export async function getBooking(env, id) {
 // patch a booking's status (pending → confirmed / declined / expired). Records
 // only; slot-holding is a separate concern (holdSlot/releaseSlot), because a
 // confirmed booking keeps its slot while a declined/expired one gives it back.
-/**
- * @param {any} env
- * @param {string} id
- * @param {Booking["status"]} status
- * @returns {Promise<Booking|null>}
- */
-export async function setStatus(env, id, status) {
+export async function setStatus(env, id: string, status: Booking["status"]): Promise<Booking | null> {
   const b = await getBooking(env, id);
   if (!b) return null;
   b.status = status;
@@ -104,20 +88,17 @@ async function putBooking(env, b) {
 }
 
 // ── held slots ──────────────────────────────────────────────────────────
-/** @param {Slot} b */
-const heldKey = (b) => `held:${b.start}:${b.end}`;
+const heldKey = (b: Slot) => `held:${b.start}:${b.end}`;
 
 // mark a slot held. Expires ~1d after the slot ends (absolute KV expiration),
 // floored to a safe minimum so KV never rejects a near-term slot.
-/** @param {any} env @param {Booking} b */
-export async function holdSlot(env, b) {
+export async function holdSlot(env, b: Booking) {
   const nowSec = Math.floor(Date.now() / 1000);
   const expiration = Math.max(Math.floor(b.end / 1000) + 86400, nowSec + 120);
   await env.BOOKINGS.put(heldKey(b), b.id, { expiration });
 }
 
-/** @param {any} env @param {Slot} b */
-export async function releaseSlot(env, b) {
+export async function releaseSlot(env, b: Slot) {
   await env.BOOKINGS.delete(heldKey(b));
 }
 
@@ -125,8 +106,7 @@ export async function releaseSlot(env, b) {
 // bookings hold slots; availability treats them identically (conflict + count
 // toward the caps), so a single list is all generateSlots needs. start/end are
 // encoded in the key name, so this is one list() with no per-key gets.
-/** @param {any} env @returns {Promise<Slot[]>} */
-export async function listHeld(env) {
+export async function listHeld(env): Promise<Slot[]> {
   // A REAL annotation. This was `/** @type {Slot[]} */`, which a .ts file
   // ignores, so the array inferred `never[]` the moment strictNullChecks came on.
   const held: Slot[] = [];

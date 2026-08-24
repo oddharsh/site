@@ -4479,6 +4479,51 @@ bun run deploy:direct
     has to be regenerated when the hash moves, and a hash moving is exactly the
     event that leaves no diff in the derived file to notice.**
 
+42. **A JSDoc TYPE in a `.ts` file is INERT, and this repo wrote them six times
+    during one migration.** TypeScript ignores `@type`, `@param {T}`,
+    `@returns {T}` and `@typedef` in a `.ts` file; they work only in `.js` and
+    `.mjs`, where an annotation is a syntax error instead. The two rules are
+    exact inverses, and `tools/` holds both kinds side by side.
+
+    What makes it survive review is that the annotation still LOOKS like it
+    types something. Nothing errors, nothing is flagged, and whatever it typed
+    stops being checked.
+
+    **Every instance arrived the same way: a correct JSDoc fix and a correct
+    `.js` to `.ts` rename, landing in either order.** Neither change is wrong.
+    #532 renamed 39 tools scripts and made three fixes from an in-flight branch
+    inert on rebase; the reverse also happened, a `.ts` file getting a JSDoc fix
+    because the author had just been working in `.mjs`.
+
+    The bill, measured on 2026-08-24 when the survivors were finally converted:
+
+    | file | before | after | what was inert |
+    |---|--:|--:|---|
+    | `src/worker/nlweb.ts` | 10 | 2 | one `@returns` |
+    | `tools/ua-survey.ts` | 21 | 19 | two `@type` |
+    | `tools/deploy-promote.ts` | 37 | 0 | `@returns {never}` + two `@type` |
+    | `cal/test/*` | 0 | 8 → 0 | booking.ts's whole signature set |
+
+    That cal row is the one worth reading twice. `booking.ts` documented
+    `getBooking` and `setStatus` as returning `Booking | null` in JSDoc, so three
+    tests read straight through a possible null and nothing said a word. Making
+    the signatures real surfaced all three at once.
+
+    **Two of them had also DRIFTED from the annotation they shadowed**, which is
+    what a type in a place nothing checks does over time: `agent-ready.ts`
+    documented a `note` field where the real tuple says `what`, and `index.ts`
+    documented a precise `RouteHandler` while the table it sits above enforced
+    `Function`. The typedef was more accurate than the code and bought nothing.
+
+    A contract test now fails on any JSDoc type tag in a `.ts` file. It matches
+    only tags that OPEN a comment line, because the notes written about this trap
+    all mention `@type` inside a `//` line and a test that failed on them could
+    not be fixed without deleting its own explanation.
+
+    The rule when you meet one: write a real annotation. If it was only ever
+    documentation, drop the `{braces}` so it reads as prose rather than as a type
+    nobody enforces.
+
 
 ---
 

@@ -221,12 +221,6 @@ export function diffAroundRows(current, previous) {
   }
   return changes;
 }
-
-/**
- * @param {any} env
- * @param {string|number|null} [requestedLimit] the raw ?limit param, coerced and
- *   clamped below — callers pass searchParams.get(), which is string|null.
- */
 // requestedLimit takes whatever a query string hands over, which is why the
 // body coerces with `Number(x) || 50`. The annotation says so; the default
 // alone would have tsc infer number and reject its only caller.

@@ -100,9 +100,8 @@ export function askRelevance(raw, termCount) {
 
 /**
  * Read the NLWeb parameter set out of whichever dialect arrived.
- * @returns {{ok: true, params: any} | {ok: false, status: number, error: any}}
  */
-export function parseAskRequest(url, body) {
+export function parseAskRequest(url, body): { ok: true, params: any } | { ok: false, status: number, error: any } {
   const q = url.searchParams;
   const flat = asRecord(body) || {};
   let structured = false;

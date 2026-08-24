@@ -83,7 +83,6 @@ async function route_index(req, env, ctx) {
 
   // Filled phase by phase as the page is assembled (render, total, and the
   // fetch timings listOpenSlots adds), so the key set is not knowable here.
-  /** @type {Record<string, number>} */
   const timings: Record<string, number> = {};
   const t0 = Date.now();
   const { slots, cal } = await listOpenSlots(env, ctx, timings, { allowStale: true });

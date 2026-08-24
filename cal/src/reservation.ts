@@ -43,9 +43,8 @@ export function reservationName(start, end) {
  * until the slot's own end time passes, after which the row is reusable — a
  * reservation cannot outlive the time it reserves.
  *
- * @returns {Promise<boolean>} true when this booking now holds the slot.
  */
-export async function claimReservation(storage, bookingId, start, end, now = Date.now()) {
+export async function claimReservation(storage, bookingId, start, end, now = Date.now()): Promise<boolean> {
   const existing = await storage.get(RESERVATION_KEY);
   if (existing && existing.bookingId !== bookingId && Number(existing.end) > now) return false;
   await storage.put(RESERVATION_KEY, { bookingId, start, end });
@@ -57,7 +56,6 @@ export async function claimReservation(storage, bookingId, start, end, now = Dat
  * not free a slot someone else has since claimed, which is why this compares the
  * id rather than deleting unconditionally.
  *
- * @returns {Promise<boolean>} true when this call is what freed the slot.
  */
 export async function dropReservation(storage, bookingId) {
   const existing = await storage.get(RESERVATION_KEY);

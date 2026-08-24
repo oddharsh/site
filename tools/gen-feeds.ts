@@ -87,7 +87,6 @@ export const FEEDS = [
 /**
  * Build every feed from the committed sources.
  *
- * @returns {Map<string, string>} route ("/garage/feed.xml") to XML body.
  */
 export function buildFeeds(root = ".") {
   const manifest = JSON.parse(readFileSync(`${root}/config/site-manifest.json`, "utf8"));

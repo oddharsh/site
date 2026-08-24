@@ -20,6 +20,16 @@ beforeEach(async () => {
   await Promise.all(keys.map((k) => env.BOOKINGS.delete(k.name)));
 });
 
+// getBooking and setStatus both answer `Booking | null`, and every assertion
+// below reads through the result. A miss means the record was not written,
+// which is worth saying out loud rather than surfacing as a TypeError on the
+// next property access.
+/** @param {Awaited<ReturnType<typeof getBooking>>} b */
+const must = (b) => {
+  if (!b) throw new Error("expected a booking record, got null");
+  return b;
+};
+
 const HOUR = 3600_000;
 const soon = () => {
   const start = Date.now() + 48 * HOUR;
@@ -42,7 +52,7 @@ describe("BookingWorkflow expiry timer", () => {
     await env.BOOKING_WORKFLOW.create({ id: b.id, params: { id: b.id } });
     await instance.waitForStatus("complete");
 
-    expect((await getBooking(env, b.id)).status).toBe("expired");
+    expect(must(await getBooking(env, b.id)).status).toBe("expired");
     expect(await listHeld(env)).toHaveLength(0);
   });
 
@@ -57,7 +67,7 @@ describe("BookingWorkflow expiry timer", () => {
     await env.BOOKING_WORKFLOW.create({ id: b.id, params: { id: b.id } });
     await instance.waitForStatus("complete");
 
-    expect((await getBooking(env, b.id)).status).toBe("confirmed");
+    expect(must(await getBooking(env, b.id)).status).toBe("confirmed");
     expect(await listHeld(env)).toContainEqual({ start: b.start, end: b.end });
   });
 
@@ -71,7 +81,7 @@ describe("BookingWorkflow expiry timer", () => {
     await instance.waitForStatus("complete");
 
     // the "only expire if still pending" guard protects a confirmed booking
-    expect((await getBooking(env, b.id)).status).toBe("confirmed");
+    expect(must(await getBooking(env, b.id)).status).toBe("confirmed");
     expect(await listHeld(env)).toContainEqual({ start: b.start, end: b.end });
   });
 });

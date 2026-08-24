@@ -40,11 +40,6 @@ function titleFor(name) {
     .map((word) => word[0].toUpperCase() + word.slice(1))
     .join(" ");
 }
-
-/**
- * @param {any} tool
- * @param {{title?: string, openWorldHint?: boolean}} [overrides]
- */
 export function mcpTool(tool, { title, openWorldHint }: { title?: string; openWorldHint?: boolean } = {}) {
   return {
     ...tool,

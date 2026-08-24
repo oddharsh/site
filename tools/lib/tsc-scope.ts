@@ -23,16 +23,6 @@
 // route invariant.
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
-
-/**
- * @param {object} opts
- * @param {string} opts.repo      absolute repo root
- * @param {string} opts.tsc       absolute path to the tsc binary
- * @param {string} opts.config    absolute path to the tsconfig
- * @param {string[]} opts.owns    repo-relative path prefixes this caller judges
- * @param {string} opts.label     the caller's name, used in failure text
- * @param {string} [opts.cwd]     working directory for tsc (defaults to repo)
- */
 export function runScopedTsc({ repo, tsc, config, owns, label, cwd = repo }) {
   let out = "";
   try {
