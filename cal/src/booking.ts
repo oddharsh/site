@@ -20,7 +20,7 @@
 // That also means there's nothing to sweep: the weekly cron is gone (the
 // per-booking BookingWorkflow reclaims abandoned pending slots on timeout).
 
-import { v4 as uuid } from "./uuid.js";
+import { v4 as uuid } from "./uuid.ts";
 
 // The booking record, written to KV and read back by every route that acts on
 // one. Declared so `bun run typecheck` has a shape to enforce: in a .js file

@@ -9,9 +9,9 @@
 // is one server quietly speaking a dialect no client asked for.
 //
 // SHARING IS SAFE HERE, and it is worth saying why, because the near-identical
-// trace helpers in `lib/trace.js` and `cal/src/trace.js` are duplicated ON
+// trace helpers in `lib/trace.js` and `cal/src/trace.ts` are duplicated ON
 // PURPOSE and this looks like the same situation. It is not. cal is duplicated
-// because its Vitest pool boots from `cal/src/index.js` alone, so a cal ->
+// because its Vitest pool boots from `cal/src/index.ts` alone, so a cal ->
 // holding import would make cal untestable without the site tree. Serendipity
 // has no such constraint and already imports `lib/desktop.js` and
 // `lib/crawl.js`; the serendipity -> www/lib direction is established.

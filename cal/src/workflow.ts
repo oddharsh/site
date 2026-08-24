@@ -22,10 +22,13 @@
 // the deployed Worker, the same way the Counter Durable Object does.
 
 import { WorkflowEntrypoint } from "cloudflare:workers";
-import { getBooking, releaseSlot, setStatus } from "./booking.js";
-import { releaseSlotClaim } from "./reservation.js";
+import { getBooking, releaseSlot, setStatus } from "./booking.ts";
+import { releaseSlotClaim } from "./reservation.ts";
 
-export class BookingWorkflow extends WorkflowEntrypoint {
+// WorkflowEntrypoint is GENERIC over its Env, and without the parameter
+// `this.env` is unknown. The bindings this class reads are the site Worker's,
+// which no type declares in one place, so the record is the honest shape.
+export class BookingWorkflow extends WorkflowEntrypoint<Record<string, any>> {
   async run(event, step) {
     const { id } = event.payload;
     const ttlDays = +this.env.PENDING_TTL_DAYS || 7;

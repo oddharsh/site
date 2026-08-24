@@ -15,7 +15,7 @@
 // shape we cannot parse keeps just the base occurrence rather than dropping the
 // event; VTIMEZONE blocks are not expanded (TZID resolves through Intl instead).
 
-import { span } from "./trace.js";
+import { span } from "./trace.ts";
 
 // ── calendar snapshot (stale-while-revalidate) ──────────────────────────────
 // The ICS upstream can be slow or briefly down, and the old fetchBusy() gated
@@ -84,8 +84,8 @@ async function fetchBusySWRInner(env, ctx, allowStale, s) {
   // they must still wait for a live calendar or fail closed.
   if (snap && allowStale) {
     // cal MUST NOT import src/worker/lib/parse.ts: cal's Vitest pool boots from
-  // cal/src/index.js alone, so that edge would make cal untestable without the
-  // site tree (gotcha 16, the same constraint that keeps cal/src/trace.js a
+  // cal/src/index.ts alone, so that edge would make cal untestable without the
+  // site tree (gotcha 16, the same constraint that keeps cal/src/trace.ts a
   // deliberate duplicate). One binding check does not earn a second parse layer.
   // oxlint-disable-next-line anti-slop/no-runtime-typeof
   if (ctx && typeof ctx.waitUntil === "function") {
@@ -194,7 +194,9 @@ function expandEvent(dtstart, dtend, rrule, exdates, windowStart, windowEnd) {
   const ex = exdates || new Set();
   if (!rrule) return [iv(dtstart)];
 
-  const R = {};
+  // An RRULE is a semicolon-separated bag of KEY=VALUE, so the keys are whatever
+  // the calendar sent: FREQ, INTERVAL, COUNT, UNTIL, BYDAY and the rest.
+  const R: Record<string, string> = {};
   for (const part of rrule.split(";")) { const i = part.indexOf("="); if (i > 0) R[part.slice(0, i).toUpperCase()] = part.slice(i + 1); }
   const freq = (R.FREQ || "").toUpperCase();
   const interval = Math.max(1, parseInt(R.INTERVAL, 10) || 1);

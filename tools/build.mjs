@@ -191,7 +191,7 @@ async function checkInvariants() {
   // 2 (hard) — wherever a worker emits a CSP with a style-src, it includes
   // 'self'. cal emits no CSP and passes vacuously (this is the exact thing that
   // blanked serendipity's taskbar).
-  for (const f of ["public/_headers", "src/worker/lib/security.ts", "serendipity/serendipity.js", "cal/src/templates.js", "cal/src/index.js"]) {
+  for (const f of ["public/_headers", "src/worker/lib/security.ts", "serendipity/serendipity.js", "cal/src/templates.ts", "cal/src/index.ts"]) {
     let s; try { s = await read(f); } catch { continue; }
     for (const m of s.matchAll(/style-src([^;'"]*(?:'[^']*')?[^;'"]*)*/g)) {
       const dir = m[0];
@@ -214,7 +214,7 @@ async function checkInvariants() {
     ...(await servedFiles((r) => /\.(html|css|js)$/.test(r) && !VT_DIAGNOSTIC.test(r))),
     ...(await readdir("src/client")).filter((r) => r.endsWith(".js")).map((r) => `src/client/${r}`),
     ...(await readdir("src/styles")).filter((r) => r.endsWith(".css")).map((r) => `src/styles/${r}`),
-    "cal/src/templates.js", "serendipity/serendipity.js", "pipelines/lwe/generate.mjs",
+    "cal/src/templates.ts", "serendipity/serendipity.js", "pipelines/lwe/generate.mjs",
   ];
   for (const f of vtSources) {
     let s; try { s = await read(f); } catch { continue; }
@@ -429,7 +429,7 @@ async function checkInvariants() {
   // frontier CSS in them is the point, while a web font anywhere is still fatal.
   let tasteScanned = 0, tasteOk = [];
   try {
-    const served = [...await servedFiles(), "cal/src/templates.js", "serendipity/serendipity.js"];
+    const served = [...await servedFiles(), "cal/src/templates.ts", "serendipity/serendipity.js"];
     const isDemo = (p) => /^www\/(garage|lwe)\//.test(p);
     // Blank block comments before pattern-matching (luna.css discusses @font-face
     // in prose twice, and a guard that fires on its own documentation gets
@@ -533,8 +533,8 @@ async function checkInvariants() {
       ...await collect("src/pages", /\.html$/, /^(i|images|og|cars|node_modules)$/),
       ...await flat("src/client", /\.js$/),
       ...await flat("src/styles", /\.css$/),
-      ...await collect("src/worker", /\.js$/),
-      ...await flat("cal/src", /\.js$/),
+      ...await collect("src/worker", /\.ts$/),
+      ...await flat("cal/src", /\.ts$/),
       ...await flat("serendipity", /\.js$/),
     ];
     const MARKER = /^(<{7} |={7}$|>{7} )/;
@@ -759,7 +759,7 @@ await cp("serendipity/serendipity.js", `${OUT}/serendipity/serendipity.js`);
     .concat((await readdir(`${OUT}/src/worker`, { recursive: true }))
       .filter((f) => f.endsWith(".js") || f.endsWith(".ts"))
       .map((f) => `${OUT}/src/worker/${f}`))
-    .concat([`${OUT}/cal/src/templates.js`, `${OUT}/serendipity/serendipity.js`]);
+    .concat([`${OUT}/cal/src/templates.ts`, `${OUT}/serendipity/serendipity.js`]);
 
   let mirrored = 0, skipped = 0;
   for (const f of targets) {
@@ -1674,7 +1674,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   // same templates, where a relative /luna.css would 404) and get their own pass below.
   const targets = [`${OUT}/serendipity/serendipity.js`];
   for (const rel of await readdir(`${OUT}/cal/src`).catch(() => [])) {
-    if (rel.endsWith(".js")) targets.push(`${OUT}/cal/src/${rel}`);
+    if (rel.endsWith(".ts")) targets.push(`${OUT}/cal/src/${rel}`);
   }
   for (const rel of await readdir(`${OUT}/public`, { recursive: true })) {
     if (rel.endsWith(".html") && !rel.endsWith(".src.html")) targets.push(`${OUT}/public/${rel}`);
@@ -1701,14 +1701,14 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   // only match leading-slash paths, so the absolute form is rewritten here, scoped to
   // the staged cal modules alone.
   {
-    const p = `${OUT}/cal/src/templates.js`;
+    const p = `${OUT}/cal/src/templates.ts`;
     let t; try { t = await readFile(p, "utf8"); } catch { t = null; }
     if (t !== null) {
       const out = t.split("https://aadhar.sh/luna.css").join(`https://aadhar.sh${hashedFor.luna}`);
       if (out !== t) await writeFile(p, out);
       const now = await readFile(p, "utf8");
-      if (!now.includes(hashedFor.luna)) throw new Error("cal/src/templates.js was not repointed to hashed luna.css");
-      if (!now.includes(hashedFor.nav)) throw new Error("cal/src/templates.js was not repointed to hashed nav.js");
+      if (!now.includes(hashedFor.luna)) throw new Error("cal/src/templates.ts was not repointed to hashed luna.css");
+      if (!now.includes(hashedFor.nav)) throw new Error("cal/src/templates.ts was not repointed to hashed nav.js");
       console.log(`cal: /coffee templates repointed to ${hashedFor.luna} + ${hashedFor.nav}`);
     }
   }

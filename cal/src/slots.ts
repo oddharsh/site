@@ -1,7 +1,7 @@
 // Slot computation, split out of index.js so it can be imported without
 // pulling in the Workflow class.
 //
-// index.js re-exports BookingWorkflow (cal/src/workflow.js), which imports
+// index.js re-exports BookingWorkflow (cal/src/workflow.ts), which imports
 // `cloudflare:workers`. That's fine inside wrangler, which resolves the scheme
 // at bundle time, but plain `node --test` can't load it: the default ESM loader
 // only understands file:, data:, and node:. So anything a Node test touches has
@@ -9,8 +9,8 @@
 // /coffee/availability.json route and contract-tests.mjs both import from here
 // for that reason.
 
-import { generateSlots, fetchBusySWR, BOOK_MAX_STALE_MS } from "./availability.js";
-import { listHeld } from "./booking.js";
+import { generateSlots, fetchBusySWR, BOOK_MAX_STALE_MS } from "./availability.ts";
+import { listHeld } from "./booking.ts";
 
 // returns { slots, cal } where cal is the SWR calendar metadata (busy, ageMs,
 // ok, source). Callers that only need the listing destructure { slots };

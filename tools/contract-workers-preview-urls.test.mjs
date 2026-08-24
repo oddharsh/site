@@ -99,7 +99,7 @@ test("previews refuse every unsafe method, and the GET-shaped writes too", async
 test("every preview-guarded GET write names a path the site really routes", async () => {
   const { PREVIEW_GET_WRITES } = await import("../src/worker/lib/preview.ts");
   const dispatcher = readFileSync(new URL("./src/worker/index.ts", ROOT), "utf8");
-  const cal = readFileSync(new URL("./cal/src/index.js", ROOT), "utf8");
+  const cal = readFileSync(new URL("./cal/src/index.ts", ROOT), "utf8");
 
   // Exact ROUTES entries in the site dispatcher, plus cal's own matches, which
   // reach the visitor one prefix deeper: index.js hands /coffee/* to cal, and
