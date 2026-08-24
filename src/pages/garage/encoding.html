@@ -278,9 +278,9 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
       numbers; the corpus study that put zenjpeg in the pipeline is below.
     </p>
     <p class="lede" style="margin-top:4px">
-      <b>The verdict shipped:</b> the live pipeline (<code>www/scripts/add-photos.sh</code>)
+      <b>The verdict shipped:</b> the live pipeline (<code>tools/photos/add-photos.sh</code>)
       encodes every thumbnail as AVIF-primary + a JPG fallback. The JPG encoder is now
-      <b>zenc</b> (<code>www/scripts/zenc/</code>, a zenjpeg wrapper: hybrid trellis + progressive
+      <b>zenc</b> (<code>tools/photos/zenc/</code>, a zenjpeg wrapper: hybrid trellis + progressive
       scan search) at q84, which retired the from-source jpegli build in 2026-07 for a few percent
       fewer bytes at equal quality. The corpus comparison that drove that switch is below.
     </p>
@@ -317,7 +317,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
     <p>“Zenjpg” is a good shorthand, but the crate is published as
       <a href="https://docs.rs/crate/zenjpeg/latest" rel="external"><code>zenjpeg</code></a>
       (<a href="https://github.com/imazen/zenjpeg" rel="external">imazen/zenjpeg</a>).
-      It ships no CLI, so the site checks in a small Rust wrapper (<code>www/scripts/zenc/</code>)
+      It ships no CLI, so the site checks in a small Rust wrapper (<code>tools/photos/zenc/</code>)
       and the photo Action builds it with cargo; dependabot tracks the pin. That retired the
       from-source jpegli build in 2026-07. The corpus run below is the evidence that drove the switch.</p>
 
@@ -377,7 +377,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
       zenjpeg is
       <a href="https://docs.rs/crate/zenjpeg/latest" rel="external">AGPL-3.0-or-later (or a $1 startup license)</a>,
       a paper cut for a build-time encoder whose JPEG output is not a derivative work of it; the Rust
-      wrapper (<code>www/scripts/zenc/</code>) is dependabot-tracked and builds anywhere, no
+      wrapper (<code>tools/photos/zenc/</code>) is dependabot-tracked and builds anywhere, no
       cmake/ninja. So it replaced the from-source <code>cjpegli</code> in the pipeline.</p>
     <p class="note"><b>The knob I hoped would change the answer, and did not:</b> "encode every photo to a
       fixed perceptual score instead of a fixed <code>q</code>" would be worth real effort, because a
