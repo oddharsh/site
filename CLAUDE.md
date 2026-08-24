@@ -4356,6 +4356,47 @@ bun run deploy:direct
     from the script, because the second one is silently wrong after any move.
 
 
+41. **A re-encode changes the pixels the HISTOGRAMS were computed from, and the
+    check that should have caught that compares two files derived from each
+    other.** Found 2026-08-23. #394 re-encoded 316 JPEG thumbnails on 2026-08-14,
+    minting a new content hash for each, and re-baked ZERO histograms. So
+    `images/histograms.json` described thumbnails nobody had been served for nine
+    days. Corrected here: 158 of 158 photos moved, 31.2% of bins, mean 0.95 of
+    100 but with 65 photos carrying at least one bin past 15 and a worst case of
+    59, which is a visible bar rather than decoder noise.
+
+    **`photos:check` cannot see this and never could.** It compares
+    `histograms.json` against `images/meta/`, and since #441 made `meta/` build
+    OUTPUT that `build.mjs` derives FROM `histograms.json`, the two agree no
+    matter what the JPEGs contain. That is gotcha 24's shape exactly: a check
+    whose two sides come from one source proves only that copying works.
+
+    **`zenc histogram --check` is the only thing that reads the pixels, and
+    pointing it at a built tree is guaranteed to lie.** The index packs each bin
+    into ONE character over 64 levels (`HIST_BASE` 63, `HIST_LEVELS` 64) while
+    zenc computes 0..100, so a build-derived `meta/` has been through a lossy
+    101 → 64 → 101 round trip and can never equal a fresh bake. Measured: the
+    derived tree reproduces `roundTrip(committed)` on 100.00% of 40,448 bins, so
+    the packing is faithful and the drift `--check` reports against it is an
+    artifact. Run it against a tree ZENC ITSELF wrote, which is what
+    `extract-photo-metadata.sh` produces mid-pipeline, and a healthy library
+    answers `histograms match on disk for 158 photos`.
+
+    The decoder was the obvious suspect and was innocent: `image` 0.25.10 and
+    `zune-jpeg` 0.5.15 are pinned identically at every commit involved. What
+    changed was the INPUT, which is the thing a version pin cannot hold still.
+
+    `hash-thumbnails.sh` now snapshots each stem's `j` hash and warns when one
+    moves, because that script is the choke point where new bytes become served
+    bytes. `add-photos.sh` re-bakes the whole library on every run and was never
+    at risk; the gap is a STANDALONE `reencode-thumbnails.sh`, whose own header
+    told you to re-run `hash-thumbnails.sh` and stopped there.
+
+    Generalise past histograms: **anything derived from a content-addressed file
+    has to be regenerated when the hash moves, and a hash moving is exactly the
+    event that leaves no diff in the derived file to notice.**
+
+
 ---
 
 ## Source folder for new photos
