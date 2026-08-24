@@ -189,23 +189,54 @@ the reason, rather than written here with the caret quietly dropped.
   it is an XHTML parser and HTML5 void elements are not XHTML. Tolerant parsing
   is not the separable part.
 
-  `htmlparser2` 11.0.0 is a DIRECT dependency now, and also still an override on
+  `htmlparser2` 12.0.0 is a DIRECT dependency now, and also still an override on
   linkedom's declared `^10.1.0` range so the oracle resolves the same parser the
   Worker bundles. A parity gate whose reference parses differently proves
-  nothing. The version reasoning below is unchanged and is why 11 rather than
-  12 is pinned in both places. Version 10 carried domhandler 5, domutils 3,
-  dom-serializer 2, and two older entity-table generations beside the newer
-  stack linkedom already receives through css-select. Version 11 uses that same
-  newer generation. Version 12 is deliberately NOT selected: its WHATWG raw-text
-  change breaks linkedom 0.18.13's self-closing-script serialization in its own
-  upstream suite. Version 11 passes that full suite. Measured 2026-08-20, it moves
-  the minified Worker from 113.30 -> 80.56 KiB gzip (28.9% less); a fixed
-  four-page corpus produced byte-identical extraction payloads. Nine 20-conversion
-  trials moved the median 1112.5 -> 1084.9 ms (2.5%, within the run-to-run spread),
-  so the supported claim is no conversion regression rather than a CPU win. Its
-  local tests also pin the self-closing-script behavior and assert the resolved
-  tree has no nested domutils under htmlparser2. Re-evaluate the override when
-  linkedom changes its parser range rather than carrying it by inertia.
+  nothing. Version 10 carried domhandler 5, domutils 3, dom-serializer 2, and
+  two older entity-table generations beside the newer stack linkedom already
+  receives through css-select. Version 11 uses that same newer generation, and
+  12 keeps it. Measured 2026-08-20 on the move off linkedom, the minified Worker
+  went 113.30 -> 80.56 KiB gzip (28.9% less); a fixed four-page corpus produced
+  byte-identical extraction payloads. Nine 20-conversion trials moved the median
+  1112.5 -> 1084.9 ms (2.5%, within the run-to-run spread), so the supported
+  claim is no conversion regression rather than a CPU win.
+
+  **Version 12 was deliberately REFUSED here until 2026-08-24, and the reason it
+  is taken now is that a browser was finally asked.** The refusal read: its
+  WHATWG raw-text change breaks linkedom 0.18.13's self-closing-script
+  serialization in linkedom's own upstream suite. That is accurate about the
+  suite and says nothing about which parse is right, which is the question this
+  Worker actually has, because /lens exists to show what a machine saw rather
+  than what a library used to return.
+
+  Asked, Chrome 148.0.7778.280 backs 12 on every one of the three behaviours
+  that separate them, and 11 on none:
+
+  | source | 11 | 12 and Chrome |
+  |---|---|---|
+  | `<script src=x />` | closes at the slash | swallows to `</script>`, so the document close is script data |
+  | `<?>` | dropped silently | `<!--?-->`, a bogus comment |
+  | SVG `clipPath` | lowercased to `clippath` | case preserved, per foreign content |
+
+  So linkedom's upstream test is pinning the pre-spec string, which is exactly
+  what this repository's own test was doing (`test/reader.test.mjs` carried the
+  11 serialization as its expectation, with a message naming 12 as the thing
+  that would break it). Both were reading a regression where there was a
+  correction.
+
+  What it costs in the payload is nothing a visitor sees. Running the real
+  extraction pipeline over the 10 captured pages in `lens-reader/test/corpus`
+  at both versions, the Markdown is BYTE-IDENTICAL on 10 of 10. Three pages
+  differ in the intermediate content HTML and every difference is one of the
+  three rows above: `clipPath` on stripe.com, `<!--?-->` on the two MDN pages.
+  The parity gate is unmoved, at 4 of 4 across 48 documents plus those 10.
+
+  The override still forces the oracle onto the same generation, which is what
+  keeps that gate meaning anything. Re-evaluate it when linkedom changes its
+  parser range rather than carrying it by inertia. Its local tests pin the
+  self-closing-script behaviour AGAINST THE BROWSER now, with the DOMParser line
+  to re-run written at the assertion, and assert the resolved tree has no nested
+  domutils under htmlparser2.
 
   Markdown is a focused first-party walk over Readability's finished article
   node. It replaced `turndown` 7.2.4 after a 36-document corpus preserved every

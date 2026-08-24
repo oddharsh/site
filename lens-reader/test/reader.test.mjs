@@ -22,17 +22,31 @@ import { collectControlLabels, countControls, countWords, read, scoreExtraction,
 // the override buys no shipped bytes at all. What it buys is that the parity
 // oracle in dom-differential.test.mjs resolves the SAME parser the Worker
 // bundles, and a gate whose reference parses differently proves nothing.
+//
+// The three version literals this used to carry are DERIVED now. They read
+// 11.0.0 until 2026-08-24 and the bump to 12 had to edit all three by hand,
+// which is a test asking to be edited rather than a test asserting a property.
+// The property is in the name: ONE generation, reached three ways. A literal
+// additionally claimed that a specific version was the right one, and the
+// paragraph in DEPENDENCIES.md that argued for it is the honest place for that
+// claim, since it can carry the measurement.
+//
+// Deriving costs the floor, which is the usual price: three fields read from
+// one file agree trivially if the file is empty. So the exact-version shape is
+// asserted first, and a range fails here rather than silently passing as a
+// string match against itself.
 test("the oracle and the Worker resolve one parser generation", () => {
   const manifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
   const parser = JSON.parse(readFileSync(new URL("../node_modules/htmlparser2/package.json", import.meta.url), "utf8"));
+  const declared = manifest.dependencies?.htmlparser2;
 
-  assert.equal(manifest.dependencies?.htmlparser2, "11.0.0",
-    "src/dom.ts parses with htmlparser2 directly, so it must be a declared dependency rather than linkedom's transitive");
+  assert.match(String(declared), /^\d+\.\d+\.\d+$/,
+    "src/dom.ts parses with htmlparser2 directly, so it must be a declared dependency at an EXACT version rather than linkedom's transitive or a range");
   assert.equal(manifest.devDependencies?.linkedom, "0.18.13",
     "linkedom is the parity oracle; deleting it deletes the only proof src/dom.ts is faithful");
-  assert.equal(manifest.overrides?.htmlparser2, "11.0.0",
+  assert.equal(manifest.overrides?.htmlparser2, declared,
     "without the override the oracle resolves a different parser than the Worker bundles");
-  assert.equal(parser.version, "11.0.0", "the installed parser must honor the measured override");
+  assert.equal(parser.version, declared, "the installed parser must honor the override");
   assert.equal(
     existsSync(new URL("../node_modules/htmlparser2/node_modules/domutils/package.json", import.meta.url)),
     false,
@@ -43,17 +57,35 @@ test("the oracle and the Worker resolve one parser generation", () => {
 // Was asserted against linkedom, which is no longer what ships. It runs on the
 // fitted DOM now and checks the oracle agrees, so the property is pinned on the
 // product first and the reference second.
-test("the aligned parser preserves self-closing script serialization", () => {
+//
+// The EXPECTED STRING FLIPPED on 2026-08-24 with htmlparser2 12, and the flip
+// is the fix rather than the damage. HTML has no self-closing `<script/>`: the
+// slash is ignored and everything to the next `</script>` is script data, so
+// the document's own close tag really does land inside the element. v11 honored
+// the slash, v12 does not, and Chrome 148 agrees with v12 byte for byte:
+//
+//   new DOMParser().parseFromString(SOURCE, "text/html")
+//     -> <script src="./main.js" type="module"></html></script>
+//
+// So this test spent its life pinning the one behaviour of the two that a
+// browser does not have, on the surface whose whole premise is showing what a
+// machine actually saw. The browser is the control now, and it is written here
+// rather than left as a memory of a session.
+test("the aligned parser reads a self-closing script the way a browser does", () => {
   const source = '<html><script src="./main.js" type="module"/></html>';
-  const expected = '<script src="./main.js" type="module"></script>';
+  // Measured in Chrome 148.0.7778.280, 2026-08-24. Re-run the DOMParser line
+  // above before touching this string; a parser disagreeing with it is the
+  // finding, and this expectation is only ever downstream of the browser.
+  const expected = '<script src="./main.js" type="module"></html></script>';
   const root = parseHTML(source).document.documentElement;
   assert.ok(root, "the fitted DOM parsed no documentElement");
   const shipped = root.firstElementChild;
   assert.equal(shipped?.outerHTML, expected,
-    "htmlparser2 v12's raw-text parsing leaves the document close inside the script");
+    "a self-closing script is not self-closing: the slash is ignored and the document close is script data");
   assert.equal(parseLinkedom(source).document.documentElement.firstElementChild?.toString(), expected,
     "the oracle must agree, or the parity gate is measuring against a different parser");
 });
+
 
 test("the focused Markdown walk covers the article vocabulary", () => {
   const md = toMarkdown("<h2>Title</h2><p>Body <strong>text</strong>.</p>");
