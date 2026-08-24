@@ -29,7 +29,7 @@ review policy and entry point for future agent runs.
 
 ## Current baseline
 
-- Wrangler 4.124.0 is the exact root pin shared by all Worker projects.
+- Wrangler 4.125.0 is the exact root pin shared by all Worker projects.
   `cal`'s @cloudflare/vitest-pool-workers floor is 0.22.0, which resolves the
   same Wrangler, Miniflare, and Workerd stack as the root. Measured on
   2026-08-15 across five warm-store, clean installs, that alignment cut median
