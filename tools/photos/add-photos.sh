@@ -231,7 +231,16 @@ INTER="$TMP/inter"; mkdir -p "$INTER"
 while IFS= read -r f; do
   base=$(basename "$f"); stem="${base%.*}"
   jpg="$DEST/${stem}.jpg"; avif="$DEST/${stem}.avif"; smavif="$DEST/${stem}-${SQ_SM}.avif"
-  xs="$TMP/sq/${stem}-xs.png"; xsavif="$DEST/${stem}-${SQ_XS}.avif"
+  # $INTER, like the two tiers above it. This read "$TMP/sq/", a directory
+  # NOTHING CREATES, so the 1x tier has never been produced by this script: the
+  # 200px files on the 158 published photos all came from reencode-thumbnails.sh.
+  # It stayed hidden because `sips -Z` EXITS 0 when its --out directory does not
+  # exist (measured 2026-08-24) and writes nothing, so the guard below passes and
+  # avif_encode then fails on a missing input, costing one `~` in a progress line
+  # of dots. The first photo added after this was noticed crashed
+  # build-image-fingerprints.ts on `<stem>-200.undefined.avif`, because hashes.json
+  # carried no `x` for it.
+  xs="$INTER/${stem}.xs.png"; xsavif="$DEST/${stem}-${SQ_XS}.avif"
   if [ -f "$jpg" ] && [ -f "$avif" ] && [ -f "$smavif" ] && [ "$jpg" -nt "$f" ]; then
     T_SKIP=$((T_SKIP+1)); printf "·"; continue
   fi
