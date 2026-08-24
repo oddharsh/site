@@ -12,10 +12,15 @@
 // there is no hand-tuned signal here worth preserving.
 //
 // WHAT IS AUTHORED BY HAND
-// /bot, /whoareyou and /security render from the Worker, so their prose lives in
-// template literals rather than a file this script can read. Their twins are
-// authored in src/content/md/, and checkTwinFacts() below pins the load-bearing
-// strings so the twin cannot quietly disagree with the page.
+// A page that renders from the Worker keeps its prose in template literals
+// rather than in a file this script can read, so its twin is authored in
+// src/content/md/ instead. SEVEN are today: /around, /bot, /coffee, /lens,
+// /security, /terminal, /whoareyou. The set is not declared anywhere; buildTwins
+// looks for <path>.md per surface, so a page joins by someone dropping a file in
+// and nothing announces it. checkTwinFacts() below pins THREE of them (bot,
+// whoareyou, security) so those twins cannot quietly disagree with the page. The
+// other four are unpinned, which is a real gap rather than a decision: they are
+// pinnable the same way whenever someone writes the facts down.
 //
 // Every exported function is PURE so build.mjs can re-run this in-memory; only
 // main() touches the filesystem.

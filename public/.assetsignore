@@ -1,4 +1,5 @@
-# Files in www/ that must NOT be uploaded as public static assets.
+# Files in the served asset tree that must NOT be uploaded as public static
+# assets.
 # Cloudflare warns that uploading the worker as an asset exposes server-side
 # source. The _worker.js directory is the worker bundle entry, not an asset.
 _worker.js
@@ -11,11 +12,13 @@ _worker.js
 # The previous shipped versions of the content-hashed shell, kept only as
 # dictionary inputs, USED TO SIT HERE and be ignored. They live at src/dict/
 # now, outside the served tree, so there is nothing at this path to exclude.
-# www/ad/ (the deltas themselves) is deliberately NOT ignored: the worker
+# /ad/ (the deltas themselves) is deliberately NOT ignored: the worker
 # fetches those through ASSETS to answer an Available-Dictionary request.
 
-# Hand-authored Markdown twins for the Worker-rendered prose pages (/bot,
-# /whoareyou, /security), whose text lives in template literals no build can read.
-# scripts/gen-md-twins.mjs publishes each one AT ITS PAGE'S PATH (/bot.md), so
-# shipping this directory as well would serve the same twin at a second URL.
+# Hand-authored Markdown twins for the Worker-rendered prose pages, whose text
+# lives in template literals no build can read. Seven of them today: /around,
+# /bot, /coffee, /lens, /security, /terminal, /whoareyou. They are authored in
+# src/content/md/ and stage to this path, and tools/gen-md-twins.ts publishes
+# each one AT ITS PAGE'S PATH (/bot.md), so shipping this directory as well
+# would serve the same twin at a second URL.
 md
