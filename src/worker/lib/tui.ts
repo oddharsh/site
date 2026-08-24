@@ -50,8 +50,26 @@ export const COLS = 80;
 // ignores it.
 
 // ── spans ─────────────────────────────────────────────────────────────────
-/** One styled run of text. `style` is a key of SGR, or null for terminal default. */
-export const s = (text, style = null) => [text === null || text === undefined ? "" : String(text), style];
+
+// THE STYLE VOCABULARY, which had no written form after the SGR table was
+// deleted on 2026-08-14. The note above says colour comes back by teaching
+// emit() to map these names, so the names are the contract that survived; a
+// union is what makes a typo in one a compile error rather than a span that
+// silently renders unstyled forever.
+//
+// These eight are what the tree actually passes today. Adding a ninth means
+// adding it here, which is the point: the next renderer has one list to read.
+export type SpanStyle = "accent" | "bad" | "dim" | "key" | "label" | "ok" | "strong" | "warn";
+
+/** One styled run of text: the text, and how to paint it. */
+export type Span = [string, SpanStyle | null];
+
+/** A rendered line, which is a sequence of spans. */
+export type Line = Span[];
+
+/** One styled run of text. `style` is a SpanStyle, or null for terminal default. */
+export const s = (text, style: SpanStyle | null = null): Span =>
+  [text === null || text === undefined ? "" : String(text), style];
 
 /** Visible width of a line, in code points. */
 export const width = (spans) => spans.reduce((n, [t]) => n + [...t].length, 0);
@@ -60,7 +78,7 @@ export const width = (spans) => spans.reduce((n, [t]) => n + [...t].length, 0);
 export function truncTo(spans, w) {
   if (w <= 0) return [];
   if (width(spans) <= w) return spans;
-  const out = [];
+  const out: Line = [];
   let left = w - 1;                       // reserve the ellipsis column
   for (const [text, style] of spans) {
     const chars = [...text];
@@ -145,7 +163,7 @@ const G = {
 export function wrap(text, w) {
   const words = String(text ?? "").replace(/\s+/g, " ").trim().split(" ").filter(Boolean);
   if (!words.length) return [];
-  const out = [];
+  const out: string[] = [];
   let cur = "";
   for (const word of words) {
     if (!cur) { cur = word; continue; }
@@ -160,7 +178,7 @@ export function wrap(text, w) {
     // oxlint-disable-next-line typescript/no-misused-spread
     const chars = [...row];
     if (chars.length <= w) return [row];
-    const parts = [];
+    const parts: string[] = [];
     for (let i = 0; i < chars.length; i += w) parts.push(chars.slice(i, i + w).join(""));
     return parts;
   });
@@ -230,7 +248,7 @@ export function table({ cols, rows, width: w = COLS, header = true }) {
     return out;
   };
 
-  const lines = [];
+  const lines: Line[] = [];
   if (header) {
     lines.push(layRow(cols.map((c) => c.title || ""), "label"));
     lines.push([s(widths.map((n) => G.h.repeat(n)).join(" "), "border")]);

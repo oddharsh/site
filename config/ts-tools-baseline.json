@@ -8,7 +8,6 @@
     "tools/check-dictionary-support.ts": 25,
     "tools/check-infra.ts": 28,
     "tools/check-kitesurf.ts": 4,
-    "tools/check-tool-types.ts": 4,
     "tools/check-tools.ts": 18,
     "tools/check-wrangler.ts": 6,
     "tools/contract-cache-the-behavioral-revalidation-lint.test.mjs": 8,
@@ -18,10 +17,9 @@
     "tools/contract-lens-browser-do-recipe-interaction-recipes.test.mjs": 13,
     "tools/contract-lens-cost-origin-level-discovery-is-cached.test.mjs": 2,
     "tools/contract-lens-per-ip-crawl-budgets.test.mjs": 4,
-    "tools/contract-lib-tui-js.test.mjs": 2,
     "tools/contract-nlweb.test.mjs": 4,
     "tools/contract-reading-somebody-else-s-site.test.mjs": 1,
-    "tools/contract-rn-the-track-meta-map-must-survive-a-short-playlist-.test.mjs": 19,
+    "tools/contract-rn-the-track-meta-map-must-survive-a-short-playlist-.test.mjs": 16,
     "tools/contract-shared.ts": 20,
     "tools/contract-the-bundled-photo-pool.test.mjs": 7,
     "tools/contract-the-execution-half-of-the-readiness-rubric.test.mjs": 1,
@@ -45,6 +43,7 @@
     "tools/lib/dependency-docs.ts": 22,
     "tools/lib/lens-chips.ts": 2,
     "tools/lib/link-integrity.ts": 1,
+    "tools/lib/tsc-scope.ts": 4,
     "tools/lib/zstd-batch.ts": 2,
     "tools/perf-budget.ts": 2,
     "tools/perf-snapshot.ts": 7,
@@ -58,5 +57,5 @@
     "tools/ua-survey.ts": 21,
     "tools/verify-routes.ts": 27
   },
-  "total": 600
+  "total": 595
 }

@@ -22,6 +22,7 @@
 // this repo's most-repeated failure and it has its own precedent in build.mjs's
 // route invariant.
 import { execFileSync } from "node:child_process";
+import { readFileSync, writeFileSync } from "node:fs";
 
 /**
  * @param {object} opts
@@ -78,4 +79,47 @@ export function runScopedTsc({ repo, tsc, config, owns, label, cwd = repo }) {
   }
 
   return { mine, foreign: lines.length - mine.length, listed, ownedFiles: listed.filter(owned), byFile };
+}
+
+/**
+ * THE RATCHET, extracted so two callers cannot keep separate copies of it.
+ *
+ * A baseline records what is owed per file, and this fails on a NEW file, on a
+ * file that got WORSE, and on a file that got BETTER without the baseline being
+ * updated. That third arm is what makes the number monotone rather than a
+ * suggestion: without it a fix quietly banks nothing and the next regression
+ * hides inside the slack. It has already earned its keep once, catching a
+ * two-diagnostic improvement that arrived from an unrelated merge.
+ *
+ * A wall would be simpler and is the wrong shape here. tools/ and the Worker
+ * program each carry hundreds of strictNullChecks diagnostics, so a check that
+ * failed on them could never be required, and an unrequired check is decoration
+ * — this repo has the perf-budget history to prove it.
+ *
+ * Returns the problems as strings; the caller decides how to print and exit.
+ */
+export function ratchet({ baselinePath, byFile, total, updateCommand, update = false }) {
+  const declared = JSON.parse(readFileSync(baselinePath, "utf8"));
+  // Sorted by filename so the baseline file stays diffable. The comparator is
+  // explicit because the type-aware lint requires one, and because a default
+  // sort on [file, count] pairs compares them stringified, which is only
+  // accidentally the same order.
+  const actual = Object.fromEntries([...byFile].sort((a, b) => a[0].localeCompare(b[0])));
+
+  if (update) {
+    writeFileSync(baselinePath, `${JSON.stringify({ files: actual, total }, null, 2)}\n`);
+    return { rewritten: true, problems: [], owed: total };
+  }
+
+  const problems = [];
+  for (const [f, n] of Object.entries(actual)) {
+    const was = declared.files[f];
+    if (was === undefined) problems.push(`${f}: ${n} error(s), and this file is not in the baseline`);
+    else if (n > was) problems.push(`${f}: ${n} error(s), up from ${was}`);
+    else if (n < was) problems.push(`${f}: ${n} error(s), DOWN from ${was} — run \`${updateCommand}\``);
+  }
+  for (const f of Object.keys(declared.files)) {
+    if (!(f in actual)) problems.push(`${f}: now clean — run \`${updateCommand}\` and drop it`);
+  }
+  return { rewritten: false, problems, owed: declared.total };
 }

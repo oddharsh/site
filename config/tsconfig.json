@@ -35,6 +35,13 @@
     "skipLibCheck": true,
     // Not `strict` yet. The Worker was converted from unannotated JavaScript and
     // the explicit quarantine must shrink before a global strictness migration.
+    // strictNullChecks ON, against the ratchet in check-worker-types.ts. The
+    // program carried 572 diagnostics under it; 264 are fixed and the rest are
+    // recorded per file in config/ts-worker-baseline.json, where they can only
+    // fall. `strict` stays false for the reason the comment below gives:
+    // noImplicitAny is 7,197 diagnostics of annotation labour repo-wide and
+    // would bury this.
+    "strictNullChecks": true,
     "strict": false
   },
   // Paths are relative to THIS file, which lives in config/ — hence the `../`.
