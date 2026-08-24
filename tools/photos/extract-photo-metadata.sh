@@ -184,11 +184,11 @@ done
 
 # roll the per-photo EXIF (minus histograms) into the one shared index the
 # tooltip warms on idle. derived data, so it MUST be rebuilt whenever the
-# per-photo files change; check-photo-pipeline.mjs fails on any drift.
-node "$SCRIPT_DIR/build-exif-index.mjs"
+# per-photo files change; check-photo-pipeline.ts fails on any drift.
+node "$SCRIPT_DIR/build-exif-index.ts"
 # The packed bars the grid inlines into each tile as data-hist. Same input as the
 # EXIF index above, different consumer: this one never reaches a browser whole.
-node "$SCRIPT_DIR/build-histogram-index.mjs"
+node "$SCRIPT_DIR/build-histogram-index.ts"
 
 COUNT=$(jq 'keys | length' "$OUT")
 if [ "$MERGE" -eq 1 ]; then

@@ -101,7 +101,7 @@ with open(map_path, "w") as f:
 #   1. drop the un-hashed source tiers we just addressed — they live in /i/ now.
 #      metadata.json / alt.json / hashes.json / meta/ stay put.
 #   2. drop /i/ files a re-encode superseded (not referenced by the merged map),
-#      so public/i/ is 1:1 with hashes.json and check-photo-pipeline.mjs passes.
+#      so public/i/ is 1:1 with hashes.json and check-photo-pipeline.ts passes.
 pruned_src = pruned_i = 0
 for stem in stems:
     for name in (f"{stem}.avif", f"{stem}.jpg", f"{stem}-400.avif", f"{stem}-200.avif"):
@@ -125,4 +125,4 @@ EOF
 
 # The short URL hash above is intentionally kept separate from the full-byte
 # fingerprint used by the exact photo_recipe matcher.
-node "$SCRIPT_DIR/build-image-fingerprints.mjs"
+node "$SCRIPT_DIR/build-image-fingerprints.ts"
