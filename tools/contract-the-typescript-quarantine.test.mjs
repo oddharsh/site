@@ -442,8 +442,9 @@ test("every program declared null-safe still declares it", async () => {
   // TWO KINDS OF ENTRY, and the difference matters before adding one. Most of
   // these are CLEAN under the flag, so `bun run typecheck` fails on a single new
   // diagnostic. Two are RATCHETED instead, each against a per-file baseline that
-  // can only fall: tsconfig.tools.json through check-tool-types.ts, and
-  // tsconfig.json through check-worker-types.ts. Both kinds belong here, because
+  // can only fall: tsconfig.tools.json through check-tool-types.ts,
+  // tsconfig.json through check-worker-types.ts, and tsconfig.browser.json
+  // through check-browser-types.ts. Both kinds belong here, because
   // what this asserts is that the flag stays ON, not that a program is clean.
   const DECLARED = [
     "tsconfig.json",
@@ -453,6 +454,7 @@ test("every program declared null-safe still declares it", async () => {
     "tsconfig.lens-reader.json",
     "tsconfig.lens-reader-test.json",
     "tsconfig.lwe-ask.json",
+    "tsconfig.browser.json",
     "tsconfig.tools.json",
   ].sort();
 
