@@ -39,26 +39,16 @@ minimumReleaseAge = 86400
 # every entry below now exempts that package FOREVER, at any version. Prune
 # this list when a bump lands rather than letting it grow — an unpruned entry
 # is a permanently disabled check, not a stale one.
-minimumReleaseAgeExcludes = [
-  "@cloudflare/workers-types",
-  "@oxc-minify/binding-android-arm-eabi",
-  "@oxc-minify/binding-android-arm64",
-  "@oxc-minify/binding-darwin-arm64",
-  "@oxc-minify/binding-darwin-x64",
-  "@oxc-minify/binding-freebsd-x64",
-  "@oxc-minify/binding-linux-arm-gnueabihf",
-  "@oxc-minify/binding-linux-arm-musleabihf",
-  "@oxc-minify/binding-linux-arm64-gnu",
-  "@oxc-minify/binding-linux-arm64-musl",
-  "@oxc-minify/binding-linux-ppc64-gnu",
-  "@oxc-minify/binding-linux-riscv64-gnu",
-  "@oxc-minify/binding-linux-riscv64-musl",
-  "@oxc-minify/binding-linux-s390x-gnu",
-  "@oxc-minify/binding-linux-x64-gnu",
-  "@oxc-minify/binding-linux-x64-musl",
-  "@oxc-minify/binding-openharmony-arm64",
-  "@oxc-minify/binding-win32-arm64-msvc",
-  "@oxc-minify/binding-win32-ia32-msvc",
-  "@oxc-minify/binding-win32-x64-msvc",
-  "oxc-minify",
-]
+# EMPTY, and it stays that way unless something is actively blocked. It held 22
+# entries until 2026-08-24: oxc-minify plus its 20 platform bindings, and
+# @cloudflare/workers-types. Every one of those bumps has since landed and each
+# package is now days past the window, so the entries were exempting packages
+# that no longer needed exempting, which is the FOREVER case the note above
+# warns about rather than a stale-but-harmless list.
+#
+# Checked before pruning rather than after, because the check is one request:
+# oxc-minify 0.146.0 at 126 h, workers-types 5.20260821.1 at 88 h, @types/bun
+# 1.4.0 at 93 h. Removing an entry for a package still inside 24 h would red
+# CI's frozen install instead, so read the registry's `time` field for the
+# PINNED version before deleting its line.
+minimumReleaseAgeExcludes = []
