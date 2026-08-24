@@ -28,7 +28,7 @@ decides which one a given file belongs in:
 | **`src/client/`**, **`src/styles/`** | the client islands (`nav.js`, `tooltip.js`, `lens*.js`, `quiz.js`, …) and the stylesheets (`luna.css`, `lwe-base.css`, …). They stage back to the ROOT of the served tree, so their public URLs are still `/nav.js` and `/luna.css`. Source layout and URL layout are different questions, and only the first one moved. |
 | **`src/dict/`** | `a-dict/` and `p-dict/`, the previously shipped bytes of the shell and of each page. Build INPUT that is never served: a dictionary has to be bytes a browser already holds, which no build can derive from source. Being outside the served tree is why the build no longer stages 130 files for `.assetsignore` to exclude again. |
 | `cal/`, `serendipity/` | the two application modules the site Worker bundles and serves at `/coffee` and `/serendipity`. They sit outside the served tree because they are programs with their own tests, not documents. |
-| `cf-garage/`, `lwe-ask/`, `lens-reader/` | the three SEPARATELY deployed auxiliary Workers, each with its own `wrangler.toml` and its own deploy. Nothing here reaches production through the site Worker. |
+| `cf-garage/`, `lwe-ask/`, `lens-reader/` | the three SEPARATELY deployed auxiliary Workers, each with its own config and its own deploy. Nothing here reaches production through the site Worker. `lwe-ask` and `lens-reader` carry a `wrangler.toml`; **`cf-garage` carries a `cloudflare.config.ts`** and is the repository's one trial of wrangler's experimental TypeScript config, so every wrangler command in that directory needs `--x-new-config` (gotcha 41). |
 | **`tools/`** | **every developer tool.** The build (`build.mjs`), the test suite (`contract-*.test.mjs`, 49 files sharing `contract-shared.mjs`; it was ONE 8720-line file until 2026-08-20, and the split files stay at this depth rather than in `tools/test/` because 147 relative specifiers in them resolve from here), the route oracle, the perf budget, the `check-*` / `gen-*` family, plus `photos/` (the photo and asset pipeline) and `oxlint/` (the custom rules). Nothing in here ships. |
 | **`config/`** | `infra.json` (declared Cloudflare + GitHub state), `site-manifest.json` (the surface registry), `tsconfig.json`. |
 | `pipelines/` | the page GENERATORS, one directory per section: `content/` (the shared page contract), `garage/`, `lwe/`. These author into `src/pages/`; they are not part of the build. |
@@ -4355,6 +4355,89 @@ bun run deploy:direct
     (`$SCRIPT_DIR/../..` plus `/public`) over one that counts directory levels
     from the script, because the second one is silently wrong after any move.
 
+41. **cf-garage runs wrangler's EXPERIMENTAL TypeScript config, and it is the
+    trial rather than the standard.** Converted 2026-08-23:
+    `cf-garage/wrangler.toml` is gone and `cf-garage/cloudflare.config.ts` is the
+    config. The site Worker, `lwe-ask` and `lens-reader` are untouched and stay
+    on `wrangler.jsonc` / `wrangler.toml`.
+
+    Wrangler 4.124.0 loads `cloudflare.config.ts` (plus an optional
+    `wrangler.config.ts` for tooling settings) behind `--x-new-config`. The flag
+    is `hidden: true`, `@cloudflare/config` 0.7.0 says "not yet stable enough for
+    external use — APIs may change without notice", and a web search on the day
+    of the conversion found no Cloudflare documentation for it at all. cf-garage
+    was picked because it is the cheapest place to be wrong: a demo Worker
+    deployed by hand, whose failure costs `/garage/cf/*` rather than the site.
+
+    **THE BUN QUESTION IS SETTLED AND THE ANSWER TURNS ON THE INVOCATION.**
+    Measured 2026-08-23:
+
+    | invocation | result |
+    |---|---|
+    | `bun x --no-install wrangler … --x-new-config` | loads, deploys |
+    | `bun run <script>` (resolves the same `.bin` shim) | loads |
+    | `bun ./node_modules/wrangler/bin/wrangler.js … --x-new-config` | **REFUSED** |
+
+    The refusal names itself: *"cloudflare.config.ts loading is not supported on
+    Bun. Please use Node.js v22.18.0 or higher."* It reads as a blocker until you
+    notice which door it comes through. `bun x` and `bun run` resolve
+    `node_modules/.bin/wrangler`, whose `#!/usr/bin/env node` shebang hands the
+    process to node, so bun never reaches the loader. Only invoking wrangler's
+    ENTRY FILE under bun puts bun in front of it, which is a thing gotcha 38
+    already stopped doing everywhere. So this cost no bun leverage: bun still
+    installs, still runs every script, still runs the tests.
+
+    Take the general shape past this flag. **"Does tool X support bun" is a
+    question about the process that ends up running X, and a package manager
+    that resolves a shebang is not that process.** Both halves of gotcha 38 are
+    still true and neither one predicted this.
+
+    Three translation notes worth having before reading the file:
+
+    - **`accountId` is on a separate `settings` export**, via `defineSettings`,
+      rather than on the worker. `check-infra.ts` reads it from there now, and
+      `AUX_CONFIGS` carries a pattern per path so the three auxiliary Workers can
+      be in two formats without one regex being widened until it matches
+      anything.
+    - **Bindings live under `env`**, which is what pays for the format: the
+      generated types read `InferEnv<typeof cloudflare.config.default>`, so the
+      binding names ARE the type of `env` instead of a snapshot some earlier
+      `wrangler types` run happened to take. Nothing here reached that payoff
+      yet, because `wrangler types` does NOT accept `--x-new-config` (measured:
+      unknown argument) and the types are written by `wrangler dev`.
+    - **`[[migrations]]` has no equivalent and needs none.** A DO class declares
+      its lifecycle as state on its export (`{ storage: "sqlite" }` is the
+      created form; `state` carries deleted / renamed / transferred /
+      expecting-transfer). Wrangler's `resolveDoLifecyclePayload` sends
+      `{ migrations: undefined, exports }` the moment a config declares DO
+      exports, so this is the newer exports-based path rather than an omission.
+
+    **`[dependencies_instrumentation]` could not come across, and it cost
+    nothing.** The new schema has no field for it and `unsafe` carries only
+    `metadata` and `capnp`. It was already a no-op: wrangler reads
+    `config.dependencies_instrumentation?.enabled !== false`, so an ABSENT block
+    behaves exactly like the explicit `true` cf-garage used to set. Verified by
+    reading wrangler's upload path, since a dry run never reports it.
+
+    **What is verified, and what the first real deploy is still the measurement
+    for.** The dry-run is byte-identical to the toml's (8.83 KiB, 3.07 KiB gzip,
+    the same four bindings), and `wrangler build --x-cf-build-output` writes the
+    resolved config to `.cloudflare/output/v0/workers/default/config.json`, which
+    is the readout to reach for when you want to see what a config actually
+    resolved to. What neither can check is whether the API accepts the
+    exports-based DO form for a class that already exists under migration tag
+    `v1`, which is the DO note above holding in its new clothes: a dry run never
+    computes a migration. `git revert` restores the toml if it refuses.
+
+    Two smaller things. `--config` / `-c` is REFUSED alongside the flag, because
+    the loader reads from the working directory, so CI's step keeps its
+    `working-directory: cf-garage` and drops the `-c` it used to pass. And the
+    quarantine test discovers deployable Workers by looking for a wrangler config
+    filename, so deleting the toml dropped cf-garage out of its own registry; its
+    FLOOR caught that, which is the job the floor exists for. A registry derived
+    from a filename expires the day the vendor ships a second filename, and it is
+    still better than a hand-kept list, because a list goes stale without failing
+    anything.
 
 ---
 

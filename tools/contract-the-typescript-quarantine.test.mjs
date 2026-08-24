@@ -87,14 +87,24 @@ test("every auxiliary Worker has a tsc program, and something runs it", async ()
   const { readdirSync, existsSync } = await import("node:fs");
   const root = new URL("./", ROOT).pathname;
 
-  // A directory holding a wrangler.toml is a separately deployed Worker. The
-  // ROOT config is wrangler.jsonc, so it is excluded by extension rather than
-  // by name, and cal/ and serendipity/ are correctly absent: they carry no
-  // wrangler config because the site Worker bundles them.
+  // A directory holding a wrangler config is a separately deployed Worker. The
+  // ROOT config is wrangler.jsonc, so it is excluded by extension rather than by
+  // name, and cal/ and serendipity/ are correctly absent: they carry no wrangler
+  // config because the site Worker bundles them.
+  //
+  // TWO FILENAMES COUNT, since 2026-08-23. cf-garage moved to wrangler's
+  // experimental TypeScript config and its wrangler.toml is gone, which dropped
+  // it out of this registry silently — the floor below caught it, and that is
+  // exactly the job the floor was written for. Read it as the general warning
+  // rather than as one project's quirk: a registry derived from a FILENAME
+  // expires the day the vendor ships a second filename, and the discovery is
+  // still better than a hand-kept list, because the list would have gone stale
+  // without failing anything at all.
+  const WORKER_CONFIGS = ["wrangler.toml", "cloudflare.config.ts"];
   const projects = readdirSync(root, { withFileTypes: true })
     .filter((e) => e.isDirectory() && !e.name.startsWith(".") && e.name !== "node_modules")
     .map((e) => e.name)
-    .filter((name) => existsSync(`${root}${name}/wrangler.toml`))
+    .filter((name) => WORKER_CONFIGS.some((config) => existsSync(`${root}${name}/${config}`)))
     .sort();
 
   // A FLOOR, because a test that scanned nothing looks exactly like a clean run.

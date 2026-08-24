@@ -29,5 +29,12 @@
     "strictNullChecks": true,
     "strict": false
   },
-  "include": ["../cf-garage/src/**/*.ts"]
+  // cloudflare.config.ts is IN this program rather than in tsconfig.tools.json,
+  // and the distinction is which globals it needs. It is not runtime code and it
+  // never ships in the bundle, so tools/ is the reflexive home; but it imports
+  // `wrangler/experimental-config`, whose binding factories are generic over
+  // Workers types, and it is the file the Worker's own `Env` is inferred FROM.
+  // Checking it beside the Worker it configures is what makes a wrong binding
+  // name a type error here rather than a 500 in production.
+  "include": ["../cf-garage/src/**/*.ts", "../cf-garage/cloudflare.config.ts"]
 }

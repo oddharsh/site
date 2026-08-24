@@ -140,7 +140,10 @@ rotation and treat all previously emailed links as compromised.
 `.github/workflows/ci.yml` is the pull-request gate. It installs locked
 dependencies, builds the site, enforces the performance budget, dry-runs
 the single site Worker plus the `cf-garage/` and `lwe-ask/` auxiliary Wrangler
-configs, and runs `cal/pnpm test`. Cal and Serendipity are bundled into the site
+configs, and runs `cal/pnpm test`. The `cf-garage/` dry-run is the odd one out:
+that project moved to wrangler's experimental TypeScript config on 2026-08-23,
+so its step passes `--x-new-config` and passes no `-c` (the flag refuses
+`--config` and reads the config from the working directory instead). Cal and Serendipity are bundled into the site
 Worker; their source modules and Cal behavioral suite remain inside the
 pull-request gate.
 
