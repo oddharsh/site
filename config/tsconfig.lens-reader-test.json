@@ -1,0 +1,33 @@
+{
+  // tsconfig.lens-reader-test.json — the Reader lens's behavioural suite.
+  //
+  // NODE GLOBALS, for the reason tsconfig.cf-garage-test.json's header gives:
+  // the source runs on workerd and the test runs on node, so the two cannot
+  // share one `types` entry without declaring a union that is true of neither.
+  // Importing ../src/reader.js therefore drags src/worker/lib/crawl.ts and
+  // botauth.ts in against Cloudflare-shaped code, which is why this program is
+  // run through `bun run typecheck:tests` and never bare.
+  //
+  // IT ONLY RESOLVES WHERE lens-reader/node_modules EXISTS, which is the same
+  // constraint lens-reader/package.json's `typecheck` script already carries and
+  // the reason this is not in the root `typecheck`. Wired there, CI fails with
+  // TS2307 on readability and linkedom while every workstation that has run an
+  // install in lens-reader/ stays green — the split CLAUDE.md records about the
+  // root contract suite, arriving through a third door. It runs from
+  // lens-reader/ instead, after the install CI already does for its tests.
+  "compilerOptions": {
+    "noEmit": true,
+    "allowJs": true,
+    "checkJs": true,
+    "target": "esnext",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "lib": ["esnext"],
+    "types": ["bun"],
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "strict": false
+  },
+  "include": ["../lens-reader/test/**/*.mjs"]
+}

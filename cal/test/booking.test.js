@@ -30,7 +30,27 @@ const soon = (offsetH = 48) => {
   const start = Date.now() + offsetH * HOUR;
   return { start, end: start + 30 * 60_000 };
 };
-const pending = (fields = {}) => ({ status: "pending", created: Date.now(), ...soon(), ...fields });
+/** @typedef {import("../src/booking.js").Booking} Booking */
+
+// name/email/topic are REQUIRED on Omit<Booking, "id">, and this helper omitted
+// all three until the suite joined a tsc program (2026-08-23). Nothing failed:
+// createBooking spreads whatever it is handed, so seven call sites were writing
+// records with three undefined fields and asserting only on the fields they set.
+// Defaults here rather than at each call site, so a test that cares about a name
+// still overrides it through `fields`.
+//
+// The return annotation is doing work too. Without it the literal widens
+// `status` to `string`, which is not the four-member union the record declares,
+// so the helper produces a shape createBooking would refuse.
+/**
+ * @param {Partial<Omit<Booking, "id">>} [fields]
+ * @returns {Omit<Booking, "id">}
+ */
+const pending = (fields = {}) => ({
+  status: "pending", created: Date.now(),
+  name: "Test Requester", email: "test@example.dev", topic: "coffee",
+  ...soon(), ...fields,
+});
 
 describe("booking record CRUD", () => {
   it("creates a booking and reads it back by id", async () => {

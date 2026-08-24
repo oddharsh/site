@@ -128,6 +128,29 @@ bun run photos:check
 # finding inside a content-hashed client asset.
 bun run lint
 
+# type-check everything, in ~2s. TEN programs rather than one, because a program
+# is only as accurate as the globals it declares: the Worker gets Cloudflare's,
+# the client islands get the DOM's, sw.js gets webworker's, the three auxiliary
+# Workers get Cloudflare's apiece, and the test suites get whichever runtime they
+# actually run on. Each config/tsconfig.*.json header argues its own case.
+# Three of the ten go through a WRAPPER instead of a bare `tsc -p`, because they
+# hold files from two runtimes at once and the imported half is checked against
+# the wrong scope: check-tool-types.mjs (tools, pipelines, talks) filters to the
+# owned trees against a ratchet, check-test-types.mjs does the same for the two
+# node-runtime suites and holds them at zero.
+bun run typecheck
+
+# the gate under all of that: every JS/TS file this repo owns must belong to SOME
+# program. It is a diff of `git ls-files` against `tsc --listFilesOnly`, and it
+# exists because the set of programs is an allowlist too: 19 files, including
+# three deployed Workers and every test suite, were held by nothing until anyone
+# went looking. Runs inside `typecheck`; run it alone when adding a project.
+bun run typecheck:coverage
+
+# lens-reader is deliberately OUT of the workspace, so its two programs run from
+# there, after an install that only exists there. CI already does this.
+cd lens-reader && bun run typecheck
+
 # the wire-size DIFF. perf-budget checks numbers against constants that rot;
 # this compares two builds and has no constants. CI runs it against the merge
 # base on every PR touching served code and comments the delta, gating nothing.

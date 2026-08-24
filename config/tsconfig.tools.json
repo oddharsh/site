@@ -36,5 +36,30 @@
     "types": ["bun"]
   },
   // The .d.ts declares Event Timing members lib.dom still lacks; see its header.
-  "include": ["../tools/**/*.mjs", "../tools/**/*.d.ts"]
+  //
+  // FOUR GLOBS, because "the tools stay .mjs" above describes tools/ and was
+  // read as describing this program. It does not, and three trees fell through
+  // the gap until 2026-08-23:
+  //
+  //   ../tools/**/*.ts       the custom oxlint rules in tools/oxlint/anti-slop.
+  //                          They are already TypeScript, and no compiler read
+  //                          them, because an `*.mjs` glob cannot match a `.ts`
+  //                          file. A program that excludes the one directory
+  //                          written in the language it checks is the sharpest
+  //                          form of this repo's allowlist failure.
+  //   ../pipelines/**/*.mjs  the page generators. Same runtime, same globals,
+  //                          and `check-page-contracts` is a required check that
+  //                          runs them, so they are not optional code.
+  //   ../talks/**/*.mjs      the deck builder and its screengrab harness.
+  //
+  // Their BROWSER-side siblings do not belong here: pipelines/lwe/specs/*.js is
+  // the inline script a generator injects into a page, so it runs in a browser
+  // and lives in tsconfig.browser.json's glob instead.
+  "include": [
+    "../tools/**/*.mjs",
+    "../tools/**/*.ts",
+    "../tools/**/*.d.ts",
+    "../pipelines/**/*.mjs",
+    "../talks/**/*.mjs"
+  ]
 }

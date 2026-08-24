@@ -26,7 +26,7 @@ const soon = () => {
   return { start, end: start + 30 * 60_000 };
 };
 async function heldPending() {
-  const b = await createBooking(env, { status: "pending", created: Date.now(), name: "Ada", email: "a@x.dev", ...soon() });
+  const b = await createBooking(env, { status: "pending", created: Date.now(), name: "Ada", email: "a@x.dev", topic: "coffee", ...soon() });
   await holdSlot(env, b);
   return b;
 }

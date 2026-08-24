@@ -88,10 +88,17 @@ test("read publishes Markdown from Readability's finished article node", async (
     ${"<p>Article prose with <strong>structure</strong> that the extractor should retain.</p>".repeat(12)}
     </article></body></html>`;
   try {
-    globalThis.fetch = async () => new Response(html, {
-      status: 200,
-      headers: { "content-type": "text/html; charset=utf-8" },
-    });
+    // The cast is the stub's honesty note. node's `fetch` carries a `preconnect`
+    // property this one does not, and `read()` never calls it, so the two do not
+    // overlap enough for a direct assertion and the hop through `unknown` is what
+    // TypeScript asks for. Widening the stub to satisfy the type would be adding
+    // a method to a test double for the compiler's benefit.
+    globalThis.fetch = /** @type {typeof fetch} */ (/** @type {unknown} */ (
+      async () => new Response(html, {
+        status: 200,
+        headers: { "content-type": "text/html; charset=utf-8" },
+      })
+    ));
     const result = await read("https://example.com/article");
     const baseline = new (await import("@mozilla/readability")).Readability(
       parseHTML(html).document,

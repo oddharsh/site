@@ -1,0 +1,45 @@
+{
+  // tsconfig.cal-test.json — the booking module's Vitest suite.
+  //
+  // WORKERS GLOBALS, and that is a fact about how these tests RUN rather than a
+  // copy of the neighbouring config. @cloudflare/vitest-pool-workers executes
+  // the suite inside workerd, so `env`, the KV binding and WebCrypto here are
+  // Cloudflare's, exactly as in cal/src. That is also why this program needs no
+  // diagnostic filtering: it pulls cal/src in transitively and checks it against
+  // the same globals tsconfig.json already checks it against, so a diagnostic in
+  // either tree is a finding rather than a missing global. The two node-runtime
+  // suites next door are the opposite case and get check-test-types.mjs instead.
+  //
+  // It is a SEPARATE program from tsconfig.json rather than a wider include
+  // there, for one reason: `types` is per-program, and reaching `cloudflare:test`
+  // means dragging the pool's ambient declaration into the Worker's program too.
+  // The Worker does not have a test pool and should not be able to import one.
+  //
+  // The suite was in no program at all until 2026-08-23. It found 8 real
+  // diagnostics on its first run, all one cause: booking fixtures built as
+  // `{start, end, status, created}` against an `Omit<Booking, "id">` parameter
+  // that requires name, email and topic. The tests passed throughout, because a
+  // missing property is only visible to a checker.
+  "compilerOptions": {
+    "noEmit": true,
+    "allowJs": true,
+    "checkJs": true,
+    "target": "esnext",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    // cal/src/templates.js imports the site Worker by its real `.ts` filename,
+    // for the reason tsconfig.json's header gives: that specifier is the one
+    // that resolves in both trees. Without this the suite's program rejects it
+    // and never reaches a finding.
+    "allowImportingTsExtensions": true,
+    "lib": ["esnext"],
+    "types": ["@cloudflare/workers-types"],
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "strict": false
+  },
+  // vitest.config.js is here deliberately. It is the file that decides which
+  // runtime the suite gets, so a program covering the suite and skipping its
+  // configuration covers the tests and not the thing that makes them tests.
+  "include": ["../cal/test/**/*.js", "../cal/test/**/*.d.ts", "../cal/vitest.config.js"]
+}

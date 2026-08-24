@@ -4,6 +4,10 @@
 // explanation makes: name the reader's problem, state the model, show the
 // evidence and uncertainty, then ask the reader to reconstruct the mechanism.
 
+// The tuple annotation is load-bearing for the checker rather than decoration:
+// inferred from the literal alone this is `(string | RegExp)[][]`, so the
+// `pattern` destructured out of it below has no `.test`.
+/** @type {[RegExp, string][]} */
 const BANNED_PATTERNS = [
   [/\u2014|&mdash;|&#8212;/, "em dashes"],
   [/\b(?:delve|leverage|utili[sz]e|robust|game[- ]changer|cutting[- ]edge)\b/i, "AI or marketing filler"],

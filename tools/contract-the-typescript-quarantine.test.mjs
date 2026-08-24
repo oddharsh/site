@@ -138,15 +138,52 @@ test("every auxiliary Worker has a tsc program, and something runs it", async ()
   // The other direction, so a program cannot be written and left unwired. Every
   // tsconfig in config/ has to be run by something, which is the failure that
   // made the aux Workers orphans in the first place, one level up.
-  const orphaned = readdirSync(`${root}config`)
-    .filter((f) => /^tsconfig\..+\.json$/.test(f))
-    // tsconfig.tools.json runs through check-tool-types.mjs, which the script
-    // invokes by tool name rather than by config path. That wrapper exists so
-    // diagnostics can be filtered to tools/; see its header.
-    .filter((f) => f !== "tsconfig.tools.json")
-    .filter((f) => !rootTypecheck.includes(`config/${f}`) && !ranBy.has(`config/${f}`));
+  const configs = readdirSync(`${root}config`).filter((f) => /^tsconfig\..+\.json$/.test(f));
+
+  // A THIRD WAY TO BE RUN, and it is now the common one: through a wrapper.
+  // Several programs hold files from two runtimes at once, so their diagnostics
+  // have to be filtered to the tree the program can legitimately judge, and a
+  // package script therefore names `tools/check-*.mjs` rather than the config.
+  // This arm used to be a single hardcoded exemption for tsconfig.tools.json,
+  // which is the same allowlist habit the rest of this file is about: the two
+  // test-suite programs added on 2026-08-23 landed on it immediately. So the
+  // wrappers are READ instead. A config counts as run when some wrapper names
+  // it AND a script names that wrapper — both halves, because a wrapper nothing
+  // invokes is decoration and a script pointing at a wrapper that checks
+  // nothing is worse.
+  //
+  // WHAT THIS ARM DOES NOT PROVE, stated because the obvious control is weaker
+  // than it looks. It asks whether SOME script names the wrapper, not whether
+  // the invocation that names it reaches this particular config:
+  // check-test-types.mjs takes `--only`, so lens-reader's script runs one of its
+  // two programs. Unwiring a single caller therefore leaves the arm satisfied,
+  // and the control that bites is unwiring every caller (run 2026-08-23: both
+  // configs reported orphaned). Modelling the flag here would mean
+  // reimplementing the wrapper's selection inside the test, which is the shape
+  // of check that can only ever agree with itself. The claim is the useful one
+  // either way: a config cannot be written and left with nothing pointing at it.
+  const scripts = [rootTypecheck, ...await Promise.all(projects.map(async (name) => {
+    const own = JSON.parse(await readFile(new URL(`${name}/package.json`, ROOT), "utf8"));
+    return own.scripts?.typecheck ?? "";
+  }))].join(" ");
+
+  const wrappedBy = new Map();
+  for (const file of readdirSync(`${root}tools`).filter((f) => f.startsWith("check-") && f.endsWith(".mjs"))) {
+    const source = await readFile(new URL(`tools/${file}`, ROOT), "utf8");
+    for (const config of configs) {
+      if (source.includes(`config/${config}`) && scripts.includes(`tools/${file}`)) wrappedBy.set(config, file);
+    }
+  }
+
+  const orphaned = configs.filter((f) =>
+    !rootTypecheck.includes(`config/${f}`) && !ranBy.has(`config/${f}`) && !wrappedBy.has(f));
   assert.deepEqual(orphaned, [],
     `a tsconfig exists that nothing runs: ${orphaned.join(", ")}`);
+
+  // The wrapper arm has to have MATCHED something, or a rename in tools/ turns
+  // it into a filter that exempts nothing while this test still reports green.
+  assert.ok(wrappedBy.size >= 1,
+    "no tsconfig resolved through a tools/check-*.mjs wrapper — the wrapper scan has lost its target");
 });
 
 // A TOOL MAY NOT SPAWN A PACKAGE MANAGER. Every script in tools/ runs under
