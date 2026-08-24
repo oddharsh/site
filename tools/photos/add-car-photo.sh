@@ -13,7 +13,10 @@
 # here and cropped at render — no distortion.
 #
 # No EXIF, no R2: these are small static reference images, not gallery photos.
-set -e
+#
+# pipefail because every measurement below reads through a pipe into awk, and
+# without it a failed sips reports awk's status instead of its own.
+set -euo pipefail
 
 STEM="${1:?usage: add-car-photo.sh <stem> <input-image>}"
 SRC="${2:?usage: add-car-photo.sh <stem> <input-image>}"
