@@ -44,6 +44,10 @@ import { accessSync, constants as fsConstants, existsSync, readdirSync, readFile
 import { delimiter, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { ZSTD_DICTIONARY_PROBE, interpretZstdProbe } from "./lib/bun-pin.ts";
+
+class SkipBuildComparison extends Error {}
+
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const BUILD = join(ROOT, ".build");
 const SHADOW = join(ROOT, ".build.node-baseline");
@@ -92,35 +96,20 @@ const record = (name, ok, detail) => {
 // ---------------------------------------------------------------------------
 // 1. the silent one: does zstd honour `dictionary`?
 // ---------------------------------------------------------------------------
-// Three compressions of one target: no dictionary, the right dictionary, a
-// wrong one. An engine that honours the option prints a SMALLER number for the
-// right dictionary alone. An engine that ignores it prints the same number
-// three times, which is why the byte count is the only available signal.
-const PROBE = `
-import { zstdCompressSync } from "node:zlib";
-const target = Buffer.from(("export const NAV_SHELL = {taskbar:1,start:1,clock:1};").repeat(400));
-const n = (o) => zstdCompressSync(target, o).length;
-console.log(JSON.stringify({
-  none:  n({}),
-  good:  n({ dictionary: target.subarray(0, 4096) }),
-  wrong: n({ dictionary: Buffer.alloc(4096, 0x78) }),
-}));
-`;
+// The probe itself lives in lib/bun-pin.ts, because `bump-bun-pin.ts` runs the
+// same three compressions against a candidate runtime and two copies of one
+// measurement agree on the day they are written and rot separately after. A
+// contract test fails if either file re-declares it.
 {
-  const out = run(bun, ["-e", PROBE]);
-  let parsed = null;
-  try { parsed = JSON.parse(out.stdout.trim()); } catch { /* left null on purpose */ }
-  if (!parsed) {
-    record("zstd honours `dictionary`", false, `probe did not run: ${(out.stderr || "").trim().split("\n")[0] || "no output"}`);
-  } else {
-    const honoured = parsed.good < parsed.none && parsed.wrong >= parsed.none;
-    record(
-      "zstd honours `dictionary`",
-      honoured,
-      `${parsed.none} none / ${parsed.good} good / ${parsed.wrong} wrong` +
-        (honoured ? "" : "  <-- SILENT: every dcz delta would be plain zstd"),
-    );
-  }
+  const out = run(bun, ["-e", ZSTD_DICTIONARY_PROBE]);
+  const verdict = interpretZstdProbe(out.stdout);
+  record(
+    "zstd honours `dictionary`",
+    verdict.honoured === true,
+    verdict.honoured === null
+      ? `probe did not run: ${(out.stderr || "").trim().split("\n")[0] || "no output"}`
+      : verdict.detail + (verdict.honoured ? "" : "  <-- SILENT: every dcz delta would be plain zstd"),
+  );
 }
 
 // A failure here disqualifies the runtime, so stop rather than spend two builds
@@ -163,9 +152,37 @@ const timedBuild = (label, cmd, args) => {
   return ms;
 };
 
+// NODE CANNOT RUN THIS BUILD ANY MORE, so the baseline half of this comparison
+// is gone. Measured 2026-08-24 on unmodified main: `lib/link-integrity.ts` has
+// parsed documents with HTMLRewriter since 2026-08-20 rather than
+// pattern-matching them, HTMLRewriter is a bun and workerd global, and `node
+// tools/build.ts` dies with `ReferenceError: HTMLRewriter is not defined`
+// before writing anything. The same line took the nightly dictionary roll down
+// for three nights (#567).
+//
+// A 20ms probe rather than a 25s build that ends in a stack trace, because the
+// question is settled and the reason is worth naming at the point of failure.
+//
+// WHAT REPLACES IT is `bun run bun:pin`, which compares a CANDIDATE bun against
+// the PINNED one and is the comparison that matters now: production builds with
+// `bun tools/build.ts`, so bun-versus-bun is the pair that decides whether a
+// content-addressed URL moves. Node was the right baseline while the question
+// was whether to adopt bun at all. That question is answered, and this control
+// is a candidate for retirement rather than repair.
+const nodeCanBuild = run(process.execPath, ["-e", "new HTMLRewriter()"]).status === 0;
+if (!nodeCanBuild) {
+  record(
+    "build output is byte-identical",
+    false,
+    "node cannot run this build at all (HTMLRewriter is not defined), so there is no baseline to diff against",
+  );
+  console.log("         `bun run bun:pin` is the live form of this check: candidate bun against the pinned one.");
+}
+
 if (existsSync(SHADOW)) rmSync(SHADOW, { recursive: true, force: true });
 let restored = false;
 try {
+  if (!nodeCanBuild) throw new SkipBuildComparison();
   rmSync(BUILD, { recursive: true, force: true });
   const nodeMs = timedBuild("node", process.execPath, ["tools/build.ts"]);
   renameSync(BUILD, SHADOW);
@@ -193,6 +210,9 @@ try {
   rmSync(BUILD, { recursive: true, force: true });
   renameSync(SHADOW, BUILD);
   restored = true;
+} catch (err) {
+  // A skip is not a crash. Anything else still is.
+  if (!(err instanceof SkipBuildComparison)) throw err;
 } finally {
   if (!restored && existsSync(SHADOW)) {
     rmSync(BUILD, { recursive: true, force: true });
@@ -221,6 +241,15 @@ try {
 const failed = results.filter((r) => !r.ok);
 console.log("");
 if (failed.length) {
+  // "NOT viable" is a verdict about BUN, and the dead baseline is a verdict
+  // about this script. Saying the first when the second is true would report a
+  // perfectly good runtime as disqualified, which is the wrong way round.
+  if (!nodeCanBuild && failed.length === 1) {
+    console.log("bun:check: cannot run. Bun cleared every question this script can still ask;");
+    console.log("  the node baseline is gone, so the byte-identical comparison has no second side.");
+    console.log("  Use `bun run bun:pin` instead, which compares a candidate bun against the pinned one.");
+    process.exit(2);
+  }
   console.log(`bun:check: NOT viable — ${failed.map((r) => r.name).join("; ")}`);
   process.exit(1);
 }

@@ -1,0 +1,205 @@
+name: Bun pin
+
+# `packageManager: bun@x.y.z` is the one dependency version in this repository
+# that no updater owns, and it is the one that compiles the site.
+#
+# Dependabot watches five ecosystems and none of them reaches this string. The
+# npm updater bumps `@types/bun` and leaves the runtime alone; the `bun`
+# ecosystem reads bun.lock rather than the field, and cannot run here anyway
+# (dependabot-core pins MAX_SUPPORTED_LOCKFILE_VERSION = 1 against our v2
+# lockfiles). So without this job the compiler behind every content-addressed
+# `/a/` and `/i/` URL drifts until somebody remembers to look.
+#
+# THE ANCESTOR is bun-release-watch.yml on the unmerged `ci/bun-release-watch`
+# branch, which watched for ONE version and filed an issue. bun 1.4 shipped on
+# 2026-08-20, so that job's question is answered and this asks the general form.
+# What it keeps from it: stable releases only (a rolling `canary` tag is not
+# pinnable), a numeric version compare so 1.10 does not read as older than 1.4,
+# and holding no Cloudflare credential.
+#
+# It differs in that it does not stop at noticing. `bun:pin` runs every gate and
+# the PR arrives carrying the evidence: the zstd capability probe, the lockfile
+# format in both directions, a byte-identical build against the pinned runtime,
+# and the contract suite. A bun bump that changes one output byte is a
+# dictionary roll and a CSP hash change wearing a version string, so a PR that
+# has not proved otherwise is worth less than no PR.
+#
+# Shape borrowed from dictionary-roll.yml: nightly, exit quietly when there is
+# nothing to say, one long-lived branch force-pushed, and never a push to a
+# protected ref. `main` takes zero bypass actors on purpose, so merging stays a
+# human call.
+
+on:
+  schedule:
+    - cron: "40 9 * * *" # after dictionary-roll at 09:30, so two PR-opening jobs do not interleave
+  workflow_dispatch:
+    inputs:
+      to:
+        description: "Pin this exact version instead of the newest stable release"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bun-pin
+  cancel-in-progress: false
+
+jobs:
+  pin:
+    name: Propose the newest stable bun, if it earns it
+    runs-on: ubuntu-latest
+    # Two full builds plus the suite plus a download. The budget is generous
+    # because the expensive path runs a few times a year; every other night the
+    # job exits at the version compare in seconds.
+    timeout-minutes: 25
+    permissions:
+      # Both are GITHUB token scopes. This job holds no Cloudflare credential at
+      # all, so the standing rule about never giving CI a Cloudflare token that
+      # can write is untouched. `contents: write` reaches only the branch below
+      # and cannot reach `main` or `production`, which carry rulesets with zero
+      # bypass actors.
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Check out main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up bun
+        # The PINNED bun, and it is the baseline half of the comparison rather
+        # than a convenience. bump-bun-pin.ts refuses to run if the runtime it
+        # is under disagrees with packageManager, because a stale bun would
+        # compare the candidate against a third runtime and report a
+        # byte-identical build that says nothing about what production ships.
+        uses: ./.github/actions/setup-bun
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run every gate, and write the pin if they all pass
+        id: pin
+        env:
+          # Raises the unauthenticated 60/hr per-IP limit that shared runners
+          # exhaust. Same reasoning as the rulesets tier in infra:check.
+          GITHUB_TOKEN: ${{ github.token }}
+          TO: ${{ inputs.to }}
+        run: |
+          set -euo pipefail
+
+          before=$(bun -e 'process.stdout.write(require("./package.json").packageManager)')
+
+          # gotcha 40: read the status without a pipe in front of it. A `| tee`
+          # here would hand $? to tee and report every failed gate as a pass.
+          set +e
+          if [ -n "${TO:-}" ]; then
+            bun run bun:pin --write --to "$TO" > pin.log 2>&1
+          else
+            bun run bun:pin --write > pin.log 2>&1
+          fi
+          status=$?
+          set -e
+          cat pin.log
+
+          after=$(bun -e 'process.stdout.write(require("./package.json").packageManager)')
+          {
+            echo "before=$before"
+            echo "after=$after"
+            echo "status=$status"
+          } >> "$GITHUB_OUTPUT"
+
+          # THREE OUTCOMES, and only one of them is a failure worth a red run.
+          # Nothing to do exits 0 and moves the pin nowhere. A candidate that
+          # fails a gate exits 1 and is INFORMATION rather than a fault in this
+          # repository, so it is summarised and left green; a red nightly for
+          # "upstream shipped a release we cannot take" is a red nightly nobody
+          # reads. Anything else is a real fault.
+          if [ "$status" -ne 0 ] && [ "$status" -ne 1 ]; then
+            echo "::error title=bun:pin could not run::exit $status"
+            exit "$status"
+          fi
+
+      - name: Open or update the pin PR
+        if: steps.pin.outputs.before != steps.pin.outputs.after
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: chore/bun-pin
+          BEFORE: ${{ steps.pin.outputs.before }}
+          AFTER: ${{ steps.pin.outputs.after }}
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # The gate output goes in the PR body verbatim. A bot PR that says
+          # "bump bun" and nothing else asks a human to re-run the evidence by
+          # hand, which is how a bot PR becomes a rubber stamp.
+          EVIDENCE=$(sed -n '/^  ok  \|^ FAIL /p' pin.log)
+
+          git checkout -B "$BRANCH"
+          git add package.json
+          git commit -m "chore(bun): move the pin from $BEFORE to $AFTER
+
+          Every gate green: the zstd dictionary capability, the committed lockfile
+          in both directions, a byte-identical build against $BEFORE, and the
+          contract suite under the candidate.
+
+          Opened by .github/workflows/bun-pin.yml."
+          git push --force origin "$BRANCH"
+
+          BODY=$(cat <<BODY
+          \`packageManager\` moves **$BEFORE → $AFTER**.
+
+          This is a build change wearing a version string: \`wrangler.jsonc\` builds with \`bun tools/build.ts\`, so the pinned bun is the compiler that mints every content-addressed \`/a/\` and \`/i/\` URL. Nothing else in the repository updates it, which is why this job exists.
+
+          \`\`\`
+          $EVIDENCE
+          \`\`\`
+
+          The byte-identical line is the one that matters. One differing byte re-mints a URL, orphans every \`src/dict/a-dict\` snapshot naming the old hash, and moves the CSP hashes documents are served under.
+
+          Reproduce locally with the pinned bun installed:
+
+          \`\`\`bash
+          bun run bun:pin --from $BEFORE --to ${AFTER#bun@}
+          \`\`\`
+
+          \`@types/bun\` is dependabot's and may lag by a day; that is a wait rather than a fork.
+
+          Merging is a human call, because \`main\` takes no bypass actors.
+          BODY
+          )
+
+          if [ -n "$(gh pr list --head "$BRANCH" --state open --json number --jq '.[].number')" ]; then
+            gh pr edit "$BRANCH" --title "chore(bun): move the pin from $BEFORE to $AFTER" --body "$BODY"
+            echo "PR already open for $BRANCH; the force-push updated it."
+          else
+            gh pr create --base main --head "$BRANCH" \
+              --title "chore(bun): move the pin from $BEFORE to $AFTER" \
+              --body "$BODY"
+          fi
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Bun pin"
+            echo
+            if [ "${{ steps.pin.outputs.before }}" != "${{ steps.pin.outputs.after }}" ]; then
+              echo "Proposed \`${{ steps.pin.outputs.before }}\` → \`${{ steps.pin.outputs.after }}\` on \`chore/bun-pin\`."
+            elif [ "${{ steps.pin.outputs.status }}" = "1" ]; then
+              echo "A newer bun exists and did not clear a gate. Not a fault here; the log says which."
+            else
+              echo "The pin is current."
+            fi
+            echo
+            echo '```'
+            sed -n '1,40p' pin.log 2>/dev/null || echo "(no log)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

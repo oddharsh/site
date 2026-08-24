@@ -3663,7 +3663,27 @@ bun run deploy:direct
     injection class in workflow code is on you to read for. Grep new workflows for
     `\$\{\{` inside `run:` and route values through `env:` instead.
 
-28. **Bun runs this build byte-identically and about twice as fast, and it is
+28. **EVERYTHING BELOW IS THE PRE-ADOPTION RECORD, and both of its verdicts have
+    expired.** Bun was adopted on 2026-08-20 (gotcha 38), so "still not adopted"
+    is history, and `bun run bun:check` CANNOT RUN AT ALL: `lib/link-integrity.ts`
+    parses documents with HTMLRewriter, which node does not have, so the node
+    half of its byte-identical diff dies with `ReferenceError: HTMLRewriter is
+    not defined`. It exits 2 naming that rather than reporting a perfectly good
+    runtime as disqualified. The same line took the nightly dictionary roll down
+    for three nights (#567).
+
+    **`bun run bun:pin` is the live successor**, and it asks the question that
+    replaced this one: not whether to adopt bun, but whether to move
+    `packageManager` to the bun that shipped this week. Node was the right
+    baseline while adoption was the question; now that production builds with
+    `bun tools/build.ts`, bun-against-bun is the pair that decides whether a
+    content-addressed URL moves. It carries five gates and the byte-identical
+    paragraph two paragraphs down is gate 5, unchanged and still the bar.
+
+    Keep the rest for the measurements and for the `Response` finding at the
+    end, which is about runtimes rather than about which one this repo runs.
+
+    **Bun runs this build byte-identically and about twice as fast, and it is
     still not adopted.** `bun run bun:check` is the control, in the same idiom as
     `kitesurf:check`: it probes the zstd dictionary option, diffs a full node
     build against a full bun build file by file, and runs the contract suite

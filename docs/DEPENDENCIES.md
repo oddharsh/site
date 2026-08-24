@@ -27,6 +27,49 @@ If there is no useful leverage, say so explicitly in the PR review. The merged
 PR and its review comment are the changelog record; this file is the durable
 review policy and entry point for future agent runs.
 
+## The one version no ecosystem owns
+
+`package.json`'s `packageManager` field names the bun this repository runs, and
+none of the five ecosystems above reaches it. The npm updater bumps `@types/bun`
+and leaves the runtime alone. Dependabot's own `bun` ecosystem would not help
+either: it reads `bun.lock` rather than the field, and it cannot run here at all
+while dependabot-core pins `MAX_SUPPORTED_LOCKFILE_VERSION = 1` against our v2
+lockfiles.
+
+That is the worst version to leave unowned, because it is the one that compiles
+the site. `wrangler.jsonc`'s build command is `bun tools/build.ts`, so the pinned
+bun mints every content-addressed `/a/` and `/i/` URL production serves. A bump
+that changes one output byte is a dictionary roll and a CSP hash change wearing a
+version string.
+
+`bun run bun:pin` is what owns it, and
+[`.github/workflows/bun-pin.yml`](../.github/workflows/bun-pin.yml) runs it
+nightly and opens a PR when a candidate earns one. Five gates, ordered so the
+cheapest disqualifier runs first:
+
+| gate | refuses |
+|---|---|
+| newest STABLE release, carried by npm too | a rolling `canary`, and a version only half the resolvers can see |
+| older than `minimumReleaseAge` | a runtime younger than the window bunfig applies to a lightningcss patch |
+| zstd honours `dictionary` | the silent one: a runtime that accepts the option and ignores it ships plain zstd as every dcz delta |
+| reads the committed lockfile, writes the same `lockfileVersion` | a format change, which is what 1.4 actually did and what broke dependabot's bun updater |
+| byte-identical build, and the suite | a differing byte, which mints a URL and orphans every `a-dict` snapshot naming the old hash |
+
+The control is permanent, because the previous bun is a known-bad runtime:
+
+```bash
+bun run bun:pin --from 1.3.13 --to 1.3.14
+```
+
+That must fail at the zstd gate with `73 none / 73 good / 73 wrong`, the collapse
+that means the option was ignored. Without it, a run reporting "nothing to do" on
+a day when the pin is already current proves only that the comparison ran.
+
+`@types/bun` stays dependabot's, and the two are allowed to disagree for a day.
+The baseline below already worked that through: the release-age policy once held
+the types pin a release behind the runtime and it caught up on its own, which is
+a wait rather than a fork.
+
 ## Current baseline
 
 - Wrangler 4.125.0 is the exact root pin shared by all Worker projects.

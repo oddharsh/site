@@ -51,6 +51,7 @@
     "kitesurf:check": "bun tools/check-kitesurf.ts",
     "agent:check": "bun tools/check-agent.ts",
     "bun:check": "node tools/check-bun.ts",
+    "bun:pin": "bun tools/bump-bun-pin.ts",
     "early-hints:probe": "bun tools/early-hints-probe.ts",
     "speculation:probe": "bun tools/speculation-probe.ts",
     "csp:sweep": "bun tools/csp-sweep.ts",
