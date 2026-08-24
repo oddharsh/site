@@ -28,6 +28,15 @@
   // public/**/*.js is here for the one island that lives outside src/client:
   // /lwe/ask.js ships from public/ because it is page-specific rather than part
   // of the shell.
+  //
+  // pipelines/**/*.js is browser code too, and its location is the only reason
+  // it reads otherwise. A page generator's `specs/` directory holds the inline
+  // script the generator INJECTS into the page it authors, so
+  // pipelines/lwe/specs/encoding-demo.js runs in a browser on /lwe/encoding and
+  // nowhere else. It sat in no program at all until 2026-08-23. The generators
+  // BESIDE it (`*.mjs`) are node programs and belong to tsconfig.tools.json,
+  // which is why this glob names the extension rather than the directory.
+  //
   // sw.js is EXCLUDED because it is a service worker, not a browser module; it
   // has its own program in tsconfig.sw.json, where its globals are real. This is
   // an exclusion with a checker behind it, not a gap.
@@ -35,6 +44,7 @@
   "include": [
     "../src/client/**/*.js",
     "../src/client/**/*.d.ts",
-    "../public/**/*.js"
+    "../public/**/*.js",
+    "../pipelines/**/*.js"
   ]
 }

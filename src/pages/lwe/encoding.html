@@ -203,9 +203,9 @@ initWhenNear("demo-bpp", function(){var PX=400*266,body=document.getElementById(
 // The luma detail stays crisp at every mode; the chroma detail blurs, for a
 // large drop in stored samples that you can barely see.
 initWhenNear("csCanvas", function(){
-  var c = document.getElementById('csCanvas'); if (!c) return;
+  var c = /** @type {HTMLCanvasElement | null} */ (document.getElementById('csCanvas')); if (!c) return;
   var ctx = c.getContext('2d');
-  var sel = document.getElementById('csMode'), info = document.getElementById('csInfo');
+  var sel = /** @type {HTMLSelectElement | null} */ (document.getElementById('csMode')), info = document.getElementById('csInfo');
   var W = c.width, H = c.height;
   // build the source test card once
   var src = ctx.createImageData(W, H), s = src.data;

@@ -4,6 +4,14 @@ import worker from "../src/index.js";
 
 const context = () => ({ waitUntil() {}, tracing: null });
 
+// `Response.json()` resolves to `unknown`, which is the honest type for a body
+// nobody has validated and is also unindexable, so `(await res.json()).parked`
+// does not compile. Asserting the shape here would be asserting the thing under
+// test, so this narrows rather than describes: the assertions below are what say
+// what the payload contains.
+/** @param {Response} response @returns {Promise<any>} */
+const readJson = (response) => response.json();
+
 test("a parked screenshot request never starts a browser", async () => {
   let called = false;
   const response = await worker.fetch(
@@ -14,7 +22,7 @@ test("a parked screenshot request never starts a browser", async () => {
 
   assert.equal(response.status, 503);
   assert.equal(called, false);
-  assert.equal((await response.json()).parked, true);
+  assert.equal((await readJson(response)).parked, true);
 });
 
 test("an opted-in screenshot delegates the bounded operation to Browser Run", async () => {
@@ -107,7 +115,7 @@ const refuse = (body, init) => worker.fetch(
 
 test("a spent Browser Run budget is reported as OUR limit, not an upstream fault", async () => {
   const response = await refuse({ errors: [{ code: 2001 }] }, { status: 429 });
-  const payload = await response.json();
+  const payload = await readJson(response);
 
   assert.equal(response.status, 429, "a 502 here sends the reader to debug a page that is fine");
   assert.equal(payload.budget, true);

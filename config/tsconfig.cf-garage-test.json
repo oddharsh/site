@@ -1,0 +1,35 @@
+{
+  // tsconfig.cf-garage-test.json — the Garage demo Worker's `node --test` suite.
+  //
+  // NODE GLOBALS, unlike tsconfig.cf-garage.json beside it, and the split is the
+  // whole reason this is a second program: the SOURCE runs on workerd and the
+  // TEST runs on node, so no single `types` entry is right for both. Declaring
+  // the union instead would let a Workers-only call pass in a node file and a
+  // node-only call pass in a Worker, which is the accuracy every program header
+  // in this directory is protecting.
+  //
+  // The consequence is that importing the Worker pulls cf-garage/src in against
+  // the wrong globals: `fetch(url, { cf: { ... } })` reads as `'cf' does not
+  // exist in type 'RequestInit'` here and is clean next door. That diagnostic is
+  // a missing declaration rather than a finding, so this program is NOT run
+  // bare. `bun run typecheck:tests` filters to cf-garage/test/ and asserts the
+  // program holds every test file on disk, which is the floor that keeps the
+  // filter from quietly scanning nothing.
+  "compilerOptions": {
+    "noEmit": true,
+    "allowJs": true,
+    "checkJs": true,
+    "target": "esnext",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "lib": ["esnext"],
+    // bun-types carries node's globals, which is what these tests run on. Same
+    // entry tsconfig.tools.json uses, for the same reason.
+    "types": ["bun"],
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "strict": false
+  },
+  "include": ["../cf-garage/test/**/*.mjs"]
+}

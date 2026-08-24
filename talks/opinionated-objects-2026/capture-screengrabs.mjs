@@ -79,7 +79,7 @@ await page.waitForFunction(() => {
 // The Human pane renders from Browser Run and arrives last. Without this the
 // left third of frames 1 and 2 photographs as a blank white box.
 await page.waitForFunction(() => {
-  const p = document.querySelector(".lx-pane, .lx-compare");
+  const p = /** @type {HTMLElement | null} */ (document.querySelector(".lx-pane, .lx-compare"));
   return p && (p.querySelector("img, iframe, canvas") || (p.innerText || "").length > 400);
 }, { timeout: 60000 }).catch(() => console.log("warning: human pane did not render in time"));
 

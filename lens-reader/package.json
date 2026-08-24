@@ -9,8 +9,8 @@
     "dev": "wrangler dev -c wrangler.toml",
     "deploy": "wrangler deploy -c wrangler.toml --x-provision=false --x-auto-create=false",
     "tail": "wrangler tail -c wrangler.toml",
-    "comment:typecheck": "Runs from HERE rather than from the root `typecheck` script, because this project is deliberately out of the workspace and readability/linkedom live in lens-reader/node_modules. Wired into the root script instead, CI fails with TS2307 on both imports while every workstation that has run an install here stays green, which is the split CLAUDE.md records about the root contract suite arriving through a second door. tsc itself comes from the root install; only the dependency graph is local.",
-    "typecheck": "node ../node_modules/typescript/bin/tsc -p ../config/tsconfig.lens-reader.json",
+    "comment:typecheck": "Runs from HERE rather than from the root `typecheck` script, because this project is deliberately out of the workspace and readability/linkedom live in lens-reader/node_modules. Wired into the root script instead, CI fails with TS2307 on both imports while every workstation that has run an install here stays green, which is the split CLAUDE.md records about the root contract suite arriving through a second door. tsc itself comes from the root install; only the dependency graph is local. The test suite is a SECOND program (config/tsconfig.lens-reader-test.json) because it runs on node while src/ runs on workerd, and it goes through check-test-types.mjs rather than tsc directly: importing ../src/reader.js pulls the Worker's crawl.ts in against node globals, and those diagnostics are missing declarations rather than findings.",
+    "typecheck": "node ../node_modules/typescript/bin/tsc -p ../config/tsconfig.lens-reader.json && node ../tools/check-test-types.mjs --only lens-reader",
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {

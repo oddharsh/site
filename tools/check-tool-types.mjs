@@ -13,45 +13,36 @@
 // keeps that filter honest: a wrapper that reports nothing because it scanned
 // nothing looks identical to a clean run, which is this repo's most-repeated
 // failure (see the route invariant's own floor in build.mjs).
-import { execFileSync } from "node:child_process";
+// The run-and-filter half lives in tools/lib/tsc-scope.mjs, shared with
+// check-test-types.mjs. Two copies of a diagnostic filter that each have to keep
+// their own floor honest is the drift this repo names everywhere else.
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { runScopedTsc } from "./lib/tsc-scope.mjs";
 
 const REPO = dirname(dirname(fileURLToPath(import.meta.url)));
 const TSC = join(REPO, "node_modules", "typescript", "bin", "tsc");
 
-let out = "";
-try {
-  out = execFileSync(process.execPath, [TSC, "-p", join(REPO, "config/tsconfig.tools.json")], {
-    encoding: "utf8", cwd: REPO,
-  });
-} catch (e) {
-  out = `${e.stdout || ""}\n${e.stderr || ""}`;
-}
+// THE TREES THIS PROGRAM JUDGES, which is wider than its name. tools/ is most
+// of it; pipelines/ (the page generators) and talks/ (the deck builder) are the
+// same kind of program on the same runtime, and they joined tsconfig.tools.json
+// on 2026-08-23. Filtering on `tools/` alone after that widening would have put
+// their diagnostics in the foreign bucket, so the include would have bought
+// coverage on paper and judged nothing.
+const OWNED = ["tools/", "pipelines/", "talks/"];
 
-const lines = out.split("\n").filter((l) => /error TS\d+/.test(l));
-if (out.includes("error TS5") && !lines.length) {
-  console.error(`check-tool-types: tsc could not run the program:\n${out.trim().slice(-600)}`);
-  process.exit(1);
-}
-
-const mine = lines.filter((l) => l.startsWith("tools/"));
-const foreign = lines.length - mine.length;
+const { mine, foreign, ownedFiles, byFile } = runScopedTsc({
+  repo: REPO, tsc: TSC, owns: OWNED, label: "check-tool-types",
+  config: join(REPO, "config/tsconfig.tools.json"),
+});
 
 // The floor. tsc emits one line per diagnostic and nothing when clean, so an
-// empty `lines` is only trustworthy if the program actually held files.
-const listed = execFileSync(process.execPath, [TSC, "-p", join(REPO, "config/tsconfig.tools.json"), "--listFilesOnly"], { encoding: "utf8", cwd: REPO })
-  .split("\n").filter((f) => f.includes("/tools/") && f.endsWith(".mjs")).length;
+// empty diagnostic list is only trustworthy if the program actually held files.
+const listed = ownedFiles.filter((f) => f.endsWith(".mjs") || f.endsWith(".ts")).length;
 if (listed < 50) {
-  console.error(`check-tool-types: the program holds only ${listed} tools files — it has lost the directory, not the errors`);
+  console.error(`check-tool-types: the program holds only ${listed} owned files — it has lost a directory, not the errors`);
   process.exit(1);
-}
-
-const byFile = new Map();
-for (const l of mine) {
-  const f = l.slice(0, l.indexOf("("));
-  byFile.set(f, (byFile.get(f) || 0) + 1);
 }
 
 // A RATCHET, not a wall. tools/ carries 124 errors today, so a check that simply
@@ -85,7 +76,7 @@ for (const f of Object.keys(declared.files)) {
 }
 
 for (const [f, n] of [...byFile].sort((a, b) => b[1] - a[1])) console.log(`  ${String(n).padStart(3)}  ${f}`);
-console.log(`check-tool-types: ${mine.length} error(s) across ${byFile.size} of ${listed} tools files` +
+console.log(`check-tool-types: ${mine.length} error(s) across ${byFile.size} of ${listed} owned files` +
   (foreign ? ` (${foreign} in transitively-imported non-tools files, not reported — see the header)` : ""));
 
 if (problems.length) {
