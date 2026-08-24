@@ -464,15 +464,19 @@ test("the hashed policy REPLACES the asset layer's generic stamp, and never a be
 });
 
 test("the hashed policy is well-formed and keeps 'self' for the external scripts", async () => {
-  const { cspHeadersFor, ENFORCE_PAGE_HASHES } = await import("../src/worker/lib/security.ts");
+  const { cspHeadersFor } = await import("../src/worker/lib/security.ts");
   const csp = cspHeadersFor("/anything-unmapped")["content-security-policy"];
 
   // the fallback is exactly today's policy, so an unmapped page is never a regression
   assert.match(csp, /script-src 'self' 'unsafe-inline';/);
   assert.match(csp, /default-src 'self';/);
   assert.match(csp, /object-src 'none';/);
-  // no report-only twin when there is nothing stricter to report against
-  assert.equal(cspHeadersFor("/anything-unmapped")["content-security-policy-report-only"], undefined);
+  // EXACTLY ONE header, always. The rollout flag that made this a pair went on
+  // 2026-08-23; before it did, the hashed policy could ship under a second header
+  // name while the enforcing one stayed loose, and this asserts that shape cannot
+  // come back by accident. Count the keys rather than probing one name, since a
+  // twin under any other spelling is the same regression.
+  assert.deepEqual(Object.keys(cspHeadersFor("/anything-unmapped")), ["content-security-policy"]);
 
   // Rebuild the hashed arm against a stub map, so this asserts the SHAPE the
   // build's output will take rather than waiting on a staged tree.
@@ -481,7 +485,8 @@ test("the hashed policy is well-formed and keeps 'self' for the external scripts
   try {
     mod.PAGE_SCRIPT_HASHES["/probe"] = ["AAAA", "BBBB"];
     const pair = cspHeadersFor("/probe");
-    const hashed = pair[ENFORCE_PAGE_HASHES ? "content-security-policy" : "content-security-policy-report-only"];
+    assert.deepEqual(Object.keys(pair), ["content-security-policy"]);
+    const hashed = pair["content-security-policy"];
     assert.match(hashed, /script-src 'self' 'sha256-AAAA' 'sha256-BBBB';/);
     // 'strict-dynamic' would make 'self' inert for scripts and break /a/nav.js,
     // /tooltip.js, /hoist.js and the homepage's dynamic import()s.
@@ -493,30 +498,26 @@ test("the hashed policy is well-formed and keeps 'self' for the external scripts
 
     // a document with no inline script at all earns the strictest form
     mod.PAGE_SCRIPT_HASHES["/empty"] = [];
-    const bare = cspHeadersFor("/empty");
-    const bareCsp = bare[ENFORCE_PAGE_HASHES ? "content-security-policy" : "content-security-policy-report-only"];
+    const bareCsp = cspHeadersFor("/empty")["content-security-policy"];
     assert.match(bareCsp, /script-src 'self';/);
 
-    // while the flag is off, the ENFORCING header must still be the loose one:
-    // that is the whole point of the report-only phase.
-    if (!ENFORCE_PAGE_HASHES) {
-      assert.match(pair["content-security-policy"], /script-src 'self' 'unsafe-inline';/);
-      // A browser IGNORES upgrade-insecure-requests in a report-only policy and
-      // files a security issue saying so, on every page load (found in DevTools
-      // 2026-08-07, and in a Cloudflare URL Scanner run the same day).
-      assert.doesNotMatch(hashed, /upgrade-insecure-requests/,
-        "a report-only policy must omit directives the browser cannot report");
-      // The other half, which absence alone cannot express: the ENFORCING policy
-      // must still carry it. Asserting only the omission passes just as happily
-      // if the directive falls out of both.
-      assert.match(pair["content-security-policy"], /upgrade-insecure-requests/);
-      // And everything else must still match, or the two tails have drifted into
-      // being two policies rather than one policy minus an inert directive.
-      assert.equal(
-        pair["content-security-policy"].replace(/script-src [^;]*;/, ""),
-        `${pair["content-security-policy-report-only"].replace(/script-src [^;]*;/, "")}; upgrade-insecure-requests`,
-      );
-    }
+    // upgrade-insecure-requests must be PRESENT. It used to be the directive the
+    // report-only twin had to drop, because a browser ignores it in a reporting
+    // policy and files a security issue per page load (DevTools 2026-08-07). With
+    // one policy left, the assertion inverts: the only way to get this wrong now
+    // is to lose it, and asserting the omission is what would pass just as
+    // happily if the directive fell out of everything.
+    assert.match(hashed, /upgrade-insecure-requests/);
+    assert.match(bareCsp, /upgrade-insecure-requests/);
+
+    // The hashed and loose policies are ONE policy differing only in script-src.
+    // That was previously checked between the enforcing header and its twin; the
+    // twin is gone, so it is checked between the two arms that remain.
+    assert.equal(
+      hashed.replace(/script-src [^;]*;/, ""),
+      cspHeadersFor("/anything-unmapped")["content-security-policy"].replace(/script-src [^;]*;/, ""),
+      "the hashed and loose policies must differ in script-src alone",
+    );
   } finally {
     for (const k of Object.keys(mod.PAGE_SCRIPT_HASHES)) delete mod.PAGE_SCRIPT_HASHES[k];
     Object.assign(mod.PAGE_SCRIPT_HASHES, original);

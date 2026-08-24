@@ -897,7 +897,7 @@ Single-page personal site at `aadhar.sh`. A Cloudflare Worker with static assets
 | `src/client/sw.js` | RETIRED (v136, 2026-07-03): now a ~15-line unregister stub (skipWaiting, delete caches, claim, unregister) that must keep serving 200 for a year+ so installed copies clean themselves up. No CACHE_VERSION anymore; the deploy-log vnum is staged in `checkpoints.json` and recorded in D1 by the ramp (bump-version.sh mints the next from that projection). Repeat-visit speed comes from immutable assets + bfcache + speculation prerender. |
 | `public/llms.txt` | The llms.txt format — concise site summary for LLMs. Linked from `<link rel="alternate">`. |
 | `public/index.md` | Markdown source of homepage copy (used by `/llms.txt` and as a fallback). The one COMMITTED Markdown twin: `gen-md-twins.mjs` skips any path that already has one, so this hand-written prose is never regenerated over. |
-| `public/md/` | Hand-authored Markdown twins for the three Worker-rendered prose pages, `/bot`, `/whoareyou` and `/security`, whose text lives in template literals no build step can read. `.assetsignore`d (build input, not a public URL): the generator publishes them at `/bot.md`, `/whoareyou.md` and `/security.md`. `checkTwinFacts()` pins the load-bearing strings against the Worker in BOTH directions, so bumping `BOT_VERSION` fails the deploy until `bot.md` agrees. `security.md`'s pins read `lib/security.ts` rather than the page, since a page ABOUT headers must agree with the module that SENDS them; one of them is derived from `ENFORCE_PAGE_HASHES`, so finishing the hashed-CSP rollout fails the deploy until the twin stops calling the policy report-only. |
+| `public/md/` | Hand-authored Markdown twins for the three Worker-rendered prose pages, `/bot`, `/whoareyou` and `/security`, whose text lives in template literals no build step can read. `.assetsignore`d (build input, not a public URL): the generator publishes them at `/bot.md`, `/whoareyou.md` and `/security.md`. `checkTwinFacts()` pins the load-bearing strings against the Worker in BOTH directions, so bumping `BOT_VERSION` fails the deploy until `bot.md` agrees. `security.md`'s pins read `lib/security.ts` rather than the page, since a page ABOUT headers must agree with the module that SENDS them; one of them is derived from the header set `cspHeadersFor` actually emits, so reintroducing a report-only twin fails the deploy until `security.md` stops claiming `'unsafe-inline'` is gone. It read the `ENFORCE_PAGE_HASHES` flag until that flag was deleted on 2026-08-23; reading the emitted headers is the better check, since a flag states an intention and the headers state what ships. |
 | `public/sitemap.xml`, `robots.txt` | Standard SEO files. robots.txt explicitly allows AadharshBot. |
 | `public/.well-known/http-message-signatures-directory` | JWKS for AadharshBot's Ed25519 public key (Web Bot Auth IETF draft). |
 | `public/images/` + `public/i/` | `images/` holds the photo DATA surfaces: `metadata.json` (the EXIF RECORD, long field names + the Fuji recipe card), `exif.json` (the tooltip's TEXT tier: every photo's short-key EXIF in one 2.6KB-brotli file, warmed once on idle because the homepage draws a fresh random 12 of 158 per request and a per-slot warm-up was cold nearly every visit), `meta/<stem>.json` (per-photo EXIF plus the four 64-bin histogram channels — the BARS tier, fetched only on the hover that needs them, and the self-healing fallback for a stem missing from a cached `exif.json`), `alt.json` (AI captions), `hashes.json` (stem to hash8 map). The pixel tiers (600px AVIF+JPG squares, plus 400px and 200px AVIF) live in `i/` under content-hashed names, 632 files for 158 photos. |
@@ -2852,9 +2852,14 @@ bun run deploy:direct
     `/ on\w+=/` over the raw tag calls that an event handler.
 
     **The rollout FINISHED on 2026-08-16, and the report-only era is worth reading
-    as a lesson about evidence rather than as history.** `ENFORCE_PAGE_HASHES` is
-    TRUE, the twin is gone, and `script-src` carries no `'unsafe-inline'` on the 48
-    hashed documents. You still cannot hedge inside one header: a browser that
+    as a lesson about evidence rather than as history.** `script-src` carries no
+    `'unsafe-inline'` on the 48 hashed documents. `ENFORCE_PAGE_HASHES` was DELETED
+    on 2026-08-23, a week after it was pinned true, along with the report-only
+    header, the second tail constant, and the `tail` parameter both policy builders
+    carried to feed it; `cspHeadersFor` returns exactly one header now and a
+    contract test counts the keys, so the pair shape cannot return by accident.
+    Rolling back is `git revert` rather than a flag, and `bun run csp:sweep` is the
+    signal that would call for one. You still cannot hedge inside one header: a browser that
     understands hashes IGNORES `'unsafe-inline'` in the same directive, which is why
     the two policies had to be two headers while both shipped.
 

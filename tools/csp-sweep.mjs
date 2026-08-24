@@ -1,14 +1,15 @@
 // Sweep every hashed document against the ENFORCING hashed CSP and report any
-// blocked script. This is the evidence ENFORCE_PAGE_HASHES was always supposed to
-// be flipped on, and the reason it needs a sweep rather than a page load is that
-// the failure is silent: a blocked inline script leaves the page rendering and
-// merely dead.
+// blocked script. This was the evidence that flipped the ENFORCE_PAGE_HASHES
+// rollout flag on (2026-08-16), and it outlived the flag's deletion (2026-08-23)
+// because the thing it measures did not change: the failure is silent, so a
+// blocked inline script leaves the page rendering and merely dead. With no flag
+// left, this IS the rollback signal.
 //
 // Reads securitypolicyviolation events rather than the console, because that is
 // the authoritative signal and it carries the directive and the blocked sample.
 //
 // Run it against a LOCALLY BUILT worker (`wrangler dev -c wrangler.jsonc`), never
-// the readable dev tree: the committed hash map is empty by design, so `pnpm run
+// the readable dev tree: the committed hash map is empty by design, so `bun run
 // dev` serves every page loose and this would sweep 48 documents that cannot fail.
 //
 // PROVE THE INSTRUMENT BEFORE BELIEVING A GREEN RUN. Two ways this reports a clean
