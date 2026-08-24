@@ -385,7 +385,15 @@ async function checkInvariants() {
     // Strip the partial before scanning so this only ever sees hand-written cards.
     const gallery = (await read("src/pages/garage/index.html"))
       .replace(/<!-- axp:shell -->[\s\S]*?<!-- \/axp:shell -->/g, "");
-    const galLinks = new Set([...gallery.matchAll(/href="(\/(?:garage\/[a-z0-9]+|pixel-peeper))"/g)].map((m) => m[1]));
+    // The id class here must match the one the generator ENFORCES, which is
+    // /^[a-z0-9][a-z0-9-]*$/ in pipelines/garage/generate.mjs. It read
+    // `[a-z0-9]+` until 2026-08-24 and no page had ever carried a hyphen, so the
+    // two disagreed silently for as long as both existed: the first hyphenated
+    // id generated fine, registered fine, got a hand-written shelf card, and
+    // then failed this invariant claiming the card was missing from a file it
+    // was sitting in. A scanner narrower than the names it scans for reports an
+    // absence rather than a mismatch, which sends you looking at the wrong file.
+    const galLinks = new Set([...gallery.matchAll(/href="(\/(?:garage\/[a-z0-9][a-z0-9-]*|pixel-peeper))"/g)].map((m) => m[1]));
 
     // 8b — each flag is the registry's contract with exactly one surface; assert
     // both directions so neither the registry nor the surface can drift alone.

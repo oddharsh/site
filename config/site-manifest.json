@@ -862,6 +862,42 @@
       }
     },
     {
+      "path": "/garage/typed-config",
+      "title": "The config that types itself",
+      "section": "garage",
+      "kind": "content",
+      "short": "typed config",
+      "description": "Wrangler's hidden TypeScript config, converted on a real Worker: the upload came out byte-identical, a plain-text variable arrived in the type as its own value, and the Durable Object type went backwards.",
+      "hint": "what a config that is a program buys, and what it loses",
+      "flags": {
+        "run": true,
+        "taskbar": false,
+        "sitemap": true,
+        "gallery": true,
+        "agents": true,
+        "searchIndex": false,
+        "webmention": true
+      }
+    },
+    {
+      "path": "/garage/hidden-flags",
+      "title": "Flags the docs don't list",
+      "section": "garage",
+      "kind": "content",
+      "short": "hidden flags",
+      "description": "Nineteen hidden flags in one CLI, and the control that separates an option being accepted from an option doing anything: on a closed schema those are two questions, and the first one is free.",
+      "hint": "how to tell an ignored option from an honoured one",
+      "flags": {
+        "run": true,
+        "taskbar": false,
+        "sitemap": true,
+        "gallery": true,
+        "agents": true,
+        "searchIndex": false,
+        "webmention": true
+      }
+    },
+    {
       "path": "/garage/safari27",
       "title": "Safari 27",
       "section": "garage",

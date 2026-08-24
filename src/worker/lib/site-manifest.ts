@@ -301,6 +301,18 @@ export const AGENT_SURFACES = [
     "description": "Sixteen identities against eleven sites: two invented user-agent strings cleared a wall four documented crawler tokens could not, one site caught the lie, and Reddit served a link-preview bot 1,640 words where a browser got one."
   },
   {
+    "path": "/garage/typed-config",
+    "title": "The config that types itself",
+    "kind": "content",
+    "description": "Wrangler's hidden TypeScript config, converted on a real Worker: the upload came out byte-identical, a plain-text variable arrived in the type as its own value, and the Durable Object type went backwards."
+  },
+  {
+    "path": "/garage/hidden-flags",
+    "title": "Flags the docs don't list",
+    "kind": "content",
+    "description": "Nineteen hidden flags in one CLI, and the control that separates an option being accepted from an option doing anything: on a closed schema those are two questions, and the first one is free."
+  },
+  {
     "path": "/garage/safari27",
     "title": "Safari 27",
     "kind": "content",
@@ -397,6 +409,8 @@ export const WEBMENTION_PATHS = [
   "/garage/pretext",
   "/garage/pqc",
   "/garage/useragent",
+  "/garage/typed-config",
+  "/garage/hidden-flags",
   "/garage/safari27",
   "/garage/scroll",
   "/garage/teardown",

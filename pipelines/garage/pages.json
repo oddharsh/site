@@ -26,6 +26,24 @@
       "lastmod": "2026-08-21",
       "navLabel": "user-agent",
       "navHint": "what a crawler name is worth when nothing verifies it"
+    },
+    {
+      "id": "typed-config",
+      "title": "The config that types itself",
+      "summary": "Wrangler's hidden TypeScript config, converted on a real Worker: the upload came out byte-identical, a plain-text variable arrived in the type as its own value, and the Durable Object type went backwards.",
+      "status": "watching",
+      "lastmod": "2026-08-24",
+      "navLabel": "typed config",
+      "navHint": "what a config that is a program buys, and what it loses"
+    },
+    {
+      "id": "hidden-flags",
+      "title": "Flags the docs don't list",
+      "summary": "Nineteen hidden flags in one CLI, and the control that separates an option being accepted from an option doing anything: a closed schema answers the first question for an exit code, and four cases here show what the second one costs when nobody asks it.",
+      "status": "shipped",
+      "lastmod": "2026-08-24",
+      "navLabel": "hidden flags",
+      "navHint": "how to tell an ignored option from an honoured one"
     }
   ]
 }
