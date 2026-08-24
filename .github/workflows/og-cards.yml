@@ -101,7 +101,7 @@ jobs:
       # only the PNG. Running it always keeps a newly added page from shipping a
       # card nothing references.
       - name: Add meta to any page missing it
-        run: node tools/photos/inject-og-meta.mjs
+        run: node tools/photos/inject-og-meta.ts
 
       - name: Anything to propose?
         id: diff

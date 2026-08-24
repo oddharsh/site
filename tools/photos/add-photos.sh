@@ -486,7 +486,7 @@ else
   echo "  python3 missing — skipping alt-text generation"
 fi
 
-node "$PROJECT_DIR/tools/photos/check-photo-pipeline.mjs"
+node "$PROJECT_DIR/tools/photos/check-photo-pipeline.ts"
 echo ""
 
 echo "✓ done. deploy with:"

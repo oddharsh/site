@@ -31,9 +31,9 @@
 //             it is opt-in and the artifact is honest when it is absent.
 //
 // Usage:
-//   node tools/photos/gen-photo-semantics.mjs              # derived only
-//   node tools/photos/gen-photo-semantics.mjs --vision     # + model terms
-//   node tools/photos/gen-photo-semantics.mjs --vision --dry-run
+//   node tools/photos/gen-photo-semantics.ts              # derived only
+//   node tools/photos/gen-photo-semantics.ts --vision     # + model terms
+//   node tools/photos/gen-photo-semantics.ts --vision --dry-run
 //
 //   export CLOUDFLARE_API_TOKEN=...   # the same token gen-alt-text.py uses
 //   export CLOUDFLARE_AI_GATEWAY=""   # opt OUT of gateway routing (defaults to "default")
@@ -128,7 +128,10 @@ function derivedTerms(record) {
   for (const [needle, alias] of CAMERA_ALIASES) {
     if (camera.toUpperCase().includes(needle.toUpperCase())) { out.push(alias); break; }
   }
-  const card = Object.entries(record.recipe || {}).map(([k, v]) => `${k}: ${v}`).join(" ");
+  // The Fuji recipe card is a flat bag of scalars off metadata.json, so
+  // Object.entries yields unknown values that must be stringified explicitly
+  // before they reach a template.
+  const card = Object.entries(record.recipe || {}).map(([k, v]) => `${k}: ${String(v)}`).join(" ");
   for (const [needle, alias] of RECIPE_ALIASES) {
     if (card.toLowerCase().includes(needle.toLowerCase())) out.push(alias);
   }
@@ -188,7 +191,7 @@ const alt = readJson(ALT, {});
 const existing = readJson(OUT, {});
 const stems = Object.keys(metadata);
 
-const out = {};
+const out: Record<string, { terms: string; from: string[]; vision?: string }> = {};
 for (const stem of stems) {
   const record = metadata[stem] || {};
   const derived = derivedTerms(record);
@@ -196,7 +199,10 @@ for (const stem of stems) {
   // The caption is folded in so one field answers the query. It is already
   // scored on its own at a higher weight, and a duplicate hit costs nothing
   // because each term scores once, at its best field.
-  const entry = {
+  // `vision` is attached below only when a vision pass produced one, which is
+  // the distinction the comment there is making, so it is optional here rather
+  // than absent from the shape.
+  const entry: { terms: string; from: string[]; vision?: string } = {
     terms: [derived, prior.vision || "", String(alt[stem] || "").toLowerCase()].filter(Boolean).join(" "),
     from: prior.vision ? ["derived", "vision"] : ["derived"],
   };

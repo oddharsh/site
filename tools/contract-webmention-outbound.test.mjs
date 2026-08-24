@@ -56,7 +56,7 @@ test("outbound self-link list stays in sync with the desktop shell profiles", as
     const bare = (u.host + u.pathname).replace(/^www\./, "").replace(/\/$/, "");
     assert.ok(
       SELF_LINK_HOSTS.some((self) => bare === self || bare.startsWith(self + "/")),
-      `shell-data.mjs PROFILES has ${bare} but webmention-send.js SELF_LINK_HOSTS does not exclude it`
+      `shell-data.ts PROFILES has ${bare} but webmention-send.js SELF_LINK_HOSTS does not exclude it`
     );
   }
 });

@@ -234,7 +234,7 @@ test("homepage selects 12 photos and transfers all of them", async () => {
 
 
 test("the packed histogram survives the round trip tooltip.js does", async () => {
-  const { packHistogram, CHANNELS, BINS, HIST_BASE, HIST_LEVELS } = await import("../tools/photos/build-histogram-index.mjs");
+  const { packHistogram, CHANNELS, BINS, HIST_BASE, HIST_LEVELS } = await import("../tools/photos/build-histogram-index.ts");
   const hi = {};
   for (const [ci, c] of CHANNELS.entries()) hi[c] = Array.from({ length: BINS }, (_, i) => (i * 7 + ci * 13) % 101);
   const packed = packHistogram(hi);
