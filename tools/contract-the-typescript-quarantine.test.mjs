@@ -415,3 +415,60 @@ test("a ramp step hands the remainder to the LARGEST incumbent", () => {
   // Nothing serving yet: a first deploy has no remainder to hand out.
   assert.equal(remainderHolder([], "7634b9d8-fc15"), null);
 });
+
+// ── strictNullChecks is a RATCHET, and it only ever tightens ────────────────
+// `strict` is off everywhere and stays off: it bundles noImplicitAny, measured
+// at 7,197 diagnostics across this repo against strictNullChecks' 1,544, and the
+// two answer different questions. noImplicitAny finds missing annotations on
+// code that was written without types. strictNullChecks finds places a null can
+// actually arrive, which is the half worth having.
+//
+// The six programs below are clean under it and declare it. The list may only
+// GROW: turning the flag off in one of them, or dropping a program from this
+// list while its config still has it, fails here. That is the same mechanism
+// config/ts-migration.json used for the Worker quarantine, pointed the other
+// way — that one could only shrink, this one can only grow.
+//
+// TEXT-BASED on purpose. Proving a program is clean means RUNNING tsc against
+// it, which is what `bun run typecheck` already does on every one of these; a
+// second run per program here would put ~8 compilations on a suite that answers
+// in about a second. What this asserts is the declaration, and typecheck is what
+// makes the declaration true.
+test("every program declared null-safe still declares it", async () => {
+  const { readdirSync } = await import("node:fs");
+
+  const DECLARED = [
+    "tsconfig.cf-garage.json",
+    "tsconfig.cf-garage-test.json",
+    "tsconfig.cal-test.json",
+    "tsconfig.lens-reader.json",
+    "tsconfig.lens-reader-test.json",
+    "tsconfig.lwe-ask.json",
+  ].sort();
+
+  const configs = readdirSync(new URL("config/", ROOT).pathname)
+    .filter((f) => /^tsconfig\..+\.json$/.test(f) || f === "tsconfig.json");
+
+  // A FLOOR on the scan itself, because a test that read no configs would agree
+  // with an empty declaration list and report a clean run.
+  assert.ok(configs.length >= 8,
+    `only ${configs.length} tsconfigs found — this is reading the wrong directory`);
+
+  const strict = [];
+  for (const name of configs) {
+    const source = await readFile(new URL(`config/${name}`, ROOT), "utf8");
+    if (/"strictNullChecks"\s*:\s*true/.test(source)) strict.push(name);
+  }
+
+  const missing = DECLARED.filter((name) => !strict.includes(name));
+  assert.deepEqual(missing, [],
+    `these programs are declared null-safe but no longer set strictNullChecks:\n  ${missing.join("\n  ")}\n` +
+    "The flag comes off only by fixing whatever made it fail, never by editing this list down.");
+
+  // The other direction, so a program that gains the flag joins the record
+  // rather than sitting outside it: a config can be ahead of this list only by
+  // somebody forgetting to add it.
+  const undeclared = strict.filter((name) => !DECLARED.includes(name));
+  assert.deepEqual(undeclared, [],
+    `these programs set strictNullChecks but are not in the declared list: ${undeclared.join(", ")} — add them`);
+});

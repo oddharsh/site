@@ -17,6 +17,19 @@
 
 import { span } from "./trace.ts";
 
+// The one shape this module traffics in: a half-open span of unix-ms. Busy
+// intervals from the feed, expanded recurrences, held coffee slots and generated
+// slots are all this, which is why it is exported rather than repeated inline.
+// Every accumulator below needs it explicitly, because an empty array literal
+// infers `never[]` under strictNullChecks: TypeScript only lets an array evolve
+// from its pushes while that flag is off.
+export type Interval = { start: number, end: number };
+
+// The last-good calendar snapshot as stored in KV. `busy` is optional because
+// every reader already defaults it, and that default is load-bearing rather than
+// defensive: an older deploy's entry may predate the field.
+type BusySnapshot = { ts?: number, busy?: Interval[] };
+
 // ── calendar snapshot (stale-while-revalidate) ──────────────────────────────
 // The ICS upstream can be slow or briefly down, and the old fetchBusy() gated
 // the whole page on it AND returned [] on failure — which silently made EVERY
@@ -57,11 +70,17 @@ export async function fetchBusySWR(env, ctx, { allowStale = false } = {}) {
 async function fetchBusySWRInner(env, ctx, allowStale, s) {
   const kv = env.BOOKINGS;
   const now = Date.now();
-  let snap = null;
+  let snap: BusySnapshot | null = null;
   try { snap = kv ? await kv.get(BUSY_KEY, "json") : null; } catch (e) {
     s.setAttribute("cal.snapshot_read_error", (e && e.message) || String(e));
   }
-  const age = snap && Number.isFinite(snap.ts) ? now - snap.ts : Infinity;
+  // Read once into a local: `Number.isFinite` is not a type guard, so it cannot
+  // narrow `snap.ts` away from `number | undefined` and the subtraction below
+  // stays an error however the ternary is arranged. `!= null` does narrow, and
+  // the pair keeps the original meaning (a missing OR non-finite stamp is not an
+  // age, so both fall through to Infinity).
+  const ts = snap?.ts;
+  const age = ts != null && Number.isFinite(ts) ? now - ts : Infinity;
   // Infinity is not a valid attribute value and "no snapshot" is not an age.
   // Omitted rather than coerced, same discipline as the photo metadata.
   if (Number.isFinite(age)) s.setAttribute("cal.snapshot_age_ms", age);
@@ -135,7 +154,7 @@ function parseICS(text) {
   const windowStart = now - 2 * 86_400_000;                    // catch an in-progress recurrence
   const windowEnd = now + RRULE_HORIZON_DAYS * 86_400_000;
 
-  const busy = [];
+  const busy: Interval[] = [];
   let inEvent = false;
   let dtstart, dtend, status, transp, rrule, exdates;
 
@@ -204,7 +223,7 @@ function expandEvent(dtstart, dtend, rrule, exdates, windowStart, windowEnd) {
   const until = R.UNTIL ? parseICSDate(R.UNTIL, "") : null;
   if (["DAILY", "WEEKLY", "MONTHLY", "YEARLY"].indexOf(freq) === -1) return [iv(dtstart)];  // unknown FREQ → base only
 
-  const out = [];
+  const out: Interval[] = [];
   let n = 0;   // occurrence index (counts toward COUNT even before the window)
   // returns false when the series is exhausted (UTIL / COUNT / cap / past window)
   const stop = (start) => (until && start > until) || (count != null && n >= count) || n >= RRULE_MAX_INSTANCES || start > windowEnd;
@@ -307,7 +326,7 @@ function icsZoneOffsetMinutes(ms, tzid) {
 // conflating the two was a real bug: counting every calendar event toward the
 // daily limit zeroed out availability for anyone with a busy calendar.
 // returns [{start, end}, ...] in unix-ms.
-export function generateSlots(env, busy, bookings = []) {
+export function generateSlots(env, busy: Interval[], bookings: Interval[] = []) {
   const tz       = env.HOST_TIMEZONE;
   const minNotice = +env.MIN_NOTICE_HOURS * 3600_000;
   const lookahead = +env.MAX_LOOKAHEAD_DAYS * 86400_000;
@@ -334,7 +353,7 @@ export function generateSlots(env, busy, bookings = []) {
   // existing coffee booking. limits, below, only count the coffee bookings.
   const conflicts = [...busy, ...bookings];
 
-  const slots = [];
+  const slots: Interval[] = [];
   const dayCounts = {};   // YYYY-MM-DD → count of coffee bookings (pending+confirmed)
   const weekCounts = {};  // YYYY-WW → count
 

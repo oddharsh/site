@@ -428,7 +428,10 @@ export function scoreExtraction({ source, kept, controls, title, markdown }) {
 async function readCapped(response, maxBytes) {
   if (!response.body) return "";
   const reader = response.body.getReader();
-  const chunks = [];
+  // Annotated because an empty literal infers `never[]` under strictNullChecks:
+  // TypeScript only lets an array "evolve" from its pushes while that flag is
+  // off, so without this the push below assigns a chunk to `never`.
+  const chunks: Uint8Array[] = [];
   let total = 0;
   for (;;) {
     const { done, value } = await reader.read();

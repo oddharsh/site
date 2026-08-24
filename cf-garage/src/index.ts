@@ -55,7 +55,10 @@ export class Counter {
     // in without ever clobbering a counter that's already live.
     if (url.searchParams.has("seed")) {
       if (!(await this.state.storage.get("seeded"))) {
-        n = parseInt(url.searchParams.get("seed"), 10) || 0;
+        // `get` answers `string | null` even behind the `has` above, and the old
+        // call leaned on `parseInt(null)` coercing to NaN for the `|| 0` to catch.
+        // `?? ""` reaches the same 0 by a route that is written down.
+        n = parseInt(url.searchParams.get("seed") ?? "", 10) || 0;
         await this.state.storage.put("n", n);
         await this.state.storage.put("seeded", true);
       }

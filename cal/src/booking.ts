@@ -127,8 +127,9 @@ export async function releaseSlot(env, b) {
 // encoded in the key name, so this is one list() with no per-key gets.
 /** @param {any} env @returns {Promise<Slot[]>} */
 export async function listHeld(env) {
-  /** @type {Slot[]} */
-  const held = [];
+  // A REAL annotation. This was `/** @type {Slot[]} */`, which a .ts file
+  // ignores, so the array inferred `never[]` the moment strictNullChecks came on.
+  const held: Slot[] = [];
   let cursor;
   do {
     const page = await env.BOOKINGS.list({ prefix: "held:", cursor });
