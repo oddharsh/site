@@ -243,20 +243,14 @@ test("no tool spawns a package manager by name", async () => {
   assert.deepEqual(offenders, [], `a tool spawns a package manager:\n  ${offenders.join("\n  ")}\n  Use wranglerCommand() from tools/lib/wrangler-bin.ts, which names the runtime instead.`);
 });
 
-// check-bun uses process.execPath as the Node half of its comparison. Running
-// the controller itself under Bun therefore compares Bun with Bun and produces
-// a meaningless green result. Keep both halves mechanical: the package script
-// selects Node, and the tool refuses a direct Bun invocation.
-test("bun:check compares bun against a real node control", async () => {
-  const { readFileSync } = await import("node:fs");
-  const pkg = JSON.parse(readFileSync(new URL("package.json", ROOT), "utf8"));
-  const source = readFileSync(new URL("tools/check-bun.ts", ROOT), "utf8");
-
-  assert.match(pkg.scripts["bun:check"], /^node /, "the controller must run under Node");
-  assert.match(source, /if \(process\.versions\.bun\)/, "the tool must reject a direct Bun invocation");
-  assert.match(source, /timedBuild\("node", process\.execPath,/, "the Node baseline must use the controlling Node executable");
-  assert.doesNotMatch(source, /unlinkSync|symlinkSync/, "the checker must not replace the real contract suite with a temporary link");
-});
+// The `bun:check` assertions stood here until 2026-08-24 and went with the tool
+// they guarded. Their invariant did NOT retire, so read this as a forwarding
+// address rather than a deletion: a comparison whose two halves are the same
+// runtime is a green result with no control, which is why check-bun.ts refused
+// to be invoked through bun. `bump-bun-pin.ts` inherits the same exposure from
+// the other side, since ITS baseline is whatever bun happens to be on PATH, and
+// contract-the-bun-pin-is-declared-once.test.mjs asserts the guard that closes
+// it (the runtime must equal the pin, or the script refuses to run).
 
 // The helper those tools use has to run wrangler under NODE, name no package
 // manager, and resolve the PINNED entry rather than whatever a PATH lookup

@@ -3668,10 +3668,38 @@ bun run deploy:direct
     injection class in workflow code is on you to read for. Grep new workflows for
     `\$\{\{` inside `run:` and route values through `env:` instead.
 
-28. **Bun runs this build byte-identically and about twice as fast, and it is
-    still not adopted.** `bun run bun:check` is the control, in the same idiom as
-    `kitesurf:check`: it probes the zstd dictionary option, diffs a full node
-    build against a full bun build file by file, and runs the contract suite
+28. **EVERYTHING BELOW IS THE PRE-ADOPTION RECORD, and the tool it describes was
+    RETIRED on 2026-08-24.** `bun run bun:check` no longer exists. Bun was
+    adopted on 2026-08-20 (gotcha 38), so "still not adopted" is history, and the
+    control died of something narrower: node cannot build this repo at all any
+    more. `lib/link-integrity.ts` parses documents with HTMLRewriter, which is a
+    bun and workerd global, so `node tools/build.ts` dies with `ReferenceError:
+    HTMLRewriter is not defined` and the NODE half of a node-versus-bun diff has
+    no second side. The same line took the nightly dictionary roll down for three
+    nights (#567).
+
+    **`bun run bun:pin` is what replaced it**, and it asks the question that
+    replaced this one: whether to move `packageManager` to the bun that shipped
+    this week. Node was the right baseline while adoption was the question. Now
+    that production builds with `bun tools/build.ts`, bun-against-bun is the pair
+    that decides whether a content-addressed URL moves. The byte-identical
+    paragraph below is its gate 5, unchanged and still the bar, and the zstd
+    probe moved to `tools/lib/bun-pin.ts` rather than being rewritten.
+
+    Two invariants left with the file and are asserted elsewhere rather than
+    lost. A comparison whose two halves are the same runtime is a green result
+    with no control, which check-bun.ts enforced by refusing to run under bun and
+    bump-bun-pin.ts enforces from the other side by refusing a baseline that is
+    not the pin. And a build comparison must restore `.build/` through a
+    `finally`, since `process.exit()` skips one.
+
+    Keep the rest for the measurements and for the `Response` finding at the
+    end, which is about runtimes rather than about which one this repo runs.
+
+    **Bun runs this build byte-identically and about twice as fast, and it is
+    still not adopted.** `bun run bun:check` WAS the control, in the same idiom as
+    `kitesurf:check`: it probed the zstd dictionary option, diffed a full node
+    build against a full bun build file by file, and ran the contract suite
     under `bun test`. Measured 2026-08-10, node v26.7.0 against bun
     `1.4.0-canary.1+827475e21`:
 
