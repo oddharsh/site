@@ -121,6 +121,14 @@ export const SUB_MANIFEST_POLICY = [
     kind: "npm",
     aliases: [
       { prose: "@mozilla/readability", pkg: "@mozilla/readability" },
+      // htmlparser2 became a DIRECT dependency on 2026-08-23, when src/dom.js
+      // replaced linkedom's DOM layer and left the parser underneath it. The
+      // reverse direction found it the same minute, which is the third time
+      // that direction has caught a real gap.
+      { prose: "htmlparser2", pkg: "htmlparser2" },
+      // linkedom is a devDependency now, kept as the parity oracle for
+      // test/dom-differential.test.mjs. It stays claimed so a bump to the
+      // reference still has to be a documented decision.
       { prose: "linkedom", pkg: "linkedom" },
     ],
     versionless: new Map(),

@@ -12,7 +12,10 @@
 // beside `export default { fetch }`. Same shape as lib/tui.js: pure module,
 // three callers (the Worker, the tests, and anything that wants the numbers).
 import { Readability } from "@mozilla/readability";
-import { parseHTML } from "linkedom";
+// A first-party DOM fitted to what this file and Readability actually call,
+// over the same htmlparser2 linkedom used. See src/dom.ts for the surface count
+// and test/dom-differential.test.mjs for the parity gate that keeps it honest.
+import { parseHTML } from "./dom.ts";
 import { privateHostBlocked, validateLensTarget } from "../../src/worker/lib/crawl.ts";
 
 // Errors whose MESSAGE is deliberately written for the visitor. Everything else

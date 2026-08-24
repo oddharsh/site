@@ -13,31 +13,46 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
-import { parseHTML } from "linkedom";
+import { parseHTML as parseLinkedom } from "linkedom";
+import { parseHTML } from "../src/dom.ts";
 import { collectControlLabels, countControls, countWords, read, scoreExtraction, tally, toMarkdown } from "../src/reader.ts";
 
-test("linkedom resolves one parser dependency generation", () => {
+// The override's REASON changed on 2026-08-23 and the assertion outlived it, so
+// this now says what it is for today. The Worker no longer bundles linkedom, so
+// the override buys no shipped bytes at all. What it buys is that the parity
+// oracle in dom-differential.test.mjs resolves the SAME parser the Worker
+// bundles, and a gate whose reference parses differently proves nothing.
+test("the oracle and the Worker resolve one parser generation", () => {
   const manifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
   const parser = JSON.parse(readFileSync(new URL("../node_modules/htmlparser2/package.json", import.meta.url), "utf8"));
 
+  assert.equal(manifest.dependencies?.htmlparser2, "11.0.0",
+    "src/dom.ts parses with htmlparser2 directly, so it must be a declared dependency rather than linkedom's transitive");
+  assert.equal(manifest.devDependencies?.linkedom, "0.18.13",
+    "linkedom is the parity oracle; deleting it deletes the only proof src/dom.ts is faithful");
   assert.equal(manifest.overrides?.htmlparser2, "11.0.0",
-    "removing the override restores three generations of the DOM stack and ~33 KiB gzip");
+    "without the override the oracle resolves a different parser than the Worker bundles");
   assert.equal(parser.version, "11.0.0", "the installed parser must honor the measured override");
   assert.equal(
     existsSync(new URL("../node_modules/htmlparser2/node_modules/domutils/package.json", import.meta.url)),
     false,
-    "htmlparser2 should share linkedom's domutils generation rather than carrying another tree",
+    "htmlparser2 should share one domutils generation rather than carrying another tree",
   );
 });
 
-test("the aligned parser preserves linkedom's self-closing script serialization", () => {
+// Was asserted against linkedom, which is no longer what ships. It runs on the
+// fitted DOM now and checks the oracle agrees, so the property is pinned on the
+// product first and the reference second.
+test("the aligned parser preserves self-closing script serialization", () => {
   const source = '<html><script src="./main.js" type="module"/></html>';
-  const { document } = parseHTML(source);
-  assert.equal(
-    document.documentElement.firstElementChild?.toString(),
-    '<script src="./main.js" type="module"></script>',
-    "htmlparser2 v12's raw-text parsing leaves the document close inside the script",
-  );
+  const expected = '<script src="./main.js" type="module"></script>';
+  const root = parseHTML(source).document.documentElement;
+  assert.ok(root, "the fitted DOM parsed no documentElement");
+  const shipped = root.firstElementChild;
+  assert.equal(shipped?.outerHTML, expected,
+    "htmlparser2 v12's raw-text parsing leaves the document close inside the script");
+  assert.equal(parseLinkedom(source).document.documentElement.firstElementChild?.toString(), expected,
+    "the oracle must agree, or the parity gate is measuring against a different parser");
 });
 
 test("the focused Markdown walk covers the article vocabulary", () => {
@@ -78,6 +93,7 @@ test("the extracted article node preserves the string path byte for byte", () =>
     <pre><code>const answer = 42;</code></pre></article>`;
   const { document } = parseHTML(html);
   const node = document.querySelector("article");
+  assert.ok(node, "the fixture has no <article> to walk");
   assert.equal(toMarkdown(node), toMarkdown(node.outerHTML));
 });
 
