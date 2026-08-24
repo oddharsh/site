@@ -41,7 +41,7 @@
 #      bust anymore.)
 #   6. captions anything still missing alt text (gen-alt-text.py), then validates
 #      the whole artifact graph — pixels, EXIF, histograms, captions, the index —
-#      via check-photo-pipeline.mjs, which fails the run rather than let an
+#      via check-photo-pipeline.ts, which fails the run rather than let an
 #      unlabelled image reach a deploy
 #
 # REMOTE_RENDER_ONLY=1 skips R2 uploads. The GitHub Actions pipeline uses it
@@ -478,7 +478,7 @@ fi
 # gets captioned here rather than waiting for a deploy. resumable and idempotent:
 # already-captioned stems cost nothing. a 429 (the free 10k neurons/day) stops it
 # early, which is why the failure is tolerated here and the real gate is
-# check-photo-pipeline.mjs below.
+# check-photo-pipeline.ts below.
 if command -v python3 >/dev/null 2>&1; then
   python3 "$SCRIPT_DIR/gen-alt-text.py" || \
     echo "  captions incomplete — re-run 'bun run captions' before deploying"
