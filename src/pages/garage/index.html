@@ -356,107 +356,6 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
 
       <li>
         <div class="title-row">
-          <span class="name"><a href="/pixel-peeper">Pixel Peeper: whose eye do you have?</a></span>
-          <span class="status review">prototype</span>
-        </div>
-        <div class="desc">
-          <a href="https://ismy.blue" rel="external">ismy.blue</a> keeps asking where green
-          becomes blue until it has your personal boundary. This does the same for image
-          compression. Each call shows the
-          same photo squeezed two or three ways; you pick the best on instinct, over and over,
-          and it profiles what your eye is quietly tuned to. Every tile is a real encode
-          (zenc, jpegli, mozjpeg, sips; honest 4:2:2 vs 4:2:0 on the 4:2:2-native Fuji files),
-          scored offline by <code style="font-family: var(--font-mono);font-size:9pt">ssimulacra2</code>
-          and <code style="font-family: var(--font-mono);font-size:9pt">butteraugli</code>. The twist:
-          the two metrics are rival models of human vision that disagree, so the end reads which
-          one your eye sides with. Closes with an understanding check.
-        </div>
-        <div class="meta">
-          shape: blind A/B/C compression test + metric-alignment read &middot; added 2026-07-21
-        </div>
-      </li>
-
-      <li>
-        <div class="title-row">
-          <span class="name"><a href="/garage/compression">Compression teardown</a></span>
-          <span class="status shipped">shipped</span>
-        </div>
-        <div class="desc">
-          The edge was handing browsers <em>more</em> bytes than its own second choice, and
-          compressing at about a third of the effort brotli can reach offline. Fixing it took
-          four rounds, three of them spent blaming the platform for a one-line bug in my own
-          code (<code style="font-family: var(--font-mono);font-size:9pt">encodeBody</code> is
-          write-only Response init, so rebuilding a response drops it silently). Ends at
-          ~19% off the shell for every browser and 116 bytes for a returning Chromium visitor,
-          via <a href="https://www.rfc-editor.org/rfc/rfc9842.html" rel="external">RFC 9842</a>
-          zstd shared-dictionary deltas. Keeps the wrong turns, since those transfer.
-        </div>
-        <div class="meta">
-          shape: measured teardown + shipped fix &middot; added 2026-07-27
-        </div>
-      </li>
-
-      <li>
-        <div class="title-row">
-          <span class="name"><a href="/garage/gpt56">5.6 Sol&apos;s performance pass</a></span>
-          <span class="status review">field note</span>
-        </div>
-        <div class="desc">
-          The performance pass outlined with 5.6 Sol this morning, translated into the
-          work that actually made it onto the lift: first-paint geometry, immutable photo
-          bytes, a shared Luna sheet, explicit Worker boundaries, and deploy-time proof.
-          The local workbench toggles between the three checks; the trace readout is honest
-          about what is local and what still needs field data.
-        </div>
-        <div class="meta">
-          shape: performance field note + local workbench &middot; added 2026-07-10
-        </div>
-      </li>
-
-      <li>
-        <div class="title-row">
-          <span class="name"><a href="/garage/blueprint">Blueprint: how Fable 5 would rebuild it</a></span>
-          <span class="status idle">sketch</span>
-        </div>
-        <div class="desc">
-          The <a href="/garage/teardown">teardown</a>'s sequel. Fable 5 read every file in
-          the repo and drew the rebuild drawing: the boutique tricks worth keeping (the
-          two-key SWR quartet, the Temporal wall-clock discipline, the earn-it
-          <code style="font-family: var(--font-mono);font-size:9pt">will-change</code>),
-          the Pages-era scar tissue a Workers-native design would remove (denylist routing,
-          SPA-fallback sniffs), and the consolidation sketch, before and after. Ends with
-          the longer list: what a rewrite must never touch.
-        </div>
-        <div class="meta">
-          shape: architecture review + rebuild sketch &middot; added 2026-07-01
-        </div>
-      </li>
-
-      <li>
-        <div class="title-row">
-          <span class="name"><a href="/garage/wire">Bytes on the wire</a></span>
-          <span class="status shipped">shipped</span>
-        </div>
-        <div class="desc">
-          The site's first build step, and the brotli rabbit hole that led there. Where
-          Cloudflare actually compresses (edge quality vs q11, with the four roads to q11
-          that all closed), deploy-time minification with readable
-          <code style="font-family: var(--font-mono);font-size:9pt">/&lt;name&gt;.src.js</code>
-          twins (nav.js went ~33KB to 20.4KB on the wire; sw.js turned out to be 64%
-          comments), whether the CSS deserves the same treatment (measured: brotli voted
-          no), an <a href="https://github.com/evanw/esbuild" rel="external">esbuild</a> vs
-          <a href="https://github.com/oxc-project/oxc" rel="external">Oxc</a> head-to-head,
-          and the Cache API layer that finally made
-          <code style="font-family: var(--font-mono);font-size:9pt">s-maxage</code> true.
-          With a live edge-cache prober.
-        </div>
-        <div class="meta">
-          shape: measurements + the build's reasoning &middot; added 2026-07-01
-        </div>
-      </li>
-
-      <li>
-        <div class="title-row">
           <span class="name"><a href="/garage/typed-config">The config that types itself</a></span>
           <span class="status watching">watching</span>
         </div>
@@ -518,7 +417,73 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
           <a href="https://datatracker.ietf.org/doc/draft-meunier-web-bot-auth-architecture/" rel="external">Web Bot Auth</a>
           and the awkward fact that this site's own crawler signs and has never registered.
         </div>
+        <div class="meta">
+          shape: crawler-identity survey + measurements &middot; added 2026-08-21
+        </div>
       </li>
+
+      <li>
+        <div class="title-row">
+          <span class="name"><a href="/garage/dyno">Dyno</a></span>
+          <span class="status shipped">shipped</span>
+        </div>
+        <div class="desc">
+          A dyno tells you what an engine actually puts down. This one straps the
+          site to the rollers every night: a GitHub Action builds <code>main</code>,
+          weighs the worker bundle, all 46 pages and the client assets, and records
+          a pull. The chart is the part no threshold check could draw. This worker
+          went 86 &rarr; 129 &rarr; 204 &rarr; 262 KiB gzip and every one of those
+          numbers got found by somebody tripping over a stale constant, because
+          nothing was watching the slope. Server-rendered SVG, no client
+          JavaScript, and the hand-entered prefix is drawn dashed so the page never
+          passes a typed number off as a measured one.
+        </div>
+        <div class="meta">
+          shape: nightly wire-size trend + chart &middot; added 2026-08-08
+        </div>
+      </li>
+
+      <li>
+        <div class="title-row">
+          <span class="name"><a href="/garage/octane">Octane, priced against no framework</a></span>
+          <span class="status shipped">shipped</span>
+        </div>
+        <div class="desc">
+          <a href="https://github.com/southpolesteve/nextane" rel="external">Nextane</a>
+          rebuilds the Next.js Pages Router on
+          <a href="https://github.com/octanejs/octane" rel="external">Octane</a>
+          and ships 60.9% less client
+          JavaScript than Next.js 16. The claim holds: the deployed demo measures
+          43,384 bytes gzip against a published 43.0 KiB. Every row of that
+          benchmark is a framework though, so it fixes an order without ever fixing
+          a zero. This page adds the missing row, measures where the homepage you
+          came from actually sits, and argues about what the distance proves.
+        </div>
+        <div class="meta">
+          shape: benchmark re-measurement + baseline · added 2026-07-31
+        </div>
+      </li>
+
+      <li>
+        <div class="title-row">
+          <span class="name"><a href="/garage/compression">Compression teardown</a></span>
+          <span class="status shipped">shipped</span>
+        </div>
+        <div class="desc">
+          The edge was handing browsers <em>more</em> bytes than its own second choice, and
+          compressing at about a third of the effort brotli can reach offline. Fixing it took
+          four rounds, three of them spent blaming the platform for a one-line bug in my own
+          code (<code style="font-family: var(--font-mono);font-size:9pt">encodeBody</code> is
+          write-only Response init, so rebuilding a response drops it silently). Ends at
+          ~19% off the shell for every browser and 116 bytes for a returning Chromium visitor,
+          via <a href="https://www.rfc-editor.org/rfc/rfc9842.html" rel="external">RFC 9842</a>
+          zstd shared-dictionary deltas. Keeps the wrong turns, since those transfer.
+        </div>
+        <div class="meta">
+          shape: measured teardown + shipped fix &middot; added 2026-07-27
+        </div>
+      </li>
+
       <li>
         <div class="title-row">
           <span class="name"><a href="/garage/pqc">Post-quantum signatures, priced</a></span>
@@ -537,6 +502,87 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
         </div>
         <div class="meta">
           shape: measurements + a shipped migration &middot; added 2026-07-27
+        </div>
+      </li>
+
+      <li>
+        <div class="title-row">
+          <span class="name"><a href="/pixel-peeper">Pixel Peeper: whose eye do you have?</a></span>
+          <span class="status review">prototype</span>
+        </div>
+        <div class="desc">
+          <a href="https://ismy.blue" rel="external">ismy.blue</a> keeps asking where green
+          becomes blue until it has your personal boundary. This does the same for image
+          compression. Each call shows the
+          same photo squeezed two or three ways; you pick the best on instinct, over and over,
+          and it profiles what your eye is quietly tuned to. Every tile is a real encode
+          (zenc, jpegli, mozjpeg, sips; honest 4:2:2 vs 4:2:0 on the 4:2:2-native Fuji files),
+          scored offline by <code style="font-family: var(--font-mono);font-size:9pt">ssimulacra2</code>
+          and <code style="font-family: var(--font-mono);font-size:9pt">butteraugli</code>. The twist:
+          the two metrics are rival models of human vision that disagree, so the end reads which
+          one your eye sides with. Closes with an understanding check.
+        </div>
+        <div class="meta">
+          shape: blind A/B/C compression test + metric-alignment read &middot; added 2026-07-21
+        </div>
+      </li>
+
+      <li>
+        <div class="title-row">
+          <span class="name"><a href="/garage/gpt56">5.6 Sol&apos;s performance pass</a></span>
+          <span class="status review">field note</span>
+        </div>
+        <div class="desc">
+          The performance pass outlined with 5.6 Sol this morning, translated into the
+          work that actually made it onto the lift: first-paint geometry, immutable photo
+          bytes, a shared Luna sheet, explicit Worker boundaries, and deploy-time proof.
+          The local workbench toggles between the three checks; the trace readout is honest
+          about what is local and what still needs field data.
+        </div>
+        <div class="meta">
+          shape: performance field note + local workbench &middot; added 2026-07-10
+        </div>
+      </li>
+
+      <li>
+        <div class="title-row">
+          <span class="name"><a href="/garage/blueprint">Blueprint: how Fable 5 would rebuild it</a></span>
+          <span class="status idle">sketch</span>
+        </div>
+        <div class="desc">
+          The <a href="/garage/teardown">teardown</a>'s sequel. Fable 5 read every file in
+          the repo and drew the rebuild drawing: the boutique tricks worth keeping (the
+          two-key SWR quartet, the Temporal wall-clock discipline, the earn-it
+          <code style="font-family: var(--font-mono);font-size:9pt">will-change</code>),
+          the Pages-era scar tissue a Workers-native design would remove (denylist routing,
+          SPA-fallback sniffs), and the consolidation sketch, before and after. Ends with
+          the longer list: what a rewrite must never touch.
+        </div>
+        <div class="meta">
+          shape: architecture review + rebuild sketch &middot; added 2026-07-01
+        </div>
+      </li>
+
+      <li>
+        <div class="title-row">
+          <span class="name"><a href="/garage/wire">Bytes on the wire</a></span>
+          <span class="status shipped">shipped</span>
+        </div>
+        <div class="desc">
+          The site's first build step, and the brotli rabbit hole that led there. Where
+          Cloudflare actually compresses (edge quality vs q11, with the four roads to q11
+          that all closed), deploy-time minification with readable
+          <code style="font-family: var(--font-mono);font-size:9pt">/&lt;name&gt;.src.js</code>
+          twins (nav.js went ~33KB to 20.4KB on the wire; sw.js turned out to be 64%
+          comments), whether the CSS deserves the same treatment (measured: brotli voted
+          no), an <a href="https://github.com/evanw/esbuild" rel="external">esbuild</a> vs
+          <a href="https://github.com/oxc-project/oxc" rel="external">Oxc</a> head-to-head,
+          and the Cache API layer that finally made
+          <code style="font-family: var(--font-mono);font-size:9pt">s-maxage</code> true.
+          With a live edge-cache prober.
+        </div>
+        <div class="meta">
+          shape: measurements + the build's reasoning &middot; added 2026-07-01
         </div>
       </li>
 
@@ -671,45 +717,6 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
 
       <li>
         <div class="title-row">
-          <span class="name"><a href="/garage/dyno">Dyno</a></span>
-          <span class="status shipped">shipped</span>
-        </div>
-        <div class="desc">
-          A dyno tells you what an engine actually puts down. This one straps the
-          site to the rollers every night: a GitHub Action builds <code>main</code>,
-          weighs the worker bundle, all 46 pages and the client assets, and records
-          a pull. The chart is the part no threshold check could draw. This worker
-          went 86 &rarr; 129 &rarr; 204 &rarr; 262 KiB gzip and every one of those
-          numbers got found by somebody tripping over a stale constant, because
-          nothing was watching the slope. Server-rendered SVG, no client
-          JavaScript, and the hand-entered prefix is drawn dashed so the page never
-          passes a typed number off as a measured one.
-        </div>
-      </li>
-
-      <li>
-        <div class="title-row">
-          <span class="name"><a href="/garage/octane">Octane, priced against no framework</a></span>
-          <span class="status shipped">shipped</span>
-        </div>
-        <div class="desc">
-          <a href="https://github.com/southpolesteve/nextane" rel="external">Nextane</a>
-          rebuilds the Next.js Pages Router on
-          <a href="https://github.com/octanejs/octane" rel="external">Octane</a>
-          and ships 60.9% less client
-          JavaScript than Next.js 16. The claim holds: the deployed demo measures
-          43,384 bytes gzip against a published 43.0 KiB. Every row of that
-          benchmark is a framework though, so it fixes an order without ever fixing
-          a zero. This page adds the missing row, measures where the homepage you
-          came from actually sits, and argues about what the distance proves.
-        </div>
-        <div class="meta">
-          shape: benchmark re-measurement + baseline · added 2026-07-31
-        </div>
-      </li>
-
-      <li>
-        <div class="title-row">
           <span class="name"><a href="/garage/pretext">pretext: text measurement off the DOM</a></span>
           <span class="status idle">watching</span>
         </div>
@@ -803,7 +810,6 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
           shape: visual + interaction · added 2026-05-22
         </div>
       </li>
-
     </ul>
 
     <p style="margin-top: 18px; font-size: 9.5pt; color: oklch(51.03% 0 0); font-style: italic;">
