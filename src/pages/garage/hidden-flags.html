@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#2D78BD">
+<link rel="preload" as="style" href="/luna.css">
+<title>aadhar.sh/garage/hidden-flags: Flags the docs don&#39;t list</title>
+<meta name="description" content="Nineteen hidden flags in one CLI, and the control that separates an option being accepted from an option doing anything. On a closed schema those are two questions, and the first one is free.">
+<link rel="canonical" href="https://aadhar.sh/garage/hidden-flags">
+<meta property="og:type" content="article">
+<meta property="og:title" content="aadhar.sh/garage/hidden-flags: Flags the docs don&#39;t list">
+<meta property="og:description" content="Nineteen hidden flags in one CLI, and the control that separates an option being accepted from an option doing anything. On a closed schema those are two questions, and the first one is free.">
+<meta property="og:url" content="https://aadhar.sh/garage/hidden-flags">
+<meta name="twitter:card" content="summary_large_image">
+<meta property="og:image" content="https://aadhar.sh/og/garage-hidden-flags.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The aadhar.sh/garage/hidden-flags interactive demo, screenshotted">
+<meta name="twitter:image" content="https://aadhar.sh/og/garage-hidden-flags.png">
+<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}html{background:linear-gradient(180deg,oklch(56% .13 250),oklch(73% .10 236) 50%,oklch(88% .05 232) 60%,oklch(60% .16 140))}
+body{background:transparent;font-family:var(--font-ui);font-size:10.5pt;line-height:1.5;color:#181818;padding:24px 12px 60px;min-height:100vh}
+.window{max-width:820px;margin:0 auto;background:#fff;border:2px solid #0831d9;border-right-color:#001ea0;border-bottom-color:#001ea0;border-radius:8px 8px 0 0;overflow:hidden;box-shadow:inset 1px 1px 0 #166aee,inset -1px -1px 0 #00138c,4px 4px 0 rgba(0,30,160,.35)}
+.title-bar{background:linear-gradient(180deg,oklch(70% .15 258),oklch(60% .20 261) 8%,oklch(51% .225 263) 18%,oklch(50% .225 263) 86%,oklch(58% .18 260));color:#fff;font-family:var(--font-caption);font-weight:bold;font-size:11pt;padding:4px 5px 4px 8px;display:flex;align-items:center;gap:6px;text-shadow:1px 1px #0f1089;user-select:none}
+.title-bar .title-text{flex:1;min-width:0;display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.title-bar .icon{width:14px;height:14px;flex:0 0 14px;background:#fff;border:1px solid #8f4d06;position:relative}.title-bar .icon:before{content:"✦";position:absolute;inset:0;display:grid;place-items:center;font-size:10px;color:#ef8f24;text-shadow:none}
+.controls{display:inline-flex;align-items:center;gap:2px}.controls span,.controls a{position:relative;box-sizing:border-box;width:21px;height:21px;display:inline-block;overflow:hidden;font-size:0;color:transparent;border:1px solid #6696eb;border-radius:3px;text-decoration:none;cursor:pointer;background:linear-gradient(180deg,#5f8cf7,#3a71f5 22%,#3e73f5 55%,#2a70f2 82%,#1045be)}.controls .close{border-color:#d8401c;background:linear-gradient(180deg,#e8795f,#e45f40 30%,#e45d3d 52%,#e2552a 80%,#ae3110)}.controls .min:before{content:"";position:absolute;left:5px;right:5px;bottom:5px;height:2px;background:#fff}.controls .max:before{content:"";position:absolute;left:5px;top:5px;width:11px;height:9px;border:1px solid #fff;border-top-width:2px}.controls .close:before,.controls .close:after{content:"";position:absolute;left:50%;top:50%;width:13px;height:2px;margin:-1px 0 0 -6.5px;background:#fff}.controls .close:before{transform:rotate(45deg)}.controls .close:after{transform:rotate(-45deg)}
+.content{padding:18px 20px 8px;background:#fffdf6;border-top:1px solid #8d9bb0}.content h1,.content h2,.content h3{font-family:var(--font-caption);color:#0831d9;line-height:1.25}.content h1{font-size:18pt;margin:0 0 7px}.content h2{font-size:13pt;margin:18px 0 5px}.content h3{font-size:11pt;margin:13px 0 4px}.content p{margin:0 0 12px}.content a{color:#153eab}.content code,.content pre{font-family:var(--font-mono)}
+.garage-intro{font-size:11pt;color:#444;max-width:70ch}.garage-meta{font-size:8.5pt;color:#69758a;border-top:1px solid #d8dfeb;margin-top:18px;padding-top:6px}.status{border-top:1px solid #d1d9e4;background:#f1f4f8;padding:4px 10px;display:flex;gap:8px;flex-wrap:wrap;font-size:8.5pt;color:#586579}.status span:after{content:"·";margin-left:8px;color:#9ca8b8}.status span:last-child:after{content:""}
+@media(max-width:620px){body{padding:8px 5px 42px}.content{padding:14px 12px 6px}.window{border-radius:5px 5px 0 0}}
+
+.hf-code{background:#f4f6fa;border:1px solid #c8d2e2;border-left:3px solid #0831d9;padding:8px 10px;margin:0 0 12px;overflow-x:auto;font-size:9pt;line-height:1.5}
+.hf-code code{white-space:pre}
+.hf-demo{border:1px solid #9aa7ba;background:#f6f8fb;margin:14px 0 16px;box-shadow:inset 1px 1px 0 #fff}
+.hf-bar{background:#e3e9f2;border-bottom:1px solid #c8d2e2;padding:5px 8px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.hf-filters{display:inline-flex;gap:4px;flex-wrap:wrap}
+.hf-filters button{font:inherit;font-size:8pt;padding:2px 8px;border:1px solid #a9b4c6;background:linear-gradient(180deg,#fff,#e6eaf1);border-radius:3px;cursor:pointer;color:#33415c}
+.hf-filters button.on{background:linear-gradient(180deg,#cfe0fb,#a8c6f4);border-color:#5f86c8;color:#12305e;font-weight:bold}
+.hf-count{font-size:8.5pt;color:#5c6779}
+.hf-scroll{overflow-x:auto;background:#fff}
+.hf-table{border-collapse:collapse;font-size:8.5pt;width:100%;min-width:560px}
+.hf-table th{text-align:left;background:#e3e9f2;border:1px solid #c8d2e2;padding:4px 7px;font-family:var(--font-caption);color:#33415c;position:sticky;top:0}
+.hf-table td{border:1px solid #d8dfeb;padding:4px 7px;vertical-align:top;line-height:1.45}
+.hf-table tr:nth-child(even) td{background:#f8fafd}
+.hf-table code{font-size:8pt;font-family:var(--font-mono)}
+.hf-here td{background:#fdf6e0 !important;box-shadow:inset 3px 0 0 #e0a72c}
+.hf-tag{display:inline-block;font-size:7.5pt;padding:0 5px;border-radius:8px;background:#dde5f2;color:#3d4d68;white-space:nowrap}
+.hf-static{margin:0 0 12px}
+.hf-ok{color:#1c6b32;font-weight:bold}
+.hf-no{color:#a3261a;font-weight:bold}
+.hf-case{padding:10px 12px;background:#fff;font-size:9pt;line-height:1.55}
+.hf-case h4{font-family:var(--font-caption);color:#0831d9;font-size:10.5pt;margin:0 0 5px}
+.hf-case pre{background:#f4f6fa;border:1px solid #c8d2e2;padding:7px 9px;margin:0 0 8px;overflow-x:auto;font-size:8.5pt}
+.hf-case pre code{white-space:pre;font-family:var(--font-mono)}
+.hf-case table{border-collapse:collapse;font-size:8.5pt;width:100%;margin:0 0 6px}
+.hf-case th{text-align:left;background:#e3e9f2;border:1px solid #c8d2e2;padding:3px 7px;color:#33415c}
+.hf-case td{border:1px solid #d8dfeb;padding:3px 7px;vertical-align:top}
+.hf-cost{font-size:8.5pt;color:#5c6779;margin:0}
+@media(max-width:620px){.hf-table{min-width:460px}}
+</style>
+<link rel="stylesheet" href="/luna.css">
+</head>
+<body>
+<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<div class="window">
+  <div class="title-bar" aria-hidden="true">
+    <span class="title-text"><span class="icon"></span>aadhar.sh/garage/hidden-flags</span>
+    <span class="controls"><span class="min"></span><span class="max"></span><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
+  </div>
+  <div class="content">
+<h1>Flags the docs don't list</h1>
+<p class="garage-intro">Wrangler 4.125.0 carries nineteen flags marked hidden, so they appear in no help output and no documentation page. Reading them is easy. The hard part is that an option a tool silently ignores and an option it honours produce the same exit code, the same output, and the same success. This page is about the control that separates those two, why it usually costs nothing, and four times the difference decided something real on this site.</p>
+
+<h2>The inventory</h2>
+<p>Every flag below was pulled out of the shipped bundle by matching option definitions that carry <code>hidden: true</code>, then read back with its own description. Filter by what it is for.</p>
+<div class="hf-demo">
+  <div class="hf-bar">
+    <span class="hf-filters" id="hf-filters"></span>
+    <span class="hf-count" id="hf-count"></span>
+  </div>
+  <div class="hf-scroll"><table class="hf-table" id="hf-table"></table></div>
+  <p class="hf-legend">Marked rows are the ones that touch this site. The rest are here so the list is the whole list: a survey that reports only the interesting rows cannot tell you how many rows it skipped.</p>
+</div>
+
+<h2>Two questions, and only one of them is free</h2>
+<p>When you find an undocumented option, there are two separate things to establish, and reading the docs answers neither.</p>
+<p><b>Is it accepted?</b> Does the tool recognise the key at all, or is it dropping an unknown name on the floor. <b>Does it work?</b> Does accepting the key change the behaviour the flag claims to change.</p>
+<p>The first question is usually free, and that is the part people skip. A tool with strict argument parsing answers it through its exit code alone, with no work performed and nothing deployed:</p>
+<pre class="hf-code"><code>$ wrangler deploy --x-bogus-flag ; echo $?
+1
+$ wrangler deploy --x-provision=false --dry-run ; echo $?
+0</code></pre>
+<p>Two commands, no account touched, and the answer is decisive: wrangler validates flag names, so a flag it accepts is a flag it knows. Run that before trusting any option a help page omits.</p>
+<p>The second question costs a real run, and its answer is worth much less than it looks like when the failure mode is silence.</p>
+
+<h2>When silence is the failure mode</h2>
+<p>Four cases from this site, each of which cost time in proportion to how late the control was run.</p>
+
+<h3>A payload schema that refuses unknown keys</h3>
+<p>Cloudflare's Browser Run binding takes a JSON payload. A launch post described selecting a rendering engine with one extra key; the Quick Actions reference did not list it. Sending it answered:</p>
+<pre class="hf-code"><code>{"code":"unrecognized_keys","keys":["browser"]}</code></pre>
+<p>An invented engine name returned the byte-identical error, which is the useful half of the result. The schema is closed, so it refuses the option rather than failing on the value, and a closed schema is a gift: it answers "is this accepted" for free, every time, with no render performed and no browser minutes spent.</p>
+<p>The same feature then produced the opposite trap through the REST door, where the parameter is merely ignored. A 200 came back either way, so the code labelled the render with the engine it had asked for. On a page whose entire premise is showing what a machine actually saw, that label was a claim nobody had checked. It reads <code>kitesurf-requested</code> now.</p>
+
+<h3>A compression option three runtimes disagree about</h3>
+<p>Dictionary compression takes a <code>dictionary</code> option. Node 26 honours it. Workers ignore it for zstd and say nothing. Bun ignored it through 1.3.14 and fixed it in <a href="https://github.com/oven-sh/bun/pull/34427" rel="external">oven-sh/bun#34427</a>. Every one of those failures is silent, because a frame compressed <em>without</em> a dictionary still decodes perfectly <em>with</em> one. Nothing throws. The only symptom is a byte count that never got smaller.</p>
+<p>The control is four lines and it needs no deploy: compress one target three times, with no dictionary, with the right one, and with a deliberately wrong one. An engine that honours the option prints a smaller number for the right dictionary alone. An engine that ignores it prints the same number three times.</p>
+<div class="hf-scroll"><table class="hf-table hf-static">
+  <tr><th>engine</th><th>no dictionary</th><th>right dictionary</th><th>verdict</th></tr>
+  <tr><td>node 26</td><td>70 B</td><td>18 B</td><td class="hf-ok">honours it</td></tr>
+  <tr><td>workerd</td><td colspan="2">same number three times</td><td class="hf-no">ignores it</td></tr>
+  <tr><td>bun through 1.3.14</td><td colspan="2">same number three times</td><td class="hf-no">ignored it</td></tr>
+</table></div>
+<p>Sending the option and reading the exit code would have passed on all three.</p>
+
+<h3>A key that is accepted and still unmeasured</h3>
+<p>The Browser Run payload takes a <code>waitForTimeout</code>. Whether the binding accepts the key was answered for free, using the closed schema above: send it alongside a deliberately invalid URL, and a bogus key comes back as <code>unrecognized_keys</code> while an accepted one leaves only the URL error. Three keys passed that test individually and together.</p>
+<p>Whether the capture actually waits out the timeout is a different question, it needs a real render, and it is still open. Both halves are written down separately for that reason. An entry claiming the key works, on evidence that only shows it is accepted, is the exact error this page is about.</p>
+
+<h3>A path that routes either way</h3>
+<p>The engine selector above only functions on one of two URL spellings. Both route. Probed unauthenticated against a real account, each answers <code>10000 Authentication error</code> rather than <code>7003 Could not route to</code>. So the wrong path costs no error, no retry, and no log line. It costs the feature. One reference page documents the selector on the newer spelling while older pages show the other, so reading either one alone hands you a path that looks right.</p>
+
+<h2>A flag that proves the limit is somewhere else</h2>
+<p>Among the nineteen is <code>--max-versions</code>, on the command that shifts production traffic between Worker versions. This site's release script walks a version to 10%, then 50%, then 100%, and it can only ever name two versions in a step, which shapes the whole procedure: a ramp starting from a three-way split has to drop one of them. The obvious hope is that a hidden flag raises the ceiling. The definition answers it without a single request:</p>
+<pre class="hf-code"><code>"max-versions": {
+  hidden: true,
+  // experimental, not supported long-term
+  describe: "Maximum allowed versions to select",
+  type: "number",
+  default: 2
+  // (when server-side limitation is lifted, we can update this
+  //  default or just remove the option entirely)
+}</code></pre>
+<p>The comment is the finding. The cap lives on the server and this flag is the client's mirror of it, so raising the number locally buys an error instead of a wider split. That is a real answer, arrived at by reading rather than by deploying, and it retires a question that had been open on the strength of a guess.</p>
+
+<h2>A flag that looks like the fix and is not one</h2>
+<p>This site has a documented failure where a gradual deployment splits asset requests: a document served by one version asks for a content-hashed asset only the other version built, and gets a 404. So <code>--old-asset-ttl</code>, described as "expire old assets in given seconds rather than immediate deletion", reads like the exact repair.</p>
+<p>It is threaded into one place in the entire codebase, and that place is the sync routine for the legacy Workers Sites layer, the retired KV-namespace mechanism that predates the modern assets binding this site uses. The flag would apply to a system that is not running here.</p>
+<p>Fifteen minutes of reading, and the answer arrives before any config changes. Had it been adopted on the strength of its description, it would have shipped, changed nothing, and become the fix everyone believed was already in place.</p>
+
+<h2>Pick a situation, get the control</h2>
+<p>The shape of the doubt decides the experiment. Choose what you are looking at:</p>
+<div class="hf-demo">
+  <div class="hf-bar"><span class="hf-filters" id="hf-cases"></span></div>
+  <div class="hf-case" id="hf-case"></div>
+</div>
+
+<h2>The rule this leaves</h2>
+<p>On a closed schema, <b>"is this accepted" and "does this work" are two questions, and the first one is free.</b> Ask it first, always, because it costs an exit code and it eliminates the most common way an undocumented option wastes a week: being quietly dropped while everything around it reports success.</p>
+<p>Then be careful about what a success proves. A 200 from an endpoint that ignores unknown parameters is indistinguishable from a 200 from an endpoint that honoured yours. When you cannot tell those apart, the honest move is to label the result with what you asked for rather than with what you hope happened, and to write the unmeasured half down beside the measured one.</p>
+<p>And prefer reading the definition to running the experiment when the definition is in your <code>node_modules</code>. Two of the four cases here were settled by a source comment and a call site, in less time than a deploy takes, and neither answer could have been reached by watching the tool succeed.</p>
+
+<h2>What would change this</h2>
+<p>A tool that accepts unknown flags silently would break the free half outright, and the check for that is the bogus-flag control itself: an exit code of 0 on an invented name means every conclusion on this page has to be re-earned with real runs. A hidden flag becoming documented would move its row from this list to an ordinary reference, which is the outcome to hope for rather than a defeat. And a measurement showing the capture does honour <code>waitForTimeout</code> would close the one case here that is deliberately still open.</p>
+    <section id="luq" aria-label="understanding check"></section>
+    <p class="garage-meta">shipped · the understanding check is part of the page, not a gate</p>
+  </div>
+  <div class="status"><span>garage</span><span>shipped</span><span>2026-08-24</span></div>
+</div>
+
+<script>
+// /garage/hidden-flags — the inventory and the control picker.
+//
+// FLAGS is the full set of option definitions carrying `hidden: true` in the
+// wrangler 4.125.0 bundle, read back with each flag's own describe string. The
+// list is complete rather than curated: rows that matter here are marked, and
+// the rest stay so the count is honest.
+(function () {
+  var FLAGS = [
+    { f: "--experimental-new-config", a: "--x-new-config", g: "config", here: true,
+      d: "[experimental] Use cloudflare.config.ts and wrangler.config.ts" },
+    { f: "--experimental-cf-build-output", a: "--x-cf-build-output", g: "config", here: true,
+      d: "[experimental] Emit a Build Output Specification directory under .cloudflare/output/ (requires --experimental-new-config)" },
+    { f: "--experimental-auto-create", a: "--x-auto-create", g: "release", here: true,
+      d: "Automatically provision draft bindings with new resources" },
+    { f: "--experimental-provision", a: "", g: "release", here: true,
+      d: "No description in the definition. Pinned off here alongside auto-create, because no deploy path on this account may create resources." },
+    { f: "--max-versions", a: "", g: "release", here: true,
+      d: "Maximum allowed versions to select. Defaults to 2, and its own comment says the limit is server side." },
+    { f: "--experimental-deploy-helpers", a: "--x-deploy-helpers", g: "release", here: false,
+      d: "Experimental: Gates refactored deploy/upload path" },
+    { f: "--experimental-include-runtime", a: "--x-include-runtime", g: "types", here: false,
+      d: "The path of the generated runtime types file" },
+    { f: "--enable-containers", a: "", g: "containers", here: false,
+      d: "Whether to build and enable containers during development" },
+    { f: "--config-file", a: "-F", g: "containers", here: false,
+      d: "Sets ssh -F: specify an alternative per-user ssh configuration file" },
+    { f: "--identity-file", a: "-i", g: "containers", here: false,
+      d: "Sets ssh -i: select a file from which the identity for public key authentication is read" },
+    { f: "--escape-char", a: "", g: "containers", here: false,
+      d: "Sets ssh -e: set the escape character for sessions with a pty" },
+    { f: "--log-file", a: "", g: "containers", here: false,
+      d: "Sets ssh -E: append debug logs to log_file instead of standard error" },
+    { f: "--mac-spec", a: "", g: "containers", here: false,
+      d: "Sets ssh -m: a comma separated list of message authentication code algorithms, in order of preference" },
+    { f: "--delegate-c3", a: "--c3", g: "setup", here: false, d: "Delegate to Create Cloudflare CLI (C3)" },
+    { f: "--install-wrangler", a: "", g: "setup", here: false, d: "Install Wrangler during project setup" },
+    { f: "--completion-message", a: "", g: "setup", here: false,
+      d: "Display a message with deployment details after wrangler setup is complete" },
+    { f: "--node-compat", a: "", g: "legacy", here: false, d: "Enable Node.js compatibility" },
+    { f: "--site-include", a: "", g: "legacy", here: false,
+      d: "Workers Sites: gitignore style patterns; only matched items will be uploaded" },
+    { f: "--site-exclude", a: "", g: "legacy", here: false,
+      d: "Workers Sites: gitignore style patterns; matched items are skipped" },
+  ];
+
+  var GROUPS = [
+    { k: "all", label: "all 19" },
+    { k: "here", label: "touches this site" },
+    { k: "release", label: "release path" },
+    { k: "config", label: "config" },
+    { k: "containers", label: "containers" },
+    { k: "setup", label: "setup" },
+    { k: "legacy", label: "legacy" },
+    { k: "types", label: "types" },
+  ];
+
+  var CASES = [
+    {
+      k: "ignored",
+      label: "the option may be silently ignored",
+      title: "Run it three ways and compare the number",
+      body: "An engine that ignores an option produces output identical to one that never received it, and the output still works. So do not ask whether it succeeded. Ask whether the thing the option claims to change actually changed, against a case where it could not have.",
+      code: "compress(target)                 # no option\ncompress(target, opt: correct)   # the option, correct value\ncompress(target, opt: wrong)     # the option, useless value",
+      table: [
+        ["all three identical", "the option is being dropped"],
+        ["correct one smaller, wrong one matches the first", "the option is honoured"],
+        ["correct and wrong both differ from the first", "something reads the option and your model of it is off"],
+      ],
+      cost: "Cost: three local runs, no deploy. This is the control that separates node, workerd and bun on the same option.",
+    },
+    {
+      k: "closed",
+      label: "the schema may refuse unknown keys",
+      title: "Send a key you invented, next to a request that fails anyway",
+      body: "A closed schema validates the shape before it does any work, which makes it the cheapest oracle you will ever get. Pair the probe with a deliberately invalid input so nothing can execute even if the key is accepted.",
+      code: 'send({ url: "not-a-url", definitely_not_a_key_xyz: 1 })\nsend({ url: "not-a-url", theKeyYouAreUnsure: 1 })',
+      table: [
+        ["first names your bogus key, second reports only the url error", "the key is accepted, and the schema is closed"],
+        ["both report only the url error", "the schema is open, so acceptance proves nothing"],
+        ["both name the bogus key", "your unsure key is being rejected too"],
+      ],
+      cost: "Cost: two rejected requests. Nothing renders, nothing is billed, and it answers acceptance completely.",
+    },
+    {
+      k: "undocumented",
+      label: "the docs skip the failure mode",
+      title: "Read the exit code on a name that cannot exist",
+      body: "Argument parsers either validate names or ignore them. One invented flag tells you which, and it tells you before you have trusted a real one.",
+      code: "tool command --x-bogus-flag ; echo $?\ntool command --the-real-flag=false --dry-run ; echo $?",
+      table: [
+        ["1 then 0", "names are validated, so an accepted flag is a known flag"],
+        ["0 then 0", "unknown names are ignored, and acceptance means nothing at all"],
+        ["1 then 1", "the real flag is being rejected too, so check the spelling and the subcommand"],
+      ],
+      cost: "Cost: one exit code. Pair it with --dry-run so the second command performs no work.",
+    },
+    {
+      k: "routing",
+      label: "two paths both seem to work",
+      title: "Compare the errors, rather than the successes",
+      body: "When an old and a new URL spelling both respond, a success on either one proves nothing about which is live. The distinguishing signal lives in what each one says when it refuses, and an unauthenticated request is enough to get it.",
+      code: "curl -s https://api/OLD-SPELLING/action   # unauthenticated\ncurl -s https://api/NEW-SPELLING/action   # unauthenticated",
+      table: [
+        ["both report an auth error", "both spellings route, so pick the one the feature's own page documents"],
+        ["one reports could-not-route", "that spelling is dead and the choice is made for you"],
+        ["one reports auth and the other 404s", "same conclusion, through a different status"],
+      ],
+      cost: "Cost: two unauthenticated requests. No credential, so this one is safe to run against somebody else's API.",
+    },
+  ];
+
+  var filters = document.getElementById("hf-filters");
+  var table = document.getElementById("hf-table");
+  var count = document.getElementById("hf-count");
+  var cases = document.getElementById("hf-cases");
+  var caseBox = document.getElementById("hf-case");
+  var active = "all";
+
+  function matches(row) {
+    if (active === "all") return true;
+    if (active === "here") return row.here;
+    return row.g === active;
+  }
+
+  function drawTable() {
+    if (!table) return;
+    table.textContent = "";
+    var head = document.createElement("tr");
+    ["flag", "alias", "group", "what it says it does"].forEach(function (h) {
+      var th = document.createElement("th");
+      th.textContent = h;
+      head.appendChild(th);
+    });
+    table.appendChild(head);
+    var shown = 0;
+    FLAGS.forEach(function (row) {
+      if (!matches(row)) return;
+      shown++;
+      var tr = document.createElement("tr");
+      if (row.here) tr.className = "hf-here";
+      var c1 = document.createElement("td");
+      var code = document.createElement("code");
+      code.textContent = row.f;
+      c1.appendChild(code);
+      var c2 = document.createElement("td");
+      if (row.a) {
+        var al = document.createElement("code");
+        al.textContent = row.a;
+        c2.appendChild(al);
+      }
+      var c3 = document.createElement("td");
+      var tag = document.createElement("span");
+      tag.className = "hf-tag";
+      tag.textContent = row.g;
+      c3.appendChild(tag);
+      var c4 = document.createElement("td");
+      c4.textContent = row.d;
+      [c1, c2, c3, c4].forEach(function (c) { tr.appendChild(c); });
+      table.appendChild(tr);
+    });
+    if (count) {
+      count.textContent = shown === FLAGS.length
+        ? shown + " hidden flags"
+        : shown + " of " + FLAGS.length + " hidden flags";
+    }
+  }
+
+  if (filters) {
+    GROUPS.forEach(function (g) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = g.label;
+      if (g.k === active) btn.className = "on";
+      btn.addEventListener("click", function () {
+        active = g.k;
+        Array.prototype.forEach.call(filters.children, function (b) { b.classList.toggle("on", b === btn); });
+        drawTable();
+      });
+      filters.appendChild(btn);
+    });
+  }
+
+  function drawCase(c) {
+    if (!caseBox) return;
+    caseBox.textContent = "";
+    var h = document.createElement("h4");
+    h.textContent = c.title;
+    var p = document.createElement("p");
+    p.textContent = c.body;
+    var pre = document.createElement("pre");
+    var code = document.createElement("code");
+    code.textContent = c.code;
+    pre.appendChild(code);
+    var tbl = document.createElement("table");
+    var head = document.createElement("tr");
+    ["what you see", "what it means"].forEach(function (t) {
+      var th = document.createElement("th");
+      th.textContent = t;
+      head.appendChild(th);
+    });
+    tbl.appendChild(head);
+    c.table.forEach(function (pair) {
+      var tr = document.createElement("tr");
+      pair.forEach(function (cell) {
+        var td = document.createElement("td");
+        td.textContent = cell;
+        tr.appendChild(td);
+      });
+      tbl.appendChild(tr);
+    });
+    var cost = document.createElement("p");
+    cost.className = "hf-cost";
+    cost.textContent = c.cost;
+    [h, p, pre, tbl, cost].forEach(function (n) { caseBox.appendChild(n); });
+  }
+
+  if (cases) {
+    CASES.forEach(function (c, i) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = c.label;
+      if (i === 0) btn.className = "on";
+      btn.addEventListener("click", function () {
+        Array.prototype.forEach.call(cases.children, function (b) { b.classList.toggle("on", b === btn); });
+        drawCase(c);
+      });
+      cases.appendChild(btn);
+    });
+    drawCase(CASES[0]);
+  }
+
+  drawTable();
+})();
+</script>
+<script type="application/json" id="luq-data">
+{
+  "skin": "garage",
+  "intro": "Six questions on the controls, and one on what would break them.",
+  "questions": [
+    {
+      "q": "Why can sending an option and seeing the command succeed fail to tell you anything?",
+      "options": [
+        {
+          "t": "A tool that drops an unknown option produces the same success as one that honoured it.",
+          "ok": true,
+          "why": "Right. Success is compatible with both outcomes, so it discriminates between nothing."
+        },
+        {
+          "t": "Success codes are unreliable and often wrong.",
+          "why": "The exit code is accurate about whether the command worked. The gap is that the command works either way."
+        },
+        {
+          "t": "The option is applied asynchronously, after the process exits.",
+          "why": "Nothing here defers option handling past the run. The problem is what a success is evidence for."
+        }
+      ]
+    },
+    {
+      "q": "What makes a closed payload schema useful rather than annoying?",
+      "options": [
+        {
+          "t": "It rejects an unknown key before doing any work, so acceptance can be probed for free.",
+          "ok": true,
+          "why": "Right. Validation ahead of execution is what turns the schema into a cheap oracle."
+        },
+        {
+          "t": "It guarantees that any accepted key changes behaviour.",
+          "why": "Acceptance and effect stay separate. A closed schema answers the first question only."
+        },
+        {
+          "t": "It documents every option it accepts.",
+          "why": "The schema rejects what it does not know. It publishes nothing about what it does know."
+        }
+      ]
+    },
+    {
+      "q": "The dictionary control runs three times: no option, the right value, a wrong value. Why does the wrong value earn its place?",
+      "options": [
+        {
+          "t": "It separates an engine reading the option from an engine that changed its output for some other reason.",
+          "ok": true,
+          "why": "Right. Two runs can only show that something differed. The third says the difference tracks the value you supplied."
+        },
+        {
+          "t": "It confirms the tool rejects invalid input.",
+          "why": "This control expects the wrong value to be accepted. A rejection would be a different experiment."
+        },
+        {
+          "t": "It warms the cache so the timings are comparable.",
+          "why": "The measurement is output size rather than time, so warming buys nothing here."
+        }
+      ]
+    },
+    {
+      "q": "The --max-versions definition sets a default of 2 and carries a comment about a server-side limitation. What follows?",
+      "options": [
+        {
+          "t": "Raising the number locally cannot widen the split, because the constraint lives at the other end.",
+          "ok": true,
+          "why": "Right. The flag mirrors a server limit, so the client is the wrong place to argue with it."
+        },
+        {
+          "t": "The flag is broken and should be reported.",
+          "why": "It works as designed. It exposes a client-side knob for a value the server also enforces."
+        },
+        {
+          "t": "Passing a higher number would succeed but be ignored.",
+          "why": "The comment points at the server refusing, which surfaces as an error rather than as silence."
+        }
+      ]
+    },
+    {
+      "q": "--old-asset-ttl is described as keeping old assets alive rather than deleting them. Why did it turn out to be irrelevant here?",
+      "options": [
+        {
+          "t": "It is threaded only into the legacy Workers Sites sync, which this site does not use.",
+          "ok": true,
+          "why": "Right. The description was accurate about a subsystem that is not running, which a description cannot tell you."
+        },
+        {
+          "t": "The time-to-live is capped too low to matter.",
+          "why": "No cap was involved. The flag never reaches the code path in question."
+        },
+        {
+          "t": "Assets are content-addressed, so nothing is ever deleted.",
+          "why": "Content addressing changes the names rather than the deletion behaviour, and it is a separate mechanism from this flag."
+        }
+      ]
+    },
+    {
+      "q": "A 200 comes back from an endpoint you sent an undocumented parameter to. What is the honest label for the result?",
+      "options": [
+        {
+          "t": "Name it after what was requested, and record separately that the effect is unverified.",
+          "ok": true,
+          "why": "Right. The request is a fact and the effect is a hypothesis, so the label should carry only the first."
+        },
+        {
+          "t": "Name it after the feature, since the endpoint returned success.",
+          "why": "That is the mislabel this page describes. An endpoint ignoring the parameter returns the same success."
+        },
+        {
+          "t": "Discard the result, because a 200 carries no information.",
+          "why": "It does tell you the request was well formed and that the endpoint served. It just fails to say which engine served it."
+        }
+      ]
+    },
+    {
+      "q": "Which observation would undermine every cheap control on this page?",
+      "options": [
+        {
+          "t": "A tool exiting 0 on a flag name that was invented on the spot.",
+          "ok": true,
+          "why": "Right. That would mean acceptance carries no information, and each conclusion would need a real run to re-earn."
+        },
+        {
+          "t": "A hidden flag becoming documented.",
+          "why": "That moves a row to an ordinary reference page, which is the good outcome rather than a problem."
+        },
+        {
+          "t": "A description turning out to be inaccurate.",
+          "why": "The page already assumes descriptions are unreliable, which is why the controls read behaviour instead."
+        }
+      ]
+    }
+  ]
+}
+</script>
+<script src="/quiz.js" defer></script>
+<script src="/nav.js" defer></script>
+<!-- axp:shell --><nav id="axp-icons" aria-label="desktop shortcuts"><a class="axp-ico" title="writing, in flux" href="/writing" data-key="Notepad" style="left:9px;top:9px"><span class="ic note" aria-hidden="true"></span><span class="t">Notepad</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="GitHub (opens in a new tab)" href="https://github.com/oddharsh" data-key="GitHub" style="left:9px;top:95px"><span class="ic " style="background:linear-gradient(180deg,oklch(72% 0.05 255),oklch(60% 0.07 257))" aria-hidden="true">G</span><span class="t">GitHub</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Twitter (opens in a new tab)" href="https://x.com/oddhash" data-key="Twitter" style="left:9px;top:181px"><span class="ic " style="background:linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))" aria-hidden="true">@</span><span class="t">Twitter</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Instagram (opens in a new tab)" href="https://www.instagram.com/aadharsh.hif" data-key="Photos" style="left:9px;top:267px"><span class="ic " style="background:linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))" aria-hidden="true"><i class="cam" aria-hidden="true"></i></span><span class="t">Photos</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Curius (opens in a new tab)" href="https://curius.app/aadharsh-pannirselvam" data-key="Curius" style="left:9px;top:353px"><span class="ic " style="background:linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))" aria-hidden="true">C</span><span class="t">Curius</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Beli (opens in a new tab)" href="https://beliapp.com/users/aadharsh" data-key="Beli" style="left:9px;top:439px"><span class="ic " style="background:linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))" aria-hidden="true">B</span><span class="t">Beli</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Spotify (opens in a new tab)" href="https://open.spotify.com/user/aadharsh2010" data-key="Music" style="left:9px;top:525px"><span class="ic " style="background:linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))" aria-hidden="true">♪</span><span class="t">Music</span></a></nav><div id="axp-taskbar" role="navigation" aria-label="taskbar"><a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a><div id="axp-pins"><a class="axp-pin" title="prototypes + experiments" href="/garage" data-count="22"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-garage" alt=""></span><span class="lbl">garage</span></a><a class="axp-pin" title="chat-style explainers + live demos" href="/lwe" data-count="12"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lwe" alt=""></span><span class="lbl">lwe</span></a><a class="axp-pin" title="notes, in flux: an editable notepad" href="/writing" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-writing" alt=""></span><span class="lbl">writing</span></a><a class="axp-pin" title="what I've been reading, from Curius" href="/reading" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-reading" alt=""></span><span class="lbl">reading</span></a><a class="axp-pin" title="events worth going to" href="/serendipity" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-serendipity" alt=""></span><span class="lbl">serendipity</span></a><a class="axp-pin" title="the crypto-VC neighborhood" href="/around" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-around" alt=""></span><span class="lbl">around</span></a><a class="axp-pin" title="the other web: how machines read a URL" href="/lens" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lens" alt=""></span><span class="lbl">lens</span></a><a class="axp-pin" title="terminal utilities, drivable by keypress" href="/terminal" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-terminal" alt=""></span><span class="lbl">terminal</span></a><a class="axp-pin" title="a compression vision test — whose eye do you have?" href="/pixel-peeper" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-pixel-peeper" alt=""></span><span class="lbl">pixel peeper</span></a><a class="axp-pin" title="what I'm listening to right now" href="/rn" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-music" alt=""></span><span class="lbl">music</span></a><a class="axp-pin" title="book a coffee / bagel" href="/coffee" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-coffee" alt=""></span><span class="lbl">coffee</span></a></div><div id="axp-spacer"></div><div id="axp-tray"><button id="axp-sound" type="button" hidden></button><a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><img src="/icons.svg#tray-sysprop" alt=""></a><a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><img src="/icons.svg#tray-security" alt=""></a><a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><img src="/icons.svg#tray-updates" alt=""></a><span id="axp-clock" aria-hidden="true"></span></div></div><script type="speculationrules">{"prerender":[{"where":{"and":[{"href_matches":"/*"},{"not":{"href_matches":"/whoareyou*"}},{"not":{"href_matches":"/run"}},{"not":{"href_matches":"/rn*"}},{"not":{"href_matches":"/images*"}},{"not":{"href_matches":"/index.md"}},{"not":{"href_matches":"/llms.txt"}}]},"eagerness":"moderate"}]}</script><!-- /axp:shell -->
+</body>
+</html>

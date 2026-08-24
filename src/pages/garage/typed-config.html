@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#2D78BD">
+<link rel="preload" as="style" href="/luna.css">
+<title>aadhar.sh/garage/typed-config: The config that types itself</title>
+<meta name="description" content="Wrangler&#39;s hidden TypeScript config, measured on a real Worker: a byte-identical upload, a variable whose value reaches the type, and a Durable Object type that gets worse.">
+<link rel="canonical" href="https://aadhar.sh/garage/typed-config">
+<meta property="og:type" content="article">
+<meta property="og:title" content="aadhar.sh/garage/typed-config: The config that types itself">
+<meta property="og:description" content="Wrangler&#39;s hidden TypeScript config, measured on a real Worker: a byte-identical upload, a variable whose value reaches the type, and a Durable Object type that gets worse.">
+<meta property="og:url" content="https://aadhar.sh/garage/typed-config">
+<meta name="twitter:card" content="summary_large_image">
+<meta property="og:image" content="https://aadhar.sh/og/garage-typed-config.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The aadhar.sh/garage/typed-config interactive demo, screenshotted">
+<meta name="twitter:image" content="https://aadhar.sh/og/garage-typed-config.png">
+<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}html{background:linear-gradient(180deg,oklch(56% .13 250),oklch(73% .10 236) 50%,oklch(88% .05 232) 60%,oklch(60% .16 140))}
+body{background:transparent;font-family:var(--font-ui);font-size:10.5pt;line-height:1.5;color:#181818;padding:24px 12px 60px;min-height:100vh}
+.window{max-width:820px;margin:0 auto;background:#fff;border:2px solid #0831d9;border-right-color:#001ea0;border-bottom-color:#001ea0;border-radius:8px 8px 0 0;overflow:hidden;box-shadow:inset 1px 1px 0 #166aee,inset -1px -1px 0 #00138c,4px 4px 0 rgba(0,30,160,.35)}
+.title-bar{background:linear-gradient(180deg,oklch(70% .15 258),oklch(60% .20 261) 8%,oklch(51% .225 263) 18%,oklch(50% .225 263) 86%,oklch(58% .18 260));color:#fff;font-family:var(--font-caption);font-weight:bold;font-size:11pt;padding:4px 5px 4px 8px;display:flex;align-items:center;gap:6px;text-shadow:1px 1px #0f1089;user-select:none}
+.title-bar .title-text{flex:1;min-width:0;display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.title-bar .icon{width:14px;height:14px;flex:0 0 14px;background:#fff;border:1px solid #8f4d06;position:relative}.title-bar .icon:before{content:"✦";position:absolute;inset:0;display:grid;place-items:center;font-size:10px;color:#ef8f24;text-shadow:none}
+.controls{display:inline-flex;align-items:center;gap:2px}.controls span,.controls a{position:relative;box-sizing:border-box;width:21px;height:21px;display:inline-block;overflow:hidden;font-size:0;color:transparent;border:1px solid #6696eb;border-radius:3px;text-decoration:none;cursor:pointer;background:linear-gradient(180deg,#5f8cf7,#3a71f5 22%,#3e73f5 55%,#2a70f2 82%,#1045be)}.controls .close{border-color:#d8401c;background:linear-gradient(180deg,#e8795f,#e45f40 30%,#e45d3d 52%,#e2552a 80%,#ae3110)}.controls .min:before{content:"";position:absolute;left:5px;right:5px;bottom:5px;height:2px;background:#fff}.controls .max:before{content:"";position:absolute;left:5px;top:5px;width:11px;height:9px;border:1px solid #fff;border-top-width:2px}.controls .close:before,.controls .close:after{content:"";position:absolute;left:50%;top:50%;width:13px;height:2px;margin:-1px 0 0 -6.5px;background:#fff}.controls .close:before{transform:rotate(45deg)}.controls .close:after{transform:rotate(-45deg)}
+.content{padding:18px 20px 8px;background:#fffdf6;border-top:1px solid #8d9bb0}.content h1,.content h2,.content h3{font-family:var(--font-caption);color:#0831d9;line-height:1.25}.content h1{font-size:18pt;margin:0 0 7px}.content h2{font-size:13pt;margin:18px 0 5px}.content h3{font-size:11pt;margin:13px 0 4px}.content p{margin:0 0 12px}.content a{color:#153eab}.content code,.content pre{font-family:var(--font-mono)}
+.garage-intro{font-size:11pt;color:#444;max-width:70ch}.garage-meta{font-size:8.5pt;color:#69758a;border-top:1px solid #d8dfeb;margin-top:18px;padding-top:6px}.status{border-top:1px solid #d1d9e4;background:#f1f4f8;padding:4px 10px;display:flex;gap:8px;flex-wrap:wrap;font-size:8.5pt;color:#586579}.status span:after{content:"·";margin-left:8px;color:#9ca8b8}.status span:last-child:after{content:""}
+@media(max-width:620px){body{padding:8px 5px 42px}.content{padding:14px 12px 6px}.window{border-radius:5px 5px 0 0}}
+
+.tc-code{background:#f4f6fa;border:1px solid #c8d2e2;border-left:3px solid #0831d9;padding:8px 10px;margin:0 0 12px;overflow-x:auto;font-size:9pt;line-height:1.5}
+.tc-code code{white-space:pre}
+.tc-demo{border:1px solid #9aa7ba;background:#eef1f6;margin:14px 0 16px;box-shadow:inset 1px 1px 0 #fff}
+.tc-cols{display:grid;grid-template-columns:minmax(150px,1fr) minmax(0,1.5fr) minmax(0,1.5fr);gap:1px;background:#9aa7ba}
+.tc-pick{background:#f6f8fb;padding:0 0 8px}
+.tc-pick-head{font-family:var(--font-caption);font-size:8.5pt;text-transform:uppercase;letter-spacing:.06em;color:#4a5568;background:#e3e9f2;border-bottom:1px solid #c8d2e2;padding:5px 8px}
+.tc-pick-head-2{margin-top:8px;border-top:1px solid #c8d2e2}
+.tc-row{display:flex;align-items:flex-start;gap:6px;padding:4px 8px;font-size:8.5pt;line-height:1.35;cursor:pointer}
+.tc-row:hover{background:#e8eefa}
+.tc-row input{margin:2px 0 0;flex:0 0 auto}
+.tc-row b{font-family:var(--font-mono);font-weight:normal;color:#123;display:block}
+.tc-row span{color:#6b7688;display:block;font-size:8pt}
+.tc-pane{background:#fff;min-width:0;display:flex;flex-direction:column}
+.tc-pane-head{background:#e3e9f2;border-bottom:1px solid #c8d2e2;padding:4px 8px;font-size:8.5pt;color:#4a5568;display:flex;justify-content:space-between;align-items:center;gap:6px;min-height:26px}
+.tc-dim{color:#8b95a6}
+.tc-tabs{display:inline-flex;gap:4px}
+.tc-tabs button{font:inherit;font-size:8pt;padding:1px 7px;border:1px solid #a9b4c6;background:linear-gradient(180deg,#fff,#e6eaf1);border-radius:3px;cursor:pointer;color:#33415c}
+.tc-tabs button.on{background:linear-gradient(180deg,#cfe0fb,#a8c6f4);border-color:#5f86c8;color:#12305e;font-weight:bold}
+.tc-src{margin:0;padding:8px 10px;font-size:8.5pt;line-height:1.45;overflow:auto;max-height:390px;flex:1}
+.tc-src code{white-space:pre;font-family:var(--font-mono)}
+.tc-legend{font-size:8.5pt;color:#5c6779;margin:0;padding:7px 10px;border-top:1px solid #c8d2e2;background:#f6f8fb}
+.tc-scroll{overflow-x:auto;margin:0 0 12px}
+.tc-table{border-collapse:collapse;font-size:8.5pt;width:100%;min-width:520px}
+.tc-table th{text-align:left;background:#e3e9f2;border:1px solid #c8d2e2;padding:4px 7px;font-family:var(--font-caption);color:#33415c}
+.tc-table td{border:1px solid #d8dfeb;padding:4px 7px;vertical-align:top}
+.tc-table td code{font-size:8pt}
+.tc-table tr:nth-child(even) td{background:#f8fafd}
+.tc-ok{color:#1c6b32;font-weight:bold}
+.tc-no{color:#a3261a;font-weight:bold}
+.tc-mig td,.tc-bun td{line-height:1.5}
+@media(max-width:760px){.tc-cols{grid-template-columns:1fr}.tc-src{max-height:250px}}
+</style>
+<link rel="stylesheet" href="/luna.css">
+</head>
+<body>
+<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<div class="window">
+  <div class="title-bar" aria-hidden="true">
+    <span class="title-text"><span class="icon"></span>aadhar.sh/garage/typed-config</span>
+    <span class="controls"><span class="min"></span><span class="max"></span><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
+  </div>
+  <div class="content">
+<h1>The config that types itself</h1>
+<p class="garage-intro">A Worker config is data, so every binding name in it is a string that nothing checks. Wrangler ships a hidden flag that makes the config a TypeScript program instead, and then infers the Worker's <code>Env</code> from it. This site converted one Worker to find out what that buys: the upload came out byte-identical, a plain-text variable arrived in the type as its own value, and the Durable Object class type went the other way and got worse.</p>
+
+<h2>The thing a config cannot do</h2>
+<p>Here is the whole problem in one line. This site's Worker declares 21 bindings across two config files, and its request handler types them like this:</p>
+<pre class="tc-code"><code>@typedef {(request: Request, env: any, ctx: any, url: URL) =&gt; Response} RouteHandler</code></pre>
+<p><code>any</code>. Every KV namespace, every D1 database, the R2 bucket, the Durable Object, all of it. Rename a binding in <code>wrangler.jsonc</code> and nothing in the tree goes red; the failure arrives at runtime as a property read on <code>undefined</code>, in production, on whichever route touched it first.</p>
+<p>That is a property of the format rather than an oversight. JSON cannot export a type. The usual repair is <code>wrangler types</code>, which reads the config and writes a <code>.d.ts</code>, and it works: run against this site it produces the full interface, Durable Object generics and all. It also prints this when it finishes.</p>
+<pre class="tc-code"><code>Remember to rerun 'wrangler types' after you change your wrangler.jsonc file.</code></pre>
+<p>A generated file plus a reminder is a snapshot plus a promise. The snapshot is correct on the day it is taken and silently wrong afterwards, which is the same shape as every committed artifact this site has replaced with a build step.</p>
+
+<h2>What the flag actually is</h2>
+<p>Wrangler 4.125.0 loads a <code>cloudflare.config.ts</code>, and an optional <code>wrangler.config.ts</code> beside it, behind <code>--x-new-config</code>. The flag is marked hidden, so it appears in no help output. The package behind it says of itself that it is "not yet stable enough for external use", and searching for documentation on the day this page was written found none.</p>
+<p>The two filenames are the reverse of the guess. <b><code>cloudflare.config.ts</code> holds the Worker</b>: name, compatibility date, entrypoint, triggers, bindings, exports, observability, placement, limits. <b><code>wrangler.config.ts</code> holds the tooling</b>: the build command, the assets directory, dev settings, tsconfig, source maps. Put a Worker field in the tooling file and the error names the mistake and the fix.</p>
+
+<h2>Build a config and watch three things move</h2>
+<p>Toggle bindings on the left. The middle pane is the config you would write. The right pane switches between what the platform receives and what your <code>env</code> becomes. Every row below was measured through a real Worker: the resolved JSON is what <code>wrangler build --x-cf-build-output</code> wrote, and each type is what the compiler reported for that key.</p>
+<div class="tc-demo">
+  <div class="tc-cols">
+    <div class="tc-pick">
+      <div class="tc-pick-head">bindings</div>
+      <div id="tc-rows"></div>
+      <div class="tc-pick-head tc-pick-head-2">exports</div>
+      <div id="tc-rows-x"></div>
+    </div>
+    <div class="tc-pane">
+      <div class="tc-pane-head"><span>cloudflare.config.ts</span><span class="tc-dim">what you write</span></div>
+      <pre class="tc-src"><code id="tc-src"></code></pre>
+    </div>
+    <div class="tc-pane">
+      <div class="tc-pane-head">
+        <span class="tc-tabs">
+          <button type="button" data-t="resolved" class="on">resolved config</button>
+          <button type="button" data-t="env">inferred Env</button>
+        </span>
+      </div>
+      <pre class="tc-src"><code id="tc-out"></code></pre>
+    </div>
+  </div>
+  <p class="tc-legend">The resolved pane is the Build Output Specification wrangler writes to <code>.cloudflare/output/v0/workers/default/config.json</code>, which is the readable answer to "what did my config actually become". The Env pane is what <code>tsc</code> reported for each key of the generated interface.</p>
+</div>
+
+<h2>A variable arrives in the type as its own value</h2>
+<p>Twelve binding kinds went through the compiler. Most land where you would guess, and three do something a JSON config structurally cannot.</p>
+<div class="tc-scroll"><table class="tc-table" id="tc-table"></table></div>
+<p>The interesting rows are the last three. <code>bindings.text("default")</code> gives <code>env.AI_GATEWAY</code> the type <code>"default"</code>, so the variable's <em>value</em> is in the type and a comparison against a string that was never configured is a compile error. <code>bindings.json({ dcz: true, tier: 2 })</code> comes back as <code>{ dcz: true; tier: number }</code>, where the boolean narrows to a literal and the number widens, which is ordinary TypeScript inference showing through. And <code>bindings.secret()</code> types the secret as <code>string</code>, so a secret you forgot to set is a name the compiler already knows about.</p>
+
+<h2>The row that goes backwards</h2>
+<p>The Durable Object type gets worse, and this is the finding worth carrying away from the page. Against the existing JSON config, <code>wrangler types</code> threads the class through:</p>
+<pre class="tc-code"><code>COUNTER: DurableObjectNamespace&lt;import("../../.build/src/worker/index").Counter&gt;;
+BOOKING_WORKFLOW: Workflow&lt;Parameters&lt;import("...").BookingWorkflow['run']&gt;[0]['payload']&gt;;</code></pre>
+<p>Under inference, the same binding comes back as <code>DurableObjectNamespace&lt;undefined&gt;</code>, so every stub method call is untyped. That was measured twice, because the first result looked like holding it wrong: the type stayed <code>undefined</code> with the entrypoint given as a path string, and again with the entrypoint given as a module through the <code>{ type: "cf-worker" }</code> import attribute the package documents for exactly this purpose. Both forms boot a Worker and serve requests. Neither carries the class into the namespace.</p>
+<p>So the honest scoreboard is split. The new format wins on plain variables and secrets, which the old one types as bare strings, and loses on Durable Objects and Workflows, which the old one types precisely.</p>
+
+<h2>Migrations become a state on an export</h2>
+<p>The cumulative migration list is gone. A class declares what it is on its own export, and the storage engine sits beside it:</p>
+<div class="tc-scroll"><table class="tc-table tc-mig">
+  <tr><th>wrangler.toml</th><th>cloudflare.config.ts</th></tr>
+  <tr><td><code>[[migrations]] tag = "v1"<br>new_sqlite_classes = ["Counter"]</code></td><td><code>Counter: exports.durableObject({ storage: "sqlite" })</code></td></tr>
+  <tr><td><code>deleted_classes = ["Old"]</code></td><td><code>Old: exports.durableObject({ state: "deleted" })</code></td></tr>
+  <tr><td><code>renamed_classes = [{ from, to }]</code></td><td><code>Old: exports.durableObject({ state: "renamed", renamedTo: "New" })</code></td></tr>
+</table></div>
+<p>This is a different upload path rather than a missing feature. Wrangler decides between them in one function: when a config declares Durable Object exports it sends those exports and sends no migrations at all, and it computes a migration only for configs that declare none.</p>
+<p>Which leaves the question a dry run structurally cannot answer, because a dry run never computes a migration in the first place. Whether the API accepts the export form for a class that already exists under an applied migration tag is a fact about the server, and the first real deploy is the only instrument that reports it. That deploy has not happened here yet.</p>
+
+<h2>Two things it will not do</h2>
+<p><b>The dependency instrumentation key has no home.</b> The old config set <code>[dependencies_instrumentation] enabled = true</code> and the new schema has no field for it. The escape hatch offers no route around it, because <code>unsafe</code> carries metadata and capnp schemas alone. This cost nothing, for a reason only readable in wrangler's source: it tests the key as <code>enabled !== false</code>, so an absent block behaves exactly like the explicit <code>true</code>. A dry run reports on none of this, which is why the answer came from reading the upload path.</p>
+<p><b>The types command does not know about the flag.</b> Passing <code>--x-new-config</code> to <code>wrangler types</code> is an unknown argument. The generated file is written by <code>wrangler dev</code> instead, from a <code>types.generate</code> setting in the tooling config that defaults on. So the inferred types exist on a machine somebody has run the dev server on, which is a thinner guarantee than a build step.</p>
+
+<h2>The bun trap, and why it is a trap</h2>
+<p>The loader refuses bun, in a message that names itself:</p>
+<pre class="tc-code"><code>cloudflare.config.ts loading is not supported on Bun.
+Please use Node.js v22.18.0 or higher.</code></pre>
+<p>On a repository whose whole toolchain is bun, that reads as a blocker for about a minute. It is a claim about the process that ends up running wrangler rather than about the package manager:</p>
+<div class="tc-scroll"><table class="tc-table tc-bun">
+  <tr><th>invocation</th><th>result</th></tr>
+  <tr><td><code>bun x --no-install wrangler … --x-new-config</code></td><td class="tc-ok">loads, deploys</td></tr>
+  <tr><td><code>bun run &lt;script&gt;</code>, resolving the same shim</td><td class="tc-ok">loads</td></tr>
+  <tr><td><code>bun ./node_modules/wrangler/bin/wrangler.js …</code></td><td class="tc-no">refused</td></tr>
+</table></div>
+<p>The first two resolve <code>node_modules/.bin/wrangler</code>, whose <code>#!/usr/bin/env node</code> shebang hands the process to node before any config is read. Only running wrangler's entry file directly puts bun in front of the loader. So "does this tool support bun" turned out to be a question about a shebang, and the answer changed with the invocation rather than with the tool.</p>
+
+<h2>What this cost, and what it did not</h2>
+<p>The conversion ran on this site's smallest deployed Worker, the one behind <code>/garage/cf/*</code>, chosen because it is a demo that a person deploys by hand. The upload came out the same size it was before, to the byte, with the same four bindings. The account pin moved to a separate settings export, the route became a fetch trigger, and one line of CI changed a flag.</p>
+<p>What it has not bought yet is the thing it exists for. This site's main Worker still types <code>env</code> as <code>any</code>, because converting it means folding two config files of 24,662 and 10,987 bytes into one program and putting a hidden flag on the path that publishes production. A demo Worker is the right place to be wrong. The site is not.</p>
+
+<h2>What would change the verdict</h2>
+<p>Three results would move this page. A real deploy that the API refuses on the export-based Durable Object form would make the migration section a warning instead of a translation table. A release that threads the class type into <code>DurableObjectNamespace</code> would remove the only column where the old format wins, and then the argument for converting the main Worker becomes hard to resist. And the flag losing its hidden marker, with documentation to read, would turn all of this from an experiment into a migration with a date on it.</p>
+    <section id="luq" aria-label="understanding check"></section>
+    <p class="garage-meta">watching · the understanding check is part of the page, not a gate</p>
+  </div>
+  <div class="status"><span>garage</span><span>watching</span><span>2026-08-24</span></div>
+</div>
+
+<script>
+// /garage/typed-config — the config explorer.
+//
+// Every row below was measured against a real Worker on wrangler 4.125.0 with
+// @cloudflare/config 0.7.0: `resolved` is what `wrangler build --x-cf-build-output`
+// wrote for that binding, and `env` is what tsc reported for that key of the
+// generated interface. Nothing here is derived at runtime, so the page states
+// measurements rather than guesses.
+(function () {
+  var BINDINGS = [
+    { key: "RN_KV", note: "KV namespace", call: 'bindings.kv({ id: "3cb8a107c58e47dc9244e75b33401f36" })',
+      resolved: { type: "kv", id: "3cb8a107c58e47dc9244e75b33401f36" }, env: "KVNamespace<string>", on: true },
+    { key: "RESTORE_DB", note: "D1 database", call: 'bindings.d1({ id: "88c8daf1-3a36-4f8e-a2ad-dba8a74e1b9f", name: "aadhar-restore" })',
+      resolved: { type: "d1", name: "aadhar-restore", id: "88c8daf1-3a36-4f8e-a2ad-dba8a74e1b9f" }, env: "D1Database", on: true },
+    { key: "PHOTOS_R2", note: "R2 bucket", call: 'bindings.r2({ name: "aadhar-photos" })',
+      resolved: { type: "r2", name: "aadhar-photos" }, env: "R2Bucket", on: true },
+    { key: "AI", note: "Workers AI", call: "bindings.ai()", resolved: { type: "ai" }, env: "Ai<AiModels>", on: false },
+    { key: "BROWSER", note: "Browser Run", call: "bindings.browser()", resolved: { type: "browser" }, env: "BrowserRun", on: false },
+    { key: "BOT_LEDGER", note: "Analytics Engine", call: 'bindings.analyticsEngineDataset({ name: "aadhar_bot_ledger" })',
+      resolved: { type: "analytics-engine-dataset", name: "aadhar_bot_ledger" }, env: "AnalyticsEngineDataset", on: false },
+    { key: "CF_VERSION_METADATA", note: "version metadata", call: "bindings.versionMetadata()",
+      resolved: { type: "version-metadata" }, env: "WorkerVersionMetadata", on: false },
+    { key: "ASSETS", note: "static assets; the directory lives in wrangler.config.ts", call: "bindings.assets()",
+      resolved: { type: "assets" }, env: "Fetcher", on: false },
+    { key: "COUNTER", note: "Durable Object stub", call: 'bindings.durableObject({ workerName: "probe", exportName: "Counter" })',
+      resolved: { type: "durable-object", workerName: "probe", exportName: "Counter" }, env: "DurableObjectNamespace<undefined>", on: true },
+    { key: "SIGNING_SECRET", note: "secret; the value never enters the config", call: "bindings.secret()",
+      resolved: { type: "secret" }, env: "string", on: true },
+    { key: "AI_GATEWAY", note: "plain text; the value reaches the type", call: 'bindings.text("default")',
+      resolved: { type: "text", value: "default" }, env: '"default"', on: true },
+    { key: "FEATURES", note: "JSON; booleans narrow, numbers widen", call: "bindings.json({ dcz: true, tier: 2 })",
+      resolved: { type: "json", value: { dcz: true, tier: 2 } }, env: "{ dcz: true; tier: number; }", on: true },
+  ];
+
+  var EXPORTS = [
+    { key: "Counter", note: "created, SQLite storage", call: 'exports.durableObject({ storage: "sqlite" })',
+      resolved: { type: "durable-object", storage: "sqlite" }, on: true },
+    { key: "Legacy", note: "deleted; this destroys its stored data", call: 'exports.durableObject({ state: "deleted" })',
+      resolved: { type: "durable-object", state: "deleted" }, on: false },
+  ];
+
+  var rows = document.getElementById("tc-rows");
+  var rowsX = document.getElementById("tc-rows-x");
+  var srcEl = document.getElementById("tc-src");
+  var outEl = document.getElementById("tc-out");
+  var table = document.getElementById("tc-table");
+  if (!rows || !srcEl || !outEl) return;
+  var mode = "resolved";
+
+  function pick(list, host) {
+    list.forEach(function (item) {
+      var label = document.createElement("label");
+      label.className = "tc-row";
+      var box = document.createElement("input");
+      box.type = "checkbox";
+      box.checked = item.on;
+      box.addEventListener("change", function () { item.on = box.checked; render(); });
+      var text = document.createElement("span");
+      var name = document.createElement("b");
+      name.textContent = item.key;
+      var note = document.createElement("span");
+      note.textContent = item.note;
+      text.appendChild(name);
+      text.appendChild(note);
+      label.appendChild(box);
+      label.appendChild(text);
+      host.appendChild(label);
+    });
+  }
+
+  function chosen(list) { return list.filter(function (i) { return i.on; }); }
+
+  function source() {
+    var env = chosen(BINDINGS);
+    var ex = chosen(EXPORTS);
+    var lines = [];
+    lines.push('import { bindings, defineWorker, exports, triggers } from "wrangler/experimental-config";');
+    lines.push("");
+    lines.push("export default defineWorker({");
+    lines.push('  name: "probe",');
+    lines.push('  compatibilityDate: "2026-08-15",');
+    lines.push('  entrypoint: "./src/index.ts",');
+    lines.push('  triggers: [triggers.fetch({ pattern: "aadhar.sh/probe/*", zone: "aadhar.sh" })],');
+    if (env.length) {
+      lines.push("  env: {");
+      env.forEach(function (b) { lines.push("    " + b.key + ": " + b.call + ","); });
+      lines.push("  },");
+    }
+    if (ex.length) {
+      lines.push("  exports: {");
+      ex.forEach(function (b) { lines.push("    " + b.key + ": " + b.call + ","); });
+      lines.push("  },");
+    }
+    lines.push("});");
+    return lines.join("\n");
+  }
+
+  function resolved() {
+    var out = {
+      type: "worker",
+      name: "probe",
+      compatibilityDate: "2026-08-15",
+      triggers: [{ type: "fetch", pattern: "aadhar.sh/probe/*", zone: "aadhar.sh" }],
+    };
+    var env = chosen(BINDINGS);
+    var ex = chosen(EXPORTS);
+    if (env.length) {
+      out.env = {};
+      env.forEach(function (b) { out.env[b.key] = b.resolved; });
+    }
+    if (ex.length) {
+      out.exports = {};
+      ex.forEach(function (b) { out.exports[b.key] = b.resolved; });
+    }
+    return JSON.stringify(out, null, 2);
+  }
+
+  function envType() {
+    var env = chosen(BINDINGS);
+    if (!env.length) return "interface Env {}\n\n// No bindings selected, so env carries nothing\n// and every property read is a compile error.";
+    var lines = ["interface Env {"];
+    env.forEach(function (b) { lines.push("  " + b.key + ": " + b.env + ";"); });
+    lines.push("}");
+    return lines.join("\n");
+  }
+
+  function render() {
+    srcEl.textContent = source();
+    outEl.textContent = mode === "resolved" ? resolved() : envType();
+  }
+
+  var tabs = document.querySelectorAll(".tc-tabs button");
+  Array.prototype.forEach.call(tabs, function (btn) {
+    btn.addEventListener("click", function () {
+      mode = btn.getAttribute("data-t");
+      Array.prototype.forEach.call(tabs, function (b) { b.classList.toggle("on", b === btn); });
+      render();
+    });
+  });
+
+  if (table) {
+    var head = document.createElement("tr");
+    ["binding", "written as", "reaches the platform as", "env type"].forEach(function (h) {
+      var th = document.createElement("th");
+      th.textContent = h;
+      head.appendChild(th);
+    });
+    table.appendChild(head);
+    BINDINGS.forEach(function (b) {
+      var tr = document.createElement("tr");
+      [b.key, b.call, JSON.stringify(b.resolved), b.env].forEach(function (cell, i) {
+        var td = document.createElement("td");
+        var code = document.createElement("code");
+        code.textContent = cell;
+        td.appendChild(code);
+        if (i === 3) td.className = "tc-envcell";
+        tr.appendChild(td);
+      });
+      table.appendChild(tr);
+    });
+  }
+
+  pick(BINDINGS, rows);
+  if (rowsX) pick(EXPORTS, rowsX);
+  render();
+})();
+</script>
+<script type="application/json" id="luq-data">
+{
+  "skin": "garage",
+  "intro": "Five questions on the mechanism, and one on what would change the verdict.",
+  "questions": [
+    {
+      "q": "Why can a JSON config never give env a checked type on its own?",
+      "options": [
+        {
+          "t": "A data file cannot export a type, so the binding names have to be copied into a type by something else.",
+          "ok": true,
+          "why": "Right. That copy is what wrangler types produces, and a copy is correct when it is made and silently stale afterwards."
+        },
+        {
+          "t": "JSON has no way to express a string, so the binding names are untyped.",
+          "why": "JSON expresses strings fine. The gap is that a JSON file cannot participate in the type system at all."
+        },
+        {
+          "t": "The Workers runtime strips types before the config is read.",
+          "why": "Types are erased at build time in every TypeScript project. The runtime is not what decides whether a config can carry one."
+        }
+      ]
+    },
+    {
+      "q": "The demo shows bindings.text(\"default\") producing the type \"default\" rather than string. What does that buy?",
+      "options": [
+        {
+          "t": "A comparison against a value that was never configured fails at compile time instead of silently at runtime.",
+          "ok": true,
+          "why": "Right. The literal type carries the configured value, so the set of things the variable can equal is known to the compiler."
+        },
+        {
+          "t": "The variable becomes read-only at runtime.",
+          "why": "Types are erased before the Worker runs. Nothing about runtime mutability changes."
+        },
+        {
+          "t": "The value is encrypted the way a secret is.",
+          "why": "A text binding is plain configuration and is visible in the resolved config. Secrets are a separate binding kind that carries no value at all."
+        }
+      ]
+    },
+    {
+      "q": "The Durable Object binding infers as DurableObjectNamespace\u003cundefined>. What was ruled out before calling that a limitation?",
+      "options": [
+        {
+          "t": "The entrypoint was given both as a path string and as a module through the documented import attribute, and the type stayed undefined either way.",
+          "ok": true,
+          "why": "Right. One form failing looks like holding it wrong, so the second form is what turns the result into a claim about the tool."
+        },
+        {
+          "t": "The class was renamed until the compiler agreed.",
+          "why": "A rename changes which name is looked up. It says nothing about whether the class type is threaded into the namespace."
+        },
+        {
+          "t": "A newer compiler was tried, which resolved it.",
+          "why": "The page reports the type as still undefined. A result that resolved would have changed the finding rather than qualified it."
+        }
+      ]
+    },
+    {
+      "q": "A dry run of the converted Worker passes. What does that fail to tell you?",
+      "options": [
+        {
+          "t": "Whether the API accepts the export-based Durable Object form, because a dry run never computes a migration at all.",
+          "ok": true,
+          "why": "Right. The migration is resolved against the live script, which a run that contacts no API cannot do."
+        },
+        {
+          "t": "Whether the bindings are named correctly, since a dry run skips binding resolution.",
+          "why": "The dry run prints the resolved binding table, which is exactly the part it does check."
+        },
+        {
+          "t": "Whether the bundle compiles, since a dry run skips the build.",
+          "why": "A dry run builds the Worker and reports its upload size. Building is most of what it does."
+        }
+      ]
+    },
+    {
+      "q": "The loader refuses bun, yet bun x --no-install wrangler loads the config. Why?",
+      "options": [
+        {
+          "t": "That path resolves a shim whose node shebang hands the process to node before the config is read.",
+          "ok": true,
+          "why": "Right. The refusal is about the process that ends up running wrangler rather than about which package manager launched it."
+        },
+        {
+          "t": "The --no-install flag switches wrangler into a compatibility mode.",
+          "why": "That flag only stops bun fetching a package it cannot resolve locally. It changes nothing about the runtime."
+        },
+        {
+          "t": "bun detects the config extension and delegates automatically.",
+          "why": "Nothing inspects the config to choose a runtime. The shebang on the resolved binary decides, before any config is opened."
+        }
+      ]
+    },
+    {
+      "q": "Which result would most weaken the case for converting the main Worker?",
+      "options": [
+        {
+          "t": "A real deploy that the API refuses on the export-based Durable Object form.",
+          "ok": true,
+          "why": "Right. That would turn the one unmeasured step into a blocker on the Worker that carries the site's Durable Object and Workflow."
+        },
+        {
+          "t": "The flag staying hidden for another release.",
+          "why": "That is the current state, and the page already treats it as a reason to convert a demo Worker rather than the site."
+        },
+        {
+          "t": "A binding kind whose resolved JSON differs from the table here.",
+          "why": "That would date one row of a table. It would leave the argument about types and migrations untouched."
+        }
+      ]
+    }
+  ]
+}
+</script>
+<script src="/quiz.js" defer></script>
+<script src="/nav.js" defer></script>
+<!-- axp:shell --><nav id="axp-icons" aria-label="desktop shortcuts"><a class="axp-ico" title="writing, in flux" href="/writing" data-key="Notepad" style="left:9px;top:9px"><span class="ic note" aria-hidden="true"></span><span class="t">Notepad</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="GitHub (opens in a new tab)" href="https://github.com/oddharsh" data-key="GitHub" style="left:9px;top:95px"><span class="ic " style="background:linear-gradient(180deg,oklch(72% 0.05 255),oklch(60% 0.07 257))" aria-hidden="true">G</span><span class="t">GitHub</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Twitter (opens in a new tab)" href="https://x.com/oddhash" data-key="Twitter" style="left:9px;top:181px"><span class="ic " style="background:linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))" aria-hidden="true">@</span><span class="t">Twitter</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Instagram (opens in a new tab)" href="https://www.instagram.com/aadharsh.hif" data-key="Photos" style="left:9px;top:267px"><span class="ic " style="background:linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))" aria-hidden="true"><i class="cam" aria-hidden="true"></i></span><span class="t">Photos</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Curius (opens in a new tab)" href="https://curius.app/aadharsh-pannirselvam" data-key="Curius" style="left:9px;top:353px"><span class="ic " style="background:linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))" aria-hidden="true">C</span><span class="t">Curius</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Beli (opens in a new tab)" href="https://beliapp.com/users/aadharsh" data-key="Beli" style="left:9px;top:439px"><span class="ic " style="background:linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))" aria-hidden="true">B</span><span class="t">Beli</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Spotify (opens in a new tab)" href="https://open.spotify.com/user/aadharsh2010" data-key="Music" style="left:9px;top:525px"><span class="ic " style="background:linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))" aria-hidden="true">♪</span><span class="t">Music</span></a></nav><div id="axp-taskbar" role="navigation" aria-label="taskbar"><a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a><div id="axp-pins"><a class="axp-pin" title="prototypes + experiments" href="/garage" data-count="22"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-garage" alt=""></span><span class="lbl">garage</span></a><a class="axp-pin" title="chat-style explainers + live demos" href="/lwe" data-count="12"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lwe" alt=""></span><span class="lbl">lwe</span></a><a class="axp-pin" title="notes, in flux: an editable notepad" href="/writing" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-writing" alt=""></span><span class="lbl">writing</span></a><a class="axp-pin" title="what I've been reading, from Curius" href="/reading" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-reading" alt=""></span><span class="lbl">reading</span></a><a class="axp-pin" title="events worth going to" href="/serendipity" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-serendipity" alt=""></span><span class="lbl">serendipity</span></a><a class="axp-pin" title="the crypto-VC neighborhood" href="/around" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-around" alt=""></span><span class="lbl">around</span></a><a class="axp-pin" title="the other web: how machines read a URL" href="/lens" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lens" alt=""></span><span class="lbl">lens</span></a><a class="axp-pin" title="terminal utilities, drivable by keypress" href="/terminal" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-terminal" alt=""></span><span class="lbl">terminal</span></a><a class="axp-pin" title="a compression vision test — whose eye do you have?" href="/pixel-peeper" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-pixel-peeper" alt=""></span><span class="lbl">pixel peeper</span></a><a class="axp-pin" title="what I'm listening to right now" href="/rn" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-music" alt=""></span><span class="lbl">music</span></a><a class="axp-pin" title="book a coffee / bagel" href="/coffee" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-coffee" alt=""></span><span class="lbl">coffee</span></a></div><div id="axp-spacer"></div><div id="axp-tray"><button id="axp-sound" type="button" hidden></button><a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><img src="/icons.svg#tray-sysprop" alt=""></a><a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><img src="/icons.svg#tray-security" alt=""></a><a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><img src="/icons.svg#tray-updates" alt=""></a><span id="axp-clock" aria-hidden="true"></span></div></div><script type="speculationrules">{"prerender":[{"where":{"and":[{"href_matches":"/*"},{"not":{"href_matches":"/whoareyou*"}},{"not":{"href_matches":"/run"}},{"not":{"href_matches":"/rn*"}},{"not":{"href_matches":"/images*"}},{"not":{"href_matches":"/index.md"}},{"not":{"href_matches":"/llms.txt"}}]},"eagerness":"moderate"}]}</script><!-- /axp:shell -->
+</body>
+</html>

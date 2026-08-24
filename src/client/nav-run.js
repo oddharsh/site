@@ -99,6 +99,8 @@ export function createRun(options) {
     { label: "garage · pretext", path: "/garage/pretext", hint: "DOM-free text measurement" },
     { label: "garage · pqc", path: "/garage/pqc", hint: "what a PQ signature costs in bytes and milliseconds" },
     { label: "garage · user-agent", path: "/garage/useragent", hint: "what a crawler name is worth when nothing verifies it" },
+    { label: "garage · typed config", path: "/garage/typed-config", hint: "what a config that is a program buys, and what it loses" },
+    { label: "garage · hidden flags", path: "/garage/hidden-flags", hint: "how to tell an ignored option from an honoured one" },
     { label: "garage · safari 27", path: "/garage/safari27", hint: "WWDC26 Safari 27 features, through this site's lens" },
     { label: "garage · scroll", path: "/garage/scroll", hint: "XP scroll chrome" },
     { label: "garage · teardown", path: "/garage/teardown", hint: "what a multi-agent audit found + fixed" },
