@@ -49,57 +49,37 @@ import { PREVIEW_ROBOTS } from "./preview.ts";
 // never CSP-checked, never hashed.
 const CSP_SCRIPT_SRC_LOOSE = "'self' 'unsafe-inline'";
 
-// The rollout flag. FALSE ships the hashed policy as report-only alongside the
-// loose enforcing one, so a miss shows up in DevTools instead of blanking a page;
-// TRUE promotes it to the enforcing policy and drops the report-only twin.
+// The hashed policy is ENFORCED, and there is no report-only twin.
 //
-// TRUE since 2026-08-16, and the report-only era ended by finally being READ.
-// Nothing ever collected the reports (no `report-to`, no endpoint), so "come back
-// clean" meant somebody opening DevTools on each page, which nobody had done.
-// Doing it found /garage/horizon failing twice, and both misses were in places a
-// hash cannot reach from where the build was looking:
-//
-//   1. the `#mb-frame` srcdoc's inline counter. A srcdoc document INHERITS this
-//      policy, and build step 7c only walked the parent document, so the script
-//      was uncovered. It is the proof that moveBefore() reparents without
-//      reloading, so enforcing would have frozen it at 0, silently. 7c hashes
-//      srcdoc now.
-//   2. an inline event handler, from the sanitizer demo parsing its hostile
-//      default payload into a LIVE detached node on load. That fired alert(1) on
-//      every visit to that page, which was a defect on its own. It parses into an
-//      inert document now, so no handler runs and the panes are unchanged.
-//
-// Verified against a locally built Worker before the flip: 48 documents swept
-// under enforcement, zero violations, and horizon's counter, sanitizer panes and
-// demos all still live. The failure mode this guarded against is silent, so the
-// evidence had to be a sweep rather than a page load.
-export const ENFORCE_PAGE_HASHES = true;
+// It shipped behind an ENFORCE_PAGE_HASHES rollout flag, pinned TRUE from
+// 2026-08-16 and deleted 2026-08-23, so for a week the false arm was dead code
+// that still cost a second header name, a second tail constant, and a `tail`
+// parameter threaded through both policy builders to feed it. The rollout story
+// is worth keeping and is not worth keeping HERE: what the DevTools sweep found
+// on /garage/horizon, and why the enforcing half had never actually been applied
+// to a single document, are gotcha 17 in CLAUDE.md. Rolling back is `git revert`
+// rather than a flag, which is the honest cost given nothing flipped it in
+// either direction after the day it went true.
 
 // Everything after script-src, held once so the loose and hashed policies cannot
 // drift apart. img-src is 'self' data: per #186 — do NOT let a rebase quietly
 // restore the two spotifycdn hosts that landed here before it.
-const CSP_TAIL_REPORTABLE =
-  "style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; worker-src 'self'; manifest-src 'self'";
-
-// `upgrade-insecure-requests` is a NAVIGATION directive, not a violation-reporting
-// one, so a browser ignores it in a report-only policy and Chrome logs a security
-// issue saying so on every page load — which is how it was found (DevTools →
-// Security violations, 2026-08-07). The report-only twin exists to prove the
-// script-src hashes against real browsers and nothing else, and the enforcing
-// policy beside it carries the directive, so dropping it there costs nothing and
-// clears the noise. Treat any directive the spec ignores in report-only the same
-// way (`sandbox` is the other one) rather than reaching for a suppression.
 //
-// COMPOSED rather than subtracted. #249 fixed this by deriving the twin with
-// `CSP_TAIL.replace(/; upgrade-insecure-requests$/, "")`, which is correct today
-// and anchored to the end of the string: append one more directive after
-// upgrade-insecure-requests and the replace silently matches nothing, the twin
-// gets the directive back, and nothing errors. Building the long tail from the
-// short one cannot fail that way, because there is no pattern to miss.
-const CSP_TAIL = `${CSP_TAIL_REPORTABLE}; upgrade-insecure-requests`;
+// `upgrade-insecure-requests` sits at the END, and that position used to matter:
+// it is a NAVIGATION directive, so a browser ignores it in a report-only policy
+// and Chrome logged a security issue on every page load until #249 built the
+// twin without it (DevTools → Security violations, 2026-08-07). #249 COMPOSED
+// the short tail rather than subtracting the directive with an end-anchored
+// replace, because appending one more directive would have made that replace
+// match nothing and silently hand the twin its directive back. With the twin
+// gone there is nothing to subtract and one constant says it all. Keep the
+// general rule: a directive the spec ignores in report-only (`sandbox` is the
+// other) belongs in the enforcing policy alone, never behind a suppression.
+const CSP_TAIL =
+  "style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; worker-src 'self'; manifest-src 'self'; upgrade-insecure-requests";
 
-const cspWith = (scriptSrc, tail = CSP_TAIL) =>
-  `default-src 'self'; script-src ${scriptSrc}; ${tail}`;
+const cspWith = (scriptSrc) =>
+  `default-src 'self'; script-src ${scriptSrc}; ${CSP_TAIL}`;
 
 const CSP_LOOSE = cspWith(CSP_SCRIPT_SRC_LOOSE);
 
@@ -111,23 +91,17 @@ const CSP_LOOSE = cspWith(CSP_SCRIPT_SRC_LOOSE);
 // script at all gets a bare `script-src 'self'`, which is the strictest this policy
 // can be. Do not confuse it with "no entry", which means the build could not speak
 // for this document and falls back to the loose policy.
-const cspHashed = (hashes, tail = CSP_TAIL) =>
-  cspWith(["'self'", ...hashes.map((h) => `'sha256-${h}'`)].join(" "), tail);
+const cspHashed = (hashes) =>
+  cspWith(["'self'", ...hashes.map((h) => `'sha256-${h}'`)].join(" "));
 
-// Returns the CSP header pair for a document. A path with no hash entry (every
-// live worker-rendered page, and everything in readable local dev) gets the loose
-// policy with no report-only twin, which is exactly today's behaviour.
+// Returns the CSP header for a document, ALWAYS exactly one. A path with no hash
+// entry (every live worker-rendered page, and everything in readable local dev)
+// gets the loose policy. An EMPTY hash list is not that, and is the best case: a
+// document with no inline script at all earns a bare `script-src 'self'`, the
+// strictest this policy can be.
 export function cspHeadersFor(pathname) {
   const hashes = scriptHashesFor(pathname);
-  if (!hashes) return { "content-security-policy": CSP_LOOSE };
-  if (ENFORCE_PAGE_HASHES) return { "content-security-policy": cspHashed(hashes) };
-  return {
-    "content-security-policy": CSP_LOOSE,
-    // upgrade-insecure-requests has no report-only behavior; Chromium ignores
-    // it and emits a console error. Keep it in the enforcing policy and omit the
-    // inert directive only from this reporting twin.
-    "content-security-policy-report-only": cspHashed(hashes, CSP_TAIL_REPORTABLE),
-  };
+  return { "content-security-policy": hashes ? cspHashed(hashes) : CSP_LOOSE };
 }
 
 export const SECURITY_HEADERS = {
@@ -220,12 +194,12 @@ export function withSecurityHeaders(response, pathname?, opts?) {
     // the twin lands on a DIFFERENT header name, so the reporting half looked
     // perfect while the enforcing half was never applied at all. Compare against
     // the known stamp instead, which distinguishes "no opinion" from "an opinion".
+    // A plain set rather than a loop over the returned entries. That loop existed
+    // to carry a second header (the report-only twin) past this bail, and
+    // cspHeadersFor has returned exactly one header since the rollout flag went.
     const stamped = headers.get("content-security-policy");
     const bespoke = stamped !== null && stamped !== CSP_LOOSE;
-    for (const [k, v] of Object.entries(cspHeadersFor(pathname))) {
-      if (k === "content-security-policy" && bespoke) continue;
-      headers.set(k, v);
-    }
+    if (!bespoke) headers.set("content-security-policy", cspHeadersFor(pathname)["content-security-policy"]);
   }
   // Tell the browser where to report that a speculated copy of THIS document
   // was actually used for a navigation. See speculation.js for why the server

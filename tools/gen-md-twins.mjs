@@ -313,19 +313,20 @@ export const TWIN_FACTS = [
       { label: "object-src",      source: "src/worker/lib/security.ts", string: "object-src 'none'" },
       { label: "Referrer-Policy", source: "src/worker/lib/security.ts", string: "strict-origin-when-cross-origin" },
       {
-        // The one fact on that page with a scheduled expiry. ENFORCE_PAGE_HASHES
-        // is false today, so the hashed policy ships report-only beside a loose
-        // enforcing one, and the page says so. Flipping the flag makes that
-        // sentence false; this fails the deploy until the twin is rewritten,
-        // which is the only reminder the rollout has.
-        label: "hashed-CSP rollout state",
+        // This used to read the ENFORCE_PAGE_HASHES rollout flag and pick the
+        // sentence the twin had to carry. The flag is gone (2026-08-23), and
+        // reading the EMITTED HEADER SET is the better check anyway: a flag
+        // says what somebody intended, while this says what the module sends.
+        // /security claims 'unsafe-inline' left script-src. That claim goes
+        // false the moment a report-only twin comes back, because the twin is
+        // how the hashed policy ships without being enforced, so this fails the
+        // deploy until either the header set or the page is put right.
+        label: "hashed-CSP enforcement state",
         source: "src/worker/lib/security.ts",
         derive: (src) => {
-          const m = /ENFORCE_PAGE_HASHES\s*=\s*(true|false)/.exec(src);
-          if (!m) return null;
-          return m[1] === "true"
-            ? "the enforced policy names each inline script by hash"
-            : "Content-Security-Policy-Report-Only";
+          const code = src.split("\n").filter((l) => !l.trimStart().startsWith("//")).join("\n");
+          if (code.includes("content-security-policy-report-only")) return null;
+          return "the enforced policy names each inline script by hash";
         },
       },
       { label: "JWKS path", source: "src/worker/security.ts", string: "/.well-known/http-message-signatures-directory" },
