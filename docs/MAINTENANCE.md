@@ -32,8 +32,8 @@ pushable; it is not intended to contain every piece of live operational state.
 ```bash
 git clone git@github.com:oddharsh/site.git
 cd site
-pnpm install --frozen-lockfile
-pnpm --filter cal-aadhar-sh test
+bun install --frozen-lockfile
+bun run --filter cal-aadhar-sh test
 bun run build
 bun run wrangler deploy --dry-run -c wrangler.jsonc
 ```
@@ -140,7 +140,7 @@ rotation and treat all previously emailed links as compromised.
 `.github/workflows/ci.yml` is the pull-request gate. It installs locked
 dependencies, builds the site, enforces the performance budget, dry-runs
 the single site Worker plus the `cf-garage/` and `lwe-ask/` auxiliary Wrangler
-configs, and runs `cal/pnpm test`. The `cf-garage/` dry-run is the odd one out:
+configs, and runs `bun run --filter cal-aadhar-sh test`. The `cf-garage/` dry-run is the odd one out:
 that project moved to wrangler's experimental TypeScript config on 2026-08-23,
 so its step passes `--x-new-config` and passes no `-c` (the flag refuses
 `--config` and reads the config from the working directory instead). Cal and Serendipity are bundled into the site
@@ -228,10 +228,13 @@ production publisher. Configure one Workers Build project for the site Worker
 with `production` as the production branch and monorepo root `.`, leave its
 dashboard Build command blank, and use
 `bash .github/deploy-wrangler.sh versions upload --x-provision=false
---x-auto-create=false` as the Deploy command. That wrapper picks wrangler's
-invocation from the lockfile in the tree being built, so one dashboard string
-serves both a pnpm branch and a bun one. GitHub never holds a Cloudflare token that can write, so it
-cannot publish to production even if the workflow guard is defeated.
+--x-auto-create=false` as the Deploy command. That wrapper runs wrangler's entry file
+under node, which is what lets one dashboard string serve both a pnpm tree and a
+bun one: wrangler does not support bun, and the refusal is per-COMMAND, so a bun
+invocation publishes fine and does no work at all on `check startup`. It used to
+branch on the lockfile; that branch is gone. GitHub never holds a Cloudflare
+token that can write, so it cannot publish to production even if the workflow
+guard is defeated.
 
 ### Ramp a release (`bun run deploy:promote`)
 
@@ -472,9 +475,10 @@ matters:
    CI token still on its old scopes. The new section degrades to a note, nothing
    fails, and the merge deploys normally under the current dashboard command.
 2. **Flip the dashboard**: Workers Builds → the site Worker → Settings → Build →
-   Deploy command → `pnpm exec wrangler versions upload --x-provision=false
-   --x-auto-create=false`. Leave Build command blank and the non-production
-   command alone (it already uploads).
+   Deploy command → `bash .github/deploy-wrangler.sh versions upload
+   --x-provision=false --x-auto-create=false`, the string declared in
+   `infra.json` and exact-matched by `check-infra.mjs`. Leave Build command
+   blank and the non-production command alone (it already uploads).
 3. **Then** rotate `CLOUDFLARE_API_TOKEN` to add `Workers Builds Configuration:Read`.
 
 Backwards — scope first, dashboard second — and `infra:check` starts failing on a
@@ -1282,7 +1286,7 @@ the entry ships with the deploy it describes instead of needing a second one.
 
 `bun run deploy:promote` records the staged rows in D1 when traffic reaches
 **100%** — the one place that knows traffic actually moved. A ramp that stops at
-10% leaves the entry staged, which is exactly what it is. `pnpm run
+10% leaves the entry staged, which is exactly what it is. `bun run
 checkpoints:check` therefore allows the projection to run AHEAD by a contiguous
 tail of unreleased entries, and fails on anything else: behind, mismatched, or a
 gap in the tail.

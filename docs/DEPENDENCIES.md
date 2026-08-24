@@ -76,7 +76,7 @@ review policy and entry point for future agent runs.
 
   Two esbuild copies REMAIN in the tree and neither is ours to remove. Wrangler
   hard-depends on 0.28.1 for Cloudflare's Worker bundler. Vite 8 keeps 0.28.2 as
-  an OPTIONAL peer through `cal`'s vitest chain, so `pnpm why esbuild` still
+  an OPTIONAL peer through `cal`'s vitest chain, so `bun why esbuild` still
   reports it; dropping the root pin removed the root's path to it without
   shrinking the store. Do not read the removal as a disk saving.
 - minify-html 0.18.1 is the exact root pin for the deploy-time HTML pass over

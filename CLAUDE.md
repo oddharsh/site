@@ -50,7 +50,8 @@ moving any of them costs more than it buys:
   config file, so relocating these means editing the Cloudflare dashboard
   FIRST (the deploy command is mirrored in `config/infra.json` and `infra:check`
   fails on drift it would otherwise invent itself).
-- `package.json`, `pnpm-workspace.yaml`, `pnpm-lock.yaml`, `.node-version`.
+- `package.json` (which carries the four workspaces itself, so there is no
+  separate workspace file), `bun.lock`, `.node-version`.
 - `CLAUDE.md` and its `AGENTS.md` symlink, plus `README.md`.
 - `.github/`, `.gitignore`.
 
@@ -491,10 +492,14 @@ worktrees may edit freely, but a worktree is not a release surface.
     resolves whatever it can find: measured 2026-08-12 in a tree with no
     `node_modules`, `npx wrangler --version` answered **4.105.0** from its own
     cache while this repo pins 4.120.0. So the wrangler that moved production
-    traffic depended on how the script happened to be invoked. It calls `pnpm
-    exec wrangler` now (see gotcha 29), which resolves the pin itself. Ramp steps
-    still go through `pnpm run` to match the documented interface, but that is
-    consistency now rather than the guardrail it briefly was.
+    traffic depended on how the script happened to be invoked. It goes through
+    `wranglerCommand()` in `tools/lib/wrangler-bin.ts` now, which NAMES NO
+    PACKAGE MANAGER and runs the pinned entry file under node. The `pnpm exec`
+    that replaced npx was itself wrong the day the tree became bun, since pnpm
+    reads `packageManager` and refuses outright; read that module's header
+    before touching any spawn here. Ramp steps still go through `bun run` to
+    match the documented interface, but that is consistency now rather than the
+    guardrail it briefly was.
 
   `--to`, `--steps`, `--status`, `--rollback` and `--dry-run` all still work by
   hand, and a rollback is still a workstation command on purpose.
@@ -646,7 +651,7 @@ worktrees may edit freely, but a worktree is not a release surface.
      for a second class only when the two really need different code, and assert
      the declared class list in a contract test when you do, so adding one is a
      deliberate act rather than a surprise at deploy time.
-  2. **When a class genuinely must appear or disappear, publish it with `pnpm run
+  2. **When a class genuinely must appear or disappear, publish it with `bun run
      deploy:direct` once** (straight to 100%, migration applied), then go back to the
      ramp for everything after. Deleting also needs its own entry, and the
      migration list is CUMULATIVE: keep the old tags and append.
@@ -742,7 +747,7 @@ worktrees may edit freely, but a worktree is not a release surface.
   TRUE, and they provision real KV/R2/D1 for any binding declared without an
   id. `bun run deploy:direct`, `bun run deploy:version`, and **both** Workers Builds
   commands (the Deploy command AND the Non-production branch deploy command)
-  pin them off, so resource creation stays with `pnpm run
+  pin them off, so resource creation stays with `bun run
   infra:apply` and a missing id fails loudly. **That list read "the Workers
   Builds Deploy command" until 2026-08-04, and the branch build it left out was
   running bare** — every push to every feature branch published with both flags
@@ -1990,7 +1995,7 @@ route is a dead end.
 Keep the paragraph. The dependency is gone and the trap is a property of
 wrangler's condition resolution, so the next package with an `exports` map that
 branches on `browser` inherits it whole, and the failure is invisible to a node
-suite by construction. Turndown is no longer in this repository: `pnpm test`
+suite by construction. Turndown is no longer in this repository: `bun test`
 asserts the manifest cannot carry it and that `reader.js` names neither it nor
 `TurndownService`.
 
@@ -2423,7 +2428,7 @@ cal/
 ### Required secrets (before deploy)
 
 ```bash
-pnpm install
+bun install
 bun run wrangler versions secret put -c wrangler.jsonc ICAL_URL        # Google Calendar → "secret ICS"
 bun run wrangler versions secret put -c wrangler.jsonc RESEND_API_KEY  # resend.com, DKIM-verify aadhar.sh
 openssl rand -hex 32 | bun run wrangler versions secret put -c wrangler.jsonc SIGNING_SECRET
@@ -3801,8 +3806,11 @@ bun run deploy:direct
     would publish production with a registry download and say nothing, which is
     precisely what this gotcha's own sweep measured in `deploy-promote.mjs`
     (4.105.0 against a pinned 4.120.0). `pnpm exec` turns that silent
-    wrong-version publish into a loud failure. Both commands are `pnpm exec
-    wrangler versions upload` now.
+    wrong-version publish into a loud failure. Both commands moved ONCE MORE
+    when the tree became bun, because `pnpm exec` reads `packageManager` and
+    refuses on a bun tree outright: they are `bash .github/deploy-wrangler.sh
+    versions upload` now, and that wrapper runs the pinned entry file under node
+    and fetches nothing, which is the same property `pnpm exec` was picked for.
 
     **The ORDER survives the migration and is the part to keep.** Those two
     strings in `infra.json`, plus the mirrored copies in `wrangler.jsonc` and
@@ -3819,7 +3827,12 @@ bun run deploy:direct
     future change to these two: it is the only trigger whose failure costs no
     release.
 
-    **`lens-reader` needs `pnpm install --ignore-workspace`.** It deliberately
+    **`lens-reader` NEEDED `pnpm install --ignore-workspace`, and under bun it
+    needs nothing.** A bare `bun install` in that directory resolves its own
+    `package.json` and creates `lens-reader/node_modules`, which is what CI runs;
+    do not add a flag looking for parity with the era below, since the flag pnpm
+    wanted does not exist here. The pnpm behaviour, kept because the reason the
+    directory sits outside the workspace has not changed: it deliberately
     stays out of the workspace (readability + linkedom are megabytes that only that
     Worker bundles), and under pnpm a bare `pnpm install` inside it walks UP to
     the root `pnpm-workspace.yaml`, installs the five workspace projects, and
