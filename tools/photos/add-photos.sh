@@ -240,8 +240,13 @@ while IFS= read -r f; do
   fi
   # 3. center-crop to a square: resize the SHORT edge to SQ, then crop SQ×SQ
   #    centered (sips object-position is center, matching object-fit:cover).
-  W=$(sips -g pixelWidth "$work" 2>/dev/null | awk '/pixelWidth/{print $2}')
-  H=$(sips -g pixelHeight "$work" 2>/dev/null | awk '/pixelHeight/{print $2}')
+  # ONE sips spawn for both dimensions. `sips -g` takes repeated keys, which
+  # export-for-instagram.sh's dims() already relied on and these three sites did
+  # not: two spawns measured 43ms against 23ms for one, on a 2000px intermediate.
+  # Pure spawn overhead, no pixels touched.
+  dims=$(sips -g pixelWidth -g pixelHeight "$work" 2>/dev/null)
+  W=$(printf '%s\n' "$dims" | awk '/pixelWidth/{print $2}')
+  H=$(printf '%s\n' "$dims" | awk '/pixelHeight/{print $2}')
   if [ -z "$W" ] || [ -z "$H" ] || [ "$W" -lt 1 ] || [ "$H" -lt 1 ]; then T_FAIL=$((T_FAIL+1)); printf "✗"; continue; fi
   if [ "$W" -le "$H" ]; then tl=$(( (SQ*H + W-1)/W )); else tl=$(( (SQ*W + H-1)/H )); fi
   # The resize and the crop happen on a LOSSLESS intermediate. They used to run
