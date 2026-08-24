@@ -186,7 +186,18 @@ function sitemapBlock(concepts) {
 // emitted to match the hand-authored markup exactly. Status badge per concept
 // (chat = live ask box, read = page only). The per-buddy .pic CSS stays hand-authored.
 function buddyGroup(concepts) {
-  const online = concepts.filter((c) => c.status === "online");
+  // Newest first, which is the order /garage's shelf reads in and the order a
+  // returning visitor wants: the buddy they have not seen is at the top. The
+  // sort lives HERE rather than in concepts.json because that file is also the
+  // source for the sitemap block, the Run palette and ask.js, none of which care
+  // about recency, and because a display order that depends on where somebody
+  // appended an entry is the drift this exists to prevent. `lastmod` is the only
+  // date the registry carries; git cannot stand in for it, since the whole
+  // section arrived in one 2026-06-30 recovery commit. Ties keep registry order.
+  const online = concepts.filter((c) => c.status === "online")
+    .map((c, i) => ({ c, i }))
+    .sort((x, y) => (x.c.lastmod === y.c.lastmod ? x.i - y.i : (x.c.lastmod < y.c.lastmod ? 1 : -1)))
+    .map(({ c }) => c);
   const items = online.map((c) =>
 `      <li><a class="buddy ${c.buddyClass}" href="${c.path}">
         <span class="pic" aria-hidden="true"></span>
