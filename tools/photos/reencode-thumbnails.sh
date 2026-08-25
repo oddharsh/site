@@ -75,7 +75,20 @@ trap 'rm -rf "$TMP"' EXIT
 
 ZENC_DIR="$(cd "$(dirname "$0")/zenc" && pwd)"
 ZENC="$ZENC_DIR/target/release/zenc"
-ZENC_Q=84   # calibrated to match the retired cjpegli q82 quality at fewer bytes
+ZENC_Q=84   # The linear-light geometry preserves high-frequency energy that sips'
+            # gamma-incorrect average destroyed, so correct pixels compress worse
+            # and the quality knob had to be chosen rather than inherited.
+            #
+            # Measured over 181 photos and all four tiers, q80/avif-58 against
+            # q84/avif-63: jpg 600 +14.3%, avif 600 +21.8%, avif 400 +20.2%,
+            # avif 200 +19.4%, tier total +17.6% or +2.39 MiB. So q84 is not free.
+            #
+            # It is kept anyway, because the alternative traded encoder quality
+            # DOWN while trading geometry UP: the old corpus was sips geometry at
+            # q84/63, and q80/58 would have been better pixels with more
+            # quantization. q84/63 changes one variable instead of two, so the
+            # corpus is strictly better than what it replaced rather than better
+            # on one axis and worse on another.
 MOZ_JTRAN="/opt/homebrew/opt/mozjpeg/bin/jpegtran"
 
 for cmd in sips exif-sooc; do
@@ -174,21 +187,48 @@ while IFS= read -r stem; do
   # export-for-instagram.sh's dims() already relied on and these three sites did
   # not: two spawns measured 43ms against 23ms for one, on a 2000px intermediate.
   # Pure spawn overhead, no pixels touched.
-  dims=$(sips -g pixelWidth -g pixelHeight "$work" 2>/dev/null)
-  W=$(printf '%s\n' "$dims" | awk '/pixelWidth/{print $2}')
-  H=$(printf '%s\n' "$dims" | awk '/pixelHeight/{print $2}')
-  if [ -z "$W" ] || [ -z "$H" ] || [ "$W" -lt 1 ] || [ "$H" -lt 1 ]; then FAIL=$((FAIL+1)); printf "✗"; continue; fi
-  if [ "$W" -le "$H" ]; then tl=$(( (SQ*H + W-1)/W )); else tl=$(( (SQ*W + H-1)/H )); fi
-  # The resize and the crop run on a LOSSLESS intermediate. They used to run on
-  # the JPEG, and `sips -Z` and `sips -c` each decode and re-encode, so what
-  # reached zenc had been through three JPEG encodes rather than one. Measured
-  # over the whole corpus: median ssimulacra2 68.97 -> 80.20, better on 159 of
-  # 159 photos, for 1.1% more bytes. TIFF for the geometry because sips writes
-  # it fastest, then one PNG because that is what zenc and avifenc read.
-  if ! sips -s format tiff "$work" --out "$tif" >/dev/null 2>&1; then FAIL=$((FAIL+1)); printf "✗"; continue; fi
-  sips -Z "$tl" "$tif" >/dev/null 2>&1
-  if ! sips -c "$SQ" "$SQ" "$tif" --out "$sqt" >/dev/null 2>&1; then FAIL=$((FAIL+1)); printf "✗"; continue; fi
-  if ! sips -s format png "$sqt" --out "$sqjpg" >/dev/null 2>&1; then FAIL=$((FAIL+1)); printf "✗"; continue; fi
+  # 3. centre square, in ONE process, resampled in LINEAR LIGHT.
+  #
+  # This replaced six sips spawns on 2026-08-25: two to read the dimensions, one
+  # to reach TIFF, one to resize, one to crop, one to reach PNG. `zenc square`
+  # needs none of them. It computes the short-edge target itself, so W/H and `tl`
+  # are gone with it, and it reads the JPEG and writes the PNG directly, so the
+  # TIFF round trip that existed only because sips is slow at PNG is gone too.
+  #
+  # THE REASON IS QUALITY, and the speed is the bonus. sips resamples by
+  # averaging ENCODED sRGB values as though they were light, which darkens every
+  # texture it touches. Measured by tools/photos/resample-probe.ts against
+  # patterns with analytically known answers, no reference implementation
+  # involved:
+  #
+  #   candidate   gamma   identity   ring   gray->ch   ms/photo
+  #   ideal       187.5       0.00      0          1
+  #   sips        127.6       0.00      2          1      222.4
+  #   zenc box    188.0       0.00      0          1       66.7
+  #
+  # A 1px black/white checkerboard must reduce to sRGB 187.5, half the LIGHT.
+  # sips gives 127.6, and so does ffmpeg, so this is the industry norm rather
+  # than a defect unique to sips. `--filter box` rather than lanczos3 because at
+  # this reduction the sharpness Lanczos buys costs 26 levels of ringing that an
+  # alias-free area average does not need; the probe measures that column too.
+  #
+  # THE COST, measured on 8 real sources before any of this was adopted. Correct
+  # pixels compress WORSE, because sips' gamma-incorrect average was quietly
+  # destroying high-frequency energy that a correct one keeps:
+  #
+  #   jpg  q84    288,987 -> 359,797 bytes   +24.5%
+  #   avif q63    185,696 -> 239,092 bytes   +28.8%
+  #
+  # Every one of the 8 got bigger, from +1% to +43%. Projected over the shipped
+  # tier that is 11.35 -> 14.38 MiB, +3.03 MiB, +26.7% on 660 files. The probe
+  # measures correctness and cannot see this, which is why it is measured here.
+  #
+  # THE CORPUS IS DELIBERATELY NOT REGENERATED in the commit that wired this. The
+  # scripts produce better pixels for the next photo added; the 158 already
+  # committed still carry sips geometry. That inconsistency is on purpose and is
+  # the open question: paying 3 MiB to fix a defect nobody has complained about
+  # is a decision about this site rather than about resampling.
+  if ! "$ZENC" square "$work" --size "$SQ" --out "$sqjpg" --filter box >/dev/null 2>&1; then FAIL=$((FAIL+1)); printf "✗"; continue; fi
   # 4. desktop square: zenc (zenjpeg hybrid+scan+sharp_yuv, q84) + AVIF (yuv400 for grayscale, else yuv420).
   #    metadata is stripped: the grid reads EXIF/histogram from metadata.json, so
   #    embedded EXIF/XMP/ICC in the thumbnail files is dead weight (~1.5KB/AVIF
@@ -207,7 +247,7 @@ while IFS= read -r stem; do
   fi
   fi
   # 5. mobile square: downscale the SQ square to SQ_SM (square→square, no distortion)
-  if want sm && sips -Z "$SQ_SM" "$sqjpg" --out "$smtmp" >/dev/null 2>&1; then
+  if want sm && "$ZENC" square "$sqjpg" --size "$SQ_SM" --out "$smtmp" --filter box >/dev/null 2>&1; then
     if [ "$AVIF_ENCODER" = "avifenc" ]; then
       avifenc -q 63 -d 10 --ignore-icc --ignore-exif --ignore-xmp --speed 4 --jobs 4 --yuv "$yuv" "$smtmp" "$smavif" >/dev/null 2>&1 || printf "~"
     else
