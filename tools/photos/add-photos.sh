@@ -345,9 +345,23 @@ while IFS= read -r f; do
   #
   # That removes an objection rather than the problem. The measured fault was the
   # RESAMPLER, not the colour path: `image`'s Lanczos3 is not identity at scale
-  # 1.0, and moxcms does not resample. Anyone starting attempt 3 should fix the
-  # instrument first (the bias note above), then the filter, and should expect
-  # colour management to be the cheap part.
+  # 1.0, and moxcms does not resample.
+  #
+  # THE INSTRUMENT IS BUILT: `bun run resample:probe`. It judges a downscaler on
+  # properties with analytically known answers rather than against a reference,
+  # which is what the biased round trip above could not do, and it carries a
+  # self-test proving the gamma column discriminates. First reading:
+  #
+  #   candidate     gamma   identity   ring   gray->ch
+  #   ideal         187.5       0.00      0          1
+  #   sips          127.6       0.00      0          1
+  #
+  # So attempt 2's PREMISE was right and its execution was not. sips really does
+  # average encoded values as though they were light, which is the 127.6, and it
+  # is otherwise flawless: identity-preserving, no ringing, grayscale kept.
+  # Attempt 3 has to win the gamma column WITHOUT losing the other three, and
+  # `image`'s Lanczos3 already fails identity. Run the probe against a candidate
+  # before wiring it into anything.
   if ! sips -s format tiff "$work" --out "$tif" >/dev/null 2>&1; then T_FAIL=$((T_FAIL+1)); printf "✗"; continue; fi
   sips -Z "$tl" "$tif" >/dev/null 2>&1
   if ! sips -c "$SQ" "$SQ" "$tif" --out "$sqt" >/dev/null 2>&1; then T_FAIL=$((T_FAIL+1)); printf "✗"; continue; fi
