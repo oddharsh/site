@@ -31,6 +31,7 @@
     "routes:check:remote": "node tools/check-routes-harness.ts --remote",
     "infra:check": "bun tools/check-infra.ts",
     "infra:apply": "bun tools/apply-infra.ts",
+    "labels:sync": "bun tools/sync-labels.ts",
     "pages:check": "bun tools/check-page-contracts.ts",
     "tools:check": "bun tools/check-tools.ts",
     "ua:survey": "node tools/ua-survey.ts",

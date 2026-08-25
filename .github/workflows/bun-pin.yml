@@ -181,6 +181,8 @@ jobs:
             echo "PR already open for $BRANCH; the force-push updated it."
           else
             gh pr create --base main --head "$BRANCH" \
+              --assignee oddharsh \
+              --label "type: chore" --label "area: infra" \
               --title "chore(bun): move the pin from $BEFORE to $AFTER" \
               --body "$BODY"
           fi
