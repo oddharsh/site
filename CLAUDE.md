@@ -1490,10 +1490,12 @@ BOTH servers, and one fails if either file re-declares `MCP_SUPPORTED` or
 `MCP_PROTOCOL` locally instead of importing them — the drift that would pass on
 the day it was written and rot later.
 
-**`/mcp` is also the browser's tool catalog now, which is why `find_events` lives
-there.** Cloudflare's WebMCP bridge (gotcha 20) reads ONE endpoint per origin,
-`data-mcp-url`, defaulting to `/mcp`, and registers whatever `tools/list` returns
-into `document.modelContext`. Two servers on one origin is right for an agent that
+**`/mcp` is also the browser's tool catalog, which is why `find_events` lives
+there.** `src/client/webmcp.js` reads `tools/list` from this ONE endpoint and
+registers it into `document.modelContext`. Cloudflare's injected bridge did the
+same thing until 2026-08-25 and is off now (see the design-system section for
+the two measurements that retired it); the endpoint it read is unchanged, so
+everything below holds either way. Two servers on one origin is right for an agent that
 reads the agent card and picks a door, and invisible to an agent that only ever
 knocks on one. So `lib/tools.ts` hoists exactly one Serendipity tool through
 `serendipityFindEvents()` in `serendipity/serendipity.ts`, which dispatches into the
@@ -2372,17 +2374,30 @@ it before treating anything in there as a target.
    (`--font-*`) are inlined site-wide. Color and gradient tokens are not inlined;
    there is no external stylesheet and no JavaScript for styling.
 
-   **Served pages load no cross-origin assets.** The one same-origin script whose
-   code is not in this repository is Cloudflare's WebMCP bridge. The edge injects
-   `<script type="module" src="/.webmcp/bridge.js">` into every document, 47.6 KB
-   of Cloudflare code under `cache-control: public, max-age=0, must-revalidate`,
-   first in `<head>`. The CSP's `script-src 'self'` admits it in the enforcing and
-   hashed report-only policies, which is why hashing inline scripts guarantees
-   less than it sounds like. For ordinary visitors `initBridge()` returns unless
-   the browser implements `document.modelContext`, so nearly everyone downloads
-   it, gets one warning, and stops. `/whoareyou` and `/security` disclose it, and
-   `gen-md-twins.mjs` pins the path so turning the edge feature off cannot leave
-   those pages describing a tag that is gone.
+   **Served pages load no cross-origin assets, and since 2026-08-25 every
+   same-origin script they load is a file in this repository.** That is newer than
+   it reads. From 2026-08-06 the edge injected Cloudflare's WebMCP bridge,
+   `<script type="module" src="/.webmcp/bridge.js">`, 47.6 KB, first in `<head>`
+   of every document, and the CSP's `script-src 'self'` admitted it in both
+   policies, which is why hashing inline scripts guarantees less than it sounds
+   like. **That injection is OFF** (Agent Readiness, Labs), verified on the wire:
+   `/.webmcp/bridge.js` answers 404 and no served document carries the tag.
+
+   `src/client/webmcp.js` registers this origin's tools now, loaded on idle from
+   `nav.js`. Two measurements retired the bridge rather than a preference. It never
+   ran on `/` at all, because that document is served as a dcz delta and
+   HTMLRewriter cannot rewrite one, so the busiest page here registered 0 tools
+   while every other page registered 25. And the BROWSER keeps only
+   `readOnlyHint` of MCP's five tool annotations, so the bridge could not tell a
+   page-driven agent which tools WRITE; the first-party module restates that in
+   the description and gates a writing tool behind a dialog.
+
+   `/whoareyou` and `/security` disclose all of it, `gen-md-twins.ts` pins
+   `/webmcp.js` in both copies of `/whoareyou` so the page cannot describe a
+   script that is gone, and `infra.json`'s `webmcp-bridge-off` edge check reads
+   production so re-enabling the injection fails rather than quietly making two
+   pages lie. **Dashboard first, prose second**, the same order the Workers Builds
+   deploy command takes.
 
    Browser RUM is deliberately absent: no page loads Cloudflare Web Analytics,
    there is no `/ledger/rum*` route or proxy module, and build tripwire #7b plus
@@ -3227,8 +3242,14 @@ bun run deploy:direct
 
 20. **An edge feature that rewrites HTML *after* the Worker invalidates anything
     derived from the Worker's own output — silently, and dictionaries first.**
+    THE FEATURE THIS ENTRY IS ABOUT IS OFF as of 2026-08-25, replaced by
+    `src/client/webmcp.js`, and the entry stays because the lesson is about edge
+    rewriting rather than about WebMCP: the next zone feature anybody enables
+    inherits every word of it. Note also that the injection turned out to be
+    absent on `/` the whole time, for the reason this entry teaches read in
+    reverse, so a dcz delta and an edge rewrite each break the other.
     WebMCP was enabled on 2026-08-06 (Agent Readiness → Labs), and Cloudflare
-    implements it by injecting one loader tag with HTMLRewriter at the edge:
+    implemented it by injecting one loader tag with HTMLRewriter at the edge:
 
     ```html
     <script type="module" src="/.webmcp/bridge.js" data-packs="c2pa,mcp-server-client"></script>

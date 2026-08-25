@@ -7,6 +7,7 @@ import { BOT_UA } from "./lib/botauth.ts";
 // them, and a second copy is the drift the LENS_BUDGETS contract test refuses.
 import { BROWSER_FREE_PLAN, LENS_BUDGETS, lensSha256Hex, overLensBudget } from "./lens.ts";
 import { EXECUTION_PROBE } from "./lib/agent-execution.ts";
+import { WEBMCP_PROBE, readWebmcpProbe } from "./lib/agent-webmcp.ts";
 import { isCallable } from "./lib/parse.ts";
 import { asText } from "./lib/parse.ts";
 
@@ -376,7 +377,35 @@ async function runWireSession(env, url) {
       } catch (_e) { execution = null; }
     }
 
-    return { events: cdp.events, navMs: Date.now() - t0, loadFired: Boolean(loaded), uaApplied, execution, sessionId };
+    // The browser-local tool catalog, read from the SAME session. A page's
+    // WebMCP tools exist only once its own script has run, so this is the one
+    // place on the site that can see them at all; every other tool reading here
+    // fetches /mcp, which is a different catalog belonging to the server.
+    //
+    // awaitPromise is the load-bearing option: getTools() is async, and without
+    // it the evaluate resolves to a pending Promise handle and the catalog reads
+    // as empty on every origin, which is indistinguishable from a site that has
+    // no tools.
+    let webmcp: ReturnType<typeof readWebmcpProbe> = null;
+    if (execDomains) {
+      try {
+        const w = await cdp.send("Runtime.evaluate", { expression: WEBMCP_PROBE, returnByValue: true, awaitPromise: true }, pageSession);
+        const value = w && w.result ? asText(w.result.value) : null;
+        webmcp = value === null ? null : readWebmcpProbe(JSON.parse(value));
+        // The engine label has to come from CDP rather than from the page. This
+        // route overrides navigator.userAgent to AadharshBot, so the in-page
+        // value is our own mask and would report the browser as a crawler.
+        if (webmcp) {
+          try {
+            const ver = await cdp.send("Browser.getVersion");
+            const product = ver && asText(ver.product);
+            if (product) webmcp = { ...webmcp, engine: product.slice(0, 120) };
+          } catch (_e) { /* an engine we cannot name is still a result */ }
+        }
+      } catch (_e) { webmcp = null; }
+    }
+
+    return { events: cdp.events, navMs: Date.now() - t0, loadFired: Boolean(loaded), uaApplied, execution, webmcp, sessionId };
   } finally {
     // Fire and forget would be wrong: a leaked session holds one of three
     // concurrent slots and blacks out every browser lens on the site.
@@ -468,6 +497,10 @@ export async function handleLensWire(request, env, ctx) {
       // consumes. Null when the probe could not run, which keeps those checks
       // neutral rather than turning our own failure into the site's fail.
       execution: out.execution || null,
+      // The browser-local tool catalog. Null when the probe could not run, and
+      // `{present:false}` when it ran and the page registered nothing: those are
+      // different claims and this surface must not collapse them.
+      webmcp: out.webmcp || null,
       ...summary,
     };
 
@@ -483,6 +516,10 @@ export async function handleLensWire(request, env, ctx) {
       s.setAttribute("lens.exec_script_errors", (out.execution.consoleErrors || 0) + (out.execution.pageErrors || 0));
       s.setAttribute("lens.exec_images_broken", out.execution.brokenImages || 0);
       s.setAttribute("lens.exec_images_total", out.execution.totalImages || 0);
+    }
+    if (out.webmcp && out.webmcp.present === true) {
+      s.setAttribute("lens.webmcp_tools", out.webmcp.count || 0);
+      s.setAttribute("lens.webmcp_write", out.webmcp.write || 0);
     }
 
     if (env.RN_KV) ctx.waitUntil(env.RN_KV.put(cacheKey, JSON.stringify(payload), { expirationTtl: WIRE_CACHE_TTL }));

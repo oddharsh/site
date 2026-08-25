@@ -23,3 +23,13 @@ box-shadow:2px 3px 11px -3px oklch(40% 0.05 90 / .55)}
 #axp-balloon .mono{font-family:var(--font-mono,'Courier New',monospace);font-size:10px}
 #axp-balloon .load{padding:0 12px 6px 32px;color:oklch(55% 0.02 90);font-style:italic}
 #axp-balloon .ft{padding:2px 12px 9px 32px}#axp-balloon .ft a{color:oklch(42.61% 0.2353 263.74);font-size:10.5px;text-decoration:underline}
+/* the refusal colour, for the one line where a person overrode an agent */
+#axp-balloon .no{color:oklch(52% 0.19 27);font-weight:bold}
+/* the agent-activity count, on the tray icon itself. Lives here rather than in
+   luna.css because it only ever appears alongside this balloon's icon, and
+   luna.css is render-blocking on every page for every visitor. */
+.axp-traybadge{position:absolute;right:-3px;bottom:-2px;min-width:12px;height:12px;padding:0 2px;
+border-radius:6px;background:oklch(45% 0.16 255);color:#fff;border:1px solid oklch(97% 0 0);
+font:bold 9px/12px var(--font-ui,Tahoma,Verdana,sans-serif);text-align:center;pointer-events:none}
+.axp-traybadge.no{background:oklch(52% 0.19 27)}
+.axp-trayico{position:relative}

@@ -1131,6 +1131,17 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 .lx-tools-intro { padding:10px 9px; border:1px solid oklch(78% 0.06 265); background:linear-gradient(180deg,oklch(98% 0.02 265),oklch(95% 0.04 265)); color:oklch(32% 0.05 260); font-size:9pt; line-height:1.45; }
 .lx-tools-intro b { color:oklch(35% 0.11 262); }
 .lx-tools-intro code { font-family:"Courier New",monospace; font-size:8.5pt; }
+/* the browser-local catalogue, under the same tab as the server one. Read-vs-write
+   is coloured because it is the only safety fact Chrome carries across registration;
+   an unstated tool is deliberately neutral rather than green. */
+.lx-wmcp-intro { padding:10px 9px; border:1px solid oklch(78% 0.06 300); background:linear-gradient(180deg,oklch(98% 0.02 300),oklch(95% 0.04 300)); color:oklch(32% 0.05 295); font-size:9pt; line-height:1.45; }
+.lx-wmcp-intro b { color:oklch(35% 0.11 300); }
+.lx-wmcp-intro code, .lx-wmcp-row code { font-family:"Courier New",monospace; font-size:8.5pt; }
+.lx-wmcp-row { padding:7px 9px; border:1px solid oklch(88% 0.01 265); border-top:0; font-size:9pt; line-height:1.45; }
+.lx-wmcp-row:first-of-type { border-top:1px solid oklch(88% 0.01 265); }
+.lx-wmcp-read { color:oklch(48% 0.14 145); font-weight:bold; }
+.lx-wmcp-write { color:oklch(52% 0.19 27); font-weight:bold; }
+.lx-wmcp-k { color:oklch(52% 0.02 265); }
 .lx-tools-fail { padding:6px 8px; border:1px solid oklch(62% 0.16 25); background:oklch(96% 0.03 25); color:oklch(38% 0.12 25); font-size:9pt; }
 .lx-tools-fail ul { margin:3px 0 0; padding-left:17px; }
 .lx-tools-list { border:1px solid oklch(80% 0.02 260); }

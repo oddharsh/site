@@ -6,6 +6,7 @@ export function createTray(options) {
   var sound = options.sound;
   var loadSys = options.loadSys;
   var loadUpd = options.loadUpd;
+  var loadWebmcp = options.loadWebmcp;
   var balloon = /** @type {HTMLElement | null} */ (null), balloonKind = /** @type {string | null} */ (null);
 
   /** @returns {HTMLElement} */
@@ -53,6 +54,36 @@ export function createTray(options) {
       '<div class="ln"><span class="k">build</span> <span class="mono">' + esc(j.build || "—") + '</span></div>' + latest;
   }
 
+  // The agent-activity balloon. Unlike its three neighbours this reads no
+  // endpoint: the log lives in webmcp.js's module scope for this document only,
+  // which is the whole design (see the audit-log note there).
+  function renderWebmcp(j) {
+    var b = body(); if (!b) return;
+    if (!j) { b.innerHTML = '<div class="load">this browser has no WebMCP, so nothing can drive this page.</div>'; return; }
+    if (!j.calls) {
+      b.innerHTML =
+        '<div class="ln"><b>' + j.registered + '</b> tools an agent could use here.</div>' +
+        '<div class="ln"><span class="k">Nothing has asked yet. Anything that writes will stop and ask you first.</span></div>';
+      return;
+    }
+    var tally = '<div class="ln"><b>' + j.calls + '</b> tool call' + (j.calls === 1 ? "" : "s") + ' this visit' +
+      (j.refused ? ' \u00b7 <b class="no">' + j.refused + ' you refused</b>' : "") +
+      (j.failed ? ' \u00b7 <span class="k">' + j.failed + ' failed</span>' : "") + "</div>";
+    // Newest first, because the question a person opens this to answer is
+    // "what did it just do", never "what did it do first".
+    var rows = (j.recent || []).map(function (c) {
+      // Named rather than left to an else, so a fourth outcome shows up as
+      // "unknown" instead of being quietly filed under failed.
+      var mark = c.outcome === "ok" ? '<span class="ok">ran</span>'
+        : c.outcome === "refused" ? '<span class="no">refused</span>'
+        : c.outcome === "failed" ? '<span class="k">failed</span>'
+        : '<span class="k">' + esc(String(c.outcome || "unknown")) + '</span>';
+      return '<div class="ln"><span class="mono">' + esc(c.name) + '</span> ' + mark +
+        ' <span class="k">' + Math.round(c.ms) + 'ms' + (c.gated ? ' \u00b7 asked you' : "") + '</span></div>';
+    }).join("");
+    b.innerHTML = tally + rows;
+  }
+
   var BALLOON = {
     sysprop: { title: "System Properties", href: "/whoareyou",
       icon: "<svg viewBox='0 0 16 16' fill='none' stroke='#1c4bb0' stroke-width='1.3' stroke-linecap='round' stroke-linejoin='round'><rect x='1.8' y='2.4' width='12.4' height='8' rx='1'></rect><path d='M6 10.4v2M10 10.4v2M4.6 12.9h6.8'></path></svg>",
@@ -62,7 +93,10 @@ export function createTray(options) {
       load: loadSys, render: renderSec },
     updates: { title: "Windows Update", href: "/updates",
       icon: "<svg viewBox='0 0 16 16' fill='none' stroke='#1c4bb0' stroke-width='1.2'><circle cx='8' cy='8' r='6'></circle><path d='M2 8 h12 M8 2 c2.3 2.4 2.3 9.2 0 12 M8 2 c-2.3 2.4 -2.3 9.2 0 12'></path></svg>",
-      load: loadUpd, render: renderUpd }
+      load: loadUpd, render: renderUpd },
+    webmcp: { title: "Agent activity", href: "/whoareyou",
+      icon: "<svg viewBox='0 0 16 16' fill='none' stroke='#1c4bb0' stroke-width='1.25' stroke-linecap='round' stroke-linejoin='round'><rect x='2.4' y='1.8' width='9.4' height='12.4' rx='1.2'></rect><path d='M4.4 5.4h5.4M4.4 8h4.2M4.4 10.6h4.8'></path><circle cx='12.2' cy='11.9' r='2.5' stroke='#2c8f1e'></circle><path d='M11 11.9 11.9 12.9 13.5 10.9' stroke='#2c8f1e'></path></svg>",
+      load: loadWebmcp, render: renderWebmcp }
   };
 
   function build() {

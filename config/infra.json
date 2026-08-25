@@ -391,6 +391,14 @@
         "why": "The repo declares these in _headers AND in the worker's SECURITY_HEADERS, and for an unknown stretch before 2026-07-26 the edge quietly overrode both: Cloudflare's `Add security headers` managed transform served x-frame-options SAMEORIGIN over the declared DENY, referrer-policy same-origin over strict-origin-when-cross-origin, plus two headers nobody asked for (expect-ct, an obsolete spec, and x-xss-protection: 1; mode=block, whose recommended value is now 0). Nothing in the repo could see it, because every local check reads the source rather than the wire. That is the whole argument for asserting observed responses: a header the code sets is not a header the visitor gets."
       },
       {
+        "id": "webmcp-bridge-off",
+        "target": "homepage",
+        "assert": {
+          "bodyLacks": ["/.webmcp/bridge.js"]
+        },
+        "why": "Cloudflare's WebMCP bridge is off in the dashboard (Agent Readiness, Labs) and src/client/webmcp.js registers this origin's tools instead, which is what carries the tool annotations the browser would otherwise drop and what gates a tool that writes behind a human. This check exists for the ORDER rather than for the toggle: /whoareyou and /security both state, in prose, that every script on the page is a file in this repository, and that claim is false for as long as the edge is still injecting. Dashboard first, prose second, exactly like the Workers Builds deploy command. Two things follow from the injection being edge-side. Re-enabling it in the dashboard silently makes two pages lie, and nothing in the tree could see that, which is the same argument app-owns-security-headers makes above. And the bridge never reached / at all, because that document is served as a dcz delta and HTMLRewriter cannot rewrite one, so the homepage registered zero tools while every other page registered 25 (gotcha 20 inverted)."
+      },
+      {
         "id": "speed-brain-off",
         "target": "homepage",
         "assert": { "headerAbsent": ["speculation-rules"] },
