@@ -4081,12 +4081,48 @@ bun run deploy:direct
     `curl -sI` is what shows it, and only if you read the whole line rather than
     grep for the directive you added.
 
-    So a file under a glob has exactly two ways to get a different policy: move
-    it out of the glob, or set the header in the worker. Adding a narrower rule
-    is not one of them. Worth knowing before reaching for the obvious fix, since
-    every other layered-config system in this repo (wrangler's routes, the CSP
-    map, `run_worker_first`) does let the specific entry win, and this one reads
-    exactly like it should too.
+    **This entry used to end by saying a file under a glob has exactly two ways
+    to get a different policy, moving it out of the glob or setting the header in
+    the worker, and that adding a narrower rule is not one of them. There is a
+    third, and it was documented the whole time: DETACH.** Prepending `! ` to a
+    header name removes it, and re-setting it afterwards gives a clean single
+    value.
+
+    **It is ORDER-DEPENDENT, which is the part no documentation states and the
+    reason this went unnoticed for two weeks.** Rules apply in file order and
+    `! ` removes only what earlier rules have already added, so a detach above
+    the rule it targets is a silent no-op. Measured on wrangler 4.125.0 under
+    `wrangler dev --local`, same two files, only the layout changing:
+
+    | layout | `Cache-Control` served |
+    |---|---|
+    | specific rule with `!` ABOVE the glob | the glob's value, detach did nothing |
+    | glob first, then specific with `!` and a new value | the narrow value alone |
+    | glob first, then specific with `!` only | header absent entirely |
+
+    So the working shape puts the narrow rule AFTER the glob:
+
+    ```
+    /lwe/*
+      Cache-Control: public, max-age=0, s-maxage=86400, stale-while-revalidate=604800
+
+    /lwe/quadgrams.txt
+      ! Cache-Control
+      ! Link
+      Cache-Control: public, max-age=604800, stale-while-revalidate=604800
+    ```
+
+    The combining behaviour above is real and unchanged, and it is documented at
+    [Custom headers](https://developers.cloudflare.com/workers/static-assets/headers/).
+    What was wrong here was the conclusion drawn from it. Filed upstream as
+    [cloudflare-docs#32979](https://github.com/cloudflare/cloudflare-docs/issues/32979)
+    with a PR for the ordering rule.
+
+    The general lesson is the expensive one. This note reasoned from one failed
+    experiment to "there is no way", without reading the page that documents the
+    escape hatch two sections further down. **A negative claim about a system
+    someone else built is a claim about their documentation as much as their
+    behaviour, so read the whole page before writing one down.**
 
 32. **`bun run pages:check` lints AUTHORED PAGE TEXT against the house voice,
     and it is a required check.** `pipelines/content/page-contract.mjs` bans em
