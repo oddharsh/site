@@ -171,6 +171,7 @@ const AXES={
   quality: {teach:`that gap was plain JPEG quality. the encoder drops fine detail as quality falls, and below some point your eye stops noticing. that point is your ceiling: export any higher and you're spending bytes on detail you can't see.`},
   chroma:  {teach:`that was chroma subsampling. your eye resolves brightness far finer than color, so JPEG stores color at lower resolution to save bytes, and 4:2:0 halves what these 4:2:2 files began with. here's the honest part: on most photos this is free. fourteen saturated crops were built and measured for this test and <b>twelve were thrown out</b> because 4:2:0 cost them nothing you could see. what survives is a high-contrast two-tone edge, which is where the halved color plane can't keep up — and butteraugli (a color model) punishes that far harder than ssimulacra2. that's also why you only get one of these per run.`},
   encoder: {teach:`same photo, same byte budget. every tile in that call was searched onto one file size and landed within 2% of it, so the only thing that varied was the encoder's math. newer coders (zenc, jpegli) fit more picture into those bytes than mozjpeg, and sips fits the least. that gap is free quality — same size, better image, for picking a different tool.`},
+  resample:{teach:`same photo, same byte budget, same encoder — only the DOWNSCALER changed. one averaged the pixels as sRGB numbers, the other converted to light first, averaged, and converted back. sRGB is a curve, not light, so averaging it directly loses energy and darkens texture: a black-and-white checkerboard should reduce to sRGB 188 and the naive way gives 128. that shows up as flat-looking detail and a faint dark halo at high-contrast edges. this site's thumbnails were built the naive way until the geometry was rewritten in 2026-08.`},
   tradeoff:{teach:`same bytes, a forced trade. 4:2:0 spends them on sharp detail; 4:2:2 spends them on the source's full color. you can't buy both, because color bits come straight out of the detail budget. which one you reached for is what your eye quietly weights, and it's where ssimulacra2 (structure) and butteraugli (color) split.`},
 };
 
@@ -180,7 +181,10 @@ const AXES={
 // chroma gets one call and the rest go to axes a person can actually win.
 // Scarce axes are listed first — the fill loop refuses to repeat a photo within
 // a play, so whichever axis draws last is the one that gets starved.
-const AXIS_QUOTA={chroma:1,tradeoff:2,encoder:3,quality:6};
+// resample sits between chroma and encoder in difficulty: the difference is real
+// and structural, but it is a whole-tile tone shift rather than a local artifact,
+// which is a different kind of looking.
+const AXIS_QUOTA={chroma:1,tradeoff:2,resample:2,encoder:3,quality:4};
 const RUN_SIZE=Object.values(AXIS_QUOTA).reduce((a,b)=>a+b,0);
 
 // end-of-exam understanding check: you judged with your eyes, now test the WHY.
