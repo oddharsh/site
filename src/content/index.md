@@ -27,8 +27,6 @@ If you'd like to grab a coffee in NYC, write me at <coffee@aadhar.sh> or pick a
 slot at [aadhar.sh/coffee](https://aadhar.sh/coffee). It's a manual opt-in on
 my side, so i'll try to get back to you.
 
-The rest of the site goes live shortly. Check back, or just send a note.
-
 ## Music I'm listening to right now
 
 The current "rn" Spotify playlist's tracks are served as JSON at
