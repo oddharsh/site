@@ -16,7 +16,9 @@ use zenjpeg::encoder::{
 };
 
 mod histogram;
+mod pixels;
 mod resample;
+mod resize;
 mod square;
 
 fn die(msg: String) -> ! {
@@ -36,6 +38,11 @@ fn main() {
     }
     if args.get(1).map(String::as_str) == Some("square") {
         exit(square::run(&args[2..]));
+    }
+    // Caps one dimension and keeps the whole frame, which is what an Instagram
+    // export wants and what `square` deliberately does not do.
+    if args.get(1).map(String::as_str) == Some("resize") {
+        exit(resize::run(&args[2..]));
     }
 
     let (mut input, mut output, mut q): (Option<String>, Option<String>, u8) = (None, None, 82);

@@ -186,7 +186,19 @@ pub fn resample(
 // Exact round trip at 8 bit: all 256 values return to themselves, verified in
 // the tests below rather than assumed.
 
+/// The forward transfer takes a u8, so it has exactly 256 answers and does not
+/// need to be computed 119 million times. Measured on a 7728x5152 frame, the
+/// powf per sample was most of the resize; the table makes it a load. Built
+/// once, lazily, from the same expression the table replaces, so there is no
+/// second definition of sRGB to keep in step.
+static SRGB_LUT: std::sync::OnceLock<[f32; 256]> = std::sync::OnceLock::new();
+
+#[inline]
 pub fn srgb_to_linear(c: u8) -> f32 {
+    SRGB_LUT.get_or_init(|| std::array::from_fn(|i| srgb_to_linear_exact(i as u8)))[c as usize]
+}
+
+fn srgb_to_linear_exact(c: u8) -> f32 {
     let s = c as f32 / 255.0;
     if s <= 0.040_449_936 { s / 12.92 } else { ((s + 0.055) / 1.055).powf(2.4) }
 }
@@ -276,5 +288,22 @@ mod tests {
         };
         assert!(over(Filter::Box) < 1e-6, "Box rang");
         assert!(over(Filter::Lanczos3) > 1e-4, "Lanczos3 did not ring, so this test proves nothing");
+    }
+}
+
+#[cfg(test)]
+mod lut_tests {
+    use super::*;
+
+    // The table is an optimisation and must not be a second opinion about sRGB.
+    #[test]
+    fn the_lut_agrees_with_the_expression_it_replaces() {
+        for c in 0..=255u8 {
+            assert_eq!(
+                srgb_to_linear(c).to_bits(),
+                srgb_to_linear_exact(c).to_bits(),
+                "lut disagrees at {c}"
+            );
+        }
     }
 }
