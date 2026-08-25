@@ -124,12 +124,14 @@ class Node {
   ownerDocument: Document | null;
   parentNode: Node | null;
   childNodes: Node[];
+  elementChildren: Element[] | null;
 
   constructor(nodeType: number, ownerDocument: Document | null) {
     this.nodeType = nodeType;
     this.ownerDocument = ownerDocument;
     this.parentNode = null;
     this.childNodes = [];
+    this.elementChildren = null;
   }
 
   get parentElement() {
@@ -140,10 +142,11 @@ class Node {
   get firstChild() { return this.childNodes[0] || null; }
   get lastChild() { return this.childNodes[this.childNodes.length - 1] || null; }
 
-  /** Element-only view. Recomputed per access because Readability reparents
-   *  constantly and a cached array would go stale between two of its own lines. */
+  /** Readability walks this view repeatedly between edits. Cache it until one
+   *  of the mutation paths below changes childNodes; rebuilding it on every
+   *  access spent a fifth of the real-world corpus sweep for no new answer. */
   get children(): Element[] {
-    return this.childNodes.filter((n) => n.nodeType === ELEMENT_NODE) as Element[];
+    return this.elementChildren ||= this.childNodes.filter((n) => n.nodeType === ELEMENT_NODE) as Element[];
   }
   get firstElementChild(): Element | null { return this.children[0] || null; }
   get lastElementChild(): Element | null { const c = this.children; return c[c.length - 1] || null; }
@@ -164,6 +167,7 @@ class Node {
     if (child.parentNode) child.parentNode.removeChild(child);
     child.parentNode = this;
     this.childNodes.push(child);
+    this.elementChildren = null;
     return child;
   }
 
@@ -173,12 +177,16 @@ class Node {
     const i = this.childNodes.indexOf(ref);
     child.parentNode = this;
     this.childNodes.splice(i < 0 ? this.childNodes.length : i, 0, child);
+    this.elementChildren = null;
     return child;
   }
 
   removeChild(child) {
     const i = this.childNodes.indexOf(child);
-    if (i >= 0) this.childNodes.splice(i, 1);
+    if (i >= 0) {
+      this.childNodes.splice(i, 1);
+      this.elementChildren = null;
+    }
     child.parentNode = null;
     return child;
   }
@@ -189,6 +197,7 @@ class Node {
     if (newChild.parentNode) newChild.parentNode.removeChild(newChild);
     newChild.parentNode = this;
     this.childNodes[i] = newChild;
+    this.elementChildren = null;
     oldChild.parentNode = null;
     return oldChild;
   }
@@ -211,6 +220,7 @@ class Node {
   }
   set textContent(value) {
     this.childNodes = [];
+    this.elementChildren = null;
     if (value) this.appendChild(new Text(String(value), this.ownerDocument));
   }
 }
@@ -348,6 +358,7 @@ class Element extends Node {
   get innerHTML() { return serializeChildren(this); }
   set innerHTML(html) {
     this.childNodes = [];
+    this.elementChildren = null;
     parseInto(String(html), this, this.ownerDocument);
   }
   get outerHTML() { return serializeNode(this); }

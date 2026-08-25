@@ -3104,7 +3104,7 @@ bun run deploy:direct
 18. **`scrollbar-color` INHERITS, and it silently disables every
     `::-webkit-scrollbar` rule underneath it.** Chromium treats the standard
     scrollbar properties and the `-webkit-` pseudo-elements as mutually
-    exclusive: if an element's used `scrollbar-color` is anything but `auto`,
+    exclusive: if an element's COMPUTED `scrollbar-color` is anything but `auto`,
     all of its `::-webkit-scrollbar-*` rules are discarded. `xpChromeCss` sets
     `html { scrollbar-color: … }` for the whole site, so EVERY element inherits
     a non-auto value it never declared, and any element trying to draw a custom
@@ -3119,6 +3119,57 @@ bun run deploy:direct
     The fix is to reset to `auto` on the element and put the standard property
     behind a query only Firefox (the one engine that needs it) matches. Check
     the INHERITED value first the next time a custom scrollbar does not appear.
+
+    **`scrollbar-width` DOES THE SAME THING and does NOT inherit, which is the
+    whole reason `scrollbar-color` is the expensive one.** The spec gives both
+    properties the same sentence, word for word
+    ([§2.1](https://drafts.csswg.org/css-scrollbars/#scrollbar-color) and
+    [§3.1](https://drafts.csswg.org/css-scrollbars/#scrollbar-width)): a computed
+    value other than `auto` obliges a UA to ignore the `::-webkit-scrollbar`
+    family. What differs is the property definition table, where `scrollbar-color`
+    is `Inherited: yes` and `scrollbar-width` is `Inherited: no`. Measured in
+    Chromium 148.0.7778.280 on 2026-08-25 against one element carrying
+    `::-webkit-scrollbar { width: 40px }`, changing only the standard property:
+
+    | on the element itself | gutter |
+    |---|--:|
+    | nothing else | 40px |
+    | `scrollbar-width: thin` | **0px** |
+    | `scrollbar-width: none` | 0px |
+    | `scrollbar-width: auto` | 40px |
+
+    | on an ANCESTOR | child's computed value | gutter |
+    |---|---|--:|
+    | `scrollbar-width: thin` | `auto` | 40px |
+    | `scrollbar-color: #333 #ccc` | the two colours | **0px** |
+
+    `thin` reads 0px rather than a thin bar, because the fallback is the macOS
+    overlay bar this entry already names. Both properties restore on `auto`. What
+    separates them is reach: `scrollbar-width` can only ever be the element's own
+    declaration, while `scrollbar-color` arrives from anywhere up the tree, so
+    only one of the two leaves you reading a stylesheet that never mentions the
+    element you are looking at.
+
+    Two live pairings in `luna.css` (`#axp-pins`, `.axp-well`) set
+    `scrollbar-width: none` beside `::-webkit-scrollbar { display: none }`, so
+    Chromium is discarding that pseudo-element rule today. They are safe because
+    both halves want the same outcome, which is the part to notice: a
+    belt-and-braces pair holds only while the two halves agree, and rewriting the
+    webkit half to STYLE the bar instead of hiding it would silently do nothing.
+    `/access` and `/garage/scroll` already reset to `auto` outside the Firefox
+    arm and are correct.
+
+    **MDN said "have any value other than `auto` set", which reads as declared on
+    this element, and that phrasing is what this entry cost two days to get
+    past.** Corrected upstream in
+    [mdn/content#45246](https://github.com/mdn/content/pull/45246): the
+    `::-webkit-scrollbar` note now names the computed value and the inheritance,
+    and `scrollbar-color` and `scrollbar-width`, which said nothing about the
+    interaction at all, each carry the note on their own page. Take the argument
+    the PR was made on rather than the fix: you meet this from the PROPERTY side,
+    having set `scrollbar-color` and watched your webkit rules stop applying, so
+    a warning that lives only on the pseudo-element page reaches the people who
+    already suspect the answer.
 
     **Writing this note down did not fix the other three instances, and that is
     the part worth generalizing.** It was filed 2026-08-05 off the `/terminal`
