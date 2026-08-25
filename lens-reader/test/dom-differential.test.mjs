@@ -150,6 +150,47 @@ test("fitted DOM supports toMarkdown's string fallback", () => {
   assert.equal(toMarkdown(fragment).length > 0, true, "string fallback produced nothing");
 });
 
+test("the cached element-child view invalidates on every mutation path", () => {
+  const { document } = parseFitted("<main><a></a><b></b></main>");
+  const main = document.querySelector("main");
+  assert.ok(main);
+
+  const cached = main.children;
+  assert.equal(main.children, cached, "an unchanged node rebuilt its element-child view");
+
+  const c = document.createElement("c");
+  main.appendChild(c);
+  assert.notEqual(main.children, cached, "appendChild kept a stale view");
+  assert.deepEqual(main.children.map((node) => node.localName), ["a", "b", "c"]);
+
+  const first = document.createElement("first");
+  main.insertBefore(first, main.firstChild);
+  assert.deepEqual(main.children.map((node) => node.localName), ["first", "a", "b", "c"]);
+
+  main.removeChild(first);
+  assert.deepEqual(main.children.map((node) => node.localName), ["a", "b", "c"]);
+
+  const replacement = document.createElement("replacement");
+  main.replaceChild(replacement, main.children[1]);
+  assert.deepEqual(main.children.map((node) => node.localName), ["a", "replacement", "c"]);
+
+  const other = document.createElement("aside");
+  document.appendChild(other);
+  void main.children;
+  void other.children;
+  other.appendChild(c);
+  assert.deepEqual(main.children.map((node) => node.localName), ["a", "replacement"],
+    "moving a child kept the old parent's cached view");
+  assert.deepEqual(other.children.map((node) => node.localName), ["c"],
+    "moving a child kept the new parent's cached view");
+
+  main.textContent = "text";
+  assert.equal(main.children.length, 0, "textContent kept the previous children");
+  main.innerHTML = "<i></i><em></em>";
+  assert.deepEqual(main.children.map((node) => node.localName), ["i", "em"],
+    "innerHTML kept the textContent-era cache");
+});
+
 // SVG semantics the corpus CANNOT reach, pinned directly against the oracle.
 //
 // Two of the three below are invisible to every gate above, and finding that out
