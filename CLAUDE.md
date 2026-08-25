@@ -4492,11 +4492,44 @@ bun run deploy:direct
     site makes.
 
     **Two smaller traps, both worth knowing before anyone benchmarks it again.**
-    `resize(600, 600)` STRETCHES to those dimensions; the square tiles here come
-    from an explicit `sips -c` centre crop, so a naive comparison is measuring
-    two different pictures. And feeding it the original JPEG compares one encode
-    against a pipeline that encodes from a LOSSLESS intermediate, which is the
-    generational-loss point the thumbnail work already settled.
+    `resize(600, 600)` with no third argument STRETCHES to those dimensions; the
+    square tiles here come from an explicit `sips -c` centre crop, so a naive
+    comparison is measuring two different pictures. It DOES take a third options
+    argument (`{ fit: "inside" }` and friends), which the first version of this
+    note missed by reading `resize.length` and getting 2. And feeding it the
+    original JPEG compares one encode against a pipeline that encodes from a
+    LOSSLESS intermediate, which is the generational-loss point the thumbnail
+    work already settled.
+
+    **RE-MEASURED 2026-08-25 on stable 1.4.0, and the disqualifying argument
+    above is WRONG.** This entry says `backend === "system"` rules `Bun.Image`
+    out on its own, because macOS and a Linux runner would mint different `/i/`
+    URLs for the same photo. They do not. The same input, same options, encoded
+    on macOS 26 arm64 and on `oven/bun:1.4` Linux arm64, comes back
+    BYTE-IDENTICAL: 27,849 B, matching sha256, even though `backend` reports
+    `system` on the first and `bun` on the second. `Bun.Image.backend` is also
+    settable at runtime, which the docs offer for golden-image tests, so the
+    portable path can be forced where reproducibility has to be guaranteed
+    rather than observed.
+
+    **The SIZE gap is real and is the whole case, and it is smaller than the
+    numbers above.** `progressive: true` is documented and this note never tried
+    it: on the shipped 600px `L1000069_3` tile it takes the q84 encode from
+    27,849 B to 23,773 B. Against zenc's 21,232 B for the same pixels that is
+    +12%, rather than the +31% a `progressive`-less comparison shows or the +66%
+    this entry records from its original-JPEG measurement. Still the wrong
+    trade for a content-addressed served tier on a craft-maximiser site, and no
+    longer the rout the entry implies. Nothing else moves it: `optimizeCoding`,
+    `chromaSubsampling`, `trellis` and `mozjpeg` are all undocumented and all
+    silently ignored.
+
+    **`Bun.Image` validates no encoder option**, which is worth knowing before
+    trusting any benchmark of it. A typo (`qualiy: 95`), a string
+    (`quality: "84"`), and an unknown key all silently fall back to the q80
+    default, and `quality: 999` is accepted outside the documented 1-100 range
+    and emits 68,672 B. Filed as
+    [oven-sh/bun#40490](https://github.com/oven-sh/bun/issues/40490). A
+    benchmark that fat-fingers an option measures the default and says nothing.
 
     **Where it would genuinely fit is the plumbing.** Phase 1 spends six `sips`
     spawns per photo on decode, resize, crop and format conversion, and
