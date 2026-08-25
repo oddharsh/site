@@ -1585,6 +1585,17 @@
         '<div class="lx-wmcp-intro">A site can hand an agent tools that live in the document rather than on the server. ' +
         'Reading them means rendering the page, so this fills in when you run <b>What it costs</b>.</div>');
     }
+    // The engine is a CONTROL. Browser Run renders in Chrome 128, which predates
+    // WebMCP entirely, so it cannot see a catalogue on ANY origin. Reporting that
+    // as "this site has no tools" would be the same false negative the bot-view
+    // controls exist to prevent, and on a far more confident-looking number.
+    if (w && w.supported === false) {
+      return section(head, { text: "unmeasurable" },
+        "The rendering engine has no WebMCP, so no catalogue could be read.",
+        '<div class="lx-wmcp-intro">This says <b>nothing</b> about whether the site registers tools. ' +
+        'The render happened in <span class="lx-wmcp-k">' + esc(w.engine || "an engine that does not implement it") +
+        '</span>, which has no <code>document.modelContext</code> to ask.</div>');
+    }
     if (!w || w.present === null) {
       return section(head, { text: "unreadable" },
         "The render happened; the catalogue could not be read.",

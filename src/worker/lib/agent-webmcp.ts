@@ -31,6 +31,12 @@
 // named `delete_document` would not stop it. A contract test asserts the string
 // `executeTool` never appears in this file.
 
+// The ENGINE LABEL deliberately does not come from here. `navigator.userAgent`
+// inside the page is whatever /lens/wire overrode it to (AadharshBot), so asking
+// the page which browser it is returns this site's own mask. lens-wire.ts reads
+// `Browser.getVersion` off the CDP session instead, which no page-level override
+// can touch, and merges it in.
+
 // Caps. A catalog is a stranger's data and lands in a JSON payload this site
 // serves, so every axis is bounded rather than trusted.
 import { asList, asNumber, asRecord } from "./parse.ts";
@@ -44,9 +50,13 @@ export const WEBMCP_LIMITS = { tools: 40, description: 300, params: 12, name: 80
 export const WEBMCP_PROBE = `(async () => {
   try {
     var mc = document.modelContext;
-    if (!mc || typeof mc.getTools !== "function") return JSON.stringify({ present: false });
+    // THE ENGINE IS A CONTROL. An engine with no WebMCP cannot see a catalogue,
+    // so "no tools" from one is a fact about the instrument and not about the
+    // page, and reporting the two the same way is exactly the false negative the
+    // bot-view controls exist to prevent one tier down.
+    if (!mc || typeof mc.getTools !== "function") return JSON.stringify({ supported: false });
     var tools = await mc.getTools();
-    if (!Array.isArray(tools)) return JSON.stringify({ present: true, count: 0, tools: [] });
+    if (!Array.isArray(tools)) return JSON.stringify({ supported: true, present: true, count: 0, tools: [] });
     var cap = ${WEBMCP_LIMITS.tools}, dcap = ${WEBMCP_LIMITS.description}, pcap = ${WEBMCP_LIMITS.params};
     var hint = function (t) {
       var a = t && t.annotations;
@@ -67,6 +77,7 @@ export const WEBMCP_PROBE = `(async () => {
     var origins = {};
     tools.forEach(function (t) { if (t && t.origin) origins[String(t.origin).slice(0, 200)] = 1; });
     return JSON.stringify({
+      supported: true,
       present: true,
       count: tools.length,
       read: tools.filter(function (t) { return hint(t) === true; }).length,
@@ -93,19 +104,48 @@ export const WEBMCP_PROBE = `(async () => {
 })()`;
 
 /**
+ * The reading, declared rather than inferred. Without this the three return
+ * shapes below infer as a union of three closed object literals, and merging the
+ * CDP engine label onto one of them stops type-checking.
+ */
+export type WebmcpReading = {
+  /** does the RENDERING ENGINE implement WebMCP at all */
+  supported?: boolean;
+  /** true = a catalogue was read; false = engine supports it and the page has none; null = not determinable */
+  present: boolean | null;
+  error?: string;
+  /** the real browser, from CDP. Never the page's navigator.userAgent (see above). */
+  engine?: string;
+  count?: number;
+  read?: number;
+  write?: number;
+  unstated?: number;
+  origins?: string[];
+  truncated?: boolean;
+  tools?: unknown[];
+};
+
+/**
  * Normalize what the probe returned. Anything unexpected becomes null rather
  * than a partial object, on this surface's standing rule: a check that did not
  * run is reported as absent, never as a negative result.
- * @param {unknown} raw
+ * @param raw whatever Runtime.evaluate returned, parsed
  */
-export function readWebmcpProbe(raw) {
+export function readWebmcpProbe(raw: unknown): WebmcpReading | null {
   const r = asRecord(raw);
   if (!r) return null;
   if (r.probeError) return { present: null, error: String(r.probeError).slice(0, 160) };
-  if (r.present !== true) return { present: false, count: 0, tools: [] };
+  // Three states, and collapsing the first two is the whole failure this guards.
+  // `supported:false` means the RENDERING ENGINE has no WebMCP, so nothing could
+  // have been seen; `present:false` means it does and the page registered none.
+  if (r.supported === false) {
+    return { supported: false, present: null, count: 0, tools: [] };
+  }
+  if (r.present !== true) return { supported: true, present: false, count: 0, tools: [] };
   const tools = asList(r.tools);
   const count = (value, fallback) => asNumber(value, fallback) ?? fallback;
   return {
+    supported: true,
     present: true,
     count: count(r.count, tools.length),
     read: count(r.read, 0),

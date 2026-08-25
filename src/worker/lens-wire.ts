@@ -392,6 +392,16 @@ async function runWireSession(env, url) {
         const w = await cdp.send("Runtime.evaluate", { expression: WEBMCP_PROBE, returnByValue: true, awaitPromise: true }, pageSession);
         const value = w && w.result ? asText(w.result.value) : null;
         webmcp = value === null ? null : readWebmcpProbe(JSON.parse(value));
+        // The engine label has to come from CDP rather than from the page. This
+        // route overrides navigator.userAgent to AadharshBot, so the in-page
+        // value is our own mask and would report the browser as a crawler.
+        if (webmcp) {
+          try {
+            const ver = await cdp.send("Browser.getVersion");
+            const product = ver && asText(ver.product);
+            if (product) webmcp = { ...webmcp, engine: product.slice(0, 120) };
+          } catch (_e) { /* an engine we cannot name is still a result */ }
+        }
       } catch (_e) { webmcp = null; }
     }
 

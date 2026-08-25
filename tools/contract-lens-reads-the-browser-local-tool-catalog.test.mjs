@@ -61,6 +61,36 @@ test("a tool that states no readOnlyHint is a THIRD state, never a safe one", ()
     "the three columns must account for every tool");
 });
 
+test("an engine with no WebMCP is UNMEASURABLE, never a site with no tools", () => {
+  // Measured 2026-08-25 against the real binding: Browser Run renders in
+  // Chrome/128.0.6613.137, and WebMCP's origin trial is Chrome 149-156. So this
+  // engine cannot see a catalogue on ANY origin, and the first version of this
+  // probe reported that as `present: false` for aadhar.sh/whoareyou, a page
+  // measured at 25 registered tools minutes earlier. On the one surface whose
+  // premise is never reporting a failed check as a negative result, that is the
+  // worst bug it could have shipped.
+  const out = readWebmcpProbe({ supported: false });
+  assert.ok(out, "an unsupported engine must still return a record");
+  assert.equal(out.supported, false);
+  assert.equal(out.present, null, "an engine that cannot look must not report absence");
+  assert.equal(out.count, 0);
+  // Supported and genuinely empty is a DIFFERENT claim.
+  const empty = readWebmcpProbe({ supported: true, present: false });
+  assert.ok(empty, "a supported-but-empty probe must still return a record");
+  assert.equal(empty.supported, true);
+  assert.equal(empty.present, false);
+});
+
+test("the engine label comes from CDP, never from the page's user agent", () => {
+  // /lens/wire overrides navigator.userAgent to AadharshBot, so asking the page
+  // which browser it is returns this site's own mask. It did, once: the reading
+  // came back `engine: "AadharshBot/1.0 (+https://aadhar.sh/bot)"`.
+  assert.ok(!/navigator\.userAgent/.test(WEBMCP_PROBE),
+    "the probe must not report navigator.userAgent; this route overrides it");
+  assert.ok(/Browser\.getVersion/.test(WIRE),
+    "lens-wire.ts should read the engine from CDP");
+});
+
 test("a probe that could not run is ABSENT, never an empty catalog", () => {
   // /lens's standing rule: never report a failed check as a negative result.
   assert.equal(readWebmcpProbe(null), null, "no payload is not an empty catalog");
@@ -74,6 +104,7 @@ test("a probe that could not run is ABSENT, never an empty catalog", () => {
   assert.ok(empty, "a ran-and-found-nothing probe must still return a record");
   assert.equal(empty.present, false);
   assert.equal(empty.count, 0);
+  assert.equal(empty.supported, true, "reaching this branch means the engine could look");
 });
 
 test("every axis of a stranger's catalog is bounded", () => {
