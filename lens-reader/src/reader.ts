@@ -11,7 +11,10 @@
 // so the constants and helpers the contract tests assert against cannot live
 // beside `export default { fetch }`. Same shape as lib/tui.js: pure module,
 // three callers (the Worker, the tests, and anything that wants the numbers).
-import { Readability } from "@mozilla/readability";
+// The package barrel also loads isProbablyReaderable, which this Worker never
+// calls. The exact dependency pin makes the direct extractor entry stable and
+// keeps that separate heuristic out of the deployed bundle.
+import Readability from "@mozilla/readability/Readability.js";
 // A first-party DOM fitted to what this file and Readability actually call,
 // over the same htmlparser2 linkedom used. See src/dom.ts for the surface count
 // and test/dom-differential.test.mjs for the parity gate that keeps it honest.

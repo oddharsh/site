@@ -382,6 +382,17 @@ the reason, rather than written here with the caret quietly dropped.
   alternating trials on a 5754 KiB corpus, a 614.5 -> 299.4 ms median for the
   full parse-extract-markdown pipeline (51.3% less CPU, 12.80 -> 6.24 ms/doc).
 
+  A second fitted-DOM pass on 2026-08-25 cached the element-only `children`
+  view until a child mutation instead of filtering `childNodes` on every read,
+  and imported Readability's extractor directly instead of its CommonJS barrel
+  (which also loads an unused readerability heuristic). Across two alternating
+  15-trial blocks on the ten captured real-world pages, the pooled median moved
+  174.5 -> 144.8 ms (17.0% less CPU). The minified dry-run moved 47.30 ->
+  46.97 KiB gzip; five fresh-process sweeps showed no RSS regression. The parity
+  gate still compares the complete visitor-visible result and serialized trees,
+  and a focused mutation test invalidates the cache through append, insert,
+  remove, replace, move, `textContent`, and `innerHTML`.
+
   It stays INSTALLED because it is the oracle.
   `test/dom-differential.test.mjs` runs the real pipeline twice over 48
   documents, once on each DOM, and compares title, byline, content, markdown and
