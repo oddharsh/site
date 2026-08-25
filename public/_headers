@@ -150,16 +150,12 @@
   Link: </luna.css>; rel=preload; as=style, </nav.js>; rel=preload; as=script
   Link: </webmention>; rel="webmention"
 
-# NB: /lwe/quadgrams.txt (the model the vigenere cracker fetches) deliberately
-# has NO rule of its own, and a longer browser max-age for it was tried and
-# reverted 2026-08-11. A more specific rule does not OVERRIDE the glob below,
-# it COMBINES with it: adding one produced
-#   Cache-Control: public, max-age=604800, …, public, max-age=0, s-maxage=86400, …
-# on the wire, two conflicting max-ages in one field, which is worse than the
-# 304 it was meant to save. Cache-Control here is one value per matching rule,
-# appended, so the only way to give a file under a glob a different policy is
-# to move it out of the glob or set the header in the worker. For a 16 KB inert
-# asset fetched once per solve, neither is worth it.
+# NB: a narrow rule COMBINES with the glob below rather than overriding it, so a
+# plain second Cache-Control ships two conflicting max-ages in one field. That
+# much has been true since 2026-08-11. What this comment used to conclude, that
+# the only escapes are moving the file or setting the header in the worker, was
+# wrong: DETACH is the third, and it has to sit AFTER the rule it overrides,
+# because `! ` only removes what earlier rules already added. See gotcha 31.
 
 # LWE concept pages: same deal as the garage mules. static content that changes
 # rarely, so let the edge serve a cheap 304 (s-maxage) instead of revalidating
@@ -168,6 +164,14 @@
   Cache-Control: public, max-age=0, s-maxage=86400, stale-while-revalidate=604800
   Link: </luna.css>; rel=preload; as=style, </lwe-base.css>; rel=preload; as=style, </nav.js>; rel=preload; as=script
   Link: </webmention>; rel="webmention"
+
+# the vigenere cracker's 16 KB quadgram model. It is data fetched by JS, so the
+# shell preloads above are dead weight on it, and it changes about never. Detach
+# both and give it a real browser lifetime. MUST stay below /lwe/*.
+/lwe/quadgrams.txt
+  ! Cache-Control
+  ! Link
+  Cache-Control: public, max-age=604800, stale-while-revalidate=604800
 
 # pixel-peeper — the compression eye exam (/pixel-peeper). a static XP-window
 # game: the shell + metadata manifest revalidate like the garage pages (a deploy
