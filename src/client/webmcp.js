@@ -45,15 +45,58 @@ const META = {
   "io.modelcontextprotocol/clientCapabilities": {},
 };
 
-/** @type {Array<{ name: string, at: number, ms: number, ok: boolean, gated: boolean }>} */
+// ---- the audit log --------------------------------------------------------
+//
+// A consent dialog somebody answers once and never sees again is a dialog they
+// will click through. The log is the other half: what was asked for, what ran,
+// and what they refused. It is per-document and in memory on purpose. Nothing
+// here is reported anywhere and a reload clears it, because this records what
+// an agent did to THIS page in front of THIS person rather than building a
+// profile of either.
+
+/** @type {Array<{ name: string, at: number, ms: number, outcome: "ok" | "refused" | "failed", gated: boolean }>} */
 const audit = [];
+/** @type {Set<() => void>} */
+const listeners = new Set();
+let registered = 0;
 let seq = 0;
+
+function record(name, started, outcome, gated) {
+  audit.push({ name, at: started, ms: Date.now() - started, outcome, gated });
+  for (const fn of listeners) {
+    // A broken listener must never break a tool call. The tray is an observer.
+    try { fn(); } catch (error) { /* ignored on purpose */ }
+  }
+}
 
 /** Is there a WebMCP implementation on this page at all? */
 export function available() { return MC !== null; }
 
 /** Every tool call this page has served this session, newest last. */
 export function callLog() { return audit.slice(); }
+
+/**
+ * Subscribe to registration and to every tool call. Returns an unsubscribe.
+ * @param {() => void} fn
+ */
+export function onActivity(fn) {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
+
+/** What the tray reads: the tally, plus the last few calls. */
+export function summary() {
+  const counted = (outcome) => audit.filter((c) => c.outcome === outcome).length;
+  return {
+    registered,
+    calls: audit.length,
+    ok: counted("ok"),
+    refused: counted("refused"),
+    failed: counted("failed"),
+    gated: audit.filter((c) => c.gated).length,
+    recent: audit.slice(-6).reverse(),
+  };
+}
 
 /** The names currently in the browser-local catalog, whoever registered them. */
 export async function catalog() {
@@ -218,17 +261,17 @@ export async function registerTool(def) {
           gated = true;
           const allowed = await gate(def.name, args || {});
           if (!allowed) {
-            audit.push({ name: def.name, at: started, ms: Date.now() - started, ok: false, gated });
+            record(def.name, started, "refused", gated);
             // isError rather than throw: a throw reaches the agent as "the script
             // function threw an error", which loses the one fact that matters.
             return { content: [{ type: "text", text: "Refused by the person at the keyboard. This tool writes data, so it needs their consent and did not get it." }], isError: true };
           }
         }
         const out = await def.execute(args || {});
-        audit.push({ name: def.name, at: started, ms: Date.now() - started, ok: true, gated });
+        record(def.name, started, "ok", gated);
         return out;
       } catch (error) {
-        audit.push({ name: def.name, at: started, ms: Date.now() - started, ok: false, gated });
+        record(def.name, started, "failed", gated);
         const message = (error && /** @type {Error} */ (error).message) || String(error);
         return { content: [{ type: "text", text: "Tool failed: " + message }], isError: true };
       }
@@ -240,6 +283,7 @@ export async function registerTool(def) {
     const taken = (await MC.getTools()).some((t) => t.name === def.name);
     if (taken) return "taken";
     await MC.registerTool(/** @type {any} */ (tool));
+    registered += 1;
     return "registered";
   } catch (error) {
     // The catalog is shared with whatever the edge injected, so losing a race

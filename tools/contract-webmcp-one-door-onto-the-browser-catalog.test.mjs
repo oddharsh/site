@@ -22,6 +22,9 @@ const LENS = readFileSync("./src/client/lens.js", "utf8");
 const WEBMCP = readFileSync("./src/client/webmcp.js", "utf8");
 const NAV = readFileSync("./src/client/nav.js", "utf8");
 const BUILD = readFileSync("./tools/build.ts", "utf8");
+const TRAY = readFileSync("./src/client/nav-tray.js", "utf8");
+const SHELL = readFileSync("./tools/photos/shell-data.ts", "utf8");
+const CHROME = readFileSync("./src/worker/lib/desktop.ts", "utf8");
 
 // The page tools are declared in one array literal at the end of lens.js. Read
 // the array rather than the whole file, so a `name:` in some unrelated object
@@ -74,18 +77,31 @@ test("webmcp.js is the only client module that reads document.modelContext", () 
   // readiness fix copy it shows a visitor ("Expose safe browser actions with
   // document.modelContext"), and a rule that cannot tell page copy from a call
   // would either fail on that sentence or be silenced into uselessness.
+  // Strings FIRST, in ONE pass over all three quote styles, then comments.
+  //
+  // Both halves are load-bearing and the order is too. Three separate quote
+  // passes is wrong: the double-quote pass runs first, so a ' ... " ... " ... '
+  // string is chewed from the middle and whatever followed is exposed as if it
+  // were code. And stripping comments BEFORE strings would eat the // inside a
+  // URL literal. lens.js is the file that proves both, since it names this API
+  // in visitor-facing copy, in a comment, and in an HTML string.
   const codeOnly = (src) => src
-    .replace(/"(?:[^"\\\n]|\\.)*"/g, '""')
-    .replace(/'(?:[^'\\\n]|\\.)*'/g, "''")
-    .replace(/`(?:[^`\\]|\\.)*`/g, "``");
+    .replace(/"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`/g, '""')
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/[^\n]*/g, "");
   const mentions = clients.filter((f) => /modelContext/.test(codeOnly(readFileSync(`./src/client/${f}`, "utf8")))).sort();
   assert.deepEqual(mentions, ["nav.js", "webmcp.js"],
     `only webmcp.js may own the WebMCP API, and nav.js may feature-check it; found: ${mentions.join(", ")}`);
-  // nav.js gets ONE mention and it has to stay a truthiness check.
-  assert.equal((codeOnly(NAV).match(/modelContext/g) || []).length, 1,
-    "nav.js should mention modelContext exactly once, as the feature check before the import");
-  assert.ok(!/modelContext\s*\.\s*(registerTool|executeTool|getTools)/.test(NAV),
-    "nav.js must not call the WebMCP API; it only decides whether to load webmcp.js");
+  // nav.js may READ the object to decide whether to spend the import, and may
+  // never touch anything ON it. Counting the mentions was the first version of
+  // this and it was wrong the moment a second guard appeared (the tray reader
+  // needs its own); the number was never the rule. This is: bare truthiness
+  // only, so no property access, no call, no index.
+  const navUse = codeOnly(NAV).match(/modelContext\s*[.([]/g) || [];
+  assert.deepEqual(navUse, [],
+    `nav.js must only feature-check modelContext, never use it: found ${navUse.join(", ")}`);
+  assert.ok(/modelContext/.test(codeOnly(NAV)),
+    "nav.js should still feature-check before importing webmcp.js");
   assert.ok(/document\.modelContext/.test(WEBMCP) && /\.registerTool\(/.test(WEBMCP),
     "webmcp.js should be the module that reads the API and registers against it");
 });
@@ -117,4 +133,34 @@ test("a tool that writes cannot reach its handler without passing the gate", () 
   assert.ok(gateAt < callAt,
     "the consent gate must run BEFORE the tool's own handler, or it is decoration");
   assert.ok(/if \(writes\) \{/.test(body), "the gate must be conditional on `writes`");
+});
+
+test("the agent-activity tray icon ships HIDDEN and is unhidden by script", () => {
+  // The icon claims "an agent can drive this page", which is only true in a
+  // browser that implements WebMCP. Shipping it visible would show a Safari
+  // visitor a control for a thing their browser cannot do.
+  assert.ok(/id: "axp-webmcp"[^}]*hidden: true/s.test(SHELL),
+    "the webmcp tray item must declare hidden: true in shell-data.ts");
+  assert.ok(/id=\\"axp-webmcp\\" class=\\"axp-trayico\\" hidden/.test(CHROME),
+    "the generated chrome must carry the hidden attribute — re-run bun run gen:shell");
+  assert.ok(/ico\.hidden = false/.test(NAV),
+    "nav.js must be what unhides it, and only after tools registered");
+});
+
+test("the tray reads the log rather than fetching it, and renders every outcome", () => {
+  // The audit log is module state in this document. A reader that fetched would
+  // be inventing an endpoint for data it already holds.
+  assert.ok(/loadWebmcp/.test(NAV) && /loadWebmcp/.test(TRAY),
+    "nav.js should pass a loadWebmcp reader and nav-tray.js should take it");
+  assert.ok(!/fetch\(/.test(TRAY.slice(TRAY.indexOf("function renderWebmcp"), TRAY.indexOf("var BALLOON"))),
+    "renderWebmcp must not fetch anything");
+  for (const outcome of ["ok", "refused", "failed"]) {
+    assert.ok(new RegExp(`"${outcome}"`).test(TRAY),
+      `the balloon must render the ${outcome} outcome`);
+  }
+  // webmcp.js has to keep exporting what the tray reads.
+  for (const name of ["summary", "onActivity"]) {
+    assert.ok(new RegExp(`export function ${name}\\b`).test(WEBMCP),
+      `webmcp.js must export ${name}; nav.js depends on it`);
+  }
 });

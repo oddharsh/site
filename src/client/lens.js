@@ -1568,14 +1568,71 @@
   // The Tools lens. Opt-in like Reader and Wire, and for the same reason: every
   // run is a real POST to somebody else's server, so it happens when a visitor
   // asks for it rather than on every scan.
+  // The OTHER catalogue, and the reason it sits under this tab rather than under
+  // "What it costs" where its data is fetched: both answer "what does this site
+  // let an agent do". They just come from different places. /mcp is a SERVER
+  // catalogue anything can POST to; these are tools the page registers into
+  // document.modelContext with its own JavaScript, so nothing you can fetch will
+  // ever reveal them and an origin whose whole agent surface is browser-local
+  // reads as having none. Seeing them means running the page, which is what the
+  // Wire tab's CDP session already does.
+  function webmcpSection() {
+    var w = wireData && wireData.webmcp;
+    var head = "Tools the PAGE registers";
+    if (!wireData) {
+      return section(head, { text: "not read" },
+        "Browser-local tools only exist once the page has run.",
+        '<div class="lx-wmcp-intro">A site can hand an agent tools that live in the document rather than on the server. ' +
+        'Reading them means rendering the page, so this fills in when you run <b>What it costs</b>.</div>');
+    }
+    if (!w || w.present === null) {
+      return section(head, { text: "unreadable" },
+        "The render happened; the catalogue could not be read.",
+        '<div class="lx-wmcp-intro">' + (w && w.error ? esc(w.error) : "The probe did not return a catalogue.") +
+        ' This says nothing about whether the site has tools.</div>');
+    }
+    if (!w.present) {
+      return section(head, { text: "none" },
+        "The page ran and registered no browser-local tools.",
+        '<div class="lx-wmcp-intro">Its agent surface, if any, is whatever the server publishes above.</div>');
+    }
+    // Read-vs-write is the most a visitor CAN be told: Chrome carries one of
+    // MCP's five annotations across registration. A tool that stated nothing is
+    // its own column rather than being counted as safe.
+    var split = '<div class="lx-wmcp-intro"><b>' + w.count + '</b> tool' + (w.count === 1 ? "" : "s") +
+      ' registered into <code>document.modelContext</code>' +
+      ' \u00b7 <b>' + (w.read || 0) + '</b> read \u00b7 <b>' + (w.write || 0) + '</b> write' +
+      (w.unstated ? ' \u00b7 <b>' + w.unstated + '</b> unstated' : "") +
+      (w.truncated ? " (list truncated)" : "") +
+      '<br><span class="lx-wmcp-k">Chrome keeps only <code>readOnlyHint</code> across registration, so read-versus-write is the whole safety story a page can tell your agent. ' +
+      (w.unstated ? "An unstated tool has not claimed to be safe; it has said nothing." : "Every tool here stated one.") +
+      '</span></div>';
+    var rows = (w.tools || []).map(function (t) {
+      var kind = t.readOnly === true ? '<span class="lx-wmcp-read">read</span>'
+        : t.readOnly === false ? '<span class="lx-wmcp-write">write</span>'
+        : '<span class="lx-wmcp-k">unstated</span>';
+      var args = (t.params || []).map(function (a) {
+        return '<code>' + esc(a.name) + (a.required ? "*" : "") + "</code>";
+      }).join(" ");
+      return '<div class="lx-wmcp-row"><div><b>' + esc(t.name || "?") + "</b> " + kind +
+        (t.untrustedContent === true ? ' <span class="lx-wmcp-k">untrusted content</span>' : "") +
+        "</div>" +
+        (t.description ? "<div>" + esc(t.description) + "</div>" : "") +
+        (args ? '<div class="lx-wmcp-k">takes ' + args + "</div>" : '<div class="lx-wmcp-k">takes no arguments</div>') +
+        "</div>";
+    }).join("");
+    return section(head, { text: w.count + " live" },
+      "Read from the page itself, in a real browser. Never called.", split + rows);
+  }
+
   function lensTools() {
-    if (window.LensTools) return window.LensTools.render(toolsBusy ? { pending: true } : toolsData);
+    if (window.LensTools) return window.LensTools.render(toolsBusy ? { pending: true } : toolsData) + webmcpSection();
     // Pre-module fallback, self-contained because the module may never arrive.
     return section("What it accepts", { text: "not run" },
       "Reads this origin's MCP catalogue and draws a form for every tool, from the argument schema the server publishes.",
       '<div class="lx-tools-intro"><b>An MCP tool list is an ABI.</b> A block explorer turns one into a form you can fill in, ' +
       'and <code>inputSchema</code> is the same artefact under another name.' +
-      '<button class="lx-browser-run" type="button" id="lx-tools-run">Read the catalogue</button></div>');
+      '<button class="lx-browser-run" type="button" id="lx-tools-run">Read the catalogue</button></div>') + webmcpSection();
   }
 
   function runTools() {

@@ -95,7 +95,7 @@ export function renderDesktopArtifacts(surfaces = readManifest().surfaces) {
   }).join("");
 
   const trayHtml = '<div id="axp-tray"><button id="axp-sound" type="button" hidden></button>'
-    + TRAY_ITEMS.map((item) => `<a id="${item.id}" class="axp-trayico" href="${item.href}" data-kind="${item.kind}" title="${esc(item.title)}" aria-label="${esc(item.label)}">${spriteRef(`tray-${item.kind}`, item.svg)}</a>`).join("")
+    + TRAY_ITEMS.map((item) => `<a id="${item.id}" class="axp-trayico"${item.hidden ? " hidden" : ""} href="${item.href}" data-kind="${item.kind}" title="${esc(item.title)}" aria-label="${esc(item.label)}">${spriteRef(`tray-${item.kind}`, item.svg)}</a>`).join("")
     + '<span id="axp-clock" aria-hidden="true"></span></div>';
 
   const taskbarHtml = '<div id="axp-taskbar" role="navigation" aria-label="taskbar">'

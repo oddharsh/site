@@ -389,11 +389,19 @@
       .then(function (j) { if (j && j.items) updData = j; cb(updData); })
       .catch(function () { cb(null); });
   }
+  // Same shape as the two readers above, and it fetches nothing: the audit log
+  // lives in webmcp.js's module scope, so this is a read of state this document
+  // already holds. It resolves null when WebMCP never loaded, which is what the
+  // balloon renders as "nothing has asked".
+  function loadWebmcp(cb) {
+    if (!D.modelContext) { cb(null); return; }
+    import("/webmcp.js").then(function (m) { cb(m.summary()); }, function () { cb(null); });
+  }
   function loadTray() {
     if (!trayPromise) {
       trayPromise = Promise.all([loadStyle("nav-tray"), import("/nav-tray.js")]).then(function (loaded) {
         var m = loaded[1];
-        return m.createTray({ sound: AXP_SND, loadSys: loadSys, loadUpd: loadUpd });
+        return m.createTray({ sound: AXP_SND, loadSys: loadSys, loadUpd: loadUpd, loadWebmcp: loadWebmcp });
       });
     }
     return trayPromise;
@@ -830,7 +838,41 @@
   // has tools worth advertising.
   function bootWebmcp() {
     if (!D.modelContext) return;   // no WebMCP here; do not spend the fetch
-    import("/webmcp.js").then(function (m) { return m.boot(); }).catch(function () {});
+    import("/webmcp.js").then(function (m) {
+      // The tray icon ships hidden (shell-data.ts says why). Showing it is the
+      // page telling the visitor, in the place XP puts running things, that an
+      // agent can drive this document. The badge then counts what one actually
+      // did, so the icon means "possible" and the number means "happened".
+      var ico = D.getElementById("axp-webmcp");
+      /** @type {HTMLSpanElement | null} */
+      var badge = null;
+      function paint() {
+        var s = m.summary();
+        if (!ico || !s.registered) return;
+        ico.hidden = false;
+        if (!badge) {
+          // The badge's rules live in nav-tray.css, which is otherwise lazy and
+          // would not arrive until the first tray hover, so the count would sit
+          // there unstyled until somebody happened to touch the tray. Ask for the
+          // sheet here. It is ~30 lines, it is idempotent, and it only ever loads
+          // on a page that really has registered tools.
+          loadStyle("nav-tray").catch(function () {});
+          badge = D.createElement("span");
+          badge.className = "axp-traybadge";
+          ico.appendChild(badge);
+        }
+        badge.hidden = !s.calls;
+        badge.textContent = String(s.calls);
+        // The refusal is the state worth colouring: it is the one moment the
+        // person overrode an agent, and it should still be visible afterwards.
+        badge.classList.toggle("no", s.refused > 0);
+        ico.setAttribute("title", s.calls
+          ? "Agent activity \u00b7 " + s.calls + " tool call" + (s.calls === 1 ? "" : "s") + " this visit"
+          : "Agent activity \u00b7 " + s.registered + " tools an agent can use here");
+      }
+      m.onActivity(paint);
+      return m.boot().then(paint, paint);
+    }).catch(function () {});
   }
   if ("requestIdleCallback" in window) requestIdleCallback(bootWebmcp, { timeout: 4000 });
   else setTimeout(bootWebmcp, 1200);
