@@ -147,6 +147,8 @@ jobs:
             echo "PR already open for $BRANCH; the force-push updated it."
           else
             gh pr create --base main --head "$BRANCH" \
+              --assignee oddharsh \
+              --label "type: chore" --label "area: photos" \
               --title "chore(og): re-bake the social cards from production" \
               --body "Automated by [\`og-cards.yml\`](.github/workflows/og-cards.yml). **${CARDS}** card(s), **${PAGES}** page head(s).
 

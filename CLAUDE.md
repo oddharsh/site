@@ -220,6 +220,32 @@ worktrees may edit freely, but a worktree is not a release surface.
   your branch out from under you.
 - Keep each change on its own branch, commit it, push it, and open a PR. Do
   not deploy from a dirty worktree or push agent work directly to `main`.
+- **A new issue or PR assigns and labels itself**, via
+  `.github/workflows/triage.yml`. It reads the title's conventional-commit
+  prefix for a `type:` label and the changed paths for `area:` labels, so
+  `fix(photos):` on a diff under `tools/photos/` arrives tagged without anyone
+  typing a label. Keep writing the title the way you already do; that IS the
+  input. Two labels are worth reacting to rather than filing: **`hashed-asset`**
+  says the diff remints an `/a/` URL and therefore every page and page
+  dictionary (gotcha 35), and **`release-path`** says it touches what decides
+  which commit reaches production.
+
+  The label set, the routing rules and the assignee are declared in
+  [`infra.json`](config/infra.json) under `repository.triage`, and
+  `bun run infra:check` fails on drift in both directions: a label the workflow
+  can emit but GitHub does not have, and a colour or description edited from the
+  web UI. `bun run labels:sync` plans, `-- --confirm` writes, and it refuses to
+  run in CI like `infra:apply`. **Sync BEFORE merging a label rename**, because
+  `infra:check` is inside the required `validate` check and reads live GitHub,
+  so a declaration that runs ahead of reality blocks its own PR.
+
+  Four workflows label themselves inline instead (`dictionary-roll`, `bun-pin`,
+  `og-cards`, `node-support-window`), and that is a platform limit rather than a
+  style choice: an event created with the default `GITHUB_TOKEN` does not
+  trigger another workflow, so `triage.yml` never sees them. `gh pr create
+  --label` fails outright on an unknown label, so their flags are checked
+  against the same declaration; a rename without a sync stops the nightly roll
+  rather than mislabelling it.
 - PR CI lints (`bun run lint`, oxlint including its type-aware rules), builds
   the site, enforces the performance budget, dry-runs the single
   site Worker plus the auxiliary Garage/LWE configs (`cf-garage/`, `lwe-ask/`),
@@ -612,19 +638,31 @@ worktrees may edit freely, but a worktree is not a release surface.
   whose migration has never been applied. The failure, if there is one, shows up
   at the one moment you least want it, on the real publish.
 
-  **This entry used to say `wrangler versions upload` REFUSES to apply a
-  migration. Wrangler's own code contradicts that, read on the pinned 4.123.0 on
-  2026-08-19.** For a real upload it computes the delta in
-  `getMigrationsToUpload` (which fetches the live script's `migration_tag` and
-  diffs it against the config), and `createWorkerUploadForm` folds the result
-  into the metadata with `...migrations && { migrations }`. That is the same
-  `workerBundle` POSTed to `/accounts/<id>/workers/scripts/<name>/versions`. No
-  branch excludes it and no warning fires: searching every string literal in the
-  18MB bundle for one naming both migrations and versions or upload returns five
-  hits, all of them function names or a D1 filename help string.
+  **SETTLED 2026-08-25, and both halves of this entry's history were half
+  right, which is why it stayed open for months.** The original text said
+  `wrangler versions upload` refuses a migration and blamed wrangler. The
+  2026-08-19 correction proved wrangler's code sends it and concluded the refusal
+  claim was unsupported. Wrangler sends it AND the API rejects it.
 
-  The dry-run half of this entry IS verified by the same read, and the mechanism
-  is one line:
+  Measured against a throwaway Worker, deleted afterwards:
+
+  ```
+  ✘ [ERROR] A request to the Cloudflare API
+    (/accounts/<id>/workers/scripts/<name>/versions) failed.
+
+    Version upload failed. You attempted to upload a version of a Worker that
+    includes a Durable Object migration, but migrations must be fully applied
+    via a non-versioned deployment. [code: 10211]
+  ```
+
+  Exit 1. The client half is confirmed too, read on 4.125.0: `uploadWorkerVersion`
+  calls `resolveExportsUploadPayload`, folds `migrations` into the upload form,
+  and POSTs it to `${workerUrl}/versions`. So the refusal is SERVER-side, and the
+  months of wrong attribution came from testing one layer and concluding about
+  the other. **A claim of the form "X refuses" has to name the layer, because the
+  client and the server are separately checkable and can disagree.**
+
+  The dry-run half is unchanged and verified by the same read, one line:
 
   ```js
   const migrations = !props.isDryRun ? await getMigrationsToUpload(...) : undefined
@@ -632,16 +670,30 @@ worktrees may edit freely, but a worktree is not a release surface.
 
   A dry run never computes a migration, so it cannot report on one.
 
-  **What is still untested is whether the API accepts it.** If a refusal exists
-  it lives server-side, and this entry attributed it to the wrong layer for
-  months. Settling it needs a real authenticated `versions upload` carrying a
-  `[[migrations]]` entry, which creates account state, so it wants a throwaway
-  Worker rather than `aadhar-sh`: declare one new class, upload a version, read
-  the response, then delete the Worker and its namespace.
+  Two things the experiment turned up that no note here recorded:
 
-  The advice below is unchanged either way, because it is safe whether the
-  endpoint accepts the migration or rejects it. That is the reason to keep it
-  while the question is open, rather than to act on a guess about which.
+  - **`versions upload` refuses on a Worker that does not exist yet** ("Please run
+    the `deploy` command first"), so reaching 10211 takes two steps: deploy the
+    Worker without the class, then add the class and upload a version.
+  - **`wrangler deploy` never meets 10211**, because
+    `canUseNewVersionsDeploymentsApi` is gated on `migrations === undefined` and
+    routes around the versions endpoint entirely. Only an explicit `versions
+    upload` hits it, which is exactly this repo's release model.
+
+  The DECLARATIVE `exports` form (gotcha 41, cf-garage) is refused too, on its own
+  path: `resolveExportsUploadPayload` returns `migrations: undefined` when a config
+  declares DO exports, and wrangler carries a dedicated message for the server's
+  rejection, saying declarative exports "are reconciled when the version is
+  deployed."
+
+  **The docs do not state any of this.** Error 10211 links to the gradual-deployments
+  Durable Objects anchor, which explains only that gradual deployments differ for
+  DOs. `10211`, `non-versioned deployment` and `must be fully applied` are each 0
+  hits across the whole cloudflare-docs repo. Filed as
+  [cloudflare-docs#32982](https://github.com/cloudflare/cloudflare-docs/issues/32982).
+
+  The advice below was written to be safe whichever way the question resolved, and
+  it survives unchanged.
 
   Two consequences, both load-bearing:
 
@@ -4055,12 +4107,48 @@ bun run deploy:direct
     `curl -sI` is what shows it, and only if you read the whole line rather than
     grep for the directive you added.
 
-    So a file under a glob has exactly two ways to get a different policy: move
-    it out of the glob, or set the header in the worker. Adding a narrower rule
-    is not one of them. Worth knowing before reaching for the obvious fix, since
-    every other layered-config system in this repo (wrangler's routes, the CSP
-    map, `run_worker_first`) does let the specific entry win, and this one reads
-    exactly like it should too.
+    **This entry used to end by saying a file under a glob has exactly two ways
+    to get a different policy, moving it out of the glob or setting the header in
+    the worker, and that adding a narrower rule is not one of them. There is a
+    third, and it was documented the whole time: DETACH.** Prepending `! ` to a
+    header name removes it, and re-setting it afterwards gives a clean single
+    value.
+
+    **It is ORDER-DEPENDENT, which is the part no documentation states and the
+    reason this went unnoticed for two weeks.** Rules apply in file order and
+    `! ` removes only what earlier rules have already added, so a detach above
+    the rule it targets is a silent no-op. Measured on wrangler 4.125.0 under
+    `wrangler dev --local`, same two files, only the layout changing:
+
+    | layout | `Cache-Control` served |
+    |---|---|
+    | specific rule with `!` ABOVE the glob | the glob's value, detach did nothing |
+    | glob first, then specific with `!` and a new value | the narrow value alone |
+    | glob first, then specific with `!` only | header absent entirely |
+
+    So the working shape puts the narrow rule AFTER the glob:
+
+    ```
+    /lwe/*
+      Cache-Control: public, max-age=0, s-maxage=86400, stale-while-revalidate=604800
+
+    /lwe/quadgrams.txt
+      ! Cache-Control
+      ! Link
+      Cache-Control: public, max-age=604800, stale-while-revalidate=604800
+    ```
+
+    The combining behaviour above is real and unchanged, and it is documented at
+    [Custom headers](https://developers.cloudflare.com/workers/static-assets/headers/).
+    What was wrong here was the conclusion drawn from it. Filed upstream as
+    [cloudflare-docs#32979](https://github.com/cloudflare/cloudflare-docs/issues/32979)
+    with a PR for the ordering rule.
+
+    The general lesson is the expensive one. This note reasoned from one failed
+    experiment to "there is no way", without reading the page that documents the
+    escape hatch two sections further down. **A negative claim about a system
+    someone else built is a claim about their documentation as much as their
+    behaviour, so read the whole page before writing one down.**
 
 32. **`bun run pages:check` lints AUTHORED PAGE TEXT against the house voice,
     and it is a required check.** `pipelines/content/page-contract.mjs` bans em

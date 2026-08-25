@@ -114,7 +114,9 @@ jobs:
             exit 0
           fi
 
-          gh issue create --title "$title" --body "$(cat <<BODY
+          gh issue create --assignee oddharsh \
+            --label "type: chore" --label "area: infra" \
+            --title "$title" --body "$(cat <<BODY
           \`\`\`
           $(cat window.txt)
           \`\`\`

@@ -44,7 +44,7 @@
 //   node tools/check-infra.ts --strict     turn advisories into failures
 
 import { execFile } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile, access } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, writeFile, access } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -428,6 +428,95 @@ async function checkTree(infra, wrangler, aux) {
   pass(`release block agrees with wrangler.jsonc (Worker ${wrangler.name}, build owned by Wrangler, upload-then-ramp, previews ${wrangler.preview_urls ? "on" : "off"})`);
 
   await checkCodeqlWorkflow(infra.repository);
+  await checkTriageDeclaration(infra.repository);
+}
+
+// The triage declaration, asserted WITHOUT a network call. The live half (do
+// these labels exist, with these colours) is in checkLabels below; this is the
+// half that can run on a plane, and it is the half that catches the failure
+// that matters most.
+//
+// THE FAILURE IT CATCHES: POST /issues/:n/labels CREATES a label that does not
+// exist. So a routing rule naming `area: garagee` does not error, it mints a
+// second label and the pull request looks triaged. Nothing reports it. What
+// makes that catchable here is that infra.json holds the routing and the label
+// set in ONE list, so a route can only ever name a label declared beside it.
+// That is the whole argument for not splitting this block in two.
+//
+// The `gh --label` scan is the other direction, and it is the one with teeth.
+// A workflow that opens its own pull request passes `--label` at creation,
+// because an event created with the default GITHUB_TOKEN never triggers
+// triage.yml. `gh pr create --label` FAILS OUTRIGHT on an unknown label, so a
+// rename here without a sync does not mislabel the nightly roll, it stops it.
+async function checkTriageDeclaration(repo) {
+  const triage = repo?.triage;
+  if (!triage) return;
+  const before = hard.length;
+
+  const names = new Set<string>();
+  for (const label of triage.labels) {
+    const at = `infra.json triage label ${JSON.stringify(label.name)}`;
+    if (names.has(label.name)) fail(`${at} is declared twice`);
+    names.add(label.name);
+    if (!/^[0-9a-f]{6}$/i.test(label.color || "")) fail(`${at} has colour ${JSON.stringify(label.color)}, which is not a 6-digit hex`);
+    if (!label.description) fail(`${at} has no description; it is what the label list reads like to anyone but you`);
+
+    // A label nothing can apply is decoration. Either something in this repo
+    // routes to it, or an outside actor is named as the one that applies it.
+    if (!label.title && !label.paths && !label.applied_by) {
+      fail(`${at} carries no \`title\` route, no \`paths\` route and no \`applied_by\`, so nothing can ever apply it`);
+    }
+  }
+
+  let workflow;
+  try {
+    workflow = await readFile(join(ROOT, triage.workflow), "utf8");
+  } catch {
+    fail(`infra.json declares repository.triage but ${triage.workflow} is missing, so nothing assigns or labels anything`);
+    return;
+  }
+  if (!workflow.includes("triage.assignee")) {
+    fail(`${triage.workflow} does not read \`triage.assignee\` from infra.json; hard-coding the assignee is how the two silently disagree about who owns the inbox`);
+  }
+
+  // The self-opening workflows. FLOOR included, for the reason every scanner in
+  // this repo carries one: a regex that matches nothing reports a clean pass,
+  // and this one is scanning for a flag that is easy to spell three ways.
+  //
+  // SCOPED TO `gh`, and the first draft was not. `--label` is also a flag on
+  // `bun run perf:snapshot record`, where it names a build rather than a GitHub
+  // label, so a bare scan for the flag reported three drifts against workflows
+  // that touch no label at all. Backslash continuations are folded first
+  // because every one of these invocations is wrapped across lines, and each
+  // passes `--label` before the multi-line `--body` that ends the logical line.
+  const dir = join(ROOT, ".github/workflows");
+  let inline = 0;
+  for (const file of (await readdir(dir)).filter((f) => f.endsWith(".yml"))) {
+    const raw = await readFile(join(dir, file), "utf8");
+    const text = raw.replace(/\\\n\s*/g, " ")
+      .split("\n")
+      .filter((line) => /\bgh\s+(?:pr|issue)\s+(?:create|edit)\b/.test(line))
+      .join("\n");
+    for (const m of text.matchAll(/--label\s+(?:"([^"]+)"|'([^']+)'|(\S+))/g)) {
+      const name = m[1] ?? m[2] ?? m[3];
+      inline++;
+      if (!names.has(name)) {
+        fail(`.github/workflows/${file} passes \`--label ${JSON.stringify(name)}\`, which infra.json does not declare. \`gh pr create --label\` fails on an unknown label, so this stops that workflow rather than mislabelling it`);
+      }
+    }
+    for (const m of text.matchAll(/--assignee\s+(?:"([^"]+)"|'([^']+)'|(\S+))/g)) {
+      const who = m[1] ?? m[2] ?? m[3];
+      if (who && who !== triage.assignee) {
+        fail(`.github/workflows/${file} assigns ${JSON.stringify(who)} but infra.json declares ${JSON.stringify(triage.assignee)}`);
+      }
+    }
+  }
+  if (inline < triage.self_labelling_workflows) {
+    fail(`only ${inline} inline \`--label\` flag(s) found across .github/workflows, expected at least ${triage.self_labelling_workflows}. A workflow that opens its own pull request cannot be triaged by triage.yml, so losing its flags is silent`);
+  }
+
+  if (hard.length > before) return;
+  pass(`triage declaration is consistent: ${triage.labels.length} labels, all routed or attributed, ${inline} inline flag(s) declared, ${triage.workflow} reads the assignee from here`);
 }
 
 // The CodeQL language curation, asserted from the COMMITTED workflow rather
@@ -1133,7 +1222,68 @@ async function checkRepo(infra) {
 
   pass(`${slug} is ${meta.visibility} and its ${repo.rulesets.length} declared ruleset(s) match, with no bypass actors${token ? "" : " (unauthenticated read)"}`);
 
+  await checkLabels(repo, slug, token);
   await checkCodeScanning(repo, slug, token);
+}
+
+// The live half of the triage declaration. Same tier as the rulesets above and
+// for the same reason: /repos/:slug/labels is public on a public repo, so this
+// runs on every pull request with no credential rather than degrading to a note
+// like the account tier.
+//
+// A MISSING LABEL IS FATAL, and the reason is not tidiness. Three things break
+// on one: `gh pr create --label` fails outright, so the nightly dictionary roll
+// stops opening pull requests; triage.yml silently CREATES the label instead,
+// because the add-labels endpoint invents what it is handed; and the label list
+// stops being the thing you can filter the repository by, which is the only
+// reason any of this exists.
+//
+// Colour and description drift is fatal too, which looks strict for something
+// cosmetic. It is one command to fix and it is the only signal that somebody
+// edited the set from the web UI, where the next edit is a rename.
+async function checkLabels(repo, slug, token) {
+  const triage = repo.triage;
+  if (!triage) return;
+
+  const live: any[] = [];
+  try {
+    for (let page = 1; ; page++) {
+      const batch = await ghFetch(`/repos/${slug}/labels?per_page=100&page=${page}`, token);
+      live.push(...batch);
+      if (batch.length < 100) break;
+    }
+  } catch (e) {
+    warn(`repository labels could not be read: ${e.message}`);
+    return;
+  }
+
+  const byName = new Map<string, any>(live.map((l) => [l.name, l]));
+  const before = hard.length;
+  for (const want of triage.labels) {
+    const got = byName.get(want.name);
+    byName.delete(want.name);
+    if (!got) {
+      fail(`${slug} has no label ${JSON.stringify(want.name)}. Run \`bun run labels:sync -- --confirm\`: until then triage.yml will invent it with a colour nobody chose, and any workflow passing it to \`gh --label\` fails outright`);
+      continue;
+    }
+    if (got.color.toLowerCase() !== want.color.toLowerCase()) {
+      fail(`label ${JSON.stringify(want.name)} is #${got.color}, declared #${want.color} (\`bun run labels:sync -- --confirm\`)`);
+    }
+    if ((got.description ?? "") !== want.description) {
+      fail(`label ${JSON.stringify(want.name)} reads ${JSON.stringify(got.description ?? "")}, declared ${JSON.stringify(want.description)} (\`bun run labels:sync -- --confirm\`)`);
+    }
+  }
+
+  // Strays WARN, matching the ruleset tier. GitHub ships a stock label set on
+  // every new repository, so failing here would make the first run of this
+  // check red for something nobody chose.
+  const strays = [...byName.keys()];
+  if (strays.length) {
+    warn(`${slug} carries ${strays.length} undeclared label(s): ${strays.join(", ")}. Declare them in infra.json or remove them with \`bun run labels:sync -- --confirm --prune\` (a deletion strips the label from every issue that carried it)`);
+  }
+
+  if (hard.length > before) return;
+  pass(`${slug}'s ${triage.labels.length} declared label(s) match on name, colour and description${strays.length ? `, with ${strays.length} stray` : ""}${token ? "" : " (unauthenticated read)"}`);
 }
 
 // CodeQL default setup, declared for the same reason the rulesets are: it is a
