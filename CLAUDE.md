@@ -612,19 +612,31 @@ worktrees may edit freely, but a worktree is not a release surface.
   whose migration has never been applied. The failure, if there is one, shows up
   at the one moment you least want it, on the real publish.
 
-  **This entry used to say `wrangler versions upload` REFUSES to apply a
-  migration. Wrangler's own code contradicts that, read on the pinned 4.123.0 on
-  2026-08-19.** For a real upload it computes the delta in
-  `getMigrationsToUpload` (which fetches the live script's `migration_tag` and
-  diffs it against the config), and `createWorkerUploadForm` folds the result
-  into the metadata with `...migrations && { migrations }`. That is the same
-  `workerBundle` POSTed to `/accounts/<id>/workers/scripts/<name>/versions`. No
-  branch excludes it and no warning fires: searching every string literal in the
-  18MB bundle for one naming both migrations and versions or upload returns five
-  hits, all of them function names or a D1 filename help string.
+  **SETTLED 2026-08-25, and both halves of this entry's history were half
+  right, which is why it stayed open for months.** The original text said
+  `wrangler versions upload` refuses a migration and blamed wrangler. The
+  2026-08-19 correction proved wrangler's code sends it and concluded the refusal
+  claim was unsupported. Wrangler sends it AND the API rejects it.
 
-  The dry-run half of this entry IS verified by the same read, and the mechanism
-  is one line:
+  Measured against a throwaway Worker, deleted afterwards:
+
+  ```
+  ✘ [ERROR] A request to the Cloudflare API
+    (/accounts/<id>/workers/scripts/<name>/versions) failed.
+
+    Version upload failed. You attempted to upload a version of a Worker that
+    includes a Durable Object migration, but migrations must be fully applied
+    via a non-versioned deployment. [code: 10211]
+  ```
+
+  Exit 1. The client half is confirmed too, read on 4.125.0: `uploadWorkerVersion`
+  calls `resolveExportsUploadPayload`, folds `migrations` into the upload form,
+  and POSTs it to `${workerUrl}/versions`. So the refusal is SERVER-side, and the
+  months of wrong attribution came from testing one layer and concluding about
+  the other. **A claim of the form "X refuses" has to name the layer, because the
+  client and the server are separately checkable and can disagree.**
+
+  The dry-run half is unchanged and verified by the same read, one line:
 
   ```js
   const migrations = !props.isDryRun ? await getMigrationsToUpload(...) : undefined
@@ -632,16 +644,30 @@ worktrees may edit freely, but a worktree is not a release surface.
 
   A dry run never computes a migration, so it cannot report on one.
 
-  **What is still untested is whether the API accepts it.** If a refusal exists
-  it lives server-side, and this entry attributed it to the wrong layer for
-  months. Settling it needs a real authenticated `versions upload` carrying a
-  `[[migrations]]` entry, which creates account state, so it wants a throwaway
-  Worker rather than `aadhar-sh`: declare one new class, upload a version, read
-  the response, then delete the Worker and its namespace.
+  Two things the experiment turned up that no note here recorded:
 
-  The advice below is unchanged either way, because it is safe whether the
-  endpoint accepts the migration or rejects it. That is the reason to keep it
-  while the question is open, rather than to act on a guess about which.
+  - **`versions upload` refuses on a Worker that does not exist yet** ("Please run
+    the `deploy` command first"), so reaching 10211 takes two steps: deploy the
+    Worker without the class, then add the class and upload a version.
+  - **`wrangler deploy` never meets 10211**, because
+    `canUseNewVersionsDeploymentsApi` is gated on `migrations === undefined` and
+    routes around the versions endpoint entirely. Only an explicit `versions
+    upload` hits it, which is exactly this repo's release model.
+
+  The DECLARATIVE `exports` form (gotcha 41, cf-garage) is refused too, on its own
+  path: `resolveExportsUploadPayload` returns `migrations: undefined` when a config
+  declares DO exports, and wrangler carries a dedicated message for the server's
+  rejection, saying declarative exports "are reconciled when the version is
+  deployed."
+
+  **The docs do not state any of this.** Error 10211 links to the gradual-deployments
+  Durable Objects anchor, which explains only that gradual deployments differ for
+  DOs. `10211`, `non-versioned deployment` and `must be fully applied` are each 0
+  hits across the whole cloudflare-docs repo. Filed as
+  [cloudflare-docs#32982](https://github.com/cloudflare/cloudflare-docs/issues/32982).
+
+  The advice below was written to be safe whichever way the question resolved, and
+  it survives unchanged.
 
   Two consequences, both load-bearing:
 
