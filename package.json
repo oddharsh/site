@@ -20,6 +20,7 @@
     "search:index": "bun tools/generate-search-index.ts",
     "photos": "bash tools/photos/add-photos.sh",
     "photos:check": "bun tools/photos/check-photo-pipeline.ts",
+    "resample:probe": "bun tools/photos/resample-probe.ts",
     "captions": "python3 tools/photos/gen-alt-text.py",
     "photos:env": "uv venv tools/photos/.venv --python 3.12 --allow-existing && uv pip install --python tools/photos/.venv/bin/python -r tools/photos/requirements.txt",
     "perf-budget": "node tools/perf-budget.ts",
