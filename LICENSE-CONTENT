@@ -1,0 +1,32 @@
+# Content licence
+
+The MIT licence in `LICENSE` covers the SOFTWARE in this repository: the Worker,
+the client islands, the build and the tools, the tests, and the configuration.
+GitHub detects that file, so the repository reads as MIT, and for the code it is.
+
+It does not cover the CONTENT, which is separately owned and reserved. All rights
+reserved, no licence granted, express or implied:
+
+| what | where |
+|---|---|
+| photographs, every tier and the originals behind them | `public/i/`, `public/images/`, `public/cars/`, `public/og/` |
+| written posts | `src/content/writing/` |
+| page prose, including the copy inside `src/pages/` and the template literals the Worker renders | `src/pages/`, `src/content/`, the prose in `src/worker/` |
+| the photo metadata that describes the photographs, including EXIF records, Fuji recipe cards, histograms and captions | `public/images/metadata.json`, `public/images/exif.json`, `public/images/meta/`, `public/images/alt.json` |
+
+Two notes on the seam, because the split is not tidy and pretending otherwise
+would be the dishonest version.
+
+**A file can hold both.** `src/pages/garage/horizon.html` is a demo whose
+JavaScript is software and whose surrounding argument is writing, and the Worker's
+modules carry long prose comments that are the same. Read the code as MIT and the
+prose as reserved, in whatever file they share.
+
+**Reproducing the design is fine; reproducing the work is not.** The Luna design
+system in `design/`, the XP component vocabulary, and every technique written down
+in `CLAUDE.md` are offered freely, and the whole point of writing them down was
+that somebody else could use them. What is reserved is the photography, the
+essays, and the page copy, which are the parts that are not techniques.
+
+Ask, if you want something here that this does not grant. The answer is usually
+yes: aadhar.sh/coffee, or coffee@aadhar.sh.
