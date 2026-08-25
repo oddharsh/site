@@ -200,18 +200,80 @@ orient_ops() {
 # decode → upright → width-capped PNG. This is the reference every score is
 # measured against, and the only input the encoder ever sees.
 #
-# The resample rides ALONG WITH the decode, on purpose: asking sips for the full
-# 40MP PNG first and shrinking it after costs 5.05s against 0.46s on a 7728x5152
-# HIF, and buys nothing — the two paths score 95.66 against each other with edge
-# energy identical to three decimals (22.475 vs 22.476), so the difference lands
-# in dither rather than in detail.
+# THE RESAMPLE IS zenc's, NOT sips', AND THE REASON IS GAMMA. sips averages
+# pixels in ENCODED sRGB, which is a curve, so the mean of two samples is not
+# the mean of the light they stand for. Measured on a 1px black/white
+# checkerboard reduced 16x, where the correct answer is sRGB 187.5:
 #
-# Which AXIS to cap is the subtle half. sips resamples the pixels AS STORED, and
-# a frame the camera tagged Orientation 5-8 is stored on its side, so capping its
-# stored width would cap the delivered HEIGHT. Same swap rule as metadata.json's
-# (CLAUDE.md gotcha 6), applied before the rotation rather than after.
+#     sips -Z                 127.75
+#     sips --resampleWidth    127.75    <- what this script used until 2026-08-25
+#     zenc resize             188.00    <- the 0.5 is 8-bit quantisation
+#
+# 127.75 is the average of 0 and 255 as CODES. Every reduction this tool
+# performed was darkening the frame it was about to spend a quality search on,
+# and then scoring that frame against itself, so nothing in the report could see
+# it. ig-prep has been correct here all along (fast_image_resize in linear
+# light); this brings the shell path level with it.
+#
+# THE INTERMEDIATE IS TIFF BECAUSE IT HAS TO BE LOSSLESS AND PNG IS TOO SLOW.
+# zenc cannot decode HEIF, so sips still owns the decode, and asking it for a
+# full-resolution lossless frame is the only way to hand zenc every pixel. On a
+# 7728x5152 HIF, `sips -s format png` spends 6222ms deflating 160MB where
+# `sips -s format tiff` spends 509ms writing 311MB. Same pixels, 10.6x apart.
+#
+# WHAT IT COSTS, measured on that frame, since this is slower than what it
+# replaced and pretending otherwise would be the easy mistake:
+#
+#     old   sips -s format png --resampleWidth 1080          549 ms
+#     new   sips -s format tiff  +  zenc resize --width      937 ms
+#
+# 388ms a photo, plus a 311MB temp file that is deleted before the next one is
+# read. Paid deliberately: this is a tool whose entire job is squeezing the last
+# ssimulacra2 point out of an encode, and it was feeding that search a reference
+# that had already lost more than the search could ever win back.
+#
+# GAMMA IS NOT THE ONLY DEFECT, and the first draft of this comment claimed it
+# was. It said box is what sips was approximating so the swap is gamma alone.
+# Measured against five encoded-sRGB kernels on the same frame, sips matches
+# NONE of them: box 57.77, hamming 58.03, bilinear 59.34, bicubic 59.71,
+# lanczos 58.72. A real kernel family difference puts one of those near 90, and
+# a flat low cluster means the thing being compared is not a clean filter.
+#
+# The checkerboard says what it is. Reduced 16x, a correct average leaves ONE
+# value and therefore no variance:
+#
+#     PIL box, encoded sRGB    mean 128.00   std 0.00   range 128..128
+#     zenc box, linear light   mean 188.00   std 0.00   range 188..188
+#     sips --resampleWidth     mean 127.75   std 1.77   range  96..159
+#
+# So sips low-passes roughly right and leaves +/-32 codes of aliasing on a field
+# that has one correct answer. Two defects, and zenc fixes both. Read the low
+# ssimulacra2 between the old and new references (51-60 across three frames) as
+# sips being wrong twice rather than as box being soft.
+#
+# --filter box because the corpus pipeline already chose it and matching sips is
+# not a goal once sips is not a clean anything. Lanczos3 is available and
+# sharper, and this tool can price it directly, since it searches for the lowest
+# q clearing the target and a sharper reference costs the encoder bits. Same
+# three frames, same q on all three:
+#
+#     box        24.1 KB   292.3 KB   184.7 KB
+#     lanczos3   24.9 KB   312.9 KB   197.0 KB      +3.3%  +7.0%  +6.7%
+#
+# So lanczos3 is a real option that costs about 6% for sharpness, not a free
+# upgrade. Reach for it per-run if a frame needs it.
+#
+# Which AXIS to cap is the subtle half, and it survives the rewrite unchanged
+# because zenc reads the same stored pixels sips wrote: a frame the camera
+# tagged Orientation 5-8 is stored on its side, so capping its stored width
+# would cap the delivered HEIGHT. Same swap rule as metadata.json's (CLAUDE.md
+# gotcha 6), applied before the rotation rather than after.
+#
+# ROTATION STAYS ON sips. `-r` and `-f` move samples without inventing any, so
+# there is no averaging to get wrong, and they run on the 1080px output rather
+# than the 40MP source.
 prepare_reference() {  # prepare_reference <src> <out.png>
-  local src="$1" ref="$2" o ops axis cur w h
+  local src="$1" ref="$2" o ops axis w h
   o=$(exif-sooc -s -s -s -n -Orientation "$src" 2>/dev/null || echo "")
   ops=$(orient_ops "$src")
   # One spawn for both, the same shape dims() below already used.
@@ -223,15 +285,18 @@ prepare_reference() {  # prepare_reference <src> <out.png>
   # into an integer comparison and spills a bash error over the report.
   case "$w$h" in ''|*[!0-9]*) return 1 ;; esac
   case "$o" in
-    5|6|7|8) axis="--resampleHeight"; cur="$h" ;;
-    *)       axis="--resampleWidth";  cur="$w" ;;
+    5|6|7|8) axis="--height" ;;
+    *)       axis="--width"  ;;
   esac
-  # only ever downscale — a source already narrower than the cap is delivered as-is
-  if [ "$cur" -gt "$WIDTH" ]; then
-    sips -s format png "$axis" "$WIDTH" "$src" --out "$ref" >/dev/null 2>&1 || return 1
-  else
-    sips -s format png "$src" --out "$ref" >/dev/null 2>&1 || return 1
-  fi
+  # `--width N` is a CAP rather than a target, so a source already inside it
+  # passes through untouched and there is no branch to keep in step. That is why
+  # the old if/else is gone rather than translated.
+  local mid="$TMP/$(basename "$ref" .png)-mid.tiff"
+  sips -s format tiff "$src" --out "$mid" >/dev/null 2>&1 || { rm -f "$mid"; return 1; }
+  "$ZENC" resize "$mid" "$axis" "$WIDTH" --filter box --out "$ref" >/dev/null 2>&1 || { rm -f "$mid"; return 1; }
+  # Deleted HERE rather than by the EXIT trap: these are ~311MB apiece, and a
+  # 160-photo run holding them all would want 50GB of /tmp.
+  rm -f "$mid"
   for op in $ops; do
     case "$op" in
       r:*) sips -r "${op#r:}" "$ref" >/dev/null 2>&1 || return 1 ;;

@@ -28,6 +28,13 @@
 //   ringing    a step edge must not overshoot into values outside the range the
 //              source contained. Lanczos rings by design, so this is reported
 //              as a magnitude to compare rather than a pass or fail.
+//   flatness   that same checkerboard has ONE correct output value, so the
+//              spread across the result must be zero. A filter that does not
+//              low-pass to the output Nyquist leaves aliasing here while still
+//              reporting a clean edge. This is what separated sips from every
+//              standard kernel: it matches none of box, hamming, bilinear,
+//              bicubic or lanczos (57.8-59.7 ssimulacra2 against all five)
+//              because it is not a different kernel, it is a noisy one.
 //   channels   a grayscale source must stay grayscale. Attempt 1 promoted Luma8
 //              to RGBA and nobody noticed until the pixel diff was nonsense.
 //
@@ -40,6 +47,7 @@
 //
 // With no --candidate it probes the shipping sips chain alone, which is the
 // baseline any future attempt has to beat.
+import { existsSync } from "node:fs";
 import { deflateSync, inflateSync } from "node:zlib";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
@@ -207,6 +215,27 @@ function interiorMean(img: Img, margin: number): number {
   return n ? t / n : NaN;
 }
 
+/** Standard deviation over the same interior. A 1px checkerboard reduced by an
+ *  integer factor has exactly ONE correct output value, so a real average leaves
+ *  no spread at all. Anything above zero is residual aliasing: the filter did
+ *  not low-pass to the output Nyquist and let high frequencies through.
+ *
+ *  This column exists because `ring` did not catch what it should have. sips
+ *  reads ring 2, which looks like a well-behaved filter, while leaving std 1.77
+ *  and a 96..159 range on a field whose answer is a single number. Overshoot at
+ *  an EDGE and noise across a FLAT FIELD are different defects, and a probe that
+ *  only measured the first called the second clean for months. */
+function interiorStd(img: Img, margin: number): number {
+  const m = interiorMean(img, margin);
+  let t = 0, n = 0;
+  for (let y = margin; y < img.h - margin; y++) {
+    for (let x = margin; x < img.w - margin; x++) {
+      for (let c = 0; c < img.ch; c++) { const d = img.data[(y * img.w + x) * img.ch + c]! - m; t += d * d; n++; }
+    }
+  }
+  return n ? Math.sqrt(t / n) : NaN;
+}
+
 // ── the control ─────────────────────────────────────────────────────────────
 //
 // A probe that has only ever seen defective candidates has not been shown to
@@ -289,6 +318,14 @@ function parseArgs(argv: string[]): { candidates: Candidate[]; size: number; sou
     // The shipping baseline. `sips -Z` is the resize the pipeline actually runs;
     // the surrounding TIFF dance is container work and does not resample.
     candidates.push({ name: "sips", cmd: "sips -Z {size} {in} --out {out} >/dev/null 2>&1" });
+    // zenc is the SHIPPING path for every resample in this repo since
+    // 2026-08-25, so it belongs in the default comparison rather than behind a
+    // flag. Added only when built, because the probe's job is to measure what
+    // is here and a missing binary is not a failing candidate.
+    const zenc = new URL("zenc/target/release/zenc", import.meta.url).pathname;
+    if (existsSync(zenc)) {
+      candidates.push({ name: "zenc", cmd: `${zenc} resize {in} --width {size} --filter box --out {out} >/dev/null 2>&1` });
+    }
   }
   return { candidates, size, source, selfTest };
 }
@@ -300,16 +337,19 @@ function main(): number {
   console.log(`resample-probe: ${source}px sources -> ${size}px, ${candidates.length} candidate(s)\n`);
 
   const rows: string[] = [];
-  const measured: Record<string, { gamma: number; identity: number; ring: number; ch: number }> = {};
+  const measured: Record<string, { gamma: number; identity: number; ring: number; flat: number; ch: number }> = {};
   try {
     for (const c of candidates) {
       // 1. GAMMA. The answer is known: half the light, encoded.
       const gammaResults: Record<string, number> = {};
+      let flat = NaN;
       for (const ch of [1, 3] as const) {
         const src = join(dir, `check-${ch}.png`), dst = join(dir, `check-${ch}.out.png`);
         writePng(src, checkerboard(source, ch));
         if (!runCandidate(c, src, dst, size)) { gammaResults[`ch${ch}`] = NaN; continue; }
-        gammaResults[`ch${ch}`] = interiorMean(readPng(dst), 2);
+        const gimg = readPng(dst);
+        gammaResults[`ch${ch}`] = interiorMean(gimg, 2);
+        if (ch === 1) flat = interiorStd(gimg, 2);
       }
 
       // 2. IDENTITY. Downscale to the size it already is.
@@ -365,12 +405,13 @@ function main(): number {
       if (runCandidate(c, gSrc, gDst, size)) chOut = readPng(gDst).ch;
 
       const g1 = gammaResults.ch1!, g3 = gammaResults.ch3!;
-      measured[c.name] = { gamma: g1, identity, ring, ch: chOut };
+      measured[c.name] = { gamma: g1, identity, ring, flat, ch: chOut };
       rows.push(
         `  ${c.name.padEnd(10)} ` +
         `gamma ${fmt(g1)}/${fmt(g3)}  ` +
         `identity ${Number.isNaN(identity) ? "  n/a" : identity.toFixed(2).padStart(5)}  ` +
         `ring ${Number.isNaN(ring) ? "n/a" : String(Math.round(ring)).padStart(3)}  ` +
+        `flat ${Number.isNaN(flat) ? " n/a" : flat.toFixed(2).padStart(4)}  ` +
         `gray->ch ${chOut < 0 ? "n/a" : chOut}`
       );
     }
@@ -378,8 +419,8 @@ function main(): number {
     rmSync(dir, { recursive: true, force: true });
   }
 
-  console.log(`  ${"".padEnd(10)} gamma gray/rgb   identity    ring  gray->ch`);
-  console.log(`  ${"ideal".padEnd(10)} ${ideal.toFixed(1)}/${ideal.toFixed(1)}      0.00       0         1\n`);
+  console.log(`  ${"".padEnd(10)} gamma gray/rgb   identity    ring  flat  gray->ch`);
+  console.log(`  ${"ideal".padEnd(10)} ${ideal.toFixed(1)}/${ideal.toFixed(1)}      0.00       0  0.00         1\n`);
   for (const r of rows) console.log(r);
   console.log(`
   gamma     mean of a 1px checkerboard's interior. ${ideal.toFixed(1)} is correct
@@ -393,6 +434,12 @@ function main(): number {
             The edge is 32/223 rather than 0/255 so the overshoot has somewhere
             to go: at full range 8-bit clamps it and every filter reads 0.
             Lanczos rings by design; this compares magnitudes.
+  flat      standard deviation over that same checkerboard interior. A correct
+            average leaves ONE value, so 0.00 is the only right answer and
+            anything above it is aliasing the filter failed to low-pass away.
+            Distinct from ring, which measures an EDGE: sips reads ring 2 and
+            flat 1.77, so it looks well behaved at edges while leaving noise
+            across a field that has a single correct value.
   gray->ch  channels out of a 1-channel source. 1 is correct; 3 or 4 means the
             tool promoted grayscale and any byte comparison against it is void.`);
 

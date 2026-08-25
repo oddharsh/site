@@ -33,9 +33,13 @@ path = "src/main.rs"
 # Re-add it only with a measurement on the tier that motivates it, and check
 # byte-identity in the same run. dependabot (cargo ecosystem) owns the pin.
 zenjpeg = { version = "0.8.4", features = ["trellis"] }
-# Input decode only. The pipeline hands us an already-upright, metadata-stripped
-# PNG/JPG, so keep image lean: no extra format decoders to widen the dep graph.
-image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+# Input decode only. `tiff` was added on 2026-08-25 for the Instagram export,
+# which needs a LOSSLESS decode of a HEIF source and cannot use JPEG for it.
+# Measured on a 7728x5152 HIF: `sips -s format png` takes 6222ms because it
+# deflates 160MB, and `sips -s format tiff` takes 585ms because it does not.
+# 10.6x on the slowest step of that tool, for four crates, and dropping
+# zenjpeg's `parallel` feature had just freed six.
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "tiff"] }
 # The histogram bake's only new dependency, and it replaces a whole python3 + pip
 # prerequisite. preserve_order keeps an existing meta file's key order across the
 # read/modify/write, which is what python dicts did for free and what makes the
