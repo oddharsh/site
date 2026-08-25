@@ -43,21 +43,29 @@
 # YOURSELF: a site, an AirDrop, a DM carrying the real file.
 #
 # --target has no universally right value and this script does not pretend
-# otherwise. The default is 70, ssimulacra2's published "high quality" anchor,
-# and it is a PLACEHOLDER for a number only your own eye can set. Run
-# --calibrate, which writes every rung as a real file next to the reference PNG,
-# put them on the phone you actually post from, and find where you stop seeing
-# the difference. Pass that as --target from then on.
+# otherwise. The default is 84, DERIVED (see the block at TARGET= below) rather
+# than taken off ssimulacra2's published scale, and it is still a PLACEHOLDER for
+# a number only your own eye can set. Run --calibrate, which writes every rung as
+# a real file next to the reference PNG, put them on the phone you actually post
+# from, and find where you stop seeing the difference. Pass that as --target from
+# then on.
 #
-# Expect the ladder to sit lower than the anchors suggest, because 1080 wide is
-# a dense delivery scale: a downscaled 40MP frame is high-frequency in every
-# tile, so there is nothing cheap left for the encoder to throw away. Measured
-# across a 5-frame sample of this library, the winning q ran 78 to 95 and saved
-# 46-65% against a flat q95. One frame (XT509346, Nostalgic Neg with Grain
-# Effect: Strong) could not clear 70 at ANY quality in range: film grain is
-# expensive, JPEG smooths it, and ssimulacra2 scores that harshly. That is a
-# real property of the frame, which is why a miss is reported by name instead of
-# being rounded away.
+# CALIBRATE AGAIN IF YOU CALIBRATED BEFORE 2026-08-25. The resample changed that
+# day, and this target is scored against the resized frame, so a number tuned
+# against the old one does not carry over. That is the whole argument at TARGET=.
+#
+# Expect the ladder to sit high, because 1080 wide is a dense delivery scale: a
+# downscaled 40MP frame is high-frequency in every tile, so there is nothing
+# cheap left for the encoder to throw away. At 84 the winning q runs about 91 to
+# 95 on the Fuji files and 83 to 88 on the Leica ones.
+#
+# The 5-frame measurement that used to sit here (winning q 78 to 95, saving
+# 46-65% against a flat q95, with XT509346's Nostalgic Neg grain unable to clear
+# 70 at any quality) was taken against the SIPS reference and does not describe
+# this tool any more. Grain being expensive is still true and is still why a miss
+# is reported by name instead of being rounded away; the numbers are not, and are
+# left here named as stale rather than quietly deleted, because somebody who
+# remembers them needs to know they expired.
 #
 # usage:
 #   ./tools/photos/export-for-instagram.sh photo.HIF
@@ -68,7 +76,7 @@
 # options:
 #   -o, --out DIR      output directory        (default ~/Desktop/ig-export)
 #   -w, --width N      delivery width cap      (default 1080)
-#   -t, --target N     ssimulacra2 floor       (default 70)
+#   -t, --target N     ssimulacra2 floor       (default 84)
 #   -q, --qmax N       quality ceiling         (default 95)
 #       --qmin N       quality floor           (default 50)
 #       --ba-max N     butteraugli ceiling, second gate  (default off)
@@ -90,7 +98,39 @@ BUTTERAUGLI="$(command -v butteraugli_main || echo /opt/zerobrew/prefix/bin/butt
 
 OUT="$HOME/Desktop/ig-export"
 WIDTH=1080
-TARGET=70
+# 84 rather than the 70 this carried until 2026-08-25, and the reason is that
+# THE TARGET IS CALIBRATED AGAINST THE REFERENCE, so replacing the reference
+# silently rescaled it. ssimulacra2 here scores the encode against the resized
+# frame, which measures encode FIDELITY and says nothing about whether the frame
+# itself is any good. sips left aliasing the DCT could not reproduce, so 70 was
+# expensive and often unreachable; a clean reference is easy to match, so the
+# same 70 was suddenly bought at q50 and shipped a heavily compressed file.
+#
+# Scored against a common ground truth (an independent PIL Lanczos downscale in
+# linear light), delivered quality, KB beside it:
+#
+#                      old (sips)      t=70        t=78        t=84
+#     L1000069_3      76.55   73KB   69.91 24KB  75.94 29KB  80.80  39KB
+#     L1009920        76.64  235KB   67.64 60KB  74.94 84KB  80.31 133KB
+#     XT509996        64.66  155KB     --        75.50 336KB 79.38 548KB
+#     XT507399        59.67  232KB     --        72.31 380KB 77.02 585KB
+#
+# So t=70 on the new reference is WORSE than the tool it replaced, which is the
+# regression this fixes. t=84 lands ~80 on both cameras: the Leica beats the old
+# output at 43% fewer bytes, and the Fuji gains 16 points at about 3x the bytes
+# because the old tool had been delivering it at 60, not because 84 is greedy.
+#
+# Two things worth keeping past this number. A RELATIVE metric's threshold is a
+# property of the reference, so any future change to prepare_reference has to
+# re-derive it rather than inherit it. And the old tool's own report was lying in
+# BOTH directions: L1000069_3 scored 58.41 against sips' reference while scoring
+# 76.55 against truth, because JPEG's low-pass was quietly undoing some of the
+# aliasing, so a file it declared a failure was the better one.
+#
+# Expect the occasional MISSED at q95. That is the report being honest about a
+# frame the encoder cannot carry, and it is preferable to a target low enough
+# that nothing ever misses.
+TARGET=84
 QMAX=95
 QMIN=50
 BA_MAX=""
