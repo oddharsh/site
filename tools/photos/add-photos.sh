@@ -118,7 +118,12 @@ fi
 # jpegtran still does the lossless EXIF-orientation step (structural, not an encode).
 ZENC_DIR="$(cd "$(dirname "$0")/zenc" && pwd)"
 ZENC="$ZENC_DIR/target/release/zenc"
-ZENC_Q=84
+ZENC_Q=80   # was 84. The linear-light geometry preserves high-frequency energy
+            # that sips' gamma-incorrect average destroyed, so correct pixels
+            # compress worse: at q84 the tier grows 24.5%. Measured ladder against
+            # the old sips-q84 baseline: q76 -3.9%, q78 +3.1%, q80 +8.2%,
+            # q82 +15.3%, q84 +24.5%. q80 keeps the gamma correction, which is the
+            # visible change, and spends a third of the bytes q84 wanted.
 MOZJPEG_DIR="/opt/homebrew/opt/mozjpeg/bin"
 MOZ_JTRAN="$MOZJPEG_DIR/jpegtran"
 
@@ -220,7 +225,11 @@ avif_encode() {  # avif_encode <src.jpg> <out.avif>
     # the colorspace should fall through to 4:2:0, never abort the encode.
     local space; space=$(sips -g space "$1" 2>/dev/null | awk '/space:/{print $2}') || space=""
     local yuv; [ "$space" = "Gray" ] && yuv=400 || yuv=420
-    avifenc -q 63 -d 10 --ignore-icc --ignore-exif --ignore-xmp --speed 4 --jobs 4 --yuv "$yuv" "$1" "$2" >/dev/null 2>&1
+    # -q 58, was 63, matched to the same ~8% budget the JPG tier took. Ladder
+    # against the old sips-q63 baseline: q54 -10.2%, q56/57 +0.9%, q58 +6.8%,
+    # q59 +12.4%, q63 +28.8%. Note q56 and q57 produce identical bytes, so the
+    # quantizer mapping is coarser than the flag suggests.
+    avifenc -q 58 -d 10 --ignore-icc --ignore-exif --ignore-xmp --speed 4 --jobs 4 --yuv "$yuv" "$1" "$2" >/dev/null 2>&1
   else
     sips -s format avif --setProperty formatOptions 60 "$1" --out "$2" >/dev/null 2>&1
   fi
