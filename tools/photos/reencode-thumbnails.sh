@@ -256,7 +256,12 @@ while IFS= read -r stem; do
   fi
   # 6. 1x square: the same lossless SQ square down to SQ_XS, so this tier is ONE
   #    encode from the source like the other two rather than a resize of a resize.
-  if want xs && sips -Z "$SQ_XS" "$sqjpg" --out "$xstmp" >/dev/null 2>&1; then
+  # zenc square here too. This tier was MISSED when the geometry moved on
+  # 2026-08-25: the 600 and 400 tiers went to the linear-light kernel and the 200
+  # stayed on sips, so a quarter of the shipped corpus was still gamma-incorrect
+  # while the commit said otherwise. Found by grepping for the resize rather than
+  # by any check, which is the gap worth noting.
+  if want xs && "$ZENC" square "$sqjpg" --size "$SQ_XS" --out "$xstmp" --filter box >/dev/null 2>&1; then
     if [ "$AVIF_ENCODER" = "avifenc" ]; then
       avifenc -q 63 -d 10 --ignore-icc --ignore-exif --ignore-xmp --speed 4 --jobs 4 --yuv "$yuv" "$xstmp" "$xsavif" >/dev/null 2>&1 || printf "~"
     else

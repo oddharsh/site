@@ -45,10 +45,16 @@ from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageOps, ImageStat
 
 REPO = Path(__file__).resolve().parents[2]
 SRC_DIR = Path("/Users/aadharsh/Downloads/to post (from ssd)")
-OUT_DIR = REPO / "www" / "pixel-peeper"
+OUT_DIR = REPO / "public" / "pixel-peeper"
 TILES_DIR = OUT_DIR / "tiles"
 
-ZENC = REPO / "www" / "scripts" / "zenc" / "target" / "release" / "zenc"
+# Both of these named `www/` and `www/scripts/` until 2026-08-25, so this
+# generator had been pointing at directories that stopped existing when the tree
+# split into public/ + tools/. It writes its output and finds its encoder by
+# path, and neither path resolved. Same shape as gotcha 40: a path assembled
+# from parts is invisible to a rename sweep that greps for the assembled form.
+ZENC = REPO / "tools" / "photos" / "zenc" / "target" / "release" / "zenc"
+SIPS = shutil.which("sips") or "/usr/bin/sips"
 CJPEGLI = shutil.which("cjpegli") or str(Path.home() / ".local/bin/cjpegli")
 CJPEG = "/opt/homebrew/opt/mozjpeg/bin/cjpeg"
 SSIMULACRA2 = shutil.which("ssimulacra2") or "/opt/zerobrew/prefix/bin/ssimulacra2"
@@ -133,6 +139,20 @@ CANDIDATES = {
         "XT509809",   # yellow car, red interior
         "XT509346",   # orange mirror
     ]),
+    # The geometry axis. Fine repeating detail is where a downscale's defects
+    # live: gamma-incorrect averaging darkens texture, and aliasing shows on
+    # anything periodic. A smooth subject would separate by nothing and the
+    # legibility gate would correctly drop it, so the stems are chosen the same
+    # way the quality axis chooses its own.
+    "resample": ("detail", 6, [
+        "XT507494",   # chrome grille — fine mesh
+        "XT509278",   # red grille, black mesh
+        "XT507955",   # metal staircase, yellow stripes
+        "XT509986",   # subway signage — text edges
+        "XT509509",   # train livery lettering
+        "XT507517",   # license plate lettering
+        "XT509535",   # Coca-Cola livery — text on a curve
+    ]),
 }
 
 # How each axis ranks its survivors — bigger sorts first, so ships first.
@@ -147,6 +167,7 @@ RANK = {
     "encoder":  lambda t: t["spread"],
     "chroma":   lambda t: t["spread"],   # structural damage is what a person can SEE
     "tradeoff": lambda t: (1 if t["disagree"] else 0, t.get("penalty", 0)),
+    "resample": lambda t: t["spread"],   # how far apart the two geometries land
 }
 
 # Legibility thresholds. A trial that cannot clear these is dropped, because a
@@ -279,16 +300,22 @@ def score_window(win, intent):
     return coarse + detail * 0.05
 
 
-def best_crop(im, intent):
-    """Scan candidate windows on a coarse proxy, then cut the winner at native res."""
+def best_crop(im, intent, box_px=TILE):
+    """Scan candidate windows on a coarse proxy, then cut the winner at native res.
+
+    `box_px` is the NATIVE window edge. It defaults to TILE, which is every axis
+    that compares encodes of one set of pixels. The resample axis asks for a
+    larger window because what it compares is the DOWNSCALE, so it needs real
+    reduction to happen inside the trial rather than a 1:1 cut.
+    """
     W, H = im.size
-    if W < TILE or H < TILE:
-        raise RuntimeError(f"source smaller than a tile: {W}x{H}")
+    if W < box_px or H < box_px:
+        raise RuntimeError(f"source smaller than a {box_px}px window: {W}x{H}")
     # Score on a downscaled proxy so the scan is cheap, then map the window back.
     scale = min(1.0, 1400 / max(W, H))
     proxy = im.resize((max(1, int(W * scale)), max(1, int(H * scale))), Image.LANCZOS)
     pw, ph = proxy.size
-    box = max(8, int(TILE * scale))
+    box = max(8, int(box_px * scale))
     if box > min(pw, ph):
         box = min(pw, ph)
     stride = max(4, box // 3)
@@ -301,9 +328,9 @@ def best_crop(im, intent):
     if best_s <= -1e5:
         raise RuntimeError(f"no window carries enough colour (mean sat < {COLOR_MIN_SAT})")
     # Map proxy coords back to native, clamped so the tile stays inside the frame.
-    nx = min(W - TILE, max(0, int(best[0] / scale)))
-    ny = min(H - TILE, max(0, int(best[1] / scale)))
-    return im.crop((nx, ny, nx + TILE, ny + TILE)), best_s
+    nx = min(W - box_px, max(0, int(best[0] / scale)))
+    ny = min(H - box_px, max(0, int(best[1] / scale)))
+    return im.crop((nx, ny, nx + box_px, ny + box_px)), best_s
 
 
 # -------------------------------------------------------------------- encoders
@@ -540,7 +567,108 @@ def build_tradeoff(crop_id, srcs, ref_png, tmp):
             "penalty": round(abs(options[0]["butter"] - options[1]["butter"]), 3)}, None
 
 
+# The reduction the trial reproduces. The pipeline takes a ~1333px short edge to
+# a 600px square, so ~2.2x; 3x here keeps the tile peepable while staying in the
+# regime the site actually runs in. A 1:1 comparison would test nothing, since
+# the whole difference between these two candidates IS the downscale.
+RESAMPLE_REDUCTION = 3
+# Two candidates that are meant to differ MUST separate by this much for the
+# trial to ship. Below it, nobody can call the tile and the honest answer is that
+# the difference does not survive at display size.
+RESAMPLE_MIN_SPREAD = 8.0
+
+
+def build_resample(crop_id, srcs, ref_png, tmp):
+    """sips against the linear-light kernel, at one byte budget.
+
+    NOT scored against a reference, and that is the design rather than a
+    shortcut. Every other axis compares encodes of ONE set of pixels, so the
+    native crop is a legitimate reference and ssimulacra2 measures encode damage.
+    Here the candidates are different downscales of a larger region, so there is
+    no common-size truth to score against, and manufacturing one means choosing a
+    downscaler, which is choosing the winner. That mistake cost this repository
+    two wrong conclusions before the probe in resample-probe.ts replaced
+    reference-similarity with analytically-known answers.
+
+    So the number here is the two candidates against EACH OTHER. That is the
+    question the page exists to answer: not which is closer to some truth, but
+    whether a person looking at two tiles can tell them apart at all.
+
+    `srcs` and `ref_png` are the TILE-sized crop the main loop cuts for every
+    axis. They are unused: this builder re-cuts a RESAMPLE_REDUCTION x larger
+    window from the same source, because a downscale needs something to reduce.
+    """
+    src = load_source(crop_id, tmp)
+    big, _ = best_crop(src, "detail", box_px=TILE * RESAMPLE_REDUCTION)
+    big_png = tmp / "resample-src.png"
+    big.save(big_png)
+
+    made = {}
+    for label in ("sips", "zenc"):
+        out = tmp / f"resample-{label}.png"
+        if label == "sips":
+            # The shipping chain: resize the short edge, then centre-crop. The
+            # window is already square, so this is the resize alone.
+            run([SIPS, "-Z", str(TILE), str(big_png), "--out", str(out)])
+        else:
+            run([ZENC, "square", str(big_png), "--size", str(TILE),
+                 "--out", str(out), "--filter", "box"])
+        if not out.exists():
+            return None, f"{label} produced no output"
+        made[label] = out
+
+    # One byte budget, both searched onto it, so the tile is not secretly a
+    # quality comparison. Same discipline the encoder axis uses.
+    probe = tmp / "resample-budget.jpg"
+    target = encode("zenc", {"png": made["sips"], "ppm": made["sips"]}, probe, 72, "420")
+
+    options, rejected = [], []
+    for label, png in made.items():
+        # A SUBDIRECTORY PER CANDIDATE, and it is load-bearing. search_quality
+        # names its output by encoder `kind`, and both candidates here are zenc,
+        # so a shared tmp makes them write to the same cand-zenc-<q>.jpg. When the
+        # two geometries happen to settle on the same quality the second silently
+        # overwrites the first, both options point at one file, and the spread
+        # reads exactly 0.0 — which looks like "these are indistinguishable" and
+        # is really "these are the same file". Two of seven crops reported that
+        # before the split.
+        sub = tmp / f"rs-{label}"
+        sub.mkdir(exist_ok=True)
+        got = search_quality("zenc", {"png": png, "ppm": png}, sub, target, "420")
+        if got is None:
+            rejected.append(f"{label}: search found nothing")
+            continue
+        q, size, path = got
+        drift = abs(size - target) / target
+        if drift > BUDGET_TOL:
+            rejected.append(f"{label}: closest was {size}B, {drift*100:.1f}% off budget")
+            continue
+        options.append({"label": label, "bytes": size, "q": q, "path": path})
+
+    if len(options) != 2:
+        return None, f"only {len(options)} geometry hit the budget; {rejected}"
+
+    # The legibility gate: how far apart the two DECODED tiles are. A reference
+    # is deliberately absent, so this is ssimulacra2 run candidate against
+    # candidate, which is symmetric and needs no truth.
+    a, b = options[0], options[1]
+    a_png = to_png(a["path"], tmp / "resample-a-dec.png")
+    b_png = to_png(b["path"], tmp / "resample-b-dec.png")
+    spread = 100.0 - ssim2(a_png, b_png)
+    if spread < RESAMPLE_MIN_SPREAD:
+        return None, (f"the two geometries differ by only {spread:.1f} at this budget "
+                      f"(want {RESAMPLE_MIN_SPREAD}); nobody could call this tile")
+
+    for o in options:
+        o["s2"] = None
+        o["butter"] = None
+    return {"axis": "resample", "crop": crop_id, "options": options,
+            "spread": round(spread, 1), "disagree": False,
+            "budget": target}, None
+
+
 BUILDERS = {"quality": build_quality, "encoder": build_encoder,
+            "resample": build_resample,
             "chroma": build_chroma, "tradeoff": build_tradeoff}
 
 

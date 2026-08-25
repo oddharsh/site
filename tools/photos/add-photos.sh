@@ -272,6 +272,23 @@ while IFS= read -r f; do
 
   # 1. decode source → working JPG (long edge 2000; ample to crop a sharp square).
   #    sips handles HEIF/HIF/HEIC decode natively.
+  # DROPPING `-Z 2000` HERE WAS MEASURED AND DECLINED, 2026-08-25. This decode is
+  # itself a gamma-incorrect downscale, roughly 5976px to 2000px, feeding the
+  # correct one below, so every thumbnail is one defective reduction followed by
+  # one good one. Letting sips decode at full resolution and having zenc do the
+  # whole reduction in one correct step is the obvious fix.
+  #
+  # It does not measurably help. Over 6 sources, mean linear-luminance error
+  # against a full-res crop came out 0.02286 for the two-step against 0.02270 for
+  # one-step, and the median 0.00247 against 0.00236. Direction is inconsistent:
+  # one-step was closer on 3 of 6 and worse on 3. For that it costs +139% pipeline
+  # time (412 -> 984 ms/photo) and +2.6% bytes.
+  #
+  # The reason it does so little is that the first reduction is only ~3x and the
+  # second does the rest, so the gamma error the first introduces is largely
+  # re-averaged away by a correct filter downstream. Worth knowing before anyone
+  # reaches for it again: the defect that mattered was the FINAL reduction, and
+  # that one is already fixed.
   if ! sips -Z 2000 -s format jpeg --setProperty formatOptions 100 "$f" --out "$work" >/dev/null 2>&1; then
     T_FAIL=$((T_FAIL+1)); printf "✗"; continue
   fi
@@ -355,7 +372,12 @@ while IFS= read -r f; do
     avif_encode "$sm" "$smavif" || printf "~"
   fi
   # 7. 1x square AVIF, same one-encode-from-the-square property as step 6.
-  if sips -Z "$SQ_XS" "$sq" --out "$xs" >/dev/null 2>&1; then
+  # zenc square here too. This tier was MISSED when the geometry moved on
+  # 2026-08-25: the 600 and 400 tiers went to the linear-light kernel and the
+  # 200 stayed on sips, so a quarter of the shipped corpus was still
+  # gamma-incorrect while the commit message said otherwise. Found by grepping
+  # for the resize rather than by any check, which is the gap worth noting.
+  if "$ZENC" square "$sq" --size "$SQ_XS" --out "$xs" --filter box >/dev/null 2>&1; then
     avif_encode "$xs" "$xsavif" || printf "~"
   fi
   T_OK=$((T_OK+1)); printf "."
