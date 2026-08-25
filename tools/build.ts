@@ -639,6 +639,10 @@ const SHELLS = [
   // the /a/ repointer is attribute-scoped (src=/href= only) and would never
   // rewrite an `import` specifier, so it stays a plain /hoist.js like its peers.
   ["hoist.js",   "/hoist.src.js",   "createHoist"],
+  // first-party WebMCP registration. Unhashed for hoist.js's reason: nav.js and
+  // lens.js both reach it through an `import()` specifier, which the /a/
+  // repointer is attribute-scoped and would never rewrite.
+  ["webmcp.js",  "/webmcp.src.js",  "registerSiteTools"],
 ];
 
 // fail fast on a broken invariant before doing any staging work

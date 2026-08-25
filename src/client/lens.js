@@ -57,6 +57,8 @@
   var vsMode = false;    // head-to-head: #lx-vs shown, single-scan chrome .lx-off
   var vsBusy = false;
   /** @type {any} */
+  var vsData = null;  // last head-to-head payload, so a WebMCP caller can read what is on screen
+  /** @type {any} */
   var lastShotUrl = null;   // the live snapshot object URL, revoked before the next mint / on decode
 
   // Must match LENS_TAB_LABELS in src/worker/lens.ts: the tab labels are
@@ -570,6 +572,7 @@
       .then(function (r) { return r.json(); })
       .then(function (j) {
         vsBusy = false;
+        vsData = j;
         renderVs(j);
         statusBar.innerHTML = j && j.ok
           ? '<span><b>Head-to-head</b></span><span>' + esc(vsHost(left)) + " vs " + esc(vsHost(right)) + '</span><span style="margin-left:auto">both fetched server-side as AadharshBot</span>'
@@ -1203,7 +1206,7 @@
     oauthDiscovery: "Publish OAuth/OIDC discovery metadata with issuer and token endpoints.", oauthProtectedResource: "Publish /.well-known/oauth-protected-resource with authorization_servers and scopes_supported.",
     authMd: "Publish /auth.md with agent registration instructions and link it to your OAuth metadata.", mcpServerCard: "Publish /.well-known/mcp/server-card.json with serverInfo, transport, and capabilities.",
     a2aAgentCard: "Publish /.well-known/agent-card.json describing the agent's interfaces, capabilities, and skills.", agentSkills: "Publish /.well-known/agent-skills/index.json with skills, URLs, and digests.",
-    webMcp: "Expose safe browser actions with navigator.modelContext and JSON Schemas.", x402: "Return a machine-readable HTTP 402 payment requirement for payable routes.",
+    webMcp: "Expose safe browser actions with document.modelContext and JSON Schemas.", x402: "Return a machine-readable HTTP 402 payment requirement for payable routes.",
     mpp: "Describe payable OpenAPI operations with x-payment-info and MPP settlement metadata.", ucp: "Publish /.well-known/ucp with protocol version, services, capabilities, and endpoints.",
     acp: "Publish /.well-known/acp.json so agents can discover commerce services and transports.", ap2: "Publish the AP2 discovery metadata when your commerce flow supports it.",
   };
@@ -2346,4 +2349,233 @@
     // The idle shell used to pop the "state of the machine web" dialog here, once
     // a session. The rail carries that argument now without asking to be closed.
   } catch (e) {}
+
+  // ---- WebMCP: the tools that need THIS WINDOW --------------------------
+  //
+  // /mcp already serves lens_inspect, lens_page and lens_compare. All three run
+  // server-side and answer the caller privately; none of them touches this page.
+  // The six below do the opposite. They drive the Lens window the person is
+  // looking at, so an agent and a human work one instrument and each can see
+  // what the other just did.
+  //
+  // That is the whole reason to put a tool in a page instead of behind an
+  // endpoint, and it is why they are registered HERE rather than in webmcp.js:
+  // this closure owns `data`, `view`, `lens`, `vsData` and the counterfactual
+  // switches, and no server has any of it.
+  //
+  // Registered as soon as lens.js loads rather than on idle, because /lens is
+  // the page an agent is most likely to be pointed at, and a catalog that fills
+  // in a second late reads as a page with no tools at all.
+
+  var WM_VIEWS = ["both", "human", "machine", "browser", "delta"];
+  var WM_OPT_IN = { reader: runReader, wire: runWire, tools: runTools, nlweb: runNlweb };
+
+  function wmOk(obj) {
+    return { content: [{ type: "text", text: JSON.stringify(obj, null, 1) }], structuredContent: obj };
+  }
+  function wmErr(message) {
+    return { content: [{ type: "text", text: message }], isError: true };
+  }
+
+  // Poll rather than refactor. run(), runVs() and the four opt-in loaders are
+  // fire-and-forget by design (each repaints as it goes and owns its own
+  // staleness guard), and threading a promise back out of all six to satisfy a
+  // caller would put the tool layer inside code paths a visitor's click shares.
+  // A busy flag they already maintain is the cheaper seam.
+  function wmSettle(isBusy, limitMs) {
+    return new Promise(function (resolve, reject) {
+      var started = Date.now();
+      (function poll() {
+        if (!isBusy()) return resolve(null);
+        if (Date.now() - started > limitMs) return reject(new Error("Timed out after " + Math.round(limitMs / 1000) + "s; the pane is still working."));
+        setTimeout(poll, 120);
+      })();
+    });
+  }
+
+  function wmScreen() {
+    var field = data && data.readiness && data.readiness.field;
+    return {
+      scanned: data ? (data.finalUrl || data.url || null) : null,
+      httpStatus: data && data.status != null ? data.status : null,
+      contentType: data ? (data.contentType || null) : null,
+      pane: view,
+      machineTab: lens,
+      machineTabAnswers: LENS_LABEL[lens] || lens,
+      agentReadyScore: field && field.overall != null ? field.overall : null,
+      comparing: vsMode
+        ? { left: urlInput.value || null, right: vsInput ? vsInput.value : null, loaded: !!vsData }
+        : null,
+      deltaSwitchesOn: Object.keys(counterfactuals).filter(function (k) { return counterfactuals[k]; }),
+      // Which opt-in panes actually hold a result. An agent that skips this asks
+      // for a reading the person has not paid for yet.
+      tabsWithData: {
+        reader: !!readerData, wire: !!wireData, tools: !!toolsData,
+        nlweb: !!nlwebData, browser: !!browserData, cloudflare: !!cloudflareData,
+      },
+      busy: busy || vsBusy,
+    };
+  }
+
+  import("/webmcp.js").then(function (wm) {
+    if (!wm.available()) return;
+    var tabs = Object.keys(LENS_LABEL);
+
+    var defs = [
+      {
+        name: "lens_scan",
+        description:
+          "Scan a URL in the Lens window on this page, the one the person is watching. The panes repaint as it runs and this returns once the scan has settled. Prefer lens_inspect when you only want the data: that one answers you privately and leaves the screen alone. Use this one when the person should SEE what you found.",
+        inputSchema: { type: "object", properties: { url: { type: "string", description: "an absolute http(s) URL" } }, required: ["url"] },
+        annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: true },
+        writes: false,
+        execute: function (args) {
+          var url = String((args && args.url) || "").trim();
+          if (!url) return wmErr("A url is required.");
+          if (busy || vsBusy) return wmErr("The Lens window is already fetching. Call lens_read_screen to see what it is doing.");
+          // Hold the previous payload so a failure is distinguishable from a
+          // success. A failed scan leaves `data` untouched and paints the reason
+          // into the status bar, so returning wmScreen() blind would hand back a
+          // tidy object describing the LAST scan, or an empty one, and call it a
+          // result. That is the one thing this page exists not to do.
+          var before = data;
+          run(url);
+          if (!busy) return wmErr("Lens refused that URL. It has to be an absolute http(s) address.");
+          return wmSettle(function () { return busy; }, 60000).then(function () {
+            if (!data || data === before) {
+              return wmErr("The scan did not complete. Lens reported: " + (statusBar.textContent || "no reason given").replace(/\s+/g, " ").trim());
+            }
+            return wmOk(wmScreen());
+          });
+        },
+      },
+      {
+        name: "lens_compare_onscreen",
+        description:
+          "Put two URLs through the same rubric side by side, in the Lens window on this page. Returns the comparison and leaves it on screen. The head-to-head costs a tighter per-visitor budget than a single scan, so do not loop it.",
+        inputSchema: { type: "object", properties: { left: { type: "string" }, right: { type: "string" } }, required: ["left", "right"] },
+        annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: true },
+        writes: false,
+        execute: function (args) {
+          var left = String((args && args.left) || "").trim();
+          var right = String((args && args.right) || "").trim();
+          if (!left || !right) return wmErr("Both left and right are required.");
+          if (busy || vsBusy) return wmErr("The Lens window is already fetching.");
+          runVs(left, right);
+          if (!vsBusy) return wmErr("Lens refused that pair. Both have to be absolute http(s) addresses.");
+          return wmSettle(function () { return vsBusy; }, 60000).then(function () {
+            if (!vsData || !vsData.ok) {
+              return wmErr("The comparison did not complete. Lens reported: " + ((vsData && vsData.error) || (statusBar.textContent || "no reason given")).replace(/\s+/g, " ").trim());
+            }
+            return wmOk({ screen: wmScreen(), comparison: vsData });
+          });
+        },
+      },
+      {
+        name: "lens_show",
+        description:
+          "Change what the Lens window is displaying. `pane` picks the split (" + WM_VIEWS.join(", ") + ") and `tab` picks which machine lens is open (" + tabs.join(", ") + "). This only moves the view. Four tabs hold nothing until somebody pays for the fetch, so follow it with lens_run_tab when the pane comes back empty.",
+        inputSchema: { type: "object", properties: { pane: { type: "string", enum: WM_VIEWS }, tab: { type: "string", enum: tabs } } },
+        annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: false },
+        writes: false,
+        execute: function (args) {
+          var pane = args && args.pane ? String(args.pane) : "";
+          var tab = args && args.tab ? String(args.tab) : "";
+          if (!pane && !tab) return wmErr("Give a pane, a tab, or both.");
+          if (pane && WM_VIEWS.indexOf(pane) < 0) return wmErr("Unknown pane " + pane + ". Try one of: " + WM_VIEWS.join(", ") + ".");
+          if (tab && tabs.indexOf(tab) < 0) return wmErr("Unknown tab " + tab + ". Try one of: " + tabs.join(", ") + ".");
+          // Order matters: setView("both") is what Delta needs before a lens
+          // selection means anything, which is the same rule the tab row uses.
+          if (pane) setView(pane);
+          if (tab) {
+            if (view === "delta" && !pane) setView("both");
+            setLens(tab);
+          }
+          return wmOk(wmScreen());
+        },
+      },
+      {
+        name: "lens_run_tab",
+        description:
+          "Pay for one of the opt-in machine tabs and wait for it: reader (a third-party extractor's guess at the article), wire (every request the page makes, through a real browser), tools (the MCP catalog the origin advertises), nlweb (ask the origin's own /ask endpoint a question). Each one is a fresh fetch of somebody else's site from this visitor's budget, which is why none of them run on their own. Needs a scan on screen first.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            tab: { type: "string", enum: Object.keys(WM_OPT_IN) },
+            query: { type: "string", description: "nlweb only: the question to ask the origin" },
+          },
+          required: ["tab"],
+        },
+        annotations: { readOnlyHint: false, idempotentHint: false, openWorldHint: true },
+        writes: false,
+        execute: function (args) {
+          var tab = String((args && args.tab) || "");
+          var starter = Object.prototype.hasOwnProperty.call(WM_OPT_IN, tab) ? WM_OPT_IN[tab] : null;
+          if (!starter) return wmErr("Unknown tab " + tab + ". Try one of: " + Object.keys(WM_OPT_IN).join(", ") + ".");
+          if (!data) return wmErr("Nothing is on screen yet. Call lens_scan first.");
+          if (tab === "nlweb" && args && args.query) {
+            // runNlweb re-reads the visible box and lets it win, so setting the
+            // closure variable alone would be silently overwritten by whatever
+            // the person last typed. Write both, and let the box win if it holds
+            // something a human put there.
+            nlwebQuery = String(args.query).slice(0, 200);
+            var box = /** @type {HTMLInputElement | null} */ (machineBody.querySelector("#lx-nlweb-q"));
+            if (box) box.value = nlwebQuery;
+          }
+          setLens(tab);
+          starter();
+          var pending = { reader: function () { return readerBusy; }, wire: function () { return wireBusy; }, tools: function () { return toolsBusy; }, nlweb: function () { return nlwebBusy; } }[tab];
+          return wmSettle(pending, 90000).then(function () {
+            var got = { reader: readerData, wire: wireData, tools: toolsData, nlweb: nlwebData }[tab];
+            if (!got) return wmErr("The " + tab + " pane came back empty. Lens reported: " + (statusBar.textContent || "no reason given").replace(/\s+/g, " ").trim());
+            return wmOk({ screen: wmScreen(), tab: tab, result: got });
+          });
+        },
+      },
+      {
+        name: "lens_read_screen",
+        description:
+          "Read what the Lens window is showing right now: the URL that was scanned, its status, which pane and machine tab are open, the agent-readiness score, which Delta switches are flipped, and which opt-in tabs already hold data. The one tool here that changes nothing. Call it to find out what the person is looking at before you touch anything.",
+        inputSchema: { type: "object", properties: {} },
+        annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
+        writes: false,
+        execute: function () { return wmOk(wmScreen()); },
+      },
+      {
+        name: "lens_delta",
+        description:
+          "Flip one of the Delta counterfactual switches and repaint. Each switch simulates a fix the scanned site has not made (" + Object.keys(counterfactuals).join(", ") + ") and shows what it would have bought. Nothing is sent anywhere: the whole simulation is arithmetic on the scan already on screen.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            "switch": { type: "string", enum: Object.keys(counterfactuals) },
+            on: { type: "boolean", description: "omit to toggle" },
+          },
+          required: ["switch"],
+        },
+        annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: false },
+        writes: false,
+        execute: function (args) {
+          var key = String((args && args["switch"]) || "");
+          if (!Object.prototype.hasOwnProperty.call(counterfactuals, key)) {
+            return wmErr("Unknown switch " + key + ". Try one of: " + Object.keys(counterfactuals).join(", ") + ".");
+          }
+          if (!data) return wmErr("Nothing is on screen yet. Call lens_scan first.");
+          var on = args ? args.on : undefined;
+          counterfactuals[key] = on === true || on === false ? on : !counterfactuals[key];
+          updateDeltaCount();
+          syncUrl(true);
+          renderMachine();
+          return wmOk(wmScreen());
+        },
+      },
+    ];
+
+    // Sequential, because each registration reads the shared catalog to check
+    // the name is free and a parallel burst races itself for it.
+    defs.reduce(function (chain, def) {
+      return chain.then(function () { return wm.registerTool(def); });
+    }, Promise.resolve()).catch(function () {});
+  }).catch(function () {});
+
 })();

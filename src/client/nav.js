@@ -816,6 +816,25 @@
     if (prerenderDocument.prerendering) return boot();
     requestAnimationFrame(() => requestAnimationFrame(boot));
   }
+  // WebMCP: put this origin's tools into the browser-local catalog ourselves.
+  // Cloudflare's injected bridge already does this on most pages, and it cannot
+  // be the whole story for two measured reasons: it never runs on the homepage,
+  // whose dcz delta reconstructs a document with the injected tag missing, and
+  // the browser discards every annotation except readOnlyHint on the way in, so
+  // a page-driven agent cannot tell a tool that WRITES from one that reads.
+  // webmcp.js carries that information through the description instead and gates
+  // the writers on a human. It skips any name the bridge already claimed.
+  //
+  // Scheduled on idle and kept OUTSIDE boot(), because the tool catalog belongs
+  // to the origin rather than to the desktop shell: a page with no taskbar still
+  // has tools worth advertising.
+  function bootWebmcp() {
+    if (!D.modelContext) return;   // no WebMCP here; do not spend the fetch
+    import("/webmcp.js").then(function (m) { return m.boot(); }).catch(function () {});
+  }
+  if ("requestIdleCallback" in window) requestIdleCallback(bootWebmcp, { timeout: 4000 });
+  else setTimeout(bootWebmcp, 1200);
+
   if (D.readyState === "loading") D.addEventListener("DOMContentLoaded", bootAfterStaticPaint);
   else bootAfterStaticPaint();
 })();
