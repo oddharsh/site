@@ -54,17 +54,22 @@ re-hit ARIN, and the Edge Trace section's fetch of `/cdn-cgi/trace`, which your
 own browser makes to this same origin. The data lives for as long
 as it takes to render, then nothing writes it to storage.
 
-One script on every page is not mine: since 2026-08-06 the Cloudflare edge injects
-`<script type="module" src="/.webmcp/bridge.js">` into every HTML document here, after
-this worker has finished with it. It is 47KB of Cloudflare's code, served from this
-origin, and it is the reason View Source shows a tag no file in the repository
-contains. What it does: if your browser implements `document.modelContext` (today that
-means Chrome 146 with experimental web platform features on) it reads this site's own
-`/mcp` server and registers those tools into the page, so an agent browsing here can
-call them instead of scraping. Every other browser, which is nearly all of them,
-downloads it, finds no such API, writes one warning to the console, and stops. So the
-honest description is that most visitors pay 47KB for nothing, and the site is betting
-that changes.
+Every script on this page is mine, and that is newer than it sounds. From 2026-08-06
+the Cloudflare edge injected a 47KB WebMCP bridge of its own into every document here,
+after this worker had finished with it, which is why View Source used to show a tag no
+file in the repository contained. It is off. What builds the tool catalogue now is
+`/webmcp.js`, which is in the repository and which you can read end-to-end like the
+rest.
+
+Two measurements retired the bridge rather than a preference. It never ran on the
+busiest page here at all: `/` is served as a compressed delta against bytes your
+browser already holds, and the edge cannot rewrite one, so the homepage advertised
+nothing to anybody while every other page advertised 25 tools. And your browser keeps
+only ONE of the five annotations the protocol defines for a tool, `readOnlyHint`,
+discarding the rest on the way in. So the bridge had no way to tell your agent which of
+these tools WRITE data. `/webmcp.js` restates that in the description an agent reads,
+and anything that writes stops and asks you, by name, showing you the arguments, before
+it runs.
 
 Analytics: none. No page loads a Web Analytics or RUM beacon, and this Worker exposes
 no browser-timing collector. Page-load timings are not sent to Cloudflare.

@@ -534,19 +534,24 @@ footer .signature small { color: oklch(56.93% 0 0); }
       it takes to render, then nothing writes it to storage. View-source if you
       want, since it's a single JavaScript file you can read end-to-end.
       <br><br>
-      <strong>One script on every page is not mine:</strong> since 2026-08-06 the
-      Cloudflare edge injects
-      <code>&lt;script type="module" src="/.webmcp/bridge.js"&gt;</code> into every
-      HTML document here, after this worker has finished with it. It is 47KB of
-      Cloudflare's code, served from this origin, and it is the reason View Source
-      shows a tag no file in the repository contains. What it does: if your browser
-      implements <code>document.modelContext</code> &mdash; today that means Chrome
-      146 with experimental web platform features on &mdash; it reads this site's own
-      <a href="/mcp">/mcp</a> server and registers those tools into the page, so an
-      agent browsing here can call them instead of scraping. Every other browser,
-      which is nearly all of them, downloads it, finds no such API, writes one
-      warning to the console, and stops. So the honest description is that most
-      visitors pay 47KB for nothing, and the site is betting that changes.
+      <strong>Every script on this page is mine, and that is newer than it
+      sounds.</strong> From 2026-08-06 the Cloudflare edge injected a 47KB WebMCP
+      bridge of its own into every document here, after this worker had finished
+      with it, which is why View Source used to show a tag no file in the
+      repository contained. It is off. What builds the tool catalogue now is
+      <code>/webmcp.js</code>, which is in the repository and which you can read
+      end-to-end like the rest.
+      <br><br>
+      Two measurements retired the bridge rather than a preference. It never ran
+      on the busiest page here at all: <code>/</code> is served as a compressed
+      delta against bytes your browser already holds, and the edge cannot rewrite
+      one, so the homepage advertised nothing to anybody while every other page
+      advertised 25 tools. And your browser keeps only ONE of the five annotations
+      the protocol defines for a tool, <code>readOnlyHint</code>, discarding the
+      rest on the way in. So the bridge had no way to tell your agent which of
+      these tools WRITE data. <code>/webmcp.js</code> restates that in the
+      description an agent reads, and anything that writes stops and asks you,
+      by name, showing you the arguments, before it runs.
       <br><br>
       <strong>Analytics:</strong> none. No page loads a Web Analytics or RUM beacon,
       and this Worker exposes no browser-timing collector. Page-load timings are not

@@ -300,11 +300,12 @@ export const TWIN_FACTS = [
       { label: "JSON endpoint", source: "src/worker/whoareyou.ts", string: "/whoareyou.json" },
       { label: "no-storage claim", source: "src/worker/whoareyou.ts", string: "none of it is stored" },
       // The page's whole subject is what a request reveals, so the ONE script on it
-      // that this repository does not contain has to be named in both copies or in
-      // neither. Pinning the path means turning the edge injection off (or Cloudflare
-      // renaming it) fails the deploy rather than leaving the page describing a tag
-      // that is no longer there.
-      { label: "WebMCP bridge", source: "src/worker/whoareyou.ts", string: "/.webmcp/bridge.js" },
+      // that registers a tool catalogue has to be named in both copies or in neither.
+      // It used to pin `/.webmcp/bridge.js`, the edge injection, and the pin did its
+      // job: turning that injection off failed the deploy until both copies stopped
+      // describing a tag that was no longer there. What replaced it is first-party,
+      // so the pin follows the same script to its new name rather than retiring.
+      { label: "WebMCP registrar", source: "src/worker/whoareyou.ts", string: "/webmcp.js" },
     ],
   },
   {
