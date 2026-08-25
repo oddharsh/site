@@ -16,6 +16,8 @@ use zenjpeg::encoder::{
 };
 
 mod histogram;
+mod resample;
+mod square;
 
 fn die(msg: String) -> ! {
     eprintln!("zenc: {msg}");
@@ -31,6 +33,9 @@ fn main() {
     // entire reason it costs nothing to carry.
     if args.get(1).map(String::as_str) == Some("histogram") {
         exit(histogram::run(&args[2..]));
+    }
+    if args.get(1).map(String::as_str) == Some("square") {
+        exit(square::run(&args[2..]));
     }
 
     let (mut input, mut output, mut q): (Option<String>, Option<String>, u8) = (None, None, 82);

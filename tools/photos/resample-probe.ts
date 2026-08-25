@@ -154,14 +154,18 @@ function checkerboard(n: number, ch: number): Img {
   return { w: n, h: n, ch, data };
 }
 
-/** Left half black, right half white. A resampler must not produce values
- *  outside [0,255]'s occupied range in the flat regions; how far it overshoots
- *  is its ringing. */
+/** A step edge with HEADROOM: 32 on the left, 223 on the right rather than 0 and
+ *  255. That detail is the test. A full-range edge rings past both ends and 8-bit
+ *  clamps the overshoot away, so the column reads a clean 0 for a filter that
+ *  demonstrably rings, which is what it did before this was fixed. Leaving 32
+ *  levels at each end gives the overshoot somewhere to be seen. */
+const STEP_LO = 32;
+const STEP_HI = 223;
 function stepEdge(n: number, ch: number): Img {
   const data = new Uint8Array(n * n * ch);
   for (let y = 0; y < n; y++) {
     for (let x = 0; x < n; x++) {
-      const v = x < n / 2 ? 0 : 255;
+      const v = x < n / 2 ? STEP_LO : STEP_HI;
       for (let c = 0; c < ch; c++) data[(y * n + x) * ch + c] = v;
     }
   }
@@ -309,8 +313,16 @@ function main(): number {
       }
 
       // 2. IDENTITY. Downscale to the size it already is.
-      const idSrc = join(dir, "grad.png"), idDst = join(dir, "grad.out.png");
-      writePng(idSrc, gradient(size, 3));
+      //
+      // The pattern is a CHECKERBOARD rather than the gradient this used at
+      // first, and the difference is the whole test. A linear ramp is invariant
+      // under any normalised symmetric kernel, so a gradient reads 0.00 for a
+      // filter that softens everything: Mitchell, which is provably
+      // approximating (see zenc's resample.rs), scored a clean 0.00 through it.
+      // The column was measuring nothing and would have cleared the exact defect
+      // it exists to catch. Only a signal at the Nyquist limit can see softening.
+      const idSrc = join(dir, "id.png"), idDst = join(dir, "id.out.png");
+      writePng(idSrc, checkerboard(size, 3));
       let identity = NaN;
       if (runCandidate(c, idSrc, idDst, size)) {
         const a = readPng(idSrc), b = readPng(idDst);
@@ -327,16 +339,23 @@ function main(): number {
       let ring = NaN;
       if (runCandidate(c, stSrc, stDst, size)) {
         const o = readPng(stDst);
+        // Overshoot past the SOURCE's own range, which is what ringing is.
+        // Measured against STEP_LO/STEP_HI rather than 0/255, so an undershoot
+        // below the dark level counts even though it is still a legal byte.
         let worst = 0;
         for (let y = 0; y < o.h; y++) {
           for (let x = 0; x < o.w; x++) {
             const v = o.data[(y * o.w + x) * o.ch]!;
-            const nearEdge = Math.abs(x - o.w / 2) < o.w * 0.08;
-            if (nearEdge) continue;          // the transition itself is not ringing
-            worst = Math.max(worst, x < o.w / 2 ? v : 255 - v);
+            // Skip the TRANSITION only, two output pixels either side. This was
+            // 8% of the width, which at a 16x reduction is wider than the
+            // ringing itself: Lanczos3's lobes live within about three output
+            // pixels of the edge, so the column excluded exactly the region it
+            // was supposed to be reading and answered 0 for every filter.
+            if (Math.abs(x - o.w / 2) < 2) continue;
+            worst = Math.max(worst, x < o.w / 2 ? STEP_LO - v : v - STEP_HI);
           }
         }
-        ring = worst;
+        ring = Math.max(0, worst);
       }
 
       // 4. CHANNELS. A grayscale source must come back grayscale.
@@ -367,10 +386,13 @@ function main(): number {
             (linear 0.5 encoded). 127.5 means encoded values were averaged as
             though they were light, which darkens every downscaled texture.
   identity  mean absolute difference when asked to resize to the size it already
-            is. Anything above 0 is unconditional softening, applied at every
-            scale and not only this one.
-  ring      worst overshoot into the flat regions away from the edge. Lanczos
-            rings by design; this is for comparing magnitudes.
+            is, measured on a 1px checkerboard because a gradient is invariant
+            under any symmetric kernel and cannot see softening. Anything above 0
+            is unconditional softening, applied at every scale and not only this.
+  ring      worst overshoot past the source's own levels in the flat regions.
+            The edge is 32/223 rather than 0/255 so the overshoot has somewhere
+            to go: at full range 8-bit clamps it and every filter reads 0.
+            Lanczos rings by design; this compares magnitudes.
   gray->ch  channels out of a 1-channel source. 1 is correct; 3 or 4 means the
             tool promoted grayscale and any byte comparison against it is void.`);
 
