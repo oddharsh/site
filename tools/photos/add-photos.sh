@@ -308,6 +308,19 @@ while IFS= read -r f; do
   # committed still carry sips geometry. That inconsistency is on purpose and is
   # the open question: paying 3 MiB to fix a defect nobody has complained about
   # is a decision about this site rather than about resampling.
+  #
+  # AND THE OBVIOUS ESCAPE DOES NOT WORK, measured before anyone tried it.
+  # tools/photos/matched-bytes-probe.py asks whether the bytes can be given back
+  # through the quality knob: encode the zenc geometry at whatever q lands on
+  # sips-at-q84's byte count, then compare. Matching costs q84 -> q76..79, and at
+  # that budget sips wins on 7 of 8 photos under all three references, including
+  # zenc's own kernel as the reference, which is the direction that would have
+  # flattered it. The +26.7% IS the quality rather than overhead around it.
+  #
+  # Both results are true and they are about different things. The same run's
+  # reference-free metric, mean linear luminance against the native crop and so
+  # needing no resampling and carrying no bias, has zenc 77% closer: 0.00027
+  # against 0.00118. The geometry really is more correct. It cannot be had free.
   if ! "$ZENC" square "$work" --size "$SQ" --out "$sq" --filter box >/dev/null 2>&1; then T_FAIL=$((T_FAIL+1)); printf "✗"; continue; fi
   # 4. desktop square JPG (zenc: zenjpeg hybrid+scan, q84 ≈ old jpegli q82) + strip
   #    any residual metadata (sips can leave a grayscale ICC on B&W frames; keep
