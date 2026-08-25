@@ -75,12 +75,20 @@ trap 'rm -rf "$TMP"' EXIT
 
 ZENC_DIR="$(cd "$(dirname "$0")/zenc" && pwd)"
 ZENC="$ZENC_DIR/target/release/zenc"
-ZENC_Q=80   # was 84. The linear-light geometry preserves high-frequency energy
-            # that sips' gamma-incorrect average destroyed, so correct pixels
-            # compress worse: at q84 the tier grows 24.5%. Measured ladder against
-            # the old sips-q84 baseline: q76 -3.9%, q78 +3.1%, q80 +8.2%,
-            # q82 +15.3%, q84 +24.5%. q80 keeps the gamma correction, which is the
-            # visible change, and spends a third of the bytes q84 wanted.
+ZENC_Q=84   # The linear-light geometry preserves high-frequency energy that sips'
+            # gamma-incorrect average destroyed, so correct pixels compress worse
+            # and the quality knob had to be chosen rather than inherited.
+            #
+            # Measured over 181 photos and all four tiers, q80/avif-58 against
+            # q84/avif-63: jpg 600 +14.3%, avif 600 +21.8%, avif 400 +20.2%,
+            # avif 200 +19.4%, tier total +17.6% or +2.39 MiB. So q84 is not free.
+            #
+            # It is kept anyway, because the alternative traded encoder quality
+            # DOWN while trading geometry UP: the old corpus was sips geometry at
+            # q84/63, and q80/58 would have been better pixels with more
+            # quantization. q84/63 changes one variable instead of two, so the
+            # corpus is strictly better than what it replaced rather than better
+            # on one axis and worse on another.
 MOZ_JTRAN="/opt/homebrew/opt/mozjpeg/bin/jpegtran"
 
 for cmd in sips exif-sooc; do
@@ -233,7 +241,7 @@ while IFS= read -r stem; do
   if ! "$ZENC" "$sqjpg" "$jpg" -q "$ZENC_Q" >/dev/null 2>&1; then FAIL=$((FAIL+1)); printf "✗"; continue; fi
   exif-sooc -all= -overwrite_original "$jpg" >/dev/null 2>&1 || true
   if [ "$AVIF_ENCODER" = "avifenc" ]; then
-    avifenc -q 58 -d 10 --ignore-icc --ignore-exif --ignore-xmp --speed 4 --jobs 4 --yuv "$yuv" "$sqjpg" "$avif" >/dev/null 2>&1 || { FAIL=$((FAIL+1)); printf "✗"; continue; }
+    avifenc -q 63 -d 10 --ignore-icc --ignore-exif --ignore-xmp --speed 4 --jobs 4 --yuv "$yuv" "$sqjpg" "$avif" >/dev/null 2>&1 || { FAIL=$((FAIL+1)); printf "✗"; continue; }
   else
     sips -s format avif --setProperty formatOptions 60 "$sqjpg" --out "$avif" >/dev/null 2>&1 || { FAIL=$((FAIL+1)); printf "✗"; continue; }
   fi
@@ -241,7 +249,7 @@ while IFS= read -r stem; do
   # 5. mobile square: downscale the SQ square to SQ_SM (square→square, no distortion)
   if want sm && "$ZENC" square "$sqjpg" --size "$SQ_SM" --out "$smtmp" --filter box >/dev/null 2>&1; then
     if [ "$AVIF_ENCODER" = "avifenc" ]; then
-      avifenc -q 58 -d 10 --ignore-icc --ignore-exif --ignore-xmp --speed 4 --jobs 4 --yuv "$yuv" "$smtmp" "$smavif" >/dev/null 2>&1 || printf "~"
+      avifenc -q 63 -d 10 --ignore-icc --ignore-exif --ignore-xmp --speed 4 --jobs 4 --yuv "$yuv" "$smtmp" "$smavif" >/dev/null 2>&1 || printf "~"
     else
       sips -s format avif --setProperty formatOptions 60 "$smtmp" --out "$smavif" >/dev/null 2>&1 || printf "~"
     fi
@@ -250,7 +258,7 @@ while IFS= read -r stem; do
   #    encode from the source like the other two rather than a resize of a resize.
   if want xs && sips -Z "$SQ_XS" "$sqjpg" --out "$xstmp" >/dev/null 2>&1; then
     if [ "$AVIF_ENCODER" = "avifenc" ]; then
-      avifenc -q 58 -d 10 --ignore-icc --ignore-exif --ignore-xmp --speed 4 --jobs 4 --yuv "$yuv" "$xstmp" "$xsavif" >/dev/null 2>&1 || printf "~"
+      avifenc -q 63 -d 10 --ignore-icc --ignore-exif --ignore-xmp --speed 4 --jobs 4 --yuv "$yuv" "$xstmp" "$xsavif" >/dev/null 2>&1 || printf "~"
     else
       sips -s format avif --setProperty formatOptions 60 "$xstmp" --out "$xsavif" >/dev/null 2>&1 || printf "~"
     fi
