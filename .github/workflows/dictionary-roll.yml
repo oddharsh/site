@@ -147,6 +147,8 @@ jobs:
             echo "PR already open for $BRANCH; the force-push updated it."
           else
             gh pr create --base main --head "$BRANCH" \
+              --assignee oddharsh \
+              --label "type: chore" --label "area: compression" \
               --title "chore(dcz): roll the dictionaries onto what production serves" \
               --body "Automated by [\`dictionary-roll.yml\`](.github/workflows/dictionary-roll.yml). Adopted **$ADOPTED**, pruned **$PRUNED**.
 

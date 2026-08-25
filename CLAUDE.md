@@ -220,6 +220,32 @@ worktrees may edit freely, but a worktree is not a release surface.
   your branch out from under you.
 - Keep each change on its own branch, commit it, push it, and open a PR. Do
   not deploy from a dirty worktree or push agent work directly to `main`.
+- **A new issue or PR assigns and labels itself**, via
+  `.github/workflows/triage.yml`. It reads the title's conventional-commit
+  prefix for a `type:` label and the changed paths for `area:` labels, so
+  `fix(photos):` on a diff under `tools/photos/` arrives tagged without anyone
+  typing a label. Keep writing the title the way you already do; that IS the
+  input. Two labels are worth reacting to rather than filing: **`hashed-asset`**
+  says the diff remints an `/a/` URL and therefore every page and page
+  dictionary (gotcha 35), and **`release-path`** says it touches what decides
+  which commit reaches production.
+
+  The label set, the routing rules and the assignee are declared in
+  [`infra.json`](config/infra.json) under `repository.triage`, and
+  `bun run infra:check` fails on drift in both directions: a label the workflow
+  can emit but GitHub does not have, and a colour or description edited from the
+  web UI. `bun run labels:sync` plans, `-- --confirm` writes, and it refuses to
+  run in CI like `infra:apply`. **Sync BEFORE merging a label rename**, because
+  `infra:check` is inside the required `validate` check and reads live GitHub,
+  so a declaration that runs ahead of reality blocks its own PR.
+
+  Four workflows label themselves inline instead (`dictionary-roll`, `bun-pin`,
+  `og-cards`, `node-support-window`), and that is a platform limit rather than a
+  style choice: an event created with the default `GITHUB_TOKEN` does not
+  trigger another workflow, so `triage.yml` never sees them. `gh pr create
+  --label` fails outright on an unknown label, so their flags are checked
+  against the same declaration; a rename without a sync stops the nightly roll
+  rather than mislabelling it.
 - PR CI lints (`bun run lint`, oxlint including its type-aware rules), builds
   the site, enforces the performance budget, dry-runs the single
   site Worker plus the auxiliary Garage/LWE configs (`cf-garage/`, `lwe-ask/`),
