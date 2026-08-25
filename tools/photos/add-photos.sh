@@ -355,7 +355,12 @@ while IFS= read -r f; do
     avif_encode "$sm" "$smavif" || printf "~"
   fi
   # 7. 1x square AVIF, same one-encode-from-the-square property as step 6.
-  if sips -Z "$SQ_XS" "$sq" --out "$xs" >/dev/null 2>&1; then
+  # zenc square here too. This tier was MISSED when the geometry moved on
+  # 2026-08-25: the 600 and 400 tiers went to the linear-light kernel and the
+  # 200 stayed on sips, so a quarter of the shipped corpus was still
+  # gamma-incorrect while the commit message said otherwise. Found by grepping
+  # for the resize rather than by any check, which is the gap worth noting.
+  if "$ZENC" square "$sq" --size "$SQ_XS" --out "$xs" --filter box >/dev/null 2>&1; then
     avif_encode "$xs" "$xsavif" || printf "~"
   fi
   T_OK=$((T_OK+1)); printf "."
