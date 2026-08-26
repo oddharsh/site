@@ -89,3 +89,16 @@ pub fn parse_filter(s: Option<&str>) -> Result<Filter, String> {
         other => Err(format!("--filter wants box|lanczos3|mitchell, got {other:?}")),
     }
 }
+
+/// Select a window. A crop is pure selection, so it commutes with the per-pixel
+/// transfer function: cropping in linear light and cropping after the sRGB
+/// encode give the same bytes. That is what lets `square` share this path.
+pub fn crop(f: &Frame, x: u32, y: u32, w: u32, h: u32) -> Frame {
+    let ch = if f.gray { 1 } else { 3 };
+    let mut data = Vec::with_capacity((w * h) as usize * ch);
+    for row in 0..h {
+        let src = ((y + row) as usize * f.w as usize + x as usize) * ch;
+        data.extend_from_slice(&f.data[src..src + w as usize * ch]);
+    }
+    Frame { w, h, gray: f.gray, data }
+}
