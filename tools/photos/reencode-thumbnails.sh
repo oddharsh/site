@@ -125,18 +125,6 @@ fi
 [ -d "$SRC" ]      || { echo "error: source folder not found: $SRC" >&2; exit 1; }
 if command -v avifenc >/dev/null 2>&1; then AVIF_ENCODER="avifenc"; else AVIF_ENCODER="sips"; fi
 
-# read EXIF Orientation (1-8) for `zenc square --orient` (identical to
-# add-photos.sh). jpegtran's DCT rotation held this job until 2026-08-26; it is
-# only lossless on iMCU-aligned dimensions and degraded silently at the 2000px
-# intermediate's dims — CLAUDE.md gotcha 3.
-exif_orientation() {
-  local o; o=$(exif-sooc -s -s -s -n -Orientation "$1" 2>/dev/null || echo "")
-  case "$o" in
-    [1-8]) echo "$o" ;;
-    *) echo "" ;;
-  esac
-}
-
 # find the source file for a thumbnail stem (any extension/case)
 find_source() {
   local stem="$1" hit
@@ -164,72 +152,59 @@ while IFS= read -r stem; do
   [ -n "$stem" ] || continue
   if ! src=$(find_source "$stem"); then MISS=$((MISS+1)); printf "?"; continue; fi
 
-  work="$INTER/${stem}.jpg"
-  # Lossless intermediates, not JPEGs: see the note at the geometry below.
+  tif="$INTER/${stem}.tif"
   sqjpg="$INTER/${stem}.sq.png"; smtmp="$INTER/${stem}.sm.png"
   jpg="$DEST/${stem}.jpg"; avif="$DEST/${stem}.avif"; smavif="$DEST/${stem}-${SQ_SM}.avif"
   xstmp="$INTER/${stem}.xs.png"; xsavif="$DEST/${stem}-${SQ_XS}.avif"
 
-  # 1. decode source → working JPG (long edge 2000 — ample to crop a sharp square)
-  if ! sips -Z 2000 -s format jpeg --setProperty formatOptions 100 "$src" --out "$work" >/dev/null 2>&1; then
-    FAIL=$((FAIL+1)); printf "✗"; continue
+  # 1-3. decode → orient → all three tiers, ONE zenc invocation, in linear light.
+  #
+  # This consolidated four seams on 2026-08-26, each one measured before it moved:
+  #
+  #   - the `sips -Z 2000` first reduction was a GAMMA-INCORRECT resample feeding
+  #     the correct one. An earlier note here declined removing it, measured with
+  #     a home-grown mean-luminance metric; re-measured with ssimulacra2 against
+  #     a linear-light ground truth, one-step wins +27.5 mean over 10 frames
+  #     (57.23 -> 84.77), better on 10 of 10. The instrument was the error.
+  #   - jpegtran's DCT rotation is silently non-lossless when the constraint
+  #     edge is not iMCU-aligned, and this script never passed -perfect. On the
+  #     2000x1333 intermediates, -rotate 270 (133 of 181 photos) was perfect BY
+  #     LUCK and -rotate 90/-rotate 180 were not: XT507876 shipped with its
+  #     frame displaced 5px and a garbled edge strip. zenc's --orient re-indexes
+  #     samples in f32: exact at any dimensions, no MCU grid, no lottery.
+  #   - the 400 and 200 tiers were resamples OF THE 600 TIER; all three now come
+  #     from the same full-resolution linear-light frame.
+  #   - a 10-bit HIF was quantised to 8 bits at this first step. The TIFF door
+  #     decodes at 16 bits straight into f32 (sips -s format tiff is also 10.6x
+  #     faster than PNG at this size: 509ms vs 6222ms on a 7728x5152 frame).
+  #     JPEG sources skip the TIFF entirely: zenc decodes them itself.
+  #
+  # --transfer g22 for the Monochrom files, whose profile is Gray Gamma 2.2 and
+  # not sRGB: linearising them with the sRGB curve was wrong by up to 4 codes,
+  # in the shadows a monochrome body exists for. The curve is decode AND encode,
+  # so unaveraged values pass through exactly and the shipped tone is unchanged.
+  #
+  # The probe (tools/photos/resample-probe.ts) and its history stay the record
+  # for the kernel itself: gamma 188.0 where sips read 127.6, flat 0.00 where
+  # sips read 0.49, ring 0. See also ZENC_Q above for what correct pixels cost.
+  input="$src"
+  case "${src##*.}" in
+    [Hh][Ii][Ff]|[Hh][Ee][Ii][Cc]|[Hh][Ee][Ii][Ff])
+      if ! sips -s format tiff "$src" --out "$tif" >/dev/null 2>&1; then FAIL=$((FAIL+1)); printf "✗"; continue; fi
+      input="$tif" ;;
+  esac
+  o=$(exif-sooc -s -s -s -n -Orientation "$src" 2>/dev/null) || o=""
+  case "$o" in [1-8]) ;; *) o=1 ;; esac
+  transfer=srgb
+  profile=$(sips -g profile "$src" 2>/dev/null | awk '/profile:/{sub(/^ *profile: /,""); print}') || profile=""
+  [ "$profile" = "Gray Gamma 2.2" ] && transfer=g22
+  if ! "$ZENC" square "$input" --orient "$o" --transfer "$transfer" --filter box \
+      --size "$SQ" --out "$sqjpg" --size "$SQ_SM" --out "$smtmp" --size "$SQ_XS" --out "$xstmp" >/dev/null 2>&1; then
+    rm -f "$tif"; FAIL=$((FAIL+1)); printf "✗"; continue
   fi
-  # 2. EXIF orientation, handed to zenc as --orient (exact sample permutation;
-  # the retired jpegtran step was silently lossy here for -rotate 90/180).
-  # `${ORIENT+...}` not a bare "${ORIENT[@]}": bash 3.2 treats an empty array as
-  # unbound under set -u (see add-photos.sh's META_MODE note).
-  o=$(exif_orientation "$src")
-  ORIENT=()
-  if [ -n "$o" ] && [ "$o" != "1" ]; then ORIENT=(--orient "$o"); fi
-  # 3. center-crop to a square — what the grid actually shows. resize the SHORT
-  #    edge up to SQ (keeping aspect), then crop SQ×SQ centered (sips object-
-  #    position is center, matching object-fit:cover's default).
-  # ONE sips spawn for both dimensions. `sips -g` takes repeated keys, which
-  # export-for-instagram.sh's dims() already relied on and these three sites did
-  # not: two spawns measured 43ms against 23ms for one, on a 2000px intermediate.
-  # Pure spawn overhead, no pixels touched.
-  # 3. centre square, in ONE process, resampled in LINEAR LIGHT.
-  #
-  # This replaced six sips spawns on 2026-08-25: two to read the dimensions, one
-  # to reach TIFF, one to resize, one to crop, one to reach PNG. `zenc square`
-  # needs none of them. It computes the short-edge target itself, so W/H and `tl`
-  # are gone with it, and it reads the JPEG and writes the PNG directly, so the
-  # TIFF round trip that existed only because sips is slow at PNG is gone too.
-  #
-  # THE REASON IS QUALITY, and the speed is the bonus. sips resamples by
-  # averaging ENCODED sRGB values as though they were light, which darkens every
-  # texture it touches. Measured by tools/photos/resample-probe.ts against
-  # patterns with analytically known answers, no reference implementation
-  # involved:
-  #
-  #   candidate   gamma   identity   ring   gray->ch   ms/photo
-  #   ideal       187.5       0.00      0          1
-  #   sips        127.6       0.00      2          1      222.4
-  #   zenc box    188.0       0.00      0          1       66.7
-  #
-  # A 1px black/white checkerboard must reduce to sRGB 187.5, half the LIGHT.
-  # sips gives 127.6, and so does ffmpeg, so this is the industry norm rather
-  # than a defect unique to sips. `--filter box` rather than lanczos3 because at
-  # this reduction the sharpness Lanczos buys costs 26 levels of ringing that an
-  # alias-free area average does not need; the probe measures that column too.
-  #
-  # THE COST, measured on 8 real sources before any of this was adopted. Correct
-  # pixels compress WORSE, because sips' gamma-incorrect average was quietly
-  # destroying high-frequency energy that a correct one keeps:
-  #
-  #   jpg  q84    288,987 -> 359,797 bytes   +24.5%
-  #   avif q63    185,696 -> 239,092 bytes   +28.8%
-  #
-  # Every one of the 8 got bigger, from +1% to +43%. Projected over the shipped
-  # tier that is 11.35 -> 14.38 MiB, +3.03 MiB, +26.7% on 660 files. The probe
-  # measures correctness and cannot see this, which is why it is measured here.
-  #
-  # THE CORPUS IS DELIBERATELY NOT REGENERATED in the commit that wired this. The
-  # scripts produce better pixels for the next photo added; the 158 already
-  # committed still carry sips geometry. That inconsistency is on purpose and is
-  # the open question: paying 3 MiB to fix a defect nobody has complained about
-  # is a decision about this site rather than about resampling.
-  if ! "$ZENC" square "$work" --size "$SQ" ${ORIENT+"${ORIENT[@]}"} --out "$sqjpg" --filter box >/dev/null 2>&1; then FAIL=$((FAIL+1)); printf "✗"; continue; fi
+  # Deleted per photo rather than by the EXIT trap: a full-res TIFF is ~311MB,
+  # and 158 of them would want 50GB of /tmp.
+  rm -f "$tif"
   # 4. desktop square: zenc (zenjpeg hybrid+scan+sharp_yuv, q84) + AVIF (yuv400 for grayscale, else yuv420).
   #    metadata is stripped: the grid reads EXIF/histogram from metadata.json, so
   #    embedded EXIF/XMP/ICC in the thumbnail files is dead weight (~1.5KB/AVIF
@@ -247,22 +222,19 @@ while IFS= read -r stem; do
     sips -s format avif --setProperty formatOptions 60 "$sqjpg" --out "$avif" >/dev/null 2>&1 || { FAIL=$((FAIL+1)); printf "✗"; continue; }
   fi
   fi
-  # 5. mobile square: downscale the SQ square to SQ_SM (square→square, no distortion)
-  if want sm && "$ZENC" square "$sqjpg" --size "$SQ_SM" --out "$smtmp" --filter box >/dev/null 2>&1; then
+  # 5. mobile square: from the same full-resolution frame as the 600 tier
+  if want sm; then
     if [ "$AVIF_ENCODER" = "avifenc" ]; then
       avifenc -q 63 -d 10 --ignore-icc --ignore-exif --ignore-xmp --speed 4 --jobs 4 --yuv "$yuv" "$smtmp" "$smavif" >/dev/null 2>&1 || printf "~"
     else
       sips -s format avif --setProperty formatOptions 60 "$smtmp" --out "$smavif" >/dev/null 2>&1 || printf "~"
     fi
   fi
-  # 6. 1x square: the same lossless SQ square down to SQ_XS, so this tier is ONE
-  #    encode from the source like the other two rather than a resize of a resize.
-  # zenc square here too. This tier was MISSED when the geometry moved on
-  # 2026-08-25: the 600 and 400 tiers went to the linear-light kernel and the 200
-  # stayed on sips, so a quarter of the shipped corpus was still gamma-incorrect
-  # while the commit said otherwise. Found by grepping for the resize rather than
-  # by any check, which is the gap worth noting.
-  if want xs && "$ZENC" square "$sqjpg" --size "$SQ_XS" --out "$xstmp" --filter box >/dev/null 2>&1; then
+  # 6. 1x square: from the same full-resolution frame. (Until 2026-08-26 this
+  #    and the 400 tier re-squared the 600 square — a resize of a resize, while
+  #    this very comment claimed one encode from the source. The multi-size
+  #    ingest made the claim true.)
+  if want xs; then
     if [ "$AVIF_ENCODER" = "avifenc" ]; then
       avifenc -q 63 -d 10 --ignore-icc --ignore-exif --ignore-xmp --speed 4 --jobs 4 --yuv "$yuv" "$xstmp" "$xsavif" >/dev/null 2>&1 || printf "~"
     else

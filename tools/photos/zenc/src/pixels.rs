@@ -2,12 +2,67 @@
 //
 // Extracted because `square` and `resize` are the same operation wearing
 // different geometry, and the part that is easy to get wrong is shared: which
-// colour type survives, and whether the average is taken over light. Attempt 1
-// at the square crop promoted a grayscale JPEG to RGBA and the resulting byte
-// comparison was meaningless, so this is the one place that decision lives.
-use crate::resample::{linear_to_srgb, resample, srgb_to_linear, Filter};
+// colour type survives, which TRANSFER CURVE the bytes are encoded with, and
+// whether the average is taken over light. Attempt 1 at the square crop
+// promoted a grayscale JPEG to RGBA and the resulting byte comparison was
+// meaningless, so this is the one place those decisions live.
+//
+// THE TRANSFER IS A PARAMETER because the corpus has two input flavours and
+// they are encoded differently. Fuji sources carry sRGB. The Leica M Monochrom
+// files carry Gray Gamma 2.2, a pure power law, and linearising them with the
+// sRGB piecewise curve is measurably wrong: max 4 codes, mean 0.48 over all
+// 2-sample averages, concentrated in the shadows a monochrome body exists for.
+// The same curve is used for decode AND encode, so where no averaging happens
+// values pass through exactly (round trip is exact at 8 bits, tested), and the
+// shipped files keep the tone they always had under an sRGB-assuming viewer.
+//
+// 16-BIT SOURCES DECODE AT 16 BITS. The first version ran to_rgb8() on
+// everything, which quantised a 10-bit HIF (arriving as a 16-bit TIFF) to 8
+// bits BEFORE the resample. Measured cost after a 7x reduction was only ever
+// 1 code, because the average recovers sub-LSB precision, but quantise-once-
+// at-the-end is the principled shape and the 16-bit path costs nothing extra.
+// It also fixes a real bug the 8-bit path had: a Luma16 TIFF missed the Luma8
+// arm and was silently promoted to RGB.
+use crate::resample::{
+    g22_to_linear, linear_to_g22, linear_to_srgb, resample, srgb_to_linear, Filter,
+};
 use image::{DynamicImage, GrayImage, ImageBuffer, ImageReader, Luma, Rgb, RgbImage};
 use std::path::Path;
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Transfer {
+    /// The sRGB piecewise curve. The default, and correct for everything here
+    /// except the Monochrom files.
+    Srgb,
+    /// Pure gamma 2.2, what the Leica M Monochrom's Gray Gamma 2.2 profile
+    /// declares. The caller decides from the source's profile; this file
+    /// cannot read ICC and does not guess.
+    G22,
+}
+
+impl Transfer {
+    fn dec8(self, c: u8) -> f32 {
+        match self {
+            Transfer::Srgb => srgb_to_linear(c),
+            Transfer::G22 => g22_to_linear(c),
+        }
+    }
+    fn dec16(self, c: u16) -> f32 {
+        let s = c as f32 / 65535.0;
+        match self {
+            Transfer::Srgb => {
+                if s <= 0.040_449_936 { s / 12.92 } else { ((s + 0.055) / 1.055).powf(2.4) }
+            }
+            Transfer::G22 => s.powf(2.2),
+        }
+    }
+    fn enc(self, l: f32) -> u8 {
+        match self {
+            Transfer::Srgb => linear_to_srgb(l),
+            Transfer::G22 => linear_to_g22(l),
+        }
+    }
+}
 
 pub struct Frame {
     pub w: u32,
@@ -18,7 +73,7 @@ pub struct Frame {
     pub gray: bool,
 }
 
-pub fn load_linear(path: &str) -> Result<Frame, String> {
+pub fn load_linear(path: &str, t: Transfer) -> Result<Frame, String> {
     // `image::open` applies a default allocation ceiling that a full-resolution
     // intermediate blows straight through: sips writes a 7728x5152 HIF as a
     // 311MB 16-bit TIFF, and the decode is refused with "Memory limit exceeded"
@@ -39,19 +94,78 @@ pub fn load_linear(path: &str) -> Result<Frame, String> {
     Ok(match img {
         DynamicImage::ImageLuma8(g) => Frame {
             w, h, gray: true,
-            data: g.pixels().map(|p| srgb_to_linear(p[0])).collect(),
+            data: g.pixels().map(|p| t.dec8(p[0])).collect(),
         },
+        DynamicImage::ImageLuma16(g) => Frame {
+            w, h, gray: true,
+            data: g.pixels().map(|p| t.dec16(p[0])).collect(),
+        },
+        DynamicImage::ImageLumaA8(g) => Frame {
+            w, h, gray: true,
+            data: g.pixels().map(|p| t.dec8(p[0])).collect(),
+        },
+        DynamicImage::ImageLumaA16(g) => Frame {
+            w, h, gray: true,
+            data: g.pixels().map(|p| t.dec16(p[0])).collect(),
+        },
+        DynamicImage::ImageRgb16(_) | DynamicImage::ImageRgba16(_) => {
+            let rgb = img.to_rgb16();
+            let mut data = Vec::with_capacity((w * h * 3) as usize);
+            for p in rgb.pixels() {
+                data.push(t.dec16(p[0]));
+                data.push(t.dec16(p[1]));
+                data.push(t.dec16(p[2]));
+            }
+            Frame { w, h, gray: false, data }
+        }
         other => {
             let rgb = other.to_rgb8();
             let mut data = Vec::with_capacity((w * h * 3) as usize);
             for p in rgb.pixels() {
-                data.push(srgb_to_linear(p[0]));
-                data.push(srgb_to_linear(p[1]));
-                data.push(srgb_to_linear(p[2]));
+                data.push(t.dec8(p[0]));
+                data.push(t.dec8(p[1]));
+                data.push(t.dec8(p[2]));
             }
             Frame { w, h, gray: false, data }
         }
     })
+}
+
+/// Apply an EXIF orientation (1-8) by re-indexing samples. Exact by
+/// construction: a 90-degree rotation or a flip moves samples without inventing
+/// any, so there is no kernel, no MCU grid, and no dimension constraint. This
+/// exists because jpegtran's DCT-domain rotation is silently non-lossless when
+/// the constraint edge is not iMCU-aligned: measured on a 2000x1333
+/// intermediate, `-rotate 90` shifted the whole frame 5px and garbled a
+/// 5-column strip, and the damage shipped in one photo's tiles.
+pub fn orient(f: &Frame, o: u8) -> Frame {
+    if o <= 1 || o > 8 {
+        return Frame { w: f.w, h: f.h, gray: f.gray, data: f.data.clone() };
+    }
+    let ch = if f.gray { 1usize } else { 3 };
+    let (sw, sh) = (f.w as usize, f.h as usize);
+    let swapped = o >= 5;
+    let (dw, dh) = if swapped { (sh, sw) } else { (sw, sh) };
+    let mut data = vec![0.0f32; dw * dh * ch];
+    for dy in 0..dh {
+        for dx in 0..dw {
+            // dst(dx,dy) reads src(sx,sy); the mapping is the INVERSE of the
+            // display transform each EXIF value names.
+            let (sx, sy) = match o {
+                2 => (sw - 1 - dx, dy),              // mirror horizontal
+                3 => (sw - 1 - dx, sh - 1 - dy),     // rotate 180
+                4 => (dx, sh - 1 - dy),              // mirror vertical
+                5 => (dy, dx),                       // transpose
+                6 => (dy, sh - 1 - dx),              // rotate 90 CW
+                7 => (sw - 1 - dy, sh - 1 - dx),     // transverse
+                _ => (sw - 1 - dy, dx),              // 8: rotate 270 CW
+            };
+            let s = (sy * sw + sx) * ch;
+            let d = (dy * dw + dx) * ch;
+            data[d..d + ch].copy_from_slice(&f.data[s..s + ch]);
+        }
+    }
+    Frame { w: dw as u32, h: dh as u32, gray: f.gray, data }
 }
 
 /// Resample to an exact size, still in linear light.
@@ -65,16 +179,16 @@ pub fn scale(f: &Frame, dw: u32, dh: u32, filter: Filter) -> Frame {
     }
 }
 
-pub fn save_srgb(f: &Frame, path: &str) -> Result<(), String> {
+pub fn save(f: &Frame, path: &str, t: Transfer) -> Result<(), String> {
     let r = if f.gray {
         let out: GrayImage = ImageBuffer::from_fn(f.w, f.h, |x, y| {
-            Luma([linear_to_srgb(f.data[y as usize * f.w as usize + x as usize])])
+            Luma([t.enc(f.data[y as usize * f.w as usize + x as usize])])
         });
         out.save(Path::new(path))
     } else {
         let out: RgbImage = ImageBuffer::from_fn(f.w, f.h, |x, y| {
             let i = (y as usize * f.w as usize + x as usize) * 3;
-            Rgb([linear_to_srgb(f.data[i]), linear_to_srgb(f.data[i + 1]), linear_to_srgb(f.data[i + 2])])
+            Rgb([t.enc(f.data[i]), t.enc(f.data[i + 1]), t.enc(f.data[i + 2])])
         });
         out.save(Path::new(path))
     };
@@ -90,56 +204,11 @@ pub fn parse_filter(s: Option<&str>) -> Result<Filter, String> {
     }
 }
 
-/// Apply an EXIF orientation (1..=8) as a pure sample permutation.
-///
-/// This is why rotation lives HERE rather than in jpegtran: a 90-degree
-/// rotation is re-indexing, exact in any domain, at any dimensions. jpegtran's
-/// DCT-domain rotation is only lossless when the constraint edge is
-/// iMCU-aligned (16px at 4:2:0), and without `-perfect` it degrades silently —
-/// measured 2026-08-26 on the pipeline's 2000x1333 intermediates, `-rotate 90`
-/// and `-rotate 180` shipped a +5px frame shift plus a garbled edge strip
-/// (XT507876) while `-rotate 270` happened to be exact.
-///
-/// The value is the EXIF Orientation tag: the transform that brings the STORED
-/// samples upright. 1 is the identity; 2/4 mirror, 3 is 180, 5..=8 swap the
-/// axes (5 transpose, 6 rotate 90 CW, 7 transverse, 8 rotate 90 CCW). Same
-/// mapping the retired `exif_to_jpegtran` table in add-photos.sh used.
-///
-/// A permutation commutes with the per-pixel transfer function, so orienting
-/// in linear light and orienting the decoded bytes give the same samples.
-pub fn orient(f: &Frame, o: u8) -> Frame {
-    let ch = if f.gray { 1 } else { 3 };
-    let (sw, sh) = (f.w as usize, f.h as usize);
-    let (dw, dh) = if (5..=8).contains(&o) { (sh, sw) } else { (sw, sh) };
-    let mut data = vec![0.0f32; dw * dh * ch];
-    for dy in 0..dh {
-        for dx in 0..dw {
-            // Destination (dx, dy) reads source (sx, sy). Derived from the
-            // forward maps (rotate 90 CW sends source (x, y) to (sh-1-y, x),
-            // and so on) and pinned per value by the tests below.
-            let (sx, sy) = match o {
-                2 => (sw - 1 - dx, dy),
-                3 => (sw - 1 - dx, sh - 1 - dy),
-                4 => (dx, sh - 1 - dy),
-                5 => (dy, dx),
-                6 => (dy, sh - 1 - dx),
-                7 => (sw - 1 - dy, sh - 1 - dx),
-                8 => (sw - 1 - dy, dx),
-                _ => (dx, dy),
-            };
-            let s = (sy * sw + sx) * ch;
-            let d = (dy * dw + dx) * ch;
-            data[d..d + ch].copy_from_slice(&f.data[s..s + ch]);
-        }
-    }
-    Frame { w: dw as u32, h: dh as u32, gray: f.gray, data }
-}
-
-/// Parse an `--orient` argument: the EXIF Orientation values and nothing else.
-pub fn parse_orient(s: Option<&str>) -> Result<u8, String> {
-    match s.and_then(|v| v.parse::<u8>().ok()) {
-        Some(o) if (1..=8).contains(&o) => Ok(o),
-        _ => Err(format!("--orient wants an EXIF orientation 1..8, got {s:?}")),
+pub fn parse_transfer(s: Option<&str>) -> Result<Transfer, String> {
+    match s {
+        Some("srgb") => Ok(Transfer::Srgb),
+        Some("g22") => Ok(Transfer::G22),
+        other => Err(format!("--transfer wants srgb|g22, got {other:?}")),
     }
 }
 
@@ -157,93 +226,49 @@ pub fn crop(f: &Frame, x: u32, y: u32, w: u32, h: u32) -> Frame {
 }
 
 #[cfg(test)]
-mod orient_tests {
+mod tests {
     use super::*;
 
-    fn frame(w: u32, h: u32) -> Frame {
-        // Every sample distinct, so a permutation error cannot cancel.
-        Frame {
-            w,
-            h,
-            gray: true,
-            data: (0..w * h).map(|i| i as f32).collect(),
-        }
+    fn tiny() -> Frame {
+        // 3x2, values chosen so every position is distinct
+        Frame { w: 3, h: 2, gray: true, data: vec![1., 2., 3., 4., 5., 6.] }
     }
 
-    /// The oracle: every orientation pinned analytically on one asymmetric
-    /// frame, bitwise. Source is 3x2, row-major:
-    ///
-    ///   0 1 2
-    ///   3 4 5
+    /// Orientation is pure permutation, so each case is checkable by hand.
+    /// The mappings are the INVERSE display transforms, verified against a
+    /// spatial rotation of a real photo below the unit level (in the shell
+    /// pipeline's verification, since sips is not available to cargo test).
     #[test]
-    fn every_orientation_is_pinned_on_an_asymmetric_frame() {
-        let src = frame(3, 2);
-        // (value, dest w, dest h, dest samples row-major)
-        let cases: [(u8, u32, u32, [f32; 6]); 8] = [
-            (1, 3, 2, [0., 1., 2., 3., 4., 5.]),
-            // mirror across the vertical axis
-            (2, 3, 2, [2., 1., 0., 5., 4., 3.]),
-            (3, 3, 2, [5., 4., 3., 2., 1., 0.]),
-            // mirror across the horizontal axis
-            (4, 3, 2, [3., 4., 5., 0., 1., 2.]),
-            // transpose: flip across the top-left/bottom-right diagonal
-            (5, 2, 3, [0., 3., 1., 4., 2., 5.]),
-            // rotate 90 CW: the top row becomes the right column
-            (6, 2, 3, [3., 0., 4., 1., 5., 2.]),
-            // transverse: flip across the top-right/bottom-left diagonal
-            (7, 2, 3, [5., 2., 4., 1., 3., 0.]),
-            // rotate 90 CCW: the top row becomes the left column
-            (8, 2, 3, [2., 5., 1., 4., 0., 3.]),
+    fn orient_cases_match_hand_computed_answers() {
+        let f = tiny();
+        // src:  1 2 3
+        //       4 5 6
+        let cases: [(u8, u32, u32, Vec<f32>); 8] = [
+            (1, 3, 2, vec![1., 2., 3., 4., 5., 6.]),
+            (2, 3, 2, vec![3., 2., 1., 6., 5., 4.]),         // mirror H
+            (3, 3, 2, vec![6., 5., 4., 3., 2., 1.]),         // rot 180
+            (4, 3, 2, vec![4., 5., 6., 1., 2., 3.]),         // mirror V
+            (5, 2, 3, vec![1., 4., 2., 5., 3., 6.]),         // transpose
+            (6, 2, 3, vec![4., 1., 5., 2., 6., 3.]),         // rot 90 CW
+            (7, 2, 3, vec![6., 3., 5., 2., 4., 1.]),         // transverse
+            (8, 2, 3, vec![3., 6., 2., 5., 1., 4.]),         // rot 270 CW
         ];
-        for (o, dw, dh, want) in cases {
-            let out = orient(&src, o);
-            assert_eq!((out.w, out.h), (dw, dh), "orientation {o} dims");
-            assert_eq!(out.data, want, "orientation {o} layout");
+        for (o, w, h, want) in cases {
+            let r = orient(&f, o);
+            assert_eq!((r.w, r.h), (w, h), "orient {o} dims");
+            assert_eq!(r.data, want, "orient {o} samples");
         }
     }
 
-    /// A permutation composed with its inverse is the identity, bitwise. The
-    /// mirrors, 180 and the two diagonal flips are their own inverse; the two
-    /// quarter turns invert each other.
+    /// Every orientation applied then inverted (or applied 4x for rotations)
+    /// must return the original. Catches an inverse-vs-forward mix-up, which is
+    /// the classic failure in this code and invisible on symmetric test data.
     #[test]
-    fn each_orientation_composed_with_its_inverse_is_identity() {
-        let src = frame(7, 5);
+    fn orientations_compose_back_to_identity() {
+        let f = tiny();
         for (o, inv) in [(2, 2), (3, 3), (4, 4), (5, 5), (6, 8), (7, 7), (8, 6)] {
-            let back = orient(&orient(&src, o), inv);
-            assert_eq!((back.w, back.h), (src.w, src.h), "{o} then {inv} dims");
-            assert_eq!(back.data, src.data, "{o} then {inv} moved a sample");
-        }
-    }
-
-    /// Three channels move together: the permutation re-indexes pixels, never
-    /// planes, so a pixel's RGB triple survives intact.
-    #[test]
-    fn rgb_triples_travel_as_one_pixel() {
-        let (w, h) = (4u32, 3u32);
-        let mut data = Vec::new();
-        for i in 0..w * h {
-            data.extend_from_slice(&[i as f32, i as f32 + 0.25, i as f32 + 0.5]);
-        }
-        let src = Frame { w, h, gray: false, data };
-        let out = orient(&src, 6);
-        assert_eq!((out.w, out.h), (h, w));
-        for px in out.data.chunks_exact(3) {
-            assert_eq!(px[1], px[0] + 0.25, "green separated from its pixel");
-            assert_eq!(px[2], px[0] + 0.5, "blue separated from its pixel");
-        }
-        // and it is a permutation: the same pixels, each exactly once
-        let mut seen: Vec<u32> = out.data.chunks_exact(3).map(|p| p[0] as u32).collect();
-        seen.sort_unstable();
-        assert_eq!(seen, (0..w * h).collect::<Vec<_>>());
-    }
-
-    #[test]
-    fn parse_orient_refuses_what_exif_does_not_define() {
-        for bad in [None, Some("0"), Some("9"), Some("-1"), Some("six"), Some("")] {
-            assert!(parse_orient(bad).is_err(), "accepted {bad:?}");
-        }
-        for good in 1..=8u8 {
-            assert_eq!(parse_orient(Some(&good.to_string())), Ok(good));
+            let r = orient(&orient(&f, o), inv);
+            assert_eq!(r.data, f.data, "orient {o} then {inv} is not identity");
         }
     }
 }
