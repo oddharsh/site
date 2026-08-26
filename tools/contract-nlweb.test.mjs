@@ -23,21 +23,33 @@ const askGet = async (query) => {
   return handleAsk(new Request("https://aadhar.sh/ask" + query), nlwebEnv());
 };
 
+// `headers.get()` is `string | null`, and handing that null straight to
+// assert.match throws `TypeError: The "string" argument must be of type string`
+// rather than failing on the thing being asserted — so a route that answered
+// with NO content-type reported as a broken test instead of a broken route.
+// The type only started saying so once span() stopped returning `any`, which is
+// how handleAsk's Response became a Response.
+const contentType = (res) => {
+  const value = res.headers.get("content-type");
+  assert.ok(value, "response carries no content-type at all");
+  return value;
+};
+
 test("/ask streams by default and answers JSON only when asked", async () => {
   // The spec's own default, and the one thing about this endpoint that reads as
   // a bug the first time somebody curls it. A regression flipping it would
   // leave every other assertion here passing.
   const streamed = await askGet(`?query=${NLWEB_HIT}`);
   assert.equal(streamed.status, 200);
-  assert.match(streamed.headers.get("content-type"), /text\/event-stream/);
+  assert.match(contentType(streamed), /text\/event-stream/);
 
   for (const off of ["0", "false", "FALSE", "off"]) {
     const res = await askGet(`?query=${NLWEB_HIT}&streaming=${off}`);
-    assert.match(res.headers.get("content-type"), /application\/json/, `streaming=${off} must turn streaming off`);
+    assert.match(contentType(res), /application\/json/, `streaming=${off} must turn streaming off`);
   }
   // Anything that is not an off-switch is streaming, per the spec's wording.
   const odd = await askGet(`?query=${NLWEB_HIT}&streaming=yes-please`);
-  assert.match(odd.headers.get("content-type"), /text\/event-stream/);
+  assert.match(contentType(odd), /text\/event-stream/);
 });
 
 test("/ask returns NLWeb's six result fields, with a real schema.org object", async () => {

@@ -1,4 +1,6 @@
 import { WorkerEntrypoint, tracing } from "cloudflare:workers";
+import type { Env, SiteRequest } from "./lib/env.ts";
+import type { SpanName } from "./lib/span-vocabulary.ts";
 import calWorker from "../../cal/src/index.ts";
 import { handleAgentAuthClaim, handleAgentAuthRegister, handleAgentAuthRevoke, handleAgentAuthToken } from "./agent.ts";
 import { cronAround, handleAround, handleAroundChangesJson, handleAroundJson } from "./around.ts";
@@ -114,7 +116,7 @@ export { BookingWorkflow } from "../../cal/src/workflow.ts";
 // could reach it. The bug shipped through a green CI.
 const WORKERS_CACHEABLE_PATHS = new Set("/ /favicon.ico /auth.md /.well-known/api-catalog /.well-known/agent-card.json /.well-known/oauth-protected-resource /.well-known/oauth-authorization-server /reading /updates /updates.json /restore /lens /ledger /writing /bot /around /around/json /around/changes.json /photos /rn/tracks /rn/tracks.html /images/manifest.json /images/metadata.json /coffee /coffee/availability.json /run /search /photos/query.json".split(" "));
 
-async function serveWorkerRequest(request, env, ctx) {
+async function serveWorkerRequest(request: SiteRequest, env: Env, ctx: ExecutionContext) {
   const url = new URL(request.url);
 
   // Workers preview URLs (see lib/preview.js). A preview serves the real site
@@ -220,7 +222,7 @@ async function serveWorkerRequest(request, env, ctx) {
 // The named entrypoint is the only one configured to consult Workers Cache in
 // production. A cache hit returns before this method runs; a miss gets the
 // exact same dispatcher, security headers, and observability as the gateway.
-export class CachedPages extends WorkerEntrypoint {
+export class CachedPages extends WorkerEntrypoint<Env> {
   async fetch(request) {
     return serveWorkerRequest(request, this.env, this.ctx);
   }
@@ -252,7 +254,19 @@ export default {
     // post-return grace — which is what cut the census sweep off at its first
     // batch on the owner-refresh path. waitUntil still receives the promise
     // too, so failure semantics are unchanged.
-    const cron = (name, work) => { const p = span(name, work, { "cron.schedule": event.cron }); ctx.waitUntil(p); return p; };
+    // The name is the CRON SLICE of SpanName rather than a type parameter, and
+    // both halves of that are load-bearing. Left with implicit-any parameters
+    // this helper erased the inference it wraps: the callback's return widened
+    // to `unknown` and the `.catch()` three of these calls rely on became an
+    // error on `unknown`. Made generic instead, `SpanSurface<N>` stays deferred
+    // and the compiler cannot prove `cron.schedule` belongs, so even the
+    // correct attribute fails. A closed union resolves the surface to `cron`
+    // and says the true thing about this helper: it opens cron spans only.
+    const cron = (name: Extract<SpanName, `cron.${string}`>, work: () => Promise<unknown>) => {
+      const p = span(name, work, { "cron.schedule": event.cron });
+      ctx.waitUntil(p);
+      return p;
+    };
     // Dispatch via cronJob() (lib/cron.js): minute+hour signatures, immune to
     // Cloudflare's cron-expression normalization ("* * 1" can come back
     // "* * MON", and the old exact match sent three straight Monday censuses
@@ -304,7 +318,7 @@ export default {
 // `@typedef` a .ts file ignores, so the ROUTE_TABLE below fell back to the
 // `Function` its annotation names — a precise signature documented and an
 // imprecise one enforced.
-type RouteHandler = (request: Request, env: any, ctx: any, url: URL) => Response | Promise<Response>;
+type RouteHandler = (request: SiteRequest, env: Env, ctx: ExecutionContext, url: URL) => Response | Promise<Response>;
 
 // Exact worker-owned routes. This table mirrors wrangler.jsonc's
 // assets.run_worker_first allowlist: static is the default, and each entry here
@@ -569,7 +583,7 @@ const PREFIX = [
   },
 ];
 
-async function route(request, env, ctx) {
+async function route(request: SiteRequest, env: Env, ctx: ExecutionContext) {
   const url = new URL(request.url);
   // Preserve the legacy Cal subdomain while giving it a small, unlisted
   // work-calendar escape hatch. The bare host is public and goes to the
@@ -608,7 +622,7 @@ async function route(request, env, ctx) {
   return env.ASSETS.fetch(request);
 }
 
-function dispatchTraced(template, kind, handle, request, env, ctx, url) {
+function dispatchTraced(template: string, kind: string, handle: RouteHandler, request: SiteRequest, env: Env, ctx: ExecutionContext, url: URL) {
   return span(
     `route ${template}`,
     async (s) => {
@@ -632,11 +646,11 @@ function dispatchTraced(template, kind, handle, request, env, ctx, url) {
 // These two applications remain separate source modules, but the public route
 // boundary is now owned by this Worker. Keeping the delegation here means the
 // app-specific cache, auth, and persistence policies stay local to each module.
-function routeCoffee(request, env, ctx) {
+function routeCoffee(request: SiteRequest, env: Env, ctx: ExecutionContext) {
   return calWorker.fetch(request, env, ctx);
 }
 
-async function routeCalHost(request, env, ctx, url) {
+async function routeCalHost(request: SiteRequest, env: Env, ctx: ExecutionContext, url: URL) {
   const path = url.pathname.replace(/\/+$/, "") || "/";
   if (path === "/") return noStoreRedirect("https://aadhar.sh/coffee");
 
@@ -688,7 +702,7 @@ const WORK_CAL_TTL = 86400; // 24h
 // Resolve the short link to its full destination, reading/writing the KV cache.
 // Returns a validated calendar.google.com URL string, or null (caller falls
 // back to the short link). Never throws.
-async function resolveWorkCalendar(shortUrl, env, ctx) {
+async function resolveWorkCalendar(shortUrl: string, env: Env, ctx: ExecutionContext) {
   if (env.RN_KV) {
     try {
       const cached = await env.RN_KV.get(WORK_CAL_CACHE_KEY);
@@ -746,7 +760,7 @@ function isResolvedCalendarUrl(href) {
   }
 }
 
-async function routeSerendipity(request, env, ctx) {
+async function routeSerendipity(request: SiteRequest, env: Env, ctx: ExecutionContext) {
   const response = await handleSerendipity(request, env, ctx);
   return withSerendipitySecurityHeaders(response);
 }
@@ -763,23 +777,23 @@ function routeFavicon() {
 // Agent-discovery docs: extensionless / iterated files stay worker-first because
 // prior scanner work treats /auth.md, OAuth metadata, and live auth endpoints as
 // one coordinated surface.
-function routeAuthMd(request, env) {
+function routeAuthMd(request: SiteRequest, env: Env) {
   return serveFreshAsset(request, env, "text/markdown; charset=utf-8");
 }
 
-function routeApiCatalog(request, env) {
+function routeApiCatalog(request: SiteRequest, env: Env) {
   return serveFreshAsset(request, env, "application/linkset+json");
 }
 
-function routeAgentCard(request, env) {
+function routeAgentCard(request: SiteRequest, env: Env) {
   return serveFreshAsset(request, env, "application/json; charset=utf-8");
 }
 
-function routeOAuthProtectedResource(request, env) {
+function routeOAuthProtectedResource(request: SiteRequest, env: Env) {
   return serveFreshAsset(request, env, "application/json; charset=utf-8");
 }
 
-function routeOAuthAuthorizationServer(request, env) {
+function routeOAuthAuthorizationServer(request: SiteRequest, env: Env) {
   return serveFreshAsset(request, env, "application/json; charset=utf-8");
 }
 
@@ -794,7 +808,7 @@ function routeDropSlash(_request, _env, _ctx, url) {
   return Response.redirect(url.origin + url.pathname.replace(/\/+$/, "") + url.search, 301);
 }
 
-async function routeWritingPost(request, env, ctx, url) {
+async function routeWritingPost(request: SiteRequest, env: Env, ctx: ExecutionContext, url: URL) {
   const slug = url.pathname.slice("/writing/".length);
   const response = await serveGeneratedWriting(request, env);
   if (response.status !== 404) return response;
@@ -817,19 +831,19 @@ const UTILITY_SHELL_HEADERS = {
   "link": SHELL_PRELOAD_LINK,
 };
 
-function routeRun(request, env, ctx, url) {
+function routeRun(request: SiteRequest, env: Env, ctx: ExecutionContext, url: URL) {
   if (url.searchParams.get("cmd")) return handleRun(request, env, ctx);
   return serveStaticPage(request, env, {
     headers: { ...UTILITY_SHELL_HEADERS, "x-robots-tag": "noindex" },
   });
 }
 
-function routeSearch(request, env, ctx, url) {
+function routeSearch(request: SiteRequest, env: Env, ctx: ExecutionContext, url: URL) {
   if (url.searchParams.get("q")) return handleSearch(request, env, ctx);
   return serveStaticPage(request, env, { headers: UTILITY_SHELL_HEADERS });
 }
 
-function routeLens(request, env, ctx, url) {
+function routeLens(request: SiteRequest, env: Env, ctx: ExecutionContext, url: URL) {
   // A target-bearing Lens response spends crawler/browser budget and contains
   // third-party data, so it remains the live no-store Worker path. The bare,
   // deterministic shell is now a built q11/DCZ/304 static page.
@@ -837,7 +851,7 @@ function routeLens(request, env, ctx, url) {
   return serveStaticPage(request, env, { headers: GENERATED_PAGE_HEADERS });
 }
 
-async function routeWritingIndex(request, env, ctx) {
+async function routeWritingIndex(request: SiteRequest, env: Env, ctx: ExecutionContext) {
   const response = await serveGeneratedWriting(request, env);
   if (response.status !== 404) return response;
   try { await response.body?.cancel(); } catch {}
@@ -869,35 +883,35 @@ const PHOTOS_PAGE_HEADERS = {
 // Same shape as /photos and /writing. They take the standard generated policy — no
 // shortened window like /photos needs, because their data cannot change between
 // deploys, so a stale copy inside the 7 days is a copy of the same log.
-async function routeUpdates(request, env, ctx) {
+async function routeUpdates(request: SiteRequest, env: Env, ctx: ExecutionContext) {
   const response = await serveStaticPage(request, env, { headers: GENERATED_PAGE_HEADERS });
   if (response.status !== 404) return response;
   try { await response.body?.cancel(); } catch {}
   return handleWindowsUpdate(request, env, ctx);
 }
 
-async function routeRestore(request, env, ctx) {
+async function routeRestore(request: SiteRequest, env: Env, ctx: ExecutionContext) {
   const response = await serveStaticPage(request, env, { headers: GENERATED_PAGE_HEADERS });
   if (response.status !== 404) return response;
   try { await response.body?.cancel(); } catch {}
   return handleSystemRestore(request, env, ctx);
 }
 
-async function routePhotos(request, env, ctx) {
+async function routePhotos(request: SiteRequest, env: Env, ctx: ExecutionContext) {
   const response = await serveStaticPage(request, env, { headers: PHOTOS_PAGE_HEADERS });
   if (response.status !== 404) return response;
   try { await response.body?.cancel(); } catch {}
   return handlePhotos(request, env, ctx);
 }
 
-async function routeBot(request, env, ctx) {
+async function routeBot(request: SiteRequest, env: Env, ctx: ExecutionContext) {
   const response = await serveStaticPage(request, env, { headers: GENERATED_PAGE_HEADERS });
   if (response.status !== 404) return response;
   try { await response.body?.cancel(); } catch {}
   return handleBotPage(request, env, ctx);
 }
 
-function serveGeneratedWriting(request, env) {
+function serveGeneratedWriting(request: SiteRequest, env: Env) {
   return serveStaticPage(request, env, {
     headers: {
       ...GENERATED_PAGE_HEADERS,
@@ -906,7 +920,7 @@ function serveGeneratedWriting(request, env) {
   });
 }
 
-function routeImagesMetadata(request, env) {
+function routeImagesMetadata(request: SiteRequest, env: Env) {
   return serveAssetWith404Clamp(request, env, {
     headers: { "cache-control": "public, max-age=60, s-maxage=60, must-revalidate" },
     notFoundBody: '{"error":"not found"}',
@@ -914,7 +928,7 @@ function routeImagesMetadata(request, env) {
   });
 }
 
-function routeImagesMeta(request, env) {
+function routeImagesMeta(request: SiteRequest, env: Env) {
   return serveAssetWith404Clamp(request, env, {
     notFoundBody: '{"error":"not found"}',
     notFoundType: "application/json; charset=utf-8",
@@ -925,15 +939,15 @@ function routeImagesMeta(request, env) {
 // addressed /i/ twins, so every old link, bookmark, and cached page keeps
 // resolving for at least a year after the hash cutover. Unknown names fall
 // through to the asset layer with the 404 cache-clamp, same as before.
-function routeStaticPage(request, env) {
+function routeStaticPage(request: SiteRequest, env: Env) {
   return serveStaticPage(request, env);
 }
 
-function routeShellAsset(request, env) {
+function routeShellAsset(request: SiteRequest, env: Env) {
   return servePrecompressedShell(request, env);
 }
 
-async function routeImageThumb(request, env, _ctx, url) {
+async function routeImageThumb(request: SiteRequest, env: Env, _ctx: ExecutionContext, url: URL) {
   const m = url.pathname.match(/^\/images\/([^/]+?)(-400)?\.(avif|jpe?g)$/i);
   if (m) {
     const [, stem, small, ext] = m;
@@ -1039,7 +1053,7 @@ const HOMEPAGE_HEADERS = {
 // so the one path that ran it was the one nothing else could check.
 //
 // Both branches now take the GET's own code, which decides the header set once.
-function routeHomepage(request, env, ctx) {
+function routeHomepage(request: SiteRequest, env: Env, ctx: ExecutionContext) {
   if (wantsMarkdown(request)) return serveMarkdown(request, env);
   return serveStaticPage(request, env, { headers: HOMEPAGE_HEADERS });
 }

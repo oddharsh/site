@@ -269,7 +269,7 @@ export async function handleRnArt(request, env, ctx) {
   // than the original. q82 mirrors the neighbourhood the photo pipeline settled
   // on rather than Cloudflare's default 85, on art that is a 120px hover
   // affordance rather than something anyone will pixel-peep.
-  let res = null;
+  let res: Response | null = null;
   try {
     res = await fetch(upstream, {
       // 63 rather than 82, matching the number the photo pipeline gives avifenc.

@@ -1,5 +1,6 @@
 // trace.js — one wrapper over Workers Traces so every span in this worker has a
 import { isCallable } from "./parse.ts";
+import type { Span, SpanAttrs, SpanAttrValue, SpanName } from "./span-vocabulary.ts";
 // single import site and a single failure story. Bundled by wrangler at deploy;
 // not served.
 //
@@ -38,7 +39,16 @@ import { isCallable } from "./parse.ts";
 // dimension is honest; one that says 0 or "unknown" is a lie you later read as
 // data.
 
-let tracing = null;
+// The runtime's tracer, or null until index.ts installs it. ANNOTATED, because
+// `let tracing = null` infers the type `null` and every read of `.enterSpan`
+// below then fails on `never`. The shape is the sliver of `cloudflare:workers`
+// this module uses; it is written out rather than imported for the reason the
+// header gives at length.
+type Tracing = {
+  enterSpan<T>(name: string, fn: (span: Span) => T): T;
+};
+
+let tracing: Tracing | null = null;
 
 // Called once from _worker.js/index.js with the `tracing` export of
 // cloudflare:workers. Anything without a usable enterSpan is rejected, so a
@@ -50,28 +60,44 @@ export function installTracing(candidate) {
 
 // Stand-in span for the not-installed case, so callbacks can always assume the
 // argument is there and call setAttribute on it unconditionally.
-const INERT = Object.freeze({
+const INERT: Span = Object.freeze({
   setAttribute() {},
   end() {},
   isTraced: false,
 });
 
-function apply(span, attrs) {
+function apply(span: Span, attrs: SpanAttrs<string> | undefined) {
   if (!attrs) return;
   for (const key in attrs) {
-    const value = attrs[key];
-    if (value !== undefined) span.setAttribute(key, value);
+    const value = (attrs as Record<string, SpanAttrValue>)[key];
+    // The one cast in this module, and it is at the only place a key stops
+    // being statically known: `for...in` widens to string no matter what the
+    // object's type is. Callers are checked at the call site, which is where
+    // the name and the attribute literal are both in hand.
+    if (value !== undefined) span.setAttribute(key as never, value);
   }
 }
 
 // span(name, fn, attrs?) — run fn inside a span that ends when fn settles.
 // Returns whatever fn returns (a promise stays a promise), so this can be
 // dropped around an existing expression without changing its shape.
-export function span(name, fn, attrs?) {
+//
+// GENERIC OVER THE NAME, which is what makes the attribute checking work: `N`
+// is inferred as the literal string at the call site, so `SpanAttrs<N>` and the
+// `Span<N>` handed to the callback both resolve to that span's own surface.
+// Widen `name` to `string` anywhere on the way in and every attribute check
+// silently becomes `${string}.${string}`, which accepts everything. That is the
+// failure mode to watch for if this signature is ever edited: it does not
+// error, it just stops checking.
+export function span<N extends SpanName, T>(
+  name: N,
+  fn: (span: Span<N>) => T,
+  attrs?: SpanAttrs<N>,
+): T {
   const t = tracing;
-  if (!t) return fn(INERT);
+  if (!t) return fn(INERT as Span<N>);
   return t.enterSpan(name, (s) => {
     apply(s, attrs);
-    return fn(s);
+    return fn(s as Span<N>);
   });
 }
