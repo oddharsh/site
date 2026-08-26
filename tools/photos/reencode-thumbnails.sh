@@ -89,7 +89,6 @@ ZENC_Q=84   # The linear-light geometry preserves high-frequency energy that sip
             # quantization. q84/63 changes one variable instead of two, so the
             # corpus is strictly better than what it replaced rather than better
             # on one axis and worse on another.
-MOZ_JTRAN="/opt/homebrew/opt/mozjpeg/bin/jpegtran"
 
 for cmd in sips exif-sooc; do
   command -v "$cmd" >/dev/null 2>&1 || { echo "error: $cmd not in PATH" >&2; exit 1; }
@@ -123,17 +122,18 @@ if [ ! -x "$ZENC" ]; then
   echo "building zenc (zenjpeg encoder) — first run only…" >&2
   cargo build --release --manifest-path "$ZENC_DIR/Cargo.toml" >&2 || { echo "error: zenc build failed" >&2; exit 1; }
 fi
-[ -x "$MOZ_JTRAN" ] || { echo "error: jpegtran not installed (brew install mozjpeg)" >&2; exit 1; }
 [ -d "$SRC" ]      || { echo "error: source folder not found: $SRC" >&2; exit 1; }
 if command -v avifenc >/dev/null 2>&1; then AVIF_ENCODER="avifenc"; else AVIF_ENCODER="sips"; fi
 
-# EXIF Orientation → jpegtran transform flag (identical to add-photos.sh).
-exif_to_jpegtran() {
+# read EXIF Orientation (1-8) for `zenc square --orient` (identical to
+# add-photos.sh). jpegtran's DCT rotation held this job until 2026-08-26; it is
+# only lossless on iMCU-aligned dimensions and degraded silently at the 2000px
+# intermediate's dims — CLAUDE.md gotcha 3.
+exif_orientation() {
   local o; o=$(exif-sooc -s -s -s -n -Orientation "$1" 2>/dev/null || echo "")
   case "$o" in
-    ""|"1") echo "" ;;  "2") echo "-flip horizontal" ;;  "3") echo "-rotate 180" ;;
-    "4") echo "-flip vertical" ;;  "5") echo "-transpose" ;;  "6") echo "-rotate 90" ;;
-    "7") echo "-transverse" ;;  "8") echo "-rotate 270" ;;  *) echo "" ;;
+    [1-8]) echo "$o" ;;
+    *) echo "" ;;
   esac
 }
 
@@ -164,9 +164,8 @@ while IFS= read -r stem; do
   [ -n "$stem" ] || continue
   if ! src=$(find_source "$stem"); then MISS=$((MISS+1)); printf "?"; continue; fi
 
-  work="$INTER/${stem}.jpg"; rot="$INTER/${stem}.rot.jpg"
+  work="$INTER/${stem}.jpg"
   # Lossless intermediates, not JPEGs: see the note at the geometry below.
-  tif="$INTER/${stem}.tif"; sqt="$INTER/${stem}.sq.tif"
   sqjpg="$INTER/${stem}.sq.png"; smtmp="$INTER/${stem}.sm.png"
   jpg="$DEST/${stem}.jpg"; avif="$DEST/${stem}.avif"; smavif="$DEST/${stem}-${SQ_SM}.avif"
   xstmp="$INTER/${stem}.xs.png"; xsavif="$DEST/${stem}-${SQ_XS}.avif"
@@ -175,11 +174,13 @@ while IFS= read -r stem; do
   if ! sips -Z 2000 -s format jpeg --setProperty formatOptions 100 "$src" --out "$work" >/dev/null 2>&1; then
     FAIL=$((FAIL+1)); printf "✗"; continue
   fi
-  # 2. lossless EXIF-orientation rotation (cjpegli/avifenc strip EXIF, bake it in)
-  rot_flag=$(exif_to_jpegtran "$src")
-  if [ -n "$rot_flag" ]; then
-    if "$MOZ_JTRAN" -copy none $rot_flag "$work" > "$rot" 2>/dev/null; then work="$rot"; fi
-  fi
+  # 2. EXIF orientation, handed to zenc as --orient (exact sample permutation;
+  # the retired jpegtran step was silently lossy here for -rotate 90/180).
+  # `${ORIENT+...}` not a bare "${ORIENT[@]}": bash 3.2 treats an empty array as
+  # unbound under set -u (see add-photos.sh's META_MODE note).
+  o=$(exif_orientation "$src")
+  ORIENT=()
+  if [ -n "$o" ] && [ "$o" != "1" ]; then ORIENT=(--orient "$o"); fi
   # 3. center-crop to a square — what the grid actually shows. resize the SHORT
   #    edge up to SQ (keeping aspect), then crop SQ×SQ centered (sips object-
   #    position is center, matching object-fit:cover's default).
@@ -228,7 +229,7 @@ while IFS= read -r stem; do
   # committed still carry sips geometry. That inconsistency is on purpose and is
   # the open question: paying 3 MiB to fix a defect nobody has complained about
   # is a decision about this site rather than about resampling.
-  if ! "$ZENC" square "$work" --size "$SQ" --out "$sqjpg" --filter box >/dev/null 2>&1; then FAIL=$((FAIL+1)); printf "✗"; continue; fi
+  if ! "$ZENC" square "$work" --size "$SQ" ${ORIENT+"${ORIENT[@]}"} --out "$sqjpg" --filter box >/dev/null 2>&1; then FAIL=$((FAIL+1)); printf "✗"; continue; fi
   # 4. desktop square: zenc (zenjpeg hybrid+scan+sharp_yuv, q84) + AVIF (yuv400 for grayscale, else yuv420).
   #    metadata is stripped: the grid reads EXIF/histogram from metadata.json, so
   #    embedded EXIF/XMP/ICC in the thumbnail files is dead weight (~1.5KB/AVIF

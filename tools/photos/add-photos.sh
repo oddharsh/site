@@ -6,9 +6,11 @@
 #      <stem>-<SQ_SM>.avif — PRE-CROPPED CENTER SQUARES (what the grid shows:
 #      aspect-ratio:1 + object-fit:cover), metadata-stripped. mirrors
 #      reencode-thumbnails.sh exactly (keep the two encode paths in sync).
-#      Everything after the lossless jpegtran rotation happens on a TIFF/PNG
-#      intermediate, so each output is ONE JPEG encode away from the source
-#      rather than three.
+#      EXIF orientation is applied by `zenc square --orient` as an exact sample
+#      permutation (it rode jpegtran's DCT rotation until 2026-08-26, which is
+#      silently lossy off iMCU alignment — CLAUDE.md gotcha 3), and everything
+#      after the sips decode happens on a lossless intermediate, so each output
+#      is ONE JPEG encode away from the source rather than three.
 #   2. uploads a BROWSER-RENDERABLE full-resolution JPG to R2 as
 #      aadhar-photos/<stem>.jpg — this is what /images/full/<stem>.jpg returns
 #      on click, and the shareable R2 copy. for a JPG-source photo that's the
@@ -115,7 +117,11 @@ fi
 # at equal quality (see /garage/encoding). It builds from source with cargo, so
 # any machine with rust runs this pipeline; dependabot tracks the zenjpeg pin.
 # q84 is calibrated to match the old cjpegli q82 quality at fewer bytes. mozjpeg's
-# jpegtran still does the lossless EXIF-orientation step (structural, not an encode).
+# jpegtran is still wanted for phase 3's progressive rearrangement of the R2
+# copies (a true coefficient reorder, no rotation involved); the EXIF-orientation
+# step moved into `zenc square --orient` on 2026-08-26 because jpegtran's
+# DCT-domain rotation is only lossless on iMCU-aligned dimensions and degrades
+# silently without -perfect (CLAUDE.md gotcha 3).
 ZENC_DIR="$(cd "$(dirname "$0")/zenc" && pwd)"
 ZENC="$ZENC_DIR/target/release/zenc"
 ZENC_Q=84   # The linear-light geometry preserves high-frequency energy that sips'
@@ -213,14 +219,15 @@ fi
 echo "found $TOTAL source file(s) to process"
 echo ""
 
-# read EXIF Orientation → the jpegtran flag that brings the pixels upright.
-# empty = no rotation. 1=normal, 3=180°, 6=90°CW, 8=270°CW, etc.
-exif_to_jpegtran() {
+# read EXIF Orientation (1-8) for `zenc square --orient`, which brings the
+# pixels upright as an exact sample permutation. sips does NOT apply the tag on
+# decode, so the intermediate below is stored-order pixels and this is the one
+# rotation. empty = upright or unreadable, and zenc is simply not passed the flag.
+exif_orientation() {
   local o; o=$(exif-sooc -s -s -s -n -Orientation "$1" 2>/dev/null || echo "")
   case "$o" in
-    ""|"1") echo "" ;;  "2") echo "-flip horizontal" ;;  "3") echo "-rotate 180" ;;
-    "4") echo "-flip vertical" ;;  "5") echo "-transpose" ;;  "6") echo "-rotate 90" ;;
-    "7") echo "-transverse" ;;  "8") echo "-rotate 270" ;;  *) echo "" ;;
+    [1-8]) echo "$o" ;;
+    *) echo "" ;;
   esac
 }
 
@@ -265,9 +272,8 @@ while IFS= read -r f; do
   if [ -f "$jpg" ] && [ -f "$avif" ] && [ -f "$smavif" ] && [ "$jpg" -nt "$f" ]; then
     T_SKIP=$((T_SKIP+1)); printf "·"; continue
   fi
-  work="$INTER/${stem}.jpg"; rot="$INTER/${stem}.rot.jpg"
-  # The square and its mobile twin are LOSSLESS intermediates now, not JPEGs.
-  tif="$INTER/${stem}.tif"; sqt="$INTER/${stem}.sq.tif"
+  work="$INTER/${stem}.jpg"
+  # The square and its mobile twin are LOSSLESS intermediates, not JPEGs.
   sq="$INTER/${stem}.sq.png"; sm="$INTER/${stem}.sm.png"
 
   # 1. decode source → working JPG (long edge 2000; ample to crop a sharp square).
@@ -292,11 +298,18 @@ while IFS= read -r f; do
   if ! sips -Z 2000 -s format jpeg --setProperty formatOptions 100 "$f" --out "$work" >/dev/null 2>&1; then
     T_FAIL=$((T_FAIL+1)); printf "✗"; continue
   fi
-  # 2. lossless EXIF-orientation rotation (cjpegli/avifenc strip EXIF, bake it in)
-  rot_flag=$(exif_to_jpegtran "$f")
-  if [ -n "$rot_flag" ]; then
-    if "$MOZ_JTRAN" -copy none $rot_flag "$work" > "$rot" 2>/dev/null; then work="$rot"; fi
-  fi
+  # 2. EXIF orientation, handed to zenc as --orient rather than applied here.
+  # jpegtran's DCT rotation held this slot until 2026-08-26. Measured on the
+  # 2000x1333 intermediates this decode produces (h%16=5): -rotate 270 was
+  # exact by luck, -rotate 90 and -rotate 180 shifted the frame +5px and
+  # garbled the rotated edge, silently, because the script never passed
+  # -perfect. A 90-degree rotation is pure re-indexing, exact at any
+  # dimensions in zenc's linear-light frame; only DCT-domain rotation carries
+  # the iMCU alignment constraint. CLAUDE.md gotcha 3.
+  # `${ORIENT+...}` not a bare "${ORIENT[@]}": bash 3.2 + set -u, see META_MODE.
+  o=$(exif_orientation "$f")
+  ORIENT=()
+  if [ -n "$o" ] && [ "$o" != "1" ]; then ORIENT=(--orient "$o"); fi
   # 3. center-crop to a square: resize the SHORT edge to SQ, then crop SQ×SQ
   #    centered (sips object-position is center, matching object-fit:cover).
   # ONE sips spawn for both dimensions. `sips -g` takes repeated keys, which
@@ -357,7 +370,7 @@ while IFS= read -r f; do
   # reference-free metric, mean linear luminance against the native crop and so
   # needing no resampling and carrying no bias, has zenc 77% closer: 0.00027
   # against 0.00118. The geometry really is more correct. It cannot be had free.
-  if ! "$ZENC" square "$work" --size "$SQ" --out "$sq" --filter box >/dev/null 2>&1; then T_FAIL=$((T_FAIL+1)); printf "✗"; continue; fi
+  if ! "$ZENC" square "$work" --size "$SQ" ${ORIENT+"${ORIENT[@]}"} --out "$sq" --filter box >/dev/null 2>&1; then T_FAIL=$((T_FAIL+1)); printf "✗"; continue; fi
   # 4. desktop square JPG (zenc: zenjpeg hybrid+scan, q84 ≈ old jpegli q82) + strip
   #    any residual metadata (sips can leave a grayscale ICC on B&W frames; keep
   #    formats consistent / sRGB).
