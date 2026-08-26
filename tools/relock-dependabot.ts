@@ -50,10 +50,13 @@
 //
 // It works in a THROWAWAY WORKTREE and never in the current one, because
 // several sessions share this tree and a checkout under one of them is how
-// another session's uncommitted work gets lost.
+// another session's uncommitted work gets lost. That worktree lives OUTSIDE the
+// repository for a second reason, measured rather than assumed; see the note at
+// its path.
 
 import { spawnSync } from "node:child_process";
 import { readFile, writeFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import type { DocPinEdit } from "./lib/dependency-docs.ts";
 import { DOC_ALIASES, SUB_MANIFEST_POLICY, VERSIONLESS, parseCargoDeps, planDocPinRewrites } from "./lib/dependency-docs.ts";
@@ -162,7 +165,22 @@ async function relock(n: number) {
     return false;
   }
 
-  const tree = path.join(REPO, ".git", "relock-worktrees", `pr-${n}`);
+  // OUTSIDE THE REPOSITORY, and that is a correctness property rather than
+  // tidiness. Node resolution walks UP, so a worktree nested anywhere under the
+  // repo root falls through to the PARENT's node_modules. Measured 2026-08-26 at
+  // .git/relock-worktrees/probe: `bun run lint` exited 0 in a worktree holding no
+  // node_modules at all, resolving oxlint from the parent checkout, while the
+  // same command in a worktree under the system temp dir exits 127. Nested, every
+  // gate would run against the versions ALREADY INSTALLED HERE and report on a
+  // bump it never loaded — the exact failure this script exists to prevent, in
+  // the direction that stays quiet.
+  const tree = path.join(tmpdir(), "aadhar-sh-relock", `pr-${n}`);
+  // The tripwire for the paragraph above. Relocating this path back under the
+  // repo is a one-word edit that breaks nothing visibly, so it fails loudly here
+  // rather than reporting green gates on the wrong dependency tree.
+  if (tree.startsWith(REPO + path.sep)) {
+    throw new Error(`relock worktree ${tree} is inside ${REPO}; node resolution would leak the parent's node_modules`);
+  }
   await rm(tree, { recursive: true, force: true });
   run("git", ["worktree", "prune"]);
   run("git", ["fetch", "--prune", "origin"]);
