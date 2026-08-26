@@ -50,6 +50,7 @@
 // once per ask, next to a model call. Latency was never the reason the programs
 // stay on URLs. Forking, bookmarking, and testability were.
 import { agentReadyFrame } from "./agent-ready.ts";
+import { unsafeHtml } from "./lib/html.ts";
 import { asScalarText } from "./lib/parse.ts";
 import { ENCODE_CAP, encodeReadout, fetchImageBytes, parseAvif, parseJpeg, sniff } from "./encode.ts";
 import { probeRevalidation } from "./cache-lint.ts";
@@ -1083,7 +1084,7 @@ function toolPage(frame, path) {
     cache: "no-store",
     css: `/*min*/\n.tool-out{font:12px/1.5 var(--font-mono);white-space:pre;overflow-x:auto;margin:0}`,
     headers: { "x-robots-tag": "noindex" },
-    body: `<pre class="tool-out">${escHtml(frameText(frame))}</pre>`,
+    body: unsafeHtml`<pre class="tool-out">${escHtml(frameText(frame))}</pre>`,
   });
 }
 

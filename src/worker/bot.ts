@@ -4,6 +4,7 @@ import { serveMarkdownTwin } from "./lib/assets.ts";
 import { BOT_NAME, BOT_UA, SIG_AGENT } from "./lib/botauth.ts";
 import { cachedRender } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
+import { unsafeHtml } from "./lib/html.ts";
 import { esc, wantsMarkdown } from "./lib/http.ts";
 
 // ── /bot info page ──────────────────────────────────────────────────
@@ -118,7 +119,7 @@ Disallow: /</code></pre>
     width: 660,
     description: "Identity and behavior of AadharshBot, the crawler operated by aadhar.sh.",
     css,
-    body,
+    body: unsafeHtml(body),
     cache: "public, max-age=300, s-maxage=300",
   });
 }

@@ -2,6 +2,7 @@ import { signedFetch } from "./lib/botauth.ts";
 import { SUBREQUEST_CAP_FREE, createBudget, recordBudget } from "./lib/budget.ts";
 import { deleteSWRKV, swrKV } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
+import { unsafeHtml } from "./lib/html.ts";
 import { asNumber, asRecord, asText } from "./lib/parse.ts";
 import { esc, escAttr, escHtml, jsonResp, timingSafeEqual, wantsMarkdown } from "./lib/http.ts";
 import { span } from "./lib/trace.ts";
@@ -1174,7 +1175,7 @@ export function setPage(status, title, bodyHtml) {
   a:hover   { color: oklch(62.80% 0.2577 29.23); }
   code { font-family: "Courier New", Courier, monospace; background: oklch(96.72% 0 0); padding: 0 3px; border: 1px solid oklch(88.22% 0 0); }
 `,
-    body: `
+    body: unsafeHtml`
     <h1>${esc(title)}</h1>
     <p>${bodyHtml}</p>
     <p><small>&larr; <a href="/">aadhar.sh</a></small></p>

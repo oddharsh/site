@@ -2,6 +2,7 @@ import { BOT_NAME, BOT_UA, SIG_AGENT, signedFetch } from "./lib/botauth.ts";
 import { cachedRender, deleteSWRKV } from "./lib/cache.ts";
 import { crawlDocument, mapWithConcurrency, readResponseCapped } from "./lib/crawl.ts";
 import { lunaPage } from "./lib/chrome.ts";
+import { unsafeHtml } from "./lib/html.ts";
 import { esc, extractMeta, jsonResponse } from "./lib/http.ts";
 import { lensParseRobots, lensRobotsVerdict } from "./lib/robots.ts";
 import { span } from "./lib/trace.ts";
@@ -444,7 +445,7 @@ export function renderAroundHtml(report) {
       robots: "noindex",
       css: `.pending { border: 1px solid oklch(61.14% 0.0611 253.60); background: oklch(96.72% 0 0);
         color: oklch(51.03% 0 0); padding: 18px 16px; margin: 16px 0; cursor: progress; }`,
-      body: `
+      body: unsafeHtml`
     <h1 style="font-family:'Trebuchet MS',Verdana,Geneva,sans-serif;color:oklch(41.92% 0.0962 250.51);font-size:18pt;margin:0 0 4px">Around the Neighborhood</h1>
     <div class="pending"><b>The neighborhood snapshot isn't built yet.</b><br>
     The crawl runs on a schedule, not on your visit; check back in a few minutes.</div>
@@ -530,7 +531,7 @@ export function renderAroundHtml(report) {
   .dim { color: oklch(62.68% 0 0); }
   hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 12px 0; height: 0; }
 `,
-    body: `
+    body: unsafeHtml`
     <h1>Around the Neighborhood</h1>
     <p class="lede">
       A peek at what folks in crypto VC are up to. <code>${esc(BOT_UA)}</code>, the

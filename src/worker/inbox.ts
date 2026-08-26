@@ -13,6 +13,7 @@
 // readers' IPs to their host and buys nothing OE ever had. Name, subject, date,
 // excerpt — very 2003.
 import { lunaPage } from "./lib/chrome.ts";
+import { unsafeHtml } from "./lib/html.ts";
 import { esc } from "./lib/http.ts";
 import { readApprovedMentions } from "./webmention.ts";
 
@@ -73,7 +74,7 @@ export async function handleInbox(request, env, ctx) {
     // (or their software) can find it from here too.
     headers: { link: `<${origin}/webmention>; rel="webmention"` },
     css: OE_CSS,
-    body: `
+    body: unsafeHtml`
     <h1>Inbox</h1>
     <p class="oe-sub">When someone links to a page here from their own site, their post arrives as
       <a href="https://www.w3.org/TR/webmention/" rel="noopener external" target="_blank">a webmention</a>

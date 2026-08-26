@@ -2,6 +2,7 @@
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
 import { serveMarkdownTwin } from "./lib/assets.ts";
 import { lunaPage } from "./lib/chrome.ts";
+import { unsafeHtml } from "./lib/html.ts";
 import { esc, wantsMarkdown } from "./lib/http.ts";
 
 // ── /security handler (Windows Security Center reskin) ───────────────
@@ -83,7 +84,7 @@ dl.sc-grid dd{margin:0;color:#15243f;font-family:var(--font-mono);font-size:8.5p
     description: "This site's security posture in a Windows Security Center reskin. Read-only.",
     robots: "noindex",
     css,
-    body,
+    body: unsafeHtml(body),
     cache: "no-store, must-revalidate",
     closeHref: "/whoareyou",
     closeTitle: "back to System Properties",

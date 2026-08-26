@@ -3,6 +3,7 @@
 import { BOT_NAME, signedFetch } from "./lib/botauth.ts";
 import { cachedRender, deleteSWRKV, edgeKey, swrKV } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
+import { unsafeHtml } from "./lib/html.ts";
 import { esc } from "./lib/http.ts";
 
 // ── /reading — a native, Luna-styled mirror of my Curius reading list ──
@@ -169,7 +170,7 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:14pt; color
 footer { text-align:center; font-size:9pt; color:oklch(44.95% 0 0); margin-top:16px; padding-top:12px; border-top:1px solid oklch(86.67% 0.0294 259.59); }
 footer a { color:oklch(42.61% 0.2353 263.74); }
 `,
-    body: `
+    body: unsafeHtml`
     <h1>My Reading</h1>
     <p class="rd-lede">Things I've saved to read, pulled from my <a href="${esc(profile)}" rel="external me" target="_blank">Curius</a>. Newest first.</p>
     <div class="rd-bar">${count} link${count === 1 ? "" : "s"}${fetched ? ` &middot; last synced ${fetched}` : ""} &middot; source: Curius, via AadharshBot</div>

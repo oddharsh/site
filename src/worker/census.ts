@@ -1,4 +1,5 @@
 import { lunaPage } from "./lib/chrome.ts";
+import { unsafeHtml } from "./lib/html.ts";
 import { escHtml, escAttr, jsonResponse, timingSafeEqual } from "./lib/http.ts";
 import { lensInspect } from "./lens.ts";
 import { span } from "./lib/trace.ts";
@@ -292,7 +293,7 @@ h1 { font-family:"Trebuchet MS",Verdana,sans-serif; font-size:13pt; color:oklch(
 footer { text-align:center; font-size:9pt; color:oklch(45% 0 0); margin-top:16px; padding-top:11px; border-top:1px solid oklch(86.67% 0.0294 259.59); }
 footer a { color:oklch(42.61% 0.2353 263.74); }
 `,
-    body: `
+    body: unsafeHtml`
     <h1>The census</h1>
     <p class="cx-lede">Every per-URL scan in <a href="/lens">The Other Web</a> is a sample of one. This is the population over time: 16 representative sites, re-scanned weekly, so you can watch the agentic web actually move. Nobody else publishes agent-readiness as a time series for named sites, which is exactly why it is worth keeping.</p>
     ${banner}

@@ -2,6 +2,7 @@ import { BOT_UA, botHeaders } from "./lib/botauth.ts";
 import { cachedRender } from "./lib/cache.ts";
 import { CANONICAL_HOST } from "./lib/const.ts";
 import { fetchFollowingPublicRedirects, privateHostBlocked, readResponseCapped, validateLensTarget } from "./lib/crawl.ts";
+import { unsafeHtml } from "./lib/html.ts";
 import { lensParseRobots, lensPathMatch, lensRobotsVerdict } from "./lib/robots.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { escAttr, escHtml, jsonResponse } from "./lib/http.ts";
@@ -929,7 +930,7 @@ export function renderLensShell(initial?, state?, inputValue?, compare?) {
     // scanned ?url= variants share the shell card — a per-scan card would need
     // an on-the-fly render, and X's fetcher hits once, caches, and won't wait.
     // Absolute URLs because card fetchers don't resolve relative ones.
-    head: `<meta property="og:type" content="website">
+    head: unsafeHtml`<meta property="og:type" content="website">
 <meta property="og:site_name" content="aadhar.sh">
 <meta property="og:title" content="The Other Web: how machines read a URL">
 <meta property="og:description" content="${escAttr(lensDescription)}">
@@ -1528,7 +1529,7 @@ footer { text-align:center; font-size:9pt; color:oklch(45% 0 0); margin-top:14px
 footer a { color:oklch(42.61% 0.2353 263.74); }
 @media (max-width:720px){ .lx-panes{ flex-direction:column; } .lx-panes.is-both .lx-pane{ min-height:280px; } }
 `,
-    body: `
+    body: unsafeHtml`
     <h1>The Other Web</h1>
     <p class="lx-lede">Every page has two audiences: the person looking at it and the machine reading over their shoulder. The semantic web asked publishers to mark meaning; today&rsquo;s models scrape the human page; the next web must decide how machines act. Paste one URL to compare the human page, the HTTP response, and the browser-rendered result. Fetched server-side, honestly, as <a href="/bot">AadharshBot</a>.</p>
     ${lensStateOfWebRail()}
@@ -1644,7 +1645,7 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
     // lens client first, rewrites that exact URL into the bootstrap, then hashes the
     // bootstrap itself. A fresh shell therefore cannot pair with either stale layer.
     // The plain files stay served, short-cached, for dev and stale HTML.
-    scripts: `<script src="/lens-boot.js" defer></script>`,
+    scripts: unsafeHtml`<script src="/lens-boot.js" defer></script>`,
     cache: "public, max-age=60, s-maxage=300",
     headers: {
       // No x-robots-tag here: the bare shell is meant to be indexed. handleLens

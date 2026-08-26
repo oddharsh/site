@@ -3,6 +3,7 @@
 // keeping the homepage critical path free of search bytes and fan-out.
 import { cachedRender } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
+import { unsafeHtml } from "./lib/html.ts";
 import { escAttr, escHtml, jsonResp } from "./lib/http.ts";
 import { queryTerms as queryTermsOf, terms } from "./lib/text.ts";
 
@@ -117,6 +118,6 @@ ${query.trim() ? `<p class="summary">${results.total} result${results.total === 
     description: "Search the public pages and writing on aadhar.sh.",
     robots: "noindex",
     css: `.search-form{display:flex;align-items:end;gap:7px;margin:12px 0}.search-form label{display:grid;gap:3px;flex:1;color:oklch(43% 0 0);font-size:9pt}.search-form input{font:10pt Tahoma,Verdana,sans-serif;padding:5px 7px;border:1px solid oklch(55% .04 250);box-shadow:inset 1px 1px 2px #999}.search-form button{font:9pt Tahoma,Verdana,sans-serif;padding:5px 12px}.summary,.hint{color:oklch(47% 0 0);font-size:9pt}.results{padding-left:22px}.results li{padding:7px 0;border-bottom:1px solid oklch(88% .02 250)}.results a{color:oklch(40% .13 255);text-decoration:none}.results a:hover{text-decoration:underline}.results small{display:block;color:oklch(55% 0 0);font:8pt "Courier New",monospace}.results p{margin:3px 0 0;color:oklch(35% .02 255);font-size:9pt}`,
-    body,
+    body: unsafeHtml(body),
   });
 }
