@@ -55,6 +55,7 @@
 import { spawnSync } from "node:child_process";
 import { readFile, writeFile, rm } from "node:fs/promises";
 import path from "node:path";
+import type { DocPinEdit } from "./lib/dependency-docs.ts";
 import { DOC_ALIASES, SUB_MANIFEST_POLICY, VERSIONLESS, parseCargoDeps, planDocPinRewrites } from "./lib/dependency-docs.ts";
 
 const REPO = path.resolve(import.meta.dirname, "..");
@@ -80,21 +81,22 @@ function gh(ghArgs: string[]) {
   return r.out;
 }
 
-type Pr = { number: number; headRefName: string; author: string; files: string[] };
+type Pr = { number: number; headRefName: string; author: string; state: string; files: string[] };
 
 function openDependabotPrs(): Pr[] {
   const raw = JSON.parse(gh(["pr", "list", "--json", "number,headRefName,author", "--limit", "50"]));
   return raw
     .filter((p: any) => (p.author?.login ?? "").startsWith("app/dependabot") || p.author?.login === "dependabot")
-    .map((p: any) => ({ number: p.number, headRefName: p.headRefName, author: p.author.login, files: [] }));
+    .map((p: any) => ({ number: p.number, headRefName: p.headRefName, author: p.author.login, state: "OPEN", files: [] }));
 }
 
 function prDetail(n: number): Pr {
-  const p = JSON.parse(gh(["pr", "view", String(n), "--json", "number,headRefName,author,files"]));
+  const p = JSON.parse(gh(["pr", "view", String(n), "--json", "number,headRefName,author,state,files"]));
   return {
     number: p.number,
     headRefName: p.headRefName,
     author: p.author?.login ?? "",
+    state: p.state ?? "",
     files: (p.files ?? []).map((f: any) => f.path),
   };
 }
@@ -108,12 +110,12 @@ function unexpectedFiles(files: string[]) {
   return files.filter((f) => !ALLOWED.has(f) && !f.endsWith("/package.json") && !f.endsWith("/bun.lock"));
 }
 
-async function rewritePins(tree: string) {
+async function rewritePins(tree: string): Promise<DocPinEdit[]> {
   const read = (p: string) => readFile(path.join(tree, p), "utf8");
   const doc = await read("docs/DEPENDENCIES.md");
   const pkg = JSON.parse(await read("package.json"));
 
-  const subManifests = [];
+  const subManifests: { manifest: string; kind: string; aliases: { prose: string; pkg: string }[]; versionless: Map<string, unknown>; pins: Record<string, string> }[] = [];
   for (const entry of SUB_MANIFEST_POLICY) {
     let raw: string;
     try {
@@ -142,6 +144,14 @@ async function relock(n: number) {
   const pr = prDetail(n);
   console.log(`\n=== PR #${pr.number}  ${pr.headRefName}`);
 
+  // A merged or closed PR usually has no branch left, and without this the run
+  // dies at `git worktree add` on an "invalid reference" that reads like a
+  // broken checkout rather than a PR that is already done. Found by pointing
+  // the control at the most recently merged PR.
+  if (pr.state !== "OPEN") {
+    console.log(`  refusing: PR is ${pr.state || "(unknown)"}, not OPEN`);
+    return false;
+  }
   if (!pr.author.startsWith("app/dependabot") && pr.author !== "dependabot") {
     console.log(`  refusing: author is ${pr.author || "(unknown)"}, not dependabot`);
     return false;

@@ -170,8 +170,8 @@ const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const claimPattern = (prose) =>
   new RegExp(`(?<![\\w-])${escape(prose)}\`?\\s+v?(\\d+\\.\\d+\\.\\d+[\\w.-]*)`, "gi");
 
-export function findClaims(doc, aliases = DOC_ALIASES) {
-  const claims = [];
+export function findClaims(doc: string, aliases: DocAlias[] = DOC_ALIASES): DocClaim[] {
+  const claims: DocClaim[] = [];
   for (const { prose, pkg } of aliases) {
     for (const m of doc.matchAll(claimPattern(prose))) {
       claims.push({ prose, pkg, version: m[1], index: m.index });
@@ -414,6 +414,26 @@ export async function checkDependencyDocs(root = REPO_ROOT) {
   });
 }
 
+// An exact pin is the only shape the prose can be wrong ABOUT: a range names a
+// set, and the doc states one number.
+const EXACT_PIN = /^\d+\.\d+\.\d+[\w.-]*$/;
+
+type DocAlias = { prose: string; pkg: string };
+// What findClaims hands back: the prose name, the package it maps to, the version
+// the doc states, and where the match started IN THE SLICE it was given.
+type DocClaim = { prose: string; pkg: string; version: string; index: number };
+type DocPinScan = { aliases: DocAlias[]; pins: Record<string, string>; versionless: Map<string, unknown> };
+export type DocPinEdit = { pkg: string; prose: string; from: string; to: string; start: number };
+type SubManifestScan = { missing?: boolean; aliases: DocAlias[]; pins: Record<string, string>; versionless?: Map<string, unknown> };
+type PlanDocPinRewritesInput = {
+  doc: string;
+  pins: Record<string, string>;
+  aliases?: DocAlias[];
+  versionless?: Map<string, unknown>;
+  subManifests?: SubManifestScan[];
+  heading?: string;
+};
+
 // The INVERSE of the claim audit above: given the pins, say exactly which spans
 // of prose disagree and what they should read instead. `bun run deps:relock`
 // applies these; nothing else writes to the doc.
@@ -439,18 +459,18 @@ export function planDocPinRewrites({
   versionless = VERSIONLESS,
   subManifests = [],
   heading = BASELINE_HEADING,
-}) {
+}: PlanDocPinRewritesInput): { updated: string; edits: DocPinEdit[] } {
   const at = doc.indexOf(heading);
   if (at === -1) return { updated: doc, edits: [] };
   const baseline = doc.slice(at);
 
-  const scans = [{ aliases, pins, versionless }];
+  const scans: DocPinScan[] = [{ aliases, pins, versionless }];
   for (const sub of subManifests) {
     if (sub.missing) continue;
     scans.push({ aliases: sub.aliases, pins: sub.pins, versionless: sub.versionless ?? new Map() });
   }
 
-  const edits = [];
+  const edits: DocPinEdit[] = [];
   for (const scan of scans) {
     for (const claim of findClaims(baseline, scan.aliases)) {
       // A deliberately versionless entry is documented WITHOUT a pin on
@@ -460,7 +480,7 @@ export function planDocPinRewrites({
       // An unpinned or range-pinned package ("^1.62.1") has no single number
       // the prose could be wrong about. The audit already reports those; a
       // rewriter guessing at them would invent a pin nothing declares.
-      if (typeof want !== "string" || !/^\d+\.\d+\.\d+[\w.-]*$/.test(want)) continue;
+      if (!want || !EXACT_PIN.test(want)) continue;
       if (want === claim.version) continue;
       // The version is the last thing the pattern captures, so the first
       // occurrence at or after the match start is this claim's own.
