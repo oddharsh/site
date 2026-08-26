@@ -265,99 +265,38 @@ while IFS= read -r f; do
   if [ -f "$jpg" ] && [ -f "$avif" ] && [ -f "$smavif" ] && [ "$jpg" -nt "$f" ]; then
     T_SKIP=$((T_SKIP+1)); printf "·"; continue
   fi
-  work="$INTER/${stem}.jpg"; rot="$INTER/${stem}.rot.jpg"
-  # The square and its mobile twin are LOSSLESS intermediates now, not JPEGs.
-  tif="$INTER/${stem}.tif"; sqt="$INTER/${stem}.sq.tif"
+  # The intermediates are LOSSLESS: a TIFF for the HEIF decode, PNGs out.
+  tif="$INTER/${stem}.tif"
   sq="$INTER/${stem}.sq.png"; sm="$INTER/${stem}.sm.png"
 
-  # 1. decode source → working JPG (long edge 2000; ample to crop a sharp square).
-  #    sips handles HEIF/HIF/HEIC decode natively.
-  # DROPPING `-Z 2000` HERE WAS MEASURED AND DECLINED, 2026-08-25. This decode is
-  # itself a gamma-incorrect downscale, roughly 5976px to 2000px, feeding the
-  # correct one below, so every thumbnail is one defective reduction followed by
-  # one good one. Letting sips decode at full resolution and having zenc do the
-  # whole reduction in one correct step is the obvious fix.
-  #
-  # It does not measurably help. Over 6 sources, mean linear-luminance error
-  # against a full-res crop came out 0.02286 for the two-step against 0.02270 for
-  # one-step, and the median 0.00247 against 0.00236. Direction is inconsistent:
-  # one-step was closer on 3 of 6 and worse on 3. For that it costs +139% pipeline
-  # time (412 -> 984 ms/photo) and +2.6% bytes.
-  #
-  # The reason it does so little is that the first reduction is only ~3x and the
-  # second does the rest, so the gamma error the first introduces is largely
-  # re-averaged away by a correct filter downstream. Worth knowing before anyone
-  # reaches for it again: the defect that mattered was the FINAL reduction, and
-  # that one is already fixed.
-  if ! sips -Z 2000 -s format jpeg --setProperty formatOptions 100 "$f" --out "$work" >/dev/null 2>&1; then
-    T_FAIL=$((T_FAIL+1)); printf "✗"; continue
+  # 1-3. decode → orient → all three tiers, ONE zenc invocation, in linear light.
+  # The full argument lives at the twin site in reencode-thumbnails.sh; short
+  # form: the `sips -Z 2000` first reduction was itself a gamma-incorrect
+  # resample (+27.5 ssimulacra2 mean when removed, measured against a
+  # linear-light ground truth — the earlier decline recorded here used a weaker
+  # instrument and was wrong), jpegtran's DCT rotation silently garbled
+  # non-iMCU-aligned frames (XT507876 shipped damaged), the smaller tiers were
+  # resamples of the 600 tier, and a 10-bit HIF was quantised to 8 bits before
+  # anything else happened. zenc --orient re-indexes samples in f32 (exact at
+  # any dimensions) and --transfer g22 linearises the Monochrom's Gray Gamma
+  # 2.2 with the curve its profile declares instead of sRGB.
+  input="$f"
+  case "${f##*.}" in
+    [Hh][Ii][Ff]|[Hh][Ee][Ii][Cc]|[Hh][Ee][Ii][Ff])
+      if ! sips -s format tiff "$f" --out "$tif" >/dev/null 2>&1; then T_FAIL=$((T_FAIL+1)); printf "✗"; continue; fi
+      input="$tif" ;;
+  esac
+  o=$(exif-sooc -s -s -s -n -Orientation "$f" 2>/dev/null) || o=""
+  case "$o" in [1-8]) ;; *) o=1 ;; esac
+  transfer=srgb
+  profile=$(sips -g profile "$f" 2>/dev/null | awk '/profile:/{sub(/^ *profile: /,""); print}') || profile=""
+  [ "$profile" = "Gray Gamma 2.2" ] && transfer=g22
+  if ! "$ZENC" square "$input" --orient "$o" --transfer "$transfer" --filter box \
+      --size "$SQ" --out "$sq" --size "$SQ_SM" --out "$sm" --size "$SQ_XS" --out "$xs" >/dev/null 2>&1; then
+    rm -f "$tif"; T_FAIL=$((T_FAIL+1)); printf "✗"; continue
   fi
-  # 2. lossless EXIF-orientation rotation (cjpegli/avifenc strip EXIF, bake it in)
-  rot_flag=$(exif_to_jpegtran "$f")
-  if [ -n "$rot_flag" ]; then
-    if "$MOZ_JTRAN" -copy none $rot_flag "$work" > "$rot" 2>/dev/null; then work="$rot"; fi
-  fi
-  # 3. center-crop to a square: resize the SHORT edge to SQ, then crop SQ×SQ
-  #    centered (sips object-position is center, matching object-fit:cover).
-  # ONE sips spawn for both dimensions. `sips -g` takes repeated keys, which
-  # export-for-instagram.sh's dims() already relied on and these three sites did
-  # not: two spawns measured 43ms against 23ms for one, on a 2000px intermediate.
-  # Pure spawn overhead, no pixels touched.
-  # 3. centre square, in ONE process, resampled in LINEAR LIGHT.
-  #
-  # This replaced six sips spawns on 2026-08-25: two to read the dimensions, one
-  # to reach TIFF, one to resize, one to crop, one to reach PNG. `zenc square`
-  # needs none of them. It computes the short-edge target itself, so W/H and `tl`
-  # are gone with it, and it reads the JPEG and writes the PNG directly, so the
-  # TIFF round trip that existed only because sips is slow at PNG is gone too.
-  #
-  # THE REASON IS QUALITY, and the speed is the bonus. sips resamples by
-  # averaging ENCODED sRGB values as though they were light, which darkens every
-  # texture it touches. Measured by tools/photos/resample-probe.ts against
-  # patterns with analytically known answers, no reference implementation
-  # involved:
-  #
-  #   candidate   gamma   identity   ring   gray->ch   ms/photo
-  #   ideal       187.5       0.00      0          1
-  #   sips        127.6       0.00      2          1      222.4
-  #   zenc box    188.0       0.00      0          1       66.7
-  #
-  # A 1px black/white checkerboard must reduce to sRGB 187.5, half the LIGHT.
-  # sips gives 127.6, and so does ffmpeg, so this is the industry norm rather
-  # than a defect unique to sips. `--filter box` rather than lanczos3 because at
-  # this reduction the sharpness Lanczos buys costs 26 levels of ringing that an
-  # alias-free area average does not need; the probe measures that column too.
-  #
-  # THE COST, measured on 8 real sources before any of this was adopted. Correct
-  # pixels compress WORSE, because sips' gamma-incorrect average was quietly
-  # destroying high-frequency energy that a correct one keeps:
-  #
-  #   jpg  q84    288,987 -> 359,797 bytes   +24.5%
-  #   avif q63    185,696 -> 239,092 bytes   +28.8%
-  #
-  # Every one of the 8 got bigger, from +1% to +43%. Projected over the shipped
-  # tier that is 11.35 -> 14.38 MiB, +3.03 MiB, +26.7% on 660 files. The probe
-  # measures correctness and cannot see this, which is why it is measured here.
-  #
-  # THE CORPUS IS DELIBERATELY NOT REGENERATED in the commit that wired this. The
-  # scripts produce better pixels for the next photo added; the 158 already
-  # committed still carry sips geometry. That inconsistency is on purpose and is
-  # the open question: paying 3 MiB to fix a defect nobody has complained about
-  # is a decision about this site rather than about resampling.
-  #
-  # AND THE OBVIOUS ESCAPE DOES NOT WORK, measured before anyone tried it.
-  # tools/photos/matched-bytes-probe.py asks whether the bytes can be given back
-  # through the quality knob: encode the zenc geometry at whatever q lands on
-  # sips-at-q84's byte count, then compare. Matching costs q84 -> q76..79, and at
-  # that budget sips wins on 7 of 8 photos under all three references, including
-  # zenc's own kernel as the reference, which is the direction that would have
-  # flattered it. The +26.7% IS the quality rather than overhead around it.
-  #
-  # Both results are true and they are about different things. The same run's
-  # reference-free metric, mean linear luminance against the native crop and so
-  # needing no resampling and carrying no bias, has zenc 77% closer: 0.00027
-  # against 0.00118. The geometry really is more correct. It cannot be had free.
-  if ! "$ZENC" square "$work" --size "$SQ" --out "$sq" --filter box >/dev/null 2>&1; then T_FAIL=$((T_FAIL+1)); printf "✗"; continue; fi
+  # Deleted per photo rather than by the EXIT trap: a full-res TIFF is ~311MB.
+  rm -f "$tif"
   # 4. desktop square JPG (zenc: zenjpeg hybrid+scan, q84 ≈ old jpegli q82) + strip
   #    any residual metadata (sips can leave a grayscale ICC on B&W frames; keep
   #    formats consistent / sRGB).
@@ -365,21 +304,15 @@ while IFS= read -r f; do
   exif-sooc -all= -overwrite_original "$jpg" >/dev/null 2>&1 || true
   # 5. desktop square AVIF
   if ! avif_encode "$sq" "$avif"; then T_FAIL=$((T_FAIL+1)); printf "✗"; continue; fi
-  # 6. mobile square AVIF (downscale the SQ square → SQ_SM, square→square)
-  # PNG to PNG, so the mobile tier is one encode from the source too. It used to
-  # be a JPEG resized from a JPEG, which cost it a fourth generation.
-  if "$ZENC" square "$sq" --size "$SQ_SM" --out "$sm" --filter box >/dev/null 2>&1; then
-    avif_encode "$sm" "$smavif" || printf "~"
-  fi
-  # 7. 1x square AVIF, same one-encode-from-the-square property as step 6.
-  # zenc square here too. This tier was MISSED when the geometry moved on
-  # 2026-08-25: the 600 and 400 tiers went to the linear-light kernel and the
-  # 200 stayed on sips, so a quarter of the shipped corpus was still
-  # gamma-incorrect while the commit message said otherwise. Found by grepping
-  # for the resize rather than by any check, which is the gap worth noting.
-  if "$ZENC" square "$sq" --size "$SQ_XS" --out "$xs" --filter box >/dev/null 2>&1; then
-    avif_encode "$xs" "$xsavif" || printf "~"
-  fi
+  # 6. mobile square AVIF — from the same full-resolution frame as the 600
+  # tier since 2026-08-26 (it used to be a resize of the 600 square, and before
+  # that a JPEG resized from a JPEG).
+  avif_encode "$sm" "$smavif" || printf "~"
+  # 7. 1x square AVIF, same one-encode-from-the-source property as step 6.
+  # (This tier was missed when the geometry first moved on 2026-08-25 — the 600
+  # and 400 went linear-light while the 200 stayed on sips — and its next
+  # incarnation re-squared the 600. Both found by reading, not by a check.)
+  avif_encode "$xs" "$xsavif" || printf "~"
   T_OK=$((T_OK+1)); printf "."
 done < "$SOURCES"
 echo ""

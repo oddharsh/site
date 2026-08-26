@@ -240,9 +240,48 @@ pub fn linear_to_srgb(l: f32) -> u8 {
     (s * 255.0 + 0.5).clamp(0.0, 255.0) as u8
 }
 
+// ── pure gamma 2.2, the Leica M Monochrom's declared transfer ───────────────
+// A separate pair rather than a parameter on the sRGB one, because the two
+// curves must never blend: the piecewise linear toe is exactly what makes sRGB
+// not-a-power-law, and a "close enough" hybrid is how the max-4-code shadow
+// error this exists to fix would come back wearing a fix's name.
+
+static G22_LUT: std::sync::OnceLock<[f32; 256]> = std::sync::OnceLock::new();
+
+#[inline]
+pub fn g22_to_linear(c: u8) -> f32 {
+    G22_LUT.get_or_init(|| std::array::from_fn(|i| (i as f32 / 255.0).powf(2.2)))[c as usize]
+}
+
+pub fn linear_to_g22(l: f32) -> u8 {
+    let l = l.clamp(0.0, 1.0);
+    (l.powf(1.0 / 2.2) * 255.0 + 0.5).clamp(0.0, 255.0) as u8
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn g22_round_trip_is_exact_at_8_bit() {
+        for c in 0u8..=255 {
+            assert_eq!(linear_to_g22(g22_to_linear(c)), c, "g22 value {c} did not return");
+        }
+    }
+
+    /// The two curves must actually differ where it matters, or the parameter
+    /// is decoration. Largest gap is in the shadows, where sRGB's linear toe
+    /// departs from the power law.
+    #[test]
+    fn g22_and_srgb_are_distinct_curves() {
+        let mut diverge = 0;
+        for c in 1u8..=254 {
+            if (g22_to_linear(c) - srgb_to_linear(c)).abs() / srgb_to_linear(c).max(1e-9) > 0.01 {
+                diverge += 1;
+            }
+        }
+        assert!(diverge > 100, "curves nearly identical ({diverge} values differ >1%); the transfer parameter buys nothing");
+    }
 
     #[test]
     fn srgb_round_trip_is_exact_at_8_bit() {

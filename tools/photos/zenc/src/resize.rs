@@ -9,12 +9,13 @@
 // unchanged rather than being enlarged. That is what export-for-instagram.sh
 // wanted from `sips --resampleWidth` and had to spell as an if/else around two
 // different sips calls; here it is the one meaning of the flag.
-use crate::pixels::{load_linear, parse_filter, save_srgb, scale};
+use crate::pixels::{load_linear, parse_filter, parse_transfer, save, scale, Transfer};
 
 pub fn run(args: &[String]) -> i32 {
     let (mut input, mut out, mut width, mut height): (Option<&str>, Option<&str>, Option<u32>, Option<u32>) =
         (None, None, None, None);
     let mut filter_arg: Option<&str> = Some("box");
+    let mut transfer = Transfer::Srgb;
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
@@ -22,6 +23,15 @@ pub fn run(args: &[String]) -> i32 {
             "--height" => { i += 1; height = args.get(i).and_then(|s| s.parse().ok()); if height.is_none() { return err("--height needs a positive number") } }
             "--out" => { i += 1; match args.get(i) { Some(s) => out = Some(s), None => return err("--out needs a path") } }
             "--filter" => { i += 1; filter_arg = args.get(i).map(String::as_str) }
+            // The source's curve, decode and encode both. g22 is the Monochrom's
+            // Gray Gamma 2.2; see pixels.rs for why the caller decides.
+            "--transfer" => {
+                i += 1;
+                match parse_transfer(args.get(i).map(String::as_str)) {
+                    Ok(t) => transfer = t,
+                    Err(e) => return err(&e),
+                }
+            }
             other if input.is_none() => input = Some(other),
             other => return err(&format!("unexpected argument {other:?}")),
         }
@@ -35,7 +45,7 @@ pub fn run(args: &[String]) -> i32 {
     }
     let filter = match parse_filter(filter_arg) { Ok(f) => f, Err(e) => return err(&e) };
 
-    let src = match load_linear(input) { Ok(f) => f, Err(e) => return err(&e) };
+    let src = match load_linear(input, transfer) { Ok(f) => f, Err(e) => return err(&e) };
 
     // Which axis is capped decides the other. Integer-rounded to nearest rather
     // than truncated, so a 3:2 frame does not lose a row to flooring.
@@ -57,7 +67,7 @@ pub fn run(args: &[String]) -> i32 {
     // resample.rs). Taking a shortcut here would be a second code path to keep
     // honest for no gain.
     let outf = scale(&src, dw, dh, filter);
-    match save_srgb(&outf, out) { Ok(()) => 0, Err(e) => err(&e) }
+    match save(&outf, out, transfer) { Ok(()) => 0, Err(e) => err(&e) }
 }
 
 fn err(msg: &str) -> i32 {
