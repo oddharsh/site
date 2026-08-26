@@ -2,6 +2,7 @@
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
 import { cachedRender } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
+import { unsafeHtml } from "./lib/html.ts";
 import { esc } from "./lib/http.ts";
 import checkpoints from "./checkpoints.json" with { type: "json" };
 
@@ -83,7 +84,7 @@ h1{margin:0 0 4px}
 .wu-desc{flex:1}
 .wu-foot{font-size:8.5pt;color:#6b7280;border-top:1px solid #e2e8f0;padding-top:8px;margin-top:11px}
 `,
-    body: `
+    body: unsafeHtml`
     <h1>Windows Update</h1>
     <div class="wu-ok">
       <span class="ck"><svg viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5 6.5 11.5 12.5 4.5"/></svg></span>
@@ -269,7 +270,7 @@ h1{margin:0 0 4px}
 .sr-pending .sub{font-size:8.5pt;color:#8a7430}
 @media (max-width:560px){.sr-stage{flex-direction:column}.sr-listwrap{flex:none}.sr-list{max-height:170px}}
 `,
-    body: `
+    body: unsafeHtml`
     <h1>System Restore</h1>
     ${liveBar}
 ${main}

@@ -19,6 +19,7 @@
 // back the other way would be a cycle.
 import { handleSiteMcp } from "./mcp.ts";
 import { lunaPage } from "./lib/chrome.ts";
+import { unsafeHtml } from "./lib/html.ts";
 import { escHtml } from "./lib/http.ts";
 import { asRecord } from "./lib/parse.ts";
 
@@ -88,7 +89,7 @@ export async function handleTerminal(request, env, ctx) {
     cache: "no-store",
     css: WIRE_CSS,
     headers: { "x-robots-tag": "noindex" },
-    body: `<div class="wire">`
+    body: unsafeHtml(`<div class="wire">`
       + `<p>An agent pointed at this site does not browse it. It opens one endpoint, asks what it can do, and calls something. Below is that exchange, run against <b>/mcp</b> when you loaded this page.</p>`
       + `<h2>1 &middot; what can you do</h2>`
       + `<pre class="req">POST /mcp\n${jsonBlock(listReq)}</pre>`
@@ -99,6 +100,6 @@ export async function handleTerminal(request, env, ctx) {
       + `<h2>3 &middot; the same call, from a shell</h2>`
       + `<pre>curl -s https://aadhar.sh/mcp -H 'content-type: application/json' \\\n  -d '${escHtml(JSON.stringify(rpc("tools/call", DEMO_CALL)))}'</pre>`
       + `<p class="note">Every tool above also answers a plain GET at its own path &mdash; /finger, /dict, /encode &mdash; returning text instead of JSON. One implementation, three doors: this page, curl, and any MCP client.</p>`
-      + `</div>`,
+      + `</div>`),
   });
 }

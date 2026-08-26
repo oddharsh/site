@@ -1,6 +1,7 @@
 // photos.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
 import { cachedRender } from "./lib/cache.ts";
+import { unsafeHtml } from "./lib/html.ts";
 import { asScalarText } from "./lib/parse.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { ARCHIVE_VERSION } from "./lib/const.ts";
@@ -634,7 +635,7 @@ export function renderPhotosPage(photos, altMap) {
   footer address { font-style: italic; margin-top: 4px; }
   a { color: oklch(42.61% 0.2353 263.74); }
 `,
-    body: `
+    body: unsafeHtml`
   <h1>Photos</h1>
   <p class="lede">
     All ${photos.length}, straight out of camera (FUJIFILM X-T50, Leica M).

@@ -5,6 +5,7 @@
 // or dialog unsupported — the palette's own footer links here.
 import { cachedRender } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
+import { unsafeHtml } from "./lib/html.ts";
 import { escAttr, escHtml } from "./lib/http.ts";
 import { getImagesManifest } from "./photos.ts";
 
@@ -107,7 +108,7 @@ export function renderRun({ cmd = "", notFound = false } = {}) {
   }
   .run-note { font-size: 9pt; color: oklch(51.03% 0 0); margin-top: 12px; }
 `,
-    body: `
+    body: unsafeHtml`
     <div class="run-lede">
       <span class="run-ico" aria-hidden="true"></span>
       <p>Type the name of a page, a photo, or a profile, and aadhar.sh will open it for you.</p>

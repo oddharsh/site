@@ -1,6 +1,7 @@
 import { BOT_UA } from "./lib/botauth.ts";
 import { swrKV } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
+import { unsafeHtml } from "./lib/html.ts";
 import { asNumber } from "./lib/parse.ts";
 import { esc, jsonResponse } from "./lib/http.ts";
 import { span } from "./lib/trace.ts";
@@ -254,7 +255,7 @@ td.sha{color:#7a4eb0}
 td.src{font-size:7.5pt;color:#8b98a8}
 .foot{font-size:8.5pt;color:#6b7280;border-top:1px solid #e2e8f0;padding-top:9px;margin-top:13px;line-height:1.55}
 `,
-    body: `
+    body: unsafeHtml`
     <h1>Dyno</h1>
     <p class="lede">A dyno tells you what an engine actually puts down. The spec sheet is a claim; the rollers
     are a measurement. This one straps the site down every night: a GitHub Action builds <code>main</code>,

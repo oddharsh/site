@@ -1,0 +1,23 @@
+{
+  "files": {
+    "src/worker/around.ts": 3,
+    "src/worker/bot.ts": 2,
+    "src/worker/census.ts": 2,
+    "src/worker/dyno.ts": 2,
+    "src/worker/inbox.ts": 2,
+    "src/worker/ledger.ts": 2,
+    "src/worker/lens.ts": 4,
+    "src/worker/lib/chrome.ts": 6,
+    "src/worker/photos.ts": 2,
+    "src/worker/reading.ts": 2,
+    "src/worker/rn.ts": 2,
+    "src/worker/run.ts": 2,
+    "src/worker/search.ts": 2,
+    "src/worker/security.ts": 2,
+    "src/worker/terminal.ts": 2,
+    "src/worker/updates.ts": 3,
+    "src/worker/whoareyou.ts": 3,
+    "src/worker/wire.ts": 2
+  },
+  "total": 45
+}

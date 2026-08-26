@@ -46,7 +46,7 @@ test("unsafeHtml is the only unescaped door, and it is greppable", async () => {
   // so what keeps it honest is that every use is countable. If this name ever
   // gains an alias, the ratchet stops meaning anything.
   const source = await readFile(new URL("src/worker/lib/html.ts", ROOT), "utf8");
-  const doors = [...source.matchAll(/^export function (\w+)/gm)].map((m) => m[1]);
+  const doors = [...new Set([...source.matchAll(/^export function (\w+)/gm)].map((m) => m[1]))];
   assert.deepEqual(doors.sort(), ["escape", "html", "joinHtml", "unsafeHtml"]);
   // `escape` is exported for the migration's benefit and must not be a way to
   // mint Html; only `html` and `unsafeHtml` may return it. The checker makes
@@ -55,4 +55,46 @@ test("unsafeHtml is the only unescaped door, and it is greppable", async () => {
   // an instance of anything — so the runtime check is just the readable half.
   assert.equal(typeof escape("x"), "string");
   assert.equal(typeof html`x`, "object");
+});
+
+test("the unescaped door is counted, and the count may only go down", async () => {
+  // THE STRANGLER LEDGER. Typing lunaPage's body/head/scripts as Html forced
+  // every caller to say something, and what 20 of them say is `unsafeHtml`:
+  // "this literal predates the tagged template, and its interpolations are
+  // escaped by hand." That is honest and it is DEBT, so it is counted.
+  //
+  // The baseline may only shrink. A new use fails here rather than passing
+  // review, and migrating a caller to `html` requires editing the number down,
+  // which is what keeps the ledger a real record instead of a stale file.
+  const declared = JSON.parse(
+    await readFile(new URL("config/unsafe-html-baseline.json", ROOT), "utf8"),
+  );
+  const { readdir } = await import("node:fs/promises");
+  const files = (await readdir(new URL("src/worker", ROOT), { recursive: true }))
+    .filter((rel) => rel.endsWith(".ts") && rel !== "lib/html.ts");
+
+  const actual = {};
+  for (const rel of files) {
+    const source = await readFile(new URL(`src/worker/${rel}`, ROOT), "utf8");
+    const n = source.match(/\bunsafeHtml\b/g)?.length ?? 0;
+    if (n) actual[`src/worker/${rel}`] = n;
+  }
+
+  const problems = [];
+  for (const [file, n] of Object.entries(actual)) {
+    const was = declared.files[file];
+    if (was === undefined) problems.push(`${file}: ${n} use(s), and this file is not in the baseline`);
+    else if (n > was) problems.push(`${file}: ${n} use(s), up from ${was} — migrate to \`html\` instead`);
+    else if (n < was) problems.push(`${file}: ${n} use(s), DOWN from ${was} — lower it in the baseline`);
+  }
+  for (const file of Object.keys(declared.files)) {
+    if (!(file in actual)) problems.push(`${file}: now clean — drop it from the baseline`);
+  }
+  assert.deepEqual(problems, [], "config/unsafe-html-baseline.json disagrees with the tree");
+
+  const total = Object.values(actual).reduce((a, b) => a + b, 0);
+  assert.equal(declared.total, total, "the declared total disagrees with the entries");
+  // A floor on the scanner itself: if this ever matches nothing, the ledger
+  // would report a clean tree rather than a broken regex.
+  assert.ok(total > 0, "the unsafeHtml scan matched nothing; the scanner is broken");
 });

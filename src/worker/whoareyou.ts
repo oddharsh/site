@@ -4,6 +4,7 @@ import { serveMarkdownTwin } from "./lib/assets.ts";
 import { BOT_UA } from "./lib/botauth.ts";
 import { deadline } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
+import { unsafeHtml } from "./lib/html.ts";
 import { esc, wantsMarkdown } from "./lib/http.ts";
 import { asNumber, asRecord, asText } from "./lib/parse.ts";
 
@@ -413,7 +414,7 @@ footer {
 footer .signature { font-style: italic; margin-top: 4px; }
 footer .signature small { color: oklch(56.93% 0 0); }
 `,
-    body: `
+    body: unsafeHtml`
 
     <h1>System Properties</h1>
     <p class="lede">
@@ -576,7 +577,7 @@ footer .signature small { color: oklch(56.93% 0 0); }
     // second request happens. Failure is reported rather than hidden, because a
     // page whose whole subject is what a request reveals should not quietly
     // show blanks where it could not look.
-    scripts: `<script>
+    scripts: unsafeHtml`<script>
 (function () {
   var grid = document.getElementById("trace-grid");
   var note = document.getElementById("trace-note");

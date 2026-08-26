@@ -20,6 +20,7 @@
 import type { Env, SiteRequest } from "./lib/env.ts";
 import { cachedRender } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
+import { unsafeHtml } from "./lib/html.ts";
 import { esc, jsonResp } from "./lib/http.ts";
 
 const RATE_USD = 0.01;      // the site's posted price (the /llms-full.txt cent), not a market quote
@@ -352,7 +353,7 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
     description: "An invoice for the AI crawlers that read aadhar.sh: every identified bot hit in the last 30 days, priced at one cent a page. Issued monthly, collected never.",
     robots: "index, nofollow",
     css,
-    body,
+    body: unsafeHtml(body),
     cache: "public, max-age=60, s-maxage=300",
   });
 }

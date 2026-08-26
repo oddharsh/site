@@ -15,6 +15,11 @@
 // pane that pads itself out with plausible links is worse than no task pane.
 import { Html, html } from "./html.ts";
 
+/** One row of the task pane: somewhere this object can go. */
+export type Task = { href: string; label: string; glyph?: string };
+/** One row of the Details box: a fact the CALLER counted. */
+export type Detail = { term: string; value: string };
+
 // The first-level places, in taskbar order. Declared here rather than derived
 // at runtime so the Worker carries no data file; build.mjs asserts this list
 // against site-manifest.json's `taskbar` surfaces, so adding a section to the
@@ -37,9 +42,9 @@ export const PLACES = [
 const PLACE_LABEL = new Map(PLACES.map((place) => [place.path, place.label]));
 
 /** "/garage/encoding" -> ["/garage", "/garage/encoding"] */
-function trail(path) {
+function trail(path: string): string[] {
   const parts = String(path || "/").split("?")[0].replace(/\/+$/, "").split("/").filter(Boolean);
-  const out = [];
+  const out: string[] = [];
   let walked = "";
   for (const part of parts) { walked += `/${part}`; out.push(walked); }
   return out;
@@ -71,7 +76,7 @@ export function labelFor(path, fallback = "") {
  * rules forbid. Making the well a real editable address is the follow-up; /run
  * already exists to answer it.
  */
-export function addressBar({ path = "/", name = "" } = {}): Html {
+export function addressBar({ path = "/", name = "" }: { path?: string; name?: string } = {}): Html {
   const parts = trail(path);
   const crumbs: Html[] = [html`<a href="/">aadhar.sh</a>`];
   parts.forEach((step, index) => {
@@ -89,7 +94,7 @@ function group(title: string, inner: Html): Html {
   return html`<section class="axp-group"><h2>${title}</h2>${inner}</section>`;
 }
 
-function taskList(items): Html {
+function taskList(items: Task[]): Html {
   const rows = items.map((item) => html`<li><span class="axp-glyph" aria-hidden="true">${item.glyph || "›"}</span><a href="${item.href}">${item.label}</a></li>`);
   return html`<ul>${rows}</ul>`;
 }
@@ -99,7 +104,10 @@ function taskList(items): Html {
  * representations, mostly) and `details` are facts the caller has counted.
  * Both are optional; what remains is true of every page.
  */
-export function taskPane({ path = "/", name = "", tasks = [], details = [] } = {}): Html {
+export function taskPane(
+  { path = "/", name = "", tasks = [], details = [] }:
+    { path?: string; name?: string; tasks?: Task[]; details?: Detail[] } = {},
+): Html {
   const section = sectionOf(path);
   const parent = parentOf(path);
   const boxes: Html[] = [];
@@ -112,7 +120,7 @@ export function taskPane({ path = "/", name = "", tasks = [], details = [] } = {
     .map((place) => ({ href: place.path, label: place.label, glyph: "■" }));
   if (places.length) boxes.push(group("Other places", taskList(places)));
 
-  const rows = [];
+  const rows: Detail[] = [];
   const here = name && name !== "aadhar.sh" ? name : "";
   if (here) rows.push({ term: "Name", value: here });
   rows.push({ term: "Location", value: `aadhar.sh${path === "/" ? "" : String(path).replace(/\/+$/, "")}` });

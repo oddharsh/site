@@ -2367,10 +2367,35 @@ the types do NOT catch it everywhere: `Html + string` degrades to `string`, and
 a `string` interpolated later is silently escaped instead. Build one template,
 never concatenate two.
 
-**The next step is `lunaPage`'s boundary.** Typing its `body`, `head` and
-`scripts` as `Html` is what would make this structural for whole pages rather
-than one module, and it forces all 20 callers at once — deliberately a separate
-change. The 84 `escHtml` call sites stand until then.
+**`lunaPage`'s boundary is TYPED, so this is structural for whole pages.**
+`LunaPageOptions` declares `head`, `body`, `scripts` and `windowAttrs` as `Html`;
+everything else was already text the function escapes for the caller. `css` stays
+`string` DELIBERATELY, and the reason is a trap worth knowing: `<style>` is a
+raw-text element, so entities are not decoded inside it, and escaping CSS would
+turn `a > b` into `a &gt; b` and break the selector rather than protect anything.
+Escaping is the wrong tool in that context, so the CSS splice goes through
+`unsafeHtml` explicitly.
+
+**The 20 callers say `unsafeHtml`, and that is a LEDGER rather than a fix.**
+`unsafeHtml` takes both a string and a TEMPLATE TAG, and the tag form exists for
+exactly this migration: retagging `` body: `…` `` to `` body: unsafeHtml`…` `` is a
+one-token edit that rebuilds precisely what a plain template literal would have,
+so it is byte-for-byte inert. What it buys is that every unmigrated page now
+SAYS it is unmigrated, in a word a ratchet can count. One name takes both call
+forms on purpose, so the count cannot be routed around by adding a second door.
+
+`config/unsafe-html-baseline.json` is the ledger, checked by
+`contract-html-escapes-by-construction`: 45 uses across 18 files, and the number
+may only go down. Migrating a caller to `html` means editing it down, which is
+what keeps it a record instead of a stale file. The remaining `escHtml` call
+sites are the same debt seen from the other side.
+
+**The whole boundary change is byte-inert on served output**, verified by
+building before and after: of 54 documents, ONE file differs, `lens.src.html`,
+whose meta description gains a `&#39;` for an apostrophe. The SERVED
+`lens.html` is byte-identical, because minify-html decodes that entity back
+inside a quoted attribute — the same behaviour gotcha 19's trap is about, here
+working in our favour.
 
 `foreignMcpTools` grew an `opts.schemas` flag, OFF by default: the three
 existing callers render a catalogue as prose and a schema is dead weight in a

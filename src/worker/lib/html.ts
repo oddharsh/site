@@ -102,15 +102,43 @@ export function html(strings: TemplateStringsArray, ...values: Interpolable[]): 
   return new Html(out);
 }
 
-/** Mark a string as already-safe HTML, WITHOUT escaping it.
+/** Mark markup as already-safe, WITHOUT escaping it. Two call forms, one name.
  *
- *  Every use is a claim that the string is either a literal this repository
- *  wrote or was built by `html`. It is named to be greppable and counted by a
- *  ratchet (config/unsafe-html-baseline.json) so the number can only go down;
- *  a new one fails the contract test rather than passing review. */
-export function unsafeHtml(value: string): Html {
-  return new Html(value);
+ *      unsafeHtml(someString)      a computed string the caller vouches for
+ *      unsafeHtml`<p>${x}</p>`     a literal that predates `html`
+ *
+ *  The TAG form exists for the migration and is the honest description of what
+ *  the pre-`html` templates are: literals this repository wrote, whose
+ *  interpolations are escaped BY HAND with escHtml/escAttr. Retagging one is a
+ *  one-token edit that changes no bytes, which is what makes converting 20
+ *  callers a reviewable diff instead of a rewrite of every page at once. It
+ *  does NOT escape its interpolations — that is the point, and the reason each
+ *  one still owes a real migration to `html`.
+ *
+ *  ONE NAME ON PURPOSE, so the ratchet in
+ *  contract-html-escapes-by-construction counts one thing and cannot be routed
+ *  around by adding a second door. */
+/** Which of the two call forms this is. Named for the question rather than
+ *  written as a `typeof` at the branch, because the domain fact is "the runtime
+ *  invoked this as a template tag" and a tag is always handed an array. */
+function calledAsTag(value: string | TemplateStringsArray): value is TemplateStringsArray {
+  return Array.isArray(value);
 }
+
+export function unsafeHtml(value: string): Html;
+export function unsafeHtml(strings: TemplateStringsArray, ...values: unknown[]): Html;
+export function unsafeHtml(value: string | TemplateStringsArray, ...values: unknown[]): Html {
+  if (!calledAsTag(value)) return new Html(value);
+  // Tagged-template form: rebuild exactly what a plain template literal would
+  // have produced, so retagging is byte-for-byte inert.
+  let out = value[0];
+  for (let i = 0; i < values.length; i++) out += String(values[i]) + value[i + 1];
+  return new Html(out);
+}
+
+/** The empty fragment. Exists so an `Html` parameter can default to nothing
+ *  without a cast at every declaration site. */
+export const EMPTY: Html = new Html("");
 
 /** Join fragments with a separator that is itself HTML (default: nothing). */
 export function joinHtml(parts: readonly Html[], separator = ""): Html {

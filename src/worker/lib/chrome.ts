@@ -2,7 +2,7 @@
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
 import { DESKTOP_CHROME, DESKTOP_TOP, SECTION_FAVICONS } from "./desktop.ts";
 import { addressBar, taskPane } from "./explorer.ts";
-import { escAttr, escHtml } from "./http.ts";
+import { EMPTY, Html, html, unsafeHtml } from "./html.ts";
 import { SHELL_PRELOAD_LINK } from "./shell-assets.ts";
 import { twinFor } from "./twins.ts";
 
@@ -68,12 +68,55 @@ export function xpChromeCss() {
 // painted one icon and then swapped to another, and it cost one data-favicon
 // attribute per pin on all 46 pages so that 11 of them could read one. Anything
 // that is not a section keeps /favicon.ico.
-function faviconLink(route) {
+function faviconLink(route): Html {
   const icon = SECTION_FAVICONS[route];
   return icon
-    ? `<link rel="icon" type="image/svg+xml" href="${icon}">`
-    : '<link rel="icon" href="/favicon.ico">';
+    ? html`<link rel="icon" type="image/svg+xml" href="${icon}">`
+    : html`<link rel="icon" href="/favicon.ico">`;
 }
+
+/** What `lunaPage` accepts.
+ *
+ *  The point of writing this out is the four `Html` fields. Everything else was
+ *  already text this function escapes on the caller's behalf; `head`, `body`,
+ *  `scripts` and `windowAttrs` are markup it splices in verbatim, and they were
+ *  plain `string`, so nothing stopped a caller interpolating a stranger's text
+ *  into one. Declaring them `Html` moves that from a convention to a call-site
+ *  error.
+ *
+ *  `css` stays `string` DELIBERATELY, and the reason is a real trap: `<style>`
+ *  is a raw-text element, so HTML entities are not decoded inside it. Escaping
+ *  CSS would turn `a > b` into `a &gt; b` and break the selector rather than
+ *  protect anything. Escaping is the wrong tool in that context, which is why
+ *  it goes through `unsafeHtml` at the one place it is spliced. */
+export type LunaPageOptions = {
+  title?: string;
+  path?: string;
+  width?: number;
+  description?: string;
+  robots?: string;
+  /** CSS, not HTML. See the note above. */
+  css?: string;
+  head?: Html;
+  body?: Html;
+  scripts?: Html;
+  status?: number;
+  cache?: string;
+  headers?: Record<string, string>;
+  titleClass?: string;
+  windowClass?: string;
+  contentClass?: string;
+  /** Raw attributes for the window element, e.g. `data-no-histnav`. */
+  windowAttrs?: Html;
+  route?: string;
+  explorer?: boolean;
+  explorerName?: string;
+  explorerTasks?: { href: string; label: string; glyph?: string }[];
+  explorerDetails?: { term: string; value: string }[];
+  closeHref?: string;
+  closeTitle?: string;
+  closeLabel?: string;
+};
 
 export function lunaPage({
   title,
@@ -82,8 +125,8 @@ export function lunaPage({
   description = "",
   robots = "",
   css = "",
-  head = "",
-  body = "",
+  head = EMPTY,
+  body = EMPTY,
   status = 200,
   cache = "public, max-age=300, s-maxage=300",
   headers = {},
@@ -102,7 +145,7 @@ export function lunaPage({
   // head, and desktop wiring would opt one page out of that on day one.
   windowClass = "",
   contentClass = "",
-  windowAttrs = "",
+  windowAttrs = EMPTY,
   // The REQUEST path, which `path` above is not: that one is the window caption
   // and callers pass free text through it ("Security Center", "The Crawl
   // Ledger"). The Explorer chrome and the Markdown twin both need the real
@@ -122,25 +165,24 @@ export function lunaPage({
   closeHref = "/",
   closeTitle = "back to aadhar.sh",
   closeLabel = closeTitle,
-  scripts = "",
-}) {
+  scripts = EMPTY,
+}: LunaPageOptions = {}) {
   const documentTitle = title || path || "aadhar.sh";
   const windowTitle = path || title || "aadhar.sh";
-  const classAttr = ` class="title-text${titleClass ? " " + escAttr(titleClass) : ""}"`;
   const metaDescription = description
-    ? `\n<meta name="description" content="${escAttr(description)}">`
-    : "";
+    ? html`\n<meta name="description" content="${description}">`
+    : EMPTY;
   const metaRobots = robots
-    ? `\n<meta name="robots" content="${escAttr(robots)}">`
-    : "";
-  const scriptHtml = `${scripts || ""}\n<script src="/nav.js" defer></script>`;
+    ? html`\n<meta name="robots" content="${robots}">`
+    : EMPTY;
+  const scriptHtml = html`${scripts}\n<script src="/nav.js" defer></script>`;
 
   // The Markdown twin, advertised only where the build actually wrote one, and
   // offered as this object's first task for the same reason.
   const twin = route ? twinFor(route) : null;
   const twinLink = twin
-    ? `\n<link rel="alternate" type="text/markdown" title="markdown source" href="${escAttr(twin)}">`
-    : "";
+    ? html`\n<link rel="alternate" type="text/markdown" title="markdown source" href="${twin}">`
+    : EMPTY;
   const chromeOptions = {
     path: route || "/",
     name: explorerName || title || "",
@@ -148,42 +190,43 @@ export function lunaPage({
     details: explorerDetails,
   };
   const showChrome = explorer && Boolean(route);
-  const addressHtml = showChrome ? `\n  ${String(addressBar(chromeOptions))}` : "";
-  const paneHtml = showChrome ? `${String(taskPane(chromeOptions))}\n` : "";
+  const addressHtml = showChrome ? html`\n  ${addressBar(chromeOptions)}` : EMPTY;
+  const paneHtml = showChrome ? html`${taskPane(chromeOptions)}\n` : EMPTY;
 
-  const html = `<!DOCTYPE html>
+  // `document` rather than `html`, which is the tagged template now.
+  const document = html`<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
-<title>${escHtml(documentTitle)}</title>${metaDescription}${metaRobots}${twinLink}
+<title>${documentTitle}</title>${metaDescription}${metaRobots}${twinLink}
 ${faviconLink(route)}
-${head || ""}<style>
+${head}<style>
 :root{--axp-maxw:${width}px}
-${xpChromeCss()}
-${css || ""}
+${unsafeHtml(xpChromeCss())}
+${unsafeHtml(css || "")}
 </style>
 <link rel="stylesheet" href="/luna.css">
 </head>
 <body>
-${DESKTOP_TOP}
-<div class="window${windowClass ? " " + escAttr(windowClass) : ""}"${windowAttrs ? " " + windowAttrs : ""}>
+${unsafeHtml(DESKTOP_TOP)}
+<div class="window${windowClass ? " " + windowClass : ""}"${windowAttrs === EMPTY ? EMPTY : html` ${windowAttrs}`}>
   <div class="title-bar">
-    <span${classAttr}><span class="icon"></span>${escHtml(windowTitle)}</span>
-    <span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="${escAttr(closeHref)}" title="${escAttr(closeTitle)}" aria-label="${escAttr(closeLabel)}"></a></span>
+    <span class="title-text${titleClass ? " " + titleClass : ""}"><span class="icon"></span>${windowTitle}</span>
+    <span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="${closeHref}" title="${closeTitle}" aria-label="${closeLabel}"></a></span>
   </div>${addressHtml}
-  ${paneHtml}<div class="content${contentClass ? " " + escAttr(contentClass) : ""}">
+  ${paneHtml}<div class="content${contentClass ? " " + contentClass : ""}">
 ${body}
   </div>
 </div>
-${DESKTOP_CHROME}
+${unsafeHtml(DESKTOP_CHROME)}
 ${scriptHtml}
 </body>
 </html>`;
 
-  return new Response(html, {
+  return new Response(String(document), {
     status,
     headers: {
       "content-type": "text/html; charset=utf-8",
