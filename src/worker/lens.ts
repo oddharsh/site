@@ -2870,7 +2870,36 @@ export function discoveryScope(origin, env) {
 // only opts.fresh is. Typing the bag is what surfaced it. Left in place rather
 // than deleted, because an ignored option is either a caller's leftover or a
 // scoping intent that was never wired, and those want different fixes.
-export async function originDiscovery(origin, hostname, env, opts: { fresh?: boolean; selfLens?: boolean } = {}) {
+/**
+ * The 27 doors one discovery pass knocks on, named once.
+ *
+ * This type exists because the two return paths below could not otherwise be
+ * one type: the live path returns an object literal of these 27 fields, and the
+ * cache path returns a spread of `hit.json()`. TypeScript unions those into a
+ * shape carrying none of the fields, so the 27-way destructure in
+ * lensInspect() read every door off a type that had no doors. That was
+ * invisible while `span()` returned `any`; it is the same finding typing
+ * queryBillableUsage's union produced in ledger.ts, one file over.
+ *
+ * PER-DOOR `any` IS DELIBERATE and adds no looseness that was not already
+ * there. Each probe returns a genuinely different shape (a robots read carries
+ * rules, a DNS-AID read carries SVCB records, a locked MCP door carries an auth
+ * scheme), and pinning 27 of those is a much larger change than this one. What
+ * the type buys today is the KEY SET, which is what the destructure needs and
+ * what makes the door list greppable in one place instead of being spelled out
+ * at three call sites that can drift apart.
+ */
+export type DiscoveryPayload = {
+  robots: any; sitemap: any; sitemapDeclared: any; llms: any; llmsFull: any;
+  aiTxt: any; secTxt: any; tdmrep: any; agentCard: any; openapi: any; aiPlugin: any;
+  apiCatalog: any; mcp: any; nlweb: any; webBotAuth: any; openidConfig: any;
+  oauthServer: any; oauthResource: any; authMd: any; mcpServerCard: any;
+  agentSkills: any; ucp: any; acp: any; ap2: any; agentsMd: any; dnsAid: any; ech: any;
+};
+
+export async function originDiscovery(
+  origin, hostname, env, opts: { fresh?: boolean; selfLens?: boolean } = {},
+): Promise<DiscoveryPayload & { cached: boolean }> {
   // `caches` is a Workers global and does not exist under plain node, where the
   // contract tests import this module. Absent cache means every call is a live
   // fan-out, which is exactly the previous behaviour.
@@ -2886,7 +2915,10 @@ export async function originDiscovery(origin, hostname, env, opts: { fresh?: boo
     try {
       const hit = await cache.match(key);
       if (hit) {
-        const cached = await hit.json() as Record<string, unknown>;
+        // Cast rather than validated, and the cast is honest: this blob is
+        // exactly `JSON.stringify(result)` from the live path below, written by
+        // this same function. Nothing else writes this key.
+        const cached = await hit.json() as DiscoveryPayload;
         return { ...cached, cached: true };
       }
     } catch { /* a cache read must never cost the scan */ }

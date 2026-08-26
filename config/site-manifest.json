@@ -706,6 +706,23 @@
       }
     },
     {
+      "path": "/garage/resample",
+      "title": "Half the light",
+      "section": "garage",
+      "kind": "content",
+      "description": "A one pixel checkerboard reduces to sRGB 188 and every resizer says 128. The kernels agree; the colour space is where the quality went.",
+      "hint": "a checkerboard, and six instruments that could not see the defect",
+      "flags": {
+        "run": true,
+        "taskbar": false,
+        "sitemap": true,
+        "gallery": true,
+        "agents": true,
+        "searchIndex": false,
+        "webmention": true
+      }
+    },
+    {
       "path": "/garage/compression",
       "title": "Compression teardown",
       "section": "garage",

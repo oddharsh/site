@@ -8,9 +8,7 @@
     "src/worker/dyno.ts": 3,
     "src/worker/encode.ts": 25,
     "src/worker/image-tools.ts": 13,
-    "src/worker/ledger.ts": 7,
     "src/worker/lens-nlweb.ts": 1,
-    "src/worker/lens-render.ts": 2,
     "src/worker/lens-wire.ts": 14,
     "src/worker/lens.ts": 31,
     "src/worker/lib/assets.ts": 1,
@@ -21,7 +19,6 @@
     "src/worker/lib/preview.ts": 2,
     "src/worker/lib/robots.ts": 13,
     "src/worker/lib/text.ts": 4,
-    "src/worker/lib/trace.ts": 1,
     "src/worker/lib/tui.ts": 17,
     "src/worker/lib/twins.ts": 1,
     "src/worker/nlweb.ts": 2,
@@ -30,15 +27,14 @@
     "src/worker/radar.ts": 11,
     "src/worker/reading.ts": 7,
     "src/worker/representation.ts": 2,
-    "src/worker/rn.ts": 23,
+    "src/worker/rn.ts": 20,
     "src/worker/run.ts": 1,
     "src/worker/search.ts": 13,
     "src/worker/terminal.ts": 43,
     "src/worker/updates.ts": 1,
     "src/worker/webmention.ts": 4,
     "src/worker/whoareyou.ts": 3,
-    "src/worker/writing.ts": 4,
-    "src/worker/x402.ts": 3
+    "src/worker/writing.ts": 4
   },
-  "total": 299
+  "total": 283
 }

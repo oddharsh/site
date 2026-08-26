@@ -1,4 +1,5 @@
 import { signedFetch } from "./lib/botauth.ts";
+import { SUBREQUEST_CAP_FREE, createBudget, recordBudget } from "./lib/budget.ts";
 import { deleteSWRKV, swrKV } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { asNumber, asRecord, asText } from "./lib/parse.ts";
@@ -269,7 +270,7 @@ export async function handleRnArt(request, env, ctx) {
   // than the original. q82 mirrors the neighbourhood the photo pipeline settled
   // on rather than Cloudflare's default 85, on art that is a 120px hover
   // affordance rather than something anyone will pixel-peep.
-  let res = null;
+  let res: Response | null = null;
   try {
     res = await fetch(upstream, {
       // 63 rather than 82, matching the number the photo pipeline gives avifenc.
@@ -778,9 +779,20 @@ function withTrackMeta(track, meta) {
 // payload writes = 29 subrequests, against a cap of 50. Raise these ONLY with
 // that arithmetic redone: the cap counts KV operations, which is the part that
 // is easy to forget and is how the inline version got to 67.
+//
+// That arithmetic is now also CHECKED AT RUNTIME rather than only reasoned
+// about here, against a ledger from lib/budget.ts. A comment doing this sum is
+// exactly what was in place when the inline version reached 67, since the sum
+// was right and the code had moved. The ledger cannot see subrequests nobody
+// routes through it either, which is what `budget.overrun` is for: the platform
+// refusing while the count shows headroom means this comment is wrong again.
 const TRACK_META_KEY       = "trackmeta:v1";
 const ENRICH_TRACK_BUDGET  = 6;
 const ENRICH_ARTIST_BUDGET = 6;
+// Held back for the two payload writes at the end, plus slack. A tick that
+// spends its last subrequest cannot save the work it just did, so the failure
+// lands on the one call whose whole job is making the tick worth having.
+const ENRICH_BUDGET_RESERVE = 4;
 // How long an entry survives without being seen in the live playlist. It exists
 // to bound the map rather than to keep it tight, so it is deliberately far
 // longer than any plausible upstream wobble: see the prune block for what a
@@ -817,7 +829,15 @@ export async function cronEnrichTracks(env, ctx) {
       s.setAttribute("rn.outcome", "no_playlist_set");
       return { ok: false, reason: "no_playlist_set" };
     }
+    // The invocation's subrequest allowance, threaded through both fan-outs
+    // below. The reserve is for the two KV writes at the end: a tick that spends
+    // its last subrequest cannot record what it did, and the write that saves
+    // this pass's work is the one that would fail.
+    const budget = createBudget(SUBREQUEST_CAP_FREE, { reserve: ENRICH_BUDGET_RESERVE });
+    let capped = false;
+
     const cacheKey = `tracks:${playlistId}`;
+    budget.charge(2);
     const [payload, storedMeta] = await Promise.all([
       env.RN_KV.get(cacheKey, "json"),
       env.RN_KV.get(TRACK_META_KEY, "json"),
@@ -865,10 +885,21 @@ export async function cronEnrichTracks(env, ctx) {
     const pendingTracks = live.filter(id => !meta[id]).slice(0, ENRICH_TRACK_BUDGET);
     let trackScraped = 0, trackFailed = 0;
     await Promise.all(pendingTracks.map(async id => {
+      // Charged at DISPATCH, not on success: the subrequest is spent the moment
+      // the fetch goes out, whether or not it comes back.
+      budget.charge(1);
       try {
         meta[id] = trackMetaFromEntity(await scrapeSpotifyEmbed(`track/${id}`, env));
         trackScraped++;
-      } catch { trackFailed++; }   // stays pending, retried next tick
+      } catch (e) {
+        // THE LINE THIS WHOLE LEDGER EXISTS FOR. This was `catch { trackFailed++ }`,
+        // and on 2026-08-15 a 21-track scrape crossed the 50-subrequest ceiling
+        // and threw into it once per remaining track. That reported 15 upstream
+        // failures over a payload of nulls, twice, and both times it was read as
+        // Spotify being flaky. A ceiling is never this track's fault.
+        if (budget.fault(e) === "cap") capped = true;
+        else trackFailed++;   // stays pending, retried next tick
+      }
     }));
 
     // Artists, across the WHOLE map rather than only the tracks just added: an
@@ -887,6 +918,11 @@ export async function cronEnrichTracks(env, ctx) {
     let artistCached = 0, artistScraped = 0, artistFailed = 0;
     await Promise.all([...pendingArtists.keys()].map(async id => {
       const key = `artist:${id}`;
+      // A KV read is a subrequest too, which is the half of this ceiling
+      // everyone forgets: the outage that started all this spent 37 fetches and
+      // 30 KV operations against a limit of 50, and only the fetches were ever
+      // counted.
+      budget.charge(1);
       try {
         const hit = asRecord(await env.RN_KV.get(key, "json"));
         if (hit) {
@@ -895,6 +931,7 @@ export async function cronEnrichTracks(env, ctx) {
           return;
         }
       } catch { /* fall through to the scrape */ }
+      budget.charge(1);
       try {
         const e = await scrapeSpotifyEmbed(`artist/${id}`, env);
         artistScraped++;
@@ -908,7 +945,10 @@ export async function cronEnrichTracks(env, ctx) {
         const rec = { name: e?.name || "", image_url: canonicalArtUrl(pick?.url || null) };
         resolved.set(id, rec);
         if (ctx) ctx.waitUntil(env.RN_KV.put(key, JSON.stringify(rec), { expirationTtl: ARTIST_KV_TTL }));
-      } catch { artistFailed++; }
+      } catch (e) {
+        if (budget.fault(e) === "cap") capped = true;
+        else artistFailed++;
+      }
     }));
 
     for (const id of Object.keys(meta)) {
@@ -923,6 +963,7 @@ export async function cronEnrichTracks(env, ctx) {
     // deliberately leaves `fetched_at` alone: it names when the PLAYLIST was
     // read, and this pass did not read it.
     const next = { ...payload, tracks: payload.tracks.map(t => withTrackMeta(t, meta[t.id])) };
+    budget.charge(2);
     await Promise.all([
       env.RN_KV.put(TRACK_META_KEY, JSON.stringify(meta)),
       env.RN_KV.put(cacheKey, JSON.stringify(next)),
@@ -940,6 +981,14 @@ export async function cronEnrichTracks(env, ctx) {
     // the number to alert on: covers still missing after a tick. It should walk
     // to 0 within ceil(tracks / ENRICH_TRACK_BUDGET) runs of a stable playlist.
     s.setAttribute("rn.covers_pending", live.length - covered);
+    // What the pending number could not say on its own. A tick that stalls
+    // because the platform refused looks exactly like one that stalled because
+    // Spotify was down, and that ambiguity is what let this outage run twice.
+    // `budget.overrun` is the sharper of the two: it means the ceiling arrived
+    // while this ledger still showed headroom, so something in the invocation is
+    // spending subrequests nothing here counts.
+    s.setAttribute("rn.capped", capped);
+    recordBudget(s, budget);
     return { ok: true, total: live.length, covered, pending: live.length - covered };
   });
 }

@@ -53,6 +53,15 @@
       "lastmod": "2026-08-24",
       "navLabel": "ig-prep",
       "navHint": "hand Instagram pixels it has no reason to resample"
+    },
+    {
+      "id": "resample",
+      "title": "Half the light",
+      "summary": "A one pixel checkerboard reduces to sRGB 188 and every resizer says 128, the browser's canvas included. The kernels already agree to seven decimal places, so what is left is the colour space, plus the five other defects that survived measurement because the instrument agreed with them.",
+      "status": "shipped",
+      "lastmod": "2026-08-26",
+      "navLabel": "resample",
+      "navHint": "a checkerboard, and six instruments that could not see the defect"
     }
   ]
 }
