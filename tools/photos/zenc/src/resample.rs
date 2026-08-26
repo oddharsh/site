@@ -29,12 +29,13 @@
 //      wrong thing the default; this makes it impossible.
 //   2. Zero dependencies and testable against analytic answers, which is what
 //      let the probe catch its own three bugs (see resample-probe.ts).
-//   3. It is CORRECT-first, not fast-first: scalar f32, measured 2.4x slower
-//      than fast_image_resize's SIMD on the whole gamma-correct job (70.3ms vs
-//      60.3ms for 5952x3968 RGB -> 900x600, and fir's linear space is u16
-//      where this is f32). A fixed-channel inner loop was measured recovering
-//      2x of the resample core (42.9 -> 22.9ms, byte-identical) and is
-//      recorded headroom, not implemented.
+//   3. It is CORRECT-first, not fast-first: scalar f32. The fixed-channel
+//      inner loop (see resample_fixed) recovered 2x of the resample core
+//      (42.9 -> 22.9ms on 5952x3968 RGB -> 900x600 Box, byte-identical),
+//      which puts the whole gamma-correct job ahead of fast_image_resize's
+//      opt-in correct path (u16 linear) while staying f32 linear. fir's SIMD
+//      on its gamma-WRONG default u8 path is still ~1.8x faster; that gap is
+//      the price of the transfer function, not the kernel.
 //
 // THE THREE THINGS THAT MAKE THIS CORRECT, none of which is exotic and all of
 // which something in the wild gets wrong (sips gets all three wrong at once;
@@ -172,6 +173,20 @@ fn plan(src_len: usize, dst_len: usize, f: Filter) -> Vec<Taps> {
 /// Separable because a 2D filter of this family factors into two 1D passes,
 /// which turns O(support^2) per output pixel into O(support). At the pipeline's
 /// 3.3x reduction that is the difference between ~44 taps and ~13 per pixel.
+///
+/// The passes are monomorphised over the channel count for the two counts the
+/// pipeline produces (1 and 3), with the dynamic loop kept as the fallback for
+/// any other. The win is not vectorisation so much as what a compile-time CH
+/// removes: the per-channel pass over the tap list becomes one pass carrying a
+/// fixed-width accumulator, so each weight is loaded once instead of ch times
+/// and the bounds checks fold. Measured on 5952x3968 RGB -> 900x600 Box:
+/// 42.9 -> 22.9 ms for the resample core, output byte-identical.
+///
+/// BYTE-IDENTICAL is a property of the summation ORDER, not luck: both shapes
+/// accumulate each channel over k ascending, and rustc does not reassociate
+/// f32 adds, so the sums are bitwise the same. A future SIMD pass that splits
+/// the accumulator would break that order and re-mint every content-addressed
+/// thumbnail; the corpus check in the tests below is the tripwire.
 pub fn resample(
     src: &[f32],
     sw: usize,
@@ -182,8 +197,66 @@ pub fn resample(
     f: Filter,
 ) -> Vec<f32> {
     debug_assert_eq!(src.len(), sw * sh * ch);
+    match ch {
+        1 => resample_fixed::<1>(src, sw, sh, dw, dh, f),
+        3 => resample_fixed::<3>(src, sw, sh, dw, dh, f),
+        _ => resample_dyn(src, sw, sh, ch, dw, dh, f),
+    }
+}
+
+fn resample_fixed<const CH: usize>(
+    src: &[f32],
+    sw: usize,
+    sh: usize,
+    dw: usize,
+    dh: usize,
+    f: Filter,
+) -> Vec<f32> {
     // Horizontal first: it shrinks the row length before the vertical pass has
     // to walk it, which is strictly less work when both axes reduce.
+    let xplan = plan(sw, dw, f);
+    let mut mid = vec![0.0f32; dw * sh * CH];
+    for y in 0..sh {
+        let row = &src[y * sw * CH..(y + 1) * sw * CH];
+        for (x, tap) in xplan.iter().enumerate() {
+            let mut acc = [0.0f32; CH];
+            for (k, w) in tap.weights.iter().enumerate() {
+                let p = &row[(tap.first + k) * CH..(tap.first + k + 1) * CH];
+                for c in 0..CH {
+                    acc[c] += p[c] * w;
+                }
+            }
+            mid[(y * dw + x) * CH..(y * dw + x + 1) * CH].copy_from_slice(&acc);
+        }
+    }
+    let yplan = plan(sh, dh, f);
+    let mut dst = vec![0.0f32; dw * dh * CH];
+    for (y, tap) in yplan.iter().enumerate() {
+        for x in 0..dw {
+            let mut acc = [0.0f32; CH];
+            for (k, w) in tap.weights.iter().enumerate() {
+                let i = ((tap.first + k) * dw + x) * CH;
+                for c in 0..CH {
+                    acc[c] += mid[i + c] * w;
+                }
+            }
+            dst[(y * dw + x) * CH..(y * dw + x + 1) * CH].copy_from_slice(&acc);
+        }
+    }
+    dst
+}
+
+/// The original dynamic-channel loops, kept verbatim as the fallback and as
+/// the oracle the specialisation is tested against.
+fn resample_dyn(
+    src: &[f32],
+    sw: usize,
+    sh: usize,
+    ch: usize,
+    dw: usize,
+    dh: usize,
+    f: Filter,
+) -> Vec<f32> {
     let xplan = plan(sw, dw, f);
     let mut mid = vec![0.0f32; dw * sh * ch];
     for y in 0..sh {
@@ -304,6 +377,32 @@ mod tests {
             let out = resample(&src, 100, 100, 1, 30, 30, f);
             for (i, v) in out.iter().enumerate() {
                 assert!((v - 0.5).abs() < 1e-4, "{f:?} sample {i} drifted to {v}");
+            }
+        }
+    }
+
+    /// The fixed-channel passes must be BITWISE equal to the dynamic loop they
+    /// replaced, because /i/ URLs are content-addressed and one moved bit
+    /// re-mints the corpus. Bitwise rather than epsilon on purpose: both shapes
+    /// accumulate each channel over k ascending and rustc does not reassociate
+    /// f32, so exact equality is the contract, and an epsilon here would let a
+    /// reordering SIMD rewrite slip through the exact gate it needs to hit.
+    #[test]
+    fn fixed_channel_passes_match_the_dynamic_oracle_bitwise() {
+        let (sw, sh) = (97, 61); // deliberately awkward, non-square, prime-ish
+        for ch in [1usize, 3] {
+            let src: Vec<f32> = (0..sw * sh * ch)
+                .map(|i| ((i * 2654435761usize) % 1000) as f32 / 999.0)
+                .collect();
+            for f in [Filter::Box, Filter::Lanczos3, Filter::Mitchell] {
+                for (dw, dh) in [(29, 17), (97, 61), (120, 80)] {
+                    let a = resample(&src, sw, sh, ch, dw, dh, f);
+                    let b = resample_dyn(&src, sw, sh, ch, dw, dh, f);
+                    assert_eq!(a.len(), b.len());
+                    for (i, (x, y)) in a.iter().zip(&b).enumerate() {
+                        assert_eq!(x.to_bits(), y.to_bits(), "{f:?} ch={ch} {dw}x{dh} sample {i}");
+                    }
+                }
             }
         }
     }
