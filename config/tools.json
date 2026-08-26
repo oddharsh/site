@@ -57,6 +57,7 @@
         "tools/photos/extract-photo-metadata.sh",
         "tools/photos/gen-encoding-grids.sh",
         "tools/photos/gen-encoding-samples.sh",
+        "tools/photos/onestep-probe.sh",
         "tools/photos/reencode-thumbnails.sh"
       ],
       "min_version": "0.2.0",
@@ -91,6 +92,7 @@
         "tools/photos/export-for-instagram.sh",
         "tools/photos/gen-encoding-grids.sh",
         "tools/photos/gen-encoding-samples.sh",
+        "tools/photos/onestep-probe.sh",
         "tools/photos/reencode-thumbnails.sh"
       ],
       "version": {
@@ -124,6 +126,7 @@
         "tools/photos/export-for-instagram.sh",
         "tools/photos/gen-encoding-grids.sh",
         "tools/photos/gen-encoding-samples.sh",
+        "tools/photos/onestep-probe.sh",
         "tools/photos/reencode-thumbnails.sh"
       ],
       "version": {
@@ -137,10 +140,9 @@
       "bin": "jpegtran",
       "path": "/opt/homebrew/opt/mozjpeg/bin/jpegtran",
       "install": "brew install mozjpeg",
-      "why": "lossless EXIF-orientation rotation before recompression",
+      "why": "progressive rearrangement of the R2 share copies, a coefficient reorder. It did EXIF-orientation rotation until 2026-08-26; that is `zenc square --orient` now, per CLAUDE.md gotcha 3",
       "required_by": [
-        "tools/photos/add-photos.sh",
-        "tools/photos/reencode-thumbnails.sh"
+        "tools/photos/add-photos.sh"
       ],
       "version": {
         "flag": "-version",
@@ -198,9 +200,10 @@
     {
       "bin": "ffmpeg",
       "install": "brew install ffmpeg",
-      "why": "PNG to PPM, because cjpeg will not read PNG and sips BMP confuses it",
+      "why": "PNG to PPM, because cjpeg will not read PNG and sips BMP confuses it; also the independent reduction the one-step probe scores against",
       "required_by": [
-        "tools/photos/gen-encoding-grids.sh"
+        "tools/photos/gen-encoding-grids.sh",
+        "tools/photos/onestep-probe.sh"
       ],
       "version": {
         "flag": "-version",
@@ -212,9 +215,10 @@
     {
       "bin": "ssimulacra2",
       "install": "build libjxl with -DJPEGXL_ENABLE_TOOLS=ON; brew's jpeg-xl does not ship it",
-      "why": "the perceptual metric the Instagram export searches quality against",
+      "why": "the perceptual metric the Instagram export searches quality against, and the one the one-step ingest probe compares geometries with",
       "required_by": [
-        "tools/photos/export-for-instagram.sh"
+        "tools/photos/export-for-instagram.sh",
+        "tools/photos/onestep-probe.sh"
       ],
       "version": {
         "reports": false,

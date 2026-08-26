@@ -968,10 +968,13 @@ SOOC original (in /Users/aadharsh/Downloads/to post (from ssd)/)
    |
    v
 [add-photos.sh] — resize, rotate, encode:
-   |   1. sips: resize to 1200px + format-convert (handles HEIF/HIF)
-   |   2. zenc square --orient N (EXIF orientation as an exact sample
-   |      permutation, folded into the crop; it was jpegtran -rotate N until
-   |      2026-08-26, which is silently lossy off iMCU alignment, gotcha 3)
+   |   1. sips -s format tiff, HEIF/HIF ONLY, at FULL resolution and 16 bits.
+   |      A JPEG source skips it: zenc decodes those itself.
+   |   2. zenc square --orient N --transfer <srgb|g22>, ONE invocation, which
+   |      decodes once and writes all three tiers from the same linear-light
+   |      frame. --orient is an exact sample permutation (it was jpegtran
+   |      -rotate N until 2026-08-26, silently lossy off iMCU alignment,
+   |      gotcha 3); --transfer names the SOURCE curve, g22 for the Monochrom.
    |   3. zenc -q 84 (zenjpeg hybrid trellis + progressive scan search; ~4%
    |      under the retired cjpegli at equal quality, q84 ≈ old cjpegli q82)
    |   4. avifenc -q 63 -d 10 (10-bit AVIF, ~6% smaller at equal quality than
@@ -1002,6 +1005,44 @@ public/images/<stem>.{avif,jpg}  +  R2 aadhar-photos/<filename>
    |   instead of waiting for a deploy. check-photo-pipeline.mjs then
    |   FAILS on any uncaptioned stem, same as a missing pixel tier.
 ```
+
+**The ingest consolidated into `zenc square` on 2026-08-26, and the reason to
+read that entry is the INSTRUMENT rather than the pixels.** A note in
+`add-photos.sh` recorded dropping the `sips -Z 2000` pre-reduction as MEASURED
+AND DECLINED: over 6 sources, mean linear luminance moved 0.02286 to 0.02270,
+inconsistent in direction, for +139% pipeline time. Re-measured with
+ssimulacra2 it is +27.5 mean over 10 frames and better on 10 of 10.
+
+Both numbers are correct about what they measured, which is the whole lesson.
+**Mean linear luminance is one scalar per frame and is blind to everything the
+defect actually was**: a gamma-incorrect first reduction misplaces energy
+WITHIN the frame while preserving its average almost exactly, and the metric
+was chosen precisely because it needed no reference. That property is what made
+it safe from reference bias and also what made it unable to see this.
+
+The reversal was re-verified independently on 2026-08-26 before it was
+believed, because a number that overturns a committed decline deserves a second
+instrument. Scoring both candidates against a reference sharing NO code with
+either (sips for the exact ops, rotation and crop, which resample nothing, and
+ffmpeg for the one reduction) gives **+27.25 mean, 10 of 10**, against +31.59
+when zenc's own kernel is the reference. So reference bias is real and worth
+about 4 points here; the finding survives it.
+
+**`bun run onestep:probe` is that measurement, committed.** It was a throwaway
+at first, which is how this question came to be re-litigated twice from scratch
+in two days; a measurement that has already been wrong once should leave a
+runnable artifact behind rather than a number in a commit message. It scores
+both candidates against all three references at once, so the size of the
+reference bias stays visible instead of being a claim, and it fails loudly
+rather than averaging over a metric that could not run. Re-run it before
+touching the ingest geometry again.
+
+Take the general rule past this pipeline, since `matched-bytes-probe.py` states
+half of it already and this is the other half. **A reference-free metric is not
+a safer metric, it is a NARROWER one**, and "the instrument was the error" has
+now been the answer twice on this one thread (gotcha 15 and version affinity are
+the same shape from other directions). Before trusting a null result, ask what
+the metric is structurally incapable of seeing.
 
 Two encoders + one transform tool, all built from source:
 
