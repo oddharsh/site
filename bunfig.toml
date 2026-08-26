@@ -52,3 +52,30 @@ minimumReleaseAge = 86400
 # CI's frozen install instead, so read the registry's `time` field for the
 # PINNED version before deleting its line.
 minimumReleaseAgeExcludes = []
+
+# ── test discovery ───────────────────────────────────────────────────────────
+#
+# Bare `bun test` used to be a trap, and it is exactly the kind this repo spends
+# its gotcha list on: it reports failures that mean nothing, confidently.
+#
+# Bun globs the whole tree, so it collected THREE suites that do not run under
+# it. `cal/test/*` is a Vitest suite (CI runs `bun run --filter cal-aadhar-sh
+# test`, and it needs `vi.stubGlobal` plus the `cloudflare:test` pool module);
+# `lens-reader/test/*` deliberately sits outside the workspace, so readability
+# and linkedom resolve only after an install inside that directory. Every one of
+# those is healthy under its own runner. Run bare, they produced 21 red tests
+# and 5 module errors — measured 2026-08-26 on a PRISTINE origin/main, so the
+# noise was never anybody's diff.
+#
+# `root` scopes discovery to the suite this runner owns. `preload` is the other
+# half and matters more: `bun run test` passes `--preload ./tools/lib/no-network.ts`
+# on the command line, and without it here, bare `bun test` would go green while
+# silently dropping the network guard — a worse outcome than the red it
+# replaces, since the failure it hides is a test reaching the network. Verified
+# with a control (a test that calls `fetch` fails the run at exit, by name).
+#
+# The two commands are now equivalent, and `bun run test` stays the documented
+# one because it states its own preload rather than inheriting it.
+[test]
+root = "tools"
+preload = ["./tools/lib/no-network.ts"]
