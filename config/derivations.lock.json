@@ -995,6 +995,6 @@
     "tools/photos/shell-data.ts": "1f9f02180c390b232403d24a11b478dbbddd55d5e1d2ed30d96365a7ff5d6e4b",
     "tools/photos/zenc/Cargo.lock": "193c0e7739a2801ca39328db4e6b724f8d634ff1f890b1c5bad4b898c3d8102d",
     "tools/photos/zenc/src/histogram.rs": "1a5fbc3744bf1d571e6cb2bf19aa0f965e5a8c097c2175d185023c415cfd3a10",
-    "tools/photos/zenc/src/pixels.rs": "37e9a6987cca24028b81fba41b7d78e601832718a851ec4340e41faf7fb17800"
+    "tools/photos/zenc/src/pixels.rs": "86eb420dbf7a215c9c95a714b75a1da4a1b1198bd42f193cabf09c193d30f01f"
   }
 }

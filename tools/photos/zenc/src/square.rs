@@ -25,7 +25,7 @@ pub fn run(args: &[String]) -> i32 {
     let mut sizes: Vec<u32> = Vec::new();
     let mut outs: Vec<&str> = Vec::new();
     let mut filter = Filter::Lanczos3;
-    let mut transfer = Transfer::Srgb;
+    let mut transfer = Transfer::Auto;
     let mut exif: u8 = 1;
     let mut i = 0;
     while i < args.len() {
@@ -97,7 +97,7 @@ pub fn run(args: &[String]) -> i32 {
         let (cx, cy) = ((nw.saturating_sub(size)) / 2, (nh.saturating_sub(size)) / 2);
         let scaled = scale(&src, nw, nh, filter);
         let cropped = crop(&scaled, cx, cy, size.min(nw), size.min(nh));
-        if let Err(e) = save(&cropped, out, transfer) {
+        if let Err(e) = save(&cropped, out) {
             return err(&e);
         }
     }

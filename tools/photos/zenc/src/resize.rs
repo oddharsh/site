@@ -15,7 +15,7 @@ pub fn run(args: &[String]) -> i32 {
     let (mut input, mut out, mut width, mut height): (Option<&str>, Option<&str>, Option<u32>, Option<u32>) =
         (None, None, None, None);
     let mut filter_arg: Option<&str> = Some("box");
-    let mut transfer = Transfer::Srgb;
+    let mut transfer = Transfer::Auto;
     let mut exif: u8 = 1;
     let mut i = 0;
     while i < args.len() {
@@ -79,7 +79,7 @@ pub fn run(args: &[String]) -> i32 {
     // resample.rs). Taking a shortcut here would be a second code path to keep
     // honest for no gain.
     let outf = scale(&src, dw, dh, filter);
-    match save(&outf, out, transfer) { Ok(()) => 0, Err(e) => err(&e) }
+    match save(&outf, out) { Ok(()) => 0, Err(e) => err(&e) }
 }
 
 fn err(msg: &str) -> i32 {
