@@ -303,7 +303,7 @@
       "tools/perf-snapshot.ts": "writes a snapshot file named on the command line, never a fixed committed path",
       "tools/gen-remote-config.ts": "writes .wrangler.remote.jsonc, which is gitignored",
       "tools/bump-bun-pin.ts": "downloads a release zip to a temp path while checking the bun pin",
-      "tools/lib/bun-pin.ts": "the module behind bump-bun-pin.ts, and it writes the same temp release zip while checking whether the bun pin can move",
+      "tools/lib/bun-pin.ts": "writes the root package.json, rewriting ONLY the `packageManager: bun@x.y.z` pin, which is a maintenance edit to a hand-authored file rather than a derived artifact. contract-the-bun-pin-is-declared-once.test.mjs holds that pin and its three readers together. THIS ENTRY FIRST SAID IT WROTE A TEMP RELEASE ZIP, which is bump-bun-pin.ts and not this: the census caught the file correctly and the reason beside it was wrong, which is the failure mode an exemption list has",
       "tools/check-infra.ts": "writes one request line into a mkdtemp directory while probing the edge",
       "tools/lens-seed.ts": "writes seed captures into a scratch directory",
       "tools/photos/resample-probe.ts": "writes probe output while measuring the ingest geometry, and commits nothing",

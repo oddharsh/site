@@ -296,3 +296,40 @@ test("census: the standalone re-encode path points at derive:check", async () =>
   const src = await readFile(new URL("tools/photos/reencode-thumbnails.sh", ROOT), "utf8");
   assert.ok(src.includes("derive:check"), "reencode-thumbnails.sh no longer names derive:check");
 });
+
+// ── the one thing the census still asks about tests ──────────────────────────
+// findWriters SKIPS test files, on the reasoning that a test writing a fixture is
+// not a generator of anything committed. That reasoning holds for a fixture in a
+// temp directory and fails completely for a test that writes into the REPO, which
+// is invisible to the census by construction.
+//
+// It is not hypothetical. contract-the-bun-pin-is-declared-once.test.mjs used to
+// call writePin(root, "9.9.9") against the live package.json and restore it in a
+// finally. `node --test` runs test FILES in parallel processes and writeFileSync
+// truncates before writing, so for the width of that write any other file's module
+// resolution could read a half-written package.json. CI died with
+// ERR_INVALID_PACKAGE_CONFIG naming the repo root, on an unrelated test file,
+// while the test that caused it reported green.
+//
+// This guard is NARROW on purpose: it catches the exact shape (handing the repo
+// root to a write-shaped function), not every way a test could reach outside its
+// sandbox. A wider version would need to resolve expressions, and a heuristic that
+// fires on temp-dir writes would be muted within a week.
+test("census: no test hands the repo root to a write-shaped call", async () => {
+  const fs = await import("node:fs/promises");
+  const dir = path.join(root, "tools");
+  const offenders = [];
+  for (const name of (await fs.readdir(dir)).filter((f) => f.includes(".test."))) {
+    // Comment lines are stripped FIRST, because the note explaining this guard
+    // names the very call it forbids, and a test that fails on its own
+    // explanation can only be fixed by deleting the explanation. The JSDoc-tag
+    // contract learned this the same way.
+    const src = (await fs.readFile(path.join(dir, name), "utf8"))
+      .split("\n")
+      .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
+      .join("\n");
+    if (!/const root = fileURLToPath\(ROOT\)/.test(src)) continue;
+    for (const m of src.matchAll(/\b(write\w*)\s*\(\s*root\s*[,)]/g)) offenders.push(`${name}: ${m[1]}(root, ...)`);
+  }
+  assert.deepEqual(offenders, [], `a test writes through the repo root: ${offenders.join(", ")}`);
+});

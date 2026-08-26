@@ -4,6 +4,9 @@ import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 
 import { compareVersions, interpretZstdProbe, minimumReleaseAgeSeconds, readPin, releaseAsset, releaseUrl, writePin } from "./lib/bun-pin.ts";
 import { fileURLToPath } from "node:url";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const root = fileURLToPath(ROOT);
 
@@ -25,21 +28,36 @@ test("writePin edits one field and reflows nothing else", async () => {
   // `comment:` keys in package.json carry paragraphs that re-serializing folds
   // into one line each. So the assertion is on the BYTES either side of the pin
   // rather than on a parsed object.
+  //
+  // It runs against a COPY, and that is a fix rather than a preference. This used
+  // to write the REAL package.json and restore it in a `finally`, which is safe
+  // in one process and is not what happens: `node --test` runs test FILES in
+  // parallel processes, and `writeFileSync` truncates before it writes. So for
+  // the width of two writes, every other file's module resolution could read a
+  // half-written package.json, and Node answers that with
+  // ERR_INVALID_PACKAGE_CONFIG naming the repo root.
+  //
+  // It is a RACE, so it passed locally for months and failed in CI under load,
+  // on an unrelated test file, while this one reported green. `writePin` already
+  // took its root as an argument, so the copy costs nothing.
   const before = await readFile(new URL("package.json", ROOT), "utf8");
   const pin = readPin(root);
+  const dir = await mkdtemp(join(tmpdir(), "bun-pin-"));
   try {
-    writePin(root, "9.9.9");
-    const after = await readFile(new URL("package.json", ROOT), "utf8");
-    assert.equal(readPin(root).version, "9.9.9");
+    await writeFile(join(dir, "package.json"), before);
+    writePin(dir, "9.9.9");
+    const after = await readFile(join(dir, "package.json"), "utf8");
+    assert.equal(readPin(dir).version, "9.9.9");
     assert.equal(
       after.replace('"packageManager": "bun@9.9.9"', `"packageManager": "${pin.raw}"`),
       before,
       "writePin changed something other than the version",
     );
   } finally {
-    writePin(root, pin.version);
+    await rm(dir, { recursive: true, force: true });
   }
-  assert.equal(await readFile(new URL("package.json", ROOT), "utf8"), before, "the restore did not restore");
+  // The real file is what the race was about, so assert it was never touched.
+  assert.equal(await readFile(new URL("package.json", ROOT), "utf8"), before, "the live package.json was modified");
 });
 
 test("the zstd capability probe is declared once", async () => {
