@@ -969,7 +969,9 @@ SOOC original (in /Users/aadharsh/Downloads/to post (from ssd)/)
    v
 [add-photos.sh] — resize, rotate, encode:
    |   1. sips: resize to 1200px + format-convert (handles HEIF/HIF)
-   |   2. jpegtran -rotate N (lossless EXIF orientation, mozjpeg's tool)
+   |   2. zenc square --orient N (EXIF orientation as an exact sample
+   |      permutation, folded into the crop; it was jpegtran -rotate N until
+   |      2026-08-26, which is silently lossy off iMCU alignment, gotcha 3)
    |   3. zenc -q 84 (zenjpeg hybrid trellis + progressive scan search; ~4%
    |      under the retired cjpegli at equal quality, q84 ≈ old cjpegli q82)
    |   4. avifenc -q 63 -d 10 (10-bit AVIF, ~6% smaller at equal quality than
@@ -1004,7 +1006,11 @@ public/images/<stem>.{avif,jpg}  +  R2 aadhar-photos/<filename>
 Two encoders + one transform tool, all built from source:
 
 - **mozjpeg** (`brew install mozjpeg`, keg-only at `/opt/homebrew/opt/mozjpeg/`)
-  — provides `jpegtran` for lossless EXIF-orientation rotation.
+  — provides `jpegtran`, which rearranges the R2 share copies to progressive
+  (`-progressive -copy all`, a true coefficient reorder), and `cjpeg` for the
+  `/garage/encoding` grids. It did the EXIF-orientation ROTATION until
+  2026-08-26 and no longer does: that step is `zenc square --orient` now, for
+  the reason gotcha 3 measures.
 - **zenc** (`tools/photos/zenc/`, a Rust crate wrapping
   `github.com/imazen/zenjpeg`) — the JPEG universal-fallback encoder: hybrid
   trellis + 64-candidate progressive scan search + sharp_yuv chroma, ~4% under the
@@ -2558,9 +2564,68 @@ bun run deploy:direct
    need `${=flag}` to force splitting. Caught this when `jpegtran -copy none $flag`
    passed `"-rotate 270"` as a single argv element.
 
-3. **mozjpeg's `djpeg|cjpeg` strips EXIF.** Including orientation. Apply
-   rotation losslessly with `jpegtran -copy none -rotate N` BEFORE the
-   recompression pipe — otherwise portrait shots come out landscape.
+3. **mozjpeg's `djpeg|cjpeg` strips EXIF**, orientation included, so a
+   recompression pipe needs the rotation applied first or portrait shots come
+   out landscape. **`jpegtran -copy none -rotate N` was that step here until
+   2026-08-26 and it is NOT unconditionally lossless**, which is what this
+   entry claimed for two months.
+
+   jpegtran rotates in the DCT domain, so it can only move whole iMCUs. Where
+   the edge that becomes the constraint is not a multiple of the iMCU size
+   (16px at 4:2:0) the transform is not expressible, and jpegtran degrades
+   rather than refusing: **`-perfect` is what makes it refuse, and this
+   pipeline never passed it.** The failure is therefore silent, which is why
+   nothing in the exit codes ever said a word.
+
+   Measured 2026-08-26 on the 2000x1333 intermediates `sips -Z 2000` actually
+   produces here (w%16=0, h%16=5), so the alignment is a property of the aspect
+   ratio rather than of any one photo:
+
+   | flag | EXIF | corpus | lossless |
+   |---|---|--:|---|
+   | `-rotate 270` | 8 | 133 of 181 | yes, **by luck**: the aligned long edge happens to be the constraint edge |
+   | `-rotate 90` | 6 | 1 | **no** |
+   | `-rotate 180` | 3 | 0 | **no** |
+
+   On XT507876.JPG, the library's one orientation-6 photo, the whole frame
+   landed shifted +5px horizontally (interior mean |d| 4.72, dropping to 0.025
+   once shifted back) plus a garbled strip at the rotated edge, columns
+   1328-1332, mean |d| about 14 and max 166. It survived into the SHIPPED tile:
+   `public/i/XT507876.0faf1137.jpg` carried a roughly 2px wrong right edge
+   (column means 14.5 and 14.3 against a spatially-rotated control) alongside
+   the framing shift.
+
+   **The repair was to stop rotating in the DCT domain at all.** A rotation by
+   a multiple of 90 degrees is pure sample re-indexing, exact in any domain at
+   any dimensions, with no MCU to align. `zenc square --orient N` and
+   `zenc resize --orient N` take the EXIF value and permute the frame
+   `pixels.rs` has already decoded to linear light, before the resample. Both
+   thumbnail scripts pass it and neither calls jpegtran any more, so the
+   orientation-to-flag table they shared is an orientation-to-value one now.
+
+   Three things about how this was verified are worth keeping, because "is a
+   rotation correct" is easy to answer with a check that cannot fail. Each of
+   the 8 orientations is pinned bitwise against an analytic 3x2 oracle in
+   `pixels.rs`, so a transposed sign in one arm cannot hide behind a symmetric
+   test image. Each is separately checked against **sips** performing the same
+   spatial rotation on identical decoded pixels, pixel-exact on all 8, which is
+   an independent implementation rather than a restatement of ours. And
+   `--orient` is skipped entirely at 1, so every existing call is
+   byte-identical to the binary built from the previous commit: `square`,
+   `resize` and the encode were each diffed old-against-new on a real
+   intermediate, since `/i/` is content-addressed and one stray byte re-mints
+   every URL.
+
+   **XT507876's four tiles were regenerated deliberately in the same change**,
+   it being the only affected stem, since 180 is unused in the library and 270
+   was exact. That re-mints one stem's `/i/` URLs plus its rows in
+   `hashes.json`, `histograms.json` and `fingerprints.json`. No page hardcodes
+   those hashes, which is worth checking rather than assuming: `/garage/tooltips`
+   carries literal `/i/` URLs and has broken builds twice.
+
+   jpegtran stays installed and is still wanted. `add-photos.sh` phase 3 runs
+   `-progressive -copy all` on the R2 copies, a genuine coefficient reorder
+   with no geometry in it, and `gen-encoding-grids.sh` uses mozjpeg's `cjpeg`.
 
 4. **`jpegtran` writes binary to stdout.** Don't `2>&1` to a file or stderr
    warnings will corrupt the JPEG bytes. Use `2>/dev/null > out.jpg` (stderr

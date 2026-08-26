@@ -5,16 +5,24 @@
 // decides whether it ever replaces anything. Two earlier attempts were adopted
 // in a branch before being measured and both were wrong; this one is measured
 // first on purpose.
-use crate::pixels::{crop, load_linear, save_srgb, scale};
+use crate::pixels::{crop, load_linear, orient, parse_orient, save_srgb, scale};
 use crate::resample::Filter;
 
 pub fn run(args: &[String]) -> i32 {
     let (mut input, mut out): (Option<&str>, Option<&str>) = (None, None);
     let mut size: u32 = 600;
     let mut filter = Filter::Lanczos3;
+    let mut ori: u8 = 1;
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
+            "--orient" => {
+                i += 1;
+                ori = match parse_orient(args.get(i).map(String::as_str)) {
+                    Ok(o) => o,
+                    Err(e) => return err(&e),
+                };
+            }
             "--size" => {
                 i += 1;
                 match args.get(i).and_then(|s| s.parse().ok()) {
@@ -44,7 +52,7 @@ pub fn run(args: &[String]) -> i32 {
         i += 1;
     }
     let (Some(input), Some(out)) = (input, out) else {
-        return err("usage: zenc square <in> --size <n> --out <out.png> [--filter box|lanczos3|mitchell]");
+        return err("usage: zenc square <in> --size <n> --out <out.png> [--filter box|lanczos3|mitchell] [--orient 1..8]");
     };
 
     // Shared with `resize` through pixels.rs since 2026-08-25. It used to call
@@ -55,6 +63,13 @@ pub fn run(args: &[String]) -> i32 {
     // now read a full-resolution TIFF; the old path answered "Memory limit
     // exceeded" on one.
     let src = match load_linear(input) { Ok(f) => f, Err(e) => return err(&e) };
+    // EXIF orientation first, as a pure permutation on the loaded samples, so
+    // the short-edge arithmetic below sees the DISPLAYED geometry. This is the
+    // step jpegtran used to do in the DCT domain, where it is only lossless on
+    // iMCU-aligned dimensions (see pixels::orient); here it is exact always.
+    // Skipped at 1 so an orient-less call is byte-identical to before the flag
+    // existed — the corpus is content-addressed.
+    let src = if ori != 1 { orient(&src, ori) } else { src };
     let (w, h) = (src.w, src.h);
 
     // Short edge lands on `size`. sips reaches the same crop from the long edge,

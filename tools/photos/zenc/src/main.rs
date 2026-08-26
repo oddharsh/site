@@ -1,7 +1,9 @@
 // zenc — the site's JPEG thumbnail encoder.
 //
-// Reads an already-upright, metadata-stripped PNG/JPG (the photo pipeline bakes
-// EXIF orientation in with jpegtran before this step) and writes a JPEG encoded
+// Reads an already-upright, metadata-stripped PNG/JPG (the photo pipeline
+// brings pixels upright with `zenc square --orient` before this step; it was
+// jpegtran's DCT rotation until 2026-08-26, which is silently lossy off iMCU
+// alignment — see pixels::orient) and writes a JPEG encoded
 // with zenjpeg's hybrid trellis (jpegli adaptive quantization + rate-distortion)
 // and a 64-candidate progressive scan search, 4:2:0. On the 158-photo corpus
 // this is ~4% smaller than cjpegli at equal SSIMULACRA2 (see /garage/encoding).
