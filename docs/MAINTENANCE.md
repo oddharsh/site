@@ -1167,11 +1167,25 @@ the Actions, npm, and Pillow layers. This retired the old `Refresh image toolcha
 workflow that hand-tracked the from-source jpegli commit. Only Homebrew formulas
 (mozjpeg, libavif) fall outside Dependabot and update on their own cadence.
 
+**The AVIF encoder left that ambient set on 2026-08-26.** `tools/photos/libavif/build.sh`
+builds `avifenc` from source at a pinned `LIBAVIF_TAG`, and the photo pipeline
+prefers it over anything on PATH. Dependabot does not track it either, but a pin
+does not drift: bumping it is an edit to a committed script rather than something
+`brew upgrade` can do behind you. That matters because `/i/` is content-addressed,
+so the encoder decides shipped URLs. Brew's `libavif` is still wanted for the
+`/garage/encoding` grid scripts.
+
 ## Local fallback setup
 
 ```bash
 # the photo pipeline
-brew install jq mozjpeg libavif              # mozjpeg = jpegtran + cjpeg; libavif = avifenc (optional, sips falls back)
+brew install jq mozjpeg libavif              # mozjpeg = jpegtran + cjpeg; libavif = avifenc for the /garage/encoding grids
+brew install cmake ninja                     # for the pinned avifenc below
+# the AVIF encoder the photo tiers actually use: libavif at a pinned tag, built
+# with aom + libsharpyuv + libyuv. First run clones and builds all four (~10 min,
+# needs network); after that it is a no-op. Byte-identical to brew's avifenc at
+# the pipeline's settings, so building it re-mints no /i/ URL.
+./tools/photos/libavif/build.sh
 brew install uv && bun run photos:env               # Pillow, for gen-pixel-peeper.py only (brew's python3 is PEP 668; pip into it fails)
 # the JPEG encoder (zenc) builds itself on first pipeline run; needs rust (rustup.rs)
 cargo build --release --manifest-path tools/photos/zenc/Cargo.toml

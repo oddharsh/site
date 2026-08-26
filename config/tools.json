@@ -170,11 +170,12 @@
       "bin": "avifenc",
       "install": "brew install libavif",
       "optional": true,
-      "why": "primary 10-bit AVIF tier; add-photos and reencode-thumbnails fall back to sips, the grid scripts do not",
+      "why": "the encoder-comparison grids on /garage/encoding. The PHOTO PIPELINE no longer reaches for this one: add-photos and reencode-thumbnails prefer tools/photos/libavif/build/avifenc, a pinned from-source build, and fall back here and then to sips",
       "required_by": [
         "tools/photos/gen-encoding-grids.sh",
         "tools/photos/gen-encoding-samples.sh"
       ],
+      "bytes_why": "it still bakes the /garage/encoding sample bytes. It no longer bakes /i/: that moved to the pinned build, whose version is fixed by LIBAVIF_TAG in tools/photos/libavif/build.sh rather than recorded here, because a pin does not drift and this entry's `recorded` field exists only to catch drift in an ambient brew install",
       "version": {
         "flag": "--version",
         "match": "Version: (\\d+\\.\\d+\\.\\d+)"
@@ -190,6 +191,7 @@
         "tools/photos/gen-encoding-grids.sh",
         "tools/photos/gen-encoding-samples.sh"
       ],
+      "bytes_why": "it still bakes the /garage/encoding sample bytes. It no longer bakes /i/: that moved to the pinned build, whose version is fixed by LIBAVIF_TAG in tools/photos/libavif/build.sh rather than recorded here, because a pin does not drift and this entry's `recorded` field exists only to catch drift in an ambient brew install",
       "version": {
         "flag": "-version",
         "match": "^(\\d+\\.\\d+\\.\\d+)"

@@ -1,6 +1,7 @@
 // ── every committed shell script aborts instead of continuing ────────────────
 // Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
-import { ROOT, assert, readFile, readdir, test } from "./contract-shared.ts";
+import { execFileSync } from "node:child_process";
+import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 
 // Gotcha 40 is the bill for a shell script that kept going. `zenc histogram`
 // returns 2 on an unreadable hashes.json, add-photos.sh ran it as
@@ -18,21 +19,28 @@ import { ROOT, assert, readFile, readdir, test } from "./contract-shared.ts";
 // somebody remembers into one a PR cannot lose. A twelfth script is covered by
 // existing rather than by an edit here.
 
-/** Committed shell scripts, DISCOVERED rather than listed. Vendored and build
- *  trees are skipped: node_modules and cargo's target/ hold third-party scripts
- *  this repository does not own and may not edit. */
-async function shellScripts(dir = new URL(".", ROOT), out = []) {
-  const SKIP = new Set([
-    "node_modules", ".git", ".build", ".wrangler", ".claude",
-    "target", ".venv", "dist", ".dev-assets",
-  ]);
-  for (const entry of await readdir(dir, { withFileTypes: true })) {
-    if (SKIP.has(entry.name)) continue;
-    const child = new URL(entry.name + (entry.isDirectory() ? "/" : ""), dir);
-    if (entry.isDirectory()) await shellScripts(child, out);
-    else if (entry.name.endsWith(".sh")) out.push(child);
-  }
-  return out;
+/** Committed shell scripts, from `git ls-files` rather than a directory walk.
+ *
+ *  THE ENUMERATOR IS THE ASSERTION HERE. This test is about scripts the
+ *  repository OWNS, and the walk it used to do could not express that: it read
+ *  whatever was on disk and subtracted a hardcoded list of directory names
+ *  (node_modules, target, .venv, …). That list is a guess about where
+ *  third-party code will appear next, and it was wrong the first time somebody
+ *  vendored something it did not name. `tools/photos/libavif/build.sh` clones
+ *  libavif, aom, libwebp and libyuv into a gitignored `src/`, which is 40+
+ *  third-party `.sh` files this repository does not own and may not edit; the
+ *  walk found every one of them and failed.
+ *
+ *  `git ls-files` answers the question the test's own name asks, and it stays
+ *  right for the next vendored tree without an edit here. Untracked scripts are
+ *  correctly out of scope: a script nobody has committed cannot regress CI.
+ */
+function shellScripts() {
+  const out = execFileSync("git", ["ls-files", "-z", "*.sh"], {
+    cwd: new URL(".", ROOT),
+    encoding: "utf8",
+  });
+  return out.split("\0").filter(Boolean).map((rel) => new URL(rel, new URL(".", ROOT)));
 }
 
 /** A `set` line is only the one that OPENS a line, so the word inside a comment
@@ -58,7 +66,7 @@ function shellOptions(source) {
 }
 
 test("every committed shell script sets -e, -u and pipefail", async () => {
-  const scripts = await shellScripts();
+  const scripts = shellScripts();
 
   // FLOOR. A scanner that matches nothing reports a pass, which is the failure
   // this repository has shipped three times. Eleven scripts exist today: ten
