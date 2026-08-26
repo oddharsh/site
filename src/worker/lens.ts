@@ -930,7 +930,7 @@ export function renderLensShell(initial?, state?, inputValue?, compare?) {
     // scanned ?url= variants share the shell card — a per-scan card would need
     // an on-the-fly render, and X's fetcher hits once, caches, and won't wait.
     // Absolute URLs because card fetchers don't resolve relative ones.
-    head: unsafeHtml`<meta property="og:type" content="website">
+    head: unsafeHtml(`<meta property="og:type" content="website">
 <meta property="og:site_name" content="aadhar.sh">
 <meta property="og:title" content="The Other Web: how machines read a URL">
 <meta property="og:description" content="${escAttr(lensDescription)}">
@@ -940,7 +940,7 @@ export function renderLensShell(initial?, state?, inputValue?, compare?) {
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="A Windows XP browser window showing one URL three ways at once: the page a person sees, the evidence a machine can recover, and a rendered snapshot.">
 <meta name="twitter:card" content="summary_large_image">
-`,
+`),
     // The bare shell is the site's flagship machine-web page and should be
     // indexable — an agent reading llms.txt now finds /lens listed there. Only a
     // targeted ?url= scan gets x-robots-tag: noindex (handleLens sets it), since
@@ -1529,7 +1529,7 @@ footer { text-align:center; font-size:9pt; color:oklch(45% 0 0); margin-top:14px
 footer a { color:oklch(42.61% 0.2353 263.74); }
 @media (max-width:720px){ .lx-panes{ flex-direction:column; } .lx-panes.is-both .lx-pane{ min-height:280px; } }
 `,
-    body: unsafeHtml`
+    body: unsafeHtml(`
     <h1>The Other Web</h1>
     <p class="lx-lede">Every page has two audiences: the person looking at it and the machine reading over their shoulder. The semantic web asked publishers to mark meaning; today&rsquo;s models scrape the human page; the next web must decide how machines act. Paste one URL to compare the human page, the HTTP response, and the browser-rendered result. Fetched server-side, honestly, as <a href="/bot">AadharshBot</a>.</p>
     ${lensStateOfWebRail()}
@@ -1639,13 +1639,13 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
     <div class="lx-tip" id="lx-tip" popover="manual" role="tooltip"></div>
     <script type="application/json" id="lx-glossary">${lensScriptJson(LENS_GLOSSARY)}</script>
     ${initialScript}
-`,
+`),
     // The idle shell is complete server-rendered HTML, including a native GET form,
     // so it loads only the tiny interaction bootstrap. build.mjs hashes the full
     // lens client first, rewrites that exact URL into the bootstrap, then hashes the
     // bootstrap itself. A fresh shell therefore cannot pair with either stale layer.
     // The plain files stay served, short-cached, for dev and stale HTML.
-    scripts: unsafeHtml`<script src="/lens-boot.js" defer></script>`,
+    scripts: unsafeHtml(`<script src="/lens-boot.js" defer></script>`),
     cache: "public, max-age=60, s-maxage=300",
     headers: {
       // No x-robots-tag here: the bare shell is meant to be indexed. handleLens

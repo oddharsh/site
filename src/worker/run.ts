@@ -108,7 +108,7 @@ export function renderRun({ cmd = "", notFound = false } = {}) {
   }
   .run-note { font-size: 9pt; color: oklch(51.03% 0 0); margin-top: 12px; }
 `,
-    body: unsafeHtml`
+    body: unsafeHtml(`
     <div class="run-lede">
       <span class="run-ico" aria-hidden="true"></span>
       <p>Type the name of a page, a photo, or a profile, and aadhar.sh will open it for you.</p>
@@ -127,7 +127,7 @@ ${options}
       <b>&#8984;K</b> (or Start &gt; Run) anywhere for the live palette with
       photo search and previews. Photo stems work here too ("L1000069_3").
     </p>
-`,
+`),
     cache: "public, max-age=300",
     headers: { "x-robots-tag": "noindex" },
   });
