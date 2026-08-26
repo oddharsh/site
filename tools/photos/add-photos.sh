@@ -312,10 +312,13 @@ while IFS= read -r f; do
   esac
   o=$(exif-sooc -s -s -s -n -Orientation "$f" 2>/dev/null) || o=""
   case "$o" in [1-8]) ;; *) o=1 ;; esac
-  transfer=srgb
-  profile=$(sips -g profile "$f" 2>/dev/null | awk '/profile:/{sub(/^ *profile: /,""); print}') || profile=""
-  [ "$profile" = "Gray Gamma 2.2" ] && transfer=g22
-  if ! "$ZENC" square "$input" --orient "$o" --transfer "$transfer" --filter box \
+  # The transfer curve is zenc's to decide, from the file's own ICC, since
+  # 2026-08-26. This used to be `sips -g profile` plus a literal match on
+  # "Gray Gamma 2.2": a 123ms process per photo whose failure direction was
+  # silent, because any other spelling falls back to sRGB and sRGB on Monochrom
+  # data is wrong by up to 4 codes in the shadows. Classification is unchanged
+  # on this corpus (2 g22, 179 srgb) and the outputs are byte-identical.
+  if ! "$ZENC" square "$input" --orient "$o" --filter box \
       --size "$SQ" --out "$sq" --size "$SQ_SM" --out "$sm" --size "$SQ_XS" --out "$xs" >/dev/null 2>&1; then
     rm -f "$tif"; T_FAIL=$((T_FAIL+1)); printf "✗"; continue
   fi
