@@ -22,6 +22,8 @@ const PREFIX = "/serendipity";
 // and nav.js only wires behavior, same as every other page.
 import { DESKTOP_CHROME, DESKTOP_TOP } from "../src/worker/lib/desktop.ts";
 import { privateHostBlocked } from "../src/worker/lib/crawl.ts";
+import { SUBREQUEST_CAP_FREE, createBudget, isSubrequestLimit } from "../src/worker/lib/budget.ts";
+import type { Budget } from "../src/worker/lib/budget.ts";
 import { CACHE_EMPTY, CACHE_STATIC, mcpGate, mcpHttpStatus, mcpServer } from "../src/worker/lib/mcp-protocol.ts";
 import { mcpTool } from "../src/worker/lib/mcp-tools.ts";
 import { previewToolRefusal } from "../src/worker/lib/preview.ts";
@@ -835,10 +837,19 @@ async function fetchMyEvents(auth, selfId) {
 // until 2026-08-21: one 1,932-person event costs 20 fetches at 100 a page, and
 // seven past events had parked on "Too many subrequests" because of it. The
 // sibling fetchMyEvents has carried page caps for exactly this reason all along.
-// The invocation-wide fetch allowance the sweep paces itself against. `left` is
-// what remains and `spent` is what the log reports; both are mutated in place so
-// every roster walk in one tick draws on the same pool.
-type FetchBudget = { left: number, spent: number };
+// The invocation-wide fetch allowance the sweep paces itself against. One
+// ledger is threaded through every roster walk in a tick so they draw on the
+// same pool.
+//
+// This was a local `{ left: number, spent: number }` mutated in place until it
+// moved onto lib/budget.ts. Two things came with the move and neither was
+// available to the hand-rolled version: the cap is declared ONCE rather than
+// typed out here and in rn.ts, and a ceiling that arrives while the ledger
+// still shows headroom is recorded as an overrun instead of read as an ordinary
+// exhaustion. The second matters because this file cannot see the subrequests
+// spent by the rest of the invocation, so its own count has always been a lower
+// bound and nothing said so.
+type FetchBudget = Budget;
 
 export async function fetchEventGuests(
   eventId, ticketKey, auth,
@@ -859,7 +870,7 @@ export async function fetchEventGuests(
     const p = new URLSearchParams({ event_api_id: eventId, pagination_limit: "100" });
     if (ticketKey) p.set("ticket_key", ticketKey);
     if (cursor) p.set("pagination_cursor", cursor);
-    if (budget) { budget.left--; budget.spent++; }
+    if (budget) budget.charge(1);
     const data = asRecord(await (await lumaFetch(`${LUMA_API}/event/get-guest-list?${p}`, auth)).json()) ?? {};
     for (const e of (data.entries || [])) all.push(parseGuest(e.api_id, e.user || {}));
     if (!data.has_more || !data.next_cursor) return { guests: all, done: true, cursor: null };
@@ -1167,7 +1178,7 @@ const GUEST_SYNC_KEY = "serendipity_guest_sync_";
 // One mutable counter per scheduled invocation, threaded through the roster
 // sweep. A plain object rather than a closure so a caller can read `spent`
 // afterwards and put it on the log line.
-export function fetchBudget(max) { return { left: max, spent: 0 }; }
+export function fetchBudget(max) { return createBudget(max); }
 
 // Cancellation pruning is only correct when this pass saw the ENTIRE roster in
 // one invocation. `done` alone is not enough: a pass that RESUMED from a cursor
@@ -1280,7 +1291,12 @@ async function syncGuests(d, eventId, userKey, cookiesJson, budget: FetchBudget 
     // broken. Marking it parks a healthy roster in the past-event retry queue,
     // which selects on `NOT LIKE 'ok:%'`, so it returns every tick, spends the
     // budget again and fails again. That loop is what stranded seven events.
-    if (/too many subrequests/i.test(m)) return { skipped: "subrequests" };
+    //
+    // Routed through the ledger when there is one, so a ceiling that arrives
+    // early also records the overrun, and through the bare predicate when there
+    // is not. Both answer the same question; only the first can also notice
+    // that our count disagreed with the platform's.
+    if (budget ? budget.fault(err) === "cap" : isSubrequestLimit(err)) return { skipped: "subrequests" };
     const error = m.includes("403") ? "GUEST_LIST_RESTRICTED" : m;
     await markGuestSync(d, eventId, `error:${error.slice(0, 180)}`).catch(() => {});
     return { error };
@@ -1357,7 +1373,11 @@ async function handleSync(request, env, d) {
   // rather than the sweep's share. Bounded all the same: an admin refresh of a
   // 5,000-person roster would otherwise hit the same ceiling the cron did, and
   // the marker it leaves behind lets the next tick resume where this stopped.
-  const budget = fetchBudget(Math.max(0, CRON_SUBREQUEST_CAP - CRON_BUDGET_HEADROOM));
+  // The headroom is a RESERVE now rather than a subtraction, which is the same
+  // arithmetic said properly: an invocation that spends its last subrequest has
+  // none left to write down what it did, and both outages this ledger exists for
+  // ended on exactly that call.
+  const budget = createBudget(SUBREQUEST_CAP_FREE, { reserve: CRON_BUDGET_HEADROOM });
   for (const s of sets) {
     if (eventId) out.push({ label: s.label, event: eventId, ...(await syncGuests(d, eventId, s.user_key, s.cookies_json, budget)) });
     else out.push({ label: s.label, ...(await syncEvents(d, s.user_key, s.cookies_json)) });
@@ -1396,9 +1416,12 @@ const CRON_DESC_LIMIT = 10;
 // whole tail of the tick. The cap is a documented plan limit rather than
 // something the runtime reports: the error names no number, so re-measure this
 // against the account's plan before tuning it.
-const CRON_SUBREQUEST_CAP = 50;
+// The ceiling itself is lib/budget.ts's, imported rather than restated: it was
+// typed out here as `const CRON_SUBREQUEST_CAP = 50` while rn.ts carried its own
+// copy of the same platform fact, which is how a limit gets updated in one place
+// and stays wrong in the other.
 const CRON_BUDGET_HEADROOM = 6;
-export function guestSweepBudget(setCount, cap = CRON_SUBREQUEST_CAP) {
+export function guestSweepBudget(setCount, cap = SUBREQUEST_CAP_FREE) {
   const perSet = SERENDIPITY_SYNC_LIMITS.futurePages + SERENDIPITY_SYNC_LIMITS.pastPages;
   return Math.max(0, cap - (setCount * perSet) - CRON_DESC_LIMIT - CRON_BUDGET_HEADROOM);
 }
@@ -1496,7 +1519,7 @@ export async function cronSerendipity(env) {
   // sweep was silently overspending. An exhausted budget is normal on a tick
   // holding a large roster; it is a problem only when it never clears.
   console.log(JSON.stringify({
-    cron: "serendipity", ...out, fetches: budget.spent, budget_exhausted: budget.left <= 0,
+    cron: "serendipity", ...out, fetches: budget.spent, budget_exhausted: budget.exhausted, budget_overrun: budget.overrun,
   }));
 }
 

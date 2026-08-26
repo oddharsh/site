@@ -14,6 +14,7 @@
 //   X402_NETWORK      "base" (default) or "base-sepolia" for testing.
 //   X402_FACILITATOR  verify/settle service; defaults to x402.org's hosted
 //                     one (base-sepolia only — mainnet needs e.g. Coinbase's).
+import type { Env, SiteRequest } from "./lib/env.ts";
 import { jsonResponse } from "./lib/http.ts";
 
 const X402_VERSION = 1;
@@ -28,7 +29,7 @@ const USDC = {
 };
 const FACILITATOR_DEFAULT = "https://x402.org/facilitator";
 
-export async function handleLlmsFull(request, env, _ctx) {
+export async function handleLlmsFull(request: SiteRequest, env: Env, _ctx: ExecutionContext) {
   const url = new URL(request.url);
 
   // gate off = serve free, and say so. never a broken paywall.
@@ -77,7 +78,7 @@ export async function handleLlmsFull(request, env, _ctx) {
   });
 }
 
-function paymentRequirements(env, url) {
+function paymentRequirements(env: Env, url: URL) {
   const network = String(env.X402_NETWORK || "base").toLowerCase();
   const usdc = USDC[network] || USDC["base"];
   return {
@@ -116,14 +117,17 @@ async function facilitatorPost(url, body) {
 // llms.txt + posts.json + each post's canonical .txt. no-store — the paid
 // response carries a per-payment receipt header, so it must never be shared
 // from a cache.
-async function llmsFullResponse(request, env, extraHeaders) {
+async function llmsFullResponse(request: SiteRequest, env: Env, extraHeaders) {
   const base = new URL(request.url);
   const grab = async (path) => {
     const r = await env.ASSETS.fetch(new Request(new URL(path, base)));
     return r.ok ? await r.text() : null;
   };
   const [llms, postsRaw] = await Promise.all([grab("/llms.txt"), grab("/writing/posts.json")]);
-  let posts = [];
+  // Annotated because `let posts = []` infers `never[]`, which makes `p` below
+  // `never` and every field read on it an error. The shape is the registry's,
+  // src/content/writing/posts.json.
+  let posts: Array<{ slug: string; title: string; date: string }> = [];
   try { posts = JSON.parse(postsRaw || "[]"); } catch (_e) {}
   const texts = (await Promise.all(posts.map(async (p) => {
     const t = await grab("/writing/" + p.slug + ".txt");

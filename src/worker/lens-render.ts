@@ -56,7 +56,13 @@ import { isCallable } from "./lib/parse.ts";
 
 // Per-isolate memo: null = untested, false = REST rejected the selector. Not
 // persisted, because it is a fact about an API during a beta.
-let kitesurfParamLive = null;
+// TRI-STATE, and the annotation is what makes it one: `let x = null` infers the
+// type `null`, so both assignments below were errors and the isolate-level memo
+// this implements could not be written down. null is "not probed yet", false is
+// "the endpoint refused the selector", true is "a call carrying it came back
+// clean". Only false suppresses the retry, which is why `!== false` is the
+// guard rather than a truthiness check.
+let kitesurfParamLive: boolean | null = null;
 
 export function _resetKitesurfProbe() { kitesurfParamLive = null; }
 export function _kitesurfParamLive() { return kitesurfParamLive; }

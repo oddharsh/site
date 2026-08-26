@@ -17,6 +17,7 @@
 //   API with BILLING_READ_TOKEN (Billing : Read). It is the only figure on the
 //   page that was ever actually paid, and it is account-level by necessity;
 //   see queryBillableUsage() for why there is no per-bot cost column.
+import type { Env, SiteRequest } from "./lib/env.ts";
 import { cachedRender } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { esc, jsonResp } from "./lib/http.ts";
@@ -56,7 +57,7 @@ export function matchCrawler(ua) {
 }
 
 // one data point per crawler hit; called from the dispatcher. never throws.
-export function countCrawlerHit(env, request, response, pathname) {
+export function countCrawlerHit(env: Env, request, response, pathname) {
   try {
     if (!env.BOT_LEDGER || response.status >= 400) return;
     const hit = matchCrawler(request.headers.get("user-agent"));
@@ -70,7 +71,32 @@ export function countCrawlerHit(env, request, response, pathname) {
 }
 
 // ── reading the meter ───────────────────────────────────────────────
-async function queryLedger(env) {
+//
+// BOTH READS DECLARE THEIR RETURN UNION RATHER THAN LETTING IT BE INFERRED, and
+// that is a correctness fix rather than documentation. An inferred union built
+// from object literals of different shapes does NOT discriminate: TypeScript
+// normalizes it to ONE object type carrying every field as optional, so `.ok`
+// narrows nothing and each field reads as possibly-undefined. Measured on the
+// pinned tsc in a six-line probe:
+//
+//   function f(x: boolean) {
+//     if (x) return { ok: false, reason: "no" };
+//     return { ok: true, services: ["a"], totalUsd: 1 };
+//   }
+//   const r = f(true);
+//   if (r.ok) r.services.length;   // TS18048: 'r.services' is possibly 'undefined'
+//
+// The `if (cost.ok)` branch below reads four fields that only exist on the
+// success arm, and every one of them was unchecked until these types existed.
+// The reads happen to be safe, because the runtime shapes really are disjoint,
+// so nothing here was broken; what was broken is that the compiler could not
+// tell, which is the whole reason a `?` on a degrading secret means anything.
+type LedgerRow = { bot: string; owner: string; kind: string; hits: number };
+type LedgerRead =
+  | { ok: false; reason: string }
+  | { ok: true; rows: LedgerRow[] };
+
+async function queryLedger(env: Env): Promise<LedgerRead> {
   if (!env.ANALYTICS_READ_TOKEN || !env.CF_ACCOUNT_ID) return { ok: false, reason: "unconfigured" };
   const sql =
     `SELECT blob1 AS bot, blob2 AS owner, blob3 AS kind, SUM(_sample_interval * double1) AS hits ` +
@@ -123,7 +149,11 @@ async function queryLedger(env) {
 // Browser Run, and KV are absent from that list, so the cost line is a
 // floor rather than a total — `services` records which families actually
 // answered, so the note can name them instead of implying completeness.
-async function queryBillableUsage(env) {
+type BillableRead =
+  | { ok: false; reason: string }
+  | { ok: true; totalUsd: number; currency: string; services: string[]; from: string; to: string };
+
+async function queryBillableUsage(env: Env): Promise<BillableRead> {
   if (!env.BILLING_READ_TOKEN || !env.CF_ACCOUNT_ID) return { ok: false, reason: "unconfigured" };
   const end = new Date();
   const start = new Date(end.getTime() - WINDOW_DAYS * 86400000);
@@ -150,7 +180,7 @@ async function queryBillableUsage(env) {
     // period once per row that follows it.
     let totalUsd = 0;
     let currency = "USD";
-    const services = new Set();
+    const services = new Set<string>();
     for (const row of j.result) {
       const cost = Number(row && row.ContractedCost);
       if (!Number.isFinite(cost)) continue;
@@ -179,7 +209,7 @@ function priced(rows) {
 }
 
 // ── /ledger.json — the machine twin ─────────────────────────────────
-export async function handleLedgerJson(request, env) {
+export async function handleLedgerJson(request: SiteRequest, env: Env) {
   const [q, cost] = await Promise.all([queryLedger(env), queryBillableUsage(env)]);
   const costBlock = cost.ok
     ? {
@@ -199,13 +229,13 @@ export async function handleLedgerJson(request, env) {
 }
 
 // ── /ledger — the invoice ───────────────────────────────────────────
-export function handleLedger(request, env, ctx) {
+export function handleLedger(request: SiteRequest, env: Env, ctx: ExecutionContext) {
   return cachedRender(request, ctx, () => renderLedger(env), "/ledger", env);
 }
 
 const KIND_LABEL = { search: "search indexing", train: "model training", answers: "AI answers (live retrieval)" };
 
-async function renderLedger(env) {
+async function renderLedger(env: Env) {
   const [q, cost] = await Promise.all([queryLedger(env), queryBillableUsage(env)]);
   const { items, totalHits, totalUsd } = priced(q.ok ? q.rows : []);
 
