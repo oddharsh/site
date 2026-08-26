@@ -28,7 +28,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { brotliCompressSync, constants } from "node:zlib";
 
 const KEEP = 4000;
-const OUT = new URL("../lwe/quadgrams.txt", import.meta.url);
+const OUT = new URL("../../public/lwe/quadgrams.txt", import.meta.url);
 
 const src = process.argv[2];
 if (!src) {

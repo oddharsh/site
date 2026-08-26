@@ -130,6 +130,15 @@ bun run photos:check
 # loud which outputs it is vouching for.
 bun run derive:check
 
+# It also takes a CENSUS: every file under tools/ and pipelines/ that WRITES is
+# either named by some derivation's regenerate command or exempt with a reason in
+# config/derivations.json. The graph answers "is this artifact stale" and could
+# not answer the question underneath it, which is whether an artifact has a
+# declaration at all: that is the gap gotcha 41 fell through, since
+# histograms.json had no declaration and so there was nothing to be wrong about.
+# A new generator is covered by EXISTING rather than by anyone remembering.
+# It reads JS, TS and Python and NOT shell, and says so at derive-writers.ts.
+
 # lint, syntax plus TYPE-AWARE, in one 0.6s pass. the type half runs on tsgolint,
 # which tracks the exact TypeScript 7.0.2 pinned here; that pairing matters
 # because TS 7.0 ships no stable programmatic API, so typescript-eslint cannot
@@ -4934,6 +4943,19 @@ bun run deploy:direct
     since 2026-08-18. A warn block nobody can clear is how a warn block gets
     ignored, which is the same argument the perf-budget note makes about
     thresholds.
+
+    **A TWELFTH SITE, same afternoon, same class.**
+    `gen-quadgram-table.ts` wrote to `new URL("../lwe/quadgrams.txt")` relative to
+    `tools/photos/`, which resolves to `tools/lwe/`, a directory that has never
+    existed under any of this repository's three layouts. The artifact it is meant
+    to produce is `public/lwe/quadgrams.txt`. Found by the writer CENSUS rather
+    than by hashing anything: the census asks which files write, and answering
+    that for one file meant reading where it writes to.
+
+    Three instances in one afternoon, after nine had already been swept for, and
+    none of the three was found by looking for them. **A path expression is not
+    greppable and therefore does not get audited**, so the thing that finds them
+    is any check that has to resolve one for its own reasons.
 
     **A TENTH AND ELEVENTH SITE, found 2026-08-26, and the method that found them
     is the point.** Both were `www/`, which the 2026-08-18 split DELETED, sitting

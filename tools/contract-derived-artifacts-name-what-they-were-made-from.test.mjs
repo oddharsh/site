@@ -7,6 +7,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { digestOf, hashInputs, project, record, resolveInputs, verify } from "./lib/derive.ts";
+import { WRITER_FLOOR, declaredBy, findWriters } from "./lib/derive-writers.ts";
 
 /** @typedef {import("./lib/derive.ts").Derivation} Derivation */
 
@@ -212,5 +213,56 @@ test("derivations: a set-mode entry declares what it covers", () => {
   for (const d of graph.filter((x) => x.inputs?.set)) {
     assert.ok(d.covers, `${d.id}: set mode with no covers, so a half-written artifact reads fresh`);
     assert.ok(d.outputs.includes(d.covers), `${d.id}: covers ${d.covers}, which is not one of its outputs`);
+  }
+});
+
+// ── the census: no generator exists that nothing declares ────────────────────
+// The graph answers "is this artifact stale" and cannot answer the question
+// underneath it, which is whether an artifact has a declaration at all. That is
+// the gap gotcha 41 fell through.
+
+const writers = await findWriters(root, decl.writers.roots);
+const regenerates = graph.map((d) => d.regenerate ?? "");
+
+test("census: the writer scan has not stopped matching", () => {
+  assert.ok(writers.length >= WRITER_FLOOR, `only ${writers.length} writers found, under the floor of ${WRITER_FLOOR}`);
+});
+
+test("census: every file that writes is declared or exempt with a reason", () => {
+  const undeclared = writers.filter((f) => !declaredBy(f, regenerates) && !(f in decl.writers.exempt));
+  assert.deepEqual(undeclared, [], `undeclared generator(s): ${undeclared.join(", ")}`);
+});
+
+test("census: an exemption states why, at length", () => {
+  for (const [file, reason] of Object.entries(decl.writers.exempt)) {
+    assert.ok(reason.length > 40, `${file}: exemption reason is too thin to be one`);
+  }
+});
+
+// An exemption for a file that no longer writes is stale bookkeeping, and left
+// alone it makes the list look more considered than it is.
+test("census: no exemption outlives the file it exempts", () => {
+  const stale = Object.keys(decl.writers.exempt).filter((f) => !writers.includes(f));
+  assert.deepEqual(stale, [], `exempt but no longer writing: ${stale.join(", ")}`);
+});
+
+test("census: a file is never both declared and exempt", () => {
+  const both = writers.filter((f) => declaredBy(f, regenerates) && f in decl.writers.exempt);
+  assert.deepEqual(both, [], `both declared and exempt: ${both.join(", ")}`);
+});
+
+// A regenerate command that names no script cannot be linked to the census, and
+// a reader following it has to go guess which file to run. gen-og-cards.ts was
+// exactly this on the day the census was written: declared, and invisible to it.
+test("census: every regenerate command names a file that exists", async () => {
+  const fs = await import("node:fs/promises");
+  for (const d of graph) {
+    if (!d.regenerate) continue;
+    const named = d.regenerate.match(/\b[\w./-]+\.(ts|mjs|js|sh|py)\b/g) ?? [];
+    assert.ok(named.length, `${d.id}: regenerate names no script`);
+    for (const f of named) {
+      const info = await fs.stat(path.join(root, f)).catch(() => null);
+      assert.ok(info, `${d.id}: regenerate names ${f}, which does not exist`);
+    }
   }
 });

@@ -26,6 +26,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { type Derivation, type Lock, record, verify } from "./lib/derive.ts";
+import { WRITER_FLOOR, declaredBy, findWriters } from "./lib/derive-writers.ts";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DECL = path.join(ROOT, "config/derivations.json");
@@ -129,8 +130,34 @@ for (const d of graph) {
 
 for (const n of notes) console.log(n);
 
-const summary = `derive: ${fresh} fresh, ${stale} stale, ${notes.length} unverifiable`;
-if (stale) {
+// ── the census: is there a generator nobody declared? ────────────────────────
+// Skipped under --only, which is a single-derivation debugging mode rather than a
+// statement about the repository.
+let undeclared: string[] = [];
+if (!ONLY) {
+  const { roots, exempt } = declaration.writers;
+  const writers = await findWriters(ROOT, roots);
+  if (writers.length < WRITER_FLOOR) {
+    console.error(`derive: the writer scan found ${writers.length} files, under the floor of ${WRITER_FLOOR}. It has stopped matching.`);
+    process.exit(2);
+  }
+  const regenerates = all.map((d) => d.regenerate ?? "");
+  undeclared = writers.filter((f) => !declaredBy(f, regenerates) && !(f in exempt));
+
+  // An exemption for a file that no longer writes is stale bookkeeping, and left
+  // alone it makes the list look more considered than it is.
+  const stale = Object.keys(exempt).filter((f) => !writers.includes(f));
+  for (const f of stale) console.log(`  note  ${f} is exempt but no longer writes; drop the entry`);
+
+  for (const f of undeclared) {
+    console.log(`  UNDECLARED ${f}`);
+    console.log("      it writes, and no derivation names it. Declare what it produces, or exempt it with a reason in config/derivations.json.");
+  }
+  console.log(`  census: ${writers.length} writers, ${writers.length - undeclared.length} classified`);
+}
+
+const summary = `derive: ${fresh} fresh, ${stale} stale, ${notes.length} unverifiable, ${undeclared.length} undeclared`;
+if (stale || undeclared.length) {
   console.error(`\n${summary}`);
   console.error("a stale artifact describes bytes this site no longer serves. regenerate it, then --lock.");
   process.exit(1);

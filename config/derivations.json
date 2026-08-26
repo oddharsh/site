@@ -145,7 +145,7 @@
         "set": "^public/i/(.+)\\.[0-9a-f]{8}\\.jpg$"
       },
       "covers": "public/images/alt.json",
-      "regenerate": "bun run captions",
+      "regenerate": "python3 tools/photos/gen-alt-text.py",
       "recorded": {
         "inputs": "57c4119ad420a7e405a9fe8a515135c0dbc7b0a7ec22e4f6cc7031a80638fa23",
         "count": 165
@@ -189,7 +189,7 @@
           "config/site-manifest.json"
         ]
       },
-      "regenerate": "bun run gen:shell",
+      "regenerate": "bun tools/photos/gen-desktop-partial.ts",
       "recorded": {
         "inputs": "9f6f90c92a62882b50963087b6a94034e0f4d5bfb804c8b1833868605874b7c9",
         "count": 2
@@ -207,7 +207,7 @@
         "exif-sooc"
       ],
       "unverifiable": "The inputs are the SOOC originals, which live in R2 and in one local folder rather than in this repository, so no checkout can hash them. exif.json is a second step removed: it rolls up images/meta/, which has been a LOCAL pipeline artifact rather than a committed one since 2026-08-17. What is checkable about this family is that every published stem carries a record, which photos:check already asserts.",
-      "regenerate": "./tools/photos/extract-photo-metadata.sh \"$SOOC_DIR\""
+      "regenerate": "./tools/photos/extract-photo-metadata.sh \"$SOOC_DIR\" && node tools/photos/build-exif-index.ts"
     },
     {
       "id": "og/cards",
@@ -217,7 +217,70 @@
         "public/og"
       ],
       "unverifiable": "gen-og-cards.ts drives Chrome against PRODUCTION so the demos carry live data, which makes the input a deployed site at a moment in time rather than any bytes in the tree. Pinning these to their page sources would be a lie in the useful direction: the card can go stale from a deploy that changed no page file at all.",
-      "regenerate": "bun run og-cards"
+      "regenerate": "bun tools/photos/gen-og-cards.ts"
+    },
+    {
+      "id": "lwe/quadgrams",
+      "tier": "unverifiable",
+      "why": "public/lwe/quadgrams.txt is the 4000-row English quadgram rank table the /lwe/vigenere solver hill-climbs against, cut down from a 46,040-row model to keep a demo nobody has clicked yet from costing more than nav.js and luna.css together.",
+      "outputs": [
+        "public/lwe/quadgrams.txt"
+      ],
+      "unverifiable": "The input is an english_quadgrams.txt corpus passed as argv[2], which is not in this repository and is not small. What IS checkable is that the table still parses and still has 4000 rows, which the page contract owns. FOUND BROKEN while taking this census: the generator wrote to `../lwe/quadgrams.txt` relative to tools/photos/, which is tools/lwe/, a directory that has never existed. Gotcha 40 again, third instance in one afternoon.",
+      "regenerate": "node tools/photos/gen-quadgram-table.ts <english_quadgrams.txt>"
+    },
+    {
+      "id": "repo/card",
+      "tier": "unverifiable",
+      "why": "The GitHub social preview for this repository, 1280x640, two variants.",
+      "outputs": [
+        ".github"
+      ],
+      "unverifiable": "It drives Chrome against the LIVE homepage, and that page draws a random 12 of 158 photos per request, so the generator's own header says every regeneration ships a different grid. There is no digest to record: the same inputs deliberately do not produce the same bytes. Same class as og/cards.",
+      "regenerate": "bun tools/gen-repo-card.ts"
     }
-  ]
+  ],
+  "writers": {
+    "$comment": [
+      "Every file that WRITES is classified exactly once, so a generator nobody",
+      "declared cannot exist quietly. config/derivations.json answers 'is this",
+      "artifact stale' and could not answer the question underneath it: whether an",
+      "artifact has a declaration at all. That is the gap gotcha 41 fell through,",
+      "since histograms.json had no declaration and so there was nothing for a check",
+      "to be wrong about.",
+      "",
+      "A file here is either named by some derivation's `regenerate` command, or it",
+      "is exempt WITH A REASON. A new generator is covered by existing rather than by",
+      "somebody remembering, which is the property worth copying from tools.json.",
+      "",
+      "The scanner reads JS, TS and Python and NOT shell; the limit and its reasoning",
+      "are at the top of tools/lib/derive-writers.ts."
+    ],
+    "roots": [
+      "tools",
+      "pipelines"
+    ],
+    "exempt": {
+      "tools/build.ts": "writes only into .build/, the staged tree, which is rebuilt from source every deploy and never committed",
+      "tools/gen-md-twins.ts": "same, a build step: the twins are generated into .build/ precisely so no committed copy can fall behind",
+      "tools/generate-search-index.ts": "same, and for the same reason: it was committed until 2026-08-24 and froze twice, which is why it is build output now",
+      "tools/gen-mcp-cards.ts": "the cards ARE committed, and a contract test deep-equals each one against its server's live tools/list. That is stronger than a digest, and a second check over one artifact is a second thing to keep in agreement",
+      "tools/gen-manifest.ts": "writes the nav fences and the Worker's registry module, which build.ts invariant #8 verifies against config/site-manifest.json on every build",
+      "tools/roll-shell-dictionary.ts": "writes src/dict/, whose input is what production SERVED rather than anything in this tree. dcz:check owns the question those raise, which is coverage of the live shell",
+      "pipelines/garage/generate.mjs": "an AUTHORING tool: it writes a page into src/pages that a human then edits by hand, so there is no input it stays a pure function of",
+      "pipelines/lwe/generate.mjs": "an AUTHORING tool, like its garage twin: it writes an LWE conversation page into src/pages that a human then edits by hand, so there is no input it stays a pure function of",
+      "pipelines/lwe/build-corpus.mjs": "an AUTHORING tool too, writing the retrieval passages into lwe-ask/src/passages.ts, which is then edited in place rather than regenerated",
+      "tools/photos/inject-og-meta.ts": "same, a one-time edit that adds og:image tags to pages people then keep editing",
+      "tools/check-derivations.ts": "writes this file and its lock, which is the graph recording itself",
+      "tools/check-checkpoints.ts": "--sync writes src/worker/checkpoints.json, the deploy-log projection, which checkpoints:check already diffs against D1",
+      "tools/lib/tsc-scope.ts": "writes the typecheck ratchet baseline, a machine-owned record of owed errors",
+      "tools/perf-snapshot.ts": "writes a snapshot file named on the command line, never a fixed committed path",
+      "tools/gen-remote-config.ts": "writes .wrangler.remote.jsonc, which is gitignored",
+      "tools/bump-bun-pin.ts": "downloads a release zip to a temp path while checking the bun pin",
+      "tools/lib/bun-pin.ts": "the module behind bump-bun-pin.ts, and it writes the same temp release zip while checking whether the bun pin can move",
+      "tools/check-infra.ts": "writes one request line into a mkdtemp directory while probing the edge",
+      "tools/lens-seed.ts": "writes seed captures into a scratch directory",
+      "tools/photos/resample-probe.ts": "writes probe output while measuring the ingest geometry, and commits nothing"
+    }
+  }
 }
