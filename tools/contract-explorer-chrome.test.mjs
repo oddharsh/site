@@ -22,20 +22,20 @@ test("the pane states only what it was given", async () => {
   const { taskPane, addressBar } = await import("../src/worker/lib/explorer.ts");
   // A page with no tasks and no counted details gets the two rows that are true
   // of every object, and no Contains, Modified, or Status invented for it.
-  const bare = taskPane({ path: "/garage/wire", name: "On the wire" });
+  const bare = String(taskPane({ path: "/garage/wire", name: "On the wire" }));
   assert.match(bare, /<dt>Name<\/dt><dd>On the wire<\/dd>/);
   assert.match(bare, /<dt>Location<\/dt><dd>aadhar\.sh\/garage\/wire<\/dd>/);
   assert.doesNotMatch(bare, /Contains|Modified|Status/);
   // "Up to" is derived from the path, so a leaf offers its section and a section
   // offers the root.
   assert.match(bare, /href="\/garage">Up to Garage</);
-  assert.match(taskPane({ path: "/garage" }), /href="\/">Up to aadhar\.sh</);
+  assert.match(String(taskPane({ path: "/garage" })), /href="\/">Up to aadhar\.sh</);
   // The current object is not a link to itself.
-  const bar = addressBar({ path: "/garage/wire", name: "On the wire" });
+  const bar = String(addressBar({ path: "/garage/wire", name: "On the wire" }));
   assert.match(bar, /<span aria-current="page" class="axp-here">On the wire<\/span>|<span class="axp-here" aria-current="page">On the wire<\/span>/);
   assert.match(bar, /<a href="\/garage">Garage<\/a>/);
   // Untrusted text is escaped, not interpolated.
-  assert.match(taskPane({ path: "/garage/x", name: '<img src=x onerror=alert(1)>' }), /&lt;img src=x/);
+  assert.match(String(taskPane({ path: "/garage/x", name: '<img src=x onerror=alert(1)>' })), /&lt;img src=x/);
 });
 
 // A twin may only be advertised where the build wrote one. The committed list is

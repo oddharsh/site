@@ -2345,6 +2345,33 @@ that keeps it honest:
    them came from a stranger's server. Same reason `src/worker/terminal.ts` runs third-party
    page titles through `escHtml`.
 
+**`escHtml` is being replaced by a TYPE, and new Worker markup should use it.**
+[`lib/html.ts`](src/worker/lib/html.ts) exports an `html` tagged template that
+escapes what it interpolates and returns an `Html`; an `Html` interpolated into
+another `html` is passed through rather than escaped again, so fragments
+compose. A function that declares a parameter or return as `Html` therefore
+cannot be handed an unescaped string, and the checker says so at the call site
+— measured under this repo's `strict: false` config, where passing a `string`
+where `Html` is declared is a TS2345.
+
+It is a CLASS rather than a branded `string & {…}`, and that is forced: a brand
+is erased at runtime, so the template could not tell a trusted fragment from a
+caller's text and would double-escape every composition. `unsafeHtml` is the one
+unescaped door and is named to be greppable.
+
+`lib/explorer.ts` is migrated as the proof, and it earned its keep immediately:
+the mechanical pass left an `html\`…\` + \`…\`` where the second half was an
+UNTAGGED literal, and the return annotation caught it as a TS2322 rather than
+shipping an unescaped interpolation. Note the shape of that near-miss, because
+the types do NOT catch it everywhere: `Html + string` degrades to `string`, and
+a `string` interpolated later is silently escaped instead. Build one template,
+never concatenate two.
+
+**The next step is `lunaPage`'s boundary.** Typing its `body`, `head` and
+`scripts` as `Html` is what would make this structural for whole pages rather
+than one module, and it forces all 20 callers at once — deliberately a separate
+change. The 84 `escHtml` call sites stand until then.
+
 `foreignMcpTools` grew an `opts.schemas` flag, OFF by default: the three
 existing callers render a catalogue as prose and a schema is dead weight in a
 terminal frame. An over-cap schema is dropped WHOLE and flagged, never

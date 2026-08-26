@@ -148,8 +148,8 @@ export function lunaPage({
     details: explorerDetails,
   };
   const showChrome = explorer && Boolean(route);
-  const addressHtml = showChrome ? `\n  ${addressBar(chromeOptions)}` : "";
-  const paneHtml = showChrome ? `${taskPane(chromeOptions)}\n` : "";
+  const addressHtml = showChrome ? `\n  ${String(addressBar(chromeOptions))}` : "";
+  const paneHtml = showChrome ? `${String(taskPane(chromeOptions))}\n` : "";
 
   const html = `<!DOCTYPE html>
 <html lang="en">
