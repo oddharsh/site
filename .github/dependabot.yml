@@ -44,6 +44,14 @@ updates:
   # dependency PR, and `validate` failing at install is the expected first state
   # of one rather than a broken branch.
   #
+  # THAT HAND COMMIT IS `bun run deps:relock <pr> --push`. It rebases the branch
+  # first (two bumps in flight both edit the head of bun.lock, so whichever
+  # merges second conflicts), installs, moves the version claims in
+  # docs/DEPENDENCIES.md that a contract test holds against package.json, and
+  # runs the gates before it pushes. Re-verified 2026-08-26 against the live
+  # constant rather than trusting the paragraph above; when it reaches 2, both
+  # that script and this comment are deletable.
+  #
   # The root workspace owns the shared deploy toolchain (including Wrangler,
   # Oxc Minify, and Lightning CSS) and all workspace dependency resolution.
   #
