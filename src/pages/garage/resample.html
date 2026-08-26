@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#2D78BD">
+<link rel="preload" as="style" href="/luna.css">
+<title>aadhar.sh/garage/resample: Half the light</title>
+<meta name="description" content="A one pixel checkerboard reduces to sRGB 188 and every resizer says 128, including the canvas in your browser. The kernels are correct; the colour space is not. Plus the five other defects that survived measurement because the instrument agreed with them.">
+<link rel="canonical" href="https://aadhar.sh/garage/resample">
+<meta property="og:type" content="article">
+<meta property="og:title" content="aadhar.sh/garage/resample: Half the light">
+<meta property="og:description" content="A one pixel checkerboard reduces to sRGB 188 and every resizer says 128, including the canvas in your browser. The kernels are correct; the colour space is not. Plus the five other defects that survived measurement because the instrument agreed with them.">
+<meta property="og:url" content="https://aadhar.sh/garage/resample">
+<meta name="twitter:card" content="summary_large_image">
+<meta property="og:image" content="https://aadhar.sh/og/garage-resample.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The aadhar.sh/garage/resample interactive demo, screenshotted">
+<meta name="twitter:image" content="https://aadhar.sh/og/garage-resample.png">
+<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}html{background:linear-gradient(180deg,oklch(56% .13 250),oklch(73% .10 236) 50%,oklch(88% .05 232) 60%,oklch(60% .16 140))}
+body{background:transparent;font-family:var(--font-ui);font-size:10.5pt;line-height:1.5;color:#181818;padding:24px 12px 60px;min-height:100vh}
+.window{max-width:820px;margin:0 auto;background:#fff;border:2px solid #0831d9;border-right-color:#001ea0;border-bottom-color:#001ea0;border-radius:8px 8px 0 0;overflow:hidden;box-shadow:inset 1px 1px 0 #166aee,inset -1px -1px 0 #00138c,4px 4px 0 rgba(0,30,160,.35)}
+.title-bar{background:linear-gradient(180deg,oklch(70% .15 258),oklch(60% .20 261) 8%,oklch(51% .225 263) 18%,oklch(50% .225 263) 86%,oklch(58% .18 260));color:#fff;font-family:var(--font-caption);font-weight:bold;font-size:11pt;padding:4px 5px 4px 8px;display:flex;align-items:center;gap:6px;text-shadow:1px 1px #0f1089;user-select:none}
+.title-bar .title-text{flex:1;min-width:0;display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.title-bar .icon{width:14px;height:14px;flex:0 0 14px;background:#fff;border:1px solid #8f4d06;position:relative}.title-bar .icon:before{content:"✦";position:absolute;inset:0;display:grid;place-items:center;font-size:10px;color:#ef8f24;text-shadow:none}
+.controls{display:inline-flex;align-items:center;gap:2px}.controls span,.controls a{position:relative;box-sizing:border-box;width:21px;height:21px;display:inline-block;overflow:hidden;font-size:0;color:transparent;border:1px solid #6696eb;border-radius:3px;text-decoration:none;cursor:pointer;background:linear-gradient(180deg,#5f8cf7,#3a71f5 22%,#3e73f5 55%,#2a70f2 82%,#1045be)}.controls .close{border-color:#d8401c;background:linear-gradient(180deg,#e8795f,#e45f40 30%,#e45d3d 52%,#e2552a 80%,#ae3110)}.controls .min:before{content:"";position:absolute;left:5px;right:5px;bottom:5px;height:2px;background:#fff}.controls .max:before{content:"";position:absolute;left:5px;top:5px;width:11px;height:9px;border:1px solid #fff;border-top-width:2px}.controls .close:before,.controls .close:after{content:"";position:absolute;left:50%;top:50%;width:13px;height:2px;margin:-1px 0 0 -6.5px;background:#fff}.controls .close:before{transform:rotate(45deg)}.controls .close:after{transform:rotate(-45deg)}
+.content{padding:18px 20px 8px;background:#fffdf6;border-top:1px solid #8d9bb0}.content h1,.content h2,.content h3{font-family:var(--font-caption);color:#0831d9;line-height:1.25}.content h1{font-size:18pt;margin:0 0 7px}.content h2{font-size:13pt;margin:18px 0 5px}.content h3{font-size:11pt;margin:13px 0 4px}.content p{margin:0 0 12px}.content a{color:#153eab}.content code,.content pre{font-family:var(--font-mono)}
+.garage-intro{font-size:11pt;color:#444;max-width:70ch}.garage-meta{font-size:8.5pt;color:#69758a;border-top:1px solid #d8dfeb;margin-top:18px;padding-top:6px}.status{border-top:1px solid #d1d9e4;background:#f1f4f8;padding:4px 10px;display:flex;gap:8px;flex-wrap:wrap;font-size:8.5pt;color:#586579}.status span:after{content:"·";margin-left:8px;color:#9ca8b8}.status span:last-child:after{content:""}
+@media(max-width:620px){body{padding:8px 5px 42px}.content{padding:14px 12px 6px}.window{border-radius:5px 5px 0 0}}
+
+.hl-demo{border:1px solid #99a8bd;background:#f3f6fa;box-shadow:inset 1px 1px 0 #fff;padding:12px;margin:10px 0;display:flex;gap:18px;align-items:flex-start;flex-wrap:wrap}
+.hl-demo .cell{text-align:center;font-size:8.6pt}
+.hl-demo .sw{width:104px;height:104px;border:1px solid #7a8ba3;display:block;margin:0 0 5px}
+.hl-demo .n{font-family:var(--font-mono);font-size:11pt;font-weight:700}
+.hl-demo .lbl{color:#3a4a5e}
+.hl-code{border:1px solid #99a8bd;background:#f3f6fa;box-shadow:inset 1px 1px 0 #fff;padding:8px 10px;overflow-x:auto;font-size:8.4pt;margin:8px 0}
+.hl-table{border:1px solid #99a8bd;background:#f3f6fa;box-shadow:inset 1px 1px 0 #fff;margin:10px 0;padding:2px 0}
+.hl-table .row{display:grid;grid-template-columns:11em 10em 1fr;gap:10px;align-items:baseline;padding:4px 10px;font-size:8.6pt;border-bottom:1px solid #e4eaf3}
+.hl-table .row:last-child{border-bottom:0}
+.hl-table .row.head{font-weight:700;background:#e8eef7}
+@media(max-width:560px){.hl-table .row{grid-template-columns:1fr}}
+</style>
+<link rel="stylesheet" href="/luna.css">
+</head>
+<body>
+<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<div class="window">
+  <div class="title-bar" aria-hidden="true">
+    <span class="title-text"><span class="icon"></span>aadhar.sh/garage/resample</span>
+    <span class="controls"><span class="min"></span><span class="max"></span><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
+  </div>
+  <div class="content">
+<h1>Half the light</h1>
+<p class="garage-intro">A one pixel black and white checkerboard is exactly half black and half white, so any honest downscale has to average it. The right answer is sRGB 188, because the average is over light. Every resizer I measured returns about 128: <code>sips</code>, ffmpeg, the Rust <a href="https://github.com/image-rs/image">image</a> crate, <a href="https://github.com/cykooz/fast_image_resize">fast_image_resize</a>, <code>Bun.Image</code>, and the canvas in whatever browser is rendering this sentence. Their kernels agree with each other to seven decimal places. All of them average in the wrong space, which <a href="http://www.ericbrasseur.org/gamma.html">Eric Brasseur wrote up in 2007</a> and the defaults have outlived.</p>
+
+<h2>Your browser is doing it right now</h2>
+<p>This runs in your machine, on a checkerboard built a moment ago. The left square is what <code>drawImage</code> produces when it shrinks that checkerboard 16 times. The right square is the same reduction with the samples converted to light first.</p>
+<div id="hl-demo" class="hl-demo">enable JavaScript to run the measurement</div>
+<p>The two grey squares should be visibly different, and the numbers under them say by how much. Nothing about the left square is a bug in your browser: it is what almost every image pipeline shipped this decade does.</p>
+
+<h2>Why 128 is the wrong grey</h2>
+<p>sRGB encodes perceived brightness rather than light. The code 128 sits near the middle of what your eye does with the range, and it carries about 21% of the light of code 255. So averaging the codes of black and white gives a grey with a fifth of the light of the pair it replaced, and the picture darkens everywhere fine detail used to be.</p>
+<p>Textures are where this lands hardest, because texture is exactly where neighbouring pixels differ most. A photograph reduced this way loses contrast in foliage, fabric, hair and grain, and gains it nowhere.</p>
+
+<h2>The resampler, with every operational concern taken back out</h2>
+<p>Here is the whole idea at an integer reduction factor. It is the load-bearing version, and the shipping one is a few hundred lines around this shape.</p>
+<pre class="hl-code"><code>function reduce(src, w, factor) {
+  const out = [], n = factor * factor;
+  for (let y = 0; y &lt; w / factor; y++)
+    for (let x = 0; x &lt; w / factor; x++) {
+      let sum = 0;
+      for (let dy = 0; dy &lt; factor; dy++)
+        for (let dx = 0; dx &lt; factor; dx++)
+          sum += toLinear(src[(y * factor + dy) * w + x * factor + dx]);
+      out.push(toSrgb(sum / n));
+    }
+  return out;
+}</code></pre>
+<p>Convert to light, average, convert back. Everything the real implementation adds is a separate concern wearing this function's clothes, and each one earns its place for a reason worth naming.</p>
+<p><b>Arbitrary ratios need weights.</b> An integer factor lets every source sample count once. A 3.86 times reduction does not, so each output sample carries a list of taps and weights instead of a rectangle.</p>
+<p><b>The filter has to widen with the reduction.</b> On a downscale the filter must low pass at the <i>output</i> Nyquist, so its support in source pixels grows by the reduction factor. A kernel evaluated at fixed width is sampling rather than filtering, and it aliases. This is why naive Lanczos3 downscales shimmer.</p>
+<p><b>Weights are renormalised per output sample.</b> At the frame edge the support window is clipped, and the weights that survive have to sum to one again or the border darkens into a vignette nobody can explain.</p>
+<p><b>The two axes run separately.</b> A 2D filter of this family factors into two 1D passes, which turns work per output pixel from support squared into support: about 13 taps instead of 44 at the reduction this site uses.</p>
+<p><b>The forward transfer is a table.</b> It takes an 8 bit value, so it has exactly 256 answers and does not need a <code>powf</code> 119 million times. That one change cut the resample core from 42.9 ms to 22.9 ms with byte identical output.</p>
+
+<h2>Six wrong answers, and the control that caught each one</h2>
+<p>The gamma defect is the easy part of this story. The hard part is that it survived years of measurement, and so did five other things, because in each case the instrument could not see the defect it was pointed at.</p>
+<div id="hl-table" class="hl-table"></div>
+<p>The pattern that connects them: a measurement that compares a thing against itself always agrees. Scoring an encode against the reference it came from cannot see a bad reference. Resizing to the size you already are cannot test a kernel that short circuits equal dimensions. Reading a metric you invented cannot tell you the metric is insensitive.</p>
+<p>What worked every time was cheaper than it sounds. Build the control that would fail if the thing were broken, then break the thing on purpose and watch the control go red. The regression test for the rotation fix was written that way, and so was the probe column that finally caught <code>sips</code> leaving noise on a flat field.</p>
+
+<h2>What the correct version costs</h2>
+<p>Correct pixels compress worse, because the gamma incorrect average was quietly destroying high frequency energy that a correct one keeps. Regenerating this site's 660 thumbnail files moved them 15164 KB to 15392 KB, which is 1.5%.</p>
+<p>Against a ground truth downscale, delivered quality on real photographs moved from 57.2 to 84.8 as a mean over 10 frames. On the Instagram export the same change let three Leica frames beat their old versions by about 4 ssimulacra2 points while landing 43% smaller, because the search could stop reaching for quality it was spending on aliasing.</p>
+<p>Speed is a fair question and the answer is mixed. The scalar path here runs a 5952 by 3968 frame to 900 by 600 in about 70 ms single threaded, which beats <code>fast_image_resize</code>'s own gamma correct path at 60.3 ms only after the channel specialisation above, and stays roughly twice the cost of its gamma wrong SIMD default at 28.6 ms. That gap is the price of the transfer function rather than of the kernel.</p>
+
+<h2>Offered upstream</h2>
+<p>Two of these are somebody else's to fix. <a href="https://github.com/image-rs/image/issues/3101">image-rs/image#3101</a> proposes an opt in linear light resize, with measurements aimed at the specific objection that converting to a 16 bit linear space is too expensive to do transparently; their kernel is already correct, so the offer is the colour layer and the property tests rather than a replacement resampler. <a href="https://github.com/oven-sh/bun/issues/40510">oven-sh/bun#40510</a> reports the same defect in <code>Bun.Image</code> with a self contained repro, where the argument is different: a runtime whose image API shipped this year has no back compatible golden images anchoring it to the wrong default.</p>
+
+<h2>What would change my mind</h2>
+<p>The byte cost is real and it is the honest objection. If a wider corpus showed the 1.5% growing into double digits at some other reduction ratio or subject matter, the right answer would be to spend the difference on the quality knob instead and take a smaller correctness win. The measurement that would settle it is a matched bytes comparison across a few hundred frames from several cameras, and this site has 165 frames from two.</p>
+<p>The other open edge is the transfer curve itself. This pipeline assumes sRGB except where a file declares Gray Gamma 2.2, which covers its two cameras and would be wrong for anything shot in Display P3 or a log profile. Reading the curve from the ICC profile rather than from a filename pattern is the fix, and it is not written yet.</p>
+    <section id="luq" aria-label="understanding check"></section>
+    <p class="garage-meta">shipped · the understanding check is part of the page, not a gate</p>
+  </div>
+  <div class="status"><span>garage</span><span>shipped</span><span>2026-08-26</span></div>
+</div>
+
+<script>
+(function(){
+  // The checkerboard is BUILT here rather than shipped as an image, so the
+  // measurement is of the reader's own browser and cannot be a picture of
+  // someone else's result.
+  var el = document.getElementById("hl-demo");
+  if (el) {
+    var N = 256, F = 16, S = N / F;
+    var lin = function(c){ var s = c / 255; return s <= 0.04044993 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4); };
+    var enc = function(l){ var s = l <= 0.0031308 ? l * 12.92 : 1.055 * Math.pow(l, 1 / 2.4) - 0.055; return Math.round(s * 255); };
+    var a = document.createElement("canvas"); a.width = a.height = N;
+    var ax = a.getContext("2d", { willReadFrequently: true });
+    var im = ax.createImageData(N, N);
+    for (var y = 0; y < N; y++) for (var x = 0; x < N; x++) {
+      var v = ((x + y) & 1) ? 255 : 0, i = (y * N + x) * 4;
+      im.data[i] = im.data[i + 1] = im.data[i + 2] = v; im.data[i + 3] = 255;
+    }
+    ax.putImageData(im, 0, 0);
+    var b = document.createElement("canvas"); b.width = b.height = S;
+    var bx = b.getContext("2d", { willReadFrequently: true });
+    bx.imageSmoothingEnabled = true; bx.imageSmoothingQuality = "high";
+    bx.drawImage(a, 0, 0, S, S);
+    var bd = bx.getImageData(0, 0, S, S).data, cs = 0, cn = 0;
+    for (var p = 0; p < bd.length; p += 4) { cs += bd[p]; cn++; }
+    var canvasMean = cs / cn;
+    var ls = 0;
+    for (var oy = 0; oy < S; oy++) for (var ox = 0; ox < S; ox++) {
+      var sum = 0;
+      for (var dy = 0; dy < F; dy++) for (var dx = 0; dx < F; dx++)
+        sum += lin(im.data[(((oy * F + dy) * N) + (ox * F + dx)) * 4]);
+      ls += enc(sum / (F * F));
+    }
+    var linMean = ls / (S * S);
+    var cell = function(v, label) {
+      var g = Math.round(v);
+      return '<div class="cell"><span class="sw" style="background:rgb(' + g + ',' + g + ',' + g + ')"></span>' +
+             '<span class="n">' + v.toFixed(2) + '</span><br><span class="lbl">' + label + '</span></div>';
+    };
+    el.innerHTML = cell(canvasMean, "canvas drawImage") + cell(linMean, "averaged over light") +
+      '<div class="cell" style="text-align:left;max-width:16em"><span class="lbl">The correct answer is 187.5. ' +
+      'Your browser reports ' + canvasMean.toFixed(2) + ', which is the average of the codes rather than of the light.</span></div>';
+  }
+
+  // The six rows are the page's argument, so they live in one place and render
+  // rather than being restated in prose where the copies could drift.
+  var t = document.getElementById("hl-table");
+  if (!t) return;
+  var rows = [
+    ["the shipped resize", "score against its own reference", "a defective reference scores itself perfectly"],
+    ["the quality target", "the same ssimulacra2 number", "a clean reference is easier to match, so 70 bought a worse file"],
+    ["dropping a resize step", "mean linear luminance", "insensitive here; ssimulacra2 against ground truth said +27.5"],
+    ["jpegtran rotation", "the exit code", "off the block grid it degrades and still exits 0"],
+    ["a claim about image-rs", "resize to the current size", "both entry points short circuit, so the kernel never ran"],
+    ["a container contract test", "the first 12 files on disk", "readdir order differs by filesystem, so CI and the laptop sampled different files"]
+  ];
+  var html = '<div class="row head"><span>what looked fine</span><span>the instrument</span><span>what it could not see</span></div>';
+  for (var i = 0; i < rows.length; i++)
+    html += '<div class="row"><span>' + rows[i][0] + '</span><span>' + rows[i][1] + '</span><span>' + rows[i][2] + '</span></div>';
+  t.innerHTML = html;
+})();
+</script>
+<script type="application/json" id="luq-data">
+{
+  "skin": "garage",
+  "intro": "Before you close the hood, reconstruct the mechanism in four questions.",
+  "questions": [
+    {
+      "q": "A one pixel black and white checkerboard is reduced 16 times. Why is sRGB 188 the correct answer rather than 128?",
+      "options": [
+        {
+          "t": "Half the pixels are black and half are white, so the result carries half the light, and half the light encodes to about 188 in sRGB.",
+          "ok": true,
+          "why": "Right. sRGB encodes perceived brightness rather than light, so the midpoint of the codes and the midpoint of the light are different greys."
+        },
+        {
+          "t": "188 is the midpoint between 128 and 255, which is where a downscale lands.",
+          "why": "The number comes from converting half the light back to sRGB, not from a midpoint between two codes."
+        },
+        {
+          "t": "The filter adds sharpening, which raises the mean above 128.",
+          "why": "Sharpening changes contrast around edges and leaves the mean where it was. The mean moves here because the averaging happens in a different space."
+        }
+      ]
+    },
+    {
+      "q": "The page shows that this site's kernel and the image crate's kernel agree to within 6e-7 on identical linear input. What does that rule out?",
+      "options": [
+        {
+          "t": "That the visible quality difference came from the filter maths, since both compute the same weights and taps.",
+          "ok": true,
+          "why": "Right. Agreement in linear light localises the difference to the colour conversion at the 8 bit boundary."
+        },
+        {
+          "t": "That either library has a bug at all.",
+          "why": "It rules out a difference between their kernels. Both still average encoded values by default, which is the defect the page is about."
+        },
+        {
+          "t": "That the reduction ratio matters.",
+          "why": "Support widening with the ratio is a separate property, and both implementations do it. The comparison holds ratio fixed."
+        }
+      ]
+    },
+    {
+      "q": "After the reference frame was made gamma correct, the Instagram export's quality target of 70 started producing visibly worse files. Why?",
+      "options": [
+        {
+          "t": "The score compares the encode against its own reference, and a clean reference is easier for JPEG to match, so the same number was reached at a much lower quality setting.",
+          "ok": true,
+          "why": "Right. The threshold was calibrated against a noisy reference, so making the reference correct silently rescaled what the number bought."
+        },
+        {
+          "t": "Gamma correct references are inherently harder to encode, so quality dropped.",
+          "why": "They are harder in bytes, which is why the corpus grew 1.5%. The delivered file got worse because the search stopped earlier, not because the reference resisted encoding."
+        },
+        {
+          "t": "The encoder was changed at the same time.",
+          "why": "The encoder was unchanged and verified byte identical on colour inputs. Only the reference moved."
+        }
+      ]
+    },
+    {
+      "q": "What would falsify the page's claim that the linear light geometry is worth its byte cost?",
+      "options": [
+        {
+          "t": "A matched bytes comparison where the gamma incorrect version scores higher, meaning the extra bytes buy less than spending them on the quality setting would.",
+          "ok": true,
+          "why": "Right, and that comparison has been run once at a smaller scale and went the other way, which is why the page states the corpus size as the limit."
+        },
+        {
+          "t": "Finding another library that also averages encoded values.",
+          "why": "That is already true of every library measured here. Being common says nothing about being correct."
+        },
+        {
+          "t": "A photograph where the two versions look identical.",
+          "why": "Flat or low texture frames should look identical, since the defect lives where neighbouring pixels differ. That result is predicted rather than contradictory."
+        }
+      ]
+    }
+  ]
+}
+</script>
+<script src="/quiz.js" defer></script>
+<script src="/nav.js" defer></script>
+<!-- axp:shell --><nav id="axp-icons" aria-label="desktop shortcuts"><a class="axp-ico" title="writing, in flux" href="/writing" data-key="Notepad" style="left:9px;top:9px"><span class="ic note" aria-hidden="true"></span><span class="t">Notepad</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="GitHub (opens in a new tab)" href="https://github.com/oddharsh" data-key="GitHub" style="left:9px;top:95px"><span class="ic " style="background:linear-gradient(180deg,oklch(72% 0.05 255),oklch(60% 0.07 257))" aria-hidden="true">G</span><span class="t">GitHub</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Twitter (opens in a new tab)" href="https://x.com/oddhash" data-key="Twitter" style="left:9px;top:181px"><span class="ic " style="background:linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))" aria-hidden="true">@</span><span class="t">Twitter</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Instagram (opens in a new tab)" href="https://www.instagram.com/aadharsh.hif" data-key="Photos" style="left:9px;top:267px"><span class="ic " style="background:linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))" aria-hidden="true"><i class="cam" aria-hidden="true"></i></span><span class="t">Photos</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Curius (opens in a new tab)" href="https://curius.app/aadharsh-pannirselvam" data-key="Curius" style="left:9px;top:353px"><span class="ic " style="background:linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))" aria-hidden="true">C</span><span class="t">Curius</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Beli (opens in a new tab)" href="https://beliapp.com/users/aadharsh" data-key="Beli" style="left:9px;top:439px"><span class="ic " style="background:linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))" aria-hidden="true">B</span><span class="t">Beli</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Spotify (opens in a new tab)" href="https://open.spotify.com/user/aadharsh2010" data-key="Music" style="left:9px;top:525px"><span class="ic " style="background:linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))" aria-hidden="true">♪</span><span class="t">Music</span></a></nav><div id="axp-taskbar" role="navigation" aria-label="taskbar"><a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a><div id="axp-pins"><a class="axp-pin" title="prototypes + experiments" href="/garage" data-count="24"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-garage" alt=""></span><span class="lbl">garage</span></a><a class="axp-pin" title="chat-style explainers + live demos" href="/lwe" data-count="12"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lwe" alt=""></span><span class="lbl">lwe</span></a><a class="axp-pin" title="notes, in flux: an editable notepad" href="/writing" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-writing" alt=""></span><span class="lbl">writing</span></a><a class="axp-pin" title="what I've been reading, from Curius" href="/reading" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-reading" alt=""></span><span class="lbl">reading</span></a><a class="axp-pin" title="events worth going to" href="/serendipity" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-serendipity" alt=""></span><span class="lbl">serendipity</span></a><a class="axp-pin" title="the crypto-VC neighborhood" href="/around" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-around" alt=""></span><span class="lbl">around</span></a><a class="axp-pin" title="the other web: how machines read a URL" href="/lens" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lens" alt=""></span><span class="lbl">lens</span></a><a class="axp-pin" title="terminal utilities, drivable by keypress" href="/terminal" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-terminal" alt=""></span><span class="lbl">terminal</span></a><a class="axp-pin" title="a compression vision test — whose eye do you have?" href="/pixel-peeper" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-pixel-peeper" alt=""></span><span class="lbl">pixel peeper</span></a><a class="axp-pin" title="what I'm listening to right now" href="/rn" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-music" alt=""></span><span class="lbl">music</span></a><a class="axp-pin" title="book a coffee / bagel" href="/coffee" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-coffee" alt=""></span><span class="lbl">coffee</span></a></div><div id="axp-spacer"></div><div id="axp-tray"><button id="axp-sound" type="button" hidden></button><a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><img src="/icons.svg#tray-sysprop" alt=""></a><a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><img src="/icons.svg#tray-security" alt=""></a><a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><img src="/icons.svg#tray-updates" alt=""></a><a id="axp-webmcp" class="axp-trayico" hidden href="/whoareyou" data-kind="webmcp" title="Agent activity · what an agent has asked this page to do" aria-label="Agent activity"><img src="/icons.svg#tray-webmcp" alt=""></a><span id="axp-clock" aria-hidden="true"></span></div></div><script type="speculationrules">{"prerender":[{"where":{"and":[{"href_matches":"/*"},{"not":{"href_matches":"/whoareyou*"}},{"not":{"href_matches":"/run"}},{"not":{"href_matches":"/rn*"}},{"not":{"href_matches":"/images*"}},{"not":{"href_matches":"/index.md"}},{"not":{"href_matches":"/llms.txt"}}]},"eagerness":"moderate"}]}</script><!-- /axp:shell -->
+</body>
+</html>

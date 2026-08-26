@@ -247,6 +247,12 @@ export const AGENT_SURFACES = [
     "description": "A photo converter that owns the downscale Instagram would otherwise do carelessly, and an MCP mode a model can drive against local files."
   },
   {
+    "path": "/garage/resample",
+    "title": "Half the light",
+    "kind": "content",
+    "description": "A one pixel checkerboard reduces to sRGB 188 and every resizer says 128. The kernels agree; the colour space is where the quality went."
+  },
+  {
     "path": "/garage/compression",
     "title": "Compression teardown",
     "kind": "content",
@@ -407,6 +413,7 @@ export const WEBMENTION_PATHS = [
   "/garage/cloudflare",
   "/garage/encoding",
   "/garage/ig-prep",
+  "/garage/resample",
   "/garage/compression",
   "/garage/gpt56",
   "/garage/horizon",
