@@ -74,7 +74,7 @@ export async function handleInbox(request, env, ctx) {
     // (or their software) can find it from here too.
     headers: { link: `<${origin}/webmention>; rel="webmention"` },
     css: OE_CSS,
-    body: unsafeHtml`
+    body: unsafeHtml(`
     <h1>Inbox</h1>
     <p class="oe-sub">When someone links to a page here from their own site, their post arrives as
       <a href="https://www.w3.org/TR/webmention/" rel="noopener external" target="_blank">a webmention</a>
@@ -103,7 +103,7 @@ export async function handleInbox(request, env, ctx) {
     <p class="oe-foot">Endpoint: <code>${esc(origin)}/webmention</code> · POST <code>source</code> and <code>target</code>.
       Mentions are moderated; nothing appears here automatically. Sending a mention again after the link is
       removed retracts it.</p>
-`,
+`),
   });
 }
 

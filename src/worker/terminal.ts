@@ -1084,7 +1084,7 @@ function toolPage(frame, path) {
     cache: "no-store",
     css: `/*min*/\n.tool-out{font:12px/1.5 var(--font-mono);white-space:pre;overflow-x:auto;margin:0}`,
     headers: { "x-robots-tag": "noindex" },
-    body: unsafeHtml`<pre class="tool-out">${escHtml(frameText(frame))}</pre>`,
+    body: unsafeHtml(`<pre class="tool-out">${escHtml(frameText(frame))}</pre>`),
   });
 }
 

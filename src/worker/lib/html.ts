@@ -50,7 +50,7 @@
 // the wrong tool for those contexts; nothing here should build either.
 
 /** A string that is already HTML. The only way to make one without escaping is
- *  `unsafeHtml`, which is deliberately greppable. */
+ *  `unsafeHtml(`, which is deliberately greppable. */
 export class Html {
   readonly html: string;
   constructor(value: string) {
@@ -61,7 +61,7 @@ export class Html {
   }
 }
 
-/** What may be interpolated. Arrays flatten, so `${rows}` works on a list of
+/** What may be interpolated. Arrays flatten, so `)${rows}` works on a list of
  *  fragments without a `.join("")` that would stringify each one first. */
 export type Interpolable =
   | Html
@@ -105,7 +105,7 @@ export function html(strings: TemplateStringsArray, ...values: Interpolable[]): 
 /** Mark markup as already-safe, WITHOUT escaping it. Two call forms, one name.
  *
  *      unsafeHtml(someString)      a computed string the caller vouches for
- *      unsafeHtml`<p>${x}</p>`     a literal that predates `html`
+ *      unsafeHtml(`<p>${x}</p>`)     a literal that predates `html`
  *
  *  The TAG form exists for the migration and is the honest description of what
  *  the pre-`html` templates are: literals this repository wrote, whose
@@ -118,22 +118,33 @@ export function html(strings: TemplateStringsArray, ...values: Interpolable[]): 
  *  ONE NAME ON PURPOSE, so the ratchet in
  *  contract-html-escapes-by-construction counts one thing and cannot be routed
  *  around by adding a second door. */
-/** Which of the two call forms this is. Named for the question rather than
- *  written as a `typeof` at the branch, because the domain fact is "the runtime
- *  invoked this as a template tag" and a tag is always handed an array. */
-function calledAsTag(value: string | TemplateStringsArray): value is TemplateStringsArray {
-  return Array.isArray(value);
-}
-
-export function unsafeHtml(value: string): Html;
-export function unsafeHtml(strings: TemplateStringsArray, ...values: unknown[]): Html;
-export function unsafeHtml(value: string | TemplateStringsArray, ...values: unknown[]): Html {
-  if (!calledAsTag(value)) return new Html(value);
-  // Tagged-template form: rebuild exactly what a plain template literal would
-  // have produced, so retagging is byte-for-byte inert.
-  let out = value[0];
-  for (let i = 0; i < values.length; i++) out += String(values[i]) + value[i + 1];
-  return new Html(out);
+/** Mark markup as already-safe, WITHOUT escaping it.
+ *
+ *  Every use is a claim that the string is either a literal this repository
+ *  wrote or was built by `html`. It is the migration marker for the templates
+ *  that predate the tagged template, whose interpolations are escaped BY HAND
+ *  with escHtml/escAttr, and each one still owes a real migration to `html`.
+ *
+ *  IT IS A CALL, NOT A TAG, and that is measured rather than stylistic. A
+ *  `tag` + "`" form would have been a one-token edit per call site, which is
+ *  tempting for a 20-caller migration. It also more than DOUBLES the literal in
+ *  the bundle: a tagged template must preserve `strings.raw`, so as soon as the
+ *  content carries a backslash escape the bundler emits the cooked AND raw
+ *  arrays. Measured through esbuild, which is what wrangler bundles with, on one
+ *  120-line literal containing `\t` and `\n`:
+ *
+ *      plain literal            3907 B
+ *      tagged                   8383 B   (+115%)
+ *      wrapped in a call        3910 B   (+3 B)
+ *
+ *  It cost 1.42 KiB on `whoareyou.ts` alone before it was caught, on a PR whose
+ *  whole claim was that it changed no bytes. Wrapping is free and says the same
+ *  thing.
+ *
+ *  The count is the ledger: config/unsafe-html-baseline.json, checked by
+ *  contract-html-escapes-by-construction, may only go down. */
+export function unsafeHtml(value: string): Html {
+  return new Html(value);
 }
 
 /** The empty fragment. Exists so an `Html` parameter can default to nothing
