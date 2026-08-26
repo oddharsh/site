@@ -144,7 +144,16 @@ export type SpanSurface<N extends string> =
 export type SharedSpanAttr =
   | "http.request.method"
   | "http.response.status_code"
-  | "cron.schedule";
+  | "cron.schedule"
+  // The per-invocation subrequest ledger (lib/budget.ts). Shared for the same
+  // reason http.* is: an invocation's remaining subrequest allowance is a
+  // property of the INVOCATION, not of whichever surface happens to be spending
+  // it, and the surfaces that need it (rn, serendipity, lens, around) are
+  // exactly the ones that would otherwise each invent their own spelling.
+  | "budget.limit"
+  | "budget.spent"
+  | "budget.exhausted"
+  | "budget.overrun";
 
 /**
  * The attributes a span of name `N` may carry: anything under its own surface,
