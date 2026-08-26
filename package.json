@@ -38,6 +38,7 @@
     "tools:check": "bun tools/check-tools.ts",
     "ua:survey": "node tools/ua-survey.ts",
     "test": "bun test --preload ./tools/lib/no-network.ts tools/",
+    "deps:relock": "bun tools/relock-dependabot.ts",
     "comment:test-node": "The same suite under node, kept because a suite that passes on one runtime and fails on another is reporting a fact about the runtime. bun's spec-strict Response found a real defect this way: withSecurityHeaders rebuilds every response, which per Fetch LOCKS the body it was handed, and one test pushed the same case objects through twice. node's undici allows it and bun throws.",
     "test:node": "node --import ./tools/lib/no-network.ts --test tools/*.test.mjs",
     "lint": "oxlint --type-aware",

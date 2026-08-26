@@ -37,7 +37,7 @@
     "tools/lens-warm.ts": 5,
     "tools/lens-webmcp.ts": 2,
     "tools/lib/css-parse.ts": 2,
-    "tools/lib/dependency-docs.ts": 22,
+    "tools/lib/dependency-docs.ts": 19,
     "tools/lib/lens-chips.ts": 2,
     "tools/lib/link-integrity.ts": 1,
     "tools/lib/tsc-scope.ts": 4,
@@ -54,5 +54,5 @@
     "tools/ua-survey.ts": 17,
     "tools/verify-routes.ts": 27
   },
-  "total": 556
+  "total": 553
 }
