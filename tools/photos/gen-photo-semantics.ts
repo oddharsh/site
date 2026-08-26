@@ -50,10 +50,10 @@ import { fileURLToPath } from "node:url";
 // at public/scripts — the one script here that did not use "../..", and therefore
 // the one the move to tools/photos would have silently repointed at tools/.
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const META = path.join(ROOT, "www", "images", "metadata.json");
-const HASHES = path.join(ROOT, "www", "images", "hashes.json");
-const ALT = path.join(ROOT, "www", "images", "alt.json");
-const OUT = path.join(ROOT, "www", "images", "semantics.json");
+const META = path.join(ROOT, "public", "images", "metadata.json");
+const HASHES = path.join(ROOT, "public", "images", "hashes.json");
+const ALT = path.join(ROOT, "public", "images", "alt.json");
+const OUT = path.join(ROOT, "public", "images", "semantics.json");
 
 const WANT_VISION = process.argv.includes("--vision");
 const DRY_RUN = process.argv.includes("--dry-run");
@@ -149,7 +149,7 @@ function derivedTerms(record) {
 async function visionTerms(stem, hashes) {
   const entry = hashes[stem] || {};
   if (!entry.j) throw new Error(`${stem} missing from hashes.json (half-run pipeline?)`);
-  const file = path.join(ROOT, "www", "i", `${stem}.${entry.j}.jpg`);
+  const file = path.join(ROOT, "public", "i", `${stem}.${entry.j}.jpg`);
   const image = Array.from(fs.readFileSync(file));
   const body = JSON.stringify({ image, prompt: VISION_PROMPT, max_tokens: 128 });
   if (DRY_RUN) {

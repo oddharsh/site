@@ -36,6 +36,7 @@
     "labels:sync": "bun tools/sync-labels.ts",
     "pages:check": "bun tools/check-page-contracts.ts",
     "tools:check": "bun tools/check-tools.ts",
+    "derive:check": "bun tools/check-derivations.ts",
     "ua:survey": "node tools/ua-survey.ts",
     "test": "bun test --preload ./tools/lib/no-network.ts tools/",
     "deps:relock": "bun tools/relock-dependabot.ts",

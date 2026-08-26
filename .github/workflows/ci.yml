@@ -82,6 +82,16 @@ jobs:
       - name: Check photo asset invariants
         run: bun run photos:check
 
+      # Does every committed derived artifact still describe the bytes it was made
+      # from? photos:check above cannot answer that for the histograms, because it
+      # compares histograms.json against images/meta/, which the build derives FROM
+      # histograms.json: two sides of one source agree whatever the pixels say. This
+      # hashes the INPUTS instead, so a re-encode that skips the bake is caught here
+      # rather than nine days later (gotcha 41). No generator runs and nothing is
+      # written, so it is safe on a shared tree and needs no photo toolchain.
+      - name: Check derived artifacts against their inputs
+        run: bun run derive:check
+
       - name: Enforce homepage performance budget
         run: bun run perf-budget
 

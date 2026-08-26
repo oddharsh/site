@@ -1,0 +1,320 @@
+{
+  "$comment": [
+    "What each COMMITTED DERIVED artifact was made from, recorded as a content",
+    "hash of its inputs, so `bun run derive:check` can answer whether it still",
+    "describes the bytes it was derived from.",
+    "",
+    "It sits beside config/tools.json rather than inside it because the two answer",
+    "different questions about the same pipeline. tools.json asks whether the",
+    "avifenc on this machine is the one that baked the library. This asks whether",
+    "the library still matches what was baked FROM it. A tool can be perfectly",
+    "pinned while every artifact downstream of it is nine days stale, which is",
+    "exactly what happened (gotcha 41).",
+    "",
+    "WHY A GRAPH RATHER THAN ANOTHER TRIPWIRE. Four incidents here share one",
+    "shape: a content-addressed input moved and something derived from it did not.",
+    "#394 re-encoded 316 thumbnails and re-baked no histograms. An /a/ asset",
+    "changing hash orphans every a-dict snapshot naming the old one. The search",
+    "index froze twice. Each bought one bespoke check, and each bespoke check was",
+    "written to catch the incident that had already happened. This is the general",
+    "form, and adding an artifact to it is a data edit rather than a new script.",
+    "",
+    "THE CHECK NEVER RUNS A GENERATOR AND NEVER MUTATES THE TREE. That is a",
+    "requirement rather than a nicety: several agents work in this repo at once, so",
+    "a check that rebuilds artifacts in place would be writing over somebody else's",
+    "uncommitted work. It also has to answer from a clean checkout, and the three",
+    "families that actually go stale cannot be rebuilt from one (images/meta/ is a",
+    "local pipeline artifact, metadata.json reads the SOOC originals, the og cards",
+    "capture production). Hashing inputs works on all of them; rebuilding works on",
+    "none of them.",
+    "",
+    "TIERS. `pinned` means the inputs are committed bytes, so the recorded digest",
+    "is checkable here with no tool and no network. `unverifiable` means the inputs",
+    "are not in this repository, and the entry says which ones and why. An",
+    "unverifiable entry is reported as a note and never counted as a pass, on the",
+    "same reasoning as the two tools in tools.json that report no version: a check",
+    "whose summary line covers more than the check does is worse than one that says",
+    "what it skipped.",
+    "",
+    "`tools` names entries in config/tools.json whose `recorded` version is part of",
+    "an artifact's identity, so swapping encoders reads as staleness. A FIRST-PARTY",
+    "tool needs no such entry, because its source is committed and goes straight",
+    "into `inputs`: zenc's decode and histogram sources are inputs to the histogram",
+    "bake for the same reason the JPEGs are.",
+    "",
+    "WHAT IS DELIBERATELY NOT HERE, so the coverage claim stays honest:",
+    "  - the MCP server cards, which a contract test already deep-equals against",
+    "    each server's live tools/list. That is stronger than a digest, and a second",
+    "    check over the same artifact is a second thing to keep in agreement.",
+    "  - src/dict/a-dict and p-dict, whose input is what production served rather",
+    "    than anything in the tree. dcz:check owns the question they actually raise,",
+    "    which is coverage of the live shell rather than freshness against a source.",
+    "",
+    "SET MODE AND `covers`, and why the second one is the half that bites. An",
+    "artifact keyed by stem does not depend on the pixel bytes: re-encoding a photo",
+    "does not change what is in the picture, so pinning alt.json to bytes would",
+    "report it stale on every re-encode and teach somebody to re-record it without",
+    "looking. `set` projects each input path to a key and digests the key SET",
+    "instead, so those artifacts go stale for the one reason they can be: a photo",
+    "arrived or left.",
+    "",
+    "The digest alone is still not enough for an artifact built one key at a time. A",
+    "resumable generator that dies halfway leaves a file covering most of the set,",
+    "and --lock afterwards would call it fresh forever. `covers` reads the output and",
+    "asserts it HAS an entry per input, computed live rather than recorded, so it is",
+    "the one verdict --lock cannot clear. It found semantics.json at 158 of 165 on",
+    "the day it was written."
+  ],
+  "derivations": [
+    {
+      "id": "images/fingerprints",
+      "tier": "pinned",
+      "why": "images/fingerprints.json is {sha256: 'stem:tier'} over every published pixel tier, which is what /lens and the radar tool use to recognise one of this site's images when they meet it somewhere else. A re-encode mints new bytes AND a new hash8 filename, so a stale map recognises nothing and reports it as a photo this site never published.",
+      "outputs": [
+        "public/images/fingerprints.json"
+      ],
+      "inputs": {
+        "paths": [
+          "public/i"
+        ]
+      },
+      "regenerate": "node tools/photos/build-image-fingerprints.ts",
+      "recorded": {
+        "inputs": "c1f7f227f2f468f7e6e8c997b557fac0feb31b538697134f5137f952f3b17d88",
+        "count": 660
+      }
+    },
+    {
+      "id": "images/hashes",
+      "tier": "pinned",
+      "why": "images/hashes.json maps each stem to the hash8 of its four tiers, and buildImagesManifest bakes those into the manifest's absolute URLs. A stem missing from it is skipped rather than served broken, so the failure of a stale map is a photo that quietly stops appearing in the grid.",
+      "outputs": [
+        "public/images/hashes.json"
+      ],
+      "inputs": {
+        "paths": [
+          "public/i"
+        ]
+      },
+      "regenerate": "bash tools/photos/hash-thumbnails.sh",
+      "recorded": {
+        "inputs": "c1f7f227f2f468f7e6e8c997b557fac0feb31b538697134f5137f952f3b17d88",
+        "count": 660
+      }
+    },
+    {
+      "id": "images/histograms",
+      "tier": "pinned",
+      "why": "THE ONE THIS FILE WAS BUILT FOR. images/histograms.json holds four 64-bin channels per photo, baked by `zenc histogram` from the SHIPPED hashed JPG tier, and build.ts derives the served /images/meta/<stem>.json from it. #394 re-encoded 316 of those JPEGs on 2026-08-14 and re-baked nothing, so the bars described pixels nobody had been served for nine days. photos:check could not see it, because it compares histograms.json against images/meta/, which the build derives FROM histograms.json: two sides of one source agree no matter what the pixels say.",
+      "outputs": [
+        "public/images/histograms.json"
+      ],
+      "inputs": {
+        "paths": [
+          "public/i",
+          "tools/photos/zenc/src/histogram.rs",
+          "tools/photos/zenc/src/pixels.rs",
+          "tools/photos/zenc/Cargo.lock"
+        ],
+        "include": [
+          ".jpg",
+          ".rs",
+          ".lock"
+        ]
+      },
+      "regenerate": "bash tools/photos/extract-photo-metadata.sh \"$SOOC_DIR\" && node tools/photos/build-histogram-index.ts",
+      "recorded": {
+        "inputs": "f406145bffb355c3d7e773021addcedf0290c92f8461dbca127baaf47d4d67ba",
+        "count": 168
+      }
+    },
+    {
+      "id": "images/alt",
+      "tier": "pinned",
+      "why": "images/alt.json is the AI caption per photo, and it is ALT TEXT first: a photo with no entry ships to a screen reader with nothing to say. photos:check already fails on an uncaptioned stem, so what this adds is the other direction, a caption still carried for a photo that has been deleted.",
+      "outputs": [
+        "public/images/alt.json"
+      ],
+      "inputs": {
+        "paths": [
+          "public/i"
+        ],
+        "include": [
+          ".jpg"
+        ],
+        "set": "^public/i/(.+)\\.[0-9a-f]{8}\\.jpg$"
+      },
+      "covers": "public/images/alt.json",
+      "regenerate": "python3 tools/photos/gen-alt-text.py",
+      "recorded": {
+        "inputs": "57c4119ad420a7e405a9fe8a515135c0dbc7b0a7ec22e4f6cc7031a80638fa23",
+        "count": 165
+      }
+    },
+    {
+      "id": "images/semantics",
+      "tier": "pinned",
+      "why": "images/semantics.json widens what queryPhotos can match beyond the one-sentence caption and the EXIF. A photo missing from it is still findable, one tier down, which is why it went unnoticed: the failure is a search result that is quietly worse rather than an error. FOUND STALE BY THIS CHECK at 158 of 165, because gen-photo-semantics.ts had been reading a www/ that the 2026-08-18 split deleted, so nobody had been able to run it since.",
+      "outputs": [
+        "public/images/semantics.json"
+      ],
+      "inputs": {
+        "paths": [
+          "public/i"
+        ],
+        "include": [
+          ".jpg"
+        ],
+        "set": "^public/i/(.+)\\.[0-9a-f]{8}\\.jpg$"
+      },
+      "covers": "public/images/semantics.json",
+      "regenerate": "node tools/photos/gen-photo-semantics.ts   # add --vision for the model tier",
+      "recorded": {
+        "inputs": "57c4119ad420a7e405a9fe8a515135c0dbc7b0a7ec22e4f6cc7031a80638fa23",
+        "count": 165
+      }
+    },
+    {
+      "id": "shell/desktop",
+      "tier": "pinned",
+      "why": "gen-desktop-partial.ts projects shell-data.ts (pins, profiles, icons, tray art) and site-manifest.json (which routes are taskbar applications) into a checked-in Worker partial, the icon sprite, and the per-section favicons. All of it is committed, on both sides, so this is fully checkable. Staleness here is silent by construction: the old partial keeps rendering a taskbar perfectly, it just describes a site that has moved on.",
+      "outputs": [
+        "src/worker/lib/desktop.ts",
+        "public/icons.svg",
+        "public/section-icons"
+      ],
+      "inputs": {
+        "paths": [
+          "tools/photos/shell-data.ts",
+          "config/site-manifest.json"
+        ]
+      },
+      "regenerate": "bun tools/photos/gen-desktop-partial.ts",
+      "recorded": {
+        "inputs": "9f6f90c92a62882b50963087b6a94034e0f4d5bfb804c8b1833868605874b7c9",
+        "count": 2
+      }
+    },
+    {
+      "id": "images/metadata",
+      "tier": "unverifiable",
+      "why": "images/metadata.json is the EXIF record keyed by stem, plus the Fujifilm recipe card, read by exif-sooc from the camera originals.",
+      "outputs": [
+        "public/images/metadata.json",
+        "public/images/exif.json"
+      ],
+      "tools": [
+        "exif-sooc"
+      ],
+      "unverifiable": "The inputs are the SOOC originals, which live in R2 and in one local folder rather than in this repository, so no checkout can hash them. exif.json is a second step removed: it rolls up images/meta/, which has been a LOCAL pipeline artifact rather than a committed one since 2026-08-17. What is checkable about this family is that every published stem carries a record, which photos:check already asserts.",
+      "regenerate": "./tools/photos/extract-photo-metadata.sh \"$SOOC_DIR\" && node tools/photos/build-exif-index.ts"
+    },
+    {
+      "id": "og/cards",
+      "tier": "unverifiable",
+      "why": "One pre-baked 1200x630 card per garage and lwe page, each showing that page's live demo on the Bliss desktop, so a shared link unfurls as the interaction rather than a bare title.",
+      "outputs": [
+        "public/og"
+      ],
+      "unverifiable": "gen-og-cards.ts drives Chrome against PRODUCTION so the demos carry live data, which makes the input a deployed site at a moment in time rather than any bytes in the tree. Pinning these to their page sources would be a lie in the useful direction: the card can go stale from a deploy that changed no page file at all.",
+      "regenerate": "bun tools/photos/gen-og-cards.ts"
+    },
+    {
+      "id": "lwe/quadgrams",
+      "tier": "unverifiable",
+      "why": "public/lwe/quadgrams.txt is the 4000-row English quadgram rank table the /lwe/vigenere solver hill-climbs against, cut down from a 46,040-row model to keep a demo nobody has clicked yet from costing more than nav.js and luna.css together.",
+      "outputs": [
+        "public/lwe/quadgrams.txt"
+      ],
+      "unverifiable": "The input is an english_quadgrams.txt corpus passed as argv[2], which is not in this repository and is not small. What IS checkable is that the table still parses and still has 4000 rows, which the page contract owns. FOUND BROKEN while taking this census: the generator wrote to `../lwe/quadgrams.txt` relative to tools/photos/, which is tools/lwe/, a directory that has never existed. Gotcha 40 again, third instance in one afternoon.",
+      "regenerate": "node tools/photos/gen-quadgram-table.ts <english_quadgrams.txt>"
+    },
+    {
+      "id": "repo/card",
+      "tier": "unverifiable",
+      "why": "The GitHub social preview for this repository, 1280x640, two variants.",
+      "outputs": [
+        ".github"
+      ],
+      "unverifiable": "It drives Chrome against the LIVE homepage, and that page draws a random 12 of 158 photos per request, so the generator's own header says every regeneration ships a different grid. There is no digest to record: the same inputs deliberately do not produce the same bytes. Same class as og/cards.",
+      "regenerate": "bun tools/gen-repo-card.ts"
+    },
+    {
+      "id": "cars/reference",
+      "tier": "unverifiable",
+      "why": "The resto-mod reference photos the car-link tooltips draw, as the dual AVIF and JPG pair those tooltips expect. No EXIF, no R2, no hashed tier: they are illustrations rather than photographs of the library.",
+      "outputs": [
+        "public/cars"
+      ],
+      "unverifiable": "The input is a reference photo from somewhere on the web, credited by hand in public/cars/CREDITS.txt and not in this repository. There is nothing to hash. What is checkable is that each stem has both tiers and a credit line, which belongs with the page contract rather than here.",
+      "regenerate": "bash tools/photos/add-car-photo.sh <image> <stem>"
+    },
+    {
+      "id": "garage/encoding-samples",
+      "tier": "unverifiable",
+      "why": "The sample set the /garage/encoding study compares, one file per encoder and quality point, plus the byte counts the page quotes.",
+      "outputs": [
+        "public/garage/enc"
+      ],
+      "unverifiable": "The inputs are source images held outside this repository and SEVEN external encoders at whatever version the machine has. config/tools.json records those versions and is the right place to ask whether they moved; a digest here would restate that without adding anything, because the source images can never be hashed from a checkout.",
+      "regenerate": "bash tools/photos/gen-encoding-grids.sh && bash tools/photos/gen-encoding-samples.sh"
+    }
+  ],
+  "writers": {
+    "$comment": [
+      "Every file that WRITES is classified exactly once, so a generator nobody",
+      "declared cannot exist quietly. config/derivations.json answers 'is this",
+      "artifact stale' and could not answer the question underneath it: whether an",
+      "artifact has a declaration at all. That is the gap gotcha 41 fell through,",
+      "since histograms.json had no declaration and so there was nothing for a check",
+      "to be wrong about.",
+      "",
+      "A file here is either named by some derivation's `regenerate` command, or it",
+      "is exempt WITH A REASON. A new generator is covered by existing rather than by",
+      "somebody remembering, which is the property worth copying from tools.json.",
+      "",
+      "The scanner reads JS, TS and Python and NOT shell; the limit and its reasoning",
+      "TWO SCANNERS. JS, TS and Python get an exact scan, because a write is a named",
+      "call. Shell gets a deliberately wider one: does the script MENTION a committed",
+      "path at all. That over-approximates, which fails closed, so a script that only",
+      "reads still has to be classified and says so. A shell script handed its target",
+      "as an argument is invisible to it, and that is the same reason perf-snapshot.ts",
+      "is exempt: a tool that writes where it is told has no fixed artifact to pin.",
+      "The reasoning is at the top of tools/lib/derive-writers.ts."
+    ],
+    "roots": [
+      "tools",
+      "pipelines"
+    ],
+    "exempt": {
+      "tools/build.ts": "writes only into .build/, the staged tree, which is rebuilt from source every deploy and never committed",
+      "tools/gen-md-twins.ts": "same, a build step: the twins are generated into .build/ precisely so no committed copy can fall behind",
+      "tools/generate-search-index.ts": "same, and for the same reason: it was committed until 2026-08-24 and froze twice, which is why it is build output now",
+      "tools/gen-mcp-cards.ts": "the cards ARE committed, and a contract test deep-equals each one against its server's live tools/list. That is stronger than a digest, and a second check over one artifact is a second thing to keep in agreement",
+      "tools/gen-manifest.ts": "writes the nav fences and the Worker's registry module, which build.ts invariant #8 verifies against config/site-manifest.json on every build",
+      "tools/roll-shell-dictionary.ts": "writes src/dict/, whose input is what production SERVED rather than anything in this tree. dcz:check owns the question those raise, which is coverage of the live shell",
+      "pipelines/garage/generate.mjs": "an AUTHORING tool: it writes a page into src/pages that a human then edits by hand, so there is no input it stays a pure function of",
+      "pipelines/lwe/generate.mjs": "an AUTHORING tool, like its garage twin: it writes an LWE conversation page into src/pages that a human then edits by hand, so there is no input it stays a pure function of",
+      "pipelines/lwe/build-corpus.mjs": "an AUTHORING tool too, writing the retrieval passages into lwe-ask/src/passages.ts, which is then edited in place rather than regenerated",
+      "tools/photos/inject-og-meta.ts": "same, a one-time edit that adds og:image tags to pages people then keep editing",
+      "tools/check-derivations.ts": "writes this file and its lock, which is the graph recording itself",
+      "tools/check-checkpoints.ts": "--sync writes src/worker/checkpoints.json, the deploy-log projection, which checkpoints:check already diffs against D1",
+      "tools/lib/tsc-scope.ts": "writes the typecheck ratchet baseline, a machine-owned record of owed errors",
+      "tools/perf-snapshot.ts": "writes a snapshot file named on the command line, never a fixed committed path",
+      "tools/gen-remote-config.ts": "writes .wrangler.remote.jsonc, which is gitignored",
+      "tools/bump-bun-pin.ts": "downloads a release zip to a temp path while checking the bun pin",
+      "tools/lib/bun-pin.ts": "writes the root package.json, rewriting ONLY the `packageManager: bun@x.y.z` pin, which is a maintenance edit to a hand-authored file rather than a derived artifact. contract-the-bun-pin-is-declared-once.test.mjs holds that pin and its three readers together. THIS ENTRY FIRST SAID IT WROTE A TEMP RELEASE ZIP, which is bump-bun-pin.ts and not this: the census caught the file correctly and the reason beside it was wrong, which is the failure mode an exemption list has",
+      "tools/check-infra.ts": "writes one request line into a mkdtemp directory while probing the edge",
+      "tools/lens-seed.ts": "writes seed captures into a scratch directory",
+      "tools/photos/resample-probe.ts": "writes probe output while measuring the ingest geometry, and commits nothing",
+      "tools/relock-dependabot.ts": "rewrites the version pins inside docs/DEPENDENCIES.md to match the lockfile, in a throwaway worktree during a dependabot relock. The prose is edited in place rather than generated, and contract-docs-dependencies-md-states-version-pins-in-prose.test.mjs already holds those pins to the lockfile on every run, which is the check a digest here would duplicate",
+      "tools/photos/add-photos.sh": "the ORCHESTRATOR rather than a generator: it drives zenc, exif-sooc, hash-thumbnails.sh and gen-alt-text.py in order, and every artifact that comes out is declared by the script that actually produces it. It also re-bakes the whole library on every run, so it has never been the path that leaves derived data behind",
+      "tools/photos/bump-version.sh": "appends one entry to src/worker/checkpoints.json, the deploy-log projection, and writes nothing else. checkpoints:check already diffs that projection against D1 in both directions, which is a stronger claim than a digest of its inputs would be",
+      "tools/photos/reencode-thumbnails.sh": "produces public/i/, which is an INPUT to images/histograms, images/fingerprints and images/hashes rather than an output of anything. It is also the exact script whose standalone use caused gotcha 41: it told you to re-run hash-thumbnails.sh and stopped there. derive:check is what now catches a run that re-encodes and skips the re-bake, and the script points at it"
+    },
+    "shellRoots": [
+      "tools",
+      "pipelines"
+    ]
+  }
+}
