@@ -30,7 +30,7 @@ decides which one a given file belongs in:
 | `cal/`, `serendipity/` | the two application modules the site Worker bundles and serves at `/coffee` and `/serendipity`. They sit outside the served tree because they are programs with their own tests, not documents. |
 | `cf-garage/`, `lwe-ask/`, `lens-reader/` | the three SEPARATELY deployed auxiliary Workers, each with its own config and its own deploy. Nothing here reaches production through the site Worker. `lwe-ask` and `lens-reader` carry a `wrangler.toml`; **`cf-garage` carries a `cloudflare.config.ts`** and is the repository's one trial of wrangler's experimental TypeScript config, so every wrangler command in that directory needs `--x-new-config` (gotcha 41). |
 | **`tools/`** | **every developer tool.** The build (`build.mjs`), the test suite (`contract-*.test.mjs`, 49 files sharing `contract-shared.mjs`; it was ONE 8720-line file until 2026-08-20, and the split files stay at this depth rather than in `tools/test/` because 147 relative specifiers in them resolve from here), the route oracle, the perf budget, the `check-*` / `gen-*` family, plus `photos/` (the photo and asset pipeline) and `oxlint/` (the custom rules). Nothing in here ships. |
-| **`config/`** | `infra.json` (declared Cloudflare + GitHub state), `site-manifest.json` (the surface registry), `tsconfig.json`. |
+| **`config/`** | `infra.json` (declared Cloudflare + GitHub state), `site-manifest.json` (the surface registry), `derivations.json` (what each committed derived artifact was made FROM, plus its machine-owned `.lock.json`), `tools.json` (the external binaries), `tsconfig.json`. |
 | `pipelines/` | the page GENERATORS, one directory per section: `content/` (the shared page contract), `garage/`, `lwe/`. These author into `src/pages/`; they are not part of the build. |
 | **`docs/`** | the long-form runbooks: `MAINTENANCE.md`, `PHOTO-PIPELINE.md`, `DEPENDENCIES.md`, `UNDERSTANDING-REVIEW.md`. |
 | `design/` | the Luna design system. `tokens/` and `DESIGN.md` are canonical; the rest is history, and `design/README.md` draws that line. |
@@ -120,6 +120,15 @@ bun run photos "/path/to/photo.HIF" "/path/to/folder/"
 
 # validate the committed photo artifact graph without uploading anything
 bun run photos:check
+
+# does every committed DERIVED artifact still describe the bytes it was made from?
+# one declaration (config/derivations.json) replaces the per-incident tripwires:
+# a re-encode that skips the histogram bake, an input tree renamed away, an
+# encoder swapped underneath the library. It hashes INPUTS, so it runs no
+# generator, writes nothing, needs no photo toolchain, and answers from a fresh
+# worktree. `-- --lock` re-records AFTER you regenerate by hand, and says out
+# loud which outputs it is vouching for.
+bun run derive:check
 
 # lint, syntax plus TYPE-AWARE, in one 0.6s pass. the type half runs on tsgolint,
 # which tracks the exact TypeScript 7.0.2 pinned here; that pairing matters
@@ -5112,6 +5121,36 @@ bun run deploy:direct
     Generalise past histograms: **anything derived from a content-addressed file
     has to be regenerated when the hash moves, and a hash moving is exactly the
     event that leaves no diff in the derived file to notice.**
+
+    **THAT GENERALISATION IS NOW A CHECK, `bun run derive:check`.** The snapshot
+    in `hash-thumbnails.sh` above only fires when that script RUNS, so it cannot
+    answer "is this stale right now" from a clean checkout, which is the question
+    anyone arriving at a red build actually has. `config/derivations.json` records
+    what each committed derived artifact was made FROM as a content hash of its
+    inputs, and the check re-hashes those inputs. It runs no generator and writes
+    nothing, which is a requirement rather than a nicety: several sessions work in
+    this tree at once, and the three families that actually go stale cannot be
+    rebuilt from a checkout anyway (`images/meta/` is local, `metadata.json` reads
+    the SOOC originals, the og cards capture production). Hashing inputs works on
+    all of them for the cost of reading 15 MB.
+
+    The baseline was VERIFIED rather than assumed, which is the half worth
+    copying. `tools.json`'s `recorded` versions are honest about being an observed
+    starting point rather than a reconstruction, and a digest recorded the same
+    way would be a claim nobody had checked. So before recording anything, the
+    library was re-baked from the committed JPEG tiers with `zenc histogram` and
+    packed through the exported `packHistogram`: **165 of 165 stems byte-identical,
+    42,240 bins, zero drift.** Both failure shapes were then run as controls, since
+    a check that has never gone red is decoration: perturbing one JPEG names it
+    under `changed`, and renaming one to a new hash8 (the real re-encode shape)
+    names it under both `added` and `removed`.
+
+    Two things it deliberately does NOT cover, so the claim stays honest.
+    `alt.json` and `semantics.json` depend on the SET of stems rather than on the
+    pixel bytes, since re-encoding a photo does not change what is in it, and
+    pinning them to bytes would invent staleness on every re-encode. And the MCP
+    cards already have a contract test that deep-equals them against each server's
+    live `tools/list`, which is stronger than a digest.
 
 42. **A JSDoc TYPE in a `.ts` file is INERT, and this repo wrote them six times
     during one migration.** TypeScript ignores `@type`, `@param {T}`,

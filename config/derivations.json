@@ -1,0 +1,168 @@
+{
+  "$comment": [
+    "What each COMMITTED DERIVED artifact was made from, recorded as a content",
+    "hash of its inputs, so `bun run derive:check` can answer whether it still",
+    "describes the bytes it was derived from.",
+    "",
+    "It sits beside config/tools.json rather than inside it because the two answer",
+    "different questions about the same pipeline. tools.json asks whether the",
+    "avifenc on this machine is the one that baked the library. This asks whether",
+    "the library still matches what was baked FROM it. A tool can be perfectly",
+    "pinned while every artifact downstream of it is nine days stale, which is",
+    "exactly what happened (gotcha 41).",
+    "",
+    "WHY A GRAPH RATHER THAN ANOTHER TRIPWIRE. Four incidents here share one",
+    "shape: a content-addressed input moved and something derived from it did not.",
+    "#394 re-encoded 316 thumbnails and re-baked no histograms. An /a/ asset",
+    "changing hash orphans every a-dict snapshot naming the old one. The search",
+    "index froze twice. Each bought one bespoke check, and each bespoke check was",
+    "written to catch the incident that had already happened. This is the general",
+    "form, and adding an artifact to it is a data edit rather than a new script.",
+    "",
+    "THE CHECK NEVER RUNS A GENERATOR AND NEVER MUTATES THE TREE. That is a",
+    "requirement rather than a nicety: several agents work in this repo at once, so",
+    "a check that rebuilds artifacts in place would be writing over somebody else's",
+    "uncommitted work. It also has to answer from a clean checkout, and the three",
+    "families that actually go stale cannot be rebuilt from one (images/meta/ is a",
+    "local pipeline artifact, metadata.json reads the SOOC originals, the og cards",
+    "capture production). Hashing inputs works on all of them; rebuilding works on",
+    "none of them.",
+    "",
+    "TIERS. `pinned` means the inputs are committed bytes, so the recorded digest",
+    "is checkable here with no tool and no network. `unverifiable` means the inputs",
+    "are not in this repository, and the entry says which ones and why. An",
+    "unverifiable entry is reported as a note and never counted as a pass, on the",
+    "same reasoning as the two tools in tools.json that report no version: a check",
+    "whose summary line covers more than the check does is worse than one that says",
+    "what it skipped.",
+    "",
+    "`tools` names entries in config/tools.json whose `recorded` version is part of",
+    "an artifact's identity, so swapping encoders reads as staleness. A FIRST-PARTY",
+    "tool needs no such entry, because its source is committed and goes straight",
+    "into `inputs`: zenc's decode and histogram sources are inputs to the histogram",
+    "bake for the same reason the JPEGs are.",
+    "",
+    "WHAT IS DELIBERATELY NOT HERE, so the coverage claim stays honest:",
+    "  - the MCP server cards, which a contract test already deep-equals against",
+    "    each server's live tools/list. That is stronger than a digest, and a second",
+    "    check over the same artifact is a second thing to keep in agreement.",
+    "  - images/alt.json and images/semantics.json. Their real input is the SET of",
+    "    stems rather than the pixel bytes, since re-encoding a photo does not",
+    "    change what is in it, and pinning them to bytes would invent staleness on",
+    "    every re-encode. photos:check already fails on an uncaptioned stem, which",
+    "    is the failure those two actually have. Expressing a set-valued input is",
+    "    the obvious next thing this file needs.",
+    "  - src/dict/a-dict and p-dict, whose input is what production served rather",
+    "    than anything in the tree. dcz:check owns the question they actually raise,",
+    "    which is coverage of the live shell rather than freshness against a source."
+  ],
+  "derivations": [
+    {
+      "id": "images/fingerprints",
+      "tier": "pinned",
+      "why": "images/fingerprints.json is {sha256: 'stem:tier'} over every published pixel tier, which is what /lens and the radar tool use to recognise one of this site's images when they meet it somewhere else. A re-encode mints new bytes AND a new hash8 filename, so a stale map recognises nothing and reports it as a photo this site never published.",
+      "outputs": [
+        "public/images/fingerprints.json"
+      ],
+      "inputs": {
+        "paths": [
+          "public/i"
+        ]
+      },
+      "regenerate": "node tools/photos/build-image-fingerprints.ts",
+      "recorded": {
+        "inputs": "c1f7f227f2f468f7e6e8c997b557fac0feb31b538697134f5137f952f3b17d88",
+        "count": 660
+      }
+    },
+    {
+      "id": "images/hashes",
+      "tier": "pinned",
+      "why": "images/hashes.json maps each stem to the hash8 of its four tiers, and buildImagesManifest bakes those into the manifest's absolute URLs. A stem missing from it is skipped rather than served broken, so the failure of a stale map is a photo that quietly stops appearing in the grid.",
+      "outputs": [
+        "public/images/hashes.json"
+      ],
+      "inputs": {
+        "paths": [
+          "public/i"
+        ]
+      },
+      "regenerate": "bash tools/photos/hash-thumbnails.sh",
+      "recorded": {
+        "inputs": "c1f7f227f2f468f7e6e8c997b557fac0feb31b538697134f5137f952f3b17d88",
+        "count": 660
+      }
+    },
+    {
+      "id": "images/histograms",
+      "tier": "pinned",
+      "why": "THE ONE THIS FILE WAS BUILT FOR. images/histograms.json holds four 64-bin channels per photo, baked by `zenc histogram` from the SHIPPED hashed JPG tier, and build.ts derives the served /images/meta/<stem>.json from it. #394 re-encoded 316 of those JPEGs on 2026-08-14 and re-baked nothing, so the bars described pixels nobody had been served for nine days. photos:check could not see it, because it compares histograms.json against images/meta/, which the build derives FROM histograms.json: two sides of one source agree no matter what the pixels say.",
+      "outputs": [
+        "public/images/histograms.json"
+      ],
+      "inputs": {
+        "paths": [
+          "public/i",
+          "tools/photos/zenc/src/histogram.rs",
+          "tools/photos/zenc/src/pixels.rs",
+          "tools/photos/zenc/Cargo.lock"
+        ],
+        "include": [
+          ".jpg",
+          ".rs",
+          ".lock"
+        ]
+      },
+      "regenerate": "bash tools/photos/extract-photo-metadata.sh \"$SOOC_DIR\" && node tools/photos/build-histogram-index.ts",
+      "recorded": {
+        "inputs": "f406145bffb355c3d7e773021addcedf0290c92f8461dbca127baaf47d4d67ba",
+        "count": 168
+      }
+    },
+    {
+      "id": "shell/desktop",
+      "tier": "pinned",
+      "why": "gen-desktop-partial.ts projects shell-data.ts (pins, profiles, icons, tray art) and site-manifest.json (which routes are taskbar applications) into a checked-in Worker partial, the icon sprite, and the per-section favicons. All of it is committed, on both sides, so this is fully checkable. Staleness here is silent by construction: the old partial keeps rendering a taskbar perfectly, it just describes a site that has moved on.",
+      "outputs": [
+        "src/worker/lib/desktop.ts",
+        "public/icons.svg",
+        "public/section-icons"
+      ],
+      "inputs": {
+        "paths": [
+          "tools/photos/shell-data.ts",
+          "config/site-manifest.json"
+        ]
+      },
+      "regenerate": "bun run gen:shell",
+      "recorded": {
+        "inputs": "9f6f90c92a62882b50963087b6a94034e0f4d5bfb804c8b1833868605874b7c9",
+        "count": 2
+      }
+    },
+    {
+      "id": "images/metadata",
+      "tier": "unverifiable",
+      "why": "images/metadata.json is the EXIF record keyed by stem, plus the Fujifilm recipe card, read by exif-sooc from the camera originals.",
+      "outputs": [
+        "public/images/metadata.json",
+        "public/images/exif.json"
+      ],
+      "tools": [
+        "exif-sooc"
+      ],
+      "unverifiable": "The inputs are the SOOC originals, which live in R2 and in one local folder rather than in this repository, so no checkout can hash them. exif.json is a second step removed: it rolls up images/meta/, which has been a LOCAL pipeline artifact rather than a committed one since 2026-08-17. What is checkable about this family is that every published stem carries a record, which photos:check already asserts.",
+      "regenerate": "./tools/photos/extract-photo-metadata.sh \"$SOOC_DIR\""
+    },
+    {
+      "id": "og/cards",
+      "tier": "unverifiable",
+      "why": "One pre-baked 1200x630 card per garage and lwe page, each showing that page's live demo on the Bliss desktop, so a shared link unfurls as the interaction rather than a bare title.",
+      "outputs": [
+        "public/og"
+      ],
+      "unverifiable": "gen-og-cards.ts drives Chrome against PRODUCTION so the demos carry live data, which makes the input a deployed site at a moment in time rather than any bytes in the tree. Pinning these to their page sources would be a lie in the useful direction: the card can go stale from a deploy that changed no page file at all.",
+      "regenerate": "bun run og-cards"
+    }
+  ]
+}
