@@ -120,6 +120,8 @@ for (const d of graph) {
     list(v.changed, "changed");
     list(v.added, "added");
     list(v.removed, "removed");
+    list(v.uncovered, "NO ENTRY for");
+    list(v.orphaned, "entries for inputs that are gone");
     for (const t of v.tools) console.log(`      tool ${t.name}: recorded ${t.recorded}, now ${t.now}`);
     if (d.regenerate) console.log(`      regenerate: ${d.regenerate}`);
   }

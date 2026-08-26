@@ -64,6 +64,22 @@ export type InputSpec = {
   include?: string[];
   /** Drop any relative path containing one of these segments. */
   exclude?: string[];
+  /**
+   * SET MODE. A regex with one capture group, applied to each resolved path. The
+   * digest is taken over the sorted unique captures rather than over file bytes.
+   *
+   * This exists because some artifacts depend on WHICH inputs exist rather than
+   * on what is in them. images/semantics.json is keyed by stem, and re-encoding a
+   * photo does not change what is in the picture, so pinning it to pixel bytes
+   * would report it stale on every re-encode and train somebody to re-record it
+   * without looking. Pinned to the stem SET it goes stale for the one reason it
+   * can actually be stale: a photo arrived or left.
+   *
+   * Every resolved path must match. A projection that silently skips what it
+   * cannot parse is the shape of scanner that reports a pass over an empty set,
+   * which is what every floor in this repo exists to refuse.
+   */
+  set?: string;
 };
 
 export type Derivation = {
@@ -78,6 +94,17 @@ export type Derivation = {
   regenerate?: string;
   /** Required on the unverifiable tier: what is not in the repository, and why. */
   unverifiable?: string;
+  /**
+   * A JSON output whose TOP-LEVEL KEYS must cover every input key. Set mode only.
+   *
+   * The digest answers "did the input set move since this was made". That is the
+   * wrong question on its own for an artifact built one key at a time: a resumable
+   * generator that dies halfway leaves a file covering most of the set, and
+   * re-recording the digest afterwards would call it fresh forever. This asks the
+   * question the reader actually has, which is whether the artifact HAS an entry
+   * for every input, and it is what caught semantics.json sitting at 158 of 165.
+   */
+  covers?: string;
   recorded?: Recorded;
 };
 
@@ -145,6 +172,56 @@ export async function resolveInputs(root: string, spec: InputSpec): Promise<stri
   return found.sort();
 }
 
+/**
+ * What one derivation's digest is taken over, plus how those entries are named in
+ * the flat lock. Two modes behind one shape, so verify() and record() never
+ * branch on the mode and the lock stays a single flat map.
+ */
+export type Projection = {
+  entries: Record<string, string>;
+  /** How an entry appears in the lock. Namespaced in set mode so stems from two
+   *  derivations cannot collide, and so removals can be attributed. */
+  lockName: (name: string) => string;
+  /** Does a lock entry belong to this derivation? Used to name what was removed. */
+  owns: (lockName: string) => boolean;
+  count: number;
+};
+
+export async function project(root: string, d: Derivation): Promise<Projection> {
+  if (!d.inputs) throw new Error(`${d.id}: a pinned derivation must declare inputs`);
+  const spec = d.inputs;
+  const files = await resolveInputs(root, spec);
+
+  if (!spec.set) {
+    return {
+      entries: await hashInputs(root, files),
+      lockName: (name) => name,
+      owns: (name) => claims(spec, name),
+      count: files.length,
+    };
+  }
+
+  const re = new RegExp(spec.set);
+  const keys = new Set<string>();
+  for (const rel of files) {
+    const m = re.exec(rel);
+    if (!m || m[1] === undefined) {
+      throw new Error(`${d.id}: input ${rel} does not match the set pattern ${spec.set}`);
+    }
+    keys.add(m[1]);
+  }
+  // The digest is over the BARE keys, never over the namespaced lock names, so
+  // renaming a derivation does not move its digest.
+  const entries = Object.fromEntries([...keys].sort().map((k) => [k, "set"]));
+  const prefix = `${d.id}#`;
+  return {
+    entries,
+    lockName: (name) => prefix + name,
+    owns: (name) => name.startsWith(prefix),
+    count: keys.size,
+  };
+}
+
 /** sha256 of each resolved input, keyed by repo-relative path. */
 export async function hashInputs(root: string, files: string[]): Promise<Record<string, string>> {
   const out: Record<string, string> = {};
@@ -177,6 +254,8 @@ export type Verdict =
       changed: string[];
       added: string[];
       removed: string[];
+      uncovered: string[];
+      orphaned: string[];
       tools: { name: string; recorded: string; now: string }[];
     };
 
@@ -194,46 +273,69 @@ export async function verify(
   if (d.tier === "unverifiable") {
     return { id: d.id, state: "unverifiable", reason: d.unverifiable ?? "no reason declared" };
   }
-  if (!d.inputs) throw new Error(`${d.id}: a pinned derivation must declare inputs`);
+  const { entries, lockName, owns, count } = await project(root, d);
+  const digest = digestOf(entries);
+  const { uncovered, orphaned } = await coverage(root, d, entries);
 
-  const files = await resolveInputs(root, d.inputs);
-  const hashes = await hashInputs(root, files);
-  const digest = digestOf(hashes);
-
-  if (!d.recorded) return { id: d.id, state: "unrecorded", count: files.length, digest };
+  if (!d.recorded) return { id: d.id, state: "unrecorded", count, digest };
 
   const toolDrift = (d.tools ?? [])
     .map((name) => ({ name, recorded: d.recorded?.tools?.[name] ?? "", now: toolVersions[name] ?? "" }))
     .filter((t) => t.now && t.recorded && t.now !== t.recorded);
 
-  if (digest === d.recorded.inputs && !toolDrift.length) {
-    return { id: d.id, state: "fresh", count: files.length };
+  if (digest === d.recorded.inputs && !toolDrift.length && !uncovered.length) {
+    return { id: d.id, state: "fresh", count };
   }
 
   // The lock is what turns "something moved" into "these 316 files moved", which
   // is the difference between a check somebody acts on and one they re-run.
   const changed: string[] = [];
   const added: string[] = [];
-  for (const [rel, sum] of Object.entries(hashes)) {
-    if (!(rel in lock)) added.push(rel);
-    else if (lock[rel] !== sum) changed.push(rel);
+  for (const [name, value] of Object.entries(entries)) {
+    const key = lockName(name);
+    if (!(key in lock)) added.push(name);
+    else if (lock[key] !== value) changed.push(name);
   }
   // A DELETED input still moves the digest, so it is caught either way. Naming it
-  // takes the flat lock read backwards: anything this spec would have claimed,
-  // that the lock knows and disk no longer has, left.
-  const removed = Object.keys(lock).filter(
-    (rel) => !(rel in hashes) && claims(d.inputs as InputSpec, rel),
-  );
+  // takes the flat lock read backwards: anything this derivation owns, that the
+  // lock knows and the projection no longer produces, left.
+  const present = new Set(Object.keys(entries).map(lockName));
+  const removed = Object.keys(lock)
+    .filter((key) => owns(key) && !present.has(key))
+    .map((key) => key.replace(`${d.id}#`, ""));
 
   return {
     id: d.id,
     state: "stale",
-    count: files.length,
+    count,
     digest,
     changed: changed.sort(),
     added: added.sort(),
     removed: removed.sort(),
+    uncovered,
+    orphaned,
     tools: toolDrift,
+  };
+}
+
+/**
+ * Which input keys the covering artifact has no entry for, and which entries it
+ * carries for inputs that are gone. An orphan is reported rather than failed: it
+ * is dead weight rather than a missing answer, and the deletion that created it
+ * has already moved the digest.
+ */
+async function coverage(
+  root: string,
+  d: Derivation,
+  entries: Record<string, string>,
+): Promise<{ uncovered: string[]; orphaned: string[] }> {
+  if (!d.covers) return { uncovered: [], orphaned: [] };
+  const parsed = JSON.parse(await readFile(path.join(root, d.covers), "utf8"));
+  const have = new Set(Object.keys(parsed));
+  const want = Object.keys(entries);
+  return {
+    uncovered: want.filter((k) => !have.has(k)).sort(),
+    orphaned: [...have].filter((k) => !(k in entries)).sort(),
   };
 }
 
@@ -244,13 +346,13 @@ export async function record(
   toolVersions: Record<string, string> = {},
 ): Promise<{ recorded: Recorded; hashes: Record<string, string> } | null> {
   if (d.tier === "unverifiable" || !d.inputs) return null;
-  const files = await resolveInputs(root, d.inputs);
-  const hashes = await hashInputs(root, files);
-  const recorded: Recorded = { inputs: digestOf(hashes), count: files.length };
+  const { entries, lockName, count } = await project(root, d);
+  const recorded: Recorded = { inputs: digestOf(entries), count };
   if (d.tools?.length) {
     recorded.tools = Object.fromEntries(
       d.tools.map((name) => [name, toolVersions[name] ?? ""]).filter(([, v]) => v),
     );
   }
+  const hashes = Object.fromEntries(Object.entries(entries).map(([n, v]) => [lockName(n), v]));
   return { recorded, hashes };
 }

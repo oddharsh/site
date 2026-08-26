@@ -46,15 +46,24 @@
     "  - the MCP server cards, which a contract test already deep-equals against",
     "    each server's live tools/list. That is stronger than a digest, and a second",
     "    check over the same artifact is a second thing to keep in agreement.",
-    "  - images/alt.json and images/semantics.json. Their real input is the SET of",
-    "    stems rather than the pixel bytes, since re-encoding a photo does not",
-    "    change what is in it, and pinning them to bytes would invent staleness on",
-    "    every re-encode. photos:check already fails on an uncaptioned stem, which",
-    "    is the failure those two actually have. Expressing a set-valued input is",
-    "    the obvious next thing this file needs.",
     "  - src/dict/a-dict and p-dict, whose input is what production served rather",
     "    than anything in the tree. dcz:check owns the question they actually raise,",
-    "    which is coverage of the live shell rather than freshness against a source."
+    "    which is coverage of the live shell rather than freshness against a source.",
+    "",
+    "SET MODE AND `covers`, and why the second one is the half that bites. An",
+    "artifact keyed by stem does not depend on the pixel bytes: re-encoding a photo",
+    "does not change what is in the picture, so pinning alt.json to bytes would",
+    "report it stale on every re-encode and teach somebody to re-record it without",
+    "looking. `set` projects each input path to a key and digests the key SET",
+    "instead, so those artifacts go stale for the one reason they can be: a photo",
+    "arrived or left.",
+    "",
+    "The digest alone is still not enough for an artifact built one key at a time. A",
+    "resumable generator that dies halfway leaves a file covering most of the set,",
+    "and --lock afterwards would call it fresh forever. `covers` reads the output and",
+    "asserts it HAS an entry per input, computed live rather than recorded, so it is",
+    "the one verdict --lock cannot clear. It found semantics.json at 158 of 165 on",
+    "the day it was written."
   ],
   "derivations": [
     {
@@ -117,6 +126,52 @@
       "recorded": {
         "inputs": "f406145bffb355c3d7e773021addcedf0290c92f8461dbca127baaf47d4d67ba",
         "count": 168
+      }
+    },
+    {
+      "id": "images/alt",
+      "tier": "pinned",
+      "why": "images/alt.json is the AI caption per photo, and it is ALT TEXT first: a photo with no entry ships to a screen reader with nothing to say. photos:check already fails on an uncaptioned stem, so what this adds is the other direction, a caption still carried for a photo that has been deleted.",
+      "outputs": [
+        "public/images/alt.json"
+      ],
+      "inputs": {
+        "paths": [
+          "public/i"
+        ],
+        "include": [
+          ".jpg"
+        ],
+        "set": "^public/i/(.+)\\.[0-9a-f]{8}\\.jpg$"
+      },
+      "covers": "public/images/alt.json",
+      "regenerate": "bun run captions",
+      "recorded": {
+        "inputs": "57c4119ad420a7e405a9fe8a515135c0dbc7b0a7ec22e4f6cc7031a80638fa23",
+        "count": 165
+      }
+    },
+    {
+      "id": "images/semantics",
+      "tier": "pinned",
+      "why": "images/semantics.json widens what queryPhotos can match beyond the one-sentence caption and the EXIF. A photo missing from it is still findable, one tier down, which is why it went unnoticed: the failure is a search result that is quietly worse rather than an error. FOUND STALE BY THIS CHECK at 158 of 165, because gen-photo-semantics.ts had been reading a www/ that the 2026-08-18 split deleted, so nobody had been able to run it since.",
+      "outputs": [
+        "public/images/semantics.json"
+      ],
+      "inputs": {
+        "paths": [
+          "public/i"
+        ],
+        "include": [
+          ".jpg"
+        ],
+        "set": "^public/i/(.+)\\.[0-9a-f]{8}\\.jpg$"
+      },
+      "covers": "public/images/semantics.json",
+      "regenerate": "node tools/photos/gen-photo-semantics.ts   # add --vision for the model tier",
+      "recorded": {
+        "inputs": "57c4119ad420a7e405a9fe8a515135c0dbc7b0a7ec22e4f6cc7031a80638fa23",
+        "count": 165
       }
     },
     {

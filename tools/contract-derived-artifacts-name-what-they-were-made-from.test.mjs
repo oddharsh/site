@@ -6,7 +6,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { digestOf, hashInputs, record, resolveInputs, verify } from "./lib/derive.ts";
+import { digestOf, hashInputs, project, record, resolveInputs, verify } from "./lib/derive.ts";
+
+/** @typedef {import("./lib/derive.ts").Derivation} Derivation */
 
 const root = fileURLToPath(ROOT);
 const decl = JSON.parse(await readFile(new URL("config/derivations.json", ROOT), "utf8"));
@@ -127,4 +129,88 @@ test("derive: a declared input that has vanished is an error, never an empty set
     "a missing input tree did not throw",
   );
   await rm(dir, { recursive: true, force: true });
+});
+
+// ── set mode and coverage ────────────────────────────────────────────────────
+
+// The property set mode exists for. An artifact keyed by stem must NOT go stale
+// when a photo is re-encoded, or the check cries wolf on every encode and gets
+// re-recorded without anybody looking at it.
+test("derive: set mode ignores a re-encode and notices a new photo", async () => {
+  const spec = { paths: ["in"], include: [".jpg"], set: "^in/(.+)\\.[0-9a-f]{8}\\.jpg$" };
+  /** @type {Derivation} */
+  const d = { id: "t", tier: "pinned", why: "", outputs: [], inputs: spec };
+  const dir = await scratch({ "a.11111111.jpg": "px", "b.22222222.jpg": "px" });
+  const before = digestOf((await project(dir, d)).entries);
+
+  const fs = await import("node:fs/promises");
+  await fs.rename(path.join(dir, "in/a.11111111.jpg"), path.join(dir, "in/a.33333333.jpg"));
+  await fs.writeFile(path.join(dir, "in/a.33333333.jpg"), "different pixels");
+  assert.equal(digestOf((await project(dir, d)).entries), before, "a re-encode moved a set-mode digest");
+
+  await fs.writeFile(path.join(dir, "in/c.44444444.jpg"), "px");
+  assert.notEqual(digestOf((await project(dir, d)).entries), before, "a new stem did not move the digest");
+  await rm(dir, { recursive: true, force: true });
+});
+
+// A projection that silently skips what it cannot parse reports a pass over an
+// empty set, which is the failure every scanner floor in this repo refuses.
+test("derive: set mode refuses an input it cannot project", async () => {
+  const spec = { paths: ["in"], set: "^in/(.+)\\.[0-9a-f]{8}\\.jpg$" };
+  const dir = await scratch({ "a.11111111.jpg": "px", "README": "not a thumbnail" });
+  /** @type {Derivation} */
+  const d = { id: "t", tier: "pinned", why: "", outputs: [], inputs: spec };
+  await assert.rejects(
+    () => project(dir, d),
+    /does not match the set pattern/,
+    "an unparseable input was silently skipped",
+  );
+  await rm(dir, { recursive: true, force: true });
+});
+
+// The one verdict --lock cannot clear, which is the whole point of computing
+// coverage live. semantics.json sat at 158 of 165 and a recorded digest would
+// have called that fresh forever.
+test("derive: coverage is computed live, so --lock cannot clear a gap", async () => {
+  const spec = { paths: ["in"], include: [".jpg"], set: "^in/(.+)\\.[0-9a-f]{8}\\.jpg$" };
+  const dir = await scratch({ "a.11111111.jpg": "px", "b.22222222.jpg": "px" });
+  const fs = await import("node:fs/promises");
+  await fs.writeFile(path.join(dir, "out.json"), JSON.stringify({ a: "covered" }));
+  /** @type {Derivation} */
+  const d = { id: "t", tier: "pinned", why: "", outputs: ["out.json"], inputs: spec, covers: "out.json" };
+
+  const made = await record(dir, d);
+  assert.ok(made, "record() returned nothing");
+  const v = await verify(dir, { ...d, recorded: made.recorded }, made.hashes);
+  assert.equal(v.state, "stale", "a covering artifact missing an entry was reported fresh");
+  assert.deepEqual(v.uncovered, ["b"]);
+  await rm(dir, { recursive: true, force: true });
+});
+
+test("derive: coverage reports an entry left behind by a deleted input", async () => {
+  const spec = { paths: ["in"], include: [".jpg"], set: "^in/(.+)\\.[0-9a-f]{8}\\.jpg$" };
+  const dir = await scratch({ "a.11111111.jpg": "px" });
+  const fs = await import("node:fs/promises");
+  await fs.writeFile(path.join(dir, "out.json"), JSON.stringify({ a: "covered", gone: "orphan" }));
+  /** @type {Derivation} */
+  const d = { id: "t", tier: "pinned", why: "", outputs: ["out.json"], inputs: spec, covers: "out.json" };
+  const made = await record(dir, d);
+  assert.ok(made, "record() returned nothing");
+  // Nothing moved, so the digest is fresh; the orphan is reported rather than failed.
+  const v = await verify(dir, { ...d, recorded: made.recorded }, made.hashes);
+  assert.equal(v.state, "fresh", "an orphaned entry was treated as a failure");
+  const forced = await verify(dir, { ...d, recorded: { ...made.recorded, inputs: "forced-mismatch" } }, made.hashes);
+  if (forced.state !== "stale") throw new Error("forced digest mismatch did not read as stale");
+  assert.deepEqual(forced.orphaned, ["gone"]);
+  await rm(dir, { recursive: true, force: true });
+});
+
+// Every set-mode derivation in the real graph declares `covers`. Set mode without
+// it answers a strictly weaker question, and the two artifacts using it are both
+// built one key at a time by a resumable generator.
+test("derivations: a set-mode entry declares what it covers", () => {
+  for (const d of graph.filter((x) => x.inputs?.set)) {
+    assert.ok(d.covers, `${d.id}: set mode with no covers, so a half-written artifact reads fresh`);
+    assert.ok(d.outputs.includes(d.covers), `${d.id}: covers ${d.covers}, which is not one of its outputs`);
+  }
 });

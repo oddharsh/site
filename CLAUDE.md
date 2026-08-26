@@ -4935,6 +4935,29 @@ bun run deploy:direct
     ignored, which is the same argument the perf-budget note makes about
     thresholds.
 
+    **A TENTH AND ELEVENTH SITE, found 2026-08-26, and the method that found them
+    is the point.** Both were `www/`, which the 2026-08-18 split DELETED, sitting
+    in a path that resolves fine and names nothing:
+    `gen-photo-semantics.ts` joined `ROOT, "www", "images", ...` five times, and
+    `tools/lib/lens-chips.ts` read `www/_worker.js/lens.js`, taking `lens-seed`
+    and `lens-warm` down with it. The semantics one had been dead since the
+    split, which is why seven photos added after it carried no retrieval terms:
+    the failure is a search result that is quietly worse rather than an error.
+
+    Neither was found by reading scripts. `derive:check` asked whether
+    `semantics.json` covered every published stem, the answer was 158 of 165, and
+    the generator turned out to be unrunnable. **A derived artifact is a witness
+    for its generator**: checking the OUTPUT finds a broken producer that no sweep
+    of path expressions caught, twice, because `gen-photo-semantics.ts` had
+    already been audited once. Its own header brags about fixing this exact class
+    ("the one script here that did not use `../..`"), and the fix repaired `ROOT`
+    while leaving `www` in all five joins beneath it.
+
+    Worth noting the irony recorded live: the run that confirmed the breakage was
+    `node gen-photo-semantics.ts 2>&1 | tail -5`, which printed a stack trace and
+    reported `EXIT:0`, because `$?` after a pipeline is `tail`'s. This entry's own
+    lesson, in the act of proving this entry's other lesson.
+
     The check is cheap and belongs in any rename that moves a script: resolve
     every path expression and assert the target EXISTS, rather than grepping for
     the old name. A one-line version is to run each script's path assignments in

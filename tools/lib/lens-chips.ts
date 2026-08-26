@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
-const SHELL = join(ROOT, "www", "_worker.js", "lens.js");
+const SHELL = join(ROOT, "src", "worker", "lens.ts");
 
 // Below this, assume the markup moved rather than the chips.
 const FLOOR = 5;
