@@ -15,17 +15,34 @@ import {
 test("the JPEG parser agrees with the pipeline that made the files", async () => {
   const { parseJpeg, sniff, estimateQuality } = await import("../src/worker/encode.ts");
   const { readdirSync } = await import("node:fs");
-  const files = readdirSync("public/i").filter((f) => f.endsWith(".jpg")).slice(0, 12);
+  // SORTED before slicing, because readdir order is filesystem-arbitrary: the
+  // unsorted slice sampled different files on APFS and ext4, which is how this
+  // test failed in CI while passing locally. Sorted, the L-prefixed Monochrom
+  // stems land in the window and both layout arms below are exercised.
+  const files = readdirSync("public/i").filter((f) => f.endsWith(".jpg")).sort().slice(0, 12);
   assert.ok(files.length > 4, "expected committed thumbnails to test against");
 
+  // The corpus carries BOTH layouts since 2026-08-26: colour tiles at 4:2:0,
+  // and the three Leica M Monochrom tiles as true 1-component grayscale (zenc
+  // detects a gray or channel-equal input and drops the flat chroma planes —
+  // the AVIF tier had been YUV400 all along). The alphabetical first-12 sample
+  // includes the L-prefixed stems, so both arms are exercised; the counters
+  // assert that stays true rather than trusting the sort.
+  let gray = 0, colour = 0;
   for (const f of files) {
     const bytes = new Uint8Array(readFileSync(`public/i/${f}`));
     assert.equal(sniff(bytes), "jpeg", `${f} should sniff as jpeg`);
     const info = parseJpeg(bytes);
-    // add-photos.sh emits 600px squares through zenc at 4:2:0, progressive.
+    // add-photos.sh emits 600px squares through zenc, progressive.
     assert.equal(info.width, 600, `${f} width`);
     assert.equal(info.height, 600, `${f} height`);
-    assert.equal(info.subsampling, "4:2:0", `${f} is the delivery tier, so 4:2:0`);
+    if (info.components === 1) {
+      gray += 1;
+      assert.equal(info.subsampling, "grayscale", `${f} is 1-component, so grayscale`);
+    } else {
+      colour += 1;
+      assert.equal(info.subsampling, "4:2:0", `${f} is the colour delivery tier, so 4:2:0`);
+    }
     assert.equal(info.progressive, true, `${f} should be progressive — zenc searches scan scripts`);
     assert.ok(info.scans > 1, `${f} progressive means multiple scans, got ${info.scans}`);
 
@@ -36,6 +53,8 @@ test("the JPEG parser agrees with the pipeline that made the files", async () =>
     assert.equal(estimateQuality(luma.values).standard, false,
       `${f} should read as a CUSTOM table — zenjpeg does not use scaled Annex K`);
   }
+  assert.ok(gray >= 1, "the sample lost its grayscale tiles; the 1-component arm is unexercised");
+  assert.ok(colour >= 1, "the sample lost its colour tiles; the 4:2:0 arm is unexercised");
 });
 
 test("the AVIF parser reads bit depth and subsampling, and monochrome is real", async () => {
