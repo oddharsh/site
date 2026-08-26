@@ -5,9 +5,8 @@
 // decides whether it ever replaces anything. Two earlier attempts were adopted
 // in a branch before being measured and both were wrong; this one is measured
 // first on purpose.
-use crate::resample::{linear_to_srgb, resample, srgb_to_linear, Filter};
-use image::{DynamicImage, GrayImage, ImageBuffer, Luma, Rgb, RgbImage};
-use std::path::Path;
+use crate::pixels::{crop, load_linear, save_srgb, scale};
+use crate::resample::Filter;
 
 pub fn run(args: &[String]) -> i32 {
     let (mut input, mut out): (Option<&str>, Option<&str>) = (None, None);
@@ -48,14 +47,16 @@ pub fn run(args: &[String]) -> i32 {
         return err("usage: zenc square <in> --size <n> --out <out.png> [--filter box|lanczos3|mitchell]");
     };
 
-    let img = match image::open(Path::new(input)) {
-        Ok(i) => i,
-        Err(e) => return err(&format!("cannot read {input}: {e}")),
-    };
-    let (w, h) = (img.width(), img.height());
-    if w == 0 || h == 0 {
-        return err("source has a zero dimension");
-    }
+    // Shared with `resize` through pixels.rs since 2026-08-25. It used to call
+    // image::open and hand-roll the two colour-type arms, which was a second
+    // copy of the one decision that is easy to get wrong (attempt 1 promoted
+    // Luma8 to RGBA here and made a whole byte comparison meaningless). The
+    // shared loader also lifts image's default allocation ceiling, so this can
+    // now read a full-resolution TIFF; the old path answered "Memory limit
+    // exceeded" on one.
+    let src = match load_linear(input) { Ok(f) => f, Err(e) => return err(&e) };
+    let (w, h) = (src.w, src.h);
+
     // Short edge lands on `size`. sips reaches the same crop from the long edge,
     // which is one more piece of arithmetic to get wrong.
     let (nw, nh) = if w <= h {
@@ -65,38 +66,9 @@ pub fn run(args: &[String]) -> i32 {
     };
     let (cx, cy) = ((nw.saturating_sub(size)) / 2, (nh.saturating_sub(size)) / 2);
 
-    // COLOUR TYPE IS PRESERVED. A grayscale frame stays one channel end to end.
-    // Attempt 1 promoted Luma8 to RGBA here and the resulting byte comparison
-    // was meaningless, which took a while to notice.
-    let saved = match img {
-        DynamicImage::ImageLuma8(g) => {
-            let lin: Vec<f32> = g.pixels().map(|p| srgb_to_linear(p[0])).collect();
-            let rs = resample(&lin, w as usize, h as usize, 1, nw as usize, nh as usize, filter);
-            let full: GrayImage = ImageBuffer::from_fn(nw, nh, |x, y| {
-                Luma([linear_to_srgb(rs[y as usize * nw as usize + x as usize])])
-            });
-            image::imageops::crop_imm(&full, cx, cy, size, size).to_image().save(Path::new(out))
-        }
-        other => {
-            let rgb = other.to_rgb8();
-            let mut lin = Vec::with_capacity((w * h * 3) as usize);
-            for p in rgb.pixels() {
-                lin.push(srgb_to_linear(p[0]));
-                lin.push(srgb_to_linear(p[1]));
-                lin.push(srgb_to_linear(p[2]));
-            }
-            let rs = resample(&lin, w as usize, h as usize, 3, nw as usize, nh as usize, filter);
-            let full: RgbImage = ImageBuffer::from_fn(nw, nh, |x, y| {
-                let i = (y as usize * nw as usize + x as usize) * 3;
-                Rgb([linear_to_srgb(rs[i]), linear_to_srgb(rs[i + 1]), linear_to_srgb(rs[i + 2])])
-            });
-            image::imageops::crop_imm(&full, cx, cy, size, size).to_image().save(Path::new(out))
-        }
-    };
-    match saved {
-        Ok(()) => 0,
-        Err(e) => err(&format!("cannot write {out}: {e}")),
-    }
+    let scaled = scale(&src, nw, nh, filter);
+    let cropped = crop(&scaled, cx, cy, size.min(nw), size.min(nh));
+    match save_srgb(&cropped, out) { Ok(()) => 0, Err(e) => err(&e) }
 }
 
 fn err(msg: &str) -> i32 {
