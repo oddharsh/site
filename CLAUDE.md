@@ -3230,6 +3230,26 @@ bun run deploy:direct
     `-moz-appearance` becomes `appearance`, which Chromium implements, so a
     Firefox-only arm quietly applies everywhere. This site's is the quiet one.
 
+    **A FIX IS SUBMITTED, [parcel-bundler/lightningcss#1316](https://github.com/parcel-bundler/lightningcss/pull/1316),
+    2026-08-25.** The merge pass binds the unprefixed id OVER `property_id` and
+    then uses that binding for two more things, so a condition matching nothing
+    already seen is stored stripped, and the merge branch adds `VendorPrefix::None`
+    rather than the real prefix. A separate binding for the match key fixes both.
+    120/120 of their lib tests pass and the three added regression tests fail
+    without it.
+
+    That also explains the compound trigger this note reports as a bare
+    observation: a lone condition takes the `conditions.push(in_parens.clone())`
+    path and is never handed to the merge at all. The mechanism was one commit
+    away the whole time, which is worth remembering the next time an entry here
+    records a reproduction without going to look at the source.
+
+    **The `:-moz-focusring` arm above is therefore a workaround with an expiry.**
+    When a release carrying the fix lands, `@supports (-moz-appearance:none)`
+    becomes safe to use directly and the compound query can go back to naming the
+    thing it actually tests. Do NOT remove it before then: the failure is the
+    quiet direction, so nothing goes red when it returns.
+
 19. **A backtick inside a CSS comment inside a `/*min*/` literal ends the JS
     template literal.** The worker's static CSS lives in backtick literals that
     `build.mjs` step 8 minifies in place, and prose in a CSS comment is still
