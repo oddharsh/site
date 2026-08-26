@@ -280,7 +280,8 @@
       "tools/lib/bun-pin.ts": "the module behind bump-bun-pin.ts, and it writes the same temp release zip while checking whether the bun pin can move",
       "tools/check-infra.ts": "writes one request line into a mkdtemp directory while probing the edge",
       "tools/lens-seed.ts": "writes seed captures into a scratch directory",
-      "tools/photos/resample-probe.ts": "writes probe output while measuring the ingest geometry, and commits nothing"
+      "tools/photos/resample-probe.ts": "writes probe output while measuring the ingest geometry, and commits nothing",
+      "tools/relock-dependabot.ts": "rewrites the version pins inside docs/DEPENDENCIES.md to match the lockfile, in a throwaway worktree during a dependabot relock. The prose is edited in place rather than generated, and contract-docs-dependencies-md-states-version-pins-in-prose.test.mjs already holds those pins to the lockfile on every run, which is the check a digest here would duplicate"
     }
   }
 }
