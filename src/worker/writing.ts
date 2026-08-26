@@ -214,8 +214,8 @@ export async function renderWritingIndex(env) {
     // The folder view is the one place on this site that was already a complete
     // Explorer window bar the chrome: caption, listing, status bar. The counts
     // below are the ones its own status bar states, so the two cannot disagree.
-    addressBar({ path: "/writing", name: "My Writing" }) +
-    taskPane({
+    String(addressBar({ path: "/writing", name: "My Writing" })) +
+    String(taskPane({
         path: "/writing",
         name: "My Writing",
         // glyph is optional (taskPane defaults it to "≡"), so the literal is
@@ -224,7 +224,7 @@ export async function renderWritingIndex(env) {
         tasks: ([{ href: "/writing/posts.json", label: "Open the post registry", glyph: "{" }] as { href: string; label: string; glyph?: string }[])
           .concat(twinFor("/writing") ? [{ href: twinFor("/writing"), label: "Read this as Markdown" }] : []),
       details: [{ term: "Contains", value: posts.length + (posts.length === 1 ? " document" : " documents") }],
-    }) +
+    })) +
     "<div class=\"np-folder-body\"><p class=\"np-folder-intro\">Notes, in flux. Open one: it's a real text field you can edit, though it reverts to my canonical version on reload.</p>" +
       "<ul class=\"np-files\">" + (files || "<li><a><span class=\"np-file-name\">(nothing written yet)</span></a></li>") + "</ul></div>" +
     "<div class=\"np-status\"><span>" + posts.length + (posts.length === 1 ? " document" : " documents") + "</span>" +

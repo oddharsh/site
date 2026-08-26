@@ -14,7 +14,7 @@
     "src/worker/lib/assets.ts": 1,
     "src/worker/lib/chrome.ts": 1,
     "src/worker/lib/doors.ts": 6,
-    "src/worker/lib/explorer.ts": 13,
+    "src/worker/lib/explorer.ts": 10,
     "src/worker/lib/photo-grid.ts": 1,
     "src/worker/lib/preview.ts": 2,
     "src/worker/lib/robots.ts": 13,
@@ -36,5 +36,5 @@
     "src/worker/whoareyou.ts": 3,
     "src/worker/writing.ts": 4
   },
-  "total": 283
+  "total": 280
 }
