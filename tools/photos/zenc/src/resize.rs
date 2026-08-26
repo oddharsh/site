@@ -9,13 +9,14 @@
 // unchanged rather than being enlarged. That is what export-for-instagram.sh
 // wanted from `sips --resampleWidth` and had to spell as an if/else around two
 // different sips calls; here it is the one meaning of the flag.
-use crate::pixels::{load_linear, parse_filter, parse_transfer, save, scale, Transfer};
+use crate::pixels::{load_linear, orient, parse_filter, parse_transfer, save, scale, Transfer};
 
 pub fn run(args: &[String]) -> i32 {
     let (mut input, mut out, mut width, mut height): (Option<&str>, Option<&str>, Option<u32>, Option<u32>) =
         (None, None, None, None);
     let mut filter_arg: Option<&str> = Some("box");
     let mut transfer = Transfer::Srgb;
+    let mut exif: u8 = 1;
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
@@ -32,6 +33,16 @@ pub fn run(args: &[String]) -> i32 {
                     Err(e) => return err(&e),
                 }
             }
+            // EXIF orientation, applied by sample re-indexing before the cap is
+            // interpreted — so --width caps the DISPLAYED width, matching what
+            // the caller sees, and CLAUDE.md gotcha 3's account of this flag.
+            "--orient" => {
+                i += 1;
+                match args.get(i).and_then(|s| s.parse::<u8>().ok()) {
+                    Some(n) if (1..=8).contains(&n) => exif = n,
+                    _ => return err("--orient takes an EXIF orientation, 1-8"),
+                }
+            }
             other if input.is_none() => input = Some(other),
             other => return err(&format!("unexpected argument {other:?}")),
         }
@@ -46,6 +57,7 @@ pub fn run(args: &[String]) -> i32 {
     let filter = match parse_filter(filter_arg) { Ok(f) => f, Err(e) => return err(&e) };
 
     let src = match load_linear(input, transfer) { Ok(f) => f, Err(e) => return err(&e) };
+    let src = orient(&src, exif);
 
     // Which axis is capped decides the other. Integer-rounded to nearest rather
     // than truncated, so a 3:2 frame does not lose a row to flooring.
