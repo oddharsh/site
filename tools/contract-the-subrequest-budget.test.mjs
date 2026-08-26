@@ -17,6 +17,16 @@ const REAL_CAP_ERROR = "Too many subrequests by single Worker";
 
 const budget = async () => await import("../src/worker/lib/budget.ts");
 
+// A span that records what was set on it. Deliberately the SAME shape
+// lib/trace.ts's INERT stand-in has, so these assertions run against the real
+// `recordBudget` rather than against a second accessor written to be tested —
+// which is what the first version of this file did, and it left the production
+// path with no coverage at all.
+const fakeSpan = () => {
+  const set = new Map();
+  return { set, setAttribute: (k, v) => set.set(k, v), end() {}, isTraced: false };
+};
+
 test("the cap error is recognised, and ordinary failures are not", async () => {
   const { isSubrequestLimit } = await budget();
 
@@ -75,7 +85,7 @@ test("fault() separates the ceiling from the work, which is the whole file", asy
 });
 
 test("a ceiling hit while the ledger shows headroom is reported as an overrun", async () => {
-  const { createBudget } = await budget();
+  const { createBudget, recordBudget } = await budget();
 
   // The reconciliation, and the only thing in this module that finds a bug
   // nobody already knew about. A Worker cannot read its own subrequest count,
@@ -87,7 +97,9 @@ test("a ceiling hit while the ledger shows headroom is reported as an overrun", 
   assert.equal(leaky.overrun, false);
   assert.equal(leaky.fault(new Error(REAL_CAP_ERROR)), "cap");
   assert.equal(leaky.overrun, true, "the platform disagreed with our count, and that is findable");
-  assert.equal(leaky.attributes()["budget.overrun"], true);
+  const leakySpan = fakeSpan();
+  recordBudget(leakySpan, leaky);
+  assert.equal(leakySpan.set.get("budget.overrun"), true);
 
   // Against a ledger that HAD spent its allowance, the same error is simply the
   // ceiling arriving on schedule and says nothing about our accounting.
@@ -95,25 +107,30 @@ test("a ceiling hit while the ledger shows headroom is reported as an overrun", 
   honest.afford(4);
   assert.equal(honest.fault(new Error(REAL_CAP_ERROR)), "cap");
   assert.equal(honest.overrun, false, "an expected ceiling is not an accounting bug");
+  const honestSpan = fakeSpan();
+  recordBudget(honestSpan, honest);
   assert.equal(
-    honest.attributes()["budget.overrun"], undefined,
+    honestSpan.set.has("budget.overrun"), false,
     "a false overrun is omitted rather than emitted on every span",
   );
 });
 
-test("attributes skip undefined rather than fabricating a value", async () => {
-  const { createBudget } = await budget();
+test("recordBudget stamps a span and omits what it has nothing to say about", async () => {
+  const { createBudget, recordBudget } = await budget();
   const b = createBudget(20, { reserve: 4 });
   b.afford(5);
 
-  const attrs = b.attributes();
-  assert.equal(attrs["budget.limit"], 16);
-  assert.equal(attrs["budget.spent"], 5);
-  assert.equal(attrs["budget.exhausted"], false);
+  const s = fakeSpan();
+  recordBudget(s, b);
+  assert.equal(s.set.get("budget.limit"), 16);
+  assert.equal(s.set.get("budget.spent"), 5);
+  assert.equal(s.set.get("budget.exhausted"), false);
   // The photo pipeline's discipline, which lib/trace.ts's apply() also follows:
   // a span that says nothing about a dimension is honest, one that says 0 or
-  // "unknown" is a lie you later read as data.
-  assert.ok(!("budget.overrun" in attrs) || attrs["budget.overrun"] === undefined);
+  // "unknown" is a lie you later read as data. `exhausted` IS said, because
+  // false is a real answer to "did this run out"; `overrun` is not, because it
+  // is only ever news.
+  assert.equal(s.set.has("budget.overrun"), false);
 });
 
 test("mapWithBudget stops at the ledger and calls the rest skipped, not failed", async () => {

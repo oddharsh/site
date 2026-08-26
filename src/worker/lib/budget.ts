@@ -35,7 +35,7 @@
 // unmetered `fetch()` elsewhere in the invocation is invisible to it. That is
 // not a flaw to fix later; it is the reason `overrun` exists.
 
-import type { Span, SpanAttrValue } from "./span-vocabulary.ts";
+import type { Span } from "./span-vocabulary.ts";
 
 /**
  * Subrequests allowed per invocation on Workers Free. This account is on Free,
@@ -133,8 +133,6 @@ export interface Budget {
    * without which `failed++` counts the ceiling once per remaining item.
    */
   fault(error: unknown): Fault;
-  /** Span attributes for this ledger. Shaped for the shared `budget.*` keys. */
-  attributes(): Record<string, SpanAttrValue>;
 }
 
 /**
@@ -176,17 +174,6 @@ export function createBudget(
       // which is a fact worth surfacing rather than swallowing.
       if (spent < limit) overrun = true;
       return "cap";
-    },
-    attributes() {
-      return {
-        "budget.limit": limit,
-        "budget.spent": spent,
-        "budget.exhausted": spent >= limit,
-        // Reported only when TRUE. An attribute that is false on every span
-        // teaches nobody anything and costs a field on every trace; one that
-        // appears only when the count disagrees with the platform is a signal.
-        "budget.overrun": overrun ? true : undefined,
-      };
     },
   };
   return ledger;
