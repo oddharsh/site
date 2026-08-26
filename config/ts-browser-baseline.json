@@ -9,7 +9,7 @@
     "src/client/lens-browser.js": 2,
     "src/client/lens-nlweb.js": 3,
     "src/client/lens-tools.js": 4,
-    "src/client/lens.js": 33,
+    "src/client/lens.js": 36,
     "src/client/nav-run.js": 10,
     "src/client/nav-tray.js": 15,
     "src/client/nav.js": 19,
@@ -17,5 +17,5 @@
     "src/client/quiz.js": 10,
     "src/client/tooltip.js": 3
   },
-  "total": 165
+  "total": 168
 }

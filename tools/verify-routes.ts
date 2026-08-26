@@ -277,6 +277,15 @@ const ROUTES = [
   // hostname and the row would assert nothing. A blocked host is refused before
   // any fetch, which is the property worth pinning here.
   { path: "/lens/nlweb?url=http://localhost", status: 400, ct: "application/json", marker: "no-fetch list" },
+  // The Markdown lens against THIS origin, which self-dispatches in-process like
+  // the row above. It asserts the REPLAY ran rather than any particular verdict:
+  // a local Worker serves no Markdown twins (they are build output the dev farm
+  // does not derive), so pinning `reach` here would pin a dev-only artifact and
+  // go red the day the farm learned to build them.
+  { path: "/lens/markdown?url=https://aadhar.sh/bot", status: 200, ct: "application/json", marker: "claude-code" },
+  // The SSRF guard on this route specifically, same reasoning as the nlweb row:
+  // a blocked host is refused before any of the ten fetches leave.
+  { path: "/lens/markdown?url=http://localhost", status: 400, ct: "application/json", marker: "no-fetch list" },
   // 200 text/plain when the x402 gate is unconfigured; 402 json once X402_PAY_TO is set
   { path: "/llms-full.txt", status: [200, 402], ct: ["text/plain", "application/json"] },
   { path: "/ledger", status: 200, ct: "text/html", marker: "Crawl Ledger" },

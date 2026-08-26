@@ -631,6 +631,7 @@ const SHELLS = [
   ["lens-wire.js",   "/lens-wire.src.js",   "LensWire"],
   ["lens-tools.js",  "/lens-tools.src.js",  "LensTools"],
   ["lens-nlweb.js",  "/lens-nlweb.src.js",  "LensNlweb"],
+  ["lens-markdown.js", "/lens-markdown.src.js", "LensMarkdown"],
   ["quiz.js",    "/quiz.src.js",    "luq-data"],       // the understanding-check widget
   ["tooltip.js", "/tooltip.src.js", "function start"],
   ["infotip.js", "/infotip.src.js", "axp-infotip"],   // the shell's own tooltips
@@ -1650,7 +1651,9 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
       [/(["'`])\/lens-tools\.js\?v=1\1/g, `$1${to}$1`] ] },
     { file: "/lens-nlweb.js",   base: "lens-nlweb",   mk: (to) => [
       [/(["'`])\/lens-nlweb\.js\?v=1\1/g, `$1${to}$1`] ] },
-    // The full Lens application depends on all five feature modules above. It
+    { file: "/lens-markdown.js", base: "lens-markdown", mk: (to) => [
+      [/(["'`])\/lens-markdown\.js\?v=1\1/g, `$1${to}$1`] ] },
+    // The full Lens application depends on all six feature modules above. It
     // must be hashed after they rewrite it, and before lens-boot.js is hashed by
     // ASSETS below, so every URL names the final bytes of its complete subtree.
     { file: "/lens.js",         base: "lens",         mk: (to) => [
@@ -1707,6 +1710,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     if (!lens.includes(hashedFor["lens-wire"])) throw new Error("lens.js was not repointed to hashed lens-wire.js");
     if (!lens.includes(hashedFor["lens-tools"])) throw new Error("lens.js was not repointed to hashed lens-tools.js");
     if (!lens.includes(hashedFor["lens-nlweb"])) throw new Error("lens.js was not repointed to hashed lens-nlweb.js");
+    if (!lens.includes(hashedFor["lens-markdown"])) throw new Error("lens.js was not repointed to hashed lens-markdown.js");
     const lensBoot = await readFile(`${OUT}/public/lens-boot.js`, "utf8");
     if (!lensBoot.includes(hashedFor.lens)) throw new Error("lens-boot.js was not repointed to hashed lens.js");
     // the SERVED tooltip bytes, not the staged source: this is the copy the browser gets,

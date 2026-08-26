@@ -95,11 +95,15 @@ test("every browser lens reads its cache before it checks a budget", async () =>
   const files = {
     "lens.js": await readFile(new URL("../src/worker/lens.ts", import.meta.url), "utf8"),
     "lens-wire.js": await readFile(new URL("../src/worker/lens-wire.ts", import.meta.url), "utf8"),
+    "lens-markdown.js": await readFile(new URL("../src/worker/lens-markdown.ts", import.meta.url), "utf8"),
   };
   const cases = [
     { file: "lens.js", handler: "handleLensShot", key: '"lens:shot:"' },
     { file: "lens.js", handler: "handleLensBrowser", key: '"lens:browser:"' },
     { file: "lens-wire.js", handler: "handleLensWire", key: '"lens:wire:"' },
+    // Not a browser lens, and the rule is the same one: a cache hit spends none
+    // of the budget, so refusing one on a full cache rations nothing.
+    { file: "lens-markdown.js", handler: "handleLensMarkdown", key: '"lens:md:"' },
   ];
   for (const c of cases) {
     const src = files[c.file];

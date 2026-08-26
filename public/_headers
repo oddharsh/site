@@ -368,12 +368,18 @@
 /lens-browser.js
   Cache-Control: public, max-age=300, stale-while-revalidate=86400, s-maxage=86400
 
-# the other two /lens islands, same class and same rule. lens-reader.js had been
+# the remaining /lens islands, same class and same rule. lens-reader.js had been
 # missing one since it shipped — exactly the omission the note above describes
 # fixing for hoist.js and lens-browser.js, repeated on the next island added.
 # The pattern is worth naming: a new on-demand island inherits the platform
 # default (max-age=0, must-revalidate) unless someone remembers this file, and
 # the symptom is a silent 304 per load rather than anything that looks broken.
+#
+# It then happened a THIRD time, which is what retires "worth naming" as a fix.
+# lens-nlweb.js shipped in #469 and went eleven weeks on the platform default,
+# directly underneath the paragraph above describing that exact failure. A
+# comment cannot catch this, so a contract test does now: every island in
+# build.ts's SHELLS list that lens.js loads on demand must have a rule here.
 /lens-reader.js
   Cache-Control: public, max-age=300, stale-while-revalidate=86400, s-maxage=86400
 
@@ -381,6 +387,12 @@
   Cache-Control: public, max-age=300, stale-while-revalidate=86400, s-maxage=86400
 
 /lens-tools.js
+  Cache-Control: public, max-age=300, stale-while-revalidate=86400, s-maxage=86400
+
+/lens-nlweb.js
+  Cache-Control: public, max-age=300, stale-while-revalidate=86400, s-maxage=86400
+
+/lens-markdown.js
   Cache-Control: public, max-age=300, stale-while-revalidate=86400, s-maxage=86400
 
 # the retired service worker's unregister stub (v136): revalidates on every
