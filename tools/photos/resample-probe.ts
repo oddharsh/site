@@ -23,8 +23,13 @@
 //              light is the classic downscale defect and it darkens every
 //              texture. This is the test the two attempts actually disagreed on.
 //   identity   downscaling to the size you already are must change nothing.
-//              `image`'s Lanczos3 fails this, which is how attempt 2's real
-//              fault was found: it softens at every scale, including 1:1.
+//              Attempt 2 failed this column, and the blame was originally put
+//              on `image`'s Lanczos3. That was wrong: image short-circuits
+//              equal dims to a copy (so the property is untestable there), and
+//              its kernel, fed linear f32 directly, agrees with ours to 6e-7.
+//              What attempt 2 actually did was resample through image's default
+//              u8 path, which averages ENCODED values -- the gamma column's
+//              defect wearing the identity column's clothes.
 //   ringing    a step edge must not overshoot into values outside the range the
 //              source contained. Lanczos rings by design, so this is reported
 //              as a magnitude to compare rather than a pass or fail.

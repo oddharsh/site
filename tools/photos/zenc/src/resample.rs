@@ -1,13 +1,44 @@
 // resample.rs — a separable resampling kernel, written rather than borrowed.
 //
-// WHY HAND-WRITTEN. `image`'s Lanczos3 fails the one property a resampler
-// cannot fail: it is not identity at scale 1.0. Measured by
-// tools/photos/resample-probe.ts, it softens unconditionally, at every scale
-// and not only the degenerate one. That is what sank the second attempt at
-// moving the pipeline's square crop into zenc, and it is not a tuning problem.
+// WHY HAND-WRITTEN, corrected 2026-08-26. This header used to claim `image`'s
+// Lanczos3 "is not identity at scale 1.0" and "softens unconditionally". THAT
+// CLAIM IS RETRACTED, and the retraction is worth more than the claim was:
+//
+//   - Both of image 0.25.10's public resize entry points SHORT-CIRCUIT at
+//     equal dimensions (dynimage.rs:876, sample.rs:985 both copy), so the
+//     identity property is vacuously true there and untestable from outside.
+//     The measurement that "confirmed" the claim couldn't reach the kernel,
+//     and neither could the one that later "refuted" it.
+//   - Their kernel source has the same centre convention ((i+0.5)*ratio-0.5),
+//     the same support scaling, and the same per-sample renormalisation as
+//     this file. Fed identical linear f32, image and fast_image_resize agree
+//     with this kernel to within 6e-7, with identical Lanczos ringing (0.0105
+//     on a 0.2/0.8 step) and identical zero aliasing.
+//
+// What the failed second attempt at the square crop ACTUALLY hit was the
+// wrapper, not the kernel: image's default u8 path averages ENCODED values.
+// A 0/255 checkerboard reduced 16x comes back 127.02 from image, 127.98 from
+// fast_image_resize's default u8 path, and 188 is correct. fir ships an sRGB
+// mapper that fixes it, opt-in, and nothing calls it for you.
+//
+// So the real reasons this file exists, stated honestly:
+//
+//   1. THE CORRECT COLOUR PATH IS THE ONLY PATH. The API takes planar linear
+//      f32, so resampling encoded values is unrepresentable here rather than a
+//      default you must remember to override. Both major Rust crates make the
+//      wrong thing the default; this makes it impossible.
+//   2. Zero dependencies and testable against analytic answers, which is what
+//      let the probe catch its own three bugs (see resample-probe.ts).
+//   3. It is CORRECT-first, not fast-first: scalar f32, measured 2.4x slower
+//      than fast_image_resize's SIMD on the whole gamma-correct job (70.3ms vs
+//      60.3ms for 5952x3968 RGB -> 900x600, and fir's linear space is u16
+//      where this is f32). A fixed-channel inner loop was measured recovering
+//      2x of the resample core (42.9 -> 22.9ms, byte-identical) and is
+//      recorded headroom, not implemented.
 //
 // THE THREE THINGS THAT MAKE THIS CORRECT, none of which is exotic and all of
-// which something in the wild gets wrong:
+// which something in the wild gets wrong (sips gets all three wrong at once;
+// see the probe's gamma/flat/ring columns):
 //
 // 1. SUPPORT SCALES WITH THE REDUCTION. On a downscale the filter has to
 //    low-pass at the OUTPUT Nyquist, so its support in SOURCE pixels widens by
@@ -220,9 +251,11 @@ mod tests {
         }
     }
 
-    /// The property `image`'s Lanczos3 fails. Box and Lanczos3 are INTERPOLATING
-    /// filters: their weight is 1 at zero offset and 0 at every other integer,
-    /// so at unit scale each output sample reads exactly one input sample.
+    /// Box and Lanczos3 are INTERPOLATING filters: their weight is 1 at zero
+    /// offset and 0 at every other integer, so at unit scale each output sample
+    /// reads exactly one input sample. `image` short-circuits this case to a
+    /// copy, so the property is untestable there; here the kernel actually runs
+    /// at unit scale, which is why the test means something.
     #[test]
     fn unit_scale_is_identity_for_the_interpolating_filters() {
         let src: Vec<f32> = (0..64 * 64).map(|i| (i % 251) as f32 / 251.0).collect();
