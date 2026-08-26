@@ -894,5 +894,12 @@
     "version": "aadhar-v192-efuses",
     "vnum": 192,
     "ymd": "2026-08-22"
+  },
+  {
+    "slug": "webmcp-first-party",
+    "title": "The site hands an agent its own tools now, and anything that writes stops to ask you first. Cloudflare was injecting a bridge that did the registering, and two measurements retired it. It never ran on the homepage at all, because that page is served as a compressed delta against bytes your browser already holds and the edge cannot rewrite one, so the busiest page here advertised nothing while every other page advertised 25 tools. And the browser keeps only one of the five annotations the protocol defines for a tool, so nothing could tell an agent which of these tools write data. The replacement carries that in the description an agent reads, gates a writing tool behind a dialog that names it and shows you the arguments, and logs every call to a tray in the taskbar. The Other Web also gained six tools that drive the window you are watching rather than answering privately, so an agent and a person can work one instrument.",
+    "version": "aadhar-v193-webmcp-first-party",
+    "vnum": 193,
+    "ymd": "2026-08-26"
   }
 ]
