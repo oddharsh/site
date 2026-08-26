@@ -1,7 +1,9 @@
-// lens-boot.js — keep the complete server-rendered /lens idle shell idle.
-// The full client arrives for URL state, a persisted non-default view, or the
-// first interaction with the Lens UI. Capture listeners replay that first
-// action after import(), so a cold click cannot race the client that owns it.
+// lens-boot.js — keep the complete server-rendered /lens idle shell idle unless
+// this browser exposes WebMCP. The full client arrives for URL state, a
+// persisted non-default view, the first interaction with the Lens UI, or the
+// browser-local tool catalog: the six page tools own Lens closure state and
+// cannot register until lens.js exists. Capture listeners replay the first
+// human action after import(), so a cold click cannot race the client that owns it.
 // They are bound to the Lens content root rather than the document, so the
 // desktop shell's own controls never wait on a module they do not use.
 (function () {
@@ -96,5 +98,8 @@
   root.addEventListener("click", click, true);
   root.addEventListener("submit", submit, true);
 
-  if (hasClientState()) load().catch(function () {});
+  // WebMCP discovery happens before interaction, so its page tools must too.
+  // Keep the ordinary cold shell lazy; only a browser that can consume the
+  // catalog pays for the full client while idle.
+  if (document.modelContext || hasClientState()) load().catch(function () {});
 })();

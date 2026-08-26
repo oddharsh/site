@@ -19,6 +19,7 @@ import {
 import { readdirSync } from "node:fs";
 
 const LENS = readFileSync("./src/client/lens.js", "utf8");
+const LENS_BOOT = readFileSync("./src/client/lens-boot.js", "utf8");
 const WEBMCP = readFileSync("./src/client/webmcp.js", "utf8");
 const NAV = readFileSync("./src/client/nav.js", "utf8");
 const BUILD = readFileSync("./tools/build.ts", "utf8");
@@ -66,7 +67,7 @@ test("every Lens page tool states its own safety, rather than inheriting a defau
     "every page tool must declare `annotations` explicitly");
 });
 
-test("webmcp.js is the only client module that reads document.modelContext", () => {
+test("webmcp.js is the only client module that uses document.modelContext", () => {
   // Anything reaching the API directly bypasses the safety note and the consent
   // gate, and its tools would keep working, so this cannot be left to review.
   // Going THROUGH webmcp.js (wm.registerTool) is exactly the point, so the rule
@@ -90,20 +91,45 @@ test("webmcp.js is the only client module that reads document.modelContext", () 
     .replace(/\/\*[\s\S]*?\*\//g, "")
     .replace(/\/\/[^\n]*/g, "");
   const mentions = clients.filter((f) => /modelContext/.test(codeOnly(readFileSync(`./src/client/${f}`, "utf8")))).sort();
-  assert.deepEqual(mentions, ["nav.js", "webmcp.js"],
-    `only webmcp.js may own the WebMCP API, and nav.js may feature-check it; found: ${mentions.join(", ")}`);
-  // nav.js may READ the object to decide whether to spend the import, and may
-  // never touch anything ON it. Counting the mentions was the first version of
+  assert.deepEqual(mentions, ["lens-boot.js", "nav.js", "webmcp.js"],
+    `only webmcp.js may own the WebMCP API, while nav.js and lens-boot.js may feature-check it; found: ${mentions.join(", ")}`);
+  // nav.js and lens-boot.js may READ the object to decide whether to spend an
+  // import, and may never touch anything ON it. Counting the mentions was the first version of
   // this and it was wrong the moment a second guard appeared (the tray reader
   // needs its own); the number was never the rule. This is: bare truthiness
   // only, so no property access, no call, no index.
-  const navUse = codeOnly(NAV).match(/modelContext\s*[.([]/g) || [];
-  assert.deepEqual(navUse, [],
-    `nav.js must only feature-check modelContext, never use it: found ${navUse.join(", ")}`);
-  assert.ok(/modelContext/.test(codeOnly(NAV)),
-    "nav.js should still feature-check before importing webmcp.js");
+  for (const [file, source] of [["nav.js", NAV], ["lens-boot.js", LENS_BOOT]]) {
+    const uses = codeOnly(source).match(/modelContext\s*[.([]/g) || [];
+    assert.deepEqual(uses, [],
+      `${file} must only feature-check modelContext, never use it: found ${uses.join(", ")}`);
+    assert.ok(/modelContext/.test(codeOnly(source)),
+      `${file} should still feature-check before spending its WebMCP-only import`);
+  }
   assert.ok(/document\.modelContext/.test(WEBMCP) && /\.registerTool\(/.test(WEBMCP),
     "webmcp.js should be the module that reads the API and registers against it");
+});
+
+test("a cold Lens document loads its page tools when WebMCP is available", () => {
+  // The six tools live inside lens.js because they close over the live pane
+  // state. A default, untouched /lens used to keep that client lazy forever and
+  // therefore advertised only the 25 server tools. Ordinary browsers should
+  // stay lazy; a browser that can consume the catalog must pay for its owner.
+  assert.ok(/if \(document\.modelContext \|\| hasClientState\(\)\) load\(\)/.test(LENS_BOOT),
+    "lens-boot.js must load lens.js for an idle WebMCP-capable document");
+});
+
+test("successful registration repaints activity observers", () => {
+  // Site tools and Lens tools register from separate async entry points. The
+  // tray cannot assume either one wins the race; every successful registration
+  // must notify it so 25 becomes 31 when the page tools arrive later.
+  const start = WEBMCP.indexOf("export async function registerTool");
+  assert.ok(start > 0, "registerTool moved; update this scanner");
+  const body = WEBMCP.slice(start, WEBMCP.indexOf("// ---- the site's own /mcp tools", start));
+  const countAt = body.indexOf("registered += 1");
+  const notifyAt = body.indexOf("notify()", countAt);
+  const returnAt = body.indexOf('return "registered"', countAt);
+  assert.ok(countAt > 0 && notifyAt > countAt && returnAt > notifyAt,
+    "registerTool must notify observers after incrementing the count and before returning");
 });
 
 test("webmcp.js ships as a minified asset with a readable twin", () => {

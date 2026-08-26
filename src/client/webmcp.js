@@ -61,12 +61,17 @@ const listeners = new Set();
 let registered = 0;
 let seq = 0;
 
-function record(name, started, outcome, gated) {
-  audit.push({ name, at: started, ms: Date.now() - started, outcome, gated });
+function notify() {
   for (const fn of listeners) {
-    // A broken listener must never break a tool call. The tray is an observer.
+    // A broken listener must never break registration or a tool call. The tray
+    // is an observer of both, never part of either operation.
     try { fn(); } catch (error) { /* ignored on purpose */ }
   }
+}
+
+function record(name, started, outcome, gated) {
+  audit.push({ name, at: started, ms: Date.now() - started, outcome, gated });
+  notify();
 }
 
 /** Is there a WebMCP implementation on this page at all? */
@@ -284,6 +289,7 @@ export async function registerTool(def) {
     if (taken) return "taken";
     await MC.registerTool(/** @type {any} */ (tool));
     registered += 1;
+    notify();
     return "registered";
   } catch (error) {
     // The catalog is shared with whatever the edge injected, so losing a race
