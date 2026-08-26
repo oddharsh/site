@@ -413,3 +413,68 @@ export async function checkDependencyDocs(root = REPO_ROOT) {
     subManifests,
   });
 }
+
+// The INVERSE of the claim audit above: given the pins, say exactly which spans
+// of prose disagree and what they should read instead. `bun run deps:relock`
+// applies these; nothing else writes to the doc.
+//
+// It reuses findClaims rather than matching versions itself, and that is the
+// whole reason this lives here instead of as a sed in the relock script. The
+// claim pattern separates the prose name from the version with `\s+`, so a
+// sentence that WRAPS ("The pinned Oxlint\n1.79.0 does support…") is one claim
+// to the scanner and two unrelated lines to any line-oriented tool. Measured
+// 2026-08-26 on the oxlint 1.80.0 bump: a `s/Oxlint 1.79.0/` sweep fixed three
+// of four mentions and left the wrapped one, which the contract test then
+// caught. A rewriter that does not share the reader's pattern will keep finding
+// new ways to disagree with it.
+//
+// Offsets are BASELINE-RELATIVE, because that is the slice findClaims reads.
+// Adding the heading offset back is not bookkeeping: forgetting it silently
+// rewrites whatever sits that far into the file, which for this doc is prose
+// about something else entirely.
+export function planDocPinRewrites({
+  doc,
+  pins,
+  aliases = DOC_ALIASES,
+  versionless = VERSIONLESS,
+  subManifests = [],
+  heading = BASELINE_HEADING,
+}) {
+  const at = doc.indexOf(heading);
+  if (at === -1) return { updated: doc, edits: [] };
+  const baseline = doc.slice(at);
+
+  const scans = [{ aliases, pins, versionless }];
+  for (const sub of subManifests) {
+    if (sub.missing) continue;
+    scans.push({ aliases: sub.aliases, pins: sub.pins, versionless: sub.versionless ?? new Map() });
+  }
+
+  const edits = [];
+  for (const scan of scans) {
+    for (const claim of findClaims(baseline, scan.aliases)) {
+      // A deliberately versionless entry is documented WITHOUT a pin on
+      // purpose, so a version sitting next to it is not ours to move.
+      if (scan.versionless?.has?.(claim.pkg)) continue;
+      const want = scan.pins[claim.pkg];
+      // An unpinned or range-pinned package ("^1.62.1") has no single number
+      // the prose could be wrong about. The audit already reports those; a
+      // rewriter guessing at them would invent a pin nothing declares.
+      if (typeof want !== "string" || !/^\d+\.\d+\.\d+[\w.-]*$/.test(want)) continue;
+      if (want === claim.version) continue;
+      // The version is the last thing the pattern captures, so the first
+      // occurrence at or after the match start is this claim's own.
+      const rel = baseline.indexOf(claim.version, claim.index);
+      if (rel === -1) continue;
+      edits.push({ pkg: claim.pkg, prose: claim.prose, from: claim.version, to: want, start: at + rel });
+    }
+  }
+
+  // Right to left, so each splice leaves every earlier offset valid.
+  edits.sort((a, b) => b.start - a.start);
+  let updated = doc;
+  for (const e of edits) {
+    updated = updated.slice(0, e.start) + e.to + updated.slice(e.start + e.from.length);
+  }
+  return { updated, edits: edits.slice().reverse() };
+}
