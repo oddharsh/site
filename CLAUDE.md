@@ -137,7 +137,10 @@ bun run derive:check
 # declaration at all: that is the gap gotcha 41 fell through, since
 # histograms.json had no declaration and so there was nothing to be wrong about.
 # A new generator is covered by EXISTING rather than by anyone remembering.
-# It reads JS, TS and Python and NOT shell, and says so at derive-writers.ts.
+# TWO scanners: JS, TS and Python get an exact one, since a write is a named call.
+# Shell gets a deliberately wider one (does it MENTION a committed path), because
+# shell writes through redirects, cp, sed -i and the encoders it drives. Wider
+# fails CLOSED, so a script that only reads is classified too and says so.
 
 # lint, syntax plus TYPE-AWARE, in one 0.6s pass. the type half runs on tsgolint,
 # which tracks the exact TypeScript 7.0.2 pinned here; that pairing matters
@@ -5162,6 +5165,12 @@ bun run deploy:direct
     bytes. `add-photos.sh` re-bakes the whole library on every run and was never
     at risk; the gap is a STANDALONE `reencode-thumbnails.sh`, whose own header
     told you to re-run `hash-thumbnails.sh` and stopped there.
+
+    **That last sentence is fixed rather than merely true now.**
+    `reencode-thumbnails.sh` names `derive:check` in its closing advice and says
+    why, and a contract test fails if that reference goes away. The script that
+    caused this entry is the one place the remedy has to be legible, since taking
+    the standalone path is the whole precondition for the bug.
 
     Generalise past histograms: **anything derived from a content-addressed file
     has to be regenerated when the hash moves, and a hash moving is exactly the

@@ -7,7 +7,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { digestOf, hashInputs, project, record, resolveInputs, verify } from "./lib/derive.ts";
-import { WRITER_FLOOR, declaredBy, findWriters } from "./lib/derive-writers.ts";
+import { SHELL_FLOOR, WRITER_FLOOR, declaredBy, findShellTouchers, findWriters } from "./lib/derive-writers.ts";
 
 /** @typedef {import("./lib/derive.ts").Derivation} Derivation */
 
@@ -222,6 +222,8 @@ test("derivations: a set-mode entry declares what it covers", () => {
 // the gap gotcha 41 fell through.
 
 const writers = await findWriters(root, decl.writers.roots);
+const shell = await findShellTouchers(root, decl.writers.shellRoots ?? decl.writers.roots);
+const everything = [...writers, ...shell];
 const regenerates = graph.map((d) => d.regenerate ?? "");
 
 test("census: the writer scan has not stopped matching", () => {
@@ -229,7 +231,7 @@ test("census: the writer scan has not stopped matching", () => {
 });
 
 test("census: every file that writes is declared or exempt with a reason", () => {
-  const undeclared = writers.filter((f) => !declaredBy(f, regenerates) && !(f in decl.writers.exempt));
+  const undeclared = everything.filter((f) => !declaredBy(f, regenerates) && !(f in decl.writers.exempt));
   assert.deepEqual(undeclared, [], `undeclared generator(s): ${undeclared.join(", ")}`);
 });
 
@@ -242,12 +244,12 @@ test("census: an exemption states why, at length", () => {
 // An exemption for a file that no longer writes is stale bookkeeping, and left
 // alone it makes the list look more considered than it is.
 test("census: no exemption outlives the file it exempts", () => {
-  const stale = Object.keys(decl.writers.exempt).filter((f) => !writers.includes(f));
+  const stale = Object.keys(decl.writers.exempt).filter((f) => !everything.includes(f));
   assert.deepEqual(stale, [], `exempt but no longer writing: ${stale.join(", ")}`);
 });
 
 test("census: a file is never both declared and exempt", () => {
-  const both = writers.filter((f) => declaredBy(f, regenerates) && f in decl.writers.exempt);
+  const both = everything.filter((f) => declaredBy(f, regenerates) && f in decl.writers.exempt);
   assert.deepEqual(both, [], `both declared and exempt: ${both.join(", ")}`);
 });
 
@@ -265,4 +267,32 @@ test("census: every regenerate command names a file that exists", async () => {
       assert.ok(info, `${d.id}: regenerate names ${f}, which does not exist`);
     }
   }
+});
+
+// The shell tier asks a wider question than the exact one, because shell has no
+// exact answer: a script writes through redirects, cp, sed -i, and through the
+// encoders it drives. Over-approximating fails CLOSED, which is the property
+// being asserted here.
+test("census: the shell scan has not stopped matching", () => {
+  assert.ok(shell.length >= SHELL_FLOOR, `only ${shell.length} shell scripts matched, under the floor of ${SHELL_FLOOR}`);
+});
+
+// It shipped with shell as a stated hole and the hole was real: all four of these
+// write committed bytes and none was classified until the tier existed.
+test("census: the shell tier still sees the scripts it was built for", () => {
+  for (const f of [
+    "tools/photos/add-car-photo.sh",
+    "tools/photos/reencode-thumbnails.sh",
+    "tools/photos/gen-encoding-grids.sh",
+    "tools/photos/gen-encoding-samples.sh",
+  ]) {
+    assert.ok(shell.includes(f), `${f} is no longer seen by the shell scan`);
+  }
+});
+
+// gotcha 41's residual gap was this script telling you to re-run hash-thumbnails
+// and stopping there, which is exactly the run that leaves the histograms behind.
+test("census: the standalone re-encode path points at derive:check", async () => {
+  const src = await readFile(new URL("tools/photos/reencode-thumbnails.sh", ROOT), "utf8");
+  assert.ok(src.includes("derive:check"), "reencode-thumbnails.sh no longer names derive:check");
 });

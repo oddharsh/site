@@ -26,7 +26,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { type Derivation, type Lock, record, verify } from "./lib/derive.ts";
-import { WRITER_FLOOR, declaredBy, findWriters } from "./lib/derive-writers.ts";
+import { SHELL_FLOOR, WRITER_FLOOR, declaredBy, findShellTouchers, findWriters } from "./lib/derive-writers.ts";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DECL = path.join(ROOT, "config/derivations.json");
@@ -141,19 +141,28 @@ if (!ONLY) {
     console.error(`derive: the writer scan found ${writers.length} files, under the floor of ${WRITER_FLOOR}. It has stopped matching.`);
     process.exit(2);
   }
+  // The shell tier asks a wider question than "does this write", because shell
+  // has no exact answer to that one. See the header of derive-writers.ts.
+  const shell = await findShellTouchers(ROOT, declaration.writers.shellRoots ?? roots);
+  if (shell.length < SHELL_FLOOR) {
+    console.error(`derive: the shell scan found ${shell.length} scripts, under the floor of ${SHELL_FLOOR}. It has stopped matching.`);
+    process.exit(2);
+  }
+
   const regenerates = all.map((d) => d.regenerate ?? "");
-  undeclared = writers.filter((f) => !declaredBy(f, regenerates) && !(f in exempt));
+  const everything = [...writers, ...shell];
+  undeclared = everything.filter((f) => !declaredBy(f, regenerates) && !(f in exempt));
 
   // An exemption for a file that no longer writes is stale bookkeeping, and left
   // alone it makes the list look more considered than it is.
-  const stale = Object.keys(exempt).filter((f) => !writers.includes(f));
+  const stale = Object.keys(exempt).filter((f) => !everything.includes(f));
   for (const f of stale) console.log(`  note  ${f} is exempt but no longer writes; drop the entry`);
 
   for (const f of undeclared) {
     console.log(`  UNDECLARED ${f}`);
     console.log("      it writes, and no derivation names it. Declare what it produces, or exempt it with a reason in config/derivations.json.");
   }
-  console.log(`  census: ${writers.length} writers, ${writers.length - undeclared.length} classified`);
+  console.log(`  census: ${writers.length} writers + ${shell.length} shell, ${everything.length - undeclared.length} of ${everything.length} classified`);
 }
 
 const summary = `derive: ${fresh} fresh, ${stale} stale, ${notes.length} unverifiable, ${undeclared.length} undeclared`;

@@ -238,6 +238,26 @@
       ],
       "unverifiable": "It drives Chrome against the LIVE homepage, and that page draws a random 12 of 158 photos per request, so the generator's own header says every regeneration ships a different grid. There is no digest to record: the same inputs deliberately do not produce the same bytes. Same class as og/cards.",
       "regenerate": "bun tools/gen-repo-card.ts"
+    },
+    {
+      "id": "cars/reference",
+      "tier": "unverifiable",
+      "why": "The resto-mod reference photos the car-link tooltips draw, as the dual AVIF and JPG pair those tooltips expect. No EXIF, no R2, no hashed tier: they are illustrations rather than photographs of the library.",
+      "outputs": [
+        "public/cars"
+      ],
+      "unverifiable": "The input is a reference photo from somewhere on the web, credited by hand in public/cars/CREDITS.txt and not in this repository. There is nothing to hash. What is checkable is that each stem has both tiers and a credit line, which belongs with the page contract rather than here.",
+      "regenerate": "bash tools/photos/add-car-photo.sh <image> <stem>"
+    },
+    {
+      "id": "garage/encoding-samples",
+      "tier": "unverifiable",
+      "why": "The sample set the /garage/encoding study compares, one file per encoder and quality point, plus the byte counts the page quotes.",
+      "outputs": [
+        "public/garage/enc"
+      ],
+      "unverifiable": "The inputs are source images held outside this repository and SEVEN external encoders at whatever version the machine has. config/tools.json records those versions and is the right place to ask whether they moved; a digest here would restate that without adding anything, because the source images can never be hashed from a checkout.",
+      "regenerate": "bash tools/photos/gen-encoding-grids.sh && bash tools/photos/gen-encoding-samples.sh"
     }
   ],
   "writers": {
@@ -254,7 +274,13 @@
       "somebody remembering, which is the property worth copying from tools.json.",
       "",
       "The scanner reads JS, TS and Python and NOT shell; the limit and its reasoning",
-      "are at the top of tools/lib/derive-writers.ts."
+      "TWO SCANNERS. JS, TS and Python get an exact scan, because a write is a named",
+      "call. Shell gets a deliberately wider one: does the script MENTION a committed",
+      "path at all. That over-approximates, which fails closed, so a script that only",
+      "reads still has to be classified and says so. A shell script handed its target",
+      "as an argument is invisible to it, and that is the same reason perf-snapshot.ts",
+      "is exempt: a tool that writes where it is told has no fixed artifact to pin.",
+      "The reasoning is at the top of tools/lib/derive-writers.ts."
     ],
     "roots": [
       "tools",
@@ -281,7 +307,14 @@
       "tools/check-infra.ts": "writes one request line into a mkdtemp directory while probing the edge",
       "tools/lens-seed.ts": "writes seed captures into a scratch directory",
       "tools/photos/resample-probe.ts": "writes probe output while measuring the ingest geometry, and commits nothing",
-      "tools/relock-dependabot.ts": "rewrites the version pins inside docs/DEPENDENCIES.md to match the lockfile, in a throwaway worktree during a dependabot relock. The prose is edited in place rather than generated, and contract-docs-dependencies-md-states-version-pins-in-prose.test.mjs already holds those pins to the lockfile on every run, which is the check a digest here would duplicate"
-    }
+      "tools/relock-dependabot.ts": "rewrites the version pins inside docs/DEPENDENCIES.md to match the lockfile, in a throwaway worktree during a dependabot relock. The prose is edited in place rather than generated, and contract-docs-dependencies-md-states-version-pins-in-prose.test.mjs already holds those pins to the lockfile on every run, which is the check a digest here would duplicate",
+      "tools/photos/add-photos.sh": "the ORCHESTRATOR rather than a generator: it drives zenc, exif-sooc, hash-thumbnails.sh and gen-alt-text.py in order, and every artifact that comes out is declared by the script that actually produces it. It also re-bakes the whole library on every run, so it has never been the path that leaves derived data behind",
+      "tools/photos/bump-version.sh": "appends one entry to src/worker/checkpoints.json, the deploy-log projection, and writes nothing else. checkpoints:check already diffs that projection against D1 in both directions, which is a stronger claim than a digest of its inputs would be",
+      "tools/photos/reencode-thumbnails.sh": "produces public/i/, which is an INPUT to images/histograms, images/fingerprints and images/hashes rather than an output of anything. It is also the exact script whose standalone use caused gotcha 41: it told you to re-run hash-thumbnails.sh and stopped there. derive:check is what now catches a run that re-encodes and skips the re-bake, and the script points at it"
+    },
+    "shellRoots": [
+      "tools",
+      "pipelines"
+    ]
   }
 }
