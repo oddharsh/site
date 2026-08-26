@@ -1175,11 +1175,11 @@ export function setPage(status, title, bodyHtml) {
   a:hover   { color: oklch(62.80% 0.2577 29.23); }
   code { font-family: "Courier New", Courier, monospace; background: oklch(96.72% 0 0); padding: 0 3px; border: 1px solid oklch(88.22% 0 0); }
 `,
-    body: unsafeHtml`
+    body: unsafeHtml(`
     <h1>${esc(title)}</h1>
     <p>${bodyHtml}</p>
     <p><small>&larr; <a href="/">aadhar.sh</a></small></p>
-`,
+`),
     cache: "no-store",
     headers: {
       "x-robots-tag":  "noindex",

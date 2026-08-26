@@ -170,13 +170,13 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:14pt; color
 footer { text-align:center; font-size:9pt; color:oklch(44.95% 0 0); margin-top:16px; padding-top:12px; border-top:1px solid oklch(86.67% 0.0294 259.59); }
 footer a { color:oklch(42.61% 0.2353 263.74); }
 `,
-    body: unsafeHtml`
+    body: unsafeHtml(`
     <h1>My Reading</h1>
     <p class="rd-lede">Things I've saved to read, pulled from my <a href="${esc(profile)}" rel="external me" target="_blank">Curius</a>. Newest first.</p>
     <div class="rd-bar">${count} link${count === 1 ? "" : "s"}${fetched ? ` &middot; last synced ${fetched}` : ""} &middot; source: Curius, via AadharshBot</div>
     ${listHtml}
     <footer>&larr; <a href="/">aadhar.sh</a> &middot; saved on <a href="${esc(profile)}" rel="external" target="_blank">Curius</a> &middot; fetched by <a href="/bot">${esc(BOT_NAME)}</a></footer>
-`,
+`),
     cache: "public, max-age=300",
     headers: { "referrer-policy": "strict-origin-when-cross-origin" },
   });

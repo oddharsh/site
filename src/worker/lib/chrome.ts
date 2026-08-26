@@ -88,7 +88,7 @@ function faviconLink(route): Html {
  *  is a raw-text element, so HTML entities are not decoded inside it. Escaping
  *  CSS would turn `a > b` into `a &gt; b` and break the selector rather than
  *  protect anything. Escaping is the wrong tool in that context, which is why
- *  it goes through `unsafeHtml` at the one place it is spliced. */
+ *  it goes through `unsafeHtml(` at the one place it is spliced. */
 export type LunaPageOptions = {
   title?: string;
   path?: string;
@@ -106,7 +106,7 @@ export type LunaPageOptions = {
   titleClass?: string;
   windowClass?: string;
   contentClass?: string;
-  /** Raw attributes for the window element, e.g. `data-no-histnav`. */
+  /** Raw attributes for the window element, e.g. `)data-no-histnav`. */
   windowAttrs?: Html;
   route?: string;
   explorer?: boolean;

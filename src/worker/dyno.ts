@@ -255,7 +255,7 @@ td.sha{color:#7a4eb0}
 td.src{font-size:7.5pt;color:#8b98a8}
 .foot{font-size:8.5pt;color:#6b7280;border-top:1px solid #e2e8f0;padding-top:9px;margin-top:13px;line-height:1.55}
 `,
-    body: unsafeHtml`
+    body: unsafeHtml(`
     <h1>Dyno</h1>
     <p class="lede">A dyno tells you what an engine actually puts down. The spec sheet is a claim; the rollers
     are a measurement. This one straps the site down every night: a GitHub Action builds <code>main</code>,
@@ -281,7 +281,7 @@ td.src{font-size:7.5pt;color:#8b98a8}
     absent, because <code>wrangler check startup</code> read 9.6, 7.6, 6.4 and 16.4&nbsp;ms across bytes nobody
     touched, and charting that would draw weather. A dyno with a wandering needle is a decoration. Raw series at
     <a href="/garage/dyno.json">/garage/dyno.json</a>.</p>
-`,
+`),
   });
 }
 

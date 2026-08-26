@@ -2377,12 +2377,24 @@ Escaping is the wrong tool in that context, so the CSS splice goes through
 `unsafeHtml` explicitly.
 
 **The 20 callers say `unsafeHtml`, and that is a LEDGER rather than a fix.**
-`unsafeHtml` takes both a string and a TEMPLATE TAG, and the tag form exists for
-exactly this migration: retagging `` body: `…` `` to `` body: unsafeHtml`…` `` is a
-one-token edit that rebuilds precisely what a plain template literal would have,
-so it is byte-for-byte inert. What it buys is that every unmigrated page now
-SAYS it is unmigrated, in a word a ratchet can count. One name takes both call
-forms on purpose, so the count cannot be routed around by adding a second door.
+`body: `…`` becomes `body: unsafeHtml(`…`)`, which changes no bytes and
+makes every unmigrated page SAY it is unmigrated, in a word a ratchet can count.
+
+**It is a CALL and not a TEMPLATE TAG, and that is measured rather than
+stylistic.** A tag would have been a one-token edit per call site, which is
+tempting across 20 callers, and it is what shipped first. It also more than
+DOUBLES the literal in the bundle: a tagged template must preserve
+`strings.raw`, so the moment the content carries a backslash escape the bundler
+emits the cooked AND raw arrays. Measured through esbuild, which is what
+wrangler bundles with, on one 120-line literal containing `\t` and `\n`: plain
+3907 B, tagged 8383 B (+115%), wrapped in a call 3910 B (+3 B).
+
+It cost **1.42 KiB on `whoareyou.ts` alone**, on a change whose whole claim was
+that it moved no bytes, and the only thing that caught it was `perf-diff.yml` —
+the advisory check that gates nothing. That is the argument for keeping that job
+outside `validate`, arriving from the other direction: a number that merely
+reports is what noticed this, and a hard threshold at +0.2% would have been
+widened rather than read.
 
 `config/unsafe-html-baseline.json` is the ledger, checked by
 `contract-html-escapes-by-construction`: 45 uses across 18 files, and the number

@@ -140,9 +140,9 @@ test("the idle Lens shell defers its full client without losing the first action
   const boot = readFileSync("./src/client/lens-boot.js", "utf8");
   const build = readFileSync("./tools/build.ts", "utf8");
 
-  assert.match(server, /scripts: (?:unsafeHtml)?`<script src="\/lens-boot\.js" defer><\/script>`/,
+  assert.match(server, /scripts: (?:unsafeHtml\()?`<script src="\/lens-boot\.js" defer><\/script>`/,
     "the server-rendered idle shell must load only the bootstrap");
-  assert.doesNotMatch(server, /scripts: (?:unsafeHtml)?`<script src="\/lens\.js"/,
+  assert.doesNotMatch(server, /scripts: (?:unsafeHtml\()?`<script src="\/lens\.js"/,
     "the full Lens application must not sit on the passive render path");
   assert.match(boot, /import\("\/lens\.js\?v=1"\)/,
     "the bootstrap must load the full application through the build's hashable specifier");

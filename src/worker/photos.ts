@@ -635,7 +635,7 @@ export function renderPhotosPage(photos, altMap) {
   footer address { font-style: italic; margin-top: 4px; }
   a { color: oklch(42.61% 0.2353 263.74); }
 `,
-    body: unsafeHtml`
+    body: unsafeHtml(`
   <h1>Photos</h1>
   <p class="lede">
     All ${photos.length}, straight out of camera (FUJIFILM X-T50, Leica M).
@@ -651,7 +651,7 @@ ${tiles}
     &larr; <a href="/">aadhar.sh</a> &middot; press <b>&#8984;K</b> anywhere to search these by name
     <address>handwritten worker at aadhar.sh</address>
   </footer>
-`,
+`),
     cache: "public, max-age=300",
   });
 }

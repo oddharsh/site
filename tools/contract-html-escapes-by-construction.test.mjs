@@ -63,6 +63,12 @@ test("the unescaped door is counted, and the count may only go down", async () =
   // "this literal predates the tagged template, and its interpolations are
   // escaped by hand." That is honest and it is DEBT, so it is counted.
   //
+  // Note it is `unsafeHtml(`…`)` and never a template TAG. A tag would be a
+  // one-token edit and shipped first; it also emits `strings.raw` alongside the
+  // cooked strings, which more than doubles any literal carrying a backslash
+  // escape (esbuild: 3907 B plain, 8383 B tagged, 3910 B wrapped). It cost
+  // 1.42 KiB on whoareyou.ts before perf-diff caught it.
+  //
   // The baseline may only shrink. A new use fails here rather than passing
   // review, and migrating a caller to `html` requires editing the number down,
   // which is what keeps the ledger a real record instead of a stale file.

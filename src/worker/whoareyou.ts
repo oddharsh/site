@@ -414,7 +414,7 @@ footer {
 footer .signature { font-style: italic; margin-top: 4px; }
 footer .signature small { color: oklch(56.93% 0 0); }
 `,
-    body: unsafeHtml`
+    body: unsafeHtml(`
 
     <h1>System Properties</h1>
     <p class="lede">
@@ -569,7 +569,7 @@ footer .signature small { color: oklch(56.93% 0 0); }
       </p>
     </footer>
 
-`,
+`),
     // The one script on the page. It fills the Edge Trace section from
     // /cdn-cgi/trace, which is the only source for those fields: request.cf
     // never carries them, so the worker cannot render them and would have to
@@ -577,7 +577,7 @@ footer .signature small { color: oklch(56.93% 0 0); }
     // second request happens. Failure is reported rather than hidden, because a
     // page whose whole subject is what a request reveals should not quietly
     // show blanks where it could not look.
-    scripts: unsafeHtml`<script>
+    scripts: unsafeHtml(`<script>
 (function () {
   var grid = document.getElementById("trace-grid");
   var note = document.getElementById("trace-note");
@@ -605,7 +605,7 @@ footer .signature small { color: oklch(56.93% 0 0); }
       note.textContent = "Could not reach /cdn-cgi/trace (" + e.message + "), so these seven fields are unknown rather than assumed.";
     });
 })();
-</script>`,
+</script>`),
     cache: "no-store, must-revalidate",
     headers: {
       "x-robots-tag":    "noindex",
