@@ -6,9 +6,10 @@
 #      <stem>-<SQ_SM>.avif — PRE-CROPPED CENTER SQUARES (what the grid shows:
 #      aspect-ratio:1 + object-fit:cover), metadata-stripped. mirrors
 #      reencode-thumbnails.sh exactly (keep the two encode paths in sync).
-#      Everything after the lossless jpegtran rotation happens on a TIFF/PNG
-#      intermediate, so each output is ONE JPEG encode away from the source
-#      rather than three.
+#      One `zenc square` decodes the source once, orients it, and writes all
+#      three tiers from that same linear-light frame, so each output is ONE
+#      JPEG encode away from the source rather than three, and the 400 and 200
+#      tiers are no longer resamples of the 600.
 #   2. uploads a BROWSER-RENDERABLE full-resolution JPG to R2 as
 #      aadhar-photos/<stem>.jpg — this is what /images/full/<stem>.jpg returns
 #      on click, and the shareable R2 copy. for a JPG-source photo that's the
@@ -115,7 +116,10 @@ fi
 # at equal quality (see /garage/encoding). It builds from source with cargo, so
 # any machine with rust runs this pipeline; dependabot tracks the zenjpeg pin.
 # q84 is calibrated to match the old cjpegli q82 quality at fewer bytes. mozjpeg's
-# jpegtran still does the lossless EXIF-orientation step (structural, not an encode).
+# jpegtran survives ONLY for phase 3's progressive rearrangement of the R2 copies,
+# which reorders coefficients and has no alignment constraint. It did the
+# EXIF-orientation rotation until 2026-08-26; that is `zenc square --orient` now,
+# for the reason CLAUDE.md gotcha 3 measures.
 ZENC_DIR="$(cd "$(dirname "$0")/zenc" && pwd)"
 ZENC="$ZENC_DIR/target/release/zenc"
 ZENC_Q=84   # The linear-light geometry preserves high-frequency energy that sips'
@@ -212,17 +216,6 @@ if [ "$TOTAL" -eq 0 ]; then
 fi
 echo "found $TOTAL source file(s) to process"
 echo ""
-
-# read EXIF Orientation → the jpegtran flag that brings the pixels upright.
-# empty = no rotation. 1=normal, 3=180°, 6=90°CW, 8=270°CW, etc.
-exif_to_jpegtran() {
-  local o; o=$(exif-sooc -s -s -s -n -Orientation "$1" 2>/dev/null || echo "")
-  case "$o" in
-    ""|"1") echo "" ;;  "2") echo "-flip horizontal" ;;  "3") echo "-rotate 180" ;;
-    "4") echo "-flip vertical" ;;  "5") echo "-transpose" ;;  "6") echo "-rotate 90" ;;
-    "7") echo "-transverse" ;;  "8") echo "-rotate 270" ;;  *) echo "" ;;
-  esac
-}
 
 avif_encode() {  # avif_encode <src.jpg> <out.avif>
   if [ "$AVIF_ENCODER" = "avifenc" ]; then

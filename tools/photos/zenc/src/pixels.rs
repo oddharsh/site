@@ -271,4 +271,28 @@ mod tests {
             assert_eq!(r.data, f.data, "orient {o} then {inv} is not identity");
         }
     }
+
+    /// The two tests above are GRAYSCALE, so neither can see a channel-stride
+    /// bug: the permutation re-indexes pixels, and reading it as though it
+    /// re-indexed samples would tear every RGB triple apart while leaving a
+    /// 1-channel frame perfectly correct. Every colour photo in the library
+    /// goes through this arm.
+    #[test]
+    fn rgb_triples_travel_as_one_pixel() {
+        let (w, h) = (4u32, 3u32);
+        let mut data = Vec::new();
+        for i in 0..w * h {
+            data.extend_from_slice(&[i as f32, i as f32 + 0.25, i as f32 + 0.5]);
+        }
+        let out = orient(&Frame { w, h, gray: false, data }, 6);
+        assert_eq!((out.w, out.h), (h, w));
+        for px in out.data.chunks_exact(3) {
+            assert_eq!(px[1], px[0] + 0.25, "green separated from its pixel");
+            assert_eq!(px[2], px[0] + 0.5, "blue separated from its pixel");
+        }
+        // and it is a permutation: the same pixels, each exactly once
+        let mut seen: Vec<u32> = out.data.chunks_exact(3).map(|p| p[0] as u32).collect();
+        seen.sort_unstable();
+        assert_eq!(seen, (0..w * h).collect::<Vec<_>>());
+    }
 }
