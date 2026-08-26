@@ -1254,8 +1254,8 @@ let dressPage: (html: string, rel: string) => { html: string; addedLink: boolean
       const contentOpen = /<div class="content"[^>]*>/.exec(out);
       if (contentOpen) {
         out = out.slice(0, contentOpen.index)
-          + addressBar(options)
-          + taskPane(options)
+          + String(addressBar(options))
+          + String(taskPane(options))
           + out.slice(contentOpen.index);
         addedChrome = true;
       }

@@ -13,7 +13,7 @@
 // module invents nothing: given no tasks and no details it renders the two rows
 // it can always prove (where you are, and what is above you) and stops. A task
 // pane that pads itself out with plausible links is worse than no task pane.
-import { escAttr, escHtml } from "./http.ts";
+import { Html, html } from "./html.ts";
 
 // The first-level places, in taskbar order. Declared here rather than derived
 // at runtime so the Worker carries no data file; build.mjs asserts this list
@@ -71,29 +71,27 @@ export function labelFor(path, fallback = "") {
  * rules forbid. Making the well a real editable address is the follow-up; /run
  * already exists to answer it.
  */
-export function addressBar({ path = "/", name = "" } = {}) {
+export function addressBar({ path = "/", name = "" } = {}): Html {
   const parts = trail(path);
-  const crumbs = [`<a href="/">aadhar.sh</a>`];
+  const crumbs: Html[] = [html`<a href="/">aadhar.sh</a>`];
   parts.forEach((step, index) => {
     const last = index === parts.length - 1;
-    const text = escHtml(last ? labelFor(step, name) : labelFor(step, step.replace(/^.*\//, "")));
-    crumbs.push(`<span class="axp-sep" aria-hidden="true">›</span>`);
+    const text = last ? labelFor(step, name) : labelFor(step, step.replace(/^.*\//, ""));
+    crumbs.push(html`<span class="axp-sep" aria-hidden="true">›</span>`);
     crumbs.push(last
-      ? `<span class="axp-here" aria-current="page">${text}</span>`
-      : `<a href="${escAttr(step)}">${text}</a>`);
+      ? html`<span class="axp-here" aria-current="page">${text}</span>`
+      : html`<a href="${step}">${text}</a>`);
   });
-  return `<div class="axp-address"><span class="axp-addr-label">Address</span>`
-    + `<div class="axp-well"><span class="axp-addr-icon" aria-hidden="true"></span>${crumbs.join("")}</div></div>`;
+  return html`<div class="axp-address"><span class="axp-addr-label">Address</span><div class="axp-well"><span class="axp-addr-icon" aria-hidden="true"></span>${crumbs}</div></div>`;
 }
 
-function group(title, inner) {
-  return `<section class="axp-group"><h2>${escHtml(title)}</h2>${inner}</section>`;
+function group(title: string, inner: Html): Html {
+  return html`<section class="axp-group"><h2>${title}</h2>${inner}</section>`;
 }
 
-function taskList(items) {
-  const rows = items.map((item) => `<li><span class="axp-glyph" aria-hidden="true">${escHtml(item.glyph || "›")}</span>`
-    + `<a href="${escAttr(item.href)}">${escHtml(item.label)}</a></li>`).join("");
-  return `<ul>${rows}</ul>`;
+function taskList(items): Html {
+  const rows = items.map((item) => html`<li><span class="axp-glyph" aria-hidden="true">${item.glyph || "›"}</span><a href="${item.href}">${item.label}</a></li>`);
+  return html`<ul>${rows}</ul>`;
 }
 
 /**
@@ -101,10 +99,10 @@ function taskList(items) {
  * representations, mostly) and `details` are facts the caller has counted.
  * Both are optional; what remains is true of every page.
  */
-export function taskPane({ path = "/", name = "", tasks = [], details = [] } = {}) {
+export function taskPane({ path = "/", name = "", tasks = [], details = [] } = {}): Html {
   const section = sectionOf(path);
   const parent = parentOf(path);
-  const boxes = [];
+  const boxes: Html[] = [];
 
   const objectTasks = tasks.map((task) => ({ href: task.href, label: task.label, glyph: task.glyph || "≡" }));
   if (parent) objectTasks.push({ href: parent, label: `Up to ${labelFor(parent)}`, glyph: "↑" });
@@ -119,8 +117,8 @@ export function taskPane({ path = "/", name = "", tasks = [], details = [] } = {
   if (here) rows.push({ term: "Name", value: here });
   rows.push({ term: "Location", value: `aadhar.sh${path === "/" ? "" : String(path).replace(/\/+$/, "")}` });
   for (const detail of details) if (detail && detail.value) rows.push(detail);
-  boxes.push(group("Details", `<dl>${rows.map((row) =>
-    `<dt>${escHtml(row.term)}</dt><dd>${escHtml(row.value)}</dd>`).join("")}</dl>`));
+  boxes.push(group("Details", html`<dl>${rows.map((row) =>
+    html`<dt>${row.term}</dt><dd>${row.value}</dd>`)}</dl>`));
 
   // A plain container, NOT a <details>. The disclosure was tried and removed:
   // `.axp-pane{display:flex}` is an author rule and beats the UA rule that hides
@@ -130,6 +128,6 @@ export function taskPane({ path = "/", name = "", tasks = [], details = [] } = {
   // purpose. The wrapper stays explicit so luna.css can hide the whole piece of
   // secondary navigation at its narrow breakpoint instead of turning the rail
   // into a bottom strip that reads like page content.
-  return `<div class="axp-tasks"><aside class="axp-pane" aria-label="Explorer tasks">${boxes.join("")}</aside></div>`;
+  return html`<div class="axp-tasks"><aside class="axp-pane" aria-label="Explorer tasks">${boxes}</aside></div>`;
 }
 
