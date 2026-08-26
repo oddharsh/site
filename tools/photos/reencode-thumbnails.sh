@@ -123,7 +123,22 @@ if [ ! -x "$ZENC" ]; then
   cargo build --release --manifest-path "$ZENC_DIR/Cargo.toml" >&2 || { echo "error: zenc build failed" >&2; exit 1; }
 fi
 [ -d "$SRC" ]      || { echo "error: source folder not found: $SRC" >&2; exit 1; }
-if command -v avifenc >/dev/null 2>&1; then AVIF_ENCODER="avifenc"; else AVIF_ENCODER="sips"; fi
+# Same encoder preference as add-photos.sh, and it matters MORE here: this
+# script re-encodes the whole published library, so the encoder it picks decides
+# every /i/ URL at once. The vendored build is pinned; brew's is whatever the
+# machine happens to have. See tools/photos/libavif/build.sh.
+VENDORED_AVIFENC="$(cd "$(dirname "$0")" && pwd)/libavif/build/avifenc"
+if [ -x "$VENDORED_AVIFENC" ]; then
+  AVIF_ENCODER="$VENDORED_AVIFENC"; AVIF_KIND="vendored"
+elif command -v avifenc >/dev/null 2>&1; then
+  AVIF_ENCODER="avifenc"; AVIF_KIND="brew"
+else
+  AVIF_ENCODER="sips"; AVIF_KIND="sips"
+fi
+if [ "$AVIF_KIND" = "sips" ]; then
+  echo "warning: no avifenc found; sips encodes the AVIF tier differently, and this" >&2
+  echo "         script rewrites the WHOLE library. build tools/photos/libavif/build.sh" >&2
+fi
 
 # find the source file for a thumbnail stem (any extension/case)
 find_source() {
@@ -142,7 +157,7 @@ find_source() {
 STEMS=$(for j in "$PROJECT_DIR/public/i/"*.jpg; do b=$(basename "$j" .jpg); echo "${b%.*}"; done | sort -u)
 TOTAL=$(echo "$STEMS" | grep -c . || true)
 [ "$TOTAL" -gt 0 ] || { echo "error: no published thumbnails found in public/i/ (expected the content-hashed JPG tiles)" >&2; exit 1; }
-echo "re-encoding $TOTAL thumbnails as ${SQ}×${SQ} / ${SQ_SM}×${SQ_SM} center squares  (zenc q${ZENC_Q} + AVIF via $AVIF_ENCODER)"
+echo "re-encoding $TOTAL thumbnails as ${SQ}×${SQ} / ${SQ_SM}×${SQ_SM} center squares  (zenc q${ZENC_Q} + AVIF via $AVIF_KIND)"
 echo "  source: $SRC"
 echo ""
 
@@ -216,16 +231,16 @@ while IFS= read -r stem; do
   if want sq; then
   if ! "$ZENC" "$sqjpg" "$jpg" -q "$ZENC_Q" >/dev/null 2>&1; then FAIL=$((FAIL+1)); printf "✗"; continue; fi
   exif-sooc -all= -overwrite_original "$jpg" >/dev/null 2>&1 || true
-  if [ "$AVIF_ENCODER" = "avifenc" ]; then
-    avifenc -q 63 -d 10 --ignore-icc --ignore-exif --ignore-xmp --speed 4 --jobs 4 --yuv "$yuv" "$sqjpg" "$avif" >/dev/null 2>&1 || { FAIL=$((FAIL+1)); printf "✗"; continue; }
+  if [ "$AVIF_KIND" != "sips" ]; then
+    "$AVIF_ENCODER" -q 63 -d 10 --ignore-icc --ignore-exif --ignore-xmp --speed 4 --jobs 4 --yuv "$yuv" "$sqjpg" "$avif" >/dev/null 2>&1 || { FAIL=$((FAIL+1)); printf "✗"; continue; }
   else
     sips -s format avif --setProperty formatOptions 60 "$sqjpg" --out "$avif" >/dev/null 2>&1 || { FAIL=$((FAIL+1)); printf "✗"; continue; }
   fi
   fi
   # 5. mobile square: from the same full-resolution frame as the 600 tier
   if want sm; then
-    if [ "$AVIF_ENCODER" = "avifenc" ]; then
-      avifenc -q 63 -d 10 --ignore-icc --ignore-exif --ignore-xmp --speed 4 --jobs 4 --yuv "$yuv" "$smtmp" "$smavif" >/dev/null 2>&1 || printf "~"
+    if [ "$AVIF_KIND" != "sips" ]; then
+      "$AVIF_ENCODER" -q 63 -d 10 --ignore-icc --ignore-exif --ignore-xmp --speed 4 --jobs 4 --yuv "$yuv" "$smtmp" "$smavif" >/dev/null 2>&1 || printf "~"
     else
       sips -s format avif --setProperty formatOptions 60 "$smtmp" --out "$smavif" >/dev/null 2>&1 || printf "~"
     fi
@@ -235,8 +250,8 @@ while IFS= read -r stem; do
   #    this very comment claimed one encode from the source. The multi-size
   #    ingest made the claim true.)
   if want xs; then
-    if [ "$AVIF_ENCODER" = "avifenc" ]; then
-      avifenc -q 63 -d 10 --ignore-icc --ignore-exif --ignore-xmp --speed 4 --jobs 4 --yuv "$yuv" "$xstmp" "$xsavif" >/dev/null 2>&1 || printf "~"
+    if [ "$AVIF_KIND" != "sips" ]; then
+      "$AVIF_ENCODER" -q 63 -d 10 --ignore-icc --ignore-exif --ignore-xmp --speed 4 --jobs 4 --yuv "$yuv" "$xstmp" "$xsavif" >/dev/null 2>&1 || printf "~"
     else
       sips -s format avif --setProperty formatOptions 60 "$xstmp" --out "$xsavif" >/dev/null 2>&1 || printf "~"
     fi

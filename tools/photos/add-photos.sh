@@ -187,7 +187,31 @@ if [ ! -x "$MOZ_JTRAN" ]; then
   echo "  install with: brew install mozjpeg" >&2
   exit 1
 fi
-if command -v avifenc >/dev/null 2>&1; then AVIF_ENCODER="avifenc"; else AVIF_ENCODER="sips"; fi
+# AVIF encoder, in preference order. The VENDORED build is first because it is
+# the only one this repo can pin: `/i/` is content-addressed, so the encoder
+# decides shipped URLs, and a `brew upgrade libavif` could re-mint them silently
+# (gotcha 41). tools/photos/libavif/build.sh builds libavif at a pinned tag with
+# aom, libsharpyuv and libyuv LOCAL.
+#
+# Preferring it costs NOTHING today: verified 2026-08-26 that the vendored and
+# brew binaries produce BYTE-IDENTICAL output at the settings below (same
+# libavif 1.4.2, same aom 3.14.1). What the vendored one adds is `--sharpyuv`,
+# which brew's build cannot do at all, and which this script deliberately does
+# NOT pass yet (see avif_encode).
+VENDORED_AVIFENC="$(cd "$(dirname "$0")" && pwd)/libavif/build/avifenc"
+if [ -x "$VENDORED_AVIFENC" ]; then
+  AVIF_ENCODER="$VENDORED_AVIFENC"; AVIF_KIND="vendored"
+elif command -v avifenc >/dev/null 2>&1; then
+  AVIF_ENCODER="avifenc"; AVIF_KIND="brew"
+else
+  AVIF_ENCODER="sips"; AVIF_KIND="sips"
+fi
+# The sips fallback is a DIFFERENT ENCODER at a different quality, so say so
+# rather than let a missing avifenc quietly change what ships.
+if [ "$AVIF_KIND" = "sips" ]; then
+  echo "warning: no avifenc found; falling back to sips, which encodes the AVIF" >&2
+  echo "         tier differently. build the pinned one: tools/photos/libavif/build.sh" >&2
+fi
 
 mkdir -p "$DEST" "$TMP"
 trap 'rm -rf "$TMP"' EXIT
@@ -218,7 +242,7 @@ echo "found $TOTAL source file(s) to process"
 echo ""
 
 avif_encode() {  # avif_encode <src.jpg> <out.avif>
-  if [ "$AVIF_ENCODER" = "avifenc" ]; then
+  if [ "$AVIF_KIND" != "sips" ]; then
     # 4:0:0 for grayscale (Leica Monochrom — no chroma planes), else 4:2:0.
     # strip ICC/EXIF/XMP: the grid reads EXIF from metadata.json, so embedded
     # metadata is dead weight (and avifenc copies source EXIF by default).
@@ -232,14 +256,21 @@ avif_encode() {  # avif_encode <src.jpg> <out.avif>
     # 8-photo sample: q54 -10.2%, q56/57 +0.9%, q58 +6.8%, q59 +12.4%, q63 +28.8%.
     # Note q56 and q57 produce identical bytes, so the quantizer mapping is
     # coarser than the flag suggests.
-    avifenc -q 63 -d 10 --ignore-icc --ignore-exif --ignore-xmp --speed 4 --jobs 4 --yuv "$yuv" "$1" "$2" >/dev/null 2>&1
+    # --sharpyuv is available on the vendored build and is NOT passed. Measured
+    # 2026-08-26 over 12 Fuji colour frames at this exact tier: it looks like
+    # +1.218 mean SSIMULACRA2, but it also spends +4.54% more bytes, and the
+    # matched-bytes probe (raise q until plain costs the same, the test
+    # matched-bytes-probe.py runs for the resampling work) puts the real figure
+    # at +0.411 mean with sharpyuv LOSING on 5 of 12. Turning it on is a
+    # deliberate decision that also re-mints every /i/ URL it touches.
+    "$AVIF_ENCODER" -q 63 -d 10 --ignore-icc --ignore-exif --ignore-xmp --speed 4 --jobs 4 --yuv "$yuv" "$1" "$2" >/dev/null 2>&1
   else
     sips -s format avif --setProperty formatOptions 60 "$1" --out "$2" >/dev/null 2>&1
   fi
 }
 
 # ── phase 1: square thumbnails (zenc q84 JPG + 10-bit AVIF, + mobile AVIF) ──
-echo "phase 1 — square thumbnails (${SQ}×${SQ} / ${SQ_SM}×${SQ_SM}, zenc q84 + AVIF via $AVIF_ENCODER, metadata-stripped)"
+echo "phase 1 — square thumbnails (${SQ}×${SQ} / ${SQ_SM}×${SQ_SM}, zenc q84 + AVIF via $AVIF_KIND, metadata-stripped)"
 T_OK=0; T_SKIP=0; T_FAIL=0
 INTER="$TMP/inter"; mkdir -p "$INTER"
 while IFS= read -r f; do

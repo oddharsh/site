@@ -1057,9 +1057,44 @@ Two encoders + one transform tool, all built from source:
   trellis + 64-candidate progressive scan search + sharp_yuv chroma, ~4% under the
   retired cjpegli at equal quality. Builds with `cargo`; dependabot tracks the
   zenjpeg pin. Replaced the from-source jpegli build (2026-07). See `tools/photos/zenc/src/main.rs`.
-- **libavif** (`brew install libavif`, optional) — `avifenc` for the
-  primary AVIF thumbnail. Falls back to `sips -s format avif` (macOS
-  native, no extra dep) when avifenc isn't installed.
+- **libavif, VENDORED** (`tools/photos/libavif/build.sh`) — `avifenc` for the
+  primary AVIF thumbnail, built from source at a pinned tag rather than taken
+  from brew. `LIBAVIF_TAG` in that script is the single pin: libavif's own
+  `ext/*.cmd` scripts then fetch and build aom, libsharpyuv and libyuv at ITS
+  pinned revisions, so one tag fixes four projects. v1.4.2 pins aom v3.14.1,
+  which is the aom brew was already supplying, so the encoder does not move.
+
+  **The reason is that `/i/` is content-addressed, so the encoder decides
+  shipped URLs.** An ambient `brew upgrade libavif` could re-mint every AVIF
+  tier silently, which is gotcha 41 as a standing risk rather than a one-off;
+  `config/tools.json` carries a whole `recorded`-version tier to DETECT that
+  drift, and a pin removes it instead. The brew `avifenc` stays declared there
+  because the `/garage/encoding` grid scripts still use it.
+
+  **Adopting it re-mints nothing**, verified 2026-08-26: at the pipeline's
+  settings (`-q 63 -d 10 --speed 4 --yuv 420`) the vendored and brew binaries
+  produced BYTE-IDENTICAL output on a real 600px square, 26,594 bytes either
+  way. That is the bar, since one differing byte orphans every `a-dict`
+  snapshot naming the old hash.
+
+  What it adds is **`--sharpyuv`**, which brew's build cannot do at all: it is
+  compiled without libsharpyuv, and passing the flag exits 1 with "Conversion
+  to YUV failed" (its `--help` says "(if supported)", so the flag reads as
+  optional rather than absent). **The pipeline does NOT pass it**, and the
+  measurement is why. Over 12 Fuji colour frames at the shipped tier it looks
+  like +1.218 mean SSIMULACRA2, but it spends +4.54% more bytes, and the
+  matched-bytes probe (raise plain's q until it costs the same, the test
+  `matched-bytes-probe.py` runs for the resampling work) puts it at **+0.411
+  mean with sharpyuv LOSING on 5 of 12**. Wins are concentrated and
+  content-dependent (one frame +3.473); losses are small. So it is real and
+  modest, and turning it on is a deliberate decision that re-mints every `/i/`
+  URL it touches. The pre-2026-08-26 estimate came from a `cwebp -sharp_yuv`
+  proxy and overstates the real AVIF path by roughly 6x.
+
+  Falls back to a PATH `avifenc` and then to `sips -s format avif`, and the
+  sips arm now WARNS, because it is a different encoder at a different quality
+  and a missing binary quietly changing what ships is the failure this repo
+  keeps meeting.
 - **exif-sooc** (`cargo install --git https://github.com/oddharsh/exif-sooc exif-sooc`).
   The metadata reader for the photo INDEX, since 2026-08-14. Its `--keyed` mode
   emits `metadata.json`'s record shape and the Fujifilm recipe card directly,
