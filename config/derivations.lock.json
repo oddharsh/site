@@ -341,9 +341,12 @@
     "public/i/L1009919_2.6e03d6df.jpg": "6e03d6df16594f8d6aa41781a132b12a6b09512793a171c970c0758ab1f19846",
     "public/i/L1009919_2.90a088b5.avif": "90a088b5926ecd7b2546077dd8daf431d200f085cc064ce196e6b1550840b55a",
     "public/i/L1009920-200.232aa7e1.avif": "232aa7e113af179920c6ff37c84c3e0a2713298674757f84238d107e47b75987",
+    "public/i/L1009920-200.7e3bf00a.avif": "7e3bf00a2600d4b19fc0b62c29f394729e3308f87fc2651fcf42a72a0df83d89",
+    "public/i/L1009920-400.5778ff12.avif": "5778ff128bc022e4352f9abea64165465e67c5df1d8725c27f48451470a5e8f8",
     "public/i/L1009920-400.e9161f41.avif": "e9161f419aaad53ef38d4c71f2202eb61675a2491f9a6eca2f6d65c4f07ec77c",
     "public/i/L1009920.60c918bd.avif": "60c918bd3f725bf9ea9fe0d3fe8113524aeb81a15889a339d7157eb14e5307dd",
     "public/i/L1009920.98d75f8f.jpg": "98d75f8fcf35c3ef8e8a0a57e38df88fc9b521ad2ad60fc5923121809cde8231",
+    "public/i/L1009920.f4f8b90b.avif": "f4f8b90bfee60b0193b2cee297afc5d08ac8fda5e61c9a6aa20130718389a8d0",
     "public/i/XT500010-200.cefe1f84.avif": "cefe1f8427c7562b0be3bf550caca96c38f0ea8c88ccd640a04c9b77bf19e6e5",
     "public/i/XT500010-400.c6b341c0.avif": "c6b341c06d27d269e56989a743e3ff8eb0869c52c242f7a55bc463cb0546bcc0",
     "public/i/XT500010.7a3aab17.avif": "7a3aab173d33eb0c57dd25cadc62f0fa60b42aef3a186399cd54b50662b77b2a",
@@ -995,6 +998,6 @@
     "tools/photos/shell-data.ts": "1f9f02180c390b232403d24a11b478dbbddd55d5e1d2ed30d96365a7ff5d6e4b",
     "tools/photos/zenc/Cargo.lock": "193c0e7739a2801ca39328db4e6b724f8d634ff1f890b1c5bad4b898c3d8102d",
     "tools/photos/zenc/src/histogram.rs": "1a5fbc3744bf1d571e6cb2bf19aa0f965e5a8c097c2175d185023c415cfd3a10",
-    "tools/photos/zenc/src/pixels.rs": "86eb420dbf7a215c9c95a714b75a1da4a1b1198bd42f193cabf09c193d30f01f"
+    "tools/photos/zenc/src/pixels.rs": "a5013ede8b0f841d82270014b5af0f2df31d579ccde8ef483b68a6ed6ba5769c"
   }
 }

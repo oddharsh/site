@@ -137,6 +137,25 @@ pub struct Frame {
     pub transfer: Transfer,
 }
 
+/// An RGB CONTAINER HOLDING R=G=B EVERYWHERE IS A MONOCHROME FRAME wearing the
+/// wrong coat, and reading it as one is lossless: nothing is averaged, so the
+/// single channel kept here is bitwise the R channel the three-channel arm
+/// would have produced. L1009920.JPG, a Monochrom frame the camera stored as
+/// RGB with an sRGB profile, is channel-equal on 100.00% of its 23.6M pixels.
+///
+/// IT BELONGS AT THE DECODE because everything downstream reads `Frame.gray`.
+/// Deciding it later meant the two tiers disagreed about one photo: `save`
+/// wrote an RGB PNG, the shell asked `sips -g space`, got RGB, and picked
+/// `--yuv 420` for avifenc, while the JPEG tier hit the equality scan in
+/// main.rs and came out 1-channel. The shipped 600px pair carried a grayscale
+/// JPG beside a yuv420p10le AVIF with two flat chroma planes.
+///
+/// The scan bails on the first unequal pixel, so a colour photo pays one
+/// comparison.
+fn channel_equal<T: Copy + PartialEq>(raw: &[T]) -> bool {
+    raw.chunks_exact(3).all(|p| p[0] == p[1] && p[1] == p[2])
+}
+
 pub fn load_linear(path: &str, t: Transfer) -> Result<Frame, String> {
     // `image::open` applies a default allocation ceiling that a full-resolution
     // intermediate blows straight through: sips writes a 7728x5152 HIF as a
@@ -181,23 +200,37 @@ pub fn load_linear(path: &str, t: Transfer) -> Result<Frame, String> {
         },
         DynamicImage::ImageRgb16(_) | DynamicImage::ImageRgba16(_) => {
             let rgb = img.to_rgb16();
-            let mut data = Vec::with_capacity((w * h * 3) as usize);
-            for p in rgb.pixels() {
-                data.push(t.dec16(p[0]));
-                data.push(t.dec16(p[1]));
-                data.push(t.dec16(p[2]));
+            if channel_equal(rgb.as_raw()) {
+                Frame {
+                    w, h, gray: true, transfer: t,
+                    data: rgb.pixels().map(|p| t.dec16(p[0])).collect(),
+                }
+            } else {
+                let mut data = Vec::with_capacity((w * h * 3) as usize);
+                for p in rgb.pixels() {
+                    data.push(t.dec16(p[0]));
+                    data.push(t.dec16(p[1]));
+                    data.push(t.dec16(p[2]));
+                }
+                Frame { w, h, gray: false, data, transfer: t }
             }
-            Frame { w, h, gray: false, data, transfer: t }
         }
         other => {
             let rgb = other.to_rgb8();
-            let mut data = Vec::with_capacity((w * h * 3) as usize);
-            for p in rgb.pixels() {
-                data.push(t.dec8(p[0]));
-                data.push(t.dec8(p[1]));
-                data.push(t.dec8(p[2]));
+            if channel_equal(rgb.as_raw()) {
+                Frame {
+                    w, h, gray: true, transfer: t,
+                    data: rgb.pixels().map(|p| t.dec8(p[0])).collect(),
+                }
+            } else {
+                let mut data = Vec::with_capacity((w * h * 3) as usize);
+                for p in rgb.pixels() {
+                    data.push(t.dec8(p[0]));
+                    data.push(t.dec8(p[1]));
+                    data.push(t.dec8(p[2]));
+                }
+                Frame { w, h, gray: false, data, transfer: t }
             }
-            Frame { w, h, gray: false, data, transfer: t }
         }
     })
 }
@@ -445,5 +478,149 @@ mod icc_tests {
     fn auto_never_reaches_the_sample_path() {
         assert_eq!(Transfer::G22.dec8(128).to_bits(), g22_to_linear(128).to_bits());
         assert_eq!(Transfer::Srgb.dec8(128).to_bits(), srgb_to_linear(128).to_bits());
+    }
+}
+
+#[cfg(test)]
+mod gray_tests {
+    use super::*;
+    use image::ImageBuffer;
+
+    /// The decision lives inside `load_linear`, so the only honest way to test
+    /// it is through a real file. These fixtures are a few bytes and the temp
+    /// file is removed on the way out.
+    fn load_png<F: FnOnce(&Path)>(name: &str, write: F) -> Frame {
+        let mut path = std::env::temp_dir();
+        path.push(format!("zenc-gray-{name}-{}.png", std::process::id()));
+        write(&path);
+        let f = load_linear(path.to_str().unwrap(), Transfer::Srgb).expect("fixture must load");
+        std::fs::remove_file(&path).ok();
+        f
+    }
+
+    fn rgb8(name: &str, w: u32, h: u32, px: &[[u8; 3]]) -> Frame {
+        load_png(name, |p| {
+            let img: RgbImage = ImageBuffer::from_fn(w, h, |x, y| Rgb(px[(y * w + x) as usize]));
+            img.save(p).expect("write fixture");
+        })
+    }
+
+    /// The defect this arm exists for: one photo shipped a grayscale JPG tier
+    /// beside a yuv420 AVIF, because the JPEG encoder scanned for channel
+    /// equality and the resample path did not.
+    #[test]
+    fn an_rgb_container_with_equal_channels_loads_as_gray() {
+        let px = [[0u8, 0, 0], [10, 10, 10], [200, 200, 200], [255, 255, 255]];
+        let f = rgb8("equal", 2, 2, &px);
+        assert!(f.gray, "channel-equal RGB must load as a 1-channel frame");
+        assert_eq!(f.data.len(), 4, "one sample per pixel, not three");
+    }
+
+    /// The kept channel is R, decoded with the frame's own curve. Stated
+    /// bitwise because this is what makes the JPEG tier byte-identical across
+    /// the change: the encoder was already taking `p[0]`.
+    #[test]
+    fn the_gray_plane_is_the_sources_r_channel() {
+        let px = [[3u8, 3, 3], [64, 64, 64], [128, 128, 128], [251, 251, 251]];
+        let f = rgb8("rchan", 4, 1, &px);
+        assert!(f.gray);
+        for (i, p) in px.iter().enumerate() {
+            assert_eq!(
+                f.data[i].to_bits(),
+                Transfer::Srgb.dec8(p[0]).to_bits(),
+                "sample {i} is not the decoded R channel"
+            );
+        }
+    }
+
+    /// ONE differing sample anywhere keeps all three channels. A near-miss is
+    /// the case worth pinning, since an approximate scan would fold a
+    /// desaturated colour photo to gray and there is no undoing that.
+    #[test]
+    fn one_unequal_sample_keeps_the_frame_in_colour() {
+        for (name, last) in [("blue", [255u8, 255, 254]), ("green", [255, 254, 255])] {
+            let px = [[0u8, 0, 0], [10, 10, 10], [200, 200, 200], last];
+            let f = rgb8(name, 2, 2, &px);
+            assert!(!f.gray, "{name}: a single unequal sample must keep 3 channels");
+            assert_eq!(f.data.len(), 12);
+        }
+    }
+
+    /// 16-bit sources take their own arm (a HIF arrives as a 16-bit TIFF), so
+    /// the scan has to be on both or the two flavours of one photo disagree
+    /// about what it is.
+    #[test]
+    fn the_16_bit_arm_decides_the_same_way() {
+        let equal = load_png("eq16", |p| {
+            let img: ImageBuffer<Rgb<u16>, Vec<u16>> = ImageBuffer::from_fn(2, 1, |x, _| {
+                Rgb([[300u16, 300, 300], [60000, 60000, 60000]][x as usize])
+            });
+            img.save(p).expect("write fixture");
+        });
+        assert!(equal.gray, "channel-equal 16-bit RGB must load as gray");
+        assert_eq!(equal.data.len(), 2);
+
+        let colour = load_png("ne16", |p| {
+            let img: ImageBuffer<Rgb<u16>, Vec<u16>> = ImageBuffer::from_fn(2, 1, |x, _| {
+                Rgb([[300u16, 300, 300], [60000, 60000, 59999]][x as usize])
+            });
+            img.save(p).expect("write fixture");
+        });
+        assert!(!colour.gray);
+        assert_eq!(colour.data.len(), 6);
+    }
+
+    /// `save` writing 1 channel is what the shell reads with `sips -g space`
+    /// to pick `--yuv 400`, so the round trip is the actual interface.
+    #[test]
+    fn a_gray_frame_saves_as_a_gray_png() {
+        let px = [[9u8, 9, 9], [77, 77, 77], [180, 180, 180], [240, 240, 240]];
+        let f = rgb8("save", 2, 2, &px);
+        let mut out = std::env::temp_dir();
+        out.push(format!("zenc-gray-save-out-{}.png", std::process::id()));
+        save(&f, out.to_str().unwrap()).expect("save must succeed");
+        let back = load_linear(out.to_str().unwrap(), Transfer::Srgb).expect("reload");
+        std::fs::remove_file(&out).ok();
+        assert!(back.gray, "a gray frame must not widen on the way to disk");
+        assert_eq!(back.data, f.data, "the round trip must be exact at 8 bits");
+    }
+
+    /// Resampling is per-channel, so the plane this arm keeps is bitwise the R
+    /// plane the three-channel arm would have produced. That is the whole
+    /// reason the change re-mints AVIF URLs and no JPEG ones, and the two
+    /// channel counts are separate monomorphisations, so it is pinned rather
+    /// than assumed.
+    #[test]
+    fn a_resampled_gray_plane_equals_the_resampled_r_plane() {
+        let (w, h) = (7u32, 5u32);
+        let mut one = Vec::new();
+        let mut three = Vec::new();
+        for i in 0..w * h {
+            let v = (i * 7 % 251) as f32 / 251.0;
+            one.push(v);
+            three.extend_from_slice(&[v, v, v]);
+        }
+        for filter in [Filter::Box, Filter::Lanczos3, Filter::Mitchell] {
+            let g = scale(
+                &Frame { w, h, gray: true, data: one.clone(), transfer: Transfer::Srgb },
+                3,
+                2,
+                filter,
+            );
+            let c = scale(
+                &Frame { w, h, gray: false, data: three.clone(), transfer: Transfer::Srgb },
+                3,
+                2,
+                filter,
+            );
+            assert_eq!(g.data.len() * 3, c.data.len());
+            for (i, s) in g.data.iter().enumerate() {
+                assert_eq!(
+                    s.to_bits(),
+                    c.data[i * 3].to_bits(),
+                    "{filter:?} sample {i} left the R plane"
+                );
+            }
+        }
     }
 }

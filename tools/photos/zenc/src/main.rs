@@ -126,10 +126,17 @@ fn main() {
             // An RGB container holding R=G=B everywhere is a monochrome image
             // wearing the wrong coat, and converting it is LOSSLESS: Y equals
             // R when the channels agree, and the chroma planes are exactly
-            // flat. L1009920.JPG — a Monochrom frame the camera stored as RGB
-            // — is channel-equal on 100.00% of its 23.6M pixels. The scan is
-            // one pass and bails on the first unequal pixel, so a real colour
-            // photo pays almost nothing.
+            // flat. L1009920.JPG, a Monochrom frame the camera stored as RGB,
+            // is channel-equal on 100.00% of its 23.6M pixels. The scan is one
+            // pass and bails on the first unequal pixel, so a real colour photo
+            // pays almost nothing.
+            //
+            // pixels.rs makes the same call at the DECODE since 2026-08-27, so
+            // a pipeline thumbnail now arrives already 1-channel and takes the
+            // Luma8 arm above. This scan is still the only one that sees an
+            // input no Frame ever touched, which is six call sites handing this
+            // path bytes straight from sips or ffmpeg: add-photos.sh phase 2,
+            // add-car-photo.sh, and the two gen-encoding scripts.
             if img.as_raw().chunks_exact(3).all(|p| p[0] == p[1] && p[1] == p[2]) {
                 let gray: Vec<u8> = img.as_raw().chunks_exact(3).map(|p| p[0]).collect();
                 let cfg = EncoderConfig::grayscale(q)
