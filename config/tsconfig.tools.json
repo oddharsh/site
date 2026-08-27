@@ -19,6 +19,11 @@
     "target": "esnext",
     "module": "esnext",
     "moduleResolution": "bundler",
+    // Two control-flow checks, set here because they are set in tsconfig.json
+    // and a program is only as strict as its own options. Both cost nothing:
+    // +0 diagnostics on every one of the ten programs, measured 2026-08-27.
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitReturns": true,
     // strictNullChecks ON, against a RATCHET rather than a wall. tools/ carried
     // 395 diagnostics under it when this landed and carries 600 now, after
     // #532 converted 39 more scripts to .ts and JS-mode leniency withdrew with

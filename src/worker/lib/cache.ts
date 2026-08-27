@@ -4,10 +4,16 @@ import { wantsMarkdown } from "./http.ts";
 // lib/cache.js: the worker's caching kit, one primitive surface where four
 // hand-rolled dialects used to drift apart.
 //
-//   swrKV: a persistent KV value plus a tiny ":fresh" TTL sentinel. Stale serves
-//   instantly, the rebuild rides ctx.waitUntil, and only a true cold miss builds
-//   inline. Callers pass validity guards because a transient empty rebuild must
-//   never wipe a good stale value; two of the four old copies allowed exactly that.
+//   swrKV: a persistent KV value carrying its own freshness stamp in KV
+//   METADATA. Stale serves instantly, the rebuild rides ctx.waitUntil, and only a
+//   true cold miss builds inline. Callers pass validity guards because a
+//   transient empty rebuild must never wipe a good stale value; two of the four
+//   old copies allowed exactly that.
+//
+//   The stamp rode a second ":fresh" key until 2026-08-27. Metadata travels with
+//   the value on the read that was already happening, so folding it in costs one
+//   KV read per lookup instead of two and one write per rebuild instead of two,
+//   for a number that occupies about 20 of metadata's 1024 bytes.
 //
 //   cachedRender: a local caches.default fallback for rendered shells whose bytes
 //   are static-shaped. Production's named CachedPages entrypoint now sits in
@@ -17,12 +23,22 @@ import { wantsMarkdown } from "./http.ts";
 
 type SwrOptions<T> = {
   type?: "text" | "json" | "arrayBuffer" | "stream";
-  freshKey?: string;
   isValid?: (value: T | null) => boolean;
   shouldStore?: (value: T | null) => boolean;
   buildOnMiss?: boolean;
   cacheTtl?: number;
 };
+
+// A legacy entry carries no metadata, and that reads as STALE on purpose: it
+// serves instantly and rebuilds once behind the response, which is what writes
+// the first stamp. Reading absence as fresh would be the unsafe half of the same
+// guess, since "written seconds ago" and "written before this code shipped" are
+// the same observation from here. The cost is bounded at one background rebuild
+// per key on the first read after the deploy.
+function isStampFresh(metadata, ttl) {
+  const written = Number(metadata && metadata.t);
+  return Number.isFinite(written) && Date.now() - written < ttl * 1000;
+}
 
 // opts.cacheTtl (seconds, KV floor 30) keeps the value cached at the colo that
 // read it. Without it KV's default is 60s, and this site's traffic is thin
@@ -35,16 +51,18 @@ type SwrOptions<T> = {
 //   - a write or delete from ANOTHER colo stays invisible here for up to
 //     cacheTtl, so a manual `wrangler kv key delete` bust lands late. Callers
 //     that document a bust step keep this short.
-//   - the sentinel gets the SAME cacheTtl on purpose. It rides the Promise.all
-//     below, so leaving it uncached just moves the cold read rather than
-//     removing it. The cost is that the effective freshness window at a colo
-//     stretches to ttl + cacheTtl, and a lapsed sentinel reads as absent for up
-//     to cacheTtl, so a colo can fire an extra background rebuild or two before
-//     its own write settles. Both are bounded; neither touches the response.
+//   - the stamp is part of the value's own entry, so the two cannot be cached
+//     independently and cannot disagree. That retires the ttl + cacheTtl
+//     freshness window this bullet used to describe, where a separately cached
+//     sentinel could outlive or predate the value it spoke for. The stamp is an
+//     absolute time describing exactly the bytes it arrived with, so no colo
+//     reads a value as fresher than ttl. What is left is plain cacheTtl cost: a
+//     colo serves a value up to cacheTtl older than central's newest and can
+//     fire an extra background rebuild or two until its own copy refreshes.
+//     Bounded, and it never touches the response.
 export async function swrKV<T>(env, ctx, key, ttl, buildFn: () => T | Promise<T>, opts: SwrOptions<T> = {}): Promise<T | null> {
   const kv = env && env.RN_KV;
   const type = opts.type || "json";
-  const freshKey = opts.freshKey || `${key}:fresh`;
   const isValid = opts.isValid || ((value) => value !== null && value !== undefined);
   const shouldStore = opts.shouldStore || isValid;
   const buildOnMiss = opts.buildOnMiss !== false;
@@ -53,20 +71,19 @@ export async function swrKV<T>(env, ctx, key, ttl, buildFn: () => T | Promise<T>
   const store = async (value: T) => {
     if (!kv || !shouldStore(value)) return value;
     const body = type === "json" ? JSON.stringify(value) : value;
-    await Promise.all([
-      kv.put(key, body),
-      kv.put(freshKey, "1", { expirationTtl: ttl }),
-    ]);
+    // The stamp is the write time rather than an expiry, so ttl stays the
+    // READER's parameter: changing it at a caller takes effect on the entries
+    // already in KV instead of waiting for each one to be rewritten.
+    await kv.put(key, body, { metadata: { t: Date.now() } });
     return value;
   };
 
   if (kv) {
-    let value: T | null = null, fresh = null;
+    let value: T | null = null, fresh = false;
     try {
-      [value, fresh] = await Promise.all([
-        kv.get(key, cacheTtl ? { type, cacheTtl } : type),
-        kv.get(freshKey, cacheTtl ? { type: "text", cacheTtl } : "text"),
-      ]);
+      const read = await kv.getWithMetadata(key, cacheTtl ? { type, cacheTtl } : { type });
+      value = read.value;
+      fresh = isStampFresh(read.metadata, ttl);
     } catch {}
 
     if (isValid(value)) {
@@ -119,13 +136,15 @@ export function deadline(promise, ms, fallback, onTimeout) {
   ]);
 }
 
-export async function deleteSWRKV(env, key, opts: { freshKey?: string } = {}) {
+// One key to drop, since the freshness stamp is metadata on the value and dies
+// with it. The ":fresh" sentinels this used to delete alongside were every one of
+// them written with `expirationTtl: ttl`, so KV reaps the last of them within one
+// ttl of the deploy that stops writing them (6h, the longest any caller sets),
+// and nothing reads one in the meantime. There is no cleanup pass to run, and a
+// second delete here would only be a write against a key that is already gone.
+export async function deleteSWRKV(env, key) {
   if (!env || !env.RN_KV) return;
-  const freshKey = opts.freshKey || `${key}:fresh`;
-  await Promise.all([
-    env.RN_KV.delete(key),
-    env.RN_KV.delete(freshKey),
-  ]);
+  await env.RN_KV.delete(key);
 }
 
 // The cache key folds in the deployed worker VERSION (CF_VERSION_METADATA.id),

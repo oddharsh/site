@@ -7,6 +7,7 @@ import {
   readdir,
   remainderHolder,
   test,
+  wranglerErrorLines,
 } from "./contract-shared.ts";
 
 // ── the TypeScript quarantine ───────────────────────────────────────────────
@@ -421,6 +422,52 @@ test("a ramp step hands the remainder to the LARGEST incumbent", () => {
   assert.equal(remainderHolder([], "7634b9d8-fc15"), null);
 });
 
+// A ramp reports a wrangler failure by trimming its stderr to the first few real
+// lines, which is only readable once the ANSI colour codes come off. Nothing
+// exercised that until 2026-08-27, and the gap cost more than coverage usually
+// does: the pattern carries its ESC as a RAW 0x1b byte, invisible in any
+// rendering of the source, so it reads as though it strips the bracket and
+// leaves the escape. That reading was reported as a bug, and the repair it
+// implies (an escape in front of the byte already there) matches nothing and
+// leaves every colour code in place. This is the two lines that answer it.
+test("the ramp's error reporter strips wrangler's ANSI colour codes", () => {
+  const ESC = "\u001b";
+  // Verbatim from wrangler 4.126.0 stderr: `deploy --dry-run` against a config
+  // whose entry point does not exist, captured under FORCE_COLOR=3.
+  const stderr = [
+    `${ESC}[31m✘ ${ESC}[41;31m[${ESC}[41;97mERROR${ESC}[41;31m]${ESC}[0m ${ESC}[1mThe entry-point file at "does-not-exist.ts" was not found.${ESC}[0m`,
+    "",
+    "  This might mean that your entry-point file needs to be generated.",
+    "",
+    '🪵  Logs were written to "/Users/x/.wrangler/logs/wrangler-2026-08-27.log"',
+  ].join("\n");
+
+  const lines = wranglerErrorLines({ stderr });
+
+  assert.deepEqual(lines, [
+    '✘ [ERROR] The entry-point file at "does-not-exist.ts" was not found.',
+    "This might mean that your entry-point file needs to be generated.",
+  ]);
+  assert.ok(!lines.join("\n").includes(ESC), "no ESC byte may survive into the reported text");
+
+  // The control, because the assertion above would pass on a fixture carrying no
+  // escapes at all. Dropping the escape from the pattern leaves one ESC per code
+  // and the survivors re-form an `ESC [` introducer, which is the failure the
+  // audit described and the shape this fixture is able to detect.
+  const halfStripped = stderr.replace(/\[[0-9;]*m/g, "");
+  assert.equal([...halfStripped].filter((c) => c === ESC).length, 7);
+  assert.ok(halfStripped.includes(`${ESC}[`), "the old pattern re-forms a CSI introducer");
+
+  // stdout is the fallback when a failure says nothing on stderr, then message.
+  assert.deepEqual(wranglerErrorLines({ stdout: `${ESC}[1monly stdout${ESC}[0m` }), ["only stdout"]);
+  assert.deepEqual(wranglerErrorLines({ message: "spawn ENOENT" }), ["spawn ENOENT"]);
+  assert.deepEqual(wranglerErrorLines({}), []);
+
+  // Capped, so one chatty failure cannot bury the ramp's own message under it.
+  const many = { stderr: Array.from({ length: 20 }, (_, i) => `line ${i}`).join("\n") };
+  assert.equal(wranglerErrorLines(many).length, 6);
+});
+
 // ── strictNullChecks is a RATCHET, and it only ever tightens ────────────────
 // `strict` is off everywhere and stays off: it bundles noImplicitAny, measured
 // at 7,197 diagnostics across this repo against strictNullChecks' 1,544, and the
@@ -460,6 +507,11 @@ test("every program declared null-safe still declares it", async () => {
     "tsconfig.lwe-ask.json",
     "tsconfig.browser.json",
     "tsconfig.tools.json",
+    // The last program to join, on 2026-08-27. It had been the only config in
+    // config/ without the flag, and its header argues why the service worker
+    // needs a separate PROGRAM rather than a laxer one, so the gap read as a
+    // decision purely because it sat where a decision goes. 0 diagnostics.
+    "tsconfig.sw.json",
   ].sort();
 
   const configs = readdirSync(new URL("config/", ROOT).pathname)

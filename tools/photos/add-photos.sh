@@ -322,7 +322,20 @@ while IFS= read -r f; do
       --size "$SQ" --out "$sq" --size "$SQ_SM" --out "$sm" --size "$SQ_XS" --out "$xs" >/dev/null 2>&1; then
     rm -f "$tif"; T_FAIL=$((T_FAIL+1)); printf "✗"; continue
   fi
-  # Deleted per photo rather than by the EXIT trap: a full-res TIFF is ~311MB.
+  # Deleted per photo rather than by the EXIT trap: a full-res TIFF is ~311MB
+  # (326,474,696 B for a 7728x5152 HIF, 16-bit RGBA).
+  #
+  # `-s formatOptions lzw` is NOT the way to shrink that, and it reads like it
+  # should be: `sips -H` documents `[lzw|packbits]` for TIFF. Measured 2026-08-27
+  # on sips-316, the bare and lzw writes are BYTE-IDENTICAL at 326,474,696 B and
+  # the result reports `formatOptions: default`. Two controls say the property
+  # itself works and the BIT DEPTH is what it will not do: on an 8-bit source lzw
+  # takes a 587,544 B TIFF to 320,258 B (packbits does nothing there either), and
+  # on JPEG output low/normal/best give 29,264/57,595/397,722 B. Timing is a wash,
+  # 473-695ms bare against 450-752ms lzw over 5 alternating trials, and zenc's
+  # three tiers plus the q84 encode are byte-identical from either TIFF. A bogus
+  # value is accepted silently too, so nothing errors in any direction. Dropping
+  # to 8 bits to buy the compression is the thing this door exists to avoid.
   rm -f "$tif"
   # 4. desktop square JPG (zenc: zenjpeg hybrid+scan, q84 ≈ old jpegli q82) + strip
   #    any residual metadata (sips can leave a grayscale ICC on B&W frames; keep

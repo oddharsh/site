@@ -707,6 +707,16 @@ const WORK_CAL_TTL = 86400; // 24h
 async function resolveWorkCalendar(shortUrl: string, env: Env, ctx: ExecutionContext) {
   if (env.RN_KV) {
     try {
+      // No cacheTtl, and the reason is specific to this key rather than a habit.
+      // It is the only KV value here written WITH an expirationTtl, and KV caches
+      // negative lookups on the same timer, so a colo that reads it in the moment
+      // after the 24h window lapses would pin the miss: every visitor for the rest
+      // of that window re-walks the redirect chain and re-writes, which costs more
+      // than the cold read it was meant to save. Whether the colo's own write
+      // clears that miss is not documented either way, and this route is a shared
+      // booking link, so two visits landing at one colo inside any window worth
+      // setting is the rare case rather than the common one. Measure the
+      // negative-lookup behaviour before revisiting.
       const cached = await env.RN_KV.get(WORK_CAL_CACHE_KEY);
       if (cached && isResolvedCalendarUrl(cached)) return cached;
     } catch {}

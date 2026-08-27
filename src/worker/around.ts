@@ -330,15 +330,23 @@ async function readAroundReport(request, env) {
   // still allowed to crawl, because it authenticates as the owner.
   const url = new URL(request.url);
   if (env.RN_BUST_SECRET && url.searchParams.get("bust") === env.RN_BUST_SECRET) {
-    await deleteSWRKV(env, AROUND_KEY);   // clears the legacy :fresh sentinel too
+    await deleteSWRKV(env, AROUND_KEY);   // this key is written directly above, never by swrKV
     const report = await runAround(env);
     if (report && report.results && report.results.some(r => !r.error) && env.RN_KV) {
       await env.RN_KV.put(AROUND_KEY, JSON.stringify(report));
     }
     return report;
   }
+  // cacheTtl 1800: cronAround rewrites this key once a DAY, so half an hour is 2%
+  // of the snapshot's own cadence and the page already says "as of the last cron
+  // crawl". It has to exceed 300 to buy anything at all, because /around and
+  // /around/json both sit behind cachedRender at s-maxage=300 and this read only
+  // runs on an edge miss, so a shorter window would expire alongside the render it
+  // was meant to skip ahead of. The owner's ?bust= still renders from its own fresh
+  // crawl rather than from KV, so the person who ran it is never the one reading
+  // stale; other colos catch up as their own cacheTtl lapses.
   try {
-    const report = env.RN_KV ? await env.RN_KV.get(AROUND_KEY, "json") : null;
+    const report = env.RN_KV ? await env.RN_KV.get(AROUND_KEY, { type: "json", cacheTtl: 1800 }) : null;
     return report && Array.isArray(report.results) ? report : null;
   } catch { return null; }
 }

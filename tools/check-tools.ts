@@ -41,6 +41,7 @@ type Tool = {
   install: string;
   why: string;
   optional?: boolean;
+  optional_why?: string;
   required_by?: string[];
   min_version?: string;
   bytes?: boolean;
@@ -255,7 +256,13 @@ if (minGuards < FLOOR_MIN_GUARDS) {
 const PATH_DIRS = (process.env.PATH ?? "").split(path.delimiter).filter(Boolean);
 
 async function present(tool: Tool): Promise<string | null> {
-  const candidates = tool.path ? [tool.path] : PATH_DIRS.map((dir) => path.join(dir, tool.bin));
+  // A declared `path` resolves against the REPOSITORY, not the working
+  // directory, so a tool built into the tree (zenc) can be declared by its
+  // committed location and still be found when this runs from anywhere.
+  // `path.resolve` leaves an absolute path (jpegtran's) untouched.
+  const candidates = tool.path
+    ? [path.resolve(ROOT, tool.path)]
+    : PATH_DIRS.map((dir) => path.join(dir, tool.bin));
   for (const candidate of candidates) {
     try {
       await access(candidate, fsConstants.X_OK);
@@ -341,7 +348,31 @@ for (const [bin, where] of found) {
     continue;
   }
 
-  const version = found_[1];
+  // A pattern may capture MORE THAN ONE component, and it has to when the
+  // binary's own version is not the thing that decides the bytes. avifenc
+  // answers `Version: 1.4.2 (dav1d [dec]:1.5.4, aom [enc/dec]:3.14.1)`, and aom
+  // is the encoder: brew can relink libavif against a newer one without moving
+  // 1.4.2, so a pattern reading the wrapper alone passes through exactly the
+  // drift this tier exists to catch. NAMED groups join into the recorded string,
+  // which keeps the names load-bearing rather than decorative: they are part of
+  // the value compared against `recorded`.
+  const groups = found_.groups;
+  const version = groups
+    ? Object.entries(groups)
+        .map(([name, value]) => `${name} ${value}`)
+        .join(", ")
+    : found_[1];
+
+  // `olderThan` reads one number per dot-separated component, so it cannot rank
+  // a multi-part record. Saying so beats comparing anyway: a floor that silently
+  // stops flooring is the same rot this file's header warns about.
+  if (tool.min_version && groups) {
+    versionErrors.push(
+      `config/tools.json: ${bin} declares min_version ${tool.min_version} and a multi-part version pattern, which cannot be ordered`,
+    );
+    continue;
+  }
+
   const marks: string[] = [];
   if (tool.min_version && olderThan(version, tool.min_version)) {
     versionErrors.push(`${bin} ${version} is older than the declared minimum ${tool.min_version}`);

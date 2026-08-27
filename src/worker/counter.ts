@@ -67,25 +67,49 @@ const PEEK_UA = /bot|crawl|spider|slurp|crawler|bingpreview|facebookexternalhit|
 
 // ── the KV mirror the homepage render reads ──────────────────────────
 // COUNT_KEY holds the value and never expires, so the render always finds a
-// number even after a quiet night. FRESH_KEY is a TTL sentinel that throttles
-// the writes, the same value + freshness pair the images manifest uses.
+// number even after a quiet night. Its KV METADATA carries the write time, and
+// that stamp is the throttle: the same one-key shape lib/cache.ts's swrKV uses,
+// for the same reason (a timestamp beside the value costs no second key).
 //
-// The throttle is what keeps this inside the ~10K writes/day KV budget: an
-// unthrottled mirror would be one write per visit AND would fight Cloudflare's
-// 1-write-per-second-per-key limit under any burst. Behind the sentinel the worst
-// case is 2 writes per MIRROR_TTL even under continuous traffic, ~2.9K/day, and a
-// visit odometer trailing real time by a minute is not a number anyone audits.
+// Without a throttle this is one write per visit, and it would also fight
+// Cloudflare's 1-write-per-second-per-key limit under any burst. Behind the stamp
+// the worst case is one write per MIRROR_TTL under continuous traffic:
+// 86400 / 60 = 1,440 a day. A visit odometer trailing real time by a minute is
+// not a number anyone audits.
+//
+// THAT IS STILL OVER THE FREE-PLAN CEILING, and this comment said the opposite
+// until 2026-08-27. It priced the old two-key shape at ~2.9K writes/day and
+// called that comfortable inside a "~10K writes/day KV budget". Workers Free
+// allows 1,000 writes a day and Paid is unlimited, which CLAUDE.md's RN_KV note
+// corrected after this was written, so the old figure was about 3x over the real
+// ceiling and the halved one is still about 1.4x over. Folding the sentinel into
+// metadata was worth doing and does not settle this.
+//
+// Two things decide whether the gap costs anything. Which plan the account is on
+// is the first, and it is the cheap thing to check before spending effort here.
+// The second is that 1,440 is a CEILING on a site nowhere near a visit a second:
+// a write happens only when /hit runs and finds the stamp lapsed, so the real
+// figure is min(ticks, 1440) and a quiet day is a small fraction of it.
+//
+// MIRROR_TTL is the lever if it ever has to close: writes/day is 86400/MIRROR_TTL,
+// so 90s buys 960/day and 120s buys 720. It stays at 60 because moving it trades
+// odometer lag against a ceiling nobody has measured this hitting, and arithmetic
+// alone is not evidence. Note that 60 was ALSO KV's floor for expirationTtl, which
+// the sentinel needed and a stamp does not, so the floor no longer binds it.
 export const COUNT_KEY = "counter:n";
-const FRESH_KEY = "counter:n:fresh";
-const MIRROR_TTL = 60;   // seconds; KV's floor for expirationTtl is 60
+const MIRROR_TTL = 60;   // seconds between mirror writes; priced above
 
 async function mirrorCount(env, n, force = false) {
   try {
-    if (!force && await env.RN_KV.get(FRESH_KEY)) return;   // a recent tick already mirrored
-    await Promise.all([
-      env.RN_KV.put(COUNT_KEY, String(n)),
-      env.RN_KV.put(FRESH_KEY, "1", { expirationTtl: MIRROR_TTL }),
-    ]);
+    if (!force) {
+      // A legacy entry has no metadata and reads as lapsed, so the first tick
+      // after the deploy mirrors once and stamps it. Same call shape as swrKV's
+      // read: absence is treated as stale rather than guessed at.
+      const { metadata } = await env.RN_KV.getWithMetadata(COUNT_KEY, { type: "text" });
+      const written = Number(metadata && metadata.t);
+      if (Number.isFinite(written) && Date.now() - written < MIRROR_TTL * 1000) return;
+    }
+    await env.RN_KV.put(COUNT_KEY, String(n), { metadata: { t: Date.now() } });
   } catch {}   // a missed mirror costs staleness, never the response
 }
 
@@ -159,9 +183,17 @@ export async function handleHit(request, env, ctx) {
   // global round trip — and it is fetched on idle, because a footer odometer is
   // the last thing on the page that matters. A miss leaves the static
   // placeholder alone rather than inventing a number.
+  //
+  // cacheTtl MIRROR_TTL: the mirror behind this key is rewritten at most once per
+  // MIRROR_TTL anyway, so caching the read for the same window can only ever double
+  // the lag the throttle above already accepts, to two minutes. The comment on that
+  // throttle is the argument: an odometer trailing real time is not a number anyone
+  // audits, and this fetch is on idle, so nobody is waiting for it either. KV's
+  // floor is 30 seconds (lowered from 60 on 2026-01-30), so 60 is a choice rather
+  // than the minimum.
   if (url.searchParams.has("n")) {
     let n = null;
-    try { const v = env.RN_KV && await env.RN_KV.get(COUNT_KEY); if (v != null) n = Number(v); } catch {}
+    try { const v = env.RN_KV && await env.RN_KV.get(COUNT_KEY, { cacheTtl: MIRROR_TTL }); if (v != null) n = Number(v); } catch {}
     return Response.json({ n: Number.isFinite(n) ? n : null }, {
       headers: { "cache-control": "no-store", "x-robots-tag": "noindex" },
     });

@@ -20,6 +20,7 @@ import { readdirSync } from "node:fs";
 
 const LENS = readFileSync("./src/client/lens.js", "utf8");
 const LENS_BOOT = readFileSync("./src/client/lens-boot.js", "utf8");
+const LENS_WEBMCP = readFileSync("./src/client/lens-webmcp.js", "utf8");
 const WEBMCP = readFileSync("./src/client/webmcp.js", "utf8");
 const NAV = readFileSync("./src/client/nav.js", "utf8");
 const BUILD = readFileSync("./tools/build.ts", "utf8");
@@ -27,15 +28,15 @@ const TRAY = readFileSync("./src/client/nav-tray.js", "utf8");
 const SHELL = readFileSync("./tools/photos/shell-data.ts", "utf8");
 const CHROME = readFileSync("./src/worker/lib/desktop.ts", "utf8");
 
-// The page tools are declared in one array literal at the end of lens.js. Read
-// the array rather than the whole file, so a `name:` in some unrelated object
-// cannot inflate the count and hide a collision.
+// The page tools are declared in one array literal in the lightweight registrar.
+// Read that array rather than the whole file, so a `name:` in some unrelated
+// object cannot inflate the count and hide a collision.
 function pageToolNames() {
-  const start = LENS.indexOf("var defs = [");
-  assert.ok(start > 0, "lens.js no longer declares its WebMCP page tools as `var defs = [` — update this scanner");
-  const end = LENS.indexOf("\n    ];", start);
+  const start = LENS_WEBMCP.indexOf("const defs = [");
+  assert.ok(start > 0, "lens-webmcp.js no longer declares its page tools as `const defs = [` — update this scanner");
+  const end = LENS_WEBMCP.indexOf("\n  ];", start);
   assert.ok(end > start, "could not find the end of the page-tool array");
-  return [...LENS.slice(start, end).matchAll(/^\s+name:\s*"([a-z0-9_]+)",$/gm)].map((m) => m[1]);
+  return [...LENS_WEBMCP.slice(start, end).matchAll(/^\s+name:\s*"([a-z0-9_]+)",$/gm)].map((m) => m[1]);
 }
 
 test("no Lens page tool is named after a tool /mcp already serves", () => {
@@ -54,9 +55,9 @@ test("no Lens page tool is named after a tool /mcp already serves", () => {
 });
 
 test("every Lens page tool states its own safety, rather than inheriting a default", () => {
-  const start = LENS.indexOf("var defs = [");
-  const end = LENS.indexOf("\n    ];", start);
-  const body = LENS.slice(start, end);
+  const start = LENS_WEBMCP.indexOf("const defs = [");
+  const end = LENS_WEBMCP.indexOf("\n  ];", start);
+  const body = LENS_WEBMCP.slice(start, end);
   const count = pageToolNames().length;
   // `writes` is what arms the consent dialog and `annotations` is what feeds the
   // description's safety line. Defaulting either one is how a tool that changes
@@ -110,12 +111,30 @@ test("webmcp.js is the only client module that uses document.modelContext", () =
 });
 
 test("a cold Lens document loads its page tools when WebMCP is available", () => {
-  // The six tools live inside lens.js because they close over the live pane
-  // state. A default, untouched /lens used to keep that client lazy forever and
-  // therefore advertised only the 25 server tools. Ordinary browsers should
-  // stay lazy; a browser that can consume the catalog must pay for its owner.
-  assert.ok(/if \(document\.modelContext \|\| hasClientState\(\)\) load\(\)/.test(LENS_BOOT),
-    "lens-boot.js must load lens.js for an idle WebMCP-capable document");
+  // Discovery needs the six definitions before interaction, not the 80+ KiB
+  // client that executes them. The registrar must load eagerly in a capable
+  // browser while lens.js stays behind saved state, human intent, or a tool call.
+  assert.match(LENS_BOOT, /document\.modelContext\s*\? import\("\/lens-webmcp\.js"\)/,
+    "lens-boot.js must load the lightweight registrar in a WebMCP browser");
+  assert.match(LENS_BOOT, /if \(pageTools\) pageTools\.then\(function \(wm\) \{ return wm && wm\.boot\(load\); \}\)/,
+    "lens-boot.js must register page tools before interaction");
+  assert.match(LENS_BOOT, /import\("\/lens-webmcp\.js"\)\.catch\(function \(\) \{ return null; \}\)/,
+    "a failed optional registrar import must not prevent the human Lens client from loading");
+  assert.doesNotMatch(LENS_BOOT, /document\.modelContext\s*\|\|\s*hasClientState\(\)/,
+    "WebMCP discovery must not hydrate the full Lens client while idle");
+
+  const execute = LENS_WEBMCP.slice(LENS_WEBMCP.indexOf("async function execute"), LENS_WEBMCP.indexOf("const proxy"));
+  assert.ok(execute.indexOf("await loadClient()") < execute.indexOf("return handler(args)"),
+    "a page-tool call must hydrate lens.js before reaching its live handler");
+});
+
+test("the early definitions and lazy Lens handlers stay one-to-one", () => {
+  const start = LENS.indexOf("wmBridge.installHandlers({");
+  const end = LENS.indexOf("\n  });", start);
+  assert.ok(start > 0 && end > start, "could not find the Lens page-handler boundary");
+  const handlers = [...LENS.slice(start, end).matchAll(/^\s{4}([a-z0-9_]+): function/gm)].map((m) => m[1]);
+  assert.deepEqual(handlers, pageToolNames(),
+    "every early page-tool definition needs exactly one closure-backed handler, in the same order");
 });
 
 test("successful registration repaints activity observers", () => {
@@ -135,12 +154,14 @@ test("successful registration repaints activity observers", () => {
 test("webmcp.js ships as a minified asset with a readable twin", () => {
   assert.ok(/\["webmcp\.js",\s*"\/webmcp\.src\.js",/.test(BUILD),
     "webmcp.js is missing from build.ts SHELLS, so it would ship unminified and without a .src.js twin");
+  assert.ok(/\["lens-webmcp\.js",\s*"\/lens-webmcp\.src\.js",/.test(BUILD),
+    "lens-webmcp.js is missing from build.ts SHELLS, so the early catalog would ship unminified");
 });
 
 test("both entry points reach webmcp.js through an import specifier", () => {
   // Deliberately unhashed, for hoist.js's reason: the /a/ repointer is
   // attribute-scoped (src=/href= only) and would never rewrite an import().
-  for (const [file, source] of [["nav.js", NAV], ["lens.js", LENS]]) {
+  for (const [file, source] of [["nav.js", NAV], ["lens-webmcp.js", LENS_WEBMCP]]) {
     assert.ok(/import\(\s*"\/webmcp\.js"\s*\)/.test(source),
       `${file} should load the WebMCP core with import("/webmcp.js")`);
   }

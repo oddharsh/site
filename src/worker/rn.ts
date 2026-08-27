@@ -24,6 +24,21 @@ import { span } from "./lib/trace.ts";
 // redirect falls back to the playlist URL hardcoded below.
 export const RN_FALLBACK = "https://open.spotify.com/playlist/4IRq9W1N2tOWHhH0O3vXiF";
 
+// cacheTtl for the reads of "playlist-id" that sit on a request path. The key is
+// written exactly once, by hand, at /rn/set; a rollover is a monthly event, so
+// this is the window a swap takes to reach every colo. 900 is picked from both
+// ends. It has to clear 600 to help /rn/tracks at all, which is in
+// WORKERS_CACHEABLE_PATHS at s-maxage=600 and so only reads KV on a miss. And it
+// stays inside the 1800 getTracksSWR already spends on the payload this id
+// selects, so the pointer can never be the stalest thing in the chain. /rn itself
+// is `no-store`, so before this every redirect paid a central round trip for 22
+// characters.
+//
+// Two readers deliberately opt OUT below: cronEnrichTracks (off the request path,
+// and it should enrich the playlist that is set NOW) and /rn/admin (a read-back of
+// what you just wrote, which must never be able to lie).
+export const PLAYLIST_ID_CACHE_TTL = 900;
+
 // ── /rn handler ─────────────────────────────────────────────────────
 // This route has NO page of its own: it is a 302 to Spotify, and a browser that
 // follows it lands on a JS application. That is fine for a human and useless to
@@ -56,7 +71,7 @@ export async function handleRn(request, env, ctx) {
 async function playlistUrl(env) {
   let playlistId = null;
   if (env?.RN_KV) {
-    try { playlistId = await env.RN_KV.get("playlist-id"); } catch {}
+    try { playlistId = await env.RN_KV.get("playlist-id", { cacheTtl: PLAYLIST_ID_CACHE_TTL }); } catch {}
   }
   return (playlistId && /^[0-9A-Za-z]{22}$/.test(playlistId))
     ? `https://open.spotify.com/playlist/${playlistId}`
@@ -478,7 +493,7 @@ async function loadRnTracksInner(request, env, ctx, s) {
     s.setAttribute("rn.outcome", "no_kv_binding");
     return { payload: { error: "no kv binding", tracks: [] }, status: 500 };
   }
-  const playlistId = await span("rn.tracks.playlist_id", () => env.RN_KV.get("playlist-id"));
+  const playlistId = await span("rn.tracks.playlist_id", () => env.RN_KV.get("playlist-id", { cacheTtl: PLAYLIST_ID_CACHE_TTL }));
   if (!playlistId || !/^[0-9A-Za-z]{22}$/.test(playlistId)) {
     s.setAttribute("rn.outcome", "no_playlist_set");
     return { payload: { error: "no playlist set", tracks: [] }, status: 200 };
@@ -487,7 +502,7 @@ async function loadRnTracksInner(request, env, ctx, s) {
 
   const cacheKey = `tracks:${playlistId}`;
 
-  // optional bust — drop both the value and its freshness sentinel.
+  // optional bust: drop the value, whose metadata carries the freshness stamp.
   // constant-time compare, same as the admin/set gate (a plain === leaks the
   // secret's length + prefix through timing).
   if (env.RN_BUST_SECRET && timingSafeEqual(url.searchParams.get("bust") || "", env.RN_BUST_SECRET)) {
@@ -495,9 +510,9 @@ async function loadRnTracksInner(request, env, ctx, s) {
     await span("rn.tracks.bust", () => deleteSWRKV(env, cacheKey));
   }
 
-  // two-key SWR (same shape as the photo manifest): stale serves instantly,
-  // a lapsed sentinel refreshes in the background. only a true cold start
-  // (or a bust) pays the 3-tier Spotify scrape inline.
+  // SWR (same shape as the photo manifest): stale serves instantly, a lapsed
+  // stamp refreshes in the background. only a true cold start (or a bust)
+  // pays the 3-tier Spotify scrape inline.
   let payload;
   try {
     payload = await span("rn.tracks.swr", () => getTracksSWR(env, ctx, playlistId, { buildOnMiss: true }));
@@ -676,12 +691,12 @@ function fmtDuration(ms) {
   return `${m}:${s}`;
 }
 
-// two-key stale-while-revalidate for the playlist payload, mirroring
+// stale-while-revalidate for the playlist payload, mirroring
 // getImagesManifest: `tracks:<pid>` persists with NO TTL (a visitor never
-// catches an empty hole when the hour lapses), and `tracks:<pid>:fresh`
-// carries the freshness window. lapsed sentinel → serve stale now, rescrape
-// on ctx.waitUntil. used by both /rn/tracks and the homepage prerender, so
-// whichever gets hit keeps the payload warm.
+// catches an empty hole when the hour lapses), and its KV metadata carries the
+// write time the freshness window is measured from. lapsed stamp, so serve
+// stale now and rescrape on ctx.waitUntil. used by both /rn/tracks and the
+// homepage prerender, so whichever gets hit keeps the payload warm.
 export async function getTracksSWR(env, ctx, pid, opts: { buildOnMiss?: boolean } = {}) {
   // cacheTtl 1800: this is the homepage's slowest TTFB-gating read (204ms cold on
   // 2026-07-27), and the key is write-rarely by construction. A playlist swap
@@ -776,10 +791,16 @@ function withTrackMeta(track, meta) {
 // took the covers with it.
 //
 // Budgets are per RUN and deliberately small. Worst case per tick is 3 KV reads
-// + 6 track embeds + 6 artist reads + 6 artist embeds + 6 artist writes + 2
-// payload writes = 29 subrequests, against a cap of 50. Raise these ONLY with
-// that arithmetic redone: the cap counts KV operations, which is the part that
-// is easy to forget and is how the inline version got to 67.
+// + 6 track embeds + 6 artist embeds + 6 artist writes + 2 payload writes = 23
+// subrequests, against a cap of 50. Raise these ONLY with that arithmetic
+// redone: the cap counts KV operations, which is the part that is easy to
+// forget and is how the inline version got to 67.
+//
+// Two of those three reads are BULK reads, which is why 6 artist reads left the
+// sum (see kvBulkJson). The 6 subrequests that frees are deliberately NOT spent
+// here: `budget.spent` on the rn.enrich span is what says whether the saving is
+// real, and a raised budget on the strength of a sum nobody has measured is the
+// exact shape of the 67.
 //
 // That arithmetic is now also CHECKED AT RUNTIME rather than only reasoned
 // about here, against a ledger from lib/budget.ts. A comment doing this sum is
@@ -821,10 +842,35 @@ function trackMetaFromEntity(e) {
   };
 }
 
+// ONE bulk read is ONE subrequest, whatever the key count, and that is the whole
+// reason this exists instead of a Promise.all of gets. Cloudflare's KV "Read
+// key-value pairs" reference says so under "Requesting more keys per Worker
+// invocation with bulk requests": up to 100 keys per call, and "These count as a
+// single operation against the 1,000 operation limit". That figure is the
+// ceiling in its PAID form; Free is the same counter at 50, which is the one
+// SUBREQUEST_CAP_FREE holds.
+//
+// So the ledger is charged for the CALL rather than for the keys, and the charge
+// lives in here because per-key is what the next edit reaches for by reflex.
+// Both callers stay far under 100 by their own budgets: two keys at the setup
+// read, at most ENRICH_ARTIST_BUDGET at the artist read.
+//
+// `json` is not a default anyone may widen. The bulk form supports `text` and
+// `json` alone; `arrayBuffer` and `stream` are documented as unsupported and
+// want individual gets under Promise.all instead. Errors are left to the caller,
+// since the two call sites want opposite things from a read that fails.
+function kvBulkJson(env, budget, keys) {
+  budget.charge(1);
+  return env.RN_KV.get(keys, "json");
+}
+
 export async function cronEnrichTracks(env, ctx) {
   if (!env?.RN_KV) return { ok: false, reason: "no_kv_binding" };
 
   return span("rn.enrich", async (s) => {
+    // no cacheTtl on purpose: a cron tick is off the request path, so it has no
+    // latency to save, and it is the job that would spend a whole cycle enriching
+    // the playlist someone just swapped away from.
     const playlistId = await env.RN_KV.get("playlist-id");
     if (!playlistId || !/^[0-9A-Za-z]{22}$/.test(playlistId)) {
       s.setAttribute("rn.outcome", "no_playlist_set");
@@ -838,11 +884,12 @@ export async function cronEnrichTracks(env, ctx) {
     let capped = false;
 
     const cacheKey = `tracks:${playlistId}`;
-    budget.charge(2);
-    const [payload, storedMeta] = await Promise.all([
-      env.RN_KV.get(cacheKey, "json"),
-      env.RN_KV.get(TRACK_META_KEY, "json"),
-    ]);
+    // Both setup keys in one read. A key with nothing behind it comes back as
+    // null, which is the answer a single get gave, so `no_payload` below is
+    // unchanged.
+    const setup = await kvBulkJson(env, budget, [cacheKey, TRACK_META_KEY]);
+    const payload = setup.get(cacheKey);
+    const storedMeta = setup.get(TRACK_META_KEY);
     if (!payload || !Array.isArray(payload.tracks) || payload.tracks.length === 0) {
       // nothing has built the playlist yet; the SWR path owns that, not this.
       s.setAttribute("rn.outcome", "no_payload");
@@ -917,21 +964,37 @@ export async function cronEnrichTracks(env, ctx) {
 
     const resolved = new Map();
     let artistCached = 0, artistScraped = 0, artistFailed = 0;
-    await Promise.all([...pendingArtists.keys()].map(async id => {
-      const key = `artist:${id}`;
-      // A KV read is a subrequest too, which is the half of this ceiling
-      // everyone forgets: the outage that started all this spent 37 fetches and
-      // 30 KV operations against a limit of 50, and only the fetches were ever
-      // counted.
-      budget.charge(1);
-      try {
-        const hit = asRecord(await env.RN_KV.get(key, "json"));
-        if (hit) {
-          artistCached++;
-          resolved.set(id, { name: asText(hit.name, ""), image_url: asText(hit.image_url) });
-          return;
-        }
-      } catch { /* fall through to the scrape */ }
+
+    // A KV read is a subrequest too, which is the half of this ceiling everyone
+    // forgets: the outage that started all this spent 37 fetches and 30 KV
+    // operations against a limit of 50, and only the fetches were ever counted.
+    // So the whole pending set is read in ONE call rather than one per artist,
+    // which is 1 subrequest where it used to be up to ENRICH_ARTIST_BUDGET.
+    const artistIds = [...pendingArtists.keys()];
+    const artistKey = (id) => `artist:${id}`;
+    let cachedArtists: Map<string, unknown> | null = null;
+    try {
+      if (artistIds.length > 0) cachedArtists = await kvBulkJson(env, budget, artistIds.map(artistKey));
+    } catch (e) {
+      // A read that fails leaves every artist pending and the scrape below is
+      // the fallback it always was. What changed is that one failure now costs
+      // the whole batch its cache hit rather than one artist, which is still
+      // cheaper than the shape it replaced: 1 read + N scrapes against N + N.
+      if (budget.fault(e) === "cap") capped = true;
+    }
+
+    const toScrape: string[] = [];
+    for (const id of artistIds) {
+      // `?.` covers the no-read and failed-read paths with the miss path, since
+      // all three mean the same thing here: this artist is still pending.
+      const hit = asRecord(cachedArtists?.get(artistKey(id)));
+      if (!hit) { toScrape.push(id); continue; }
+      artistCached++;
+      resolved.set(id, { name: asText(hit.name, ""), image_url: asText(hit.image_url) });
+    }
+
+    await Promise.all(toScrape.map(async id => {
+      const key = artistKey(id);
       budget.charge(1);
       try {
         const e = await scrapeSpotifyEmbed(`artist/${id}`, env);
@@ -1071,7 +1134,10 @@ export async function handleRnAdmin(request, env) {
     return setPage(403, "denied", "wrong secret. check the bookmark.");
   }
 
-  // show current target so you can tell at a glance what /rn points to.
+  // show current target so you can tell at a glance what /rn points to. No
+  // cacheTtl here, unlike the request-path reads: this line is the confirmation
+  // that a swap landed, and a colo-cached answer would show you the playlist you
+  // just replaced.
   let current = "(empty — using fallback)";
   if (env.RN_KV) {
     const id = await env.RN_KV.get("playlist-id");
@@ -1127,6 +1193,10 @@ export async function handleRnSet(request, env) {
   if (!env.RN_KV) {
     return setPage(500, "no kv binding", "the worker can't see RN_KV — bind it in wrangler.jsonc.");
   }
+  // The request-path readers hold this id for PLAYLIST_ID_CACHE_TTL, so a swap
+  // takes up to 15 minutes to reach every colo. The confirmation below names the
+  // new id from the URL you submitted rather than from KV, so it is true the
+  // instant this write returns.
   await env.RN_KV.put("playlist-id", id);
 
   return setPage(200, "updated",

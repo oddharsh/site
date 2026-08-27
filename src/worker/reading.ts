@@ -65,11 +65,12 @@ export async function fetchCuriusLinks(env) {
   return out;
 }
 
-// two-key stale-while-revalidate (mirrors photos.getImagesManifest / rn.getTracksSWR):
-// the list is stored WITHOUT a TTL (persistent value key) and a tiny sentinel key
-// carries the 6h freshness window. When the sentinel lapses, the visitor gets the
-// stale list instantly and the Curius crawl rides ctx.waitUntil in the background —
-// so nobody ever waits on the ~3.5s (bounded) crawl except the true first run.
+// stale-while-revalidate (mirrors photos.getImagesManifest / rn.getTracksSWR):
+// the list is stored WITHOUT a TTL (persistent value key) and the entry's KV
+// metadata carries the write time the 6h freshness window runs from. Once that
+// lapses, the visitor gets the stale list instantly and the Curius crawl rides
+// ctx.waitUntil in the background, so nobody ever waits on the ~3.5s (bounded)
+// crawl except the true first run.
 async function buildCuriusPayload(env) {
   const items = await fetchCuriusLinks(env);
   return { items, fetchedAt: new Date().toISOString() };
@@ -78,12 +79,21 @@ async function buildCuriusPayload(env) {
 export async function getCuriusCached(request, env, ctx) {
   const url = new URL(request.url);
   if (env.RN_BUST_SECRET && url.searchParams.get("bust") === env.RN_BUST_SECRET && env.RN_KV) {
-    // clear BOTH keys, or a bust would leave the persistent value in place and never rebuild.
+    // drop the value itself, since the persistent key is what a rebuild is gated on.
     await deleteSWRKV(env, CURIUS_CACHE_KEY);
   }
   // no cached value at all — true first run or right after a bust — builds inline.
   // non-empty guard: a transient Curius failure must not blank a good stale list.
+  //
+  // cacheTtl 900: this was the one swrKV caller passing none, while both siblings
+  // (rn 1800, dyno 300) pass one, and no argument was recorded for the difference.
+  // 900 adds 15 minutes to a list that already refreshes every 6 hours, so 4% on
+  // its own window. It has to clear 300 to do anything, because handleReading sits
+  // behind cachedRender at max-age=300 and this read only runs on an edge miss. The
+  // bust is unaffected for whoever runs it: ?bust= deletes both keys and rebuilds
+  // inline in the same request, and evicts that colo's edge entry too.
   return swrKV(env, ctx, CURIUS_CACHE_KEY, CURIUS_TTL, () => buildCuriusPayload(env), {
+    cacheTtl: 900,
     isValid: (p) => p && Array.isArray(p.items),
     shouldStore: (p) => p && Array.isArray(p.items) && p.items.length > 0,
   });

@@ -180,15 +180,22 @@ jobs:
       # this Worker bundles, and keeping them out of the root install is what
       # stops them drifting onto the site Worker's dependency surface.
       #
-      # pnpm needed --ignore-workspace here and bun needs NOTHING, measured on
-      # the parked branch: a bare `bun install` in this directory resolved this
-      # package.json alone and created lens-reader/node_modules locally. Do not
-      # add a flag looking for parity with the pnpm era; there is nothing left to
-      # preserve, and the flag pnpm wanted does not exist here.
+      # pnpm needed --ignore-workspace here and bun needs NOTHING for the
+      # WORKSPACE half, measured on the parked branch: a bare `bun install` in
+      # this directory resolved this package.json alone and created
+      # lens-reader/node_modules locally. Do not go looking for a workspace flag
+      # for parity with the pnpm era; there is nothing left to preserve, and the
+      # flag pnpm wanted does not exist here.
+      #
+      # --frozen-lockfile is a DIFFERENT axis and was missing until 2026-08-27:
+      # this was the one install of nine in .github/workflows that let the
+      # resolver pick versions the committed bun.lock does not name, on a Worker
+      # that reaches production. lens-reader/bunfig.toml carries the release-age
+      # floor, since bun resolves bunfig from the CWD and never walks up.
       - name: Validate Reader lens Worker config and run its tests
         working-directory: lens-reader
         run: |
-          bun install
+          bun install --frozen-lockfile
           bun run typecheck
           bun test
           bun x --no-install wrangler deploy --dry-run -c wrangler.toml

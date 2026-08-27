@@ -80,7 +80,7 @@
       },
       "regenerate": "node tools/photos/build-image-fingerprints.ts",
       "recorded": {
-        "inputs": "c1f7f227f2f468f7e6e8c997b557fac0feb31b538697134f5137f952f3b17d88",
+        "inputs": "3e6649235867f46f930e7d8cbe38a8206243b3260316cd67cf9ea06edaff9d07",
         "count": 660
       }
     },
@@ -98,7 +98,7 @@
       },
       "regenerate": "bash tools/photos/hash-thumbnails.sh",
       "recorded": {
-        "inputs": "c1f7f227f2f468f7e6e8c997b557fac0feb31b538697134f5137f952f3b17d88",
+        "inputs": "3e6649235867f46f930e7d8cbe38a8206243b3260316cd67cf9ea06edaff9d07",
         "count": 660
       }
     },
@@ -124,7 +124,7 @@
       },
       "regenerate": "bash tools/photos/extract-photo-metadata.sh \"$SOOC_DIR\" && node tools/photos/build-histogram-index.ts",
       "recorded": {
-        "inputs": "6908340cc0f967a096484515926eb005b760eaf701991c0fd30ab85a8676fef3",
+        "inputs": "3cefed056567844e0d15028b5647a8fff3d5463188821c2ccca0b40a031e8bad",
         "count": 168
       }
     },
@@ -247,7 +247,7 @@
         "public/cars"
       ],
       "unverifiable": "The input is a reference photo from somewhere on the web, credited by hand in public/cars/CREDITS.txt and not in this repository. There is nothing to hash. What is checkable is that each stem has both tiers and a credit line, which belongs with the page contract rather than here.",
-      "regenerate": "bash tools/photos/add-car-photo.sh <image> <stem>"
+      "regenerate": "bash tools/photos/add-car-photo.sh <stem> <image>"
     },
     {
       "id": "garage/encoding-samples",

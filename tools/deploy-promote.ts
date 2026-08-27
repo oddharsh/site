@@ -75,6 +75,7 @@ import { releaseCredentialError } from "./lib/release-guard.ts";
 import { promisify } from "node:util";
 import { wranglerCommand } from "./lib/wrangler-bin.ts";
 import { remainderHolder } from "./lib/ramp-split.ts";
+import { wranglerErrorLines } from "./lib/wrangler-error.ts";
 
 const exec = promisify(execFile);
 
@@ -132,13 +133,9 @@ async function wrangler(args, { json = false } = {}) {
     // Report what wrangler actually said, not a Node spawn dump. The first real
     // ramp died here and printed thirty lines of ChildProcess internals around
     // one line of usable error, which is a poor way to learn that traffic did
-    // not move. wrangler puts its diagnostics on stderr.
-    const said = String(e.stderr || e.stdout || e.message || "")
-      // eslint-disable-next-line no-control-regex
-      .replace(/\[[0-9;]*m/g, "")
-      .split("\n").map((l) => l.trim()).filter(Boolean)
-      .filter((l) => !l.startsWith("🪵"))
-      .slice(0, 6).join("\n    ");
+    // not move. wrangler puts its diagnostics on stderr. The reading lives in
+    // lib/wrangler-error.ts so a test can exercise it; this frames the result.
+    const said = wranglerErrorLines(e).join("\n    ");
     die(`\`wrangler ${args.slice(0, 2).join(" ")}\` failed:\n    ${said}\n\n  Nothing was changed — wrangler validates before it moves traffic.\n  Check \`bun run deploy:promote --status\` to confirm.`);
   }
 }

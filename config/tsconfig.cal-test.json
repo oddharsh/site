@@ -36,6 +36,11 @@
     "types": ["@cloudflare/workers-types"],
     "resolveJsonModule": true,
     "skipLibCheck": true,
+    // Two control-flow checks, set here because they are set in tsconfig.json
+    // and a program is only as strict as its own options. Both cost nothing:
+    // +0 diagnostics on every one of the ten programs, measured 2026-08-27.
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitReturns": true,
     // strictNullChecks ON. `strict` stays off: it bundles noImplicitAny,
     // which is 7,197 diagnostics of annotation labour across this repo, and
     // raising the two together buries the checks that find bugs under the

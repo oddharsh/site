@@ -729,6 +729,7 @@ const SHELLS = [
   ["nav-tray.js", "/nav-tray.src.js", "axp-balloon"],
   ["notepad.js", "/notepad.src.js", "np-window"],
   ["lens-boot.js", "/lens-boot.src.js", "requestSubmit"],
+  ["lens-webmcp.js", "/lens-webmcp.src.js", "LensWebMcp"],
   ["lens.js",    "/lens.src.js",    "replaceState"],   // verify-routes.mjs marker
   ["lens-browser.js", "/lens-browser.src.js", "LensBrowser"],
   ["lens-reader.js", "/lens-reader.src.js", "LensReader"],
@@ -745,7 +746,7 @@ const SHELLS = [
   // rewrite an `import` specifier, so it stays a plain /hoist.js like its peers.
   ["hoist.js",   "/hoist.src.js",   "createHoist"],
   // first-party WebMCP registration. Unhashed for hoist.js's reason: nav.js and
-  // lens.js both reach it through an `import()` specifier, which the /a/
+  // lens-webmcp.js both reach it through an `import()` specifier, which the /a/
   // repointer is attribute-scoped and would never rewrite.
   ["webmcp.js",  "/webmcp.src.js",  "registerSiteTools"],
 ];
@@ -959,6 +960,17 @@ const HTML_MINIFY_CFG = {
   minify_css: false,
   minify_doctype: false,
   minify_js: false,
+  // The template-passthrough pair, both at the library default. They are here
+  // so the 15 options @minify-html/node 0.18.1 declares are 15 DECISIONS: this
+  // block enumerated 13 and inherited 2, and an inherited default is a byte
+  // change nobody reviews the day upstream flips one. Nothing here authors in
+  // a `{{ }}` or `<% %>` template language, and /garage/horizon ships hostile
+  // demo payloads as content, so a passthrough that swallowed source until a
+  // matching close brace would be a parser this build cannot see into.
+  // Verified as a no-op: 1614 staged files, byte-identical, measured
+  // 2026-08-27. A moved byte would re-mint an `/a/` URL (gotcha 35).
+  preserve_brace_template_syntax: false,
+  preserve_chevron_percent_template_syntax: false,
   remove_bangs: false,
   remove_processing_instructions: false,
 };
@@ -1757,6 +1769,10 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
       [/(["'`])\/lens-nlweb\.js\?v=1\1/g, `$1${to}$1`] ] },
     { file: "/lens-markdown.js", base: "lens-markdown", mk: (to) => [
       [/(["'`])\/lens-markdown\.js\?v=1\1/g, `$1${to}$1`] ] },
+    // The WebMCP-capable idle shell loads only this registrar. Hash it before
+    // lens-boot so the bootstrap's immutable URL covers the complete lazy chain.
+    { file: "/lens-webmcp.js",  base: "lens-webmcp",  mk: (to) => [
+      [/import\((["'`])\/lens-webmcp\.js\1\)/g, `import($1${to}$1)`] ] },
     // The full Lens application depends on all six feature modules above. It
     // must be hashed after they rewrite it, and before lens-boot.js is hashed by
     // ASSETS below, so every URL names the final bytes of its complete subtree.
@@ -1817,6 +1833,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     if (!lens.includes(hashedFor["lens-markdown"])) throw new Error("lens.js was not repointed to hashed lens-markdown.js");
     const lensBoot = await readFile(`${OUT}/public/lens-boot.js`, "utf8");
     if (!lensBoot.includes(hashedFor.lens)) throw new Error("lens-boot.js was not repointed to hashed lens.js");
+    if (!lensBoot.includes(hashedFor["lens-webmcp"])) throw new Error("lens-boot.js was not repointed to hashed lens-webmcp.js");
     // the SERVED tooltip bytes, not the staged source: this is the copy the browser gets,
     // and the one the old ordering left pointing at the unhashed duplicate.
     if (!tip.includes(hashedFor.hoist)) throw new Error(`${hashedFor.tooltip} still imports an unhashed /hoist.js — STRING_ASSETS ordering broke (hoist must be hashed before tooltip)`);
