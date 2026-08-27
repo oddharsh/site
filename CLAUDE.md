@@ -267,6 +267,18 @@ worktrees may edit freely, but a worktree is not a release surface.
   --label` fails outright on an unknown label, so their flags are checked
   against the same declaration; a rename without a sync stops the nightly roll
   rather than mislabelling it.
+
+  **Dependabot is the QUIET half of that, and it was unwatched until 2026-08-27.**
+  A `labels:` key in `.github/dependabot.yml` REPLACES the defaults Dependabot
+  would otherwise apply, and a name GitHub does not have is dropped without a
+  word, so the symptom is a PR carrying FEWER labels than an unconfigured block
+  gets. The github-actions block asked for a `github-actions` label that has
+  never existed here and lost `dependencies` to get it: measured on #620, which
+  carried only the two labels `triage.yml` gives it, against #622 (no `labels:`
+  key) carrying `dependencies` and `javascript`. `infra:check` reads that file's
+  `labels:` lists against the same declaration now, with a structural floor on
+  `package-ecosystem:` entries so a scanner that stops matching cannot report a
+  clean pass over zero labels.
 - PR CI lints (`bun run lint`, oxlint including its type-aware rules), builds
   the site, enforces the performance budget, dry-runs the single
   site Worker plus the auxiliary Garage/LWE configs (`cf-garage/`, `lwe-ask/`),

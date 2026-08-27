@@ -448,6 +448,13 @@ async function checkTree(infra, wrangler, aux) {
 // because an event created with the default GITHUB_TOKEN never triggers
 // triage.yml. `gh pr create --label` FAILS OUTRIGHT on an unknown label, so a
 // rename here without a sync does not mislabel the nightly roll, it stops it.
+//
+// Dependabot is the QUIET direction, and nothing read that file until #620 was
+// noticed. Its `labels:` key REPLACES the defaults it would apply, and a name
+// GitHub does not have is dropped without a word, so the symptom is a pull
+// request carrying FEWER labels than an unconfigured block gets. The
+// github-actions block asked for a `github-actions` label that has never
+// existed in this repository and lost `dependencies` to get it.
 async function checkTriageDeclaration(repo) {
   const triage = repo?.triage;
   if (!triage) return;
@@ -515,8 +522,76 @@ async function checkTriageDeclaration(repo) {
     fail(`only ${inline} inline \`--label\` flag(s) found across .github/workflows, expected at least ${triage.self_labelling_workflows}. A workflow that opens its own pull request cannot be triaged by triage.yml, so losing its flags is silent`);
   }
 
+  // Dependabot's own `labels:` lists, scanned the same way and for the opposite
+  // failure. It walks LINES rather than reaching for `Bun.YAML`, because the
+  // usage header above documents `node tools/check-infra.ts` and a bun global
+  // would delete that invocation to save a dozen lines. A `labels:` key takes
+  // either a flow sequence on its own line or the indented `- item` list
+  // beneath it, and comments and blanks between items are skipped.
+  //
+  // Cross-checked against a real parser rather than trusted, 2026-08-27:
+  // `Bun.YAML.parse` read the same 5 ecosystems and the same 1 label out of
+  // this file that the walk below finds. Re-run that if the shape changes.
+  //
+  // The FLOOR is STRUCTURAL rather than an inventory of ecosystems. A file with
+  // no `labels:` key anywhere is a legitimate state (the defaults apply), so
+  // counting labels would floor at zero and prove nothing; counting
+  // `package-ecosystem:` items asserts the scanner still recognises this file's
+  // shape. `- package-ecosystem:` matches the LIST-ITEM form on purpose, since
+  // the header comment discusses `package-ecosystem: bun` in prose.
+  const dbPath = triage.dependabot;
+  let dependabot;
+  try {
+    dependabot = await readFile(join(ROOT, dbPath), "utf8");
+  } catch {
+    fail(`infra.json declares repository.triage.dependabot but ${dbPath} is missing, so no dependency update PR is labelled or checked`);
+    return;
+  }
+
+  // One YAML scalar: an inline `# comment` is stripped, a quoted value is taken
+  // whole so a `#` inside it survives.
+  const scalar = (raw) => {
+    const s = raw.trim();
+    const quoted = /^(['"])(.*?)\1/.exec(s);
+    return quoted ? quoted[2] : s.replace(/\s+#.*$/, "").trim();
+  };
+
+  const dbLines = dependabot.split("\n");
+  let ecosystems = 0;
+  let dbLabels = 0;
+  for (let i = 0; i < dbLines.length; i++) {
+    if (/^\s*-\s*package-ecosystem:/.test(dbLines[i])) ecosystems++;
+    const head = /^(\s*)labels:\s*(.*)$/.exec(dbLines[i]);
+    if (!head) continue;
+
+    const listed: { name: string; line: number }[] = [];
+    const flow = head[2].trim();
+    if (flow.startsWith("[")) {
+      for (const part of flow.replace(/^\[/, "").replace(/\]\s*$/, "").split(",")) {
+        if (part.trim()) listed.push({ name: scalar(part), line: i + 1 });
+      }
+    } else {
+      for (let j = i + 1; j < dbLines.length; j++) {
+        if (/^\s*(#|$)/.test(dbLines[j])) continue;
+        const item = /^(\s*)-\s*(.+)$/.exec(dbLines[j]);
+        if (!item || item[1].length <= head[1].length) break;
+        listed.push({ name: scalar(item[2]), line: j + 1 });
+      }
+    }
+
+    for (const { name, line } of listed) {
+      dbLabels++;
+      if (!names.has(name)) {
+        fail(`${dbPath} line ${line} asks Dependabot for \`${name}\`, which infra.json does not declare. That key REPLACES Dependabot's default labels and an unknown name is dropped in silence, so the symptom is a pull request MISSING a label rather than an error`);
+      }
+    }
+  }
+  if (ecosystems < triage.dependabot_ecosystems) {
+    fail(`only ${ecosystems} \`package-ecosystem:\` entr${ecosystems === 1 ? "y" : "ies"} found in ${dbPath}, expected at least ${triage.dependabot_ecosystems}. A line scanner that stops matching this file finds zero labels and reports a clean pass, which is what this floor exists to catch`);
+  }
+
   if (hard.length > before) return;
-  pass(`triage declaration is consistent: ${triage.labels.length} labels, all routed or attributed, ${inline} inline flag(s) declared, ${triage.workflow} reads the assignee from here`);
+  pass(`triage declaration is consistent: ${triage.labels.length} labels, all routed or attributed, ${inline} inline flag(s) and ${dbLabels} dependabot label(s) declared across ${ecosystems} ecosystem(s), ${triage.workflow} reads the assignee from here`);
 }
 
 // The CodeQL language curation, asserted from the COMMITTED workflow rather

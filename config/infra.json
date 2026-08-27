@@ -750,6 +750,21 @@
         "Losing a whole workflow's pair trips it; adding or removing one label",
         "does not."
       ],
+      "dependabot": ".github/dependabot.yml",
+      "dependabot_ecosystems": 4,
+      "$dependabot_ecosystems": [
+        "The FLOOR on `package-ecosystem:` list items in .github/dependabot.yml,",
+        "and it is STRUCTURAL rather than an inventory. check-infra reads that",
+        "file's `labels:` lists and fails on a name this block does not declare,",
+        "because Dependabot REPLACES its default labels with that list and drops",
+        "an unknown name in silence: #620 shipped carrying no `dependencies`",
+        "label at all, against a `github-actions` label GitHub never had.",
+        "A line scanner that stops matching this file's shape finds zero labels",
+        "and reports a clean pass, so the floor asserts the file parsed. Five",
+        "ecosystems today (npm, github-actions, pip, cargo, npm again for",
+        "lens-reader); four is the floor, so deleting one block is a deliberate",
+        "act that costs nothing here while a broken parser matches zero and fails."
+      ],
       "labels": [
         { "name": "type: feat", "color": "0e8a16", "description": "New capability or surface", "title": ["feat"] },
         { "name": "type: fix", "color": "d73a4a", "description": "Corrects behaviour that was wrong", "title": ["fix"] },
