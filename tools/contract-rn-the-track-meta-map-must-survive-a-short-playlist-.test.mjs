@@ -42,20 +42,35 @@ import {
 // truncated playlist embed stored a 6-track playlist as the whole thing and
 // took 15 covers with it. Absence from a single read is not evidence.
 
-function metaEnv({ tracks, meta }) {
+function metaEnv({ tracks, meta, seed = {} }) {
   const store = new Map([
     ["playlist-id", "0raTdu2MZH4dNvfG5keVAL"],
     ["tracks:0raTdu2MZH4dNvfG5keVAL", JSON.stringify({ tracks, playlist_id: "0raTdu2MZH4dNvfG5keVAL" })],
     ["trackmeta:v1", JSON.stringify(meta)],
+    ...Object.entries(seed).map(([k, v]) => [k, JSON.stringify(v)]),
   ]);
+  // One entry per get(), holding the key or the key ARRAY it was called with.
+  // The charge the ledger makes is per CALL, so the call shape is the thing a
+  // test here can actually check.
+  const reads = [];
+  const decode = (raw, t) => {
+    if (raw === undefined) return null;
+    return (t === "json" || t?.type === "json") ? JSON.parse(raw) : raw;
+  };
   return {
     store,
+    reads,
     env: {
       RN_KV: {
+        // The bulk contract as Cloudflare documents it: an array of keys answers
+        // with a Map carrying EVERY requested key, null where nothing is stored.
+        // A fake that took an array and answered one value would report the
+        // collapse as working while production read nothing.
         get: async (k, t) => {
-          const v = store.get(k);
-          if (v === undefined) return null;
-          return (t === "json" || t?.type === "json") ? JSON.parse(v) : v;
+          reads.push(k);
+          if (!Array.isArray(k)) return decode(store.get(k), t);
+          assert.ok(k.length <= 100, "a bulk read carries at most 100 keys");
+          return new Map(k.map((key) => [key, decode(store.get(key), t)]));
         },
         put: async (k, v) => void store.set(k, v),
       },
@@ -94,6 +109,41 @@ test("an entry written before `seen` existed is stamped, never dropped", async (
   const after = JSON.parse(store.get("trackmeta:v1"));
   assert.ok(after.a, "the upgrade must not become the outage it prevents");
   assert.equal(typeof after.a.seen, "number");
+});
+
+test("the enrich tick reads KV in bulk, so its cost does not scale with artists", async () => {
+  // A KV read is a subrequest, and this pass used to spend one per pending
+  // artist. Cloudflare charges a bulk read of up to 100 keys as ONE operation
+  // against that ceiling, so the property worth pinning is the CALL COUNT: it
+  // must not move when the pending set grows.
+  const artistIds = ["p", "q", "r", "s", "t"];
+  const seed = Object.fromEntries(artistIds.map((a) => [
+    `artist:${a}`, { name: a.toUpperCase(), image_url: `https://i.scdn.co/image/${a}` },
+  ]));
+  const meta = {
+    a: {
+      image_url: "https://i.scdn.co/image/a",
+      seen: Date.now(),
+      artists: artistIds.map((id) => ({ id, name: id.toUpperCase(), image_url: null })),
+    },
+  };
+  const { store, reads, env } = metaEnv({ tracks: [{ id: "a" }], meta, seed });
+  await cronEnrichTracks(env, null);
+
+  // playlist id, then the two setup keys together, then all five artists
+  // together. Five separate artist reads is the shape this replaced.
+  assert.deepEqual(reads, [
+    "playlist-id",
+    ["tracks:0raTdu2MZH4dNvfG5keVAL", "trackmeta:v1"],
+    artistIds.map((id) => `artist:${id}`),
+  ], "the tick must read three times regardless of how many artists are pending");
+
+  // And the cache hits still land, which is what makes the collapse free rather
+  // than merely cheap: no artist was scraped, so no fetch left the isolate.
+  const after = JSON.parse(store.get("trackmeta:v1"));
+  for (const a of after.a.artists) {
+    assert.equal(a.image_url, `https://i.scdn.co/image/${a.id}`, `${a.id} keeps its photo`);
+  }
 });
 
 test("the published key directory advertises only what the bot signs with", async () => {
