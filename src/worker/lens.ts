@@ -11,6 +11,7 @@ import { documentTally, hasRenderEngine, runBrowserAction } from "./lens-render.
 import { lensRecipe, lensRecipeCatalog, lensRecipeIds, lensRecipeNonce, lensRecipeReceipt, lensRecipeScript } from "./lens-recipes.ts";
 import { EXECUTION_META, executionChecks } from "./lib/agent-execution.ts";
 import { asRecord, asText, isCallable } from "./lib/parse.ts";
+import { overBudget } from "./lib/ratelimit.ts";
 
 // The glossary. This page's whole subject is protocol names, which is fine for
 // the audience that already has them and a wall for the audience that doesn't.
@@ -400,42 +401,12 @@ export const LENS_BUDGETS = {
 
 // Returns true when the caller is already over their per-minute budget.
 //
-// BACKED BY THE RATE LIMITING BINDING since 2026-08-04, where it used to be a
-// KV read plus a KV write per allowed request. The KV version worked, and the
-// reason to move is that it charged the site's most expensive route a durable
-// write for a counter with a 120-second life. CLAUDE.md's "~10K writes/day
-// budget; we use a handful" was written before /lens existed and stopped being
-// true the day it shipped: every scan, snapshot and comparison wrote.
-//
-// The binding's counters are per-colo and eventually consistent, which sounds
-// like a downgrade and is not: the KV buckets were already per-colo and
-// eventually consistent, because a KV write is not visible everywhere
-// immediately either. What actually changes is that the counter no longer costs
-// a write, and no longer sits on the request path waiting for one.
-//
-// FAILS OPEN when the binding is absent, exactly as the KV version failed open
-// without RN_KV. This is abuse control, not authorization; the SSRF guard in
-// validateLensTarget is what enforces safety, and it has no fallback.
-//
-// Keyed on IP, which Cloudflare's own docs advise against because users share
-// them. Kept deliberately: the thing being limited is a server-side crawler
-// being pointed at third parties, there is no account to key on, and the
-// alternative to an imperfect key here is no limit at all.
-export async function overLensBudget(budget, request, env) {
-  const limiter = env && env[budget.binding];
-  if (!limiter || !isCallable(limiter.limit)) return false;
-  // A budget carrying a fixed `key` is a SHARED ceiling rather than a per-caller
-  // one: everybody bills against the same bucket on purpose.
-  const ip = budget.key || request.headers.get("cf-connecting-ip") || "0.0.0.0";
-  try {
-    const { success } = await limiter.limit({ key: ip });
-    return !success;
-  } catch {
-    // A limiter blip should cost the rate limit, never the route — the same
-    // reasoning the /lens/browser call site used to spell out inline.
-    return false;
-  }
-}
+// The implementation moved to lib/ratelimit.ts when /mcp and /webmention became
+// the second and third surfaces to need it. Re-exported under the lens name
+// because twenty call sites across eight modules read
+// `overLensBudget(LENS_BUDGETS.x, ...)`, and renaming those is a sweep rather
+// than part of moving the function.
+export const overLensBudget = overBudget;
 
 // ── /lens — "the other web" -----------------------------------------------
 // A URL goes in; what a MACHINE sees comes out, across five lenses: page

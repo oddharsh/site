@@ -284,7 +284,9 @@
   // Image Workbench uses the managed Images transformation binding; outputs
   // are returned inline and are not written to PHOTOS_R2.
   "images": { "binding": "IMAGES" },
-  // Per-IP crawl budgets for /lens and the /mcp tools that share its crawler.
+  // Per-IP budgets for every public route that spends something on a caller's
+  // say-so: /lens and the /mcp tools that share its crawler, the five /mcp
+  // tools that fetch or write, and /webmention.
   // These were KV counters until 2026-08-04: a read plus a WRITE on every
   // allowed request, for a number that lived 120 seconds. RN_KV's write budget
   // is ~10K/day and /lens is the busiest writer on the site, so the counters
@@ -329,7 +331,22 @@
     // — so the ceiling is set by what it costs the target, which is ten plain
     // GETs of the same URL. The real control is the 1h KV cache, same as the
     // catalogue read.
-    { "name": "LENS_RL_MARKDOWN", "namespace_id": "1009", "simple": { "limit": 4, "period": 60 } }
+    { "name": "LENS_RL_MARKDOWN", "namespace_id": "1009", "simple": { "limit": 4, "period": 60 } },
+    // The five /mcp tools that spend something, moved off KV counters on
+    // 2026-08-27. FIVE buckets rather than one, because the ceilings span 5x and
+    // the per-call costs span more: image_inspect on inlined base64 is a single
+    // IMAGES.info call, image_compare runs up to three transforms, and
+    // representation_capture is up to four third-party fetches plus four D1
+    // writes. Mirrored in MCP_BUDGETS (mcp.ts), which is what the 429 quotes.
+    { "name": "MCP_RL_IMAGE_INSPECT",   "namespace_id": "1010", "simple": { "limit": 20, "period": 60 } },
+    { "name": "MCP_RL_IMAGE_TRANSFORM", "namespace_id": "1011", "simple": { "limit": 8,  "period": 60 } },
+    { "name": "MCP_RL_IMAGE_COMPARE",   "namespace_id": "1012", "simple": { "limit": 4,  "period": 60 } },
+    { "name": "MCP_RL_REPR_CAPTURE",    "namespace_id": "1013", "simple": { "limit": 4,  "period": 60 } },
+    { "name": "MCP_RL_REPR_COMPARE",    "namespace_id": "1014", "simple": { "limit": 8,  "period": 60 } },
+    // The public webmention endpoint. One accepted POST costs a third-party
+    // fetch, a D1 write and a Resend email, so this is the one budget here whose
+    // overrun spends somebody else's quota as well as ours.
+    { "name": "WEBMENTION_RL", "namespace_id": "1015", "simple": { "limit": 10, "period": 60 } }
   ],
   "vars": {
     // Not a secret: an account id is an identifier, and this one is already

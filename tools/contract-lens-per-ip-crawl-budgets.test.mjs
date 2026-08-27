@@ -16,6 +16,8 @@ import {
 
 test("every rate-limit ceiling matches the ratelimits declared in both wrangler configs", async () => {
   const { LENS_BUDGETS } = await import("../src/worker/lens.ts");
+  const { MCP_BUDGETS } = await import("../src/worker/mcp.ts");
+  const { WEBMENTION_BUDGET } = await import("../src/worker/webmention.ts");
   const { parseJsonc } = await import("./lib/jsonc.ts");
 
   // EVERY per-IP budget on the site, not just Lens's. The orphan check at the
@@ -24,7 +26,19 @@ test("every rate-limit ceiling matches the ratelimits declared in both wrangler 
   // declared and would catch the next one too. A budget that lives in a module
   // this list forgets reads as an orphan and fails here, which is the correct
   // and cheap way to find out.
-  const BUDGETS = { ...LENS_BUDGETS };
+  const BUDGETS = { ...LENS_BUDGETS, ...MCP_BUDGETS, webmention: WEBMENTION_BUDGET };
+  // Two budget tables plus a singleton is three chances to typo a key into
+  // nothing, and a `{...a, ...b}` that silently loses one still passes every
+  // assertion below. Count what went in.
+  assert.equal(Object.keys(BUDGETS).length,
+    Object.keys(LENS_BUDGETS).length + Object.keys(MCP_BUDGETS).length + 1,
+    "two budgets share a key, so one of them is not being checked");
+
+  // And one binding per budget ACROSS the tables, not just inside Lens's. Two
+  // budgets on one binding means two published ceilings on one bucket, so the
+  // lower one is a message nobody enforces.
+  const bindings = Object.values(BUDGETS).map((b) => b.binding);
+  assert.equal(new Set(bindings).size, bindings.length, "two budgets share one binding");
 
   // The number in LENS_BUDGETS is what the 429 message quotes; the number in
   // wrangler.jsonc is what actually limits. A message that disagrees with the

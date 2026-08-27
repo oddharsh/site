@@ -30,13 +30,16 @@
 import { validateLensTarget } from "./lens.ts";
 import { fetchFollowingPublicRedirects, privateHostBlocked, readResponseCapped } from "./lib/crawl.ts";
 import { esc, extractMeta, extractTitle } from "./lib/http.ts";
+import { overBudget } from "./lib/ratelimit.ts";
 import { sign, verify } from "../../cal/src/sign.ts";
 import { resendSend } from "../../cal/src/email.ts";
 import { WEBMENTION_PATHS, WEBMENTION_SECTIONS } from "./lib/site-manifest.ts";
 
-// One bucket, one ceiling, matching the /lens posture. Fails OPEN without KV
-// (dev): this is abuse control, and the SSRF guard is what enforces safety.
-const WM_BUDGET = { key: "wm:rl", max: 10 };
+// One bucket, one ceiling, matching the /lens posture. Fails OPEN without the
+// binding (dev): this is abuse control, and the SSRF guard is what enforces
+// safety. `max` is mirrored in wrangler.jsonc's ratelimits and a contract test
+// pins the pair, the same as every /lens budget.
+export const WEBMENTION_BUDGET = { binding: "WEBMENTION_RL", max: 10 };
 const SOURCE_BYTE_CAP = 512 * 1024;   // a blog post that needs more isn't a mention
 const SOURCE_TIMEOUT_MS = 8000;
 const EXCERPT_MAX = 320;
@@ -115,7 +118,7 @@ export async function handleWebmention(request, env, ctx) {
   if (!checked.ok) return text(`source: ${checked.error}`, 400);
   if (sameOriginPath(checked.url, origin)) return text("source must be on another site.", 400);
 
-  if (await overBudget(request, env, ctx)) {
+  if (await overBudget(WEBMENTION_BUDGET, request, env)) {
     return text("Too many webmentions from this address; try again in a minute.", 429);
   }
 
@@ -445,18 +448,6 @@ function sameOriginPath(raw, origin) {
     if (u.origin !== origin) return null;
     return u.pathname.replace(/\/+$/, "") || "/";
   } catch { return null; }
-}
-
-async function overBudget(request, env, ctx) {
-  if (!env.RN_KV) return false;
-  const ip = request.headers.get("cf-connecting-ip") || "0.0.0.0";
-  const bucket = `${WM_BUDGET.key}:${ip}:${Math.floor(Date.now() / 60000)}`;
-  let n = 0;
-  try { n = parseInt((await env.RN_KV.get(bucket)) || "0", 10) || 0; } catch {}
-  if (n >= WM_BUDGET.max) return true;
-  const write = env.RN_KV.put(bucket, String(n + 1), { expirationTtl: 120 }).catch(() => {});
-  if (ctx?.waitUntil) ctx.waitUntil(write); else await write;
-  return false;
 }
 
 function text(body, status, extra = {}) {

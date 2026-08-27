@@ -72,6 +72,15 @@ export interface EnvBindings {
   LENS_RL_NLWEB: RateLimit;
   LENS_RL_MARKDOWN: RateLimit;
 
+  // The five /mcp tools that spend something on a caller's say-so, mirrored in
+  // MCP_BUDGETS (mcp.ts), plus the public webmention endpoint's own ceiling.
+  MCP_RL_IMAGE_INSPECT: RateLimit;
+  MCP_RL_IMAGE_TRANSFORM: RateLimit;
+  MCP_RL_IMAGE_COMPARE: RateLimit;
+  MCP_RL_REPR_CAPTURE: RateLimit;
+  MCP_RL_REPR_COMPARE: RateLimit;
+  WEBMENTION_RL: RateLimit;
+
   BROWSER: BrowserRun;
   IMAGES: ImagesBinding;
   /** Read straight off the binding by /whoareyou.json; the ramp's read-out. */
