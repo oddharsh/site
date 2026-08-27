@@ -31,6 +31,20 @@ fn die(msg: String) -> ! {
 fn main() {
     let args: Vec<String> = std::env::args().collect();
 
+    // Dispatched before the positional parse below, which would otherwise read
+    // `--version` as an input path. It names the zenjpeg pin as well as this
+    // crate, because the pin is what decides the bytes: zenc's own version has
+    // not moved since the crate was written. build.rs reads it out of Cargo.lock
+    // and config/tools.json matches this exact line.
+    if matches!(args.get(1).map(String::as_str), Some("--version" | "-V")) {
+        println!(
+            "zenc {} (zenjpeg {})",
+            env!("CARGO_PKG_VERSION"),
+            env!("ZENJPEG_VERSION")
+        );
+        exit(0);
+    }
+
     // One subcommand, dispatched before the positional encode interface so that
     // interface is untouched. The bake lives here rather than in its own binary
     // because it shares the JPEG decoder the encoder already links, which is the

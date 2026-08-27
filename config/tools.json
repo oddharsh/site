@@ -29,6 +29,19 @@
     "stderr. Two of them answer nothing at all, so they say so rather than being",
     "quietly skipped.",
     "",
+    "A `match` may capture SEVERAL components, as NAMED groups, and it has to",
+    "wherever the binary's own version is not what decides the bytes. avifenc is",
+    "the wrapper over aom, and brew can relink it against a newer aom without",
+    "moving libavif's 1.4.2, so reading 1.4.2 alone passes through exactly the",
+    "drift this tier exists to catch; aom 3.13 already changed the still-image",
+    "tune default. zenc is the same shape one layer in, since its own 0.1.0 has",
+    "never moved while dependabot bumps the zenjpeg pin underneath it. Named",
+    "groups join into the recorded string as `name value, name value`, so the",
+    "names are part of what is compared rather than documentation nobody reads.",
+    "A multi-part pattern may NOT carry a `min_version`: the ordering compares one",
+    "number per component and would silently stop flooring, so check-tools.ts",
+    "fails on the pair instead.",
+    "",
     "`bytes` marks a tool whose version decides SHIPPED BYTES, and `recorded` is the",
     "version that made the ones committed today. That pairing is the point of this",
     "block: /i/ is content-addressed, so re-encoding under a different encoder mints",
@@ -137,6 +150,30 @@
       "bytes_why": "builds zenc, and zenjpeg's encode is deterministic for a given pin, which dependabot owns in tools/photos/zenc/Cargo.toml. A compiler bump does not move a JPEG"
     },
     {
+      "bin": "zenc",
+      "path": "tools/photos/zenc/target/release/zenc",
+      "install": "cargo build --release --manifest-path tools/photos/zenc/Cargo.toml",
+      "optional": true,
+      "why": "the JPEG encoder for every shipped tier, plus the square/resize geometry and the histogram bake. It decides the bytes of the JPG half of /i/ exactly the way avifenc decides the AVIF half, and it was the one encoder here with no entry: `cargo` was declared as its BUILD prerequisite, which is a different question from which encoder baked the library",
+      "required_by": [
+        "tools/photos/add-car-photo.sh",
+        "tools/photos/add-photos.sh",
+        "tools/photos/export-for-instagram.sh",
+        "tools/photos/extract-photo-metadata.sh",
+        "tools/photos/gen-encoding-grids.sh",
+        "tools/photos/gen-encoding-samples.sh",
+        "tools/photos/onestep-probe.sh",
+        "tools/photos/reencode-thumbnails.sh"
+      ],
+      "optional_why": "`optional` here means BUILT ON DEMAND rather than degrades: every caller runs `cargo build --release` when the binary is missing, so an absent zenc on a fresh checkout is a state the pipeline repairs itself rather than a prerequisite anybody has to go install. A missing `cargo` is the blocking failure, and cargo is declared above",
+      "version": {
+        "flag": "--version",
+        "match": "zenc (?<zenc>\\d+\\.\\d+\\.\\d+) \\(zenjpeg (?<zenjpeg>\\d+\\.\\d+\\.\\d+)\\)"
+      },
+      "bytes": true,
+      "recorded": "zenc 0.1.0, zenjpeg 0.8.4"
+    },
+    {
       "bin": "jpegtran",
       "path": "/opt/homebrew/opt/mozjpeg/bin/jpegtran",
       "install": "brew install mozjpeg",
@@ -172,16 +209,17 @@
       "optional": true,
       "why": "the encoder-comparison grids on /garage/encoding. The PHOTO PIPELINE no longer reaches for this one: add-photos and reencode-thumbnails prefer tools/photos/libavif/build/avifenc, a pinned from-source build, and fall back here and then to sips",
       "required_by": [
+        "tools/photos/add-car-photo.sh",
         "tools/photos/gen-encoding-grids.sh",
         "tools/photos/gen-encoding-samples.sh"
       ],
-      "bytes_why": "it still bakes the /garage/encoding sample bytes. It no longer bakes /i/: that moved to the pinned build, whose version is fixed by LIBAVIF_TAG in tools/photos/libavif/build.sh rather than recorded here, because a pin does not drift and this entry's `recorded` field exists only to catch drift in an ambient brew install",
+      "bytes_why": "it still bakes the /garage/encoding sample bytes and the public/cars reference pair. It no longer bakes /i/: that moved to the pinned build, whose version is fixed by LIBAVIF_TAG in tools/photos/libavif/build.sh rather than recorded here, because a pin does not drift and this entry's `recorded` field exists only to catch drift in an ambient brew install",
       "version": {
         "flag": "--version",
-        "match": "Version: (\\d+\\.\\d+\\.\\d+)"
+        "match": "Version: (?<libavif>\\d+\\.\\d+\\.\\d+) \\(.*aom \\[enc/dec\\]:(?<aom>\\d+\\.\\d+\\.\\d+)"
       },
       "bytes": true,
-      "recorded": "1.4.2"
+      "recorded": "libavif 1.4.2, aom 3.14.1"
     },
     {
       "bin": "cwebp",
