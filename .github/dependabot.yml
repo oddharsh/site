@@ -40,17 +40,31 @@ updates:
   # lockfile v2 which dependabot currently does not support") was opened by
   # another user on 2026-08-24, carries `help-wanted`, and has zero comments;
   # #15897, asking for per-repository bun versions in the updater image, is open
-  # as well. Until the constant reaches 2 the lockfile is a hand commit on each
+  # as well. Until the constant reaches 2 the lockfile is a SECOND COMMIT on each
   # dependency PR, and `validate` failing at install is the expected first state
   # of one rather than a broken branch.
   #
-  # THAT HAND COMMIT IS `bun run deps:relock <pr> --push`. It rebases the branch
-  # first (two bumps in flight both edit the head of bun.lock, so whichever
-  # merges second conflicts), installs, moves the version claims in
-  # docs/DEPENDENCIES.md that a contract test holds against package.json, and
-  # runs the gates before it pushes. Re-verified 2026-08-26 against the live
-  # constant rather than trusting the paragraph above; when it reaches 2, both
-  # that script and this comment are deletable.
+  # THAT COMMIT IS MADE FOR YOU, by .github/workflows/dependabot-relock.yml,
+  # which runs `bun run deps:relock <pr> --push --no-gates` on every bump that
+  # touches a package.json. It rebases the branch first (two bumps in flight both
+  # edit the head of bun.lock, so whichever merges second conflicts), installs,
+  # moves the version claims in docs/DEPENDENCIES.md that a contract test holds
+  # against package.json, and force-pushes. The push carries a GitHub App token
+  # rather than GITHUB_TOKEN, and that is the load-bearing part: a push made with
+  # GITHUB_TOKEN triggers no further workflow, so `validate` would never re-run
+  # and the branch would sit on a stale red required check having been fixed.
+  #
+  # EXPECT TO SEE RED BRIEFLY, and read it as the pipeline working. The first
+  # `validate` fires against Dependabot's own commit and dies at the frozen
+  # install; the relock lands seconds later and the re-run is the one that
+  # counts. A pull request still red MINUTES later is the signal, and the run to
+  # read is `Relock Dependabot bumps` on that branch.
+  #
+  # `bun run deps:relock <pr> --push` by hand still works, gates and all, and is
+  # what to reach for when the workflow is the thing that is broken. Re-verified
+  # 2026-08-26 against the live constant rather than trusting the paragraph
+  # above; when it reaches 2, the script, the workflow and this comment are all
+  # deletable.
   #
   # The root workspace owns the shared deploy toolchain (including Wrangler,
   # Oxc Minify, and Lightning CSS) and all workspace dependency resolution.

@@ -1,0 +1,129 @@
+name: Relock Dependabot bumps
+
+# Dependabot's npm updater writes package.json and has never written a bun.lock,
+# so every dependency pull request here opens RED at the first CI step with
+# "lockfile had changes, but lockfile is frozen". .github/dependabot.yml carries
+# the long argument for why the ecosystem stays `npm` on a bun tree and why the
+# reflex switch to `package-ecosystem: bun` is a downgrade. This workflow is the
+# hand commit that argument ends with, run by a machine rather than by a person
+# at 09:00 who has to notice.
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize]
+    # A cargo, pip or github-actions bump has no bun.lock to move, and
+    # relock-dependabot.ts REFUSES a diff that touches anything outside the
+    # manifest allowlist, which would exit 1 and hang a red X on a pull request
+    # that is perfectly fine. Filtering here is cheaper than teaching the script
+    # to shrug: those bumps start no runner at all.
+    #
+    # The filter reads the pull request's whole base...head diff rather than the
+    # newest push, so a grouped bump keeps matching on `synchronize` even though
+    # the push that fired it moved only a lockfile.
+    paths:
+      - "package.json"
+      - "**/package.json"
+
+# `synchronize` is PRESENT here and deliberately ABSENT from
+# dependabot-site-review.yml, and the difference is what each job produces. That
+# one rewrites a checklist which says the same thing after a rebase. This one has
+# to run again whenever the manifest MOVES, and for a grouped bump that is a
+# force-push in place rather than a new pull request, leaving a package.json the
+# committed lockfile no longer matches.
+#
+# It therefore also fires on this workflow's OWN push. That is intended rather
+# than tolerated: the re-run rebases, installs, finds the lockfile already
+# agrees, prints "nothing to do" and pushes nothing, so the loop terminates on
+# the first no-op. The no-op is also the CONTROL, since a run that reports
+# nothing to do is the evidence that the previous run's commit was complete.
+
+permissions:
+  # The write this job needs comes from the App token minted below, never from
+  # GITHUB_TOKEN, and that split is the whole security design rather than a
+  # style choice. A push made with GITHUB_TOKEN does not trigger another
+  # workflow, so `validate` would never re-run and the branch would sit on a
+  # stale red required check forever, having been fixed.
+  contents: read
+
+concurrency:
+  group: relock-${{ github.event.pull_request.number }}
+  # FALSE on purpose. This workflow's own push fires the next run in this group
+  # while the run that pushed is still finishing its last step, so
+  # cancel-in-progress would cancel the successful run seconds after it did the
+  # work and report it as `cancelled`. ramp.yml has a long note on how expensive
+  # a misread cancellation is; a queued no-op costs seconds and lies to nobody.
+  cancel-in-progress: false
+
+jobs:
+  relock:
+    # THE AUTHOR CHECK IS WHAT KEEPS `pull_request_target` FROM BEING A
+    # PWN-REQUEST. This trigger runs in the base repository's context with
+    # secrets in reach, so without it any fork could open a pull request and
+    # have this job act on its branch. Dependabot's branches live in this
+    # repository and carry a diff the script re-verifies before it does
+    # anything. The repository check stops a fork's Actions tab running it.
+    if: >-
+      github.event.pull_request.user.login == 'dependabot[bot]'
+      && github.repository == 'oddharsh/site'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mint a scoped App token
+        id: app
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.RELOCK_APP_ID }}
+          private-key: ${{ secrets.RELOCK_APP_PRIVATE_KEY }}
+
+      # BASE, never head. Under pull_request_target this checks out main, so the
+      # workflow file, the relock script and every gate it runs are the TRUSTED
+      # copies. The bump's own tree is only ever reached through the throwaway
+      # worktree the script builds, where the sole thing executed against it is
+      # `bun install --ignore-scripts`.
+      - name: Check out the trusted base
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          token: ${{ steps.app.outputs.token }}
+
+      # Belt and braces over `fetch-depth: 0`. The script fetches origin itself,
+      # and a refspec narrower than expected would surface as `git worktree add`
+      # failing on an invalid reference, which reads like a broken checkout
+      # rather than a missing ref.
+      - name: Fetch the bump branch
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: git fetch --no-tags origin "+refs/heads/${HEAD_REF}:refs/remotes/origin/${HEAD_REF}"
+
+      - name: Set up bun
+        uses: ./.github/actions/setup-bun
+
+      # The commit is the App's own work, so it carries the App's identity
+      # rather than a person's. The numeric id is what makes the address resolve
+      # to the bot account on github.com instead of showing as an unknown author.
+      - name: Identify the committer as the App
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          APP_SLUG: ${{ steps.app.outputs.app-slug }}
+        run: |
+          set -euo pipefail
+          uid=$(gh api "/users/${APP_SLUG}[bot]" --jq .id)
+          git config user.name "${APP_SLUG}[bot]"
+          git config user.email "${uid}+${APP_SLUG}[bot]@users.noreply.github.com"
+
+      # `--no-gates` is argued at its flag in tools/relock-dependabot.ts. Short
+      # version: lint, typecheck, test and build all EXECUTE the version being
+      # bumped, because the packages being bumped ARE the toolchain, and running
+      # them here would put a package published yesterday in the same process
+      # tree as a token that can write to this repository. `validate` re-runs on
+      # the pushed commit and is the only required check, so the bump is gated
+      # either way, by a job holding no credential. The frozen install still
+      # runs, since it proves the lockfile and executes no dependency code.
+      #
+      # The pull request number goes through `env` rather than into the `run:`
+      # body. CodeQL's Actions analyzer treats these values as trusted and would
+      # not flag the interpolated form.
+      - name: Relock and push
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: bun run deps:relock "$PR" --push --no-gates
