@@ -549,7 +549,23 @@ async function checkInvariants() {
   // frontier CSS in them is the point, while a web font anywhere is still fatal.
   let tasteScanned = 0, tasteOk = [];
   try {
-    const served = [...await servedFiles(), "cal/src/templates.ts", "serendipity/serendipity.ts"];
+    // Taste rules can execute only from text a browser parses or from a program
+    // that emits that text. The old walk decoded EVERY served byte as UTF-8,
+    // including all content-addressed AVIF/JPEG tiers and every OG PNG, while
+    // missing most of src/worker even though that is where generated-page CSS
+    // lives. Keep active textual assets plus the complete three Worker program
+    // trees: less work, and coverage now follows the actual authors.
+    const activeText = (rel: string): boolean =>
+      rel === "_headers" || /\.(?:[cm]?[jt]sx?|css|html?|xhtml|xml|svg)$/i.test(rel);
+    const programFiles = async (root: string): Promise<string[]> => (await readdir(root, { recursive: true }))
+      .filter((rel) => /\.(?:[cm]?[jt]sx?)$/i.test(rel))
+      .map((rel) => `${root}/${rel}`);
+    const served = [
+      ...await servedFiles(activeText),
+      ...await programFiles("src/worker"),
+      ...await programFiles("cal/src"),
+      ...await programFiles("serendipity"),
+    ];
     // Anchored on the SERVED_SOURCES roots, not on a tree name. This read
     // /^www\/(garage|lwe)\// until 2026-08-23, and www/ stopped existing on
     // 2026-08-18, so the exemption had been silently false for every file and
