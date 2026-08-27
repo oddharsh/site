@@ -159,9 +159,17 @@ export async function handleHit(request, env, ctx) {
   // global round trip — and it is fetched on idle, because a footer odometer is
   // the last thing on the page that matters. A miss leaves the static
   // placeholder alone rather than inventing a number.
+  //
+  // cacheTtl MIRROR_TTL: the mirror behind this key is rewritten at most once per
+  // MIRROR_TTL anyway, so caching the read for the same window can only ever double
+  // the lag the throttle above already accepts, to two minutes. The comment on that
+  // throttle is the argument: an odometer trailing real time is not a number anyone
+  // audits, and this fetch is on idle, so nobody is waiting for it either. KV's
+  // floor is 30 seconds (lowered from 60 on 2026-01-30), so 60 is a choice rather
+  // than the minimum.
   if (url.searchParams.has("n")) {
     let n = null;
-    try { const v = env.RN_KV && await env.RN_KV.get(COUNT_KEY); if (v != null) n = Number(v); } catch {}
+    try { const v = env.RN_KV && await env.RN_KV.get(COUNT_KEY, { cacheTtl: MIRROR_TTL }); if (v != null) n = Number(v); } catch {}
     return Response.json({ n: Number.isFinite(n) ? n : null }, {
       headers: { "cache-control": "no-store", "x-robots-tag": "noindex" },
     });

@@ -24,6 +24,21 @@ import { span } from "./lib/trace.ts";
 // redirect falls back to the playlist URL hardcoded below.
 export const RN_FALLBACK = "https://open.spotify.com/playlist/4IRq9W1N2tOWHhH0O3vXiF";
 
+// cacheTtl for the reads of "playlist-id" that sit on a request path. The key is
+// written exactly once, by hand, at /rn/set; a rollover is a monthly event, so
+// this is the window a swap takes to reach every colo. 900 is picked from both
+// ends. It has to clear 600 to help /rn/tracks at all, which is in
+// WORKERS_CACHEABLE_PATHS at s-maxage=600 and so only reads KV on a miss. And it
+// stays inside the 1800 getTracksSWR already spends on the payload this id
+// selects, so the pointer can never be the stalest thing in the chain. /rn itself
+// is `no-store`, so before this every redirect paid a central round trip for 22
+// characters.
+//
+// Two readers deliberately opt OUT below: cronEnrichTracks (off the request path,
+// and it should enrich the playlist that is set NOW) and /rn/admin (a read-back of
+// what you just wrote, which must never be able to lie).
+export const PLAYLIST_ID_CACHE_TTL = 900;
+
 // ── /rn handler ─────────────────────────────────────────────────────
 // This route has NO page of its own: it is a 302 to Spotify, and a browser that
 // follows it lands on a JS application. That is fine for a human and useless to
@@ -56,7 +71,7 @@ export async function handleRn(request, env, ctx) {
 async function playlistUrl(env) {
   let playlistId = null;
   if (env?.RN_KV) {
-    try { playlistId = await env.RN_KV.get("playlist-id"); } catch {}
+    try { playlistId = await env.RN_KV.get("playlist-id", { cacheTtl: PLAYLIST_ID_CACHE_TTL }); } catch {}
   }
   return (playlistId && /^[0-9A-Za-z]{22}$/.test(playlistId))
     ? `https://open.spotify.com/playlist/${playlistId}`
@@ -478,7 +493,7 @@ async function loadRnTracksInner(request, env, ctx, s) {
     s.setAttribute("rn.outcome", "no_kv_binding");
     return { payload: { error: "no kv binding", tracks: [] }, status: 500 };
   }
-  const playlistId = await span("rn.tracks.playlist_id", () => env.RN_KV.get("playlist-id"));
+  const playlistId = await span("rn.tracks.playlist_id", () => env.RN_KV.get("playlist-id", { cacheTtl: PLAYLIST_ID_CACHE_TTL }));
   if (!playlistId || !/^[0-9A-Za-z]{22}$/.test(playlistId)) {
     s.setAttribute("rn.outcome", "no_playlist_set");
     return { payload: { error: "no playlist set", tracks: [] }, status: 200 };
@@ -825,6 +840,9 @@ export async function cronEnrichTracks(env, ctx) {
   if (!env?.RN_KV) return { ok: false, reason: "no_kv_binding" };
 
   return span("rn.enrich", async (s) => {
+    // no cacheTtl on purpose: a cron tick is off the request path, so it has no
+    // latency to save, and it is the job that would spend a whole cycle enriching
+    // the playlist someone just swapped away from.
     const playlistId = await env.RN_KV.get("playlist-id");
     if (!playlistId || !/^[0-9A-Za-z]{22}$/.test(playlistId)) {
       s.setAttribute("rn.outcome", "no_playlist_set");
@@ -1071,7 +1089,10 @@ export async function handleRnAdmin(request, env) {
     return setPage(403, "denied", "wrong secret. check the bookmark.");
   }
 
-  // show current target so you can tell at a glance what /rn points to.
+  // show current target so you can tell at a glance what /rn points to. No
+  // cacheTtl here, unlike the request-path reads: this line is the confirmation
+  // that a swap landed, and a colo-cached answer would show you the playlist you
+  // just replaced.
   let current = "(empty — using fallback)";
   if (env.RN_KV) {
     const id = await env.RN_KV.get("playlist-id");
@@ -1127,6 +1148,10 @@ export async function handleRnSet(request, env) {
   if (!env.RN_KV) {
     return setPage(500, "no kv binding", "the worker can't see RN_KV — bind it in wrangler.jsonc.");
   }
+  // The request-path readers hold this id for PLAYLIST_ID_CACHE_TTL, so a swap
+  // takes up to 15 minutes to reach every colo. The confirmation below names the
+  // new id from the URL you submitted rather than from KV, so it is true the
+  // instant this write returns.
   await env.RN_KV.put("playlist-id", id);
 
   return setPage(200, "updated",

@@ -68,7 +68,7 @@ import {
   COLS, blank, emit, fit, keys as keyHints, kv, meter, rows, rule, s, table, plainFrame, wrap,
 } from "./lib/tui.ts";
 import { photoFacets, queryPhotos } from "./photos.ts";
-import { RN_FALLBACK, getTracksSWR } from "./rn.ts";
+import { PLAYLIST_ID_CACHE_TTL, RN_FALLBACK, getTracksSWR } from "./rn.ts";
 import { getCuriusCached } from "./reading.ts";
 import { searchSite } from "./search.ts";
 import { readCheckpoints } from "./updates.ts";
@@ -216,7 +216,7 @@ const PANES = {
     return { links, stale: !!payload?.stale, list: links.map((l, i) => ({ id: String(i), label: l.title, meta: l.domain || "" })) };
   },
   async listening(env, ctx) {
-    const stored = env.RN_KV ? await env.RN_KV.get("playlist-id").catch(() => null) : null;
+    const stored = env.RN_KV ? await env.RN_KV.get("playlist-id", { cacheTtl: PLAYLIST_ID_CACHE_TTL }).catch(() => null) : null;
     const pid = /^[0-9A-Za-z]{22}$/.test(stored || "") ? stored : RN_FALLBACK.split("/").pop();
     const payload = await getTracksSWR(env, ctx, pid, { buildOnMiss: true }).catch(() => null);
     const tracks = Array.isArray(payload?.tracks) ? payload.tracks : [];

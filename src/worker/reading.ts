@@ -83,7 +83,16 @@ export async function getCuriusCached(request, env, ctx) {
   }
   // no cached value at all — true first run or right after a bust — builds inline.
   // non-empty guard: a transient Curius failure must not blank a good stale list.
+  //
+  // cacheTtl 900: this was the one swrKV caller passing none, while both siblings
+  // (rn 1800, dyno 300) pass one, and no argument was recorded for the difference.
+  // 900 adds 15 minutes to a list that already refreshes every 6 hours, so 4% on
+  // its own window. It has to clear 300 to do anything, because handleReading sits
+  // behind cachedRender at max-age=300 and this read only runs on an edge miss. The
+  // bust is unaffected for whoever runs it: ?bust= deletes both keys and rebuilds
+  // inline in the same request, and evicts that colo's edge entry too.
   return swrKV(env, ctx, CURIUS_CACHE_KEY, CURIUS_TTL, () => buildCuriusPayload(env), {
+    cacheTtl: 900,
     isValid: (p) => p && Array.isArray(p.items),
     shouldStore: (p) => p && Array.isArray(p.items) && p.items.length > 0,
   });

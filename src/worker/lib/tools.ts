@@ -22,7 +22,7 @@ import { readAroundChanges } from "../around.ts";
 import { readCoffeeAvailability } from "../coffee.ts";
 import { LENS_BUDGETS, compareLensTargets, lensInspect, lensObservationSummary, overLensBudget, validateLensTarget } from "../lens.ts";
 import { queryPhotos } from "../photos.ts";
-import { RN_FALLBACK, getTracksSWR } from "../rn.ts";
+import { PLAYLIST_ID_CACHE_TTL, RN_FALLBACK, getTracksSWR } from "../rn.ts";
 import { NLWEB_MODES, nlwebAsk, parseAskRequest } from "../nlweb.ts";
 import { searchSite } from "../search.ts";
 import { mcpTool } from "./mcp-tools.ts";
@@ -157,7 +157,7 @@ export async function callDataTool(name, args, request, env, ctx): Promise<Recor
   if (name === "coffee_availability") return readCoffeeAvailability(env, ctx);
   if (name === "change_radar") return readAroundChanges(env, args.limit);
   if (name === "now_playing") {
-    const playlistId = env.RN_KV ? await env.RN_KV.get("playlist-id") : null;
+    const playlistId = env.RN_KV ? await env.RN_KV.get("playlist-id", { cacheTtl: PLAYLIST_ID_CACHE_TTL }) : null;
     const pid = /^[0-9A-Za-z]{22}$/.test(playlistId || "") ? playlistId : RN_FALLBACK.split("/").pop();
     try {
       const tracks = await getTracksSWR(env, ctx, pid, { buildOnMiss: true });

@@ -337,8 +337,16 @@ async function readAroundReport(request, env) {
     }
     return report;
   }
+  // cacheTtl 1800: cronAround rewrites this key once a DAY, so half an hour is 2%
+  // of the snapshot's own cadence and the page already says "as of the last cron
+  // crawl". It has to exceed 300 to buy anything at all, because /around and
+  // /around/json both sit behind cachedRender at s-maxage=300 and this read only
+  // runs on an edge miss, so a shorter window would expire alongside the render it
+  // was meant to skip ahead of. The owner's ?bust= still renders from its own fresh
+  // crawl rather than from KV, so the person who ran it is never the one reading
+  // stale; other colos catch up as their own cacheTtl lapses.
   try {
-    const report = env.RN_KV ? await env.RN_KV.get(AROUND_KEY, "json") : null;
+    const report = env.RN_KV ? await env.RN_KV.get(AROUND_KEY, { type: "json", cacheTtl: 1800 }) : null;
     return report && Array.isArray(report.results) ? report : null;
   } catch { return null; }
 }
