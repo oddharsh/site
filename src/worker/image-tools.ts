@@ -308,22 +308,22 @@ function publicPhoto(record, stem, hashes, alt, kind, tier) {
 }
 
 export async function photoRecipe(args, env) {
-  const metadata = await loadJson(env, "images/metadata.json");
-  const hashes = await loadJson(env, "images/hashes.json");
-  const alt = await loadJson(env, "images/alt.json");
-  const fingerprints = await loadJson(env, "images/fingerprints.json");
   let stem = String(args.stem || "").trim();
   let kind = stem ? "stem" : null;
   let tier = null;
+  let inputSha256: string | null = null;
   if (stem && !/^[A-Za-z0-9_-]{1,120}$/.test(stem)) return error("stem is not a published photo stem");
-  if (!stem && args.source_url) {
-    const match = archiveStemFromUrl(args.source_url, hashes);
-    if (match) { stem = match.stem; kind = match.kind; tier = match.tier; }
-  }
+
+  // These JSON files are separate assets so their 285 KiB stays out of every
+  // isolate's Worker bundle. Read only the indexes this lookup shape can use:
+  // a stem never needs fingerprints, while a byte miss needs nothing else.
+  // Once a stem is known, the three independent projection reads share one
+  // asset-binding round trip instead of forming a serial waterfall.
   if (args.image_data) {
     const encoded = decodeBase64(args.image_data);
     if (!encoded) return error("image_data must be valid base64 and no larger than 8 MiB");
-    const digest = await sha256(encoded.bytes);
+    inputSha256 = await sha256(encoded.bytes);
+    const fingerprints = await loadJson(env, "images/fingerprints.json");
     // fingerprints.json is keyed BY DIGEST, so the parsed object IS the index and
     // this is the whole lookup. It used to be a nested scan over all 474 entries
     // with an Object.entries() allocation per call, which is the wrong shape for
@@ -338,13 +338,25 @@ export async function photoRecipe(args, env) {
     // 0.0205 ms scan this replaces, so the boundary parse would spend the whole
     // win. JSON.parse already returns the index; the values are our own build
     // artifact, and check-photo-pipeline.mjs is what proves their shape.
-    const hit = Object.hasOwn(fingerprints, digest) ? String(fingerprints[digest]) : "";
+    const hit = Object.hasOwn(fingerprints, inputSha256) ? String(fingerprints[inputSha256]) : "";
     const cut = hit.lastIndexOf(":");
     const hitStem = cut > 0 ? hit.slice(0, cut) : "";
     const hitTier = cut > 0 ? hit.slice(cut + 1) : "";
-    if (!hitStem || !["a", "j", "s"].includes(hitTier)) return { matched: false, inputSha256: digest, reason: "No exact published thumbnail match. Arbitrary originals are not treated as recipe matches." };
+    if (!hitStem || !["a", "j", "s"].includes(hitTier)) return { matched: false, inputSha256, reason: "No exact published thumbnail match. Arbitrary originals are not treated as recipe matches." };
     stem = hitStem; kind = "published-thumbnail"; tier = hitTier;
   }
+
+  if (!stem && !args.source_url) return error("provide a published stem, archive URL, or exact bytes from a published thumbnail");
+
+  const [metadata, hashes, alt] = await Promise.all([
+    loadJson(env, "images/metadata.json"),
+    loadJson(env, "images/hashes.json"),
+    loadJson(env, "images/alt.json"),
+  ]);
+  if (!stem && args.source_url) {
+    const match = archiveStemFromUrl(args.source_url, hashes);
+    if (match) { stem = match.stem; kind = match.kind; tier = match.tier; }
+  }
   if (!stem || !metadata[stem]) return error("provide a published stem, archive URL, or exact bytes from a published thumbnail");
-  return { matched: true, input: args.image_data ? { sha256: await sha256(decodeBase64(args.image_data).bytes) } : null, photo: publicPhoto(metadata[stem], stem, hashes, alt, kind, tier), note: "Recipe data is returned only after an explicit archive identity or exact published-thumbnail match." };
+  return { matched: true, input: inputSha256 ? { sha256: inputSha256 } : null, photo: publicPhoto(metadata[stem], stem, hashes, alt, kind, tier), note: "Recipe data is returned only after an explicit archive identity or exact published-thumbnail match." };
 }
