@@ -189,8 +189,22 @@ updates:
       time: "09:00"
       timezone: America/New_York
     open-pull-requests-limit: 5
+    # `labels:` REPLACES Dependabot's defaults rather than adding to them, and a
+    # name GitHub does not have is dropped in silence. This key read
+    # `github-actions`, a label that has never existed in this repository, so
+    # every bump from this block traded the working `dependencies` label for
+    # nothing. Measured on #620 (a github-actions bump): it carried only the two
+    # labels triage.yml gives it, while #622 (an npm bump, no `labels:` key)
+    # carried `dependencies` and `javascript` from the defaults. `gh pr create
+    # --label` fails outright on an unknown name; Dependabot does not, so the
+    # symptom is a missing label rather than an error.
+    #
+    # It stays explicit rather than being deleted, on the argument bunfig.toml
+    # makes for minimumReleaseAge: a stated decision beats a behaviour that
+    # arrives with a version. check-infra.ts reads every name here against the
+    # label set config/infra.json declares, so a third spelling fails a PR.
     labels:
-      - github-actions
+      - dependencies
     # The same 24h window, on the weaker of the two arguments. No bun install
     # relocks an action pin, so nothing here fails the way the npm blocks do;
     # what carries it is the half of the bunfig comment that is not about bun at
