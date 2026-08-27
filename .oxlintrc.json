@@ -15,7 +15,13 @@
   // lint still exits 0, and the tree reads as clean because most of the rules
   // that were checking it are gone. Adding a plugin here means appending to
   // this array, never writing the one you want.
-  "plugins": ["eslint", "unicorn", "typescript", "oxc", "vitest"],
+  // `import` is appended rather than swapped in, per the paragraph above. It
+  // brings NOTHING on by itself: measured 2026-08-27 on oxlint 1.80.0, the
+  // plugin with no named rule reports 0 on this tree AND 0 on a planted
+  // two-file cycle, because none of the four rules named below sit in the
+  // `correctness` category this config enables. So each one is listed
+  // explicitly under `rules`, and adding the plugin costs no unnamed sweep.
+  "plugins": ["eslint", "unicorn", "typescript", "oxc", "vitest", "import"],
 
   // Three rules vendored from dmmulroy/anti-slop, at tools/oxlint/anti-slop.
   // That directory is ignorePattern'd above: it is TypeScript in a repository
@@ -24,6 +30,22 @@
   "jsPlugins": [{ "name": "anti-slop", "specifier": "./tools/oxlint/anti-slop/index.ts" }],
 
   "categories": { "correctness": "error" },
+
+  // A suppression that no longer suppresses anything is a claim about the code
+  // that has quietly stopped being true, and every one in this tree carries a
+  // reason next to it (gotcha 35's three are the sharpest: they say a fix would
+  // re-mint a content-addressed URL). When the underlying finding goes away the
+  // reason goes stale, and nothing else here would notice.
+  //
+  // `deny` rather than `warn`, deliberately. The severity is per-directive and
+  // takes allow/warn/deny, so an unused one can be an ERROR without reaching for
+  // `denyWarnings`, which is a global promotion that would also catch every
+  // future warn-severity rule and every reclassification oxlint ships. One
+  // narrow gate beats one broad one.
+  //
+  // 0 findings on this tree, measured 2026-08-27. It has teeth: a planted
+  // `// oxlint-disable-next-line no-sparse-arrays` above a clean line reports.
+  "options": { "reportUnusedDisableDirectives": "deny" },
 
   "rules": {
     // Three rules fire only on idioms this codebase uses deliberately and
@@ -144,6 +166,43 @@
     // The two exemptions below are the classes the rule is categorically wrong
     // about, and both are language facts rather than preferences.
     "anti-slop/no-runtime-typeof": "error",
+
+    // The complement of no-floating-promises, which the note at the end of the
+    // type-aware block above keeps ON for one reason: this runtime cancels "a
+    // promise nobody awaited" at request teardown. An async function handed to
+    // a caller that expects a void return is the same promise, dropped one step
+    // earlier, so the same argument covers it. 0 findings, measured 2026-08-27;
+    // it fires on a planted `list.filter(async …)` and on `if (work())`.
+    "typescript/no-misused-promises": "error",
+
+    // A switch over a union that stops matching every member is how a new
+    // variant reaches production silently. This repo dispatches on string
+    // unions all over the Worker, and `noFallthroughCasesInSwitch` catches the
+    // other half of the same failure. 0 findings, measured 2026-08-27; it fires
+    // on a two-member union missing a case.
+    "typescript/switch-exhaustiveness-check": "error",
+
+    // FOUR IMPORT RULES, each measured at 0 on this tree on 2026-08-27 and each
+    // proven to fire on a planted violation, because a rule that reports
+    // nothing looks identical to a rule that is not running. oxlint accepts an
+    // unknown rule name in silence, which is what makes the control mandatory
+    // here rather than tidy: `-D typescript/no-such-rule-xyz` exits 0 with no
+    // output, exactly like a clean pass.
+    //
+    // `import/no-unresolved` was wanted and DOES NOT EXIST in oxlint 1.80.0.
+    // It is absent from configuration_schema.json, so naming it would have been
+    // four silent no-ops dressed as a check.
+    //
+    // no-cycle earns the most here. The tools import Worker modules by their
+    // real `.ts` filename across three resolution trees (tsconfig.tools.json's
+    // header has the reason), which is precisely the shape a cycle hides in.
+    "import/no-cycle": "error",
+    "import/export": "error",
+    // Skips `.ts` files by design, upstream and here: type-only re-exports are
+    // not resolvable this way. It has teeth on the .js/.mjs half of the tree,
+    // which is all of src/client and most of tools.
+    "import/named": "error",
+    "import/no-self-import": "error",
 
     "vitest/no-restricted-vi-methods": [
       "error",

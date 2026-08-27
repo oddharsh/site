@@ -507,6 +507,11 @@ test("every program declared null-safe still declares it", async () => {
     "tsconfig.lwe-ask.json",
     "tsconfig.browser.json",
     "tsconfig.tools.json",
+    // The last program to join, on 2026-08-27. It had been the only config in
+    // config/ without the flag, and its header argues why the service worker
+    // needs a separate PROGRAM rather than a laxer one, so the gap read as a
+    // decision purely because it sat where a decision goes. 0 diagnostics.
+    "tsconfig.sw.json",
   ].sort();
 
   const configs = readdirSync(new URL("config/", ROOT).pathname)

@@ -38,6 +38,7 @@ jobs:
   changed:
     name: New commits since yesterday?
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       run: ${{ steps.check.outputs.run }}
     steps:

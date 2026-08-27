@@ -17,6 +17,11 @@
     "paths": { "/*": ["../src/client/*", "../src/styles/*", "../public/*"] },
     "lib": ["esnext", "dom", "dom.iterable"],
     "skipLibCheck": true,
+    // Two control-flow checks, set here because they are set in tsconfig.json
+    // and a program is only as strict as its own options. Both cost nothing:
+    // +0 diagnostics on every one of the ten programs, measured 2026-08-27.
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitReturns": true,
     // strictNullChecks ON, against the ratchet in check-browser-types.ts. The
     // program carried 509 diagnostics under it; 344 are fixed and the rest are
     // recorded per file in config/ts-browser-baseline.json, where they can only
