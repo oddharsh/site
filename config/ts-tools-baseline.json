@@ -17,7 +17,7 @@
     "tools/contract-lens-per-ip-crawl-budgets.test.mjs": 4,
     "tools/contract-nlweb.test.mjs": 4,
     "tools/contract-reading-somebody-else-s-site.test.mjs": 1,
-    "tools/contract-rn-the-track-meta-map-must-survive-a-short-playlist-.test.mjs": 16,
+    "tools/contract-rn-the-track-meta-map-must-survive-a-short-playlist-.test.mjs": 14,
     "tools/contract-shared.ts": 20,
     "tools/contract-the-bundled-photo-pool.test.mjs": 7,
     "tools/contract-the-execution-half-of-the-readiness-rubric.test.mjs": 1,
@@ -54,5 +54,5 @@
     "tools/ua-survey.ts": 17,
     "tools/verify-routes.ts": 27
   },
-  "total": 509
+  "total": 507
 }

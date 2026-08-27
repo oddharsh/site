@@ -776,10 +776,16 @@ function withTrackMeta(track, meta) {
 // took the covers with it.
 //
 // Budgets are per RUN and deliberately small. Worst case per tick is 3 KV reads
-// + 6 track embeds + 6 artist reads + 6 artist embeds + 6 artist writes + 2
-// payload writes = 29 subrequests, against a cap of 50. Raise these ONLY with
-// that arithmetic redone: the cap counts KV operations, which is the part that
-// is easy to forget and is how the inline version got to 67.
+// + 6 track embeds + 6 artist embeds + 6 artist writes + 2 payload writes = 23
+// subrequests, against a cap of 50. Raise these ONLY with that arithmetic
+// redone: the cap counts KV operations, which is the part that is easy to
+// forget and is how the inline version got to 67.
+//
+// Two of those three reads are BULK reads, which is why 6 artist reads left the
+// sum (see kvBulkJson). The 6 subrequests that frees are deliberately NOT spent
+// here: `budget.spent` on the rn.enrich span is what says whether the saving is
+// real, and a raised budget on the strength of a sum nobody has measured is the
+// exact shape of the 67.
 //
 // That arithmetic is now also CHECKED AT RUNTIME rather than only reasoned
 // about here, against a ledger from lib/budget.ts. A comment doing this sum is
@@ -821,6 +827,28 @@ function trackMetaFromEntity(e) {
   };
 }
 
+// ONE bulk read is ONE subrequest, whatever the key count, and that is the whole
+// reason this exists instead of a Promise.all of gets. Cloudflare's KV "Read
+// key-value pairs" reference says so under "Requesting more keys per Worker
+// invocation with bulk requests": up to 100 keys per call, and "These count as a
+// single operation against the 1,000 operation limit". That figure is the
+// ceiling in its PAID form; Free is the same counter at 50, which is the one
+// SUBREQUEST_CAP_FREE holds.
+//
+// So the ledger is charged for the CALL rather than for the keys, and the charge
+// lives in here because per-key is what the next edit reaches for by reflex.
+// Both callers stay far under 100 by their own budgets: two keys at the setup
+// read, at most ENRICH_ARTIST_BUDGET at the artist read.
+//
+// `json` is not a default anyone may widen. The bulk form supports `text` and
+// `json` alone; `arrayBuffer` and `stream` are documented as unsupported and
+// want individual gets under Promise.all instead. Errors are left to the caller,
+// since the two call sites want opposite things from a read that fails.
+function kvBulkJson(env, budget, keys) {
+  budget.charge(1);
+  return env.RN_KV.get(keys, "json");
+}
+
 export async function cronEnrichTracks(env, ctx) {
   if (!env?.RN_KV) return { ok: false, reason: "no_kv_binding" };
 
@@ -838,11 +866,12 @@ export async function cronEnrichTracks(env, ctx) {
     let capped = false;
 
     const cacheKey = `tracks:${playlistId}`;
-    budget.charge(2);
-    const [payload, storedMeta] = await Promise.all([
-      env.RN_KV.get(cacheKey, "json"),
-      env.RN_KV.get(TRACK_META_KEY, "json"),
-    ]);
+    // Both setup keys in one read. A key with nothing behind it comes back as
+    // null, which is the answer a single get gave, so `no_payload` below is
+    // unchanged.
+    const setup = await kvBulkJson(env, budget, [cacheKey, TRACK_META_KEY]);
+    const payload = setup.get(cacheKey);
+    const storedMeta = setup.get(TRACK_META_KEY);
     if (!payload || !Array.isArray(payload.tracks) || payload.tracks.length === 0) {
       // nothing has built the playlist yet; the SWR path owns that, not this.
       s.setAttribute("rn.outcome", "no_payload");
@@ -917,21 +946,37 @@ export async function cronEnrichTracks(env, ctx) {
 
     const resolved = new Map();
     let artistCached = 0, artistScraped = 0, artistFailed = 0;
-    await Promise.all([...pendingArtists.keys()].map(async id => {
-      const key = `artist:${id}`;
-      // A KV read is a subrequest too, which is the half of this ceiling
-      // everyone forgets: the outage that started all this spent 37 fetches and
-      // 30 KV operations against a limit of 50, and only the fetches were ever
-      // counted.
-      budget.charge(1);
-      try {
-        const hit = asRecord(await env.RN_KV.get(key, "json"));
-        if (hit) {
-          artistCached++;
-          resolved.set(id, { name: asText(hit.name, ""), image_url: asText(hit.image_url) });
-          return;
-        }
-      } catch { /* fall through to the scrape */ }
+
+    // A KV read is a subrequest too, which is the half of this ceiling everyone
+    // forgets: the outage that started all this spent 37 fetches and 30 KV
+    // operations against a limit of 50, and only the fetches were ever counted.
+    // So the whole pending set is read in ONE call rather than one per artist,
+    // which is 1 subrequest where it used to be up to ENRICH_ARTIST_BUDGET.
+    const artistIds = [...pendingArtists.keys()];
+    const artistKey = (id) => `artist:${id}`;
+    let cachedArtists: Map<string, unknown> | null = null;
+    try {
+      if (artistIds.length > 0) cachedArtists = await kvBulkJson(env, budget, artistIds.map(artistKey));
+    } catch (e) {
+      // A read that fails leaves every artist pending and the scrape below is
+      // the fallback it always was. What changed is that one failure now costs
+      // the whole batch its cache hit rather than one artist, which is still
+      // cheaper than the shape it replaced: 1 read + N scrapes against N + N.
+      if (budget.fault(e) === "cap") capped = true;
+    }
+
+    const toScrape: string[] = [];
+    for (const id of artistIds) {
+      // `?.` covers the no-read and failed-read paths with the miss path, since
+      // all three mean the same thing here: this artist is still pending.
+      const hit = asRecord(cachedArtists?.get(artistKey(id)));
+      if (!hit) { toScrape.push(id); continue; }
+      artistCached++;
+      resolved.set(id, { name: asText(hit.name, ""), image_url: asText(hit.image_url) });
+    }
+
+    await Promise.all(toScrape.map(async id => {
+      const key = artistKey(id);
       budget.charge(1);
       try {
         const e = await scrapeSpotifyEmbed(`artist/${id}`, env);
