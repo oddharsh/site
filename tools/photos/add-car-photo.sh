@@ -35,25 +35,60 @@ if [ ! -x "$ZENC" ]; then
   cargo build --release --manifest-path "$ZENC_DIR/Cargo.toml" >&2 || { echo "error: zenc build failed" >&2; exit 1; }
 fi
 
-# 1. downscale (preserve aspect), strip to a clean sRGB JPG.
-# `-s format jpeg` is load-bearing rather than belt-and-braces: `-Z` RESIZES and
-# does not convert, so a HEIC/PNG/WEBP source came out still in its own format
-# under a .jpg name, and zenc refused it ("Illegal start bytes"). That made the
-# HEIC/WEBP/AVIF half of this script's own usage line above dead, silently, since
-# every step here is >/dev/null. Measured 2026-08-24: byte-identical output for a
-# JPEG source (so no committed car photo moves), and exit 0 instead of 1 for a
-# .HIF. add-photos.sh has always passed the flag; this script never did.
-"$SIPS" -Z 480 -s format jpeg "$SRC" --out "$TMP/x.jpg" >/dev/null 2>&1
+# 1. DECODE, and only for what zenc cannot open itself. zenc reads JPEG, PNG and
+# TIFF, so sips is here for HEIC/HIF, WEBP, AVIF and whatever else it reads. The
+# door is a TIFF because it is LOSSLESS and 16-bit, which is the same door
+# add-photos.sh phase 1 uses; `sips -s format png` deflates the same pixels and
+# takes about 10x longer at full resolution.
+#
+# This step used to be `sips -Z 480 -s format jpeg`, which did three jobs at
+# once and got two of them wrong: it wrote a LOSSY intermediate that both
+# encoders below then re-encoded, and it resampled in gamma space, which the
+# 2026-08-26 ingest rewrite took out of every other path here (+27.5 mean
+# ssimulacra2 over 10 frames, `bun run onestep:probe`).
+input="$SRC"
+case "$(printf '%s' "${SRC##*.}" | /usr/bin/tr '[:upper:]' '[:lower:]')" in
+  jpg|jpeg|png|tif|tiff) ;;
+  *)
+    "$SIPS" -s format tiff "$SRC" --out "$TMP/decoded.tif" >/dev/null 2>&1 ||
+      { echo "error: sips cannot decode $SRC" >&2; exit 1; }
+    input="$TMP/decoded.tif" ;;
+esac
 
-# 2. JPG fallback via zenc (zenjpeg hybrid+scan, q84 ≈ old jpegli q82)
-"$ZENC" "$TMP/x.jpg" "$DEST/$STEM.jpg" -q 84 >/dev/null 2>&1
+# 2. cap the long edge at 480 into a LOSSLESS PNG, resampled in linear light.
+# `zenc resize` caps ONE axis and keeps the whole frame, so which axis carries
+# the cap has to be decided here; `sips -Z` took the long edge on its own.
+#
+# EXIF orientation is deliberately NOT applied, because the old path did not
+# apply it either and this swap is not the place to change what ships. Measured
+# 2026-08-27 on XT507876.JPG (orientation 6): `sips -Z 480` writes 480x320 and
+# leaves the tag, zenc's encode ignores EXIF, so the old script shipped 480x320
+# unrotated and so does this one. A portrait source is sideways either way.
+srcw=$("$SIPS" -g pixelWidth "$input" | /usr/bin/awk '/pixelWidth/{print $2}')
+srch=$("$SIPS" -g pixelHeight "$input" | /usr/bin/awk '/pixelHeight/{print $2}')
+if [ "$srcw" -ge "$srch" ]; then axis=--width; else axis=--height; fi
+"$ZENC" resize "$input" "$axis" 480 --filter box --out "$TMP/x.png" >/dev/null 2>&1
 
-# 3. AVIF primary. grayscale shots get yuv400; everything else yuv420.
-# tolerant under pipefail: an unreadable colorspace defaults to 4:2:0 below.
-space=$("$SIPS" -g space "$TMP/x.jpg" 2>/dev/null | /usr/bin/awk '/space:/{print $2}') || space=""
+# 3. JPG fallback via zenc (zenjpeg hybrid+scan, q84 ≈ old jpegli q82)
+"$ZENC" "$TMP/x.png" "$DEST/$STEM.jpg" -q 84 >/dev/null 2>&1
+
+# 4. AVIF primary, from the SAME lossless PNG rather than from the JPG above.
+# Encoding it from the JPG spent a whole generation for nothing: measured
+# 2026-08-27 over 3 sources at this tier, from-the-PNG is +2.2 to +3.4
+# ssimulacra2 at the same bytes. `-d 10` is the 10-bit encode every other
+# avifenc call site here passes, worth another 0.5-1.4% off.
+#
+# grayscale shots get yuv400; everything else yuv420. The probe reads the
+# SOURCE rather than the intermediate, because the source is where the colour
+# space is a fact about the photograph. The two agree here (measured 2026-08-27:
+# sips reports Gray for a Monochrom JPG and for the PNG zenc resizes it into),
+# and reading the source means a future intermediate format cannot quietly
+# decide this. Tolerant under pipefail: an unreadable colorspace falls through
+# to 4:2:0.
+space=$("$SIPS" -g space "$input" 2>/dev/null | /usr/bin/awk '/space:/{print $2}') || space=""
 if [ "$space" = "Gray" ]; then yuv=400; else yuv=420; fi
-"$AVIFENC" -q 63 --speed 4 --jobs 4 --ignore-icc --yuv "$yuv" \
-  "$DEST/$STEM.jpg" "$DEST/$STEM.avif" >/dev/null 2>&1
+"$AVIFENC" -q 63 -d 10 --speed 4 --jobs 4 --ignore-icc --ignore-exif --ignore-xmp \
+  --yuv "$yuv" "$TMP/x.png" "$DEST/$STEM.avif" >/dev/null 2>&1
 
 aw=$("$SIPS" -g pixelWidth "$DEST/$STEM.jpg" | /usr/bin/awk '/pixelWidth/{print $2}')
 ah=$("$SIPS" -g pixelHeight "$DEST/$STEM.jpg" | /usr/bin/awk '/pixelHeight/{print $2}')

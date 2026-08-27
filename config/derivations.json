@@ -247,7 +247,7 @@
         "public/cars"
       ],
       "unverifiable": "The input is a reference photo from somewhere on the web, credited by hand in public/cars/CREDITS.txt and not in this repository. There is nothing to hash. What is checkable is that each stem has both tiers and a credit line, which belongs with the page contract rather than here.",
-      "regenerate": "bash tools/photos/add-car-photo.sh <image> <stem>"
+      "regenerate": "bash tools/photos/add-car-photo.sh <stem> <image>"
     },
     {
       "id": "garage/encoding-samples",

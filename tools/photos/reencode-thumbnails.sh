@@ -221,7 +221,9 @@ while IFS= read -r stem; do
     rm -f "$tif"; FAIL=$((FAIL+1)); printf "✗"; continue
   fi
   # Deleted per photo rather than by the EXIT trap: a full-res TIFF is ~311MB,
-  # and 158 of them would want 50GB of /tmp.
+  # and 158 of them would want 50GB of /tmp. Compressing it instead is not on
+  # offer: `sips -s formatOptions lzw` is documented for TIFF and silently
+  # ignored at 16 bits, measured at the twin site in add-photos.sh.
   rm -f "$tif"
   # 4. desktop square: zenc (zenjpeg hybrid+scan+sharp_yuv, q84) + AVIF (yuv400 for grayscale, else yuv420).
   #    metadata is stripped: the grid reads EXIF/histogram from metadata.json, so

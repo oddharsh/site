@@ -331,12 +331,20 @@ async function capture(page, cardPage, p, bliss) {
   // the demo is captured at 2x (supersampled); the card renders at 1x/1200x630
   // (the standard OG size), so the downscaled demo stays crisp while the file
   // stays a quarter the size of a full 2x card.
-  const shotBuf = await page.screenshot({ clip, type: "png" });
+  //
+  // `animations: "disabled"` finishes every CSS animation and transition at its
+  // END STATE and holds it there for the capture. The waitForTimeout calls above
+  // are the older way of buying the same thing, and they buy it by racing a
+  // timer: a demo whose transition is 200ms lands mid-flight if the machine is
+  // busy, so two runs of an unchanged page can differ. The timers stay, because
+  // they also wait out JS that has nothing to do with CSS (canvas draws, fetches
+  // the demos make on load), which this option does not touch.
+  const shotBuf = await page.screenshot({ clip, type: "png", animations: "disabled" });
   const shot = "data:image/png;base64," + shotBuf.toString("base64");
 
   await cardPage.setContent(cardHtml({ bliss, shot, favicon }), { waitUntil: "load" });
   await cardPage.waitForTimeout(150);
-  const cardBuf = await cardPage.screenshot({ clip: { x: 0, y: 0, width: CARD_W, height: CARD_H }, type: "png" });
+  const cardBuf = await cardPage.screenshot({ clip: { x: 0, y: 0, width: CARD_W, height: CARD_H }, type: "png", animations: "disabled" });
   await writeFile(path.join(OUT, `${p.id}.png`), cardBuf);
   return { id: p.id, route, usedFallback: !box };
 }
@@ -375,6 +383,15 @@ async function main() {
   const bliss = await blissBackground();
   const pages = await listPages();
   const browser = await chromium.launch({ channel: "chrome", headless: true, args: ["--hide-scrollbars"] });
+  // NEITHER context sets `reducedMotion: "reduce"`, and it is the obvious
+  // companion to the `animations: "disabled"` capture below, so here is why not.
+  // That option emulates `prefers-reduced-motion` and 13 of the pages these cards
+  // capture answer it with real rules: `/garage/scroll` pins `.xp-progress-fill`
+  // at `width: 60% !important` and forces `transform: none` on the zoom demo, and
+  // `/garage/horizon` carries four such blocks. So it would not stabilise the
+  // card, it would photograph a DIFFERENT card, which is the fallback state
+  // rather than the demo the unfurl is meant to show. `animations: "disabled"`
+  // settles the same motion under the page's normal media conditions.
   const ctxHi = await browser.newContext({ deviceScaleFactor: 2 }); // demo capture (supersampled)
   const ctxLo = await browser.newContext({ deviceScaleFactor: 1, viewport: { width: CARD_W, height: CARD_H } }); // 1200x630 card
   const cardPage = await ctxLo.newPage();
