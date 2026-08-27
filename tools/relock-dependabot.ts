@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-// bun run deps:relock [<pr>...] [--all] [--push] [--no-build] [--keep]
+// bun run deps:relock [<pr>...] [--all] [--push] [--no-build] [--no-gates] [--keep]
 //
 // Carries a Dependabot bump into bun.lock, because DEPENDABOT CANNOT.
 //
@@ -55,6 +55,7 @@
 // its path.
 
 import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { readFile, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -69,6 +70,25 @@ const PUSH = flag("--push");
 const ALL = flag("--all");
 const BUILD = !flag("--no-build");
 const KEEP = flag("--keep");
+// `--no-gates` DROPS THE TOOLCHAIN GATES, and it exists for one caller:
+// .github/workflows/dependabot-relock.yml, where skipping them is a SECURITY
+// property rather than a shortcut.
+//
+// lint, typecheck, test and build all EXECUTE the version being bumped, because
+// the things being bumped ARE the toolchain (oxlint, wrangler, oxc-minify,
+// lightningcss). Running them in the job that holds the push credential puts a
+// package published yesterday in the same process tree as a token that can
+// write to this repository. On a workstation that trade is right and the gates
+// are the point. In Actions it buys nothing, because `validate` re-runs on the
+// pushed commit and is the ONLY required check on main, so the bump is gated
+// either way — by a job holding no credential.
+//
+// THE FROZEN INSTALL SURVIVES THE FLAG, deliberately. It is the exact assertion
+// this script exists to satisfy, and it is the one gate that executes no
+// dependency code: --frozen-lockfile compares the lockfile against the
+// manifests and stops. A --no-gates run that skipped it would push a lockfile
+// having proven nothing about it.
+const GATES = !flag("--no-gates");
 const prNums = args.filter((a) => /^\d+$/.test(a));
 
 function run(cmd: string, cmdArgs: string[], cwd = REPO, quiet = false) {
@@ -199,8 +219,28 @@ async function relock(n: number) {
       return false;
     }
 
-    const install = run("bun", ["install"], tree);
+    // --ignore-scripts completes the isolation argued at GATES. bun already runs
+    // dependency lifecycle scripts only for `trustedDependencies` (esbuild,
+    // sharp, workerd here), so those three are the last door through which a
+    // bumped package could execute beside the token; this shuts it. Resolution
+    // does not depend on scripts having run, so the lockfile is byte-identical
+    // either way, which is why the flag is safe to make conditional at all.
+    const installArgs = GATES ? ["install"] : ["install", "--ignore-scripts"];
+    const install = run("bun", installArgs, tree);
     if (install.code !== 0) { console.log(`  bun install failed:\n${install.err || install.out}`); return false; }
+
+    // lens-reader SITS OUTSIDE THE WORKSPACE and keeps its own bun.lock, and
+    // .github/dependabot.yml watches it as a SECOND npm block. A root install
+    // resolves the root package.json alone, so before this the script relocked
+    // nothing on a lens-reader bump, reported success, and left
+    // lens-reader/bun.lock stale — the quiet direction of the failure it exists
+    // to fix. Conditional on the diff rather than unconditional because the
+    // install is ~22 MB of defuddle + linkedom that no root bump can touch.
+    if (pr.files.some((f) => f.startsWith("lens-reader/"))) {
+      const sub = run("bun", installArgs, path.join(tree, "lens-reader"));
+      if (sub.code !== 0) { console.log(`  lens-reader install failed:\n${sub.err || sub.out}`); return false; }
+      console.log("  installed in lens-reader/ too");
+    }
 
     const edits = await rewritePins(tree);
     for (const e of edits) console.log(`  prose: ${e.prose} ${e.from} -> ${e.to}`);
@@ -216,13 +256,19 @@ async function relock(n: number) {
 
     // The frozen install is re-run as its own gate because it is the EXACT
     // command CI died on. A plain `bun install` succeeding does not prove it.
-    const gates: [string, string[]][] = [
-      ["bun install --frozen-lockfile", ["install", "--frozen-lockfile"]],
+    const frozen = GATES
+      ? ["install", "--frozen-lockfile"]
+      : ["install", "--frozen-lockfile", "--ignore-scripts"];
+    const toolchainGates: [string, string[]][] = [
       ["lint", ["run", "lint"]],
       ["typecheck", ["run", "typecheck"]],
       ["test", ["run", "test"]],
       ["test:node", ["run", "test:node"]],
       ...(BUILD ? [["build", ["run", "build"]] as [string, string[]]] : []),
+    ];
+    const gates: [string, string[]][] = [
+      ["bun install --frozen-lockfile", frozen],
+      ...(GATES ? toolchainGates : []),
     ];
     for (const [label, gateArgs] of gates) {
       const g = run("bun", gateArgs, tree);
@@ -234,15 +280,20 @@ async function relock(n: number) {
     }
 
     if (dirty) {
-      run("git", ["add", "bun.lock", "docs/DEPENDENCIES.md"], tree);
+      // Named rather than `git add -A`, because the allowlist above is what makes
+      // this script safe to point at a branch it is about to force-push.
+      const staged = ["bun.lock", "lens-reader/bun.lock", "docs/DEPENDENCIES.md"]
+        .filter((f) => existsSync(path.join(tree, f)));
+      run("git", ["add", ...staged], tree);
       const subject = "chore(deps-dev): relock bun.lock for this bump";
       const body = [
         "Dependabot's npm updater writes package.json and never a bun.lock, so the",
         "PR opens red at `bun install --frozen-lockfile`. This is the hand commit",
         ".github/dependabot.yml describes, applied by `bun run deps:relock`.",
         edits.length ? `\nProse pins moved in docs/DEPENDENCIES.md: ${edits.map((e) => `${e.prose} ${e.from} -> ${e.to}`).join("; ")}.` : "",
-        "\nGates on the rebased tree: frozen install, lint, typecheck, contract tests",
-        `under bun and node${BUILD ? ", build" : ""}.`,
+        GATES
+          ? `\nGates on the rebased tree: frozen install, lint, typecheck, contract tests under bun and node${BUILD ? ", build" : ""}.`
+          : "\nGate on the rebased tree: frozen install. The toolchain gates are deliberately left to `validate`, which re-runs on this commit and is the required check; see --no-gates in tools/relock-dependabot.ts.",
       ].filter(Boolean).join("\n");
       const c = run("git", ["commit", "-m", subject, "-m", body], tree);
       if (c.code !== 0) { console.log(`  commit failed: ${c.err || c.out}`); return false; }
