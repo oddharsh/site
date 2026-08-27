@@ -154,6 +154,7 @@ const ROUTES = [
   { path: "/lens", status: 200, ct: "text/html", marker: "The Other Web", fullPage: true },
   { path: "/lens/", status: 301 },   // slashless canonical: routeDropSlash 301s to /lens
   { path: "/lens-boot.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "requestSubmit" },
+  { path: "/lens-webmcp.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "LensWebMcp" },
   { path: "/lens.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "replaceState" },
   { path: "/lens-browser.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "LensBrowser" },
   // maxBytes is a "did the build actually minify this" tripwire, not a byte
@@ -183,6 +184,7 @@ const ROUTES = [
     { path: "/nav-tray.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "axp-balloon" },
     { path: "/notepad.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "np-window" },
     { path: "/lens-boot.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "requestSubmit" },
+    { path: "/lens-webmcp.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "LensWebMcp" },
     { path: "/lens.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "replaceState" },
     { path: "/lens-browser.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "LensBrowser" },
     { path: "/tooltip.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", maxBytes: 18000 },
