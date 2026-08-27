@@ -959,6 +959,17 @@ const HTML_MINIFY_CFG = {
   minify_css: false,
   minify_doctype: false,
   minify_js: false,
+  // The template-passthrough pair, both at the library default. They are here
+  // so the 15 options @minify-html/node 0.18.1 declares are 15 DECISIONS: this
+  // block enumerated 13 and inherited 2, and an inherited default is a byte
+  // change nobody reviews the day upstream flips one. Nothing here authors in
+  // a `{{ }}` or `<% %>` template language, and /garage/horizon ships hostile
+  // demo payloads as content, so a passthrough that swallowed source until a
+  // matching close brace would be a parser this build cannot see into.
+  // Verified as a no-op: 1614 staged files, byte-identical, measured
+  // 2026-08-27. A moved byte would re-mint an `/a/` URL (gotcha 35).
+  preserve_brace_template_syntax: false,
+  preserve_chevron_percent_template_syntax: false,
   remove_bangs: false,
   remove_processing_instructions: false,
 };

@@ -66,6 +66,13 @@ jobs:
       github.event.pull_request.user.login == 'dependabot[bot]'
       && github.repository == 'oddharsh/site'
     runs-on: ubuntu-latest
+    # The concurrency group above holds `cancel-in-progress: false`, so a run
+    # that hangs is not displaced by the next one: it parks the whole group for
+    # this pull request until it expires. GitHub's default expiry is 360
+    # minutes, and this job holds an App token with `contents: write` for every
+    # one of them. 20 matches dictionary-roll.yml, the other workflow that
+    # checks out, installs and pushes.
+    timeout-minutes: 20
     steps:
       - name: Mint a scoped App token
         id: app
