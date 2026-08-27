@@ -92,12 +92,31 @@
       // ceiling on how many surfaces you can add this way.
       "/finger*", "/radar*", "/dict*", "/cache*", "/agent-ready*", "/encode*",
       "/photos.txt", "/lens.txt",
-      "/search", "/search.json",
+      "/search", "/search.json", "/ask",
       "/coffee", "/coffee/*", "/serendipity", "/serendipity/*",
       "/slots", "/book", "/approve", "/decline",
       "/llms-full.txt", "/ledger", "/ledger.json",
       "/ledger/prefetch",
       "/writing", "/writing/*",
+      // These four ("/ask" above, and the three here) were MISSING from this file
+      // until 2026-08-27, against both headers' rule that the two allowlists match.
+      //
+      // The consequence was LATENT rather than active, which is worth stating
+      // because the obvious reading is wrong and was measured before it went in
+      // here: all four answered identically with and without their entries under
+      // `bun run dev` (/ask 200 JSON, /inbox 200 HTML, /webmention 405 from its
+      // own method check). run_worker_first decides PRECEDENCE where an asset
+      // exists at the path, and nothing is staged at any of these, so the asset
+      // layer had nothing to serve and passed them to the Worker regardless.
+      //
+      // That is a property of today's staged tree, not of this config, and it
+      // flips the moment a file lands at one of these paths — which is exactly
+      // the failure the "/rn.md" note below and the bare "/garage" rows above
+      // record, both of them routes the asset layer answered first. So the drift
+      // was a live round of ammunition rather than a wound. Same class as the
+      // missing "41 5 * * *" cron (see the triggers note); build.ts invariant #6
+      // diffs the two allowlists now, so the next one fails a check.
+      "/webmention", "/webmention/*", "/inbox",
       "/rn", "/rn.md", "/rn/tracks", "/rn/tracks.html", "/rn/admin", "/rn/set", "/rn/art/*",
       "/bot", "/around", "/around/json", "/around/changes.json",
       "/photos", "/photos/", "/photos/query.json", "/photos/grid.html", "/run",
@@ -121,6 +140,12 @@
   // missing "41 5 * * *" entirely, so the daily outbound tick existed in
   // production and not in dev, against a comment at the top of this file saying
   // crons MUST match. Found while folding the /around crawl onto that tick.
+  //
+  // CHECKED since 2026-08-27 rather than remembered: build.ts invariant #6 diffs
+  // this list against wrangler.jsonc's and warns, alongside the run_worker_first
+  // diff that landed with it. Order does not matter (index.ts dispatches on the
+  // cron STRING), a duplicate does, and losing the block entirely fails the build
+  // rather than reporting two empty lists as agreement.
   "triggers": { "crons": ["17 8 * * 1", "41 5 * * *", "7,37 * * * *", "23 */6 * * *"] },
   "kv_namespaces": [
     { "binding": "RN_KV", "id": "3cb8a107c58e47dc9244e75b33401f36" },

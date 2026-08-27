@@ -139,6 +139,38 @@ const servedFiles = async (filter?: (rel: string) => boolean): Promise<string[]>
   return out;
 };
 
+// One array-of-strings, read out of a wrangler config's source text by key.
+//
+// GENERIC because the alternative is what put this here. Two configs must agree
+// on two such arrays, and each hand-rolled copy of this regex is one more place
+// to be subtly different from the others: the dev twin lost "/ask", "/inbox",
+// "/webmention" and "/webmention/*" (2026-08-27) and the "41 5 * * *" cron
+// (2026-08-14) precisely because nothing compared them. Five readers share this
+// now — invariant #1, both halves of the invariant #6 dev-twin diff, and the
+// link resolver in step 7b.
+//
+// These are JSONC files and the // COMMENTS INSIDE THESE BLOCKS QUOTE VALUES, so
+// a bare scan for quoted strings reads prose as data. wrangler.jsonc's fold note
+// names all eight retired exact /lens rows that way, and the first version of the
+// dev-twin diff duly reported seven of them as drift — a false positive on the
+// one check whose job is telling real drift from none. That was harmless in
+// invariant #1 (a phantom rule only ever makes `covered()` more permissive) and
+// wrong in 7b, where a link to a path some comment happens to mention would
+// resolve. One `//`-to-end-of-line strip fixes every reader; no value in either
+// array can contain "//", since they are paths and cron expressions.
+//
+// Returns [] when the key is absent, which is why every caller floors on the
+// length rather than trusting a clean-looking comparison of two empty lists.
+const jsoncStringArray = (configSrc: string, key: string): string[] => {
+  const block = (configSrc.match(new RegExp(`"${key}"\\s*:\\s*\\[([\\s\\S]*?)\\]`)) || [, ""])[1];
+  return [...block.replace(/\/\/[^\n]*/g, "").matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+};
+
+// The run_worker_first allowlist. Entries starting with "!" are wrangler's
+// negation form and are left in; a caller wanting only positive patterns filters
+// them itself.
+const runWorkerFirst = (configSrc: string): string[] => jsoncStringArray(configSrc, "run_worker_first");
+
 // ── deploy-time invariant tripwires (explore-unknowns, phase A) ──────────────
 // Silent-failure classes this codebase has hit or is one careless edit from
 // hitting. They live here because build.mjs runs on every `bun run deploy:direct`, the
@@ -148,7 +180,10 @@ const servedFiles = async (filter?: (rel: string) => boolean): Promise<string[]>
 // deploy path would get the whole guard commented out.
 async function checkInvariants() {
   const read = (p) => readFile(p, "utf8");
-  const hard = [], warn = [];
+  // Annotated because a bare `[]` infers never[], which made EVERY `.push(msg)`
+  // in this function a TS2345 — 87 of the file's 91 baseline diagnostics, all of
+  // them noise sitting on top of the one check that blocks the deploy.
+  const hard: string[] = [], warn: string[] = [];
 
   // 1 (hard) — every index.js dispatch key is covered by the wrangler
   // run_worker_first allowlist, or that route silently serves static. BOTH tables
@@ -182,8 +217,8 @@ async function checkInvariants() {
   const routesBlock = (idx.match(/const ROUTE_TABLE(?::[^=]*)? = \[([\s\S]*?)\n\];/) || [, ""])[1];
   const routeKeys = [...routesBlock.matchAll(/\[\s*"([^"]+)"/g)].map((m) => m[1]);
   if (routeKeys.length < 60) hard.push(`route invariant scanned only ${routeKeys.length} ROUTE_TABLE keys — the scanner has lost the table, not the site its routes`);
-  const allowBlock = (wrangler.match(/"run_worker_first"\s*:\s*\[([\s\S]*?)\]/) || [,""])[1];
-  const allow = [...allowBlock.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+  const allow = runWorkerFirst(wrangler);
+  if (allow.length < 60) hard.push(`route invariant scanned only ${allow.length} run_worker_first entries — the scanner has lost the allowlist, not the config its rules`);
   const globRe = (g) => new RegExp("^" + g.replace(/[\\.+?^${}()|[\]]/g, "\\$&").replace(/\*/g, ".*") + "$");
   const covered = (p) => allow.includes(p) || allow.some((a) => a.includes("*") && globRe(a).test(p));
   for (const k of routeKeys) if (!covered(k)) hard.push(`ROUTES key ${k} is not in wrangler run_worker_first (route would silently serve static)`);
@@ -303,12 +338,81 @@ async function checkInvariants() {
   // bindings as the deploy config (wrangler.jsonc), or local `wrangler dev`
   // diverges from prod. Compare the set of binding identifiers by name; a
   // mismatch means a binding was added to one config but not the other.
+  //
+  // The run_worker_first ALLOWLIST is compared the same way, and it was not until
+  // 2026-08-27. Both files' headers say the two must match, and a check reading
+  // only the bindings watched them diverge by four entries ("/ask", "/inbox",
+  // "/webmention", "/webmention/*") while reporting a clean build. Same class as
+  // the missing "41 5 * * *" cron of 2026-08-14, which wrangler.dev.jsonc's own
+  // comment records — so the CRONS are diffed here too, at the end of this block.
+  //
+  // What that drift COST was nothing yet, measured rather than assumed: all four
+  // answered identically under `bun run dev` with their entries absent, because
+  // nothing is staged at those paths and the asset layer passes a path it cannot
+  // serve to the Worker anyway. This claim is deliberately not stronger than the
+  // measurement — the first draft of this comment said those routes "fell through
+  // to the asset layer" locally, which is what the config says and not what the
+  // wire said. The rule it enforces is unchanged either way: the allowlist governs
+  // precedence WHERE AN ASSET EXISTS, so a divergence is inert exactly until a
+  // file lands at one of the diverging paths, and this repo has two notes in that
+  // config about routes the asset layer answered first once one did.
+  //
+  // Compared as SETS, in both directions, since an entry in the dev twin that
+  // production does not claim is the more dangerous half: it makes local dev
+  // exercise a path the deployed site serves statically.
+  //
+  // WARN rather than hard, on this function's stated policy for duplicated text
+  // (see the header above): the drift is real, and blocking the one deploy path
+  // over a local-dev-only file would gate production on something that cannot
+  // reach it. The scanner cannot pass VACUOUSLY, which is the failure this would
+  // otherwise share with every other text scraper here — invariant #1 floors the
+  // same extraction at 60 entries and hard-fails, so a regex that has stopped
+  // matching reddens the build before it can quietly agree with itself.
   try {
     const dev = await read("wrangler.dev.jsonc");
     const names = (s) => new Set([...s.matchAll(/"(?:binding|name|database_name|bucket_name|dataset)"\s*:\s*"([^"]+)"/g)].map((m) => m[1]));
     const a = names(wrangler), b = names(dev);
     const diff = [...new Set([...a].filter((x) => !b.has(x)).concat([...b].filter((x) => !a.has(x))))];
     if (diff.length) warn.push(`wrangler.jsonc and wrangler.dev.jsonc binding sets differ (${diff.join(", ")}) — keep the dev twin in sync`);
+
+    const prodAllow = new Set(allow), devAllow = new Set(runWorkerFirst(dev));
+    const prodOnly = [...prodAllow].filter((x) => !devAllow.has(x));
+    const devOnly = [...devAllow].filter((x) => !prodAllow.has(x));
+    if (prodOnly.length || devOnly.length) {
+      const parts: string[] = [];
+      if (prodOnly.length) parts.push(`missing from wrangler.dev.jsonc: ${prodOnly.join(", ")}`);
+      if (devOnly.length) parts.push(`only in wrangler.dev.jsonc: ${devOnly.join(", ")}`);
+      warn.push(`wrangler.jsonc and wrangler.dev.jsonc run_worker_first allowlists differ (${parts.join("; ")}) — the two configs disagree about which paths the Worker claims from the asset layer, so dev and prod diverge the moment a file is staged at one of them`);
+    }
+
+    // And the CRONS, which is the drift this file's own comment records: this
+    // list was missing "41 5 * * *" entirely from 2026-08-14, so the daily
+    // outbound tick existed in production and not in dev. That one was found by
+    // hand while folding the /around crawl onto the tick, and it stayed on the
+    // honour system for the whole time an allowlist check sat next to it.
+    //
+    // Compared ORDER-INSENSITIVELY, because index.ts dispatches on the cron
+    // STRING (`switch (event.cron)`), so a reordering changes nothing and
+    // failing on one would be a check with an opinion about formatting. Sorting
+    // and joining rather than diffing two Sets keeps a duplicated entry visible,
+    // which a symmetric set difference reports as no difference at all.
+    //
+    // Both lists print in full: there are four, and naming them beats a diff the
+    // reader then has to reconstruct the lists from.
+    //
+    // Keyed on "crons" rather than the "triggers" that holds it, because
+    // triggers opens an OBJECT and this reads arrays. Both files carry the key
+    // exactly once, comments included, so the first match is the real one.
+    const prodCrons = jsoncStringArray(wrangler, "crons"), devCrons = jsoncStringArray(dev, "crons");
+    const sorted = (xs: string[]) => [...xs].sort().join(", ");
+    // The floor. Four crons are documented at this key in both files and Workers
+    // Free caps an account at five, so zero means the extraction lost the block
+    // rather than the site losing its jobs. Deleting every cron is a real edit
+    // that should come here and say so, which is the point of failing loudly.
+    if (!prodCrons.length) hard.push("dev-twin drift check read 0 crons from wrangler.jsonc — the scanner has lost the triggers block, not the site its schedule");
+    else if (sorted(prodCrons) !== sorted(devCrons)) {
+      warn.push(`wrangler.jsonc and wrangler.dev.jsonc crons differ (wrangler.jsonc: ${prodCrons.join(", ") || "none"}; wrangler.dev.jsonc: ${devCrons.join(", ") || "none"}) — the two schedules must match, or a job fires in one config and not the other`);
+    }
   } catch (e) { warn.push(`dev-config drift check could not run: ${e.message}`); }
 
   // 7 (hard) — every agent-skills digest matches the file it points at. The
@@ -2140,13 +2244,12 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   const idxSrc = await readFile("src/worker/index.ts", "utf8");
   const wranglerSrc = await readFile("wrangler.jsonc", "utf8");
   const routesSrc = (idxSrc.match(/const ROUTES = new Map\(\[([\s\S]*?)\]\);/) || [, ""])[1];
-  const allowSrc = (wranglerSrc.match(/"run_worker_first"\s*:\s*\[([\s\S]*?)\]/) || [, ""])[1];
   const surfaceList = JSON.parse(await readFile("config/site-manifest.json", "utf8")).surfaces;
 
   const resolves = makeResolver({
     files: served,
     routeKeys: new Set([...routesSrc.matchAll(/\[\s*"([^"]+)"/g)].map((m) => m[1])),
-    allow: [...allowSrc.matchAll(/"([^"]+)"/g)].map((m) => m[1]).filter((a) => !a.startsWith("!")),
+    allow: runWorkerFirst(wranglerSrc).filter((a) => !a.startsWith("!")),
     surfaces: new Set(surfaceList.map((s) => s.path)),
   });
 
