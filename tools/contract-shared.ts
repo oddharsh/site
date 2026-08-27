@@ -56,6 +56,7 @@ import { TASKBAR } from "../tools/photos/shell-data.ts";
 import { SECTION_FAVICONS } from "../src/worker/lib/desktop.ts";
 import { collectBlockClasses, readDocument } from "./lib/html-to-md.ts";
 import { remainderHolder } from "./lib/ramp-split.ts";
+import { wranglerErrorLines } from "./lib/wrangler-error.ts";
 import {
   SERENDIPITY_MCP_SERVER_INFO,
   SERENDIPITY_SYNC_LIMITS,
@@ -495,5 +496,6 @@ export {
   wmEnv,
   wmPost,
   workerModule,
+  wranglerErrorLines,
   zlibConstants,
 };
