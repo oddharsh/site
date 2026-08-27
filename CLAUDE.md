@@ -220,10 +220,11 @@ cargo build --release --manifest-path tools/photos/zenc/Cargo.toml
 # bust caches via wrangler (RN_KV namespace ID hardcoded in scripts).
 # NB: the photo manifest is NOT a cache anymore — the worker bundles
 # photo-index.json + hashes.json, so a deploy replaces the pool atomically
-# and there are no manifest:* keys. Tracks remain KV (two-key SWR):
+# and there are no manifest:* keys. Tracks remain KV, one key whose own
+# metadata carries the freshness stamp (it was a second ":fresh" key until
+# 2026-08-27, so an older note tells you to delete two):
 NS="3cb8a107c58e47dc9244e75b33401f36"
 bun run wrangler kv key delete --namespace-id="$NS" "tracks:4IRq9W1N2tOWHhH0O3vXiF" --remote
-bun run wrangler kv key delete --namespace-id="$NS" "tracks:4IRq9W1N2tOWHhH0O3vXiF:fresh" --remote
 ```
 
 ## Collaboration and release discipline

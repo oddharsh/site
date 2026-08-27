@@ -65,11 +65,12 @@ export async function fetchCuriusLinks(env) {
   return out;
 }
 
-// two-key stale-while-revalidate (mirrors photos.getImagesManifest / rn.getTracksSWR):
-// the list is stored WITHOUT a TTL (persistent value key) and a tiny sentinel key
-// carries the 6h freshness window. When the sentinel lapses, the visitor gets the
-// stale list instantly and the Curius crawl rides ctx.waitUntil in the background —
-// so nobody ever waits on the ~3.5s (bounded) crawl except the true first run.
+// stale-while-revalidate (mirrors photos.getImagesManifest / rn.getTracksSWR):
+// the list is stored WITHOUT a TTL (persistent value key) and the entry's KV
+// metadata carries the write time the 6h freshness window runs from. Once that
+// lapses, the visitor gets the stale list instantly and the Curius crawl rides
+// ctx.waitUntil in the background, so nobody ever waits on the ~3.5s (bounded)
+// crawl except the true first run.
 async function buildCuriusPayload(env) {
   const items = await fetchCuriusLinks(env);
   return { items, fetchedAt: new Date().toISOString() };
@@ -78,7 +79,7 @@ async function buildCuriusPayload(env) {
 export async function getCuriusCached(request, env, ctx) {
   const url = new URL(request.url);
   if (env.RN_BUST_SECRET && url.searchParams.get("bust") === env.RN_BUST_SECRET && env.RN_KV) {
-    // clear BOTH keys, or a bust would leave the persistent value in place and never rebuild.
+    // drop the value itself, since the persistent key is what a rebuild is gated on.
     await deleteSWRKV(env, CURIUS_CACHE_KEY);
   }
   // no cached value at all — true first run or right after a bust — builds inline.

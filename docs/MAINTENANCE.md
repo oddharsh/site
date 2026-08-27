@@ -1607,15 +1607,15 @@ The homepage scrapes a Spotify playlist; `playlist-id` in KV points at it. To sw
 NS="3cb8a107c58e47dc9244e75b33401f36"
 OLD=$(bun run wrangler kv key get --namespace-id="$NS" playlist-id --remote)   # save the current id
 bun run wrangler kv key put --namespace-id="$NS" playlist-id "<NEW_22_CHAR_ID>" --remote
-# clear the old playlist's two-key SWR cache (value + freshness sentinel):
+# clear the old playlist's SWR entry (the freshness stamp is its KV metadata,
+# so the value key is the only one to drop):
 bun run wrangler kv key delete --namespace-id="$NS" "tracks:${OLD}" --remote
-bun run wrangler kv key delete --namespace-id="$NS" "tracks:${OLD}:fresh" --remote
 curl -s "https://aadhar.sh/rn/tracks" >/dev/null                       # warms tracks:<new> by scraping
 bun run deploy:direct   # from the repo root; deploys the aadhar-sh Worker (public/ as static assets)
 ```
 - The id is the 22 chars after `/playlist/` in the share URL (drop `?si=...`).
 - **Why the redeploy:** the worker caches `playlist-id` in a module variable (`_playlistId`) per warm isolate. A redeploy recycles isolates so the homepage *prerenders* the new list immediately instead of waiting for them to age out.
-- **zsh gotcha:** write `"tracks:${OLD}:fresh"` with braces. Bare `tracks:$OLD:fresh` triggers a zsh history modifier (`:r` etc.) and silently mangles the key.
+- **zsh gotcha:** brace the parameter. This used to delete a second `tracks:${OLD}:fresh` key, and bare `tracks:$OLD:fresh` triggers a zsh history modifier (`:r` etc.) that silently mangles it. The sentinel is gone; the habit is worth keeping for any key that carries a colon after a parameter.
 - One-shot alternative once you have the secret: `curl "https://aadhar.sh/rn/set?secret=$RN_BUST_SECRET&url=<playlist-url>"`.
 
 ---
