@@ -74,7 +74,7 @@ import {
 import { MCP_SUPPORTED as MCP_SUPPORTED_VERSIONS } from "../src/worker/lib/mcp-protocol.ts";
 import { derivePhotoPool, renderPhotosPage, getImagesManifest, handlePhotoQuery, queryPhotos, _resetPhotoCaches } from "../src/worker/photos.ts";
 import { renderPhotoSlots } from "../src/worker/lib/photo-grid.ts";
-import { cachedRender, deadline } from "../src/worker/lib/cache.ts";
+import { cachedRender, deadline, deleteSWRKV, swrKV } from "../src/worker/lib/cache.ts";
 import { ifNoneMatchMatches, notModifiedIfFresh, withWeakEtag } from "../src/worker/lib/cache.ts";
 import { fetchFollowingPublicRedirects, privateHostBlocked } from "../src/worker/lib/crawl.ts";
 import { handleHit } from "../src/worker/counter.ts";
@@ -185,15 +185,23 @@ function kvType(typeOrOptions) {
 }
 
 function kvForTracks() {
-  return {
+  const kv = {
     async get(key, typeOrOptions) {
       const type = kvType(typeOrOptions);
       if (key === "playlist-id") return PLAYLIST_ID;
       if (key === `tracks:${PLAYLIST_ID}`) return type === "json" ? TRACKS : JSON.stringify(TRACKS);
-      if (key === `tracks:${PLAYLIST_ID}:fresh`) return "1";
       return null;
     },
+    // swrKV asks for the value and its freshness stamp in ONE read, so the fake
+    // has to answer that call. The stamp is now, which is what the retired
+    // `tracks:<pid>:fresh` sentinel used to say: these tests read a warm cache
+    // and must never fire a background rescrape.
+    async getWithMetadata(key, typeOrOptions) {
+      const value = await kv.get(key, typeOrOptions);
+      return { value, metadata: value === null ? null : { t: Date.now() } };
+    },
   };
+  return kv;
 }
 
 function assertFullDocument(html) {
@@ -388,6 +396,7 @@ export {
   cronHomeProbe,
   cronJob,
   deadline,
+  deleteSWRKV,
   deferredContext,
   derivePhotoPool,
   diffAroundRows,
@@ -483,6 +492,7 @@ export {
   parseGuestSyncMark,
   staleGuestIds,
   staticAssets,
+  swrKV,
   terminalEnv,
   terminalGet,
   terminalReq,

@@ -487,7 +487,7 @@ async function loadRnTracksInner(request, env, ctx, s) {
 
   const cacheKey = `tracks:${playlistId}`;
 
-  // optional bust — drop both the value and its freshness sentinel.
+  // optional bust: drop the value, whose metadata carries the freshness stamp.
   // constant-time compare, same as the admin/set gate (a plain === leaks the
   // secret's length + prefix through timing).
   if (env.RN_BUST_SECRET && timingSafeEqual(url.searchParams.get("bust") || "", env.RN_BUST_SECRET)) {
@@ -495,9 +495,9 @@ async function loadRnTracksInner(request, env, ctx, s) {
     await span("rn.tracks.bust", () => deleteSWRKV(env, cacheKey));
   }
 
-  // two-key SWR (same shape as the photo manifest): stale serves instantly,
-  // a lapsed sentinel refreshes in the background. only a true cold start
-  // (or a bust) pays the 3-tier Spotify scrape inline.
+  // SWR (same shape as the photo manifest): stale serves instantly, a lapsed
+  // stamp refreshes in the background. only a true cold start (or a bust)
+  // pays the 3-tier Spotify scrape inline.
   let payload;
   try {
     payload = await span("rn.tracks.swr", () => getTracksSWR(env, ctx, playlistId, { buildOnMiss: true }));
@@ -676,12 +676,12 @@ function fmtDuration(ms) {
   return `${m}:${s}`;
 }
 
-// two-key stale-while-revalidate for the playlist payload, mirroring
+// stale-while-revalidate for the playlist payload, mirroring
 // getImagesManifest: `tracks:<pid>` persists with NO TTL (a visitor never
-// catches an empty hole when the hour lapses), and `tracks:<pid>:fresh`
-// carries the freshness window. lapsed sentinel → serve stale now, rescrape
-// on ctx.waitUntil. used by both /rn/tracks and the homepage prerender, so
-// whichever gets hit keeps the payload warm.
+// catches an empty hole when the hour lapses), and its KV metadata carries the
+// write time the freshness window is measured from. lapsed stamp, so serve
+// stale now and rescrape on ctx.waitUntil. used by both /rn/tracks and the
+// homepage prerender, so whichever gets hit keeps the payload warm.
 export async function getTracksSWR(env, ctx, pid, opts: { buildOnMiss?: boolean } = {}) {
   // cacheTtl 1800: this is the homepage's slowest TTFB-gating read (204ms cold on
   // 2026-07-27), and the key is write-rarely by construction. A playlist swap

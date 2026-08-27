@@ -330,7 +330,7 @@ async function readAroundReport(request, env) {
   // still allowed to crawl, because it authenticates as the owner.
   const url = new URL(request.url);
   if (env.RN_BUST_SECRET && url.searchParams.get("bust") === env.RN_BUST_SECRET) {
-    await deleteSWRKV(env, AROUND_KEY);   // clears the legacy :fresh sentinel too
+    await deleteSWRKV(env, AROUND_KEY);   // this key is written directly above, never by swrKV
     const report = await runAround(env);
     if (report && report.results && report.results.some(r => !r.error) && env.RN_KV) {
       await env.RN_KV.put(AROUND_KEY, JSON.stringify(report));
