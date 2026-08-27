@@ -165,8 +165,31 @@ test("every lazily-loaded lens island has a cache rule in _headers", async () =>
   const loaded = [...lens.matchAll(/["'`](\/lens-[a-z-]+\.js)\?v=1["'`]/g)].map((m) => m[1]);
   assert.ok(loaded.length >= 5, `expected the on-demand islands, found ${loaded.length}`);
 
+  // Parsed into blocks rather than matched with a RegExp built from `path`.
+  // Building one would need every metacharacter in the data escaped, and the
+  // first cut escaped `.` while missing `\\` — CodeQL caught it. Nothing can
+  // reach that construction here, since the capture above admits only
+  // `[a-z-]`, but an assertion that is only safe because of a regex two lines
+  // away is the kind that stops being safe when somebody widens the capture.
+  // Parsing is also strictly stronger: it checks that the directive belongs to
+  // THAT block rather than merely sitting on the next line.
+  const rules = new Map();
+  // Empty rather than null so the type is `string` throughout; both are falsy,
+  // which is what the indented-line guard below actually tests.
+  let block = "";
+  for (const line of headers.split("\n")) {
+    if (!line.trim() || line.trimStart().startsWith("#")) continue;
+    if (/^\s/.test(line)) { if (block) rules.get(block).push(line.trim()); continue; }
+    block = line.trim();
+    if (!rules.has(block)) rules.set(block, []);
+  }
+
   for (const path of new Set(loaded)) {
-    const rule = new RegExp("^" + path.replace(/[.]/g, "\\.") + "\\s*$\\n\\s+Cache-Control:", "m");
-    assert.match(headers, rule, `${path} has no Cache-Control rule in public/_headers`);
+    const directives = rules.get(path);
+    assert.ok(directives, `${path} has no block in public/_headers`);
+    assert.ok(
+      directives.some((d) => d.toLowerCase().startsWith("cache-control:")),
+      `${path} has a block in public/_headers but no Cache-Control rule`,
+    );
   }
 });
