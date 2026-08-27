@@ -196,7 +196,13 @@
     { "name": "LENS_RL_WIRE", "namespace_id": "1006", "simple": { "limit": 2, "period": 60 } },
     { "name": "LENS_RL_TOOLS", "namespace_id": "1007", "simple": { "limit": 10, "period": 60 } },
     { "name": "LENS_RL_NLWEB", "namespace_id": "1008", "simple": { "limit": 4, "period": 60 } },
-    { "name": "LENS_RL_MARKDOWN", "namespace_id": "1009", "simple": { "limit": 4, "period": 60 } }
+    { "name": "LENS_RL_MARKDOWN", "namespace_id": "1009", "simple": { "limit": 4, "period": 60 } },
+    { "name": "MCP_RL_IMAGE_INSPECT",   "namespace_id": "1010", "simple": { "limit": 20, "period": 60 } },
+    { "name": "MCP_RL_IMAGE_TRANSFORM", "namespace_id": "1011", "simple": { "limit": 8,  "period": 60 } },
+    { "name": "MCP_RL_IMAGE_COMPARE",   "namespace_id": "1012", "simple": { "limit": 4,  "period": 60 } },
+    { "name": "MCP_RL_REPR_CAPTURE",    "namespace_id": "1013", "simple": { "limit": 4,  "period": 60 } },
+    { "name": "MCP_RL_REPR_COMPARE",    "namespace_id": "1014", "simple": { "limit": 8,  "period": 60 } },
+    { "name": "WEBMENTION_RL", "namespace_id": "1015", "simple": { "limit": 10, "period": 60 } }
   ],
   "vars": {
     // Not a secret: an account id is an identifier, and this one is already

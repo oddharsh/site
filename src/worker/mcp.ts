@@ -8,6 +8,7 @@ import { AGENT_SURFACES } from "./lib/site-manifest.ts";
 import { CACHE_EMPTY, CACHE_LIVE, CACHE_STATIC, mcpCorsHeaders, mcpGate, mcpHttpStatus, mcpServer } from "./lib/mcp-protocol.ts";
 import { mcpTool } from "./lib/mcp-tools.ts";
 import { previewToolRefusal } from "./lib/preview.ts";
+import { overBudget } from "./lib/ratelimit.ts";
 import { asRecord, asText } from "./lib/parse.ts";
 
 // DUAL-ERA. The wire rules (versions, `_meta` keys, resultType, cache hints,
@@ -260,17 +261,25 @@ const mcpCors = mcpCorsHeaders;
 
 function errorResult(message) { return { _error: String(message).slice(0, 400) }; }
 
-async function overMcpBudget(name, max, request, env, ctx) {
-  if (!env.RN_KV) return false;
-  const ip = request.headers.get("cf-connecting-ip") || "0.0.0.0";
-  const bucket = `mcp:${name}:${ip}:${Math.floor(Date.now() / 60000)}`;
-  let n = 0;
-  try { n = parseInt((await env.RN_KV.get(bucket)) || "0", 10) || 0; } catch {}
-  if (n >= max) return true;
-  const write = env.RN_KV.put(bucket, String(n + 1), { expirationTtl: 120 }).catch(() => {});
-  if (ctx?.waitUntil) ctx.waitUntil(write); else await write;
-  return false;
-}
+// The five tools that spend something the caller does not own: a fetch of a URL
+// they named, an Images transform, or a row in the vault. FIVE buckets rather
+// than one shared one, because the ceilings differ by 5x and they differ for a
+// reason: image_inspect on inlined base64 is one binding call and no subrequest,
+// while representation_capture is up to four third-party fetches and four D1
+// writes. A single bucket has to pick one number, and either choice is wrong at
+// one end of that range.
+//
+// `what` lives here so the 429 quotes a ceiling it cannot disagree with; `max`
+// is mirrored in wrangler.jsonc's ratelimits and a contract test pins the pair.
+export const MCP_BUDGETS = {
+  imageInspect:   { binding: "MCP_RL_IMAGE_INSPECT",   max: 20, what: "Image inspections" },
+  imageTransform: { binding: "MCP_RL_IMAGE_TRANSFORM", max: 8,  what: "Image transforms" },
+  imageCompare:   { binding: "MCP_RL_IMAGE_COMPARE",   max: 4,  what: "Image comparisons" },
+  reprCapture:    { binding: "MCP_RL_REPR_CAPTURE",    max: 4,  what: "Representation captures" },
+  reprCompare:    { binding: "MCP_RL_REPR_COMPARE",    max: 8,  what: "Representation comparisons" },
+};
+
+const budgetRefusal = (budget) => errorResult(`${budget.what} are rate-limited to ${budget.max}/min.`);
 
 // The crawl tools bill against the SAME per-IP buckets as their HTTP twins
 // (lens.js LENS_BUDGETS), not a private `mcp:lensrl:` one. A separate bucket let
@@ -315,25 +324,25 @@ async function callTool(name, args, request, env, ctx): Promise<ToolOutcome> {
     return { frame: frameText(radarFrame(samples, { source: String(args?.source || "").slice(0, 60) })), sources: samples.length };
   }
   if (name === "image_inspect") {
-    if (await overMcpBudget("image-inspect", 20, request, env, ctx)) return errorResult("Image inspections are rate-limited to 20/min.");
+    if (await overBudget(MCP_BUDGETS.imageInspect, request, env)) return budgetRefusal(MCP_BUDGETS.imageInspect);
     return imageInspect(args, env);
   }
   if (name === "image_transform") {
-    if (await overMcpBudget("image-transform", 8, request, env, ctx)) return errorResult("Image transforms are rate-limited to 8/min.");
+    if (await overBudget(MCP_BUDGETS.imageTransform, request, env)) return budgetRefusal(MCP_BUDGETS.imageTransform);
     return imageTransform(args, env);
   }
   if (name === "image_compare") {
-    if (await overMcpBudget("image-compare", 4, request, env, ctx)) return errorResult("Image comparisons are rate-limited to 4/min.");
+    if (await overBudget(MCP_BUDGETS.imageCompare, request, env)) return budgetRefusal(MCP_BUDGETS.imageCompare);
     return imageCompare(args, env);
   }
   if (name === "photo_recipe") return photoRecipe(args, env);
   if (name === "representation_capture") {
-    if (await overMcpBudget("representation-capture", 4, request, env, ctx)) return errorResult("Representation captures are rate-limited to 4/min.");
+    if (await overBudget(MCP_BUDGETS.reprCapture, request, env)) return budgetRefusal(MCP_BUDGETS.reprCapture);
     return captureRepresentation(args, env);
   }
   if (name === "representation_read") return readRepresentation(args, env);
   if (name === "representation_compare") {
-    if (await overMcpBudget("representation-compare", 8, request, env, ctx)) return errorResult("Representation comparisons are rate-limited to 8/min.");
+    if (await overBudget(MCP_BUDGETS.reprCompare, request, env)) return budgetRefusal(MCP_BUDGETS.reprCompare);
     return compareRepresentation(args, env);
   }
   return { _unknown: true };
