@@ -2070,17 +2070,19 @@ async function mcpFrequentPeople(d, when, limit) {
 async function mcpCoAttendees(d, q, limit) {
   const person = await mcpResolvePerson(d, q);
   if (!person) return null;
-  const rows = await d.prepare(
-    `SELECT ${PUB_COLS}, COUNT(*) AS shared, GROUP_CONCAT(e.name, '|||') AS shared_names
-       FROM event_attendees ea
-       JOIN attendees a ON a.id = ea.attendee_id
-       JOIN events e ON e.id = ea.event_id
-       LEFT JOIN enrichments en ON en.attendee_id = a.id
-      WHERE ea.event_id IN (SELECT event_id FROM event_attendees WHERE attendee_id = ?1)
-        AND ea.attendee_id != ?1
-      GROUP BY a.id ORDER BY shared DESC, times_seen DESC, a.name ASC LIMIT ?2`
-  ).all(person.id, limit);
-  const tot = await d.prepare(`SELECT COUNT(DISTINCT event_id) AS n FROM event_attendees WHERE attendee_id = ?`).get(person.id);
+  const [rows, tot] = await Promise.all([
+    d.prepare(
+      `SELECT ${PUB_COLS}, COUNT(*) AS shared, GROUP_CONCAT(e.name, '|||') AS shared_names
+         FROM event_attendees ea
+         JOIN attendees a ON a.id = ea.attendee_id
+         JOIN events e ON e.id = ea.event_id
+         LEFT JOIN enrichments en ON en.attendee_id = a.id
+        WHERE ea.event_id IN (SELECT event_id FROM event_attendees WHERE attendee_id = ?1)
+          AND ea.attendee_id != ?1
+        GROUP BY a.id ORDER BY shared DESC, times_seen DESC, a.name ASC LIMIT ?2`
+    ).all(person.id, limit),
+    d.prepare(`SELECT COUNT(DISTINCT event_id) AS n FROM event_attendees WHERE attendee_id = ?`).get(person.id),
+  ]);
   return {
     person: mcpAttendee(person),
     events_attended: tot ? Number(tot.n) : 0,
@@ -2117,8 +2119,11 @@ async function mcpConnections(d, minShared, limit) {
 
 // the events two named people both attended (did they cross paths, and where).
 async function mcpSharedEvents(d, qa, qb) {
-  const a = await mcpResolvePerson(d, qa);
-  const b = await mcpResolvePerson(d, qb);
+  // The two names share no dependency; resolve them in one D1 latency window.
+  // The common found/found path then needs two rounds (resolve, shared events),
+  // not a three-read waterfall. A miss may spend one otherwise-skipped lookup,
+  // bounded to this pair and still within the same wall-clock round.
+  const [a, b] = await Promise.all([mcpResolvePerson(d, qa), mcpResolvePerson(d, qb)]);
   if (!a) return { _missing: qa };
   if (!b) return { _missing: qb };
   const rows = await d.prepare(
