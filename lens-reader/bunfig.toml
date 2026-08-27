@@ -1,0 +1,35 @@
+# A SECOND settings file, because bun resolves bunfig.toml from the CURRENT
+# WORKING DIRECTORY and then $HOME/.bunfig.toml. It does not walk up the tree,
+# so the root file governs nothing here and this project is deliberately outside
+# the workspace (readability + htmlparser2 + linkedom are megabytes only this
+# Worker bundles). Without this file, a Worker that reaches production installed
+# with no supply-chain floor at all.
+#
+# MEASURED rather than inferred, 2026-08-27 on bun 1.4.0, same directory and
+# same manifest, changing only where bunfig.toml sits:
+#
+#   bunfig here     -> exit 1, `No version matching "semver" found for specifier
+#                      "^7.0.0" (blocked by minimum-release-age: ...)`
+#   bunfig at root  -> exit 0, semver@7.8.5 installed
+#
+# The install LINKER is deliberately not copied down. The root sets
+# `linker = "isolated"` to keep five workspace projects' dependency sets apart,
+# which is a question this single standalone project does not have, and changing
+# it would move what `overrides` resolves for the htmlparser2 parity oracle in
+# test/dom-differential.test.mjs.
+
+[install]
+
+# A package published in the last 24 hours is REFUSED, mirroring the root.
+#
+# UNIT TRAP, carried from the root file's own note: pnpm counted MINUTES and
+# wrote 1440, bun counts SECONDS. Copying 1440 here would cut the window to 24
+# minutes while looking like a faithful port.
+#
+# It bites on RESOLUTION and NOT on a satisfied lockfile, measured the same day
+# with the floor set past every package's age: `bun install --frozen-lockfile`
+# still exited 0 and installed, while the unfrozen run refused. So what this
+# guards is somebody adding or bumping a dependency HERE, and it cannot redden a
+# CI install of an already-committed lock. `.github/dependabot.yml` mirrors the
+# window for the bot with `cooldown.default-days: 1`.
+minimumReleaseAge = 86400
