@@ -63,7 +63,7 @@
 
   // Must match LENS_TAB_LABELS in src/worker/lens.ts: the tab labels are
   // phrased as the question each lens answers, so the tab row reads as a menu.
-  var LENS_LABEL = { readiness: "Agent-ready?", anatomy: "Raw response", reader: "Reader's guess", wire: "What it costs", structured: "What it claims", ai: "Model cost", terms: "Who's allowed", discovery: "Agent doors", tools: "What it accepts", nlweb: "What it answers" };
+  var LENS_LABEL = { readiness: "Agent-ready?", anatomy: "Raw response", reader: "Reader's guess", wire: "What it costs", structured: "What it claims", ai: "Model cost", terms: "Who's allowed", discovery: "Agent doors", tools: "What it accepts", nlweb: "What it answers", markdown: "What agents get" };
   /** @type {any} */
   var readerData = null;   // last /lens/read extraction, null until asked for
   var readerBusy = false;
@@ -77,6 +77,9 @@
   var nlwebData = null;    // last /lens/nlweb answer, null until asked for
   var nlwebBusy = false;
   var nlwebQuery = "";     // the visitor's question, kept across re-renders
+  /** @type {any} */
+  var markdownData = null; // last /lens/markdown replay, null until asked for
+  var markdownBusy = false;
   /** @type {any} */
   var cloudflareData = null; // normalized result from Cloudflare's public scanner
   var cloudflareBusy = false;
@@ -1429,6 +1432,7 @@
     LENS_FN.discovery = lensDiscovery;
     LENS_FN.tools = lensTools;
     LENS_FN.nlweb = lensNlweb;
+    LENS_FN.markdown = lensMarkdownTab;
     var candidate = Object.prototype.hasOwnProperty.call(LENS_FN, lens) ? LENS_FN[lens] : null;
   // Capability probe on a caller-supplied callback, not a parsed value.
   // oxlint-disable-next-line anti-slop/no-runtime-typeof
@@ -1455,6 +1459,8 @@
     if (toolsBtn) toolsBtn.addEventListener("click", runTools);
     var nlwebBtn = machineBody.querySelector("#lx-nlweb-run");
     if (nlwebBtn) nlwebBtn.addEventListener("click", runNlweb);
+    var mdBtn = machineBody.querySelector("#lx-md-run");
+    if (mdBtn) mdBtn.addEventListener("click", runMarkdown);
     // The catalogue's controls are real nodes rather than markup, because they
     // carry a stranger's tool names and enum labels. Built after the pane's HTML
     // lands, exactly like bindCounterfactuals.
@@ -1462,6 +1468,9 @@
     // Same reason as the line above: the result rows carry a stranger's strings
     // and are built as nodes after the pane's HTML lands.
     if (lens === "nlweb" && window.LensNlweb) window.LensNlweb.bind(machineBody);
+    // And again: every content-type and byte count in the replay table came off
+    // somebody else's server.
+    if (lens === "markdown" && window.LensMarkdown) window.LensMarkdown.bind(machineBody);
     // The strip sits in machineTop in Machine view and inside the body in every
     // other one, so look in both rather than in whichever was true last week.
     var scoreBtn = machineBody.querySelector(".lx-verdict-score") ||
@@ -1725,6 +1734,51 @@
     script.onerror = function () {
       if (!data || (data.finalUrl || data.url) !== targetUrl) return;
       nlwebBusy = false; renderMachine();
+    };
+    document.head.appendChild(script);
+  }
+
+  // The Markdown lens. Opt-in like the three above it, and metered like NLWeb
+  // rather than like Tools: a run is ten plain requests for this one page,
+  // which costs the origin bandwidth every time somebody clicks.
+  function lensMarkdownTab() {
+    if (window.LensMarkdown) return window.LensMarkdown.render(markdownBusy ? { pending: true } : markdownData);
+    // Pre-module fallback, self-contained because the module may never arrive.
+    return section("What agents get", { text: "not run" },
+      "Replays the Accept header seven named agent clients actually send, and reports what each one got back.",
+      '<div class="lx-tools-intro"><b>Agent doors knocks. This walks through.</b> ' +
+      'An origin can flip its content-type for a bare <code>text/markdown</code> and still hand ' +
+      'the client you use HTML.' +
+      '<button class="lx-browser-run" type="button" id="lx-md-run">Check it</button></div>');
+  }
+
+  function runMarkdown() {
+    if (markdownBusy || !data) return;
+    var targetUrl = data.finalUrl || data.url;
+    markdownBusy = true;
+    renderMachine();
+    function loaded() {
+      // Same staleness guard as runTools: a visitor can scan a different URL
+      // while this is in flight, and a late reply must not be labelled with it.
+      if (!data || (data.finalUrl || data.url) !== targetUrl) return;
+      if (!window.LensMarkdown) { markdownBusy = false; renderMachine(); return; }
+      window.LensMarkdown.run(targetUrl, function (json) {
+        if (!data || (data.finalUrl || data.url) !== targetUrl) return;
+        markdownBusy = false; markdownData = json; renderMachine();
+      }, function () {
+        if (!data || (data.finalUrl || data.url) !== targetUrl) return;
+        markdownBusy = false;
+        markdownData = { ok: false, unreadable: true, error: "the Markdown check did not complete" };
+        renderMachine();
+      });
+    }
+    if (window.LensMarkdown) { loaded(); return; }
+    var script = document.createElement("script");
+    script.src = "/lens-markdown.js?v=1";
+    script.onload = loaded;
+    script.onerror = function () {
+      if (!data || (data.finalUrl || data.url) !== targetUrl) return;
+      markdownBusy = false; renderMachine();
     };
     document.head.appendChild(script);
   }
@@ -2436,7 +2490,7 @@
   // in a second late reads as a page with no tools at all.
 
   var WM_VIEWS = ["both", "human", "machine", "browser", "delta"];
-  var WM_OPT_IN = { reader: runReader, wire: runWire, tools: runTools, nlweb: runNlweb };
+  var WM_OPT_IN = { reader: runReader, wire: runWire, tools: runTools, nlweb: runNlweb, markdown: runMarkdown };
 
   function wmOk(obj) {
     return { content: [{ type: "text", text: JSON.stringify(obj, null, 1) }], structuredContent: obj };
@@ -2479,7 +2533,8 @@
       // for a reading the person has not paid for yet.
       tabsWithData: {
         reader: !!readerData, wire: !!wireData, tools: !!toolsData,
-        nlweb: !!nlwebData, browser: !!browserData, cloudflare: !!cloudflareData,
+        nlweb: !!nlwebData, markdown: !!markdownData,
+        browser: !!browserData, cloudflare: !!cloudflareData,
       },
       busy: busy || vsBusy,
     };
@@ -2565,7 +2620,7 @@
       {
         name: "lens_run_tab",
         description:
-          "Pay for one of the opt-in machine tabs and wait for it: reader (a third-party extractor's guess at the article), wire (every request the page makes, through a real browser), tools (the MCP catalog the origin advertises), nlweb (ask the origin's own /ask endpoint a question). Each one is a fresh fetch of somebody else's site from this visitor's budget, which is why none of them run on their own. Needs a scan on screen first.",
+          "Pay for one of the opt-in machine tabs and wait for it: reader (a third-party extractor's guess at the article), wire (every request the page makes, through a real browser), tools (the MCP catalog the origin advertises), nlweb (ask the origin's own /ask endpoint a question), markdown (replay the Accept header each named agent client sends, and report which representation each one gets). Each one is a fresh fetch of somebody else's site from this visitor's budget, which is why none of them run on their own. Needs a scan on screen first.",
         inputSchema: {
           type: "object",
           properties: {
@@ -2594,7 +2649,7 @@
           starter();
           var pending = { reader: function () { return readerBusy; }, wire: function () { return wireBusy; }, tools: function () { return toolsBusy; }, nlweb: function () { return nlwebBusy; } }[tab];
           return wmSettle(pending, 90000).then(function () {
-            var got = { reader: readerData, wire: wireData, tools: toolsData, nlweb: nlwebData }[tab];
+            var got = { reader: readerData, wire: wireData, tools: toolsData, nlweb: nlwebData, markdown: markdownData }[tab];
             if (!got) return wmErr("The " + tab + " pane came back empty. Lens reported: " + (statusBar.textContent || "no reason given").replace(/\s+/g, " ").trim());
             return wmOk({ screen: wmScreen(), tab: tab, result: got });
           });

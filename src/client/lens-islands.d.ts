@@ -1,7 +1,7 @@
 // lens-islands.d.ts — the /lens machine tabs, as the shell sees them.
 //
 // Each tab ships as its own island (lens-browser.js, lens-reader.js,
-// lens-wire.js, lens-tools.js, lens-nlweb.js) and registers itself on `window`
+// lens-wire.js, lens-tools.js, lens-nlweb.js, lens-markdown.js) and registers itself on `window`
 // when its script loads, because the shell loads them LAZILY: a visitor who
 // never opens the Wire tab never fetches lens-wire.js. That is why every member
 // here is optional, and why lens.js guards each one before calling it.
@@ -33,4 +33,5 @@ interface Window {
   LensWire?: LensIsland;
   LensTools?: LensIsland;
   LensNlweb?: LensIsland;
+  LensMarkdown?: LensIsland;
 }

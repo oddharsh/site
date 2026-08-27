@@ -170,7 +170,8 @@
     { "name": "LENS_RL_BROWSER_ALL", "namespace_id": "1005", "simple": { "limit": 4, "period": 60 } },
     { "name": "LENS_RL_WIRE", "namespace_id": "1006", "simple": { "limit": 2, "period": 60 } },
     { "name": "LENS_RL_TOOLS", "namespace_id": "1007", "simple": { "limit": 10, "period": 60 } },
-    { "name": "LENS_RL_NLWEB", "namespace_id": "1008", "simple": { "limit": 4, "period": 60 } }
+    { "name": "LENS_RL_NLWEB", "namespace_id": "1008", "simple": { "limit": 4, "period": 60 } },
+    { "name": "LENS_RL_MARKDOWN", "namespace_id": "1009", "simple": { "limit": 4, "period": 60 } }
   ],
   "vars": {
     // Not a secret: an account id is an identifier, and this one is already

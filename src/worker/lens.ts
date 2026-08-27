@@ -381,6 +381,11 @@ export const LENS_BUDGETS = {
   // catalogue read costs a foreign server a lookup, and an /ask costs it a
   // retrieval and possibly a model call.
   nlweb:   { binding: "LENS_RL_NLWEB",   max: 4  },
+  // Ten plain GETs of one URL per run, deduped by Accept string. No browser
+  // and no model, so it is cheaper than the tabs above it on OUR side; what it
+  // spends is somebody else's bandwidth, ten times over, on one page. Sat
+  // between the catalogue read and the /ask question for that reason.
+  markdown: { binding: "LENS_RL_MARKDOWN", max: 4 },
   // The shared ceiling. Keyed on a CONSTANT rather than the caller's IP, so
   // every browser-consuming route bills against one bucket and no single
   // visitor can spend the account's allowance.
@@ -497,6 +502,7 @@ const LENS_TAB_LABELS = {
   discovery: "Agent doors",
   tools: "What it accepts",
   nlweb: "What it answers",
+  markdown: "What agents get",
 };
 
 // Tab ORDER is evidence to verdict: raw observation first (the default lens, so
@@ -520,7 +526,14 @@ const LENS_TAB_LABELS = {
 // walks through /ask: door, room, room. It sits last before the capstone because
 // it is the only tab that asks the origin a QUESTION, which is also why it is
 // the only one that never fires on its own.
-export const LENS_TAB_ORDER = ["anatomy", "reader", "wire", "structured", "ai", "terms", "discovery", "tools", "nlweb", "readiness"];
+// `markdown` closes the same door-then-room run. The discovery tier already
+// knocks on Markdown negotiation and keeps ONE boolean from it: `lensProbeMdNego`
+// reads the content-type and cancels the body without ever looking at what came
+// back. This walks through, replays the Accept header seven named agent clients
+// actually send, and reports which representation each one got. The boolean and
+// the tab disagree often enough to be worth both: an origin can flip its
+// content-type for a bare `text/markdown` and still hand Claude Code HTML.
+export const LENS_TAB_ORDER = ["anatomy", "reader", "wire", "structured", "ai", "terms", "discovery", "tools", "nlweb", "markdown", "readiness"];
 
 function lensState(url) {
   const validViews = ["both", "human", "machine", "browser", "delta"];
@@ -1204,6 +1217,29 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 .lx-nlweb-desc { font-size:8.7pt; line-height:1.45; color:oklch(38% 0.015 260); margin-top:3px; }
 .lx-nlweb-schema pre { margin:4px 0 0; padding:6px 7px; background:oklch(24% 0.02 258); color:oklch(92% 0.03 150); font:8.2pt/1.45 "Courier New",monospace; white-space:pre-wrap; word-break:break-word; overflow:auto; max-height:170px; }
 .lx-nlweb-missing { margin-top:4px; padding:4px 7px; font-size:8.4pt; color:oklch(46% 0.11 45); background:oklch(97% 0.02 60); border:1px solid oklch(82% 0.06 60); }
+.lx-md-run { margin-top:8px; }
+.lx-md-note { padding:6px 8px; border:1px solid oklch(80% 0.02 260); background:oklch(97% 0.005 260); color:oklch(40% 0.02 260); font-size:9pt; line-height:1.45; }
+.lx-md-verdict { padding:6px 8px; margin-bottom:7px; border:1px solid oklch(80% 0.05 150); background:oklch(97% 0.02 150); color:oklch(34% 0.07 150); font-size:9pt; line-height:1.45; }
+.lx-md-agents { width:100%; border-collapse:collapse; font-size:8.6pt; margin-bottom:7px; table-layout:fixed; }
+.lx-md-agents th { text-align:left; font-weight:normal; color:oklch(48% 0.02 250); border-bottom:1px solid oklch(85% 0.01 250); padding:2px 6px 3px; }
+.lx-md-agents td { padding:4px 6px; border-bottom:1px solid oklch(92% 0.008 250); vertical-align:top; }
+.lx-md-agents td:first-child { width:23%; }
+.lx-md-agents code { font:8pt "Courier New",monospace; color:oklch(30% 0.07 262); word-break:break-word; }
+.lx-md-vendor { font-size:8pt; color:oklch(55% 0.02 250); margin-top:2px; }
+.lx-md-gets { width:22%; white-space:nowrap; }
+/* The row tint is the table's whole point: which clients get Markdown has to be
+   readable at a glance, before anybody parses a content-type. */
+.lx-md-yes td { background:oklch(98% 0.02 150); }
+.lx-md-no td  { background:oklch(98% 0.02 60); }
+.lx-md-err td { background:oklch(97% 0.005 260); color:oklch(52% 0.02 260); }
+.lx-md-delta { padding:6px 8px; margin-bottom:7px; border:1px solid oklch(84% 0.04 250); background:oklch(97% 0.012 250); font-size:9pt; line-height:1.5; }
+.lx-md-delta b { font-size:11pt; color:oklch(38% 0.13 262); }
+.lx-md-checks { border:1px solid oklch(84% 0.01 250); }
+.lx-md-check { display:flex; gap:7px; align-items:flex-start; padding:5px 8px; border-bottom:1px solid oklch(92% 0.008 250); }
+.lx-md-check:last-child { border-bottom:0; }
+.lx-md-check code { font:8.4pt "Courier New",monospace; color:oklch(30% 0.07 262); }
+.lx-md-detail { font-size:8.7pt; line-height:1.45; color:oklch(38% 0.015 260); margin-top:2px; }
+.lx-md-sample { margin:0; padding:6px 7px; background:oklch(24% 0.02 258); color:oklch(92% 0.03 150); font:8.2pt/1.45 "Courier New",monospace; white-space:pre-wrap; word-break:break-word; overflow:auto; max-height:220px; }
 .lx-tf-multi-row { display:flex; align-items:center; gap:5px; padding:1px 0; font-size:9pt; }
 .lx-tf-row { display:flex; gap:6px; align-items:flex-start; padding:6px; margin-bottom:5px; background:oklch(96% 0.006 260); border:1px solid oklch(84% 0.015 260); }
 .lx-tf-row > *:first-child { flex:1; min-width:0; }
@@ -3054,10 +3090,16 @@ const LENS_BOT_VIEWS = [
   { key: "Claude-User", label: "Claude-User", owner: "Anthropic", role: "answers", ua: "Claude-User/1.0" },
 ];
 
-export async function lensFetchAsBot(targetUrl, env, signal, userAgent) {
+// `accept` defaults to the browser-shaped header every existing caller was
+// sending inline, so the bot-views tier is byte-identical. The Markdown lens
+// passes its own, because there the Accept header IS the instrument: it replays
+// the exact string a named agent client sends and reports which representation
+// came back. Both callers share this one function rather than growing a second
+// outbound path, for the reason the per-hop redirect check below exists.
+export async function lensFetchAsBot(targetUrl, env, signal, userAgent, accept = "text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.7") {
   const headers = new Headers({
     "user-agent": userAgent,
-    accept: "text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.7",
+    accept,
     "accept-language": "en-US,en;q=0.9",
   });
   // same self-dispatch rule as lensFetch: route() gives the real response this

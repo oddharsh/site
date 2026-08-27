@@ -19,6 +19,7 @@ import { handleLens, handleLensBrowser, handleLensCompare, handleLensFetch, hand
 import { handleLensWire } from "./lens-wire.ts";
 import { handleLensNlweb } from "./lens-nlweb.ts";
 import { handleLensTools } from "./lens-tools.ts";
+import { handleLensMarkdown } from "./lens-markdown.ts";
 import { serveAssetWith404Clamp, serveFreshAsset, servePrecompressedShell, serveStaticPage } from "./lib/assets.ts";
 import { BOT_UA } from "./lib/botauth.ts";
 import { CANONICAL_HOST, PAGE_CACHE_CONTROL, isCanonicalHost } from "./lib/const.ts";
@@ -380,6 +381,7 @@ const ROUTE_TABLE: Array<[path: string, handler: RouteHandler]> = [
   ["/lens/wire", handleLensWire],
   ["/lens/tools", handleLensTools],
   ["/lens/nlweb", handleLensNlweb],
+  ["/lens/markdown", handleLensMarkdown],
   ["/lens/compare.json", handleLensCompare],
   ["/lens/census", handleCensus],
   ["/lens/census.json", handleCensusJson],

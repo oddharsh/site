@@ -86,6 +86,20 @@ const ROUTES = [
   // kind — the negotiation was correct throughout — and neither check alone can
   // tell the two apart.
   { path: "/", status: 200, ct: "text/markdown", headers: { accept: "text/markdown" } },
+  // The TIE, end to end. Both types arrive at q=1 with nothing in the header to
+  // separate them, and this is the exact string Claude Code, Copilot CLI and
+  // Microsoft Copilot send. It answered text/html until 2026-08-27, on an origin
+  // that passed every Markdown conformance check on the public list, which is
+  // the gap /lens/markdown exists to make visible.
+  { path: "/garage/horizon", status: 200, ct: "text/markdown",
+    headers: { accept: "text/markdown, text/html, */*" } },
+  // The control that must never flip with it. A browser names no text/markdown
+  // at all, so the same path on the same build still answers HTML.
+  { path: "/garage/horizon", status: 200, ct: "text/html",
+    headers: { accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" } },
+  // An explicit refusal is still a refusal, and order never overrides a q-value.
+  { path: "/garage/horizon", status: 200, ct: "text/html",
+    headers: { accept: "text/html, text/markdown;q=0" } },
   { path: "/index.html", status: 301 },
   { path: "/favicon.ico", status: 200, ct: "image/svg+xml" },
   // ?peek=1 so the oracle never advances the visitor count
@@ -277,6 +291,15 @@ const ROUTES = [
   // hostname and the row would assert nothing. A blocked host is refused before
   // any fetch, which is the property worth pinning here.
   { path: "/lens/nlweb?url=http://localhost", status: 400, ct: "application/json", marker: "no-fetch list" },
+  // The Markdown lens against THIS origin, which self-dispatches in-process like
+  // the row above. It asserts the REPLAY ran rather than any particular verdict:
+  // a local Worker serves no Markdown twins (they are build output the dev farm
+  // does not derive), so pinning `reach` here would pin a dev-only artifact and
+  // go red the day the farm learned to build them.
+  { path: "/lens/markdown?url=https://aadhar.sh/bot", status: 200, ct: "application/json", marker: "claude-code" },
+  // The SSRF guard on this route specifically, same reasoning as the nlweb row:
+  // a blocked host is refused before any of the ten fetches leave.
+  { path: "/lens/markdown?url=http://localhost", status: 400, ct: "application/json", marker: "no-fetch list" },
   // 200 text/plain when the x402 gate is unconfigured; 402 json once X402_PAY_TO is set
   { path: "/llms-full.txt", status: [200, 402], ct: ["text/plain", "application/json"] },
   { path: "/ledger", status: 200, ct: "text/html", marker: "Crawl Ledger" },

@@ -323,7 +323,13 @@
     { "name": "LENS_RL_TOOLS", "namespace_id": "1007", "simple": { "limit": 10, "period": 60 } },
     // /lens/nlweb asks a foreign origin a real question rather than asking it to
     // describe itself, so it is metered harder than the catalogue read above.
-    { "name": "LENS_RL_NLWEB", "namespace_id": "1008", "simple": { "limit": 4, "period": 60 } }
+    { "name": "LENS_RL_NLWEB", "namespace_id": "1008", "simple": { "limit": 4, "period": 60 } },
+    // /lens/markdown fetches ONE page ten times, once per distinct Accept
+    // header it replays. Nothing on our side is expensive — no browser, no model
+    // — so the ceiling is set by what it costs the target, which is ten plain
+    // GETs of the same URL. The real control is the 1h KV cache, same as the
+    // catalogue read.
+    { "name": "LENS_RL_MARKDOWN", "namespace_id": "1009", "simple": { "limit": 4, "period": 60 } }
   ],
   "vars": {
     // Not a secret: an account id is an identifier, and this one is already

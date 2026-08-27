@@ -2425,6 +2425,79 @@ remotable, so `?url=https://aadhar.sh` is the one target that works under
 `bun run dev` (self-dispatch needs no wire signature). Everything else needs a
 deployed version.
 
+### `/lens/markdown` — the tenth tab, and why a conformance grade is the wrong headline
+
+"What agents get" replays the `Accept` header seven named agent clients actually
+send and reports which representation each one received. The four conformance
+checks it also runs are the ones
+[acceptmarkdown.com](https://acceptmarkdown.com/) scores a URL against, credited
+in the pane, re-derived from RFC 9110 rather than copied.
+
+**The replay leads and the checklist follows, because the two disagree.** Three
+of the seven shipping clients (Claude Code, Copilot CLI, Microsoft Copilot) send
+`text/markdown, text/html, */*`, where both types arrive at `q=1` and nothing in
+the header breaks the tie. A server ranking strictly by q-value passes every
+check on the list and still hands those three HTML.
+
+**THIS ORIGIN WAS ONE OF THEM, which is how the tab paid for itself on its first
+run.** `/garage/horizon` scored full marks on the checklist and handed Claude
+Code HTML, because `wantsMarkdown` in `lib/http.ts` required Markdown to STRICTLY
+outrank HTML. Fixed 2026-08-27: a tie now goes to whichever type was listed
+first, and `acceptIndex` beside it matches only types named EXACTLY, since `*/*`
+expresses no preference BETWEEN two named types and so cannot break a tie between
+them.
+
+Two things about that fix are worth keeping. RFC 9110 gives order within `Accept`
+no significance, so first-listed-wins is a CONVENTION rather than a rule; what
+makes it the right one is that the alternative is not neutrality, it is silently
+preferring HTML, which is a choice too and the one that costs an agent the point
+of asking. And the control is what proves the route oracle row has teeth: under
+the old rule that row fails with `text/html` where Markdown was expected, and the
+two rows beside it (a browser header, and `text/markdown;q=0`) must keep
+answering HTML either way.
+
+**Two checks are added that the public four do not cover**, and each closes a
+real gap. `q=0` is an explicit REFUSAL, so a server matching on the presence of
+the substring serves Markdown to a client that just said it would not take any;
+the ranked-q check catches the easy half and this one catches the half that
+distinguishes a parse from a substring match. And `rel=alternate` (RFC 8288, in
+the header or the `<link>`) is the path a client that sends no `Accept` follows
+at all, so an origin can be perfectly reachable by a real client while failing
+every other check on the list.
+
+**The browser control is DISPLAYED and never SCORED**, the same rule the bot
+views tier had to learn. A row reading "HTML" has two explanations that look
+identical from one sample: the origin negotiated and chose HTML, or it has one
+representation and nobody gets Markdown. With no control admitted, `reach` is
+`null` and says why, rather than printing a confident 0 of 7.
+
+**The byte delta is measured DECODED, and the first version got this wrong in a
+way a passing test would not have caught.** It read `Content-Length`, which is
+usually ABSENT on a chunked or compressed response — so the comparison silently
+declined to render on most origins, including the 38x case that motivated it —
+and where both headers exist they describe COMPRESSED bytes while the sample
+beside them is decoded, so any comparison mixing the two measures two different
+quantities and calls the difference a saving. Decoded is also what the argument
+wants, since an agent spends context on characters. Measured 2026-08-26:
+`developers.cloudflare.com/fundamentals` is 135 KB of HTML against 3.5 KB of
+Markdown, 38.4x, and acceptmarkdown.com is 11x.
+
+Ten requests per run, not eleven: seven agents share five distinct headers, plus
+five conformance probes. It sends an honest AadharshBot user-agent carrying
+somebody else's `Accept`, because the Accept IS the instrument here and wearing
+the agent's user-agent on top would buy nothing. Opt-in, cached 1h per URL,
+`LENS_RL_MARKDOWN` at 4/min.
+
+**This is the door-then-room pairing again.** The discovery tier already knocks
+and keeps ONE boolean (`lensProbeMdNego` reads the content-type and cancels the
+body). The boolean can be true while the client you use still gets HTML.
+
+**Under `bun run dev` it reports THIS origin as not negotiating, and that is a
+farm artifact rather than a finding.** Markdown twins are build output and
+`dev-stage.ts` derives nothing, so the local Worker has none to serve. The route
+oracle's row therefore asserts the replay RAN (`marker: "claude-code"`) and
+deliberately pins no verdict, since pinning `reach` would pin the artifact.
+
 ### Observability: Workers Traces + the span vocabulary
 
 Three layers, deliberately not redundant:

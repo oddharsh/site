@@ -58,7 +58,7 @@ export interface EnvBindings {
   /** The :07/:37 homepage-fragment latency series. */
   PERF_PROBE: AnalyticsEngineDataset;
 
-  // The seven per-IP /lens budgets plus the one account-wide browser bucket.
+  // The eight per-IP /lens budgets plus the one account-wide browser bucket.
   // LENS_BUDGETS in lens.ts mirrors these ceilings because that is what the 429
   // message quotes; a contract test pins the two together.
   LENS_RL_INSPECT: RateLimit;
@@ -70,6 +70,7 @@ export interface EnvBindings {
   LENS_RL_WIRE: RateLimit;
   LENS_RL_TOOLS: RateLimit;
   LENS_RL_NLWEB: RateLimit;
+  LENS_RL_MARKDOWN: RateLimit;
 
   BROWSER: BrowserRun;
   IMAGES: ImagesBinding;

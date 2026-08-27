@@ -75,6 +75,7 @@ export type SpanName =
   | "lens.wire.session"
   | "lens.tools"
   | "lens.nlweb"
+  | "lens.markdown"
 
   // The neighborhood crawl, where every degradation is designed to be quiet.
   // `around.neighbor` is the per-host span the rollup is built from, and it is
