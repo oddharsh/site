@@ -13,6 +13,7 @@ import { test } from "node:test";
 import {
   AGENT_ACCEPTS, BROWSER_ACCEPT, isMarkdown, markdownAlternate, probePlan, variesOnAccept,
 } from "../src/worker/lens-markdown.ts";
+import { wantsMarkdown } from "../src/worker/lib/http.ts";
 
 const worker = await readFile(new URL("../src/worker/lens-markdown.ts", import.meta.url), "utf8");
 const island = await readFile(new URL("../src/client/lens-markdown.js", import.meta.url), "utf8");
@@ -128,6 +129,52 @@ test("the tie header the tab exists for is in the table", () => {
   const tied = AGENT_ACCEPTS.filter((a) => a.accept === "text/markdown, text/html, */*");
   assert.ok(tied.length >= 3, "at least three shipping clients send the tied header");
   assert.ok(tied.some((a) => a.key === "claude-code"), "Claude Code among them");
+});
+
+test("this origin serves Markdown to every agent client the lens replays", () => {
+  // The tab pointed at us, as a test. /lens/markdown replays these exact headers
+  // against any origin; this asserts our own negotiator answers all of them, so
+  // the two can never disagree without something here going red.
+  //
+  // It is the regression test for the tie rule. `wantsMarkdown` required Markdown
+  // to STRICTLY outrank HTML until 2026-08-27, which meant the three clients
+  // sending `text/markdown, text/html, */*` got HTML while this origin passed
+  // every conformance check on the public list.
+  const asks = (accept) => wantsMarkdown(new Request("https://aadhar.sh/garage/horizon", { headers: { accept } }));
+
+  for (const a of AGENT_ACCEPTS) {
+    assert.equal(asks(a.accept), true, `${a.label} asks for Markdown and must get it`);
+  }
+});
+
+test("the tie rule does not widen to anyone who did not ask", () => {
+  const asks = (accept) => wantsMarkdown(new Request("https://aadhar.sh/garage/horizon", { headers: { accept } }));
+
+  // A browser. It never names text/markdown, so the guard stops it before any
+  // of the ranking runs, and this is the row that must never flip.
+  assert.equal(asks(BROWSER_ACCEPT), false, "a browser navigation still gets HTML");
+  assert.equal(asks("text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,*/*;q=0.8"), false);
+  assert.equal(asks("*/*"), false, "a bare wildcard is not a request for Markdown");
+  assert.equal(asks(""), false);
+
+  // Ranked BELOW html. Unchanged by the tie rule, because there is no tie.
+  assert.equal(asks("text/html, text/markdown;q=0.5"), false);
+  assert.equal(asks("text/html;q=1.0, text/markdown;q=0.5"), false);
+
+  // An explicit refusal stays a refusal. This is the case the substring-matching
+  // servers get wrong, and the reason the lens checks it separately.
+  assert.equal(asks("text/html, text/markdown;q=0"), false);
+  assert.equal(asks("text/markdown;q=0, text/html"), false);
+
+  // Order decides only a TIE, and only among types named EXACTLY. A wildcard
+  // expresses no preference between two named types, so it cannot break one.
+  assert.equal(asks("text/markdown, text/html"), true, "markdown first wins the tie");
+  assert.equal(asks("text/html, text/markdown"), false, "html first wins the tie");
+  assert.equal(asks("text/markdown, */*"), true, "the only named type is the markdown one");
+  // xhtml is ranked as html, so these two are a tie decided by order like any
+  // other. Both directions are pinned because only one of them can be wrong.
+  assert.equal(asks("text/markdown, application/xhtml+xml"), true, "markdown was first");
+  assert.equal(asks("application/xhtml+xml, text/markdown"), false, "xhtml was first");
 });
 
 test("the pane builds foreign strings as nodes, never as markup", () => {

@@ -2437,10 +2437,24 @@ in the pane, re-derived from RFC 9110 rather than copied.
 of the seven shipping clients (Claude Code, Copilot CLI, Microsoft Copilot) send
 `text/markdown, text/html, */*`, where both types arrive at `q=1` and nothing in
 the header breaks the tie. A server ranking strictly by q-value passes every
-check on the list and still hands those three HTML. Measured on our own
-`/garage/horizon` the day this shipped: full marks on the checklist, and Claude
-Code got HTML (see `wantsMarkdown` in `lib/http.ts`, whose rule is
-`markdownQ > htmlQ`).
+check on the list and still hands those three HTML.
+
+**THIS ORIGIN WAS ONE OF THEM, which is how the tab paid for itself on its first
+run.** `/garage/horizon` scored full marks on the checklist and handed Claude
+Code HTML, because `wantsMarkdown` in `lib/http.ts` required Markdown to STRICTLY
+outrank HTML. Fixed 2026-08-27: a tie now goes to whichever type was listed
+first, and `acceptIndex` beside it matches only types named EXACTLY, since `*/*`
+expresses no preference BETWEEN two named types and so cannot break a tie between
+them.
+
+Two things about that fix are worth keeping. RFC 9110 gives order within `Accept`
+no significance, so first-listed-wins is a CONVENTION rather than a rule; what
+makes it the right one is that the alternative is not neutrality, it is silently
+preferring HTML, which is a choice too and the one that costs an agent the point
+of asking. And the control is what proves the route oracle row has teeth: under
+the old rule that row fails with `text/html` where Markdown was expected, and the
+two rows beside it (a browser header, and `text/markdown;q=0`) must keep
+answering HTML either way.
 
 **Two checks are added that the public four do not cover**, and each closes a
 real gap. `q=0` is an explicit REFUSAL, so a server matching on the presence of

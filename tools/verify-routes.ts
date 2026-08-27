@@ -86,6 +86,20 @@ const ROUTES = [
   // kind — the negotiation was correct throughout — and neither check alone can
   // tell the two apart.
   { path: "/", status: 200, ct: "text/markdown", headers: { accept: "text/markdown" } },
+  // The TIE, end to end. Both types arrive at q=1 with nothing in the header to
+  // separate them, and this is the exact string Claude Code, Copilot CLI and
+  // Microsoft Copilot send. It answered text/html until 2026-08-27, on an origin
+  // that passed every Markdown conformance check on the public list, which is
+  // the gap /lens/markdown exists to make visible.
+  { path: "/garage/horizon", status: 200, ct: "text/markdown",
+    headers: { accept: "text/markdown, text/html, */*" } },
+  // The control that must never flip with it. A browser names no text/markdown
+  // at all, so the same path on the same build still answers HTML.
+  { path: "/garage/horizon", status: 200, ct: "text/html",
+    headers: { accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" } },
+  // An explicit refusal is still a refusal, and order never overrides a q-value.
+  { path: "/garage/horizon", status: 200, ct: "text/html",
+    headers: { accept: "text/html, text/markdown;q=0" } },
   { path: "/index.html", status: 301 },
   { path: "/favicon.ico", status: 200, ct: "image/svg+xml" },
   // ?peek=1 so the oracle never advances the visitor count

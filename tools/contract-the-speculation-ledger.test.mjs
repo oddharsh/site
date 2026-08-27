@@ -647,7 +647,11 @@ test("Workers Cache never answers a content-negotiated request from the stored r
   }), PATHS), true, "an ordinary browser navigation must still reach Workers Cache");
 
   // ...and the bug: markdown at the same URL must bypass it
-  for (const accept of ["text/markdown", "text/markdown, text/html;q=0.5", "text/markdown;q=1.0, text/html;q=0.9"]) {
+  // The last entry is the TIE, added 2026-08-27 with the wantsMarkdown fix: both
+  // types at q=1, decided by order. It used to resolve to HTML, so it never
+  // bailed, and a cached HTML copy would now answer an agent asking for Markdown.
+  for (const accept of ["text/markdown", "text/markdown, text/html;q=0.5", "text/markdown;q=1.0, text/html;q=0.9",
+                        "text/markdown, text/html, */*"]) {
     for (const path of ["/", "/bot", "/lens", "/reading"]) {
       assert.equal(shouldUseWorkersCache(req(`https://aadhar.sh${path}`, { accept }), PATHS), false,
         `${path} with "${accept}" must bypass Workers Cache or the stored HTML answers it`);
