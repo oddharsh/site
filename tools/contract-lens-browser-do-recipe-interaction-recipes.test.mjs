@@ -29,6 +29,7 @@ import {
   staticAssets,
   test,
 } from "./contract-shared.ts";
+import { photoRecipe } from "../src/worker/image-tools.ts";
 
 // ── /lens/browser?do=<recipe> — interaction recipes ────────────────────────
 // The feature runs JavaScript inside somebody else's page. Almost every test
@@ -619,6 +620,40 @@ test("photo_recipe only claims exact archive identities", async () => {
   const miss = await handleSiteMcp(new Request("https://aadhar.sh/mcp", { method: "POST", body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "photo_recipe", arguments: { image_data: "aGVsbG8=" } } }), headers: { "content-type": "application/json" } }), env, context());
   const missBody = await miss.json();
   assert.equal(missBody.result.structuredContent.matched, false);
+});
+
+test("photo_recipe fetches only the indexes its lookup can use, without a serial asset waterfall", async () => {
+  const files = {
+    "/images/metadata.json": { L1000069_3: { camera: "Leica M11" } },
+    "/images/hashes.json": { L1000069_3: { a: "aaaa", j: "bbbb", s: "cccc" } },
+    "/images/alt.json": { L1000069_3: "a test frame" },
+    "/images/fingerprints.json": {},
+  };
+  let active = 0;
+  let peak = 0;
+  const paths = [];
+  const env = { ASSETS: { async fetch(input) {
+    const path = new URL(input).pathname;
+    paths.push(path);
+    active++;
+    peak = Math.max(peak, active);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    active--;
+    return Response.json(files[path]);
+  } } };
+
+  const exact = await photoRecipe({ stem: "L1000069_3" }, env);
+  assert.ok("matched" in exact);
+  assert.equal(exact.matched, true);
+  assert.deepEqual(paths.slice().sort(), ["/images/alt.json", "/images/hashes.json", "/images/metadata.json"]);
+  assert.equal(peak, 3, "the independent projection reads should overlap");
+
+  paths.length = 0;
+  peak = 0;
+  const miss = await photoRecipe({ image_data: "aGVsbG8=" }, env);
+  assert.ok("matched" in miss);
+  assert.equal(miss.matched, false);
+  assert.deepEqual(paths, ["/images/fingerprints.json"], "a byte miss should not load an unused projection");
 });
 
 test("representation vault stores normalized snapshots and compares digests", async () => {
