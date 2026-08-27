@@ -1,20 +1,29 @@
 // lens-boot.js — keep the complete server-rendered /lens idle shell idle unless
 // this browser exposes WebMCP. The full client arrives for URL state, a
-// persisted non-default view, the first interaction with the Lens UI, or the
-// browser-local tool catalog: the six page tools own Lens closure state and
-// cannot register until lens.js exists. Capture listeners replay the first
+// persisted non-default view, or the first interaction with the Lens UI. A
+// WebMCP browser loads only the small page-tool registrar while idle; each tool
+// hydrates the full client on its first call. Capture listeners replay the first
 // human action after import(), so a cold click cannot race the client that owns it.
 // They are bound to the Lens content root rather than the document, so the
 // desktop shell's own controls never wait on a module they do not use.
 (function () {
   "use strict";
 
+  /** @type {Promise<void> | null} */
   var app = null;
   var ready = false;
   var replaying = false;
+  // Import this BEFORE lens.js in a WebMCP browser. The registrar installs the
+  // one narrow handoff through which the full client gives it live handlers;
+  // ordering the promises here makes that handoff race-free even when a person
+  // clicks while the registrar is still crossing the wire.
+  var pageTools = document.modelContext
+    ? import("/lens-webmcp.js").catch(function () { return null; })
+    : null;
 
   function load() {
-    if (!app) {
+    if (app) return app;
+    var loading = Promise.resolve(pageTools).then(function () {
       // @ts-expect-error — a CACHE-BUSTED specifier. "/lens.js?v=1" is a real URL
       // the browser resolves and no path mapping can match. Pointing tsc at the
       // file instead answers "is not a module", because lens.js is a classic
@@ -22,14 +31,15 @@
       // changes it from script scope to module scope for a type checker. This is
       // a side-effect import. @ts-expect-error rather than @ts-ignore so it fails
       // the day the situation changes.
-      app = import("/lens.js?v=1").then(function () {
-        ready = true;
-      }, function (error) {
-        app = null;
-        throw error;
-      });
-    }
-    return app;
+      return import("/lens.js?v=1");
+    }).then(function () {
+      ready = true;
+    }, function (error) {
+      app = null;
+      throw error;
+    });
+    app = loading;
+    return loading;
   }
 
   function hasClientState() {
@@ -98,8 +108,9 @@
   root.addEventListener("click", click, true);
   root.addEventListener("submit", submit, true);
 
-  // WebMCP discovery happens before interaction, so its page tools must too.
-  // Keep the ordinary cold shell lazy; only a browser that can consume the
-  // catalog pays for the full client while idle.
-  if (document.modelContext || hasClientState()) load().catch(function () {});
+  // WebMCP discovery happens before interaction, so register the six lightweight
+  // definitions now. Their handlers call load() only when an agent invokes one.
+  // Keep the ordinary cold shell lazy and hydrate saved/deep-linked state as before.
+  if (pageTools) pageTools.then(function (wm) { return wm && wm.boot(load); }).catch(function () {});
+  if (hasClientState()) load().catch(function () {});
 })();

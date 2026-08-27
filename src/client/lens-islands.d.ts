@@ -7,7 +7,7 @@
 // here is optional, and why lens.js guards each one before calling it.
 //
 // Declared rather than cast at each use: 37 of the 102 findings the browser
-// program surfaced when its include became a glob were these five names, and a
+// program surfaced when its include became a glob were these island names, and a
 // cast per site would have said nothing about what an island actually is.
 
 interface LensIsland {
@@ -27,6 +27,13 @@ interface LensIsland {
   [testHandle: `_${string}`]: any;
 }
 
+interface LensWebMcpBridge {
+  installHandlers(handlers: Record<string, (args: any) => unknown>): void;
+  readonly views: readonly string[];
+  readonly optIn: readonly string[];
+  readonly switches: readonly string[];
+}
+
 interface Window {
   LensBrowser?: LensIsland;
   LensReader?: LensIsland;
@@ -34,4 +41,5 @@ interface Window {
   LensTools?: LensIsland;
   LensNlweb?: LensIsland;
   LensMarkdown?: LensIsland;
+  LensWebMcp?: LensWebMcpBridge;
 }

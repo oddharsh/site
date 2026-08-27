@@ -345,6 +345,11 @@
 /lens.js
   Cache-Control: public, max-age=300, stale-while-revalidate=86400, s-maxage=86400
 
+# lens-webmcp.js — the lightweight page-tool registrar. Production reaches its
+# immutable /a/ twin; this covers dev and a stale lens-boot fallback.
+/lens-webmcp.js
+  Cache-Control: public, max-age=300, stale-while-revalidate=86400, s-maxage=86400
+
 # tooltip.js — the homepage's idle-prefetched interaction island. It is not
 # critical-path JS, but once a visitor warms it the browser should reuse it for
 # later hovers and the edge should serve it without a Worker invocation.

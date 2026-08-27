@@ -5,7 +5,6 @@
     "public/lwe/ask.js": 8,
     "src/client/hoist.js": 7,
     "src/client/infotip.js": 5,
-    "src/client/lens-boot.js": 4,
     "src/client/lens-browser.js": 2,
     "src/client/lens-nlweb.js": 3,
     "src/client/lens-tools.js": 4,
@@ -17,5 +16,5 @@
     "src/client/quiz.js": 10,
     "src/client/tooltip.js": 3
   },
-  "total": 168
+  "total": 164
 }
