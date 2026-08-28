@@ -68,6 +68,9 @@ export { Counter } from "./counter.ts";
 // booking replaces the old weekly cron sweep; its class_name must resolve on
 // this entry so the BOOKING_WORKFLOW binding can find it (see cal/src/workflow.ts).
 export { BookingWorkflow } from "../../cal/src/workflow.ts";
+// One instance per census roster host; see census-workflow.ts for why the class
+// sits in its own module and why the unit is an instance rather than a step.
+export { CensusWorkflow } from "./census-workflow.ts";
 
 // Workers Cache only fronts responses whose route contract is already public
 // and reusable. Keep the default export as an uncached gateway: it handles

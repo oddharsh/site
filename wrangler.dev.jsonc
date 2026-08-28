@@ -187,7 +187,8 @@
   ],
   // per-booking coffee expiry timer — MUST match wrangler.jsonc (build.mjs warns on drift).
   "workflows": [
-    { "name": "cal-booking-expiry", "binding": "BOOKING_WORKFLOW", "class_name": "BookingWorkflow" }
+    { "name": "cal-booking-expiry", "binding": "BOOKING_WORKFLOW", "class_name": "BookingWorkflow" },
+    { "name": "lens-census-host", "binding": "CENSUS_WORKFLOW", "class_name": "CensusWorkflow" }
   ],
   // Quick Actions need remote mode during local Wrangler development.
   "browser": { "binding": "BROWSER", "remote": true },

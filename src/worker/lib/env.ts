@@ -36,6 +36,7 @@
 
 
 import type { BookingWorkflow } from "../../../cal/src/workflow.ts";
+import type { CensusWorkflow } from "../census-workflow.ts";
 
 // ---------------------------------------------------------------------------
 // Tier 1 — platform bindings. Declared in wrangler.jsonc; wrangler will not
@@ -102,6 +103,9 @@ export interface EnvBindings {
    */
   COUNTER: DurableObjectNamespace;
   BOOKING_WORKFLOW: Workflow<Parameters<BookingWorkflow["run"]>[0]["payload"]>;
+  // One instance per census roster host. The payload carries ts and ymd so a
+  // whole sweep lands on one census day however long an instance queues.
+  CENSUS_WORKFLOW: Workflow<Parameters<CensusWorkflow["run"]>[0]["payload"]>;
 }
 
 // ---------------------------------------------------------------------------
