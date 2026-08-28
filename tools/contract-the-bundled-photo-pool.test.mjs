@@ -393,15 +393,16 @@ test("local dev composes the same served tree the build stages", async () => {
 
   // Step 1's cp calls into .build/public ARE the production definition of the
   // served root. Read them rather than restating the list, so this test cannot
-  // agree with a copy of itself (the failure mode gotcha 24 names).
-  const staged = [...build.matchAll(/await cp\("([^"]+)",\s*`\$\{OUT\}\/public`/g)].map((m) => m[1]);
+  // agree with a copy of itself (the failure mode gotcha 24 names). They run in
+  // parallel now; build.ts separately blocks any path collision before staging.
+  const staged = [...build.matchAll(/\bcp\("([^"]+)",\s*`\$\{OUT\}\/public`/g)].map((m) => m[1]);
   assert.ok(staged.length >= 3, "build.mjs step 1 should still stage several roots into .build/public");
   assert.ok(staged.includes("public"), "the byte-for-byte asset root must still be staged");
   // public/ is the cp with the STAGE_SKIP filter, so it matches a different
   // shape above; assert it explicitly rather than loosening the regex.
-  assert.match(build, /await cp\("public", `\$\{OUT\}\/public`/, "build.mjs must still stage public/ into the served root");
+  assert.match(build, /\bcp\("public", `\$\{OUT\}\/public`/, "build.mjs must still stage public/ into the served root");
   assert.deepEqual(ASSET_ROOTS, staged,
-    "dev-stage.mjs's roots must equal build.mjs step 1's, in the same order — a later root wins a colliding path in both");
+    "dev-stage.mjs's roots must equal build.mjs step 1's, in the same canonical order");
 
   assert.equal(devConfig.assets.directory, FARM,
     "wrangler.dev.jsonc must serve the farm, not one authored root (pointing it at any single root 404s every document the others hold)");
