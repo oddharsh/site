@@ -156,7 +156,23 @@ if (orphans.length) fail(`unreferenced hashed pixel files: ${orphans.join(", ")}
 // prunes the old file — which would leave those pages 404ing on images with nothing
 // to catch it. Walk the authored HTML/JS and hold every hardcoded reference to the
 // same standard as the manifest's own tiers.
-const HARDCODED_ROOTS = ["public/garage", "public/lwe", "src/pages/index.html"];
+//
+// THE ROOTS WERE public/garage AND public/lwe UNTIL 2026-08-28, and neither has held
+// an HTML file since the src/pages split on 2026-08-18. So this walked two asset
+// directories plus one page, read 0 references, and reported a pass, while the 12
+// real ones sat in src/pages/garage/tooltips.html. Gotcha 40 from the scanner's
+// side: the rewrite moved the documents and left the walk pointing where they used
+// to be, and a grep for the old path finds nothing because the roots are a list of
+// directories rather than a spelling of any file.
+//
+// It stayed invisible because the check only bites during a re-encode, and there
+// had not been one since the split. The first full re-encode is what found it,
+// which is the event it exists for.
+const HARDCODED_ROOTS = ["src/pages", "src/content", "src/client"];
+// A scanner whose roots stop matching reports a pass over an empty set, which is
+// what every floor in this repo refuses. 12 today, all in tooltips.html. Deleting
+// that demo is a deliberate act and lowering this number with it is one line.
+const HARDCODED_FLOOR = 12;
 const walk = async (target) => {
   const entry = await stat(target);
   if (!entry.isDirectory()) return [target];
@@ -166,14 +182,21 @@ const walk = async (target) => {
 };
 const authored = (await Promise.all(HARDCODED_ROOTS.map((r) => walk(path.join(ROOT, r)))))
   .flat().filter((file) => /\.(html|js)$/.test(file));
+let hardcoded = 0;
 for (const file of authored) {
   const body = await readFile(file, "utf8");
   for (const [, name] of body.matchAll(/\/i\/([A-Za-z0-9_-]+\.[a-f0-9]{8}\.(?:avif|jpg))/g)) {
+    hardcoded++;
     if (!expectedFiles.has(name)) {
       fail(`${path.relative(ROOT, file)} references /i/${name}, which no longer exists\n` +
            `  the tier was re-encoded; re-point it at the current hash in images/hashes.json`);
     }
   }
+}
+if (hardcoded < HARDCODED_FLOOR) {
+  fail(`the hardcoded /i/ scan read ${hardcoded} references across ${authored.length} file(s), ` +
+       `under the floor of ${HARDCODED_FLOOR}\n` +
+       `  it has stopped matching. roots: ${HARDCODED_ROOTS.join(", ")}`);
 }
 
 const exifIndex = await json(path.join(IMAGES, "exif.json"));

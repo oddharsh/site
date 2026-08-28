@@ -1018,7 +1018,7 @@ Single-page personal site at `aadhar.sh`. A Cloudflare Worker with static assets
 | `src/content/md/` | Hand-authored Markdown twins for the Worker-rendered prose pages, whose text lives in template literals no build step can read. SEVEN of them: `/around`, `/bot`, `/coffee`, `/lens`, `/security`, `/terminal`, `/whoareyou`. It was three when this row was written; `/terminal` joined in #227 and the other three in #354, and nothing here noticed either time, because the set is not a list anywhere in the code. `buildTwins` looks for `<path>.md` in this directory per SURFACE, so any page gets a hand twin by dropping a file in, and a hand twin OUTRANKS the generated tier. `.assetsignore`d (build input, not a public URL) and staged into the served tree: the generator publishes each at its page's own path, `/bot.md` and so on. `checkTwinFacts()` pins THREE of the seven (`bot`, `whoareyou`, `security`) against the Worker in BOTH directions, so bumping `BOT_VERSION` fails the deploy until `bot.md` agrees; the other four carry no pins and can drift from the page silently. `security.md`'s pins read `lib/security.ts` rather than the page, since a page ABOUT headers must agree with the module that SENDS them; one of them is derived from the header set `cspHeadersFor` actually emits, so reintroducing a report-only twin fails the deploy until `security.md` stops claiming `'unsafe-inline'` is gone. It read the `ENFORCE_PAGE_HASHES` flag until that flag was deleted on 2026-08-23; reading the emitted headers is the better check, since a flag states an intention and the headers state what ships. |
 | `public/sitemap.xml`, `robots.txt` | Standard SEO files. robots.txt explicitly allows AadharshBot. |
 | `public/.well-known/http-message-signatures-directory` | JWKS for AadharshBot's Ed25519 public key (Web Bot Auth IETF draft). |
-| `public/images/` + `public/i/` | `images/` holds the photo DATA surfaces: `metadata.json` (the EXIF RECORD, long field names + the Fuji recipe card), `exif.json` (the tooltip's TEXT tier: every photo's short-key EXIF in one 2.6KB-brotli file, warmed once on idle because the homepage draws a fresh random 12 of 158 per request and a per-slot warm-up was cold nearly every visit), `meta/<stem>.json` (per-photo EXIF plus the four 64-bin histogram channels — the BARS tier, fetched only on the hover that needs them, and the self-healing fallback for a stem missing from a cached `exif.json`), `alt.json` (AI captions), `hashes.json` (stem to hash8 map). The pixel tiers (600px AVIF+JPG squares, plus 400px and 200px AVIF) live in `i/` under content-hashed names, 632 files for 158 photos. |
+| `public/images/` + `public/i/` | `images/` holds the photo DATA surfaces: `metadata.json` (the EXIF RECORD, long field names + the Fuji recipe card), `exif.json` (the tooltip's TEXT tier: every photo's short-key EXIF in one 2.6KB-brotli file, warmed once on idle because the homepage draws a fresh random 12 of 165 per request and a per-slot warm-up was cold nearly every visit), `meta/<stem>.json` (per-photo EXIF plus the four 64-bin histogram channels — the BARS tier, fetched only on the hover that needs them, and the self-healing fallback for a stem missing from a cached `exif.json`), `alt.json` (AI captions), `hashes.json` (stem to hash8 map). The pixel tiers (600px AVIF+JPG squares, plus 400px and 200px AVIF) live in `i/` under content-hashed names, 660 files for 165 photos. |
 | `public/og/` | Pre-baked 1200x630 OG/Twitter cards, one per garage + lwe page (`<section>-<name>.png`): the page's live demo floated on the Bliss desktop under the page's own favicon as a brand stamp, so a shared link unfurls as the interaction rather than a bare title. **There is no route label on the card**, and this row said there was until 2026-08-15: the generator's own header comment has described a "translucent XP dock naming the route" since #55 while the card template has never rendered one, and the claim was copied here. Wired via `og:image`/`twitter:card` in each page's `<head>` (edge-direct static pages can't be worker-injected). Built by `tools/photos/gen-og-cards.ts` (playwright-core → Chrome, captures production for live data); meta added by `tools/photos/inject-og-meta.ts`. **Both paths read `scripts/` here until the same date**, which is the split the layout table above draws and costs a `No such file` to anyone following this row. Regen recipe in MAINTENANCE.md. Cached 30d, deploy purges the edge. |
 | `tools/photos/` | Photo-pipeline + asset scripts (see below). Beyond the core pipeline (`add-photos.sh`, `extract-photo-metadata.sh`, `check-photo-pipeline.mjs`, `zenc/` the JPEG encoder crate): `add-car-photo.sh` (one resto-mod reference photo into the dual AVIF+JPG pair the car-link tooltips expect, output `public/cars/<stem>.{avif,jpg}`, no EXIF/R2); `gen-alt-text.py` (AI alt text for every grid photo, writes `public/images/alt.json` `{stem: alt}`, resumable; run by `add-photos.sh` phase 4 — posts the committed `i/` thumbnail bytes to Workers AI when `CLOUDFLARE_API_TOKEN` is set so a brand-new photo captions pre-deploy, else falls back to the cf-garage `/garage/cf/caption` endpoint by stem, which only sees deployed photos); `gen-encoding-samples.sh` (regenerates the color sample set for the `/garage/encoding` study through every encoder, prints byte counts + bytes-per-pixel); `reencode-thumbnails.sh` (re-encodes all published grid thumbnails as pre-cropped center squares from the canonical source folder, two square tiers); `gen-pixel-peeper.py` (the one remaining Pillow consumer, a one-off generator for the /pixel-peeper comparison frames; NOT part of add-photos.sh). The four 64-bin RGB/luminance channels are baked by `zenc histogram`, inside the encoder crate, since 2026-08-14. |
 
@@ -1067,33 +1067,41 @@ public/images/<stem>.{avif,jpg}  +  R2 aadhar-photos/<filename>
    |   FAILS on any uncaptioned stem, same as a missing pixel tier.
 ```
 
-**avifenc moved to `--speed 2` on 2026-08-28, and THE LIBRARY IS MIXED because
-of it.** Measured over 6 stems covering both yuv paths through the real ingest
-geometry, shipping flags verbatim and varying only `--speed`: the 600 tier goes
-153,138 to 150,948 bytes (-1.43%), all three tiers go 262,158 to 257,836
+**avifenc moved to `--speed 2` on 2026-08-28, and the WHOLE LIBRARY is on it as
+of the same day.** Measured over 6 stems covering both yuv paths through the real
+ingest geometry, shipping flags verbatim and varying only `--speed`: the 600 tier
+goes 153,138 to 150,948 bytes (-1.43%), all three tiers go 262,158 to 257,836
 (-1.65%), and mean ssimulacra2 on the 600 tier RISES 79.439 to 79.601. So it
 wins on both axes for +0.21 s per photo serial (0.515 to 1.078), which is an
 incremental add of 5 going 0.7 s to 1.7 s. **`--speed 0` is rejected on its own
 numbers**: +0.09 ssimulacra2 over speed 2 for 3.6x the time, and LARGER files
 than speed 2 on 2 of the 6.
 
-Every tile committed before that date is speed 4 and stays speed 4. Collecting
-the difference is worth **118.6 KiB spread over 495 immutable-1y AVIF files**,
-about 245 bytes per tile, of which a homepage visit fetches 12. It costs 495
-re-minted `/i/` URLs, 495 rewritten rows in `fingerprints.json`, the `a`/`s`/`x`
-keys of all 165 stems in `hashes.json`, a hand-edit to
-`src/pages/garage/tooltips.html` (12 literal `/i/` refs across 3 stems), and a
-p-dict roll for that page. That is the trade that has broken this build twice
-(gotcha 41, gotcha 35).
+The library was deliberately MIXED for a few hours, then `reencode-thumbnails.sh`
+collected it. **It ran better than the 6-stem projection: 138,609 bytes rather
+than 118.6 KiB**, which is -1.816% on the 600 tier, -1.968% on 400, -2.007% on
+200, and -1.882% across all 495 AVIF files. Quality moved with it, mean
+ssimulacra2 **+0.327** over 24 tier comparisons on 8 stems, better on 20 of 24
+and smaller on 23 of 24. That is the direction to expect from a projection taken
+on 6 stems and it is worth noticing which way it missed.
 
-**Two speeds cost nothing operationally**, because a `/i/` URL names exact bytes
-PER FILE and nothing downstream reads encoder settings. `config/tools.json`
-already makes this argument about its own `recorded` versions: nothing recorded
-which encoder made the 632 files in `public/i`, and #394 re-encoded 316 of them
-on 2026-08-14, so claiming those versions produced them would be inventing
-provenance. The remaining 118.6 KiB gets collected whenever something forces a
-full re-encode anyway: a `LIBAVIF_TAG` bump, a geometry change, or another
-`reencode-thumbnails.sh` run. The two `/garage/encoding` study generators keep
+It cost what the estimate said: 495 re-minted `/i/` URLs, 495 rewritten rows in
+`fingerprints.json`, the `a`/`s`/`x` keys of all 165 stems in `hashes.json`, the
+12 literal `/i/` refs across 3 stems in `src/pages/garage/tooltips.html`, and a
+p-dict roll owed for that one page. That is the trade that has broken this build
+twice (gotcha 41, gotcha 35), and it broke nothing this time because
+`derive:check` and `photos:check` each named their half before the commit.
+
+**The JPG tier did not move by one byte on any of the 165**, so no histogram
+re-bake was owed and `derive:check` said so independently rather than being taken
+on trust. Do not promote that to a rule: it holds because `--speed` reaches
+avifenc alone, and any change to the `zenc` call or to the geometry above it
+moves `j` and owes the bake.
+
+**Two speeds would have cost nothing operationally**, because a `/i/` URL names
+exact bytes PER FILE and nothing downstream reads encoder settings. What settled
+it was that a full re-encode re-mints every URL either way, so once one was being
+run the flag was free. The two `/garage/encoding` study generators keep
 their own efforts (6 and 4) and deliberately do NOT track this, because their
 byte counts are what that page prints.
 
@@ -1167,12 +1175,18 @@ Two encoders + one transform tool, all built from source:
   output on a real 600px square, 26,594 bytes either way. That is the bar, since
   one differing byte orphans every `a-dict` snapshot naming the old hash.
 
-  Those were the shipping settings on the day; the pipeline passes `--speed 2`
-  since 2026-08-28 and the pair is UNMEASURED at that effort. Both are still
-  libavif 1.4.2 over aom 3.14.1, so identity is likely, and likely is not
-  evidence. It costs nothing until somebody re-encodes, because a new photo
-  mints a new URL under either binary, and a full re-encode is exactly where a
-  difference would rewrite 495 committed URLs. Re-measure there.
+  **MEASURED AT `--speed 2` TOO, on 2026-08-28**, which is what that paragraph
+  asked for and the full re-encode is what made it matter. Over 3 stems covering
+  both yuv paths, at speed 4 and speed 2, all 6 vendored-versus-brew pairs
+  matched to the byte. So the 495 URLs that moved that day moved because of
+  `--speed` and for no other reason.
+
+  Worth one caution before generalising it. Brew's binary reports `libyuv:
+  unavailable` while this one links libyuv 1924, which sounds like it must move
+  the colour conversion and does not at these settings, because the pipeline
+  passes nothing that reaches libyuv's scaler. Re-measure before the NEXT full
+  re-encode rather than reading this as a property of the two builds: it has now
+  held across two efforts on one aom version, which is evidence about those.
 
   What it adds is **`--sharpyuv`**, which brew's build cannot do at all: it is
   compiled without libsharpyuv, and passing the flag exits 1 with "Conversion
@@ -1274,7 +1288,7 @@ one of them was undocumented until `tools:check` went looking (2026-08-14):
 > a bare `1.6.0`, and mozjpeg answering on stderr), the seven whose output ships
 > carry `bytes: true` and a `recorded` version, and drift from `recorded` is a
 > NOTICE rather than a failure. For an encoder, "newer" is not "take it": a bump
-> means re-encoding 632 files, re-hashing, and rolling the dictionaries, so the
+> means re-encoding 660 files, re-hashing, and rolling the dictionaries, so the
 > signal is deliberately the local one. `brew outdated` already answers the other
 > question and this does not duplicate it.
 >

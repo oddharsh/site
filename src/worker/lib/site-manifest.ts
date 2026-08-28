@@ -325,6 +325,12 @@ export const AGENT_SURFACES = [
     "description": "Nineteen hidden flags in one CLI, and the control that separates an option being accepted from an option doing anything: on a closed schema those are two questions, and the first one is free."
   },
   {
+    "path": "/garage/htmx",
+    "title": "Break-even at three submits",
+    "kind": "content",
+    "description": "htmx 4.0 costs 11.46 KiB Brotli and saves 3,968 bytes per submit. Break-even is 2.96 submits per visitor, on a form submitted once."
+  },
+  {
     "path": "/garage/safari27",
     "title": "Safari 27",
     "kind": "content",
@@ -425,6 +431,7 @@ export const WEBMENTION_PATHS = [
   "/garage/useragent",
   "/garage/typed-config",
   "/garage/hidden-flags",
+  "/garage/htmx",
   "/garage/safari27",
   "/garage/scroll",
   "/garage/teardown",
