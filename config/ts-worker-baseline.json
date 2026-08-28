@@ -7,7 +7,7 @@
     "src/worker/counter.ts": 1,
     "src/worker/dyno.ts": 3,
     "src/worker/encode.ts": 25,
-    "src/worker/image-tools.ts": 12,
+    "src/worker/image-tools.ts": 7,
     "src/worker/lens-nlweb.ts": 1,
     "src/worker/lens-wire.ts": 14,
     "src/worker/lens.ts": 31,
@@ -34,5 +34,5 @@
     "src/worker/whoareyou.ts": 3,
     "src/worker/writing.ts": 2
   },
-  "total": 266
+  "total": 261
 }

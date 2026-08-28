@@ -251,17 +251,29 @@ export async function imageCompare(args: ImageToolArgs, env) {
   input.sha256 = await sha256(input.bytes);
   const info = await imageInfo(env, input.bytes);
   if (!info) return error("Image binding is not configured on this deployment.");
-  const variants = [];
-  let total = 0;
+  const jobs: { format: string; spec: TransformSpec }[] = [];
   for (const format of normalized) {
     const spec = transformOptions({ ...args, format });
     if ("error" in spec) return error(spec.error);
+    jobs.push({ format, spec });
+  }
+  // Each format is a complete, independent Images pipeline. Keep the caller's
+  // order through Promise.all, but pay one binding latency window rather than a
+  // three-encode waterfall. The combined-output cap is checked below exactly as
+  // before; parallelism does not increase its 3 x 4 MiB worst-case residency.
+  const outputs: ({ _error: string } | (TransformedImage & { format: string }))[] = await Promise.all(jobs.map(async ({ format, spec }) => {
     const output = await transformBytes(env, input.bytes, spec);
     if ("error" in output) return error(output.error);
     output.sha256 = await sha256(output.bytes);
+    return { ...output, format };
+  }));
+  const variants: (TransformedImage & { format: string })[] = [];
+  let total = 0;
+  for (const output of outputs) {
+    if ("_error" in output) return output;
     total += output.bytes.byteLength;
     if (total > TOTAL_COMPARE_CAP) return error("combined comparison output exceeds the 8 MiB limit");
-    variants.push({ ...output, format });
+    variants.push(output);
   }
   const receipt = {
     ...imageReceipt(input, info, null), operation: "compare", preset: args.preset || null,
