@@ -65,6 +65,12 @@ exif-sooc -all= -overwrite_original "$DEST"/c-sips82.jpg "$DEST"/c-zc*.jpg >/dev
 
 for q in 60 80; do cwebp -q "$q" "$base" -o "$DEST/c-wp$q.webp" >/dev/null 2>&1; done
 
+# --speed 4 here, --speed 6 in gen-encoding-grids.sh, --speed 2 in the photo
+# pipeline since 2026-08-28. Left alone deliberately: this script PRINTS the
+# byte counts that get transcribed onto /garage/encoding, so changing the effort
+# without re-running it makes the script disagree with the numbers on the page,
+# which is worse on that page than three efforts are. Aligning the two study
+# scripts is a separate change that regenerates public/garage/enc.
 AV="--speed 4 --jobs 4 --ignore-icc --ignore-exif --ignore-xmp"
 avifenc -q 40 --yuv 420 $AV "$base" "$DEST/c-av40.avif" >/dev/null 2>&1
 avifenc -q 63 --yuv 420 $AV "$base" "$DEST/c-av63.avif" >/dev/null 2>&1
