@@ -68,7 +68,7 @@
   },
   "comment:check-fast": "Local feedback only: lint, typecheck and test are independent read-only gates, so Bun can run them concurrently. CI keeps them as named sequential steps for legible failures. Do not add build, routes, Lens or perf commands here: several share .build or intentionally run under Node.",
   "devDependencies": {
-    "@cloudflare/workers-types": "5.20260826.1",
+    "@cloudflare/workers-types": "5.20260827.1",
     "@minify-html/node": "0.18.1",
     "@oxlint/plugins": "1.80.0",
     "@types/bun": "1.4.0",
