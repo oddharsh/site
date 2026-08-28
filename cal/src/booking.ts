@@ -50,6 +50,21 @@ export type Booking = {
   status: "pending" | "confirmed" | "declined" | "expired";
   /** epoch ms, set when the host decides */
   acted_at?: number;
+  /** Where in NYC the REQUESTER is, in their own words. Free text on purpose:
+   *  "west village", "bushwick", "midtown, near bryant park" are all answers a
+   *  dropdown of neighbourhoods would have to either enumerate or lose. It is
+   *  advisory input to the host, never rendered to a third party. */
+  area?: string;
+  /** The venue the HOST picks, once picked. Distinct from `area`: that one is
+   *  the guest saying roughly where they are, this one is the address that goes
+   *  on the calendar entry. Set by /update, which may run before OR after the
+   *  invite goes out. */
+  location?: string;
+  /** RFC 5545 SEQUENCE. Absent means 0. Every /update bumps it, because a
+   *  calendar client applies a same-UID REQUEST as an update ONLY when the
+   *  sequence has advanced; re-sending at the same sequence is a no-op that
+   *  looks exactly like a delivery failure. */
+  sequence?: number;
 };
 
 /** A half-open interval on the calendar. */
@@ -77,6 +92,23 @@ export async function setStatus(env, id: string, status: Booking["status"]): Pro
   if (!b) return null;
   b.status = status;
   b.acted_at = Date.now();
+  await putBooking(env, b);
+  return b;
+}
+
+// Patch the venue and advance the sequence. Separate from setStatus because the
+// two are independent axes: a location can be set on a booking that is still
+// pending (so it rides the first invite out) and changed again long after it is
+// confirmed. Returns null when there is nothing to patch.
+export async function setLocation(env, id: string, location: string): Promise<Booking | null> {
+  const b = await getBooking(env, id);
+  if (!b) return null;
+  b.location = location;
+  // Bump only for a booking whose invite is already out. A pending booking has
+  // never sent a VEVENT, so its first one must go out at SEQUENCE:0 — starting
+  // it higher makes the guest's client treat the ORIGINAL invite as an update to
+  // an event it has never seen, which Outlook in particular declines to show.
+  if (b.status === "confirmed") b.sequence = (b.sequence ?? 0) + 1;
   await putBooking(env, b);
   return b;
 }

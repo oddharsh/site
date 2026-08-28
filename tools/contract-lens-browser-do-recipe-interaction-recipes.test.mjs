@@ -29,7 +29,7 @@ import {
   staticAssets,
   test,
 } from "./contract-shared.ts";
-import { photoRecipe } from "../src/worker/image-tools.ts";
+import { imageCompare, photoRecipe } from "../src/worker/image-tools.ts";
 
 // ── /lens/browser?do=<recipe> — interaction recipes ────────────────────────
 // The feature runs JavaScript inside somebody else's page. Almost every test
@@ -596,6 +596,31 @@ test("site MCP image workbench returns an image content block and exact receipt"
   assert.equal(body.result.structuredContent.engine, "cloudflare-images");
   assert.equal(body.result.content[1].type, "image");
   assert.equal(body.result.content[1].mimeType, "image/avif");
+});
+
+test("image_compare encodes independent formats in one binding latency window", async () => {
+  let active = 0;
+  let peak = 0;
+  const env = { IMAGES: {
+    async info(bytes) { return { format: "jpeg", width: 1, height: 1, fileSize: bytes.byteLength }; },
+    input() {
+      return {
+        transform() { return this; },
+        output(options) { return { response: async () => {
+          active++;
+          peak = Math.max(peak, active);
+          await new Promise((resolve) => setTimeout(resolve, 10));
+          active--;
+          return new Response(options.format, { headers: { "content-type": options.format } });
+        } }; },
+      };
+    },
+  } };
+
+  const result = await imageCompare({ image_data: "aGVsbG8=", formats: ["avif", "webp", "jpeg"] }, env);
+  assert.ok("_mcp" in result);
+  assert.equal(result._mcp.structured.variants.length, 3);
+  assert.equal(peak, 3, "all three Images pipelines should overlap");
 });
 
 test("photo_recipe only claims exact archive identities", async () => {

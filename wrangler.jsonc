@@ -45,11 +45,68 @@
   "main": ".build/src/worker/index.ts",
   "build": { "command": "bun tools/build.ts" },
   "compatibility_date": "2026-06-01",
+  // The incoming Request's `signal` fires when the CLIENT hangs up, so a handler
+  // can attach an abort listener and learn that nobody is waiting any more. It is
+  // NOT date-gated, so no compatibility_date bump ever delivers it and this key
+  // is the only door.
+  //
+  // A flag nothing reads is dead config, so this ships with its one reader:
+  // dispatchTraced() in src/worker/index.ts records `route.aborted` on every
+  // route span. The number it buys is the abandon rate, which nothing here can
+  // currently count. /lens is the case that wants it: one scan fans out about 28
+  // probes against the 50-subrequest cap Workers Free enforces (gotcha 36), and
+  // whether visitors walk away mid-fan-out has only ever been argued.
+  //
+  // The sibling flag `request_signal_passthrough` is deliberately absent, and it
+  // is the dangerous half. It forwards the signal to every subrequest, which
+  // cancels the work that deliberately OUTLIVES the response. Two of those are
+  // user-visible: cal/src/index.ts waitUntils three Resend sends, so a host who
+  // approves a booking and closes the tab means the requester never gets the
+  // invite, and webmention.ts:130 runs its whole job after a 202, by which point
+  // the sender has always disconnected. A listener changes no subrequest
+  // behaviour at all, which is why this half is safe to take alone.
+  //
+  // THE RUNTIME VALIDATES THIS ARRAY AND THE DRY RUN DOES NOT, which is the
+  // reverse of where you would look. Measured 2026-08-28 on wrangler 4.127.0 with
+  // "definitely_not_a_real_flag_xyz" in here: `wrangler deploy --dry-run` exits
+  // 0 and says nothing, while booting the real Worker through
+  // createTestHarness() dies with `No such compatibility flag:
+  // definitely_not_a_real_flag_xyz`. So `bun run routes:check` is the gate that
+  // makes acceptance mean something, and CI already runs it inside `validate`.
+  // Same control idiom as --x-bogus-flag, aimed one layer lower.
+  //
+  // WHAT LOCAL DEV CANNOT TELL YOU, so nobody re-runs it: the in-process harness
+  // never delivers a hang-up. A throwaway Worker booted four times (no flags,
+  // enable_request_signal, disable_request_signal, request_signal_passthrough)
+  // reported `signal` present, an AbortSignal, and listenable in ALL FOUR, and
+  // `aborted` stayed false in all four after a raw socket was destroyed 120ms
+  // into a 600ms handler. So the property is not what this flag adds here, the
+  // FIRING is, and the firing is a production measurement. Expect route.aborted
+  // to read false under `bun run dev` and routes:check by construction.
+  "compatibility_flags": ["enable_request_signal"],
   // Deploy-only. Measured 2026-08-16: 274.45 -> 227.67 KiB gzip (17.0% off).
   // Keep the local-dev twin readable; uploaded source maps retain original stack
   // locations in Workers Logs without shipping to clients.
   "minify": true,
   "upload_source_maps": true,
+  // OFF, against wrangler's default. esbuild's keep-names injects a helper call
+  // per function and class so `fn.name` survives minification, and the pinned
+  // wrangler turns it ON for you: cli.js reads `keepNames: config.keep_names ??
+  // true` in the same options object as the `minify` above. Measured 2026-08-28
+  // over two `deploy --dry-run` runs, each reproduced exactly: 715.83 -> 698.63
+  // KiB upload, 244.60 -> 236.18 KiB gzip. That is 8.42 KiB of gzip (3.44%)
+  // across 717 helper call sites. Both runs go through node, since bun's zlib-ng
+  // gzips ~0.55% heavier (gotcha 38) and would corrupt the comparison.
+  //
+  // Nothing here reads a function or class NAME at runtime. Every `.name` in
+  // src/worker, cal/src and serendipity is a data field, except lens.ts's
+  // `e.name === "AbortError"`, which is an Error property keep-names never sets.
+  // The Counter DO and BookingWorkflow resolve by EXPORT BINDING NAME, which
+  // this leaves alone. Every local identifier moves between the two bundles
+  // (`xr` -> `wr`); the `export{...}` statement still names Counter,
+  // BookingWorkflow, CachedPages and default. Source maps keep their names[],
+  // so Workers Logs frames stay legible.
+  "keep_names": false,
   // Workers Cache sits in front of the public-response entrypoint below. The
   // default dispatcher stays uncached because it owns mutations, per-visitor
   // views, content-negotiated representations, and request logging; response
@@ -276,7 +333,8 @@
   // re-exported from _worker.js/index.js). Replaced the weekly cron sweep. Must
   // match wrangler.dev.jsonc + cal/wrangler.test.toml.
   "workflows": [
-    { "name": "cal-booking-expiry", "binding": "BOOKING_WORKFLOW", "class_name": "BookingWorkflow" }
+    { "name": "cal-booking-expiry", "binding": "BOOKING_WORKFLOW", "class_name": "BookingWorkflow" },
+    { "name": "lens-census-host", "binding": "CENSUS_WORKFLOW", "class_name": "CensusWorkflow" }
   ],
   // Browser Run Quick Actions. The binding is authenticated by Workers, so
   // Lens no longer needs a Browser Run API token for snapshots.

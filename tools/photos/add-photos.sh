@@ -263,7 +263,38 @@ avif_encode() {  # avif_encode <src.jpg> <out.avif>
     # matched-bytes-probe.py runs for the resampling work) puts the real figure
     # at +0.411 mean with sharpyuv LOSING on 5 of 12. Turning it on is a
     # deliberate decision that also re-mints every /i/ URL it touches.
-    "$AVIF_ENCODER" -q 63 -d 10 --ignore-icc --ignore-exif --ignore-xmp --speed 4 --jobs 4 --yuv "$yuv" "$1" "$2" >/dev/null 2>&1
+    #
+    # --speed 2 since 2026-08-28, up from 4, because it wins on BOTH axes at
+    # once. Measured over 6 stems covering both yuv paths through this exact
+    # geometry (sips to TIFF, then zenc square at 600/400/200), shipping flags
+    # verbatim and varying only --speed: the 600 tier goes 153,138 -> 150,948 B
+    # (-1.43%) and all three tiers 262,158 -> 257,836 B (-1.65%), while mean
+    # ssimulacra2 on the 600 tier RISES 79.439 -> 79.601. The bill is +0.21 s
+    # per photo serial (0.515 -> 1.078), so an incremental add of 5 goes
+    # 0.7 s -> 1.7 s and a full 165-photo run goes 21.8 s -> 57 s.
+    #
+    # speed 0 is REJECTED on its own numbers rather than on principle: it beats
+    # speed 2 by 0.09 ssimulacra2 for 3.6x the time (2.942 s per photo), and it
+    # produced LARGER files than speed 2 on 2 of the 6 stems.
+    #
+    # THE LIBRARY IS MIXED, deliberately. Every tile committed before that date
+    # is speed 4 and stays speed 4. Re-encoding to collect the difference buys
+    # 118.6 KiB spread over 495 immutable-1y AVIF files, about 245 B per tile,
+    # of which a homepage visit fetches 12. It costs 495 re-minted /i/ URLs, 495
+    # rewritten rows in public/images/fingerprints.json, the a/s/x keys of all
+    # 165 stems in hashes.json, a hand-edit to src/pages/garage/tooltips.html
+    # (12 literal /i/ refs across 3 stems), and a p-dict roll for that page.
+    # That is the trade that has broken this build twice.
+    #
+    # Two speeds cost nothing operationally, because a /i/ URL names exact bytes
+    # PER FILE and nothing downstream reads encoder settings. config/tools.json
+    # already makes this argument about its own `recorded` versions: "Nothing
+    # recorded which encoder made the 632 files in public/i, and #394 re-encoded
+    # 316 of them on 2026-08-14, so claiming these versions produced them would
+    # be inventing provenance." The remaining 118.6 KiB gets collected whenever
+    # something forces a full re-encode anyway: a LIBAVIF_TAG bump, a geometry
+    # change, or another reencode-thumbnails.sh run.
+    "$AVIF_ENCODER" -q 63 -d 10 --ignore-icc --ignore-exif --ignore-xmp --speed 2 --jobs 4 --yuv "$yuv" "$1" "$2" >/dev/null 2>&1
   else
     sips -s format avif --setProperty formatOptions 60 "$1" --out "$2" >/dev/null 2>&1
   fi

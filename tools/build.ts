@@ -29,6 +29,7 @@
 // root wrangler.jsonc is copied verbatim into .build/ and just works against the copy.
 
 import { createHash } from "node:crypto";
+import { availableParallelism } from "node:os";
 
 // One nonce per build for the dynamic imports below: the staged worker modules
 // are rewritten in place by later steps, so each import site needs a fresh URL.
@@ -48,6 +49,12 @@ import { zstdCompressDictionaryBatch } from "./lib/zstd-batch.ts";
 import { patchStaticShell, renderDesktopArtifacts, staticShellPages } from "../tools/photos/gen-desktop-partial.ts";
 
 const OUT = ".build";
+// Every q11 file below is independent, but node:zlib's callback API shares
+// libuv's four-thread default. Let clean builds use the same eight-core ceiling
+// as the zstd batch while preserving an explicit caller override and libuv's
+// four-thread floor on smaller CI hosts. This must run before the first async fs
+// or zlib operation, when libuv fixes the process-wide pool size.
+process.env.UV_THREADPOOL_SIZE ||= String(Math.max(4, Math.min(8, availableParallelism())));
 const brotliCompressAsync = promisify(brotliCompress);
 
 // q11 dominates clean builds, so use zlib's callback path to run independent
@@ -184,6 +191,29 @@ async function checkInvariants() {
   // in this function a TS2345 — 87 of the file's 91 baseline diagnostics, all of
   // them noise sitting on top of the one check that blocks the deploy.
   const hard: string[] = [], warn: string[] = [];
+
+  // 0 (hard) — the authored roots merged into .build/public have no file-path
+  // collisions. Staging copies them concurrently below, so there is no longer
+  // a meaningful "last writer wins" order to hide a duplicate behind. A file
+  // belongs to exactly one authored root; fail before copying if that changes.
+  const stageRoots = ["public", "src/pages", "src/content", "src/client", "src/styles"];
+  const stageOwner = new Map<string, string>();
+  let stagedAuthored = 0;
+  const walkStage = async (root, dir = root, prefix = "") => {
+    for (const entry of await readdir(dir, { withFileTypes: true })) {
+      const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+      if (root === "public" && (rel === "images/meta" || rel.startsWith("images/meta/"))) continue;
+      if (entry.isDirectory()) {
+        await walkStage(root, `${dir}/${entry.name}`, rel);
+        continue;
+      }
+      stagedAuthored++;
+      const prior = stageOwner.get(rel);
+      if (prior) hard.push(`served path ${rel} is authored by both ${prior} and ${root}; parallel staging has no overwrite order`);
+      else stageOwner.set(rel, root);
+    }
+  };
+  for (const root of stageRoots) await walkStage(root);
 
   // 1 (hard) — every index.js dispatch key is covered by the wrangler
   // run_worker_first allowlist, or that route silently serves static. BOTH tables
@@ -344,7 +374,8 @@ async function checkInvariants() {
   // only the bindings watched them diverge by four entries ("/ask", "/inbox",
   // "/webmention", "/webmention/*") while reporting a clean build. Same class as
   // the missing "41 5 * * *" cron of 2026-08-14, which wrangler.dev.jsonc's own
-  // comment records — so the CRONS are diffed here too, at the end of this block.
+  // comment records — so the CRONS are diffed here too, at the end of this block,
+  // and the COMPATIBILITY FLAGS after them.
   //
   // What that drift COST was nothing yet, measured rather than assumed: all four
   // answered identically under `bun run dev` with their entries absent, because
@@ -412,6 +443,32 @@ async function checkInvariants() {
     if (!prodCrons.length) hard.push("dev-twin drift check read 0 crons from wrangler.jsonc — the scanner has lost the triggers block, not the site its schedule");
     else if (sorted(prodCrons) !== sorted(devCrons)) {
       warn.push(`wrangler.jsonc and wrangler.dev.jsonc crons differ (wrangler.jsonc: ${prodCrons.join(", ") || "none"}; wrangler.dev.jsonc: ${devCrons.join(", ") || "none"}) — the two schedules must match, or a job fires in one config and not the other`);
+    }
+
+    // And the COMPATIBILITY FLAGS, added 2026-08-28 with the first one this repo
+    // has ever set. A flag changes what the RUNTIME hands the Worker, so a
+    // divergence here is worse than the three above: those make dev and prod
+    // disagree about which paths compute, while this makes them disagree about
+    // what the platform is. `enable_request_signal` is the live case, since it
+    // decides whether request.signal aborts, and dispatchTraced() branches on
+    // exactly that. A dev twin without it runs the not-instrumented arm on every
+    // local request while production runs the other one, silently.
+    //
+    // Compared ORDER-INSENSITIVELY like the crons, and for the same reason: the
+    // runtime reads this as a set, so a reordering changes nothing and failing
+    // on one would be a check with an opinion about formatting.
+    const prodFlags = jsoncStringArray(wrangler, "compatibility_flags");
+    const devFlags = jsoncStringArray(dev, "compatibility_flags");
+    // The floor, and it is a claim about this commit rather than about the key.
+    // Zero flags was the TRUE state here until 2026-08-28, so an empty array is
+    // a config a reader could reasonably expect; what it cannot be is invisible.
+    // Both sides are lists and two empty lists agree, so without this a renamed
+    // key or a reformatted array reports a clean build over a config it never
+    // read. Removing the last flag is a real edit that should come here and say
+    // so, which is the point of failing rather than warning.
+    if (!prodFlags.length) hard.push("dev-twin drift check read 0 compatibility_flags from wrangler.jsonc — either the scanner lost the key or the last flag was dropped; both want a human here");
+    else if (sorted(prodFlags) !== sorted(devFlags)) {
+      warn.push(`wrangler.jsonc and wrangler.dev.jsonc compatibility_flags differ (wrangler.jsonc: ${prodFlags.join(", ") || "none"}; wrangler.dev.jsonc: ${devFlags.join(", ") || "none"}) — a flag changes what the runtime hands the Worker, so local dev exercises a different platform from the one that ships`);
     }
   } catch (e) { warn.push(`dev-config drift check could not run: ${e.message}`); }
 
@@ -691,7 +748,7 @@ async function checkInvariants() {
 
   if (warn.length) console.warn("build: invariant WARNINGS (deploy continues):\n  - " + warn.join("\n  - "));
   if (hard.length) throw new Error("build: invariant tripwires FAILED, deploy blocked:\n  - " + hard.join("\n  - "));
-  console.log(`invariants ok: ${routeKeys.length + prefixProbes.length} routes mirrored (${prefixProbes.length} prefix), CSP style-src, blink-fix, generator, geometry, ${skillsChecked} skill digest${skillsChecked === 1 ? "" : "s"}, ${manifestChecked} surfaces registered, ${tasteScanned} files taste-scanned${tasteOk.length ? ` (${tasteOk.length} taste-ok: ${tasteOk.join("; ")})` : ""}, ${conflictScanned} files conflict-free${warn.length ? " (with warnings above)" : ""}`);
+  console.log(`invariants ok: ${stagedAuthored} staged paths collision-free, ${routeKeys.length + prefixProbes.length} routes mirrored (${prefixProbes.length} prefix), CSP style-src, blink-fix, generator, geometry, ${skillsChecked} skill digest${skillsChecked === 1 ? "" : "s"}, ${manifestChecked} surfaces registered, ${tasteScanned} files taste-scanned${tasteOk.length ? ` (${tasteOk.length} taste-ok: ${tasteOk.join("; ")})` : ""}, ${conflictScanned} files conflict-free${warn.length ? " (with warnings above)" : ""}`);
 }
 
 // ── the client edge, authored once and mirrored at deploy ────────────────────
@@ -809,17 +866,27 @@ await mkdir(OUT, { recursive: true });
 // src/client + src/styles supply the shell. src/dict/ is deliberately absent:
 // the committed dictionary snapshots are build INPUT (#455).
 const STAGE_SKIP = new Set(["public/images/meta"]);
-await cp("public", `${OUT}/public`, {
-  recursive: true,
-  filter: (source) => !STAGE_SKIP.has(source.split(sep).join("/")),
-});
-await cp("src/pages", `${OUT}/public`, { recursive: true });
+// The invariant above proves that the five served roots do not contend for a
+// destination file. Copy all independent source trees in one filesystem latency
+// window instead of serializing eight recursive walks.
+await Promise.all([
+  mkdir(`${OUT}/public`, { recursive: true }),
+  mkdir(`${OUT}/src`, { recursive: true }),
+  mkdir(`${OUT}/cal`, { recursive: true }),
+  mkdir(`${OUT}/serendipity`, { recursive: true }),
+]);
+await Promise.all([
+  cp("public", `${OUT}/public`, {
+    recursive: true,
+    filter: (source) => !STAGE_SKIP.has(source.split(sep).join("/")),
+  }),
+  cp("src/pages", `${OUT}/public`, { recursive: true }),
 // The Worker is a PROGRAM, not a document, so its source lives in src/worker
 // beside cal/ and serendipity/ rather than inside the tree of things a browser
 // can fetch. Its STAGED position is unchanged: wrangler.jsonc still points main
 // at .build/src/worker/index.ts, and every deploy path and content hash
 // downstream is therefore untouched by the move.
-await cp("src/worker", `${OUT}/src/worker`, { recursive: true });
+  cp("src/worker", `${OUT}/src/worker`, { recursive: true }),
 // The client islands and stylesheets author in src/ beside the Worker, and stage
 // back to the ROOT of the served tree because their public URLs are /nav.js and
 // /luna.css. Source layout and URL layout are different questions; only the first
@@ -830,13 +897,12 @@ await cp("src/worker", `${OUT}/src/worker`, { recursive: true });
 // paths, so /writing/<slug>.txt, /index.md and the rest answer exactly where they
 // did. Source layout and URL layout are different questions, and only the first
 // one moved.
-await cp("src/content", `${OUT}/public`, { recursive: true });
-await cp("src/client", `${OUT}/public`, { recursive: true });
-await cp("src/styles", `${OUT}/public`, { recursive: true });
-await mkdir(`${OUT}/cal`, { recursive: true });
-await cp("cal/src", `${OUT}/cal/src`, { recursive: true });
-await mkdir(`${OUT}/serendipity`, { recursive: true });
-await cp("serendipity/serendipity.ts", `${OUT}/serendipity/serendipity.ts`);
+  cp("src/content", `${OUT}/public`, { recursive: true }),
+  cp("src/client", `${OUT}/public`, { recursive: true }),
+  cp("src/styles", `${OUT}/public`, { recursive: true }),
+  cp("cal/src", `${OUT}/cal/src`, { recursive: true }),
+  cp("serendipity/serendipity.ts", `${OUT}/serendipity/serendipity.ts`),
+]);
 // 1a) /images/meta/<stem>.json, DERIVED rather than copied.
 //
 // These are the tooltip's per-photo self-heal: a stem missing from the shared

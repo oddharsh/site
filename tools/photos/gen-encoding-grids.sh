@@ -86,6 +86,14 @@ sz(){ stat -f%z "$1"; }
 # 1. format x quality
 for q in 90 50 22; do "$ZENC" "$TMP/crop.png" "$DEST/z-zc$q.jpg" -q $q >/dev/null 2>&1; done
 for q in 90 50 22; do cwebp -q $q "$TMP/crop.png" -o "$DEST/z-wp$q.webp" >/dev/null 2>&1; done
+# --speed 6 here, --speed 4 in gen-encoding-samples.sh, --speed 2 in the photo
+# pipeline since 2026-08-28. Three values on purpose for now, and the divergence
+# is recorded rather than swept: this grid varies FORMAT and QUALITY at a fixed
+# effort, and moving the effort moves every AVIF byte count the page prints, so
+# aligning it means regenerating the committed samples under public/garage/enc.
+# That is a separate change with a real diff, and picking one effort for a page
+# whose job is teaching these axes is an editorial decision rather than a flag
+# sweep. Do not "fix" this to match the pipeline without regenerating.
 AV="--speed 6 --jobs 4 --ignore-icc --ignore-exif --ignore-xmp --yuv 420"
 for q in 78 42 18; do avifenc -q $q $AV "$TMP/crop.png" "$DEST/z-av$q.avif" >/dev/null 2>&1; done
 

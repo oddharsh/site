@@ -430,7 +430,8 @@ export const WEBMENTION_PATHS = [
   "/garage/teardown",
   "/garage/tooltips",
   "/garage/wire",
-  "/garage/workers"
+  "/garage/workers",
+  "/inbox"
 ];
 export const WEBMENTION_SECTIONS = [
   "/writing"

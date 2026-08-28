@@ -7,12 +7,39 @@ import { asText } from "./lib/parse.ts";
 const SEND_TIMEOUT_MS = 8000;
 const PAGE_BYTE_CAP = 512 * 1024;
 const DISCOVERY_BYTE_CAP = 256 * 1024;
-// Politeness cap per run. The cron fires every 30 minutes; a run that tried to
-// re-notify every citation on every page would be a small crawl of its own.
+// Politeness cap per run, and the one bound that is about the RECEIVER rather
+// than about us. The tick is daily (41 5 * * *, shared with /around); a run that
+// re-notified every citation on every page would be a small crawl of its own.
+//
+// Under the subrequest budget below it cannot currently bind — 40 subrequests buy
+// at most ~12 sends — so it is the ceiling that takes over if that budget is ever
+// raised, which is what moving off Workers Free would do (the cap there is 1000).
+// Kept rather than deleted because the two bounds answer different questions and
+// only one of them is about being a good citizen.
 const MAX_SENDS_PER_RUN = 25;
 // Don't re-notify the same (source,target) pair more often than this. A
-// re-send is legitimate (it's the spec's update signal) but nightly is plenty.
+// re-send is legitimate (it's the spec's update signal) but weekly is plenty.
 const RESEND_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
+
+// THE BOUND THAT DECIDES THE SHAPE OF THIS JOB. Workers Free allows 50
+// subrequests per invocation, and every D1 statement, every asset read and every
+// outbound fetch is one (gotcha 36 — a fan-out that crosses it arrives as an
+// ordinary exception, which a job written to swallow its own failures reports as
+// silence). A full sweep here is ~35 pages plus ~100 citations at 2-3 statements
+// each, so it was never going to fit and the honest move is to spend a budget and
+// come back tomorrow rather than to die two thirds of the way through.
+//
+// 40 rather than 50, because this count is an ESTIMATE and has to fail on the
+// safe side: a page read dispatches through route(), which reads the asset and
+// may touch the Workers cache on the way, and none of that is visible from here.
+// The headroom is what covers the difference.
+const SUBREQUEST_BUDGET = 40;
+// What one citation costs at worst: discover, POST, record. The loop stops while
+// it can still afford a whole one, so a target is never half-processed.
+const COST_PER_TARGET = 3;
+// And what one page costs at worst, charged up front for the same reason: the
+// dispatch is one call here and more than one subrequest down there.
+const COST_PER_PAGE = 3;
 
 // My own profile links, stamped into every page by the desktop shell. Kept in
 // sync with nav.js PROFILES by a contract test rather than by hope.
@@ -43,13 +70,14 @@ async function ensureTable(db) {
 }
 
 // ── the cron entry point ───────────────────────────────────────────────────
-// Traced with the CAP as a first-class attribute. This loop stops at
-// MAX_SENDS_PER_RUN, which is a deliberate politeness bound and also a silent
-// truncation: a run that hit the cap left citations unsent and looks, in the
-// summary log, exactly like a run that finished the work. `webmention.capped`
-// is the difference. The per-target spans additionally separate the three
-// outcomes the summary line fuses — no endpoint (the common, fine case), an
-// endpoint that took the POST, and an endpoint that rejected it.
+// Traced with both CAPS as first-class attributes. A run stops on whichever of
+// MAX_SENDS_PER_RUN (politeness, about the receivers) or SUBREQUEST_BUDGET
+// (the platform, about us) it reaches first, and either one leaves work undone
+// while looking, in the summary log, exactly like a run that finished.
+// `webmention.capped` and `webmention.budget_spent` are the difference. The
+// per-target spans additionally separate the three outcomes the summary line
+// fuses — no endpoint (the common, fine case), an endpoint that took the POST,
+// and an endpoint that rejected it.
 export async function cronSendWebmentions(env, origin = "https://aadhar.sh") {
   return span("webmention.send", (s) => cronSendWebmentionsInner(env, origin, s));
 }
@@ -59,73 +87,116 @@ async function cronSendWebmentionsInner(env, origin, sSend) {
   if (!db) {
     sSend.setAttribute("webmention.outcome", "db_unbound");
     console.warn("webmention-send: SOCIAL_DB unbound; skipping");
-    return { sent: 0, skipped: "unbound" };
+    // the full shape even here, so a caller reading `pagesRead` or `spent` off
+    // this job never has to ask which branch it came back from.
+    return { sent: 0, discovered: 0, considered: 0, pagesRead: 0, spent: 0, skipped: "unbound" };
   }
-  await ensureTable(db);
+  let spent = 0;
+  await ensureTable(db); spent++;
 
   const pages = await span("webmention.own_pages", () => mentionablePages(env, origin));
   sSend.setAttribute("webmention.pages", Array.isArray(pages) ? pages.length : 0);
   const now = Date.now();
-  let sent = 0, discovered = 0, considered = 0;
 
-  for (const pageUrl of pages) {
-    if (sent >= MAX_SENDS_PER_RUN) break;
+  // ONE read of everything this job has ever recorded, rather than a SELECT per
+  // citation. The table holds one row per (page, citation) plus one marker row
+  // per page, so it is a few hundred rows and it buys back ~100 subrequests —
+  // which is the whole difference between a run that finishes and a run that
+  // dies at the platform cap.
+  const priorRows = await db.prepare(`SELECT source, target, last_sent_at FROM ${TABLE}`).all(); spent++;
+  const prior = new Map();
+  for (const r of (priorRows && priorRows.results) || []) prior.set(`${r.source}|${r.target}`, r.last_sent_at || 0);
+  const freshAt = (source, target) => now - (prior.get(`${source}|${target}`) ?? 0) < RESEND_AFTER_MS;
+
+  // ROTATION, and it needs the marker rows to work. A bounded run always starts
+  // at the top of the list, so without a memory of which pages have been READ the
+  // first few would be swept every night and the tail never at all — and the
+  // twelve pages that cite nothing would starve it hardest, because a page with
+  // no citations writes no row and so always looks new. The marker is the
+  // self-pair (source === target), which no real citation can ever be:
+  // citationsIn drops same-origin links, so the two key spaces cannot collide.
+  const pageRead = (p) => prior.get(`${p}|${p}`) ?? 0;
+  const queue = [...pages].sort((a, b) => pageRead(a) - pageRead(b));
+
+  let sent = 0, discovered = 0, considered = 0, pagesRead = 0;
+  const affordable = () => spent + COST_PER_TARGET <= SUBREQUEST_BUDGET;
+
+  for (const pageUrl of queue) {
+    if (sent >= MAX_SENDS_PER_RUN || spent + COST_PER_PAGE + COST_PER_TARGET > SUBREQUEST_BUDGET) break;
+    // A page whose own marker is fresh has had every citation on it recorded
+    // within the window, so re-reading it can only produce rows we would skip.
+    // Costs nothing to check and is what makes the rotation advance.
+    if (freshAt(pageUrl, pageUrl)) continue;
+
     const html = await span("webmention.fetch_own_page", (s) => {
       s.setAttribute("webmention.source", pageUrl);
-      return fetchOwnPage(pageUrl);
+      return fetchOwnPage(pageUrl, env);
     });
+    spent += COST_PER_PAGE;
     if (!html) continue;
+    pagesRead++;
 
     for (const target of citationsIn(html, origin)) {
-      if (sent >= MAX_SENDS_PER_RUN) break;
+      if (sent >= MAX_SENDS_PER_RUN || !affordable()) break;
       considered++;
 
       // already told them recently? the spec's re-send is an update signal, not
       // a heartbeat, so this stays quiet between real changes.
-      const prior = await db.prepare(
-        `SELECT last_sent_at FROM ${TABLE} WHERE source = ? AND target = ?`
-      ).bind(pageUrl, target).first();
-      if (prior && now - prior.last_sent_at < RESEND_AFTER_MS) continue;
+      if (freshAt(pageUrl, target)) continue;
 
       const endpoint = await span("webmention.discover", (s) => {
-        s.setAttribute("webmention.target_host", (() => { try { return new URL(target).hostname; } catch { return undefined; } })());
+        s.setAttribute("webmention.target_host", hostOf(target));
         return discoverEndpoint(target);
       });
+      spent++;
       if (!endpoint) {
         // No endpoint is the common case and not a failure. Record it so the
         // next run doesn't re-probe the same URL for a week.
-        await db.prepare(
-          `INSERT INTO ${TABLE} (source, target, endpoint, status, last_sent_at) VALUES (?, ?, NULL, NULL, ?)
-           ON CONFLICT(source, target) DO UPDATE SET endpoint = NULL, status = NULL, last_sent_at = excluded.last_sent_at`
-        ).bind(pageUrl, target, now).run();
+        await recordSend(db, pageUrl, target, null, null, now); spent++;
         continue;
       }
       discovered++;
 
       const status = await span("webmention.post", async (s) => {
-        s.setAttribute("webmention.target_host", (() => { try { return new URL(target).hostname; } catch { return undefined; } })());
+        s.setAttribute("webmention.target_host", hostOf(target));
         const st = await postMention(endpoint, pageUrl, target);
         // the receiving endpoint's verdict. Stored in D1 per pair, but a run-level
         // view of "who is rejecting my mentions" needed a query nobody writes.
         s.setAttribute("http.response.status_code", st);
         return st;
       });
-      await db.prepare(
-        `INSERT INTO ${TABLE} (source, target, endpoint, status, last_sent_at) VALUES (?, ?, ?, ?, ?)
-         ON CONFLICT(source, target) DO UPDATE SET endpoint = excluded.endpoint, status = excluded.status, last_sent_at = excluded.last_sent_at`
-      ).bind(pageUrl, target, endpoint, status, now).run();
+      spent++;
+      await recordSend(db, pageUrl, target, endpoint, status, now); spent++;
       sent++;
     }
+
+    // The marker, written LAST so a page only counts as swept once its citations
+    // are. A run that ran out of budget mid-page leaves it unmarked and picks it
+    // up first tomorrow.
+    await recordSend(db, pageUrl, pageUrl, null, null, now); spent++;
   }
 
   sSend.setAttribute("webmention.considered", considered);
   sSend.setAttribute("webmention.discovered", discovered);
   sSend.setAttribute("webmention.sent", sent);
-  // the honest cap flag: true means this run stopped early and there is more to
-  // send, which the summary line below cannot express.
-  sSend.setAttribute("webmention.capped", sent >= MAX_SENDS_PER_RUN);
-  console.log(`webmention-send: ${considered} citations considered, ${discovered} endpoints found, ${sent} sent`);
-  return { sent, discovered, considered };
+  sSend.setAttribute("webmention.pages_read", pagesRead);
+  sSend.setAttribute("webmention.budget_spent", spent);
+  // the honest cap flags: either means this run stopped early and there is more
+  // to do, which the summary line below cannot express.
+  sSend.setAttribute("webmention.capped", sent >= MAX_SENDS_PER_RUN || !affordable());
+  console.log(`webmention-send: ${pagesRead} pages read, ${considered} citations considered, ${discovered} endpoints found, ${sent} sent, ${spent}/${SUBREQUEST_BUDGET} subrequests`);
+  return { sent, discovered, considered, pagesRead, spent };
+}
+
+function hostOf(url) {
+  try { return new URL(url).hostname; } catch { return undefined; }
+}
+
+function recordSend(db, source, target, endpoint, status, at) {
+  return db.prepare(
+    `INSERT INTO ${TABLE} (source, target, endpoint, status, last_sent_at) VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(source, target) DO UPDATE SET endpoint = excluded.endpoint, status = excluded.status, last_sent_at = excluded.last_sent_at`
+  ).bind(source, target, endpoint, status, at).run();
 }
 
 // Every page that accepts mentions also SENDS them: if a page is public enough
@@ -147,16 +218,41 @@ export async function mentionablePages(env, origin) {
   return paths.map((p) => origin + p);
 }
 
-// Read one of my own pages. Goes over the network to the public origin rather
-// than through ASSETS, because the worker-rendered pages (writing posts) don't
-// exist as static files — what a reader sees is what should be credited.
-async function fetchOwnPage(url) {
+// Read one of my own pages, IN-PROCESS.
+//
+// This used to be a plain `fetch(url)` at the public origin, with a comment
+// saying it went over the network on purpose because the worker-rendered pages
+// (writing posts) do not exist as static files. The reasoning is right and the
+// mechanism is not available: a fetch to our own hostname from inside this worker
+// is blocked as recursion (error 1042), which perf-probe.js and lens's SELF_FETCH
+// each already document. It failed by RETURNING "" — the catch is right there —
+// so every page was skipped, every run wrote nothing, and the job reported the
+// same silence a working job reports.
+//
+// Measured 2026-08-28, weeks after the feature shipped: `webmentions_sent` held
+// zero rows, `webmentions` held zero rows, and /around on the same daily tick had
+// run that morning. The whole outbound half had never fetched one page.
+//
+// SELF_FETCH dispatches through route() and is what a reader would have got,
+// worker enhancement included; index.js sets IDENTITY_BODY on it so the
+// precompressed page tier arrives readable rather than as raw brotli. ASSETS is
+// the fallback for a caller that has no dispatcher (dev, tests): it returns the
+// pre-enhancement static bytes, which is worse but is still the page's own links.
+// There is deliberately NO plain-fetch arm, because that arm is the bug.
+async function fetchOwnPage(url, env) {
+  const req = new Request(url, {
+    headers: { "user-agent": "AadharshBot/1.0 (+https://aadhar.sh/bot)", accept: "text/html" },
+    signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
+  });
+  const read = env?.SELF_FETCH
+    ? (r) => env.SELF_FETCH(r)
+    : env?.ASSETS
+      ? (r) => env.ASSETS.fetch(r)
+      : null;
+  if (!read) { console.warn("webmention-send: no SELF_FETCH or ASSETS; cannot read own pages"); return ""; }
   try {
-    const res = await fetch(url, {
-      headers: { "user-agent": "AadharshBot/1.0 (+https://aadhar.sh/bot)", accept: "text/html" },
-      signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
-    });
-    if (!res.ok) return "";
+    const res = await read(req);
+    if (!res || !res.ok) return "";
     const body = await readResponseCapped(res, PAGE_BYTE_CAP);
     return body?.text || "";
   } catch { return ""; }

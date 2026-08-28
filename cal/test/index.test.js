@@ -286,6 +286,88 @@ describe("book → approve / decline lifecycle", () => {
     expect(mailCalls[0].body.attachments[0].filename).toBe("coffee.ics");
   });
 
+  // ── /location ────────────────────────────────────────────────────────
+  //
+  // The venue is a SECOND axis from the status, and these pin both directions
+  // of that: set it before approval and it rides the invite silently, set it
+  // after and it rewrites the entry the guest already holds.
+  // atob alone hands back latin-1 bytes, so an accented venue ("Devoción")
+  // reads as mojibake and an assertion about it fails on the TEST rather than
+  // on the code. email.test.js keeps the same helper for the same reason.
+  const icsOf = (call) => new TextDecoder().decode(
+    Uint8Array.from(atob(call.body.attachments[0].content), (c) => c.charCodeAt(0)));
+  const locSig = (id) => sign(`${id}|location`, SECRET);
+  const postLoc = async (id, sig, location) => dispatch("/location", {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ t: id, sig, location }).toString(),
+  });
+
+  it("a location set BEFORE approval mails nothing and rides out on the invite", async () => {
+    const slot = await firstSlot();
+    await postBook({ name: "Fin", email: "fin@x.dev", topic: "hi", start: slot.start });
+    const id = lastBookingId();
+    mailCalls.length = 0;
+
+    const res = await postLoc(id, await locSig(id), "Devoción, 25 E 20th St");
+    expect(res.status).toBe(200);
+    expect(mailCalls).toHaveLength(0);           // nothing to update yet
+
+    await dispatch(`/approve?t=${id}&sig=${await sign(`${id}|approve`, SECRET)}`);
+    const ics = icsOf(mailCalls.at(-1));
+    expect(ics).toContain("LOCATION:Devoción\\, 25 E 20th St");
+    expect(ics).toContain("SEQUENCE:0");          // first invite, never a bump
+  });
+
+  it("a location set AFTER approval sends an in-place update at a higher SEQUENCE", async () => {
+    const slot = await firstSlot();
+    await postBook({ name: "Gus", email: "gus@x.dev", topic: "hi", start: slot.start });
+    const id = lastBookingId();
+    await dispatch(`/approve?t=${id}&sig=${await sign(`${id}|approve`, SECRET)}`);
+    const invite = icsOf(mailCalls.at(-1));
+    mailCalls.length = 0;
+
+    const res = await postLoc(id, await locSig(id), "Sey Coffee");
+    expect(res.status).toBe(200);
+    expect(mailCalls).toHaveLength(1);
+    const { body } = mailCalls[0];
+    expect(body.to).toEqual(["gus@x.dev"]);
+    expect(body.subject).toContain("updated:");
+    const update = icsOf(mailCalls[0]);
+    // same UID as the invite, so a client rewrites rather than adds …
+    const uid = (t) => t.match(/UID:(.+)/)[1];
+    expect(uid(update)).toBe(uid(invite));
+    // … and a higher SEQUENCE, which is what makes it apply at all.
+    expect(update).toContain("SEQUENCE:1");
+    expect(update).toContain("LOCATION:Sey Coffee");
+  });
+
+  it("refuses a forged signature, a declined booking, and an empty place", async () => {
+    const slot = await firstSlot();
+    await postBook({ name: "Hana", email: "hana@x.dev", topic: "hi", start: slot.start });
+    const id = lastBookingId();
+
+    expect((await postLoc(id, "forged", "anywhere")).status).toBe(401);
+    expect((await postLoc(id, await locSig(id), "   ")).status).toBe(400);
+
+    await dispatch(`/decline?t=${id}&sig=${await sign(`${id}|decline`, SECRET)}`);
+    // a declined booking has no calendar entry to place, and the GET agrees
+    // with the POST so the form never renders on something it can't save.
+    expect((await postLoc(id, await locSig(id), "Sey Coffee")).status).toBe(409);
+    expect((await dispatch(`/location?t=${id}&sig=${await locSig(id)}`)).status).toBe(409);
+  });
+
+  it("carries the requester's NYC area into the approval mail and the invite", async () => {
+    const slot = await firstSlot();
+    await postBook({ name: "Iris", email: "iris@x.dev", topic: "hi",
+                     area: "Bushwick", start: slot.start });
+    const id = lastBookingId();
+    expect(mailCalls.at(-1).body.html).toContain("Bushwick");
+
+    await dispatch(`/approve?t=${id}&sig=${await sign(`${id}|approve`, SECRET)}`);
+    expect(icsOf(mailCalls.at(-1))).toContain("they're around: Bushwick");
+  });
+
   it("declining frees the slot again and sends a decline note (no invite)", async () => {
     const slot = await firstSlot();
     await postBook({ name: "Eve", email: "eve@x.dev", topic: "hi", start: slot.start });

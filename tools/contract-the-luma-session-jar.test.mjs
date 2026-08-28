@@ -267,6 +267,32 @@ test("the cron enrich dispatch reports outcomes and swallows its own failures", 
   assert.deepEqual(weird, { attempted: 0, outcomes: {} }, "a body with no enriched array is 0 attempted, not a crash");
 });
 
+test("the contribute page overlaps its independent D1 reads", async () => {
+  const { handleSerendipity } = await import("../serendipity/serendipity.ts");
+  let active = 0;
+  let peak = 0;
+  const SERENDIPITY_DB = { prepare(sql) {
+    return { bind() {
+      return { async first() {
+        active++;
+        peak = Math.max(peak, active);
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        active--;
+        return sql.includes("COUNT(*) AS n FROM user_cookies") ? { n: 2 } : null;
+      } };
+    } };
+  } };
+
+  const response = await handleSerendipity(
+    new Request("https://aadhar.sh/serendipity/contribute"),
+    { SERENDIPITY_DB },
+    { waitUntil() {} },
+  );
+  assert.equal(response.status, 200);
+  assert.match(await response.text(), /2 active contributors/);
+  assert.equal(peak, 2, "the pool count and current-user lookup should share one D1 latency window");
+});
+
 test("serendipity hides collapsed description chrome and uses the Luna scrollbar", async () => {
   const serendipity = await readFile(new URL("serendipity/serendipity.ts", ROOT), "utf8");
   const luna = await readFile(new URL("src/styles/luna.css", ROOT), "utf8");

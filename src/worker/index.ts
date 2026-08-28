@@ -30,6 +30,7 @@ import { handleSiteMcp } from "./mcp.ts";
 import { withSecurityHeaders } from "./lib/security.ts";
 import { SHELL_PRELOAD_LINK } from "./lib/shell-assets.ts";
 import { cronJob } from "./lib/cron.ts";
+import { isCallable } from "./lib/parse.ts";
 import { installTracing, span } from "./lib/trace.ts";
 import { installTracing as installCalTracing } from "../../cal/src/trace.ts";
 import { getThumbHashes, handleImagesManifest, handlePhotoQuery, handlePhotos, servePhotoFromR2 } from "./photos.ts";
@@ -67,6 +68,9 @@ export { Counter } from "./counter.ts";
 // booking replaces the old weekly cron sweep; its class_name must resolve on
 // this entry so the BOOKING_WORKFLOW binding can find it (see cal/src/workflow.ts).
 export { BookingWorkflow } from "../../cal/src/workflow.ts";
+// One instance per census roster host; see census-workflow.ts for why the class
+// sits in its own module and why the unit is an instance rather than a step.
+export { CensusWorkflow } from "./census-workflow.ts";
 
 // Workers Cache only fronts responses whose route contract is already public
 // and reusable. Keep the default export as an uncached gateway: it handles
@@ -116,6 +120,18 @@ export { BookingWorkflow } from "../../cal/src/workflow.ts";
 // be imported under plain node (see gotcha 16), and so nothing in the 78-test suite
 // could reach it. The bug shipped through a green CI.
 const WORKERS_CACHEABLE_PATHS = new Set("/ /favicon.ico /auth.md /.well-known/api-catalog /.well-known/agent-card.json /.well-known/oauth-protected-resource /.well-known/oauth-authorization-server /reading /updates /updates.json /restore /lens /ledger /writing /bot /around /around/json /around/changes.json /photos /rn/tracks /rn/tracks.html /images/manifest.json /images/metadata.json /coffee /coffee/availability.json /run /search /photos/query.json".split(" "));
+
+// The self-dispatcher itself, factored out because the CRON needs it too and a
+// second copy is how the two drift. `scheduled()` has no request to build one
+// from, and webmention-send's outbound half reads this site's own pages: a plain
+// fetch() there is the error-1042 recursion perf-probe.js already documents.
+function withSelfFetch(env: Env, ctx: ExecutionContext) {
+  return {
+    ...env,
+    SELF_FETCH: async (req) =>
+      withSecurityHeaders(await route(req, { ...env, SELF_FETCH: null, IDENTITY_BODY: true }, ctx)),
+  };
+}
 
 async function serveWorkerRequest(request: SiteRequest, env: Env, ctx: ExecutionContext) {
   const url = new URL(request.url);
@@ -174,11 +190,7 @@ async function serveWorkerRequest(request: SiteRequest, env: Env, ctx: Execution
   // to a constant, so branching on it is dead code). A flag on the child env is
   // also the safer seam, because env is not caller-controllable and no external
   // request can ask production to stop serving its precompressed bodies.
-  const selfEnv = {
-    ...env,
-    SELF_FETCH: async (req) =>
-      withSecurityHeaders(await route(req, { ...env, SELF_FETCH: null, IDENTITY_BODY: true }, ctx)),
-  };
+  const selfEnv = withSelfFetch(env, ctx);
 
   // Workers Logs: one structured line per worker-owned request (path, method,
   // status, ms, version, country, bot), filterable in the dashboard. Edge-direct
@@ -270,7 +282,7 @@ export default {
     };
     // Dispatch via cronJob() (lib/cron.js): minute+hour signatures, immune to
     // Cloudflare's cron-expression normalization ("* * 1" can come back
-    // "* * MON", and the old exact match sent three straight Monday censuses
+    // "* * MON", and the old exact match sent three straight weekly censuses
     // into the else-branch). Unknown expressions get their own traced event
     // instead of silently running somebody else's job.
     const job = cronJob(event.cron);
@@ -283,7 +295,14 @@ export default {
       // ordered second for the same reason.
       await cron("cron.rn_enrich", () => cronEnrichTracks(env, ctx)).catch(() => {});
     } else if (job === "census") {
-      await cron("cron.census", () => cronCensus(env));   // Mondays 08:17 UTC — the longitudinal census, full roster in one awaited pass
+      // SUNDAYS 08:17 UTC. Cloudflare numbers weekdays Quartz-style, 1 = Sunday
+      // through 7 = Saturday, where most cron systems use 0 = Sunday, so the `1`
+      // in "17 8 * * 1" schedules Sunday. Nine comments across three files read
+      // Monday for six weeks while production fired on Sunday, and nothing could
+      // catch it because cronJob() matches minute+hour and is right either way.
+      // The pairing is pinned in contract-the-perf-probe now. Prefer the
+      // three-letter form in anything new.
+      await cron("cron.census", () => cronCensus(env));   // the longitudinal census, full roster in one awaited pass
     } else if (job === "daily_outbound") {
       // 05:41 UTC daily — the two jobs that probe somebody else's server.
       // Sequential, not Promise.all: both fetch third-party hosts and running
@@ -296,7 +315,13 @@ export default {
       // Both are caught so a failure in one cannot skip the other. span() does
       // not swallow, so enterSpan has already recorded the exception by the time
       // the catch runs; what is dropped here is only the rethrow.
-      await cron("cron.webmention_send", () => cronSendWebmentions(env)).catch(() => {});
+      // withSelfFetch, not the bare env: this job reads this site's OWN pages, and
+      // a plain fetch() to our own hostname from inside the worker is blocked as
+      // recursion (error 1042 — perf-probe.js documents the same limit). It failed
+      // by returning "", so every page was skipped and the run wrote nothing at
+      // all. Measured 2026-08-28: both webmention tables empty since the feature
+      // shipped, while /around on this same tick had run that morning.
+      await cron("cron.webmention_send", () => cronSendWebmentions(withSelfFetch(env, ctx))).catch(() => {});
       await cron("cron.around", () => cronAround(env)).catch(() => {});
     } else if (job === "serendipity") {
       // 00/06/12/18:23 UTC — re-sync every enabled Luma feed into the
@@ -628,11 +653,63 @@ function dispatchTraced(template: string, kind: string, handle: RouteHandler, re
   return span(
     `route ${template}`,
     async (s) => {
-      const response = await handle(request, env, ctx, url);
-      // status lands on the span rather than only in the log line, so a trace
-      // can be read end to end without cross-referencing Workers Logs.
-      s.setAttribute("http.response.status_code", response.status);
-      return response;
+      // DID THE VISITOR HANG UP WHILE WE WERE STILL WORKING? `route.aborted`
+      // answers that, and it is what wrangler.jsonc's `enable_request_signal`
+      // was taken for: nothing on this origin can currently count an abandoned
+      // request. /lens is the surface that wants the number and needs no
+      // attribute of its own, since /lens is an exact ROUTES entry: its dispatch
+      // lands here and the rate is a group-by on route.template. A second
+      // spelling of one fact is what lib/span-vocabulary.ts exists to prevent.
+      //
+      // THE TYPE SAYS `signal: AbortSignal` AND THAT IS A GUARANTEE ABOUT ONE
+      // RUNTIME, which is why this widens rather than trusting workers-types.
+      // The contract suite imports this module under bun, outside workerd, and a
+      // future runtime may rename the property. `isCallable` is the same guard
+      // lib/trace.ts puts on its injected tracer, for the same reason:
+      // instrumentation must never be why a request fails.
+      const signal: AbortSignal | undefined = request.signal;
+      // unbound-method guards against `const f = obj.m; f()`, and `isCallable`
+      // only reads `typeof value === "function"` and never calls what it is
+      // handed. lib/trace.ts writes the same probe and escapes the rule only
+      // because its parameter is untyped, which is luck rather than a pattern.
+      // oxlint-disable-next-line typescript/unbound-method
+      const listening = isCallable(signal?.addEventListener);
+      let hungUp = false;
+      const onAbort = () => { hungUp = true; };
+      // `once` so one signal cannot double-fire, and the removal below so the
+      // listener cannot outlive the dispatch that registered it. A request
+      // reaches here exactly once anyway (route() returns on its first match,
+      // and a /lens self-scan builds a NEW Request), so this makes that true by
+      // construction rather than by reading the caller.
+      if (listening) signal?.addEventListener("abort", onAbort, { once: true });
+      try {
+        const response = await handle(request, env, ctx, url);
+        // status lands on the span rather than only in the log line, so a trace
+        // can be read end to end without cross-referencing Workers Logs.
+        s.setAttribute("http.response.status_code", response.status);
+        // Recorded as a real boolean and SKIPPED entirely when there is no
+        // signal to read, which is the attribute discipline working in both
+        // directions: absent means the instrument is not there, false means it
+        // is there and the visitor stayed. Emitting only the true case would
+        // make a flag that silently stopped working read as a site nobody ever
+        // abandons, which is the failure shape gotcha 36 already cost twice.
+        //
+        // `signal.aborted` is read beside the listener rather than instead of
+        // it, because a signal already aborted on arrival never fires an abort
+        // event and the listener alone would miss it. What neither catches is a
+        // hang-up AFTER the handler settles, since the span ends with this
+        // callback. That is out of scope on purpose: the question is wasted work.
+        //
+        // EXPECT FALSE EVERYWHERE LOCALLY. The in-process harness never delivers
+        // a hang-up to a Worker at all, measured across four flag settings on
+        // 2026-08-28 (the argument is at compatibility_flags in wrangler.jsonc),
+        // so a green routes:check says this line does not throw and says nothing
+        // about the number. Production is the only place it can answer.
+        if (listening) s.setAttribute("route.aborted", hungUp || signal?.aborted === true);
+        return response;
+      } finally {
+        if (listening) signal?.removeEventListener("abort", onAbort);
+      }
     },
     {
       "http.request.method": request.method,

@@ -232,12 +232,25 @@ while IFS= read -r stem; do
   #    already emits clean JPGs, but sips can leave a grayscale ICC on B&W frames,
   #    so strip the JPG too. assumes sRGB display (the AVIF primary has no profile
   #    either, so this keeps the two formats consistent).
+  #
+  #    All three avifenc calls below pass --speed 2, up from 4 on 2026-08-28.
+  #    The measurement and the speed-0 rejection live once, at avif_encode() in
+  #    add-photos.sh; the short version is -1.65% bytes across the three tiers
+  #    AND +0.162 mean ssimulacra2, for +0.21 s per photo.
+  #
+  #    THIS SCRIPT IS WHERE THE MIXED LIBRARY GETS COLLECTED. The committed
+  #    tiles are speed 4 and are deliberately not being re-encoded for the flag
+  #    alone: 118.6 KiB over 495 files against 495 re-minted /i/ URLs, 495
+  #    fingerprint rows, hashes.json, the 12 literal /i/ refs in
+  #    src/pages/garage/tooltips.html, and a p-dict roll. A full run here for
+  #    some OTHER reason picks the 118.6 KiB up for free, and it re-mints every
+  #    URL either way, so the flag adds no cost to that run.
   space=$(sips -g space "$sqjpg" 2>/dev/null | awk '/space:/{print $2}'); [ "$space" = "Gray" ] && yuv=400 || yuv=420
   if want sq; then
   if ! "$ZENC" "$sqjpg" "$jpg" -q "$ZENC_Q" >/dev/null 2>&1; then FAIL=$((FAIL+1)); printf "✗"; continue; fi
   exif-sooc -all= -overwrite_original "$jpg" >/dev/null 2>&1 || true
   if [ "$AVIF_KIND" != "sips" ]; then
-    "$AVIF_ENCODER" -q 63 -d 10 --ignore-icc --ignore-exif --ignore-xmp --speed 4 --jobs 4 --yuv "$yuv" "$sqjpg" "$avif" >/dev/null 2>&1 || { FAIL=$((FAIL+1)); printf "✗"; continue; }
+    "$AVIF_ENCODER" -q 63 -d 10 --ignore-icc --ignore-exif --ignore-xmp --speed 2 --jobs 4 --yuv "$yuv" "$sqjpg" "$avif" >/dev/null 2>&1 || { FAIL=$((FAIL+1)); printf "✗"; continue; }
   else
     sips -s format avif --setProperty formatOptions 60 "$sqjpg" --out "$avif" >/dev/null 2>&1 || { FAIL=$((FAIL+1)); printf "✗"; continue; }
   fi
@@ -245,7 +258,7 @@ while IFS= read -r stem; do
   # 5. mobile square: from the same full-resolution frame as the 600 tier
   if want sm; then
     if [ "$AVIF_KIND" != "sips" ]; then
-      "$AVIF_ENCODER" -q 63 -d 10 --ignore-icc --ignore-exif --ignore-xmp --speed 4 --jobs 4 --yuv "$yuv" "$smtmp" "$smavif" >/dev/null 2>&1 || printf "~"
+      "$AVIF_ENCODER" -q 63 -d 10 --ignore-icc --ignore-exif --ignore-xmp --speed 2 --jobs 4 --yuv "$yuv" "$smtmp" "$smavif" >/dev/null 2>&1 || printf "~"
     else
       sips -s format avif --setProperty formatOptions 60 "$smtmp" --out "$smavif" >/dev/null 2>&1 || printf "~"
     fi
@@ -256,7 +269,7 @@ while IFS= read -r stem; do
   #    ingest made the claim true.)
   if want xs; then
     if [ "$AVIF_KIND" != "sips" ]; then
-      "$AVIF_ENCODER" -q 63 -d 10 --ignore-icc --ignore-exif --ignore-xmp --speed 4 --jobs 4 --yuv "$yuv" "$xstmp" "$xsavif" >/dev/null 2>&1 || printf "~"
+      "$AVIF_ENCODER" -q 63 -d 10 --ignore-icc --ignore-exif --ignore-xmp --speed 2 --jobs 4 --yuv "$yuv" "$xstmp" "$xsavif" >/dev/null 2>&1 || printf "~"
     else
       sips -s format avif --setProperty formatOptions 60 "$xstmp" --out "$xsavif" >/dev/null 2>&1 || printf "~"
     fi

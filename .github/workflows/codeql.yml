@@ -36,7 +36,25 @@ permissions:
   actions: read
 
 concurrency:
-  group: codeql-${{ github.event.pull_request.number || github.ref }}
+  # Keyed by PR for a pull_request, and by EVENT PLUS SHA for everything else.
+  # `github.event.pull_request.number` is null on both a push to main and the
+  # Wednesday schedule, so `github.ref` put the two into one
+  # `codeql-refs/heads/main` group with cancellation on. Any merge landing in
+  # the schedule's window killed the weekly scan, and the next one is seven days
+  # out. That scan is the only thing that re-reads UNCHANGED code against
+  # updated queries, which is how a newly published rule finds an old bug; a
+  # pull_request scan only ever sees the diff.
+  #
+  # `github.sha` on its own leaves the collision open, because a scheduled run
+  # and a push can point at the same head commit. `github.event_name` is what
+  # separates them. Per-commit isolation matters for pushes here too: both
+  # analysis jobs are alert sources, and a cancelled analysis files nothing.
+  #
+  # Measured 2026-08-28: 10 of the last 23 push runs were cancelled, and the
+  # 2026-08-26 scheduled run finished 4m09s before the next merge fired. That
+  # run started at 19:24 UTC against a cron of 17:28, so the window it has to
+  # survive is not predictable from the schedule.
+  group: codeql-${{ github.event.pull_request.number || format('{0}-{1}', github.event_name, github.sha) }}
   cancel-in-progress: true
 
 jobs:

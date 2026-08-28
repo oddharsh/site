@@ -762,6 +762,33 @@ worktrees may edit freely, but a worktree is not a release surface.
   `deleted_classes` silently. Run that control before trusting either form,
   because the docs describe the newest wrangler and this repo pins an exact
   older one.
+
+  **A WORKFLOW IS NOT A DURABLE OBJECT ON THIS AXIS, measured 2026-08-28, and
+  the entry above is exactly why somebody would assume otherwise.** Workflows
+  are built on Durable Objects, the DO note is emphatic that a lifecycle change
+  cannot ship through `versions upload`, and the obvious inference is that a new
+  Workflow class inherits that. It does not. Adding `CensusWorkflow` needed NO
+  `[[migrations]]` entry, and a branch build uploaded it through the ordinary
+  non-production deploy command:
+
+  ```
+  version b42ff316, alias claude-census-workflow-per-host, workers/triggered_by
+  version_upload
+    env.BOOKING_WORKFLOW (BookingWorkflow)   Workflow
+    env.CENSUS_WORKFLOW  (CensusWorkflow)    Workflow
+  ```
+
+  So a new Workflow class ships through the normal merge and ramp, and reaching
+  for `deploy:direct` costs a needless straight-to-100% release. `BookingWorkflow`
+  had been the only precedent and it proved nothing on its own, since nobody
+  recorded how it first shipped.
+
+  What makes this checkable at all rather than a guess is that **both** Workers
+  Builds commands are `versions upload` (`config/infra.json`, `release`), so a
+  branch build exercises the same API call a release does against the real
+  account. That is the cheapest place to answer any "will the deploy accept
+  this" question: push the branch and read `wrangler versions view` on the alias,
+  which the dry run structurally cannot tell you.
 - **A fix for a bug that `infra:check`'s edge tier can see will DEADLOCK that
   promotion, and the merge is where it bites.** Those checks read production over
   the wire, which is the whole point of them (see the `app-owns-security-headers`
@@ -1011,8 +1038,8 @@ SOOC original (in /Users/aadharsh/Downloads/to post (from ssd)/)
    |      gotcha 3); --transfer names the SOURCE curve, g22 for the Monochrom.
    |   3. zenc -q 84 (zenjpeg hybrid trellis + progressive scan search; ~4%
    |      under the retired cjpegli at equal quality, q84 ≈ old cjpegli q82)
-   |   4. avifenc -q 63 -d 10 (10-bit AVIF, ~6% smaller at equal quality than
-   |      8-bit; sips formatOptions 60 fallback) — primary
+   |   4. avifenc -q 63 -d 10 --speed 2 (10-bit AVIF, ~6% smaller at equal
+   |      quality than 8-bit; sips formatOptions 60 fallback) — primary
    |
    v
 public/images/<stem>.{avif,jpg}  +  R2 aadhar-photos/<filename>
@@ -1039,6 +1066,36 @@ public/images/<stem>.{avif,jpg}  +  R2 aadhar-photos/<filename>
    |   instead of waiting for a deploy. check-photo-pipeline.mjs then
    |   FAILS on any uncaptioned stem, same as a missing pixel tier.
 ```
+
+**avifenc moved to `--speed 2` on 2026-08-28, and THE LIBRARY IS MIXED because
+of it.** Measured over 6 stems covering both yuv paths through the real ingest
+geometry, shipping flags verbatim and varying only `--speed`: the 600 tier goes
+153,138 to 150,948 bytes (-1.43%), all three tiers go 262,158 to 257,836
+(-1.65%), and mean ssimulacra2 on the 600 tier RISES 79.439 to 79.601. So it
+wins on both axes for +0.21 s per photo serial (0.515 to 1.078), which is an
+incremental add of 5 going 0.7 s to 1.7 s. **`--speed 0` is rejected on its own
+numbers**: +0.09 ssimulacra2 over speed 2 for 3.6x the time, and LARGER files
+than speed 2 on 2 of the 6.
+
+Every tile committed before that date is speed 4 and stays speed 4. Collecting
+the difference is worth **118.6 KiB spread over 495 immutable-1y AVIF files**,
+about 245 bytes per tile, of which a homepage visit fetches 12. It costs 495
+re-minted `/i/` URLs, 495 rewritten rows in `fingerprints.json`, the `a`/`s`/`x`
+keys of all 165 stems in `hashes.json`, a hand-edit to
+`src/pages/garage/tooltips.html` (12 literal `/i/` refs across 3 stems), and a
+p-dict roll for that page. That is the trade that has broken this build twice
+(gotcha 41, gotcha 35).
+
+**Two speeds cost nothing operationally**, because a `/i/` URL names exact bytes
+PER FILE and nothing downstream reads encoder settings. `config/tools.json`
+already makes this argument about its own `recorded` versions: nothing recorded
+which encoder made the 632 files in `public/i`, and #394 re-encoded 316 of them
+on 2026-08-14, so claiming those versions produced them would be inventing
+provenance. The remaining 118.6 KiB gets collected whenever something forces a
+full re-encode anyway: a `LIBAVIF_TAG` bump, a geometry change, or another
+`reencode-thumbnails.sh` run. The two `/garage/encoding` study generators keep
+their own efforts (6 and 4) and deliberately do NOT track this, because their
+byte counts are what that page prints.
 
 **The ingest consolidated into `zenc square` on 2026-08-26, and the reason to
 read that entry is the INSTRUMENT rather than the pixels.** A note in
@@ -1105,11 +1162,17 @@ Two encoders + one transform tool, all built from source:
   drift, and a pin removes it instead. The brew `avifenc` stays declared there
   because the `/garage/encoding` grid scripts still use it.
 
-  **Adopting it re-mints nothing**, verified 2026-08-26: at the pipeline's
-  settings (`-q 63 -d 10 --speed 4 --yuv 420`) the vendored and brew binaries
-  produced BYTE-IDENTICAL output on a real 600px square, 26,594 bytes either
-  way. That is the bar, since one differing byte orphans every `a-dict`
-  snapshot naming the old hash.
+  **Adopting it re-mints nothing**, verified 2026-08-26: at `-q 63 -d 10
+  --speed 4 --yuv 420` the vendored and brew binaries produced BYTE-IDENTICAL
+  output on a real 600px square, 26,594 bytes either way. That is the bar, since
+  one differing byte orphans every `a-dict` snapshot naming the old hash.
+
+  Those were the shipping settings on the day; the pipeline passes `--speed 2`
+  since 2026-08-28 and the pair is UNMEASURED at that effort. Both are still
+  libavif 1.4.2 over aom 3.14.1, so identity is likely, and likely is not
+  evidence. It costs nothing until somebody re-encodes, because a new photo
+  mints a new URL under either binary, and a full re-encode is exactly where a
+  difference would rewrite 495 committed URLs. Re-measure there.
 
   What it adds is **`--sharpyuv`**, which brew's build cannot do at all: it is
   compiled without libsharpyuv, and passing the flag exits 1 with "Conversion

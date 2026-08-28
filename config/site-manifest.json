@@ -1065,7 +1065,7 @@
         "gallery": false,
         "agents": true,
         "searchIndex": true,
-        "webmention": false
+        "webmention": true
       }
     },
     {

@@ -31,6 +31,35 @@ function wireEvents(specs) {
   return out;
 }
 
+test("the wire lens overlaps independent CDP domain enables", async () => {
+  const { enableWireDomains } = await import("../src/worker/lens-wire.ts");
+  const calls = [];
+  let active = 0, peak = 0;
+  const send = async (method) => {
+    calls.push(method);
+    active++;
+    peak = Math.max(peak, active);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    active--;
+    return {};
+  };
+  assert.equal(await enableWireDomains(send), true);
+  assert.equal(peak, 2, "each independent domain pair should share one CDP latency window");
+  assert.deepEqual(calls, ["Network.enable", "Page.enable", "Runtime.enable", "Log.enable"]);
+
+  const optional = [];
+  assert.equal(await enableWireDomains(async (method) => {
+    optional.push(method);
+    if (method === "Runtime.enable") throw new Error("unsupported");
+    return {};
+  }), false, "an unsupported execution domain should leave execution evidence neutral");
+  assert.ok(optional.includes("Log.enable"), "both optional domains should still be attempted");
+  await assert.rejects(enableWireDomains(async (method) => {
+    if (method === "Network.enable") throw new Error("required");
+    return {};
+  }), /required/, "a required Network/Page failure must still reject the run");
+});
+
 test("the wire lens counts bytes on the wire, not the header preamble", async () => {
   const { summariseWire } = await import("../src/worker/lens-wire.ts");
   // responseReceived carries encodedDataLength for the HEADERS only. Reading it
