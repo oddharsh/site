@@ -92,6 +92,42 @@ test("neither MCP server keeps a private copy of the protocol constants", async 
   }
 });
 
+test("Serendipity social reads overlap independent D1 queries", async () => {
+  const { handleMcp } = await import("../serendipity/serendipity.ts");
+  let active = 0;
+  let peak = 0;
+  const d = { prepare(sql) {
+    const run = async (kind, args) => {
+      active++;
+      peak = Math.max(peak, active);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      active--;
+      if (kind === "get" && sql.includes("WHERE a.name LIKE")) {
+        const alice = String(args[0]).includes("Alice");
+        return { id: alice ? 1 : 2, name: alice ? "Alice" : "Bob", times_seen: 1 };
+      }
+      if (kind === "get") return { n: 1 };
+      return [];
+    };
+    return { get: (...args) => run("get", args), all: (...args) => run("all", args) };
+  } };
+  const call = async (name, args) => {
+    peak = 0;
+    const response = await handleMcp(new Request("https://aadhar.sh/serendipity/mcp", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }),
+    }), {}, d);
+    assert.equal(response.status, 200);
+    return peak;
+  };
+
+  assert.equal(await call("shared_events", { a: "Alice", b: "Bob" }), 2,
+    "the two person resolutions should share one D1 latency window");
+  assert.equal(await call("co_attendees", { q: "Alice" }), 2,
+    "the co-attendee rows and total should share one D1 latency window");
+});
+
 test("both CSS checks go through the one parser, and it still tolerates the right family", async () => {
   // build.mjs decides what reaches a visitor; check-page-contracts.mjs is a
   // pre-build gate on the same stylesheets. They ran DIFFERENT engines until
