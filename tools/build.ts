@@ -29,6 +29,7 @@
 // root wrangler.jsonc is copied verbatim into .build/ and just works against the copy.
 
 import { createHash } from "node:crypto";
+import { availableParallelism } from "node:os";
 
 // One nonce per build for the dynamic imports below: the staged worker modules
 // are rewritten in place by later steps, so each import site needs a fresh URL.
@@ -48,6 +49,12 @@ import { zstdCompressDictionaryBatch } from "./lib/zstd-batch.ts";
 import { patchStaticShell, renderDesktopArtifacts, staticShellPages } from "../tools/photos/gen-desktop-partial.ts";
 
 const OUT = ".build";
+// Every q11 file below is independent, but node:zlib's callback API shares
+// libuv's four-thread default. Let clean builds use the same eight-core ceiling
+// as the zstd batch while preserving an explicit caller override and libuv's
+// four-thread floor on smaller CI hosts. This must run before the first async fs
+// or zlib operation, when libuv fixes the process-wide pool size.
+process.env.UV_THREADPOOL_SIZE ||= String(Math.max(4, Math.min(8, availableParallelism())));
 const brotliCompressAsync = promisify(brotliCompress);
 
 // q11 dominates clean builds, so use zlib's callback path to run independent
