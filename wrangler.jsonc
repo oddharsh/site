@@ -50,6 +50,24 @@
   // locations in Workers Logs without shipping to clients.
   "minify": true,
   "upload_source_maps": true,
+  // OFF, against wrangler's default. esbuild's keep-names injects a helper call
+  // per function and class so `fn.name` survives minification, and the pinned
+  // wrangler turns it ON for you: cli.js reads `keepNames: config.keep_names ??
+  // true` in the same options object as the `minify` above. Measured 2026-08-28
+  // over two `deploy --dry-run` runs, each reproduced exactly: 715.83 -> 698.63
+  // KiB upload, 244.60 -> 236.18 KiB gzip. That is 8.42 KiB of gzip (3.44%)
+  // across 717 helper call sites. Both runs go through node, since bun's zlib-ng
+  // gzips ~0.55% heavier (gotcha 38) and would corrupt the comparison.
+  //
+  // Nothing here reads a function or class NAME at runtime. Every `.name` in
+  // src/worker, cal/src and serendipity is a data field, except lens.ts's
+  // `e.name === "AbortError"`, which is an Error property keep-names never sets.
+  // The Counter DO and BookingWorkflow resolve by EXPORT BINDING NAME, which
+  // this leaves alone. Every local identifier moves between the two bundles
+  // (`xr` -> `wr`); the `export{...}` statement still names Counter,
+  // BookingWorkflow, CachedPages and default. Source maps keep their names[],
+  // so Workers Logs frames stay legible.
+  "keep_names": false,
   // Workers Cache sits in front of the public-response entrypoint below. The
   // default dispatcher stays uncached because it owns mutations, per-visitor
   // views, content-negotiated representations, and request logging; response
