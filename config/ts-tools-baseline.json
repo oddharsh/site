@@ -5,7 +5,7 @@
     "tools/check-agent.ts": 15,
     "tools/check-checkpoints.ts": 4,
     "tools/check-dictionary-support.ts": 25,
-    "tools/check-infra.ts": 28,
+    "tools/check-infra.ts": 27,
     "tools/check-kitesurf.ts": 4,
     "tools/check-wrangler.ts": 6,
     "tools/contract-cache-the-behavioral-revalidation-lint.test.mjs": 8,
@@ -54,5 +54,5 @@
     "tools/ua-survey.ts": 17,
     "tools/verify-routes.ts": 27
   },
-  "total": 507
+  "total": 506
 }
