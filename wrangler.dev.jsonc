@@ -48,6 +48,14 @@
   "account_id": "1c99acdb6141579023fb97d24261ea58",
   "main": "src/worker/index.ts",
   "compatibility_date": "2026-06-01",
+  // Another value that must MATCH rather than a seventh difference, and it is
+  // the one worth spelling out: a compatibility flag changes what the RUNTIME
+  // hands the Worker, so a divergence here makes local dev a different platform
+  // from the one that ships rather than merely a different route table.
+  // tools/build.ts diffs this array between the two configs for that reason.
+  // wrangler.jsonc carries the argument, including why the sibling
+  // `request_signal_passthrough` is absent and what local dev cannot measure.
+  "compatibility_flags": ["enable_request_signal"],
   "cache": { "enabled": false, "cross_version_cache": false },
   "exports": {
     "default": { "type": "worker", "cache": { "enabled": false } },

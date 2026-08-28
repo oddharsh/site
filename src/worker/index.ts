@@ -30,6 +30,7 @@ import { handleSiteMcp } from "./mcp.ts";
 import { withSecurityHeaders } from "./lib/security.ts";
 import { SHELL_PRELOAD_LINK } from "./lib/shell-assets.ts";
 import { cronJob } from "./lib/cron.ts";
+import { isCallable } from "./lib/parse.ts";
 import { installTracing, span } from "./lib/trace.ts";
 import { installTracing as installCalTracing } from "../../cal/src/trace.ts";
 import { getThumbHashes, handleImagesManifest, handlePhotoQuery, handlePhotos, servePhotoFromR2 } from "./photos.ts";
@@ -628,11 +629,63 @@ function dispatchTraced(template: string, kind: string, handle: RouteHandler, re
   return span(
     `route ${template}`,
     async (s) => {
-      const response = await handle(request, env, ctx, url);
-      // status lands on the span rather than only in the log line, so a trace
-      // can be read end to end without cross-referencing Workers Logs.
-      s.setAttribute("http.response.status_code", response.status);
-      return response;
+      // DID THE VISITOR HANG UP WHILE WE WERE STILL WORKING? `route.aborted`
+      // answers that, and it is what wrangler.jsonc's `enable_request_signal`
+      // was taken for: nothing on this origin can currently count an abandoned
+      // request. /lens is the surface that wants the number and needs no
+      // attribute of its own, since /lens is an exact ROUTES entry: its dispatch
+      // lands here and the rate is a group-by on route.template. A second
+      // spelling of one fact is what lib/span-vocabulary.ts exists to prevent.
+      //
+      // THE TYPE SAYS `signal: AbortSignal` AND THAT IS A GUARANTEE ABOUT ONE
+      // RUNTIME, which is why this widens rather than trusting workers-types.
+      // The contract suite imports this module under bun, outside workerd, and a
+      // future runtime may rename the property. `isCallable` is the same guard
+      // lib/trace.ts puts on its injected tracer, for the same reason:
+      // instrumentation must never be why a request fails.
+      const signal: AbortSignal | undefined = request.signal;
+      // unbound-method guards against `const f = obj.m; f()`, and `isCallable`
+      // only reads `typeof value === "function"` and never calls what it is
+      // handed. lib/trace.ts writes the same probe and escapes the rule only
+      // because its parameter is untyped, which is luck rather than a pattern.
+      // oxlint-disable-next-line typescript/unbound-method
+      const listening = isCallable(signal?.addEventListener);
+      let hungUp = false;
+      const onAbort = () => { hungUp = true; };
+      // `once` so one signal cannot double-fire, and the removal below so the
+      // listener cannot outlive the dispatch that registered it. A request
+      // reaches here exactly once anyway (route() returns on its first match,
+      // and a /lens self-scan builds a NEW Request), so this makes that true by
+      // construction rather than by reading the caller.
+      if (listening) signal?.addEventListener("abort", onAbort, { once: true });
+      try {
+        const response = await handle(request, env, ctx, url);
+        // status lands on the span rather than only in the log line, so a trace
+        // can be read end to end without cross-referencing Workers Logs.
+        s.setAttribute("http.response.status_code", response.status);
+        // Recorded as a real boolean and SKIPPED entirely when there is no
+        // signal to read, which is the attribute discipline working in both
+        // directions: absent means the instrument is not there, false means it
+        // is there and the visitor stayed. Emitting only the true case would
+        // make a flag that silently stopped working read as a site nobody ever
+        // abandons, which is the failure shape gotcha 36 already cost twice.
+        //
+        // `signal.aborted` is read beside the listener rather than instead of
+        // it, because a signal already aborted on arrival never fires an abort
+        // event and the listener alone would miss it. What neither catches is a
+        // hang-up AFTER the handler settles, since the span ends with this
+        // callback. That is out of scope on purpose: the question is wasted work.
+        //
+        // EXPECT FALSE EVERYWHERE LOCALLY. The in-process harness never delivers
+        // a hang-up to a Worker at all, measured across four flag settings on
+        // 2026-08-28 (the argument is at compatibility_flags in wrangler.jsonc),
+        // so a green routes:check says this line does not throw and says nothing
+        // about the number. Production is the only place it can answer.
+        if (listening) s.setAttribute("route.aborted", hungUp || signal?.aborted === true);
+        return response;
+      } finally {
+        if (listening) signal?.removeEventListener("abort", onAbort);
+      }
     },
     {
       "http.request.method": request.method,
