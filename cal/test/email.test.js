@@ -59,6 +59,20 @@ describe("sendApprovalRequest → Resend", () => {
     expect(res).toEqual({ id: "resend-msg-id" });
   });
 
+  // The searchability contract, and both halves are load-bearing. Gmail exposes
+  // List-Id as the `list:` operator, which is the one query that returns booking
+  // requests without also returning the DMARC aggregate reports that share
+  // coffee@aadhar.sh. The subject has to carry the WORD, because an emoji plus a
+  // name plus a date is three things none of which anyone searches for.
+  it("carries List-Id and a subject the word `coffee` can find", async () => {
+    await sendApprovalRequest(env, booking, "u1", "u2");
+    const { body } = calls[0];
+    expect(body.headers["List-Id"]).toBe("coffee bookings <coffee.aadhar.sh>");
+    expect(body.headers["X-Coffee-Booking"]).toBe("abc123def456");
+    expect(body.subject).toContain("coffee request");
+    expect(body.subject).toContain("Jordan Lee");
+  });
+
   it("escapes attacker-controlled name/topic (no HTML injection into the host's inbox)", async () => {
     await sendApprovalRequest(env, { ...booking, name: "<script>x</script>", topic: "a & b < c" }, "u1", "u2");
     const { body } = calls[0];
@@ -116,6 +130,18 @@ describe("sendDecline + error handling", () => {
     expect(body.to).toEqual(["jordan@example.com"]);
     expect(body.attachments).toBeUndefined();
     expect(body.subject).toContain("coffee with aadharsh");
+  });
+
+  // Guest-facing mail is header-clean ON PURPOSE: a List-Id would give Gmail a
+  // reason to read a 1:1 calendar invite as bulk, and the invite is the one
+  // message here that has to reach an inbox. The host finds these by sender.
+  it("keeps List-Id off the guest's copies", async () => {
+    await sendDecline(env, booking);
+    await sendInvite(env, booking);
+    for (const { body } of calls) {
+      expect(body.headers["List-Id"]).toBeUndefined();
+      expect(body.headers["X-Coffee-Booking"]).toBe("abc123def456");
+    }
   });
 
   it("throws when Resend returns a non-2xx (so callers/log see the failure)", async () => {
