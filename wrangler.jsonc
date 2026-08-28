@@ -333,7 +333,8 @@
   // re-exported from _worker.js/index.js). Replaced the weekly cron sweep. Must
   // match wrangler.dev.jsonc + cal/wrangler.test.toml.
   "workflows": [
-    { "name": "cal-booking-expiry", "binding": "BOOKING_WORKFLOW", "class_name": "BookingWorkflow" }
+    { "name": "cal-booking-expiry", "binding": "BOOKING_WORKFLOW", "class_name": "BookingWorkflow" },
+    { "name": "lens-census-host", "binding": "CENSUS_WORKFLOW", "class_name": "CensusWorkflow" }
   ],
   // Browser Run Quick Actions. The binding is authenticated by Workers, so
   // Lens no longer needs a Browser Run API token for snapshots.
