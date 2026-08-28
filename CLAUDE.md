@@ -762,6 +762,33 @@ worktrees may edit freely, but a worktree is not a release surface.
   `deleted_classes` silently. Run that control before trusting either form,
   because the docs describe the newest wrangler and this repo pins an exact
   older one.
+
+  **A WORKFLOW IS NOT A DURABLE OBJECT ON THIS AXIS, measured 2026-08-28, and
+  the entry above is exactly why somebody would assume otherwise.** Workflows
+  are built on Durable Objects, the DO note is emphatic that a lifecycle change
+  cannot ship through `versions upload`, and the obvious inference is that a new
+  Workflow class inherits that. It does not. Adding `CensusWorkflow` needed NO
+  `[[migrations]]` entry, and a branch build uploaded it through the ordinary
+  non-production deploy command:
+
+  ```
+  version b42ff316, alias claude-census-workflow-per-host, workers/triggered_by
+  version_upload
+    env.BOOKING_WORKFLOW (BookingWorkflow)   Workflow
+    env.CENSUS_WORKFLOW  (CensusWorkflow)    Workflow
+  ```
+
+  So a new Workflow class ships through the normal merge and ramp, and reaching
+  for `deploy:direct` costs a needless straight-to-100% release. `BookingWorkflow`
+  had been the only precedent and it proved nothing on its own, since nobody
+  recorded how it first shipped.
+
+  What makes this checkable at all rather than a guess is that **both** Workers
+  Builds commands are `versions upload` (`config/infra.json`, `release`), so a
+  branch build exercises the same API call a release does against the real
+  account. That is the cheapest place to answer any "will the deploy accept
+  this" question: push the branch and read `wrangler versions view` on the alias,
+  which the dry run structurally cannot tell you.
 - **A fix for a bug that `infra:check`'s edge tier can see will DEADLOCK that
   promotion, and the merge is where it bites.** Those checks read production over
   the wire, which is the whole point of them (see the `app-owns-security-headers`

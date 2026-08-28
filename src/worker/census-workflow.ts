@@ -21,6 +21,15 @@
 // cronCensusInner in census.ts; the short form is that Cloudflare's limits page
 // is ambiguous about whether a subrequest budget belongs to the instance or the
 // step, and an instance per host is correct either way.
+//
+// NO `[[migrations]]` ENTRY, and that is measured rather than copied from
+// BookingWorkflow. A Workflow is built on a Durable Object and the DO lifecycle
+// note in CLAUDE.md is emphatic that `versions upload` refuses a migration, so
+// the natural inference is that a new Workflow class needs a `deploy:direct`.
+// It does not: this class uploaded through the ordinary non-production deploy
+// command on its own PR branch, and `wrangler versions view` on that version
+// lists env.CENSUS_WORKFLOW (CensusWorkflow) beside the booking one. It ships
+// through the normal merge and ramp.
 
 import { WorkflowEntrypoint } from "cloudflare:workers";
 import { censusScanOne } from "./census.ts";
