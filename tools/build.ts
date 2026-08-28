@@ -185,6 +185,29 @@ async function checkInvariants() {
   // them noise sitting on top of the one check that blocks the deploy.
   const hard: string[] = [], warn: string[] = [];
 
+  // 0 (hard) — the authored roots merged into .build/public have no file-path
+  // collisions. Staging copies them concurrently below, so there is no longer
+  // a meaningful "last writer wins" order to hide a duplicate behind. A file
+  // belongs to exactly one authored root; fail before copying if that changes.
+  const stageRoots = ["public", "src/pages", "src/content", "src/client", "src/styles"];
+  const stageOwner = new Map<string, string>();
+  let stagedAuthored = 0;
+  const walkStage = async (root, dir = root, prefix = "") => {
+    for (const entry of await readdir(dir, { withFileTypes: true })) {
+      const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+      if (root === "public" && (rel === "images/meta" || rel.startsWith("images/meta/"))) continue;
+      if (entry.isDirectory()) {
+        await walkStage(root, `${dir}/${entry.name}`, rel);
+        continue;
+      }
+      stagedAuthored++;
+      const prior = stageOwner.get(rel);
+      if (prior) hard.push(`served path ${rel} is authored by both ${prior} and ${root}; parallel staging has no overwrite order`);
+      else stageOwner.set(rel, root);
+    }
+  };
+  for (const root of stageRoots) await walkStage(root);
+
   // 1 (hard) — every index.js dispatch key is covered by the wrangler
   // run_worker_first allowlist, or that route silently serves static. BOTH tables
   // are checked: the exact ROUTES map, and the ordered PREFIX table (whose labels
@@ -718,7 +741,7 @@ async function checkInvariants() {
 
   if (warn.length) console.warn("build: invariant WARNINGS (deploy continues):\n  - " + warn.join("\n  - "));
   if (hard.length) throw new Error("build: invariant tripwires FAILED, deploy blocked:\n  - " + hard.join("\n  - "));
-  console.log(`invariants ok: ${routeKeys.length + prefixProbes.length} routes mirrored (${prefixProbes.length} prefix), CSP style-src, blink-fix, generator, geometry, ${skillsChecked} skill digest${skillsChecked === 1 ? "" : "s"}, ${manifestChecked} surfaces registered, ${tasteScanned} files taste-scanned${tasteOk.length ? ` (${tasteOk.length} taste-ok: ${tasteOk.join("; ")})` : ""}, ${conflictScanned} files conflict-free${warn.length ? " (with warnings above)" : ""}`);
+  console.log(`invariants ok: ${stagedAuthored} staged paths collision-free, ${routeKeys.length + prefixProbes.length} routes mirrored (${prefixProbes.length} prefix), CSP style-src, blink-fix, generator, geometry, ${skillsChecked} skill digest${skillsChecked === 1 ? "" : "s"}, ${manifestChecked} surfaces registered, ${tasteScanned} files taste-scanned${tasteOk.length ? ` (${tasteOk.length} taste-ok: ${tasteOk.join("; ")})` : ""}, ${conflictScanned} files conflict-free${warn.length ? " (with warnings above)" : ""}`);
 }
 
 // ── the client edge, authored once and mirrored at deploy ────────────────────
@@ -836,17 +859,27 @@ await mkdir(OUT, { recursive: true });
 // src/client + src/styles supply the shell. src/dict/ is deliberately absent:
 // the committed dictionary snapshots are build INPUT (#455).
 const STAGE_SKIP = new Set(["public/images/meta"]);
-await cp("public", `${OUT}/public`, {
-  recursive: true,
-  filter: (source) => !STAGE_SKIP.has(source.split(sep).join("/")),
-});
-await cp("src/pages", `${OUT}/public`, { recursive: true });
+// The invariant above proves that the five served roots do not contend for a
+// destination file. Copy all independent source trees in one filesystem latency
+// window instead of serializing eight recursive walks.
+await Promise.all([
+  mkdir(`${OUT}/public`, { recursive: true }),
+  mkdir(`${OUT}/src`, { recursive: true }),
+  mkdir(`${OUT}/cal`, { recursive: true }),
+  mkdir(`${OUT}/serendipity`, { recursive: true }),
+]);
+await Promise.all([
+  cp("public", `${OUT}/public`, {
+    recursive: true,
+    filter: (source) => !STAGE_SKIP.has(source.split(sep).join("/")),
+  }),
+  cp("src/pages", `${OUT}/public`, { recursive: true }),
 // The Worker is a PROGRAM, not a document, so its source lives in src/worker
 // beside cal/ and serendipity/ rather than inside the tree of things a browser
 // can fetch. Its STAGED position is unchanged: wrangler.jsonc still points main
 // at .build/src/worker/index.ts, and every deploy path and content hash
 // downstream is therefore untouched by the move.
-await cp("src/worker", `${OUT}/src/worker`, { recursive: true });
+  cp("src/worker", `${OUT}/src/worker`, { recursive: true }),
 // The client islands and stylesheets author in src/ beside the Worker, and stage
 // back to the ROOT of the served tree because their public URLs are /nav.js and
 // /luna.css. Source layout and URL layout are different questions; only the first
@@ -857,13 +890,12 @@ await cp("src/worker", `${OUT}/src/worker`, { recursive: true });
 // paths, so /writing/<slug>.txt, /index.md and the rest answer exactly where they
 // did. Source layout and URL layout are different questions, and only the first
 // one moved.
-await cp("src/content", `${OUT}/public`, { recursive: true });
-await cp("src/client", `${OUT}/public`, { recursive: true });
-await cp("src/styles", `${OUT}/public`, { recursive: true });
-await mkdir(`${OUT}/cal`, { recursive: true });
-await cp("cal/src", `${OUT}/cal/src`, { recursive: true });
-await mkdir(`${OUT}/serendipity`, { recursive: true });
-await cp("serendipity/serendipity.ts", `${OUT}/serendipity/serendipity.ts`);
+  cp("src/content", `${OUT}/public`, { recursive: true }),
+  cp("src/client", `${OUT}/public`, { recursive: true }),
+  cp("src/styles", `${OUT}/public`, { recursive: true }),
+  cp("cal/src", `${OUT}/cal/src`, { recursive: true }),
+  cp("serendipity/serendipity.ts", `${OUT}/serendipity/serendipity.ts`),
+]);
 // 1a) /images/meta/<stem>.json, DERIVED rather than copied.
 //
 // These are the tooltip's per-photo self-heal: a stem missing from the shared
