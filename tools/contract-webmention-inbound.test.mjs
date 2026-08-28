@@ -135,21 +135,25 @@ test("every page that accepts a mention also advertises where to send it", async
     advertisedByHeaders.some((rule) =>
       rule.endsWith("/*") ? path.startsWith(rule.slice(0, -1)) : rule === path);
 
+  // The worker-rendered ones, asked through their REAL handler rather than the
+  // inner render, so an edge-cache wrapper that drops the header on its way out
+  // still fails. A path that is neither covered by _headers nor named here fails
+  // outright: a page can join WEBMENTION_PATHS with one manifest flag, and the
+  // whole point of this test is that the flag is not enough on its own.
+  const workerRendered = {
+    "/writing": () => handleWritingIndex(new Request("https://aadhar.sh/writing"), { ASSETS: staticAssets({}) }, context()),
+    "/inbox":   () => handleInbox(new Request("https://aadhar.sh/inbox"), { ASSETS: staticAssets({}) }, context()),
+  };
+
   for (const path of WEBMENTION_PATHS) {
     if (coveredByStatics(path)) continue;
-    // anything the statics don't cover is worker-rendered, so ask the worker.
-    // Going through the real handler (not the inner render) also catches an
-    // edge-cache wrapper that drops the header on its way out.
-    assert.equal(path, "/writing", `no advertisement path known for ${path}`);
+    const render = workerRendered[path];
+    assert.ok(render, `no advertisement path known for ${path}`);
     const priorCaches = globalThis.caches;
     testGlobals.caches = { default: { match: async () => undefined, put: async () => {} } };
     let res;
     try {
-      res = await handleWritingIndex(
-        new Request("https://aadhar.sh/writing"),
-        { ASSETS: staticAssets({}) },
-        context()
-      );
+      res = await render();
     } finally {
       if (priorCaches === undefined) delete globalThis.caches;
       else testGlobals.caches = priorCaches;
@@ -157,7 +161,7 @@ test("every page that accepts a mention also advertises where to send it", async
     assert.match(
       res.headers.get("link") || "",
       /rel="webmention"/,
-      "/writing accepts mentions, so it must say where to send them"
+      `${path} accepts mentions, so it must say where to send them`
     );
   }
 });
