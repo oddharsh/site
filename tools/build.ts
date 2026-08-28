@@ -1680,6 +1680,12 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     await writeFile(path, out);
     fileCount++;
   }
+  // A FLOOR, because every failure this pass has had was an absence. The marker
+  // scan matched nothing at all after the Worker moved from .js to .ts, and with
+  // no floor it printed "0 literals" and shipped unminified CSS on every
+  // Worker-rendered page for as long as nobody read the line. The extension list
+  // above is fixed; the next rename, or an edit to the sentinel, is not.
+  if (litCount < 7) throw new Error(`worker CSS: found only ${litCount} /*min*/ literals (expected 7+) — did the sentinel change, or did the walk stop reaching the staged Worker modules?`);
   console.log(`worker CSS: minified ${litCount} /*min*/ literals across ${fileCount} modules, ~${(saved / 1024).toFixed(1)}KB raw saved`);
 }
 
