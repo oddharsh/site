@@ -40,7 +40,21 @@ concurrency:
   # A dispatch deliberately does NOT share the PR's group. The whole reason this
   # trigger exists is to get past a poisoned group, so joining it would inherit
   # the problem it is here to route around.
-  group: ci-${{ github.event_name == 'workflow_dispatch' && format('manual-{0}', github.run_id) || github.event.pull_request.number || github.ref }}
+  #
+  # The last fallback is `github.sha`, never `github.ref`. A push to main has no
+  # `pull_request.number`, so `github.ref` put every merge into one group named
+  # `ci-refs/heads/main` and each one cancelled its predecessor. Measured
+  # 2026-08-28 over the last 40 main runs, all of them push: 11 cancelled, 27
+  # success, 1 failure, 1 still running. Five died inside 114 seconds on
+  # 2026-08-27. A pull_request still groups by PR number, so the runner-minute
+  # saving on a force-push to a branch is untouched.
+  #
+  # Nothing untested can promote: promote-production.yml gates on
+  # `conclusion == 'success'`, which a cancelled run never reaches. What was
+  # lost is the assertion itself, since for those 11 commits nobody ever said CI
+  # passed on main. `cancel-in-progress: false` was rejected here because it
+  # serializes a merge train behind this job's own 30-minute timeout.
+  group: ci-${{ github.event_name == 'workflow_dispatch' && format('manual-{0}', github.run_id) || github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
 
 jobs:

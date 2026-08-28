@@ -1184,7 +1184,8 @@ brew install cmake ninja                     # for the pinned avifenc below
 # the AVIF encoder the photo tiers actually use: libavif at a pinned tag, built
 # with aom + libsharpyuv + libyuv. First run clones and builds all four (~10 min,
 # needs network); after that it is a no-op. Byte-identical to brew's avifenc at
-# the pipeline's settings, so building it re-mints no /i/ URL.
+# q63 -d 10 --speed 4 --yuv 420 (measured 2026-08-26, and NOT re-measured since
+# the pipeline moved to --speed 2), so building it re-mints no /i/ URL.
 ./tools/photos/libavif/build.sh
 brew install uv && bun run photos:env               # Pillow, for gen-pixel-peeper.py only (brew's python3 is PEP 668; pip into it fails)
 # the JPEG encoder (zenc) builds itself on first pipeline run; needs rust (rustup.rs)

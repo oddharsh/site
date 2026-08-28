@@ -78,6 +78,15 @@ if [ "$srcw" -ge "$srch" ]; then axis=--width; else axis=--height; fi
 # ssimulacra2 at the same bytes. `-d 10` is the 10-bit encode every other
 # avifenc call site here passes, worth another 0.5-1.4% off.
 #
+# `--speed 2` tracks the photo pipeline, which moved off 4 on 2026-08-28 for
+# -1.65% bytes AND +0.162 mean ssimulacra2 (the measurement lives at
+# avif_encode() in add-photos.sh). It was taken on the 600/400/200 photo tiers
+# rather than on this 480px one, and this call site inherits it because it is
+# the same encoder at the same -q 63 -d 10 on a tier of the same order. The
+# cost here is invisible either way: one image per invocation, sub-second.
+# public/cars is not content-addressed, so this re-mints no URL; the six
+# committed reference pairs stay speed 4 until somebody re-adds one.
+#
 # grayscale shots get yuv400; everything else yuv420. The probe reads the
 # SOURCE rather than the intermediate, because the source is where the colour
 # space is a fact about the photograph. The two agree here (measured 2026-08-27:
@@ -87,7 +96,7 @@ if [ "$srcw" -ge "$srch" ]; then axis=--width; else axis=--height; fi
 # to 4:2:0.
 space=$("$SIPS" -g space "$input" 2>/dev/null | /usr/bin/awk '/space:/{print $2}') || space=""
 if [ "$space" = "Gray" ]; then yuv=400; else yuv=420; fi
-"$AVIFENC" -q 63 -d 10 --speed 4 --jobs 4 --ignore-icc --ignore-exif --ignore-xmp \
+"$AVIFENC" -q 63 -d 10 --speed 2 --jobs 4 --ignore-icc --ignore-exif --ignore-xmp \
   --yuv "$yuv" "$TMP/x.png" "$DEST/$STEM.avif" >/dev/null 2>&1
 
 aw=$("$SIPS" -g pixelWidth "$DEST/$STEM.jpg" | /usr/bin/awk '/pixelWidth/{print $2}')
