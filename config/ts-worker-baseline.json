@@ -24,7 +24,6 @@
     "src/worker/photos.ts": 14,
     "src/worker/radar.ts": 11,
     "src/worker/reading.ts": 7,
-    "src/worker/representation.ts": 2,
     "src/worker/rn.ts": 20,
     "src/worker/run.ts": 1,
     "src/worker/search.ts": 13,

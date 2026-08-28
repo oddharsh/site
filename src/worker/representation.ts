@@ -3,7 +3,7 @@
 // only long enough to derive a title/word count and are never persisted.
 import { lensFetch, validateLensTarget } from "./lens.ts";
 import { extractTitle } from "./lib/http.ts";
-import { readResponseCapped } from "./lib/crawl.ts";
+import { mapWithConcurrency, readResponseCapped } from "./lib/crawl.ts";
 
 const BODY_CAP = 1024 * 1024;
 const PROFILES = {
@@ -123,13 +123,17 @@ function rowForOutput(row) {
   };
 }
 
-async function store(db, row) {
-  await db.prepare(`INSERT OR REPLACE INTO http_representation_vault
+function storeStatement(db, row) {
+  return db.prepare(`INSERT OR REPLACE INTO http_representation_vault
     (id,url,profile,observed_at,final_url,status,content_type,content_encoding,content_length,cache_control,vary,etag,last_modified,server,age,cf_cache_status,body_bytes,body_hash,truncated,title,word_count)
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
     .bind(row.id, row.url, row.profile, row.observed_at, row.final_url, row.status, row.content_type, row.content_encoding,
       row.content_length, row.cache_control, row.vary, row.etag, row.last_modified, row.server, row.age, row.cf_cache_status,
-      row.body_bytes, row.body_hash, row.truncated, row.title, row.word_count).run();
+      row.body_bytes, row.body_hash, row.truncated, row.title, row.word_count);
+}
+
+async function store(db, row) {
+  await storeStatement(db, row).run();
 }
 
 export async function captureRepresentation(args, env) {
@@ -140,12 +144,22 @@ export async function captureRepresentation(args, env) {
   const db = database(env);
   if (!db) return error("representation vault is not configured on this deployment");
   await ensureTable(db);
-  const rows = [];
-  for (const profile of profiles) {
-    const row = await fetchProfile(target.url, profile, env);
+  // Comparing profiles is explicit caller intent, but four simultaneous reads
+  // would be an impolite burst at somebody else's origin. Two workers halve the
+  // waterfall while preserving input order and a tight concurrency ceiling.
+  const fetched = await mapWithConcurrency(profiles, 2, (profile) =>
+    fetchProfile(target.url, profile, env));
+  const rows: any[] = [];
+  const successful: any[] = [];
+  for (let index = 0; index < profiles.length; index++) {
+    const profile = profiles[index];
+    const row = fetched[index];
     if (row.error) rows.push({ url: target.url, profile, error: row.error });
-    else { await store(db, row); rows.push(rowForOutput(row)); }
+    else { successful.push(row); rows.push(rowForOutput(row)); }
   }
+  // D1 batch is one transactional subrequest rather than one write round trip
+  // per successful profile. Four is the public profile ceiling above.
+  if (successful.length) await db.batch(successful.map((row) => storeStatement(db, row)));
   return { url: target.url, profiles, persistence: "normalized headers, metadata, and body digests only", snapshots: rows };
 }
 
