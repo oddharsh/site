@@ -443,6 +443,23 @@ export function bookingPage(slots, env) {
           <input type="email" id="email" name="email" required maxlength="200" autocomplete="email"
                  title="Where the invite lands. Nothing else is sent here.">
         </div>
+        <div class="row">
+          <label for="area">Where in NYC?</label>
+          <input type="text" id="area" name="area" maxlength="120" autocomplete="off"
+                 list="nyc-areas"
+                 title="Roughly where you'll be coming from, so I can pick somewhere near you."
+                 placeholder="west village, bushwick, midtown…">
+          <!-- A datalist, not a select. The suggestions cover the common answers
+               without refusing the ones a five-borough dropdown would have to
+               drop; the field stays free text either way. -->
+          <datalist id="nyc-areas">
+            ${["Lower East Side","East Village","West Village","SoHo","Tribeca","Chelsea",
+               "Flatiron","Midtown","Upper West Side","Upper East Side","Harlem",
+               "Williamsburg","Greenpoint","Bushwick","Bed-Stuy","Park Slope","Dumbo",
+               "Long Island City","Astoria","Jersey City"]
+              .map(a => `<option value="${esc(a)}"></option>`).join("")}
+          </datalist>
+        </div>
         <div class="row stacked">
           <label for="topic">What would you like to talk about?</label>
           <textarea id="topic" name="topic" required maxlength="1000"
@@ -500,7 +517,7 @@ export function successPage(env) {
   return shell("Request sent", body, env);
 }
 
-export function confirmedPage(booking, env, already) {
+export function confirmedPage(booking, env, already, locationUrl?: string) {
   const when = new Date(booking.start).toLocaleString("en-US", {
     timeZone: env.HOST_TIMEZONE, weekday: "long", month: "long", day: "numeric",
     hour: "numeric", minute: "2-digit", timeZoneName: "short",
@@ -517,8 +534,77 @@ export function confirmedPage(booking, env, already) {
     <div class="banner success">
       <div>${already ? "you've already approved this booking." : "invite sent to the requester. you've been cc'd."}</div>
     </div>
+    ${locationUrl ? `<p>${booking.location
+        ? `it's at <strong>${esc(booking.location)}</strong> — <a href="${esc(locationUrl)}">change the spot</a>.`
+        : `<a href="${esc(locationUrl)}">set the spot</a> whenever you know it. this same link keeps working afterwards.`}</p>` : ""}
+    <!-- A plain link, NOT class="xp-button". The rule up in STYLES is qualified
+         to the button ELEMENT, so an anchor carrying that class inherits none of
+         the bevel and ships as unstyled blue text. Widening that selector is a
+         change to every cal page and is not what this feature needed.
+         (No backticks in this comment: it sits inside a JS template literal and
+         one would end the string mid-file. Gotcha 19.) -->
   `;
   return shell(title, body, env);
+}
+
+// The host's form for naming the venue. Deliberately one field: the time is
+// already settled by the slot picker and the guest has accepted it, so a form
+// that could also move the clock would turn a low-stakes edit into one that
+// re-opens the negotiation.
+export function locationPage(booking, env, action, sig) {
+  const when = new Date(booking.start).toLocaleString("en-US", {
+    timeZone: env.HOST_TIMEZONE, weekday: "long", month: "long", day: "numeric",
+    hour: "numeric", minute: "2-digit", timeZoneName: "short",
+  });
+  const live = booking.status === "confirmed";
+  const body = `
+    <h1>${booking.location ? "Change the spot" : "Set the spot"}</h1>
+    <div class="xp-group">
+      <span class="legend">Booking</span>
+      <p><strong>${esc(booking.name)}</strong> &lt;${esc(booking.email)}&gt;<br>
+         <strong>${esc(when)}</strong></p>
+      ${booking.area ? `<p class="xp-meta">they're around: ${esc(booking.area)}</p>` : ""}
+    </div>
+    <form class="book" method="POST" action="${esc(action)}">
+      <input type="hidden" name="t" value="${esc(booking.id)}">
+      <input type="hidden" name="sig" value="${esc(sig)}">
+      <div class="xp-group">
+        <span class="legend">Where</span>
+        <div class="row stacked">
+          <label for="location">Place and address</label>
+          <input type="text" id="location" name="location" maxlength="200" required
+                 value="${esc(booking.location || "")}"
+                 title="Goes straight onto the calendar entry, so write it the way a maps app wants it."
+                 placeholder="Devoción, 25 E 20th St">
+        </div>
+        <div class="actions">
+          <button type="submit" class="xp-button primary">${live ? "save and send the update" : "save"}</button>
+        </div>
+      </div>
+    </form>
+    <div class="banner ${live ? "" : "warn"}">
+      <div>${live
+        ? "this rewrites the calendar entry they already have, in place. no second invite, nothing to re-accept."
+        : "not approved yet, so nothing is mailed. this rides out on the invite when you approve."}</div>
+    </div>
+  `;
+  return shell(booking.location ? "Change the spot" : "Set the spot", body, env);
+}
+
+export function locationSavedPage(booking, env, mailed) {
+  const body = `
+    <h1>Saved</h1>
+    <div class="xp-group">
+      <span class="legend">Where</span>
+      <p><strong>${esc(booking.location)}</strong></p>
+    </div>
+    <div class="banner success">
+      <div>${mailed
+        ? `update sent to ${esc(booking.email)}. their calendar entry moves itself; you've been cc'd.`
+        : "stored. it goes out with the invite when you approve this booking."}</div>
+    </div>
+  `;
+  return shell("Saved", body, env);
 }
 
 export function declinedPage(booking, env, already) {

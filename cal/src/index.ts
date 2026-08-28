@@ -25,13 +25,14 @@
 import { BOOK_MAX_STALE_MS }               from "./availability.ts";
 import { listOpenSlots }                   from "./slots.ts";
 import { createBooking, getBooking, setStatus,
-         holdSlot, releaseSlot }           from "./booking.ts";
+         holdSlot, releaseSlot, setLocation } from "./booking.ts";
 import { releaseSlotClaim, reserveSlot }  from "./reservation.ts";
 import { sendApprovalRequest, sendInvite,
-         sendDecline }                     from "./email.ts";
+         sendDecline, sendUpdate }         from "./email.ts";
 import { sign, verify }                    from "./sign.ts";
 import { bookingPage, successPage,
          confirmedPage, declinedPage,
+         locationPage, locationSavedPage,
          errorPage }                       from "./templates.ts";
 
 // Re-export the expiry-timer Workflow so it resolves as a class_name both from
@@ -58,6 +59,11 @@ export default {
       if (req.method === "POST" && path === "/book")               return route_book(req, env, ctx);
       if (req.method === "GET"  && path === "/approve")            return route_approve(req, env, ctx, url);
       if (req.method === "GET"  && path === "/decline")            return route_decline(req, env, ctx, url);
+      // GET renders the form, POST applies it. Both carry the same signature, so
+      // the form is not a second capability: anyone who can open the page could
+      // already have submitted it by hand.
+      if (req.method === "GET"  && path === "/location")           return route_location_form(req, env, ctx, url);
+      if (req.method === "POST" && path === "/location")           return route_location_save(req, env, ctx);
       return new Response(errorPage("not found", env), { status: 404, headers: htmlHeaders() });
     } catch (e) {
       console.error("unhandled", e?.stack || e);
@@ -125,6 +131,9 @@ async function route_book(req, env, ctx) {
   const name  = (payload.name  || "").toString().trim().slice(0, 100);
   const email = (payload.email || "").toString().trim().slice(0, 200);
   const topic = (payload.topic || "").toString().trim().slice(0, 1000);
+  // Optional. A blank answer is a real answer ("wherever, I'll travel"), and a
+  // required field here would turn a nice-to-have into a reason a request fails.
+  const area  = (payload.area  || "").toString().trim().slice(0, 120);
   const start = parseInt(payload.start, 10);
 
   if (!name || !email || !topic || !Number.isFinite(start)) {
@@ -158,6 +167,10 @@ async function route_book(req, env, ctx) {
 
   const booking = await createBooking(env, {
     name, email, topic,
+    // Blank stays undefined rather than "": JSON.stringify drops an undefined
+    // key outright, so an unanswered field is ABSENT in KV rather than an empty
+    // string every later reader has to remember to test for.
+    area: area || undefined,
     start: slot.start, end: slot.end,
     created: Date.now(),
     status: "pending",
@@ -201,14 +214,16 @@ async function route_book(req, env, ctx) {
   // sign approve/decline links so only someone with the secret can act on them
   const approveSig = await sign(`${booking.id}|approve`, env.SIGNING_SECRET);
   const declineSig = await sign(`${booking.id}|decline`, env.SIGNING_SECRET);
+  const locationSig = await sign(`${booking.id}|location`, env.SIGNING_SECRET);
   // include BASE_PATH: a booking made at aadhar.sh/coffee must email links under
   // /coffee/* (the worker's only zone route there) — bare /approve|/decline fall
   // through to the main site and 404, so the host can't act on the request.
   const base = `https://${new URL(req.url).host}${env.BASE_PATH || ""}`;
   const approveUrl = `${base}/approve?t=${booking.id}&sig=${approveSig}`;
   const declineUrl = `${base}/decline?t=${booking.id}&sig=${declineSig}`;
+  const locationUrl = `${base}/location?t=${booking.id}&sig=${locationSig}`;
 
-  ctx.waitUntil(sendApprovalRequest(env, booking, approveUrl, declineUrl));
+  ctx.waitUntil(sendApprovalRequest(env, booking, approveUrl, declineUrl, locationUrl));
   ctx.waitUntil(caches.default.delete(calIndexKey(req, env)));  // slot now held: drop the stale SSR page
 
   return new Response(successPage(env), { headers: htmlHeaders() });
@@ -241,16 +256,84 @@ async function route_approve(req, env, ctx, url) {
     return new Response(errorPage("booking not found (already expired?).", env),
                         { status: 404, headers: htmlHeaders() });
   }
+  const locationUrl = await locationLink(req, env, booking.id);
   if (booking.status !== "pending") {
-    return new Response(confirmedPage(booking, env, /*already=*/true),
+    return new Response(confirmedPage(booking, env, /*already=*/true, locationUrl),
                         { headers: htmlHeaders() });
   }
   await setStatus(env, id, "confirmed");   // slot stays held (confirmed coffees hold their slot + count toward caps)
   ctx.waitUntil(sendInvite(env, booking));
   cancelExpiry(env, ctx, id);                                   // end the durable timer early
   ctx.waitUntil(caches.default.delete(calIndexKey(req, env)));  // pending slot resolved
-  return new Response(confirmedPage(booking, env, /*already=*/false),
+  return new Response(confirmedPage({ ...booking, status: "confirmed" }, env, /*already=*/false, locationUrl),
                       { headers: htmlHeaders() });
+}
+
+async function locationLink(req, env, id: string) {
+  const sig = await sign(`${id}|location`, env.SIGNING_SECRET);
+  return `https://${new URL(req.url).host}${env.BASE_PATH || ""}/location?t=${id}&sig=${sig}`;
+}
+
+// Shared by both halves of /location. Returns the booking, or the Response that
+// should be sent instead. Written as one function because the GET and the POST
+// have to agree exactly on what is actionable: a form that renders for a
+// declined booking and then refuses to save is a worse experience than one that
+// never rendered, and two copies of this check is how they drift apart.
+async function resolveLocationTarget(env, id, sig) {
+  if (!id || !sig || !(await verify(`${id}|location`, sig, env.SIGNING_SECRET))) {
+    return { err: new Response(errorPage("location link invalid or expired.", env),
+                               { status: 401, headers: htmlHeaders() }) };
+  }
+  const booking = await getBooking(env, id);
+  if (!booking) {
+    return { err: new Response(errorPage("booking not found (already expired?).", env),
+                               { status: 404, headers: htmlHeaders() }) };
+  }
+  // Only a live booking has a calendar entry worth pointing at an address.
+  if (booking.status === "declined" || booking.status === "expired") {
+    return { err: new Response(errorPage(`this booking is ${booking.status}; there's nothing to place.`, env),
+                               { status: 409, headers: htmlHeaders() }) };
+  }
+  return { booking };
+}
+
+async function route_location_form(req, env, ctx, url) {
+  const id  = url.searchParams.get("t");
+  const sig = url.searchParams.get("sig");
+  const { booking, err } = await resolveLocationTarget(env, id, sig);
+  if (err) return err;
+  const action = `${env.BASE_PATH || ""}/location`;
+  return new Response(locationPage(booking, env, action, sig), { headers: htmlHeaders() });
+}
+
+async function route_location_save(req, env, ctx) {
+  const form = await req.formData();
+  const id   = (form.get("t")   || "").toString();
+  const sig  = (form.get("sig") || "").toString();
+  const { err } = await resolveLocationTarget(env, id, sig);
+  if (err) return err;
+
+  const location = (form.get("location") || "").toString().trim().slice(0, 200);
+  if (!location) {
+    return new Response(errorPage("give it somewhere to be.", env),
+                        { status: 400, headers: htmlHeaders() });
+  }
+
+  const updated = await setLocation(env, id, location);
+  // resolveLocationTarget already found this record, so a null here means the KV
+  // entry vanished between the two reads — its 90-day TTL landing mid-request.
+  // Vanishingly rare and still a real state, so it gets the same 404 the read
+  // path gives, rather than a `!` that would throw a 500 at the same moment.
+  if (!updated) {
+    return new Response(errorPage("booking not found (already expired?).", env),
+                        { status: 404, headers: htmlHeaders() });
+  }
+  // A pending booking has no invite out yet, so there is nothing to update and
+  // the address simply rides the first one. Mailing here would tell a guest
+  // where to meet before telling them the meeting is happening.
+  const mailed = updated.status === "confirmed";
+  if (mailed) ctx.waitUntil(sendUpdate(env, updated));
+  return new Response(locationSavedPage(updated, env, mailed), { headers: htmlHeaders() });
 }
 
 async function route_decline(req, env, ctx, url) {
