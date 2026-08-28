@@ -63,11 +63,18 @@ test("cron dispatch survives Cloudflare's expression normalization", () => {
   // The dispatcher used to exact-match event.cron against the strings in
   // wrangler.jsonc, but Cloudflare normalizes expressions between declaration
   // and delivery (day-of-week tokens especially), and the census schedule is
-  // the only one carrying a day-of-week token: three straight Monday sweeps
+  // the only one carrying a day-of-week token: three straight weekly sweeps
   // fell into the else-branch and ran the /around crawl with nothing logged.
   // The rule now matches minute+hour signatures, which normalization leaves
-  // alone. Both spellings of Monday must land on the census.
+  // alone, so EVERY spelling must land on the census.
+  //
+  // "17 8 * * 1" IS SUNDAY, and this test used to assert MON as its alias,
+  // which is what a reader would reach for when checking the pairing. Both are
+  // asserted now, because the property is that the matcher ignores the weekday
+  // field entirely; pinning one "correct" alias is what let the wrong one sit
+  // here unquestioned.
   assert.equal(cronJob("17 8 * * 1"), "census");
+  assert.equal(cronJob("17 8 * * SUN"), "census");
   assert.equal(cronJob("17 8 * * MON"), "census");
   assert.equal(cronJob("7,37 * * * *"), "home_probe");
   assert.equal(cronJob("41 5 * * *"), "daily_outbound");
@@ -246,4 +253,71 @@ test("slot reservations name one Durable Object instance per slot", () => {
   assert.notEqual(reservationName(start, end), reservationName(start, end + 1));
   assert.notEqual(reservationName(start, end), "homepage-visits");
   assert.match(reservationName(start, end), /^coffee-slot:\d+:\d+$/);
+});
+
+test("the census cron's weekday token and the prose about it agree", async () => {
+  // SIX WEEKS OF PROSE SAID MONDAY WHILE PRODUCTION FIRED ON SUNDAY. Cloudflare
+  // numbers weekdays Quartz-style, 1 = Sunday to 7 = Saturday, where most cron
+  // systems use 0 = Sunday, so "17 8 * * 1" is SUNDAY 08:17 UTC. Confirmed
+  // against the live lens_census table, whose every cron-written row lands at
+  // 08:17 UTC on a Sunday, back to the first sweep on 2026-07-19.
+  //
+  // Nothing in this repo could catch that: the dispatcher matches minute+hour
+  // and so is correct either way, and the day survived only in comments and in
+  // one line of shipped banner copy. This is the check that makes the pairing
+  // fail loudly instead of drifting, and it fires in both directions, so
+  // changing the SCHEDULE without changing the copy is caught too.
+  const CF_WEEKDAYS = { 1: "Sunday", 2: "Monday", 3: "Tuesday", 4: "Wednesday", 5: "Thursday", 6: "Friday", 7: "Saturday" };
+
+  const { parseJsonc } = await import("./lib/jsonc.ts");
+  const crons = parseJsonc(readFileSync("wrangler.jsonc", "utf8")).triggers?.crons ?? [];
+  assert.ok(crons.length >= 4, `read only ${crons.length} crons from wrangler.jsonc; the reader is broken`);
+  const census = crons.find((expr) => expr.startsWith("17 8 "));
+  assert.ok(census, `no census cron found among ${crons.length} expressions`);
+
+  const token = census.split(/\s+/)[4];
+  const day = CF_WEEKDAYS[token] || { SUN: "Sunday", MON: "Monday", TUE: "Tuesday", WED: "Wednesday", THU: "Thursday", FRI: "Friday", SAT: "Saturday" }[token.toUpperCase()];
+  assert.ok(day, `unrecognised weekday token ${token}; Cloudflare takes 1-7 or a 3-letter name`);
+  assert.equal(day, "Sunday", `the census cron declares ${token}, which Cloudflare fires on ${day}`);
+
+  // No source file may CLAIM a different weekday for this cron. The matcher
+  // reads a claim rather than a mention, because the fix for this bug has to be
+  // able to explain the mapping it is fixing: "1 = Sunday to 7 = Saturday" names
+  // five wrong days and asserts nothing about when the census runs. A claim is
+  // the plural ("Mondays"), or the day sitting directly on the thing it
+  // schedules ("the Monday cron", "Monday sweeps", "Monday 08:17").
+  const claims = (day) => new RegExp(`\\b${day}s\\b|\\b${day}s?\\s+(?:cron|census|sweep|sweeps|pass|08:17)\\b`, "i");
+
+  const scanned = ["src/worker/census.ts", "src/worker/index.ts", "src/worker/lib/cron.ts"];
+  const wrong = Object.values(CF_WEEKDAYS).filter((d) => d !== day);
+  const findClaims = (src, label) => {
+    const hits = [];
+    for (const line of src.split("\n")) {
+      for (const d of wrong) if (claims(d).test(line)) hits.push(`${label}: ${line.trim().slice(0, 90)}`);
+    }
+    return hits;
+  };
+
+  // CONTROL, because a matcher that has stopped matching reports a clean pass
+  // and this one is deliberately narrow. Every shape the repair removed must
+  // still be caught, and the explanatory prose beside it must not be.
+  //
+  // Only SCHEDULE claims are in scope. The ninth thing this repair fixed was
+  // "both spellings of Monday must land on the census", a claim about which
+  // alias means 1 rather than about when the job runs, and it is deliberately
+  // not covered: the matcher that would catch it also catches the prose two
+  // lines above explaining the mapping. It is fixed directly in the test above.
+  const control = [
+    'await cron("cron.census", () => cronCensus(env));   // Mondays 08:17 UTC',
+    "// The Monday cron is now AWAITED by scheduled() and sweeps the whole roster",
+  ].join("\n");
+  assert.equal(findClaims(control, "control").length, 2, "the matcher no longer catches the claims this test exists for");
+  const innocent = [
+    "// 1 = Sunday to 7 = Saturday, where most cron systems use 0 = Sunday, so",
+    "// Nine comments here said Monday and production fired on Sunday.",
+  ].join("\n");
+  assert.deepEqual(findClaims(innocent, "innocent"), [], "prose explaining the mapping is not a claim about the schedule");
+
+  const offenders = scanned.flatMap((rel) => findClaims(readFileSync(rel, "utf8"), rel));
+  assert.deepEqual(offenders, [], `the census fires on ${day}; these say otherwise:\n  ${offenders.join("\n  ")}`);
 });

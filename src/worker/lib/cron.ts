@@ -5,12 +5,27 @@
 // Match on the minute+hour signature, never the full expression. Cloudflare
 // normalizes cron strings between what wrangler.jsonc declares and what
 // event.cron delivers (day-of-week tokens especially: a "1" can come back
-// "MON"), and an exact match against "17 8 * * 1" left the Monday census
+// "MON"), and an exact match against "17 8 * * 1" left the weekly census
 // branch unreachable while the else-chain quietly ran the /around crawl in
 // its place — three weeks of a 16-host roster produced zero cron rows and
 // nothing logged, because every job is deliberately quiet. The minute and
 // hour fields are plain numbers on every schedule this worker declares, and
 // normalization leaves them alone.
+//
+// THE ECHOED TOKEN AND THE FIRING DAY HAVE NOT BEEN RECONCILED, and the "MON"
+// above is left exactly as it was observed rather than corrected to fit.
+// Cloudflare numbers weekdays 1 = Sunday through 7 = Saturday, so "17 8 * * 1"
+// schedules SUNDAY, which is what production does: every cron-written row in
+// lens_census lands at 08:17 UTC on a Sunday, back to the first sweep on
+// 2026-07-19. If Cloudflare really does echo "MON" for that same expression,
+// that is an inconsistency on their side worth reporting, and it is equally
+// possible the token was misremembered. Nobody has read a real event.cron
+// since. Settle it by reading `cron.schedule` off a census span in Workers
+// Traces after any Sunday 08:17 fire, and record what it actually says.
+//
+// Either way this dispatcher is unaffected: it matches minute+hour and never
+// looks at the weekday field, which is also why the wrong day could sit in
+// nine comments for six weeks without a single check going red.
 //
 // An unknown expression returns null so the caller can surface it as its own
 // traced event instead of running somebody else's job.

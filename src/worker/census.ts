@@ -79,7 +79,7 @@ type CensusOpts = { oneBatch?: boolean };
 
 // opts.oneBatch: process a single 4-host slice and advance a KV cursor, for
 // callers whose invocation cannot outlive the runtime's post-response grace.
-// The Monday cron is now AWAITED by scheduled() and sweeps the whole roster in
+// The weekly cron is now AWAITED by scheduled() and sweeps the whole roster in
 // one pass; the owner's ?refresh= rides a fetch event's waitUntil, which gets
 // roughly thirty seconds — a full sweep is four batches at up to ~15s each, and
 // three straight weeks of refresh-seeded snapshots wrote exactly batch one. A
@@ -254,7 +254,7 @@ export const CENSUS_CSS = `
 
 // GET /lens/census — the standalone exhibit page (SSR, no-JS friendly, machines
 // welcome). ?refresh=<CENSUS_KEY> triggers a scan now (owner-only), so the first
-// snapshot doesn't have to wait for the Monday cron.
+// snapshot doesn't have to wait for the weekly cron.
 export async function handleCensus(request, env, ctx) {
   const url = new URL(request.url);
   const refresh = url.searchParams.get("refresh");
@@ -264,9 +264,9 @@ export async function handleCensus(request, env, ctx) {
       // oneBatch: a fetch invocation's waitUntil gets ~30s past the response,
       // which a 16-host sweep blows through (that ceiling is why refresh-seeded
       // snapshots only ever held the first four hosts). Each pass sweeps one
-      // batch and advances a cursor; the Monday cron sweeps everything at once.
+      // batch and advances a cursor; the weekly cron sweeps everything at once.
       ctx.waitUntil(cronCensus(env, { oneBatch: true }));
-      banner = '<div class="cx-banner ok">Census refresh triggered: one pass of 4 roster hosts (a browser-triggered pass stays under the runtime\'s post-response budget; the Monday cron sweeps all 16 at once). Reload in a minute, then trigger again to continue where the cursor left off.</div>';
+      banner = '<div class="cx-banner ok">Census refresh triggered: one pass of 4 roster hosts (a browser-triggered pass stays under the runtime\'s post-response budget; the Sunday cron sweeps all 16 at once). Reload in a minute, then trigger again to continue where the cursor left off.</div>';
     } else {
       banner = '<div class="cx-banner err">That refresh key did not match. The census only re-scans on the weekly cron or with the owner key.</div>';
     }
