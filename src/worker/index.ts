@@ -279,7 +279,7 @@ export default {
     };
     // Dispatch via cronJob() (lib/cron.js): minute+hour signatures, immune to
     // Cloudflare's cron-expression normalization ("* * 1" can come back
-    // "* * MON", and the old exact match sent three straight Monday censuses
+    // "* * MON", and the old exact match sent three straight weekly censuses
     // into the else-branch). Unknown expressions get their own traced event
     // instead of silently running somebody else's job.
     const job = cronJob(event.cron);
@@ -292,7 +292,14 @@ export default {
       // ordered second for the same reason.
       await cron("cron.rn_enrich", () => cronEnrichTracks(env, ctx)).catch(() => {});
     } else if (job === "census") {
-      await cron("cron.census", () => cronCensus(env));   // Mondays 08:17 UTC — the longitudinal census, full roster in one awaited pass
+      // SUNDAYS 08:17 UTC. Cloudflare numbers weekdays Quartz-style, 1 = Sunday
+      // through 7 = Saturday, where most cron systems use 0 = Sunday, so the `1`
+      // in "17 8 * * 1" schedules Sunday. Nine comments across three files read
+      // Monday for six weeks while production fired on Sunday, and nothing could
+      // catch it because cronJob() matches minute+hour and is right either way.
+      // The pairing is pinned in contract-the-perf-probe now. Prefer the
+      // three-letter form in anything new.
+      await cron("cron.census", () => cronCensus(env));   // the longitudinal census, full roster in one awaited pass
     } else if (job === "daily_outbound") {
       // 05:41 UTC daily — the two jobs that probe somebody else's server.
       // Sequential, not Promise.all: both fetch third-party hosts and running
