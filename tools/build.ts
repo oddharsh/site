@@ -34,6 +34,7 @@ import { availableParallelism } from "node:os";
 // One nonce per build for the dynamic imports below: the staged worker modules
 // are rewritten in place by later steps, so each import site needs a fresh URL.
 const BUILD_NONCE = process.hrtime.bigint().toString(36);
+import { existsSync } from "node:fs";
 import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -1679,6 +1680,12 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     await writeFile(path, out);
     fileCount++;
   }
+  // A FLOOR, because every failure this pass has had was an absence. The marker
+  // scan matched nothing at all after the Worker moved from .js to .ts, and with
+  // no floor it printed "0 literals" and shipped unminified CSS on every
+  // Worker-rendered page for as long as nobody read the line. The extension list
+  // above is fixed; the next rename, or an edit to the sentinel, is not.
+  if (litCount < 7) throw new Error(`worker CSS: found only ${litCount} /*min*/ literals (expected 7+) — did the sentinel change, or did the walk stop reaching the staged Worker modules?`);
   console.log(`worker CSS: minified ${litCount} /*min*/ literals across ${fileCount} modules, ~${(saved / 1024).toFixed(1)}KB raw saved`);
 }
 
@@ -2376,6 +2383,86 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     );
   }
   console.log(`links: ${refs} internal refs across ${docs.length} documents all resolve`);
+}
+
+// 7b-paths) Does every repository path CITED in the staged bytes still exist?
+//
+// The sibling of the link check above, and the direction it cannot see. That one
+// asks whether an href resolves to something this site SERVES. This one asks
+// whether a path in the prose resolves to something this repository HAS, which is
+// the failure a rename actually produces here.
+//
+// Two shapes, and the branch that wrote this scan produced both.
+//
+// STALE: a page describing the architecture keeps naming a directory after it
+// moves. Byte-identity discipline makes this MORE likely rather than less, since
+// preserving bytes means reverting served files and leaving their prose behind.
+// /garage/workers is a page ABOUT the Worker and it cited www/_worker.js/index.js
+// for the ten days after that directory stopped existing.
+//
+// COUPLED: a repository path inside a CONTENT-ADDRESSED artifact ties the file
+// layout to a public URL, so moving the source re-mints /a/<name>.<hash8>.<ext>
+// and orphans every committed dictionary naming the old one. icons.svg did exactly
+// that, through a banner naming its generator by path.
+//
+// It reads the STAGED tree for the same reason the link check does: a comment in a
+// client island reaches its .src.js twin alone, while a string literal reaches the
+// hashed asset too, and only the served bytes decide. The Worker tree is scanned
+// beside it because a Worker string literal is served the moment somebody asks for
+// the route that prints it — /terminal/radar printed `node
+// tools/photos/radar-sample.mjs` long after that file became .ts.
+{
+  // Anchored on a real top-level entry of this repository, so a URL path like
+  // /images/x, an MCP method like tools/list, or somebody else's src/ do not
+  // match. The three RETIRED names are the point: www/, holding/ and scripts/ can
+  // never resolve, so any surviving citation of them fails by construction.
+  const REPO_PATH = /(?<![\w./-])(www|holding|scripts|src|tools|cal|cf-garage|lens-reader|lwe-ask|pipelines|config|serendipity|public|design|docs|migrations|talks)\/[A-Za-z0-9_./-]+/g;
+
+  // Only a token naming a FILE is a citation that has to resolve. A bare directory
+  // mention is usually prose ("used to sit at www/scripts") or a build path that
+  // exists under .build alone, and flagging those makes this a nuisance. A nuisance
+  // check gets commented out, which is the failure every tripwire here warns about.
+  const NAMES_A_FILE = /\.[A-Za-z0-9]{1,5}$/;
+  const BINARY = /\.(br|dcz|dict|png|jpe?g|avif|webp|gif|pdf|woff2?|ico|mp4|zip|wasm)$/i;
+
+  // One entry, and it is a file in SOMEBODY ELSE'S repository. /lwe/vigenere ports
+  // a periodic-cipher attack from github.com/0xdiid/buttcrack and names the file it
+  // came from, which is attribution rather than a reference into this tree.
+  const ELSEWHERE = [/^src\/buttcrack\//];
+
+  const cited = new Map<string, Set<string>>();
+  let scanned = 0;
+  for (const root of ["public", "src"]) {
+    for (const rel of await readdir(`${OUT}/${root}`, { recursive: true })) {
+      if (BINARY.test(rel)) continue;
+      let body: string;
+      try { body = await readFile(`${OUT}/${root}/${rel}`, "utf8"); } catch { continue; }
+      scanned++;
+      for (const token of new Set(body.match(REPO_PATH) || [])) {
+        const path = token.replace(/[,;:)\]]+$/, "").replace(/\.$/, "");
+        if (!NAMES_A_FILE.test(path)) continue;
+        if (ELSEWHERE.some((r) => r.test(path))) continue;
+        if (existsSync(path)) continue;
+        if (!cited.has(path)) cited.set(path, new Set());
+        cited.get(path)!.add(`${root}/${rel}`);
+      }
+    }
+  }
+
+  // Counted, because a scanner that stops matching asserts nothing and still
+  // reports a pass. This build has caught three naive scanners on its own output.
+  if (scanned < 300) throw new Error(`repo-paths: scanned only ${scanned} staged files, expected 300+ — did a walk stop reaching the staged tree?`);
+
+  if (cited.size) {
+    const lines = [...cited].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([p, from]) => `  ${p}  <- ${[...from].sort().slice(0, 4).join(", ")}${from.size > 4 ? ` +${from.size - 4}` : ""}`);
+    throw new Error(
+      `repo-paths: ${cited.size} repository path(s) named in served bytes do not exist:\n`
+      + lines.join("\n")
+      + "\n  A move is finished when the prose still says where things are, not when"
+      + "\n  the build matches. Update the citation, or cite the new location.",
+    );
+  }
+  console.log(`repo-paths: every repository path cited across ${scanned} staged files resolves`);
 }
 
 // 7c) CSP: hash every inline <script> in the staged documents, so script-src can

@@ -1189,7 +1189,7 @@ brew install cmake ninja                     # for the pinned avifenc below
 ./tools/photos/libavif/build.sh
 brew install uv && bun run photos:env               # Pillow, for gen-pixel-peeper.py only (brew's python3 is PEP 668; pip into it fails)
 # the JPEG encoder (zenc) builds itself on first pipeline run; needs rust (rustup.rs)
-cargo build --release --manifest-path tools/photos/zenc/Cargo.toml
+cargo build --release --locked --manifest-path tools/photos/zenc/Cargo.toml
 bun run wrangler login                                         # Cloudflare auth (deploys + KV + R2 all use it)
 
 # the study pages, which are NOT needed to add a photo

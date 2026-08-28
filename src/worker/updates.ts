@@ -46,7 +46,7 @@ export async function readCheckpoints(env) {
 
 export async function renderWindowsUpdate(cp) {
   // Single source of truth: the same D1 `checkpoints` table that backs /restore.
-  // One row per logged deploy (scripts/bump-version.sh, which now derives the
+  // One row per logged deploy (tools/photos/bump-version.sh, which now derives the
   // next vnum from this table; the retired service worker used to carry it as
   // CACHE_VERSION). The newest row is the running build and the recent rows ARE
   // the changelog, so /updates and /restore cannot drift apart. Degrades

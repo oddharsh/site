@@ -139,7 +139,7 @@ export function renderPhotoSlots(pick, altMap = {}, { deferred = true, histogram
     // late for hover number one.
     //
     // One character per bin in ASCII 63..126, packed by
-    // scripts/build-histogram-index.mjs, which carries the reasoning. 256 chars a
+    // tools/photos/build-histogram-index.ts, which carries the reasoning. 256 chars a
     // tile against base64's 344, and 36% smaller after brotli because base64
     // destroys the byte alignment brotli exploits on smooth data.
     //

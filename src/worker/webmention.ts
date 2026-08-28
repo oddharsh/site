@@ -49,7 +49,7 @@ const EXCERPT_MAX = 320;
 // DB: social content is third-party, moderated, and mutable, while the
 // checkpoints table is the site's own append-only history. Created lazily like
 // census.js and around.js do, so a fresh binding self-provisions instead of
-// requiring a migration step before the route works. migrations/0001_init.sql
+// requiring a migration step before the route works. migrations/0001_webmentions.sql
 // carries the same DDL for anyone who prefers to apply it up front.
 const TABLE = "webmentions";
 let ensured = false;

@@ -254,7 +254,7 @@ export async function getAltMap(env) {
   return _altMap;
 }
 
-// content-hash map {stem: {a,j,s}} written by scripts/hash-thumbnails.sh at
+// content-hash map {stem: {a,j,s}} written by tools/photos/hash-thumbnails.sh at
 // photo-add time. The pool bakes these into /i/ URLs, so a thumbnail URL
 // is born with its bytes: no global ?v= bump, and a cached 404 can never
 // shadow real bytes (a new encode IS a new URL). Module-cached like _altMap.
@@ -265,7 +265,7 @@ export async function getAltMap(env) {
 // are not hot, and keeping them on ASSETS keeps them stubbable in
 // contract-tests. Both readers see the same committed file per deploy.
 // Packed histograms {stem: base64(4 channels x 64 bins, one byte each)}, written
-// by scripts/build-histogram-index.mjs. Module-cached like _altMap, and that memo
+// by tools/photos/build-histogram-index.ts. Module-cached like _altMap, and that memo
 // is the whole reason this is an ASSETS read rather than a bundled import: the
 // fragment draws a random twelve per request so all 158 must be reachable, and
 // bundling them costs 22.9 KiB gzip (83% of the bundle's remaining headroom)
