@@ -278,18 +278,84 @@ export function linksTo(html, target, sourceUrl) {
 // author renders as the site it came from, which is honest and still useful.
 function parseSource(html, sourceUrl, target) {
   const title = (extractTitle(html) || "").slice(0, 200) || new URL(sourceUrl).hostname;
-  const author =
-    firstMatch(html, /class="[^"]*\bp-author\b[^"]*"[^>]*>([^<]{1,120})</i) ||
-    firstMatch(html, /class="[^"]*\bp-name\b[^"]*"[^>]*>([^<]{1,120})</i) ||
-    extractMeta(html, "author") ||
-    new URL(sourceUrl).hostname.replace(/^www\./, "");
   return {
     kind: mentionKind(html, target),
-    author: clean(author).slice(0, 120),
+    author: authorOf(html, sourceUrl),
     authorUrl: new URL(sourceUrl).origin,
     title: clean(title),
     excerpt: excerptAround(html, target),
   };
+}
+
+// Who sent it. The floor is the hostname, which is honest and still useful, and
+// the rule is that NOTHING may win this by being confidently wrong.
+//
+// Both halves of that were broken, and the first real webmention this site ever
+// received is what showed it (webmention.rocks receiver test 1, 2026-08-28,
+// stored with an empty author):
+//
+//   <div class="left p-author h-card">
+//     <a href="/"><img class="u-photo" alt="Webmention Rocks!"></a>
+//   </div>
+//   ...
+//   <h1 class="p-name"><a href="/receive/1">Receiver Test #1</a></h1>
+//
+//   1. The p-author pattern matched, then captured the WHITESPACE between that
+//      div's ">" and the "<a" on the next line. A whitespace string is truthy,
+//      so the `||` chain stopped there and the hostname floor never ran. clean()
+//      then reduced it to "". An h-card wrapping a photo is the ordinary shape on
+//      a real IndieWeb site, so this was not a quirk of the test post: every
+//      reply from a site that markes its author up properly would have arrived
+//      blank.
+//   2. Falling back to a bare p-name is worse than falling back to the hostname.
+//      In microformats2 a p-name inside an h-card is the author's name, and a
+//      p-name inside an h-entry is the POST's name, and a pattern that cannot
+//      see which parent it is under picks up the title. On this very document
+//      that fallback would have called the author "Receiver Test #1".
+//
+// So: read the p-author ELEMENT (bounded by its own closing tag, not by a
+// character window, because the post title sits a few hundred characters past
+// this one's end), take its text, then a p-name nested INSIDE it, then the alt
+// of its photo, which mf2 says contributes the name for a p-* property. Every
+// candidate has to survive clean() as a non-empty string to win.
+function authorOf(html, sourceUrl) {
+  const host = new URL(sourceUrl).hostname.replace(/^www\./, "");
+  for (const candidate of [() => authorFromCard(html), () => extractMeta(html, "author"), () => host]) {
+    const value = clean(candidate() || "").slice(0, 120);
+    if (value) return value;
+  }
+  return host;
+}
+
+function authorFromCard(html) {
+  const open = String(html).match(/<(\w+)\b[^>]*class="[^"]*\bp-author\b[^"]*"[^>]*>/i);
+  // `index` is always set on a non-global match; the checker cannot know that.
+  if (!open || open.index === undefined) return "";
+  const inner = elementInner(html, open.index + open[0].length, open[1]);
+  const nested = firstMatch(inner, /class="[^"]*\bp-name\b[^"]*"[^>]*>([\s\S]{0,200}?)</i);
+  const alt = firstMatch(inner, /<img\b[^>]*\balt\s*=\s*"([^"]{1,120})"/i);
+  return clean(nested) || clean(stripTags(inner)) || clean(alt);
+}
+
+/** The inner HTML of an element whose opening tag ended at `from`, found by
+ *  counting its own tag's nesting rather than by taking a fixed window. A window
+ *  is what would run past the h-card's end and into the entry title. An element
+ *  that is never closed yields the rest of the document, which is the safe
+ *  direction here: it can only make an author emptier or longer, never wrong. */
+function elementInner(html, from, tag) {
+  const s = String(html);
+  const scan = new RegExp(`<(/?)${tag}\\b`, "gi");
+  scan.lastIndex = from;
+  let depth = 1;
+  for (let m = scan.exec(s); m; m = scan.exec(s)) {
+    depth += m[1] ? -1 : 1;
+    if (depth === 0) return s.slice(from, m.index);
+  }
+  return s.slice(from);
+}
+
+function stripTags(html) {
+  return String(html).replace(/<(?:[^>"']|"[^"]*"|'[^']*')*>/g, " ");
 }
 
 // The microformats2 class on the link that points at me decides how this reads

@@ -165,3 +165,72 @@ test("every page that accepts a mention also advertises where to send it", async
     );
   }
 });
+
+// The author markup on the first webmention this site ever received, verbatim
+// from webmention.rocks receiver test 1 (2026-08-28). Kept as a fixture rather
+// than paraphrased, because both bugs it caught live in the exact shape: an
+// h-card whose only content is a linked photo, and an h-entry p-name a few
+// hundred characters later that is the POST title rather than anybody's name.
+const REAL_HCARD = (target) => `<html><head><title>Webmention Rocks!</title></head><body>
+  <div class="post-container h-entry">
+    <div class="post-main"><a href="${target}" class="u-in-reply-to">${target}</a></div>
+    <div class="post-main">
+      <div class="left p-author h-card">
+        <a href="/">
+          <img src="/assets/webmention-rocks-icon.png" width="80" class="u-photo" alt="Webmention Rocks!">
+        </a>
+      </div>
+      <div class="right">
+        <h1 class="p-name"><a href="/receive/1">Receiver Test #1</a></h1>
+        <div class="e-content"><p>This test verifies that you accept a Webmention request.</p></div>
+      </div>
+    </div>
+  </div></body></html>`;
+
+async function storeFrom(html, source = "https://webmention.rocks/receive/1/abc") {
+  const db = fakeD1();
+  const target = "https://aadhar.sh/writing/in-flux";
+  const realFetch = globalThis.fetch;
+  testGlobals.fetch = async () => new Response(typeof html === "function" ? html(target) : html,
+    { headers: { "content-type": "text/html" } });
+  try {
+    const ctx = deferredContext();
+    await handleWebmention(wmPost(source, target), wmEnv(db), ctx);
+    await ctx.settle();
+  } finally { testGlobals.fetch = realFetch; }
+  return db.rows[0];
+}
+
+test("an h-card that wraps only a photo names its author, and never blank", async () => {
+  // The regression, measured on the real thing: the p-author pattern matched and
+  // then captured the whitespace between that div's ">" and the "<a" on the next
+  // line. Whitespace is truthy, so the fallback chain stopped and the hostname
+  // floor never ran; clean() reduced the winner to "". Stored author was "".
+  const row = await storeFrom(REAL_HCARD);
+  assert.ok(row, "the mention is stored");
+  assert.equal(row.author, "Webmention Rocks!", "the u-photo alt is what mf2 says carries the name here");
+});
+
+test("an entry title is never mistaken for an author", async () => {
+  // p-name inside an h-card is the author's name; p-name inside an h-entry is the
+  // POST's name. A pattern that cannot see which parent it sits under reads the
+  // title, which is worse than falling back to the hostname because it is
+  // confidently wrong. On the fixture above that mistake reads "Receiver Test #1".
+  const row = await storeFrom(REAL_HCARD);
+  assert.notEqual(row.author, "Receiver Test #1");
+});
+
+test("a source with no author markup falls back to its host, never to nothing", async () => {
+  const target = "https://aadhar.sh/writing/in-flux";
+  const row = await storeFrom(`<html><head><title>A post</title></head><body>
+    <p>see <a href="${target}">this</a></p></body></html>`, "https://mari.example/post");
+  assert.equal(row.author, "mari.example", "the documented floor: an unknown author reads as the site it came from");
+});
+
+test("a p-author with real text still wins over the floor", async () => {
+  const target = "https://aadhar.sh/writing/in-flux";
+  const row = await storeFrom(`<html><body>
+    <div class="h-card p-author"><a class="p-name" href="/">Mari Kondo</a></div>
+    <p>see <a href="${target}">this</a></p></body></html>`, "https://mari.example/post");
+  assert.equal(row.author, "Mari Kondo");
+});
