@@ -27,13 +27,21 @@
 # changes nothing until somebody passes --sharpyuv, which is a separate,
 # deliberate decision (see MAINTENANCE.md).
 #
-# Those were the SHIPPING settings when the measurement was taken; the pipeline
-# passes --speed 2 since 2026-08-28, and the pair has not been re-measured at
-# that effort. Both binaries are still libavif 1.4.2 over aom 3.14.1, so identity
-# is likely and is not evidence. It costs nothing today either way, because
-# nothing here re-encodes an existing tile: a new photo mints a new URL under any
-# encoder. Re-measure before a full re-encode, which is the one run where a
-# vendored-versus-brew difference would rewrite 495 committed URLs.
+# RE-MEASURED AT --speed 2 ON 2026-08-28, which is what the paragraph above used
+# to ask for, on the day the full re-encode made it matter. Byte-identical again:
+# over 3 stems covering both yuv paths (one Monochrom at yuv400, two Fuji at
+# yuv420), at --speed 4 and --speed 2, all 6 pairs matched to the byte. So the
+# 495 URLs that re-minted did so because of --speed and for no other reason.
+#
+# One difference between the two binaries is real and changes nothing here:
+# brew's reports `libyuv: unavailable` while this build links it (1924). That
+# reads like it should move the color conversion and does not, at these settings.
+# Do not take that as a general result, since the pipeline passes neither
+# --sharpyuv nor any option that reaches libyuv's scaler.
+#
+# Re-measure again before the NEXT full re-encode rather than trusting this. The
+# pairing has now held across two efforts and one aom version, which is evidence
+# about those and not a property of the two builds.
 #
 # NETWORK. libavif's ext scripts git-clone aom, libwebp and libyuv, so the first
 # run needs network and about 10 minutes. Everything lands under src/ and build/,

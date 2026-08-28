@@ -80,7 +80,7 @@
       },
       "regenerate": "node tools/photos/build-image-fingerprints.ts",
       "recorded": {
-        "inputs": "3e6649235867f46f930e7d8cbe38a8206243b3260316cd67cf9ea06edaff9d07",
+        "inputs": "ed4ec82c3f689f2c59e4cb0b474c68eca7a83f86d00258021c2934c072c76788",
         "count": 660
       }
     },
@@ -98,7 +98,7 @@
       },
       "regenerate": "bash tools/photos/hash-thumbnails.sh",
       "recorded": {
-        "inputs": "3e6649235867f46f930e7d8cbe38a8206243b3260316cd67cf9ea06edaff9d07",
+        "inputs": "ed4ec82c3f689f2c59e4cb0b474c68eca7a83f86d00258021c2934c072c76788",
         "count": 660
       }
     },

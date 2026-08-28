@@ -238,13 +238,21 @@ while IFS= read -r stem; do
   #    add-photos.sh; the short version is -1.65% bytes across the three tiers
   #    AND +0.162 mean ssimulacra2, for +0.21 s per photo.
   #
-  #    THIS SCRIPT IS WHERE THE MIXED LIBRARY GETS COLLECTED. The committed
-  #    tiles are speed 4 and are deliberately not being re-encoded for the flag
-  #    alone: 118.6 KiB over 495 files against 495 re-minted /i/ URLs, 495
-  #    fingerprint rows, hashes.json, the 12 literal /i/ refs in
-  #    src/pages/garage/tooltips.html, and a p-dict roll. A full run here for
-  #    some OTHER reason picks the 118.6 KiB up for free, and it re-mints every
-  #    URL either way, so the flag adds no cost to that run.
+  #    THIS SCRIPT IS WHERE THE MIXED LIBRARY GOT COLLECTED, on 2026-08-28, by
+  #    a run of exactly this command with no arguments. The library is one
+  #    speed again. It cost the 495 re-minted /i/ URLs, 495 fingerprint rows,
+  #    the a/s/x keys of all 165 stems in hashes.json, the 12 literal /i/ refs
+  #    in src/pages/garage/tooltips.html, and a p-dict roll for that one page.
+  #
+  #    It bought 138,609 bytes, which is 135.4 KiB and MORE than the 118.6 KiB
+  #    projected from 6 stems: -1.816% on the 600 tier, -1.968% on 400,
+  #    -2.007% on 200, -1.882% across all three. Quality rose with it, mean
+  #    ssimulacra2 +0.327 over 24 tier comparisons on 8 stems.
+  #
+  #    The JPG tier did not move by a single byte on any of the 165, which is
+  #    what said no histogram re-bake was owed. Do not read that as a rule: it
+  #    holds because --speed reaches avifenc alone, and any change to the zenc
+  #    call or to the geometry above moves j and owes the bake.
   space=$(sips -g space "$sqjpg" 2>/dev/null | awk '/space:/{print $2}'); [ "$space" = "Gray" ] && yuv=400 || yuv=420
   if want sq; then
   if ! "$ZENC" "$sqjpg" "$jpg" -q "$ZENC_Q" >/dev/null 2>&1; then FAIL=$((FAIL+1)); printf "✗"; continue; fi
