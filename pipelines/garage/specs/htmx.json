@@ -1,0 +1,137 @@
+{
+  "id": "htmx",
+  "title": "Break-even at three submits",
+  "description": "htmx 4.0 costs this site 11.46 KiB Brotli and saves 3,968 bytes per form submit, measured on the one page whose shape it was built for. That page is submitted once.",
+  "status": "watching",
+  "added": "2026-08-28",
+  "bodyHtml": "<h1>Break-even at three submits</h1>\n<p class=\"garage-intro\"><a href=\"https://github.com/bigskysoftware/htmx\" rel=\"external\">htmx</a> shipped <a href=\"https://four.htmx.org/announcements/2026-08-28-htmx-4.0.0-is-released\" rel=\"external\">4.0.0</a> on the day this page was written, and it is a real improvement on 2.x: 36,716 bytes minified against 50,917, with the history cache dropped and <code>XMLHttpRequest</code> traded for <code>fetch</code>. The size is the easy question. The one that decides adoption is how much of your existing JavaScript the library can delete, and that turns on whether your code is already shaped like a request and a swap. This site's mostly isn't. So the measurement went to the one page where htmx should have won, and it lost by a factor of three.</p>\n\n<h2>The library is priced per visitor, never per repo</h2>\n<p>A hypermedia library moves rendering to the server and sends HTML fragments back. That trade is good when a page holds many interactions, because the download amortizes across all of them. It is bad when a page holds one, because the visitor pays the whole library to save one response.</p>\n<p>Which means the honest unit is bytes per visitor rather than bytes on disk, and the number you need is the count of swaps a single visitor performs. Everything below is that arithmetic, run on real bytes.</p>\n\n<h2>The page htmx was built for</h2>\n<p>This site has 54 documents and 17 client modules, and almost none of it fetches HTML. <code>quiz.js</code> makes zero network requests. So do <code>hoist.js</code>, <code>infotip.js</code>, <code>notepad.js</code> and <code>nav-tray.js</code>. The modules that do fetch read JSON and paint structured interfaces from it, which htmx has no opinion about.</p>\n<p>One surface is different. <code>/coffee</code> is a booking form: two plain <code>method=\"POST\"</code> forms, server-rendered responses, 874 bytes of inline script for the slot picker. Submitting it reloads the document. That is the shape htmx was designed for, so that is where the experiment went.</p>\n\n<h2>What was built</h2>\n<p>htmx 4.0.0 vendored as a client asset, loaded on the booking page alone rather than on the shared shell, so the confirmation and decline pages pay nothing. The form keeps its <code>method</code> and <code>action</code> as the no-JavaScript fallback and gains three attributes:</p>\n<pre class=\"hb-code\"><code>&lt;form class=\"book\" id=\"bookform\" method=\"POST\" action=\"/coffee/book\" novalidate\n      hx-post=\"/coffee/book\" hx-swap=\"outerHTML\" hx-disabled-elt=\"#submit\"&gt;</code></pre>\n<p>The Worker grew a branch that answers the body alone when htmx asks for it, and the full document otherwise, which is what a crawler and a visitor with JavaScript off still receive:</p>\n<pre class=\"hb-code\"><code>function bookingReply(req, env) {\n  return req.headers.get(\"HX-Request\")\n    ? new Response(successFragment(env), { headers: htmlHeaders() })\n    : new Response(successPage(env), { headers: htmlHeaders() });\n}</code></pre>\n<p>The build passed with no changes to it. The minifier left htmx byte-identical, since it arrives minified.</p>\n\n<h2>The diff</h2>\n<p>Both trees went through <code>bun run perf:snapshot</code>, which self-builds through the wrangler dry run and reports Brotli q11, the quality the edge serves. Base is <code>3f9f2f9f</code>. Every number here is deterministic, so an unchanged file produces no row at all.</p>\n<div class=\"hb-scroll\"><table class=\"hb-table\">\n  <thead><tr><th>category</th><th>base</th><th>head</th><th>delta</th></tr></thead>\n  <tbody>\n    <tr><td>client assets, Brotli</td><td>86.35 KiB</td><td>97.81 KiB</td><td class=\"hb-bad\">+11.46 KiB, +13.3%</td></tr>\n    <tr><td><code>htmx.js</code></td><td class=\"hb-dim\">absent</td><td>11.46 KiB</td><td class=\"hb-bad\">new</td></tr>\n    <tr><td>Worker bundle, gzip</td><td>239.88 KiB</td><td>239.97 KiB</td><td>+0.09 KiB</td></tr>\n    <tr><td>pages, Brotli</td><td colspan=\"2\">571.62 KiB across 54 files</td><td class=\"hb-dim\">no change</td></tr>\n    <tr><td>dictionary deltas</td><td colspan=\"2\">110 deltas, 498.41 KiB</td><td class=\"hb-dim\">no change</td></tr>\n  </tbody>\n</table></div>\n<p>The page bytes hold still because <code>/coffee</code> is rendered by the Worker rather than staged as a file, so its markup lives in the bundle. The whole cost is one new asset.</p>\n\n<h2>What the swap actually buys</h2>\n<p>This is htmx doing its job well. The confirmation response stops being a document and becomes a pane:</p>\n<div class=\"hb-scroll\"><table class=\"hb-table\">\n  <thead><tr><th>POST /coffee/book</th><th>raw</th><th>gzip</th><th>Brotli q11</th></tr></thead>\n  <tbody>\n    <tr><td>full page, today</td><td>17,001</td><td>5,101</td><td>4,187</td></tr>\n    <tr><td>htmx fragment</td><td>515</td><td>291</td><td>219</td></tr>\n    <tr class=\"hb-total\"><td>saved per submit</td><td>16,486</td><td>4,810</td><td>3,968</td></tr>\n  </tbody>\n</table></div>\n<p>95% off the wire on that response. If the argument were only about response size, htmx would win this page outright.</p>\n\n<h2>The arithmetic that closes it</h2>\n<p>11,735 bytes of library against 3,968 bytes saved per submit is a break-even at <b>2.96 submits per visitor</b>. A booking form is submitted at most once, so the third submit never arrives.</p>\n<p>Move the sliders. The library is a first-visit cost, because the asset is cached afterwards, and the saving lands on every submit whether or not the visitor is new. Those two facts are the whole model, and they are enough to find the region where htmx wins.</p>\n<div class=\"hb-demo\">\n  <div class=\"hb-controls\">\n    <label for=\"hb-book\">visitors who submit the form <output id=\"hb-book-out\">4%</output></label>\n    <input type=\"range\" id=\"hb-book\" min=\"0\" max=\"100\" value=\"4\" step=\"1\">\n    <label for=\"hb-repeat\">visits that are repeat visits <output id=\"hb-repeat-out\">15%</output></label>\n    <input type=\"range\" id=\"hb-repeat\" min=\"0\" max=\"100\" value=\"15\" step=\"1\">\n    <button type=\"button\" id=\"hb-reset\" class=\"hb-btn\">reset to this page's guess</button>\n  </div>\n  <div class=\"hb-readout\">\n    <div class=\"hb-bars\">\n      <div class=\"hb-bar-row\"><span class=\"hb-bar-label\">library</span><span class=\"hb-bar hb-bar-cost\" id=\"hb-bar-cost\"></span><span class=\"hb-bar-num\" id=\"hb-cost\"></span></div>\n      <div class=\"hb-bar-row\"><span class=\"hb-bar-label\">saved</span><span class=\"hb-bar hb-bar-save\" id=\"hb-bar-save\"></span><span class=\"hb-bar-num\" id=\"hb-save\"></span></div>\n    </div>\n    <p class=\"hb-verdict\" id=\"hb-verdict\"></p>\n    <p class=\"hb-legend\">Per 1,000 visits, Brotli bytes. Library cost is 11,735 per first visit; saving is 3,968 per submit. The booking rate would have to pass <span id=\"hb-cross\">the crossover</span> for htmx to pay for itself at the current repeat rate.</p>\n  </div>\n</div>\n<p>The default positions are a guess about a personal booking page, and they are the part of this page you should distrust most. The site records no funnel for <code>/coffee</code>, so the 4% is an estimate rather than a measurement. Drag it and see how far it has to go.</p>\n\n<h2>Three reasons the rest of the site is worse</h2>\n<p>The booking page is htmx's best case here. The surfaces that carry the actual JavaScript are worse, for reasons that have nothing to do with the library's quality.</p>\n<h3>Rendering would move onto the scarcest resource</h3>\n<p>htmx returns HTML fragments, so every swap is Worker CPU. This account runs on the Workers free tier, where CPU under sustained load is what has actually taken surfaces down here: a signature fan-out across 28 probes clamped requests at 10 ms and blacked out <a href=\"/lens\">the lens</a> for a window in August. Client rendering off a payload already in memory costs the platform nothing.</p>\n<h3>The caching model runs the other way</h3>\n<p>The photo tooltips read <code>/images/exif.json</code>, which is 55,674 bytes raw and <b>2,764 Brotli</b>, warmed once when the browser goes idle, and it carries the metadata for all 158 photographs. Under htmx that becomes 158 separate fragment requests, one per hover, each one a Worker invocation and a round trip. The site front-loads bytes into assets that go nearly free on the second visit, which is the opposite bet.</p>\n<h3>Boosted navigation is slower than what already ships</h3>\n<p>41 documents here carry a <code>speculationrules</code> block at <code>moderate</code> eagerness, so the next page is rendered before the click lands. <code>hx-boost</code> is a fetch on click, which is strictly later. The cross-document View Transition was removed from this site in July for the same reason. htmx 4 also drops the history cache and refetches on back navigation, where the browser's own bfcache restores the page with its state in place.</p>\n\n<h2>What the snapshot cannot see</h2>\n<p>A wire-size diff measures files. It cannot measure round trips, and round trips are where the argument above actually lives. So the diff proves the narrow claim, which is that the library is additive on this site's one hypermedia-shaped page, and the three reasons remain reasoning rather than measurement.</p>\n<p>Two smaller things the experiment left on the table. htmx landed as a plain top-level asset, outside the content-hashed <code>/a/</code> tier, so it received no shared-compression dictionary and the delta count held at 110. Giving it that treatment would make repeat visits nearly free and leave the first visit exactly where it is. And the inline slot picker survived untouched, because an <code>aria-pressed</code> toggle and a <code>toLocaleString</code> button label are not requests. Lines of JavaScript this deleted: zero.</p>\n\n<h2>What would change the verdict</h2>\n<p>A surface on this site with several swaps per visitor. That is the whole condition. A multi-step form, a filterable list somebody actually pages through, a comment thread: any of those move the submits-per-visitor number above three and the arithmetic flips on its own.</p>\n<p>The finding that would falsify the page is a measurement showing the fragment saving is larger than 3,968 bytes on a real interaction, or a Worker rendering cost near zero under load. The first is easy to imagine on a heavier page than this one. The second is the claim the free-tier CPU ceiling makes hard.</p>",
+  "pageCss": ".hb-code{background:#f4f6fa;border:1px solid #c9d4e4;border-left:3px solid #0831d9;padding:8px 10px;margin:0 0 12px;overflow-x:auto;font-size:9pt;line-height:1.45}\n.hb-code code{white-space:pre}\n.hb-scroll{overflow-x:auto;margin:0 0 12px}\n.hb-table{border-collapse:collapse;width:100%;font-size:9.5pt}\n.hb-table th,.hb-table td{border:1px solid #c9d4e4;padding:4px 8px;text-align:right}\n.hb-table th:first-child,.hb-table td:first-child{text-align:left}\n.hb-table thead th{background:#dce6f5;font-family:var(--font-caption);color:#0831d9}\n.hb-table tbody tr:nth-child(even){background:#f6f8fc}\n.hb-table .hb-total td{font-weight:bold;border-top:2px solid #8d9bb0}\n.hb-bad{color:#a8330f}\n.hb-dim{color:#69758a}\n.hb-demo{border:1px solid #8d9bb0;background:#f1f4f8;padding:12px;margin:0 0 14px;box-shadow:inset 1px 1px 0 #fff,inset -1px -1px 0 #b6c0d0}\n.hb-controls{display:grid;gap:4px;margin-bottom:12px}\n.hb-controls label{font-size:9pt;color:#3a4657;display:flex;justify-content:space-between;align-items:baseline}\n.hb-controls output{font-family:var(--font-mono);font-weight:bold;color:#0831d9}\n.hb-controls input[type=range]{width:100%;margin:0 0 6px}\n.hb-btn{font-family:var(--font-ui);font-size:8.5pt;padding:3px 10px;justify-self:start;background:linear-gradient(180deg,#fff,#eceef3 45%,#dfe3ea);border:1px solid #7f8ea3;border-radius:3px;cursor:pointer}\n.hb-btn:active{background:linear-gradient(180deg,#dfe3ea,#eceef3)}\n.hb-bars{display:grid;gap:5px;margin-bottom:8px}\n.hb-bar-row{display:grid;grid-template-columns:56px 1fr 92px;align-items:center;gap:8px;font-size:9pt}\n.hb-bar-label{color:#3a4657}\n.hb-bar{height:15px;border:1px solid #7f8ea3;min-width:1px;transition:width .12s linear}\n.hb-bar-cost{background:linear-gradient(180deg,#e8967c,#c9501f)}\n.hb-bar-save{background:linear-gradient(180deg,#8fd08a,#2f8b3f)}\n.hb-bar-num{font-family:var(--font-mono);font-size:8.5pt;text-align:right;color:#3a4657}\n.hb-verdict{font-family:var(--font-caption);font-size:11pt;margin:0 0 6px;padding:6px 8px;border:1px solid #b6c0d0;background:#fff}\n.hb-verdict.hb-win{border-color:#2f8b3f;background:#eefaee;color:#1f6b2c}\n.hb-verdict.hb-lose{border-color:#c9501f;background:#fdf1ec;color:#8c3410}\n.hb-legend{font-size:8.5pt;color:#69758a;margin:0}\n@media(max-width:620px){.hb-bar-row{grid-template-columns:48px 1fr 78px}}",
+  "pageJs": "(function () {\n  // Two constants, both measured, both Brotli q11 because that is what the edge\n  // serves: the library is a per-first-visit cost, the saving is per submit.\n  var LIB = 11735, SAVE = 3968, VISITS = 1000;\n\n  var book = document.getElementById(\"hb-book\");\n  var repeat = document.getElementById(\"hb-repeat\");\n  if (!book || !repeat) return;\n\n  var bookOut = document.getElementById(\"hb-book-out\");\n  var repeatOut = document.getElementById(\"hb-repeat-out\");\n  var barCost = document.getElementById(\"hb-bar-cost\");\n  var barSave = document.getElementById(\"hb-bar-save\");\n  var costNum = document.getElementById(\"hb-cost\");\n  var saveNum = document.getElementById(\"hb-save\");\n  var verdict = document.getElementById(\"hb-verdict\");\n  var cross = document.getElementById(\"hb-cross\");\n\n  // Per 1,000 visits the totals run into megabytes, so the unit follows the\n  // number rather than printing four digits of KiB.\n  var bytes = function (n) {\n    return n >= 1048576 ? (n / 1048576).toFixed(2) + \" MiB\" : (n / 1024).toFixed(1) + \" KiB\";\n  };\n\n  function paint() {\n    var b = Number(book.value) / 100;\n    var r = Number(repeat.value) / 100;\n\n    var cost = VISITS * (1 - r) * LIB;\n    var saved = VISITS * b * SAVE;\n    var net = cost - saved;\n\n    bookOut.textContent = book.value + \"%\";\n    repeatOut.textContent = repeat.value + \"%\";\n\n    // Both bars share one scale, so their lengths stay comparable.\n    var top = Math.max(cost, saved, 1);\n    barCost.style.width = (cost / top * 100).toFixed(1) + \"%\";\n    barSave.style.width = (saved / top * 100).toFixed(1) + \"%\";\n    costNum.textContent = bytes(cost);\n    saveNum.textContent = bytes(saved);\n\n    if (net > 0) {\n      verdict.className = \"hb-verdict hb-lose\";\n      verdict.textContent = \"htmx costs \" + bytes(net) + \" more per 1,000 visits.\";\n    } else if (net < 0) {\n      verdict.className = \"hb-verdict hb-win\";\n      verdict.textContent = \"htmx saves \" + bytes(-net) + \" per 1,000 visits.\";\n    } else {\n      verdict.className = \"hb-verdict\";\n      verdict.textContent = \"Exactly break-even.\";\n    }\n\n    // The booking rate that would pay for the library at this repeat rate. Above\n    // 100% it needs more than one submit per visitor, which a booking form cannot\n    // produce, so the readout says so rather than printing an unreachable number.\n    var needed = (1 - r) * LIB / SAVE;\n    cross.textContent = needed > 1\n      ? Math.round(needed * 100) + \"%, which is more than one submit per visitor\"\n      : Math.round(needed * 100) + \"%\";\n  }\n\n  book.addEventListener(\"input\", paint);\n  repeat.addEventListener(\"input\", paint);\n\n  var reset = document.getElementById(\"hb-reset\");\n  if (reset) reset.addEventListener(\"click\", function () {\n    book.value = \"4\";\n    repeat.value = \"15\";\n    paint();\n  });\n\n  paint();\n})();",
+  "editorial": {
+    "reader": "Someone who read the htmx 4.0 release, finds the hypermedia argument persuasive, and wants to know what adopting it would cost a site whose JavaScript was written without it.",
+    "problem": "The library's size is easy to look up and decides almost nothing on its own. What settles adoption is how much existing JavaScript htmx can delete, and that depends on a property of your code most people have never measured: how many request-and-swap interactions one visitor actually performs.",
+    "thesis": "A hypermedia library is priced per visitor rather than per repository, so its download has to amortize across the swaps a single visit performs, and a page with one interaction can never repay a library with none of its own.",
+    "evidence": [
+      "The wire-size diff against 3f9f2f9f reports client assets going from 86.35 to 97.81 KiB Brotli, a single new file, with the Worker bundle moving 0.09 KiB and the page bytes and the 110 dictionary deltas holding still.",
+      "The confirmation response drops from 4,187 to 219 Brotli bytes when htmx asks for the body alone, which is 95% off the wire on that one response.",
+      "Dividing the 11,735-byte library by the 3,968 bytes saved per submit puts break-even at 2.96 submits per visitor, and a booking form is submitted at most once.",
+      "The photo tooltips read one 2,764-byte Brotli file covering 158 photographs, warmed on idle, where a fragment-per-hover design would make 158 requests."
+    ],
+    "uncertainty": "The diff measures files rather than round trips, so the claim it proves is the narrow one about this page. The three arguments against htmx on the rest of the site rest on the free-tier CPU ceiling and on the caching model, and neither was measured under a real htmx build. The default slider positions are an estimate, since no funnel is recorded for the booking page."
+  },
+  "understanding": {
+    "intro": "Three numbers decide this page. Reconstruct them before you close the hood.",
+    "questions": [
+      {
+        "q": "Break-even came out at 2.96 submits per visitor. Which pair of numbers produces it?",
+        "options": [
+          {
+            "t": "The library's 11,735 Brotli bytes divided by the 3,968 bytes saved on each submit.",
+            "ok": true,
+            "why": "Right. The library is paid once per first visit and the saving arrives once per swap, so their ratio is the number of swaps that repay it."
+          },
+          {
+            "t": "The library's 36,716 raw bytes divided by the full page's 17,001 raw bytes.",
+            "why": "Those are both real measurements, and they compare a compressed-on-the-wire cost against an uncompressed page. The edge serves Brotli, so mixing the two units gives a ratio that describes no actual visitor."
+          },
+          {
+            "t": "The Worker bundle's 0.09 KiB growth divided by the saving.",
+            "why": "The bundle delta is the template change, which every visitor pays through the Worker regardless. It is far too small to drive the decision and it is not what the visitor downloads."
+          },
+          {
+            "t": "The 54 pages divided by the 17 client modules.",
+            "why": "Neither number appears in the trade. The page count and the module count describe the site's shape rather than the cost of one interaction."
+          }
+        ]
+      },
+      {
+        "q": "The htmx fragment is 95% smaller than the full page it replaces. Why doesn't that settle the question in htmx's favour?",
+        "options": [
+          {
+            "t": "The saving arrives only when somebody submits, and a booking form accepts one submit per visitor, so it can be collected at most once against a library paid in full.",
+            "ok": true,
+            "why": "Right. A large per-interaction saving is worth little when the interaction happens once. The size of the win and the frequency of the win are separate quantities, and only their product pays for the download."
+          },
+          {
+            "t": "Fragments are served uncompressed, so the measured saving overstates the real one.",
+            "why": "Both figures in that table are Brotli q11, the quality the edge actually serves. The 3,968-byte saving is already a compressed comparison."
+          },
+          {
+            "t": "The full page would still be sent alongside the fragment.",
+            "why": "The Worker branches on the HX-Request header and sends one response or the other. Nothing sends both."
+          },
+          {
+            "t": "The browser cannot cache a fragment, so it costs more over time.",
+            "why": "Neither response is cached here, and the comparison is a single submit against a single submit. Caching governs the library asset rather than the reply."
+          }
+        ]
+      },
+      {
+        "q": "The site serves all 158 photographs' metadata as one 2,764-byte file warmed on idle. What does that example establish about the fragment model?",
+        "options": [
+          {
+            "t": "That batching a whole dataset into one cached payload beats per-item fragments when a visitor may touch many items, because the fragment design pays a round trip for each one.",
+            "ok": true,
+            "why": "Right. The current design spends one request covering everything a visitor might hover; the fragment design spends one request per hover. The comparison is a single warm fetch against up to 158 cold ones."
+          },
+          {
+            "t": "That JSON compresses better than HTML in every case.",
+            "why": "The file compresses well because its keys repeat across 158 records, which is a property of the batching rather than of the format. An HTML batch would compress well too."
+          },
+          {
+            "t": "That the tooltips would break under htmx.",
+            "why": "They would work. The objection is cost rather than correctness: the interface would still render, and it would spend a request and Worker CPU on each hover."
+          },
+          {
+            "t": "That htmx cannot render a photograph's metadata.",
+            "why": "It could render any of it perfectly well. What changes is where the rendering happens and how many times the network is asked."
+          }
+        ]
+      },
+      {
+        "q": "The page argues hx-boost would be slower here than what already ships. What is it competing against?",
+        "options": [
+          {
+            "t": "A speculationrules block on 41 documents that prerenders the next page before the click, so the document is ready rather than requested.",
+            "ok": true,
+            "why": "Right. Boost improves on a full reload and loses to prerendering, because prerendering has already done the work when the click lands. The same reasoning removed this site's cross-document View Transition in July."
+          },
+          {
+            "t": "A service worker that caches every page.",
+            "why": "The service worker here was retired and is now a small unregister stub. Nothing on this site serves pages from it."
+          },
+          {
+            "t": "Server-side rendering of the destination page.",
+            "why": "Both designs end with a server-rendered page. What separates them is when the request happens, which is before the click in one case and after it in the other."
+          },
+          {
+            "t": "The dictionary deltas, which already compress the next page.",
+            "why": "Dictionary compression shrinks the response, and it still requires the request to be made. Prerendering is what removes the wait."
+          }
+        ]
+      },
+      {
+        "q": "What result would falsify this page's conclusion?",
+        "options": [
+          {
+            "t": "A surface on this site where one visitor performs more than three swaps, which would carry the same arithmetic to the opposite verdict.",
+            "ok": true,
+            "why": "Right. The conclusion is arithmetic rather than a preference, so the way to overturn it is a higher swap count. A multi-step form or a list somebody genuinely pages through would do it without any new argument."
+          },
+          {
+            "t": "A future htmx release that is smaller than 11,735 Brotli bytes.",
+            "why": "It moves the threshold and leaves the shape intact. htmx would have to reach zero for a page with one submit to repay it, and the fragment saving is fixed at 3,968 bytes."
+          },
+          {
+            "t": "A page where the full document response is larger than 17,001 bytes.",
+            "why": "A heavier page raises the saving per submit, which helps, and the count of submits per visitor is what the conclusion turns on. That is why the correct answer names frequency rather than size."
+          },
+          {
+            "t": "Discovering that the Worker bundle grew by more than 0.09 KiB.",
+            "why": "The bundle delta is the smallest term in the comparison. Changing it in either direction moves nothing."
+          }
+        ]
+      }
+    ]
+  }
+}

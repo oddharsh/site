@@ -166,6 +166,12 @@
     <priority>0.3</priority>
   </url>
   <url>
+    <loc>https://aadhar.sh/garage/htmx</loc>
+    <lastmod>2026-08-28</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
     <loc>https://aadhar.sh/garage/typed-config</loc>
     <lastmod>2026-08-24</lastmod>
     <changefreq>monthly</changefreq>
