@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#2D78BD">
+<link rel="preload" as="style" href="/luna.css">
+<title>aadhar.sh/garage/htmx: Break-even at three submits</title>
+<meta name="description" content="htmx 4.0 costs this site 11.46 KiB Brotli and saves 3,968 bytes per form submit, measured on the one page whose shape it was built for. That page is submitted once.">
+<link rel="canonical" href="https://aadhar.sh/garage/htmx">
+<meta property="og:type" content="article">
+<meta property="og:title" content="aadhar.sh/garage/htmx: Break-even at three submits">
+<meta property="og:description" content="htmx 4.0 costs this site 11.46 KiB Brotli and saves 3,968 bytes per form submit, measured on the one page whose shape it was built for. That page is submitted once.">
+<meta property="og:url" content="https://aadhar.sh/garage/htmx">
+<meta name="twitter:card" content="summary_large_image">
+<meta property="og:image" content="https://aadhar.sh/og/garage-htmx.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The aadhar.sh/garage/htmx interactive demo, screenshotted">
+<meta name="twitter:image" content="https://aadhar.sh/og/garage-htmx.png">
+<style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}html{background:linear-gradient(180deg,oklch(56% .13 250),oklch(73% .10 236) 50%,oklch(88% .05 232) 60%,oklch(60% .16 140))}
+body{background:transparent;font-family:var(--font-ui);font-size:10.5pt;line-height:1.5;color:#181818;padding:24px 12px 60px;min-height:100vh}
+.window{max-width:820px;margin:0 auto;background:#fff;border:2px solid #0831d9;border-right-color:#001ea0;border-bottom-color:#001ea0;border-radius:8px 8px 0 0;overflow:hidden;box-shadow:inset 1px 1px 0 #166aee,inset -1px -1px 0 #00138c,4px 4px 0 rgba(0,30,160,.35)}
+.title-bar{background:linear-gradient(180deg,oklch(70% .15 258),oklch(60% .20 261) 8%,oklch(51% .225 263) 18%,oklch(50% .225 263) 86%,oklch(58% .18 260));color:#fff;font-family:var(--font-caption);font-weight:bold;font-size:11pt;padding:4px 5px 4px 8px;display:flex;align-items:center;gap:6px;text-shadow:1px 1px #0f1089;user-select:none}
+.title-bar .title-text{flex:1;min-width:0;display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.title-bar .icon{width:14px;height:14px;flex:0 0 14px;background:#fff;border:1px solid #8f4d06;position:relative}.title-bar .icon:before{content:"✦";position:absolute;inset:0;display:grid;place-items:center;font-size:10px;color:#ef8f24;text-shadow:none}
+.controls{display:inline-flex;align-items:center;gap:2px}.controls span,.controls a{position:relative;box-sizing:border-box;width:21px;height:21px;display:inline-block;overflow:hidden;font-size:0;color:transparent;border:1px solid #6696eb;border-radius:3px;text-decoration:none;cursor:pointer;background:linear-gradient(180deg,#5f8cf7,#3a71f5 22%,#3e73f5 55%,#2a70f2 82%,#1045be)}.controls .close{border-color:#d8401c;background:linear-gradient(180deg,#e8795f,#e45f40 30%,#e45d3d 52%,#e2552a 80%,#ae3110)}.controls .min:before{content:"";position:absolute;left:5px;right:5px;bottom:5px;height:2px;background:#fff}.controls .max:before{content:"";position:absolute;left:5px;top:5px;width:11px;height:9px;border:1px solid #fff;border-top-width:2px}.controls .close:before,.controls .close:after{content:"";position:absolute;left:50%;top:50%;width:13px;height:2px;margin:-1px 0 0 -6.5px;background:#fff}.controls .close:before{transform:rotate(45deg)}.controls .close:after{transform:rotate(-45deg)}
+.content{padding:18px 20px 8px;background:#fffdf6;border-top:1px solid #8d9bb0}.content h1,.content h2,.content h3{font-family:var(--font-caption);color:#0831d9;line-height:1.25}.content h1{font-size:18pt;margin:0 0 7px}.content h2{font-size:13pt;margin:18px 0 5px}.content h3{font-size:11pt;margin:13px 0 4px}.content p{margin:0 0 12px}.content a{color:#153eab}.content code,.content pre{font-family:var(--font-mono)}
+.garage-intro{font-size:11pt;color:#444;max-width:70ch}.garage-meta{font-size:8.5pt;color:#69758a;border-top:1px solid #d8dfeb;margin-top:18px;padding-top:6px}.status{border-top:1px solid #d1d9e4;background:#f1f4f8;padding:4px 10px;display:flex;gap:8px;flex-wrap:wrap;font-size:8.5pt;color:#586579}.status span:after{content:"·";margin-left:8px;color:#9ca8b8}.status span:last-child:after{content:""}
+@media(max-width:620px){body{padding:8px 5px 42px}.content{padding:14px 12px 6px}.window{border-radius:5px 5px 0 0}}
+
+.hb-code{background:#f4f6fa;border:1px solid #c9d4e4;border-left:3px solid #0831d9;padding:8px 10px;margin:0 0 12px;overflow-x:auto;font-size:9pt;line-height:1.45}
+.hb-code code{white-space:pre}
+.hb-scroll{overflow-x:auto;margin:0 0 12px}
+.hb-table{border-collapse:collapse;width:100%;font-size:9.5pt}
+.hb-table th,.hb-table td{border:1px solid #c9d4e4;padding:4px 8px;text-align:right}
+.hb-table th:first-child,.hb-table td:first-child{text-align:left}
+.hb-table thead th{background:#dce6f5;font-family:var(--font-caption);color:#0831d9}
+.hb-table tbody tr:nth-child(even){background:#f6f8fc}
+.hb-table .hb-total td{font-weight:bold;border-top:2px solid #8d9bb0}
+.hb-bad{color:#a8330f}
+.hb-dim{color:#69758a}
+.hb-demo{border:1px solid #8d9bb0;background:#f1f4f8;padding:12px;margin:0 0 14px;box-shadow:inset 1px 1px 0 #fff,inset -1px -1px 0 #b6c0d0}
+.hb-controls{display:grid;gap:4px;margin-bottom:12px}
+.hb-controls label{font-size:9pt;color:#3a4657;display:flex;justify-content:space-between;align-items:baseline}
+.hb-controls output{font-family:var(--font-mono);font-weight:bold;color:#0831d9}
+.hb-controls input[type=range]{width:100%;margin:0 0 6px}
+.hb-btn{font-family:var(--font-ui);font-size:8.5pt;padding:3px 10px;justify-self:start;background:linear-gradient(180deg,#fff,#eceef3 45%,#dfe3ea);border:1px solid #7f8ea3;border-radius:3px;cursor:pointer}
+.hb-btn:active{background:linear-gradient(180deg,#dfe3ea,#eceef3)}
+.hb-bars{display:grid;gap:5px;margin-bottom:8px}
+.hb-bar-row{display:grid;grid-template-columns:56px 1fr 92px;align-items:center;gap:8px;font-size:9pt}
+.hb-bar-label{color:#3a4657}
+.hb-bar{height:15px;border:1px solid #7f8ea3;min-width:1px;transition:width .12s linear}
+.hb-bar-cost{background:linear-gradient(180deg,#e8967c,#c9501f)}
+.hb-bar-save{background:linear-gradient(180deg,#8fd08a,#2f8b3f)}
+.hb-bar-num{font-family:var(--font-mono);font-size:8.5pt;text-align:right;color:#3a4657}
+.hb-verdict{font-family:var(--font-caption);font-size:11pt;margin:0 0 6px;padding:6px 8px;border:1px solid #b6c0d0;background:#fff}
+.hb-verdict.hb-win{border-color:#2f8b3f;background:#eefaee;color:#1f6b2c}
+.hb-verdict.hb-lose{border-color:#c9501f;background:#fdf1ec;color:#8c3410}
+.hb-legend{font-size:8.5pt;color:#69758a;margin:0}
+@media(max-width:620px){.hb-bar-row{grid-template-columns:48px 1fr 78px}}
+</style>
+<link rel="stylesheet" href="/luna.css">
+</head>
+<body>
+<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<div class="window">
+  <div class="title-bar" aria-hidden="true">
+    <span class="title-text"><span class="icon"></span>aadhar.sh/garage/htmx</span>
+    <span class="controls"><span class="min"></span><span class="max"></span><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
+  </div>
+  <div class="content">
+<h1>Break-even at three submits</h1>
+<p class="garage-intro"><a href="https://github.com/bigskysoftware/htmx" rel="external">htmx</a> shipped <a href="https://four.htmx.org/announcements/2026-08-28-htmx-4.0.0-is-released" rel="external">4.0.0</a> on the day this page was written, and it is a real improvement on 2.x: 36,716 bytes minified against 50,917, with the history cache dropped and <code>XMLHttpRequest</code> traded for <code>fetch</code>. The size is the easy question. The one that decides adoption is how much of your existing JavaScript the library can delete, and that turns on whether your code is already shaped like a request and a swap. This site's mostly isn't. So the measurement went to the one page where htmx should have won, and it lost by a factor of three.</p>
+
+<h2>The library is priced per visitor, never per repo</h2>
+<p>A hypermedia library moves rendering to the server and sends HTML fragments back. That trade is good when a page holds many interactions, because the download amortizes across all of them. It is bad when a page holds one, because the visitor pays the whole library to save one response.</p>
+<p>Which means the honest unit is bytes per visitor rather than bytes on disk, and the number you need is the count of swaps a single visitor performs. Everything below is that arithmetic, run on real bytes.</p>
+
+<h2>The page htmx was built for</h2>
+<p>This site has 54 documents and 17 client modules, and almost none of it fetches HTML. <code>quiz.js</code> makes zero network requests. So do <code>hoist.js</code>, <code>infotip.js</code>, <code>notepad.js</code> and <code>nav-tray.js</code>. The modules that do fetch read JSON and paint structured interfaces from it, which htmx has no opinion about.</p>
+<p>One surface is different. <code>/coffee</code> is a booking form: two plain <code>method="POST"</code> forms, server-rendered responses, 874 bytes of inline script for the slot picker. Submitting it reloads the document. That is the shape htmx was designed for, so that is where the experiment went.</p>
+
+<h2>What was built</h2>
+<p>htmx 4.0.0 vendored as a client asset, loaded on the booking page alone rather than on the shared shell, so the confirmation and decline pages pay nothing. The form keeps its <code>method</code> and <code>action</code> as the no-JavaScript fallback and gains three attributes:</p>
+<pre class="hb-code"><code>&lt;form class="book" id="bookform" method="POST" action="/coffee/book" novalidate
+      hx-post="/coffee/book" hx-swap="outerHTML" hx-disabled-elt="#submit"&gt;</code></pre>
+<p>The Worker grew a branch that answers the body alone when htmx asks for it, and the full document otherwise, which is what a crawler and a visitor with JavaScript off still receive:</p>
+<pre class="hb-code"><code>function bookingReply(req, env) {
+  return req.headers.get("HX-Request")
+    ? new Response(successFragment(env), { headers: htmlHeaders() })
+    : new Response(successPage(env), { headers: htmlHeaders() });
+}</code></pre>
+<p>The build passed with no changes to it. The minifier left htmx byte-identical, since it arrives minified.</p>
+
+<h2>The diff</h2>
+<p>Both trees went through <code>bun run perf:snapshot</code>, which self-builds through the wrangler dry run and reports Brotli q11, the quality the edge serves. Base is <code>3f9f2f9f</code>. Every number here is deterministic, so an unchanged file produces no row at all.</p>
+<div class="hb-scroll"><table class="hb-table">
+  <thead><tr><th>category</th><th>base</th><th>head</th><th>delta</th></tr></thead>
+  <tbody>
+    <tr><td>client assets, Brotli</td><td>86.35 KiB</td><td>97.81 KiB</td><td class="hb-bad">+11.46 KiB, +13.3%</td></tr>
+    <tr><td><code>htmx.js</code></td><td class="hb-dim">absent</td><td>11.46 KiB</td><td class="hb-bad">new</td></tr>
+    <tr><td>Worker bundle, gzip</td><td>239.88 KiB</td><td>239.97 KiB</td><td>+0.09 KiB</td></tr>
+    <tr><td>pages, Brotli</td><td colspan="2">571.62 KiB across 54 files</td><td class="hb-dim">no change</td></tr>
+    <tr><td>dictionary deltas</td><td colspan="2">110 deltas, 498.41 KiB</td><td class="hb-dim">no change</td></tr>
+  </tbody>
+</table></div>
+<p>The page bytes hold still because <code>/coffee</code> is rendered by the Worker rather than staged as a file, so its markup lives in the bundle. The whole cost is one new asset.</p>
+
+<h2>What the swap actually buys</h2>
+<p>This is htmx doing its job well. The confirmation response stops being a document and becomes a pane:</p>
+<div class="hb-scroll"><table class="hb-table">
+  <thead><tr><th>POST /coffee/book</th><th>raw</th><th>gzip</th><th>Brotli q11</th></tr></thead>
+  <tbody>
+    <tr><td>full page, today</td><td>17,001</td><td>5,101</td><td>4,187</td></tr>
+    <tr><td>htmx fragment</td><td>515</td><td>291</td><td>219</td></tr>
+    <tr class="hb-total"><td>saved per submit</td><td>16,486</td><td>4,810</td><td>3,968</td></tr>
+  </tbody>
+</table></div>
+<p>95% off the wire on that response. If the argument were only about response size, htmx would win this page outright.</p>
+
+<h2>The arithmetic that closes it</h2>
+<p>11,735 bytes of library against 3,968 bytes saved per submit is a break-even at <b>2.96 submits per visitor</b>. A booking form is submitted at most once, so the third submit never arrives.</p>
+<p>Move the sliders. The library is a first-visit cost, because the asset is cached afterwards, and the saving lands on every submit whether or not the visitor is new. Those two facts are the whole model, and they are enough to find the region where htmx wins.</p>
+<div class="hb-demo">
+  <div class="hb-controls">
+    <label for="hb-book">visitors who submit the form <output id="hb-book-out">4%</output></label>
+    <input type="range" id="hb-book" min="0" max="100" value="4" step="1">
+    <label for="hb-repeat">visits that are repeat visits <output id="hb-repeat-out">15%</output></label>
+    <input type="range" id="hb-repeat" min="0" max="100" value="15" step="1">
+    <button type="button" id="hb-reset" class="hb-btn">reset to this page's guess</button>
+  </div>
+  <div class="hb-readout">
+    <div class="hb-bars">
+      <div class="hb-bar-row"><span class="hb-bar-label">library</span><span class="hb-bar hb-bar-cost" id="hb-bar-cost"></span><span class="hb-bar-num" id="hb-cost"></span></div>
+      <div class="hb-bar-row"><span class="hb-bar-label">saved</span><span class="hb-bar hb-bar-save" id="hb-bar-save"></span><span class="hb-bar-num" id="hb-save"></span></div>
+    </div>
+    <p class="hb-verdict" id="hb-verdict"></p>
+    <p class="hb-legend">Per 1,000 visits, Brotli bytes. Library cost is 11,735 per first visit; saving is 3,968 per submit. The booking rate would have to pass <span id="hb-cross">the crossover</span> for htmx to pay for itself at the current repeat rate.</p>
+  </div>
+</div>
+<p>The default positions are a guess about a personal booking page, and they are the part of this page you should distrust most. The site records no funnel for <code>/coffee</code>, so the 4% is an estimate rather than a measurement. Drag it and see how far it has to go.</p>
+
+<h2>Three reasons the rest of the site is worse</h2>
+<p>The booking page is htmx's best case here. The surfaces that carry the actual JavaScript are worse, for reasons that have nothing to do with the library's quality.</p>
+<h3>Rendering would move onto the scarcest resource</h3>
+<p>htmx returns HTML fragments, so every swap is Worker CPU. This account runs on the Workers free tier, where CPU under sustained load is what has actually taken surfaces down here: a signature fan-out across 28 probes clamped requests at 10 ms and blacked out <a href="/lens">the lens</a> for a window in August. Client rendering off a payload already in memory costs the platform nothing.</p>
+<h3>The caching model runs the other way</h3>
+<p>The photo tooltips read <code>/images/exif.json</code>, which is 55,674 bytes raw and <b>2,764 Brotli</b>, warmed once when the browser goes idle, and it carries the metadata for all 158 photographs. Under htmx that becomes 158 separate fragment requests, one per hover, each one a Worker invocation and a round trip. The site front-loads bytes into assets that go nearly free on the second visit, which is the opposite bet.</p>
+<h3>Boosted navigation is slower than what already ships</h3>
+<p>41 documents here carry a <code>speculationrules</code> block at <code>moderate</code> eagerness, so the next page is rendered before the click lands. <code>hx-boost</code> is a fetch on click, which is strictly later. The cross-document View Transition was removed from this site in July for the same reason. htmx 4 also drops the history cache and refetches on back navigation, where the browser's own bfcache restores the page with its state in place.</p>
+
+<h2>What the snapshot cannot see</h2>
+<p>A wire-size diff measures files. It cannot measure round trips, and round trips are where the argument above actually lives. So the diff proves the narrow claim, which is that the library is additive on this site's one hypermedia-shaped page, and the three reasons remain reasoning rather than measurement.</p>
+<p>Two smaller things the experiment left on the table. htmx landed as a plain top-level asset, outside the content-hashed <code>/a/</code> tier, so it received no shared-compression dictionary and the delta count held at 110. Giving it that treatment would make repeat visits nearly free and leave the first visit exactly where it is. And the inline slot picker survived untouched, because an <code>aria-pressed</code> toggle and a <code>toLocaleString</code> button label are not requests. Lines of JavaScript this deleted: zero.</p>
+
+<h2>What would change the verdict</h2>
+<p>A surface on this site with several swaps per visitor. That is the whole condition. A multi-step form, a filterable list somebody actually pages through, a comment thread: any of those move the submits-per-visitor number above three and the arithmetic flips on its own.</p>
+<p>The finding that would falsify the page is a measurement showing the fragment saving is larger than 3,968 bytes on a real interaction, or a Worker rendering cost near zero under load. The first is easy to imagine on a heavier page than this one. The second is the claim the free-tier CPU ceiling makes hard.</p>
+    <section id="luq" aria-label="understanding check"></section>
+    <p class="garage-meta">watching · the understanding check is part of the page, not a gate</p>
+  </div>
+  <div class="status"><span>garage</span><span>watching</span><span>2026-08-28</span></div>
+</div>
+
+<script>
+(function () {
+  // Two constants, both measured, both Brotli q11 because that is what the edge
+  // serves: the library is a per-first-visit cost, the saving is per submit.
+  var LIB = 11735, SAVE = 3968, VISITS = 1000;
+
+  var book = document.getElementById("hb-book");
+  var repeat = document.getElementById("hb-repeat");
+  if (!book || !repeat) return;
+
+  var bookOut = document.getElementById("hb-book-out");
+  var repeatOut = document.getElementById("hb-repeat-out");
+  var barCost = document.getElementById("hb-bar-cost");
+  var barSave = document.getElementById("hb-bar-save");
+  var costNum = document.getElementById("hb-cost");
+  var saveNum = document.getElementById("hb-save");
+  var verdict = document.getElementById("hb-verdict");
+  var cross = document.getElementById("hb-cross");
+
+  // Per 1,000 visits the totals run into megabytes, so the unit follows the
+  // number rather than printing four digits of KiB.
+  var bytes = function (n) {
+    return n >= 1048576 ? (n / 1048576).toFixed(2) + " MiB" : (n / 1024).toFixed(1) + " KiB";
+  };
+
+  function paint() {
+    var b = Number(book.value) / 100;
+    var r = Number(repeat.value) / 100;
+
+    var cost = VISITS * (1 - r) * LIB;
+    var saved = VISITS * b * SAVE;
+    var net = cost - saved;
+
+    bookOut.textContent = book.value + "%";
+    repeatOut.textContent = repeat.value + "%";
+
+    // Both bars share one scale, so their lengths stay comparable.
+    var top = Math.max(cost, saved, 1);
+    barCost.style.width = (cost / top * 100).toFixed(1) + "%";
+    barSave.style.width = (saved / top * 100).toFixed(1) + "%";
+    costNum.textContent = bytes(cost);
+    saveNum.textContent = bytes(saved);
+
+    if (net > 0) {
+      verdict.className = "hb-verdict hb-lose";
+      verdict.textContent = "htmx costs " + bytes(net) + " more per 1,000 visits.";
+    } else if (net < 0) {
+      verdict.className = "hb-verdict hb-win";
+      verdict.textContent = "htmx saves " + bytes(-net) + " per 1,000 visits.";
+    } else {
+      verdict.className = "hb-verdict";
+      verdict.textContent = "Exactly break-even.";
+    }
+
+    // The booking rate that would pay for the library at this repeat rate. Above
+    // 100% it needs more than one submit per visitor, which a booking form cannot
+    // produce, so the readout says so rather than printing an unreachable number.
+    var needed = (1 - r) * LIB / SAVE;
+    cross.textContent = needed > 1
+      ? Math.round(needed * 100) + "%, which is more than one submit per visitor"
+      : Math.round(needed * 100) + "%";
+  }
+
+  book.addEventListener("input", paint);
+  repeat.addEventListener("input", paint);
+
+  var reset = document.getElementById("hb-reset");
+  if (reset) reset.addEventListener("click", function () {
+    book.value = "4";
+    repeat.value = "15";
+    paint();
+  });
+
+  paint();
+})();
+</script>
+<script type="application/json" id="luq-data">
+{
+  "skin": "garage",
+  "intro": "Three numbers decide this page. Reconstruct them before you close the hood.",
+  "questions": [
+    {
+      "q": "Break-even came out at 2.96 submits per visitor. Which pair of numbers produces it?",
+      "options": [
+        {
+          "t": "The library's 11,735 Brotli bytes divided by the 3,968 bytes saved on each submit.",
+          "ok": true,
+          "why": "Right. The library is paid once per first visit and the saving arrives once per swap, so their ratio is the number of swaps that repay it."
+        },
+        {
+          "t": "The library's 36,716 raw bytes divided by the full page's 17,001 raw bytes.",
+          "why": "Those are both real measurements, and they compare a compressed-on-the-wire cost against an uncompressed page. The edge serves Brotli, so mixing the two units gives a ratio that describes no actual visitor."
+        },
+        {
+          "t": "The Worker bundle's 0.09 KiB growth divided by the saving.",
+          "why": "The bundle delta is the template change, which every visitor pays through the Worker regardless. It is far too small to drive the decision and it is not what the visitor downloads."
+        },
+        {
+          "t": "The 54 pages divided by the 17 client modules.",
+          "why": "Neither number appears in the trade. The page count and the module count describe the site's shape rather than the cost of one interaction."
+        }
+      ]
+    },
+    {
+      "q": "The htmx fragment is 95% smaller than the full page it replaces. Why doesn't that settle the question in htmx's favour?",
+      "options": [
+        {
+          "t": "The saving arrives only when somebody submits, and a booking form accepts one submit per visitor, so it can be collected at most once against a library paid in full.",
+          "ok": true,
+          "why": "Right. A large per-interaction saving is worth little when the interaction happens once. The size of the win and the frequency of the win are separate quantities, and only their product pays for the download."
+        },
+        {
+          "t": "Fragments are served uncompressed, so the measured saving overstates the real one.",
+          "why": "Both figures in that table are Brotli q11, the quality the edge actually serves. The 3,968-byte saving is already a compressed comparison."
+        },
+        {
+          "t": "The full page would still be sent alongside the fragment.",
+          "why": "The Worker branches on the HX-Request header and sends one response or the other. Nothing sends both."
+        },
+        {
+          "t": "The browser cannot cache a fragment, so it costs more over time.",
+          "why": "Neither response is cached here, and the comparison is a single submit against a single submit. Caching governs the library asset rather than the reply."
+        }
+      ]
+    },
+    {
+      "q": "The site serves all 158 photographs' metadata as one 2,764-byte file warmed on idle. What does that example establish about the fragment model?",
+      "options": [
+        {
+          "t": "That batching a whole dataset into one cached payload beats per-item fragments when a visitor may touch many items, because the fragment design pays a round trip for each one.",
+          "ok": true,
+          "why": "Right. The current design spends one request covering everything a visitor might hover; the fragment design spends one request per hover. The comparison is a single warm fetch against up to 158 cold ones."
+        },
+        {
+          "t": "That JSON compresses better than HTML in every case.",
+          "why": "The file compresses well because its keys repeat across 158 records, which is a property of the batching rather than of the format. An HTML batch would compress well too."
+        },
+        {
+          "t": "That the tooltips would break under htmx.",
+          "why": "They would work. The objection is cost rather than correctness: the interface would still render, and it would spend a request and Worker CPU on each hover."
+        },
+        {
+          "t": "That htmx cannot render a photograph's metadata.",
+          "why": "It could render any of it perfectly well. What changes is where the rendering happens and how many times the network is asked."
+        }
+      ]
+    },
+    {
+      "q": "The page argues hx-boost would be slower here than what already ships. What is it competing against?",
+      "options": [
+        {
+          "t": "A speculationrules block on 41 documents that prerenders the next page before the click, so the document is ready rather than requested.",
+          "ok": true,
+          "why": "Right. Boost improves on a full reload and loses to prerendering, because prerendering has already done the work when the click lands. The same reasoning removed this site's cross-document View Transition in July."
+        },
+        {
+          "t": "A service worker that caches every page.",
+          "why": "The service worker here was retired and is now a small unregister stub. Nothing on this site serves pages from it."
+        },
+        {
+          "t": "Server-side rendering of the destination page.",
+          "why": "Both designs end with a server-rendered page. What separates them is when the request happens, which is before the click in one case and after it in the other."
+        },
+        {
+          "t": "The dictionary deltas, which already compress the next page.",
+          "why": "Dictionary compression shrinks the response, and it still requires the request to be made. Prerendering is what removes the wait."
+        }
+      ]
+    },
+    {
+      "q": "What result would falsify this page's conclusion?",
+      "options": [
+        {
+          "t": "A surface on this site where one visitor performs more than three swaps, which would carry the same arithmetic to the opposite verdict.",
+          "ok": true,
+          "why": "Right. The conclusion is arithmetic rather than a preference, so the way to overturn it is a higher swap count. A multi-step form or a list somebody genuinely pages through would do it without any new argument."
+        },
+        {
+          "t": "A future htmx release that is smaller than 11,735 Brotli bytes.",
+          "why": "It moves the threshold and leaves the shape intact. htmx would have to reach zero for a page with one submit to repay it, and the fragment saving is fixed at 3,968 bytes."
+        },
+        {
+          "t": "A page where the full document response is larger than 17,001 bytes.",
+          "why": "A heavier page raises the saving per submit, which helps, and the count of submits per visitor is what the conclusion turns on. That is why the correct answer names frequency rather than size."
+        },
+        {
+          "t": "Discovering that the Worker bundle grew by more than 0.09 KiB.",
+          "why": "The bundle delta is the smallest term in the comparison. Changing it in either direction moves nothing."
+        }
+      ]
+    }
+  ]
+}
+</script>
+<script src="/quiz.js" defer></script>
+<script src="/nav.js" defer></script>
+<!-- axp:shell --><nav id="axp-icons" aria-label="desktop shortcuts"><a class="axp-ico" title="writing, in flux" href="/writing" data-key="Notepad" style="left:9px;top:9px"><span class="ic note" aria-hidden="true"></span><span class="t">Notepad</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="GitHub (opens in a new tab)" href="https://github.com/oddharsh" data-key="GitHub" style="left:9px;top:95px"><span class="ic " style="background:linear-gradient(180deg,oklch(72% 0.05 255),oklch(60% 0.07 257))" aria-hidden="true">G</span><span class="t">GitHub</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Twitter (opens in a new tab)" href="https://x.com/oddhash" data-key="Twitter" style="left:9px;top:181px"><span class="ic " style="background:linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))" aria-hidden="true">@</span><span class="t">Twitter</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Instagram (opens in a new tab)" href="https://www.instagram.com/aadharsh.hif" data-key="Photos" style="left:9px;top:267px"><span class="ic " style="background:linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))" aria-hidden="true"><i class="cam" aria-hidden="true"></i></span><span class="t">Photos</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Curius (opens in a new tab)" href="https://curius.app/aadharsh-pannirselvam" data-key="Curius" style="left:9px;top:353px"><span class="ic " style="background:linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))" aria-hidden="true">C</span><span class="t">Curius</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Beli (opens in a new tab)" href="https://beliapp.com/users/aadharsh" data-key="Beli" style="left:9px;top:439px"><span class="ic " style="background:linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))" aria-hidden="true">B</span><span class="t">Beli</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Spotify (opens in a new tab)" href="https://open.spotify.com/user/aadharsh2010" data-key="Music" style="left:9px;top:525px"><span class="ic " style="background:linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))" aria-hidden="true">♪</span><span class="t">Music</span></a></nav><div id="axp-taskbar" role="navigation" aria-label="taskbar"><a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a><div id="axp-pins"><a class="axp-pin" title="prototypes + experiments" href="/garage" data-count="25"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-garage" alt=""></span><span class="lbl">garage</span></a><a class="axp-pin" title="chat-style explainers + live demos" href="/lwe" data-count="12"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lwe" alt=""></span><span class="lbl">lwe</span></a><a class="axp-pin" title="notes, in flux: an editable notepad" href="/writing" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-writing" alt=""></span><span class="lbl">writing</span></a><a class="axp-pin" title="what I've been reading, from Curius" href="/reading" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-reading" alt=""></span><span class="lbl">reading</span></a><a class="axp-pin" title="events worth going to" href="/serendipity" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-serendipity" alt=""></span><span class="lbl">serendipity</span></a><a class="axp-pin" title="the crypto-VC neighborhood" href="/around" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-around" alt=""></span><span class="lbl">around</span></a><a class="axp-pin" title="the other web: how machines read a URL" href="/lens" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lens" alt=""></span><span class="lbl">lens</span></a><a class="axp-pin" title="terminal utilities, drivable by keypress" href="/terminal" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-terminal" alt=""></span><span class="lbl">terminal</span></a><a class="axp-pin" title="a compression vision test — whose eye do you have?" href="/pixel-peeper" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-pixel-peeper" alt=""></span><span class="lbl">pixel peeper</span></a><a class="axp-pin" title="what I'm listening to right now" href="/rn" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-music" alt=""></span><span class="lbl">music</span></a><a class="axp-pin" title="book a coffee / bagel" href="/coffee" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-coffee" alt=""></span><span class="lbl">coffee</span></a></div><div id="axp-spacer"></div><div id="axp-tray"><button id="axp-sound" type="button" hidden></button><a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><img src="/icons.svg#tray-sysprop" alt=""></a><a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><img src="/icons.svg#tray-security" alt=""></a><a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><img src="/icons.svg#tray-updates" alt=""></a><a id="axp-webmcp" class="axp-trayico" hidden href="/whoareyou" data-kind="webmcp" title="Agent activity · what an agent has asked this page to do" aria-label="Agent activity"><img src="/icons.svg#tray-webmcp" alt=""></a><span id="axp-clock" aria-hidden="true"></span></div></div><script type="speculationrules">{"prerender":[{"where":{"and":[{"href_matches":"/*"},{"not":{"href_matches":"/whoareyou*"}},{"not":{"href_matches":"/run"}},{"not":{"href_matches":"/rn*"}},{"not":{"href_matches":"/images*"}},{"not":{"href_matches":"/index.md"}},{"not":{"href_matches":"/llms.txt"}}]},"eagerness":"moderate"}]}</script><!-- /axp:shell -->
+</body>
+</html>

@@ -25,7 +25,7 @@
       "section": "photos",
       "kind": "utility",
       "description": "The straight-out-of-camera photo archive and public photo query utility.",
-      "hint": "every photo, Explorer Thumbnails view \u2014 the archive the old /images/ listing became",
+      "hint": "every photo, Explorer Thumbnails view — the archive the old /images/ listing became",
       "flags": {
         "run": true,
         "taskbar": false,
@@ -42,7 +42,7 @@
       "section": "identity",
       "kind": "page",
       "description": "System Properties for the site: what a single request reveals, for agents and the curious.",
-      "hint": "system properties \u00b7 what one request reveals \u00b7 for agents + the curious",
+      "hint": "system properties · what one request reveals · for agents + the curious",
       "flags": {
         "run": true,
         "taskbar": false,
@@ -195,7 +195,7 @@
       "section": "writing",
       "kind": "section",
       "description": "Notes, in flux: an editable XP Notepad. Posts are registered in posts.json.",
-      "hint": "notes, in flux \u2014 an editable notepad",
+      "hint": "notes, in flux — an editable notepad",
       "flags": {
         "run": true,
         "taskbar": true,
@@ -212,7 +212,7 @@
       "section": "reading",
       "kind": "utility",
       "description": "A native mirror of Aadharsh's saved reading list, synced from Curius.",
-      "hint": "what I've been reading \u2014 saved to Curius, mirrored here",
+      "hint": "what I've been reading — saved to Curius, mirrored here",
       "flags": {
         "run": true,
         "taskbar": true,
@@ -229,7 +229,7 @@
       "section": "lens",
       "kind": "utility",
       "description": "Inspect how a public URL reads to people and machines: raw HTML, JSON-LD, llms.txt.",
-      "hint": "the other web: see any URL the way a machine does \u2014 raw HTML, JSON-LD, llms.txt",
+      "hint": "the other web: see any URL the way a machine does — raw HTML, JSON-LD, llms.txt",
       "flags": {
         "run": true,
         "taskbar": true,
@@ -246,7 +246,7 @@
       "section": "finger",
       "kind": "utility",
       "description": "Look up who runs this host: writing, reading, listening, photographs, neighborhood, availability, deploy log, and a search across all of it.",
-      "hint": "who runs this host \u2014 drivable by keypress",
+      "hint": "who runs this host — drivable by keypress",
       "flags": {
         "run": true,
         "taskbar": false,
@@ -296,7 +296,7 @@
       "title": "Cache",
       "section": "cache",
       "kind": "utility",
-      "description": "Does your ETag ever actually 304? Fetches twice, replays the validator, and reports what the origin DID \u2014 the failure header graders cannot see.",
+      "description": "Does your ETag ever actually 304? Fetches twice, replays the validator, and reports what the origin DID — the failure header graders cannot see.",
       "hint": "behavioral revalidation lint",
       "flags": {
         "run": true,
@@ -313,7 +313,7 @@
       "title": "Encode",
       "section": "encode",
       "kind": "utility",
-      "description": "What did your encoder actually do? Reads a JPEG or AVIF container \u2014 quantization tables, scan script, chroma subsampling, bit depth \u2014 and says where bytes are being left on the table. No pixels are decoded.",
+      "description": "What did your encoder actually do? Reads a JPEG or AVIF container — quantization tables, scan script, chroma subsampling, bit depth — and says where bytes are being left on the table. No pixels are decoded.",
       "hint": "what did your encoder actually do?",
       "flags": {
         "run": true,
@@ -330,7 +330,7 @@
       "title": "Agent Ready",
       "section": "agent-ready",
       "kind": "utility",
-      "description": "How much of an origin a machine can actually use \u2014 the agent doors, counted rather than scored \u2014 and, for this origin, what building all of it cost in files and lines.",
+      "description": "How much of an origin a machine can actually use — the agent doors, counted rather than scored — and, for this origin, what building all of it cost in files and lines.",
       "hint": "the scorecard, pointed at anyone including us",
       "flags": {
         "run": true,
@@ -348,7 +348,7 @@
       "section": "tui",
       "kind": "utility",
       "description": "Three terminal programs an agent can drive by keypress: finger (who runs this host), photos (the archive), and lens (how a URL reads to a machine).",
-      "hint": "terminal utilities \u2014 curl them, or drive them by keypress",
+      "hint": "terminal utilities — curl them, or drive them by keypress",
       "note": "sitemap:false because a frame is per-query and every response is x-robots-tag noindex, so there is no canonical document here for a crawler to hold. searchIndex:false for a different reason worth keeping straight: these programs RENDER other surfaces' data, so indexing their frames would file every record the index already carries a second time under a /terminal URL.",
       "flags": {
         "run": true,
@@ -366,7 +366,7 @@
       "section": "access",
       "kind": "page",
       "description": "Device Manager for language models: the flavors of access that shipped, what they depend on, and the ones with no driver installed.",
-      "hint": "a skill tree for model access \u2014 what shipped, what's blocked, what nobody built",
+      "hint": "a skill tree for model access — what shipped, what's blocked, what nobody built",
       "note": "EVERY FLAG IS FALSE ON PURPOSE, and this is the only surface here in that state. The route is live and canonical, but it stays out of the Run palette, the taskbar, the sitemap, the agent catalog, and the search index until the internal research presentation it was built for has happened (owner call, 2026-08-03). Flipping run/taskbar/sitemap/agents/searchIndex to true is the entire follow-up: nothing else about the page changes, and build.mjs #8b will then demand the matching nav.js and sitemap.xml entries, which is the point of registering it now rather than later.",
       "flags": {
         "run": false,
@@ -483,12 +483,12 @@
     },
     {
       "path": "/lwe/vigenere",
-      "title": "Vigen\u00e8re",
+      "title": "Vigenère",
       "section": "lwe",
       "kind": "content",
-      "short": "vigen\u00e8re",
-      "description": "The Vigen\u00e8re cipher and Kryptos: keyed alphabets, autokeys, K1\u2013K3, and a keystream workbench.",
-      "hint": "the Vigen\u00e8re cipher and Kryptos: keystream workbench, cipher stats",
+      "short": "vigenère",
+      "description": "The Vigenère cipher and Kryptos: keyed alphabets, autokeys, K1–K3, and a keystream workbench.",
+      "hint": "the Vigenère cipher and Kryptos: keystream workbench, cipher stats",
       "flags": {
         "run": true,
         "taskbar": false,
@@ -921,6 +921,23 @@
       "short": "hidden flags",
       "description": "Nineteen hidden flags in one CLI, and the control that separates an option being accepted from an option doing anything: on a closed schema those are two questions, and the first one is free.",
       "hint": "how to tell an ignored option from an honoured one",
+      "flags": {
+        "run": true,
+        "taskbar": false,
+        "sitemap": true,
+        "gallery": true,
+        "agents": true,
+        "searchIndex": false,
+        "webmention": true
+      }
+    },
+    {
+      "path": "/garage/htmx",
+      "title": "Break-even at three submits",
+      "section": "garage",
+      "kind": "content",
+      "description": "htmx 4.0 costs 11.46 KiB Brotli and saves 3,968 bytes per submit. Break-even is 2.96 submits per visitor, on a form submitted once.",
+      "hint": "what a hypermedia library costs a site with nothing to swap",
       "flags": {
         "run": true,
         "taskbar": false,
