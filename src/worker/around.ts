@@ -117,10 +117,28 @@ export async function handleAroundJson(request, env, ctx) {
 const AROUND_KEY = "around:report";
 const AROUND_HISTORY_TABLE = "around_crawl_history";
 
-async function ensureAroundHistoryTable(env) {
-  if (!env.RESTORE_DB) return false;
-  await env.RESTORE_DB.exec(
-    `CREATE TABLE IF NOT EXISTS ${AROUND_HISTORY_TABLE} (
+// D1's exec() SPLITS ITS INPUT ON NEWLINES and runs each line as a statement,
+// so it can only ever take one-line statements. This used to hand it a
+// multi-line CREATE TABLE plus two CREATE INDEXes as one string, which fails on
+// the first line with `D1_EXEC_ERROR: Error in line 1: CREATE TABLE IF NOT
+// EXISTS around_crawl_history (: incomplete input`. The table was therefore
+// NEVER created in production, and persistAroundHistory's catch turned that
+// into a returned reason nobody read: from 2026-08-18 until 2026-08-28 every
+// daily crawl published its KV snapshot and wrote zero history rows, while
+// /around/changes.json reported "change history starts with the next scheduled
+// crawl" rather than "the table does not exist".
+//
+// Measured against a local D1 before the repair, with both controls: exec() of
+// a SINGLE-LINE statement succeeds (`{count:1}`), and exec() of TWO single-line
+// statements succeeds reporting `{count:2}`, which is the line-splitting shown
+// directly rather than inferred from the failure.
+//
+// batch() rather than a prepare().run() loop (webmention.ts's ensureTable has
+// one statement and so faces no choice): it is one round trip, it is atomic, so
+// the table can never be visible without its indexes, and persistAroundHistory
+// below already batches its inserts.
+const AROUND_HISTORY_DDL = [
+  `CREATE TABLE IF NOT EXISTS ${AROUND_HISTORY_TABLE} (
       target TEXT NOT NULL,
       name TEXT NOT NULL,
       observed_at INTEGER NOT NULL,
@@ -138,12 +156,16 @@ async function ensureAroundHistoryTable(env) {
       skipped TEXT,
       error TEXT,
       PRIMARY KEY (target, observed_at)
-    );
-    CREATE INDEX IF NOT EXISTS idx_around_crawl_history_time
-      ON ${AROUND_HISTORY_TABLE} (observed_at DESC);
-    CREATE INDEX IF NOT EXISTS idx_around_crawl_history_target_time
-      ON ${AROUND_HISTORY_TABLE} (target, observed_at DESC);`
-  );
+    )`,
+  `CREATE INDEX IF NOT EXISTS idx_around_crawl_history_time
+      ON ${AROUND_HISTORY_TABLE} (observed_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_around_crawl_history_target_time
+      ON ${AROUND_HISTORY_TABLE} (target, observed_at DESC)`,
+];
+
+async function ensureAroundHistoryTable(env) {
+  if (!env.RESTORE_DB) return false;
+  await env.RESTORE_DB.batch(AROUND_HISTORY_DDL.map((sql) => env.RESTORE_DB.prepare(sql)));
   return true;
 }
 
@@ -319,9 +341,21 @@ export async function cronAround(env) {
   if (publishable) {
     await span("around.publish", () => env.RN_KV.put(AROUND_KEY, JSON.stringify(report)));
   }
-  await span("around.persist_history", (s) => {
+  // The result is READ rather than returned into the void. persistAroundHistory
+  // catches everything so a history failure cannot cost the crawl, and for ten
+  // days that catch was the whole reason a broken CREATE TABLE was invisible: it
+  // handed back {ok:false, reason} and the only caller dropped it. A cron has no
+  // response and no visitor to complain, so the span is the one place the answer
+  // can land. `unconfigured` is a legitimate state (no RESTORE_DB, which is every
+  // local dev run) and is reported as itself rather than as a failure.
+  await span("around.persist_history", async (s) => {
     s.setAttribute("around.snapshot_published", publishable);
-    return persistAroundHistory(env, report);
+    const out = await persistAroundHistory(env, report);
+    const unconfigured = !out.ok && out.reason === "unconfigured";
+    s.setAttribute("around.outcome", out.ok ? "persisted" : unconfigured ? "unconfigured" : "persist_failed");
+    if (out.ok) s.setAttribute("around.history_written", out.written);
+    else if (!unconfigured) s.setAttribute("around.error", out.reason);
+    return out;
   });
 }
 
