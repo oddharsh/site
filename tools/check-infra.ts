@@ -49,6 +49,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { parseJsonc } from "./lib/jsonc.ts";
+import { auditActionPins } from "./lib/action-pins.ts";
 
 const execFileP = promisify(execFile);
 
@@ -435,7 +436,7 @@ async function checkTree(infra, wrangler, aux) {
   await checkActionPinning(infra.repository);
 }
 
-// Every third-party action in .github is pinned to a commit, asserted from
+// Every action reference under .github is pinned to a commit, asserted from
 // COMMITTED SOURCE. No network, no credential, so this runs on every pull
 // request beside the DNS tier rather than degrading to a note like the two API
 // halves of the same declaration.
@@ -447,81 +448,88 @@ async function checkTree(infra, wrangler, aux) {
 // off, which it is today, so the declaration above can run ahead of reality
 // without leaving the repo unguarded in the meantime.
 //
-// WHAT A TAG ACTUALLY IS, since the fix looks like pedantry until you say it: a
-// tag is a mutable pointer owned by somebody else. `actions/checkout@v7`
-// resolves to whatever that repository last pushed there, so the reference is a
-// standing grant of arbitrary code execution in CI to a party who can change
-// what it means later, with no diff here and no notification.
+// THE SCAN LIVES IN tools/lib/action-pins.ts AND FAILS CLOSED, which is the
+// repair for three shapes that walked past the first version of this check and
+// were each reported as "all 32 third-party action references are
+// commit-pinned": a flow-style step (`- {name: x, uses: attacker/evil@main}`),
+// a plain scalar on the line after `uses:`, and a nested or out-of-tree
+// composite reached through a local `./` ref the walk never opened. A reference
+// this scanner cannot read is now an ERROR naming the file, the line and the
+// text it could not classify.
 //
-// LOCAL `./` REFERENCES ARE EXEMPT BY CONSTRUCTION rather than by indulgence.
-// A path reference resolves inside this checkout, at the commit under test, so
-// there is no upstream owner and nothing to repoint. .github/actions/setup-bun
-// is the only one and it names no nested `uses:` of its own, which is checked
-// here rather than assumed: a composite action IS a place a tag ref can hide.
+// LOCAL `./` REFERENCES ARE RESOLVED RATHER THAN EXEMPTED, and the old
+// exemption is the lesson worth keeping. "A path reference has no upstream
+// owner" is true and is not the question: the file it points AT is a place a tag
+// can hide, at any depth and outside .github entirely, since GitHub resolves a
+// local ref against the repository root. A target that cannot be found fails.
 //
-// FLOOR, for the reason every scanner in this repo carries one. A regex that
-// matches nothing reports a clean pass, and this one is scanning for an absence
-// (a ref that lacks a 40-character suffix), so a broken pattern reads as 32
-// perfectly pinned actions rather than as a scan that never ran.
-//
-// The line matcher is anchored at `uses:` with an optional list dash, which
-// costs nothing and drops the one false positive in this tree: dependabot.yml
-// discusses `uses:` inside a `#` comment, and a bare substring scan reads that
-// sentence as an unpinned action.
+// FLOOR, and what it is FOR is narrower than it looks. It catches a scan that
+// stopped matching, which is a real failure this repo has shipped: a pattern
+// that matches nothing reports a clean pass, and a control proved this one goes
+// to 0 of 24 when the matcher breaks. It CANNOT catch an evasion, because a
+// hidden unpinned ref moves the count by zero or one. Coverage is held by
+// failing closed above and by the contract test's fixtures, never by this
+// number.
 async function checkActionPinning(repo) {
   const want = repo?.actions_permissions;
   if (!want) return;
   const before = hard.length;
 
-  const files = [];
-  try {
-    for (const f of await readdir(join(ROOT, ".github/workflows"))) {
-      if (f.endsWith(".yml") || f.endsWith(".yaml")) files.push(`.github/workflows/${f}`);
-    }
-    for (const d of await readdir(join(ROOT, ".github/actions"), { withFileTypes: true })) {
-      if (!d.isDirectory()) continue;
-      for (const name of ["action.yml", "action.yaml"]) {
-        if (await exists(`.github/actions/${d.name}/${name}`)) files.push(`.github/actions/${d.name}/${name}`);
+  // .github/workflows is a PRECONDITION and .github/actions is not. GitHub
+  // reads workflows at one level and requires none of them to be composites, so
+  // an absent actions directory is a repository with no composite actions
+  // rather than a walk that failed. Hard-failing on it (ENOENT from readdir)
+  // made a required check depend on a directory this repo happens to carry.
+  const io = {
+    read: (rel: string) => readFile(join(ROOT, rel), "utf8").then((s) => s, () => null),
+    async list(dir: string): Promise<string[]> {
+      const out: string[] = [];
+      let entries;
+      try {
+        entries = await readdir(join(ROOT, dir), { withFileTypes: true });
+      } catch {
+        return out;
       }
-    }
-  } catch (e) {
-    fail(`.github could not be walked for action pinning: ${e.message}`);
+      for (const e of entries) {
+        if (e.isDirectory()) out.push(...await io.list(`${dir}/${e.name}`));
+        else if (e.isFile()) out.push(`${dir}/${e.name}`);
+      }
+      return out;
+    },
+  };
+
+  const audit = await auditActionPins(io);
+
+  if (!audit.files.some((f) => f.startsWith(".github/workflows/"))) {
+    fail(".github/workflows holds no .yml file, so this scan read nothing. Either every workflow is gone or the walk is broken, and both are worth a red line");
     return;
   }
 
-  let scanned = 0;
-  let local = 0;
-  const actions = new Set<string>();
-  for (const rel of files) {
-    const lines = (await readFile(join(ROOT, rel), "utf8")).split("\n");
-    for (const [i, line] of lines.entries()) {
-      const m = /^\s*(?:-\s+)?uses:\s*(\S+)/.exec(line);
-      if (!m) continue;
-      const ref = m[1].replace(/^["']|["']$/g, "");
-      if (ref.startsWith("./")) {
-        local++;
-        continue;
-      }
-      scanned++;
-      const at = ref.indexOf("@");
-      actions.add(at === -1 ? ref : ref.slice(0, at));
-      if (!/@[0-9a-f]{40}$/.test(ref)) {
-        fail(
-          `${rel}:${i + 1} uses \`${ref}\`, which is not pinned to a 40-character commit. A tag is a mutable pointer owned by somebody else, so this grants that repository arbitrary code execution in CI with no diff here when they repoint it. Pin the commit and keep the version as a trailing comment`,
-        );
-      }
+  // One sentence per CLASS, because the three findings want different fixes and
+  // a single template said "not pinned to a 40-character commit" about a local
+  // ref whose target was simply missing.
+  const TAIL = "A tag is a mutable pointer owned by somebody else, so an unpinned ref grants that repository arbitrary code execution in CI with no diff here when they repoint it";
+  for (const p of audit.problems) {
+    const at = p.line ? `${p.file}:${p.line}` : p.file;
+    const why = p.why ? ` ${p.why[0].toUpperCase()}${p.why.slice(1).replace(/\.?$/, ".")}` : "";
+    if (p.kind === "local-missing") {
+      fail(`${at} uses the local action \`${p.ref}\`, which resolves to nothing.${why} A local ref is followed and scanned here rather than exempted, because "it has no upstream owner" is true of the reference and false of the file it points at`);
+    } else if (p.kind === "unreadable") {
+      fail(`${at} carries a \`uses:\` this scan could not classify${p.ref === null ? "" : `, \`${p.ref}\``}.${why} An unreadable reference FAILS rather than passing: a shape nobody recognised is how three unpinned actions got reported as a clean pass`);
+    } else {
+      fail(`${at} uses \`${p.ref}\`, which is not pinned to a 40-character commit.${why} ${TAIL}. Pin the commit and keep the version as a trailing comment`);
     }
   }
 
-  if (scanned < want.pinned_action_refs) {
+  if (audit.remote < want.pinned_action_refs) {
     fail(
-      `only ${scanned} third-party \`uses:\` reference(s) found across ${files.length} file(s) in .github, expected at least ${want.pinned_action_refs}. This scan reports an ABSENCE, so a pattern that matches nothing reads as a perfectly pinned repository`,
+      `only ${audit.remote} third-party action reference(s) found across ${audit.files.length} file(s) under .github, expected at least ${want.pinned_action_refs}. This floor catches a scan that stopped matching, which reports a clean pass rather than an error; it cannot catch a hidden ref, and failing closed on an unreadable one is what covers that`,
     );
   }
 
   if (hard.length > before) return;
   pass(
-    `all ${scanned} third-party action reference(s) in .github are commit-pinned (${actions.size} action(s), plus ${local} local \`./\` ref(s) that have no upstream owner)`,
+    `all ${audit.remote} third-party action reference(s) across ${audit.files.length} file(s) under .github are commit-pinned (${audit.paths.size} path(s) from ${audit.repos.size} repositor${audit.repos.size === 1 ? "y" : "ies"}, plus ${audit.local} local \`./\` ref(s), every one resolved and scanned)`,
   );
 }
 
@@ -1417,6 +1425,31 @@ async function checkRepo(infra) {
 // among them, and CLAUDE.md prices that particular outage at 161 commits of
 // unrolled dictionaries while `dcz:check` printed PASS the whole time. A
 // cleared checkbox breaks it inside a nightly job with nobody watching.
+
+/** How many workflows carry a TOP-LEVEL `permissions:` block, counted rather
+ *  than remembered.
+ *
+ *  The argument for flipping `default_workflow_permissions` to `read` rests
+ *  entirely on this number: an explicit block always beats the repository
+ *  default, so today's `write` governs zero jobs only while every workflow
+ *  carries one. That sentence was written as "all 13 workflows" in three
+ *  places, two of which this script PRINTS, and there were 14. A number typed
+ *  into a message is a claim nobody re-checks, so the message says what the
+ *  count is at the moment it prints and names the workflows that lack a block.
+ *
+ *  Column 0 is the whole discriminator: a job-level `permissions:` is indented
+ *  and does not govern a job that omits one. */
+async function workflowPermissionBlocks() {
+  const dir = join(ROOT, ".github/workflows");
+  const files = (await readdir(dir).catch(() => [])).filter((f) => /\.ya?ml$/.test(f)).sort();
+  const without: string[] = [];
+  for (const f of files) {
+    const src = await readFile(join(dir, f), "utf8");
+    if (!/^permissions\s*:/m.test(src)) without.push(f);
+  }
+  return { total: files.length, without };
+}
+
 async function checkActionsPermissions(repo, slug, token) {
   const want = repo.actions_permissions;
   if (!want) return;
@@ -1473,8 +1506,9 @@ async function checkActionsPermissions(repo, slug, token) {
   }
 
   if (workflow.default_workflow_permissions !== want.default_workflow_permissions) {
+    const blocks = await workflowPermissionBlocks();
     fail(
-      `Actions default_workflow_permissions is ${JSON.stringify(workflow.default_workflow_permissions)}, declared ${JSON.stringify(want.default_workflow_permissions)}. An explicit \`permissions:\` block beats the default and all 13 workflows carry one, so the flip governs the next workflow added without one rather than anything running today`,
+      `Actions default_workflow_permissions is ${JSON.stringify(workflow.default_workflow_permissions)}, declared ${JSON.stringify(want.default_workflow_permissions)}. An explicit \`permissions:\` block beats the default and ${blocks.without.length ? `${blocks.total - blocks.without.length} of ${blocks.total} workflows carry one (missing: ${blocks.without.join(", ")}), which already inherit the default` : `all ${blocks.total} workflows carry one`}, so the flip governs the next workflow added without one rather than anything running today`,
     );
   }
 
@@ -1496,8 +1530,14 @@ async function checkActionsPermissions(repo, slug, token) {
 // `visibility` precondition. No third call: `security_and_analysis` rides on
 // that same payload, so this tier costs one field rather than one request.
 //
-// THE ABSENT-KEY CASE IS THE TRAP AND IS WHY THIS IS NOT A LOOP OVER FOUR
-// FIELDS. /repos/:slug answers HTTP 200 with NO credential and simply omits
+// IT READS BOTH DIRECTIONS, which the first version did not. Looping the
+// DECLARED keys answers "is every setting I named still right" and is silent
+// about a setting GitHub added or the owner switched on;
+// `dependabot_security_updates` was live and undeclared the day this landed.
+// The stray pass below is an advisory, matching checkRepo's undeclared-ruleset
+// line: an undeclared setting is a declaration to write.
+//
+// THE ABSENT-OBJECT CASE IS THE TRAP AND IS WHY THIS IS NOT A BARE LOOP. /repos/:slug answers HTTP 200 with NO credential and simply omits
 // `security_and_analysis` (measured 2026-08-27), which is sharper than the 401s
 // the Actions endpoints give: a checker written against the anonymous shape
 // gets a successful read of an object that is not there, and every `?.status`
@@ -1506,7 +1546,7 @@ async function checkActionsPermissions(repo, slug, token) {
 // missing key is an advisory naming the credential, and only a PRESENT object
 // is ever compared.
 function checkSecretScanning(repo, slug, meta) {
-  const want = repo.secret_scanning;
+  const want = repo.security_and_analysis;
   if (!want) return;
 
   const live = meta?.security_and_analysis;
@@ -1530,8 +1570,25 @@ function checkSecretScanning(repo, slug, meta) {
     }
   }
 
+  // The OTHER direction, which a loop over declared keys structurally cannot
+  // see. Iterating the declaration answers "is every setting I named still
+  // right" and says nothing about a setting GitHub added or the owner switched
+  // on, so this file quietly stops being the source of truth for that object.
+  // `dependabot_security_updates` was live and undeclared the day this landed.
+  //
+  // ADVISORY rather than fatal, matching the undeclared-ruleset line in
+  // checkRepo above: a setting the repo carries and this file does not name is
+  // a declaration to write, not a security state to be red about, and GitHub
+  // adding a field should not fail a PR that touched CSS.
+  const strays = Object.keys(live).filter((k) => !fields.includes(k));
+  if (strays.length) {
+    warn(
+      `${slug} carries ${strays.length} undeclared \`security_and_analysis\` setting(s): ${strays.map((k) => `${k} ${live[k]?.status}`).join(", ")}. Declare them in infra.json's repository.security_and_analysis block so this file stays the source of truth for that object`,
+    );
+  }
+
   if (hard.length > before) return;
-  pass(`secret scanning matches on all ${fields.length} declared setting(s): ${fields.map((k) => `${k.replace(/^secret_scanning_?/, "") || "on"} ${live[k].status}`).join(", ")}`);
+  pass(`security_and_analysis matches on all ${fields.length} declared setting(s): ${fields.map((k) => `${k.replace(/^secret_scanning_?/, "") || "secret_scanning"} ${live[k].status}`).join(", ")}`);
 }
 
 // The live half of the triage declaration. Same tier as the rulesets above and
