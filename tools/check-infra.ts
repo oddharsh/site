@@ -49,6 +49,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { parseJsonc } from "./lib/jsonc.ts";
+import { auditActionPins } from "./lib/action-pins.ts";
 
 const execFileP = promisify(execFile);
 
@@ -124,13 +125,16 @@ const STRICT = process.argv.includes("--strict");
 // pretending otherwise in the access log would be a small lie.
 const BOT_UA = "aadhar-sh-infra-check/1.0 (+https://aadhar.sh/bot)";
 
-const hard = [];
-const advisory = [];
-const ok = [];
+// Typed because a bare `[]` infers `never[]`, which made every one of the ~90
+// fail/warn/pass call sites in this file a TS2345 against the tools ratchet.
+// The annotation is the whole fix and it costs nothing at runtime.
+const hard: string[] = [];
+const advisory: string[] = [];
+const ok: string[] = [];
 
-const fail = (m) => hard.push(m);
-const warn = (m) => advisory.push(m);
-const pass = (m) => ok.push(m);
+const fail = (m: string) => hard.push(m);
+const warn = (m: string) => advisory.push(m);
+const pass = (m: string) => ok.push(m);
 
 // ---------------------------------------------------------------- JSONC ----
 
@@ -429,6 +433,104 @@ async function checkTree(infra, wrangler, aux) {
 
   await checkCodeqlWorkflow(infra.repository);
   await checkTriageDeclaration(infra.repository);
+  await checkActionPinning(infra.repository);
+}
+
+// Every action reference under .github is pinned to a commit, asserted from
+// COMMITTED SOURCE. No network, no credential, so this runs on every pull
+// request beside the DNS tier rather than degrading to a note like the two API
+// halves of the same declaration.
+//
+// WHY IT IS THE HALF WORTH HAVING. `sha_pinning_required` is the same rule
+// enforced by GitHub, and it rejects at RUN time: the workflow starts, the step
+// fails, and you find out from a red check on a branch. This fails at REVIEW
+// time, in the diff that introduced the tag. It also holds while the setting is
+// off, which it is today, so the declaration above can run ahead of reality
+// without leaving the repo unguarded in the meantime.
+//
+// THE SCAN LIVES IN tools/lib/action-pins.ts AND FAILS CLOSED, which is the
+// repair for three shapes that walked past the first version of this check and
+// were each reported as "all 32 third-party action references are
+// commit-pinned": a flow-style step (`- {name: x, uses: attacker/evil@main}`),
+// a plain scalar on the line after `uses:`, and a nested or out-of-tree
+// composite reached through a local `./` ref the walk never opened. A reference
+// this scanner cannot read is now an ERROR naming the file, the line and the
+// text it could not classify.
+//
+// LOCAL `./` REFERENCES ARE RESOLVED RATHER THAN EXEMPTED, and the old
+// exemption is the lesson worth keeping. "A path reference has no upstream
+// owner" is true and is not the question: the file it points AT is a place a tag
+// can hide, at any depth and outside .github entirely, since GitHub resolves a
+// local ref against the repository root. A target that cannot be found fails.
+//
+// FLOOR, and what it is FOR is narrower than it looks. It catches a scan that
+// stopped matching, which is a real failure this repo has shipped: a pattern
+// that matches nothing reports a clean pass, and a control proved this one goes
+// to 0 of 24 when the matcher breaks. It CANNOT catch an evasion, because a
+// hidden unpinned ref moves the count by zero or one. Coverage is held by
+// failing closed above and by the contract test's fixtures, never by this
+// number.
+async function checkActionPinning(repo) {
+  const want = repo?.actions_permissions;
+  if (!want) return;
+  const before = hard.length;
+
+  // .github/workflows is a PRECONDITION and .github/actions is not. GitHub
+  // reads workflows at one level and requires none of them to be composites, so
+  // an absent actions directory is a repository with no composite actions
+  // rather than a walk that failed. Hard-failing on it (ENOENT from readdir)
+  // made a required check depend on a directory this repo happens to carry.
+  const io = {
+    read: (rel: string) => readFile(join(ROOT, rel), "utf8").then((s) => s, () => null),
+    async list(dir: string): Promise<string[]> {
+      const out: string[] = [];
+      let entries;
+      try {
+        entries = await readdir(join(ROOT, dir), { withFileTypes: true });
+      } catch {
+        return out;
+      }
+      for (const e of entries) {
+        if (e.isDirectory()) out.push(...await io.list(`${dir}/${e.name}`));
+        else if (e.isFile()) out.push(`${dir}/${e.name}`);
+      }
+      return out;
+    },
+  };
+
+  const audit = await auditActionPins(io);
+
+  if (!audit.files.some((f) => f.startsWith(".github/workflows/"))) {
+    fail(".github/workflows holds no .yml file, so this scan read nothing. Either every workflow is gone or the walk is broken, and both are worth a red line");
+    return;
+  }
+
+  // One sentence per CLASS, because the three findings want different fixes and
+  // a single template said "not pinned to a 40-character commit" about a local
+  // ref whose target was simply missing.
+  const TAIL = "A tag is a mutable pointer owned by somebody else, so an unpinned ref grants that repository arbitrary code execution in CI with no diff here when they repoint it";
+  for (const p of audit.problems) {
+    const at = p.line ? `${p.file}:${p.line}` : p.file;
+    const why = p.why ? ` ${p.why[0].toUpperCase()}${p.why.slice(1).replace(/\.?$/, ".")}` : "";
+    if (p.kind === "local-missing") {
+      fail(`${at} uses the local action \`${p.ref}\`, which resolves to nothing.${why} A local ref is followed and scanned here rather than exempted, because "it has no upstream owner" is true of the reference and false of the file it points at`);
+    } else if (p.kind === "unreadable") {
+      fail(`${at} carries a \`uses:\` this scan could not classify${p.ref === null ? "" : `, \`${p.ref}\``}.${why} An unreadable reference FAILS rather than passing: a shape nobody recognised is how three unpinned actions got reported as a clean pass`);
+    } else {
+      fail(`${at} uses \`${p.ref}\`, which is not pinned to a 40-character commit.${why} ${TAIL}. Pin the commit and keep the version as a trailing comment`);
+    }
+  }
+
+  if (audit.remote < want.pinned_action_refs) {
+    fail(
+      `only ${audit.remote} third-party action reference(s) found across ${audit.files.length} file(s) under .github, expected at least ${want.pinned_action_refs}. This floor catches a scan that stopped matching, which reports a clean pass rather than an error; it cannot catch a hidden ref, and failing closed on an unreadable one is what covers that`,
+    );
+  }
+
+  if (hard.length > before) return;
+  pass(
+    `all ${audit.remote} third-party action reference(s) across ${audit.files.length} file(s) under .github are commit-pinned (${audit.paths.size} path(s) from ${audit.repos.size} repositor${audit.repos.size === 1 ? "y" : "ies"}, plus ${audit.local} local \`./\` ref(s), every one resolved and scanned)`,
+  );
 }
 
 // The triage declaration, asserted WITHOUT a network call. The live half (do
@@ -1299,6 +1401,194 @@ async function checkRepo(infra) {
 
   await checkLabels(repo, slug, token);
   await checkCodeScanning(repo, slug, token);
+  await checkActionsPermissions(repo, slug, token);
+  checkSecretScanning(repo, slug, meta);
+}
+
+// The Actions policy, on the two endpoints that hold it. Same tier as
+// checkCodeScanning above and workstation-only for the same measured reason:
+// /repos/:slug/actions/permissions and .../permissions/workflow each answer
+// HTTP 401 unauthenticated on this public repo (2026-08-27), so no PR run can
+// assert them and CI says so in one advisory instead of pretending.
+//
+// TWO OF THESE ARE DECLARED AHEAD OF LIVE STATE ON PURPOSE, so this reports
+// drift today and is meant to. zone.version_affinity set that precedent: the
+// declaration is the intent, the red line is the to-do, and the check goes
+// green when the owner flips the toggle rather than when somebody edits the
+// declaration down to match a dashboard nobody chose.
+//
+// `can_approve_pull_request_reviews` runs the OTHER WAY and is the sharp one.
+// It is true today and declared true to KEEP it, because the dashboard control
+// it maps to is "Allow GitHub Actions to create and approve pull requests" and
+// clearing it stops the default GITHUB_TOKEN from CREATING one. Four scheduled
+// workflows do exactly that on `${{ github.token }}`, dictionary-roll.yml:149
+// among them, and CLAUDE.md prices that particular outage at 161 commits of
+// unrolled dictionaries while `dcz:check` printed PASS the whole time. A
+// cleared checkbox breaks it inside a nightly job with nobody watching.
+
+/** How many workflows carry a TOP-LEVEL `permissions:` block, counted rather
+ *  than remembered.
+ *
+ *  The argument for flipping `default_workflow_permissions` to `read` rests
+ *  entirely on this number: an explicit block always beats the repository
+ *  default, so today's `write` governs zero jobs only while every workflow
+ *  carries one. That sentence was written as "all 13 workflows" in three
+ *  places, two of which this script PRINTS, and there were 14. A number typed
+ *  into a message is a claim nobody re-checks, so the message says what the
+ *  count is at the moment it prints and names the workflows that lack a block.
+ *
+ *  Column 0 is the whole discriminator: a job-level `permissions:` is indented
+ *  and does not govern a job that omits one. */
+async function workflowPermissionBlocks() {
+  const dir = join(ROOT, ".github/workflows");
+  const files = (await readdir(dir).catch(() => [])).filter((f) => /\.ya?ml$/.test(f)).sort();
+  const without: string[] = [];
+  for (const f of files) {
+    const src = await readFile(join(dir, f), "utf8");
+    if (!/^permissions\s*:/m.test(src)) without.push(f);
+  }
+  return { total: files.length, without };
+}
+
+async function checkActionsPermissions(repo, slug, token) {
+  const want = repo.actions_permissions;
+  if (!want) return;
+
+  let live, workflow;
+  try {
+    live = await ghFetch(`/repos/${slug}/actions/permissions`, token);
+    workflow = await ghFetch(`/repos/${slug}/actions/permissions/workflow`, token);
+  } catch (e) {
+    warn(
+      /401|403/.test(e.message)
+        ? `Actions permissions: not verifiable here, both endpoints answer 401 unauthenticated even on a public repo. Run \`GITHUB_TOKEN=$(gh auth token) bun run infra:check\` on a workstation (being logged in is not enough, the script reads GITHUB_TOKEN) to assert them (${e.message})`
+        : `Actions permissions could not be read: ${e.message}`,
+    );
+    return;
+  }
+
+  // SHAPE BEFORE VALUES, and this guard is what keeps the tier out of CI's way
+  // rather than a defensive reflex. CI reads with the workflow's own
+  // GITHUB_TOKEN, which holds no Administration permission, so the expected
+  // answer is a 403 the catch above turns into an advisory. What this covers is
+  // the other shape: a 200 carrying a body without these fields. Read as values
+  // that are simply absent, `undefined !== true` fails, and a required check
+  // goes red over a credential rather than over a setting. Unverifiable is the
+  // honest reading of a payload that never named the thing.
+  const policyAbsent = (live.enabled !== true && live.enabled !== false) || !workflow.default_workflow_permissions;
+  if (policyAbsent) {
+    warn(
+      `Actions permissions: the API answered without the policy fields, so this tier is not verifiable with the credential in use. Run \`GITHUB_TOKEN=$(gh auth token) bun run infra:check\` on a workstation to assert it`,
+    );
+    return;
+  }
+
+  const before = hard.length;
+
+  // enabled first, as a PRECONDITION rather than a field. With Actions off the
+  // three settings below govern nothing, and so does every workflow in this
+  // repo, which is a much larger fact than any drift underneath it.
+  if (live.enabled !== true) {
+    fail(`${slug} has GitHub Actions DISABLED, so every workflow here is dead and the policy below governs nothing`);
+    return;
+  }
+
+  if (live.allowed_actions !== want.allowed_actions) {
+    fail(
+      `Actions allowed_actions is ${JSON.stringify(live.allowed_actions)}, declared ${JSON.stringify(want.allowed_actions)}. \`selected\` needs an explicit allowlist of every action and reusable workflow, which is a second registry beside the commit pins`,
+    );
+  }
+
+  if (live.sha_pinning_required !== want.sha_pinning_required) {
+    fail(
+      `Actions sha_pinning_required is ${live.sha_pinning_required}, declared ${want.sha_pinning_required}. Flip it under Settings, Actions, General: every third-party ref here is already commit-pinned by hand (the tree tier proves it), so this costs nothing today and is what stops the next one arriving on a tag`,
+    );
+  }
+
+  if (workflow.default_workflow_permissions !== want.default_workflow_permissions) {
+    const blocks = await workflowPermissionBlocks();
+    fail(
+      `Actions default_workflow_permissions is ${JSON.stringify(workflow.default_workflow_permissions)}, declared ${JSON.stringify(want.default_workflow_permissions)}. An explicit \`permissions:\` block beats the default and ${blocks.without.length ? `${blocks.total - blocks.without.length} of ${blocks.total} workflows carry one (missing: ${blocks.without.join(", ")}), which already inherit the default` : `all ${blocks.total} workflows carry one`}, so the flip governs the next workflow added without one rather than anything running today`,
+    );
+  }
+
+  // Asserted TRUE, which is the reverse of every other line here. See the
+  // header: this field gates CREATING pull requests, not only approving them.
+  if (workflow.can_approve_pull_request_reviews !== want.can_approve_pull_request_reviews) {
+    fail(
+      `Actions can_approve_pull_request_reviews is ${workflow.can_approve_pull_request_reviews}, declared ${want.can_approve_pull_request_reviews}. That checkbox reads "create AND approve", so turning it off stops \`gh pr create\` on the default token in dictionary-roll.yml, bun-pin.yml, og-cards.yml and photo-pipeline.yml. The nightly dictionary roll then fails silently inside a scheduled job`,
+    );
+  }
+
+  if (hard.length > before) return;
+  pass(
+    `Actions policy matches: ${live.allowed_actions} actions allowed, sha pinning ${live.sha_pinning_required ? "required" : "off"}, default token ${workflow.default_workflow_permissions}, PR creation ${workflow.can_approve_pull_request_reviews ? "allowed" : "BLOCKED"}`,
+  );
+}
+
+// Secret scanning, read off the repo metadata checkRepo already fetched for its
+// `visibility` precondition. No third call: `security_and_analysis` rides on
+// that same payload, so this tier costs one field rather than one request.
+//
+// IT READS BOTH DIRECTIONS, which the first version did not. Looping the
+// DECLARED keys answers "is every setting I named still right" and is silent
+// about a setting GitHub added or the owner switched on;
+// `dependabot_security_updates` was live and undeclared the day this landed.
+// The stray pass below is an advisory, matching checkRepo's undeclared-ruleset
+// line: an undeclared setting is a declaration to write.
+//
+// THE ABSENT-OBJECT CASE IS THE TRAP AND IS WHY THIS IS NOT A BARE LOOP. /repos/:slug answers HTTP 200 with NO credential and simply omits
+// `security_and_analysis` (measured 2026-08-27), which is sharper than the 401s
+// the Actions endpoints give: a checker written against the anonymous shape
+// gets a successful read of an object that is not there, and every `?.status`
+// under it comes back undefined. Reported as four settings being off, that is a
+// false alarm on every unauthenticated run, meaning every run in CI. So the
+// missing key is an advisory naming the credential, and only a PRESENT object
+// is ever compared.
+function checkSecretScanning(repo, slug, meta) {
+  const want = repo.security_and_analysis;
+  if (!want) return;
+
+  const live = meta?.security_and_analysis;
+  if (!live) {
+    warn(
+      `secret scanning: not verifiable here, /repos/${slug} omits \`security_and_analysis\` unless the read is authenticated (it answers 200 either way, so absence is not a failure). Run \`GITHUB_TOKEN=$(gh auth token) bun run infra:check\` on a workstation to assert it`,
+    );
+    return;
+  }
+
+  const before = hard.length;
+  const fields = Object.keys(want).filter((k) => !k.startsWith("$") && k !== "why");
+  for (const key of fields) {
+    const got = live[key]?.status;
+    if (got === undefined) {
+      fail(`${slug} reports no \`${key}\` at all; GitHub renamed or withdrew it, so this declaration is asserting a field that no longer exists`);
+      continue;
+    }
+    if (got !== want[key]) {
+      fail(`secret scanning: \`${key}\` is ${JSON.stringify(got)}, declared ${JSON.stringify(want[key])}. Flip it under Settings, Advanced Security`);
+    }
+  }
+
+  // The OTHER direction, which a loop over declared keys structurally cannot
+  // see. Iterating the declaration answers "is every setting I named still
+  // right" and says nothing about a setting GitHub added or the owner switched
+  // on, so this file quietly stops being the source of truth for that object.
+  // `dependabot_security_updates` was live and undeclared the day this landed.
+  //
+  // ADVISORY rather than fatal, matching the undeclared-ruleset line in
+  // checkRepo above: a setting the repo carries and this file does not name is
+  // a declaration to write, not a security state to be red about, and GitHub
+  // adding a field should not fail a PR that touched CSS.
+  const strays = Object.keys(live).filter((k) => !fields.includes(k));
+  if (strays.length) {
+    warn(
+      `${slug} carries ${strays.length} undeclared \`security_and_analysis\` setting(s): ${strays.map((k) => `${k} ${live[k]?.status}`).join(", ")}. Declare them in infra.json's repository.security_and_analysis block so this file stays the source of truth for that object`,
+    );
+  }
+
+  if (hard.length > before) return;
+  pass(`security_and_analysis matches on all ${fields.length} declared setting(s): ${fields.map((k) => `${k.replace(/^secret_scanning_?/, "") || "secret_scanning"} ${live[k].status}`).join(", ")}`);
 }
 
 // The live half of the triage declaration. Same tier as the rulesets above and
