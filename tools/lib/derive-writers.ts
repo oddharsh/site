@@ -43,6 +43,23 @@ import path from "node:path";
 /** Directories with no first-party generators in them. */
 const SKIP = new Set(["node_modules", ".git", ".build", ".wrangler", ".claude", "target", ".venv", "dist", ".dev-assets"]);
 
+/**
+ * Vendored third-party trees, skipped by PATH rather than by basename.
+ *
+ * tools/photos/libavif/build.sh clones libavif and builds aom, libwebp and libyuv
+ * underneath it. Both directories are gitignored, because that is a vendored BUILD
+ * rather than source this repository owns. The census walks the filesystem, so the
+ * first person to follow build.sh got seven of those projects' own scripts reported
+ * as undeclared generators and a red derive:check on a tree with no local edits.
+ *
+ * The shell tier fires hardest, and by construction: it matches any mention of
+ * `src/`, and every C project on earth has one of those.
+ *
+ * By path because the basenames are `src` and `build`, which are the two names
+ * least safe to add to SKIP.
+ */
+const VENDORED = new Set(["tools/photos/libavif/src", "tools/photos/libavif/build"]);
+
 const SCANNED = [".ts", ".mjs", ".js", ".py"];
 
 /** A write, per language. Exact calls, never a loose path match. */
@@ -66,7 +83,7 @@ export async function findWriters(root: string, roots: string[]): Promise<string
       if (SKIP.has(entry.name)) continue;
       const child = path.join(rel, entry.name);
       if (entry.isDirectory()) {
-        await walk(child);
+        if (!VENDORED.has(child)) await walk(child);
         continue;
       }
       // A test that writes a fixture is not a generator of anything committed.
@@ -103,7 +120,7 @@ export async function findShellTouchers(root: string, roots: string[]): Promise<
       if (SKIP.has(entry.name)) continue;
       const child = path.join(rel, entry.name);
       if (entry.isDirectory()) {
-        await walk(child);
+        if (!VENDORED.has(child)) await walk(child);
         continue;
       }
       if (path.extname(entry.name) !== ".sh") continue;
