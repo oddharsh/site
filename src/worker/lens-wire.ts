@@ -284,6 +284,18 @@ function cdpClient(ws) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+type PageCdpSend = (method: string, params?: unknown) => Promise<Record<string, any>>;
+
+// These domains have no ordering edge between them; all four only need to be
+// ready before Page.navigate. Pairing their enables removes two CDP round trips
+// from every uncached wire run while keeping the required-vs-optional boundary:
+// Network/Page still reject the run, Runtime/Log merely neutralize execution.
+export async function enableWireDomains(send: PageCdpSend) {
+  await Promise.all([send("Network.enable", {}), send("Page.enable", {})]);
+  const execution = await Promise.allSettled([send("Runtime.enable", {}), send("Log.enable", {})]);
+  return execution.every((result) => result.status === "fulfilled");
+}
+
 // Open a session, drive one navigation, return the raw events. Every exit path
 // runs the DELETE.
 async function runWireSession(env, url) {
@@ -324,8 +336,6 @@ async function runWireSession(env, url) {
       try { await cdp.send("Emulation.setUserAgentOverride", { userAgent: BOT_UA }, pageSession); }
       catch (_e2) { uaApplied = false; }
     }
-    await cdp.send("Network.enable", {}, pageSession);
-    await cdp.send("Page.enable", {}, pageSession);
     // Runtime and Log carry the EXECUTION evidence, and both are enabled before
     // the navigation because an exception thrown during load is the interesting
     // case. This costs no extra browser instance and no extra minute: it is the
@@ -338,11 +348,8 @@ async function runWireSession(env, url) {
     // A binding that refuses either domain should cost the execution checks and
     // leave them neutral, not lose the whole request waterfall this route
     // exists for.
-    let execDomains = true;
-    try {
-      await cdp.send("Runtime.enable", {}, pageSession);
-      await cdp.send("Log.enable", {}, pageSession);
-    } catch (_e) { execDomains = false; }
+    const execDomains = await enableWireDomains((method, params) =>
+      cdp.send(method, params, pageSession));
 
     const t0 = Date.now();
     await cdp.send("Page.navigate", { url }, pageSession);
