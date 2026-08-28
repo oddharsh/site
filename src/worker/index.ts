@@ -117,6 +117,18 @@ export { BookingWorkflow } from "../../cal/src/workflow.ts";
 // could reach it. The bug shipped through a green CI.
 const WORKERS_CACHEABLE_PATHS = new Set("/ /favicon.ico /auth.md /.well-known/api-catalog /.well-known/agent-card.json /.well-known/oauth-protected-resource /.well-known/oauth-authorization-server /reading /updates /updates.json /restore /lens /ledger /writing /bot /around /around/json /around/changes.json /photos /rn/tracks /rn/tracks.html /images/manifest.json /images/metadata.json /coffee /coffee/availability.json /run /search /photos/query.json".split(" "));
 
+// The self-dispatcher itself, factored out because the CRON needs it too and a
+// second copy is how the two drift. `scheduled()` has no request to build one
+// from, and webmention-send's outbound half reads this site's own pages: a plain
+// fetch() there is the error-1042 recursion perf-probe.js already documents.
+function withSelfFetch(env: Env, ctx: ExecutionContext) {
+  return {
+    ...env,
+    SELF_FETCH: async (req) =>
+      withSecurityHeaders(await route(req, { ...env, SELF_FETCH: null, IDENTITY_BODY: true }, ctx)),
+  };
+}
+
 async function serveWorkerRequest(request: SiteRequest, env: Env, ctx: ExecutionContext) {
   const url = new URL(request.url);
 
@@ -174,11 +186,7 @@ async function serveWorkerRequest(request: SiteRequest, env: Env, ctx: Execution
   // to a constant, so branching on it is dead code). A flag on the child env is
   // also the safer seam, because env is not caller-controllable and no external
   // request can ask production to stop serving its precompressed bodies.
-  const selfEnv = {
-    ...env,
-    SELF_FETCH: async (req) =>
-      withSecurityHeaders(await route(req, { ...env, SELF_FETCH: null, IDENTITY_BODY: true }, ctx)),
-  };
+  const selfEnv = withSelfFetch(env, ctx);
 
   // Workers Logs: one structured line per worker-owned request (path, method,
   // status, ms, version, country, bot), filterable in the dashboard. Edge-direct
@@ -296,7 +304,13 @@ export default {
       // Both are caught so a failure in one cannot skip the other. span() does
       // not swallow, so enterSpan has already recorded the exception by the time
       // the catch runs; what is dropped here is only the rethrow.
-      await cron("cron.webmention_send", () => cronSendWebmentions(env)).catch(() => {});
+      // withSelfFetch, not the bare env: this job reads this site's OWN pages, and
+      // a plain fetch() to our own hostname from inside the worker is blocked as
+      // recursion (error 1042 — perf-probe.js documents the same limit). It failed
+      // by returning "", so every page was skipped and the run wrote nothing at
+      // all. Measured 2026-08-28: both webmention tables empty since the feature
+      // shipped, while /around on this same tick had run that morning.
+      await cron("cron.webmention_send", () => cronSendWebmentions(withSelfFetch(env, ctx))).catch(() => {});
       await cron("cron.around", () => cronAround(env)).catch(() => {});
     } else if (job === "serendipity") {
       // 00/06/12/18:23 UTC — re-sync every enabled Luma feed into the
