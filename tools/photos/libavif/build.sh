@@ -20,12 +20,20 @@
 # libavif 1.4.2 pins aom v3.14.1, which is what brew was already giving us, so
 # the encoder does not move.
 #
-# BYTE-IDENTICAL TO BREW at the pipeline's current settings, verified 2026-08-26
-# on a real 600px square: q63 -d 10 --speed 4 --yuv 420 produced the same 26,594
-# bytes from both binaries. That is the bar that matters here, because a single
-# differing byte re-mints an `/i/` URL and orphans every a-dict snapshot naming
-# the old hash. So adopting this changes nothing until somebody passes
-# --sharpyuv, which is a separate, deliberate decision (see MAINTENANCE.md).
+# BYTE-IDENTICAL TO BREW, verified 2026-08-26 on a real 600px square: q63 -d 10
+# --speed 4 --yuv 420 produced the same 26,594 bytes from both binaries. That is
+# the bar that matters here, because a single differing byte re-mints an `/i/`
+# URL and orphans every a-dict snapshot naming the old hash. So adopting this
+# changes nothing until somebody passes --sharpyuv, which is a separate,
+# deliberate decision (see MAINTENANCE.md).
+#
+# Those were the SHIPPING settings when the measurement was taken; the pipeline
+# passes --speed 2 since 2026-08-28, and the pair has not been re-measured at
+# that effort. Both binaries are still libavif 1.4.2 over aom 3.14.1, so identity
+# is likely and is not evidence. It costs nothing today either way, because
+# nothing here re-encodes an existing tile: a new photo mints a new URL under any
+# encoder. Re-measure before a full re-encode, which is the one run where a
+# vendored-versus-brew difference would rewrite 495 committed URLs.
 #
 # NETWORK. libavif's ext scripts git-clone aom, libwebp and libyuv, so the first
 # run needs network and about 10 minutes. Everything lands under src/ and build/,
