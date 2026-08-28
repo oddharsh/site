@@ -116,6 +116,23 @@ export async function handleWebmention(request, env, ctx) {
   // fetches anything a stranger names.
   const checked = validateLensTarget(source);
   if (!checked.ok) return text(`source: ${checked.error}`, 400);
+
+  // …and then it must be an ABSOLUTE one, which that guard deliberately does not
+  // require. validateLensTarget prepends https:// to a schemeless string, because
+  // the /lens box is a place a visitor TYPES "example.com" and means a website.
+  // An endpoint that machines POST to is the opposite case: the spec's `source`
+  // is a URL, and guessing at a scheme accepts input that was never one.
+  //
+  // Measured against production 2026-08-28, running webmention.rocks receiver
+  // test 2, whose entire contract is "HTTP 400 for all the requests it receives":
+  // `source=/some/path` became `https:///some/path`, passed every check, and came
+  // back 202. The mention then died quietly in verification, so the only visible
+  // symptom was a conformance test failing. `https:///x` gets in the same way and
+  // is checked here too: it carries a scheme and no host at all.
+  //
+  // The lens guard is left alone on purpose. Both surfaces are right about their
+  // own callers, and the difference is who is doing the typing.
+  if (!absoluteHttpUrl(source)) return text("source must be an absolute http(s) URL.", 400);
   if (sameOriginPath(checked.url, origin)) return text("source must be on another site.", 400);
 
   if (await overBudget(WEBMENTION_BUDGET, request, env)) {
@@ -508,6 +525,26 @@ export async function acceptsWebmention(path, env) {
 }
 
 // ── helpers ────────────────────────────────────────────────────────────────
+/** A URL a machine sent, rather than a string a person typed: it carries an
+ *  http(s) scheme and a host of its own, and nothing is inferred.
+ *
+ *  The SHAPE is checked before the parse, and that order is the whole point.
+ *  WHATWG parsing is forgiving about the slashes after a scheme, so
+ *  `new URL("https:///some/path")` does not come back host-less the way it
+ *  reads: it comes back with host `some` and path `/path`. So a parse-only
+ *  check accepts it, and what it accepts is an instruction to fetch a hostname
+ *  the sender never wrote. Found by the suite's network tripwire, which caught
+ *  a test firing at `https://no-host/`. */
+export function absoluteHttpUrl(raw) {
+  const s = String(raw ?? "");
+  // scheme, exactly two slashes, then something that is already the host
+  if (!/^https?:\/\/[^/\\?#]/i.test(s)) return false;
+  try {
+    const u = new URL(s);
+    return (u.protocol === "http:" || u.protocol === "https:") && !!u.hostname;
+  } catch { return false; }
+}
+
 function sameOriginPath(raw, origin) {
   try {
     const u = new URL(raw);

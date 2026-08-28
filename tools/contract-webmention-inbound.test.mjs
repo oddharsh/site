@@ -2,6 +2,7 @@
 // Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
 import {
   testGlobals,
+  absoluteHttpUrl,
   WEBMENTION_PATHS,
   WM_SECRET,
   assert,
@@ -233,4 +234,41 @@ test("a p-author with real text still wins over the floor", async () => {
     <div class="h-card p-author"><a class="p-name" href="/">Mari Kondo</a></div>
     <p>see <a href="${target}">this</a></p></body></html>`, "https://mari.example/post");
   assert.equal(row.author, "Mari Kondo");
+});
+
+test("a source that is not an absolute URL is refused, not guessed at", async () => {
+  // webmention.rocks receiver test 2 grades one thing: HTTP 400 for every
+  // invalid parameter. `source=/some/path` came back 202 from production on
+  // 2026-08-28, because validateLensTarget prepends https:// to a schemeless
+  // string — correct for the /lens box, where a visitor types "example.com" and
+  // means a website, and wrong for an endpoint machines POST to. It became
+  // "https:///some/path", passed every check, and then died quietly in
+  // verification, so the only symptom was a conformance failure.
+  const env = wmEnv(fakeD1());
+  const target = "https://aadhar.sh/writing/in-flux";
+  for (const source of ["/some/path", "some/path", "https:///no-host", "//protocol-relative/x", "example.com/post"]) {
+    const res = await handleWebmention(wmPost(source, target), env, context());
+    assert.equal(res.status, 400, `source ${JSON.stringify(source)} must be refused, not inferred`);
+  }
+  // and the shape that IS a URL still gets through to verification. Stubbed,
+  // because a 202 hands the work to waitUntil and the suite refuses to let a
+  // real fetch escape a test.
+  const realFetch = globalThis.fetch;
+  testGlobals.fetch = async () => new Response(
+    `<html><body><a href="${target}">x</a></body></html>`, { headers: { "content-type": "text/html" } });
+  try {
+    const ctx = deferredContext();
+    assert.equal((await handleWebmention(wmPost("https://mari.example/post", target), env, ctx)).status, 202);
+    await ctx.settle();
+  } finally { testGlobals.fetch = realFetch; }
+});
+
+test("absoluteHttpUrl accepts only what a machine could have sent", () => {
+  for (const ok of ["https://a.example/x", "http://a.example", "https://a.example:443/x?q=1#f"]) {
+    assert.equal(absoluteHttpUrl(ok), true, ok);
+  }
+  for (const bad of ["/path", "path", "", "https:///x", "ftp://a.example/x", "javascript:alert(1)",
+                     "//a.example/x", "mailto:a@b.c", null, undefined]) {
+    assert.equal(absoluteHttpUrl(bad), false, JSON.stringify(bad));
+  }
 });

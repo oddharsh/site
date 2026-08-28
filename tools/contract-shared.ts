@@ -36,7 +36,7 @@ import { lensRecipe, lensRecipeIds, lensRecipeScript } from "../src/worker/lens-
 import { handleCoffeeAvailability } from "../src/worker/coffee.ts";
 import { reservationName } from "../cal/src/reservation.ts";
 import { handleSiteMcp, MCP_TOOLS as SITE_MCP_TOOLS, SITE_MCP_SERVER_INFO } from "../src/worker/mcp.ts";
-import { documentContent, handleWebmention, handleWebmentionDecision, linksTo } from "../src/worker/webmention.ts";
+import { absoluteHttpUrl, documentContent, handleWebmention, handleWebmentionDecision, linksTo } from "../src/worker/webmention.ts";
 import { handleInbox } from "../src/worker/inbox.ts";
 import { citationsIn, cronSendWebmentions, findEndpointIn, SELF_LINK_HOSTS } from "../src/worker/webmention-send.ts";
 import { sign } from "../cal/src/sign.ts";
@@ -381,6 +381,7 @@ export {
   _resetPhotoCaches,
   artUrls,
   artWarmList,
+  absoluteHttpUrl,
   assert,
   assertFullDocument,
   auditDependencyDocs,
