@@ -547,13 +547,13 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
 
 <script>
 // ── Demo D: the cracker ─────────────────────────────────────────────────────
-// A JS port of the periodic-cipher attack in buttcrack (MIT, © 2026 diid),
-// src/buttcrack/ciphers/_periodic.py: seed each period column by χ², then
-// hill-climb every key position against the quadgram score of the WHOLE
-// plaintext, because cross-column context is what recovers the last letters
-// that per-column analysis alone always gets wrong. Candidates dedupe by
-// resulting plaintext keeping the shortest key, so a 5-letter key and its
-// 10-letter repeat collapse instead of competing.
+// A JS port of the periodic-cipher attack in buttcrack (MIT, © 2026 diid,
+// github.com/0xdiid/buttcrack), from src/buttcrack/ciphers/_periodic.py there:
+// seed each period column by χ², then hill-climb every key position against
+// the quadgram score of the WHOLE plaintext, because cross-column context is
+// what recovers the last letters that per-column analysis alone always gets
+// wrong. Candidates dedupe by resulting plaintext keeping the shortest key,
+// so a 5-letter key and its 10-letter repeat collapse instead of competing.
 (function () {
   var V = document.getElementById("demo-solve"); if (!V) return;
   var $ = function (id) { return document.getElementById(id); };
@@ -565,7 +565,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
   // is derived from RANK on a Zipf curve. Only the ORDER of scores matters to a
   // hill-climb, and dropping the counts is 60% of the bytes. TOP is log10 of
   // the share "THAT" holds in the source corpus, FLOOR an unseen quadgram.
-  // Both printed by scripts/gen-quadgram-table.mjs, which builds the table.
+  // Both printed by tools/photos/gen-quadgram-table.ts, which builds the table.
   var TOP = -2.4773, FLOOR = -8.7282, ZIPF = 0.75;
   var MAX_KEY = 12, MAX_LETTERS = 900, PSEUDO = 40;
   var LOGP = null, HI = 0, model = null;

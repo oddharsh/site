@@ -220,9 +220,9 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
       with <code class="m">!</code> carves that path back out to serve straight from the edge:</p>
     <pre class="cf-code">{
   "name": "aadhar-sh",
-  "main": "www/_worker.js/index.js",
+  "main": ".build/src/worker/index.ts",
   "assets": {
-    "directory": "www",
+    "directory": ".build/public",
     "binding": "ASSETS",
     "run_worker_first": ["/*", "!/nav.js", "!/garage/*", "!/images/*.avif", ...]
   },
@@ -266,7 +266,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
         odometer at the bottom of the front page) had to reach <em>across</em> to a separate
         Worker, <code class="m">cf-garage</code>, and borrow its <code class="m">Counter</code>
         class by cross-script binding. On Workers the class lives right here, in
-        <code class="m">www/_worker.js/counter.js</code>, exported from the entry, with its
+        <code class="m">src/worker/counter.ts</code>, exported from the entry, with its
         migration in the same config. To keep the number honest across the move, the new object
         self-seeds once from the count it had on the old one (about 2,375) instead of resetting to
         zero. Same odometer, now wired into its own dashboard.</p>
@@ -462,7 +462,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
         {
           "t": "Its Durable Object class moved in-house, exported from this worker's entry with its migration in the same config.",
           "ok": true,
-          "why": "Right. Pages could host no Durable Object, so the counter borrowed the Counter class from the separate cf-garage worker by cross-script binding. Now it lives in www/_worker.js/counter.js."
+          "why": "Right. Pages could host no Durable Object, so the counter borrowed the Counter class from the separate cf-garage worker by cross-script binding. Now it lives in src/worker/counter.ts."
         },
         {
           "t": "It moved out of a Durable Object into KV, which Workers ships built in.",
