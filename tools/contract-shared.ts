@@ -153,6 +153,7 @@ function fakeImages() {
 
 function representationD1() {
   const rows = [];
+  let batches = 0;
   return {
     prepare(sql) {
       return {
@@ -176,6 +177,11 @@ function representationD1() {
         async run() { return { success: true, meta: { changes: 0 } }; },
       };
     },
+    async batch(statements) {
+      batches++;
+      return Promise.all(statements.map((statement) => statement.run()));
+    },
+    get batchCount() { return batches; },
     rows,
   };
 }

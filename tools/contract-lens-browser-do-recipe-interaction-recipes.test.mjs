@@ -660,12 +660,23 @@ test("representation vault stores normalized snapshots and compares digests", as
   const db = representationD1();
   const realFetch = globalThis.fetch;
   let version = "one";
-  testGlobals.fetch = async () => new Response(`<!doctype html><title>${version}</title><p>${version}</p>`, { headers: { "content-type": "text/html; charset=utf-8", etag: `"${version}"`, "cache-control": "public, max-age=60" } });
+  let active = 0;
+  let peak = 0;
+  testGlobals.fetch = async () => {
+    active++;
+    peak = Math.max(peak, active);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    active--;
+    return new Response(`<!doctype html><title>${version}</title><p>${version}</p>`, { headers: { "content-type": "text/html; charset=utf-8", etag: `"${version}"`, "cache-control": "public, max-age=60" } });
+  };
   try {
     const env = { RESTORE_DB: db };
-    const capture = await handleSiteMcp(new Request("https://aadhar.sh/mcp", { method: "POST", body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "representation_capture", arguments: { url: "https://example.com/page", profiles: ["browser"] } } }), headers: { "content-type": "application/json" } }), env, context());
+    const capture = await handleSiteMcp(new Request("https://aadhar.sh/mcp", { method: "POST", body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "representation_capture", arguments: { url: "https://example.com/page", profiles: ["browser", "identity"] } } }), headers: { "content-type": "application/json" } }), env, context());
     const captured = (await capture.json()).result.structuredContent;
     const first = captured.snapshots[0];
+    assert.equal(captured.snapshots.length, 2);
+    assert.equal(peak, 2, "two requested origin profiles should share one network latency window");
+    assert.equal(db.batchCount, 1, "successful profile rows should use one D1 batch");
     assert.ok(first.id);
     assert.equal(first.title, "one");
     assert.equal(db.rows[0].body, undefined);
