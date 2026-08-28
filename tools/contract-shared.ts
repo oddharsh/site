@@ -36,9 +36,9 @@ import { lensRecipe, lensRecipeIds, lensRecipeScript } from "../src/worker/lens-
 import { handleCoffeeAvailability } from "../src/worker/coffee.ts";
 import { reservationName } from "../cal/src/reservation.ts";
 import { handleSiteMcp, MCP_TOOLS as SITE_MCP_TOOLS, SITE_MCP_SERVER_INFO } from "../src/worker/mcp.ts";
-import { documentContent, handleWebmention, handleWebmentionDecision, linksTo } from "../src/worker/webmention.ts";
+import { absoluteHttpUrl, documentContent, handleWebmention, handleWebmentionDecision, linksTo } from "../src/worker/webmention.ts";
 import { handleInbox } from "../src/worker/inbox.ts";
-import { citationsIn, findEndpointIn, SELF_LINK_HOSTS } from "../src/worker/webmention-send.ts";
+import { citationsIn, cronSendWebmentions, findEndpointIn, SELF_LINK_HOSTS } from "../src/worker/webmention-send.ts";
 import { sign } from "../cal/src/sign.ts";
 import { AGENT_SURFACES, WEBMENTION_PATHS } from "../src/worker/lib/site-manifest.ts";
 import { handleWritingIndex } from "../src/worker/writing.ts";
@@ -53,7 +53,7 @@ import { readManifest, workerModule, navFenceBody, readFenceBody, runProfilesBod
 import { PROFILES } from "../tools/photos/shell-data.ts";
 import { faviconHref, sectionFavicons, speculationHtml } from "../tools/photos/gen-desktop-partial.ts";
 import { TASKBAR } from "../tools/photos/shell-data.ts";
-import { SECTION_FAVICONS } from "../src/worker/lib/desktop.ts";
+import { DESKTOP_CHROME, SECTION_FAVICONS } from "../src/worker/lib/desktop.ts";
 import { collectBlockClasses, readDocument } from "./lib/html-to-md.ts";
 import { remainderHolder } from "./lib/ramp-split.ts";
 import { wranglerErrorLines } from "./lib/wrangler-error.ts";
@@ -365,6 +365,7 @@ export {
   PLAYLIST_ID,
   PROFILES,
   ROOT,
+  DESKTOP_CHROME,
   SECTION_FAVICONS,
   SELF_LINK_HOSTS,
   SERENDIPITY_MCP_SERVER_INFO,
@@ -380,6 +381,7 @@ export {
   _resetPhotoCaches,
   artUrls,
   artWarmList,
+  absoluteHttpUrl,
   assert,
   assertFullDocument,
   auditDependencyDocs,
@@ -390,6 +392,7 @@ export {
   canonicalArtUrl,
   checkDependencyDocs,
   citationsIn,
+  cronSendWebmentions,
   collectBlockClasses,
   context,
   cookieJar,

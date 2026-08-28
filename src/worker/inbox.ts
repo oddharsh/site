@@ -79,7 +79,9 @@ export async function handleInbox(request, env, ctx) {
     <p class="oe-sub">When someone links to a page here from their own site, their post arrives as
       <a href="https://www.w3.org/TR/webmention/" rel="noopener external" target="_blank">a webmention</a>
       — the standards-track descendant of the trackback. Verified automatically (the source really
-      does link here), then approved by hand before it appears.</p>
+      does link here), then approved by hand before it appears. The
+      <a href="https://indieweb.org/Webmention" rel="noopener external" target="_blank">IndieWeb wiki</a>
+      keeps the working notes: who sends, who receives, and what breaks between them.</p>
 
     <div class="oe-panes">
       <nav class="oe-tree" aria-label="folders">
