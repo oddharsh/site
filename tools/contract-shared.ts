@@ -53,7 +53,7 @@ import { readManifest, workerModule, navFenceBody, readFenceBody, runProfilesBod
 import { PROFILES } from "../tools/photos/shell-data.ts";
 import { faviconHref, sectionFavicons, speculationHtml } from "../tools/photos/gen-desktop-partial.ts";
 import { TASKBAR } from "../tools/photos/shell-data.ts";
-import { SECTION_FAVICONS } from "../src/worker/lib/desktop.ts";
+import { DESKTOP_CHROME, SECTION_FAVICONS } from "../src/worker/lib/desktop.ts";
 import { collectBlockClasses, readDocument } from "./lib/html-to-md.ts";
 import { remainderHolder } from "./lib/ramp-split.ts";
 import { wranglerErrorLines } from "./lib/wrangler-error.ts";
@@ -365,6 +365,7 @@ export {
   PLAYLIST_ID,
   PROFILES,
   ROOT,
+  DESKTOP_CHROME,
   SECTION_FAVICONS,
   SELF_LINK_HOSTS,
   SERENDIPITY_MCP_SERVER_INFO,
