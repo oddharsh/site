@@ -542,8 +542,13 @@ async function renderEvent(d, id, path) {
 }
 
 async function renderContribute(d, path, uid, msg) {
-  const n = await countContributors(d);
-  const own = await d.prepare("SELECT label, enabled FROM user_cookies WHERE user_key = ?").get(uid);
+  // The pool count and this browser's contributor row share no dependency.
+  // Pay one D1 latency window for both; a connected contributor's event count
+  // remains a second round because it is conditional on the row existing.
+  const [n, own] = await Promise.all([
+    countContributors(d),
+    d.prepare("SELECT label, enabled FROM user_cookies WHERE user_key = ?").get(uid),
+  ]);
   let cnt = 0;
   if (own) { const c = await d.prepare("SELECT count(*) AS n FROM event_contributions WHERE user_key = ?").get(uid); cnt = c ? Number(c.n) : 0; }
   const body = `<h1 class="page">Contribute</h1>
