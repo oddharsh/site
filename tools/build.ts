@@ -344,7 +344,8 @@ async function checkInvariants() {
   // only the bindings watched them diverge by four entries ("/ask", "/inbox",
   // "/webmention", "/webmention/*") while reporting a clean build. Same class as
   // the missing "41 5 * * *" cron of 2026-08-14, which wrangler.dev.jsonc's own
-  // comment records — so the CRONS are diffed here too, at the end of this block.
+  // comment records — so the CRONS are diffed here too, at the end of this block,
+  // and the COMPATIBILITY FLAGS after them.
   //
   // What that drift COST was nothing yet, measured rather than assumed: all four
   // answered identically under `bun run dev` with their entries absent, because
@@ -412,6 +413,32 @@ async function checkInvariants() {
     if (!prodCrons.length) hard.push("dev-twin drift check read 0 crons from wrangler.jsonc — the scanner has lost the triggers block, not the site its schedule");
     else if (sorted(prodCrons) !== sorted(devCrons)) {
       warn.push(`wrangler.jsonc and wrangler.dev.jsonc crons differ (wrangler.jsonc: ${prodCrons.join(", ") || "none"}; wrangler.dev.jsonc: ${devCrons.join(", ") || "none"}) — the two schedules must match, or a job fires in one config and not the other`);
+    }
+
+    // And the COMPATIBILITY FLAGS, added 2026-08-28 with the first one this repo
+    // has ever set. A flag changes what the RUNTIME hands the Worker, so a
+    // divergence here is worse than the three above: those make dev and prod
+    // disagree about which paths compute, while this makes them disagree about
+    // what the platform is. `enable_request_signal` is the live case, since it
+    // decides whether request.signal aborts, and dispatchTraced() branches on
+    // exactly that. A dev twin without it runs the not-instrumented arm on every
+    // local request while production runs the other one, silently.
+    //
+    // Compared ORDER-INSENSITIVELY like the crons, and for the same reason: the
+    // runtime reads this as a set, so a reordering changes nothing and failing
+    // on one would be a check with an opinion about formatting.
+    const prodFlags = jsoncStringArray(wrangler, "compatibility_flags");
+    const devFlags = jsoncStringArray(dev, "compatibility_flags");
+    // The floor, and it is a claim about this commit rather than about the key.
+    // Zero flags was the TRUE state here until 2026-08-28, so an empty array is
+    // a config a reader could reasonably expect; what it cannot be is invisible.
+    // Both sides are lists and two empty lists agree, so without this a renamed
+    // key or a reformatted array reports a clean build over a config it never
+    // read. Removing the last flag is a real edit that should come here and say
+    // so, which is the point of failing rather than warning.
+    if (!prodFlags.length) hard.push("dev-twin drift check read 0 compatibility_flags from wrangler.jsonc — either the scanner lost the key or the last flag was dropped; both want a human here");
+    else if (sorted(prodFlags) !== sorted(devFlags)) {
+      warn.push(`wrangler.jsonc and wrangler.dev.jsonc compatibility_flags differ (wrangler.jsonc: ${prodFlags.join(", ") || "none"}; wrangler.dev.jsonc: ${devFlags.join(", ") || "none"}) — a flag changes what the runtime hands the Worker, so local dev exercises a different platform from the one that ships`);
     }
   } catch (e) { warn.push(`dev-config drift check could not run: ${e.message}`); }
 
