@@ -147,12 +147,12 @@
         "match": "cargo (\\d+\\.\\d+\\.\\d+)"
       },
       "bytes": false,
-      "bytes_why": "builds zenc, and zenjpeg's encode is deterministic for a given pin, which dependabot owns in tools/photos/zenc/Cargo.toml. A compiler bump does not move a JPEG"
+      "bytes_why": "builds zenc, and zenjpeg's encode is deterministic for a given pin, which dependabot owns in tools/photos/zenc/Cargo.toml. A compiler bump does not move a JPEG, and it does not move a HISTOGRAM either, which is the half that was doubted: `bun run zenc:reproducible` bakes all 165 stems under three rustc versions and diffs them"
     },
     {
       "bin": "zenc",
       "path": "tools/photos/zenc/target/release/zenc",
-      "install": "cargo build --release --manifest-path tools/photos/zenc/Cargo.toml",
+      "install": "cargo build --release --locked --manifest-path tools/photos/zenc/Cargo.toml",
       "optional": true,
       "why": "the JPEG encoder for every shipped tier, plus the square/resize geometry and the histogram bake. It decides the bytes of the JPG half of /i/ exactly the way avifenc decides the AVIF half, and it was the one encoder here with no entry: `cargo` was declared as its BUILD prerequisite, which is a different question from which encoder baked the library",
       "required_by": [
@@ -165,7 +165,7 @@
         "tools/photos/onestep-probe.sh",
         "tools/photos/reencode-thumbnails.sh"
       ],
-      "optional_why": "`optional` here means BUILT ON DEMAND rather than degrades: every caller runs `cargo build --release` when the binary is missing, so an absent zenc on a fresh checkout is a state the pipeline repairs itself rather than a prerequisite anybody has to go install. A missing `cargo` is the blocking failure, and cargo is declared above",
+      "optional_why": "`optional` here means BUILT ON DEMAND rather than degrades: every caller runs `cargo build --release --locked` when the binary is missing, so an absent zenc on a fresh checkout is a state the pipeline repairs itself rather than a prerequisite anybody has to go install. A missing `cargo` is the blocking failure, and cargo is declared above",
       "version": {
         "flag": "--version",
         "match": "zenc (?<zenc>\\d+\\.\\d+\\.\\d+) \\(zenjpeg (?<zenjpeg>\\d+\\.\\d+\\.\\d+)\\)"

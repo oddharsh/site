@@ -106,7 +106,7 @@ ZENC_DIR="$(cd "$SCRIPT_DIR/zenc" && pwd)"
 ZENC="$ZENC_DIR/target/release/zenc"
 if [ ! -x "$ZENC" ]; then
   echo "building zenc (histogram bake) — first run only…" >&2
-  cargo build --release --manifest-path "$ZENC_DIR/Cargo.toml" >&2 || { echo "error: zenc build failed" >&2; exit 1; }
+  cargo build --release --locked --manifest-path "$ZENC_DIR/Cargo.toml" >&2 || { echo "error: zenc build failed" >&2; exit 1; }
 fi
 
 # exif-sooc reads the containers directly and emits this script's exact record

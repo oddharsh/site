@@ -27,7 +27,7 @@ ZENC_DIR="$(cd "$SCRIPT_DIR/zenc" && pwd)"
 ZENC="$ZENC_DIR/target/release/zenc"
 if [ ! -x "$ZENC" ]; then
   command -v cargo >/dev/null 2>&1 || { echo "error: cargo (rust) not found; install from https://rustup.rs" >&2; exit 1; }
-  cargo build --release --manifest-path "$ZENC_DIR/Cargo.toml" >&2 || { echo "error: zenc build failed" >&2; exit 1; }
+  cargo build --release --locked --manifest-path "$ZENC_DIR/Cargo.toml" >&2 || { echo "error: zenc build failed" >&2; exit 1; }
 fi
 TMP="/tmp/enc-gen-$$"; mkdir -p "$TMP"; trap 'rm -rf "$TMP"' EXIT
 

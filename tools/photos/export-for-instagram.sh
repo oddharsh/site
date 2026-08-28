@@ -210,7 +210,7 @@ done
 if [ ! -x "$ZENC" ]; then
   command -v cargo >/dev/null 2>&1 || { echo "error: cargo (rust) not found; install from https://rustup.rs" >&2; exit 1; }
   echo "building zenc (zenjpeg encoder) — first run only…" >&2
-  cargo build --release --manifest-path "$ZENC_DIR/Cargo.toml" >&2
+  cargo build --release --locked --manifest-path "$ZENC_DIR/Cargo.toml" >&2
 fi
 
 TMP="$(mktemp -d "/tmp/ig-export-$$-XXXX")"

@@ -728,7 +728,7 @@ def preflight():
         missing.append(f"source photos at {SRC_DIR}")
     if missing:
         log("missing: " + ", ".join(missing))
-        log("  zenc:  cargo build --release --manifest-path tools/photos/zenc/Cargo.toml")
+        log("  zenc:  cargo build --release --locked --manifest-path tools/photos/zenc/Cargo.toml")
         sys.exit(1)
 
 

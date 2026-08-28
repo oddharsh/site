@@ -215,7 +215,7 @@ bun run photos:env
 
 # build the JPEG thumbnail encoder (zenc = zenjpeg hybrid+scan). the pipeline
 # scripts auto-build it on first run; this is the explicit form.
-cargo build --release --manifest-path tools/photos/zenc/Cargo.toml
+cargo build --release --locked --manifest-path tools/photos/zenc/Cargo.toml
 
 # bust caches via wrangler (RN_KV namespace ID hardcoded in scripts).
 # NB: the photo manifest is NOT a cache anymore — the worker bundles
