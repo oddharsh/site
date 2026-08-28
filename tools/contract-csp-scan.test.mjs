@@ -44,6 +44,18 @@ test("an empty inline script still gets the hash of the empty string", needsPars
   assert.deepEqual(hashes, [EMPTY_SHA]);
 });
 
+test("an empty script does not swallow the text that follows it", needsParser, async () => {
+  // The reason the text handler is scoped to `script` rather than to `*`. An
+  // empty script emits NO text chunk, so a `*` handler hands it the next text
+  // the stream produces, which is whatever follows the close tag. Measured with
+  // a `*` handler on this exact fixture: the body comes back as "following
+  // text", so the page ships a hash for a script that does not exist and the
+  // real empty block stays blocked.
+  const { hashes } = await scan(`<script></script><p>following text</p>`);
+  const [empty] = (await scan(`<script></script>`)).hashes;
+  assert.deepEqual(hashes, [empty], "the empty script must hash the empty string, not its neighbour");
+});
+
 test("a script body is hashed as its SOURCE bytes, undecoded", needsParser, async () => {
   // Raw-text content arrives in chunks split on `<` and is not entity-decoded,
   // which is what the browser hashes too. If HTMLRewriter ever started decoding,
@@ -100,10 +112,16 @@ test("hashes come back in DOCUMENT ORDER", needsParser, async () => {
   assert.deepEqual((await scan(`<script>2</script><script>1</script>`)).hashes, [two, one]);
 });
 
-test("an unterminated script is loud rather than dropped", needsParser, async () => {
-  // A dropped block is a page that silently keeps 'unsafe-inline', which is the
-  // failure this whole pass exists to remove.
-  await assert.rejects(() => scan(`<script>never closed`), /unterminated <script>/);
+test("an unterminated script hashes the body a browser would run", needsParser, async () => {
+  // The old hand-rolled walker THREW here, because it went looking for a close
+  // tag and found none. That was a property of the walker rather than a real
+  // invariant: a browser runs an unterminated script to end of document, and
+  // lol-html agrees, closing the text node at EOF. Probed rather than assumed.
+  // So the parser's answer is the browser's answer, and hashing it is right;
+  // throwing would refuse to cover a block that really does execute.
+  const [open] = (await scan(`<script>never closed`)).hashes;
+  const [closed] = (await scan(`<script>never closed</script>`)).hashes;
+  assert.equal(open, closed, "an unterminated script hashes as if it closed at EOF");
 });
 
 test("the parser requirement is stated by name", async () => {

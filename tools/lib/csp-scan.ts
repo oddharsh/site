@@ -74,58 +74,70 @@ export type ScanResult = { hashes: string[]; handlers: string[] };
 export async function scanDocument(source: string, label: string): Promise<ScanResult> {
   requireParser();
 
-  type Item = { hash: string } | { srcdoc: string; label: string };
-  const items: Item[] = [];
+  // A slot is RESERVED at the script's OPEN tag and filled by the text handler
+  // afterwards, which is what keeps document order exact without needing to know
+  // when the element closed. The obvious shape is el.onEndTag(), and this avoids
+  // it deliberately: it is the newest HTMLRewriter API this module would need,
+  // lib/link-integrity.ts (the other parser caller) exercises none of it, and
+  // this build has to run in three places — a workstation, a GitHub runner, and
+  // Cloudflare's build image — only two of which anything here can measure.
+  type Slot = { body: string[] } | { srcdoc: string; label: string };
+  const items: Slot[] = [];
   const handlers: string[] = [];
-  let capture: string[] | null = null;
+  let current: { body: string[] } | null = null;
 
-  const rewriter = new HTMLRewriter().on("*", {
-    element(el) {
-      const tag = el.tagName.toLowerCase();
-      // Attributes are PARSED rather than regexed off the raw tag, because
-      // garage/horizon.html carries `value="&lt;img src=x onerror=alert(1)&gt;"`
-      // as demo TEXT. To a parser that is an attribute VALUE and can never be
-      // read as a handler; to a naive /\son\w+=/ it is one, and it sends you
-      // refactoring a string literal.
-      for (const [name] of el.attributes) {
-        const lower = name.toLowerCase();
-        if (HANDLER_ATTR.test(lower)) handlers.push(`${label}: <${tag} ${lower}=…>`);
-      }
+  const rewriter = new HTMLRewriter()
+    .on("*", {
+      element(el) {
+        const tag = el.tagName.toLowerCase();
+        // Attributes are PARSED rather than regexed off the raw tag, because
+        // garage/horizon.html carries `value="&lt;img src=x onerror=alert(1)&gt;"`
+        // as demo TEXT. To a parser that is an attribute VALUE and can never be
+        // read as a handler; to a naive /\son\w+=/ it is one, and it sends you
+        // refactoring a string literal.
+        for (const [name] of el.attributes) {
+          const lower = name.toLowerCase();
+          if (HANDLER_ATTR.test(lower)) handlers.push(`${label}: <${tag} ${lower}=…>`);
+        }
 
-      const srcdoc = el.getAttribute("srcdoc");
-      if (srcdoc) items.push({ srcdoc: decodeCharRefs(srcdoc), label: `${label}: <${tag} srcdoc>` });
+        const srcdoc = el.getAttribute("srcdoc");
+        if (srcdoc) items.push({ srcdoc: decodeCharRefs(srcdoc), label: `${label}: <${tag} srcdoc>` });
 
-      if (tag !== "script") return;
-      if (el.getAttribute("src") !== null) return;      // external: covered by 'self'
-      if (!isExecutableType((el.getAttribute("type") || "").toLowerCase())) return;
+        if (tag !== "script") return;
+        if (el.getAttribute("src") !== null) return;      // external: covered by 'self'
+        if (!isExecutableType((el.getAttribute("type") || "").toLowerCase())) return;
 
-      const body: string[] = [];
-      capture = body;
-      // Fires for an empty <script></script> too, which is why this hangs off the
-      // END TAG rather than off the last text chunk: an empty executable block
-      // still needs the hash of the empty string, and it has no text node.
-      el.onEndTag(() => {
-        items.push({ hash: createHash("sha256").update(body.join(""), "utf8").digest("base64") });
-        capture = null;
-      });
-    },
-    text(chunk) {
-      // Raw-text content arrives in chunks split on `<`, undecoded, so joining
-      // reproduces the source bytes the browser hashes. Probed rather than
-      // assumed: `&amp;` inside a script body survives as `&amp;`.
-      if (capture) capture.push(chunk.text);
-    },
-  });
+        // Reserved here, so an EMPTY <script></script> still gets its slot and
+        // hashes the empty string. Probed rather than assumed: an empty script
+        // emits no text chunk at all, so anything that waited for one would drop
+        // the block and leave that page needing a hash the header never carries.
+        current = { body: [] };
+        items.push(current);
+      },
+    })
+    .on("script", {
+      text(chunk) {
+        // Scoped to `script` rather than `*` on purpose. A `*` text handler would
+        // hand an empty script the whitespace that follows its close tag, since
+        // that is the next text the stream produces.
+        //
+        // Raw-text content arrives in chunks split on `<`, undecoded, so joining
+        // reproduces the source bytes the browser hashes. Probed: `&amp;` inside
+        // a script body survives as `&amp;`.
+        if (!current) return;
+        current.body.push(chunk.text);
+        if (chunk.lastInTextNode) current = null;
+      },
+    });
 
   await rewriter.transform(new Response(source)).text();
 
-  // The old walker threw on an unterminated <script>. Keep that loud: a dropped
-  // block is a page that silently keeps 'unsafe-inline'.
-  if (capture !== null) throw new Error(`csp-scan: unterminated <script> in ${label}`);
-
   const hashes: string[] = [];
   for (const item of items) {
-    if ("hash" in item) { hashes.push(item.hash); continue; }
+    if ("body" in item) {
+      hashes.push(createHash("sha256").update(item.body.join(""), "utf8").digest("base64"));
+      continue;
+    }
     const inner = await scanDocument(item.srcdoc, item.label);
     hashes.push(...inner.hashes);
     handlers.push(...inner.handlers);
