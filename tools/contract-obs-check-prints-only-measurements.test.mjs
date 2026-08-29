@@ -6,7 +6,18 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
-import { checkBuckets, checkRun, classify, dailyTable, sampledAt, windowDayKeys } from "./check-observability.ts";
+import {
+  checkBuckets,
+  checkRun,
+  classify,
+  dailyTable,
+  readCount,
+  readGroups,
+  readSeriesByDay,
+  render,
+  sampledAt,
+  windowDayKeys,
+} from "./check-observability.ts";
 
 // THE DEFECT CLASS. #667 shipped three paths that printed a FAIL line and then
 // rendered a full table of headroom underneath it, exit 0. A reader acts on the
@@ -34,12 +45,135 @@ import { checkBuckets, checkRun, classify, dailyTable, sampledAt, windowDayKeys 
 //                 window, so a slow clock dropped a real day from the peak
 //   the gap       rows returned were never counted against days requested
 //
+// A THIRD PASS found the rooms off that corridor, all four in the SECONDARY
+// tiers rounds 1 and 2 never keyed on. Those are marked ROUND 3:
+//
+//   the split     `checkBuckets` WAS run on the split series and only
+//                 `.problem` was read, so a day the split never answered
+//                 rendered `0` in every dataset column beside a total of
+//                 100,000: tracing reported as contributing nothing on a day
+//                 nobody measured, exit 0
+//   the breakdown `Number(a.value) || 0` printed "lots" as 0, under a comment
+//                 in the same block saying these rows were held to the rule
+//   the payload   a bucket whose `data` was an object threw
+//                 "{} is not iterable" and exited 2 on a stack trace
+//   the count     `Number.isFinite(Number(v))` read `true` as 1 and `[7]` as 7
+//
+// The fix is one GATE rather than four patches, so the tests above are held at
+// `readCount`, `render`, `readGroups` and `readSeriesByDay` themselves: a fifth
+// tier that skips the gate cannot print at all, which is a property of the
+// choke point rather than a rule anyone has to remember.
+//
 // Every case below is held at the function that decides it and again end to end
 // through main().
 
 const DAY_MS = 86_400_000;
 const HOUR_MS = 3_600_000;
 const TOOL = "tools/check-observability.ts";
+
+// ── ROUND 3: the gate ───────────────────────────────────────────────────────
+// Rounds 1 and 2 each fixed the tier they were shown and left the siblings open,
+// because every tier did its own checking. These hold the CHOKE POINT instead:
+// `readCount` is the only way a wire value becomes a number and `render` is the
+// only way a number becomes text. A fourth tier that skips them cannot print.
+
+test("readCount is the only door, and Number() opens four that it closes", () => {
+  const measured = (v) => {
+    const f = readCount(v);
+    assert.equal(f.state, "measured", `${JSON.stringify(v)} is a count`);
+    return f;
+  };
+  assert.equal(render(measured(0)), "0", "a real zero is a reading and prints as one");
+  assert.equal(render(measured(200_000)), "200,000");
+
+  // The four coercions. `Number.isFinite(Number(v))` said yes to all of them,
+  // and `Number(v) || 0` printed the last two as counts.
+  for (const [value, note] of [
+    [true, "Number(true) is 1"],
+    [[7], "Number([7]) is 7"],
+    ["12", 'Number("12") is 12'],
+    [null, "Number(null) is 0"],
+    ["abc", "Number('abc') is NaN"],
+    [undefined, "an absent field"],
+    [-1, "a negative count rendered 125.0% headroom"],
+    [1.5, "an event count counts events"],
+    [Number.NaN, "NaN"],
+    [Number.POSITIVE_INFINITY, "Infinity"],
+  ]) {
+    assert.equal(readCount(value).state, "unreadable", `${JSON.stringify(value) ?? "undefined"}: ${note}`);
+  }
+});
+
+test("render refuses anything it cannot vouch for, which is what makes the gate structural", () => {
+  // BLOCKING. TypeScript refuses a bare number here and TypeScript does not run:
+  // this suite is .mjs, and a future tier holding `a.value` as unknown can cast
+  // past the compiler. The brand is a module-private symbol, so a hand-built
+  // lookalike fails too. Throwing lands in main()'s catch as exit 2 with no
+  // table above it; printing a marker would be the warning-over-wrong-numbers
+  // shape this whole file refuses.
+  for (const raw of [0, 42, "42", null, undefined, { state: "measured", value: 5 }]) {
+    assert.throws(
+      () => render(raw),
+      /rather than a Figure/,
+      `${JSON.stringify(raw) ?? "undefined"} must not be printable`,
+    );
+  }
+  assert.equal(render(readCount(1234)), "1,234", "and a real Figure still renders");
+
+  // THE TWO UNMEASURED STATES ARE NOT THE SAME MARK, which is this file's own
+  // rule one level down. A dash says nothing was read. A question mark says
+  // something WAS read and is not a count, which is a payload change and a
+  // different thing for a reader to do something about.
+  const todayStart = Math.floor(Date.now() / DAY_MS) * DAY_MS;
+  const key = new Date(todayStart - DAY_MS).toISOString().slice(0, 10);
+  const nothingRead = readSeriesByDay([{ time: String(todayStart - DAY_MS), data: [] }], [key]);
+  assert.equal(render(nothingRead.byDay.get(key)?.total), "-", "absent renders as a dash");
+  assert.equal(render(readCount("abc")), "?", "unreadable renders as a question mark, never as a dash");
+});
+
+test("readGroups drops a breakdown whole rather than printing a hole in it", () => {
+  const row = (name, value) => ({ value, groups: [{ key: "s", value: name }] });
+
+  const good = readGroups([row("aadhar-sh", 12), row("cf-garage", 400)]);
+  assert.equal(good.problem, null, "a clean breakdown is not blanket-red");
+  assert.deepEqual(good.rows.map((r) => r.name), ["cf-garage", "aadhar-sh"], "sorted by the reading, descending");
+  assert.equal(render(good.rows[0].events), "400");
+
+  // MEDIUM. `Number(a.value) || 0` printed this as 0, under a comment in the
+  // same block claiming these rows were held to the same rule as the total.
+  const bad = readGroups([row("aadhar-sh", "lots"), row("cf-garage", 400)]);
+  assert.match(bad.problem ?? "", /not a number/, "the bad row names itself");
+  assert.equal(bad.rows.length, 0, "and the rows beside it are dropped, since the same code read them");
+});
+
+test("readSeriesByDay is one parse, so the refusal and the render cannot disagree", () => {
+  const todayStart = Math.floor(Date.now() / DAY_MS) * DAY_MS;
+  const key = (back) => new Date(todayStart - back * DAY_MS).toISOString().slice(0, 10);
+  const time = (back) => String(todayStart - back * DAY_MS);
+
+  // The declared type says `data` is a list of aggregates and the WIRE says
+  // whatever it says, which is the lie this parse exists to catch, so a fixture
+  // for it has to be cast rather than typed.
+  const wire = (v) => /** @type {any} */ (v);
+
+  // LOW. Round 2 iterated `data` directly, so this threw "is not iterable" and
+  // exited 2 on a stack trace where every other bad payload got a sentence.
+  const notList = readSeriesByDay(wire([{ time: time(1), data: { value: 12 } }]), [key(1)]);
+  assert.match(notList.problem ?? "", /list of aggregates/, "a non-list `data` is a named payload change");
+
+  // A refusal no longer stops the walk, so the fold stays correct on a response
+  // nothing can vouch for. That is what lets dailyTable read from this result.
+  const doubled = readSeriesByDay([{ time: time(1), data: [{ value: 100_000 }] }, { time: time(1), data: [{ value: 100_000 }] }], [key(1)]);
+  assert.match(doubled.problem ?? "", /2 buckets/, "two buckets on one day still refuse");
+  assert.equal(render(doubled.byDay.get(key(1))?.total), "200,000", "and the day still sums correctly");
+
+  // An EMPTY aggregate list is absence rather than zero, on the rule the whole
+  // file serves, so the day reads unanswered instead of quietly calm.
+  const empty = readSeriesByDay([{ time: time(1), data: [] }], [key(1)]);
+  assert.equal(empty.problem, null, "an empty bucket is not the response contradicting itself");
+  assert.deepEqual(empty.unanswered, [key(1)], "but it is not a reading either");
+  assert.equal(render(empty.byDay.get(key(1))?.total), "-");
+});
 
 test("classify separates its four states, and sampling beats a real count", () => {
   assert.equal(classify(0, false), "no-data", "an empty window is not data");
@@ -238,6 +372,74 @@ test("dailyTable never scores a day it cannot vouch for", () => {
   assert.ok(!rows.some((l) => /worst COMPLETE day: 0 /.test(l)), "an expired 0 never becomes the peak");
 });
 
+test("a split column answers for its OWN days, never for the total's", () => {
+  // ROUND 3, HIGH, at the function that decides it. `checkBuckets` WAS called on
+  // the split series, and only `.problem` was read: the `unanswered` array was
+  // discarded and the cell asked `totals.has(day)` instead. So a day the split
+  // query never returned rendered `0` in every dataset column beside a real
+  // total, at exit 0, saying tracing contributed nothing on a day nobody
+  // measured. The split is parsed by the same walk as the total now.
+  const todayStart = Math.floor(Date.now() / DAY_MS) * DAY_MS;
+  const key = (back) => new Date(todayStart - back * DAY_MS).toISOString().slice(0, 10);
+  const time = (back) => String(todayStart - back * DAY_MS);
+  const pair = (back, traces, logs) => ({
+    time: time(back),
+    data: [
+      { value: traces, groups: [{ key: "dataset", value: "traces" }] },
+      { value: logs, groups: [{ key: "dataset", value: "logs" }] },
+    ],
+  });
+
+  const rows = dailyTable({
+    series: [{ time: time(2), data: [{ value: 3000 }] }, { time: time(1), data: [{ value: 100_000 }] }],
+    split: [pair(2, 2000, 1000)],
+    days: [key(2), key(1), key(0)],
+    todayKey: key(0),
+  });
+  const answered = rowStarting(rows, `  ${key(2)}`);
+  const gap = rowStarting(rows, `  ${key(1)}`);
+
+  assert.match(answered, /2,000/, "the day the split answered prints its real columns");
+  assert.match(answered, /1,000/);
+  assert.match(gap, /100,000/, "the total is a reading and still prints");
+  assert.doesNotMatch(gap, /\s0\s/, "and the split columns must NOT read as a measured zero");
+  // Count dashes past the date, since the day key carries two of its own.
+  assert.equal((gap.slice(gap.indexOf(key(1)) + key(1).length).match(/-/g) ?? []).length, 2, "both dataset cells read as unread");
+  assert.ok(
+    rows.some((l) => l.includes("the split query returned no bucket")),
+    "and the run says so out loud rather than leaving the dashes unexplained",
+  );
+
+  // A group MISSING from a bucket the split DID answer is a real zero, since a
+  // group-by returns only groups that carried events.
+  const partial = dailyTable({
+    series: [{ time: time(1), data: [{ value: 5 }] }],
+    split: [{ time: time(1), data: [{ value: 5, groups: [{ key: "dataset", value: "traces" }] }] }],
+    days: [key(1)],
+    todayKey: key(0),
+  });
+  assert.match(rowStarting(partial, `  ${key(1)}`), /\s5\s/, "the group that reported prints");
+});
+
+test("a split that does not add up to the total is dropped rather than printed beside it", () => {
+  // The split is the same query plus a group-by, so on a day both answered the
+  // groups must sum to the total. If they do not, the columns are not a
+  // decomposition of the number beside them and a reader would take them as one.
+  const todayStart = Math.floor(Date.now() / DAY_MS) * DAY_MS;
+  const key = (back) => new Date(todayStart - back * DAY_MS).toISOString().slice(0, 10);
+  const time = (back) => String(todayStart - back * DAY_MS);
+
+  const rows = dailyTable({
+    series: [{ time: time(1), data: [{ value: 100_000 }] }],
+    split: [{ time: time(1), data: [{ value: 1, groups: [{ key: "dataset", value: "traces" }] }] }],
+    days: [key(1)],
+    todayKey: key(0),
+  });
+  assert.ok(rows.some((l) => l.includes("not a decomposition")), "the mismatch is named");
+  assert.doesNotMatch(rowStarting(rows, `  ${key(1)}`), /\s1\s/, "the bogus column is gone");
+  assert.match(rowStarting(rows, `  ${key(1)}`), /100,000/, "the total is unaffected: it carries no group-by");
+});
+
 test("dailyTable prints no headroom over a day the API never answered for", () => {
   const todayStart = Math.floor(Date.now() / DAY_MS) * DAY_MS;
   const rows = dailyTable({
@@ -300,9 +502,44 @@ const days = (vals, sampleInterval) => vals.map((v, i) => ({
 }));
 const hours = (total) => Array.from({ length: 24 }, (_, i) => ({ time: String(todayStart + i * HOUR), data: [{ value: total / 24 }] }));
 const at = (back, value) => ({ time: String(todayStart - back * DAY), data: [{ value }] });
+const grouped = (back, pairs) => ({
+  time: String(todayStart - back * DAY),
+  data: pairs.map(([k, v]) => ({ value: v, groups: [{ key: "dataset", value: k }] })),
+});
 const calc = (aggregates, series) => ({ run: { dry: false, granularity: DAY }, calculations: [{ aggregates, series }] });
-const payload = (isProbe) => {
+// ROUND 3 needs the three query shapes told apart, because its defects live in
+// the SECONDARY tiers: the total, the daily split (groupBys + granularity) and
+// the two breakdowns (groupBys, no granularity) all took one payload before, so
+// no scenario could make the split disagree with the total.
+const payload = (isProbe, isGrouped, isDaily) => {
   if (isProbe) return { run: { dry: false }, events: { events: [{ id: "e1" }] } };
+  // ROUND 3, HIGH: the total answers all three days and the SPLIT answers one.
+  // This exited 0 printing "traces 0" beside a total of 100,000.
+  if (scenario === "split-gap") {
+    if (isGrouped && isDaily) return calc([{ value: 3000 }], [grouped(2, [["traces", 3000]])]);
+    if (isGrouped) return calc([{ value: 3000, groups: [{ key: "s", value: "aadhar-sh" }] }], []);
+    return calc([{ value: 203000 }], [at(2, 3000), at(1, 100000), at(0, 100000)]);
+  }
+  // ROUND 3, MEDIUM: a breakdown row whose count is not one. Number(v) || 0
+  // printed "lots" as 0 under a comment claiming the same rule applied here.
+  if (scenario === "bad-breakdown") {
+    if (isGrouped && !isDaily) return calc([{ value: "lots", groups: [{ key: "s", value: "aadhar-sh" }] }], []);
+    if (isGrouped) return calc([{ value: 203000 }], [grouped(2, [["traces", 3000]]), grouped(1, [["traces", 100000]]), grouped(0, [["traces", 100000]])]);
+    return calc([{ value: 203000 }], [at(2, 3000), at(1, 100000), at(0, 100000)]);
+  }
+  // ROUND 3, MEDIUM: the split disagrees with the total it decomposes.
+  if (scenario === "split-mismatch") {
+    if (isGrouped && isDaily) return calc([{ value: 1 }], [grouped(1, [["traces", 1]])]);
+    if (isGrouped) return calc([{ value: 1, groups: [{ key: "s", value: "aadhar-sh" }] }], []);
+    return calc([{ value: 100000 }], [at(1, 100000)]);
+  }
+  // ROUND 3, LOW: data is not a list, which threw "is not iterable".
+  if (scenario === "data-not-array") return calc([{ value: 3000 }], [{ time: String(todayStart - DAY), data: { value: 12 } }]);
+  // ROUND 3, HARDENING: Number(true) is 1 and Number([7]) is 7, and
+  // Number.isFinite said yes to both.
+  if (scenario === "bool-count") return calc([{ value: 1 }], [at(1, true)]);
+  if (scenario === "boxed-count") return calc([{ value: 7 }], [at(1, [7])]);
+  if (scenario === "string-count") return calc([{ value: 12 }], [at(1, "12")]);
   if (scenario === "sampling") return calc([{ value: 5430 }], days([1810, 1810, 1810], 100));
   // ROUND 2: the interval rides the WINDOW AGGREGATE, which round 1 never read.
   if (scenario === "aggregate-sampling") return calc([{ value: 5430, sampleInterval: 100 }], days([1810, 1810, 1810]));
@@ -327,9 +564,11 @@ globalThis.fetch = async (input, init) => {
   if (scenario === "offline") throw new TypeError("Unable to connect. Is the computer able to access the url?");
   const sent = JSON.parse(String(init?.body ?? "{}"));
   const isProbe = sent.view === "events";
+  const isGrouped = Array.isArray(sent.parameters?.groupBys);
+  const isDaily = Boolean(sent.granularity);
   // 'unreadable-probe' returns a probe payload whose events array is missing, which is
   // indistinguishable from an empty one once it reaches Array.isArray.
-  const body = scenario === "unreadable-probe" && isProbe ? { run: { dry: false }, events: {} } : payload(isProbe);
+  const body = scenario === "unreadable-probe" && isProbe ? { run: { dry: false }, events: {} } : payload(isProbe, isGrouped, isDaily);
   return new Response(JSON.stringify({ success: true, errors: [], messages: [], result: body }), { status: 200, headers: { "content-type": "application/json" } });
 };
 `;
@@ -379,8 +618,18 @@ test("a refusal prints no headroom and exits non-zero", () => {
   refuses("a bucket outside the window", runTool("skewed-clock"), /outside the/);
   refuses("a negative count", runTool("negative-count"), /non-negative/);
 
+  // ROUND 3. The count guard was `Number.isFinite(Number(v))`, which reads
+  // `true` as 1 event and `[7]` as 7, and `data` that is not a list threw a
+  // TypeError out of checkBuckets and exited 2 on a stack trace.
+  refuses("a boolean where a count belongs", runTool("bool-count"), /true is not a number/);
+  refuses("a boxed number where a count belongs", runTool("boxed-count"), /\[7\] is not a number/);
+  refuses("a numeric string where a count belongs", runTool("string-count"), /"12" is not a number/);
+  const notList = refuses("a bucket whose `data` is not a list", runTool("data-not-array"), /list of aggregates/);
+  assert.doesNotMatch(notList.stdout, /TypeError|is not iterable/, "a malformed payload gets a sentence, not a stack trace");
+
   for (const scenario of ["sampling", "granularity", "dry", "unreadable-probe", "aggregate-sampling",
-    "rate-not-interval", "two-buckets", "skewed-clock", "negative-count"]) {
+    "rate-not-interval", "two-buckets", "skewed-clock", "negative-count",
+    "bool-count", "boxed-count", "string-count", "data-not-array"]) {
     const { stdout } = runTool(scenario);
     for (const phrase of HEADROOM) {
       assert.doesNotMatch(stdout, phrase, `${scenario} printed ${phrase}, which is what a reader acts on`);
@@ -389,9 +638,35 @@ test("a refusal prints no headroom and exits non-zero", () => {
   const expired = runTool("healthy", ["--days", "7"]);
   for (const phrase of HEADROOM) assert.doesNotMatch(expired.stdout, phrase);
 
-  // FLOOR: ten refusal paths ran. A scenario silently failing to reach the tool
-  // would otherwise report as a clean pass over zero assertions.
-  assert.equal(refusals.length, 10, "every refusal scenario has to have run");
+  // FLOOR: fourteen refusal paths ran. A scenario silently failing to reach the
+  // tool would otherwise report as a clean pass over zero assertions.
+  assert.equal(refusals.length, 14, "every refusal scenario has to have run");
+});
+
+test("a secondary tier that cannot be read is dropped, and the total it sits beside still prints", () => {
+  // ROUND 3 end to end, and both of these EXIT 0 on purpose. The window total
+  // is asked with no group-by and no per-day tier can falsify it, so refusing
+  // the run would be blanket-red on a reading that is sound. What they may not
+  // do is print a number for the tier that was not read.
+  const gap = runTool("split-gap");
+  assert.equal(gap.code, 0, "the totals are a measurement and still stand");
+  assert.match(gap.stdout, /100,000/, "and they print");
+  assert.match(gap.stdout, /the split query returned no bucket/, "the missing split days say so");
+  for (const line of gap.stdout.split("\n").filter((l) => /^ {2}\d{4}-\d{2}-\d{2}/.test(l))) {
+    // The defect exactly: a day the split never answered rendered "traces 0"
+    // next to "total 100,000". Any dataset cell here is either a real number
+    // from the split or a dash.
+    if (line.includes("100,000")) assert.doesNotMatch(line, /\s0\s/, `a fabricated zero survived: ${line}`);
+  }
+
+  const breakdown = runTool("bad-breakdown");
+  assert.equal(breakdown.code, 0, "one bad breakdown row does not unwind a sound window total");
+  assert.match(breakdown.stdout, /unavailable: aadhar-sh carried a count that is not one/, "the breakdown names its own refusal");
+  assert.doesNotMatch(breakdown.stdout, /aadhar-sh\s+0\s*$/m, '"lots" must never render as 0');
+
+  const mismatch = runTool("split-mismatch");
+  assert.equal(mismatch.code, 0);
+  assert.match(mismatch.stdout, /not a decomposition/, "a split that does not sum to the total is named and dropped");
 });
 
 test("a window with an unanswered day reads as incomplete rather than roomy", () => {

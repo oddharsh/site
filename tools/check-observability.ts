@@ -125,6 +125,24 @@
 //                 and full headroom. Unanswered days render as such, cannot be
 //                 the peak, and suppress the headroom sentence.
 //
+// A THIRD PASS FOUND THE ROOMS OFF THAT CORRIDOR, and round 3 is a STRUCTURAL
+// fix rather than a fourth patch. Rounds 1 and 2 both keyed their repairs on the
+// TOTAL, and the four defects that survived were all in the tiers beside it: the
+// dataset split rendered `0` for a day the split query never answered, because
+// the cell asked the TOTAL whether that day was answered; the breakdown coerced
+// `"lots"` to 0 under a comment claiming it was held to the same rule; a bucket
+// whose `data` was an object crashed out of `checkBuckets` with a TypeError; and
+// the count guard admitted `true` as 1 event and `[7]` as 7.
+//
+// One pattern under all three rounds: EVERY TIER DID ITS OWN CHECKING, so the
+// newest tier inherited nothing. The repair is one gate. `readCount` is the only
+// function that turns a wire value into a number, `render` is the only one that
+// turns a number into text, and it takes a branded Figure that no other file can
+// forge. Absence is not a number, so `?? 0` has nothing left to default. The
+// long argument, and what stops a fifth tier repeating this, is at THE GATE
+// below; `readSeriesByDay` is the one parse both the refusal and the renderer
+// read, so those two can no longer disagree about whether a day was answered.
+//
 // The event probe is the part that earns its call. A count of 0 is only
 // believable next to a second query that also finds nothing; if `view: events`
 // returns a row over the same window the count is wrong, and Cloudflare's forum
@@ -346,8 +364,167 @@ function countQuery(timeframe: Timeframe, groupBy?: string, granularity?: number
   return query;
 }
 
-type Aggregate = { groups?: { key: string; value: unknown }[]; value: number; sampleInterval?: number };
+// `value` is UNKNOWN on purpose, and the change from `number` is load-bearing
+// rather than pedantic. Typing a wire field as the thing you hope it is makes
+// `Number(a.value)` compile everywhere, which is how `true` came to print as 1
+// event. Typed as unknown, arithmetic on it does not compile at all, so the gate
+// below is the only way through and the compiler is what enforces that.
+type Aggregate = { groups?: { key: string; value: unknown }[]; value: unknown; sampleInterval?: number };
 type Series = { time: string; data: Aggregate[] };
+
+const n = (v: number) => v.toLocaleString("en-US");
+
+// ── THE GATE ─────────────────────────────────────────────────────────────────
+// EVERY NUMBER THIS TOOL PRINTS IS A FIGURE, and a Figure can only be made by
+// reading one off the wire here. That is the design, and it is an answer to
+// three rounds of one defect rather than a fourth patch to it.
+//
+// WHAT THE THREE ROUNDS SHARE. Round 1 fixed sampling, granularity and retention
+// on the TOTAL. Round 2 found the sample interval reported at a nesting the
+// guard never visited, and the table peaking per ROW so two buckets on one day
+// halved it, and fixed both by keying on FIELDS and on DAYS ASKED FOR. Round 3
+// found the rooms off that corridor, all four in the secondary tiers:
+//
+//   the split      a day the split query never answered rendered `0` in every
+//                  dataset column beside a total of 100,000, because the cell
+//                  asked the TOTAL whether that day was answered. Exit 0, and
+//                  wrong in the worst direction: tracing contributed nothing on
+//                  a day nobody measured.
+//   the breakdown  `Number(a.value) || 0` under a comment saying these rows were
+//                  held to the same rule. `"lots"` printed as 0.
+//   the payload    a bucket whose `data` was an object rather than a list threw
+//                  a TypeError out of checkBuckets and exited 2 on a stack
+//                  trace, where every other malformed payload gets a sentence.
+//   the count      `Number.isFinite(Number(v))` accepted `true` as 1 event and
+//                  `[7]` as 7.
+//
+// Every one of those is A TIER THAT DID ITS OWN CHECKING. The tool grew from one
+// printed number to five (window total, per-day cell, split column, and two
+// breakdowns) and each new tier inherited nothing from the last, because there
+// was nothing to inherit: a guard was a rule a caller had to remember, and the
+// newest caller is the one who was not there when the rule was written.
+//
+// So there is one gate now, and skipping it is not on the menu. `readCount` is
+// the only function that turns a wire value into a number. `render` is the only
+// function that turns a number into text, and it takes a Figure. A Figure
+// carries a module-private symbol, so no other file, no test and no future tier
+// can build one by hand, and `render` THROWS on anything unbranded rather than
+// printing it. A fourth tier has two options: call the gate, or print nothing.
+//
+// WHY A TAGGED TYPE RATHER THAN ONE VALIDATOR EVERYBODY CALLS. A validator is
+// what was already here, four times over, and the fourth tier is precisely the
+// one that does not call it. The tag makes the UNMEASURED STATE UNPRINTABLE
+// instead: `?? 0` has nothing left to default, because absent is not a number
+// and never becomes one. That is the difference between a rule and a type.
+//
+// WHERE THIS STOPS, stated so the boundary is not guesswork. A constant declared
+// in this file is not a reading, so `n(DAILY_CEILING)` prints directly. A number
+// that came off the wire is a Figure, and anything computed from one stays a
+// Figure through `derive`.
+const FIGURE = Symbol("obs-check.figure");
+
+type Figure =
+  | { [FIGURE]: true; state: "measured"; value: number }
+  | { [FIGURE]: true; state: "absent"; why: string }
+  | { [FIGURE]: true; state: "unreadable"; why: string };
+
+const measured = (value: number): Figure => ({ [FIGURE]: true, state: "measured", value });
+/** Nothing was read here. Not a zero, and there is no path that turns it into one. */
+const absent = (why: string): Figure => ({ [FIGURE]: true, state: "absent", why });
+/** Something WAS read and it is not a count, which is a different failure from absence. */
+const unreadable = (why: string): Figure => ({ [FIGURE]: true, state: "unreadable", why });
+
+/** A wire value quoted back inside a refusal, without throwing on a cycle. */
+const shown = (v: unknown): string => {
+  try {
+    return JSON.stringify(v) ?? String(v);
+  } catch {
+    return String(v);
+  }
+};
+
+/**
+ * THE ONE PARSE. An untyped wire value becomes an event count or a named
+ * refusal, and nothing else in this file may do that job.
+ *
+ * `Number()` is the trap this replaces and it is worth naming each member,
+ * because the coercion reads as a validation. `Number(true)` is 1, `Number([7])`
+ * is 7, `Number("12")` is 12 and `Number(null)` is 0, so the round-2 guard
+ * `Number.isFinite(Number(v))` admitted all four and `Number(v) || 0` printed
+ * the last two as counts. An event count is a non-negative whole NUMBER on the
+ * wire; anything else is a payload change, and a payload change is the one thing
+ * this file must never render as a quiet reading.
+ */
+export function readCount(raw: unknown): Figure {
+  // The rule wants a parse at the I/O boundary and a branch on the domain value.
+  // This IS that parse: there is no earlier place to put it, because the wire is
+  // where the value came from and `unknown` is what it arrives as.
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof
+  if (typeof raw !== "number") {
+    return unreadable(`${shown(raw)} is not a number; \`Number()\` would have read true as 1, [7] as 7 and null as 0`);
+  }
+  if (!Number.isInteger(raw)) {
+    return unreadable(`${shown(raw)} is not a whole number, and an event count counts events`);
+  }
+  if (raw < 0) {
+    // "non-negative" is load-bearing wording rather than prose: the contract
+    // suite pins this refusal by that phrase, because a negative count is what
+    // rendered as -25.0% used and 125.0% headroom.
+    return unreadable(`${shown(raw)} is negative, and an event count is a non-negative whole number`);
+  }
+  return measured(raw);
+}
+
+/** Two figures added. Unreadable poisons, absent yields to a reading. */
+function add(a: Figure, b: Figure): Figure {
+  if (a.state === "unreadable") return a;
+  if (b.state === "unreadable") return b;
+  if (a.state === "absent") return b;
+  if (b.state === "absent") return a;
+  return measured(a.value + b.value);
+}
+
+/** Arithmetic on a reading stays a reading. Anything else stays what it was. */
+function derive(f: Figure, fn: (v: number) => number): Figure {
+  return f.state === "measured" ? measured(fn(f.value)) : f;
+}
+
+const isFigure = (f: unknown): f is Figure =>
+  // The brand check IS the enforcement, so it has to run against whatever it was
+  // handed rather than against a parsed domain value.
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof
+  f !== null && typeof f === "object" && (f as Record<symbol, unknown>)[FIGURE] === true;
+
+/**
+ * THE ONLY WAY A WIRE NUMBER BECOMES TEXT. Measured prints, absent prints `-`,
+ * unreadable prints `?`, and each of the last two carries its reason to a note
+ * line rather than into the column a reader scans.
+ *
+ * IT THROWS ON A RAW VALUE, which is the enforcement rather than defensiveness.
+ * TypeScript already refuses a `number` here, and TypeScript does not run: the
+ * contract suite is `.mjs`, and a future tier holding `a.value` as `unknown` can
+ * cast its way past the compiler. The symbol is module-private, so a hand-built
+ * `{ state: "measured", value: 5 }` fails this check, and the throw lands in
+ * main()'s catch as exit 2 with no table above it. Printing a marker instead
+ * would be the warning-over-wrong-numbers shape this whole file refuses.
+ */
+export function render(f: unknown): string {
+  if (!isFigure(f)) {
+    throw new Error(
+      `render() was handed ${shown(f)} rather than a Figure. Every number printed here comes from readCount(); an unchecked value may not reach a reader.`,
+    );
+  }
+  if (f.state === "measured") return n(f.value);
+  return f.state === "absent" ? "-" : "?";
+}
+
+/**
+ * The reason a figure carries no number, for the note under the table.
+ *
+ * A `?` cell with no explanation beneath it would be this file's own failure in
+ * miniature: a mark a reader has to guess at, printed where a number goes.
+ */
+const gapWhy = (f: Figure): string | null => (f.state === "measured" ? null : f.why);
 
 /** What the response says about sampling, or why that could not be read. */
 export type Sampling =
@@ -365,9 +542,26 @@ function calculation(result: Record<string, unknown>): { aggregates: Aggregate[]
   };
 }
 
-/** Sum every aggregate in one bucket. */
-function bucketTotal(data: Aggregate[]): number {
-  return data.reduce((n, a) => n + (Number(a.value) || 0), 0);
+/**
+ * One bucket's aggregates, summed through the gate.
+ *
+ * A `data` that is not a list is a PAYLOAD CHANGE and says so. Round 2's version
+ * iterated it directly, so an object there threw `{} is not iterable` out of
+ * checkBuckets and the tool exited 2 on a stack trace, which is the one
+ * malformed payload in this file that got no sentence.
+ *
+ * An EMPTY list is `absent` rather than 0, on the rule the whole file serves. A
+ * bucket carrying no aggregate row carries no count, and the day it lands on
+ * reads as unanswered instead of as a quiet zero.
+ */
+function bucketTotal(data: unknown): Figure {
+  if (!Array.isArray(data)) {
+    return unreadable(`a bucket's \`data\` came back as ${shown(data)} rather than a list of aggregates, so its payload has changed`);
+  }
+  if (data.length === 0) return absent("the bucket carried no aggregate row, and nothing is not a zero");
+  let sum = absent("no aggregate read");
+  for (const a of data) sum = add(sum, readCount((a as Aggregate)?.value));
+  return sum;
 }
 
 /**
@@ -418,7 +612,7 @@ function bucketTotal(data: Aggregate[]): number {
  */
 export function sampledAt(result: unknown): Sampling {
   let worst = 1;
-  const unreadable: string[] = [];
+  const notIntervals: string[] = [];
   // A WeakSet rather than a depth cap. A cap is the special-case habit this
   // function exists to break: it would silently stop looking at whatever depth
   // somebody guessed, which is the failure mode again one level down. JSON has
@@ -458,34 +652,39 @@ export function sampledAt(result: unknown): Sampling {
       // place to put it, because the walk is what found the value.
       // oxlint-disable-next-line anti-slop/no-runtime-typeof
       if (typeof value !== "number" || !Number.isInteger(value) || value < 1) {
-        unreadable.push(JSON.stringify(value) ?? String(value));
+        notIntervals.push(JSON.stringify(value) ?? String(value));
       } else {
         worst = Math.max(worst, value);
       }
     }
   };
   walk(result);
-  if (unreadable.length > 0) {
+  if (notIntervals.length > 0) {
     return {
       state: "unreadable",
-      why: `sampleInterval came back as ${unreadable.slice(0, 3).join(", ")}, which is not a 1-in-N interval; a rate (head_sampling_rate is 0..1) and an interval are reciprocals, so this cannot be read either way`,
+      why: `sampleInterval came back as ${notIntervals.slice(0, 3).join(", ")}, which is not a 1-in-N interval; a rate (head_sampling_rate is 0..1) and an interval are reciprocals, so this cannot be read either way`,
     };
   }
   return worst > 1 ? { state: "sampled", interval: worst } : { state: "unsampled" };
 }
 
-const n = (v: number) => v.toLocaleString("en-US");
-
 /**
  * Share of the daily ceiling and the headroom beside it, ROUNDED ONCE and then
  * complemented, so the pair always sums to 100.0. Computing each from the raw
  * value rounds twice: 1,500 events printed 0.8% used and 99.3% left in #667.
+ *
+ * IT TAKES A FIGURE AND RETURNS NULL FOR ANYTHING UNMEASURED, which is the gate
+ * arriving at the derived numbers. A percentage of an unread day is the exact
+ * output the tool exists to refuse, and round 1 printed `100.0%` headroom over
+ * a day past retention because this took a bare number and every bare number
+ * divides.
  */
-function share(v: number): { used: string; left: string } {
-  const used = Number(((v / DAILY_CEILING) * 100).toFixed(1));
+function shareOf(f: Figure): { used: string; left: string } | null {
+  if (f.state !== "measured") return null;
+  const used = Number(((f.value / DAILY_CEILING) * 100).toFixed(1));
   return { used: `${used.toFixed(1)}%`, left: `${(100 - used).toFixed(1)}%` };
 }
-const pct = (v: number) => share(v).used;
+const pctOf = (f: Figure) => shareOf(f)?.used ?? "?";
 
 /**
  * The classifier, kept pure so the control and the contract test can exercise it
@@ -530,10 +729,48 @@ export function windowDayKeys(from: number, to: number): string[] {
   return out;
 }
 
+/** One day's counts: the bucket total, plus a Figure per group-by key. */
+type DayReading = { total: Figure; groups: Map<string, Figure> };
+
 /**
+ * THE ONE PARSE OVER A BREAKDOWN, the ungrouped-by-time sibling of the walk
+ * below. `aggregates[]` in, sorted Figures out, and a single unreadable value
+ * drops the whole breakdown rather than putting a hole in it.
+ *
+ * Rows are sorted on the READING, so an unreadable row cannot be ranked against
+ * a measured one. It never gets that far, since `problem` is set first.
+ */
+export function readGroups(aggregates: Aggregate[]): {
+  problem: string | null;
+  rows: { name: string; events: Figure }[];
+} {
+  const rows = aggregates.map((a) => ({
+    name: a?.groups?.[0] ? String(a.groups[0].value) : "(none)",
+    events: readCount(a?.value),
+  }));
+  const broken = rows.find((r) => r.events.state === "unreadable");
+  if (broken && broken.events.state === "unreadable") {
+    return { problem: `${broken.name} carried a count that is not one: ${broken.events.why}`, rows: [] };
+  }
+  rows.sort((a, b) => (b.events.state === "measured" ? b.events.value : 0) - (a.events.state === "measured" ? a.events.value : 0));
+  return { problem: null, rows };
+}
+
+/**
+ * THE ONE PARSE OVER SERIES. Every count in this file is read here, once, and
+ * comes out as a Figure keyed by the UTC day it belongs to. `checkBuckets` and
+ * `dailyTable` are both projections of this, which is round 3's structural half:
+ * previously the two walked the response separately, so `checkBuckets` could
+ * decide a day was unanswered while the renderer printed a number for it.
+ *
+ * The GROUPED case is the same walk. A split query returns the same series with
+ * `groups` on each aggregate, so the split's per-day answer comes from the same
+ * function that decides the total's. That is what closes round 3's headline
+ * defect: the split columns used to ask the TOTAL whether a day was answered.
+ *
  * Does the set of buckets that came back match the window that was asked for?
  * `checkRun` reads the API's ECHO of the query; this reads the ROWS, and the two
- * can disagree. Four ways, each of which round 1 rendered as a number:
+ * can disagree. Five ways, each of which some earlier round rendered as a number:
  *
  *  1. AN UNREADABLE STAMP. A bucket that cannot be placed on a day was being
  *     silently placed on 1970-01-01 by `Number(t) || Date.parse(t)`.
@@ -557,51 +794,96 @@ export function windowDayKeys(from: number, to: number): string[] {
  *     had consumed the whole ceiling.
  *  4. A COUNT THAT IS NOT A COUNT. `Number(v) || 0` read "abc" and null as zero
  *     and passed -50,000 straight through, which rendered as `-25.0%` used and
- *     `125.0%` headroom.
+ *     `125.0%` headroom. Round 2 replaced that with `Number.isFinite(Number(v))`,
+ *     which still admitted `true` as 1 event and `[7]` as 7. `readCount` is the
+ *     gate now and neither coercion happens anywhere.
+ *  5. A `data` THAT IS NOT A LIST. Round 2 iterated it directly, so an object
+ *     there threw `{} is not iterable` and exited 2 on a stack trace where every
+ *     other malformed payload gets a sentence. `bucketTotal` names it.
+ *
+ * A refusal no longer stops the walk, which matters because `dailyTable` folds
+ * from this same result: it records the FIRST reason and keeps reading, so the
+ * arithmetic stays correct on a response nothing can vouch for. main() prints no
+ * table when `problem` is set, so a correct fold of a bad response never ships.
  *
  * `unanswered` is reported rather than refused, and that split is the point.
- * 1 to 4 are the response disagreeing with itself, which is never normal. A day
+ * 1 to 5 are the response disagreeing with itself, which is never normal. A day
  * with no row may just be the API omitting an empty bucket, which no authorized
  * call has been made from here to settle, so refusing would be blanket-red on
  * precisely the quiet account this tool is meant to reassure. The caller marks
  * it instead, and prints no headroom over it.
  */
-export function checkBuckets(
+export function readSeriesByDay(
   series: Series[],
   days: string[],
-): { problem: string | null; unanswered: string[] } {
+): { problem: string | null; byDay: Map<string, DayReading>; unanswered: string[] } {
   const wanted = new Set(days);
   const bucketsPerDay = new Map<string, number>();
+  const byDay = new Map<string, DayReading>();
   const span = days.length > 0 ? `${days[0]}..${days[days.length - 1]}` : "(empty window)";
-  const refuse = (problem: string) => ({ problem, unanswered: [] as string[] });
+  let problem: string | null = null;
+  const refuse = (why: string) => {
+    problem ??= why;
+  };
+  const reading = (day: string): DayReading => {
+    const existing = byDay.get(day);
+    if (existing) return existing;
+    const fresh: DayReading = { total: absent("no bucket read for this day"), groups: new Map() };
+    byDay.set(day, fresh);
+    return fresh;
+  };
 
   for (const s of series) {
     const stamp = bucketStamp(s.time);
     if (stamp === null) {
-      return refuse(`a bucket carried ${JSON.stringify(s.time)} as its time, which places it on no day at all`);
+      refuse(`a bucket carried ${shown(s.time)} as its time, which places it on no day at all`);
+      continue;
     }
     const day = dayKey(stamp);
     if (!wanted.has(day)) {
-      return refuse(
+      refuse(
         `a bucket landed on ${day}, outside the ${span} window this run asked for; the API's clock and this machine's do not agree, so no row can be trusted to the day it claims`,
       );
-    }
-    for (const a of s.data) {
-      const v = Number(a.value);
-      if (!Number.isFinite(v) || v < 0) {
-        return refuse(`${day} carried a count of ${JSON.stringify(a.value)}; an event count is a non-negative number, so that row is not a reading`);
-      }
+      continue;
     }
     bucketsPerDay.set(day, (bucketsPerDay.get(day) ?? 0) + 1);
+    const row = reading(day);
+    const bucket = bucketTotal(s.data);
+    if (bucket.state === "unreadable") {
+      refuse(`${day} is not a reading: ${bucket.why}`);
+    }
+    row.total = add(row.total, bucket);
+    if (!Array.isArray(s.data)) continue;
+    for (const a of s.data) {
+      const agg = a as Aggregate;
+      if (!agg?.groups?.[0]) continue;
+      const key = String(agg.groups[0].value);
+      row.groups.set(key, add(row.groups.get(key) ?? absent("no row for this group"), readCount(agg.value)));
+    }
   }
 
   const doubled = [...bucketsPerDay.entries()].find(([, count]) => count > 1);
   if (doubled) {
-    return refuse(
+    refuse(
       `${doubled[0]} came back as ${doubled[1]} buckets while the API echoed one bucket per day, so the response disagrees with its own granularity`,
     );
   }
-  return { problem: null, unanswered: days.filter((d) => !bucketsPerDay.has(d)) };
+  return {
+    problem,
+    byDay,
+    unanswered: days.filter((d) => byDay.get(d)?.total.state !== "measured"),
+  };
+}
+
+/**
+ * The shape round 2 shipped, kept because main() and the control both ask this
+ * exact question and because narrowing an exported signature buys nothing here.
+ * It is a projection of `readSeriesByDay` rather than a second walk, so the
+ * refusal it reports and the Figures the table renders can no longer disagree.
+ */
+export function checkBuckets(series: Series[], days: string[]): { problem: string | null; unanswered: string[] } {
+  const { problem, unanswered } = readSeriesByDay(series, days);
+  return { problem, unanswered: problem ? [] : unanswered };
 }
 
 /**
@@ -614,6 +896,13 @@ export function checkBuckets(
  * day: a day that had spent 100% of the ceiling printed as 50%, exit 0. Every
  * bucket is summed into its UTC day here before anything is rendered or peaked,
  * so the arithmetic is right even where `checkBuckets` was not consulted.
+ *
+ * IT RENDERS FIGURES AND NOTHING ELSE. The two parses at the top are the last
+ * place a wire value is read, so below them there is no `Number(`, no `?? 0` and
+ * no bare count to default: an unread cell is `absent` and `render` prints `-`
+ * for it. Round 3's headline defect lived exactly in the gap this closes, where
+ * the split columns asked the TOTAL whether a day had been answered and printed
+ * `0` for a day the split query had never returned.
  *
  * THREE KINDS OF DAY CARRY NO NUMBER, for one reason: nothing was read for them.
  * TODAY is marked partial, because a day three hours old always looks like
@@ -647,40 +936,48 @@ export function dailyTable(opts: {
 }): string[] {
   const { series, split = null, days, todayKey, retentionFrom } = opts;
 
-  // Fold first, render second.
-  const totals = new Map<string, number>();
-  for (const s of series) {
-    const stamp = bucketStamp(s.time);
-    if (stamp === null) continue;
-    const day = dayKey(stamp);
-    totals.set(day, (totals.get(day) ?? 0) + bucketTotal(s.data));
-  }
-  const perDay = new Map<string, Map<string, number>>();
-  for (const s of split ?? []) {
-    const stamp = bucketStamp(s.time);
-    if (stamp === null) continue;
-    const day = dayKey(stamp);
-    const row = perDay.get(day) ?? new Map<string, number>();
-    for (const a of s.data) {
-      const key = a.groups?.[0] ? String(a.groups[0].value) : "unknown";
-      row.set(key, (row.get(key) ?? 0) + (Number(a.value) || 0));
+  // ONE parse for each series, so the renderer holds Figures and never a wire
+  // value. There is no `Number(` and no `?? 0` below this line, by construction.
+  const total = readSeriesByDay(series, days);
+  const bySplit = split ? readSeriesByDay(split, days) : null;
+  const datasets = [
+    ...new Set([...(bySplit?.byDay.values() ?? [])].flatMap((d) => [...d.groups.keys()])),
+  ].sort();
+
+  // A DECOMPOSITION THAT DOES NOT SUM IS NOT ONE. The split is the same query
+  // plus a group-by, so on any day both answered, the groups must add to the
+  // total. They disagree only if the API truncated the groups or the two queries
+  // saw different data, and either way a column beside an honest total would be
+  // read as a real share of it. The columns drop and say so; the totals are
+  // untouched, since they are asked with no group-by at all.
+  let splitProblem: string | null = null;
+  for (const day of days) {
+    const whole = total.byDay.get(day)?.total;
+    const part = bySplit?.byDay.get(day)?.total;
+    if (whole?.state !== "measured" || part?.state !== "measured") continue;
+    if (part.value !== whole.value) {
+      splitProblem = `${day} splits to ${n(part.value)} against a total of ${n(whole.value)}, so the columns are not a decomposition of it`;
+      break;
     }
-    perDay.set(day, row);
   }
-  const datasets = [...new Set([...perDay.values()].flatMap((m) => [...m.keys()]))].sort();
+  const columns = splitProblem ? [] : datasets;
 
   const lines = [
-    `  ${"day".padEnd(12)}${datasets.map((d) => d.padStart(20)).join("")}${"total".padStart(12)}${"of ceiling".padStart(12)}${"headroom".padStart(11)}`,
+    `  ${"day".padEnd(12)}${columns.map((d) => d.padStart(20)).join("")}${"total".padStart(12)}${"of ceiling".padStart(12)}${"headroom".padStart(11)}`,
   ];
-  let peak = 0;
+  let peak = absent("no day scored");
   let scored = 0;
   let expired = 0;
   let unanswered = 0;
+  let splitGaps = 0;
+  const unreadable: string[] = [];
   for (const day of days) {
     const past = retentionFrom !== undefined && day < retentionFrom;
     const partial = day === todayKey;
-    const answered = totals.has(day);
-    const total = totals.get(day) ?? 0;
+    const row = total.byDay.get(day);
+    const readable = row?.total ?? absent("the API returned no bucket for this day");
+    const answered = readable.state === "measured";
+    if (readable.state === "unreadable") unreadable.push(`${day}: ${gapWhy(readable)}`);
     if (past) expired++;
     // TODAY is excluded from the gap count on purpose. It is never scored and
     // so can never be the peak, which means an unanswered today cannot falsify
@@ -690,23 +987,55 @@ export function dailyTable(opts: {
     else if (!answered && !partial) unanswered++;
     if (answered && !partial && !past) {
       scored++;
-      peak = Math.max(peak, total);
+      if (peak.state !== "measured" || readable.value > peak.value) peak = readable;
     }
-    const unread = !answered || (past && total === 0);
-    const cells = datasets.map((d) => (unread ? "-" : n(perDay.get(day)?.get(d) ?? 0)).padStart(20)).join("");
-    const count = (unread ? "-" : n(total)).padStart(12);
-    const s2 = share(total);
+    // A past-retention day carrying events still prints, since that is data and
+    // also evidence the retention assumption is wrong. A past-retention ZERO is
+    // what the plan predicts and is not a reading, so it renders as unread.
+    const hidden = !answered || (past && readable.value === 0);
+    const shownTotal = hidden ? absent("past retention, so nothing was read") : readable;
+
+    // THE SPLIT ANSWERS FOR ITS OWN DAYS, which is round 3's headline fix. This
+    // asked `totals.has(day)` before, so a day the SPLIT never returned rendered
+    // `0` in every column beside a real total: tracing reported as contributing
+    // nothing on a day nobody measured, at exit 0.
+    const splitRow = bySplit?.byDay.get(day);
+    const splitAnswered = splitRow?.total.state === "measured";
+    if (bySplit && !splitAnswered && !partial && !past && answered) splitGaps++;
+    const cells = columns
+      .map((d) => {
+        if (hidden) return render(absent("the day itself was not read"));
+        if (!splitAnswered) return render(absent("the split query returned no bucket for this day"));
+        // A group MISSING from an answered bucket is a real zero: under a
+        // group-by the API returns only groups that carried events, and the
+        // decomposition check above has already confirmed the parts sum.
+        return render(splitRow?.groups.get(d) ?? measured(0));
+      })
+      .map((c) => c.padStart(20))
+      .join("");
+
+    const s2 = shareOf(shownTotal);
     const tail = past
       ? "  past retention"
       : partial
         ? "     partial"
         : !answered
           ? "  no row returned"
-          : `${s2.used.padStart(12)}${s2.left.padStart(11)}`;
-    lines.push(`  ${day.padEnd(12)}${cells}${count}${tail}`);
+          : s2
+            ? `${s2.used.padStart(12)}${s2.left.padStart(11)}`
+            : "  not a reading";
+    lines.push(`  ${day.padEnd(12)}${cells}${render(shownTotal).padStart(12)}${tail}`);
   }
 
   lines.push("");
+  if (unreadable.length > 0) {
+    // A `?` cell says something WAS read and is not a count, which is a
+    // different state from a dash, so the reason has to reach the reader. main()
+    // refuses before printing a table in this case; the renderer is also called
+    // directly by the control, where the note is the whole output.
+    lines.push(`  ..    ${unreadable.length} day(s) carried something that is not an event count:`);
+    for (const line of unreadable.slice(0, 3)) lines.push(`        ${line}`);
+  }
   if (expired > 0) {
     lines.push(`  ..    ${expired} day(s) sit past the ${RETENTION_DAYS}-day ${PLAN} retention window and are NOT a reading:`);
     lines.push("        no count, no share, no headroom. Ask for a window inside retention instead.");
@@ -715,11 +1044,26 @@ export function dailyTable(opts: {
     lines.push(`  ..    ${unanswered} of the ${days.length} day(s) asked for came back with no bucket at all, and nothing is not a zero:`);
     lines.push("        they carry no count, no share and no headroom, and none of them can be the peak below.");
   }
-  if (peak > 0 && unanswered === 0) {
-    lines.push(`  worst COMPLETE day: ${n(peak)} events, ${pct(peak)} of the ${n(DAILY_CEILING)} ${PLAN} ceiling, ${n(DAILY_CEILING - peak)} to spare.`);
-    lines.push(`  that headroom is about ${n(Math.floor((DAILY_CEILING - peak) / SPANS_PER_LENS_SCAN))} more /lens scans at ~${SPANS_PER_LENS_SCAN} spans each.`);
-  } else if (peak > 0) {
-    lines.push(`  worst ANSWERED day: ${n(peak)} events, ${pct(peak)} of the ${n(DAILY_CEILING)} ${PLAN} ceiling, over the ${scored} day(s) that returned one.`);
+  if (splitProblem) {
+    lines.push(`  ..    the spans/logs columns are NOT printed: ${splitProblem}.`);
+    lines.push("        The totals are unaffected: they are asked with no group-by at all.");
+  } else if (split && datasets.length === 0) {
+    // A split that came back carrying no group keys is the absence rule one
+    // level up. The previous renderer labelled a groupless aggregate `unknown`
+    // and drew a column of numbers under a name the API never said.
+    lines.push("  ..    the split query answered with no group keys at all, so there are no spans/logs columns:");
+    lines.push("        a dataset name this tool invented would be a label the API never returned.");
+  } else if (splitGaps > 0) {
+    lines.push(`  ..    ${splitGaps} day(s) carry a total the split query returned no bucket for, so those cells read "-":`);
+    lines.push("        a dataset that recorded nothing and a dataset nobody asked about look identical from here.");
+  }
+  if (peak.state === "measured" && unanswered === 0) {
+    const spare = derive(peak, (v) => DAILY_CEILING - v);
+    const scans = derive(spare, (v) => Math.floor(v / SPANS_PER_LENS_SCAN));
+    lines.push(`  worst COMPLETE day: ${render(peak)} events, ${pctOf(peak)} of the ${n(DAILY_CEILING)} ${PLAN} ceiling, ${render(spare)} to spare.`);
+    lines.push(`  that headroom is about ${render(scans)} more /lens scans at ~${SPANS_PER_LENS_SCAN} spans each.`);
+  } else if (peak.state === "measured") {
+    lines.push(`  worst ANSWERED day: ${render(peak)} events, ${pctOf(peak)} of the ${n(DAILY_CEILING)} ${PLAN} ceiling, over the ${scored} day(s) that returned one.`);
     lines.push(`  NO headroom figure: ${unanswered} day(s) returned nothing and any of them could have been worse.`);
   } else {
     lines.push("  ..    no complete day in the window carried events, so nothing here is measured against a daily ceiling.");
@@ -915,6 +1259,41 @@ async function control(): Promise<never> {
     ok("a 3-day window answered with one bucket names the 2 days that went unanswered");
   } else { bad("days requested and days answered were never reconciled"); failures++; }
 
+  // ROUND 3, and each of these exited 0 printing a number under round 2's repair.
+  for (const [label, value] of [["true", true], ["[7]", [7]], ['"12"', "12"]] as const) {
+    if (readCount(value).state === "unreadable") continue;
+    bad(`a count of ${label} read as a reading; Number() would have made it 1, 7 and 12`);
+    failures++;
+  }
+  ok('true, [7] and "12" are unreadable counts rather than 1, 7 and 12 events');
+  if (bucketTotal({ value: 12 }).state === "unreadable") {
+    ok("a bucket whose `data` is not a list refuses in a sentence rather than a TypeError");
+  } else { bad("a non-list `data` was accepted"); failures++; }
+  if (readGroups([{ value: "lots", groups: [{ key: "s", value: "aadhar-sh" }] }]).problem) {
+    ok("a breakdown row whose count is not one drops the whole breakdown");
+  } else { bad('a breakdown printed "lots" as a number'); failures++; }
+  try {
+    // The gate itself. A hand-built lookalike carries no brand, so it cannot
+    // reach a reader even from a caller the compiler never saw.
+    render({ state: "measured", value: 5 });
+    bad("render printed an unbranded value, so the gate is not a gate");
+    failures++;
+  } catch {
+    ok("render refuses a value that did not come through readCount, so no tier can print around it");
+  }
+
+  // The HIGH defect, at the renderer: the split answers for its own days.
+  const splitGapRows = dailyTable({
+    series: [{ time: day(1), data: [bucket(100_000)] }],
+    split: [{ time: day(2), data: [bucket(3_000, "traces")] }],
+    days: [key(2), key(1), key(0)],
+    todayKey: key(0),
+  });
+  const gapRow = splitGapRows.find((l) => l.startsWith(`  ${key(1)}`)) ?? "";
+  if (gapRow.includes("100,000") && !/\s0\s/.test(gapRow)) {
+    ok("a day the SPLIT never answered reads as unread, beside a total that is a real reading");
+  } else { bad("the split columns printed 0 for a day the split query never returned"); failures++; }
+
   const rendered = dailyTable({
     series: [
       // Outside the retention window: unread, and it must not read as a zero.
@@ -1060,7 +1439,15 @@ export async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const windowTotal = totalCalc.series.reduce((sum, s) => sum + bucketTotal(s.data), 0);
+  // Through the gate like every other number. `checkBuckets` has already refused
+  // any unreadable count, so this cannot be unreadable here; going through
+  // `bucketTotal` anyway is what keeps that true if the order ever changes.
+  const windowFigure = totalCalc.series.reduce<Figure>((sum, s) => add(sum, bucketTotal(s.data)), absent("no bucket read"));
+  if (windowFigure.state === "unreadable") {
+    bad(`the window total is not a reading: ${windowFigure.why}`);
+    process.exit(1);
+  }
+  const windowTotal = windowFigure.state === "measured" ? windowFigure.value : 0;
 
   // The corroborating probe. A count of 0 is only believable beside a second
   // query that also finds nothing.
@@ -1179,7 +1566,9 @@ export async function main(): Promise<void> {
     if (by.state !== "ok") { info(`unavailable: ${why(by)}`); continue; }
     const byProblem = checkRun(by.result);
     if (byProblem) { info(`unavailable: ${byProblem}`); continue; }
-    // These rows are printed numbers, so they are held to the same rule. This
+    // These rows are printed numbers, so they are held to the same rule, and
+    // round 2 said so in this comment while reading `Number(a.value) || 0`, so
+    // `"lots"` printed as 0. Every value goes through the gate now. The
     // breakdown is asked with NO granularity, so it has no buckets to reconcile
     // and `checkBuckets` does not apply; sampling still does, and reaches these
     // rows through `aggregates[]`, which is the nesting round 1 never read.
@@ -1188,13 +1577,14 @@ export async function main(): Promise<void> {
       info(`unavailable: ${bySampling.state === "sampled" ? `sampled at 1 in ${bySampling.interval}` : bySampling.why}`);
       continue;
     }
-    const calc = calculation(by.result);
-    const rows = (calc?.aggregates ?? [])
-      .map((a) => ({ name: a.groups?.[0] ? String(a.groups[0].value) : "(none)", value: Number(a.value) || 0 }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 15);
-    if (rows.length === 0) { info(`no groups came back for ${key}; the breakdown is missing, not empty`); continue; }
-    for (const r of rows) console.log(`  ${r.name.padEnd(34)}${n(r.value).padStart(12)}`);
+    const rows = readGroups(calculation(by.result)?.aggregates ?? []);
+    // A BREAKDOWN IS DROPPED WHOLE rather than printed with a hole in it. One
+    // row that is not a count says the payload changed, and the rows beside it
+    // were read by the same code, so their ordering and their share of the
+    // window are exactly as unverified as the bad one.
+    if (rows.problem) { info(`unavailable: ${rows.problem}`); continue; }
+    if (rows.rows.length === 0) { info(`no groups came back for ${key}; the breakdown is missing, not empty`); continue; }
+    for (const r of rows.rows.slice(0, 15)) console.log(`  ${r.name.padEnd(34)}${render(r.events).padStart(12)}`);
   }
 
   console.log("\nTracing is free until 2026-10-01. After that each span is one of these events.");
