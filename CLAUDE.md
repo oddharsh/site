@@ -1080,10 +1080,21 @@ than speed 2 on 2 of the 6.
 The library was deliberately MIXED for a few hours, then `reencode-thumbnails.sh`
 collected it. **It ran better than the 6-stem projection: 138,609 bytes rather
 than 118.6 KiB**, which is -1.816% on the 600 tier, -1.968% on 400, -2.007% on
-200, and -1.882% across all 495 AVIF files. Quality moved with it, mean
-ssimulacra2 **+0.327** over 24 tier comparisons on 8 stems, better on 20 of 24
-and smaller on 23 of 24. That is the direction to expect from a projection taken
-on 6 stems and it is worth noticing which way it missed.
+200, and -1.882% across all 495 AVIF files. Those four are exact, re-derived
+from git on 2026-08-29; the AVIF came out smaller on 456 of the 495 and larger
+on 39. That is the direction to expect from a projection taken on 6 stems and it
+is worth noticing which way it missed.
+
+**Quality rose ON AVERAGE, and the figure recorded on the day said only that
+half.** It read "+0.327 mean ssimulacra2 over 24 tier comparisons on 8 stems",
+a real measurement of a small sample that reads as the whole result. A wider
+independent scoring against the same reference, 51 comparisons on 17 stems,
+gives mean **+0.2080**: better on 39 tiers, worse on 12, worst tier **-0.61**.
+The decision is unchanged, since every magnitude sits far under perceptual
+significance and the aggregate direction holds. The record is what needed
+fixing, because a lone mean gets read later as "quality rose" while 12 of 51
+tiers went the other way. PR #660's description still carries +0.327 and cannot
+usefully be edited; `reencode-thumbnails.sh` carries the corrected version.
 
 It cost what the estimate said: 495 re-minted `/i/` URLs, 495 rewritten rows in
 `fingerprints.json`, the `a`/`s`/`x` keys of all 165 stems in `hashes.json`, the
