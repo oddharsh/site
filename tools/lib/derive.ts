@@ -19,9 +19,16 @@
 // ── why the check cannot simply rebuild and diff ──────────────────────────────
 // The obvious design is "re-run the generator, byte-compare the output". It does
 // not work for the artifacts that actually go stale. images/meta/ is a LOCAL
-// pipeline artifact rather than a committed one, so histograms.json and exif.json
-// are not recomputable from a checkout at all; metadata.json reads the SOOC
-// originals, which live in R2 and on one laptop; og cards capture PRODUCTION.
+// pipeline artifact rather than a committed one, so histograms.json is not
+// recomputable from a checkout at all; metadata.json reads the SOOC originals,
+// which live in R2 and on one laptop; og cards capture PRODUCTION.
+//
+// exif.json was named here too until 2026-08-29, and the fix was to stop
+// committing it: it IS recomputable from a checkout, being a projection of
+// metadata.json, so build.ts step 1a derives it and this graph has nothing left
+// to say about it. Worth reading as the preferred outcome rather than an
+// exception. An artifact a checkout can rebuild does not want a digest, it wants
+// to be build output; a digest is what you record when rebuilding is impossible.
 // A rebuild-and-diff check would therefore be unrunnable on exactly the three
 // families that have gone stale, while a check of INPUT bytes runs on all of them
 // for the cost of a hash.

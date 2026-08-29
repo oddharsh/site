@@ -1,18 +1,23 @@
 #!/usr/bin/env node
 
-// Validate the committed public photo artifact graph. Full-resolution source
-// files stay outside git; this checks everything the site actually serves:
-// the photo index the worker bundles, metadata, per-photo EXIF/histogram JSON,
-// the hash map, and all three pixel tiers. add-photos.sh runs this as its last
-// phase, and CI runs it on every PR so an incremental add cannot silently
-// truncate the library.
+// Validate the public photo artifact graph. Full-resolution source files stay
+// outside git; this checks everything the site actually serves: the photo index
+// the worker bundles, metadata, the histogram index, alt text, the hash map, and
+// all four pixel tiers. add-photos.sh runs this as its last phase, and CI runs it
+// on every PR so an incremental add cannot silently truncate the library.
+//
+// Two of the artifacts it once READ are BUILD OUTPUT now (exif.json and
+// fingerprints.json, since 2026-08-29), so it DERIVES those through
+// tools/lib/photo-indexes.ts rather than opening a committed file. Both blocks
+// below say which of their old assertions that retired and why; the short version
+// is that a claim about a committed copy disagreeing with its inputs has nothing
+// left to be true of once the build computes it from those same inputs.
 
-import { createHash } from "node:crypto";
 import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildExifIndex } from "./build-exif-index.ts";
 import { buildHistogramIndex } from "./build-histogram-index.ts";
+import { buildExifIndex, buildImageFingerprints, HISTOGRAM_KEY, tierFiles, TIER_KEYS } from "../lib/photo-indexes.ts";
 import { asRecord, asText } from "../../src/worker/lib/parse.ts";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -28,7 +33,6 @@ const fail = (message) => {
 
 const metadata = await json(path.join(IMAGES, "metadata.json"));
 const hashes = await json(path.join(IMAGES, "hashes.json"));
-const fingerprints = await json(path.join(IMAGES, "fingerprints.json"));
 const alt = await json(path.join(IMAGES, "alt.json"));
 const stems = Object.keys(hashes).sort();
 const metadataStems = Object.keys(metadata).sort();
@@ -81,9 +85,11 @@ for (const [stem, entry] of Object.entries(photoIndex)) {
   }
 }
 
-// The published pixel tiers, in one place: a (600 AVIF), j (600 JPG),
-// s (400 AVIF, DPR-2), x (200 AVIF, DPR-1).
-const TIER_KEYS = ["a", "j", "s", "x"];
+// The published pixel tiers are a (600 AVIF), j (600 JPG), s (400 AVIF, DPR-2),
+// x (200 AVIF, DPR-1). TIER_KEYS and the filename shape come from
+// tools/lib/photo-indexes.ts, which is what the build derives fingerprints.json
+// from, so this file and that derivation cannot disagree about which four files
+// a stem publishes.
 
 const histIndex = await json(path.join(IMAGES, "histograms.json"));
 
@@ -99,22 +105,11 @@ for (const stem of stems) {
     fail(`${stem}: hash entry must contain a, j, s, and x tiers`);
   }
 
-  const files = [
-    `${stem}.${entry.a}.avif`,
-    `${stem}.${entry.j}.jpg`,
-    `${stem}-400.${entry.s}.avif`,
-    `${stem}-200.${entry.x}.avif`,
-  ];
-  for (const [tier, file] of [["a", files[0]], ["j", files[1]], ["s", files[2]], ["x", files[3]]]) {
-    expectedFiles.add(file);
-    try { await stat(path.join(HASHED, file)); }
-    catch { fail(`${stem}: missing hashed pixel tier ${file}`); }
-    const actual = createHash("sha256").update(await readFile(path.join(HASHED, file))).digest("hex");
-    // Asserted in the direction photo_recipe reads it: hash the published bytes,
-    // and the index must name this exact stem and tier. A missing entry and a
-    // drifted one are the same failure here, which is why the old separate
-    // "must contain a, j and s tiers" guard is gone rather than rewritten.
-    if (fingerprints[actual] !== `${stem}:${tier}`) fail(`${stem}: fingerprint drift for ${file}`);
+  const files = tierFiles(stem, entry);
+  for (const tier of TIER_KEYS) {
+    expectedFiles.add(files[tier]);
+    try { await stat(path.join(HASHED, files[tier])); }
+    catch { fail(`${stem}: missing hashed pixel tier ${files[tier]}`); }
   }
 
   // The four histogram channels are asserted against the INDEX now, because
@@ -128,23 +123,28 @@ for (const stem of stems) {
     fail(`${stem}: histograms.json must carry four 64-bin channels (got ${packedHist ? `${packedHist.length} chars` : "nothing"})`);
   }
 }
-const fingerprintStems = [...new Set(Object.values(fingerprints).map((entry) => String(entry).slice(0, String(entry).lastIndexOf(":"))))];
-const fingerprintStrays = fingerprintStems.filter((stem) => !hashes[stem]);
-if (fingerprintStrays.length) fail(`images/fingerprints.json carries unpublished stems: ${fingerprintStrays.join(", ")}`);
-// What this catches that nothing above does: a STALE digest naming a photo that
-// is still published, left over from a previous encode. The per-stem loop passes
-// because the CURRENT bytes still resolve, and the stray check passes because the
-// stem is still in hashes.json, so the count is the only witness. Measured with
-// both controls rather than reasoned about: an earlier version of this comment
-// claimed it was the backstop for a digest COLLISION, and a collision in fact
-// trips the per-stem loop first, since the surviving entry names the other stem
-// and that reads as drift.
-// TIER_KEYS rather than a literal 3: this assertion hardcoded the tier count and
-// went red the moment the 200px tier landed, naming a number nobody had thought
-// to update. It was the check doing its job, and it should not need a second
-// edit next time.
-if (Object.keys(fingerprints).length !== stems.length * TIER_KEYS.length) {
-  fail(`images/fingerprints.json holds ${Object.keys(fingerprints).length} digests, expected ${stems.length * TIER_KEYS.length} (${stems.length} photos x ${TIER_KEYS.length} tiers)`);
+// THREE FINGERPRINT ASSERTIONS LIVED HERE AND ARE GONE, because images/
+// fingerprints.json is BUILD OUTPUT as of 2026-08-29 and each of the three was a
+// statement about a committed file that could disagree with these bytes: a
+// digest that had drifted, a digest naming an unpublished stem, and a count that
+// no longer matched stems x tiers. A map derived from hashes.json and public/i
+// on the way into .build/ cannot hold any of those three states, so re-asserting
+// them here would be a check that can only agree with itself, which this
+// repository has shipped before and does not want again.
+//
+// One fact about that map is NOT a restatement of its own inputs: two published
+// tiers can hold identical bytes, and an inverted index cannot represent both.
+// buildImageFingerprints refuses rather than picking a winner, and running it
+// here is what puts that refusal in front of add-photos.sh instead of leaving it
+// to the next build. It re-reads the same 660 files the loop above stats, which
+// is the hashing this file used to do inline and no longer does.
+try {
+  const { tiers } = await buildImageFingerprints(ROOT);
+  if (tiers !== stems.length * TIER_KEYS.length) {
+    fail(`fingerprint derivation covered ${tiers} tiers, expected ${stems.length * TIER_KEYS.length} (${stems.length} photos x ${TIER_KEYS.length} tiers)`);
+  }
+} catch (error) {
+  fail(String(error?.message || error));
 }
 
 const actualFiles = (await readdir(HASHED)).filter((file) => /\.(avif|jpg)$/.test(file));
@@ -199,23 +199,28 @@ if (hardcoded < HARDCODED_FLOOR) {
        `  it has stopped matching. roots: ${HARDCODED_ROOTS.join(", ")}`);
 }
 
-const exifIndex = await json(path.join(IMAGES, "exif.json"));
-// TIERED, because images/meta/ is BUILD OUTPUT now and is absent from a fresh
-// checkout. Where it exists — a workstation that just ran the pipeline, which is
-// the only place these two indexes can actually go stale — rebuild both from it
-// and fail on any drift. Where it does not, say so and check coverage instead.
+// exif.json is BUILD OUTPUT as of 2026-08-29, so this DERIVES it rather than
+// reading it. Its coverage of the published set is asserted by the
+// metadata/hash stem-set equality at the top of this file, which is exact in
+// both directions, so the old "absent from images/exif.json" and "carries
+// unpublished stems" checks would now be re-deriving that same equality from
+// the same two files. They are gone rather than restated.
+const exifIndex = await buildExifIndex(ROOT);
+
+// TIERED, because images/meta/ is BUILD OUTPUT too and is absent from a fresh
+// checkout. Where it exists, which is a workstation that just ran the pipeline,
+// roll it up and compare.
 //
-// Nothing is lost by that. The drift these guarded was two committed copies
-// disagreeing, and there is one copy now: build.mjs derives meta/ from the
-// indexes rather than the other way round, so a stale per-photo file is no longer
-// a state the repository can be in.
+// WHAT THAT COMPARISON MEANS CHANGED with the move, and it is worth more now
+// than it was. It used to hold two committed copies of one projection together.
+// The projection has TWO IMPLEMENTATIONS: the jq object literal in
+// extract-photo-metadata.sh, which writes these per-photo files, and
+// EXIF_KEY_MAP in tools/lib/photo-indexes.ts, which is what ships. Nothing else
+// holds those two to each other, and a field added to one and forgotten in the
+// other is silent on both sides: the tooltip renders one line fewer and the
+// per-photo fallback renders one line more.
 const metaPresent = await stat(META).then((s) => s.isDirectory(), () => false);
 
-const missing = stems.filter((stem) => !exifIndex[stem]);
-if (missing.length) {
-  fail(`${missing.length} photo(s) absent from images/exif.json: ${missing.slice(0, 8).join(", ")}` +
-       `${missing.length > 8 ? " …" : ""}\n  fix with: node tools/photos/build-exif-index.ts`);
-}
 const histMissing = stems.filter((stem) => !histIndex[stem]);
 if (histMissing.length) {
   fail(`${histMissing.length} photo(s) absent from images/histograms.json: ${histMissing.slice(0, 8).join(", ")}` +
@@ -223,11 +228,20 @@ if (histMissing.length) {
 }
 
 if (metaPresent) {
-  const rebuilt = await buildExifIndex();
-  const stale = stems.filter((stem) => JSON.stringify(exifIndex[stem]) !== JSON.stringify(rebuilt[stem]));
+  // The per-photo files minus their histogram channel: what the jq literal in
+  // extract-photo-metadata.sh produced for each stem.
+  const rolled = {};
+  for (const file of (await readdir(META)).filter((f) => f.endsWith(".json"))) {
+    const { [HISTOGRAM_KEY]: _hist, ...exif } = JSON.parse(await readFile(path.join(META, file), "utf8"));
+    rolled[file.replace(/\.json$/, "")] = exif;
+  }
+  const stale = stems.filter((stem) => JSON.stringify(exifIndex[stem]) !== JSON.stringify(rolled[stem]));
   if (stale.length) {
-    fail(`images/exif.json disagrees with images/meta/ for ${stale.length} photo(s): ${stale.slice(0, 8).join(", ")}` +
-         `${stale.length > 8 ? " …" : ""}\n  fix with: node tools/photos/build-exif-index.ts`);
+    fail(`the two EXIF projections disagree for ${stale.length} photo(s): ${stale.slice(0, 8).join(", ")}` +
+         `${stale.length > 8 ? " …" : ""}\n` +
+         `  images/meta/ came from the jq map in tools/photos/extract-photo-metadata.sh;\n` +
+         `  what ships comes from EXIF_KEY_MAP in tools/lib/photo-indexes.ts. Make the two agree,\n` +
+         `  or re-run extract-photo-metadata.sh if images/meta/ is simply older than metadata.json.`);
   }
   const rebuiltHist = (await buildHistogramIndex()).index;
   const histStale = stems.filter((stem) => histIndex[stem] !== rebuiltHist[stem]);
@@ -236,14 +250,11 @@ if (metaPresent) {
          `${histStale.length > 8 ? " …" : ""}\n  fix with: node tools/photos/build-histogram-index.ts`);
   }
 } else {
-  console.log("photo-pipeline: images/meta/ absent (build output), so the index drift checks are skipped here");
+  console.log("photo-pipeline: images/meta/ absent (build output), so the projection-agreement checks are skipped here");
 }
 
 const histStrays = Object.keys(histIndex).filter((stem) => !hashes[stem]);
 if (histStrays.length) fail(`images/histograms.json carries unpublished stems: ${histStrays.join(", ")}`);
-
-const strays = Object.keys(exifIndex).filter((stem) => !hashes[stem]);
-if (strays.length) fail(`images/exif.json carries unpublished stems: ${strays.join(", ")}`);
 
 // alt text is a served artifact like the pixels and the EXIF, so a gap fails here
 // rather than shipping an unlabelled image. add-photos.sh generates captions just

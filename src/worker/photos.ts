@@ -273,7 +273,7 @@ export async function getAltMap(env) {
 // cap. One memoised read costs neither.
 //
 // Only the drawn twelve reach the client, as data-hist on each tile. That is what
-// keeps this from being the download build-exif-index.mjs declined: all 158 would
+// keeps this from being the download tools/lib/photo-indexes.ts declined: all 158 would
 // be 24 KiB brotli of bars most visitors never see, where the twelve a visitor can
 // actually hover are ~1.9 KiB.
 export let _histograms;

@@ -315,9 +315,10 @@ while IFS= read -r f; do
   # It stayed hidden because `sips -Z` EXITS 0 when its --out directory does not
   # exist (measured 2026-08-24) and writes nothing, so the guard below passes and
   # avif_encode then fails on a missing input, costing one `~` in a progress line
-  # of dots. The first photo added after this was noticed crashed
-  # build-image-fingerprints.ts on `<stem>-200.undefined.avif`, because hashes.json
-  # carried no `x` for it.
+  # of dots. The first photo added after this was noticed crashed the fingerprint
+  # build on `<stem>-200.undefined.avif`, because hashes.json carried no `x` for
+  # it. That build lives in tools/lib/photo-indexes.ts now and runs inside
+  # build.ts rather than here, so the same gap fails the deploy instead.
   xs="$INTER/${stem}.xs.png"; xsavif="$DEST/${stem}-${SQ_XS}.avif"
   if [ -f "$jpg" ] && [ -f "$avif" ] && [ -f "$smavif" ] && [ "$jpg" -nt "$f" ]; then
     T_SKIP=$((T_SKIP+1)); printf "·"; continue

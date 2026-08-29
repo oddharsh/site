@@ -81,7 +81,21 @@ tools/photos/.venv/
 .github/social-preview-desktop.png
 
 # Per-photo EXIF + histogram twins. DERIVED by build.mjs from images/exif.json
-# and images/histograms.json, which are the committed source. Kept out of git for
-# the same reason the Markdown twins are: a pure function of committed bytes
-# should not be a second committed copy that can fall behind.
+# and images/histograms.json. Kept out of git for the same reason the Markdown
+# twins are: a pure function of committed bytes should not be a second committed
+# copy that can fall behind. extract-photo-metadata.sh still WRITES this
+# directory, since the histogram bake reads it, which is what the entry is for.
 public/images/meta/
+
+# The two photo data indexes that joined them on 2026-08-29. build.ts step 1a
+# derives exif.json from metadata.json and fingerprints.json from public/i, both
+# into .build/public, so both still ship at their existing URLs and neither is a
+# file this tree holds.
+#
+# Nothing writes either one here any more, which makes these entries narrower
+# than the one above: they guard a LEFTOVER from a checkout that predates the
+# move, or from an old branch's pipeline run, rather than an artifact the
+# pipeline keeps producing. Both are in build.ts's STAGE_SKIP for the same
+# reason, so a leftover cannot reach .build/ either.
+public/images/exif.json
+public/images/fingerprints.json

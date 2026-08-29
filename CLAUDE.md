@@ -1018,7 +1018,7 @@ Single-page personal site at `aadhar.sh`. A Cloudflare Worker with static assets
 | `src/content/md/` | Hand-authored Markdown twins for the Worker-rendered prose pages, whose text lives in template literals no build step can read. SEVEN of them: `/around`, `/bot`, `/coffee`, `/lens`, `/security`, `/terminal`, `/whoareyou`. It was three when this row was written; `/terminal` joined in #227 and the other three in #354, and nothing here noticed either time, because the set is not a list anywhere in the code. `buildTwins` looks for `<path>.md` in this directory per SURFACE, so any page gets a hand twin by dropping a file in, and a hand twin OUTRANKS the generated tier. `.assetsignore`d (build input, not a public URL) and staged into the served tree: the generator publishes each at its page's own path, `/bot.md` and so on. `checkTwinFacts()` pins THREE of the seven (`bot`, `whoareyou`, `security`) against the Worker in BOTH directions, so bumping `BOT_VERSION` fails the deploy until `bot.md` agrees; the other four carry no pins and can drift from the page silently. `security.md`'s pins read `lib/security.ts` rather than the page, since a page ABOUT headers must agree with the module that SENDS them; one of them is derived from the header set `cspHeadersFor` actually emits, so reintroducing a report-only twin fails the deploy until `security.md` stops claiming `'unsafe-inline'` is gone. It read the `ENFORCE_PAGE_HASHES` flag until that flag was deleted on 2026-08-23; reading the emitted headers is the better check, since a flag states an intention and the headers state what ships. |
 | `public/sitemap.xml`, `robots.txt` | Standard SEO files. robots.txt explicitly allows AadharshBot. |
 | `public/.well-known/http-message-signatures-directory` | JWKS for AadharshBot's Ed25519 public key (Web Bot Auth IETF draft). |
-| `public/images/` + `public/i/` | `images/` holds the photo DATA surfaces: `metadata.json` (the EXIF RECORD, long field names + the Fuji recipe card), `exif.json` (the tooltip's TEXT tier: every photo's short-key EXIF in one 2.6KB-brotli file, warmed once on idle because the homepage draws a fresh random 12 of 165 per request and a per-slot warm-up was cold nearly every visit), `meta/<stem>.json` (per-photo EXIF plus the four 64-bin histogram channels — the BARS tier, fetched only on the hover that needs them, and the self-healing fallback for a stem missing from a cached `exif.json`), `alt.json` (AI captions), `hashes.json` (stem to hash8 map). The pixel tiers (600px AVIF+JPG squares, plus 400px and 200px AVIF) live in `i/` under content-hashed names, 660 files for 165 photos. |
+| `public/images/` + `public/i/` | `images/` holds the photo DATA surfaces. COMMITTED: `metadata.json` (the EXIF RECORD, long field names + the Fuji recipe card), `histograms.json`, `alt.json`, `semantics.json`, `hashes.json` (stem to hash8 map). DERIVED into `.build/` by build.ts and never committed: `exif.json` (the tooltip's TEXT tier, every photo's short-key EXIF in one 2.6KB-brotli file, warmed once on idle because the homepage draws a fresh random 12 of 165 per request and a per-slot warm-up was cold nearly every visit), `fingerprints.json` (sha256 of every published tier, the map `photo_recipe` recognises an uploaded thumbnail with), and `meta/<stem>.json` (per-photo EXIF plus the four 64-bin histogram channels, the BARS tier, fetched only on the hover that needs them and the self-healing fallback for a stem missing from a cached `exif.json`). All three still serve at the URLs they always had; what changed is where they come from. The pixel tiers (600px AVIF+JPG squares, plus 400px and 200px AVIF) live in `i/` under content-hashed names, 660 files for 165 photos. |
 | `public/og/` | Pre-baked 1200x630 OG/Twitter cards, one per garage + lwe page (`<section>-<name>.png`): the page's live demo floated on the Bliss desktop under the page's own favicon as a brand stamp, so a shared link unfurls as the interaction rather than a bare title. **There is no route label on the card**, and this row said there was until 2026-08-15: the generator's own header comment has described a "translucent XP dock naming the route" since #55 while the card template has never rendered one, and the claim was copied here. Wired via `og:image`/`twitter:card` in each page's `<head>` (edge-direct static pages can't be worker-injected). Built by `tools/photos/gen-og-cards.ts` (playwright-core → Chrome, captures production for live data); meta added by `tools/photos/inject-og-meta.ts`. **Both paths read `scripts/` here until the same date**, which is the split the layout table above draws and costs a `No such file` to anyone following this row. Regen recipe in MAINTENANCE.md. Cached 30d, deploy purges the edge. |
 | `tools/photos/` | Photo-pipeline + asset scripts (see below). Beyond the core pipeline (`add-photos.sh`, `extract-photo-metadata.sh`, `check-photo-pipeline.mjs`, `zenc/` the JPEG encoder crate): `add-car-photo.sh` (one resto-mod reference photo into the dual AVIF+JPG pair the car-link tooltips expect, output `public/cars/<stem>.{avif,jpg}`, no EXIF/R2); `gen-alt-text.py` (AI alt text for every grid photo, writes `public/images/alt.json` `{stem: alt}`, resumable; run by `add-photos.sh` phase 4 — posts the committed `i/` thumbnail bytes to Workers AI when `CLOUDFLARE_API_TOKEN` is set so a brand-new photo captions pre-deploy, else falls back to the cf-garage `/garage/cf/caption` endpoint by stem, which only sees deployed photos); `gen-encoding-samples.sh` (regenerates the color sample set for the `/garage/encoding` study through every encoder, prints byte counts + bytes-per-pixel); `reencode-thumbnails.sh` (re-encodes all published grid thumbnails as pre-cropped center squares from the canonical source folder, two square tiers); `gen-pixel-peeper.py` (the one remaining Pillow consumer, a one-off generator for the /pixel-peeper comparison frames; NOT part of add-photos.sh). The four 64-bin RGB/luminance channels are baked by `zenc histogram`, inside the encoder crate, since 2026-08-14. |
 
@@ -1053,9 +1053,11 @@ public/images/<stem>.{avif,jpg}  +  R2 aadhar-photos/<filename>
    |   also writes per-photo /images/meta/<stem>.json files. `zenc histogram`
    |   then bakes four 64-bin RGB/luminance channels into those files from the
    |   shipped hashed JPG tier, so the tooltip has a stable, whole-image
-   |   histogram. build-exif-index.mjs finally rolls every per-photo file MINUS
-   |   its histogram into the one /images/exif.json the tooltip warms on idle
-   |   (derived data: check-photo-pipeline.mjs rebuilds it and fails on drift).
+   |   histogram. build-histogram-index.ts then rolls those channels into
+   |   /images/histograms.json, which IS committed.
+   |   the one /images/exif.json the tooltip warms on idle is NOT rolled up here
+   |   any more: build.ts step 1a projects it straight out of metadata.json
+   |   through the same 22-pair key map, into .build/ (see below).
    |   discipline: every field is nullable; the tooltip skips lines
    |   that are null rather than fabricate. never guess metadata.
    |
@@ -1555,6 +1557,61 @@ one looks like it works. `bun run search:index .dev-assets` fills it in for a
 session. It refuses to write into `public/` or `src/`, which is not paranoia: the
 farm still holds a symlink to the committed file from before it was removed, and
 writing through that dangling link recreates the artifact in the source tree.
+
+### The two photo data indexes (`tools/lib/photo-indexes.ts`)
+
+`/images/exif.json` and `/images/fingerprints.json` are BUILD OUTPUT, never
+committed, since 2026-08-29. `build.ts` step 1a derives both into
+`.build/public`, and both still serve at the URLs they always had, because both
+are read at RUNTIME: `image-tools.ts` pulls `fingerprints.json` through the
+ASSETS binding on a byte match, and `tooltip.js` warms `exif.json` on idle.
+
+The argument is the search index's, one section up, and it applies unchanged:
+each was a checked-in derivative with nothing diffing it against the bytes it
+derives from. What each stale copy would cost is the part worth stating, because
+neither raises anything. A stale `exif.json` is a tooltip that quietly renders
+fewer lines. A stale `fingerprints.json` is `photo_recipe` telling an agent that
+a real published photo is one this site never served, which is the exact claim
+that tool exists to make.
+
+Both were verified byte-for-byte against the copies they replace before the
+committed ones were deleted, and that bar is not optional: `/i/` and `/a/` are
+content-addressed, so a rounding, key-order or whitespace difference in a derived
+file is a defect rather than a detail. 660 sha256 digests recomputed from
+`public/i` reproduce `fingerprints.json` exactly; `metadata.json` projected
+through the 22-pair key map reproduces `exif.json` exactly across all 165 stems.
+Diffing a full build against `origin/main`'s put all 1532 staged files identical.
+
+**exif.json lost a hop rather than moving one.** It used to be rolled up out of
+`images/meta/`, which build.ts step 1a2 derives FROM `exif.json`, so the pipeline
+projected `metadata.json` into 165 files and rolled those back into one. It is
+one projection now. What that costs is a second implementation of the key map,
+since `extract-photo-metadata.sh` still writes the per-photo files for the
+histogram bake through a jq object literal; `check-photo-pipeline.ts` holds the
+two together wherever `images/meta/` exists, which is any workstation that has
+just run the pipeline.
+
+Two floors, since every failure here is an ABSENCE: the build throws below 100
+exif stems (165 today) and below 400 fingerprint tiers (660 today, 165 photos x
+4). Both sit about a third below current, which catches a collapse without
+turning a deliberate cull into a build failure. A floor cannot see the
+cross-file case, so the build also fails when a stem in `hashes.json` carries no
+EXIF record, and `buildImageFingerprints` refuses outright when two published
+tiers hold identical bytes.
+
+**Three fingerprint assertions LEFT `photos:check` with the move**, and that is
+the point rather than a loss. A drifted digest, a digest naming an unpublished
+stem, and a count that no longer matched stems x tiers were all claims about a
+committed file disagreeing with these bytes. A map derived from `hashes.json`
+and `public/i` cannot hold any of those states, so re-asserting them would be a
+check that can only agree with itself, which is gotcha 24's lesson. What
+`photos:check` keeps is the collision refusal, which is the one fact about that
+map that is not a restatement of its own inputs.
+
+**Both are build-only surfaces under `bun run dev`**, joining `images/meta/*`,
+the generated `/lens` shell and `/search`. The farm derives nothing, so a hover
+in dev draws the photo frame with no EXIF lines, and `photo_recipe`'s byte-match
+arm degrades the same way. Build if you need either.
 
 ### AadharshBot — the branded crawler
 
