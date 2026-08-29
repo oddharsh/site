@@ -998,11 +998,36 @@ async function section(label, scope, fn) {
 }
 
 async function checkApi(infra, wrangler, token) {
-  let accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+  // The account id, in the order it should be trusted. wrangler.jsonc's pin is
+  // the SOURCE OF TRUTH per infra.json's account block, and checkTree has
+  // already proven all 7 declarations agree by the time this runs.
+  //
+  // SECOND READER of that field, and deliberately not shared with the first:
+  // tools/print-account-id.ts makes exactly this argument in its header and
+  // emits the value for ramp.yml's $GITHUB_ENV. It cannot be imported, because
+  // it reads and writes at module scope, so importing it to borrow the lookup
+  // would print to stdout as a side effect. Two readers of one committed
+  // string, both failing loudly when it is absent, is the cheap shape here.
+  //
+  // What this replaces: a jump straight from the env var to enumerating
+  // /accounts, which is a network call for a value sitting in the object this
+  // function is handed, and a `return` that BLANKS THE WHOLE TIER when the
+  // count is not 1. The owner's interactive login sees two accounts, which is
+  // the 2026-08-07 failure that made pinning account_id necessary in the first
+  // place; this path still had the pre-pin shape, so a workstation run would
+  // check nothing here while reporting one tidy note about an env var.
+  //
+  // The env var still wins, because aiming the tier at another account on
+  // purpose is legitimate. A disagreement is reported rather than failed.
+  const pinned = wrangler.account_id;
+  let accountId = process.env.CLOUDFLARE_ACCOUNT_ID || pinned;
+  if (pinned && process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_ACCOUNT_ID !== pinned) {
+    warn(`CLOUDFLARE_ACCOUNT_ID (${process.env.CLOUDFLARE_ACCOUNT_ID}) overrides wrangler.jsonc's pin (${pinned}) — the account tier is checking an account this repo does not deploy to`);
+  }
   if (!accountId) {
     const accounts = await cf(token, "/accounts");
     if (accounts.length !== 1) {
-      warn(`token sees ${accounts.length} accounts; set CLOUDFLARE_ACCOUNT_ID to pick one`);
+      warn(`no account_id in wrangler.jsonc and the token sees ${accounts.length} accounts; set CLOUDFLARE_ACCOUNT_ID to pick one`);
       return;
     }
     accountId = accounts[0].id;
@@ -1159,6 +1184,98 @@ async function checkApi(infra, wrangler, token) {
     }
     const known = new Set([...infra.workers.expected, ...infra.workers.retired, ...infra.workers.unmanaged].map((w) => w.name));
     for (const name of live) if (!known.has(name)) warn(`Worker ${name} is deployed but not accounted for in infra.json`);
+  });
+
+  // API token scoping. Granular Workers permissions (2026-08-29) made the ramp
+  // token's blast radius a CHOICE rather than a platform limit, so it is worth
+  // declaring and therefore worth checking. infra.json's `tokens` block carries
+  // the long argument; three things about this section decide how it behaves.
+  //
+  // IT IS WORKSTATION-ONLY, and that is deliberate rather than a gap. Reading a
+  // token's policies costs API Tokens Read, which lets the bearer enumerate
+  // every token on the account and read what each one may do. Granting that to
+  // the CI credential to verify that the CI credential is narrow would be a
+  // wider grant than the one being verified. So this degrades to a note in CI,
+  // the same standing as repository.code_scanning and zone.version_affinity.
+  //
+  // THE HARD FAILURES ARE NEGATIVES, and both are chosen so they hold without
+  // knowing what Cloudflare ends up calling the new roles. A token declared
+  // read-only must carry no group whose name matches write/edit/admin, and a
+  // token declared resource-scoped must not hold the bare account resource.
+  // Neither depends on a permission-group name or a resource-key format that
+  // nobody here has observed yet.
+  //
+  // EVERYTHING ELSE IS A REPORT. The declared permission_groups are dashboard
+  // labels and the API may spell them differently, so a mismatch prints both
+  // lists rather than failing. The first run against a real token is the
+  // measurement: it prints the observed resource keys, which is what fills in
+  // `resource_key` in infra.json. Asserting against a string invented here
+  // would be a check that only ever agreed with itself.
+  await section("API token scoping", "API Tokens Read", async () => {
+    const accountResource = `com.cloudflare.api.account.${accountId}`;
+    const writeGroup = new RegExp(infra.tokens.write_group_pattern, "i");
+
+    const tokens = await cf(token, `/accounts/${accountId}/tokens?per_page=100`);
+    const byName = new Map((tokens || []).map((t) => [t.name, t])) as Map<string, any>;
+
+    // `checked` is an explicit flag rather than a read of `location`, and the
+    // first draft is why: it filtered on location.includes("GitHub"), and the
+    // DNS token's location reads "workstation only, never GitHub", which
+    // contains it. The one entry the filter existed to exclude was the one it
+    // selected. A prose field must never carry a machine decision.
+    for (const want of infra.tokens.expected.filter((t) => t.checked)) {
+      const live = byName.get(want.name);
+      if (!live) {
+        // A rename is indistinguishable from a deletion from here, and both are
+        // worth a look, so say what was searched for rather than guessing which.
+        warn(`token ${want.name} (${want.env}) is declared but no account token carries that name — renamed, deleted, or user-owned rather than account-owned`);
+        continue;
+      }
+
+      const policies = live.policies || [];
+      const groups = policies.flatMap((p) => (p.permission_groups || []).map((g) => g.name));
+      const resources = [...new Set(policies.flatMap((p) => Object.keys(p.resources || {})))];
+
+      // 1. A read-only token may hold nothing that writes. Asserted against the
+      //    NAME rather than against want.permission_groups, on the same
+      //    reasoning bypass_actors is asserted empty: diffing against a
+      //    declared list means the way to turn this green is to add the write
+      //    scope to infra.json, which is the exact change worth catching.
+      if (!want.may_write) {
+        const offenders = groups.filter((g) => writeGroup.test(g));
+        if (offenders.length) fail(`token ${want.name} (${want.env}) is declared read-only but carries ${offenders.join(", ")} — this credential is a GitHub secret on a PUBLIC repository`);
+        else pass(`token ${want.name} carries no write permission (${groups.length} groups, all read)`);
+      }
+
+      // 2. The Workers half of a resource-scoped token must not hold the whole
+      //    account. PER POLICY, and only the policies carrying the declared
+      //    group: D1 Edit and Account Settings Read have no per-resource form,
+      //    so a real ramp token is necessarily account-wide for those, and the
+      //    first draft's flat "no resource may name the account" failed the
+      //    clean control. The narrow grant and the wide one both ramp
+      //    perfectly, so undoing this is silent by construction.
+      if (want.resource_scoped_group) {
+        const guard = new RegExp(want.resource_scoped_group, "i");
+        const guarded = policies.filter((p) => (p.permission_groups || []).some((g) => guard.test(g.name)));
+        if (!guarded.length) {
+          // A guard pointed at nothing that reports success is the silent pass
+          // this file exists to refuse. Cloudflare's API name for the granular
+          // Workers roles is unmeasured here, so a rename can do exactly that.
+          fail(`token ${want.name} (${want.env}) declares resource_scoped_group /${want.resource_scoped_group}/i but no permission group on it matches — the scoping guard is pointed at nothing. Observed ${JSON.stringify(groups)}; correct the pattern in infra.json`);
+        } else {
+          const wide = guarded.filter((p) => Object.keys(p.resources || {}).includes(accountResource));
+          if (wide.length) fail(`token ${want.name} (${want.env}) is declared resource-scoped but its Workers policy names the whole account (${accountResource}), so it can write to every Worker rather than just ${infra.release.worker}`);
+          else pass(`token ${want.name}: Workers grant is scoped below the account (${guarded.flatMap((p) => Object.keys(p.resources || {})).join(", ")})`);
+        }
+      }
+
+      // 3. Report the shape, so infra.json can be corrected from evidence.
+      if (!want.resource_key) warn(`token ${want.name}: resource_key is unrecorded in infra.json — observed ${JSON.stringify(resources)}`);
+      else if (!resources.includes(want.resource_key)) warn(`token ${want.name}: declared resource_key ${want.resource_key} is not among the observed ${JSON.stringify(resources)}`);
+
+      const missing = want.permission_groups.filter((g) => !groups.some((n) => n.toLowerCase() === g.toLowerCase()));
+      if (missing.length) warn(`token ${want.name}: declared groups ${JSON.stringify(missing)} were not found by that name — observed ${JSON.stringify(groups)}. These are dashboard labels and the API may spell them differently, so correct infra.json from the observed list rather than treating this as drift`);
+    }
   });
 
   // Version affinity: the Transform Rule that keeps one visitor on one Worker
