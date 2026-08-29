@@ -40,7 +40,10 @@
 //
 // `dry` DEFAULTS TO TRUE in that schema. A dry run returns no rows, and a run
 // that returns no rows is indistinguishable from a quiet day, so every body
-// here sets it false explicitly.
+// here sets it false explicitly AND every response is checked for the `run.dry`
+// the API echoes back. Sending a flag is not the same as the server honouring
+// it, and this is the one design point where the failure mode is precisely the
+// empty reading the file exists to refuse.
 //
 // ── the credential ────────────────────────────────────────────────────────
 // CLOUDFLARE_API_TOKEN carrying WORKERS OBSERVABILITY : READ. That is a SEVENTH
@@ -65,15 +68,27 @@
 // ── the failure this is built around ──────────────────────────────────────
 // "0 events today, plenty of headroom" is the most dangerous line this tool
 // could print, because a broken read and a quiet day look identical and only one
-// of them is reassurance. Four states are separated, and each prints
-// differently:
+// of them is reassurance. THE RULE THE WHOLE FILE SERVES: a number is printed
+// only when it is a MEASUREMENT. Everything else refuses, loudly, non-zero. A
+// warning line above a table of wrong numbers is not a refusal, because the
+// numbers are what a reader acts on.
 //
-//   cannot run    no credential, or the transport threw            exit 2
-//   query error   any non-2xx, success!=true, or a 200 whose
-//                 count says 0 while an event probe returns a row  exit 1
-//   no data       200, well formed, zero across the window, and
-//                 the event probe finds nothing either             exit 1
-//   zero          one day at 0 inside a window with data           exit 0, "0"
+//   cannot run     no credential, no account id, or the transport
+//                  never reached the API                            exit 2
+//   query error    any non-2xx, success!=true, a result whose `run`
+//                  block does not echo what was asked, a malformed
+//                  probe payload, a sampled dataset, or a count of
+//                  0 while an event probe returns a row             exit 1
+//   no data        well formed, zero across the window, and the
+//                  event probe finds nothing either                 exit 1
+//   zero           one day at 0 inside a window with data           exit 0, "0"
+//
+// Three of those refusals were shipped as WARNINGS in #667 and each printed a
+// full table of headroom underneath itself. Sampling read `0.9% of ceiling,
+// 99.1% headroom` on a dataset sampled 1 in 100; an hourly `granularity` echo
+// rendered 24 buckets as 24 days and understated the peak 24x; and a day past
+// retention printed `0` with `100.0%` headroom in the same column as a measured
+// zero. All three now refuse before anything numeric reaches the terminal.
 //
 // The event probe is the part that earns its call. A count of 0 is only
 // believable next to a second query that also finds nothing; if `view: events`
@@ -81,9 +96,19 @@
 // has a standing report of telemetry/query returning rows_read: 0 while data
 // exists. A contradiction is reported as a contradiction.
 //
+// ONE COUNT IS CORROBORATED THAT WAY, THE WINDOW TOTAL, and #667 claimed all of
+// them were. The per-day counts, the dataset split and the two breakdowns are
+// not, because `view: events` answers "does any event exist in this window" and
+// nothing finer: corroborating a single day needs its own query per day, which
+// multiplies calls against a rate-limited API to answer a question the day's own
+// `run` echo already settles. So the per-day tier is defended by asserting the
+// GRANULARITY the API says it used, and the claim here is narrowed to match.
+//
 // `--control` proves the separation by pointing the same code at a bad account
 // and a malformed query and showing it refuses. It needs no token, because an
 // unauthenticated request is refused too and a refusal is the thing under test.
+// Its two live cases assert an HTTP RESPONSE ARRIVED, since a transport failure
+// refuses just as loudly while proving nothing about the endpoint.
 //
 // ── what is NOT verified here, and it is the breakdowns ────────────────────
 // The three group-by keys — `dataset` for the spans/logs split,
@@ -104,7 +129,21 @@ const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..")
 
 // The published Workers Free ceiling. Printed in the output so the table still
 // explains itself a month from now, and named here so there is one copy.
+//
+// NOTHING HERE READS THE PLAN, and the output says so on every run. The token
+// this tool wants carries Workers Observability : Read alone, which cannot see a
+// subscription, and widening it to find out would cost a scope for a sentence.
+// So the assumption is DISCLOSED rather than checked, because every percentage
+// below is a share of a plan-specific ceiling and the Paid figure is not a
+// bigger version of this one: it is 20 million per MONTH (+$0.60/million), over
+// a different period, with 7 days of retention rather than 3
+// (developers.cloudflare.com/workers/observability/traces/, read 2026-08-29).
+// A reader on Paid must not read these percentages at all. CLAUDE.md's KV note
+// and gotcha 36 are both this same bill: a ceiling reasoned about without first
+// asking which plan the account is on.
+const PLAN = "Workers Free";
 const DAILY_CEILING = 200_000;
+const PAID_MONTHLY = "20 million events/month";
 
 // Workers Free retains 3 days. Asking for more returns nothing for the days past
 // it, and four empty days read as four zeros that drag every average down, so
@@ -123,9 +162,23 @@ const ok = (m: string) => console.log(`  ok    ${m}`);
 const info = (m: string) => console.log(`  ..    ${m}`);
 const bad = (m: string) => console.log(`  FAIL  ${m}`);
 
+// THREE states, and the split between the last two is what makes the control
+// worth running. A `transport` never reached Cloudflare: DNS, a dropped socket,
+// an offline laptop, a stubbed fetch that throws. An `error` is the API itself
+// refusing, which is the only outcome that proves anything about the endpoint.
+// #667 collapsed both into one `error`, so `--control` printed two green
+// "refused" lines with the network unreachable and the endpoint untouched.
 type QueryOutcome =
   | { state: "ok"; result: Record<string, unknown> }
-  | { state: "error"; why: string };
+  | { state: "error"; why: string; status: number }
+  | { state: "transport"; why: string };
+
+/** Anything that is not a reading, rendered the same way wherever it is caught. */
+const why = (o: QueryOutcome): string => (o.state === "ok" ? "" : o.why);
+
+// A hung connection is a hung command. 20s is far above the ~1s this endpoint
+// answers in and far below the patience of somebody who has walked away.
+const REQUEST_TIMEOUT_MS = 20_000;
 
 /**
  * One POST to the telemetry API. Every non-2xx, every success:false, and every
@@ -150,12 +203,20 @@ async function post(
       method: "POST",
       headers,
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
   } catch (e) {
-    return { state: "error", why: `transport: ${e instanceof Error ? e.message : String(e)}` };
+    return { state: "transport", why: `transport: ${e instanceof Error ? e.message : String(e)}` };
   }
 
-  const text = await response.text();
+  let text: string;
+  try {
+    text = await response.text();
+  } catch (e) {
+    // The status line arrived and the body did not. That is still a connection
+    // that failed rather than an API that answered, so it lands as transport.
+    return { state: "transport", why: `transport: body never arrived (${e instanceof Error ? e.message : String(e)})` };
+  }
   let parsed: Record<string, unknown> | null = null;
   try {
     parsed = JSON.parse(text) as Record<string, unknown>;
@@ -176,16 +237,50 @@ async function post(
     // 2026-08-29, an invalid calculation operator answers 400 with
     // {success:false,_e,_i,_c} echoing the request. So the raw body is the
     // fallback, labelled as raw rather than dressed up as a message.
-    return { state: "error", why: `HTTP ${response.status} ${named || `raw: ${text.slice(0, 100)}`}` };
+    return {
+      state: "error",
+      status: response.status,
+      why: `HTTP ${response.status} ${named || `raw: ${text.slice(0, 100)}`}`,
+    };
   }
   if (!parsed || parsed.success !== true) {
-    return { state: "error", why: `HTTP ${response.status} but success is not true: ${text.slice(0, 200)}` };
+    return {
+      state: "error",
+      status: response.status,
+      why: `HTTP ${response.status} but success is not true: ${text.slice(0, 200)}`,
+    };
   }
   const result = parsed.result as Record<string, unknown> | null | undefined;
   if (!result) {
-    return { state: "error", why: `HTTP 200 carrying no result object: ${text.slice(0, 200)}` };
+    return { state: "error", status: response.status, why: `HTTP 200 carrying no result object: ${text.slice(0, 200)}` };
   }
   return { state: "ok", result };
+}
+
+/**
+ * Did the API run the query that was ASKED for? The response echoes the resolved
+ * run back, and both fields it echoes are ones a caller can get silently wrong:
+ * `dry` defaults to true in Cloudflare's own schema, and `granularity` is what
+ * decides whether a bucket is an hour or a day.
+ *
+ * Returns null when the echo agrees, or the reason it does not. An ABSENT `run`
+ * block is a reason too: unverifiable and verified are different states, and
+ * this file may only print numbers it can vouch for.
+ */
+export function checkRun(
+  result: Record<string, unknown>,
+  expect: { granularity?: number } = {},
+): string | null {
+  const run = result.run as Record<string, unknown> | undefined;
+  if (!run) return "the response carried no `run` block, so nothing echoes back what was executed";
+  if (run.dry !== false) return `the API ran this as dry=${JSON.stringify(run.dry)}; a dry run returns no rows and reads as a quiet day`;
+  if (expect.granularity === undefined) return null;
+  const got = Number(run.granularity);
+  if (!Number.isFinite(got)) return `granularity came back as ${JSON.stringify(run.granularity)} rather than a number`;
+  if (got !== expect.granularity) {
+    return `asked for ${expect.granularity}ms buckets and the API used ${got}ms, so each row is ${(expect.granularity / got).toFixed(2)}x smaller than a day`;
+  }
+  return null;
 }
 
 type Timeframe = { from: number; to: number };
@@ -235,10 +330,27 @@ function bucketTotal(data: Aggregate[]): number {
 }
 
 /**
- * Cloudflare samples ingestion once an account is over quota, so the rows that
- * come back UNDERSTATE what was ingested — precisely when the answer matters
- * most. A sampleInterval above 1 is that state, and it is surfaced rather than
- * multiplied away.
+ * A `sampleInterval` above 1 says these rows are 1 in N of what was ingested, so
+ * every count under them understates the real number by an unknown factor.
+ *
+ * WHY THIS REFUSES RATHER THAN SCALES. Multiplying by N produces an estimate,
+ * and this file's rule is that a printed number is a measurement. The estimate
+ * is also unverifiable from here in a way the window total is not: the event
+ * probe answers "does a row exist", which cannot check a multiplied count, and
+ * head-based sampling is applied per request at ingest, so the interval that
+ * reaches one bucket need not be the one that reached another. Scaling would
+ * therefore hand a reader a headroom figure with no error bar on the one axis
+ * they act on. The dashboard is the place to read a sampled account.
+ *
+ * The ADVICE that used to sit at the refusal was wrong and is worth naming.
+ * #667 printed "sampling starts when the account is over quota, so read this as
+ * already past the ceiling." Cloudflare puts the trigger at 5 BILLION logs per
+ * account per day, after which a 1% head-based sample applies for the remainder
+ * of the day (developers.cloudflare.com/workers/observability/logs/workers-logs/,
+ * Limits, footnote 1, read 2026-08-29). That is 25,000x the 200,000/day ceiling
+ * this tool prints and has nothing to do with exceeding the Free quota. The
+ * likelier source of a non-unit interval here is a configured
+ * `head_sampling_rate`, which is a per-Worker setting rather than a symptom.
  */
 function sampledAt(series: Series[]): number {
   let worst = 1;
@@ -247,14 +359,35 @@ function sampledAt(series: Series[]): number {
 }
 
 const n = (v: number) => v.toLocaleString("en-US");
-const pct = (v: number) => `${((v / DAILY_CEILING) * 100).toFixed(1)}%`;
 
 /**
- * The classifier, kept pure so the control can exercise it without a network.
- * `total` is the window's event count, `probeFoundEvent` is whether a second
- * `view: events` query returned a row over the same window.
+ * Share of the daily ceiling and the headroom beside it, ROUNDED ONCE and then
+ * complemented, so the pair always sums to 100.0. Computing each from the raw
+ * value rounds twice: 1,500 events printed 0.8% used and 99.3% left in #667.
  */
-export function classify(total: number, probeFoundEvent: boolean): "data" | "no-data" | "contradiction" {
+function share(v: number): { used: string; left: string } {
+  const used = Number(((v / DAILY_CEILING) * 100).toFixed(1));
+  return { used: `${used.toFixed(1)}%`, left: `${(100 - used).toFixed(1)}%` };
+}
+const pct = (v: number) => share(v).used;
+
+/**
+ * The classifier, kept pure so the control and the contract test can exercise it
+ * without a network. `total` is the window's event count, `probeFoundEvent` is
+ * whether a second `view: events` query returned a row over the same window, and
+ * `sampleInterval` is the worst interval any bucket reported.
+ *
+ * SAMPLING IS TESTED FIRST and beats a real count, which is the ordering that
+ * matters: #667 checked it AFTER deciding there was data, printed a FAIL line,
+ * and then rendered the whole table anyway. A count that understates ingestion
+ * by an unknown factor is not a reading no matter how large it is.
+ */
+export function classify(
+  total: number,
+  probeFoundEvent: boolean,
+  sampleInterval = 1,
+): "data" | "no-data" | "contradiction" | "sampled" {
+  if (sampleInterval > 1) return "sampled";
   if (total > 0) return "data";
   if (probeFoundEvent) return "contradiction";
   return "no-data";
@@ -265,8 +398,24 @@ export function classify(total: number, probeFoundEvent: boolean): "data" | "no-
  * what a real one looks like without a credential. TODAY is marked partial
  * rather than scored: a day three hours old always looks like headroom, and the
  * peak is taken over COMPLETE days alone for the same reason.
+ *
+ * A day older than `retentionStart` gets the SAME treatment for the same reason,
+ * which #667 gave only to today. `--days 7` on a 3-day plan asked for four days
+ * the API cannot answer for and rendered each as `0  0  0.0%  100.0%`, in the
+ * column and the format a measured zero uses. An expired day carrying no events
+ * prints `-`, because the honest statement is that nothing was read rather than
+ * that nothing happened; one carrying events prints them, since that is data and
+ * also evidence the retention assumption is wrong. Neither is scored, and
+ * neither ever shows headroom: retention truncates from the start of the day, so
+ * a surviving count understates in exactly the direction a headroom figure
+ * would flatter.
  */
-export function dailyTable(series: Series[], split: Series[] | null, todayStart: number): string[] {
+export function dailyTable(
+  series: Series[],
+  split: Series[] | null,
+  todayStart: number,
+  retentionStart = -Infinity,
+): string[] {
   const perDay = new Map<string, Map<string, number>>();
   for (const s of split ?? []) {
     const day = new Date(Number(s.time) || Date.parse(s.time)).toISOString().slice(0, 10);
@@ -283,22 +432,34 @@ export function dailyTable(series: Series[], split: Series[] | null, todayStart:
     `  ${"day".padEnd(12)}${datasets.map((d) => d.padStart(20)).join("")}${"total".padStart(12)}${"of ceiling".padStart(12)}${"headroom".padStart(11)}`,
   ];
   let peak = 0;
+  let expired = 0;
   for (const s of series) {
     const stamp = Number(s.time) || Date.parse(s.time);
     const day = new Date(stamp).toISOString().slice(0, 10);
     const total = bucketTotal(s.data);
     const partial = stamp >= todayStart;
-    if (!partial) peak = Math.max(peak, total);
-    const cells = datasets.map((d) => n(perDay.get(day)?.get(d) ?? 0).padStart(20)).join("");
-    const tail = partial
-      ? "     partial"
-      : `${pct(total).padStart(12)}${`${(100 - (total / DAILY_CEILING) * 100).toFixed(1)}%`.padStart(11)}`;
-    lines.push(`  ${day.padEnd(12)}${cells}${n(total).padStart(12)}${tail}`);
+    const past = stamp < retentionStart;
+    if (past) expired++;
+    if (!partial && !past) peak = Math.max(peak, total);
+    const unread = past && total === 0;
+    const cells = datasets.map((d) => (unread ? "-" : n(perDay.get(day)?.get(d) ?? 0)).padStart(20)).join("");
+    const count = (unread ? "-" : n(total)).padStart(12);
+    const s2 = share(total);
+    const tail = past
+      ? "  past retention"
+      : partial
+        ? "     partial"
+        : `${s2.used.padStart(12)}${s2.left.padStart(11)}`;
+    lines.push(`  ${day.padEnd(12)}${cells}${count}${tail}`);
   }
 
   lines.push("");
+  if (expired > 0) {
+    lines.push(`  ..    ${expired} day(s) sit past the ${RETENTION_DAYS}-day ${PLAN} retention window and are NOT a reading:`);
+    lines.push("        no count, no share, no headroom. Ask for a window inside retention instead.");
+  }
   if (peak > 0) {
-    lines.push(`  worst COMPLETE day: ${n(peak)} events, ${pct(peak)} of the ${n(DAILY_CEILING)} ceiling, ${n(DAILY_CEILING - peak)} to spare.`);
+    lines.push(`  worst COMPLETE day: ${n(peak)} events, ${pct(peak)} of the ${n(DAILY_CEILING)} ${PLAN} ceiling, ${n(DAILY_CEILING - peak)} to spare.`);
     lines.push(`  that headroom is about ${n(Math.floor((DAILY_CEILING - peak) / SPANS_PER_LENS_SCAN))} more /lens scans at ~${SPANS_PER_LENS_SCAN} spans each.`);
   } else {
     lines.push("  ..    no complete day in the window carried events, so nothing here is measured against a daily ceiling.");
@@ -311,12 +472,31 @@ async function readAccount(): Promise<string> {
   return process.env.CLOUDFLARE_ACCOUNT_ID || (wrangler.account_id as string) || "";
 }
 
+/**
+ * A window this plan cannot answer for is REFUSED at the flag rather than
+ * rendered with holes in it. #667 accepted `--days 7`, asked for four days
+ * outside the 3-day retention window, and printed each as `0` with `100.0%`
+ * headroom, which is the shape of a measured quiet day. The renderer marks an
+ * expired row now (defence in depth, since a window edge or a clock skew can
+ * still deliver one), and the flag no longer asks for a single one on purpose.
+ *
+ * MAX_DAYS stays as the parse bound because Workers Paid retains 7, so the
+ * number is real; what refuses here is the retention of the plan this tool
+ * prints ceilings for.
+ */
 function windowDays(): number {
   const i = process.argv.indexOf("--days");
   if (i === -1) return RETENTION_DAYS;
   const v = Number(process.argv[i + 1]);
   if (!Number.isInteger(v) || v < 1 || v > MAX_DAYS) {
-    bad(`--days wants an integer 1..${MAX_DAYS}; Workers Free retains ${RETENTION_DAYS} days`);
+    bad(`--days wants an integer 1..${MAX_DAYS}; ${PLAN} retains ${RETENTION_DAYS} days`);
+    process.exit(2);
+  }
+  if (v > RETENTION_DAYS) {
+    bad(`--days ${v} asks for ${v - RETENTION_DAYS} day(s) past the ${RETENTION_DAYS}-day ${PLAN} retention window`);
+    info("Those days return nothing, and nothing is not a zero. Every count and share here assumes");
+    info(`${PLAN}; Workers Paid retains ${MAX_DAYS} days and its allowance is ${PAID_MONTHLY} instead.`);
+    info(`Run it inside retention: bun run obs:check --days ${RETENTION_DAYS}`);
     process.exit(2);
   }
   return v;
@@ -333,16 +513,26 @@ async function control(): Promise<never> {
   let failures = 0;
 
   console.log("live, against the real endpoint:");
+  // A live case may only pass on an HTTP RESPONSE. #667 asserted `state ===
+  // "error"` alone, which a stubbed or dead network satisfies, so with fetch
+  // throwing this printed two green "refused: transport: Unable to connect"
+  // lines under this very heading. A control that passes without reaching the
+  // endpoint is decoration.
+  const live = (label: string, o: QueryOutcome): boolean => {
+    if (o.state === "error") { ok(`${label} -> refused by the API: ${o.why}`); return true; }
+    if (o.state === "transport") { bad(`${label} -> the request never reached the API (${o.why}), so this case proved nothing`); return false; }
+    bad(`${label} returned a result rather than an error`);
+    return false;
+  };
+
   const badAccount = await post("0".repeat(32), token, "query", countQuery(timeframe));
-  if (badAccount.state === "error") ok(`bad account id -> refused: ${badAccount.why}`);
-  else { bad("bad account id returned a result; the tool would read another account's silence as ours"); failures++; }
+  if (!live("bad account id", badAccount)) failures++;
 
   const badQuery = await post(account, token, "query", {
     ...countQuery(timeframe),
     parameters: { calculations: [{ operator: "not-an-operator", alias: "events" }] },
   });
-  if (badQuery.state === "error") ok(`malformed query -> refused: ${badQuery.why}`);
-  else { bad("a malformed query returned a result rather than an error"); failures++; }
+  if (!live("malformed query", badQuery)) failures++;
 
   // WITHOUT a credential both live cases stop at the auth layer and come back
   // byte-identical, so they prove one thing (an unauthenticated read is refused)
@@ -350,7 +540,10 @@ async function control(): Promise<never> {
   // coverage than it has is the failure this whole file is about.
   const stoppedAtAuth = (o: QueryOutcome) =>
     o.state === "error" && /9106|Authentication error|Missing X-Auth/.test(o.why);
-  if (!token) {
+  if (badAccount.state === "transport" || badQuery.state === "transport") {
+    info("At least one live case never left this machine, so the two rows above are about the network.");
+    info("Re-run with the endpoint reachable before reading anything here as a fact about the API.");
+  } else if (!token) {
     info("no CLOUDFLARE_API_TOKEN, so both live cases stopped at auth and are ONE assertion, not two.");
     info("Neither the account id nor the query body reached a validator. Re-run with a token for the rest.");
   } else if (stoppedAtAuth(badAccount) && stoppedAtAuth(badQuery)) {
@@ -378,6 +571,25 @@ async function control(): Promise<never> {
   if (classify(12, false) === "data") ok("a real count reads as data, so a genuine 0 for one day still prints as 0");
   else { bad("a real count did not read as data"); failures++; }
 
+  // The three refusals #667 shipped as warnings, each asserted at the function
+  // that now makes them refusals.
+  if (classify(181_000, true, 100) === "sampled") ok("a sampled dataset refuses even with a large count beside it");
+  else { bad("a 1-in-100 sample classified as a reading"); failures++; }
+
+  if (checkRun({ run: { dry: false, granularity: 3_600_000 } }, { granularity: DAY_MS })) {
+    ok("an hourly granularity echo refuses when whole days were asked for");
+  } else { bad("the API reporting hourly buckets passed as a daily table"); failures++; }
+
+  if (checkRun({ run: { dry: true, granularity: DAY_MS } })) ok("a run the API executed as dry refuses");
+  else { bad("a dry run passed as a quiet day"); failures++; }
+
+  if (checkRun({}, { granularity: DAY_MS })) ok("a response carrying no run block refuses rather than being assumed fine");
+  else { bad("an unverifiable response passed as verified"); failures++; }
+
+  if (checkRun({ run: { dry: false, granularity: DAY_MS } }, { granularity: DAY_MS }) === null) {
+    ok("a run block echoing exactly what was asked passes, so the check is not blanket-red");
+  } else { bad("a correct run block was rejected"); failures++; }
+
   // The same renderer main() uses, over a fixture whose MIDDLE day is a real
   // zero. It has to print `0` beside two days that carried events, because a
   // measured zero and an unreadable window are the two things this file exists
@@ -388,6 +600,8 @@ async function control(): Promise<never> {
     label ? { value: v, groups: [{ key: "dataset", value: label }] } : { value: v };
   const rendered = dailyTable(
     [
+      // Outside the retention window: unread, and it must not read as a zero.
+      { time: day(5), data: [bucket(0)] },
       { time: day(2), data: [bucket(48_120)] },
       { time: day(1), data: [bucket(0)] },
       { time: day(0), data: [bucket(9_004)] },
@@ -399,14 +613,20 @@ async function control(): Promise<never> {
       { time: day(0), data: [bucket(8_000, "traces"), bucket(1_004, "cloudflare-workers")] },
     ],
     todayStart,
+    todayStart - (RETENTION_DAYS - 1) * DAY_MS,
   );
   console.log("\nthe same renderer over a SYNTHETIC reading whose middle day is a real zero:");
   for (const line of rendered) console.log(line);
-  const zeroRow = rendered.find((l) => l.includes(new Date(todayStart - DAY_MS).toISOString().slice(0, 10)));
+  const rowFor = (back: number) => rendered.find((l) => l.startsWith(`  ${new Date(todayStart - back * DAY_MS).toISOString().slice(0, 10)}`));
+  const zeroRow = rowFor(1);
   if (zeroRow && /\s0\s/.test(zeroRow) && /100\.0%/.test(zeroRow)) ok("the zero day printed as 0 with full headroom, beside days that carried events");
   else { bad("a measured zero did not render as a zero row"); failures++; }
   if (rendered.some((l) => l.includes("partial"))) ok("today is marked partial rather than scored against a full-day ceiling");
   else { bad("the incomplete current day was scored as if it were a whole day"); failures++; }
+  const expiredRow = rowFor(5);
+  if (expiredRow && expiredRow.includes("past retention") && !expiredRow.includes("%") && !/\s0\s/.test(expiredRow)) {
+    ok("a day past retention prints no count, no share and no headroom");
+  } else { bad("an expired day rendered in the same column and format as a measured zero"); failures++; }
 
   console.log("");
   if (failures === 0) {
@@ -417,7 +637,7 @@ async function control(): Promise<never> {
   process.exit(1);
 }
 
-async function main(): Promise<void> {
+export async function main(): Promise<void> {
   if (process.argv.includes("--control")) await control();
 
   const days = windowDays();
@@ -444,14 +664,23 @@ async function main(): Promise<void> {
   const todayStart = Math.floor(now / DAY_MS) * DAY_MS;
   const timeframe = { from: todayStart - (days - 1) * DAY_MS, to: now };
 
+  const retentionStart = todayStart - (RETENTION_DAYS - 1) * DAY_MS;
+
   console.log(`observability events, account <elided>, ${days} day(s) to ${new Date(now).toISOString()}`);
-  console.log(`Workers Free ceiling: ${n(DAILY_CEILING)} events/day, spans and logs sharing one quota.`);
+  console.log(`ASSUMES ${PLAN}: ${n(DAILY_CEILING)} events/day, spans and logs sharing one quota.`);
+  console.log(`Nothing here reads the plan. On Workers Paid the allowance is ${PAID_MONTHLY}, a different`);
+  console.log("figure over a different period, and every percentage below would be meaningless.");
   if (days > RETENTION_DAYS) {
-    info(`Workers Free retains ${RETENTION_DAYS} days; anything older reads as empty rather than as zero.`);
+    info(`${PLAN} retains ${RETENTION_DAYS} days; older days are marked past retention and carry no numbers.`);
   }
   console.log("");
 
   const totals = await post(account, token, "query", countQuery(timeframe, undefined, DAY_MS));
+  if (totals.state === "transport") {
+    bad(`could not reach the telemetry API: ${totals.why}`);
+    info("Nothing was read, so nothing below would be a reading. Check the network, then re-run.");
+    process.exit(2);
+  }
   if (totals.state === "error") {
     bad(`could not read the event total: ${totals.why}`);
     info("This is a failed query, not a quiet account. Nothing below would be a reading.");
@@ -459,9 +688,21 @@ async function main(): Promise<void> {
     // authenticates but lacks the grant answers a bare `Forbidden` on /query and
     // `10104 …no_access_to_workers_observability` on /keys, so the endpoint
     // names the permission on one path and not the other.
-    if (totals.why.startsWith("HTTP 403")) {
+    if (totals.status === 403) {
       info("A 403 here means the token authenticated and lacks Workers Observability : Read.");
     }
+    process.exit(1);
+  }
+
+  // The daily table rests entirely on each bucket being a DAY. The response
+  // echoes the granularity it used, so this is one comparison rather than an
+  // inference from row labels, which is what #667 did: 24 hourly buckets all
+  // stamped with today's date rendered as 24 daily rows and understated the
+  // peak 24x while every figure beneath read as headroom.
+  const runProblem = checkRun(totals.result, { granularity: DAY_MS });
+  if (runProblem) {
+    bad(`the API did not run the query that was asked for: ${runProblem}`);
+    info("Every per-day number below would describe a bucket of a different size, so none is printed.");
     process.exit(1);
   }
   const totalCalc = calculation(totals.result);
@@ -482,15 +723,34 @@ async function main(): Promise<void> {
     timeframe,
     limit: 1,
   });
-  if (probe.state === "error") {
-    bad(`the corroborating event probe failed: ${probe.why}`);
+  if (probe.state !== "ok") {
+    bad(`the corroborating event probe failed: ${why(probe)}`);
     info("Without it a zero cannot be told apart from a broken read, so no total is printed.");
+    process.exit(probe.state === "transport" ? 2 : 1);
+  }
+  const probeRun = checkRun(probe.result);
+  if (probeRun) {
+    bad(`the corroborating event probe did not run as asked: ${probeRun}`);
+    info("A dry probe finds nothing by construction, which is the reading it exists to rule out.");
     process.exit(1);
   }
-  const probeEvents = (probe.result as { events?: { events?: unknown[] } }).events?.events;
-  const probeFoundEvent = Array.isArray(probeEvents) && probeEvents.length > 0;
 
-  const verdict = classify(windowTotal, probeFoundEvent);
+  // THE PAYLOAD IS VALIDATED, because `result.events?.events` being undefined is
+  // indistinguishable from an empty array once it reaches `Array.isArray`. Both
+  // read as "no event found", which silently disarms the contradiction detector
+  // in exactly the case a payload change would cause. Asking for the LIST is the
+  // whole check: a missing envelope, a renamed field and a non-array all arrive
+  // here as "this is not a list of events" and all refuse.
+  const probeEvents = (probe.result as { events?: { events?: unknown } }).events?.events;
+  if (!Array.isArray(probeEvents)) {
+    bad("the event probe returned a payload with no `events.events` array; its payload has changed");
+    info("An unreadable probe is not a probe that found nothing, so the count it corroborates is not printed.");
+    process.exit(1);
+  }
+  const probeFoundEvent = probeEvents.length > 0;
+
+  const sample = sampledAt(totalCalc.series);
+  const verdict = classify(windowTotal, probeFoundEvent, sample);
   if (verdict === "contradiction") {
     bad("the count says 0 events while an event probe returned a row over the same window");
     info("Cloudflare has a standing report of telemetry/query reading 0 against real data.");
@@ -504,18 +764,26 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const sample = sampledAt(totalCalc.series);
-  if (sample > 1) {
-    bad(`Cloudflare is sampling this dataset at 1 in ${sample}: the numbers below UNDERSTATE ingestion`);
-    info("Sampling starts when the account is over quota, so read this as already past the ceiling.");
+  if (verdict === "sampled") {
+    bad(`this dataset is sampled at 1 in ${sample}, so every count returned understates ingestion`);
+    info("No table is printed: scaling by the interval would be an estimate, and this tool prints measurements.");
+    info(`The window sampled to ${n(windowTotal)} events, which is a floor and not a reading.`);
+    info("Read the Observability dashboard for a sampled account, and check head_sampling_rate in wrangler.jsonc.");
+    info("Sampling is NOT evidence of being over the daily quota: Cloudflare's own trigger is 5 billion");
+    info("logs per account per day, 25,000x the ceiling above, after which 1% head-based sampling applies.");
+    process.exit(1);
   }
 
   // ── the daily table ─────────────────────────────────────────────────────
+  // The split is verified the same way and DROPPED rather than degraded when it
+  // is not: a dry or wrongly bucketed split renders as a column of zeros beside
+  // real totals, which reads as "no spans today".
   const split = await post(account, token, "query", countQuery(timeframe, "dataset", DAY_MS));
-  const splitCalc = split.state === "ok" ? calculation(split.result) : null;
-  for (const line of dailyTable(totalCalc.series, splitCalc?.series ?? null, todayStart)) console.log(line);
+  const splitProblem = split.state === "ok" ? checkRun(split.result, { granularity: DAY_MS }) : why(split);
+  const splitCalc = split.state === "ok" && !splitProblem ? calculation(split.result) : null;
+  for (const line of dailyTable(totalCalc.series, splitCalc?.series ?? null, todayStart, retentionStart)) console.log(line);
   if (!splitCalc) {
-    info(`spans/logs split unavailable: ${split.state === "error" ? split.why : "the API returned no grouped calculation"}`);
+    info(`spans/logs split unavailable: ${splitProblem || "the API returned no grouped calculation"}`);
     info("The totals above are unaffected: they are asked with no group-by at all.");
   }
 
@@ -523,7 +791,9 @@ async function main(): Promise<void> {
   for (const [label, key] of [["worker", "$metadata.service"], ["span name", "$metadata.spanName"]] as const) {
     const by = await post(account, token, "query", countQuery(timeframe, key));
     console.log(`\nevents by ${label} (${days} day window):`);
-    if (by.state === "error") { info(`unavailable: ${by.why}`); continue; }
+    if (by.state !== "ok") { info(`unavailable: ${why(by)}`); continue; }
+    const byProblem = checkRun(by.result);
+    if (byProblem) { info(`unavailable: ${byProblem}`); continue; }
     const calc = calculation(by.result);
     const rows = (calc?.aggregates ?? [])
       .map((a) => ({ name: a.groups?.[0] ? String(a.groups[0].value) : "(none)", value: Number(a.value) || 0 }))
@@ -537,7 +807,13 @@ async function main(): Promise<void> {
   process.exit(0);
 }
 
-main().catch((e) => {
-  bad(e instanceof Error ? (e.stack ?? e.message) : String(e));
-  process.exit(2);
-});
+// GUARDED, because `classify` and `dailyTable` are exported to be tested and an
+// unguarded call ran main() on IMPORT: a contract test importing this file got
+// `process.exit(2)` for having no credential and took the runner down with it,
+// which is why nothing in the suite touched either export until now.
+if (import.meta.main) {
+  main().catch((e) => {
+    bad(e instanceof Error ? (e.stack ?? e.message) : String(e));
+    process.exit(2);
+  });
+}

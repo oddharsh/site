@@ -1757,8 +1757,9 @@ number.
 
 ```bash
 CLOUDFLARE_API_TOKEN=... bun run obs:check              # 3 days, the Free retention window
-CLOUDFLARE_API_TOKEN=... bun run obs:check --days 7     # says which days are past retention
-bun run obs:check --control                             # needs no credential
+CLOUDFLARE_API_TOKEN=... bun run obs:check --days 2     # a shorter window
+CLOUDFLARE_API_TOKEN=... bun run obs:check --days 7     # REFUSED: 4 days past Free retention
+bun run obs:check --control                             # exercises the refusals; no credential
 ```
 
 It posts to `POST /accounts/<id>/workers/observability/telemetry/query`, the
@@ -1781,14 +1782,44 @@ for at the same rate as the cheap ones. Cut spans on the surface that emits them
 
 **A zero from this tool is a measured zero, and that took the whole design.**
 "0 events today, plenty of headroom" is indistinguishable from a broken read and
-would be believed right up to the moment the quota bit, so four states print
-differently: cannot run (exit 2), query error (exit 1), no data (exit 1), and a
-real zero day inside a window that has data (exit 0, prints `0`). The `dry` flag
-in Cloudflare's own request schema defaults to TRUE and a dry run returns
-nothing, so every body here sets it false. Every count is corroborated by a
-second `view: events` query; a count of 0 next to a real event is reported as a
-contradiction rather than as zero. `--control` proves all of it against a bad
-account id and a malformed query, and needs no credential.
+would be believed right up to the moment the quota bit, so the rule is that a
+number prints only when it is a MEASUREMENT: cannot run (exit 2, no credential
+or the request never reached the API), query error (exit 1), no data (exit 1),
+and a real zero day inside a window that has data (exit 0, prints `0`). The
+`dry` flag in Cloudflare's own request schema defaults to TRUE and a dry run
+returns nothing, so every body sets it false AND every response is checked for
+the `dry` and `granularity` the API echoes back. A count of 0 next to a real
+event is reported as a contradiction rather than as zero.
+
+**ONE count is corroborated by a second `view: events` query, the window
+total.** The per-day counts, the dataset split and the two breakdowns are not:
+that probe answers "does any event exist in this window" and nothing finer, so
+corroborating a single day would need its own query per day to answer what the
+day's own `run` echo already settles. #667 claimed every count was corroborated;
+it was one.
+
+**Three states REFUSE where #667 warned and then printed a table.** A sampled
+dataset (counts understate ingestion by an unknown factor, so no table is
+printed and no estimate is invented), an echoed `granularity` that is not what
+was asked for (hourly buckets rendered as daily rows understate the peak 24x),
+and a `--days` window reaching past retention (those days return nothing, and
+nothing is not a zero). All three exit non-zero. Note that sampling is NOT
+evidence of being over the daily quota: Cloudflare's trigger is 5 billion logs
+per account per day, after which a 1% head-based sample applies for the rest of
+the day, which is 25,000x the ceiling this tool prints.
+
+**Every percentage assumes Workers Free and the output says so**, because the
+token carries Workers Observability : Read alone and cannot see a subscription.
+Workers Paid is 20 million events per MONTH with 7-day retention, a different
+figure over a different period, so a reader on Paid must not read these shares
+at all.
+
+`--control` exercises the refusals with no credential. What it proves without a
+token is narrower than it looks, and it says so on the run: both live cases stop
+at the auth layer and come back byte-identical, so they are ONE assertion rather
+than two, and the classifier, the run check and the renderer are proven offline.
+Both live cases now require an HTTP RESPONSE, so a control run with the network
+down fails instead of printing two green refusals it never earned.
 
 ### Log a deploy (bump-version.sh)
 `./tools/photos/bump-version.sh <slug> "<title>"`, then deploy. Inserts the next checkpoint into D1 (vnum from `SELECT MAX(vnum)`), which is what `/updates` and `/restore` render. Nothing edits sw.js anymore: the service worker retired in v136, `nav.js`/`notepad.js` updates land via their short `_headers` max-age plus the per-deploy edge purge, and the stub at `/sw.js` cleans up old installs.

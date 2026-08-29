@@ -2703,6 +2703,17 @@ CLOUDFLARE_API_TOKEN=... bun run obs:check     # events/day vs 200K, split, by w
 bun run obs:check --control                    # proves a failed read never prints as zero
 ```
 
+**It prints a number only when that number is a MEASUREMENT, and #667 shipped
+three paths that broke the rule with a warning line above a table of headroom.**
+A sampled dataset, an echoed `granularity` that is not the one asked for, and a
+`--days` window past the 3-day retention now each REFUSE with a non-zero exit and
+no figures, since a reader acts on the numbers rather than on the warning. Every
+share assumes **Workers Free** and the output says so on every run: the token
+carries Workers Observability : Read alone and cannot see a plan, and Workers
+Paid is 20 million events per MONTH over 7 days of retention, which makes these
+percentages meaningless there. Sampling is not evidence of being over quota:
+Cloudflare's trigger is 5 billion logs per account per day, 25,000x this ceiling.
+
 It reads `POST /accounts/<id>/workers/observability/telemetry/query`, the
 endpoint the Observability dashboard calls. GraphQL cannot answer this: the
 account type carries 231 fields and none of them is an observability-events
