@@ -40,9 +40,11 @@
 #      it ships at deploy like every other committed artifact. (It replaced the
 #      manifest:images KV cache over a runtime R2 list(); there is no cache to
 #      bust anymore.)
-#   6. captions anything still missing alt text (gen-alt-text.py), then validates
-#      the whole artifact graph — pixels, EXIF, histograms, captions, the index —
-#      via check-photo-pipeline.ts, which fails the run rather than let an
+#   6. captions anything still missing alt text (gen-alt-text.py), rebuilds the
+#      retrieval terms queryPhotos ranks on (gen-photo-semantics.ts, which reads
+#      those captions and so must follow them), then validates the whole artifact
+#      graph — pixels, EXIF, histograms, captions, the index — via
+#      check-photo-pipeline.ts, which fails the run rather than let an
 #      unlabelled image reach a deploy
 #
 # REMOTE_RENDER_ONLY=1 skips R2 uploads. The GitHub Actions pipeline uses it
@@ -613,6 +615,27 @@ if command -v python3 >/dev/null 2>&1; then
 else
   echo "  python3 missing — skipping alt-text generation"
 fi
+
+# retrieval terms for every stem, and the ONE stem-keyed artifact this script has
+# never regenerated. The other five reach it: hashes and fingerprints through
+# hash-thumbnails.sh, histograms through extract-photo-metadata.sh plus the zenc
+# bake, alt text through the block above. #609's `covers` verdict found
+# semantics.json at 158 of 165 and repaired the generator, which had been joining
+# a deleted www/ for a week (gotcha 40). That fixed the producer and left the hole
+# that let seven photos drift out of it, so the next add would open it again.
+#
+# It runs AFTER gen-alt-text.py because the derived tier folds alt[stem] into
+# `terms`. Captioning second leaves a new stem carrying camera vocabulary and no
+# subject, which is the quiet half of this failure: the photo stays findable one
+# tier down and nothing errors.
+#
+# No credential and no network. It reads metadata.json, hashes.json and alt.json,
+# so unlike the captioner it cannot be rate-limited, and `set -e` makes a failure
+# stop the run rather than degrade it. Re-running over the whole library is a
+# byte-identical no-op, measured on all 165 stems at 95ms. --vision is the opt-in
+# model tier and is deliberately not passed here, since it wants a token and this
+# path has to work without one.
+node "$PROJECT_DIR/tools/photos/gen-photo-semantics.ts"
 
 node "$PROJECT_DIR/tools/photos/check-photo-pipeline.ts"
 echo ""
