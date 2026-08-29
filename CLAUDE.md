@@ -2714,6 +2714,21 @@ Paid is 20 million events per MONTH over 7 days of retention, which makes these
 percentages meaningless there. Sampling is not evidence of being over quota:
 Cloudflare's trigger is 5 billion logs per account per day, 25,000x this ceiling.
 
+**Those three were not the list, and the reason is the transferable half.** An
+adversarial second pass reached the same "headroom over a wrong reading" output
+through five more doors, because each first repair was written as ONE PATH: the
+sampling check read one nesting of one field, the day check read the API's echo
+and never the rows, and `partial` compared Cloudflare's stamps against this
+machine's clock with nothing reconciling them. So an interval reported on the
+window aggregate, two buckets stamped one day under an honest daily granularity,
+a stamp outside the window asked for, a negative count, and a 3-day window
+answered with one bucket each exited 0 with a confident peak. Every one of them
+now refuses or renders as unread, and the checks are keyed on the FIELD and on
+the DAYS ASKED FOR rather than on paths and row counts, so the next nesting
+Cloudflare adds is covered by construction. Take the general shape past this
+tool: **a reading has as many doors as the response has shapes, and a fix keyed
+on a path closes the door it was written for and leaves the corridor.**
+
 It reads `POST /accounts/<id>/workers/observability/telemetry/query`, the
 endpoint the Observability dashboard calls. GraphQL cannot answer this: the
 account type carries 231 fields and none of them is an observability-events

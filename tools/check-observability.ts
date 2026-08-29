@@ -1,4 +1,4 @@
-// check-observability.ts — how much of the daily observability-event budget is
+// check-observability.ts: how much of the daily observability-event budget is
 // this account actually spending, and where does it go?
 //
 // WHY THIS EXISTS. Workers tracing is free during the beta and stops being free
@@ -76,9 +76,11 @@
 //   cannot run     no credential, no account id, or the transport
 //                  never reached the API                            exit 2
 //   query error    any non-2xx, success!=true, a result whose `run`
-//                  block does not echo what was asked, a malformed
-//                  probe payload, a sampled dataset, or a count of
-//                  0 while an event probe returns a row             exit 1
+//                  block does not echo what was asked, buckets that
+//                  do not describe the window asked for, a malformed
+//                  probe payload, a sampled or unreadably-sampled
+//                  dataset, or a count of 0 while an event probe
+//                  returns a row                                    exit 1
 //   no data        well formed, zero across the window, and the
 //                  event probe finds nothing either                 exit 1
 //   zero           one day at 0 inside a window with data           exit 0, "0"
@@ -89,6 +91,39 @@
 // rendered 24 buckets as 24 days and understated the peak 24x; and a day past
 // retention printed `0` with `100.0%` headroom in the same column as a measured
 // zero. All three now refuse before anything numeric reaches the terminal.
+//
+// A SECOND PASS FOUND THE SAME FAILURE CLASS THROUGH DOORS THE FIRST LEFT OPEN,
+// and the shape of that is the lesson rather than the five bugs. Each first fix
+// was correct and each was written as ONE PATH: the sampling check read one
+// nesting of one field, the day check read the run echo and not the rows, the
+// partial-day rule read one side of one clock. A reading that goes wrong has as
+// many doors as the response has shapes, so a fix keyed on a path closes the
+// door it was written for and leaves the corridor.
+//
+//   sampling      the interval was read at `series[].data[]` alone. Reported on
+//                 `calculations[].aggregates[]` instead, a 1-in-100 dataset
+//                 exited 0 at "0.9% of ceiling". `sampledAt` walks the whole
+//                 result by FIELD NAME now, over all four nestings Cloudflare's
+//                 schema puts it in, and it is applied to the split and the two
+//                 breakdowns rather than the total alone.
+//   the interval  `Number(v) || 1` read 0, -100, null and "abc" as unsampled.
+//                 0.01 is the dangerous member, because head_sampling_rate is a
+//                 RATE in 0..1 and this field is its reciprocal. Anything that
+//                 is not a positive integer is unreadable and refuses.
+//   folding       the table emitted one row per SERIES ENTRY and peaked per row,
+//                 so two buckets stamped one day halved it: a day at 100% of the
+//                 ceiling printed as 50%, exit 0. Rows come from the DAYS asked
+//                 for now, buckets are summed into them, and a day carrying two
+//                 buckets under a daily granularity echo refuses outright.
+//   the clocks    `partial` was `stamp >= todayStart`, comparing Cloudflare's
+//                 stamps against this machine's `Date.now()` with no upper bound
+//                 and no reconciliation, so a slow clock marked a real day
+//                 partial and dropped it from the peak in silence. Bucket stamps
+//                 are checked against the window that was ASKED for.
+//   the gap       rows returned were never counted against days requested, so a
+//                 3-day window answered with one bucket printed a confident peak
+//                 and full headroom. Unanswered days render as such, cannot be
+//                 the peak, and suppress the headroom sentence.
 //
 // The event probe is the part that earns its call. A count of 0 is only
 // believable next to a second query that also finds nothing; if `view: events`
@@ -111,8 +146,8 @@
 // refuses just as loudly while proving nothing about the endpoint.
 //
 // ── what is NOT verified here, and it is the breakdowns ────────────────────
-// The three group-by keys — `dataset` for the spans/logs split,
-// `$metadata.service` for the Worker, `$metadata.spanName` for the span — are
+// The three group-by keys (`dataset` for the spans/logs split,
+// `$metadata.service` for the Worker, `$metadata.spanName` for the span) are
 // read off the event schema those same Cloudflare clients declare. NONE of them
 // has been exercised against an authorized call, because no credential on this
 // workstation carries the grant. That is why the TOTAL is asked with no group-by
@@ -182,7 +217,7 @@ const REQUEST_TIMEOUT_MS = 20_000;
 
 /**
  * One POST to the telemetry API. Every non-2xx, every success:false, and every
- * missing result is an ERROR rather than an empty reading — that distinction is
+ * missing result is an ERROR rather than an empty reading, and that distinction is
  * the whole point of the file.
  */
 async function post(
@@ -314,6 +349,12 @@ function countQuery(timeframe: Timeframe, groupBy?: string, granularity?: number
 type Aggregate = { groups?: { key: string; value: unknown }[]; value: number; sampleInterval?: number };
 type Series = { time: string; data: Aggregate[] };
 
+/** What the response says about sampling, or why that could not be read. */
+export type Sampling =
+  | { state: "unsampled" }
+  | { state: "sampled"; interval: number }
+  | { state: "unreadable"; why: string };
+
 function calculation(result: Record<string, unknown>): { aggregates: Aggregate[]; series: Series[] } | null {
   const calcs = result.calculations;
   if (!Array.isArray(calcs) || calcs.length === 0) return null;
@@ -351,11 +392,86 @@ function bucketTotal(data: Aggregate[]): number {
  * this tool prints and has nothing to do with exceeding the Free quota. The
  * likelier source of a non-unit interval here is a configured
  * `head_sampling_rate`, which is a per-Worker setting rather than a symptom.
+ *
+ * WHY THIS WALKS THE WHOLE RESULT RATHER THAN NAMING PATHS. Round 1 read
+ * `calculations[0].series[].data[]` and nothing else, so an interval reported on
+ * the WINDOW AGGREGATE rather than on the buckets was invisible: a 1-in-100
+ * dataset exited 0 and printed "0.9% of ceiling" with full headroom, which is
+ * the exact output this refusal exists to prevent. Adding `aggregates[]` as a
+ * second case would have closed that one door and left the shape intact.
+ *
+ * Cloudflare's schema is why a path list can never be complete here. The field
+ * is declared ONCE, on `zAggregateResult` (cloudflare/mcp-server-cloudflare,
+ * apps/workers-observability/src/types/workers-logs.types.ts:124-130, read
+ * 2026-08-29), and that object is then reused: `zQueryRunCalculationsV2` embeds
+ * it at `aggregates[]` AND at `series[].data[]`, and `zReturnedQueryRunResult`
+ * embeds that array twice, at `calculations` and at `compare`. One declaration
+ * is already FOUR live paths, and every future reuse of `zAggregateResult` mints
+ * another without touching the field. A checker keyed on the FIELD NAME is
+ * complete over all four by construction and stays complete when a fifth
+ * appears. A checker keyed on paths is a list that goes stale in silence, which
+ * is the one failure mode this file may not have.
+ *
+ * So the walk visits every key named `sampleInterval` at any depth. It needs no
+ * knowledge of the nesting and cannot be outrun by a change to it, and it costs
+ * one traversal of a response already in memory.
  */
-function sampledAt(series: Series[]): number {
+export function sampledAt(result: unknown): Sampling {
   let worst = 1;
-  for (const s of series) for (const d of s.data) worst = Math.max(worst, Number(d.sampleInterval) || 1);
-  return worst;
+  const unreadable: string[] = [];
+  // A WeakSet rather than a depth cap. A cap is the special-case habit this
+  // function exists to break: it would silently stop looking at whatever depth
+  // somebody guessed, which is the failure mode again one level down. JSON has
+  // no cycles, so the set is belt and braces against a hand-built fixture.
+  const seen = new WeakSet<object>();
+  const walk = (node: unknown): void => {
+    // The rule asks for a parse at the I/O boundary and a branch on the domain
+    // value. Parsing is exactly what this function may not do: the shape is the
+    // unknown, and a walk keyed on the field name is what survives Cloudflare
+    // reusing `zAggregateResult` somewhere nobody here modelled. A parser would
+    // reintroduce the path list this replaced.
+    // oxlint-disable-next-line anti-slop/no-runtime-typeof
+    if (node === null || typeof node !== "object") return;
+    if (seen.has(node)) return;
+    seen.add(node);
+    if (Array.isArray(node)) {
+      for (const v of node) walk(v);
+      return;
+    }
+    for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+      if (key !== "sampleInterval") {
+        walk(value);
+        continue;
+      }
+      // POSITIVE INTEGER OR NOTHING. `Number(v) || 1` read 0, -100, null and
+      // "abc" as unsampled, and the dangerous member of that set is 0.01:
+      // Cloudflare's own knob is `head_sampling_rate`, documented as a RATE in
+      // 0..1 where 0.01 means one request in a hundred is kept
+      // (developers.cloudflare.com/workers/observability/logs/workers-logs/,
+      // read 2026-08-29), while this field is an INTERVAL where 100 means the
+      // same thing. The two spellings are reciprocals, so an API that ever
+      // reports the rate here hands 0.01 to a reader of intervals and 1% of
+      // ingestion renders as none of it. Neither shape is assumed: an interval
+      // that is not a positive integer is unreadable and refuses.
+      // This IS the boundary parse the rule asks for: it turns an untyped wire
+      // value into a positive integer or a refusal, and there is no earlier
+      // place to put it, because the walk is what found the value.
+      // oxlint-disable-next-line anti-slop/no-runtime-typeof
+      if (typeof value !== "number" || !Number.isInteger(value) || value < 1) {
+        unreadable.push(JSON.stringify(value) ?? String(value));
+      } else {
+        worst = Math.max(worst, value);
+      }
+    }
+  };
+  walk(result);
+  if (unreadable.length > 0) {
+    return {
+      state: "unreadable",
+      why: `sampleInterval came back as ${unreadable.slice(0, 3).join(", ")}, which is not a 1-in-N interval; a rate (head_sampling_rate is 0..1) and an interval are reciprocals, so this cannot be read either way`,
+    };
+  }
+  return worst > 1 ? { state: "sampled", interval: worst } : { state: "unsampled" };
 }
 
 const n = (v: number) => v.toLocaleString("en-US");
@@ -393,32 +509,157 @@ export function classify(
   return "no-data";
 }
 
+/** The UTC calendar day a bucket stamp falls in, as YYYY-MM-DD. */
+const dayKey = (stamp: number): string => new Date(stamp).toISOString().slice(0, 10);
+
+/**
+ * A bucket's `time`, which the schema types as a string and which arrives as
+ * either epoch milliseconds or an ISO stamp. Returns null when it is neither,
+ * because a bucket that cannot be placed on a day cannot be summed into one.
+ */
+function bucketStamp(time: string): number | null {
+  const asNumber = String(time).trim() === "" ? Number.NaN : Number(time);
+  const stamp = Number.isFinite(asNumber) ? asNumber : Date.parse(String(time));
+  return Number.isFinite(stamp) ? stamp : null;
+}
+
+/** Every UTC day a window touches, oldest first. */
+export function windowDayKeys(from: number, to: number): string[] {
+  const out: string[] = [];
+  for (let d = Math.floor(from / DAY_MS) * DAY_MS; d <= to; d += DAY_MS) out.push(dayKey(d));
+  return out;
+}
+
+/**
+ * Does the set of buckets that came back match the window that was asked for?
+ * `checkRun` reads the API's ECHO of the query; this reads the ROWS, and the two
+ * can disagree. Four ways, each of which round 1 rendered as a number:
+ *
+ *  1. AN UNREADABLE STAMP. A bucket that cannot be placed on a day was being
+ *     silently placed on 1970-01-01 by `Number(t) || Date.parse(t)`.
+ *  2. A STAMP OUTSIDE THE WINDOW, which is the clock reconciliation. `partial`
+ *     was `stamp >= todayStart` with `todayStart` from this workstation's
+ *     `Date.now()` and the stamps from Cloudflare, and nothing bounded it above
+ *     or compared it to the window at all. A workstation clock a day behind
+ *     therefore marked a real complete day partial and dropped it from the peak,
+ *     quietly. The two clocks are reconciled HERE, once: the days this tool
+ *     asked for are the only days it will accept an answer for, so skew in
+ *     either direction is a named refusal rather than a missing row.
+ *  3. TWO BUCKETS ON ONE DAY. Deliberate choice, and it REFUSES. The query asks
+ *     for `granularity: 86400000` and `checkRun` has already confirmed the API
+ *     echoed that back, so a second bucket on the same day is the response
+ *     contradicting its own echo. It cannot be benign paging either: at day
+ *     granularity a day is one bucket by definition. Folding alone would produce
+ *     the right arithmetic and leave a response nothing can vouch for, and this
+ *     file may only print numbers it can vouch for. `dailyTable` folds anyway,
+ *     as defence in depth, so a caller that skips this check still gets a
+ *     correct sum rather than round 1's per-row peak, which halved a day that
+ *     had consumed the whole ceiling.
+ *  4. A COUNT THAT IS NOT A COUNT. `Number(v) || 0` read "abc" and null as zero
+ *     and passed -50,000 straight through, which rendered as `-25.0%` used and
+ *     `125.0%` headroom.
+ *
+ * `unanswered` is reported rather than refused, and that split is the point.
+ * 1 to 4 are the response disagreeing with itself, which is never normal. A day
+ * with no row may just be the API omitting an empty bucket, which no authorized
+ * call has been made from here to settle, so refusing would be blanket-red on
+ * precisely the quiet account this tool is meant to reassure. The caller marks
+ * it instead, and prints no headroom over it.
+ */
+export function checkBuckets(
+  series: Series[],
+  days: string[],
+): { problem: string | null; unanswered: string[] } {
+  const wanted = new Set(days);
+  const bucketsPerDay = new Map<string, number>();
+  const span = days.length > 0 ? `${days[0]}..${days[days.length - 1]}` : "(empty window)";
+  const refuse = (problem: string) => ({ problem, unanswered: [] as string[] });
+
+  for (const s of series) {
+    const stamp = bucketStamp(s.time);
+    if (stamp === null) {
+      return refuse(`a bucket carried ${JSON.stringify(s.time)} as its time, which places it on no day at all`);
+    }
+    const day = dayKey(stamp);
+    if (!wanted.has(day)) {
+      return refuse(
+        `a bucket landed on ${day}, outside the ${span} window this run asked for; the API's clock and this machine's do not agree, so no row can be trusted to the day it claims`,
+      );
+    }
+    for (const a of s.data) {
+      const v = Number(a.value);
+      if (!Number.isFinite(v) || v < 0) {
+        return refuse(`${day} carried a count of ${JSON.stringify(a.value)}; an event count is a non-negative number, so that row is not a reading`);
+      }
+    }
+    bucketsPerDay.set(day, (bucketsPerDay.get(day) ?? 0) + 1);
+  }
+
+  const doubled = [...bucketsPerDay.entries()].find(([, count]) => count > 1);
+  if (doubled) {
+    return refuse(
+      `${doubled[0]} came back as ${doubled[1]} buckets while the API echoed one bucket per day, so the response disagrees with its own granularity`,
+    );
+  }
+  return { problem: null, unanswered: days.filter((d) => !bucketsPerDay.has(d)) };
+}
+
 /**
  * The daily table, pure so `--control` can render a synthetic reading and show
- * what a real one looks like without a credential. TODAY is marked partial
- * rather than scored: a day three hours old always looks like headroom, and the
- * peak is taken over COMPLETE days alone for the same reason.
+ * what a real one looks like without a credential.
  *
- * A day older than `retentionStart` gets the SAME treatment for the same reason,
- * which #667 gave only to today. `--days 7` on a 3-day plan asked for four days
- * the API cannot answer for and rendered each as `0  0  0.0%  100.0%`, in the
- * column and the format a measured zero uses. An expired day carrying no events
- * prints `-`, because the honest statement is that nothing was read rather than
- * that nothing happened; one carrying events prints them, since that is data and
- * also evidence the retention assumption is wrong. Neither is scored, and
- * neither ever shows headroom: retention truncates from the start of the day, so
- * a surviving count understates in exactly the direction a headroom figure
- * would flatter.
+ * ROWS COME FROM `days`, NEVER FROM THE SERIES, which is what makes the row
+ * count and the day count independent. Round 1 emitted one row per SERIES ENTRY
+ * and took `Math.max` per row, so two buckets stamped the same day halved that
+ * day: a day that had spent 100% of the ceiling printed as 50%, exit 0. Every
+ * bucket is summed into its UTC day here before anything is rendered or peaked,
+ * so the arithmetic is right even where `checkBuckets` was not consulted.
+ *
+ * THREE KINDS OF DAY CARRY NO NUMBER, for one reason: nothing was read for them.
+ * TODAY is marked partial, because a day three hours old always looks like
+ * headroom. A day older than `retentionFrom` is marked past retention, which
+ * round 1 of #667 gave only to today: `--days 7` on a 3-day plan rendered four
+ * unanswerable days as `0  0  0.0%  100.0%`, in the column and format a measured
+ * zero uses. A day the API returned NO BUCKET for is marked as such rather than
+ * shown as 0, on the same argument that nothing is not a zero.
+ *
+ * A past-retention day carrying events still prints them, since that is data and
+ * also evidence the retention assumption is wrong. None of the three is scored
+ * and none can become the peak.
+ *
+ * THE HEADROOM SENTENCE IS SUPPRESSED WHEN A DAY WENT UNANSWERED, and the line
+ * between what still prints and what does not is the governing rule itself. The
+ * largest answered day is a measurement and prints, labelled with the number of
+ * days it was taken over. "N to spare" and "M more /lens scans" are claims about
+ * the whole window's worst case, which the unanswered day can falsify, and they
+ * are the figures a reader acts on. So the measured number survives and the
+ * extrapolated comfort does not.
  */
-export function dailyTable(
-  series: Series[],
-  split: Series[] | null,
-  todayStart: number,
-  retentionStart = -Infinity,
-): string[] {
+export function dailyTable(opts: {
+  series: Series[];
+  split?: Series[] | null;
+  /** The UTC days asked for, oldest first. One row each, answered or not. */
+  days: string[];
+  /** The day holding the end of the window: marked partial, never scored. */
+  todayKey: string;
+  /** Oldest day inside retention. Older days are unreadable by construction. */
+  retentionFrom?: string;
+}): string[] {
+  const { series, split = null, days, todayKey, retentionFrom } = opts;
+
+  // Fold first, render second.
+  const totals = new Map<string, number>();
+  for (const s of series) {
+    const stamp = bucketStamp(s.time);
+    if (stamp === null) continue;
+    const day = dayKey(stamp);
+    totals.set(day, (totals.get(day) ?? 0) + bucketTotal(s.data));
+  }
   const perDay = new Map<string, Map<string, number>>();
   for (const s of split ?? []) {
-    const day = new Date(Number(s.time) || Date.parse(s.time)).toISOString().slice(0, 10);
+    const stamp = bucketStamp(s.time);
+    if (stamp === null) continue;
+    const day = dayKey(stamp);
     const row = perDay.get(day) ?? new Map<string, number>();
     for (const a of s.data) {
       const key = a.groups?.[0] ? String(a.groups[0].value) : "unknown";
@@ -432,16 +673,26 @@ export function dailyTable(
     `  ${"day".padEnd(12)}${datasets.map((d) => d.padStart(20)).join("")}${"total".padStart(12)}${"of ceiling".padStart(12)}${"headroom".padStart(11)}`,
   ];
   let peak = 0;
+  let scored = 0;
   let expired = 0;
-  for (const s of series) {
-    const stamp = Number(s.time) || Date.parse(s.time);
-    const day = new Date(stamp).toISOString().slice(0, 10);
-    const total = bucketTotal(s.data);
-    const partial = stamp >= todayStart;
-    const past = stamp < retentionStart;
+  let unanswered = 0;
+  for (const day of days) {
+    const past = retentionFrom !== undefined && day < retentionFrom;
+    const partial = day === todayKey;
+    const answered = totals.has(day);
+    const total = totals.get(day) ?? 0;
     if (past) expired++;
-    if (!partial && !past) peak = Math.max(peak, total);
-    const unread = past && total === 0;
+    // TODAY is excluded from the gap count on purpose. It is never scored and
+    // so can never be the peak, which means an unanswered today cannot falsify
+    // the headroom sentence. Counting it would suppress that sentence for the
+    // first few hours of every UTC day on a quiet account, which is the
+    // blanket-red failure the refusals here are written to avoid.
+    else if (!answered && !partial) unanswered++;
+    if (answered && !partial && !past) {
+      scored++;
+      peak = Math.max(peak, total);
+    }
+    const unread = !answered || (past && total === 0);
     const cells = datasets.map((d) => (unread ? "-" : n(perDay.get(day)?.get(d) ?? 0)).padStart(20)).join("");
     const count = (unread ? "-" : n(total)).padStart(12);
     const s2 = share(total);
@@ -449,7 +700,9 @@ export function dailyTable(
       ? "  past retention"
       : partial
         ? "     partial"
-        : `${s2.used.padStart(12)}${s2.left.padStart(11)}`;
+        : !answered
+          ? "  no row returned"
+          : `${s2.used.padStart(12)}${s2.left.padStart(11)}`;
     lines.push(`  ${day.padEnd(12)}${cells}${count}${tail}`);
   }
 
@@ -458,9 +711,16 @@ export function dailyTable(
     lines.push(`  ..    ${expired} day(s) sit past the ${RETENTION_DAYS}-day ${PLAN} retention window and are NOT a reading:`);
     lines.push("        no count, no share, no headroom. Ask for a window inside retention instead.");
   }
-  if (peak > 0) {
+  if (unanswered > 0) {
+    lines.push(`  ..    ${unanswered} of the ${days.length} day(s) asked for came back with no bucket at all, and nothing is not a zero:`);
+    lines.push("        they carry no count, no share and no headroom, and none of them can be the peak below.");
+  }
+  if (peak > 0 && unanswered === 0) {
     lines.push(`  worst COMPLETE day: ${n(peak)} events, ${pct(peak)} of the ${n(DAILY_CEILING)} ${PLAN} ceiling, ${n(DAILY_CEILING - peak)} to spare.`);
     lines.push(`  that headroom is about ${n(Math.floor((DAILY_CEILING - peak) / SPANS_PER_LENS_SCAN))} more /lens scans at ~${SPANS_PER_LENS_SCAN} spans each.`);
+  } else if (peak > 0) {
+    lines.push(`  worst ANSWERED day: ${n(peak)} events, ${pct(peak)} of the ${n(DAILY_CEILING)} ${PLAN} ceiling, over the ${scored} day(s) that returned one.`);
+    lines.push(`  NO headroom figure: ${unanswered} day(s) returned nothing and any of them could have been worse.`);
   } else {
     lines.push("  ..    no complete day in the window carried events, so nothing here is measured against a daily ceiling.");
   }
@@ -590,31 +850,89 @@ async function control(): Promise<never> {
     ok("a run block echoing exactly what was asked passes, so the check is not blanket-red");
   } else { bad("a correct run block was rejected"); failures++; }
 
+  // Sampling, over the FOUR nestings Cloudflare's schema puts the field in.
+  // Each of these passed round 1 while printing a full table of headroom.
+  const withInterval = (interval: unknown) => ({ value: 5, sampleInterval: interval });
+  if (sampledAt({ calculations: [{ aggregates: [withInterval(100)], series: [] }] }).state === "sampled") {
+    ok("an interval on the WINDOW AGGREGATE refuses, which is the nesting round 1 never read");
+  } else { bad("a sampled window aggregate read as unsampled"); failures++; }
+  if (sampledAt({ calculations: [{ aggregates: [], series: [{ time: "0", data: [withInterval(4)] }] }] }).state === "sampled") {
+    ok("an interval on a bucket refuses");
+  } else { bad("a sampled bucket read as unsampled"); failures++; }
+  if (sampledAt({ compare: [{ aggregates: [withInterval(7)], series: [] }] }).state === "sampled") {
+    ok("an interval under `compare` refuses, which no path list here had ever named");
+  } else { bad("a sampled compare block read as unsampled"); failures++; }
+  for (const value of [0, -100, null, "abc", 0.01]) {
+    if (sampledAt({ calculations: [{ aggregates: [withInterval(value)], series: [] }] }).state === "unreadable") continue;
+    bad(`sampleInterval ${JSON.stringify(value)} read as unsampled rather than unreadable`);
+    failures++;
+  }
+  ok("0, -100, null, \"abc\" and 0.01 are all unreadable intervals rather than 'no sampling'");
+  if (sampledAt({ calculations: [{ aggregates: [{ value: 5, sampleInterval: 1 }], series: [] }] }).state === "unsampled") {
+    ok("an interval of exactly 1 is not sampling, so the check is not blanket-red");
+  } else { bad("an unsampled response refused"); failures++; }
+
   // The same renderer main() uses, over a fixture whose MIDDLE day is a real
   // zero. It has to print `0` beside two days that carried events, because a
   // measured zero and an unreadable window are the two things this file exists
   // to keep apart, and only one of them is allowed to look calm.
   const todayStart = Math.floor(Date.now() / DAY_MS) * DAY_MS;
   const day = (back: number) => String(todayStart - back * DAY_MS);
+  const key = (back: number) => new Date(todayStart - back * DAY_MS).toISOString().slice(0, 10);
   const bucket = (v: number, label?: string): Aggregate =>
     label ? { value: v, groups: [{ key: "dataset", value: label }] } : { value: v };
-  const rendered = dailyTable(
-    [
+
+  // Two buckets stamped ONE day, with the granularity echo honest. Round 1 took
+  // Math.max per ROW, so a day that spent the whole ceiling printed as half of
+  // it. It refuses here, and the renderer folds it correctly regardless.
+  const doubled = checkBuckets(
+    [{ time: day(1), data: [bucket(100_000)] }, { time: day(1), data: [bucket(100_000)] }],
+    [key(1)],
+  );
+  if (doubled.problem) ok("two buckets stamped the same day refuse rather than being peaked one at a time");
+  else { bad("a day split across two buckets passed, so its peak reads half its real value"); failures++; }
+  const foldedRows = dailyTable({
+    series: [{ time: day(1), data: [bucket(100_000)] }, { time: day(1), data: [bucket(100_000)] }],
+    days: [key(1)],
+    todayKey: key(0),
+  });
+  if (foldedRows.some((l) => l.includes("200,000") && l.includes("100.0%"))) {
+    ok("and the renderer folds both buckets into one day, so its arithmetic holds without that check");
+  } else { bad("the renderer did not fold two buckets of one day into a single row"); failures++; }
+
+  // A stamp outside the asked-for window, which is how clock skew arrives.
+  if (checkBuckets([{ time: day(9), data: [bucket(1)] }], [key(1), key(0)]).problem) {
+    ok("a bucket outside the requested window refuses rather than being dropped from the peak");
+  } else { bad("a bucket from outside the window was accepted"); failures++; }
+  if (checkBuckets([{ time: "not-a-time", data: [bucket(1)] }], [key(0)]).problem) {
+    ok("a bucket whose time cannot be read refuses rather than landing on 1970-01-01");
+  } else { bad("an unreadable bucket time was accepted"); failures++; }
+  if (checkBuckets([{ time: day(0), data: [bucket(-50_000)] }], [key(0)]).problem) {
+    ok("a negative count refuses rather than rendering -25.0% used and 125.0% headroom");
+  } else { bad("a negative event count was accepted as a reading"); failures++; }
+  const gap = checkBuckets([{ time: day(1), data: [bucket(12_000)] }], [key(2), key(1), key(0)]);
+  if (gap.problem === null && gap.unanswered.length === 2) {
+    ok("a 3-day window answered with one bucket names the 2 days that went unanswered");
+  } else { bad("days requested and days answered were never reconciled"); failures++; }
+
+  const rendered = dailyTable({
+    series: [
       // Outside the retention window: unread, and it must not read as a zero.
       { time: day(5), data: [bucket(0)] },
       { time: day(2), data: [bucket(48_120)] },
       { time: day(1), data: [bucket(0)] },
       { time: day(0), data: [bucket(9_004)] },
     ],
-    [
+    split: [
       // The two labels are illustrative. What the API actually calls its
       // datasets is whatever it returns; nothing here asserts the names.
       { time: day(2), data: [bucket(41_010, "traces"), bucket(7_110, "cloudflare-workers")] },
       { time: day(0), data: [bucket(8_000, "traces"), bucket(1_004, "cloudflare-workers")] },
     ],
-    todayStart,
-    todayStart - (RETENTION_DAYS - 1) * DAY_MS,
-  );
+    days: [key(5), key(2), key(1), key(0)],
+    todayKey: key(0),
+    retentionFrom: key(RETENTION_DAYS - 1),
+  });
   console.log("\nthe same renderer over a SYNTHETIC reading whose middle day is a real zero:");
   for (const line of rendered) console.log(line);
   const rowFor = (back: number) => rendered.find((l) => l.startsWith(`  ${new Date(todayStart - back * DAY_MS).toISOString().slice(0, 10)}`));
@@ -627,6 +945,22 @@ async function control(): Promise<never> {
   if (expiredRow && expiredRow.includes("past retention") && !expiredRow.includes("%") && !/\s0\s/.test(expiredRow)) {
     ok("a day past retention prints no count, no share and no headroom");
   } else { bad("an expired day rendered in the same column and format as a measured zero"); failures++; }
+
+  // The gap case rendered, since the headroom sentence is what a reader acts on
+  // and an unanswered day is exactly the thing that can falsify it.
+  const withGap = dailyTable({
+    series: [{ time: day(1), data: [bucket(12_000)] }],
+    days: [key(2), key(1), key(0)],
+    todayKey: key(0),
+  });
+  console.log("\nthe same renderer over a 3-day window the API answered with ONE bucket:");
+  for (const line of withGap) console.log(line);
+  if (withGap.some((l) => l.includes("no row returned")) && !withGap.some((l) => /to spare|more \/lens scans|worst COMPLETE day/.test(l))) {
+    ok("an unanswered day prints no count and suppresses the headroom sentence entirely");
+  } else { bad("a window with an unanswered day still printed headroom"); failures++; }
+  if (withGap.some((l) => l.includes("worst ANSWERED day") && l.includes("12,000"))) {
+    ok("the largest answered day still prints, named as a peak over the days that returned one");
+  } else { bad("the measured maximum was dropped along with the claim it could not support"); failures++; }
 
   console.log("");
   if (failures === 0) {
@@ -660,11 +994,17 @@ export async function main(): Promise<void> {
   // Whole UTC days, plus however much of today has elapsed. Today is marked
   // partial rather than compared against a full-day ceiling: a day three hours
   // old always looks like headroom.
+  // ONE reading of this machine's clock, and everything downstream is derived
+  // from it. The window is what gets reconciled against Cloudflare's bucket
+  // stamps in `checkBuckets`, so the two clocks meet at exactly one comparison
+  // rather than at a fresh `Date.now()` inside the renderer.
   const now = Date.now();
   const todayStart = Math.floor(now / DAY_MS) * DAY_MS;
   const timeframe = { from: todayStart - (days - 1) * DAY_MS, to: now };
 
-  const retentionStart = todayStart - (RETENTION_DAYS - 1) * DAY_MS;
+  const dayKeys = windowDayKeys(timeframe.from, timeframe.to);
+  const todayKey = dayKeys[dayKeys.length - 1];
+  const retentionFrom = dayKey(todayStart - (RETENTION_DAYS - 1) * DAY_MS);
 
   console.log(`observability events, account <elided>, ${days} day(s) to ${new Date(now).toISOString()}`);
   console.log(`ASSUMES ${PLAN}: ${n(DAILY_CEILING)} events/day, spans and logs sharing one quota.`);
@@ -711,6 +1051,15 @@ export async function main(): Promise<void> {
     process.exit(1);
   }
 
+  // The echo said one bucket per day. This asks the ROWS whether they agree,
+  // which is a different question and the one round 1 never put.
+  const buckets = checkBuckets(totalCalc.series, dayKeys);
+  if (buckets.problem) {
+    bad(`the buckets that came back do not describe the window that was asked for: ${buckets.problem}`);
+    info("Every per-day number below would rest on that, so none is printed.");
+    process.exit(1);
+  }
+
   const windowTotal = totalCalc.series.reduce((sum, s) => sum + bucketTotal(s.data), 0);
 
   // The corroborating probe. A count of 0 is only believable beside a second
@@ -749,7 +1098,16 @@ export async function main(): Promise<void> {
   }
   const probeFoundEvent = probeEvents.length > 0;
 
-  const sample = sampledAt(totalCalc.series);
+  // The WHOLE result, not one nesting of it: an interval on the window
+  // aggregate says as much about these counts as one on a bucket does.
+  const sampling = sampledAt(totals.result);
+  if (sampling.state === "unreadable") {
+    bad(`this response says something about sampling that cannot be read: ${sampling.why}`);
+    info("An interval that is not a positive integer leaves every count below scaled by an unknown factor.");
+    info("No table is printed. Read the Observability dashboard, and check head_sampling_rate in wrangler.jsonc.");
+    process.exit(1);
+  }
+  const sample = sampling.state === "sampled" ? sampling.interval : 1;
   const verdict = classify(windowTotal, probeFoundEvent, sample);
   if (verdict === "contradiction") {
     bad("the count says 0 events while an event probe returned a row over the same window");
@@ -779,9 +1137,36 @@ export async function main(): Promise<void> {
   // is not: a dry or wrongly bucketed split renders as a column of zeros beside
   // real totals, which reads as "no spans today".
   const split = await post(account, token, "query", countQuery(timeframe, "dataset", DAY_MS));
-  const splitProblem = split.state === "ok" ? checkRun(split.result, { granularity: DAY_MS }) : why(split);
+  // The split is a printed number too, so it earns the SAME three checks the
+  // total gets rather than the run echo alone. A sampled or misbucketed split
+  // beside honest totals is a column that reads as "no spans today".
+  const splitSampling = split.state === "ok" ? sampledAt(split.result) : null;
+  const splitProblem =
+    split.state !== "ok"
+      ? why(split)
+      : (checkRun(split.result, { granularity: DAY_MS }) ??
+        (splitSampling?.state === "unreadable"
+          ? splitSampling.why
+          : splitSampling?.state === "sampled"
+            ? `the split is sampled at 1 in ${splitSampling.interval}`
+            : (checkBuckets(calculation(split.result)?.series ?? [], dayKeys).problem ?? null)));
   const splitCalc = split.state === "ok" && !splitProblem ? calculation(split.result) : null;
-  for (const line of dailyTable(totalCalc.series, splitCalc?.series ?? null, todayStart, retentionStart)) console.log(line);
+  for (const line of dailyTable({
+    series: totalCalc.series,
+    split: splitCalc?.series ?? null,
+    days: dayKeys,
+    todayKey,
+    retentionFrom,
+  })) {
+    console.log(line);
+  }
+  // Today is left out for the reason `dailyTable` gives: it is never scored, so
+  // an unanswered today is an incomplete day rather than a gap in the reading.
+  const gaps = buckets.unanswered.filter((d) => d !== todayKey);
+  if (gaps.length > 0) {
+    info(`the API returned no bucket for ${gaps.join(", ")}, so those days are not a reading.`);
+    info("A day the API did not answer for and a day with no events look identical from here.");
+  }
   if (!splitCalc) {
     info(`spans/logs split unavailable: ${splitProblem || "the API returned no grouped calculation"}`);
     info("The totals above are unaffected: they are asked with no group-by at all.");
@@ -794,6 +1179,15 @@ export async function main(): Promise<void> {
     if (by.state !== "ok") { info(`unavailable: ${why(by)}`); continue; }
     const byProblem = checkRun(by.result);
     if (byProblem) { info(`unavailable: ${byProblem}`); continue; }
+    // These rows are printed numbers, so they are held to the same rule. This
+    // breakdown is asked with NO granularity, so it has no buckets to reconcile
+    // and `checkBuckets` does not apply; sampling still does, and reaches these
+    // rows through `aggregates[]`, which is the nesting round 1 never read.
+    const bySampling = sampledAt(by.result);
+    if (bySampling.state !== "unsampled") {
+      info(`unavailable: ${bySampling.state === "sampled" ? `sampled at 1 in ${bySampling.interval}` : bySampling.why}`);
+      continue;
+    }
     const calc = calculation(by.result);
     const rows = (calc?.aggregates ?? [])
       .map((a) => ({ name: a.groups?.[0] ? String(a.groups[0].value) : "(none)", value: Number(a.value) || 0 }))
