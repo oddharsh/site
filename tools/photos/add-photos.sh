@@ -583,22 +583,31 @@ else
   echo "  exif-sooc or jq missing — skipping metadata regen"
 fi
 
-# bake 64-bin RGB+luma histograms into per-stem meta. the photo tooltip renders
-# the histogram from meta.hist (index.html renderHistogramSvg), and
-# extract-photo-metadata.sh above does NOT emit hist — so this MUST run after it,
-# or every incremental add strips the bars off all existing photos. computed from
-# the shipped /i/ thumbnails via hashes.json; idempotent (unchanged thumbs re-bake
-# byte-identically), so running over the whole library each add is a no-op diff.
-# zenc does this now (2026-08-14, was photo-histograms.py + Pillow), which is why
-# there is no longer a conditional here: $ZENC is built above and is not optional,
-# so the bake either runs or the whole script has already failed.
+# A SECOND `zenc histogram --root` stood here until 2026-08-29, and the comment
+# that justified it rested on a premise that expired in 2026-08. It claimed
+# extract-photo-metadata.sh "does NOT emit hist", so this "MUST run after it".
+# That script bakes at its own line 266 and then builds BOTH indexes from the
+# result, so the outer call ran after the artifacts it was supposed to feed and
+# nothing rebuilt from what it wrote.
 #
-# NOT piped into `tail -1`, which is what gotcha 40's five silent days were.
-# zenc writes only to stderr and only one summary line on the happy path, so the
-# pipe was buying no quiet; what it bought was `tail`'s exit status over zenc's.
-# Unpiped, a bad root (2) or a skipped stem (1) stops the run under `set -e`, and
-# the per-stem warnings that name WHICH stem are visible instead of dropped.
-"$ZENC" histogram --root "$PROJECT_DIR/public"
+# Verified equivalent before removal rather than assumed. The two --root values
+# spell the same path ($SCRIPT_DIR/../.. plus /public), neither passed a STEM, so
+# zenc took every key in hashes.json both times: 165 photos baked twice. Measured
+# 2026-08-29, one library: 0.954s cold, 0.332s and 0.316s warm, and the second
+# bake is always the warm one because the first left every file correct.
+#
+# Idempotence is why this was invisible and is not a reason to keep it. The one
+# thing left reading meta/ down here is check-photo-pipeline.ts, which COMPARES
+# the two indexes against it and rebuilds nothing, so a second bake that ever
+# disagreed could only turn a good run red. Keeping the bake beside the index
+# builds makes the last bake to run always the one they read.
+#
+# One path did change behaviour, for the better. The regen above is guarded on
+# exif-sooc and jq, so on a machine missing either, this call was the ONLY bake
+# and it wrote a meta/ carrying `hi` and no EXIF. check-photo-pipeline.ts then
+# rebuilt exif.json from that and failed 165 of 165 photos pointing at
+# build-exif-index.ts, which is not where the fault was. With no meta/ at all
+# it skips the drift tier by design and reports the real gap instead.
 
 # caption anything still missing alt text. runs AFTER hash-thumbnails.sh because
 # it reads the committed public/i/ square via hashes.json and posts those exact

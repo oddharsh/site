@@ -262,8 +262,21 @@ done
 # an exif-sooc upgrade that changes the card.
 
 # bake the 64-bin histograms back into the meta files (the full run may have
-# wiped them; the tooltip reads meta.hi instead of computing client-side)
-"$ZENC" histogram --root "$PUBLIC_DIR" 2>&1 | tail -1
+# wiped them; the tooltip reads meta.hi instead of computing client-side).
+# THE ONLY BAKE IN THE PIPELINE, and it is pinned here: the two index builds
+# below read meta/, so a bake anywhere else is one the indexes cannot see.
+# add-photos.sh ran a second one after calling this script until 2026-08-29.
+#
+# NOT piped into `tail -1`, matching the sibling call #566 unpiped. The status
+# half of gotcha 40 was never open here, because this script has carried
+# `set -euo pipefail` since before that PR and pipefail already hands the
+# pipeline zenc's status over tail's. What the pipe cost was narrower and had
+# no other cover: the per-stem warnings. Measured 2026-08-29 against a root
+# whose hashes.json names a tile that is not on disk, both shapes exit 1 and
+# stop the run, and only the unpiped one prints `warn: L1009919_2:
+# L1009919_2.6e03d6df.jpg missing, skipped`. Piped, the run died on a summary
+# reading "1 skipped" and named no stem.
+"$ZENC" histogram --root "$PUBLIC_DIR"
 
 # roll the per-photo EXIF (minus histograms) into the one shared index the
 # tooltip warms on idle. derived data, so it MUST be rebuilt whenever the
