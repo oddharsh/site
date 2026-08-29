@@ -46,6 +46,7 @@ import { minifySync } from "oxc-minify";
 import { readManifest, workerModule, navFenceBody, readFenceBody, runProfilesBody } from "./gen-manifest.ts";
 import { parseCss } from "./lib/css-parse.ts";
 import { HTML_MARKERS } from "./lib/html-markers.ts";
+import { buildExifIndex, buildImageFingerprints, serializeExifIndex, serializeFingerprints } from "./lib/photo-indexes.ts";
 import { zstdCompressDictionaryBatch } from "./lib/zstd-batch.ts";
 import { patchStaticShell, renderDesktopArtifacts, staticShellPages } from "../tools/photos/gen-desktop-partial.ts";
 
@@ -866,7 +867,17 @@ await mkdir(OUT, { recursive: true });
 // src/pages/ is every HTML document, src/content/ is authored prose, and
 // src/client + src/styles supply the shell. src/dict/ is deliberately absent:
 // the committed dictionary snapshots are build INPUT (#455).
-const STAGE_SKIP = new Set(["public/images/meta"]);
+// Three paths under public/ that step 1a and 1a2 DERIVE rather than copy.
+// images/meta was the first; exif.json and fingerprints.json joined it on
+// 2026-08-29. Skipping them is not tidiness: nothing writes any of the three
+// into the source tree any more, so a file at one of these paths can only be a
+// leftover from a checkout that predates the move, and copying it would let the
+// built tree depend on a pipeline artifact somebody happens to still have.
+const STAGE_SKIP = new Set([
+  "public/images/meta",
+  "public/images/exif.json",
+  "public/images/fingerprints.json",
+]);
 // The invariant above proves that the five served roots do not contend for a
 // destination file. Copy all independent source trees in one filesystem latency
 // window instead of serializing eight recursive walks.
@@ -904,7 +915,67 @@ await Promise.all([
   cp("cal/src", `${OUT}/cal/src`, { recursive: true }),
   cp("serendipity/serendipity.ts", `${OUT}/serendipity/serendipity.ts`),
 ]);
-// 1a) /images/meta/<stem>.json, DERIVED rather than copied.
+// 1a) /images/exif.json and /images/fingerprints.json, DERIVED rather than copied.
+//
+// Both were committed until 2026-08-29 and both are pure functions of committed
+// bytes, verified byte-for-byte against the copies they replace: 660 sha256
+// digests recomputed from public/i reproduce fingerprints.json exactly, and
+// metadata.json projected through the 22-pair key map reproduces exif.json
+// exactly across all 165 stems.
+//
+// The argument is the search index's, which was committed until 2026-08-24 and
+// froze TWICE: once when a path rename made its generator exit ENOENT, once
+// because nobody ran it. Two causes, one shape, and both silent because the
+// consumer falls back to an empty result. These two fail the same way. A stale
+// exif.json is a tooltip that quietly renders fewer lines; a stale
+// fingerprints.json is photo_recipe telling an agent that a real published photo
+// is one this site never served. Generating them here retires the shape.
+//
+// The wire is untouched. Both still land at their existing URLs, because both
+// are read at RUNTIME: image-tools.ts pulls fingerprints.json through the ASSETS
+// binding on a byte match, and tooltip.js warms exif.json on idle.
+//
+// Note this deletes a hop rather than relocating one. exif.json used to be
+// rolled up out of images/meta/, which is itself derived from exif.json by 1a2
+// below, so the pipeline read metadata.json, projected it into 165 files, and
+// rolled those back into one. It is one projection now, and the two floors are
+// what stand in for the drift check that round trip used to justify.
+{
+  const exif = await buildExifIndex(".");
+  const stems = Object.keys(exif);
+  // The floor guards an ABSENCE, which is the only failure this artifact has:
+  // tooltip.js treats an unreadable index as "no EXIF for this photo" and draws
+  // the frame anyway. 165 stems today, and a library that has only ever grown
+  // (111, then 158, then 165), so 100 is a third of the way down and catches a
+  // collapse without turning a deliberate cull into a build failure.
+  if (stems.length < 100) {
+    throw new Error(`exif index: only ${stems.length} stems (expected 100+) — is public/images/metadata.json readable and whole?`);
+  }
+  // The cross-file half, and the one a floor cannot see: metadata.json can be
+  // perfectly large and still be missing the photo that shipped this morning.
+  // hashes.json is the published set, so every key in it must carry a record.
+  const hashes = JSON.parse(await readFile("public/images/hashes.json", "utf8"));
+  const uncovered = Object.keys(hashes).filter((stem) => !exif[stem]);
+  if (uncovered.length) {
+    throw new Error(`exif index: ${uncovered.length} published photo(s) carry no EXIF record: ${uncovered.slice(0, 8).join(", ")}${uncovered.length > 8 ? " …" : ""} — re-run tools/photos/extract-photo-metadata.sh`);
+  }
+  await writeFile(`${OUT}/public/images/exif.json`, serializeExifIndex(exif));
+
+  // buildImageFingerprints throws on a digest collision, which is the one fact
+  // about this map that is not a restatement of its own inputs, and it throws on
+  // a tier file it cannot read. Both are build failures on purpose.
+  const { index, photos, tiers } = await buildImageFingerprints(".");
+  // 660 tiers today (165 photos x 4). Same third-of-the-way-down reasoning as
+  // above; the failure it catches is a truncated or unreadable hashes.json,
+  // which would otherwise ship a map that recognises a fraction of the library.
+  if (tiers < 400) {
+    throw new Error(`image fingerprints: only ${tiers} tiers digested (expected 400+) — is public/images/hashes.json readable and whole?`);
+  }
+  await writeFile(`${OUT}/public/images/fingerprints.json`, serializeFingerprints(index));
+  console.log(`photo indexes: exif.json ${stems.length} stems, fingerprints.json ${tiers} tiers across ${photos} photos`);
+}
+
+// 1a2) /images/meta/<stem>.json, DERIVED rather than copied.
 //
 // These are the tooltip's per-photo self-heal: a stem missing from the shared
 // EXIF index, or a tile with no baked histogram, falls back to one of these. They
@@ -917,6 +988,11 @@ await Promise.all([
 // public/images/meta is in STAGE_SKIP for this reason. Copying whatever happens to be
 // on the local disk and then writing over it would make the built tree depend on
 // pipeline leftovers; deriving it makes the two indexes the only source.
+//
+// exif.json is the one step 1a just wrote rather than a committed file, so this
+// reads the STAGED copy deliberately and the ordering is load-bearing. Run this
+// block first and it reads nothing, which the `written < 30` floor below catches
+// by name. histograms.json is still committed and still copied.
 //
 // The histogram values come back quantized to the index's 64 levels rather than
 // the original 0-100, so a regenerated file differs from the retired committed one

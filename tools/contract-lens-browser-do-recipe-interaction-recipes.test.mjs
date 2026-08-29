@@ -30,6 +30,7 @@ import {
   test,
 } from "./contract-shared.ts";
 import { imageCompare, photoRecipe } from "../src/worker/image-tools.ts";
+import { buildImageFingerprints } from "./lib/photo-indexes.ts";
 
 // ── /lens/browser?do=<recipe> — interaction recipes ────────────────────────
 // The feature runs JavaScript inside somebody else's page. Almost every test
@@ -627,7 +628,11 @@ test("photo_recipe only claims exact archive identities", async () => {
   const metadata = JSON.parse(readFileSync("public/images/metadata.json", "utf8"));
   const hashes = JSON.parse(readFileSync("public/images/hashes.json", "utf8"));
   const alt = JSON.parse(readFileSync("public/images/alt.json", "utf8"));
-  const fingerprints = JSON.parse(readFileSync("public/images/fingerprints.json", "utf8"));
+  // DERIVED rather than read: images/fingerprints.json is build output as of
+  // 2026-08-29, so there is no committed file to load. This is the stronger
+  // shape anyway, since it runs photo_recipe against the exact map build.ts
+  // stages, rather than against a copy that could have gone stale beside it.
+  const { index: fingerprints } = await buildImageFingerprints(".");
   const stem = Object.keys(metadata)[0];
   const env = { ASSETS: staticAssets({ "/images/metadata.json": metadata, "/images/hashes.json": hashes, "/images/alt.json": alt, "/images/fingerprints.json": fingerprints }) };
   const exact = await handleSiteMcp(new Request("https://aadhar.sh/mcp", { method: "POST", body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "photo_recipe", arguments: { stem } } }), headers: { "content-type": "application/json" } }), env, context());

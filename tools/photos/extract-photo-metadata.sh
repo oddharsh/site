@@ -265,12 +265,20 @@ done
 # wiped them; the tooltip reads meta.hi instead of computing client-side)
 "$ZENC" histogram --root "$PUBLIC_DIR" 2>&1 | tail -1
 
-# roll the per-photo EXIF (minus histograms) into the one shared index the
-# tooltip warms on idle. derived data, so it MUST be rebuilt whenever the
-# per-photo files change; check-photo-pipeline.ts fails on any drift.
-node "$SCRIPT_DIR/build-exif-index.ts"
-# The packed bars the grid inlines into each tile as data-hist. Same input as the
-# EXIF index above, different consumer: this one never reaches a browser whole.
+# the one shared EXIF index the tooltip warms on idle USED TO BE ROLLED UP HERE,
+# out of the per-photo files just written, and committed. build.ts step 1a
+# projects it straight out of metadata.json now, which is the same 22-pair map
+# one hop shorter, and it lands in .build/ rather than in git. So the EXIF half
+# of the per-photo files above no longer feeds anything that ships; what still
+# needs them is the histogram bake, below.
+#
+# The map is therefore written twice, as the jq literal above and as
+# EXIF_KEY_MAP in tools/lib/photo-indexes.ts. check-photo-pipeline.ts holds the
+# two together wherever images/meta/ exists, which is exactly a workstation that
+# has just run this script.
+
+# The packed bars the grid inlines into each tile as data-hist. These read the
+# per-photo files, so they still run here.
 node "$SCRIPT_DIR/build-histogram-index.ts"
 
 COUNT=$(jq 'keys | length' "$OUT")

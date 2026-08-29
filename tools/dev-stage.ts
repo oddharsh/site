@@ -41,13 +41,25 @@ import { fileURLToPath } from "node:url";
 // paths today and the collision report below is what says so out loud.
 export const ASSET_ROOTS = ["public", "src/pages", "src/content", "src/client", "src/styles"];
 
-// build.mjs skips this and DERIVES the per-photo meta twins from exif.json +
-// histograms.json instead, so copying whatever is on the local disk would make
-// the tree depend on pipeline leftovers. Dev derives nothing, so /images/meta/*
-// is a build-only surface here — the same standing as the generated /lens shell
-// and /run, which CLAUDE.md already records as 404ing under `bun run dev`. The
-// tooltip's primary tier is /images/exif.json, which is committed and staged.
-const SKIP = new Set(["public/images/meta"]);
+// Three paths build.ts DERIVES rather than copies, so a local leftover at any of
+// them must not reach the farm either: the tree would then depend on whatever
+// pipeline output a given machine happens to be holding.
+//
+// Dev derives nothing, so all three are build-only surfaces here, the same
+// standing as the generated /lens shell and /run that CLAUDE.md records as
+// 404ing under `bun run dev`.
+//
+// **THE TOOLTIP LOSES ITS EXIF UNDER `bun run dev`, and that is new as of
+// 2026-08-29.** This comment used to end "the tooltip's primary tier is
+// /images/exif.json, which is committed and staged", which was true while that
+// file was committed. Both of its tiers are derived now, so a hover in dev draws
+// the frame and no EXIF lines. `photo_recipe`'s byte-match arm degrades the same
+// way, since it reads fingerprints.json through ASSETS. Build if you need either.
+const SKIP = new Set([
+  "public/images/meta",
+  "public/images/exif.json",
+  "public/images/fingerprints.json",
+]);
 
 export const FARM = ".dev-assets";
 

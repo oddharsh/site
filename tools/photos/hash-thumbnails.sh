@@ -146,5 +146,7 @@ if restale:
 EOF
 
 # The short URL hash above is intentionally kept separate from the full-byte
-# fingerprint used by the exact photo_recipe matcher.
-node "$SCRIPT_DIR/build-image-fingerprints.ts"
+# fingerprint the exact photo_recipe matcher uses. That full-byte map used to be
+# built here into a committed images/fingerprints.json; build.ts step 1a derives
+# it into .build/ now, from these same public/i bytes, so there is nothing left
+# to run and nothing left that can go stale against a re-encode.

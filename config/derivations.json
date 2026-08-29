@@ -49,6 +49,13 @@
     "  - src/dict/a-dict and p-dict, whose input is what production served rather",
     "    than anything in the tree. dcz:check owns the question they actually raise,",
     "    which is coverage of the live shell rather than freshness against a source.",
+    "  - images/fingerprints.json and images/exif.json, which had entries here until",
+    "    2026-08-29 and are BUILD OUTPUT now. build.ts step 1a derives both into",
+    "    .build/public on every deploy, so neither can be stale by construction and",
+    "    there is nothing left in the tree for a digest to describe. Note what that",
+    "    costs and what it does not: public/i keeps its pinned digest through",
+    "    images/hashes, which declares the identical inputs, so dropping the",
+    "    fingerprints entry took no coverage of the pixel tiers with it.",
     "",
     "SET MODE AND `covers`, and why the second one is the half that bites. An",
     "artifact keyed by stem does not depend on the pixel bytes: re-encoding a photo",
@@ -66,24 +73,6 @@
     "the day it was written."
   ],
   "derivations": [
-    {
-      "id": "images/fingerprints",
-      "tier": "pinned",
-      "why": "images/fingerprints.json is {sha256: 'stem:tier'} over every published pixel tier, which is what /lens and the radar tool use to recognise one of this site's images when they meet it somewhere else. A re-encode mints new bytes AND a new hash8 filename, so a stale map recognises nothing and reports it as a photo this site never published.",
-      "outputs": [
-        "public/images/fingerprints.json"
-      ],
-      "inputs": {
-        "paths": [
-          "public/i"
-        ]
-      },
-      "regenerate": "node tools/photos/build-image-fingerprints.ts",
-      "recorded": {
-        "inputs": "ed4ec82c3f689f2c59e4cb0b474c68eca7a83f86d00258021c2934c072c76788",
-        "count": 660
-      }
-    },
     {
       "id": "images/hashes",
       "tier": "pinned",
@@ -200,14 +189,13 @@
       "tier": "unverifiable",
       "why": "images/metadata.json is the EXIF record keyed by stem, plus the Fujifilm recipe card, read by exif-sooc from the camera originals.",
       "outputs": [
-        "public/images/metadata.json",
-        "public/images/exif.json"
+        "public/images/metadata.json"
       ],
       "tools": [
         "exif-sooc"
       ],
-      "unverifiable": "The inputs are the SOOC originals, which live in R2 and in one local folder rather than in this repository, so no checkout can hash them. exif.json is a second step removed: it rolls up images/meta/, which has been a LOCAL pipeline artifact rather than a committed one since 2026-08-17. What is checkable about this family is that every published stem carries a record, which photos:check already asserts.",
-      "regenerate": "./tools/photos/extract-photo-metadata.sh \"$SOOC_DIR\" && node tools/photos/build-exif-index.ts"
+      "unverifiable": "The inputs are the SOOC originals, which live in R2 and in one local folder rather than in this repository, so no checkout can hash them. What is checkable about this family is that every published stem carries a record, which photos:check already asserts. images/exif.json USED TO BE A SECOND OUTPUT HERE and is build output as of 2026-08-29: build.ts step 1a projects it out of metadata.json through the 22-pair key map, so there is no committed copy left to go stale and nothing for this graph to record.",
+      "regenerate": "./tools/photos/extract-photo-metadata.sh \"$SOOC_DIR\""
     },
     {
       "id": "og/cards",

@@ -15,7 +15,7 @@
 // 50 cap. Reading ONE file, memoised per isolate exactly like alt.json and
 // hashes.json already are, costs neither.
 //
-// This does NOT contradict build-exif-index.mjs's reasoning for leaving
+// This does NOT contradict tools/lib/photo-indexes.ts's reasoning for leaving
 // histograms out of exif.json. That argument is about a file every visitor
 // downloads whole: all 158 histograms would take that index from 2.6 KiB to
 // 24 KiB brotli for bars most people never see. Here only the twelve the page
