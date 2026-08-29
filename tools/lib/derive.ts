@@ -344,9 +344,9 @@ export async function record(
   root: string,
   d: Derivation,
   toolVersions: Record<string, string> = {},
-): Promise<{ recorded: Recorded; hashes: Record<string, string> } | null> {
+): Promise<{ recorded: Recorded; hashes: Record<string, string>; owns: (lockName: string) => boolean } | null> {
   if (d.tier === "unverifiable" || !d.inputs) return null;
-  const { entries, lockName, count } = await project(root, d);
+  const { entries, lockName, owns, count } = await project(root, d);
   const recorded: Recorded = { inputs: digestOf(entries), count };
   if (d.tools?.length) {
     recorded.tools = Object.fromEntries(
@@ -354,5 +354,57 @@ export async function record(
     );
   }
   const hashes = Object.fromEntries(Object.entries(entries).map(([n, v]) => [lockName(n), v]));
-  return { recorded, hashes };
+  return { recorded, hashes, owns };
+}
+
+/**
+ * The lock after ONE derivation re-records: its fresh rows in, and the rows it
+ * OWNS that the projection no longer produces out.
+ *
+ * The pruning half is the whole point, and merging alone is what the --lock path
+ * did until 2026-08-29. public/i is content-addressed, so a re-encode does not
+ * edit a row, it mints a new filename beside the old one and leaves the old row
+ * with nothing behind it. Measured on the commit that added this: 1493 rows
+ * describing 660 files, 498 of them naming a path no checkout can open, 495 of
+ * those minted by one full-library re-encode (#660). Every future re-encode adds
+ * another ~495. It reports nothing wrong, because verify() hashes the inputs on
+ * disk rather than reading the lock, so a dead row cannot produce a wrong
+ * verdict; what it costs is a machine-owned file whose own $comment says it
+ * exists "so a stale result can name what moved" filling with rows that can never
+ * be what moved.
+ *
+ * SCOPED TO `owns`, because --only re-records one derivation at a time and must
+ * leave every other derivation's rows exactly as it found them. A key is dropped
+ * for one reason: this derivation would have collected it and did not, which for
+ * a path spec means the file is gone and for a set spec means the key left the
+ * set. Two derivations declaring the same tree (fingerprints and hashes both
+ * declare public/i) project the same entries, so either one prunes the same rows.
+ *
+ * The trade that buys: under --only, a row this derivation owns and prunes may
+ * also be owned by a derivation NOT being recorded, which then loses the ability
+ * to name that file in its `removed` list. Its verdict does not move, since the
+ * digest lives on the declaration rather than in the lock, so the cost is one
+ * shorter diagnostic line on a result that is already STALE. A full --lock run
+ * records every pinned derivation and has no such gap.
+ *
+ * It returns what it dropped rather than only how many, so the caller can NAME
+ * them without re-deciding the rule. A second copy of that predicate at the call
+ * site is a second thing to keep in agreement, and the one that would rot is the
+ * printed count, which nothing checks.
+ */
+export function relock(
+  lock: Lock,
+  fresh: Record<string, string>,
+  owns: (lockName: string) => boolean,
+): { next: Lock; pruned: string[] } {
+  const next: Lock = {};
+  const pruned: string[] = [];
+  for (const [key, value] of Object.entries(lock)) {
+    if (owns(key) && !(key in fresh)) {
+      pruned.push(key);
+      continue;
+    }
+    next[key] = value;
+  }
+  return { next: { ...next, ...fresh }, pruned };
 }
