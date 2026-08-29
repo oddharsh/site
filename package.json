@@ -37,6 +37,7 @@
     "pages:check": "bun tools/check-page-contracts.ts",
     "tools:check": "bun tools/check-tools.ts",
     "derive:check": "bun tools/check-derivations.ts",
+    "obs:check": "bun tools/check-observability.ts",
     "ua:survey": "node tools/ua-survey.ts",
     "test": "bun test --preload ./tools/lib/no-network.ts tools/",
     "deps:relock": "bun tools/relock-dependabot.ts",
