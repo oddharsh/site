@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { digestOf, hashInputs, project, record, resolveInputs, verify } from "./lib/derive.ts";
+import { digestOf, hashInputs, project, record, relock, resolveInputs, verify } from "./lib/derive.ts";
 import { SHELL_FLOOR, WRITER_FLOOR, declaredBy, findShellTouchers, findWriters } from "./lib/derive-writers.ts";
 
 /** @typedef {import("./lib/derive.ts").Derivation} Derivation */
@@ -204,6 +204,87 @@ test("derive: coverage reports an entry left behind by a deleted input", async (
   if (forced.state !== "stale") throw new Error("forced digest mismatch did not read as stale");
   assert.deepEqual(forced.orphaned, ["gone"]);
   await rm(dir, { recursive: true, force: true });
+});
+
+// ── the lock is rewritten, not accumulated ───────────────────────────────────
+// The --lock path merged the prior lock forward and pruned nothing, so a row
+// survived every input it named. public/i is content-addressed, so a re-encode
+// mints a new filename rather than editing a row: the 2026-08-26 full-library
+// re-encode took the lock from 998 rows for 663 files to 1493 for 660, 498 of
+// them naming a path no checkout can open. Inert, because verify() hashes disk
+// rather than reading the lock, and still the opposite of what a file whose own
+// $comment says it exists to "name what moved" should be filling with.
+
+test("derive: a rewrite drops the row for an input that is gone", async () => {
+  const dir = await scratch({ "a.txt": "one", "b.txt": "two" });
+  /** @type {Derivation} */
+  const d = { id: "t", tier: "pinned", why: "", outputs: [], inputs: SPEC };
+
+  const first = await record(dir, d);
+  assert.ok(first, "record() returned nothing");
+  const lock1 = relock({}, first.hashes, first.owns).next;
+  assert.deepEqual(Object.keys(lock1).sort(), ["in/a.txt", "in/b.txt"]);
+
+  const fs = await import("node:fs/promises");
+  await fs.rm(path.join(dir, "in/b.txt"));
+  const second = await record(dir, d);
+  assert.ok(second, "record() returned nothing on the re-record");
+  const lock2 = relock(lock1, second.hashes, second.owns);
+  assert.deepEqual(Object.keys(lock2.next).sort(), ["in/a.txt"], "the row for a deleted input survived the rewrite");
+  assert.deepEqual(lock2.pruned, ["in/b.txt"], "the reported prune disagrees with what was dropped");
+  await rm(dir, { recursive: true, force: true });
+});
+
+// The distinction the pruning turns on, and the one a blunt rewrite gets wrong.
+// --only re-records ONE derivation, so pruning has to drop what is GONE while
+// keeping every path that still exists and simply was not part of this
+// derivation's inputs. Two derivations here: a set-mode one keyed by stem and a
+// path-mode one over a sibling tree neither run touches.
+test("derive: --only prunes its own dead rows and leaves every other derivation's alone", async () => {
+  const dir = await scratch({ "a.11111111.jpg": "px", "b.22222222.jpg": "px" });
+  const fs = await import("node:fs/promises");
+  await fs.mkdir(path.join(dir, "other"), { recursive: true });
+  await fs.writeFile(path.join(dir, "other/keep.txt"), "not mine");
+
+  /** @type {Derivation} */
+  const stems = { id: "stems", tier: "pinned", why: "", outputs: [], inputs: { paths: ["in"], include: [".jpg"], set: "^in/(.+)\\.[0-9a-f]{8}\\.jpg$" } };
+  /** @type {Derivation} */
+  const sibling = { id: "sibling", tier: "pinned", why: "", outputs: [], inputs: { paths: ["other"] } };
+
+  const madeStems = await record(dir, stems);
+  const madeSibling = await record(dir, sibling);
+  assert.ok(madeStems && madeSibling, "record() returned nothing");
+  let lockAll = relock({}, madeStems.hashes, madeStems.owns).next;
+  lockAll = relock(lockAll, madeSibling.hashes, madeSibling.owns).next;
+  assert.deepEqual(Object.keys(lockAll).sort(), ["other/keep.txt", "stems#a", "stems#b"]);
+
+  // A photo leaves. Re-record ONLY the stem derivation, the way --only does.
+  await fs.rm(path.join(dir, "in/b.22222222.jpg"));
+  const again = await record(dir, stems);
+  assert.ok(again, "record() returned nothing on the re-record");
+  const after = relock(lockAll, again.hashes, again.owns);
+  assert.deepEqual(Object.keys(after.next).sort(), ["other/keep.txt", "stems#a"], "--only pruned or kept the wrong rows");
+  assert.deepEqual(after.pruned, ["stems#b"], "--only dropped something other than its own dead row");
+  assert.equal(after.next["other/keep.txt"], lockAll["other/keep.txt"], "another derivation's row was rewritten");
+  await rm(dir, { recursive: true, force: true });
+});
+
+// The same property asserted on the REAL lock, which is the half that would have
+// caught this: every row has to be one some pinned derivation still collects. It
+// covers set mode too, where the key is a projected stem rather than a path and a
+// stat cannot answer. Committed at 660 rows for 660 files.
+test("derivations: every lock row is an input some derivation still collects", async () => {
+  const live = new Set();
+  for (const d of graph.filter((x) => x.tier === "pinned")) {
+    const { entries, lockName } = await project(root, d);
+    for (const name of Object.keys(entries)) live.add(lockName(name));
+  }
+  const dead = Object.keys(lock).filter((key) => !live.has(key));
+  assert.deepEqual(
+    dead.slice(0, 8),
+    [],
+    `${dead.length} of ${Object.keys(lock).length} lock rows name inputs nothing collects; run bun run derive:check -- --lock`,
+  );
 });
 
 // Every set-mode derivation in the real graph declares `covers`. Set mode without

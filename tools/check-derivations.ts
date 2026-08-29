@@ -25,7 +25,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { type Derivation, type Lock, record, verify } from "./lib/derive.ts";
+import { type Derivation, type Lock, record, relock, verify } from "./lib/derive.ts";
 import { SHELL_FLOOR, WRITER_FLOOR, declaredBy, findShellTouchers, findWriters } from "./lib/derive-writers.ts";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -79,15 +79,23 @@ const list = (files: string[], label: string, cap = 8) => {
 };
 
 if (WRITE) {
-  const nextLock: Lock = { ...lock };
+  // Each derivation's rows are REPLACED rather than merged over, which relock()
+  // argues at length: a merge-only rewrite carried every input forward forever, so
+  // one full-library re-encode left 495 rows naming filenames nobody can open.
+  let nextLock: Lock = { ...lock };
   let vouched = 0;
+  let pruned = 0;
   for (const d of graph) {
     const made = await record(ROOT, d, toolVersions);
     if (!made) continue;
     d.recorded = made.recorded;
-    Object.assign(nextLock, made.hashes);
+    const rolled = relock(nextLock, made.hashes, made.owns);
+    const gone = rolled.pruned;
+    nextLock = rolled.next;
+    pruned += gone.length;
     vouched++;
     console.log(`recorded ${d.id}: ${made.recorded.count} inputs -> ${made.recorded.inputs.slice(0, 12)}`);
+    if (gone.length) console.log(`      pruned ${gone.length} lock row(s) for inputs that are gone: ${gone.slice(0, 4).join(", ")}${gone.length > 4 ? ", ..." : ""}`);
     for (const out of d.outputs) console.log(`      vouching for ${out}`);
   }
   await writeFile(DECL, `${JSON.stringify(declaration, null, 2)}\n`);
@@ -95,7 +103,9 @@ if (WRITE) {
     LOCK,
     `${JSON.stringify({ $comment: "Machine-owned. Per-input hashes for config/derivations.json, so a stale result can name what moved. Written by `bun run derive:check -- --lock`; do not hand-edit.", files: Object.fromEntries(Object.keys(nextLock).sort().map((k) => [k, nextLock[k]])) }, null, 2)}\n`,
   );
-  console.log(`\nderive: recorded ${vouched} derivation(s). This asserts the committed outputs were made from these inputs.`);
+  console.log(
+    `\nderive: recorded ${vouched} derivation(s), ${Object.keys(nextLock).length} lock rows${pruned ? `, ${pruned} pruned` : ""}. This asserts the committed outputs were made from these inputs.`,
+  );
   process.exit(0);
 }
 

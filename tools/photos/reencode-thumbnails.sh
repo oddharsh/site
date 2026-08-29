@@ -246,8 +246,23 @@ while IFS= read -r stem; do
   #
   #    It bought 138,609 bytes, which is 135.4 KiB and MORE than the 118.6 KiB
   #    projected from 6 stems: -1.816% on the 600 tier, -1.968% on 400,
-  #    -2.007% on 200, -1.882% across all three. Quality rose with it, mean
-  #    ssimulacra2 +0.327 over 24 tier comparisons on 8 stems.
+  #    -2.007% on 200, -1.882% across all three. Re-derived from git on
+  #    2026-08-29 and exact to the byte.
+  #
+  #    QUALITY ROSE ON AVERAGE RATHER THAN EVERYWHERE, and the figure first
+  #    recorded here said only the first half of that. It read "+0.327 mean
+  #    ssimulacra2 over 24 tier comparisons on 8 stems", which is a real
+  #    measurement of a small sample and reads as the whole result. A wider
+  #    independent scoring against the same reference, 51 comparisons on 17
+  #    stems, gives mean +0.2080: better on 39 tiers, WORSE on 12, worst tier
+  #    -0.61. That scoring is quoted rather than reproduced, since redoing it
+  #    means rebuilding the ingest reference from the SOOC originals.
+  #
+  #    The decision it justified is unchanged, because every magnitude is far
+  #    under perceptual significance and the aggregate direction holds. The
+  #    record is what needed fixing: a lone mean gets read later as "quality
+  #    rose", and 12 of 51 tiers went the other way. PR #660's description
+  #    still carries the +0.327 figure and cannot usefully be edited.
   #
   #    The JPG tier did not move by a single byte on any of the 165, which is
   #    what said no histogram re-bake was owed. Do not read that as a rule: it
