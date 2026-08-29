@@ -2691,6 +2691,35 @@ sits on the free tier here regardless of the Workers plan). Budget in SPANS, not
 visits: one `/lens/fetch` scan is 33-46 spans, so scan bursts spend it far faster
 than page views do.
 
+**TRACING STOPS BEING FREE ON 2026-10-01, and this section described it as free
+until 2026-08-29.** Cloudflare's traces page states that each span then becomes
+one observability event on the SAME daily quota as Workers logs, which is the
+200K/day above rather than a second allowance. The owner stays on Workers Free,
+and OTLP export, the one thing that would move spans off that quota, is
+documented as unavailable on Free. So the whole lever is knowing the number:
+
+```bash
+CLOUDFLARE_API_TOKEN=... bun run obs:check     # events/day vs 200K, split, by worker, by span
+bun run obs:check --control                    # proves a failed read never prints as zero
+```
+
+It reads `POST /accounts/<id>/workers/observability/telemetry/query`, the
+endpoint the Observability dashboard calls. GraphQL cannot answer this: the
+account type carries 231 fields and none of them is an observability-events
+dataset, `workersInvocationsAdaptive` counts REQUESTS, and a request count says
+nothing about spans (introspected 2026-08-29).
+
+**The token wants `Workers Observability : Read`, a SEVENTH read scope, and it
+must NOT join the CI token's six.** This is workstation-only, wired into no
+workflow, and gates nothing. wrangler's own OAuth token does not carry it and
+answers 403, measured the same day; wrangler 4.127.0 does request the scope at
+login, so `wrangler login` is the alternative to minting a token.
+
+**Lowering `head_sampling_rate` is the wrong fix when that number gets tight**,
+for the reason the paragraph above already gives. Cut spans on the surface
+emitting them. 200K over ~40 spans a scan is roughly 5,000 `/lens` scans a day,
+which is the sentence `obs:check` turns into a measurement.
+
 **A span cannot measure CPU.** Workers spans inherit the frozen-clock semantics of
 `Date.now()` — the clock advances across I/O, never during synchronous execution.
 Measured in production 2026-07-29 on a 752KB page: `lens.inspect` 685ms decomposed

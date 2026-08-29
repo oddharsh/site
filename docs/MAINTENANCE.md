@@ -1747,6 +1747,49 @@ What this changes day to day: a new span's NAME and ATTRIBUTES can be checked
 before it ships. Previously the cheapest way to find out whether a span was
 usefully named was to deploy it and open the dashboard.
 
+### Read the observability event budget (`bun run obs:check`)
+
+Tracing is free until **2026-10-01**. After that each SPAN is one observability
+event on the same daily quota as Workers logs: **200,000 events/day on Workers
+Free**, which is the plan this account stays on. OTLP export would move spans off
+that quota and is documented as unavailable on Free, so the lever is knowing the
+number.
+
+```bash
+CLOUDFLARE_API_TOKEN=... bun run obs:check              # 3 days, the Free retention window
+CLOUDFLARE_API_TOKEN=... bun run obs:check --days 7     # says which days are past retention
+bun run obs:check --control                             # needs no credential
+```
+
+It posts to `POST /accounts/<id>/workers/observability/telemetry/query`, the
+endpoint the Observability dashboard itself calls, and prints one row per UTC day
+with the spans/logs split, the share of the ceiling, and the headroom in
+`/lens` scans at ~40 spans each. Then events by Worker and by span name, which is
+the actionable half: 200,000 divided by ~40 is roughly 5,000 scans a day.
+
+**The token wants `Workers Observability : Read` and that is a SEVENTH read
+scope this repo does not otherwise have.** It is workstation-only and is wired
+into no workflow. Do NOT add it to the CI token: nothing in CI reads this, and
+the six-read-scopes rule under "Infrastructure declaration" is the point.
+Measured 2026-08-29, wrangler's own OAuth token does not carry it either and
+answers 403; `wrangler login` on 4.127.0 does request the scope, so re-logging in
+is the alternative to minting a token.
+
+**Do not answer a tight number by lowering `head_sampling_rate`.** It is
+per-Worker, not per-route, so it thins the rare expensive events tracing exists
+for at the same rate as the cheap ones. Cut spans on the surface that emits them.
+
+**A zero from this tool is a measured zero, and that took the whole design.**
+"0 events today, plenty of headroom" is indistinguishable from a broken read and
+would be believed right up to the moment the quota bit, so four states print
+differently: cannot run (exit 2), query error (exit 1), no data (exit 1), and a
+real zero day inside a window that has data (exit 0, prints `0`). The `dry` flag
+in Cloudflare's own request schema defaults to TRUE and a dry run returns
+nothing, so every body here sets it false. Every count is corroborated by a
+second `view: events` query; a count of 0 next to a real event is reported as a
+contradiction rather than as zero. `--control` proves all of it against a bad
+account id and a malformed query, and needs no credential.
+
 ### Log a deploy (bump-version.sh)
 `./tools/photos/bump-version.sh <slug> "<title>"`, then deploy. Inserts the next checkpoint into D1 (vnum from `SELECT MAX(vnum)`), which is what `/updates` and `/restore` render. Nothing edits sw.js anymore: the service worker retired in v136, `nav.js`/`notepad.js` updates land via their short `_headers` max-age plus the per-deploy edge purge, and the stub at `/sw.js` cleans up old installs.
 
