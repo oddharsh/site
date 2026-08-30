@@ -267,30 +267,39 @@ test("the cron enrich dispatch reports outcomes and swallows its own failures", 
   assert.deepEqual(weird, { attempted: 0, outcomes: {} }, "a body with no enriched array is 0 attempted, not a crash");
 });
 
-test("the contribute page overlaps its independent D1 reads", async () => {
+test("the contribute page reads its complete summary in one D1 call", async () => {
   const { handleSerendipity } = await import("../serendipity/serendipity.ts");
-  let active = 0;
-  let peak = 0;
+  let calls = 0;
   const SERENDIPITY_DB = { prepare(sql) {
-    return { bind() {
+    return { bind(uid) {
       return { async first() {
-        active++;
-        peak = Math.max(peak, active);
+        calls++;
         await new Promise((resolve) => setTimeout(resolve, 10));
-        active--;
-        return sql.includes("COUNT(*) AS n FROM user_cookies") ? { n: 2 } : null;
+        if (!sql.includes("AS active_count") || !sql.includes("AS event_count")) throw new Error(`unexpected contribute query: ${sql}`);
+        return uid === "abc"
+          ? { active_count: 2, user_key: "abc", label: "mine", enabled: 1, event_count: 7 }
+          : { active_count: 2, user_key: null, label: null, enabled: null, event_count: 0 };
       } };
     } };
   } };
 
   const response = await handleSerendipity(
-    new Request("https://aadhar.sh/serendipity/contribute"),
+    new Request("https://aadhar.sh/serendipity/contribute", { headers: { cookie: "serendipity-uid=abc" } }),
     { SERENDIPITY_DB },
     { waitUntil() {} },
   );
   assert.equal(response.status, 200);
-  assert.match(await response.text(), /2 active contributors/);
-  assert.equal(peak, 2, "the pool count and current-user lookup should share one D1 latency window");
+  const body = await response.text();
+  assert.match(body, /2 active contributors/);
+  assert.match(body, /7 events from your feed/);
+
+  const anonymous = await handleSerendipity(
+    new Request("https://aadhar.sh/serendipity/contribute"),
+    { SERENDIPITY_DB },
+    { waitUntil() {} },
+  );
+  assert.doesNotMatch(await anonymous.text(), /events from your feed/);
+  assert.equal(calls, 2, "connected and anonymous renders should spend one D1 subrequest apiece");
 });
 
 test("serendipity hides collapsed description chrome and uses the Luna scrollbar", async () => {

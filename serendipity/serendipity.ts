@@ -542,15 +542,19 @@ async function renderEvent(d, id, path) {
 }
 
 async function renderContribute(d, path, uid, msg) {
-  // The pool count and this browser's contributor row share no dependency.
-  // Pay one D1 latency window for both; a connected contributor's event count
-  // remains a second round because it is conditional on the row existing.
-  const [n, own] = await Promise.all([
-    countContributors(d),
-    d.prepare("SELECT label, enabled FROM user_cookies WHERE user_key = ?").get(uid),
-  ]);
-  let cnt = 0;
-  if (own) { const c = await d.prepare("SELECT count(*) AS n FROM event_contributions WHERE user_key = ?").get(uid); cnt = c ? Number(c.n) : 0; }
+  // One summary row owns all three numbers this page needs. These used to be
+  // three D1 calls (two overlapped, then the connected browser's event count),
+  // so the common connected path still paid two binding-latency windows. The
+  // seed row keeps the aggregate present when this browser is not a contributor.
+  const summary = await d.prepare(`
+    WITH own AS (SELECT user_key, label, enabled FROM user_cookies WHERE user_key = ?)
+    SELECT (SELECT COUNT(*) FROM user_cookies WHERE enabled = 1) AS active_count,
+           own.user_key, own.label, own.enabled,
+           (SELECT COUNT(*) FROM event_contributions ec WHERE ec.user_key = own.user_key) AS event_count
+      FROM (SELECT 1) seed LEFT JOIN own ON 1 = 1`).get(uid);
+  const n = Number(summary?.active_count || 0);
+  const own = summary?.user_key ? summary : null;
+  const cnt = own ? Number(own.event_count) : 0;
   const body = `<h1 class="page">Contribute</h1>
     <p class="lede">Serendipity pools events worth going to &mdash; and who&apos;s going &mdash; into one public view. Add an event by link, or connect your Luma feed to sync everything. ${n} active contributor${n == 1 ? "" : "s"} so far.</p>
     ${banner(msg)}
