@@ -50,6 +50,7 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import { parseJsonc } from "./lib/jsonc.ts";
 import { auditActionPins } from "./lib/action-pins.ts";
+import { redactCredentials } from "./lib/redact.ts";
 
 const execFileP = promisify(execFile);
 
@@ -132,9 +133,15 @@ const hard: string[] = [];
 const advisory: string[] = [];
 const ok: string[] = [];
 
-const fail = (m: string) => hard.push(m);
-const warn = (m: string) => advisory.push(m);
-const pass = (m: string) => ok.push(m);
+// Every message goes through the redaction barrier on the way IN, so the three
+// arrays never hold a credential and the print loops at the bottom cannot leak
+// one. This script holds CLOUDFLARE_API_TOKEN and GITHUB_TOKEN and prints into
+// Actions logs on a PUBLIC repository; nothing today interpolates either, and
+// the funnel is ~90 call sites wide, so "nothing today" is not a property
+// anybody can keep by reading. tools/lib/redact.ts argues the rest.
+const fail = (m: string) => hard.push(redactCredentials(m));
+const warn = (m: string) => advisory.push(redactCredentials(m));
+const pass = (m: string) => ok.push(redactCredentials(m));
 
 // ---------------------------------------------------------------- JSONC ----
 
