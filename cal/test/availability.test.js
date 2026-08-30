@@ -87,6 +87,29 @@ describe("fetchBusySWR — stale GET behavior", () => {
     expect(result).toMatchObject({ busy: [], ok: true, source: "live", ageMs: 0 });
     expect(env.BOOKINGS.put).toHaveBeenCalledTimes(1);
   });
+
+  it("keeps a live snapshot write off the response path when a context can own it", async () => {
+    let finishWrite;
+    const write = new Promise((resolve) => { finishWrite = resolve; });
+    const env = {
+      BOOKINGS: {
+        get: vi.fn(async () => null),
+        put: vi.fn(() => write),
+      },
+      ICAL_URL: "https://calendar.test/availability.ics",
+    };
+    const ctx = { waitUntil: vi.fn() };
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n", { status: 200 })));
+
+    const result = await fetchBusySWR(env, ctx);
+
+    expect(result).toMatchObject({ busy: [], ok: true, source: "live", ageMs: 0 });
+    expect(env.BOOKINGS.put).toHaveBeenCalledTimes(1);
+    expect(ctx.waitUntil).toHaveBeenCalledTimes(1);
+    const deferredWrite = ctx.waitUntil.mock.calls[0][0];
+    finishWrite();
+    await deferredWrite;
+  });
 });
 
 describe("generateSlots — invariants", () => {
