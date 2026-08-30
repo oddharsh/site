@@ -108,14 +108,16 @@ async function fetchBusySWRInner(env, ctx, allowStale, s) {
   // deliberate duplicate). One binding check does not earn a second parse layer.
   // oxlint-disable-next-line anti-slop/no-runtime-typeof
   if (ctx && typeof ctx.waitUntil === "function") {
-      ctx.waitUntil(span("cal.refresh_background", () => refreshBusy(env)).catch(() => {}));
+      // The whole refresh already belongs to waitUntil here, so let it await its
+      // own KV write instead of registering a nested background task.
+      ctx.waitUntil(span("cal.refresh_background", () => refreshBusy(env, null)).catch(() => {}));
     }
     return done({ busy: snap.busy || [], ageMs: age, ok: true, source: "stale" });
   }
 
   // stale or missing → refresh under a deadline
   try {
-    const fresh = await span("cal.refresh", () => refreshBusy(env));
+    const fresh = await span("cal.refresh", () => refreshBusy(env, ctx));
     return done({ busy: fresh.busy, ageMs: 0, ok: true, source: "live" });
   } catch (e) {
     // upstream slow/down → serve the last-good snapshot if we have one
@@ -128,9 +130,12 @@ async function fetchBusySWRInner(env, ctx, allowStale, s) {
   }
 }
 
-// fetch + parse the ICS under a deadline and persist the snapshot. throws on any
-// failure (no ICAL_URL, non-2xx, timeout) so fetchBusySWR can fall back.
-async function refreshBusy(env) {
+// Fetch + parse the ICS under a deadline, then persist the snapshot. The parsed
+// intervals decide this response; the KV mirror only benefits the next request,
+// so a real execution context keeps that write alive without adding its latency
+// to this one. Callers without a context still await it, preserving the test and
+// non-Worker fallback. Upstream failures still throw so fetchBusySWR can fall back.
+async function refreshBusy(env, ctx) {
   const url = env.ICAL_URL;
   if (!url) throw new Error("no ICAL_URL");
   const r = await fetch(url, {
@@ -140,7 +145,14 @@ async function refreshBusy(env) {
   if (!r.ok) throw new Error(`ICS ${r.status}`);
   const busy = parseICS(await r.text());
   const snap = { busy, ts: Date.now() };
-  if (env.BOOKINGS) { try { await env.BOOKINGS.put(BUSY_KEY, JSON.stringify(snap)); } catch {} }
+  if (env.BOOKINGS) {
+    const write = Promise.resolve(env.BOOKINGS.put(BUSY_KEY, JSON.stringify(snap))).catch(() => {});
+    // cal MUST stay independently testable, so keep the narrow capability check
+    // local instead of importing the site Worker's context helpers.
+    // oxlint-disable-next-line anti-slop/no-runtime-typeof
+    if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(write);
+    else await write;
+  }
   return snap;
 }
 

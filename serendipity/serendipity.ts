@@ -542,15 +542,19 @@ async function renderEvent(d, id, path) {
 }
 
 async function renderContribute(d, path, uid, msg) {
-  // The pool count and this browser's contributor row share no dependency.
-  // Pay one D1 latency window for both; a connected contributor's event count
-  // remains a second round because it is conditional on the row existing.
-  const [n, own] = await Promise.all([
-    countContributors(d),
-    d.prepare("SELECT label, enabled FROM user_cookies WHERE user_key = ?").get(uid),
-  ]);
-  let cnt = 0;
-  if (own) { const c = await d.prepare("SELECT count(*) AS n FROM event_contributions WHERE user_key = ?").get(uid); cnt = c ? Number(c.n) : 0; }
+  // One summary row owns all three numbers this page needs. These used to be
+  // three D1 calls (two overlapped, then the connected browser's event count),
+  // so the common connected path still paid two binding-latency windows. The
+  // seed row keeps the aggregate present when this browser is not a contributor.
+  const summary = await d.prepare(`
+    WITH own AS (SELECT user_key, label, enabled FROM user_cookies WHERE user_key = ?)
+    SELECT (SELECT COUNT(*) FROM user_cookies WHERE enabled = 1) AS active_count,
+           own.user_key, own.label, own.enabled,
+           (SELECT COUNT(*) FROM event_contributions ec WHERE ec.user_key = own.user_key) AS event_count
+      FROM (SELECT 1) seed LEFT JOIN own ON 1 = 1`).get(uid);
+  const n = Number(summary?.active_count || 0);
+  const own = summary?.user_key ? summary : null;
+  const cnt = own ? Number(own.event_count) : 0;
   const body = `<h1 class="page">Contribute</h1>
     <p class="lede">Serendipity pools events worth going to &mdash; and who&apos;s going &mdash; into one public view. Add an event by link, or connect your Luma feed to sync everything. ${n} active contributor${n == 1 ? "" : "s"} so far.</p>
     ${banner(msg)}
@@ -1469,6 +1473,38 @@ export async function dispatchEnrich(env, fetchImpl: EnrichFetch = fetch) {
   }
 }
 
+export async function selectCronGuestEvents(D) {
+  // The two slices share only the clock and cannot affect each other. Keep their
+  // independent caps and ordering, but send both prepared reads in one D1 batch
+  // so the cron pays one binding call and one latency window rather than two.
+  // datetime() normalizes the mixed start_at formats in this table (ISO-with-T
+  // from Luma, space-separated from SQLite) — a bare string compare would sort
+  // "…T16:00" after "… 21:00" and let same-day past events shadow real ones.
+  const [soonResult, pastResult] = await D.batch([
+    D.prepare(
+      `SELECT id FROM events WHERE user_status = 'going' AND start_at IS NOT NULL AND datetime(start_at) >= datetime('now') ORDER BY datetime(start_at) ASC LIMIT ?`
+    ).bind(CRON_UPCOMING_GUEST_EVENTS),
+    // Completed past rosters are immutable. Unattempted ones lead; restricted or
+    // transient failures fall to the back and are retried oldest-attempt first
+    // only after the sweep has made progress through the rest of the history.
+    D.prepare(
+      `SELECT e.id FROM events e
+         LEFT JOIN settings gs ON gs.key = ? || e.id
+        WHERE e.user_status = 'going' AND e.start_at IS NOT NULL
+          AND datetime(e.start_at) < datetime('now')
+          AND (gs.value IS NULL OR gs.value NOT LIKE 'ok:%')
+        ORDER BY (gs.updated_at IS NULL) DESC, datetime(gs.updated_at) ASC, datetime(e.start_at) DESC
+        LIMIT ?`
+    ).bind(GUEST_SYNC_KEY, CRON_PAST_GUEST_EVENTS),
+  ]);
+  const soon = soonResult.results || [];
+  const past = pastResult.results || [];
+  // Upcoming first, then past: `soon` is what someone is about to walk into and
+  // a past roster is immutable backfill nobody reads under time pressure, so the
+  // backfill takes the remainder and stops when the remainder is gone.
+  return [...soon, ...past];
+}
+
 export async function cronSerendipity(env) {
   const d = db(env);
   const sets = await d.prepare("SELECT user_key, cookies_json, label FROM user_cookies WHERE enabled = 1").all();
@@ -1487,28 +1523,7 @@ export async function cronSerendipity(env) {
   // the pass after it must send what Luma just issued, never the old snapshot.
   const fresh = await d.prepare("SELECT user_key, cookies_json, label FROM user_cookies WHERE enabled = 1").all();
   if (!fresh.length) return;
-  // datetime() normalizes the mixed start_at formats in this table (ISO-with-T
-  // from Luma, space-separated from SQLite) — a bare string compare would sort
-  // "…T16:00" after "… 21:00" and let same-day past events shadow real ones.
-  const soon = await d.prepare(
-    `SELECT id FROM events WHERE user_status = 'going' AND start_at IS NOT NULL AND datetime(start_at) >= datetime('now') ORDER BY datetime(start_at) ASC LIMIT ?`
-  ).all(CRON_UPCOMING_GUEST_EVENTS);
-  // Completed past rosters are immutable. Unattempted ones lead; restricted or
-  // transient failures fall to the back and are retried oldest-attempt first
-  // only after the sweep has made progress through the rest of the history.
-  const past = await d.prepare(
-    `SELECT e.id FROM events e
-       LEFT JOIN settings gs ON gs.key = ? || e.id
-      WHERE e.user_status = 'going' AND e.start_at IS NOT NULL
-        AND datetime(e.start_at) < datetime('now')
-        AND (gs.value IS NULL OR gs.value NOT LIKE 'ok:%')
-      ORDER BY (gs.updated_at IS NULL) DESC, datetime(gs.updated_at) ASC, datetime(e.start_at) DESC
-      LIMIT ?`
-  ).all(GUEST_SYNC_KEY, CRON_PAST_GUEST_EVENTS);
-  // Upcoming first, then past: `soon` is what someone is about to walk into and
-  // a past roster is immutable backfill nobody reads under time pressure, so the
-  // backfill takes the remainder and stops when the remainder is gone.
-  for (const ev of [...soon, ...past]) {
+  for (const ev of await selectCronGuestEvents(d.raw)) {
     if (budget.left <= 0) { out.skipped.push(ev.id); continue; }
     // first set that can read this list wins; with one contributor that is one
     // try, and a restricted list falls through to the next set rather than dying.
