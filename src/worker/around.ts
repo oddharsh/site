@@ -134,9 +134,9 @@ const AROUND_HISTORY_TABLE = "around_crawl_history";
 // directly rather than inferred from the failure.
 //
 // batch() rather than a prepare().run() loop (webmention.ts's ensureTable has
-// one statement and so faces no choice): it is one round trip, it is atomic, so
-// the table can never be visible without its indexes, and persistAroundHistory
-// below already batches its inserts.
+// one statement and so faces no choice): persistAroundHistory sends this DDL,
+// the observations, and retention cleanup in one ordered, atomic D1 call, so
+// the table can never be visible without its indexes or a partial crawl.
 const AROUND_HISTORY_DDL = [
   `CREATE TABLE IF NOT EXISTS ${AROUND_HISTORY_TABLE} (
       target TEXT NOT NULL,
@@ -163,20 +163,14 @@ const AROUND_HISTORY_DDL = [
       ON ${AROUND_HISTORY_TABLE} (target, observed_at DESC)`,
 ];
 
-async function ensureAroundHistoryTable(env) {
-  if (!env.RESTORE_DB) return false;
-  await env.RESTORE_DB.batch(AROUND_HISTORY_DDL.map((sql) => env.RESTORE_DB.prepare(sql)));
-  return true;
-}
-
 // Persist only normalized observations and the digest of the bounded body
 // sample. The raw third-party response never enters D1.
 export async function persistAroundHistory(env, report) {
   if (!env.RESTORE_DB || !report || !Array.isArray(report.results)) return { ok: false, reason: "unconfigured" };
   try {
-    await ensureAroundHistoryTable(env);
+    const db = env.RESTORE_DB;
     const observedAt = Date.parse(report.crawledAt) || Date.now();
-    const statements = report.results.map((row) => env.RESTORE_DB.prepare(
+    const inserts = report.results.map((row) => db.prepare(
       `INSERT OR REPLACE INTO ${AROUND_HISTORY_TABLE}
        (target, name, observed_at, status, final_url, title, description, content_type,
         server, last_modified, body_hash, bytes_read, truncated, robots, skipped, error)
@@ -199,13 +193,19 @@ export async function persistAroundHistory(env, report) {
       row.skipped || null,
       row.error || null,
     ));
-    if (statements.length) await env.RESTORE_DB.batch(statements);
     // Keep the history explainable without letting a frequent cron grow D1
-    // forever. The public reader still uses a small recent window.
-    await env.RESTORE_DB.prepare(
+    // forever. The public reader still uses a small recent window. D1 executes
+    // a batch in order, so the DDL remains ahead of writes and cleanup remains
+    // behind them while all three stages share one database round trip.
+    const retention = db.prepare(
       `DELETE FROM ${AROUND_HISTORY_TABLE} WHERE observed_at < ?`
-    ).bind(Date.now() - 90 * 24 * 60 * 60 * 1000).run();
-    return { ok: true, written: statements.length };
+    ).bind(Date.now() - 90 * 24 * 60 * 60 * 1000);
+    await db.batch([
+      ...AROUND_HISTORY_DDL.map((sql) => db.prepare(sql)),
+      ...inserts,
+      retention,
+    ]);
+    return { ok: true, written: inserts.length };
   } catch (e) {
     return { ok: false, reason: String(e?.message || e) };
   }

@@ -4,6 +4,7 @@ import {
   NEIGHBORS,
   assert,
   diffAroundRows,
+  persistAroundHistory,
   renderAroundHtml,
   test,
 } from "./contract-shared.ts";
@@ -72,6 +73,39 @@ test("around the neighbour roster is well formed", () => {
     assert.ok(!urls.has(u.href), `${n.name} duplicates ${u.href}`);
     urls.add(u.href);
   }
+});
+
+test("around persists DDL, observations, and retention in one ordered D1 batch", async () => {
+  /** @type {Array<Array<{ sql: string }>>} */
+  const batches = [];
+  const db = {
+    prepare(sql) {
+      return {
+        sql,
+        bind() { return this; },
+      };
+    },
+    async batch(statements) {
+      batches.push(statements);
+      return statements.map(() => ({ success: true }));
+    },
+  };
+  const report = {
+    crawledAt: "2026-08-30T12:00:00.000Z",
+    results: [
+      { url: "https://one.example/", name: "One", status: 200 },
+      { url: "https://two.example/", name: "Two", status: 200 },
+    ],
+  };
+
+  const result = await persistAroundHistory({ RESTORE_DB: db }, report);
+
+  assert.deepEqual(result, { ok: true, written: 2 });
+  assert.equal(batches.length, 1, "one crawl must make one D1 batch call");
+  assert.equal(batches[0].length, 6, "three DDL statements, two observations, and retention");
+  assert.ok(batches[0].slice(0, 3).every((statement) => statement.sql.startsWith("CREATE ")));
+  assert.ok(batches[0].slice(3, 5).every((statement) => statement.sql.startsWith("INSERT OR REPLACE ")));
+  assert.match(batches[0][5].sql, /^DELETE FROM /);
 });
 
 test("around renders an honest empty panel rather than a fabricated table", async () => {

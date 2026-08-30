@@ -86,7 +86,7 @@ import { renderRun } from "../src/worker/run.ts";
 import { getPublicAvailability } from "../cal/src/slots.ts";
 import { botHeaders } from "../src/worker/lib/botauth.ts";
 import { mapWithConcurrency, readResponseCapped } from "../src/worker/lib/crawl.ts";
-import { NEIGHBORS, diffAroundRows, handleAroundChangesJson, readAroundChanges, renderAroundHtml } from "../src/worker/around.ts";
+import { NEIGHBORS, diffAroundRows, handleAroundChangesJson, persistAroundHistory, readAroundChanges, renderAroundHtml } from "../src/worker/around.ts";
 import * as tui from "../src/worker/lib/tui.ts";
 import {
   ART_VERSION,
@@ -410,6 +410,7 @@ export {
   deferredContext,
   derivePhotoPool,
   diffAroundRows,
+  persistAroundHistory,
   documentContent,
   executionChecks,
   existsSync,
