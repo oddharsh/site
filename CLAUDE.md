@@ -2699,9 +2699,51 @@ and OTLP export, the one thing that would move spans off that quota, is
 documented as unavailable on Free. So the whole lever is knowing the number:
 
 ```bash
-CLOUDFLARE_API_TOKEN=... bun run obs:check     # events/day vs 200K, split, by worker, by span
+CLOUDFLARE_API_TOKEN=... bun run obs:check     # events/day against the 200K ceiling
 bun run obs:check --control                    # proves a failed read never prints as zero
 ```
+
+**It prints a number only when that number is a MEASUREMENT, and #667 shipped
+three paths that broke the rule with a warning line above a table of headroom.**
+A sampled dataset, an echoed `granularity` that is not the one asked for, and a
+`--days` window past the 3-day retention now each REFUSE with a non-zero exit and
+no figures, since a reader acts on the numbers rather than on the warning. Every
+share assumes **Workers Free** and the output says so on every run: the token
+carries Workers Observability : Read alone and cannot see a plan, and Workers
+Paid is 20 million events per MONTH over 7 days of retention, which makes these
+percentages meaningless there. Sampling is not evidence of being over quota:
+Cloudflare's trigger is 5 billion logs per account per day, 25,000x this ceiling.
+
+**Those three were not the list, and the reason is the transferable half.** An
+adversarial second pass reached the same "headroom over a wrong reading" output
+through five more doors, because each first repair was written as ONE PATH: the
+sampling check read one nesting of one field, the day check read the API's echo
+and never the rows, and `partial` compared Cloudflare's stamps against this
+machine's clock with nothing reconciling them. So an interval reported on the
+window aggregate, two buckets stamped one day under an honest daily granularity,
+a stamp outside the window asked for, a negative count, and a 3-day window
+answered with one bucket each exited 0 with a confident peak. Every one of them
+now refuses or renders as unread, and the checks are keyed on the FIELD and on
+the DAYS ASKED FOR rather than on paths and row counts, so the next nesting
+Cloudflare adds is covered by construction. Take the general shape past this
+tool: **a reading has as many doors as the response has shapes, and a fix keyed
+on a path closes the door it was written for and leaves the corridor.**
+
+**A FOURTH PASS ANSWERED WITH A DELETION.** Round 3 made the fix structural: one
+branded type, minted at one parse and printed by one renderer, so an unmeasured
+value cannot reach a reader. That half held, across 22 mutations. What it never
+covered was a Figure minted from something nobody read. Four call sites minted
+one: three were the gate's own arithmetic, and the fourth stood a literal 0 in
+for a dataset column the split query had not answered. So the split and both
+breakdowns are gone. **`bun run obs:check` reports the window total and the
+per-day rows and nothing finer: no split by dataset, and no breakdown by Worker
+or by span name.** A contract test pins the construction sites at three, which is
+a stronger guarantee than the three earlier rounds attempted, since a fifth tier
+cannot reopen the class without failing it. **Every finding across four rounds
+was an inferred zero**, so the fourth round removed the inference rather than
+closing its fourth door. Read the Observability dashboard for the by-dataset and
+by-Worker question, and do not add either tier back without meeting the same bar:
+every cell owes a reading of its own.
 
 It reads `POST /accounts/<id>/workers/observability/telemetry/query`, the
 endpoint the Observability dashboard calls. GraphQL cannot answer this: the
