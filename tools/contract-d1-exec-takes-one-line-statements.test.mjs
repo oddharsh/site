@@ -119,8 +119,8 @@ test("the around history DDL is a list of complete statements", async () => {
   const src = await readFile(new URL("../src/worker/around.ts", import.meta.url), "utf8");
 
   assert.ok(
-    /await env\.RESTORE_DB\.batch\(/.test(src),
-    "ensureAroundHistoryTable must reach D1 through batch(), not exec()",
+    /await db\.batch\(/.test(src),
+    "persistAroundHistory must reach D1 through batch(), not exec()",
   );
 
   const block = /const AROUND_HISTORY_DDL = \[([\s\S]*?)\n\];/.exec(src);
