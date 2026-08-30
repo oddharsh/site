@@ -104,8 +104,7 @@
 //                 `calculations[].aggregates[]` instead, a 1-in-100 dataset
 //                 exited 0 at "0.9% of ceiling". `sampledAt` walks the whole
 //                 result by FIELD NAME now, over all four nestings Cloudflare's
-//                 schema puts it in, and it is applied to the split and the two
-//                 breakdowns rather than the total alone.
+//                 schema puts it in.
 //   the interval  `Number(v) || 1` read 0, -100, null and "abc" as unsampled.
 //                 0.01 is the dangerous member, because head_sampling_rate is a
 //                 RATE in 0..1 and this field is its reciprocal. Anything that
@@ -143,6 +142,23 @@
 // below; `readSeriesByDay` is the one parse both the refusal and the renderer
 // read, so those two can no longer disagree about whether a day was answered.
 //
+// A FOURTH PASS MET THE SAME CLASS AGAIN, and the answer is a DELETION rather
+// than a fifth door closed. Four rounds found one shape between them, a printed
+// number that is not a measurement, and every single instance was AN INFERRED
+// ZERO. Round 3's brand holds where it is applied: 22 mutations against it were
+// all caught. What the design claimed was wider than what it had. Exactly FOUR
+// call sites minted a Figure. Three were the gate's own internals and the fourth
+// was `measured` with a literal 0, standing in for a dataset column the split
+// query had not answered, defended by a decomposition check written to license
+// exactly that zero.
+//
+// So the dataset split and the two breakdowns are GONE, with the check that
+// licensed them, and nothing left mints a Figure outside the gate. That is a
+// stronger guarantee than any of the three previous rounds attempted, because it
+// is a property of the file rather than a rule at a call site: a fifth tier
+// cannot reopen this class without a new construction site, and a contract test
+// fails on one.
+//
 // The event probe is the part that earns its call. A count of 0 is only
 // believable next to a second query that also finds nothing; if `view: events`
 // returns a row over the same window the count is wrong, and Cloudflare's forum
@@ -150,12 +166,12 @@
 // exists. A contradiction is reported as a contradiction.
 //
 // ONE COUNT IS CORROBORATED THAT WAY, THE WINDOW TOTAL, and #667 claimed all of
-// them were. The per-day counts, the dataset split and the two breakdowns are
-// not, because `view: events` answers "does any event exist in this window" and
-// nothing finer: corroborating a single day needs its own query per day, which
-// multiplies calls against a rate-limited API to answer a question the day's own
-// `run` echo already settles. So the per-day tier is defended by asserting the
-// GRANULARITY the API says it used, and the claim here is narrowed to match.
+// them were. The per-day counts are not, because `view: events` answers "does
+// any event exist in this window" and nothing finer: corroborating a single day
+// needs its own query per day, which multiplies calls against a rate-limited API
+// to answer a question the day's own `run` echo already settles. So the per-day
+// tier is defended by asserting the GRANULARITY the API says it used, and the
+// claim here is narrowed to match.
 //
 // `--control` proves the separation by pointing the same code at a bad account
 // and a malformed query and showing it refuses. It needs no token, because an
@@ -163,15 +179,24 @@
 // Its two live cases assert an HTTP RESPONSE ARRIVED, since a transport failure
 // refuses just as loudly while proving nothing about the endpoint.
 //
-// ── what is NOT verified here, and it is the breakdowns ────────────────────
-// The three group-by keys (`dataset` for the spans/logs split,
-// `$metadata.service` for the Worker, `$metadata.spanName` for the span) are
-// read off the event schema those same Cloudflare clients declare. NONE of them
-// has been exercised against an authorized call, because no credential on this
-// workstation carries the grant. That is why the TOTAL is asked with no group-by
-// at all: a wrong key can cost a breakdown and structurally cannot cost the
-// number the ceiling is about. A key the API rejects prints its own reason and
-// the run continues.
+// ── WHAT THIS DOES NOT ANSWER ─────────────────────────────────────────────
+// It reports ONE thing: whether this account is near the 200,000 events/day
+// ceiling, as a window total and a row per whole UTC day. It does NOT break that
+// number down by dataset (spans versus logs) and it does NOT break it down by
+// Worker or by span name.
+//
+// Those three tiers existed and were REMOVED on 2026-08-30, after four
+// adversarial reviews, because each of them inferred a zero: a dataset column
+// stood in for a day the split query never answered, and a breakdown row read a
+// value that was not a count. The Observability dashboard answers the
+// by-dataset and by-Worker question, and is where to take it.
+//
+// A future reader must not add them back without meeting the same bar. The bar
+// is the one this file already states: a printed number is a measurement, so
+// each tier owes a reading per cell it prints and may not borrow another tier's
+// answer for a cell of its own. Note also that the three group-by keys were
+// never exercised against an authorized call, because no credential on this
+// workstation carries the grant, so a tier built on them starts unverified.
 
 import { readFile } from "node:fs/promises";
 import path from "node:path";
@@ -328,10 +353,20 @@ export function checkRun(
   if (!run) return "the response carried no `run` block, so nothing echoes back what was executed";
   if (run.dry !== false) return `the API ran this as dry=${JSON.stringify(run.dry)}; a dry run returns no rows and reads as a quiet day`;
   if (expect.granularity === undefined) return null;
-  const got = Number(run.granularity);
-  if (!Number.isFinite(got)) return `granularity came back as ${JSON.stringify(run.granularity)} rather than a number`;
-  if (got !== expect.granularity) {
-    return `asked for ${expect.granularity}ms buckets and the API used ${got}ms, so each row is ${(expect.granularity / got).toFixed(2)}x smaller than a day`;
+  // THROUGH THE GATE, like every other wire value. This read
+  // `Number(run.granularity)` until 2026-08-30, which is the exact construct
+  // round 3 removed from four other tiers, surviving inside the refusal written
+  // to catch a wrong bucket size. `granularity: true` coerced to 1 and printed
+  // "the API used 1ms, so each row is 86400000.00x smaller than a day": a
+  // fabricated measurement, quoted back to a reader, inside a refusal. It also
+  // made the file's own claim that `Number()` is never called on a wire value
+  // false. `readCount` is declared below and hoists; it is the only door.
+  const got = readCount(run.granularity);
+  if (got.state !== "measured" || got.value < 1) {
+    return `granularity came back as ${shown(run.granularity)} rather than a positive whole number of milliseconds`;
+  }
+  if (got.value !== expect.granularity) {
+    return `asked for ${expect.granularity}ms buckets and the API used ${got.value}ms, so each row is ${(expect.granularity / got.value).toFixed(2)}x smaller than a day`;
   }
   return null;
 }
@@ -339,19 +374,16 @@ export function checkRun(
 type Timeframe = { from: number; to: number };
 
 /**
- * A count query. `groupBy` and `granularity` are both optional so the TOTAL can
- * be asked with neither: a total that carries no groupBy cannot fail because a
- * key name was wrong, which keeps the load-bearing number independent of the
- * breakdowns beside it.
+ * A count query. IT CARRIES NO GROUP-BY, and that is the shape of the whole tool
+ * since the split and the breakdowns were removed: a count asked with no
+ * `groupBys` cannot fail because a key name was wrong, and there is no second
+ * tier whose cells could disagree with it. `granularity` stays optional because
+ * the control asks the same question without buckets.
  */
-function countQuery(timeframe: Timeframe, groupBy?: string, granularity?: number) {
+function countQuery(timeframe: Timeframe, granularity?: number) {
   const parameters: Record<string, unknown> = {
     calculations: [{ operator: "count", alias: "events" }],
   };
-  if (groupBy) {
-    parameters.groupBys = [{ type: "string", value: groupBy }];
-    parameters.limit = 25;
-  }
   const query: Record<string, unknown> = {
     queryId: "obs-check",
     view: "calculations",
@@ -369,7 +401,7 @@ function countQuery(timeframe: Timeframe, groupBy?: string, granularity?: number
 // `Number(a.value)` compile everywhere, which is how `true` came to print as 1
 // event. Typed as unknown, arithmetic on it does not compile at all, so the gate
 // below is the only way through and the compiler is what enforces that.
-type Aggregate = { groups?: { key: string; value: unknown }[]; value: unknown; sampleInterval?: number };
+type Aggregate = { value: unknown; sampleInterval?: number };
 type Series = { time: string; data: Aggregate[] };
 
 const n = (v: number) => v.toLocaleString("en-US");
@@ -378,6 +410,18 @@ const n = (v: number) => v.toLocaleString("en-US");
 // EVERY NUMBER THIS TOOL PRINTS IS A FIGURE, and a Figure can only be made by
 // reading one off the wire here. That is the design, and it is an answer to
 // three rounds of one defect rather than a fourth patch to it.
+//
+// THREE CALL SITES MINT A MEASURED FIGURE AND ALL THREE ARE IN THIS BLOCK:
+// `readCount` (the parse), `add` (two readings summed) and `derive` (arithmetic
+// on a reading). There is no fourth, and
+// `contract-obs-check-prints-only-measurements.test.mjs` fails on one, naming
+// the enclosing function so a new site cannot hide behind a familiar-looking
+// line. That pin is the structural close on this whole defect class, and it is
+// worth more than the three repairs above it: the brand stops a raw value being
+// PRINTED, and this stops one being MINTED, which is the door round 4 came
+// through. `absent` and `unreadable` are deliberately outside the pin, because
+// neither carries a number: the worst a new one can do is suppress a reading,
+// which is the direction this file already errs in.
 //
 // WHAT THE THREE ROUNDS SHARE. Round 1 fixed sampling, granularity and retention
 // on the TOTAL. Round 2 found the sample interval reported at a nesting the
@@ -404,6 +448,11 @@ const n = (v: number) => v.toLocaleString("en-US");
 // was nothing to inherit: a guard was a rule a caller had to remember, and the
 // newest caller is the one who was not there when the rule was written.
 //
+// ROUND 4 CUT THAT LIST BACK TO TWO. The split column and the two breakdowns are
+// gone, so the tool prints the window total and the per-day cell and nothing
+// else. Both come from `readSeriesByDay`, which is one parse rather than a tier
+// apiece, and neither can borrow the other's answer for a cell of its own.
+//
 // So there is one gate now, and skipping it is not on the menu. `readCount` is
 // the only function that turns a wire value into a number. `render` is the only
 // function that turns a number into text, and it takes a Figure. A Figure
@@ -420,7 +469,9 @@ const n = (v: number) => v.toLocaleString("en-US");
 // WHERE THIS STOPS, stated so the boundary is not guesswork. A constant declared
 // in this file is not a reading, so `n(DAILY_CEILING)` prints directly. A number
 // that came off the wire is a Figure, and anything computed from one stays a
-// Figure through `derive`.
+// Figure through `derive`. A number STOOD IN FOR one that was never read is the
+// thing with no place at all: that is what the removed `measured` with a literal
+// 0 was, and it is why the count above is a pinned three rather than a habit.
 const FIGURE = Symbol("obs-check.figure");
 
 type Figure =
@@ -532,14 +583,11 @@ export type Sampling =
   | { state: "sampled"; interval: number }
   | { state: "unreadable"; why: string };
 
-function calculation(result: Record<string, unknown>): { aggregates: Aggregate[]; series: Series[] } | null {
+function calculation(result: Record<string, unknown>): { series: Series[] } | null {
   const calcs = result.calculations;
   if (!Array.isArray(calcs) || calcs.length === 0) return null;
   const first = calcs[0] as Record<string, unknown>;
-  return {
-    aggregates: Array.isArray(first.aggregates) ? (first.aggregates as Aggregate[]) : [],
-    series: Array.isArray(first.series) ? (first.series as Series[]) : [],
-  };
+  return { series: Array.isArray(first.series) ? (first.series as Series[]) : [] };
 }
 
 /**
@@ -729,32 +777,8 @@ export function windowDayKeys(from: number, to: number): string[] {
   return out;
 }
 
-/** One day's counts: the bucket total, plus a Figure per group-by key. */
-type DayReading = { total: Figure; groups: Map<string, Figure> };
-
-/**
- * THE ONE PARSE OVER A BREAKDOWN, the ungrouped-by-time sibling of the walk
- * below. `aggregates[]` in, sorted Figures out, and a single unreadable value
- * drops the whole breakdown rather than putting a hole in it.
- *
- * Rows are sorted on the READING, so an unreadable row cannot be ranked against
- * a measured one. It never gets that far, since `problem` is set first.
- */
-export function readGroups(aggregates: Aggregate[]): {
-  problem: string | null;
-  rows: { name: string; events: Figure }[];
-} {
-  const rows = aggregates.map((a) => ({
-    name: a?.groups?.[0] ? String(a.groups[0].value) : "(none)",
-    events: readCount(a?.value),
-  }));
-  const broken = rows.find((r) => r.events.state === "unreadable");
-  if (broken && broken.events.state === "unreadable") {
-    return { problem: `${broken.name} carried a count that is not one: ${broken.events.why}`, rows: [] };
-  }
-  rows.sort((a, b) => (b.events.state === "measured" ? b.events.value : 0) - (a.events.state === "measured" ? a.events.value : 0));
-  return { problem: null, rows };
-}
+/** One day's count. It was `{ total, groups }` while the split existed. */
+type DayReading = { total: Figure };
 
 /**
  * THE ONE PARSE OVER SERIES. Every count in this file is read here, once, and
@@ -762,11 +786,6 @@ export function readGroups(aggregates: Aggregate[]): {
  * `dailyTable` are both projections of this, which is round 3's structural half:
  * previously the two walked the response separately, so `checkBuckets` could
  * decide a day was unanswered while the renderer printed a number for it.
- *
- * The GROUPED case is the same walk. A split query returns the same series with
- * `groups` on each aggregate, so the split's per-day answer comes from the same
- * function that decides the total's. That is what closes round 3's headline
- * defect: the split columns used to ask the TOTAL whether a day was answered.
  *
  * Does the set of buckets that came back match the window that was asked for?
  * `checkRun` reads the API's ECHO of the query; this reads the ROWS, and the two
@@ -828,7 +847,7 @@ export function readSeriesByDay(
   const reading = (day: string): DayReading => {
     const existing = byDay.get(day);
     if (existing) return existing;
-    const fresh: DayReading = { total: absent("no bucket read for this day"), groups: new Map() };
+    const fresh: DayReading = { total: absent("no bucket read for this day") };
     byDay.set(day, fresh);
     return fresh;
   };
@@ -853,13 +872,6 @@ export function readSeriesByDay(
       refuse(`${day} is not a reading: ${bucket.why}`);
     }
     row.total = add(row.total, bucket);
-    if (!Array.isArray(s.data)) continue;
-    for (const a of s.data) {
-      const agg = a as Aggregate;
-      if (!agg?.groups?.[0]) continue;
-      const key = String(agg.groups[0].value);
-      row.groups.set(key, add(row.groups.get(key) ?? absent("no row for this group"), readCount(agg.value)));
-    }
   }
 
   const doubled = [...bucketsPerDay.entries()].find(([, count]) => count > 1);
@@ -897,12 +909,17 @@ export function checkBuckets(series: Series[], days: string[]): { problem: strin
  * bucket is summed into its UTC day here before anything is rendered or peaked,
  * so the arithmetic is right even where `checkBuckets` was not consulted.
  *
- * IT RENDERS FIGURES AND NOTHING ELSE. The two parses at the top are the last
- * place a wire value is read, so below them there is no `Number(`, no `?? 0` and
- * no bare count to default: an unread cell is `absent` and `render` prints `-`
- * for it. Round 3's headline defect lived exactly in the gap this closes, where
- * the split columns asked the TOTAL whether a day had been answered and printed
- * `0` for a day the split query had never returned.
+ * IT RENDERS FIGURES AND NOTHING ELSE. The parse at the top is the last place a
+ * wire value is read, so below it there is no `Number(`, no `?? 0` and no bare
+ * count to default: an unread cell is `absent` and `render` prints `-` for it.
+ *
+ * IT ALSO MINTS NOTHING. Round 4 removed the dataset columns that used to sit
+ * left of `total`, and with them the one `measured` call outside the gate: an
+ * empty cell in an answered split bucket was rendered as a literal 0 on the
+ * argument that a group-by returns only groups that carried events. That
+ * argument is fine and the zero was still an inference rather than a reading,
+ * which is the class every round of review found. There is no cell here now that
+ * any query but the total answers for.
  *
  * THREE KINDS OF DAY CARRY NO NUMBER, for one reason: nothing was read for them.
  * TODAY is marked partial, because a day three hours old always looks like
@@ -926,7 +943,6 @@ export function checkBuckets(series: Series[], days: string[]): { problem: strin
  */
 export function dailyTable(opts: {
   series: Series[];
-  split?: Series[] | null;
   /** The UTC days asked for, oldest first. One row each, answered or not. */
   days: string[];
   /** The day holding the end of the window: marked partial, never scored. */
@@ -934,42 +950,23 @@ export function dailyTable(opts: {
   /** Oldest day inside retention. Older days are unreadable by construction. */
   retentionFrom?: string;
 }): string[] {
-  const { series, split = null, days, todayKey, retentionFrom } = opts;
+  const { series, days, todayKey, retentionFrom } = opts;
 
-  // ONE parse for each series, so the renderer holds Figures and never a wire
-  // value. There is no `Number(` and no `?? 0` below this line, by construction.
+  // ONE parse, so the renderer holds Figures and never a wire value. There is no
+  // `Number(` and no `?? 0` below this line, by construction. The decomposition
+  // check that used to sit here went with the split it licensed: it compared the
+  // grouped query's per-day sum against the total's and dropped the columns on a
+  // mismatch, which existed to make the fabricated `measured` with a literal 0
+  // defensible. Removing the inference removed the reason to check it.
   const total = readSeriesByDay(series, days);
-  const bySplit = split ? readSeriesByDay(split, days) : null;
-  const datasets = [
-    ...new Set([...(bySplit?.byDay.values() ?? [])].flatMap((d) => [...d.groups.keys()])),
-  ].sort();
-
-  // A DECOMPOSITION THAT DOES NOT SUM IS NOT ONE. The split is the same query
-  // plus a group-by, so on any day both answered, the groups must add to the
-  // total. They disagree only if the API truncated the groups or the two queries
-  // saw different data, and either way a column beside an honest total would be
-  // read as a real share of it. The columns drop and say so; the totals are
-  // untouched, since they are asked with no group-by at all.
-  let splitProblem: string | null = null;
-  for (const day of days) {
-    const whole = total.byDay.get(day)?.total;
-    const part = bySplit?.byDay.get(day)?.total;
-    if (whole?.state !== "measured" || part?.state !== "measured") continue;
-    if (part.value !== whole.value) {
-      splitProblem = `${day} splits to ${n(part.value)} against a total of ${n(whole.value)}, so the columns are not a decomposition of it`;
-      break;
-    }
-  }
-  const columns = splitProblem ? [] : datasets;
 
   const lines = [
-    `  ${"day".padEnd(12)}${columns.map((d) => d.padStart(20)).join("")}${"total".padStart(12)}${"of ceiling".padStart(12)}${"headroom".padStart(11)}`,
+    `  ${"day".padEnd(12)}${"total".padStart(12)}${"of ceiling".padStart(12)}${"headroom".padStart(11)}`,
   ];
   let peak = absent("no day scored");
   let scored = 0;
   let expired = 0;
   let unanswered = 0;
-  let splitGaps = 0;
   const unreadable: string[] = [];
   for (const day of days) {
     const past = retentionFrom !== undefined && day < retentionFrom;
@@ -995,25 +992,6 @@ export function dailyTable(opts: {
     const hidden = !answered || (past && readable.value === 0);
     const shownTotal = hidden ? absent("past retention, so nothing was read") : readable;
 
-    // THE SPLIT ANSWERS FOR ITS OWN DAYS, which is round 3's headline fix. This
-    // asked `totals.has(day)` before, so a day the SPLIT never returned rendered
-    // `0` in every column beside a real total: tracing reported as contributing
-    // nothing on a day nobody measured, at exit 0.
-    const splitRow = bySplit?.byDay.get(day);
-    const splitAnswered = splitRow?.total.state === "measured";
-    if (bySplit && !splitAnswered && !partial && !past && answered) splitGaps++;
-    const cells = columns
-      .map((d) => {
-        if (hidden) return render(absent("the day itself was not read"));
-        if (!splitAnswered) return render(absent("the split query returned no bucket for this day"));
-        // A group MISSING from an answered bucket is a real zero: under a
-        // group-by the API returns only groups that carried events, and the
-        // decomposition check above has already confirmed the parts sum.
-        return render(splitRow?.groups.get(d) ?? measured(0));
-      })
-      .map((c) => c.padStart(20))
-      .join("");
-
     const s2 = shareOf(shownTotal);
     const tail = past
       ? "  past retention"
@@ -1024,7 +1002,7 @@ export function dailyTable(opts: {
           : s2
             ? `${s2.used.padStart(12)}${s2.left.padStart(11)}`
             : "  not a reading";
-    lines.push(`  ${day.padEnd(12)}${cells}${render(shownTotal).padStart(12)}${tail}`);
+    lines.push(`  ${day.padEnd(12)}${render(shownTotal).padStart(12)}${tail}`);
   }
 
   lines.push("");
@@ -1043,19 +1021,6 @@ export function dailyTable(opts: {
   if (unanswered > 0) {
     lines.push(`  ..    ${unanswered} of the ${days.length} day(s) asked for came back with no bucket at all, and nothing is not a zero:`);
     lines.push("        they carry no count, no share and no headroom, and none of them can be the peak below.");
-  }
-  if (splitProblem) {
-    lines.push(`  ..    the spans/logs columns are NOT printed: ${splitProblem}.`);
-    lines.push("        The totals are unaffected: they are asked with no group-by at all.");
-  } else if (split && datasets.length === 0) {
-    // A split that came back carrying no group keys is the absence rule one
-    // level up. The previous renderer labelled a groupless aggregate `unknown`
-    // and drew a column of numbers under a name the API never said.
-    lines.push("  ..    the split query answered with no group keys at all, so there are no spans/logs columns:");
-    lines.push("        a dataset name this tool invented would be a label the API never returned.");
-  } else if (splitGaps > 0) {
-    lines.push(`  ..    ${splitGaps} day(s) carry a total the split query returned no bucket for, so those cells read "-":`);
-    lines.push("        a dataset that recorded nothing and a dataset nobody asked about look identical from here.");
   }
   if (peak.state === "measured" && unanswered === 0) {
     const spare = derive(peak, (v) => DAILY_CEILING - v);
@@ -1190,6 +1155,10 @@ async function control(): Promise<never> {
   if (checkRun({}, { granularity: DAY_MS })) ok("a response carrying no run block refuses rather than being assumed fine");
   else { bad("an unverifiable response passed as verified"); failures++; }
 
+  if (checkRun({ run: { dry: false, granularity: true } }, { granularity: DAY_MS })?.includes("positive whole number")) {
+    ok("a boolean granularity refuses as unreadable rather than coercing to a fabricated 1ms");
+  } else { bad("Number(true) made a granularity of 1ms and an 86400000.00x ratio to quote"); failures++; }
+
   if (checkRun({ run: { dry: false, granularity: DAY_MS } }, { granularity: DAY_MS }) === null) {
     ok("a run block echoing exactly what was asked passes, so the check is not blanket-red");
   } else { bad("a correct run block was rejected"); failures++; }
@@ -1223,8 +1192,7 @@ async function control(): Promise<never> {
   const todayStart = Math.floor(Date.now() / DAY_MS) * DAY_MS;
   const day = (back: number) => String(todayStart - back * DAY_MS);
   const key = (back: number) => new Date(todayStart - back * DAY_MS).toISOString().slice(0, 10);
-  const bucket = (v: number, label?: string): Aggregate =>
-    label ? { value: v, groups: [{ key: "dataset", value: label }] } : { value: v };
+  const bucket = (v: number): Aggregate => ({ value: v });
 
   // Two buckets stamped ONE day, with the granularity echo honest. Round 1 took
   // Math.max per ROW, so a day that spent the whole ceiling printed as half of
@@ -1269,9 +1237,6 @@ async function control(): Promise<never> {
   if (bucketTotal({ value: 12 }).state === "unreadable") {
     ok("a bucket whose `data` is not a list refuses in a sentence rather than a TypeError");
   } else { bad("a non-list `data` was accepted"); failures++; }
-  if (readGroups([{ value: "lots", groups: [{ key: "s", value: "aadhar-sh" }] }]).problem) {
-    ok("a breakdown row whose count is not one drops the whole breakdown");
-  } else { bad('a breakdown printed "lots" as a number'); failures++; }
   try {
     // The gate itself. A hand-built lookalike carries no brand, so it cannot
     // reach a reader even from a caller the compiler never saw.
@@ -1282,18 +1247,6 @@ async function control(): Promise<never> {
     ok("render refuses a value that did not come through readCount, so no tier can print around it");
   }
 
-  // The HIGH defect, at the renderer: the split answers for its own days.
-  const splitGapRows = dailyTable({
-    series: [{ time: day(1), data: [bucket(100_000)] }],
-    split: [{ time: day(2), data: [bucket(3_000, "traces")] }],
-    days: [key(2), key(1), key(0)],
-    todayKey: key(0),
-  });
-  const gapRow = splitGapRows.find((l) => l.startsWith(`  ${key(1)}`)) ?? "";
-  if (gapRow.includes("100,000") && !/\s0\s/.test(gapRow)) {
-    ok("a day the SPLIT never answered reads as unread, beside a total that is a real reading");
-  } else { bad("the split columns printed 0 for a day the split query never returned"); failures++; }
-
   const rendered = dailyTable({
     series: [
       // Outside the retention window: unread, and it must not read as a zero.
@@ -1301,12 +1254,6 @@ async function control(): Promise<never> {
       { time: day(2), data: [bucket(48_120)] },
       { time: day(1), data: [bucket(0)] },
       { time: day(0), data: [bucket(9_004)] },
-    ],
-    split: [
-      // The two labels are illustrative. What the API actually calls its
-      // datasets is whatever it returns; nothing here asserts the names.
-      { time: day(2), data: [bucket(41_010, "traces"), bucket(7_110, "cloudflare-workers")] },
-      { time: day(0), data: [bucket(8_000, "traces"), bucket(1_004, "cloudflare-workers")] },
     ],
     days: [key(5), key(2), key(1), key(0)],
     todayKey: key(0),
@@ -1394,7 +1341,7 @@ export async function main(): Promise<void> {
   }
   console.log("");
 
-  const totals = await post(account, token, "query", countQuery(timeframe, undefined, DAY_MS));
+  const totals = await post(account, token, "query", countQuery(timeframe, DAY_MS));
   if (totals.state === "transport") {
     bad(`could not reach the telemetry API: ${totals.why}`);
     info("Nothing was read, so nothing below would be a reading. Check the network, then re-run.");
@@ -1447,7 +1394,7 @@ export async function main(): Promise<void> {
     bad(`the window total is not a reading: ${windowFigure.why}`);
     process.exit(1);
   }
-  const windowTotal = windowFigure.state === "measured" ? windowFigure.value : 0;
+
 
   // The corroborating probe. A count of 0 is only believable beside a second
   // query that also finds nothing.
@@ -1495,6 +1442,30 @@ export async function main(): Promise<void> {
     process.exit(1);
   }
   const sample = sampling.state === "sampled" ? sampling.interval : 1;
+
+  // AN UNREAD WINDOW IS NOT A WINDOW OF ZERO, and it refuses here rather than
+  // becoming one. This was `windowFigure.state === "measured" ? windowFigure.value
+  // : 0`, which is the `?? 0` this file says has nothing left to default, written
+  // as a ternary. It fed `classify` and then `n()` on the sampled path below, so
+  // an empty `series` printed "the window sampled to 0 events, which is a floor"
+  // over a window nothing had been read for. The state is reachable: `reduce`
+  // over an empty series returns the seed, and the unreadable arm above has
+  // already exited, so what lands here is `absent`.
+  if (windowFigure.state !== "measured") {
+    bad(`no window total came back: ${windowFigure.why}`);
+    info(
+      probeFoundEvent
+        ? "The event probe DID return a row over the same window, so events exist and no count arrived."
+        : "The event probe found nothing either, so this is an unread window rather than a quiet one.",
+    );
+    // The wording avoids the word the contract suite sweeps refusal output for.
+    // That sweep is blunt on purpose, since a refusal that mentions room to
+    // spare is the failure it exists to catch, and it may not be softened.
+    info("Nothing is not a zero, so no count and no share of the ceiling is printed.");
+    process.exit(1);
+  }
+  const windowTotal = windowFigure.value;
+
   const verdict = classify(windowTotal, probeFoundEvent, sample);
   if (verdict === "contradiction") {
     bad("the count says 0 events while an event probe returned a row over the same window");
@@ -1519,32 +1490,11 @@ export async function main(): Promise<void> {
     process.exit(1);
   }
 
-  // ── the daily table ─────────────────────────────────────────────────────
-  // The split is verified the same way and DROPPED rather than degraded when it
-  // is not: a dry or wrongly bucketed split renders as a column of zeros beside
-  // real totals, which reads as "no spans today".
-  const split = await post(account, token, "query", countQuery(timeframe, "dataset", DAY_MS));
-  // The split is a printed number too, so it earns the SAME three checks the
-  // total gets rather than the run echo alone. A sampled or misbucketed split
-  // beside honest totals is a column that reads as "no spans today".
-  const splitSampling = split.state === "ok" ? sampledAt(split.result) : null;
-  const splitProblem =
-    split.state !== "ok"
-      ? why(split)
-      : (checkRun(split.result, { granularity: DAY_MS }) ??
-        (splitSampling?.state === "unreadable"
-          ? splitSampling.why
-          : splitSampling?.state === "sampled"
-            ? `the split is sampled at 1 in ${splitSampling.interval}`
-            : (checkBuckets(calculation(split.result)?.series ?? [], dayKeys).problem ?? null)));
-  const splitCalc = split.state === "ok" && !splitProblem ? calculation(split.result) : null;
-  for (const line of dailyTable({
-    series: totalCalc.series,
-    split: splitCalc?.series ?? null,
-    days: dayKeys,
-    todayKey,
-    retentionFrom,
-  })) {
+  // ── the daily table, and it is the last thing printed ───────────────────
+  // A dataset split and two breakdowns used to follow. They were removed on
+  // 2026-08-30: see WHAT THIS DOES NOT ANSWER at the top for why, and read the
+  // Observability dashboard for the by-dataset and by-Worker question.
+  for (const line of dailyTable({ series: totalCalc.series, days: dayKeys, todayKey, retentionFrom })) {
     console.log(line);
   }
   // Today is left out for the reason `dailyTable` gives: it is never scored, so
@@ -1554,40 +1504,10 @@ export async function main(): Promise<void> {
     info(`the API returned no bucket for ${gaps.join(", ")}, so those days are not a reading.`);
     info("A day the API did not answer for and a day with no events look identical from here.");
   }
-  if (!splitCalc) {
-    info(`spans/logs split unavailable: ${splitProblem || "the API returned no grouped calculation"}`);
-    info("The totals above are unaffected: they are asked with no group-by at all.");
-  }
 
-  // ── where the events come from ──────────────────────────────────────────
-  for (const [label, key] of [["worker", "$metadata.service"], ["span name", "$metadata.spanName"]] as const) {
-    const by = await post(account, token, "query", countQuery(timeframe, key));
-    console.log(`\nevents by ${label} (${days} day window):`);
-    if (by.state !== "ok") { info(`unavailable: ${why(by)}`); continue; }
-    const byProblem = checkRun(by.result);
-    if (byProblem) { info(`unavailable: ${byProblem}`); continue; }
-    // These rows are printed numbers, so they are held to the same rule, and
-    // round 2 said so in this comment while reading `Number(a.value) || 0`, so
-    // `"lots"` printed as 0. Every value goes through the gate now. The
-    // breakdown is asked with NO granularity, so it has no buckets to reconcile
-    // and `checkBuckets` does not apply; sampling still does, and reaches these
-    // rows through `aggregates[]`, which is the nesting round 1 never read.
-    const bySampling = sampledAt(by.result);
-    if (bySampling.state !== "unsampled") {
-      info(`unavailable: ${bySampling.state === "sampled" ? `sampled at 1 in ${bySampling.interval}` : bySampling.why}`);
-      continue;
-    }
-    const rows = readGroups(calculation(by.result)?.aggregates ?? []);
-    // A BREAKDOWN IS DROPPED WHOLE rather than printed with a hole in it. One
-    // row that is not a count says the payload changed, and the rows beside it
-    // were read by the same code, so their ordering and their share of the
-    // window are exactly as unverified as the bad one.
-    if (rows.problem) { info(`unavailable: ${rows.problem}`); continue; }
-    if (rows.rows.length === 0) { info(`no groups came back for ${key}; the breakdown is missing, not empty`); continue; }
-    for (const r of rows.rows.slice(0, 15)) console.log(`  ${r.name.padEnd(34)}${render(r.events).padStart(12)}`);
-  }
-
-  console.log("\nTracing is free until 2026-10-01. After that each span is one of these events.");
+  console.log("\nThis is the window total and the days in it, and nothing finer: no split by");
+  console.log("dataset and none by Worker. The Observability dashboard answers that question.");
+  console.log("Tracing is free until 2026-10-01. After that each span is one of these events.");
   process.exit(0);
 }
 

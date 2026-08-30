@@ -1763,10 +1763,20 @@ bun run obs:check --control                             # exercises the refusals
 ```
 
 It posts to `POST /accounts/<id>/workers/observability/telemetry/query`, the
-endpoint the Observability dashboard itself calls, and prints one row per UTC day
-with the spans/logs split, the share of the ceiling, and the headroom in
-`/lens` scans at ~40 spans each. Then events by Worker and by span name, which is
-the actionable half: 200,000 divided by ~40 is roughly 5,000 scans a day.
+endpoint the Observability dashboard itself calls, and prints the window total
+plus one row per UTC day: the count, its share of the ceiling, and the headroom
+in `/lens` scans at ~40 spans each. 200,000 divided by ~40 is roughly 5,000 scans
+a day.
+
+**WHAT IT DOES NOT ANSWER: the number is never broken down by dataset or by
+Worker.** A spans-versus-logs split and two breakdowns (events by Worker, events
+by span name) shipped in #667 and were REMOVED on 2026-08-30, after four
+adversarial reviews found one defect class every time. A printed number that is
+not a measurement, and every instance an inferred zero: the split rendered `0` in
+a dataset column for a day its own query had never answered, beside a real total
+of 100,000. Take the by-dataset and by-Worker question to the Observability
+dashboard. Adding either tier back needs the bar this tool already sets, which is
+that every cell owes a reading of its own and may not borrow another query's.
 
 **The token wants `Workers Observability : Read` and that is a SEVENTH read
 scope this repo does not otherwise have.** It is workstation-only and is wired
@@ -1792,11 +1802,10 @@ the `dry` and `granularity` the API echoes back. A count of 0 next to a real
 event is reported as a contradiction rather than as zero.
 
 **ONE count is corroborated by a second `view: events` query, the window
-total.** The per-day counts, the dataset split and the two breakdowns are not:
-that probe answers "does any event exist in this window" and nothing finer, so
-corroborating a single day would need its own query per day to answer what the
-day's own `run` echo already settles. #667 claimed every count was corroborated;
-it was one.
+total.** The per-day counts are not: that probe answers "does any event exist in
+this window" and nothing finer, so corroborating a single day would need its own
+query per day to answer what the day's own `run` echo already settles. #667
+claimed every count was corroborated; it was one.
 
 **Three states REFUSE where #667 warned and then printed a table.** A sampled
 dataset (counts understate ingestion by an unknown factor, so no table is
