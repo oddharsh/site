@@ -198,6 +198,28 @@ test("the sweep budget leaves room for the two passes that bracket it", () => {
   assert.equal(guestSweepBudget(99, 50), 0, "an impossible reservation floors at zero rather than going negative");
 });
 
+test("the cron batches upcoming and past roster selection into one D1 call", async () => {
+  const { selectCronGuestEvents } = await import("../serendipity/serendipity.ts");
+  let batchCalls = 0;
+  const D = {
+    prepare(sql) { return { bind(...args) { return { sql, args }; } }; },
+    async batch(statements) {
+      batchCalls++;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      assert.equal(statements.length, 2, "the batch must carry both independently capped reads");
+      assert.deepEqual(statements.map((statement) => statement.args.length), [1, 2], "both query parameter lists survive batching");
+      return [
+        { results: [{ id: "soon-1" }, { id: "soon-2" }] },
+        { results: [{ id: "past-1" }] },
+      ];
+    },
+  };
+
+  const rows = await selectCronGuestEvents(D);
+  assert.deepEqual(rows.map((row) => row.id), ["soon-1", "soon-2", "past-1"], "upcoming work must still lead the backfill");
+  assert.equal(batchCalls, 1, "both selections should spend one D1 subrequest");
+});
+
 
 // ── the enrichment tier ─────────────────────────────────────────────────
 // Enrichment had never run automatically: it was absent from cronSerendipity
