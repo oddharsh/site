@@ -99,7 +99,7 @@ export default defineWorker({
     // The atomic visitor counter. A DO binding now names the worker and the
     // export it points at, which is the same shape a cross-script binding takes,
     // so a self-binding and a foreign one stop being two different spellings.
-    COUNTER: bindings.durableObject({ workerName: "cf-garage", exportName: "Counter" }),
+    COUNTER: bindings.durableObject({ worker: "cf-garage", exportName: "Counter" }),
   },
 
   // THE MIGRATION LIST IS GONE, and this is the replacement rather than an
