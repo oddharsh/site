@@ -20,7 +20,7 @@ test(".node-version holds a bare major, which is why there is no bumper", async 
   assert.doesNotMatch(raw, /\./, ".node-version names a minor or patch, which freezes the runtime at one release");
 });
 
-test("the engines floor agrees with the pin and with the build's own tripwire", async () => {
+test("the engines floor sits between the zstd floor and the pin", async () => {
   const raw = await readFile(new URL(".node-version", ROOT), "utf8");
   const pinned = Number(raw.trim());
   const pkg = JSON.parse(await readFile(new URL("package.json", ROOT), "utf8"));
@@ -28,25 +28,39 @@ test("the engines floor agrees with the pin and with the build's own tripwire", 
   assert.ok(floorMatch, `engines.node is ${pkg.engines.node}, which names no version`);
   const floor = Number(floorMatch[1]);
 
-  assert.ok(floor <= pinned, `engines.node floors at ${floor} while .node-version pins ${pinned}`);
-
-  // THE FLOOR IS A MEASURED NUMBER, not a guess, and it is the zstd
-  // `dictionary` option that sets it. Measured 2026-08-24 on darwin-arm64 with
-  // one 8800-byte buffer compressed against itself at level 19:
+  // TWO FLOORS, and welding them into one is what this test used to do wrong.
+  // Until 2026-08-31 it asserted that build.ts's zstd tripwire named the
+  // engines.node floor, on the reasoning that the zstd `dictionary` option was
+  // what set the repository's floor. That was true when it was written and
+  // stopped being true silently, because a floor is the MAXIMUM of every
+  // constraint and nothing stops a newer one arriving. One had:
+  // Map.prototype.getOrInsertComputed reached node in 26 and is used in three
+  // Worker modules, so package.json claimed 24 while the suite could not run
+  // below 26. Measured 2026-08-31: `typeof Map.prototype.getOrInsertComputed`
+  // is undefined on v24.20.0 and v25.4.0, and a function on v26.8.1.
   //
-  //   v23.11.1   63 none / 63 dict   ignores it, silently
-  //   v24.19.0   63 none / 19 dict   honours it
-  //   v26.7.0    63 none / 19 dict   honours it
+  //   zstd floor      the lowest node that HONOURS zlib's dictionary option
+  //   engines.node    the highest node any constraint here demands
+  //   .node-version   what CI actually installs
   //
-  // build.ts throws on that collapse failing, and its message names the floor.
-  // Both numbers are the same fact, so a change to one must move the other; the
-  // failure otherwise is a build that dies quoting a version nobody supports.
+  // They are ordered, never equal by rule, and each moves for its own reason.
   const build = await readFile(new URL("tools/build.ts", ROOT), "utf8");
-  assert.match(
-    build,
-    new RegExp(`Node ${floor}\\+ is required`),
-    `build.ts's zstd tripwire does not name Node ${floor}+, which is what engines.node floors at`,
-  );
+  const zstdMatch = /ZSTD_DICTIONARY_NODE_FLOOR = (\d+)/.exec(build);
+  assert.ok(zstdMatch, "tools/build.ts declares no ZSTD_DICTIONARY_NODE_FLOOR");
+  const zstdFloor = Number(zstdMatch[1]);
+
+  assert.ok(zstdFloor <= floor,
+    `engines.node floors at ${floor}, below the zstd dictionary floor of ${zstdFloor}; the build would throw on a runtime this repo says it supports`);
+  assert.ok(floor <= pinned,
+    `engines.node floors at ${floor} while .node-version pins ${pinned}`);
+
+  // The tripwire must INTERPOLATE its own constant rather than repeat the
+  // number. A literal is how the old weld failed in the first place: two copies
+  // of one fact, and only a test standing between them. With the constant
+  // interpolated there is one copy, and this assertion is what stops somebody
+  // hardcoding it back.
+  assert.match(build, /Node \$\{ZSTD_DICTIONARY_NODE_FLOOR\}\+ is required/,
+    "build.ts's zstd tripwire hardcodes a version instead of interpolating ZSTD_DICTIONARY_NODE_FLOOR");
 });
 
 test("every workflow reads .node-version rather than naming a version", async () => {

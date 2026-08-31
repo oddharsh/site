@@ -2273,6 +2273,25 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     // collapse to almost nothing if the dictionary is real. Throwing is correct because
     // .node-version pins the runtime, so this firing means the pin was lost, and a silent
     // no-op is exactly the failure this whole page-worth of debugging came from.
+    //
+    // THIS IS ITS OWN FLOOR, and it is deliberately NOT engines.node. The two
+    // were welded together until 2026-08-31 on the reasoning that zstd set the
+    // repository's floor, which was true when it was written and stopped being
+    // true the moment any source file used something newer. engines.node is the
+    // HIGHEST constraint the repo carries; this is the one THIS check enforces,
+    // and it only ever rises when a measurement says so.
+    //
+    // Measured 2026-08-24 on darwin-arm64, one 8800-byte buffer compressed
+    // against itself at level 19:
+    //
+    //   v23.11.1   63 none / 63 dict   ignores it, silently
+    //   v24.19.0   63 none / 19 dict   honours it
+    //   v26.7.0    63 none / 19 dict   honours it
+    //
+    // The message below interpolates it rather than repeating the number, so a
+    // build cannot die quoting a floor that no declaration agrees with.
+    const ZSTD_DICTIONARY_NODE_FLOOR = 24;
+
     const probe = Buffer.from("the quick brown fox jumps over the lazy dog ".repeat(200));
     const withDict = zstdCompressSync(probe, { dictionary: probe, params: { [zlibConstants.ZSTD_c_compressionLevel]: 19 } });
     const noDict = zstdCompressSync(probe, { params: { [zlibConstants.ZSTD_c_compressionLevel]: 19 } });
@@ -2280,7 +2299,8 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
       throw new Error(
         `zstd dictionary compression is not honored by ${process.version} ` +
         `(probe: ${withDict.length} bytes with a dictionary vs ${noDict.length} without; expected a collapse). ` +
-        `Node 24+ is required — see .node-version. Shell deltas would silently ship as no-ops.`,
+        `Node ${ZSTD_DICTIONARY_NODE_FLOOR}+ is required for the dictionary option; see .node-version. ` +
+        `Shell deltas would silently ship as no-ops.`,
       );
     }
 
