@@ -203,7 +203,7 @@ declaration, and a declared minimum nothing enforces is an error.
 
 ## Current baseline
 
-- Wrangler 4.127.0 is the exact root pin shared by all Worker projects.
+- Wrangler 4.127.1 is the exact root pin shared by all Worker projects.
   `cal`'s @cloudflare/vitest-pool-workers floor is 0.22.0, which resolves the
   same Wrangler, Miniflare, and Workerd stack as the root. Measured on
   2026-08-15 across five warm-store, clean installs, that alignment cut median
