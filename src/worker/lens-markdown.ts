@@ -38,7 +38,7 @@
 // no model. Cheaper per run than the Reader or Wire tabs and more than a knock,
 // which is why it is opt-in, cached for an hour, and rate-limited on its own
 // budget rather than the shared browser ceiling.
-import { validateLensTarget } from "./lib/crawl.ts";
+import { mapWithConcurrency, validateLensTarget } from "./lib/crawl.ts";
 import { jsonResponse } from "./lib/http.ts";
 import { span } from "./lib/trace.ts";
 import { LENS_BUDGETS, lensFetchAsBot, lensSha256Hex, overLensBudget } from "./lens.ts";
@@ -255,12 +255,13 @@ export async function handleLensMarkdown(request, env) {
     s.setAttribute("lens.cache", "miss");
 
     const { probes, agentProbe } = probePlan();
-    // Serial rather than fanned out. Ten concurrent requests to one URL is a
-    // burst somebody's rate limiter is right to refuse, and a refusal here would
-    // be indistinguishable from the origin declining to negotiate, which is the
-    // one confusion this tab exists to remove.
+    // Two workers halve the waterfall without turning ten probes into a burst.
+    // This is the same ceiling the representation vault uses for comparing one
+    // origin: enough overlap to remove idle network time, still small enough that
+    // a refusal is evidence about negotiation rather than our own load pattern.
+    const results = await mapWithConcurrency(probes, 2, (p) => probeOnce(target, env, p.accept));
     const byId = new Map();
-    for (const p of probes) byId.set(p.id, await probeOnce(target, env, p.accept));
+    for (let i = 0; i < probes.length; i++) byId.set(probes[i].id, results[i]);
 
     const control = byId.get("control");
     const md = byId.get("markdown");

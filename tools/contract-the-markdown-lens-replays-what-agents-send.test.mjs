@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
-  AGENT_ACCEPTS, BROWSER_ACCEPT, isMarkdown, markdownAlternate, probePlan, variesOnAccept,
+  AGENT_ACCEPTS, BROWSER_ACCEPT, handleLensMarkdown, isMarkdown, markdownAlternate, probePlan, variesOnAccept,
 } from "../src/worker/lens-markdown.ts";
 import { wantsMarkdown } from "../src/worker/lib/http.ts";
 
@@ -105,6 +105,33 @@ test("the replay plan dedupes by Accept string and admits a browser control", ()
   // The subrequest budget is the reason this is bounded at all: Workers Free
   // allows 50 per invocation and KV operations count toward it (gotcha 36).
   assert.ok(probes.length + 2 < 50, "the whole run plus its KV read and write stays under the cap");
+});
+
+test("the replay overlaps only two probes and preserves its evidence order", async () => {
+  let active = 0;
+  let peak = 0;
+  const accepts = [];
+  const env = {
+    SELF_FETCH: async (request) => {
+      active++;
+      peak = Math.max(peak, active);
+      accepts.push(request.headers.get("accept"));
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      active--;
+      return new Response("<h1>control</h1>", { headers: { "content-type": "text/html", vary: "Accept" } });
+    },
+  };
+  const target = encodeURIComponent("https://aadhar.sh/garage/horizon");
+  const response = await handleLensMarkdown(new Request(`https://aadhar.sh/lens/markdown?url=${target}`), env);
+  const payload = await response.json();
+  const planned = probePlan().probes;
+
+  assert.equal(response.status, 200);
+  assert.equal(accepts.length, planned.length, "every distinct probe still runs exactly once");
+  assert.equal(new Set(accepts).size, planned.length, "no Accept string is duplicated");
+  assert.equal(peak, 2, "one origin sees at most two simultaneous requests");
+  assert.deepEqual(payload.responses.map((row) => row.id), planned.map((probe) => probe.id),
+    "completion timing cannot reorder the evidence");
 });
 
 test("the browser control is never scored as an agent", () => {
