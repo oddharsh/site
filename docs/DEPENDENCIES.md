@@ -143,11 +143,24 @@ bun run node:pin --pretend 22   # in maintenance since 2025-10-21
 
 The tree half of the check has no network and lives in
 `contract-the-node-pin-is-declared-once.test.mjs`, so `validate` already runs it:
-the pin is a bare major, the `engines.node` floor agrees with it and with the
-version `build.ts`'s zstd tripwire names, and every workflow reads the file
-rather than naming a version inline.
+the pin is a bare major, the three node numbers below stay in order, and every
+workflow reads the file rather than naming a version inline.
 
-**That floor is measured rather than asserted**, as of 2026-08-24. One 8800-byte
+**THERE ARE TWO FLOORS, and they were welded into one until 2026-08-31.** The
+distinction is the useful part, because the weld was correct on the day it was
+written and came apart without anything going red:
+
+| number | means | lives in |
+|---|---|---|
+| zstd floor, **24** | the lowest node that HONOURS `node:zlib`'s `dictionary` option | `ZSTD_DICTIONARY_NODE_FLOOR` in `tools/build.ts`, beside the check that enforces it |
+| `engines.node`, **26** | the highest node any constraint in this repo demands | `package.json` |
+| `.node-version`, **26** | what CI installs | `.node-version` |
+
+The test asserts `zstd floor <= engines.node <= pin` and that build.ts's tripwire
+INTERPOLATES its constant rather than repeating the number. Each floor moves for
+its own reason.
+
+The zstd one is measured rather than asserted, as of 2026-08-24. One 8800-byte
 buffer compressed against itself at level 19, on darwin-arm64:
 
 | node | no dictionary | with dictionary | honours it |
@@ -156,9 +169,33 @@ buffer compressed against itself at level 19, on darwin-arm64:
 | v24.19.0 | 63 | 19 | yes |
 | v26.7.0 | 63 | 19 | yes |
 
-So `engines.node: ">=24.0.0"` and build.ts's "Node 24+ is required" were both
-right. The surrounding comments had only ever measured 22 as broken and 26 as
-working, which left 24 as the one number in that sentence nobody had checked.
+That measurement was right and the conclusion drawn from it was too wide. It
+said the zstd option "sets the floor", and a floor is the MAXIMUM of every
+constraint, so the claim held only while zstd was the only one. It stopped
+holding when `Map.prototype.getOrInsertComputed` arrived in
+[`inbox.ts`](../src/worker/inbox.ts), [`around.ts`](../src/worker/around.ts) and
+[`census.ts`](../src/worker/census.ts): probed 2026-08-31, `typeof
+Map.prototype.getOrInsertComputed` is `undefined` on v24.20.0 and v25.4.0 and
+`function` on v26.8.1. So `package.json` advertised node 24 while the repository's
+own suite could not run below 26.
+
+**Production was never affected, which is exactly why nothing caught it.**
+workerd has the method, probed through `createTestHarness`, and the call works;
+`/around` and `/inbox` both answer 200. The only casualty was a contributor on a
+node this repo claimed to support, who would get two failures reading like real
+defects. It surfaced as a side effect of testing an unrelated flag against the
+declared floor, which nothing else in the repo had ever done.
+
+Note that `engines.node` now EQUALS the pin. That is worth keeping where it can
+be: a floor equal to the pin is the version CI exercises on every run, while any
+gap below it is a support claim nothing tests. The test still allows a gap, since
+closing it by rule would make every `.node-version` move a two-file edit, but the
+gap is where this class of bug lives.
+
+The general rule, which the zstd measurement already stated one level down: a
+floor written `>=N` is a claim about N-1 as much as about N, and measuring only
+the versions you happen to have running leaves the boundary untested. It applies
+to the floor itself as much as to any one feature behind it.
 
 ### the system binaries, in `config/tools.json`
 
