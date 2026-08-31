@@ -77,6 +77,11 @@ test("webmention verifies the source really links back, then moderates before pu
     assert.equal(db.rows[0].status, "pending", "nothing is displayed unmoderated");
     assert.equal(db.rows[0].kind, "reply", "u-in-reply-to reads as a reply");
     assert.equal(db.rows[0].author, "Mari");
+    const upserts = db.statements.filter((sql) => /^INSERT INTO webmentions/i.test(sql));
+    assert.equal(upserts.length, 1, "a verified mention is stored by one upsert");
+    assert.match(upserts[0], /RETURNING status/i, "the upsert returns the moderation status it preserved");
+    assert.equal(db.statements.filter((sql) => /^SELECT status FROM webmentions/i.test(sql)).length, 0,
+      "the verified path must not spend a second D1 call rereading moderation status");
 
     // 3. it stays out of /inbox until approved.
     let inbox = await handleInbox(new Request("https://aadhar.sh/inbox"), env, context());
@@ -104,12 +109,21 @@ test("webmention verifies the source really links back, then moderates before pu
     assert.ok(html.includes(source), "the row links out to the source");
     assert.ok(html.includes("/writing/in-flux"), "filed under the page it mentions");
 
-    // 6. re-sending after the link is removed retracts it (the spec's delete signal).
-    testGlobals.fetch = async () => new Response("<html><p>rewritten, no link anymore</p></html>", { headers: { "content-type": "text/html" } });
+    // 6. re-sending a live mention refreshes its content without resetting moderation.
     const ctx3 = deferredContext();
     res = await handleWebmention(wmPost(source, target), env, ctx3);
     assert.equal(res.status, 202);
     await ctx3.settle();
+    inbox = await handleInbox(new Request("https://aadhar.sh/inbox"), env, context());
+    html = await inbox.text();
+    assert.ok(html.includes("Resto-mod web"), "the upsert must return and preserve approved status");
+
+    // 7. re-sending after the link is removed retracts it (the spec's delete signal).
+    testGlobals.fetch = async () => new Response("<html><p>rewritten, no link anymore</p></html>", { headers: { "content-type": "text/html" } });
+    const ctx4 = deferredContext();
+    res = await handleWebmention(wmPost(source, target), env, ctx4);
+    assert.equal(res.status, 202);
+    await ctx4.settle();
     assert.equal(db.rows.length, 0, "a mention whose source dropped the link is retracted");
   } finally { testGlobals.fetch = realFetch; }
 });

@@ -236,14 +236,17 @@ function staticAssets(files) {
 
 function fakeD1() {
   const rows = [];
+  const statements: string[] = [];
   const run = (sql, args) => {
     const s = sql.replace(/\s+/g, " ").trim();
+    statements.push(s);
     if (/^CREATE/i.test(s)) return { results: [], meta: { changes: 0 } };
     if (/^INSERT INTO webmentions/i.test(s)) {
       const [id, source, target, kind, author, author_url, title, excerpt, received_at] = args;
       const existing = rows.find((r) => r.source === source && r.target === target);
       if (existing) Object.assign(existing, { kind, author, author_url, title, excerpt, received_at });
       else rows.push({ id, source, target, kind, author, author_url, title, excerpt, status: "pending", received_at, approved_at: null });
+      if (/RETURNING status/i.test(s)) return existing || rows.at(-1);
       return { meta: { changes: 1 } };
     }
     if (/^SELECT status FROM webmentions/i.test(s)) {
@@ -274,6 +277,7 @@ function fakeD1() {
   };
   return {
     rows,
+    statements,
     prepare(sql) {
       let bound = [];
       const api = {

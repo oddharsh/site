@@ -179,15 +179,15 @@ async function processMention(source, target, request, env) {
 
   // A re-send of an already-approved mention refreshes its content but keeps it
   // approved — re-moderating an edit I already blessed would be busywork.
-  await db.prepare(
+  const row = await db.prepare(
     `INSERT INTO ${TABLE} (id, source, target, kind, author, author_url, title, excerpt, status, received_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
      ON CONFLICT(source, target) DO UPDATE SET
        kind = excluded.kind, author = excluded.author, author_url = excluded.author_url,
-       title = excluded.title, excerpt = excluded.excerpt, received_at = excluded.received_at`
-  ).bind(id, source, target, parsed.kind, parsed.author, parsed.authorUrl, parsed.title, parsed.excerpt, Date.now()).run();
+       title = excluded.title, excerpt = excluded.excerpt, received_at = excluded.received_at
+     RETURNING status`
+  ).bind(id, source, target, parsed.kind, parsed.author, parsed.authorUrl, parsed.title, parsed.excerpt, Date.now()).first();
 
-  const row = await db.prepare(`SELECT status FROM ${TABLE} WHERE source = ? AND target = ?`).bind(source, target).first();
   if (row?.status === "approved") return;   // already live; no second email
 
   await emailHost(env, request, { id, source, target, ...parsed });
