@@ -1612,10 +1612,24 @@ bun run wrangler kv key put --namespace-id="$NS" playlist-id "<NEW_22_CHAR_ID>" 
 # so the value key is the only one to drop):
 bun run wrangler kv key delete --namespace-id="$NS" "tracks:${OLD}" --remote
 curl -s "https://aadhar.sh/rn/tracks" >/dev/null                       # warms tracks:<new> by scraping
-bun run deploy:direct   # from the repo root; deploys the aadhar-sh Worker (public/ as static assets)
 ```
 - The id is the 22 chars after `/playlist/` in the share URL (drop `?si=...`).
-- **Why the redeploy:** the worker caches `playlist-id` in a module variable (`_playlistId`) per warm isolate. A redeploy recycles isolates so the homepage *prerenders* the new list immediately instead of waiting for them to age out.
+- **No redeploy, and this bullet used to call for one.** It read: the worker caches
+  `playlist-id` in a module variable (`_playlistId`) per warm isolate, so a redeploy
+  recycles isolates and the homepage *prerenders* the new list immediately. Both halves
+  have expired. `_playlistId` is gone and every reader now fetches the id from KV per
+  request (`playlistUrl`, `handleRnTracks`, `cronEnrichTracks` in `src/worker/rn.ts`), so
+  there is nothing warm holding a stale one. And `/` stopped prerendering the playlist
+  when `serveHomepageWithPrerenderedTracks` and `SSR_DEADLINE_MS` were deleted: the
+  document is deterministic and static, and the tracklist hydrates client-side from
+  `/rn/tracks.html`.
+- **What is left is a ten-minute stale window on one fragment, and it clears itself.**
+  `/rn/tracks.html` is in `WORKERS_CACHEABLE_PATHS` under `s-maxage=600`, so a copy
+  rendered just before the swap keeps serving the old list until it ages out. A deploy
+  WOULD flush it at once, since `edgeKey` folds the worker version into the cache key,
+  but that is a full production release to save under ten minutes. Confirm the origin is
+  right rather than waiting on the cache: a query string bails `shouldUseWorkersCache`,
+  so `curl -s "https://aadhar.sh/rn/tracks.html?cb=1"` renders fresh.
 - **zsh gotcha:** brace the parameter. This used to delete a second `tracks:${OLD}:fresh` key, and bare `tracks:$OLD:fresh` triggers a zsh history modifier (`:r` etc.) that silently mangles it. The sentinel is gone; the habit is worth keeping for any key that carries a colon after a parameter.
 - One-shot alternative once you have the secret: `curl "https://aadhar.sh/rn/set?secret=$RN_BUST_SECRET&url=<playlist-url>"`.
 
