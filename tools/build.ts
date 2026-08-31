@@ -1004,7 +1004,6 @@ await Promise.all([
   const CHANNELS = ["l", "r", "g", "b"];
   const BINS = 64, HIST_BASE = 63, HIST_LEVELS = 64;
   await mkdir(`${OUT}/public/images/meta`, { recursive: true });
-  let written = 0;
   // Parsed at the boundary: a packed entry becomes channels or nothing, and every
   // caller below branches on the channels rather than on the string. A wrong-typed
   // entry has no .length and falls out here the same as a missing one.
@@ -1017,13 +1016,14 @@ await Promise.all([
     }
     return hi;
   };
-  for (const [stem, record] of Object.entries(exif) as [string, Record<string, any>][]) {
+  const entries = Object.entries(exif) as [string, Record<string, any>][];
+  await Promise.all(entries.map(async ([stem, record]) => {
     const out = { ...record };
     const hi = unpackChannels(packed[stem]);
     if (hi) out.hi = hi;
     await writeFile(`${OUT}/public/images/meta/${stem}.json`, JSON.stringify(out));
-    written++;
-  }
+  }));
+  const written = entries.length;
   // A silent zero here serves 404s to every fallback fetch, which reads as a
   // tooltip that has quietly stopped self-healing rather than as a broken build.
   if (written < 30) throw new Error(`meta twins: only ${written} per-photo files generated — is images/exif.json staged?`);
@@ -1050,15 +1050,16 @@ await Promise.all([
       .map((f) => `${OUT}/src/worker/${f}`))
     .concat([`${OUT}/cal/src/templates.ts`, `${OUT}/serendipity/serendipity.ts`]);
 
-  let mirrored = 0, skipped = 0;
-  for (const f of targets) {
-    let src; try { src = await readFile(f, "utf8"); } catch { continue; }
-    if (!GEOMETRY_MIRROR.test(src)) { skipped++; continue; }
+  const outcomes = await Promise.all(targets.map(async (f) => {
+    let src; try { src = await readFile(f, "utf8"); } catch { return null; }
+    if (!GEOMETRY_MIRROR.test(src)) return false;
     const out = clientEdgeMirror(src, decl);
     if (!out) throw new Error(`client edge: ${f} matched the geometry mirror but the injection did not fire`);
     await writeFile(f, out);
-    mirrored++;
-  }
+    return true;
+  }));
+  const mirrored = outcomes.filter((outcome) => outcome === true).length;
+  const skipped = outcomes.filter((outcome) => outcome === false).length;
   // a rename in luna.css or in the geometry mirror would silently mirror nothing
   // and cost every page a reflow, so the count is the tripwire.
   if (mirrored < 32) throw new Error(`client edge: mirrored into only ${mirrored} pages (expected 32+) — did the geometry-mirror shape change, or did a walk stop reaching the Worker modules?`);
@@ -1394,11 +1395,11 @@ let dressPage: (html: string, rel: string) => { html: string; addedLink: boolean
   }
   const { files, skipped, generated } = buildTwins(".", { generatedRoot: OUT });
   twinFiles = files;
-  for (const [rel, body] of files) {
+  await Promise.all([...files].map(async ([rel, body]) => {
     const dest = `${OUT}/public${rel}`;
     await mkdir(dest.slice(0, dest.lastIndexOf("/")), { recursive: true });
     await writeFile(dest, body);
-  }
+  }));
   const twins = [...files.keys()].filter((k) => k.endsWith(".md")).length;
   const indexes = [...files.keys()].filter((k) => k.endsWith("llms.txt")).length;
   // Losing the twins would otherwise be silent: pages keep serving HTML and only
@@ -1539,18 +1540,18 @@ let dressPage: (html: string, rel: string) => { html: string; addedLink: boolean
     return { html: out, addedLink, addedChrome };
   };
 
-  let dressed = 0, linked = 0;
-  for (const rel of pages) {
+  const outcomes = await Promise.all(pages.map(async (rel) => {
     const file = `${OUT}/public/${rel}`;
     const html = await readFile(file, "utf8");
     const hasChrome = html.includes('class="axp-tasks"');
     const windowed = /<div class="content"[^>]*>/.test(html) && /<div class="window"/.test(html);
-    if (!hasChrome && !windowed) continue;
+    if (!hasChrome && !windowed) return null;
     const result = dressPage(html, rel);
-    if (result.addedLink) linked++;
-    if (result.addedChrome) dressed++;
     await writeFile(file, result.html);
-  }
+    return result;
+  }));
+  const dressed = outcomes.filter((result) => result?.addedChrome).length;
+  const linked = outcomes.filter((result) => result?.addedLink).length;
 
   // Both counts are tripwires for the same silent failure: a shape change in the
   // staged markup that makes the regexes above match nothing, leaving every page
@@ -1969,12 +1970,15 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
       await writeFile(`${OUT}/public${to}`, bytes);
       hashedFor[hashKey(a)] = to;
       const reps = a.mk(to);
-      for (const path of stringTargets) {
-        let t; try { t = await readFile(path, "utf8"); } catch { continue; }
+      const touched = await Promise.all(stringTargets.map(async (path) => {
+        let t; try { t = await readFile(path, "utf8"); } catch { return null; }
         let out = t;
         for (const [re, sub] of reps) out = out.replace(re, sub);
-        if (out !== t) { await writeFile(path, out); hits++; }
-      }
+        if (out === t) return false;
+        await writeFile(path, out);
+        return true;
+      }));
+      hits += touched.filter(Boolean).length;
       console.log(`hashed asset (string-loaded): ${a.file} -> ${to} (${bytes.length} bytes)`);
     }
     // Witnesses: each island's loader must now carry the hashed URL, or the enrolment
@@ -2043,16 +2047,20 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   for (const rel of await readdir(`${OUT}/src/worker`, { recursive: true })) {
     if (rel.endsWith(".js") || rel.endsWith(".ts")) targets.push(`${OUT}/src/worker/${rel}`);
   }
-  let refCount = 0, filesTouched = 0;
-  for (const path of targets) {
-    let s; try { s = await readFile(path, "utf8"); } catch { continue; }
+  const rewritten = await Promise.all(targets.map(async (path) => {
+    let s; try { s = await readFile(path, "utf8"); } catch { return null; }
     let out = s, hits = 0;
     for (const { re, sub } of reps) {
       const m = out.match(re);
       if (m) { hits += m.length; out = out.replace(re, sub); }
     }
-    if (hits) { await writeFile(path, out); refCount += hits; filesTouched++; }
-  }
+    if (!hits) return 0;
+    await writeFile(path, out);
+    return hits;
+  }));
+  const rewriteHits = rewritten.filter((hits): hits is number => hits !== null);
+  const refCount = rewriteHits.reduce((total, hits) => total + hits, 0);
+  const filesTouched = rewriteHits.filter(Boolean).length;
 
   // /coffee's absolute shell refs (https://aadhar.sh/luna.css) — the attr reps above
   // only match leading-slash paths, so the absolute form is rewritten here, scoped to
@@ -2211,17 +2219,22 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     const bytes = await readFile(`${dir}/${f}`);
     return { f, bytes, out: await brotliQ11(bytes) };
   }));
-  for (const { f, bytes, out } of compressed) {
+  const writes = await Promise.all(compressed.map(async ({ f, bytes, out }) => {
     // Refuse to ship a "compressed" twin that isn't smaller. Cheap guard against a
     // future asset type where q11 loses (already-compressed bytes, tiny files).
     if (out.length >= bytes.length) {
-      console.log(`precompress: SKIPPED /a/${f} (br ${out.length} >= raw ${bytes.length})`);
-      continue;
+      return { f, bytes, out, written: false };
     }
     await writeFile(`${dir}/${f}.br`, out);
-
-    raw += bytes.length; enc += out.length;
-    console.log(`precompressed: /a/${f} ${bytes.length} -> ${out.length} bytes (br q11)`);
+    return { f, bytes, out, written: true };
+  }));
+  for (const { f, bytes, out, written } of writes) {
+    if (!written) {
+      console.log(`precompress: SKIPPED /a/${f} (br ${out.length} >= raw ${bytes.length})`);
+    } else {
+      raw += bytes.length; enc += out.length;
+      console.log(`precompressed: /a/${f} ${bytes.length} -> ${out.length} bytes (br q11)`);
+    }
   }
   console.log(`precompress: ${(raw / 1024).toFixed(1)}KB -> ${(enc / 1024).toFixed(1)}KB brotli q11 across ${files.length} shell assets`);
 
@@ -2663,38 +2676,42 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   }
   if (familyBytes || pageDicts.length) await mkdir(`${OUT}/public/pd`, { recursive: true });
 
-  let brCount = 0, brRaw = 0, brEnc = 0, dCount = 0, dBytes = 0, dPlain = 0, pageCount = 0, pageBytes = 0, familyCount = 0, familyBytesOut = 0;
+  let dCount = 0, dBytes = 0, dPlain = 0, pageCount = 0, pageBytes = 0, familyCount = 0, familyBytesOut = 0;
   const compressedPages = await Promise.all(pages.map(async (page) => {
     const bytes = await readFile(`${OUT}/public/${page}`);
     return { page, bytes, br: await brotliQ11(bytes) };
   }));
-  const deltaJobs = [];
-  for (const { page, bytes, br } of compressedPages) {
-    if (br.length < bytes.length) {
-      await writeFile(`${OUT}/public/${page}.br`, br);
-      brCount++; brRaw += bytes.length; brEnc += br.length;
-    }
+  const brotliPages = compressedPages.filter(({ bytes, br }) => br.length < bytes.length);
+  await Promise.all(brotliPages.map(({ page, br }) => writeFile(`${OUT}/public/${page}.br`, br)));
+  const brCount = brotliPages.length;
+  const brRaw = brotliPages.reduce((total, { bytes }) => total + bytes.length, 0);
+  const brEnc = brotliPages.reduce((total, { br }) => total + br.length, 0);
 
+  const deltaJobs = (await Promise.all(compressedPages.map(async ({ page, bytes, br }) => {
+    const jobs = [];
     const slug = slugOf(page);
     for (const candidate of pageDicts.filter((d) => d.slug === slug)) {
       const dictBytes = brotliDecompressSync(await readFile(`${dictDir}/${candidate.name}`));
       if (dictBytes.equals(bytes)) continue;
-      deltaJobs.push({ kind: "page", slug, tag: candidate.tag, bytes, dictBytes, br });
+      jobs.push({ kind: "page", slug, tag: candidate.tag, bytes, dictBytes, br });
     }
     if (familyBytes) {
-      deltaJobs.push({ kind: "family", slug, bytes, dictBytes: familyBytes, br });
+      jobs.push({ kind: "family", slug, bytes, dictBytes: familyBytes, br });
     }
-  }
+    return jobs;
+  }))).flat();
   const deltas = await dczEncodeBatch(deltaJobs);
-  for (let i = 0; i < deltaJobs.length; i++) {
-    const job = deltaJobs[i];
+  const deltaWrites = await Promise.all(deltaJobs.map(async (job, i) => {
     const { out, digest } = deltas[i];
     if (out.length >= job.br.length) {
       const label = job.kind === "page" ? `per-page ${job.tag.slice(0, 8)}` : "site-page";
-      console.log(`page-delta: SKIPPED ${job.slug} vs ${label} (dcz ${out.length} >= br ${job.br.length})`);
-      continue;
+      return { job, out, skipped: `page-delta: SKIPPED ${job.slug} vs ${label} (dcz ${out.length} >= br ${job.br.length})` };
     }
     await writeFile(`${OUT}/public/pd/${job.slug}.${digest.toString("hex").slice(0, 16)}.dcz`, out);
+    return { job, out, skipped: null };
+  }));
+  for (const { job, out, skipped } of deltaWrites) {
+    if (skipped) { console.log(skipped); continue; }
     dCount++; dBytes += out.length; dPlain += job.br.length;
     if (job.kind === "page") {
       pageCount++; pageBytes += out.length;
