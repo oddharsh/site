@@ -1357,10 +1357,44 @@ for a year+ for old links); unknown names still get the 404 cache-clamp so
 a miss can't inherit an immutable rule. Workers static assets return honest
 404s; the old Pages SPA-fallback masquerade is gone.
 
-### Worker enhancement (`serveHomepageWithPrerenderedTracks`)
+### The homepage's dynamic half, as two fragments
 
-When `/` is requested, the worker pulls two cached chunks of data from KV
-and uses `HTMLRewriter` to inject them into the static HTML:
+**`/` is a DETERMINISTIC STATIC DOCUMENT, and this section described the
+server-enhancement era until 2026-08-31.** It used to say the worker pulled two
+cached chunks out of KV on every `/` and injected them with `HTMLRewriter`,
+behind a 25ms SSR deadline. There were four such injections, all four are gone,
+and `serveHomepageWithPrerenderedTracks` and `SSR_DEADLINE_MS` are deleted
+symbols. What determinism buys is the reason it was worth doing: `/` carries a
+q11 twin, a dcz delta and a real ETag like every other page here, none of which
+a per-request render can have.
+
+Each injection left by its own route. `src/worker/home.ts`'s header is the
+canonical account and this table is the index into it:
+
+| was injected | now |
+|---|---|
+| tracks | `/rn/tracks.html`, the fragment the deadline path already fell back to. Now the only path. |
+| photo grid | `/photos/grid.html` (`handlePhotoGrid`), a fresh random 12 of the pool per request, `no-store` because the body differs every time. |
+| visit counter | `/hit?peek=1`, which already read without bumping. |
+| last-modified | BAKED. It derives from the bundled photo index, so it moves only on deploy, and a build is the honest place for it. |
+
+`tools/build.ts` step 1d bakes a fixed twelve tiles and that date into the document,
+chosen by stem sort so the bytes are reproducible, and it throws if the pool
+yields anything but twelve or if one of them carries no histogram. Those twelve
+are what a script-off visitor keeps, and what stays on screen when
+`handlePhotoGrid` answers 503 because the manifest is unreachable.
+
+Both fragments are preloaded from `<head>` and fetched by inline scripts near the
+bottom of the document. **`crossorigin` on those preloads is load-bearing even
+same-origin**: without it the preload is mode `no-cors` and cannot match the
+hydrator's `cors` fetch, so the page requests each fragment twice.
+
+**`data-ssr` survives on both mount points and is now ALWAYS `"0"` on arrival**,
+so neither hydrator's guard ever declines. Read a `data-ssr="0"` in a served
+response as the pre-hydration placeholder it is. The attribute used to mean the
+SSR deadline had been missed, so a `curl` of `/` showing `np-list data-ssr=0` and
+the words "The current playlist is unavailable" reads exactly like a broken
+playlist and is the page working correctly.
 
 1. **`/rn/tracks` (Spotify playlist tracks)** — populated by a separate
    handler that scrapes `open.spotify.com/embed/playlist/<id>` for the ordered
@@ -1393,12 +1427,21 @@ and uses `HTMLRewriter` to inject them into the static HTML:
    a playlist someone edited. Entries carry a `seen` stamp now and expire after 30
    days. **Absence from a single read is not evidence for deleting anything**, and
    the same reasoning applies to every cache in here that mirrors a remote list.
-2. **Photo grid** — random 12 from manifest, emitted as
-   `<a><picture><source><img></picture></a>` slots inside `<section class="photos">`.
+2. **Photo grid.** `<a><picture><source><img></picture></a>` slots, rendered by
+   `renderPhotoSlots` into `<section class="photos">`. The build and the fragment
+   call the SAME function, which is what keeps the baked twelve and the live
+   twelve the same shape.
 
-If either chunk fails (KV empty, R2 missing, etc.), the rewriter silently
-skips and the inline JS in `index.html` takes over with a client-side
-fetch.
+A fragment that cannot be built answers rather than degrading the document:
+`/photos/grid.html` returns 503 and the page keeps its baked twelve,
+`/rn/tracks.html` renders its own empty-state `<li>`. Nothing silently skips any
+more, because there is no rewriter left to skip.
+
+**The swap runbook is in [MAINTENANCE.md](docs/MAINTENANCE.md)** under "Change
+the now-playing playlist", and it needs no deploy: every reader fetches
+`playlist-id` from KV per request. It told you to redeploy until 2026-08-31, on
+the strength of a `_playlistId` module memo that no longer exists and a prerender
+that no longer happens.
 
 ### Moving a page: what checks it, and what does not
 
