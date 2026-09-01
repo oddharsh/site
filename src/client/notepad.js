@@ -25,7 +25,7 @@
 
   function el(h) { var t = D.createElement("template"); t.innerHTML = h.trim(); return /** @type {HTMLElement} */ (t.content.firstChild); }
   // Intentional twins of nav.js's el()/esc(). nav.js and notepad.js are separate
-  // top-level scripts, each minified on its own (build.mjs runs esbuild `transform`,
+  // top-level scripts, each minified on its own (build.ts runs esbuild `transform`,
   // never `bundle`), so sharing these ~250 bytes would cost either an import (a
   // second request on every /writing page) or a window global — and notepad.js is
   // deferred BEFORE nav.js, so nav's global isn't there yet when this runs. Keep the

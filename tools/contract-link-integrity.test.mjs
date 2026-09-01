@@ -6,7 +6,7 @@ import {
 } from "./contract-shared.ts";
 
 // ── link integrity ──────────────────────────────────────────────────────────
-// The resolver behind build.mjs's link-integrity invariant. Tested for TEETH
+// The resolver behind build.ts's link-integrity invariant. Tested for TEETH
 // rather than for agreement: the invariant runs over a tree that currently has
 // zero dangling refs, so a test that only asserted "the real site passes" would
 // keep passing after the resolver was accidentally reduced to `() => true`.
@@ -52,7 +52,7 @@ test("the link resolver rejects a page that moved", async () => {
 });
 
 // BUN ONLY, and the skip is explicit so it cannot pass quietly. internalRefs
-// parses with HTMLRewriter, a bun global; build.mjs runs under bun, so that is
+// parses with HTMLRewriter, a bun global; build.ts runs under bun, so that is
 // the only runtime the function is ever called in. Under `node --test` the
 // global is absent and the import throws, which is how this test began failing
 // the node twin the day #497 landed — invisibly, because CI ran only bun.

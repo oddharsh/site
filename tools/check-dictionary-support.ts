@@ -43,7 +43,7 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
 // 1b. shell COVERAGE: is the a-dict set built against the bytes browsers actually HOLD?
 //
 // Probe 1 above offers a committed candidate and asserts the worker answers dcz. That is
-// true by construction: build.mjs builds a delta for every a-dict entry, so the probe can
+// true by construction: build.ts builds a delta for every a-dict entry, so the probe can
 // only ever agree with itself. It reads the live hash purely to EXCLUDE it.
 //
 // The question a returning visitor asks is the opposite one. They hold whatever `/a/` asset

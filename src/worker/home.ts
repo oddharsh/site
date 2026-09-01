@@ -5,7 +5,7 @@ import { span } from "./lib/trace.ts";
 import { getAltMap, getHistogramMap, getImagesManifest } from "./photos.ts";
 
 // ── the homepage's dynamic half, as a fragment ──────────────────────
-// `/` itself is now a DETERMINISTIC static document: build.mjs bakes a fixed
+// `/` itself is now a DETERMINISTIC static document: build.ts bakes a fixed
 // twelve tiles and the newest-photo date into it, so it carries a q11 twin, a
 // dcz delta, and a real ETag like every other page here. What used to be four
 // HTMLRewriter injections (tracks, photo grid, visit counter, last-modified)
@@ -18,7 +18,7 @@ import { getAltMap, getHistogramMap, getImagesManifest } from "./photos.ts";
 //   last-modified   → BAKED. It derives from the bundled photo index, so it
 //                     changes only on deploy; a build is the honest place for
 //                     it. The old comment here claimed "there's no build step",
-//                     which stopped being true when build.mjs arrived.
+//                     which stopped being true when build.ts arrived.
 //
 // no-store, because the whole point of this response is that it differs every
 // time. It is small (twelve <a> blocks, ~4KB br) and it is fetched after the

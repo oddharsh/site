@@ -375,7 +375,7 @@ test("site-manifest.json is a well-formed registry with unique paths", async () 
 
 test("committed manifest projections match a fresh generation", async () => {
   // guards against a commit that edits site-manifest.json but forgets
-  // `bun run gen:manifest` — the same drift build.mjs #8 blocks, checked here too.
+  // `bun run gen:manifest` — the same drift build.ts #8 blocks, checked here too.
   const { surfaces } = readManifest();
   const mod = await readFile("src/worker/lib/site-manifest.ts", "utf8");
   assert.equal(mod.trim(), workerModule(surfaces).trim(), "lib/site-manifest.js is stale — run bun run gen:manifest");

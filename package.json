@@ -1,7 +1,7 @@
 {
   "name": "aadhar-sh",
   "private": true,
-  "description": "aadhar.sh - deploy-time transform only (authoring stays buildless; see build.mjs)",
+  "description": "aadhar.sh - deploy-time transform only (authoring stays buildless; see build.ts)",
   "license": "MIT",
   "type": "module",
   "packageManager": "bun@1.4.0",

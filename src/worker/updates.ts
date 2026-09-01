@@ -20,7 +20,7 @@ export async function handleWindowsUpdate(request, env, ctx) {
 // it, which is what keeps /updates, /updates.json and /restore from drifting apart —
 // previously each ran its own SELECT with its own LIMIT and its own error handling.
 //
-// It also makes the three renderers PURE, so build.mjs can call them in Node against
+// It also makes the three renderers PURE, so build.ts can call them in Node against
 // the committed projection (src/worker/checkpoints.json, written by
 // bump-version.sh) and emit updates.html + restore.html at deploy time. Those two
 // pages are the only dynamic surfaces whose data changes ONLY at deploy — the

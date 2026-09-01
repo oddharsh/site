@@ -4,7 +4,7 @@
   // allowlist that mirrors src/worker/index.ts: static is the default,
   // and compute only runs where a route earns it. Compression is NO LONGER left
   // entirely to the platform: /a/* (the content-hashed shell) is worker-first so it
-  // can serve build.mjs's brotli q11 twin. The edge fly-compresses at about q4 and
+  // can serve build.ts's brotli q11 twin. The edge fly-compresses at about q4 and
   // prefers zstd when a browser offers everything, which measured LARGER than its
   // own brotli here (homepage: 13,264 zstd vs 12,457 br vs 10,524 br q11, 2026-07-26).
   // Everything else still takes the platform default. (The homepage used to be the
@@ -13,7 +13,7 @@
   // delta, and ETag as every other page.)
   //
   // UNBYPASSABLE BUILD: main + assets point at .build/public (the minified
-  // tree), and the "build" block below runs build.mjs FIRST on every deploy.
+  // tree), and the "build" block below runs build.ts FIRST on every deploy.
   // So `wrangler deploy` (bare), `bun run deploy:direct`, and Workers Builds all ship
   // the minified shells + luna.css — there is no longer a path that serves the
   // readable originals by accident (which is exactly how prod ended up on an
@@ -25,7 +25,7 @@
   // Wrangler then owns this one build instead of running it twice. Local dev
   // must NOT use this config (it would pay the full public/ -> .build copy on
   // every reload); it uses wrangler.dev.jsonc, which points at public/ directly.
-  // The two configs' bindings must match; build.mjs warns on drift.
+  // The two configs' bindings must match; build.ts warns on drift.
   "name": "aadhar-sh",
   // Pinned because wrangler picks an account only when the login has exactly
   // ONE, and that stopped being true on 2026-08-07: a second account appeared

@@ -40,7 +40,7 @@ test("the pane states only what it was given", async () => {
 
 // A twin may only be advertised where the build wrote one. The committed list is
 // empty on purpose (dev serves a tree with no twins), so the guard is that the
-// marker build.mjs rewrites is still there to be rewritten.
+// marker build.ts rewrites is still there to be rewritten.
 test("the twin list is generated, not committed", () => {
   const source = readFileSync("src/worker/lib/twins.ts", "utf8");
   assert.match(source, /^export const TWIN_PATHS = \[\]; \/\/ build:twins$/m,

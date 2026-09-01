@@ -11,7 +11,7 @@
 // actual Browser Run service — with your uncommitted edits in the handler.
 //
 // WHY THIS IS GENERATED AND NOT A THIRD COMMITTED CONFIG. There are already two
-// (wrangler.jsonc and wrangler.dev.jsonc), build.mjs invariant #6 exists solely
+// (wrangler.jsonc and wrangler.dev.jsonc), build.ts invariant #6 exists solely
 // to warn when their binding sets drift, and that warning is the evidence that a
 // third hand-maintained copy would rot. A twin derived at the moment of use is a
 // pure function of the config it came from, which is the same argument the

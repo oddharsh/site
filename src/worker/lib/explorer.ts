@@ -1,11 +1,11 @@
 // lib/explorer.js — the Explorer address bar and task pane, as markup.
 //
-// Two devices, one builder, used from both sides of the site: build.mjs bakes
+// Two devices, one builder, used from both sides of the site: build.ts bakes
 // them into every staged static page, and lunaPage() emits them for the
 // Worker-rendered ones. Neither side owns a private copy, for the same reason
 // lib/desktop.js exists — window chrome that changes in two places drifts.
 //
-// Node-safe on purpose (no `cloudflare:` import), because build.mjs and
+// Node-safe on purpose (no `cloudflare:` import), because build.ts and
 // contract-tests.mjs both import it under plain node. See gotcha 16.
 //
 // THE HONESTY RULE IS THE DESIGN CONSTRAINT. Every row here is passed in by a
@@ -21,7 +21,7 @@ export type Task = { href: string; label: string; glyph?: string };
 export type Detail = { term: string; value: string };
 
 // The first-level places, in taskbar order. Declared here rather than derived
-// at runtime so the Worker carries no data file; build.mjs asserts this list
+// at runtime so the Worker carries no data file; build.ts asserts this list
 // against site-manifest.json's `taskbar` surfaces, so adding a section to the
 // manifest and not to this list fails the build instead of quietly leaving the
 // pane one place short.

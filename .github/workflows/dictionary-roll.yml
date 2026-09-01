@@ -5,7 +5,7 @@ name: Dictionary roll
 # `/a/` assets and pages are content-addressed, so a change mints a new URL. A
 # returning visitor still holds the OLD bytes, offers their hash, and earns a
 # delta only if those exact bytes were committed here when the new version was
-# built. build.mjs cannot derive that from source: it would have to know what a
+# built. build.ts cannot derive that from source: it would have to know what a
 # browser is holding. So the sets are committed, and committing them is a step a
 # human has to remember.
 #

@@ -1,7 +1,7 @@
 // check-agent.mjs — is this site agent-accessible IN PRACTICE?
 //
 // Every other agent check here reads a declaration: the route oracle sweeps
-// routes, gen-mcp-cards diffs a card against tools/list, build.mjs counts the
+// routes, gen-mcp-cards diffs a card against tools/list, build.ts counts the
 // Markdown twins. All of them passed on 2026-08-12 while an agent browser was
 // getting a homepage with 12 blank squares and a script that threw on every
 // page. A declaration cannot catch that, because the defect is in what an

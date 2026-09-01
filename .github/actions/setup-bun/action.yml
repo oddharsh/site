@@ -56,7 +56,7 @@ runs:
         # zstdCompressSync's `dictionary` option is the ONE api this build cannot
         # ship without, and every bun before 1.4 ACCEPTS it and silently ignores
         # it: the frame still decodes, nothing throws, and the only signal is a
-        # byte count that never shrank. build.mjs feature-detects it too, but 40
+        # byte count that never shrank. build.ts feature-detects it too, but 40
         # seconds into a build. This is the same control, run first and named.
         bun -e '
           const { constants, zstdCompressSync } = require("node:zlib");

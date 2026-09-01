@@ -11,13 +11,13 @@
 //   - src/client/nav-run.js generated:garage-pages + generated:lwe-pages — the Run
 //     palette's garage/lwe sub-entries (terse {label,path,hint}, no temporal data)
 //
-// What this deliberately does NOT own (hand-authored, VERIFIED by build.mjs #8):
+// What this deliberately does NOT own (hand-authored, VERIFIED by build.ts #8):
 //   - sitemap.xml — carries per-page hand-tuned <lastmod>; generating would
-//     flatten a real SEO freshness signal. build.mjs enforces coverage instead.
+//     flatten a real SEO freshness signal. build.ts enforces coverage instead.
 //   - src/pages/garage/index.html — rich hand-written gallery cards. Verified.
 //   - nav-run.js top-level PAGES (Home/photos/…) — hand-authored. Verified subset.
 //
-// The projection functions below are PURE and exported, so build.mjs re-runs the
+// The projection functions below are PURE and exported, so build.ts re-runs the
 // exact same logic in-memory and fails the deploy if a committed output drifts.
 // Only main() touches the filesystem, and only when run directly.
 
@@ -86,7 +86,7 @@ export function workerModule(surfaces) {
 // (do not hand-edit; edit the registry and re-run the generator). AGENT_SURFACES
 // is the catalog MCP resources/list serves: every surface flagged agents:true,
 // trimmed to what a client needs to decide where to look. WEBMENTION_* are the
-// pages that accept an inbound webmention. build.mjs #8 fails the deploy if any
+// pages that accept an inbound webmention. build.ts #8 fails the deploy if any
 // of these drift from the registry.
 export const AGENT_SURFACES = ${JSON.stringify(agentSurfaces(surfaces), null, 2)};
 

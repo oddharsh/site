@@ -10,7 +10,7 @@
 //   bun run routes:check                 # boot .build/public, sweep, exit non-zero on failure
 //
 // It points at wrangler.jsonc, NOT wrangler.dev.jsonc, deliberately: that config
-// carries `build.command`, so the harness runs build.mjs itself and serves the
+// carries `build.command`, so the harness runs build.ts itself and serves the
 // minified tree with the /a/<hash8> shell — the bytes a deploy would ship. That
 // is also why VERIFY_BUILT=1 is set, which re-arms the build-output rows
 // (minified banners, .src twins, the luna.css size ceiling) that verify-routes

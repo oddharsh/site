@@ -32,13 +32,13 @@ The generator always emits the quiz data block and `/quiz.js`, so a new page
 cannot silently omit the understanding check.
 
 > **`generate.mjs wire` is stale. Do not run it.** It predates
-> [`tools/gen-manifest.mjs`](../tools/gen-manifest.mjs), which now owns the
+> [`tools/gen-manifest.ts`](../tools/gen-manifest.ts), which now owns the
 > `generated:garage-pages` fence in `nav.js` and derives it from
 > `site-manifest.json`. `wire` also wants to own `garage/index.html` and
 > `sitemap.xml`, which are deliberately hand-authored: the shelf cards are
 > written prose, and the sitemap carries per-page `<lastmod>` values that a
 > generator would flatten into one date and destroy as a freshness signal.
-> `build.mjs` check #8 verifies coverage of both instead. Steps 6 and 7 above
+> `build.ts` check #8 verifies coverage of both instead. Steps 6 and 7 above
 > are the current path; `/garage/pqc` was the first page through it.
 
 ## Spec shape

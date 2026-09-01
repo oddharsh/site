@@ -45,7 +45,7 @@ function chromeCss(c) {
   const soft = c.accentSoft || "#f6f1e6";
   const glyphFont = c.glyphFont || 'var(--font-caption)';
   const [g0, g1] = c.picGrad;
-  // READABLE on purpose: src/pages is authored source and build.mjs minifies it
+  // READABLE on purpose: src/pages is authored source and build.ts minifies it
   // into .build, so a minified template here only made the generated pages
   // differ from every hand-authored one. Values track the rest of the section
   // (10pt title bar, 12px content gutter, #66707d timestamps); the minified

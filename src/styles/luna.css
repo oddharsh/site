@@ -19,7 +19,7 @@
    local()-only references for tooling, and the house rule is that no served
    page carries @font-face — the --font-* stacks in typography.css are the
    shipping surface. View Source is part of the product, so this readable copy
-   ships too: build.mjs minifies /luna.css for the wire and serves this file
+   ships too: build.ts minifies /luna.css for the wire and serves this file
    verbatim as /luna.src.css.
    ============================================================================ */
 
@@ -956,7 +956,7 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
    Two devices Luna Explorer always had and this site did not: the path as a
    sunken well under the caption, and the left rail answering "what can I do
    with this, where else can I go, what is this thing". Markup comes from
-   _worker.js/lib/explorer.js — baked into static pages by build.mjs, emitted
+   _worker.js/lib/explorer.js — baked into static pages by build.ts, emitted
    by lunaPage() for the Worker-rendered ones.
 
    The pane is a SIBLING of .content, not a child, and the window itself becomes

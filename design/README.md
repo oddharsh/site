@@ -74,7 +74,7 @@ Treat every remaining number in GREENFIELD.md as wrong by a similar margin.
 - **Notepad autosize via `field-sizing: content`**; the measurement script died.
 - **Window resize via CSS `resize: both`**, replacing the scripted path.
 - **Histograms and EXIF bake at photo-add time** (v139), all four channels.
-- **The static desktop partial** (lib/desktop.js), with a build.mjs tripwire
+- **The static desktop partial** (lib/desktop.js), with a build.ts tripwire
   keeping it in sync with nav.js. This is what actually won CLS 0 and the
   curl/JS-off desktop, which was the real prize behind the zero-JS ledger.
 - **Sound pack, System Properties tray popout, Windows Update balloon**: all

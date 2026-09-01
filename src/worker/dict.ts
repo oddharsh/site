@@ -13,7 +13,7 @@
 // saving that does not exist. There is no error to catch — the numbers just come
 // out confident and false, which is worse than not offering the feature.
 //
-// So the delta stays in build.mjs, where real node computes it, and this route
+// So the delta stays in build.ts, where real node computes it, and this route
 // does the half that is genuinely missing from the world.
 //
 // ── the half that is missing ──────────────────────────────────────────────

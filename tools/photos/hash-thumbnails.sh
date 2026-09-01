@@ -74,7 +74,7 @@ if os.path.exists(map_path):
 #
 # Not hypothetical: #394 re-encoded 316 thumbnails on 2026-08-14 and re-baked
 # nothing, and it went unseen for nine days because check-photo-pipeline compares
-# histograms.json against images/meta/, which build.mjs derives FROM
+# histograms.json against images/meta/, which build.ts derives FROM
 # histograms.json. Those two agree no matter what the JPEGs say.
 prev_j = {st: e.get("j") for st, e in hashes.items() if isinstance(e, dict)}
 copied = 0

@@ -10,7 +10,7 @@
 //   node tools/photos/gen-desktop-partial.ts
 
 // Static pages keep the generated partial checked in so direct local serving,
-// curl and JavaScript-off visits see the same desktop as production. build.mjs
+// curl and JavaScript-off visits see the same desktop as production. build.ts
 // independently renders these artifacts and hard-fails on any drift.
 
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";

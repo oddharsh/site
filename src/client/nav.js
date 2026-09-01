@@ -758,7 +758,7 @@
       // hoist.js is infotip.js's one static import, so the parser cannot
       // discover it until infotip.js has landed — the same serialized second
       // fetch that cost the homepage a round trip through tooltip.js (measured
-      // 2026-07-27, see build.mjs's STRING_ASSETS note). Kicking it off here
+      // 2026-07-27, see build.ts's STRING_ASSETS note). Kicking it off here
       // runs the two in parallel; the result is unused on purpose, since the
       // module cache is what the static import hits, and on the homepage it is
       // usually already warm from tooltip.js.

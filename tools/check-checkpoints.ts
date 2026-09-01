@@ -3,7 +3,7 @@
 // check-checkpoints.mjs — does the committed projection still match D1?
 //
 // D1 is the source of truth for the deploy log; src/worker/checkpoints.json
-// is a derived read of it that build.mjs renders /updates and /restore from.
+// is a derived read of it that build.ts renders /updates and /restore from.
 // bump-version.sh rewrites the file after every insert, so the normal path keeps
 // them in step. This catches the paths it cannot: a row inserted by hand or by
 // another machine, a projection edited directly, or a bump whose D1 re-read failed

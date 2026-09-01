@@ -38,7 +38,7 @@ const TIMEOUT_MS = Number(process.env.VERIFY_TIMEOUT_MS || 20000);
 // (unminified, no .src twins), so those checks are gated to non-localhost bases.
 // VERIFY_BUILT=1 forces them back on for a local base pointed at .build/public,
 // which is what check-routes-harness.mjs does: there the built tree IS the tree
-// under test, so the "deploy bypassed build.mjs" tripwire can fire pre-merge.
+// under test, so the "deploy bypassed build.ts" tripwire can fire pre-merge.
 const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])/.test(base);
 const isProd = !isLocal;
 const builtOutput = isProd || process.env.VERIFY_BUILT === "1";
@@ -166,7 +166,7 @@ const ROUTES = [
   // the retired SW's unregister stub: must keep serving 200 for a year+
   { path: "/sw.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "unregister" },
   // build-output oracle (prod only — dev serves the readable public/ tree): a
-  // deploy that skipped build.mjs ships the readable 98KB nav.js with no banner
+  // deploy that skipped build.ts ships the readable 98KB nav.js with no banner
   // and 404s every .src twin. These are the tripwire for that exact bypass.
   //
   // 50,000 -> 65,000 when the shell infotips landed: the minified shell reached
@@ -407,7 +407,7 @@ async function probe(r) {
     const okCt = !r.ct || (Array.isArray(r.ct) ? r.ct.some(c => ct.startsWith(c)) : ct.startsWith(r.ct));
     const okMarker = !r.marker || body.includes(r.marker);
     const okBytes = !r.maxBytes || (bytes !== null && bytes <= r.maxBytes);
-    // The doctype leads the document, but build.mjs stamps a one-line banner
+    // The doctype leads the document, but build.ts stamps a one-line banner
     // pointing at the readable .src.html twin ahead of it. That banner reached
     // /lens on 2026-07-31, when minification stopped being homepage-only; the
     // homepage had carried it for a while without tripping this, because only

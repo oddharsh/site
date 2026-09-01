@@ -15,7 +15,7 @@ export async function handleBotPage(request, env, ctx) {
   // and that stranger is increasingly an agent. Answer in Markdown when asked;
   // /bot.md is the stable, cacheable URL for the same bytes. The twin is
   // hand-authored (src/content/md/bot.md) because this page renders from a template
-  // literal, and build.mjs fails the deploy if it drifts from the constants here.
+  // literal, and build.ts fails the deploy if it drifts from the constants here.
   if (wantsMarkdown(request)) {
     const md = await serveMarkdownTwin(request, env, "/bot.md");
     if (md) return md;

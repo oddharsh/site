@@ -571,7 +571,7 @@ export async function handleImagesManifest(request, env, ctx) {
 // (above the fold), the rest lazy; content-visibility skips below-fold work.
 // The /photos contact sheet, as a PURE renderer over the committed pool.
 //
-// Extracted from the closure inside handlePhotos so build.mjs can call it in Node
+// Extracted from the closure inside handlePhotos so build.ts can call it in Node
 // and emit photos.html at deploy time (step 1e), which buys the page the same q11
 // twin + dcz delta tier the 40 authored pages get. It is the largest page on the
 // site (60KB), and it was the largest one still taking Cloudflare's on-the-fly

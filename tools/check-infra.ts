@@ -319,7 +319,7 @@ async function checkTree(infra, wrangler, aux) {
   // account appearing on the login is enough to break every non-interactive
   // wrangler call at once (2026-08-07). Checking BOTH configs matters: the dev
   // twin is what dev:remote and routes:check:remote reach production through,
-  // and build.mjs's drift warning compares binding sets only, so an account_id
+  // and build.ts's drift warning compares binding sets only, so an account_id
   // that went missing from one of them would otherwise be caught by nothing.
   //
   // wrangler.jsonc's account_id is the SOURCE OF TRUTH and the other three are

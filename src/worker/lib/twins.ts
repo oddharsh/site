@@ -2,7 +2,7 @@
 // its own alternate representation instead of leaving agents to guess.
 //
 // Same shape as csp-hashes.js and shell-assets.js: COMMITTED with an empty list,
-// and build.mjs overwrites the marked line in the staged .build/ copy from the
+// and build.ts overwrites the marked line in the staged .build/ copy from the
 // twin set it just generated. Keep the `// build:twins` marker — the build
 // replaces that whole line.
 //
@@ -10,7 +10,7 @@
 // empty: twins are BUILD OUTPUT (`.build/public/**/*.md`), so `bun run dev`
 // serves a tree where none of them exist. A committed list would advertise a
 // twin that answers 404 on exactly the surface it claims to describe. Empty
-// means no page advertises one in dev, which is true there; build.mjs hard-fails
+// means no page advertises one in dev, which is true there; build.ts hard-fails
 // if the list it emits collapses.
 //
 // This is the honesty rule as a build step: a page links to its Markdown only

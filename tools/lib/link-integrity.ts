@@ -8,7 +8,7 @@
 // href survived every gate in the repo.
 //
 // Nothing here is a second copy of the route table. The inputs are exactly what
-// build.mjs already extracts for invariant #1 (the ROUTES keys, run_worker_first's
+// build.ts already extracts for invariant #1 (the ROUTES keys, run_worker_first's
 // globs), plus the surface registry and the staged tree itself, so a route added
 // anywhere is understood here without a matching edit.
 //

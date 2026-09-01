@@ -19,7 +19,7 @@
 // wants a count over 123 files, and check-test-types can compare the program
 // against the directory exactly. What this module guarantees is that `listed`
 // is real, so a filter that scanned nothing cannot read as a clean run. That is
-// this repo's most-repeated failure and it has its own precedent in build.mjs's
+// this repo's most-repeated failure and it has its own precedent in build.ts's
 // route invariant.
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";

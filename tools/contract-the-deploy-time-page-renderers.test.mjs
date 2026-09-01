@@ -10,7 +10,7 @@ import {
 } from "./contract-shared.ts";
 
 // ── the deploy-time page renderers ──────────────────────────────────
-// build.mjs step 1e runs these in Node and writes photos.html / bot.html, which
+// build.ts step 1e runs these in Node and writes photos.html / bot.html, which
 // step 8 then turns into the q11 twin and the dcz deltas. The whole scheme rests on
 // one property: the renderer is PURE over build-time artifacts, so Node and the
 // Worker produce identical bytes. If it ever reaches for runtime state the twin

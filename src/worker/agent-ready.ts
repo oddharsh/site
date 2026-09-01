@@ -6,7 +6,7 @@ const INNER = COLS - 4;
 // ── the bill ──────────────────────────────────────────────────────────────
 // HAND-MAINTAINED with a checked date, the same contract lens's census runs on
 // (lens.js: "Hand-maintained; each fact carries a 'checked' date and a source").
-// A generator would drift less but would mean extending build.mjs, which this
+// A generator would drift less but would mean extending build.ts, which this
 // repo does not do without the owner saying so. A stale number with an honest
 // date beats a fresh number nobody sanctioned.
 //

@@ -53,7 +53,7 @@
 // images/meta/ IS A LOCAL PIPELINE ARTIFACT as of 2026-08-17, not a committed
 // tree. This script and build-histogram-index.mjs read it right after
 // extract-photo-metadata.sh writes it, and the two indexes they emit are what
-// gets committed; build.mjs then derives the served /images/meta/<stem>.json
+// gets committed; build.ts then derives the served /images/meta/<stem>.json
 // files back out of those indexes. So the causality runs one way now, and a
 // stale per-photo file is no longer a state the repository can hold.
 

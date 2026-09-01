@@ -4,13 +4,13 @@
 //   bun run shell:roll
 //
 // This is all that remains of the old gen-shell-deltas.mjs. The deltas themselves moved
-// into build.mjs once it turned out node:zlib's zstd takes a `dictionary` option (the
+// into build.ts once it turned out node:zlib's zstd takes a `dictionary` option (the
 // "unreachable from Node" limit was BROTLI's at the time, I had over-generalized it, and
 // node 26 has since given brotli one as well), so they are
 // build output now: no zstd CLI, no committed artifacts, nothing to forget.
 //
 // Rolling stays a deliberate human step for one reason: it WRITES INTO THE SOURCE TREE, and
-// build.mjs must never do that. Its output has to be committed, because a dictionary must be
+// build.ts must never do that. Its output has to be committed, because a dictionary must be
 // bytes the BROWSER already holds, which no build can derive from source.
 //
 // Rolling is also not urgent. A dictionary 11 days stale still delivered 87-93%, so the
@@ -213,7 +213,7 @@ for (const [, group] of byBase) {
   }
 }
 console.log(`shell:roll — adopted ${adopted}, pruned ${pruned}, keeping ${KEEP} per asset.`);
-console.log("  Commit src/dict/a-dict/. build.mjs regenerates the deltas on its own from here.");
+console.log("  Commit src/dict/a-dict/. build.ts regenerates the deltas on its own from here.");
 }
 
 // ── PAGE DICTIONARIES (src/dict/p-dict) ──────────────────────────────────────────

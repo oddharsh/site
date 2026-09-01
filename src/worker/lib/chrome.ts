@@ -14,7 +14,7 @@ import { twinFor } from "./twins.ts";
 // how the /whoareyou and /bot h2 rules drifted apart earlier). this is
 // the one shared source; page-specific rules (h1 sizes, tables, field
 // grids, the whoareyou title-text + control spacing) stay inline per
-// page after the call. The /*min*/ sentinel lets build.mjs minify this static
+// page after the call. The /*min*/ sentinel lets build.ts minify this static
 // literal on the wire; the readable source remains in git.
 export function xpChromeCss() {
   return `/*min*/
