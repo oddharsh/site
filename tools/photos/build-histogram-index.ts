@@ -107,6 +107,29 @@ export function packHistogram(hi) {
   return out;
 }
 
+// The build derives /images/meta/<stem>.json fallbacks from this packed index.
+// Keep that decoder beside the encoder: when the wire representation moved from
+// absolute levels to modulo deltas, build.ts's private copy did not move with it
+// and generated plausible-looking but wrong fallback curves. tooltip.js retains
+// the small browser copy, and the contract suite checks both against this one.
+export function unpackHistogram(packed) {
+  if (!packed || packed.length !== CHANNELS.length * BINS) return null;
+  const hi: Record<string, number[]> = {};
+  for (const [ci, channel] of CHANNELS.entries()) {
+    let previous = 0;
+    const bins: number[] = [];
+    for (let i = 0; i < BINS; i++) {
+      const wire = packed.charCodeAt(ci * BINS + i) - HIST_BASE;
+      if (wire < 0 || wire >= HIST_LEVELS) return null;
+      const level = (previous + wire) % HIST_LEVELS;
+      bins.push(Math.round(level * 100 / (HIST_LEVELS - 1)));
+      previous = level;
+    }
+    hi[channel] = bins;
+  }
+  return hi;
+}
+
 export async function buildHistogramIndex() {
   const files = (await readdir(META)).filter((f) => f.endsWith(".json")).sort();
   const index = {};
