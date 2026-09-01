@@ -2106,19 +2106,54 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   // they contribute nothing while the leading pages are long enough, and they keep a
   // content edit from becoming a release incident.
   {
+    // WHAT THE WINDOW ACTUALLY HOLDS, because the list below is not it. The
+    // representatives' tails are laid over the START of this concatenation
+    // (`base.subarray(prefix.length)`), and their 29 KB is longer than
+    // lwe/drivers, so drivers contributes nothing and the dictionary is
+    // garage/compression plus 2 KB of vigenere. That has been true since the
+    // tails were added and was measured on 2026-08-31 rather than reversed:
+    // putting the tails LAST keeps drivers and evicts compression, and it is
+    // 4,953 B worse over the 55 pages (home 25.9% -> 23.6%, /garage 22.0% ->
+    // 18.2%; only /lwe prefers drivers, 45.3% -> 48.3%). The Garage explainer
+    // is the better single exemplar of the shell every page shares, so the
+    // page this construction happens to drop is the right one to drop. Keep
+    // drivers first: it is what makes the prefix land on bytes that cost the
+    // least, and the throw below still needs the list to reach 64 KB.
     const BASE_CORPUS = [
-      "lwe/drivers.html",           // the compact LWE conversation shell
-      "garage/compression.html",    // the Garage explainer, the other structural family
+      "lwe/drivers.html",           // displaced by the tails; see above
+      "garage/compression.html",    // the Garage explainer: the window, in practice
       "lwe/vigenere.html",          // slack, in corpus order
       "garage/chunks.html",
     ];
-    const REPRESENTATIVES = [
-      "garage/horizon.html",        // very large standalone lab
-      "garage/vt-b.html",           // tiny browser fixture
-      "garage/vt-check.html",       // tiny browser fixture
-      "access/index.html",          // standalone device matrix
+    // Each representative carries its OWN tail budget, since 2026-08-31. They
+    // were a uniform 16 KiB, and that uniform number was the single most
+    // expensive setting in this block: four 16 KiB tails are 36.4 KB of the 64,
+    // laid over the START of the base corpus, so the pages with real traffic
+    // matched against 28 KB of corpus instead of 64. Measured over the 55
+    // staged pages, family delta as a share under plain q11:
+    //
+    //                          served    home   /garage   /lwe   worst outlier
+    //   16/16 + fixtures     480,138   16.4%    13.8%   41.7%   4.5% horizon
+    //   12/12 + fixtures     455,704   25.9%    22.1%   45.3%   3.9% access
+    //   no representatives   446,810   25.2%    22.3%   49.8%   0.0% access
+    //
+    // So the tails cost the homepage nine points and /garage eight, while what
+    // they buy is a margin on four pages almost nobody fetches. Not zero,
+    // though: with no tail at all access/index beats plain q11 by 17 BYTES, a
+    // coin flip that one content edit turns into a loss (and does, at a 4 KiB
+    // tail). 12 KiB each for the two large layouts keeps every outlier at 3.9%
+    // or better; the frontier is flat around it (14/10 is 57 B cheaper with a
+    // 2.6% margin), and the widest margin wins a flat frontier.
+    //
+    // The two fixtures are under 3 KB apiece, so a 4 KiB budget takes the whole
+    // file and each compresses to 20 bytes. Keeping them COSTS nothing on the
+    // aggregate: their 4.4 KB displaces less base than the 1.7 KB they save.
+    const REPRESENTATIVES: Array<[string, number]> = [
+      ["garage/horizon.html", 12_288],   // very large standalone lab
+      ["garage/vt-b.html",     4_096],   // tiny browser fixture, whole file
+      ["garage/vt-check.html", 4_096],   // tiny browser fixture, whole file
+      ["access/index.html",   12_288],   // standalone device matrix
     ];
-    const REPRESENTATIVE_BYTES = 16_384;
     const SIZE = 65_536;
     const parts = [];
     let total = 0;
@@ -2150,14 +2185,14 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     }
     const base = Buffer.concat(parts).subarray(0, SIZE);
     const representatives = [];
-    for (const rel of REPRESENTATIVES) {
+    for (const [rel, tailBytes] of REPRESENTATIVES) {
       const staged = await readFile(`${OUT}/public/${rel}`, "utf8");
       const final = Buffer.from(minifiedPage(staged, rel));
-      representatives.push(final.subarray(Math.max(0, final.length - REPRESENTATIVE_BYTES)));
+      representatives.push(final.subarray(Math.max(0, final.length - tailBytes)));
     }
     const prefix = Buffer.concat(representatives);
     if (prefix.length >= SIZE) {
-      throw new Error(`page-family dictionary representatives consume ${prefix.length} B of ${SIZE} B; reduce REPRESENTATIVE_BYTES`);
+      throw new Error(`page-family dictionary representatives consume ${prefix.length} B of ${SIZE} B; reduce a tail budget in REPRESENTATIVES`);
     }
     const dictionary = Buffer.concat([prefix, base.subarray(prefix.length)]);
     if (dictionary.readUInt32LE(0) === 0xec30a437) {
