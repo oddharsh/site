@@ -127,8 +127,8 @@ export function start(initial) {
       // dr · cc chrome · cb chrome-blue · gr grain · gs grain-size · ht highlight ·
       // st shadow · sa saturation · hi {l,r,g,b} histogram. nulls dropped.
       // Bars come from the TILE first and the network second. The worker packs the
-      // twelve it drew into data-hist (4 channels x 64 bins, one byte each,
-      // base64), so a hover on a tile that has one costs no request at all. A
+      // twelve it drew into data-hist (4 channels x 64 bins, one character each,
+      // modulo-delta encoded), so a hover on a tile that has one costs no request at all. A
       // tile without one, or a hover on something that is not a grid tile, falls
       // through to the per-photo fetch exactly as before.
       // One character per bin, ASCII 63..126, written by
@@ -143,14 +143,19 @@ export function start(initial) {
         const out = { l: [], r: [], g: [], b: [] };
         const channels = ["l", "r", "g", "b"];
         for (let c = 0; c < 4; c++) {
+          let previous = 0;
           for (let i = 0; i < HIST_BINS; i++) {
-            const level = packed.charCodeAt(c * HIST_BINS + i) - HIST_BASE;
+            const wire = packed.charCodeAt(c * HIST_BINS + i) - HIST_BASE;
             // Out of range means the attribute was truncated or tampered with.
             // Refuse the whole histogram rather than draw a shape with a hole in
             // it: a wrong curve is worse than no curve on a surface whose point
             // is showing what the file actually contains.
-            if (level < 0 || level >= HIST_LEVELS) return null;
+            if (wire < 0 || wire >= HIST_LEVELS) return null;
+            // Starting previous at zero makes the first bin absolute; the same
+            // modulo addition reconstructs every later signed delta.
+            const level = (previous + wire) % HIST_LEVELS;
             out[channels[c]].push(Math.round(level * 100 / (HIST_LEVELS - 1)));
+            previous = level;
           }
         }
         return out;
@@ -179,7 +184,7 @@ export function start(initial) {
       // BARS: the four 64-bin channels stay OUT of that index, because they are
       // 623 of a meta file's ~977 bytes and would take it from 2.6KB to 24KB for
       // bars most visitors never see. They now ride on the TILE instead
-      // (data-hist, ~1.9KB brotli for the twelve a visitor can actually hover),
+      // (data-hist, ~1.8KB brotli for the twelve a visitor can actually hover),
       // which is the same argument reaching a different answer once the set is
       // twelve rather than 158.
       //

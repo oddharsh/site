@@ -238,17 +238,36 @@ test("the packed histogram survives the round trip tooltip.js does", async () =>
   const hi = {};
   for (const [ci, c] of CHANNELS.entries()) hi[c] = Array.from({ length: BINS }, (_, i) => (i * 7 + ci * 13) % 101);
   const packed = packHistogram(hi);
+  assert.ok(packed, "a complete histogram packs");
   assert.equal(packed.length, CHANNELS.length * BINS, "one character per bin, no padding");
 
-  // The exact decode tooltip.js runs.
-  const decode = (s, ci, i) => Math.round((s.charCodeAt(ci * BINS + i) - HIST_BASE) * 100 / (HIST_LEVELS - 1));
+  // The exact decode tooltip.js runs: first bin absolute, then first-order
+  // deltas in modulo space. The transform changes only the wire entropy; it
+  // neither drops a level nor changes the quantisation bound.
+  const decoded = [];
+  for (let ci = 0; ci < CHANNELS.length; ci++) {
+    let previous = 0;
+    decoded[ci] = [];
+    for (let i = 0; i < BINS; i++) {
+      const wire = packed.charCodeAt(ci * BINS + i) - HIST_BASE;
+      const level = (previous + wire) % HIST_LEVELS;
+      decoded[ci][i] = Math.round(level * 100 / (HIST_LEVELS - 1));
+      previous = level;
+    }
+  }
   let worst = 0;
   for (const [ci, c] of CHANNELS.entries()) {
-    for (let i = 0; i < BINS; i++) worst = Math.max(worst, Math.abs(decode(packed, ci, i) - hi[c][i]));
+    for (let i = 0; i < BINS; i++) worst = Math.max(worst, Math.abs(decoded[ci][i] - hi[c][i]));
   }
   // 64 levels over a 0-100 source, rendered into a 32-unit-tall SVG, so one
   // level is half a pixel and this bound is the whole quality argument.
   assert.ok(worst <= 1, `round trip is within one unit of 100, got ${worst}`);
+  const flat = packHistogram(Object.fromEntries(CHANNELS.map((c) => [c, Array(BINS).fill(50)])));
+  assert.ok(flat, "four complete flat channels pack");
+  for (let ci = 0; ci < CHANNELS.length; ci++) {
+    assert.equal(flat.slice(ci * BINS + 1, (ci + 1) * BINS), "?".repeat(BINS - 1),
+      `${CHANNELS[ci]} flat tail becomes zero deltas rather than repeated absolutes`);
+  }
 
   // THE ENCODING'S SAFETY IS STRUCTURAL, not a property of the current data:
   // 63..126 holds none of & < > " (34, 38, 60, 62), so the attribute can never

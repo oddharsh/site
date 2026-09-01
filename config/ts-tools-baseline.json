@@ -20,7 +20,7 @@
     "tools/contract-rn-the-track-meta-map-must-survive-a-short-playlist-.test.mjs": 14,
     "tools/contract-shared.ts": 20,
     "tools/contract-static-text-assets-ship-their-q11-twin.test.mjs": 2,
-    "tools/contract-the-bundled-photo-pool.test.mjs": 7,
+    "tools/contract-the-bundled-photo-pool.test.mjs": 6,
     "tools/contract-the-execution-half-of-the-readiness-rubric.test.mjs": 1,
     "tools/contract-the-luma-session-jar.test.mjs": 24,
     "tools/contract-the-reader-lens-lens-read-lens-reader.test.mjs": 5,
@@ -55,5 +55,5 @@
     "tools/ua-survey.ts": 17,
     "tools/verify-routes.ts": 2
   },
-  "total": 478
+  "total": 477
 }
