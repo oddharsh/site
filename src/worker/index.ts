@@ -190,8 +190,6 @@ async function serveWorkerRequest(request: SiteRequest, env: Env, ctx: Execution
   // to a constant, so branching on it is dead code). A flag on the child env is
   // also the safer seam, because env is not caller-controllable and no external
   // request can ask production to stop serving its precompressed bodies.
-  const selfEnv = withSelfFetch(env, ctx);
-
   // Workers Logs: one structured line per worker-owned request (path, method,
   // status, ms, version, country, bot), filterable in the dashboard. Edge-direct
   // traffic never reaches this code, so it never logs. Strippable: delete the
@@ -205,7 +203,7 @@ async function serveWorkerRequest(request: SiteRequest, env: Env, ctx: Execution
   // line is emitted on every worker-owned request; the prefix is unique across any
   // two versions that will ever be live together.
   const t0 = Date.now();
-  const response = await route(request, selfEnv, ctx);
+  const response = await route(request, env, ctx);
   // the bot ledger: identified AI-crawler hits tick into Analytics Engine
   // (worker-owned routes only); /ledger prices them. Best-effort, non-blocking.
   countCrawlerHit(env, request, response, url.pathname);
@@ -346,6 +344,19 @@ export default {
 // imprecise one enforced.
 type RouteHandler = (request: SiteRequest, env: Env, ctx: ExecutionContext, url: URL) => Response | Promise<Response>;
 
+// Only Lens needs to dispatch back into this Worker. Building that derived env
+// in serveWorkerRequest made every favicon, redirect, JSON endpoint and static
+// page copy the whole binding object for a callback it could never call. Keep
+// the capability at the routes that consume it instead. A null marker means the
+// request is the inner self-dispatch and must not be armed again. Seven
+// alternating 1000-request in-process harness trials on 2026-09-01 moved the
+// median from 1674.83ms to 1594.44ms; the paired median saved 68.66ms (4.1%),
+// with the candidate winning five of seven pairs.
+function withSelfFetchHandler(handle: RouteHandler): RouteHandler {
+  return (request, env, ctx, url) =>
+    handle(request, env.SELF_FETCH === null ? env : withSelfFetch(env, ctx), ctx, url);
+}
+
 // Exact worker-owned routes. This table mirrors wrangler.jsonc's
 // assets.run_worker_first allowlist: static is the default, and each entry here
 // earns a Worker invocation because it renders, redirects, negotiates, proxies,
@@ -398,16 +409,16 @@ const ROUTE_TABLE: Array<[path: string, handler: RouteHandler]> = [
   ["/perf", (request) => Response.redirect(new URL("/garage/dyno", request.url).href, 301)],
   ["/perf.json", (request) => Response.redirect(new URL("/garage/dyno.json", request.url).href, 301)],
 
-  ["/lens", routeLens],
+  ["/lens", withSelfFetchHandler(routeLens)],
   ["/lens/", routeDropSlash],
-  ["/lens/fetch", handleLensFetch],
-  ["/lens/shot", handleLensShot],
-  ["/lens/browser", handleLensBrowser],
-  ["/lens/wire", handleLensWire],
-  ["/lens/tools", handleLensTools],
-  ["/lens/nlweb", handleLensNlweb],
-  ["/lens/markdown", handleLensMarkdown],
-  ["/lens/compare.json", handleLensCompare],
+  ["/lens/fetch", withSelfFetchHandler(handleLensFetch)],
+  ["/lens/shot", withSelfFetchHandler(handleLensShot)],
+  ["/lens/browser", withSelfFetchHandler(handleLensBrowser)],
+  ["/lens/wire", withSelfFetchHandler(handleLensWire)],
+  ["/lens/tools", withSelfFetchHandler(handleLensTools)],
+  ["/lens/nlweb", withSelfFetchHandler(handleLensNlweb)],
+  ["/lens/markdown", withSelfFetchHandler(handleLensMarkdown)],
+  ["/lens/compare.json", withSelfFetchHandler(handleLensCompare)],
   ["/lens/census", handleCensus],
   ["/lens/census.json", handleCensusJson],
 
