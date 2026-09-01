@@ -5660,6 +5660,52 @@ bun run deploy:direct
     documentation, drop the `{braces}` so it reads as prose rather than as a type
     nobody enforces.
 
+43. **`avifenc --jobs` changes the OUTPUT BYTES, so on a content-addressed
+    pipeline a thread count is a quality flag.**
+    Measured 2026-09-01 on avifenc 1.4.2 (aom 3.14.1) at the exact settings
+    `add-photos.sh` ships, `-q 63 -d 10 --speed 2 --yuv 420`, varying nothing but
+    `--jobs`:
+
+    | stem | `--jobs 1` | `--jobs 4` |
+    |---|--:|--:|
+    | L1000069_3 | 12,301 | 12,329 |
+    | L1009919_2 | 12,580 | 12,483 |
+    | L1009920 | 20,618 | 20,542 |
+    | XT500010 | 52,037 | 51,798 |
+
+    Four of four differ. `--jobs` 2, 4, 8 and 14 are BYTE-IDENTICAL to each
+    other, and a fixed value is deterministic (5 runs at `--jobs 4` produce one
+    md5), so this is a 1-versus-many split rather than per-run nondeterminism.
+
+    **The direction is not consistent, which kills the reflexive explanation.**
+    Single-threaded is LARGER on one stem and SMALLER on the other three, so
+    "more threads compress worse" is not the rule and neither is its opposite.
+    The same split appeared at `--speed 4`, the setting this pipeline used before
+    2026-08-28 (17,389 against 17,347 on a 600px tile), with `--jobs 1` on the
+    other side of the gap. A mechanism is not asserted here: aom's row and tile
+    threading is the obvious suspect and nothing in this repo has verified it,
+    which is gotcha 15's rule about naming mechanisms you have not measured.
+
+    What it costs is gotcha 41's shape, one flag earlier. `/i/` is
+    content-addressed, so re-encoding under a different `--jobs` mints a new URL
+    for each of the AVIF tiers, rewrites `hashes.json`, and orphans every
+    histogram and fingerprint baked from the bytes that are no longer served.
+    Nothing errors. The pipeline runs perfectly and the library quietly becomes a
+    different library.
+
+    **The trap is that it does not look like an encoder setting.** `-q` and
+    `--speed` announce themselves as quality knobs, and `--jobs` reads as
+    scheduling, so it is the first thing anyone reaches for when balancing an
+    outer parallel loop against the encoder's own threads. That is exactly the
+    change #685 wanted to make and deliberately did not: `JOBS` parallelises
+    PHOTOS and avifenc keeps its `--jobs 4` untouched, which is why 8 workers on
+    14 cores is the default rather than 14 workers each running single-threaded.
+
+    The general rule, for any encoder feeding a content-addressed store: **treat
+    every concurrency flag as a quality flag until measured otherwise.** The
+    control is four encodes and a `cmp`, it takes a minute, and the failure it
+    catches is silent in both directions.
+
 
 ---
 
