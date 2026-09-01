@@ -200,12 +200,14 @@ async function checkInvariants() {
   // belongs to exactly one authored root; fail before copying if that changes.
   const stageRoots = ["public", "src/pages", "src/content", "src/client", "src/styles"];
   const stageOwner = new Map<string, string>();
+  const stageDirectories = new Set<string>();
   let stagedAuthored = 0;
   const walkStage = async (root, dir = root, prefix = "") => {
     for (const entry of await readdir(dir, { withFileTypes: true })) {
       const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
       if (root === "public" && (rel === "images/meta" || rel.startsWith("images/meta/"))) continue;
       if (entry.isDirectory()) {
+        stageDirectories.add(rel);
         await walkStage(root, `${dir}/${entry.name}`, rel);
         continue;
       }
@@ -751,6 +753,7 @@ async function checkInvariants() {
   if (warn.length) console.warn("build: invariant WARNINGS (deploy continues):\n  - " + warn.join("\n  - "));
   if (hard.length) throw new Error("build: invariant tripwires FAILED, deploy blocked:\n  - " + hard.join("\n  - "));
   console.log(`invariants ok: ${stagedAuthored} staged paths collision-free, ${routeKeys.length + prefixProbes.length} routes mirrored (${prefixProbes.length} prefix), CSP style-src, blink-fix, generator, geometry, ${skillsChecked} skill digest${skillsChecked === 1 ? "" : "s"}, ${manifestChecked} surfaces registered, ${tasteScanned} files taste-scanned${tasteOk.length ? ` (${tasteOk.length} taste-ok: ${tasteOk.join("; ")})` : ""}, ${conflictScanned} files conflict-free${warn.length ? " (with warnings above)" : ""}`);
+  return stageDirectories;
 }
 
 // ── the client edge, authored once and mirrored at deploy ────────────────────
@@ -826,8 +829,9 @@ const SHELLS = [
   ["webmcp.js",  "/webmcp.src.js",  "registerSiteTools"],
 ];
 
-// fail fast on a broken invariant before doing any staging work
-await checkInvariants();
+// Fail fast on a broken invariant before doing any staging work. The same walk
+// also returns the destination directory skeleton used by the merge below.
+const stageDirectories = await checkInvariants();
 
 // Generated delta dirs must never exist in the SOURCE tree. They were committed under an
 // earlier design and are pure build output now, but a leftover public/ad/ gets copied in
@@ -879,14 +883,21 @@ const STAGE_SKIP = new Set([
   "public/images/fingerprints.json",
 ]);
 // The invariant above proves that the five served roots do not contend for a
-// destination file. Copy all independent source trees in one filesystem latency
-// window instead of serializing eight recursive walks.
+// destination file, but directories are intentionally shared: public/ and
+// src/pages/ both contribute to garage/, lwe/ and pixel-peeper/. Bun 1.4's
+// recursive cp can race two walkers through mkdir for one of those directories
+// and fail with EEXIST. Pre-create the complete directory union captured by the
+// invariant walk, then keep the independent file copies concurrent. This is
+// deterministic for future shared directories too; no collision list can rot.
 await Promise.all([
   mkdir(`${OUT}/public`, { recursive: true }),
   mkdir(`${OUT}/src`, { recursive: true }),
   mkdir(`${OUT}/cal`, { recursive: true }),
   mkdir(`${OUT}/serendipity`, { recursive: true }),
 ]);
+await Promise.all([...stageDirectories].map((dir) =>
+  mkdir(`${OUT}/public/${dir}`, { recursive: true })
+));
 await Promise.all([
   cp("public", `${OUT}/public`, {
     recursive: true,
