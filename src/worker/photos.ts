@@ -264,7 +264,7 @@ export async function getAltMap(env) {
 // memory; these callers (the legacy /images/<thumb> 301 mapper, queryPhotos)
 // are not hot, and keeping them on ASSETS keeps them stubbable in
 // contract-tests. Both readers see the same committed file per deploy.
-// Packed histograms {stem: base64(4 channels x 64 bins, one byte each)}, written
+// Packed histograms {stem: four modulo-delta channels x 64 bins}, written
 // by tools/photos/build-histogram-index.ts. Module-cached like _altMap, and that memo
 // is the whole reason this is an ASSETS read rather than a bundled import: the
 // fragment draws a random twelve per request so all 158 must be reachable, and
@@ -275,7 +275,7 @@ export async function getAltMap(env) {
 // Only the drawn twelve reach the client, as data-hist on each tile. That is what
 // keeps this from being the download tools/lib/photo-indexes.ts declined: all 158 would
 // be 24 KiB brotli of bars most visitors never see, where the twelve a visitor can
-// actually hover are ~1.9 KiB.
+// actually hover are ~1.8 KiB.
 export let _histograms;
 
 export async function getHistogramMap(env) {
