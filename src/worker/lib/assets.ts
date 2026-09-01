@@ -40,7 +40,7 @@ export async function serveFreshAsset(request, env, contentType) {
 }
 
 // serveMarkdownTwin: answer `Accept: text/markdown` at a page's own URL with the
-// .md twin build.mjs generated for it. The twin also lives at a stable, cacheable
+// .md twin build.ts generated for it. The twin also lives at a stable, cacheable
 // URL of its own (/garage/encoding -> /garage/encoding.md), which is what
 // llms.txt links and what an agent without a precise Accept header should use.
 // This is the same-URL convenience layered on that, not a replacement for it.
@@ -338,7 +338,7 @@ async function serveDictionaryDelta(url, ext, request, env) {
 // can carry bytes the platform would not have produced.
 //
 // Cloudflare compresses on the fly at roughly brotli q4 and prefers zstd when a
-// browser offers everything, which measured LARGER than its own brotli here. build.mjs
+// browser offers everything, which measured LARGER than its own brotli here. build.ts
 // writes a q11 `.br` twin next to each shell asset; this hands that twin over when the
 // request offers br, which is a measured ~19% off nav.js + luna.css on the wire.
 //
@@ -497,7 +497,7 @@ export async function serveStaticPage(request, env, opts: AssetOptions = {}) {
   // two live URLs. The route oracle caught exactly that.
   // The ROOT is canonical WITH its slash, so it must be answered rather than
   // redirected — the opposite of every other trailing slash here. It maps to
-  // index.html, which build.mjs bakes into a deterministic document precisely so
+  // index.html, which build.ts bakes into a deterministic document precisely so
   // it can take this path. Has to come before the guard below, which would
   // otherwise hand `/` to the asset layer and skip the twin entirely.
   const rel = url.pathname === "/"
@@ -526,7 +526,7 @@ export async function serveStaticPage(request, env, opts: AssetOptions = {}) {
   // takes the asset layer's own HEAD handling, exactly as it did before this change.
   if (head) return serveAssetWith404Clamp(request, env, opts);
 
-  // build.mjs names both artifacts after the ASSET path; this function knows only the
+  // build.ts names both artifacts after the ASSET path; this function knows only the
   // REQUEST path, and `html_handling: "drop-trailing-slash"` makes those differ for
   // exactly one shape — a section index, where /garage is served by garage/index.html.
   // So /garage asked for garage.html.br and /pd/garage.<tag>.dcz while the build had

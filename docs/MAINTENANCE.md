@@ -5,7 +5,7 @@ with the exact command and the gotcha that bit me last time. Deep design notes
 and the full conventions list live in [CLAUDE.md](CLAUDE.md); this is the ops sheet.
 
 One site Worker, with three source islands:
-- **public/** (aadhar.sh): the **Cloudflare Worker with static assets** (migrated off Pages 2026-06-30). Config is `wrangler.jsonc` at the repo root: it points `main` + `assets.directory` at `.build/public` and runs `build.mjs` via its `build.command`, so `assets.run_worker_first` (an allowlist mirroring the `ROUTES`/`PREFIX` tables in `index.js`; static is the default) applies to the built tree; `workers_dev:false` (custom domain only). **Production deploy: merge to `main`; GitHub CI promotes the exact tested commit to the machine-owned `production` branch, then Cloudflare Workers Builds deploys it.** The config self-builds, so the Workers Build Deploy command ships the minified tree; local dev uses `wrangler.dev.jsonc` (readable `public/`, fast reload). A local `wrangler deploy` is fallback-only. Verify after every deploy with `node tools/verify-routes.ts https://aadhar.sh` (now also asserts `/nav.js` minified + `.src` twins resolve). All site bindings live in `wrangler.jsonc`; secrets via `wrangler versions secret put`.
+- **public/** (aadhar.sh): the **Cloudflare Worker with static assets** (migrated off Pages 2026-06-30). Config is `wrangler.jsonc` at the repo root: it points `main` + `assets.directory` at `.build/public` and runs `build.ts` via its `build.command`, so `assets.run_worker_first` (an allowlist mirroring the `ROUTES`/`PREFIX` tables in `index.js`; static is the default) applies to the built tree; `workers_dev:false` (custom domain only). **Production deploy: merge to `main`; GitHub CI promotes the exact tested commit to the machine-owned `production` branch, then Cloudflare Workers Builds deploys it.** The config self-builds, so the Workers Build Deploy command ships the minified tree; local dev uses `wrangler.dev.jsonc` (readable `public/`, fast reload). A local `wrangler deploy` is fallback-only. Verify after every deploy with `node tools/verify-routes.ts https://aadhar.sh` (now also asserts `/nav.js` minified + `.src` twins resolve). All site bindings live in `wrangler.jsonc`; secrets via `wrangler versions secret put`.
 - **cal/** (coffee booking module): **LIVE** at `aadhar.sh/coffee`, dispatched by the same `aadhar-sh` Worker. Availability still serves from an SWR calendar snapshot (KV `cal:busy`, 2s upstream deadline, stale fallback); the GET page edge-caches 30s; booking fails closed if the calendar can't be vouched for. See [cal/README.md](cal/README.md). `cal/wrangler.test.toml` is test-only; it is not a deployment target.
 - **serendipity/** (event dashboard module): **LIVE** at `aadhar.sh/serendipity`, dispatched by the same `aadhar-sh` Worker. Its D1, secrets, route-specific CSP, and dashboard cache policy remain isolated in the module and shared root bindings.
 
@@ -711,7 +711,7 @@ fires on an unrelated PR, fix the zone rather than the branch.
 project configuration, so the `release` block in `infra.json` is recorded but
 unverifiable, and the checker says so on every run. It matters more than most of
 what is checked: a non-empty dashboard Build command builds twice, and a command
-that runs anything other than `build.mjs` is how production once served an
+that runs anything other than `build.ts` is how production once served an
 unminified 78KB `nav.js`. Review it by eye when you touch build settings.
 
 ### Performance budget semantics
@@ -874,7 +874,7 @@ Backfill or force a run with `workflow_dispatch`; it takes an optional `date` to
 place the row. Raw series at `/garage/dyno.json`.
 
 Browser RUM is deliberately off. No page loads Cloudflare Web Analytics, the Worker
-has no `/ledger/rum*` proxy or collector, and `build.mjs` tripwire #7b hard-fails if
+has no `/ledger/rum*` proxy or collector, and `build.ts` tripwire #7b hard-fails if
 any of that runtime wiring returns. That removes client-side field collection: this
 site does not currently observe real-user LCP, INP, CLS, FCP, or Navigation Type.
 
@@ -1097,7 +1097,7 @@ this as the regression tripwire; keep it green on every future change.
 
 The same table runs **before** a merge through `bun run routes:check`, which
 boots the Worker in-process with Wrangler's `createTestHarness()` and points the
-oracle at it (about 5s end to end, build.mjs included, since the harness honours
+oracle at it (about 5s end to end, build.ts included, since the harness honours
 `wrangler.jsonc`'s `build.command` and therefore serves the minified tree). CI
 runs it on every PR. Five rows carry `remote: true` and sit out the local pass,
 because a local Worker structurally cannot have what they assert: production R2
@@ -1422,7 +1422,7 @@ captured waterfall does not announce itself there the way the Browser pane does.
 That is true of a real `chromium-cdp` capture too, so it is a pre-existing gap
 rather than something this introduces, and the field is in the JSON either way.
 
-Both scripts take their target list from `tools/lib/lens-chips.mjs`, which
+Both scripts take their target list from `tools/lib/lens-chips.ts`, which
 reads the chips out of the shell renderer in `src/worker/lens.ts`. Adding a
 chip there is all it takes; nothing needs updating here.
 
@@ -1860,7 +1860,7 @@ curl -s "https://aadhar.sh/images/manifest.json" | jq length          # photo co
 
 ### Markdown twins
 
-Nothing to run by hand: `build.mjs` generates them, and the deploy fails if fewer
+Nothing to run by hand: `build.ts` generates them, and the deploy fails if fewer
 than 30 appear. To check the live surface:
 
 ```bash
@@ -1910,7 +1910,7 @@ until its twin agrees: `checkTwinFacts()` recomposes the User-Agent from
 - **Thumbnail 404s must be uncacheable.** Workers static assets no longer return homepage HTML for missing files, but a real miss under `/images/*` can still inherit the immutable cache rule unless the worker clamps it. Keep the thumbnail route worker-first; a re-encode mints a fresh `/i/` URL by itself, so there is no version to bump.
 - **zsh eats `${var}:something`.** Brace-quote KV key names with colons (`"tracks:${OLD}:fresh"`), and use `${=flag}` if you need word-splitting in ad-hoc snippets (the scripts use `#!/usr/bin/env bash` so they are safe internally).
 - **`jpegtran` / mozjpeg strip EXIF.** Rotate losslessly with `jpegtran -copy none -rotate N` *before* recompressing, and send its binary stdout to a file (`2>/dev/null > out.jpg`), not through a pipe that could mix in stderr.
-- **Production deploy = merge to `main`, CI promotion to `production`, then Workers Builds**; the single site Worker deploys the root `wrangler.jsonc`, bundling `public/`, `cal/src/`, and `serendipity/` from that exact release branch. The deploy config points `main` + `assets` at `.build/public` and runs `build.mjs` first through its `build.command`, so the production path self-builds and ships the minified client scripts + `luna.css`. Local dev is the exception: `wrangler dev -c wrangler.dev.jsonc` (`bun run dev`, wired into `.claude/launch.json`) serves the readable tree directly. Before merging, CI runs `bun run perf-budget`; after configuring Workers Builds, verify its release status and run `node tools/verify-routes.ts https://aadhar.sh` plus the `/coffee` and `/serendipity` route smoke checks.
+- **Production deploy = merge to `main`, CI promotion to `production`, then Workers Builds**; the single site Worker deploys the root `wrangler.jsonc`, bundling `public/`, `cal/src/`, and `serendipity/` from that exact release branch. The deploy config points `main` + `assets` at `.build/public` and runs `build.ts` first through its `build.command`, so the production path self-builds and ships the minified client scripts + `luna.css`. Local dev is the exception: `wrangler dev -c wrangler.dev.jsonc` (`bun run dev`, wired into `.claude/launch.json`) serves the readable tree directly. Before merging, CI runs `bun run perf-budget`; after configuring Workers Builds, verify its release status and run `node tools/verify-routes.ts https://aadhar.sh` plus the `/coffee` and `/serendipity` route smoke checks.
 - **`_playlistId` is module-cached per isolate.** After changing `playlist-id`, redeploy to flush it (see the playlist section).
 - **The worker is bundled, not hand-concatenated.** `_worker.js/` imports sibling modules; wrangler bundles them at deploy via built-in esbuild.
-- **Authoring is buildless; SERVING is minified.** `build.mjs` (repo root; minifier devDependencies: `@minify-html/node`, `lightningcss`, `oxc-minify`) copies `public/` to `.build/` and minifies: `index.html` (structure via minify-html, inline CSS/JS through the same Lightning CSS + Oxc settings, with marker tripwires and a readable `/index.src.html` twin), the six client scripts (`nav.js`, `notepad.js`, `lens.js`, `lens-browser.js`, `quiz.js`, `tooltip.js`), `luna.css` (owner-approved 2026-07), and the worker modules' `/*min*/` CSS literals — each with a readable `/<name>.src.*` twin (the banner in each minified file points there). It hard-fails the deploy if `luna.css` doesn't parse as valid CSS (the v143 corruption slipped through for three releases), and content-hashes `nav.js` + `luna.css` into immutable `/a/` URLs. Garage/lwe HTML, images, and `_headers` ship byte-identical to git (View Source is part of the design). Do NOT extend the build into bundling or version auto-bumps; the scripts remain independently readable islands.
+- **Authoring is buildless; SERVING is minified.** `build.ts` (repo root; minifier devDependencies: `@minify-html/node`, `lightningcss`, `oxc-minify`) copies `public/` to `.build/` and minifies: `index.html` (structure via minify-html, inline CSS/JS through the same Lightning CSS + Oxc settings, with marker tripwires and a readable `/index.src.html` twin), the six client scripts (`nav.js`, `notepad.js`, `lens.js`, `lens-browser.js`, `quiz.js`, `tooltip.js`), `luna.css` (owner-approved 2026-07), and the worker modules' `/*min*/` CSS literals — each with a readable `/<name>.src.*` twin (the banner in each minified file points there). It hard-fails the deploy if `luna.css` doesn't parse as valid CSS (the v143 corruption slipped through for three releases), and content-hashes `nav.js` + `luna.css` into immutable `/a/` URLs. Garage/lwe HTML, images, and `_headers` ship byte-identical to git (View Source is part of the design). Do NOT extend the build into bundling or version auto-bumps; the scripts remain independently readable islands.

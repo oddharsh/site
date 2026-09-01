@@ -4,7 +4,7 @@
 //
 // WHY THIS EXISTS. The served tree is authored across five directories now
 // (public/, src/pages/, src/content/, src/client/, src/styles/) and merged into
-// one URL root. Only build.mjs used to do that merge, and it merges by COPYING
+// one URL root. Only build.ts used to do that merge, and it merges by COPYING
 // into .build/public and then minifying, hashing and precompressing what it
 // copied. Pointing dev at .build/public would therefore have cost the readable
 // edit->reload loop this config exists for: a 2.8s rebuild per keystroke, View
@@ -30,13 +30,13 @@
 // deeper is free. That is the whole cost of not copying.
 //
 // It is NOT a second definition of the served tree. The roots and their order
-// are build.mjs step 1's, and a contract test pins the two lists together so a
+// are build.ts step 1's, and a contract test pins the two lists together so a
 // sixth root cannot reach production while dev keeps serving five.
 import { mkdir, readdir, rm, symlink, stat } from "node:fs/promises";
 import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-// Same roots, same ORDER, as build.mjs step 1: a later root wins a path an
+// Same roots, same ORDER, as build.ts step 1: a later root wins a path an
 // earlier one also provides, which is what `cp` does there. There are no such
 // paths today and the collision report below is what says so out loud.
 export const ASSET_ROOTS = ["public", "src/pages", "src/content", "src/client", "src/styles"];
@@ -123,7 +123,7 @@ async function merge(rel, roots) {
     }
     if (claims.length > 1) {
       // Two roots claiming ONE URL is an authoring mistake rather than a merge
-      // to resolve, and it is silent under build.mjs's cp. Name it here.
+      // to resolve, and it is silent under build.ts's cp. Name it here.
       collisions.push(`/${child} <- ${claims.map((c) => c.root).join(", ")} (last wins)`);
     }
     const winner = claims[claims.length - 1];
@@ -132,7 +132,7 @@ async function merge(rel, roots) {
 }
 
 // Everything below runs only when this file is INVOKED, never when it is
-// imported. The contract test imports ASSET_ROOTS to pin them against build.mjs
+// imported. The contract test imports ASSET_ROOTS to pin them against build.ts
 // step 1, and an import that staged as a side effect would rm -rf and rebuild
 // the farm under a dev server that happens to be running.
 export async function stage() {
@@ -147,7 +147,7 @@ export async function stage() {
   // that does not start, because the second tells you what is wrong.
   for (const root of ASSET_ROOTS) {
     const ok = await stat(root).then((s) => s.isDirectory()).catch(() => false);
-    if (!ok) throw new Error(`dev-stage: asset root "${root}" does not exist — has the served tree been rearranged again? Update ASSET_ROOTS here and build.mjs step 1 together.`);
+    if (!ok) throw new Error(`dev-stage: asset root "${root}" does not exist — has the served tree been rearranged again? Update ASSET_ROOTS here and build.ts step 1 together.`);
   }
 
   await rm(FARM, { recursive: true, force: true });

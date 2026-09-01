@@ -1,7 +1,7 @@
 // lib/photo-grid.js — the homepage photo grid's markup, in ONE place.
 //
 // Two callers render this, and they must not drift:
-//   - build.mjs bakes a DETERMINISTIC twelve into the staged index.html, which
+//   - build.ts bakes a DETERMINISTIC twelve into the staged index.html, which
 //     is what makes the document byte-stable enough to carry a dcz delta and
 //     answer a 304. Those tiles are also the whole grid for a visitor without
 //     JavaScript, via the <noscript> twin beside each one.

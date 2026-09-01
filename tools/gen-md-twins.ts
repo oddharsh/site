@@ -22,7 +22,7 @@
 // other four are unpinned, which is a real gap rather than a decision: they are
 // pinnable the same way whenever someone writes the facts down.
 //
-// Every exported function is PURE so build.mjs can re-run this in-memory; only
+// Every exported function is PURE so build.ts can re-run this in-memory; only
 // main() touches the filesystem.
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -149,15 +149,15 @@ export function renderSectionIndex(section, surfaces, { descriptions = {} } = {}
 
 /**
  * Build every twin + section index as { path -> contents }. Pure apart from
- * reading the source tree, which build.mjs also does.
+ * reading the source tree, which build.ts also does.
  *
  * opts.generatedRoot names a staged tree to fall back to for surfaces with no
  * prose source in `root`. That tier did not exist when this file was written:
  * /updates and /restore were Worker-rendered, so they had no twin and could not
- * have one, and when build.mjs started baking them into HTML nothing here
+ * have one, and when build.ts started baking them into HTML nothing here
  * noticed. They stayed on the skipped list, kept `flags.agents: true`, and kept
  * answering HTML to an agent asking for Markdown. Read only BEFORE the staged
- * pages are rewritten (hashed asset refs, minification); build.mjs owns that
+ * pages are rewritten (hashed asset refs, minification); build.ts owns that
  * ordering and reads the source tree first for everything that has one.
  */
 /**
@@ -266,7 +266,7 @@ export function buildTwins(root = ".", opts: { generatedRoot?: string } = {}) {
 /**
  * The load-bearing facts a hand-authored twin shares with the Worker that
  * renders its page. A twin is allowed to be shorter than the page; it is not
- * allowed to disagree with it. build.mjs fails the deploy on a mismatch.
+ * allowed to disagree with it. build.ts fails the deploy on a mismatch.
  *
  * Each fact is checked in BOTH directions. Asserting only that the twin says
  * "AadharshBot/1.0" would keep passing after a version bump, because the twin

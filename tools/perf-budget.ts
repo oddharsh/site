@@ -460,7 +460,7 @@ if (homepage) {
     bad("index.src.html: readable homepage twin missing");
   }
   // Every OTHER served page has carried the same contract since 2026-07-31. This is
-  // the shipped-artifact half of the gate build.mjs step 7b enforces at write time,
+  // the shipped-artifact half of the gate build.ts step 7b enforces at write time,
   // the same two-moment arrangement HTML_MARKERS already uses.
   //
   // The twin is checked for EXISTENCE and readability rather than byte-equality with

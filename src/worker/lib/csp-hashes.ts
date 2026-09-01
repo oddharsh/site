@@ -2,7 +2,7 @@
 // so `script-src` can drop 'unsafe-inline' and start doing real work.
 //
 // Same shape as shell-assets.js: this file is COMMITTED readable with an empty
-// map, and build.mjs overwrites the marked line in the staged .build/ copy with
+// map, and build.ts overwrites the marked line in the staged .build/ copy with
 // hashes derived from the final bytes it just wrote. Keep the
 // `// build:csp-hashes` marker — the build replaces that whole line.
 //
@@ -11,7 +11,7 @@
 // hash differently from the staged
 // ones, so a committed map would be wrong for exactly the surface it claims to
 // protect. An empty map means every path falls back to the loose policy, which is
-// what dev wants and what production must never silently get — build.mjs hard-fails
+// what dev wants and what production must never silently get — build.ts hard-fails
 // if the map it emits does not cover essentially every staged document.
 //
 // Keys are canonical REQUEST paths (no trailing slash, no .html), because that is

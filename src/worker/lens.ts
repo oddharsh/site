@@ -1648,7 +1648,7 @@ footer a { color:oklch(42.61% 0.2353 263.74); }
     ${initialScript}
 `),
     // The idle shell is complete server-rendered HTML, including a native GET form,
-    // so it loads only the tiny interaction bootstrap. build.mjs hashes the full
+    // so it loads only the tiny interaction bootstrap. build.ts hashes the full
     // lens client first, rewrites that exact URL into the bootstrap, then hashes the
     // bootstrap itself. A fresh shell therefore cannot pair with either stale layer.
     // The plain files stay served, short-cached, for dev and stale HTML.

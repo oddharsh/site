@@ -7,7 +7,7 @@
 > are live. Sounds, dishes, and tinkering are still planned.
 
 A handwritten HTML/CSS personal site on Cloudflare Workers (static assets + a
-module `_worker.js`). Minimal build: `build.mjs` only minifies the shell
+module `_worker.js`). Minimal build: `build.ts` only minifies the shell
 scripts and one stylesheet; the HTML is authored and served as-is. One
 stylesheet inline per page. This file follows the
 [llmstxt.org](https://llmstxt.org) convention so agents can read a clean

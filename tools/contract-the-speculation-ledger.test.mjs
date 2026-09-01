@@ -557,7 +557,7 @@ test("every inline script in the STAGED tree is covered by the emitted hash map"
   // attribute and demands a CSP hash for something no browser will ever execute as
   // part of this document.
   //
-  // Independence from build.mjs's collector is the point of this test, so this is a
+  // Independence from build.ts's collector is the point of this test, so this is a
   // separate implementation. Being different is not the goal though, and the earlier
   // regex here was different by being wrong. A correct walk is the only correct
   // answer: consume each tag whole so attribute text is never read as content, and

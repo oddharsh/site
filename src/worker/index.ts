@@ -569,7 +569,7 @@ const PREFIX = [
   },
   // /a/<name>.<hash8>.<ext> — the content-hashed shell (nav.js, luna.css, lens.js,
   // icons.svg). This was edge-direct until 2026-07-26 and the _headers comment said
-  // so deliberately; it moved behind the worker to hand out build.mjs's brotli q11
+  // so deliberately; it moved behind the worker to hand out build.ts's brotli q11
   // twin, which the edge would not have produced (it fly-compresses at ~q4 and
   // prefers zstd, measured LARGER than its own brotli here). The `.br` suffix is
   // excluded so the twin itself stays a plain static asset — the worker fetches it
@@ -948,7 +948,7 @@ async function routeWritingIndex(request: SiteRequest, env: Env, ctx: ExecutionC
 }
 
 // /photos and /bot join the generated-page tier, same shape as /writing above: the
-// build emits their HTML (build.mjs step 1e), so they earn the q11 twin and the dcz
+// build emits their HTML (build.ts step 1e), so they earn the q11 twin and the dcz
 // delta tiers that 40 authored pages already had, and the dynamic handler stays as
 // the fallback for a build that somehow shipped without them.
 //

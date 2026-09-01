@@ -3,7 +3,7 @@
 // (do not hand-edit; edit the registry and re-run the generator). AGENT_SURFACES
 // is the catalog MCP resources/list serves: every surface flagged agents:true,
 // trimmed to what a client needs to decide where to look. WEBMENTION_* are the
-// pages that accept an inbound webmention. build.mjs #8 fails the deploy if any
+// pages that accept an inbound webmention. build.ts #8 fails the deploy if any
 // of these drift from the registry.
 export const AGENT_SURFACES = [
   {

@@ -83,7 +83,7 @@ test("every wrangler config's entry point resolves to a real file", async () => 
     const declared = match[1];
 
     // wrangler.jsonc points at `.build/src/worker/index.ts`, which the build
-    // STAGES rather than commits. CLAUDE.md records that build.mjs mirrors the
+    // STAGES rather than commits. CLAUDE.md records that build.ts mirrors the
     // source path there deliberately, so the staged path is checkable against
     // its source twin without running a build.
     const resolved = declared.replace(/^\.\//, "").replace(/^\.build\//, "");

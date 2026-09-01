@@ -1,7 +1,7 @@
 // html-markers.mjs — the load-bearing structures the minified homepage must still
 // carry, as one list both halves of the gate read.
 //
-// build.mjs throws if the minifier drops one, and perf-budget.mjs fails the deploy
+// build.ts throws if the minifier drops one, and perf-budget.mjs fails the deploy
 // if the shipped file is missing one. Those are the same claim checked at two
 // moments, so they were the same array written out twice, byte-identical. A marker
 // added to one copy and not the other silently narrows the gate to whatever the
@@ -12,7 +12,7 @@
 // unquoting (`type=application/ld+json` as well as the quoted form), because the
 // point is to prove the STRUCTURE survived, not that its bytes went untouched.
 // Typed as TUPLES. Left to inference the elements widen to (string | RegExp)[],
-// and `marker.test(min)` in build.mjs stops type-checking for a reason that has
+// and `marker.test(min)` in build.ts stops type-checking for a reason that has
 // nothing to do with the regex.
 export const HTML_MARKERS: Array<[label: string, marker: RegExp]> = [
   ["JSON-LD", /<script\b[^>]*\btype=(?:"application\/ld\+json"|application\/ld\+json)(?:\s|>)/i],

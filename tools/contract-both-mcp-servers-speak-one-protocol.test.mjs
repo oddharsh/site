@@ -129,7 +129,7 @@ test("Serendipity social reads overlap independent D1 queries", async () => {
 });
 
 test("both CSS checks go through the one parser, and it still tolerates the right family", async () => {
-  // build.mjs decides what reaches a visitor; check-page-contracts.mjs is a
+  // build.ts decides what reaches a visitor; check-page-contracts.mjs is a
   // pre-build gate on the same stylesheets. They ran DIFFERENT engines until
   // 2026-08-14 (Lightning CSS and esbuild), which disagree in both directions, so
   // a scaffold could pass the gate and fail the build. One parser, one family.

@@ -12,7 +12,7 @@
 // So diagnostics are filtered to files under tools/. The FLOOR below is what
 // keeps that filter honest: a wrapper that reports nothing because it scanned
 // nothing looks identical to a clean run, which is this repo's most-repeated
-// failure (see the route invariant's own floor in build.mjs).
+// failure (see the route invariant's own floor in build.ts).
 // The run-and-filter half lives in tools/lib/tsc-scope.ts, shared with
 // check-test-types.mjs. Two copies of a diagnostic filter that each have to keep
 // their own floor honest is the drift this repo names everywhere else.

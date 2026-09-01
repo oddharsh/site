@@ -278,7 +278,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
       does not forgive all of that prose.</p>
     <p>So the split, and the compromise that finally justified a build: <strong>the
       authoring stays buildless, the serving gets minified.</strong> One script
-      (<code class="m">build.mjs</code>) stages a copy of the site, runs Oxc Minify
+      (<code class="m">build.ts</code>) stages a copy of the site, runs Oxc Minify
       <code class="m">0.140.0</code> over six independent client scripts, runs Lightning
       CSS <code class="m">1.32.0</code> over the shared stylesheet and marked Worker
       CSS literals, and deploys from the copy. The repo never changes; local dev still
@@ -427,7 +427,7 @@ transition:filter 60ms ease-out}</pre></figure>
     <p>“Minify it” is not one switch. The useful part of today's work was deciding which
       transformations are safe for this site, which are intentionally absent, and where a
       warning becomes a failed deploy. The two panels below are the actual policy behind
-      <code class="m">build.mjs</code>, not a menu of hypothetical optimizations.</p>
+      <code class="m">build.ts</code>, not a menu of hypothetical optimizations.</p>
 
     <div class="knob-grid">
       <section class="knob-panel" aria-labelledby="js-knobs">

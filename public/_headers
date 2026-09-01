@@ -52,13 +52,13 @@
 /i/*
   Cache-Control: public, max-age=31536000, immutable
 
-# hashed app-shell assets: /a/<name>.<hash8>.<ext> (nav.js + luna.css + lens.js). build.mjs
+# hashed app-shell assets: /a/<name>.<hash8>.<ext> (nav.js + luna.css + lens.js). build.ts
 # mints a fresh hash whenever the shell bytes change, so the URL names exact bytes
 # and a year + immutable is structurally safe — same content-addressed contract as
 # /i/ thumbnails.
 #
 # NO LONGER edge-direct (changed 2026-07-26). /a/* is in run_worker_first so the
-# worker can hand out build.mjs's brotli q11 `.br` twin, which the edge would not
+# worker can hand out build.ts's brotli q11 `.br` twin, which the edge would not
 # have produced: it fly-compresses at about q4 and prefers zstd when a browser
 # offers everything, and zstd measured LARGER than its own brotli on this site.
 # Worth ~19% of nav.js + luna.css on the wire. This rule still applies to both the
@@ -139,7 +139,7 @@
 #
 # the Link line preloads the two shared shell assets (luna.css + nav.js) so
 # Cloudflare Early Hints replays them as a 103 ahead of the HTML — safe to share
-# across visitors because these are content-hashed, immutable URLs (build.mjs
+# across visitors because these are content-hashed, immutable URLs (build.ts
 # rewrites /luna.css + /nav.js here to their /a/<hash> forms). NOT the photos:
 # those are per-page and would make a shared 103 stale (see home.js). Early Hints
 # fires only on navigations, so the header is inert on the enc/* image + ask.js

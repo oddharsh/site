@@ -29,7 +29,7 @@ decides which one a given file belongs in:
 | **`src/dict/`** | `a-dict/` and `p-dict/`, the previously shipped bytes of the shell and of each page. Build INPUT that is never served: a dictionary has to be bytes a browser already holds, which no build can derive from source. Being outside the served tree is why the build no longer stages 130 files for `.assetsignore` to exclude again. |
 | `cal/`, `serendipity/` | the two application modules the site Worker bundles and serves at `/coffee` and `/serendipity`. They sit outside the served tree because they are programs with their own tests, not documents. |
 | `cf-garage/`, `lwe-ask/`, `lens-reader/` | the three SEPARATELY deployed auxiliary Workers, each with its own config and its own deploy. Nothing here reaches production through the site Worker. `lwe-ask` and `lens-reader` carry a `wrangler.toml`; **`cf-garage` carries a `cloudflare.config.ts`** and is the repository's one trial of wrangler's experimental TypeScript config, so every wrangler command in that directory needs `--x-new-config` (gotcha 41). |
-| **`tools/`** | **every developer tool.** The build (`build.mjs`), the test suite (`contract-*.test.mjs`, 49 files sharing `contract-shared.mjs`; it was ONE 8720-line file until 2026-08-20, and the split files stay at this depth rather than in `tools/test/` because 147 relative specifiers in them resolve from here), the route oracle, the perf budget, the `check-*` / `gen-*` family, plus `photos/` (the photo and asset pipeline) and `oxlint/` (the custom rules). Nothing in here ships. |
+| **`tools/`** | **every developer tool.** The build (`build.ts`), the test suite (`contract-*.test.mjs`, 49 files sharing `contract-shared.mjs`; it was ONE 8720-line file until 2026-08-20, and the split files stay at this depth rather than in `tools/test/` because 147 relative specifiers in them resolve from here), the route oracle, the perf budget, the `check-*` / `gen-*` family, plus `photos/` (the photo and asset pipeline) and `oxlint/` (the custom rules). Nothing in here ships. |
 | **`config/`** | `infra.json` (declared Cloudflare + GitHub state), `site-manifest.json` (the surface registry), `derivations.json` (what each committed derived artifact was made FROM, plus its machine-owned `.lock.json`), `tools.json` (the external binaries), `tsconfig.json`. |
 | `pipelines/` | the page GENERATORS, one directory per section: `content/` (the shared page contract), `garage/`, `lwe/`. These author into `src/pages/`; they are not part of the build. |
 | **`docs/`** | the long-form runbooks: `MAINTENANCE.md`, `PHOTO-PIPELINE.md`, `DEPENDENCIES.md`, `UNDERSTANDING-REVIEW.md`. |
@@ -37,7 +37,7 @@ decides which one a given file belongs in:
 | `migrations/`, `talks/` | D1 SQL for the site Worker, and talk material. |
 
 Three directories now compose the served URL root: `public/` plus `src/client/`
-plus `src/styles/`, merged by `build.mjs` into `.build/public`. That is why
+plus `src/styles/`, merged by `build.ts` into `.build/public`. That is why
 `config/tsconfig.browser.json` maps `/*` across all three rather than at `public/`
 alone. An absolute specifier like `import "/hoist.js"` is checkable only if the
 mapping names the directory the file actually authors in.
@@ -449,7 +449,7 @@ worktrees may edit freely, but a worktree is not a release surface.
   same D1 changelog, so `/updates.json` structurally cannot tell them apart) and
   aborts on a non-200 or on a step that never took. `--to`, `--steps`,
   `--status`, and `--rollback` are the other modes. The old flat
-  `if (process.env.CI) die()` is gone: `tools/lib/release-guard.mjs` asks
+  `if (process.env.CI) die()` is gone: `tools/lib/release-guard.ts` asks
   whether the process can authenticate instead, because a blanket CI ban refused
   the gated pipeline it was meant to protect while doing nothing about a ramp
   that starts unauthenticated and dies after traffic already moved.
@@ -570,7 +570,7 @@ worktrees may edit freely, but a worktree is not a release surface.
 
   **A SPLIT DEPLOYMENT SPLITS ASSET REQUESTS TOO, which is what version affinity
   is for.** Every document here references content-hashed shell assets
-  (`/a/luna.<hash8>.css`, `/a/nav.<hash8>.js`), `build.mjs` keeps exactly one hash
+  (`/a/luna.<hash8>.css`, `/a/nav.<hash8>.js`), `build.ts` keeps exactly one hash
   per asset, and during a ramp each request picks a version independently. So a
   document from one version asks for an asset the other version has never built
   and gets a 404: `/a/*` is `run_worker_first` and is NOT in
@@ -1450,7 +1450,7 @@ Renaming or moving a page used to leave every page LINKING to it pointing at a
 TOLD about, which is the forward direction. Build invariant #1 asserts the
 Worker's routes reach `run_worker_first`. Neither one reads an href.
 
-**`tools/lib/link-integrity.mjs`, run as a build invariant, closes that.** Every
+**`tools/lib/link-integrity.ts`, run as a build invariant, closes that.** Every
 same-origin `href`/`src` in the minified documents has to resolve to a real staged
 file, a `<path>.html`, a Worker `ROUTES` key, a registered surface, or a dynamic
 namespace. 2921 refs across 50 documents in ~45ms, so it is COMPLETE rather than
@@ -1491,14 +1491,14 @@ sections carry their own `llms.txt`. `/garage/encoding` and
 `/garage/encoding.md` are the same content; `/garage/llms.txt` indexes the 17
 garage pages so an agent does not have to pull the whole root index to find one.
 
-**Twins are BUILD OUTPUT, never committed.** `build.mjs` step 1c generates them
+**Twins are BUILD OUTPUT, never committed.** `build.ts` step 1c generates them
 from the readable source in `public/` into `.build/public/`. A twin is a pure
 function of the page's bytes, so there is no committed copy that can fall behind
 and no step anyone can forget. Same argument the dcz deltas won. It reads the
 SOURCE tree deliberately: the staged copy is about to be rewritten (client edge,
 hashed asset refs) and `index.html` minified, none of which belongs in a twin.
 
-Two rules the converter (`tools/lib/html-to-md.mjs`) exists to enforce:
+Two rules the converter (`tools/lib/html-to-md.ts`) exists to enforce:
 
 1. **`<script>` bodies never reach the tree.** Every garage/lwe page carries a
    `<script type="application/json" id="luq-data">` holding the understanding
@@ -1553,10 +1553,10 @@ a hand twin would have to describe rather than mirror AND the data already exist
 in another representation; otherwise the honest move is to drop `flags.agents`,
 because the registry should not advertise a surface an agent cannot read. Note the
 `run_worker_first` requirement: a Markdown URL with an extension is a static asset
-by default, and `build.mjs` invariant #8 catches a route that forgets it.
+by default, and `build.ts` invariant #8 catches a route that forgets it.
 
 Adding a page needs no work here: register it in `site-manifest.json` as usual
-and the twin appears. `build.mjs` fails the deploy if fewer than 30 generate,
+and the twin appears. `build.ts` fails the deploy if fewer than 30 generate,
 since losing them would otherwise be silent (pages keep serving HTML).
 
 ### The search corpus (`tools/generate-search-index.ts`)
@@ -2317,7 +2317,7 @@ of a document is the article, and how badly that goes on a page that is not one.
 Measured 2026-08-14 on the live Worker: stripe.com loses 64% of its words and its hero
 headline; Wikipedia loses 5%, which is an extractor doing its job; `/garage/horizon`
 loses 2% and hands over **3 of 26 control labels** as prose. That last number is the
-same failure `tools/lib/html-to-md.mjs` rule 2 exists to refuse, which is why the
+same failure `tools/lib/html-to-md.ts` rule 2 exists to refuse, which is why the
 twins still use the hand-rolled converter.
 
 **THE EXTRACTOR WAS SWAPPED FOR THAT NUMBER, and the decision came out of running both
@@ -2917,7 +2917,7 @@ it before treating anything in there as a target.
    browser runs are the current client-side performance evidence; do not claim a
    field baseline that the site does not collect.
 3. **Authoring stays buildless; serving is minified, on every page.** The only
-   build is `build.mjs`: a deploy-time transform that minifies every served HTML
+   build is `build.ts`: a deploy-time transform that minifies every served HTML
    document (structure plus inline CSS/JS), the six client scripts, `luna.css`,
    `lwe-base.css`, and the Worker modules' `/*min*/` CSS literals into a staged
    `.build/` copy. It ships a readable twin beside each transformed asset:
@@ -2950,7 +2950,7 @@ it before treating anything in there as a target.
    What the farm cannot see is a file CREATED in one of the four directories more
    than one root contributes to (the root, `garage`, `lwe`, `pixel-peeper`);
    restart dev and it is there. Everything deeper is a whole-directory symlink and
-   needs nothing. A contract test pins the farm's roots to `build.mjs` step 1, so
+   needs nothing. A contract test pins the farm's roots to `build.ts` step 1, so
    the quiet version of this failure (a sixth root reaching production while dev
    composes five) cannot ship. Never bundle or extend the build without the
    owner's say-so. `luna.css` was owner-approved
@@ -2988,7 +2988,7 @@ Custom-built scheduler at `aadhar.sh/coffee`. Replaces Cal.com. Inspired by
 
 **Status: LIVE at aadhar.sh/coffee**, delegated by the root `aadhar-sh` Worker.
 The source remains in `cal/src/` so its booking, calendar, and email policies
-stay readable and testable; `build.mjs` stages it beside the holding Worker
+stay readable and testable; `build.ts` stages it beside the holding Worker
 entrypoint. Production secrets (`ICAL_URL`, `RESEND_API_KEY`, and
 `SIGNING_SECRET`) belong to the root Worker. `cal/wrangler.test.toml` is only a
 Vitest runtime fixture, never a deployment config.
@@ -3369,7 +3369,7 @@ bun run deploy:direct
     distance-matching and 22+btultra2 produce BYTE-IDENTICAL output on all 9 shell
     assets and all 12 deltas. What separates 20-22 is window size and long-range
     search, and the largest asset is 47KB raw, so level 19's window already spans
-    the whole file and there is no long range to find. build.mjs's pin at 19 is
+    the whole file and there is no long range to find. build.ts's pin at 19 is
     optimal; do not spend an afternoon re-checking it.
 
     dcz's framing is also the tidier of the two: the dictionary hash rides in a
@@ -3378,7 +3378,7 @@ bun run deploy:direct
     `zstd -d -D dict` round-trips the whole file untouched. dcb instead needs
     format-specific handling of its 36-byte prefix.
 
-    Deltas are BUILD OUTPUT, generated by build.mjs with `node:zlib`'s zstd. An
+    Deltas are BUILD OUTPUT, generated by build.ts with `node:zlib`'s zstd. An
     earlier version of this note said dictionary compression was "unreachable from
     Node" and shipped a workstation script with committed artifacts; that limit was
     BROTLI's, generalizing it to zstd was wrong, and node 26 has since retired the
@@ -3394,7 +3394,7 @@ bun run deploy:direct
     because an `/a/` asset is content-addressed: a change mints a new URL, so its
     dictionary must be bytes the BROWSER already holds and no build can derive that
     from source. `bun run shell:roll` adopts the current shell and prunes to 3 per
-    asset; it writes into the source tree, which build.mjs must never do, so it can
+    asset; it writes into the source tree, which build.ts must never do, so it can
     only ever land as a separate commit.
 
     **"Not urgent" was wrong, and the cost of believing it was 161 commits.**
@@ -3413,7 +3413,7 @@ bun run deploy:direct
     on, so the last step stays a human one deliberately. `a-dict` is
     `.assetsignore`d (build input, not a public URL).
 
-    **PAGES use two dictionary tiers.** build.mjs derives ONE raw 64KB family corpus
+    **PAGES use two dictionary tiers.** build.ts derives ONE raw 64KB family corpus
     from the staged documents, ships it at an immutable `/a/page-family.<hash8>.dict`,
     and every HTML response advertises it via `Link: rel="compression-dictionary"`
     (`lib/security.ts`). It also diffs the current page against the committed
@@ -3465,7 +3465,7 @@ bun run deploy:direct
 
     **`dcz:check`'s shell probe could only ever agree with itself, and the coverage
     assertion beside it is the fix.** The probe picks an a-dict candidate that is NOT
-    the live hash, offers it, and asserts `dcz` comes back. build.mjs builds a delta
+    the live hash, offers it, and asserts `dcz` comes back. build.ts builds a delta
     for every a-dict entry, so that is true by construction; it reads the live hash
     only to EXCLUDE it. What a returning visitor actually asks is whether the bytes
     THEY hold are covered, which is the same shape as the page tier's "committed
@@ -3823,7 +3823,7 @@ bun run deploy:direct
 
 19. **A backtick inside a CSS comment inside a `/*min*/` literal ends the JS
     template literal.** The worker's static CSS lives in backtick literals that
-    `build.mjs` step 8 minifies in place, and prose in a CSS comment is still
+    `build.ts` step 8 minifies in place, and prose in a CSS comment is still
     JavaScript source. Writing ``overflow-y is `scroll`, not `auto` `` in one
     truncated the literal mid-file and the build failed with a JS parse error
     pointing at a line that looked fine. Nothing is wrong with the CSS; the
@@ -4489,7 +4489,7 @@ bun run deploy:direct
     win is seconds on a step CI already spends far longer on in dry-runs.
 
     **The failure here would be LOUD, which is worth knowing before this reads
-    scarier than it is.** build.mjs already feature-detects the same collapse and
+    scarier than it is.** build.ts already feature-detects the same collapse and
     throws (search `expected a collapse`), so bun 1.3.14 kills the build rather
     than shipping no-op deltas. That guard exists because the no-op shipped for a
     full deploy once. The ENGINE is silent; this build is not.
@@ -5223,7 +5223,7 @@ bun run deploy:direct
     profile. Meanwhile `deploy --dry-run` under bun returns a perfectly correct
     bundle, and the production deploy through `.github/deploy-wrangler.sh` runs
     wrangler under bun and succeeds. So a spot check passes and one subcommand
-    silently stops measuring. `tools/lib/wrangler-bin.mjs` names node for every
+    silently stops measuring. `tools/lib/wrangler-bin.ts` names node for every
     tool, and a contract test pins it.
 
     **Bun 1.4 ships zlib-ng, so its gzip is ~0.55% larger than node's on
@@ -5349,7 +5349,7 @@ bun run deploy:direct
     reader to patch an exit code that is already correct, which is the more
     expensive of the two mistakes and the harder one to notice finishing.
 
-    The same rename left `build.mjs`'s taste-tripwire exemption
+    The same rename left `build.ts`'s taste-tripwire exemption
     (`/^www\/(garage|lwe)\//`) matching nothing, so the demo pages it exists to
     exempt lost the exemption and the build printed 14 warnings on every run
     since 2026-08-18. A warn block nobody can clear is how a warn block gets
@@ -5550,7 +5550,7 @@ bun run deploy:direct
 
     **`photos:check` cannot see this and never could.** It compares
     `histograms.json` against `images/meta/`, and since #441 made `meta/` build
-    OUTPUT that `build.mjs` derives FROM `histograms.json`, the two agree no
+    OUTPUT that `build.ts` derives FROM `histograms.json`, the two agree no
     matter what the JPEGs contain. That is gotcha 24's shape exactly: a check
     whose two sides come from one source proves only that copying works.
 
