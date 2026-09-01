@@ -2122,8 +2122,22 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     const SIZE = 65_536;
     const parts = [];
     let total = 0;
+    // THROUGH minifiedPage(), the same as the representatives below. This block
+    // runs before step 7b reaches the staged files, so a bare read here returns
+    // the READABLE source: indentation, comments, none of it in any target. The
+    // note on minifiedPage already says a dictionary sampled that way "wastes
+    // its scarce 64KB on whitespace and comments absent from every target"; the
+    // fix had simply been applied to one of the two contributors. Measured
+    // 2026-08-31 over the 55 staged pages, family deltas against plain q11:
+    // 510,803 B from the readable corpus, 480,187 B from this one, 55/55 pages
+    // still beating brotli either way. 30,616 B for reading the right bytes.
+    //
+    // The proof it was the readable source: the shipped dictionary carried a
+    // distinctive indented line from garage/compression.src.html, and 370 of its
+    // 552 newlines were followed by four or more spaces.
     for (const rel of BASE_CORPUS) {
-      const bytes = await readFile(`${OUT}/public/${rel}`);
+      const staged = await readFile(`${OUT}/public/${rel}`, "utf8");
+      const bytes = Buffer.from(minifiedPage(staged, rel));
       parts.push(bytes);
       total += bytes.length;
       if (total >= SIZE) break;
