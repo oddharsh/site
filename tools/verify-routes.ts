@@ -314,7 +314,7 @@ const ROUTES = [
   { path: "/writing/", status: 301 },   // routeDropSlash 301s to /writing
   { path: `/writing/${SLUG}`, status: 200, ct: "text/html" },
   { path: `/writing/${SLUG}.txt`, status: 200, ct: "text/plain" },
-  { path: "/writing/posts.json", status: 200, ct: "application/json" },
+  { path: "/writing/posts.json", status: 200, ct: "application/json", encoding: "br" },
   { path: "/rn", status: 302 },
   // /rn has no page to twin, so its Markdown is rendered live. The negotiated
   // form is the one that matters: it is the arm that stops an agent following
@@ -349,7 +349,7 @@ const ROUTES = [
   { path: "/run?cmd=garage", status: 302 },
   { path: "/run?cmd=xyzzy-not-a-page", status: 200, ct: "text/html", marker: "cannot find" },
   { path: "/images/manifest.json", status: 200, ct: "application/json" },
-  { path: "/images/metadata.json", status: 200, ct: "application/json" },
+  { path: "/images/metadata.json", status: 200, ct: "application/json", encoding: "br" },
   { path: `/images/meta/${META}.json`, status: 200, ct: "application/json" },
   // the SOOC original: ~3GB of R2 that is deliberately not in the repo.
   { path: `/images/full/${FULL}`, status: 200, ct: "image/jpeg", remote: true },
@@ -375,7 +375,20 @@ const ROUTES = [
   // that the route resolves at all. The marker is the table the graph is a view
   // over: if that table stops shipping, the page silently becomes a blank canvas.
   { path: "/access", status: 200, ct: "text/html", marker: "Device list, flat" },
-  { path: "/access.md", status: 200, ct: "text/markdown", marker: "Device list, flat" },
+  { path: "/access.md", status: 200, ct: "text/markdown", marker: "Device list, flat", encoding: "br" },
+  // The brotli q11 twins for static text assets, one row per routing shape that
+  // reaches servePrecompressedText, since each is a different way for a twin to be
+  // built and then not served. feed.xml is the control for the design decision in
+  // that function: headers come from the PLAIN asset, so the application/rss+xml
+  // that _headers sets on the .xml path must survive a body that came from the .br.
+  { path: "/garage/horizon.md", status: 200, ct: "text/markdown", encoding: "br" },     // page prefix, extension bail
+  { path: "/lwe/llms.txt", status: 200, ct: "text/plain", encoding: "br" },             // page prefix, .txt
+  { path: "/garage/feed.xml", status: 200, ct: "application/rss+xml", encoding: "br" },  // page prefix, _headers type survives
+  { path: "/images/exif.json", status: 200, ct: "application/json", encoding: "br" },    // /images/<index>.json prefix
+  { path: "/images/meta/L1000069_3.json", status: 200, ct: "application/json", encoding: "br" }, // existing meta route
+  { path: "/search-index.json", status: 200, ct: "application/json", encoding: "br" },   // exact route
+  { path: "/llms.txt", status: 200, ct: "text/plain", encoding: "br" },                  // exact route, _headers 30d rule
+  { path: "/sitemap.xml", status: 200, ct: "application/xml", encoding: "br" },          // exact route
 ];
 
 function cacheBust(path) {
@@ -387,13 +400,28 @@ function statusOk(want, got) {
   return Array.isArray(want) ? want.includes(got) : want === got;
 }
 
+function probeHeaders(r) {
+  const headers: Record<string, string> = { accept: "*/*" };
+  if (r.encoding) headers["accept-encoding"] = r.encoding;
+  return { ...headers, ...r.headers };
+}
+
 async function probe(r) {
   const url = cacheBust(r.path);
   try {
     const res = await fetch(url, {
       redirect: "manual",
       signal: AbortSignal.timeout(TIMEOUT_MS),
-      headers: { accept: "*/*", ...r.headers },
+      // An `encoding` row offers br explicitly. Node's fetch does not by default,
+      // and the LOCAL asset layer then re-encodes any MIME type it deems
+      // compressible to what the client did offer: measured 2026-08-31, the
+      // same Worker response that arrives as br on /access.md (text/markdown,
+      // not on its list) arrived as gzip on /llms.txt, /search-index.json and
+      // /garage/feed.xml when br was not offered, and as br on all four when it
+      // was. Production passes origin brotli through untouched (every /a/ asset
+      // lands at exactly its q11 size), so this is the harness, and the row's
+      // claim is the one a real client makes: offer br, get the q11 twin.
+      headers: probeHeaders(r),
     });
     const ct = res.headers.get("content-type") || "";
     let body = "", bytes = null;
@@ -405,6 +433,13 @@ async function probe(r) {
     }
     const okStatus = statusOk(r.status, res.status);
     const okCt = !r.ct || (Array.isArray(r.ct) ? r.ct.some(c => ct.startsWith(c)) : ct.startsWith(r.ct));
+    // `encoding` pins the content-encoding the Worker put on the wire. It exists
+    // for the q11 twins: a twin that is built, uploaded and never served still
+    // returns a correct body of the right type, only larger, and every other
+    // assertion here reads that as a pass. That is exactly how /garage and /lwe
+    // shipped 16% fat for weeks in July 2026 (see serveStaticPage's index note).
+    const enc = (res.headers.get("content-encoding") || "").toLowerCase();
+    const okEnc = !r.encoding || enc === r.encoding;
     const okMarker = !r.marker || body.includes(r.marker);
     const okBytes = !r.maxBytes || (bytes !== null && bytes <= r.maxBytes);
     // The doctype leads the document, but build.ts stamps a one-line banner
@@ -430,8 +465,8 @@ async function probe(r) {
       !/<(?:!doctype|html|head|body)\b/i.test(body) &&
       (!r.fragmentRoot || body.includes(r.fragmentRoot))
     );
-    const pass = okStatus && okCt && okMarker && okBytes && okFullPage && okFragment;
-    return { path: r.path, status: res.status, ct, pass, flaky: !!r.flaky, okStatus, okCt, okMarker, okBytes, okFullPage, okFragment, bytes, want: r.status, wantCt: r.ct, marker: r.marker, maxBytes: r.maxBytes };
+    const pass = okStatus && okCt && okEnc && okMarker && okBytes && okFullPage && okFragment;
+    return { path: r.path, status: res.status, ct, enc, wantEnc: r.encoding, pass, flaky: !!r.flaky, okStatus, okCt, okEnc, okMarker, okBytes, okFullPage, okFragment, bytes, want: r.status, wantCt: r.ct, marker: r.marker, maxBytes: r.maxBytes };
   } catch (e) {
     return { path: r.path, status: 0, ct: "", pass: false, flaky: !!r.flaky, error: String(e && e.message || e), want: r.status };
   }
@@ -444,7 +479,7 @@ async function main() {
     (skipped ? `  (${skipped} remote-only route(s) skipped)` : "") +
     (isLocal && remoteRows ? "  (remote bindings: production KV/R2/Browser)" : "") +
     "\n" + "=".repeat(60));
-  const results = [];
+  const results: Awaited<ReturnType<typeof probe>>[] = [];
   // small concurrency to be quick without hammering the edge
   const queue = [...routes];
   const workers = Array.from({ length: 6 }, async () => {
@@ -463,6 +498,7 @@ async function main() {
     const why = r.pass ? "" : [
       r.okStatus === false ? `status ${r.status}!=${JSON.stringify(r.want)}` : "",
       r.okCt === false ? `ct "${r.ct}"!^"${r.wantCt}"` : "",
+      r.okEnc === false ? `content-encoding "${r.enc || "none"}" != "${r.wantEnc}" (twin built but not served?)` : "",
       r.okMarker === false ? `missing marker "${r.marker}"` : "",
       r.okBytes === false ? `size ${r.bytes}B > ${r.maxBytes}B (unminified? build bypassed?)` : "",
       r.okFullPage === false ? "full-page contract missing document wrapper" : "",

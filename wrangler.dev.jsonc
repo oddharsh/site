@@ -132,7 +132,18 @@
       "/images/manifest.json", "/images/metadata.json", "/images/meta/*",
       "/images/*.avif", "/images/*.jpg", "/images/*.jpeg",
       "/images/*.png", "/images/*.gif",
-      "/images/*.heic", "/images/*.heif", "/images/*.hif"
+      "/images/*.heic", "/images/*.heif", "/images/*.hif",
+      // Five rules for the brotli q11 twins of static text assets, added
+      // 2026-08-31. Without them these paths never reach the Worker and ship
+      // edge-compressed at ~q4, 12-24% larger than the twin the build already
+      // writes. /garage/*, /lwe/*, /writing/*, /pixel-peeper/* and /images/meta/*
+      // were worker-first already and needed nothing here. `*` spans slashes in
+      // this allowlist (build.ts's own coverage check reads it that way), so
+      // "/*.md" claims every Markdown twin at any depth and "/images/*.json"
+      // the data indexes beside meta/. This puts the config at 98 of the 100
+      // rules wrangler allows; the fold gotcha 26 names is the next step if a
+      // 101st is ever needed.
+      "/images/*.json", "/*.md", "/search-index.json", "/llms.txt", "/sitemap.xml"
     ]
   },
   // matches wrangler.jsonc. Locally the spans open and record nothing

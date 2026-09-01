@@ -445,6 +445,88 @@ export async function servePrecompressedShell(request, env) {
 }
 
 
+// servePrecompressedText: the brotli q11 twin for a static TEXT asset that is
+// neither a page nor part of the /a/ shell: the Markdown twins, the photo data
+// indexes, llms.txt, the sitemap, the feeds.
+//
+// Why it exists is one measurement. Every hashed /a/ asset arrives at EXACTLY
+// its q11 size (1098/1098, 7781/7781, 6148/6148, 2839/2839 on 2026-08-31), so
+// the twin path works and reaches the client untouched. Everything without a
+// twin arrived 12-24% larger, because the edge compresses on the fly at what
+// the comment on servePrecompressedShell calls "roughly brotli q4". That is
+// now measured rather than assumed: local q4 reproduces production's wire size
+// almost byte for byte (garage/horizon.md 50,624 live against 50,508 at q4,
+// index.md 1,361 against 1,361, search-index.json 34,856 against 34,757).
+// 271 static text files shipped that way, 496.7 KiB at q4 against 416.1 KiB
+// at q11. The content is byte-identical either way, so nothing here is a
+// quality trade.
+//
+// It differs from servePrecompressedShell in ONE structural way, and the
+// difference is the reason this is not a call to that function with a wider
+// type map. The shell takes its headers from the TWIN, which works because the
+// `/a/*` glob in _headers matches the .br file too. Nothing else here has that
+// property: `/llms.txt` carries a 30-day Cache-Control and an explicit
+// Content-Type from _headers, `/garage/feed.xml` is typed application/rss+xml,
+// and none of those rules match `<path>.br`. So the headers come from the PLAIN
+// asset and only the body comes from the twin, fetched in parallel because
+// both are colo-local lookups. Whatever _headers says about the URL a visitor
+// asked for is what they get, with three corrections for the bytes actually on
+// the wire: content-encoding, content-length, and a weakened validator.
+//
+// Every failure path lands on today's behaviour, the same contract as the shell:
+//   - not a GET, or not a type the build twins   -> plain asset, untouched
+//   - env.IDENTITY_BODY (an in-process caller)   -> plain asset, untouched
+//   - either lookup fails, or the twin is missing -> plain asset, untouched
+//   - the twin arrives already encoded            -> plain asset, untouched
+//
+// encodeBody: "manual" is load-bearing here for the reason recorded on the
+// shell path: without it the runtime would brotli these already-brotli bytes.
+const TEXT_TWIN_TYPES = new Set(["md", "json", "txt", "xml", "svg"]);
+
+export async function servePrecompressedText(request, env, opts: AssetOptions = {}) {
+  const url = new URL(request.url);
+  const ext = (url.pathname.split(".").pop() ?? "").toLowerCase();
+  if (request.method !== "GET" || !TEXT_TWIN_TYPES.has(ext) || env.IDENTITY_BODY) {
+    return serveAssetWith404Clamp(request, env, opts);
+  }
+
+  // Both subrequests ask for identity so the asset layer hands back the file's
+  // own bytes: the plain one so its headers describe the plain body we then
+  // discard, the twin so we are not re-wrapping something the layer encoded.
+  const identity = { headers: { "accept-encoding": "identity" } };
+  const [plain, twin] = await Promise.all([
+    env.ASSETS.fetch(new Request(url.toString(), identity)).catch(() => null),
+    env.ASSETS.fetch(new Request(`${url.origin}${url.pathname}.br`, identity)).catch(() => null),
+  ]);
+  const drop = async (r) => { try { await r?.body?.cancel(); } catch {} };
+  if (!plain?.ok || !twin?.ok || twin.headers.get("content-encoding")) {
+    await Promise.all([drop(plain), drop(twin)]);
+    return serveAssetWith404Clamp(request, env, opts);
+  }
+  await drop(plain);
+
+  const headers = new Headers(plain.headers);
+  headers.set("content-encoding", "br");
+  // The plain response's length describes the body we just cancelled. The twin's
+  // is the one on the wire; if the layer did not state it, let the runtime
+  // measure the stream rather than assert a number that is wrong.
+  const twinLength = twin.headers.get("content-length");
+  if (twinLength) headers.set("content-length", twinLength);
+  else headers.delete("content-length");
+  // Same URL, two encodings: a shared cache must not hand one to a client that
+  // asked for the other.
+  headers.append("vary", "accept-encoding");
+  // The asset layer's ETag is a strong validator for the PLAIN bytes. Two
+  // encodings of one resource must not share it, so weaken and mark it, the way
+  // the page path does.
+  const encoded = variantEtag(headers.get("etag"), "br");
+  if (encoded) headers.set("etag", encoded);
+  for (const [name, value] of Object.entries(opts.headers || {})) headers.set(name, value);
+
+  const res = new Response(twin.body, { status: 200, headers, encodeBody: "manual" });
+  return notModifiedIfFresh(request, res);
+}
+
 // serveStaticPage: static and build-rendered HTML, with a dcz delta when the
 // client holds either the preferred immutable family dictionary or a committed
 // per-page snapshot, otherwise the brotli q11 twin, otherwise the plain asset.
@@ -506,8 +588,14 @@ export async function serveStaticPage(request, env, opts: AssetOptions = {}) {
   if (rel !== "index" && url.pathname.endsWith("/")) return serveAssetWith404Clamp(request, env);
 
   if (!rel || rel.includes("..") || /\.[a-z0-9]+$/i.test(rel)) {
-    // Sub-resources under these prefixes (the garage's images, ask.js) are not pages and
-    // have no twin; hand them straight to the asset layer untouched.
+    // Sub-resources under these prefixes are not pages. The TEXT ones (a page's
+    // .md twin, a section's llms.txt or feed.xml) have a q11 twin of their own
+    // since 2026-08-31 and take servePrecompressedText, which falls through to
+    // the plain asset on any miss; everything else (the garage's images,
+    // ask.js) goes straight to the asset layer untouched, as it always did.
+    if (!rel.includes("..") && TEXT_TWIN_TYPES.has((rel.split(".").pop() ?? "").toLowerCase())) {
+      return servePrecompressedText(request, env);
+    }
     return serveAssetWith404Clamp(request, env);
   }
   // Markdown negotiation runs before the dictionary/delta machinery below, which

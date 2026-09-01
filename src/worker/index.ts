@@ -20,7 +20,7 @@ import { handleLensWire } from "./lens-wire.ts";
 import { handleLensNlweb } from "./lens-nlweb.ts";
 import { handleLensTools } from "./lens-tools.ts";
 import { handleLensMarkdown } from "./lens-markdown.ts";
-import { serveAssetWith404Clamp, serveFreshAsset, servePrecompressedShell, serveStaticPage } from "./lib/assets.ts";
+import { serveAssetWith404Clamp, serveFreshAsset, servePrecompressedShell, servePrecompressedText, serveStaticPage } from "./lib/assets.ts";
 import { BOT_UA } from "./lib/botauth.ts";
 import { CANONICAL_HOST, PAGE_CACHE_CONTROL, isCanonicalHost } from "./lib/const.ts";
 import { HOMEPAGE_DISCOVERY_LINK } from "./lib/security.ts";
@@ -513,6 +513,12 @@ const ROUTE_TABLE: Array<[path: string, handler: RouteHandler]> = [
   ["/images/full/", routePhotosRedirect],
   ["/images/manifest.json", handleImagesManifest],
   ["/images/metadata.json", routeImagesMetadata],
+  // Three root-level text assets that were edge-compressed at ~q4 until
+  // 2026-08-31, now served from their build-time q11 twin. search-index.json is
+  // the one /search fetches on every query, and the largest of the three.
+  ["/search-index.json", routeTextTwin],
+  ["/llms.txt", routeTextTwin],
+  ["/sitemap.xml", routeTextTwin],
 
   ["/index.html", routeIndexHtml],
   ["/", routeHomepage],
@@ -542,6 +548,15 @@ const PREFIX = [
     handle: routeWritingPost,
   },
   {
+    // The section's own data files: posts.json, feed.xml, and the raw .txt of
+    // each post. /writing/* is already worker-first for the slug route above,
+    // which excludes anything carrying a dot, so these used to fall through to
+    // the bare asset fetch at the end of route() and ship edge-compressed.
+    label: "/writing/<file>.<ext>",
+    match: (pathname) => /^\/writing\/[^/]+\.(json|txt|xml)$/i.test(pathname),
+    handle: routeTextTwin,
+  },
+  {
     // The old /terminal/<tool> namespace, kept as a permanent redirect. These
     // URLs never shipped — the restructure landed before the PR merged — so it
     // costs nothing, and it exists so any link written during development lands
@@ -567,6 +582,23 @@ const PREFIX = [
     label: "/images/meta/<stem>.json",
     match: (pathname) => /^\/images\/meta\/[^/]+\.json$/i.test(pathname),
     handle: routeImagesMeta,
+  },
+  {
+    // The photo data indexes beside meta/: exif.json is warmed on idle by every
+    // homepage visit, so it is the highest-frequency file this covers. The
+    // exact routes above (manifest, metadata) win first, so the Worker-built
+    // manifest never reaches a twin lookup it has no file for.
+    label: "/images/<index>.json",
+    match: (pathname) => /^\/images\/[^/]+\.json$/i.test(pathname),
+    handle: routeTextTwin,
+  },
+  {
+    // A root-level Markdown twin (/access.md, /garage.md, /index.md). The two
+    // the Worker renders itself, /auth.md and /rn.md, are exact routes and are
+    // matched before this table is consulted.
+    label: "/<page>.md",
+    match: (pathname) => /^\/[^/]+\.md$/i.test(pathname),
+    handle: routeTextTwin,
   },
   {
     label: "/images/full/<key>",
@@ -1021,7 +1053,7 @@ function serveGeneratedWriting(request: SiteRequest, env: Env) {
 }
 
 function routeImagesMetadata(request: SiteRequest, env: Env) {
-  return serveAssetWith404Clamp(request, env, {
+  return servePrecompressedText(request, env, {
     headers: { "cache-control": "public, max-age=60, s-maxage=60, must-revalidate" },
     notFoundBody: '{"error":"not found"}',
     notFoundType: "application/json; charset=utf-8",
@@ -1029,7 +1061,7 @@ function routeImagesMetadata(request: SiteRequest, env: Env) {
 }
 
 function routeImagesMeta(request: SiteRequest, env: Env) {
-  return serveAssetWith404Clamp(request, env, {
+  return servePrecompressedText(request, env, {
     notFoundBody: '{"error":"not found"}',
     notFoundType: "application/json; charset=utf-8",
   });
@@ -1045,6 +1077,13 @@ function routeStaticPage(request: SiteRequest, env: Env) {
 
 function routeShellAsset(request: SiteRequest, env: Env) {
   return servePrecompressedShell(request, env);
+}
+
+// The q11 twin for a static text asset outside /a/ and outside any page
+// prefix. The reasoning, and the measurement that put these behind the
+// Worker, is on servePrecompressedText.
+function routeTextTwin(request: SiteRequest, env: Env) {
+  return servePrecompressedText(request, env);
 }
 
 async function routeImageThumb(request: SiteRequest, env: Env, _ctx: ExecutionContext, url: URL) {

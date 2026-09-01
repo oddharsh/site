@@ -3463,6 +3463,43 @@ bun run deploy:direct
     requirement. (Either writes into `src/dict/a-dict/` the moment it runs, so if you run one
     to read the code, `git checkout -- src/dict/a-dict` after.)
 
+    **Every static TEXT asset ships a q11 twin as of 2026-08-31, and the way that
+    was found is worth more than the bytes.** Hashed `/a/` assets arrive at
+    EXACTLY their q11 size (1098/1098, 7781/7781, 6148/6148, 2839/2839), so the
+    twin path works and reaches the client untouched; everything without a twin
+    arrived 12-24% larger, because the edge compresses on the fly at brotli q4.
+    That "roughly q4" in `servePrecompressedShell`'s comment is measured now:
+    local q4 reproduces production's wire size almost byte for byte
+    (`garage/horizon.md` 50,624 live / 50,508 at q4, `index.md` 1,361 / 1,361,
+    `search-index.json` 34,856 / 34,757). The Markdown twins, the photo data
+    indexes, `llms.txt`, the sitemap and the feeds were all in that state: 241
+    files, 452.5 KiB at q4 against 379.7 KiB from the twin, 72.8 KiB (16.1%) off
+    the wire for byte-identical content. `servePrecompressedText` serves them,
+    with one structural difference from the shell path: headers come from the
+    PLAIN asset and only the body from the twin, because `_headers` rules
+    (`/llms.txt`'s 30-day cache, `feed.xml`'s `application/rss+xml`) are keyed on
+    the plain path and match nothing ending in `.br`. Five `run_worker_first`
+    rules put the config at 98 of 100. Twins are written only for paths the
+    Worker claims, and a contract test refuses one that is not, because a twin
+    that is built and never served returns a correct body at a larger size and
+    every other check reads that as a pass.
+
+    **THE LOCAL HARNESS TRANSCODES BY MIME TYPE, and that reads exactly like a
+    twin that is not being served.** The first oracle run failed nine rows with
+    `content-encoding "gzip" != "br"` while the two `.md` rows passed. The Worker
+    was serving every twin as br; miniflare's asset layer re-encodes any type it
+    deems compressible (`application/json`, `text/plain`, `application/xml`) to
+    whatever the client offered, and node's fetch does not offer br by default.
+    `text/markdown` is not on its list, which is the whole reason the `.md` rows
+    passed and the split looked like a Worker bug keyed on extension. Measured
+    with and without `accept-encoding: br` on the same booted Worker: `.md` br
+    either way, the other three gzip without and br with. The oracle's `encoding`
+    rows now offer br explicitly. Production passes origin brotli through (the
+    `/a/` measurement above is the proof), so this is the instrument, and it is
+    gotcha 13's `wrangler dev` mangling arriving through the harness. Diagnose a
+    by-extension encoding split in local dev by asking what the client offered
+    before asking what the Worker sent.
+
     **`dcz:check`'s shell probe could only ever agree with itself, and the coverage
     assertion beside it is the fix.** The probe picks an a-dict candidate that is NOT
     the live hash, offers it, and asserts `dcz` comes back. build.ts builds a delta

@@ -19,6 +19,7 @@
     "tools/contract-reading-somebody-else-s-site.test.mjs": 1,
     "tools/contract-rn-the-track-meta-map-must-survive-a-short-playlist-.test.mjs": 14,
     "tools/contract-shared.ts": 20,
+    "tools/contract-static-text-assets-ship-their-q11-twin.test.mjs": 2,
     "tools/contract-the-bundled-photo-pool.test.mjs": 7,
     "tools/contract-the-execution-half-of-the-readiness-rubric.test.mjs": 1,
     "tools/contract-the-luma-session-jar.test.mjs": 24,
@@ -52,7 +53,7 @@
     "tools/release-status.ts": 18,
     "tools/roll-shell-dictionary.ts": 16,
     "tools/ua-survey.ts": 17,
-    "tools/verify-routes.ts": 27
+    "tools/verify-routes.ts": 2
   },
-  "total": 501
+  "total": 478
 }
