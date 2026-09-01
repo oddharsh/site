@@ -2141,15 +2141,30 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     // they buy is a margin on four pages almost nobody fetches. Not zero,
     // though: with no tail at all access/index beats plain q11 by 17 BYTES, a
     // coin flip that one content edit turns into a loss (and does, at a 4 KiB
-    // tail). 12 KiB each for the two large layouts keeps every outlier at 3.9%
-    // or better; the frontier is flat around it (14/10 is 57 B cheaper with a
-    // 2.6% margin), and the widest margin wins a flat frontier.
+    // tail).
+    //
+    // The first pass stopped at 12 KiB each because it compared DELTAS while
+    // holding the dictionary's raw 64 KiB fixed. Raw is not what the relation
+    // downloads: the dictionary has its own q11 twin, and changing which corpus
+    // bytes occupy the window changes that twin. Measured 2026-09-01 over the
+    // current 55 pages, including the dictionary acquisition:
+    //
+    //                         family DCZ   dict q11   combined   worst outlier
+    //   horizon 12 / access 12   457,969     14,925    472,894    3.84% access
+    //   horizon 11 / access 12   457,959     14,754    472,713    3.41% horizon
+    //   horizon 12 / access 11   457,884     14,737    472,621    3.05% access
+    //
+    // Trimming Horizon alone is a strict wire win: 171 B less acquisition and
+    // 10 B less even if every page is fetched once. Trimming Access too buys 92
+    // more bytes across that whole-site sweep but spends a third of the outlier
+    // margin. The wider margin wins that flat frontier; ordinary content edits
+    // are larger than 92 bytes, while the dictionary is fetched as a unit.
     //
     // The two fixtures are under 3 KB apiece, so a 4 KiB budget takes the whole
     // file and each compresses to 20 bytes. Keeping them COSTS nothing on the
     // aggregate: their 4.4 KB displaces less base than the 1.7 KB they save.
     const REPRESENTATIVES: Array<[string, number]> = [
-      ["garage/horizon.html", 12_288],   // very large standalone lab
+      ["garage/horizon.html", 11_264],   // very large standalone lab
       ["garage/vt-b.html",     4_096],   // tiny browser fixture, whole file
       ["garage/vt-check.html", 4_096],   // tiny browser fixture, whole file
       ["access/index.html",   12_288],   // standalone device matrix
