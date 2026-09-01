@@ -95,6 +95,98 @@ WRANGLER="$PROJECT_DIR/node_modules/.bin/wrangler"
 DEST="$PROJECT_DIR/public/images"
 TMP="/tmp/aadhar-add-photos-$$"
 
+# How many photos phases 1 and 2 encode at once. Every photo is independent (its
+# own source, its own output stems), so this is the one place in the pipeline
+# where the machine's cores were sitting idle: those two loops ran one photo at
+# a time while phase 3 had been uploading four at a time for months.
+#
+# The default is deliberately BELOW the core count, and the reason is what
+# happens when the machine is NOT idle. Measured over a mixed 12-photo sample
+# (8 JPG, 4 HIF) on an otherwise quiet 14-core M-series:
+#
+#   serial  114s  1.00x        JOBS  8   29s  3.93x
+#   JOBS 2   77s  1.48x        JOBS 10   29s  3.93x
+#   JOBS 4   53s  2.15x        JOBS 12   30s  3.80x
+#   JOBS 6   48s  2.38x        JOBS 14   28s  4.07x
+#
+# It plateaus at 8 rather than turning over: past that the wall clock is the
+# SLOWEST SINGLE PHOTO (a HIF full-res export, ~28s here), so on a sample this
+# size there is no parallelism left to extract at any width. 8 reaches the
+# plateau at half the cores, which leaves headroom for the two things that scale
+# with N and are invisible in the table above. avifenc already spends `--jobs 4`
+# per photo, so N photos in flight ask for up to 4N threads. And each worker
+# holds a full-resolution frame: a 40MP linear-light f32 frame is ~480MB, on top
+# of the ~311MB TIFF phase 1 writes and the bigger PNG phase 2 writes, all of
+# which live in $TMP at once.
+#
+# THAT SECOND COST IS NOT THEORETICAL, and the same sweep on a loaded box is the
+# evidence: at a 5-minute load average of 25 on those 14 cores with 14.7GB
+# already swapped, the serial arm took 679s while JOBS=4/8/12 took 1704s, 1910s
+# and 4373s. Parallel was 2.5x to 6.4x SLOWER than serial, because serial holds
+# one frame and eight workers hold eight. A machine with other agent sessions on
+# it is the normal case in this repo (see the collaboration rule in CLAUDE.md),
+# so lower this rather than raise it when in doubt.
+#
+# The general trap is worth more than the number: a first pass took the loaded
+# figures at face value and read them as a verdict on the change. Both sweeps
+# were real measurements of different machines. Capture load and swap either side
+# of each arm, which tools/photos is now in the habit of doing, or a busy box
+# will quietly answer a question you did not ask.
+#
+# JOBS=1 costs 1% against the serial original, which is the control that says the
+# restructuring below is free: the win is concurrency and not a quiet change to
+# what the encoders are asked to do. All 48 output tiers came back byte-identical
+# at every JOBS value on both boxes, which is the bar that matters here, since
+# `/i/` is content-addressed and one moved byte re-mints the URL and orphans the
+# baked histogram behind it (gotcha 41). That is also why avifenc's own `--jobs`
+# is untouched: measured 2026-08-31, `--jobs 1` and `--jobs 2` disagree on the
+# bytes (17,389 against 17,347 on one 600px tile), with everything from 2 up
+# identical, so the thread count is baked into the encode and stealing threads
+# back from avifenc to widen this knob would re-encode the whole library.
+JOBS="${JOBS:-8}"
+
+# A worker runs in a subshell, so it cannot increment a counter in the parent.
+# Each one drops an empty file named by its loop index into a per-outcome
+# directory instead, and the parent counts files once every job has finished.
+# The index is unique per photo, so concurrent workers never write the same name
+# and none of this needs a lock.
+st_init() { ST_ROOT="$1"; rm -rf "$ST_ROOT"; mkdir -p "$ST_ROOT/ok" "$ST_ROOT/skip" "$ST_ROOT/fail" "$ST_ROOT/na"; }
+mark()    { : > "$ST_ROOT/$1/$2"; }
+tally()   { ls -1 "$ST_ROOT/$1" 2>/dev/null | wc -l | tr -d ' '; }
+
+# A worker that dies takes its outcome with it. Under `set -e` a failing command
+# used to kill the whole run, which was loud; inside a subshell it kills one
+# worker and `wait` still returns 0, which is not. So every photo records
+# exactly one outcome and the count has to come back whole. Gotcha 36's lesson
+# in this script's own idiom: a catch that degrades one item will happily
+# degrade every item, so count what you handled rather than trusting that you did.
+reconcile() {  # reconcile <phase-label>
+  local seen expected
+  seen=$(( $(tally ok) + $(tally skip) + $(tally fail) + $(tally na) ))
+  expected=$(cat "$ST_ROOT/launched")
+  if [ "$seen" -ne "$expected" ]; then
+    echo "  warning: $1 recorded $seen of $expected photos; $((expected - seen)) worker(s) exited without an outcome" >&2
+  fi
+}
+
+# Runs a worker function over $SOURCES, $JOBS at a time. Same batching idiom
+# phase 3 has always used for uploads: launch until the batch is full, `wait`
+# for all of it, start the next. A batch waits on its slowest member, which
+# costs something against a true work pool and needs no `wait -n`, which matters
+# because bash 3.2 is what /usr/bin/env bash finds on macOS and that builtin
+# arrived in 4.3.
+run_parallel() {  # run_parallel <worker-fn>
+  local fn="$1" pending=0 idx=0 f
+  while IFS= read -r f; do
+    idx=$((idx+1))
+    ( "$fn" "$f" "$idx" ) &
+    pending=$((pending+1))
+    if [ "$pending" -ge "$JOBS" ]; then wait; pending=0; fi
+  done < "$SOURCES"
+  wait
+  echo "$idx" > "$ST_ROOT/launched"
+}
+
 # square thumbnail edges (px). the file IS the displayed pixels (center square),
 # so no off-square bytes ship. MUST match reencode-thumbnails.sh + THUMB_SMALL_PX
 # in _worker.js (the -<N>.avif suffix). override per run with SQ=/SQ_SM=.
@@ -303,10 +395,12 @@ avif_encode() {  # avif_encode <src.jpg> <out.avif>
 }
 
 # ── phase 1: square thumbnails (zenc q84 JPG + 10-bit AVIF, + mobile AVIF) ──
-echo "phase 1 — square thumbnails (${SQ}×${SQ} / ${SQ_SM}×${SQ_SM}, zenc q84 + AVIF via $AVIF_KIND, metadata-stripped)"
-T_OK=0; T_SKIP=0; T_FAIL=0
+echo "phase 1 — square thumbnails (${SQ}×${SQ} / ${SQ_SM}×${SQ_SM}, zenc q84 + AVIF via $AVIF_KIND, metadata-stripped, parallel $JOBS)"
 INTER="$TMP/inter"; mkdir -p "$INTER"
-while IFS= read -r f; do
+st_init "$TMP/status1"
+thumb_one() {  # thumb_one <source-file> <index>
+  local f="$1" idx="$2"
+  local base stem jpg avif smavif xs xsavif tif sq sm input o profile transfer
   base=$(basename "$f"); stem="${base%.*}"
   jpg="$DEST/${stem}.jpg"; avif="$DEST/${stem}.avif"; smavif="$DEST/${stem}-${SQ_SM}.avif"
   # $INTER, like the two tiers above it. This read "$TMP/sq/", a directory
@@ -321,7 +415,7 @@ while IFS= read -r f; do
   # build.ts rather than here, so the same gap fails the deploy instead.
   xs="$INTER/${stem}.xs.png"; xsavif="$DEST/${stem}-${SQ_XS}.avif"
   if [ -f "$jpg" ] && [ -f "$avif" ] && [ -f "$smavif" ] && [ "$jpg" -nt "$f" ]; then
-    T_SKIP=$((T_SKIP+1)); printf "·"; continue
+    mark skip "$idx"; printf "·"; return
   fi
   # The intermediates are LOSSLESS: a TIFF for the HEIF decode, PNGs out.
   tif="$INTER/${stem}.tif"
@@ -341,7 +435,7 @@ while IFS= read -r f; do
   input="$f"
   case "${f##*.}" in
     [Hh][Ii][Ff]|[Hh][Ee][Ii][Cc]|[Hh][Ee][Ii][Ff])
-      if ! sips -s format tiff "$f" --out "$tif" >/dev/null 2>&1; then T_FAIL=$((T_FAIL+1)); printf "✗"; continue; fi
+      if ! sips -s format tiff "$f" --out "$tif" >/dev/null 2>&1; then mark fail "$idx"; printf "✗"; return; fi
       input="$tif" ;;
   esac
   o=$(exif-sooc -s -s -s -n -Orientation "$f" 2>/dev/null) || o=""
@@ -354,7 +448,7 @@ while IFS= read -r f; do
   # on this corpus (2 g22, 179 srgb) and the outputs are byte-identical.
   if ! "$ZENC" square "$input" --orient "$o" --filter box \
       --size "$SQ" --out "$sq" --size "$SQ_SM" --out "$sm" --size "$SQ_XS" --out "$xs" >/dev/null 2>&1; then
-    rm -f "$tif"; T_FAIL=$((T_FAIL+1)); printf "✗"; continue
+    rm -f "$tif"; mark fail "$idx"; printf "✗"; return
   fi
   # Deleted per photo rather than by the EXIT trap: a full-res TIFF is ~311MB
   # (326,474,696 B for a 7728x5152 HIF, 16-bit RGBA).
@@ -374,10 +468,10 @@ while IFS= read -r f; do
   # 4. desktop square JPG (zenc: zenjpeg hybrid+scan, q84 ≈ old jpegli q82) + strip
   #    any residual metadata (sips can leave a grayscale ICC on B&W frames; keep
   #    formats consistent / sRGB).
-  if ! "$ZENC" "$sq" "$jpg" -q "$ZENC_Q" >/dev/null 2>&1; then T_FAIL=$((T_FAIL+1)); printf "✗"; continue; fi
+  if ! "$ZENC" "$sq" "$jpg" -q "$ZENC_Q" >/dev/null 2>&1; then mark fail "$idx"; printf "✗"; return; fi
   exif-sooc -all= -overwrite_original "$jpg" >/dev/null 2>&1 || true
   # 5. desktop square AVIF
-  if ! avif_encode "$sq" "$avif"; then T_FAIL=$((T_FAIL+1)); printf "✗"; continue; fi
+  if ! avif_encode "$sq" "$avif"; then mark fail "$idx"; printf "✗"; return; fi
   # 6. mobile square AVIF — from the same full-resolution frame as the 600
   # tier since 2026-08-26 (it used to be a resize of the 600 square, and before
   # that a JPEG resized from a JPEG).
@@ -387,23 +481,30 @@ while IFS= read -r f; do
   # and 400 went linear-light while the 200 stayed on sips — and its next
   # incarnation re-squared the 600. Both found by reading, not by a check.)
   avif_encode "$xs" "$xsavif" || printf "~"
-  T_OK=$((T_OK+1)); printf "."
-done < "$SOURCES"
+  mark ok "$idx"; printf "."
+}
+run_parallel thumb_one
 echo ""
-echo "  generated: $T_OK  skipped (current): $T_SKIP  failed: $T_FAIL"
+echo "  generated: $(tally ok)  skipped (current): $(tally skip)  failed: $(tally fail)"
+reconcile "phase 1"
 echo ""
 
 # ── phase 2: HIF → full-res JPG export (for click-through) ────────────
-echo "phase 2 — HIF → full-res JPG exports"
-H_OK=0; H_SKIP=0; H_FAIL=0
+echo "phase 2 — HIF → full-res JPG exports (parallel $JOBS)"
 EXPORTS="$TMP/jpgexports"
 mkdir -p "$EXPORTS"
-while IFS= read -r f; do
+st_init "$TMP/status2"
+export_one() {  # export_one <source-file> <index>
+  local f="$1" idx="$2"
+  local base ext_lc stem src_dir out tmppng
   base=$(basename "$f")
   ext_lc=$(echo "${base##*.}" | tr '[:upper:]' '[:lower:]')
   case "$ext_lc" in
     hif|heic|heif) ;;
-    *) continue ;;
+    # A non-HEIF source has nothing to export, which is not a skip and not a
+    # failure. It gets its own outcome so that every photo records exactly one
+    # and `reconcile` can still expect the counts to come back whole.
+    *) mark na "$idx"; return ;;
   esac
   stem="${base%.*}"
   src_dir=$(dirname "$f")
@@ -411,8 +512,8 @@ while IFS= read -r f; do
   # authoritative click target; no need to make a derived export.
   if ls "$src_dir"/"$stem".[Jj][Pp][Gg] 2>/dev/null  | grep -q . || \
      ls "$src_dir"/"$stem".[Jj][Pp][Ee][Gg] 2>/dev/null | grep -q .; then
-    H_SKIP=$((H_SKIP+1)); printf "→"
-    continue
+    mark skip "$idx"; printf "→"
+    return
   fi
   out="$EXPORTS/${stem}.jpg"
   # This export IS the R2 share/click copy; the .HIF original stays local-only.
@@ -428,13 +529,15 @@ while IFS= read -r f; do
   if sips -s format png "$f" --out "$tmppng" >/dev/null 2>&1 \
      && "$ZENC" "$tmppng" "$out" -q 100 --yuv 422 >/dev/null 2>&1 \
      && exif-sooc -TagsFromFile "$f" -all:all -overwrite_original "$out" >/dev/null 2>&1; then
-    rm -f "$tmppng"; H_OK=$((H_OK+1)); printf "."
+    rm -f "$tmppng"; mark ok "$idx"; printf "."
   else
-    rm -f "$tmppng"; H_FAIL=$((H_FAIL+1)); printf "✗"
+    rm -f "$tmppng"; mark fail "$idx"; printf "✗"
   fi
-done < "$SOURCES"
+}
+run_parallel export_one
 echo ""
-echo "  exported: $H_OK  skipped (JPG sibling exists): $H_SKIP  failed: $H_FAIL"
+echo "  exported: $(tally ok)  skipped (JPG sibling exists): $(tally skip)  failed: $(tally fail)"
+reconcile "phase 2"
 echo ""
 
 # ── phase 3: upload originals + HIF JPG exports to R2 ─────────────────
