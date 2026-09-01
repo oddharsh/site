@@ -48,6 +48,7 @@ import { parseCss } from "./lib/css-parse.ts";
 import { HTML_MARKERS } from "./lib/html-markers.ts";
 import { buildExifIndex, buildImageFingerprints, serializeExifIndex, serializeFingerprints } from "./lib/photo-indexes.ts";
 import { zstdCompressDictionaryBatch } from "./lib/zstd-batch.ts";
+import { unpackHistogram } from "./photos/build-histogram-index.ts";
 import { patchStaticShell, renderDesktopArtifacts, staticShellPages } from "../tools/photos/gen-desktop-partial.ts";
 
 const OUT = ".build";
@@ -1012,25 +1013,11 @@ await Promise.all([
 {
   const exif = JSON.parse(await readFile(`${OUT}/public/images/exif.json`, "utf8").catch(() => "{}"));
   const packed = JSON.parse(await readFile(`${OUT}/public/images/histograms.json`, "utf8").catch(() => "{}"));
-  const CHANNELS = ["l", "r", "g", "b"];
-  const BINS = 64, HIST_BASE = 63, HIST_LEVELS = 64;
   await mkdir(`${OUT}/public/images/meta`, { recursive: true });
-  // Parsed at the boundary: a packed entry becomes channels or nothing, and every
-  // caller below branches on the channels rather than on the string. A wrong-typed
-  // entry has no .length and falls out here the same as a missing one.
-  const unpackChannels = (p) => {
-    if (!p || p.length !== CHANNELS.length * BINS) return null;
-    const hi = {};
-    for (const [ci, channel] of CHANNELS.entries()) {
-      hi[channel] = Array.from({ length: BINS }, (_, i) =>
-        Math.round((p.charCodeAt(ci * BINS + i) - HIST_BASE) * 100 / (HIST_LEVELS - 1)));
-    }
-    return hi;
-  };
   const entries = Object.entries(exif) as [string, Record<string, any>][];
   await Promise.all(entries.map(async ([stem, record]) => {
     const out = { ...record };
-    const hi = unpackChannels(packed[stem]);
+    const hi = unpackHistogram(packed[stem]);
     if (hi) out.hi = hi;
     await writeFile(`${OUT}/public/images/meta/${stem}.json`, JSON.stringify(out));
   }));

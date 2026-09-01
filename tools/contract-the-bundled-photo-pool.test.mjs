@@ -233,8 +233,8 @@ test("homepage selects 12 photos and transfers all of them", async () => {
 });
 
 
-test("the packed histogram survives the round trip tooltip.js does", async () => {
-  const { packHistogram, CHANNELS, BINS, HIST_BASE, HIST_LEVELS } = await import("../tools/photos/build-histogram-index.ts");
+test("the packed histogram survives the round trip tooltip.js and build.ts do", async () => {
+  const { packHistogram, unpackHistogram, CHANNELS, BINS, HIST_BASE, HIST_LEVELS } = await import("../tools/photos/build-histogram-index.ts");
   const hi = {};
   for (const [ci, c] of CHANNELS.entries()) hi[c] = Array.from({ length: BINS }, (_, i) => (i * 7 + ci * 13) % 101);
   const packed = packHistogram(hi);
@@ -262,6 +262,13 @@ test("the packed histogram survives the round trip tooltip.js does", async () =>
   // 64 levels over a 0-100 source, rendered into a 32-unit-tall SVG, so one
   // level is half a pixel and this bound is the whole quality argument.
   assert.ok(worst <= 1, `round trip is within one unit of 100, got ${worst}`);
+  assert.deepEqual(
+    unpackHistogram(packed),
+    Object.fromEntries(CHANNELS.map((c, ci) => [c, decoded[ci]])),
+    "the build-side fallback decoder matches the browser-side modulo accumulator",
+  );
+  assert.equal(unpackHistogram("!".repeat(CHANNELS.length * BINS)), null,
+    "the build-side decoder refuses characters outside the wire alphabet");
   const flat = packHistogram(Object.fromEntries(CHANNELS.map((c) => [c, Array(BINS).fill(50)])));
   assert.ok(flat, "four complete flat channels pack");
   for (let ci = 0; ci < CHANNELS.length; ci++) {
