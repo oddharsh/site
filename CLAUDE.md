@@ -3427,6 +3427,23 @@ bun run deploy:direct
     tails from its four outlier layouts and now beats q11 on all 46 deterministic
     pages (428,238 B vs 494,073 B across the set). Both candidates are emitted only
     when they beat plain q11.
+
+    **Each representative tail carries its OWN budget as of 2026-08-31, and the
+    uniform 16 KiB it replaced was the most expensive number in that block.**
+    Four 16 KiB tails are 36 KB of the 64, laid over the START of the base
+    corpus, so the pages with real traffic were matching against 28 KB of
+    corpus. Measured over the 55 staged pages: the homepage's family delta went
+    from 16.4% under plain q11 to 25.9% once the two large tails dropped to 12
+    KiB, `/garage` from 13.8% to 22.1%, and the family tier from 482,386 B to
+    457,969 B. Dropping the tails entirely is 11 KB better still and is the
+    wrong move: `access/index` then beats q11 by 17 bytes, a coin flip that one
+    edit turns into a loss. 12 KiB keeps every outlier at 3.9% or better. The two
+    fixtures are under 3 KB and compress to 20 bytes with the whole file in;
+    keeping them costs nothing on the aggregate. One more fact the old comment
+    got backwards: the prefix displaces `lwe/drivers`, so the window is really
+    `garage/compression`, and that is the better of the two to keep (moving the
+    tails last to save drivers is 4,953 B worse).
+
     `bun run shell:roll` rolls both `a-dict` and `p-dict`; page snapshots are Brotli'd
     in the repo, ignored by the asset upload, and decompressed only at build time.
     **BOTH halves can read the wire now, and `--live` is how the scheduled roll
