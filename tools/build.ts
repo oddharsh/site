@@ -2228,9 +2228,13 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
 // measured the same ~19% tax; wrangler.jsonc deferred it as migration scope rather
 // than rejecting it.
 //
-// Only /a/ is precompressed. Those four files are content-addressed, immutable, and
-// on the render path, so they are the whole win in one bounded directory. The static
-// garage/lwe HTML is the next candidate and needs its own routing decision.
+// This block precompresses /a/ alone: content-addressed, immutable, on the render
+// path. It read "only /a/ is precompressed" until 2026-08-31, which had been false
+// since the pages got their twins in July and became doubly so that day, when the
+// static TEXT assets (the Markdown twins, the photo data indexes, llms.txt, the
+// sitemap, the feeds) got theirs too; see the text-twins block near the end of
+// this file, and servePrecompressedText for why those headers come from the plain
+// asset rather than the twin. Three tiers, three blocks, one brotliQ11.
 //
 // This is safe to add because it degrades to exactly today's behavior: the worker
 // serves a .br twin only when the request actually offers `br` AND the twin exists.
@@ -2768,6 +2772,66 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   console.log(dCount
     ? `page-delta: ${dCount} dcz delta(s), ${dBytes} bytes against ${dPlain} plain brotli (${pageCount} per-page/${pageBytes} B, ${familyCount} family/${familyBytesOut} B)`
     : `page-delta: none (no dictionary candidate beat plain brotli)`);
+}
+
+// ── brotli q11 twins for the static TEXT assets outside /a/ and outside the pages ──
+//
+// The Markdown twins, the photo data indexes, llms.txt, the sitemap, the feeds.
+// Until 2026-08-31 none of these had a twin, so every one shipped through the
+// edge's on-the-fly compression at roughly brotli q4: measured against
+// production, local q4 reproduces the live wire size almost byte for byte
+// (garage/horizon.md 50,624 live / 50,508 at q4, index.md 1,361 / 1,361,
+// search-index.json 34,856 / 34,757), while q11 is 12-24% smaller on the same
+// bytes. 271 files, 496.7 KiB at q4 against 416.1 KiB at q11.
+//
+// Only paths the Worker CLAIMS are twinned. A twin the asset layer serves
+// directly is dead weight in the upload and a false claim in this log, which is
+// the failure the contract test refuses: every twin written here must match a
+// run_worker_first rule. The globs below are therefore a declaration of what
+// servePrecompressedText can reach, kept beside the rules that make it true,
+// rather than "every text file". robots.txt, resume.json, the section icons and
+// /.well-known/* are deliberately absent: the first three are not worth an
+// allowlist rule at 98 of 100, and .well-known goes through serveFreshAsset.
+//
+// Refuses a twin that is not smaller, the same guard the /a/ step carries, and
+// floors the count so a walk that quietly matched nothing reads as the failure
+// it is rather than as a build with no text to compress.
+{
+  const TWINNED = [
+    /^(?:garage|lwe)\/.+\.(?:md|txt|xml)$/,     // section prefixes, worker-first for the pages
+    /^writing\/[^/]+\.(?:json|txt|xml)$/,        // /writing/* is worker-first for the slug route
+    /^pixel-peeper\/[^/]+\.json$/,                // /pixel-peeper/* likewise
+    /^images\/(?:meta\/)?[^/]+\.json$/,          // the data indexes and the per-photo meta
+    /^[^/]+\.md$/,                                 // root-level Markdown twins, "/*.md"
+    /^(?:search-index\.json|llms\.txt|sitemap\.xml)$/,
+  ];
+  // Two root-level .md files the Worker renders itself rather than serves from a
+  // file, so a twin of the staged copy would describe bytes it never sends.
+  const RENDERED = new Set(["auth.md", "rn.md"]);
+  const all = await readdir(`${OUT}/public`, { recursive: true });
+  const have = new Set(all);
+  const candidates = all.filter((rel) =>
+    TWINNED.some((re) => re.test(rel)) &&
+    !RENDERED.has(rel) &&
+    !/\.src\./.test(rel) &&
+    !have.has(`${rel}.br`) &&
+    !rel.startsWith("md/"),                       // .assetsignore'd staging dir for the hand twins
+  );
+  const compressed = await Promise.all(candidates.map(async (rel) => {
+    const bytes = await readFile(`${OUT}/public/${rel}`);
+    return { rel, bytes, br: await brotliQ11(bytes) };
+  }));
+  const wins = compressed.filter(({ bytes, br }) => br.length < bytes.length);
+  await Promise.all(wins.map(({ rel, br }) => writeFile(`${OUT}/public/${rel}.br`, br)));
+  for (const { rel, bytes, br } of compressed) {
+    if (br.length >= bytes.length) console.log(`text-twins: SKIPPED /${rel} (br ${br.length} >= raw ${bytes.length})`);
+  }
+  const raw = wins.reduce((t, { bytes }) => t + bytes.length, 0);
+  const enc = wins.reduce((t, { br }) => t + br.length, 0);
+  if (wins.length < 200) {
+    throw new Error(`text-twins: only ${wins.length} static text twins written; the walk expected 200+ (241 on 2026-08-31, from 271 static text files less the 30 the globs above deliberately leave to the asset layer), so the globs have stopped matching the staged tree`);
+  }
+  console.log(`text-twins: ${wins.length} brotli q11 twins for static text assets, ${(raw / 1024).toFixed(1)}KB -> ${(enc / 1024).toFixed(1)}KB`);
 }
 
 console.log(`staged ${OUT}/ - deploy with: wrangler deploy (self-builds via build.command) or bun run deploy:direct`);
