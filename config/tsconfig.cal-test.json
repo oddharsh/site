@@ -42,9 +42,15 @@
     "allowImportingTsExtensions": true,
     "lib": ["esnext"],
     // bun-types carries node's globals, which is what these tests run on.
-    // harness.ts reaches KVNamespace and Workflow through a type-only import
-    // from @cloudflare/workers-types rather than through `types`, so the Worker
-    // globals stay out of a program whose files never see them.
+    // The Workers runtime declarations are ALSO in this program, through the
+    // generated include below, and that is the one deliberate union in
+    // config/: harness.ts's whole job is to type workerd bindings (KVNamespace,
+    // Workflow, ExecutionContext) from a bun host, and the alternative, a
+    // type-only import from @cloudflare/workers-types, left with that package
+    // on 2026-09-02. The filter in check-test-types still reports only
+    // cal/test's own diagnostics, so the cost is narrow: a Workers-only call
+    // written in a TEST file would pass here. cal/src is checked against the
+    // Workers globals alone next door.
     "types": ["bun"],
     "resolveJsonModule": true,
     "skipLibCheck": true,
@@ -64,5 +70,5 @@
   // harness.ts and preload.ts are here deliberately. They decide which runtime
   // the suite gets and what it can import, so a program covering the tests and
   // skipping them covers the tests and not the thing that makes them tests.
-  "include": ["../cal/test/**/*.js", "../cal/test/**/*.ts"]
+  "include": ["../cal/test/**/*.js", "../cal/test/**/*.ts", "./.generated/workers-runtime.d.ts"]
 }

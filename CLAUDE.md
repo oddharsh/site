@@ -151,7 +151,12 @@ bun run derive:check
 bun run lint
 
 # type-check everything, in ~2s. TEN programs rather than one, because a program
-# is only as accurate as the globals it declares: the Worker gets Cloudflare's,
+# is only as accurate as the globals it declares: the Worker gets Cloudflare's
+# (GENERATED from the pinned workerd by tools/gen-runtime-types.ts into
+# config/.generated/, which is what replaced @cloudflare/workers-types on
+# 2026-09-02: 12 of 29 dependabot PRs in a month for a package describing a
+# runtime this repo did not run on; the file is cached on wrangler's version
+# plus the config bytes, so `bun run types:gen` costs 3s cold and 0.02s warm),
 # the client islands get the DOM's, sw.js gets webworker's, the three auxiliary
 # Workers get Cloudflare's apiece, and the test suites get whichever runtime they
 # actually run on. Each config/tsconfig.*.json header argues its own case.
@@ -3074,7 +3079,8 @@ entry (nanoid, reached only through vite -> postcss). The measurements that
 decided it are in `cal/test/harness.ts`'s header. `cal/` declares no
 dependencies at all now: the harness is the root's wrangler pin, so the tree
 carries exactly one miniflare and one workerd by construction rather than by a
-floor somebody keeps aligned.
+floor somebody keeps aligned. Its bindings are typed by the same pin, through
+the generated runtime declarations below.
 
 ### Required secrets (before deploy)
 

@@ -13,15 +13,19 @@
 // WHY IT IS HAND-WRITTEN RATHER THAN `wrangler types`. That command works here
 // and its binding list is correct, so this is a choice rather than a
 // workaround. It writes 15,125 lines, of which ~15,070 re-declare the runtime
-// types config/tsconfig.json already loads through `@cloudflare/workers-types`,
-// and it types COUNTER and BOOKING_WORKFLOW by importing
+// types config/tsconfig.json already loads (through @cloudflare/workers-types
+// until 2026-09-02, and since then through the same command's runtime half,
+// which tools/gen-runtime-types.ts runs with `--include-env=false` for exactly
+// the reason this paragraph gives), and it types COUNTER and BOOKING_WORKFLOW by importing
 // `./.build/src/worker/index` — BUILD OUTPUT, which does not exist in a fresh
 // checkout, so a committed copy type-checks only after a build and any job
 // running typecheck before build reads as broken. It also cannot see tiers 4
 // and 5 below, which are the two carrying real optionality and therefore the
-// two where a type buys something. `bun run env:check` diffs this file against
-// wrangler.jsonc in both directions, so the generated list stays the authority
-// for tiers 1 to 3; it is consulted rather than committed.
+// two where a type buys something. The generated list stays the authority for
+// tiers 1 to 3 and is consulted rather than committed. (This paragraph named a
+// `bun run env:check` that diffs the two; no such script exists in
+// package.json as of 2026-09-02, so read the claim as the check this file
+// still wants rather than one it has.)
 //
 // THE FIVE TIERS ARE NOT DECORATION: they are the required/optional split, and
 // getting it backwards is how strictNullChecks stops meaning anything. Tiers 1

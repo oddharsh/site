@@ -295,10 +295,33 @@ declaration, and a declared minimum nothing enforces is an error.
   removal as the disk saving, the vitest removal is.
 - minify-html 0.18.1 is the exact root pin for the deploy-time HTML pass over
   `index.html` and the worker shells.
-- TypeScript 7.0.2 and @cloudflare/workers-types are exact root pins for
-  `bun run typecheck`, which runs TEN programs, every one of them `noEmit`.
-  **The type checker never writes a file**, so nothing here is tsc-compiled and
-  no config can start emitting one by accident.
+- TypeScript 7.0.2 is the exact root pin for `bun run typecheck`, which runs
+  TEN programs, every one of them `noEmit`. **The type checker never writes a
+  file**, so nothing here is tsc-compiled and no config can start emitting one
+  by accident.
+
+  **@cloudflare/workers-types LEFT the tree on 2026-09-02.** It was 12 of the
+  29 Dependabot PRs in the preceding thirty days, each a date-stamped release
+  describing a runtime this repo did not yet run on, and each needing the hand
+  relock commit. The four Worker programs now include
+  `config/.generated/workers-runtime.d.ts`, which `tools/gen-runtime-types.ts`
+  writes from the PINNED workerd through `wrangler types --include-runtime`
+  (wrangler's own notice says the command supersedes the package). So the
+  runtime surface moves when wrangler moves, a lane already reviewed here, and
+  it describes the workerd that runs the dry-runs, the route oracle and the
+  cal harness rather than a newer one. Measured before the switch: all four
+  programs produced byte-identical diagnostics either way, and the 23 names
+  the package carried that the generated set does not (Buffer, process, the
+  Performance family, two Hyperdrive and one Browser Run shape) are referenced
+  nowhere. The file is generated, never committed, and cached on wrangler's
+  version plus the config bytes, so a warm typecheck pays 0.02s for it.
+
+  One thing survives the removal and is worth knowing: wrangler declares the
+  package as an OPTIONAL peer and its own `cli.d.ts` imports a handful of types
+  from it. With the peer absent those imports resolve to `any` under
+  `skipLibCheck`, which costs nothing this repo reads (the harness types cal
+  uses are declared locally in that file) and is stated here so the next reader
+  of a suspiciously loose wrangler type knows where it came from.
 
   That is the claim worth making, and it is narrower than the one this entry
   carried until 2026-08-24. That version said the checker runs "over
@@ -327,7 +350,7 @@ declaration, and a declared minimum nothing enforces is an error.
   described expired with that same move.
 
   Dependabot should review TypeScript releases for new checks that could fail CI
-  on unchanged code, and workers-types for binding-shape changes. The ten
+  on unchanged code; binding-shape changes arrive with wrangler now. The ten
   programs are not decoration: three go through a wrapper because they hold
   files from two runtimes at once, and `bun run typecheck:coverage` asserts
   every file this repo owns belongs to one of them.
@@ -335,7 +358,7 @@ declaration, and a declared minimum nothing enforces is an error.
   `config/tsconfig.tools.json`, which checks `tools/`. It carries the node globals
   as well, so it is one entry rather than two, and it declares the bun-only
   globals the tools now use directly (HTMLRewriter among them). Types only: no
-  runtime, no served byte, same standing as workers-types above.
+  runtime, no served byte, same standing as the generated runtime types above.
 
   It exists because tools/ CANNOT be checked by the Worker's program. Point
   tsconfig.json at both and 169 of 337 errors are `Cannot find name 'process'`:
