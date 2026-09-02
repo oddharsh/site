@@ -1,13 +1,12 @@
 {
   "files": {
-    "tools/apply-infra.ts": 9,
-    "tools/build.ts": 32,
-    "tools/check-agent.ts": 15,
-    "tools/check-checkpoints.ts": 4,
+    "tools/apply-infra.ts": 4,
+    "tools/build.ts": 31,
+    "tools/check-agent.ts": 10,
     "tools/check-dictionary-support.ts": 25,
     "tools/check-infra.ts": 25,
     "tools/check-kitesurf.ts": 4,
-    "tools/check-wrangler.ts": 6,
+    "tools/check-wrangler.ts": 1,
     "tools/contract-cache-the-behavioral-revalidation-lint.test.mjs": 8,
     "tools/contract-docs-dependencies-md-states-version-pins-in-prose.test.mjs": 7,
     "tools/contract-encode-read-the-container-decode-nothing.test.mjs": 5,
@@ -18,7 +17,7 @@
     "tools/contract-nlweb.test.mjs": 4,
     "tools/contract-reading-somebody-else-s-site.test.mjs": 1,
     "tools/contract-rn-the-track-meta-map-must-survive-a-short-playlist-.test.mjs": 14,
-    "tools/contract-shared.ts": 20,
+    "tools/contract-shared.ts": 19,
     "tools/contract-static-text-assets-ship-their-q11-twin.test.mjs": 2,
     "tools/contract-the-bundled-photo-pool.test.mjs": 6,
     "tools/contract-the-execution-half-of-the-readiness-rubric.test.mjs": 1,
@@ -27,8 +26,7 @@
     "tools/contract-the-tools-are-services-the-frame-is-a-representation.test.mjs": 3,
     "tools/contract-web-bot-auth-the-post-quantum-second-label-retired.test.mjs": 8,
     "tools/contract-webmention-inbound.test.mjs": 7,
-    "tools/csp-sweep.ts": 10,
-    "tools/dev-stage.ts": 1,
+    "tools/csp-sweep.ts": 8,
     "tools/gen-manifest.ts": 1,
     "tools/gen-md-twins.ts": 12,
     "tools/gen-remote-config.ts": 2,
@@ -37,7 +35,6 @@
     "tools/lens-seed.ts": 8,
     "tools/lens-warm.ts": 5,
     "tools/lens-webmcp.ts": 2,
-    "tools/lib/css-parse.ts": 2,
     "tools/lib/dependency-docs.ts": 19,
     "tools/lib/lens-chips.ts": 2,
     "tools/lib/link-integrity.ts": 1,
@@ -55,5 +52,5 @@
     "tools/ua-survey.ts": 17,
     "tools/verify-routes.ts": 2
   },
-  "total": 468
+  "total": 442
 }

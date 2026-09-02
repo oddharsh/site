@@ -227,7 +227,7 @@ async function main() {
     // and the failure is unambiguous (a broken image is a decode result, not an
     // instrument artefact). A script error with a clean Chrome control is the
     // strongest signal this script produces.
-    const notes = [];
+    const notes: string[] = [];
     if (k.failed) notes.push(`navigation failed: ${k.failed}`);
     if (k.consoleErrors) notes.push(c && c.consoleErrors === 0 ? `${k.consoleErrors} script error(s), Chrome control CLEAN` : `${k.consoleErrors} script error(s)${c ? ", control also errored" : ", no control"}`);
     if (k.brokenImages) notes.push(c && c.brokenImages === 0 ? `${k.brokenImages}/${k.totalImages} images failed to decode, Chrome control decoded all` : `${k.brokenImages}/${k.totalImages} images failed to decode`);

@@ -238,7 +238,7 @@ type PlanEntry = { record: any; value?: string; from?: string; to?: string; id?:
 const create: PlanEntry[] = [];
 const update: PlanEntry[] = [];
 const prune: PlanEntry[] = [];
-const blocked = [];
+const blocked: string[] = [];
 
 for (const record of managed) {
   let live;
@@ -369,7 +369,7 @@ if (!apiRecords) {
 console.log(`\napplying to zone ${policy.zone} (${zoneId})\n`);
 
 let done = 0;
-const failed = [];
+const failed: string[] = [];
 
 for (const { record, value } of create) {
   try {
