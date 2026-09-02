@@ -14,7 +14,7 @@ import { handleInbox } from "./inbox.ts";
 import { handleWebmention, handleWebmentionDecision } from "./webmention.ts";
 import { cronSendWebmentions } from "./webmention-send.ts";
 import { countCrawlerHit, handleLedger, handleLedgerJson } from "./ledger.ts";
-import { countSpeculativeLoad, handlePrefetchActivation } from "./speculation.ts";
+import { countSpeculativeLoad, handlePrefetchActivation, handleSpeculationJson } from "./speculation.ts";
 import { handleLens, handleLensBrowser, handleLensCompare, handleLensFetch, handleLensShot } from "./lens.ts";
 import { handleLensWire } from "./lens-wire.ts";
 import { handleLensNlweb } from "./lens-nlweb.ts";
@@ -28,6 +28,7 @@ import { wantsMarkdown } from "./lib/http.ts";
 import { isPreviewHost, previewDenial } from "./lib/preview.ts";
 import { handleSiteMcp } from "./mcp.ts";
 import { withSecurityHeaders } from "./lib/security.ts";
+import { earlyDataDenial } from "./lib/early-data.ts";
 import { SHELL_PRELOAD_LINK } from "./lib/shell-assets.ts";
 import { cronJob } from "./lib/cron.ts";
 import { isCallable } from "./lib/parse.ts";
@@ -146,6 +147,13 @@ async function serveWorkerRequest(request: SiteRequest, env: Env, ctx: Execution
     const denied = previewDenial(url.pathname, request.method);
     if (denied) return denied;
   }
+
+  // 0-RTT: a request that arrived as TLS early data is replayable, so the
+  // GET-shaped writes answer 425 and the client retries after the handshake.
+  // Same position as the preview guard, and for the same reason: a guard that
+  // runs after routing has already lost (lib/early-data.ts).
+  const tooEarly = earlyDataDenial(request, url.pathname);
+  if (tooEarly) return tooEarly;
 
   if (url.hostname.endsWith(".pages.dev")) {
     const target = `https://${CANONICAL_HOST}${url.pathname}${url.search}`;
@@ -471,6 +479,9 @@ const ROUTE_TABLE: Array<[path: string, handler: RouteHandler]> = [
   // the prefetch activation beacon's receiver (speculation.js). A credentialless
   // HEAD from the browser when a speculated document is actually navigated to.
   ["/ledger/prefetch", handlePrefetchActivation],
+  // the ledger read back per path: speculations against activations, so the
+  // eager candidates are chosen from what got navigated to (speculation.js).
+  ["/ledger/speculation.json", handleSpeculationJson],
 
   ["/writing", routeWritingIndex],
   ["/writing/", routeDropSlash],
