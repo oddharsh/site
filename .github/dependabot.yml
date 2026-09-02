@@ -72,7 +72,8 @@ updates:
   # This block used to carry `open-pull-requests-limit: 1` and no groups, so
   # every pin queued behind one PR. That is why seven packages were outdated at
   # once on 2026-08-19 with ZERO dependabot PRs open: the four packages here
-  # that cut releases most often (wrangler, workers-types, oxlint, oxc-minify)
+  # that cut releases most often (wrangler, workers-types, oxlint, oxc-minify;
+  # workers-types left on 2026-09-02, generated from the wrangler pin instead)
   # generate new versions faster than a serialized queue can drain, so the
   # backlog grew while the config reported itself as busy. A limit of 1 is a
   # throughput cap masquerading as a review policy.

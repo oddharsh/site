@@ -99,3 +99,9 @@ public/images/meta/
 # reason, so a leftover cannot reach .build/ either.
 public/images/exif.json
 public/images/fingerprints.json
+
+# the Workers runtime declarations, generated from the pinned workerd by
+# tools/gen-runtime-types.ts (which `bun run typecheck` runs first). A pure
+# function of the wrangler pin, so it is never committed; the four Worker
+# programs include it in place of @cloudflare/workers-types.
+config/.generated/

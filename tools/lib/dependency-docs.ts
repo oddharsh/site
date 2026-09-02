@@ -80,7 +80,8 @@ export const DOC_ALIASES = [
 // Documented on purpose WITHOUT a version, each for a stated reason. An entry
 // here is a decision; a package in neither list fails the reverse direction.
 export const VERSIONLESS = new Map([
-  ["@cloudflare/workers-types", "a date-stamped pin dependabot rolls most days; the doc names the package and its purpose, and a version would be stale on arrival"],
+  // @cloudflare/workers-types sat here until 2026-09-02 ("a date-stamped pin
+  // dependabot rolls most days"); tools/gen-runtime-types.ts replaced it.
   ["playwright-core", "caret-ranged on purpose (it drives the locally installed Chrome), so there is no exact pin to state"],
 ]);
 

@@ -21,9 +21,20 @@
 //
 // The proxies do not use `globalThis.fetch`, measured the same day with the
 // network tripwire armed: the run exits 0 with zero recorded escapes.
+// KVNamespace, Workflow and ExecutionContext are GLOBALS here, from the runtime
+// declarations tools/gen-runtime-types.ts writes out of the pinned workerd. The
+// program in config/tsconfig.cal-test.json includes that file, and its header
+// says why the union with bun's globals is the one this repo accepts.
+//
+// Oxlint's type-aware pass is a SECOND checker with its own program: tsgolint
+// discovers a tsconfig per file, finds none named tsconfig.json above this one,
+// and builds a default program with no includes, in which those three names
+// are error types. An error type acts as `any`, so `ExecutionContext & {...}`
+// tripped no-redundant-type-constituents there while tsc was happy. The
+// context type below is an interface EXTENDING the global rather than an
+// intersection with it for that reason alone; the two spell the same type.
 import { fileURLToPath } from "node:url";
 import { createTestHarness } from "wrangler";
-import type { ExecutionContext, KVNamespace, Workflow } from "@cloudflare/workers-types";
 
 // MIRRORS cal/wrangler.test.toml AND NOTHING ELSE. Every var is a string,
 // which is what a Workers var is. The three secrets the suite needs
@@ -53,7 +64,11 @@ export type CalEnv = {
   PENDING_TTL_DAYS: string;
 };
 
-const CONFIG = fileURLToPath(new URL("../wrangler.test.toml", import.meta.url));
+// `.href` rather than the URL object: this program holds bun's `URL` and the
+// generated runtime's `URL`, and node:url's fileURLToPath wants the former
+// while `new URL` here resolves to the latter. A string satisfies both, and it
+// is the one place the union tsconfig.cal-test.json accepts actually shows.
+const CONFIG = fileURLToPath(new URL("../wrangler.test.toml", import.meta.url).href);
 
 export async function bootCal(opts: { secrets?: Record<string, string> } = {}) {
   const server = createTestHarness({
@@ -83,7 +98,7 @@ export async function bootCal(opts: { secrets?: Record<string, string> } = {}) {
 // supplied createExecutionContext / waitOnExecutionContext; on the host the
 // contract is two methods and a list of promises, so it is written out.
 const TASKS = Symbol("waitUntil tasks");
-type TestContext = ExecutionContext & { [TASKS]: Promise<unknown>[] };
+interface TestContext extends ExecutionContext { [TASKS]: Promise<unknown>[] }
 
 export function createExecutionContext(): TestContext {
   const tasks: Promise<unknown>[] = [];

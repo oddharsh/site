@@ -278,6 +278,7 @@
       "tools/build.ts": "writes only into .build/, the staged tree, which is rebuilt from source every deploy and never committed",
       "tools/gen-md-twins.ts": "same, a build step: the twins are generated into .build/ precisely so no committed copy can fall behind",
       "tools/generate-search-index.ts": "same, and for the same reason: it was committed until 2026-08-24 and froze twice, which is why it is build output now",
+    "tools/gen-runtime-types.ts": "writes only config/.generated/workers-runtime.d.ts, which is gitignored: the Workers runtime declarations, a pure function of the wrangler pin (which pins workerd) and the config bytes, both of which its first line keys on so a stale file regenerates itself. Nothing committed can fall behind it, which is the same argument as the two build steps above, run at typecheck time instead of deploy time",
       "tools/gen-mcp-cards.ts": "the cards ARE committed, and a contract test deep-equals each one against its server's live tools/list. That is stronger than a digest, and a second check over one artifact is a second thing to keep in agreement",
       "tools/gen-manifest.ts": "writes the nav fences and the Worker's registry module, which build.ts invariant #8 verifies against config/site-manifest.json on every build",
       "tools/roll-shell-dictionary.ts": "writes src/dict/, whose input is what production SERVED rather than anything in this tree. dcz:check owns the question those raise, which is coverage of the live shell",
