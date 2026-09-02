@@ -1,13 +1,14 @@
 // email.js — Resend payloads + .ics invite generation. These functions call
 // the global fetch (Resend's REST API), so we stub globalThis.fetch and inspect
-// what would have been sent. Run in-isolate (direct import), so the stub
-// applies — no SELF, no network.
+// what would have been sent. The module is imported straight into this process,
+// so the stub applies: no harness, no network.
 //
 // Also pins the two unicode-safety fixes:
 //   - the .ics attachment is UTF-8→base64 (plain btoa throws on emoji/accents)
 //   - DESCRIPTION newlines are single ICS escapes, not double-escaped literals
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { sendApprovalRequest, sendInvite, sendDecline } from "../src/email.js";
+import { stubFetch } from "./harness.ts";
 
 const env = {
   HOST_TIMEZONE: "America/New_York",
@@ -31,16 +32,17 @@ const b64ToUtf8 = (b64) =>
   new TextDecoder().decode(Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)));
 
 let calls;
+let restoreFetch = () => {};
 beforeEach(() => {
   calls = [];
-  vi.stubGlobal("fetch", vi.fn(async (url, init) => {
-    calls.push({ url: String(url), init, body: JSON.parse(init.body) });
+  restoreFetch = stubFetch(async (url, init) => {
+    calls.push({ url: String(url), init, body: JSON.parse(String(init?.body)) });
     return new Response(JSON.stringify({ id: "resend-msg-id" }), {
       status: 200, headers: { "content-type": "application/json" },
     });
-  }));
+  });
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => restoreFetch());
 
 describe("sendApprovalRequest → Resend", () => {
   it("POSTs to Resend with auth, host recipient, and reply-to the requester", async () => {
@@ -145,8 +147,8 @@ describe("sendDecline + error handling", () => {
   });
 
   it("throws when Resend returns a non-2xx (so callers/log see the failure)", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () =>
-      new Response("rate limited", { status: 429 })));
+    restoreFetch();
+    restoreFetch = stubFetch(async () => new Response("rate limited", { status: 429 }));
     await expect(sendDecline(env, booking)).rejects.toThrow(/resend 429/);
   });
 });

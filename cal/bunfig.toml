@@ -1,0 +1,12 @@
+# cal's own bun settings. `bun test` reads bunfig.toml from the directory it
+# runs in, so this file is what `bun run --filter cal-aadhar-sh test` picks up,
+# and the root bunfig.toml (which scopes discovery to tools/) is what a bare
+# `bun test` at the repository root reads. The two do not compose; run cal's
+# suite from cal/.
+[test]
+# Order matters. preload.ts installs the two shims the Worker source needs to
+# LOAD on a bun host (see its header), and it has to run before any test file
+# imports cal/src. The network tripwire is the root suite's, shared rather than
+# copied: every fetch in this suite is stubbed, and the tripwire is what turns a
+# stub somebody forgets into a red run instead of a request to Resend.
+preload = ["./test/preload.ts", "../tools/lib/no-network.ts"]

@@ -3,12 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "comment:test": "bun:test against wrangler's createTestHarness (test/harness.ts). No devDependencies on purpose: the harness is the root's wrangler pin and the types are the root's @cloudflare/workers-types and @types/bun, so this project cannot carry a second miniflare or workerd. Run from THIS directory, because bun reads bunfig.toml from the cwd and cal's carries the preload the Worker source needs to load on a host.",
   "scripts": {
-    "test": "vitest run",
-    "test:watch": "vitest"
-  },
-  "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.22.0",
-    "vitest": "^4.1.11"
+    "test": "bun test",
+    "test:watch": "bun test --watch"
   }
 }
