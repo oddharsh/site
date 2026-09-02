@@ -21,11 +21,12 @@
 // checkout, so a committed copy type-checks only after a build and any job
 // running typecheck before build reads as broken. It also cannot see tiers 4
 // and 5 below, which are the two carrying real optionality and therefore the
-// two where a type buys something. The generated list stays the authority for
-// tiers 1 to 3 and is consulted rather than committed. (This paragraph named a
-// `bun run env:check` that diffs the two; no such script exists in
-// package.json as of 2026-09-02, so read the claim as the check this file
-// still wants rather than one it has.)
+// two where a type buys something. `bun run env:check` (tools/check-env.ts)
+// diffs this file against wrangler.jsonc in both directions, per tier, and runs
+// inside `bun run typecheck`, so the config stays the authority for tiers 1 to
+// 3 and a `?` in tier 4 fails the moment the config gates the deploy on that
+// name. (This paragraph described that check for three weeks before it
+// existed; it was written on 2026-09-02, with the controls at its header.)
 //
 // THE FIVE TIERS ARE NOT DECORATION: they are the required/optional split, and
 // getting it backwards is how strictNullChecks stops meaning anything. Tiers 1
