@@ -48,6 +48,25 @@ test("early data: the guard runs in the dispatcher ahead of routing, and the set
   assert.match(check, /infra\.zone\?\.zero_rtt/, "check-infra.ts must assert the declared 0-RTT value");
 });
 
+// The edge probe for the same setting is a HARD failure on a workstation and an
+// ADVISORY on a hosted runner, keyed on GITHUB_ACTIONS. Three spaced rejections
+// from GitHub's network have read as drift on three runs while the zone was fine
+// (2026-08-20, and twice on 2026-09-02, once on main, where it left a merged PR
+// unpromoted); a workstation has never produced a false one. Pinned at the source
+// so the split cannot be tidied away into "it is an edge check, so it fails".
+test("early data: the edge probe's rejection is advisory on a hosted runner and a drift on a workstation", () => {
+  const check = readFileSync("tools/check-infra.ts", "utf8");
+  const arm = check.indexOf("if (want.earlyData)");
+  assert.ok(arm !== -1, "check-infra.ts no longer has the earlyData arm");
+  const body = check.slice(arm, check.indexOf("continue;", arm));
+  assert.match(body, /process\.env\.GITHUB_ACTIONS\) warn\(/, "a hosted-runner rejection must be an advisory (warn), keyed on GITHUB_ACTIONS");
+  assert.match(body, /else drift\(/, "a workstation rejection must stay a drift");
+  assert.ok(body.indexOf("GITHUB_ACTIONS) warn(") < body.indexOf("else drift("), "the advisory arm must be tested before the drift arm");
+  const infra = JSON.parse(readFileSync("config/infra.json", "utf8"));
+  const entry = infra.edge.checks.find((c) => c.id === "tls-0rtt-on");
+  assert.match(entry.gotcha, /ADVISORY IN HOSTED CI/, "infra.json's entry must say the check is advisory in hosted CI, or the split is undocumented");
+});
+
 // The readback folds the ledger's per-(kind, path) rows into one row per path
 // with an activation rate. Pinned as arithmetic, because a rate that quietly
 // counted the wrong denominator would order the candidates backwards.
