@@ -5837,6 +5837,44 @@ bun run deploy:direct
     catches is silent in both directions.
 
 
+44. **A worktree under `.claude/worktrees/` sits INSIDE the main checkout, so
+    module resolution walks up into the parent's `node_modules`.** Found
+    2026-09-02 while removing `@cloudflare/workers-types`: the package was gone
+    from the worktree's lockfile and `node_modules`, and wrangler's own
+    `cli.d.ts` still resolved it, from
+    `/Users/aadharsh/noodling/site/node_modules/.bun/` at a DIFFERENT version
+    (5.20260825.1 against the 5.20260901.1 the branch had just deleted).
+    Node-style resolution, which tsc, tsgolint and `require.resolve` all use,
+    walks every ancestor directory, and a nested worktree's ancestors include
+    the tree it was cut from.
+
+    The failure points the wrong way. Nothing errors; a check that should have
+    gone red stays green, on exactly the class of change (a removal) where green
+    is the claim being tested. It is the lens-reader lesson from the Reader
+    section arriving through a third door: a green local suite proves nothing
+    when the dependency set differs from CI's, and here it differs because of
+    WHERE the checkout sits rather than what was installed into it.
+
+    Two smaller traps met the same afternoon. `bun remove` leaves the old links
+    in `node_modules` in place, so "removed from the lockfile" and "gone from
+    disk" are different states until `rm -rf node_modules && bun install
+    --frozen-lockfile`. And `git worktree add <path> <branch>` REFUSES a branch
+    that is checked out elsewhere, so a chained `cd <path> && ...` whose `cd`
+    fails runs the rest of the command in the MAIN tree; guard with `|| exit 1`.
+
+    The control is a DETACHED worktree outside the checkout, installed fresh:
+
+    ```bash
+    git worktree add --detach "$SCRATCH/ctl" <branch>
+    cd "$SCRATCH/ctl" || exit 1
+    bun install --frozen-lockfile
+    ```
+
+    Run the gates there for any dependency removal or resolution-sensitive
+    change. It doubles as the cold-checkout test for generated files
+    (config/.generated/ was first proven from one), and it costs about 2s of
+    install. Remove it with `git worktree remove --force` afterwards.
+
 ---
 
 ## Source folder for new photos
