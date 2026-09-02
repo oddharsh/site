@@ -917,10 +917,31 @@ async function checkEdge(infra) {
       // probe (openssl, see probeEarlyData) instead of a fetchEdge. A machine
       // that cannot run the probe warns rather than drifts — an unmeasurable
       // check must not report the zone broken.
+      //
+      // A REJECTION IS A DRIFT ON A WORKSTATION AND AN ADVISORY IN HOSTED CI,
+      // and the split is measured rather than cautious. Cloudflare may refuse
+      // early data on any resumption (anti-replay is why 0-RTT is hedged), so
+      // the probe already takes three spaced samples before calling it drift.
+      // From GitHub's runners all three have now missed on three separate runs
+      // while the zone was fine: 2026-08-20 (five concurrent jobs), and twice
+      // on 2026-09-02, run 33652822639 on MAIN and the first attempt of
+      // 33654520873 on a PR, each accepted on a plain re-run minutes later and
+      // accepted 5 of 5 from a workstation in between. The main failure is the
+      // expensive one: `validate` gates promotion, so a merged PR sat
+      // unpromoted until somebody noticed and re-ran CI. That is the deadlock
+      // CLAUDE.md's release notes describe, arriving through a probe whose
+      // subject (a shared egress address's ticket-issuance conditions) has
+      // nothing to do with any diff. So on a hosted runner the rejection is
+      // reported, with its sample count, as something a workstation must
+      // confirm, and it fails nothing; a workstation keeps the hard failure,
+      // because there the three samples have never been wrong. GITHUB_ACTIONS
+      // rather than CI, since CI=1 is what this repo sets by hand to exercise
+      // the release guard locally (see the ramp-token control in CLAUDE.md).
       if (want.earlyData) {
         const r = await probeEarlyData(new URL(url).hostname);
         if (r.skip) warn(`edge check ${check.id} skipped: ${r.skip}`);
         else if (r.accepted) pass(`edge ${check.id}: TLS early data accepted (0-RTT on)`);
+        else if (process.env.GITHUB_ACTIONS) warn(`edge check ${check.id}: TLS early data rejected on ${r.attempts} spaced resumptions from a hosted runner; not a drift here (three false rejections on record from this network), confirm from a workstation with \`bun run infra:check\``);
         else drift(`${check.id}: TLS early data rejected on ${r.attempts} spaced resumptions — ${check.why.split(".")[0]}`);
         continue;
       }
