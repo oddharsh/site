@@ -1302,6 +1302,30 @@ async function checkApi(infra, wrangler, token) {
   // success, because every sampled document came back 200 and the assets that
   // 404ed were never sampled. The arithmetic is in infra.json under
   // zone.version_affinity.
+  // 0-RTT. Zone-scoped like version affinity, so CI degrades to a note and a
+  // workstation run asserts it. The value is declared "on" together with the
+  // Worker's early-data guard (lib/early-data.ts); the arithmetic and the
+  // pairing argument are in infra.json under zone.zero_rtt. A workstation run
+  // reads FAIL until the toggle is flipped, which is the tripwire working:
+  // the guard shipped, the round trip it exists to make safe has not.
+  await section("0-RTT connection resumption", "Zone:Zone Settings:Read and Zone:Zone:Read", async () => {
+    const declared = infra.zone?.zero_rtt;
+    if (!declared) return;
+    const zones = await cf(token, `/zones?name=${encodeURIComponent(infra.zone.name)}`);
+    const zoneId = zones?.[0]?.id;
+    if (!zoneId) {
+      warn(`0-RTT unchecked: this token sees no zone named ${infra.zone.name}`);
+      return;
+    }
+    const live = await cf(token, `/zones/${zoneId}/settings/${declared.setting}`);
+    const value = live?.value;
+    if (value !== declared.value) {
+      fail(`zone setting ${declared.setting} is "${value}" on ${infra.zone.name}, declared "${declared.value}". ${declared.why}`);
+      return;
+    }
+    pass(`zone setting ${declared.setting} is ${value}`);
+  });
+
   await section("version affinity", "Zone:Transform Rules:Read and Zone:Zone:Read", async () => {
     const declared = infra.zone?.version_affinity;
     if (!declared) return;

@@ -61,6 +61,7 @@
     "node:pin": "bun tools/check-node-pin.ts",
     "early-hints:probe": "bun tools/early-hints-probe.ts",
     "speculation:probe": "bun tools/speculation-probe.ts",
+    "speculation:report": "bun tools/speculation-report.ts",
     "csp:sweep": "bun tools/csp-sweep.ts",
     "checkpoints:check": "bun tools/check-checkpoints.ts",
     "checkpoints:sync": "bun tools/check-checkpoints.ts --sync",

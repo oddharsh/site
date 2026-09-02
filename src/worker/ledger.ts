@@ -97,12 +97,22 @@ type LedgerRead =
   | { ok: false; reason: string }
   | { ok: true; rows: LedgerRow[] };
 
-async function queryLedger(env: Env): Promise<LedgerRead> {
+// One SQL read against Analytics Engine, shared with the speculation ledger
+// (speculation.ts), which keeps its own dataset and its own GROUP BY but the
+// same token, the same 8s deadline and the same reading of "no such table".
+// The SQL API answers JSON scalars per cell: a string for a blob, a number for
+// a SUM, null for nothing. That is the contract this parses at, so a caller
+// reads a cell as text with one default and never sees "[object Object]".
+export type AnalyticsCell = string | number | null | undefined;
+export type AnalyticsRow = Record<string, AnalyticsCell>;
+export const text = (v: AnalyticsCell, dflt: string): string => (v === null || v === undefined || v === "") ? dflt : String(v);
+
+export type AnalyticsRead =
+  | { ok: false; reason: string }
+  | { ok: true; data: AnalyticsRow[] };
+
+export async function analyticsSql(env: Env, sql: string): Promise<AnalyticsRead> {
   if (!env.ANALYTICS_READ_TOKEN || !env.CF_ACCOUNT_ID) return { ok: false, reason: "unconfigured" };
-  const sql =
-    `SELECT blob1 AS bot, blob2 AS owner, blob3 AS kind, SUM(_sample_interval * double1) AS hits ` +
-    `FROM ${DATASET} WHERE timestamp > NOW() - INTERVAL '${WINDOW_DAYS}' DAY ` +
-    `GROUP BY bot, owner, kind ORDER BY hits DESC FORMAT JSON`;
   try {
     const ctrl = new AbortController();
     const to = setTimeout(() => ctrl.abort(), 8000);
@@ -119,18 +129,27 @@ async function queryLedger(env: Env): Promise<LedgerRead> {
       const detail = (await r.text().catch(() => "")).slice(0, 200);
       // a dataset with zero writes ever doesn't exist yet — that's an empty
       // ledger, not an error.
-      if (/no such table|does not exist|unknown table/i.test(detail)) return { ok: true, rows: [] };
+      if (/no such table|does not exist|unknown table/i.test(detail)) return { ok: true, data: [] };
       return { ok: false, reason: "SQL API " + r.status + ": " + detail };
     }
     const j = await r.json().catch(() => null);
-    const rows = (j && j.data ? j.data : []).map((d) => ({
-      bot: String(d.bot || "?"), owner: String(d.owner || "?"), kind: String(d.kind || "?"),
-      hits: Math.round(Number(d.hits) || 0),
-    })).filter((d) => d.hits > 0);
-    return { ok: true, rows };
+    return { ok: true, data: j && Array.isArray(j.data) ? j.data : [] };
   } catch (e) {
     return { ok: false, reason: (e && e.message) || String(e) };
   }
+}
+
+async function queryLedger(env: Env): Promise<LedgerRead> {
+  const read = await analyticsSql(env,
+    `SELECT blob1 AS bot, blob2 AS owner, blob3 AS kind, SUM(_sample_interval * double1) AS hits ` +
+    `FROM ${DATASET} WHERE timestamp > NOW() - INTERVAL '${WINDOW_DAYS}' DAY ` +
+    `GROUP BY bot, owner, kind ORDER BY hits DESC FORMAT JSON`);
+  if (!read.ok) return read;
+  const rows = read.data.map((d) => ({
+    bot: text(d.bot, "?"), owner: text(d.owner, "?"), kind: text(d.kind, "?"),
+    hits: Math.round(Number(d.hits) || 0),
+  })).filter((d) => d.hits > 0);
+  return { ok: true, rows };
 }
 
 // ── the other column: what the account actually paid ────────────────

@@ -121,3 +121,70 @@ export function handlePrefetchActivation(request, env) {
     headers: { "cache-control": "no-store" },
   });
 }
+
+// ── the readback: /ledger/speculation.json ─────────────────────────────────────
+// Everything above WRITES the ledger; until 2026-09-02 nothing read it, so the
+// one question the ledger exists to answer (which speculated documents get
+// navigated to, and which are rendered for nobody) was answerable only from
+// the dashboard. This is the same SQL read /ledger.json makes over its own
+// dataset, grouped per path and kind, folded into one row per path.
+//
+// `rate` is activations over speculations. It is NOT a conversion rate in the
+// strict sense: an activation beacon fires when a speculated document is used,
+// while the denominator counts speculations that reached the origin, and a
+// prefetch that later upgraded to a prerender counts twice there. Read it as an
+// ordering, which is what tools/speculation-report.ts does with it. The report
+// is also where any promotion to a more eager rule is decided; this route only
+// answers.
+import { analyticsSql, text, type AnalyticsRow } from "./ledger.ts";
+
+export const SPECULATION_DATASET = "aadhar_speculation";
+export const SPECULATION_WINDOW_DAYS = 30;
+
+export type SpeculationRow = {
+  path: string; prefetch: number; prerender: number; activated: number;
+  speculated: number; rate: number | null;
+};
+
+// Pure over the SQL rows, so the contract test can pin the arithmetic without a
+// token. Unknown kinds are ignored rather than counted as anything.
+export function summarizeSpeculation(rows: AnalyticsRow[]): SpeculationRow[] {
+  const byPath = new Map<string, SpeculationRow>();
+  for (const r of rows) {
+    const kind = text(r.kind, "");
+    if (kind !== "prefetch" && kind !== "prerender" && kind !== "activated") continue;
+    const path = text(r.path, "(unknown)");
+    const n = Math.round(Number(r.n) || 0);
+    if (n <= 0) continue;
+    let row = byPath.get(path);
+    if (!row) { row = { path, prefetch: 0, prerender: 0, activated: 0, speculated: 0, rate: null }; byPath.set(path, row); }
+    row[kind] += n;
+  }
+  const out = [...byPath.values()];
+  for (const row of out) {
+    row.speculated = row.prefetch + row.prerender;
+    row.rate = row.speculated ? Math.min(1, row.activated / row.speculated) : null;
+  }
+  return out.sort((a, b) => b.speculated - a.speculated || a.path.localeCompare(b.path));
+}
+
+export async function handleSpeculationJson(request, env) {
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return new Response(null, { status: 405, headers: { allow: "GET, HEAD" } });
+  }
+  const read = await analyticsSql(env,
+    `SELECT blob1 AS kind, blob2 AS path, SUM(_sample_interval * double1) AS n ` +
+    `FROM ${SPECULATION_DATASET} WHERE timestamp > NOW() - INTERVAL '${SPECULATION_WINDOW_DAYS}' DAY ` +
+    `GROUP BY kind, path FORMAT JSON`);
+  const headers = { "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=300, s-maxage=300" };
+  if (!read.ok) {
+    return new Response(JSON.stringify({ ok: false, reason: read.reason, window_days: SPECULATION_WINDOW_DAYS }) + "\n",
+      { status: read.reason === "unconfigured" ? 200 : 502, headers: { ...headers, "cache-control": "no-store" } });
+  }
+  const rows = summarizeSpeculation(read.data);
+  return new Response(JSON.stringify({
+    ok: true, window_days: SPECULATION_WINDOW_DAYS, dataset: SPECULATION_DATASET,
+    note: "speculations are Sec-Purpose prefetch/prerender requests that reached the origin; activations are the on-prefetch-activation beacon; rate orders paths and is not a strict conversion rate",
+    rows,
+  }, null, 2) + "\n", { status: 200, headers });
+}

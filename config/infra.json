@@ -138,6 +138,24 @@
       "value": "ip.src",
       "scope": "Zone:Transform Rules:Read",
       "why": "Without version affinity a gradual deployment serves a visitor HTML from one version and content-hashed assets from another, which 404s the shell and renders an unstyled page. The check is the only thing standing between deleting this rule and finding out on the next ramp that touches nav.js."
+    },
+    "zero_rtt": {
+      "$comment": [
+        "0-RTT Connection Resumption (Speed > Protocol Optimization), the zone",
+        "setting `0rtt`. Off by default on every plan, on Free too. A resumed",
+        "TLS 1.3 or QUIC client sends its first request inside the handshake and",
+        "saves one round trip, on the one navigation bfcache and prerender cannot",
+        "cover: the cold external arrival. Declared here because it is dashboard",
+        "state the Worker depends on being paired with a guard: early data is",
+        "replayable, Cloudflare forwards it with `Early-Data: 1`, and",
+        "src/worker/lib/early-data.ts answers 425 on the GET-shaped writes so a",
+        "replayed /hit cannot tick the counter twice (RFC 8470). The guard is",
+        "harmless with the setting off; the setting is unsafe without the guard,",
+        "which is why the two ship together and this check names both."
+      ],
+      "setting": "0rtt",
+      "value": "on",
+      "why": "one RTT off every resumed connection's first request; the Worker's early-data guard (lib/early-data.ts) is what makes it safe to turn on"
     }
   },
 

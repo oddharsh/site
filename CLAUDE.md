@@ -855,6 +855,18 @@ worktrees may edit freely, but a worktree is not a release surface.
   half: the next POST route anyone adds is guarded on the day it is written.
   Reads all pass, which is the point of the surface. Do not enable previews with
   that guard removed.
+- **0-RTT is declared ON in `infra.json` (`zone.zero_rtt`), and the Worker's
+  early-data guard is what makes that safe.** A resumed TLS 1.3 or QUIC client
+  sends its first request inside the handshake, one round trip sooner, on the one
+  navigation bfcache and prerender cannot cover. Early data is replayable, so
+  Cloudflare forwards it with `Early-Data: 1` and never sends a POST that way.
+  `src/worker/lib/early-data.ts` answers 425 Too Early on the GET-shaped writes
+  (`preview.ts`'s list: `/hit`, the coffee and webmention decisions, the
+  activation beacon), which RFC 8470 says the client retries after the handshake
+  and never in early data. Every document and asset stays on the fast path. The
+  guard shipped 2026-09-02; the dashboard toggle (Speed, Protocol Optimization)
+  is the owner's flip, and a workstation `infra:check` reads FAIL until it is.
+  Local curl (8.7.1, SecureTransport) cannot send early data; verify from Chrome.
 - **No deploy path may create Cloudflare resources.** Wrangler's
   `--x-provision` and `--x-auto-create` are hidden flags that both default to
   TRUE, and they provision real KV/R2/D1 for any binding declared without an
@@ -2860,6 +2872,7 @@ the existing layers structurally could not reach:
 | `around.neighbor` | every degradation here is designed to be quiet (a disallowing robots.txt is a legitimate skip). The rollup makes "3 of 20 neighbors dark for a month" one number |
 | `census.host` | a time series with silently missing rows is worse than none; the per-host catch is correct AND is how a 16-site roster becomes 3 |
 | `webmention.send` | `webmention.capped` flags a run that stopped at MAX_SENDS_PER_RUN, which the summary log cannot express |
+| the speculation ledger | not a span: `aadhar_speculation` counts every `Sec-Purpose` prefetch/prerender that reached the origin and every activation beacon. **`/ledger/speculation.json` reads it back per path** (since 2026-09-02; nothing read it before), and `bun run speculation:report` prints the activation-rate table that decides which links earn an earlier eagerness. A promotion is an edit to `SPECULATION` in `tools/photos/shell-data.ts`, gated on `speculation:probe` showing the rule fetches, because an eager rule was measured fetching nothing twice. Chrome caps eager and moderate rules at 2 prefetches and 2 prerenders at a time; prerender is Chromium-only, and WebKit's same-origin prefetch is in trunk with its shipping default unknown. |
 | `cal.busy` | `cal.source` (fresh/live/stale/none) + `cal.fail_closed`. The fail-closed 503 is a real person not getting a coffee slot, and it used to reach you only by them mentioning it |
 
 ### XP visual vocabulary (CSS)
@@ -3443,6 +3456,17 @@ bun run deploy:direct
     got backwards: the prefix displaces `lwe/drivers`, so the window is really
     `garage/compression`, and that is the better of the two to keep (moving the
     tails last to save drivers is 4,953 B worse).
+
+    **The dictionary is also the site's one `Priority` override.** Cloudflare
+    honours an origin `priority` response header on HTTP/3 (RFC 9218; the
+    enhanced scheduler is paid, and `h2_prioritization` is not on Free), and
+    `servePrecompressedShell` sends `u=7` on the `.dict` alone: it is fetched on
+    idle and useful only on the next navigation, so it should lose to every
+    document, style, script and tile on the connection. Scripts and styles keep
+    the client's signal on purpose, since Chrome already orders luna.css above
+    nav.js above the tiles and an override could only demote something the
+    parser is waiting on. Nothing on the wire reports whether the override took,
+    so this stands on the argument rather than on a measurement (2026-09-02).
 
     `bun run shell:roll` rolls both `a-dict` and `p-dict`; page snapshots are Brotli'd
     in the repo, ignored by the asset upload, and decompressed only at build time.
