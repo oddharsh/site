@@ -1191,29 +1191,24 @@ Two encoders + one transform tool, all built from source:
   retired cjpegli at equal quality. Builds with `cargo`; dependabot tracks the
   zenjpeg pin. Replaced the from-source jpegli build (2026-07). See `tools/photos/zenc/src/main.rs`.
 
-  **Its resampling kernel is `halflight` as of 2026-09-02, a PRIVATE git
-  dependency pinned to a rev in `Cargo.lock`.** `src/resample.rs` moved out to
-  `github.com/oddharsh/halflight` (crate + npm, own conformance suite) and zenc
-  imports the same six names from the crate instead. The swap moved no byte,
-  measured old binary against new: the histogram bake over all 165 stems, the
-  600/400/200 tiers of 52 real photos (46 JPG, 6 HIF, both sensors, both transfer
-  curves), the Instagram `resize` and the q84 JPEG encode, all identical, which is
-  why `config/derivations.lock.json` was re-recorded for `images/histograms` in
-  the same commit rather than the histograms re-baked. Three consequences:
-  cargo fetches it over ssh, so a fresh machine needs the owner's key and the
-  photo-pipeline workflow needs a READ-ONLY deploy key in `HALFLIGHT_DEPLOY_KEY`
-  (its step fails by name without one, and `.cargo/config.toml` at the repo root
-  makes cargo fetch through the git CLI so that key is honoured); dependabot's
+  **Its resampling kernel is `halflight` as of 2026-09-02, a git dependency
+  pinned to a full rev in `Cargo.lock`.** `src/resample.rs` moved out to
+  `github.com/oddharsh/halflight` (public, MIT; crate + npm, own conformance
+  suite, not on crates.io) and zenc imports the same six names from the crate
+  instead. The swap moved no byte, measured old binary against new: the
+  histogram bake over all 165 stems, the 600/400/200 tiers of 52 real photos
+  (46 JPG, 6 HIF, both sensors, both transfer curves), the Instagram `resize`
+  and the q84 JPEG encode, all identical, which is why
+  `config/derivations.lock.json` was re-recorded for `images/histograms` in the
+  same commit rather than the histograms re-baked. Two consequences: dependabot's
   cargo ecosystem cannot track a git rev, so bumping halflight is a hand edit of
-  the `rev` plus a re-run of the same A/B; and the `bytes: true` record in
-  `config/tools.json` still describes the zenc binary, which is what ships the
-  pixels, so a halflight bump that changes output is caught there too.
-- **libavif, VENDORED** (`tools/photos/libavif/build.sh`) — `avifenc` for the
-  primary AVIF thumbnail, built from source at a pinned tag rather than taken
-  from brew. `LIBAVIF_TAG` in that script is the single pin: libavif's own
-  `ext/*.cmd` scripts then fetch and build aom, libsharpyuv and libyuv at ITS
-  pinned revisions, so one tag fixes four projects. v1.4.2 pins aom v3.14.1,
-  which is the aom brew was already supplying, so the encoder does not move.
+  the `rev` plus a re-run of the same A/B (`bytes: true` on zenc in
+  `config/tools.json` catches an output change from either direction); and a
+  fresh machine's first `cargo build` fetches it over https, no key involved.
+  The repository was private for the first few hours and the swap shipped with
+  an ssh URL, a root `.cargo/config.toml` forcing git-fetch-with-cli, and a
+  deploy-key step in the photo-pipeline workflow; all three left the moment it
+  went public, and a note here is what stops them being re-added by analogy.
 
   **The reason is that `/i/` is content-addressed, so the encoder decides
   shipped URLs.** An ambient `brew upgrade libavif` could re-mint every AVIF
