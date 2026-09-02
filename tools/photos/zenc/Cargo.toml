@@ -34,13 +34,15 @@ path = "src/main.rs"
 # byte-identity in the same run. dependabot (cargo ecosystem) owns the pin.
 zenjpeg = { version = "0.8.4", features = ["trellis"] }
 # The resampling kernel and the sRGB / gamma-2.2 transfer, which lived in this
-# crate as src/resample.rs until 2026-09-02 and ship standalone now. A git
-# dependency pinned to a rev rather than a crates.io version because halflight
-# is private for the moment; the rev is the identity, and Cargo.lock records it.
-# Swapping the module for the crate moved no output byte: every /i/ tier of 52
-# real photos (both sensors, both transfer curves) and the histogram bake over
-# all 165 stems came back identical from the binary built either way.
-halflight = { git = "ssh://git@github.com/oddharsh/halflight.git", rev = "7d0e34d88aa1ee7e07be8c3ba7dfd750a0512839" }
+# crate as src/resample.rs until 2026-09-02 and ship standalone now, MIT, at
+# github.com/oddharsh/halflight. A git dependency pinned to a full rev rather
+# than a crates.io version because halflight is not published there; the rev
+# is the identity and Cargo.lock records it. Swapping the module for the crate
+# moved no output byte: every /i/ tier of 52 real photos (both sensors, both
+# transfer curves) and the histogram bake over all 165 stems came back
+# identical from the binary built either way, and the same A/B is the gate for
+# moving this rev.
+halflight = { git = "https://github.com/oddharsh/halflight.git", rev = "edc6358de58e5de93309d01500971bb056c65708" }
 # Input decode only. `tiff` was added on 2026-08-25 for the Instagram export,
 # which needs a LOSSLESS decode of a HEIF source and cannot use JPEG for it.
 # Measured on a 7728x5152 HIF: `sips -s format png` takes 6222ms because it
