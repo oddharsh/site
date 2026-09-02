@@ -127,7 +127,7 @@ export function start(initial) {
       // dr · cc chrome · cb chrome-blue · gr grain · gs grain-size · ht highlight ·
       // st shadow · sa saturation · hi {l,r,g,b} histogram. nulls dropped.
       // Bars come from the TILE first and the network second. The worker packs the
-      // twelve it drew into data-hist (4 channels x 64 bins, one character each,
+      // prioritised six into data-hist (4 channels x 64 bins, one character each,
       // modulo-delta encoded), so a hover on a tile that has one costs no request at all. A
       // tile without one, or a hover on something that is not a grid tile, falls
       // through to the per-photo fetch exactly as before.
@@ -184,9 +184,8 @@ export function start(initial) {
       // BARS: the four 64-bin channels stay OUT of that index, because they are
       // 623 of a meta file's ~977 bytes and would take it from 2.6KB to 24KB for
       // bars most visitors never see. They now ride on the TILE instead
-      // (data-hist, ~1.8KB brotli for the twelve a visitor can actually hover),
-      // which is the same argument reaching a different answer once the set is
-      // twelve rather than 158.
+      // (data-hist for the six topmost tiles), which is the same argument reaching
+      // a different answer once the set is six rather than the whole library.
       //
       // This had to be in the markup rather than warmed here: index.html loads
       // this module on the FIRST HOVER, on purpose ("visitors who never hover
