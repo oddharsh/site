@@ -137,17 +137,20 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   assert.match(fragment, /\ssizes="184px"/,
     "sizes must name the fixed .photos column, or the browser guesses 100vw and picks the largest tier");
 
-  // THE BARS RIDE ON THE TILE. Measured on production before this: a photo hover
+  // THE FIRST BARS RIDE ON THE TILE. Measured on production before this: a photo hover
   // stalled 135ms then 117ms waiting for /images/meta/<stem>.json, once per photo,
   // with the histogram blank until it landed. It has to be in the markup rather
   // than warmed by tooltip.js, because index.html loads that module on the FIRST
   // hover on purpose, so anything it warms is too late for the hover that caused
-  // the load. Controlled in a browser with /images/meta/* aborted outright: bars
-  // drew on 6 of 6 hovers.
+  // the load. The first six tiles take that path; the lower-priority six keep the
+  // per-photo fallback rather than making every fragment pay for every possible
+  // first hover.
   const packed = "?".repeat(128) + "~".repeat(128);   // 256 chars, both ends of the safe range
   const withHist = renderPhotoSlots(photo, {}, { deferred: false, histograms: { X1: packed } });
   assert.match(withHist, /data-hist="/, "a tile whose histogram is known carries it");
   assert.equal(/data-hist="([^"]*)"/.exec(withHist)[1], packed, "the packed histogram ships verbatim");
+  assert.doesNotMatch(renderPhotoSlots(photo, {}, { histograms: { X1: packed } }), /data-hist=/,
+    "the disposable baked grid must not carry histogram bytes a scripting browser replaces");
   // Absent is a LEGAL state, not a failure: tooltip.js falls back to the per-photo
   // fetch, which is what a stem baked before this existed gets.
   assert.doesNotMatch(renderPhotoSlots(photo, {}, { deferred: false }), /data-hist=/,
@@ -190,6 +193,15 @@ test("homepage selects 12 photos and transfers all of them", async () => {
     tiles.map((t) => /fetchpriority="low"/.test(t)),
     [false, false, false, false, false, false, true, true, true, true, true, true],
     "the first six tiles ride the default urgency and the last six stay low; flattening that back to one bucket restores the fair-share interleave",
+  );
+  const histogramGrid = renderPhotoSlots(twelve, {}, {
+    deferred: false,
+    histograms: Object.fromEntries(twelve.map((p) => [p.stem, packed])),
+  }).split("<a href=").slice(1);
+  assert.deepEqual(
+    histogramGrid.map((tile) => /data-hist=/.test(tile)),
+    [true, true, true, true, true, true, false, false, false, false, false, false],
+    "only the immediately prioritised prefix carries bars; the low-priority half uses the metadata fallback",
   );
   assert.doesNotMatch(grid12, /fetchpriority="high"/,
     "no photo may outrank the introductory prose, which is the measured LCP element at 390px and 1280px alike");

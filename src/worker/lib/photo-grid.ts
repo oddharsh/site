@@ -126,11 +126,11 @@ export function renderPhotoSlots(pick, altMap = {}, { deferred = true, histogram
     // Fall back to the stem rather than alt="": the tile IS the link, so an
     // empty alt makes the <a> nameless for screen readers and agents.
     const alt = escAttr(altMap[p.stem] || p.stem);
-    // The tooltip's four histogram channels, packed to 256 bytes and base64'd,
-    // riding with the tile that owns them. This used to arrive on the hover that
-    // needed it, one /images/meta/<stem>.json per photo: measured on production
-    // at 135ms and 117ms for the first two hovers, once per photo, with the bars
-    // unable to draw until the file landed.
+    // The tooltip's four histogram channels, packed to 256 bytes and riding with
+    // the tile that owns them. This used to arrive on the hover that needed it,
+    // one /images/meta/<stem>.json per photo: measured on production at 135ms and
+    // 117ms for the first two hovers, once per photo, with the bars unable to draw
+    // until the file landed.
     //
     // It has to be in the MARKUP rather than warmed by tooltip.js, because
     // tooltip.js does not exist until the first hover happens (index.html's
@@ -151,9 +151,18 @@ export function renderPhotoSlots(pick, altMap = {}, { deferred = true, histogram
     // noted because an attribute whose quoting varies per value looks like a bug
     // the first time you diff the output.
     //
-    // Absent is a legal state and tooltip.js falls back to its per-photo fetch,
-    // which is what a stem with no baked histogram gets.
-    const hist = histograms[p.stem];
+    // Only the six tiles in the default urgency bucket carry bars. Those are the
+    // topmost prefix and the ones a visitor can reach first; the six low-priority
+    // tiles keep the existing per-photo fallback if they are hovered. Measured
+    // over 10,000 random twelve-photo fragments at brotli q4: this partition is
+    // 667 bytes smaller on average than carrying all twelve (-25.9%), with every
+    // sample winning. q11 agreed at -565 bytes (-26.4%, 1,000/1,000 wins).
+    //
+    // The deterministic deferred grid carries none. A scripting browser replaces
+    // it before the tooltip island can run, and a script-off browser has no
+    // tooltip, so those attributes would be dead bytes in the page and its dcz
+    // dictionary. Absent remains legal: tooltip.js fetches meta/<stem>.json.
+    const hist = !deferred && index < PRIORITISED_TILES ? histograms[p.stem] : null;
     const histAttr = hist ? ` data-hist="${escAttr(hist)}"` : "";
     const sizeAttr = (asNumber(p.size) > 0) ? ` data-size="${p.size}"` : "";
     const upAttr = p.uploaded ? ` data-uploaded="${escAttr(p.uploaded)}"` : "";

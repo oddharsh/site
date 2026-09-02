@@ -272,10 +272,10 @@ export async function getAltMap(env) {
 // while reading twelve files per request costs twelve subrequests against a 50
 // cap. One memoised read costs neither.
 //
-// Only the drawn twelve reach the client, as data-hist on each tile. That is what
-// keeps this from being the download tools/lib/photo-indexes.ts declined: all 158 would
-// be 24 KiB brotli of bars most visitors never see, where the twelve a visitor can
-// actually hover are ~1.8 KiB.
+// Only the prioritised six reach the client, as data-hist on the topmost tiles.
+// That is what keeps this from being the download tools/lib/photo-indexes.ts
+// declined: all 165 would be 24 KiB brotli of bars most visitors never see. The
+// other six drawn tiles keep the existing per-photo metadata fetch if hovered.
 export let _histograms;
 
 export async function getHistogramMap(env) {
