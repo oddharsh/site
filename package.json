@@ -74,11 +74,11 @@
   "comment:check-fast": "Local feedback only: lint, typecheck and test are independent read-only gates, so Bun can run them concurrently. CI keeps them as named sequential steps for legible failures. Do not add build, routes, Lens or perf commands here: several share .build or intentionally run under Node.",
   "devDependencies": {
     "@minify-html/node": "0.18.1",
-    "@oxlint/plugins": "1.80.0",
+    "@oxlint/plugins": "1.81.0",
     "@types/bun": "1.4.0",
     "lightningcss": "1.33.0",
     "oxc-minify": "0.148.0",
-    "oxlint": "1.80.0",
+    "oxlint": "1.81.0",
     "oxlint-tsgolint": "7.0.2001",
     "playwright-core": "^1.62.1",
     "typescript": "7.0.2",
