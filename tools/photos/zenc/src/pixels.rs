@@ -23,9 +23,7 @@
 // at-the-end is the principled shape and the 16-bit path costs nothing extra.
 // It also fixes a real bug the 8-bit path had: a Luma16 TIFF missed the Luma8
 // arm and was silently promoted to RGB.
-use crate::resample::{
-    g22_to_linear, linear_to_g22, linear_to_srgb, resample, srgb_to_linear, Filter,
-};
+use halflight::{g22_to_linear, linear_to_g22, linear_to_srgb, resample, srgb_to_linear, Filter};
 use image::{DynamicImage, GrayImage, ImageBuffer, ImageDecoder, ImageReader, Luma, Rgb, RgbImage};
 use std::path::Path;
 

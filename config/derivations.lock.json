@@ -993,8 +993,8 @@
     "public/i/XT509996.47144221.avif": "471442213dffcaf2ad49d282c3a2c6058f555c6a57bdd1de0fa7fe3d2af84612",
     "public/i/XT509996.7c90b12d.jpg": "7c90b12dc70fc92e8f5e836e0b28248f7f07929b2df5607bf8a601b2a4b1b7c4",
     "tools/photos/shell-data.ts": "1f9f02180c390b232403d24a11b478dbbddd55d5e1d2ed30d96365a7ff5d6e4b",
-    "tools/photos/zenc/Cargo.lock": "193c0e7739a2801ca39328db4e6b724f8d634ff1f890b1c5bad4b898c3d8102d",
+    "tools/photos/zenc/Cargo.lock": "dde08b5eb92403b010ccb7a9e477554e6bf58261c1f30d816222c8704df464c0",
     "tools/photos/zenc/src/histogram.rs": "1a5fbc3744bf1d571e6cb2bf19aa0f965e5a8c097c2175d185023c415cfd3a10",
-    "tools/photos/zenc/src/pixels.rs": "a5013ede8b0f841d82270014b5af0f2df31d579ccde8ef483b68a6ed6ba5769c"
+    "tools/photos/zenc/src/pixels.rs": "f8f8ee85aa67ecfb0a640c33546ef09b7fe9d0f8cc6b5dbb15d57ddacf7f5f99"
   }
 }

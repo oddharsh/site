@@ -176,6 +176,11 @@ dependencies = [
 ]
 
 [[package]]
+name = "halflight"
+version = "0.1.0"
+source = "git+ssh://git@github.com/oddharsh/halflight.git?rev=7d0e34d88aa1ee7e07be8c3ba7dfd750a0512839#7d0e34d88aa1ee7e07be8c3ba7dfd750a0512839"
+
+[[package]]
 name = "hashbrown"
 version = "0.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -536,6 +541,7 @@ dependencies = [
 name = "zenc"
 version = "0.1.0"
 dependencies = [
+ "halflight",
  "image",
  "serde_json",
  "zenjpeg",

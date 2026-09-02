@@ -19,7 +19,6 @@ use zenjpeg::encoder::{
 
 mod histogram;
 mod pixels;
-mod resample;
 mod resize;
 mod square;
 
