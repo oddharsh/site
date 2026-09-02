@@ -1190,6 +1190,24 @@ Two encoders + one transform tool, all built from source:
   trellis + 64-candidate progressive scan search + sharp_yuv chroma, ~4% under the
   retired cjpegli at equal quality. Builds with `cargo`; dependabot tracks the
   zenjpeg pin. Replaced the from-source jpegli build (2026-07). See `tools/photos/zenc/src/main.rs`.
+
+  **Its resampling kernel is `halflight` as of 2026-09-02, a PRIVATE git
+  dependency pinned to a rev in `Cargo.lock`.** `src/resample.rs` moved out to
+  `github.com/oddharsh/halflight` (crate + npm, own conformance suite) and zenc
+  imports the same six names from the crate instead. The swap moved no byte,
+  measured old binary against new: the histogram bake over all 165 stems, the
+  600/400/200 tiers of 52 real photos (46 JPG, 6 HIF, both sensors, both transfer
+  curves), the Instagram `resize` and the q84 JPEG encode, all identical, which is
+  why `config/derivations.lock.json` was re-recorded for `images/histograms` in
+  the same commit rather than the histograms re-baked. Three consequences:
+  cargo fetches it over ssh, so a fresh machine needs the owner's key and the
+  photo-pipeline workflow needs a READ-ONLY deploy key in `HALFLIGHT_DEPLOY_KEY`
+  (its step fails by name without one, and `.cargo/config.toml` at the repo root
+  makes cargo fetch through the git CLI so that key is honoured); dependabot's
+  cargo ecosystem cannot track a git rev, so bumping halflight is a hand edit of
+  the `rev` plus a re-run of the same A/B; and the `bytes: true` record in
+  `config/tools.json` still describes the zenc binary, which is what ships the
+  pixels, so a halflight bump that changes output is caught there too.
 - **libavif, VENDORED** (`tools/photos/libavif/build.sh`) — `avifenc` for the
   primary AVIF thumbnail, built from source at a pinned tag rather than taken
   from brew. `LIBAVIF_TAG` in that script is the single pin: libavif's own

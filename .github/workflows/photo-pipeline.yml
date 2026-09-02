@@ -86,10 +86,37 @@ jobs:
       - name: Install repository dependencies
         run: bun install --frozen-lockfile
 
+      - name: Reach halflight, the private crate zenc depends on
+        # zenc's resampling kernel is `halflight`, a git dependency on a PRIVATE
+        # repository pinned to a rev in Cargo.lock (2026-09-02). This runner's
+        # GITHUB_TOKEN is scoped to this repository and cannot read another, so
+        # the fetch needs a READ-ONLY deploy key for oddharsh/halflight, stored
+        # here as the HALFLIGHT_DEPLOY_KEY secret. No key, no build: this step
+        # fails on purpose and says what to create, rather than letting cargo
+        # die three steps later on a "could not read from remote" that names
+        # nothing. Read-only is the whole point; a deploy key that can write is
+        # a second write token in CI, which this repository does not allow.
+        env:
+          HALFLIGHT_DEPLOY_KEY: ${{ secrets.HALFLIGHT_DEPLOY_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${HALFLIGHT_DEPLOY_KEY:-}" ]; then
+            echo "::error::HALFLIGHT_DEPLOY_KEY is not set. zenc depends on the private halflight repository; add a READ-ONLY deploy key to github.com/oddharsh/halflight (Settings > Deploy keys, leave 'Allow write access' off) and store its private half as this repository's HALFLIGHT_DEPLOY_KEY secret."
+            exit 1
+          fi
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$HALFLIGHT_DEPLOY_KEY" > ~/.ssh/halflight_deploy && chmod 600 ~/.ssh/halflight_deploy
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+          printf 'Host github.com\n  IdentityFile ~/.ssh/halflight_deploy\n  IdentitiesOnly yes\n' >> ~/.ssh/config
+          # .cargo/config.toml at the repo root sets git-fetch-with-cli, so this
+          # key is what cargo's fetch uses.
+          git ls-remote ssh://git@github.com/oddharsh/halflight.git HEAD > /dev/null
+
       - name: Build the JPEG encoder (zenc)
         # zenjpeg hybrid + progressive scan search; Cargo.lock pins the graph,
-        # dependabot tracks the zenjpeg version. macOS runners ship cargo.
-        run: cargo build --release --manifest-path tools/photos/zenc/Cargo.toml
+        # dependabot tracks the zenjpeg version (and cannot track the halflight
+        # git rev; that pin moves by hand). macOS runners ship cargo.
+        run: cargo build --release --locked --manifest-path tools/photos/zenc/Cargo.toml
 
       - name: Validate routine inputs
         run: |

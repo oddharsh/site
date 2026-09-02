@@ -544,6 +544,16 @@ the reason, rather than written here with the caret quietly dropped.
   content-hashed URLs. Read its releases for encoder output changes, and treat
   a quality or scan-search change as a reason to re-measure rather than to
   trust the version number.
+  **It also depends on `halflight` by git rev, since 2026-09-02**: the resampling
+  kernel that was `src/resample.rs`, now a private crate at
+  `github.com/oddharsh/halflight`, pinned in `Cargo.lock` to a full rev. A git
+  dependency is outside the cargo ecosystem dependabot watches, so this pin moves
+  only by hand: edit the `rev`, rebuild, and re-run the old-binary-against-new A/B
+  that gated the swap (histograms over 165 stems, three tiers of 52 photos, resize,
+  encode, all byte-identical the first time). CI can reach the private repository
+  only through a read-only deploy key in `HALFLIGHT_DEPLOY_KEY`; the
+  photo-pipeline workflow fails by name without it. `.cargo/config.toml` at the
+  repository root makes cargo fetch through the git CLI so that key is honoured.
 
 - **`cal/`** declares no package dependencies, since 2026-09-02. Its suite
   runs on bun:test against the root's wrangler (`createTestHarness`, see
