@@ -863,10 +863,14 @@ worktrees may edit freely, but a worktree is not a release surface.
   `src/worker/lib/early-data.ts` answers 425 Too Early on the GET-shaped writes
   (`preview.ts`'s list: `/hit`, the coffee and webmention decisions, the
   activation beacon), which RFC 8470 says the client retries after the handshake
-  and never in early data. Every document and asset stays on the fast path. The
-  guard shipped 2026-09-02; the dashboard toggle (Speed, Protocol Optimization)
-  is the owner's flip, and a workstation `infra:check` reads FAIL until it is.
-  Local curl (8.7.1, SecureTransport) cannot send early data; verify from Chrome.
+  and never in early data. Every document and asset stays on the fast path.
+  **The toggle was already ON when the guard shipped** (Speed, Settings,
+  Protocol Optimization; confirmed by the owner 2026-09-02), so for as long as
+  the site ran without lib/early-data.ts, a replayed early-data GET could tick
+  the counter twice or re-fire a signed coffee decision. The guard closed that
+  rather than prepared for it, and a workstation `infra:check` now asserts the
+  setting stays on. Local curl (8.7.1, SecureTransport) cannot send early data;
+  verify from Chrome.
 - **No deploy path may create Cloudflare resources.** Wrangler's
   `--x-provision` and `--x-auto-create` are hidden flags that both default to
   TRUE, and they provision real KV/R2/D1 for any binding declared without an

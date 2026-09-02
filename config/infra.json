@@ -148,6 +148,8 @@
         "cover: the cold external arrival. Declared here because it is dashboard",
         "state the Worker depends on being paired with a guard: early data is",
         "replayable, Cloudflare forwards it with `Early-Data: 1`, and",
+        "(the toggle was already on before the guard existed, per the owner on",
+        "2026-09-02, which is the case the guard retroactively made safe)",
         "src/worker/lib/early-data.ts answers 425 on the GET-shaped writes so a",
         "replayed /hit cannot tick the counter twice (RFC 8470). The guard is",
         "harmless with the setting off; the setting is unsafe without the guard,",
