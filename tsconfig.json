@@ -1,0 +1,32 @@
+{
+  // SOLUTION-STYLE, and it exists for ONE reader: oxlint's type-aware pass.
+  //
+  // Every real program lives in config/tsconfig.*.json and is run by `bun run
+  // typecheck` by explicit path; nothing here changes what tsc checks. tsgolint
+  // is different. It discovers a tsconfig PER FILE by walking up from that file
+  // and, finding none named tsconfig.json above src/ or tools/, built a default
+  // program with no includes, in which every Workers global was an error type
+  // that acts as `any`. Measured 2026-09-02: 0 type-aware findings without this
+  // file, 17 with it, on an unchanged tree. So the lint had been partially
+  // blind since it landed, and the counts .oxlintrc.json records beside each
+  // disabled rule were taken under that blindness.
+  //
+  // `files: []` so this program holds nothing itself; `references` is how
+  // tsgolint maps a file to the program that actually includes it. esbuild and
+  // bun both look upward for a tsconfig.json too and read compilerOptions from
+  // it, which is why there are none here: the Worker bundle was hashed before
+  // and after adding this file and is byte-identical.
+  "files": [],
+  "references": [
+    { "path": "config/tsconfig.json" },
+    { "path": "config/tsconfig.tools.json" },
+    { "path": "config/tsconfig.browser.json" },
+    { "path": "config/tsconfig.sw.json" },
+    { "path": "config/tsconfig.cf-garage.json" },
+    { "path": "config/tsconfig.cf-garage-test.json" },
+    { "path": "config/tsconfig.lwe-ask.json" },
+    { "path": "config/tsconfig.lens-reader.json" },
+    { "path": "config/tsconfig.lens-reader-test.json" },
+    { "path": "config/tsconfig.cal-test.json" }
+  ]
+}

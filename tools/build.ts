@@ -2682,7 +2682,7 @@ let freshFamily: Buffer | null = null;
   requireParser();
 
   const map = {};
-  const handlers = [];
+  const handlers: string[] = [];
   let blocks = 0;
   for (const page of pages) {
     const source = await readFile(`${OUT}/public/${page}`, "utf8");

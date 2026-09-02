@@ -221,6 +221,20 @@
   // script. It costs 0.56s over the whole tree, which is less than the tsc pass
   // it runs beside, so there is no reason to split it into a second script.
   //
+  // IT RAN WITHOUT REAL PROGRAMS UNTIL 2026-09-02. tsgolint discovers a
+  // tsconfig per file by walking up, every program here lives in
+  // config/tsconfig.*.json, and there was no root tsconfig.json, so each file
+  // got a default program with no includes in which every Workers global was
+  // an error type acting as `any`. The root tsconfig.json (solution-style,
+  // `files: []`, one reference per program) is what fixed it, and on an
+  // unchanged tree it took the count from 0 to 17: 13 restrict-template-
+  // expressions on `const x = []` arrays typed `any[]` in .ts tools, 2
+  // await-thenable on bun's matchers (the cal/test override below), 1
+  // no-misused-promises in sw.js, 1 await-thenable on an untyped `pending`
+  // array. All 17 fixed or scoped with a reason. Read every count in this file
+  // measured before that date as a count taken by a checker that could not see
+  // the types; re-measure before trusting one.
+  //
   // TRIAGE WARNING, learned the expensive way on the day this landed: how much
   // this pass REPORTS depends on how much of the dependency graph resolves. A
   // first triage ran against a root-only install and came back with 56 findings;
@@ -308,6 +322,18 @@
       // cancelled at request teardown.
       "files": ["**/test/**", "**/*.test.*", "tools/contract-shared.ts"],
       "rules": { "typescript/no-floating-promises": "off" }
+    },
+    {
+      // bun-types declares every matcher as returning `void`, including the
+      // ones behind `.resolves` and `.rejects`, while at runtime those return a
+      // promise the test MUST await or the assertion never runs. So `await
+      // expect(p).rejects.toThrow()` is the documented bun usage and reads to
+      // this rule as an await of a non-thenable. 2 sites (email.test.js), both
+      // correct; measured 2026-09-02, the day tsgolint first saw this program.
+      // Scoped to cal's suite, which is the only bun:test suite that awaits
+      // matchers; tools/ asserts with node:assert and is untouched.
+      "files": ["cal/test/**"],
+      "rules": { "typescript/await-thenable": "off" }
     },
     {
       "files": ["**/*.js", "**/*.mjs"],

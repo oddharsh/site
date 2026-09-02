@@ -78,8 +78,8 @@ const execFileP = promisify(execFile);
 // evidence the zone setting is off. Three attempts, spaced, is: the drift is
 // reported only when every spaced sample missed, and it names the count so a
 // future failure says how much evidence is behind it.
-async function probeEarlyData(host) {
-  let ossl = null;
+async function probeEarlyData(host: string) {
+  let ossl: string | null = null;
   for (const c of [process.env.OPENSSL_BIN, "/opt/homebrew/opt/openssl@3/bin/openssl",
                    "/usr/local/opt/openssl@3/bin/openssl", "openssl"].filter(Boolean)) {
     try {

@@ -52,7 +52,7 @@ let bad = 0, swept = 0;
 for (const path of paths) {
   const page = await ctx.newPage();
   const violations = [];
-  const errors = [];
+  const errors: string[] = [];
   await page.addInitScript(() => {
     globalThis.__csp = [];
     // The event IS a SecurityPolicyViolationEvent; lib.dom declares it and the
