@@ -97,7 +97,7 @@ jobs:
         # the build now happens under the runtime that also ships it.
         run: bun run build
 
-      - name: Roll both dictionary sets against production
+      - name: Roll the three dictionary sets against production
         # --live sources the shell half from the wire too, which is what lets this run
         # unattended. Adopting from the built tree would only ever capture the shell
         # THIS checkout builds, so it would have to run from the deployed commit, and
@@ -109,12 +109,12 @@ jobs:
         id: diff
         run: |
           set -euo pipefail
-          if [ -z "$(git status --porcelain src/dict/a-dict src/dict/p-dict)" ]; then
+          if [ -z "$(git status --porcelain src/dict/a-dict src/dict/p-dict src/dict/f-dict)" ]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "Dictionaries already cover what production is serving; nothing to do."
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
-            git status --short src/dict/a-dict src/dict/p-dict | head -40
+            git status --short src/dict/a-dict src/dict/p-dict src/dict/f-dict | head -40
           fi
 
       - name: Open or update the roll PR
@@ -127,14 +127,14 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          ADOPTED=$(git status --porcelain src/dict/a-dict src/dict/p-dict | grep -c '^??' || true)
-          PRUNED=$(git status --porcelain src/dict/a-dict src/dict/p-dict | grep -c '^ D' || true)
+          ADOPTED=$(git status --porcelain src/dict/a-dict src/dict/p-dict src/dict/f-dict | grep -c '^??' || true)
+          PRUNED=$(git status --porcelain src/dict/a-dict src/dict/p-dict src/dict/f-dict | grep -c '^ D' || true)
 
           # One long-lived branch, force-pushed. A fresh branch per night would leave a
           # trail of superseded PRs, and the roll is not a series: only the newest one
           # describes what production is serving now.
           git checkout -B "$BRANCH"
-          git add src/dict/a-dict src/dict/p-dict
+          git add src/dict/a-dict src/dict/p-dict src/dict/f-dict
           git commit -m "chore(dcz): roll the dictionaries onto what production serves
 
           Adopted $ADOPTED, pruned $PRUNED. Sourced from https://aadhar.sh over the
