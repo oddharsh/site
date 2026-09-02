@@ -31,11 +31,26 @@
 //      let the probe catch its own three bugs (see resample-probe.ts).
 //   3. It is CORRECT-first, not fast-first: scalar f32. The fixed-channel
 //      inner loop (see resample_fixed) recovered 2x of the resample core
-//      (42.9 -> 22.9ms on 5952x3968 RGB -> 900x600 Box, byte-identical),
-//      which puts the whole gamma-correct job ahead of fast_image_resize's
-//      opt-in correct path (u16 linear) while staying f32 linear. fir's SIMD
-//      on its gamma-WRONG default u8 path is still ~1.8x faster; that gap is
-//      the price of the transfer function, not the kernel.
+//      (42.9 -> 22.9ms on 5952x3968 RGB -> 900x600 Box, byte-identical).
+//
+//      THIS ENTRY CLAIMED, UNTIL 2026-09-02, that the whole gamma-correct job
+//      was therefore "ahead of fast_image_resize's opt-in correct path". It is
+//      not, and the claim rested on a filter mismatch: our Box whole job was
+//      set against fir's LANCZOS3 mapper path. Measured apples to apples in
+//      halflight's conformance bench (one process per cell, best of 5, same
+//      24 MP -> 900x600 frame), whole u8 job vs fir's sRGB mapper -> U16x3:
+//
+//        Box       43.9 ms vs 37.5 ms     fir ahead 1.2x
+//        Lanczos3 123.6 ms vs 63.0 ms     fir ahead 2.0x
+//
+//      The KERNELS are at parity on linear f32 (23.1 vs 19.6 Box, 99.6 vs
+//      102.0 Lanczos3, agreeing to 1.2e-7 / 1.9e-6). fir's u16 SIMD path wins
+//      the whole job because a u16 lane is half an f32 lane and because this
+//      transfer step is scalar. The honest statement is the one below: fir's
+//      gamma-WRONG default (8.4 / 28.6 ms) is faster still, and that gap is
+//      the price of the transfer function, not of the kernel. The kernel now
+//      ships standalone as halflight (github.com/oddharsh/halflight), where
+//      the bench that caught this is committed and CI runs the parity gates.
 //
 // THE THREE THINGS THAT MAKE THIS CORRECT, none of which is exotic and all of
 // which something in the wild gets wrong (sips gets all three wrong at once;
