@@ -58,14 +58,17 @@ minimumReleaseAgeExcludes = []
 # Bare `bun test` used to be a trap, and it is exactly the kind this repo spends
 # its gotcha list on: it reports failures that mean nothing, confidently.
 #
-# Bun globs the whole tree, so it collected THREE suites that do not run under
-# it. `cal/test/*` is a Vitest suite (CI runs `bun run --filter cal-aadhar-sh
-# test`, and it needs `vi.stubGlobal` plus the `cloudflare:test` pool module);
-# `lens-reader/test/*` deliberately sits outside the workspace, so readability
-# and linkedom resolve only after an install inside that directory. Every one of
-# those is healthy under its own runner. Run bare, they produced 21 red tests
-# and 5 module errors — measured 2026-08-26 on a PRISTINE origin/main, so the
-# noise was never anybody's diff.
+# Bun globs the whole tree, so it collected suites that do not run under a
+# bare root invocation. `cal/test/*` IS a bun suite since 2026-09-02, and it
+# still has to run from cal/ (CI runs `bun run --filter cal-aadhar-sh test`):
+# bun reads bunfig.toml from the cwd, and cal's carries the preload that shims
+# the two Worker globals its source needs on a host, which this file cannot
+# supply without shimming them for tools/ too. `lens-reader/test/*` deliberately
+# sits outside the workspace, so readability and linkedom resolve only after an
+# install inside that directory. Each is healthy under its own invocation. Run
+# bare, the tree produced 21 red tests and 5 module errors — measured 2026-08-26
+# on a PRISTINE origin/main, when cal was still Vitest, so the noise was never
+# anybody's diff.
 #
 # `root` scopes discovery to the suite this runner owns. `preload` is the other
 # half and matters more: `bun run test` passes `--preload ./tools/lib/no-network.ts`

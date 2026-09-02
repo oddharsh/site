@@ -1,22 +1,30 @@
 // Integration tests for the worker's request flow (src/index.js). Rather than
-// SELF (a separate isolate this pool version can't easily inject fetch mocks
-// into), we import the worker and call worker.fetch() directly — same isolate,
-// so the globalThis.fetch stub intercepts its outbound calls. The calendar feed
-// and Resend are both stubbed below. The KV binding + working-hours vars come
-// from wrangler.toml via cloudflare:test's `env`.
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { env as baseEnv, createExecutionContext, waitOnExecutionContext, introspectWorkflow } from "cloudflare:test";
+// dispatching into the harness's workerd, we import the worker and call
+// worker.fetch() directly in THIS process, so the globalThis.fetch stub
+// intercepts its outbound calls. The calendar feed and Resend are both stubbed
+// below. The KV binding, the Workflow binding and the working-hours vars come
+// from wrangler.test.toml through the harness (see harness.ts).
+import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll } from "bun:test";
+import { bootCal, createExecutionContext, waitOnExecutionContext, stubFetch } from "./harness.ts";
 import worker from "../src/index.js";
 import { sign } from "../src/sign.js";
 import { getBooking, listHeld } from "../src/booking.js";
 
 const SECRET = "integration-signing-secret";
-const env = {
-  ...baseEnv,
-  SIGNING_SECRET: SECRET,
-  RESEND_API_KEY: "test-key",
-  ICAL_URL: "https://calendar.test/availability.ics",
-};
+/** @type {Awaited<ReturnType<typeof bootCal>>} */
+let cal;
+/** @type {import("./harness.ts").CalEnv & { SIGNING_SECRET: string, RESEND_API_KEY: string, ICAL_URL: string }} */
+let env;
+beforeAll(async () => {
+  cal = await bootCal();
+  env = {
+    ...cal.env,
+    SIGNING_SECRET: SECRET,
+    RESEND_API_KEY: "test-key",
+    ICAL_URL: "https://calendar.test/availability.ics",
+  };
+});
+afterAll(() => cal.close());
 
 const EMPTY_ICS = [
   "BEGIN:VCALENDAR",
@@ -27,43 +35,42 @@ const EMPTY_ICS = [
 
 let mailCalls;
 let bookingWf;
+let restoreFetch = () => {};
 beforeEach(async () => {
-  // start every test with an empty booking pool. storage isn't reliably
-  // per-test in this pool version, and stale pending bookings from a prior
-  // test would hold slots / trip generateSlots' daily+weekly limits, so an
-  // assertion like "the slot frees up again" would see a slot suppressed for
-  // an unrelated reason. clearing makes each test's preconditions explicit.
-  const { keys } = await env.BOOKINGS.list();
-  await Promise.all(keys.map((k) => env.BOOKINGS.delete(k.name)));
+  // start every test with an empty booking pool: a stale pending booking from
+  // a prior test would hold a slot / trip generateSlots' daily+weekly limits,
+  // so an assertion like "the slot frees up again" would see a slot suppressed
+  // for an unrelated reason. clearing makes each test's preconditions explicit.
+  await cal.clearBookings();
 
   // route_book spins up a real expiry-timer instance per booking. Left alone,
-  // each would block on a 7-day waitForEvent that the pool rejects at teardown
-  // (uncaught) and leaks state between tests. These integration tests exercise
-  // the REQUEST flow, not the timer, so we deliver the benign "host decided"
-  // event to every instance: the workflow completes immediately as a no-op
-  // (it only touches KV on the timeout path), matching what cancelExpiry does
-  // in production. The timer's own logic is covered in workflow.test.js.
-  bookingWf = await introspectWorkflow(env.BOOKING_WORKFLOW);
+  // each would block on a 7-day waitForEvent inside the harness and leak state
+  // between tests. These integration tests exercise the REQUEST flow, not the
+  // timer, so we deliver the benign "host decided" event to every instance:
+  // the workflow completes immediately as a no-op (it only touches KV on the
+  // timeout path), matching what cancelExpiry does in production. The timer's
+  // own logic is covered in workflow.test.js.
+  bookingWf = await cal.worker.introspectWorkflow("BOOKING_WORKFLOW");
   await bookingWf.modifyAll(async (m) => {
     await m.mockEvent({ type: "host-decision", payload: { resolved: true } });
   });
 
   mailCalls = [];
-  vi.stubGlobal("fetch", vi.fn(async (url, init) => {
+  restoreFetch = stubFetch(async (url, init) => {
     if (String(url) === env.ICAL_URL) {
       return new Response(EMPTY_ICS, {
         status: 200,
         headers: { "content-type": "text/calendar" },
       });
     }
-    mailCalls.push({ url: String(url), body: JSON.parse(init.body) });
+    mailCalls.push({ url: String(url), body: JSON.parse(String(init?.body)) });
     return new Response(JSON.stringify({ id: "m" }), {
       status: 200, headers: { "content-type": "application/json" },
     });
-  }));
+  });
 });
 afterEach(async () => {
-  vi.unstubAllGlobals();
+  restoreFetch();
   await bookingWf.dispose();   // tear down any booking expiry timers this test created
 });
 
@@ -89,9 +96,9 @@ async function postBook(fields, overrides = {}) {
 // It reproduces the ONE property the real thing is being used for: requests to a
 // given instance run one at a time. Instances are keyed by name, so two slots
 // never contend, and each holds its own storage. The claim logic itself is the
-// real module — only the serialization is simulated, because that is a runtime
-// guarantee this pool cannot bind (the class lives in public/, and importing it
-// from cal would make cal untestable without the site tree).
+// real module — only the serialization is simulated, because the class lives in
+// the site tree (src/worker/counter.ts), and importing it from cal would make
+// cal untestable without the site tree.
 function stubCounterNamespace() {
   const instances = new Map();
   return {
@@ -121,12 +128,16 @@ function stubCounterNamespace() {
     },
   };
 }
+// `Response.json()` is `Promise<unknown>` under bun's types (the pool's was
+// `any`), and the one shape this suite reads back is /slots.
+/** @param {Response} res @returns {Promise<{ slots: { start: number, end: number }[] }>} */
+const slotsOf = async (res) => /** @type {any} */ (await res.json());
 // pick a slot from the MIDDLE of the list, not slots[0]: the earliest slot sits
 // on the now+MIN_NOTICE boundary and can roll off as the wall clock advances
 // during a test, making assertions about it flaky. a mid-list slot is days out
 // and stable across the test's runtime.
 const firstSlot = async () => {
-  const { slots } = await (await dispatch("/slots")).json();
+  const { slots } = await slotsOf(await dispatch("/slots"));
   return slots[Math.floor(slots.length / 2)];
 };
 const statusOf = async (id) => (await getBooking(env, id))?.status;
@@ -156,7 +167,7 @@ describe("routing", () => {
   it("GET /slots returns a non-empty slots array", async () => {
     const res = await dispatch("/slots");
     expect(res.status).toBe(200);
-    const { slots } = await res.json();
+    const { slots } = await slotsOf(res);
     expect(Array.isArray(slots)).toBe(true);
     expect(slots.length).toBeGreaterThan(0);
   });
@@ -165,7 +176,7 @@ describe("routing", () => {
     expect((await dispatch("/coffee")).status).toBe(200);
     const res = await dispatch("/coffee/slots");
     expect(res.status).toBe(200);
-    expect((await res.json()).slots.length).toBeGreaterThan(0);
+    expect((await slotsOf(res)).slots.length).toBeGreaterThan(0);
   });
 
   it("unknown path → 404", async () => {
@@ -219,7 +230,7 @@ describe("POST /book validation", () => {
   });
 
   it("a different slot is never blocked by a claim on its neighbour", async () => {
-    const { slots } = await (await dispatch("/slots")).json();
+    const { slots } = await slotsOf(await dispatch("/slots"));
     const COUNTER = stubCounterNamespace();
     const [a, b] = await Promise.all([
       postBook({ name: "A", email: "a@a.co", topic: "one", start: slots[2].start }, { COUNTER }),
@@ -268,7 +279,7 @@ describe("book → approve / decline lifecycle", () => {
     expect(await listHeld(env)).toContainEqual({ start: slot.start, end: slot.end });
 
     // the slot is no longer offered while the booking is pending
-    const after = (await (await dispatch("/slots")).json()).slots;
+    const after = (await slotsOf(await dispatch("/slots"))).slots;
     expect(after.find((s) => s.start === slot.start)).toBeUndefined();
   });
 
@@ -381,7 +392,7 @@ describe("book → approve / decline lifecycle", () => {
     expect(mailCalls).toHaveLength(1);
     expect(mailCalls[0].body.attachments).toBeUndefined();
 
-    const after = (await (await dispatch("/slots")).json()).slots;
+    const after = (await slotsOf(await dispatch("/slots"))).slots;
     expect(after.find((s) => s.start === slot.start)).toBeDefined();
   });
 

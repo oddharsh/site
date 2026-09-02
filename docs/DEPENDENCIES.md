@@ -240,13 +240,15 @@ declaration, and a declared minimum nothing enforces is an error.
 
 ## Current baseline
 
-- Wrangler 4.127.1 is the exact root pin shared by all Worker projects.
-  `cal`'s @cloudflare/vitest-pool-workers floor is 0.22.0, which resolves the
-  same Wrangler, Miniflare, and Workerd stack as the root. Measured on
-  2026-08-15 across five warm-store, clean installs, that alignment cut median
-  install time from 4.62 s to 3.03 s and `node_modules` from 781 MiB to 562 MiB.
-  Review these two updates together when either package changes its Cloudflare
-  toolchain dependencies.
+- Wrangler 4.127.1 is the exact root pin shared by all Worker projects, and
+  since 2026-09-02 it is also cal's test harness: `cal/test` runs on bun:test
+  against `createTestHarness`, so the tree carries exactly one Wrangler, one
+  Miniflare and one Workerd by construction. Until that day `cal` declared
+  @cloudflare/vitest-pool-workers to reach the same stack, and keeping its
+  floor aligned with the root pin was measured on 2026-08-15 (five warm-store
+  clean installs) to cut median install time from 4.62 s to 3.03 s and
+  `node_modules` from 781 MiB to 562 MiB. The alignment is structural now
+  rather than maintained.
 - Oxc Minify 0.148.0 and Lightning CSS 1.33.0 are exact root pins for the
   deploy-time JavaScript and CSS minifiers. Their platform-specific optional
   packages run only in the build environment; they add no browser or Worker
@@ -285,11 +287,12 @@ declaration, and a declared minimum nothing enforces is an error.
   owns the tolerated-warning family and re-proves the pass-through on every call.
   The staged tree is byte-identical across all 1476 files.
 
-  Two esbuild copies REMAIN in the tree and neither is ours to remove. Wrangler
-  hard-depends on 0.28.1 for Cloudflare's Worker bundler. Vite 8 keeps 0.28.2 as
-  an OPTIONAL peer through `cal`'s vitest chain, so `bun why esbuild` still
-  reports it; dropping the root pin removed the root's path to it without
-  shrinking the store. Do not read the removal as a disk saving.
+  ONE esbuild copy remains in the tree and it is not ours to remove: Wrangler
+  hard-depends on it for Cloudflare's Worker bundler. A second, Vite 8's
+  optional peer through `cal`'s vitest chain, left with vitest on 2026-09-02,
+  and `bun why esbuild` reports one position now. Dropping the root pin had
+  removed the root's path to it without shrinking the store; do not read that
+  removal as the disk saving, the vitest removal is.
 - minify-html 0.18.1 is the exact root pin for the deploy-time HTML pass over
   `index.html` and the worker shells.
 - TypeScript 7.0.2 and @cloudflare/workers-types are exact root pins for
@@ -519,11 +522,13 @@ the reason, rather than written here with the caret quietly dropped.
   a quality or scan-search change as a reason to re-measure rather than to
   trust the version number.
 
-- **`cal/`** carries `vitest` and `@cloudflare/vitest-pool-workers`, both
-  caret-ranged. This is the chain that pulls Vite 8, and therefore Rolldown and
-  the second esbuild copy the baseline section describes. It runs the booking
-  and calendar policy tests inside workerd, so a pool-workers bump should be
-  read against the miniflare version it carries.
+- **`cal/`** declares no package dependencies, since 2026-09-02. Its suite
+  runs on bun:test against the root's wrangler (`createTestHarness`, see
+  `cal/test/harness.ts`) with the root's types, so it cannot carry a second
+  Cloudflare toolchain. Until that day it carried `vitest` and
+  `@cloudflare/vitest-pool-workers`, the chain that pulled Vite 8, Rolldown,
+  postcss, the `nanoid` override and a second esbuild: 68 lockfile entries for
+  one runner, and one Dependabot lane that could split the miniflare stack.
 
 - **`cf-garage/`** declares no package dependencies. Its one browser operation
   calls the native Browser Run `quickAction("screenshot", ...)` binding directly;
@@ -582,9 +587,13 @@ that disagrees with the codebase, and the disables become the noise.
 `no-module-mocking`, which rejects `vi.mock` in favour of real dependency
 seams. Core Oxlint already ships `vitest/no-restricted-vi-methods`, so it is
 three lines in `.oxlintrc.json` with nothing vendored and no new dependency.
-`cal/` is the only Vitest project here and its 7 test files use real seams
-today, so it arms a tripwire rather than starting a cleanup, on the surface
-where a wrong assertion means a real person got double-booked.
+`cal/` was the only Vitest project here (it runs on bun:test since 2026-09-02)
+and its 7 test files use real seams, so it arms a tripwire rather than starting
+a cleanup, on the surface where a wrong assertion means a real person got
+double-booked. Note what the rule cannot see: bun's spelling is `mock.module`,
+which it does not match, so on the bun suite the guard is review plus the one
+`mock.module` in the tree being `cal/test/preload.ts`, a virtual module for the
+`cloudflare:workers` scheme rather than a seam being faked.
 
 Adding it surfaced a trap worth more than the rule. **Naming any plugin in
 `plugins` REPLACES the default set rather than appending to it**, silently: with

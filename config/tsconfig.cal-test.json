@@ -1,19 +1,27 @@
 {
-  // tsconfig.cal-test.json — the booking module's Vitest suite.
+  // tsconfig.cal-test.json — the booking module's bun:test suite.
   //
-  // WORKERS GLOBALS, and that is a fact about how these tests RUN rather than a
-  // copy of the neighbouring config. @cloudflare/vitest-pool-workers executes
-  // the suite inside workerd, so `env`, the KV binding and WebCrypto here are
-  // Cloudflare's, exactly as in cal/src. That is also why this program needs no
-  // diagnostic filtering: it pulls cal/src in transitively and checks it against
-  // the same globals tsconfig.json already checks it against, so a diagnostic in
-  // either tree is a finding rather than a missing global. The two node-runtime
-  // suites next door are the opposite case and get check-test-types.mjs instead.
+  // BUN GLOBALS, since 2026-09-02, and that is a fact about how these tests
+  // RUN. The suite executes on the host: route handlers, the booking store and
+  // the email builders are imported straight from cal/src into bun's process,
+  // and only the bindings live in the workerd that wrangler's createTestHarness
+  // boots (cal/test/harness.ts). So `fetch`, `Response` and `crypto` here are
+  // bun's, `env.BOOKINGS` is a proxy, and the program declares bun's globals,
+  // the same entry tsconfig.cf-garage-test.json and tsconfig.tools.json use.
   //
-  // It is a SEPARATE program from tsconfig.json rather than a wider include
-  // there, for one reason: `types` is per-program, and reaching `cloudflare:test`
-  // means dragging the pool's ambient declaration into the Worker's program too.
-  // The Worker does not have a test pool and should not be able to import one.
+  // The consequence is the one those two headers already describe: importing
+  // the Worker pulls cal/src in against the wrong scope, so a Workers-only
+  // shape reads as a diagnostic here and is clean in tsconfig.json next door.
+  // That is a missing declaration rather than a finding, which is why this
+  // program is NOT run bare. `bun run typecheck:tests` filters to cal/test/ and
+  // asserts the program holds every test file on disk, the floor that keeps
+  // the filter from quietly scanning nothing.
+  //
+  // Until 2026-09-02 this was a Workers-globals program run as a plain `tsc -p`
+  // from the `typecheck` script, because @cloudflare/vitest-pool-workers ran
+  // the suite inside workerd and the globals matched. That era is why its
+  // header used to argue against a wrapper; the runtime moved and the argument
+  // moved with it.
   //
   // The suite was in no program at all until 2026-08-23. It found 8 real
   // diagnostics on its first run, all one cause: booking fixtures built as
@@ -33,7 +41,11 @@
     // and never reaches a finding.
     "allowImportingTsExtensions": true,
     "lib": ["esnext"],
-    "types": ["@cloudflare/workers-types"],
+    // bun-types carries node's globals, which is what these tests run on.
+    // harness.ts reaches KVNamespace and Workflow through a type-only import
+    // from @cloudflare/workers-types rather than through `types`, so the Worker
+    // globals stay out of a program whose files never see them.
+    "types": ["bun"],
     "resolveJsonModule": true,
     "skipLibCheck": true,
     // Two control-flow checks, set here because they are set in tsconfig.json
@@ -49,8 +61,8 @@
     "strictNullChecks": true,
     "strict": false
   },
-  // vitest.config.js is here deliberately. It is the file that decides which
-  // runtime the suite gets, so a program covering the suite and skipping its
-  // configuration covers the tests and not the thing that makes them tests.
-  "include": ["../cal/test/**/*.js", "../cal/test/**/*.d.ts", "../cal/vitest.config.js"]
+  // harness.ts and preload.ts are here deliberately. They decide which runtime
+  // the suite gets and what it can import, so a program covering the tests and
+  // skipping them covers the tests and not the thing that makes them tests.
+  "include": ["../cal/test/**/*.js", "../cal/test/**/*.ts"]
 }

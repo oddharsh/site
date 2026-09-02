@@ -3,21 +3,23 @@
 // DELIBERATELY a near-duplicate of src/worker/lib/trace.ts, and not a
 // shared import. The dependency direction in this repo runs www -> cal:
 // _worker.js/index.js imports cal/src/index.ts to serve /coffee, and
-// cal/wrangler.test.toml boots the Vitest pool from cal/src/index.ts alone. An
+// cal/test boots cal/src/index.ts alone (through wrangler's harness). An
 // import pointing back at public/ would make cal untestable without the site
 // tree around it, which is the one property cal/ is organized to keep. Twenty
 // lines of duplication is the cheaper side of that trade — please don't
 // "consolidate" these two files.
 //
 // Same injection design as the www copy, for the same reason: no
-// `cloudflare:workers` import here, because contract-tests.mjs pulls
+// `cloudflare:workers` import here, because the root contract suite pulls
 // cal/src/slots.ts (and through it availability.js, and through that this file)
-// into PLAIN NODE, whose ESM loader rejects the `cloudflare:` scheme at link
-// time. src/worker/index.ts installs the real tracer at init.
+// into a HOST runtime, whose loader rejects the `cloudflare:` scheme, and since
+// 2026-09-02 cal's own suite imports the whole module the same way (workflow.ts
+// gets a shim in cal/test/preload.ts; this file needs none). src/worker/index.ts
+// installs the real tracer at init.
 //
-// Under cal's own Vitest pool nothing installs it, so cal's spans are inert in
-// its unit tests. That is correct: those tests assert booking policy, not
-// telemetry, and fetchBusySWR is legitimately called with a null ctx there.
+// Under cal's own suite nothing installs it, so cal's spans are inert there.
+// That is correct: those tests assert booking policy, not telemetry, and
+// fetchBusySWR is legitimately called with a null ctx there.
 
 // The injected tracer, or null under plain node. Typed by the ONE method this
 // module calls rather than by importing Cloudflare's shape: `cloudflare:workers`

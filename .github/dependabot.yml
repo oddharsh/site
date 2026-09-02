@@ -131,9 +131,12 @@ updates:
           - "oxlint-tsgolint"
       # One resolved Cloudflare stack, verified by the lockfile carrying
       # exactly one miniflare, one workerd and one undici. `cal`'s
-      # vitest-pool-workers pulls its own wrangler/miniflare/workerd, so
-      # bumping it apart from wrangler is what splits that stack in two and
-      # silently re-hoists the undici 7.28.0 pin the floors exist to keep out.
+      # vitest-pool-workers used to pull its own wrangler/miniflare/workerd, so
+      # bumping it apart from wrangler split that stack in two and silently
+      # re-hoisted the undici 7.28.0 pin the floors exist to keep out. It left
+      # the tree on 2026-09-02 (cal tests on bun over wrangler's own harness);
+      # the group stays, because the next @cloudflare/* package carrying its
+      # own wrangler re-creates the same split.
       cloudflare-toolchain:
         patterns:
           - "wrangler"

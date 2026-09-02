@@ -122,12 +122,16 @@
     // TypeScript AST nodes and nothing here is TypeScript. Nothing was vendored,
     // because core Oxlint already ships this one.
     //
-    // `cal/` is the only Vitest project in the tree and its 7 test files
-    // use real seams today, so this is a tripwire on zero existing sites rather
-    // than a cleanup. It is worth setting because a module mock is the cheapest
-    // wrong turn available to anyone extending those tests: it would pass while
-    // asserting against a fake booking store, on the surface where a bug means
-    // a real person double-booked. The 12 remaining anti-slop rules are not
+    // `cal/` was the only Vitest project in the tree; it runs on bun:test since
+    // 2026-09-02 and its 7 test files use real seams, so this is a tripwire on
+    // zero existing sites rather than a cleanup. It is worth keeping because a
+    // module mock is the cheapest wrong turn available to anyone extending
+    // those tests: it would pass while asserting against a fake booking store,
+    // on the surface where a bug means a real person double-booked. Know its
+    // reach: bun spells the same mistake `mock.module`, which this rule does not
+    // match. The one `mock.module` in the tree is cal/test/preload.ts, a
+    // virtual module for the `cloudflare:workers` scheme, and its header argues
+    // why that is a runtime shim rather than a faked seam. The 12 remaining anti-slop rules are not
     // vendored; docs/DEPENDENCIES.md records the measurement that decided each one.
     // Rejects `...(cond ? { k } : {})`. The absent-rather-than-zero discipline
     // that idiom implements is RIGHT and is kept: a `score: 0` on a filter-only

@@ -1,18 +1,21 @@
 #!/usr/bin/env node
-// check-test-types.mjs — type-check the two node-runtime test suites and report
+// check-test-types.mjs — type-check the host-runtime test suites and report
 // only what those programs can legitimately judge.
 //
-// WHY THESE TWO NEED A WRAPPER AND cal/test DOES NOT. All three suites import
-// the Worker they exercise. cal/test runs INSIDE workerd through
-// @cloudflare/vitest-pool-workers, so its program declares Cloudflare's globals
-// and the modules it pulls in are checked against the runtime they actually
-// have; that one is a plain `tsc -p config/tsconfig.cal-test.json`. These two
-// run under `node --test`, so their programs declare node's globals and the
-// Worker source arrives against the wrong scope. Measured 2026-08-23 across
-// both: 10 diagnostics, of which 5 were that artifact (`cf` does not exist in
-// RequestInit, `RequestInitCfProperties` not found, `innerHTML` on Node), every
-// one of them clean in the program whose globals match. The other 5 were real
-// and are fixed.
+// WHY THESE NEED A WRAPPER. Every suite here imports the Worker it exercises,
+// and every one runs on a HOST runtime (bun or node), so its program declares
+// the host's globals and the Worker source arrives against the wrong scope.
+// Measured 2026-08-23 across the first two: 10 diagnostics, of which 5 were
+// that artifact (`cf` does not exist in RequestInit, `RequestInitCfProperties`
+// not found, `innerHTML` on Node), every one of them clean in the program whose
+// globals match. The other 5 were real and are fixed.
+//
+// cal/test was the exception until 2026-09-02, and its header used to say so:
+// it ran INSIDE workerd through @cloudflare/vitest-pool-workers, its program
+// declared Cloudflare's globals, and a plain `tsc -p` was enough. It runs on
+// bun against wrangler's createTestHarness now (cal/test/harness.ts), so it
+// joined this list on the day the runtime moved, with the same filter and the
+// same floor.
 //
 // This is the piece config/tsconfig.lwe-ask.json's header named as the
 // prerequisite for covering the tests at all. The filter itself lives in
@@ -41,13 +44,26 @@ const PROGRAMS = [
     name: "cf-garage",
     config: "config/tsconfig.cf-garage-test.json",
     dir: "cf-garage/test",
+    ext: ".test.mjs",
     // Resolves from the root install, so the root `typecheck` runs it.
+    root: true,
+  },
+  {
+    name: "cal",
+    config: "config/tsconfig.cal-test.json",
+    dir: "cal/test",
+    // `.js` rather than `.mjs`: cal's package.json is `"type": "module"`, so its
+    // tests never needed the extension, and the floor below is what the
+    // extension is for. Naming it per program keeps a suite from being
+    // silently skipped by a glob written for its neighbour.
+    ext: ".test.js",
     root: true,
   },
   {
     name: "lens-reader",
     config: "config/tsconfig.lens-reader-test.json",
     dir: "lens-reader/test",
+    ext: ".test.mjs",
     // readability and linkedom live in lens-reader/node_modules, deliberately
     // outside the workspace, so this one runs from lens-reader/package.json's
     // own `typecheck` after the install CI already does for its tests. Selected
@@ -75,7 +91,7 @@ for (const program of selected) {
 
   // The floor: program contents against directory contents, both sorted.
   const onDisk = readdirSync(join(REPO, program.dir))
-    .filter((f) => f.endsWith(".test.mjs")).map((f) => `${program.dir}/${f}`).sort();
+    .filter((f) => f.endsWith(program.ext)).map((f) => `${program.dir}/${f}`).sort();
   const held = [...ownedFiles].sort();
   const missing = onDisk.filter((f) => !held.includes(f));
   if (missing.length) {

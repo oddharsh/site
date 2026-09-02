@@ -1,5 +1,6 @@
 // Booking KV lifecycle (src/booking.js). Runs against a real (miniflare) KV
-// binding from wrangler.test.toml — the BOOKINGS namespace.
+// binding from wrangler.test.toml, the BOOKINGS namespace, reached through
+// wrangler's test harness (see harness.ts).
 //
 // The old pending/confirmed comma-indexes (and the cron-driven expireOld sweep)
 // are gone: bookings now hold slots via per-slot `held:<start>:<end>` keys, and
@@ -9,19 +10,24 @@
 //
 // env here is the worker env: it carries the [vars] from wrangler.test.toml
 // (PENDING_TTL_DAYS = "7") and the BOOKINGS binding.
-import { describe, it, expect, beforeEach } from "vitest";
-import { env } from "cloudflare:test";
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from "bun:test";
+import { bootCal } from "./harness.ts";
 import {
   createBooking, getBooking, setStatus,
   holdSlot, releaseSlot, listHeld,
 } from "../src/booking.js";
 
-// start each test with an empty pool — storage isn't reliably per-test in this
-// pool version, so clear every key so counts are exact.
-beforeEach(async () => {
-  const { keys } = await env.BOOKINGS.list();
-  await Promise.all(keys.map((k) => env.BOOKINGS.delete(k.name)));
+/** @type {Awaited<ReturnType<typeof bootCal>>} */
+let cal;
+/** @type {import("./harness.ts").CalEnv} */
+let env;
+beforeAll(async () => {
+  cal = await bootCal();
+  env = cal.env;
 });
+afterAll(() => cal.close());
+// start each test with an empty pool, so counts are exact.
+beforeEach(() => cal.clearBookings());
 
 // getBooking and setStatus both answer `Booking | null`, and every assertion
 // below reads through the result. A miss means the record was not written,

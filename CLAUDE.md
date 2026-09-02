@@ -1799,8 +1799,9 @@ author reports to you rather than one you find yourself.
 
 Sharing is correct here even though `lib/trace.ts` and `cal/src/trace.js` are
 near-duplicates ON PURPOSE (gotcha 16). The cal duplication exists because cal's
-Vitest pool boots from `cal/src/index.js` alone, so a cal → holding import would
-make cal untestable without the site tree. Serendipity has no such constraint
+suite boots from `cal/src` alone (bun:test over wrangler's harness, see
+`cal/test/harness.ts`), so a cal → holding import would make cal untestable
+without the site tree. Serendipity has no such constraint
 and already imports `lib/desktop.ts` and `lib/crawl.ts`; that direction is
 established. **Check which of those two situations you are in before copying
 either precedent.**
@@ -3007,8 +3008,8 @@ Custom-built scheduler at `aadhar.sh/coffee`. Replaces Cal.com. Inspired by
 The source remains in `cal/src/` so its booking, calendar, and email policies
 stay readable and testable; `build.ts` stages it beside the holding Worker
 entrypoint. Production secrets (`ICAL_URL`, `RESEND_API_KEY`, and
-`SIGNING_SECRET`) belong to the root Worker. `cal/wrangler.test.toml` is only a
-Vitest runtime fixture, never a deployment config.
+`SIGNING_SECRET`) belong to the root Worker. `cal/wrangler.test.toml` is only the
+fixture the suite's harness boots, never a deployment config.
 
 ### Architecture
 
@@ -3037,7 +3038,7 @@ Vitest runtime fixture, never a deployment config.
 
 ```
 cal/
-├── wrangler.test.toml  — test-only KV/vars config for Vitest (not deployed)
+├── wrangler.test.toml  — test-only KV/vars config the suite's harness boots (not deployed)
 ├── package.json
 └── src/
     ├── index.js        — router, request dispatch, KV state
@@ -3048,6 +3049,32 @@ cal/
     ├── templates.js    — XP-themed HTML for all pages (booking, success, confirmed, declined, error)
     └── uuid.js         — RFC4122 v4 helper
 ```
+
+### Tests
+
+`bun run --filter cal-aadhar-sh test`, from the root, or `bun test` inside
+`cal/`. It is `bun:test` over wrangler's `createTestHarness` since 2026-09-02,
+and the split is the whole design: the route handlers, the booking store and
+the email builders run in bun's own process, imported straight from `cal/src`,
+while the KV and Workflow bindings live in a workerd the harness boots from
+`wrangler.test.toml` and hands back as proxies. That is what lets a test stub
+`globalThis.fetch` and read what the worker would have sent to Resend, the
+shape the old in-isolate Vitest suite had, without a Vite chain to reach it.
+
+Two Worker globals are missing on a host and `cal/test/preload.ts` supplies
+both, with the cost stated at each: a virtual `cloudflare:workers` module (an
+empty `WorkflowEntrypoint`, since the real workflow runs inside the harness)
+and an always-miss `caches`, which means the booking page's 30s edge-cache HIT
+path is not exercised. Neither shim lives in `cal/src`, because the source is
+correct for the runtime it ships to.
+
+It replaced `vitest` + `@cloudflare/vitest-pool-workers`, which were 68 of the
+lockfile's 257 packages, the tree's second esbuild, and the one `overrides`
+entry (nanoid, reached only through vite -> postcss). The measurements that
+decided it are in `cal/test/harness.ts`'s header. `cal/` declares no
+dependencies at all now: the harness is the root's wrangler pin, so the tree
+carries exactly one miniflare and one workerd by construction rather than by a
+floor somebody keeps aligned.
 
 ### Required secrets (before deploy)
 
@@ -3670,8 +3697,8 @@ bun run deploy:direct
 
     Corollary: the two trace helpers are near-duplicates ON PURPOSE. Dependency
     direction is holding -> cal (`index.ts` imports `cal/src/index.js`), and cal's
-    Vitest pool boots from `cal/src/index.js` alone, so a cal -> holding import
-    would make cal untestable without the site tree. Do not consolidate them.
+    suite boots from `cal/src` alone, so a cal -> holding import would make cal
+    untestable without the site tree. Do not consolidate them.
 
 17. **`script-src` is per-document sha256 hashes, and the committed map is EMPTY
     on purpose.** `lib/csp-hashes.ts` ships `PAGE_SCRIPT_HASHES = {}` with a

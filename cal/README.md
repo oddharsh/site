@@ -28,16 +28,18 @@ Everything on the Cloudflare free tier at personal volume.
 
 ## development and configuration
 
-Install from the repository root and run the module's Workers-runtime suite:
+Install from the repository root and run the module's suite:
 
 ```sh
 bun install
 bun run --filter cal-aadhar-sh test
 ```
 
-`wrangler.test.toml` is a test-only fixture for the Vitest pool. Production
-bindings and vars live in the root `wrangler.jsonc`; tune them there if the
-booking policy changes. All times use IANA timezone names so DST is handled
+`wrangler.test.toml` is a test-only fixture: `bun test` boots it through
+wrangler's `createTestHarness` for the KV and Workflow bindings (see
+`test/harness.ts`) while the route code runs in bun itself. Production bindings
+and vars live in the root `wrangler.jsonc`; tune them there if the booking
+policy changes. All times use IANA timezone names so DST is handled
 automatically.
 
 ### production secrets
