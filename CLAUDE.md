@@ -26,7 +26,7 @@ decides which one a given file belongs in:
 | **`src/content/`** | authored PROSE and the registries beside it: the writing posts and their `posts.json`, the hand-written Markdown twins for the seven Worker-rendered pages (`md/`), and `index.md`, `README.md`, `auth.md`, `resume.md`. Also stages back into the served tree. |
 | **`src/worker/`** | **the site Worker.** It is a program with its own tests, not a document, so it sits beside `cal/` and `serendipity/` rather than inside the tree of things a browser can fetch. It was never served either way. It STAGES to `.build/src/worker/`, mirroring its source path, and that mirroring is load-bearing rather than tidy: cal and serendipity import the Worker across the project boundary and are bundled from `.build/`, so a relative specifier has to resolve in BOTH trees, which is only possible when the two have the same shape. |
 | **`src/client/`**, **`src/styles/`** | the client islands (`nav.js`, `tooltip.js`, `lens*.js`, `quiz.js`, …) and the stylesheets (`luna.css`, `lwe-base.css`, …). They stage back to the ROOT of the served tree, so their public URLs are still `/nav.js` and `/luna.css`. Source layout and URL layout are different questions, and only the first one moved. |
-| **`src/dict/`** | `a-dict/` and `p-dict/`, the previously shipped bytes of the shell and of each page. Build INPUT that is never served: a dictionary has to be bytes a browser already holds, which no build can derive from source. Being outside the served tree is why the build no longer stages 130 files for `.assetsignore` to exclude again. |
+| **`src/dict/`** | `a-dict/`, `p-dict/` and `f-dict/`: the previously shipped bytes of the shell, of each page, and of the site-page family dictionary. Build INPUT that is never served: a dictionary has to be bytes a browser already holds, which no build can derive from source. Being outside the served tree is why the build no longer stages 130 files for `.assetsignore` to exclude again. |
 | `cal/`, `serendipity/` | the two application modules the site Worker bundles and serves at `/coffee` and `/serendipity`. They sit outside the served tree because they are programs with their own tests, not documents. |
 | `cf-garage/`, `lwe-ask/`, `lens-reader/` | the three SEPARATELY deployed auxiliary Workers, each with its own config and its own deploy. Nothing here reaches production through the site Worker. `lwe-ask` and `lens-reader` carry a `wrangler.toml`; **`cf-garage` carries a `cloudflare.config.ts`** and is the repository's one trial of wrangler's experimental TypeScript config, so every wrangler command in that directory needs `--x-new-config` (gotcha 41). |
 | **`tools/`** | **every developer tool.** The build (`build.ts`), the test suite (`contract-*.test.mjs`, 49 files sharing `contract-shared.mjs`; it was ONE 8720-line file until 2026-08-20, and the split files stay at this depth rather than in `tools/test/` because 147 relative specifiers in them resolve from here), the route oracle, the perf budget, the `check-*` / `gen-*` family, plus `photos/` (the photo and asset pipeline) and `oxlint/` (the custom rules). Nothing in here ships. |
@@ -3457,18 +3457,33 @@ bun run deploy:direct
     `garage/compression`, and that is the better of the two to keep (moving the
     tails last to save drivers is 4,953 B worse).
 
-    **The dictionary is also the site's one `Priority` override.** Cloudflare
-    honours an origin `priority` response header on HTTP/3 (RFC 9218; the
-    enhanced scheduler is paid, and `h2_prioritization` is not on Free), and
-    `servePrecompressedShell` sends `u=7` on the `.dict` alone: it is fetched on
-    idle and useful only on the next navigation, so it should lose to every
-    document, style, script and tile on the connection. Scripts and styles keep
-    the client's signal on purpose, since Chrome already orders luna.css above
-    nav.js above the tiles and an override could only demote something the
-    parser is waiting on. Nothing on the wire reports whether the override took,
-    so this stands on the argument rather than on a measurement (2026-09-02).
+    **The family dictionary is COMMITTED as of 2026-09-02, at `src/dict/f-dict`,
+    and the build ships that copy until it drifts.** The URL is the hash of the
+    corpus bytes, and the corpus samples pages that carry every `/a/<name>.<hash8>`
+    shell reference, so any deploy that touched nav.js, luna.css, quiz.js or the
+    taskbar partial re-minted `/a/page-family.<hash8>.dict`. Three hashes were live
+    across three adjacent commits on the day this was measured. Every returning
+    Chromium visitor then re-fetched the 17 KB twin on their next page, and what it
+    bought them was 0.1 point: the previous deploy's dictionary took 13.7% off the
+    54 staged pages' plain brotli where the fresh one took 13.8%. At three deploys
+    a day, a tier that saves ~1.5 KB per page view was costing 17 KB per re-mint.
 
-    `bun run shell:roll` rolls both `a-dict` and `p-dict`; page snapshots are Brotli'd
+    Step 8 now reads the committed dictionary, computes both family tiers against
+    the FINAL page bytes, and ships the committed one whenever its total is within
+    10% of the fresh derivation's (`FAMILY_DRIFT` in `tools/lib/page-family.ts`).
+    Past that line it ships fresh and says so, and the next `dict:roll` commits
+    what shipped. The line is in the reader's units: 10% of a 457 KB family tier
+    over 55 pages is ~830 B per page, so a re-mint pays back only for a visitor who
+    reads about 20 pages before the next one. The roll leaves a within-drift
+    committed file alone, adopts what production serves when that is within drift,
+    and adopts the fresh corpus otherwise; `bun run family:roll` runs that half
+    alone. Emptying the directory forces a re-mint on the next build, which is the
+    documented override, and `dcz:check` reports when production and `f-dict`
+    disagree. The one-time re-mint the 2026-08-31 corpus tuning earned still
+    happens (production's dictionary was +12% behind it, past the line), and every
+    deploy after it keeps the URL.
+
+    `bun run shell:roll` rolls `a-dict`, `p-dict` and `f-dict`; page snapshots are Brotli'd
     in the repo, ignored by the asset upload, and decompressed only at build time.
     **BOTH halves can read the wire now, and `--live` is how the scheduled roll
     works.** `p-dict` has always fetched the LIVE pages, because an edge feature can

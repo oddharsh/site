@@ -53,6 +53,7 @@
     "check:fast": "bun run --parallel lint typecheck test",
     "shell:roll": "bun tools/roll-shell-dictionary.ts",
     "pages:roll": "bun tools/roll-shell-dictionary.ts --pages",
+    "family:roll": "bun tools/roll-shell-dictionary.ts --family",
     "dict:roll": "bun tools/roll-shell-dictionary.ts --live",
     "dcz:check": "bun tools/check-dictionary-support.ts",
     "kitesurf:check": "bun tools/check-kitesurf.ts",
