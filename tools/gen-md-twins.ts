@@ -14,13 +14,22 @@
 // WHAT IS AUTHORED BY HAND
 // A page that renders from the Worker keeps its prose in template literals
 // rather than in a file this script can read, so its twin is authored in
-// src/content/md/ instead. SEVEN are today: /around, /bot, /coffee, /lens,
-// /security, /terminal, /whoareyou. The set is not declared anywhere; buildTwins
-// looks for <path>.md per surface, so a page joins by someone dropping a file in
-// and nothing announces it. checkTwinFacts() below pins THREE of them (bot,
-// whoareyou, security) so those twins cannot quietly disagree with the page. The
-// other four are unpinned, which is a real gap rather than a decision: they are
-// pinnable the same way whenever someone writes the facts down.
+// src/content/md/ instead. EIGHT are today: /around, /bot, /coffee, /lens,
+// /security, /terminal, /whoareyou, /garage/dyno. The set is not declared
+// anywhere; buildTwins looks for <path>.md per surface, so a page joins by
+// someone dropping a file in and nothing announces it. checkTwinFacts() below
+// pins FOUR of them (bot, whoareyou, security, garage/dyno) so those twins
+// cannot quietly disagree with the page. The other four are unpinned, which is
+// a real gap rather than a decision: they are pinnable the same way whenever
+// someone writes the facts down.
+//
+// A hand twin is also what a Worker-rendered page in an INDEXED section owes,
+// because the section index lists it. /garage/dyno sat in that state from the
+// day it shipped: registered, agents-flagged, listed in /garage/llms.txt as
+// /garage/dyno.md, and 404 there, since renderSectionIndex linked every
+// registered surface as a twin and the skipped list never reached it. The index
+// now lists only twins the build holds (the rest under "HTML only"), a contract
+// test pins that join, and the twin exists so the list is empty in practice.
 //
 // Every exported function is PURE so build.ts can re-run this in-memory; only
 // main() touches the filesystem.
@@ -119,11 +128,24 @@ export function renderTwin({ surface, doc, lastmod, body, note }) {
  * A per-section llms.txt. Same grammar as the root index, one level down.
  * Links point at the .md twins rather than the HTML, because the twin is the
  * representation an agent asked for.
+ *
+ * `twins` is the set of twin paths this build actually holds, and a surface
+ * outside it is listed under its HTML URL rather than under a `.md` it does
+ * not have. It used to link every registered surface as `<path>.md` on the
+ * strength of being registered, so /garage/dyno, which is Worker-rendered off
+ * the perf-history branch and has no source any walk can read, was promised at
+ * /garage/dyno.md and answered 404 there. Nothing here could see it: the index
+ * is built from the registry, the twin from the tree, and no assertion joined
+ * the two. Found from outside, by a sweep that HEADs every URL an llms.txt
+ * advertises. With no set given the old behaviour stands, for a caller that
+ * has not built the twins yet.
  */
-export function renderSectionIndex(section, surfaces, { descriptions = {} } = {}) {
+export function renderSectionIndex(section, surfaces, { descriptions = {}, twins = null }: { descriptions?: Record<string, string>; twins?: Set<string> | null } = {}) {
   const own = surfaces.filter((s) => s.section === section);
   const head = own.find((s) => s.kind === "section") || own[0];
-  const pages = own.filter((s) => s !== head);
+  const hasTwin = (s) => twins === null || twins.has(twinPath(s.path));
+  const pages = own.filter((s) => s !== head && hasTwin(s));
+  const htmlOnly = own.filter((s) => s !== head && !hasTwin(s));
 
   const lines = [
     `# ${head?.title || section}`,
@@ -137,10 +159,17 @@ export function renderSectionIndex(section, surfaces, { descriptions = {} } = {}
     "",
   ].filter((l) => l !== null);
 
-  if (head) lines.push(`- [${head.title}](${ORIGIN}${twinPath(head.path)}): ${head.description}`);
+  if (head) lines.push(`- [${head.title}](${ORIGIN}${hasTwin(head) ? twinPath(head.path) : head.path}): ${head.description}`);
   for (const s of pages) {
     const d = descriptions[s.path] || s.description || "";
     lines.push(`- [${s.title}](${ORIGIN}${twinPath(s.path)})${d ? `: ${d}` : ""}`);
+  }
+  if (htmlOnly.length) {
+    lines.push("", "## HTML only", "", "These pages have no Markdown twin. Each URL answers HTML.", "");
+    for (const s of htmlOnly) {
+      const d = descriptions[s.path] || s.description || "";
+      lines.push(`- [${s.title}](${ORIGIN}${s.path})${d ? `: ${d}` : ""}`);
+    }
   }
   return lines.join("\n") + "\n";
 }
@@ -257,7 +286,7 @@ export function buildTwins(root = ".", opts: { generatedRoot?: string } = {}) {
   }
 
   for (const section of INDEXED_SECTIONS) {
-    files.set(`/${section}/llms.txt`, renderSectionIndex(section, manifest.surfaces, { descriptions }));
+    files.set(`/${section}/llms.txt`, renderSectionIndex(section, manifest.surfaces, { descriptions, twins: new Set(files.keys()) }));
   }
 
   return { files, skipped, generated };
@@ -336,6 +365,27 @@ export const TWIN_FACTS = [
         },
       },
       { label: "JWKS path", source: "src/worker/security.ts", string: "/.well-known/http-message-signatures-directory" },
+    ],
+  },
+  {
+    // A twin that DESCRIBES a chart is held to the module that draws it: the JSON
+    // door, the two series the twin names by key, the branch the rows live on,
+    // and the cache window it quotes as a number of hours.
+    twin: "src/content/md/garage-dyno.md",
+    facts: [
+      { label: "JSON endpoint", source: "src/worker/index.ts", string: "/garage/dyno.json" },
+      { label: "worker series key", source: "src/worker/dyno.ts", string: "worker_gzip" },
+      { label: "assets series key", source: "src/worker/dyno.ts", string: "assets_br" },
+      { label: "history branch", source: "src/worker/dyno.ts", string: "perf-history" },
+      {
+        label: "cache window",
+        source: "src/worker/dyno.ts",
+        derive: (src) => {
+          const hours = /KV_TTL\s*=\s*(\d+)\s*\*\s*3600/.exec(src)?.[1] ?? "";
+          const word = ({ 1: "one", 2: "two", 3: "three", 4: "four", 6: "six", 12: "twelve", 24: "twenty-four" } as Record<string, string>)[hours];
+          return word ? `${word} hours` : null;
+        },
+      },
     ],
   },
 ];
