@@ -230,7 +230,7 @@
   Link: </.well-known/oauth-protected-resource>; rel="service-desc"; type="application/json"; title="OAuth protected resource metadata"
   Link: </.well-known/oauth-authorization-server>; rel="service-desc"; type="application/json"; title="OAuth authorization server metadata"
   Link: </rn/tracks>; rel="service-desc"; type="application/json"; title="current rn playlist as JSON"
-  Link: </.well-known/http-message-signatures-directory>; rel="http-message-signatures-directory"; type="application/jwk-set+json"
+  Link: </.well-known/http-message-signatures-directory>; rel="http-message-signatures-directory"; type="application/http-message-signatures-directory+json"
   Link: </.well-known/security.txt>; rel="security-policy"; type="text/plain"
   Link: </.well-known/api-catalog>; rel="api-catalog"; type="application/linkset+json"
   Link: </.well-known/mcp/server-card.json>; rel="service-desc"; type="application/json"; title="Aadharsh site MCP server card"
@@ -260,10 +260,13 @@
 /writing/posts.json
   Cache-Control: public, max-age=300, stale-while-revalidate=86400, s-maxage=86400
 
-# JWKS at the well-known location for Web Bot Auth. content-type must be
-# explicit because the path has no extension.
+# The Web Bot Auth key directory. content-type must be explicit because the
+# path has no extension, and it is the directory draft's own media type rather
+# than jwk-set+json: draft-meunier-http-message-signatures-directory-03 names
+# application/http-message-signatures-directory+json (it was jwk-set+json here
+# until 2026-09-03). The body is still a JWK Set.
 /.well-known/http-message-signatures-directory
-  Content-Type: application/jwk-set+json
+  Content-Type: application/http-message-signatures-directory+json
   Cache-Control: public, max-age=2592000, s-maxage=2592000
 
 # NOTE: the five worker-first docs below (api-catalog, auth.md, both oauth

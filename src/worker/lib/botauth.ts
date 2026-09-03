@@ -90,6 +90,17 @@ export async function signedFetch(targetUrl, env, opts: BotRequestOptions = {}) 
   });
 }
 
+// RFC 7638: SHA-256 over the JSON of the REQUIRED members alone, in lexicographic
+// order, with no whitespace, base64url without padding. For an OKP key those are
+// crv, kty, x. Exported so the contract suite can pin it to RFC 8037's vector.
+export async function jwkThumbprint(jwk) {
+  const required = { OKP: ["crv", "kty", "x"], EC: ["crv", "kty", "x", "y"], RSA: ["e", "kty", "n"] }[jwk.kty];
+  if (!required) throw new Error(`jwkThumbprint: unsupported kty ${jwk.kty}`);
+  const canonical = "{" + required.map((k) => `${JSON.stringify(k)}:${JSON.stringify(jwk[k])}`).join(",") + "}";
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonical)));
+  return bytesToB64(digest).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
 function bytesToB64(bytes) {
   // structured-fields binary content: base64 with padding, wrapped in colons by the caller
   let bin = "";
@@ -120,7 +131,13 @@ export async function signRequestForWebBotAuth(targetUrl, env) {
   const created = Math.floor(Date.now() / 1000);
 
   const jwk = JSON.parse(env.RN_SIGNING_KEY_JWK);
-  const edParams = paramsFor(created, jwk.kid || "rn", "ed25519");
+  // keyid MUST be the key's RFC 7638 thumbprint (draft-meunier-web-bot-auth-
+  // architecture-04): a verifier fetches the directory, thumbprints each key,
+  // and looks the signature's keyid up by that value. It read `jwk.kid` here
+  // until 2026-09-03, which was the label "rn-2026-06-30", so the signature and
+  // the directory agreed with each other and with no verifier. Deriving it from
+  // the public members means the two cannot disagree again.
+  const edParams = paramsFor(created, await jwkThumbprint(jwk), "ed25519");
   // Ed25519 is native in workerd's WebCrypto, so this costs microseconds. The
   // retired sig2 was pure JS at ~8.5ms, which is the whole reason it is gone.
   const edKey = await crypto.subtle.importKey("jwk", jwk, { name: "Ed25519" }, false, ["sign"]);

@@ -69,7 +69,7 @@ export function renderBotPage() {
       and <code>Signature</code> headers per
       <a href="https://www.rfc-editor.org/rfc/rfc9421" target="_blank" rel="noopener">RFC 9421</a>
       with the Web Bot Auth profile (<code>tag="web-bot-auth"</code>). Fetch the JWKS
-      at the URL above, find the key with the matching <code>kid</code>, and verify the
+      at the URL above, find the key with the matching <code>kid</code> (its RFC 7638 thumbprint), and verify the
       Ed25519 signature over the canonical components listed in <code>Signature-Input</code>.
       If the verification fails, the request is not from this site.
     </p>

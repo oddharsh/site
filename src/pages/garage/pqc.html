@@ -119,7 +119,7 @@ Certificate:             ecdsa-with-SHA256, P-256</code></pre>
 <p>Here is the part that made this cheap. The <a href="https://www.iana.org/assignments/http-message-signature/http-message-signature.xhtml" target="_blank" rel="noopener">IANA HTTP Signature Algorithms registry</a> has exactly six entries, and every one of them is classical. Cloudflare's Web Bot Auth verifier accepts Ed25519 only and ignores other key types in your directory. An ML-DSA-only signature would be a header nobody on the internet checks.</p>
 <p>But <code>Signature-Input</code> and <code>Signature</code> are structured-fields <em>Dictionaries</em>. A second label appends rather than replaces, so both signatures ride the same request over the same covered components:</p>
 <pre><code>Signature-Input: sig1=("@authority" "signature-agent");created=1785186311;
-                   keyid="rn-2026-06-30";alg="ed25519";tag="web-bot-auth",
+                   keyid="091z_BcIsuIgfzzKCKOie6JcSkz7UhVlbiakxjV5E8o";alg="ed25519";tag="web-bot-auth",
                  sig2=("@authority" "signature-agent");created=1785186311;
                    keyid="rn-mldsa-2026-07-27";alg="ml-dsa-44";tag="web-bot-auth"</code></pre>
 <p>A verifier that only knows Ed25519 reads <code>sig1</code> and skips the label it does not recognise. Nothing breaks, and the cost of ignoring <code>sig2</code> is zero. That property is what makes it defensible to ship an algorithm the registry has not blessed. The token <code>ml-dsa-44</code> is this site's spelling, chosen to match the registry's existing convention so it slots in if a real registration lands, and <a href="/bot">/bot</a> says plainly that you should verify <code>sig1</code> and ignore <code>sig2</code>.</p>

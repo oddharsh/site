@@ -6,6 +6,7 @@ import {
   labels,
   test,
 } from "./contract-shared.ts";
+import { jwkThumbprint } from "../src/worker/lib/botauth.ts";
 
 // ── Web Bot Auth: the post-quantum second label, retired ─────────────
 // sig2 shipped 2026-07-27 and came out 2026-08-15 because ~8.5ms of pure-JS
@@ -41,12 +42,18 @@ test("a configured ML-DSA key is ignored: sig2 stays retired", async () => {
 });
 
 test("the ed25519 signature is unchanged by the removal", async () => {
-  const headers = await botHeaders("https://example.com/", await edEnv());
+  const env = await edEnv();
+  const headers = await botHeaders("https://example.com/", env);
   assert.deepEqual(labels(headers), ["sig1"]);
+  // keyid is the key's RFC 7638 thumbprint, derived at signing time since
+  // 2026-09-03; the fixture's `kid` label is deliberately NOT what appears.
+  // (contract-web-bot-auth-keyid-is-the-thumbprint pins the derivation itself.)
+  const keyid = await jwkThumbprint(JSON.parse(env.RN_SIGNING_KEY_JWK));
   assert.match(
     headers.get("signature-input"),
-    /sig1=\("@authority" "signature-agent"\);created=\d+;keyid="test-ed";alg="ed25519";tag="web-bot-auth"/
+    new RegExp(`sig1=\\("@authority" "signature-agent"\\);created=\\d+;keyid="${keyid}";alg="ed25519";tag="web-bot-auth"`)
   );
+  assert.doesNotMatch(headers.get("signature-input"), /keyid="test-ed"/, "the typed kid label must not reach the wire");
   // one label, so exactly one `created`
   assert.equal([...headers.get("signature-input").matchAll(/created=(\d+)/g)].length, 1);
 });
