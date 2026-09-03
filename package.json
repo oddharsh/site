@@ -84,7 +84,7 @@
     "oxlint-tsgolint": "7.0.2001",
     "playwright-core": "^1.62.1",
     "typescript": "7.0.2",
-    "wrangler": "4.127.1"
+    "wrangler": "4.128.0"
   },
   "comment:engines-node-floor": "TWO node floors exist and this field is the HIGHER one: the highest version any constraint in this repo demands. It is NOT the zstd dictionary floor, which is 24, lives beside the check that enforces it as ZSTD_DICTIONARY_NODE_FLOOR in tools/build.ts, and is measured there. Welding the two was right when zstd was the only constraint and went wrong silently the moment source used something newer. What set 26 is Map.prototype.getOrInsertComputed, used in src/worker/inbox.ts, around.ts and census.ts; probed 2026-08-31, it is undefined on node 24.20.0 and 25.4.0 and a function on 26.8.1. PRODUCTION IS UNAFFECTED, which is why nothing caught this: workerd has the method (probed through createTestHarness, and the call works) and /around and /inbox both answer 200. What broke was the repo's own suite under node 24, with 2 failures that read like defects. Note also that 26 EQUALS .node-version, so the floor is now the version CI exercises on every run rather than a claim about a version nothing tests. Raise this whenever a new constraint measures higher, and lower it only with a measurement.",
   "engines": {
