@@ -240,7 +240,7 @@ declaration, and a declared minimum nothing enforces is an error.
 
 ## Current baseline
 
-- Wrangler 4.127.1 is the exact root pin shared by all Worker projects, and
+- Wrangler 4.128.0 is the exact root pin shared by all Worker projects, and
   since 2026-09-02 it is also cal's test harness: `cal/test` runs on bun:test
   against `createTestHarness`, so the tree carries exactly one Wrangler, one
   Miniflare and one Workerd by construction. Until that day `cal` declared
