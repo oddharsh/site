@@ -354,7 +354,7 @@ declaration, and a declared minimum nothing enforces is an error.
   programs are not decoration: three go through a wrapper because they hold
   files from two runtimes at once, and `bun run typecheck:coverage` asserts
   every file this repo owns belongs to one of them.
-- @types/bun 1.4.0 is the exact root pin for the SECOND type program,
+- @types/bun 1.4.1 is the exact root pin for the SECOND type program,
   `config/tsconfig.tools.json`, which checks `tools/`. It carries the node globals
   as well, so it is one entry rather than two, and it declares the bun-only
   globals the tools now use directly (HTMLRewriter among them). Types only: no
