@@ -25,7 +25,7 @@ Cloudflare KV for at least an hour so it does not re-hit the same URL repeatedly
 Every request carries `Signature-Agent`, `Signature-Input`, and `Signature`
 headers per [RFC 9421](https://www.rfc-editor.org/rfc/rfc9421) with the Web Bot
 Auth profile (`tag="web-bot-auth"`). Fetch the JWKS at the URL above, find the
-key whose `kid` matches, and verify the Ed25519 signature over the canonical
+key whose `kid` matches (the kid is the key's RFC 7638 thumbprint), and verify the Ed25519 signature over the canonical
 components listed in `Signature-Input`. If verification fails, the request did
 not come from this site.
 
