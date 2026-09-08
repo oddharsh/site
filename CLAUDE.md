@@ -5399,6 +5399,44 @@ bun run deploy:direct
     about. Reach for it for a throwaway thumbnail, a placeholder, or a clipboard
     image, never for a served tier.
 
+    **THE PLUMBING SHRANK UNDER THAT PARAGRAPH, so the six spawns are four and
+    only two of them are decodes.** `zenc square` absorbed decode, orient, crop
+    and resize on 2026-08-26, and what `add-photos.sh` still spends `sips` on is
+    a color-space read (line 345), the AVIF fallback for a missing `avifenc`
+    (393), and the two HEIF/HIF decodes this question is actually about: the
+    full-resolution 16-bit TIFF (438) and the lossless PNG the archive path
+    hands to zenc (529). So the door this entry leaves open is one decode rather
+    than four operations.
+
+    **Bun 1.4.1 made it able to walk through that door, and 8 bits is what still
+    stops it.** Its release note reads "Bun.Image HEIC support (10-bit,
+    undecodable files)", which is real: measured 2026-09-08 on `XT500010.HIF`
+    (7728x5152), a library file rather than a fixture, with the previous release
+    as the control.
+
+    | bun | the same .HIF |
+    |---|---|
+    | 1.4.0 | `Image: decode failed` |
+    | 1.4.2 | decodes, `format: heic` |
+
+    | | depth | color | size | decode+encode |
+    |---|---|---|--:|--:|
+    | `sips -s format png` | **16-bit** | RGB | 160.0 MB | 5,647 ms |
+    | `Bun.Image` 1.4.2 | 8-bit | RGBA | 66.8 MB | 4,650 ms |
+
+    Eight bits halves the sensor's tonal precision BEFORE zenc's linear-light
+    resample runs, which is the generational-loss trade the thumbnail work
+    already settled, and the speed is a wash so there is nothing to weigh
+    against it. **Depth is now the ONLY thing between `Bun.Image` and this job**,
+    which changes what to watch for: the release note that matters is a
+    bit-depth option or 16-bit output, rather than another encoder-quality pass.
+
+    One API shape worth having before re-running any of this. `img.png()` is a
+    chainable format SETTER that returns an `Image`, so `Bun.write(path,
+    img.png())` writes the 13-byte string `[object Blob]` and reports success.
+    The terminal call is `await img.png().bytes()`, and a probe that skips it
+    measures a 14-byte file.
+
     The general rule, which outlives this API: **compare encoders on BYTES at
     matched output, because a quality number means something different in each.**
     `q84` meant 21 KB in one and 36 KB in the other on the same input, and
