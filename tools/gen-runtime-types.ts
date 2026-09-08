@@ -57,6 +57,11 @@
 // what the key does NOT cover, on purpose: a config edit that leaves the file
 // byte-identical cannot change the output, and a workerd that moved without
 // wrangler moving cannot happen under an exact pin.
+//
+// On Wrangler 4.129.0, `types --include-env=false` also resolves the entrypoint
+// and runs its custom build. The temporary runtime-only configs below removed
+// that extra build: 6.15s -> 3.03s in a 2026-09-08 workstation comparison,
+// with byte-identical declarations and no writes to the staged site.
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -65,6 +70,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { wranglerCommand } from "./lib/wrangler-bin.ts";
+import { parseJsonc } from "./lib/jsonc.ts";
 
 const REPO = dirname(dirname(fileURLToPath(import.meta.url)));
 export const OUT = join(REPO, "config", ".generated", "workers-runtime.d.ts");
@@ -93,7 +99,20 @@ if (!process.argv.includes("--force") && existsSync(OUT) && readFileSync(OUT, "u
 }
 
 function generate(config: string, out: string) {
-  execFileSync(...wranglerCommand(["types", "-c", config, "--include-env=false", out]), {
+  // Runtime declarations depend only on these two fields (Wrangler's
+  // generateRuntimeTypes), but `types` still resolves `main` and runs its custom
+  // build with --include-env=false. Projecting the runtime inputs avoids a full
+  // site build and makes cold lint/typecheck safe alongside the contract suite.
+  // The projection is disposable; the original configs still own every value
+  // and the cache key above covers their complete bytes.
+  const source = readFileSync(join(REPO, config), "utf8");
+  const parsed = config.endsWith(".toml") ? Bun.TOML.parse(source) : parseJsonc(source);
+  const runtimeConfig = out.replace(/\.d\.ts$/, ".json");
+  writeFileSync(runtimeConfig, JSON.stringify({
+    compatibility_date: parsed.compatibility_date,
+    compatibility_flags: parsed.compatibility_flags ?? [],
+  }));
+  execFileSync(...wranglerCommand(["types", "-c", runtimeConfig, "--include-env=false", out]), {
     cwd: REPO, stdio: ["ignore", "ignore", "inherit"],
   });
   const text = readFileSync(out, "utf8");

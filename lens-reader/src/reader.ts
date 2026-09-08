@@ -54,8 +54,10 @@ export const READER_NOTE =
 
 // ── the read ────────────────────────────────────────────────────────────────
 
-export async function read(targetUrl) {
-  const t0 = Date.now();
+// The network deadline covers headers AND the capped body. Clearing it after
+// fetch() resolves leaves a server that sends headers and stalls holding the
+// Reader request indefinitely.
+async function fetchSource(targetUrl) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   let response;
@@ -69,7 +71,16 @@ export async function read(targetUrl) {
       redirect: "follow",
       signal: controller.signal,
     });
+    const finalUrl = response.url || targetUrl;
+    const landed = validateLensTarget(finalUrl);
+    if (!landed.ok || privateHostBlocked(new URL(finalUrl).hostname)) {
+      await response.body?.cancel();
+      throw new ReaderError("That URL redirected somewhere this reader will not follow.");
+    }
+    const html = await readCapped(response, BODY_CAP);
+    return { response, html, finalUrl };
   } catch (error) {
+    if (error instanceof ReaderError) throw error;
     // The two failures a visitor can actually cause, named rather than leaked.
     if (error && error.name === "AbortError") {
       throw new ReaderError(`That page did not respond within ${FETCH_TIMEOUT_MS / 1000}s.`);
@@ -78,18 +89,12 @@ export async function read(targetUrl) {
   } finally {
     clearTimeout(timer);
   }
+}
 
-  const finalUrl = response.url || targetUrl;
-  // A redirect can land somewhere the first check passed but the second would
-  // not. `fetch` followed it for us, so re-check where we ACTUALLY are before
-  // reading a byte of the body.
-  const landed = validateLensTarget(finalUrl);
-  if (!landed.ok || privateHostBlocked(new URL(finalUrl).hostname)) {
-    throw new ReaderError("That URL redirected somewhere this reader will not follow.");
-  }
-
+export async function read(targetUrl) {
+  const t0 = Date.now();
+  const { response, html, finalUrl } = await fetchSource(targetUrl);
   const contentType = response.headers.get("content-type") || "";
-  const html = await readCapped(response, BODY_CAP);
   const fetchMs = Date.now() - t0;
 
   if (!/html|xml/i.test(contentType)) {
