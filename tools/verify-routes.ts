@@ -100,6 +100,10 @@ const ROUTES = [
   // An explicit refusal is still a refusal, and order never overrides a q-value.
   { path: "/garage/horizon", status: 200, ct: "text/html",
     headers: { accept: "text/html, text/markdown;q=0" } },
+  { path: "/garage/horizon", status: 200, ct: "text/html",
+    headers: { accept: "text/markdown;q=0, */*;q=1" } },
+  { path: "/garage/horizon", status: 200, ct: "text/html",
+    headers: { accept: "text/markdown;q=0.2, text/html;q=0.8, */*;q=1" } },
   { path: "/index.html", status: 301 },
   { path: "/favicon.ico", status: 200, ct: "image/svg+xml" },
   // ?peek=1 so the oracle never advances the visitor count
