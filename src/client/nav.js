@@ -45,13 +45,6 @@
   // Run destinations and profiles live in /nav-run.js, transferred only when
   // someone opens the palette. Section artwork lives only in shell-data.mjs;
   // the compiler already projected it into each taskbar pin's sprite image.
-  // PHOTOS is written by loadPhotos() and never read: photosPromise above is
-  // the real memo, so this is a second cache nobody consults. Left in place
-  // deliberately, because nav.js is content-hashed into /a/, so deleting one dead line
-  // re-mints the asset and every page and page-dictionary that names it. It
-  // goes on the next change to this file that is worth a new URL.
-  // oxlint-disable-next-line no-unused-vars
-  var PHOTOS = /** @type {any[] | null} */ (null);          // lazy: [{ label, path, hint, kind:'photo' }]
   var WRITING = /** @type {any[] | null} */ (null);         // lazy: [{ label, path, hint, kind:'writing' }]
   var photosPromise = /** @type {Promise<any> | null} */ (null), writingPromise = /** @type {Promise<any> | null} */ (null);
 
@@ -75,7 +68,6 @@
           thumb: p.thumb_small || p.thumb_avif || ""
         });
       });
-      PHOTOS = photos;
       return photos;
     });
     return photosPromise;
