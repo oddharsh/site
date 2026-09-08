@@ -39,6 +39,42 @@
 // !== false`, so an ABSENT block collects package dependencies exactly like an
 // explicit `true` does. Verified by reading wrangler's own upload path rather
 // than by dry-run, since a dry run never reports it.
+// THE `cf` CLI WAS TRIALLED HERE ON 2026-09-08 AND CANNOT TAKE THIS WORKER YET,
+// for two independent reasons that are both structural rather than polish. It is
+// Cloudflare's own (workers-sdk maintainers, MIT, depends on the same Miniflare 5
+// wrangler already pulls), and their blog calls it a technical preview and
+// explicitly not production-ready. This directory is where it WOULD land first,
+// on the same argument that put the experimental config here: cheapest place to
+// be wrong, and already on `cf`'s native config format.
+//
+// 1. `cf build` REFUSES a project whose own manifest declares no dev server:
+//    "A project must declare exactly one of the following in its manifest",
+//    listing @cloudflare/vite-plugin, wrangler, and the Python and Rust servers.
+//    It checks `cf-garage/package.json` alone and does not walk up to the
+//    workspace root. Declaring wrangler here is precisely what
+//    `tools/check-wrangler.ts` fails on ("package.json must not declare
+//    Wrangler; use the root pin"), so satisfying `cf` breaks a required check.
+//
+// 2. `cf deploy --dry-run` REQUIRES a credential, and wrangler's does not.
+//    Measured the same day with no token in the environment: `cf deploy
+//    --prebuilt --dry-run` stops at "No authentication token found", while
+//    `wrangler deploy --dry-run --x-new-config` prints all four bindings and
+//    exits 0. CI dry-runs this config with no Cloudflare credential at all, by
+//    the no-write-token rule, so `cf` cannot stand in for that step.
+//
+// THE SEAM THAT DOES WORK, and it is the interesting half. `wrangler build
+// --x-cf-build-output --x-new-config` writes the Build Output API tree that
+// `cf deploy --prebuilt` is designed to consume:
+//
+//     .cloudflare/output/v0/workers/default/{config.json,bundle/index.js}
+//
+// That config.json carries the name, compatibility date and flags, the fetch
+// trigger, all four bindings and the declarative `Counter` DO export. So the
+// handoff exists today and only the credential rule stands between it and a
+// working `cf` deploy from a built tree. Re-try when `cf` either reads a
+// workspace root for its dev server or stops asking for auth on a dry run;
+// re-trying on a version bump alone measures nothing.
+
 import { bindings, defineSettings, defineWorker, exports, triggers } from "wrangler/experimental-config";
 
 // `accountId` lives on a SEPARATE `settings` export rather than on the worker,
