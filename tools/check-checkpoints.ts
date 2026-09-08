@@ -81,7 +81,7 @@ const pending = committed.filter((r) => !l.has(r.vnum) && r.vnum > liveMax)
   .sort((a, b) => a.vnum - b.vnum);
 const pendingVnums = new Set(pending.map((r) => r.vnum));
 
-const diffs = [];
+const diffs: string[] = [];
 for (const [vnum, row] of l) {
   const mine = c.get(vnum);
   if (!mine) { diffs.push(`v${vnum} present in D1, absent from the projection`); continue; }

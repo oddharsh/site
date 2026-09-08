@@ -26,7 +26,7 @@ decides which one a given file belongs in:
 | **`src/content/`** | authored PROSE and the registries beside it: the writing posts and their `posts.json`, the hand-written Markdown twins for the seven Worker-rendered pages (`md/`), and `index.md`, `README.md`, `auth.md`, `resume.md`. Also stages back into the served tree. |
 | **`src/worker/`** | **the site Worker.** It is a program with its own tests, not a document, so it sits beside `cal/` and `serendipity/` rather than inside the tree of things a browser can fetch. It was never served either way. It STAGES to `.build/src/worker/`, mirroring its source path, and that mirroring is load-bearing rather than tidy: cal and serendipity import the Worker across the project boundary and are bundled from `.build/`, so a relative specifier has to resolve in BOTH trees, which is only possible when the two have the same shape. |
 | **`src/client/`**, **`src/styles/`** | the client islands (`nav.js`, `tooltip.js`, `lens*.js`, `quiz.js`, …) and the stylesheets (`luna.css`, `lwe-base.css`, …). They stage back to the ROOT of the served tree, so their public URLs are still `/nav.js` and `/luna.css`. Source layout and URL layout are different questions, and only the first one moved. |
-| **`src/dict/`** | `a-dict/` and `p-dict/`, the previously shipped bytes of the shell and of each page. Build INPUT that is never served: a dictionary has to be bytes a browser already holds, which no build can derive from source. Being outside the served tree is why the build no longer stages 130 files for `.assetsignore` to exclude again. |
+| **`src/dict/`** | `a-dict/`, `p-dict/` and `f-dict/`: the previously shipped bytes of the shell, of each page, and of the site-page family dictionary. Build INPUT that is never served: a dictionary has to be bytes a browser already holds, which no build can derive from source. Being outside the served tree is why the build no longer stages 130 files for `.assetsignore` to exclude again. |
 | `cal/`, `serendipity/` | the two application modules the site Worker bundles and serves at `/coffee` and `/serendipity`. They sit outside the served tree because they are programs with their own tests, not documents. |
 | `cf-garage/`, `lwe-ask/`, `lens-reader/` | the three SEPARATELY deployed auxiliary Workers, each with its own config and its own deploy. Nothing here reaches production through the site Worker. `lwe-ask` and `lens-reader` carry a `wrangler.toml`; **`cf-garage` carries a `cloudflare.config.ts`** and is the repository's one trial of wrangler's experimental TypeScript config, so every wrangler command in that directory needs `--x-new-config` (gotcha 41). |
 | **`tools/`** | **every developer tool.** The build (`build.ts`), the test suite (`contract-*.test.mjs`, 49 files sharing `contract-shared.mjs`; it was ONE 8720-line file until 2026-08-20, and the split files stay at this depth rather than in `tools/test/` because 147 relative specifiers in them resolve from here), the route oracle, the perf budget, the `check-*` / `gen-*` family, plus `photos/` (the photo and asset pipeline) and `oxlint/` (the custom rules). Nothing in here ships. |
@@ -151,7 +151,12 @@ bun run derive:check
 bun run lint
 
 # type-check everything, in ~2s. TEN programs rather than one, because a program
-# is only as accurate as the globals it declares: the Worker gets Cloudflare's,
+# is only as accurate as the globals it declares: the Worker gets Cloudflare's
+# (GENERATED from the pinned workerd by tools/gen-runtime-types.ts into
+# config/.generated/, which is what replaced @cloudflare/workers-types on
+# 2026-09-02: 12 of 29 dependabot PRs in a month for a package describing a
+# runtime this repo did not run on; the file is cached on wrangler's version
+# plus the config bytes, so `bun run types:gen` costs 3s cold and 0.02s warm),
 # the client islands get the DOM's, sw.js gets webworker's, the three auxiliary
 # Workers get Cloudflare's apiece, and the test suites get whichever runtime they
 # actually run on. Each config/tsconfig.*.json header argues its own case.
@@ -855,6 +860,22 @@ worktrees may edit freely, but a worktree is not a release surface.
   half: the next POST route anyone adds is guarded on the day it is written.
   Reads all pass, which is the point of the surface. Do not enable previews with
   that guard removed.
+- **0-RTT is declared ON in `infra.json` (`zone.zero_rtt`), and the Worker's
+  early-data guard is what makes that safe.** A resumed TLS 1.3 or QUIC client
+  sends its first request inside the handshake, one round trip sooner, on the one
+  navigation bfcache and prerender cannot cover. Early data is replayable, so
+  Cloudflare forwards it with `Early-Data: 1` and never sends a POST that way.
+  `src/worker/lib/early-data.ts` answers 425 Too Early on the GET-shaped writes
+  (`preview.ts`'s list: `/hit`, the coffee and webmention decisions, the
+  activation beacon), which RFC 8470 says the client retries after the handshake
+  and never in early data. Every document and asset stays on the fast path.
+  **The toggle was already ON when the guard shipped** (Speed, Settings,
+  Protocol Optimization; confirmed by the owner 2026-09-02), so for as long as
+  the site ran without lib/early-data.ts, a replayed early-data GET could tick
+  the counter twice or re-fire a signed coffee decision. The guard closed that
+  rather than prepared for it, and a workstation `infra:check` now asserts the
+  setting stays on. Local curl (8.7.1, SecureTransport) cannot send early data;
+  verify from Chrome.
 - **No deploy path may create Cloudflare resources.** Wrangler's
   `--x-provision` and `--x-auto-create` are hidden flags that both default to
   TRUE, and they provision real KV/R2/D1 for any binding declared without an
@@ -1015,7 +1036,7 @@ Single-page personal site at `aadhar.sh`. A Cloudflare Worker with static assets
 | `src/client/sw.js` | RETIRED (v136, 2026-07-03): now a ~15-line unregister stub (skipWaiting, delete caches, claim, unregister) that must keep serving 200 for a year+ so installed copies clean themselves up. No CACHE_VERSION anymore; the deploy-log vnum is staged in `checkpoints.json` and recorded in D1 by the ramp (bump-version.sh mints the next from that projection). Repeat-visit speed comes from immutable assets + bfcache + speculation prerender. |
 | `public/llms.txt` | The llms.txt format — concise site summary for LLMs. Linked from `<link rel="alternate">`. |
 | `src/content/index.md` | Markdown source of homepage copy (used by `/llms.txt` and as a fallback). The one hand twin that SHIPS as an ordinary static asset rather than being `.assetsignore`d like `md/`: `gen-md-twins.ts` skips any surface whose twin path already exists under `src/content/`, so this prose is never regenerated over. It looked in `public/` until the prose moved, and the symptom of reading the old location was silent, since the hand-written twin was simply overwritten by a generated one 472 bytes shorter. |
-| `src/content/md/` | Hand-authored Markdown twins for the Worker-rendered prose pages, whose text lives in template literals no build step can read. SEVEN of them: `/around`, `/bot`, `/coffee`, `/lens`, `/security`, `/terminal`, `/whoareyou`. It was three when this row was written; `/terminal` joined in #227 and the other three in #354, and nothing here noticed either time, because the set is not a list anywhere in the code. `buildTwins` looks for `<path>.md` in this directory per SURFACE, so any page gets a hand twin by dropping a file in, and a hand twin OUTRANKS the generated tier. `.assetsignore`d (build input, not a public URL) and staged into the served tree: the generator publishes each at its page's own path, `/bot.md` and so on. `checkTwinFacts()` pins THREE of the seven (`bot`, `whoareyou`, `security`) against the Worker in BOTH directions, so bumping `BOT_VERSION` fails the deploy until `bot.md` agrees; the other four carry no pins and can drift from the page silently. `security.md`'s pins read `lib/security.ts` rather than the page, since a page ABOUT headers must agree with the module that SENDS them; one of them is derived from the header set `cspHeadersFor` actually emits, so reintroducing a report-only twin fails the deploy until `security.md` stops claiming `'unsafe-inline'` is gone. It read the `ENFORCE_PAGE_HASHES` flag until that flag was deleted on 2026-08-23; reading the emitted headers is the better check, since a flag states an intention and the headers state what ships. |
+| `src/content/md/` | Hand-authored Markdown twins for the Worker-rendered prose pages, whose text lives in template literals no build step can read. EIGHT of them: `/around`, `/bot`, `/coffee`, `/lens`, `/security`, `/terminal`, `/whoareyou`, `/garage/dyno`. It was three when this row was written; `/terminal` joined in #227, the next three in #354, and `/garage/dyno` on 2026-09-02, and nothing here noticed the first two times, because the set is not a list anywhere in the code. `buildTwins` looks for `<path>.md` in this directory per SURFACE, so any page gets a hand twin by dropping a file in, and a hand twin OUTRANKS the generated tier. `.assetsignore`d (build input, not a public URL) and staged into the served tree: the generator publishes each at its page's own path, `/bot.md` and so on. `checkTwinFacts()` pins FOUR of the eight (`bot`, `whoareyou`, `security`, `garage-dyno`) against the Worker in BOTH directions, so bumping `BOT_VERSION` fails the deploy until `bot.md` agrees; the other four carry no pins and can drift from the page silently. `security.md`'s pins read `lib/security.ts` rather than the page, since a page ABOUT headers must agree with the module that SENDS them; one of them is derived from the header set `cspHeadersFor` actually emits, so reintroducing a report-only twin fails the deploy until `security.md` stops claiming `'unsafe-inline'` is gone. It read the `ENFORCE_PAGE_HASHES` flag until that flag was deleted on 2026-08-23; reading the emitted headers is the better check, since a flag states an intention and the headers state what ships. |
 | `public/sitemap.xml`, `robots.txt` | Standard SEO files. robots.txt explicitly allows AadharshBot. |
 | `public/.well-known/http-message-signatures-directory` | JWKS for AadharshBot's Ed25519 public key (Web Bot Auth IETF draft). |
 | `public/images/` + `public/i/` | `images/` holds the photo DATA surfaces. COMMITTED: `metadata.json` (the EXIF RECORD, long field names + the Fuji recipe card), `histograms.json`, `alt.json`, `semantics.json`, `hashes.json` (stem to hash8 map). DERIVED into `.build/` by build.ts and never committed: `exif.json` (the tooltip's TEXT tier, every photo's short-key EXIF in one 2.6KB-brotli file, warmed once on idle because the homepage draws a fresh random 12 of 165 per request and a per-slot warm-up was cold nearly every visit), `fingerprints.json` (sha256 of every published tier, the map `photo_recipe` recognises an uploaded thumbnail with), and `meta/<stem>.json` (per-photo EXIF plus the four 64-bin histogram channels, the BARS tier, fetched only on the hover that needs them and the self-healing fallback for a stem missing from a cached `exif.json`). All three still serve at the URLs they always had; what changed is where they come from. The pixel tiers (600px AVIF+JPG squares, plus 400px and 200px AVIF) live in `i/` under content-hashed names, 660 files for 165 photos. |
@@ -1169,12 +1190,25 @@ Two encoders + one transform tool, all built from source:
   trellis + 64-candidate progressive scan search + sharp_yuv chroma, ~4% under the
   retired cjpegli at equal quality. Builds with `cargo`; dependabot tracks the
   zenjpeg pin. Replaced the from-source jpegli build (2026-07). See `tools/photos/zenc/src/main.rs`.
-- **libavif, VENDORED** (`tools/photos/libavif/build.sh`) — `avifenc` for the
-  primary AVIF thumbnail, built from source at a pinned tag rather than taken
-  from brew. `LIBAVIF_TAG` in that script is the single pin: libavif's own
-  `ext/*.cmd` scripts then fetch and build aom, libsharpyuv and libyuv at ITS
-  pinned revisions, so one tag fixes four projects. v1.4.2 pins aom v3.14.1,
-  which is the aom brew was already supplying, so the encoder does not move.
+
+  **Its resampling kernel is `halflight` as of 2026-09-02, a git dependency
+  pinned to a full rev in `Cargo.lock`.** `src/resample.rs` moved out to
+  `github.com/oddharsh/halflight` (public, MIT; crate + npm, own conformance
+  suite, not on crates.io) and zenc imports the same six names from the crate
+  instead. The swap moved no byte, measured old binary against new: the
+  histogram bake over all 165 stems, the 600/400/200 tiers of 52 real photos
+  (46 JPG, 6 HIF, both sensors, both transfer curves), the Instagram `resize`
+  and the q84 JPEG encode, all identical, which is why
+  `config/derivations.lock.json` was re-recorded for `images/histograms` in the
+  same commit rather than the histograms re-baked. Two consequences: dependabot's
+  cargo ecosystem cannot track a git rev, so bumping halflight is a hand edit of
+  the `rev` plus a re-run of the same A/B (`bytes: true` on zenc in
+  `config/tools.json` catches an output change from either direction); and a
+  fresh machine's first `cargo build` fetches it over https, no key involved.
+  The repository was private for the first few hours and the swap shipped with
+  an ssh URL, a root `.cargo/config.toml` forcing git-fetch-with-cli, and a
+  deploy-key step in the photo-pipeline workflow; all three left the moment it
+  went public, and a note here is what stops them being re-added by analogy.
 
   **The reason is that `/i/` is content-addressed, so the encoder decides
   shipped URLs.** An ambient `brew upgrade libavif` could re-mint every AVIF
@@ -1559,6 +1593,23 @@ Adding a page needs no work here: register it in `site-manifest.json` as usual
 and the twin appears. `build.ts` fails the deploy if fewer than 30 generate,
 since losing them would otherwise be silent (pages keep serving HTML).
 
+**A section index only ever promises a twin the build holds, since 2026-09-02.**
+`/garage/llms.txt` used to link every registered garage surface as `<path>.md`,
+and `/garage/dyno` is Worker-rendered off the perf-history branch with no source
+any walk can read, so it was advertised at `/garage/dyno.md` and answered 404
+there from the day it shipped. The index is built from the REGISTRY and the twins
+from the TREE, and no assertion joined the two: the floor above counts twins, the
+link checker resolves hrefs in documents rather than in `llms.txt`, and
+`routes:check` sweeps only the routes it is told about. It was found from outside,
+by a sweep that HEADs every URL an llms.txt advertises (`oddharsh/doors`, the
+`discovery-files` probe). `renderSectionIndex` takes the set of twin paths now and
+lists a surface outside it under "HTML only" at its page URL, and
+`contract-section-index-promises-only-real-twins` pins the join both ways plus a
+control. Dyno itself got a hand twin describing the chart and naming
+`/garage/dyno.json`, pinned to `dyno.ts`, so that HTML-only list is empty today
+and the guard is for the next Worker-rendered page somebody registers in `garage`
+or `lwe`.
+
 ### The search corpus (`tools/generate-search-index.ts`)
 
 `/search-index.json` is the corpus `/search` ranks and `/ask` publishes as
@@ -1783,8 +1834,9 @@ author reports to you rather than one you find yourself.
 
 Sharing is correct here even though `lib/trace.ts` and `cal/src/trace.js` are
 near-duplicates ON PURPOSE (gotcha 16). The cal duplication exists because cal's
-Vitest pool boots from `cal/src/index.js` alone, so a cal → holding import would
-make cal untestable without the site tree. Serendipity has no such constraint
+suite boots from `cal/src` alone (bun:test over wrangler's harness, see
+`cal/test/harness.ts`), so a cal → holding import would make cal untestable
+without the site tree. Serendipity has no such constraint
 and already imports `lib/desktop.ts` and `lib/crawl.ts`; that direction is
 established. **Check which of those two situations you are in before copying
 either precedent.**
@@ -2860,6 +2912,7 @@ the existing layers structurally could not reach:
 | `around.neighbor` | every degradation here is designed to be quiet (a disallowing robots.txt is a legitimate skip). The rollup makes "3 of 20 neighbors dark for a month" one number |
 | `census.host` | a time series with silently missing rows is worse than none; the per-host catch is correct AND is how a 16-site roster becomes 3 |
 | `webmention.send` | `webmention.capped` flags a run that stopped at MAX_SENDS_PER_RUN, which the summary log cannot express |
+| the speculation ledger | not a span: `aadhar_speculation` counts every `Sec-Purpose` prefetch/prerender that reached the origin and every activation beacon. **`/ledger/speculation.json` reads it back per path** (since 2026-09-02; nothing read it before), and `bun run speculation:report` prints the activation-rate table that decides which links earn an earlier eagerness. A promotion is an edit to `SPECULATION` in `tools/photos/shell-data.ts`, gated on `speculation:probe` showing the rule fetches, because an eager rule was measured fetching nothing twice. Chrome caps eager and moderate rules at 2 prefetches and 2 prerenders at a time; prerender is Chromium-only, and WebKit's same-origin prefetch is in trunk with its shipping default unknown. |
 | `cal.busy` | `cal.source` (fresh/live/stale/none) + `cal.fail_closed`. The fail-closed 503 is a real person not getting a coffee slot, and it used to reach you only by them mentioning it |
 
 ### XP visual vocabulary (CSS)
@@ -2927,6 +2980,44 @@ it before treating anything in there as a target.
    keeping the unhashed paths as short-cached fallbacks for Cal's absolute refs
    and stale HTML.
 
+   **Step 5c renames every CSS custom property in the staged tree**, so
+   `--surface-window` ships as `--h`. The palette is authored for people and
+   about 100 of those names are DISTINCT strings, which is the one thing brotli
+   cannot discount: a repeated string costs a backreference, a unique one costs
+   its length. Measured 2026-09-08, it is -0.24 KiB brotli on `luna.css` alone
+   (-3.2%) and -0.30 KiB across the client assets.
+
+   It is safe to do mechanically for one reason, and that reason is checked
+   rather than assumed: NOTHING in the tree builds a property name at runtime.
+   Every `setProperty` / `getPropertyValue` / `removeProperty` call passes a
+   literal, the five names they pass are reserved, and
+   `assertNoDynamicPropertyNames` fails the build on a non-literal first
+   argument. A single `setProperty("--" + kind)` would defeat the whole pass
+   silently.
+
+   **The integrity assertion is the load-bearing part, because a missed file is
+   invisible.** Its `var(--surface-window)` would simply keep the old name,
+   nothing would define it, and the colour would fall back to nothing several
+   commits later. So the invariant is not that the output looks right, it is
+   that the set of DANGLING `var()` references is unchanged name for name with
+   the rename applied. A file the walk forgot appears there immediately, and a
+   floor of 80 stops a collector that has quietly stopped matching from
+   reporting a clean pass. It earned its keep on its first run, catching a
+   generated `--l` that collided with a name something referenced and nothing
+   defined; generated names are now seeded against every token already in the
+   tree. The `.src.*` twins are deliberately NOT mangled, since they are the
+   readable copy.
+
+   **`keep_closing_tags` went false in the same change** (16,270 B raw across 55
+   pages), which means served documents no longer carry `</html>`. That was
+   measured and declined on 2026-09-02 because it re-mints every page and page
+   dictionary; the rename was already paying that cost, so it rode along. The
+   route oracle's full-page contract dropped its `</html>` assertion to match:
+   the doctype still anchors the document, so `document.doctype.name` and
+   `compatMode` are unaffected, and what is genuinely given up is that a
+   TRUNCATED response no longer differs from a complete one at the last byte.
+   Truncation is caught by `maxBytes` and the marker assertions instead.
+
    `wrangler.jsonc` self-builds and points both `main` and `assets` at
    `.build/public`, so no deploy path can ship the readable originals. Local
    development uses `wrangler.dev.jsonc` against a SYMLINK FARM at `.dev-assets`,
@@ -2990,8 +3081,8 @@ Custom-built scheduler at `aadhar.sh/coffee`. Replaces Cal.com. Inspired by
 The source remains in `cal/src/` so its booking, calendar, and email policies
 stay readable and testable; `build.ts` stages it beside the holding Worker
 entrypoint. Production secrets (`ICAL_URL`, `RESEND_API_KEY`, and
-`SIGNING_SECRET`) belong to the root Worker. `cal/wrangler.test.toml` is only a
-Vitest runtime fixture, never a deployment config.
+`SIGNING_SECRET`) belong to the root Worker. `cal/wrangler.test.toml` is only the
+fixture the suite's harness boots, never a deployment config.
 
 ### Architecture
 
@@ -3020,7 +3111,7 @@ Vitest runtime fixture, never a deployment config.
 
 ```
 cal/
-├── wrangler.test.toml  — test-only KV/vars config for Vitest (not deployed)
+├── wrangler.test.toml  — test-only KV/vars config the suite's harness boots (not deployed)
 ├── package.json
 └── src/
     ├── index.js        — router, request dispatch, KV state
@@ -3031,6 +3122,33 @@ cal/
     ├── templates.js    — XP-themed HTML for all pages (booking, success, confirmed, declined, error)
     └── uuid.js         — RFC4122 v4 helper
 ```
+
+### Tests
+
+`bun run --filter cal-aadhar-sh test`, from the root, or `bun test` inside
+`cal/`. It is `bun:test` over wrangler's `createTestHarness` since 2026-09-02,
+and the split is the whole design: the route handlers, the booking store and
+the email builders run in bun's own process, imported straight from `cal/src`,
+while the KV and Workflow bindings live in a workerd the harness boots from
+`wrangler.test.toml` and hands back as proxies. That is what lets a test stub
+`globalThis.fetch` and read what the worker would have sent to Resend, the
+shape the old in-isolate Vitest suite had, without a Vite chain to reach it.
+
+Two Worker globals are missing on a host and `cal/test/preload.ts` supplies
+both, with the cost stated at each: a virtual `cloudflare:workers` module (an
+empty `WorkflowEntrypoint`, since the real workflow runs inside the harness)
+and an always-miss `caches`, which means the booking page's 30s edge-cache HIT
+path is not exercised. Neither shim lives in `cal/src`, because the source is
+correct for the runtime it ships to.
+
+It replaced `vitest` + `@cloudflare/vitest-pool-workers`, which were 68 of the
+lockfile's 257 packages, the tree's second esbuild, and the one `overrides`
+entry (nanoid, reached only through vite -> postcss). The measurements that
+decided it are in `cal/test/harness.ts`'s header. `cal/` declares no
+dependencies at all now: the harness is the root's wrangler pin, so the tree
+carries exactly one miniflare and one workerd by construction rather than by a
+floor somebody keeps aligned. Its bindings are typed by the same pin, through
+the generated runtime declarations below.
 
 ### Required secrets (before deploy)
 
@@ -3444,7 +3562,33 @@ bun run deploy:direct
     `garage/compression`, and that is the better of the two to keep (moving the
     tails last to save drivers is 4,953 B worse).
 
-    `bun run shell:roll` rolls both `a-dict` and `p-dict`; page snapshots are Brotli'd
+    **The family dictionary is COMMITTED as of 2026-09-02, at `src/dict/f-dict`,
+    and the build ships that copy until it drifts.** The URL is the hash of the
+    corpus bytes, and the corpus samples pages that carry every `/a/<name>.<hash8>`
+    shell reference, so any deploy that touched nav.js, luna.css, quiz.js or the
+    taskbar partial re-minted `/a/page-family.<hash8>.dict`. Three hashes were live
+    across three adjacent commits on the day this was measured. Every returning
+    Chromium visitor then re-fetched the 17 KB twin on their next page, and what it
+    bought them was 0.1 point: the previous deploy's dictionary took 13.7% off the
+    54 staged pages' plain brotli where the fresh one took 13.8%. At three deploys
+    a day, a tier that saves ~1.5 KB per page view was costing 17 KB per re-mint.
+
+    Step 8 now reads the committed dictionary, computes both family tiers against
+    the FINAL page bytes, and ships the committed one whenever its total is within
+    10% of the fresh derivation's (`FAMILY_DRIFT` in `tools/lib/page-family.ts`).
+    Past that line it ships fresh and says so, and the next `dict:roll` commits
+    what shipped. The line is in the reader's units: 10% of a 457 KB family tier
+    over 55 pages is ~830 B per page, so a re-mint pays back only for a visitor who
+    reads about 20 pages before the next one. The roll leaves a within-drift
+    committed file alone, adopts what production serves when that is within drift,
+    and adopts the fresh corpus otherwise; `bun run family:roll` runs that half
+    alone. Emptying the directory forces a re-mint on the next build, which is the
+    documented override, and `dcz:check` reports when production and `f-dict`
+    disagree. The one-time re-mint the 2026-08-31 corpus tuning earned still
+    happens (production's dictionary was +12% behind it, past the line), and every
+    deploy after it keeps the URL.
+
+    `bun run shell:roll` rolls `a-dict`, `p-dict` and `f-dict`; page snapshots are Brotli'd
     in the repo, ignored by the asset upload, and decompressed only at build time.
     **BOTH halves can read the wire now, and `--live` is how the scheduled roll
     works.** `p-dict` has always fetched the LIVE pages, because an edge feature can
@@ -3627,8 +3771,8 @@ bun run deploy:direct
 
     Corollary: the two trace helpers are near-duplicates ON PURPOSE. Dependency
     direction is holding -> cal (`index.ts` imports `cal/src/index.js`), and cal's
-    Vitest pool boots from `cal/src/index.js` alone, so a cal -> holding import
-    would make cal untestable without the site tree. Do not consolidate them.
+    suite boots from `cal/src` alone, so a cal -> holding import would make cal
+    untestable without the site tree. Do not consolidate them.
 
 17. **`script-src` is per-document sha256 hashes, and the committed map is EMPTY
     on purpose.** `lib/csp-hashes.ts` ships `PAGE_SCRIPT_HASHES = {}` with a
@@ -5255,6 +5399,44 @@ bun run deploy:direct
     about. Reach for it for a throwaway thumbnail, a placeholder, or a clipboard
     image, never for a served tier.
 
+    **THE PLUMBING SHRANK UNDER THAT PARAGRAPH, so the six spawns are four and
+    only two of them are decodes.** `zenc square` absorbed decode, orient, crop
+    and resize on 2026-08-26, and what `add-photos.sh` still spends `sips` on is
+    a color-space read (line 345), the AVIF fallback for a missing `avifenc`
+    (393), and the two HEIF/HIF decodes this question is actually about: the
+    full-resolution 16-bit TIFF (438) and the lossless PNG the archive path
+    hands to zenc (529). So the door this entry leaves open is one decode rather
+    than four operations.
+
+    **Bun 1.4.1 made it able to walk through that door, and 8 bits is what still
+    stops it.** Its release note reads "Bun.Image HEIC support (10-bit,
+    undecodable files)", which is real: measured 2026-09-08 on `XT500010.HIF`
+    (7728x5152), a library file rather than a fixture, with the previous release
+    as the control.
+
+    | bun | the same .HIF |
+    |---|---|
+    | 1.4.0 | `Image: decode failed` |
+    | 1.4.2 | decodes, `format: heic` |
+
+    | | depth | color | size | decode+encode |
+    |---|---|---|--:|--:|
+    | `sips -s format png` | **16-bit** | RGB | 160.0 MB | 5,647 ms |
+    | `Bun.Image` 1.4.2 | 8-bit | RGBA | 66.8 MB | 4,650 ms |
+
+    Eight bits halves the sensor's tonal precision BEFORE zenc's linear-light
+    resample runs, which is the generational-loss trade the thumbnail work
+    already settled, and the speed is a wash so there is nothing to weigh
+    against it. **Depth is now the ONLY thing between `Bun.Image` and this job**,
+    which changes what to watch for: the release note that matters is a
+    bit-depth option or 16-bit output, rather than another encoder-quality pass.
+
+    One API shape worth having before re-running any of this. `img.png()` is a
+    chainable format SETTER that returns an `Image`, so `Bun.write(path,
+    img.png())` writes the 13-byte string `[object Blob]` and reports success.
+    The terminal call is `await img.png().bytes()`, and a probe that skips it
+    measures a 14-byte file.
+
     The general rule, which outlives this API: **compare encoders on BYTES at
     matched output, because a quality number means something different in each.**
     `q84` meant 21 KB in one and 36 KB in the other on the same input, and
@@ -5760,6 +5942,44 @@ bun run deploy:direct
     control is four encodes and a `cmp`, it takes a minute, and the failure it
     catches is silent in both directions.
 
+
+44. **A worktree under `.claude/worktrees/` sits INSIDE the main checkout, so
+    module resolution walks up into the parent's `node_modules`.** Found
+    2026-09-02 while removing `@cloudflare/workers-types`: the package was gone
+    from the worktree's lockfile and `node_modules`, and wrangler's own
+    `cli.d.ts` still resolved it, from
+    `/Users/aadharsh/noodling/site/node_modules/.bun/` at a DIFFERENT version
+    (5.20260825.1 against the 5.20260901.1 the branch had just deleted).
+    Node-style resolution, which tsc, tsgolint and `require.resolve` all use,
+    walks every ancestor directory, and a nested worktree's ancestors include
+    the tree it was cut from.
+
+    The failure points the wrong way. Nothing errors; a check that should have
+    gone red stays green, on exactly the class of change (a removal) where green
+    is the claim being tested. It is the lens-reader lesson from the Reader
+    section arriving through a third door: a green local suite proves nothing
+    when the dependency set differs from CI's, and here it differs because of
+    WHERE the checkout sits rather than what was installed into it.
+
+    Two smaller traps met the same afternoon. `bun remove` leaves the old links
+    in `node_modules` in place, so "removed from the lockfile" and "gone from
+    disk" are different states until `rm -rf node_modules && bun install
+    --frozen-lockfile`. And `git worktree add <path> <branch>` REFUSES a branch
+    that is checked out elsewhere, so a chained `cd <path> && ...` whose `cd`
+    fails runs the rest of the command in the MAIN tree; guard with `|| exit 1`.
+
+    The control is a DETACHED worktree outside the checkout, installed fresh:
+
+    ```bash
+    git worktree add --detach "$SCRATCH/ctl" <branch>
+    cd "$SCRATCH/ctl" || exit 1
+    bun install --frozen-lockfile
+    ```
+
+    Run the gates there for any dependency removal or resolution-sensitive
+    change. It doubles as the cold-checkout test for generated files
+    (config/.generated/ was first proven from one), and it costs about 2s of
+    install. Remove it with `git worktree remove --force` afterwards.
 
 ---
 

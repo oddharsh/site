@@ -36,7 +36,13 @@
     // Workers globals only. With the DOM lib loaded, its CacheStorage shadows
     // Cloudflare's and every `caches.default` reads as an error.
     "lib": ["esnext"],
-    "types": ["@cloudflare/workers-types"],
+    // EMPTY on purpose, and load-bearing: an omitted `types` pulls in every
+    // @types/* package, which here means bun's globals landing in the Worker's
+    // scope. The Workers runtime declarations arrive through `include` below
+    // instead, as a file tools/gen-runtime-types.ts writes from the pinned
+    // workerd; that file's header says why it replaced @cloudflare/workers-types
+    // on 2026-09-02 and what was measured before it did.
+    "types": [],
     "resolveJsonModule": true,
     "skipLibCheck": true,
     // Not `strict` yet. The Worker was converted from unannotated JavaScript and
@@ -51,5 +57,8 @@
     "strict": false
   },
   // Paths are relative to THIS file, which lives in config/ — hence the `../`.
-  "include": ["../cal/src/**/*.ts", "../src/worker/**/*.ts"]
+  // The generated runtime surface is a literal path rather than a glob, so a
+  // missing file (typecheck run without its generator) fails on the include
+  // instead of checking the Worker against no globals at all.
+  "include": ["../cal/src/**/*.ts", "../src/worker/**/*.ts", "./.generated/workers-runtime.d.ts"]
 }

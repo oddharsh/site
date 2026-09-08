@@ -18,7 +18,7 @@
 // Gray Gamma 2.2) and is used for decode and encode both, so unaveraged values
 // pass through exactly.
 use crate::pixels::{crop, load_linear, orient, parse_transfer, save, scale, Transfer};
-use crate::resample::Filter;
+use halflight::Filter;
 
 pub fn run(args: &[String]) -> i32 {
     let mut input: Option<&str> = None;

@@ -87,9 +87,12 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Build the JPEG encoder (zenc)
-        # zenjpeg hybrid + progressive scan search; Cargo.lock pins the graph,
-        # dependabot tracks the zenjpeg version. macOS runners ship cargo.
-        run: cargo build --release --manifest-path tools/photos/zenc/Cargo.toml
+        # zenjpeg hybrid + progressive scan search; Cargo.lock pins the graph.
+        # dependabot tracks the zenjpeg version and cannot track halflight, the
+        # resampling kernel, which is a public git dependency pinned to a full
+        # rev in Cargo.lock and moves by hand. --locked so a runner builds the
+        # pinned graph or fails, never a resolved one. macOS runners ship cargo.
+        run: cargo build --release --locked --manifest-path tools/photos/zenc/Cargo.toml
 
       - name: Validate routine inputs
         run: |

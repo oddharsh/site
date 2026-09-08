@@ -302,8 +302,8 @@ function wmEnv(db) {
 }
 
 function deferredContext() {
-  const pending = [];
-  return { waitUntil: (p) => pending.push(p), settle: () => Promise.all(pending) };
+  const pending: Promise<unknown>[] = [];
+  return { waitUntil: (p: Promise<unknown>) => pending.push(p), settle: () => Promise.all(pending) };
 }
 
 const wmPost = (source, target) => new Request("https://aadhar.sh/webmention", {

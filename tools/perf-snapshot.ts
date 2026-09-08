@@ -129,7 +129,7 @@ async function record(outPath, label) {
     schema: typeof SCHEMA; label: string; subject: string;
     worker: { gzipBytes: number | null; modules: Record<string, number> };
     assets: Record<string, Sizes>; pages: Record<string, Sizes>; wire: Record<string, Sizes>;
-    dcz: { count: number; bytes: number };
+    dcz: { count: number; bytes: number; dictionaryBrotliBytes: number };
     [more: string]: any;
   } = {
     schema: SCHEMA,
@@ -139,7 +139,7 @@ async function record(outPath, label) {
     assets: {},
     pages: {},
     wire: {},
-    dcz: { count: 0, bytes: 0 },
+    dcz: { count: 0, bytes: 0, dictionaryBrotliBytes: 0 },
   };
 
   const gz = dryOut.match(/gzip:\s*([\d.]+)\s*KiB/);
@@ -186,6 +186,16 @@ async function record(outPath, label) {
   for (const name of await walk(`${BUILD}/pd`, (f) => f.endsWith(".dcz"))) {
     snapshot.dcz.count += 1;
     snapshot.dcz.bytes += (await readFile(`${BUILD}/pd/${name}`)).length;
+  }
+
+  // The deltas are unusable until the browser downloads the family dictionary.
+  // It is a q11 asset in /a/, but deliberately not part of the ordinary client-
+  // asset total: adding it there would redefine the historical assets_br series
+  // overnight. Keep acquisition beside the deltas it enables, using the emitted
+  // twin rather than recompressing, so a corpus edit that improves one while
+  // worsening the other is visible in the same section.
+  for (const name of await walk(`${BUILD}/a`, (f) => /^page-family\.[0-9a-f]{8}\.dict\.br$/.test(f))) {
+    snapshot.dcz.dictionaryBrotliBytes += (await readFile(`${BUILD}/a/${name}`)).length;
   }
 
   const n = Object.keys(snapshot.assets).length + Object.keys(snapshot.pages).length;
@@ -351,16 +361,28 @@ async function compare(basePath, headPath, outPath) {
     if (mods.length) parts.push("Largest module deltas (raw bytes in bundle):", "", table(mods, { limit: 10 }), "");
   }
 
-  // Dictionary coverage. A page that loses its delta silently falls back to the
+  // Dictionary transport. A page that loses its delta silently falls back to the
   // family tier, which is a real regression nobody would otherwise see: gotcha 20
   // is the record of that exact failure going unnoticed because it errors on
   // nothing. perf-budget hard-fails on a MISSING delta; this reports the drift.
-  parts.push("### Dictionary deltas (`pd/`)", "");
-  if (base.dcz.count === head.dcz.count && base.dcz.bytes === head.dcz.bytes) {
-    parts.push(`No change. ${head.dcz.count} deltas, ${kib(head.dcz.bytes)} total.`, "");
+  // The acquisition sits here too: comparing only pd/ is how a smaller q11
+  // dictionary stayed invisible while its dependent deltas were fully counted.
+  parts.push("### Dictionary transport", "");
+  const baseDictionary = base.dcz.dictionaryBrotliBytes ?? 0;
+  const headDictionary = head.dcz.dictionaryBrotliBytes ?? 0;
+  if (baseDictionary === headDictionary) {
+    parts.push(`Family dictionary acquisition: no change, ${kib(headDictionary)} q11.`, "");
   } else {
     parts.push(
-      `${base.dcz.count} → ${head.dcz.count} deltas, ${kib(base.dcz.bytes)} → ${kib(head.dcz.bytes)} (${signed(head.dcz.bytes - base.dcz.bytes)}).`,
+      `Family dictionary acquisition: ${kib(baseDictionary)} → ${kib(headDictionary)} q11 (${signed(headDictionary - baseDictionary)}).`,
+      "",
+    );
+  }
+  if (base.dcz.count === head.dcz.count && base.dcz.bytes === head.dcz.bytes) {
+    parts.push(`\`pd/\`: no change. ${head.dcz.count} deltas, ${kib(head.dcz.bytes)} total.`, "");
+  } else {
+    parts.push(
+      `\`pd/\`: ${base.dcz.count} → ${head.dcz.count} deltas, ${kib(base.dcz.bytes)} → ${kib(head.dcz.bytes)} (${signed(head.dcz.bytes - base.dcz.bytes)}).`,
       "",
     );
     if (head.dcz.count < base.dcz.count) {
@@ -409,6 +431,7 @@ async function row(snapshotPath, date) {
     pages_n: Object.keys(snap.pages).length,
     dcz_n: snap.dcz.count,
     dcz_b: snap.dcz.bytes,
+    dict_br: snap.dcz.dictionaryBrotliBytes ?? null,
     source: "nightly",
   };
   console.log(JSON.stringify(line));

@@ -20,6 +20,7 @@ import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises"
 import { existsSync } from "node:fs";
 import { brotliCompressSync, brotliDecompressSync, constants as zc } from "node:zlib";
 import { execFileSync } from "node:child_process";
+import { chooseFamilyDictionary, FAMILY_DICT_DIR, FAMILY_FRESH, FAMILY_REPORT, hash8, readCommittedFamily, writeCommittedFamily } from "./lib/page-family.ts";
 
 // ------------------------------------------------------- adoption order ----
 
@@ -77,7 +78,10 @@ const ORIGIN = process.env.ROLL_ORIGIN || "https://aadhar.sh";
 // different `/a/` hashes, so its candidates are bytes no browser will ever hold).
 // PAGE adoption reads production, so it is correct from anywhere and is the repair
 // step whenever an edge feature starts rewriting documents. Default stays both.
-const only = process.argv.includes("--pages") ? "pages"
+// --pages rolls the page half AND the family dictionary, since both are the HTML
+// tier; --family rolls the family dictionary alone; --shell leaves both alone.
+const only = process.argv.includes("--family") ? "family"
+           : process.argv.includes("--pages") ? "pages"
            : process.argv.includes("--shell") ? "shell"
            : "both";
 
@@ -173,7 +177,7 @@ async function liveShell() {
   return [...names].map(parse).filter(Boolean);
 }
 
-if (only === "pages") console.log("shell:roll — --pages given, leaving src/dict/a-dict/ alone.");
+if (only === "pages" || only === "family") console.log(`shell:roll — --${only} given, leaving src/dict/a-dict/ alone.`);
 else {
 await mkdir(DICTS, { recursive: true });
 const shell = live ? await liveShell() : (await readdir(BUILT)).map(parse).filter(Boolean);
@@ -251,7 +255,7 @@ console.log("  Commit src/dict/a-dict/. build.ts regenerates the deltas on its o
 // required). And a staged page production does not serve yet is SKIPPED with a
 // named line rather than adopted, because a browser cannot hold bytes that were
 // never sent to it.
-if (only === "shell") console.log("pages:roll — --shell given, leaving src/dict/p-dict/ alone.");
+if (only === "shell" || only === "family") console.log(`pages:roll — --${only} given, leaving src/dict/p-dict/ alone.`);
 else {
   const BUILT_PAGES = ".build/public";
   const PDICTS = "src/dict/p-dict";
@@ -340,4 +344,94 @@ else {
     }
   }
   console.log(`pages:roll — adopted ${adopted}, pruned ${pruned}, skipped ${missing}, keeping ${KEEP_PAGES} per page (source: ${ORIGIN}).`);
+}
+
+// ── THE FAMILY DICTIONARY (src/dict/f-dict) ──────────────────────────────────────
+// The site-page dictionary every HTML response advertises. build.ts derives a fresh
+// corpus on every run, and shipping that derivation as-is re-minted the dictionary
+// URL on most deploys, because the corpus samples pages that carry every hashed
+// shell reference. Each re-mint cost every returning visitor a 17 KB fetch for a
+// dictionary measured 0.1 point better than the one they held (2026-09-02). So the
+// build ships the COMMITTED dictionary while it is within FAMILY_DRIFT of the fresh
+// one, and this half is what commits it. Exactly one file lives here; there is no
+// KEEP, because a page advertises exactly one family dictionary at a time.
+//
+// The rule, in order:
+//   1. The committed dictionary is within drift of the fresh one: leave it alone.
+//      The build keeps shipping it, so every browser keeps holding it. Production
+//      may lag behind it for a deploy; that is expected, not drift.
+//   2. Otherwise (nothing committed, or drifted): adopt what browsers HOLD, the
+//      dictionary production advertises, if THAT is within drift of the fresh one.
+//      Under --live this is read off the wire, the same argument as the page half.
+//   3. Otherwise adopt the fresh corpus, which is what the next build ships anyway.
+//      Committing it is what makes the build after that keep the same URL.
+//
+// Needs a build, because "fresh" is a derivation from the final staged pages and
+// the comparison runs against those same bytes. The scheduled roll builds first.
+if (only === "shell") console.log(`family:roll — --shell given, leaving ${FAMILY_DICT_DIR}/ alone.`);
+else {
+  if (!existsSync(FAMILY_REPORT) || !existsSync(FAMILY_FRESH)) {
+    console.error(`family:roll — ${FAMILY_REPORT} is missing. Run \`bun run build\` first: the fresh corpus`);
+    console.error("  is derived from the FINAL staged pages, and the drift check compares against those bytes.");
+    process.exit(1);
+  }
+  const report = JSON.parse(await readFile(FAMILY_REPORT, "utf8"));
+  const fresh = await readFile(FAMILY_FRESH);
+  if (hash8(fresh) !== report.fresh) {
+    console.error(`family:roll — ${FAMILY_FRESH} (${hash8(fresh)}) disagrees with ${FAMILY_REPORT} (${report.fresh}); rebuild.`);
+    process.exit(1);
+  }
+  const finalPages = await Promise.all(
+    (await readdir(".build/public", { recursive: true }))
+      .filter((rel) => rel.endsWith(".html") && !rel.endsWith(".src.html"))
+      .sort()
+      .map((rel) => readFile(`.build/public/${rel}`)),
+  );
+  const committed = await readCommittedFamily();
+  const pct = (n) => `${n >= 0 ? "+" : ""}${(n * 100).toFixed(1)}%`;
+
+  const keep = committed ? await chooseFamilyDictionary({ fresh, committed: committed.bytes, pages: finalPages }) : null;
+  if (committed && keep && keep.source === "committed") {
+    console.log(`family:roll — ${FAMILY_DICT_DIR}/${committed.name} is within drift of the fresh corpus (${pct(keep.drift ?? 0)} on ${finalPages.length} pages); leaving it alone.`);
+  } else {
+    if (committed && keep) console.log(`family:roll — committed ${committed.hash8} has drifted ${pct(keep.drift ?? 0)} past the ${pct(keep.threshold).slice(1)} line; replacing it.`);
+    else console.log(`family:roll — ${FAMILY_DICT_DIR}/ is empty.`);
+
+    let adopt = fresh, why = "the fresh corpus, which the next build ships";
+    if (live) {
+      // What browsers hold: the dictionary production's own documents advertise.
+      // Decode whatever comes back rather than trusting a request for identity;
+      // the Worker precompresses and cannot negotiate (gotcha 13).
+      const home = await fetch(`${ORIGIN}/`, { headers: { "accept-encoding": "identity" } });
+      const offered = home.headers.get("link")?.match(/<([^>]+)>;\s*rel="compression-dictionary"/)?.[1];
+      try { await home.body?.cancel(); } catch {}
+      if (!offered) {
+        console.error(`family:roll --live: no rel="compression-dictionary" Link on ${ORIGIN}/. Refusing to roll.`);
+        process.exit(1);
+      }
+      const res = await fetch(`${ORIGIN}${offered}`, { headers: { "accept-encoding": "br" } });
+      const body = Buffer.from(await res.arrayBuffer());
+      let liveBytes = body;
+      try { liveBytes = brotliDecompressSync(body); } catch { /* already plain */ }
+      const liveHash = offered.match(/page-family\.([0-9a-f]{8})\.dict$/)?.[1];
+      if (!res.ok || liveHash !== hash8(liveBytes)) {
+        console.error(`family:roll --live: ${offered} answered ${res.status} and hashes to ${hash8(liveBytes)}; refusing to adopt bytes the URL does not name.`);
+        process.exit(1);
+      }
+      const asLive = await chooseFamilyDictionary({ fresh, committed: liveBytes, pages: finalPages });
+      if (asLive.source === "committed") {
+        adopt = liveBytes;
+        why = `what production serves (${liveHash}), ${pct(asLive.drift ?? 0)} from the fresh corpus`;
+      } else {
+        why = `the fresh corpus; production's ${liveHash} is ${pct(asLive.drift ?? 0)} from it, past the ${pct(asLive.threshold).slice(1)} line`;
+      }
+    }
+    if (committed && committed.hash8 === hash8(adopt)) {
+      console.log(`family:roll — ${committed.name} is already the right file; nothing to write.`);
+    } else {
+      const name = await writeCommittedFamily(adopt);
+      console.log(`adopted family ${name}: ${why}`);
+      console.log(`  Commit ${FAMILY_DICT_DIR}/. The next build ships it at /a/page-family.${hash8(adopt)}.dict and keeps that URL until it drifts.`);
+    }
+  }
 }

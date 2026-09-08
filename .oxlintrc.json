@@ -122,12 +122,16 @@
     // TypeScript AST nodes and nothing here is TypeScript. Nothing was vendored,
     // because core Oxlint already ships this one.
     //
-    // `cal/` is the only Vitest project in the tree and its 7 test files
-    // use real seams today, so this is a tripwire on zero existing sites rather
-    // than a cleanup. It is worth setting because a module mock is the cheapest
-    // wrong turn available to anyone extending those tests: it would pass while
-    // asserting against a fake booking store, on the surface where a bug means
-    // a real person double-booked. The 12 remaining anti-slop rules are not
+    // `cal/` was the only Vitest project in the tree; it runs on bun:test since
+    // 2026-09-02 and its 7 test files use real seams, so this is a tripwire on
+    // zero existing sites rather than a cleanup. It is worth keeping because a
+    // module mock is the cheapest wrong turn available to anyone extending
+    // those tests: it would pass while asserting against a fake booking store,
+    // on the surface where a bug means a real person double-booked. Know its
+    // reach: bun spells the same mistake `mock.module`, which this rule does not
+    // match. The one `mock.module` in the tree is cal/test/preload.ts, a
+    // virtual module for the `cloudflare:workers` scheme, and its header argues
+    // why that is a runtime shim rather than a faked seam. The 12 remaining anti-slop rules are not
     // vendored; docs/DEPENDENCIES.md records the measurement that decided each one.
     // Rejects `...(cond ? { k } : {})`. The absent-rather-than-zero discipline
     // that idiom implements is RIGHT and is kept: a `score: 0` on a filter-only
@@ -217,6 +221,20 @@
   // script. It costs 0.56s over the whole tree, which is less than the tsc pass
   // it runs beside, so there is no reason to split it into a second script.
   //
+  // IT RAN WITHOUT REAL PROGRAMS UNTIL 2026-09-02. tsgolint discovers a
+  // tsconfig per file by walking up, every program here lives in
+  // config/tsconfig.*.json, and there was no root tsconfig.json, so each file
+  // got a default program with no includes in which every Workers global was
+  // an error type acting as `any`. The root tsconfig.json (solution-style,
+  // `files: []`, one reference per program) is what fixed it, and on an
+  // unchanged tree it took the count from 0 to 17: 13 restrict-template-
+  // expressions on `const x = []` arrays typed `any[]` in .ts tools, 2
+  // await-thenable on bun's matchers (the cal/test override below), 1
+  // no-misused-promises in sw.js, 1 await-thenable on an untyped `pending`
+  // array. All 17 fixed or scoped with a reason. Read every count in this file
+  // measured before that date as a count taken by a checker that could not see
+  // the types; re-measure before trusting one.
+  //
   // TRIAGE WARNING, learned the expensive way on the day this landed: how much
   // this pass REPORTS depends on how much of the dependency graph resolves. A
   // first triage ran against a root-only install and came back with 56 findings;
@@ -304,6 +322,18 @@
       // cancelled at request teardown.
       "files": ["**/test/**", "**/*.test.*", "tools/contract-shared.ts"],
       "rules": { "typescript/no-floating-promises": "off" }
+    },
+    {
+      // bun-types declares every matcher as returning `void`, including the
+      // ones behind `.resolves` and `.rejects`, while at runtime those return a
+      // promise the test MUST await or the assertion never runs. So `await
+      // expect(p).rejects.toThrow()` is the documented bun usage and reads to
+      // this rule as an await of a non-thenable. 2 sites (email.test.js), both
+      // correct; measured 2026-09-02, the day tsgolint first saw this program.
+      // Scoped to cal's suite, which is the only bun:test suite that awaits
+      // matchers; tools/ asserts with node:assert and is untouched.
+      "files": ["cal/test/**"],
+      "rules": { "typescript/await-thenable": "off" }
     },
     {
       "files": ["**/*.js", "**/*.mjs"],

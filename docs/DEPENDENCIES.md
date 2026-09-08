@@ -240,19 +240,21 @@ declaration, and a declared minimum nothing enforces is an error.
 
 ## Current baseline
 
-- Wrangler 4.127.1 is the exact root pin shared by all Worker projects.
-  `cal`'s @cloudflare/vitest-pool-workers floor is 0.22.0, which resolves the
-  same Wrangler, Miniflare, and Workerd stack as the root. Measured on
-  2026-08-15 across five warm-store, clean installs, that alignment cut median
-  install time from 4.62 s to 3.03 s and `node_modules` from 781 MiB to 562 MiB.
-  Review these two updates together when either package changes its Cloudflare
-  toolchain dependencies.
-- Oxc Minify 0.147.0 and Lightning CSS 1.33.0 are exact root pins for the
+- Wrangler 4.129.0 is the exact root pin shared by all Worker projects, and
+  since 2026-09-02 it is also cal's test harness: `cal/test` runs on bun:test
+  against `createTestHarness`, so the tree carries exactly one Wrangler, one
+  Miniflare and one Workerd by construction. Until that day `cal` declared
+  @cloudflare/vitest-pool-workers to reach the same stack, and keeping its
+  floor aligned with the root pin was measured on 2026-08-15 (five warm-store
+  clean installs) to cut median install time from 4.62 s to 3.03 s and
+  `node_modules` from 781 MiB to 562 MiB. The alignment is structural now
+  rather than maintained.
+- Oxc Minify 0.148.0 and Lightning CSS 1.33.0 are exact root pins for the
   deploy-time JavaScript and CSS minifiers. Their platform-specific optional
   packages run only in the build environment; they add no browser or Worker
   runtime dependency. Dependabot should review their release notes for output,
   target-browser, and native-install changes.
-- Oxlint 1.80.0 and oxlint-tsgolint 7.0.2001 are exact root pins for
+- Oxlint 1.81.0 and oxlint-tsgolint 7.0.2001 are exact root pins for
   `bun run lint`, a required step in `validate`. The tsgolint version tracks the
   TypeScript pin below on purpose: TypeScript 7.0 ships no stable programmatic
   API, so typescript-eslint cannot run on it, and tsgolint is the door oxlint
@@ -261,7 +263,7 @@ declaration, and a declared minimum nothing enforces is an error.
   unchanged code, and should treat any tsgolint release as paired with a
   TypeScript one. Every rule this repo turns off is turned off in
   `.oxlintrc.json` beside the measurement that decided it.
-- @oxlint/plugins 1.80.0 is the runtime for the three rules vendored from
+- @oxlint/plugins 1.81.0 is the runtime for the three rules vendored from
   anti-slop at `tools/oxlint/anti-slop`. **Bump it in lockstep with oxlint and
   never on its own**: it is the ABI between the linter and a JS plugin, the two
   ship one version number, and a mismatch would fail at plugin load rather than
@@ -285,17 +287,41 @@ declaration, and a declared minimum nothing enforces is an error.
   owns the tolerated-warning family and re-proves the pass-through on every call.
   The staged tree is byte-identical across all 1476 files.
 
-  Two esbuild copies REMAIN in the tree and neither is ours to remove. Wrangler
-  hard-depends on 0.28.1 for Cloudflare's Worker bundler. Vite 8 keeps 0.28.2 as
-  an OPTIONAL peer through `cal`'s vitest chain, so `bun why esbuild` still
-  reports it; dropping the root pin removed the root's path to it without
-  shrinking the store. Do not read the removal as a disk saving.
+  ONE esbuild copy remains in the tree and it is not ours to remove: Wrangler
+  hard-depends on it for Cloudflare's Worker bundler. A second, Vite 8's
+  optional peer through `cal`'s vitest chain, left with vitest on 2026-09-02,
+  and `bun why esbuild` reports one position now. Dropping the root pin had
+  removed the root's path to it without shrinking the store; do not read that
+  removal as the disk saving, the vitest removal is.
 - minify-html 0.18.1 is the exact root pin for the deploy-time HTML pass over
   `index.html` and the worker shells.
-- TypeScript 7.0.2 and @cloudflare/workers-types are exact root pins for
-  `bun run typecheck`, which runs TEN programs, every one of them `noEmit`.
-  **The type checker never writes a file**, so nothing here is tsc-compiled and
-  no config can start emitting one by accident.
+- TypeScript 7.0.2 is the exact root pin for `bun run typecheck`, which runs
+  TEN programs, every one of them `noEmit`. **The type checker never writes a
+  file**, so nothing here is tsc-compiled and no config can start emitting one
+  by accident.
+
+  **@cloudflare/workers-types LEFT the tree on 2026-09-02.** It was 12 of the
+  29 Dependabot PRs in the preceding thirty days, each a date-stamped release
+  describing a runtime this repo did not yet run on, and each needing the hand
+  relock commit. The four Worker programs now include
+  `config/.generated/workers-runtime.d.ts`, which `tools/gen-runtime-types.ts`
+  writes from the PINNED workerd through `wrangler types --include-runtime`
+  (wrangler's own notice says the command supersedes the package). So the
+  runtime surface moves when wrangler moves, a lane already reviewed here, and
+  it describes the workerd that runs the dry-runs, the route oracle and the
+  cal harness rather than a newer one. Measured before the switch: all four
+  programs produced byte-identical diagnostics either way, and the 23 names
+  the package carried that the generated set does not (Buffer, process, the
+  Performance family, two Hyperdrive and one Browser Run shape) are referenced
+  nowhere. The file is generated, never committed, and cached on wrangler's
+  version plus the config bytes, so a warm typecheck pays 0.02s for it.
+
+  One thing survives the removal and is worth knowing: wrangler declares the
+  package as an OPTIONAL peer and its own `cli.d.ts` imports a handful of types
+  from it. With the peer absent those imports resolve to `any` under
+  `skipLibCheck`, which costs nothing this repo reads (the harness types cal
+  uses are declared locally in that file) and is stated here so the next reader
+  of a suspiciously loose wrangler type knows where it came from.
 
   That is the claim worth making, and it is narrower than the one this entry
   carried until 2026-08-24. That version said the checker runs "over
@@ -324,15 +350,15 @@ declaration, and a declared minimum nothing enforces is an error.
   described expired with that same move.
 
   Dependabot should review TypeScript releases for new checks that could fail CI
-  on unchanged code, and workers-types for binding-shape changes. The ten
+  on unchanged code; binding-shape changes arrive with wrangler now. The ten
   programs are not decoration: three go through a wrapper because they hold
   files from two runtimes at once, and `bun run typecheck:coverage` asserts
   every file this repo owns belongs to one of them.
-- @types/bun 1.4.0 is the exact root pin for the SECOND type program,
+- @types/bun 1.4.1 is the exact root pin for the SECOND type program,
   `config/tsconfig.tools.json`, which checks `tools/`. It carries the node globals
   as well, so it is one entry rather than two, and it declares the bun-only
   globals the tools now use directly (HTMLRewriter among them). Types only: no
-  runtime, no served byte, same standing as workers-types above.
+  runtime, no served byte, same standing as the generated runtime types above.
 
   It exists because tools/ CANNOT be checked by the Worker's program. Point
   tsconfig.json at both and 169 of 337 errors are `Cannot find name 'process'`:
@@ -518,12 +544,21 @@ the reason, rather than written here with the caret quietly dropped.
   content-hashed URLs. Read its releases for encoder output changes, and treat
   a quality or scan-search change as a reason to re-measure rather than to
   trust the version number.
+  **It also depends on `halflight` by git rev, since 2026-09-02**: the resampling
+  kernel that was `src/resample.rs`, now its own public MIT crate at
+  `github.com/oddharsh/halflight`, pinned in `Cargo.lock` to a full rev and fetched
+  over https. A git dependency is outside the cargo ecosystem dependabot watches,
+  so this pin moves only by hand: edit the `rev`, rebuild, and re-run the
+  old-binary-against-new A/B that gated the swap (histograms over 165 stems, three
+  tiers of 52 photos, resize, encode, all byte-identical the first time).
 
-- **`cal/`** carries `vitest` and `@cloudflare/vitest-pool-workers`, both
-  caret-ranged. This is the chain that pulls Vite 8, and therefore Rolldown and
-  the second esbuild copy the baseline section describes. It runs the booking
-  and calendar policy tests inside workerd, so a pool-workers bump should be
-  read against the miniflare version it carries.
+- **`cal/`** declares no package dependencies, since 2026-09-02. Its suite
+  runs on bun:test against the root's wrangler (`createTestHarness`, see
+  `cal/test/harness.ts`) with the root's types, so it cannot carry a second
+  Cloudflare toolchain. Until that day it carried `vitest` and
+  `@cloudflare/vitest-pool-workers`, the chain that pulled Vite 8, Rolldown,
+  postcss, the `nanoid` override and a second esbuild: 68 lockfile entries for
+  one runner, and one Dependabot lane that could split the miniflare stack.
 
 - **`cf-garage/`** declares no package dependencies. Its one browser operation
   calls the native Browser Run `quickAction("screenshot", ...)` binding directly;
@@ -582,9 +617,13 @@ that disagrees with the codebase, and the disables become the noise.
 `no-module-mocking`, which rejects `vi.mock` in favour of real dependency
 seams. Core Oxlint already ships `vitest/no-restricted-vi-methods`, so it is
 three lines in `.oxlintrc.json` with nothing vendored and no new dependency.
-`cal/` is the only Vitest project here and its 7 test files use real seams
-today, so it arms a tripwire rather than starting a cleanup, on the surface
-where a wrong assertion means a real person got double-booked.
+`cal/` was the only Vitest project here (it runs on bun:test since 2026-09-02)
+and its 7 test files use real seams, so it arms a tripwire rather than starting
+a cleanup, on the surface where a wrong assertion means a real person got
+double-booked. Note what the rule cannot see: bun's spelling is `mock.module`,
+which it does not match, so on the bun suite the guard is review plus the one
+`mock.module` in the tree being `cal/test/preload.ts`, a virtual module for the
+`cloudflare:workers` scheme rather than a seam being faked.
 
 Adding it surfaced a trap worth more than the rule. **Naming any plugin in
 `plugins` REPLACES the default set rather than appending to it**, silently: with
@@ -595,5 +634,5 @@ now lists all five explicitly with that measurement at the array.
 
 To re-run the whole evaluation, clone the repo, `bun install` inside it, and
 point a scratch config at `src/index.ts` through `jsPlugins`. The pinned Oxlint
-1.80.0 does support custom JS plugins and `@oxlint/plugins` is published at a
+1.81.0 does support custom JS plugins and `@oxlint/plugins` is published at a
 matching 1.80.0, so feasibility was never the blocker; applicability was.

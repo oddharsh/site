@@ -35,7 +35,7 @@ import { availableParallelism } from "node:os";
 // are rewritten in place by later steps, so each import site needs a fresh URL.
 const BUILD_NONCE = process.hrtime.bigint().toString(36);
 import { existsSync } from "node:fs";
-import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
@@ -48,6 +48,8 @@ import { parseCss } from "./lib/css-parse.ts";
 import { HTML_MARKERS } from "./lib/html-markers.ts";
 import { buildExifIndex, buildImageFingerprints, serializeExifIndex, serializeFingerprints } from "./lib/photo-indexes.ts";
 import { zstdCompressDictionaryBatch } from "./lib/zstd-batch.ts";
+import { chooseFamilyDictionary, FAMILY_DICT_DIR, FAMILY_FRESH, FAMILY_REPORT, hash8, readCommittedFamily } from "./lib/page-family.ts";
+import { unpackHistogram } from "./photos/build-histogram-index.ts";
 import { patchStaticShell, renderDesktopArtifacts, staticShellPages } from "../tools/photos/gen-desktop-partial.ts";
 
 const OUT = ".build";
@@ -1012,25 +1014,11 @@ await Promise.all([
 {
   const exif = JSON.parse(await readFile(`${OUT}/public/images/exif.json`, "utf8").catch(() => "{}"));
   const packed = JSON.parse(await readFile(`${OUT}/public/images/histograms.json`, "utf8").catch(() => "{}"));
-  const CHANNELS = ["l", "r", "g", "b"];
-  const BINS = 64, HIST_BASE = 63, HIST_LEVELS = 64;
   await mkdir(`${OUT}/public/images/meta`, { recursive: true });
-  // Parsed at the boundary: a packed entry becomes channels or nothing, and every
-  // caller below branches on the channels rather than on the string. A wrong-typed
-  // entry has no .length and falls out here the same as a missing one.
-  const unpackChannels = (p) => {
-    if (!p || p.length !== CHANNELS.length * BINS) return null;
-    const hi = {};
-    for (const [ci, channel] of CHANNELS.entries()) {
-      hi[channel] = Array.from({ length: BINS }, (_, i) =>
-        Math.round((p.charCodeAt(ci * BINS + i) - HIST_BASE) * 100 / (HIST_LEVELS - 1)));
-    }
-    return hi;
-  };
   const entries = Object.entries(exif) as [string, Record<string, any>][];
   await Promise.all(entries.map(async ([stem, record]) => {
     const out = { ...record };
-    const hi = unpackChannels(packed[stem]);
+    const hi = unpackHistogram(packed[stem]);
     if (hi) out.hi = hi;
     await writeFile(`${OUT}/public/images/meta/${stem}.json`, JSON.stringify(out));
   }));
@@ -1123,7 +1111,11 @@ const HTML_MINIFY_CFG = {
   allow_noncompliant_unquoted_attribute_values: false,
   allow_optimal_entities: false,
   allow_removing_spaces_between_attributes: false,
-  keep_closing_tags: true,
+  // Measured 2026-09-02 over all 54 staged documents: this is the ONLY html
+  // option that helps after brotli, and it saves 1,192 B (22 B per page). It
+  // was declined then because it re-mints every page and page dictionary; this
+  // change is already paying that cost, so it rides along.
+  keep_closing_tags: false,
   keep_comments: false,
   keep_html_and_head_opening_tags: true,
   keep_input_type_text_attr: true,
@@ -1836,6 +1828,60 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   console.log(`static renders: /lens + blank /run + blank /search + /writing index + ${posts.length} notes staged from canonical Worker renderers`);
 }
 
+// 5c) shorten every CSS custom property name, across the whole staged tree.
+//
+// The palette is authored for people and 100-odd of those names are distinct
+// strings, which is the one thing brotli cannot discount. Measured 2026-09-08:
+// -272 B brotli over the five stylesheets, 93% of it luna.css.
+//
+// It runs HERE, after every document, stylesheet and Worker CSS literal is
+// staged and before step 6 hashes anything, so the content hashes, the CSP
+// hashes at 7c and the deltas at 8 all see final bytes.
+//
+// The `.src.*` twins are skipped on purpose: they are the readable copy, and
+// `--surface-window` is what makes them worth reading.
+{
+  const { RESERVED, planNames, applyMangle, assertIntegrity, assertNoDynamicPropertyNames } = await import(
+    "./lib/mangle-custom-properties.ts"
+  );
+
+  const staged = (await readdir(OUT, { recursive: true }))
+    .filter((f) => /\.(css|html|js|ts|mjs)$/.test(f))
+    .filter((f) => !/\.src\.(css|html|js)$/.test(f))
+    .filter((f) => !f.startsWith("src/dict/"));
+
+  const before = new Map<string, string>();
+  for (const rel of staged) {
+    const full = `${OUT}/${rel}`;
+    if (!(await stat(full)).isFile()) continue;
+    before.set(rel, await readFile(full, "utf8"));
+  }
+
+  // A name assembled at runtime is the one input a find-and-replace cannot
+  // follow, so it is a build failure rather than a silent miss.
+  assertNoDynamicPropertyNames(before);
+
+  const map = planNames(before);
+  const after = new Map<string, string>();
+  for (const [rel, text] of before) after.set(rel, applyMangle(text, map));
+
+  // The floor is what stops a collector that quietly stops matching from
+  // reporting a clean pass, the same argument as the twin and CSP-hash floors.
+  assertIntegrity(before, after, map, 80);
+
+  let touched = 0;
+  for (const [rel, text] of after) {
+    if (text === before.get(rel)) continue;
+    await writeFile(`${OUT}/${rel}`, text);
+    touched++;
+  }
+  console.log(`custom properties: ${map.size} renamed across ${touched} staged files (${RESERVED.size} reserved for the DOM calls that name them)`);
+}
+
+// The fresh family corpus step 6 derives. Whether it SHIPS is step 8's call, made
+// against the final page bytes and the committed src/dict/f-dict dictionary.
+let freshFamily: Buffer | null = null;
+
 // 6) content-hash the critical-path shell assets (nav.js + luna.css + lens-boot.js) into
 // immutable /a/<name>.<hash8>.<ext> URLs, then repoint every <script src>/<link
 // href> that loads them. /a/<name>.<hash8> names exact bytes (same content-
@@ -2141,15 +2187,30 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     // they buy is a margin on four pages almost nobody fetches. Not zero,
     // though: with no tail at all access/index beats plain q11 by 17 BYTES, a
     // coin flip that one content edit turns into a loss (and does, at a 4 KiB
-    // tail). 12 KiB each for the two large layouts keeps every outlier at 3.9%
-    // or better; the frontier is flat around it (14/10 is 57 B cheaper with a
-    // 2.6% margin), and the widest margin wins a flat frontier.
+    // tail).
+    //
+    // The first pass stopped at 12 KiB each because it compared DELTAS while
+    // holding the dictionary's raw 64 KiB fixed. Raw is not what the relation
+    // downloads: the dictionary has its own q11 twin, and changing which corpus
+    // bytes occupy the window changes that twin. Measured 2026-09-01 over the
+    // current 55 pages, including the dictionary acquisition:
+    //
+    //                         family DCZ   dict q11   combined   worst outlier
+    //   horizon 12 / access 12   457,969     14,925    472,894    3.84% access
+    //   horizon 11 / access 12   457,959     14,754    472,713    3.41% horizon
+    //   horizon 12 / access 11   457,884     14,737    472,621    3.05% access
+    //
+    // Trimming Horizon alone is a strict wire win: 171 B less acquisition and
+    // 10 B less even if every page is fetched once. Trimming Access too buys 92
+    // more bytes across that whole-site sweep but spends a third of the outlier
+    // margin. The wider margin wins that flat frontier; ordinary content edits
+    // are larger than 92 bytes, while the dictionary is fetched as a unit.
     //
     // The two fixtures are under 3 KB apiece, so a 4 KiB budget takes the whole
     // file and each compresses to 20 bytes. Keeping them COSTS nothing on the
     // aggregate: their 4.4 KB displaces less base than the 1.7 KB they save.
     const REPRESENTATIVES: Array<[string, number]> = [
-      ["garage/horizon.html", 12_288],   // very large standalone lab
+      ["garage/horizon.html", 11_264],   // very large standalone lab
       ["garage/vt-b.html",     4_096],   // tiny browser fixture, whole file
       ["garage/vt-check.html", 4_096],   // tiny browser fixture, whole file
       ["access/index.html",   12_288],   // standalone device matrix
@@ -2198,25 +2259,29 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     if (dictionary.readUInt32LE(0) === 0xec30a437) {
       throw new Error("page-family dictionary starts with the zstd --train magic — dcz needs RAW bytes, not a trained dictionary");
     }
-    const to = `/a/page-family.${hash8(dictionary)}.dict`;
-    await writeFile(`${OUT}/public${to}`, dictionary);
-    hashedFor["page-family"] = to;
-    console.log(`hashed asset: site-page corpus -> ${to} (${dictionary.length} raw bytes)`);
+    // NOT written to /a/ here, and not the dictionary that necessarily ships. The
+    // URL is the hash of these bytes, and these bytes sample pages that carry every
+    // /a/<name>.<hash8> shell reference, so shipping the derivation as-is re-minted
+    // the dictionary on most deploys and cost every returning visitor a 17 KB
+    // re-fetch for a 0.1-point gain (measured 2026-09-02). Step 8 decides between
+    // this derivation and the committed src/dict/f-dict copy against the FINAL page
+    // bytes, which do not exist yet: step 7b has not minified them. The rule and
+    // its arithmetic live in tools/lib/page-family.ts.
+    freshFamily = dictionary;
+    console.log(`site-page corpus: fresh candidate ${hash8(dictionary)} (${dictionary.length} raw bytes); step 8 chooses between it and ${FAMILY_DICT_DIR}`);
   }
 
-  // Point the worker's Early-Hints header and its HTML dictionary Link header at
-  // the exact same content-addressed assets as the staged documents.
+  // Point the worker's Early-Hints header at the exact same content-addressed
+  // assets as the staged documents. Its HTML dictionary Link header is patched in
+  // step 8, where the dictionary that ships is decided.
   {
     const p = `${OUT}/src/worker/lib/shell-assets.ts`;
     const src = await readFile(p, "utf8");
     const line = `export const SHELL_ASSETS = { luna: ${JSON.stringify(hashedFor.luna)}, nav: ${JSON.stringify(hashedFor.nav)} }; // build:shell-assets`;
-    const dictionaryLine = `export const PAGE_DICTIONARY: string = ${JSON.stringify(hashedFor["page-family"])}; // build:page-dictionary`;
     const shellPatched = src.replace(/^export const SHELL_ASSETS = .*\/\/ build:shell-assets$/m, line);
-    const out = shellPatched.replace(/^export const PAGE_DICTIONARY(: string)? = .*\/\/ build:page-dictionary$/m, dictionaryLine);
     if (shellPatched === src) throw new Error("shell-assets.js: the `// build:shell-assets` marker line was not found — did the export shape change?");
-    if (out === shellPatched) throw new Error("shell-assets.js: the `// build:page-dictionary` marker line was not found");
-    await writeFile(p, out);
-    console.log(`shell-assets: Early-Hints -> ${hashedFor.luna} + ${hashedFor.nav}; page dictionary -> ${hashedFor["page-family"]}`);
+    await writeFile(p, shellPatched);
+    console.log(`shell-assets: Early-Hints -> ${hashedFor.luna} + ${hashedFor.nav}`);
   }
 
   // same Early-Hints preload for the STATIC garage/lwe pages: rewrite the
@@ -2671,7 +2736,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   requireParser();
 
   const map = {};
-  const handlers = [];
+  const handlers: string[] = [];
   let blocks = 0;
   for (const page of pages) {
     const source = await readFile(`${OUT}/public/${page}`, "utf8");
@@ -2752,39 +2817,97 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     return m ? { slug: m[1], tag: m[2], name: n } : null;
   };
   const pageDicts = dicts.map(parseDict).filter(Boolean);
-  const familyName = (await readdir(`${OUT}/public/a`)).find((n) => /^page-family\.[0-9a-f]{8}\.dict$/.test(n));
-  const familyBytes = familyName ? await readFile(`${OUT}/public/a/${familyName}`) : null;
-  const familyTag = familyBytes ? createHash("sha256").update(familyBytes).digest("hex").slice(0, 16) : null;
-  if (familyBytes) {
-    console.log(`page-delta: site-page dictionary ${familyName} (${familyBytes.length} bytes, tag ${familyTag})`);
-  }
-  if (familyBytes || pageDicts.length) await mkdir(`${OUT}/public/pd`, { recursive: true });
 
   let dCount = 0, dBytes = 0, dPlain = 0, pageCount = 0, pageBytes = 0, familyCount = 0, familyBytesOut = 0;
   const compressedPages = await Promise.all(pages.map(async (page) => {
     const bytes = await readFile(`${OUT}/public/${page}`);
     return { page, bytes, br: await brotliQ11(bytes) };
   }));
+
+  // ── which family dictionary ships: the committed one, unless it has drifted ──
+  //
+  // These are the final bytes, so this is the one place the comparison is honest.
+  // The committed dictionary is what browsers already hold (the roll adopts it from
+  // production); the fresh one is what step 6 just derived. Shipping the committed
+  // copy keeps /a/page-family.<hash8>.dict stable across deploys, which is the whole
+  // point: a re-mint costs every returning visitor a 17 KB fetch, and the fresh
+  // corpus was measured 0.1 point better than the one they held. The rule, the
+  // threshold and its arithmetic are in tools/lib/page-family.ts; this block only
+  // applies it and writes down what it did, for the roll and for the log.
+  if (!freshFamily) throw new Error("page-family: step 6 derived no fresh corpus, so there is nothing to choose from");
+  const committedFamily = await readCommittedFamily();
+  const family = await chooseFamilyDictionary({
+    fresh: freshFamily,
+    committed: committedFamily?.bytes ?? null,
+    pages: compressedPages.map(({ bytes }) => bytes),
+  });
+  const dictionary = family.dictionary;
+  const committedHash = committedFamily?.hash8 ?? null;
+  const familyName = `page-family.${hash8(dictionary)}.dict`;
+  await writeFile(`${OUT}/public/a/${familyName}`, dictionary);
+  // Its q11 twin. Step 7 wrote one for every other /a/ asset before this file
+  // existed, and the Worker serves the dictionary through the same twin path.
+  const familyBr = await brotliQ11(dictionary);
+  if (familyBr.length < dictionary.length) await writeFile(`${OUT}/public/a/${familyName}.br`, familyBr);
+  {
+    // the Worker's Link: rel="compression-dictionary" header names this exact URL
+    const p = `${OUT}/src/worker/lib/shell-assets.ts`;
+    const src = await readFile(p, "utf8");
+    const dictionaryLine = `export const PAGE_DICTIONARY: string = ${JSON.stringify(`/a/${familyName}`)}; // build:page-dictionary`;
+    const out = src.replace(/^export const PAGE_DICTIONARY(: string)? = .*\/\/ build:page-dictionary$/m, dictionaryLine);
+    if (out === src) throw new Error("shell-assets.js: the `// build:page-dictionary` marker line was not found");
+    await writeFile(p, out);
+  }
+  // The record, OUTSIDE the served tree. The roll reads this rather than
+  // re-deriving anything; dcz:check compares production against f-dict directly.
+  await writeFile(FAMILY_FRESH, freshFamily);
+  await writeFile(FAMILY_REPORT, JSON.stringify({
+    shipped: hash8(dictionary),
+    source: family.source,
+    fresh: hash8(freshFamily),
+    committed: committedFamily?.hash8 ?? null,
+    freshTotal: family.freshTotal,
+    committedTotal: family.committedTotal,
+    drift: family.drift,
+    threshold: family.threshold,
+    pages: compressedPages.length,
+  }, null, 2) + "\n");
+  const pct = (n) => `${n >= 0 ? "+" : ""}${(n * 100).toFixed(1)}%`;
+  if (family.source === "committed") {
+    console.log(`page-family: shipping the COMMITTED dictionary ${committedHash} (family tier ${family.committedTotal} B; fresh ${hash8(freshFamily)} would be ${family.freshTotal} B, drift ${pct(family.drift)} within the ${pct(family.threshold).slice(1)} line)`);
+  } else if (committedHash) {
+    console.log(`page-family: shipping the FRESH dictionary ${hash8(dictionary)}: the committed ${committedHash} has drifted ${pct(family.drift)} past the ${pct(family.threshold).slice(1)} line (${family.committedTotal} B against ${family.freshTotal} B). Run \`bun run dict:roll\` once this deploys, so the next build keeps this URL.`);
+  } else {
+    console.log(`page-family: shipping the FRESH dictionary ${hash8(dictionary)}; ${FAMILY_DICT_DIR} is empty. Run \`bun run dict:roll\` once this deploys, so the next build keeps this URL.`);
+  }
+  console.log(`shell-assets: page dictionary -> /a/${familyName}`);
+  const familyBytes = dictionary;
+  const familyTag = createHash("sha256").update(familyBytes).digest("hex").slice(0, 16);
+  console.log(`page-delta: site-page dictionary ${familyName} (${familyBytes.length} bytes, tag ${familyTag})`);
+  await mkdir(`${OUT}/public/pd`, { recursive: true });
   const brotliPages = compressedPages.filter(({ bytes, br }) => br.length < bytes.length);
   await Promise.all(brotliPages.map(({ page, br }) => writeFile(`${OUT}/public/${page}.br`, br)));
   const brCount = brotliPages.length;
   const brRaw = brotliPages.reduce((total, { bytes }) => total + bytes.length, 0);
   const brEnc = brotliPages.reduce((total, { br }) => total + br.length, 0);
 
-  const deltaJobs = (await Promise.all(compressedPages.map(async ({ page, bytes, br }) => {
-    const jobs = [];
+  type DeltaJob = { kind: "page" | "family"; slug: string; tag?: string; bytes: Buffer; dictBytes: Buffer; br: Buffer; frame?: Buffer };
+  const deltaJobs = (await Promise.all(compressedPages.map(async ({ page, bytes, br }, index) => {
+    const jobs: DeltaJob[] = [];
     const slug = slugOf(page);
     for (const candidate of pageDicts.filter((d) => d.slug === slug)) {
       const dictBytes = brotliDecompressSync(await readFile(`${dictDir}/${candidate.name}`));
       if (dictBytes.equals(bytes)) continue;
       jobs.push({ kind: "page", slug, tag: candidate.tag, bytes, dictBytes, br });
     }
-    if (familyBytes) {
-      jobs.push({ kind: "family", slug, bytes, dictBytes: familyBytes, br });
-    }
+    // The family frame was already encoded while choosing the dictionary; carry it
+    // rather than paying level 19 twice for the same bytes.
+    jobs.push({ kind: "family", slug, bytes, dictBytes: familyBytes, br, frame: family.frames[index] });
     return jobs;
   }))).flat();
-  const deltas = await dczEncodeBatch(deltaJobs);
+  const toEncode = deltaJobs.filter((job) => !job.frame);
+  const encoded = await dczEncodeBatch(toEncode);
+  const deltas = deltaJobs.map((job) => job.frame ? frameDcz(job.frame, job.dictBytes) : encoded[toEncode.indexOf(job)]);
   const deltaWrites = await Promise.all(deltaJobs.map(async (job, i) => {
     const { out, digest } = deltas[i];
     if (out.length >= job.br.length) {

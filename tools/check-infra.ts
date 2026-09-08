@@ -78,8 +78,8 @@ const execFileP = promisify(execFile);
 // evidence the zone setting is off. Three attempts, spaced, is: the drift is
 // reported only when every spaced sample missed, and it names the count so a
 // future failure says how much evidence is behind it.
-async function probeEarlyData(host) {
-  let ossl = null;
+async function probeEarlyData(host: string) {
+  let ossl: string | null = null;
   for (const c of [process.env.OPENSSL_BIN, "/opt/homebrew/opt/openssl@3/bin/openssl",
                    "/usr/local/opt/openssl@3/bin/openssl", "openssl"].filter(Boolean)) {
     try {
@@ -917,10 +917,31 @@ async function checkEdge(infra) {
       // probe (openssl, see probeEarlyData) instead of a fetchEdge. A machine
       // that cannot run the probe warns rather than drifts — an unmeasurable
       // check must not report the zone broken.
+      //
+      // A REJECTION IS A DRIFT ON A WORKSTATION AND AN ADVISORY IN HOSTED CI,
+      // and the split is measured rather than cautious. Cloudflare may refuse
+      // early data on any resumption (anti-replay is why 0-RTT is hedged), so
+      // the probe already takes three spaced samples before calling it drift.
+      // From GitHub's runners all three have now missed on three separate runs
+      // while the zone was fine: 2026-08-20 (five concurrent jobs), and twice
+      // on 2026-09-02, run 33652822639 on MAIN and the first attempt of
+      // 33654520873 on a PR, each accepted on a plain re-run minutes later and
+      // accepted 5 of 5 from a workstation in between. The main failure is the
+      // expensive one: `validate` gates promotion, so a merged PR sat
+      // unpromoted until somebody noticed and re-ran CI. That is the deadlock
+      // CLAUDE.md's release notes describe, arriving through a probe whose
+      // subject (a shared egress address's ticket-issuance conditions) has
+      // nothing to do with any diff. So on a hosted runner the rejection is
+      // reported, with its sample count, as something a workstation must
+      // confirm, and it fails nothing; a workstation keeps the hard failure,
+      // because there the three samples have never been wrong. GITHUB_ACTIONS
+      // rather than CI, since CI=1 is what this repo sets by hand to exercise
+      // the release guard locally (see the ramp-token control in CLAUDE.md).
       if (want.earlyData) {
         const r = await probeEarlyData(new URL(url).hostname);
         if (r.skip) warn(`edge check ${check.id} skipped: ${r.skip}`);
         else if (r.accepted) pass(`edge ${check.id}: TLS early data accepted (0-RTT on)`);
+        else if (process.env.GITHUB_ACTIONS) warn(`edge check ${check.id}: TLS early data rejected on ${r.attempts} spaced resumptions from a hosted runner; not a drift here (three false rejections on record from this network), confirm from a workstation with \`bun run infra:check\``);
         else drift(`${check.id}: TLS early data rejected on ${r.attempts} spaced resumptions — ${check.why.split(".")[0]}`);
         continue;
       }
@@ -1302,6 +1323,30 @@ async function checkApi(infra, wrangler, token) {
   // success, because every sampled document came back 200 and the assets that
   // 404ed were never sampled. The arithmetic is in infra.json under
   // zone.version_affinity.
+  // 0-RTT. Zone-scoped like version affinity, so CI degrades to a note and a
+  // workstation run asserts it. The value is declared "on" together with the
+  // Worker's early-data guard (lib/early-data.ts); the arithmetic and the
+  // pairing argument are in infra.json under zone.zero_rtt. A workstation run
+  // reads FAIL until the toggle is flipped, which is the tripwire working:
+  // the guard shipped, the round trip it exists to make safe has not.
+  await section("0-RTT connection resumption", "Zone:Zone Settings:Read and Zone:Zone:Read", async () => {
+    const declared = infra.zone?.zero_rtt;
+    if (!declared) return;
+    const zones = await cf(token, `/zones?name=${encodeURIComponent(infra.zone.name)}`);
+    const zoneId = zones?.[0]?.id;
+    if (!zoneId) {
+      warn(`0-RTT unchecked: this token sees no zone named ${infra.zone.name}`);
+      return;
+    }
+    const live = await cf(token, `/zones/${zoneId}/settings/${declared.setting}`);
+    const value = live?.value;
+    if (value !== declared.value) {
+      fail(`zone setting ${declared.setting} is "${value}" on ${infra.zone.name}, declared "${declared.value}". ${declared.why}`);
+      return;
+    }
+    pass(`zone setting ${declared.setting} is ${value}`);
+  });
+
   await section("version affinity", "Zone:Transform Rules:Read and Zone:Zone:Read", async () => {
     const declared = infra.zone?.version_affinity;
     if (!declared) return;

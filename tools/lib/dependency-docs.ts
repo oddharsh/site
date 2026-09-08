@@ -31,7 +31,8 @@
 // it four ways: `CSS Overflow 5` and `Vite 8` are not packages, `TypeScript 7.0`
 // is prose about a major line rather than the pin, and `0.28.1` / `0.28.2` sit
 // in the paragraph explaining that esbuild is no longer a direct dependency and
-// that the two remaining copies belong to wrangler and vitest. A sweep would
+// that the remaining copy belongs to wrangler (a second belonged to vitest
+// until 2026-09-02). A sweep would
 // demand those match a manifest entry that is correctly absent. This matches a
 // KNOWN ALIAS followed by a FULL three-component version, inside the baseline
 // section only.
@@ -79,7 +80,8 @@ export const DOC_ALIASES = [
 // Documented on purpose WITHOUT a version, each for a stated reason. An entry
 // here is a decision; a package in neither list fails the reverse direction.
 export const VERSIONLESS = new Map([
-  ["@cloudflare/workers-types", "a date-stamped pin dependabot rolls most days; the doc names the package and its purpose, and a version would be stale on arrival"],
+  // @cloudflare/workers-types sat here until 2026-09-02 ("a date-stamped pin
+  // dependabot rolls most days"); tools/gen-runtime-types.ts replaced it.
   ["playwright-core", "caret-ranged on purpose (it drives the locally installed Chrome), so there is no exact pin to state"],
 ]);
 
@@ -137,10 +139,9 @@ export const SUB_MANIFEST_POLICY = [
     manifest: "cal/package.json",
     kind: "npm",
     aliases: [],
-    versionless: new Map([
-      ["vitest", "caret-ranged; it is the test runner for cal alone and pulls the Vite 8 chain, so the exact resolution is the lockfile's business"],
-      ["@cloudflare/vitest-pool-workers", "caret-ranged; it must track the vitest above and the miniflare wrangler carries, so pinning it here would fight both"],
-    ]),
+    // No dependencies since 2026-09-02: the suite runs on bun:test over the
+    // root's wrangler, so there is nothing here for the prose to name.
+    versionless: new Map(),
   },
   {
     manifest: "cf-garage/package.json",

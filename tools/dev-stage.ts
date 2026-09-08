@@ -75,7 +75,7 @@ async function entries(path) {
 
 let links = 0;
 let dirs = 0;
-const collisions = [];
+const collisions: string[] = [];
 
 // Link one path into the farm, relative so `ls -l .dev-assets` names the source
 // directory a file actually authors in. That readability is the point: the farm

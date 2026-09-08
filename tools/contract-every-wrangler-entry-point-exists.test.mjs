@@ -23,6 +23,10 @@ import {
 // is the one no deploy path touches, so nothing failed. This is the check that
 // turns "no deploy path touches it" from the reason it rotted into the reason
 // it cannot rot again.
+//
+// Since 2026-09-02 that config has a real wrangler consumer: cal's suite boots
+// it through createTestHarness, which resolves `main` the way a deploy would,
+// so a wrong path now fails the suite before it reaches this check.
 
 /** Directories that hold a Worker config, discovered rather than listed, so a
  *  seventh Worker is covered by existing rather than by an edit here.

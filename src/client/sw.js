@@ -6,7 +6,9 @@
 // installed copy replaces itself, empties its caches, and unregisters;
 // with no fetch handler here, pages fall straight through to the network
 // the moment it activates. The deploy log lives on at /updates.
-self.addEventListener("install", () => self.skipWaiting());
+// `void`: skipWaiting() returns a promise nobody needs, and a listener that
+// RETURNS it hands a promise to a void slot (no-misused-promises, real).
+self.addEventListener("install", () => { void self.skipWaiting(); });
 self.addEventListener("activate", (/** @type {ExtendableEvent} */ event) => {
   event.waitUntil((async () => {
     const keys = await caches.keys();

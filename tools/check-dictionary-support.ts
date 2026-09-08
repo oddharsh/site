@@ -14,6 +14,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { brotliDecompressSync } from "node:zlib";
 import { createHash } from "node:crypto";
 import { PAGE_FAMILY_MATCH } from "../src/worker/lib/assets.ts";
+import { FAMILY_DICT_DIR, readCommittedFamily, type CommittedFamily } from "./lib/page-family.ts";
 
 const b64 = (buf) => `:${createHash("sha256").update(buf).digest("base64")}:`;
 const get = (url, dict?) => {
@@ -128,6 +129,32 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
          missing.length
            ? `run \`bun run shell:roll\` from the DEPLOYED commit. Uncovered: ${missing.join(", ")}`
            : `${tracked.length} live asset(s) present in a-dict${skipped.length ? `; ${skipped.length} untracked base(s) skipped: ${skipped.join(", ")}` : ""}`);
+}
+
+// 1c. FAMILY dictionary: is the one production advertises the one that is COMMITTED?
+//
+// build.ts ships the committed src/dict/f-dict dictionary whenever it is within drift
+// of the fresh derivation, which is what keeps /a/page-family.<hash8>.dict stable
+// across deploys (a re-mint costs every returning visitor a 17 KB fetch). The two
+// disagree in exactly two states: the build shipped a fresh corpus because the
+// committed one drifted, and the roll has not committed it yet; or someone forced a
+// re-mint by emptying the directory. Both want `bun run dict:roll`, which is why this
+// is a row here and not an error anywhere else. Advisory, like every row: it reads
+// production.
+{
+  let committed: CommittedFamily | null = null, problem: string | null = null;
+  try { committed = await readCommittedFamily(); } catch (e) { problem = e instanceof Error ? e.message : String(e); }
+  const home = await fetch("https://aadhar.sh/", { headers: { "accept-encoding": "identity" } });
+  const offered = home.headers.get("link")?.match(/<([^>]+)>;\s*rel="compression-dictionary"/)?.[1] || null;
+  try { await home.body?.cancel(); } catch {}
+  const liveHash = offered?.match(/page-family\.([0-9a-f]{8})\.dict$/)?.[1] || null;
+  if (problem) report("family dictionary is committed", false, problem);
+  else if (!liveHash) report("family dictionary is committed", false, "production's homepage advertises no rel=compression-dictionary Link");
+  else if (!committed) report("family dictionary is committed", false, `${FAMILY_DICT_DIR} is empty while production serves ${liveHash}; run \`bun run dict:roll\``);
+  else report("family dictionary is committed", committed.hash8 === liveHash,
+              committed.hash8 === liveHash
+                ? `live and committed agree on ${liveHash}`
+                : `production serves ${liveHash}, ${FAMILY_DICT_DIR} holds ${committed.hash8}; run \`bun run dict:roll\` (or the last deploy re-minted on purpose and the roll has not run yet)`);
 }
 
 // 2. page html — exercise both dictionary tiers. The family dictionary is read from

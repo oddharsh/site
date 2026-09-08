@@ -36,7 +36,7 @@ async function exists(relativePath) {
 
 const rootPackage = await readJson("package.json");
 const expected = (process.env.WRANGLER_VERSION || rootPackage.devDependencies?.wrangler || "").replace(/^v/, "");
-const errors = [];
+const errors: string[] = [];
 
 if (!(await exists("node_modules/wrangler/package.json"))) {
   console.error("Wrangler version check failed:");

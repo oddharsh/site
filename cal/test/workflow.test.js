@@ -1,24 +1,29 @@
-// The per-booking expiry timer (src/workflow.js), driven through the Vitest
-// pool's Workflow introspector. The workflow waits for a "host-decision" event
-// and, if none arrives within PENDING_TTL_DAYS, reclaims an abandoned pending
-// booking. It touches KV only (never sends mail), which is exactly why the
+// The per-booking expiry timer (src/workflow.js), driven through wrangler's
+// Workflow introspector. The workflow waits for a "host-decision" event and, if
+// none arrives within PENDING_TTL_DAYS, reclaims an abandoned pending booking.
+// It touches KV only (never sends mail), which is exactly why the
 // confirm/decline emails stayed in the request routes — the introspector can
 // drive KV outcomes, but a Workflow's outbound fetch is out of the test stub's
 // reach.
-import { describe, it, expect, beforeEach } from "vitest";
-import { env, introspectWorkflowInstance } from "cloudflare:test";
+//
+// The workflow itself runs INSIDE the harness's workerd (it is the class
+// wrangler.test.toml binds), while this file drives it from the host through
+// the proxied binding. The KV it writes is the same KV `env.BOOKINGS` reads.
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from "bun:test";
+import { bootCal } from "./harness.ts";
 import { createBooking, getBooking, holdSlot, setStatus, listHeld } from "../src/booking.js";
 
-// NOTE: the two forceEventTimeout tests below each print one
-// "WorkflowTimeoutError: Execution timed out" line. That's the miniflare
-// workflows emulator surfacing its internal timeout promise; run() catches the
-// timeout and behaves correctly (the assertions prove it), and the suite exits
-// 0. It's cosmetic, not a failure.
-
-beforeEach(async () => {
-  const { keys } = await env.BOOKINGS.list();
-  await Promise.all(keys.map((k) => env.BOOKINGS.delete(k.name)));
+/** @type {Awaited<ReturnType<typeof bootCal>>} */
+let cal;
+/** @type {import("./harness.ts").CalEnv} */
+let env;
+beforeAll(async () => {
+  cal = await bootCal();
+  env = cal.env;
 });
+afterAll(() => cal.close());
+beforeEach(() => cal.clearBookings());
+const introspectWorkflowInstance = (id) => cal.worker.introspectWorkflowInstance("BOOKING_WORKFLOW", id);
 
 // getBooking and setStatus both answer `Booking | null`, and every assertion
 // below reads through the result. A miss means the record was not written,
@@ -46,7 +51,7 @@ const WAIT_STEP = { name: "wait for host decision" };
 describe("BookingWorkflow expiry timer", () => {
   it("abandoned pending booking → timeout expires it and frees the slot", async () => {
     const b = await heldPending();
-    await using instance = await introspectWorkflowInstance(env.BOOKING_WORKFLOW, b.id);
+    await using instance = await introspectWorkflowInstance(b.id);
     await instance.modify(async (m) => { await m.forceEventTimeout(WAIT_STEP); });
 
     await env.BOOKING_WORKFLOW.create({ id: b.id, params: { id: b.id } });
@@ -59,7 +64,7 @@ describe("BookingWorkflow expiry timer", () => {
   it("host decision arrives → timer ends early and leaves the booking untouched", async () => {
     const b = await heldPending();
     await setStatus(env, b.id, "confirmed");   // the route already confirmed it
-    await using instance = await introspectWorkflowInstance(env.BOOKING_WORKFLOW, b.id);
+    await using instance = await introspectWorkflowInstance(b.id);
     await instance.modify(async (m) => {
       await m.mockEvent({ type: "host-decision", payload: { resolved: true } });
     });
@@ -74,7 +79,7 @@ describe("BookingWorkflow expiry timer", () => {
   it("timeout fires but the booking was already resolved → guard leaves it alone", async () => {
     const b = await heldPending();
     await setStatus(env, b.id, "confirmed");   // resolved, but pretend the cancel event was lost
-    await using instance = await introspectWorkflowInstance(env.BOOKING_WORKFLOW, b.id);
+    await using instance = await introspectWorkflowInstance(b.id);
     await instance.modify(async (m) => { await m.forceEventTimeout(WAIT_STEP); });
 
     await env.BOOKING_WORKFLOW.create({ id: b.id, params: { id: b.id } });

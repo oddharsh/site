@@ -209,7 +209,9 @@
       "/coffee", "/coffee/*", "/serendipity", "/serendipity/*",
       "/slots", "/book", "/approve", "/decline",
       "/llms-full.txt", "/ledger", "/ledger.json",
-      "/ledger/prefetch",
+      // one glob for the ledger's sub-routes: the activation beacon and the
+      // speculation readback. Nothing static lives under /ledger/.
+      "/ledger/*",
       "/writing", "/writing/*",
       "/webmention", "/webmention/*", "/inbox",
       // "/rn.md" carries an extension, so without it here the asset layer would

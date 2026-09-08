@@ -5,9 +5,11 @@
 //
 // It reads the real wall clock (Date.now()), so assertions are written as
 // structural invariants relative to "now" rather than fixed timestamps — no
-// fake timers, which are unreliable under the workers runtime.
-import { describe, it, expect, vi, afterEach } from "vitest";
+// fake timers, which were unreliable under the workers runtime and are not
+// worth reintroducing on the host.
+import { describe, it, expect, mock, afterEach } from "bun:test";
 import { fetchBusySWR, generateSlots, CAL_FRESH_MS } from "../src/availability.js";
+import { stubFetch } from "./harness.ts";
 
 const TZ = "America/New_York";
 const baseEnv = {
@@ -45,20 +47,21 @@ const localParts = (ms) => {
   };
 };
 
-afterEach(() => vi.unstubAllGlobals());
+let restoreFetch = () => {};
+afterEach(() => restoreFetch());
 
 describe("fetchBusySWR — stale GET behavior", () => {
   it("serves a stale snapshot immediately and refreshes in the background when allowed", async () => {
     const snapshot = { busy: [{ start: 100, end: 200 }], ts: Date.now() - CAL_FRESH_MS - 1 };
     const env = {
       BOOKINGS: {
-        get: vi.fn(async () => snapshot),
-        put: vi.fn(),
+        get: mock(async () => snapshot),
+        put: mock(() => undefined),
       },
       ICAL_URL: "https://calendar.test/availability.ics",
     };
-    const ctx = { waitUntil: vi.fn() };
-    vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("calendar unavailable"); }));
+    const ctx = { waitUntil: mock((task) => undefined) };
+    restoreFetch = stubFetch(async () => { throw new Error("calendar unavailable"); });
 
     const result = await fetchBusySWR(env, ctx, { allowStale: true });
 
@@ -72,15 +75,15 @@ describe("fetchBusySWR — stale GET behavior", () => {
     const snapshot = { busy: [{ start: 100, end: 200 }], ts: Date.now() - CAL_FRESH_MS - 1 };
     const env = {
       BOOKINGS: {
-        get: vi.fn(async () => snapshot),
-        put: vi.fn(),
+        get: mock(async () => snapshot),
+        put: mock(() => undefined),
       },
       ICAL_URL: "https://calendar.test/availability.ics",
     };
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n", {
+    restoreFetch = stubFetch(async () => new Response("BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n", {
       status: 200,
       headers: { "content-type": "text/calendar" },
-    })));
+    }));
 
     const result = await fetchBusySWR(env, null);
 
@@ -93,13 +96,13 @@ describe("fetchBusySWR — stale GET behavior", () => {
     const write = new Promise((resolve) => { finishWrite = resolve; });
     const env = {
       BOOKINGS: {
-        get: vi.fn(async () => null),
-        put: vi.fn(() => write),
+        get: mock(async () => null),
+        put: mock(() => write),
       },
       ICAL_URL: "https://calendar.test/availability.ics",
     };
-    const ctx = { waitUntil: vi.fn() };
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n", { status: 200 })));
+    const ctx = { waitUntil: mock((task) => undefined) };
+    restoreFetch = stubFetch(async () => new Response("BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n", { status: 200 }));
 
     const result = await fetchBusySWR(env, ctx);
 

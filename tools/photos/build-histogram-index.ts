@@ -23,7 +23,11 @@
 // they are exactly the twelve a visitor is able to hover.
 //
 // Packing: four channels of 64 bins, ONE CHARACTER PER BIN, in ASCII 63..126.
-// The stored form is the WIRE form, so the worker copies the string into the
+// The first bin of each channel is absolute; every later bin is the first-order
+// delta from its predecessor, modulo 64. The modulo keeps the same safe six-bit
+// alphabet and is lossless over the quantised levels, while turning smooth and
+// flat stretches into low-entropy runs that Brotli can state more cheaply. The
+// stored form is the WIRE form, so the worker copies the string into the
 // attribute and does no encoding per request.
 //
 // Base64 was the obvious choice and is the wrong one HERE, because these end up
@@ -33,11 +37,15 @@
 // Measured over the twelve tiles a homepage draws:
 //
 //   base64             344 chars/tile   1964 B brotli
-//   one char per bin   256 chars/tile   1263 B brotli   -36%
+//   absolute/bin       256 chars/tile   1263 B brotli   -36%
 //   5-bit packed+b64   216 chars/tile   1240 B brotli
 //
 // The 5-bit variant wins by 23 bytes and costs a bit-packing loop at both ends,
-// which is a bad trade for a value the tooltip has to decode on a hover.
+// which is a bad trade for a value the tooltip has to decode on a hover. The
+// modulo-delta form added later keeps all 64 levels and the same 256 characters.
+// Over 10,000 seeded twelve-photo draws rendered as the complete grid fragment,
+// local q4 Brotli fell from 2704.4 B to 2572.0 B on average (-132.4 B, -4.9%)
+// with no raw-byte growth; packing pairs or bitstreams was worse after Brotli.
 //
 // 63..126 is 64 contiguous characters holding NONE of & < > " (34, 38, 60, 62,
 // all below the range), so the attribute never escapes and the encoder never has
@@ -80,6 +88,7 @@ export function packHistogram(hi) {
   for (const channel of CHANNELS) {
     const bins = hi[channel];
     if (!Array.isArray(bins) || bins.length !== BINS) return null;
+    let previous = 0;
     for (let i = 0; i < BINS; i++) {
       const v = Number(bins[i]);
       // Clamped rather than trusted: a bin outside 0-100 would land outside the
@@ -88,10 +97,37 @@ export function packHistogram(hi) {
       // to refuse a value it cannot state, never to fabricate one.
       const level = Math.max(0, Math.min(HIST_LEVELS - 1,
         Math.round((Number.isFinite(v) ? v : 0) * (HIST_LEVELS - 1) / 100)));
-      out += String.fromCharCode(HIST_BASE + level);
+      // previous starts at zero, so this also makes each channel's first bin
+      // absolute without a separate format bit or branch.
+      const wire = (level - previous + HIST_LEVELS) % HIST_LEVELS;
+      out += String.fromCharCode(HIST_BASE + wire);
+      previous = level;
     }
   }
   return out;
+}
+
+// The build derives /images/meta/<stem>.json fallbacks from this packed index.
+// Keep that decoder beside the encoder: when the wire representation moved from
+// absolute levels to modulo deltas, build.ts's private copy did not move with it
+// and generated plausible-looking but wrong fallback curves. tooltip.js retains
+// the small browser copy, and the contract suite checks both against this one.
+export function unpackHistogram(packed) {
+  if (!packed || packed.length !== CHANNELS.length * BINS) return null;
+  const hi: Record<string, number[]> = {};
+  for (const [ci, channel] of CHANNELS.entries()) {
+    let previous = 0;
+    const bins: number[] = [];
+    for (let i = 0; i < BINS; i++) {
+      const wire = packed.charCodeAt(ci * BINS + i) - HIST_BASE;
+      if (wire < 0 || wire >= HIST_LEVELS) return null;
+      const level = (previous + wire) % HIST_LEVELS;
+      bins.push(Math.round(level * 100 / (HIST_LEVELS - 1)));
+      previous = level;
+    }
+    hi[channel] = bins;
+  }
+  return hi;
 }
 
 export async function buildHistogramIndex() {

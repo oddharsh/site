@@ -137,17 +137,20 @@ test("homepage selects 12 photos and transfers all of them", async () => {
   assert.match(fragment, /\ssizes="184px"/,
     "sizes must name the fixed .photos column, or the browser guesses 100vw and picks the largest tier");
 
-  // THE BARS RIDE ON THE TILE. Measured on production before this: a photo hover
+  // THE FIRST BARS RIDE ON THE TILE. Measured on production before this: a photo hover
   // stalled 135ms then 117ms waiting for /images/meta/<stem>.json, once per photo,
   // with the histogram blank until it landed. It has to be in the markup rather
   // than warmed by tooltip.js, because index.html loads that module on the FIRST
   // hover on purpose, so anything it warms is too late for the hover that caused
-  // the load. Controlled in a browser with /images/meta/* aborted outright: bars
-  // drew on 6 of 6 hovers.
+  // the load. The first six tiles take that path; the lower-priority six keep the
+  // per-photo fallback rather than making every fragment pay for every possible
+  // first hover.
   const packed = "?".repeat(128) + "~".repeat(128);   // 256 chars, both ends of the safe range
   const withHist = renderPhotoSlots(photo, {}, { deferred: false, histograms: { X1: packed } });
   assert.match(withHist, /data-hist="/, "a tile whose histogram is known carries it");
   assert.equal(/data-hist="([^"]*)"/.exec(withHist)[1], packed, "the packed histogram ships verbatim");
+  assert.doesNotMatch(renderPhotoSlots(photo, {}, { histograms: { X1: packed } }), /data-hist=/,
+    "the disposable baked grid must not carry histogram bytes a scripting browser replaces");
   // Absent is a LEGAL state, not a failure: tooltip.js falls back to the per-photo
   // fetch, which is what a stem baked before this existed gets.
   assert.doesNotMatch(renderPhotoSlots(photo, {}, { deferred: false }), /data-hist=/,
@@ -191,6 +194,15 @@ test("homepage selects 12 photos and transfers all of them", async () => {
     [false, false, false, false, false, false, true, true, true, true, true, true],
     "the first six tiles ride the default urgency and the last six stay low; flattening that back to one bucket restores the fair-share interleave",
   );
+  const histogramGrid = renderPhotoSlots(twelve, {}, {
+    deferred: false,
+    histograms: Object.fromEntries(twelve.map((p) => [p.stem, packed])),
+  }).split("<a href=").slice(1);
+  assert.deepEqual(
+    histogramGrid.map((tile) => /data-hist=/.test(tile)),
+    [true, true, true, true, true, true, false, false, false, false, false, false],
+    "only the immediately prioritised prefix carries bars; the low-priority half uses the metadata fallback",
+  );
   assert.doesNotMatch(grid12, /fetchpriority="high"/,
     "no photo may outrank the introductory prose, which is the measured LCP element at 390px and 1280px alike");
 
@@ -233,22 +245,48 @@ test("homepage selects 12 photos and transfers all of them", async () => {
 });
 
 
-test("the packed histogram survives the round trip tooltip.js does", async () => {
-  const { packHistogram, CHANNELS, BINS, HIST_BASE, HIST_LEVELS } = await import("../tools/photos/build-histogram-index.ts");
+test("the packed histogram survives the round trip tooltip.js and build.ts do", async () => {
+  const { packHistogram, unpackHistogram, CHANNELS, BINS, HIST_BASE, HIST_LEVELS } = await import("../tools/photos/build-histogram-index.ts");
   const hi = {};
   for (const [ci, c] of CHANNELS.entries()) hi[c] = Array.from({ length: BINS }, (_, i) => (i * 7 + ci * 13) % 101);
   const packed = packHistogram(hi);
+  assert.ok(packed, "a complete histogram packs");
   assert.equal(packed.length, CHANNELS.length * BINS, "one character per bin, no padding");
 
-  // The exact decode tooltip.js runs.
-  const decode = (s, ci, i) => Math.round((s.charCodeAt(ci * BINS + i) - HIST_BASE) * 100 / (HIST_LEVELS - 1));
+  // The exact decode tooltip.js runs: first bin absolute, then first-order
+  // deltas in modulo space. The transform changes only the wire entropy; it
+  // neither drops a level nor changes the quantisation bound.
+  const decoded = [];
+  for (let ci = 0; ci < CHANNELS.length; ci++) {
+    let previous = 0;
+    decoded[ci] = [];
+    for (let i = 0; i < BINS; i++) {
+      const wire = packed.charCodeAt(ci * BINS + i) - HIST_BASE;
+      const level = (previous + wire) % HIST_LEVELS;
+      decoded[ci][i] = Math.round(level * 100 / (HIST_LEVELS - 1));
+      previous = level;
+    }
+  }
   let worst = 0;
   for (const [ci, c] of CHANNELS.entries()) {
-    for (let i = 0; i < BINS; i++) worst = Math.max(worst, Math.abs(decode(packed, ci, i) - hi[c][i]));
+    for (let i = 0; i < BINS; i++) worst = Math.max(worst, Math.abs(decoded[ci][i] - hi[c][i]));
   }
   // 64 levels over a 0-100 source, rendered into a 32-unit-tall SVG, so one
   // level is half a pixel and this bound is the whole quality argument.
   assert.ok(worst <= 1, `round trip is within one unit of 100, got ${worst}`);
+  assert.deepEqual(
+    unpackHistogram(packed),
+    Object.fromEntries(CHANNELS.map((c, ci) => [c, decoded[ci]])),
+    "the build-side fallback decoder matches the browser-side modulo accumulator",
+  );
+  assert.equal(unpackHistogram("!".repeat(CHANNELS.length * BINS)), null,
+    "the build-side decoder refuses characters outside the wire alphabet");
+  const flat = packHistogram(Object.fromEntries(CHANNELS.map((c) => [c, Array(BINS).fill(50)])));
+  assert.ok(flat, "four complete flat channels pack");
+  for (let ci = 0; ci < CHANNELS.length; ci++) {
+    assert.equal(flat.slice(ci * BINS + 1, (ci + 1) * BINS), "?".repeat(BINS - 1),
+      `${CHANNELS[ci]} flat tail becomes zero deltas rather than repeated absolutes`);
+  }
 
   // THE ENCODING'S SAFETY IS STRUCTURAL, not a property of the current data:
   // 63..126 holds none of & < > " (34, 38, 60, 62), so the attribute can never

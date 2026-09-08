@@ -69,7 +69,7 @@ export async function handleRn(request, env, ctx) {
 // representations so the Markdown one cannot cite a different playlist than the
 // one a browser is sent to.
 async function playlistUrl(env) {
-  let playlistId = null;
+  let playlistId: string | null = null;
   if (env?.RN_KV) {
     try { playlistId = await env.RN_KV.get("playlist-id", { cacheTtl: PLAYLIST_ID_CACHE_TTL }); } catch {}
   }

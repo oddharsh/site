@@ -15,7 +15,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { parseHTML as parseLinkedom } from "linkedom";
 import { parseHTML } from "../src/dom.ts";
-import { collectControlLabels, countControls, countWords, read, scoreExtraction, tally, toMarkdown } from "../src/reader.ts";
+import { collectControlLabels, countControls, countWords, FETCH_TIMEOUT_MS, read, ReaderError, scoreExtraction, tally, toMarkdown } from "../src/reader.ts";
 
 // The override's REASON changed on 2026-08-23 and the assertion outlived it, so
 // this now says what it is for today. The Worker no longer bundles linkedom, so
@@ -159,6 +159,54 @@ test("read publishes Markdown from Readability's finished article node", async (
     assert.equal(result.title, "Direct Article");
     assert.equal(result.markdown, toMarkdown(baseline.content));
   } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("the network deadline aborts a body that stalls after successful headers", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalSetTimeout = globalThis.setTimeout;
+  let aborted = false;
+  let deadlineScheduled = false;
+  /** @type {ReadableStreamDefaultController<Uint8Array> | undefined} */
+  let body;
+  try {
+    // Run the production timer on a short test clock. Only the Reader's exact
+    // deadline is accelerated; the watchdog keeps its own real-time budget.
+    globalThis.setTimeout = /** @type {typeof setTimeout} */ ((callback, ms, ...args) => {
+      if (ms === FETCH_TIMEOUT_MS) deadlineScheduled = true;
+      return originalSetTimeout(callback, ms === FETCH_TIMEOUT_MS ? 10 : ms, ...args);
+    });
+    globalThis.fetch = /** @type {typeof fetch} */ (/** @type {unknown} */ (
+      async (_url, { signal }) => new Response(new ReadableStream({
+        start(controller) {
+          body = controller;
+          controller.enqueue(new TextEncoder().encode("<html><body>Partial article"));
+          signal.addEventListener("abort", () => {
+            aborted = true;
+            controller.error(signal.reason);
+          }, { once: true });
+        },
+      }), { headers: { "content-type": "text/html" } })
+    ));
+    // A watchdog fails the regression instead of leaving the suite hung when
+    // the application clears its timer too early.
+    let watchdog;
+    try {
+      await assert.rejects(Promise.race([
+        read("https://example.com/slow-body"),
+        new Promise((_resolve, reject) => {
+          watchdog = originalSetTimeout(() => reject(new Error("Reader exceeded its network deadline")), 500);
+        }),
+      ]), (error) => error instanceof ReaderError && /within 8s/.test(error.message));
+      assert.equal(aborted, true, "the upstream stream must be aborted, not left running");
+      assert.equal(deadlineScheduled, true, "the Reader must schedule its declared network budget");
+    } finally {
+      clearTimeout(watchdog);
+    }
+  } finally {
+    if (!aborted) body?.error(new Error("test cleanup"));
+    globalThis.setTimeout = originalSetTimeout;
     globalThis.fetch = originalFetch;
   }
 });

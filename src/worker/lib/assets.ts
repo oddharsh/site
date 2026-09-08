@@ -418,6 +418,17 @@ export async function servePrecompressedShell(request, env) {
   const headers = new Headers(br.headers);
   headers.set("content-type", SHELL_TYPES[ext]);
   headers.set("content-encoding", "br");
+  // RFC 9218 Extensible Priorities: Cloudflare honours an origin `priority`
+  // response header on HTTP/3 (unenhanced scheduler on Free), and this is the
+  // one response where the server knows better than the client's own signal.
+  // The family dictionary is fetched on idle at VeryLow and is useful only on
+  // the NEXT navigation, so u=7 puts it behind every document, style, script
+  // and tile on the connection outright. Scripts and styles keep the client's
+  // signal: Chrome already ranks luna.css above nav.js above the tiles, and an
+  // override there could only demote something the parser is waiting on.
+  // Nothing on the wire reports whether the override took, so this is set on
+  // the argument rather than on a measurement (roadmap, 2026-09-02).
+  if (ext === "dict") headers.set("priority", "u=7");
   // Only offer a type we are willing to answer with a delta. Offering the sprite would
   // teach Chromium to send Available-Dictionary for it and then get plain br anyway:
   // wasted storage on the client and a header we deliberately ignore.

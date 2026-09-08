@@ -42,11 +42,11 @@ export const UNKNOWN_SELECTOR = /'([^']+)' is not recognized as a valid pseudo-(
 // tolerated family, and throwing again if a tolerated selector failed to survive.
 // `minify` is the caller's business: the build wants minified bytes, a contract
 // check only wants the verdict. Both want the same definition of "damaged".
-export const parseCss = (filename, sourceText, { minify = false } = {}) => {
+export const parseCss = (filename: string, sourceText: string, { minify = false } = {}) => {
   const result = transformCss({ filename, code: Buffer.from(sourceText), minify });
   const out = Buffer.from(result.code).toString();
 
-  const fatal = [], tolerated = [];
+  const fatal: string[] = [], tolerated: string[] = [];
   for (const w of result.warnings) {
     const m = UNKNOWN_SELECTOR.exec(w.message);
     if (m) tolerated.push(m[1]);
