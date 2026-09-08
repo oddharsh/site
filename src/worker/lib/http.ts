@@ -98,6 +98,7 @@ function acceptIndex(accept, type) {
 function acceptQ(accept, type) {
   const [wantType, wantSub] = type.split("/");
   let best = 0;
+  let specificity = -1;
   for (const raw of accept.split(",")) {
     const parts = raw.trim().split(";").map(s => s.trim());
     const media = parts.shift();
@@ -109,7 +110,13 @@ function acceptQ(accept, type) {
       const m = p.match(/^q=([0-9.]+)$/);
       if (m) q = Math.max(0, Math.min(1, Number(m[1]) || 0));
     }
-    if (q > best) best = q;
+    // RFC 9110 section 12.5.1: the most specific matching range supplies
+    // the weight. A wildcard cannot raise an explicit q=0 refusal to q=1.
+    const rank = gotType === "*" ? 0 : gotSub === "*" ? 1 : 2;
+    if (rank > specificity) {
+      specificity = rank;
+      best = q;
+    } else if (rank === specificity && q > best) best = q;
   }
   return best;
 }

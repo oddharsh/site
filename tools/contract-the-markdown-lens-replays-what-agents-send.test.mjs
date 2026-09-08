@@ -204,6 +204,23 @@ test("the tie rule does not widen to anyone who did not ask", () => {
   assert.equal(asks("application/xhtml+xml, text/markdown"), false, "xhtml was first");
 });
 
+test("explicit Accept weights outrank matching wildcards, including refusals", () => {
+  /** @type {[string, boolean][]} */
+  const cases = [
+    ["text/markdown;q=0, */*;q=1", false],
+    ["text/markdown;q=0, text/*;q=1", false],
+    ["*/*;q=1, text/markdown;q=0", false],
+    ["text/markdown;q=0.2, text/html;q=0.8, */*;q=1", false],
+    ["text/markdown;q=0.2, text/*;q=0.8", false],
+    ["text/markdown;q=0.8, text/html;q=0.2, application/xhtml+xml;q=0, */*;q=1", true],
+    ["text/markdown;q=0.8, text/*;q=0, */*;q=0.1", true],
+  ];
+  for (const [accept, expected] of cases) {
+    const request = new Request("https://aadhar.sh/garage/horizon", { headers: { accept } });
+    assert.equal(wantsMarkdown(request), expected, accept);
+  }
+});
+
 test("the pane builds foreign strings as nodes, never as markup", () => {
   // Every content-type, status and byte count in the replay table came off a
   // stranger's server, and so did the Markdown sample. Same discipline the tools
