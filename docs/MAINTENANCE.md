@@ -88,7 +88,7 @@ delete only that derived snapshot and ask the live slots endpoint to refresh:
 ```bash
 BOOKINGS_NS="37acb65118fe485583a90a94cb89365e"
 bun run wrangler kv key delete --namespace-id="$BOOKINGS_NS" "cal:busy" --remote
-curl -fsS https://aadhar.sh/coffee/slots | jq .
+curl -fsS https://aadhar.sh/coffee/slots | jaq .
 ```
 
 The feed is cached for up to five minutes at the edge; a changed URL normally
@@ -338,7 +338,7 @@ response would take the page out of shared caches.
 Verify it after the next ramp reaches a split:
 
 ```bash
-curl -s https://aadhar.sh/whoareyou.json -H 'Cloudflare-Workers-Version-Key: probe-1' | jq -r '.groups[]|select(.title=="Server").fields[]|select(.k=="Serving version").v'
+curl -s https://aadhar.sh/whoareyou.json -H 'Cloudflare-Workers-Version-Key: probe-1' | jaq -r '.groups[]|select(.title=="Server").fields[]|select(.k=="Serving version").v'
 ```
 
 Same key twice must report the same version; different keys should spread across
@@ -1179,7 +1179,7 @@ so the encoder decides shipped URLs. Brew's `libavif` is still wanted for the
 
 ```bash
 # the photo pipeline
-brew install jq mozjpeg libavif              # mozjpeg = jpegtran + cjpeg; libavif = avifenc for the /garage/encoding grids
+brew install jaq mozjpeg libavif              # mozjpeg = jpegtran + cjpeg; libavif = avifenc for the /garage/encoding grids
 brew install cmake ninja                     # for the pinned avifenc below
 # the AVIF encoder the photo tiers actually use: libavif at a pinned tag, built
 # with aom + libsharpyuv + libyuv. First run clones and builds all four (~10 min,
@@ -1355,7 +1355,7 @@ day and `--render` spends from the same budget `/lens/browser` does.
 
 Read which engine actually answered, and the shape it measured:
 ```bash
-curl -s 'https://aadhar.sh/lens/browser?url=https://react.dev/' | jq '.engine, .shape'
+curl -s 'https://aadhar.sh/lens/browser?url=https://react.dev/' | jaq '.engine, .shape'
 ```
 
 ### Warm the /lens browser caches before a demo
@@ -1438,8 +1438,8 @@ reading it. They live in `src/worker/lens-recipes.ts` and are published
 verbatim, so anyone can check what ran:
 
 ```bash
-curl -s 'https://aadhar.sh/lens/browser?recipes=1' | jq '.recipes[] | {id, label}'
-curl -s 'https://aadhar.sh/lens/browser?url=https://example.com&do=expand' | jq '.interaction'
+curl -s 'https://aadhar.sh/lens/browser?recipes=1' | jaq '.recipes[] | {id, label}'
+curl -s 'https://aadhar.sh/lens/browser?url=https://example.com&do=expand' | jaq '.interaction'
 ```
 
 **Rules a new recipe has to clear, each pinned by a contract test.** It must not
@@ -1472,7 +1472,7 @@ inside a Worker:
 
 ```bash
 bun run dev:remote
-curl -s 'http://localhost:8787/lens/browser?url=https://example.com&do=expand' | jq '.interaction, .engine'
+curl -s 'http://localhost:8787/lens/browser?url=https://example.com&do=expand' | jaq '.interaction, .engine'
 ```
 
 A binding that refuses `addScriptTag` surfaces as the existing `upstream_not_ok`
@@ -1853,9 +1853,9 @@ down fails instead of printing two green refusals it never earned.
 
 ```bash
 dig _index._agents.aadhar.sh SVCB +dnssec +short          # DNS-AID agent-discovery record
-curl -s https://aadhar.sh/.well-known/http-message-signatures-directory | jq .   # AadharshBot JWKS (Web Bot Auth)
+curl -s https://aadhar.sh/.well-known/http-message-signatures-directory | jaq .   # AadharshBot JWKS (Web Bot Auth)
 curl -sD- -o /dev/null "https://aadhar.sh/images/<stem>.avif?v=<N>"  # a thumb: expect 200 image/avif, 1yr immutable
-curl -s "https://aadhar.sh/images/manifest.json" | jq length          # photo count
+curl -s "https://aadhar.sh/images/manifest.json" | jaq length          # photo count
 ```
 
 ### Markdown twins
@@ -1885,7 +1885,7 @@ until its twin agrees: `checkTwinFacts()` recomposes the User-Agent from
 |---|---|
 | `add-photos.sh` | Full pipeline for new photos: resize, EXIF-rotate, encode AVIF+JPG center-square thumbs, upload the full-resolution browser copy to R2, write the stem's `photo-index.json` entry, regenerate metadata, bake histograms, and validate the artifact graph. |
 | `check-photo-pipeline.mjs` | CI-safe invariant check: every metadata stem has all three hashed tiers, per-photo metadata, and four 64-bin histogram channels, with no orphaned pixel files. Also walks the authored HTML/JS for hardcoded `/i/<stem>.<hash>` URLs (the `/garage/tooltips` demo slots have three) and fails if a re-encode has pruned the bytes one of them names. |
-| `extract-photo-metadata.sh` | Read EXIF from the SOOC folder, emit `images/metadata.json` + per-photo `images/meta/<stem>.json`. Pulls the Fuji recipe fields too. Requires exif-sooc + jq. **Two schemas, on purpose:** `metadata.json` is the RECORD (long, self-documenting field names, plus the derived `recipe` card) and the per-photo files are the tooltip's RENDER CACHE (short keys, tooltip-only fields, nulls dropped, ~28% smaller compressed because one is fetched per hover). Bump `META_V` in `tooltip.js` when the per-photo shape changes. |
+| `extract-photo-metadata.sh` | Read EXIF from the SOOC folder, emit `images/metadata.json` + per-photo `images/meta/<stem>.json`. Pulls the Fuji recipe fields too. Requires exif-sooc + jaq. **Two schemas, on purpose:** `metadata.json` is the RECORD (long, self-documenting field names, plus the derived `recipe` card) and the per-photo files are the tooltip's RENDER CACHE (short keys, tooltip-only fields, nulls dropped, ~28% smaller compressed because one is fetched per hover). Bump `META_V` in `tooltip.js` when the per-photo shape changes. |
 | `build-exif-index.mjs` | **RETIRED 2026-08-29**, along with `build-image-fingerprints.ts`. Both rolled a committed index out of the pipeline's own leftovers, and both are BUILD OUTPUT now: `tools/lib/photo-indexes.ts` holds the two derivations and `build.ts` step 1a stages `images/exif.json` and `images/fingerprints.json` into `.build/public` on every deploy, so both still ship at the URLs they always had. Neither script has a caller left; `extract-photo-metadata.sh` and `hash-thumbnails.sh` each dropped one line. **Why exif.json exists at all:** the homepage draws a random 12 of 165 per request, so warming metadata per visible slot was 12 cold requests on nearly every visit (a given slot repeats ~7.6% of the time). One immutable index is smaller than that on the first visit and free after. Histograms stay out of it because they are 623 of a per-photo file's ~977 bytes, so folding them in would take the index from 2.6KB to 24KB for bars most visitors never see. |
 | `build-recipes.py` | **RETIRED 2026-08-14.** The Fujifilm recipe card is derived during extraction now, by `exif-sooc --keyed`, from the Fuji tags rather than from the flattened record this script re-read. Same idiom and same output: all 158 committed cards regenerate byte-identical. One behaviour change worth knowing, since the old script rewrote every card on every run: a `--merge` run now refreshes the BATCH only, so re-run a full extraction after an exif-sooc upgrade that changes the card. Query it with `/photos/query.json?recipe=DR400` as before. |
 | `reencode-thumbnails.sh` | Re-encode every published grid thumb from the source folder at a new resolution (pre-cropped squares, two tiers). Follow with `hash-thumbnails.sh`, then commit + deploy. |

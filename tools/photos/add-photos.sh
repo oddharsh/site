@@ -653,15 +653,15 @@ while IFS= read -r f; do
     continue
   fi
   size=$(wc -c < "$obj" | tr -d '[:space:]')
-  jq --arg s "$stem" --arg k "$key" --argjson z "$size" \
+  jaq --arg s "$stem" --arg k "$key" --argjson z "$size" \
      '. + {($s): {full: $k, size: $z}}' "$NEW_ENTRIES" > "$NEW_ENTRIES.tmp" && mv "$NEW_ENTRIES.tmp" "$NEW_ENTRIES"
 done < "$SOURCES"
-jq -S --arg now "$NOW_ISO" --slurpfile new "$NEW_ENTRIES" '
+jaq -S --arg now "$NOW_ISO" --slurpfile new "$NEW_ENTRIES" '
   . as $idx
   | ($new[0] | with_entries(.value += {uploaded: ($idx[.key].uploaded // $now)}))
   | $idx + .
 ' "$INDEX_FILE" > "$INDEX_FILE.tmp" && mv "$INDEX_FILE.tmp" "$INDEX_FILE"
-echo "  photo index: $(jq 'length' "$INDEX_FILE") entries"
+echo "  photo index: $(jaq 'length' "$INDEX_FILE") entries"
 # regenerate from the FIRST input dir if it was a directory; else from the
 # parent dir of the first file (metadata script walks one canonical dir).
 META_SRC=""
@@ -671,7 +671,7 @@ done
 if [ -z "$META_SRC" ]; then
   META_SRC="$(dirname "$(head -1 "$SOURCES")")"
 fi
-if command -v exif-sooc >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
+if command -v exif-sooc >/dev/null 2>&1 && command -v jaq >/dev/null 2>&1; then
   META_MODE=()
   if [ "${REMOTE_RENDER_ONLY:-0}" = "1" ]; then META_MODE=(--merge); fi
   # `${META_MODE+"${META_MODE[@]}"}` rather than a bare `"${META_MODE[@]}"`,
@@ -686,7 +686,7 @@ if command -v exif-sooc >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
   # `2>&1` would tail them into nothing.
   "$SCRIPT_DIR/extract-photo-metadata.sh" ${META_MODE+"${META_MODE[@]}"} "$META_SRC" | tail -1
 else
-  echo "  exif-sooc or jq missing — skipping metadata regen"
+  echo "  exif-sooc or jaq missing — skipping metadata regen"
 fi
 
 # A SECOND `zenc histogram --root` stood here until 2026-08-29, and the comment
@@ -709,7 +709,7 @@ fi
 # builds makes the last bake to run always the one they read.
 #
 # One path did change behaviour, for the better. The regen above is guarded on
-# exif-sooc and jq, so on a machine missing either, this call was the ONLY bake
+# exif-sooc and jaq, so on a machine missing either, this call was the ONLY bake
 # and it wrote a meta/ carrying `hi` and no EXIF. check-photo-pipeline.ts then
 # rebuilt exif.json from that and failed 165 of 165 photos pointing at
 # build-exif-index.ts, which is not where the fault was. With no meta/ at all

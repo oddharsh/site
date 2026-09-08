@@ -1263,8 +1263,26 @@ Two encoders + one transform tool, all built from source:
   .[1]'` is a RECURSIVE merge and the reflexive substitute `+` is shallow: on a
   `--merge` run the fresh read carries no `recipe`, so `+` drops the card from
   every re-merged photo, silently, and it surfaces as a tooltip that has quietly
-  stopped showing lines. That one operator pinned this pipeline to jq
-  specifically (jaq, measured 2026-08-14, refuses it outright). `--merge-into`
+  stopped showing lines. That merge pinned this pipeline to jq specifically.
+
+  **THE RECORDED REASON WAS WRONG ABOUT WHICH PART, corrected 2026-09-08 while
+  swapping this pipeline to jaq.** This said "jaq, measured 2026-08-14, refuses
+  it outright", naming the `*` operator. jaq does NOT refuse `*`:
+  `{"a":{"x":1}} * {"a":{"y":2}}` returns the recursive merge on jaq 3.1.1,
+  exactly as jq does. What jaq does differently is `-s` across MULTIPLE FILE
+  ARGUMENTS, which is how that merge was written: jq slurps two files into one
+  array of 2, jaq processes each file separately, so `.[1]` is null and the
+  expression dies on a type error that NAMES `*`. The error names the operator
+  and the cause is the flag, which is exactly how it got misfiled, and it is
+  gotcha 15's lesson again: an entry that blames a specific component needs the
+  control that would exonerate it. Two commands, and nobody ran the first:
+
+  ```
+  echo '{}' | jaq -c '{"a":{"x":1}} * {"a":{"y":2}}'   # {"a":{"x":1,"y":2}}
+  jaq -s -c 'length' a.json b.json                     # 1, where jq says 2
+  ```
+
+  `--merge-into`
   states the rule instead of relying on an operator, and a contract test in that
   repo pins it.
 
@@ -1276,15 +1294,20 @@ Two encoders + one transform tool, all built from source:
   those files at all, so the parse is ~0.3ms and no language or rewrite can
   reach it. The photo pipeline's real cost is the encode: the same run spends
   ~19s in the zenc histogram bake.
-- **exif-sooc, jq** (`cargo install --git https://github.com/oddharsh/exif-sooc exif-sooc --locked`, and
-  `brew install jq`). exiftool is GONE from this repository as of 2026-08-14:
+- **exif-sooc, jaq** (`cargo install --git https://github.com/oddharsh/exif-sooc exif-sooc --locked`, and
+  `brew install jaq`). exiftool is GONE from this repository as of 2026-08-14:
   the six other scripts that still called it (encoding grids and samples,
   Instagram export, add photos, remote download, thumbnail re-encode) moved too, using ExifTool's own
   flag spellings so each swap was one word. `-all=` is byte-identical to
   ExifTool's output across a 20-file, 452 MB mixed Fujifilm and Leica set, and
   `-TagsFromFile` copies APP1 segments verbatim where ExifTool rebuilds them,
-  keeping 165 tags to its 163 at the cost of the source's padding. jq is still
-  wanted by the per-stem split.
+  keeping 165 tags to its 163 at the cost of the source's padding. The per-stem
+  split still wants a jq-language interpreter, and since 2026-09-08 that is
+  **jaq** rather than jq: every remaining filter was diffed engine against
+  engine over the real 165-photo library and matched byte for byte
+  (`--slurpfile`, `-S`, `--arg`, `-n`, `with_entries`, `has`, `to_entries`,
+  array subtraction, the photo-index merge). Nothing here uses `-s`, which is
+  the one real incompatibility.
 - **Pillow, via uv** (`brew install uv`, then `bun run photos:env`) — required by
   `gen-pixel-peeper.py` alone, which is a one-off generator rather than part of
   this pipeline. The 64-bin RGB/luminance bake moved into `zenc histogram` on
@@ -1331,7 +1354,7 @@ one of them was undocumented until `tools:check` went looking (2026-08-14):
 > orphans every `a-dict` snapshot naming the old hash, and can leave derived data
 > describing pixels nobody serves, which is gotcha 41 as a check instead of a
 > postmortem. So each tool declares how to ASK its version (there is no
-> convention: `exif-sooc 0.2.0`, `jq-1.7.1-apple`, `sips-316`, `Version: 1.4.2`,
+> convention: `exif-sooc 0.2.0`, `jaq 3.1.1`, `sips-316`, `Version: 1.4.2`,
 > a bare `1.6.0`, and mozjpeg answering on stderr), the seven whose output ships
 > carry `bytes: true` and a `recorded` version, and drift from `recorded` is a
 > NOTICE rather than a failure. For an encoder, "newer" is not "take it": a bump
@@ -1681,7 +1704,7 @@ Diffing a full build against `origin/main`'s put all 1532 staged files identical
 projected `metadata.json` into 165 files and rolled those back into one. It is
 one projection now. What that costs is a second implementation of the key map,
 since `extract-photo-metadata.sh` still writes the per-photo files for the
-histogram bake through a jq object literal; `check-photo-pipeline.ts` holds the
+histogram bake through a jaq object literal; `check-photo-pipeline.ts` holds the
 two together wherever `images/meta/` exists, which is any workstation that has
 just run the pipeline.
 

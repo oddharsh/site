@@ -18,7 +18,7 @@ KEYS_FILE="$1"
 DEST_DIR="$2"
 ORIGIN="${PHOTO_SOURCE_ORIGIN:-https://aadhar.sh}"
 
-for cmd in curl jq exif-sooc; do
+for cmd in curl jaq exif-sooc; do
   command -v "$cmd" >/dev/null 2>&1 || {
     echo "error: $cmd not found in PATH" >&2
     exit 1
@@ -39,7 +39,7 @@ if grep -Eq '^[[:space:]]*all[[:space:]]*$' "$KEYS_FILE"; then
   fi
   curl --fail --silent --show-error --location --retry 3 --retry-all-errors \
     "${ORIGIN%/}/images/manifest.json" |
-    jq -r '.photos[]?.full' > "$NORMALIZED"
+    jaq -r '.photos[]?.full' > "$NORMALIZED"
 else
   sed 's/\r$//' "$KEYS_FILE" |
     awk 'NF { sub(/^[[:space:]]+/, ""); sub(/[[:space:]]+$/, ""); print }' > "$NORMALIZED"
@@ -63,7 +63,7 @@ while IFS= read -r key || [ -n "$key" ]; do
   fi
   printf '%s\n' "$stem" >> "$STEMS_FILE"
 
-  encoded="$(jq -nr --arg key "$key" '$key | @uri')"
+  encoded="$(jaq -nr --arg key "$key" '$key | @uri')"
   output="$DEST_DIR/$key"
   echo "fetching $key"
   curl --fail --silent --show-error --location --retry 3 --retry-all-errors \

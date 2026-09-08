@@ -224,7 +224,7 @@ produced them would be inventing provenance. What is true is that they are the
 versions the next run will use, and a future re-encode updates them.
 
 Reading a version has no convention, so each tool declares its own flag and
-pattern: `exif-sooc 0.2.0`, `jq-1.7.1-apple`, `sips-316`, `Version: 1.4.2 (...)`,
+pattern: `exif-sooc 0.2.0`, `jaq 3.1.1`, `sips-316`, `Version: 1.4.2 (...)`,
 a bare `1.6.0`, and mozjpeg's two answering `mozjpeg version 4.1.5` on stderr.
 `ssimulacra2` and `butteraugli_main` report nothing at all and say so with a
 reason; both are metrics rather than encoders, so no shipped byte depends on

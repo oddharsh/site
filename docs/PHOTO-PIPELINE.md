@@ -26,7 +26,7 @@ Run GitHub Actions → Remote photo pipeline and choose a routine:
 The workflow runs on an ephemeral GitHub-hosted macOS runner because the
 current decoder path deliberately uses macOS sips. It builds the JPEG encoder
 (tools/photos/zenc, a Cargo crate wrapping zenjpeg) with cargo, installs
-Homebrew's mozjpeg/libavif/jq tools plus exif-sooc, and never commits the downloaded
+Homebrew's mozjpeg/libavif/jaq tools plus exif-sooc, and never commits the downloaded
 sources or the built encoder binary.
 
 ## Derived output
