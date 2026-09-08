@@ -146,7 +146,12 @@ export const SUB_MANIFEST_POLICY = [
   {
     manifest: "cf-garage/package.json",
     kind: "npm",
-    aliases: [],
+    // It declares Wrangler, alone among the workspaces, and the declaration is
+    // load-bearing rather than a duplicate: the `cf` CLI reads a dev server out
+    // of the project's OWN manifest and does not walk up to the workspace root,
+    // so `cf build` refuses this directory without it. Bun symlinks it to the
+    // one hoisted install, and check-wrangler holds it equal to the root pin.
+    aliases: [{ prose: "Wrangler", pkg: "wrangler" }],
     versionless: new Map(),
   },
   {

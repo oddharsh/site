@@ -241,7 +241,11 @@ declaration, and a declared minimum nothing enforces is an error.
 ## Current baseline
 
 - Wrangler 4.129.0 is the exact root pin shared by all Worker projects, and
-  since 2026-09-02 it is also cal's test harness: `cal/test` runs on bun:test
+  **cf-garage restates it in its own manifest** so the `cf` CLI will build that
+  directory (it reads a dev server from the project's own package.json and does
+  not walk up). That costs no second copy, since bun symlinks the declaration to
+  the one hoisted install, and `check-wrangler` holds the two equal.
+  Since 2026-09-02 that same pin is cal's test harness too: `cal/test` runs on bun:test
   against `createTestHarness`, so the tree carries exactly one Wrangler, one
   Miniflare and one Workerd by construction. Until that day `cal` declared
   @cloudflare/vitest-pool-workers to reach the same stack, and keeping its
@@ -399,8 +403,15 @@ declaration, and a declared minimum nothing enforces is an error.
   2026-08-15 and the package went with it: pure-JS ML-DSA costs ~8.5ms per
   request against a 10ms CPU budget, which was taking down the playlist scrape
   and `/lens`. `/garage/pqc` carries the measurements and the retirement note.
-- The root workspace lockfile is authoritative; workspace-local Wrangler pins
-  are rejected by `bun run check-wrangler`.
+- The root workspace lockfile is authoritative. A workspace may RESTATE the root
+  Wrangler pin and may not diverge from it, which `bun run check-wrangler`
+  enforces as an equality test. **cf-garage declares Wrangler 4.129.0** for that
+  reason: the `cf` CLI reads a dev server out of the project's own manifest and
+  does not walk up to the workspace root, so `cf build` refuses the directory
+  without it. It costs no second copy, because bun symlinks the declaration to
+  the one hoisted install (same inode as the root copy, measured 2026-09-08).
+  The check was an absence test until then, which could not catch a root bump
+  that left a project behind; equality can, and does.
 
 ## Outside the root manifest
 

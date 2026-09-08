@@ -1,5 +1,6 @@
-// Every Worker project on this account must run the SAME Wrangler, pinned
-// exactly at the root. A drifting Wrangler is how a config key means one thing
+// Every Worker project on this account must run the SAME Wrangler. The root
+// carries the pin; a project may RESTATE it exactly (cf-garage does, because
+// the `cf` CLI reads the project's own manifest) and may not diverge from it. A drifting Wrangler is how a config key means one thing
 // in CI and another on a workstation.
 //
 // This read the npm lockfile until the pnpm migration. It now reads the
@@ -78,14 +79,35 @@ for (const project of PROJECTS) {
   const pkg = await readJson(`${project}/package.json`);
   const declared = pkg.devDependencies?.wrangler || pkg.dependencies?.wrangler || "";
 
-  if (declared) errors.push(`${project}: package.json must not declare Wrangler; use the root pin ${expected}`);
-  // Under pnpm a workspace's own dependencies materialise in its local
-  // node_modules, so a direct declaration shows up here even when the root
-  // package.json is clean.
-  if (await exists(`${project}/node_modules/wrangler`)) {
-    errors.push(`${project}: has its own Wrangler in node_modules; it must use the root pin ${expected}`);
+  // A declaration is ALLOWED when it is exactly the root pin, and forbidden
+  // otherwise. This was an absence test until 2026-09-08 ("must not declare"),
+  // which made drift impossible by making declaration impossible. The `cf` CLI
+  // needs the declaration: it looks for a dev server in the project's OWN
+  // manifest and does not walk up to the workspace root, so `cf build` refuses
+  // cf-garage outright without it.
+  //
+  // Equality is the property this file has always been about ("every Worker
+  // project on this account must run the SAME Wrangler"), and checking it
+  // directly is stronger than the proxy it replaces: absence could not catch a
+  // root bump that left a project behind, because under the old rule no project
+  // could name a version to be left behind at. Now that one can, this fails.
+  if (declared && declared !== expected) {
+    errors.push(`${project}: package.json declares Wrangler ${JSON.stringify(declared)}, expected the root pin ${expected}`);
   }
-  console.log(`${project}: uses root Wrangler ${expected}`);
+
+  // Bun symlinks a workspace dependency to the one hoisted copy rather than
+  // installing a second, so the presence of this path is not evidence of a
+  // duplicate. Measured 2026-09-08: cf-garage/node_modules/wrangler is a
+  // symlink into node_modules/.bun/wrangler@4.129.0 and shares an inode with
+  // the root copy. What matters is the version it resolves to, so read that.
+  const localManifest = `${project}/node_modules/wrangler/package.json`;
+  if (await exists(localManifest)) {
+    const localVersion = (await readJson(localManifest)).version || "";
+    if (localVersion !== expected) {
+      errors.push(`${project}: node_modules resolves Wrangler ${JSON.stringify(localVersion)}, expected ${expected}`);
+    }
+  }
+  console.log(`${project}: ${declared ? `declares Wrangler ${declared}` : `uses root Wrangler ${expected}`}`);
 }
 
 if (errors.length) {

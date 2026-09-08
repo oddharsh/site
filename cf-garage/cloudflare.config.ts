@@ -39,41 +39,51 @@
 // !== false`, so an ABSENT block collects package dependencies exactly like an
 // explicit `true` does. Verified by reading wrangler's own upload path rather
 // than by dry-run, since a dry run never reports it.
-// THE `cf` CLI WAS TRIALLED HERE ON 2026-09-08 AND CANNOT TAKE THIS WORKER YET,
-// for two independent reasons that are both structural rather than polish. It is
-// Cloudflare's own (workers-sdk maintainers, MIT, depends on the same Miniflare 5
-// wrangler already pulls), and their blog calls it a technical preview and
-// explicitly not production-ready. This directory is where it WOULD land first,
-// on the same argument that put the experimental config here: cheapest place to
-// be wrong, and already on `cf`'s native config format.
+// THE `cf` CLI RUNS HERE, and this directory is where it should. Same argument
+// that put the experimental TypeScript config in it: cheapest place to be wrong,
+// a demo Worker deployed by hand, and already on `cf`'s native config format.
+// Trialled 2026-09-08 against cf 0.9.1, which Cloudflare calls a technical
+// preview and explicitly not production-ready, so nothing in CI depends on it.
 //
-// 1. `cf build` REFUSES a project whose own manifest declares no dev server:
-//    "A project must declare exactly one of the following in its manifest",
-//    listing @cloudflare/vite-plugin, wrangler, and the Python and Rust servers.
-//    It checks `cf-garage/package.json` alone and does not walk up to the
-//    workspace root. Declaring wrangler here is precisely what
-//    `tools/check-wrangler.ts` fails on ("package.json must not declare
-//    Wrangler; use the root pin"), so satisfying `cf` breaks a required check.
+//     cd cf-garage && npx cf build          # delegates to the pinned wrangler
+//     cd cf-garage && npx cf deploy         # workstation only, wants a token
 //
-// 2. `cf deploy --dry-run` REQUIRES a credential, and wrangler's does not.
-//    Measured the same day with no token in the environment: `cf deploy
-//    --prebuilt --dry-run` stops at "No authentication token found", while
-//    `wrangler deploy --dry-run --x-new-config` prints all four bindings and
-//    exits 0. CI dry-runs this config with no Cloudflare credential at all, by
-//    the no-write-token rule, so `cf` cannot stand in for that step.
+// **`cf build` DELEGATES TO WRANGLER**, which is the fact that makes this safe:
+// it prints "Delegating to Wrangler" and the bundle is byte-identical to what
+// `wrangler build --x-cf-build-output --x-new-config` writes (sha256
+// 7bacc9438af5db28..., measured both ways). So adopting `cf` here changes no
+// shipped byte and cannot move a content hash. It is a front end today.
 //
-// THE SEAM THAT DOES WORK, and it is the interesting half. `wrangler build
-// --x-cf-build-output --x-new-config` writes the Build Output API tree that
-// `cf deploy --prebuilt` is designed to consume:
+// **THE `wrangler` DEVDEPENDENCY IN package.json IS LOAD-BEARING, and it is NOT
+// a second copy.** `cf` looks for a dev server in the project's OWN manifest and
+// does not walk up to the workspace root, so without it `cf build` refuses
+// outright ("A project must declare exactly one of the following in its
+// manifest"). Bun then symlinks it: `cf-garage/node_modules/wrangler` points into
+// `node_modules/.bun/wrangler@4.129.0` and shares an INODE with the root copy, so
+// the tree still carries exactly one wrangler. `bun install` reported "no
+// changes" on adding it.
 //
-//     .cloudflare/output/v0/workers/default/{config.json,bundle/index.js}
+// It must stay EQUAL to the root pin, and `tools/check-wrangler.ts` is what makes
+// that true rather than remembered. That check was an absence test until this
+// change ("must not declare"), which made drift impossible by making declaration
+// impossible; it is an equality test now, which is the property it was always
+// about and catches one case the absence rule structurally could not: a root bump
+// that leaves this file behind. Both directions are proven by controls.
 //
-// That config.json carries the name, compatibility date and flags, the fetch
-// trigger, all four bindings and the declarative `Counter` DO export. So the
-// handoff exists today and only the credential rule stands between it and a
-// working `cf` deploy from a built tree. Re-try when `cf` either reads a
-// workspace root for its dev server or stops asking for auth on a dry run;
-// re-trying on a version bump alone measures nothing.
+// **CI STAYS ON WRANGLER, and the reason is a credential.** `cf deploy --dry-run`
+// requires a token where wrangler's does not: measured with an empty environment,
+// `cf deploy --prebuilt --dry-run` stops at "No authentication token found" while
+// `wrangler deploy --dry-run --x-new-config` prints all four bindings and exits 0.
+// CI dry-runs this config with no Cloudflare credential at all, by the
+// no-write-token rule, so `cf` cannot stand in for that step and is not asked to.
+// That puts it on the workstation-only tier with `infra:apply`, `kitesurf:check`
+// and `csp:sweep`, which is the right home for a preview tool anyway.
+//
+// The seam worth knowing if that ever changes: `wrangler build
+// --x-cf-build-output` writes the Build Output API tree `cf deploy --prebuilt`
+// consumes, at .cloudflare/output/v0/workers/default/{config.json,bundle/index.js},
+// carrying the name, compatibility date and flags, the fetch trigger, all four
+// bindings and the declarative Counter DO export.
 
 import { bindings, defineSettings, defineWorker, exports, triggers } from "wrangler/experimental-config";
 
