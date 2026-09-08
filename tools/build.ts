@@ -35,7 +35,7 @@ import { availableParallelism } from "node:os";
 // are rewritten in place by later steps, so each import site needs a fresh URL.
 const BUILD_NONCE = process.hrtime.bigint().toString(36);
 import { existsSync } from "node:fs";
-import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
@@ -1111,7 +1111,11 @@ const HTML_MINIFY_CFG = {
   allow_noncompliant_unquoted_attribute_values: false,
   allow_optimal_entities: false,
   allow_removing_spaces_between_attributes: false,
-  keep_closing_tags: true,
+  // Measured 2026-09-02 over all 54 staged documents: this is the ONLY html
+  // option that helps after brotli, and it saves 1,192 B (22 B per page). It
+  // was declined then because it re-mints every page and page dictionary; this
+  // change is already paying that cost, so it rides along.
+  keep_closing_tags: false,
   keep_comments: false,
   keep_html_and_head_opening_tags: true,
   keep_input_type_text_attr: true,
@@ -1822,6 +1826,56 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     await writeFile(`${OUT}/public/writing/${post.slug}.html`, await response.text());
   }
   console.log(`static renders: /lens + blank /run + blank /search + /writing index + ${posts.length} notes staged from canonical Worker renderers`);
+}
+
+// 5c) shorten every CSS custom property name, across the whole staged tree.
+//
+// The palette is authored for people and 100-odd of those names are distinct
+// strings, which is the one thing brotli cannot discount. Measured 2026-09-08:
+// -272 B brotli over the five stylesheets, 93% of it luna.css.
+//
+// It runs HERE, after every document, stylesheet and Worker CSS literal is
+// staged and before step 6 hashes anything, so the content hashes, the CSP
+// hashes at 7c and the deltas at 8 all see final bytes.
+//
+// The `.src.*` twins are skipped on purpose: they are the readable copy, and
+// `--surface-window` is what makes them worth reading.
+{
+  const { RESERVED, planNames, applyMangle, assertIntegrity, assertNoDynamicPropertyNames } = await import(
+    "./lib/mangle-custom-properties.ts"
+  );
+
+  const staged = (await readdir(OUT, { recursive: true }))
+    .filter((f) => /\.(css|html|js|ts|mjs)$/.test(f))
+    .filter((f) => !/\.src\.(css|html|js)$/.test(f))
+    .filter((f) => !f.startsWith("src/dict/"));
+
+  const before = new Map<string, string>();
+  for (const rel of staged) {
+    const full = `${OUT}/${rel}`;
+    if (!(await stat(full)).isFile()) continue;
+    before.set(rel, await readFile(full, "utf8"));
+  }
+
+  // A name assembled at runtime is the one input a find-and-replace cannot
+  // follow, so it is a build failure rather than a silent miss.
+  assertNoDynamicPropertyNames(before);
+
+  const map = planNames(before);
+  const after = new Map<string, string>();
+  for (const [rel, text] of before) after.set(rel, applyMangle(text, map));
+
+  // The floor is what stops a collector that quietly stops matching from
+  // reporting a clean pass, the same argument as the twin and CSP-hash floors.
+  assertIntegrity(before, after, map, 80);
+
+  let touched = 0;
+  for (const [rel, text] of after) {
+    if (text === before.get(rel)) continue;
+    await writeFile(`${OUT}/${rel}`, text);
+    touched++;
+  }
+  console.log(`custom properties: ${map.size} renamed across ${touched} staged files (${RESERVED.size} reserved for the DOM calls that name them)`);
 }
 
 // The fresh family corpus step 6 derives. Whether it SHIPS is step 8's call, made

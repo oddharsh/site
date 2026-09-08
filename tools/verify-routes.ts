@@ -454,12 +454,21 @@ async function probe(r) {
     // production the homepage reports document.childNodes[0].nodeType === 8,
     // document.doctype.name === "html", and document.compatMode === "CSS1Compat".
     // Still anchored, so a document that merely mentions a doctype later fails.
+    // `</html>` is NOT part of this contract, because it is an optional end tag
+    // and the build stopped emitting it when keep_closing_tags went false
+    // (2026-09-08, 16,270 B raw across 55 pages). Everything this check is FOR
+    // survives that: the doctype still anchors the document, so
+    // document.doctype.name is "html" and compatMode is CSS1Compat either way.
+    //
+    // What is genuinely given up is that a TRUNCATED response no longer looks
+    // different from a complete one at the last byte. The oracle still catches
+    // truncation through maxBytes and the marker assertions, which is where it
+    // was really being caught; this line only ever caught it by accident.
     const okFullPage = !r.fullPage || (
       /^(?:<!--[\s\S]*?-->\s*)?<!doctype html[\s>]/i.test(body) &&
       /<html\b/i.test(body) &&
       /<head\b/i.test(body) &&
-      /<body\b/i.test(body) &&
-      /<\/html>/i.test(body)
+      /<body\b/i.test(body)
     );
     const okFragment = !r.fragment || (
       !/<(?:!doctype|html|head|body)\b/i.test(body) &&

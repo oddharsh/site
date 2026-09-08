@@ -2980,6 +2980,44 @@ it before treating anything in there as a target.
    keeping the unhashed paths as short-cached fallbacks for Cal's absolute refs
    and stale HTML.
 
+   **Step 5c renames every CSS custom property in the staged tree**, so
+   `--surface-window` ships as `--h`. The palette is authored for people and
+   about 100 of those names are DISTINCT strings, which is the one thing brotli
+   cannot discount: a repeated string costs a backreference, a unique one costs
+   its length. Measured 2026-09-08, it is -0.24 KiB brotli on `luna.css` alone
+   (-3.2%) and -0.30 KiB across the client assets.
+
+   It is safe to do mechanically for one reason, and that reason is checked
+   rather than assumed: NOTHING in the tree builds a property name at runtime.
+   Every `setProperty` / `getPropertyValue` / `removeProperty` call passes a
+   literal, the five names they pass are reserved, and
+   `assertNoDynamicPropertyNames` fails the build on a non-literal first
+   argument. A single `setProperty("--" + kind)` would defeat the whole pass
+   silently.
+
+   **The integrity assertion is the load-bearing part, because a missed file is
+   invisible.** Its `var(--surface-window)` would simply keep the old name,
+   nothing would define it, and the colour would fall back to nothing several
+   commits later. So the invariant is not that the output looks right, it is
+   that the set of DANGLING `var()` references is unchanged name for name with
+   the rename applied. A file the walk forgot appears there immediately, and a
+   floor of 80 stops a collector that has quietly stopped matching from
+   reporting a clean pass. It earned its keep on its first run, catching a
+   generated `--l` that collided with a name something referenced and nothing
+   defined; generated names are now seeded against every token already in the
+   tree. The `.src.*` twins are deliberately NOT mangled, since they are the
+   readable copy.
+
+   **`keep_closing_tags` went false in the same change** (16,270 B raw across 55
+   pages), which means served documents no longer carry `</html>`. That was
+   measured and declined on 2026-09-02 because it re-mints every page and page
+   dictionary; the rename was already paying that cost, so it rode along. The
+   route oracle's full-page contract dropped its `</html>` assertion to match:
+   the doctype still anchors the document, so `document.doctype.name` and
+   `compatMode` are unaffected, and what is genuinely given up is that a
+   TRUNCATED response no longer differs from a complete one at the last byte.
+   Truncation is caught by `maxBytes` and the marker assertions instead.
+
    `wrangler.jsonc` self-builds and points both `main` and `assets` at
    `.build/public`, so no deploy path can ship the readable originals. Local
    development uses `wrangler.dev.jsonc` against a SYMLINK FARM at `.dev-assets`,
