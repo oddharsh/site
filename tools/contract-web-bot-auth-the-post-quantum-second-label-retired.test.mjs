@@ -49,13 +49,17 @@ test("the ed25519 signature is unchanged by the removal", async () => {
   // 2026-09-03; the fixture's `kid` label is deliberately NOT what appears.
   // (contract-web-bot-auth-keyid-is-the-thumbprint pins the derivation itself.)
   const keyid = await jwkThumbprint(JSON.parse(env.RN_SIGNING_KEY_JWK));
+  // read once and check once: Headers.get is `string | null`, and all three
+  // assertions below want a string.
+  const input = headers.get("signature-input");
+  assert.ok(input, "signature-input must be present");
   assert.match(
-    headers.get("signature-input"),
+    input,
     new RegExp(`sig1=\\("@authority" "signature-agent"\\);created=\\d+;keyid="${keyid}";alg="ed25519";tag="web-bot-auth"`)
   );
-  assert.doesNotMatch(headers.get("signature-input"), /keyid="test-ed"/, "the typed kid label must not reach the wire");
+  assert.doesNotMatch(input, /keyid="test-ed"/, "the typed kid label must not reach the wire");
   // one label, so exactly one `created`
-  assert.equal([...headers.get("signature-input").matchAll(/created=(\d+)/g)].length, 1);
+  assert.equal([...input.matchAll(/created=(\d+)/g)].length, 1);
 });
 
 test("sig1 verifies against the ed25519 key the JWKS publishes", async () => {
