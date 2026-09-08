@@ -9,9 +9,9 @@
 #   ./extract-photo-metadata.sh --merge /path/to/selected-sources/
 #
 # requires: exif-sooc (cargo install --git https://github.com/oddharsh/exif-sooc exif-sooc),
-#           jq (brew install jq)
+#           jaq (brew install jaq)
 #
-# This read exiftool + jq + build-recipes.py until 2026-08-14. exif-sooc emits
+# This read exiftool + jaq + build-recipes.py until 2026-08-14. exif-sooc emits
 # this record shape and the recipe card directly, and owns the merge, so the
 # reshape filter and the Python step are both gone. Measured on the 158
 # committed photos: byte-identical output, and 9.9ms against exiftool's 995ms,
@@ -86,8 +86,8 @@ if ! command -v exif-sooc >/dev/null 2>&1; then
   echo "  cargo install --git https://github.com/oddharsh/exif-sooc exif-sooc" >&2
   exit 1
 fi
-if ! command -v jq >/dev/null 2>&1; then
-  echo "error: jq not found. install with: brew install jq" >&2
+if ! command -v jaq >/dev/null 2>&1; then
+  echo "error: jaq not found. install with: brew install jaq" >&2
   exit 1
 fi
 
@@ -113,12 +113,30 @@ fi
 # shape, so the 50-line jq `reduce` that used to reshape `exiftool -json` is
 # gone, and so is the `jq -s '.[0] * .[1]'` merge that followed it.
 #
-# THE MERGE IS THE REASON THIS SWAP MATTERS, more than the speed. jq's object
+# BOTH NAMES BELOW ARE jq ON PURPOSE, because they are history: this script ran
+# jq until 2026-09-08 and the merge described here is the reason it had to.
+#
+# THE MERGE IS THE REASON THAT SWAP MATTERED, more than the speed. jq's object
 # `*` is a RECURSIVE merge, and the reflexive substitute `+` is shallow: on a
 # --merge run the fresh read carries no `recipe`, so `+` would drop the card
 # from every re-merged photo, silently, and the failure reads as a tooltip that
-# has quietly stopped showing lines. That operator pinned this pipeline to jq
-# specifically. `--merge-into` states the rule instead of relying on one:
+# has quietly stopped showing lines. That merge pinned this pipeline to jq.
+#
+# THE RECORDED REASON WAS WRONG ABOUT WHICH PART, and the correction is why the
+# move to jaq on 2026-09-08 was safe. The 2026-08-14 note said jaq "refuses `*`
+# outright". It does not: `{"a":{"x":1}} * {"a":{"y":2}}` gives the recursive
+# merge on jaq 3.1.1, same as jq. What differs is `-s` across MULTIPLE FILE
+# ARGUMENTS, which is how that merge was actually written: jq slurps two files
+# into one array of 2, and jaq processes each file separately, so `.[1]` is
+# null and the expression dies on a type error that names `*`. The error names
+# the operator and the cause is the flag, which is how it was misfiled.
+#
+# No filter left in this repo uses `-s` at all. `--slurpfile` is a different
+# flag, reads ONE named file, and agrees on both engines. Every remaining
+# filter was diffed jq against jaq over the real 165-photo library and matched
+# byte for byte: `--slurpfile`, `-S`, `--arg`, `-n`, `with_entries`, `has`,
+# `to_entries`, array subtraction and the photo-index merge.
+# `--merge-into` states the rule instead of relying on an operator:
 #
 #   * a stem the read did not see passes through untouched
 #   * a stem it did see keeps every key it already had, freshly read fields on top
@@ -131,7 +149,7 @@ fi
 # script's path.
 #
 # Verified before the swap: regenerating all 158 committed photos through
-# exif-sooc produced records byte-identical to what exiftool + jq + Python
+# exif-sooc produced records byte-identical to what exiftool + jaq + Python
 # produced, recipe cards included, 158/158.
 if [ "$MERGE" -eq 1 ]; then
   exif-sooc --keyed --merge-into "$OUT" -q -r "$SRC_DIR" > "$OUT.tmp"
@@ -165,11 +183,11 @@ fi
 # same unpublished frames; it differs in preserving stems it did not read, and
 # those are already published by definition.
 HASHES_JSON="$PUBLIC_DIR/images/hashes.json"
-read_count=$(jq 'length' "$OUT.tmp")
-if [ -s "$HASHES_JSON" ] && [ "$(jq 'length' "$HASHES_JSON")" -gt 0 ]; then
-  dropped=$(jq -r --slurpfile pub "$HASHES_JSON" 'keys - ($pub[0] | keys) | .[]' "$OUT.tmp")
-  jq --slurpfile pub "$HASHES_JSON" 'with_entries(select(.key as $k | $pub[0] | has($k)))' "$OUT.tmp" > "$OUT.pruned"
-  kept_count=$(jq 'length' "$OUT.pruned")
+read_count=$(jaq 'length' "$OUT.tmp")
+if [ -s "$HASHES_JSON" ] && [ "$(jaq 'length' "$HASHES_JSON")" -gt 0 ]; then
+  dropped=$(jaq -r --slurpfile pub "$HASHES_JSON" 'keys - ($pub[0] | keys) | .[]' "$OUT.tmp")
+  jaq --slurpfile pub "$HASHES_JSON" 'with_entries(select(.key as $k | $pub[0] | has($k)))' "$OUT.tmp" > "$OUT.pruned"
+  kept_count=$(jaq 'length' "$OUT.pruned")
 
   # FLOOR. An empty intersection means SRC_DIR is not the folder this archive was
   # built from, and writing that result would replace every record with nothing.
@@ -205,7 +223,7 @@ if [ -s "$HASHES_JSON" ] && [ "$(jq 'length' "$HASHES_JSON")" -gt 0 ]; then
   # --merge is the mode for a partial source, which is why the remote pipeline
   # uses it, and merge preserves stems it did not read, so this list is empty
   # there by construction.
-  unread=$(jq -r --slurpfile meta "$OUT.tmp" 'keys - ($meta[0] | keys) | .[]' "$HASHES_JSON")
+  unread=$(jaq -r --slurpfile meta "$OUT.tmp" 'keys - ($meta[0] | keys) | .[]' "$HASHES_JSON")
   if [ -n "$unread" ]; then
     unread_count=$(printf '%s\n' "$unread" | wc -l | tr -d ' ')
     {
@@ -245,9 +263,9 @@ fi
 #   dt date · w width · h height · wb white_balance · ct color_temp · fs flash ·
 #   fm film · dr · cc chrome · cb chrome_blue · gr grain · gs grain_size ·
 #   ht highlight_tone · st shadow_tone · sa saturation  (hi added later by histograms)
-jq -c 'to_entries[]' "$OUT" | while IFS= read -r entry; do
-  stem=$(printf '%s' "$entry" | jq -r '.key')
-  printf '%s' "$entry" | jq -c '.value | {
+jaq -c 'to_entries[]' "$OUT" | while IFS= read -r entry; do
+  stem=$(printf '%s' "$entry" | jaq -r '.key')
+  printf '%s' "$entry" | jaq -c '.value | {
     cm: .camera, ln: .lens, ap: .aperture, sp: .shutter, is: .iso, fl: .focal,
     ev: .ev, dt: .date, w: .width, h: .height, wb: .white_balance, ct: .color_temp,
     fs: .flash, fm: .film, dr: .dr, cc: .chrome, cb: .chrome_blue, gr: .grain,
@@ -285,7 +303,7 @@ done
 # of the per-photo files above no longer feeds anything that ships; what still
 # needs them is the histogram bake, below.
 #
-# The map is therefore written twice, as the jq literal above and as
+# The map is therefore written twice, as the jaq literal above and as
 # EXIF_KEY_MAP in tools/lib/photo-indexes.ts. check-photo-pipeline.ts holds the
 # two together wherever images/meta/ exists, which is exactly a workstation that
 # has just run this script.
@@ -294,7 +312,7 @@ done
 # per-photo files, so they still run here.
 node "$SCRIPT_DIR/build-histogram-index.ts"
 
-COUNT=$(jq 'keys | length' "$OUT")
+COUNT=$(jaq 'keys | length' "$OUT")
 if [ "$MERGE" -eq 1 ]; then
   echo "✓ merged metadata for $COUNT photos → $OUT (+ per-stem files in images/meta/, histograms baked)"
 else

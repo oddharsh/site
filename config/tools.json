@@ -23,7 +23,7 @@
     "PATH would report a pass on the wrong binary.",
     "",
     "`version` is how to ASK a binary what it is, per tool, because there is no",
-    "convention: exif-sooc answers `exif-sooc 0.2.0`, jq answers `jq-1.7.1-apple`,",
+    "convention: exif-sooc answers `exif-sooc 0.2.0`, jaq answers `jaq 3.1.1`,",
     "sips answers `sips-316`, avifenc answers `Version: 1.4.2 (...)`, cwebp answers",
     "a bare `1.6.0`, and mozjpeg's two answer `mozjpeg version 4.1.5 (build ...)` on",
     "stderr. Two of them answer nothing at all, so they say so rather than being",
@@ -106,16 +106,17 @@
       "recorded": "0.2.0"
     },
     {
-      "bin": "jq",
-      "install": "brew install jq",
-      "why": "JSON assembly in the metadata shell scripts",
+      "bin": "jaq",
+      "install": "brew install jaq",
+      "why": "JSON assembly in the metadata shell scripts. Swapped from jq on 2026-09-08 after every remaining filter was diffed jq against jaq over the real 165-photo library and matched byte for byte. The one incompatibility is `-s` across multiple file arguments, which nothing here uses; --slurpfile reads one named file and agrees. jq had been required by the recursive-merge `*` in the old reshape, which exif-sooc --merge-into retired",
       "required_by": [
         "tools/photos/extract-photo-metadata.sh",
-        "tools/photos/download-remote-photos.sh"
+        "tools/photos/download-remote-photos.sh",
+        "tools/photos/add-photos.sh"
       ],
       "version": {
         "flag": "--version",
-        "match": "jq-(\\d+\\.\\d+(?:\\.\\d+)?)"
+        "match": "jaq (\\d+\\.\\d+(?:\\.\\d+)?)"
       },
       "bytes": false,
       "bytes_why": "assembles JSON, so its output is the same text at any version"

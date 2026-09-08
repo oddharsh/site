@@ -27,7 +27,7 @@
 // Run it separately, once:
 //
 //     bun run dev:remote          # local Worker, production Browser binding
-//     curl -s 'http://localhost:8787/lens/browser?url=https://aadhar.sh/garage&do=expand' | jq .interaction
+//     curl -s 'http://localhost:8787/lens/browser?url=https://aadhar.sh/garage&do=expand' | jaq .interaction
 //
 // A payload rejection surfaces as the existing `upstream_not_ok` 502 carrying
 // `unrecognized_keys`, which is the same signature the Kitesurf probe produced.
