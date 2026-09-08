@@ -240,7 +240,7 @@ declaration, and a declared minimum nothing enforces is an error.
 
 ## Current baseline
 
-- Wrangler 4.128.0 is the exact root pin shared by all Worker projects, and
+- Wrangler 4.129.0 is the exact root pin shared by all Worker projects, and
   since 2026-09-02 it is also cal's test harness: `cal/test` runs on bun:test
   against `createTestHarness`, so the tree carries exactly one Wrangler, one
   Miniflare and one Workerd by construction. Until that day `cal` declared
@@ -354,7 +354,7 @@ declaration, and a declared minimum nothing enforces is an error.
   programs are not decoration: three go through a wrapper because they hold
   files from two runtimes at once, and `bun run typecheck:coverage` asserts
   every file this repo owns belongs to one of them.
-- @types/bun 1.4.0 is the exact root pin for the SECOND type program,
+- @types/bun 1.4.1 is the exact root pin for the SECOND type program,
   `config/tsconfig.tools.json`, which checks `tools/`. It carries the node globals
   as well, so it is one entry rather than two, and it declares the bun-only
   globals the tools now use directly (HTMLRewriter among them). Types only: no
