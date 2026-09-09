@@ -64,7 +64,6 @@
   //   ../pipelines/**/*.mjs  the page generators. Same runtime, same globals,
   //                          and `check-page-contracts` is a required check that
   //                          runs them, so they are not optional code.
-  //   ../talks/**/*.mjs      the deck builder and its screengrab harness.
   //
   // Their BROWSER-side siblings do not belong here: pipelines/lwe/specs/*.js is
   // the inline script a generator injects into a page, so it runs in a browser
@@ -73,7 +72,6 @@
     "../tools/**/*.mjs",
     "../tools/**/*.ts",
     "../tools/**/*.d.ts",
-    "../pipelines/**/*.mjs",
-    "../talks/**/*.mjs"
+    "../pipelines/**/*.mjs"
   ]
 }

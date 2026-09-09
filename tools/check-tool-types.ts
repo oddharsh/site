@@ -24,12 +24,12 @@ const REPO = dirname(dirname(fileURLToPath(import.meta.url)));
 const TSC = join(REPO, "node_modules", "typescript", "bin", "tsc");
 
 // THE TREES THIS PROGRAM JUDGES, which is wider than its name. tools/ is most
-// of it; pipelines/ (the page generators) and talks/ (the deck builder) are the
-// same kind of program on the same runtime, and they joined tsconfig.tools.json
-// on 2026-08-23. Filtering on `tools/` alone after that widening would have put
-// their diagnostics in the foreign bucket, so the include would have bought
-// coverage on paper and judged nothing.
-const OWNED = ["tools/", "pipelines/", "talks/"];
+// of it; pipelines/ (the page generators) is the same kind of program on the
+// same runtime, and it joined tsconfig.tools.json on 2026-08-23. Filtering on
+// `tools/` alone after that widening would have put its diagnostics in the
+// foreign bucket, so the include would have bought coverage on paper and judged
+// nothing. (talks/ was a third tree here until #713 deleted it, 2026-09-02.)
+const OWNED = ["tools/", "pipelines/"];
 
 const { mine, foreign, ownedFiles, byFile } = runScopedTsc({
   repo: REPO, tsc: TSC, owns: OWNED, label: "check-tool-types",

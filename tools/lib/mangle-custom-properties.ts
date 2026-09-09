@@ -24,10 +24,6 @@ const TOKEN = /--[a-z0-9][a-z0-9-]*/g;
 const DEFINITION = /(--[a-z0-9][a-z0-9-]*)\s*:/g;
 const REFERENCE = /var\(\s*(--[a-z0-9][a-z0-9-]*)/g;
 
-/** Property names a DOM API is handed as a literal, anywhere in the tree. */
-const PROPERTY_API =
-  /(?:setProperty|getPropertyValue|removeProperty|getPropertyPriority)\(\s*[`"']\s*(--[a-z0-9][a-z0-9-]*)/g;
-
 /** A first argument to those APIs that is NOT a literal, which would be unsafe. */
 const PROPERTY_API_DYNAMIC =
   /(?:setProperty|getPropertyValue|removeProperty|getPropertyPriority)\(\s*(?![`"'])[^)]/g;
@@ -36,7 +32,6 @@ const matchAll = (re: RegExp, text: string): string[] => [...text.matchAll(re)].
 
 export const definitionsIn = (text: string): string[] => matchAll(DEFINITION, text);
 export const referencesIn = (text: string): string[] => matchAll(REFERENCE, text);
-export const propertyApiNamesIn = (text: string): string[] => matchAll(PROPERTY_API, text);
 
 /**
  * Throw if any file hands a property-name API something other than a literal.

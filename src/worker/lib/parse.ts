@@ -35,11 +35,6 @@ export const asRecord = (value) =>
 /** An array, or an empty one, so callers can map without a guard. */
 export const asList = (value) => (Array.isArray(value) ? value : []);
 
-/** A boolean, or `fallback`. Deliberately does NOT coerce: a missing flag and
- *  a false one are different answers at a boundary. */
-export const asBool = (value, fallback = null) =>
-	(typeof value === "boolean" ? value : fallback);
-
 /**
  * A value going into text a human or an agent will read: a URL parameter, a
  * tooltip line, a frame cell. Primitives keep their exact spelling; anything
