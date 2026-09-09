@@ -275,7 +275,7 @@
       "pipelines"
     ],
     "exempt": {
-      "tools/gen-xp.ts": "generates the typed Window renderer from tools/xp; required CI runs its --check mode and native/TypeScript parity tests before accepting the projection",
+      "tools/gen-xp.ts": "generates typed Window and PropertySheet renderers from tools/xp; required CI runs its --check mode and native/TypeScript parity tests before accepting the projections",
       "tools/build.ts": "writes only into .build/, the staged tree, which is rebuilt from source every deploy and never committed",
       "tools/gen-md-twins.ts": "same, a build step: the twins are generated into .build/ precisely so no committed copy can fall behind",
       "tools/generate-search-index.ts": "same, and for the same reason: it was committed until 2026-08-24 and froze twice, which is why it is build output now",

@@ -3,7 +3,8 @@ fn run() -> Result<String, String> {
     let args: Vec<_> = std::env::args().skip(1).collect();
     match args.as_slice() {
         [mode] if mode == "typescript" => Ok(site_xp::typescript()),
-        [mode] if mode == "render" || mode == "render-batch" => {
+        [mode] if mode == "typescript-property-sheet" => Ok(site_xp::property_sheet_typescript()),
+        [mode] if mode == "render" || mode == "render-batch" || mode == "render-property-sheet-batch" => {
             let mut input = String::new();
             std::io::stdin()
                 .take(4 * 1024 * 1024 + 1)
@@ -14,14 +15,14 @@ fn run() -> Result<String, String> {
             }
             let value: serde_json::Value =
                 serde_json::from_str(&input).map_err(|e| e.to_string())?;
-            if mode == "render-batch" {
+            if mode.ends_with("-batch") {
                 let values = value.as_array().ok_or("Window batch must be an array")?;
                 let rendered: Result<Vec<_>, String> = values
                     .iter()
                     .map(|value| {
-                        site_xp::render_window(
-                            value.as_object().ok_or("Window input must be an object")?,
-                        )
+                        let object = value.as_object().ok_or("component input must be an object")?;
+                        if mode == "render-property-sheet-batch" { site_xp::render_property_sheet(object) }
+                        else { site_xp::render_window(object) }
                     })
                     .collect();
                 serde_json::to_string(&rendered?).map_err(|e| e.to_string())
@@ -29,7 +30,7 @@ fn run() -> Result<String, String> {
                 site_xp::render_window(value.as_object().ok_or("Window input must be an object")?)
             }
         }
-        _ => Err("usage: site-xp typescript|render|render-batch".into()),
+        _ => Err("usage: site-xp typescript|typescript-property-sheet|render|render-batch|render-property-sheet-batch".into()),
     }
 }
 fn main() {

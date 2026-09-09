@@ -5,6 +5,7 @@ use serde_json::{Map, Value};
 enum Kind {
     Text,
     Html,
+    Rows(&'static Component),
 }
 enum Default {
     Required,
@@ -22,8 +23,13 @@ enum Part {
     Value(&'static str),
     Prefix(&'static str),
 }
+struct Component {
+    name: &'static str,
+    fields: &'static [Field],
+    parts: &'static [Part],
+}
 
-const FIELDS: &[Field] = &[
+const WINDOW_FIELDS: &[Field] = &[
     Field {
         name: "caption",
         kind: Kind::Text,
@@ -81,7 +87,7 @@ const FIELDS: &[Field] = &[
     },
 ];
 
-const PARTS: &[Part] = &[
+const WINDOW_PARTS: &[Part] = &[
     Part::Literal("<div class=\"window"), Part::Prefix("windowClass"), Part::Literal("\""), Part::Prefix("windowAttrs"),
     Part::Literal(">\n  <div class=\"title-bar\">\n    <span class=\"title-text"), Part::Prefix("titleClass"),
     Part::Literal("\"><span class=\"icon\"></span>"), Part::Value("caption"),
@@ -91,6 +97,47 @@ const PARTS: &[Part] = &[
     Part::Value("pane"), Part::Literal("<div class=\"content"), Part::Prefix("contentClass"), Part::Literal("\">\n"),
     Part::Value("body"), Part::Literal("\n  </div>\n</div>"),
 ];
+
+const WINDOW: Component = Component {
+    name: "Window",
+    fields: WINDOW_FIELDS,
+    parts: WINDOW_PARTS,
+};
+const PROPERTY_ROW: Component = Component {
+    name: "PropertyRow",
+    fields: &[
+        Field {
+            name: "term",
+            kind: Kind::Text,
+            default: Default::Required,
+        },
+        Field {
+            name: "value",
+            kind: Kind::Text,
+            default: Default::Required,
+        },
+    ],
+    parts: &[
+        Part::Literal("<dt>"),
+        Part::Value("term"),
+        Part::Literal("</dt><dd>"),
+        Part::Value("value"),
+        Part::Literal("</dd>"),
+    ],
+};
+const PROPERTY_SHEET: Component = Component {
+    name: "PropertySheet",
+    fields: &[Field {
+        name: "rows",
+        kind: Kind::Rows(&PROPERTY_ROW),
+        default: Default::Required,
+    }],
+    parts: &[
+        Part::Literal("<dl>"),
+        Part::Value("rows"),
+        Part::Literal("</dl>"),
+    ],
+};
 
 #[derive(Clone)]
 enum Slot {
@@ -112,8 +159,9 @@ fn escape(text: &str) -> String {
     }
     out
 }
-fn field(name: &str) -> &'static Field {
-    FIELDS
+fn field(component: &'static Component, name: &str) -> &'static Field {
+    component
+        .fields
         .iter()
         .find(|f| f.name == name)
         .expect("declared component field")
@@ -122,21 +170,43 @@ fn field(name: &str) -> &'static Field {
 /// Native render boundary. HTML slots are explicitly trusted authored markup,
 /// just like the Worker's Html values; this function is not a sanitizer.
 pub fn render_window(input: &Map<String, Value>) -> Result<String, String> {
+    render(&WINDOW, input)
+}
+pub fn render_property_sheet(input: &Map<String, Value>) -> Result<String, String> {
+    render(&PROPERTY_SHEET, input)
+}
+fn render(component: &'static Component, input: &Map<String, Value>) -> Result<String, String> {
     for key in input.keys() {
-        if !FIELDS.iter().any(|f| f.name == key) {
-            return Err(format!("unknown Window field: {key}"));
+        if !component.fields.iter().any(|f| f.name == key) {
+            return Err(format!("unknown {} field: {key}", component.name));
         }
     }
     let mut values: std::collections::BTreeMap<&str, Slot> = std::collections::BTreeMap::new();
-    for f in FIELDS {
+    for f in component.fields {
         let value = match input.get(f.name) {
-            Some(Value::String(value)) => match f.kind {
+            Some(Value::String(value)) if !matches!(f.kind, Kind::Rows(_)) => match f.kind {
                 Kind::Text => Slot::Text(value.clone()),
                 Kind::Html => Slot::Html(value.clone()),
+                Kind::Rows(_) => unreachable!("guard excludes rows"),
             },
-            Some(_) => return Err(format!("Window {} must be a string", f.name)),
+            Some(Value::Array(rows)) if matches!(f.kind, Kind::Rows(_)) => {
+                let Kind::Rows(row) = f.kind else {
+                    unreachable!("guard requires rows")
+                };
+                let mut rendered = String::new();
+                for value in rows {
+                    rendered.push_str(&render(
+                        row,
+                        value.as_object().ok_or("property row must be an object")?,
+                    )?);
+                }
+                Slot::Html(rendered)
+            }
+            Some(_) => return Err(format!("{} {} has the wrong type", component.name, f.name)),
             None => match f.default {
-                Default::Required => return Err(format!("Window {} is required", f.name)),
+                Default::Required => {
+                    return Err(format!("{} {} is required", component.name, f.name))
+                }
                 Default::Text(value) => Slot::Text(value.into()),
                 Default::EmptyHtml => Slot::EmptyHtml,
                 Default::Previous(name) => values.get(name).expect("earlier default field").clone(),
@@ -145,7 +215,7 @@ pub fn render_window(input: &Map<String, Value>) -> Result<String, String> {
         values.insert(f.name, value);
     }
     let mut out = String::new();
-    for part in PARTS {
+    for part in component.parts {
         let (name, prefix) = match part {
             Part::Literal(value) => {
                 out.push_str(value);
@@ -175,8 +245,33 @@ pub fn render_window(input: &Map<String, Value>) -> Result<String, String> {
 
 /// Emit the existing tagged-template boundary, rather than a runtime interpreter.
 pub fn typescript() -> String {
-    let mut out = String::from("// Generated by tools/xp; run bun tools/gen-xp.ts. Do not edit.\nimport { EMPTY, Html, html } from \"../html.ts\";\n\nexport type WindowOptions = {\n");
-    for f in FIELDS {
+    module(&[&WINDOW])
+}
+pub fn property_sheet_typescript() -> String {
+    module(&[&PROPERTY_ROW, &PROPERTY_SHEET])
+}
+fn module(components: &[&'static Component]) -> String {
+    let empty = if components.iter().any(|c| {
+        c.fields
+            .iter()
+            .any(|f| matches!(f.default, Default::EmptyHtml))
+    }) {
+        "EMPTY, "
+    } else {
+        ""
+    };
+    let mut out = format!("// Generated by tools/xp; run bun tools/gen-xp.ts. Do not edit.\nimport {{ {empty}Html, html }} from \"../html.ts\";\n\n");
+    for (index, component) in components.iter().enumerate() {
+        if index > 0 {
+            out.push('\n');
+        }
+        out.push_str(&typescript_component(component));
+    }
+    out
+}
+fn typescript_component(component: &'static Component) -> String {
+    let mut out = format!("export type {}Options = {{\n", component.name);
+    for f in component.fields {
         out.push_str(&format!(
             "  {}{}: {};\n",
             f.name,
@@ -186,13 +281,14 @@ pub fn typescript() -> String {
                 "?"
             },
             match f.kind {
-                Kind::Text => "string",
-                Kind::Html => "Html",
+                Kind::Text => "string".to_string(),
+                Kind::Html => "Html".to_string(),
+                Kind::Rows(row) => format!("{}Options[]", row.name),
             }
         ));
     }
-    out.push_str("};\n\nexport function Window({\n");
-    for f in FIELDS {
+    out.push_str(&format!("}};\n\nexport function {}({{\n", component.name));
+    for f in component.fields {
         out.push_str(&format!("  {}", f.name));
         match f.default {
             Default::Required => {}
@@ -204,8 +300,11 @@ pub fn typescript() -> String {
         }
         out.push_str(",\n");
     }
-    out.push_str("}: WindowOptions): Html {\n  return html`");
-    for part in PARTS {
+    out.push_str(&format!(
+        "}}: {}Options): Html {{\n  return html`",
+        component.name
+    ));
+    for part in component.parts {
         match part {
             Part::Literal(value) => out.push_str(
                 &value
@@ -213,8 +312,12 @@ pub fn typescript() -> String {
                     .replace('`', "\\`")
                     .replace("${", "\\${"),
             ),
-            Part::Value(name) => out.push_str(&format!("${{{name}}}")),
-            Part::Prefix(name) => match field(name).kind {
+            Part::Value(name) => match field(component, name).kind {
+                Kind::Rows(row) => out.push_str(&format!("${{{name}.map({})}}", row.name)),
+                _ => out.push_str(&format!("${{{name}}}")),
+            },
+            Part::Prefix(name) => match field(component, name).kind {
+                Kind::Rows(_) => panic!("row lists cannot have a prefix"),
                 Kind::Text => out.push_str(&format!("${{{name} ? \" \" + {name} : \"\"}}")),
                 Kind::Html => out.push_str(&format!(
                     "${{{name} === EMPTY ? EMPTY : html` ${{{name}}}`}}"

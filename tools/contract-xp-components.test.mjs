@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Window } from "../src/worker/lib/xp/window.ts";
+import { PropertySheet } from "../src/worker/lib/xp/property-sheet.ts";
 import { html, Html } from "../src/worker/lib/html.ts";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -41,6 +42,22 @@ test("native Window batch refuses invalid input without partial output", () => {
       assert.ok(error instanceof Error && "stdout" in error && "status" in error);
       assert.equal(error.stdout, "");
       assert.ok(error.status !== 0);
+      return true;
+    });
+  }
+});
+
+test("PropertySheet native and generated renderers preserve typed rows and escaping", () => {
+  assert.equal(readFileSync(new URL("../src/worker/lib/xp/property-sheet.ts", import.meta.url), "utf8"), native("typescript-property-sheet"));
+  const cases = [{ rows: [] }, { rows: [{ term: 'Name <&>', value: 'Snow 雪 "tea"' }, { term: "", value: "" }] }];
+  const expected = cases.map((value) => String(PropertySheet(value)));
+  assert.deepEqual(JSON.parse(native("render-property-sheet-batch", JSON.stringify(cases))), expected);
+  assert.equal(expected[0], "<dl></dl>");
+  assert.equal(expected[1], '<dl><dt>Name &lt;&amp;&gt;</dt><dd>Snow 雪 &quot;tea&quot;</dd><dt></dt><dd></dd></dl>');
+  for (const value of [{ rows: "bad" }, { rows: [null] }, { rows: [{ term: "missing value" }] }, { rows: [{ term: "x", value: "y", extra: true }] }]) {
+    assert.throws(() => native("render-property-sheet-batch", JSON.stringify([{ rows: [] }, value])), (error) => {
+      assert.ok(error instanceof Error && "stdout" in error);
+      assert.equal(error.stdout, "");
       return true;
     });
   }

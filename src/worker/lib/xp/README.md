@@ -27,7 +27,16 @@ test compares 128 native/TypeScript renders and checks that invalid batches emit
 no partial result. The generated code differs from the earlier handwritten
 component only in comments.
 
-The native CLI accepts `typescript`, `render`, and `render-batch`. Render input
+`PropertySheet` now uses the same field/template engine, including typed row
+lists. Its read-only term/value pairs render as a semantic `<dl>` and replace
+the previous inline Details markup in Explorer task panes. `Detail` derives
+from the generated row type. Both Rust and TypeScript reject malformed input at
+their respective runtime and compile-time boundaries; field text is escaped.
+The differential contract covers empty lists, Unicode, escaping, missing fields,
+unknown row fields and invalid row types, with no partial native batch output.
+
+The native CLI accepts `typescript`, `render`, and `render-batch` for Window,
+plus `typescript-property-sheet` and `render-property-sheet-batch`. Render input
 is a JSON object (or array of objects for a batch), capped at 4 MiB. Unknown keys,
 missing captions and non-string field values are rejected. HTML slots are trusted
 authored markup, corresponding to Worker `Html` values: this is not an HTML
@@ -44,7 +53,7 @@ bun test tools/contract-xp-components.test.mjs
 
 - Apply the native rendering path to static page compilation, and extend the
   shared definitions/code generation to the rest of the component family.
-- Taskbar, Menu, Dialog, ExplorerList, PropertySheet, and Demo components.
+- Taskbar, Menu, Dialog, ExplorerList, and Demo components.
 - Typed, small client behaviors with keyboard/focus contracts, lazy loading,
   and machine actions where a component exposes an action.
 - Adoption by existing static and dynamic pages without changing the XP design.

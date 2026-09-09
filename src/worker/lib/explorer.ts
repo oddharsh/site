@@ -14,11 +14,12 @@
 // it can always prove (where you are, and what is above you) and stops. A task
 // pane that pads itself out with plausible links is worse than no task pane.
 import { Html, html } from "./html.ts";
+import { PropertySheet, type PropertyRowOptions } from "./xp/property-sheet.ts";
 
 /** One row of the task pane: somewhere this object can go. */
 export type Task = { href: string; label: string; glyph?: string };
 /** One row of the Details box: a fact the CALLER counted. */
-export type Detail = { term: string; value: string };
+export type Detail = PropertyRowOptions;
 
 // The first-level places, in taskbar order. Declared here rather than derived
 // at runtime so the Worker carries no data file; build.ts asserts this list
@@ -125,8 +126,7 @@ export function taskPane(
   if (here) rows.push({ term: "Name", value: here });
   rows.push({ term: "Location", value: `aadhar.sh${path === "/" ? "" : String(path).replace(/\/+$/, "")}` });
   for (const detail of details) if (detail && detail.value) rows.push(detail);
-  boxes.push(group("Details", html`<dl>${rows.map((row) =>
-    html`<dt>${row.term}</dt><dd>${row.value}</dd>`)}</dl>`));
+  boxes.push(group("Details", PropertySheet({ rows })));
 
   // A plain container, NOT a <details>. The disclosure was tried and removed:
   // `.axp-pane{display:flex}` is an author rule and beats the UA rule that hides
@@ -138,4 +138,3 @@ export function taskPane(
   // into a bottom strip that reads like page content.
   return html`<div class="axp-tasks"><aside class="axp-pane" aria-label="Explorer tasks">${boxes}</aside></div>`;
 }
-
