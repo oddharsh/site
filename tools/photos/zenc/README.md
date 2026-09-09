@@ -21,6 +21,18 @@ This removes one full-frame copy for upright inputs. For an RGB frame the
 avoided allocation is width × height × 3 × 4 bytes. This is an allocation
 reduction, not a claim of a measured end-to-end speedup.
 
+`square --size 600 --out tile.png --jpeg-out tile.jpg --jpeg-quality 84`
+emits both formats from one quantized pixel buffer. `--jpeg-out` attaches to the
+preceding `--out`; it can be repeated for different tiers. The optional quality
+is global and defaults to 84. The standalone JPEG command uses the same encoder.
+`add-photos.sh` now uses this operation and asks Cargo to check freshness before
+running, so an older existing binary cannot silently survive a script upgrade.
+
+Local comparison of 54 paired PNG/JPEG outputs against the old two-process path
+was byte-identical (six photos, three orientations, all three transfer choices).
+The unit suite also checks colour and monochrome paired output against decoding
+and encoding the emitted PNG.
+
 ## Validation
 
 Run from the repository root:
@@ -31,7 +43,7 @@ cargo clippy --locked --manifest-path tools/photos/zenc/Cargo.toml -- -D warning
 cargo build --release --locked --manifest-path tools/photos/zenc/Cargo.toml
 ```
 
-The 15 unit tests cover pixel permutations and inverses, RGB channel integrity,
+The 17 unit tests cover pixel permutations and inverses, RGB channel integrity,
 8/16-bit monochrome decoding, transfer preservation, rejected EXIF values, and
 allocation reuse for the upright transform. CI runs the tests and Clippy inside
 the required validate job.
@@ -47,8 +59,8 @@ histograms were regenerated, and the packed committed index stayed identical.
 ## Remaining work
 
 - Carry typed source depth and colour information through the complete pipeline.
-- Share buffers with encoders instead of serializing intermediate PNGs between
-  zenc processes.
+- Extend buffer sharing to the remaining encoders; JPEG ingest now consumes the
+  same pixels used to write the desktop PNG.
 - Integrate metadata extraction and encoded-output histogram production into
   the same coordinated operation.
 - Record input, policy, and encoder provenance for the complete artifact set.

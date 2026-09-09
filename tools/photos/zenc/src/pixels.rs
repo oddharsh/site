@@ -331,21 +331,25 @@ pub fn scale(f: &Frame, dw: u32, dh: u32, filter: Filter) -> Frame {
     }
 }
 
-pub fn save(f: &Frame, path: &str) -> Result<(), String> {
+/// Quantize once after resampling; the returned pixels can feed several encoders.
+pub fn encoded(f: &Frame) -> DynamicImage {
     let t = f.transfer;
-    let r = if f.gray {
+    if f.gray {
         let out: GrayImage = ImageBuffer::from_fn(f.w, f.h, |x, y| {
             Luma([t.enc(f.data[y as usize * f.w as usize + x as usize])])
         });
-        out.save(Path::new(path))
+        DynamicImage::ImageLuma8(out)
     } else {
         let out: RgbImage = ImageBuffer::from_fn(f.w, f.h, |x, y| {
             let i = (y as usize * f.w as usize + x as usize) * 3;
             Rgb([t.enc(f.data[i]), t.enc(f.data[i + 1]), t.enc(f.data[i + 2])])
         });
-        out.save(Path::new(path))
-    };
-    r.map_err(|e| format!("cannot write {path}: {e}"))
+        DynamicImage::ImageRgb8(out)
+    }
+}
+
+pub fn save(f: &Frame, path: &str) -> Result<(), String> {
+    encoded(f).save(Path::new(path)).map_err(|e| format!("cannot write {path}: {e}"))
 }
 
 pub fn parse_filter(s: Option<&str>) -> Result<Filter, String> {
