@@ -27,7 +27,6 @@
     "tools/contract-web-bot-auth-the-post-quantum-second-label-retired.test.mjs": 6,
     "tools/contract-webmention-inbound.test.mjs": 7,
     "tools/csp-sweep.ts": 8,
-    "tools/gen-manifest.ts": 1,
     "tools/gen-md-twins.ts": 12,
     "tools/gen-remote-config.ts": 2,
     "tools/inp-lab.ts": 26,
@@ -52,5 +51,5 @@
     "tools/ua-survey.ts": 17,
     "tools/verify-routes.ts": 2
   },
-  "total": 440
+  "total": 439
 }

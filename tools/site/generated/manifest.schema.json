@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SiteManifest",
+  "type": "object",
+  "properties": {
+    "note": {
+      "type": "string"
+    },
+    "surfaces": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Surface"
+      }
+    },
+    "version": {
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 0
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "note",
+    "surfaces"
+  ],
+  "$defs": {
+    "Surface": {
+      "type": "object",
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "flags": {
+          "$ref": "#/$defs/SurfaceFlags"
+        },
+        "hint": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/SurfaceKind"
+        },
+        "note": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "path": {
+          "type": "string"
+        },
+        "section": {
+          "type": "string"
+        },
+        "short": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "title",
+        "section",
+        "kind",
+        "description",
+        "hint",
+        "flags"
+      ]
+    },
+    "SurfaceFlags": {
+      "type": "object",
+      "properties": {
+        "agents": {
+          "type": "boolean"
+        },
+        "gallery": {
+          "type": "boolean"
+        },
+        "run": {
+          "type": "boolean"
+        },
+        "searchIndex": {
+          "type": "boolean"
+        },
+        "sitemap": {
+          "type": "boolean"
+        },
+        "taskbar": {
+          "type": "boolean"
+        },
+        "webmention": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "run",
+        "taskbar",
+        "sitemap",
+        "gallery",
+        "agents",
+        "searchIndex",
+        "webmention"
+      ]
+    },
+    "SurfaceKind": {
+      "type": "string",
+      "enum": [
+        "content",
+        "page",
+        "section",
+        "utility"
+      ]
+    }
+  }
+}
