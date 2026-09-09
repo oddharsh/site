@@ -240,7 +240,7 @@ declaration, and a declared minimum nothing enforces is an error.
 
 ## Current baseline
 
-- Wrangler 4.129.0 is the exact root pin shared by all Worker projects, and
+- Wrangler 4.129.1 is the exact root pin shared by all Worker projects, and
   since 2026-09-02 it is also cal's test harness: `cal/test` runs on bun:test
   against `createTestHarness`, so the tree carries exactly one Wrangler, one
   Miniflare and one Workerd by construction. Until that day `cal` declared
@@ -249,7 +249,7 @@ declaration, and a declared minimum nothing enforces is an error.
   clean installs) to cut median install time from 4.62 s to 3.03 s and
   `node_modules` from 781 MiB to 562 MiB. The alignment is structural now
   rather than maintained.
-- Oxc Minify 0.148.0 and Lightning CSS 1.33.0 are exact root pins for the
+- Oxc Minify 0.149.0 and Lightning CSS 1.33.0 are exact root pins for the
   deploy-time JavaScript and CSS minifiers. Their platform-specific optional
   packages run only in the build environment; they add no browser or Worker
   runtime dependency. Dependabot should review their release notes for output,
@@ -354,7 +354,7 @@ declaration, and a declared minimum nothing enforces is an error.
   programs are not decoration: three go through a wrapper because they hold
   files from two runtimes at once, and `bun run typecheck:coverage` asserts
   every file this repo owns belongs to one of them.
-- @types/bun 1.4.1 is the exact root pin for the SECOND type program,
+- @types/bun 1.4.2 is the exact root pin for the SECOND type program,
   `config/tsconfig.tools.json`, which checks `tools/`. It carries the node globals
   as well, so it is one entry rather than two, and it declares the bun-only
   globals the tools now use directly (HTMLRewriter among them). Types only: no
