@@ -159,8 +159,12 @@ pub fn extract_metadata(input: impl Read, limits: Limits) -> Result<Metadata, Ex
         match name.local.as_ref() {
             "title" if !title_seen => {
                 title_seen = true;
-                for child in &node.children {
-                    if let Kind::Text(text) = &nodes[*child].kind {
+                // Foreign (SVG) titles can contain elements: textContent
+                // includes every descendant, not only immediate text nodes.
+                let mut descendants: Vec<_> = node.children.iter().rev().copied().collect();
+                while let Some(child) = descendants.pop() {
+                    descendants.extend(nodes[child].children.iter().rev().copied());
+                    if let Kind::Text(text) = &nodes[child].kind {
                         if append_bounded(&mut result.title, text, limits.field_bytes) {
                             result.truncated = true;
                             break;
@@ -215,6 +219,23 @@ mod tests {
     struct Chunks<'a> {
         data: &'a [u8],
         size: usize,
+    }
+    #[test]
+    fn foreign_title_includes_descendant_text_with_a_shared_limit() {
+        let html = "<svg><title>A <span>雪 &amp; tea</span> end</title></svg>";
+        let result = extract_metadata(html.as_bytes(), Limits::default()).unwrap();
+        assert_eq!(result.title, "A 雪 & tea end");
+        assert!(!result.truncated);
+        let limited = extract_metadata(
+            html.as_bytes(),
+            Limits {
+                field_bytes: 6,
+                ..Limits::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(limited.title, "A 雪 ");
+        assert!(limited.truncated);
     }
     impl Read for Chunks<'_> {
         fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
