@@ -3098,103 +3098,19 @@ are installed on macOS, so the fallback path doesn't hit Helvetica/Arial.
 
 ## cal/ — coffee booking module
 
-Custom-built scheduler at `aadhar.sh/coffee`. Replaces Cal.com. Inspired by
-[jry.io/bagel](https://jry.io/bagel). Crediting Jacob Young in the footer.
+The root site Worker serves `cal/src/` at `aadhar.sh/coffee`. Its bindings and
+policy live in root `wrangler.jsonc`; `cal/wrangler.test.toml` is the local test
+fixture. The build stages the module beside the site Worker entrypoint.
 
-**Status: LIVE at aadhar.sh/coffee**, delegated by the root `aadhar-sh` Worker.
-The source remains in `cal/src/` so its booking, calendar, and email policies
-stay readable and testable; `build.ts` stages it beside the holding Worker
-entrypoint. Production secrets (`ICAL_URL`, `RESEND_API_KEY`, and
-`SIGNING_SECRET`) belong to the root Worker. `cal/wrangler.test.toml` is only the
-fixture the suite's harness boots, never a deployment config.
+[cal/README.md](cal/README.md) describes the booking flow, Durable Object slot
+claims, Workflow expiry, test harness, and calendar limitations.
+[MAINTENANCE.md](docs/MAINTENANCE.md#rotate-cals-calendar-or-approval-secret)
+owns the secret-rotation procedure. Cal uses the site's release path.
 
-### Architecture
-
-- Public ICS feed (Google/iCloud) is the read-only source of busy intervals,
-  read via `fetchBusySWR`: a last-good snapshot in KV (`cal:busy`, 5-min
-  freshness, 2s upstream deadline, stale fallback) so a slow/down feed never
-  gates the page. The GET page edge-caches 30s (invalidated on booking action);
-  `/slots` stays live.
-- `generateSlots()` computes bookable slots from working hours config
-- `POST /book` creates a pending booking in KV, emails the host with
-  HMAC-signed approve/decline links (Resend free tier). It **fails closed**: if
-  the calendar snapshot is unavailable or older than 15 min, it 503s rather than
-  book over a real event it can't see (the old code returned `[]` on ICS failure,
-  making every slot look free — a double-booking risk).
-- Host clicks approve → confirmed → `.ics` invite to requester
-- Host clicks decline → polite auto-reply
-- Each pending booking gets its own **BookingWorkflow** (Cloudflare Workflows)
-  expiry timer instead of a weekly cron sweep: it `waitForEvent`s up to
-  `PENDING_TTL_DAYS` for the host's approve/decline (which fire a `host-decision`
-  event to end it early), and on timeout reclaims the slot if it's still pending.
-  The class is defined in `cal/src/workflow.js`, re-exported from the root
-  `_worker.js/index.js`, and bound as `BOOKING_WORKFLOW`. Slots are held via
-  per-slot `held:<start>:<end>` KV keys (no more race-prone shared index).
-
-### Files
-
-```
-cal/
-├── wrangler.test.toml  — test-only KV/vars config the suite's harness boots (not deployed)
-├── package.json
-└── src/
-    ├── index.js        — router, request dispatch, KV state
-    ├── availability.js — ICS parsing, slot generation, working-hours logic
-    ├── booking.js      — pending/confirmed booking CRUD + index
-    ├── email.js        — Resend integration, .ics generation
-    ├── sign.js         — HMAC-SHA256 for approve/decline URL auth
-    ├── templates.js    — XP-themed HTML for all pages (booking, success, confirmed, declined, error)
-    └── uuid.js         — RFC4122 v4 helper
-```
-
-### Tests
-
-`bun run --filter cal-aadhar-sh test`, from the root, or `bun test` inside
-`cal/`. It is `bun:test` over wrangler's `createTestHarness` since 2026-09-02,
-and the split is the whole design: the route handlers, the booking store and
-the email builders run in bun's own process, imported straight from `cal/src`,
-while the KV and Workflow bindings live in a workerd the harness boots from
-`wrangler.test.toml` and hands back as proxies. That is what lets a test stub
-`globalThis.fetch` and read what the worker would have sent to Resend, the
-shape the old in-isolate Vitest suite had, without a Vite chain to reach it.
-
-Two Worker globals are missing on a host and `cal/test/preload.ts` supplies
-both, with the cost stated at each: a virtual `cloudflare:workers` module (an
-empty `WorkflowEntrypoint`, since the real workflow runs inside the harness)
-and an always-miss `caches`, which means the booking page's 30s edge-cache HIT
-path is not exercised. Neither shim lives in `cal/src`, because the source is
-correct for the runtime it ships to.
-
-It replaced `vitest` + `@cloudflare/vitest-pool-workers`, which were 68 of the
-lockfile's 257 packages, the tree's second esbuild, and the one `overrides`
-entry (nanoid, reached only through vite -> postcss). The measurements that
-decided it are in `cal/test/harness.ts`'s header. `cal/` declares no
-dependencies at all now: the harness is the root's wrangler pin, so the tree
-carries exactly one miniflare and one workerd by construction rather than by a
-floor somebody keeps aligned. Its bindings are typed by the same pin, through
-the generated runtime declarations below.
-
-### Required secrets (before deploy)
-
-```bash
-bun install
-bun run wrangler versions secret put -c wrangler.jsonc ICAL_URL        # Google Calendar → "secret ICS"
-bun run wrangler versions secret put -c wrangler.jsonc RESEND_API_KEY  # resend.com, DKIM-verify aadhar.sh
-openssl rand -hex 32 | bun run wrangler versions secret put -c wrangler.jsonc SIGNING_SECRET
-
-# Production still ships through merge -> CI -> production -> Workers Builds.
-# Local fallback, from the repository root only:
-bun run deploy:direct
-```
-
-### Visual notes (XP reskin lives in `cal/src/templates.js`)
-
-- Window chrome matches the homepage (`title-bar`, boxed `_ □ ×` controls)
-- GroupBox panels for "Available slots" + "Your info" (sunken bevel)
-- Slot picker: raised XP buttons that depress + tint blue when selected
-- Form inputs: sunken 3D (dark TL, light BR — opposite of buttons)
-- Banner variants: info / success / warn / error (Outlook-Express style)
-- Status bar at the bottom with `← aadhar.sh · jacob credit · cloudflare workers · tz`
+Run `bun run --filter cal-aadhar-sh test` from the repository root. The suite runs
+route code in Bun and reaches local KV and Workflow bindings through Wrangler's
+harness; see [cal/test/harness.ts](cal/test/harness.ts) and
+[cal/test/preload.ts](cal/test/preload.ts) for its runtime boundaries.
 
 ---
 

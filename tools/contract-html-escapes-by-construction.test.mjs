@@ -5,6 +5,7 @@
 // Worker is allowed to rely on.
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 import { Html, escape, html, joinHtml, unsafeHtml } from "../src/worker/lib/html.ts";
+import { esc } from "../src/worker/lib/http.ts";
 
 test("interpolated text is escaped, and Html composes without double-escaping", () => {
   assert.equal(html`<b>${"<script>x</script>"}</b>`.html, "<b>&lt;script&gt;x&lt;/script&gt;</b>");
@@ -30,6 +31,18 @@ test("absent values render as nothing, never as the word", () => {
   // "undefined" into a page is never what the caller meant.
   assert.equal(html`[${null}${undefined}]`.html, "[]");
   assert.equal(html`${0}${false}`.html, "0false");
+});
+
+test("the string escaper preserves coercion and escapes even Html values", () => {
+  assert.equal(esc(null), "");
+  assert.equal(esc(undefined), "");
+  assert.equal(esc(0), "0");
+  assert.equal(esc(false), "false");
+  assert.equal(esc(unsafeHtml("<b>&</b>")), "&lt;b&gt;&amp;&lt;/b&gt;");
+  let reads = 0;
+  const value = { toString() { reads++; return `&<>"' ☕`; } };
+  assert.equal(esc(value), "&amp;&lt;&gt;&quot;&#39; ☕");
+  assert.equal(reads, 1, "coercion happens once before escaping");
 });
 
 test("the marker survives to runtime, which is why Html is not a branded string", () => {

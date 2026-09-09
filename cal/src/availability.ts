@@ -9,11 +9,10 @@
 // MONTHLY|YEARLY with INTERVAL, COUNT, UNTIL, BYDAY (weekly), and honor EXDATE, out
 // to RRULE_HORIZON_DAYS and capped at RRULE_MAX_INSTANCES per rule.
 //
-// Known deviations, all on the SAFE side (fail-closed: over-block a slot, never
-// under-block one): occurrences step in whole UTC days, so a recurrence that
-// crosses a DST boundary can land ~1h off for occurrences past the shift; an RRULE
-// shape we cannot parse keeps just the base occurrence rather than dropping the
-// event; VTIMEZONE blocks are not expanded (TZID resolves through Intl instead).
+// Known deviations: occurrences step in UTC, so a recurrence across a DST
+// boundary can land an hour off; unsupported RRULE shapes keep only the base
+// occurrence; VTIMEZONE blocks are not expanded (TZID resolves through Intl).
+// These limits can miss busy intervals; freshness checks do not correct them.
 
 import { span } from "./trace.ts";
 

@@ -2,7 +2,7 @@ import { assert, fakeImages, representationD1, test, testGlobals } from "./contr
 import { imageInspect } from "../src/worker/image-tools.ts";
 import { captureRepresentation } from "../src/worker/representation.ts";
 import { discoverEndpoint } from "../src/worker/webmention-send.ts";
-import { fetchFollowingPublicRedirects, validateLensTarget } from "../src/worker/lib/public-fetch.ts";
+import { fetchFollowingPublicRedirects, validateLensTarget } from "../src/worker/lib/crawl.ts";
 
 const start = "https://example.com/start";
 const redirectStatuses = [301, 302, 303, 307, 308];
@@ -94,7 +94,7 @@ test("Webmention validates endpoints from Link headers and HTML with the same po
 test("the redirect guard follows redirect statuses only", async () => {
   for (const status of [200, 300, 304, 305, 306, 399]) {
     await withResponses(() => new Response(null, { status, headers: { location: "/elsewhere" } }), async (seen) => {
-      const result = await fetchFollowingPublicRedirects(start, () => ({}), validateLensTarget);
+      const result = await fetchFollowingPublicRedirects(start, {}, validateLensTarget);
       assert.equal(result.ok, true);
       assert.equal(result.response.status, status);
       assert.equal(seen.length, 1, `HTTP ${status} is not a redirect`);
@@ -105,7 +105,7 @@ test("the redirect guard follows redirect statuses only", async () => {
     Object.defineProperty(response, "url", { value: start });
     return response;
   }, async () => {
-    const result = await fetchFollowingPublicRedirects(start + "#fragment", () => ({}), validateLensTarget);
+    const result = await fetchFollowingPublicRedirects(start + "#fragment", {}, validateLensTarget);
     assert.equal(result.ok, true);
     assert.equal(result.finalUrl, start, "the fetched URL excludes the request fragment");
   });
@@ -116,7 +116,7 @@ test("the redirect guard cancels malformed redirects", async () => {
   await withResponses(() => new Response(new ReadableStream({ cancel() { cancelled = true; } }), {
     status: 302, headers: { location: "http://[" },
   }), async (seen) => {
-    const result = await fetchFollowingPublicRedirects(start, () => ({}), validateLensTarget);
+    const result = await fetchFollowingPublicRedirects(start, {}, validateLensTarget);
     assert.equal(result.ok, false);
     assert.equal(seen.length, 1);
     assert.equal(cancelled, true, "a malformed Location must not leave its response stream open");

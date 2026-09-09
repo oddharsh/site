@@ -58,7 +58,7 @@ import { readDoors } from "./lib/doors.ts";
 import { MEASURED, auditUrl } from "./dict.ts";
 import { RADAR_LIMITS, radarFrame, readSamples } from "./radar.ts";
 import { readAroundChanges } from "./around.ts";
-import { readCoffeeAvailability } from "./coffee.ts";
+import { getPublicAvailability } from "../../cal/src/slots.ts";
 import { LENS_BUDGETS, lensFetch, lensInspect, lensObservationSummary, overLensBudget, validateLensTarget } from "./lens.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { CANONICAL_HOST } from "./lib/const.ts";
@@ -231,7 +231,7 @@ const PANES = {
     return { changes: rowsOut, list: rowsOut.map((c, i) => ({ id: String(i), label: c.host || c.url || "", meta: c.kind || "" })) };
   },
   async coffee(env, ctx) {
-    return { availability: await readCoffeeAvailability(env, ctx).catch(() => null), list: [] };
+    return { availability: await getPublicAvailability(env, ctx).catch(() => null), list: [] };
   },
   async deploys(env) {
     const { points } = await readCheckpoints(env);
