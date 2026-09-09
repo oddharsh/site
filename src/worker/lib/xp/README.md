@@ -54,7 +54,13 @@ count validated as a non-negative safe integer by both native and generated
 renderers. Tests cover zero, the upper bound, fractions, negative values,
 non-finite numbers, escaping, and incomplete batches. The source registry still
 owns application identities and the compiler computes counts from the manifest.
-Tray data and client behavior have not yet moved into typed components.
+`TaskbarTray` and `TrayItem` now render all tray items, the sound-button placeholder,
+and the clock placeholder. IDs, links, labels, kinds and icon slots are typed;
+the `hidden` field defaults to false and must be boolean in native and generated
+renderers. Differential tests cover omitted/false/true values and reject strings,
+numbers and null without partial output. All 1,792 built public files remain
+byte-identical for this tray migration. Client behavior is still owned by the
+existing navigation modules.
 
 The pin migration changes two apostrophe spellings to `&#39;` in 42 committed
 generated source files. Comparing 1,792 built public files, only 53 source-view
@@ -65,7 +71,8 @@ The native CLI accepts `typescript`, `render`, and `render-batch` for Window,
 plus `typescript-property-sheet` / `render-property-sheet-batch` and
 `typescript-explorer-list` / `render-explorer-list-batch`. Taskbar uses
 `typescript-taskbar` / `render-taskbar-batch`; individual pins use
-`render-taskbar-pin-batch`. Render input is a JSON object
+`render-taskbar-pin-batch`, and trays use `render-taskbar-tray-batch`.
+Render input is a JSON object
 (or array of objects for a batch), capped at 4 MiB. Unknown keys, missing required
 fields and incorrect field types are rejected. HTML slots are trusted
 authored markup, corresponding to Worker `Html` values: this is not an HTML
@@ -82,7 +89,7 @@ bun test tools/contract-xp-components.test.mjs
 
 - Apply the native rendering path to static page compilation, and extend the
   shared definitions/code generation to the rest of the component family.
-- Complete Taskbar tray contracts and implement Menu, Dialog, and Demo.
+- Implement Menu, Dialog, and Demo components.
 - Typed, small client behaviors with keyboard/focus contracts, lazy loading,
   and machine actions where a component exposes an action.
 - Adoption by existing static and dynamic pages without changing the XP design.

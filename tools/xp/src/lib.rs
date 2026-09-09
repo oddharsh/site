@@ -6,11 +6,13 @@ enum Kind {
     Text,
     Html,
     Count,
+    Bool,
     Rows(&'static Component),
 }
 enum Default {
     Required,
     Text(&'static str),
+    Bool(bool),
     EmptyHtml,
     Previous(&'static str),
 }
@@ -24,6 +26,7 @@ enum Part {
     Value(&'static str),
     Prefix(&'static str),
     OrText(&'static str, &'static str),
+    BoolAttr(&'static str, &'static str),
 }
 struct Component {
     name: &'static str,
@@ -227,6 +230,78 @@ const TASKBAR_PIN: Component = Component {
         Part::Literal("</span></a>"),
     ],
 };
+const TRAY_ITEM: Component = Component {
+    name: "TrayItem",
+    fields: &[
+        Field {
+            name: "id",
+            kind: Kind::Text,
+            default: Default::Required,
+        },
+        Field {
+            name: "href",
+            kind: Kind::Text,
+            default: Default::Required,
+        },
+        Field {
+            name: "kind",
+            kind: Kind::Text,
+            default: Default::Required,
+        },
+        Field {
+            name: "title",
+            kind: Kind::Text,
+            default: Default::Required,
+        },
+        Field {
+            name: "label",
+            kind: Kind::Text,
+            default: Default::Required,
+        },
+        Field {
+            name: "icon",
+            kind: Kind::Html,
+            default: Default::Required,
+        },
+        Field {
+            name: "hidden",
+            kind: Kind::Bool,
+            default: Default::Bool(false),
+        },
+    ],
+    parts: &[
+        Part::Literal("<a id=\""),
+        Part::Value("id"),
+        Part::Literal("\" class=\"axp-trayico\""),
+        Part::BoolAttr("hidden", "hidden"),
+        Part::Literal(" href=\""),
+        Part::Value("href"),
+        Part::Literal("\" data-kind=\""),
+        Part::Value("kind"),
+        Part::Literal("\" title=\""),
+        Part::Value("title"),
+        Part::Literal("\" aria-label=\""),
+        Part::Value("label"),
+        Part::Literal("\">"),
+        Part::Value("icon"),
+        Part::Literal("</a>"),
+    ],
+};
+const TASKBAR_TRAY: Component = Component {
+    name: "TaskbarTray",
+    fields: &[Field {
+        name: "items",
+        kind: Kind::Rows(&TRAY_ITEM),
+        default: Default::Required,
+    }],
+    parts: &[
+        Part::Literal(
+            "<div id=\"axp-tray\"><button id=\"axp-sound\" type=\"button\" hidden></button>",
+        ),
+        Part::Value("items"),
+        Part::Literal("<span id=\"axp-clock\" aria-hidden=\"true\"></span></div>"),
+    ],
+};
 const TASKBAR: Component = Component { name: "Taskbar", fields: &[
     Field { name: "pins", kind: Kind::Html, default: Default::Required },
     Field { name: "tray", kind: Kind::Html, default: Default::Required },
@@ -237,6 +312,7 @@ const TASKBAR: Component = Component { name: "Taskbar", fields: &[
 
 #[derive(Clone)]
 enum Slot {
+    Bool(bool),
     Text(String),
     Html(String),
     EmptyHtml,
@@ -280,6 +356,9 @@ pub fn render_taskbar(input: &Map<String, Value>) -> Result<String, String> {
 pub fn render_taskbar_pin(input: &Map<String, Value>) -> Result<String, String> {
     render(&TASKBAR_PIN, input)
 }
+pub fn render_taskbar_tray(input: &Map<String, Value>) -> Result<String, String> {
+    render(&TASKBAR_TRAY, input)
+}
 fn render(component: &'static Component, input: &Map<String, Value>) -> Result<String, String> {
     for key in input.keys() {
         if !component.fields.iter().any(|f| f.name == key) {
@@ -289,6 +368,7 @@ fn render(component: &'static Component, input: &Map<String, Value>) -> Result<S
     let mut values: std::collections::BTreeMap<&str, Slot> = std::collections::BTreeMap::new();
     for f in component.fields {
         let value = match input.get(f.name) {
+            Some(Value::Bool(value)) if matches!(f.kind, Kind::Bool) => Slot::Bool(*value),
             Some(Value::Number(value)) if matches!(f.kind, Kind::Count) => {
                 let number = value
                     .as_f64()
@@ -302,7 +382,9 @@ fn render(component: &'static Component, input: &Map<String, Value>) -> Result<S
             {
                 Kind::Text => Slot::Text(value.clone()),
                 Kind::Html => Slot::Html(value.clone()),
-                Kind::Rows(_) | Kind::Count => unreachable!("guard requires text or HTML"),
+                Kind::Rows(_) | Kind::Count | Kind::Bool => {
+                    unreachable!("guard requires text or HTML")
+                }
             },
             Some(Value::Array(rows)) if matches!(f.kind, Kind::Rows(_)) => {
                 let Kind::Rows(row) = f.kind else {
@@ -323,6 +405,7 @@ fn render(component: &'static Component, input: &Map<String, Value>) -> Result<S
                     return Err(format!("{} {} is required", component.name, f.name))
                 }
                 Default::Text(value) => Slot::Text(value.into()),
+                Default::Bool(value) => Slot::Bool(value),
                 Default::EmptyHtml => Slot::EmptyHtml,
                 Default::Previous(name) => values.get(name).expect("earlier default field").clone(),
             },
@@ -332,6 +415,16 @@ fn render(component: &'static Component, input: &Map<String, Value>) -> Result<S
     let mut out = String::new();
     for part in component.parts {
         let (name, prefix) = match part {
+            Part::BoolAttr(name, attribute) => {
+                let Slot::Bool(value) = &values[name] else {
+                    panic!("boolean attribute requires a boolean")
+                };
+                if *value {
+                    out.push(' ');
+                    out.push_str(attribute);
+                }
+                continue;
+            }
             Part::OrText(name, fallback) => {
                 let Slot::Text(value) = &values[name] else {
                     panic!("text fallback requires a text field")
@@ -347,6 +440,7 @@ fn render(component: &'static Component, input: &Map<String, Value>) -> Result<S
             Part::Prefix(name) => (name, true),
         };
         match &values[name] {
+            Slot::Bool(value) => out.push_str(if *value { "true" } else { "false" }),
             Slot::EmptyHtml => {}
             Slot::Text(value) => {
                 if prefix && !value.is_empty() {
@@ -376,7 +470,7 @@ pub fn explorer_list_typescript() -> String {
     module(&[&EXPLORER_ITEM, &EXPLORER_LIST])
 }
 pub fn taskbar_typescript() -> String {
-    module(&[&TASKBAR_PIN, &TASKBAR])
+    module(&[&TASKBAR_PIN, &TRAY_ITEM, &TASKBAR_TRAY, &TASKBAR])
 }
 fn module(components: &[&'static Component]) -> String {
     let empty = if components.iter().any(|c| {
@@ -388,7 +482,14 @@ fn module(components: &[&'static Component]) -> String {
     } else {
         ""
     };
-    let mut out = format!("// Generated by tools/xp; run bun tools/gen-xp.ts. Do not edit.\nimport {{ {empty}Html, html }} from \"../html.ts\";\n\n");
+    let mut out = format!("// Generated by tools/xp; run bun tools/gen-xp.ts. Do not edit.\nimport {{ {empty}Html, html }} from \"../html.ts\";\n");
+    if components
+        .iter()
+        .any(|c| c.fields.iter().any(|f| matches!(f.kind, Kind::Bool)))
+    {
+        out.push_str("import { asBool } from \"../parse.ts\";\n");
+    }
+    out.push('\n');
     for (index, component) in components.iter().enumerate() {
         if index > 0 {
             out.push('\n');
@@ -411,6 +512,7 @@ fn typescript_component(component: &'static Component) -> String {
             match f.kind {
                 Kind::Text => "string".to_string(),
                 Kind::Count => "number".to_string(),
+                Kind::Bool => "boolean".to_string(),
                 Kind::Html => "Html".to_string(),
                 Kind::Rows(row) => format!("{}Options[]", row.name),
             }
@@ -421,6 +523,7 @@ fn typescript_component(component: &'static Component) -> String {
         out.push_str(&format!("  {}", f.name));
         match f.default {
             Default::Required => {}
+            Default::Bool(value) => out.push_str(&format!(" = {value}")),
             Default::Text(value) => {
                 out.push_str(&format!(" = {}", serde_json::to_string(value).unwrap()))
             }
@@ -431,6 +534,12 @@ fn typescript_component(component: &'static Component) -> String {
     }
     out.push_str(&format!("}}: {}Options): Html {{\n", component.name));
     for f in component.fields {
+        if matches!(f.kind, Kind::Bool) {
+            out.push_str(&format!(
+                "  if (asBool({0}) === null) throw new Error(\"{0} must be a boolean\");\n",
+                f.name
+            ));
+        }
         if matches!(f.kind, Kind::Count) {
             out.push_str(&format!("  if (!Number.isSafeInteger({0}) || {0} < 0) throw new Error(\"count must be a safe nonnegative integer\");\n", f.name));
         }
@@ -438,6 +547,10 @@ fn typescript_component(component: &'static Component) -> String {
     out.push_str("  return html`");
     for part in component.parts {
         match part {
+            Part::BoolAttr(name, attribute) => out.push_str(&format!(
+                "${{{name} ? {} : \"\"}}",
+                serde_json::to_string(&format!(" {attribute}")).unwrap()
+            )),
             Part::OrText(name, fallback) => out.push_str(&format!(
                 "${{{name} || {}}}",
                 serde_json::to_string(fallback).unwrap()
@@ -453,7 +566,9 @@ fn typescript_component(component: &'static Component) -> String {
                 _ => out.push_str(&format!("${{{name}}}")),
             },
             Part::Prefix(name) => match field(component, name).kind {
-                Kind::Rows(_) | Kind::Count => panic!("row lists and counts cannot have a prefix"),
+                Kind::Rows(_) | Kind::Count | Kind::Bool => {
+                    panic!("only text and HTML fields support prefixes")
+                }
                 Kind::Text => out.push_str(&format!("${{{name} ? \" \" + {name} : \"\"}}")),
                 Kind::Html => out.push_str(&format!(
                     "${{{name} === EMPTY ? EMPTY : html` ${{{name}}}`}}"

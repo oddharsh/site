@@ -6,7 +6,7 @@ fn run() -> Result<String, String> {
         [mode] if mode == "typescript-property-sheet" => Ok(site_xp::property_sheet_typescript()),
         [mode] if mode == "typescript-explorer-list" => Ok(site_xp::explorer_list_typescript()),
         [mode] if mode == "typescript-taskbar" => Ok(site_xp::taskbar_typescript()),
-        [mode] if mode == "render" || mode == "render-batch" || mode == "render-property-sheet-batch" || mode == "render-explorer-list-batch" || mode == "render-taskbar-batch" || mode == "render-taskbar-pin-batch" => {
+        [mode] if mode == "render" || mode == "render-batch" || mode == "render-property-sheet-batch" || mode == "render-explorer-list-batch" || mode == "render-taskbar-batch" || mode == "render-taskbar-pin-batch" || mode == "render-taskbar-tray-batch" => {
             let mut input = String::new();
             std::io::stdin()
                 .take(4 * 1024 * 1024 + 1)
@@ -23,7 +23,8 @@ fn run() -> Result<String, String> {
                     .iter()
                     .map(|value| {
                         let object = value.as_object().ok_or("component input must be an object")?;
-                        if mode == "render-taskbar-pin-batch" { site_xp::render_taskbar_pin(object) }
+                        if mode == "render-taskbar-tray-batch" { site_xp::render_taskbar_tray(object) }
+                        else if mode == "render-taskbar-pin-batch" { site_xp::render_taskbar_pin(object) }
                         else if mode == "render-taskbar-batch" { site_xp::render_taskbar(object) }
                         else if mode == "render-explorer-list-batch" { site_xp::render_explorer_list(object) }
                         else if mode == "render-property-sheet-batch" { site_xp::render_property_sheet(object) }
@@ -35,7 +36,7 @@ fn run() -> Result<String, String> {
                 site_xp::render_window(value.as_object().ok_or("Window input must be an object")?)
             }
         }
-        _ => Err("usage: site-xp typescript|typescript-property-sheet|typescript-explorer-list|typescript-taskbar|render|render-batch|render-property-sheet-batch|render-explorer-list-batch|render-taskbar-batch|render-taskbar-pin-batch".into()),
+        _ => Err("usage: site-xp typescript|typescript-property-sheet|typescript-explorer-list|typescript-taskbar|render|render-batch|render-property-sheet-batch|render-explorer-list-batch|render-taskbar-batch|render-taskbar-pin-batch|render-taskbar-tray-batch".into()),
     }
 }
 fn main() {

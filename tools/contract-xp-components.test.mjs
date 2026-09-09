@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { Window } from "../src/worker/lib/xp/window.ts";
 import { PropertySheet } from "../src/worker/lib/xp/property-sheet.ts";
 import { ExplorerList } from "../src/worker/lib/xp/explorer-list.ts";
-import { Taskbar, TaskbarPin } from "../src/worker/lib/xp/taskbar.ts";
+import { Taskbar, TaskbarPin, TaskbarTray } from "../src/worker/lib/xp/taskbar.ts";
 import { html, Html } from "../src/worker/lib/html.ts";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -113,6 +113,25 @@ test("TaskbarPin validates numeric counts in both runtimes and escapes labels", 
   for (const count of [-1, 0.5, Number.MAX_SAFE_INTEGER + 1, NaN, Infinity]) {
     assert.throws(() => TaskbarPin({ ...base, icon: new Html(base.icon), count }), /safe nonnegative integer/);
     assert.throws(() => native("render-taskbar-pin-batch", JSON.stringify([cases[0], { ...base, count }])), (error) => {
+      assert.ok(error instanceof Error && "stdout" in error);
+      assert.equal(error.stdout, "");
+      return true;
+    });
+  }
+});
+
+test("TaskbarTray preserves boolean visibility and rejects non-boolean values", () => {
+  const item = { id: 'tray"<&', href: "/whoareyou", kind: "webmcp", title: "Agent's tools", label: "Tools <&>", icon: "<img alt=\"\">" };
+  const cases = [{ items: [] }, { items: [item, { ...item, hidden: false }, { ...item, hidden: true }] }];
+  const expected = cases.map(({ items }) => String(TaskbarTray({ items: items.map((row) => ({ ...row, icon: new Html(row.icon) })) })));
+  assert.deepEqual(JSON.parse(native("render-taskbar-tray-batch", JSON.stringify(cases))), expected);
+  assert.equal(expected[0], '<div id="axp-tray"><button id="axp-sound" type="button" hidden></button><span id="axp-clock" aria-hidden="true"></span></div>');
+  assert.equal(expected[1].split('class="axp-trayico" hidden').length - 1, 1);
+  assert.ok(expected[1].includes('id="tray&quot;&lt;&amp;"'));
+  assert.ok(expected[1].includes('aria-label="Tools &lt;&amp;&gt;"'));
+  for (const hidden of ["false", 0, null]) {
+    assert.throws(() => Reflect.apply(TaskbarTray, null, [{ items: [{ ...item, icon: new Html(item.icon), hidden }] }]), /must be a boolean/);
+    assert.throws(() => native("render-taskbar-tray-batch", JSON.stringify([cases[0], { items: [{ ...item, hidden }] }])), (error) => {
       assert.ok(error instanceof Error && "stdout" in error);
       assert.equal(error.stdout, "");
       return true;
