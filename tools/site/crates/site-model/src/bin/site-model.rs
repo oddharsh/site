@@ -14,7 +14,42 @@ fn run() -> Result<(), Box<dyn Error>> {
     let mut args = std::env::args().skip(1);
     let command = args
         .next()
-        .ok_or("usage: site-model schema | typescript | check <manifest> | project <manifest>")?;
+        .ok_or("usage: site-model schema | page-schema | typescript | check <manifest> | project <manifest> | pages <spec>...")?;
+    if command == "pages" {
+        let paths: Vec<_> = args.collect();
+        if paths.is_empty() {
+            return Err("pages requires at least one spec path".into());
+        }
+        let mut checked = Vec::new();
+        let mut ids = std::collections::HashSet::new();
+        for path in paths {
+            let raw = std::fs::read_to_string(&path)?;
+            let page = serde_json::from_str::<site_model::content::GaragePage>(&raw)?
+                .validate()
+                .map_err(|e| format!("{path}: {e}"))?;
+            if !ids.insert(page.page().id.clone()) {
+                return Err(format!("duplicate page {}", page.page().id).into());
+            }
+            checked.push(page);
+        }
+        serde_json::to_writer(
+            io::stdout().lock(),
+            &checked.iter().map(|p| p.page()).collect::<Vec<_>>(),
+        )?;
+        println!();
+        return Ok(());
+    }
+    if command == "page-schema" {
+        if args.next().is_some() {
+            return Err("page-schema accepts no arguments".into());
+        }
+        serde_json::to_writer_pretty(
+            io::stdout().lock(),
+            &schemars::schema_for!(site_model::content::GaragePage),
+        )?;
+        println!();
+        return Ok(());
+    }
     if command == "typescript" {
         if args.next().is_some() {
             return Err("typescript accepts no arguments".into());

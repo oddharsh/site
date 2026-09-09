@@ -6,6 +6,7 @@
 // check come from this one scaffold. The old hand-authored pages remain valid;
 // new pages should enter through this pipeline.
 
+import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
@@ -32,6 +33,7 @@ function html(value) {
   })[c]);
 }
 
+/** @param {import("../../tools/site/generated/manifest.ts").GaragePage} spec */
 function validateGarageSpec(spec, context = "Garage spec") {
   validatePageSpec(spec, context, { contentField: "bodyHtml" });
   if (!/^[a-z0-9][a-z0-9-]*$/.test(spec.id)) fail(`${context}.id: use lowercase letters, numbers, and hyphens`);
@@ -44,7 +46,19 @@ function validateGarageSpec(spec, context = "Garage spec") {
   return spec;
 }
 
-function validateRegistry() {
+// Parse and validate the batch once at the native boundary. No authored spec
+// reaches file generation through an unchecked JSON.parse path.
+export function readGaragePages() {
+  const paths = REGISTRY.map((page) => join(HERE, "specs", `${page.id}.json`));
+  /** @type {import("../../tools/site/generated/manifest.ts").GaragePage[]} */
+  const pages = JSON.parse(execFileSync("cargo", [
+    "run", "--quiet", "--locked", "--manifest-path", join(ROOT, "tools/site/Cargo.toml"),
+    "--bin", "site-model", "--", "pages", ...paths,
+  ], { cwd: ROOT, encoding: "utf8", maxBuffer: 16 * 1024 * 1024 }));
+  return new Map(pages.map((page) => [page.id, page]));
+}
+
+function validateRegistry(specs = readGaragePages()) {
   const ids = new Set();
   for (const page of REGISTRY) {
     if (!page || typeof page !== "object") fail("Garage registry: every page must be an object");
@@ -54,7 +68,8 @@ function validateRegistry() {
     if (!/^[a-z0-9][a-z0-9-]*$/.test(page.id)) fail(`${context}.id: use lowercase letters, numbers, and hyphens`);
     for (const field of ["title", "summary", "status", "lastmod", "navLabel", "navHint"]) text(page[field], `${context}.${field}`);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(page.lastmod)) fail(`${context}.lastmod: use YYYY-MM-DD`);
-    const spec = JSON.parse(readFileSync(join(HERE, "specs", `${page.id}.json`), "utf8"));
+    const spec = specs.get(page.id);
+    if (!spec) throw new Error(`${context}: missing validated spec`);
     if (spec.id !== page.id) fail(`${context}: spec id is ${spec.id}, expected ${page.id}`);
     validateGarageSpec(spec, context);
   }
@@ -74,6 +89,7 @@ body{background:transparent;font-family:var(--font-ui);font-size:10.5pt;line-hei
 @media(max-width:620px){body{padding:8px 5px 42px}.content{padding:14px 12px 6px}.window{border-radius:5px 5px 0 0}}
 `;
 
+/** @param {import("../../tools/site/generated/manifest.ts").GaragePage} spec */
 export function pageHtml(spec) {
   validateGarageSpec(spec, `Garage spec "${spec.id}"`);
   const path = `/garage/${spec.id}`;
@@ -165,8 +181,10 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const [cmd, arg] = process.argv.slice(2);
   if (cmd === "page") {
     if (!arg) fail("usage: generate.mjs page <id> | generate.mjs wire");
-    validateRegistry();
-    const spec = JSON.parse(readFileSync(join(HERE, "specs", `${arg}.json`), "utf8"));
+    const specs = readGaragePages();
+    validateRegistry(specs);
+    const spec = specs.get(arg);
+    if (!spec) throw new Error(`unregistered Garage page: ${arg}`);
     const out = join(HOLDING, "garage", `${arg}.html`);
     writeFileSync(out, pageHtml(spec));
     console.log(`wrote ${out}`);

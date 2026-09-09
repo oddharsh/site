@@ -1,0 +1,157 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "GaragePage",
+  "type": "object",
+  "properties": {
+    "added": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "bodyHtml": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "editorial": {
+      "$ref": "#/$defs/Editorial"
+    },
+    "id": {
+      "type": "string"
+    },
+    "pageCss": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "pageJs": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "status": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "understanding": {
+      "$ref": "#/$defs/Understanding"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "title",
+    "description",
+    "status",
+    "editorial",
+    "understanding",
+    "bodyHtml"
+  ],
+  "$defs": {
+    "AnswerOption": {
+      "type": "object",
+      "properties": {
+        "ok": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "t": {
+          "type": "string"
+        },
+        "why": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "t",
+        "why"
+      ]
+    },
+    "Editorial": {
+      "type": "object",
+      "properties": {
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "problem": {
+          "type": "string"
+        },
+        "reader": {
+          "type": "string"
+        },
+        "thesis": {
+          "type": "string"
+        },
+        "uncertainty": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "reader",
+        "problem",
+        "thesis",
+        "evidence",
+        "uncertainty"
+      ]
+    },
+    "Question": {
+      "type": "object",
+      "properties": {
+        "options": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AnswerOption"
+          }
+        },
+        "q": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "q",
+        "options"
+      ]
+    },
+    "Understanding": {
+      "type": "object",
+      "properties": {
+        "intro": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "questions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Question"
+          }
+        },
+        "title": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "questions"
+      ]
+    }
+  }
+}

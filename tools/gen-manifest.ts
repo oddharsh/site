@@ -139,6 +139,7 @@ function main() {
   ], { encoding: "utf8" });
   const types = rustOutput("typescript");
   const schema = rustOutput("schema");
+  const pageSchema = rustOutput("page-schema");
 
   let nav = readFileSync(NAV, "utf8");
   const counts: string[] = [];
@@ -151,6 +152,7 @@ function main() {
   mkdirSync("tools/site/generated", { recursive: true });
   writeFileSync("tools/site/generated/manifest.ts", types);
   writeFileSync("tools/site/generated/manifest.schema.json", schema);
+  writeFileSync("tools/site/generated/page.schema.json", pageSchema);
   writeFileSync(NAV, nav);
   console.log(`nav-run.js: ${counts.join(" + ")} palette entries + ${PROFILES.length} profiles`);
 

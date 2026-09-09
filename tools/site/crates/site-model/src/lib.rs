@@ -1,5 +1,6 @@
 //! The site's shared authored contracts. JSON remains the authored data; Rust
 //! defines its shape and verifies relationships before projections are emitted.
+pub mod content;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -163,6 +164,7 @@ pub fn typescript() -> String {
         output.push_str(&declaration);
         output.push('\n');
     }
+    output.push_str(&content::typescript());
     output
 }
 

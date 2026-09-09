@@ -63,6 +63,7 @@ fn committed_bindings_and_schema_match_the_rust_contract() {
     for (command, file) in [
         ("typescript", "manifest.ts"),
         ("schema", "manifest.schema.json"),
+        ("page-schema", "page.schema.json"),
     ] {
         let output = Command::new(env!("CARGO_BIN_EXE_site-model"))
             .arg(command)
@@ -74,5 +75,21 @@ fn committed_bindings_and_schema_match_the_rust_contract() {
             std::fs::read(root.join("generated").join(file)).unwrap(),
             "{file} is stale; run bun run gen:manifest"
         );
+    }
+}
+
+#[test]
+fn page_batch_is_atomic_on_missing_or_duplicate_input() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../../../pipelines/garage/specs/typed-config.json");
+    for last in [path.clone(), path.with_file_name("nonexistent.json")] {
+        let output = Command::new(env!("CARGO_BIN_EXE_site-model"))
+            .arg("pages")
+            .arg(&path)
+            .arg(last)
+            .output()
+            .unwrap();
+        assert!(!output.status.success());
+        assert!(output.stdout.is_empty());
     }
 }
