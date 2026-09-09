@@ -5,6 +5,7 @@ import { addressBar, taskPane } from "./explorer.ts";
 import { EMPTY, Html, html, unsafeHtml } from "./html.ts";
 import { SHELL_PRELOAD_LINK } from "./shell-assets.ts";
 import { twinFor } from "./twins.ts";
+import { Window, type WindowOptions } from "./xp/window.ts";
 
 // shared XP window chrome for the server-rendered pages (/around, /bot,
 // /whoareyou, /rn/set). these four used to each carry their own copy of
@@ -89,7 +90,7 @@ function faviconLink(route): Html {
  *  CSS would turn `a > b` into `a &gt; b` and break the selector rather than
  *  protect anything. Escaping is the wrong tool in that context, which is why
  *  it goes through `unsafeHtml(` at the one place it is spliced. */
-export type LunaPageOptions = {
+export type LunaPageOptions = Omit<WindowOptions, "caption" | "address" | "pane"> & {
   title?: string;
   path?: string;
   width?: number;
@@ -98,24 +99,15 @@ export type LunaPageOptions = {
   /** CSS, not HTML. See the note above. */
   css?: string;
   head?: Html;
-  body?: Html;
   scripts?: Html;
   status?: number;
   cache?: string;
   headers?: Record<string, string>;
-  titleClass?: string;
-  windowClass?: string;
-  contentClass?: string;
-  /** Raw attributes for the window element, e.g. `)data-no-histnav`. */
-  windowAttrs?: Html;
   route?: string;
   explorer?: boolean;
   explorerName?: string;
   explorerTasks?: { href: string; label: string; glyph?: string }[];
   explorerDetails?: { term: string; value: string }[];
-  closeHref?: string;
-  closeTitle?: string;
-  closeLabel?: string;
 };
 
 export function lunaPage({
@@ -130,7 +122,7 @@ export function lunaPage({
   status = 200,
   cache = "public, max-age=300, s-maxage=300",
   headers = {},
-  titleClass = "",
+  titleClass,
   // Extra classes on the window and its content pane, plus raw attributes on
   // the window. All three default to empty, so the nine existing callers are
   // byte-identical. They exist for /terminal, which needs the SAME window
@@ -143,9 +135,9 @@ export function lunaPage({
   // terminal.js. The whole argument for this function is that window chrome
   // changes in one place and every page follows; a private copy of the doctype,
   // head, and desktop wiring would opt one page out of that on day one.
-  windowClass = "",
-  contentClass = "",
-  windowAttrs = EMPTY,
+  windowClass,
+  contentClass,
+  windowAttrs,
   // The REQUEST path, which `path` above is not: that one is the window caption
   // and callers pass free text through it ("Security Center", "The Crawl
   // Ledger"). The Explorer chrome and the Markdown twin both need the real
@@ -162,9 +154,9 @@ export function lunaPage({
   explorerName = "",
   explorerTasks = [],
   explorerDetails = [],
-  closeHref = "/",
-  closeTitle = "back to aadhar.sh",
-  closeLabel = closeTitle,
+  closeHref,
+  closeTitle,
+  closeLabel,
   scripts = EMPTY,
 }: LunaPageOptions = {}) {
   const documentTitle = title || path || "aadhar.sh";
@@ -212,15 +204,8 @@ ${unsafeHtml(css || "")}
 </head>
 <body>
 ${unsafeHtml(DESKTOP_TOP)}
-<div class="window${windowClass ? " " + windowClass : ""}"${windowAttrs === EMPTY ? EMPTY : html` ${windowAttrs}`}>
-  <div class="title-bar">
-    <span class="title-text${titleClass ? " " + titleClass : ""}"><span class="icon"></span>${windowTitle}</span>
-    <span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="${closeHref}" title="${closeTitle}" aria-label="${closeLabel}"></a></span>
-  </div>${addressHtml}
-  ${paneHtml}<div class="content${contentClass ? " " + contentClass : ""}">
-${body}
-  </div>
-</div>
+${Window({ caption: windowTitle, body, address: addressHtml, pane: paneHtml,
+  windowClass, windowAttrs, titleClass, contentClass, closeHref, closeTitle, closeLabel })}
 ${unsafeHtml(DESKTOP_CHROME)}
 ${scriptHtml}
 </body>
