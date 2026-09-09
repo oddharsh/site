@@ -109,18 +109,21 @@ export function validateLensTarget(raw) {
 //
 // `check` is the caller's full allowlist (scheme, port, host), not just this
 // module's host floor, because a redirect can change the scheme and port too.
-export async function fetchFollowingPublicRedirects(url, init, check, maxHops = 4) {
+export async function fetchFollowingPublicRedirects(url, init, check, maxHops = 4): Promise<
+  | { ok: true; response: Response; finalUrl: string; hops: number }
+  | { ok: false; error: string; blockedHop: number; url: string }
+> {
   let current = url;
   for (let hop = 0; hop <= maxHops; hop++) {
     const verdict = check(current);
     if (!verdict.ok) return { ok: false, error: verdict.error, blockedHop: hop, url: current };
     const response = await fetch(current, { ...init, redirect: "manual" });
-    const location = response.status >= 300 && response.status < 400 ? response.headers.get("location") : null;
-    if (!location) return { ok: true, response, finalUrl: current, hops: hop };
+    const location = [301, 302, 303, 307, 308].includes(response.status) ? response.headers.get("location") : null;
+    if (location === null) return { ok: true, response, finalUrl: response.url || current, hops: hop };
+    try { await response.body?.cancel(); } catch (_e) { /* nothing buffered yet */ }
     let next;
     try { next = new URL(location, current).toString(); }
     catch { return { ok: false, error: "That redirect target does not parse as a URL.", blockedHop: hop, url: current }; }
-    try { await response.body?.cancel(); } catch (_e) { /* nothing buffered yet */ }
     current = next;
   }
   return { ok: false, error: `That URL redirected more than ${maxHops} times.`, blockedHop: maxHops, url: current };

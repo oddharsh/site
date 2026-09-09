@@ -4,7 +4,7 @@
 // public photo bucket or the representation vault.
 import photoIndex from "./photo-index.json" with { type: "json" };
 import { CANONICAL_HOST } from "./lib/const.ts";
-import { validateLensTarget } from "./lens.ts";
+import { fetchFollowingPublicRedirects, validateLensTarget } from "./lib/crawl.ts";
 
 const INPUT_CAP = 8 * 1024 * 1024;
 const OUTPUT_CAP = 4 * 1024 * 1024;
@@ -160,15 +160,17 @@ async function resolveImageInput(args: ImageToolArgs, env): Promise<ImageInput |
   const target = validateLensTarget(rawUrl);
   if (!target.ok) return { error: target.error };
   try {
-    const response = await fetch(target.url, { method: "GET", redirect: "follow", signal: AbortSignal.timeout(8000) });
-    const final = validateLensTarget(response.url || target.url);
-    if (!final.ok) return { error: "source_url redirected to a disallowed target" };
+    const followed = await fetchFollowingPublicRedirects(
+      target.url, { method: "GET", signal: AbortSignal.timeout(8000) }, validateLensTarget, 20,
+    ); // Preserve native fetch's twenty-redirect allowance.
+    if (!followed.ok) return { error: "source_url redirected to a disallowed target" };
+    const response = followed.response;
     const type = (response.headers.get("content-type") || "").split(";")[0].toLowerCase();
     if (!response.ok) return { error: `source_url returned HTTP ${response.status}` };
     if (type && !type.startsWith("image/")) return { error: "source_url did not return an image" };
     const body = await readBytesCapped(response, INPUT_CAP);
     if (body.truncated) return { error: "source_url response exceeds the 8 MiB input limit" };
-    return { bytes: body.bytes, mime: type || "application/octet-stream", source: "source_url", url: final.url };
+    return { bytes: body.bytes, mime: type || "application/octet-stream", source: "source_url", url: followed.finalUrl };
   } catch { return { error: "source_url could not be fetched" }; }
 }
 

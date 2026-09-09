@@ -1,5 +1,4 @@
-import { validateLensTarget } from "./lens.ts";
-import { privateHostBlocked, readResponseCapped } from "./lib/crawl.ts";
+import { fetchFollowingPublicRedirects, privateHostBlocked, readResponseCapped, validateLensTarget } from "./lib/crawl.ts";
 import { WEBMENTION_PATHS, WEBMENTION_SECTIONS } from "./lib/site-manifest.ts";
 import { span } from "./lib/trace.ts";
 import { asText } from "./lib/parse.ts";
@@ -350,28 +349,29 @@ export function findEndpointIn(html, linkHeader, baseUrl) {
 
 export async function discoverEndpoint(target) {
   try {
-    const res = await fetch(target, {
+    const followed = await fetchFollowingPublicRedirects(target, {
       headers: { "user-agent": "AadharshBot/1.0 (+https://aadhar.sh/bot)", accept: "text/html" },
-      redirect: "follow",
       signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
-    });
-    const finalUrl = res.url || target;
-    if (privateHostBlocked(new URL(finalUrl).hostname.toLowerCase())) return null;
+    }, validateLensTarget, 20); // Preserve native fetch's redirect allowance.
+    if (!followed.ok) return null;
+    const { response: res, finalUrl } = followed;
     const linkHeader = res.headers.get("link");
+    let endpoint;
     // A HEAD-equivalent shortcut: if the Link header already names an endpoint,
     // don't read the body at all.
     if (linkHeader && /\bwebmention\b/i.test(linkHeader)) {
-      void res.body?.cancel?.();
-      return findEndpointIn("", linkHeader, finalUrl);
+      try { await res.body?.cancel(); } catch { /* no body needed for header discovery */ }
+      endpoint = findEndpointIn("", linkHeader, finalUrl);
+    } else {
+      if (!res.ok) return null;
+      const body = await readResponseCapped(res, DISCOVERY_BYTE_CAP);
+      endpoint = findEndpointIn(body?.text || "", null, finalUrl);
     }
-    if (!res.ok) return null;
-    const body = await readResponseCapped(res, DISCOVERY_BYTE_CAP);
-    const endpoint = findEndpointIn(body?.text || "", null, finalUrl);
     if (!endpoint) return null;
     // The endpoint itself is an attacker-supplied URL (it comes from a page I
     // don't control), so it gets the same guard as everything else.
     const checked = validateLensTarget(endpoint);
-    return checked.ok && !privateHostBlocked(new URL(checked.url).hostname.toLowerCase()) ? checked.url : null;
+    return checked.ok ? checked.url : null;
   } catch { return null; }
 }
 
