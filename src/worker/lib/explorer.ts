@@ -14,11 +14,13 @@
 // it can always prove (where you are, and what is above you) and stops. A task
 // pane that pads itself out with plausible links is worse than no task pane.
 import { Html, html } from "./html.ts";
+import { PropertySheet, type PropertyRowOptions } from "./xp/property-sheet.ts";
+import { ExplorerList, type ExplorerItemOptions } from "./xp/explorer-list.ts";
 
 /** One row of the task pane: somewhere this object can go. */
-export type Task = { href: string; label: string; glyph?: string };
+export type Task = ExplorerItemOptions;
 /** One row of the Details box: a fact the CALLER counted. */
-export type Detail = { term: string; value: string };
+export type Detail = PropertyRowOptions;
 
 // The first-level places, in taskbar order. Declared here rather than derived
 // at runtime so the Worker carries no data file; build.ts asserts this list
@@ -94,11 +96,6 @@ function group(title: string, inner: Html): Html {
   return html`<section class="axp-group"><h2>${title}</h2>${inner}</section>`;
 }
 
-function taskList(items: Task[]): Html {
-  const rows = items.map((item) => html`<li><span class="axp-glyph" aria-hidden="true">${item.glyph || "›"}</span><a href="${item.href}">${item.label}</a></li>`);
-  return html`<ul>${rows}</ul>`;
-}
-
 /**
  * The task pane. `tasks` are this object's own actions (its other
  * representations, mostly) and `details` are facts the caller has counted.
@@ -114,19 +111,18 @@ export function taskPane(
 
   const objectTasks = tasks.map((task) => ({ href: task.href, label: task.label, glyph: task.glyph || "≡" }));
   if (parent) objectTasks.push({ href: parent, label: `Up to ${labelFor(parent)}`, glyph: "↑" });
-  if (objectTasks.length) boxes.push(group("Object tasks", taskList(objectTasks)));
+  if (objectTasks.length) boxes.push(group("Object tasks", ExplorerList({ items: objectTasks })));
 
   const places = PLACES.filter((place) => place.path !== section).slice(0, 6)
     .map((place) => ({ href: place.path, label: place.label, glyph: "■" }));
-  if (places.length) boxes.push(group("Other places", taskList(places)));
+  if (places.length) boxes.push(group("Other places", ExplorerList({ items: places })));
 
   const rows: Detail[] = [];
   const here = name && name !== "aadhar.sh" ? name : "";
   if (here) rows.push({ term: "Name", value: here });
   rows.push({ term: "Location", value: `aadhar.sh${path === "/" ? "" : String(path).replace(/\/+$/, "")}` });
   for (const detail of details) if (detail && detail.value) rows.push(detail);
-  boxes.push(group("Details", html`<dl>${rows.map((row) =>
-    html`<dt>${row.term}</dt><dd>${row.value}</dd>`)}</dl>`));
+  boxes.push(group("Details", PropertySheet({ rows })));
 
   // A plain container, NOT a <details>. The disclosure was tried and removed:
   // `.axp-pane{display:flex}` is an author rule and beats the UA rule that hides
@@ -138,4 +134,3 @@ export function taskPane(
   // into a bottom strip that reads like page content.
   return html`<div class="axp-tasks"><aside class="axp-pane" aria-label="Explorer tasks">${boxes}</aside></div>`;
 }
-

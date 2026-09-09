@@ -175,13 +175,14 @@
       "inputs": {
         "paths": [
           "tools/photos/shell-data.ts",
-          "config/site-manifest.json"
+          "config/site-manifest.json",
+          "src/worker/lib/xp/taskbar.ts"
         ]
       },
       "regenerate": "bun tools/photos/gen-desktop-partial.ts",
       "recorded": {
-        "inputs": "a7a19fb979dfe2c9fc402231187092a8b690b5060cf86273e7c2b5cbabacd57a",
-        "count": 2
+        "inputs": "9b2a255a3ceb8a9f715996c67d5692ac7cf80e76d832deee8ae83652dd9ecacd",
+        "count": 3
       }
     },
     {
@@ -275,6 +276,7 @@
       "pipelines"
     ],
     "exempt": {
+      "tools/gen-xp.ts": "generates typed XP component renderers from tools/xp; required CI runs its --check mode and native/TypeScript parity tests before accepting the projections",
       "tools/build.ts": "writes only into .build/, the staged tree, which is rebuilt from source every deploy and never committed",
       "tools/gen-md-twins.ts": "same, a build step: the twins are generated into .build/ precisely so no committed copy can fall behind",
       "tools/generate-search-index.ts": "same, and for the same reason: it was committed until 2026-08-24 and froze twice, which is why it is build output now",
