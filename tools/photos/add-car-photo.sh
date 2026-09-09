@@ -26,7 +26,7 @@ DEST="$(cd "$(dirname "$0")/../../public/cars" && pwd)"
 SIPS=/usr/bin/sips
 ZENC_DIR="$(cd "$(dirname "$0")/zenc" && pwd)"
 ZENC="$ZENC_DIR/target/release/zenc"
-AVIFENC=/opt/homebrew/bin/avifenc
+AVIFENC="$(command -v avifenc)"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 

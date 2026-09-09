@@ -281,9 +281,9 @@ while IFS= read -r stem; do
   # 5. mobile square: from the same full-resolution frame as the 600 tier
   if want sm; then
     if [ "$AVIF_KIND" != "sips" ]; then
-      "$AVIF_ENCODER" -q 63 -d 10 --ignore-icc --ignore-exif --ignore-xmp --speed 2 --jobs 4 --yuv "$yuv" "$smtmp" "$smavif" >/dev/null 2>&1 || printf "~"
+      "$AVIF_ENCODER" -q 63 -d 10 --ignore-icc --ignore-exif --ignore-xmp --speed 2 --jobs 4 --yuv "$yuv" "$smtmp" "$smavif" >/dev/null 2>&1 || { FAIL=$((FAIL+1)); printf "✗"; continue; }
     else
-      sips -s format avif --setProperty formatOptions 60 "$smtmp" --out "$smavif" >/dev/null 2>&1 || printf "~"
+      sips -s format avif --setProperty formatOptions 60 "$smtmp" --out "$smavif" >/dev/null 2>&1 || { FAIL=$((FAIL+1)); printf "✗"; continue; }
     fi
   fi
   # 6. 1x square: from the same full-resolution frame. (Until 2026-08-26 this
@@ -292,9 +292,9 @@ while IFS= read -r stem; do
   #    ingest made the claim true.)
   if want xs; then
     if [ "$AVIF_KIND" != "sips" ]; then
-      "$AVIF_ENCODER" -q 63 -d 10 --ignore-icc --ignore-exif --ignore-xmp --speed 2 --jobs 4 --yuv "$yuv" "$xstmp" "$xsavif" >/dev/null 2>&1 || printf "~"
+      "$AVIF_ENCODER" -q 63 -d 10 --ignore-icc --ignore-exif --ignore-xmp --speed 2 --jobs 4 --yuv "$yuv" "$xstmp" "$xsavif" >/dev/null 2>&1 || { FAIL=$((FAIL+1)); printf "✗"; continue; }
     else
-      sips -s format avif --setProperty formatOptions 60 "$xstmp" --out "$xsavif" >/dev/null 2>&1 || printf "~"
+      sips -s format avif --setProperty formatOptions 60 "$xstmp" --out "$xsavif" >/dev/null 2>&1 || { FAIL=$((FAIL+1)); printf "✗"; continue; }
     fi
   fi
   OK=$((OK+1)); printf "."
@@ -302,6 +302,10 @@ done <<< "$STEMS"
 echo ""
 echo ""
 echo "  re-encoded: $OK   source-missing: $MISS   failed: $FAIL"
+if [ "$FAIL" -gt 0 ] || [ "$OK" -eq 0 ]; then
+  echo "error: thumbnail re-encode incomplete; do not hash or publish these outputs" >&2
+  exit 1
+fi
 echo "  next: re-run hash-thumbnails.sh (new bytes mint new /i/ URLs), then"
 echo "  re-bake the histograms, then \`bun run derive:check\`, commit, and deploy."
 echo "  the worker bundles photo-index.json + hashes.json, so the deploy IS the"

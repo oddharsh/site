@@ -68,7 +68,7 @@ fi
 # crop. Sizes on that page are measured live from these files, so the images
 # and the copy disagree the moment you regenerate. Update the copy in the same
 # commit, or do not regenerate.
-MOZ_CJPEG="/opt/homebrew/opt/mozjpeg/bin/cjpeg"
+MOZ_CJPEG="$(brew --prefix mozjpeg)/bin/cjpeg"
 if [ ! -x "$MOZ_CJPEG" ]; then
   echo "error: mozjpeg's cjpeg not found at $MOZ_CJPEG (brew install mozjpeg)" >&2
   echo "       a bare cjpeg is libjpeg-turbo's and would mislabel the grid" >&2

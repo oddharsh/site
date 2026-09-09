@@ -31,13 +31,9 @@ name: Ramp production
 # The six-read-scope `CLOUDFLARE_API_TOKEN` that infra:check uses is a DIFFERENT,
 # read-only credential and this must not widen it.
 #
-# Ramp steps run through `pnpm run` to match the documented interface, and that
-# used to be load-bearing rather than cosmetic: deploy-promote.mjs shelled out to
-# `npx wrangler`, and npx resolves whatever it can find. Measured 2026-08-12 in a
-# tree with no `node_modules`, `npx wrangler --version` answered 4.105.0 while this
-# repo pins 4.120.0, so the wrangler that moved production traffic depended on how
-# the script was invoked. It calls `bun x --no-install wrangler` now, which resolves the pin
-# on its own, so the choice here is consistency rather than a guardrail.
+# Both traffic-moving jobs call deploy:promote. Its wranglerCommand helper
+# resolves the installed Wrangler entrypoint under Node and never fetches a
+# missing binary; the root lockfile owns the version that moves traffic.
 
 on:
   workflow_run:
