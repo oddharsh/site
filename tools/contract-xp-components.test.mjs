@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Window } from "../src/worker/lib/xp/window.ts";
 import { PropertySheet } from "../src/worker/lib/xp/property-sheet.ts";
+import { ExplorerList } from "../src/worker/lib/xp/explorer-list.ts";
 import { html, Html } from "../src/worker/lib/html.ts";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -80,6 +81,24 @@ test("XP Window composes trusted slots and escapes text and attributes", () => {
   assert.ok(markup.includes('class="window &quot; onclick=&quot;bad"'));
   assert.ok(markup.includes('href="/?x=&quot;&amp;y=1"'));
   assert.ok(markup.includes('aria-label="Close &quot;window&quot;"'));
+});
+
+test("ExplorerList preserves native links, glyph fallback, and row ordering", () => {
+  assert.equal(readFileSync(new URL("../src/worker/lib/xp/explorer-list.ts", import.meta.url), "utf8"), native("typescript-explorer-list"));
+  const cases = [{ items: [] }, { items: [
+    { href: '/?q="&x=1', label: '<Snow 雪>' },
+    { href: "/two", label: "Second", glyph: "" },
+    { href: "/three", label: "Third", glyph: "<&" },
+  ] }];
+  const expected = cases.map((value) => String(ExplorerList(value)));
+  assert.deepEqual(JSON.parse(native("render-explorer-list-batch", JSON.stringify(cases))), expected);
+  assert.equal(expected[0], "<ul></ul>");
+  assert.equal(expected[1], '<ul><li><span class="axp-glyph" aria-hidden="true">›</span><a href="/?q=&quot;&amp;x=1">&lt;Snow 雪&gt;</a></li><li><span class="axp-glyph" aria-hidden="true">›</span><a href="/two">Second</a></li><li><span class="axp-glyph" aria-hidden="true">&lt;&amp;</span><a href="/three">Third</a></li></ul>');
+  assert.throws(() => native("render-explorer-list-batch", JSON.stringify([{ items: [] }, { items: [{ href: "/" }] }])), (error) => {
+    assert.ok(error instanceof Error && "stdout" in error);
+    assert.equal(error.stdout, "");
+    return true;
+  });
 });
 
 test("XP Window keeps a native close link and the shell enhancement hooks", () => {

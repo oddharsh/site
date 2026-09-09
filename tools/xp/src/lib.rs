@@ -22,6 +22,7 @@ enum Part {
     Literal(&'static str),
     Value(&'static str),
     Prefix(&'static str),
+    OrText(&'static str, &'static str),
 }
 struct Component {
     name: &'static str,
@@ -139,6 +140,49 @@ const PROPERTY_SHEET: Component = Component {
     ],
 };
 
+const EXPLORER_ITEM: Component = Component {
+    name: "ExplorerItem",
+    fields: &[
+        Field {
+            name: "href",
+            kind: Kind::Text,
+            default: Default::Required,
+        },
+        Field {
+            name: "label",
+            kind: Kind::Text,
+            default: Default::Required,
+        },
+        Field {
+            name: "glyph",
+            kind: Kind::Text,
+            default: Default::Text(""),
+        },
+    ],
+    parts: &[
+        Part::Literal("<li><span class=\"axp-glyph\" aria-hidden=\"true\">"),
+        Part::OrText("glyph", "›"),
+        Part::Literal("</span><a href=\""),
+        Part::Value("href"),
+        Part::Literal("\">"),
+        Part::Value("label"),
+        Part::Literal("</a></li>"),
+    ],
+};
+const EXPLORER_LIST: Component = Component {
+    name: "ExplorerList",
+    fields: &[Field {
+        name: "items",
+        kind: Kind::Rows(&EXPLORER_ITEM),
+        default: Default::Required,
+    }],
+    parts: &[
+        Part::Literal("<ul>"),
+        Part::Value("items"),
+        Part::Literal("</ul>"),
+    ],
+};
+
 #[derive(Clone)]
 enum Slot {
     Text(String),
@@ -174,6 +218,9 @@ pub fn render_window(input: &Map<String, Value>) -> Result<String, String> {
 }
 pub fn render_property_sheet(input: &Map<String, Value>) -> Result<String, String> {
     render(&PROPERTY_SHEET, input)
+}
+pub fn render_explorer_list(input: &Map<String, Value>) -> Result<String, String> {
+    render(&EXPLORER_LIST, input)
 }
 fn render(component: &'static Component, input: &Map<String, Value>) -> Result<String, String> {
     for key in input.keys() {
@@ -217,6 +264,13 @@ fn render(component: &'static Component, input: &Map<String, Value>) -> Result<S
     let mut out = String::new();
     for part in component.parts {
         let (name, prefix) = match part {
+            Part::OrText(name, fallback) => {
+                let Slot::Text(value) = &values[name] else {
+                    panic!("text fallback requires a text field")
+                };
+                out.push_str(&escape(if value.is_empty() { fallback } else { value }));
+                continue;
+            }
             Part::Literal(value) => {
                 out.push_str(value);
                 continue;
@@ -249,6 +303,9 @@ pub fn typescript() -> String {
 }
 pub fn property_sheet_typescript() -> String {
     module(&[&PROPERTY_ROW, &PROPERTY_SHEET])
+}
+pub fn explorer_list_typescript() -> String {
+    module(&[&EXPLORER_ITEM, &EXPLORER_LIST])
 }
 fn module(components: &[&'static Component]) -> String {
     let empty = if components.iter().any(|c| {
@@ -306,6 +363,10 @@ fn typescript_component(component: &'static Component) -> String {
     ));
     for part in component.parts {
         match part {
+            Part::OrText(name, fallback) => out.push_str(&format!(
+                "${{{name} || {}}}",
+                serde_json::to_string(fallback).unwrap()
+            )),
             Part::Literal(value) => out.push_str(
                 &value
                     .replace('\\', "\\\\")

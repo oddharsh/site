@@ -10,7 +10,7 @@ const args = process.argv.slice(2);
 if (args.length > 1 || (args.length === 1 && args[0] !== "--check")) {
   throw new Error("usage: bun tools/gen-xp.ts [--check]");
 }
-const outputs = [["window.ts", "typescript"], ["property-sheet.ts", "typescript-property-sheet"]].map(([file, mode]) => ({
+const outputs = [["window.ts", "typescript"], ["property-sheet.ts", "typescript-property-sheet"], ["explorer-list.ts", "typescript-explorer-list"]].map(([file, mode]) => ({
   output: new URL(`../src/worker/lib/xp/${file}`, import.meta.url),
   generated: execFileSync("cargo", ["run", "--quiet", "--release", "--locked", "--manifest-path", manifest, "--", mode], {
     cwd: root, encoding: "utf8", timeout: 120_000,

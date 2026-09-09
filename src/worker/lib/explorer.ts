@@ -15,9 +15,10 @@
 // pane that pads itself out with plausible links is worse than no task pane.
 import { Html, html } from "./html.ts";
 import { PropertySheet, type PropertyRowOptions } from "./xp/property-sheet.ts";
+import { ExplorerList, type ExplorerItemOptions } from "./xp/explorer-list.ts";
 
 /** One row of the task pane: somewhere this object can go. */
-export type Task = { href: string; label: string; glyph?: string };
+export type Task = ExplorerItemOptions;
 /** One row of the Details box: a fact the CALLER counted. */
 export type Detail = PropertyRowOptions;
 
@@ -95,11 +96,6 @@ function group(title: string, inner: Html): Html {
   return html`<section class="axp-group"><h2>${title}</h2>${inner}</section>`;
 }
 
-function taskList(items: Task[]): Html {
-  const rows = items.map((item) => html`<li><span class="axp-glyph" aria-hidden="true">${item.glyph || "›"}</span><a href="${item.href}">${item.label}</a></li>`);
-  return html`<ul>${rows}</ul>`;
-}
-
 /**
  * The task pane. `tasks` are this object's own actions (its other
  * representations, mostly) and `details` are facts the caller has counted.
@@ -115,11 +111,11 @@ export function taskPane(
 
   const objectTasks = tasks.map((task) => ({ href: task.href, label: task.label, glyph: task.glyph || "≡" }));
   if (parent) objectTasks.push({ href: parent, label: `Up to ${labelFor(parent)}`, glyph: "↑" });
-  if (objectTasks.length) boxes.push(group("Object tasks", taskList(objectTasks)));
+  if (objectTasks.length) boxes.push(group("Object tasks", ExplorerList({ items: objectTasks })));
 
   const places = PLACES.filter((place) => place.path !== section).slice(0, 6)
     .map((place) => ({ href: place.path, label: place.label, glyph: "■" }));
-  if (places.length) boxes.push(group("Other places", taskList(places)));
+  if (places.length) boxes.push(group("Other places", ExplorerList({ items: places })));
 
   const rows: Detail[] = [];
   const here = name && name !== "aadhar.sh" ? name : "";
