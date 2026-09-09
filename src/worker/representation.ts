@@ -3,7 +3,8 @@
 // only long enough to derive a title/word count and are never persisted.
 import { lensFetch } from "./lens.ts";
 import { extractTitle } from "./lib/http.ts";
-import { fetchFollowingPublicRedirects, mapWithConcurrency, readResponseCapped, validateLensTarget } from "./lib/crawl.ts";
+import { fetchFollowingPublicRedirects, validateLensTarget } from "./lib/public-fetch.ts";
+import { mapWithConcurrency, readResponseCapped } from "./lib/crawl.ts";
 
 const BODY_CAP = 1024 * 1024;
 const PROFILES = {
@@ -91,7 +92,7 @@ async function fetchProfile(url, profile, env) {
       const headers = { accept: spec.accept, "user-agent": spec.userAgent };
       if (spec.identity) headers["accept-encoding"] = "identity";
       const followed = await fetchFollowingPublicRedirects(
-        url, { method: "GET", headers, signal, cf: { cacheTtl: 0 } }, validateLensTarget, 20,
+        url, () => ({ method: "GET", headers, signal, cf: { cacheTtl: 0 } }), validateLensTarget, 20,
       ); // Preserve native fetch's twenty-redirect allowance for these profiles.
       if (!followed.ok) return { error: "request redirected to a disallowed target" };
       ({ response, finalUrl } = followed);

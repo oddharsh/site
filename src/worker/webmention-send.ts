@@ -1,4 +1,5 @@
-import { fetchFollowingPublicRedirects, privateHostBlocked, readResponseCapped, validateLensTarget } from "./lib/crawl.ts";
+import { fetchFollowingPublicRedirects, privateHostBlocked, validateLensTarget } from "./lib/public-fetch.ts";
+import { readResponseCapped } from "./lib/crawl.ts";
 import { WEBMENTION_PATHS, WEBMENTION_SECTIONS } from "./lib/site-manifest.ts";
 import { span } from "./lib/trace.ts";
 import { asText } from "./lib/parse.ts";
@@ -349,10 +350,11 @@ export function findEndpointIn(html, linkHeader, baseUrl) {
 
 export async function discoverEndpoint(target) {
   try {
-    const followed = await fetchFollowingPublicRedirects(target, {
+    const signal = AbortSignal.timeout(SEND_TIMEOUT_MS);
+    const followed = await fetchFollowingPublicRedirects(target, () => ({
       headers: { "user-agent": "AadharshBot/1.0 (+https://aadhar.sh/bot)", accept: "text/html" },
-      signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
-    }, validateLensTarget, 20); // Preserve native fetch's redirect allowance.
+      signal,
+    }), validateLensTarget, 20); // Preserve native fetch's redirect allowance.
     if (!followed.ok) return null;
     const { response: res, finalUrl } = followed;
     const linkHeader = res.headers.get("link");
