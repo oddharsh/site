@@ -31,7 +31,7 @@
 // dangling-pointer problem the DNS-AID note refuses for `_a2a`.
 //
 // Reviving it needs a runtime with native ML-DSA, or a plan that is not
-// "sign on the request path". Do not re-add it to signRequestForWebBotAuth
+// "sign on the request path". Do not re-add it to botHeaders
 // without one, and read the CPU note above first.
 export const BOT_NAME    = "AadharshBot";
 
@@ -68,13 +68,28 @@ export async function botHeaders(targetUrl, env, opts: BotRequestOptions = {}) {
   if (!env || !env.RN_SIGNING_KEY_JWK) {
     throw new Error("AadharshBot signing key is unavailable");
   }
-  const sigs = await signRequestForWebBotAuth(targetUrl, env);
+  const host = new URL(targetUrl).host;
+  const created = Math.floor(Date.now() / 1000);
+  const jwk = JSON.parse(env.RN_SIGNING_KEY_JWK);
+  // keyid MUST be the key's RFC 7638 thumbprint (draft-meunier-web-bot-auth-
+  // architecture-04): a verifier fetches the directory, thumbprints each key,
+  // and looks the signature's keyid up by that value. It read `jwk.kid` here
+  // until 2026-09-03, which was the label "rn-2026-06-30", so the signature and
+  // the directory agreed with each other and with no verifier. Deriving it from
+  // the public members means the two cannot disagree again.
+  const keyId = await jwkThumbprint(jwk);
+  const params = `("@authority" "signature-agent");created=${created};keyid="${keyId}";alg="ed25519";tag="web-bot-auth"`;
+  const key = await crypto.subtle.importKey("jwk", jwk, { name: "Ed25519" }, false, ["sign"]);
+  // RFC 9421: one covered component per line, then the signed parameters.
+  const base = new TextEncoder().encode([
+    `"@authority": ${host}`,
+    `"signature-agent": "${SIG_AGENT}"`,
+    `"@signature-params": ${params}`,
+  ].join("\n"));
+  const signature = new Uint8Array(await crypto.subtle.sign("Ed25519", key, base)).toBase64();
   headers.set("Signature-Agent", `"${SIG_AGENT}"`);
-  // both fields are structured-fields Dictionaries, so a second label appends
-  // rather than replaces. a verifier that only knows ed25519 reads sig1 and
-  // ignores sig2, which is the whole reason this can ship before the registry.
-  headers.set("Signature-Input", sigs.map((s) => `${s.label}=${s.params}`).join(", "));
-  headers.set("Signature", sigs.map((s) => `${s.label}=:${s.b64}:`).join(", "));
+  headers.set("Signature-Input", `sig1=${params}`);
+  headers.set("Signature", `sig1=:${signature}:`);
   return headers;
 }
 
@@ -99,46 +114,4 @@ export async function jwkThumbprint(jwk) {
   const canonical = "{" + required.map((k) => `${JSON.stringify(k)}:${JSON.stringify(jwk[k])}`).join(",") + "}";
   const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonical)));
   return digest.toBase64({ alphabet: "base64url", omitPadding: true });
-}
-
-// RFC 9421 signature base: one covered component per line, then the parameters
-// of the label being signed.
-function signatureBase(host, params) {
-  return new TextEncoder().encode([
-    `"@authority": ${host}`,
-    `"signature-agent": "${SIG_AGENT}"`,
-    `"@signature-params": ${params}`,
-  ].join("\n"));
-}
-
-function paramsFor(created, keyId, alg) {
-  return `("@authority" "signature-agent");created=${created};keyid="${keyId}";alg="${alg}";tag="web-bot-auth"`;
-}
-
-// build + sign the Web Bot Auth signature over (@authority, signature-agent).
-// One entry, kept as a list because the wire format is a structured-fields
-// Dictionary and the callers join it: a second label would slot in here, and
-// the header-building code above never has to learn how many there are.
-export async function signRequestForWebBotAuth(targetUrl, env) {
-  const host = new URL(targetUrl).host;
-  const created = Math.floor(Date.now() / 1000);
-
-  const jwk = JSON.parse(env.RN_SIGNING_KEY_JWK);
-  // keyid MUST be the key's RFC 7638 thumbprint (draft-meunier-web-bot-auth-
-  // architecture-04): a verifier fetches the directory, thumbprints each key,
-  // and looks the signature's keyid up by that value. It read `jwk.kid` here
-  // until 2026-09-03, which was the label "rn-2026-06-30", so the signature and
-  // the directory agreed with each other and with no verifier. Deriving it from
-  // the public members means the two cannot disagree again.
-  const edParams = paramsFor(created, await jwkThumbprint(jwk), "ed25519");
-  // Ed25519 is native in workerd's WebCrypto, so this costs microseconds. The
-  // retired sig2 was pure JS at ~8.5ms, which is the whole reason it is gone.
-  const edKey = await crypto.subtle.importKey("jwk", jwk, { name: "Ed25519" }, false, ["sign"]);
-  return [{
-    label: "sig1",
-    params: edParams,
-    b64: new Uint8Array(await crypto.subtle.sign(
-      "Ed25519", edKey, signatureBase(host, edParams)
-    )).toBase64(),
-  }];
 }
