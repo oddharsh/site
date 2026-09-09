@@ -4,24 +4,22 @@ For future me. Every recurring chore on aadhar.sh, organized by "I want to ___",
 with the exact command and the gotcha that bit me last time. Deep design notes
 and the full conventions list live in [CLAUDE.md](../CLAUDE.md); this is the ops sheet.
 
-One site Worker, with three source islands:
-- **public/** (aadhar.sh): the **Cloudflare Worker with static assets** (migrated off Pages 2026-06-30). Config is `wrangler.jsonc` at the repo root: it points `main` + `assets.directory` at `.build/public` and runs `build.ts` via its `build.command`, so `assets.run_worker_first` (an allowlist mirroring the `ROUTES`/`PREFIX` tables in `index.js`; static is the default) applies to the built tree; `workers_dev:false` (custom domain only). **Production deploy: merge to `main`; GitHub CI promotes the exact tested commit to the machine-owned `production` branch, then Cloudflare Workers Builds deploys it.** The config self-builds, so the Workers Build Deploy command ships the minified tree; local dev uses `wrangler.dev.jsonc` (readable `public/`, fast reload). A local `wrangler deploy` is fallback-only. Verify after every deploy with `node tools/verify-routes.ts https://aadhar.sh` (now also asserts `/nav.js` minified + `.src` twins resolve). All site bindings live in `wrangler.jsonc`; secrets via `wrangler versions secret put`.
-- **cal/** (coffee booking module): **LIVE** at `aadhar.sh/coffee`, dispatched by the same `aadhar-sh` Worker. Availability still serves from an SWR calendar snapshot (KV `cal:busy`, 2s upstream deadline, stale fallback); the GET page edge-caches 30s; booking fails closed if the calendar can't be vouched for. See [cal/README.md](../cal/README.md). `cal/wrangler.test.toml` is test-only; it is not a deployment target.
-- **serendipity/** (event dashboard module): **LIVE** at `aadhar.sh/serendipity`, dispatched by the same `aadhar-sh` Worker. Its D1, secrets, route-specific CSP, and dashboard cache policy remain isolated in the module and shared root bindings.
+The root Worker serves the site, coffee bookings, and Serendipity. Its entrypoint
+is `src/worker/index.ts`; [cal/README.md](../cal/README.md) covers bookings.
+See [the repository layout](../CLAUDE.md#repository-layout) for source ownership.
 
-**Deploy sanity:** after Workers Builds deploys the promoted commit, verify the live route oracle. `_headers` and `.assetsignore` (which excludes `_worker.js` from being served) both work natively on Workers static assets. `_worker.js/` is the bundled Worker entry, not a served asset. The old Pages "static-only, no Function" outage class no longer applies (a Worker deploy is atomic).
+[`wrangler.jsonc`](../wrangler.jsonc) runs `bun tools/build.ts` before uploading
+`.build/src/worker/index.ts` and `.build/public`. Local development uses
+[`wrangler.dev.jsonc`](../wrangler.dev.jsonc), with the source Worker and
+`.dev-assets` assembled by `tools/dev-stage.ts`.
 
-**Consolidation cutover:** before the first production deploy, set the former
-Cal secrets (`ICAL_URL`, `RESEND_API_KEY`, `SIGNING_SECRET`) and Serendipity
-secrets (`SYNC_SECRET`, `EXA_API_KEY`, `PARALLEL_API_KEY`, `COVER_SECRET`) on
-the root `aadhar-sh` Worker. After the new route smoke tests pass, remove the
-old `cal-aadhar-sh` and `serendipity` route/custom-domain ownership so only
-the root Worker receives `/coffee*`, `/serendipity*`, and `cal.aadhar.sh/*`.
+A merge passes through CI, branch promotion, version upload, and a traffic ramp.
+Follow the [release path](#cicd-release-path) below; an uploaded version alone
+has no production traffic.
 
-The legacy `cal.aadhar.sh/` host redirects to the canonical `/coffee` page.
-The exact work-calendar slug and its Google Calendar destination are Worker
-secrets (`WORK_CALENDAR_SLUG`, `WORK_CALENDAR_URL`); both can be rotated
-without changing the route or source code.
+The legacy `cal.aadhar.sh/` host redirects to `/coffee`. The work-calendar
+redirect uses `WORK_CALENDAR_SLUG` and `WORK_CALENDAR_URL`; use the
+[secret rotation procedure](#rotate-cals-calendar-or-approval-secret) to change them.
 
 ## Repository boundary and fresh checkouts
 
@@ -54,9 +52,9 @@ than copied between checkouts:
 - The curated photo source folder is outside the repository by design; the
   checked-in derivative metadata and image tiers are the repo-facing artifacts.
 
-There are currently no repository symlinks. Do not rely on a case-insensitive
-filesystem making two names look like one file. If a symlink becomes a real
-repository contract, create it explicitly and confirm Git records mode `120000`:
+`AGENTS.md` is a symlink to `CLAUDE.md`, so both agent entrypoints read the same
+instructions. Preserve Git mode `120000`; a second copied file would drift.
+Check symlinks with:
 
 ```bash
 git ls-files --stage | awk '$1 == 120000 { print }'
@@ -151,163 +149,118 @@ rotation and treat all previously emailed links as compromised.
 
 ## CI/CD release path
 
-`.github/workflows/ci.yml` is the pull-request gate. It installs locked
-dependencies, builds the site, enforces the performance budget, dry-runs
-the single site Worker plus the `cf-garage/` and `lwe-ask/` auxiliary Wrangler
-configs, and runs `bun run --filter cal-aadhar-sh test`. The `cf-garage/` dry-run is the odd one out:
-that project moved to wrangler's experimental TypeScript config on 2026-08-23,
-so its step passes `--x-new-config` and passes no `-c` (the flag refuses
-`--config` and reads the config from the working directory instead). Cal and Serendipity are bundled into the site
-Worker; their source modules and Cal behavioral suite remain inside the
-pull-request gate.
+1. [CI](../.github/workflows/ci.yml) runs the required `validate` check: locked
+   dependencies, build, lint, typechecks, tests, Worker dry-runs, performance gates,
+   and the local route oracle. Cal and Serendipity ship inside the site Worker.
+2. [Promote production](../.github/workflows/promote-production.yml) advances
+   `production` after successful CI on current `main` and a merged PR.
+   Manual dispatch also requires a merged PR.
+3. Cloudflare Workers Builds uploads that commit as a Worker version.
+4. [Ramp production](../.github/workflows/ramp.yml) waits for the upload, moves
+   10% of traffic, and waits for approval before moving 50% and then 100%.
 
-**`bun run infra:check` runs LAST in that job, and the order is deliberate.** It is
-the only step asserting against live production rather than against the tree, so
-its result depends on the deployed world instead of on the diff. Steps run
-sequentially and stop at the first failure, so while it sat near the front a
-production drift did not merely redden a PR, it SKIPPED all ten code gates behind
-it and reported nothing about the change. That happened on 2026-07-31: a Workers
-Cache regression on `/` put the edge out of sync with `infra.json`, and four
-unrelated PRs went red with `Build homepage` through `Validate LWE ask Worker
-config` all skipped, one of them belonging to someone with no way to know why.
-Keep it last. A production incident should still be able to redden a PR; it should
-not be able to hide whether the PR's own code is sound.
+Workers Builds uses the settings declared under `release` in
+[`config/infra.json`](../config/infra.json): branch `production`, repository root
+`.`, an empty Build command, and this Deploy command:
 
-It stays FATAL, so drift cannot merge unnoticed. The consequence worth knowing: a
-change whose purpose is to FIX production drift cannot turn its own check green
-before it deploys, because the thing it asserts against is the thing it repairs.
-Deploy that one with the local fallback (`bun run deploy:direct`), then re-run CI.
+```sh
+bash .github/deploy-wrangler.sh versions upload --x-provision=false --x-auto-create=false
+```
 
-Dependabot (`.github/dependabot.yml`) keeps the Wrangler pin current: the npm
-ecosystem entry at the repository root bumps the single exact root pin (and the
-shared lockfile) via PR, alongside the cargo, pip, and github-actions
-ecosystems. The exact lockfile pin keeps a release reproducible; the Dependabot
-PR keeps it current. Wrangler's npm dependency metadata instrumentation is
-explicitly enabled in every Worker config.
+The wrapper invokes the installed Wrangler entrypoint under Node. Wrangler owns
+the build step; keep the dashboard Build command empty to avoid building twice.
+For the auxiliary `cf-garage/` Worker, commands run from its directory with
+`--x-new-config`; its TypeScript config does not accept `-c`.
 
-**CodeQL analyzes `actions` and `javascript-typescript` only, and since
-2026-08-15 that list is a FILE.** It lives in
-[`.github/workflows/codeql.yml`](../.github/workflows/codeql.yml) as the job
-matrix, declared in [`infra.json`](../config/infra.json) under
-`repository.code_scanning`, and `bun run infra:check` fails on drift between the
-two. This paragraph used to say the list was a repo setting with no file in this
-tree, which was true of default setup and is the exact thing the move retired.
+`infra:check` follows the code checks so deployed-state drift cannot prevent
+validation of the diff. It still blocks the PR on confirmed drift.
+If a code change must deploy to resolve that drift, validate locally, use the
+`deploy:direct` fallback, then rerun CI.
 
-To change what is scanned, edit the matrix and the declaration in one commit. The
-checker reads the workflow's own `- language:` lines, so it needs no credential
-and runs on every PR.
+CodeQL's language matrix lives in [codeql.yml](../.github/workflows/codeql.yml)
+and `repository.code_scanning` in `config/infra.json`. Change both together.
+The check requires the declared languages, pinned actions, and CodeQL's default
+query suite and threat model. Rust and Python currently serve build tooling;
+revisit the scan coverage if either language starts serving requests.
 
-**The move bought a check that CI can actually make.** Default setup kept the
-curation in dashboard state whose endpoint wants the repository `Administration`
-read, which is not among the keys a workflow may grant its `GITHUB_TOKEN`
-(`security-events: read` was tried in `ci.yml` on 2026-08-07 and measured to
-change nothing, still HTTP 403, so it was removed rather than left looking
-load-bearing). Re-enabling rust or python from the Security tab was therefore
-invisible to every PR. Now it is a diff.
-
-**One assertion stays workstation-only: that default setup is still OFF.** Both
-scanners on would analyze every commit twice and file duplicate alerts, and the
-dashboard is one click from it. That read wants the same `Administration`
-permission, so CI reports one advisory naming the limit and never fails a PR. Run
-it locally after touching anything in the Security tab, and note that being
-logged in is not the bar, since the script reads the variable:
+Default CodeQL setup must remain off alongside the committed workflow. That API
+check needs a workstation credential with repository Administration access;
+CI's `GITHUB_TOKEN` cannot perform it. `infra:check` reads the environment
+variable, so a CLI login alone does not enable that check:
 
 ```bash
 GITHUB_TOKEN=$(gh auth token) bun run infra:check
 gh api repos/oddharsh/site/code-scanning/default-setup   # expect state not-configured
 ```
 
-The workflow tier asserts three things, and two of them are ABSENCES: the matrix
-equals the declared languages, every action is SHA-pinned, and the file sets
-neither `queries:` nor a threat model, so CodeQL's own defaults (`default` suite,
-`remote` model) are what hold. `threat_model` is asserted because the argument
-below depends on it.
-
-`rust` and `python` were dropped 2026-08-06. Between them they cost about 3 of the
-scan's 4 minutes to analyze four files: `tools/photos/zenc/src/main.rs` and the
-three `tools/photos/*.py` pipeline scripts. Every one of them is workstation and
-CI build tooling that runs before a deploy and never answers a request, while the
-configured threat model is `remote`. The Worker, which is the code an attacker can
-actually reach, is JavaScript and stays covered.
-
-Turn one back on the moment its language starts serving traffic. A Rust wasm module
-inside the Worker, or a Python endpoint of any kind, moves that code from the build
-side of the line to the served side, and this reasoning stops holding.
-
-`.github/workflows/promote-production.yml` runs after a successful `CI` run for
-`main` associated with a merged PR (or an explicit manual dispatch). It refuses
-unmerged commits, then advances the machine-owned `production` branch to the
-exact tested SHA. Cloudflare Workers Builds watches that branch and is the only
-production publisher. Configure one Workers Build project for the site Worker
-with `production` as the production branch and monorepo root `.`, leave its
-dashboard Build command blank, and use
-`bash .github/deploy-wrangler.sh versions upload --x-provision=false
---x-auto-create=false` as the Deploy command. That wrapper runs wrangler's entry file
-under node, which is what lets one dashboard string serve both a pnpm tree and a
-bun one: wrangler does not support bun, and the refusal is per-COMMAND, so a bun
-invocation publishes fine and does no work at all on `check startup`. It used to
-branch on the lockfile; that branch is gone. GitHub never holds a Cloudflare
-token that can write, so it cannot publish to production even if the workflow
-guard is defeated.
-
 ### Ramp a release (`bun run deploy:promote`)
 
-Reaching `production` uploads a version. It does not move traffic. That is the
-whole change: a merge now produces a fully built, fully uploaded Worker version
-with its own preview URL, serving nobody, and a human decides how much of the
-world sees it.
+The Actions workflow uses these environments:
+
+| job | traffic | environment | operator action |
+|---|---|---|---|
+| canary | 10% | `production-canary` | Inspect the new version and Workers Logs. |
+| full | 50%, then 100% | `production-full` | Approve this job after reviewing the canary. |
+| verify | unchanged | none | Review the advisory dictionary check. |
+
+The two ramp jobs use the `CLOUDFLARE_API_TOKEN_RAMP` environment secret, whose
+scope is declared in `config/infra.json`. Keep it separate from CI's read token
+and the workstation-only DNS credential. The full job refuses a target that
+changed while it waited for approval.
+
+A newer release cancels an older ramp, including one awaiting approval. Inspect
+the latest run and `deploy:promote --status` before acting on an old canary.
+Cancellation or a failed probe leaves the current traffic split in place.
+
+For a workstation ramp, inspect the target first:
 
 ```bash
-bun run deploy:promote                  # newest version, 10% -> 50% -> 100%
-bun run deploy:promote --status      # what is serving right now
-bun run deploy:promote --to 25       # one step, park it there
-bun run deploy:promote --steps 5,100
-bun run deploy:promote --rollback    # 100% back to the previous version
+bun run deploy:promote --dry-run
+bun run deploy:promote --status
+bun run wrangler versions list -c wrangler.jsonc
+bun run deploy:promote --version <version-id> --to 10
+# Inspect the canary and Workers Logs before continuing:
+bun run deploy:promote --version <version-id> --steps 50,100
 ```
 
-Between steps it runs two probes against `/whoareyou.json`, reading the **Serving
-version** field out of each response. They answer different questions and neither
-replaces the other:
+The dry-run prints the target's eight-character prefix. Find its full ID in the
+version listing and use that same ID for both traffic commands. The default
+`bun run deploy:promote` walks 10%, 50%, and 100% automatically; it has no
+interactive approval pause. `--to` stops after one step, and `--version` selects
+an explicit target instead of the newest production-aliased upload.
 
-| probe | requests | asks |
-|---|--:|---|
-| pinned | 12 | is the NEW version healthy? Each request carries `Cloudflare-Workers-Version-Overrides`, so all 12 are handled by the target. A non-200 here is conclusive and stops the ramp. |
-| sampled | 40 | did the split actually take? Unpinned, one `Cloudflare-Workers-Version-Key` per request. Pinning bypasses the split by construction, so only this probe can see routing. |
+After each traffic change, the script waits for propagation and checks
+`/whoareyou.json`, which reports the answering version:
 
-The pinned probe is the one that catches a bad release. Before it existed, errors
-were found only in whatever share of the 40 sampled requests happened to land on
-the new code, which at a 10% step is about four: a fault in the version being
-ramped had four requests looking for it. Cloudflare honours the override header
-only for a version already in the current deployment, so the probe necessarily
-runs after each step rather than before it.
+- Twelve requests use `Cloudflare-Workers-Version-Overrides` to probe the target.
+  An unapplied override or a fully stalled pinned probe is reported; the sampled
+  probe then carries the check.
+- Forty requests use separate `Cloudflare-Workers-Version-Key` values to sample
+  the split. An intermediate step with no target response retries up to three
+  windows before failing.
 
-Two failures stop the ramp: a non-200 from the pinned probe, and a step where not
-one sampled request reached the target (the deploy did not land, and continuing
-would ramp something untested). It sleeps 20s after each step before believing
-anything, and it polls sequentially.
+HTTP errors, an entirely unmeasurable sampled window, or a partial step with no
+target responses stop the ramp. The probes cannot establish visual correctness
+or acceptable latency. Inspect the affected routes and Workers Logs filtered to
+`v`, the eight-character version prefix.
 
-The per-request keys in the sampled probe are what let it work under version
-affinity (below). Without them a sweep from one machine hashes to one version and
-a healthy ramp reads as dead. If a step ever fails with "the ramp did not take"
-while the pinned probe reported the version answering fine, that is the shape of
-it, and the error says so.
+A failed ramp does not roll back automatically. Inspect the serving state, then
+use the rollback command if reverting is the intended response:
 
-**Read the logs at the hold points.** The script checks status codes and nothing
-else. It cannot tell you the page is wrong, only that it answered. Filter Workers
-Logs on `v` (the 8-char version prefix, in every structured line) and compare the
-new version against the old one on latency and on the routes you touched. That is
-the step the ramp exists to make possible; skipping it makes the ramp a slower
-way to do what `bun run deploy:direct` already did.
+```bash
+bun run deploy:promote --status
+bun run deploy:promote --rollback
+```
 
-`bun run deploy:direct` still goes straight to 100% and is the right tool for the
-`infra:check` deadlock above, where the extra step is the liability.
+`deploy:direct` builds and deploys the checkout at 100% without the ramp.
+It remains the fallback for the infrastructure-check deadlock described above.
 
 ### Version affinity (the Transform Rule)
 
-**Not yet created.** It needs a zone write, which no script in this repo has: the
-one write token is DNS-scoped and workstation-only. This is the recipe, and
-`bun run infra:check` fails until the rule exists, because it is declared in
-`config/infra.json` under `zone.version_affinity`.
+The intended rule lives under `zone.version_affinity` in
+[`config/infra.json`](../config/infra.json). Check its deployed state with
+`bun run infra:check` using the zone-read permissions listed below. If the rule
+is missing or differs, use this setup procedure to restore the declaration.
 
 **What it fixes.** Every document here references content-hashed shell assets
 (`/a/luna.<hash8>.css`, `/a/nav.<hash8>.js`), the build keeps exactly one hash per
