@@ -21,7 +21,7 @@
     "src/worker/lib/twins.ts": 1,
     "src/worker/nlweb.ts": 2,
     "src/worker/perf-probe.ts": 1,
-    "src/worker/photos.ts": 14,
+    "src/worker/photos.ts": 10,
     "src/worker/radar.ts": 11,
     "src/worker/reading.ts": 7,
     "src/worker/rn.ts": 20,
@@ -32,5 +32,5 @@
     "src/worker/whoareyou.ts": 3,
     "src/worker/writing.ts": 2
   },
-  "total": 246
+  "total": 242
 }

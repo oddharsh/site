@@ -691,8 +691,8 @@ function fmtDuration(ms) {
   return `${m}:${s}`;
 }
 
-// stale-while-revalidate for the playlist payload, mirroring
-// getImagesManifest: `tracks:<pid>` persists with NO TTL (a visitor never
+// stale-while-revalidate for the playlist payload:
+// `tracks:<pid>` persists with NO TTL (a visitor never
 // catches an empty hole when the hour lapses), and its KV metadata carries the
 // write time the freshness window is measured from. lapsed stamp, so serve
 // stale now and rescrape on ctx.waitUntil. used by both /rn/tracks and the

@@ -74,7 +74,7 @@ export async function cronHomeProbe(env, ctx) {
       return Date.now() - s;
     };
     const tracksMs = await time(() => handleRnTracksHtml(request, env, ctx));
-    const gridMs = await time(() => handlePhotoGrid(request, env, ctx));
+    const gridMs = await time(() => handlePhotoGrid(request, env));
     // Both arms failing means the probe learned nothing. Say nothing.
     if (tracksMs == null && gridMs == null) return;
     const spans = {

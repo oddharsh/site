@@ -17,10 +17,6 @@
 import { escAttr } from "./http.ts";
 import { asNumber } from "./parse.ts";
 
-// Pool URLs are already absolute /i/ form; this is the last-resort shim for a
-// pool entry that predates that (kept identical to photos.js's absThumb).
-const abs = (u) => (u && u.startsWith("/") ? u : `/images/${u}`);
-
 // WHICH tiles carry a real `src` depends on which caller is rendering, and the
 // reason is the same one in both directions: a URL should only be in the markup
 // when it is a URL the visitor is actually going to use. Each tile names ONE
@@ -99,7 +95,7 @@ export function renderPhotoSlots(pick, altMap = {}, { deferred = true, histogram
     // Current photo artifacts always have thumb_small. The larger AVIF and then
     // JPEG are recovery paths for an old/incomplete manifest entry, not alternate
     // candidates emitted beside it: even that degraded row still names one URL.
-    const thumb = abs(p.thumb_small || p.thumb_avif || p.thumb_jpg);
+    const thumb = p.thumb_small || p.thumb_avif || p.thumb_jpg;
     // ONE FORMAT, THREE SIZES. The candidates are all AVIF, which is what makes
     // this different from the <picture> the note above removed: that raced two
     // FORMATS behind one element and the loser kept being instantiated on hover.
@@ -114,9 +110,9 @@ export function renderPhotoSlots(pick, altMap = {}, { deferred = true, histogram
     // file went to everyone, 2.3x what a 1x display can show, while a DPR-3 phone
     // asked for 552 and got 400.
     const cands = [
-      p.thumb_xs ? `${abs(p.thumb_xs)} 200w` : "",
-      p.thumb_small ? `${abs(p.thumb_small)} 400w` : "",
-      p.thumb_avif ? `${abs(p.thumb_avif)} 600w` : "",
+      p.thumb_xs ? `${p.thumb_xs} 200w` : "",
+      p.thumb_small ? `${p.thumb_small} 400w` : "",
+      p.thumb_avif ? `${p.thumb_avif} 600w` : "",
     ].filter(Boolean);
     // One candidate is what `src` already says, so the attribute would be pure
     // bytes. This is also the degraded path for a stem the pipeline half-ran.
