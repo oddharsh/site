@@ -22,3 +22,7 @@ both wrangler configs stay at the root because workers builds runs from there.
 ```bash
 bun install && bun run dev
 ```
+
+`bun run build` also needs the repository-pinned Rust toolchain and a C compiler.
+It builds the native artifact compiler with locked Cargo dependencies; subsequent
+builds reuse it and its content cache under `.cache/site-compiler/`.

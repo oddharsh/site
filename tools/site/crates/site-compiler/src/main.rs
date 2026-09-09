@@ -3,6 +3,10 @@ use std::path::Path;
 
 fn run() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<_> = std::env::args().skip(1).collect();
+    if args == ["typescript"] {
+        print!("{}", site_compiler::typescript());
+        return Ok(());
+    }
     if args.len() != 4 {
         return Err(
             "usage: site-compiler <plan.json> <source-root> <output-root> <cache-dir>".into(),

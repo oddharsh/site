@@ -38,8 +38,7 @@ import { existsSync } from "node:fs";
 import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
-import { promisify } from "node:util";
-import { brotliCompress, brotliDecompressSync, constants as zlibConstants, zstdCompressSync } from "node:zlib";
+import { brotliDecompressSync, constants as zlibConstants, zstdCompressSync } from "node:zlib";
 import minifyHtml from "@minify-html/node";
 import { transform as transformCss } from "lightningcss";
 import { minifySync } from "oxc-minify";
@@ -47,34 +46,19 @@ import { readManifest, workerModule, navFenceBody, readFenceBody, runProfilesBod
 import { parseCss } from "./lib/css-parse.ts";
 import { HTML_MARKERS } from "./lib/html-markers.ts";
 import { buildExifIndex, buildImageFingerprints, serializeExifIndex, serializeFingerprints } from "./lib/photo-indexes.ts";
+import { NativeArtifacts } from "./lib/native-artifacts.ts";
 import { zstdCompressDictionaryBatch } from "./lib/zstd-batch.ts";
 import { chooseFamilyDictionary, FAMILY_DICT_DIR, FAMILY_FRESH, FAMILY_REPORT, hash8, readCommittedFamily } from "./lib/page-family.ts";
 import { unpackHistogram } from "./photos/build-histogram-index.ts";
 import { patchStaticShell, renderDesktopArtifacts, staticShellPages } from "../tools/photos/gen-desktop-partial.ts";
 
 const OUT = ".build";
-// Every q11 file below is independent, but node:zlib's callback API shares
-// libuv's four-thread default. Let clean builds use the same eight-core ceiling
-// as the zstd batch while preserving an explicit caller override and libuv's
-// four-thread floor on smaller CI hosts. This must run before the first async fs
-// or zlib operation, when libuv fixes the process-wide pool size.
+// Preserve the build's async filesystem pool and any explicit caller override.
+// Native transforms have their own bounded workers.
 process.env.UV_THREADPOOL_SIZE ||= String(Math.max(4, Math.min(8, availableParallelism())));
-const brotliCompressAsync = promisify(brotliCompress);
-
-// q11 dominates clean builds, so use zlib's callback path to run independent
-// files in the libuv pool. Promise.all preserves input order, and the callback
-// and sync APIs produced a byte-identical staged tree in the 2026-08-15 trial.
-// Keep the dcz encoder synchronous: its async API changed every `.dcz` byte.
-function brotliQ11(bytes) {
-  return brotliCompressAsync(bytes, {
-    params: {
-      [zlibConstants.BROTLI_PARAM_QUALITY]: 11,
-      // 24 is the largest window legal for Content-Encoding: br (RFC 7932 §4).
-      [zlibConstants.BROTLI_PARAM_LGWIN]: 24,
-      [zlibConstants.BROTLI_PARAM_SIZE_HINT]: bytes.length,
-    },
-  });
-}
+// One typed native artifact engine owns all q11 encoding. Its content cache
+// survives staging, while plans and candidate outputs stay outside public/.
+const nativeArtifacts = new NativeArtifacts(`${OUT}/public`, `${OUT}/compiler`, ".cache/site-compiler");
 
 // dcz framing (RFC 9842), the one construction both delta passes share: compress
 // against the dictionary, then prepend the dictionary's SHA-256 in a Zstandard
@@ -2334,7 +2318,7 @@ let freshFamily: Buffer | null = null;
 // static TEXT assets (the Markdown twins, the photo data indexes, llms.txt, the
 // sitemap, the feeds) got theirs too; see the text-twins block near the end of
 // this file, and servePrecompressedText for why those headers come from the plain
-// asset rather than the twin. Three tiers, three blocks, one brotliQ11.
+// asset rather than the twin. Three tiers, three blocks, one native compiler.
 //
 // This is safe to add because it degrades to exactly today's behavior: the worker
 // serves a .br twin only when the request actually offers `br` AND the twin exists.
@@ -2344,9 +2328,10 @@ let freshFamily: Buffer | null = null;
   const files = (await readdir(dir)).filter((f) => /\.(js|css|svg|dict)$/.test(f));
   if (!files.length) throw new Error("precompression found no /a/ shell assets — did step 6 stop emitting them?");
   let raw = 0, enc = 0;
-  const compressed = await Promise.all(files.map(async (f) => {
+  const shellBr = await nativeArtifacts.brotli(files.map((f) => `a/${f}`));
+  const compressed = await Promise.all(files.map(async (f, i) => {
     const bytes = await readFile(`${dir}/${f}`);
-    return { f, bytes, out: await brotliQ11(bytes) };
+    return { f, bytes, out: shellBr[i] };
   }));
   const writes = await Promise.all(compressed.map(async ({ f, bytes, out }) => {
     // Refuse to ship a "compressed" twin that isn't smaller. Cheap guard against a
@@ -2819,9 +2804,10 @@ let freshFamily: Buffer | null = null;
   const pageDicts = dicts.map(parseDict).filter(Boolean);
 
   let dCount = 0, dBytes = 0, dPlain = 0, pageCount = 0, pageBytes = 0, familyCount = 0, familyBytesOut = 0;
-  const compressedPages = await Promise.all(pages.map(async (page) => {
+  const pageBr = await nativeArtifacts.brotli(pages);
+  const compressedPages = await Promise.all(pages.map(async (page, i) => {
     const bytes = await readFile(`${OUT}/public/${page}`);
-    return { page, bytes, br: await brotliQ11(bytes) };
+    return { page, bytes, br: pageBr[i] };
   }));
 
   // ── which family dictionary ships: the committed one, unless it has drifted ──
@@ -2847,7 +2833,7 @@ let freshFamily: Buffer | null = null;
   await writeFile(`${OUT}/public/a/${familyName}`, dictionary);
   // Its q11 twin. Step 7 wrote one for every other /a/ asset before this file
   // existed, and the Worker serves the dictionary through the same twin path.
-  const familyBr = await brotliQ11(dictionary);
+  const [familyBr] = await nativeArtifacts.brotli([`a/${familyName}`]);
   if (familyBr.length < dictionary.length) await writeFile(`${OUT}/public/a/${familyName}.br`, familyBr);
   {
     // the Worker's Link: rel="compression-dictionary" header names this exact URL
@@ -2975,9 +2961,10 @@ let freshFamily: Buffer | null = null;
     !have.has(`${rel}.br`) &&
     !rel.startsWith("md/"),                       // .assetsignore'd staging dir for the hand twins
   );
-  const compressed = await Promise.all(candidates.map(async (rel) => {
+  const textBr = await nativeArtifacts.brotli(candidates);
+  const compressed = await Promise.all(candidates.map(async (rel, i) => {
     const bytes = await readFile(`${OUT}/public/${rel}`);
-    return { rel, bytes, br: await brotliQ11(bytes) };
+    return { rel, bytes, br: textBr[i] };
   }));
   const wins = compressed.filter(({ bytes, br }) => br.length < bytes.length);
   await Promise.all(wins.map(({ rel, br }) => writeFile(`${OUT}/public/${rel}.br`, br)));

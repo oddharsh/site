@@ -3,8 +3,9 @@
 This is the first compiler stage, on a branch stacked above the site model draft.
 It accepts a typed versioned plan, executes independent transforms with up to eight
 workers, and returns source/output hashes and sizes for its dependency records.
-Identity and HTTP-compatible Brotli transforms are implemented. The build has not
-yet been switched to this stage.
+Identity and HTTP-compatible Brotli transforms are implemented. The site build
+uses this stage for all four Brotli batches: shell assets, pages, the family
+dictionary and static text. The build continues publishing only smaller twins.
 
 ```sh
 cargo build --release --locked --manifest-path tools/site/Cargo.toml -p site-compiler
@@ -42,13 +43,33 @@ All 55 native outputs matched the existing compressed files byte-for-byte. These
 are exploratory stage timings on one workstation, not whole-build or production
 performance claims. Node timing includes the verification reads and decompression;
 native timing includes process startup, hashing, cache and output writes. A matched
-benchmark and actual build integration are still required before drawing a cold
-performance conclusion. Raw measurements are in the task's local evidence folder
+benchmark was subsequently run through the integrated build, below. Raw measurements are in the task's local evidence folder
 `/tmp/site-native-compiler-benchmark`.
 
 Tests cover selective invalidation, compiler/action invalidation, corrupt-cache
 repair, decoder roundtrips, invalid plans, symlink output rejection and preservation
 of existing outputs when an input fails. Remaining compiler work includes parsed
 document and asset transforms, multi-input dependencies, native minification,
-selective compression integration, directory publication, a Garage document's
+directory publication, a Garage document's
 complete representation pipeline, and matched full-build measurements.
+
+## Integrated build measurement
+
+Three paired local builds compared the model branch's existing build with this
+branch. All 1,887 pre-existing staged files matched byte-for-byte in every pair;
+new plans, candidate bytes and dependency records live outside the served tree
+under `.build/compiler`. The native cache is outside staging and survives rebuilds.
+
+| Pair | Existing build | Native build | Native cache |
+| --- | ---: | ---: | --- |
+| 1 | 2.2065 s | 2.4661 s | empty, compiler already built |
+| 2 | 1.9682 s | 1.8036 s | warm |
+| 3 | 1.8874 s | 1.7145 s | warm |
+
+The two warm observations improved by about 8–9%; the empty-cache observation
+was slower. An earlier first build that also compiled the native executable took
+5.6594 s. These are local samples, not a production or universal speed guarantee.
+Cloudflare's preview build must also validate availability of the Rust toolchain
+before this draft is ready to merge. The Cargo executable is read from its JSON
+artifact message, so `CARGO_TARGET_DIR` cannot make a successful build execute a
+stale binary from the default directory.

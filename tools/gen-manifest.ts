@@ -140,6 +140,10 @@ function main() {
   const types = rustOutput("typescript");
   const schema = rustOutput("schema");
   const pageSchema = rustOutput("page-schema");
+  const compilerTypes = execFileSync("cargo", [
+    "run", "--quiet", "--locked", "--manifest-path", "tools/site/Cargo.toml",
+    "--bin", "site-compiler", "--", "typescript",
+  ], { encoding: "utf8" });
 
   let nav = readFileSync(NAV, "utf8");
   const counts: string[] = [];
@@ -153,6 +157,7 @@ function main() {
   writeFileSync("tools/site/generated/manifest.ts", types);
   writeFileSync("tools/site/generated/manifest.schema.json", schema);
   writeFileSync("tools/site/generated/page.schema.json", pageSchema);
+  writeFileSync("tools/site/generated/compiler.ts", compilerTypes);
   writeFileSync(NAV, nav);
   console.log(`nav-run.js: ${counts.join(" + ")} palette entries + ${PROFILES.length} profiles`);
 

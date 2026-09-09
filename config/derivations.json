@@ -275,6 +275,7 @@
       "pipelines"
     ],
     "exempt": {
+      "tools/lib/native-artifacts.ts": "writes only disposable native plans and candidates under .build/compiler; the Rust compiler caches derived bytes under .cache/site-compiler, never committed",
       "tools/build.ts": "writes only into .build/, the staged tree, which is rebuilt from source every deploy and never committed",
       "tools/gen-md-twins.ts": "same, a build step: the twins are generated into .build/ precisely so no committed copy can fall behind",
       "tools/generate-search-index.ts": "same, and for the same reason: it was committed until 2026-08-24 and froze twice, which is why it is build output now",
