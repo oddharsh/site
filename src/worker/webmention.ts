@@ -80,7 +80,7 @@ async function ensureTable(db) {
 async function mentionId(source, target) {
   const data = new TextEncoder().encode(`${source}|${target}`);
   const digest = await crypto.subtle.digest("SHA-256", data);
-  return [...new Uint8Array(digest).slice(0, 12)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  return new Uint8Array(digest).subarray(0, 12).toHex();
 }
 
 // ── POST /webmention ───────────────────────────────────────────────────────

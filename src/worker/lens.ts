@@ -2191,7 +2191,7 @@ export function lensPngHeaders(cached) {
 
 export async function lensSha256Hex(s) {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
-  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  return new Uint8Array(buf).toHex();
 }
 
 // X-Frame-Options / CSP frame-ancestors → can a browser embed this live?

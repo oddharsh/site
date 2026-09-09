@@ -108,16 +108,9 @@ async function readBytesCapped(response, maxBytes) {
   return { bytes, truncated: false };
 }
 
-function base64(bytes) {
-  let out = "";
-  const chunk = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunk) out += String.fromCharCode(...bytes.subarray(i, i + chunk));
-  return btoa(out);
-}
-
 async function sha256(bytes) {
   const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
-  return Array.from(digest, (b) => b.toString(16).padStart(2, "0")).join("");
+  return digest.toHex();
 }
 
 function normalizeFormat(value, fallback = "avif") {
@@ -213,7 +206,7 @@ function mcpOutput(receipt, images: TransformedImage[] = []) {
   // infers as text-only off its first element and refuses the image blocks.
   const content: ({ type: "text"; text: string } | { type: "image"; data: string; mimeType: string })[] =
     [{ type: "text", text: JSON.stringify(receipt, null, 2) }];
-  for (const image of images) content.push({ type: "image", data: base64(image.bytes), mimeType: image.mime });
+  for (const image of images) content.push({ type: "image", data: image.bytes.toBase64(), mimeType: image.mime });
   return { _mcp: { structured: receipt, content } };
 }
 

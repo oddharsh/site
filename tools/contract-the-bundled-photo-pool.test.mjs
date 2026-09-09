@@ -498,6 +498,7 @@ test("weak validators turn unchanged rendered HTML into an empty 304", async () 
   }));
   const etag = tagged.headers.get("etag");
   assert.match(etag, /^W\/"sha256-[0-9a-f]{64}"$/);
+  assert.equal(etag, 'W/"sha256-0b377fbdcaf496540d0318db6c0d8062b81e92d5c7a13a37a18f35cee9bcfe16"');
   assert.equal(ifNoneMatchMatches(new Request("https://aadhar.sh/x", { headers: { "if-none-match": etag } }), etag), true);
   assert.equal(ifNoneMatchMatches(new Request("https://aadhar.sh/x", { headers: { "if-none-match": etag.replace(/^W\//, "") } }), etag), true);
   const notModified = notModifiedIfFresh(new Request("https://aadhar.sh/x", {

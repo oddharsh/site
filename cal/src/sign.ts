@@ -4,7 +4,7 @@
 export async function sign(message, secret) {
   const key = await importKey(secret);
   const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(message));
-  return b64url(sig);
+  return new Uint8Array(sig).toBase64({ alphabet: "base64url", omitPadding: true });
 }
 
 export async function verify(message, signature, secret) {
@@ -26,10 +26,6 @@ async function importKey(secret) {
   );
 }
 
-function b64url(buf) {
-  return btoa(String.fromCharCode(...new Uint8Array(buf)))
-    .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
 function b64urlDecode(s) {
   s = s.replace(/-/g, "+").replace(/_/g, "/");
   while (s.length % 4) s += "=";

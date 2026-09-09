@@ -201,7 +201,7 @@ export async function sha256Hex(value) {
     ? value
     : new TextEncoder().encode(String(value ?? ""));
   const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
-  return Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return digest.toHex();
 }
 
 // Fetch one bounded HTML-ish document as AadharshBot. The body is deliberately

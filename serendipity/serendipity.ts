@@ -127,7 +127,7 @@ function readUid(request) {
 function mintUid() {
   const b = new Uint8Array(24);
   crypto.getRandomValues(b);
-  return Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
+  return b.toHex();
 }
 function uidCookie(uid) {
   return `${UID_COOKIE}=${uid}; Path=${PREFIX}; HttpOnly; Secure; SameSite=Lax; Max-Age=63072000`;
@@ -1784,15 +1784,13 @@ async function handleEnrich(request, env, d) {
 // with a dedicated COVER_SECRET). If neither is set the proxy degrades to open —
 // that's an unconfigured deploy only, not anything an attacker can induce.
 const _enc = new TextEncoder();
-function _b64url(buf) {
-  return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
 function coverSecret(env) { return (env && (env.COVER_SECRET || env.SYNC_SECRET)) || null; }
 function coverKey(secret) {
   return crypto.subtle.importKey("raw", _enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]);
 }
 async function signCoverUrl(rawUrl, secret) {
-  return _b64url(await crypto.subtle.sign("HMAC", await coverKey(secret), _enc.encode(rawUrl)));
+  const sig = await crypto.subtle.sign("HMAC", await coverKey(secret), _enc.encode(rawUrl));
+  return new Uint8Array(sig).toBase64({ alphabet: "base64url", omitPadding: true });
 }
 async function verifyCoverUrl(rawUrl, sig, secret) {
   if (!sig) return false;

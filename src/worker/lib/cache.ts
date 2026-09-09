@@ -198,10 +198,8 @@ export async function withWeakEtag(response) {
   if (response.status !== 200 || response.headers.has("etag")) return response;
   const bytes = await response.arrayBuffer();
   const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
-  let hex = "";
-  for (const byte of digest) hex += byte.toString(16).padStart(2, "0");
   const headers = new Headers(response.headers);
-  headers.set("etag", `W/"sha256-${hex}"`);
+  headers.set("etag", `W/"sha256-${digest.toHex()}"`);
   headers.set("content-length", String(bytes.byteLength));
   return new Response(bytes, {
     status: response.status,
