@@ -1,17 +1,16 @@
-//! Bounded native extraction. Metadata is the first stage; article extraction
-//! and the runtime adapter will consume the same parser boundary.
-use lol_html::{element, end_tag, text, HtmlRewriter, MemorySettings, Settings};
+//! Bounded HTML tree construction and metadata projection for native Lens.
+mod tree;
+use html5ever::{parse_document, tendril::TendrilSink, tree_builder::TreeBuilderOpts, ParseOpts};
 use serde::Serialize;
-use std::{
-    cell::{Cell, RefCell},
-    io::Read,
-    rc::Rc,
-};
+use std::io::Read;
+use tree::{Kind, Tree};
 
 #[derive(Clone, Copy, Debug)]
 pub struct Limits {
     pub input_bytes: usize,
-    pub parser_bytes: usize,
+    pub nodes: usize,
+    pub tree_bytes: usize,
+    pub depth: usize,
     pub field_bytes: usize,
     pub entries: usize,
 }
@@ -19,7 +18,9 @@ impl Default for Limits {
     fn default() -> Self {
         Self {
             input_bytes: 2 * 1024 * 1024,
-            parser_bytes: 1024 * 1024,
+            nodes: 65536,
+            depth: 256,
+            tree_bytes: 16 * 1024 * 1024,
             field_bytes: 4096,
             entries: 256,
         }
@@ -48,9 +49,11 @@ pub struct Link {
 #[derive(Debug, PartialEq, Eq)]
 pub enum ExtractError {
     InputLimit,
+    NodeLimit,
+    TreeLimit,
+    DepthLimit,
     InvalidLimits,
     Read,
-    Parse,
 }
 
 fn append_bounded(target: &mut String, value: &str, cap: usize) -> bool {
@@ -63,111 +66,137 @@ fn append_bounded(target: &mut String, value: &str, cap: usize) -> bool {
     end < value.len()
 }
 fn field(value: &str, cap: usize, truncated: &mut bool) -> String {
-    let decoded = html_escape::decode_html_entities(value);
     let mut result = String::new();
-    *truncated |= append_bounded(&mut result, &decoded, cap);
+    *truncated |= append_bounded(&mut result, value, cap);
     result
 }
 
-/// Reads fixed-size chunks. A failed extraction returns no partial result.
-/// `parser_bytes` controls lol_html's accounted buffers, not total process RSS.
-pub fn extract_metadata(mut input: impl Read, limits: Limits) -> Result<Metadata, ExtractError> {
+fn parse(mut input: impl Read, limits: Limits) -> Result<(Tree, usize), ExtractError> {
     if limits.input_bytes == 0
-        || limits.parser_bytes < 1024
+        || limits.nodes == 0
+        || limits.depth == 0
+        || limits.tree_bytes == 0
         || limits.field_bytes == 0
         || limits.entries == 0
     {
         return Err(ExtractError::InvalidLimits);
     }
-    let result = RefCell::new(Metadata {
-        version: 1,
-        title: String::new(),
-        meta: Vec::new(),
-        links: Vec::new(),
-        input_bytes: 0,
-        truncated: false,
-    });
-    let title_seen = RefCell::new(false);
-    let title_truncated = Cell::new(false);
-    let title_active = Rc::new(Cell::new(false));
-    let settings = Settings::new()
-        .with_memory_settings(
-            MemorySettings::new().with_max_allowed_memory_usage(limits.parser_bytes),
-        )
-        .append_element_content_handler(element!("title", |el| {
-            if !*title_seen.borrow() {
-                *title_seen.borrow_mut() = true;
-                title_active.set(true);
-                let active = Rc::clone(&title_active);
-                el.on_end_tag(end_tag!(move |_| {
-                    active.set(false);
-                    Ok(())
-                }))?;
-            }
-            Ok(())
-        }))
-        .append_element_content_handler(text!("title", |chunk| {
-            if title_active.get() && !title_truncated.get() {
-                let mut r = result.borrow_mut();
-                let truncated = append_bounded(&mut r.title, chunk.as_str(), limits.field_bytes);
-                title_truncated.set(truncated);
-                r.truncated |= truncated;
-            }
-            Ok(())
-        }))
-        .append_element_content_handler(element!("meta", |el| {
-            let mut r = result.borrow_mut();
-            if r.meta.len() + r.links.len() >= limits.entries {
-                r.truncated = true;
-                return Ok(());
-            }
-            if let (Some(name), Some(content)) = (
-                el.get_attribute("name")
-                    .or_else(|| el.get_attribute("property")),
-                el.get_attribute("content"),
-            ) {
-                let name = field(&name, limits.field_bytes, &mut r.truncated);
-                let content = field(&content, limits.field_bytes, &mut r.truncated);
-                r.meta.push(Meta { name, content });
-            }
-            Ok(())
-        }))
-        .append_element_content_handler(element!("link", |el| {
-            let mut r = result.borrow_mut();
-            if r.meta.len() + r.links.len() >= limits.entries {
-                r.truncated = true;
-                return Ok(());
-            }
-            if let (Some(rel), Some(href)) = (el.get_attribute("rel"), el.get_attribute("href")) {
-                let rel = field(&rel, limits.field_bytes, &mut r.truncated);
-                let href = field(&href, limits.field_bytes, &mut r.truncated);
-                r.links.push(Link { rel, href });
-            }
-            Ok(())
-        }));
-    let mut parser = HtmlRewriter::new(settings, |_: &[u8]| {});
-    let mut buffer = [0u8; 8192];
+    let tree = Tree::new(limits.tree_bytes, limits.depth);
+    // The existing Reader parses noscript for lazy-image recovery. Scripting is
+    // disabled for this parse too; no scripts are ever executed by either path.
+    let opts = ParseOpts {
+        tree_builder: TreeBuilderOpts {
+            scripting_enabled: false,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let mut parser = parse_document(tree.clone(), opts).from_utf8();
+    let mut buffer = [0u8; 1024];
+    let mut bytes = 0usize;
     loop {
         let n = input.read(&mut buffer).map_err(|_| ExtractError::Read)?;
         if n == 0 {
             break;
         }
-        let total = result
-            .borrow()
-            .input_bytes
-            .checked_add(n)
-            .ok_or(ExtractError::InputLimit)?;
-        if total > limits.input_bytes {
+        bytes = bytes.checked_add(n).ok_or(ExtractError::InputLimit)?;
+        if bytes > limits.input_bytes {
             return Err(ExtractError::InputLimit);
         }
-        result.borrow_mut().input_bytes = total;
-        parser
-            .write(&buffer[..n])
-            .map_err(|_| ExtractError::Parse)?;
+        parser.process(buffer[..n].into());
+        if tree.depth_exceeded.get() {
+            return Err(ExtractError::DepthLimit);
+        }
+        if tree.exceeded.get() {
+            return Err(ExtractError::TreeLimit);
+        }
+        if tree.nodes.borrow().len() > limits.nodes {
+            return Err(ExtractError::NodeLimit);
+        }
     }
-    parser.end().map_err(|_| ExtractError::Parse)?;
-    let mut result = result.into_inner();
-    result.title = field(&result.title, limits.field_bytes, &mut result.truncated);
+    let tree = parser.finish();
+    if tree.depth_exceeded.get() {
+        return Err(ExtractError::DepthLimit);
+    }
+    if tree.exceeded.get() {
+        return Err(ExtractError::TreeLimit);
+    }
+    if tree.nodes.borrow().len() > limits.nodes {
+        return Err(ExtractError::NodeLimit);
+    }
+    Ok((tree, bytes))
+}
+
+/// Project active-document metadata from the tree. Template contents live in
+/// separate fragments and are not traversed, matching the Reader's selectors.
+/// Node budgets are checked between 1 KiB feeds and at EOF; one feed may
+/// temporarily exceed the node limit. This is not a process RSS limit.
+pub fn extract_metadata(input: impl Read, limits: Limits) -> Result<Metadata, ExtractError> {
+    let (tree, input_bytes) = parse(input, limits)?;
+    let nodes = tree.nodes.borrow();
+    let mut result = Metadata {
+        version: 1,
+        title: String::new(),
+        meta: vec![],
+        links: vec![],
+        input_bytes,
+        truncated: false,
+    };
+    let mut title_seen = false;
+    let mut stack = vec![0];
+    while let Some(id) = stack.pop() {
+        let node = &nodes[id];
+        stack.extend(node.children.iter().rev().copied());
+        let Kind::Element { name, attrs, .. } = &node.kind else {
+            continue;
+        };
+        let attr = |key: &str| {
+            attrs
+                .iter()
+                .find(|a| a.name.local.as_ref() == key)
+                .map(|a| a.value.as_ref())
+        };
+        match name.local.as_ref() {
+            "title" if !title_seen => {
+                title_seen = true;
+                for child in &node.children {
+                    if let Kind::Text(text) = &nodes[*child].kind {
+                        if append_bounded(&mut result.title, text, limits.field_bytes) {
+                            result.truncated = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            "meta" => {
+                if let (Some(name), Some(content)) =
+                    (attr("name").or_else(|| attr("property")), attr("content"))
+                {
+                    if result.meta.len() + result.links.len() >= limits.entries {
+                        result.truncated = true;
+                        continue;
+                    }
+                    result.meta.push(Meta {
+                        name: field(name, limits.field_bytes, &mut result.truncated),
+                        content: field(content, limits.field_bytes, &mut result.truncated),
+                    });
+                }
+            }
+            "link" => {
+                if let (Some(rel), Some(href)) = (attr("rel"), attr("href")) {
+                    if result.meta.len() + result.links.len() >= limits.entries {
+                        result.truncated = true;
+                        continue;
+                    }
+                    result.links.push(Link {
+                        rel: field(rel, limits.field_bytes, &mut result.truncated),
+                        href: field(href, limits.field_bytes, &mut result.truncated),
+                    });
+                }
+            }
+            _ => {}
+        }
+    }
     Ok(result)
 }
 
@@ -265,10 +294,10 @@ mod tests {
         }
     }
     #[test]
-    fn parser_budget_refuses_an_oversized_token() {
-        let html = format!("<meta name='description' content='{}'>", "a".repeat(32768));
+    fn node_budget_refuses_a_large_tree() {
+        let html = "<p>x</p>".repeat(100);
         let limits = Limits {
-            parser_bytes: 1024,
+            nodes: 10,
             ..Limits::default()
         };
         assert_eq!(
@@ -279,7 +308,84 @@ mod tests {
                 },
                 limits
             ),
-            Err(ExtractError::Parse)
+            Err(ExtractError::NodeLimit)
+        );
+    }
+    #[test]
+    fn retained_tree_budget_rejects_large_text_and_attributes() {
+        let limits = Limits {
+            tree_bytes: 1024,
+            ..Limits::default()
+        };
+        for html in [
+            format!("<p>{}</p>", "x".repeat(4096)),
+            format!("<meta name='x' content='{}'>", "x".repeat(4096)),
+        ] {
+            assert_eq!(
+                extract_metadata(html.as_bytes(), limits),
+                Err(ExtractError::TreeLimit)
+            );
+        }
+    }
+    #[test]
+    fn noscript_is_parsed_and_template_contents_are_inert() {
+        let html = "<head><noscript><link rel='a' href='/visible'></noscript><template><meta name='bad' content='bad'><link rel='b' href='/inert'></template></head>";
+        let result = extract_metadata(html.as_bytes(), Limits::default()).unwrap();
+        assert_eq!(
+            result.links,
+            vec![Link {
+                rel: "a".into(),
+                href: "/visible".into()
+            }]
+        );
+        assert!(result.meta.is_empty());
+    }
+    #[test]
+    fn repaired_trees_keep_consistent_parent_links() {
+        for html in [
+            "<table>before<tr><td>inside</table>after",
+            "<p><b>one<i>two</b>three</i>",
+            "<template><table><p>x</template><p>outside",
+            "<svg><foreignObject><p>x</p></foreignObject></svg>",
+        ] {
+            let (tree, _) = parse(html.as_bytes(), Limits::default()).unwrap();
+            let nodes = tree.nodes.borrow();
+            let mut references = vec![0usize; nodes.len()];
+            for (parent, node) in nodes.iter().enumerate() {
+                for &child in &node.children {
+                    assert_eq!(nodes[child].parent, Some(parent));
+                    references[child] += 1;
+                }
+            }
+            assert!(references.iter().all(|&n| n <= 1));
+            for (id, node) in nodes.iter().enumerate() {
+                assert_eq!(references[id], usize::from(node.parent.is_some()));
+            }
+        }
+    }
+    #[test]
+    fn deeply_nested_input_traverses_and_drops_without_recursion() {
+        let html = format!(
+            "{}<link rel='x' href='/found'>{}",
+            "<div>".repeat(10000),
+            "</div>".repeat(10000)
+        );
+        let result = extract_metadata(
+            html.as_bytes(),
+            Limits {
+                depth: 20000,
+                ..Limits::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(result.links.len(), 1);
+    }
+    #[test]
+    fn default_depth_budget_rejects_hostile_nesting() {
+        let html = "<div>".repeat(10000);
+        assert_eq!(
+            extract_metadata(html.as_bytes(), Limits::default()),
+            Err(ExtractError::DepthLimit)
         );
     }
     #[test]
