@@ -71,7 +71,7 @@ const pending = (fields = {}) => ({
 describe("booking record CRUD", () => {
   it("creates a booking and reads it back by id", async () => {
     const b = await createBooking(env, pending({ name: "Jo", email: "jo@x.dev" }));
-    expect(b.id).toMatch(/^[0-9a-f]{32}$/); // 32 hex from uuid.v4()
+    expect(b.id).toMatch(/^[0-9a-f]{32}$/); // UUID without hyphens; persisted ID format
     expect(await getBooking(env, b.id)).toMatchObject({ id: b.id, name: "Jo", status: "pending" });
   });
 

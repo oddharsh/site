@@ -19,7 +19,7 @@
 // lib/tools.js a cycle. The ask loop has no use for them either: it wants
 // records to reason over, not a rendered 80-column screen.
 import { readAroundChanges } from "../around.ts";
-import { readCoffeeAvailability } from "../coffee.ts";
+import { getPublicAvailability } from "../../../cal/src/slots.ts";
 import { LENS_BUDGETS, compareLensTargets, lensInspect, lensObservationSummary, overLensBudget, validateLensTarget } from "../lens.ts";
 import { queryPhotos } from "../photos.ts";
 import { PLAYLIST_ID_CACHE_TTL, RN_FALLBACK, getTracksSWR } from "../rn.ts";
@@ -154,7 +154,7 @@ export async function callDataTool(name, args, request, env, ctx): Promise<Recor
   }
   if (name === "search_site") return searchSite(env, args.q, args.limit);
   if (name === "photo_query") return queryPhotos(env, args, ctx);
-  if (name === "coffee_availability") return readCoffeeAvailability(env, ctx);
+  if (name === "coffee_availability") return getPublicAvailability(env, ctx);
   if (name === "change_radar") return readAroundChanges(env, args.limit);
   if (name === "now_playing") {
     const playlistId = env.RN_KV ? await env.RN_KV.get("playlist-id", { cacheTtl: PLAYLIST_ID_CACHE_TTL }) : null;

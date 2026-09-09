@@ -4,16 +4,12 @@
 import { getPublicAvailability } from "../../cal/src/slots.ts";
 import { jsonResponse } from "./lib/http.ts";
 
-export async function readCoffeeAvailability(env, ctx) {
-  return getPublicAvailability(env, ctx);
-}
-
 export async function handleCoffeeAvailability(request, env, ctx) {
   if (request.method !== "GET" && request.method !== "HEAD") {
     return jsonResponse({ ok: false, error: "method not allowed" }, 405, { allow: "GET, HEAD" });
   }
   try {
-    const payload = await readCoffeeAvailability(env, ctx);
+    const payload = await getPublicAvailability(env, ctx);
     const status = payload.available ? 200 : 503;
     const headers = {
       "cache-control": payload.available ? "public, max-age=0, s-maxage=30" : "public, max-age=0, s-maxage=10",

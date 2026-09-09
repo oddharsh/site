@@ -2,11 +2,11 @@
 
 For future me. Every recurring chore on aadhar.sh, organized by "I want to ___",
 with the exact command and the gotcha that bit me last time. Deep design notes
-and the full conventions list live in [CLAUDE.md](CLAUDE.md); this is the ops sheet.
+and the full conventions list live in [CLAUDE.md](../CLAUDE.md); this is the ops sheet.
 
 One site Worker, with three source islands:
 - **public/** (aadhar.sh): the **Cloudflare Worker with static assets** (migrated off Pages 2026-06-30). Config is `wrangler.jsonc` at the repo root: it points `main` + `assets.directory` at `.build/public` and runs `build.ts` via its `build.command`, so `assets.run_worker_first` (an allowlist mirroring the `ROUTES`/`PREFIX` tables in `index.js`; static is the default) applies to the built tree; `workers_dev:false` (custom domain only). **Production deploy: merge to `main`; GitHub CI promotes the exact tested commit to the machine-owned `production` branch, then Cloudflare Workers Builds deploys it.** The config self-builds, so the Workers Build Deploy command ships the minified tree; local dev uses `wrangler.dev.jsonc` (readable `public/`, fast reload). A local `wrangler deploy` is fallback-only. Verify after every deploy with `node tools/verify-routes.ts https://aadhar.sh` (now also asserts `/nav.js` minified + `.src` twins resolve). All site bindings live in `wrangler.jsonc`; secrets via `wrangler versions secret put`.
-- **cal/** (coffee booking module): **LIVE** at `aadhar.sh/coffee`, dispatched by the same `aadhar-sh` Worker. Availability still serves from an SWR calendar snapshot (KV `cal:busy`, 2s upstream deadline, stale fallback); the GET page edge-caches 30s; booking fails closed if the calendar can't be vouched for. See [cal/README.md](cal/README.md). `cal/wrangler.test.toml` is test-only; it is not a deployment target.
+- **cal/** (coffee booking module): **LIVE** at `aadhar.sh/coffee`, dispatched by the same `aadhar-sh` Worker. Availability still serves from an SWR calendar snapshot (KV `cal:busy`, 2s upstream deadline, stale fallback); the GET page edge-caches 30s; booking fails closed if the calendar can't be vouched for. See [cal/README.md](../cal/README.md). `cal/wrangler.test.toml` is test-only; it is not a deployment target.
 - **serendipity/** (event dashboard module): **LIVE** at `aadhar.sh/serendipity`, dispatched by the same `aadhar-sh` Worker. Its D1, secrets, route-specific CSP, and dashboard cache policy remain isolated in the module and shared root bindings.
 
 **Deploy sanity:** after Workers Builds deploys the promoted commit, verify the live route oracle. `_headers` and `.assetsignore` (which excludes `_worker.js` from being served) both work natively on Workers static assets. `_worker.js/` is the bundled Worker entry, not a served asset. The old Pages "static-only, no Function" outage class no longer applies (a Worker deploy is atomic).
@@ -67,10 +67,22 @@ changes, and `git ls-files --others --exclude-standard` should be empty.
 
 ## Rotate Cal's calendar or approval secret
 
-Run these from the repository root. They update the live `aadhar-sh` Worker
-directly; no GitHub commit or code deploy is required because the values are
-Worker secrets. Use `bun run wrangler secret list -c wrangler.jsonc` to confirm the
-secret is present without printing its value.
+Run these from the repository root. `wrangler versions secret put` creates a
+new Worker version with the updated secret; production keeps its current version
+until you deploy the new one. See [Cloudflare's secrets documentation](https://developers.cloudflare.com/workers/configuration/secrets/).
+
+The command copies the latest uploaded version, which may be a branch preview.
+Before rotating, inspect that version's source and bindings. After the final
+secret update, inspect the returned version ID and promote that exact version:
+
+```bash
+bun run wrangler versions view <version-id> -c wrangler.jsonc
+bun run deploy:promote --version <version-id> --steps 100 --dry-run
+bun run deploy:promote --version <version-id> --steps 100
+```
+
+The 100% step avoids serving two signing secrets during the transition.
+Review the dry-run target before moving traffic. Secret values stay out of Git.
 
 ### Change the availability calendar (`ICAL_URL`)
 
@@ -81,9 +93,9 @@ equivalent read-only iCloud feed), then replace the secret:
 bun run wrangler versions secret put -c wrangler.jsonc ICAL_URL
 ```
 
-Paste the new feed URL when prompted. To make the new source take effect
-immediately instead of waiting for the current `cal:busy` snapshot to age out,
-delete only that derived snapshot and ask the live slots endpoint to refresh:
+Paste the new feed URL when prompted, then deploy the returned version as above.
+To refresh availability after the new version serves all traffic, delete only
+the derived snapshot and ask the live slots endpoint to refresh:
 
 ```bash
 BOOKINGS_NS="37acb65118fe485583a90a94cb89365e"
@@ -107,6 +119,7 @@ bun run wrangler versions secret put -c wrangler.jsonc WORK_CALENDAR_URL
 bun run wrangler versions secret put -c wrangler.jsonc WORK_CALENDAR_SLUG
 ```
 
+Deploy the version returned by the second command; it carries both changes.
 Verify the new path without following the redirect and confirm that the old
 path no longer matches:
 
@@ -127,9 +140,10 @@ Generate a new value and replace the Worker secret:
 openssl rand -hex 32 | bun run wrangler versions secret put -c wrangler.jsonc SIGNING_SECRET
 ```
 
-This immediately invalidates every outstanding approve and decline link. It
-does not delete bookings, so any pending requests whose links were invalidated
-must be handled manually or allowed to expire after `PENDING_TTL_DAYS`.
+Deploy the returned version to 100% as above. Once it serves all traffic,
+outstanding approve, decline, and location links signed with the previous secret
+are invalid. Bookings remain; handle pending requests manually or let them expire
+after `PENDING_TTL_DAYS`.
 
 For a routine rotation, send one throwaway booking after the change and verify
 that the new approval link works. For an emergency rotation, prioritize the
