@@ -5,7 +5,6 @@
   "license": "MIT",
   "type": "module",
   "packageManager": "bun@1.4.2",
-  "comment:workspaces": "pnpm does not read npm's `workspaces` field; the package list and the build allowlist live in pnpm-workspace.yaml. See that file, and CLAUDE.md gotcha 29 for why the release script is `deploy:direct` rather than `deploy`.",
   "scripts": {
     "build": "bun tools/build.ts",
     "dev": "bun tools/dev-stage.ts && wrangler dev -c wrangler.dev.jsonc",
