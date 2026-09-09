@@ -4,7 +4,9 @@ import type { SearchRecord } from "../../src/worker/search.ts";
 
 export function unpackCorpus(bytes: Uint8Array): { version: number; generatedAt: string; records: SearchRecord[] } {
   if (bytes.length > 16 * 1024 * 1024) throw new Error("packed corpus exceeds 16 MiB");
-  const decoder = new TextDecoder("utf-8", { fatal: true });
+  // These are length-framed strings, not independent files. A leading U+FEFF
+  // is content and must not be consumed as an encoding signature.
+  const decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
   let offset = 0;
   function byte(): number {
     if (offset >= bytes.length) throw new Error("truncated packed corpus");
@@ -23,13 +25,13 @@ export function unpackCorpus(bytes: Uint8Array): { version: number; generatedAt:
     }
     throw new Error("packed integer overflow");
   }
-  function string(): string {
-    const length = integer();
+  function utf8(length: number): string {
     if (length > bytes.length - offset) throw new Error("truncated packed string");
     const value = decoder.decode(bytes.subarray(offset, offset + length));
     offset += length;
     return value;
   }
+  function string(): string { return utf8(integer()); }
   for (const part of [83, 83, 73, 88, 1]) {
     if (byte() !== part) throw new Error("unsupported packed corpus version");
   }
@@ -37,7 +39,15 @@ export function unpackCorpus(bytes: Uint8Array): { version: number; generatedAt:
   const vocabularySize = integer();
   if (vocabularySize > bytes.length - offset) throw new Error("invalid packed vocabulary count");
   const vocabulary: string[] = [];
-  for (let i = 0; i < vocabularySize; i++) vocabulary.push(string());
+  const tokenBytes: number[] = [];
+  for (let i = 0; i < vocabularySize; i++) {
+    const length = integer();
+    const token = utf8(length);
+    if (!token) throw new Error("empty packed token");
+    vocabulary.push(token);
+    // Preserve the byte budget rather than counting UTF-16 code units.
+    tokenBytes.push(length);
+  }
   const count = integer();
   if (count > bytes.length - offset) throw new Error("invalid packed document count");
   const records: SearchRecord[] = [];
@@ -53,9 +63,10 @@ export function unpackCorpus(bytes: Uint8Array): { version: number; generatedAt:
     if (tokenCount > bytes.length - offset) throw new Error("invalid packed token count");
     const text: string[] = [];
     for (let j = 0; j < tokenCount; j++) {
-      const token = vocabulary[integer()];
+      const id = integer();
+      const token = vocabulary[id];
       if (token === undefined) throw new Error("invalid packed token reference");
-      expanded += token.length;
+      expanded += tokenBytes[id];
       if (expanded > 16 * 1024 * 1024) throw new Error("expanded corpus exceeds 16 MiB");
       text.push(token);
     }

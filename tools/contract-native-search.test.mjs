@@ -33,3 +33,31 @@ test("packed corpus preserves Unicode and whitespace and rejects corrupt frames"
   badRef[badRef.length - 1] = 127;
   assert.throws(() => unpackCorpus(badRef));
 });
+
+test("packed strings preserve leading BOM code points as content", () => {
+  const corpus = { version: 1, generatedAt: "\ufefffixed", records: [{
+    url: "/", title: "\ufeffTitle", description: "\ufeffDescription", kind: "page", text: "\ufeffSnow 雪",
+  }] };
+  assert.deepEqual(unpackCorpus(pack(corpus)), corpus);
+});
+
+test("packed expansion is bounded in UTF-8 bytes and empty tokens are refused", () => {
+  const integer = (value) => {
+    const bytes = [];
+    while (value >= 128) { bytes.push((value & 127) | 128); value >>>= 7; }
+    return Buffer.from([...bytes, value]);
+  };
+  const string = (value) => {
+    const bytes = Buffer.from(value);
+    return Buffer.concat([integer(bytes.length), bytes]);
+  };
+  const frame = (token, copies) => Buffer.concat([
+    Buffer.from([83, 83, 73, 88, 1]), string("fixed"), integer(1), string(token),
+    integer(1), string("/"), string("title"), string(""), Buffer.from([0]),
+    integer(copies), Buffer.alloc(copies),
+  ]);
+  assert.throws(() => unpackCorpus(frame("", 1)), /empty packed token/);
+  // Six million UTF-16 units, but eighteen million UTF-8 bytes. The former
+  // ceiling incorrectly accepted this expansion despite claiming a byte limit.
+  assert.throws(() => unpackCorpus(frame("雪".repeat(400_000), 15)), /expanded corpus exceeds/);
+});
