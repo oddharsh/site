@@ -73,7 +73,7 @@ import {
   staleGuestIds,
 } from "../serendipity/serendipity.ts";
 import { MCP_SUPPORTED as MCP_SUPPORTED_VERSIONS } from "../src/worker/lib/mcp-protocol.ts";
-import { derivePhotoPool, renderPhotosPage, getImagesManifest, handlePhotoQuery, queryPhotos, _resetPhotoCaches } from "../src/worker/photos.ts";
+import { derivePhotoPool, renderPhotosPage, handleImagesManifest, handlePhotoQuery, queryPhotos, _resetPhotoCaches } from "../src/worker/photos.ts";
 import { renderPhotoSlots } from "../src/worker/lib/photo-grid.ts";
 import { cachedRender, deadline, deleteSWRKV, swrKV } from "../src/worker/lib/cache.ts";
 import { ifNoneMatchMatches, notModifiedIfFresh, withWeakEtag } from "../src/worker/lib/cache.ts";
@@ -425,7 +425,7 @@ export {
   findClaims,
   findEndpointIn,
   gatherWhoareyou,
-  getImagesManifest,
+  handleImagesManifest,
   getPublicAvailability,
   handleAroundChangesJson,
   handleCoffeeAvailability,

@@ -65,7 +65,7 @@ export async function fetchCuriusLinks(env) {
   return out;
 }
 
-// stale-while-revalidate (mirrors photos.getImagesManifest / rn.getTracksSWR):
+// stale-while-revalidate (mirrors rn.getTracksSWR):
 // the list is stored WITHOUT a TTL (persistent value key) and the entry's KV
 // metadata carries the write time the 6h freshness window runs from. Once that
 // lapses, the visitor gets the stale list instantly and the Curius crawl rides

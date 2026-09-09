@@ -7,7 +7,7 @@ import { cachedRender } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { unsafeHtml } from "./lib/html.ts";
 import { escAttr, escHtml } from "./lib/http.ts";
-import { getImagesManifest } from "./photos.ts";
+import { PHOTO_POOL } from "./photos.ts";
 
 // Mirrors nav.js's inline pages + profiles set (kept small on purpose; photos
 // resolve dynamically against the manifest instead of bloating the datalist).
@@ -36,7 +36,7 @@ const DESTS = [
   ["spotify",     "https://open.spotify.com/user/aadharsh2010",         "profile"],
 ];
 
-async function resolve(cmd, env, ctx, request) {
+async function resolve(cmd, env, request) {
   const q = cmd.trim().toLowerCase().replace(/\/+$/, "");
   if (!q) return null;
 
@@ -55,11 +55,8 @@ async function resolve(cmd, env, ctx, request) {
   } catch {}
   // photo stems: "L1000069_3" → the SOOC original
   if (/^[a-z0-9_@-]+$/i.test(q)) {
-    try {
-      const photos = await getImagesManifest(env, ctx);
-      const hit = photos.find(p => p.stem.toLowerCase() === q);
-      if (hit) return `/images/full/${encodeURIComponent(hit.full).replace(/%2F/g, "/")}`;
-    } catch {}
+    const hit = PHOTO_POOL.find(p => p.stem.toLowerCase() === q);
+    if (hit) return `/images/full/${encodeURIComponent(hit.full).replace(/%2F/g, "/")}`;
   }
   // unique name prefix ("gar" → garage)
   const pre = DESTS.filter(([name]) => name.startsWith(q));
@@ -138,7 +135,7 @@ export async function handleRun(request, env, ctx) {
   const cmd = url.searchParams.get("cmd");
 
   if (cmd) {
-    const dest = await resolve(cmd, env, ctx, request);
+    const dest = await resolve(cmd, env, request);
     if (dest) {
       const location = /^https?:\/\//.test(dest) ? dest : url.origin + dest;
       return new Response(null, { status: 302, headers: { "location": location, "cache-control": "no-store" } });

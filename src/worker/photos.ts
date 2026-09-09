@@ -231,12 +231,7 @@ export function derivePhotoPool(index: PhotoIndexMap, hashes: ThumbHashMap) {
   }).sort((a, b) => (a.full < b.full ? -1 : a.full > b.full ? 1 : 0));
 }
 
-const PHOTO_POOL = derivePhotoPool(photoIndex, thumbHashes);
-
-// normalize a pool thumb URL. The pool always bakes absolute /i/ URLs now, so
-// this is a passthrough kept for shape-compat with its callers (home.js SSR);
-// the legacy-relative arm survives only as paranoia, not a live path.
-export const absThumb = (u) => (u && u.startsWith("/") ? u : `/images/${u}`);
+export const PHOTO_POOL = derivePhotoPool(photoIndex, thumbHashes);
 
 // AI alt text (cf-garage Workers AI, ?mode=alt) generated offline into the static
 // asset /images/alt.json {stem: alt}. loaded once per isolate and cached in a module
@@ -369,7 +364,7 @@ function photoFields(stem, record, alt, expansion) {
 // Shared photo query used by /photos/query.json and the site MCP tool. GPS and
 // other unlisted EXIF fields never cross this boundary, even if the source
 // metadata grows later.
-export async function queryPhotos(env, options: PhotoQueryOptions = {}, ctx = null) {
+export async function queryPhotos(env, options: PhotoQueryOptions = {}, _ctx = null) {
   const q = String(options.q || "").trim().slice(0, 120).toLowerCase();
   const camera = String(options.camera || "").trim().slice(0, 120).toLowerCase();
   const lens = String(options.lens || "").trim().slice(0, 120).toLowerCase();
@@ -387,9 +382,7 @@ export async function queryPhotos(env, options: PhotoQueryOptions = {}, ctx = nu
     getThumbHashes(env),
     getStaticPhotoJson<Record<string, { terms?: unknown }> | null>(env, "images/semantics.json", null),
   ]);
-  let manifest = [];
-  try { manifest = await getImagesManifest(env, ctx); } catch { manifest = []; }
-  const manifestByStem = new Map((manifest || []).map((photo) => [photo.stem, photo]));
+  const manifestByStem = new Map(PHOTO_POOL.map((photo) => [photo.stem, photo]));
 
   // The structured parameters are FILTERS and stay exact — a caller asking for
   // lens "XF27mm" wants that lens, not the closest thing to it. Only `q` is
@@ -547,16 +540,8 @@ export async function handlePhotoQuery(request, env, ctx) {
   return response;
 }
 
-export async function getImagesManifest(_env, _ctx) {
-  // the pool is module memory (see derivePhotoPool above). The async (env, ctx)
-  // signature survives from the KV/SWR era so the callers (home.js SSR, run.js
-  // palette, /photos, queryPhotos) didn't have to move; the awaits they do on
-  // this resolve on the microtask queue, no I/O behind them.
-  return PHOTO_POOL;
-}
-
-export async function handleImagesManifest(request, env, ctx) {
-  const photos = await getImagesManifest(env, ctx);
+export function handleImagesManifest() {
+  const photos = PHOTO_POOL;
   // _address: the doctrinal signature that lived in the retired Apache listings;
   // the machine surface keeps it now that the human one is /photos.
   return jsonResp({ _address: "handwritten worker at aadhar.sh", photos, count: photos.length });
@@ -593,11 +578,10 @@ export function renderPhotosPage(photos, altMap) {
   const tiles = photos.map((p, i) => {
     const eager = i < 12;
     const alt = escAttr((altMap && altMap[p.stem]) || p.stem);
-    const small = absThumb(p.thumb_small);   // manifest guarantees thumb_small (unhashed stems are skipped)
     return `<a class="ph" href="/images/full/${escAttr(encodeURIComponent(p.full).replace(/%2F/g, "/"))}">
 <picture>
-<source type="image/avif" srcset="${escAttr(small)}">
-<img src="${escAttr(absThumb(p.thumb_jpg))}" alt="${alt}" width="400" height="400"${eager ? "" : ` loading="lazy"`} decoding="async">
+<source type="image/avif" srcset="${escAttr(p.thumb_small)}">
+<img src="${escAttr(p.thumb_jpg)}" alt="${alt}" width="400" height="400"${eager ? "" : ` loading="lazy"`} decoding="async">
 </picture>
 <span class="ph-name">${escHtml(p.stem)}</span>
 </a>`;
@@ -657,19 +641,6 @@ ${tiles}
 }
 
 export async function handlePhotos(request, env, ctx) {
-  const render = async () => {
-    const [photos, altMap] = await Promise.all([
-      getImagesManifest(env, ctx),
-      getAltMap(env),
-    ]);
-    if (!photos.length) {
-      return new Response("photo manifest unavailable", {
-        status: 503,
-        headers: { "content-type": "text/plain; charset=utf-8", "retry-after": "60" },
-      });
-    }
-    return renderPhotosPage(photos, altMap);
-  };
-
+  const render = async () => renderPhotosPage(PHOTO_POOL, await getAltMap(env));
   return cachedRender(request, ctx, render, "/photos", env);
 }
