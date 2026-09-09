@@ -105,3 +105,6 @@ public/images/fingerprints.json
 # function of the wrangler pin, so it is never committed; the four Worker
 # programs include it in place of @cloudflare/workers-types.
 config/.generated/
+
+# Native Lens extraction build products; its Cargo.lock is committed.
+lens-reader/native/target/
