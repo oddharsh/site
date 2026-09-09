@@ -8,7 +8,6 @@ import {
   cookieJar,
   dispatchEnrich,
   enrichBatchLimit,
-  fetchBudget,
   fetchEventGuests,
   guestSweepBudget,
   mayPruneRoster,
@@ -18,6 +17,7 @@ import {
   staleGuestIds,
   test,
 } from "./contract-shared.ts";
+import { createBudget } from "../src/worker/lib/budget.ts";
 
 // ── the Luma session jar ────────────────────────────────────────────
 // Two failure modes these guard. (1) A whole-domain browser export drags in
@@ -135,7 +135,7 @@ test("a budget-limited roster walk stops on the budget and hands back its cursor
     return { ok: true, json: async () => pages[idx] };
   });
   try {
-    const budget = fetchBudget(2);
+    const budget = createBudget(2);
     const first = await fetchEventGuests("evt-x", null, "cookie=1", { budget });
     assert.equal(first.done, false, "a walk that ran out of budget has not finished");
     assert.equal(first.cursor, "c2", "an unfinished walk must return where to resume");
@@ -145,7 +145,7 @@ test("a budget-limited roster walk stops on the budget and hands back its cursor
 
     // the resumed pass picks up at the cursor rather than re-buying page one
     const rest = await fetchEventGuests("evt-x", null, "cookie=1", {
-      budget: fetchBudget(10), cursor: first.cursor,
+      budget: createBudget(10), cursor: first.cursor,
     });
     assert.equal(rest.done, true);
     assert.equal(rest.guests.length, 1, "resuming returns the tail, never the whole roster");
@@ -289,8 +289,10 @@ test("the cron enrich dispatch reports outcomes and swallows its own failures", 
   assert.deepEqual(weird, { attempted: 0, outcomes: {} }, "a body with no enriched array is 0 attempted, not a crash");
 });
 
-test("the contribute page reads its complete summary in one D1 call", async () => {
+test("the contribute page escapes its complete summary from one D1 call", async () => {
   const { handleSerendipity } = await import("../serendipity/serendipity.ts");
+  const label = `mine "<script>&' ☕`;
+  const escapedLabel = "mine &quot;&lt;script&gt;&amp;&#39; ☕";
   let calls = 0;
   const SERENDIPITY_DB = { prepare(sql) {
     return { bind(uid) {
@@ -299,7 +301,7 @@ test("the contribute page reads its complete summary in one D1 call", async () =
         await new Promise((resolve) => setTimeout(resolve, 10));
         if (!sql.includes("AS active_count") || !sql.includes("AS event_count")) throw new Error(`unexpected contribute query: ${sql}`);
         return uid === "abc"
-          ? { active_count: 2, user_key: "abc", label: "mine", enabled: 1, event_count: 7 }
+          ? { active_count: 2, user_key: "abc", label, enabled: 1, event_count: 7 }
           : { active_count: 2, user_key: null, label: null, enabled: null, event_count: 0 };
       } };
     } };
@@ -314,6 +316,9 @@ test("the contribute page reads its complete summary in one D1 call", async () =
   const body = await response.text();
   assert.match(body, /2 active contributors/);
   assert.match(body, /7 events from your feed/);
+  assert.ok(body.includes(`<b>${escapedLabel}</b>`), "the contributor label is escaped in text");
+  assert.ok(body.includes(`value="${escapedLabel}"`), "the contributor label cannot break out of its quoted input value");
+  assert.ok(!body.includes(label), "unescaped contributor markup never enters the page");
 
   const anonymous = await handleSerendipity(
     new Request("https://aadhar.sh/serendipity/contribute"),
