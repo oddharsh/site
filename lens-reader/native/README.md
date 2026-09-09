@@ -45,6 +45,10 @@ cargo run --release --locked --manifest-path lens-reader/native/Cargo.toml < src
 After the existing locked dependency install in lens-reader, its normal test
 suite includes `test/native-metadata.test.mjs`. Titles, meta tags, and links are
 required to equal the existing DOM across all ten compressed external fixtures.
+Before registering tests, the module allows up to 120 seconds for a cold locked
+release build through the subprocess timeout; the
+corpus test has a separate 30-second ceiling and each invocation a 10-second
+ceiling. These are test-harness deadlines, not Worker performance claims.
 
 Twelve Rust tests cover streaming UTF-8/entities, Unicode truncation, resource
 limits, I/O failure, noscript/template semantics, parent-link integrity after
