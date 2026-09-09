@@ -15,7 +15,7 @@ Run from the repository root:
 ```sh
 cargo test --locked --manifest-path tools/site/Cargo.toml
 cargo clippy --locked --manifest-path tools/site/Cargo.toml --all-targets -- -D warnings
-cargo fmt --manifest-path tools/site/Cargo.toml --check
+cargo fmt --all --manifest-path tools/site/Cargo.toml --check
 bun run gen:manifest
 ```
 
@@ -43,7 +43,7 @@ the first component; the remaining scope below is deliberately explicit.
 | Component | Required implementation and evidence | Current state |
 | --- | --- | --- |
 | Typed site model | Shared route, representation, cache, method and authorization contracts; semantic content; tool inputs, results, errors and effects; persisted schema versions. Generate types, runtime validation, JSON Schema and machine descriptions, with real consumers. | Surface registry and Garage content validation integrated; TypeScript and JSON Schema generated, HTML parity tested. Broader contracts pending. |
-| Native site compiler | Dependency graph, incremental cache, parsed asset rewriting, existing Rust minifiers, selective compression and atomic output. A Garage document must produce HTML, Markdown, discovery, search, hashes and compressed assets from one representation. | Pending, depends on the model. |
+| Native site compiler | Dependency graph, incremental cache, parsed asset rewriting, existing Rust minifiers, selective compression and atomic output. A Garage document must produce HTML, Markdown, discovery, search, hashes and compressed assets from one representation. | Native cached artifact stage implemented and measured independently; build integration and document compiler pending. |
 | Photo pipeline | Shared decoded buffers, explicit color/orientation/depth, tier generation, metadata and histograms with coherent provenance. Extend the existing encoders and compare artifacts and processing cost. | Pending. |
 | Lens extraction | Bounded streaming metadata and compact article tree, established parsing, native and Wasm builds, parity fixtures and size/startup/throughput measurements. | Pending. |
 | XP component compiler | Typed Window, Taskbar, Menu, Dialog, ExplorerList, PropertySheet and Demo components; generated HTML/CSS and small TS behaviors; keyboard, focus, lazy loading and machine actions tested in real pages. | Pending. |

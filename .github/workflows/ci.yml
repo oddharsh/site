@@ -93,7 +93,7 @@ jobs:
       - name: Validate Rust site contracts
         run: |
           rustup component add rustfmt clippy
-          cargo fmt --manifest-path tools/site/Cargo.toml --check
+          cargo fmt --all --manifest-path tools/site/Cargo.toml --check
           cargo test --locked --manifest-path tools/site/Cargo.toml
           cargo clippy --locked --manifest-path tools/site/Cargo.toml --all-targets -- -D warnings
           bun run gen:manifest

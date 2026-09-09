@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/site-model"]
+members = ["crates/site-model", "crates/site-compiler"]
 resolver = "2"
 
 [workspace.package]
