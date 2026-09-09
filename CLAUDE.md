@@ -1860,7 +1860,7 @@ near-duplicates ON PURPOSE (gotcha 16). The cal duplication exists because cal's
 suite boots from `cal/src` alone (bun:test over wrangler's harness, see
 `cal/test/harness.ts`), so a cal → holding import would make cal untestable
 without the site tree. Serendipity has no such constraint
-and already imports `lib/desktop.ts` and `lib/crawl.ts`; that direction is
+and already imports `lib/desktop.ts` and `lib/public-fetch.ts`; that direction is
 established. **Check which of those two situations you are in before copying
 either precedent.**
 
@@ -2435,9 +2435,10 @@ The second reason this section used to give, `run_worker_first`'s 100-rule cap, 
 when the eight exact `/lens` rows were folded to `/lens` + `/lens/*` and the config
 dropped to 94. Do not cite it again. Same shape as `cf-garage` owning `/garage/cf/*`.
 
-What it DOES share with the site tree is exactly one thing: the SSRF guard.
-`validateLensTarget` moved from `lens.ts` into `lib/crawl.ts`, beside the
-`privateHostBlocked` floor it wraps, and both Workers import it. A second Worker aiming
+Both Workers share the URL policy and redirect walker in `lib/public-fetch.ts`.
+`validateLensTarget` and the `privateHostBlocked` floor it wraps moved there from
+`lib/crawl.ts` so signing and document parsing can use the same policy without a
+circular dependency. A second Worker aiming
 a visitor-supplied URL at the public internet is the same surface `/lens/fetch` has, and
 two copies of an allowlist pass review on the day they are written. A contract test
 asserts both files import it and neither redefines it.

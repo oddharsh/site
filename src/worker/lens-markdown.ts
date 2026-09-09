@@ -38,7 +38,8 @@
 // no model. Cheaper per run than the Reader or Wire tabs and more than a knock,
 // which is why it is opt-in, cached for an hour, and rate-limited on its own
 // budget rather than the shared browser ceiling.
-import { mapWithConcurrency, validateLensTarget } from "./lib/crawl.ts";
+import { validateLensTarget } from "./lib/public-fetch.ts";
+import { mapWithConcurrency } from "./lib/crawl.ts";
 import { jsonResponse } from "./lib/http.ts";
 import { span } from "./lib/trace.ts";
 import { LENS_BUDGETS, lensFetchAsBot, lensSha256Hex, overLensBudget } from "./lens.ts";

@@ -4,7 +4,7 @@
 // public photo bucket or the representation vault.
 import photoIndex from "./photo-index.json" with { type: "json" };
 import { CANONICAL_HOST } from "./lib/const.ts";
-import { fetchFollowingPublicRedirects, validateLensTarget } from "./lib/crawl.ts";
+import { fetchFollowingPublicRedirects, validateLensTarget } from "./lib/public-fetch.ts";
 
 const INPUT_CAP = 8 * 1024 * 1024;
 const OUTPUT_CAP = 4 * 1024 * 1024;
@@ -160,8 +160,9 @@ async function resolveImageInput(args: ImageToolArgs, env): Promise<ImageInput |
   const target = validateLensTarget(rawUrl);
   if (!target.ok) return { error: target.error };
   try {
+    const signal = AbortSignal.timeout(8000);
     const followed = await fetchFollowingPublicRedirects(
-      target.url, { method: "GET", signal: AbortSignal.timeout(8000) }, validateLensTarget, 20,
+      target.url, () => ({ method: "GET", signal }), validateLensTarget, 20,
     ); // Preserve native fetch's twenty-redirect allowance.
     if (!followed.ok) return { error: "source_url redirected to a disallowed target" };
     const response = followed.response;

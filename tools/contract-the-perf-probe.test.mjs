@@ -200,17 +200,17 @@ test("redirect following validates every hop, not just the landing", async () =>
   };
   try {
     const check = (candidate) => validateLensTarget(candidate);
-    const blocked = await fetchFollowingPublicRedirects("https://example.com/start", {}, check);
+    const blocked = await fetchFollowingPublicRedirects("https://example.com/start", () => ({}), check);
     assert.equal(blocked.ok, false, "a hop into link-local space must be refused");
     assert.ok(!seen.includes("http://169.254.169.254/latest/meta-data/"), "the blocked host must never be requested");
     assert.equal(seen.length, 2, "it stops at the refusal instead of continuing");
 
-    const fine = await fetchFollowingPublicRedirects("https://example.com/ok", {}, check);
+    const fine = await fetchFollowingPublicRedirects("https://example.com/ok", () => ({}), check);
     assert.equal(fine.ok, true);
     assert.equal(fine.finalUrl, "https://example.com/ok");
 
     testGlobals.fetch = async (url) => new Response(null, { status: 302, headers: { location: `${url}x` } });
-    const looping = await fetchFollowingPublicRedirects("https://example.com/loop", {}, check, 3);
+    const looping = await fetchFollowingPublicRedirects("https://example.com/loop", () => ({}), check, 3);
     assert.equal(looping.ok, false, "an endless redirect chain is bounded");
   } finally {
     testGlobals.fetch = originalFetch;

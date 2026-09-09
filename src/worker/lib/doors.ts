@@ -26,7 +26,8 @@
 // This module adds no new way to reach the network.
 import { botHeaders } from "./botauth.ts";
 import { CANONICAL_HOST } from "./const.ts";
-import { fetchFollowingPublicRedirects, readResponseCapped, validateLensTarget } from "./crawl.ts";
+import { fetchFollowingPublicRedirects, validateLensTarget } from "./public-fetch.ts";
+import { readResponseCapped } from "./crawl.ts";
 import { ERR_HEADER_MISMATCH, MCP_MODERN, META_PROTOCOL, META_CLIENT_CAPS } from "./mcp-protocol.ts";
 import { lensProbe, originDiscovery } from "../lens.ts";
 import { asRecord, asText } from "./parse.ts";
@@ -239,7 +240,7 @@ export async function foreignMcpTools(origin, env, opts: { schemas?: boolean } =
   try { isSelf = new URL(url).hostname.toLowerCase() === CANONICAL_HOST && !!(env.SELF_FETCH || env.ASSETS); } catch { /* not self */ }
 
   const send = async (extra) => {
-    const headers = await botHeaders(url, env, {
+    const headersFor = (candidate) => botHeaders(candidate, env, {
       headers: {
         "content-type": "application/json",
         // Both framings, because the server picks. DeepWiki refuses a
@@ -253,7 +254,7 @@ export async function foreignMcpTools(origin, env, opts: { schemas?: boolean } =
       sign: !isSelf,
     });
     if (isSelf) {
-      const selfReq = new Request(url, { method: "POST", headers, body });
+      const selfReq = new Request(url, { method: "POST", headers: await headersFor(url), body });
       return { res: await (env.SELF_FETCH ? env.SELF_FETCH(selfReq) : env.ASSETS.fetch(selfReq)) };
     }
     // Per-hop validation, not redirect:"follow", for the reason lensFetch
@@ -264,7 +265,7 @@ export async function foreignMcpTools(origin, env, opts: { schemas?: boolean } =
     // an unreachable target, which is what it is.
     const followed = await fetchFollowingPublicRedirects(
       url,
-      { method: "POST", headers, body, signal: controller.signal, cf: { cacheTtl: 0 } },
+      async (candidate) => ({ method: "POST", headers: await headersFor(candidate), body, signal: controller.signal, cf: { cacheTtl: 0 } }),
       (candidate) => validateLensTarget(candidate),
     );
     if (!followed.ok) return { blocked: true };
@@ -423,7 +424,7 @@ export async function foreignNlwebAsk(origin, env, opts: { query?: string } = {}
   try {
     // Both framings on Accept. A server is entitled to stream even when asked
     // not to, and one that does is answering rather than failing.
-    const headers = await botHeaders(url, env, {
+    const headersFor = (candidate) => botHeaders(candidate, env, {
       headers: { accept: "application/json, text/event-stream" },
       method: "GET",
       sign: !isSelf,
@@ -431,12 +432,12 @@ export async function foreignNlwebAsk(origin, env, opts: { query?: string } = {}
 
     let res;
     if (isSelf) {
-      const selfReq = new Request(url, { method: "GET", headers });
+      const selfReq = new Request(url, { method: "GET", headers: await headersFor(url) });
       res = await (env.SELF_FETCH ? env.SELF_FETCH(selfReq) : env.ASSETS.fetch(selfReq));
     } else {
       const followed = await fetchFollowingPublicRedirects(
         url,
-        { method: "GET", headers, signal: controller.signal, cf: { cacheTtl: 0 } },
+        async (candidate) => ({ method: "GET", headers: await headersFor(candidate), signal: controller.signal, cf: { cacheTtl: 0 } }),
         (candidate) => validateLensTarget(candidate),
       );
       if (!followed.ok) return { ok: false, unreadable: true, detail: "redirected somewhere this reader will not follow" };

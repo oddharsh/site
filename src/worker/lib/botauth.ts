@@ -33,6 +33,8 @@
 // Reviving it needs a runtime with native ML-DSA, or a plan that is not
 // "sign on the request path". Do not re-add it to botHeaders
 // without one, and read the CPU note above first.
+import { fetchFollowingPublicRedirects, validateLensTarget } from "./public-fetch.ts";
+
 export const BOT_NAME    = "AadharshBot";
 
 const BOT_VERSION = "1.0";   // module-private: only BOT_UA below consumes it
@@ -94,15 +96,20 @@ export async function botHeaders(targetUrl, env, opts: BotRequestOptions = {}) {
 }
 
 export async function signedFetch(targetUrl, env, opts: BotRequestOptions = {}) {
-  const headers = await botHeaders(targetUrl, env, { ...opts, sign: true });
-
-  return fetch(targetUrl, {
+  const init = async (url) => ({
     method: opts.method || "GET",
-    headers,
-    redirect: opts.redirect || "follow",
+    headers: await botHeaders(url, env, { ...opts, sign: true }),
     signal: opts.signal,  // optional caller-supplied deadline (AbortSignal)
     cf: opts.cf || { cacheTtl: 0 },  // caller may set its own edge-cache policy; default is app-layer only
   });
+  if (opts.redirect && opts.redirect !== "follow") {
+    const verdict = validateLensTarget(targetUrl);
+    if (!verdict.ok) throw new TypeError(verdict.error);
+    return fetch(targetUrl, { ...await init(targetUrl), redirect: opts.redirect });
+  }
+  const followed = await fetchFollowingPublicRedirects(targetUrl, init, validateLensTarget, 20);
+  if (!followed.ok) throw new TypeError(followed.error);
+  return followed.response;
 }
 
 // RFC 7638: SHA-256 over the JSON of the REQUIRED members alone, in lexicographic

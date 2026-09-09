@@ -76,7 +76,7 @@ import { derivePhotoPool, renderPhotosPage, handleImagesManifest, handlePhotoQue
 import { renderPhotoSlots } from "../src/worker/lib/photo-grid.ts";
 import { cachedRender, deadline, deleteSWRKV, swrKV } from "../src/worker/lib/cache.ts";
 import { ifNoneMatchMatches, notModifiedIfFresh, withWeakEtag } from "../src/worker/lib/cache.ts";
-import { fetchFollowingPublicRedirects, privateHostBlocked } from "../src/worker/lib/crawl.ts";
+import { fetchFollowingPublicRedirects, privateHostBlocked } from "../src/worker/lib/public-fetch.ts";
 import { handleHit } from "../src/worker/counter.ts";
 import { cronHomeProbe, parseServerTiming } from "../src/worker/perf-probe.ts";
 import { gatherWhoareyou } from "../src/worker/whoareyou.ts";
@@ -226,7 +226,7 @@ function labels(headers) {
 function staticAssets(files) {
   return {
     async fetch(input) {
-      const path = new URL(input).pathname;
+      const path = new URL(input instanceof Request ? input.url : input).pathname;
       if (!(path in files)) return new Response("not found", { status: 404 });
       return Response.json(files[path]);
     },

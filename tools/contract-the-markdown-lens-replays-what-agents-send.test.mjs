@@ -27,7 +27,7 @@ test("the markdown lens reaches the network with nothing but the URL", () => {
   assert.equal(reads.length, 1, "exactly one caller-supplied parameter is read");
   assert.ok(worker.includes('params.get("url")'), "and it is the target URL");
 
-  assert.ok(worker.includes('from "./lib/crawl.ts"'), "imports the shared SSRF guard");
+  assert.ok(worker.includes('from "./lib/public-fetch.ts"'), "imports the shared SSRF guard");
   assert.ok(worker.includes("validateLensTarget("), "and calls it");
   // Never a local copy. Two allowlists pass review on the day they are written
   // and drift the week after.
