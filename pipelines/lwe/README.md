@@ -1,23 +1,39 @@
 # lwe-publish
 
-Turn a chat about a topic into a deployed Learning With Errors page, without hand-building the chrome or hand-wiring four files. Phase 1 (this directory) is the generator and the registry. Phases 2 and 3 layer the chat-to-spec structuring and a one-command publish on top.
+Build a Learning With Errors page from a transcript and a structured spec. The
+pipeline generates the page, corpus, and discovery records locally. Review its
+diff before releasing the site or the separate ask Worker.
 
 ## What is here
 
-- `concepts.json` — the registry. One entry per concept drives the buddy list, the nav.js Run destinations, and the sitemap. Edit this, not the four downstream files.
+- `concepts.json` owns the buddy list, LWE sitemap entries, ask allowlist, and
+  page metadata. `navHint` remains the fallback page subtitle.
+- [`config/site-manifest.json`](../../config/site-manifest.json) owns navigation
+  labels and agent discovery. Register each new surface there too.
 - `generate.mjs` — the generator.
 - `specs/<id>.json` — one page-spec per concept. Holds what is unique to that page: the conversation, the demos, the disclosure, the editorial card, and the understanding check. The window chrome, messenger shell, and quiz wiring come from the generator, so every page stays identical in its bones.
 
 ## Commands
 
 ```bash
-node pipelines/lwe/generate.mjs page <id>   # specs/<id>.json -> public/lwe/<id>.html
-node pipelines/lwe/generate.mjs wire        # rewrite the registry-driven regions (sitemap, buddy list, nav, ask.js CONCEPTS)
+node pipelines/lwe/generate.mjs page <id>   # specs/<id>.json -> src/pages/lwe/<id>.html
+node pipelines/lwe/generate.mjs wire        # update sitemap, buddies, ask.js, then manifest projections
 node pipelines/lwe/build-corpus.mjs         # rebuild the ask corpus from lwe-ask/corpus/<concept>.json
 node pipelines/lwe/publish.mjs <id>         # one command: page -> corpus -> wire -> print the deploy steps
 ```
 
-`wire` rewrites three marked regions straight from the registry: the sitemap URLs (`sitemap.xml`), the buddy-list Online group (`lwe/index.html`), and the nav.js Run entries. Each region is bounded by a `generated:*:start` / `:end` marker pair, so `wire` is idempotent and re-runnable. Adding a concept is now: write its spec, add a registry entry, `generate.mjs page <id>`, `generate.mjs wire`. The per-buddy `.pic` CSS stays hand-authored (it rarely changes). Every generated page also emits the shared `/quiz.js` runtime with its own understanding payload.
+`wire` rewrites three marked LWE regions: `public/sitemap.xml`,
+`src/pages/lwe/index.html`, and `public/lwe/ask.js`. It then runs the canonical
+manifest generator, which updates `src/client/nav-run.js` and the Worker's
+agent discovery module from `config/site-manifest.json`. Both registries have
+distinct jobs; a Run label does not come from the page's subtitle.
+
+For a new concept, write the spec and both registry entries, generate the page,
+and run `wire` plus `bun run pages:check`. The per-buddy `.pic` CSS stays authored
+by hand. Existing pages may contain work newer than their specs; page generation
+refuses to overwrite a differing file. Reconcile the spec first. Use `--force`
+only after reviewing which version should replace it; `publish.mjs` does not
+force regeneration.
 
 ## The spec format
 
@@ -87,7 +103,7 @@ Apply the whole writing-style ruleset together, never one subset instead of anot
 - **No AI shibboleths.** No em dashes. Straight apostrophes. Contractions on. None of the banned phrases (leverage, delve, robust, "it's worth noting"). Never the "not X, Y" negation pattern. Emojis only when they clearly earn their place (a functional UI glyph, or a genuinely apt beat), never as filler reactions.
 - A teacher bubble that quotes a source stays verbatim and carries a `cite`.
 
-## Demo detection (the rule for Phase 2)
+## Demo detection
 
 Demos get authored by hand, in real time. But the source chat decides where they go: a request to clarify, a request to re-explain, or an explicit "show me" is a demo cue. The structuring step flags those moments as `{demo:{...}}` slots; a human builds the actual widget.
 
@@ -97,20 +113,14 @@ Every LWE page can carry a live "ask a follow-up" box, grounded only in that con
 
 1. Set `"hasAsk": true` on the registry entry. The generated page then ships `ask.js`, and `wire` adds the concept to ask.js's CONCEPTS allow-list, so the include set never drifts from the allow-list.
 2. Add `lwe-ask/corpus/<concept>.json`: an array of `{ text, source, title }` passages. `build-corpus.mjs` injects them into the worker's corpus tagged by concept, each carrying its own source link.
-3. Ship it: merge to `main` (CI promotes to `production`; Workers Builds deploys the site Worker carrying the page + ask.js), then `cd lwe-ask && bun run deploy` + `curl -X POST https://aadhar.sh/lwe/ask/reindex -H "x-reindex-secret: $REINDEX_SECRET"` (the corpus). That route is gated, so a bare POST answers 401.
+3. Release the page through the [site promotion and ramp](../../docs/MAINTENANCE.md#cicd-release-path). The ask corpus belongs to a separate Worker: deploy it from `lwe-ask/`, then run the reindex command printed by `publish.mjs`. That command requires `REINDEX_SECRET` and prints the HTTP status; a bare POST is refused.
 
 **Copyright rule (convention, enforced in code review).** A corpus file may hold the author's own writing, the site's own AI-authored explanation of a topic, or genuinely republishable sources (Wikipedia with attribution, public domain). It must NEVER hold third-party copyrighted text. Copyrighted material (the 0xPARC primer, a book) informs the AI-authored page copy and shows up as a `cite` link, but never enters the retrieval corpus. The "found when building" case (no source supplied) defaults to a few relevant Wikipedia sections, chunked with attribution.
 
-## Phase 2: chat to spec
+## Structuring a transcript
 
 Feed a raw LLM transcript of learning a topic; get back a draft `specs/<id>.json`. The structuring pass:
 - Segments the chat into a clean conversation, `you` (learner) and `bot` (teacher) turns, honesty-tagged. A teacher turn that quotes a source keeps a `cite`.
 - **Demo detection:** a request to clarify, to re-explain, or an explicit "show me" becomes a `{demo:{...}}` slot. The pipeline flags the moment; a human builds the actual widget (demos stay artisanal).
 - Splits the sources: republishable ones become `lwe-ask/corpus/<concept>.json` passages; copyrighted ones stay as `cite` links only.
 - Hits the content contract (the LRS voice above).
-
-## Phases
-
-1. **Generator + registry** (done). New page = one spec; wiring comes from the registry.
-2. **Chat to spec** (done). The structuring pass above produces a draft spec plus the corpus split.
-3. **`publish.mjs`** (done). One command builds the page, rebuilds the ask corpus, and wires every registry-driven region, then prints the deploy + reindex steps (those touch the live account, so they stay explicit).

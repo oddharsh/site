@@ -14,8 +14,7 @@ import { DESKTOP_CHROME, DESKTOP_TOP } from "../../src/worker/lib/desktop.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..", "..");   // pipelines/<name>/ -> repo root
-const HOLDING = join(ROOT, "src/pages");
-const REGISTRY = JSON.parse(readFileSync(join(HERE, "pages.json"), "utf8")).pages;
+const PAGES = join(ROOT, "src/pages");
 
 function fail(message) {
   throw new Error(message);
@@ -42,23 +41,6 @@ function validateGarageSpec(spec, context = "Garage spec") {
   if (spec.pageCss != null && spec.pageCss !== "") text(spec.pageCss, `${context}.pageCss`);
   if (spec.pageJs != null && spec.pageJs !== "") text(spec.pageJs, `${context}.pageJs`);
   return spec;
-}
-
-function validateRegistry() {
-  const ids = new Set();
-  for (const page of REGISTRY) {
-    if (!page || typeof page !== "object") fail("Garage registry: every page must be an object");
-    const context = `Garage registry entry "${page.id}"`;
-    if (ids.has(page.id)) fail(`${context}: duplicate id`);
-    ids.add(page.id);
-    if (!/^[a-z0-9][a-z0-9-]*$/.test(page.id)) fail(`${context}.id: use lowercase letters, numbers, and hyphens`);
-    for (const field of ["title", "summary", "status", "lastmod", "navLabel", "navHint"]) text(page[field], `${context}.${field}`);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(page.lastmod)) fail(`${context}.lastmod: use YYYY-MM-DD`);
-    const spec = JSON.parse(readFileSync(join(HERE, "specs", `${page.id}.json`), "utf8"));
-    if (spec.id !== page.id) fail(`${context}: spec id is ${spec.id}, expected ${page.id}`);
-    validateGarageSpec(spec, context);
-  }
-  return REGISTRY;
 }
 
 const BASE_CSS = `:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}
@@ -125,57 +107,20 @@ ${renderUnderstanding(spec.understanding, "garage")}
 `;
 }
 
-function sitemapBlock(pages) {
-  return pages.map((page) => `  <url>\n    <loc>https://aadhar.sh/garage/${page.id}</loc>\n    <lastmod>${page.lastmod}</lastmod>\n    <changefreq>monthly</changefreq>\n    <priority>0.3</priority>\n  </url>`).join("\n");
-}
-
-function js(value) {
-  return JSON.stringify(String(value));
-}
-
-function navBlock(pages) {
-  return pages.map((page) => `    { label: ${js(`garage · ${page.navLabel}`)}, path: ${js(`/garage/${page.id}`)}, hint: ${js(page.navHint)} },`).join("\n");
-}
-
-function statusClass(value) {
-  return String(value).toLowerCase().replace(/[^a-z0-9_-]+/g, "-");
-}
-
-function shelfBlock(pages) {
-  return pages.map((page) => `      <li class="generated-garage-page">
-        <div class="title-row"><span class="name"><a href="/garage/${page.id}">${html(page.title)}</a></span><span class="status ${statusClass(page.status)}">${html(page.status)}</span></div>
-        <div class="desc">${html(page.summary)}</div>
-        <div class="meta">generated page · added ${html(page.lastmod)}</div>
-      </li>`).join("\n");
-}
-
-function injectBetween(file, start, end, content) {
-  const path = join(HOLDING, file);
-  const src = readFileSync(path, "utf8");
-  const i = src.indexOf(start), j = src.indexOf(end);
-  if (i === -1 || j === -1 || j < i) fail(`${file}: missing or inverted generated markers`);
-  const next = src.slice(0, i + start.length) + "\n" + content + "\n" + src.slice(j);
-  writeFileSync(path, next);
-  console.log(`  · ${file}: rewrote ${start}`);
-}
-
-export { validateGarageSpec, validateRegistry };
+export { validateGarageSpec };
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const [cmd, arg] = process.argv.slice(2);
   if (cmd === "page") {
-    if (!arg) fail("usage: generate.mjs page <id> | generate.mjs wire");
-    validateRegistry();
+    if (!arg) fail("usage: generate.mjs page <id>");
     const spec = JSON.parse(readFileSync(join(HERE, "specs", `${arg}.json`), "utf8"));
-    const out = join(HOLDING, "garage", `${arg}.html`);
+    if (spec.id !== arg) fail(`spec id is ${spec.id}, expected ${arg}`);
+    const out = join(PAGES, "garage", `${arg}.html`);
     writeFileSync(out, pageHtml(spec));
     console.log(`wrote ${out}`);
   } else if (cmd === "wire") {
-    const pages = validateRegistry();
-    injectBetween("garage/index.html", "<!-- generated:garage-pages:start -->", "<!-- generated:garage-pages:end -->", shelfBlock(pages));
-    injectBetween("nav.js", "// generated:garage-pages:start", "// generated:garage-pages:end", navBlock(pages));
-    injectBetween("sitemap.xml", "<!-- generated:garage-pages:start -->", "<!-- generated:garage-pages:end -->", sitemapBlock(pages));
+    fail("Garage wire is retired. Run bun run gen:manifest; edit the Garage shelf and sitemap by hand.");
   } else {
-    console.log("usage: generate.mjs page <id> | generate.mjs wire");
+    console.log("usage: generate.mjs page <id>");
   }
 }

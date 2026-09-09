@@ -922,27 +922,19 @@ under "What the automation does, and why it stopped".
 
 ## Author a new LWE or Garage explainer
 
-The page generators carry the current editorial contract forward. LWE authors
-write `pipelines/lwe/specs/<id>.json`; Garage authors write
-`pipelines/garage/specs/<id>.json` and register the page in
-`pipelines/garage/pages.json`. Both specs require a reader/problem/thesis/
-evidence/uncertainty card and a three-to-seven-question understanding check.
+The [LWE guide](../pipelines/lwe/README.md) and
+[Garage guide](../pipelines/garage/README.md) own the creation steps. Both use
+[`page-contract.mjs`](../pipelines/content/page-contract.mjs) for the editorial
+card and three-to-seven-question understanding check.
 
-```bash
-node pipelines/lwe/generate.mjs page <id>
-node pipelines/lwe/generate.mjs wire
-node pipelines/garage/generate.mjs page <id>
-node pipelines/garage/generate.mjs wire
-bun run pages:check
-bun run og-cards   # bake the page's OG/Twitter card once it's live (see below)
-```
+Render the selected page with its generator and register the surface in
+`config/site-manifest.json`. For Garage, run `bun run gen:manifest` and author
+the shelf card and sitemap entry. LWE's `wire` command owns its buddy list,
+sitemap region, and ask allowlist, then calls the same manifest generator.
+Garage's retired `wire` command refuses to write.
 
-The shared contract lives in
-[`pipelines/content/page-contract.mjs`](pipelines/content/page-contract.mjs).
-It emits the shared quiz payload and runtime, checks the LRS/style guardrails,
-and keeps the understanding check diagnostic rather than a gate. Read the
-[LWE authoring guide](pipelines/lwe/README.md) and
-[Garage authoring guide](pipelines/garage/README.md) before starting a page.
+Run `bun run pages:check` and review the generated diff before release. Bake the
+OG/Twitter card once the page is live with `bun run og-cards` (see below).
 
 Key facts (don't hardcode these elsewhere, they drift):
 - RN_KV namespace id: `3cb8a107c58e47dc9244e75b33401f36`
