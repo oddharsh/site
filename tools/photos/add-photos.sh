@@ -271,11 +271,11 @@ if [ -z "$sooc_ver" ] || [ "$(printf '%s\n%s\n' "$EXIF_SOOC_MIN" "$sooc_ver" | s
   echo "  update with: cargo install --git https://github.com/oddharsh/exif-sooc exif-sooc --force" >&2
   exit 1
 fi
-if [ ! -x "$ZENC" ]; then
-  command -v cargo >/dev/null 2>&1 || { echo "error: cargo (rust) not found; install from https://rustup.rs" >&2; exit 1; }
-  echo "building zenc (zenjpeg encoder) — first run only…" >&2
-  cargo build --release --locked --manifest-path "$ZENC_DIR/Cargo.toml" >&2 || { echo "error: zenc build failed" >&2; exit 1; }
-fi
+# Cargo's incremental check also upgrades an existing binary when this script
+# starts using a new native pipeline operation.
+command -v cargo >/dev/null 2>&1 || { echo "error: cargo (rust) not found; install from https://rustup.rs" >&2; exit 1; }
+(cd "$PROJECT_DIR" && cargo build --release --locked --manifest-path "$ZENC_DIR/Cargo.toml" --target-dir "$ZENC_DIR/target") >&2 || { echo "error: zenc build failed" >&2; exit 1; }
+
 if [ ! -x "$MOZ_JTRAN" ]; then
   echo "error: jpegtran not installed at $MOZJPEG_DIR" >&2
   echo "  install with: brew install mozjpeg" >&2
@@ -447,7 +447,7 @@ thumb_one() {  # thumb_one <source-file> <index>
   # data is wrong by up to 4 codes in the shadows. Classification is unchanged
   # on this corpus (2 g22, 179 srgb) and the outputs are byte-identical.
   if ! "$ZENC" square "$input" --orient "$o" --filter box \
-      --size "$SQ" --out "$sq" --size "$SQ_SM" --out "$sm" --size "$SQ_XS" --out "$xs" >/dev/null 2>&1; then
+      --size "$SQ" --out "$sq" --jpeg-out "$jpg" --jpeg-quality "$ZENC_Q" --size "$SQ_SM" --out "$sm" --size "$SQ_XS" --out "$xs" >/dev/null 2>&1; then
     rm -f "$tif"; mark fail "$idx"; printf "✗"; return
   fi
   # Deleted per photo rather than by the EXIT trap: a full-res TIFF is ~311MB
@@ -465,10 +465,9 @@ thumb_one() {  # thumb_one <source-file> <index>
   # value is accepted silently too, so nothing errors in any direction. Dropping
   # to 8 bits to buy the compression is the thing this door exists to avoid.
   rm -f "$tif"
-  # 4. desktop square JPG (zenc: zenjpeg hybrid+scan, q84 ≈ old jpegli q82) + strip
+  # 4. desktop square JPG was emitted with the PNG above (zenc: zenjpeg hybrid+scan, q84 ≈ old jpegli q82) + strip
   #    any residual metadata (sips can leave a grayscale ICC on B&W frames; keep
   #    formats consistent / sRGB).
-  if ! "$ZENC" "$sq" "$jpg" -q "$ZENC_Q" >/dev/null 2>&1; then mark fail "$idx"; printf "✗"; return; fi
   exif-sooc -all= -overwrite_original "$jpg" >/dev/null 2>&1 || true
   # 5. desktop square AVIF
   if ! avif_encode "$sq" "$avif"; then mark fail "$idx"; printf "✗"; return; fi
