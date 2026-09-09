@@ -10,7 +10,7 @@ const root = fileURLToPath(new URL("../../", import.meta.url));
 const manifest = fileURLToPath(new URL("../native/Cargo.toml", import.meta.url));
 const corpus = new URL("./corpus/", import.meta.url);
 
-test("native metadata preserves corpus titles and meta tags", (t) => {
+test("native metadata preserves corpus titles, meta tags, and links", () => {
   const fixtures = readdirSync(corpus).filter((file) => file.endsWith(".html.br"));
   assert.ok(fixtures.length >= 10);
   for (const fixture of fixtures) {
@@ -25,13 +25,9 @@ test("native metadata preserves corpus titles and meta tags", (t) => {
       .map((el) => ({ name: el.getAttribute("name") ?? el.getAttribute("property"), content: el.getAttribute("content") }));
     assert.deepEqual(native.meta, meta, fixture);
     assert.equal(native.truncated, false, fixture);
-    // Link parity remains a separate, unresolved contract: the current DOM's
-    // template and noscript semantics differ from lol_html's token stream.
     const links = [...document.querySelectorAll("link")]
       .filter((el) => el.hasAttribute("rel") && el.hasAttribute("href"))
       .map((el) => ({ rel: el.getAttribute("rel"), href: el.getAttribute("href") }));
-    if (JSON.stringify(links) !== JSON.stringify(native.links)) {
-      t.diagnostic(`${fixture}: link parity unresolved (DOM ${links.length}, native ${native.links.length})`);
-    }
+    assert.deepEqual(native.links, links, fixture);
   }
 });
