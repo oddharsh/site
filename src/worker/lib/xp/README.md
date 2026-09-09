@@ -85,27 +85,61 @@ bun tools/gen-xp.ts --check
 bun test tools/contract-xp-components.test.mjs
 ```
 
-## Notepad behavior typing
+## Menu behavior
 
-The existing Notepad menu now declares its action/separator union, optional
-boolean checkbox reader, callback signature, menu definition and nullable open
-state. Its literal-authored dialog controls and attached menu-button parent have
-explicit DOM types. These annotations remove all seven existing Notepad type
-errors; the browser ratchet records 157 remaining errors in other files.
-They compile away: the production script and hashed URL remain unchanged. The
-served `notepad.src.js` source view includes the annotations. This is a checked
-boundary for the later Menu component, not shared rendering or new keyboard
-behavior, and does not claim a runtime speedup.
+`Menu(menubar, definitions)` in `src/client/notepad.js` owns menu rendering and
+interaction for every Notepad window. The caller supplies typed action IDs,
+labels, callbacks and optional boolean checkbox readers. Separators are a union
+variant, not actions. It stays in the existing classic script, adding no request,
+shared global, framework or Wasm startup. Rust does not own this DOM controller.
+
+The single-level keyboard contract follows the [WAI-ARIA menubar pattern](https://www.w3.org/WAI/ARIA/apg/patterns/menubar/).
+The controller provides one Tab stop per menubar, arrow-key wrapping, Home/End,
+first-letter navigation, Enter/Space activation, Escape focus restoration and
+native Tab/Shift+Tab exit. It preserves pointer switching and the note's existing
+actions. Checkbox items expose `menuitemcheckbox` and `aria-checked`; dropdowns
+have labels, separators have roles, and action buttons expose stable
+`data-np-action` IDs. Focused items use the existing XP selection colors.
+
+Hidden notes are enhanced only when first opened: the four-note folder now
+creates zero menu buttons initially, instead of twenty. Reopening reuses the
+window setup. Dropdowns are created only when opened and removed when closed. There is one
+active dropdown across windows. Its document-click listener exists only while
+open and is removed on Escape, outside focus, action activation and note closure.
+Chrome inspection on the four-note folder measured four idle document-click
+listeners before this change, zero afterward, and one while a menu is open.
+
+Run `node tools/check-xp-menu.ts http://127.0.0.1:PORT` against a locally built site
+(e.g. the existing dev server). It launches an isolated installed Chrome profile
+and checks keyboard navigation, action focus, checkbox state, lazy menus, listener
+cleanup, multiple popovers and the standalone permalink. It rejects non-local
+URLs. The regression control using the previous Notepad script fails on its twenty
+preinitialized buttons; the earlier listener control also found four idle
+listeners. The current built script passes. This browser check is local,
+not yet a required CI step; the normal build, types and contract suite remain CI
+checks.
+
+The controller costs bytes: the canonical Oxc output grows from 6,022 to 7,675
+bytes, gzip level 9 from 2,481 to 3,162, and Brotli quality 11 from 2,129 to 2,781.
+The measurement reconstructs the old script from `4e24ae16` with the build's
+minifier and verifies the new result equals the built artifact. The script's
+content hash changes. This buys keyboard behavior and less idle listener work;
+it is not an overall page-speed improvement claim.
+
+The earlier annotations removed all seven Notepad type errors; its count stays
+at zero. The browser ratchet records 157 remaining errors in other files.
 
 ## Full component scope still to implement
 
 - Apply the native rendering path to static page compilation, and extend the
   shared definitions/code generation to the rest of the component family.
-- Implement Menu, Dialog, and Demo components.
+- Add native/shared Menu rendering where needed beyond this first DOM consumer;
+  implement Dialog and Demo components.
 - Typed, small client behaviors with keyboard/focus contracts, lazy loading,
   and machine actions where a component exposes an action.
 - Adoption by existing static and dynamic pages without changing the XP design.
-- Browser behavior checks and measured build/served-byte/runtime comparisons.
+- Broaden the browser behavior checks beyond Menu and measure build/runtime
+  effects of the complete component family.
 
 Dynamic Window rendering uses generated TypeScript; native rendering is verified
 but not yet used to compile static pages. The full component family remains
