@@ -10,13 +10,20 @@ const root = fileURLToPath(new URL("../../", import.meta.url));
 const manifest = fileURLToPath(new URL("../native/Cargo.toml", import.meta.url));
 const corpus = new URL("./corpus/", import.meta.url);
 
-test("native metadata preserves corpus titles, meta tags, and links", () => {
+// Compile before registering tests, with an explicit subprocess deadline.
+// Bun's node:test compatibility layer applies its five-second hook ceiling even
+// to a before hook with a longer timeout; a cold build reproduces that failure.
+execFileSync("cargo", ["build", "--quiet", "--release", "--locked", "--manifest-path", manifest], {
+  cwd: root, timeout: 120_000,
+});
+
+test("native metadata preserves corpus titles, meta tags, and links", { timeout: 30_000 }, () => {
   const fixtures = readdirSync(corpus).filter((file) => file.endsWith(".html.br"));
   assert.ok(fixtures.length >= 10);
   for (const fixture of fixtures) {
     const html = brotliDecompressSync(readFileSync(new URL(fixture, corpus))).toString("utf8");
     const native = JSON.parse(execFileSync("cargo", ["run", "--quiet", "--release", "--locked", "--manifest-path", manifest], {
-      cwd: root, input: html, encoding: "utf8", maxBuffer: 4 * 1024 * 1024,
+      cwd: root, timeout: 10_000, input: html, encoding: "utf8", maxBuffer: 4 * 1024 * 1024,
     }));
     const { document } = parseHTML(html);
     assert.equal(native.title, document.querySelector("title")?.textContent || "", fixture);
