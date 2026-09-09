@@ -1,16 +1,6 @@
-// serendipity.js — "Serendipity, collective edition" rebuilt the aadhar.sh way:
-// one self-contained Cloudflare-Worker module, server-rendered handwritten HTML
-// with inline CSS, over Cloudflare D1 (env.SERENDIPITY_DB). Public read surface:
-// "what events are good and who's going." Reached from _worker.js route() via:
-//   if (path === "/serendipity" || path.startsWith("/serendipity/"))
-//     return handleSerendipity(request, env, ctx);
-//
-// Self-contained on purpose (own Luna chrome, own helpers) so it lifts out into
-// its own site later by flipping PREFIX to "".
-//
-// Phase 1: read-only HTML (dashboard, event detail, contribute/config page).
-// Phase 2 adds cookie-paste + sync + enrich (form POST → 302). Phase 3 adds the
-// /serendipity/mcp JSON-RPC tool surface over the same query layer below.
+// Serendipity serves event pages and MCP tools over env.SERENDIPITY_DB.
+// The root site Worker dispatches /serendipity/* here. Scheduled sync and
+// secret-gated actions update the pool; HTML and MCP share the query layer.
 
 const PREFIX = "/serendipity";
 
@@ -22,6 +12,7 @@ const PREFIX = "/serendipity";
 // and nav.js only wires behavior, same as every other page.
 import { DESKTOP_CHROME, DESKTOP_TOP } from "../src/worker/lib/desktop.ts";
 import { privateHostBlocked } from "../src/worker/lib/crawl.ts";
+import { esc } from "../src/worker/lib/http.ts";
 import { SUBREQUEST_CAP_FREE, createBudget, isSubrequestLimit } from "../src/worker/lib/budget.ts";
 import type { Budget } from "../src/worker/lib/budget.ts";
 import { CACHE_EMPTY, CACHE_STATIC, mcpGate, mcpHttpStatus, mcpServer } from "../src/worker/lib/mcp-protocol.ts";
@@ -30,13 +21,6 @@ import { previewToolRefusal } from "../src/worker/lib/preview.ts";
 import { asRecord, asText } from "../src/worker/lib/parse.ts";
 
 // ── tiny helpers ────────────────────────────────────────────────────────────
-const esc = (v) =>
-  String(v == null ? "" : v).replace(/[&<>"']/g, (c) =>
-    // The regex can only produce these five, so the lookup is total. The
-    // annotation is what says so; without it the literal has no index
-    // signature and `[c]` reads as possibly undefined.
-    (({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" } as Record<string, string>)[c]));
-
 const html = (status, body) =>
   new Response(body, { status, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
 
@@ -846,23 +830,9 @@ async function fetchMyEvents(auth, selfId) {
 // until 2026-08-21: one 1,932-person event costs 20 fetches at 100 a page, and
 // seven past events had parked on "Too many subrequests" because of it. The
 // sibling fetchMyEvents has carried page caps for exactly this reason all along.
-// The invocation-wide fetch allowance the sweep paces itself against. One
-// ledger is threaded through every roster walk in a tick so they draw on the
-// same pool.
-//
-// This was a local `{ left: number, spent: number }` mutated in place until it
-// moved onto lib/budget.ts. Two things came with the move and neither was
-// available to the hand-rolled version: the cap is declared ONCE rather than
-// typed out here and in rn.ts, and a ceiling that arrives while the ledger
-// still shows headroom is recorded as an overrun instead of read as an ordinary
-// exhaustion. The second matters because this file cannot see the subrequests
-// spent by the rest of the invocation, so its own count has always been a lower
-// bound and nothing said so.
-type FetchBudget = Budget;
-
 export async function fetchEventGuests(
   eventId, ticketKey, auth,
-  opts: { budget?: FetchBudget | null, cursor?: string | null } = {},
+  opts: { budget?: Budget | null, cursor?: string | null } = {},
 ) {
   const budget = opts.budget || null;
   const all: any[] = []; let cursor = opts.cursor || null;
@@ -1184,11 +1154,6 @@ async function handleAddEvent(request, env, d, uid) {
 
 const GUEST_SYNC_KEY = "serendipity_guest_sync_";
 
-// One mutable counter per scheduled invocation, threaded through the roster
-// sweep. A plain object rather than a closure so a caller can read `spent`
-// afterwards and put it on the log line.
-export function fetchBudget(max) { return createBudget(max); }
-
 // Cancellation pruning is only correct when this pass saw the ENTIRE roster in
 // one invocation. `done` alone is not enough: a pass that RESUMED from a cursor
 // also ends done while holding only the tail. Exported for the same reason
@@ -1234,7 +1199,7 @@ async function markGuestSync(d, eventId, value) {
 // Sync one event's guest list (batched writes), paced by the invocation's fetch
 // budget. Returns {synced,...}, {error}, or {skipped} when there was no budget
 // left to try. A skip deliberately writes NO marker: see the catch below.
-async function syncGuests(d, eventId, userKey, cookiesJson, budget: FetchBudget | null = null) {
+async function syncGuests(d, eventId, userKey, cookiesJson, budget: Budget | null = null) {
   const jar = cookieJar(cookiesJson);
   if (!jar || !jar.header()) return { error: "bad cookie json" };
   // Ahead of the row lookup, so a skip costs nothing at all.
@@ -1517,7 +1482,7 @@ export async function cronSerendipity(env) {
     descriptions: any, enrich?: any,
   } = { events: [], guests: [], skipped: [], descriptions: null };
   // One budget for the whole sweep, so no single roster can spend the tick.
-  const budget = fetchBudget(guestSweepBudget(sets.length));
+  const budget = createBudget(guestSweepBudget(sets.length));
   for (const s of sets) out.events.push({ label: s.label, ...(await syncEvents(d, s.user_key, s.cookies_json)) });
   // Re-read the sets before the guest pass: if syncEvents absorbed a rotation,
   // the pass after it must send what Luma just issued, never the old snapshot.
