@@ -2,7 +2,10 @@
 // Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
 import {
   assert,
+  context,
+  handleTool,
   terminalGet,
+  terminalReq,
   test,
   testGlobals,
 } from "./contract-shared.ts";
@@ -88,7 +91,9 @@ test("the scorecard grades other origins, and only bills its own", async () => {
       return new Response("not found", { status: 404 });
     };
 
-    const self = await (await terminalGet("/agent-ready?plain=1")).text();
+    // A self-probe uses the dispatcher. The network stub alone used to work
+    // because the asset fixture threw on Request and Lens fell through to fetch.
+    const self = await (await handleTool(terminalReq("/agent-ready?plain=1"), { SELF_FETCH: testGlobals.fetch }, context())).text();
     assert.match(self, /what this cost to build/);
     assert.match(self, /aadhar\.sh/);
     // The scan read what it was served rather than defaulting: one door open,

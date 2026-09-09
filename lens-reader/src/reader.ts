@@ -19,7 +19,7 @@ import Readability from "@mozilla/readability/Readability.js";
 // over the same htmlparser2 linkedom used. See src/dom.ts for the surface count
 // and test/dom-differential.test.mjs for the parity gate that keeps it honest.
 import { parseHTML } from "./dom.ts";
-import { fetchFollowingPublicRedirects, validateLensTarget } from "../../src/worker/lib/crawl.ts";
+import { fetchFollowingPublicRedirects, validateLensTarget } from "../../src/worker/lib/public-fetch.ts";
 
 // Errors whose MESSAGE is deliberately written for the visitor. Everything else
 // that escapes `read()` is an internal failure whose text is not ours to publish:
@@ -61,14 +61,14 @@ async function fetchSource(targetUrl) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
-    const followed = await fetchFollowingPublicRedirects(targetUrl, {
+    const followed = await fetchFollowingPublicRedirects(targetUrl, () => ({
       headers: {
         "user-agent": BOT_UA,
         accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "accept-language": "en-US,en;q=0.9",
       },
       signal: controller.signal,
-    }, validateLensTarget, 20); // Preserve native fetch's redirect allowance.
+    }), validateLensTarget, 20); // Preserve native fetch's redirect allowance.
     if (!followed.ok) {
       throw new ReaderError("That URL redirected somewhere this reader will not follow.");
     }

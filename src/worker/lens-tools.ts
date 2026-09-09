@@ -1,4 +1,4 @@
-import { validateLensTarget } from "./lib/crawl.ts";
+import { validateLensTarget } from "./lib/public-fetch.ts";
 import { jsonResponse } from "./lib/http.ts";
 import { span } from "./lib/trace.ts";
 import { foreignMcpTools } from "./lib/doors.ts";

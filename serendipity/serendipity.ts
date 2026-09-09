@@ -21,7 +21,7 @@ const PREFIX = "/serendipity";
 // at all, and everyone else got a shell pop. Now the markup is in the document
 // and nav.js only wires behavior, same as every other page.
 import { DESKTOP_CHROME, DESKTOP_TOP } from "../src/worker/lib/desktop.ts";
-import { privateHostBlocked } from "../src/worker/lib/crawl.ts";
+import { privateHostBlocked } from "../src/worker/lib/public-fetch.ts";
 import { SUBREQUEST_CAP_FREE, createBudget, isSubrequestLimit } from "../src/worker/lib/budget.ts";
 import type { Budget } from "../src/worker/lib/budget.ts";
 import { CACHE_EMPTY, CACHE_STATIC, mcpGate, mcpHttpStatus, mcpServer } from "../src/worker/lib/mcp-protocol.ts";

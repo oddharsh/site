@@ -7,7 +7,7 @@
   // cal plus one transitively imported Worker module and skipped the other 68.
   // contract-tests now executes `tsc --listFilesOnly` and compares the program
   // with the directory, making the scope part of the contract rather than a
-  // comment. The remaining explicit quarantine lives in ts-migration.json.
+  // comment. The completed migration permits no @ts-nocheck opt-outs.
   "compilerOptions": {
     "noEmit": true,
     "allowJs": true,

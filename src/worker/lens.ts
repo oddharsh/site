@@ -1,7 +1,8 @@
 import { BOT_UA, botHeaders } from "./lib/botauth.ts";
 import { cachedRender } from "./lib/cache.ts";
 import { CANONICAL_HOST } from "./lib/const.ts";
-import { fetchFollowingPublicRedirects, privateHostBlocked, readResponseCapped, validateLensTarget } from "./lib/crawl.ts";
+import { fetchFollowingPublicRedirects, privateHostBlocked, validateLensTarget } from "./lib/public-fetch.ts";
+import { readResponseCapped } from "./lib/crawl.ts";
 import { unsafeHtml } from "./lib/html.ts";
 import { lensParseRobots, lensPathMatch, lensRobotsVerdict } from "./lib/robots.ts";
 import { lunaPage } from "./lib/chrome.ts";
@@ -2681,42 +2682,18 @@ export async function lensFetch(targetUrl, env, signal?, accept?) {
     "accept": accept || "text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.7",
     "accept-language": "en-US,en;q=0.9",
   };
-  let isSelf = false;
-  try {
-    const u = new URL(targetUrl);
-    isSelf = u.hostname.toLowerCase() === CANONICAL_HOST && !!(env.SELF_FETCH || env.ASSETS);
-  } catch (_e) {}
-  // Self-dispatch never leaves Cloudflare, so it does not need a wire
-  // signature. Every external target still requires the real AadharshBot key.
-  const headers = await botHeaders(targetUrl, env, { headers: baseHeaders, sign: !isSelf });
-  // Fetching our own hostname over the network loops back through this same
-  // worker, and Cloudflare kills the loop with a 522 — which is why the featured
-  // "Try: aadhar.sh" example (and every self-probe: robots.txt, llms.txt, …) once
-  // rendered the site as down. Dispatch through our own router instead
-  // (SELF_FETCH, injected in index.js): it returns the REAL response an external
-  // agent receives — worker enhancement, markdown negotiation, cache + security
-  // headers, all of it — so a self-scan measures the live surface rather than a
-  // reimplementation of it.
-  //
-  // ASSETS is the fallback only. It serves the PRE-enhancement static file, which
-  // is right for /robots.txt but wrong for "/": the skeleton carries an empty photo
-  // grid and zero alt text, so a self-scan through it under-reported this site's own
-  // image accessibility as 0/12 while the live page ships 13 alt texts.
-  try {
-    const u = new URL(targetUrl);
-    if (u.hostname.toLowerCase() === CANONICAL_HOST) {
-      const selfReq = new Request(u.toString(), { method: "GET", headers });
-      if (env.SELF_FETCH) return await env.SELF_FETCH(selfReq);
-      if (env.ASSETS)     return await env.ASSETS.fetch(selfReq);
-    }
-  } catch (_e) { /* fall through to a normal fetch */ }
-  // Per-hop validation, not redirect:"follow". The allowlist vetted the URL the
-  // visitor typed; without this, one 302 to a blocked host still got fetched and
-  // its body read, and only the discovery fan-out was skipped afterwards. A
-  // refused hop reads as an unreachable target, which is what it is.
+  const target = new URL(targetUrl);
+  // Network self-fetch loops back through this Worker and Cloudflare refuses it.
+  // SELF_FETCH measures the enhanced response; ASSETS is the static fallback.
+  // A binding failure must propagate, never become an unsigned network request.
+  if (target.hostname.toLowerCase() === CANONICAL_HOST && (env.SELF_FETCH || env.ASSETS)) {
+    const headers = await botHeaders(targetUrl, env, { headers: baseHeaders, sign: false });
+    const selfReq = new Request(target.toString(), { method: "GET", headers });
+    return env.SELF_FETCH ? await env.SELF_FETCH(selfReq) : await env.ASSETS.fetch(selfReq);
+  }
   const followed = await fetchFollowingPublicRedirects(
     targetUrl,
-    { method: "GET", headers, signal, cf: { cacheTtl: 0 } },
+    async (candidate) => ({ method: "GET", headers: await botHeaders(candidate, env, { headers: baseHeaders }), signal, cf: { cacheTtl: 0 } }),
     (candidate) => validateLensTarget(candidate),
   );
   if (!followed.ok) return new Response(null, { status: 502, statusText: "Blocked redirect" });
@@ -3073,25 +3050,19 @@ export async function lensFetchAsBot(targetUrl, env, signal, userAgent, accept =
     accept,
     "accept-language": "en-US,en;q=0.9",
   });
-  // same self-dispatch rule as lensFetch: route() gives the real response this
-  // bot identity would actually receive (the worker's UA-conditional branches
-  // included), where ASSETS would hand back the pre-enhancement skeleton and make
-  // every bot look identical for the wrong reason.
-  try {
-    const u = new URL(targetUrl);
-    if (u.hostname.toLowerCase() === CANONICAL_HOST) {
-      const selfReq = new Request(u.toString(), { method: "GET", headers });
-      if (env.SELF_FETCH) return await env.SELF_FETCH(selfReq);
-      if (env.ASSETS)     return await env.ASSETS.fetch(selfReq);
-    }
-  } catch (_e) { /* fall through to a normal fetch */ }
+  // Use the same local dispatch boundary as lensFetch, with this profile's UA.
+  const target = new URL(targetUrl);
+  if (target.hostname.toLowerCase() === CANONICAL_HOST && (env?.SELF_FETCH || env?.ASSETS)) {
+    const selfReq = new Request(target.toString(), { method: "GET", headers });
+    return env.SELF_FETCH ? await env.SELF_FETCH(selfReq) : await env.ASSETS.fetch(selfReq);
+  }
   // Per-hop validation, not redirect:"follow". The allowlist vetted the URL the
   // visitor typed; without this, one 302 to a blocked host still got fetched and
   // its body read, and only the discovery fan-out was skipped afterwards. A
   // refused hop reads as an unreachable target, which is what it is.
   const followed = await fetchFollowingPublicRedirects(
     targetUrl,
-    { method: "GET", headers, signal, cf: { cacheTtl: 0 } },
+    () => ({ method: "GET", headers, signal, cf: { cacheTtl: 0 } }),
     (candidate) => validateLensTarget(candidate),
   );
   if (!followed.ok) return new Response(null, { status: 502, statusText: "Blocked redirect" });

@@ -12,10 +12,10 @@
   // file rather than from this config, so the split costs nothing here.
   //
   // `allowImportingTsExtensions` is load-bearing: reader.js imports
-  // `../../src/worker/lib/crawl.ts` by its real filename, which is the ONE
+  // `../../src/worker/lib/public-fetch.ts` by its real filename, which is the ONE
   // specifier that resolves in both trees (tsconfig.json's header has the long
   // version). Without it tsc rejects that import and never reaches a finding.
-  // Pulling crawl.ts in transitively is correct here rather than the artifact it
+  // Pulling public-fetch.ts in transitively is correct here rather than the artifact it
   // would be under node globals, since both files run on Workers.
   //
   // The program found 6 real diagnostics on its first run, all in reader.js and

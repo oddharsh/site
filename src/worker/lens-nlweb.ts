@@ -28,7 +28,7 @@
 // cached for an hour per origin and query, and the tab never fires on its own.
 // Same reasoning as the Reader lens, one step stronger, because a second fetch
 // of a page costs the origin bandwidth and a second /ask costs them compute.
-import { validateLensTarget } from "./lib/crawl.ts";
+import { validateLensTarget } from "./lib/public-fetch.ts";
 import { foreignNlwebAsk } from "./lib/doors.ts";
 import { jsonResponse } from "./lib/http.ts";
 import { span } from "./lib/trace.ts";

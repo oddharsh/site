@@ -37,7 +37,7 @@
 // with "Incorrect type for map entry '<name>': the provided value is not of
 // type 'function or ExportedHandler'", which is how that rule was learned here.
 import { EXTRACTOR, READER_LIMIT_PER_MIN, READER_NOTE, ReaderError, read } from "./reader.ts";
-import { validateLensTarget } from "../../src/worker/lib/crawl.ts";
+import { validateLensTarget } from "../../src/worker/lib/public-fetch.ts";
 
 export default {
   async fetch(request, env) {

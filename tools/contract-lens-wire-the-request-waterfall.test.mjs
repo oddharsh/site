@@ -212,7 +212,7 @@ test("the wire lens shares the SSRF guard and reaches the browser with nothing b
   // The rule lens-recipes.js is built around: this route points a real browser
   // at a visitor-supplied address, so the ONLY caller byte that may reach it is
   // the URL, after the shared guard has passed it.
-  assert.match(src, /from "\.\/lib\/crawl\.(js|ts)"/, "must import the shared guard, not reimplement it");
+  assert.match(src, /from "\.\/lib\/public-fetch\.(js|ts)"/, "must import the shared guard, not reimplement it");
   assert.doesNotMatch(src, /function\s+validateLensTarget|function\s+privateHostBlocked/,
     "lens-wire.js redefines a guard it is supposed to be importing");
   // Exactly one searchParams read, and it is the url. A second one is how a

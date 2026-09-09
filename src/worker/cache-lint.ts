@@ -25,7 +25,7 @@
 // markdown ask off a warm cache came back HTML. The lint probes it the same
 // behavioral way: ask for a second representation and check whether the answer
 // changed while Vary claims it cannot.
-import { botHeaders } from "./lib/botauth.ts";
+import { botHeaders, signedFetch } from "./lib/botauth.ts";
 import { CANONICAL_HOST } from "./lib/const.ts";
 import { parseCacheControl } from "./dict.ts";
 
@@ -47,11 +47,14 @@ async function probeHeaders(url, env, extraHeaders = {}): Promise<HeaderProbe> {
     };
     let isSelf = false;
     try { isSelf = new URL(url).hostname.toLowerCase() === CANONICAL_HOST && !!(env.SELF_FETCH || env.ASSETS); } catch { /* not self */ }
-    const headers = await botHeaders(url, env, { headers: base, sign: !isSelf });
-    const req = new Request(url, { headers, redirect: "follow" });
-    const res = isSelf
-      ? await (env.SELF_FETCH ? env.SELF_FETCH(req) : env.ASSETS.fetch(req))
-      : await fetch(url, { headers, redirect: "follow", signal: controller.signal, cf: { cacheTtl: 0 } });
+    let res;
+    if (isSelf) {
+      const headers = await botHeaders(url, env, { headers: base, sign: false });
+      const req = new Request(url, { headers, redirect: "follow" });
+      res = await (env.SELF_FETCH ? env.SELF_FETCH(req) : env.ASSETS.fetch(req));
+    } else {
+      res = await signedFetch(url, env, { headers: base, signal: controller.signal });
+    }
     const responseHeaders: Record<string, string> = {};
     for (const [key, value] of res.headers) responseHeaders[key.toLowerCase()] = value;
     try { await res.body?.cancel(); } catch { /* already drained */ }
