@@ -85,6 +85,18 @@ bun tools/gen-xp.ts --check
 bun test tools/contract-xp-components.test.mjs
 ```
 
+## Notepad behavior typing
+
+The existing Notepad menu now declares its action/separator union, optional
+boolean checkbox reader, callback signature, menu definition and nullable open
+state. Its literal-authored dialog controls and attached menu-button parent have
+explicit DOM types. These annotations remove all seven existing Notepad type
+errors; the browser ratchet records 157 remaining errors in other files.
+They compile away: the production script and hashed URL remain unchanged. The
+served `notepad.src.js` source view includes the annotations. This is a checked
+boundary for the later Menu component, not shared rendering or new keyboard
+behavior, and does not claim a runtime speedup.
+
 ## Full component scope still to implement
 
 - Apply the native rendering path to static page compilation, and extend the

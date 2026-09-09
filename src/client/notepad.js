@@ -23,6 +23,11 @@
   "use strict";
   var D = document;
 
+  /** @typedef {{ label: string, acc?: string, check?: () => boolean, fn: () => void }} MenuAction */
+  /** @typedef {{ name: string, items: (MenuAction | "sep")[] }} MenuDefinition */
+  /** @typedef {{ btn: HTMLElement, drop: HTMLElement }} OpenMenu */
+
+  /** @param {string} h */
   function el(h) { var t = D.createElement("template"); t.innerHTML = h.trim(); return /** @type {HTMLElement} */ (t.content.firstChild); }
   // Intentional twins of nav.js's el()/esc(). nav.js and notepad.js are separate
   // top-level scripts, each minified on its own (build.ts runs esbuild `transform`,
@@ -31,6 +36,7 @@
   // deferred BEFORE nav.js, so nav's global isn't there yet when this runs. Keep the
   // two byte-identical instead: esc() escapes the double quote too, so it stays safe
   // in an attribute even though today's callers only use it in text.
+  /** @param {string} s */
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
   // Note popovers used to show and hide inside a same-document View Transition,
   // each one given its own `axp-note-<id>` transition name. That came out with the
@@ -118,12 +124,14 @@
       var back = el('<div class="np-modal-back"></div>');
       function close(e) { if (e) e.preventDefault(); box.remove(); back.remove(); }
       back.addEventListener("click", close);
-      box.querySelector(".close").addEventListener("click", close);
-      box.querySelector(".np-btn").addEventListener("click", close);
+      // Both controls are authored in the literal above, before this detached box is exposed.
+      /** @type {HTMLAnchorElement} */ (box.querySelector(".close")).addEventListener("click", close);
+      /** @type {HTMLButtonElement} */ (box.querySelector(".np-btn")).addEventListener("click", close);
       D.body.appendChild(back); D.body.appendChild(box);
       /** @type {HTMLElement} */ (box.querySelector(".np-btn")).focus();
     }
 
+    /** @type {MenuDefinition[]} */
     var MENUS = [
       { name: "File", items: [
         { label: "New", acc: "Ctrl+N", fn: newDoc },
@@ -144,6 +152,7 @@
     ];
 
     // ── menu bar ───────────────────────────────────────────────────────────────
+    /** @type {OpenMenu | null} */
     var openMenu = null;
     function closeMenu() { if (openMenu) { openMenu.btn.setAttribute("aria-expanded", "false"); openMenu.drop.remove(); openMenu = null; } }
     function buildMenus() {
@@ -158,6 +167,7 @@
       D.addEventListener("click", closeMenu);
       D.addEventListener("keydown", function (e) { if (e.key === "Escape") closeMenu(); });
     }
+    /** @param {MenuDefinition} m @param {HTMLElement} btn */
     function open(m, btn) {
       var drop = el('<div class="np-drop" role="menu"></div>');
       m.items.forEach(function (it) {
@@ -171,7 +181,8 @@
         drop.appendChild(row);
       });
       btn.setAttribute("aria-expanded", "true");
-      btn.parentNode.appendChild(drop);
+      // Only listeners on buttons already appended to menubar call open().
+      /** @type {HTMLElement} */ (btn.parentNode).appendChild(drop);
       drop.style.left = btn.offsetLeft + "px";
       openMenu = { btn: btn, drop: drop };
     }
