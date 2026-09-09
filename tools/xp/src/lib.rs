@@ -5,6 +5,7 @@ use serde_json::{Map, Value};
 enum Kind {
     Text,
     Html,
+    Count,
     Rows(&'static Component),
 }
 enum Default {
@@ -183,6 +184,49 @@ const EXPLORER_LIST: Component = Component {
     ],
 };
 
+const TASKBAR_PIN: Component = Component {
+    name: "TaskbarPin",
+    fields: &[
+        Field {
+            name: "href",
+            kind: Kind::Text,
+            default: Default::Required,
+        },
+        Field {
+            name: "label",
+            kind: Kind::Text,
+            default: Default::Required,
+        },
+        Field {
+            name: "hint",
+            kind: Kind::Text,
+            default: Default::Required,
+        },
+        Field {
+            name: "count",
+            kind: Kind::Count,
+            default: Default::Required,
+        },
+        Field {
+            name: "icon",
+            kind: Kind::Html,
+            default: Default::Required,
+        },
+    ],
+    parts: &[
+        Part::Literal("<a class=\"axp-pin\" title=\""),
+        Part::Value("hint"),
+        Part::Literal("\" href=\""),
+        Part::Value("href"),
+        Part::Literal("\" data-count=\""),
+        Part::Value("count"),
+        Part::Literal("\"><span class=\"fav\" aria-hidden=\"true\">"),
+        Part::Value("icon"),
+        Part::Literal("</span><span class=\"lbl\">"),
+        Part::Value("label"),
+        Part::Literal("</span></a>"),
+    ],
+};
 const TASKBAR: Component = Component { name: "Taskbar", fields: &[
     Field { name: "pins", kind: Kind::Html, default: Default::Required },
     Field { name: "tray", kind: Kind::Html, default: Default::Required },
@@ -233,6 +277,9 @@ pub fn render_explorer_list(input: &Map<String, Value>) -> Result<String, String
 pub fn render_taskbar(input: &Map<String, Value>) -> Result<String, String> {
     render(&TASKBAR, input)
 }
+pub fn render_taskbar_pin(input: &Map<String, Value>) -> Result<String, String> {
+    render(&TASKBAR_PIN, input)
+}
 fn render(component: &'static Component, input: &Map<String, Value>) -> Result<String, String> {
     for key in input.keys() {
         if !component.fields.iter().any(|f| f.name == key) {
@@ -242,10 +289,20 @@ fn render(component: &'static Component, input: &Map<String, Value>) -> Result<S
     let mut values: std::collections::BTreeMap<&str, Slot> = std::collections::BTreeMap::new();
     for f in component.fields {
         let value = match input.get(f.name) {
-            Some(Value::String(value)) if !matches!(f.kind, Kind::Rows(_)) => match f.kind {
+            Some(Value::Number(value)) if matches!(f.kind, Kind::Count) => {
+                let number = value
+                    .as_f64()
+                    .ok_or("count must be a safe nonnegative integer")?;
+                if !(0.0..=9_007_199_254_740_991.0).contains(&number) || number.fract() != 0.0 {
+                    return Err("count must be a safe nonnegative integer".into());
+                }
+                Slot::Text((number as u64).to_string())
+            }
+            Some(Value::String(value)) if matches!(f.kind, Kind::Text | Kind::Html) => match f.kind
+            {
                 Kind::Text => Slot::Text(value.clone()),
                 Kind::Html => Slot::Html(value.clone()),
-                Kind::Rows(_) => unreachable!("guard excludes rows"),
+                Kind::Rows(_) | Kind::Count => unreachable!("guard requires text or HTML"),
             },
             Some(Value::Array(rows)) if matches!(f.kind, Kind::Rows(_)) => {
                 let Kind::Rows(row) = f.kind else {
@@ -319,7 +376,7 @@ pub fn explorer_list_typescript() -> String {
     module(&[&EXPLORER_ITEM, &EXPLORER_LIST])
 }
 pub fn taskbar_typescript() -> String {
-    module(&[&TASKBAR])
+    module(&[&TASKBAR_PIN, &TASKBAR])
 }
 fn module(components: &[&'static Component]) -> String {
     let empty = if components.iter().any(|c| {
@@ -353,6 +410,7 @@ fn typescript_component(component: &'static Component) -> String {
             },
             match f.kind {
                 Kind::Text => "string".to_string(),
+                Kind::Count => "number".to_string(),
                 Kind::Html => "Html".to_string(),
                 Kind::Rows(row) => format!("{}Options[]", row.name),
             }
@@ -371,10 +429,13 @@ fn typescript_component(component: &'static Component) -> String {
         }
         out.push_str(",\n");
     }
-    out.push_str(&format!(
-        "}}: {}Options): Html {{\n  return html`",
-        component.name
-    ));
+    out.push_str(&format!("}}: {}Options): Html {{\n", component.name));
+    for f in component.fields {
+        if matches!(f.kind, Kind::Count) {
+            out.push_str(&format!("  if (!Number.isSafeInteger({0}) || {0} < 0) throw new Error(\"count must be a safe nonnegative integer\");\n", f.name));
+        }
+    }
+    out.push_str("  return html`");
     for part in component.parts {
         match part {
             Part::OrText(name, fallback) => out.push_str(&format!(
@@ -392,7 +453,7 @@ fn typescript_component(component: &'static Component) -> String {
                 _ => out.push_str(&format!("${{{name}}}")),
             },
             Part::Prefix(name) => match field(component, name).kind {
-                Kind::Rows(_) => panic!("row lists cannot have a prefix"),
+                Kind::Rows(_) | Kind::Count => panic!("row lists and counts cannot have a prefix"),
                 Kind::Text => out.push_str(&format!("${{{name} ? \" \" + {name} : \"\"}}")),
                 Kind::Html => out.push_str(&format!(
                     "${{{name} === EMPTY ? EMPTY : html` ${{{name}}}`}}"

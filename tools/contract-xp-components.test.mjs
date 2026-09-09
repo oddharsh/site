@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { Window } from "../src/worker/lib/xp/window.ts";
 import { PropertySheet } from "../src/worker/lib/xp/property-sheet.ts";
 import { ExplorerList } from "../src/worker/lib/xp/explorer-list.ts";
-import { Taskbar } from "../src/worker/lib/xp/taskbar.ts";
+import { Taskbar, TaskbarPin } from "../src/worker/lib/xp/taskbar.ts";
 import { html, Html } from "../src/worker/lib/html.ts";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -100,6 +100,24 @@ test("Taskbar shares native frame semantics with the generated desktop component
     assert.equal(error.stdout, "");
     return true;
   });
+});
+
+test("TaskbarPin validates numeric counts in both runtimes and escapes labels", () => {
+  const base = { href: '/?q="&x=1', hint: "I'm <here>", label: 'Snow 雪 "tea"', icon: '<img src="/icons.svg#pin" alt="">' };
+  const cases = [0, -0, 1, 25, Number.MAX_SAFE_INTEGER].map((count) => ({ ...base, count }));
+  const expected = cases.map((value) => String(TaskbarPin({ ...value, icon: new Html(value.icon) })));
+  assert.deepEqual(JSON.parse(native("render-taskbar-pin-batch", JSON.stringify(cases))), expected);
+  assert.ok(expected[0].includes('title="I&#39;m &lt;here&gt;"'));
+  assert.ok(expected[0].includes('data-count="0"'));
+  assert.ok(expected[0].includes('<span class="lbl">Snow 雪 &quot;tea&quot;</span>'));
+  for (const count of [-1, 0.5, Number.MAX_SAFE_INTEGER + 1, NaN, Infinity]) {
+    assert.throws(() => TaskbarPin({ ...base, icon: new Html(base.icon), count }), /safe nonnegative integer/);
+    assert.throws(() => native("render-taskbar-pin-batch", JSON.stringify([cases[0], { ...base, count }])), (error) => {
+      assert.ok(error instanceof Error && "stdout" in error);
+      assert.equal(error.stdout, "");
+      return true;
+    });
+  }
 });
 
 test("ExplorerList preserves native links, glyph fallback, and row ordering", () => {

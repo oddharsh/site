@@ -17,7 +17,7 @@ import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { readManifest } from "../../tools/gen-manifest.ts";
 import { DESKTOP, PROFILES, SECTION_ICONS, SPECULATION, TASKBAR, TRAY_ITEMS } from "./shell-data.ts";
-import { Taskbar } from "../../src/worker/lib/xp/taskbar.ts";
+import { Taskbar, TaskbarPin } from "../../src/worker/lib/xp/taskbar.ts";
 import { unsafeHtml } from "../../src/worker/lib/html.ts";
 
 const TOP_OPEN = "<!-- axp:desktop -->";
@@ -91,9 +91,8 @@ export function renderDesktopArtifacts(surfaces = readManifest().surfaces) {
 
   const pinsHtml = TASKBAR.map((item) => {
     const name = `pin-${item.label.replace(/\s+/g, "-")}`;
-    return `<a class="axp-pin" title="${esc(item.hint)}" href="${esc(item.path)}" data-count="${counts.get(item.path) || 0}">`
-      + `<span class="fav" aria-hidden="true">${spriteRef(name, SECTION_ICONS[item.label])}</span>`
-      + `<span class="lbl">${esc(item.label)}</span></a>`;
+    return String(TaskbarPin({ href: item.path, hint: item.hint, label: item.label,
+      count: counts.get(item.path) || 0, icon: unsafeHtml(spriteRef(name, SECTION_ICONS[item.label])) }));
   }).join("");
 
   const trayHtml = '<div id="axp-tray"><button id="axp-sound" type="button" hidden></button>'
