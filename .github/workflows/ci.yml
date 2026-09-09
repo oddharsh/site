@@ -96,6 +96,13 @@ jobs:
       - name: Check photo asset invariants
         run: bun run photos:check
 
+      - name: Test native photo processing
+        # Run from the repository root so rust-toolchain.toml selects the same
+        # compiler used by the local photo pipeline.
+        run: |
+          cargo test --locked --manifest-path tools/photos/zenc/Cargo.toml
+          cargo clippy --locked --manifest-path tools/photos/zenc/Cargo.toml -- -D warnings
+
       # Does every committed derived artifact still describe the bytes it was made
       # from? photos:check above cannot answer that for the histograms, because it
       # compares histograms.json against images/meta/, which the build derives FROM

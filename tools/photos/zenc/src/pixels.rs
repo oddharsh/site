@@ -28,7 +28,7 @@ use image::{DynamicImage, GrayImage, ImageBuffer, ImageDecoder, ImageReader, Lum
 use std::path::Path;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Transfer {
+pub enum TransferOption {
     /// The sRGB piecewise curve. The default, and correct for everything here
     /// except the Monochrom files.
     Srgb,
@@ -38,6 +38,54 @@ pub enum Transfer {
     /// Read the curve from the file's own ICC profile. The default, and what
     /// `--transfer` omitted means. See `classify`.
     Auto,
+}
+
+/// A resolved encoding curve. A decoded frame cannot carry `Auto`.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Transfer {
+    Srgb,
+    G22,
+}
+
+impl TransferOption {
+    fn resolve(self, icc: Option<&[u8]>) -> Transfer {
+        match self {
+            Self::Auto => classify(icc),
+            Self::Srgb => Transfer::Srgb,
+            Self::G22 => Transfer::G22,
+        }
+    }
+}
+
+/// Validated EXIF display transform, parsed once at the command boundary.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[repr(u8)]
+pub enum Orientation {
+    Upright = 1,
+    MirrorHorizontal,
+    Rotate180,
+    MirrorVertical,
+    Transpose,
+    Rotate90,
+    Transverse,
+    Rotate270,
+}
+
+impl TryFrom<u8> for Orientation {
+    type Error = &'static str;
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            1 => Ok(Self::Upright),
+            2 => Ok(Self::MirrorHorizontal),
+            3 => Ok(Self::Rotate180),
+            4 => Ok(Self::MirrorVertical),
+            5 => Ok(Self::Transpose),
+            6 => Ok(Self::Rotate90),
+            7 => Ok(Self::Transverse),
+            8 => Ok(Self::Rotate270),
+            _ => Err("--orient takes an EXIF orientation, 1-8"),
+        }
+    }
 }
 
 /// Which curve a profile declares, decided from its TONE REPRODUCTION CURVE
@@ -98,14 +146,14 @@ impl Transfer {
     fn dec8(self, c: u8) -> f32 {
         match self {
             Transfer::G22 => g22_to_linear(c),
-            _ => srgb_to_linear(c),
+            Transfer::Srgb => srgb_to_linear(c),
         }
     }
     fn dec16(self, c: u16) -> f32 {
         let s = c as f32 / 65535.0;
         match self {
             Transfer::G22 => s.powf(2.2),
-            _ => {
+            Transfer::Srgb => {
                 if s <= 0.040_449_936 { s / 12.92 } else { ((s + 0.055) / 1.055).powf(2.4) }
             }
         }
@@ -113,7 +161,7 @@ impl Transfer {
     fn enc(self, l: f32) -> u8 {
         match self {
             Transfer::G22 => linear_to_g22(l),
-            _ => linear_to_srgb(l),
+            Transfer::Srgb => linear_to_srgb(l),
         }
     }
 }
@@ -154,7 +202,7 @@ fn channel_equal<T: Copy + PartialEq>(raw: &[T]) -> bool {
     raw.chunks_exact(3).all(|p| p[0] == p[1] && p[1] == p[2])
 }
 
-pub fn load_linear(path: &str, t: Transfer) -> Result<Frame, String> {
+pub fn load_linear(path: &str, t: TransferOption) -> Result<Frame, String> {
     // `image::open` applies a default allocation ceiling that a full-resolution
     // intermediate blows straight through: sips writes a 7728x5152 HIF as a
     // 311MB 16-bit TIFF, and the decode is refused with "Memory limit exceeded"
@@ -173,7 +221,7 @@ pub fn load_linear(path: &str, t: Transfer) -> Result<Frame, String> {
     // A 311MB TIFF is the test that keeps that honest.
     let mut dec = r.into_decoder().map_err(|e| format!("cannot decode {path}: {e}"))?;
     let icc = dec.icc_profile().ok().flatten();
-    let t = if t == Transfer::Auto { classify(icc.as_deref()) } else { t };
+    let t = t.resolve(icc.as_deref());
     let img = DynamicImage::from_decoder(dec).map_err(|e| format!("cannot decode {path}: {e}"))?;
     let (w, h) = (img.width(), img.height());
     if w == 0 || h == 0 {
@@ -240,10 +288,11 @@ pub fn load_linear(path: &str, t: Transfer) -> Result<Frame, String> {
 /// the constraint edge is not iMCU-aligned: measured on a 2000x1333
 /// intermediate, `-rotate 90` shifted the whole frame 5px and garbled a
 /// 5-column strip, and the damage shipped in one photo's tiles.
-pub fn orient(f: &Frame, o: u8) -> Frame {
-    if o <= 1 || o > 8 {
-        return Frame { w: f.w, h: f.h, gray: f.gray, data: f.data.clone(), transfer: f.transfer };
+pub fn orient(f: Frame, orientation: Orientation) -> Frame {
+    if orientation == Orientation::Upright {
+        return f;
     }
+    let o = orientation as u8;
     let ch = if f.gray { 1usize } else { 3 };
     let (sw, sh) = (f.w as usize, f.h as usize);
     let swapped = o >= 5;
@@ -308,11 +357,11 @@ pub fn parse_filter(s: Option<&str>) -> Result<Filter, String> {
     }
 }
 
-pub fn parse_transfer(s: Option<&str>) -> Result<Transfer, String> {
+pub fn parse_transfer(s: Option<&str>) -> Result<TransferOption, String> {
     match s {
-        Some("srgb") => Ok(Transfer::Srgb),
-        Some("g22") => Ok(Transfer::G22),
-        Some("auto") => Ok(Transfer::Auto),
+        Some("srgb") => Ok(TransferOption::Srgb),
+        Some("g22") => Ok(TransferOption::G22),
+        Some("auto") => Ok(TransferOption::Auto),
         other => Err(format!("--transfer wants auto|srgb|g22, got {other:?}")),
     }
 }
@@ -334,6 +383,29 @@ pub fn crop(f: &Frame, x: u32, y: u32, w: u32, h: u32) -> Frame {
 mod tests {
     use super::*;
 
+    #[test]
+    fn upright_orientation_keeps_the_decoded_allocation() {
+        let f = tiny();
+        let allocation = f.data.as_ptr();
+        let out = orient(f, Orientation::Upright);
+        assert_eq!(out.data.as_ptr(), allocation);
+        assert_eq!(out.data, vec![1., 2., 3., 4., 5., 6.]);
+    }
+
+    #[test]
+    fn orientation_boundary_rejects_every_invalid_exif_value() {
+        for value in 0..=u8::MAX {
+            assert_eq!(Orientation::try_from(value).is_ok(), (1..=8).contains(&value));
+        }
+    }
+
+    #[test]
+    fn explicit_transfer_overrides_profile_detection() {
+        assert_eq!(TransferOption::Auto.resolve(None), Transfer::Srgb);
+        assert_eq!(TransferOption::G22.resolve(None), Transfer::G22);
+        assert_eq!(TransferOption::Srgb.resolve(None), Transfer::Srgb);
+    }
+
     fn tiny() -> Frame {
         // 3x2, values chosen so every position is distinct
         Frame { w: 3, h: 2, gray: true, data: vec![1., 2., 3., 4., 5., 6.], transfer: Transfer::Srgb }
@@ -345,7 +417,6 @@ mod tests {
     /// pipeline's verification, since sips is not available to cargo test).
     #[test]
     fn orient_cases_match_hand_computed_answers() {
-        let f = tiny();
         // src:  1 2 3
         //       4 5 6
         let cases: [(u8, u32, u32, Vec<f32>); 8] = [
@@ -359,7 +430,7 @@ mod tests {
             (8, 2, 3, vec![3., 6., 2., 5., 1., 4.]),         // rot 270 CW
         ];
         for (o, w, h, want) in cases {
-            let r = orient(&f, o);
+            let r = orient(tiny(), Orientation::try_from(o).unwrap());
             assert_eq!((r.w, r.h), (w, h), "orient {o} dims");
             assert_eq!(r.data, want, "orient {o} samples");
         }
@@ -372,7 +443,7 @@ mod tests {
     fn orientations_compose_back_to_identity() {
         let f = tiny();
         for (o, inv) in [(2, 2), (3, 3), (4, 4), (5, 5), (6, 8), (7, 7), (8, 6)] {
-            let r = orient(&orient(&f, o), inv);
+            let r = orient(orient(tiny(), Orientation::try_from(o).unwrap()), Orientation::try_from(inv).unwrap());
             assert_eq!(r.data, f.data, "orient {o} then {inv} is not identity");
         }
     }
@@ -389,7 +460,7 @@ mod tests {
         for i in 0..w * h {
             data.extend_from_slice(&[i as f32, i as f32 + 0.25, i as f32 + 0.5]);
         }
-        let out = orient(&Frame { w, h, gray: false, data, transfer: Transfer::Srgb }, 6);
+        let out = orient(Frame { w, h, gray: false, data, transfer: Transfer::Srgb }, Orientation::Rotate90);
         assert_eq!((out.w, out.h), (h, w));
         for px in out.data.chunks_exact(3) {
             assert_eq!(px[1], px[0] + 0.25, "green separated from its pixel");
@@ -491,7 +562,7 @@ mod gray_tests {
         let mut path = std::env::temp_dir();
         path.push(format!("zenc-gray-{name}-{}.png", std::process::id()));
         write(&path);
-        let f = load_linear(path.to_str().unwrap(), Transfer::Srgb).expect("fixture must load");
+        let f = load_linear(path.to_str().unwrap(), TransferOption::Srgb).expect("fixture must load");
         std::fs::remove_file(&path).ok();
         f
     }
@@ -577,7 +648,7 @@ mod gray_tests {
         let mut out = std::env::temp_dir();
         out.push(format!("zenc-gray-save-out-{}.png", std::process::id()));
         save(&f, out.to_str().unwrap()).expect("save must succeed");
-        let back = load_linear(out.to_str().unwrap(), Transfer::Srgb).expect("reload");
+        let back = load_linear(out.to_str().unwrap(), TransferOption::Srgb).expect("reload");
         std::fs::remove_file(&out).ok();
         assert!(back.gray, "a gray frame must not widen on the way to disk");
         assert_eq!(back.data, f.data, "the round trip must be exact at 8 bits");

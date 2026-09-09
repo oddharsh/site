@@ -17,7 +17,7 @@
 // `--transfer` names the SOURCE's curve (srgb, or g22 for the Monochrom's
 // Gray Gamma 2.2) and is used for decode and encode both, so unaveraged values
 // pass through exactly.
-use crate::pixels::{crop, load_linear, orient, parse_transfer, save, scale, Transfer};
+use crate::pixels::{crop, load_linear, orient, parse_transfer, save, scale, Orientation, TransferOption};
 use halflight::Filter;
 
 pub fn run(args: &[String]) -> i32 {
@@ -25,8 +25,8 @@ pub fn run(args: &[String]) -> i32 {
     let mut sizes: Vec<u32> = Vec::new();
     let mut outs: Vec<&str> = Vec::new();
     let mut filter = Filter::Lanczos3;
-    let mut transfer = Transfer::Auto;
-    let mut exif: u8 = 1;
+    let mut transfer = TransferOption::Auto;
+    let mut exif = Orientation::Upright;
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
@@ -60,8 +60,8 @@ pub fn run(args: &[String]) -> i32 {
             }
             "--orient" => {
                 i += 1;
-                match args.get(i).and_then(|s| s.parse::<u8>().ok()) {
-                    Some(n) if (1..=8).contains(&n) => exif = n,
+                match args.get(i).and_then(|s| s.parse::<u8>().ok()).and_then(|n| Orientation::try_from(n).ok()) {
+                    Some(n) => exif = n,
                     _ => return err("--orient takes an EXIF orientation, 1-8"),
                 }
             }
@@ -82,8 +82,8 @@ pub fn run(args: &[String]) -> i32 {
         Err(e) => return err(&e),
     };
     // Orient BEFORE the resample, so the crop math sees the frame the viewer
-    // will. For orientation 1 this is a straight copy.
-    let src = orient(&src, exif);
+    // will. For orientation 1 the decoded buffer moves without copying.
+    let src = orient(src, exif);
     let (w, h) = (src.w, src.h);
 
     for (size, out) in sizes.iter().copied().zip(outs.iter()) {
