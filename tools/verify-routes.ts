@@ -275,6 +275,7 @@ const ROUTES = [
 
   { path: "/search", status: 200, ct: "text/html", marker: "Search aadhar.sh", fullPage: true },
   { path: "/search.json?q=photo", status: 200, ct: "application/json" },
+  { path: "/search.json?q=scheduler.yield", status: 200, ct: "application/json", marker: '"url":"/garage/horizon"' },
 
   // /ask — NLWeb. Four rows, because the ways this endpoint can be wrong are not
   // reachable from one request. Streaming DEFAULTS ON, so the bare row asserts

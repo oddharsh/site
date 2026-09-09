@@ -17,6 +17,8 @@
 //      content; its label without its behavior is a lie an agent would read as
 //      fact. The prose AROUND the demo still converts, which is the honest part.
 
+import { closeTagSource } from "./html-raw-text.ts";
+
 // schemes that execute rather than address. Read the way a BROWSER reads one
 // rather than the way a source file writes one: it strips leading C0 controls
 // and space before the scheme and then matches case-insensitively, so
@@ -221,7 +223,7 @@ function tokenize(html) {
 
     // raw-text elements swallow everything up to their matching close tag
     if (RAW_TEXT.has(tag.name) && !tag.self) {
-      const closeRe = new RegExp(`</${tag.name}\\s*>`, "i");
+      const closeRe = new RegExp(closeTagSource(tag.name), "i");
       const rest = html.slice(i);
       const m = closeRe.exec(rest);
       const body = m ? rest.slice(0, m.index) : rest;
@@ -580,15 +582,34 @@ function renderTable(table, ctx) {
 
 // ── public API ──────────────────────────────────────────────────────────────
 
+// Search needs the same content boundary as the Markdown twin, with readable
+// words rather than link syntax. Preserve inline adjacency (micro<em>scope</em>)
+// while separating block boxes, just as the Markdown renderer does.
+function renderText(nodes, ctx) {
+  let out = "";
+  for (const n of nodes) {
+    if (isText(n)) { out += n.value; continue; }
+    if (dropped(n)) continue;
+    if (n.name === "img") { out += ` ${n.attrs.alt || ""} `; continue; }
+    if (n.name === "br" || n.name === "hr") { out += " "; continue; }
+    const inner = renderText(n.children, ctx);
+    const block = BLOCK.has(n.name) || (n.attrs.class || "").split(/\s+/).some((c) => ctx.blockClasses.has(c));
+    out += block ? ` ${inner} ` : inner;
+  }
+  return out;
+}
+
 /** Parse a full HTML document into { title, description, canonical, status, body }. */
-export function readDocument(html, { origin = "https://aadhar.sh" } = {}) {
+export function readDocument(html, { origin = "https://aadhar.sh", format = "markdown" }: { origin?: string; format?: "markdown" | "text" } = {}) {
   const root = parse(html);
   const meta = collectMeta(root);
   const content = findContent(root);
   const ctx = { origin, blockClasses: collectBlockClasses(html) };
   return {
     ...meta,
-    body: content ? renderBlocks(content.children, ctx).replace(/\n{3,}/g, "\n\n").trim() : "",
+    body: format === "text"
+      ? squeeze(renderText(content.children, ctx)).trim()
+      : renderBlocks(content.children, ctx).replace(/\n{3,}/g, "\n\n").trim(),
   };
 }
 

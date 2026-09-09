@@ -10,6 +10,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { closeTagSource, stripRawText } from "./lib/html-raw-text.ts";
+import { readDocument } from "./lib/html-to-md.ts";
 
 // The four shapes the HTML tokenizer accepts as a close, plus the one it does
 // not. `</scriptfoo>` closes an element called scriptfoo, so reading it as a
@@ -35,6 +36,17 @@ test("stripRawText removes the element whatever shape its end tag takes", () => 
   }
   assert.equal(stripRawText("keep<style>a{b:c} LEAK</style >tail", "style").replace(/\s+/g, " "),
     "keep tail", "style too");
+});
+
+test("document extraction keeps prose after each legal raw-text close", () => {
+  for (const [, close] of CLOSES) {
+    for (const format of /** @type {const} */ (["markdown", "text"])) {
+      const doc = readDocument(`<body><main><p>Before</p><script>SECRET${close}<p>After</p></main></body>`, { format });
+      assert.match(doc.body, /Before/);
+      assert.match(doc.body, /After/);
+      assert.doesNotMatch(doc.body, /SECRET/);
+    }
+  }
 });
 
 // generate-search-index feeds /search and the schema.org descriptions /ask
