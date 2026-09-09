@@ -8,7 +8,7 @@
 // computes the thumbprint (oddharsh/doors, agent-identity). This pins the
 // property the verifier keys on, in every place it has to hold.
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
-import { jwkThumbprint } from "../src/worker/lib/botauth.ts";
+import { botHeaders, jwkThumbprint } from "../src/worker/lib/botauth.ts";
 
 const MEDIA_TYPE = "application/http-message-signatures-directory+json";
 
@@ -30,9 +30,20 @@ test("every published key's kid is its thumbprint", async () => {
 });
 
 test("the signer derives keyid from the key rather than reading a label", async () => {
-  const src = await readFile(new URL("src/worker/lib/botauth.ts", ROOT), "utf8");
-  assert.match(src, /paramsFor\(created, await jwkThumbprint\(jwk\), "ed25519"\)/, "keyid must be derived by jwkThumbprint at signing time");
-  assert.doesNotMatch(src, /jwk\.kid\s*\|\|/, "a typed kid must never be the fallback for keyid again");
+  // Public test key and expected thumbprint from RFC 8037 A.1/A.3:
+  // https://www.rfc-editor.org/rfc/rfc8037.txt
+  const jwk = {
+    kty: "OKP", crv: "Ed25519",
+    d: "nWGxne_9WmC6hEr0kuwsxERJxWl7MmkZcDusAxyuf2A",
+    x: "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo",
+  };
+  for (const kid of [undefined, "not-the-thumbprint"]) {
+    const headers = await botHeaders("https://example.com/", {
+      RN_SIGNING_KEY_JWK: JSON.stringify({ ...jwk, kid }),
+    });
+    assert.match(headers.get("signature-input") || "",
+      /;keyid="kPrK_qmxVWaYVA9wwBF6Iuo3vVzz7TxHCTwXBygrS4k";alg="ed25519";/);
+  }
 });
 
 test("the directory is served as the draft's media type, and advertised as such", async () => {
