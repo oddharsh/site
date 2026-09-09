@@ -5,6 +5,7 @@ import { execFileSync } from "node:child_process";
 import { brotliDecompressSync } from "node:zlib";
 import { fileURLToPath } from "node:url";
 import { parseHTML } from "../src/dom.ts";
+import { collectControlLabels } from "../src/reader.ts";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const manifest = fileURLToPath(new URL("../native/Cargo.toml", import.meta.url));
@@ -17,15 +18,21 @@ execFileSync("cargo", ["build", "--quiet", "--release", "--locked", "--manifest-
   cwd: root, timeout: 120_000,
 });
 
-test("native metadata preserves corpus titles, meta tags, and links", { timeout: 30_000 }, () => {
+test("native document preserves corpus metadata and source controls", { timeout: 30_000 }, () => {
   const fixtures = readdirSync(corpus).filter((file) => file.endsWith(".html.br"));
   assert.ok(fixtures.length >= 10);
-  for (const fixture of fixtures) {
-    const html = brotliDecompressSync(readFileSync(new URL(fixture, corpus))).toString("utf8");
-    const native = JSON.parse(execFileSync("cargo", ["run", "--quiet", "--release", "--locked", "--manifest-path", manifest], {
+  const cases = fixtures.map((fixture) => ({ fixture,
+    html: brotliDecompressSync(readFileSync(new URL(fixture, corpus))).toString("utf8") }));
+  cases.push({ fixture: "nested labels and foreign titles", html:
+    "<html><head></head><body><svg><title>A <span>snow &amp; tea</span> end</title></svg><button> Open <b>file</b> </button><input type=submit value='Send now'><button>Open file</button><button value='Wrong fallback'> </button><div role=button>😀😀</div><template><button>Inert</button></template></body></html>" });
+  for (const { fixture, html } of cases) {
+    const snapshot = JSON.parse(execFileSync("cargo", ["run", "--quiet", "--release", "--locked", "--manifest-path", manifest, "--", "--document"], {
       cwd: root, timeout: 10_000, input: html, encoding: "utf8", maxBuffer: 4 * 1024 * 1024,
     }));
     const { document } = parseHTML(html);
+    const native = snapshot.metadata;
+    assert.deepEqual(snapshot.controlLabels, collectControlLabels(document), fixture);
+    assert.equal(snapshot.controlsTruncated, false, fixture);
     assert.equal(native.title, document.querySelector("title")?.textContent || "", fixture);
     const meta = [...document.querySelectorAll("meta")]
       .filter((el) => (el.hasAttribute("name") || el.hasAttribute("property")) && el.hasAttribute("content"))

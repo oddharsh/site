@@ -1,4 +1,5 @@
 //! Bounded HTML tree construction and metadata projection for native Lens.
+mod controls;
 mod tree;
 use html5ever::{parse_document, tendril::TendrilSink, tree_builder::TreeBuilderOpts, ParseOpts};
 use serde::Serialize;
@@ -45,6 +46,29 @@ pub struct Meta {
 pub struct Link {
     pub rel: String,
     pub href: String,
+}
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentSnapshot {
+    pub metadata: Metadata,
+    pub control_labels: Vec<String>,
+    pub controls_truncated: bool,
+}
+
+/// Collect source evidence before an article selector mutates or filters it.
+/// Metadata and controls share one parsed tree.
+pub fn extract_document(
+    input: impl Read,
+    limits: Limits,
+) -> Result<DocumentSnapshot, ExtractError> {
+    let (tree, bytes) = parse(input, limits)?;
+    let metadata = project_metadata(&tree, bytes, limits);
+    let (control_labels, controls_truncated) = controls::collect(&tree, limits.entries);
+    Ok(DocumentSnapshot {
+        metadata,
+        control_labels,
+        controls_truncated,
+    })
 }
 #[derive(Debug, PartialEq, Eq)]
 pub enum ExtractError {
@@ -133,6 +157,10 @@ fn parse(mut input: impl Read, limits: Limits) -> Result<(Tree, usize), ExtractE
 /// temporarily exceed the node limit. This is not a process RSS limit.
 pub fn extract_metadata(input: impl Read, limits: Limits) -> Result<Metadata, ExtractError> {
     let (tree, input_bytes) = parse(input, limits)?;
+    Ok(project_metadata(&tree, input_bytes, limits))
+}
+
+fn project_metadata(tree: &Tree, input_bytes: usize, limits: Limits) -> Metadata {
     let nodes = tree.nodes.borrow();
     let mut result = Metadata {
         version: 1,
@@ -201,7 +229,7 @@ pub fn extract_metadata(input: impl Read, limits: Limits) -> Result<Metadata, Ex
             _ => {}
         }
     }
-    Ok(result)
+    result
 }
 
 #[cfg(test)]
