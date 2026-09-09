@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve, join } from "node:path";
 import { promisify } from "node:util";
 import type { Artifact, Plan } from "../site/generated/compiler.ts";
+import { asList, asRecord, asText } from "../../src/worker/lib/parse.ts";
 
 const execute = promisify(execFile);
 
@@ -11,10 +12,12 @@ const execute = promisify(execFile);
 export function compilerExecutable(stdout: string): string {
   for (const line of stdout.trim().split("\n").reverse()) {
     if (!line) continue;
-    const message = JSON.parse(line);
-    if (message.reason === "compiler-artifact" && message.target?.name === "site-compiler" &&
-        message.target?.kind?.includes("bin") && typeof message.executable === "string") {
-      return message.executable;
+    const message = asRecord(JSON.parse(line));
+    const target = asRecord(message?.target);
+    const executable = asText(message?.executable);
+    if (message?.reason === "compiler-artifact" && target?.name === "site-compiler" &&
+        asList(target?.kind).includes("bin") && executable) {
+      return executable;
     }
   }
   throw new Error("Cargo returned no site-compiler executable");

@@ -13,3 +13,11 @@ test("native build uses Cargo's executable, including a custom target directory"
     assert.throws(() => compilerExecutable(stdout));
   }
 });
+
+test("native build rejects malformed Cargo executable records", () => {
+  const artifact = { reason: "compiler-artifact", target: { name: "site-compiler", kind: ["bin"] }, executable: "/target/site-compiler" };
+  for (const message of [null, [], { ...artifact, executable: "" }, { ...artifact, executable: 12 },
+    { ...artifact, target: { name: "site-compiler", kind: "bin" } }, { ...artifact, target: null }]) {
+    assert.throws(() => compilerExecutable(JSON.stringify(message)), /no site-compiler executable/);
+  }
+});
