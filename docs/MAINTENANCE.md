@@ -1103,45 +1103,23 @@ sees everything.
 
 ## Remote image pipeline
 
-> Three files cover photos and they do not overlap: this section is the
-> **runbook** (which button, in what order), [PHOTO-PIPELINE.md](PHOTO-PIPELINE.md)
-> is the **input contract** (accepted source formats, the five workflow routines,
-> what lands in git versus what stays in R2), and CLAUDE.md explains the
-> **encoder choices** behind both. Start here; reach for the contract when a
-> source file is unusual or a routine misbehaves.
+Use [Remote photo pipeline](https://github.com/oddharsh/site/actions/workflows/photo-pipeline.yml)
+for rerenders of published photos, metadata refreshes, car images, and encoding
+study samples. [PHOTO-PIPELINE.md](PHOTO-PIPELINE.md) owns the input and artifact
+contracts, including the current limits on fresh-photo ingestion.
 
-The normal photo path is entirely remote:
+1. Put the source objects in `aadhar-photos` before starting the workflow.
+2. Select a routine and enter its exact R2 keys. Use `all` only when the complete
+   published library is intended.
+3. Review the artifact PR, including changed hashes, histogram records, search
+   terms, and derivation locks. Unexpected output or failed encodes stop the job.
+4. Release through the site's normal promotion and ramp. The bundled index and
+   hashes go live with the Worker; no manifest cache-bust step remains.
 
-1. Upload the source object to the aadhar-photos R2 bucket.
-2. Run [Remote photo pipeline](https://github.com/oddharsh/site/actions/workflows/photo-pipeline.yml).
-3. Enter the exact R2 object key(s), or all for a complete thumbnail re-encode.
-4. Review and merge the generated artifact PR through the normal CI and
-   production-promotion path. The deploy IS the go-live: the worker bundles
-   `photo-index.json` + `hashes.json`, so there is no cache to bust and no
-   post-deploy step. (The old "Bust remote photo manifest" workflow retired
-   with the `manifest:images` KV cache, 2026-07-28.)
-
-The photo-processing workflow needs no Cloudflare secret: it reads source
-objects through the public /images/full/<key> route and skips R2 writes.
-
-The GitHub-hosted macOS runner installs the Homebrew tools, builds the `zenc`
-encoder with cargo, runs the selected routine, and discards the source files when
-the job ends. The runner is the only execution host; nothing on the author's
-machine is part of the contract.
-
-Dependabot covers the encoder now: its cargo ecosystem tracks the zenjpeg pin in
-`tools/photos/zenc`, opening a version-bump PR on the weekly cadence alongside
-the Actions, npm, and Pillow layers. This retired the old `Refresh image toolchain`
-workflow that hand-tracked the from-source jpegli commit. Only Homebrew formulas
-(mozjpeg, libavif) fall outside Dependabot and update on their own cadence.
-
-**The AVIF encoder left that ambient set on 2026-08-26.** `tools/photos/libavif/build.sh`
-builds `avifenc` from source at a pinned `LIBAVIF_TAG`, and the photo pipeline
-prefers it over anything on PATH. Dependabot does not track it either, but a pin
-does not drift: bumping it is an edit to a committed script rather than something
-`brew upgrade` can do behind you. That matters because `/i/` is content-addressed,
-so the encoder decides shipped URLs. Brew's `libavif` is still wanted for the
-`/garage/encoding` grid scripts.
+The runner reads source objects through the public photo route and skips R2
+writes. It also has no pre-deploy caption credential, so use local ingestion for
+new uncaptioned photos. The setup below covers that path as well as recovery
+when the remote job is unavailable.
 
 ## Local fallback setup
 
@@ -1163,8 +1141,8 @@ bun run wrangler login                                         # Cloudflare auth
 # the study pages, which are NOT needed to add a photo
 brew install webp ffmpeg                              # cwebp for the encoding grids; ffmpeg for their PNG -> PPM step
 ```
-This is an emergency fallback only. sips is macOS-native (no install), and the
-normal path is the remote workflow above.
+sips is macOS-native and needs no install. Published-photo rerenders can use
+the remote workflow above; fresh ingestion needs the credentials described below.
 
 `export-for-instagram.sh` additionally wants **ssimulacra2** and
 **butteraugli_main**, the two perceptual metrics it searches quality against.
@@ -1183,30 +1161,34 @@ until it was written.
 
 ---
 
-## Add photos (local fallback only)
+## Add photos locally
+
+Use the setup above, R2 upload access, and the Workers AI caption credential
+under [Generate AI alt text](#generate-ai-alt-text-for-the-grid).
 
 ```bash
-# The normal remote path is the Remote photo pipeline workflow above.
-# This local command remains for recovery when Actions or R2 ingress is unavailable.
-./tools/photos/add-photos.sh "/path/to/photo.HIF" [more files...]
-# then it prints the deploy line; run it:
-bun run deploy:direct   # local fallback only; normal production is merge + CI promotion
+bun run derive:check                  # stop on unrelated stale artifacts first
+bun run photos "/path/to/photo.HIF"   # accepts multiple files or directories
+# After photos:check succeeds, record the four regenerated photo derivations:
+for id in images/hashes images/histograms images/alt images/semantics; do
+  bun run derive:check -- --lock --only "$id"
+done
+bun run derive:check
 ```
-- Accepts JPG/PNG/HEIF/HIF. JPGs are uploaded as supplied; HEIF/HIF sources
-  remain archive objects and also produce a full-resolution maximum-quality
-  q100 JPG export as the `/images/full/<stem>.jpg` click target.
-- Emits the 600px JPG fallback, 600px AVIF, and 400px mobile AVIF tiers;
-  writes the stem's entry into `src/worker/photo-index.json` (the
-  committed pool the worker bundles — R2 key, byte size, upload date);
-  regenerates EXIF metadata; bakes the four 64-bin RGB/luminance histograms;
-  and runs `bun run photos:check` as the final gate.
-- A photo appears in the grid at DEPLOY, when its index entry ships with the
-  worker. There is no KV manifest and nothing to bust.
-- A thumbnail can't go stale anymore: its URL is its bytes (`/i/<stem>.<hash8>`). If one looks wrong, re-run `hash-thumbnails.sh`, commit, deploy; a changed file gets a new URL automatically.
-- To REMOVE a photo: delete its `photo-index.json` entry, its `hashes.json`
-  entry, its `/i/` tiers, metadata, and caption, then deploy (photos:check
-  enforces the bijection). Delete the R2 object separately if the original
-  should go too.
+
+Review the tiers, photo index, metadata, captions, search terms, and derivation
+locks in a PR. Release through the [normal promotion and ramp](#cicd-release-path).
+The full-resolution R2 upload happens during ingestion; the grid entry appears
+when the Worker containing its index entry receives traffic.
+
+JPG sources are copied for upload; HEIF/HIF sources produce a full-resolution
+q100 JPEG companion. The original camera files remain on the source drive.
+[PHOTO-PIPELINE.md](PHOTO-PIPELINE.md#artifact-contract) describes the four
+thumbnail tiers and committed records.
+
+To remove a photo, remove its index entry, hash entry, tiers, metadata, caption,
+histogram, and search terms together, then verify the artifact graph. Delete its
+R2 object separately only if the full-resolution copy should also be removed.
 
 ### Regenerate just the EXIF metadata (photos already uploaded)
 ```bash

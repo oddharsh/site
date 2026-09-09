@@ -230,7 +230,7 @@ ZENC_Q=84   # The linear-light geometry preserves high-frequency energy that sip
             # quantization. q84/63 changes one variable instead of two, so the
             # corpus is strictly better than what it replaced rather than better
             # on one axis and worse on another.
-MOZJPEG_DIR="/opt/homebrew/opt/mozjpeg/bin"
+MOZJPEG_DIR="$(brew --prefix mozjpeg)/bin"
 MOZ_JTRAN="$MOZJPEG_DIR/jpegtran"
 
 if [ ! -x "$WRANGLER" ]; then
@@ -752,5 +752,5 @@ node "$PROJECT_DIR/tools/photos/gen-photo-semantics.ts"
 node "$PROJECT_DIR/tools/photos/check-photo-pipeline.ts"
 echo ""
 
-echo "✓ done. deploy with:"
-echo "    bun run deploy:direct"
+echo "✓ photo artifacts generated. Review them and their derivation locks in a PR."
+echo "  release through the site promotion and ramp; see docs/MAINTENANCE.md."
