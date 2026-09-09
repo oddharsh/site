@@ -175,13 +175,14 @@
       "inputs": {
         "paths": [
           "tools/photos/shell-data.ts",
-          "config/site-manifest.json"
+          "config/site-manifest.json",
+          "src/worker/lib/xp/taskbar.ts"
         ]
       },
       "regenerate": "bun tools/photos/gen-desktop-partial.ts",
       "recorded": {
-        "inputs": "a7a19fb979dfe2c9fc402231187092a8b690b5060cf86273e7c2b5cbabacd57a",
-        "count": 2
+        "inputs": "f77343a0cbd334cc34188e47b932a9c572c0f3295ecced4ce67cffa68a2b7d43",
+        "count": 3
       }
     },
     {

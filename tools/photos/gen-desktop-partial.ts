@@ -17,6 +17,8 @@ import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { readManifest } from "../../tools/gen-manifest.ts";
 import { DESKTOP, PROFILES, SECTION_ICONS, SPECULATION, TASKBAR, TRAY_ITEMS } from "./shell-data.ts";
+import { Taskbar } from "../../src/worker/lib/xp/taskbar.ts";
+import { unsafeHtml } from "../../src/worker/lib/html.ts";
 
 const TOP_OPEN = "<!-- axp:desktop -->";
 const TOP_CLOSE = "<!-- /axp:desktop -->";
@@ -98,9 +100,9 @@ export function renderDesktopArtifacts(surfaces = readManifest().surfaces) {
     + TRAY_ITEMS.map((item) => `<a id="${item.id}" class="axp-trayico"${item.hidden ? " hidden" : ""} href="${item.href}" data-kind="${item.kind}" title="${esc(item.title)}" aria-label="${esc(item.label)}">${spriteRef(`tray-${item.kind}`, item.svg)}</a>`).join("")
     + '<span id="axp-clock" aria-hidden="true"></span></div>';
 
-  const taskbarHtml = '<div id="axp-taskbar" role="navigation" aria-label="taskbar">'
-    + '<a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a>'
-    + `<div id="axp-pins">${pinsHtml}</div><div id="axp-spacer"></div>${trayHtml}</div>`;
+  // Both slots were compiled above from the authored shell registry. Preserve
+  // that explicit trusted-markup boundary when composing the generated frame.
+  const taskbarHtml = String(Taskbar({ pins: unsafeHtml(pinsHtml), tray: unsafeHtml(trayHtml) }));
   // The ruleset rides the chrome because the chrome is the one projection that
   // reaches BOTH surfaces: patchStaticShell writes it into every static page and
   // lib/desktop.js hands the same bytes to the worker-rendered ones. nav.js used

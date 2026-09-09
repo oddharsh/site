@@ -42,11 +42,21 @@ the original fallback glyph for missing or empty glyph text. Native/TypeScript
 tests compare these cases and reject missing required labels without publishing
 partial batches. It adds no client-side list controller.
 
+`Taskbar` owns the fixed navigation frame and Start link. The existing desktop
+compiler supplies explicitly trusted pin/tray markup from `shell-data.ts`, so
+the registry remains the source of its applications and tray items. Complete
+desktop artifacts compare byte-for-byte with the previous generator, including
+the sprite, favicons and page partials. The desktop derivation now includes the
+generated Taskbar input; required XP freshness checks hold it to the Rust source.
+Native tests compare frame/slot output and reject incomplete batches. Individual
+pin/tray data and their client behavior have not yet moved into typed components.
+
 The native CLI accepts `typescript`, `render`, and `render-batch` for Window,
 plus `typescript-property-sheet` / `render-property-sheet-batch` and
-`typescript-explorer-list` / `render-explorer-list-batch`. Render input
-is a JSON object (or array of objects for a batch), capped at 4 MiB. Unknown keys,
-missing captions and non-string field values are rejected. HTML slots are trusted
+`typescript-explorer-list` / `render-explorer-list-batch`. Taskbar uses
+`typescript-taskbar` / `render-taskbar-batch`. Render input is a JSON object
+(or array of objects for a batch), capped at 4 MiB. Unknown keys, missing required
+fields and incorrect field types are rejected. HTML slots are trusted
 authored markup, corresponding to Worker `Html` values: this is not an HTML
 sanitizer and must not be exposed as an untrusted-content rendering endpoint.
 
@@ -61,7 +71,7 @@ bun test tools/contract-xp-components.test.mjs
 
 - Apply the native rendering path to static page compilation, and extend the
   shared definitions/code generation to the rest of the component family.
-- Taskbar, Menu, Dialog, and Demo components.
+- Complete Taskbar pin/tray contracts and implement Menu, Dialog, and Demo.
 - Typed, small client behaviors with keyboard/focus contracts, lazy loading,
   and machine actions where a component exposes an action.
 - Adoption by existing static and dynamic pages without changing the XP design.

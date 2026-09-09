@@ -183,6 +183,14 @@ const EXPLORER_LIST: Component = Component {
     ],
 };
 
+const TASKBAR: Component = Component { name: "Taskbar", fields: &[
+    Field { name: "pins", kind: Kind::Html, default: Default::Required },
+    Field { name: "tray", kind: Kind::Html, default: Default::Required },
+], parts: &[
+    Part::Literal("<div id=\"axp-taskbar\" role=\"navigation\" aria-label=\"taskbar\"><a id=\"axp-start\" href=\"/run\" aria-haspopup=\"dialog\" aria-expanded=\"false\"><span id=\"axp-cone\" aria-hidden=\"true\"></span>start<span class=\"axp-kbd\" aria-hidden=\"true\">⌘K</span></a><div id=\"axp-pins\">"),
+    Part::Value("pins"), Part::Literal("</div><div id=\"axp-spacer\"></div>"), Part::Value("tray"), Part::Literal("</div>"),
+] };
+
 #[derive(Clone)]
 enum Slot {
     Text(String),
@@ -221,6 +229,9 @@ pub fn render_property_sheet(input: &Map<String, Value>) -> Result<String, Strin
 }
 pub fn render_explorer_list(input: &Map<String, Value>) -> Result<String, String> {
     render(&EXPLORER_LIST, input)
+}
+pub fn render_taskbar(input: &Map<String, Value>) -> Result<String, String> {
+    render(&TASKBAR, input)
 }
 fn render(component: &'static Component, input: &Map<String, Value>) -> Result<String, String> {
     for key in input.keys() {
@@ -306,6 +317,9 @@ pub fn property_sheet_typescript() -> String {
 }
 pub fn explorer_list_typescript() -> String {
     module(&[&EXPLORER_ITEM, &EXPLORER_LIST])
+}
+pub fn taskbar_typescript() -> String {
+    module(&[&TASKBAR])
 }
 fn module(components: &[&'static Component]) -> String {
     let empty = if components.iter().any(|c| {

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { Window } from "../src/worker/lib/xp/window.ts";
 import { PropertySheet } from "../src/worker/lib/xp/property-sheet.ts";
 import { ExplorerList } from "../src/worker/lib/xp/explorer-list.ts";
+import { Taskbar } from "../src/worker/lib/xp/taskbar.ts";
 import { html, Html } from "../src/worker/lib/html.ts";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -81,6 +82,24 @@ test("XP Window composes trusted slots and escapes text and attributes", () => {
   assert.ok(markup.includes('class="window &quot; onclick=&quot;bad"'));
   assert.ok(markup.includes('href="/?x=&quot;&amp;y=1"'));
   assert.ok(markup.includes('aria-label="Close &quot;window&quot;"'));
+});
+
+test("Taskbar shares native frame semantics with the generated desktop component", () => {
+  assert.equal(readFileSync(new URL("../src/worker/lib/xp/taskbar.ts", import.meta.url), "utf8"), native("typescript-taskbar"));
+  const cases = [{ pins: "", tray: "" }, { pins: '<a href="/garage">Garage</a>', tray: '<div id="axp-tray">雪</div>' }];
+  const expected = cases.map(({ pins, tray }) => String(Taskbar({ pins: new Html(pins), tray: new Html(tray) })));
+  assert.deepEqual(JSON.parse(native("render-taskbar-batch", JSON.stringify(cases))), expected);
+  for (const output of expected) {
+    assert.ok(output.startsWith('<div id="axp-taskbar" role="navigation" aria-label="taskbar">'));
+    assert.ok(output.includes('href="/run" aria-haspopup="dialog" aria-expanded="false"'));
+    assert.ok(output.includes('<span class="axp-kbd" aria-hidden="true">⌘K</span>'));
+  }
+  assert.ok(expected[1].includes('<div id="axp-pins"><a href="/garage">Garage</a></div><div id="axp-spacer"></div><div id="axp-tray">雪</div>'));
+  assert.throws(() => native("render-taskbar-batch", JSON.stringify([cases[0], { pins: "" }])), (error) => {
+    assert.ok(error instanceof Error && "stdout" in error);
+    assert.equal(error.stdout, "");
+    return true;
+  });
 });
 
 test("ExplorerList preserves native links, glyph fallback, and row ordering", () => {
