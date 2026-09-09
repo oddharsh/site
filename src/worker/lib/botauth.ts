@@ -98,14 +98,7 @@ export async function jwkThumbprint(jwk) {
   if (!required) throw new Error(`jwkThumbprint: unsupported kty ${jwk.kty}`);
   const canonical = "{" + required.map((k) => `${JSON.stringify(k)}:${JSON.stringify(jwk[k])}`).join(",") + "}";
   const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonical)));
-  return bytesToB64(digest).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
-function bytesToB64(bytes) {
-  // structured-fields binary content: base64 with padding, wrapped in colons by the caller
-  let bin = "";
-  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
-  return btoa(bin);
+  return digest.toBase64({ alphabet: "base64url", omitPadding: true });
 }
 
 // RFC 9421 signature base: one covered component per line, then the parameters
@@ -144,8 +137,8 @@ export async function signRequestForWebBotAuth(targetUrl, env) {
   return [{
     label: "sig1",
     params: edParams,
-    b64: bytesToB64(new Uint8Array(await crypto.subtle.sign(
+    b64: new Uint8Array(await crypto.subtle.sign(
       "Ed25519", edKey, signatureBase(host, edParams)
-    ))),
+    )).toBase64(),
   }];
 }

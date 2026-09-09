@@ -222,10 +222,7 @@ function foldLine(line) {
 // sendInvite throw — and since it runs in ctx.waitUntil, the confirmation email
 // would silently never send.
 function utf8ToBase64(str) {
-  const bytes = new TextEncoder().encode(str);
-  let bin = "";
-  for (const b of bytes) bin += String.fromCharCode(b);
-  return btoa(bin);
+  return new TextEncoder().encode(str).toBase64();
 }
 function escICS(s) {
   return String(s).replace(/[\\;,]/g, m => "\\" + m).replace(/\n/g, "\\n");

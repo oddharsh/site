@@ -191,7 +191,7 @@ export function lensRecipeIds() {
 export function lensRecipeNonce() {
   const b = new Uint8Array(8);
   crypto.getRandomValues(b);
-  return Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
+  return b.toHex();
 }
 
 export function lensRecipeScript(recipe, nonce) {
