@@ -19,7 +19,7 @@ import Readability from "@mozilla/readability/Readability.js";
 // over the same htmlparser2 linkedom used. See src/dom.ts for the surface count
 // and test/dom-differential.test.mjs for the parity gate that keeps it honest.
 import { parseHTML } from "./dom.ts";
-import { privateHostBlocked, validateLensTarget } from "../../src/worker/lib/crawl.ts";
+import { fetchFollowingPublicRedirects, validateLensTarget } from "../../src/worker/lib/crawl.ts";
 
 // Errors whose MESSAGE is deliberately written for the visitor. Everything else
 // that escapes `read()` is an internal failure whose text is not ours to publish:
@@ -60,23 +60,19 @@ export const READER_NOTE =
 async function fetchSource(targetUrl) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-  let response;
   try {
-    response = await fetch(targetUrl, {
+    const followed = await fetchFollowingPublicRedirects(targetUrl, {
       headers: {
         "user-agent": BOT_UA,
         accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "accept-language": "en-US,en;q=0.9",
       },
-      redirect: "follow",
       signal: controller.signal,
-    });
-    const finalUrl = response.url || targetUrl;
-    const landed = validateLensTarget(finalUrl);
-    if (!landed.ok || privateHostBlocked(new URL(finalUrl).hostname)) {
-      await response.body?.cancel();
+    }, validateLensTarget, 20); // Preserve native fetch's redirect allowance.
+    if (!followed.ok) {
       throw new ReaderError("That URL redirected somewhere this reader will not follow.");
     }
+    const { response, finalUrl } = followed;
     const html = await readCapped(response, BODY_CAP);
     return { response, html, finalUrl };
   } catch (error) {

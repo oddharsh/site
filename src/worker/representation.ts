@@ -1,9 +1,9 @@
 // HTTP representation vault. It captures bounded, normalized observations of
 // a public URL under several request profiles. Raw response bodies are parsed
 // only long enough to derive a title/word count and are never persisted.
-import { lensFetch, validateLensTarget } from "./lens.ts";
+import { lensFetch } from "./lens.ts";
 import { extractTitle } from "./lib/http.ts";
-import { mapWithConcurrency, readResponseCapped } from "./lib/crawl.ts";
+import { fetchFollowingPublicRedirects, mapWithConcurrency, readResponseCapped, validateLensTarget } from "./lib/crawl.ts";
 
 const BODY_CAP = 1024 * 1024;
 const PROFILES = {
@@ -80,25 +80,31 @@ async function fetchProfile(url, profile, env) {
   const spec = PROFILES[profile];
   const signal = AbortSignal.timeout(8000);
   let response;
+  let finalUrl;
   try {
     if (profile === "bot" || profile === "markdown") {
       response = await lensFetch(url, env, signal, spec.accept);
+      const final = validateLensTarget(response.url || url);
+      if (!final.ok) return { error: "request redirected to a disallowed target" };
+      finalUrl = final.url;
     } else {
       const headers = { accept: spec.accept, "user-agent": spec.userAgent };
       if (spec.identity) headers["accept-encoding"] = "identity";
-      response = await fetch(url, { method: "GET", headers, redirect: "follow", signal, cf: { cacheTtl: 0 } });
+      const followed = await fetchFollowingPublicRedirects(
+        url, { method: "GET", headers, signal, cf: { cacheTtl: 0 } }, validateLensTarget, 20,
+      ); // Preserve native fetch's twenty-redirect allowance for these profiles.
+      if (!followed.ok) return { error: "request redirected to a disallowed target" };
+      ({ response, finalUrl } = followed);
     }
   } catch {
     return { error: "request failed" };
   }
-  const final = validateLensTarget(response.url || url);
-  if (!final.ok) return { error: "request redirected to a disallowed target" };
   const body = await readResponseCapped(response, BODY_CAP);
   const contentType = (response.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
   const textual = contentType.startsWith("text/") || contentType.includes("html") || contentType.includes("json") || contentType.includes("xml");
   const title = textual && (contentType.includes("html") || contentType === "text/html") ? extractTitle(body.text) : "";
   return {
-    id: crypto.randomUUID(), url, profile, observed_at: Date.now(), final_url: final.url,
+    id: crypto.randomUUID(), url, profile, observed_at: Date.now(), final_url: finalUrl,
     status: response.status, content_type: contentType || null,
     content_encoding: response.headers.get("content-encoding"), content_length: headerInt(response.headers, "content-length"),
     cache_control: response.headers.get("cache-control"), vary: response.headers.get("vary"),
