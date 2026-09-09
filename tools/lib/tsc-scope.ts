@@ -24,17 +24,21 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 export function runScopedTsc({ repo, tsc, config, owns, label, cwd = repo }) {
+  const args = [tsc, "-p", config, "--pretty", "false"];
   let out = "";
+  let failed = false;
   try {
-    out = execFileSync(process.execPath, [tsc, "-p", config], { encoding: "utf8", cwd });
+    out = execFileSync(process.execPath, args, { encoding: "utf8", cwd });
   } catch (e) {
+    failed = true;
     out = `${e.stdout || ""}\n${e.stderr || ""}`;
   }
 
   const lines = out.split("\n").filter((l) => /error TS\d+/.test(l));
-  // A TS5xxx with no diagnostics means tsc rejected the PROGRAM (a bad option, a
-  // config it could not read), which reports as clean under any filter.
-  if (out.includes("error TS5") && !lines.length) {
+  // Only diagnostics with a file location can belong to another runtime's
+  // source. Global errors (such as missing standard types) and compiler crashes
+  // must stop the check before the ownership filter can discard them.
+  if ((failed && !lines.length) || lines.some((l) => !/^.+\(\d+,\d+\): error TS\d+:/.test(l))) {
     console.error(`${label}: tsc could not run the program:\n${out.trim().slice(-600)}`);
     process.exit(1);
   }
@@ -42,20 +46,17 @@ export function runScopedTsc({ repo, tsc, config, owns, label, cwd = repo }) {
   const owned = (path) => owns.some((prefix) => path.startsWith(prefix));
   const mine = lines.filter((l) => owned(l));
 
-  // The files the program actually held, repo-relative. Callers floor on this.
-  //
-  // The try is load-bearing rather than defensive. tsc EXITS NON-ZERO with
-  // TS18003 when a config's include matches nothing, so a glob that has stopped
-  // matching throws here, and an unguarded call crashes with a node stack
-  // instead of reaching the caller's floor. That was measured against the floor
-  // control on 2026-08-23: the check died rather than saying which directory it
-  // had lost. Falling back to an empty listing hands the floor a zero, which is
-  // exactly the case it exists to report.
+  // Only a successful enumeration establishes which files the program held.
+  // tsc can print a partial file list alongside a rejected compiler option;
+  // accepting it would let that config error hide in the foreign bucket while
+  // the owned-file floor still passes.
   let listing = "";
   try {
-    listing = execFileSync(process.execPath, [tsc, "-p", config, "--listFilesOnly"], { encoding: "utf8", cwd });
+    listing = execFileSync(process.execPath, [...args, "--listFilesOnly"], { encoding: "utf8", cwd });
   } catch (e) {
-    listing = String(e.stdout || "");
+    const detail = `${e.stdout || ""}\n${e.stderr || ""}`;
+    console.error(`${label}: tsc could not enumerate the program:\n${detail.trim().slice(0, 600)}`);
+    process.exit(1);
   }
   const listed = listing
     .split("\n")
