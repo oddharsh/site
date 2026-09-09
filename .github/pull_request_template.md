@@ -1,7 +1,7 @@
 <!--
 Keep this proportional to the change. The goal is to hand a reviewer a model
 they can reconstruct, not to produce a longer changelog.
-See ../UNDERSTANDING-REVIEW.md for the review contract.
+See ../docs/UNDERSTANDING-REVIEW.md for the review contract.
 -->
 
 ## What changed

@@ -307,12 +307,6 @@
       "rules": { "anti-slop/no-runtime-typeof": "off" }
     },
     {
-      // `slide.shapes.add()` is the pptx library's API, not ours, so there is
-      // nothing here to rename. The deck builder ships nothing and runs by hand.
-      "files": ["talks/**"],
-      "rules": { "anti-slop/no-shape-in-symbol-names": "off" }
-    },
-    {
       // `node:test` and Vitest both return a promise from `test()` that the
       // RUNNER tracks, so a top-level `test("...", async () => {})` is the
       // documented usage rather than a dropped promise. 272 of them here, and

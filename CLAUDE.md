@@ -34,7 +34,7 @@ decides which one a given file belongs in:
 | `pipelines/` | the page GENERATORS, one directory per section: `content/` (the shared page contract), `garage/`, `lwe/`. These author into `src/pages/`; they are not part of the build. |
 | **`docs/`** | the long-form runbooks: `MAINTENANCE.md`, `PHOTO-PIPELINE.md`, `DEPENDENCIES.md`, `UNDERSTANDING-REVIEW.md`. |
 | `design/` | the Luna design system. `tokens/` and `DESIGN.md` are canonical; the rest is history, and `design/README.md` draws that line. |
-| `migrations/`, `talks/` | D1 SQL for the site Worker, and talk material. |
+| `migrations/` | D1 SQL for the site Worker. |
 
 Three directories now compose the served URL root: `public/` plus `src/client/`
 plus `src/styles/`, merged by `build.ts` into `.build/public`. That is why
@@ -162,7 +162,7 @@ bun run lint
 # actually run on. Each config/tsconfig.*.json header argues its own case.
 # Three of the ten go through a WRAPPER instead of a bare `tsc -p`, because they
 # hold files from two runtimes at once and the imported half is checked against
-# the wrong scope: check-tool-types.mjs (tools, pipelines, talks) filters to the
+# the wrong scope: check-tool-types.mjs (tools, pipelines) filters to the
 # owned trees against a ratchet, check-test-types.mjs does the same for the two
 # node-runtime suites and holds them at zero.
 bun run typecheck
@@ -2944,11 +2944,11 @@ the existing layers structurally could not reach:
 reference + DON'T-modernize guardrails); [`design/tokens/`](design/tokens/) is the
 canonical token set (fonts, Luna palette, bevels, radii). Pull from those before
 hardcoding any color/font/bevel. Captions = Trebuchet MS, UI/body = Tahoma→Verdana,
-mono = Courier New — those three stacks only. The rest of `design/` is HISTORY,
-not spec: `GREENFIELD.md`, `PORTING.md`, and `explore-bac-map.md` are July-2026
-design passes the site did not converge on, and their byte budgets and file:line
-citations are stale. [`design/README.md`](design/README.md) draws that line; read
-it before treating anything in there as a target.
+mono = Courier New — those three stacks only. The July-2026 design plans
+(`GREENFIELD.md`, `PORTING.md`, `explore-bac-map.md`) were removed on 2026-09-09
+after their budgets and source locations became stale.
+[`design/README.md`](design/README.md) retains the design decisions and explains
+how to recover the plans and their audit from git.
 
 **HARD RULES (strong owner preference):**
 
