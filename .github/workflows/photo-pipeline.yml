@@ -67,7 +67,7 @@ jobs:
 
       - name: Install image toolchain
         run: |
-          brew install ffmpeg jq libavif mozjpeg webp
+          brew install cmake ninja ffmpeg jaq libavif mozjpeg webp
           # exif-sooc reads and writes every EXIF the pipeline touches, and
           # replaced exiftool on 2026-08-14. It was NOT installed here when the
           # extractor moved onto it in #390, so this workflow would have failed
@@ -93,6 +93,13 @@ jobs:
         # rev in Cargo.lock and moves by hand. --locked so a runner builds the
         # pinned graph or fails, never a resolved one. macOS runners ship cargo.
         run: cargo build --release --locked --manifest-path tools/photos/zenc/Cargo.toml
+
+      - name: Build the pinned photo AVIF encoder
+        if: inputs.routine == 'add-photo' || inputs.routine == 'reencode-thumbnails'
+        run: ./tools/photos/libavif/build.sh
+
+      - name: Check input derivations
+        run: bun run derive:check
 
       - name: Validate routine inputs
         run: |
@@ -140,11 +147,13 @@ jobs:
             reencode-thumbnails)
               ./tools/photos/reencode-thumbnails.sh "$source_dir"
               ./tools/photos/hash-thumbnails.sh
-              ./tools/photos/zenc/target/release/zenc histogram --root www
+              ./tools/photos/extract-photo-metadata.sh --merge "$source_dir"
+              node tools/photos/gen-photo-semantics.ts
               bun run photos:check
               ;;
             refresh-metadata)
               ./tools/photos/extract-photo-metadata.sh --merge "$source_dir"
+              node tools/photos/gen-photo-semantics.ts
               bun run photos:check
               ;;
             add-car-photo)
@@ -158,8 +167,25 @@ jobs:
               ;;
           esac
 
+      - name: Record regenerated photo derivations
+        run: |
+          set -euo pipefail
+          # Record only the artifacts the selected routine regenerated. The
+          # input check above prevents unrelated stale work from being vouched for.
+          case "$ROUTINE" in
+            add-photo) ids=(images/hashes images/histograms images/alt images/semantics);;
+            reencode-thumbnails) ids=(images/hashes images/histograms images/semantics);;
+            refresh-metadata) ids=(images/histograms images/semantics);;
+            *) exit 0;;
+          esac
+          for id in "${ids[@]}"; do
+            bun run derive:check -- --lock --only "$id"
+          done
+
       - name: Check generated files
-        run: git diff --check
+        run: |
+          bun run derive:check
+          git diff --check
 
       - name: Open artifact pull request
         env:
@@ -167,9 +193,9 @@ jobs:
         run: |
           set -euo pipefail
           case "$ROUTINE" in
-            add-photo) paths=(public/images public/i); title="photos: process remote source batch";;
-            reencode-thumbnails) paths=(public/images public/i); title="photos: re-encode remote thumbnails";;
-            refresh-metadata) paths=(public/images); title="photos: refresh remote metadata";;
+            add-photo) paths=(public/images public/i src/worker/photo-index.json config/derivations.json config/derivations.lock.json); title="photos: process remote source batch";;
+            reencode-thumbnails) paths=(public/images public/i config/derivations.json config/derivations.lock.json); title="photos: re-encode remote thumbnails";;
+            refresh-metadata) paths=(public/images config/derivations.json config/derivations.lock.json); title="photos: refresh remote metadata";;
             add-car-photo) paths=(public/cars); title="photos: update remote car image";;
             regenerate-encoding-study) paths=(public/garage/enc); title="garage: regenerate remote encoding study";;
           esac
@@ -177,6 +203,13 @@ jobs:
           branch="photos/remote-$GITHUB_RUN_ID"
           git switch --create "$branch"
           git add -- "${paths[@]}"
+          # A producer gaining an output must fail here until its PR includes
+          # it. Silently dropping the bundled photo index made new tiles invisible.
+          if ! git diff --quiet || [ -n "$(git ls-files --others --exclude-standard)" ]; then
+            echo "Generated changes remain outside this routine's artifact paths:" >&2
+            git status --short >&2
+            exit 1
+          fi
           if git diff --cached --quiet; then
             echo "No generated changes; no pull request needed."
             exit 0
