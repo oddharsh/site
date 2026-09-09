@@ -12,19 +12,19 @@
   // request". It is a deterministic document now and carries the same q11 twin, dcz
   // delta, and ETag as every other page.)
   //
-  // UNBYPASSABLE BUILD: main + assets point at .build/public (the minified
-  // tree), and the "build" block below runs build.ts FIRST on every deploy.
+  // The build stages the Worker at .build/src/worker and assets at .build/public.
+  // The "build" block below runs tools/build.ts before every upload or deploy.
   // So `wrangler deploy` (bare), `bun run deploy:direct`, and Workers Builds all ship
   // the minified shells + luna.css — there is no longer a path that serves the
   // readable originals by accident (which is exactly how prod ended up on an
   // unminified 78KB nav.js). In Workers Builds, leave the dashboard's separate
   // Build command blank and set its Deploy command to the
   // `bash .github/deploy-wrangler.sh versions upload` recorded in
-  // config/infra.json under `release`. That wrapper picks wrangler's invocation
-  // for the tree being built and runs it under node, which wrangler requires;
+  // config/infra.json under `release`. That wrapper runs the installed Wrangler
+  // entrypoint under Node, which Wrangler requires;
   // Wrangler then owns this one build instead of running it twice. Local dev
   // must NOT use this config (it would pay the full public/ -> .build copy on
-  // every reload); it uses wrangler.dev.jsonc, which points at public/ directly.
+  // every reload); wrangler.dev.jsonc uses source code and staged .dev-assets.
   // The two configs' bindings must match; build.ts warns on drift.
   "name": "aadhar-sh",
   // Pinned because wrangler picks an account only when the login has exactly

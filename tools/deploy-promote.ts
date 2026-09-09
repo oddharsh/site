@@ -56,15 +56,13 @@
 // WHAT IT DOES NOT CHECK, SAID PLAINLY. Latency, correctness, and anything a
 // visitor would notice that still returns 200. Workers Logs is the surface for
 // that (the structured line carries `v`, the version prefix, for exactly this),
-// and the honest workflow is to hold a step, read the logs, then continue. The
-// script pausing between steps is not ceremony; it is where you are supposed to
-// look at something.
+// and the honest workflow is to hold a step, read the logs, then continue.
+// Actions pauses for approval after the canary. On a workstation, use --to for
+// that pause: the default multi-step invocation continues automatically.
 //
-// RUNS ANYWHERE THAT CAN AUTHENTICATE. It was workstation-only until 2026-08-06,
-// on the rule that GitHub never holds a Cloudflare token that can write; that
-// rule was retired, and .github/workflows/ramp.yml now drives this with a
-// narrowly scoped token held as an ENVIRONMENT secret behind required
-// reviewers. lib/release-guard.ts is the check that replaced the flat CI ban.
+// lib/release-guard.ts requires authentication. Actions uses an environment
+// secret for both ramp jobs; production-full requires reviewer approval after
+// the automatic canary. config/infra.json declares that token's scope.
 //
 // infra:apply is NOT covered by that change and still refuses to run in CI. It
 // can create and destroy zone-level DNS, which no pipeline here needs to do.
@@ -729,7 +727,7 @@ for (const pct of steps) {
   }
 
   if (pct !== steps[steps.length - 1]) {
-    console.log(`   holding. Read Workers Logs filtered to v=${target.slice(0, 8)} before continuing.\n`);
+    console.log(`   step verified for v=${target.slice(0, 8)}; continuing to the next configured step.\n`);
   }
 }
 
