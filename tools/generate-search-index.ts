@@ -5,6 +5,9 @@ import { lstat, mkdir, readdir, readFile, readlink, writeFile } from "node:fs/pr
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { stripRawText } from "./lib/html-raw-text.ts";
+import { readDocument } from "./lib/html-to-md.ts";
+import type { SearchRecord } from "../src/worker/search.ts";
+export type { SearchRecord } from "../src/worker/search.ts";
 
 // THE INDEX IS BUILD OUTPUT AND IS NEVER COMMITTED. It froze twice while it was
 // a checked-in file, and the two causes were different, which is the argument
@@ -52,18 +55,10 @@ const ROOTS = [
   // Bytes, not documents. llms.txt is the one indexable thing in here.
   { dir: "public", route: (rel) => (rel === "llms.txt" ? "/llms.txt" : null) },
 ];
-// A real annotation rather than JSDoc, because this is a .ts file and a @typedef
-// here would be inert (CLAUDE.md gotcha 42). Without it `const records = []`
-// infers never[] and every consumer reading record.url is a type error.
-export type SearchRecord = {
-  url: string;
-  title: string;
-  description: string;
-  text: string;
-  kind: "page" | "writing" | "document" | "utility";
-};
-
-const MAX_TEXT = 1800;
+// Retain the full authored corpus. Truncating each page at 1,800 characters
+// made late sections undiscoverable through /search, MCP, and /ask. The text
+// stays in a lazy-loaded static asset; only descriptions and result snippets
+// are shortened. The twin parser supplies the same prose boundary and metadata.
 const SKIP_DIRS = new Set(["images", "i", "meta", "full", ".wrangler", "og", "cars", "dict", "a", "node_modules"]);
 
 // Worker-rendered utilities the source-tree walk below can't see (no static
@@ -162,12 +157,15 @@ export async function buildSearchIndex(root = "."): Promise<{ version: number; g
       if (!url || url === "/search") continue;
       if (!/\.(?:html|md|txt)$/i.test(rel)) continue;
       const raw = await readFile(file, "utf8");
-      const text = stripMarkup(raw).slice(0, MAX_TEXT);
-      if (!text) continue;
+      const doc = rel.endsWith(".html") ? readDocument(raw, { format: "text" }) : null;
+      const text = doc ? doc.body : stripMarkup(raw);
+      // A generated app shell can have metadata without authored body prose
+      // (Pixel Peeper). Its title and description must still be searchable.
+      if (!text && !doc?.title && !doc?.description) continue;
       records.push({
         url,
-        title: titleFor(raw, url),
-        description: text.slice(0, 240),
+        title: (doc?.title || titleFor(raw, url)).slice(0, 140),
+        description: (doc?.description || text).replace(/\s+/g, " ").trim().slice(0, 240),
         text,
         kind: rel.endsWith(".txt") ? "writing" : rel.endsWith(".md") ? "document" : "page",
       });

@@ -26,12 +26,11 @@
     "src/worker/reading.ts": 7,
     "src/worker/rn.ts": 20,
     "src/worker/run.ts": 1,
-    "src/worker/search.ts": 13,
     "src/worker/terminal.ts": 43,
     "src/worker/updates.ts": 1,
     "src/worker/webmention.ts": 4,
     "src/worker/whoareyou.ts": 3,
     "src/worker/writing.ts": 2
   },
-  "total": 261
+  "total": 246
 }

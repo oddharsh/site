@@ -7,25 +7,54 @@ import { unsafeHtml } from "./lib/html.ts";
 import { escAttr, escHtml, jsonResp } from "./lib/http.ts";
 import { queryTerms as queryTermsOf, terms } from "./lib/text.ts";
 
-let indexCache = null;
+export type SearchRecord = {
+  url: string;
+  title: string;
+  description: string;
+  text: string;
+  kind: "page" | "writing" | "document" | "utility";
+};
 
-async function getSearchIndex(env) {
+type PreparedRecord = {
+  record: SearchRecord;
+  fields: string[];
+  excerpt: string;
+  excerptLower: string;
+};
+
+let indexCache: PreparedRecord[] | null = null;
+
+async function getSearchIndex(env): Promise<PreparedRecord[]> {
   if (indexCache) return indexCache;
   try {
     const response = await env.ASSETS.fetch("https://assets.local/search-index.json");
-    if (!response.ok) return { records: [] };
+    if (!response.ok) return [];
     const payload = await response.json();
-    indexCache = payload && Array.isArray(payload.records) ? payload : { records: [] };
+    if (!payload || !Array.isArray(payload.records)) return [];
+    // The complete corpus is immutable for this Worker version. Normalize its
+    // scoring fields once, after the lazy read, rather than allocating and
+    // lowercasing every article for every query. Keep only completed data here:
+    // an in-flight ASSETS promise belongs to the request that started it.
+    const prepared: PreparedRecord[] = payload.records.map((record: SearchRecord) => {
+      const fields = [record.title, record.description, record.text].map((value) => String(value || "").toLowerCase());
+      const excerpt = String(record.text || record.description || "").replace(/\s+/g, " ").trim();
+      // Generated text already has collapsed whitespace, so reuse its scoring
+      // field. Only other input shapes need a separate normalized excerpt.
+      const excerptLower = excerpt === record.text ? fields[2]
+        : excerpt === record.description ? fields[1] : excerpt.toLowerCase();
+      return { record, fields, excerpt, excerptLower };
+    });
+    indexCache = prepared;
+    return prepared;
   } catch {
-    indexCache = { records: [] };
+    // A transient read/parse failure must not pin an empty corpus to an isolate.
+    return [];
   }
-  return indexCache;
 }
 
-function snippet(text, queryTerms) {
-  const source = String(text || "").replace(/\s+/g, " ").trim();
+function snippet(source, lower, queryTerms) {
   if (!source) return "";
-  const first = queryTerms.map((term) => source.toLowerCase().indexOf(term)).filter((n) => n >= 0).sort((a, b) => a - b)[0] ?? 0;
+  const first = queryTerms.map((term) => lower.indexOf(term)).filter((n) => n >= 0).sort((a, b) => a - b)[0] ?? 0;
   const start = Math.max(0, first - 70);
   return (start ? "…" : "") + source.slice(start, start + 220).trim() + (start + 220 < source.length ? "…" : "");
 }
@@ -53,27 +82,28 @@ export async function searchSiteRanked(env, query: string, limit: string | numbe
   const meaningful = queryTermsOf(q).terms;
   const queryTerms = meaningful.length ? meaningful : terms(q);
   const max = Math.min(50, Math.max(1, Number(limit) || 20));
-  const records = (await getSearchIndex(env)).records || [];
+  const records = await getSearchIndex(env);
   if (!queryTerms.length) return { query: q, terms: [], total: 0, returned: 0, results: [] };
-  const results = records.map((record) => {
-    const title = String(record.title || "");
-    const description = String(record.description || "");
-    const text = String(record.text || "");
-    const fields = [title, description, text].map((value) => value.toLowerCase());
+  const results = records.map((entry) => {
+    const { fields } = entry;
     let score = 0;
     for (const term of queryTerms) {
       if (fields[0].includes(term)) score += 8;
       if (fields[1].includes(term)) score += 4;
       if (fields[2].includes(term)) score += 1;
     }
-    return score ? { ...record, score, snippet: snippet(text || description, queryTerms) } : null;
-  }).filter(Boolean).sort((a, b) => b.score - a.score || a.url.localeCompare(b.url));
+    return score ? { entry, score } : null;
+  }).filter((row) => row !== null).sort((a, b) => b.score - a.score || a.entry.record.url.localeCompare(b.entry.record.url));
   return {
     query: q,
     terms: queryTerms,
     total: results.length,
     returned: Math.min(max, results.length),
-    results: results.slice(0, max),
+    // Only returned rows need an excerpt. Broad queries can match the whole
+    // corpus, while the caller asks for as few as one result.
+    results: results.slice(0, max).map(({ entry, score }) => ({
+      ...entry.record, score, snippet: snippet(entry.excerpt, entry.excerptLower, queryTerms),
+    })),
   };
 }
 export async function searchSite(env, query: string, limit: string | number | null = 20) {
@@ -105,7 +135,7 @@ export async function handleSearch(request, env, ctx) {
   return query.trim() ? render() : cachedRender(request, ctx, render, "/search", env);
 }
 
-export function renderSearchPage(query = "", results = { query: "", total: 0, returned: 0, results: [] }) {
+export function renderSearchPage(query = "", results: Awaited<ReturnType<typeof searchSite>> = { query: "", total: 0, returned: 0, results: [] }) {
   const rows = results.results.map((result) => `<li><a href="${escAttr(result.url)}"><b>${escHtml(result.title)}</b></a><small>${escHtml(result.kind)} · ${escHtml(result.url)}</small><p>${escHtml(result.snippet || result.description)}</p></li>`).join("\n");
   const body = `<h1>Search aadhar.sh</h1>
 <form method="get" action="/search" class="search-form"><label for="search-q">Find something</label><input id="search-q" name="q" value="${escAttr(query)}" maxlength="160" autofocus title="Titles and body text across every public page here. One word usually beats a sentence."><button type="submit">Search</button></form>
