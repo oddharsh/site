@@ -2,6 +2,49 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Window } from "../src/worker/lib/xp/window.ts";
 import { html, Html } from "../src/worker/lib/html.ts";
+import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { readFileSync } from "node:fs";
+
+const root = fileURLToPath(new URL("../", import.meta.url));
+const manifest = fileURLToPath(new URL("./xp/Cargo.toml", import.meta.url));
+execFileSync("cargo", ["build", "--release", "--locked", "--manifest-path", manifest], { cwd: root, timeout: 120_000 });
+function native(mode, input = "") {
+  return execFileSync("cargo", ["run", "--quiet", "--release", "--locked", "--manifest-path", manifest, "--", mode], {
+    cwd: root, input, encoding: "utf8", timeout: 10_000, maxBuffer: 32 * 1024 * 1024,
+  });
+}
+
+test("Window generated types and rendering are current with the native definition", () => {
+  assert.equal(readFileSync(new URL("../src/worker/lib/xp/window.ts", import.meta.url), "utf8"), native("typescript"));
+  const values = [];
+  const expected = [];
+  for (let bits = 0; bits < 128; bits++) {
+    const plain = { caption: 'Snow 雪 <&> "title"',
+      windowClass: bits & 1 ? 'terminal "&' : "", titleClass: bits & 2 ? "custom" : "",
+      contentClass: bits & 4 ? "console" : "", closeTitle: bits & 8 ? "Custom <close>" : undefined,
+      closeLabel: bits & 16 ? "Go back" : undefined,
+      windowAttrs: bits & 32 ? "" : undefined, body: bits & 64 ? "<p>Body</p>" : undefined,
+    };
+    values.push(plain);
+    expected.push(String(Window({ ...plain,
+      windowAttrs: plain.windowAttrs === undefined ? undefined : new Html(plain.windowAttrs),
+      body: plain.body === undefined ? undefined : new Html(plain.body),
+    })));
+  }
+  assert.deepEqual(JSON.parse(native("render-batch", JSON.stringify(values))), expected);
+});
+
+test("native Window batch refuses invalid input without partial output", () => {
+  for (const value of [[{ caption: "valid" }, { caption: false }], [{ caption: "valid", unexpected: true }]]) {
+    assert.throws(() => native("render-batch", JSON.stringify(value)), (error) => {
+      assert.ok(error instanceof Error && "stdout" in error && "status" in error);
+      assert.equal(error.stdout, "");
+      assert.ok(error.status !== 0);
+      return true;
+    });
+  }
+});
 
 test("XP Window composes trusted slots and escapes text and attributes", () => {
   const frame = Window({

@@ -90,6 +90,14 @@ jobs:
       - name: Check Wrangler versions and lockfiles
         run: bun run check-wrangler
 
+      - name: Validate native XP components
+        run: |
+          rustup component add clippy rustfmt
+          cargo fmt --manifest-path tools/xp/Cargo.toml --check
+          cargo test --locked --manifest-path tools/xp/Cargo.toml
+          cargo clippy --locked --manifest-path tools/xp/Cargo.toml --all-targets -- -D warnings
+          bun tools/gen-xp.ts --check
+
       - name: Build homepage
         run: bun run build
 

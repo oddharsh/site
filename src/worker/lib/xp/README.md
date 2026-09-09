@@ -13,16 +13,43 @@ compared with the previous assembler. Contract tests cover fragment composition,
 escaping, native close navigation, and hooks used by existing shell enhancement.
 This extraction establishes a real consumer; it does not itself claim a speedup.
 
+## Rust source of truth
+
+`tools/xp/src/lib.rs` owns Window's typed field/default definitions and template
+parts. The native renderer validates its input against those fields and resolves
+defaults into text, trusted markup, or the empty-markup sentinel. Its TypeScript
+generator emits the same tagged template used by the Worker, including the
+`WindowOptions` contract. There is no runtime template interpreter or Wasm boot.
+
+`bun tools/gen-xp.ts` regenerates `window.ts`; `--check` verifies it without
+writing. Required CI checks freshness, native tests and Clippy. A differential
+test compares 128 native/TypeScript renders and checks that invalid batches emit
+no partial result. The generated code differs from the earlier handwritten
+component only in comments.
+
+The native CLI accepts `typescript`, `render`, and `render-batch`. Render input
+is a JSON object (or array of objects for a batch), capped at 4 MiB. Unknown keys,
+missing captions and non-string field values are rejected. HTML slots are trusted
+authored markup, corresponding to Worker `Html` values: this is not an HTML
+sanitizer and must not be exposed as an untrusted-content rendering endpoint.
+
+```sh
+cargo test --locked --manifest-path tools/xp/Cargo.toml
+cargo clippy --locked --manifest-path tools/xp/Cargo.toml --all-targets -- -D warnings
+bun tools/gen-xp.ts --check
+bun test tools/contract-xp-components.test.mjs
+```
+
 ## Full component scope still to implement
 
-- Rust rendering/code generation with one canonical component definition and
-  generated TypeScript contracts; avoid parallel hand-maintained renderers.
+- Apply the native rendering path to static page compilation, and extend the
+  shared definitions/code generation to the rest of the component family.
 - Taskbar, Menu, Dialog, ExplorerList, PropertySheet, and Demo components.
 - Typed, small client behaviors with keyboard/focus contracts, lazy loading,
   and machine actions where a component exposes an action.
 - Adoption by existing static and dynamic pages without changing the XP design.
 - Browser behavior checks and measured build/served-byte/runtime comparisons.
 
-Window rendering currently remains TypeScript. The Rust portion and the full
-component family are unfinished; this is an implementation draft, not completion
-of the typed XP component goal.
+Dynamic Window rendering uses generated TypeScript; native rendering is verified
+but not yet used to compile static pages. The full component family remains
+unfinished; this is not completion of the typed XP component goal.

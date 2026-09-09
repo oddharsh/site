@@ -252,7 +252,9 @@ updates:
   # This is what retired the hand-rolled jpegli refresh workflow: dependabot now
   # owns the production encoder's update cadence, same as every other toolchain.
   - package-ecosystem: cargo
-    directory: "/tools/photos/zenc"
+    directories:
+      - "/tools/photos/zenc"
+      - "/tools/xp"
     schedule:
       interval: daily
       time: "09:00"
