@@ -111,13 +111,15 @@ undici@7.29.0
         └─ dev aadhar-sh (requires 4.130.0)
 ```
 
-`bun test --parallel=4 --timeout=30000` runs the suite's 92 files four at a
-time. On CI, where it counts, the `validate` step goes 18s to 15s; on a macOS
-laptop, where a process spawn costs far more, 37s to 24s measured back to back
-under the same load. Both flags are measured rather than defaulted: more workers
-only starve the interpreters these tests spawn, and the runner's 5s per-test
-default is what breaks first when they do. The table, the isolation argument and
-the control are at `comment:test-parallel`.
+`bun test --parallel=4 --no-isolate --timeout=30000` runs the suite's 92 files
+four at a time. On CI, where it counts, the `validate` step goes 18s to 15s; on
+a macOS laptop, where a process spawn costs far more, 37s to 19s. All three
+flags are measured rather than defaulted: more workers only starve the
+interpreters these tests spawn, `--isolate` (which `--parallel` implies unless
+you decline it) costs about 35% more CPU for a guarantee this suite does not
+need, and the runner's 5s per-test default is what breaks first under
+contention. The tables, the isolation argument and the control are at
+`comment:test-parallel`.
 
 **The `Bun.*` globals are the part to be careful with, and the rule is short:
 anything a `.test.mjs` file imports, or spawns with `process.execPath`, runs
