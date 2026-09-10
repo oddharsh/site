@@ -88,13 +88,15 @@ a wait rather than a fork.
 bun is the toolchain, so which of its features are wired in is a dependency
 question too. Three are, and each earns its place with a number.
 
-`bun audit` reads the **committed lockfile** against npm's advisory database:
-184 packages in under half a second, clean on 2026-09-10. `bun run deps:audit`
-runs it, and `validate` runs it on every PR as an **advisory** step. Dependabot proposes
-versions and GitHub alerts on the default branch; neither answers what this
-branch's lockfile is holding. The argument for keeping it advisory rather than
-required is at the step itself, and it is the deadlock one: an advisory arrives
-from outside any PR, so a hard failure would block the merge that fixes it.
+`bun audit` reads the **committed lockfile** against npm's advisory database in
+under half a second, 184 packages, clean on 2026-09-10. `bun run deps:audit`
+runs it, and it is a LOCAL command rather than a CI step, because CI already has
+this covered and better: the pinned `osv-scanner` step in `validate` scans four
+lockfiles across three ecosystems (`bun.lock`, `lens-reader/bun.lock`, zenc's
+`Cargo.lock`, the photo pipeline's `requirements.txt`) and is advisory for the
+reason an added `bun audit` step would have had to argue from scratch. Reach for
+`deps:audit` when you want the npm half answered in the time it takes to read
+the question, and read the CI step for the whole tree.
 
 `bun why <package>` answers the floor questions the manifest comments argue in
 prose. The `comment:undici` block spends a paragraph on where undici comes from
@@ -110,10 +112,12 @@ undici@7.29.0
 ```
 
 `bun test --parallel=4 --timeout=30000` runs the suite's 92 files four at a
-time, 42.15s to about 23s. Both numbers are measured: more workers only starve
-the interpreters these tests spawn, and the runner's 5s per-test default is what
-breaks first when they do. The table, the isolation argument and the control are
-at `comment:test-parallel`.
+time. On CI, where it counts, the `validate` step goes 18s to 15s; on a macOS
+laptop, where a process spawn costs far more, 37s to 24s measured back to back
+under the same load. Both flags are measured rather than defaulted: more workers
+only starve the interpreters these tests spawn, and the runner's 5s per-test
+default is what breaks first when they do. The table, the isolation argument and
+the control are at `comment:test-parallel`.
 
 **The `Bun.*` globals are the part to be careful with, and the rule is short:
 anything a `.test.mjs` file imports, or spawns with `process.execPath`, runs

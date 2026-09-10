@@ -90,28 +90,6 @@ jobs:
       - name: Check Wrangler versions and lockfiles
         run: bun run check-wrangler
 
-      # ADVISORY, and the ONE check here that reads the tree as it is rather than
-      # as somebody proposed it. `bun audit` matches the committed lockfile against
-      # npm's advisory database in ~0.4s over 184 packages; dependabot proposes
-      # versions, GitHub alerts on the default branch, and neither answers "what is
-      # this PR's lockfile holding right now".
-      #
-      # It must not FAIL the job, for the reason infra:check's edge tier already
-      # documents and the undici floor proves: an advisory arrives from outside any
-      # PR, and one with no patched version would redden every merge including the
-      # one that fixes it. A gate that blocks work nobody in the PR caused is a gate
-      # people learn to mute, and a muted check is worse than an advisory. Promote
-      # it to a hard failure only alongside a way to record an accepted advisory.
-      - name: Audit the lockfile (advisory)
-        run: |
-          set -uo pipefail
-          if out=$(bun run deps:audit 2>&1); then
-            printf '%s\n' "$out"
-          else
-            printf '%s\n' "$out"
-            echo "::warning title=bun audit did not pass::$(printf '%s' "$out" | tr '\n' ' ' | cut -c1-400)"
-          fi
-
       - name: Build homepage
         run: bun run build
 
