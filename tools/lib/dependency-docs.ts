@@ -32,12 +32,22 @@ export const DOC_ALIASES = [
   { prose: "TypeScript", pkg: "typescript" },
   { prose: "@types/bun", pkg: "@types/bun" },
   { prose: "smol-toml", pkg: "smol-toml" },
+  // playwright-core left VERSIONLESS on 2026-09-10. Its exemption rested on two
+  // claims and one had gone stale: "only gen-og-cards.ts uses it, no CI job and
+  // no deploy path touches it" was true when written and had grown to nine
+  // callers plus og-cards.yml, which drives it in CI and COMMITS the PNGs it
+  // bakes. The surviving claim, that it drives the locally installed Chrome, is
+  // an argument about the BROWSER rather than about the library, and the library
+  // is the half a lockfile can hold still.
+  { prose: "playwright-core", pkg: "playwright-core" },
 ];
 
 // Documented on purpose WITHOUT a version, each for a stated reason. An entry
 // here is a decision; a package in neither list fails the reverse direction.
-export const VERSIONLESS = new Map([
-  ["playwright-core", "caret-ranged on purpose (it drives the locally installed Chrome), so there is no exact pin to state"],
+export const VERSIONLESS = new Map<string, string>([
+  // Empty on purpose, and it stays declared: a package in neither list fails the
+  // reverse direction, so the next dependency documented without a version needs
+  // an entry here and therefore a stated reason.
 ]);
 
 // A null version keeps git/path dependencies in the census without inventing

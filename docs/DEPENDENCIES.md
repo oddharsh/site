@@ -337,10 +337,26 @@ does not make a failed write safe to ignore.
   age floor elapsed. That delay needed no permanent package exemption:
   `minimumReleaseAgeExcludes` matches a package name across future versions,
   so adding one to bypass a same-day delay would outlive its reason.
-- playwright-core is a scripts-only devDep (caret-ranged, not pinned: it drives
-  the locally installed Google Chrome rather than a bundled browser). Only
-  `tools/photos/gen-og-cards.ts` uses it, and only on demand; no CI job and
-  no deploy path touches it.
+- playwright-core 1.62.1 is the exact root pin for the browser probes. It was
+  caret-ranged until 2026-09-10, on the reasoning that it drives the locally
+  installed Google Chrome rather than a bundled browser, so there was no exact
+  pin worth stating. That argument is about the BROWSER, and it left the half a
+  lockfile CAN hold still floating. The scope it also rested on had gone stale:
+  "only `tools/photos/gen-og-cards.ts` uses it, and no CI job and no deploy path
+  touches it" was true when written and is now nine callers (`csp-sweep`,
+  `speculation-probe`, `early-hints-probe`, `inp-lab`, `lens-seed`,
+  `check-agent`, `check-xp-menu`, `webmcp-frame-probe`, `gen-og-cards`) plus
+  [`og-cards.yml`](../.github/workflows/og-cards.yml), which drives it in CI and
+  COMMITS the PNGs it bakes. Those cards are `unverifiable` in
+  `config/derivations.json`, since the homepage draws a random 12 of 158 photos
+  per request, so nothing downstream can notice their bytes moving.
+
+  Pinning does NOT make the cards reproducible, and reading it that way would be
+  the same mistake the old reason made from the other side. Chrome is installed
+  by the runner and unpinned either way. What it buys is one moving part instead
+  of two, and a rendering change now arrives as a dependabot PR under the
+  one-day cooldown with the review this file asks for, rather than as a silent
+  resolve at install time. No deploy path touches it, which is still true.
 - Pillow 12.3.0 is pinned in `tools/photos/requirements.txt` for
   `gen-pixel-peeper.py`, a one-off generator for the /pixel-peeper comparison
   frames. It baked the photo histograms until 2026-08-14, when that moved into
