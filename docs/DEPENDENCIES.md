@@ -83,6 +83,57 @@ The baseline below already worked that through: the release-age policy once held
 the types pin a release behind the runtime and it caught up on its own, which is
 a wait rather than a fork.
 
+### the bun surface this repo actually uses
+
+bun is the toolchain, so which of its features are wired in is a dependency
+question too. Three are, and each earns its place with a number.
+
+`bun audit` reads the **committed lockfile** against npm's advisory database:
+184 packages in under half a second, clean on 2026-09-10. `bun run deps:audit`
+runs it, and `validate` runs it on every PR as an **advisory** step. Dependabot proposes
+versions and GitHub alerts on the default branch; neither answers what this
+branch's lockfile is holding. The argument for keeping it advisory rather than
+required is at the step itself, and it is the deadlock one: an advisory arrives
+from outside any PR, so a hard failure would block the merge that fixes it.
+
+`bun why <package>` answers the floor questions the manifest comments argue in
+prose. The `comment:undici` block spends a paragraph on where undici comes from
+and why an `overrides` entry was retired; the command prints the chain, read
+here on 2026-09-10 and checked by nothing, so treat the versions as a snapshot:
+
+```
+$ bun why undici
+undici@7.29.0
+  └─ miniflare@5.20260908.0-alpha (requires 7.29.0)
+     └─ wrangler@4.130.0 (requires 5.20260908.0-alpha)
+        └─ dev aadhar-sh (requires 4.130.0)
+```
+
+`bun test --parallel=4 --timeout=30000` runs the suite's 92 files four at a
+time, 42.15s to about 23s. Both numbers are measured: more workers only starve
+the interpreters these tests spawn, and the runner's 5s per-test default is what
+breaks first when they do. The table, the isolation argument and the control are
+at `comment:test-parallel`.
+
+**The `Bun.*` globals are the part to be careful with, and the rule is short:
+anything a `.test.mjs` file imports, or spawns with `process.execPath`, runs
+under node too, so a `Bun.` reference there fails `test:node` and passes every
+local run.** That is why 22 tools walk directories with `readdirSync` rather than
+`Bun.Glob`, why `check-tools.ts` walks `PATH` by hand rather than calling
+`Bun.which`, and why `smol-toml` stays a dependency: its one consumer,
+`tools/lib/dependency-docs.ts`, is imported by two contract tests, so
+`Bun.TOML` cannot replace it. Three files are audited exceptions today, each
+run only by bun and spawned by nothing: `gen-runtime-types.ts` (`Bun.TOML`),
+`gen-repo-card.ts` (`Bun.WebView`, `Bun.write`) and
+`photos/zenc-reproducible.ts` (`Bun.spawnSync`, `Bun.CryptoHasher`,
+`Bun.file`). No scanner enforces this. `bun run test:node` in CI is the
+enforcement, and it fails by name.
+
+Available, measured, and deliberately not wired in: `bun test --shard` with
+`--timings` (splits a suite across CI jobs by measured duration, which this
+repo's single `validate` job has no use for yet), `bun test --changed` for
+local loops, and `--cpu-prof-md`, which writes a grep-friendly CPU profile.
+
 ### node, in `.node-version`
 
 Also unowned, and it needs a DIFFERENT tool rather than the same one pointed

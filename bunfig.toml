@@ -77,8 +77,14 @@ minimumReleaseAgeExcludes = []
 # replaces, since the failure it hides is a test reaching the network. Verified
 # with a control (a test that calls `fetch` fails the run at exit, by name).
 #
-# The two commands are now equivalent, and `bun run test` stays the documented
-# one because it states its own preload rather than inheriting it.
+# The two commands agree on WHAT runs, and since 2026-09-10 they no longer
+# agree on how: the script adds `--parallel=4 --timeout=30000`, so a bare
+# `bun test` sweeps the same files green, sequentially, at roughly twice the
+# wall clock and under the runner's own 5s per-test default. Those flags live
+# in the script for the same reason the preload is stated there, and
+# package.json's comment:test-parallel carries the measurements, the isolation
+# argument and the control that come with them.
+
 [test]
 root = "tools"
 preload = ["./tools/lib/no-network.ts"]

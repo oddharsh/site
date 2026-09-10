@@ -4564,6 +4564,15 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     `bun run test` and `bun run test:node` exercise the same contracts under
     both runtimes. Investigate disagreements without weakening the tests.
 
+    **The two now differ in ISOLATION as well as runtime, since 2026-09-10, and
+    that is deliberate.** The bun side runs `--parallel=4`, which implies
+    `--isolate`, so each of the 92 files gets a fresh global; the node twin keeps
+    `--test-isolation=none`, because its own cost is interpreter starts rather
+    than parity (package.json, `comment:test-node`). So a test that only passes
+    when it can read another file's leftovers now FAILS on bun and PASSES on
+    node, and that split names the cause instead of hiding it. Read a
+    bun-only failure as a leak before reading it as a runtime difference.
+
 29. **Use the installed Wrangler under Node, without a package-manager lookup.**
     Tools call `wranglerCommand()` from `tools/lib/wrangler-bin.ts`; Workers
     Builds calls `.github/deploy-wrangler.sh`. Both name the root's installed
