@@ -1,13 +1,12 @@
 # Dependency updates and site leverage
 
-Dependabot watches FIVE ecosystems, and this paragraph named two of them until
-2026-08-14:
+The [Dependabot configuration](../.github/dependabot.yml) has five update blocks:
 
 | ecosystem | directory | what it owns |
 |---|---|---|
-| npm | `/` | the shared deploy toolchain and the one shipped dependency |
+| npm | `/` | the shared build, test, and deploy toolchain |
 | npm | `/lens-reader` | the Reader lens Worker, which is outside the workspace on purpose |
-| github-actions | `/`, `/.github/actions/*` | the six digest-pinned actions |
+| github-actions | `/`, `/.github/actions/*` | SHA-pinned workflows and composite actions |
 | cargo | `/tools/photos/zenc` | the JPEG thumbnail encoder's zenjpeg pin |
 | pip | `/tools/photos` | Pillow, for one page generator |
 
@@ -15,15 +14,8 @@ Each update PR keeps the upstream release notes/changelog in its Dependabot
 description and gets a persistent site-review comment containing the exact
 version change, update type, and questions for the site.
 
-Two of those cells were wrong until 2026-08-24, in the same direction: they
-described coverage the config did not have. The count read five while six
-distinct third-party action repositories are pinned across `.github/`, because
-`codeql.yml` arrived with the move to CodeQL advanced setup and nobody re-counted.
-And the glob is new, because `directory: "/"` reaches `action.yml` at the
-REPOSITORY ROOT plus everything in `.github/workflows`, and never a composite
-action in a subdirectory, so `.github/actions/setup-bun` was unwatched from the
-day it was written. That one costs nothing yet: the action is pure shell and
-names no `uses:`, which is also why it was invisible.
+Keep the composite-action glob: the root directory entry alone does not reach
+actions nested under `.github/actions/`.
 
 Every ecosystem carries `cooldown: default-days: 1`, which is the same 24 hours
 `bunfig.toml` sets as `minimumReleaseAge = 86400`. For the two npm blocks it is
@@ -51,7 +43,7 @@ review policy and entry point for future agent runs.
 ### bun, in `packageManager`
 
 `package.json`'s `packageManager` field names the bun this repository runs, and
-none of the five ecosystems above reaches it. The npm updater bumps `@types/bun`
+none of those update blocks changes it. The npm updater bumps `@types/bun`
 and leaves the runtime alone. Dependabot's own `bun` ecosystem would not help
 either: it reads `bun.lock` rather than the field, and it cannot run here at all
 while dependabot-core pins `MAX_SUPPORTED_LOCKFILE_VERSION = 1` against our v2
@@ -237,6 +229,10 @@ does not make a failed write safe to ignore.
 
 ## Current baseline
 
+- `smol-toml` 1.5.2 parses Cargo manifests for the dependency audit and relock
+  writer under both Node and Bun. It is a development dependency with no
+  transitive dependencies. The census retains Git and path dependencies without
+  inventing semantic versions; each needs an explicit versionless policy.
 - Wrangler 4.129.1 is the exact root pin shared by all Worker projects, and
   since 2026-09-02 it is also cal's test harness: `cal/test` runs on bun:test
   against `createTestHarness`, so the tree carries exactly one Wrangler, one

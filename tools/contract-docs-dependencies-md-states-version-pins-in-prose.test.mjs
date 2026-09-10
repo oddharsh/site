@@ -214,6 +214,51 @@ test("the Cargo reader takes both dependency shapes and ignores the rest", () =>
   );
 });
 
+test("Cargo dependencies survive TOML quoting, comments and dependency subtables", async () => {
+  const source = `[package]
+name = "fixture"
+
+[dependencies] # ordinary Cargo dependencies
+'image' = '0.25'
+"codec" = { features = ["a#b"], version = '1.2.3' }
+local = { path = "../local" }
+
+[dependencies.halflight]
+git = "https://example.test/halflight.git"
+rev = "edc6358de58e5de93309d01500971bb056c65708"
+
+[profile.release]
+opt-level = 3
+`;
+  assert.deepEqual(parseCargoDeps(source), { image: "0.25", codec: "1.2.3", local: null, halflight: null });
+  const toml = await readFile(new URL("./photos/zenc/Cargo.toml", import.meta.url), "utf8");
+  assert.equal(parseCargoDeps(toml).halflight, null, "the real git dependency is present without a version claim");
+});
+
+test("the Cargo reader refuses malformed manifests instead of auditing a partial census", () => {
+  for (const toml of [
+    '[dependencies]\ncodec = { version = "1.2.3"\n',
+    '[dependencies]\ncodec = "1.2.3"\ncodec = "2.0.0"\n',
+    '[dependencies]\ncodec = "1.2.3" trailing\n',
+    '[dependencies]\ncodec = false\n',
+    '[dependencies]\ncodec = { version = 123 }\n',
+    'dependencies = []\n',
+    '[dependencies]\ncodec = 2026-09-01\n',
+    '[dependencies]\ncodec = []\n',
+  ]) assert.throws(() => parseCargoDeps(toml), Error, toml);
+});
+
+test("versionless Cargo dependencies require policy and do not look removed", () => {
+  const pins = parseCargoDeps('[dependencies]\nhalflight = { git = "https://example.test/halflight.git", rev = "abc" }\n');
+  const sub = { manifest: "Cargo.toml", pins, aliases: [], versionless: new Map() };
+  const run = () => auditDependencyDocs({ doc: BASELINE_HEADING, pins: {}, aliases: [], versionless: new Map(), floor: 0, subManifests: [sub] });
+  assert.ok(run().problems.some((p) => /halflight is a Cargo.toml dependency/.test(p)), "git dependencies cannot disappear from the reverse check");
+  sub.versionless.set("halflight", "A git revision has no semantic version to quote.");
+  assert.deepEqual(run().problems, [], "present without a version is different from absent");
+  delete pins.halflight;
+  assert.ok(run().problems.some((p) => /halflight is exempted .* but is no longer/.test(p)), "removal still invalidates the policy");
+});
+
 test("the dependency-doc scanner does not read prose as a version claim", () => {
   // Every one of these appears in the real file and breaks a naive
   // /(\w+) (\d[\d.]*)/ sweep. A two-component number is prose about a major

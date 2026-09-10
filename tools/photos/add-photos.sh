@@ -148,13 +148,13 @@ tally()   { ls -1 "$ST_ROOT/$1" 2>/dev/null | wc -l | tr -d ' '; }
 # used to kill the whole run, which was loud; inside a subshell it kills one
 # worker and `wait` still returns 0, which is not. So every photo records
 # exactly one outcome. A failed or missing outcome stops the pipeline before
-# the next phase can accept an incomplete set.
+# uploads or hashing can publish an incomplete set.
 reconcile() {  # reconcile <phase-label>
   local seen expected
   seen=$(( $(tally ok) + $(tally skip) + $(tally fail) + $(tally na) ))
   expected=$(cat "$ST_ROOT/launched")
   if [ "$seen" -ne "$expected" ] || [ "$(tally fail)" -gt 0 ]; then
-    echo "error: $1 incomplete: $seen of $expected outcomes, $(tally fail) failed; stopping before later phases" >&2
+    echo "error: $1 incomplete: $seen of $expected outcomes, $(tally fail) failed; do not upload, hash or publish these outputs" >&2
     exit 1
   fi
 }
