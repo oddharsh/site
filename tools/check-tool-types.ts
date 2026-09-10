@@ -9,7 +9,7 @@
 // the same files pass in tsconfig.json's program, which is the one whose globals
 // match their runtime. Reporting them would train everyone to ignore this check.
 //
-// So diagnostics are filtered to files under tools/. The FLOOR below is what
+// So diagnostics are filtered to tools/ and pipelines/. The FLOOR below is what
 // keeps that filter honest: a wrapper that reports nothing because it scanned
 // nothing looks identical to a clean run, which is this repo's most-repeated
 // failure (see the route invariant's own floor in build.ts).

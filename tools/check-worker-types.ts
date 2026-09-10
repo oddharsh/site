@@ -26,9 +26,8 @@ import { ratchet, runScopedTsc } from "./lib/tsc-scope.ts";
 const REPO = dirname(dirname(fileURLToPath(import.meta.url)));
 const TSC = join(REPO, "node_modules", "typescript", "bin", "tsc");
 
-// The three trees config/tsconfig.json holds. cal/src is already clean under the
-// flag (its own program declares strictNullChecks outright), so in practice this
-// ratchets src/worker and serendipity.
+// All three trees run in the site Worker, including transitively imported
+// Serendipity. cal/src is currently clean; its diagnostics remain in scope.
 const OWNED = ["src/worker/", "cal/", "serendipity/"];
 
 const { mine, ownedFiles, byFile } = runScopedTsc({

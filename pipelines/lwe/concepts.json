@@ -22,7 +22,6 @@
       "lastmod": "2026-06-21",
       "buddyClass": "fhe",
       "badge": "chat",
-      "navLabel": "fhe",
       "hasAsk": true
     },
     {
@@ -46,7 +45,6 @@
       "lastmod": "2026-06-21",
       "buddyClass": "mpc",
       "badge": "chat",
-      "navLabel": "mpc",
       "hasAsk": true
     },
     {
@@ -70,7 +68,6 @@
       "lastmod": "2026-06-21",
       "buddyClass": "tee",
       "badge": "chat",
-      "navLabel": "tee",
       "hasAsk": true
     },
     {
@@ -95,7 +92,6 @@
       "lastmod": "2026-06-21",
       "buddyClass": "utf8",
       "badge": "chat",
-      "navLabel": "utf-8",
       "hasAsk": true
     },
     {
@@ -119,7 +115,6 @@
       "lastmod": "2026-06-21",
       "buddyClass": "vig",
       "badge": "chat",
-      "navLabel": "vigenère",
       "hasAsk": true
     },
     {
@@ -143,7 +138,6 @@
       "lastmod": "2026-06-21",
       "buddyClass": "enc",
       "badge": "chat",
-      "navLabel": "encoding",
       "hasAsk": true
     },
     {
@@ -167,7 +161,6 @@
       "lastmod": "2026-06-21",
       "buddyClass": "pk",
       "badge": "chat",
-      "navLabel": "programmable crypto",
       "hasAsk": true
     },
     {
@@ -191,7 +184,6 @@
       "lastmod": "2026-06-22",
       "buddyClass": "dac",
       "badge": "chat",
-      "navLabel": "dac",
       "hasAsk": true
     },
     {
@@ -215,7 +207,6 @@
       "lastmod": "2026-06-22",
       "buddyClass": "drv",
       "badge": "chat",
-      "navLabel": "drivers",
       "hasAsk": true
     },
     {
@@ -239,7 +230,6 @@
       "lastmod": "2026-06-22",
       "buddyClass": "knot",
       "badge": "chat",
-      "navLabel": "knots",
       "hasAsk": true
     },
     {
@@ -263,7 +253,6 @@
       "lastmod": "2026-07-31",
       "buddyClass": "lean",
       "badge": "chat",
-      "navLabel": "lean",
       "hasAsk": true
     },
     {
@@ -288,7 +277,6 @@
       "lastmod": "2026-08-21",
       "buddyClass": "fuse",
       "badge": "chat",
-      "navLabel": "efuses",
       "hasAsk": true
     }
   ]

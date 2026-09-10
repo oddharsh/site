@@ -1,8 +1,8 @@
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { assert, test } from "./contract-shared.ts";
 
 const tsc = fileURLToPath(new URL("../node_modules/typescript/bin/tsc", import.meta.url));
@@ -81,4 +81,49 @@ test("scoped typechecking refuses a compiler crash without TS diagnostics", () =
   assert.match(result.stderr, /scoped-control: tsc could not/);
   assert.match(result.stderr, /compiler crashed/);
   assert.equal(result.stdout, "");
+});
+
+test("coverage rejects a failed compiler census even when it prints all owned files", () => {
+  const repo = mkdtempSync(join(tmpdir(), "coverage-typecheck-"));
+  try {
+    for (const dir of ["tools", "src", "config"]) mkdirSync(join(repo, dir));
+    symlinkSync(fileURLToPath(new URL("../node_modules", import.meta.url)), join(repo, "node_modules"), "dir");
+    copyFileSync(new URL("./check-ts-coverage.ts", import.meta.url), join(repo, "tools/check-ts-coverage.ts"));
+    // Satisfy the real census floors without altering the checker. Source
+    // diagnostics and unavailable imports are deliberately outside its job.
+    for (let i = 0; i < 150; i++) writeFileSync(join(repo, "src", `fixture${i}.ts`), "export {};\n");
+    writeFileSync(join(repo, "src/fixture0.ts"), 'import "./unavailable.ts"; export const value: number = "wrong";\n');
+    const config = { compilerOptions: { noEmit: true, types: [] }, include: ["../src/**/*.ts", "../tools/**/*.ts"] };
+    for (let i = 0; i < 5; i++) writeFileSync(join(repo, "config", `tsconfig.fixture${i}.json`), JSON.stringify(config));
+    execFileSync("git", ["init", "-q", repo], { stdio: "pipe" });
+    execFileSync("git", ["add", "src", "tools", "config"], { cwd: repo, stdio: "pipe" });
+    const run = () => spawnSync(process.execPath, ["tools/check-ts-coverage.ts"],
+      { cwd: repo, encoding: "utf8", timeout: 20_000 });
+    const healthy = run();
+    assert.equal(healthy.status, 0, healthy.stderr);
+    assert.match(healthy.stdout, /151 source files, all held by one of 5 programs/);
+
+    const broken = "config/tsconfig.fixture0.json";
+    writeFileSync(join(repo, broken), JSON.stringify({ ...config,
+      compilerOptions: { ...config.compilerOptions, invalidCompilerOption: true } }));
+    const compiler = spawnSync(process.execPath, [tsc, "-p", broken, "--listFilesOnly"],
+      { cwd: repo, encoding: "utf8", timeout: 20_000 });
+    assert.ok(compiler.status !== null && compiler.status > 0, compiler.stderr);
+    assert.match(compiler.stdout, /TS5023/);
+    assert.ok(compiler.stdout.includes(join(repo, "src/fixture149.ts")), "the failed compiler still emitted owned paths");
+    const failed = run();
+    assert.equal(failed.status, 1, `${failed.stdout}\n${failed.stderr}`);
+    assert.match(failed.stderr, /TS5023/);
+    assert.doesNotMatch(failed.stdout, /all held/);
+
+    writeFileSync(join(repo, broken), JSON.stringify(config));
+    writeFileSync(join(repo, "orphan.ts"), "export {};\n");
+    execFileSync("git", ["add", "orphan.ts"], { cwd: repo, stdio: "pipe" });
+    const orphan = run();
+    assert.equal(orphan.status, 1, orphan.stderr);
+    assert.match(orphan.stderr, /orphan\.ts/);
+    assert.match(orphan.stderr, /belong to no tsc program/);
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+  }
 });

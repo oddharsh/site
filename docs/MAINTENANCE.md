@@ -922,109 +922,52 @@ under "What the automation does, and why it stopped".
 
 ## Author a new LWE or Garage explainer
 
-The page generators carry the current editorial contract forward. LWE authors
-write `pipelines/lwe/specs/<id>.json`; Garage authors write
-`pipelines/garage/specs/<id>.json` and register the page in
-`pipelines/garage/pages.json`. Both specs require a reader/problem/thesis/
-evidence/uncertainty card and a three-to-seven-question understanding check.
+The [LWE guide](../pipelines/lwe/README.md) and
+[Garage guide](../pipelines/garage/README.md) own the creation steps. Both use
+[`page-contract.mjs`](../pipelines/content/page-contract.mjs) for the editorial
+card and three-to-seven-question understanding check.
 
-```bash
-node pipelines/lwe/generate.mjs page <id>
-node pipelines/lwe/generate.mjs wire
-node pipelines/garage/generate.mjs page <id>
-node pipelines/garage/generate.mjs wire
-bun run pages:check
-bun run og-cards   # bake the page's OG/Twitter card once it's live (see below)
-```
+Render the selected page with its generator and register the surface in
+`config/site-manifest.json`. For Garage, run `bun run gen:manifest` and author
+the shelf card and sitemap entry. LWE's `wire` command owns its buddy list,
+sitemap region, and ask allowlist, then calls the same manifest generator.
+Garage's retired `wire` command refuses to write.
 
-The shared contract lives in
-[`pipelines/content/page-contract.mjs`](pipelines/content/page-contract.mjs).
-It emits the shared quiz payload and runtime, checks the LRS/style guardrails,
-and keeps the understanding check diagnostic rather than a gate. Read the
-[LWE authoring guide](pipelines/lwe/README.md) and
-[Garage authoring guide](pipelines/garage/README.md) before starting a page.
-
-Key facts (don't hardcode these elsewhere, they drift):
-- RN_KV namespace id: `3cb8a107c58e47dc9244e75b33401f36`
-- R2 bucket: `aadhar-photos` (SOOC originals + full-res JPGs)
-- Thumbnails are content-addressed at `/i/<stem>.<hash8>.<ext>` (hashes.json via `hash-thumbnails.sh`); `THUMB_VERSION` is gone entirely (retired with the last legacy fallback — `lib/const.js` keeps only `CANONICAL_HOST` + `ARCHIVE_VERSION`).
-- The service worker RETIRED in v136 (2026-07-03): `src/client/sw.js` is an unregister stub that must keep serving 200 for a year+. There is no `CACHE_VERSION`; the deploy-log number lives in D1 (`bump-version.sh` derives the next from `MAX(vnum)`).
-- Canonical photo source: the aadhar-photos R2 bucket. Raw source files are
-  never committed to GitHub; the Actions workflow downloads only the requested
-  object keys into disposable runner storage.
+Run `bun run pages:check` and review the generated diff before release. Bake the
+OG/Twitter card once the page is live with `bun run og-cards` (see below).
 
 ---
 
 ## Route map (where each URL's code lives)
 
-`src/worker/` is a **directory** bundled by Cloudflare at deploy. The
-dispatcher lives in `index.js`; each route's handler lives in a per-section
-module (search the module name to find it). `lib/` holds shared helpers.
-Static sections (`/garage/*`, `/lwe/*`, `/cars/*`, shell JS, most discovery
-files) are served straight from disk. Worker-owned routes are enumerated in
-`index.js`; keep that table and `assets.run_worker_first` in sync.
+Start with [`src/worker/index.ts`](../src/worker/index.ts). Its route tables,
+pattern handlers, and host dispatch select the handler; the imports lead to
+its implementation. [`wrangler.jsonc`](../wrangler.jsonc)'s
+`assets.run_worker_first` decides which requests reach that dispatcher before
+static assets. Keep the two in sync when adding a Worker-owned route.
 
-| URL | Handler / mechanism | module / source |
-|---|---|---|
-| `/` | homepage prerender (HTMLRewriter over `index.html`) + markdown negotiation | `home.js` |
-| `/index.html` | 301 -> `/` | `index.js` |
-| `/favicon.ico` | inline traffic-cone SVG | `index.js` |
-| `/auth.md`, `/.well-known/api-catalog`, `/.well-known/agent-card.json`, `/.well-known/oauth-*` | `serveFreshAsset` (static cards) | `lib/assets.js` |
-| `/agent/auth`, `/agent/auth/claim`, `/oauth2/token`, `/oauth2/revoke` | `handleAgentAuth*` | `agent.js` |
-| `/whoareyou`, `/whoareyou.json` | `handleWhoareyou` / `handleWhoareyouJson` | `whoareyou.js` |
-| `/security` | `handleSecurityCenter` | `security.js` |
-| `/reading` | `handleReading` (Curius) | `reading.js` |
-| `/updates`, `/updates.json`, `/restore` | `handleWindowsUpdate` / `handleUpdatesJson` / `handleSystemRestore` (D1) | `updates.js` |
-| `/lens`, `/lens/`, `/lens/fetch`, `/lens/shot` | `handleLens` / `handleLensFetch` / `handleLensShot` | `lens.js` |
-| `/coffee`, `/coffee/*` | Cal booking module delegation | `../cal/src/index.js` |
-| `/serendipity`, `/serendipity/*` | Serendipity module delegation + local CSP | `../serendipity/serendipity.ts` |
-| `/lens.js` | static client renderer | `src/client/lens.js` (served asset) |
-| `/llms-full.txt` | `handleLlmsFull` (x402 bot paywall; free until `X402_PAY_TO` is set) | `x402.js` |
-| `/ledger`, `/ledger.json` | `handleLedger` / `handleLedgerJson` (AI-crawler invoice from Analytics Engine; counting via `countCrawlerHit` in `index.js`) | `ledger.js` |
-| `/writing`, `/writing/`, `/writing/<slug>` | `handleWritingIndex` / `handleWritingPost` (Notepad) | `writing.js` |
-| `/writing/<slug>.txt`, `/writing/posts.json` | ASSETS passthrough (dotted paths fall through) | n/a |
-| `/rn`, `/rn/tracks`, `/rn/admin`, `/rn/set` | `handleRn` / `handleRnTracks` / `handleRnAdmin` / `handleRnSet` | `rn.js` |
-| `/bot` | `handleBotPage` | `bot.js` |
-| `/around`, `/around/json` | `handleAround` / `handleAroundJson` (AadharshBot crawl) | `around.js` |
-| `/images`, `/images/full` | 301 -> trailing slash | `index.js` |
-| `/images/*` selected routes (listings, manifest, metadata, R2 originals, thumb 404 clamp) | `handleImages*` / `servePhotoFromR2` + asset 404 clamp in `index.js` | `photos.js` (+ `index.js`) |
-
-The shared toolbox: `lib/const.js` (CANONICAL_HOST, ARCHIVE_VERSION), `lib/http.js`
-(esc, json/error responses, markdown negotiation), `lib/security.js` (security +
-discovery headers), `lib/chrome.js` (the XP window CSS + `lunaPage` shell),
-`lib/cache.js` (`swrKV` + `cachedRender`), `lib/botauth.js` (AadharshBot signed
-fetch), `lib/assets.js` (`serveFreshAsset` + asset 404 clamp).
+[`config/site-manifest.json`](../config/site-manifest.json) owns the public
+surface registry and discovery metadata. URL paths and source paths differ:
+[`tools/build.ts`](../tools/build.ts) stages authored pages, client modules,
+styles, and unchanged public assets into the served tree.
 
 ### Bindings the worker reads (`env.*`)
 
-KV/R2/D1/DO are resource bindings; the rest are secrets. Bindings live in
-wrangler.jsonc; secrets on the Worker via `wrangler versions secret put`. Every use is
-guarded, so a missing binding degrades, it doesn't crash.
+[`wrangler.jsonc`](../wrangler.jsonc) declares bindings, vars, and required
+secret names. [`src/worker/lib/env.ts`](../src/worker/lib/env.ts) documents their
+uses and distinguishes required, optional, and injected values.
+`bun run env:check` compares those declarations; it also runs in `typecheck`.
 
-| `env.*` | Kind | What |
-|---|---|---|
-| `ASSETS` | (auto) | Workers static assets binding (wrangler.jsonc `assets`) |
-| `RN_KV` | KV | tracks, manifest, artist pics, crawler caches (`3cb8a107c58e47dc9244e75b33401f36`) |
-| `PHOTOS_R2` | R2 | bucket `aadhar-photos`, SOOC originals |
-| `RESTORE_DB` | D1 | `/restore` + `/updates` changelog store |
-| `SERENDIPITY_DB` | D1 | Serendipity event dashboard |
-| `BOOKINGS` | KV | Cal pending/confirmed bookings + calendar snapshot |
-| `COUNTER` | Durable Object | cross-script binding to cf-garage's Counter (homepage visits) |
-| `RN_SIGNING_KEY_JWK` | secret | AadharshBot Ed25519 signing key (RFC 9421). Absent → every signed outbound fetch throws, by design |
-| `RN_SIGNING_KEY_MLDSA_JWK` | secret | **UNUSED since 2026-08-15.** It held AadharshBot's ML-DSA-44 key while `sig2` shipped. The code now ignores it and a contract test pins that, because deleting a secret is its own release and the value outlived the feature. Safe to delete with `wrangler versions secret delete` whenever a release is going out anyway |
-| `BROWSER` | Browser Run | binding behind `/lens/shot` + `/lens/browser`; absent → clean 503 |
-| `CF_ACCOUNT_ID` | var | account id for the Analytics Engine SQL API (`/ledger` reads) |
-| `BOT_LEDGER` | Analytics Engine | dataset `aadhar_bot_ledger` — AI-crawler hit counts for `/ledger` (absent → counting silently off) |
-| `ANALYTICS_READ_TOKEN` | secret | API token (Account Analytics : Read) so `/ledger` can query the dataset back; absent → invoice renders with a "meter not readable" note |
-| `X402_PAY_TO` | var or secret | receiving EVM address for the `/llms-full.txt` x402 paywall; absent → file serves free with `x-payment-note` |
-| `X402_NETWORK`, `X402_FACILITATOR` | var | optional x402 overrides: network (`base` default, `base-sepolia` for tests) + verify/settle facilitator URL (default `https://x402.org/facilitator`, which is testnet-only — mainnet needs e.g. Coinbase CDP's) |
-| `RN_BUST_SECRET` | secret | guards `/rn/admin` + `/rn/set` |
-| `ICAL_URL` | secret | Cal's read-only Google/iCloud availability feed; changing it changes which busy events block slots |
-| `RESEND_API_KEY` | secret | Resend API credential used for booking and invite email |
-| `SIGNING_SECRET` | secret | Cal HMAC key for approve/decline links; rotating it invalidates outstanding links |
-| `WORK_CALENDAR_SLUG` | secret | exact unlisted path segment on `cal.aadhar.sh` for the external calendar redirect |
-| `WORK_CALENDAR_URL` | secret | validated `https://calendar.app.google/...` destination for that redirect |
-| `SYNC_SECRET`, `EXA_API_KEY`, `PARALLEL_API_KEY`, `COVER_SECRET` | secret | Serendipity sync, enrichment, and image-proxy credentials |
+Missing required secrets block publication. Only the optional tier is designed
+to degrade without its credential. Stage a secret with the versions command,
+then use the normal release path:
+
+```bash
+bun run wrangler versions secret put -c wrangler.jsonc <NAME>
+```
+
+The versioned command avoids an immediate traffic change. The Cal rotation
+procedures above explain which outstanding links a rotation invalidates.
 
 ### Files whose only consumer lives outside this repo
 
@@ -1058,16 +1001,15 @@ below whenever they look unreferenced again:
 
 ### Verify the whole route surface
 
-`node tools/verify-routes.ts [baseUrl]` curls every route and asserts status +
-content-type (+ markers). All-green ("0 hard failure(s)") is the gate before and
-after any deploy. The skeuomorphic `_worker.js/` module tree was extracted with
-this as the regression tripwire; keep it green on every future change.
+[`tools/verify-routes.ts`](../tools/verify-routes.ts) owns the route cases and
+asserts their status, content type, and selected markers. Run
+`node tools/verify-routes.ts https://aadhar.sh` to check production.
+"0 hard failure(s)" means the asserted cases passed; inspect skips and advisory
+rows separately.
 
-The same table runs **before** a merge through `bun run routes:check`, which
-boots the Worker in-process with Wrangler's `createTestHarness()` and points the
-oracle at it (about 5s end to end, build.ts included, since the harness honours
-`wrangler.jsonc`'s `build.command` and therefore serves the minified tree). CI
-runs it on every PR. Five rows carry `remote: true` and sit out the local pass,
+Before a merge, `bun run routes:check` builds the site, boots it with Wrangler's
+`createTestHarness()`, and runs the same oracle over HTTP. CI runs this on every
+PR. Five rows carry `remote: true` and sit out the local pass,
 because a local Worker structurally cannot have what they assert: production R2
 objects (`/images/full/…`, `/photos`), the cron's KV snapshot (`/around/json`),
 or the AadharshBot signing secret (`/lens/fetch`, `/lens/shot`). Everything else
@@ -1078,7 +1020,7 @@ one that sees real content.
 
 `bun run routes:check:remote` closes **part** of that gap on the workstation: it
 boots the same harness on a config whose KV/R2/Browser bindings reach production,
-sets `VERIFY_REMOTE=1`, and runs all 91 rows. It cannot run in CI (remote
+sets `VERIFY_REMOTE=1`, and includes the remote rows. It cannot run in CI (remote
 bindings need a write-capable token) so `bun run routes:check` remains the merge
 gate. See "Local dev and the route oracle against production data" above.
 
@@ -1196,16 +1138,39 @@ R2 object separately only if the full-resolution copy should also be removed.
 ```
 The normal remote equivalent is the `refresh-metadata` routine in the Remote
 photo pipeline workflow. Local `--merge` mode updates only a selected batch;
-the full directory mode rebuilds the metadata index. Every field is nullable;
-the tooltip skips nulls rather than guess.
+the full directory mode rebuilds the metadata index. Extraction also rebakes
+and packs histograms. Regenerate search terms and run `photos:check` before
+recording the `images/histograms` and `images/semantics` derivations, as the
+[workflow](../.github/workflows/photo-pipeline.yml) does. Metadata fields may
+be null; the tooltip skips absent values.
 
 ### Re-encode ALL thumbnails (e.g. a new resolution/quality)
+
+Use the `reencode-thumbnails` remote routine, or run the same stages locally
+with the source library available. Hashing alone leaves stale histograms.
+The subshell stops on the first failed stage:
+
 ```bash
-./tools/photos/reencode-thumbnails.sh           # re-encodes every grid thumb as pre-cropped center squares
-./tools/photos/hash-thumbnails.sh               # re-hash the tiers into /i/ + rewrite hashes.json
-# commit + deploy (new bytes = new URLs; the worker bundles the index + hashes, so the deploy is the bust)
+(
+  set -euo pipefail
+  PHOTO_SOURCE="/path/to/sooc-originals"
+  bun run derive:check
+  ./tools/photos/reencode-thumbnails.sh "$PHOTO_SOURCE"
+  ./tools/photos/hash-thumbnails.sh
+  ./tools/photos/extract-photo-metadata.sh --merge "$PHOTO_SOURCE"
+  node tools/photos/gen-photo-semantics.ts
+  bun run photos:check
+  for id in images/hashes images/histograms images/semantics; do
+    bun run derive:check -- --lock --only "$id"
+  done
+  bun run derive:check
+)
 ```
-`SQ_SM` (mobile tier) must match `THUMB_SMALL_PX` in `_worker.js` (the `-<N>.avif` suffix). add-photos.sh mirrors this script's two encode paths; keep them in sync.
+
+For a full-library run, confirm the encoder reports `source-missing: 0`;
+unavailable stems retain their old tiers. Review the complete artifact diff
+before release. Changing tier dimensions also requires updating the consumers;
+consult the [photo contract](PHOTO-PIPELINE.md#artifact-contract).
 
 ### Add a car reference photo (homepage tooltip)
 ```bash
@@ -1284,7 +1249,7 @@ the binding, delete `renderOverRest` and the token with it.
 
 **The selector rides `/browser-run/<action>`, not `/browser-rendering/<action>`.**
 Both spellings route, so the wrong one drops the opt-in without an error. Fixed
-2026-08-08; `restUrl()` in `lens-render.js` is the single source and a contract
+2026-08-08; `restUrl()` in `src/worker/lens-render.ts` is the single source and a contract
 test pins the path.
 
 **`engine: "kitesurf-requested"` means the selector was sent and the call came
@@ -1299,7 +1264,7 @@ BROWSER_RUN_TOKEN=... bun run kitesurf:check --render  # decisive, ~2 tiny rende
 
 It sends an invented engine name. A rejection proves the parameter is validated,
 which is what makes a 200 carrying `kitesurf` mean Kitesurf; on that verdict,
-promote the label in `lens-render.js` to a bare `kitesurf` and record the date
+promote the label in `src/worker/lens-render.ts` to a bare `kitesurf` and record the date
 and outputs at the control. Ration it: the account has 10 free browser-minutes a
 day and `--render` spends from the same budget `/lens/browser` does.
 
@@ -1487,7 +1452,7 @@ node tools/photos/inject-og-meta.ts   # add the meta to any page missing it (ide
 # then deploy — a deploy purges the edge so the refreshed card lands.
 ```
 
-- `gen-og-cards.mjs` drives the installed Chrome via `playwright-core` (a
+- [`gen-og-cards.ts`](../tools/photos/gen-og-cards.ts) drives the installed Chrome via `playwright-core` (a
   scripts-only devDep). Hero selector per page lives in the `HERO{}` map at the
   top; a page with no entry (or an essayistic one) falls back to the top of its
   XP window, which still reads well. `garage-vt-b`/`garage-vt-check` are excluded
@@ -1502,7 +1467,7 @@ node tools/photos/inject-og-meta.ts   # add the meta to any page missing it (ide
   `bun run og-cards` run before the URL resolves).
 - Worker-rendered routes (no static HTML for the generator to walk) live in
   `WORKER_PAGES{}` beside `HERO{}`, with their meta emitted from the page's own
-  renderer instead of `inject-og-meta.mjs`. `/lens` is one: its card captures a
+  renderer instead of `inject-og-meta.ts`. `/lens` is one: its card captures a
   live scan of stripe.com, so prewarm the two Browser-Rendering caches first or
   `networkidle` waits them out, and scope the run so the other 25 committed
   PNGs don't get rewritten with fresh-but-equal pixels:
@@ -1587,28 +1552,39 @@ curl -s "https://aadhar.sh/rn/tracks" >/dev/null                       # warms t
 
 ## Bust a cache
 
+The track cache stores its freshness stamp in the value's KV metadata. Delete
+one key to discard both, using the `RN_KV` namespace declared in
+[`wrangler.jsonc`](../wrangler.jsonc):
+
 ```bash
 NS="3cb8a107c58e47dc9244e75b33401f36"
-# (the photo manifest is no longer a cache: the worker bundles photo-index.json,
-#  so a deploy replaces it atomically and there are no manifest:* keys to touch)
-# directory-listing indexes:
-bun run wrangler kv key delete --namespace-id="$NS" "idx:images" --remote
-bun run wrangler kv key delete --namespace-id="$NS" "idx:imagesfull" --remote
-# a specific playlist's tracks (delete both keys):
 bun run wrangler kv key delete --namespace-id="$NS" "tracks:<id>" --remote
-bun run wrangler kv key delete --namespace-id="$NS" "tracks:<id>:fresh" --remote
 ```
 
+There is no `tracks:<id>:fresh` key to clear. The old directory-listing indexes
+are also retired: `/images/` and `/images/full/` redirect to `/photos`. The
+photo index and hashes are bundled with the Worker, so publishing those changes
+replaces the manifest without a KV purge.
+
 ### Bump THUMB_VERSION (retired — nothing to bump)
-Fully retired (hash cutover 2026-07-03): thumbnails are content-addressed at `/i/<stem>.<hash8>.<ext>`, so a re-encode mints new URLs by itself — run `./tools/photos/hash-thumbnails.sh` after re-encoding, commit, deploy (the bundled index/hashes make the deploy the bust). The constant no longer exists in `lib/const.js`; legacy `/images/<stem>.<ext>[?v=N]` URLs just 301 into `/i/` regardless of their `?v`. The worker route still clamps unknown-thumb 404s to `max-age=0` so misses do not inherit immutable caching.
+
+Thumbnails use `/i/<stem>.<hash8>.<ext>` URLs. The
+[photo pipeline](PHOTO-PIPELINE.md#artifact-contract) regenerates their hashes
+and dependent metadata together; a release serves the new identities.
+Legacy `/images/<stem>.<ext>` URLs redirect to those hashed assets. Keep the
+unknown-thumbnail 404 clamp so a missing image cannot inherit immutable caching.
 
 ### Read the homepage perf probe
-A cron (`7,37 * * * *`) renders `/` in-process, parses its own Server-Timing,
-and writes the spans to the `aadhar_perf_probe` Analytics Engine dataset
-(perf-probe.js). Columns are positional: `double1..5` = assets, tracks, alt,
-counter, total (`-1` = span absent); `blob1` = CSV of spans that hit the 25ms
-SSR deadline (`""` = none); `blob2` = the worker version id, so consecutive
-deploys A/B directly. Read it with the same token /ledger uses:
+The cron in [`src/worker/perf-probe.ts`](../src/worker/perf-probe.ts) times the
+track and photo-grid fragment handlers in-process. It writes to
+`aadhar_perf_probe` using the existing positional schema: `double2` is tracks,
+`double5` is the sum of completed handler timings, and `double1`, `double3`,
+and `double4` are `-1` because those old homepage spans are no longer measured.
+`blob1` is empty; `blob2` identifies the Worker version.
+
+The total can be partial when one handler throws; it is not browser load time
+or synchronous CPU time. Both handlers throwing produces no row. Query the
+series with the same token `/ledger` uses:
 ```bash
 curl -s "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/analytics_engine/sql" \
   -H "Authorization: Bearer $ANALYTICS_READ_TOKEN" \
@@ -1617,14 +1593,13 @@ curl -s "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/analytics_
       FROM aadhar_perf_probe WHERE timestamp > NOW() - INTERVAL '2' DAY
       ORDER BY timestamp DESC FORMAT JSON"
 ```
-A gap in the series means the probe itself failed — it writes nothing rather
-than fabricate a datapoint.
+A gap means no datapoint was recorded; it does not identify which stage failed.
 
 ### Read a trace (Workers Traces)
 Enabled in `wrangler.jsonc` under `observability.traces`, 100% sampled. Read them
 in the dashboard: **Workers & Pages -> aadhar-sh -> Observability -> Traces**.
 Every outbound fetch, binding call, and handler invocation is auto-instrumented;
-the named spans on top come from `lib/trace.js` (vocabulary table in CLAUDE.md).
+the named spans on top come from `src/worker/lib/trace.ts` (vocabulary table in CLAUDE.md).
 
 The queries worth knowing, because each one used to be unanswerable:
 - **"why was that /lens scan slow"** — open a `route /lens/fetch` trace and read
@@ -1644,7 +1619,7 @@ The queries worth knowing, because each one used to be unanswerable:
   00/06/12/18:23 UTC), then the run's summary log line: per-contributor
   `{synced}` or `{error}`. A `Luma 401` there means the stored session finally
   died and the fix is a cookie re-paste at `/serendipity/contribute`; the cron
-  plus the Set-Cookie capture in `serendipity.js` (`cookieJar`) exist to make
+  plus the Set-Cookie capture in `serendipity/serendipity.ts` (`cookieJar`) exist to make
   that rare, since every sync both keeps the session warm and persists any
   rotated cookie Luma issues back to D1.
 
@@ -1657,8 +1632,9 @@ Those two spans are kept for their attributes. When you actually want CPU:
 bun run wrangler tail aadhar-sh --format json | grep -o '"cpuTime":[0-9]*'
 ```
 
-Only `_worker.js/index.js` may import `cloudflare:workers` (CLAUDE.md gotcha 16)
-— the tracer is injected into `lib/trace.js` and `cal/src/trace.js` from there.
+The site entrypoint [`src/worker/index.ts`](../src/worker/index.ts) injects the
+runtime tracer into `src/worker/lib/trace.ts` and `cal/src/trace.ts`, so those
+helpers can also load under Node.
 That injection runs at module scope, and workerd loads that module locally too,
 which is why the next section works with no setup at all.
 
@@ -1795,7 +1771,13 @@ Both live cases now require an HTTP RESPONSE, so a control run with the network
 down fails instead of printing two green refusals it never earned.
 
 ### Log a deploy (bump-version.sh)
-`./tools/photos/bump-version.sh <slug> "<title>"`, then deploy. Inserts the next checkpoint into D1 (vnum from `SELECT MAX(vnum)`), which is what `/updates` and `/restore` render. Nothing edits sw.js anymore: the service worker retired in v136, `nav.js`/`notepad.js` updates land via their short `_headers` max-age plus the per-deploy edge purge, and the stub at `/sw.js` cleans up old installs.
+
+Run `./tools/photos/bump-version.sh <slug> "<title>"` inside the release PR. It
+stages the next entry in `src/worker/checkpoints.json` and performs no network
+or D1 write. Commit that entry with the change it describes. The full ramp
+records it in D1 after traffic reaches 100%; see the
+[release path](#cicd-release-path). Keep the `/sw.js` unregister stub: it still
+cleans up old service-worker installations and carries no version counter.
 
 ---
 
@@ -1804,14 +1786,14 @@ down fails instead of printing two green refusals it never earned.
 ```bash
 dig _index._agents.aadhar.sh SVCB +dnssec +short          # DNS-AID agent-discovery record
 curl -s https://aadhar.sh/.well-known/http-message-signatures-directory | jaq .   # AadharshBot JWKS (Web Bot Auth)
-curl -sD- -o /dev/null "https://aadhar.sh/images/<stem>.avif?v=<N>"  # a thumb: expect 200 image/avif, 1yr immutable
+curl -sD- -o /dev/null "https://aadhar.sh/i/<stem>.<hash8>.avif"  # use a hashes.json entry: 200 image/avif, immutable
 curl -s "https://aadhar.sh/images/manifest.json" | jaq length          # photo count
 ```
 
 ### Markdown twins
 
-Nothing to run by hand: `build.ts` generates them, and the deploy fails if fewer
-than 30 appear. To check the live surface:
+The build generates Markdown twins and checks their coverage. To check a live
+surface:
 
 ```bash
 curl -s -o /dev/null -w "%{http_code} %{content_type}\n" https://aadhar.sh/garage/encoding.md
@@ -1820,47 +1802,41 @@ curl -s https://aadhar.sh/garage/llms.txt | head
 ```
 
 The first two must both answer `text/markdown`; a browser `Accept` header and a
-bare `*/*` must both still get `text/html`. `/bot` and `/whoareyou` are the two
-twins written BY HAND (in `src/content/md/`), because those pages render from Worker
-template literals no build step can read. Edit either page and the deploy fails
-until its twin agrees: `checkTwinFacts()` recomposes the User-Agent from
-`botauth.js`'s own constants and requires it verbatim in `bot.md`, so a
-`BOT_VERSION` bump is caught instead of quietly leaving the twin a version behind.
+bare `*/*` must both still get `text/html`. Authored twins live in
+[`src/content/md/`](../src/content/md/). The selection rules and guarded facts
+live in [`tools/gen-md-twins.ts`](../tools/gen-md-twins.ts): `checkTwinFacts()`
+checks the declarations in `TWIN_FACTS`, including the bot User-Agent. Update
+an authored twin when its page changes; the fact checks cover named claims,
+not every sentence.
 
 ---
 
 ## The scripts (`tools/photos/`)
 
-| script | what it does |
-|---|---|
-| `add-photos.sh` | Full pipeline for new photos: resize, EXIF-rotate, encode AVIF+JPG center-square thumbs, upload the full-resolution browser copy to R2, write the stem's `photo-index.json` entry, regenerate metadata, bake histograms, and validate the artifact graph. |
-| `check-photo-pipeline.mjs` | CI-safe invariant check: every metadata stem has all three hashed tiers, per-photo metadata, and four 64-bin histogram channels, with no orphaned pixel files. Also walks the authored HTML/JS for hardcoded `/i/<stem>.<hash>` URLs (the `/garage/tooltips` demo slots have three) and fails if a re-encode has pruned the bytes one of them names. |
-| `extract-photo-metadata.sh` | Read EXIF from the SOOC folder, emit `images/metadata.json` + per-photo `images/meta/<stem>.json`. Pulls the Fuji recipe fields too. Requires exif-sooc + jaq. **Two schemas, on purpose:** `metadata.json` is the RECORD (long, self-documenting field names, plus the derived `recipe` card) and the per-photo files are the tooltip's RENDER CACHE (short keys, tooltip-only fields, nulls dropped, ~28% smaller compressed because one is fetched per hover). Bump `META_V` in `tooltip.js` when the per-photo shape changes. |
-| `build-exif-index.mjs` | **RETIRED 2026-08-29**, along with `build-image-fingerprints.ts`. Both rolled a committed index out of the pipeline's own leftovers, and both are BUILD OUTPUT now: `tools/lib/photo-indexes.ts` holds the two derivations and `build.ts` step 1a stages `images/exif.json` and `images/fingerprints.json` into `.build/public` on every deploy, so both still ship at the URLs they always had. Neither script has a caller left; `extract-photo-metadata.sh` and `hash-thumbnails.sh` each dropped one line. **Why exif.json exists at all:** the homepage draws a random 12 of 165 per request, so warming metadata per visible slot was 12 cold requests on nearly every visit (a given slot repeats ~7.6% of the time). One immutable index is smaller than that on the first visit and free after. Histograms stay out of it because they are 623 of a per-photo file's ~977 bytes, so folding them in would take the index from 2.6KB to 24KB for bars most visitors never see. |
-| `build-recipes.py` | **RETIRED 2026-08-14.** The Fujifilm recipe card is derived during extraction now, by `exif-sooc --keyed`, from the Fuji tags rather than from the flattened record this script re-read. Same idiom and same output: all 158 committed cards regenerate byte-identical. One behaviour change worth knowing, since the old script rewrote every card on every run: a `--merge` run now refreshes the BATCH only, so re-run a full extraction after an exif-sooc upgrade that changes the card. Query it with `/photos/query.json?recipe=DR400` as before. |
-| `reencode-thumbnails.sh` | Re-encode every published grid thumb from the source folder at a new resolution (pre-cropped squares, two tiers). Follow with `hash-thumbnails.sh`, then commit + deploy. |
-| `add-car-photo.sh` | One resto-mod reference photo -> `cars/<stem>.{avif,jpg}` for the homepage car tooltips. No EXIF, no R2. |
-| `zenc/` | The JPEG thumbnail encoder: a Rust crate wrapping zenjpeg (hybrid trellis + progressive scan search). `cargo build --release` (auto-built on first pipeline run). `zenc <in> <out> -q 84`. dependabot tracks the zenjpeg pin; replaced the from-source jpegli build in 2026-07. |
-| `download-remote-photos.sh` | Download selected R2 object keys into disposable runner storage for the GitHub Actions photo workflow; accepts `all` for the public manifest. |
-| `gen-alt-text.py` | AI alt text for grid photos -> `images/alt.json`. Run by `add-photos.sh` phase 4. Posts the committed `i/` thumbnail to Workers AI when `CLOUDFLARE_API_TOKEN` is set (captions pre-deploy), else asks `/garage/cf/caption` by stem (deployed photos only). Resumable. |
-| `gen-photo-semantics.mjs` | Retrieval terms for `photo_query` -> `images/semantics.json`. Derived tier (EXIF vocabulary repair) needs nothing; `--vision` adds model-written keywords and needs `CLOUDFLARE_API_TOKEN`. Deliberately offline so the Worker keeps zero AI credentials. Resumable. |
-| `gen-encoding-samples.sh` | Regenerate the color sample set for `/garage/encoding` through every encoder; defaults to the committed `garage/enc/c-png.png` fixture and prints byte counts. |
-| `zenc histogram --root public` | Bakes four 64-bin RGB/luminance histogram channels into each per-photo `images/meta/<stem>.json` from the shipped hashed JPG tier. A subcommand of the encoder crate since 2026-08-14 (it was `photo-histograms.py` + Pillow), called by both metadata extraction and `add-photos.sh`. `--check` compares against what is on disk and writes nothing, which is how you tell a decoder bump from an edit. |
-| `gen-og-cards.mjs` | Render the 1200x630 OG/Twitter card per garage + lwe page (live demo on the Bliss desktop) into `public/og/`. `bun run og-cards`. Drives the installed Chrome via `playwright-core`; captures production so data-driven demos render full. Hero selectors + presets in the `HERO{}` map. See "Regenerate the OG / Twitter cards". |
-| `inject-og-meta.mjs` | Idempotently add `og:image`/`twitter:card` meta to any garage + lwe page missing it, pointing at `/og/<section>-<name>.png`. `--check` reports gaps without writing. |
-| `hash-thumbnails.sh` | sha256 each pixel tier into `public/i/<stem>.<hash8>.<ext>`, write `images/hashes.json`, and prune tiers no longer named by it. Run by `add-photos.sh`; a re-encode mints new URLs, so there is no version to bump. It also built the full-byte `images/fingerprints.json` until 2026-08-29; the build derives that from these same bytes now. |
-| `gen-encoding-grids.sh` | Regenerate the ZOOMED 96px comparison crops (`garage/enc/z-*`) that `/lwe/encoding` fetches. Run by the `regenerate-encoding-study` routine of the photo workflow. |
-| `gen-desktop-partial.mjs` | Bake the XP desktop shell into `_worker.js/lib/desktop.js` and patch it into the 28 static pages, generated from nav.js's own `PROFILES`/`SUBPAGES`/`SECTION_ICONS`/tray template so the two cannot drift. Re-run after editing any of those. A run on an unchanged tree is a byte-exact no-op. |
-| `bump-version.sh` | Insert one `checkpoints` row into the `aadhar-restore` D1 database, deriving the next vnum from `MAX(vnum)`. Both `/restore` and `/updates` read that table, so this is the only place a deploy gets logged. `./tools/photos/bump-version.sh <slug> "<title>"`. |
+Use the task recipes above and the [photo artifact contract](PHOTO-PIPELINE.md).
+The canonical indexes answer the remaining questions:
+
+- [`package.json`](../package.json) names supported commands such as `photos`,
+  `photos:check`, `gen:shell`, and `og-cards`.
+- [`config/derivations.json`](../config/derivations.json) names artifact inputs,
+  regeneration commands, and the writers that deliberately sit outside that graph.
+- [`config/tools.json`](../config/tools.json) declares external binaries, their
+  installation paths, and which scripts require them. Run `bun run tools:check`
+  to compare the declaration, documentation, and installed tools.
+
+For a lower-level operation, read the selected script in
+[`tools/photos/`](../tools/photos/) before running it. Several write committed
+artifacts or R2 objects; their flags and output paths define the scope.
 
 ---
 
 ## Gotchas that have bitten me
 
-- **Thumbnail 404s must be uncacheable.** Workers static assets no longer return homepage HTML for missing files, but a real miss under `/images/*` can still inherit the immutable cache rule unless the worker clamps it. Keep the thumbnail route worker-first; a re-encode mints a fresh `/i/` URL by itself, so there is no version to bump.
-- **zsh eats `${var}:something`.** Brace-quote KV key names with colons (`"tracks:${OLD}:fresh"`), and use `${=flag}` if you need word-splitting in ad-hoc snippets (the scripts use `#!/usr/bin/env bash` so they are safe internally).
-- **`jpegtran` / mozjpeg strip EXIF.** Rotate losslessly with `jpegtran -copy none -rotate N` *before* recompressing, and send its binary stdout to a file (`2>/dev/null > out.jpg`), not through a pipe that could mix in stderr.
-- **Production deploy = merge to `main`, CI promotion to `production`, then Workers Builds**; the single site Worker deploys the root `wrangler.jsonc`, bundling `public/`, `cal/src/`, and `serendipity/` from that exact release branch. The deploy config points `main` + `assets` at `.build/public` and runs `build.ts` first through its `build.command`, so the production path self-builds and ships the minified client scripts + `luna.css`. Local dev is the exception: `wrangler dev -c wrangler.dev.jsonc` (`bun run dev`, wired into `.claude/launch.json`) serves the readable tree directly. Before merging, CI runs `bun run perf-budget`; after configuring Workers Builds, verify its release status and run `node tools/verify-routes.ts https://aadhar.sh` plus the `/coffee` and `/serendipity` route smoke checks.
-- **`_playlistId` is module-cached per isolate.** After changing `playlist-id`, redeploy to flush it (see the playlist section).
-- **The worker is bundled, not hand-concatenated.** `_worker.js/` imports sibling modules; wrangler bundles them at deploy via built-in esbuild.
-- **Authoring is buildless; SERVING is minified.** `build.ts` (repo root; minifier devDependencies: `@minify-html/node`, `lightningcss`, `oxc-minify`) copies `public/` to `.build/` and minifies: `index.html` (structure via minify-html, inline CSS/JS through the same Lightning CSS + Oxc settings, with marker tripwires and a readable `/index.src.html` twin), the six client scripts (`nav.js`, `notepad.js`, `lens.js`, `lens-browser.js`, `quiz.js`, `tooltip.js`), `luna.css` (owner-approved 2026-07), and the worker modules' `/*min*/` CSS literals — each with a readable `/<name>.src.*` twin (the banner in each minified file points there). It hard-fails the deploy if `luna.css` doesn't parse as valid CSS (the v143 corruption slipped through for three releases), and content-hashes `nav.js` + `luna.css` into immutable `/a/` URLs. Garage/lwe HTML, images, and `_headers` ship byte-identical to git (View Source is part of the design). Do NOT extend the build into bundling or version auto-bumps; the scripts remain independently readable islands.
+- **Thumbnail 404s must be uncacheable.** Keep the Worker-first legacy thumbnail
+  route and its 404 clamp; otherwise a missing image can inherit immutable caching.
+- **Brace shell variables before a colon.** Use `"${KEY}:suffix"`; unbraced
+  `$KEY:suffix` can invoke a zsh parameter modifier. The committed pipeline
+  scripts use Bash and declare their interpreter.
+- **Keep image bytes out of diagnostic streams.** When using `jpegtran`, send
+  its binary stdout to a file and keep stderr separate. Rotate from source EXIF
+  before stripping it; see the photo pipeline's orientation contract.

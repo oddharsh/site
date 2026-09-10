@@ -10,24 +10,17 @@
     "target": "esnext",
     "module": "esnext",
     "moduleResolution": "bundler",
-    // The served URL root is a COMPOSITE now: build.ts stages public/, src/client/
-    // and src/styles/ into one tree, so /hoist.js and /nav.js resolve out of
-    // src/client while /index.html and /images/* still come from public/. Listing
-    // both is what keeps an absolute specifier checkable after the split.
+    // Absolute imports resolve across the served asset trees: src/client/,
+    // src/styles/, and public/. Documents are authored separately in src/pages/.
     "paths": { "/*": ["../src/client/*", "../src/styles/*", "../public/*"] },
     "lib": ["esnext", "dom", "dom.iterable"],
     "skipLibCheck": true,
-    // Two control-flow checks, set here because they are set in tsconfig.json
-    // and a program is only as strict as its own options. Both cost nothing:
-    // +0 diagnostics on every one of the ten programs, measured 2026-08-27.
     "noFallthroughCasesInSwitch": true,
     "noImplicitReturns": true,
-    // strictNullChecks ON, against the ratchet in check-browser-types.ts. The
-    // program carried 509 diagnostics under it; 344 are fixed and the rest are
-    // recorded per file in config/ts-browser-baseline.json, where they can only
-    // fall. Every fix is JSDoc on purpose: these assets are content-hashed, a
-    // JSDoc type is a comment the minifier strips, and the hash does not move.
-    // See that wrapper for the one shape that DOES move it.
+    // bun run typecheck:browser holds the current per-file counts in
+    // ts-browser-baseline.json. Prefer JSDoc changes when fixing these hashed
+    // assets: check-browser-types.ts explains why splitting a declaration to
+    // host a comment can still change the built bytes. Verify the hashes.
     "strictNullChecks": true,
     "strict": false
   },

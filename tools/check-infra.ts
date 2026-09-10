@@ -145,9 +145,7 @@ const pass = (m: string) => ok.push(redactCredentials(m));
 
 // ---------------------------------------------------------------- JSONC ----
 
-// stripJsonc moved to tools/lib/jsonc.ts when gen-remote-config.mjs needed
-// the same string-aware walk. One parser, so the two cannot disagree about what
-// wrangler.jsonc says.
+// Share the reader with gen-remote-config.ts so both see the same config values.
 async function readJsonc(rel) {
   return parseJsonc(await readFile(join(ROOT, rel), "utf8"));
 }
