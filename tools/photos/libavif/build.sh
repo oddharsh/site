@@ -6,7 +6,7 @@
 # laptop. Two consequences, both bad:
 #
 #   1. `/i/` is content-addressed, so the encoder decides shipped URLs. A
-#      `brew upgrade` could re-mint them silently, which is gotcha 41 waiting to
+#      `brew upgrade` could re-mint them silently, which is gotcha 46 waiting to
 #      happen. config/tools.json carries a whole `recorded`-version tier to
 #      DETECT that drift; a pinned build removes the drift instead.
 #   2. Homebrew's libavif is built WITHOUT libsharpyuv, so `--sharpyuv` is

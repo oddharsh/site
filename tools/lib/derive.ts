@@ -5,7 +5,7 @@
 // The failure this exists for has happened at least four times here, always the
 // same shape and always silently. #394 re-encoded 316 thumbnails on 2026-08-14
 // and re-baked no histograms, so images/histograms.json described pixels nobody
-// had been served for nine days (gotcha 41). An /a/ asset changing hash orphans
+// had been served for nine days (gotcha 46). An /a/ asset changing hash orphans
 // every a-dict snapshot naming the old one (gotcha 20). A cosmetic edit to a
 // hashed client asset re-mints 1400 files (gotcha 35). The search index froze
 // twice under two unrelated causes (the search-corpus note).
@@ -40,7 +40,7 @@
 // ── the two tiers, and why the second one is honest rather than lazy ──────────
 // PINNED     the inputs are committed bytes, so the recorded digest is checkable
 //            here, now, with no tool and no network. This is the tier that
-//            catches gotcha 41.
+//            catches gotcha 46.
 // UNVERIFIABLE  the inputs are not in this repository (SOOC originals, a live
 //            production capture, a model's output). The declaration says so and
 //            says WHY, and the check reports it as a note. It never counts as a

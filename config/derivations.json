@@ -9,7 +9,7 @@
     "avifenc on this machine is the one that baked the library. This asks whether",
     "the library still matches what was baked FROM it. A tool can be perfectly",
     "pinned while every artifact downstream of it is nine days stale, which is",
-    "exactly what happened (gotcha 41).",
+    "exactly what happened (gotcha 46).",
     "",
     "WHY A GRAPH RATHER THAN ANOTHER TRIPWIRE. Four incidents here share one",
     "shape: a content-addressed input moved and something derived from it did not.",
@@ -253,7 +253,7 @@
       "Every file that WRITES is classified exactly once, so a generator nobody",
       "declared cannot exist quietly. config/derivations.json answers 'is this",
       "artifact stale' and could not answer the question underneath it: whether an",
-      "artifact has a declaration at all. That is the gap gotcha 41 fell through,",
+      "artifact has a declaration at all. That is the gap gotcha 46 fell through,",
       "since histograms.json had no declaration and so there was nothing for a check",
       "to be wrong about.",
       "",
@@ -300,7 +300,7 @@
       "tools/relock-dependabot.ts": "rewrites the version pins inside docs/DEPENDENCIES.md to match the lockfile, in a throwaway worktree during a dependabot relock. The prose is edited in place rather than generated, and contract-docs-dependencies-md-states-version-pins-in-prose.test.mjs already holds those pins to the lockfile on every run, which is the check a digest here would duplicate",
       "tools/photos/add-photos.sh": "the ORCHESTRATOR rather than a generator: it drives zenc, exif-sooc, hash-thumbnails.sh and gen-alt-text.py in order, and every artifact that comes out is declared by the script that actually produces it. It also re-bakes the whole library on every run, so it has never been the path that leaves derived data behind",
       "tools/photos/bump-version.sh": "appends one entry to src/worker/checkpoints.json, the deploy-log projection, and writes nothing else. checkpoints:check already diffs that projection against D1 in both directions, which is a stronger claim than a digest of its inputs would be",
-      "tools/photos/reencode-thumbnails.sh": "produces public/i/, which is an INPUT to images/histograms, images/fingerprints and images/hashes rather than an output of anything. It is also the exact script whose standalone use caused gotcha 41: it told you to re-run hash-thumbnails.sh and stopped there. derive:check is what now catches a run that re-encodes and skips the re-bake, and the script points at it"
+      "tools/photos/reencode-thumbnails.sh": "produces public/i/, which is an INPUT to images/histograms, images/fingerprints and images/hashes rather than an output of anything. It is also the exact script whose standalone use caused gotcha 46: it told you to re-run hash-thumbnails.sh and stopped there. derive:check is what now catches a run that re-encodes and skips the re-bake, and the script points at it"
     },
     "shellRoots": [
       "tools",

@@ -300,7 +300,7 @@ test("derivations: a set-mode entry declares what it covers", () => {
 // ── the census: no generator exists that nothing declares ────────────────────
 // The graph answers "is this artifact stale" and cannot answer the question
 // underneath it, which is whether an artifact has a declaration at all. That is
-// the gap gotcha 41 fell through.
+// the gap gotcha 46 fell through.
 
 const writers = await findWriters(root, decl.writers.roots);
 const shell = await findShellTouchers(root, decl.writers.shellRoots ?? decl.writers.roots);
@@ -371,7 +371,7 @@ test("census: the shell tier still sees the scripts it was built for", () => {
   }
 });
 
-// gotcha 41's residual gap was this script telling you to re-run hash-thumbnails
+// gotcha 46's residual gap was this script telling you to re-run hash-thumbnails
 // and stopping there, which is exactly the run that leaves the histograms behind.
 test("census: the standalone re-encode path points at derive:check", async () => {
   const src = await readFile(new URL("tools/photos/reencode-thumbnails.sh", ROOT), "utf8");

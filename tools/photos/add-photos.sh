@@ -128,7 +128,7 @@ TMP="/tmp/aadhar-add-photos-$$"
 # what the encoders are asked to do. All 48 output tiers came back byte-identical
 # at every JOBS value on both boxes, which is the bar that matters here, since
 # `/i/` is content-addressed and one moved byte re-mints the URL and orphans the
-# baked histogram behind it (gotcha 41). That is also why avifenc's own `--jobs`
+# baked histogram behind it (gotcha 46). That is also why avifenc's own `--jobs`
 # is untouched: measured 2026-08-31, `--jobs 1` and `--jobs 2` disagree on the
 # bytes (17,389 against 17,347 on one 600px tile), with everything from 2 up
 # identical, so the thread count is baked into the encode and stealing threads
@@ -252,7 +252,7 @@ fi
 # AVIF encoder, in preference order. The VENDORED build is first because it is
 # the only one this repo can pin: `/i/` is content-addressed, so the encoder
 # decides shipped URLs, and a `brew upgrade libavif` could re-mint them silently
-# (gotcha 41). tools/photos/libavif/build.sh builds libavif at a pinned tag with
+# (gotcha 46). tools/photos/libavif/build.sh builds libavif at a pinned tag with
 # aom, libsharpyuv and libyuv LOCAL.
 #
 # Preferring it costs NOTHING today: verified 2026-08-26 that the vendored and
