@@ -14,7 +14,6 @@
 // independently renders these artifacts and hard-fails on any drift.
 
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
-import { pathToFileURL } from "node:url";
 import { readManifest } from "../../tools/gen-manifest.ts";
 import { DESKTOP, PROFILES, SECTION_ICONS, SPECULATION, TASKBAR, TRAY_ITEMS } from "./shell-data.ts";
 
@@ -204,4 +203,4 @@ function main() {
   console.log(`patched ${patched} static pages with the canonical desktop partial`);
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) main();
+if (import.meta.main) main();

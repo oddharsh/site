@@ -36,7 +36,6 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { pathToFileURL } from "node:url";
 import { readDocument } from "./lib/html-to-md.ts";
 
 export const ORIGIN = "https://aadhar.sh";
@@ -436,5 +435,4 @@ function main() {
   console.log(`md twins: ${twins} pages + ${indexes} section indexes -> ${outDir}` + (skipped.length ? ` (no prose source: ${skipped.length})` : ""));
 }
 
-// argv[1] is undefined under `node -e`, where this module is only ever imported
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
+if (import.meta.main) main();

@@ -5701,10 +5701,37 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     **The guard therefore reads false and the CLI exits 0 having written
     nothing**, which is the worst available failure: the fixture files keep the
     real repository's bytes, so the wiring assertions compare canonical content
-    against canonical content and report the generator as broken. Six modules
-    across `tools/` and `pipelines/` carry a guard of that shape. Nothing in
-    production spawns one through a symlink, so the fixture root is the whole
-    exposure and one `realpath` closes it.
+    against canonical content and report the generator as broken.
+
+    **NINE modules carried a comparison of that shape, and they are all on
+    `import.meta.main` now.** The sweep that found six by one grep pattern
+    missed three more, including `build-histogram-index.ts`, which compared
+    against a hand-built `` `file://${process.argv[1]}` `` and so was separately
+    wrong on any path holding a space or a `#`. The repair is a DELETION rather
+    than a more careful comparison: the runtime already knows which module is
+    the entry point, so asking it directly leaves no path arithmetic to get
+    wrong. Measured on one file reached through a symlinked directory, where
+    the two questions disagree:
+
+    | | `import.meta.main` | `argv[1]` vs `import.meta.url` |
+    |---|---|---|
+    | node 26, direct | true | true |
+    | node 26, through the symlink | true | **false** |
+    | bun 1.4, through the symlink | true | true |
+    | either, imported rather than run | false | false |
+
+    `engines.node` is `>=26.0.0` and the property landed in 24.0.0, so the floor
+    was already clear and three modules here were using it. A full build before
+    and after is byte-identical across all 1829 staged files, which is the bar
+    that matters when `/a/` and `/i/` are content-addressed.
+
+    `contract-main-module-guards-survive-a-symlinked-path` pins both halves. It
+    walks `git ls-files` for either spelling of the comparison, and it RUNS a
+    fixture module through a symlink it creates itself, so the behavioural half
+    reproduces on Linux CI rather than riding macOS's `/var`. It also pins the
+    DIVERGENCE, since node still splitting the two is the entire evidence for
+    the rule, and a release closing that gap should be noticed rather than
+    quietly making the structural half look unnecessary.
 
     **The RESIDUE is the sharper half, because a passing test in the same file
     was passing for the wrong reason.** `contract-scoped-typecheck`'s coverage

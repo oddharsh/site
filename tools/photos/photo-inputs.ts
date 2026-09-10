@@ -1,6 +1,5 @@
 import { readdir, realpath, stat } from "node:fs/promises";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
 
 const JPEG = new Set([".jpg", ".jpeg"]);
 const HEIF = new Set([".hif", ".heic", ".heif"]);
@@ -100,6 +99,6 @@ async function main() {
     .map(field => `${field}\0`).join(""));
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (import.meta.main) {
   main().catch(error => { console.error(`error: ${error.message}`); process.exitCode = 1; });
 }

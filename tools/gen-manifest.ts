@@ -22,7 +22,6 @@
 // Only main() touches the filesystem, and only when run directly.
 
 import { readFileSync, writeFileSync } from "node:fs";
-import { pathToFileURL } from "node:url";
 import { PROFILES } from "../tools/photos/shell-data.ts";
 
 export const MANIFEST = "config/site-manifest.json";
@@ -135,4 +134,4 @@ function main() {
   console.log(`lib/site-manifest.js: ${agentSurfaces(surfaces).length} agent surfaces`);
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) main();
+if (import.meta.main) main();

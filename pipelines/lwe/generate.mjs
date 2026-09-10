@@ -30,7 +30,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join } from "node:path";
 import { renderUnderstanding, validatePageSpec } from "../content/page-contract.mjs";
 import { DESKTOP_CHROME, DESKTOP_TOP } from "../../src/worker/lib/desktop.ts";
 
@@ -236,7 +236,7 @@ function injectBetween(file, start, end, content) {
 export { pageHtml, chromeCss, renderMsg };
 
 // ---- CLI ----
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (import.meta.main) {
   const [cmd, arg] = process.argv.slice(2);
   if (cmd === "page") {
     const spec = JSON.parse(readFileSync(join(HERE, "specs", `${arg}.json`), "utf8"));
