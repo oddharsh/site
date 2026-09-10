@@ -12,7 +12,7 @@
 // between two compilers. It compared a fresh bake against the COMMITTED set,
 // which came from an unrecorded build, so drift-from-committed was the only
 // thing observed and rustc was the last suspect standing rather than a measured
-// cause. CLAUDE.md gotcha 41 later found the real one: #394 re-encoded 316
+// cause. CLAUDE.md gotcha 46 later found the real one: #394 re-encoded 316
 // thumbnails, so the committed histograms described bytes nobody was served.
 //
 // Measured here 2026-08-28, rustc 1.93.0 / 1.96.0 / 1.98.0 over all 165 stems:
@@ -130,5 +130,5 @@ for (let i = 1; i < CHAINS.length; i++) {
 }
 console.log(differ
   ? `\nVERDICT: the compiler MOVES histograms. Pin rustc in tools/photos/zenc/rust-toolchain.toml,\nflip config/tools.json's cargo entry to bytes: true, and record the version there.`
-  : `\nVERDICT: the compiler does not move histograms. No rustc pin is warranted; config/tools.json's\ncargo entry stays bytes: false. Suspect the INPUT bytes instead (CLAUDE.md gotcha 41).`);
+  : `\nVERDICT: the compiler does not move histograms. No rustc pin is warranted; config/tools.json's\ncargo entry stays bytes: false. Suspect the INPUT bytes instead (CLAUDE.md gotcha 46).`);
 process.exit(differ ? 1 : 0);

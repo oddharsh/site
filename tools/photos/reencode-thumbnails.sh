@@ -278,7 +278,7 @@ echo "  re-bake the histograms, then \`bun run derive:check\`, commit, and deplo
 echo "  the worker bundles photo-index.json + hashes.json, so the deploy IS the"
 echo "  cache bust."
 echo ""
-echo "  the re-bake is not optional and is why gotcha 41 exists: this script is"
+echo "  the re-bake is not optional and is why gotcha 46 exists: this script is"
 echo "  the standalone path, #394 took it, re-encoded 316 tiles, re-baked nothing,"
 echo "  and images/histograms.json described pixels nobody was served for nine"
 echo "  days. derive:check is what says so now, by name and per file."

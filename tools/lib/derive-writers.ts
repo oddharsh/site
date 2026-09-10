@@ -3,7 +3,7 @@
 //
 // config/derivations.json answers "is this artifact stale". It cannot answer the
 // question underneath it, which is whether an artifact has a declaration at all,
-// and that is the gap gotcha 41 fell through: histograms.json had no declaration,
+// and that is the gap gotcha 46 fell through: histograms.json had no declaration,
 // so there was nothing for a check to be wrong about. A graph is only as complete
 // as its census of producers.
 //
@@ -30,7 +30,7 @@
 // hole. The hole was real: `add-car-photo.sh`, `reencode-thumbnails.sh` and the
 // two encoding-grid scripts all write committed bytes and none was classified,
 // and reencode-thumbnails.sh is the very script whose standalone use caused
-// gotcha 41.
+// gotcha 46.
 //
 // Full-line comments are stripped first. A path in a comment is not a write, and
 // leaving them in would have made most of the classifications read "mentions it

@@ -134,7 +134,7 @@ bun run derive:check
 # either named by some derivation's regenerate command or exempt with a reason in
 # config/derivations.json. The graph answers "is this artifact stale" and could
 # not answer the question underneath it, which is whether an artifact has a
-# declaration at all: that is the gap gotcha 41 fell through, since
+# declaration at all: that is the gap gotcha 46 fell through, since
 # histograms.json had no declaration and so there was nothing to be wrong about.
 # A new generator is covered by EXISTING rather than by anyone remembering.
 # TWO scanners: JS, TS and Python get an exact one, since a write is a named call.
@@ -1123,7 +1123,7 @@ It cost what the estimate said: 495 re-minted `/i/` URLs, 495 rewritten rows in
 `fingerprints.json`, the `a`/`s`/`x` keys of all 165 stems in `hashes.json`, the
 12 literal `/i/` refs across 3 stems in `src/pages/garage/tooltips.html`, and a
 p-dict roll owed for that one page. That is the trade that has broken this build
-twice (gotcha 41, gotcha 35), and it broke nothing this time because
+twice (gotcha 46, gotcha 35), and it broke nothing this time because
 `derive:check` and `photos:check` each named their half before the commit.
 
 **The JPG tier did not move by one byte on any of the 165**, so no histogram
@@ -1212,7 +1212,7 @@ Two encoders + one transform tool, all built from source:
 
   **The reason is that `/i/` is content-addressed, so the encoder decides
   shipped URLs.** An ambient `brew upgrade libavif` could re-mint every AVIF
-  tier silently, which is gotcha 41 as a standing risk rather than a one-off;
+  tier silently, which is gotcha 46 as a standing risk rather than a one-off;
   `config/tools.json` carries a whole `recorded`-version tier to DETECT that
   drift, and a pin removes it instead. The brew `avifenc` stays declared there
   because the `/garage/encoding` grid scripts still use it.
@@ -5473,7 +5473,7 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     still better than a hand-kept list, because a list goes stale without failing
     anything.
 
-41. **A re-encode changes the pixels the HISTOGRAMS were computed from, and the
+46. **A re-encode changes the pixels the HISTOGRAMS were computed from, and the
     check that should have caught that compares two files derived from each
     other.** Found 2026-08-23. #394 re-encoded 316 JPEG thumbnails on 2026-08-14,
     minting a new content hash for each, and re-baked ZERO histograms. So
@@ -5481,6 +5481,18 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     days. Corrected here: 158 of 158 photos moved, 31.2% of bins, mean 0.95 of
     100 but with 65 photos carrying at least one bin past 15 and a worst case of
     59, which is a visible bar rather than decoder noise.
+
+    **It is numbered 46 and sits between 40 and 42, which is deliberate.** It
+    shipped as a SECOND gotcha 41 on 2026-08-23, one day before #538 gave the
+    cf-garage entry that same number, and the collision stood until 2026-09-10.
+    By then 42 through 45 existed, so taking 42 meant shifting four entries and
+    rewriting every cross-reference in a 6000-line file to fix a clash between
+    two of them. The number moved and the position stayed. Twenty-four
+    references pointed at `gotcha 41` across twelve files; three of them meant
+    cf-garage and are still 41.
+    `contract-gotcha-numbers-resolve` asserts that every number names one entry
+    and that every reference resolves, and it deliberately asserts nothing about
+    order, since this entry and the 21/22 pair from 2026-08-06 both break it.
 
     **`photos:check` cannot see this and never could.** It compares
     `histograms.json` against `images/meta/`, and since #441 made `meta/` build
@@ -5617,7 +5629,7 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     threading is the obvious suspect and nothing in this repo has verified it,
     which is gotcha 15's rule about naming mechanisms you have not measured.
 
-    What it costs is gotcha 41's shape, one flag earlier. `/i/` is
+    What it costs is gotcha 46's shape, one flag earlier. `/i/` is
     content-addressed, so re-encoding under a different `--jobs` mints a new URL
     for each of the AVIF tiers, rewrites `hashes.json`, and orphans every
     histogram and fingerprint baked from the bytes that are no longer served.
