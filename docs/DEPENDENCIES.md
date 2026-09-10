@@ -231,12 +231,11 @@ reason; both are metrics rather than encoders, so no shipped byte depends on
 them. A declared pattern that stops matching FAILS, because a version tier that
 silently reads nothing is the rot the floors exist to catch.
 
-**One number lived in six places and the canonical one was unread.**
-`EXIF_SOOC_MIN=0.2.0` is written out in five shell scripts, and
-`config/tools.json` carried `min_version` that nothing consulted, which is the
-failure that file's own header says it was created to fix, one field further in.
-The declaration tier now asserts both directions: a guard must match the
-declaration, and a declared minimum nothing enforces is an error.
+The photo writers source [`require-exif-sooc.sh`](../tools/photos/require-exif-sooc.sh)
+before image processing. It requires a successful version probe at or above
+`min_version`; `tools:check` rejects a missing guard or a floor that disagrees
+with the declaration. Metadata edits must also succeed: a supported version
+does not make a failed write safe to ignore.
 
 ## Current baseline
 

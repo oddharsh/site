@@ -95,6 +95,7 @@
         "tools/photos/gen-encoding-grids.sh",
         "tools/photos/gen-encoding-samples.sh",
         "tools/photos/onestep-probe.sh",
+        "tools/photos/require-exif-sooc.sh",
         "tools/photos/reencode-thumbnails.sh"
       ],
       "min_version": "0.2.0",

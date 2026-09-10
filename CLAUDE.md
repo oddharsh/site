@@ -1367,13 +1367,10 @@ one of them was undocumented until `tools:check` went looking (2026-08-14):
 > because a version tier that silently reads nothing is the same rot the floors
 > below exist to catch.
 >
-> **`min_version` was declared and unread until the same day, which is this
-> file's own lesson arriving one field further in.** `EXIF_SOOC_MIN=0.2.0` is
-> written out in five shell scripts and `config/tools.json` carried a sixth copy
-> that nothing consulted, so the one place designed to be the single declaration
-> was the only one nobody read. The declaration tier now asserts both directions:
-> every `<TOOL>_MIN=` guard must equal the declared `min_version`, and a declared
-> `min_version` that no script enforces is an error.
+> The photo writers source `tools/photos/require-exif-sooc.sh` before processing
+> images. `tools:check` requires its floor to match `min_version` and rejects a
+> declared minimum with no guard. The shared guard rejects failed or malformed
+> version probes; callers must still handle errors from each metadata edit.
 >
 > The guard scanner is the load-bearing part, and it is why four prerequisites
 > could stay undocumented. Most of these preconditions are written `for cmd in
