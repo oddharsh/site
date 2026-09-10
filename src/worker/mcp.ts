@@ -223,14 +223,14 @@ export const MCP_TOOLS = MCP_TOOL_DEFINITIONS.map((tool) => mcpTool(tool));
 // Public surfaces projected from the generated agent catalog. Names are stable
 // paths; absolute URIs let clients dereference them directly. Listing describes
 // the surface registry, while resources/read can refuse an unavailable page.
-const MCP_RESOURCE_PATHS = new Set(AGENT_SURFACES.map((s) => s.path));
+const MCP_RESOURCE_TYPES = new Map(AGENT_SURFACES.map((s) => [s.path, s.mimeType]));
 function mcpResources(origin) {
   return AGENT_SURFACES.map((s) => ({
     uri: origin + s.path,
     name: s.path,
     title: s.title,
     description: s.description,
-    mimeType: "text/html",
+    mimeType: s.mimeType,
   }));
 }
 
@@ -244,11 +244,12 @@ async function readResource(uri: unknown, request: Request, env: Env) {
   let target;
   try { target = new URL(resourceUri); } catch { return null; }
   const origin = new URL(request.url).origin;
-  if (target.origin !== origin || !MCP_RESOURCE_PATHS.has(target.pathname)) return null;
+  const resourceType = MCP_RESOURCE_TYPES.get(target.pathname);
+  if (target.origin !== origin || !resourceType) return null;
   const ctrl = new AbortController();
   const read = async () => {
     const res = await selfFetch(new Request(origin + target.pathname, {
-      headers: { "user-agent": "AadharshBot/1.0 (+https://aadhar.sh/bot)", accept: "text/html" },
+      headers: { "user-agent": "AadharshBot/1.0 (+https://aadhar.sh/bot)", accept: resourceType },
       redirect: "manual",
       signal: ctrl.signal,
     }));
@@ -256,7 +257,7 @@ async function readResource(uri: unknown, request: Request, env: Env) {
       void res.body?.cancel().catch(() => {});
       return null;
     }
-    const mimeType = (res.headers.get("content-type") || "text/html").split(";")[0].trim();
+    const mimeType = (res.headers.get("content-type") || resourceType).split(";")[0].trim();
     const { text, truncated } = await readResponseCapped(res, 512 * 1024, ctrl.signal);
     return truncated ? null : { uri: resourceUri, mimeType, text };
   };
