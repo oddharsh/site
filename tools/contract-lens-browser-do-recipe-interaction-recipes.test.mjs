@@ -598,6 +598,12 @@ test("site MCP image workbench returns an image content block and exact receipt"
   assert.equal(body.result.structuredContent.engine, "cloudflare-images");
   assert.equal(body.result.content[1].type, "image");
   assert.equal(body.result.content[1].mimeType, "image/avif");
+  const bytes = Buffer.from(body.result.content[1].data, "base64");
+  assert.deepEqual(JSON.parse(bytes.toString()), {
+    input: 5, options: { width: 600, height: 600, fit: "cover" }, output: { format: "image/avif", quality: 84 },
+  });
+  assert.equal(body.result.structuredContent.output.bytes, bytes.byteLength);
+  assert.equal(body.result.structuredContent.output.sha256, createHash("sha256").update(bytes).digest("hex"));
 });
 
 test("image_compare encodes independent formats in one binding latency window", async () => {
@@ -612,13 +618,13 @@ test("image_compare encodes independent formats in one binding latency window", 
     input() {
       return {
         transform() { return this; },
-        output(options) { return { response: async () => {
+        async output(options) {
           active++;
           peak = Math.max(peak, active);
           await new Promise((resolve) => setTimeout(resolve, 10));
           active--;
-          return new Response(bytesFor(options.format.replace("image/", "")), { headers: { "content-type": options.format } });
-        } }; },
+          return { response: () => new Response(bytesFor(options.format.replace("image/", "")), { headers: { "content-type": options.format } }) };
+        },
       };
     },
   } };
