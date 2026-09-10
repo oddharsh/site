@@ -11,7 +11,7 @@ import { parseCss } from "./lib/css-parse.ts";
 import { closeTagSource } from "./lib/html-raw-text.ts";
 import { validateUnderstanding } from "../pipelines/content/page-contract.mjs";
 import { pageHtml as renderLwePage } from "../pipelines/lwe/generate.mjs";
-import { pageHtml as renderGaragePage, validateRegistry } from "../pipelines/garage/generate.mjs";
+import { pageHtml as renderGaragePage } from "../pipelines/garage/generate.mjs";
 
 const ROOT = new URL("../", import.meta.url).pathname;
 
@@ -78,7 +78,15 @@ for (const file of lweSpecFiles) {
   }
 }
 
-validateRegistry();
+const garageSpecFiles = (await readdir(join(ROOT, "pipelines/garage/specs")))
+  .filter((file) => file.endsWith(".json"))
+  .sort();
+assert.ok(garageSpecFiles.length > 0, "discover Garage specs before checking them");
+for (const file of garageSpecFiles) {
+  const spec = JSON.parse(await readFile(join(ROOT, "pipelines/garage/specs", file), "utf8"));
+  assert.equal(spec.id, file.slice(0, -5), `${file}: spec id must match its filename`);
+  renderGaragePage(spec); // validates every spec, including a newly added file
+}
 const garageFixture = {
   id: "contract-fixture",
   title: "Contract fixture",

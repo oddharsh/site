@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// publish.mjs — Phase 3 of lwe-publish. One command: spec -> page -> corpus -> wire.
+// publish.mjs — build a concept and its discovery surfaces locally.
 //
 //   node pipelines/lwe/publish.mjs <concept>
 //
@@ -15,7 +15,7 @@
 // lwe-ask corpus is a separate auxiliary Worker and stays a manual deploy
 // because it needs the reindex secret.
 
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -29,7 +29,7 @@ if (!concept || concept.startsWith("--")) {
   process.exit(1);
 }
 
-const run = (cmd, cwd = ROOT) => { console.log(`$ ${cmd}`); execSync(cmd, { cwd, stdio: "inherit" }); };
+const run = (...args) => execFileSync(process.execPath, args, { cwd: ROOT, stdio: "inherit" });
 
 console.log(`\n=== lwe-publish: ${concept} ===\n`);
 
@@ -39,12 +39,12 @@ if (!existsSync(join(ROOT, "pipelines", "lwe", "specs", `${concept}.json`))) {
 }
 
 // 1. generate the page
-run(`node pipelines/lwe/generate.mjs page ${concept}`);
+run("pipelines/lwe/generate.mjs", "page", concept);
 
 // 2. rebuild the ask corpus (grounds the built-in ask box for this concept)
 const corpusFile = join(ROOT, "lwe-ask", "corpus", `${concept}.json`);
 if (existsSync(corpusFile)) {
-  run(`node pipelines/lwe/build-corpus.mjs`);
+  run("pipelines/lwe/build-corpus.mjs");
   console.log(`  ask box grounded in lwe-ask/corpus/${concept}.json (sandboxed to "${concept}")`);
 } else {
   console.log(`  no lwe-ask/corpus/${concept}.json yet -> the ask box stays off for "${concept}".`);
@@ -53,12 +53,12 @@ if (existsSync(corpusFile)) {
 }
 
 // 3. wire the registry-driven regions
-run(`node pipelines/lwe/generate.mjs wire`);
+run("pipelines/lwe/generate.mjs", "wire");
 
 console.log(`\n=== built locally. to ship: ===`);
 console.log(`  1) commit the generated page + wired regions on a branch, open a PR`);
 console.log(`  2) merge it — CI promotes the tested commit to production and Workers`);
-console.log(`     Builds deploys the site Worker. Nothing to bump by hand.`);
+console.log(`     Builds uploads it. Review the canary and approve the full ramp.`);
 if (existsSync(corpusFile)) {
   console.log(`  3) cd lwe-ask && bun run wrangler deploy        # the auxiliary ask Worker`);
   // ${REINDEX_SECRET:?...} and -w are BOTH load-bearing. curl DROPS a header whose
