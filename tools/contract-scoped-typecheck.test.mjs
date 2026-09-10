@@ -1,4 +1,4 @@
-import { copyFileSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdtempSync, mkdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -16,7 +16,12 @@ const scopedTsc = new URL("./lib/tsc-scope.ts", import.meta.url).href;
  * @param {Record<string, unknown>} [baseline]
  */
 function check(compilerOptions = {}, sources = { "owned/source.ts": "export const value = 1;" }, compilerSource = null, baseline) {
-  const repo = mkdtempSync(join(tmpdir(), "scoped-typecheck-"));
+  // CANONICAL root. tsc reports diagnostics under the resolved path, so a
+  // fixture rooted at a symlink scopes `owns` against an unresolved one, every
+  // owned file reads as clean, and the check passes over the errors it exists
+  // to catch. Fails on macOS alone, where $TMPDIR reaches /private/var through
+  // /var. Linux CI cannot see it.
+  const repo = realpathSync(mkdtempSync(join(tmpdir(), "scoped-typecheck-")));
   try {
     for (const [file, source] of Object.entries(sources)) {
       mkdirSync(dirname(join(repo, file)), { recursive: true });
@@ -141,7 +146,8 @@ test("type baselines record only per-file counts and preserve every ratchet dire
 });
 
 test("coverage rejects a failed compiler census even when it prints all owned files", () => {
-  const repo = mkdtempSync(join(tmpdir(), "coverage-typecheck-"));
+  // Canonical for the reason above: the census asserts on paths tsc printed.
+  const repo = realpathSync(mkdtempSync(join(tmpdir(), "coverage-typecheck-")));
   try {
     for (const dir of ["tools", "src", "config"]) mkdirSync(join(repo, dir));
     symlinkSync(fileURLToPath(new URL("../node_modules", import.meta.url)), join(repo, "node_modules"), "dir");

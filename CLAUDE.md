@@ -5664,6 +5664,71 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     (config/.generated/ was first proven from one), and it costs about 2s of
     install. Remove it with `git worktree remove --force` afterwards.
 
+45. **A fixture rooted at a bare `mkdtemp` of `tmpdir()` compares a tool's
+    RESOLVED output against an UNRESOLVED path, and only macOS can see it.**
+    `$TMPDIR` there reaches `/private/var/folders/...` through the `/var`
+    symlink, so `mkdtempSync` hands back `/var/...` while anything that
+    canonicalises reads `/private/var/...`. Linux CI has no such symlink, so
+    every instance is invisible in the one place the suite gates a merge.
+
+    **Three fixtures have hit it, and the third was found by looking rather than
+    by anyone reporting it.** #765 fixed the photo metadata selector.
+    `contract-scoped-typecheck.test.mjs` hit it on 2026-09-10, where `check()`
+    passed the unresolved root to `runScopedTsc` as `repo` while tsc reported
+    diagnostics under the resolved one. Nothing landed in the `owns: ["owned/"]`
+    set, so a fixture carrying two deliberate type errors read
+    `owned/source.ts: now clean` and the ratchet's two hardest tests failed on
+    every workstation while `validate` stayed green.
+
+    **The third instance needs macOS AND node, so `bun test` cannot see it
+    either.** `contract-page-generator-ownership.test.mjs` had been failing two
+    tests on `origin/main` under `bun run test:node` since the split, through the
+    generators' main-module guard:
+
+    ```js
+    if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+    ```
+
+    Node canonicalises the ENTRY MODULE and leaves `argv[1]` alone, so the two
+    sides disagree the moment the script is spawned through a symlink. Bun
+    resolves both. Measured on one file copied into a temp root:
+
+    | runner | `process.argv[1]` | `import.meta.url` |
+    |---|---|---|
+    | node 26 | `/var/folders/.../probe.mjs` | `/private/var/folders/.../probe.mjs` |
+    | bun 1.4 | `/private/var/folders/.../probe.mjs` | `/private/var/folders/.../probe.mjs` |
+
+    **The guard therefore reads false and the CLI exits 0 having written
+    nothing**, which is the worst available failure: the fixture files keep the
+    real repository's bytes, so the wiring assertions compare canonical content
+    against canonical content and report the generator as broken. Six modules
+    across `tools/` and `pipelines/` carry a guard of that shape. Nothing in
+    production spawns one through a symlink, so the fixture root is the whole
+    exposure and one `realpath` closes it.
+
+    **The RESIDUE is the sharper half, because a passing test in the same file
+    was passing for the wrong reason.** `contract-scoped-typecheck`'s coverage
+    fixture asserts `compiler.stdout.includes(join(repo, "src/fixture149.ts"))`,
+    which holds only because `/private/var/...` contains `/var/...` as a
+    SUBSTRING. Switch that assertion to an equality or a prefix scope and it
+    turns red with no other change.
+
+    The sweep is `grep -rn 'mkdtemp' tools/`, and two shapes it over-reports are
+    worth naming. A fixture that only reads and writes its own files never
+    compares a path at all. And `contract-search-index-is-build-output`'s
+    symlink guard compares against `linkTarget`, which resolves LEXICALLY with
+    `path.resolve` rather than through `realpath`, so it stays on the unresolved
+    side with its fixture. What triggers this is a callee that canonicalises,
+    and `realpath` the root wherever one does.
+
+    **This is the lens-reader lesson inverted, and the inversion is why it costs
+    more.** There, a green local suite proved nothing about CI. Here a RED local
+    suite means nothing either, which is worse: standing failures on
+    `origin/main` train everybody to push over a red workstation run, and the
+    workstation suite stops being a pre-push gate at all. Two of these three
+    instances were sitting on `main` unreported. Treat a local-only failure as a
+    real bug in the fixture rather than an environment quirk to route around.
+
 ---
 
 ## Source folder for new photos
