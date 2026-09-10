@@ -410,6 +410,40 @@ async function readMcpResource(uri, env, origin = "https://aadhar.sh") {
   return response.json();
 }
 
+test("MCP reads the listed music URI through its existing Markdown representation", async () => {
+  const { handleRn, handleRnMarkdown } = await import("../src/worker/rn.ts");
+  const realFetch = globalThis.fetch;
+  let wireReads = 0;
+  testGlobals.fetch = async () => { wireReads++; throw new Error("unexpected wire request"); };
+  try {
+    for (const RN_KV of [undefined, kvForTracks()]) {
+      const env = { RN_KV, RN_BUST_SECRET: "must-not-bust" };
+      const seen = [];
+      const ctx = context();
+      const uri = "https://aadhar.sh/rn?bust=must-not-bust#tracks";
+      const result = await readMcpResource(uri, { ...env, SELF_FETCH: (request) => {
+        seen.push([request.url, request.headers.get("accept")]);
+        return handleRn(request, env, ctx);
+      } });
+      assert.ok(result.result, "a listed music read must not follow the browser redirect");
+      const content = result.result.contents[0];
+      assert.equal(content.uri, uri, "the stable resource URI is preserved");
+      assert.equal(content.mimeType, "text/markdown");
+      const twin = await handleRnMarkdown(new Request("https://aadhar.sh/rn.md"), env, ctx);
+      assert.equal(content.text, await twin.text(), "MCP uses the same live renderer as the existing twin");
+      assert.deepEqual(seen, [["https://aadhar.sh/rn", "text/markdown"]]);
+      assert.match(content.text, RN_KV ? /## 1 track/ : /Could not load the track list/);
+      assert.match(content.text, /https:\/\/aadhar\.sh\/rn\/tracks/);
+      const browser = await handleRn(new Request("https://aadhar.sh/rn", { headers: { accept: "text/html" } }), env, ctx);
+      assert.equal(browser.status, 302, "the browser contract remains a Spotify redirect");
+      const location = browser.headers.get("location");
+      assert.ok(location);
+      assert.equal(new URL(location).hostname, "open.spotify.com");
+    }
+    assert.equal(wireReads, 0);
+  } finally { testGlobals.fetch = realFetch; }
+});
+
 test("site MCP resources/read dispatches only listed local pages with public headers", async () => {
   const realFetch = globalThis.fetch;
   let wireReads = 0;
