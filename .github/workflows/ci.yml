@@ -156,6 +156,49 @@ jobs:
       - name: The same contracts under Node
         run: bun run test:node
 
+      # AND AGAIN WITH $TMPDIR ON A SYMLINK, which is the shape every macOS
+      # workstation runs and ubuntu-latest structurally cannot reach: $TMPDIR
+      # there gets to /private/var through the /var symlink, while /tmp on this
+      # runner is a real directory. Every mkdtemp fixture roots under $TMPDIR, so
+      # a fixture that hands a callee an unresolved root and then compares paths
+      # against what the callee printed fails on every workstation and passes
+      # here. That is the lens-reader split inverted, and worse: a standing red
+      # on main teaches everybody to push over a red local run, at which point
+      # the workstation suite has stopped being a gate at all. Gotcha 45 has the
+      # census, including the two instances that sat on main unreported.
+      #
+      # THE CONTROL, because a gate that has never gone red is decoration. Drop
+      # the realpath from contract-scoped-typecheck's fixture root and the two
+      # steps disagree, identically under both runners (measured 2026-09-10):
+      #
+      #   real $TMPDIR (the step above)   10 pass  0 fail
+      #   symlinked $TMPDIR (this step)    7 pass  3 fail
+      #
+      # #779 canonicalized 4 of the 19 fixture roots in this suite. The other 15
+      # are correct today and rely on the next author remembering, which is why
+      # the CONDITION is the gate rather than a lint over the call shape.
+      #
+      # It runs BOTH suites because the pick would otherwise be a guess. This
+      # variant fires the same way under each, and #782 settled the other one
+      # (the main-module guard) at the source with a test that builds its own
+      # symlink and needs nothing from here. What remains is that node and bun
+      # genuinely disagree about path canonicalization: node resolves the entry
+      # module and leaves argv[1] alone, bun resolves both. Pinning this to one
+      # runtime is a bet on which of them the next instance needs, and the whole
+      # step costs ~80s inside a 30-minute job.
+      #
+      # The link and its target are SIBLINGS on purpose, so neither path holds
+      # the other as a substring. macOS's /private/var DOES contain /var, and the
+      # coverage fixture passed on that containment alone until #783; a nested
+      # layout would rebuild that blind spot inside the check meant to remove it.
+      - name: The same contracts again, with a symlinked TMPDIR
+        run: |
+          mkdir -p "$RUNNER_TEMP/real-tmp"
+          ln -sfn "$RUNNER_TEMP/real-tmp" "$RUNNER_TEMP/link-tmp"
+          export TMPDIR="$RUNNER_TEMP/link-tmp"
+          bun run test
+          bun run test:node
+
       # The route oracle, pre-merge. createTestHarness() boots the site Worker
       # in-process (honouring wrangler.jsonc's build.command, so it serves the
       # minified .build/public tree) and verify-routes.mjs sweeps it. This is
