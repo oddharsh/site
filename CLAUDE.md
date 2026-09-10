@@ -5706,12 +5706,46 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     production spawns one through a symlink, so the fixture root is the whole
     exposure and one `realpath` closes it.
 
-    **The RESIDUE is the sharper half, because a passing test in the same file
-    was passing for the wrong reason.** `contract-scoped-typecheck`'s coverage
-    fixture asserts `compiler.stdout.includes(join(repo, "src/fixture149.ts"))`,
-    which holds only because `/private/var/...` contains `/var/...` as a
-    SUBSTRING. Switch that assertion to an equality or a prefix scope and it
-    turns red with no other change.
+    **The RESIDUE was the sharper half, because a passing test in the same file
+    was passing for the wrong reason. CLOSED, and the 2x2 is the record.**
+    `contract-scoped-typecheck`'s coverage fixture asserted
+    `compiler.stdout.includes(join(repo, "src/fixture149.ts"))`, which held only
+    because `/private/var/...` contains `/var/...` as a SUBSTRING. Measured on
+    the same fixture, changing only the root and the assertion:
+
+    | fixture root | assertion | result |
+    |---|---|---|
+    | non-canonical | `includes` | **10 pass**, green while every path disagreed |
+    | non-canonical | exact lines | 1 fail |
+    | canonical | exact lines | 10 pass |
+
+    So the paragraph this replaces was right that tightening it "turns red with
+    no other change", and that is true only BEFORE the canonical root. Read it
+    as the order mattering rather than as a reason not to tighten: root the
+    fixture first and the exact form passes, tighten first and it reports a bug
+    that is really the fixture's.
+
+    It is exact lines now, compared as a SET against the owned files collected
+    as the fixture writes them, so it cannot drift from what was created.
+    Two things a substring could not separate, and the first is the one that
+    outlives this instance. The TS5023 diagnostic lands on stdout too and names
+    a path, so a mention satisfies a substring with no file list at all; it does
+    not collide here only because that line is RELATIVE
+    (`config/tsconfig.fixture0.json(1,46)`), which a future tsc printing it
+    absolute would change. And the test's own NAME claims the compiler "prints
+    all owned files", so one path found anywhere was the wrong shape of evidence
+    for the premise the test rests on. Four controls: a non-canonical root, an
+    owned file tsc never listed, a listed path that is not owned, and the old
+    form under the broken root.
+
+    **The sweep for this second shape is separate from the `mkdtemp` one and
+    came back clean**, which is worth recording so nobody re-runs it: a
+    substring over `stdout`/`stderr` standing in for an exact PATH comparison
+    existed once, here. The two other `.includes` assertions in the suite are a
+    different thing and are correct: `contract-tool-prerequisite-census`
+    compares a RELATIVE repo path embedded in a longer ENOENT message, and
+    `contract-scoped-typecheck` matches a bare TS error code. Neither
+    canonicalises, so neither can hide this bug.
 
     The sweep is `grep -rn 'mkdtemp' tools/`, and two shapes it over-reports are
     worth naming. A fixture that only reads and writes its own files never
