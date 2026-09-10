@@ -65,15 +65,9 @@ if (configs.length < 5) {
 
 const covered = new Set();
 for (const config of configs) {
-  let listing = "";
-  try {
-    listing = execFileSync(process.execPath, [TSC, "-p", join(REPO, "config", config), "--listFilesOnly"], { encoding: "utf8", cwd: REPO });
-  } catch (e) {
-    // A program that cannot run contributes nothing, and the orphan report below
-    // is what surfaces that. Failing here instead would make this check the
-    // reporter for every unrelated tsconfig problem.
-    listing = String(e.stdout || "");
-  }
+  // tsc can print every owned path before rejecting the config. A failed
+  // census is not coverage evidence, even when another program holds the files.
+  const listing = execFileSync(process.execPath, [TSC, "-p", join(REPO, "config", config), "--listFilesOnly"], { encoding: "utf8", cwd: REPO });
   for (const line of listing.split("\n")) {
     if (line.startsWith(`${REPO}/`)) covered.add(line.slice(REPO.length + 1));
   }
