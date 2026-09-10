@@ -43,7 +43,7 @@ review policy and entry point for future agent runs.
 ### bun, in `packageManager`
 
 `package.json`'s `packageManager` field names the bun this repository runs, and
-none of the five ecosystems above reaches it. The npm updater bumps `@types/bun`
+none of those update blocks changes it. The npm updater bumps `@types/bun`
 and leaves the runtime alone. Dependabot's own `bun` ecosystem would not help
 either: it reads `bun.lock` rather than the field, and it cannot run here at all
 while dependabot-core pins `MAX_SUPPORTED_LOCKFILE_VERSION = 1` against our v2
