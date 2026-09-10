@@ -1,9 +1,10 @@
-import { copyFileSync, mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync, spawnSync } from "node:child_process";
 import { assert, test } from "./contract-shared.ts";
+import { ratchet } from "./lib/tsc-scope.ts";
 
 const tsc = fileURLToPath(new URL("../node_modules/typescript/bin/tsc", import.meta.url));
 const scopedTsc = new URL("./lib/tsc-scope.ts", import.meta.url).href;
@@ -12,8 +13,9 @@ const scopedTsc = new URL("./lib/tsc-scope.ts", import.meta.url).href;
  * @param {Record<string, unknown>} compilerOptions
  * @param {Record<string, string>} sources
  * @param {string | null} compilerSource
+ * @param {Record<string, unknown>} [baseline]
  */
-function check(compilerOptions = {}, sources = { "owned/source.ts": "export const value = 1;" }, compilerSource = null) {
+function check(compilerOptions = {}, sources = { "owned/source.ts": "export const value = 1;" }, compilerSource = null, baseline) {
   const repo = mkdtempSync(join(tmpdir(), "scoped-typecheck-"));
   try {
     for (const [file, source] of Object.entries(sources)) {
@@ -27,8 +29,12 @@ function check(compilerOptions = {}, sources = { "owned/source.ts": "export cons
     // Keep failures in a child: the CLI helper exits when the compiler cannot
     // establish a program. Both host-runtime suites exercise their own binary.
     const driver = join(repo, "check.mjs");
-    writeFileSync(driver, `import { runScopedTsc } from ${JSON.stringify(scopedTsc)};
+    const baselinePath = join(repo, "baseline.json");
+    if (baseline !== undefined) writeFileSync(baselinePath, JSON.stringify(baseline));
+    writeFileSync(driver, `import { runScopedTsc, ratchet } from ${JSON.stringify(scopedTsc)};
 const result = runScopedTsc(${JSON.stringify({ repo, tsc: compiler, config, owns: ["owned/"], label: "scoped-control" })});
+${baseline === undefined ? "" : `const gate = ratchet({ baselinePath: ${JSON.stringify(baselinePath)}, byFile: result.byFile, updateCommand: "record baseline" });
+if (gate.problems.length) { console.error(gate.problems.join("\\n")); process.exit(1); }`}
 console.log(JSON.stringify(result));`);
     return spawnSync(process.execPath, [driver], { encoding: "utf8", timeout: 20_000 });
   } finally {
@@ -81,6 +87,57 @@ test("scoped typechecking refuses a compiler crash without TS diagnostics", () =
   assert.match(result.stderr, /scoped-control: tsc could not/);
   assert.match(result.stderr, /compiler crashed/);
   assert.equal(result.stdout, "");
+});
+
+test("type baselines cannot hide real compiler errors behind coerced counts", () => {
+  const source = { "owned/source.ts": 'export const one: number = "wrong"; export const two: string = 2;' };
+  const accepted = check({}, source, null, { files: { "owned/source.ts": 2 } });
+  assert.equal(accepted.status, 0, accepted.stderr);
+  assert.equal(JSON.parse(accepted.stdout).mine.length, 2, "the real compiler supplies both errors");
+  for (const count of ["not-a-count", "2", {}, [2]]) {
+    const rejected = check({}, source, null, { files: { "owned/source.ts": count } });
+    assert.equal(rejected.status, 1, `malformed baseline ${JSON.stringify(count)} accepted: ${rejected.stdout}`);
+    assert.match(rejected.stderr, /owned\/source\.ts: baseline count must be a positive integer/);
+  }
+});
+
+test("type baselines record only per-file counts and preserve every ratchet direction", () => {
+  const repo = mkdtempSync(join(tmpdir(), "type-baseline-"));
+  const baselinePath = join(repo, "baseline.json");
+  try {
+    const byFile = new Map([["b.ts", 1], ["a.ts", 2]]);
+    const run = (update = false) => ratchet({ baselinePath, byFile, updateCommand: "record baseline", update });
+    // Deliberately stale legacy total: the updater must discard it. It must
+    // also be able to create its output from the compiler census alone.
+    writeFileSync(baselinePath, JSON.stringify({ files: { "a.ts": 2, "b.ts": 1 }, total: 999 }));
+    assert.deepEqual(run(), { rewritten: false, problems: [] });
+    assert.deepEqual(run(true), { rewritten: true, problems: [] });
+    const expected = '{\n  "files": {\n    "a.ts": 2,\n    "b.ts": 1\n  }\n}\n';
+    assert.equal(readFileSync(baselinePath, "utf8"), expected);
+    rmSync(baselinePath);
+    run(true);
+    assert.equal(readFileSync(baselinePath, "utf8"), expected);
+
+    for (const count of [0, -1, 1.5, null, true, Number.MAX_SAFE_INTEGER + 1]) {
+      writeFileSync(baselinePath, JSON.stringify({ files: { "a.ts": count, "b.ts": 1 } }));
+      assert.match(run().problems.join("\n"), /a\.ts: baseline count must be a positive integer/);
+    }
+    writeFileSync(baselinePath, expected);
+
+    byFile.set("a.ts", 3);
+    assert.match(run().problems.join("\n"), /a\.ts: 3 error\(s\), up from 2/);
+    byFile.set("a.ts", 1);
+    assert.match(run().problems.join("\n"), /a\.ts: 1 error\(s\), DOWN from 2/);
+    byFile.delete("a.ts");
+    assert.match(run().problems.join("\n"), /a\.ts: now clean/);
+    byFile.set("new.ts", 1);
+    assert.match(run().problems.join("\n"), /new\.ts: 1 error\(s\), and this file is not in the baseline/);
+    assert.equal(readFileSync(baselinePath, "utf8"), expected, "checks never rewrite the baseline");
+    byFile.clear();
+    run(true);
+    assert.deepEqual(run(), { rewritten: false, problems: [] }, "a recorded clean program passes");
+    assert.deepEqual(JSON.parse(readFileSync(baselinePath, "utf8")), { files: {} });
+  } finally { rmSync(repo, { recursive: true, force: true }); }
 });
 
 test("coverage rejects a failed compiler census even when it prints all owned files", () => {

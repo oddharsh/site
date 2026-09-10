@@ -49,8 +49,8 @@ if (listed < 50) {
 // needed the same behaviour; two copies of a rule about monotonicity is exactly
 // the drift this repo names everywhere else.
 const BASELINE = join(REPO, "config/ts-tools-baseline.json");
-const { rewritten, problems, owed } = ratchet({
-  baselinePath: BASELINE, byFile, total: mine.length,
+const { rewritten, problems } = ratchet({
+  baselinePath: BASELINE, byFile,
   updateCommand: "bun run typecheck:tools -- --update",
   update: process.argv.includes("--update"),
 });
@@ -68,4 +68,4 @@ if (problems.length) {
   console.error(`\ncheck-tool-types: FAILED against config/ts-tools-baseline.json\n  - ${problems.join("\n  - ")}`);
   process.exit(1);
 }
-console.log(`check-tool-types: matches the baseline (${owed} owed)`);
+console.log(`check-tool-types: matches the baseline`);
