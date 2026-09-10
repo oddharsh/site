@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// check-ts-coverage.mjs — every JavaScript and TypeScript file this repository
+// check-ts-coverage.ts — every JavaScript and TypeScript file this repository
 // owns must belong to some tsc program.
 //
 // WHY THIS EXISTS. config/tsconfig.browser.json's header records that an
@@ -77,7 +77,7 @@ const orphans = owned.filter((f) => !covered.has(f));
 if (orphans.length) {
   console.error(`check-ts-coverage: ${orphans.length} file(s) belong to no tsc program:\n  ${orphans.join("\n  ")}\n` +
     `\nAdd each to the program whose GLOBALS match how it runs — see the headers in config/. ` +
-    `A node-runtime file that imports Worker source needs check-test-types.mjs's filtering rather than a wider include.`);
+    `A node-runtime file that imports Worker source needs check-test-types.ts's filtering rather than a wider include.`);
   process.exit(1);
 }
 
