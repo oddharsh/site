@@ -35,6 +35,8 @@
 // without one, and read the CPU note above first.
 import { fetchFollowingPublicRedirects, validateLensTarget } from "./public-fetch.ts";
 
+const ENCODER = new TextEncoder();
+
 export const BOT_NAME    = "AadharshBot";
 
 const BOT_VERSION = "1.0";   // module-private: only BOT_UA below consumes it
@@ -72,18 +74,10 @@ export async function botHeaders(targetUrl, env, opts: BotRequestOptions = {}) {
   }
   const host = new URL(targetUrl).host;
   const created = Math.floor(Date.now() / 1000);
-  const jwk = JSON.parse(env.RN_SIGNING_KEY_JWK);
-  // keyid MUST be the key's RFC 7638 thumbprint (draft-meunier-web-bot-auth-
-  // architecture-04): a verifier fetches the directory, thumbprints each key,
-  // and looks the signature's keyid up by that value. It read `jwk.kid` here
-  // until 2026-09-03, which was the label "rn-2026-06-30", so the signature and
-  // the directory agreed with each other and with no verifier. Deriving it from
-  // the public members means the two cannot disagree again.
-  const keyId = await jwkThumbprint(jwk);
+  const { keyId, key } = await signingMaterial(env.RN_SIGNING_KEY_JWK);
   const params = `("@authority" "signature-agent");created=${created};keyid="${keyId}";alg="ed25519";tag="web-bot-auth"`;
-  const key = await crypto.subtle.importKey("jwk", jwk, { name: "Ed25519" }, false, ["sign"]);
   // RFC 9421: one covered component per line, then the signed parameters.
-  const base = new TextEncoder().encode([
+  const base = ENCODER.encode([
     `"@authority": ${host}`,
     `"signature-agent": "${SIG_AGENT}"`,
     `"@signature-params": ${params}`,
@@ -93,6 +87,60 @@ export async function botHeaders(targetUrl, env, opts: BotRequestOptions = {}) {
   headers.set("Signature-Input", `sig1=${params}`);
   headers.set("Signature", `sig1=:${signature}:`);
   return headers;
+}
+
+// The key material a signature needs, derived once per secret rather than once
+// per call. `JSON.parse`, the RFC 7638 thumbprint (a SHA-256 over members that
+// never change) and `importKey` are pure functions of the secret, and measured
+// in workerd at this repo's compatibility date they were 17us of botHeaders'
+// 29.5us. What is left, 12.5us, is the Ed25519 signature itself, which covers a
+// per-request authority and a per-request `created` and so cannot be reused.
+//
+// The saving is per SIGNATURE, and the signature count is what makes it worth
+// doing: /around walks 20 neighbours at two signed fetches each, /lens
+// discovery fans out to 26 probes, and since #746 every redirect hop signs for
+// its own authority. This account is on Workers Free, where sustained requests
+// clamp near 10ms of CPU, and the ML-DSA note at the top of this file is what
+// that clamp costs when per-request crypto meets a fan-out.
+//
+// Keyed on the JWK TEXT rather than computed once, because "the secret cannot
+// change" is true of an isolate and not of a process: the contract suite signs
+// with fixture keys, and a rotation that reused retired material would sign
+// with a key the directory no longer publishes. Comparing the string makes the
+// memo correct without anyone having to know which of those is happening.
+//
+// A PROMISE is cached rather than its result, since the fan-out above starts
+// dozens of signatures at once and caching the value would let every one of
+// them begin the same derivation before the first finished.
+//
+// A REJECTION is cached like any other answer, and that is deliberate rather
+// than overlooked. Every input to the derivation is the secret, so a key that
+// cannot be parsed or imported fails the same way however many times it is
+// retried, and a different secret is a different memo entry. Dropping the entry
+// on rejection was written first and then measured against the tests here: it
+// changes nothing any caller can observe, so it went back out rather than stay
+// as a line nothing can fail on.
+let signingKey: { jwkText: string; material: Promise<{ keyId: string; key: CryptoKey }> } | null = null;
+
+function signingMaterial(jwkText: string) {
+  const cached = signingKey;
+  if (cached && cached.jwkText === jwkText) return cached.material;
+  const material = (async () => {
+    const jwk = JSON.parse(jwkText);
+    // keyid MUST be the key's RFC 7638 thumbprint (draft-meunier-web-bot-auth-
+    // architecture-04): a verifier fetches the directory, thumbprints each key,
+    // and looks the signature's keyid up by that value. It read `jwk.kid` here
+    // until 2026-09-03, which was the label "rn-2026-06-30", so the signature and
+    // the directory agreed with each other and with no verifier. Deriving it from
+    // the public members means the two cannot disagree again.
+    const [keyId, key] = await Promise.all([
+      jwkThumbprint(jwk),
+      crypto.subtle.importKey("jwk", jwk, { name: "Ed25519" }, false, ["sign"]),
+    ]);
+    return { keyId, key };
+  })();
+  signingKey = { jwkText, material };
+  return material;
 }
 
 export async function signedFetch(targetUrl, env, opts: BotRequestOptions = {}) {
@@ -119,6 +167,6 @@ export async function jwkThumbprint(jwk) {
   const required = { OKP: ["crv", "kty", "x"], EC: ["crv", "kty", "x", "y"], RSA: ["e", "kty", "n"] }[jwk.kty];
   if (!required) throw new Error(`jwkThumbprint: unsupported kty ${jwk.kty}`);
   const canonical = "{" + required.map((k) => `${JSON.stringify(k)}:${JSON.stringify(jwk[k])}`).join(",") + "}";
-  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonical)));
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", ENCODER.encode(canonical)));
   return digest.toBase64({ alphabet: "base64url", omitPadding: true });
 }
