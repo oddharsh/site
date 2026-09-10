@@ -113,7 +113,7 @@ undici@7.29.0
 
 `bun test --parallel=4 --no-isolate --timeout=30000` runs the suite's 92 files
 four at a time. On CI, where it counts, the `validate` test step goes from
-15-18s sequential to 9-10s; a version keeping the `--isolate` that `--parallel`
+15-18s sequential to 7-10s; a version keeping the `--isolate` that `--parallel`
 implies measured 15s, inside the sequential range, so the win there is the
 isolation flag rather than the parallelism. On a macOS laptop, where a process
 spawn costs far more, it is 37s to 19s. All three
