@@ -295,93 +295,55 @@ declaration, and a declared minimum nothing enforces is an error.
   removal as the disk saving, the vitest removal is.
 - minify-html 0.18.1 is the exact root pin for the deploy-time HTML pass over
   `index.html` and the worker shells.
-- TypeScript 7.0.2 is the exact root pin for `bun run typecheck`, which runs
-  TEN programs, every one of them `noEmit`. **The type checker never writes a
-  file**, so nothing here is tsc-compiled and no config can start emitting one
-  by accident.
+- TypeScript 7.0.2 is the exact root pin for the no-emit programs in
+  `config/`. `tsc` checks source without producing JavaScript; Node and Bun load
+  the authored TypeScript, and Wrangler erases types when bundling Workers.
+  Client islands remain JavaScript with readable `.src.js` build twins.
 
-  **@cloudflare/workers-types LEFT the tree on 2026-09-02.** It was 12 of the
-  29 Dependabot PRs in the preceding thirty days, each a date-stamped release
-  describing a runtime this repo did not yet run on, and each needing the hand
-  relock commit. The four Worker programs now include
-  `config/.generated/workers-runtime.d.ts`, which `tools/gen-runtime-types.ts`
-  writes from the PINNED workerd through `wrangler types --include-runtime`
-  (wrangler's own notice says the command supersedes the package). So the
-  runtime surface moves when wrangler moves, a lane already reviewed here, and
-  it describes the workerd that runs the dry-runs, the route oracle and the
-  cal harness rather than a newer one. Measured before the switch: all four
-  programs produced byte-identical diagnostics either way, and the 23 names
-  the package carried that the generated set does not (Buffer, process, the
-  Performance family, two Hyperdrive and one Browser Run shape) are referenced
-  nowhere. The file is generated, never committed, and cached on wrangler's
-  version plus the config bytes, so a warm typecheck pays 0.02s for it.
+  Run `bun run typecheck` for the workspace programs. Reader is outside the
+  workspace: install its locked dependencies and run `bun run typecheck` from
+  `lens-reader/` as CI does. `bun run typecheck:coverage` compares tracked
+  source with all programs' file lists; it checks membership, not correctness.
+  The root `tsconfig.json` maps those programs for tsgolint and intentionally
+  has no compiler options or source files of its own.
 
-  One thing survives the removal and is worth knowing: wrangler declares the
-  package as an OPTIONAL peer and its own `cli.d.ts` imports a handful of types
-  from it. With the peer absent those imports resolve to `any` under
-  `skipLibCheck`, which costs nothing this repo reads (the harness types cal
-  uses are declared locally in that file) and is stated here so the next reader
-  of a suspiciously loose wrangler type knows where it came from.
+  Programs follow runtime boundaries: Workers use the generated workerd
+  declarations, client code uses the DOM, the service worker uses WebWorker
+  globals, and host tools/tests use Bun's declarations. Cal's test harness
+  deliberately also includes Worker types to describe its binding proxies.
+  The config headers explain each boundary. `tools/check-tool-types.ts` and
+  `tools/check-test-types.ts` report diagnostics only from their owned trees;
+  imported Worker source is checked by its Worker program.
 
-  That is the claim worth making, and it is narrower than the one this entry
-  carried until 2026-08-24. That version said the checker runs "over
-  JSDoc-annotated JavaScript", that "nothing is compiled and no source is
-  converted", and that "the site stays JavaScript", with a conversion listed as
-  a cost the repo declined to pay. The conversion happened: `src/worker/` is 69
-  TypeScript files and no JavaScript, and `wrangler.jsonc` points `main`
-  straight at `.build/src/worker/index.ts`, so esbuild erases the types while
-  bundling. A paragraph arguing against a move the tree had already made is
-  worse than no paragraph, because it reads as current policy.
+  Every program enables `strictNullChecks`. Worker, browser, and tools debt is
+  recorded in the three `config/ts-*-baseline.json` files; the corresponding
+  checkers reject increases and require reductions to be recorded. The other
+  programs have no diagnostic baseline. Full `strict` remains a separate
+  migration, as `config/tsconfig.json` explains.
 
-  Two of the three things that conversion was supposed to cost were never
-  charged, which is why it is worth naming them rather than deleting the
-  sentence. **View Source is untouched**: `src/client/` is 16 JavaScript
-  islands and the only two `.ts` files in it are `.d.ts` declarations that ship
-  nothing, and the build still writes a readable `/<name>.src.js` twin beside
-  every minified one. And types still erase, so they add no runtime and no
-  served byte; that half of the old argument survives intact and is the reason
-  these two packages cost the visitor nothing.
+  **@cloudflare/workers-types left on 2026-09-02.** The Worker programs now
+  include `config/.generated/workers-runtime.d.ts`, generated by
+  `tools/gen-runtime-types.ts` through the pinned Wrangler/workerd. It is
+  uncommitted and cached by Wrangler version and config bytes. The switch
+  produced identical diagnostics across the four Worker programs, while
+  replacing a separately updated runtime description with the runtime used by
+  local validation. Binding-type changes now arrive with Wrangler updates.
 
-  The third did change. The suite no longer runs on plain node and
-  `contract-tests.mjs` no longer exists: it was split into 50 files on
-  2026-08-20 and `bun test` runs them, which is what made a TypeScript import
-  in a test a non-question. Read gotcha 16 in CLAUDE.md alongside this, since
-  the `cloudflare:workers` rule it protects is unchanged while both symptoms it
-  described expired with that same move.
+  Wrangler still declares the package as an optional peer; its own `cli.d.ts`
+  imports some names from it. Those resolve to `any` under `skipLibCheck` when
+  the peer is absent. The harness types used here are declared locally in that
+  file; keep this limitation in mind when adopting another Wrangler API.
 
-  Dependabot should review TypeScript releases for new checks that could fail CI
-  on unchanged code; binding-shape changes arrive with wrangler now. The ten
-  programs are not decoration: three go through a wrapper because they hold
-  files from two runtimes at once, and `bun run typecheck:coverage` asserts
-  every file this repo owns belongs to one of them.
-- @types/bun 1.4.2 is the exact root pin for the SECOND type program,
-  `config/tsconfig.tools.json`, which checks `tools/`. It carries the node globals
-  as well, so it is one entry rather than two, and it declares the bun-only
-  globals the tools now use directly (HTMLRewriter among them). Types only: no
-  runtime, no served byte, same standing as the generated runtime types above.
+  Review TypeScript upgrades for new checks on unchanged source and keep
+  tsgolint paired with the compiler, as described above.
+- @types/bun 1.4.2 is the exact type pin for host tools and tests. It supplies
+  Node globals as well as Bun APIs such as HTMLRewriter, so those programs use
+  one `types` entry. It adds no runtime dependency or served byte.
 
-  It exists because tools/ CANNOT be checked by the Worker's program. Point
-  tsconfig.json at both and 169 of 337 errors are `Cannot find name 'process'`:
-  node programs judged against a Workers global scope. Two programs is what
-  separates a real finding from a missing global.
-
-  **It reached 1.4.0 on 2026-08-24 and now matches the runtime**, which is the
-  release-age policy resolving exactly as this entry predicted it would. The
-  block here used to record a pin one release BEHIND the runtime, because
-  `minimumReleaseAge: 86400` in bunfig.toml refused the same-day 1.4.0 publish
-  and `bun add` took the previous version. It said that would catch up on its
-  own once 1.4.0 turned a day old. It did, dependabot opened the bump, and the
-  types program now reads the bun it actually runs under. The superseded number
-  is deliberately not restated: a stale version inside its own correction is
-  still a greppable stale version.
-
-  Worth keeping as a worked example rather than deleting, because the prediction
-  is the part that was uncertain: a delayed pin under that policy is a wait, not
-  a fork, and it needs no exclude entry to clear. The alternative on offer at the
-  time was an entry in `minimumReleaseAgeExcludes`, which would have outlived its
-  reason the moment the bump landed. bun excludes by NAME rather than
-  name@version, so that entry would still be sitting there today exempting
-  @types/bun at every future version.
+  The types caught up with the runtime on 2026-08-24 after the one-day release
+  age floor elapsed. That delay needed no permanent package exemption:
+  `minimumReleaseAgeExcludes` matches a package name across future versions,
+  so adding one to bypass a same-day delay would outlive its reason.
 - playwright-core is a scripts-only devDep (caret-ranged, not pinned: it drives
   the locally installed Google Chrome rather than a bundled browser). Only
   `tools/photos/gen-og-cards.ts` uses it, and only on demand; no CI job and
@@ -566,73 +528,35 @@ the reason, rather than written here with the caret quietly dropped.
   made a 146.26 KiB gzip bundle where the native action produces 2.77 KiB gzip.
 
 
-## Evaluated and declined: dmmulroy/anti-slop
+<a id="evaluated-and-declined-dmmulroyanti-slop"></a>
 
-[anti-slop](https://github.com/dmmulroy/anti-slop) is 15 Oxlint rules that
-reject low-evidence TypeScript and JavaScript patterns. It is designed to be
-VENDORED rather than depended on, so adopting it means copying ~20 source files
-into this repo and owning them. Measured against this tree on 2026-08-15, one
-rule was worth that and it was already available in core Oxlint, so nothing was
-vendored and `@oxlint/plugins` was not added.
+## Vendored rules: dmmulroy/anti-slop
 
-The measurement, run by pointing a throwaway config's `jsPlugins` at a clone
-and enabling all 15 rules at `error` over `www cal serendipity scripts
-pipelines lens-reader/src` (165 files):
+The repository adopts three [anti-slop](https://github.com/dmmulroy/anti-slop)
+rules through `tools/oxlint/anti-slop/index.ts` and enables them in
+`.oxlintrc.json`:
 
-| rule | findings | verdict |
-|---|--:|---|
-| `no-runtime-typeof` | 110 | rejected, see below |
-| `no-shape-in-symbol-names` | 81 | rejected, see below |
-| `no-conditional-empty-object-spread` | 12 | rejected, see below |
-| the other 12 | 0 | 10 of them structurally |
+| rule | purpose |
+|---|---|
+| `no-runtime-typeof` | Parse inputs at a boundary; parsers and tests have explicit exemptions. |
+| `no-shape-in-symbol-names` | Require a name for the domain value rather than a generic structure label. |
+| `no-conditional-empty-object-spread` | Add conditional properties explicitly while preserving absent-versus-zero semantics. |
 
-**Ten of the fifteen rules can never fire here**, because they visit only
-TypeScript AST nodes (`TSAsExpression`, `TSTypeAliasDeclaration`,
-`TSIndexSignature`, `TSParameterProperty`) and this tree has no `.ts` source at
-all. Everything served is JavaScript, type-checked through JSDoc and tsgolint.
-That is 10 rules of vendored code to maintain against a TypeScript migration
-nobody has proposed. Revisit only if one starts.
+The three rule files and their MIT license are vendored; `@oxlint/plugins`
+provides the adapter and stays paired with Oxlint. Re-sync the upstream rule
+files deliberately, review their behavior against this tree, and keep local
+policy in the wrapper and `.oxlintrc.json`.
 
-**The three that do fire each disagree with a documented house idiom**, which is
-the same test `.oxlintrc.json` already applies to `no-sparse-arrays` and
-`unicorn/no-useless-spread`: a rule needing dozens of inline disables is a rule
-that disagrees with the codebase, and the disables become the noise.
+The original 2026-08-15 evaluation rejected these rules and found several
+others inapplicable because the source was JavaScript. Adoption and the
+TypeScript migration superseded that conclusion. The unvendored rules are
+not enabled; the old zero findings do not establish their applicability now.
 
-- `no-runtime-typeof` wants boundary parsing instead of ad hoc `typeof`
-  narrowing, which is right in a repo with a schema library. This Worker parses
-  third-party HTML, KV JSON and Spotify embeds with no validator anywhere, so
-  the rule is asking for a rewrite rather than a fix. Its `allowInTypeGuards`
-  escape hatch needs TypeScript predicate signatures, so it buys nothing here.
-- `no-shape-in-symbol-names` bans the term outright and is not configurable.
-  `documentShape`, `lensSitemapShape` and `lensJsonShape` are `/lens` domain
-  vocabulary, and `shape` is a PUBLISHED field on the `/lens/browser` snapshot
-  payload. Renaming them to satisfy a linter would change a wire contract.
-- `no-conditional-empty-object-spread` flags `...(x ? { k } : {})`, and all 12
-  sites are the absent-rather-than-zero discipline this repo applies everywhere
-  (the photo pipeline's nullable fields, the span attribute rule, `ranking`'s
-  `dropped` and `common` keys). Its suggested repair, building the object across
-  separate statements, trades a declarative literal for imperative mutation.
+Core Oxlint supplies `vitest/no-restricted-vi-methods` for `vi.mock` and
+`vi.doMock`, so that equivalent rule needs no vendored copy. It does not
+match Bun's `mock.module`: `cal/test/preload.ts` uses that API for the
+`cloudflare:workers` virtual module, and other uses require review of the seam.
 
-**What was taken is the one rule with zero findings and real teeth**,
-`no-module-mocking`, which rejects `vi.mock` in favour of real dependency
-seams. Core Oxlint already ships `vitest/no-restricted-vi-methods`, so it is
-three lines in `.oxlintrc.json` with nothing vendored and no new dependency.
-`cal/` was the only Vitest project here (it runs on bun:test since 2026-09-02)
-and its 7 test files use real seams, so it arms a tripwire rather than starting
-a cleanup, on the surface where a wrong assertion means a real person got
-double-booked. Note what the rule cannot see: bun's spelling is `mock.module`,
-which it does not match, so on the bun suite the guard is review plus the one
-`mock.module` in the tree being `cal/test/preload.ts`, a virtual module for the
-`cloudflare:workers` scheme rather than a seam being faked.
-
-Adding it surfaced a trap worth more than the rule. **Naming any plugin in
-`plugins` REPLACES the default set rather than appending to it**, silently: with
-`"plugins": ["vitest"]`, a planted `Promise.all([p])` stopped reporting
-`unicorn/no-single-promise-in-promise-methods`, the lint still exited 0, and the
-tree read as clean because most of the rules checking it were gone. The config
-now lists all five explicitly with that measurement at the array.
-
-To re-run the whole evaluation, clone the repo, `bun install` inside it, and
-point a scratch config at `src/index.ts` through `jsPlugins`. The pinned Oxlint
-1.82.0 does support custom JS plugins and `@oxlint/plugins` is published at a
-matching 1.80.0, so feasibility was never the blocker; applicability was.
+The plugin array in `.oxlintrc.json` preserves the default plugins because an
+explicit array replaces them. Its comments record the planted control that
+caught a rule disappearing when only `vitest` was listed.
