@@ -186,7 +186,7 @@ async function transformBytes(env, bytes, spec: TransformSpec): Promise<Transfor
     let pipeline = env.IMAGES.input(bytes);
     const options = Object.fromEntries(Object.entries(spec.options).filter(([, value]) => value !== undefined));
     if (Object.keys(options).length) pipeline = pipeline.transform(options);
-    const response = await pipeline.output(spec.output).response();
+    const response = (await pipeline.output(spec.output)).response();
     if (!response?.ok) return { error: "Image binding could not encode the image." };
     const body = await readBytesCapped(response, OUTPUT_CAP);
     if (body.truncated) return { error: "transformed image exceeds the 4 MiB output limit" };
