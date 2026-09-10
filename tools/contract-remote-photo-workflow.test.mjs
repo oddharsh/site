@@ -121,6 +121,7 @@ test("re-encoding refuses partial tiers and empty selections before downstream h
   await fixture(async ({ root, put, command }) => {
     await put("tools/photos/reencode-thumbnails.sh", source);
     await put("tools/photos/require-exif-sooc.sh", await readFile(new URL("./photos/require-exif-sooc.sh", import.meta.url), "utf8"));
+    await put("tools/photos/photo-inputs.ts", await readFile(new URL("./photos/photo-inputs.ts", import.meta.url), "utf8"));
     await put("public/i/frame.12345678.jpg", "published fixture");
     await put("source/frame.jpg", "source fixture");
     await mkdir(path.join(root, "public/images"), { recursive: true });

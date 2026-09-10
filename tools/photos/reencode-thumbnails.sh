@@ -118,32 +118,21 @@ if [ "$AVIF_KIND" = "sips" ]; then
   echo "         script rewrites the WHOLE library. build tools/photos/libavif/build.sh" >&2
 fi
 
-# find the source file for a thumbnail stem (any extension/case)
-find_source() {
-  local stem="$1" hit
-  for hit in "$SRC/$stem".*; do
-    case "${hit##*.}" in
-      [Jj][Pp][Gg]|[Jj][Pp][Ee][Gg]|[Pp][Nn][Gg]|[Hh][Ii][Ff]|[Hh][Ee][Ii][Cc]|[Hh][Ee][Ii][Ff]) echo "$hit"; return 0 ;;
-    esac
-  done
-  return 1
-}
-
-# Enumerate published stems from the content-hashed JPG tiles in public/i/. The
-# old images/*.jpg location emptied out in the /i/ cutover, so globbing $DEST would
-# match nothing (and, with no nullglob, silently loop once on the literal glob).
-STEMS=$(for j in "$PROJECT_DIR/public/i/"*.jpg; do b=$(basename "$j" .jpg); echo "${b%.*}"; done | sort -u)
-TOTAL=$(echo "$STEMS" | grep -c . || true)
-[ "$TOTAL" -gt 0 ] || { echo "error: no published thumbnails found in public/i/ (expected the content-hashed JPG tiles)" >&2; exit 1; }
+# Use the same source selection as ingest, restricted to published stems.
+# Missing sources remain a supported partial rerender; ambiguous ones fail
+# before any existing tier is replaced.
+INPUTS="$TMP/inputs"
+node "$SCRIPT_DIR/photo-inputs.ts" rerender "$SRC" "$PROJECT_DIR/public/i" > "$INPUTS"
+TOTAL=$(( $(tr -cd '\000' < "$INPUTS" | wc -c) / 4 ))
 echo "re-encoding $TOTAL thumbnails as ${SQ}×${SQ} / ${SQ_SM}×${SQ_SM} center squares  (zenc q${ZENC_Q} + AVIF via $AVIF_KIND)"
 echo "  source: $SRC"
 echo ""
 
 OK=0; MISS=0; FAIL=0
 INTER="$TMP/inter"; mkdir -p "$INTER"
-while IFS= read -r stem; do
-  [ -n "$stem" ] || continue
-  if ! src=$(find_source "$stem"); then MISS=$((MISS+1)); printf "?"; continue; fi
+while IFS= read -r -d '' src && IFS= read -r -d '' original &&
+      IFS= read -r -d '' full && IFS= read -r -d '' stem; do
+  if [ -z "$src" ]; then MISS=$((MISS+1)); printf "?"; continue; fi
 
   tif="$INTER/${stem}.tif"
   sqjpg="$INTER/${stem}.sq.png"; smtmp="$INTER/${stem}.sm.png"
@@ -276,7 +265,7 @@ while IFS= read -r stem; do
     fi
   fi
   OK=$((OK+1)); printf "."
-done <<< "$STEMS"
+done < "$INPUTS"
 echo ""
 echo ""
 echo "  re-encoded: $OK   source-missing: $MISS   failed: $FAIL"

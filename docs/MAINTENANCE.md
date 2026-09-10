@@ -1128,8 +1128,10 @@ locks in a PR. Release through the [normal promotion and ramp](#cicd-release-pat
 The full-resolution R2 upload happens during ingestion; the grid entry appears
 when the Worker containing its index entry receives traffic.
 
-JPG sources are copied for upload; HEIF/HIF sources produce a full-resolution
-q100 JPEG companion. The original camera files remain on the source drive.
+JPG sources are copied for upload. A HEIF/HIF uses its same-folder JPEG companion
+if present, or produces a q100 JPEG export. Input selection rejects ambiguous
+stems before encoding; see the [selection rules](PHOTO-PIPELINE.md#local-input-selection).
+The original camera files remain on the source drive.
 [PHOTO-PIPELINE.md](PHOTO-PIPELINE.md#artifact-contract) describes the four
 thumbnail tiers and committed records.
 

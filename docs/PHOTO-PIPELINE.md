@@ -11,6 +11,9 @@ Sources must already exist as flat object keys in the `aadhar-photos` R2 bucket.
 The downloader reads them through `/images/full/<key>` into disposable runner
 storage. It accepts one exact key per line; `all` selects the published manifest.
 The workflow sets `REMOTE_RENDER_ONLY=1`, so processing never uploads to R2.
+Ingest accepts an existing JPEG object and preserves its exact key, including
+extension casing. It refuses HEIF inputs that would require uploading a new
+JPEG companion; supply that companion's existing key instead.
 
 Choose a routine in GitHub Actions → Remote photo pipeline:
 
@@ -33,16 +36,24 @@ Workers AI credential, and the credential-free caption service can only read
 photos already deployed. A new uncaptioned photo therefore fails `photos:check`.
 Do not remove that check to publish it.
 
-HEIC, HEIF, and HIF inputs have another constraint: the ingest script creates a
-full-resolution JPEG companion locally, but remote mode skips its R2 upload.
-It also normalizes the extension in the photo index, so an existing R2 key whose
-extension has different casing may not match that entry. The workflow does not
-yet verify these click-through objects before opening its PR.
-
 For a fresh photo, use the local ingest procedure with its R2 upload access and
 a Workers AI token scoped for captioning. It handles JPG, JPEG, HEIC, HEIF, and
 HIF sources. Until the remote input and credential path covers these cases,
 use `add-photo` only for rerenders of existing photos.
+
+## Local input selection
+
+Ingest and thumbnail rerenders resolve one source per published stem before
+encoding. A requested HEIF and a same-folder JPEG form one photo: the HEIF
+supplies pixels and metadata, and the JPEG supplies the full-resolution click
+object. An explicit JPEG argument selects that JPEG. A HEIF without a JPEG
+companion gets a q100 JPEG export. Other same-stem conflicts are refused;
+choose one source rather than relying on directory or upload order.
+
+Ingest merges metadata from precisely those selected files, including batches
+from multiple folders, and preserves records for other published photos. The
+standalone metadata extractor still supports a guarded full replacement, or
+`--merge` with one or more files or directories.
 
 ## Artifact contract
 

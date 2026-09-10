@@ -158,6 +158,7 @@
     {
       "path": "/rn",
       "title": "Music",
+      "mimeType": "text/markdown",
       "section": "music",
       "kind": "page",
       "description": "What I'm listening to right now, scraped live from a Spotify playlist.",

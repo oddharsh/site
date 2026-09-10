@@ -1,17 +1,22 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtemp, mkdir, readFile, writeFile, chmod, rm, utimes } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, realpath, writeFile, chmod, rm, utimes } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { photoInputs } from "./photos/photo-inputs.ts";
 
 const REPO = fileURLToPath(new URL("../", import.meta.url));
 
 // Real shell entrypoints, deterministic encoder stubs, no network or private
 // originals. Copy the shell corpus so sourced helpers run unchanged too.
 async function fixture(run) {
-  const root = await mkdtemp(path.join(tmpdir(), "photo-metadata-"));
+  // CANONICAL root. The selector resolves directory aliases on purpose, so a
+  // fixture rooted at a symlink compares its resolved paths against unresolved
+  // expectations and fails on macOS alone, where $TMPDIR reaches /private/var
+  // through /var. Linux CI cannot see it.
+  const root = await realpath(await mkdtemp(path.join(tmpdir(), "photo-metadata-")));
   const put = async (file, text) => {
     await mkdir(path.dirname(path.join(root, file)), { recursive: true });
     await writeFile(path.join(root, file), text);
@@ -31,7 +36,10 @@ async function fixture(run) {
     // the census check-tools.ts itself takes. A listing of tools/photos alone
     // misses the nested AVIF builder, so a declaration naming it reads as a
     // stale path, and it would copy an ignored download that no check sees.
-    for (const rel of execFileSync("git", ["ls-files", "-z", "tools/photos/*.sh"], { cwd: REPO, encoding: "utf8" }).split("\0").filter(Boolean)) {
+    // photo-inputs.ts is named outright because the shells call it: it is a
+    // dependency of the corpus rather than a member of it.
+    const corpus = ["tools/photos/*.sh", "tools/photos/photo-inputs.ts"];
+    for (const rel of execFileSync("git", ["ls-files", "-z", ...corpus], { cwd: REPO, encoding: "utf8" }).split("\0").filter(Boolean)) {
       await put(rel, await readFile(path.join(REPO, rel), "utf8"));
     }
     await put("trace", "");
@@ -44,7 +52,7 @@ async function fixture(run) {
     await command("bin/exif-sooc", `
 case "$1" in
   --version) echo version >> "$TRACE"; printf '%s\\n' "\${SOOC_VERSION:-exif-sooc 0.2.0}"; exit "\${SOOC_STATUS:-0}" ;;
-  -s) echo 1 ;;
+  -s) echo "orientation $*" >> "$TRACE"; echo 1 ;;
   *) echo "metadata $*" >> "$TRACE"
      [ "\${FAIL_METADATA:-0}" != 1 ] || { echo "metadata write failed" >&2; exit 7; }
      case "$*" in *r800.jpg*) [ "\${FAIL_METADATA:-0}" != resolution ] || exit 7 ;; esac ;;
@@ -86,6 +94,7 @@ printf encoded > "$last"`);
     // BSD stat is used by these macOS scripts; keep the control portable in CI.
     await command("bin/stat", 'test "$1" = -f%z; test -f "$2"; echo 7');
     await command("bin/cargo", 'echo cargo >> "$TRACE"');
+    await command("bin/node", `exec "${process.execPath}" "$@"`);
     await command("node_modules/.bin/wrangler", 'echo forbidden-upload >> "$TRACE"; exit 99');
     // Stop the successful ingest control at the next phase, before unrelated
     // index/caption work; failed phase 1 must never reach this sentinel.
@@ -331,5 +340,164 @@ test("remote-render-only mode performs no uploads even if the upload CLI would f
     const result = ingest(["source/frame.jpg"], { REMOTE_RENDER_ONLY: "1", FAIL_UPLOAD: "all" });
     assert.equal(result.status, 23, result.stderr + result.stdout);
     assert.deepEqual(await uploads(), []);
+  });
+});
+
+test("photo selection pairs a requested HEIF with its camera JPEG without overriding an explicit JPEG", async () => {
+  await fixture(async ({ root, put }) => {
+    await put("source/frame.hIf", "HEIF original");
+    const jpg = path.join(root, "source/frame.jpg");
+    const hif = path.join(root, "source/frame.hIf");
+    const pair = [{ stem: "frame", source: hif, original: jpg, full: "frame.jpg" }];
+    assert.deepEqual(await photoInputs([hif]), pair);
+    assert.deepEqual(await photoInputs([hif, jpg, path.join(root, "source/../source/frame.jpg")]), pair);
+    assert.deepEqual(await photoInputs([path.join(root, "source")]), pair);
+    assert.deepEqual(await photoInputs([jpg]), [{ stem: "frame", source: jpg, original: jpg, full: "frame.jpg" }]);
+  });
+});
+
+test("ingest and rerender both use one HEIF pixel source and one JPEG click object", async () => {
+  await uploadFixture(async ({ root, put, read, ingest, shell, uploads }) => {
+    await put("source/frame.hIf", "HEIF original");
+    for (const input of ["source/frame.hIf", "source"]) {
+      await put("uploads", ""); await put("trace", "");
+      const result = ingest([input]);
+      assert.equal(result.status, 23, result.stderr + result.stdout);
+      const sent = (await uploads()).filter(row => row.event === "start");
+      assert.equal(sent.length, 1);
+      assert.equal(sent[0].key, "aadhar-photos/frame.jpg");
+      assert.equal(sent[0].body, "progressive");
+      if (input.endsWith("hIf")) {
+        assert.ok((await read("trace")).includes(`-Orientation ${root}/source/frame.hIf`));
+        assert.doesNotMatch(await read("trace"), /-Orientation .*frame\.jpg/);
+      }
+    }
+    await put("trace", "");
+    const rerender = shell("reencode-thumbnails.sh", ["source"]);
+    assert.equal(rerender.status, 0, rerender.stderr + rerender.stdout);
+    assert.ok((await read("trace")).includes(`-Orientation ${root}/source/frame.hIf`));
+    assert.doesNotMatch(await read("trace"), /-Orientation .*frame\.jpg/);
+    assert.equal(await read("source/frame.hIf"), "HEIF original");
+    assert.equal(await read("source/frame.jpg"), "source fixture");
+  });
+});
+
+test("ambiguous stems fail before encoding, uploading, hashing, or replacing existing tiers", async () => {
+  for (const duplicate of ["source/frame.JPEG", "other/frame.JPG"]) {
+    await uploadFixture(async ({ put, read, ingest, shell }) => {
+      await put(duplicate, "different original");
+      await put("public/images/frame.jpg", "previous tier");
+      const result = ingest(["source/frame.jpg", duplicate]);
+      assert.equal(result.status, 1, result.stderr);
+      assert.match(result.stderr, /ambiguous photo stem frame/);
+      assert.doesNotMatch(await read("trace"), /sips|zenc|metadata|upload|downstream/);
+      assert.equal(await read("public/images/frame.jpg"), "previous tier");
+      if (duplicate.startsWith("source/")) {
+        const rerender = shell("reencode-thumbnails.sh", ["source"]);
+        assert.equal(rerender.status, 1, rerender.stderr);
+        assert.match(rerender.stderr, /ambiguous photo stem frame/);
+        assert.equal(await read("public/images/frame.jpg"), "previous tier");
+      }
+    });
+  }
+});
+
+test("remote ingest preserves the existing JPEG key and refuses a HEIF that would need an upload", async () => {
+  await uploadFixture(async ({ root, put, read, ingest, uploads }) => {
+    await put("source/Remote.JPEG", "remote bytes");
+    const source = path.join(root, "source/Remote.JPEG");
+    assert.deepEqual(await photoInputs([source], { remote: true }), [
+      { stem: "Remote", source, original: source, full: "Remote.JPEG" },
+    ]);
+    assert.equal(ingest([source], { REMOTE_RENDER_ONLY: "1" }).status, 23);
+    assert.equal(await read("progressive-paths"), "");
+    assert.deepEqual(await uploads(), []);
+    await put("source/frame.HIF", "HEIF original");
+    await put("trace", "");
+    const failed = ingest(["source/frame.HIF"], { REMOTE_RENDER_ONLY: "1" });
+    assert.equal(failed.status, 1, failed.stderr);
+    assert.match(failed.stderr, /remote ingest needs the existing JPEG object/);
+    assert.doesNotMatch(await read("trace"), /sips|zenc|metadata|upload|downstream/);
+  });
+});
+
+test("input selection keeps published-only rerenders and rejects unsupported or conflicting sources", async () => {
+  await fixture(async ({ root, put }) => {
+    await put("source/png.png", "PNG fixture");
+    await put("source/private.hif", "private HEIF");
+    await put("source/private.heic", "conflicting private HEIF");
+    const dir = path.join(root, "source");
+    const png = path.join(dir, "png.png");
+    const plan = await photoInputs([dir], { published: new Set(["png", "missing"]) });
+    assert.deepEqual(plan, [
+      { stem: "missing", source: "", original: null, full: "" },
+      { stem: "png", source: png, original: null, full: "png.jpg" },
+    ]);
+    await assert.rejects(photoInputs([png]), /unsupported photo input/);
+    await assert.rejects(photoInputs([dir]), /ambiguous photo stem private/);
+    await assert.rejects(photoInputs([path.join(root, "absent")]), /ENOENT/);
+  });
+});
+
+test("the shell input plan preserves filename whitespace and JPEG companion extensions", async () => {
+  await uploadFixture(async ({ put, ingest, uploads }) => {
+    const stem = "name with\ttab\nand newline";
+    await put(`source/${stem}.JpEg`, "camera JPEG");
+    await put(`source/${stem}.hEiC`, "HEIF original");
+    const result = ingest([`source/${stem}.hEiC`]);
+    assert.equal(result.status, 23, result.stderr + result.stdout);
+    const sent = (await uploads()).filter(row => row.event === "start");
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0].key, `aadhar-photos/${stem}.jpeg`);
+    assert.equal(sent[0].body, "progressive");
+  });
+});
+
+test("ingest forwards exactly the selected metadata sources across folders as a merge", async () => {
+  await uploadFixture(async ({ root, put, command, ingest, read }) => {
+    await put("source/frame.HIF", "HEIF original");
+    await put("other/second photo.jpeg", "second original");
+    await put("src/worker/photo-index.json", "{}");
+    await command("tools/photos/hash-thumbnails.sh", "exit 0");
+    // The JSON writer is outside this argument-boundary control. Native jaq
+    // parity is checked separately; a constant producer lets the real shell
+    // reach the extractor without installing an external CLI in contract CI.
+    await command("bin/jaq", "echo '{}'");
+    await command("tools/photos/extract-photo-metadata.sh", `printf '%s\\0' "$@" > "$FIXTURE_ROOT/metadata-args"; exit 31`);
+    const result = ingest(["source", "other/second photo.jpeg"]);
+    assert.equal(result.status, 31, result.stderr + result.stdout);
+    assert.deepEqual((await read("metadata-args")).split("\0"), [
+      "--merge", `${root}/source/frame.HIF`, `${root}/other/second photo.jpeg`, "",
+    ]);
+  });
+});
+
+test("metadata extraction passes multiple file arguments intact and preserves the prior record on read failure", async () => {
+  await fixture(async ({ root, put, command, shell, read }) => {
+    await put("other/second photo.jpeg", "second original");
+    await put("public/images/metadata.json", '{"previous":{"camera":"kept"}}');
+    await command("bin/jaq", "exit 99");
+    await command("bin/exif-sooc", `printf '%s\\0' "$@" > "$FIXTURE_ROOT/metadata-args"; exit 29`);
+    const files = [`${root}/source/frame.jpg`, `${root}/other/second photo.jpeg`];
+    const result = shell("extract-photo-metadata.sh", ["--merge", ...files]);
+    assert.equal(result.status, 29, result.stderr);
+    assert.deepEqual((await read("metadata-args")).split("\0"), [
+      "--keyed", "--merge-into", `${root}/public/images/metadata.json`, "-q", "-r", ...files, "",
+    ]);
+    assert.equal(await read("public/images/metadata.json"), '{"previous":{"camera":"kept"}}');
+  });
+});
+
+test("an index write failure stops ingest before metadata can advance", async () => {
+  await uploadFixture(async ({ put, command, ingest, read }) => {
+    const previous = '{"held":{"full":"held.jpg","size":9}}';
+    await put("src/worker/photo-index.json", previous);
+    await command("tools/photos/hash-thumbnails.sh", "exit 0");
+    await command("bin/jaq", "exit 17");
+    await command("tools/photos/extract-photo-metadata.sh", 'echo unexpected-metadata >> "$TRACE"; exit 31');
+    const result = ingest(["source/frame.jpg"]);
+    assert.equal(result.status, 17, result.stderr + result.stdout);
+    assert.equal(await read("src/worker/photo-index.json"), previous);
+    assert.doesNotMatch(await read("trace"), /unexpected-metadata/);
   });
 });

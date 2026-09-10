@@ -39,19 +39,9 @@ export const RN_FALLBACK = "https://open.spotify.com/playlist/4IRq9W1N2tOWHhH0O3
 // what you just wrote, which must never be able to lie).
 export const PLAYLIST_ID_CACHE_TTL = 900;
 
-// ── /rn handler ─────────────────────────────────────────────────────
-// This route has NO page of its own: it is a 302 to Spotify, and a browser that
-// follows it lands on a JS application. That is fine for a human and useless to
-// an agent, which is why site-manifest's `agents: true` on /rn was advertising a
-// bounce off-site. It also fooled check-infra, whose probe follows redirects and
-// so reported /rn's content-type as text/html when the text/html was Spotify's.
-//
-// So /rn answers Markdown instead of redirecting, and the answer is RENDERED
-// from the same live payload /rn/tracks serves rather than described in a twin
-// under src/content/md/. There is nothing fixed here to hand-author: the playlist
-// changes, and a file claiming otherwise would be wrong within a rollover. This
-// also cannot drift by construction, which is the property the twin machinery
-// buys with checkTwinFacts.
+// /rn redirects browsers to Spotify and answers Markdown readers locally,
+// including MCP (the surface registry declares that representation). The live
+// document uses the same payload as /rn/tracks; it has no hand-authored twin.
 export async function handleRn(request, env, ctx) {
   if (wantsMarkdown(request)) return handleRnMarkdown(request, env, ctx);
 

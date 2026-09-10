@@ -187,6 +187,23 @@ function buildICS(env, booking) {
       `\n\nbooked via cal.aadhar.sh`
     )}`,
     `ORGANIZER;CN=${escICS(env.HOST_NAME)}:mailto:${env.HOST_EMAIL}`,
+    // The host is an ATTENDEE as well as the ORGANIZER, and that second line is
+    // what puts a confirmed booking on the host's own calendar. Gmail auto-adds
+    // an invite when it finds the RECIPIENT among the attendees; the host reads
+    // this mail as a cc, so an ICS carrying HOST_EMAIL on the ORGANIZER line
+    // alone gives Gmail nothing to match on and the event silently never lands.
+    // PARTSTAT=ACCEPTED with RSVP=FALSE files it as already accepted, so the
+    // host gets a calendar entry instead of an invitation to answer.
+    //
+    // This is the conventional shape rather than an addition: Google Calendar's
+    // own exported ICS always lists the organizer among the attendees. It leaks
+    // nothing further to the guest either, since HOST_EMAIL is already on the
+    // ORGANIZER line directly above.
+    //
+    // Held slots (booking.ts `held:<start>:<end>`) already stop cal from
+    // double-booking itself, so what this buys is the other direction: a human
+    // scheduling over a confirmed coffee that was never visible to them.
+    `ATTENDEE;CN=${escICS(env.HOST_NAME)};PARTSTAT=ACCEPTED;RSVP=FALSE:mailto:${env.HOST_EMAIL}`,
     `ATTENDEE;CN=${escICS(name)};RSVP=TRUE:mailto:${email}`,
     "END:VEVENT",
     "END:VCALENDAR",
