@@ -13,7 +13,7 @@
 // The legacy list stays because legacy clients have NO fall-forward mechanism.
 // Pointed at a modern-only server they fail outright, with no diagnostic they
 // can surface to a user.
-import { asRecord, asText } from "./parse.ts";
+import { asNumber, asRecord, asText } from "./parse.ts";
 import { sseEvents } from "./sse.ts";
 
 export const MCP_MODERN = "2026-07-28";
@@ -230,9 +230,9 @@ export function mcpServer({ serverInfo, capabilities, instructions }) {
 // rather than being told its `_meta` is malformed under a revision it was never
 // claiming to follow. The two would be equally "correct" refusals and only one
 // of them is actionable.
-// An absent id suppresses the REPLY, never the refusal. Callers apply that
-// transport policy after dispatch; null here means the request may proceed.
-export function mcpGate(msg, request) {
+// mcpRequest suppresses notification replies after applying this gate;
+// null here means the request may proceed.
+function mcpGate(msg, request) {
   const id = msg.id;
   const declared = declaredVersion(msg);
   if (declared && !MCP_SUPPORTED.includes(declared)) {
@@ -245,6 +245,20 @@ export function mcpGate(msg, request) {
     return { jsonrpc: "2.0", id, error: { code: ERR_HEADER_MISMATCH, message: mismatch } };
   }
   return null;
+}
+
+export const mcpError = (id, code, message) => ({ jsonrpc: "2.0", id: id ?? null, error: { code, message } });
+
+// Only a valid request without an ID is a notification. Malformed envelopes
+// get Invalid Request with an unknown ID, even when they have no ID member.
+export async function mcpRequest(msg, request, dispatch) {
+  if (asRecord(msg) === null || msg.jsonrpc !== "2.0" || asText(msg.method) === null ||
+    (Object.hasOwn(msg, "id") && msg.id !== null && msg.id !== "" && asText(msg.id) === null && asNumber(msg.id) === null) ||
+    (Object.hasOwn(msg, "params") && asRecord(msg.params) === null && !Array.isArray(msg.params))) {
+    return mcpError(null, -32600, "Invalid Request");
+  }
+  const reply = mcpGate(msg, request) ?? await dispatch(msg);
+  return Object.hasOwn(msg, "id") ? reply : null;
 }
 
 // Preserve useful refusals from JSON-RPC and from plain vendor/OAuth errors.
