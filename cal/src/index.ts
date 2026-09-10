@@ -14,9 +14,11 @@
 //   - no auth: the only "host" interaction is clicking signed URLs from email
 //   - signing uses HMAC-SHA256 over `${id}|${action}` with SIGNING_SECRET
 //   - timezones are real: HOST_TIMEZONE drives display + working hours
-//   - the public ICS calendar is read-only; we never write back. confirmed
-//     events are pushed to the host's real calendar via the .ics invite
-//     they accept in their own inbox.
+//   - the public ICS calendar is read-only; we never write back. a confirmed
+//     event reaches the host's real calendar as its OWN PUBLISH .ics, mailed
+//     separately from the guest's invitation, so the host owns and can edit
+//     the entry. an edit made there reaches nobody: /location and its SEQUENCE
+//     bump are still the only path a change takes to the guest.
 //   - abandoned bookings expire via a durable per-booking Workflow, not a cron:
 //     /book spins up one instance (id = booking id) that waits PENDING_TTL_DAYS
 //     for a "host-decision" event; approve/decline fire that event to end it
@@ -27,7 +29,7 @@ import { listOpenSlots }                   from "./slots.ts";
 import { createBooking, getBooking, setStatus,
          holdSlot, releaseSlot, setLocation } from "./booking.ts";
 import { releaseSlotClaim, reserveSlot }  from "./reservation.ts";
-import { sendApprovalRequest, sendInvite,
+import { sendApprovalRequest, sendInvite, sendHostCopy,
          sendDecline, sendUpdate }         from "./email.ts";
 import { sign, verify }                    from "./sign.ts";
 import { bookingPage, successPage,
@@ -263,6 +265,9 @@ async function route_approve(req, env, ctx, url) {
   }
   await setStatus(env, id, "confirmed");   // slot stays held (confirmed coffees hold their slot + count toward caps)
   ctx.waitUntil(sendInvite(env, booking));
+  // Separate send, separate event: the guest gets an invitation and the host
+  // gets a plain PUBLISH copy they own outright. See buildICS in email.ts.
+  ctx.waitUntil(sendHostCopy(env, booking));
   cancelExpiry(env, ctx, id);                                   // end the durable timer early
   ctx.waitUntil(caches.default.delete(calIndexKey(req, env)));  // pending slot resolved
   return new Response(confirmedPage({ ...booking, status: "confirmed" }, env, /*already=*/false, locationUrl),
@@ -333,6 +338,7 @@ async function route_location_save(req, env, ctx) {
   // where to meet before telling them the meeting is happening.
   const mailed = updated.status === "confirmed";
   if (mailed) ctx.waitUntil(sendUpdate(env, updated));
+  if (mailed) ctx.waitUntil(sendHostCopy(env, updated, { updated: true }));
   return new Response(locationSavedPage(updated, env, mailed), { headers: htmlHeaders() });
 }
 

@@ -34,6 +34,11 @@ const EMPTY_ICS = [
 ].join("\r\n");
 
 let mailCalls;
+// Approval and /location each send TWO mails now: the guest's invitation and
+// the host's own PUBLISH copy. ctx.waitUntil orders neither, so these pick by
+// attachment rather than by index.
+const guestMail = () => mailCalls.find((m) => m.body.attachments?.[0]?.filename === "coffee.ics");
+const hostMail  = () => mailCalls.find((m) => m.body.attachments?.[0]?.filename === "coffee-host.ics");
 let bookingWf;
 let restoreFetch = () => {};
 beforeEach(async () => {
@@ -293,8 +298,14 @@ describe("book → approve / decline lifecycle", () => {
     const res = await dispatch(`/approve?t=${id}&sig=${sig}`);
     expect(res.status).toBe(200);
     expect(await statusOf(id)).toBe("confirmed");
-    expect(mailCalls).toHaveLength(1);
-    expect(mailCalls[0].body.attachments[0].filename).toBe("coffee.ics");
+    // Two sends: an invitation to the guest, and the host's own copy of it.
+    expect(mailCalls).toHaveLength(2);
+    expect(guestMail().body.to).toEqual(["dana@x.dev"]);
+    expect(icsOf(guestMail())).toContain("METHOD:REQUEST");
+    // The host copy is a plain owned event rather than a second invitation,
+    // which is what makes it editable on the host's calendar.
+    expect(hostMail().body.to).toEqual(["coffee@aadhar.sh"]);
+    expect(icsOf(hostMail())).toContain("METHOD:PUBLISH");
   });
 
   // ── /location ────────────────────────────────────────────────────────
@@ -335,22 +346,32 @@ describe("book → approve / decline lifecycle", () => {
     await postBook({ name: "Gus", email: "gus@x.dev", topic: "hi", start: slot.start });
     const id = lastBookingId();
     await dispatch(`/approve?t=${id}&sig=${await sign(`${id}|approve`, SECRET)}`);
-    const invite = icsOf(mailCalls.at(-1));
+    const invite = icsOf(guestMail());
+    const hostInvite = icsOf(hostMail());
     mailCalls.length = 0;
 
     const res = await postLoc(id, await locSig(id), "Sey Coffee");
     expect(res.status).toBe(200);
-    expect(mailCalls).toHaveLength(1);
-    const { body } = mailCalls[0];
+    expect(mailCalls).toHaveLength(2);
+    const { body } = guestMail();
     expect(body.to).toEqual(["gus@x.dev"]);
     expect(body.subject).toContain("updated:");
-    const update = icsOf(mailCalls[0]);
+    const update = icsOf(guestMail());
     // same UID as the invite, so a client rewrites rather than adds …
     const uid = (t) => t.match(/UID:(.+)/)[1];
     expect(uid(update)).toBe(uid(invite));
     // … and a higher SEQUENCE, which is what makes it apply at all.
     expect(update).toContain("SEQUENCE:1");
     expect(update).toContain("LOCATION:Sey Coffee");
+
+    // The host's copy moves the same way, on its OWN uid: re-adding rewrites
+    // the entry they already own rather than leaving a stale one beside it.
+    const hostUpdate = icsOf(hostMail());
+    expect(uid(hostUpdate)).toBe(uid(hostInvite));
+    expect(uid(hostUpdate)).not.toBe(uid(update));
+    expect(hostUpdate).toContain("SEQUENCE:1");
+    expect(hostUpdate).toContain("LOCATION:Sey Coffee");
+    expect(hostMail().body.subject).toContain("updated");
   });
 
   it("refuses a forged signature, a declined booking, and an empty place", async () => {

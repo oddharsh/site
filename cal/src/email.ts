@@ -90,8 +90,9 @@ export async function sendInvite(env, booking) {
 // Re-send the SAME event at a higher SEQUENCE. RFC 5545 says a calendar client
 // receiving a REQUEST whose UID it already holds must apply it as an update, so
 // this rewrites the guest's existing entry rather than adding a second one —
-// which is the whole reason this route exists. The host is cc'd so his own copy
-// moves too.
+// which is the whole reason this route exists. The host's own copy moves
+// through sendHostCopy below; the cc here is the audit trail of what the guest
+// was actually sent, and has never been a calendar entry.
 export async function sendUpdate(env, booking) {
   const { name, email, start, end } = booking;
   const ics = buildICS(env, booking);
@@ -116,6 +117,51 @@ export async function sendUpdate(env, booking) {
       content_type: "text/calendar; method=REQUEST",
     }],
     headers: { "X-Coffee-Booking": booking.id },
+  });
+}
+
+// The host's own copy of a confirmed booking, sent as its own mail rather than
+// bolted onto the guest's. Two attachments on one message would hand the guest a
+// second .ics they have no use for, and the two files are genuinely different
+// events (see buildICS above).
+//
+// HOST-FACING, so it goes out from noreply@ and carries List-Id, which keeps
+// `from:coffee@aadhar.sh` meaning "what the guest was sent" the way the header
+// note at the top of this file describes.
+//
+// One click is the whole cost of ownership here, and the copy says so, because
+// a PUBLISH attachment renders as a plain add link rather than adding itself.
+export async function sendHostCopy(env, booking, { updated = false } = {}) {
+  const { name, email, topic, start, end, location } = booking;
+  const ics = buildICS(env, booking, "host");
+  const when = fmtRange(start, end, env.HOST_TIMEZONE);
+  const html = `
+    <p><strong>${esc(name)}</strong> &lt;${esc(email)}&gt;${updated ? ", updated" : ""}.</p>
+    <p><strong>when:</strong> ${esc(when)}<br>
+       <strong>where:</strong> ${esc(location || "still to set")}</p>
+    <blockquote style="border-left:3px solid #888;padding-left:.8em;margin-left:0;color:#333">
+      ${esc(topic).replace(/\n/g, "<br>")}
+    </blockquote>
+    <p>the attached .ics adds this to your calendar as <em>your</em> event: you
+       can move it, rename it or invite someone else, and none of that touches
+       what ${esc(name.split(" ")[0] || name)} is holding.
+       ${updated ? "adding it again updates the entry in place." : ""}</p>
+    <p style="color:#888;font-size:12px">
+      changing what the guest sees still goes through the signed link in the
+      request mail.
+    </p>
+  `;
+  return resendSend(env, {
+    from:    `cal.aadhar.sh <noreply@aadhar.sh>`,
+    to:      [env.HOST_EMAIL],
+    subject: `${updated ? "updated" : "your copy"}: ${name} — ${shortWhen(start, env.HOST_TIMEZONE)}`,
+    html,
+    attachments: [{
+      filename:    "coffee-host.ics",
+      content:     utf8ToBase64(ics),
+      content_type: "text/calendar; method=PUBLISH",
+    }],
+    headers: { "List-Id": LIST_ID, "X-Coffee-Booking": booking.id },
   });
 }
 
@@ -156,18 +202,40 @@ export async function resendSend(env, payload) {
   return r.json();
 }
 
-// build a minimal RFC 5545 VEVENT, REQUEST method so it acts as an invite.
-// recipient's mail client will offer "Add to Calendar" and (if they hit
-// Accept) RSVP back to the host's address.
-function buildICS(env, booking) {
+// build a minimal RFC 5545 VEVENT. One booking has TWO representations, and
+// what separates them is who ends up owning the calendar entry:
+//
+//   "guest"  METHOD:REQUEST, ORGANIZER + ATTENDEE. An invitation, with Yes /
+//            Maybe / No, which the guest's client adds by itself and re-applies
+//            in place at a higher SEQUENCE.
+//   "host"   METHOD:PUBLISH, carrying neither ORGANIZER nor ATTENDEE. A plain
+//            event the host's calendar takes as ITS OWN, editable in full.
+//
+// The host copy is PUBLISH deliberately, and it costs one click. A REQUEST
+// auto-imports, which is exactly why it is right for the guest, and it lands as
+// somebody else's event: Google Calendar grants edit rights to the organizer
+// alone, and offers a guest more only when the organizer ticked "Modify event",
+// which has no ICS property to set. So a host taking the automatic add would
+// hold an entry they could not move, rename or re-guest. PUBLISH trades the
+// automatic add for outright ownership, which is the trade the host wants and
+// the guest does not.
+//
+// RFC 5545 3.7.2 forbids ATTENDEE under PUBLISH, so the host copy carries the
+// guest in SUMMARY and DESCRIPTION rather than on an attendee line.
+function buildICS(env, booking, audience: "guest" | "host" = "guest") {
   const { id, name, email, topic, area, location, start, end } = booking;
   const fmt = (ms) => new Date(ms).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
-  const uid = `${id}@cal.aadhar.sh`;
+  const host = audience === "host";
+  // A distinct UID keeps the host's own event clear of the invite they are cc'd
+  // on, so nothing in their calendar can treat the two as one object. It is
+  // still deterministic, so re-sending after a /location change updates the
+  // entry they already added instead of adding a second one.
+  const uid = host ? `${id}-host@cal.aadhar.sh` : `${id}@cal.aadhar.sh`;
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
     "PRODID:-//aadhar.sh//cal//EN",
-    "METHOD:REQUEST",
+    host ? "METHOD:PUBLISH" : "METHOD:REQUEST",
     "CALSCALE:GREGORIAN",
     "BEGIN:VEVENT",
     `UID:${uid}`,
@@ -180,31 +248,21 @@ function buildICS(env, booking) {
     // against, so omitting it on the invite is what makes the first /update
     // silently do nothing.
     `SEQUENCE:${booking.sequence ?? 0}`,
-    `SUMMARY:${escICS(env.EVENT_TITLE)}`,
+    // EVENT_TITLE is the GUEST-facing title and is deliberately not reused
+    // here: "coffee with aadharsh" names the wrong person once it is sitting on
+    // aadharsh's own calendar. The host's grid wants the guest.
+    `SUMMARY:${escICS(host ? `coffee with ${name}` : env.EVENT_TITLE)}`,
     `DESCRIPTION:${escICS(
+      // The host copy has no attendee line to carry the guest, so the address
+      // goes here, where it is also the thing that makes the entry actionable
+      // from the calendar itself.
+      (host ? `${name} <${email}>\n\n` : "") +
       `requested: ${topic}` +
       (area ? `\n\nthey're around: ${area}` : "") +
       `\n\nbooked via cal.aadhar.sh`
     )}`,
-    `ORGANIZER;CN=${escICS(env.HOST_NAME)}:mailto:${env.HOST_EMAIL}`,
-    // The host is an ATTENDEE as well as the ORGANIZER, and that second line is
-    // what puts a confirmed booking on the host's own calendar. Gmail auto-adds
-    // an invite when it finds the RECIPIENT among the attendees; the host reads
-    // this mail as a cc, so an ICS carrying HOST_EMAIL on the ORGANIZER line
-    // alone gives Gmail nothing to match on and the event silently never lands.
-    // PARTSTAT=ACCEPTED with RSVP=FALSE files it as already accepted, so the
-    // host gets a calendar entry instead of an invitation to answer.
-    //
-    // This is the conventional shape rather than an addition: Google Calendar's
-    // own exported ICS always lists the organizer among the attendees. It leaks
-    // nothing further to the guest either, since HOST_EMAIL is already on the
-    // ORGANIZER line directly above.
-    //
-    // Held slots (booking.ts `held:<start>:<end>`) already stop cal from
-    // double-booking itself, so what this buys is the other direction: a human
-    // scheduling over a confirmed coffee that was never visible to them.
-    `ATTENDEE;CN=${escICS(env.HOST_NAME)};PARTSTAT=ACCEPTED;RSVP=FALSE:mailto:${env.HOST_EMAIL}`,
-    `ATTENDEE;CN=${escICS(name)};RSVP=TRUE:mailto:${email}`,
+    host ? null : `ORGANIZER;CN=${escICS(env.HOST_NAME)}:mailto:${env.HOST_EMAIL}`,
+    host ? null : `ATTENDEE;CN=${escICS(name)};RSVP=TRUE:mailto:${email}`,
     "END:VEVENT",
     "END:VCALENDAR",
   ].filter(Boolean);
