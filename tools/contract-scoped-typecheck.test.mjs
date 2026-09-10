@@ -154,7 +154,14 @@ test("coverage rejects a failed compiler census even when it prints all owned fi
     copyFileSync(new URL("./check-ts-coverage.ts", import.meta.url), join(repo, "tools/check-ts-coverage.ts"));
     // Satisfy the real census floors without altering the checker. Source
     // diagnostics and unavailable imports are deliberately outside its job.
-    for (let i = 0; i < 150; i++) writeFileSync(join(repo, "src", `fixture${i}.ts`), "export {};\n");
+    // The owned set is collected AS the files are written, so the census
+    // assertion below cannot drift from the fixture that produced it.
+    const owned = new Set([join(repo, "tools/check-ts-coverage.ts")]);
+    for (let i = 0; i < 150; i++) {
+      const file = join(repo, "src", `fixture${i}.ts`);
+      writeFileSync(file, "export {};\n");
+      owned.add(file);
+    }
     writeFileSync(join(repo, "src/fixture0.ts"), 'import "./unavailable.ts"; export const value: number = "wrong";\n');
     const config = { compilerOptions: { noEmit: true, types: [] }, include: ["../src/**/*.ts", "../tools/**/*.ts"] };
     for (let i = 0; i < 5; i++) writeFileSync(join(repo, "config", `tsconfig.fixture${i}.json`), JSON.stringify(config));
@@ -173,7 +180,22 @@ test("coverage rejects a failed compiler census even when it prints all owned fi
       { cwd: repo, encoding: "utf8", timeout: 20_000 });
     assert.ok(compiler.status !== null && compiler.status > 0, compiler.stderr);
     assert.match(compiler.stdout, /TS5023/);
-    assert.ok(compiler.stdout.includes(join(repo, "src/fixture149.ts")), "the failed compiler still emitted owned paths");
+    // EXACT LINES, and the test's own name is why: the premise is that the
+    // compiler printed ALL owned files and failed anyway, so one path found
+    // anywhere in stdout is the wrong shape of evidence for it. Two things a
+    // substring could not separate. The TS5023 diagnostic lands on stdout too
+    // and names a path, so a mention would satisfy it with no file list at all
+    // (measured: that line is RELATIVE, `config/tsconfig.fixture0.json(1,46)`,
+    // which is why it does not collide here — a future tsc printing it
+    // absolute would). And before #779 rooted this fixture canonically,
+    // `/private/var/...` contained the unresolved `/var/...` as a substring,
+    // so this passed while the two sides disagreed about every path.
+    // Lines outside the repo (lib.d.ts through the node_modules symlink) are
+    // not owned and are excluded rather than counted.
+    const listed = new Set(compiler.stdout.split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.startsWith(`${repo}/`)));
+    assert.deepEqual(listed, owned, "the failed compiler still emitted every owned path");
     const failed = run();
     assert.equal(failed.status, 1, `${failed.stdout}\n${failed.stderr}`);
     assert.match(failed.stderr, /TS5023/);
