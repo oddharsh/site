@@ -15,7 +15,7 @@ import { privateHostBlocked } from "../src/worker/lib/public-fetch.ts";
 import { esc } from "../src/worker/lib/http.ts";
 import { SUBREQUEST_CAP_FREE, createBudget, isSubrequestLimit } from "../src/worker/lib/budget.ts";
 import type { Budget } from "../src/worker/lib/budget.ts";
-import { CACHE_EMPTY, CACHE_STATIC, mcpGate, mcpHttpStatus, mcpServer } from "../src/worker/lib/mcp-protocol.ts";
+import { CACHE_EMPTY, CACHE_STATIC, mcpCorsHeaders, mcpGate, mcpHttpStatus, mcpServer } from "../src/worker/lib/mcp-protocol.ts";
 import { mcpTool } from "../src/worker/lib/mcp-tools.ts";
 import { previewToolRefusal } from "../src/worker/lib/preview.ts";
 import { asRecord, asText } from "../src/worker/lib/parse.ts";
@@ -2369,12 +2369,7 @@ export async function serendipityFindEvents(env, args) {
 // pulled into lib/cache.js — a dispatcher-private function is a function no
 // test can reach, and the bug that taught us that shipped through a green CI.
 export async function handleMcp(request, env, d) {
-  const cors = {
-    "access-control-allow-origin": "*",
-    "access-control-allow-methods": "POST, OPTIONS",
-    "access-control-allow-headers": "content-type, mcp-protocol-version, mcp-session-id, mcp-method, mcp-name, authorization",
-    "access-control-max-age": "86400",
-  };
+  const cors = mcpCorsHeaders();
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
   const respond = (obj, status = 200) => new Response(obj === null ? null : JSON.stringify(obj), {
     status, headers: { ...cors, "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
@@ -2389,15 +2384,14 @@ export async function handleMcp(request, env, d) {
   try { payload = await request.json(); }
   catch { return respond(rpcErr(null, -32700, "Parse error")); }
 
-  const handleOne = async (msg) => {
-    const hasId = asRecord(msg) !== null && "id" in msg;
+  const dispatch = async (msg) => {
     if (!msg || msg.jsonrpc !== "2.0" || asText(msg.method) === null) {
-      return hasId ? rpcErr(msg.id, -32600, "Invalid Request") : null;
+      return rpcErr(msg?.id, -32600, "Invalid Request");
     }
     const id = msg.id, m = msg.method;
     try {
       // Version first, then the routing headers — the same gate /mcp applies.
-      const refused = mcpGate(msg, request, id, hasId);
+      const refused = mcpGate(msg, request);
       if (refused !== null) return refused;
 
       // MUST be implemented as of 2026-07-28.
@@ -2430,10 +2424,14 @@ export async function handleMcp(request, env, d) {
         if (out && out._error) return MCP.result(id, { content: [{ type: "text", text: out._error }], isError: true });
         return MCP.result(id, { content: [{ type: "text", text: JSON.stringify(out, null, 2) }], structuredContent: out });
       }
-      return hasId ? rpcErr(id, -32601, "Method not found: " + m) : null;
+      return rpcErr(id, -32601, "Method not found: " + m);
     } catch (e) {
-      return hasId ? rpcErr(id, -32603, "Internal error: " + (e && e.message ? e.message : String(e))) : null;
+      return rpcErr(id, -32603, "Internal error: " + (e && e.message ? e.message : String(e)));
     }
+  };
+  const handleOne = async (msg) => {
+    const reply = await dispatch(msg);
+    return asRecord(msg) !== null && "id" in msg ? reply : null;
   };
 
   if (Array.isArray(payload)) {

@@ -1,23 +1,7 @@
-// lib/mcp-protocol.js — the 2026-07-28 wire rules, shared by both MCP servers.
-//
-// This site publishes TWO MCP servers: `/mcp` (mcp.js, the site surface) and
-// `/serendipity/mcp` (serendipity.js, the event pool). They expose completely
-// different tools and share nothing about their data. What they do share is the
-// PROTOCOL: version negotiation, the `_meta` key names, `resultType`, the cache
-// hint fields, and the reserved error codes. That is exactly the kind of thing
-// that must not be implemented twice, because two copies drift and the symptom
-// is one server quietly speaking a dialect no client asked for.
-//
-// SHARING IS SAFE HERE, and it is worth saying why, because the near-identical
-// trace helpers in `lib/trace.js` and `cal/src/trace.ts` are duplicated ON
-// PURPOSE and this looks like the same situation. It is not. cal is duplicated
-// because its Vitest pool boots from `cal/src/index.ts` alone, so a cal ->
-// holding import would make cal untestable without the site tree. Serendipity
-// has no such constraint and already imports `lib/desktop.js` and
-// `lib/crawl.ts`; the serendipity -> src/worker/lib direction is established.
-//
-// Nothing here may import `cloudflare:workers` (gotcha 16): both importers are
-// pulled into contract-tests.mjs under plain node.
+// The wire rules shared by /mcp and /serendipity/mcp: negotiation, validation,
+// CORS and result envelopes. Tool dispatch and data stay with each server.
+// Keep this module free of cloudflare:workers imports: both servers also run
+// in the host-runtime contract suite.
 
 // ── the revisions ───────────────────────────────────────────────────
 // 2026-07-28 deleted the initialize handshake, deleted protocol-level sessions
@@ -245,18 +229,19 @@ export function mcpServer({ serverInfo, capabilities, instructions }) {
 // rather than being told its `_meta` is malformed under a revision it was never
 // claiming to follow. The two would be equally "correct" refusals and only one
 // of them is actionable.
-export function mcpGate(msg, request, id, hasId) {
+// An absent id suppresses the REPLY, never the refusal. Callers apply that
+// transport policy after dispatch; null here means the request may proceed.
+export function mcpGate(msg, request) {
+  const id = msg.id;
   const declared = declaredVersion(msg);
   if (declared && !MCP_SUPPORTED.includes(declared)) {
-    return hasId ? unsupportedVersion(id, declared) : null;
+    return unsupportedVersion(id, declared);
   }
   const missing = missingRequiredMeta(msg);
-  if (missing) return hasId ? malformedRequest(id, missing) : null;
+  if (missing) return malformedRequest(id, missing);
   const mismatch = headerMismatch(msg, request);
   if (mismatch) {
-    return hasId
-      ? { jsonrpc: "2.0", id, error: { code: ERR_HEADER_MISMATCH, message: mismatch } }
-      : null;
+    return { jsonrpc: "2.0", id, error: { code: ERR_HEADER_MISMATCH, message: mismatch } };
   }
   return null;
 }
