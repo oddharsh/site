@@ -1069,6 +1069,7 @@ when the remote job is unavailable.
 # the photo pipeline
 brew install jaq mozjpeg libavif              # mozjpeg = jpegtran + cjpeg; libavif = avifenc for the /garage/encoding grids
 brew install cmake ninja                     # for the pinned avifenc below
+# Git must also be on PATH to clone the pinned sources (brew install git if missing).
 # the AVIF encoder the photo tiers actually use: libavif at a pinned tag, built
 # with aom + libsharpyuv + libyuv. First run clones and builds all four (~10 min,
 # needs network); after that it is a no-op. Byte-identical to brew's avifenc at

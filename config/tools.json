@@ -129,6 +129,49 @@
       "bytes_why": "builds zenc, and zenjpeg's encode is deterministic for a given pin, which dependabot owns in tools/photos/zenc/Cargo.toml. A compiler bump does not move a JPEG, and it does not move a HISTOGRAM either, which is the half that was doubted: `bun run zenc:reproducible` bakes all 165 stems under three rustc versions and diffs them"
     },
     {
+      "bin": "cmake",
+      "install": "brew install cmake",
+      "why": "configures and builds the pinned AVIF encoder and its libraries",
+      "required_by": [
+        "tools/photos/libavif/build.sh"
+      ],
+      "version": {
+        "flag": "--version",
+        "match": "cmake version (\\d+\\.\\d+\\.\\d+)"
+      },
+      "bytes": false,
+      "bytes_why": "build orchestration; the encoder source and build configuration live in tools/photos/libavif/build.sh"
+    },
+    {
+      "bin": "ninja",
+      "install": "brew install ninja",
+      "why": "executes the CMake build for the pinned AVIF encoder",
+      "required_by": [
+        "tools/photos/libavif/build.sh"
+      ],
+      "version": {
+        "flag": "--version",
+        "match": "^(\\d+\\.\\d+\\.\\d+)"
+      },
+      "bytes": false,
+      "bytes_why": "runs the declared build commands; does not encode images"
+    },
+    {
+      "bin": "git",
+      "install": "brew install git",
+      "why": "fetches the pinned AVIF encoder sources; also supplies the tracked-script census for tools:check",
+      "required_by": [
+        "tools/photos/libavif/build.sh",
+        "tools/check-tools.ts"
+      ],
+      "version": {
+        "flag": "--version",
+        "match": "git version (\\d+\\.\\d+\\.\\d+)"
+      },
+      "bytes": false,
+      "bytes_why": "retrieves source bytes and reads repository ownership; does not encode images"
+    },
+    {
       "bin": "zenc",
       "path": "tools/photos/zenc/target/release/zenc",
       "install": "cargo build --release --locked --manifest-path tools/photos/zenc/Cargo.toml",

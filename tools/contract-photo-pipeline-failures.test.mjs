@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtemp, mkdir, readFile, readdir, realpath, writeFile, chmod, rm, utimes } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, realpath, writeFile, chmod, rm, utimes } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { photoInputs } from "./photos/photo-inputs.ts";
+
+const REPO = fileURLToPath(new URL("../", import.meta.url));
 
 // Real shell entrypoints, deterministic encoder stubs, no network or private
 // originals. Copy the shell corpus so sourced helpers run unchanged too.
@@ -29,8 +32,15 @@ async function fixture(run) {
       TRACE: `${root}/trace`, JOBS: "1", REMOTE_RENDER_ONLY: "1", ...env },
   });
   try {
-    for (const file of await readdir(new URL("./photos/", import.meta.url))) {
-      if (file.endsWith(".sh") || file === "photo-inputs.ts") await put(`tools/photos/${file}`, await readFile(new URL(`./photos/${file}`, import.meta.url), "utf8"));
+    // Take the corpus from git rather than from a directory listing, which is
+    // the census check-tools.ts itself takes. A listing of tools/photos alone
+    // misses the nested AVIF builder, so a declaration naming it reads as a
+    // stale path, and it would copy an ignored download that no check sees.
+    // photo-inputs.ts is named outright because the shells call it: it is a
+    // dependency of the corpus rather than a member of it.
+    const corpus = ["tools/photos/*.sh", "tools/photos/photo-inputs.ts"];
+    for (const rel of execFileSync("git", ["ls-files", "-z", ...corpus], { cwd: REPO, encoding: "utf8" }).split("\0").filter(Boolean)) {
+      await put(rel, await readFile(path.join(REPO, rel), "utf8"));
     }
     await put("trace", "");
     await put("source/frame.jpg", "source fixture");
