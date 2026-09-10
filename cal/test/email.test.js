@@ -100,7 +100,14 @@ describe("sendInvite → .ics attachment", () => {
     expect(ics).toContain("DTEND:20260514T193000Z");
     expect(ics).toContain("SUMMARY:coffee with aadharsh");
     expect(ics).toContain("ORGANIZER;CN=aadharsh:mailto:coffee@aadhar.sh");
+    // The host appears TWICE on purpose, as ORGANIZER and again as an ATTENDEE.
+    // Gmail auto-adds an invite by matching the recipient against the attendee
+    // list, and the host reads this mail as a cc, so dropping the second line
+    // takes the event off the host's calendar without failing anything else.
+    // At 73 octets it sits just under the 75-octet fold, so it stays one line.
+    expect(ics).toContain("ATTENDEE;CN=aadharsh;PARTSTAT=ACCEPTED;RSVP=FALSE:mailto:coffee@aadhar.sh");
     expect(ics).toContain("ATTENDEE;CN=Jordan Lee;RSVP=TRUE:mailto:jordan@example.com");
+    expect(ics.match(/^ATTENDEE/gm)).toHaveLength(2);
     expect(ics).toContain("\r\n");                          // CRLF line endings
     expect(ics.trim().endsWith("END:VCALENDAR")).toBe(true);
   });
