@@ -50,8 +50,8 @@ if (listed < 12) {
 }
 
 const BASELINE = join(REPO, "config/ts-browser-baseline.json");
-const { rewritten, problems, owed } = ratchet({
-  baselinePath: BASELINE, byFile, total: mine.length,
+const { rewritten, problems } = ratchet({
+  baselinePath: BASELINE, byFile,
   updateCommand: "bun run typecheck:browser -- --update",
   update: process.argv.includes("--update"),
 });
@@ -68,4 +68,4 @@ if (problems.length) {
   console.error(`\ncheck-browser-types: FAILED against config/ts-browser-baseline.json\n  - ${problems.join("\n  - ")}`);
   process.exit(1);
 }
-console.log(`check-browser-types: matches the baseline (${owed} owed)`);
+console.log(`check-browser-types: matches the baseline`);
