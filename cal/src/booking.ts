@@ -43,7 +43,7 @@ export type Booking = {
   created: number;
   // A union rather than a string because the whole approve/decline flow turns on
   // it, and `expired` in particular is the value that makes a record unactionable.
-  status: "pending" | "confirmed" | "declined" | "expired";
+  status: "pending" | "confirmed" | "declined" | "expired" | "cancelled";
   /** epoch ms, set when the host decides */
   acted_at?: number;
   /** Where in NYC the REQUESTER is, in their own words. Free text on purpose:
@@ -105,6 +105,48 @@ export async function setLocation(env, id: string, location: string): Promise<Bo
   // it higher makes the guest's client treat the ORIGINAL invite as an update to
   // an event it has never seen, which Outlook in particular declines to show.
   if (b.status === "confirmed") b.sequence = (b.sequence ?? 0) + 1;
+  await putBooking(env, b);
+  return b;
+}
+
+// Move a booking to a different slot. Separate from setLocation for the same
+// reason that one is separate from setStatus, and one step further: this is the
+// axis that touches HELD SLOTS, so a caller has to take the new hold and give
+// back the old one around it. Folding that in here would hide the ordering that
+// makes it safe.
+//
+// Returns the slot it VACATED alongside the patched booking, because the old
+// start/end are gone from the record the moment this writes, and releasing a
+// hold needs exactly those two numbers.
+export async function setSchedule(env, id: string, slot: Slot): Promise<{ booking: Booking, was: Slot } | null> {
+  const b = await getBooking(env, id);
+  if (!b) return null;
+  const was = { start: b.start, end: b.end };
+  b.start = slot.start;
+  b.end   = slot.end;
+  // Same rule as setLocation: only a booking whose invite is already out has a
+  // VEVENT to supersede. A pending one still owes its first at SEQUENCE:0.
+  if (b.status === "confirmed") b.sequence = (b.sequence ?? 0) + 1;
+  await putBooking(env, b);
+  return { booking: b, was };
+}
+
+// Cancelling is a status change that ALSO has to SUPERSEDE a VEVENT the guest
+// is already holding, which is why it is not setStatus(id, "cancelled"). iTIP
+// has a client compare SEQUENCE before applying a CANCEL, so a withdrawal sent
+// at the same sequence as the invite is one a client may legitimately ignore,
+// and the entry then sits on the guest's calendar for a coffee that is off.
+// Caught by a test rather than by review: the first version of this route did
+// call setStatus, and everything else about it looked right.
+//
+// Unconditional, unlike setLocation's bump, because /cancel only ever reaches a
+// CONFIRMED booking. A pending one has no invite out and is declined instead.
+export async function cancelBooking(env, id: string): Promise<Booking | null> {
+  const b = await getBooking(env, id);
+  if (!b) return null;
+  b.status   = "cancelled";
+  b.acted_at = Date.now();
+  b.sequence = (b.sequence ?? 0) + 1;
   await putBooking(env, b);
   return b;
 }

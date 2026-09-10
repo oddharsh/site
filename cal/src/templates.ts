@@ -156,6 +156,24 @@ a:hover { color: var(--link-hover); }
   gap: 4px 4px;
 }
 .slots li { margin: 0; }
+/* The host's reschedule picker. A LABEL wrapping a real radio rather than the
+   .slot-btn treatment beside it, because that button is driven by script and
+   the host pages ship none: the sunken well is the affordance, and :has() gives
+   the selected one the same pressed reading without a line of JS. */
+.slot-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border: 1px solid var(--luna-field-border, #7f9db9);
+  background: var(--luna-field-bg, #fff);
+  cursor: pointer;
+}
+.slot-radio:has(input:checked) {
+  background: var(--luna-select-bg, #316ac5);
+  color: var(--luna-select-fg, #fff);
+}
+.slot-radio:has(input:focus-visible) { outline: 1px dotted currentColor; outline-offset: 1px; }
 /* raised XP button look */
 .slot-btn,
 button.xp-button {
@@ -517,7 +535,7 @@ export function successPage(env) {
   return shell("Request sent", body, env);
 }
 
-export function confirmedPage(booking, env, already, locationUrl?: string) {
+export function confirmedPage(booking, env, already, locationUrl?: string, manage: { reschedule?: string, cancel?: string } = {}) {
   const when = new Date(booking.start).toLocaleString("en-US", {
     timeZone: env.HOST_TIMEZONE, weekday: "long", month: "long", day: "numeric",
     hour: "numeric", minute: "2-digit", timeZoneName: "short",
@@ -537,6 +555,12 @@ export function confirmedPage(booking, env, already, locationUrl?: string) {
     ${locationUrl ? `<p>${booking.location
         ? `it's at <strong>${esc(booking.location)}</strong> — <a href="${esc(locationUrl)}">change the spot</a>.`
         : `<a href="${esc(locationUrl)}">set the spot</a> whenever you know it. this same link keeps working afterwards.`}</p>` : ""}
+    ${manage.reschedule || manage.cancel ? `<p class="xp-meta">
+      ${manage.reschedule ? `<a href="${esc(manage.reschedule)}">move it</a>` : ""}
+      ${manage.reschedule && manage.cancel ? " &middot; " : ""}
+      ${manage.cancel ? `<a href="${esc(manage.cancel)}">cancel</a>` : ""}
+      &mdash; both mail ${esc(booking.name)}. these links keep working.
+    </p>` : ""}
     <!-- A plain link, NOT class="xp-button". The rule up in STYLES is qualified
          to the button ELEMENT, so an anchor carrying that class inherits none of
          the bevel and ships as unstyled blue text. Widening that selector is a
@@ -605,6 +629,141 @@ export function locationSavedPage(booking, env, mailed) {
     </div>
   `;
   return shell("Saved", body, env);
+}
+
+// The host's form for MOVING a confirmed booking. Radios rather than the public
+// page's slot-btn grid, and the difference is deliberate: that grid is driven by
+// /nav.js and a hidden input, and this page ships no script, so a picker that
+// needed one would render as a list of dead buttons in the one place the host is
+// least able to debug it.
+export function reschedulePage(booking, env, action, sig, slots) {
+  const when = new Date(booking.start).toLocaleString("en-US", {
+    timeZone: env.HOST_TIMEZONE, weekday: "long", month: "long", day: "numeric",
+    hour: "numeric", minute: "2-digit", timeZoneName: "short",
+  });
+  const live = booking.status === "confirmed";
+
+  const groups: Record<string, any[]> = {};
+  for (const sl of slots) {
+    const dayKey = new Date(sl.start).toLocaleDateString("en-US", {
+      timeZone: env.HOST_TIMEZONE, weekday: "long", month: "long", day: "numeric",
+    });
+    (groups[dayKey] = groups[dayKey] || []).push(sl);
+  }
+
+  // The booking's CURRENT slot is held by this very booking, so it is absent
+  // from the open list by construction and there is no same-slot no-op to guard.
+  const picker = Object.keys(groups).length === 0
+    ? `<p class="empty">nothing open in the next ${esc(env.MAX_LOOKAHEAD_DAYS)} days. cancel instead, or wait for the window to roll forward.</p>`
+    : Object.entries(groups).map(([day, list]) => `
+        <div class="xp-day-label">${esc(day)}</div>
+        <ul class="slots">
+          ${list.map(sl => {
+            const t = new Date(sl.start).toLocaleTimeString("en-US", {
+              timeZone: env.HOST_TIMEZONE, hour: "numeric", minute: "2-digit",
+            });
+            return `<li><label class="slot-radio">
+              <input type="radio" name="start" value="${sl.start}" required> ${esc(t)}
+            </label></li>`;
+          }).join("")}
+        </ul>
+      `).join("");
+
+  const body = `
+    <h1>Move it</h1>
+    <div class="xp-group">
+      <span class="legend">Booking</span>
+      <p><strong>${esc(booking.name)}</strong> &lt;${esc(booking.email)}&gt;<br>
+         currently <strong>${esc(when)}</strong></p>
+      ${booking.location ? `<p class="xp-meta">at ${esc(booking.location)}</p>` : ""}
+    </div>
+    <form class="book" method="POST" action="${esc(action)}">
+      <input type="hidden" name="t" value="${esc(booking.id)}">
+      <input type="hidden" name="sig" value="${esc(sig)}">
+      <div class="xp-group">
+        <span class="legend">New time</span>
+        <p class="xp-meta">times shown in ${esc((env.HOST_TIMEZONE || "UTC").replace(/_/g, " "))}.</p>
+        ${picker}
+        ${slots.length ? `<div class="actions">
+          <button type="submit" class="xp-button primary">${live ? "move it and send the update" : "move it"}</button>
+        </div>` : ""}
+      </div>
+    </form>
+    <div class="banner ${live ? "" : "warn"}">
+      <div>${live
+        ? "this rewrites the entry they already have, in place, at the new time. no second invite, nothing to re-accept."
+        : "not approved yet, so nothing is mailed. the new time rides out on the invite when you approve."}</div>
+    </div>
+  `;
+  return shell("Move it", body, env);
+}
+
+export function rescheduledPage(booking, env, mailed) {
+  const when = new Date(booking.start).toLocaleString("en-US", {
+    timeZone: env.HOST_TIMEZONE, weekday: "long", month: "long", day: "numeric",
+    hour: "numeric", minute: "2-digit", timeZoneName: "short",
+  });
+  const body = `
+    <h1>Moved</h1>
+    <div class="xp-group">
+      <span class="legend">New time</span>
+      <p><strong>${esc(when)}</strong></p>
+    </div>
+    <div class="banner success">
+      <div>${mailed
+        ? `update sent to ${esc(booking.email)}. their entry moves itself, and the old slot is open again.`
+        : "stored. it goes out with the invite when you approve this booking."}</div>
+    </div>
+  `;
+  return shell("Moved", body, env);
+}
+
+// Cancelling is the one host action that destroys something the guest is
+// already holding, so it asks. The GET carries the same signature the POST does
+// and changes nothing on its own, which is what makes a confirm step honest
+// rather than decorative: opening the link is safe.
+export function cancelPage(booking, env, action, sig) {
+  const when = new Date(booking.start).toLocaleString("en-US", {
+    timeZone: env.HOST_TIMEZONE, weekday: "long", month: "long", day: "numeric",
+    hour: "numeric", minute: "2-digit", timeZoneName: "short",
+  });
+  const body = `
+    <h1>Cancel this?</h1>
+    <div class="xp-group">
+      <span class="legend">Booking</span>
+      <p><strong>${esc(booking.name)}</strong> &lt;${esc(booking.email)}&gt;<br>
+         <strong>${esc(when)}</strong></p>
+      ${booking.location ? `<p class="xp-meta">at ${esc(booking.location)}</p>` : ""}
+      <p class="xp-meta">topic: ${esc(booking.topic)}</p>
+    </div>
+    <form class="book" method="POST" action="${esc(action)}">
+      <input type="hidden" name="t" value="${esc(booking.id)}">
+      <input type="hidden" name="sig" value="${esc(sig)}">
+      <div class="actions">
+        <button type="submit" class="xp-button primary">cancel it and tell them</button>
+      </div>
+    </form>
+    <div class="banner warn">
+      <div>this withdraws the entry from their calendar and frees the slot. it
+           cannot be undone from here: they would have to book again.</div>
+    </div>
+  `;
+  return shell("Cancel this?", body, env);
+}
+
+export function cancelledPage(booking, env) {
+  const body = `
+    <h1>Cancelled</h1>
+    <div class="xp-group">
+      <span class="legend">Booking</span>
+      <p><strong>${esc(booking.name)}</strong> &lt;${esc(booking.email)}&gt;</p>
+    </div>
+    <div class="banner">
+      <div>withdrawn and mailed to ${esc(booking.email)}. the slot is open again.
+           your own copy may need deleting by hand.</div>
+    </div>
+  `;
+  return shell("Cancelled", body, env);
 }
 
 export function declinedPage(booking, env, already) {

@@ -426,6 +426,137 @@ describe("book → approve / decline lifecycle", () => {
     expect((await dispatch(`/approve?t=ghost&sig=${sig}`)).status).toBe(404);
   });
 
+  // ── /reschedule and /cancel ──────────────────────────────────────────
+  //
+  // The third and fourth axes of the signed host surface. Both are POST-applied
+  // like /location, which keeps them off the GET-shaped-write lists in the root
+  // Worker's preview and early-data guards, and keeps a link-prefetching mail
+  // client from calling off a coffee by looking at it.
+  const sigFor = (id, action) => sign(`${id}|${action}`, SECRET);
+  const postForm = (path, fields) => dispatch(path, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams(fields).toString(),
+  });
+
+  // Narrowing AND a precondition. `find` gives `T | undefined`, which the cal
+  // test program refuses at zero errors, and a reschedule test that ran against
+  // an undefined slot would pass its assertions for the wrong reason.
+  const otherOpenSlot = async (notStart) => {
+    const open = (await slotsOf(await dispatch("/slots"))).slots;
+    const target = open.find((s) => s.start !== notStart);
+    if (!target) throw new Error("no second open slot to move onto");
+    return target;
+  };
+
+  const confirmedBooking = async (who = "Rae") => {
+    const slot = await firstSlot();
+    await postBook({ name: who, email: `${who.toLowerCase()}@x.dev`, topic: "hi", start: slot.start });
+    const id = lastBookingId();
+    await dispatch(`/approve?t=${id}&sig=${await sigFor(id, "approve")}`);
+    mailCalls.length = 0;
+    return { id, slot };
+  };
+
+  it("moves a confirmed booking, frees the old slot and takes the new one", async () => {
+    const { id, slot } = await confirmedBooking("Rae");
+    const target = await otherOpenSlot(slot.start);
+
+    const res = await postForm("/reschedule", { t: id, sig: await sigFor(id, "reschedule"), start: String(target.start) });
+    expect(res.status).toBe(200);
+
+    const after = (await slotsOf(await dispatch("/slots"))).slots;
+    // the vacated slot comes back …
+    expect(after.find((s) => s.start === slot.start)).toBeDefined();
+    // … and the one it moved onto is held, so nobody else can take it.
+    expect(after.find((s) => s.start === target.start)).toBeUndefined();
+  });
+
+  it("sends the guest an in-place update at the new time, and the host their own copy", async () => {
+    const { id, slot } = await confirmedBooking("Ash");
+    const target = await otherOpenSlot(slot.start);
+    await postForm("/reschedule", { t: id, sig: await sigFor(id, "reschedule"), start: String(target.start) });
+
+    expect(mailCalls).toHaveLength(2);
+    const update = icsOf(guestMail());
+    expect(guestMail().body.to).toEqual(["ash@x.dev"]);
+    expect(update).toContain("METHOD:REQUEST");
+    // Same UID at a higher SEQUENCE is what makes a client MOVE the entry
+    // rather than add a second one at the new time.
+    expect(update).toContain(`UID:${id}@cal.aadhar.sh`);
+    expect(update).toContain("SEQUENCE:1");
+    const fmt = (ms) => new Date(ms).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+    expect(update).toContain(`DTSTART:${fmt(target.start)}`);
+    expect(icsOf(hostMail())).toContain(`DTSTART:${fmt(target.start)}`);
+  });
+
+  it("refuses a slot that is not open, and changes nothing", async () => {
+    const { id, slot } = await confirmedBooking("Kit");
+    // Its OWN slot is held by this booking, so it is never on offer: asking for
+    // it back is the same refusal as asking for somebody else's.
+    const res = await postForm("/reschedule", { t: id, sig: await sigFor(id, "reschedule"), start: String(slot.start) });
+    expect(res.status).toBe(409);
+    expect(mailCalls).toHaveLength(0);
+    expect(await statusOf(id)).toBe("confirmed");
+  });
+
+  it("cancels a confirmed booking: withdraws the guest's entry and frees the slot", async () => {
+    const { id, slot } = await confirmedBooking("Wren");
+
+    const form = await dispatch(`/cancel?t=${id}&sig=${await sigFor(id, "cancel")}`);
+    expect(form.status).toBe(200);
+    // The GET is a confirm step and must change NOTHING on its own.
+    expect(await statusOf(id)).toBe("confirmed");
+    expect(mailCalls).toHaveLength(0);
+
+    const res = await postForm("/cancel", { t: id, sig: await sigFor(id, "cancel") });
+    expect(res.status).toBe(200);
+    expect(await statusOf(id)).toBe("cancelled");
+
+    const after = (await slotsOf(await dispatch("/slots"))).slots;
+    expect(after.find((s) => s.start === slot.start)).toBeDefined();
+
+    expect(mailCalls).toHaveLength(2);
+    const withdrawal = icsOf(guestMail());
+    expect(withdrawal).toContain("METHOD:CANCEL");
+    expect(withdrawal).toContain("STATUS:CANCELLED");
+    expect(withdrawal).toContain(`UID:${id}@cal.aadhar.sh`);
+    expect(withdrawal).toContain("SEQUENCE:1");
+    expect(icsOf(hostMail())).toContain(`UID:${id}-host@cal.aadhar.sh`);
+  });
+
+  it("will not cancel a booking that was never confirmed (409, and /decline is the route)", async () => {
+    const slot = await firstSlot();
+    await postBook({ name: "Nell", email: "nell@x.dev", topic: "hi", start: slot.start });
+    const id = lastBookingId();
+    mailCalls.length = 0;
+    const res = await postForm("/cancel", { t: id, sig: await sigFor(id, "cancel") });
+    expect(res.status).toBe(409);
+    expect(await statusOf(id)).toBe("pending");
+    expect(mailCalls).toHaveLength(0);
+  });
+
+  it("acts on a cancelled booking no further, on any of the three surfaces", async () => {
+    const { id } = await confirmedBooking("Ora");
+    await postForm("/cancel", { t: id, sig: await sigFor(id, "cancel") });
+    mailCalls.length = 0;
+    for (const action of ["location", "reschedule", "cancel"]) {
+      const res = await dispatch(`/${action}?t=${id}&sig=${await sigFor(id, action)}`);
+      expect(res.status).toBe(409);
+    }
+    expect(mailCalls).toHaveLength(0);
+  });
+
+  // The signature is scoped per action, so the link that names a cafe cannot be
+  // replayed to call the coffee off.
+  it("will not accept one action's signature for another", async () => {
+    const { id } = await confirmedBooking("Pip");
+    const locSignature = await sigFor(id, "location");
+    expect((await postForm("/cancel", { t: id, sig: locSignature })).status).toBe(401);
+    expect((await postForm("/reschedule", { t: id, sig: locSignature, start: "1" })).status).toBe(401);
+    expect(await statusOf(id)).toBe("confirmed");
+  });
+
   it("re-approving an already-confirmed booking is idempotent — no duplicate invite", async () => {
     const slot = await firstSlot();
     await postBook({ name: "Sam", email: "sam@x.dev", topic: "hi", start: slot.start });
