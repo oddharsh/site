@@ -354,8 +354,10 @@ does not make a failed write safe to ignore.
   2026-08-15 and the package went with it: pure-JS ML-DSA costs ~8.5ms per
   request against a 10ms CPU budget, which was taking down the playlist scrape
   and `/lens`. `/garage/pqc` carries the measurements and the retirement note.
-- The root workspace lockfile is authoritative; workspace-local Wrangler pins
-  are rejected by `bun run check-wrangler`.
+- The root workspace lockfile is authoritative. `bun run check-wrangler` rejects
+  local Wrangler declarations and separate installations in every tracked npm
+  project, including the standalone Reader. Each must resolve the root install;
+  unused package-store entries do not count as consumers.
 
 ## Outside the root manifest
 
