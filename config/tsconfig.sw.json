@@ -4,14 +4,8 @@
   //
   // sw.js runs in a ServiceWorkerGlobalScope: `skipWaiting`, `clients` and
   // `registration` are globals there and exist in NO other environment, which is
-  // why it needs lib.webworker. That lib cannot share a program with lib.dom —
-  // the two declare conflicting globals, which is the same collision
-  // tsconfig.browser.json's own header documents about workers-types.
-  //
-  // A fourth program for one 15-line file looks like overkill until you name the
-  // alternative: excluding it from the glob, which is exactly the allowlist habit
-  // that let ten client islands go unchecked. One file, checked, in the only
-  // environment where its globals are real.
+  // why it needs lib.webworker. That lib conflicts with lib.dom; keeping this
+  // program separate checks the service worker against its actual environment.
   "compilerOptions": {
     "noEmit": true,
     "allowJs": true,
@@ -21,20 +15,10 @@
     "moduleResolution": "bundler",
     "lib": ["esnext", "webworker"],
     "skipLibCheck": true,
-    // Two control-flow checks, set here because they are set in tsconfig.json
-    // and a program is only as strict as its own options. Both cost nothing:
-    // +0 diagnostics on every one of the ten programs, measured 2026-08-27.
     "noFallthroughCasesInSwitch": true,
     "noImplicitReturns": true,
-    // strictNullChecks ON, and this was the one program in config/ without it.
-    // The header above argues why sw.js needs a SEPARATE program, which is a
-    // claim about its globals; nothing here ever argued for a laxer one, and
-    // the omission read as a decision because it sat where a decision goes.
-    // 0 diagnostics under it, measured 2026-08-27. `strict` stays off for the
-    // reason every other config in this directory gives: it bundles
-    // noImplicitAny, 7,197 diagnostics of annotation labour repo-wide, which
-    // would bury the checks that find bugs under the ones that find missing
-    // annotations.
+    // This program is checked without a diagnostic baseline. Full strictness
+    // is a separate migration; see tsconfig.json.
     "strictNullChecks": true,
     "strict": false
   },

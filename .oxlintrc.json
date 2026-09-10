@@ -23,10 +23,9 @@
   // explicitly under `rules`, and adding the plugin costs no unnamed sweep.
   "plugins": ["eslint", "unicorn", "typescript", "oxc", "vitest", "import"],
 
-  // Three rules vendored from dmmulroy/anti-slop, at tools/oxlint/anti-slop.
-  // That directory is ignorePattern'd above: it is TypeScript in a repository
-  // with no TypeScript, so linting it reports on somebody else's source under
-  // rules written for ours.
+  // Three vendored anti-slop rules. Exclude that upstream source from this
+  // lint policy; the tools typecheck still covers it. Adoption and re-sync
+  // boundaries are documented in docs/DEPENDENCIES.md.
   "jsPlugins": [{ "name": "anti-slop", "specifier": "./tools/oxlint/anti-slop/index.ts" }],
 
   "categories": { "correctness": "error" },
@@ -116,23 +115,6 @@
     // the same place. Off rather than autofixed, for the same reason as above.
     "unicorn/no-new-array": "off",
 
-    // The one rule worth taking from dmmulroy/anti-slop, an Oxlint plugin of
-    // 15. Three of the other 14 fire on this tree and all three disagree with a
-    // documented house idiom; ten cannot fire at all, since they visit only
-    // TypeScript AST nodes and nothing here is TypeScript. Nothing was vendored,
-    // because core Oxlint already ships this one.
-    //
-    // `cal/` was the only Vitest project in the tree; it runs on bun:test since
-    // 2026-09-02 and its 7 test files use real seams, so this is a tripwire on
-    // zero existing sites rather than a cleanup. It is worth keeping because a
-    // module mock is the cheapest wrong turn available to anyone extending
-    // those tests: it would pass while asserting against a fake booking store,
-    // on the surface where a bug means a real person double-booked. Know its
-    // reach: bun spells the same mistake `mock.module`, which this rule does not
-    // match. The one `mock.module` in the tree is cal/test/preload.ts, a
-    // virtual module for the `cloudflare:workers` scheme, and its header argues
-    // why that is a runtime shim rather than a faked seam. The 12 remaining anti-slop rules are not
-    // vendored; docs/DEPENDENCIES.md records the measurement that decided each one.
     // Rejects `...(cond ? { k } : {})`. The absent-rather-than-zero discipline
     // that idiom implements is RIGHT and is kept: a `score: 0` on a filter-only
     // query reads as "scored and found wanting" when nothing was scored, and the
@@ -162,13 +144,10 @@
     // Worker had the failure it describes: the same "is this really a string?"
     // was asked in a dozen places and answered slightly differently in each.
     //
-    // A schema library is the usual answer and was NOT taken. This repo
-    // declares zero runtime dependencies and the bundle sits on a 204.24 KiB
-    // baseline, so the parse layer is hand-rolled: `lib/parse.js` for the
-    // Worker, a few local coercions per client IIFE (they cannot import).
+    // src/worker/lib/parse.ts owns the Worker's boundary primitives. The
+    // browser modules keep local coercions within their existing load paths.
     //
-    // The two exemptions below are the classes the rule is categorically wrong
-    // about, and both are language facts rather than preferences.
+    // Boundary parsers and tests have explicit exemptions below.
     "anti-slop/no-runtime-typeof": "error",
 
     // The complement of no-floating-promises, which the note at the end of the
@@ -204,10 +183,13 @@
     "import/export": "error",
     // Skips `.ts` files by design, upstream and here: type-only re-exports are
     // not resolvable this way. It has teeth on the .js/.mjs half of the tree,
-    // which is all of src/client and most of tools.
+    // including the client islands and tools' .mjs tests.
     "import/named": "error",
     "import/no-self-import": "error",
 
+    // Reject vi.mock/vi.doMock in favour of real dependency seams. This rule
+    // does not cover Bun's mock.module. cal/test/preload.ts uses that API only
+    // to supply the cloudflare:workers virtual module; review other uses.
     "vitest/no-restricted-vi-methods": [
       "error",
       {
@@ -240,20 +222,20 @@
   // first triage ran against a root-only install and came back with 56 findings;
   // after a full `pnpm install` populated the workspace, `@types/node` resolved,
   // `test()` typed as returning a promise, and the same command reported 272
-  // more. Nothing had changed in the source. So triage a rule against a COLD
-  // `pnpm install --frozen-lockfile`, which is what CI runs, and treat a count
+  // more. Nothing had changed in the source. Today, triage against a complete
+  // `bun install --frozen-lockfile`, which is what CI runs, and treat a count
   // taken from a partial install as a floor. Same shape as the lens-reader
   // lesson in CLAUDE.md, from the other direction.
   //
-  // Six of the eight type-aware families that fire on this tree fire because
-  // the tree is unannotated JavaScript rather than because anything is wrong,
-  // and they are off with the measurement that decided each one:
+  // These six overrides apply only to .js/.mjs, not the TypeScript source.
+  // The counts below are the original JavaScript-era triage, not a current
+  // census; the program-discovery caveat above applies to all of them:
   //
   //   no-base-to-string (14) + restrict-template-expressions (12)
   //     Both want a provable `string` in a template literal. In a .js file with
   //     no JSDoc the value is `any`, so these fire on `${url}` where url is a
-  //     URL and on `${method}` where method is a literal string. Neither is a
-  //     defect; both would be if this were TypeScript.
+  //     URL and on `${method}` where method is a literal string. Neither is
+  //     necessarily a defect. The rules remain enabled for TypeScript.
   //
   //   require-array-sort-compare (10)
   //     `[...services].sort()` in ledger.js is a Set built from String(...), so
@@ -307,13 +289,10 @@
       "rules": { "anti-slop/no-runtime-typeof": "off" }
     },
     {
-      // `node:test` and Vitest both return a promise from `test()` that the
-      // RUNNER tracks, so a top-level `test("...", async () => {})` is the
-      // documented usage rather than a dropped promise. 272 of them here, and
-      // `void` on every one would be noise that hides the rule's real subject.
-      // Scoped to test files by name so the rule keeps its teeth everywhere a
-      // Worker actually runs, which is the only place a floating promise gets
-      // cancelled at request teardown.
+      // The test runner owns top-level test registrations; they are not
+      // application promises that need a caller to await them. Suppression
+      // stays scoped to tests so Worker promises remain checked: an unawaited
+      // promise can be cancelled at request teardown.
       "files": ["**/test/**", "**/*.test.*", "tools/contract-shared.ts"],
       "rules": { "typescript/no-floating-promises": "off" }
     },

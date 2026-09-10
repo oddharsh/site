@@ -1,10 +1,7 @@
 // Vendored from https://github.com/dmmulroy/anti-slop (MIT, LICENSE alongside),
 // which is written to be COPIED rather than depended on. Three of its fifteen
-// rules are here; the other twelve were measured against this tree and left
-// out, and docs/DEPENDENCIES.md records why each one was dropped. Ten of them
-// visit TypeScript AST nodes exclusively and cannot fire on a repository with
-// no TypeScript source, so vendoring them would be dead code that still has to
-// be maintained.
+// rules are here. docs/DEPENDENCIES.md records the current adoption and the
+// limits of the earlier evaluation, which preceded the TypeScript migration.
 //
 // The rule FILES are upstream's, byte for byte, so a future re-sync is a plain
 // copy rather than a merge. Everything this repo decides lives here or in

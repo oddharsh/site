@@ -1,28 +1,21 @@
 {
-  // tsconfig.lens-reader.json — the Reader lens Worker at lens-reader/, the
-  // seventh machine tab on /lens.
+  // The Reader lens Worker has its own workerd program and deployment.
   //
   // See tsconfig.lwe-ask.json's header for why each auxiliary Worker gets its
-  // own program and why its test file is out of scope. Two things are specific
+  // own program and why its tests are out of scope. Two things are specific
   // to this one.
   //
-  // IT IS OUT OF THE WORKSPACE ON PURPOSE, because readability and linkedom are
-  // megabytes only this Worker bundles, so its dependencies live in
-  // lens-reader/node_modules. tsc resolves those by walking up from the source
-  // file rather than from this config, so the split costs nothing here.
+  // It is outside the root workspace: readability and htmlparser2 are runtime
+  // dependencies; linkedom is the test oracle. Install in lens-reader/ and run
+  // bun run typecheck there. Resolution starts from each source file, so the
+  // config can stay here while dependencies live in lens-reader/node_modules.
   //
-  // `allowImportingTsExtensions` is load-bearing: reader.js imports
+  // `allowImportingTsExtensions` is load-bearing: reader.ts imports
   // `../../src/worker/lib/public-fetch.ts` by its real filename, which is the ONE
   // specifier that resolves in both trees (tsconfig.json's header has the long
   // version). Without it tsc rejects that import and never reaches a finding.
   // Pulling public-fetch.ts in transitively is correct here rather than the artifact it
   // would be under node globals, since both files run on Workers.
-  //
-  // The program found 6 real diagnostics on its first run, all in reader.js and
-  // all fixed with type-only annotations: 5 were `.parse() || {}` widening the
-  // Readability result so every property read failed, and 1 was workers-types
-  // declaring TextDecoderConstructorOptions.ignoreBOM REQUIRED where WHATWG has
-  // it optional and defaulted to false.
   "compilerOptions": {
     "noEmit": true,
     "allowJs": true,
@@ -38,16 +31,10 @@
     "types": [],
     "resolveJsonModule": true,
     "skipLibCheck": true,
-    // Two control-flow checks, set here because they are set in tsconfig.json
-    // and a program is only as strict as its own options. Both cost nothing:
-    // +0 diagnostics on every one of the ten programs, measured 2026-08-27.
     "noFallthroughCasesInSwitch": true,
     "noImplicitReturns": true,
-    // strictNullChecks ON. `strict` stays off: it bundles noImplicitAny,
-    // which is 7,197 diagnostics of annotation labour across this repo, and
-    // raising the two together buries the checks that find bugs under the
-    // ones that find missing annotations. This program is clean under it,
-    // and a contract test keeps the set of clean programs from shrinking.
+    // Checked without a diagnostic baseline; see tsconfig.json for the
+    // separate full-strictness migration.
     "strictNullChecks": true,
     "strict": false
   },

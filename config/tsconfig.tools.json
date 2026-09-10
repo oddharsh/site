@@ -1,37 +1,18 @@
 {
-  // tsconfig.tools.json — type checking for tools/, which the Worker's program
-  // cannot do.
-  //
-  // WHY A SECOND PROGRAM. tsconfig.json declares `types: ["@cloudflare/workers-types"]`
-  // because that is what the Worker runs against. Point it at tools/ as well and
-  // 169 of the 337 errors are `Cannot find name 'process'` and `'console'`: the
-  // tools are node/bun programs being checked against a Workers global scope.
-  // Splitting the program is what separates a real finding from a missing global.
-  //
-  // The tools stay .mjs. Renaming 58 files to .ts would churn every import
-  // specifier that names them, and the value here is the CHECKING rather than
-  // the extension — `checkJs` already reads plain JavaScript.
-  //
-  // `strict` is false to match tsconfig.json. These files were written without
-  // types, so strict mode would bury the real findings under null checks; raise
-  // it later, per directory, once the current tail is cleared.
+  // Host tools, contract tests, and page generators use Bun/Node globals.
+  // Worker modules imported by these tools also enter this program. Run
+  // `bun run typecheck:tools`; tools/check-tool-types.ts reports diagnostics
+  // only for tools/ and pipelines/. The Worker program checks imported source
+  // against its own runtime. Both programs must retain their coverage checks.
   "compilerOptions": {
     "target": "esnext",
     "module": "esnext",
     "moduleResolution": "bundler",
-    // Two control-flow checks, set here because they are set in tsconfig.json
-    // and a program is only as strict as its own options. Both cost nothing:
-    // +0 diagnostics on every one of the ten programs, measured 2026-08-27.
     "noFallthroughCasesInSwitch": true,
     "noImplicitReturns": true,
-    // strictNullChecks ON, against a RATCHET rather than a wall. tools/ carried
-    // 395 diagnostics under it when this landed and carries 600 now, after
-    // #532 converted 39 more scripts to .ts and JS-mode leniency withdrew with
-    // the extension; check-tool-types.mjs holds
-    // the per-file count and fails on a new file, a worse file, or a better file
-    // whose baseline was not updated. `strict` stays off for the reason
-    // tsconfig.cal-test.json's header gives: noImplicitAny is 7,197 diagnostics
-    // of annotation labour and would bury this.
+    // Current diagnostic counts live in ts-tools-baseline.json. The checker
+    // rejects regressions and improvements whose baseline was not updated.
+    // Full strictness is a separate migration; see tsconfig.json.
     "strictNullChecks": true,
     "strict": false,
     "checkJs": true,
@@ -39,9 +20,8 @@
     "noEmit": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    // The tools import the Worker by its real filename (`../src/worker/lens.ts`),
-    // which is what bun and the build both resolve. Without this tsc rejects all
-    // 344 of those specifiers outright and never reaches a real finding.
+    // Imports name actual .ts files: Node strips types and Bun loads them;
+    // neither path needs files emitted by tsc.
     "allowImportingTsExtensions": true,
     "lib": ["esnext", "dom"],
     // bun-types carries the node globals too, so this is one entry rather than
@@ -49,29 +29,14 @@
     // HTMLRewriter among them.
     "types": ["bun"]
   },
-  // The .d.ts declares Event Timing members lib.dom still lacks; see its header.
-  //
-  // FOUR GLOBS, because "the tools stay .mjs" above describes tools/ and was
-  // read as describing this program. It does not, and three trees fell through
-  // the gap until 2026-08-23:
-  //
-  //   ../tools/**/*.ts       the custom oxlint rules in tools/oxlint/anti-slop.
-  //                          They are already TypeScript, and no compiler read
-  //                          them, because an `*.mjs` glob cannot match a `.ts`
-  //                          file. A program that excludes the one directory
-  //                          written in the language it checks is the sharpest
-  //                          form of this repo's allowlist failure.
-  //   ../pipelines/**/*.mjs  the page generators. Same runtime, same globals,
-  //                          and `check-page-contracts` is a required check that
-  //                          runs them, so they are not optional code.
-  //
-  // Their BROWSER-side siblings do not belong here: pipelines/lwe/specs/*.js is
-  // the inline script a generator injects into a page, so it runs in a browser
-  // and lives in tsconfig.browser.json's glob instead.
+  // .ts includes the tools' .d.ts declarations and vendored lint rules; .mjs
+  // includes the contract tests. The generators are host programs too, while
+  // pipelines/**/*.js is injected browser code held by tsconfig.browser.json.
+  // These trees fell outside the old tools-only .mjs glob; keep coverage tied
+  // to the files on disk rather than a hand-maintained list.
   "include": [
     "../tools/**/*.mjs",
     "../tools/**/*.ts",
-    "../tools/**/*.d.ts",
     "../pipelines/**/*.mjs"
   ]
 }

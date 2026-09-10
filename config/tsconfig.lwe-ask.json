@@ -1,28 +1,10 @@
 {
-  // tsconfig.lwe-ask.json — the LWE ask Worker at lwe-ask/.
-  //
-  // ONE PROGRAM PER AUXILIARY WORKER, for the reason tsconfig.tools.json's
-  // header gives about tools/: a program is only as accurate as the globals it
-  // declares. These three are separately deployed Workers with their own
-  // wrangler.toml and their own dependency sets, so they get Cloudflare's
-  // globals and nothing else.
-  //
-  // The three src trees were the last runtime code in this repo that no tsc
-  // program held. They reach production, and nothing checked them, which is the
-  // orphan case check-tool-types.mjs's floor exists to catch one directory over.
-  //
-  // TESTS ARE DELIBERATELY OUT. lwe-ask has none; the two that exist next door
-  // import their Worker's source, so a program carrying node globals for the
-  // test pulls Worker modules in transitively and checks them against the wrong
-  // environment. Measured 2026-08-21 with `types: ["bun"]` over both test files:
-  // 5 of the 11 diagnostics were that artifact (`cf` does not exist in
-  // RequestInit, `RequestInitCfProperties` not found, `innerHTML` on Node), all
-  // clean in the program whose globals match. Covering the tests wants the
-  // diagnostic filtering check-tool-types.mjs already implements, which is its
-  // own piece of work rather than a wider `include` here.
-  //
-  // `strict` is false to match every other program in config/. Raise it per
-  // directory once the existing tail is paid down.
+  // The separately deployed LWE ask Worker uses workerd globals. Each auxiliary
+  // Worker has its own program and dependency graph; combining host tests with
+  // Worker source would admit globals unavailable in one of those runtimes.
+  // Garage and Reader tests have separate host programs, run through
+  // tools/check-test-types.ts. lwe-ask currently has no test suite.
+  // bun run typecheck:coverage guards against leaving a source tree unchecked.
   "compilerOptions": {
     "noEmit": true,
     "allowJs": true,
@@ -44,16 +26,10 @@
     "types": [],
     "resolveJsonModule": true,
     "skipLibCheck": true,
-    // Two control-flow checks, set here because they are set in tsconfig.json
-    // and a program is only as strict as its own options. Both cost nothing:
-    // +0 diagnostics on every one of the ten programs, measured 2026-08-27.
     "noFallthroughCasesInSwitch": true,
     "noImplicitReturns": true,
-    // strictNullChecks ON. `strict` stays off: it bundles noImplicitAny,
-    // which is 7,197 diagnostics of annotation labour across this repo, and
-    // raising the two together buries the checks that find bugs under the
-    // ones that find missing annotations. This program is clean under it,
-    // and a contract test keeps the set of clean programs from shrinking.
+    // Checked without a diagnostic baseline; see tsconfig.json for the
+    // separate full-strictness migration.
     "strictNullChecks": true,
     "strict": false
   },
