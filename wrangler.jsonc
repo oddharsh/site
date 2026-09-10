@@ -60,7 +60,7 @@
   // The sibling flag `request_signal_passthrough` is deliberately absent, and it
   // is the dangerous half. It forwards the signal to every subrequest, which
   // cancels the work that deliberately OUTLIVES the response. Two of those are
-  // user-visible: cal/src/index.ts waitUntils three Resend sends, so a host who
+  // user-visible: cal/src/index.ts waitUntils six Resend sends, so a host who
   // approves a booking and closes the tab means the requester never gets the
   // invite, and webmention.ts:130 runs its whole job after a 202, by which point
   // the sender has always disconnected. A listener changes no subrequest

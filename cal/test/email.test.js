@@ -7,7 +7,7 @@
 //   - the .ics attachment is UTF-8→base64 (plain btoa throws on emoji/accents)
 //   - DESCRIPTION newlines are single ICS escapes, not double-escaped literals
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
-import { sendApprovalRequest, sendInvite, sendDecline } from "../src/email.js";
+import { sendApprovalRequest, sendInvite, sendHostCopy, sendDecline } from "../src/email.js";
 import { stubFetch } from "./harness.ts";
 
 const env = {
@@ -84,6 +84,70 @@ describe("sendApprovalRequest → Resend", () => {
   });
 });
 
+describe("sendHostCopy → the host's own PUBLISH event", () => {
+  const icsOf = () => b64ToUtf8(calls[0].body.attachments[0].content);
+
+  // The whole point of this mail. A REQUEST would auto-import and arrive as an
+  // event the host cannot move, rename or re-guest, because Google Calendar
+  // grants edit rights to the organizer alone. PUBLISH costs one click and
+  // hands over ownership, so these three assertions are the feature.
+  it("is PUBLISH, and carries neither ORGANIZER nor ATTENDEE", async () => {
+    await sendHostCopy(env, booking);
+    const ics = icsOf();
+    expect(ics).toContain("METHOD:PUBLISH");
+    expect(ics).not.toContain("ORGANIZER");
+    expect(ics).not.toContain("ATTENDEE");
+    expect(calls[0].body.attachments[0].content_type).toContain("method=PUBLISH");
+  });
+
+  it("goes to the host alone, from noreply, with the List-Id the host filters on", async () => {
+    await sendHostCopy(env, booking);
+    const { body } = calls[0];
+    expect(body.to).toEqual(["coffee@aadhar.sh"]);
+    expect(body.cc).toBeUndefined();
+    expect(body.from).toContain("noreply@aadhar.sh");
+    expect(body.headers["List-Id"]).toContain("coffee.aadhar.sh");
+  });
+
+  // A shared UID would let the host's calendar treat this and the invitation
+  // they are cc'd on as one object. Distinct, and still deterministic, so a
+  // re-send after /location updates the entry rather than adding a second.
+  it("uses a UID distinct from the guest invitation's, and a stable one", async () => {
+    await sendHostCopy(env, booking);
+    expect(icsOf()).toContain("UID:abc123def456-host@cal.aadhar.sh");
+    calls.length = 0;
+    await sendInvite(env, booking);
+    expect(icsOf()).toContain("UID:abc123def456@cal.aadhar.sh");
+  });
+
+  // EVENT_TITLE names the host, which is the wrong name once the entry is on
+  // the host's own calendar.
+  it("titles the entry with the guest and carries their address in DESCRIPTION", async () => {
+    await sendHostCopy(env, booking);
+    const ics = icsOf();
+    expect(ics).toContain("SUMMARY:coffee with Jordan Lee");
+    expect(ics).toContain("Jordan Lee <jordan@example.com>");
+    expect(ics).not.toContain("SUMMARY:coffee with aadharsh");
+  });
+
+  it("says updated on a re-send, and keeps the same UID", async () => {
+    await sendHostCopy(env, { ...booking, location: "Devoción", sequence: 1 }, { updated: true });
+    const { body } = calls[0];
+    expect(body.subject).toContain("updated");
+    expect(icsOf()).toContain("UID:abc123def456-host@cal.aadhar.sh");
+    expect(icsOf()).toContain("SEQUENCE:1");
+    expect(icsOf()).toContain("Devoción");
+  });
+
+  it("escapes an attacker-controlled name and topic into the host's inbox", async () => {
+    await sendHostCopy(env, { ...booking, name: "<script>x</script>", topic: "a & b < c" });
+    const { body } = calls[0];
+    expect(body.html).not.toContain("<script>x</script>");
+    expect(body.html).toContain("&lt;script&gt;");
+    expect(body.html).toContain("a &amp; b &lt; c");
+  });
+});
+
 describe("sendInvite → .ics attachment", () => {
   it("attaches a valid REQUEST VCALENDAR/VEVENT", async () => {
     await sendInvite(env, booking);
@@ -100,14 +164,11 @@ describe("sendInvite → .ics attachment", () => {
     expect(ics).toContain("DTEND:20260514T193000Z");
     expect(ics).toContain("SUMMARY:coffee with aadharsh");
     expect(ics).toContain("ORGANIZER;CN=aadharsh:mailto:coffee@aadhar.sh");
-    // The host appears TWICE on purpose, as ORGANIZER and again as an ATTENDEE.
-    // Gmail auto-adds an invite by matching the recipient against the attendee
-    // list, and the host reads this mail as a cc, so dropping the second line
-    // takes the event off the host's calendar without failing anything else.
-    // At 73 octets it sits just under the 75-octet fold, so it stays one line.
-    expect(ics).toContain("ATTENDEE;CN=aadharsh;PARTSTAT=ACCEPTED;RSVP=FALSE:mailto:coffee@aadhar.sh");
     expect(ics).toContain("ATTENDEE;CN=Jordan Lee;RSVP=TRUE:mailto:jordan@example.com");
-    expect(ics.match(/^ATTENDEE/gm)).toHaveLength(2);
+    // The guest copy is unchanged by the host-copy work: one attendee, and the
+    // only address on it is the public booking address already on ORGANIZER.
+    expect(ics.match(/^ATTENDEE/gm)).toHaveLength(1);
+    expect(ics).toContain("METHOD:REQUEST");
     expect(ics).toContain("\r\n");                          // CRLF line endings
     expect(ics.trim().endsWith("END:VCALENDAR")).toBe(true);
   });
