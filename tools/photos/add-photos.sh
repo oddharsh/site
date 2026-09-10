@@ -158,31 +158,32 @@ tally()   { ls -1 "$ST_ROOT/$1" 2>/dev/null | wc -l | tr -d ' '; }
 # used to kill the whole run, which was loud; inside a subshell it kills one
 # worker and `wait` still returns 0, which is not. So every photo records
 # exactly one outcome. A failed or missing outcome stops the pipeline before
-# uploads or hashing can publish an incomplete set.
+# the next phase can accept an incomplete set.
 reconcile() {  # reconcile <phase-label>
   local seen expected
   seen=$(( $(tally ok) + $(tally skip) + $(tally fail) + $(tally na) ))
   expected=$(cat "$ST_ROOT/launched")
   if [ "$seen" -ne "$expected" ] || [ "$(tally fail)" -gt 0 ]; then
-    echo "error: $1 incomplete: $seen of $expected outcomes, $(tally fail) failed; do not upload, hash or publish these outputs" >&2
+    echo "error: $1 incomplete: $seen of $expected outcomes, $(tally fail) failed; stopping before later phases" >&2
     exit 1
   fi
 }
 
-# Runs a worker function over $SOURCES, $JOBS at a time. Same batching idiom
+# Runs a worker function over a file list, defaulting to $SOURCES and $JOBS.
+# Uploads supply their own list and limit. Same batching idiom
 # phase 3 has always used for uploads: launch until the batch is full, `wait`
 # for all of it, start the next. A batch waits on its slowest member, which
 # costs something against a true work pool and needs no `wait -n`, which matters
 # because bash 3.2 is what /usr/bin/env bash finds on macOS and that builtin
 # arrived in 4.3.
-run_parallel() {  # run_parallel <worker-fn>
-  local fn="$1" pending=0 idx=0 f
+run_parallel() {  # run_parallel <worker-fn> [limit] [file-list]
+  local fn="$1" limit="${2:-$JOBS}" sources="${3:-$SOURCES}" pending=0 idx=0 f
   while IFS= read -r f; do
     idx=$((idx+1))
     ( "$fn" "$f" "$idx" ) &
     pending=$((pending+1))
-    if [ "$pending" -ge "$JOBS" ]; then wait; pending=0; fi
-  done < "$SOURCES"
+    if [ "$pending" -ge "$limit" ]; then wait; pending=0; fi
+  done < "$sources"
   wait
   echo "$idx" > "$ST_ROOT/launched"
 }
@@ -524,14 +525,6 @@ if [ "${REMOTE_RENDER_ONLY:-0}" = "1" ]; then
   echo "phase 3 — R2 uploads skipped (source is already remote)"
 else
   echo "phase 3 — R2 uploads (parallel 4)"
-  upload() {
-    local key="$1" file="$2" ct="$3"
-    if "$WRANGLER" r2 object put "aadhar-photos/$key" --file="$file" --content-type="$ct" --remote >/dev/null 2>&1; then
-      printf "."
-    else
-      printf "✗"
-    fi
-  }
 
 # originals → R2. NB: HIF/HEIF originals are NOT uploaded — they stay local-only
 # (your drive + SSD are the archive); R2 gets their q100 JPG export instead
@@ -558,40 +551,47 @@ prep_original() {
   if "$MOZ_JTRAN" -progressive -copy all -outfile "$out" "$src" 2>/dev/null && [ -s "$out" ]; then
     printf "%s" "$out"
   else
+    # The index reads this staged path if it exists. A rejected partial copy
+    # must not describe an upload that actually sent the untouched source.
+    rm -f "$out"
     printf "%s" "$src"
   fi
 }
 
-PENDING=0
+UPLOADS="$TMP/uploads"
+: > "$UPLOADS"
 while IFS= read -r f; do
-  base=$(basename "$f")
-  stem="${base%.*}"
-  ext_lc=$(echo "${base##*.}" | tr '[:upper:]' '[:lower:]')
-  case "$ext_lc" in
-    heic|heif|hif) continue ;;   # local-only; the q100 JPG export is the R2 copy
+  case "${f##*.}" in
+    [Hh][Ii][Ff]|[Hh][Ee][Ii][Cc]|[Hh][Ee][Ii][Ff]) continue ;;
   esac
-  ( send=$(prep_original "$f" "$PROGDIR/$stem.$ext_lc")
-    upload "${stem}.${ext_lc}" "$send" "image/jpeg" ) &
-  PENDING=$((PENDING+1))
-  if [ $PENDING -ge 4 ]; then wait; PENDING=0; fi
+  printf '%s\n' "$f" >> "$UPLOADS"
 done < "$SOURCES"
-wait
-  echo ""
+for jpg in "$EXPORTS"/*.jpg; do
+  [ -f "$jpg" ] || continue
+  printf '%s\n' "$jpg" >> "$UPLOADS"
+done
 
-# HIF JPG exports (the click-through-friendly companion)
-if [ "$(ls -A "$EXPORTS" 2>/dev/null)" ]; then
-  echo "  HIF JPG exports:"
-  PENDING=0
-  for jpg in "$EXPORTS"/*.jpg; do
-    [ -f "$jpg" ] || continue
-    stem=$(basename "$jpg" .jpg)
-    upload "${stem}.jpg" "$jpg" "image/jpeg" &
-    PENDING=$((PENDING+1))
-    if [ $PENDING -ge 4 ]; then wait; PENDING=0; fi
-  done
-  wait
-  echo ""
-fi
+upload_one() {  # upload_one <file> <index>
+  local f="$1" idx="$2" base stem ext_lc send key
+  base=$(basename "$f"); stem="${base%.*}"
+  ext_lc=$(echo "${base##*.}" | tr '[:upper:]' '[:lower:]')
+  key="aadhar-photos/$stem.$ext_lc"
+  case "$f" in
+    "$EXPORTS/"*) send="$f" ;;  # zenc already writes progressive JPGs
+    *) send=$(prep_original "$f" "$PROGDIR/$stem.$ext_lc") ;;
+  esac
+  if "$WRANGLER" r2 object put "$key" --file="$send" --content-type="image/jpeg" --remote >/dev/null 2>&1; then
+    mark ok "$idx"; printf "."
+  else
+    mark fail "$idx"; printf "✗"
+    echo "error: R2 upload failed: $key" >&2
+  fi
+}
+st_init "$TMP/status3"
+run_parallel upload_one 4 "$UPLOADS"
+echo ""
+echo "  uploaded: $(tally ok)  failed: $(tally fail)"
+reconcile "phase 3"
 fi
 echo ""
 

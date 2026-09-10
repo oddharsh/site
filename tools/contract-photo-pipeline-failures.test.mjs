@@ -83,7 +83,7 @@ printf encoded > "$last"`);
     // Stop the successful ingest control at the next phase, before unrelated
     // index/caption work; failed phase 1 must never reach this sentinel.
     await command("tools/photos/hash-thumbnails.sh", 'echo downstream-hash >> "$TRACE"; exit 23');
-    await run({ root, put, read, shell });
+    await run({ root, put, read, shell, command });
   } finally { await rm(root, { recursive: true, force: true }); }
 }
 
@@ -217,5 +217,112 @@ test("tools:check still refuses missing or contradictory minimum-version guards"
     assert.equal(missing.status, 1, missing.stderr);
     assert.match(missing.stderr, /minimum-version scanner matched 0 guards/);
     assert.match(missing.stderr, /no script enforces it/);
+  });
+});
+
+async function uploadFixture(run) {
+  await fixture(async (f) => {
+    await f.put("uploads", "");
+    await f.put("progressive-paths", "");
+    await f.command("mozjpeg/bin/jpegtran", `
+while [ "$1" != -outfile ]; do shift; done
+shift; out="$1"; src="$2"
+printf '%s\\t%s\\n' "$src" "$out" >> "$FIXTURE_ROOT/progressive-paths"
+printf progressive > "$out"
+[ "\${COPY_FAIL:-0}" != 1 ] || exit 7`);
+    await f.put("upload.mjs", `
+import { appendFileSync, existsSync, readFileSync, readdirSync, mkdirSync, writeFileSync } from 'node:fs';
+const args = process.argv.slice(2);
+const key = args[3];
+const file = args.find(a => a.startsWith('--file=')).slice(7);
+if (args.slice(0,3).join(' ') !== 'r2 object put' || !args.includes('--content-type=image/jpeg') || !args.includes('--remote')) process.exit(98);
+const root = process.env.FIXTURE_ROOT;
+const log = value => appendFileSync(root + '/uploads', JSON.stringify(value) + '\\n');
+const progressive = readFileSync(root + '/progressive-paths', 'utf8').split('\\n').map(line => line.split('\\t')).find(([src]) => src === file)?.[1];
+log({ event: 'start', key, body: readFileSync(file,'utf8'), discardedCopyStillExists: !!progressive && existsSync(progressive) });
+if (process.env.UPLOAD_BARRIER) {
+  mkdirSync(root + '/started', { recursive: true });
+  writeFileSync(root + '/started/' + process.pid, '');
+  const until = Date.now() + 4000;
+  while (readdirSync(root + '/started').length < 4 && Date.now() < until) await new Promise(r => setTimeout(r, 10));
+  if (readdirSync(root + '/started').length < 4) process.exit(97);
+  await new Promise(r => setTimeout(r, 40));
+}
+const failed = process.env.FAIL_UPLOAD === key || process.env.FAIL_UPLOAD === 'all';
+log({ event: 'end', key, failed });
+process.exit(failed ? 9 : 0);
+`);
+    await f.command("node_modules/.bin/wrangler", `exec "${process.execPath}" "$FIXTURE_ROOT/upload.mjs" "$@"`);
+    const uploads = async () => (await f.read("uploads")).trim().split("\n").filter(Boolean).map(line => JSON.parse(line));
+    const ingest = (args = ["source"], env = {}) => f.shell("add-photos.sh", args, { REMOTE_RENDER_ONLY: "0", ...env });
+    await run({ ...f, ingest, uploads });
+  });
+}
+
+test("failed source or HEIF-companion uploads stop before hashing and index writes", async () => {
+  await uploadFixture(async ({ put, read, ingest, uploads }) => {
+    await put("source/companion.HIF", "HEIF original");
+    await put("src/worker/photo-index.json", '{"existing":{"full":"existing.jpg"}}');
+    for (const key of ["aadhar-photos/frame.jpg", "aadhar-photos/companion.jpg"]) {
+      await put("trace", ""); await put("uploads", "");
+      const failed = ingest(["source"], { FAIL_UPLOAD: key });
+      assert.equal(failed.status, 1, failed.stderr + failed.stdout);
+      assert.match(failed.stderr, /phase 3 incomplete/);
+      assert.match(failed.stderr, new RegExp(key.replaceAll(".", "\\.")));
+      assert.doesNotMatch(failed.stdout, /phase 4/);
+      assert.doesNotMatch(await read("trace"), /downstream-hash/);
+      assert.equal(await read("src/worker/photo-index.json"), '{"existing":{"full":"existing.jpg"}}');
+      assert.ok((await uploads()).some(row => row.key === key && row.failed));
+    }
+    await put("uploads", "");
+    const good = ingest();
+    assert.equal(good.status, 23, good.stderr + good.stdout);
+    assert.match(await read("trace"), /downstream-hash/);
+    const sent = (await uploads()).filter(row => row.event === "start").map(({key,body}) => ({key,body}));
+    assert.deepEqual(sent.sort((a,b) => a.key.localeCompare(b.key)), [
+      { key: "aadhar-photos/companion.jpg", body: "encoded" },
+      { key: "aadhar-photos/frame.jpg", body: "progressive" },
+    ]);
+    assert.equal(await read("source/frame.jpg"), "source fixture");
+    assert.equal(await read("source/companion.HIF"), "HEIF original");
+  });
+});
+
+test("progressive-copy failure uploads the untouched source and removes the rejected copy", async () => {
+  await uploadFixture(async ({ ingest, uploads, read }) => {
+    const result = ingest(["source/frame.jpg"], { COPY_FAIL: "1" });
+    assert.equal(result.status, 23, result.stderr + result.stdout);
+    const [sent] = (await uploads()).filter(row => row.event === "start");
+    assert.equal(sent.body, "source fixture");
+    assert.equal(sent.discardedCopyStillExists, false);
+    assert.equal(await read("source/frame.jpg"), "source fixture");
+  });
+});
+
+test("upload batching stays at four regardless of encoder concurrency", async () => {
+  await uploadFixture(async ({ put, ingest, uploads }) => {
+    for (let i = 0; i < 8; i++) await put(`source/extra ${i}.JPG`, `source ${i}`);
+    const result = ingest(["source"], { JOBS: "8", UPLOAD_BARRIER: "1" });
+    assert.equal(result.status, 23, result.stderr + result.stdout);
+    let active = 0, maximum = 0;
+    const keys = [];
+    for (const event of await uploads()) {
+      active += event.event === "start" ? 1 : -1;
+      maximum = Math.max(maximum, active);
+      if (event.event === "start") keys.push(event.key);
+    }
+    assert.equal(maximum, 4);
+    assert.equal(active, 0);
+    assert.equal(keys.length, 9);
+    assert.equal(new Set(keys).size, 9);
+    assert.ok(keys.includes("aadhar-photos/extra 0.jpg"));
+  });
+});
+
+test("remote-render-only mode performs no uploads even if the upload CLI would fail", async () => {
+  await uploadFixture(async ({ ingest, uploads }) => {
+    const result = ingest(["source/frame.jpg"], { REMOTE_RENDER_ONLY: "1", FAIL_UPLOAD: "all" });
+    assert.equal(result.status, 23, result.stderr + result.stdout);
+    assert.deepEqual(await uploads(), []);
   });
 });
