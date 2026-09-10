@@ -23,20 +23,142 @@
   "use strict";
   var D = document;
 
+  /** @typedef {{ id: string, label: string, acc?: string, check?: () => boolean, fn: () => void }} MenuAction */
+  /** @typedef {{ name: string, items: (MenuAction | "sep")[] }} MenuDefinition */
+  /** @typedef {{ btn: HTMLElement, drop: HTMLElement, rows: HTMLElement[] }} OpenMenu */
+
+  /** @param {string} h */
   function el(h) { var t = D.createElement("template"); t.innerHTML = h.trim(); return /** @type {HTMLElement} */ (t.content.firstChild); }
   // Intentional twins of nav.js's el()/esc(). nav.js and notepad.js are separate
-  // top-level scripts, each minified on its own (build.ts runs esbuild `transform`,
-  // never `bundle`), so sharing these ~250 bytes would cost either an import (a
+  // top-level scripts, each minified on its own by Oxc in build.ts, so sharing
+  // these ~250 bytes would cost either an import (a
   // second request on every /writing page) or a window global — and notepad.js is
   // deferred BEFORE nav.js, so nav's global isn't there yet when this runs. Keep the
   // two byte-identical instead: esc() escapes the double quote too, so it stays safe
   // in an attribute even though today's callers only use it in text.
+  /** @param {string} s */
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
   // Note popovers used to show and hide inside a same-document View Transition,
   // each one given its own `axp-note-<id>` transition name. That came out with the
   // rest of the View Transition machinery (2026-07-30): a popover is a top-layer
   // element that is already composited, so the transition bought a cross-fade at
   // the cost of a deferred callback and a frame of latency on every open and close.
+
+  // Menu owns interaction; the caller owns actions and checkbox state. Keeping
+  // it in this classic script costs no extra request or cross-script global.
+  /** @type {(() => void) | null} */
+  var closeActiveMenu = null;
+  /** @param {HTMLElement} menubar @param {MenuDefinition[]} definitions */
+  function Menu(menubar, definitions) {
+    /** @type {OpenMenu | null} */
+    var opened = null;
+    /** @type {HTMLElement[]} */
+    var buttons = [];
+    menubar.replaceChildren();
+
+    /** @param {boolean} [restore] */
+    function close(restore) {
+      var previous = opened;
+      if (!previous) return;
+      opened = null;
+      closeActiveMenu = null;
+      D.removeEventListener("click", outside);
+      previous.btn.setAttribute("aria-expanded", "false");
+      previous.drop.remove();
+      if (restore) previous.btn.focus();
+    }
+    function outside() { close(); }
+    /** @param {number} index */
+    function focusButton(index) {
+      buttons.forEach(function (button, i) { button.tabIndex = i === index ? 0 : -1; });
+      buttons[index].focus();
+    }
+    /** @param {number} index @param {boolean} [last] */
+    function open(index, last) {
+      if (closeActiveMenu) closeActiveMenu();
+      var definition = definitions[index], btn = buttons[index];
+      var drop = el('<div class="np-drop" role="menu"></div>');
+      drop.setAttribute("aria-label", definition.name);
+      /** @type {HTMLElement[]} */
+      var rows = [];
+      definition.items.forEach(function (item) {
+        if (item === "sep") { drop.appendChild(el('<div class="np-sep" role="separator"></div>')); return; }
+        var checked = item.check ? item.check() : null;
+        var row = el('<button type="button" class="np-item" tabindex="-1" role="' + (checked === null ? "menuitem" : "menuitemcheckbox") + '">' +
+          '<span class="np-chk" aria-hidden="true">' + (checked ? "✓" : "") + "</span>" +
+          '<span class="np-lbl">' + esc(item.label) + "</span>" +
+          '<span class="np-acc">' + (item.acc ? esc(item.acc) : "") + "</span></button>");
+        row.dataset.npAction = item.id;
+        if (checked !== null) row.setAttribute("aria-checked", String(checked));
+        row.addEventListener("click", function (e) { e.stopPropagation(); close(true); item.fn(); });
+        rows.push(row);
+        drop.appendChild(row);
+      });
+      focusButton(index);
+      btn.setAttribute("aria-expanded", "true");
+      btn.after(drop);
+      drop.style.left = btn.offsetLeft + "px";
+      opened = { btn: btn, drop: drop, rows: rows };
+      closeActiveMenu = outside;
+      D.addEventListener("click", outside);
+      if (rows.length) rows[last ? rows.length - 1 : 0].focus();
+    }
+    definitions.forEach(function (definition, index) {
+      var btn = el('<button type="button" role="menuitem" class="np-menu" aria-haspopup="menu" aria-expanded="false">' + esc(definition.name) + "</button>");
+      btn.tabIndex = index === 0 ? 0 : -1;
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        if (opened && opened.btn === btn) close(true);
+        else open(index);
+      });
+      btn.addEventListener("mouseenter", function () { if (opened && opened.btn !== btn) open(index); });
+      buttons.push(btn);
+      menubar.appendChild(btn);
+    });
+    menubar.addEventListener("focusout", function (e) {
+      if (!menubar.contains(/** @type {Node | null} */ (e.relatedTarget))) close();
+    });
+    menubar.addEventListener("keydown", function (e) {
+      if (e.altKey || e.ctrlKey || e.metaKey) return;
+      var active = D.activeElement;
+      var top = buttons.indexOf(/** @type {HTMLElement} */ (active));
+      var rows = opened ? opened.rows : [];
+      var row = rows.indexOf(/** @type {HTMLElement} */ (active));
+      if (top < 0 && row < 0) return;
+      var key = e.key, index = top >= 0 ? top : buttons.indexOf(/** @type {OpenMenu} */ (opened).btn);
+      if (key === "Tab") { close(true); return; } // native Tab continues outside the composite
+      if (key === "Escape") {
+        if (!opened) return;
+        close(true);
+      } else if (key === "ArrowRight" || key === "ArrowLeft") {
+        var next = (index + (key === "ArrowRight" ? 1 : -1) + buttons.length) % buttons.length;
+        if (opened) open(next);
+        else focusButton(next);
+      } else if (key === "ArrowDown" || key === "ArrowUp") {
+        if (top >= 0) open(top, key === "ArrowUp");
+        else rows[(row + (key === "ArrowDown" ? 1 : -1) + rows.length) % rows.length].focus();
+      } else if (key === "Home" || key === "End") {
+        if (top >= 0) focusButton(key === "Home" ? 0 : buttons.length - 1);
+        else rows[key === "Home" ? 0 : rows.length - 1].focus();
+      } else if ((key === "Enter" || key === " ") && top >= 0) {
+        open(top);
+      } else if (key.length === 1 && key !== " ") {
+        var candidates = top >= 0 ? buttons : rows, from = top >= 0 ? top : row;
+        for (var offset = 1; offset <= candidates.length; offset++) {
+          var match = (from + offset) % candidates.length;
+          var label = candidates[match].querySelector(".np-lbl") || candidates[match];
+          if ((label.textContent || "").toLowerCase().startsWith(key.toLowerCase())) {
+            if (top >= 0) focusButton(match);
+            else candidates[match].focus();
+            break;
+          }
+        }
+      } else return; // native Enter/Space activates an action button exactly once
+      e.preventDefault();
+      e.stopPropagation();
+    });
+    return outside;
+  }
 
   // ── per-window enhancement ────────────────────────────────────────────────────
   function enhance(win) {
@@ -118,63 +240,32 @@
       var back = el('<div class="np-modal-back"></div>');
       function close(e) { if (e) e.preventDefault(); box.remove(); back.remove(); }
       back.addEventListener("click", close);
-      box.querySelector(".close").addEventListener("click", close);
-      box.querySelector(".np-btn").addEventListener("click", close);
+      // Both controls are authored in the literal above, before this detached box is exposed.
+      /** @type {HTMLAnchorElement} */ (box.querySelector(".close")).addEventListener("click", close);
+      /** @type {HTMLButtonElement} */ (box.querySelector(".np-btn")).addEventListener("click", close);
       D.body.appendChild(back); D.body.appendChild(box);
       /** @type {HTMLElement} */ (box.querySelector(".np-btn")).focus();
     }
 
+    /** @type {MenuDefinition[]} */
     var MENUS = [
       { name: "File", items: [
-        { label: "New", acc: "Ctrl+N", fn: newDoc },
-        { label: "Open…", acc: "Ctrl+O", fn: function () { location.assign("/writing"); } },
+        { id: "new", label: "New", acc: "Ctrl+N", fn: newDoc },
+        { id: "open", label: "Open…", acc: "Ctrl+O", fn: function () { location.assign("/writing"); } },
         "sep",
-        { label: "Print…", acc: "Ctrl+P", fn: function () { window.print(); } },
-        { label: "Exit", fn: exit }
+        { id: "print", label: "Print…", acc: "Ctrl+P", fn: function () { window.print(); } },
+        { id: "exit", label: "Exit", fn: exit }
       ] },
       { name: "Edit", items: [
-        { label: "Undo", acc: "Ctrl+Z", fn: function () { ta.focus(); try { D.execCommand("undo"); } catch (e) {} } },
+        { id: "undo", label: "Undo", acc: "Ctrl+Z", fn: function () { ta.focus(); try { D.execCommand("undo"); } catch (e) {} } },
         "sep",
-        { label: "Select All", acc: "Ctrl+A", fn: selectAll },
-        { label: "Time/Date", acc: "F5", fn: insertDate }
+        { id: "select-all", label: "Select All", acc: "Ctrl+A", fn: selectAll },
+        { id: "insert-date", label: "Time/Date", acc: "F5", fn: insertDate }
       ] },
-      { name: "Format", items: [ { label: "Word Wrap", check: function () { return wrap; }, fn: toggleWrap } ] },
-      { name: "View", items: [ { label: "Status Bar", check: function () { return statusOn; }, fn: toggleStatus } ] },
-      { name: "Help", items: [ { label: "About Notepad", fn: about } ] }
+      { name: "Format", items: [ { id: "word-wrap", label: "Word Wrap", check: function () { return wrap; }, fn: toggleWrap } ] },
+      { name: "View", items: [ { id: "status-bar", label: "Status Bar", check: function () { return statusOn; }, fn: toggleStatus } ] },
+      { name: "Help", items: [ { id: "about", label: "About Notepad", fn: about } ] }
     ];
-
-    // ── menu bar ───────────────────────────────────────────────────────────────
-    var openMenu = null;
-    function closeMenu() { if (openMenu) { openMenu.btn.setAttribute("aria-expanded", "false"); openMenu.drop.remove(); openMenu = null; } }
-    function buildMenus() {
-      if (!menubar) return;
-      menubar.innerHTML = "";
-      MENUS.forEach(function (m) {
-        var btn = el('<button type="button" role="menuitem" class="np-menu" aria-haspopup="true" aria-expanded="false">' + esc(m.name) + "</button>");
-        btn.addEventListener("click", function (e) { e.stopPropagation(); var was = openMenu && openMenu.btn === btn; closeMenu(); if (!was) open(m, btn); });
-        btn.addEventListener("mouseenter", function () { if (openMenu && openMenu.btn !== btn) { closeMenu(); open(m, btn); } });
-        menubar.appendChild(btn);
-      });
-      D.addEventListener("click", closeMenu);
-      D.addEventListener("keydown", function (e) { if (e.key === "Escape") closeMenu(); });
-    }
-    function open(m, btn) {
-      var drop = el('<div class="np-drop" role="menu"></div>');
-      m.items.forEach(function (it) {
-        if (it === "sep") { drop.appendChild(el('<div class="np-sep"></div>')); return; }
-        var checked = it.check ? it.check() : null;
-        var row = el('<button type="button" class="np-item" role="menuitem">' +
-          '<span class="np-chk">' + (checked ? "✓" : "") + "</span>" +
-          '<span class="np-lbl">' + esc(it.label) + "</span>" +
-          '<span class="np-acc">' + (it.acc ? esc(it.acc) : "") + "</span></button>");
-        row.addEventListener("click", function (e) { e.stopPropagation(); closeMenu(); it.fn(); });
-        drop.appendChild(row);
-      });
-      btn.setAttribute("aria-expanded", "true");
-      btn.parentNode.appendChild(drop);
-      drop.style.left = btn.offsetLeft + "px";
-      openMenu = { btn: btn, drop: drop };
-    }
 
     // ── keyboard shortcuts (only while editing) ────────────────────────────────
     ta.addEventListener("keydown", function (e) {
@@ -182,7 +273,11 @@
       else if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === "p") { e.preventDefault(); window.print(); }
     });
 
-    buildMenus();
+    if (menubar) {
+      var closeMenu = Menu(menubar, MENUS);
+      // A manually closed note must not retain a detached menu or document listener.
+      win.addEventListener("beforetoggle", function (e) { if (e.newState === "closed") closeMenu(); });
+    }
     status();
   }
 
@@ -219,6 +314,7 @@
     }, true);
   }
   function openNote(pop) {
+    enhance(pop); // Hidden notes acquire actions/listeners only when first opened.
     var ta = pop.querySelector(".np-text");
     // Order matters here: everything below focus() or measures the note, and a
     // popover is still `display:none` (writing.js's .np-note rule) until
@@ -245,6 +341,6 @@
     window.dispatchEvent(new Event("resize"));   // nudge the custom scrollbar to (re)measure now it's visible
   }
 
-  [].forEach.call(D.querySelectorAll(".np-window"), enhance);
+  [].forEach.call(D.querySelectorAll(".np-window:not([popover])"), enhance);
   initFolder();
 })();
