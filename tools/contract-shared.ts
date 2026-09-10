@@ -137,10 +137,10 @@ function fakeImages() {
     input(bytes) {
       return {
         transform(options) { this.options = options; return this; },
-        output(options) {
+        async output(options) {
+          const marker = new TextEncoder().encode(JSON.stringify({ input: bytes.byteLength, options: this.options || {}, output: options }));
           return {
-            async response() {
-              const marker = new TextEncoder().encode(JSON.stringify({ input: bytes.byteLength, options: this.options || {}, output: options }));
+            response() {
               return new Response(marker, { headers: { "content-type": options.format } });
             },
           };
