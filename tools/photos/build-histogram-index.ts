@@ -144,7 +144,7 @@ export async function buildHistogramIndex() {
   return { index, skipped, total: files.length };
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.main) {
   const { index, skipped, total } = await buildHistogramIndex();
   await writeFile(path.join(IMAGES, "histograms.json"), `${JSON.stringify(index)}\n`);
   console.log(`histogram-index: ${Object.keys(index).length} of ${total} photos packed${skipped ? `, ${skipped} without a histogram` : ""}`);

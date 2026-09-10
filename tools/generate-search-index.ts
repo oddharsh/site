@@ -3,7 +3,6 @@
 // actual words without making the homepage pay for a client-side search bundle.
 import { lstat, mkdir, readdir, readFile, readlink, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
-import { pathToFileURL } from "node:url";
 import { stripRawText } from "./lib/html-raw-text.ts";
 import { readDocument } from "./lib/html-to-md.ts";
 import type { SearchRecord } from "../src/worker/search.ts";
@@ -224,4 +223,4 @@ async function main() {
   console.log(`search index: ${payload.records.length} records -> ${out}`);
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await main();
+if (import.meta.main) await main();

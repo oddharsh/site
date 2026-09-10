@@ -34,7 +34,6 @@
 // sixth root cannot reach production while dev keeps serving five.
 import { mkdir, readdir, rm, symlink, stat } from "node:fs/promises";
 import { dirname, relative, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 
 // Same roots, same ORDER, as build.ts step 1: a later root wins a path an
 // earlier one also provides, which is what `cp` does there. There are no such
@@ -163,7 +162,7 @@ export async function stage() {
   return { links, dirs, collisions: [...collisions] };
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (import.meta.main) {
   const { links: n, dirs: d } = await stage();
   console.log(`dev-stage: ${FARM}/ ready — ${n} links across ${d} merged director${d === 1 ? "y" : "ies"} from ${ASSET_ROOTS.join(", ")}`);
 }

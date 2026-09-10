@@ -8,13 +8,13 @@ import { navFenceBody, readFenceBody, workerModule } from "./gen-manifest.ts";
 
 const ROOT = new URL("../", import.meta.url);
 async function fixture(run) {
-  // CANONICAL root, and the generators are why. Their main-module guard compares
-  // resolve(process.argv[1]) against fileURLToPath(import.meta.url), and node
-  // canonicalises the entry module while leaving argv[1] alone. Rooted at a
-  // symlink the guard is false, the CLI exits 0 having written nothing, and the
-  // wiring assertions read the unwired fixture. macOS alone, where $TMPDIR
-  // reaches /private/var through /var, and node alone, since bun resolves both
-  // sides. Linux CI cannot see it and `bun test` cannot either.
+  // CANONICAL root. This is belt and braces now rather than what makes the test
+  // pass: the generators guarded on resolve(process.argv[1]) against
+  // fileURLToPath(import.meta.url), which node splits through a symlink, so the
+  // CLI exited 0 having written nothing and these assertions read the unwired
+  // fixture. They are on `import.meta.main` since, and the unresolved root was
+  // MEASURED green against it. Kept because the fixture spawns real tools and
+  // the next one to canonicalise a path inherits the trap. CLAUDE.md gotcha 45.
   const root = await realpath(await mkdtemp(path.join(tmpdir(), "page-generators-")));
   const put = async (file, body) => {
     await mkdir(path.dirname(path.join(root, file)), { recursive: true });
