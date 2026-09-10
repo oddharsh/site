@@ -67,6 +67,8 @@ case "$last" in
   *-400.avif) tier=sm ;; *-200.avif) tier=xs ;; *.avif) tier=sq ;; *) tier=other ;;
 esac
 [ "\${FAIL_TIER:-}" != "$tier" ] || exit 8
+[ "\${OMIT_TIER:-}" != "$tier" ] || exit 0
+[ "\${EMPTY_TIER:-}" != "$tier" ] || { : > "$last"; exit 0; }
 printf encoded > "$last"`);
     await command("bin/brew", 'printf "%s/mozjpeg\\n" "$FIXTURE_ROOT"');
     await command("mozjpeg/bin/cjpeg", 'echo cjpeg >> "$TRACE"; printf encoded');
@@ -130,8 +132,11 @@ test("encoding sample measurements stop when temporary JPEG metadata editing fai
 });
 
 test("ingest stops before later phases when any thumbnail tier fails", async () => {
-  for (const tier of ["sq", "sm", "xs"]) await fixture(async ({ read, shell }) => {
-    const result = shell("add-photos.sh", ["source/frame.jpg"], { FAIL_TIER: tier });
+  for (const failure of [
+    { FAIL_TIER: "sq" }, { FAIL_TIER: "sm" }, { FAIL_TIER: "xs" },
+    { OMIT_TIER: "xs" }, { EMPTY_TIER: "sm" },
+  ]) await fixture(async ({ read, shell }) => {
+    const result = shell("add-photos.sh", ["source/frame.jpg"], failure);
     assert.equal(result.status, 1, result.stderr + result.stdout);
     assert.match(result.stderr, /phase 1 incomplete/);
     assert.doesNotMatch(result.stdout, /phase 2|phase 3|phase 4/);
