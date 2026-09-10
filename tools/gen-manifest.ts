@@ -63,10 +63,11 @@ export function runProfilesBody(profiles = PROFILES) {
 
 // the agent catalog: only agents:true surfaces, only the fields resources/list
 // needs, so the worker bundle carries a purpose-built list rather than the registry.
+// mimeType selects the on-site representation for both discovery and reads.
 export function agentSurfaces(surfaces) {
   return surfaces
     .filter((s) => s.flags.agents)
-    .map((s) => ({ path: s.path, title: s.title, kind: s.kind, description: s.description }));
+    .map((s) => ({ path: s.path, title: s.title, mimeType: s.mimeType ?? "text/html", description: s.description }));
 }
 
 // the webmention projection: paths that accept an inbound mention. A section

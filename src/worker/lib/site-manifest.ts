@@ -9,391 +9,391 @@ export const AGENT_SURFACES = [
   {
     "path": "/",
     "title": "Home",
-    "kind": "page",
+    "mimeType": "text/html",
     "description": "The aadhar.sh homepage: now-playing tracks, a photo grid, and the XP desktop."
   },
   {
     "path": "/photos",
     "title": "Photos",
-    "kind": "utility",
+    "mimeType": "text/html",
     "description": "The straight-out-of-camera photo archive and public photo query utility."
   },
   {
     "path": "/whoareyou",
     "title": "Who are you",
-    "kind": "page",
+    "mimeType": "text/html",
     "description": "System Properties for the site: what a single request reveals, for agents and the curious."
   },
   {
     "path": "/security",
     "title": "Security Center",
-    "kind": "page",
+    "mimeType": "text/html",
     "description": "The site's security posture, XP-style: firewall, updates, threat protection."
   },
   {
     "path": "/updates",
     "title": "Windows Update",
-    "kind": "page",
+    "mimeType": "text/html",
     "description": "The deploy changelog rendered as installed Windows updates, backed by Cloudflare D1."
   },
   {
     "path": "/restore",
     "title": "System Restore",
-    "kind": "page",
+    "mimeType": "text/html",
     "description": "Scrub the site back through its real deploy history, backed by Cloudflare D1."
   },
   {
     "path": "/around",
     "title": "Around",
-    "kind": "utility",
+    "mimeType": "text/html",
     "description": "AadharshBot's scheduled crawl of the crypto-VC neighborhood."
   },
   {
     "path": "/garage",
     "title": "Garage",
-    "kind": "section",
+    "mimeType": "text/html",
     "description": "Prototypes and experiments: the site's workshop."
   },
   {
     "path": "/serendipity",
     "title": "Serendipity",
-    "kind": "section",
+    "mimeType": "text/html",
     "description": "A public pool of events worth going to."
   },
   {
     "path": "/rn",
     "title": "Music",
-    "kind": "page",
+    "mimeType": "text/markdown",
     "description": "What I'm listening to right now, scraped live from a Spotify playlist."
   },
   {
     "path": "/coffee",
     "title": "Coffee",
-    "kind": "utility",
+    "mimeType": "text/html",
     "description": "Book a coffee in NYC or inspect the current public availability."
   },
   {
     "path": "/writing",
     "title": "Writing",
-    "kind": "section",
+    "mimeType": "text/html",
     "description": "Notes, in flux: an editable XP Notepad. Posts are registered in posts.json."
   },
   {
     "path": "/reading",
     "title": "Reading",
-    "kind": "utility",
+    "mimeType": "text/html",
     "description": "A native mirror of Aadharsh's saved reading list, synced from Curius."
   },
   {
     "path": "/lens",
     "title": "The Other Web",
-    "kind": "utility",
+    "mimeType": "text/html",
     "description": "Inspect how a public URL reads to people and machines: raw HTML, JSON-LD, llms.txt."
   },
   {
     "path": "/finger",
     "title": "Finger",
-    "kind": "utility",
+    "mimeType": "text/html",
     "description": "Look up who runs this host: writing, reading, listening, photographs, neighborhood, availability, deploy log, and a search across all of it."
   },
   {
     "path": "/radar",
     "title": "Radar",
-    "kind": "utility",
+    "mimeType": "text/html",
     "description": "An instrument with no antenna: POST signal readings from a machine that has one and it draws them as bands, meters and trends."
   },
   {
     "path": "/dict",
     "title": "Dict",
-    "kind": "utility",
+    "mimeType": "text/html",
     "description": "Will a browser ever actually use the compression dictionary you are serving? The registration rules fail in total silence; this encodes them, measured."
   },
   {
     "path": "/cache",
     "title": "Cache",
-    "kind": "utility",
+    "mimeType": "text/html",
     "description": "Does your ETag ever actually 304? Fetches twice, replays the validator, and reports what the origin DID — the failure header graders cannot see."
   },
   {
     "path": "/encode",
     "title": "Encode",
-    "kind": "utility",
+    "mimeType": "text/html",
     "description": "What did your encoder actually do? Reads a JPEG or AVIF container — quantization tables, scan script, chroma subsampling, bit depth — and says where bytes are being left on the table. No pixels are decoded."
   },
   {
     "path": "/agent-ready",
     "title": "Agent Ready",
-    "kind": "utility",
+    "mimeType": "text/html",
     "description": "How much of an origin a machine can actually use — the agent doors, counted rather than scored — and, for this origin, what building all of it cost in files and lines."
   },
   {
     "path": "/terminal",
     "title": "Terminal",
-    "kind": "utility",
+    "mimeType": "text/html",
     "description": "Three terminal programs an agent can drive by keypress: finger (who runs this host), photos (the archive), and lens (how a URL reads to a machine)."
   },
   {
     "path": "/pixel-peeper",
     "title": "Pixel Peeper",
-    "kind": "utility",
+    "mimeType": "text/html",
     "description": "A vision test for image compression, in the ismy.blue spirit: pick the best encode on instinct, repeatedly."
   },
   {
     "path": "/lwe",
     "title": "Learning with Errors",
-    "kind": "section",
+    "mimeType": "text/html",
     "description": "Chat-style explainers with live demos, at the pace of a 2009 MSN conversation."
   },
   {
     "path": "/lwe/fhe",
     "title": "FHE",
-    "kind": "content",
+    "mimeType": "text/html",
     "description": "Fully Homomorphic Encryption, explained at the pace of a 2009 MSN conversation."
   },
   {
     "path": "/lwe/mpc",
     "title": "MPC",
-    "kind": "content",
+    "mimeType": "text/html",
     "description": "Multi-Party Computation: honest majority, dishonest majority, and traitor tracing."
   },
   {
     "path": "/lwe/tee",
     "title": "TEE",
-    "kind": "content",
+    "mimeType": "text/html",
     "description": "Trusted Execution Environments: the secret room in the chip, and the side-channels that leak it."
   },
   {
     "path": "/lwe/utf8",
     "title": "UTF-8",
-    "kind": "content",
+    "mimeType": "text/html",
     "description": "Text encoding: ASCII vs UTF-32 vs UTF-8, with live byte demos."
   },
   {
     "path": "/lwe/vigenere",
     "title": "Vigenère",
-    "kind": "content",
+    "mimeType": "text/html",
     "description": "The Vigenère cipher and Kryptos: keyed alphabets, autokeys, K1–K3, and a keystream workbench."
   },
   {
     "path": "/lwe/encoding",
     "title": "Image encoding",
-    "kind": "content",
+    "mimeType": "text/html",
     "description": "Why one photo gives three file sizes: AVIF vs JPEG vs the tuned JPEG encoders."
   },
   {
     "path": "/lwe/pcrypto",
     "title": "Programmable cryptography",
-    "kind": "content",
+    "mimeType": "text/html",
     "description": "Programmable cryptography: 2PC and garbled circuits, SNARKs, FHE, and ORAM as one toolkit."
   },
   {
     "path": "/lwe/dac",
     "title": "DAC",
-    "kind": "content",
+    "mimeType": "text/html",
     "description": "Multibit versus delta-sigma DACs: an R-2R ladder you can mismatch and a live noise-shaping demo."
   },
   {
     "path": "/lwe/drivers",
     "title": "Headphone drivers",
-    "kind": "content",
+    "mimeType": "text/html",
     "description": "Planar magnetic versus dynamic headphone drivers, with a live diaphragm-motion demo."
   },
   {
     "path": "/lwe/knots",
     "title": "Knots",
-    "kind": "content",
+    "mimeType": "text/html",
     "description": "Why shoelaces come undone: granny versus square, the Ian knot, and bunny ears, with a live demo."
   },
   {
     "path": "/lwe/lean",
     "title": "Lean",
-    "kind": "content",
+    "mimeType": "text/html",
     "description": "Lean and formal verification: why a proof is not an inspection, how a vacuous spec passes, a toy verified compiler you can break, and the 1,765 lines of statement holding up OpenAI's ten proofs."
   },
   {
     "path": "/lwe/fuse",
     "title": "eFuses",
-    "kind": "content",
+    "mimeType": "text/html",
     "description": "eFuses and anti-rollback: why a signature cannot refuse yesterday's firmware, how a version floor kept in silicon becomes a one-way ratchet, and what that costs the owner."
   },
   {
     "path": "/garage/blueprint",
     "title": "Blueprint",
-    "kind": "content",
+    "mimeType": "text/html",
     "description": "The teardown's sequel: Fable 5 read every file in the repo and drew the blueprint it would rebuild from."
   },
   {
     "path": "/garage/chunks",
     "title": "Content-addressed chunking",
-    "kind": "content",
+    "mimeType": "text/html",
     "description": "Live FastCDC content-defined chunking and content-addressing in the browser: pure JS + crypto.subtle."
   },
   {
     "path": "/garage/cloudflare",
     "title": "Four free Cloudflare features",
-    "kind": "content",
+    "mimeType": "text/html",
     "description": "Live demos of four free Cloudflare Workers platform features, from Durable Objects to Workers AI."
   },
   {
     "path": "/garage/encoding",
     "title": "Thumbnail encoding study",
-    "kind": "content",
+    "mimeType": "text/html",
     "description": "The same photo through AVIF, WebP, and JPEG (zenc), with real byte counts and quality measurements."
   },
   {
     "path": "/garage/ig-prep",
     "title": "Pixels Instagram has no reason to resample",
-    "kind": "content",
+    "mimeType": "text/html",
     "description": "A photo converter that owns the downscale Instagram would otherwise do carelessly, and an MCP mode a model can drive against local files."
   },
   {
     "path": "/garage/resample",
     "title": "Half the light",
-    "kind": "content",
+    "mimeType": "text/html",
     "description": "A one pixel checkerboard reduces to sRGB 188 and every resizer says 128. The kernels agree; the colour space is where the quality went."
   },
   {
     "path": "/garage/compression",
     "title": "Compression teardown",
-    "kind": "content",
+    "mimeType": "text/html",
     "description": "Shipping brotli q11 and zstd shared-dictionary deltas: what the edge really does, three platform limits that turned out innocent, and the one-line bug behind all of them."
   },
   {
     "path": "/garage/gpt56",
     "title": "5.6 Sol",
-    "kind": "content",
+    "mimeType": "text/html",
     "description": "The performance pass outlined with 5.6 Sol: the bytes, cache boundaries, and first-paint decisions."
   },
   {
     "path": "/garage/horizon",
     "title": "Web-platform horizon",
-    "kind": "content",
+    "mimeType": "text/html",
     "description": "Test-driving upcoming web-platform features (text-box-trim, contrast-color, anchor positioning)."
   },
   {
     "path": "/garage/iroh",
     "title": "iroh",
-    "kind": "content",
+    "mimeType": "text/html",
     "description": "iroh 1.0: dial a machine by its public key, not its IP. A native in-browser NodeId generator."
   },
   {
     "path": "/garage/masonry",
     "title": "Masonry",
-    "kind": "content",
+    "mimeType": "text/html",
     "description": "A ragged-height contact-sheet photo grid with CSS Grid Lanes, falling back to the fixed-square grid."
   },
   {
     "path": "/garage/dyno",
     "title": "Dyno",
-    "kind": "content",
+    "mimeType": "text/html",
     "description": "The site on the rollers: worker bundle, pages, and client assets weighed nightly, charted over time."
   },
   {
     "path": "/garage/octane",
     "title": "Octane, priced against no framework",
-    "kind": "content",
+    "mimeType": "text/html",
     "description": "Nextane's 60.9% win over Next.js, re-measured on the live demo, then given the row every framework benchmark leaves out: a site that ships no framework at all."
   },
   {
     "path": "/garage/pretext",
     "title": "DOM-free text measurement",
-    "kind": "content",
+    "mimeType": "text/html",
     "description": "chenglou/pretext measures and lays out multiline text with canvas as ground truth instead of the DOM."
   },
   {
     "path": "/garage/pqc",
     "title": "Post-quantum signatures, priced",
-    "kind": "content",
+    "mimeType": "text/html",
     "description": "What ML-DSA-44 and the hash-based alternatives cost on the one signature this site controls: its crawler's RFC 9421 request signing, which now carries two."
   },
   {
     "path": "/garage/useragent",
     "title": "What a crawler name is worth",
-    "kind": "content",
+    "mimeType": "text/html",
     "description": "Sixteen identities against eleven sites: two invented user-agent strings cleared a wall four documented crawler tokens could not, one site caught the lie, and Reddit served a link-preview bot 1,640 words where a browser got one."
   },
   {
     "path": "/garage/typed-config",
     "title": "The config that types itself",
-    "kind": "content",
+    "mimeType": "text/html",
     "description": "Wrangler's hidden TypeScript config, converted on a real Worker: the upload came out byte-identical, a plain-text variable arrived in the type as its own value, and the Durable Object type went backwards."
   },
   {
     "path": "/garage/hidden-flags",
     "title": "Flags the docs don't list",
-    "kind": "content",
+    "mimeType": "text/html",
     "description": "Nineteen hidden flags in one CLI, and the control that separates an option being accepted from an option doing anything: on a closed schema those are two questions, and the first one is free."
   },
   {
     "path": "/garage/htmx",
     "title": "Break-even at three submits",
-    "kind": "content",
+    "mimeType": "text/html",
     "description": "htmx 4.0 costs 11.46 KiB Brotli and saves 3,968 bytes per submit. Break-even is 2.96 submits per visitor, on a form submitted once."
   },
   {
     "path": "/garage/safari27",
     "title": "Safari 27",
-    "kind": "content",
+    "mimeType": "text/html",
     "description": "What WWDC26's Safari 27 ships that this site already leans on: base-select, anchor-positioning, more."
   },
   {
     "path": "/garage/scroll",
     "title": "XP scroll chrome",
-    "kind": "content",
+    "mimeType": "text/html",
     "description": "Scroll-driven animations in a period-correct Windows XP idiom: the Luna file-copy progress bar and more."
   },
   {
     "path": "/garage/teardown",
     "title": "Teardown",
-    "kind": "content",
+    "mimeType": "text/html",
     "description": "What Fable 5's multi-agent audit found and fixed across aadhar.sh, from a cache-poisoning hole on down."
   },
   {
     "path": "/garage/tooltips",
     "title": "Tooltip experiments",
-    "kind": "content",
+    "mimeType": "text/html",
     "description": "Cursor-following tooltip styles for the photo grid and tracklist. Hover the slots and rows to compare."
   },
   {
     "path": "/garage/wire",
     "title": "Bytes on the wire",
-    "kind": "content",
+    "mimeType": "text/html",
     "description": "The site's first build step, and the brotli rabbit hole that led there: where Cloudflare compresses."
   },
   {
     "path": "/garage/workers",
     "title": "Off Pages, onto Workers",
-    "kind": "content",
+    "mimeType": "text/html",
     "description": "Why this site moved from Cloudflare Pages advanced mode to Workers with static assets: an atomic deploy."
   },
   {
     "path": "/bot",
     "title": "AadharshBot",
-    "kind": "page",
+    "mimeType": "text/html",
     "description": "The site's branded crawler: who it is, how it signs requests, and where its keys live."
   },
   {
     "path": "/inbox",
     "title": "Inbox",
-    "kind": "utility",
+    "mimeType": "text/html",
     "description": "Webmentions from the open web: who linked to aadhar.sh, moderated and rendered as Outlook Express mail."
   },
   {
     "path": "/search",
     "title": "Site search",
-    "kind": "utility",
+    "mimeType": "text/html",
     "description": "Search the public pages and writing on aadhar.sh."
   },
   {
     "path": "/lens/census",
     "title": "Lens census",
-    "kind": "utility",
+    "mimeType": "text/html",
     "description": "Weekly longitudinal history of agent readiness across representative sites."
   },
   {
     "path": "/ledger",
     "title": "Crawl ledger",
-    "kind": "utility",
+    "mimeType": "text/html",
     "description": "A commentary ledger of identified AI-crawler visits."
   }
 ];

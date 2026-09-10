@@ -229,6 +229,12 @@ const ROUTES = [
   { path: "/mcp", method: "POST", status: 200, ct: "application/json",
     headers: { "content-type": "application/json" }, marker: "<h1>Horizon",
     body: JSON.stringify({ jsonrpc: "2.0", id: "resource", method: "resources/read", params: { uri: base + "/garage/horizon" } }) },
+  // The music resource is the one listed surface whose HTML representation
+  // leaves the site, so this row is what proves the read asks for the declared
+  // Markdown rather than following the browser's Spotify redirect.
+  { path: "/mcp", method: "POST", status: 200, ct: "application/json",
+    headers: { "content-type": "application/json" }, marker: "# Right now",
+    body: JSON.stringify({ jsonrpc: "2.0", id: "music-resource", method: "resources/read", params: { uri: base + "/rn" } }) },
   // An empty batch is invalid, not an all-notification batch to accept silently.
   ...["/mcp", "/serendipity/mcp"].map((path) => ({ path, method: "POST", status: 200, ct: "application/json",
     headers: { "content-type": "application/json" }, body: "[]", marker: "Invalid Request" })),
