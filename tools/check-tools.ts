@@ -3,8 +3,8 @@
 // Two tiers, split on what the environment can reach, the same way infra:check
 // splits on what its credential can reach:
 //
-//   1. DECLARATION, from source text alone. No binary has to exist, so this runs
-//      on every PR and on a fresh Linux runner. It is the tier that catches the
+//   1. DECLARATION, from Git-tracked shell source. No photo binary has to exist,
+//      so this runs on every PR and a fresh Linux runner. It catches the
 //      bug this script was written for: a script acquiring a prerequisite that
 //      no documentation mentions.
 //   2. PRESENCE, by probing the machine. Only a workstation can pass this, so it
@@ -16,9 +16,9 @@
 // one carries a floor: a scanner that suddenly matches nothing reports a pass
 // while checking nothing, which is how the Markdown-twin test went green for
 // months on the wrong field names.
-import { readFile, readdir, access } from "node:fs/promises";
+import { readFile, access } from "node:fs/promises";
 import { constants as fsConstants } from "node:fs";
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -63,31 +63,17 @@ const byBin = new Map(tools.map((t) => [t.bin, t]));
 const declaredBins = new Set(byBin.keys());
 const declaredInstalls = new Set(tools.map((t) => t.install).filter(Boolean)) as Set<string>;
 
-// wrangler is guarded like a system binary and is not one: it comes from the
-// workspace install, is pinned exactly at the root, and check-wrangler.mjs
-// already asserts that. Declaring it here would put one version pin in two
-// files, which is the drift this repo keeps writing gotchas about.
-const NOT_SYSTEM = new Set(["wrangler"]);
+// These prerequisites already have canonical repository pins and checks:
+// .node-version (contract-the-node-pin-is-declared-once) and package.json
+// (check-wrangler.ts). Do not duplicate them in the system-tool declaration.
+const REPO_PINNED = new Set(["node", "wrangler"]);
 
 // ── the shell corpus ─────────────────────────────────────────────────────────
-async function shellScripts() {
-  const dirs = ["tools/photos", "scripts"];
-  const found: string[] = [];
-  for (const dir of dirs) {
-    let entries: string[] = [];
-    try {
-      entries = await readdir(path.join(ROOT, dir));
-    } catch {
-      continue;
-    }
-    for (const entry of entries) {
-      if (entry.endsWith(".sh")) found.push(`${dir}/${entry}`);
-    }
-  }
-  return found.sort();
-}
-
-const scripts = await shellScripts();
+// Git owns the census at every depth, including the nested AVIF builder but
+// excluding its ignored downloads. Stage new scripts before checking them.
+// A failed census or unreadable tracked script must fail the check.
+const scripts = execFileSync("git", ["ls-files", "-z", "*.sh"], { cwd: ROOT, encoding: "utf8" })
+  .split("\0").filter(Boolean).sort();
 const source = new Map();
 for (const rel of scripts) source.set(rel, await readFile(path.join(ROOT, rel), "utf8"));
 
@@ -132,7 +118,7 @@ for (const [rel, text] of source) {
       // binary they point at is declared under its own name instead.
       if (word.includes("$")) continue;
       const bin = word.replace(/^["']|["']$/g, "");
-      if (!bin || declaredBins.has(bin) || NOT_SYSTEM.has(bin)) continue;
+      if (!bin || declaredBins.has(bin) || REPO_PINNED.has(bin)) continue;
       errors.push(`${rel}: guards on \`${bin}\`, which config/tools.json does not declare`);
     }
   }
@@ -151,7 +137,7 @@ for (const [rel, text] of source) {
     const bin = match[1];
     if (bin.startsWith("$")) continue;
     literalProbes += 1;
-    if (declaredBins.has(bin) || NOT_SYSTEM.has(bin)) continue;
+    if (declaredBins.has(bin) || REPO_PINNED.has(bin)) continue;
     errors.push(`${rel}: probes \`${bin}\`, which config/tools.json does not declare`);
   }
 }

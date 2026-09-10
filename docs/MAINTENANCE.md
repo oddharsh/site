@@ -1069,6 +1069,7 @@ when the remote job is unavailable.
 # the photo pipeline
 brew install jaq mozjpeg libavif              # mozjpeg = jpegtran + cjpeg; libavif = avifenc for the /garage/encoding grids
 brew install cmake ninja                     # for the pinned avifenc below
+# Git must also be on PATH to clone the pinned sources (brew install git if missing).
 # the AVIF encoder the photo tiers actually use: libavif at a pinned tag, built
 # with aom + libsharpyuv + libyuv. First run clones and builds all four (~10 min,
 # needs network); after that it is a no-op. Byte-identical to brew's avifenc at
@@ -1095,7 +1096,9 @@ source build put them.
 
 **`bun run tools:check` is the check on all of it**, declared in
 [`config/tools.json`](../config/tools.json). Its declaration tier runs on every
-PR and needs no binary; its presence tier probes this machine and is advisory in
+PR and uses Git to scan every tracked `.sh` file, including nested builders.
+Stage new scripts before checking them; ignored downloads and untracked scripts
+are outside the census. Its presence tier probes this machine and is advisory in
 CI. Run it before a pipeline session on a fresh machine and it names what is
 missing and how to get it, rather than letting a script exit on a raw shell
 error four steps in. Four of the tools above were required and documented nowhere
