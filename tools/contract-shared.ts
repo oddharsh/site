@@ -78,7 +78,7 @@ import { cachedRender, deadline, deleteSWRKV, swrKV } from "../src/worker/lib/ca
 import { ifNoneMatchMatches, notModifiedIfFresh, withWeakEtag } from "../src/worker/lib/cache.ts";
 import { fetchFollowingPublicRedirects, privateHostBlocked } from "../src/worker/lib/public-fetch.ts";
 import { handleHit } from "../src/worker/counter.ts";
-import { cronHomeProbe, parseServerTiming } from "../src/worker/perf-probe.ts";
+import { cronHomeProbe } from "../src/worker/perf-probe.ts";
 import { gatherWhoareyou } from "../src/worker/whoareyou.ts";
 import { handleSearchJson, renderSearchPage, searchSite } from "../src/worker/search.ts";
 import { renderRun } from "../src/worker/run.ts";
@@ -467,7 +467,6 @@ export {
   notModifiedIfFresh,
   parseCargoDeps,
   parseCookies,
-  parseServerTiming,
   privateHostBlocked,
   queryPhotos,
   readAroundChanges,
