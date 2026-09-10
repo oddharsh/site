@@ -19,6 +19,7 @@ import {
   serveStaticPage,
   test,
 } from "./contract-shared.ts";
+import { spawnSync } from "node:child_process";
 
 // ── docs/DEPENDENCIES.md states version pins in prose ─────────────────────────
 // and dependabot rewrites those pins daily, so the file goes stale on a cadence
@@ -246,6 +247,31 @@ test("the Cargo reader refuses malformed manifests instead of auditing a partial
     '[dependencies]\ncodec = 2026-09-01\n',
     '[dependencies]\ncodec = []\n',
   ]) assert.throws(() => parseCargoDeps(toml), Error, toml);
+});
+
+test("Cargo comments at EOF cannot hang the dependency audit or relocker", () => {
+  // GHSA-7w5x-hrqm-74c2: a comment at EOF inside an unclosed array or inline
+  // table could loop forever. Isolate the actual shared reader so a regression
+  // fails within three seconds instead of hanging the entire contract suite.
+  const reader = new URL("./lib/dependency-docs.ts", import.meta.url).href;
+  const script = `
+    const { parseCargoDeps } = await import(${JSON.stringify(reader)});
+    try { console.log(JSON.stringify({ dependencies: parseCargoDeps(process.argv[1]) })); }
+    catch { console.log(JSON.stringify({ rejected: true })); }
+  `;
+  for (const [toml, expected] of /** @type {const} */ ([
+    ['[package]\nvalues = [1 #', { rejected: true }],
+    ['[package]\nvalues = { key = 1 #', { rejected: true }],
+    ['[dependencies]\ncodec = { version = "1.2.3", features = ["a" #', { rejected: true }],
+    ['[dependencies]\ncodec = { version = "1.2.3" #', { rejected: true }],
+    ['[dependencies]\ncodec = { version = "1.2.3", features = ["a" # comment\n] }\n', { dependencies: { codec: "1.2.3" } }],
+    ['[dependencies]\ncodec = "1.2.3" #', { dependencies: { codec: "1.2.3" } }],
+  ])) {
+    const result = spawnSync(process.execPath, ["--eval", script, toml], { encoding: "utf8", timeout: 3000 });
+    assert.ifError(result.error);
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(JSON.parse(result.stdout), expected);
+  }
 });
 
 test("versionless Cargo dependencies require policy and do not look removed", () => {
