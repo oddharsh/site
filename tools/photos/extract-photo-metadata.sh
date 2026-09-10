@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# extract-photo-metadata.sh — read EXIF from a folder of SOOC photos and
+# extract-photo-metadata.sh — read EXIF from SOOC photo files or folders and
 # emit /images/metadata.json keyed by R2 filename. the worker doesn't read
 # EXIF itself (would require bundling a JS library); this script runs in the
 # remote photo workflow once per upload batch.
@@ -7,6 +7,7 @@
 # usage:
 #   ./extract-photo-metadata.sh /path/to/sooc-originals/
 #   ./extract-photo-metadata.sh --merge /path/to/selected-sources/
+#   ./extract-photo-metadata.sh --merge /first/frame.HIF /second/other.jpg
 #
 # requires: exif-sooc (cargo install --git https://github.com/oddharsh/exif-sooc exif-sooc),
 #           jaq (brew install jaq)
@@ -70,16 +71,18 @@ if [ "${1:-}" = "--merge" ]; then
   shift
 fi
 
-if [ $# -ne 1 ]; then
-  echo "usage: $0 [--merge] /path/to/sooc-originals/" >&2
+if [ $# -eq 0 ]; then
+  echo "usage: $0 [--merge] <source-file-or-dir>..." >&2
   exit 1
 fi
 
-SRC_DIR="$1"
-if [ ! -d "$SRC_DIR" ]; then
-  echo "error: $SRC_DIR is not a directory" >&2
-  exit 1
-fi
+SRC_DIR="$*"  # label only; preserve each original argument when reading
+for source in "$@"; do
+  if [ ! -d "$source" ] && [ ! -f "$source" ]; then
+    echo "error: source not found: $source" >&2
+    exit 1
+  fi
+done
 
 if ! command -v exif-sooc >/dev/null 2>&1; then
   echo "error: exif-sooc not found. install with:" >&2
@@ -152,9 +155,9 @@ fi
 # exif-sooc produced records byte-identical to what exiftool + jaq + Python
 # produced, recipe cards included, 158/158.
 if [ "$MERGE" -eq 1 ]; then
-  exif-sooc --keyed --merge-into "$OUT" -q -r "$SRC_DIR" > "$OUT.tmp"
+  exif-sooc --keyed --merge-into "$OUT" -q -r "$@" > "$OUT.tmp"
 else
-  exif-sooc --keyed -q -r "$SRC_DIR" > "$OUT.tmp"
+  exif-sooc --keyed -q -r "$@" > "$OUT.tmp"
 fi
 # NOTE: "$OUT" is not replaced yet. The prune below runs on the temp file and
 # the single `mv` happens after it, so a refusal there leaves the metadata.json

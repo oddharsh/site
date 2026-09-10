@@ -10,24 +10,14 @@
 #      three tiers from that same linear-light frame, so each output is ONE
 #      JPEG encode away from the source rather than three, and the 400 and 200
 #      tiers are no longer resamples of the 600.
-#   2. uploads a BROWSER-RENDERABLE full-resolution JPG to R2 as
-#      aadhar-photos/<stem>.jpg — this is what /images/full/<stem>.jpg returns
-#      on click, and the shareable R2 copy. for a JPG-source photo that's the
-#      original, rearranged to progressive by jpegtran on the way up (lossless
-#      coefficient reorder, not a re-encode; the local source folder is never
-#      modified); for a HEIF source it's the maximum-quality q100 export from
-#      step 3, which zenc already writes progressive.
-#   3. if the original is HEIF (.hif/.heic/.heif), generates a full-res archive
-#      JPG (sips decodes to lossless PNG, zenc re-encodes at q100 4:2:2 with the
-#      full trellis + scan-search, exif-sooc re-attaches source EXIF incl
-#      Orientation) and uploads THAT. 4:2:2 matches the Fuji HIF's native chroma
-#      (the sensor records 10-bit 4:2:2): unlike 4:4:4 it doesn't spend bytes on
-#      interpolated horizontal chroma the sensor never sampled, and unlike 4:2:0
-#      it keeps the vertical chroma the sensor did record. Still a clear win over
-#      the old sips q100. The .HIF
-#      original is NOT uploaded — it stays local-only (your drive + SSD are the
-#      archive). Chrome/Firefox can't render HEIF anyway, and R2 is for
-#      serving/sharing, not cold storage of originals.
+#   2. prepares the browser-renderable full-resolution JPEG. An existing JPEG
+#      (the requested source or a HEIF's same-folder companion) is rearranged
+#      to progressive with lossless jpegtran, preserving EXIF. A HEIF without
+#      a companion is exported at q100 4:2:2 with source EXIF restored. The
+#      original files stay untouched; HEIF originals are never uploaded.
+#   3. uploads those exact prepared bytes to R2. Input selection fixes the key
+#      once, and indexing measures the same file the upload used. Every upload
+#      must succeed before the run can reach hashing or the photo index.
 #
 # post-processing:
 #   4. regenerates public/images/metadata.json + per-stem images/meta/<stem>.json
@@ -169,21 +159,20 @@ reconcile() {  # reconcile <phase-label>
   fi
 }
 
-# Runs a worker function over a file list, defaulting to $SOURCES and $JOBS.
-# Uploads supply their own list and limit. Same batching idiom
-# phase 3 has always used for uploads: launch until the batch is full, `wait`
-# for all of it, start the next. A batch waits on its slowest member, which
-# costs something against a true work pool and needs no `wait -n`, which matters
-# because bash 3.2 is what /usr/bin/env bash finds on macOS and that builtin
-# arrived in 4.3.
-run_parallel() {  # run_parallel <worker-fn> [limit] [file-list]
-  local fn="$1" limit="${2:-$JOBS}" sources="${3:-$SOURCES}" pending=0 idx=0 f
-  while IFS= read -r f; do
+# All phases read the same resolved inputs. NUL fields preserve filenames;
+# the fixed batch waits also work on macOS's Bash 3.2 (which has no wait -n).
+read_input() {
+  IFS= read -r -d '' f && IFS= read -r -d '' original &&
+    IFS= read -r -d '' full && IFS= read -r -d '' stem
+}
+run_parallel() {  # run_parallel <worker-fn> [limit]
+  local fn="$1" limit="${2:-$JOBS}" pending=0 idx=0 f original full stem
+  while read_input; do
     idx=$((idx+1))
-    ( "$fn" "$f" "$idx" ) &
+    ( "$fn" "$f" "$idx" "$original" "$full" "$stem" ) &
     pending=$((pending+1))
     if [ "$pending" -ge "$limit" ]; then wait; pending=0; fi
-  done < "$sources"
+  done < "$INPUTS"
   wait
   echo "$idx" > "$ST_ROOT/launched"
 }
@@ -289,29 +278,12 @@ fi
 mkdir -p "$DEST" "$TMP"
 trap 'rm -rf "$TMP"' EXIT
 
-# ── enumerate inputs ──────────────────────────────────────────────────
-SOURCES="$TMP/sources.txt"
-> "$SOURCES"
-for arg in "$@"; do
-  if [ -d "$arg" ]; then
-    find "$arg" -maxdepth 1 -type f \( \
-      -iname "*.jpg" -o -iname "*.jpeg" \
-      -o -iname "*.heic" -o -iname "*.heif" -o -iname "*.hif" \
-      \) >> "$SOURCES"
-  elif [ -f "$arg" ]; then
-    echo "$arg" >> "$SOURCES"
-  else
-    echo "warning: skipping $arg (not a file or directory)" >&2
-  fi
-done
-
-sort -u "$SOURCES" -o "$SOURCES"
-TOTAL=$(wc -l < "$SOURCES" | tr -d ' ')
-if [ "$TOTAL" -eq 0 ]; then
-  echo "no eligible photos found in input(s)" >&2
-  exit 1
-fi
-echo "found $TOTAL source file(s) to process"
+# Resolve every stem before encoding. A same-folder HEIF/JPEG pair has one
+# pixel/metadata source and one click-through source; all other collisions fail.
+INPUTS="$TMP/inputs"
+node "$SCRIPT_DIR/photo-inputs.ts" ingest "$@" > "$INPUTS"
+TOTAL=$(( $(tr -cd '\000' < "$INPUTS" | wc -c) / 4 ))
+echo "found $TOTAL photo(s) to process"
 echo ""
 
 avif_encode() {  # avif_encode <src.jpg> <out.avif>
@@ -469,129 +441,71 @@ echo "  generated: $(tally ok)  skipped (current): $(tally skip)  failed: $(tall
 reconcile "phase 1"
 echo ""
 
-# ── phase 2: HIF → full-res JPG export (for click-through) ────────────
-echo "phase 2 — HIF → full-res JPG exports (parallel $JOBS)"
-EXPORTS="$TMP/jpgexports"
-mkdir -p "$EXPORTS"
+# ── phase 2: prepare the exact full-resolution bytes ────────────────
+echo "phase 2 — full-resolution JPEGs (parallel $JOBS)"
+FULLS="$TMP/full-resolution"; RECEIPTS="$TMP/full-paths"
+mkdir -p "$FULLS" "$RECEIPTS"
 st_init "$TMP/status2"
-export_one() {  # export_one <source-file> <index>
-  local f="$1" idx="$2"
-  local base ext_lc stem src_dir out tmppng
-  base=$(basename "$f")
-  ext_lc=$(echo "${base##*.}" | tr '[:upper:]' '[:lower:]')
-  case "$ext_lc" in
-    hif|heic|heif) ;;
-    # A non-HEIF source has nothing to export, which is not a skip and not a
-    # failure. It gets its own outcome so that every photo records exactly one
-    # and `reconcile` can still expect the counts to come back whole.
-    *) mark na "$idx"; return ;;
-  esac
-  stem="${base%.*}"
-  src_dir=$(dirname "$f")
-  # skip if the same folder already has a JPG/JPEG sibling — that's the
-  # authoritative click target; no need to make a derived export.
-  if ls "$src_dir"/"$stem".[Jj][Pp][Gg] 2>/dev/null  | grep -q . || \
-     ls "$src_dir"/"$stem".[Jj][Pp][Ee][Gg] 2>/dev/null | grep -q .; then
-    mark skip "$idx"; printf "→"
-    return
-  fi
-  out="$EXPORTS/${stem}.jpg"
-  # This export IS the R2 share/click copy; the .HIF original stays local-only.
-  # sips decodes the 10-bit HIF to a lossless PNG (sensor-native pixels, no
-  # orientation applied), zenc re-encodes it at q100 4:2:2 (the HIF's native
-  # chroma; hybrid trellis + scan search + sharp_yuv), and exif-sooc copies the
-  # source EXIF back, including Orientation, so browsers rotate it exactly as the
-  # old sips export did. Net: better than sips q100 and source-faithful on chroma
-  # (4:4:4 fabricates horizontal chroma the sensor never sampled; 4:2:0 drops the
-  # vertical chroma it did record). By Butteraugli 4:2:2 ties/beats both; by
-  # SSIMULACRA2 it gives up ~0.1-0.5 pt vs 4:4:4 for ~14% fewer bytes. /garage/encoding.
-  tmppng="$EXPORTS/${stem}.decode.png"
-  if sips -s format png "$f" --out "$tmppng" >/dev/null 2>&1 \
-     && "$ZENC" "$tmppng" "$out" -q 100 --yuv 422 >/dev/null 2>&1 \
-     && exif-sooc -TagsFromFile "$f" -all:all -overwrite_original "$out" >/dev/null 2>&1; then
-    rm -f "$tmppng"; mark ok "$idx"; printf "."
+prepare_one() {  # source, index, existing JPEG, object key, stem
+  local f="$1" idx="$2" original="$3" full="$4" stem="$5" out tmppng
+  out="$FULLS/$full"
+  if [ -n "$original" ]; then
+    if [ "${REMOTE_RENDER_ONLY:-0}" = "1" ]; then
+      out="$original"  # these already ARE the remote bytes
+    elif ! "$MOZ_JTRAN" -progressive -copy all -outfile "$out" "$original" 2>/dev/null || [ ! -s "$out" ]; then
+      # Lossless rearrangement is optional. Discard a rejected partial copy;
+      # the receipt must name the untouched bytes that are actually uploaded.
+      rm -f "$out"
+      out="$original"
+    fi
   else
-    rm -f "$tmppng"; mark fail "$idx"; printf "✗"
+    # This export IS the R2 share/click copy; the .HIF original stays local-only.
+    # sips decodes the 10-bit HIF to a lossless PNG (sensor-native pixels, no
+    # orientation applied), zenc re-encodes it at q100 4:2:2 (the HIF's native
+    # chroma; hybrid trellis + scan search + sharp_yuv), and exif-sooc copies the
+    # source EXIF back, including Orientation, so browsers rotate it exactly as the
+    # old sips export did. Net: better than sips q100 and source-faithful on chroma
+    # (4:4:4 fabricates horizontal chroma the sensor never sampled; 4:2:0 drops the
+    # vertical chroma it did record). By Butteraugli 4:2:2 ties/beats both; by
+    # SSIMULACRA2 it gives up ~0.1-0.5 pt vs 4:4:4 for ~14% fewer bytes. /garage/encoding.
+    tmppng="$FULLS/${stem}.decode.png"
+    if ! sips -s format png "$f" --out "$tmppng" >/dev/null 2>&1 \
+       || ! "$ZENC" "$tmppng" "$out" -q 100 --yuv 422 >/dev/null 2>&1 \
+       || ! exif-sooc -TagsFromFile "$f" -all:all -overwrite_original "$out" >/dev/null 2>&1; then
+      rm -f "$tmppng"; mark fail "$idx"; printf "✗"; return
+    fi
+    rm -f "$tmppng"
   fi
+  if [ ! -s "$out" ]; then mark fail "$idx"; printf "✗"; return; fi
+  printf '%s' "$out" > "$RECEIPTS/$idx"
+  mark ok "$idx"; printf "."
 }
-run_parallel export_one
+run_parallel prepare_one
 echo ""
-echo "  exported: $(tally ok)  skipped (JPG sibling exists): $(tally skip)  failed: $(tally fail)"
+echo "  prepared: $(tally ok)  failed: $(tally fail)"
 reconcile "phase 2"
 echo ""
 
-# ── phase 3: upload originals + HIF JPG exports to R2 ─────────────────
+# ── phase 3: upload the prepared objects to R2 ───────────────────────
 if [ "${REMOTE_RENDER_ONLY:-0}" = "1" ]; then
   echo "phase 3 — R2 uploads skipped (source is already remote)"
 else
   echo "phase 3 — R2 uploads (parallel 4)"
-
-# originals → R2. NB: HIF/HEIF originals are NOT uploaded — they stay local-only
-# (your drive + SSD are the archive); R2 gets their q100 JPG export instead
-# (phase 2 / below), which is browser-renderable + shareable. only JPG-source
-# originals (already max-quality SOOC) go up. extension lowercased so keys
-# are stable; stem case preserved.
-#
-# The R2 copy is rearranged to PROGRESSIVE on the way up (see prep_original).
-# Camera JPGs are written baseline, and /images/full/<stem>.jpg is served as bare
-# image/jpeg with no AVIF tier and no <picture> — it is the one surface here where
-# a multi-MB file is the whole payload, so scan order is the entire loading
-# experience. jpegtran reorders the existing DCT coefficients; it never decodes to
-# pixels, so this is not a re-encode and there is no generational loss.
-PROGDIR="$TMP/progressive"
-mkdir -p "$PROGDIR"
-
-# jpegtran -progressive on a COPY. The file in the source folder is never touched:
-# that folder is the SOOC archive and stays byte-for-byte what the camera wrote.
-# -copy all keeps EXIF (incl. Orientation) — gotcha 3/4 in CLAUDE.md, and the
-# metadata pipeline reads these tags later. Falls back to the untouched original
-# if jpegtran fails, so a bad file costs the optimisation and not the upload.
-prep_original() {
-  local src="$1" out="$2"
-  if "$MOZ_JTRAN" -progressive -copy all -outfile "$out" "$src" 2>/dev/null && [ -s "$out" ]; then
-    printf "%s" "$out"
-  else
-    # The index reads this staged path if it exists. A rejected partial copy
-    # must not describe an upload that actually sent the untouched source.
-    rm -f "$out"
-    printf "%s" "$src"
-  fi
-}
-
-UPLOADS="$TMP/uploads"
-: > "$UPLOADS"
-while IFS= read -r f; do
-  case "${f##*.}" in
-    [Hh][Ii][Ff]|[Hh][Ee][Ii][Cc]|[Hh][Ee][Ii][Ff]) continue ;;
-  esac
-  printf '%s\n' "$f" >> "$UPLOADS"
-done < "$SOURCES"
-for jpg in "$EXPORTS"/*.jpg; do
-  [ -f "$jpg" ] || continue
-  printf '%s\n' "$jpg" >> "$UPLOADS"
-done
-
-upload_one() {  # upload_one <file> <index>
-  local f="$1" idx="$2" base stem ext_lc send key
-  base=$(basename "$f"); stem="${base%.*}"
-  ext_lc=$(echo "${base##*.}" | tr '[:upper:]' '[:lower:]')
-  key="aadhar-photos/$stem.$ext_lc"
-  case "$f" in
-    "$EXPORTS/"*) send="$f" ;;  # zenc already writes progressive JPGs
-    *) send=$(prep_original "$f" "$PROGDIR/$stem.$ext_lc") ;;
-  esac
-  if "$WRANGLER" r2 object put "$key" --file="$send" --content-type="image/jpeg" --remote >/dev/null 2>&1; then
-    mark ok "$idx"; printf "."
-  else
-    mark fail "$idx"; printf "✗"
-    echo "error: R2 upload failed: $key" >&2
-  fi
-}
-st_init "$TMP/status3"
-run_parallel upload_one 4 "$UPLOADS"
-echo ""
-echo "  uploaded: $(tally ok)  failed: $(tally fail)"
-reconcile "phase 3"
+  upload_one() {
+    local idx="$2" full="$4" send
+    send=$(cat "$RECEIPTS/$idx")
+    if "$WRANGLER" r2 object put "aadhar-photos/$full" --file="$send" --content-type="image/jpeg" --remote >/dev/null 2>&1; then
+      mark ok "$idx"; printf "."
+    else
+      mark fail "$idx"; printf "✗"
+      echo "error: R2 upload failed: aadhar-photos/$full" >&2
+    fi
+  }
+  st_init "$TMP/status3"
+  run_parallel upload_one 4
+  echo ""
+  echo "  uploaded: $(tally ok)  failed: $(tally fail)"
+  reconcile "phase 3"
 fi
 echo ""
 
@@ -609,64 +523,36 @@ echo "phase 4 — hash tiers + photo index + metadata regen"
 # deploy, which was already the real gate because its /i/ tiles, hashes.json
 # entry, and caption are committed files too.
 #
-# size = the staged bytes that went (or will go) to R2: the progressive
-# rearrangement for a JPG source (falling back to the source file where
-# jpegtran fell back, and in REMOTE_RENDER_ONLY mode, where the local file IS
-# the R2 object), the q100 export for a HIF source. `uploaded` is preserved
-# for a stem that already has an entry, so re-renders don't masquerade as new
-# photos in the footer's "Last modified".
+# Size comes from the same prepared-file receipt the uploader used. Object
+# keys come from input selection, including exact remote key casing. Existing
+# upload dates survive a rerender.
 INDEX_FILE="$PROJECT_DIR/src/worker/photo-index.json"
 NOW_ISO="$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
 NEW_ENTRIES="$TMP/index-entries.json"
 echo '{}' > "$NEW_ENTRIES"
 [ -f "$INDEX_FILE" ] || echo '{}' > "$INDEX_FILE"
-while IFS= read -r f; do
-  base=$(basename "$f"); stem="${base%.*}"
-  ext_lc=$(echo "${base##*.}" | tr '[:upper:]' '[:lower:]')
-  case "$ext_lc" in
-    heic|heif|hif) key="${stem}.jpg"; obj="$EXPORTS/$stem.jpg" ;;
-    *)             key="${stem}.${ext_lc}"; obj="${PROGDIR:-/nonexistent}/$stem.$ext_lc"; [ -f "$obj" ] || obj="$f" ;;
-  esac
-  if [ ! -f "$obj" ]; then
-    echo "  index: no staged bytes for $stem — entry skipped (photos:check will flag it)" >&2
-    continue
-  fi
+idx=0
+META_SOURCES=()
+while read_input; do
+  idx=$((idx+1))
+  obj=$(cat "$RECEIPTS/$idx")
   size=$(wc -c < "$obj" | tr -d '[:space:]')
-  jaq --arg s "$stem" --arg k "$key" --argjson z "$size" \
-     '. + {($s): {full: $k, size: $z}}' "$NEW_ENTRIES" > "$NEW_ENTRIES.tmp" && mv "$NEW_ENTRIES.tmp" "$NEW_ENTRIES"
-done < "$SOURCES"
+  jaq --arg s "$stem" --arg k "$full" --argjson z "$size" \
+     '. + {($s): {full: $k, size: $z}}' "$NEW_ENTRIES" > "$NEW_ENTRIES.tmp"
+  mv "$NEW_ENTRIES.tmp" "$NEW_ENTRIES"
+  META_SOURCES+=("$f")
+done < "$INPUTS"
 jaq -S --arg now "$NOW_ISO" --slurpfile new "$NEW_ENTRIES" '
   . as $idx
   | ($new[0] | with_entries(.value += {uploaded: ($idx[.key].uploaded // $now)}))
   | $idx + .
-' "$INDEX_FILE" > "$INDEX_FILE.tmp" && mv "$INDEX_FILE.tmp" "$INDEX_FILE"
+' "$INDEX_FILE" > "$INDEX_FILE.tmp"
+mv "$INDEX_FILE.tmp" "$INDEX_FILE"
 echo "  photo index: $(jaq 'length' "$INDEX_FILE") entries"
-# regenerate from the FIRST input dir if it was a directory; else from the
-# parent dir of the first file (metadata script walks one canonical dir).
-META_SRC=""
-for arg in "$@"; do
-  if [ -d "$arg" ]; then META_SRC="$arg"; break; fi
-done
-if [ -z "$META_SRC" ]; then
-  META_SRC="$(dirname "$(head -1 "$SOURCES")")"
-fi
-if command -v exif-sooc >/dev/null 2>&1 && command -v jaq >/dev/null 2>&1; then
-  META_MODE=()
-  if [ "${REMOTE_RENDER_ONLY:-0}" = "1" ]; then META_MODE=(--merge); fi
-  # `${META_MODE+"${META_MODE[@]}"}` rather than a bare `"${META_MODE[@]}"`,
-  # because bash 3.2 (the bash macOS ships, and the one `env bash` finds here)
-  # treats an EMPTY array as unbound and dies under `set -u`. This is the default
-  # path (META_MODE is only non-empty under REMOTE_RENDER_ONLY), so the bare form
-  # would have broken every local photo add the moment -u went on. The `:-`
-  # spelling is NOT the fix: it expands to one empty-string argument, which this
-  # script would hand to extract-photo-metadata.sh as a source directory.
-  # stdout is tailed to the one summary line; stderr passes THROUGH, because the
-  # unpublished-photo notice and the missing-source warning are printed there and
-  # `2>&1` would tail them into nothing.
-  "$SCRIPT_DIR/extract-photo-metadata.sh" ${META_MODE+"${META_MODE[@]}"} "$META_SRC" | tail -1
-else
-  echo "  exif-sooc or jaq missing — skipping metadata regen"
-fi
+# Ingest is always a batch update: read precisely the selected pixel sources
+# and preserve metadata for other published photos, even across input folders.
+# The standalone extractor still offers a full replacement with its own guard.
+"$SCRIPT_DIR/extract-photo-metadata.sh" --merge "${META_SOURCES[@]}" | tail -1
 
 # A SECOND `zenc histogram --root` stood here until 2026-08-29, and the comment
 # that justified it rested on a premise that expired in 2026-08. It claimed
@@ -687,8 +573,8 @@ fi
 # disagreed could only turn a good run red. Keeping the bake beside the index
 # builds makes the last bake to run always the one they read.
 #
-# One path did change behaviour, for the better. The regen above is guarded on
-# exif-sooc and jaq, so on a machine missing either, this call was the ONLY bake
+# At removal, metadata regen was guarded on exif-sooc and jaq, so on a
+# machine missing either, this call had been the ONLY bake
 # and it wrote a meta/ carrying `hi` and no EXIF. check-photo-pipeline.ts then
 # rebuilt exif.json from that and failed 165 of 165 photos pointing at
 # build-exif-index.ts, which is not where the fault was. With no meta/ at all
