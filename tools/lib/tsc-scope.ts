@@ -1,26 +1,7 @@
-// tsc-scope.mjs — run a tsc program and split its diagnostics into the ones it
-// can legitimately judge and the ones it cannot.
-//
-// THE PROBLEM THIS SOLVES, stated once so neither caller has to. A program is
-// only as accurate as the globals it declares, and several programs here hold
-// files from two runtimes at once: tools/ imports the Worker, and the two
-// node-runtime test suites import the Worker they exercise. Those imported
-// modules get checked against the wrong global scope, which produces
-// diagnostics that are missing declarations rather than findings
-// (`RequestInitCfProperties` not found, `cf` does not exist in RequestInit,
-// `innerHTML` on Node). Every one of them passes in the program whose globals
-// match, and reporting them would train everyone to ignore the check.
-//
-// So a caller declares which path prefixes it OWNS, and gets those diagnostics
-// alone. The rest are counted and named in the summary rather than hidden.
-//
-// THE FLOOR IS THE HONEST HALF, and it is the caller's job rather than this
-// module's, because the two callers can afford different rigour: check-tool-types
-// wants a count over 123 files, and check-test-types can compare the program
-// against the directory exactly. What this module guarantees is that `listed`
-// is real, so a filter that scanned nothing cannot read as a clean run. That is
-// this repo's most-repeated failure and it has its own precedent in build.ts's
-// route invariant.
+// Run TypeScript and keep each runtime program's owned diagnostics. Tools and
+// tests also import Worker code, which is checked against its own globals by a
+// separate program. Configuration/process failures and failed file enumeration
+// always stop the check; each caller enforces its own coverage floor.
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 export function runScopedTsc({ repo, tsc, config, owns, label, cwd = repo }) {
@@ -72,25 +53,9 @@ export function runScopedTsc({ repo, tsc, config, owns, label, cwd = repo }) {
   return { mine, foreign: lines.length - mine.length, listed, ownedFiles: listed.filter(owned), byFile };
 }
 
-/**
- * THE RATCHET, extracted so two callers cannot keep separate copies of it.
- *
- * A baseline records what is owed per file, and this fails on a NEW file, on a
- * file that got WORSE, and on a file that got BETTER without the baseline being
- * updated. That third arm is what makes the number monotone rather than a
- * suggestion: without it a fix quietly banks nothing and the next regression
- * hides inside the slack. It has already earned its keep once, catching a
- * two-diagnostic improvement that arrived from an unrelated merge.
- *
- * A wall would be simpler and is the wrong shape here. tools/ and the Worker
- * program each carry hundreds of strictNullChecks diagnostics, so a check that
- * failed on them could never be required, and an unrequired check is decoration
- * — this repo has the perf-budget history to prove it.
- *
- * Returns the problems as strings; the caller decides how to print and exit.
- */
-export function ratchet({ baselinePath, byFile, total, updateCommand, update = false }) {
-  const declared = JSON.parse(readFileSync(baselinePath, "utf8"));
+// Per-file counts must match the recorded baseline. Improvements need an
+// explicit update so a later regression cannot hide in the old allowance.
+export function ratchet({ baselinePath, byFile, updateCommand, update = false }) {
   // Sorted by filename so the baseline file stays diffable. The comparator is
   // explicit because the type-aware lint requires one, and because a default
   // sort on [file, count] pairs compares them stringified, which is only
@@ -98,19 +63,21 @@ export function ratchet({ baselinePath, byFile, total, updateCommand, update = f
   const actual = Object.fromEntries([...byFile].sort((a, b) => a[0].localeCompare(b[0])));
 
   if (update) {
-    writeFileSync(baselinePath, `${JSON.stringify({ files: actual, total }, null, 2)}\n`);
-    return { rewritten: true, problems: [], owed: total };
+    writeFileSync(baselinePath, `${JSON.stringify({ files: actual }, null, 2)}\n`);
+    return { rewritten: true, problems: [] };
   }
 
-  const problems = [];
+  const declared = JSON.parse(readFileSync(baselinePath, "utf8"));
+  const problems: string[] = [];
   for (const [f, n] of Object.entries(actual)) {
     const was = declared.files[f];
     if (was === undefined) problems.push(`${f}: ${n} error(s), and this file is not in the baseline`);
+    else if (!Number.isSafeInteger(was) || was < 1) problems.push(`${f}: baseline count must be a positive integer`);
     else if (n > was) problems.push(`${f}: ${n} error(s), up from ${was}`);
     else if (n < was) problems.push(`${f}: ${n} error(s), DOWN from ${was} — run \`${updateCommand}\``);
   }
   for (const f of Object.keys(declared.files)) {
     if (!(f in actual)) problems.push(`${f}: now clean — run \`${updateCommand}\` and drop it`);
   }
-  return { rewritten: false, problems, owed: declared.total };
+  return { rewritten: false, problems };
 }
