@@ -229,7 +229,7 @@ does not make a failed write safe to ignore.
 
 ## Current baseline
 
-- `smol-toml` 1.7.1 parses Cargo manifests for the dependency audit and relock
+- `smol-toml` 1.8.0 parses Cargo manifests for the dependency audit and relock
   writer under both Node and Bun. It is a development dependency with no
   transitive dependencies. The census retains Git and path dependencies without
   inventing semantic versions; each needs an explicit versionless policy.
