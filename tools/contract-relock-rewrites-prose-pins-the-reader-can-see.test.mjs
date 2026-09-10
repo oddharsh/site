@@ -57,14 +57,14 @@ test("the rewrite satisfies the audit that gates CI", () => {
 test("leaves alone what it cannot know a pin for", () => {
   const doc = `${BASELINE_HEADING}\n\n- Oxlint 1.79.0 and Wrangler 4.125.0.\n`;
   // A range pin names no single version the prose could be wrong about, and an
-  // absent pin names none at all. Guessing either invents a claim.
-  const { edits } = planDocPinRewrites({
-    doc,
-    pins: { oxlint: "^1.80.0" },
-    aliases: ALIASES,
-    versionless: new Map(),
-  });
-  assert.deepEqual(edits, []);
+  // absent pin or versionless source names none at all. Guessing invents a claim.
+  /** @type {import("./lib/dependency-docs.ts").DependencyVersions[]} */
+  const cases = [{ oxlint: "^1.80.0" }, { oxlint: "^1.80.0", wrangler: null }];
+  for (const pins of cases) {
+    const { updated, edits } = planDocPinRewrites({ doc, pins, aliases: ALIASES, versionless: new Map() });
+    assert.deepEqual(edits, []);
+    assert.equal(updated, doc);
+  }
 });
 
 test("a doc with no baseline heading is returned untouched", () => {

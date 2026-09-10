@@ -15,7 +15,7 @@ import { privateHostBlocked } from "../src/worker/lib/public-fetch.ts";
 import { esc } from "../src/worker/lib/http.ts";
 import { SUBREQUEST_CAP_FREE, createBudget, isSubrequestLimit } from "../src/worker/lib/budget.ts";
 import type { Budget } from "../src/worker/lib/budget.ts";
-import { CACHE_EMPTY, CACHE_STATIC, mcpCorsHeaders, mcpGate, mcpHttpStatus, mcpServer } from "../src/worker/lib/mcp-protocol.ts";
+import { CACHE_EMPTY, CACHE_STATIC, mcpCorsHeaders, mcpError, mcpHttpStatus, mcpRequest, mcpServer } from "../src/worker/lib/mcp-protocol.ts";
 import { mcpTool } from "../src/worker/lib/mcp-tools.ts";
 import { previewToolRefusal } from "../src/worker/lib/preview.ts";
 import { asRecord, asText } from "../src/worker/lib/parse.ts";
@@ -2378,22 +2378,13 @@ export async function handleMcp(request, env, d) {
     // stateless server: no server-initiated SSE stream, POST JSON-RPC only.
     return respond({ error: "Use POST with JSON-RPC 2.0. Docs: " + PREFIX + "/mcp-info" }, 405);
   }
-  const rpcErr = (id, code, message) => ({ jsonrpc: "2.0", id: id === undefined ? null : id, error: { code, message } });
-
   let payload;
   try { payload = await request.json(); }
-  catch { return respond(rpcErr(null, -32700, "Parse error")); }
+  catch { return respond(mcpError(null, -32700, "Parse error")); }
 
   const dispatch = async (msg) => {
-    if (!msg || msg.jsonrpc !== "2.0" || asText(msg.method) === null) {
-      return rpcErr(msg?.id, -32600, "Invalid Request");
-    }
     const id = msg.id, m = msg.method;
     try {
-      // Version first, then the routing headers — the same gate /mcp applies.
-      const refused = mcpGate(msg, request);
-      if (refused !== null) return refused;
-
       // MUST be implemented as of 2026-07-28.
       if (m === "server/discover") return MCP.discover(id);
       // Kept for pre-2026 clients, which have no fall-forward mechanism.
@@ -2408,7 +2399,6 @@ export async function handleMcp(request, env, d) {
       if (m === "resources/list") return MCP.result(id, { resources: [] }, CACHE_EMPTY);
       if (m === "resources/templates/list") return MCP.result(id, { resourceTemplates: [] }, CACHE_EMPTY);
       if (m === "prompts/list") return MCP.result(id, { prompts: [] }, CACHE_EMPTY);
-      if (m.startsWith("notifications/")) return null;  // client notification — ack only
       if (m === "tools/call") {
         const name = msg.params && msg.params.name;
         // Every tool on this server reads today, so this refuses nothing yet.
@@ -2418,23 +2408,21 @@ export async function handleMcp(request, env, d) {
         const refusedOnPreview = previewToolRefusal(request, MCP_TOOLS, name);
         if (refusedOnPreview) return MCP.result(id, { content: [{ type: "text", text: refusedOnPreview }], isError: true });
         const out = await mcpCallTool(d, name, (msg.params && msg.params.arguments) || {});
-        if (out && out._unknown) return rpcErr(id, -32602, "Unknown tool: " + name);
+        if (out && out._unknown) return mcpError(id, -32602, "Unknown tool: " + name);
         // A failed tool is a RESULT with isError, never a JSON-RPC error: the
         // call succeeded and the model is meant to read the text.
         if (out && out._error) return MCP.result(id, { content: [{ type: "text", text: out._error }], isError: true });
         return MCP.result(id, { content: [{ type: "text", text: JSON.stringify(out, null, 2) }], structuredContent: out });
       }
-      return rpcErr(id, -32601, "Method not found: " + m);
+      return mcpError(id, -32601, "Method not found: " + m);
     } catch (e) {
-      return rpcErr(id, -32603, "Internal error: " + (e && e.message ? e.message : String(e)));
+      return mcpError(id, -32603, "Internal error: " + (e && e.message ? e.message : String(e)));
     }
   };
-  const handleOne = async (msg) => {
-    const reply = await dispatch(msg);
-    return asRecord(msg) !== null && "id" in msg ? reply : null;
-  };
+  const handleOne = (msg) => mcpRequest(msg, request, dispatch);
 
   if (Array.isArray(payload)) {
+    if (payload.length === 0) return respond(mcpError(null, -32600, "Invalid Request"));
     const out = (await Promise.all(payload.map(handleOne))).filter((x) => x !== null);
     return out.length ? respond(out) : respond(null, 202);
   }

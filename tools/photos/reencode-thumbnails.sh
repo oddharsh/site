@@ -94,29 +94,7 @@ for cmd in sips exif-sooc; do
   command -v "$cmd" >/dev/null 2>&1 || { echo "error: $cmd not in PATH" >&2; exit 1; }
 done
 
-# exif-sooc must be new enough to WRITE, and the check is on the version rather
-# than on a flag, because every failure mode here is quiet. An older build does
-# not reject -all=: it reads it as a tag SELECTION and prints JSON, so the strip
-# does nothing. 0.1.0 went further and truncated progressive JPEGs at their
-# first scan, and every JPEG this pipeline produces is progressive. Each write
-# below is wrapped in `|| true`, so a shipped file would keep the metadata this
-# exists to remove, or lose most of its image, and nothing would say a word.
-EXIF_SOOC_MIN=0.2.0
-# `|| true` matters under `set -euo pipefail`: without it a missing or broken
-# binary kills the script at this assignment, silently, before the message
-# below can say what is wrong.
-sooc_ver=$(exif-sooc --version 2>/dev/null | awk '{print $NF}' || true)
-# Anything that is not a plain x.y.z is refused rather than compared. `sort -V`
-# happily orders a word against a version and answers, so a garbled --version
-# would otherwise read as new enough.
-case "$sooc_ver" in
-  *[!0-9.]*|'') sooc_ver='' ;;
-esac
-if [ -z "$sooc_ver" ] || [ "$(printf '%s\n%s\n' "$EXIF_SOOC_MIN" "$sooc_ver" | sort -V | head -1)" != "$EXIF_SOOC_MIN" ]; then
-  echo "error: exif-sooc ${sooc_ver:-not found} is older than $EXIF_SOOC_MIN, which cannot write metadata safely." >&2
-  echo "  update with: cargo install --git https://github.com/oddharsh/exif-sooc exif-sooc --force" >&2
-  exit 1
-fi
+source "$SCRIPT_DIR/require-exif-sooc.sh"
 if [ ! -x "$ZENC" ]; then
   command -v cargo >/dev/null 2>&1 || { echo "error: cargo (rust) not found; install from https://rustup.rs" >&2; exit 1; }
   echo "building zenc (zenjpeg encoder) — first run only…" >&2
@@ -271,7 +249,7 @@ while IFS= read -r stem; do
   space=$(sips -g space "$sqjpg" 2>/dev/null | awk '/space:/{print $2}'); [ "$space" = "Gray" ] && yuv=400 || yuv=420
   if want sq; then
   if ! "$ZENC" "$sqjpg" "$jpg" -q "$ZENC_Q" >/dev/null 2>&1; then FAIL=$((FAIL+1)); printf "✗"; continue; fi
-  exif-sooc -all= -overwrite_original "$jpg" >/dev/null 2>&1 || true
+  if ! exif-sooc -all= -overwrite_original "$jpg" >/dev/null; then FAIL=$((FAIL+1)); printf "✗"; continue; fi
   if [ "$AVIF_KIND" != "sips" ]; then
     "$AVIF_ENCODER" -q 63 -d 10 --ignore-icc --ignore-exif --ignore-xmp --speed 2 --jobs 4 --yuv "$yuv" "$sqjpg" "$avif" >/dev/null 2>&1 || { FAIL=$((FAIL+1)); printf "✗"; continue; }
   else

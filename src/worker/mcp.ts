@@ -8,7 +8,7 @@ import { captureRepresentation, compareRepresentation, readRepresentation } from
 import { frameText, terminalToolFrame } from "./terminal.ts";
 import { radarFrame, readSamples } from "./radar.ts";
 import { AGENT_SURFACES } from "./lib/site-manifest.ts";
-import { CACHE_EMPTY, CACHE_LIVE, CACHE_STATIC, mcpCorsHeaders, mcpGate, mcpHttpStatus, mcpServer } from "./lib/mcp-protocol.ts";
+import { CACHE_EMPTY, CACHE_LIVE, CACHE_STATIC, mcpCorsHeaders, mcpError, mcpHttpStatus, mcpRequest, mcpServer } from "./lib/mcp-protocol.ts";
 import { mcpTool } from "./lib/mcp-tools.ts";
 import { previewToolRefusal } from "./lib/preview.ts";
 import { overBudget } from "./lib/ratelimit.ts";
@@ -363,18 +363,10 @@ export async function handleSiteMcp(request, env, ctx) {
   if (request.method !== "POST") return respond({ error: "Use POST with JSON-RPC 2.0." }, 405);
 
   let payload;
-  try { payload = await request.json(); } catch { return respond({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "Parse error" } }); }
-  const rpcError = (id, code, message) => ({ jsonrpc: "2.0", id: id === undefined ? null : id, error: { code, message } });
+  try { payload = await request.json(); } catch { return respond(mcpError(null, -32700, "Parse error")); }
   const dispatch = async (msg) => {
-    if (!msg || msg.jsonrpc !== "2.0" || asText(msg.method) === null) return rpcError(msg?.id, -32600, "Invalid Request");
     const id = msg.id;
     try {
-      // Version first, then the routing headers. Both rules are shared with
-      // /serendipity/mcp (lib/mcp-protocol.js) so the two servers cannot
-      // diverge on which requests they refuse.
-      const refused = mcpGate(msg, request);
-      if (refused !== null) return refused;
-
       // MUST be implemented as of 2026-07-28. Identity, capabilities and
       // supported versions in one round trip, so a client can render what this
       // server is without probing tools/list + resources/list + prompts/list.
@@ -397,11 +389,10 @@ export async function handleSiteMcp(request, env, ctx) {
         const content = await readResource(uri, request, env);
         // -32602 rather than -32002: 2026-07-28 aligned resource-not-found with
         // JSON-RPC's Invalid Params, and this file already used the new code.
-        if (!content) return rpcError(id, -32602, `Unknown or unreadable resource: ${uri}`);
+        if (!content) return mcpError(id, -32602, `Unknown or unreadable resource: ${uri}`);
         return MCP.result(id, { contents: [content] }, CACHE_READ);
       }
       if (msg.method === "prompts/list") return MCP.result(id, { prompts: [] }, CACHE_PROMPTS);
-      if (msg.method.startsWith("notifications/")) return null;
       if (msg.method === "tools/call") {
         const name = msg.params?.name;
         // A preview runs production bindings, and two tools here write D1. The
@@ -410,23 +401,21 @@ export async function handleSiteMcp(request, env, ctx) {
         const refusedOnPreview = previewToolRefusal(request, MCP_TOOLS, name);
         if (refusedOnPreview) return MCP.result(id, { content: [{ type: "text", text: refusedOnPreview }], isError: true });
         const out = await callTool(name, msg.params?.arguments, request, env, ctx);
-        if (out?._unknown) return rpcError(id, -32602, `Unknown tool: ${name}`);
+        if (out?._unknown) return mcpError(id, -32602, `Unknown tool: ${name}`);
         // A tool that failed is a RESULT with isError, never a JSON-RPC error:
         // the call itself succeeded, and the model is supposed to read the text.
         if (out?._error) return MCP.result(id, { content: [{ type: "text", text: out._error }], isError: true });
         if (out?._mcp) return MCP.result(id, { content: out._mcp.content, structuredContent: out._mcp.structured });
         return MCP.result(id, { content: [{ type: "text", text: JSON.stringify(out, null, 2) }], structuredContent: out });
       }
-      return rpcError(id, -32601, `Method not found: ${msg.method}`);
+      return mcpError(id, -32601, `Method not found: ${msg.method}`);
     } catch (error) {
-      return rpcError(id, -32603, `Internal error: ${String(error?.message || error).slice(0, 240)}`);
+      return mcpError(id, -32603, `Internal error: ${String(error?.message || error).slice(0, 240)}`);
     }
   };
-  const handleOne = async (msg) => {
-    const reply = await dispatch(msg);
-    return asRecord(msg) !== null && "id" in msg ? reply : null;
-  };
+  const handleOne = (msg) => mcpRequest(msg, request, dispatch);
   if (Array.isArray(payload)) {
+    if (payload.length === 0) return respond(mcpError(null, -32600, "Invalid Request"));
     // Cap the batch. The crawl budgets are not atomic under concurrency: a batch
     // runs through Promise.all, so N simultaneous tool calls can all observe an
     // under-budget counter and all proceed. Unbounded, one POST carrying N
@@ -441,7 +430,7 @@ export async function handleSiteMcp(request, env, ctx) {
     // an accurate accounting system". So the cap is what makes the ceiling mean
     // anything, exactly as before, for a different underlying reason.
     if (payload.length > MCP_MAX_BATCH) {
-      return respond(rpcError(null, -32600, `Batch too large: ${payload.length} messages, limit ${MCP_MAX_BATCH}.`), 413);
+      return respond(mcpError(null, -32600, `Batch too large: ${payload.length} messages, limit ${MCP_MAX_BATCH}.`), 413);
     }
     const output = (await Promise.all(payload.map(handleOne))).filter(Boolean);
     return output.length ? respond(output) : respond(null, 202);
