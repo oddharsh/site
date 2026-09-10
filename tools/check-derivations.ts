@@ -49,7 +49,7 @@ const readJson = async (file: string, fallback: unknown = null) => {
 const declaration = await readJson(DECL);
 const lock: Lock = ((await readJson(LOCK, {})) as { files?: Lock }).files ?? {};
 
-/** config/tools.json's `recorded` versions, the ones that made today's bytes. */
+/** Declared version records included in the relevant derivation input digests. */
 const toolVersions: Record<string, string> = Object.fromEntries(
   ((await readJson(path.join(ROOT, "config/tools.json"), { tools: [] })).tools ?? [])
     .filter((t: { recorded?: string }) => t.recorded)

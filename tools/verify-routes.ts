@@ -224,6 +224,11 @@ const ROUTES = [
   { path: "/lens/wire?url=javascript%3Aalert(1)", status: 400, ct: "application/json" },
   { path: "/lens/wire", status: 400, ct: "application/json" },
   { path: "/mcp", status: 405, ct: "application/json" },
+  // A listed resource read covers dispatcher injection and identity bytes:
+  // Horizon normally serves a precompressed document.
+  { path: "/mcp", method: "POST", status: 200, ct: "application/json",
+    headers: { "content-type": "application/json" }, marker: "<h1>Horizon",
+    body: JSON.stringify({ jsonrpc: "2.0", id: "resource", method: "resources/read", params: { uri: base + "/garage/horizon" } }) },
 
   // ── the terminal programs ──────────────────────────────────────────────
   // The first marker is a BOX-DRAWING character rather than prose, and that is
@@ -415,6 +420,8 @@ async function probe(r) {
   const url = cacheBust(r.path);
   try {
     const res = await fetch(url, {
+      method: r.method,
+      body: r.body,
       redirect: "manual",
       signal: AbortSignal.timeout(TIMEOUT_MS),
       // An `encoding` row offers br explicitly. Node's fetch does not by default,

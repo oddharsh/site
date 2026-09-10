@@ -38,7 +38,6 @@
     "tools/lib/dependency-docs.ts": 19,
     "tools/lib/lens-chips.ts": 2,
     "tools/lib/link-integrity.ts": 1,
-    "tools/lib/tsc-scope.ts": 4,
     "tools/lib/zstd-batch.ts": 2,
     "tools/perf-budget.ts": 2,
     "tools/perf-snapshot.ts": 7,
@@ -51,6 +50,5 @@
     "tools/roll-shell-dictionary.ts": 16,
     "tools/ua-survey.ts": 17,
     "tools/verify-routes.ts": 2
-  },
-  "total": 440
+  }
 }
