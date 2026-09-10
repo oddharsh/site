@@ -229,9 +229,6 @@ const ROUTES = [
   { path: "/mcp", method: "POST", status: 200, ct: "application/json",
     headers: { "content-type": "application/json" }, marker: "<h1>Horizon",
     body: JSON.stringify({ jsonrpc: "2.0", id: "resource", method: "resources/read", params: { uri: base + "/garage/horizon" } }) },
-  { path: "/mcp", method: "POST", status: 200, ct: "application/json",
-    headers: { "content-type": "application/json" }, marker: "# Right now",
-    body: JSON.stringify({ jsonrpc: "2.0", id: "music-resource", method: "resources/read", params: { uri: base + "/rn" } }) },
 
   // ── the terminal programs ──────────────────────────────────────────────
   // The first marker is a BOX-DRAWING character rather than prose, and that is
