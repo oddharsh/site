@@ -28,9 +28,10 @@ import { botHeaders } from "./botauth.ts";
 import { CANONICAL_HOST } from "./const.ts";
 import { fetchFollowingPublicRedirects, validateLensTarget } from "./public-fetch.ts";
 import { readResponseCapped } from "./crawl.ts";
-import { ERR_HEADER_MISMATCH, MCP_MODERN, META_PROTOCOL, META_CLIENT_CAPS } from "./mcp-protocol.ts";
+import { ERR_HEADER_MISMATCH, MCP_MODERN, META_PROTOCOL, META_CLIENT_CAPS, parseMcpBody, rpcErrorDetail } from "./mcp-protocol.ts";
 import { lensProbe, originDiscovery } from "../lens.ts";
 import { asRecord, asText } from "./parse.ts";
+import { sseEvents } from "./sse.ts";
 
 // Bounds. A door reader that follows whatever it finds is a crawler; these keep
 // it to one hop and a readable amount of text.
@@ -76,6 +77,7 @@ const trim = (text, max) => {
 // entitled to refuse a request whose header disagrees with its body (-32020 is
 // exactly that check). One constant, so they cannot.
 const LIST_METHOD = "tools/list";
+const LIST_REQUEST_ID = 1;
 
 // A catalogue is text a stranger controls, so it is read from the stream with a
 // ceiling rather than buffered whole. 256 KB is roughly 9x the largest catalogue
@@ -84,33 +86,6 @@ const LIST_METHOD = "tools/list";
 // server trips it, small enough that a hostile or broken one cannot spend the
 // isolate's memory.
 const CATALOG_CAP = 256 * 1024;
-
-/**
- * Render whatever a server put in `error` as one readable line.
- *
- * A JSON-RPC error is `{code, message}`. Plenty of things that answer an MCP
- * endpoint are not JSON-RPC and say so in their own dialect: an OAuth challenge
- * body is `{error: "invalid_token", error_description: "…"}`, and a vendor API
- * error is `{error: {type, message}}` with no code. Reading `.code`/`.message`
- * off those printed the literal string "undefined: undefined" into the frame,
- * which is worse than saying nothing — measured on eight live servers
- * (Notion, Sentry, Linear, PayPal, Neon, Webflow, Canva, Grafana) 2026-08-14.
- */
-export function rpcErrorDetail(payload) {
-  const error = payload && payload.error;
-  const code = Number.isInteger(error && error.code) ? error.code : null;
-  const message = String(
-    (error && error.message)
-    || (payload && payload.error_description)
-    || asText(error, "")
-    || "",
-  ).trim();
-  if (code !== null) return `${code}: ${message.slice(0, 80) || "no message"}`;
-  if (message) return message.slice(0, 90);
-  // Something was there and none of the known shapes fit. Say what it was
-  // rather than inventing a verdict about it.
-  try { return JSON.stringify(error).slice(0, 90); } catch { return "an error with no readable message"; }
-}
 
 // A version header some servers require and others refuse. See the call site.
 const PROTOCOL_HEADER = "mcp-protocol-version";
@@ -141,40 +116,6 @@ export function gatedDoor(res): { ok: false; unreadable: true; gated: true; deta
     ? "OAuth"
     : challenge ? challenge.split(/[\s,;]/)[0] : "credentials";
   return { ok: false, unreadable: true, gated: true, detail: `needs ${how} (HTTP ${res.status})` };
-}
-
-/**
- * Read a Streamable HTTP answer, whichever framing the server chose.
- *
- * A server may answer one JSON object or an SSE stream, at its own discretion
- * and without announcing which in advance, so a client that only handles JSON
- * reports half the ecosystem as broken. mcp.deepwiki.com answers
- * text/event-stream, measured 2026-08-14.
- *
- * The content-type is a hint rather than the rule: a stream served under the
- * wrong type is still a stream, and a `data:` line is unambiguous. Pure and
- * exported because the framings are the whole behaviour worth testing here and
- * every live probe fails at signing before a test can reach one.
- */
-export function parseMcpBody(text, contentType) {
-  const type = String(contentType || "").toLowerCase();
-  const body = String(text || "");
-  if (type.includes("text/event-stream") || /^[ \t]*(?:event|data):/m.test(body)) {
-    for (const line of body.split(/\r?\n/)) {
-      const match = /^data:[ \t]?(.*)$/.exec(line);
-      if (!match) continue;
-      try {
-        const value = JSON.parse(match[1]);
-        // A stream carries comments, keep-alives and notifications alongside
-        // the answer, so the first line that PARSES is not necessarily the
-        // message. The `jsonrpc` member is what makes it one.
-        if (value && value.jsonrpc) return { ok: true, payload: value, framing: "sse" };
-      } catch { /* keep reading the stream */ }
-    }
-    return { ok: false, detail: "SSE stream carried no JSON-RPC message" };
-  }
-  try { return { ok: true, payload: JSON.parse(body), framing: "json" }; }
-  catch { return { ok: false, detail: `answered ${type.split(";")[0] || "no content-type"}, not JSON` }; }
 }
 
 /**
@@ -221,7 +162,7 @@ export async function foreignMcpTools(origin, env, opts: { schemas?: boolean } =
   // The values come from the server module so this client cannot advertise a
   // revision the site itself has stopped speaking.
   const body = JSON.stringify({
-    jsonrpc: "2.0", id: 1, method: LIST_METHOD,
+    jsonrpc: "2.0", id: LIST_REQUEST_ID, method: LIST_METHOD,
     params: { _meta: {
       [META_PROTOCOL]: MCP_MODERN,
       [META_CLIENT_CAPS]: {},
@@ -280,7 +221,7 @@ export async function foreignMcpTools(origin, env, opts: { schemas?: boolean } =
     // browser lens follows when it reports a spent render budget as our own
     // rather than as the target failing.
     if (got.truncated) return { over: true };
-    return parseMcpBody(got.text, res.headers.get("content-type"));
+    return parseMcpBody(got.text, res.headers.get("content-type"), LIST_REQUEST_ID);
   };
 
   try {
@@ -329,7 +270,8 @@ export async function foreignMcpTools(origin, env, opts: { schemas?: boolean } =
     // 400" would throw it away.
     if (payload?.error) return { ok: false, detail: rpcErrorDetail(payload) };
     if (!res.ok) return { ok: false, detail: `HTTP ${res.status}` };
-    const tools = Array.isArray(payload?.result?.tools) ? payload.result.tools : [];
+    const tools = payload?.result?.tools;
+    if (!Array.isArray(tools)) return { ok: false, detail: "no `tools` array in the response" };
     return {
       ok: true,
       count: tools.length,
@@ -497,14 +439,12 @@ function parseAskJson(text) {
  *   v0.55   event: result\n data: {"index":0,"item":{...}}
  */
 function parseAskStream(text) {
-  const results = [];
+  const results: unknown[] = [];
   const seen = new Set();
   let queryId;
   let named = false;
 
-  for (const block of text.split(/\n\n+/)) {
-    const eventName = (block.match(/^event:\s*(.+)$/m) || [])[1]?.trim();
-    const data = block.split("\n").filter((l) => l.startsWith("data:")).map((l) => l.slice(5).trim()).join("");
+  for (const { event: eventName, data } of sseEvents(text)) {
     if (!data) continue;
     let frame;
     try { frame = JSON.parse(data); } catch { continue; }
