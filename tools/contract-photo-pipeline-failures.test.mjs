@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtemp, mkdir, readFile, readdir, writeFile, chmod, rm, utimes } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, writeFile, chmod, rm, utimes } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+
+const REPO = fileURLToPath(new URL("../", import.meta.url));
 
 // Real shell entrypoints, deterministic encoder stubs, no network or private
 // originals. Copy the shell corpus so sourced helpers run unchanged too.
@@ -24,8 +27,12 @@ async function fixture(run) {
       TRACE: `${root}/trace`, JOBS: "1", REMOTE_RENDER_ONLY: "1", ...env },
   });
   try {
-    for (const file of await readdir(new URL("./photos/", import.meta.url))) {
-      if (file.endsWith(".sh")) await put(`tools/photos/${file}`, await readFile(new URL(`./photos/${file}`, import.meta.url), "utf8"));
+    // Take the corpus from git rather than from a directory listing, which is
+    // the census check-tools.ts itself takes. A listing of tools/photos alone
+    // misses the nested AVIF builder, so a declaration naming it reads as a
+    // stale path, and it would copy an ignored download that no check sees.
+    for (const rel of execFileSync("git", ["ls-files", "-z", "tools/photos/*.sh"], { cwd: REPO, encoding: "utf8" }).split("\0").filter(Boolean)) {
+      await put(rel, await readFile(path.join(REPO, rel), "utf8"));
     }
     await put("trace", "");
     await put("source/frame.jpg", "source fixture");

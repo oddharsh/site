@@ -4,7 +4,7 @@
 // - Version: unreadable versions/minimum violations fail; drift is advisory.
 // Scanner floors catch lost matches. This is not a shell interpreter or a
 // reconstruction of which executable produced each committed artifact.
-import { readFile, readdir, access } from "node:fs/promises";
+import { readFile, access } from "node:fs/promises";
 import { constants as fsConstants } from "node:fs";
 import { execFileSync, spawnSync } from "node:child_process";
 import path from "node:path";
