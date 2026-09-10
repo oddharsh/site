@@ -4,7 +4,7 @@
 // public photo bucket or the representation vault.
 import photoIndex from "./photo-index.json" with { type: "json" };
 import { CANONICAL_HOST } from "./lib/const.ts";
-import { validateLensTarget } from "./lens.ts";
+import { fetchFollowingPublicRedirects, validateLensTarget } from "./lib/public-fetch.ts";
 
 const INPUT_CAP = 8 * 1024 * 1024;
 const OUTPUT_CAP = 4 * 1024 * 1024;
@@ -108,16 +108,9 @@ async function readBytesCapped(response, maxBytes) {
   return { bytes, truncated: false };
 }
 
-function base64(bytes) {
-  let out = "";
-  const chunk = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunk) out += String.fromCharCode(...bytes.subarray(i, i + chunk));
-  return btoa(out);
-}
-
 async function sha256(bytes) {
   const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
-  return Array.from(digest, (b) => b.toString(16).padStart(2, "0")).join("");
+  return digest.toHex();
 }
 
 function normalizeFormat(value, fallback = "avif") {
@@ -167,15 +160,18 @@ async function resolveImageInput(args: ImageToolArgs, env): Promise<ImageInput |
   const target = validateLensTarget(rawUrl);
   if (!target.ok) return { error: target.error };
   try {
-    const response = await fetch(target.url, { method: "GET", redirect: "follow", signal: AbortSignal.timeout(8000) });
-    const final = validateLensTarget(response.url || target.url);
-    if (!final.ok) return { error: "source_url redirected to a disallowed target" };
+    const signal = AbortSignal.timeout(8000);
+    const followed = await fetchFollowingPublicRedirects(
+      target.url, () => ({ method: "GET", signal }), validateLensTarget, 20,
+    ); // Preserve native fetch's twenty-redirect allowance.
+    if (!followed.ok) return { error: "source_url redirected to a disallowed target" };
+    const response = followed.response;
     const type = (response.headers.get("content-type") || "").split(";")[0].toLowerCase();
     if (!response.ok) return { error: `source_url returned HTTP ${response.status}` };
     if (type && !type.startsWith("image/")) return { error: "source_url did not return an image" };
     const body = await readBytesCapped(response, INPUT_CAP);
     if (body.truncated) return { error: "source_url response exceeds the 8 MiB input limit" };
-    return { bytes: body.bytes, mime: type || "application/octet-stream", source: "source_url", url: final.url };
+    return { bytes: body.bytes, mime: type || "application/octet-stream", source: "source_url", url: followed.finalUrl };
   } catch { return { error: "source_url could not be fetched" }; }
 }
 
@@ -190,7 +186,7 @@ async function transformBytes(env, bytes, spec: TransformSpec): Promise<Transfor
     let pipeline = env.IMAGES.input(bytes);
     const options = Object.fromEntries(Object.entries(spec.options).filter(([, value]) => value !== undefined));
     if (Object.keys(options).length) pipeline = pipeline.transform(options);
-    const response = await pipeline.output(spec.output).response();
+    const response = (await pipeline.output(spec.output)).response();
     if (!response?.ok) return { error: "Image binding could not encode the image." };
     const body = await readBytesCapped(response, OUTPUT_CAP);
     if (body.truncated) return { error: "transformed image exceeds the 4 MiB output limit" };
@@ -213,7 +209,7 @@ function mcpOutput(receipt, images: TransformedImage[] = []) {
   // infers as text-only off its first element and refuses the image blocks.
   const content: ({ type: "text"; text: string } | { type: "image"; data: string; mimeType: string })[] =
     [{ type: "text", text: JSON.stringify(receipt, null, 2) }];
-  for (const image of images) content.push({ type: "image", data: base64(image.bytes), mimeType: image.mime });
+  for (const image of images) content.push({ type: "image", data: image.bytes.toBase64(), mimeType: image.mime });
   return { _mcp: { structured: receipt, content } };
 }
 

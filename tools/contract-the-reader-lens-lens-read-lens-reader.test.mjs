@@ -57,17 +57,17 @@ test("the reader Worker shares the site's SSRF guard rather than copying it", as
   // the day they are written and diverge quietly afterwards, so this asserts the
   // import exists AND that no local redefinition shadows it.
   for (const [name, src] of [["reader.ts", reader], ["index.ts", entry]]) {
-    assert.match(src, /from "\.\.\/\.\.\/src\/worker\/lib\/crawl\.(js|ts)"/,
+    assert.match(src, /from "\.\.\/\.\.\/src\/worker\/lib\/public-fetch\.(js|ts)"/,
       `lens-reader/src/${name} must import the shared guard, not reimplement it`);
     assert.doesNotMatch(src, /function\s+validateLensTarget|function\s+privateHostBlocked/,
       `lens-reader/src/${name} redefines a guard it is supposed to be importing`);
   }
   // And the site's export is still the shared one, so moving it did not leave
   // lens.js with a stale private copy that only IT uses.
-  const crawl = await import("../src/worker/lib/crawl.ts");
+  const crawl = await import("../src/worker/lib/public-fetch.ts");
   const lens = await import("../src/worker/lens.ts");
   assert.equal(lens.validateLensTarget, crawl.validateLensTarget,
-    "lens.js and lib/crawl.js must expose the same function object, not two copies");
+    "lens.js and lib/public-fetch.ts must expose the same function object, not two copies");
 });
 
 test("the reader owns one focused Markdown walk over Readability's node", async () => {

@@ -398,20 +398,129 @@ test("site MCP lists the agent surfaces as resources", async () => {
   assert.equal(home.mimeType, "text/html");
 });
 
-test("site MCP resources/read serves listed surfaces only, same-origin", async () => {
+// Direct handler tests inject the same local dispatcher that /mcp receives.
+async function readMcpResource(uri, env, origin = "https://aadhar.sh") {
+  const response = await handleSiteMcp(new Request(origin + "/mcp", {
+    method: "POST", headers: { "content-type": "application/json", cookie: "private=fixture", authorization: "Bearer fixture" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 3, method: "resources/read", params: { uri } }),
+  }), env, context());
+  return response.json();
+}
+
+test("site MCP resources/read dispatches only listed local pages with public headers", async () => {
   const realFetch = globalThis.fetch;
-  testGlobals.fetch = async () => new Response("<!doctype html><title>ok</title>", { headers: { "content-type": "text/html; charset=utf-8" } });
+  let wireReads = 0;
+  testGlobals.fetch = async () => { wireReads++; return new Response("upstream failure", { status: 522 }); };
+  const seen = [];
+  const env = { SELF_FETCH: async (request) => {
+    seen.push(request);
+    return new Response("<!doctype html><title>local ✓</title>", { headers: { "content-type": "text/html; charset=utf-8" } });
+  } };
   try {
-    const read = await handleSiteMcp(new Request("https://aadhar.sh/mcp", { method: "POST", body: JSON.stringify({ jsonrpc: "2.0", id: 3, method: "resources/read", params: { uri: "https://aadhar.sh/whoareyou" } }), headers: { "content-type": "application/json" } }), {}, context());
-    const content = (await read.json()).result.contents[0];
-    assert.equal(content.uri, "https://aadhar.sh/whoareyou");
-    assert.match(content.text, /ok/);
-    // an unlisted path and a cross-origin host are both rejected without fetching.
-    for (const uri of ["https://aadhar.sh/etc/passwd", "https://evil.example.com/whoareyou"]) {
-      const bad = await handleSiteMcp(new Request("https://aadhar.sh/mcp", { method: "POST", body: JSON.stringify({ jsonrpc: "2.0", id: 4, method: "resources/read", params: { uri } }), headers: { "content-type": "application/json" } }), {}, context());
-      assert.equal((await bad.json()).error.code, -32602, `must reject ${uri}`);
+    for (const origin of ["https://aadhar.sh", "https://preview.aadhar-sh.workers.dev"]) {
+      const uri = origin + "/whoareyou?url=https://evil.example&admin=1#fragment";
+      const content = (await readMcpResource(uri, env, origin)).result.contents[0];
+      assert.deepEqual(content, { uri, mimeType: "text/html", text: "<!doctype html><title>local ✓</title>" });
+      const request = seen.at(-1);
+      assert.equal(request.url, origin + "/whoareyou", "queries and fragments never select extra work");
+      assert.equal(request.method, "GET");
+      assert.equal(request.redirect, "manual");
+      assert.equal(request.headers.get("accept"), "text/html");
+      assert.match(request.headers.get("user-agent"), /^AadharshBot\//);
+      assert.equal(request.headers.get("cookie"), null);
+      assert.equal(request.headers.get("authorization"), null);
     }
+    for (const uri of ["https://aadhar.sh/etc/passwd", "https://evil.example/whoareyou", "https://aadhar.sh/mcp", "not a URL", null, ["https://aadhar.sh/"]]) {
+      assert.equal((await readMcpResource(uri, env)).error.code, -32602);
+    }
+    for (const SELF_FETCH of [undefined, null]) {
+      assert.equal((await readMcpResource("https://aadhar.sh/", { SELF_FETCH })).error.code, -32602);
+    }
+    assert.equal(seen.length, 2, "invalid inputs and disarmed dispatch never read a page");
+    assert.equal(wireReads, 0, "no same-host network request or fallback");
   } finally { testGlobals.fetch = realFetch; }
+});
+
+test("site MCP resources/read refuses failed and redirected pages and cancels their bodies", async () => {
+  const realFetch = globalThis.fetch;
+  try {
+    for (const status of [301, 302, 307, 308, 404, 500, 522]) {
+      let cancelled = false;
+      const fetch = async () => new Response(new ReadableStream({
+        start(controller) { controller.enqueue(new TextEncoder().encode("not a resource")); controller.close(); },
+        cancel() { cancelled = true; },
+      }), { status, headers: { location: "https://evil.example/", "content-type": "text/html" } });
+      testGlobals.fetch = fetch;
+      const out = await readMcpResource("https://aadhar.sh/whoareyou", { SELF_FETCH: fetch });
+      assert.equal(out.error?.code, -32602, `HTTP ${status} must not become a complete resource`);
+      assert.equal(out.result, undefined);
+      assert.ok(cancelled, `HTTP ${status} body must be discarded`);
+    }
+    const out = await readMcpResource("https://aadhar.sh/", { SELF_FETCH: () => { throw new Error("broken dispatcher"); } });
+    assert.equal(out.error.code, -32602);
+  } finally { testGlobals.fetch = realFetch; }
+});
+
+test("site MCP resources/read returns whole bounded UTF-8 pages and cancels overflow", async () => {
+  const realFetch = globalThis.fetch;
+  const cap = 512 * 1024;
+  try {
+    // The 256 KB Horizon page already exceeded the old 200,000-character slice.
+    for (const text of ["", "a".repeat(cap), "é".repeat(cap / 2)]) {
+      const fetch = async () => new Response(text, { headers: { "content-type": "text/html" } });
+      testGlobals.fetch = fetch;
+      assert.equal((await readMcpResource("https://aadhar.sh/garage/horizon", { SELF_FETCH: fetch })).result.contents[0].text, text);
+    }
+    let pulls = 0, cancelled = false;
+    const fetch = async () => new Response(new ReadableStream({
+      pull(controller) {
+        pulls++;
+        if (pulls > 32) controller.close();
+        else controller.enqueue(new Uint8Array(64 * 1024).fill(65));
+      },
+      cancel() { cancelled = true; },
+    }));
+    testGlobals.fetch = fetch;
+    const out = await readMcpResource("https://aadhar.sh/", { SELF_FETCH: fetch });
+    assert.equal(out.error?.code, -32602, "a prefix is not a complete resource");
+    assert.ok(cancelled, "overflow cancels the producer");
+    assert.ok(pulls < 16, `bounded reader must not drain the whole body: ${pulls} pulls`);
+  } finally { testGlobals.fetch = realFetch; }
+});
+
+test("site MCP resources/read deadlines cover stalled dispatch and body reads", async () => {
+  const realFetch = globalThis.fetch, realTimer = globalThis.setTimeout;
+  const budgets = [];
+  // Advance only this endpoint's eight-second budget; use real stream and timer
+  // scheduling for the cancellation and late-response races.
+  testGlobals.setTimeout = (fn, ms, ...args) => {
+    if (ms === 8000) { budgets.push(ms); return realTimer(fn, 10, ...args); }
+    return realTimer(fn, ms, ...args);
+  };
+  try {
+    for (const phase of ["dispatch", "body"]) {
+      let signal, deliver, cancelled = false;
+      const response = () => new Response(new ReadableStream({ cancel() { cancelled = true; } }));
+      const fetch = async (request, init) => {
+        signal = init?.signal || request.signal;
+        return phase === "body" ? response() : new Promise((resolve) => { deliver = resolve; });
+      };
+      testGlobals.fetch = fetch;
+      let watchdog;
+      const out = await Promise.race([
+        readMcpResource("https://aadhar.sh/", { SELF_FETCH: fetch }),
+        new Promise((resolve) => { watchdog = realTimer(() => resolve(null), 500); }),
+      ]);
+      clearTimeout(watchdog);
+      if (deliver) deliver(response());
+      await new Promise((resolve) => realTimer(resolve, 0));
+      assert.ok(out, `${phase} must return even when the producer ignores abort`);
+      assert.equal(out.error.code, -32602);
+      assert.ok(signal.aborted, `${phase} request is aborted`);
+      assert.ok(cancelled, `${phase} body is cancelled, including late responses`);
+    }
+    assert.deepEqual(budgets, [8000, 8000]);
+  } finally { testGlobals.fetch = realFetch; testGlobals.setTimeout = realTimer; }
 });
 
 // Server cards are pre-connection metadata. The live `server/discover` and

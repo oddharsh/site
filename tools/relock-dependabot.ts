@@ -59,7 +59,7 @@ import { existsSync } from "node:fs";
 import { readFile, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { DocPinEdit } from "./lib/dependency-docs.ts";
+import type { DependencyVersions, DocPinEdit } from "./lib/dependency-docs.ts";
 import { DOC_ALIASES, SUB_MANIFEST_POLICY, VERSIONLESS, parseCargoDeps, planDocPinRewrites } from "./lib/dependency-docs.ts";
 
 const REPO = path.resolve(import.meta.dirname, "..");
@@ -138,7 +138,7 @@ async function rewritePins(tree: string): Promise<DocPinEdit[]> {
   const doc = await read("docs/DEPENDENCIES.md");
   const pkg = JSON.parse(await read("package.json"));
 
-  const subManifests: { manifest: string; kind: string; aliases: { prose: string; pkg: string }[]; versionless: Map<string, unknown>; pins: Record<string, string> }[] = [];
+  const subManifests: { manifest: string; kind: string; aliases: { prose: string; pkg: string }[]; versionless: Map<string, unknown>; pins: DependencyVersions }[] = [];
   for (const entry of SUB_MANIFEST_POLICY) {
     let raw: string;
     try {

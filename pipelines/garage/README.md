@@ -12,34 +12,31 @@ that LWE pages use. The experiment still owns its body HTML, CSS, and JavaScript
 3. Write three to seven `understanding.questions`. Each question should test
    the mechanism or a prediction. Give every option a `why`, including the
    misconception.
-4. Add the page to `pipelines/garage/pages.json`.
-5. Render the page:
+4. Render the spec into `src/pages/garage/<id>.html`:
 
 ```bash
 node pipelines/garage/generate.mjs page <id>
 ```
 
-6. Register the surface in [`site-manifest.json`](../site-manifest.json) and
+5. Register the surface in [`site-manifest.json`](../../config/site-manifest.json) and
    project it into the Run palette:
 
 ```bash
 bun run gen:manifest
 ```
 
-7. Add the sitemap entry and the Garage shelf card by hand.
+6. Add the entry in `public/sitemap.xml` and the card in
+   `src/pages/garage/index.html` by hand.
+7. Run `bun run pages:check`. It discovers and validates every Garage spec,
+   including new files; each spec id must match its filename.
 
 The generator always emits the quiz data block and `/quiz.js`, so a new page
 cannot silently omit the understanding check.
 
-> **`generate.mjs wire` is stale. Do not run it.** It predates
-> [`tools/gen-manifest.ts`](../tools/gen-manifest.ts), which now owns the
-> `generated:garage-pages` fence in `nav.js` and derives it from
-> `site-manifest.json`. `wire` also wants to own `garage/index.html` and
-> `sitemap.xml`, which are deliberately hand-authored: the shelf cards are
-> written prose, and the sitemap carries per-page `<lastmod>` values that a
-> generator would flatten into one date and destroy as a freshness signal.
-> `build.ts` check #8 verifies coverage of both instead. Steps 6 and 7 above
-> are the current path; `/garage/pqc` was the first page through it.
+[`tools/gen-manifest.ts`](../../tools/gen-manifest.ts) owns the Run palette and
+agent discovery projections. The shelf cards remain authored prose, and the
+sitemap retains per-page freshness dates. `tools/build.ts` checks their coverage.
+The retired Garage `wire` command now refuses before writing; use steps 5 and 6.
 
 ## Spec shape
 
@@ -120,7 +117,7 @@ owe the dashboard a citation.
 `/garage/blueprint`, `/garage/gpt56` and `/garage/dyno` are about this site.
 Manufacturing a citation for them would be worse than the gap.
 
-`contract-tests.mjs` enforces the half that rots: **every external URL in a card
+[`contract-rss-feeds.test.mjs`](../../tools/contract-rss-feeds.test.mjs) enforces the half that rots: **every external URL in a card
 also has to appear on the page it describes.** A citation that lives only on the
 card credits a repo the page never mentions, and the reader who clicks through
 finds nothing. Add the link to the page first, then to the card.

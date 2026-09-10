@@ -7,7 +7,7 @@ import {
   cachedRender,
   derivePhotoPool,
   existsSync,
-  getImagesManifest,
+  handleImagesManifest,
   ifNoneMatchMatches,
   notModifiedIfFresh,
   readFile,
@@ -44,10 +44,17 @@ test("bundled photo pool derives one well-formed row per committed stem", async 
   assert.equal(derivePhotoPool({ X1: { full: "X1.jpg", size: 1, uploaded: null } }, { X1: { a: "aaaaaaaa" } }).length, 0);
 });
 
-test("getImagesManifest serves the bundled pool without env", async () => {
+test("the manifest endpoint serves the bundled pool without bindings", async () => {
   // no env, no ctx: the pool must not depend on any binding
-  const pool = await getImagesManifest(undefined, undefined);
-  assert.ok(Array.isArray(pool) && pool.length > 0);
+  const index = JSON.parse(await readFile(new URL("src/worker/photo-index.json", ROOT), "utf8"));
+  const hashes = JSON.parse(await readFile(new URL("public/images/hashes.json", ROOT), "utf8"));
+  const response = handleImagesManifest();
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    _address: "handwritten worker at aadhar.sh",
+    photos: derivePhotoPool(index, hashes),
+    count: Object.keys(index).length,
+  });
 });
 
 test("both homepage fragments are preloaded, and the reason that is free still holds", async () => {
@@ -498,6 +505,7 @@ test("weak validators turn unchanged rendered HTML into an empty 304", async () 
   }));
   const etag = tagged.headers.get("etag");
   assert.match(etag, /^W\/"sha256-[0-9a-f]{64}"$/);
+  assert.equal(etag, 'W/"sha256-0b377fbdcaf496540d0318db6c0d8062b81e92d5c7a13a37a18f35cee9bcfe16"');
   assert.equal(ifNoneMatchMatches(new Request("https://aadhar.sh/x", { headers: { "if-none-match": etag } }), etag), true);
   assert.equal(ifNoneMatchMatches(new Request("https://aadhar.sh/x", { headers: { "if-none-match": etag.replace(/^W\//, "") } }), etag), true);
   const notModified = notModifiedIfFresh(new Request("https://aadhar.sh/x", {

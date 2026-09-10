@@ -64,7 +64,6 @@ import {
   adminGated,
   dispatchEnrich,
   enrichBatchLimit,
-  fetchBudget,
   fetchEventGuests,
   guestSweepBudget,
   mayPruneRoster,
@@ -73,13 +72,13 @@ import {
   staleGuestIds,
 } from "../serendipity/serendipity.ts";
 import { MCP_SUPPORTED as MCP_SUPPORTED_VERSIONS } from "../src/worker/lib/mcp-protocol.ts";
-import { derivePhotoPool, renderPhotosPage, getImagesManifest, handlePhotoQuery, queryPhotos, _resetPhotoCaches } from "../src/worker/photos.ts";
+import { derivePhotoPool, renderPhotosPage, handleImagesManifest, handlePhotoQuery, queryPhotos, _resetPhotoCaches } from "../src/worker/photos.ts";
 import { renderPhotoSlots } from "../src/worker/lib/photo-grid.ts";
 import { cachedRender, deadline, deleteSWRKV, swrKV } from "../src/worker/lib/cache.ts";
 import { ifNoneMatchMatches, notModifiedIfFresh, withWeakEtag } from "../src/worker/lib/cache.ts";
-import { fetchFollowingPublicRedirects, privateHostBlocked } from "../src/worker/lib/crawl.ts";
+import { fetchFollowingPublicRedirects, privateHostBlocked } from "../src/worker/lib/public-fetch.ts";
 import { handleHit } from "../src/worker/counter.ts";
-import { cronHomeProbe, parseServerTiming } from "../src/worker/perf-probe.ts";
+import { cronHomeProbe } from "../src/worker/perf-probe.ts";
 import { gatherWhoareyou } from "../src/worker/whoareyou.ts";
 import { handleSearchJson, renderSearchPage, searchSite } from "../src/worker/search.ts";
 import { renderRun } from "../src/worker/run.ts";
@@ -138,10 +137,10 @@ function fakeImages() {
     input(bytes) {
       return {
         transform(options) { this.options = options; return this; },
-        output(options) {
+        async output(options) {
+          const marker = new TextEncoder().encode(JSON.stringify({ input: bytes.byteLength, options: this.options || {}, output: options }));
           return {
-            async response() {
-              const marker = new TextEncoder().encode(JSON.stringify({ input: bytes.byteLength, options: this.options || {}, output: options }));
+            response() {
               return new Response(marker, { headers: { "content-type": options.format } });
             },
           };
@@ -227,7 +226,7 @@ function labels(headers) {
 function staticAssets(files) {
   return {
     async fetch(input) {
-      const path = new URL(input).pathname;
+      const path = new URL(input instanceof Request ? input.url : input).pathname;
       if (!(path in files)) return new Response("not found", { status: 404 });
       return Response.json(files[path]);
     },
@@ -425,7 +424,7 @@ export {
   findClaims,
   findEndpointIn,
   gatherWhoareyou,
-  getImagesManifest,
+  handleImagesManifest,
   getPublicAvailability,
   handleAroundChangesJson,
   handleCoffeeAvailability,
@@ -468,7 +467,6 @@ export {
   notModifiedIfFresh,
   parseCargoDeps,
   parseCookies,
-  parseServerTiming,
   privateHostBlocked,
   queryPhotos,
   readAroundChanges,
@@ -500,7 +498,6 @@ export {
   adminGated,
   dispatchEnrich,
   enrichBatchLimit,
-  fetchBudget,
   fetchEventGuests,
   guestSweepBudget,
   mayPruneRoster,

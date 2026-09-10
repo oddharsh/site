@@ -51,7 +51,7 @@
 # because the source object is already in R2 and every generated artifact —
 # tiers, metadata, the index entry — comes back as a normal PR.
 #
-# safe to re-run. skips thumbnail generation when all three thumb files are
+# safe to re-run. skips thumbnail generation when all four thumb files are
 # already newer than the source. always uploads to R2 (wrangler r2 put is
 # idempotent). to add only new shots, pass just their paths (not the whole
 # folder) so the 100+ existing originals aren't re-uploaded.
@@ -157,32 +157,33 @@ tally()   { ls -1 "$ST_ROOT/$1" 2>/dev/null | wc -l | tr -d ' '; }
 # A worker that dies takes its outcome with it. Under `set -e` a failing command
 # used to kill the whole run, which was loud; inside a subshell it kills one
 # worker and `wait` still returns 0, which is not. So every photo records
-# exactly one outcome and the count has to come back whole. Gotcha 36's lesson
-# in this script's own idiom: a catch that degrades one item will happily
-# degrade every item, so count what you handled rather than trusting that you did.
+# exactly one outcome. A failed or missing outcome stops the pipeline before
+# uploads or hashing can publish an incomplete set.
 reconcile() {  # reconcile <phase-label>
   local seen expected
   seen=$(( $(tally ok) + $(tally skip) + $(tally fail) + $(tally na) ))
   expected=$(cat "$ST_ROOT/launched")
-  if [ "$seen" -ne "$expected" ]; then
-    echo "  warning: $1 recorded $seen of $expected photos; $((expected - seen)) worker(s) exited without an outcome" >&2
+  if [ "$seen" -ne "$expected" ] || [ "$(tally fail)" -gt 0 ]; then
+    echo "error: $1 incomplete: $seen of $expected outcomes, $(tally fail) failed; do not upload, hash or publish these outputs" >&2
+    exit 1
   fi
 }
 
-# Runs a worker function over $SOURCES, $JOBS at a time. Same batching idiom
+# Runs a worker function over a file list, defaulting to $SOURCES and $JOBS.
+# Uploads supply their own list and limit. Same batching idiom
 # phase 3 has always used for uploads: launch until the batch is full, `wait`
 # for all of it, start the next. A batch waits on its slowest member, which
 # costs something against a true work pool and needs no `wait -n`, which matters
 # because bash 3.2 is what /usr/bin/env bash finds on macOS and that builtin
 # arrived in 4.3.
-run_parallel() {  # run_parallel <worker-fn>
-  local fn="$1" pending=0 idx=0 f
+run_parallel() {  # run_parallel <worker-fn> [limit] [file-list]
+  local fn="$1" limit="${2:-$JOBS}" sources="${3:-$SOURCES}" pending=0 idx=0 f
   while IFS= read -r f; do
     idx=$((idx+1))
     ( "$fn" "$f" "$idx" ) &
     pending=$((pending+1))
-    if [ "$pending" -ge "$JOBS" ]; then wait; pending=0; fi
-  done < "$SOURCES"
+    if [ "$pending" -ge "$limit" ]; then wait; pending=0; fi
+  done < "$sources"
   wait
   echo "$idx" > "$ST_ROOT/launched"
 }
@@ -230,7 +231,7 @@ ZENC_Q=84   # The linear-light geometry preserves high-frequency energy that sip
             # quantization. q84/63 changes one variable instead of two, so the
             # corpus is strictly better than what it replaced rather than better
             # on one axis and worse on another.
-MOZJPEG_DIR="/opt/homebrew/opt/mozjpeg/bin"
+MOZJPEG_DIR="$(brew --prefix mozjpeg)/bin"
 MOZ_JTRAN="$MOZJPEG_DIR/jpegtran"
 
 if [ ! -x "$WRANGLER" ]; then
@@ -248,29 +249,7 @@ for cmd in sips exif-sooc; do
   fi
 done
 
-# exif-sooc must be new enough to WRITE, and the check is on the version rather
-# than on a flag, because every failure mode here is quiet. An older build does
-# not reject -all=: it reads it as a tag SELECTION and prints JSON, so the strip
-# does nothing. 0.1.0 went further and truncated progressive JPEGs at their
-# first scan, and every JPEG this pipeline produces is progressive. Each write
-# below is wrapped in `|| true`, so a shipped file would keep the metadata this
-# exists to remove, or lose most of its image, and nothing would say a word.
-EXIF_SOOC_MIN=0.2.0
-# `|| true` matters under `set -euo pipefail`: without it a missing or broken
-# binary kills the script at this assignment, silently, before the message
-# below can say what is wrong.
-sooc_ver=$(exif-sooc --version 2>/dev/null | awk '{print $NF}' || true)
-# Anything that is not a plain x.y.z is refused rather than compared. `sort -V`
-# happily orders a word against a version and answers, so a garbled --version
-# would otherwise read as new enough.
-case "$sooc_ver" in
-  *[!0-9.]*|'') sooc_ver='' ;;
-esac
-if [ -z "$sooc_ver" ] || [ "$(printf '%s\n%s\n' "$EXIF_SOOC_MIN" "$sooc_ver" | sort -V | head -1)" != "$EXIF_SOOC_MIN" ]; then
-  echo "error: exif-sooc ${sooc_ver:-not found} is older than $EXIF_SOOC_MIN, which cannot write metadata safely." >&2
-  echo "  update with: cargo install --git https://github.com/oddharsh/exif-sooc exif-sooc --force" >&2
-  exit 1
-fi
+source "$SCRIPT_DIR/require-exif-sooc.sh"
 # Cargo's incremental check also upgrades an existing binary when this script
 # starts using a new native pipeline operation.
 command -v cargo >/dev/null 2>&1 || { echo "error: cargo (rust) not found; install from https://rustup.rs" >&2; exit 1; }
@@ -400,23 +379,21 @@ INTER="$TMP/inter"; mkdir -p "$INTER"
 st_init "$TMP/status1"
 thumb_one() {  # thumb_one <source-file> <index>
   local f="$1" idx="$2"
-  local base stem jpg avif smavif xs xsavif tif sq sm input o profile transfer
+  local base stem jpg avif smavif xs xsavif tif sq sm input o profile transfer file current stage
   base=$(basename "$f"); stem="${base%.*}"
-  jpg="$DEST/${stem}.jpg"; avif="$DEST/${stem}.avif"; smavif="$DEST/${stem}-${SQ_SM}.avif"
-  # $INTER, like the two tiers above it. This read "$TMP/sq/", a directory
-  # NOTHING CREATES, so the 1x tier has never been produced by this script: the
-  # 200px files on the 158 published photos all came from reencode-thumbnails.sh.
-  # It stayed hidden because `sips -Z` EXITS 0 when its --out directory does not
-  # exist (measured 2026-08-24) and writes nothing, so the guard below passes and
-  # avif_encode then fails on a missing input, costing one `~` in a progress line
-  # of dots. The first photo added after this was noticed crashed the fingerprint
-  # build on `<stem>-200.undefined.avif`, because hashes.json carried no `x` for
-  # it. That build lives in tools/lib/photo-indexes.ts now and runs inside
-  # build.ts rather than here, so the same gap fails the deploy instead.
-  xs="$INTER/${stem}.xs.png"; xsavif="$DEST/${stem}-${SQ_XS}.avif"
-  if [ -f "$jpg" ] && [ -f "$avif" ] && [ -f "$smavif" ] && [ "$jpg" -nt "$f" ]; then
+  current=1
+  for file in "$DEST/$stem.jpg" "$DEST/$stem.avif" "$DEST/$stem-${SQ_SM}.avif" "$DEST/$stem-${SQ_XS}.avif"; do
+    if [ ! -s "$file" ] || [ ! "$file" -nt "$f" ]; then current=0; break; fi
+  done
+  if [ "$current" -eq 1 ]; then
     mark skip "$idx"; printf "·"; return
   fi
+  # Failed metadata or tier generation must not leave a fresh partial set for
+  # the next run to mistake for a cached success. Publish only completed tiers.
+  stage="$INTER/$idx"; mkdir -p "$stage"
+  jpg="$stage/${stem}.jpg"; avif="$stage/${stem}.avif"
+  smavif="$stage/${stem}-${SQ_SM}.avif"; xsavif="$stage/${stem}-${SQ_XS}.avif"
+  xs="$INTER/${stem}.xs.png"
   # The intermediates are LOSSLESS: a TIFF for the HEIF decode, PNGs out.
   tif="$INTER/${stem}.tif"
   sq="$INTER/${stem}.sq.png"; sm="$INTER/${stem}.sm.png"
@@ -468,18 +445,22 @@ thumb_one() {  # thumb_one <source-file> <index>
   # 4. desktop square JPG was emitted with the PNG above (zenc: zenjpeg hybrid+scan, q84 ≈ old jpegli q82) + strip
   #    any residual metadata (sips can leave a grayscale ICC on B&W frames; keep
   #    formats consistent / sRGB).
-  exif-sooc -all= -overwrite_original "$jpg" >/dev/null 2>&1 || true
+  if ! exif-sooc -all= -overwrite_original "$jpg" >/dev/null; then mark fail "$idx"; printf "✗"; return; fi
   # 5. desktop square AVIF
   if ! avif_encode "$sq" "$avif"; then mark fail "$idx"; printf "✗"; return; fi
   # 6. mobile square AVIF — from the same full-resolution frame as the 600
   # tier since 2026-08-26 (it used to be a resize of the 600 square, and before
   # that a JPEG resized from a JPEG).
-  avif_encode "$sm" "$smavif" || printf "~"
+  if ! avif_encode "$sm" "$smavif"; then mark fail "$idx"; printf "✗"; return; fi
   # 7. 1x square AVIF, same one-encode-from-the-source property as step 6.
   # (This tier was missed when the geometry first moved on 2026-08-25 — the 600
   # and 400 went linear-light while the 200 stayed on sips — and its next
   # incarnation re-squared the 600. Both found by reading, not by a check.)
-  avif_encode "$xs" "$xsavif" || printf "~"
+  if ! avif_encode "$xs" "$xsavif"; then mark fail "$idx"; printf "✗"; return; fi
+  for file in "$jpg" "$avif" "$smavif" "$xsavif"; do
+    if [ ! -s "$file" ]; then mark fail "$idx"; printf "✗"; return; fi
+  done
+  if ! mv "$jpg" "$avif" "$smavif" "$xsavif" "$DEST/"; then mark fail "$idx"; printf "✗"; return; fi
   mark ok "$idx"; printf "."
 }
 run_parallel thumb_one
@@ -544,14 +525,6 @@ if [ "${REMOTE_RENDER_ONLY:-0}" = "1" ]; then
   echo "phase 3 — R2 uploads skipped (source is already remote)"
 else
   echo "phase 3 — R2 uploads (parallel 4)"
-  upload() {
-    local key="$1" file="$2" ct="$3"
-    if "$WRANGLER" r2 object put "aadhar-photos/$key" --file="$file" --content-type="$ct" --remote >/dev/null 2>&1; then
-      printf "."
-    else
-      printf "✗"
-    fi
-  }
 
 # originals → R2. NB: HIF/HEIF originals are NOT uploaded — they stay local-only
 # (your drive + SSD are the archive); R2 gets their q100 JPG export instead
@@ -578,40 +551,47 @@ prep_original() {
   if "$MOZ_JTRAN" -progressive -copy all -outfile "$out" "$src" 2>/dev/null && [ -s "$out" ]; then
     printf "%s" "$out"
   else
+    # The index reads this staged path if it exists. A rejected partial copy
+    # must not describe an upload that actually sent the untouched source.
+    rm -f "$out"
     printf "%s" "$src"
   fi
 }
 
-PENDING=0
+UPLOADS="$TMP/uploads"
+: > "$UPLOADS"
 while IFS= read -r f; do
-  base=$(basename "$f")
-  stem="${base%.*}"
-  ext_lc=$(echo "${base##*.}" | tr '[:upper:]' '[:lower:]')
-  case "$ext_lc" in
-    heic|heif|hif) continue ;;   # local-only; the q100 JPG export is the R2 copy
+  case "${f##*.}" in
+    [Hh][Ii][Ff]|[Hh][Ee][Ii][Cc]|[Hh][Ee][Ii][Ff]) continue ;;
   esac
-  ( send=$(prep_original "$f" "$PROGDIR/$stem.$ext_lc")
-    upload "${stem}.${ext_lc}" "$send" "image/jpeg" ) &
-  PENDING=$((PENDING+1))
-  if [ $PENDING -ge 4 ]; then wait; PENDING=0; fi
+  printf '%s\n' "$f" >> "$UPLOADS"
 done < "$SOURCES"
-wait
-  echo ""
+for jpg in "$EXPORTS"/*.jpg; do
+  [ -f "$jpg" ] || continue
+  printf '%s\n' "$jpg" >> "$UPLOADS"
+done
 
-# HIF JPG exports (the click-through-friendly companion)
-if [ "$(ls -A "$EXPORTS" 2>/dev/null)" ]; then
-  echo "  HIF JPG exports:"
-  PENDING=0
-  for jpg in "$EXPORTS"/*.jpg; do
-    [ -f "$jpg" ] || continue
-    stem=$(basename "$jpg" .jpg)
-    upload "${stem}.jpg" "$jpg" "image/jpeg" &
-    PENDING=$((PENDING+1))
-    if [ $PENDING -ge 4 ]; then wait; PENDING=0; fi
-  done
-  wait
-  echo ""
-fi
+upload_one() {  # upload_one <file> <index>
+  local f="$1" idx="$2" base stem ext_lc send key
+  base=$(basename "$f"); stem="${base%.*}"
+  ext_lc=$(echo "${base##*.}" | tr '[:upper:]' '[:lower:]')
+  key="aadhar-photos/$stem.$ext_lc"
+  case "$f" in
+    "$EXPORTS/"*) send="$f" ;;  # zenc already writes progressive JPGs
+    *) send=$(prep_original "$f" "$PROGDIR/$stem.$ext_lc") ;;
+  esac
+  if "$WRANGLER" r2 object put "$key" --file="$send" --content-type="image/jpeg" --remote >/dev/null 2>&1; then
+    mark ok "$idx"; printf "."
+  else
+    mark fail "$idx"; printf "✗"
+    echo "error: R2 upload failed: $key" >&2
+  fi
+}
+st_init "$TMP/status3"
+run_parallel upload_one 4 "$UPLOADS"
+echo ""
+echo "  uploaded: $(tally ok)  failed: $(tally fail)"
+reconcile "phase 3"
 fi
 echo ""
 
@@ -752,5 +732,5 @@ node "$PROJECT_DIR/tools/photos/gen-photo-semantics.ts"
 node "$PROJECT_DIR/tools/photos/check-photo-pipeline.ts"
 echo ""
 
-echo "✓ done. deploy with:"
-echo "    bun run deploy:direct"
+echo "✓ photo artifacts generated. Review them and their derivation locks in a PR."
+echo "  release through the site promotion and ramp; see docs/MAINTENANCE.md."

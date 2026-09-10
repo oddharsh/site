@@ -80,7 +80,7 @@ jobs:
           echo "Promoted ${RELEASE_SHA} to ${ref}."
           echo "Cloudflare Workers Builds will now UPLOAD this commit as a Worker version."
           echo "It does NOT move traffic: the deploy command is 'wrangler versions upload'."
-          echo "Ramp it from the workstation with: bun run deploy:promote"
+          echo "Ramp production will canary it at 10%, then wait for approval of the full ramp."
 
       - name: Publish promotion record
         if: always()
@@ -94,15 +94,14 @@ jobs:
             echo "- target: the aadhar-sh Worker (homepage, Lens, coffee, Serendipity)"
             echo "- effect: **uploads a version, moves no traffic**"
             echo ""
-            echo "This promotion is not the end of the release. Workers Builds runs"
-            echo "\`wrangler versions upload\`, so production keeps serving whatever it"
-            echo "was already serving until someone ramps the new version:"
+            echo "Workers Builds uploads the version. Follow the **Ramp production**"
+            echo "workflow for the automatic 10% canary, then inspect the new version"
+            echo "before approving **50% then 100%** in the production-full environment."
             echo ""
+            echo "For the workstation fallback, inspect the target first:"
             echo '```bash'
-            echo "bun run deploy:promote"
+            echo "bun run deploy:promote --dry-run"
             echo '```'
             echo ""
-            echo "Traffic can only be moved from the workstation — GitHub holds no"
-            echo "Cloudflare token that can write, which is the property this whole"
-            echo "release path is built around."
+            echo "See [the release runbook](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/blob/${RELEASE_SHA}/docs/MAINTENANCE.md#cicd-release-path) for ramp, status, and rollback commands."
           } >> "$GITHUB_STEP_SUMMARY"

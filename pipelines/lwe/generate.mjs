@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-// LWE page generator — Phase 1 of the lwe-publish pipeline.
+// LWE page generator.
 //
-//   node pipelines/lwe/generate.mjs page <id>   # specs/<id>.json -> public/lwe/<id>.html
+//   node pipelines/lwe/generate.mjs page <id>   # specs/<id>.json -> src/pages/lwe/<id>.html
 //   node pipelines/lwe/generate.mjs wire         # rewrite the registry-driven regions
-//                                               #   (sitemap urls now; prints buddy + nav blocks)
+//                                               #   + the canonical manifest projections
 //
-// concepts.json is the single source of truth. A page-spec (specs/<id>.json) carries
+// concepts.json owns LWE content metadata; site-manifest.json owns discovery. A page-spec (specs/<id>.json) carries
 // only what is unique to one concept: the conversation, the demos, the disclosure,
 // the reader model, and the understanding check.
 // Everything structural — the window chrome, the messenger shell, the taskbar desktop —
@@ -27,6 +27,7 @@
 //     explicit "show me" is a demo cue. Those moments become {demo:{...}} slots, authored
 //     by hand. The pipeline flags them; a human builds the actual widget.
 
+import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
@@ -35,7 +36,7 @@ import { DESKTOP_CHROME, DESKTOP_TOP } from "../../src/worker/lib/desktop.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..", "..");   // pipelines/<name>/ -> repo root
-const HOLDING = join(ROOT, "src/pages");
+const PAGES = join(ROOT, "src/pages");
 const REGISTRY = JSON.parse(readFileSync(join(HERE, "concepts.json"), "utf8")).concepts;
 const byId = (id) => REGISTRY.find((c) => c.id === id);
 
@@ -189,7 +190,7 @@ function buddyGroup(concepts) {
   // Newest first, which is the order /garage's shelf reads in and the order a
   // returning visitor wants: the buddy they have not seen is at the top. The
   // sort lives HERE rather than in concepts.json because that file is also the
-  // source for the sitemap block, the Run palette and ask.js, none of which care
+  // source for the sitemap block and ask.js, neither of which cares
   // about recency, and because a display order that depends on where somebody
   // appended an entry is the drift this exists to prevent. `lastmod` is the only
   // date the registry carries; git cannot stand in for it, since the whole
@@ -205,10 +206,6 @@ function buddyGroup(concepts) {
         <span class="st on">${c.badge}</span>
       </a></li>`).join("\n");
   return `    <div class="grp">Online <span class="n">· ${online.length}</span></div>\n    <ul class="buddies">\n${items}\n    </ul>`;
-}
-function navBlock(concepts) {
-  return concepts.filter((c) => c.status === "online")
-    .map((c) => `    { label: "lwe · ${c.navLabel}", path: "${c.path}", hint: "${c.navHint}" },`).join("\n");
 }
 // The ask.js CONCEPTS allow-list: only concepts with hasAsk + a grounded corpus.
 // Keeps the include set from drifting (a page ships ask.js only when hasAsk is true).
@@ -243,7 +240,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const [cmd, arg] = process.argv.slice(2);
   if (cmd === "page") {
     const spec = JSON.parse(readFileSync(join(HERE, "specs", `${arg}.json`), "utf8"));
-    const out = join(HOLDING, "lwe", `${arg}.html`);
+    const out = join(PAGES, "lwe", `${arg}.html`);
     const next = pageHtml(spec);
     // REFUSE TO OVERWRITE A PAGE THAT HAS DRIFTED FROM ITS SPEC. Four of the
     // five published pages carry work that exists only in the HTML — dac has a
@@ -268,7 +265,6 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     const wired = [
       injectBetween("public/sitemap.xml", "<!-- generated:lwe:start -->", "<!-- generated:lwe:end -->", sitemapBlock(REGISTRY)),
       injectBetween("src/pages/lwe/index.html", "<!-- generated:buddies:start -->", "<!-- generated:buddies:end -->", buddyGroup(REGISTRY)),
-      injectBetween("src/client/nav-run.js", "// generated:lwe-pages:start", "// generated:lwe-pages:end", navBlock(REGISTRY)),
       injectBetween("public/lwe/ask.js", "// generated:concepts:start", "// generated:concepts:end", conceptsBlock(REGISTRY)),
     ];
     // A skipped target is the failure this script had for months, and it was silent
@@ -278,6 +274,9 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       console.error(`wire: ${wired.filter((ok) => !ok).length} of ${wired.length} target(s) skipped, see above`);
       process.exit(1);
     }
+    // The manifest owns both navigation and agent discovery. Use its writer so
+    // publishing a concept cannot leave the two projections on different inputs.
+    execFileSync(process.execPath, [join(ROOT, "tools/gen-manifest.ts")], { cwd: ROOT, stdio: "inherit" });
   } else {
     console.log("usage: generate.mjs page <id> | generate.mjs wire");
   }

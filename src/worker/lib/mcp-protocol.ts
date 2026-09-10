@@ -1,23 +1,7 @@
-// lib/mcp-protocol.js — the 2026-07-28 wire rules, shared by both MCP servers.
-//
-// This site publishes TWO MCP servers: `/mcp` (mcp.js, the site surface) and
-// `/serendipity/mcp` (serendipity.js, the event pool). They expose completely
-// different tools and share nothing about their data. What they do share is the
-// PROTOCOL: version negotiation, the `_meta` key names, `resultType`, the cache
-// hint fields, and the reserved error codes. That is exactly the kind of thing
-// that must not be implemented twice, because two copies drift and the symptom
-// is one server quietly speaking a dialect no client asked for.
-//
-// SHARING IS SAFE HERE, and it is worth saying why, because the near-identical
-// trace helpers in `lib/trace.js` and `cal/src/trace.ts` are duplicated ON
-// PURPOSE and this looks like the same situation. It is not. cal is duplicated
-// because its Vitest pool boots from `cal/src/index.ts` alone, so a cal ->
-// holding import would make cal untestable without the site tree. Serendipity
-// has no such constraint and already imports `lib/desktop.js` and
-// `lib/crawl.ts`; the serendipity -> src/worker/lib direction is established.
-//
-// Nothing here may import `cloudflare:workers` (gotcha 16): both importers are
-// pulled into contract-tests.mjs under plain node.
+// The wire rules shared by /mcp and /serendipity/mcp: negotiation, validation,
+// CORS and result envelopes. Tool dispatch and data stay with each server.
+// Keep this module free of cloudflare:workers imports: both servers also run
+// in the host-runtime contract suite.
 
 // ── the revisions ───────────────────────────────────────────────────
 // 2026-07-28 deleted the initialize handshake, deleted protocol-level sessions
@@ -29,7 +13,8 @@
 // The legacy list stays because legacy clients have NO fall-forward mechanism.
 // Pointed at a modern-only server they fail outright, with no diagnostic they
 // can surface to a user.
-import { asRecord, asText } from "./parse.ts";
+import { asNumber, asRecord, asText } from "./parse.ts";
+import { sseEvents } from "./sse.ts";
 
 export const MCP_MODERN = "2026-07-28";
 export const MCP_LEGACY = ["2025-06-18", "2025-03-26", "2024-11-05"];
@@ -245,18 +230,75 @@ export function mcpServer({ serverInfo, capabilities, instructions }) {
 // rather than being told its `_meta` is malformed under a revision it was never
 // claiming to follow. The two would be equally "correct" refusals and only one
 // of them is actionable.
-export function mcpGate(msg, request, id, hasId) {
+// mcpRequest suppresses notification replies after applying this gate;
+// null here means the request may proceed.
+function mcpGate(msg, request) {
+  const id = msg.id;
   const declared = declaredVersion(msg);
   if (declared && !MCP_SUPPORTED.includes(declared)) {
-    return hasId ? unsupportedVersion(id, declared) : null;
+    return unsupportedVersion(id, declared);
   }
   const missing = missingRequiredMeta(msg);
-  if (missing) return hasId ? malformedRequest(id, missing) : null;
+  if (missing) return malformedRequest(id, missing);
   const mismatch = headerMismatch(msg, request);
   if (mismatch) {
-    return hasId
-      ? { jsonrpc: "2.0", id, error: { code: ERR_HEADER_MISMATCH, message: mismatch } }
-      : null;
+    return { jsonrpc: "2.0", id, error: { code: ERR_HEADER_MISMATCH, message: mismatch } };
   }
   return null;
+}
+
+export const mcpError = (id, code, message) => ({ jsonrpc: "2.0", id: id ?? null, error: { code, message } });
+
+// Only a valid request without an ID is a notification. Malformed envelopes
+// get Invalid Request with an unknown ID, even when they have no ID member.
+export async function mcpRequest(msg, request, dispatch) {
+  if (asRecord(msg) === null || msg.jsonrpc !== "2.0" || asText(msg.method) === null ||
+    (Object.hasOwn(msg, "id") && msg.id !== null && msg.id !== "" && asText(msg.id) === null && asNumber(msg.id) === null) ||
+    (Object.hasOwn(msg, "params") && asRecord(msg.params) === null && !Array.isArray(msg.params))) {
+    return mcpError(null, -32600, "Invalid Request");
+  }
+  const reply = mcpGate(msg, request) ?? await dispatch(msg);
+  return Object.hasOwn(msg, "id") ? reply : null;
+}
+
+// Preserve useful refusals from JSON-RPC and from plain vendor/OAuth errors.
+export function rpcErrorDetail(payload) {
+  const error = payload && payload.error;
+  const code = Number.isInteger(error && error.code) ? error.code : null;
+  const message = String(
+    (error && error.message)
+    || (payload && payload.error_description)
+    || asText(error)
+    || "",
+  ).trim();
+  if (code !== null) return `${code}: ${message.slice(0, 80) || "no message"}`;
+  if (message) return message.slice(0, 90);
+  try { return JSON.stringify(error).slice(0, 90); } catch { return "an error with no readable message"; }
+}
+
+// A Streamable HTTP response can be JSON or SSE. Select the requested reply,
+// not a notification, server request or another call's result/error. The
+// content type is a hint: some servers send SSE under text/plain.
+export function parseMcpBody(text, contentType, expectedId: string | number) {
+  const type = String(contentType || "").toLowerCase();
+  const body = String(text || "");
+  const streamed = type.includes("text/event-stream") || /^(?:event|data)(?::|$)/m.test(body);
+  const framing = streamed ? "sse" : "json";
+  for (const { data } of streamed ? sseEvents(body) : [{ data: body }]) {
+    let payload;
+    try { payload = JSON.parse(data); }
+    catch {
+      if (!streamed) return { ok: false, detail: `answered ${type.split(";")[0] || "no content-type"}, not JSON` };
+      continue;
+    }
+    const reply = asRecord(payload);
+    if (reply?.jsonrpc === "2.0" && reply.id === expectedId && !("method" in reply)
+      && Object.hasOwn(reply, "result") !== Object.hasOwn(reply, "error")) {
+      return { ok: true, payload, framing };
+    }
+    // A non-RPC JSON refusal is still worth reading, but cannot authorize a
+    // protocol retry or supply a result for the caller to trust.
+    if (!streamed && reply?.error && !reply.jsonrpc) return { ok: false, detail: rpcErrorDetail(reply) };
+  }
+  return { ok: false, detail: `${streamed ? "SSE stream carried" : "answer contained"} no matching JSON-RPC response` };
 }

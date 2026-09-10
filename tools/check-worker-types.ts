@@ -26,9 +26,8 @@ import { ratchet, runScopedTsc } from "./lib/tsc-scope.ts";
 const REPO = dirname(dirname(fileURLToPath(import.meta.url)));
 const TSC = join(REPO, "node_modules", "typescript", "bin", "tsc");
 
-// The three trees config/tsconfig.json holds. cal/src is already clean under the
-// flag (its own program declares strictNullChecks outright), so in practice this
-// ratchets src/worker and serendipity.
+// All three trees run in the site Worker, including transitively imported
+// Serendipity. cal/src is currently clean; its diagnostics remain in scope.
 const OWNED = ["src/worker/", "cal/", "serendipity/"];
 
 const { mine, ownedFiles, byFile } = runScopedTsc({
@@ -47,8 +46,8 @@ if (listed < 60) {
 
 const BASELINE = join(REPO, "config/ts-worker-baseline.json");
 const UPDATE = "bun run typecheck:worker -- --update";
-const { rewritten, problems, owed } = ratchet({
-  baselinePath: BASELINE, byFile, total: mine.length, updateCommand: UPDATE,
+const { rewritten, problems } = ratchet({
+  baselinePath: BASELINE, byFile, updateCommand: UPDATE,
   update: process.argv.includes("--update"),
 });
 
@@ -64,4 +63,4 @@ if (problems.length) {
   console.error(`\ncheck-worker-types: FAILED against config/ts-worker-baseline.json\n  - ${problems.join("\n  - ")}`);
   process.exit(1);
 }
-console.log(`check-worker-types: matches the baseline (${owed} owed)`);
+console.log(`check-worker-types: matches the baseline`);

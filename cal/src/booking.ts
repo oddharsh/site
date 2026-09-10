@@ -7,20 +7,16 @@
 //                         booking. Presence = held; the value is the booking id
 //                         (for debugging). One key PER SLOT, not a shared list.
 //
-// Why per-slot keys instead of the old `index:pending` / `index:confirmed`
-// comma-joined lists: those lists were a single KV key every booking rewrote,
-// so two concurrent writes could clobber each other (the old code flagged this
-// and pointed at Durable Objects as the eventual fix). A slot can only be held
-// once — /book checks availability before holding — so two bookings never write
-// the same held key, and the clobber race is gone without any coordination.
+// Per-slot keys replace shared pending/confirmed indexes, so writes for different
+// slots cannot clobber each other. The per-slot Durable Object in reservation.ts
+// decides which booking owns a slot; these KV keys expose that hold to availability
+// readers. KV alone cannot make the availability check and claim atomic.
 //
 // A held key self-expires ~1 day after its slot ends, so a confirmed booking
 // keeps holding its slot (and counting toward the daily/weekly caps) right up to
 // the event, and even a leaked hold can't shadow availability for a future slot.
 // That also means there's nothing to sweep: the weekly cron is gone (the
 // per-booking BookingWorkflow reclaims abandoned pending slots on timeout).
-
-import { v4 as uuid } from "./uuid.ts";
 
 // The booking record, written to KV and read back by every route that acts on
 // one. Declared so `bun run typecheck` has a shape to enforce: in a .js file
@@ -73,7 +69,7 @@ export type Slot = { start: number; end: number };
 const TTL_BOOKING_DAYS = 90; // booking records expire after 90d for cleanup
 
 export async function createBooking(env, fields: Omit<Booking, "id">): Promise<Booking> {
-  const id = await uuid();
+  const id = crypto.randomUUID().replace(/-/g, "");
   const booking = { id, ...fields };
   await putBooking(env, booking);
   return booking;

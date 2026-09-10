@@ -11,39 +11,16 @@ import {
 } from "./contract-shared.ts";
 
 // ── the TypeScript quarantine ───────────────────────────────────────────────
-// config/ts-migration.json names the Worker modules that were not type-clean
-// when src/worker became TypeScript. Each carries @ts-nocheck. The declaration
-// says the list "may only shrink", and this is what makes that true rather than
-// aspirational: without it, adding @ts-nocheck to a module is a silent opt-out
-// of the checker, which is the one thing the conversion was for.
-test("every @ts-nocheck in the Worker is declared, and every declaration is real", async () => {
-  const declared = JSON.parse(await readFile(new URL("config/ts-migration.json", ROOT), "utf8"));
-  const names = Object.keys(declared.modules);
-
+// The migration quarantine is empty. Keep the restriction directly in source:
+// no Worker module may opt out, and no fixed module count can drift on additions.
+test("every Worker module remains free of ts-nocheck", async () => {
   const workerModules = (await readdir(new URL("src/worker", ROOT), { recursive: true }))
     .filter((rel) => rel.endsWith(".ts"));
-  const actual = [];
+  assert.ok(workerModules.length > 0, "discover Worker source before checking opt-outs");
   for (const rel of workerModules) {
-    if (!rel.endsWith(".ts")) continue;
     const source = await readFile(new URL(`src/worker/${rel}`, ROOT), "utf8");
-    if (/^\/\/ @ts-nocheck\b/m.test(source)) actual.push(`src/worker/${rel}`);
+    assert.doesNotMatch(source, /^\/\/ @ts-nocheck\b/m, `${rel} must not opt out of typechecking`);
   }
-
-  assert.deepEqual(actual.sort(), names.sort(),
-    "the set of modules carrying @ts-nocheck must equal config/ts-migration.json's list — " +
-    "add an entry deliberately, or delete one when you fix a module");
-
-  // The counts are the progress record. A module that is fixed but left in the
-  // list would keep claiming errors it no longer has, so require them positive
-  // and require the totals to agree with the entries.
-  for (const [file, count] of Object.entries(declared.modules)) {
-    assert.ok(Number.isInteger(count) && count > 0, `${file} declares a non-positive error count`);
-  }
-  assert.equal(declared.totals.quarantined, names.length, "totals.quarantined disagrees with the list");
-  assert.equal(declared.totals.worker_modules, workerModules.length, "totals.worker_modules disagrees with the Worker tree");
-  assert.equal(declared.totals.fully_checked, workerModules.length - names.length, "totals.fully_checked disagrees with the Worker tree and quarantine");
-  assert.equal(declared.totals.errors_at_conversion,
-    Object.values(declared.modules).reduce((a, b) => a + b, 0), "totals.errors_at_conversion disagrees with the entries");
 });
 
 test("the TypeScript compiler program includes every Worker module", async () => {
@@ -479,7 +456,7 @@ test("the ramp's error reporter strips wrangler's ANSI colour codes", () => {
 // carry a per-file baseline that can only fall. The list may only
 // GROW: turning the flag off in one of them, or dropping a program from this
 // list while its config still has it, fails here. That is the same mechanism
-// config/ts-migration.json used for the Worker quarantine, pointed the other
+// the completed Worker migration used for its quarantine, pointed the other
 // way — that one could only shrink, this one can only grow.
 //
 // TEXT-BASED on purpose. Proving a program is clean means RUNNING tsc against

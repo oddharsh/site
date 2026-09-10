@@ -34,7 +34,7 @@ decides which one a given file belongs in:
 | `pipelines/` | the page GENERATORS, one directory per section: `content/` (the shared page contract), `garage/`, `lwe/`. These author into `src/pages/`; they are not part of the build. |
 | **`docs/`** | the long-form runbooks: `MAINTENANCE.md`, `PHOTO-PIPELINE.md`, `DEPENDENCIES.md`, `UNDERSTANDING-REVIEW.md`. |
 | `design/` | the Luna design system. `tokens/` and `DESIGN.md` are canonical; the rest is history, and `design/README.md` draws that line. |
-| `migrations/`, `talks/` | D1 SQL for the site Worker, and talk material. |
+| `migrations/` | D1 SQL for the site Worker. |
 
 Three directories now compose the served URL root: `public/` plus `src/client/`
 plus `src/styles/`, merged by `build.ts` into `.build/public`. That is why
@@ -162,7 +162,7 @@ bun run lint
 # actually run on. Each config/tsconfig.*.json header argues its own case.
 # Three of the ten go through a WRAPPER instead of a bare `tsc -p`, because they
 # hold files from two runtimes at once and the imported half is checked against
-# the wrong scope: check-tool-types.mjs (tools, pipelines, talks) filters to the
+# the wrong scope: check-tool-types.mjs (tools, pipelines) filters to the
 # owned trees against a ratchet, check-test-types.mjs does the same for the two
 # node-runtime suites and holds them at zero.
 bun run typecheck
@@ -1335,53 +1335,17 @@ one of them was undocumented until `tools:check` went looking (2026-08-14):
   The error message in that script names the formula rather than the tools and
   is misleading; the binaries are what to go find.
 
-> **The whole list is DECLARED in [`config/tools.json`](config/tools.json) and
-> `bun run tools:check` fails on drift.** It sits outside `infra.json` on
-> purpose: that file declares Cloudflare and GitHub state and diffs it against
-> those APIs, while nothing here is remote and nothing here has an API.
+> Run `bun run tools:check` before a pipeline session. The executable declarations
+> live in [`config/tools.json`](config/tools.json); the
+> [system-tool guide](docs/DEPENDENCIES.md#the-system-binaries-in-configtoolsjson)
+> explains declaration, presence, and version checks, their failure rules, and
+> the difference between an ambient encoder and the pinned grid encoder.
+> Version drift is advisory. Review the selected executable's callers and verify
+> regenerated artifacts before updating a recorded version.
 >
-> The check is tiered the same way `infra:check` is. Its DECLARATION tier reads
-> source text, needs no binary, and runs on every PR: every `for cmd in …` guard,
-> every literal `command -v`, and every `brew install` hint in the shell scripts
-> must have an entry, and both this file and MAINTENANCE.md must name it. Its
-> PRESENCE tier probes the machine and is ADVISORY in CI, because a hosted runner
-> has none of these and is not meant to.
->
-> **A third tier landed 2026-08-24: VERSION, and it is a RECORD rather than an
-> updater.** Presence answers "is avifenc here". The question that costs
-> something is "is it the avifenc that baked the library", because `/i/` is
-> content-addressed: re-encoding under a different encoder mints new URLs,
-> orphans every `a-dict` snapshot naming the old hash, and can leave derived data
-> describing pixels nobody serves, which is gotcha 41 as a check instead of a
-> postmortem. So each tool declares how to ASK its version (there is no
-> convention: `exif-sooc 0.2.0`, `jaq 3.1.1`, `sips-316`, `Version: 1.4.2`,
-> a bare `1.6.0`, and mozjpeg answering on stderr), the seven whose output ships
-> carry `bytes: true` and a `recorded` version, and drift from `recorded` is a
-> NOTICE rather than a failure. For an encoder, "newer" is not "take it": a bump
-> means re-encoding 660 files, re-hashing, and rolling the dictionaries, so the
-> signal is deliberately the local one. `brew outdated` already answers the other
-> question and this does not duplicate it.
->
-> Two of the thirteen report no version at all, and they say so with a reason
-> rather than being skipped. A tool whose declared pattern stops matching FAILS,
-> because a version tier that silently reads nothing is the same rot the floors
-> below exist to catch.
->
-> **`min_version` was declared and unread until the same day, which is this
-> file's own lesson arriving one field further in.** `EXIF_SOOC_MIN=0.2.0` is
-> written out in five shell scripts and `config/tools.json` carried a sixth copy
-> that nothing consulted, so the one place designed to be the single declaration
-> was the only one nobody read. The declaration tier now asserts both directions:
-> every `<TOOL>_MIN=` guard must equal the declared `min_version`, and a declared
-> `min_version` that no script enforces is an error.
->
-> The guard scanner is the load-bearing part, and it is why four prerequisites
-> could stay undocumented. Most of these preconditions are written `for cmd in
-> sips exif-sooc`, so the binary name exists only as a loop word and a grep for the
-> name finds nothing. That is gotcha 29's blind spot in different clothes: a
-> command assembled from list elements is invisible to a search for the assembled
-> form. Each scanner also carries a FLOOR and fails if its match count collapses,
-> since a scanner that matches nothing otherwise reports a pass.
+> Photo writers source `tools/photos/require-exif-sooc.sh` before processing
+> images. The shared guard rejects failed or malformed version probes; callers
+> must still handle errors from each metadata edit.
 
 ### `<picture>` + content-addressed thumbnails
 
@@ -1860,7 +1824,7 @@ near-duplicates ON PURPOSE (gotcha 16). The cal duplication exists because cal's
 suite boots from `cal/src` alone (bun:test over wrangler's harness, see
 `cal/test/harness.ts`), so a cal → holding import would make cal untestable
 without the site tree. Serendipity has no such constraint
-and already imports `lib/desktop.ts` and `lib/crawl.ts`; that direction is
+and already imports `lib/desktop.ts` and `lib/public-fetch.ts`; that direction is
 established. **Check which of those two situations you are in before copying
 either precedent.**
 
@@ -2435,9 +2399,10 @@ The second reason this section used to give, `run_worker_first`'s 100-rule cap, 
 when the eight exact `/lens` rows were folded to `/lens` + `/lens/*` and the config
 dropped to 94. Do not cite it again. Same shape as `cf-garage` owning `/garage/cf/*`.
 
-What it DOES share with the site tree is exactly one thing: the SSRF guard.
-`validateLensTarget` moved from `lens.ts` into `lib/crawl.ts`, beside the
-`privateHostBlocked` floor it wraps, and both Workers import it. A second Worker aiming
+Both Workers share the URL policy and redirect walker in `lib/public-fetch.ts`.
+`validateLensTarget` and the `privateHostBlocked` floor it wraps moved there from
+`lib/crawl.ts` so signing and document parsing can use the same policy without a
+circular dependency. A second Worker aiming
 a visitor-supplied URL at the public internet is the same surface `/lens/fetch` has, and
 two copies of an allowlist pass review on the day they are written. A contract test
 asserts both files import it and neither redefines it.
@@ -2944,11 +2909,11 @@ the existing layers structurally could not reach:
 reference + DON'T-modernize guardrails); [`design/tokens/`](design/tokens/) is the
 canonical token set (fonts, Luna palette, bevels, radii). Pull from those before
 hardcoding any color/font/bevel. Captions = Trebuchet MS, UI/body = Tahoma→Verdana,
-mono = Courier New — those three stacks only. The rest of `design/` is HISTORY,
-not spec: `GREENFIELD.md`, `PORTING.md`, and `explore-bac-map.md` are July-2026
-design passes the site did not converge on, and their byte budgets and file:line
-citations are stale. [`design/README.md`](design/README.md) draws that line; read
-it before treating anything in there as a target.
+mono = Courier New — those three stacks only. The July-2026 design plans
+(`GREENFIELD.md`, `PORTING.md`, `explore-bac-map.md`) were removed on 2026-09-09
+after their budgets and source locations became stale.
+[`design/README.md`](design/README.md) retains the design decisions and explains
+how to recover the plans and their audit from git.
 
 **HARD RULES (strong owner preference):**
 
@@ -3097,103 +3062,19 @@ are installed on macOS, so the fallback path doesn't hit Helvetica/Arial.
 
 ## cal/ — coffee booking module
 
-Custom-built scheduler at `aadhar.sh/coffee`. Replaces Cal.com. Inspired by
-[jry.io/bagel](https://jry.io/bagel). Crediting Jacob Young in the footer.
+The root site Worker serves `cal/src/` at `aadhar.sh/coffee`. Its bindings and
+policy live in root `wrangler.jsonc`; `cal/wrangler.test.toml` is the local test
+fixture. The build stages the module beside the site Worker entrypoint.
 
-**Status: LIVE at aadhar.sh/coffee**, delegated by the root `aadhar-sh` Worker.
-The source remains in `cal/src/` so its booking, calendar, and email policies
-stay readable and testable; `build.ts` stages it beside the holding Worker
-entrypoint. Production secrets (`ICAL_URL`, `RESEND_API_KEY`, and
-`SIGNING_SECRET`) belong to the root Worker. `cal/wrangler.test.toml` is only the
-fixture the suite's harness boots, never a deployment config.
+[cal/README.md](cal/README.md) describes the booking flow, Durable Object slot
+claims, Workflow expiry, test harness, and calendar limitations.
+[MAINTENANCE.md](docs/MAINTENANCE.md#rotate-cals-calendar-or-approval-secret)
+owns the secret-rotation procedure. Cal uses the site's release path.
 
-### Architecture
-
-- Public ICS feed (Google/iCloud) is the read-only source of busy intervals,
-  read via `fetchBusySWR`: a last-good snapshot in KV (`cal:busy`, 5-min
-  freshness, 2s upstream deadline, stale fallback) so a slow/down feed never
-  gates the page. The GET page edge-caches 30s (invalidated on booking action);
-  `/slots` stays live.
-- `generateSlots()` computes bookable slots from working hours config
-- `POST /book` creates a pending booking in KV, emails the host with
-  HMAC-signed approve/decline links (Resend free tier). It **fails closed**: if
-  the calendar snapshot is unavailable or older than 15 min, it 503s rather than
-  book over a real event it can't see (the old code returned `[]` on ICS failure,
-  making every slot look free — a double-booking risk).
-- Host clicks approve → confirmed → `.ics` invite to requester
-- Host clicks decline → polite auto-reply
-- Each pending booking gets its own **BookingWorkflow** (Cloudflare Workflows)
-  expiry timer instead of a weekly cron sweep: it `waitForEvent`s up to
-  `PENDING_TTL_DAYS` for the host's approve/decline (which fire a `host-decision`
-  event to end it early), and on timeout reclaims the slot if it's still pending.
-  The class is defined in `cal/src/workflow.js`, re-exported from the root
-  `_worker.js/index.js`, and bound as `BOOKING_WORKFLOW`. Slots are held via
-  per-slot `held:<start>:<end>` KV keys (no more race-prone shared index).
-
-### Files
-
-```
-cal/
-├── wrangler.test.toml  — test-only KV/vars config the suite's harness boots (not deployed)
-├── package.json
-└── src/
-    ├── index.js        — router, request dispatch, KV state
-    ├── availability.js — ICS parsing, slot generation, working-hours logic
-    ├── booking.js      — pending/confirmed booking CRUD + index
-    ├── email.js        — Resend integration, .ics generation
-    ├── sign.js         — HMAC-SHA256 for approve/decline URL auth
-    ├── templates.js    — XP-themed HTML for all pages (booking, success, confirmed, declined, error)
-    └── uuid.js         — RFC4122 v4 helper
-```
-
-### Tests
-
-`bun run --filter cal-aadhar-sh test`, from the root, or `bun test` inside
-`cal/`. It is `bun:test` over wrangler's `createTestHarness` since 2026-09-02,
-and the split is the whole design: the route handlers, the booking store and
-the email builders run in bun's own process, imported straight from `cal/src`,
-while the KV and Workflow bindings live in a workerd the harness boots from
-`wrangler.test.toml` and hands back as proxies. That is what lets a test stub
-`globalThis.fetch` and read what the worker would have sent to Resend, the
-shape the old in-isolate Vitest suite had, without a Vite chain to reach it.
-
-Two Worker globals are missing on a host and `cal/test/preload.ts` supplies
-both, with the cost stated at each: a virtual `cloudflare:workers` module (an
-empty `WorkflowEntrypoint`, since the real workflow runs inside the harness)
-and an always-miss `caches`, which means the booking page's 30s edge-cache HIT
-path is not exercised. Neither shim lives in `cal/src`, because the source is
-correct for the runtime it ships to.
-
-It replaced `vitest` + `@cloudflare/vitest-pool-workers`, which were 68 of the
-lockfile's 257 packages, the tree's second esbuild, and the one `overrides`
-entry (nanoid, reached only through vite -> postcss). The measurements that
-decided it are in `cal/test/harness.ts`'s header. `cal/` declares no
-dependencies at all now: the harness is the root's wrangler pin, so the tree
-carries exactly one miniflare and one workerd by construction rather than by a
-floor somebody keeps aligned. Its bindings are typed by the same pin, through
-the generated runtime declarations below.
-
-### Required secrets (before deploy)
-
-```bash
-bun install
-bun run wrangler versions secret put -c wrangler.jsonc ICAL_URL        # Google Calendar → "secret ICS"
-bun run wrangler versions secret put -c wrangler.jsonc RESEND_API_KEY  # resend.com, DKIM-verify aadhar.sh
-openssl rand -hex 32 | bun run wrangler versions secret put -c wrangler.jsonc SIGNING_SECRET
-
-# Production still ships through merge -> CI -> production -> Workers Builds.
-# Local fallback, from the repository root only:
-bun run deploy:direct
-```
-
-### Visual notes (XP reskin lives in `cal/src/templates.js`)
-
-- Window chrome matches the homepage (`title-bar`, boxed `_ □ ×` controls)
-- GroupBox panels for "Available slots" + "Your info" (sunken bevel)
-- Slot picker: raised XP buttons that depress + tint blue when selected
-- Form inputs: sunken 3D (dark TL, light BR — opposite of buttons)
-- Banner variants: info / success / warn / error (Outlook-Express style)
-- Status bar at the bottom with `← aadhar.sh · jacob credit · cloudflare workers · tz`
+Run `bun run --filter cal-aadhar-sh test` from the repository root. The suite runs
+route code in Bun and reaches local KV and Workflow bindings through Wrangler's
+harness; see [cal/test/harness.ts](cal/test/harness.ts) and
+[cal/test/preload.ts](cal/test/preload.ts) for its runtime boundaries.
 
 ---
 
@@ -4653,314 +4534,96 @@ bun run deploy:direct
     injection class in workflow code is on you to read for. Grep new workflows for
     `\$\{\{` inside `run:` and route values through `env:` instead.
 
-28. **EVERYTHING BELOW IS THE PRE-ADOPTION RECORD, and the tool it describes was
-    RETIRED on 2026-08-24.** `bun run bun:check` no longer exists. Bun was
-    adopted on 2026-08-20 (gotcha 38), so "still not adopted" is history, and the
-    control died of something narrower: node cannot build this repo at all any
-    more. `lib/link-integrity.ts` parses documents with HTMLRewriter, which is a
-    bun and workerd global, so `node tools/build.ts` dies with `ReferenceError:
-    HTMLRewriter is not defined` and the NODE half of a node-versus-bun diff has
-    no second side. The same line took the nightly dictionary roll down for three
-    nights (#567).
+28. **Bun upgrades must preserve build bytes.** The runtime is pinned in
+    `package.json`'s `packageManager`; `bun run bun:pin` compares a candidate
+    against that exact runtime. Its stable-release, age, dictionary, lockfile,
+    build, and test gates are described in
+    [DEPENDENCIES.md](docs/DEPENDENCIES.md#bun-in-packagemanager) and implemented
+    in `tools/bump-bun-pin.ts`. The nightly `bun-pin.yml` workflow runs them
+    before proposing a change.
 
-    **`bun run bun:pin` is what replaced it**, and it asks the question that
-    replaced this one: whether to move `packageManager` to the bun that shipped
-    this week. Node was the right baseline while adoption was the question. Now
-    that production builds with `bun tools/build.ts`, bun-against-bun is the pair
-    that decides whether a content-addressed URL moves. The byte-identical
-    paragraph below is its gate 5, unchanged and still the bar, and the zstd
-    probe moved to `tools/lib/bun-pin.ts` rather than being rewritten.
+    `/a/` and `/i/` are content-addressed: one differing byte changes a URL and
+    can invalidate dictionaries and CSP hashes. A successful build alone is
+    insufficient. The comparison rejects a baseline runtime that differs from
+    the pin and restores the pinned `.build/` output through `finally` after a
+    candidate build failure; `process.exit()` would skip that restoration.
 
-    Two invariants left with the file and are asserted elsewhere rather than
-    lost. A comparison whose two halves are the same runtime is a green result
-    with no control, which check-bun.ts enforced by refusing to run under bun and
-    bump-bun-pin.ts enforces from the other side by refusing a baseline that is
-    not the pin. And a build comparison must restore `.build/` through a
-    `finally`, since `process.exit()` skips one.
+    `bun:check` was retired on 2026-08-24. Its Node-versus-Bun build comparison
+    no longer has a Node side: `tools/lib/link-integrity.ts` uses HTMLRewriter,
+    which Node does not provide. Use the current Bun-versus-Bun gates instead.
 
-    Keep the rest for the measurements and for the `Response` finding at the
-    end, which is about runtimes rather than about which one this repo runs.
+    The historical adoption trial (2026-08-10, Node 26.7.0 against Bun
+    1.4.0-canary.1+827475e21) produced 1,975 identical files in 14.4s versus
+    7.1s, with 206 Bun tests passing. Its dictionary control measured
+    73 / 24 / 73 bytes for no/right/wrong dictionary.
+    `tools/lib/bun-pin.ts` retains the runnable capability probe.
 
-    **Bun runs this build byte-identically and about twice as fast, and it is
-    still not adopted.** `bun run bun:check` WAS the control, in the same idiom as
-    `kitesurf:check`: it probed the zstd dictionary option, diffed a full node
-    build against a full bun build file by file, and ran the contract suite
-    under `bun test`. Measured 2026-08-10, node v26.7.0 against bun
-    `1.4.0-canary.1+827475e21`:
+    **Keep both runtime test suites.** Bun once rejected a test that reused a
+    response body after `withSecurityHeaders` had locked it; Node's undici
+    accepted the reuse. The test now creates fresh responses.
+    `bun run test` and `bun run test:node` exercise the same contracts under
+    both runtimes. Investigate disagreements without weakening the tests.
 
-    | question | result |
-    |---|---|
-    | zstd honours `dictionary` | yes, 73 none / 24 good / 73 wrong |
-    | build output byte-identical | yes, 1975 files, 0 differing |
-    | wall clock | 14.4s node against 7.1s bun |
-    | contract suite under `bun test` | 206 pass, 0 fail |
+29. **Use the installed Wrangler under Node, without a package-manager lookup.**
+    Tools call `wranglerCommand()` from `tools/lib/wrangler-bin.ts`; Workers
+    Builds calls `.github/deploy-wrangler.sh`. Both name the root's installed
+    Wrangler entry file and select Node. Missing dependencies must fail locally.
+    `npx` and `bun x` can fetch an uninstalled binary; the original control
+    found npx running Wrangler 4.105.0 against a 4.120.0 pin. The old
+    `pnpm exec` path failed when this repo moved to Bun.
 
-    **BYTE-IDENTICAL is the bar, and it is much higher than "the build
-    succeeds".** `/a/` and `/i/` are content-addressed, so a single differing
-    byte mints a new URL, orphans every committed `a-dict` snapshot naming the
-    old hash, and moves the CSP hashes the documents are served under. A build
-    that is 2x faster and one byte different is not a faster build.
+    When auditing spawns, search quoted command tokens as well as shell text.
+    A search for `npx wrangler` missed calls written as
+    `execFile("npx", ["wrangler", ...])`; the same mistake later hid `pnpm`
+    calls when the toolchain moved to Bun. The contract suite enforces the
+    shared runner and rejects package-manager spawns in tools.
 
-    Three things keep it unadopted, and only the first is about bun. The newest
-    STABLE bun is **1.3.14** (2026-05-13), which predates the dictionary fix
-    (oven-sh/bun#34427, merged 2026-07-18) and silently ignores
-    `zstdCompressSync`'s `dictionary`; pinning the build path to a canary trades a
-    correctness bug for an unreleased revision. wrangler, miniflare and workerd
-    are the deploy path AND the route oracle, and they are node-pinned. And the
-    win is seconds on a step CI already spends far longer on in dry-runs.
+    The root's full-traffic fallback is named `deploy:direct` deliberately.
+    Package managers can resolve a shorthand such as `deploy` to a script
+    before their own built-in command. Use the release path documented above;
+    the standalone Reader's `deploy` script publishes only that auxiliary Worker.
 
-    **The failure here would be LOUD, which is worth knowing before this reads
-    scarier than it is.** build.ts already feature-detects the same collapse and
-    throws (search `expected a collapse`), so bun 1.3.14 kills the build rather
-    than shipping no-op deltas. That guard exists because the no-op shipped for a
-    full deploy once. The ENGINE is silent; this build is not.
+    Install policy lives in `bunfig.toml`: `minimumReleaseAge` counts seconds,
+    and the declared window is 24 hours. Name-based exclusions persist across
+    future versions; remove an exception when its reason ends. Approved lifecycle
+    scripts are listed in `package.json`'s `trustedDependencies`. Use frozen installs in CI,
+    including from `lens-reader/` for its separate lockfile and dependencies;
+    Bun needs no `--ignore-workspace` flag there.
 
-    **Bun's spec-strict `Response` found a real defect in our suite**, which is
-    the byproduct worth keeping even if bun is never adopted. `withSecurityHeaders`
-    rebuilds every response as `new Response(response.body, …)`, which per Fetch
-    LOCKS the body it was handed, and one contract test pushed the same four case
-    objects through it twice. Bun threw `Body object should not be disturbed or
-    locked`; node's undici allows it. The assertions were about headers, so the
-    leniency was never load-bearing, and the test now builds its cases fresh per
-    pass. **A suite that passes on one runtime and not another is reporting a
-    fact about the runtime**, so run the other one occasionally even when you have
-    no intention of switching.
+    **Dashboard command changes still require dashboard-first ordering.**
+    `config/infra.json` records the Workers Builds commands, and `infra:check`
+    compares them with the dashboard. Changing the declaration first invents
+    drift that blocks its own required check. Validate a changed command with
+    a non-production branch build, then keep the dashboard and declaration in
+    that order. A local dry-run cannot prove the build image can launch it.
 
-29. **This repo runs pnpm, and the migration turned up four things that bite.**
-    Switched 2026-08-10 after measuring npm, pnpm, bun and all three yarn 4
-    linkers against this tree. Every one built identically and passed the full
-    suite, so the choice came down to cost rather than capability: a second
-    repo's dependencies cost pnpm **4 MB** of real disk against npm's **459 MB**
-    (APFS clones the store, so `du` reports 340 MB and is wrong), and warm
-    installs run 1.50s against 3.71s. Yarn was ruled out on a hard failure rather
-    than a preference — the 4.9.1 that Workers Builds ships cannot install this
-    repo at all, because its builtin TypeScript compat patch expects
-    `lib/_tsc.js` and TypeScript 7 has no such file (controls both ways: TS 5.9.3
-    installs on 4.9.1, TS 7.0.2 installs on 4.18.0). For bun, see gotcha 28.
+30. **A runtime pin does not prove the build image can bootstrap it.** Verify
+    that the image can launch the pinned binary, then read the lockfile that
+    binary writes. A workstation install proves neither. Bun setup and upgrade
+    gates live in `.github/actions/setup-bun/action.yml` and
+    `tools/bump-bun-pin.ts`; the release branch build supplies the image check.
 
-    **`pnpm <script>` runs the script, and that made `deploy` a loaded gun.**
-    The root release script is **`deploy:direct`** now, and the rename is the
-    whole point rather than tidiness. Under npm, reaching a 100% production
-    deploy required the word `run`. Under pnpm, `pnpm deploy` is a plausible
-    shorthand, and it does NOT hit pnpm's builtin `deploy` the way `pnpm deploy
-    --help` in an empty directory implies: a script of the same name wins, so it
-    starts `wrangler deploy` against production. Verified the hard way while
-    testing that assumption. `lens-reader` keeps a plain `deploy` on purpose,
-    since it publishes a demo Worker rather than aadhar.sh.
+    The abandoned pnpm 12 trial illustrates the two distinct failures. In the
+    2026-08-10/11 controls, pnpm 10.11.1's self-switch to 12.0.0-rc.3 failed
+    with `ENOEXEC`: it tried to execute the placeholder that pnpm 12's
+    postinstall was meant to replace with a native binary. The old reader also
+    rejected the new lockfile's `---` separator despite an unchanged
+    `lockfileVersion: '9.0'`. Fixing that separator would not fix the earlier
+    launch failure. Both were measured locally; the matching cause of two
+    failed Workers Builds runs was inferred, not observed in their logs.
 
-    **A package published in the last 24 hours is REFUSED**, by
-    `minimumReleaseAge: 1440` in `pnpm-workspace.yaml`. It is pnpm 11's default
-    and is written down explicitly so it stays a decision. The bill arrives in CI
-    rather than locally, because `--frozen-lockfile` re-checks the policy against
-    the COMMITTED lockfile: a dependabot PR opened minutes after a release fails
-    to INSTALL until the package turns a day old or lands in
-    `minimumReleaseAgeExclude`. `pnpm install` regenerates that list. It also
-    fires on any job that installs an OLDER commit — `perf-diff.yml` builds the
-    merge base using the workflow from your branch, so a base predating the
-    exclude list gets the policy without it. Self-resolving once this is on main,
-    and the general shape is that a new policy against an old tree fails on the
-    gap between them.
+    Historical install measurements from 2026-08-10, four runs each, minimum
+    steady-state time:
 
-    **It also fires on any job that installs an OLDER commit**, which is a case
-    worth knowing before you go debugging one. `perf-diff.yml` checks out the
-    merge base and builds it, using the WORKFLOW from your branch against the
-    TREE from the base, so a commit predating `minimumReleaseAgeExclude` gets
-    the policy with no exclude list and fails. That was self-resolving for the
-    pnpm migration itself (once this landed on main, every merge base carried
-    the list), and it generalises: a workflow that builds an old tree with a new
-    policy will fail on the gap between them, and the fix belongs in the job
-    rather than in the policy. `perf-diff` gates nothing, so it was left to
-    resolve itself; `validate` would not have that luxury.
-
-    **`allowBuilds` is pnpm 11 only, and the build image runs pnpm 10.11.1.**
-    pnpm 10 spells the same idea `onlyBuiltDependencies` and ignores this key
-    silently, so `esbuild` and `workerd` postinstalls do not run there. Harmless
-    today, because every native dependency here ships its platform binary through
-    `optionalDependencies` and passes its probe with the postinstall blocked
-    (measured; npm 11.19 blocks them too and always did). It stops being harmless
-    the day something genuinely needs its build step.
-
-    **`npx` is `pnpm exec` now, and the reason is the registry.** `npx` FETCHES
-    what it cannot resolve locally — pointed at a nonexistent binary it reached
-    `registry.npmjs.org` even under `--no-install`, while `pnpm exec` failed
-    locally with no network call. On a repo that pins Wrangler exactly and runs
-    `check-wrangler` on every PR to enforce one version, a command that will
-    silently download some other one is a hole in that guarantee. **`pnpm dlx` is
-    npx's true twin and is the WRONG tool here**: all 30 call sites were `npx
-    wrangler`, wrangler is a pinned devDependency, and `dlx` would fetch from the
-    registry and ignore the pin. Use `dlx` only for something genuinely not in
-    `package.json`.
-
-    **"all 30 call sites" was wrong, and EIGHT survived in `scripts/` until
-    2026-08-12.** `check-checkpoints.mjs`, `deploy-promote.mjs`, `lens-webmcp.mjs`
-    (x2), `perf-budget.mjs` (x2), `perf-snapshot.mjs` and `release-status.mjs` each
-    spawned `execFile("npx", ["wrangler", …])`, which the original sweep missed
-    because it read as a STRING ARGUMENT rather than a shell command, so no grep
-    for `npx wrangler` as a phrase would find it. That is the same blind spot the
-    `holding/` rename hit from the other direction: a path or command assembled
-    from array elements is invisible to a search for the assembled form.
-
-    The worst of the eight was `deploy-promote.mjs`, so **the wrangler that moved
-    production traffic depended on how the ramp was invoked**: under `pnpm run` it
-    got the pin, and from a tree with no `node_modules` it got whatever npx had
-    cached (measured: 4.105.0 against a pinned 4.120.0). All eight are `pnpm exec`
-    now and were each exercised afterwards, since a spawn failure here surfaces as
-    a missing binary at the worst moment rather than at review.
-
-    The general rule the sweep needed: grep for `"npx"` as a quoted token, not for
-    `npx <binary>` as a phrase.
-
-    **The sweep finished on 2026-08-14, and the last holdouts were the two
-    Workers Builds dashboard commands.** This paragraph used to say all three
-    `npx` strings would deliberately survive, on the reasoning that `npx
-    wrangler` was measured resolving pnpm's `node_modules/.bin` so the swap
-    bought nothing. That reasoning was incomplete: npx FETCHES what it cannot
-    resolve locally, so a build image whose install left no linked wrangler
-    would publish production with a registry download and say nothing, which is
-    precisely what this gotcha's own sweep measured in `deploy-promote.mjs`
-    (4.105.0 against a pinned 4.120.0). `pnpm exec` turns that silent
-    wrong-version publish into a loud failure. Both commands moved ONCE MORE
-    when the tree became bun, because `pnpm exec` reads `packageManager` and
-    refuses on a bun tree outright: they are `bash .github/deploy-wrangler.sh
-    versions upload` now, and that wrapper runs the pinned entry file under node
-    and fetches nothing, which is the same property `pnpm exec` was picked for.
-
-    **The ORDER survives the migration and is the part to keep.** Those two
-    strings in `infra.json`, plus the mirrored copies in `wrangler.jsonc` and
-    `check-infra.mjs`, RECORD what is typed into the Cloudflare dashboard rather
-    than commands this repo runs. `check-infra.mjs` compares them against the
-    live values with an exact string match, and `validate` is a required check,
-    so editing this file first fails on drift it invented itself and blocks its
-    own merge. **Dashboard FIRST, strings second, every time.**
-
-    **What a workstation cannot check here is whether the Workers Builds deploy
-    shell can run the command at all**, since `pnpm exec` dry-running clean
-    locally says nothing about that image. A branch build is the proof, which is
-    why the Non-production branch deploy command is the right place to stage any
-    future change to these two: it is the only trigger whose failure costs no
-    release.
-
-    **`lens-reader` NEEDED `pnpm install --ignore-workspace`, and under bun it
-    needs nothing.** A bare `bun install` in that directory resolves its own
-    `package.json` and creates `lens-reader/node_modules`, which is what CI runs;
-    do not add a flag looking for parity with the era below, since the flag pnpm
-    wanted does not exist here. The pnpm behaviour, kept because the reason the
-    directory sits outside the workspace has not changed: it deliberately
-    stays out of the workspace (readability + linkedom are megabytes that only that
-    Worker bundles), and under pnpm a bare `pnpm install` inside it walks UP to
-    the root `pnpm-workspace.yaml`, installs the five workspace projects, and
-    never creates `lens-reader/node_modules` at all. Its tests then die on
-    `ERR_MODULE_NOT_FOUND` with a `node_modules missing` warning as the only
-    clue. npm simply installed the local `package.json`, so this is a behaviour
-    change rather than a misconfiguration, and any future standalone project
-    inside this tree inherits it.
-
-    One more, verified rather than assumed: `pnpm import` does not carry
-    `overrides` into the lockfile, so the first `--frozen-lockfile` install after
-    adding one fails with `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH` until a single
-    non-frozen install bakes it in. That is a one-time step and the error names
-    the fix.
-
-30. **pnpm 12 writes a lockfile pnpm 10 cannot read, and the SELF-SWITCH is the
-    only thing between that and a broken release.** Measured 2026-08-10 against
-    `12.0.0-rc.3`, kept as draft #309 rather than merged. The pin here is
-    **11.21.0**.
-
-    Everything in this repo works under 12: `--frozen-lockfile` installs clean,
-    the contract suite is 206/206, typecheck exits 0, and the build is
-    BYTE-IDENTICAL to the pnpm 11 baseline across all 1975 files. What fails is
-    an older pnpm reading what it writes. pnpm 12 prepends a `---` YAML document
-    separator, and **pnpm 10.11.1, the version the Workers Builds image runs**,
-    refuses it outright:
-
-    ```
-    ERR_PNPM_BROKEN_LOCKFILE  The lockfile at ".../pnpm-lock.yaml" is broken:
-    expected a single document in the stream, but found more
-    ```
-
-    `lockfileVersion` STAYS `'9.0'`, so this is the separator alone rather than a
-    schema bump, and one upstream line could retire the entire objection.
-
-    **This note first said production would still build, because pnpm reads
-    `packageManager` before it opens the lockfile and self-switches to the
-    pinned version. That was wrong, and the correction is the whole finding:
-    THE SELF-SWITCH IS WHAT BREAKS.** Measured 2026-08-11 by running the build
-    image's own path, pnpm 10.11.1 with self-switching left at its default ON:
-
-    ```
-    ERROR  Failed to switch pnpm to v12.0.0-rc.3. Looks like pnpm CLI is
-    missing at ".../pnpm/12.0.0-rc.3/bin" or is incorrect
-    spawnSync .../pnpm/12.0.0-rc.3/bin/pnpm ENOEXEC
-    ```
-
-    The file it tries to exec is a PLACEHOLDER: *"This is a placeholder. pnpm's
-    native binary replaces this file during installation (see ./install.js)."*
-    pnpm 12 ships its CLI as a per-platform native executable that a postinstall
-    step swaps in, where pnpm 11's equivalent is an ordinary
-    `#!/usr/bin/env node` script. So the older pnpm downloads the newer one,
-    finds text with no shebang, and dies before it ever reads the lockfile.
-
-    **The lockfile incompatibility above is therefore SECOND-ORDER.** It is real,
-    and nothing reaches it. Fixing the `---` separator upstream would not make
-    this work.
-
-    **It is also gotcha 29's `allowBuilds` warning coming due.** That note records
-    the key as pnpm 11 only, silently ignored by the pnpm 10 the build image
-    runs, and ends by saying it stops being harmless the day something genuinely
-    needs its build step. pnpm 12 is that day, and the something is pnpm itself.
-    Two notes filed separately turn out to describe one failure.
-
-    Scope of the claim, since the distinction matters. The ENOEXEC, the
-    placeholder, and the pnpm 11 contrast are all measured locally. That Workers
-    Builds hits the SAME thing is inference: its log needs dashboard access this
-    environment does not have. What is measured about production is that two
-    builds of the pnpm 12 branch failed while `validate` passed on both, and the
-    second ran with rc.3 at 38h, which rules out the `minimumReleaseAge` floor
-    that was the other candidate.
-
-    The general rule outlives the instance, and it is wider than this note drew
-    it at first: **check that the BUILD IMAGE can RUN the version you pin, and
-    then that it can READ what that version writes.** Both are interchange
-    surfaces between two machines on different versions, the handoff comes
-    first, and "it installs here" tests neither of them. Pinning
-    `packageManager` looks like it removes the version-skew problem and actually
-    moves it one layer down, into whether the old binary can launch the new one.
-
-    **What waiting costs is worth writing down, because it is not nothing.**
-    Benchmarked on this repo 2026-08-10, four runs each, steady state (the
-    minimum, since pnpm 11 spanned 5.9-14.0s while the others held within 0.3s):
-
-    | | cold | warm | no-op |
+    | runtime | cold | warm | no-op |
     |---|--:|--:|--:|
-    | pnpm 11.21.0 | 20.0s | **5.8s** | 1.09s |
-    | pnpm 12.0.0-rc.3 | 18.2s | **2.0s** | 0.44s |
-    | bun 1.4.0-canary | **9.1s** | **1.8s** | 0.14s |
+    | pnpm 11.21.0 | 20.0s | 5.8s | 1.09s |
+    | pnpm 12.0.0-rc.3 | 18.2s | 2.0s | 0.44s |
+    | Bun 1.4.0-canary | 9.1s | 1.8s | 0.14s |
 
-    The warm install is the number that matters, since a populated store with a
-    deleted `node_modules` is what a branch switch produces, and **pnpm 12 is
-    about 2.9x faster there**, which puts it within noise of bun. That is a
-    better argument for 12 than anything in its release notes, and it is an
-    argument for going the day it ships rather than for going now.
-
-    Two things that benchmark cannot tell you, both worth knowing before rerunning
-    it. Bun is not doing the same job: it resolves from `package.json` and writes
-    its own `bun.lock` instead of installing `pnpm-lock.yaml` (scope was checked
-    and does match, same four workspace projects, 9 top-level dirs either way).
-    And **disk figures are deliberately absent**, because `du` reported 479 MB
-    against 356 MB and both are junk for the reason gotcha 29 already records:
-    APFS clones the store, so per-file accounting double-counts. Measuring that
-    honestly needs free-space deltas.
-
-    Two smaller notes. pnpm 12 adds `packageManagerDependencies`, pinning the
-    package manager itself with per-platform binaries and integrity hashes,
-    which is a real improvement and is also what makes the lockfile
-    self-referential. And this repo's own `minimumReleaseAge: 1440` BLOCKED the
-    first fetch of rc.3 for being thirty minutes too young, which is gotcha 29's
-    policy doing precisely its job.
-
-    The 11.20.0 → 11.21.0 bump that accompanies this note changes no lockfile
-    byte and no build byte, which is the contrast worth keeping: a patch bump
-    inside a major is free here, and the major is not.
+    Bun resolved its own lockfile, so this was not a test of reading pnpm's
+    format. APFS clones also make per-file `du` totals unsuitable for comparing
+    install disk cost; use free-space deltas.
 
 31. **A rule in `_headers` does not OVERRIDE a glob it sits above, it COMBINES
     with it, and for `Cache-Control` that ships a malformed header.** Cloudflare
@@ -5480,8 +5143,8 @@ bun run deploy:direct
 
     It then does no work, while the byte-identical call under node returns a CPU
     profile. Meanwhile `deploy --dry-run` under bun returns a perfectly correct
-    bundle, and the production deploy through `.github/deploy-wrangler.sh` runs
-    wrangler under bun and succeeds. So a spot check passes and one subcommand
+    bundle. The production upload wrapper, `.github/deploy-wrangler.sh`,
+    runs Wrangler under Node and refuses to fall back to Bun. So a spot check passes and one subcommand
     silently stops measuring. `tools/lib/wrangler-bin.ts` names node for every
     tool, and a contract test pins it.
 
@@ -5856,11 +5519,8 @@ bun run deploy:direct
     the SOOC originals, the og cards capture production). Hashing inputs works on
     all of them for the cost of reading 15 MB.
 
-    The baseline was VERIFIED rather than assumed, which is the half worth
-    copying. `tools.json`'s `recorded` versions are honest about being an observed
-    starting point rather than a reconstruction, and a digest recorded the same
-    way would be a claim nobody had checked. So before recording anything, the
-    library was re-baked from the committed JPEG tiers with `zenc histogram` and
+    Before recording the initial histogram digest, the library was re-baked
+    from the committed JPEG tiers with `zenc histogram` and
     packed through the exported `packHistogram`: **165 of 165 stems byte-identical,
     42,240 bins, zero drift.** Both failure shapes were then run as controls, since
     a check that has never gone red is decoration: perturbing one JPEG names it

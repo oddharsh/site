@@ -31,6 +31,7 @@ import {
 } from "./contract-shared.ts";
 import { imageCompare, photoRecipe } from "../src/worker/image-tools.ts";
 import { buildImageFingerprints } from "./lib/photo-indexes.ts";
+import { createHash } from "node:crypto";
 
 // ── /lens/browser?do=<recipe> — interaction recipes ────────────────────────
 // The feature runs JavaScript inside somebody else's page. Almost every test
@@ -597,31 +598,48 @@ test("site MCP image workbench returns an image content block and exact receipt"
   assert.equal(body.result.structuredContent.engine, "cloudflare-images");
   assert.equal(body.result.content[1].type, "image");
   assert.equal(body.result.content[1].mimeType, "image/avif");
+  const bytes = Buffer.from(body.result.content[1].data, "base64");
+  assert.deepEqual(JSON.parse(bytes.toString()), {
+    input: 5, options: { width: 600, height: 600, fit: "cover" }, output: { format: "image/avif", quality: 84 },
+  });
+  assert.equal(body.result.structuredContent.output.bytes, bytes.byteLength);
+  assert.equal(body.result.structuredContent.output.sha256, createHash("sha256").update(bytes).digest("hex"));
 });
 
 test("image_compare encodes independent formats in one binding latency window", async () => {
   let active = 0;
   let peak = 0;
+  // All byte values, across the old 32 KiB chunk boundary and all padding cases.
+  const formats = ["avif", "webp", "jpeg"];
+  const encoded = Uint8Array.from({ length: 0x8000 + 2 }, (_, i) => i % 256);
+  const bytesFor = (format) => encoded.subarray(0, 0x8000 + formats.indexOf(format));
   const env = { IMAGES: {
     async info(bytes) { return { format: "jpeg", width: 1, height: 1, fileSize: bytes.byteLength }; },
     input() {
       return {
         transform() { return this; },
-        output(options) { return { response: async () => {
+        async output(options) {
           active++;
           peak = Math.max(peak, active);
           await new Promise((resolve) => setTimeout(resolve, 10));
           active--;
-          return new Response(options.format, { headers: { "content-type": options.format } });
-        } }; },
+          return { response: () => new Response(bytesFor(options.format.replace("image/", "")), { headers: { "content-type": options.format } }) };
+        },
       };
     },
   } };
 
-  const result = await imageCompare({ image_data: "aGVsbG8=", formats: ["avif", "webp", "jpeg"] }, env);
+  const result = await imageCompare({ image_data: "aGVsbG8=", formats }, env);
   assert.ok("_mcp" in result);
   assert.equal(result._mcp.structured.variants.length, 3);
   assert.equal(peak, 3, "all three Images pipelines should overlap");
+  for (const [i, format] of formats.entries()) {
+    const bytes = bytesFor(format);
+    const content = result._mcp.content[i + 1];
+    assert.equal(content.type, "image");
+    assert.equal(content.data, Buffer.from(bytes).toString("base64"));
+    assert.equal(result._mcp.structured.variants[i].sha256, createHash("sha256").update(bytes).digest("hex"));
+  }
 });
 
 test("photo_recipe only claims exact archive identities", async () => {

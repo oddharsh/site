@@ -163,6 +163,34 @@ test("read publishes Markdown from Readability's finished article node", async (
   }
 });
 
+test("Reader validates redirect hops before fetching and preserves the final URL", async () => {
+  const original = globalThis.fetch;
+  try {
+    for (const target of ["http://169.254.169.254/private", "https://example.org/article"]) {
+      const seen = [];
+      globalThis.fetch = /** @type {typeof fetch} */ (/** @type {unknown} */ (async (url, init) => {
+        seen.push(String(url));
+        if (String(url) === "https://example.com/start") {
+          if (init.redirect === "manual") return new Response(null, { status: 302, headers: { location: target } });
+          seen.push(target); // model the request automatic following makes
+        }
+        const response = new Response("fixture", { headers: { "content-type": "text/plain" } });
+        Object.defineProperty(response, "url", { value: target });
+        return response;
+      }));
+      if (target.startsWith("http:")) {
+        await assert.rejects(read("https://example.com/start"), (error) => error instanceof ReaderError && /will not follow/.test(error.message));
+        assert.deepEqual(seen, ["https://example.com/start"], "refusal must precede the private request");
+      } else {
+        const result = await read("https://example.com/start");
+        assert.equal(result.finalUrl, target);
+        assert.equal(result.skipped, "not-html");
+        assert.deepEqual(seen, ["https://example.com/start", target]);
+      }
+    }
+  } finally { globalThis.fetch = original; }
+});
+
 test("the network deadline aborts a body that stalls after successful headers", async () => {
   const originalFetch = globalThis.fetch;
   const originalSetTimeout = globalThis.setTimeout;

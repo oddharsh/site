@@ -1,21 +1,9 @@
-// The external binaries the photo and encoding pipelines shell out to.
-//
-// Two tiers, split on what the environment can reach, the same way infra:check
-// splits on what its credential can reach:
-//
-//   1. DECLARATION, from source text alone. No binary has to exist, so this runs
-//      on every PR and on a fresh Linux runner. It is the tier that catches the
-//      bug this script was written for: a script acquiring a prerequisite that
-//      no documentation mentions.
-//   2. PRESENCE, by probing the machine. Only a workstation can pass this, so it
-//      degrades to a report in CI rather than a failure.
-//
-// The scanners in tier 1 read shell source, which is exactly the fragile thing
-// CLAUDE.md keeps warning about, so two rules apply to every one of them. They
-// match a BOUNDED set of shapes rather than trying to understand shell. And each
-// one carries a floor: a scanner that suddenly matches nothing reports a pass
-// while checking nothing, which is how the Markdown-twin test went green for
-// months on the wrong field names.
+// Check declared photo-tool prerequisites in three tiers:
+// - Declaration: bounded shell patterns, documentation, callers, and minimums.
+// - Presence: missing required binaries fail locally and are advisory in CI.
+// - Version: unreadable versions/minimum violations fail; drift is advisory.
+// Scanner floors catch lost matches. This is not a shell interpreter or a
+// reconstruction of which executable produced each committed artifact.
 import { readFile, readdir, access } from "node:fs/promises";
 import { constants as fsConstants } from "node:fs";
 import { spawnSync } from "node:child_process";
@@ -31,7 +19,8 @@ const IN_CI = Boolean(process.env.CI) && !STRICT;
 // edits never trip them and a scanner that stops matching always does.
 const FLOOR_GUARD_LISTS = 4;
 const FLOOR_BREW_HINTS = 4;
-const FLOOR_MIN_GUARDS = 5;
+// The five photo writers now source one shared minimum-version guard.
+const FLOOR_MIN_GUARDS = 1;
 
 /** One entry of config/tools.json. Declared rather than inferred from JSON.parse,
  *  which hands back `any` and takes every downstream field with it. */
@@ -197,13 +186,6 @@ for (const tool of tools) {
 
 // ── tier 1d: every `<TOOL>_MIN=` guard agrees with the declaration ───────────
 //
-// THE LIST WAS CONSOLIDATED HERE AND THE VERSION WAS NOT. `EXIF_SOOC_MIN=0.2.0`
-// is written out in five shell scripts, config/tools.json carries a sixth copy
-// as `min_version`, and until this scanner nothing read that field at all: the
-// one place designed to be the single declaration was the only one nobody
-// consulted. That is the same failure the $comment at the top of tools.json
-// says the file was created to fix, one field further in.
-//
 // The shape is `<NAME>_MIN=<version>` on its own line, and the tool it governs
 // is the name lowercased with underscores as dashes, so EXIF_SOOC_MIN governs
 // exif-sooc. Bounded, like every other scanner here, and floored for the same
@@ -284,19 +266,8 @@ for (const tool of tools) {
 
 // ── tier 3: version, and what the version DECIDES ────────────────────────────
 //
-// The tier the other two could not reach. Presence answers "is avifenc here",
-// and the question that actually costs something is "is it the avifenc that
-// baked the library". `/i/` is content-addressed, so re-encoding under a
-// different encoder mints new URLs, orphans every a-dict snapshot naming the
-// old hash, and can leave derived data describing pixels nobody serves, which
-// is gotcha 41 written down as a check instead of a postmortem.
-//
-// So this is a RECORD rather than an updater, and that is deliberate. For an
-// encoder whose output ships, "newer" is not "take it": a bump means re-encoding
-// 632 files, re-hashing them, and rolling the dictionaries. `brew outdated`
-// already answers whether something newer exists. What nothing answered until
-// now is whether the binary on this machine is the one the committed bytes came
-// from, and that question only has a local answer.
+// Compare the executable actually found with its declared record. Callers may
+// select another build, so drift here does not identify which artifacts changed.
 const versionErrors: string[] = [];
 const versionNotices: string[] = [];
 const versionLines: string[] = [];
@@ -380,8 +351,7 @@ for (const [bin, where] of found) {
   }
   if (tool.bytes && tool.recorded && tool.recorded !== version) {
     versionNotices.push(
-      `${bin} is ${version} and the committed artifacts are recorded against ${tool.recorded}. ` +
-        `Re-running the pipeline now encodes under a different ${bin} from the rest of the library.`,
+      `${bin} at ${where} reports ${version}; config/tools.json records ${tool.recorded}.`,
     );
     marks.push(`RECORDED ${tool.recorded}`);
   }
@@ -410,11 +380,10 @@ if (versionErrors.length) {
   process.exit(1);
 }
 if (versionNotices.length) {
-  console.log("\nversion: the recorded provenance has drifted.");
+  console.log("\nversion: reported versions differ from the recorded baselines.");
   for (const n of versionNotices) console.log(`  - ${n}`);
-  console.log("  This is a NOTICE rather than a failure: a newer encoder is normal, and taking it");
-  console.log("  is a deliberate job (re-encode, re-hash, `bun run dict:roll`), not a side effect.");
-  console.log("  Update `recorded` in config/tools.json in the commit that re-encodes.");
+  console.log("  Advisory: review the callers that select these executables before regenerating artifacts.");
+  console.log("  Verify affected outputs and derivations before updating `recorded` in config/tools.json.");
 }
 
 if (missing.length === 0) {

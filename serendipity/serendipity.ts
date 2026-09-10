@@ -1,16 +1,6 @@
-// serendipity.js — "Serendipity, collective edition" rebuilt the aadhar.sh way:
-// one self-contained Cloudflare-Worker module, server-rendered handwritten HTML
-// with inline CSS, over Cloudflare D1 (env.SERENDIPITY_DB). Public read surface:
-// "what events are good and who's going." Reached from _worker.js route() via:
-//   if (path === "/serendipity" || path.startsWith("/serendipity/"))
-//     return handleSerendipity(request, env, ctx);
-//
-// Self-contained on purpose (own Luna chrome, own helpers) so it lifts out into
-// its own site later by flipping PREFIX to "".
-//
-// Phase 1: read-only HTML (dashboard, event detail, contribute/config page).
-// Phase 2 adds cookie-paste + sync + enrich (form POST → 302). Phase 3 adds the
-// /serendipity/mcp JSON-RPC tool surface over the same query layer below.
+// Serendipity serves event pages and MCP tools over env.SERENDIPITY_DB.
+// The root site Worker dispatches /serendipity/* here. Scheduled sync and
+// secret-gated actions update the pool; HTML and MCP share the query layer.
 
 const PREFIX = "/serendipity";
 
@@ -21,22 +11,16 @@ const PREFIX = "/serendipity";
 // at all, and everyone else got a shell pop. Now the markup is in the document
 // and nav.js only wires behavior, same as every other page.
 import { DESKTOP_CHROME, DESKTOP_TOP } from "../src/worker/lib/desktop.ts";
-import { privateHostBlocked } from "../src/worker/lib/crawl.ts";
+import { privateHostBlocked } from "../src/worker/lib/public-fetch.ts";
+import { esc } from "../src/worker/lib/http.ts";
 import { SUBREQUEST_CAP_FREE, createBudget, isSubrequestLimit } from "../src/worker/lib/budget.ts";
 import type { Budget } from "../src/worker/lib/budget.ts";
-import { CACHE_EMPTY, CACHE_STATIC, mcpGate, mcpHttpStatus, mcpServer } from "../src/worker/lib/mcp-protocol.ts";
+import { CACHE_EMPTY, CACHE_STATIC, mcpCorsHeaders, mcpError, mcpHttpStatus, mcpRequest, mcpServer } from "../src/worker/lib/mcp-protocol.ts";
 import { mcpTool } from "../src/worker/lib/mcp-tools.ts";
 import { previewToolRefusal } from "../src/worker/lib/preview.ts";
 import { asRecord, asText } from "../src/worker/lib/parse.ts";
 
 // ── tiny helpers ────────────────────────────────────────────────────────────
-const esc = (v) =>
-  String(v == null ? "" : v).replace(/[&<>"']/g, (c) =>
-    // The regex can only produce these five, so the lookup is total. The
-    // annotation is what says so; without it the literal has no index
-    // signature and `[c]` reads as possibly undefined.
-    (({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" } as Record<string, string>)[c]));
-
 const html = (status, body) =>
   new Response(body, { status, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
 
@@ -127,7 +111,7 @@ function readUid(request) {
 function mintUid() {
   const b = new Uint8Array(24);
   crypto.getRandomValues(b);
-  return Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
+  return b.toHex();
 }
 function uidCookie(uid) {
   return `${UID_COOKIE}=${uid}; Path=${PREFIX}; HttpOnly; Secure; SameSite=Lax; Max-Age=63072000`;
@@ -846,23 +830,9 @@ async function fetchMyEvents(auth, selfId) {
 // until 2026-08-21: one 1,932-person event costs 20 fetches at 100 a page, and
 // seven past events had parked on "Too many subrequests" because of it. The
 // sibling fetchMyEvents has carried page caps for exactly this reason all along.
-// The invocation-wide fetch allowance the sweep paces itself against. One
-// ledger is threaded through every roster walk in a tick so they draw on the
-// same pool.
-//
-// This was a local `{ left: number, spent: number }` mutated in place until it
-// moved onto lib/budget.ts. Two things came with the move and neither was
-// available to the hand-rolled version: the cap is declared ONCE rather than
-// typed out here and in rn.ts, and a ceiling that arrives while the ledger
-// still shows headroom is recorded as an overrun instead of read as an ordinary
-// exhaustion. The second matters because this file cannot see the subrequests
-// spent by the rest of the invocation, so its own count has always been a lower
-// bound and nothing said so.
-type FetchBudget = Budget;
-
 export async function fetchEventGuests(
   eventId, ticketKey, auth,
-  opts: { budget?: FetchBudget | null, cursor?: string | null } = {},
+  opts: { budget?: Budget | null, cursor?: string | null } = {},
 ) {
   const budget = opts.budget || null;
   const all: any[] = []; let cursor = opts.cursor || null;
@@ -1184,11 +1154,6 @@ async function handleAddEvent(request, env, d, uid) {
 
 const GUEST_SYNC_KEY = "serendipity_guest_sync_";
 
-// One mutable counter per scheduled invocation, threaded through the roster
-// sweep. A plain object rather than a closure so a caller can read `spent`
-// afterwards and put it on the log line.
-export function fetchBudget(max) { return createBudget(max); }
-
 // Cancellation pruning is only correct when this pass saw the ENTIRE roster in
 // one invocation. `done` alone is not enough: a pass that RESUMED from a cursor
 // also ends done while holding only the tail. Exported for the same reason
@@ -1234,7 +1199,7 @@ async function markGuestSync(d, eventId, value) {
 // Sync one event's guest list (batched writes), paced by the invocation's fetch
 // budget. Returns {synced,...}, {error}, or {skipped} when there was no budget
 // left to try. A skip deliberately writes NO marker: see the catch below.
-async function syncGuests(d, eventId, userKey, cookiesJson, budget: FetchBudget | null = null) {
+async function syncGuests(d, eventId, userKey, cookiesJson, budget: Budget | null = null) {
   const jar = cookieJar(cookiesJson);
   if (!jar || !jar.header()) return { error: "bad cookie json" };
   // Ahead of the row lookup, so a skip costs nothing at all.
@@ -1517,7 +1482,7 @@ export async function cronSerendipity(env) {
     descriptions: any, enrich?: any,
   } = { events: [], guests: [], skipped: [], descriptions: null };
   // One budget for the whole sweep, so no single roster can spend the tick.
-  const budget = fetchBudget(guestSweepBudget(sets.length));
+  const budget = createBudget(guestSweepBudget(sets.length));
   for (const s of sets) out.events.push({ label: s.label, ...(await syncEvents(d, s.user_key, s.cookies_json)) });
   // Re-read the sets before the guest pass: if syncEvents absorbed a rotation,
   // the pass after it must send what Luma just issued, never the old snapshot.
@@ -1784,15 +1749,13 @@ async function handleEnrich(request, env, d) {
 // with a dedicated COVER_SECRET). If neither is set the proxy degrades to open —
 // that's an unconfigured deploy only, not anything an attacker can induce.
 const _enc = new TextEncoder();
-function _b64url(buf) {
-  return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
 function coverSecret(env) { return (env && (env.COVER_SECRET || env.SYNC_SECRET)) || null; }
 function coverKey(secret) {
   return crypto.subtle.importKey("raw", _enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]);
 }
 async function signCoverUrl(rawUrl, secret) {
-  return _b64url(await crypto.subtle.sign("HMAC", await coverKey(secret), _enc.encode(rawUrl)));
+  const sig = await crypto.subtle.sign("HMAC", await coverKey(secret), _enc.encode(rawUrl));
+  return new Uint8Array(sig).toBase64({ alphabet: "base64url", omitPadding: true });
 }
 async function verifyCoverUrl(rawUrl, sig, secret) {
   if (!sig) return false;
@@ -2406,12 +2369,7 @@ export async function serendipityFindEvents(env, args) {
 // pulled into lib/cache.js — a dispatcher-private function is a function no
 // test can reach, and the bug that taught us that shipped through a green CI.
 export async function handleMcp(request, env, d) {
-  const cors = {
-    "access-control-allow-origin": "*",
-    "access-control-allow-methods": "POST, OPTIONS",
-    "access-control-allow-headers": "content-type, mcp-protocol-version, mcp-session-id, mcp-method, mcp-name, authorization",
-    "access-control-max-age": "86400",
-  };
+  const cors = mcpCorsHeaders();
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
   const respond = (obj, status = 200) => new Response(obj === null ? null : JSON.stringify(obj), {
     status, headers: { ...cors, "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
@@ -2420,23 +2378,13 @@ export async function handleMcp(request, env, d) {
     // stateless server: no server-initiated SSE stream, POST JSON-RPC only.
     return respond({ error: "Use POST with JSON-RPC 2.0. Docs: " + PREFIX + "/mcp-info" }, 405);
   }
-  const rpcErr = (id, code, message) => ({ jsonrpc: "2.0", id: id === undefined ? null : id, error: { code, message } });
-
   let payload;
   try { payload = await request.json(); }
-  catch { return respond(rpcErr(null, -32700, "Parse error")); }
+  catch { return respond(mcpError(null, -32700, "Parse error")); }
 
-  const handleOne = async (msg) => {
-    const hasId = asRecord(msg) !== null && "id" in msg;
-    if (!msg || msg.jsonrpc !== "2.0" || asText(msg.method) === null) {
-      return hasId ? rpcErr(msg.id, -32600, "Invalid Request") : null;
-    }
+  const dispatch = async (msg) => {
     const id = msg.id, m = msg.method;
     try {
-      // Version first, then the routing headers — the same gate /mcp applies.
-      const refused = mcpGate(msg, request, id, hasId);
-      if (refused !== null) return refused;
-
       // MUST be implemented as of 2026-07-28.
       if (m === "server/discover") return MCP.discover(id);
       // Kept for pre-2026 clients, which have no fall-forward mechanism.
@@ -2451,7 +2399,6 @@ export async function handleMcp(request, env, d) {
       if (m === "resources/list") return MCP.result(id, { resources: [] }, CACHE_EMPTY);
       if (m === "resources/templates/list") return MCP.result(id, { resourceTemplates: [] }, CACHE_EMPTY);
       if (m === "prompts/list") return MCP.result(id, { prompts: [] }, CACHE_EMPTY);
-      if (m.startsWith("notifications/")) return null;  // client notification — ack only
       if (m === "tools/call") {
         const name = msg.params && msg.params.name;
         // Every tool on this server reads today, so this refuses nothing yet.
@@ -2461,19 +2408,21 @@ export async function handleMcp(request, env, d) {
         const refusedOnPreview = previewToolRefusal(request, MCP_TOOLS, name);
         if (refusedOnPreview) return MCP.result(id, { content: [{ type: "text", text: refusedOnPreview }], isError: true });
         const out = await mcpCallTool(d, name, (msg.params && msg.params.arguments) || {});
-        if (out && out._unknown) return rpcErr(id, -32602, "Unknown tool: " + name);
+        if (out && out._unknown) return mcpError(id, -32602, "Unknown tool: " + name);
         // A failed tool is a RESULT with isError, never a JSON-RPC error: the
         // call succeeded and the model is meant to read the text.
         if (out && out._error) return MCP.result(id, { content: [{ type: "text", text: out._error }], isError: true });
         return MCP.result(id, { content: [{ type: "text", text: JSON.stringify(out, null, 2) }], structuredContent: out });
       }
-      return hasId ? rpcErr(id, -32601, "Method not found: " + m) : null;
+      return mcpError(id, -32601, "Method not found: " + m);
     } catch (e) {
-      return hasId ? rpcErr(id, -32603, "Internal error: " + (e && e.message ? e.message : String(e))) : null;
+      return mcpError(id, -32603, "Internal error: " + (e && e.message ? e.message : String(e)));
     }
   };
+  const handleOne = (msg) => mcpRequest(msg, request, dispatch);
 
   if (Array.isArray(payload)) {
+    if (payload.length === 0) return respond(mcpError(null, -32600, "Invalid Request"));
     const out = (await Promise.all(payload.map(handleOne))).filter((x) => x !== null);
     return out.length ? respond(out) : respond(null, 202);
   }

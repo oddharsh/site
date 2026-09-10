@@ -171,6 +171,27 @@ test("bounded response reads report truncation without buffering the tail", asyn
   assert.equal(exact.truncated, false);
 });
 
+test("bounded response reads cancel stalled producers and never report aborted prefixes", async () => {
+  for (const alreadyAborted of [false, true]) {
+    const controller = new AbortController();
+    const reason = new Error("read budget exhausted");
+    let cancelled;
+    const response = new Response(new ReadableStream({
+      start(stream) { stream.enqueue(new TextEncoder().encode("partial")); },
+      cancel(error) { cancelled = error; },
+    }));
+    if (alreadyAborted) controller.abort(reason);
+    const read = readResponseCapped(response, 100, controller.signal);
+    if (!alreadyAborted) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      controller.abort(reason);
+    }
+    await assert.rejects(read, (error) => error === reason);
+    assert.equal(cancelled, reason, "the producer receives the caller's cancellation");
+    await assert.rejects(readResponseCapped(new Response(null), 100, controller.signal), (error) => error === reason);
+  }
+});
+
 test("scheduled crawl fan-out respects its concurrency cap", async () => {
   let active = 0;
   let peak = 0;
@@ -546,6 +567,38 @@ test("Lens parses only Cloudflare's normalized readiness level from an MCP SSE a
     sourceUrl: "https://isitagentready.com/",
   });
   assert.equal(lensParseCloudflareAgentScore("not a score"), null);
+});
+
+test("Lens caches only the completed Cloudflare score response, never progress or tool errors", async () => {
+  const id = "lens-cloudflare-score";
+  const result = { content: [{ type: "text", text: "Level 4/5 — Agent-Optimized" }] };
+  const reply = { jsonrpc: "2.0", id, result };
+  const frame = (value) => JSON.stringify(value, null, 2).split("\n").map((line) => `data: ${line}\n`).join("") + "\n";
+  const noise = frame({ jsonrpc: "2.0", method: "notifications/progress", params: { message: "Level 1/5 — Working" } })
+    + frame({ ...reply, id: "another-scan", result: { content: [{ type: "text", text: "Level 2/5 — Other" }] } });
+  const compact = 'data: {"jsonrpc":"2.0","method":"notifications/progress","params":{"message":"Level 1/5 — Working"}}\n\n'
+    + 'data: ' + JSON.stringify(reply) + '\n\n';
+  const realFetch = globalThis.fetch;
+  try {
+    for (const body of [noise + frame(reply), JSON.stringify(reply), compact, noise, noise + frame(reply).trimEnd(),
+      frame({ ...reply, result: { ...result, isError: true } }), frame({ jsonrpc: "2.0", id, error: { message: "Level 5/5 — Failed" } })]) {
+      const writes = [];
+      testGlobals.fetch = async (_url, init) => {
+        assert.equal(JSON.parse(init.body).id, id);
+        return new Response(body.replace(/\n/g, "\r\n"), { headers: { "content-type": body.startsWith("{") ? "application/json" : "text/event-stream" } });
+      };
+      const response = await handleLensFetch(new Request("https://aadhar.sh/lens/fetch?mode=cloudflare&url=https://example.com"),
+        { RN_KV: { get: async () => null, put: async (_key, value) => { writes.push(JSON.parse(value)); } } }, context());
+      const payload = await response.json();
+      const available = body === noise + frame(reply) || body === JSON.stringify(reply) || body === compact;
+      assert.equal(payload.available, available);
+      assert.equal(writes.length, available ? 1 : 0);
+      if (available) {
+        assert.equal(payload.level, 4);
+        assert.equal(writes[0].score, 80);
+      }
+    }
+  } finally { testGlobals.fetch = realFetch; }
 });
 
 test("Lens field evidence scores observed access without borrowing the standards rubric", () => {

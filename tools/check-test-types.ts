@@ -17,20 +17,13 @@
 // joined this list on the day the runtime moved, with the same filter and the
 // same floor.
 //
-// This is the piece config/tsconfig.lwe-ask.json's header named as the
-// prerequisite for covering the tests at all. The filter itself lives in
-// tools/lib/tsc-scope.ts, shared with check-tool-types.mjs.
+// The filter lives in tools/lib/tsc-scope.ts, shared with check-tool-types.ts.
 //
-// THE FLOOR IS STRICTER HERE THAN check-tool-types', on purpose. That one counts
-// files against a threshold because it holds 124 of them. These hold one apiece,
-// where a count is nearly meaningless, so this compares the program against the
-// DIRECTORY: every `*.test.mjs` on disk must be in the program it belongs to. A
-// suite added next week joins by existing, and a glob that stops matching fails
-// by name instead of reporting a clean run over nothing.
+// Compare each program with every test matching its declared directory and
+// extension below. A file-count threshold could miss a new test; this reports
+// the missing file by name. Helper files also remain in their program's glob.
 //
-// UNLIKE check-tool-types THERE IS NO BASELINE. Both suites are at zero, so a
-// ratchet would be machinery guarding an empty set. Add one only if a suite
-// arrives with a tail too long to fix in the change that adds it.
+// These suites have no diagnostic baseline: every owned diagnostic fails.
 import { readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";

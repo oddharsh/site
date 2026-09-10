@@ -19,6 +19,7 @@ import {
   serveStaticPage,
   test,
 } from "./contract-shared.ts";
+import { spawnSync } from "node:child_process";
 
 // ── docs/DEPENDENCIES.md states version pins in prose ─────────────────────────
 // and dependabot rewrites those pins daily, so the file goes stale on a cadence
@@ -212,6 +213,76 @@ test("the Cargo reader takes both dependency shapes and ignores the rest", () =>
     { zenjpeg: "0.8.4" },
     "a [dependencies] table with nothing after it must still be read",
   );
+});
+
+test("Cargo dependencies survive TOML quoting, comments and dependency subtables", async () => {
+  const source = `[package]
+name = "fixture"
+
+[dependencies] # ordinary Cargo dependencies
+'image' = '0.25'
+"codec" = { features = ["a#b"], version = '1.2.3' }
+local = { path = "../local" }
+
+[dependencies.halflight]
+git = "https://example.test/halflight.git"
+rev = "edc6358de58e5de93309d01500971bb056c65708"
+
+[profile.release]
+opt-level = 3
+`;
+  assert.deepEqual(parseCargoDeps(source), { image: "0.25", codec: "1.2.3", local: null, halflight: null });
+  const toml = await readFile(new URL("./photos/zenc/Cargo.toml", import.meta.url), "utf8");
+  assert.equal(parseCargoDeps(toml).halflight, null, "the real git dependency is present without a version claim");
+});
+
+test("the Cargo reader refuses malformed manifests instead of auditing a partial census", () => {
+  for (const toml of [
+    '[dependencies]\ncodec = { version = "1.2.3"\n',
+    '[dependencies]\ncodec = "1.2.3"\ncodec = "2.0.0"\n',
+    '[dependencies]\ncodec = "1.2.3" trailing\n',
+    '[dependencies]\ncodec = false\n',
+    '[dependencies]\ncodec = { version = 123 }\n',
+    'dependencies = []\n',
+    '[dependencies]\ncodec = 2026-09-01\n',
+    '[dependencies]\ncodec = []\n',
+  ]) assert.throws(() => parseCargoDeps(toml), Error, toml);
+});
+
+test("Cargo comments at EOF cannot hang the dependency audit or relocker", () => {
+  // GHSA-7w5x-hrqm-74c2: a comment at EOF inside an unclosed array or inline
+  // table could loop forever. Isolate the actual shared reader so a regression
+  // fails within three seconds instead of hanging the entire contract suite.
+  const reader = new URL("./lib/dependency-docs.ts", import.meta.url).href;
+  const script = `
+    const { parseCargoDeps } = await import(${JSON.stringify(reader)});
+    try { console.log(JSON.stringify({ dependencies: parseCargoDeps(process.argv[1]) })); }
+    catch { console.log(JSON.stringify({ rejected: true })); }
+  `;
+  for (const [toml, expected] of /** @type {const} */ ([
+    ['[package]\nvalues = [1 #', { rejected: true }],
+    ['[package]\nvalues = { key = 1 #', { rejected: true }],
+    ['[dependencies]\ncodec = { version = "1.2.3", features = ["a" #', { rejected: true }],
+    ['[dependencies]\ncodec = { version = "1.2.3" #', { rejected: true }],
+    ['[dependencies]\ncodec = { version = "1.2.3", features = ["a" # comment\n] }\n', { dependencies: { codec: "1.2.3" } }],
+    ['[dependencies]\ncodec = "1.2.3" #', { dependencies: { codec: "1.2.3" } }],
+  ])) {
+    const result = spawnSync(process.execPath, ["--eval", script, toml], { encoding: "utf8", timeout: 3000 });
+    assert.ifError(result.error);
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(JSON.parse(result.stdout), expected);
+  }
+});
+
+test("versionless Cargo dependencies require policy and do not look removed", () => {
+  const pins = parseCargoDeps('[dependencies]\nhalflight = { git = "https://example.test/halflight.git", rev = "abc" }\n');
+  const sub = { manifest: "Cargo.toml", pins, aliases: [], versionless: new Map() };
+  const run = () => auditDependencyDocs({ doc: BASELINE_HEADING, pins: {}, aliases: [], versionless: new Map(), floor: 0, subManifests: [sub] });
+  assert.ok(run().problems.some((p) => /halflight is a Cargo.toml dependency/.test(p)), "git dependencies cannot disappear from the reverse check");
+  sub.versionless.set("halflight", "A git revision has no semantic version to quote.");
+  assert.deepEqual(run().problems, [], "present without a version is different from absent");
+  delete pins.halflight;
+  assert.ok(run().problems.some((p) => /halflight is exempted .* but is no longer/.test(p)), "removal still invalidates the policy");
 });
 
 test("the dependency-doc scanner does not read prose as a version claim", () => {

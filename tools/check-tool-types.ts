@@ -9,7 +9,7 @@
 // the same files pass in tsconfig.json's program, which is the one whose globals
 // match their runtime. Reporting them would train everyone to ignore this check.
 //
-// So diagnostics are filtered to files under tools/. The FLOOR below is what
+// So diagnostics are filtered to tools/ and pipelines/. The FLOOR below is what
 // keeps that filter honest: a wrapper that reports nothing because it scanned
 // nothing looks identical to a clean run, which is this repo's most-repeated
 // failure (see the route invariant's own floor in build.ts).
@@ -24,12 +24,12 @@ const REPO = dirname(dirname(fileURLToPath(import.meta.url)));
 const TSC = join(REPO, "node_modules", "typescript", "bin", "tsc");
 
 // THE TREES THIS PROGRAM JUDGES, which is wider than its name. tools/ is most
-// of it; pipelines/ (the page generators) and talks/ (the deck builder) are the
-// same kind of program on the same runtime, and they joined tsconfig.tools.json
-// on 2026-08-23. Filtering on `tools/` alone after that widening would have put
-// their diagnostics in the foreign bucket, so the include would have bought
-// coverage on paper and judged nothing.
-const OWNED = ["tools/", "pipelines/", "talks/"];
+// of it; pipelines/ (the page generators) is the same kind of program on the
+// same runtime, and it joined tsconfig.tools.json on 2026-08-23. Filtering on
+// `tools/` alone after that widening would have put its diagnostics in the
+// foreign bucket, so the include would have bought coverage on paper and judged
+// nothing. (talks/ was a third tree here until #713 deleted it, 2026-09-02.)
+const OWNED = ["tools/", "pipelines/"];
 
 const { mine, foreign, ownedFiles, byFile } = runScopedTsc({
   repo: REPO, tsc: TSC, owns: OWNED, label: "check-tool-types",
@@ -49,8 +49,8 @@ if (listed < 50) {
 // needed the same behaviour; two copies of a rule about monotonicity is exactly
 // the drift this repo names everywhere else.
 const BASELINE = join(REPO, "config/ts-tools-baseline.json");
-const { rewritten, problems, owed } = ratchet({
-  baselinePath: BASELINE, byFile, total: mine.length,
+const { rewritten, problems } = ratchet({
+  baselinePath: BASELINE, byFile,
   updateCommand: "bun run typecheck:tools -- --update",
   update: process.argv.includes("--update"),
 });
@@ -68,4 +68,4 @@ if (problems.length) {
   console.error(`\ncheck-tool-types: FAILED against config/ts-tools-baseline.json\n  - ${problems.join("\n  - ")}`);
   process.exit(1);
 }
-console.log(`check-tool-types: matches the baseline (${owed} owed)`);
+console.log(`check-tool-types: matches the baseline`);

@@ -4,9 +4,9 @@
   // NODE GLOBALS, for the reason tsconfig.cf-garage-test.json's header gives:
   // the source runs on workerd and the test runs on node, so the two cannot
   // share one `types` entry without declaring a union that is true of neither.
-  // Importing ../src/reader.js therefore drags src/worker/lib/crawl.ts and
-  // botauth.ts in against Cloudflare-shaped code, which is why this program is
-  // run through `bun run typecheck:tests` and never bare.
+  // Importing ../src/reader.ts also checks the shared public-fetch.ts module
+  // against node globals. The scoped checker owns test diagnostics; the Worker
+  // program checks that imported source against its actual runtime.
   //
   // IT ONLY RESOLVES WHERE lens-reader/node_modules EXISTS, which is the same
   // constraint lens-reader/package.json's `typecheck` script already carries and
@@ -27,16 +27,10 @@
     "types": ["bun"],
     "resolveJsonModule": true,
     "skipLibCheck": true,
-    // Two control-flow checks, set here because they are set in tsconfig.json
-    // and a program is only as strict as its own options. Both cost nothing:
-    // +0 diagnostics on every one of the ten programs, measured 2026-08-27.
     "noFallthroughCasesInSwitch": true,
     "noImplicitReturns": true,
-    // strictNullChecks ON. `strict` stays off: it bundles noImplicitAny,
-    // which is 7,197 diagnostics of annotation labour across this repo, and
-    // raising the two together buries the checks that find bugs under the
-    // ones that find missing annotations. This program is clean under it,
-    // and a contract test keeps the set of clean programs from shrinking.
+    // Checked without a diagnostic baseline; see tsconfig.json for the
+    // separate full-strictness migration.
     "strictNullChecks": true,
     "strict": false
   },

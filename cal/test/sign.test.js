@@ -10,6 +10,8 @@ describe("sign/verify — approve/decline link auth", () => {
   it("round-trips a signature", async () => {
     const msg = "approve:abc123";
     const sig = await sign(msg, SECRET);
+    // Fixed HMAC-SHA256 vector: existing links retain their exact encoding.
+    expect(sig).toBe("4IVM4ftd9T5CfZ6ziuY0eO0YsrDq4G0_EGY1nM77AVo");
     expect(await verify(msg, sig, SECRET)).toBe(true);
   });
 

@@ -1,12 +1,15 @@
 // ── the perf probe ──────────────────────────────────────────────────
 // Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
+import { copyFile, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import {
   testGlobals,
   assert,
   cronHomeProbe,
   cronJob,
   fetchFollowingPublicRedirects,
-  parseServerTiming,
   privateHostBlocked,
   readFileSync,
   reservationName,
@@ -14,40 +17,13 @@ import {
   validateLensTarget,
 } from "./contract-shared.ts";
 
-// ── the perf probe ──────────────────────────────────────────────────
-// The probe's value is that its numbers mean what home.js's Server-Timing
-// means. The parser is the seam: if it misreads a span or drops a deadline
-// mark, the AE series lies quietly. The datapoint's column order is part of
-// the contract too — AE columns are positional, so a reorder here scrambles
-// every already-written row's meaning.
-test("parseServerTiming reads spans, deadline marks, and survives junk", () => {
-  const { spans, deadlined } = parseServerTiming(
-    "assets;dur=5, tracks;dur=25;desc=deadline, alt;dur=0, counter;dur=7, total;dur=25",
-  );
-  assert.deepEqual(spans, { assets: 5, tracks: 25, alt: 0, counter: 7, total: 25 });
-  assert.deepEqual(deadlined, ["tracks"]);
-  // junk in, nothing invented out
-  assert.deepEqual(parseServerTiming(null), { spans: {}, deadlined: [] });
-  assert.deepEqual(parseServerTiming("garbage"), { spans: {}, deadlined: [] });
-  assert.deepEqual(parseServerTiming("x;dur=NaN, ;dur=3").spans, {});
-});
-
 test("the probe writes one positionally-stable datapoint and never throws", async () => {
   // no PERF_PROBE binding -> a clean no-op, so preview/dev without the dataset
   // cannot crash the scheduled() handler
   await cronHomeProbe({}, { waitUntil() {} });
 
-  // The probe used to dispatch the homepage SSR, which needed ASSETS +
-  // HTMLRewriter, so a bindingless env was itself the "broken render" case and
-  // this asserted the resulting gap. `/` is a static document now and the probe
-  // follows the two fragments instead; the photo grid answers from the BUNDLED
-  // pool, so it succeeds with no bindings at all and there is no longer an env
-  // that fails both arms by omission. The write-nothing rule still holds in the
-  // code (both arms null -> early return), it just cannot be provoked this way.
-  //
-  // So assert what this env can actually prove: exactly one datapoint, with the
-  // positional arity Analytics Engine reads by index. A column silently
-  // appearing or vanishing is the failure that corrupts a whole dataset.
+  // Integration with the real handlers: the grid uses the bundled photo pool,
+  // while tracks returns an error response without KV. Both returns are timed.
   const written = [];
   const env = { PERF_PROBE: { writeDataPoint: (d) => written.push(d) } };
   await cronHomeProbe(env, { waitUntil() {} });
@@ -55,8 +31,84 @@ test("the probe writes one positionally-stable datapoint and never throws", asyn
   const [dp] = written;
   assert.equal(dp.doubles.length, 5, "doubles are positional: [assets, tracks, alt, counter, total]");
   assert.ok(dp.doubles.every((v) => typeof v === "number"), "every double must be a real number");
-  assert.equal(dp.blobs.length, 2, "blobs are positional: [deadlined CSV, version id]");
+  assert.deepEqual([dp.doubles[0], dp.doubles[2], dp.doubles[3]], [-1, -1, -1]);
+  assert.ok(dp.doubles[1] >= 0 && dp.doubles[4] >= dp.doubles[1]);
+  assert.deepEqual(dp.blobs, ["", "dev"]);
   assert.deepEqual(dp.indexes, ["home"]);
+});
+
+test("fragment probe preserves timings, missing values, cancellation and version identity", async () => {
+  // Load the unchanged module against controlled fragment handlers. This makes
+  // both failure paths reachable without adding a test-only production API.
+  const root = await mkdtemp(join(tmpdir(), "fragment-probe-"));
+  const now = Date.now;
+  try {
+    await mkdir(join(root, "lib"));
+    await copyFile(new URL("../src/worker/perf-probe.ts", import.meta.url), join(root, "perf-probe.ts"));
+    await writeFile(join(root, "lib/const.ts"), 'export const CANONICAL_HOST = "fixture.example";');
+    await writeFile(join(root, "home.ts"), 'import { fragment } from "./fixture.mjs"; export const handlePhotoGrid = (...args) => fragment("grid", ...args);');
+    await writeFile(join(root, "rn.ts"), 'import { fragment } from "./fixture.mjs"; export const handleRnTracksHtml = (...args) => fragment("tracks", ...args);');
+    await writeFile(join(root, "fixture.mjs"), `
+      export const state = { clock: 100, phases: {}, events: [], requests: [] };
+      export async function fragment(kind, request, env, ctx) {
+        const phase = state.phases[kind];
+        state.events.push(kind);
+        state.requests.push({ request, env, ctx });
+        state.clock += phase.ms;
+        if (phase.error) throw new Error(kind);
+        return new Response(phase.noBody ? null : new ReadableStream({
+          cancel() {
+            state.events.push("cancel:" + kind);
+            state.clock += phase.cancelMs || 0;
+            if (phase.cancelError) throw new Error("cancel " + kind);
+          }
+        }));
+      }
+    `);
+    const { state } = await import(pathToFileURL(join(root, "fixture.mjs")).href);
+    const { cronHomeProbe: probe } = await import(pathToFileURL(join(root, "perf-probe.ts")).href);
+    Date.now = () => state.clock;
+    /** @typedef {{ms: number, cancelMs?: number, error?: boolean, noBody?: boolean, cancelError?: boolean}} Phase */
+    /** @type {Array<[string, Phase, Phase, number[] | null]>} */
+    const cases = [
+      ["both measured", { ms: 5, cancelMs: 2 }, { ms: 11, cancelMs: 3 }, [-1, 7, -1, -1, 21]],
+      ["tracks failed", { ms: 5, error: true }, { ms: 11, cancelMs: 3 }, [-1, -1, -1, -1, 14]],
+      ["grid failed", { ms: 5, cancelMs: 2 }, { ms: 11, error: true }, [-1, 7, -1, -1, 7]],
+      ["both failed", { ms: 5, error: true }, { ms: 11, error: true }, null],
+      ["real zero", { ms: 0 }, { ms: 0 }, [-1, 0, -1, -1, 0]],
+      ["empty bodies", { ms: 5, noBody: true }, { ms: 11, noBody: true }, [-1, 5, -1, -1, 16]],
+      ["cancellation failed", { ms: 5, cancelMs: 2, cancelError: true }, { ms: 11, cancelMs: 3, cancelError: true }, [-1, 7, -1, -1, 21]],
+    ];
+    for (const [label, tracks, grid, doubles] of cases) {
+      Object.assign(state, { clock: 100, phases: { tracks, grid }, events: [], requests: [] });
+      const written = [];
+      const env = { PERF_PROBE: { writeDataPoint: (point) => written.push(point) }, CF_VERSION_METADATA: { id: "version-fixture" } };
+      const ctx = { waitUntil() {} };
+      await probe(env, ctx);
+      assert.deepEqual(written, doubles ? [{ doubles, blobs: ["", "version-fixture"], indexes: ["home"] }] : [], label);
+      assert.deepEqual(state.events, ["tracks", ...(!tracks.error && !tracks.noBody ? ["cancel:tracks"] : []), "grid", ...(!grid.error && !grid.noBody ? ["cancel:grid"] : [])], label);
+      for (const { request, env: received } of state.requests) {
+        assert.equal(request.url, "https://fixture.example/");
+        assert.equal(request.headers.get("user-agent"), "AadharshBot/1.0 (+https://aadhar.sh/bot) perf-probe");
+        assert.equal(received, env);
+      }
+      assert.equal(state.requests[0].ctx, ctx);
+    }
+    for (const id of [undefined, ""]) {
+      const written = [];
+      await probe({ PERF_PROBE: { writeDataPoint: (p) => written.push(p) }, CF_VERSION_METADATA: { id } }, {});
+      assert.deepEqual(written[0].blobs, ["", "dev"]);
+    }
+    let writeAttempts = 0;
+    await probe({ PERF_PROBE: { writeDataPoint() { writeAttempts++; throw new Error("dataset unavailable"); } } }, {});
+    assert.equal(writeAttempts, 1, "a dataset failure is swallowed only after attempting the write");
+    state.events = [];
+    await probe({}, {});
+    assert.deepEqual(state.events, [], "no dataset means no fragment reads");
+  } finally {
+    Date.now = now;
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("cron dispatch survives Cloudflare's expression normalization", () => {
@@ -200,17 +252,17 @@ test("redirect following validates every hop, not just the landing", async () =>
   };
   try {
     const check = (candidate) => validateLensTarget(candidate);
-    const blocked = await fetchFollowingPublicRedirects("https://example.com/start", {}, check);
+    const blocked = await fetchFollowingPublicRedirects("https://example.com/start", () => ({}), check);
     assert.equal(blocked.ok, false, "a hop into link-local space must be refused");
     assert.ok(!seen.includes("http://169.254.169.254/latest/meta-data/"), "the blocked host must never be requested");
     assert.equal(seen.length, 2, "it stops at the refusal instead of continuing");
 
-    const fine = await fetchFollowingPublicRedirects("https://example.com/ok", {}, check);
+    const fine = await fetchFollowingPublicRedirects("https://example.com/ok", () => ({}), check);
     assert.equal(fine.ok, true);
     assert.equal(fine.finalUrl, "https://example.com/ok");
 
     testGlobals.fetch = async (url) => new Response(null, { status: 302, headers: { location: `${url}x` } });
-    const looping = await fetchFollowingPublicRedirects("https://example.com/loop", {}, check, 3);
+    const looping = await fetchFollowingPublicRedirects("https://example.com/loop", () => ({}), check, 3);
     assert.equal(looping.ok, false, "an endless redirect chain is bounded");
   } finally {
     testGlobals.fetch = originalFetch;

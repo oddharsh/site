@@ -28,7 +28,8 @@
 // and, when the source no longer links here (or is gone), retracts the mention.
 // A displayed mention should still be TRUE, the same reason /around re-crawls.
 import { validateLensTarget } from "./lens.ts";
-import { fetchFollowingPublicRedirects, privateHostBlocked, readResponseCapped } from "./lib/crawl.ts";
+import { fetchFollowingPublicRedirects, privateHostBlocked } from "./lib/public-fetch.ts";
+import { readResponseCapped } from "./lib/crawl.ts";
 import { esc, extractMeta, extractTitle } from "./lib/http.ts";
 import { overBudget } from "./lib/ratelimit.ts";
 import { sign, verify } from "../../cal/src/sign.ts";
@@ -80,7 +81,7 @@ async function ensureTable(db) {
 async function mentionId(source, target) {
   const data = new TextEncoder().encode(`${source}|${target}`);
   const digest = await crypto.subtle.digest("SHA-256", data);
-  return [...new Uint8Array(digest).slice(0, 12)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  return new Uint8Array(digest).subarray(0, 12).toHex();
 }
 
 // ── POST /webmention ───────────────────────────────────────────────────────
@@ -213,12 +214,13 @@ async function retract(env, source, target, why) {
 // runs before each hop instead of after all of them.
 async function fetchSource(url) {
   try {
+    const signal = AbortSignal.timeout(SOURCE_TIMEOUT_MS);
     const followed = await fetchFollowingPublicRedirects(
       url,
-      {
+      () => ({
         headers: { "user-agent": "AadharshBot/1.0 (+https://aadhar.sh/bot)", accept: "text/html,application/xhtml+xml" },
-        signal: AbortSignal.timeout(SOURCE_TIMEOUT_MS),
-      },
+        signal,
+      }),
       (candidate) => {
         try {
           const u = new URL(candidate);

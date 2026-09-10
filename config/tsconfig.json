@@ -1,13 +1,12 @@
 {
-  // One no-emit check over the two server-side runtime surfaces: the booking
-  // module remains checked JavaScript, while the site Worker is TypeScript that
-  // both Node's type stripper and Wrangler can load directly.
+  // The site Worker and booking module are TypeScript; Serendipity joins
+  // through the Worker's imports. All run on workerd and share its globals.
   //
   // The Worker conversion initially left this include on `**/*.js`, so tsc saw
   // cal plus one transitively imported Worker module and skipped the other 68.
   // contract-tests now executes `tsc --listFilesOnly` and compares the program
   // with the directory, making the scope part of the contract rather than a
-  // comment. The remaining explicit quarantine lives in ts-migration.json.
+  // comment. The completed migration permits no @ts-nocheck opt-outs.
   "compilerOptions": {
     "noEmit": true,
     "allowJs": true,
@@ -45,14 +44,11 @@
     "types": [],
     "resolveJsonModule": true,
     "skipLibCheck": true,
-    // Not `strict` yet. The Worker was converted from unannotated JavaScript and
-    // the explicit quarantine must shrink before a global strictness migration.
-    // strictNullChecks ON, against the ratchet in check-worker-types.ts. The
-    // program carried 572 diagnostics under it; 264 are fixed and the rest are
-    // recorded per file in config/ts-worker-baseline.json, where they can only
-    // fall. `strict` stays false for the reason the comment below gives:
-    // noImplicitAny is 7,197 diagnostics of annotation labour repo-wide and
-    // would bury this.
+    // All programs enable null checks separately from full strictness. The
+    // initial noImplicitAny probe found 7,197 missing annotations repo-wide;
+    // enabling it alongside null checks would have buried the actionable work.
+    // Current debt lives in ts-worker-baseline.json, checked by
+    // bun run typecheck:worker. The per-file baseline may only shrink.
     "strictNullChecks": true,
     "strict": false
   },
