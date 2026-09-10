@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtemp, mkdir, readFile, readdir, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, realpath, writeFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
@@ -8,7 +8,14 @@ import { navFenceBody, readFenceBody, workerModule } from "./gen-manifest.ts";
 
 const ROOT = new URL("../", import.meta.url);
 async function fixture(run) {
-  const root = await mkdtemp(path.join(tmpdir(), "page-generators-"));
+  // CANONICAL root, and the generators are why. Their main-module guard compares
+  // resolve(process.argv[1]) against fileURLToPath(import.meta.url), and node
+  // canonicalises the entry module while leaving argv[1] alone. Rooted at a
+  // symlink the guard is false, the CLI exits 0 having written nothing, and the
+  // wiring assertions read the unwired fixture. macOS alone, where $TMPDIR
+  // reaches /private/var through /var, and node alone, since bun resolves both
+  // sides. Linux CI cannot see it and `bun test` cannot either.
+  const root = await realpath(await mkdtemp(path.join(tmpdir(), "page-generators-")));
   const put = async (file, body) => {
     await mkdir(path.dirname(path.join(root, file)), { recursive: true });
     await writeFile(path.join(root, file), body);
