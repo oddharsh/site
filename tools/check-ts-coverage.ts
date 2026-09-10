@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// check-ts-coverage.mjs — every JavaScript and TypeScript file this repository
+// check-ts-coverage.ts — every JavaScript and TypeScript file this repository
 // owns must belong to some tsc program.
 //
 // WHY THIS EXISTS. config/tsconfig.browser.json's header records that an
@@ -65,15 +65,9 @@ if (configs.length < 5) {
 
 const covered = new Set();
 for (const config of configs) {
-  let listing = "";
-  try {
-    listing = execFileSync(process.execPath, [TSC, "-p", join(REPO, "config", config), "--listFilesOnly"], { encoding: "utf8", cwd: REPO });
-  } catch (e) {
-    // A program that cannot run contributes nothing, and the orphan report below
-    // is what surfaces that. Failing here instead would make this check the
-    // reporter for every unrelated tsconfig problem.
-    listing = String(e.stdout || "");
-  }
+  // tsc can print every owned path before rejecting the config. A failed
+  // census is not coverage evidence, even when another program holds the files.
+  const listing = execFileSync(process.execPath, [TSC, "-p", join(REPO, "config", config), "--listFilesOnly"], { encoding: "utf8", cwd: REPO });
   for (const line of listing.split("\n")) {
     if (line.startsWith(`${REPO}/`)) covered.add(line.slice(REPO.length + 1));
   }
@@ -83,7 +77,7 @@ const orphans = owned.filter((f) => !covered.has(f));
 if (orphans.length) {
   console.error(`check-ts-coverage: ${orphans.length} file(s) belong to no tsc program:\n  ${orphans.join("\n  ")}\n` +
     `\nAdd each to the program whose GLOBALS match how it runs — see the headers in config/. ` +
-    `A node-runtime file that imports Worker source needs check-test-types.mjs's filtering rather than a wider include.`);
+    `A node-runtime file that imports Worker source needs check-test-types.ts's filtering rather than a wider include.`);
   process.exit(1);
 }
 
