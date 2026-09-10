@@ -1,4 +1,7 @@
 import { jsonResponse } from "./lib/http.ts";
+import { deadline } from "./lib/cache.ts";
+import { readResponseCapped } from "./lib/crawl.ts";
+import type { Env } from "./lib/env.ts";
 import { imageCompare, imageInspect, imageTransform, photoRecipe } from "./image-tools.ts";
 import { DATA_TOOLS, DATA_TOOL_NAMES, callDataTool } from "./lib/tools.ts";
 import { captureRepresentation, compareRepresentation, readRepresentation } from "./representation.ts";
@@ -217,11 +220,9 @@ const MCP_TOOL_DEFINITIONS = [
 
 export const MCP_TOOLS = MCP_TOOL_DEFINITIONS.map((tool) => mcpTool(tool));
 
-// The site's public surfaces as MCP resources, projected from the generated
-// agent catalog (lib/site-manifest.js, itself derived from site-manifest.json).
-// name is the stable path; uri is absolute so a client can dereference it
-// directly. resources/read below fetches these same paths, so listing here
-// promises nothing the server can't serve.
+// Public surfaces projected from the generated agent catalog. Names are stable
+// paths; absolute URIs let clients dereference them directly. Listing describes
+// the surface registry, while resources/read can refuse an unavailable page.
 const MCP_RESOURCE_PATHS = new Set(AGENT_SURFACES.map((s) => s.path));
 function mcpResources(origin) {
   return AGENT_SURFACES.map((s) => ({
@@ -233,28 +234,34 @@ function mcpResources(origin) {
   }));
 }
 
-// resources/read: fetch one listed surface, same-origin only. Restricting to
-// MCP_RESOURCE_PATHS keeps this from being a general-purpose fetcher (no SSRF to
-// other hosts, no arbitrary path), and every listed resource is genuinely
-// readable, so list and read stay in lockstep.
-async function readResource(uri, request) {
+// Read the public page through the local dispatcher, with no caller credentials
+// or query-driven work. A resource is complete or unreadable, never a silently
+// clipped prefix. 512 KiB accommodates the listed pages, including Horizon.
+async function readResource(uri: unknown, request: Request, env: Env) {
+  const resourceUri = asText(uri);
+  const selfFetch = env.SELF_FETCH;
+  if (!resourceUri || !selfFetch) return null;
   let target;
-  try { target = new URL(uri); } catch { return null; }
+  try { target = new URL(resourceUri); } catch { return null; }
   const origin = new URL(request.url).origin;
   if (target.origin !== origin || !MCP_RESOURCE_PATHS.has(target.pathname)) return null;
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 8000);
-  try {
-    const res = await fetch(origin + target.pathname, {
+  const read = async () => {
+    const res = await selfFetch(new Request(origin + target.pathname, {
       headers: { "user-agent": "AadharshBot/1.0 (+https://aadhar.sh/bot)", accept: "text/html" },
-      redirect: "follow",
+      redirect: "manual",
       signal: ctrl.signal,
-    });
+    }));
+    if (!res.ok || ctrl.signal.aborted) {
+      void res.body?.cancel().catch(() => {});
+      return null;
+    }
     const mimeType = (res.headers.get("content-type") || "text/html").split(";")[0].trim();
-    const text = (await res.text()).slice(0, 200000);
-    return { uri, mimeType, text };
-  } catch { return null; }
-  finally { clearTimeout(timer); }
+    const { text, truncated } = await readResponseCapped(res, 512 * 1024, ctrl.signal);
+    return truncated ? null : { uri: resourceUri, mimeType, text };
+  };
+  try { return await deadline(read(), 8000, null, () => ctrl.abort()); }
+  catch { return null; }
 }
 
 function errorResult(message) { return { _error: String(message).slice(0, 400) }; }
@@ -386,7 +393,7 @@ export async function handleSiteMcp(request, env, ctx) {
       if (msg.method === "resources/templates/list") return MCP.result(id, { resourceTemplates: [] }, CACHE_RESOURCES);
       if (msg.method === "resources/read") {
         const uri = msg.params?.uri;
-        const content = await readResource(uri, request);
+        const content = await readResource(uri, request, env);
         // -32602 rather than -32002: 2026-07-28 aligned resource-not-found with
         // JSON-RPC's Invalid Params, and this file already used the new code.
         if (!content) return rpcError(id, -32602, `Unknown or unreadable resource: ${uri}`);

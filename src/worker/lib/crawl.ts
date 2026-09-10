@@ -28,11 +28,14 @@ export async function mapWithConcurrency(items, limit, fn) {
 // Read at most maxBytes from a response stream. A second read after the cap
 // distinguishes an exactly-max-sized body from a truncated one without ever
 // buffering an unbounded response.
-export async function readResponseCapped(response, maxBytes = DEFAULT_CRAWL_BODY_CAP) {
+export async function readResponseCapped(response, maxBytes = DEFAULT_CRAWL_BODY_CAP, signal?: AbortSignal) {
   const reader = response && response.body && response.body.getReader
     ? response.body.getReader()
     : null;
-  if (!reader) return { text: "", bytesRead: 0, truncated: false, digest: "" };
+  if (!reader) {
+    signal?.throwIfAborted();
+    return { text: "", bytesRead: 0, truncated: false, digest: "" };
+  }
 
   // Annotated because an empty literal infers `never[]` under strictNullChecks,
   // which the lens-reader Worker's program turns on: TypeScript only lets an
@@ -40,9 +43,15 @@ export async function readResponseCapped(response, maxBytes = DEFAULT_CRAWL_BODY
   const chunks: Uint8Array[] = [];
   let bytesRead = 0;
   let truncated = false;
+  // Internal responses have no fetch transport to cancel their body for us.
+  const abort = () => { void reader.cancel(signal?.reason).catch(() => {}); };
+  signal?.addEventListener("abort", abort, { once: true });
+  if (signal?.aborted) abort();
   try {
     for (;;) {
+      signal?.throwIfAborted();
       const { done, value } = await reader.read();
+      signal?.throwIfAborted();
       if (done) break;
       if (!value.byteLength) continue;
       if (bytesRead >= maxBytes) {
@@ -58,6 +67,7 @@ export async function readResponseCapped(response, maxBytes = DEFAULT_CRAWL_BODY
       }
     }
   } finally {
+    signal?.removeEventListener("abort", abort);
     if (truncated) {
       try { await reader.cancel(); } catch (_e) {}
     }
