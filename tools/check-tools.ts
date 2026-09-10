@@ -19,7 +19,8 @@ const IN_CI = Boolean(process.env.CI) && !STRICT;
 // edits never trip them and a scanner that stops matching always does.
 const FLOOR_GUARD_LISTS = 4;
 const FLOOR_BREW_HINTS = 4;
-const FLOOR_MIN_GUARDS = 5;
+// The five photo writers now source one shared minimum-version guard.
+const FLOOR_MIN_GUARDS = 1;
 
 /** One entry of config/tools.json. Declared rather than inferred from JSON.parse,
  *  which hands back `any` and takes every downstream field with it. */
@@ -170,13 +171,6 @@ for (const tool of tools) {
 }
 
 // ── tier 1d: every `<TOOL>_MIN=` guard agrees with the declaration ───────────
-//
-// THE LIST WAS CONSOLIDATED HERE AND THE VERSION WAS NOT. `EXIF_SOOC_MIN=0.2.0`
-// is written out in five shell scripts, config/tools.json carries a sixth copy
-// as `min_version`, and until this scanner nothing read that field at all: the
-// one place designed to be the single declaration was the only one nobody
-// consulted. That is the same failure the $comment at the top of tools.json
-// says the file was created to fix, one field further in.
 //
 // The shape is `<NAME>_MIN=<version>` on its own line, and the tool it governs
 // is the name lowercased with underscores as dashes, so EXIF_SOOC_MIN governs

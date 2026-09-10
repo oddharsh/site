@@ -1099,6 +1099,13 @@ checks the [declared executables](../config/tools.json) and reports missing tool
 and version differences. The [system-tool guide](DEPENDENCIES.md#the-system-binaries-in-configtoolsjson)
 explains the failure rules and which encoder a version notice describes.
 
+The photo writers check the EXIF tool before processing images and stop on a
+failed metadata edit. Ingestion also stops after an incomplete encoding phase,
+before uploads or hashing. A failed batch can leave partial local image outputs;
+fix the reported error and rerun it successfully before hashing or publishing.
+An Instagram export applies metadata to its temporary candidate first, so a
+failed edit preserves an existing export.
+
 ---
 
 ## Add photos locally

@@ -229,6 +229,9 @@ const ROUTES = [
   { path: "/mcp", method: "POST", status: 200, ct: "application/json",
     headers: { "content-type": "application/json" }, marker: "<h1>Horizon",
     body: JSON.stringify({ jsonrpc: "2.0", id: "resource", method: "resources/read", params: { uri: base + "/garage/horizon" } }) },
+  // An empty batch is invalid, not an all-notification batch to accept silently.
+  ...["/mcp", "/serendipity/mcp"].map((path) => ({ path, method: "POST", status: 200, ct: "application/json",
+    headers: { "content-type": "application/json" }, body: "[]", marker: "Invalid Request" })),
 
   // ── the terminal programs ──────────────────────────────────────────────
   // The first marker is a BOX-DRAWING character rather than prose, and that is

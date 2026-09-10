@@ -11,6 +11,65 @@ import {
 } from "./contract-shared.ts";
 
 for (const server of ["site", "serendipity"]) {
+  test(`${server} MCP rejects malformed envelopes before treating messages as notifications`, async () => {
+    const { handleMcp } = await import("../serendipity/serendipity.ts");
+    let calls = 0;
+    const env = { MCP_RL_IMAGE_INSPECT: { limit: async () => { calls++; return { success: false }; } } };
+    const database = { prepare: () => ({ all: async () => { calls++; return []; } }) };
+    const post = (body) => {
+      const request = new Request("https://aadhar.sh/mcp", { method: "POST", body: JSON.stringify(body) });
+      return server === "site" ? handleSiteMcp(request, env, context()) : handleMcp(request, {}, database);
+    };
+    const notification = {
+      jsonrpc: "2.0", method: "tools/call",
+      params: { name: server === "site" ? "image_inspect" : "list_contributors" },
+    };
+    const invalid = { jsonrpc: "2.0", id: null, error: { code: -32600, message: "Invalid Request" } };
+    // An ID requests a reply even when the method's name says notifications.
+    for (const method of ["unknown", "notifications/initialized"]) {
+      const response = await post({ jsonrpc: "2.0", id: "reply", method });
+      assert.equal(response.status, 200);
+      assert.deepEqual(await response.json(), {
+        jsonrpc: "2.0", id: "reply", error: { code: -32601, message: `Method not found: ${method}` },
+      });
+    }
+    // Missing IDs only silence valid request envelopes. Invalid IDs must not
+    // reach a tool, and cannot be echoed into a response's correlation field.
+    for (const id of [true, false, {}, [], [1]]) {
+      const response = await post({ ...notification, id });
+      assert.equal(calls, 0, `invalid ID ${JSON.stringify(id)} reached a tool`);
+      assert.deepEqual(await response.json(), invalid);
+    }
+    for (const body of [null, false, 1, "hello", {}, [],
+      { method: "tools/list" }, { jsonrpc: "1.0", method: "ping" },
+      { jsonrpc: "2.0", method: 1 }, { jsonrpc: "2.0", method: "" },
+      ...[null, false, 1, "params"].map((params) => ({ jsonrpc: "2.0", method: "ping", params })),
+    ]) {
+      const response = await post(body);
+      assert.equal(response.status, 200, JSON.stringify(body));
+      assert.deepEqual(await response.json(), invalid, JSON.stringify(body));
+    }
+    assert.equal(calls, 0);
+    // A batch keeps errors for malformed entries while suppressing only its
+    // notifications. A nested array is one invalid entry, not another batch.
+    const response = await post([null, {}, [], notification, { jsonrpc: "2.0", method: "ping", id: "reply" }]);
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), [invalid, invalid, invalid, { jsonrpc: "2.0", id: "reply", result: {} }]);
+    assert.equal(calls, 1);
+    for (const id of [null, 0, "", 1.5, "request"]) {
+      for (const params of [undefined, {}, []]) {
+        const response = await post({ jsonrpc: "2.0", method: "ping", id, params });
+        assert.deepEqual(await response.json(), { jsonrpc: "2.0", id, result: {} });
+      }
+    }
+    for (const body of [notification, [notification]]) {
+      const response = await post(body);
+      assert.equal(response.status, 202);
+      assert.equal(await response.text(), "");
+    }
+    assert.equal(calls, 3, "valid notifications still execute exactly once each");
+  });
+
   test(`${server} MCP validates notifications before dispatch and never replies to them`, async () => {
     const { handleMcp } = await import("../serendipity/serendipity.ts");
     let calls = 0;

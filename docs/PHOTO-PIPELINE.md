@@ -67,6 +67,10 @@ The workflow checks derivations before processing, records only the derivations
 it regenerated, and verifies the result. Its PR includes those records, their
 lock file, and the routine's output paths. Unexpected output stops publication.
 An encoder failure also stops the rerender before hashing can accept partial tiers.
+Local ingest requires a successful outcome for every scheduled R2 upload before
+hashing or updating the photo index. A failed transfer names its key and stops
+the run. Earlier successful uploads and generated local tiers remain; this is
+not a batch rollback. Rerunning retries the uploads.
 
 Review the artifact diff and use the [site release path](MAINTENANCE.md#cicd-release-path).
 The Worker bundles the photo index and hash map. There is no post-release
