@@ -257,8 +257,6 @@ async function readResource(uri, request) {
   finally { clearTimeout(timer); }
 }
 
-const mcpCors = mcpCorsHeaders;
-
 function errorResult(message) { return { _error: String(message).slice(0, 400) }; }
 
 // The five tools that spend something the caller does not own: a fetch of a URL
@@ -349,7 +347,7 @@ async function callTool(name, args, request, env, ctx): Promise<ToolOutcome> {
 }
 
 export async function handleSiteMcp(request, env, ctx) {
-  const cors = mcpCors();
+  const cors = mcpCorsHeaders();
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
   const respond = (body, status = 200) => body === null
     ? new Response(null, { status, headers: cors })
@@ -359,15 +357,14 @@ export async function handleSiteMcp(request, env, ctx) {
   let payload;
   try { payload = await request.json(); } catch { return respond({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "Parse error" } }); }
   const rpcError = (id, code, message) => ({ jsonrpc: "2.0", id: id === undefined ? null : id, error: { code, message } });
-  const handleOne = async (msg) => {
-    const hasId = asRecord(msg) !== null && "id" in msg;
-    if (!msg || msg.jsonrpc !== "2.0" || asText(msg.method) === null) return hasId ? rpcError(msg.id, -32600, "Invalid Request") : null;
+  const dispatch = async (msg) => {
+    if (!msg || msg.jsonrpc !== "2.0" || asText(msg.method) === null) return rpcError(msg?.id, -32600, "Invalid Request");
     const id = msg.id;
     try {
       // Version first, then the routing headers. Both rules are shared with
       // /serendipity/mcp (lib/mcp-protocol.js) so the two servers cannot
       // diverge on which requests they refuse.
-      const refused = mcpGate(msg, request, id, hasId);
+      const refused = mcpGate(msg, request);
       if (refused !== null) return refused;
 
       // MUST be implemented as of 2026-07-28. Identity, capabilities and
@@ -412,10 +409,14 @@ export async function handleSiteMcp(request, env, ctx) {
         if (out?._mcp) return MCP.result(id, { content: out._mcp.content, structuredContent: out._mcp.structured });
         return MCP.result(id, { content: [{ type: "text", text: JSON.stringify(out, null, 2) }], structuredContent: out });
       }
-      return hasId ? rpcError(id, -32601, `Method not found: ${msg.method}`) : null;
+      return rpcError(id, -32601, `Method not found: ${msg.method}`);
     } catch (error) {
-      return hasId ? rpcError(id, -32603, `Internal error: ${String(error?.message || error).slice(0, 240)}`) : null;
+      return rpcError(id, -32603, `Internal error: ${String(error?.message || error).slice(0, 240)}`);
     }
+  };
+  const handleOne = async (msg) => {
+    const reply = await dispatch(msg);
+    return asRecord(msg) !== null && "id" in msg ? reply : null;
   };
   if (Array.isArray(payload)) {
     // Cap the batch. The crawl budgets are not atomic under concurrency: a batch

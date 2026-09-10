@@ -2,10 +2,84 @@
 // Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
 import {
   MCP_SUPPORTED_VERSIONS,
+  MODERN_META,
   assert,
+  context,
+  handleSiteMcp,
   readFileSync,
   test,
 } from "./contract-shared.ts";
+
+for (const server of ["site", "serendipity"]) {
+  test(`${server} MCP validates notifications before dispatch and never replies to them`, async () => {
+    const { handleMcp } = await import("../serendipity/serendipity.ts");
+    let calls = 0;
+    const env = { MCP_RL_IMAGE_INSPECT: { limit: async () => { calls++; return { success: false }; } } };
+    const database = { prepare: () => ({ all: async () => { calls++; return []; } }) };
+    const path = server === "site" ? "/mcp" : "/serendipity/mcp";
+    const name = server === "site" ? "image_inspect" : "list_contributors";
+    const post = (body, headers = {}) => {
+      const request = new Request(`https://aadhar.sh${path}`, {
+        method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json", ...headers },
+      });
+      return server === "site" ? handleSiteMcp(request, env, context()) : handleMcp(request, {}, database);
+    };
+    const notification = { jsonrpc: "2.0", method: "tools/call", params: { name, ...MODERN_META } };
+    const refusals = [
+      { params: { name, _meta: { "io.modelcontextprotocol/protocolVersion": "1900-01-01" } }, headers: {}, code: -32022, status: 400 },
+      { params: { name, _meta: { "io.modelcontextprotocol/protocolVersion": "2026-07-28" } }, headers: {}, code: -32602, status: 400 },
+      { params: notification.params, headers: { "mcp-method": "tools/list" }, code: -32020, status: 200 },
+      { params: notification.params, headers: { "mcp-name": "another_tool" }, code: -32020, status: 200 },
+    ];
+    for (const { params, headers, code, status } of refusals) {
+      const blocked = { ...notification, params };
+      for (const body of [blocked, [blocked]]) {
+        const before = calls;
+        const response = await post(body, headers);
+        assert.equal(calls, before, `${code}: an id-less call reached the tool`);
+        assert.equal(response.status, 202);
+        assert.equal(await response.text(), "");
+      }
+      // Correlated requests still receive the existing error and HTTP status.
+      const response = await post({ ...blocked, id: 0 }, headers);
+      assert.equal(response.status, status);
+      const reply = await response.json();
+      assert.equal(reply.id, 0);
+      assert.equal(reply.error.code, code);
+      assert.equal(calls, 0);
+    }
+
+    // Silence is a reply policy, not permission to drop valid tool execution.
+    for (const params of [{ name }, notification.params]) {
+      const before = calls;
+      const response = await post({ ...notification, params });
+      assert.equal(calls, before + 1, "a valid legacy or modern notification must run once");
+      assert.equal(response.status, 202);
+      assert.equal(await response.text(), "");
+    }
+    for (const id of [null, 0, ""]) {
+      const before = calls;
+      const response = await post({ ...notification, id });
+      assert.equal(calls, before + 1);
+      assert.equal(response.status, 200);
+      const reply = await response.json();
+      assert.equal(reply.id, id, "an explicit null, zero or empty ID still requests a reply");
+      if (server === "site") assert.equal(reply.result.isError, true, "the tool's rate limit still applies");
+      else assert.deepEqual(reply.result.structuredContent, { contributors: [] });
+    }
+    const before = calls;
+    const response = await post([
+      notification,
+      { ...notification, params: refusals[0].params },
+      { ...notification, id: "reply" },
+      { jsonrpc: "2.0", method: "notifications/initialized" },
+      { jsonrpc: "2.0", method: "unknown" },
+    ]);
+    assert.equal(calls, before + 2, "only the two valid calls in a mixed batch may run");
+    assert.equal(response.status, 200);
+    assert.deepEqual((await response.json()).map((reply) => reply.id), ["reply"]);
+  });
+}
 
 // ── both MCP servers speak one protocol ─────────────────────────────
 // This origin publishes TWO MCP servers, /mcp and /serendipity/mcp. They share
