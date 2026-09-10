@@ -229,11 +229,11 @@ does not make a failed write safe to ignore.
 
 ## Current baseline
 
-- `smol-toml` 1.7.1 parses Cargo manifests for the dependency audit and relock
+- `smol-toml` 1.8.0 parses Cargo manifests for the dependency audit and relock
   writer under both Node and Bun. It is a development dependency with no
   transitive dependencies. The census retains Git and path dependencies without
   inventing semantic versions; each needs an explicit versionless policy.
-- Wrangler 4.129.1 is the exact root pin shared by all Worker projects, and
+- Wrangler 4.130.0 is the exact root pin shared by all Worker projects, and
   since 2026-09-02 it is also cal's test harness: `cal/test` runs on bun:test
   against `createTestHarness`, so the tree carries exactly one Wrangler, one
   Miniflare and one Workerd by construction. Until that day `cal` declared
