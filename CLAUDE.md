@@ -1342,6 +1342,10 @@ one of them was undocumented until `tools:check` went looking (2026-08-14):
 > the difference between an ambient encoder and the pinned grid encoder.
 > Version drift is advisory. Review the selected executable's callers and verify
 > regenerated artifacts before updating a recorded version.
+>
+> Photo writers source `tools/photos/require-exif-sooc.sh` before processing
+> images. The shared guard rejects failed or malformed version probes; callers
+> must still handle errors from each metadata edit.
 
 ### `<picture>` + content-addressed thumbnails
 

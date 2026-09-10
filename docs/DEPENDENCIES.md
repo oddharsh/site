@@ -221,6 +221,12 @@ and record versions and derivations only after verification, using the
 [photo procedures](MAINTENANCE.md#add-photos-locally). Content-addressed bytes
 require new hashes and fresh derived metadata when they change.
 
+The photo writers source [`require-exif-sooc.sh`](../tools/photos/require-exif-sooc.sh)
+before image processing. It requires a successful version probe at or above
+`min_version`; `tools:check` rejects a missing guard or a floor that disagrees
+with the declaration. Metadata edits must also succeed: a supported version
+does not make a failed write safe to ignore.
+
 ## Current baseline
 
 - `smol-toml` 1.5.2 parses Cargo manifests for the dependency audit and relock
