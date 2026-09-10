@@ -4534,314 +4534,96 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     injection class in workflow code is on you to read for. Grep new workflows for
     `\$\{\{` inside `run:` and route values through `env:` instead.
 
-28. **EVERYTHING BELOW IS THE PRE-ADOPTION RECORD, and the tool it describes was
-    RETIRED on 2026-08-24.** `bun run bun:check` no longer exists. Bun was
-    adopted on 2026-08-20 (gotcha 38), so "still not adopted" is history, and the
-    control died of something narrower: node cannot build this repo at all any
-    more. `lib/link-integrity.ts` parses documents with HTMLRewriter, which is a
-    bun and workerd global, so `node tools/build.ts` dies with `ReferenceError:
-    HTMLRewriter is not defined` and the NODE half of a node-versus-bun diff has
-    no second side. The same line took the nightly dictionary roll down for three
-    nights (#567).
+28. **Bun upgrades must preserve build bytes.** The runtime is pinned in
+    `package.json`'s `packageManager`; `bun run bun:pin` compares a candidate
+    against that exact runtime. Its stable-release, age, dictionary, lockfile,
+    build, and test gates are described in
+    [DEPENDENCIES.md](docs/DEPENDENCIES.md#bun-in-packagemanager) and implemented
+    in `tools/bump-bun-pin.ts`. The nightly `bun-pin.yml` workflow runs them
+    before proposing a change.
 
-    **`bun run bun:pin` is what replaced it**, and it asks the question that
-    replaced this one: whether to move `packageManager` to the bun that shipped
-    this week. Node was the right baseline while adoption was the question. Now
-    that production builds with `bun tools/build.ts`, bun-against-bun is the pair
-    that decides whether a content-addressed URL moves. The byte-identical
-    paragraph below is its gate 5, unchanged and still the bar, and the zstd
-    probe moved to `tools/lib/bun-pin.ts` rather than being rewritten.
+    `/a/` and `/i/` are content-addressed: one differing byte changes a URL and
+    can invalidate dictionaries and CSP hashes. A successful build alone is
+    insufficient. The comparison rejects a baseline runtime that differs from
+    the pin and restores the pinned `.build/` output through `finally` after a
+    candidate build failure; `process.exit()` would skip that restoration.
 
-    Two invariants left with the file and are asserted elsewhere rather than
-    lost. A comparison whose two halves are the same runtime is a green result
-    with no control, which check-bun.ts enforced by refusing to run under bun and
-    bump-bun-pin.ts enforces from the other side by refusing a baseline that is
-    not the pin. And a build comparison must restore `.build/` through a
-    `finally`, since `process.exit()` skips one.
+    `bun:check` was retired on 2026-08-24. Its Node-versus-Bun build comparison
+    no longer has a Node side: `tools/lib/link-integrity.ts` uses HTMLRewriter,
+    which Node does not provide. Use the current Bun-versus-Bun gates instead.
 
-    Keep the rest for the measurements and for the `Response` finding at the
-    end, which is about runtimes rather than about which one this repo runs.
+    The historical adoption trial (2026-08-10, Node 26.7.0 against Bun
+    1.4.0-canary.1+827475e21) produced 1,975 identical files in 14.4s versus
+    7.1s, with 206 Bun tests passing. Its dictionary control measured
+    73 / 24 / 73 bytes for no/right/wrong dictionary.
+    `tools/lib/bun-pin.ts` retains the runnable capability probe.
 
-    **Bun runs this build byte-identically and about twice as fast, and it is
-    still not adopted.** `bun run bun:check` WAS the control, in the same idiom as
-    `kitesurf:check`: it probed the zstd dictionary option, diffed a full node
-    build against a full bun build file by file, and ran the contract suite
-    under `bun test`. Measured 2026-08-10, node v26.7.0 against bun
-    `1.4.0-canary.1+827475e21`:
+    **Keep both runtime test suites.** Bun once rejected a test that reused a
+    response body after `withSecurityHeaders` had locked it; Node's undici
+    accepted the reuse. The test now creates fresh responses.
+    `bun run test` and `bun run test:node` exercise the same contracts under
+    both runtimes. Investigate disagreements without weakening the tests.
 
-    | question | result |
-    |---|---|
-    | zstd honours `dictionary` | yes, 73 none / 24 good / 73 wrong |
-    | build output byte-identical | yes, 1975 files, 0 differing |
-    | wall clock | 14.4s node against 7.1s bun |
-    | contract suite under `bun test` | 206 pass, 0 fail |
+29. **Use the installed Wrangler under Node, without a package-manager lookup.**
+    Tools call `wranglerCommand()` from `tools/lib/wrangler-bin.ts`; Workers
+    Builds calls `.github/deploy-wrangler.sh`. Both name the root's installed
+    Wrangler entry file and select Node. Missing dependencies must fail locally.
+    `npx` and `bun x` can fetch an uninstalled binary; the original control
+    found npx running Wrangler 4.105.0 against a 4.120.0 pin. The old
+    `pnpm exec` path failed when this repo moved to Bun.
 
-    **BYTE-IDENTICAL is the bar, and it is much higher than "the build
-    succeeds".** `/a/` and `/i/` are content-addressed, so a single differing
-    byte mints a new URL, orphans every committed `a-dict` snapshot naming the
-    old hash, and moves the CSP hashes the documents are served under. A build
-    that is 2x faster and one byte different is not a faster build.
+    When auditing spawns, search quoted command tokens as well as shell text.
+    A search for `npx wrangler` missed calls written as
+    `execFile("npx", ["wrangler", ...])`; the same mistake later hid `pnpm`
+    calls when the toolchain moved to Bun. The contract suite enforces the
+    shared runner and rejects package-manager spawns in tools.
 
-    Three things keep it unadopted, and only the first is about bun. The newest
-    STABLE bun is **1.3.14** (2026-05-13), which predates the dictionary fix
-    (oven-sh/bun#34427, merged 2026-07-18) and silently ignores
-    `zstdCompressSync`'s `dictionary`; pinning the build path to a canary trades a
-    correctness bug for an unreleased revision. wrangler, miniflare and workerd
-    are the deploy path AND the route oracle, and they are node-pinned. And the
-    win is seconds on a step CI already spends far longer on in dry-runs.
+    The root's full-traffic fallback is named `deploy:direct` deliberately.
+    Package managers can resolve a shorthand such as `deploy` to a script
+    before their own built-in command. Use the release path documented above;
+    the standalone Reader's `deploy` script publishes only that auxiliary Worker.
 
-    **The failure here would be LOUD, which is worth knowing before this reads
-    scarier than it is.** build.ts already feature-detects the same collapse and
-    throws (search `expected a collapse`), so bun 1.3.14 kills the build rather
-    than shipping no-op deltas. That guard exists because the no-op shipped for a
-    full deploy once. The ENGINE is silent; this build is not.
+    Install policy lives in `bunfig.toml`: `minimumReleaseAge` counts seconds,
+    and the declared window is 24 hours. Name-based exclusions persist across
+    future versions; remove an exception when its reason ends. Approved lifecycle
+    scripts are listed in `package.json`'s `trustedDependencies`. Use frozen installs in CI,
+    including from `lens-reader/` for its separate lockfile and dependencies;
+    Bun needs no `--ignore-workspace` flag there.
 
-    **Bun's spec-strict `Response` found a real defect in our suite**, which is
-    the byproduct worth keeping even if bun is never adopted. `withSecurityHeaders`
-    rebuilds every response as `new Response(response.body, …)`, which per Fetch
-    LOCKS the body it was handed, and one contract test pushed the same four case
-    objects through it twice. Bun threw `Body object should not be disturbed or
-    locked`; node's undici allows it. The assertions were about headers, so the
-    leniency was never load-bearing, and the test now builds its cases fresh per
-    pass. **A suite that passes on one runtime and not another is reporting a
-    fact about the runtime**, so run the other one occasionally even when you have
-    no intention of switching.
+    **Dashboard command changes still require dashboard-first ordering.**
+    `config/infra.json` records the Workers Builds commands, and `infra:check`
+    compares them with the dashboard. Changing the declaration first invents
+    drift that blocks its own required check. Validate a changed command with
+    a non-production branch build, then keep the dashboard and declaration in
+    that order. A local dry-run cannot prove the build image can launch it.
 
-29. **This repo runs pnpm, and the migration turned up four things that bite.**
-    Switched 2026-08-10 after measuring npm, pnpm, bun and all three yarn 4
-    linkers against this tree. Every one built identically and passed the full
-    suite, so the choice came down to cost rather than capability: a second
-    repo's dependencies cost pnpm **4 MB** of real disk against npm's **459 MB**
-    (APFS clones the store, so `du` reports 340 MB and is wrong), and warm
-    installs run 1.50s against 3.71s. Yarn was ruled out on a hard failure rather
-    than a preference — the 4.9.1 that Workers Builds ships cannot install this
-    repo at all, because its builtin TypeScript compat patch expects
-    `lib/_tsc.js` and TypeScript 7 has no such file (controls both ways: TS 5.9.3
-    installs on 4.9.1, TS 7.0.2 installs on 4.18.0). For bun, see gotcha 28.
+30. **A runtime pin does not prove the build image can bootstrap it.** Verify
+    that the image can launch the pinned binary, then read the lockfile that
+    binary writes. A workstation install proves neither. Bun setup and upgrade
+    gates live in `.github/actions/setup-bun/action.yml` and
+    `tools/bump-bun-pin.ts`; the release branch build supplies the image check.
 
-    **`pnpm <script>` runs the script, and that made `deploy` a loaded gun.**
-    The root release script is **`deploy:direct`** now, and the rename is the
-    whole point rather than tidiness. Under npm, reaching a 100% production
-    deploy required the word `run`. Under pnpm, `pnpm deploy` is a plausible
-    shorthand, and it does NOT hit pnpm's builtin `deploy` the way `pnpm deploy
-    --help` in an empty directory implies: a script of the same name wins, so it
-    starts `wrangler deploy` against production. Verified the hard way while
-    testing that assumption. `lens-reader` keeps a plain `deploy` on purpose,
-    since it publishes a demo Worker rather than aadhar.sh.
+    The abandoned pnpm 12 trial illustrates the two distinct failures. In the
+    2026-08-10/11 controls, pnpm 10.11.1's self-switch to 12.0.0-rc.3 failed
+    with `ENOEXEC`: it tried to execute the placeholder that pnpm 12's
+    postinstall was meant to replace with a native binary. The old reader also
+    rejected the new lockfile's `---` separator despite an unchanged
+    `lockfileVersion: '9.0'`. Fixing that separator would not fix the earlier
+    launch failure. Both were measured locally; the matching cause of two
+    failed Workers Builds runs was inferred, not observed in their logs.
 
-    **A package published in the last 24 hours is REFUSED**, by
-    `minimumReleaseAge: 1440` in `pnpm-workspace.yaml`. It is pnpm 11's default
-    and is written down explicitly so it stays a decision. The bill arrives in CI
-    rather than locally, because `--frozen-lockfile` re-checks the policy against
-    the COMMITTED lockfile: a dependabot PR opened minutes after a release fails
-    to INSTALL until the package turns a day old or lands in
-    `minimumReleaseAgeExclude`. `pnpm install` regenerates that list. It also
-    fires on any job that installs an OLDER commit — `perf-diff.yml` builds the
-    merge base using the workflow from your branch, so a base predating the
-    exclude list gets the policy without it. Self-resolving once this is on main,
-    and the general shape is that a new policy against an old tree fails on the
-    gap between them.
+    Historical install measurements from 2026-08-10, four runs each, minimum
+    steady-state time:
 
-    **It also fires on any job that installs an OLDER commit**, which is a case
-    worth knowing before you go debugging one. `perf-diff.yml` checks out the
-    merge base and builds it, using the WORKFLOW from your branch against the
-    TREE from the base, so a commit predating `minimumReleaseAgeExclude` gets
-    the policy with no exclude list and fails. That was self-resolving for the
-    pnpm migration itself (once this landed on main, every merge base carried
-    the list), and it generalises: a workflow that builds an old tree with a new
-    policy will fail on the gap between them, and the fix belongs in the job
-    rather than in the policy. `perf-diff` gates nothing, so it was left to
-    resolve itself; `validate` would not have that luxury.
-
-    **`allowBuilds` is pnpm 11 only, and the build image runs pnpm 10.11.1.**
-    pnpm 10 spells the same idea `onlyBuiltDependencies` and ignores this key
-    silently, so `esbuild` and `workerd` postinstalls do not run there. Harmless
-    today, because every native dependency here ships its platform binary through
-    `optionalDependencies` and passes its probe with the postinstall blocked
-    (measured; npm 11.19 blocks them too and always did). It stops being harmless
-    the day something genuinely needs its build step.
-
-    **`npx` is `pnpm exec` now, and the reason is the registry.** `npx` FETCHES
-    what it cannot resolve locally — pointed at a nonexistent binary it reached
-    `registry.npmjs.org` even under `--no-install`, while `pnpm exec` failed
-    locally with no network call. On a repo that pins Wrangler exactly and runs
-    `check-wrangler` on every PR to enforce one version, a command that will
-    silently download some other one is a hole in that guarantee. **`pnpm dlx` is
-    npx's true twin and is the WRONG tool here**: all 30 call sites were `npx
-    wrangler`, wrangler is a pinned devDependency, and `dlx` would fetch from the
-    registry and ignore the pin. Use `dlx` only for something genuinely not in
-    `package.json`.
-
-    **"all 30 call sites" was wrong, and EIGHT survived in `scripts/` until
-    2026-08-12.** `check-checkpoints.mjs`, `deploy-promote.mjs`, `lens-webmcp.mjs`
-    (x2), `perf-budget.mjs` (x2), `perf-snapshot.mjs` and `release-status.mjs` each
-    spawned `execFile("npx", ["wrangler", …])`, which the original sweep missed
-    because it read as a STRING ARGUMENT rather than a shell command, so no grep
-    for `npx wrangler` as a phrase would find it. That is the same blind spot the
-    `holding/` rename hit from the other direction: a path or command assembled
-    from array elements is invisible to a search for the assembled form.
-
-    The worst of the eight was `deploy-promote.mjs`, so **the wrangler that moved
-    production traffic depended on how the ramp was invoked**: under `pnpm run` it
-    got the pin, and from a tree with no `node_modules` it got whatever npx had
-    cached (measured: 4.105.0 against a pinned 4.120.0). All eight are `pnpm exec`
-    now and were each exercised afterwards, since a spawn failure here surfaces as
-    a missing binary at the worst moment rather than at review.
-
-    The general rule the sweep needed: grep for `"npx"` as a quoted token, not for
-    `npx <binary>` as a phrase.
-
-    **The sweep finished on 2026-08-14, and the last holdouts were the two
-    Workers Builds dashboard commands.** This paragraph used to say all three
-    `npx` strings would deliberately survive, on the reasoning that `npx
-    wrangler` was measured resolving pnpm's `node_modules/.bin` so the swap
-    bought nothing. That reasoning was incomplete: npx FETCHES what it cannot
-    resolve locally, so a build image whose install left no linked wrangler
-    would publish production with a registry download and say nothing, which is
-    precisely what this gotcha's own sweep measured in `deploy-promote.mjs`
-    (4.105.0 against a pinned 4.120.0). `pnpm exec` turns that silent
-    wrong-version publish into a loud failure. Both commands moved ONCE MORE
-    when the tree became bun, because `pnpm exec` reads `packageManager` and
-    refuses on a bun tree outright: they are `bash .github/deploy-wrangler.sh
-    versions upload` now, and that wrapper runs the pinned entry file under node
-    and fetches nothing, which is the same property `pnpm exec` was picked for.
-
-    **The ORDER survives the migration and is the part to keep.** Those two
-    strings in `infra.json`, plus the mirrored copies in `wrangler.jsonc` and
-    `check-infra.mjs`, RECORD what is typed into the Cloudflare dashboard rather
-    than commands this repo runs. `check-infra.mjs` compares them against the
-    live values with an exact string match, and `validate` is a required check,
-    so editing this file first fails on drift it invented itself and blocks its
-    own merge. **Dashboard FIRST, strings second, every time.**
-
-    **What a workstation cannot check here is whether the Workers Builds deploy
-    shell can run the command at all**, since `pnpm exec` dry-running clean
-    locally says nothing about that image. A branch build is the proof, which is
-    why the Non-production branch deploy command is the right place to stage any
-    future change to these two: it is the only trigger whose failure costs no
-    release.
-
-    **`lens-reader` NEEDED `pnpm install --ignore-workspace`, and under bun it
-    needs nothing.** A bare `bun install` in that directory resolves its own
-    `package.json` and creates `lens-reader/node_modules`, which is what CI runs;
-    do not add a flag looking for parity with the era below, since the flag pnpm
-    wanted does not exist here. The pnpm behaviour, kept because the reason the
-    directory sits outside the workspace has not changed: it deliberately
-    stays out of the workspace (readability + linkedom are megabytes that only that
-    Worker bundles), and under pnpm a bare `pnpm install` inside it walks UP to
-    the root `pnpm-workspace.yaml`, installs the five workspace projects, and
-    never creates `lens-reader/node_modules` at all. Its tests then die on
-    `ERR_MODULE_NOT_FOUND` with a `node_modules missing` warning as the only
-    clue. npm simply installed the local `package.json`, so this is a behaviour
-    change rather than a misconfiguration, and any future standalone project
-    inside this tree inherits it.
-
-    One more, verified rather than assumed: `pnpm import` does not carry
-    `overrides` into the lockfile, so the first `--frozen-lockfile` install after
-    adding one fails with `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH` until a single
-    non-frozen install bakes it in. That is a one-time step and the error names
-    the fix.
-
-30. **pnpm 12 writes a lockfile pnpm 10 cannot read, and the SELF-SWITCH is the
-    only thing between that and a broken release.** Measured 2026-08-10 against
-    `12.0.0-rc.3`, kept as draft #309 rather than merged. The pin here is
-    **11.21.0**.
-
-    Everything in this repo works under 12: `--frozen-lockfile` installs clean,
-    the contract suite is 206/206, typecheck exits 0, and the build is
-    BYTE-IDENTICAL to the pnpm 11 baseline across all 1975 files. What fails is
-    an older pnpm reading what it writes. pnpm 12 prepends a `---` YAML document
-    separator, and **pnpm 10.11.1, the version the Workers Builds image runs**,
-    refuses it outright:
-
-    ```
-    ERR_PNPM_BROKEN_LOCKFILE  The lockfile at ".../pnpm-lock.yaml" is broken:
-    expected a single document in the stream, but found more
-    ```
-
-    `lockfileVersion` STAYS `'9.0'`, so this is the separator alone rather than a
-    schema bump, and one upstream line could retire the entire objection.
-
-    **This note first said production would still build, because pnpm reads
-    `packageManager` before it opens the lockfile and self-switches to the
-    pinned version. That was wrong, and the correction is the whole finding:
-    THE SELF-SWITCH IS WHAT BREAKS.** Measured 2026-08-11 by running the build
-    image's own path, pnpm 10.11.1 with self-switching left at its default ON:
-
-    ```
-    ERROR  Failed to switch pnpm to v12.0.0-rc.3. Looks like pnpm CLI is
-    missing at ".../pnpm/12.0.0-rc.3/bin" or is incorrect
-    spawnSync .../pnpm/12.0.0-rc.3/bin/pnpm ENOEXEC
-    ```
-
-    The file it tries to exec is a PLACEHOLDER: *"This is a placeholder. pnpm's
-    native binary replaces this file during installation (see ./install.js)."*
-    pnpm 12 ships its CLI as a per-platform native executable that a postinstall
-    step swaps in, where pnpm 11's equivalent is an ordinary
-    `#!/usr/bin/env node` script. So the older pnpm downloads the newer one,
-    finds text with no shebang, and dies before it ever reads the lockfile.
-
-    **The lockfile incompatibility above is therefore SECOND-ORDER.** It is real,
-    and nothing reaches it. Fixing the `---` separator upstream would not make
-    this work.
-
-    **It is also gotcha 29's `allowBuilds` warning coming due.** That note records
-    the key as pnpm 11 only, silently ignored by the pnpm 10 the build image
-    runs, and ends by saying it stops being harmless the day something genuinely
-    needs its build step. pnpm 12 is that day, and the something is pnpm itself.
-    Two notes filed separately turn out to describe one failure.
-
-    Scope of the claim, since the distinction matters. The ENOEXEC, the
-    placeholder, and the pnpm 11 contrast are all measured locally. That Workers
-    Builds hits the SAME thing is inference: its log needs dashboard access this
-    environment does not have. What is measured about production is that two
-    builds of the pnpm 12 branch failed while `validate` passed on both, and the
-    second ran with rc.3 at 38h, which rules out the `minimumReleaseAge` floor
-    that was the other candidate.
-
-    The general rule outlives the instance, and it is wider than this note drew
-    it at first: **check that the BUILD IMAGE can RUN the version you pin, and
-    then that it can READ what that version writes.** Both are interchange
-    surfaces between two machines on different versions, the handoff comes
-    first, and "it installs here" tests neither of them. Pinning
-    `packageManager` looks like it removes the version-skew problem and actually
-    moves it one layer down, into whether the old binary can launch the new one.
-
-    **What waiting costs is worth writing down, because it is not nothing.**
-    Benchmarked on this repo 2026-08-10, four runs each, steady state (the
-    minimum, since pnpm 11 spanned 5.9-14.0s while the others held within 0.3s):
-
-    | | cold | warm | no-op |
+    | runtime | cold | warm | no-op |
     |---|--:|--:|--:|
-    | pnpm 11.21.0 | 20.0s | **5.8s** | 1.09s |
-    | pnpm 12.0.0-rc.3 | 18.2s | **2.0s** | 0.44s |
-    | bun 1.4.0-canary | **9.1s** | **1.8s** | 0.14s |
+    | pnpm 11.21.0 | 20.0s | 5.8s | 1.09s |
+    | pnpm 12.0.0-rc.3 | 18.2s | 2.0s | 0.44s |
+    | Bun 1.4.0-canary | 9.1s | 1.8s | 0.14s |
 
-    The warm install is the number that matters, since a populated store with a
-    deleted `node_modules` is what a branch switch produces, and **pnpm 12 is
-    about 2.9x faster there**, which puts it within noise of bun. That is a
-    better argument for 12 than anything in its release notes, and it is an
-    argument for going the day it ships rather than for going now.
-
-    Two things that benchmark cannot tell you, both worth knowing before rerunning
-    it. Bun is not doing the same job: it resolves from `package.json` and writes
-    its own `bun.lock` instead of installing `pnpm-lock.yaml` (scope was checked
-    and does match, same four workspace projects, 9 top-level dirs either way).
-    And **disk figures are deliberately absent**, because `du` reported 479 MB
-    against 356 MB and both are junk for the reason gotcha 29 already records:
-    APFS clones the store, so per-file accounting double-counts. Measuring that
-    honestly needs free-space deltas.
-
-    Two smaller notes. pnpm 12 adds `packageManagerDependencies`, pinning the
-    package manager itself with per-platform binaries and integrity hashes,
-    which is a real improvement and is also what makes the lockfile
-    self-referential. And this repo's own `minimumReleaseAge: 1440` BLOCKED the
-    first fetch of rc.3 for being thirty minutes too young, which is gotcha 29's
-    policy doing precisely its job.
-
-    The 11.20.0 → 11.21.0 bump that accompanies this note changes no lockfile
-    byte and no build byte, which is the contrast worth keeping: a patch bump
-    inside a major is free here, and the major is not.
+    Bun resolved its own lockfile, so this was not a test of reading pnpm's
+    format. APFS clones also make per-file `du` totals unsuitable for comparing
+    install disk cost; use free-space deltas.
 
 31. **A rule in `_headers` does not OVERRIDE a glob it sits above, it COMBINES
     with it, and for `Cache-Control` that ships a malformed header.** Cloudflare
@@ -5361,8 +5143,8 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
 
     It then does no work, while the byte-identical call under node returns a CPU
     profile. Meanwhile `deploy --dry-run` under bun returns a perfectly correct
-    bundle, and the production deploy through `.github/deploy-wrangler.sh` runs
-    wrangler under bun and succeeds. So a spot check passes and one subcommand
+    bundle. The production upload wrapper, `.github/deploy-wrangler.sh`,
+    runs Wrangler under Node and refuses to fall back to Bun. So a spot check passes and one subcommand
     silently stops measuring. `tools/lib/wrangler-bin.ts` names node for every
     tool, and a contract test pins it.
 
