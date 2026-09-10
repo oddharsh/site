@@ -29,6 +29,5 @@
     "src/worker/updates.ts": 1,
     "src/worker/whoareyou.ts": 3,
     "src/worker/writing.ts": 2
-  },
-  "total": 237
+  }
 }

@@ -15,6 +15,5 @@
     "src/client/notepad.js": 7,
     "src/client/quiz.js": 10,
     "src/client/tooltip.js": 3
-  },
-  "total": 164
+  }
 }

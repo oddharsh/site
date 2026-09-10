@@ -352,7 +352,7 @@ export default {
 // imprecise one enforced.
 type RouteHandler = (request: SiteRequest, env: Env, ctx: ExecutionContext, url: URL) => Response | Promise<Response>;
 
-// Only Lens needs to dispatch back into this Worker. Building that derived env
+// Lens and MCP dispatch back into this Worker. Building that derived env
 // in serveWorkerRequest made every favicon, redirect, JSON endpoint and static
 // page copy the whole binding object for a callback it could never call. Keep
 // the capability at the routes that consume it instead. A null marker means the
@@ -430,7 +430,7 @@ const ROUTE_TABLE: Array<[path: string, handler: RouteHandler]> = [
   ["/lens/census", handleCensus],
   ["/lens/census.json", handleCensusJson],
 
-  ["/mcp", handleSiteMcp],
+  ["/mcp", withSelfFetchHandler(handleSiteMcp)],
 
   // the terminal utilities. /terminal is the index; the programs live under it and
   // are matched by the PREFIX entry below, which also owns the 404 for a name

@@ -171,6 +171,27 @@ test("bounded response reads report truncation without buffering the tail", asyn
   assert.equal(exact.truncated, false);
 });
 
+test("bounded response reads cancel stalled producers and never report aborted prefixes", async () => {
+  for (const alreadyAborted of [false, true]) {
+    const controller = new AbortController();
+    const reason = new Error("read budget exhausted");
+    let cancelled;
+    const response = new Response(new ReadableStream({
+      start(stream) { stream.enqueue(new TextEncoder().encode("partial")); },
+      cancel(error) { cancelled = error; },
+    }));
+    if (alreadyAborted) controller.abort(reason);
+    const read = readResponseCapped(response, 100, controller.signal);
+    if (!alreadyAborted) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      controller.abort(reason);
+    }
+    await assert.rejects(read, (error) => error === reason);
+    assert.equal(cancelled, reason, "the producer receives the caller's cancellation");
+    await assert.rejects(readResponseCapped(new Response(null), 100, controller.signal), (error) => error === reason);
+  }
+});
+
 test("scheduled crawl fan-out respects its concurrency cap", async () => {
   let active = 0;
   let peak = 0;

@@ -1093,13 +1093,10 @@ Those are libjxl tools built with `-DJPEGXL_ENABLE_TOOLS=ON`, and Homebrew's
 script falls back to `/opt/zerobrew/prefix/bin`, which is where this workstation's
 source build put them.
 
-**`bun run tools:check` is the check on all of it**, declared in
-[`config/tools.json`](../config/tools.json). Its declaration tier runs on every
-PR and needs no binary; its presence tier probes this machine and is advisory in
-CI. Run it before a pipeline session on a fresh machine and it names what is
-missing and how to get it, rather than letting a script exit on a raw shell
-error four steps in. Four of the tools above were required and documented nowhere
-until it was written.
+Run `bun run tools:check` before a pipeline session on a fresh machine. It
+checks the [declared executables](../config/tools.json) and reports missing tools
+and version differences. The [system-tool guide](DEPENDENCIES.md#the-system-binaries-in-configtoolsjson)
+explains the failure rules and which encoder a version notice describes.
 
 The photo writers check the EXIF tool before processing images and stop on a
 failed metadata edit. Ingestion also stops after an incomplete encoding phase,

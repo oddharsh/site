@@ -1335,50 +1335,17 @@ one of them was undocumented until `tools:check` went looking (2026-08-14):
   The error message in that script names the formula rather than the tools and
   is misleading; the binaries are what to go find.
 
-> **The whole list is DECLARED in [`config/tools.json`](config/tools.json) and
-> `bun run tools:check` fails on drift.** It sits outside `infra.json` on
-> purpose: that file declares Cloudflare and GitHub state and diffs it against
-> those APIs, while nothing here is remote and nothing here has an API.
+> Run `bun run tools:check` before a pipeline session. The executable declarations
+> live in [`config/tools.json`](config/tools.json); the
+> [system-tool guide](docs/DEPENDENCIES.md#the-system-binaries-in-configtoolsjson)
+> explains declaration, presence, and version checks, their failure rules, and
+> the difference between an ambient encoder and the pinned grid encoder.
+> Version drift is advisory. Review the selected executable's callers and verify
+> regenerated artifacts before updating a recorded version.
 >
-> The check is tiered the same way `infra:check` is. Its DECLARATION tier reads
-> source text, needs no binary, and runs on every PR: every `for cmd in …` guard,
-> every literal `command -v`, and every `brew install` hint in the shell scripts
-> must have an entry, and both this file and MAINTENANCE.md must name it. Its
-> PRESENCE tier probes the machine and is ADVISORY in CI, because a hosted runner
-> has none of these and is not meant to.
->
-> **A third tier landed 2026-08-24: VERSION, and it is a RECORD rather than an
-> updater.** Presence answers "is avifenc here". The question that costs
-> something is "is it the avifenc that baked the library", because `/i/` is
-> content-addressed: re-encoding under a different encoder mints new URLs,
-> orphans every `a-dict` snapshot naming the old hash, and can leave derived data
-> describing pixels nobody serves, which is gotcha 41 as a check instead of a
-> postmortem. So each tool declares how to ASK its version (there is no
-> convention: `exif-sooc 0.2.0`, `jaq 3.1.1`, `sips-316`, `Version: 1.4.2`,
-> a bare `1.6.0`, and mozjpeg answering on stderr), the seven whose output ships
-> carry `bytes: true` and a `recorded` version, and drift from `recorded` is a
-> NOTICE rather than a failure. For an encoder, "newer" is not "take it": a bump
-> means re-encoding 660 files, re-hashing, and rolling the dictionaries, so the
-> signal is deliberately the local one. `brew outdated` already answers the other
-> question and this does not duplicate it.
->
-> Two of the thirteen report no version at all, and they say so with a reason
-> rather than being skipped. A tool whose declared pattern stops matching FAILS,
-> because a version tier that silently reads nothing is the same rot the floors
-> below exist to catch.
->
-> The photo writers source `tools/photos/require-exif-sooc.sh` before processing
-> images. `tools:check` requires its floor to match `min_version` and rejects a
-> declared minimum with no guard. The shared guard rejects failed or malformed
-> version probes; callers must still handle errors from each metadata edit.
->
-> The guard scanner is the load-bearing part, and it is why four prerequisites
-> could stay undocumented. Most of these preconditions are written `for cmd in
-> sips exif-sooc`, so the binary name exists only as a loop word and a grep for the
-> name finds nothing. That is gotcha 29's blind spot in different clothes: a
-> command assembled from list elements is invisible to a search for the assembled
-> form. Each scanner also carries a FLOOR and fails if its match count collapses,
-> since a scanner that matches nothing otherwise reports a pass.
+> Photo writers source `tools/photos/require-exif-sooc.sh` before processing
+> images. The shared guard rejects failed or malformed version probes; callers
+> must still handle errors from each metadata edit.
 
 ### `<picture>` + content-addressed thumbnails
 
@@ -5770,11 +5737,8 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     the SOOC originals, the og cards capture production). Hashing inputs works on
     all of them for the cost of reading 15 MB.
 
-    The baseline was VERIFIED rather than assumed, which is the half worth
-    copying. `tools.json`'s `recorded` versions are honest about being an observed
-    starting point rather than a reconstruction, and a digest recorded the same
-    way would be a claim nobody had checked. So before recording anything, the
-    library was re-baked from the committed JPEG tiers with `zenc histogram` and
+    Before recording the initial histogram digest, the library was re-baked
+    from the committed JPEG tiers with `zenc histogram` and
     packed through the exported `packHistogram`: **165 of 165 stems byte-identical,
     42,240 bins, zero drift.** Both failure shapes were then run as controls, since
     a check that has never gone red is decoration: perturbing one JPEG names it

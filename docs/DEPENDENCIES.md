@@ -199,37 +199,35 @@ to the floor itself as much as to any one feature behind it.
 
 ### the system binaries, in `config/tools.json`
 
-A third shape again, and the reason is worth stating because it inverts the two
-above. bun and node are versions you want CURRENT. The encoders here are versions
-you want RECORDED.
+[`config/tools.json`](../config/tools.json) declares the executables, lookup
+paths, callers, installation instructions, version probes, and recorded versions.
+Run `bun run tools:check` before a pipeline session:
 
-Seven of the thirteen declared binaries produce bytes that ship: `exif-sooc`,
-`sips`, `jpegtran`, `cjpeg`, `avifenc`, `cwebp`, `ffmpeg`. `public/i` is
-content-addressed, so re-encoding under a different encoder mints 632 new URLs,
-orphans every `src/dict/a-dict` snapshot naming the old hash, and can leave
-derived data describing pixels nobody serves. That last one is not hypothetical:
-gotcha 41 is the record of exactly it, where #394 re-encoded 316 thumbnails and
-the histograms went on describing the old pixels for nine days.
+- **Declaration:** check declared callers, documentation, and the supported
+  guard/install-hint patterns in the scanned photo scripts. Minimum-version
+  guards must agree with the declaration; scanner floors detect lost coverage.
+- **Presence:** use the declared path or search `PATH`. Missing required tools
+  fail locally and are advisory in CI; `--strict` applies the local rule in CI.
+  Read `optional_why` where present: an optional tool may be built on demand or
+  have a fallback, depending on its caller.
+- **Version:** probe found executables and compare byte-producing tools with
+  `recorded`. An unreadable version or violated minimum fails. A differing
+  recorded version remains a notice, including with `--strict`.
 
-So `tools:check` gained a VERSION tier that reads each binary's version and
-compares it against a `recorded` field, and drift is a NOTICE rather than a
-failure. Taking a newer encoder is a deliberate job (re-encode, re-hash,
-`bun run dict:roll`) rather than a side effect, and `brew outdated` already
-answers whether one exists. What nothing answered before is whether the binary on
-this machine is the one the committed bytes came from.
+The selected executable matters. Grid ingest and rerenders prefer the pinned
+AVIF build from [`tools/photos/libavif/build.sh`](../tools/photos/libavif/build.sh),
+then ambient `avifenc`, then `sips`. Cars and encoding studies use the ambient
+encoder. The `avifenc` entry checks that ambient installation; its drift alone
+does not establish that the grid encoder changed. Named version captures include
+the linked AOM encoder, just as `zenc` reports its linked zenjpeg version.
 
-**`recorded` is a baseline observed on 2026-08-24, not a reconstruction.** Nothing
-recorded which encoder made the current artifacts, so claiming these versions
-produced them would be inventing provenance. What is true is that they are the
-versions the next run will use, and a future re-encode updates them.
-
-Reading a version has no convention, so each tool declares its own flag and
-pattern: `exif-sooc 0.2.0`, `jaq 3.1.1`, `sips-316`, `Version: 1.4.2 (...)`,
-a bare `1.6.0`, and mozjpeg's two answering `mozjpeg version 4.1.5` on stderr.
-`ssimulacra2` and `butteraugli_main` report nothing at all and say so with a
-reason; both are metrics rather than encoders, so no shipped byte depends on
-them. A declared pattern that stops matching FAILS, because a version tier that
-silently reads nothing is the rot the floors exist to catch.
+A matching version is only one part of provenance. The declaration retains
+historical verification notes; encoder source, flags, and inputs also determine
+output. Before adopting a changed tool, identify its callers and review their
+artifacts. Regenerate affected outputs, run `photos:check` and `derive:check`,
+and record versions and derivations only after verification, using the
+[photo procedures](MAINTENANCE.md#add-photos-locally). Content-addressed bytes
+require new hashes and fresh derived metadata when they change.
 
 The photo writers source [`require-exif-sooc.sh`](../tools/photos/require-exif-sooc.sh)
 before image processing. It requires a successful version probe at or above
