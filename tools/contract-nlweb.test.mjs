@@ -242,6 +242,25 @@ test("the NLWeb lens reads both streaming dialects and names which one it got", 
   assert.deepEqual(modern.schemaTypes, [{ name: "Recipe", count: 1 }]);
 });
 
+test("NLWeb reads complete SSE events across line endings without joining JSON tokens", async () => {
+  const item = askItem("/framed");
+  const frame = "event: ignored\nevent: result\n" + JSON.stringify({ item }, null, 2)
+    .split("\n").map((line) => `data: ${line}\n`).join("") + "\n";
+  for (const ending of ["\n", "\r\n", "\r"]) {
+    const out = await lensNlweb(sseEnv("\uFEFF" + (frame + frame.trimEnd()).replace(/\n/g, ending)));
+    assert.equal(out.total, 1, "the incomplete final event must not be dispatched");
+    assert.equal(out.dialect, "v0.55");
+    assert.deepEqual(out.events, ["result"], "the last event field wins");
+    assert.equal(out.conformant, true);
+  }
+  const malformed = 'event: result\ndata: {"item":{"score":1\ndata: 2}}\n\n';
+  const bad = await lensNlweb(sseEnv(malformed));
+  assert.equal(bad.ok, false, "a data-line break is a newline, not permission to manufacture the number 12");
+  const reset = await lensNlweb(sseEnv('event: result\nevent\ndata: ' + JSON.stringify({ message_type: "result", content: [item] }) + '\n\n'));
+  assert.equal(reset.total, 1);
+  assert.equal(reset.dialect, "legacy", "an empty event field resets the event name");
+});
+
 test("the NLWeb lens keeps a shut door, an unreadable one and a locked one apart", async () => {
   const shut = await lensNlweb({ SELF_FETCH: async () => new Response("", { status: 404 }) });
   assert.equal(shut.ok, false);
@@ -552,7 +571,7 @@ test("a redirect off a vetted origin is validated per hop, not followed blindly"
   };
 
   const blocked = await run("http://169.254.169.254/mcp", () => new Response(
-    '{"jsonrpc":"2.0","result":{"tools":[{"name":"leaked"}]}}', { headers: { "content-type": "application/json" } }));
+    '{"jsonrpc":"2.0","id":1,"result":{"tools":[{"name":"leaked"}]}}', { headers: { "content-type": "application/json" } }));
   assert.deepEqual(blocked.hops, ["https://example.com/mcp"], "the blocked hop was requested anyway");
   assert.equal(blocked.out.ok, false);
   // Ours, not theirs: we declined to look, which is not the same as finding
@@ -563,7 +582,7 @@ test("a redirect off a vetted origin is validated per hop, not followed blindly"
   // And a redirect to another PUBLIC host is still followed, so this is a guard
   // rather than a blanket refusal to move.
   const moved = await run("https://elsewhere.example/mcp", () => new Response(
-    '{"jsonrpc":"2.0","result":{"tools":[{"name":"moved"}]}}', { headers: { "content-type": "application/json" } }));
+    '{"jsonrpc":"2.0","id":1,"result":{"tools":[{"name":"moved"}]}}', { headers: { "content-type": "application/json" } }));
   assert.deepEqual(moved.hops, ["https://example.com/mcp", "https://elsewhere.example/mcp"]);
   assert.equal(moved.out.ok, true);
   assert.equal(moved.out.tools[0].name, "moved");
@@ -578,7 +597,8 @@ test("a locked door is reported as locked, in whatever dialect the server refuse
   // "answered no content-type, not JSON", while Notion, Sentry, Linear, PayPal,
   // Neon, Webflow, Canva, Grafana and Wix answer an OAuth challenge body and
   // used to read as the literal string "undefined: undefined".
-  const { foreignMcpTools, rpcErrorDetail } = await import("../src/worker/lib/doors.ts");
+  const { foreignMcpTools } = await import("../src/worker/lib/doors.ts");
+  const { rpcErrorDetail } = await import("../src/worker/lib/mcp-protocol.ts");
   const answer = (body, init) => ({ SELF_FETCH: () => new Response(body, init) });
 
   const empty = await foreignMcpTools("https://aadhar.sh", answer(null, { status: 401, headers: {

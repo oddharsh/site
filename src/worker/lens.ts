@@ -13,6 +13,7 @@ import { lensRecipe, lensRecipeCatalog, lensRecipeIds, lensRecipeNonce, lensReci
 import { EXECUTION_META, executionChecks } from "./lib/agent-execution.ts";
 import { asRecord, asText, isCallable } from "./lib/parse.ts";
 import { overBudget } from "./lib/ratelimit.ts";
+import { parseMcpBody } from "./lib/mcp-protocol.ts";
 
 // The glossary. This page's whole subject is protocol names, which is fine for
 // the audience that already has them and a wall for the audience that doesn't.
@@ -1682,6 +1683,7 @@ export async function handleLensFetch(request, env, ctx) {
 }
 
 const CLOUDFLARE_AGENT_READINESS_MCP = "https://isitagentready.com/mcp";
+const CLOUDFLARE_SCORE_REQUEST_ID = "lens-cloudflare-score";
 const CLOUDFLARE_SCORE_TIMEOUT_MS = 9000;
 const CLOUDFLARE_SCORE_BODY_CAP = 192 * 1024;
 const CLOUDFLARE_SCORE_TTL = 6 * 60 * 60;
@@ -1691,20 +1693,13 @@ const CLOUDFLARE_SCORE_TTL = 6 * 60 * 60;
 // answers with Streamable HTTP / SSE today, though JSON is valid too. Parse both
 // and retain only the normalized level: a third party's complete report neither
 // belongs in our response contract nor in KV.
-export function lensParseCloudflareAgentScore(body) {
-  const messages: any[] = [];
-  for (const line of String(body || "").split(/\r?\n/)) {
-    if (!line.startsWith("data:")) continue;
-    try { messages.push(JSON.parse(line.slice(5).trim())); } catch (_e) {}
-  }
-  if (!messages.length) {
-    try { messages.push(JSON.parse(String(body || ""))); } catch (_e) {}
-  }
-  const text = messages.map((message) => {
-    const content = message && message.result && message.result.content;
-    if (Array.isArray(content)) return content.map((item) => item && item.text || "").join("\n");
-    return JSON.stringify(message && (message.result || message) || "");
-  }).join("\n");
+export function lensParseCloudflareAgentScore(body, contentType = "") {
+  const parsed = parseMcpBody(body, contentType, CLOUDFLARE_SCORE_REQUEST_ID);
+  if (!parsed.ok || !parsed.payload.result || parsed.payload.result.isError) return null;
+  const { result } = parsed.payload;
+  const text = Array.isArray(result.content)
+    ? result.content.map((item) => item && item.text || "").join("\n")
+    : JSON.stringify(result);
   const match = text.match(/\bLevel\s+([0-5])\s*\/\s*5(?:\s*(?:--|[-:\u2013\u2014])\s*\**\s*([^\n*]+))?/i);
   if (!match) return null;
   const level = Number(match[1]);
@@ -1744,13 +1739,13 @@ export async function handleLensCloudflareScore(request, env, ctx) {
         "user-agent": BOT_UA,
       },
       body: JSON.stringify({
-        jsonrpc: "2.0", id: "lens-cloudflare-score", method: "tools/call",
+        jsonrpc: "2.0", id: CLOUDFLARE_SCORE_REQUEST_ID, method: "tools/call",
         params: { name: "scan_site", arguments: { url: v.url, profile: "all" } },
       }),
       signal: controller.signal,
     });
     const capped = await lensReadCapped(response, CLOUDFLARE_SCORE_BODY_CAP);
-    const parsed = response.ok && !capped.truncated ? lensParseCloudflareAgentScore(capped.text) : null;
+    const parsed = response.ok && !capped.truncated ? lensParseCloudflareAgentScore(capped.text, response.headers.get("content-type") || "") : null;
     if (!parsed) {
       return jsonResponse({
         ok: true, available: false,

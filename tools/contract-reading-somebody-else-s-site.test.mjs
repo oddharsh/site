@@ -44,16 +44,16 @@ test("the MCP client reads both Streamable HTTP framings", async () => {
   // A server answers one JSON object or an SSE stream, at its own discretion.
   // A client that handles only the first reports the second as a broken door,
   // which is the exact dishonesty classifyDoor above exists to prevent.
-  const { parseMcpBody } = await import("../src/worker/lib/doors.ts");
+  const { parseMcpBody } = await import("../src/worker/lib/mcp-protocol.ts");
 
-  const plain = parseMcpBody('{"jsonrpc":"2.0","id":1,"result":{"tools":[]}}', "application/json");
+  const plain = parseMcpBody('{"jsonrpc":"2.0","id":1,"result":{"tools":[]}}', "application/json", 1);
   assert.equal(plain.ok, true);
   assert.equal(plain.framing, "json");
 
   // Byte-for-byte the shape mcp.deepwiki.com returns, measured 2026-08-14.
   const stream = parseMcpBody(
     'event: message\ndata: {"jsonrpc":"2.0","id":1,"result":{"tools":[{"name":"ask_question"}]}}\n\n',
-    "text/event-stream",
+    "text/event-stream", 1,
   );
   assert.equal(stream.ok, true);
   assert.equal(stream.framing, "sse");
@@ -61,19 +61,57 @@ test("the MCP client reads both Streamable HTTP framings", async () => {
 
   // The content-type is a hint, not the rule: a stream under the wrong type is
   // still a stream, and a data: line is unambiguous.
-  assert.equal(parseMcpBody('data: {"jsonrpc":"2.0","result":{}}\n\n', "text/plain").framing, "sse");
+  assert.equal(parseMcpBody('data: {"jsonrpc":"2.0","id":1,"result":{}}\n\n', "text/plain", 1).framing, "sse");
 
   // A stream carries keep-alives and notifications as well as the answer, so
   // the first line that PARSES is not necessarily the message.
   const noisy = parseMcpBody(
-    ': keep-alive\ndata: {"note":"not jsonrpc"}\ndata: {"jsonrpc":"2.0","id":1,"result":{"tools":[{"name":"real"}]}}\n\n',
-    "text/event-stream",
+    ': keep-alive\ndata: {"note":"not jsonrpc"}\n\ndata: {"jsonrpc":"2.0","id":1,"result":{"tools":[{"name":"real"}]}}\n\n',
+    "text/event-stream", 1,
   );
   assert.equal(noisy.payload.result.tools[0].name, "real");
 
   // And the two failures stay legible rather than throwing.
-  assert.equal(parseMcpBody(": keep-alive\ndata: not json\n\n", "text/event-stream").ok, false);
-  const html = parseMcpBody("<!doctype html>", "text/html; charset=utf-8");
+  assert.equal(parseMcpBody(": keep-alive\ndata: not json\n\n", "text/event-stream", 1).ok, false);
+  const html = parseMcpBody("<!doctype html>", "text/html; charset=utf-8", 1);
   assert.equal(html.ok, false);
   assert.match(html.detail, /text\/html/, "a shut door should name what it answered instead");
+});
+
+test("the catalogue reader selects a complete response to its own request", async () => {
+  const { foreignMcpTools } = await import("../src/worker/lib/doors.ts");
+  const reply = { jsonrpc: "2.0", id: 1, result: { tools: [{ name: "real" }] } };
+  const frame = (value) => JSON.stringify(value, null, 2).split("\n").map((line) => `data: ${line}\n`).join("") + "\n";
+  const noise = frame({ jsonrpc: "2.0", method: "notifications/progress", params: { progress: 1 } })
+    + frame({ ...reply, id: "1", result: { tools: [{ name: "wrong-id-type" }] } })
+    + frame({ jsonrpc: "2.0", id: "other", error: { code: -32020, message: "MCP-Protocol-Version is required" } })
+    + frame({ ...reply, method: "tools/call", result: { tools: [{ name: "request" }] } });
+  const read = async (body, contentType = "text/event-stream") => {
+    let requests = 0;
+    const out = await foreignMcpTools("https://aadhar.sh", { SELF_FETCH: async (request) => {
+      requests++;
+      assert.equal((await request.json()).id, reply.id);
+      return new Response(body, { headers: { "content-type": contentType } });
+    } });
+    assert.equal(requests, 1, "another request's error must not trigger a retry");
+    return out;
+  };
+  for (const ending of ["\n", "\r\n", "\r"]) for (const type of ["text/event-stream", "text/plain"]) {
+    const out = await read("\uFEFF" + (noise + frame(reply)).replace(/\n/g, ending), type);
+    assert.equal(out.ok, true);
+    assert.deepEqual(out.tools, [{ name: "real", description: "" }]);
+  }
+  const progress = 'data: {"jsonrpc":"2.0","method":"notifications/progress","params":{"progress":1}}\n\n';
+  assert.equal((await read(progress + 'data: ' + JSON.stringify(reply) + '\n\n')).tools[0].name, "real");
+  assert.equal((await read("\uFEFF\uFEFFdata: " + JSON.stringify(reply) + "\n\n")).ok, false,
+    "UTF-8 decoding strips exactly one BOM, not the start of a field after it");
+  for (const body of [noise, noise + frame(reply).trimEnd(), frame({ ...reply, error: {} }), frame({ result: reply.result })]) {
+    assert.equal((await read(body)).ok, false, "an incomplete or uncorrelated event is not a catalogue");
+  }
+  for (const payload of [{ ...reply, id: 2 }, { result: reply.result }, { ...reply, result: {} }]) {
+    assert.equal((await read(JSON.stringify(payload), "application/json")).ok, false);
+  }
+  const empty = await read(JSON.stringify({ ...reply, result: { tools: [] } }), "application/json");
+  assert.equal(empty.ok, true, "an explicit empty catalogue is valid");
+  assert.equal(empty.count, 0);
 });

@@ -14,6 +14,7 @@
 // Pointed at a modern-only server they fail outright, with no diagnostic they
 // can surface to a user.
 import { asRecord, asText } from "./parse.ts";
+import { sseEvents } from "./sse.ts";
 
 export const MCP_MODERN = "2026-07-28";
 export const MCP_LEGACY = ["2025-06-18", "2025-03-26", "2024-11-05"];
@@ -244,4 +245,46 @@ export function mcpGate(msg, request) {
     return { jsonrpc: "2.0", id, error: { code: ERR_HEADER_MISMATCH, message: mismatch } };
   }
   return null;
+}
+
+// Preserve useful refusals from JSON-RPC and from plain vendor/OAuth errors.
+export function rpcErrorDetail(payload) {
+  const error = payload && payload.error;
+  const code = Number.isInteger(error && error.code) ? error.code : null;
+  const message = String(
+    (error && error.message)
+    || (payload && payload.error_description)
+    || asText(error)
+    || "",
+  ).trim();
+  if (code !== null) return `${code}: ${message.slice(0, 80) || "no message"}`;
+  if (message) return message.slice(0, 90);
+  try { return JSON.stringify(error).slice(0, 90); } catch { return "an error with no readable message"; }
+}
+
+// A Streamable HTTP response can be JSON or SSE. Select the requested reply,
+// not a notification, server request or another call's result/error. The
+// content type is a hint: some servers send SSE under text/plain.
+export function parseMcpBody(text, contentType, expectedId: string | number) {
+  const type = String(contentType || "").toLowerCase();
+  const body = String(text || "");
+  const streamed = type.includes("text/event-stream") || /^(?:event|data)(?::|$)/m.test(body);
+  const framing = streamed ? "sse" : "json";
+  for (const { data } of streamed ? sseEvents(body) : [{ data: body }]) {
+    let payload;
+    try { payload = JSON.parse(data); }
+    catch {
+      if (!streamed) return { ok: false, detail: `answered ${type.split(";")[0] || "no content-type"}, not JSON` };
+      continue;
+    }
+    const reply = asRecord(payload);
+    if (reply?.jsonrpc === "2.0" && reply.id === expectedId && !("method" in reply)
+      && Object.hasOwn(reply, "result") !== Object.hasOwn(reply, "error")) {
+      return { ok: true, payload, framing };
+    }
+    // A non-RPC JSON refusal is still worth reading, but cannot authorize a
+    // protocol retry or supply a result for the caller to trust.
+    if (!streamed && reply?.error && !reply.jsonrpc) return { ok: false, detail: rpcErrorDetail(reply) };
+  }
+  return { ok: false, detail: `${streamed ? "SSE stream carried" : "answer contained"} no matching JSON-RPC response` };
 }
