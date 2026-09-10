@@ -4564,6 +4564,18 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     `bun run test` and `bun run test:node` exercise the same contracts under
     both runtimes. Investigate disagreements without weakening the tests.
 
+    **Their ISOLATION models are close rather than equal, since 2026-09-10.**
+    The bun side runs `--parallel=4 --no-isolate`, so it keeps one global per
+    WORKER across the files that worker receives; the node twin keeps
+    `--test-isolation=none`, one global for the whole run. Neither isolates,
+    which is what keeps a bun-versus-node disagreement a fact about the RUNTIME.
+    What the split costs is bounded and worth knowing: a test that depends on
+    another file's leftovers is deterministic under node and
+    scheduling-dependent under bun, so read a bun-only FLAKE as a leak before
+    reading it as a runtime difference. `--isolate` was measured (it is what
+    `--parallel` implies unless you say otherwise) and declined at about 35%
+    more CPU; `comment:test-parallel` carries that table.
+
 29. **Use the installed Wrangler under Node, without a package-manager lookup.**
     Tools call `wranglerCommand()` from `tools/lib/wrangler-bin.ts`; Workers
     Builds calls `.github/deploy-wrangler.sh`. Both name the root's installed

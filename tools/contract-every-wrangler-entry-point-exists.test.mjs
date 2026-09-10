@@ -118,7 +118,14 @@ test("Wrangler check follows every tracked project's installed resolution", asyn
   };
   const run = (status, pattern, extraEnv = {}) => {
     const result = spawnSync(process.execPath, [join(dir, "tools/check-wrangler.ts")], {
-      cwd: tmpdir(), env: { ...env, ...extraEnv }, encoding: "utf8", timeout: 5000,
+      // Per SPAWN, and not a claim about how long check-wrangler.ts takes:
+      // this case runs it thirteen times and costs 1.1s with the machine to
+      // itself. It guards against a HANG, and a hang never finishes, so 30s
+      // catches exactly what 5s caught and only waits longer to say so. The
+      // suite runs its files in parallel since 2026-09-10 and one spawn was
+      // measured past 5s under that load, surfacing as `spawnSync ...
+      // ETIMEDOUT`, which reads like a broken tool rather than a busy machine.
+      cwd: tmpdir(), env: { ...env, ...extraEnv }, encoding: "utf8", timeout: 30_000,
     });
     assert.equal(result.error, undefined);
     assert.equal(result.status, status, result.stdout + result.stderr);
