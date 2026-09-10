@@ -6,7 +6,6 @@
     "tools/check-dictionary-support.ts": 25,
     "tools/check-infra.ts": 25,
     "tools/check-kitesurf.ts": 4,
-    "tools/check-wrangler.ts": 1,
     "tools/contract-cache-the-behavioral-revalidation-lint.test.mjs": 8,
     "tools/contract-encode-read-the-container-decode-nothing.test.mjs": 5,
     "tools/contract-every-lwe-content-page-carries-a-wired-ask-surface.test.mjs": 1,
