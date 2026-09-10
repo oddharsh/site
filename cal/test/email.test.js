@@ -7,7 +7,7 @@
 //   - the .ics attachment is UTF-8→base64 (plain btoa throws on emoji/accents)
 //   - DESCRIPTION newlines are single ICS escapes, not double-escaped literals
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
-import { sendApprovalRequest, sendInvite, sendHostCopy, sendDecline } from "../src/email.js";
+import { sendApprovalRequest, sendInvite, sendHostCopy, sendDecline, sendCancel } from "../src/email.js";
 import { stubFetch } from "./harness.ts";
 
 const env = {
@@ -84,6 +84,49 @@ describe("sendApprovalRequest → Resend", () => {
   });
 });
 
+describe("sendCancel → withdrawing the guest's entry", () => {
+  const icsOf = () => b64ToUtf8(calls[0].body.attachments[0].content);
+  const cancelled = { ...booking, sequence: 1 };
+
+  it("is a CANCEL at a higher SEQUENCE on the guest's own UID", async () => {
+    await sendCancel(env, cancelled);
+    const ics = icsOf();
+    expect(ics).toContain("METHOD:CANCEL");
+    expect(ics).toContain("STATUS:CANCELLED");
+    // The three together are what make a client REMOVE the entry: the same UID
+    // it holds, a sequence that supersedes what it holds, and the method that
+    // says withdraw. Drop any one and the coffee stays on their calendar.
+    expect(ics).toContain("UID:abc123def456@cal.aadhar.sh");
+    expect(ics).toContain("SEQUENCE:1");
+    expect(calls[0].body.attachments[0].content_type).toContain("method=CANCEL");
+  });
+
+  it("stops asking for an RSVP, and still names the organizer", async () => {
+    await sendCancel(env, cancelled);
+    const ics = icsOf();
+    expect(ics).toContain("ATTENDEE;CN=Jordan Lee;RSVP=FALSE:mailto:jordan@example.com");
+    expect(ics).toContain("ORGANIZER;CN=aadharsh:mailto:coffee@aadhar.sh");
+  });
+
+  it("goes to the guest, cc's the host, and says cancelled in the subject", async () => {
+    await sendCancel(env, cancelled);
+    const { body } = calls[0];
+    expect(body.to).toEqual(["jordan@example.com"]);
+    expect(body.cc).toEqual(["coffee@aadhar.sh"]);
+    expect(body.subject).toContain("cancelled:");
+  });
+
+  it("the host's copy withdraws on the HOST uid, not the guest's", async () => {
+    await sendHostCopy(env, cancelled, { cancelled: true });
+    const ics = icsOf();
+    expect(ics).toContain("METHOD:CANCEL");
+    expect(ics).toContain("UID:abc123def456-host@cal.aadhar.sh");
+    expect(ics).not.toContain("ATTENDEE");
+    // Best-effort against an event the host owns, so the mail has to say so.
+    expect(calls[0].body.html).toContain("delete it");
+  });
+});
+
 describe("sendHostCopy → the host's own PUBLISH event", () => {
   const icsOf = () => b64ToUtf8(calls[0].body.attachments[0].content);
 
@@ -137,6 +180,19 @@ describe("sendHostCopy → the host's own PUBLISH event", () => {
     expect(icsOf()).toContain("UID:abc123def456-host@cal.aadhar.sh");
     expect(icsOf()).toContain("SEQUENCE:1");
     expect(icsOf()).toContain("Devoción");
+  });
+
+  it("carries the signed host links, and drops them once cancelled", async () => {
+    const links = { location: "https://x/loc", reschedule: "https://x/move", cancel: "https://x/off" };
+    await sendHostCopy(env, booking, { links });
+    expect(calls[0].body.html).toContain("https://x/move");
+    expect(calls[0].body.html).toContain("https://x/off");
+    // Stated on the mail because it is the one thing the attached event cannot
+    // do: editing that entry moves the host's calendar and tells nobody.
+    expect(calls[0].body.html).toContain("does not");
+    calls.length = 0;
+    await sendHostCopy(env, booking, { cancelled: true, links });
+    expect(calls[0].body.html).not.toContain("https://x/move");
   });
 
   it("escapes an attacker-controlled name and topic into the host's inbox", async () => {

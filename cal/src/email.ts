@@ -131,10 +131,34 @@ export async function sendUpdate(env, booking) {
 //
 // One click is the whole cost of ownership here, and the copy says so, because
 // a PUBLISH attachment renders as a plain add link rather than adding itself.
-export async function sendHostCopy(env, booking, { updated = false } = {}) {
+// The signed host links, all optional: sendHostCopy is called from three places
+// and only two of them have a request to mint URLs from. An annotation rather
+// than a bare `= {}`, which infers `{}` and makes every property access an error
+// under strictNullChecks (gotcha 42's lesson from the other side: a type that is
+// merely implied is a type nobody checked).
+type HostLinks = { location?: string, reschedule?: string, cancel?: string };
+
+export async function sendHostCopy(
+  env,
+  booking,
+  { updated = false, cancelled = false, links = {} }:
+    { updated?: boolean, cancelled?: boolean, links?: HostLinks } = {},
+) {
   const { name, email, topic, start, end, location } = booking;
-  const ics = buildICS(env, booking, "host");
+  const ics = buildICS(env, booking, { audience: "host", cancel: cancelled });
   const when = fmtRange(start, end, env.HOST_TIMEZONE);
+  // The signed host surface, carried on the mail the host actually keeps. These
+  // are the ONLY route a change takes to the guest: editing the attached event
+  // moves the host's own calendar and tells nobody, which is the whole reason
+  // this footer exists rather than being left implied.
+  const manage = cancelled ? "" : `
+    <p style="color:#888;font-size:12px">
+      ${links.location   ? `<a href="${esc(links.location)}">set the spot</a> &nbsp;·&nbsp; `   : ""}
+      ${links.reschedule ? `<a href="${esc(links.reschedule)}">move it</a> &nbsp;·&nbsp; ` : ""}
+      ${links.cancel     ? `<a href="${esc(links.cancel)}">cancel</a><br>` : ""}
+      these mail ${esc(name.split(" ")[0] || name)}. editing the calendar entry
+      above does not.
+    </p>`;
   const html = `
     <p><strong>${esc(name)}</strong> &lt;${esc(email)}&gt;${updated ? ", updated" : ""}.</p>
     <p><strong>when:</strong> ${esc(when)}<br>
@@ -142,26 +166,63 @@ export async function sendHostCopy(env, booking, { updated = false } = {}) {
     <blockquote style="border-left:3px solid #888;padding-left:.8em;margin-left:0;color:#333">
       ${esc(topic).replace(/\n/g, "<br>")}
     </blockquote>
-    <p>the attached .ics adds this to your calendar as <em>your</em> event: you
-       can move it, rename it or invite someone else, and none of that touches
-       what ${esc(name.split(" ")[0] || name)} is holding.
-       ${updated ? "adding it again updates the entry in place." : ""}</p>
-    <p style="color:#888;font-size:12px">
-      changing what the guest sees still goes through the signed link in the
-      request mail.
-    </p>
+    ${cancelled
+      ? `<p>cancelled. ${esc(name.split(" ")[0] || name)} has been told and the
+           slot is open again.</p>
+         <p>the attachment withdraws the entry, and it is best-effort here
+            because the copy on your calendar is <em>yours</em>: a client is
+            free to ignore a withdrawal from an outside organiser. if it is
+            still sitting there, delete it.</p>`
+      : `<p>the attached .ics adds this to your calendar as <em>your</em> event:
+           you can move it, rename it or invite someone else, and none of that
+           touches what ${esc(name.split(" ")[0] || name)} is holding.
+           ${updated ? "adding it again updates the entry in place." : ""}</p>`}
+    ${manage}
   `;
   return resendSend(env, {
     from:    `cal.aadhar.sh <noreply@aadhar.sh>`,
     to:      [env.HOST_EMAIL],
-    subject: `${updated ? "updated" : "your copy"}: ${name} — ${shortWhen(start, env.HOST_TIMEZONE)}`,
+    subject: `${cancelled ? "cancelled" : updated ? "updated" : "your copy"}: ${name} — ${shortWhen(start, env.HOST_TIMEZONE)}`,
     html,
     attachments: [{
       filename:    "coffee-host.ics",
       content:     utf8ToBase64(ics),
-      content_type: "text/calendar; method=PUBLISH",
+      content_type: `text/calendar; method=${cancelled ? "CANCEL" : "PUBLISH"}`,
     }],
     headers: { "List-Id": LIST_ID, "X-Coffee-Booking": booking.id },
+  });
+}
+
+// Withdraw a CONFIRMED booking from the guest's calendar. Distinct from
+// sendDecline, which answers a request that was never accepted and so has no
+// VEVENT anywhere: this one has to reach an entry the guest is already holding,
+// which is why it carries a METHOD:CANCEL attachment rather than prose alone.
+export async function sendCancel(env, booking) {
+  const { name, email, start, end } = booking;
+  const ics = buildICS(env, booking, { cancel: true });
+  const when = fmtRange(start, end, env.HOST_TIMEZONE);
+  const html = `
+    <p>hi ${esc(name.split(" ")[0] || name)} —</p>
+    <p>i have to cancel <strong>${esc(when)}</strong>. sorry for the
+       churn.</p>
+    <p>your calendar entry should clear itself from the attachment. if you still
+       want to do this, grab another slot at
+       <a href="${esc(env.HOST_PUBLIC_URL || "https://aadhar.sh")}/coffee">aadhar.sh/coffee</a>
+       and it comes straight back to me.</p>
+    <p>${esc(env.HOST_NAME)}</p>
+  `;
+  return resendSend(env, {
+    from:    `${env.HOST_NAME} <${env.HOST_EMAIL}>`,
+    to:      [email],
+    cc:      [env.HOST_EMAIL],
+    subject: `cancelled: ${env.EVENT_TITLE} — ${shortWhen(start, env.HOST_TIMEZONE)}`,
+    html,
+    attachments: [{
+      filename:    "coffee.ics",
+      content:     utf8ToBase64(ics),
+      content_type: "text/calendar; method=CANCEL",
+    }],
+    headers: { "X-Coffee-Booking": booking.id },
   });
 }
 
@@ -222,7 +283,15 @@ export async function resendSend(env, payload) {
 //
 // RFC 5545 3.7.2 forbids ATTENDEE under PUBLISH, so the host copy carries the
 // guest in SUMMARY and DESCRIPTION rather than on an attendee line.
-function buildICS(env, booking, audience: "guest" | "host" = "guest") {
+//
+// `cancel` is the third state and cuts across both audiences. It re-sends the
+// SAME UID at a higher SEQUENCE carrying METHOD:CANCEL and STATUS:CANCELLED,
+// which is how iTIP withdraws an event the recipient already holds. It is
+// reliable for the GUEST, who holds an invitation from us. For the HOST it is
+// best-effort and the mail says so: their copy is an event they OWN, and a
+// withdrawal from an outside organizer has no standing over it, so a client is
+// within its rights to ignore this and leave them to delete it.
+function buildICS(env, booking, { audience = "guest", cancel = false } = {}) {
   const { id, name, email, topic, area, location, start, end } = booking;
   const fmt = (ms) => new Date(ms).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
   const host = audience === "host";
@@ -235,7 +304,7 @@ function buildICS(env, booking, audience: "guest" | "host" = "guest") {
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
     "PRODID:-//aadhar.sh//cal//EN",
-    host ? "METHOD:PUBLISH" : "METHOD:REQUEST",
+    cancel ? "METHOD:CANCEL" : host ? "METHOD:PUBLISH" : "METHOD:REQUEST",
     "CALSCALE:GREGORIAN",
     "BEGIN:VEVENT",
     `UID:${uid}`,
@@ -248,6 +317,7 @@ function buildICS(env, booking, audience: "guest" | "host" = "guest") {
     // against, so omitting it on the invite is what makes the first /update
     // silently do nothing.
     `SEQUENCE:${booking.sequence ?? 0}`,
+    cancel ? "STATUS:CANCELLED" : null,
     // EVENT_TITLE is the GUEST-facing title and is deliberately not reused
     // here: "coffee with aadharsh" names the wrong person once it is sitting on
     // aadharsh's own calendar. The host's grid wants the guest.
@@ -262,7 +332,10 @@ function buildICS(env, booking, audience: "guest" | "host" = "guest") {
       `\n\nbooked via cal.aadhar.sh`
     )}`,
     host ? null : `ORGANIZER;CN=${escICS(env.HOST_NAME)}:mailto:${env.HOST_EMAIL}`,
-    host ? null : `ATTENDEE;CN=${escICS(name)};RSVP=TRUE:mailto:${email}`,
+    // RSVP goes FALSE on a cancellation: there is nothing left to answer, and a
+    // client that still renders Yes / Maybe / No over a withdrawn event invites
+    // a reply nobody reads.
+    host ? null : `ATTENDEE;CN=${escICS(name)};RSVP=${cancel ? "FALSE" : "TRUE"}:mailto:${email}`,
     "END:VEVENT",
     "END:VCALENDAR",
   ].filter(Boolean);
