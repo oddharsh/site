@@ -83,7 +83,28 @@
   // into a 600ms handler. So the property is not what this flag adds here, the
   // FIRING is, and the firing is a production measurement. Expect route.aborted
   // to read false under `bun run dev` and routes:check by construction.
-  "compatibility_flags": ["enable_request_signal"],
+  //
+  // `new_module_registry` is the rewritten module loader workerd shipped in
+  // 2026-09 (blog.cloudflare.com/workers-module-registry-nodejs): specifiers
+  // parse as real URLs, `node:` resolves to one instance whatever the import
+  // path, `import.meta.url` / `.main` / `.resolve()` work, import attributes are
+  // VALIDATED (`with { type: "json" }` on a non-JSON module throws, an unknown
+  // attribute throws) instead of ignored, `require()` of a module with top-level
+  // await throws ERR_REQUIRE_ASYNC_MODULE, and modules compile on first import.
+  // It is NOT date-gated: no compatibility_date bump ever delivers it, so like
+  // the flag above this key is the only door. Same for the three auxiliary
+  // Workers and cal's test config, which carry it too so nothing here boots on
+  // a different loader from the rest.
+  //
+  // What it changes for THIS tree, checked before the flag went in (2026-09-11):
+  // nothing at runtime. The five `with { type: "json" }` imports in src/worker
+  // are the spec-correct form and esbuild inlines them before workerd ever sees
+  // a specifier; there is no `import.meta`, no `require()`, no wasm, and no
+  // query-string specifier in src/worker, cal/src, serendipity or the three
+  // auxiliaries. The pinned workerd (1.20260908.1 behind wrangler 4.130.0)
+  // knows the flag, and `bun run routes:check` boots the real Worker on it,
+  // which is the gate the paragraph above says makes acceptance mean anything.
+  "compatibility_flags": ["enable_request_signal", "new_module_registry"],
   // Deploy-only. Measured 2026-08-16: 274.45 -> 227.67 KiB gzip (17.0% off).
   // Keep the local-dev twin readable; uploaded source maps retain original stack
   // locations in Workers Logs without shipping to clients.

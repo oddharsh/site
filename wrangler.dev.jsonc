@@ -54,8 +54,9 @@
   // from the one that ships rather than merely a different route table.
   // tools/build.ts diffs this array between the two configs for that reason.
   // wrangler.jsonc carries the argument, including why the sibling
-  // `request_signal_passthrough` is absent and what local dev cannot measure.
-  "compatibility_flags": ["enable_request_signal"],
+  // `request_signal_passthrough` is absent and what local dev cannot measure,
+  // and why `new_module_registry` is here at all.
+  "compatibility_flags": ["enable_request_signal", "new_module_registry"],
   "cache": { "enabled": false, "cross_version_cache": false },
   "exports": {
     "default": { "type": "worker", "cache": { "enabled": false } },

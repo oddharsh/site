@@ -92,7 +92,9 @@ export const settings = defineSettings({
 export default defineWorker({
   name: "cf-garage",
   compatibilityDate: "2026-06-16",
-  compatibilityFlags: ["nodejs_compat"],
+  // `new_module_registry` is not date-gated; the argument is at the same key in
+  // the root wrangler.jsonc, and every Worker here carries it.
+  compatibilityFlags: ["nodejs_compat", "new_module_registry"],
 
   // `main` is `entrypoint` here, and it is the same file it always was.
   entrypoint: "./src/index.ts",

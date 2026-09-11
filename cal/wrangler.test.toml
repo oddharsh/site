@@ -10,6 +10,9 @@ name = "cal-aadhar-sh-tests"
 # is nothing CI runs and everything a spike runs first.
 main = "src/index.ts"
 compatibility_date = "2026-06-01"
+# Mirrors the root wrangler.jsonc so the Vitest pool boots the module on the
+# same loader production runs; the argument for the flag lives there.
+compatibility_flags = ["new_module_registry"]
 
 [[kv_namespaces]]
 binding = "BOOKINGS"
