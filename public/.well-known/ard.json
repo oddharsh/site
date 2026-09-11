@@ -1,0 +1,115 @@
+{
+  "specVersion": "1.0",
+  "host": {
+    "displayName": "Aadharsh Pannirselvam",
+    "identifier": "aadhar.sh",
+    "documentationUrl": "https://aadhar.sh/llms.txt"
+  },
+  "entries": [
+    {
+      "identifier": "urn:air:aadhar.sh:mcp:site",
+      "displayName": "Aadharsh Site MCP server",
+      "type": "application/mcp-server-card+json",
+      "url": "https://aadhar.sh/.well-known/mcp/server-card.json",
+      "description": "Bounded public utilities for aadhar.sh over MCP at https://aadhar.sh/mcp: site search and NLWeb ask, the current playlist, the published photo archive and its exact Fuji recipes, coffee availability, the neighborhood Change Radar, Lens (how a machine sees any public URL), ephemeral image inspection and transforms, and an HTTP representation vault. Read-only except the vault's capture and compare tools, which say so in their annotations.",
+      "tags": ["mcp", "search", "photos", "music", "lens", "images", "read-only"],
+      "capabilities": [
+        "ask", "search_site", "now_playing", "photo_query", "coffee_availability", "change_radar",
+        "lens_inspect", "lens_page", "lens_compare", "find_events",
+        "image_inspect", "image_transform", "image_compare", "photo_recipe",
+        "representation_capture", "representation_read", "representation_compare",
+        "finger", "photos", "radar", "encode", "agent_ready", "dict", "cache", "lens"
+      ],
+      "representativeQueries": [
+        "what is aadharsh listening to right now",
+        "find a photo shot on the X-T50 with Classic Chrome",
+        "when can I grab coffee with aadharsh",
+        "show me what a crawler sees when it opens example.com",
+        "what did the encoder do to this JPEG"
+      ]
+    },
+    {
+      "identifier": "urn:air:aadhar.sh:mcp:serendipity",
+      "displayName": "Serendipity event pool MCP server",
+      "type": "application/mcp-server-card+json",
+      "url": "https://aadhar.sh/.well-known/mcp/serendipity.json",
+      "description": "Read-only MCP server at https://aadhar.sh/serendipity/mcp over the Serendipity event pool: community-curated events worth going to, who is going, and who keeps crossing paths with whom. Public data only.",
+      "tags": ["mcp", "events", "people", "co-attendance", "read-only"],
+      "capabilities": [
+        "list_events", "get_event", "search_people", "list_contributors", "contributor_events",
+        "frequent_people", "co_attendees", "connections", "shared_events", "stats"
+      ],
+      "representativeQueries": [
+        "which events are on this week in the serendipity pool",
+        "who is going to this event",
+        "which people keep showing up at the same events",
+        "have these two people crossed paths at an event"
+      ]
+    },
+    {
+      "identifier": "urn:air:aadhar.sh:agent:site",
+      "displayName": "Aadharsh Site agent card",
+      "type": "application/a2a-agent-card+json",
+      "url": "https://aadhar.sh/.well-known/agent-card.json",
+      "description": "Discovery-only agent card in the A2A card format, naming every machine interface this host exposes: both MCP servers, the HTTP JSON endpoints, WebMCP, and optional anonymous agent registration. This host does not expose an A2A task endpoint; the card says so and points at the MCP and JSON interfaces instead.",
+      "tags": ["agent-card", "discovery"],
+      "representativeQueries": [
+        "what machine interfaces does aadhar.sh expose",
+        "does aadhar.sh have an A2A endpoint",
+        "how does an agent authenticate to aadhar.sh"
+      ]
+    },
+    {
+      "identifier": "urn:air:aadhar.sh:skill:serendipity-events",
+      "displayName": "Serendipity event research skill",
+      "type": "application/agent-skills+md",
+      "url": "https://aadhar.sh/.well-known/agent-skills/serendipity-events/SKILL.md",
+      "description": "A SKILL.md teaching an agent to query the Serendipity event pool over its public MCP server: which tools to call for events, attendees, contributors and co-attendance, and how to read the results.",
+      "tags": ["skill", "events", "mcp"],
+      "representativeQueries": [
+        "install a skill for querying the serendipity event pool",
+        "teach my agent to look up who is attending an event",
+        "how do I query serendipity events over MCP"
+      ]
+    },
+    {
+      "identifier": "urn:air:aadhar.sh:nlweb:ask",
+      "displayName": "NLWeb /ask",
+      "type": "application/json",
+      "url": "https://aadhar.sh/ask?query=what%20is%20this%20site%20about&streaming=0",
+      "description": "Natural-language questions over this site's corpus, answered as schema.org objects per the NLWeb convention. Parameters: query (required), streaming (defaults to an event stream; 0 for one JSON body), mode=list (summarize and generate answer 501, since this Worker has no model). The same function is the ask tool on the site MCP server.",
+      "tags": ["nlweb", "search", "schema.org"],
+      "representativeQueries": [
+        "ask aadhar.sh a question in plain English",
+        "what is this site about",
+        "which pages on aadhar.sh talk about compression dictionaries"
+      ]
+    },
+    {
+      "identifier": "urn:air:aadhar.sh:docs:llms-txt",
+      "displayName": "llms.txt site summary",
+      "type": "text/plain",
+      "url": "https://aadhar.sh/llms.txt",
+      "description": "The site summary written for agents: who runs aadhar.sh, every public page and its Markdown twin, every JSON endpoint, and the discovery files under /.well-known. Read this first.",
+      "tags": ["llms.txt", "documentation"],
+      "representativeQueries": [
+        "summarize what aadhar.sh is, for an agent",
+        "what does aadhar.sh publish for agents",
+        "which pages on aadhar.sh have markdown twins"
+      ]
+    },
+    {
+      "identifier": "urn:air:aadhar.sh:catalog:api-catalog",
+      "displayName": "API catalog (RFC 9727 linkset)",
+      "type": "application/linkset+json",
+      "url": "https://aadhar.sh/.well-known/api-catalog",
+      "description": "The RFC 9727 index of every JSON endpoint on aadhar.sh, each anchored to its service description and documentation: the photo manifest, the current playlist, public site search, the bounded photo query, coffee availability, the neighborhood crawl and Change Radar, and the compact Lens comparison.",
+      "tags": ["api-catalog", "linkset", "json"],
+      "representativeQueries": [
+        "list every JSON endpoint on aadhar.sh",
+        "where is the photo manifest for aadhar.sh",
+        "which URL returns the current playlist as JSON"
+      ]
+    }
+  ]
+}

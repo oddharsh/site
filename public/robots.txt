@@ -66,5 +66,6 @@ Disallow: /rn/set
 Disallow: /lwe/ask
 
 Sitemap: https://aadhar.sh/sitemap.xml
+Agentmap: https://aadhar.sh/.well-known/ard.json
 
 # love, aadharsh

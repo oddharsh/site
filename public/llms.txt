@@ -241,6 +241,12 @@ on, which is the only arrangement where photographs never have to move.
   Discovery-only Agent Card describing the site's MCP, bounded image and HTTP
   utilities, HTTP JSON, WebMCP, and optional anonymous agent-registration
   interfaces. This host does not expose an A2A task endpoint.
+- [/.well-known/ard.json](https://aadhar.sh/.well-known/ard.json): ARD
+  (Agentic Resource Discovery) manifest: every agentic resource here (both MCP
+  server cards, the agent card, the Serendipity skill, NLWeb `/ask`, this file,
+  the api-catalog) as `urn:air:aadhar.sh:...` entries, each with 2-5
+  representative queries for a registry's semantic index. The same bytes serve
+  at `/.well-known/ai-catalog.json`, the spec's predecessor path.
 - `_index._agents.aadhar.sh` (SVCB): DNS for AI Discovery (DNS-AID)
   entrypoint per draft-mozleywilliams-dnsop-dnsaid. A ServiceMode SVCB
   record (`1 aadhar.sh. alpn="h2,h3" port=443 mandatory=alpn,port`)
