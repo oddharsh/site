@@ -83,3 +83,14 @@ interface Document {
    */
   modelContext?: ModelContext;
 }
+
+interface Navigator {
+  /**
+   * The OLDER shape, gone from Chrome 152 but still what a polyfill or a
+   * readiness scanner installs in a browser with no native API (isitagentready
+   * shims exactly this and records the calls). webmcp.js reads it only when
+   * `document.modelContext` is absent, and a shim may implement less than the
+   * interface says, so `getTools` is guarded there rather than assumed.
+   */
+  modelContext?: ModelContext;
+}

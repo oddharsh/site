@@ -37,8 +37,30 @@
 // `import()` specifier, which the /a/ repointer is attribute-scoped and would
 // never rewrite.
 
+// The spec hangs the object on `document` (partial interface Document, read
+// 2026-09-11) and that is where Chrome 152+ puts it. `navigator.modelContext`
+// was the earlier shape, and it is still what a polyfill or a readiness scanner
+// shims in a browser that has no native API at all: isitagentready.com loads
+// this page, records calls to navigator.modelContext, and reported "No tools
+// registered via navigator.modelContext" for as long as this line read only
+// `document`. Measured 2026-09-11 with a shim in Chrome 153: 0 registrations
+// before, the whole /mcp catalog after. Native first, since a page holding both
+// should register where the browser will actually route an agent's call.
 /** @type {ModelContext | null} */
-const MC = (globalThis.document && globalThis.document.modelContext) || null;
+const MC = (globalThis.document && globalThis.document.modelContext)
+  || (globalThis.navigator && globalThis.navigator.modelContext)
+  || null;
+
+/**
+ * A native ModelContext has getTools(); a shim may not. Read the catalog where
+ * it can be read and treat everything else as empty, because "cannot list" is
+ * not "nothing is registered" and must not block a registration.
+ * @returns {Promise<Array<{ name: string }>>}
+ */
+async function listTools() {
+  if (!MC || !MC.getTools) return [];
+  try { return await MC.getTools(); } catch (error) { return []; }
+}
 
 const META = {
   "io.modelcontextprotocol/protocolVersion": "2026-07-28",
@@ -105,8 +127,7 @@ export function summary() {
 
 /** The names currently in the browser-local catalog, whoever registered them. */
 export async function catalog() {
-  if (!MC) return [];
-  return (await MC.getTools()).map((t) => t.name);
+  return (await listTools()).map((t) => t.name);
 }
 
 // ---- the annotation channel -------------------------------------------------
@@ -285,7 +306,7 @@ export async function registerTool(def) {
   if (schema) tool.inputSchema = schema;
 
   try {
-    const taken = (await MC.getTools()).some((t) => t.name === def.name);
+    const taken = (await listTools()).some((t) => t.name === def.name);
     if (taken) return "taken";
     await MC.registerTool(/** @type {any} */ (tool));
     registered += 1;
