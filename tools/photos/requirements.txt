@@ -4,5 +4,7 @@
 #
 # The histogram bake used to live here too and moved into zenc on 2026-08-14
 # (`zenc histogram`), so the CORE photo pipeline no longer needs Pillow. It does
-# still need python3, for gen-alt-text.py and build-recipes.py.
+# still need python3, for gen-alt-text.py. build-recipes.py was the third
+# consumer and was deleted on 2026-08-14 when exif-sooc took over the recipe
+# card, which config/retired.json records under `exiftool`.
 Pillow==12.3.0
