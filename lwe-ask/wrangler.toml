@@ -1,6 +1,9 @@
 name = "lwe-ask"
 main = "src/index.ts"
 compatibility_date = "2026-05-01"
+# `new_module_registry` is not date-gated; the argument is at the same key in
+# the root wrangler.jsonc, and every Worker here carries it.
+compatibility_flags = ["new_module_registry"]
 
 # Pinned because these deploy from their OWN directory, so wrangler resolves the
 # account from this file rather than from the root wrangler.jsonc. It auto-selects
