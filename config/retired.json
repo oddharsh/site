@@ -1,0 +1,175 @@
+{
+  "$comment": [
+    "Dependencies this repository deliberately replaced with first-party code,",
+    "and the mechanical ban that keeps each one out. One declaration, one",
+    "contract test, rather than a bespoke assertion per retirement.",
+    "",
+    "WHY A LEDGER RATHER THAN MORE ASSERTIONS. The same argument",
+    "config/derivations.json makes about stale artifacts. Retirements here were",
+    "enforced three different ways and mostly not at all: turndown had two lines",
+    "inside a test about something else, exiftool and jq had prose in",
+    "config/tools.json and in CLAUDE.md, and nothing anywhere stopped any of",
+    "them coming back. A retirement that is only written down is a preference.",
+    "Adding one here is a data edit and the check is already written.",
+    "",
+    "THE BANS LAND ON DECLARATION FILES, NEVER ON FREE TEXT, and that is forced",
+    "rather than tidy. Every retired name still appears in this tree on purpose,",
+    "because the comment recording a retirement has to name the thing it",
+    "retired: extract-photo-metadata.sh says `BOTH NAMES BELOW ARE jq ON PURPOSE,",
+    "because they are history`. A scanner over text would fire on exactly the",
+    "prose that documents the decision, which is the trap CLAUDE.md's own note",
+    "about path rewrites describes from the other side. So a ban asks the file a",
+    "dependency would have to be re-added to for it to work at all: a package.json",
+    "dependency map, config/tools.json's `bin`, a Cargo.toml dependency or",
+    "feature, or an anchored import statement in source.",
+    "",
+    "WHAT `npm` CANNOT SEE, stated because the gap is silent. It reads the four",
+    "dependency maps of every committed package.json and never bun.lock, so a",
+    "retired package arriving as somebody else's transitive stays invisible.",
+    "That is deliberate: @cloudflare/workers-types is an OPTIONAL PEER of",
+    "wrangler and sits in bun.lock today, so a lockfile ban would fail on a tree",
+    "that is correct. The claim a ban makes is `this repo does not ask for it`,",
+    "which is the claim that stops it being used.",
+    "",
+    "SCOPE IS PART OF THE RECORD. `Pillow` is retired from the photo pipeline",
+    "and still serves one page generator, so its entry names that file as an",
+    "exception rather than claiming a clean kill. A ledger that rounded that to",
+    "`retired` would be wrong in the direction nobody checks.",
+    "",
+    "WHEN TO REPLACE A DEPENDENCY WITH CODE. Commonware's rule is `implement",
+    "core mechanisms and algorithms inside the workspace rather than adding a",
+    "dependency for them`, and every entry below already passed some version of",
+    "that test. Written out, what this repo has actually required:",
+    "",
+    "1. THE REPLACEMENT IS MEASURED AGAINST THE DEPENDENCY, on the axis that",
+    "   motivated it, before the dependency leaves. Every `measured` field below",
+    "   is a number somebody took. A swap with no number is a preference wearing",
+    "   a commit message.",
+    "2. OUTPUT DOES NOT MOVE, or moving it is the point and is priced. `/a/` and",
+    "   `/i/` are content-addressed, so one changed byte remints URLs and",
+    "   orphans every dictionary and histogram derived from them. zenjpeg's",
+    "   `parallel` feature was droppable because 6 of 6 thumbnails and 4 of 4",
+    "   archives came back byte-identical; the avifenc `--speed` change was",
+    "   worth 495 reminted URLs and said so up front.",
+    "3. THE SURFACE IS SMALLER THAN THE DEPENDENCY. zenc is one encoder call",
+    "   this repo controls, against a from-source libjxl build. A first-party",
+    "   replacement that reimplements the whole library is a fork, and a fork is",
+    "   a dependency with worse support.",
+    "4. THE DEPENDENCY WAS COSTING SOMETHING ONGOING, in maintenance, bytes, or",
+    "   attention. @cloudflare/workers-types spent 12 of 29 dependabot pull",
+    "   requests in one month describing a runtime this repo does not run on.",
+    "   A quiet dependency that does its job is not a candidate.",
+    "5. IT DOES NOT ADD AN INTERPRETER OR A TOOLCHAIN. The histogram bake moving",
+    "   into zenc removed python3 and pip from the core pipeline, which is worth",
+    "   more than the milliseconds it also saved.",
+    "",
+    "THE COUNTER-RULE, because four of the entries below are swaps rather than",
+    "in-house builds. Readability replaced Defuddle and jaq replaced jq, both",
+    "third-party. Prefer the dependency when the thing it does is a standard",
+    "somebody else conforms to and drift from it is the actual risk. Writing a",
+    "third HTML-to-Markdown extractor would make /lens's premise weaker rather",
+    "than stronger, since that surface exists to show what a WIDELY DEPLOYED",
+    "extractor discards."
+  ],
+  "retired": [
+    {
+      "id": "turndown",
+      "replaced_by": "lens-reader/src/reader.ts, a first-party Markdown walk over Readability's own node",
+      "on": "2026-08-16",
+      "why": "A general HTML-to-Markdown dependency restores a second traversal and a tree clone: the old path serialized Readability's article node, reparsed that HTML into a third linkedom document, and handed the reconstruction to the converter. It also shipped two builds, and wrangler resolved the wrong one.",
+      "measured": "Its browser build reaches for document.implementation.createHTMLDocument, so turndown(htmlString) threw `document is not defined` inside a Worker while passing under node --test. Measured both ways 2026-08-10. The node build falls back to @mixmark-io/domino and hides it.",
+      "bans": {
+        "npm": ["turndown", "@mixmark-io/domino"],
+        "source": {
+          "specifiers": ["turndown"],
+          "trees": ["lens-reader/src", "src/worker", "src/client", "cal/src", "serendipity"]
+        }
+      }
+    },
+    {
+      "id": "defuddle",
+      "replaced_by": "@mozilla/readability, pinned",
+      "on": "2026-08-14",
+      "why": "A swap rather than an in-house build, and deliberately so: /lens's seventh tab exists to report what a WIDELY DEPLOYED extractor discards, and Readability is the one behind Firefox Reader View. Defuddle keeps <button> text on purpose, which is the failure tools/lib/html-to-md.ts rule 2 exists to refuse.",
+      "measured": "11.4 KB gzip against 90.0, taking the Reader Worker from 237.68 to 153.17 KB. On /garage/horizon it leaks 3 of 26 control labels as prose where Defuddle leaked 14. Not uniformly better: on stripe.com it leaks 5 where Defuddle leaked 2, which is why the `controls` readout stays on the payload.",
+      "bans": { "npm": ["defuddle"] }
+    },
+    {
+      "id": "vitest",
+      "replaced_by": "bun:test through cal/test/harness.ts and cal/test/preload.ts",
+      "on": "2026-09-02",
+      "why": "cal was the last consumer, and @cloudflare/vitest-pool-workers dragged a second test runner plus its own miniflare floor into a tree whose every other suite is bun:test or node --test. The harness reaches local KV and Workflow bindings through wrangler's createTestHarness() instead.",
+      "measured": "The harness boots cal in 142ms under bun against 269ms under node, returns all 17 bindings and vars, round-trips a KV put/get/list, and hands back a live Workflow introspector. Its mockEvent and forceEventTimeout are read from wrangler's types and NOT exercised, so treat those two as unproven under bun.",
+      "bans": { "npm": ["vitest", "@cloudflare/vitest-pool-workers", "@vitest/runner"] }
+    },
+    {
+      "id": "@cloudflare/workers-types",
+      "replaced_by": "config/.generated/, written by tools/gen-runtime-types.ts from the pinned workerd",
+      "on": "2026-09-02",
+      "why": "The package describes a runtime version of its own choosing, and this repo pins workerd exactly. Generating from the pinned binary makes the types a function of what actually runs, and the cache key is wrangler's version plus the config bytes, so it costs 3s cold and 0.02s warm.",
+      "measured": "12 of 29 dependabot pull requests in one month were bumps to this package, for a runtime this repo did not run on.",
+      "bans": { "npm": ["@cloudflare/workers-types"] }
+    },
+    {
+      "id": "@cloudflare/puppeteer",
+      "replaced_by": "addScriptTag on the existing env.BROWSER Quick Action, with the allowlist in src/worker/lens-recipes.ts",
+      "on": "2026-08-08",
+      "why": "Never adopted. A live CDP session counts against the free plan's 3 concurrent browsers and 1-new-instance-per-20-seconds, which Quick Actions do not, so a public unauthenticated session would black out /lens/shot and /lens/browser. Holding one also needs a new Durable Object class plus a [[migrations]] entry, which `wrangler versions upload` is refused for by the API (error 10211).",
+      "measured": "~1 MB of ESM against a Worker bundle already over its 204.24 KiB gzip budget. What shipped instead is one query parameter, no new route, no new binding, and no dependency.",
+      "bans": { "npm": ["@cloudflare/puppeteer", "puppeteer", "puppeteer-core"] }
+    },
+    {
+      "id": "exiftool",
+      "replaced_by": "exif-sooc, first-party, at github.com/oddharsh/exif-sooc",
+      "on": "2026-08-14",
+      "why": "Its --keyed mode emits metadata.json's record shape and the Fujifilm recipe card directly, and --merge-into owns the merge. That retired a 50-line jq reshape, build-recipes.py, and the last Python on that script's path. The merge is the reason more than the speed: jq's `*` is recursive and the reflexive substitute `+` is shallow, which drops the recipe card from every re-merged photo in silence.",
+      "measured": "Regenerating all 158 committed photos produced records byte-identical to what exiftool + jq + Python produced, recipe cards included. 9.9ms against exiftool's 995ms over the same 160 files. Do not chase the speed further: 9.6ms of that is the I/O floor for opening those files.",
+      "bans": { "binary": ["exiftool"] }
+    },
+    {
+      "id": "jq",
+      "replaced_by": "jaq",
+      "on": "2026-09-08",
+      "why": "A swap rather than an in-house build. The per-stem split still wants a jq-language interpreter, and jaq is the faster implementation of the same language. One real incompatibility, worth knowing before reaching back: jaq does not slurp ACROSS MULTIPLE FILE ARGUMENTS, so `jaq -s` over two files processes each separately where jq builds one array of 2. Nothing here uses -s.",
+      "measured": "Every remaining filter diffed engine against engine over the real 165-photo library and matched byte for byte: --slurpfile, -S, --arg, -n, with_entries, has, to_entries, array subtraction, and the photo-index merge.",
+      "bans": { "binary": ["jq"] }
+    },
+    {
+      "id": "cjpegli",
+      "replaced_by": "zenc, at tools/photos/zenc, wrapping zenjpeg",
+      "on": "2026-07-01",
+      "why": "cjpegli meant a from-source libjxl build in the photo pipeline's path. zenc is one crate this repo controls, with hybrid trellis plus a 64-candidate progressive scan search and sharp_yuv chroma, and dependabot tracks the zenjpeg pin.",
+      "measured": "~4% under cjpegli at equal quality. q84 on zenc is roughly the old cjpegli q82.",
+      "bans": { "binary": ["cjpegli", "djpegli"] }
+    },
+    {
+      "id": "zenjpeg/parallel",
+      "replaced_by": "nothing. Dropped outright.",
+      "on": "2026-08-24",
+      "why": "The feature was carried on the claim that it speeds the 2000px square inputs, which was never a number. zenc's own source never touches rayon; the feature only reaches zenjpeg's internals, which is why it buys so little on images this size.",
+      "measured": "+2.7% on the 600px thumbnail tier (+1.5 ms/photo over 9 alternating trials) and +1.1% on the 2000px archive, for SIX crates and 194,704 bytes of binary, 10.8% of it. Safe to drop because output did not move: byte-identical on 6 of 6 thumbnails and 4 of 4 archives. Re-add it only with a measurement on the tier that motivates it, and check byte-identity in the same run.",
+      "bans": {
+        "cargo": {
+          "manifest": "tools/photos/zenc/Cargo.toml",
+          "crates": ["rayon", "rayon-core", "crossbeam-deque"],
+          "features": [{ "crate": "zenjpeg", "feature": "parallel" }]
+        }
+      }
+    },
+    {
+      "id": "Pillow",
+      "replaced_by": "`zenc histogram`, which bakes the four 64-bin RGB and luminance channels inside the encoder crate",
+      "on": "2026-08-14",
+      "scope": "the photo pipeline only",
+      "why": "A SCOPED retirement, recorded as one rather than rounded to a clean kill. Neither add-photos.sh nor extract-photo-metadata.sh needs Pillow any more, so the core pipeline no longer needs python3 plus a venv, which matters because Homebrew's python3 is PEP 668 externally managed and refuses `pip install` outright. tools/photos/gen-pixel-peeper.py still uses it and is a one-off page generator rather than part of any pipeline.",
+      "measured": "A missing Pillow now costs one study page's regeneration rather than the histograms on 158 photos.",
+      "bans": {
+        "source": {
+          "specifiers": ["PIL"],
+          "trees": ["tools"],
+          "except": ["tools/photos/gen-pixel-peeper.py"]
+        }
+      }
+    }
+  ]
+}

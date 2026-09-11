@@ -286,3 +286,192 @@ fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     std::fs::write(&tmp, bytes)?;
     std::fs::rename(&tmp, path)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{bin_normalize, channels, ensure_ascii, hi_value, luma, BINS};
+
+    // The header names three things that had to match Pillow EXACTLY for the
+    // 158-photo re-bake to be a no-op diff, and every one is a form nobody
+    // would write from scratch. Each gets a test, because getting one wrong
+    // moves a bar on the whole library and re-mints every meta file, which is
+    // CLAUDE.md gotcha 46 arriving a second time through a different door.
+
+    /// Note 1: Pillow's 16-bit fixed point, NOT the /1000 form its own
+    /// docstring's "ITU-R 601-2" wording implies. The two disagree on roughly
+    /// 170k of 360k pixels in a real photo.
+    #[test]
+    fn luminance_is_the_fixed_point_form_rather_than_thousandths() {
+        assert_eq!(luma(0, 0, 0), 0);
+        assert_eq!(luma(255, 255, 255), 255);
+        // The smallest input the two forms disagree on: thousandths truncates
+        // 587/1000 to 0 here, the fixed point rounds to 1.
+        assert_eq!(luma(0, 1, 0), 1, "the /1000 form reads 0 here");
+        // Green carries the most weight of the three, which is what the
+        // coefficients encode and what a transposed pair would break.
+        assert!(luma(0, 255, 0) > luma(255, 0, 0));
+        assert!(luma(255, 0, 0) > luma(0, 0, 255));
+    }
+
+    /// Note 2: python 3's round() is banker's, so ties go to EVEN. Rust's
+    /// `round` goes away from zero and would move a bar on any photo whose
+    /// counts land on a half, which at 64 bins is most of them.
+    #[test]
+    fn normalisation_rounds_ties_to_even() {
+        let mut raw = [0u32; 256];
+        raw[0] = 8; // bin 0 is the peak, so it reads exactly 100
+        raw[4] = 1; // bin 1: 100 * 1/8 = 12.5, where the even neighbour is below
+        raw[8] = 3; // bin 2: 100 * 3/8 = 37.5, where the even neighbour is above
+        let bins = bin_normalize(&raw);
+        assert_eq!(bins[0], 100);
+        assert_eq!(bins[1], 12, "12.5 rounds DOWN to the even 12; f64::round gives 13");
+        assert_eq!(bins[2], 38, "37.5 rounds UP to the even 38, so this pins the rule rather than a direction");
+    }
+
+    #[test]
+    fn normalisation_always_emits_64_bins_and_a_peak_of_100() {
+        let mut raw = [0u32; 256];
+        raw[137] = 9;
+        let bins = bin_normalize(&raw);
+        assert_eq!(bins.len(), BINS);
+        assert_eq!(bins.iter().copied().max(), Some(100), "the tallest bin reads 100 by definition");
+        assert_eq!(bins.iter().filter(|&&v| v != 0).count(), 1);
+    }
+
+    /// An empty channel divides by a peak of zero unless the `.max(1)` holds.
+    /// A panic here takes the whole bake down on the first photo with a
+    /// channel nothing landed in.
+    #[test]
+    fn an_empty_channel_is_64_zeros_rather_than_a_division_by_zero() {
+        assert_eq!(bin_normalize(&[0u32; 256]), vec![0i64; BINS]);
+    }
+
+    /// Every bin of a flat channel is the peak, so all 64 read 100. Catches a
+    /// normalisation that divided by the TOTAL rather than by the peak, which
+    /// is the obvious alternative and produces 1s here.
+    #[test]
+    fn a_flat_channel_reads_100_across() {
+        assert_eq!(bin_normalize(&[7u32; 256]), vec![100i64; BINS]);
+    }
+
+    fn solid(w: u32, h: u32, rgb: [u8; 3]) -> image::RgbImage {
+        image::RgbImage::from_pixel(w, h, image::Rgb(rgb))
+    }
+
+    #[test]
+    fn a_solid_image_puts_every_channel_in_one_bin() {
+        let ch = channels(&solid(8, 8, [10, 200, 30]));
+        assert_eq!(ch.len(), 4);
+        for key in ["l", "r", "g", "b"] {
+            let bins = &ch[key];
+            assert_eq!(bins.len(), BINS, "channel {key}");
+            assert_eq!(bins.iter().filter(|&&v| v == 100).count(), 1, "channel {key} must have one peak");
+            assert_eq!(bins.iter().filter(|&&v| v != 0).count(), 1, "channel {key} must have one occupied bin");
+        }
+        // 256 values over 64 bins is 4 wide, so the bin is the value >> 2. A
+        // channel swap survives every assertion above and dies here.
+        assert_eq!(ch["r"][10 / 4], 100);
+        assert_eq!(ch["g"][200 / 4], 100);
+        assert_eq!(ch["b"][30 / 4], 100);
+    }
+
+    /// Note 3: the emitted key order is l, r, g, b. `channels` returns a
+    /// BTreeMap, which sorts to b, g, l, r, so the order is the one thing here
+    /// a correct-looking refactor reverses in silence. It decides the bytes of
+    /// 165 committed meta files.
+    #[test]
+    fn the_hi_object_emits_l_r_g_b_in_that_order() {
+        let text = serde_json::to_string(&hi_value(&solid(2, 2, [1, 2, 3]))).unwrap();
+        let mut at = 0usize;
+        for key in ["\"l\"", "\"r\"", "\"g\"", "\"b\""] {
+            let found = text[at..]
+                .find(key)
+                .unwrap_or_else(|| panic!("{key} is missing or out of order in {text}"));
+            at += found + key.len();
+        }
+    }
+
+    #[test]
+    fn ensure_ascii_escapes_above_127_and_pairs_the_astral_plane() {
+        assert_eq!(ensure_ascii("plain ascii {\"a\":1}"), "plain ascii {\"a\":1}");
+        assert_eq!(ensure_ascii("caf\u{e9}"), "caf\\u00e9");
+        // An astral char is TWO escapes, because python emits a surrogate pair.
+        // One escape would be valid JSON and a different string.
+        assert_eq!(ensure_ascii("\u{1f600}"), "\\ud83d\\ude00");
+        assert!(ensure_ascii("\u{1f600}").is_ascii(), "the output is what ensure_ascii promises");
+    }
+
+    // ── a small seeded fuzzer ────────────────────────────────────────────────
+    //
+    // Everything above is hand-picked, so it checks answers somebody already
+    // thought of. This walks random images and checks the INVARIANTS, which is
+    // the cheaper half of what an external fuzz target buys without the binary,
+    // the corpus, or a dependency. Borrowed from commonware's `minifuzz`, whose
+    // argument is that a property test belongs where you would have written a
+    // unit test rather than behind a separate fuzzing harness.
+    //
+    // It prints its seed on failure and takes one back through the environment,
+    // so a red run replays exactly:
+    //
+    //     ZENC_HIST_SEED=0x9e3779b97f4a7c15 cargo test histogram
+    //
+    // A dependency-free xorshift64*, because the property is "every input
+    // produces a well-formed histogram" and that wants coverage rather than
+    // statistical quality. Adding rand here to test a crate whose own manifest
+    // records dropping six crates for 1.1% would be a poor trade.
+    struct Rng(u64);
+
+    impl Rng {
+        fn next(&mut self) -> u64 {
+            self.0 ^= self.0 >> 12;
+            self.0 ^= self.0 << 25;
+            self.0 ^= self.0 >> 27;
+            self.0.wrapping_mul(0x2545_f491_4f6c_dd1d)
+        }
+        /// Uniform enough over the small ranges here; the high bits are taken
+        /// because the low bit of a raw xorshift word is the weakest.
+        fn below(&mut self, n: u32) -> u32 {
+            (self.next() >> 33) as u32 % n
+        }
+    }
+
+    #[test]
+    fn every_random_image_bakes_a_well_formed_histogram() {
+        let seed = std::env::var("ZENC_HIST_SEED")
+            .ok()
+            .and_then(|s| u64::from_str_radix(s.trim().trim_start_matches("0x"), 16).ok())
+            .unwrap_or(0x9e37_79b9_7f4a_7c15);
+        let mut rng = Rng(seed);
+
+        for case in 0..256 {
+            let w = 1 + rng.below(9);
+            let h = 1 + rng.below(9);
+            let mut img = image::RgbImage::new(w, h);
+            for p in img.pixels_mut() {
+                p.0 = [rng.below(256) as u8, rng.below(256) as u8, rng.below(256) as u8];
+            }
+            let fail = |what: &str| -> String {
+                format!("{what} (seed 0x{seed:016x}, case {case}, {w}x{h}); replay with ZENC_HIST_SEED=0x{seed:016x}")
+            };
+
+            let ch = channels(&img);
+            assert_eq!(ch.len(), 4, "{}", fail("a bake must emit four channels"));
+            for key in ["l", "r", "g", "b"] {
+                let bins = &ch[key];
+                assert_eq!(bins.len(), BINS, "{}", fail(&format!("channel {key} is not 64 bins")));
+                assert!(bins.iter().all(|&v| (0..=100).contains(&v)),
+                    "{}", fail(&format!("channel {key} left the 0..100 range")));
+                // A non-empty image always has a tallest bin, and normalisation
+                // is defined so that bin reads exactly 100. An off-by-one in
+                // the binning arithmetic breaks this without changing the shape.
+                assert_eq!(bins.iter().copied().max(), Some(100),
+                    "{}", fail(&format!("channel {key} has no bin at 100")));
+            }
+            // Luminance stays inside the range its inputs allow, at every pixel
+            // and so over the image. A coefficient that overflowed the shift
+            // escapes the fixed-point test above only by escaping this too.
+            let brightest = img.pixels().map(|p| luma(p.0[0], p.0[1], p.0[2])).max().unwrap();
+            assert!(brightest <= 255, "{}", fail("luminance left 0..255"));
+        }
+    }
+}

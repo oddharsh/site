@@ -74,7 +74,7 @@ jobs:
           # on its next run. macOS runners ship cargo, as the zenc step below
           # relies on too.
           cargo install --git https://github.com/oddharsh/exif-sooc exif-sooc --locked
-          # The venv is for gen-alt-text.py and build-recipes.py, which need
+          # The venv is for gen-alt-text.py, which needs
           # python3 and nothing else. requirements.txt is deliberately NOT
           # installed here any more: its one entry is Pillow, the histogram bake
           # moved into zenc on 2026-08-14, and the only remaining Pillow consumer
