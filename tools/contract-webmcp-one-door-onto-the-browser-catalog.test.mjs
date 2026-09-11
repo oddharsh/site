@@ -108,13 +108,30 @@ test("webmcp.js is the only client module that uses document.modelContext", () =
   }
   assert.ok(/document\.modelContext/.test(WEBMCP) && /\.registerTool\(/.test(WEBMCP),
     "webmcp.js should be the module that reads the API and registers against it");
+  // Both hosts, in both readers. The spec puts the object on `document`;
+  // `navigator.modelContext` is the older shape and the one a polyfill or a
+  // readiness scanner shims into a browser with no native API. Reading only
+  // `document` is how isitagentready.com reported "No tools registered via
+  // navigator.modelContext" against a page that registers 25 (2026-09-11), and
+  // gating the import on one host while the module reads the other would fail
+  // the same way with one more hop.
+  assert.match(WEBMCP, /document\.modelContext\)\s*\|\|\s*\(globalThis\.navigator/,
+    "webmcp.js must fall back to navigator.modelContext when document has none");
+  for (const [file, source] of [["nav.js", NAV], ["lens-boot.js", LENS_BOOT]]) {
+    assert.match(codeOnly(source), /modelContext\s*\|\|\s*navigator\.modelContext/,
+      `${file} must feature-check navigator.modelContext as well as document.modelContext`);
+  }
+  // A shim need not implement getTools(), and a registration must not depend on
+  // being able to list the catalog first: "cannot list" is not "already taken".
+  assert.match(WEBMCP, /if \(!MC \|\| !MC\.getTools\) return \[\];/,
+    "webmcp.js must tolerate a ModelContext with no getTools()");
 });
 
 test("a cold Lens document loads its page tools when WebMCP is available", () => {
   // Discovery needs the six definitions before interaction, not the 80+ KiB
   // client that executes them. The registrar must load eagerly in a capable
   // browser while lens.js stays behind saved state, human intent, or a tool call.
-  assert.match(LENS_BOOT, /document\.modelContext\s*\? import\("\/lens-webmcp\.js"\)/,
+  assert.match(LENS_BOOT, /\(document\.modelContext \|\| navigator\.modelContext\)\s*\? import\("\/lens-webmcp\.js"\)/,
     "lens-boot.js must load the lightweight registrar in a WebMCP browser");
   assert.match(LENS_BOOT, /if \(pageTools\) pageTools\.then\(function \(wm\) \{ return wm && wm\.boot\(load\); \}\)/,
     "lens-boot.js must register page tools before interaction");

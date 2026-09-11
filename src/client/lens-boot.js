@@ -17,7 +17,7 @@
   // one narrow handoff through which the full client gives it live handlers;
   // ordering the promises here makes that handoff race-free even when a person
   // clicks while the registrar is still crossing the wire.
-  var pageTools = document.modelContext
+  var pageTools = (document.modelContext || navigator.modelContext)
     ? import("/lens-webmcp.js").catch(function () { return null; })
     : null;
 

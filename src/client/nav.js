@@ -381,12 +381,20 @@
       .then(function (j) { if (j && j.items) updData = j; cb(updData); })
       .catch(function () { cb(null); });
   }
+  // Is there ANY ModelContext to register into? Bare truthiness only, on both
+  // hosts: `document` is where the spec and Chrome 152+ put it, `navigator` is
+  // the older shape and the one a polyfill or a readiness scanner shims into a
+  // browser with no native API. webmcp.js owns the object; this only decides
+  // whether to spend the import.
+  function hasModelContext() {
+    return !!(D.modelContext || navigator.modelContext);
+  }
   // Same shape as the two readers above, and it fetches nothing: the audit log
   // lives in webmcp.js's module scope, so this is a read of state this document
   // already holds. It resolves null when WebMCP never loaded, which is what the
   // balloon renders as "nothing has asked".
   function loadWebmcp(cb) {
-    if (!D.modelContext) { cb(null); return; }
+    if (!hasModelContext()) { cb(null); return; }
     import("/webmcp.js").then(function (m) { cb(m.summary()); }, function () { cb(null); });
   }
   function loadTray() {
@@ -829,7 +837,7 @@
   // to the origin rather than to the desktop shell: a page with no taskbar still
   // has tools worth advertising.
   function bootWebmcp() {
-    if (!D.modelContext) return;   // no WebMCP here; do not spend the fetch
+    if (!hasModelContext()) return;   // no WebMCP here; do not spend the fetch
     import("/webmcp.js").then(function (m) {
       // The tray icon ships hidden (shell-data.ts says why). Showing it is the
       // page telling the visitor, in the place XP puts running things, that an
@@ -866,7 +874,14 @@
       return m.boot().then(paint, paint);
     }).catch(function () {});
   }
-  if ("requestIdleCallback" in window) requestIdleCallback(bootWebmcp, { timeout: 4000 });
+  // The idle timeout is the ceiling on how long a busy page can put this off,
+  // and a readiness scanner reads the catalog about 4s after navigation
+  // (isitagentready.com, measured 2026-09-11: 4.25s for the whole check), so
+  // 4000 here meant a page still working at that mark registered after the
+  // scanner had already left. 2000 leaves the fetch and the registrations room
+  // inside that window and costs an idle page nothing, since an idle callback
+  // fires long before either ceiling.
+  if ("requestIdleCallback" in window) requestIdleCallback(bootWebmcp, { timeout: 2000 });
   else setTimeout(bootWebmcp, 1200);
 
   if (D.readyState === "loading") D.addEventListener("DOMContentLoaded", bootAfterStaticPaint);
