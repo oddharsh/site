@@ -129,6 +129,7 @@ const HOMEPAGE_DISCOVERY_LINKS = [
   '</.well-known/api-catalog>; rel="api-catalog"; type="application/linkset+json"',
   '</.well-known/mcp/server-card.json>; rel="service-desc"; type="application/json"; title="Aadharsh site MCP server card"',
   '</.well-known/agent-card.json>; rel="service-desc"; type="application/json"; title="Aadharsh site agent card"',
+  '</.well-known/ard.json>; rel="ard"; type="application/json"; title="ARD manifest (also at /.well-known/ai-catalog.json)"',
 ];
 
 export const HOMEPAGE_DISCOVERY_LINK = HOMEPAGE_DISCOVERY_LINKS.join(", ");

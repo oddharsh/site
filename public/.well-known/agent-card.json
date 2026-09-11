@@ -256,6 +256,7 @@
     "discovery": {
       "llms": "https://aadhar.sh/llms.txt",
       "apiCatalog": "https://aadhar.sh/.well-known/api-catalog",
+    "ard": "https://aadhar.sh/.well-known/ard.json",
       "skillsIndex": "https://aadhar.sh/.well-known/agent-skills/index.json",
       "oauthProtectedResource": "https://aadhar.sh/.well-known/oauth-protected-resource",
       "oauthAuthorizationServer": "https://aadhar.sh/.well-known/oauth-authorization-server"

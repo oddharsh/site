@@ -235,6 +235,7 @@
   Link: </.well-known/api-catalog>; rel="api-catalog"; type="application/linkset+json"
   Link: </.well-known/mcp/server-card.json>; rel="service-desc"; type="application/json"; title="Aadharsh site MCP server card"
   Link: </.well-known/agent-card.json>; rel="service-desc"; type="application/json"; title="Aadharsh site agent card"
+  Link: </.well-known/ard.json>; rel="ard"; type="application/json"; title="ARD manifest (also at /.well-known/ai-catalog.json)"
   Vary: Accept
 
 # discovery files: long cache. these all change rarely (sitemap when
@@ -310,6 +311,27 @@
 /.well-known/agent-skills/serendipity-events/SKILL.md
   Content-Type: text/markdown; charset=utf-8
   Cache-Control: public, max-age=0, must-revalidate, s-maxage=86400
+
+# The ARD (Agentic Resource Discovery) manifest: the one document that names
+# every agentic resource here (both MCP server cards, the agent card, the
+# Serendipity skill, NLWeb, llms.txt, the api-catalog) with 2-5 representative
+# queries apiece, which is what a registry builds its semantic index from.
+# TWO paths, ONE document: ARD v0.91 publishes at /.well-known/ard.json with
+# rel="ard", and names /.well-known/ai-catalog.json + rel="ai-catalog" as the
+# predecessor a consumer MAY still consult. A contract test pins the two files
+# byte-identical. CORS is the spec's own requirement (registries fetch from a
+# browser too), and the cache is a day rather than the cards' 30, because this
+# file gains a row every time a surface ships and a client cannot be purged.
+/.well-known/ard.json
+  Content-Type: application/json; charset=utf-8
+  Access-Control-Allow-Origin: *
+  Cache-Control: public, max-age=3600, s-maxage=86400
+  Link: </.well-known/ard.json>; rel="ard"; type="application/json"
+/.well-known/ai-catalog.json
+  Content-Type: application/json; charset=utf-8
+  Access-Control-Allow-Origin: *
+  Cache-Control: public, max-age=3600, s-maxage=86400
+  Link: </.well-known/ard.json>; rel="ard"; type="application/json"
 
 # (security.txt is served by Cloudflare's managed Security Center now —
 # no local file, no _headers rule needed. the Link header on / and the

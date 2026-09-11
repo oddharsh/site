@@ -1887,6 +1887,23 @@ Weigh that before repointing any long-cached well-known path again.
 `.well-known/agent-card.json` carries both interfaces and now names each one's
 card. All of them advertise 2026-07-28.
 
+**`.well-known/ard.json` is the ARD manifest, and `.well-known/ai-catalog.json`
+is the SAME BYTES rather than a second document.** ARD (Agentic Resource
+Discovery, v0.91) lists every agentic resource on an origin as a
+`urn:air:<domain>:<namespace>:<name>` entry with 2-5 `representativeQueries`,
+which is what a registry builds its semantic index from; ours names both MCP
+cards, the agent card, the Serendipity skill, NLWeb `/ask`, `llms.txt` and the
+api-catalog, with each MCP entry's `capabilities` pinned to its card's tool
+names. The spec publishes at `ard.json` with `rel="ard"` and keeps
+`ai-catalog.json` + `rel="ai-catalog"` as the predecessor path a consumer MAY
+consult, so the file is hand-authored once and copied, a contract test holds the
+two byte-identical, and the route oracle asserts `Access-Control-Allow-Origin: *`
+on both, since a manifest without CORS passes every other column and is still
+unreadable to a registry fetching from a browser. It is advertised from the
+homepage `Link` set, `robots.txt` (`Agentmap:`), `llms.txt`, the api-catalog
+and the agent card's `discovery` block, and the same test fails if any of those
+five drops it. Added 2026-09-11.
+
 **Tool annotations are a CLAIM, and the default is read-only.** `lib/mcp-tools.ts`
 decorates every tool with a title, an object output schema, and
 `readOnlyHint/destructiveHint/idempotentHint/openWorldHint`. Its defaults describe

@@ -71,6 +71,8 @@ try {
 //     may be an array of acceptable prefixes (e.g. Pages says application/javascript,
 //     Workers-assets says text/javascript for the same .js file — both are valid).
 // marker: a substring that must appear in the body (text routes only).
+// cors: the exact Access-Control-Allow-Origin the response must carry. For a
+//     document whose spec requires it: a missing header fails no other column.
 // flaky: true = record the result but never fail the run (external/rate-limited).
 // remote: true = skipped entirely against a local base. Reserve this for rows
 //     whose assertion depends on something a local Worker structurally cannot
@@ -113,6 +115,12 @@ const ROUTES = [
   { path: "/.well-known/agent-card.json", status: 200, ct: "application/json", marker: "discovery-only" },
   { path: "/.well-known/oauth-protected-resource", status: 200, ct: "application/json" },
   { path: "/.well-known/oauth-authorization-server", status: 200, ct: "application/json" },
+  // The ARD manifest, at the spec's path and its predecessor's. `cors` is the
+  // load-bearing assertion: a manifest served without Access-Control-Allow-Origin
+  // returns the right body with the right type, and a registry fetching from a
+  // browser context still cannot read it, so every other column reads as a pass.
+  { path: "/.well-known/ard.json", status: 200, ct: "application/json", marker: "urn:air:aadhar.sh:mcp:site", cors: "*" },
+  { path: "/.well-known/ai-catalog.json", status: 200, ct: "application/json", marker: "urn:air:aadhar.sh:mcp:site", cors: "*" },
   { path: "/whoareyou", status: 200, ct: "text/html" },
   { path: "/whoareyou.json", status: 200, ct: "application/json" },
   { path: "/security", status: 200, ct: "text/html" },
@@ -462,6 +470,8 @@ async function probe(r) {
     const enc = (res.headers.get("content-encoding") || "").toLowerCase();
     const okEnc = !r.encoding || enc === r.encoding;
     const okMarker = !r.marker || body.includes(r.marker);
+    const cors = res.headers.get("access-control-allow-origin");
+    const okCors = !r.cors || cors === r.cors;
     const okBytes = !r.maxBytes || (bytes !== null && bytes <= r.maxBytes);
     // The doctype leads the document, but build.ts stamps a one-line banner
     // pointing at the readable .src.html twin ahead of it. That banner reached
@@ -495,8 +505,8 @@ async function probe(r) {
       !/<(?:!doctype|html|head|body)\b/i.test(body) &&
       (!r.fragmentRoot || body.includes(r.fragmentRoot))
     );
-    const pass = okStatus && okCt && okEnc && okMarker && okBytes && okFullPage && okFragment;
-    return { path: r.path, status: res.status, ct, enc, wantEnc: r.encoding, pass, flaky: !!r.flaky, okStatus, okCt, okEnc, okMarker, okBytes, okFullPage, okFragment, bytes, want: r.status, wantCt: r.ct, marker: r.marker, maxBytes: r.maxBytes };
+    const pass = okStatus && okCt && okEnc && okMarker && okCors && okBytes && okFullPage && okFragment;
+    return { path: r.path, status: res.status, ct, enc, wantEnc: r.encoding, cors, wantCors: r.cors, pass, flaky: !!r.flaky, okStatus, okCt, okEnc, okMarker, okCors, okBytes, okFullPage, okFragment, bytes, want: r.status, wantCt: r.ct, marker: r.marker, maxBytes: r.maxBytes };
   } catch (e) {
     return { path: r.path, status: 0, ct: "", pass: false, flaky: !!r.flaky, error: String(e && e.message || e), want: r.status };
   }
@@ -530,6 +540,7 @@ async function main() {
       r.okCt === false ? `ct "${r.ct}"!^"${r.wantCt}"` : "",
       r.okEnc === false ? `content-encoding "${r.enc || "none"}" != "${r.wantEnc}" (twin built but not served?)` : "",
       r.okMarker === false ? `missing marker "${r.marker}"` : "",
+      r.okCors === false ? `access-control-allow-origin "${r.cors || "none"}" != "${r.wantCors}"` : "",
       r.okBytes === false ? `size ${r.bytes}B > ${r.maxBytes}B (unminified? build bypassed?)` : "",
       r.okFullPage === false ? "full-page contract missing document wrapper" : "",
       r.okFragment === false ? "fragment contract returned a document wrapper" : "",
