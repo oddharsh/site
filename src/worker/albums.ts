@@ -22,8 +22,8 @@
 export type Album = {
   slug: string;
   title: string;
-  /** one line under the title; plain text, escaped at render */
-  lede: string;
+  /** the lines under the title, one <br> apart; plain text, escaped at render */
+  lede: string[];
   /** the <meta name="description"> and the registry's description */
   description: string;
 };
@@ -32,7 +32,10 @@ export const ALBUMS: Record<string, Album> = {
   "cota-wec": {
     slug: "cota-wec",
     title: "Lone Star Le Mans",
-    lede: "WEC at Circuit of the Americas, 4 to 6 September 2026. Straight out of camera, FUJIFILM X-T50.",
+    lede: [
+      "6 hrs of WEC at Circuit of the Americas, 9/4/26 - 9/6/26",
+      "With friends old and new, straight out of camera on a FUJIFILM X-T50 + 50mm f/2",
+    ],
     description: "Lone Star Le Mans 2026: the FIA World Endurance Championship at Circuit of the Americas, straight out of camera, every frame as JPEG and HEIF.",
   },
 };

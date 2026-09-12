@@ -699,7 +699,9 @@ ${tiles}
 // the pipeline actually uploaded: JPEG always (the click-through), HEIF when
 // add-photos.sh ran with HEIF=1 and put the original beside it. A tile never
 // advertises a format the index does not record, which is the same rule the
-// tooltip follows for EXIF: never fabricate a line.
+// tooltip follows for EXIF: never fabricate a line. The lede is the owner's
+// copy verbatim (albums.ts); it carried counts and a how-to line for a day and
+// the owner cut both, so nothing here computes prose from the pool.
 export function renderAlbumPage(album: Album, photos, altMap) {
   const members = albumPool(photos, album);
   if (!members.length) {
@@ -708,10 +710,6 @@ export function renderAlbumPage(album: Album, photos, altMap) {
       headers: { "content-type": "text/plain; charset=utf-8", "retry-after": "60" },
     });
   }
-  const heifs = members.filter((p) => p.heif).length;
-  const bytes = members.reduce((n, p) => n + (p.size || 0), 0);
-  const gb = (bytes / 1e9).toFixed(1);
-
   const tiles = joinHtml(members.map((p, i) => {
     // `download`: the tile opens the JPEG in the browser, the format links save
     // it. Same-origin, so the attribute is honoured; the filename is the R2 key.
@@ -720,12 +718,6 @@ export function renderAlbumPage(album: Album, photos, altMap) {
     return renderTile(p, altMap, i, html`
 <span class="ph-fmt">${joinHtml(links, " &middot; ")}</span>`);
   }), "\n");
-
-  const formats = heifs === members.length
-    ? "Every frame is here twice: the camera's JPEG, and the 10-bit HEIF it wrote."
-    : heifs
-      ? `${heifs} of the ${members.length} are here as the camera's 10-bit HEIF as well as JPEG; the rest were shot JPEG only.`
-      : "JPEG only.";
 
   return lunaPage({
     title: `aadhar.sh${albumPath(album)}`,
@@ -737,9 +729,7 @@ export function renderAlbumPage(album: Album, photos, altMap) {
     body: html`
   <h1>${album.title}</h1>
   <p class="lede">
-    ${album.lede}
-    ${members.length} photos, ${gb} GB of full-resolution JPEG. ${formats}
-    Click a tile to view the full-resolution JPEG in the browser; the links under it download each format.
+    ${joinHtml(album.lede.map((line) => html`${line}`), "<br>\n    ")}
   </p>
   <div class="sheet">
 ${tiles}

@@ -76,11 +76,12 @@ test("renderAlbumPage is pure over the committed pool and never invents a format
       assert.ok(!a.includes(`/images/full/undefined`), "no tile may link a missing key");
     }
     assert.ok(a.includes(album.title), `${album.slug}: the page carries its title`);
+    for (const line of album.lede) assert.ok(a.includes(line.replace(/'/g, "&#39;")), `${album.slug}: the lede line "${line}" reaches the page`);
   }
 
   // a fabricated album with no members refuses, and a pool of curated photos
   // contributes nothing to any album
-  const none = renderAlbumPage({ slug: "nope", title: "Nope", lede: "", description: "" }, pool, alt);
+  const none = renderAlbumPage({ slug: "nope", title: "Nope", lede: [], description: "" }, pool, alt);
   assert.equal(none.status, 503, "an album nobody ran the pipeline for must refuse rather than ship an empty sheet");
   assert.equal(albumPool(curatedPool(pool), Object.values(ALBUMS)[0]).length, 0, "curated and album pools are disjoint");
 });
