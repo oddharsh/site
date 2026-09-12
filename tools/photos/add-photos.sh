@@ -37,6 +37,14 @@
 #      check-photo-pipeline.ts, which fails the run rather than let an
 #      unlabelled image reach a deploy
 #
+# ALBUM=<slug> stamps every index entry this run writes with that album, which
+# keeps the photos OUT of the homepage draw and /photos and puts them at /<slug>
+# (src/worker/albums.ts holds the registry; the slug must be declared there).
+# HEIF=1 also uploads each HEIF source to R2 beside its JPEG export, under the
+# source's own filename, and records the key as `heif` on the index entry so the
+# album page can offer both formats. Off by default: for the site-wide pool the
+# HEIF original stays local-only, as it always has.
+#
 # REMOTE_RENDER_ONLY=1 skips R2 uploads. The GitHub Actions pipeline uses it
 # because the source object is already in R2 and every generated artifact —
 # tiers, metadata, the index entry — comes back as a normal PR.
@@ -134,6 +142,12 @@ TMP="/tmp/aadhar-add-photos-$$"
 # identical, so the thread count is baked into the encode and stealing threads
 # back from avifenc to widen this knob would re-encode the whole library.
 JOBS="${JOBS:-8}"
+ALBUM="${ALBUM:-}"
+HEIF="${HEIF:-0}"
+case "$ALBUM" in
+  ""|[a-z0-9]*) ;;
+  *) echo "error: ALBUM must be a lowercase slug (got '$ALBUM')" >&2; exit 1 ;;
+esac
 
 # A worker runs in a subshell, so it cannot increment a counter in the parent.
 # Each one drops an empty file named by its loop index into a per-outcome
@@ -249,22 +263,32 @@ if [ ! -x "$MOZ_JTRAN" ]; then
   echo "  install with: brew install mozjpeg" >&2
   exit 1
 fi
-# AVIF encoder, in preference order. The VENDORED build is first because it is
-# the only one this repo can pin: `/i/` is content-addressed, so the encoder
-# decides shipped URLs, and a `brew upgrade libavif` could re-mint them silently
-# (gotcha 46). tools/photos/libavif/build.sh builds libavif at a pinned tag with
-# aom, libsharpyuv and libyuv LOCAL.
+# AVIF encoder, in preference order: the INSTALLED avifenc first, the vendored
+# build second, sips last. Owner call 2026-09-12, reversing the 2026-08-26 order
+# that put the vendored build first: the installed encoder is the one to track,
+# and a fresh machine should not spend ten minutes building an older libavif to
+# match a pin when a newer one is already on PATH. What the pin bought was
+# protection against a `brew upgrade` re-minting URLs silently (gotcha 46), and
+# that protection now lives in config/tools.json's `recorded` version, which
+# `bun run tools:check` compares against `avifenc --version` and reports as
+# drift. Adding a photo on a moved encoder re-mints NOTHING already shipped,
+# since /i/ is content-addressed per file; what it changes is the bytes of the
+# photo being added, which is exactly what the recorded version is for.
 #
-# Preferring it costs NOTHING today: verified 2026-08-26 that the vendored and
-# brew binaries produce BYTE-IDENTICAL output at the settings below (same
-# libavif 1.4.2, same aom 3.14.1). What the vendored one adds is `--sharpyuv`,
-# which brew's build cannot do at all, and which this script deliberately does
-# NOT pass yet (see avif_encode).
+# Measured before the flip rather than assumed: brew's aom 3.15.0 against the
+# vendored aom 3.14.1, shipping flags verbatim, 3 stems (1 JPG, 2 HIF), all three
+# tiers each: 9 of 9 byte-identical. The library is therefore mixed by
+# PROVENANCE and not by bytes, so far. Re-run that control before trusting the
+# next aom bump, since two versions agreeing is evidence about those two.
+#
+# The vendored build stays for two reasons: it is the fallback on a machine with
+# no avifenc at all, and it is the only build here with `--sharpyuv`, which this
+# script deliberately does NOT pass (see avif_encode).
 VENDORED_AVIFENC="$(cd "$(dirname "$0")" && pwd)/libavif/build/avifenc"
-if [ -x "$VENDORED_AVIFENC" ]; then
-  AVIF_ENCODER="$VENDORED_AVIFENC"; AVIF_KIND="vendored"
-elif command -v avifenc >/dev/null 2>&1; then
+if command -v avifenc >/dev/null 2>&1; then
   AVIF_ENCODER="avifenc"; AVIF_KIND="brew"
+elif [ -x "$VENDORED_AVIFENC" ]; then
+  AVIF_ENCODER="$VENDORED_AVIFENC"; AVIF_KIND="vendored"
 else
   AVIF_ENCODER="sips"; AVIF_KIND="sips"
 fi
@@ -272,7 +296,7 @@ fi
 # rather than let a missing avifenc quietly change what ships.
 if [ "$AVIF_KIND" = "sips" ]; then
   echo "warning: no avifenc found; falling back to sips, which encodes the AVIF" >&2
-  echo "         tier differently. build the pinned one: tools/photos/libavif/build.sh" >&2
+  echo "         tier differently. brew install libavif, or build one: tools/photos/libavif/build.sh" >&2
 fi
 
 mkdir -p "$DEST" "$TMP"
@@ -443,8 +467,8 @@ echo ""
 
 # ── phase 2: prepare the exact full-resolution bytes ────────────────
 echo "phase 2 — full-resolution JPEGs (parallel $JOBS)"
-FULLS="$TMP/full-resolution"; RECEIPTS="$TMP/full-paths"
-mkdir -p "$FULLS" "$RECEIPTS"
+FULLS="$TMP/full-resolution"; RECEIPTS="$TMP/full-paths"; HEIF_RECEIPTS="$TMP/heif-keys"
+mkdir -p "$FULLS" "$RECEIPTS" "$HEIF_RECEIPTS"
 st_init "$TMP/status2"
 prepare_one() {  # source, index, existing JPEG, object key, stem
   local f="$1" idx="$2" original="$3" full="$4" stem="$5" out tmppng
@@ -492,14 +516,30 @@ if [ "${REMOTE_RENDER_ONLY:-0}" = "1" ]; then
 else
   echo "phase 3 — R2 uploads (parallel 4)"
   upload_one() {
-    local idx="$2" full="$4" send
+    local f="$1" idx="$2" full="$4" send heif
     send=$(cat "$RECEIPTS/$idx")
-    if "$WRANGLER" r2 object put "aadhar-photos/$full" --file="$send" --content-type="image/jpeg" --remote >/dev/null 2>&1; then
-      mark ok "$idx"; printf "."
-    else
+    if ! "$WRANGLER" r2 object put "aadhar-photos/$full" --file="$send" --content-type="image/jpeg" --remote >/dev/null 2>&1; then
       mark fail "$idx"; printf "✗"
       echo "error: R2 upload failed: aadhar-photos/$full" >&2
+      return
     fi
+    # HEIF=1: the source itself goes up too, byte-for-byte, under its own name.
+    # The key is written to a receipt phase 4 reads, so the index records a
+    # HEIF only when this put actually succeeded. A JPEG-only source writes no
+    # receipt and its entry carries no `heif`.
+    if [ "$HEIF" = "1" ]; then
+      case "${f##*.}" in
+        [Hh][Ii][Ff]|[Hh][Ee][Ii][Cc]|[Hh][Ee][Ii][Ff])
+          heif=$(basename "$f")
+          if ! "$WRANGLER" r2 object put "aadhar-photos/$heif" --file="$f" --content-type="image/heif" --remote >/dev/null 2>&1; then
+            mark fail "$idx"; printf "✗"
+            echo "error: R2 upload failed: aadhar-photos/$heif" >&2
+            return
+          fi
+          printf '%s' "$heif" > "$HEIF_RECEIPTS/$idx" ;;
+      esac
+    fi
+    mark ok "$idx"; printf "."
   }
   st_init "$TMP/status3"
   run_parallel upload_one 4
@@ -537,8 +577,14 @@ while read_input; do
   idx=$((idx+1))
   obj=$(cat "$RECEIPTS/$idx")
   size=$(wc -c < "$obj" | tr -d '[:space:]')
-  jaq --arg s "$stem" --arg k "$full" --argjson z "$size" \
-     '. + {($s): {full: $k, size: $z}}' "$NEW_ENTRIES" > "$NEW_ENTRIES.tmp"
+  heif=""; [ -s "$HEIF_RECEIPTS/$idx" ] && heif=$(cat "$HEIF_RECEIPTS/$idx")
+  # `album` and `heif` are written only when set, so an entry for the site-wide
+  # pool keeps the three-key shape it has always had and photo-index.json diffs
+  # stay legible. An empty string is never written as a value.
+  jaq --arg s "$stem" --arg k "$full" --argjson z "$size" --arg album "$ALBUM" --arg heif "$heif" \
+     '. + {($s): ({full: $k, size: $z}
+                  + (if $album != "" then {album: $album} else {} end)
+                  + (if $heif != "" then {heif: $heif} else {} end))}' "$NEW_ENTRIES" > "$NEW_ENTRIES.tmp"
   mv "$NEW_ENTRIES.tmp" "$NEW_ENTRIES"
   META_SOURCES+=("$f")
 done < "$INPUTS"

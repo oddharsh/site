@@ -37,6 +37,23 @@
       }
     },
     {
+      "path": "/cota-wec",
+      "title": "Lone Star Le Mans",
+      "section": "photos",
+      "kind": "page",
+      "description": "Lone Star Le Mans 2026: the FIA World Endurance Championship at Circuit of the Americas, straight out of camera, every frame as JPEG and HEIF.",
+      "hint": "an album · WEC at COTA, September 2026 · every frame as JPEG + HEIF",
+      "flags": {
+        "run": true,
+        "taskbar": false,
+        "sitemap": true,
+        "gallery": false,
+        "agents": true,
+        "searchIndex": true,
+        "webmention": false
+      }
+    },
+    {
       "path": "/whoareyou",
       "title": "Who are you",
       "section": "identity",

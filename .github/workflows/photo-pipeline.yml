@@ -67,7 +67,13 @@ jobs:
 
       - name: Install image toolchain
         run: |
-          brew install cmake ninja ffmpeg jaq libavif mozjpeg webp
+          # libavif is brew's, and it is the encoder the tiers use: the pipeline
+          # selects the installed avifenc first since 2026-09-12 (the vendored
+          # build in tools/photos/libavif is the fallback for a machine with none),
+          # so the ten-minute pinned build that used to follow this step is gone.
+          # config/tools.json records the version the last add ran on, and
+          # tools:check reports drift from it as an advisory.
+          brew install ffmpeg jaq libavif mozjpeg webp
           # exif-sooc reads and writes every EXIF the pipeline touches, and
           # replaced exiftool on 2026-08-14. It was NOT installed here when the
           # extractor moved onto it in #390, so this workflow would have failed
@@ -93,10 +99,6 @@ jobs:
         # rev in Cargo.lock and moves by hand. --locked so a runner builds the
         # pinned graph or fails, never a resolved one. macOS runners ship cargo.
         run: cargo build --release --locked --manifest-path tools/photos/zenc/Cargo.toml
-
-      - name: Build the pinned photo AVIF encoder
-        if: inputs.routine == 'add-photo' || inputs.routine == 'reencode-thumbnails'
-        run: ./tools/photos/libavif/build.sh
 
       - name: Check input derivations
         run: bun run derive:check

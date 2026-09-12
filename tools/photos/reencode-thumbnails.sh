@@ -101,15 +101,17 @@ if [ ! -x "$ZENC" ]; then
   cargo build --release --locked --manifest-path "$ZENC_DIR/Cargo.toml" >&2 || { echo "error: zenc build failed" >&2; exit 1; }
 fi
 [ -d "$SRC" ]      || { echo "error: source folder not found: $SRC" >&2; exit 1; }
-# Same encoder preference as add-photos.sh, and it matters MORE here: this
-# script re-encodes the whole published library, so the encoder it picks decides
-# every /i/ URL at once. The vendored build is pinned; brew's is whatever the
-# machine happens to have. See tools/photos/libavif/build.sh.
+# Same encoder preference as add-photos.sh (installed first, vendored second,
+# sips last, since 2026-09-12), and it matters MORE here: this script re-encodes
+# the whole published library, so the encoder it picks decides every /i/ URL at
+# once. Read the recorded version in config/tools.json against `avifenc
+# --version` before running this, because a full re-encode on a moved encoder
+# is the one operation that can re-mint the whole library in one go.
 VENDORED_AVIFENC="$(cd "$(dirname "$0")" && pwd)/libavif/build/avifenc"
-if [ -x "$VENDORED_AVIFENC" ]; then
-  AVIF_ENCODER="$VENDORED_AVIFENC"; AVIF_KIND="vendored"
-elif command -v avifenc >/dev/null 2>&1; then
+if command -v avifenc >/dev/null 2>&1; then
   AVIF_ENCODER="avifenc"; AVIF_KIND="brew"
+elif [ -x "$VENDORED_AVIFENC" ]; then
+  AVIF_ENCODER="$VENDORED_AVIFENC"; AVIF_KIND="vendored"
 else
   AVIF_ENCODER="sips"; AVIF_KIND="sips"
 fi

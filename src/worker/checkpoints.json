@@ -908,5 +908,12 @@
     "version": "aadhar-v194-markdown-lens",
     "vnum": 194,
     "ymd": "2026-08-27"
+  },
+  {
+    "slug": "cota-wec",
+    "title": "Photo albums. The first one is Lone Star Le Mans: 93 frames from WEC at Circuit of the Americas, each downloadable as the archival JPEG and, where the camera wrote one, the 10-bit HEIF. Albums stay out of the homepage draw.",
+    "version": "aadhar-v195-cota-wec",
+    "vnum": 195,
+    "ymd": "2026-09-12"
   }
 ]

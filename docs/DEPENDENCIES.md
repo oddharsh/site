@@ -266,12 +266,16 @@ Run `bun run tools:check` before a pipeline session:
   `recorded`. An unreadable version or violated minimum fails. A differing
   recorded version remains a notice, including with `--strict`.
 
-The selected executable matters. Grid ingest and rerenders prefer the pinned
-AVIF build from [`tools/photos/libavif/build.sh`](../tools/photos/libavif/build.sh),
-then ambient `avifenc`, then `sips`. Cars and encoding studies use the ambient
-encoder. The `avifenc` entry checks that ambient installation; its drift alone
-does not establish that the grid encoder changed. Named version captures include
-the linked AOM encoder, just as `zenc` reports its linked zenjpeg version.
+The selected executable matters. Grid ingest and rerenders prefer the installed
+`avifenc`, then the source build from
+[`tools/photos/libavif/build.sh`](../tools/photos/libavif/build.sh), then `sips`
+(the order was reversed on 2026-09-12; the owner would rather track the
+installed encoder than build an older one to match a pin). Cars and encoding
+studies use the same installed encoder. The `avifenc` entry therefore records
+the encoder the last grid add ran on, and its drift is the signal that the next
+add will encode on a different one. That re-mints nothing already shipped,
+because `/i/` is content-addressed per file. Named version captures include the
+linked AOM encoder, just as `zenc` reports its linked zenjpeg version.
 
 A matching version is only one part of provenance. The declaration retains
 historical verification notes; encoder source, flags, and inputs also determine

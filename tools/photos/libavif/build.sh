@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
 # build.sh — build avifenc from PINNED SOURCE, with sharpyuv.
 #
+# THE FALLBACK, NOT THE DEFAULT, since 2026-09-12. add-photos.sh and
+# reencode-thumbnails.sh select the INSTALLED avifenc first and reach for this
+# build only when PATH has none; photo-pipeline.yml no longer builds it. Owner
+# call: track the installed encoder rather than build an older one to match a
+# pin. The drift protection this build used to provide lives in
+# config/tools.json's recorded version now. Everything below is the argument as
+# it stood when this build was first in line, kept because the sharpyuv half of
+# it is still the only reason to build this.
+#
 # WHY THIS EXISTS. The AVIF tier is the one most visitors actually get, and until
 # now it was produced by whatever `brew install libavif` happened to put on one
 # laptop. Two consequences, both bad:

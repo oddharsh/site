@@ -90,14 +90,18 @@ manifest cache to bust.
 ## Toolchain
 
 The runner installs the tools named by the workflow, including `jaq`, and builds
-`zenc` with the repository's Rust toolchain and Cargo lock. Grid ingest and
-thumbnail rerenders also build the pinned AVIF encoder from
-[`tools/photos/libavif/build.sh`](../tools/photos/libavif/build.sh). The car and
-encoding-study routines use Homebrew's encoder. The mozjpeg commands resolve
-its keg through Homebrew, so the install prefix is not tied to one workstation.
+`zenc` with the repository's Rust toolchain and Cargo lock. Every routine uses
+Homebrew's `avifenc`, which is the encoder the grid tiers select first since
+2026-09-12; the source build in
+[`tools/photos/libavif/build.sh`](../tools/photos/libavif/build.sh) is the
+fallback for a machine with no `avifenc` on PATH, and the workflow no longer
+builds it. The mozjpeg commands resolve its keg through Homebrew, so the install
+prefix is not tied to one workstation.
 
-Dependabot tracks the Cargo dependencies; the AVIF source pin changes by hand.
-See [DEPENDENCIES.md](DEPENDENCIES.md) for dependency ownership.
+Dependabot tracks the Cargo dependencies; the AVIF encoder version is RECORDED
+in `config/tools.json` rather than pinned, and `bun run tools:check` reports the
+installed one drifting from it. See [DEPENDENCIES.md](DEPENDENCIES.md) for
+dependency ownership.
 
 To validate existing artifacts without ingesting or uploading:
 

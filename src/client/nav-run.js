@@ -39,6 +39,7 @@ export function createRun(options) {
   var PAGES = [
     { label: "Home", path: "/", hint: "aadhar.sh" },
     { label: "photos", path: "/photos", hint: "every photo, Explorer Thumbnails view — the archive the old /images/ listing became" },
+    { label: "lone star le mans", path: "/cota-wec", hint: "an album · WEC at COTA, September 2026 · every frame as JPEG + HEIF" },
     { label: "whoareyou", path: "/whoareyou", hint: "system properties · what one request reveals · for agents + the curious" },
     { label: "security center", path: "/security", hint: "the site's security posture, XP-style: firewall, updates, threat protection" },
     { label: "windows update", path: "/updates", hint: "what shipped lately: the deploy changelog as installed updates" },
