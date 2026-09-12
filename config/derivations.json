@@ -87,8 +87,8 @@
       },
       "regenerate": "bash tools/photos/hash-thumbnails.sh",
       "recorded": {
-        "inputs": "ed4ec82c3f689f2c59e4cb0b474c68eca7a83f86d00258021c2934c072c76788",
-        "count": 660
+        "inputs": "192016df7a445a29d89a12bacaa88cf71bdde163e41176a8304a06b594e713ae",
+        "count": 1032
       }
     },
     {
@@ -113,8 +113,8 @@
       },
       "regenerate": "bash tools/photos/extract-photo-metadata.sh \"$SOOC_DIR\" && node tools/photos/build-histogram-index.ts",
       "recorded": {
-        "inputs": "b8793924ce2d904aedb30f0ebc75e19ea3169f02d5e94be57d7383fc423b93e0",
-        "count": 168
+        "inputs": "933ece421250a5e9e4234dcdeb399233fbb035b1f98518b9645136d871510ac7",
+        "count": 261
       }
     },
     {
@@ -136,8 +136,8 @@
       "covers": "public/images/alt.json",
       "regenerate": "python3 tools/photos/gen-alt-text.py",
       "recorded": {
-        "inputs": "57c4119ad420a7e405a9fe8a515135c0dbc7b0a7ec22e4f6cc7031a80638fa23",
-        "count": 165
+        "inputs": "d457e90604ddd1fb8206e0c374a39c372596c678b116defb5cd4a84b973666fb",
+        "count": 258
       }
     },
     {
@@ -159,8 +159,8 @@
       "covers": "public/images/semantics.json",
       "regenerate": "node tools/photos/gen-photo-semantics.ts   # add --vision for the model tier",
       "recorded": {
-        "inputs": "57c4119ad420a7e405a9fe8a515135c0dbc7b0a7ec22e4f6cc7031a80638fa23",
-        "count": 165
+        "inputs": "d457e90604ddd1fb8206e0c374a39c372596c678b116defb5cd4a84b973666fb",
+        "count": 258
       }
     },
     {
@@ -180,7 +180,7 @@
       },
       "regenerate": "bun tools/photos/gen-desktop-partial.ts",
       "recorded": {
-        "inputs": "61fdf1f9438db087c7b32dee62db15a85395ec0a258a24d7564e03b5610f1e2a",
+        "inputs": "911543d71c4d0fa84432c19cf05302e908a7f325b4d55187999e10b5de356248",
         "count": 2
       }
     },
