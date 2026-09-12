@@ -90,6 +90,13 @@ jobs:
       - name: Check Wrangler versions and lockfiles
         run: bun run check-wrangler
 
+      - name: Test native Lens extraction
+        run: |
+          rustup component add clippy rustfmt
+          cargo fmt --manifest-path lens-reader/native/Cargo.toml --check
+          cargo test --locked --manifest-path lens-reader/native/Cargo.toml
+          cargo clippy --locked --manifest-path lens-reader/native/Cargo.toml --all-targets -- -D warnings
+
       - name: Build homepage
         run: bun run build
 
