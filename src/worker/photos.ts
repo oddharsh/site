@@ -1,12 +1,13 @@
 // photos.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
 import { cachedRender } from "./lib/cache.ts";
-import { unsafeHtml } from "./lib/html.ts";
+import { EMPTY, html, joinHtml, unsafeHtml, type Html } from "./lib/html.ts";
 import { asScalarText } from "./lib/parse.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { ARCHIVE_VERSION } from "./lib/const.ts";
 import { errorResp, escAttr, escHtml, jsonResp } from "./lib/http.ts";
 import { commonPairs, queryTerms, scoreFields } from "./lib/text.ts";
+import { ALBUMS, albumPath, type Album } from "./albums.ts";
 // the photo pool, as BUILD INPUTS: photo-index.json (which photos exist — full
 // R2 key, byte size, upload date; written by add-photos.sh at upload time) and
 // hashes.json (the content-hash map the /i/ URLs are minted from). esbuild
@@ -27,6 +28,10 @@ type PhotoRecord = {
   full?: string;
   size?: number;
   uploaded?: string | null;
+  /** album slug (albums.ts), or absent for the site-wide pool */
+  album?: string | null;
+  /** R2 key of the HEIF original, when one was uploaded beside the JPEG */
+  heif?: string | null;
   camera?: string | number | null;
   lens?: string | number | null;
   film?: string | number | null;
@@ -227,11 +232,25 @@ export function derivePhotoPool(index: PhotoIndexMap, hashes: ThumbHashMap) {
       stem,
       size:       p.size,                   // R2 object size in bytes
       uploaded:   p.uploaded || null,
+      // Album membership and the HEIF original are both OPTIONAL and both null
+      // for the whole pre-2026-09-12 library, so every consumer of a row has to
+      // read null as "the site-wide pool, JPEG only" rather than as a gap.
+      album:      p.album || null,
+      heif:       p.heif || null,           // R2 key, like `full`; the URL is built at render
     }];
   }).sort((a, b) => (a.full < b.full ? -1 : a.full > b.full ? 1 : 0));
 }
 
 export const PHOTO_POOL = derivePhotoPool(photoIndex, thumbHashes);
+
+// The pool the homepage draws from and /photos lists: everything that is NOT in
+// an album. Album photos stay in PHOTO_POOL (the manifest, the query utility and
+// the Run palette see them) and are listed at their album's own page. Filtering
+// here rather than at each call site is what keeps the homepage bake in
+// build.ts and the live /photos/grid.html fragment on the same set.
+export const curatedPool = (pool: ReturnType<typeof derivePhotoPool>) => pool.filter((p) => !p.album);
+export const albumPool = (pool: ReturnType<typeof derivePhotoPool>, album: Album) => pool.filter((p) => p.album === album.slug);
+export const CURATED_POOL = curatedPool(PHOTO_POOL);
 
 // AI alt text (cf-garage Workers AI, ?mode=alt) generated offline into the static
 // asset /images/alt.json {stem: alt}. loaded once per isolate and cached in a module
@@ -567,33 +586,31 @@ export function handleImagesManifest() {
 // is the committed alt.json, so the same inputs give the same bytes in Node and in
 // the Worker. That equality is the whole precondition for a precomputed twin, and
 // contract-tests asserts it rather than trusting it.
-export function renderPhotosPage(photos, altMap) {
-  if (!photos.length) {
-    return new Response("photo manifest unavailable", {
-      status: 503,
-      headers: { "content-type": "text/plain; charset=utf-8", "retry-after": "60" },
-    });
-  }
+// `full` is optional on the record type (an index row can be malformed until
+// check-photo-pipeline.ts says otherwise), so the URL builder takes what the row
+// has; derivePhotoPool never emits a row without one.
+const fullUrl = (key: string | undefined) => `/images/full/${encodeURIComponent(key ?? "").replace(/%2F/g, "/")}`;
 
-  const tiles = photos.map((p, i) => {
-    const eager = i < 12;
-    const alt = escAttr((altMap && altMap[p.stem]) || p.stem);
-    return `<a class="ph" href="/images/full/${escAttr(encodeURIComponent(p.full).replace(/%2F/g, "/"))}">
+// One tile: the 400px AVIF over the 600px JPG, opening the SOOC JPEG. `extra`
+// is the album page's per-tile format links; it sits OUTSIDE the anchor because
+// an <a> inside an <a> is invalid HTML and the parser hoists it out (gotcha 8).
+// Built with the `html` tag, so every interpolation is escaped by construction
+// and the album page below opens no unescaped door at all.
+function renderTile(p, altMap, i: number, extra: Html = EMPTY): Html {
+  const eager = i < 12;
+  const alt = (altMap && altMap[p.stem]) || p.stem;
+  return html`<div class="ph">
+<a class="ph-open" href="${fullUrl(p.full)}">
 <picture>
-<source type="image/avif" srcset="${escAttr(p.thumb_small)}">
-<img src="${escAttr(p.thumb_jpg)}" alt="${alt}" width="400" height="400"${eager ? "" : ` loading="lazy"`} decoding="async">
+<source type="image/avif" srcset="${p.thumb_small}">
+<img src="${p.thumb_jpg}" alt="${alt}" width="400" height="400"${eager ? EMPTY : html` loading="lazy"`} decoding="async">
 </picture>
-<span class="ph-name">${escHtml(p.stem)}</span>
-</a>`;
-  }).join("\n");
+</a>
+<span class="ph-name">${p.stem}</span>${extra}
+</div>`;
+}
 
-  return lunaPage({
-    title: "aadhar.sh/photos",
-    path: "aadhar.sh/photos",
-    route: "/photos",
-    width: 980,
-    description: `All ${photos.length} photos, straight out of camera. FUJIFILM X-T50 + Leica M.`,
-    css: `
+const SHEET_CSS = `
   h1 { font-family: var(--font-caption); color: oklch(41.92% 0.0962 250.51); font-size: 18pt; margin: 0 0 4px; font-weight: bold; }
   .lede { margin: 0 0 14px; color: oklch(38.67% 0 0); font-size: 10.5pt; }
   .sheet {
@@ -601,9 +618,10 @@ export function renderPhotosPage(photos, altMap) {
   gap: 12px; margin: 8px 0 16px;
   }
   .ph {
-  display: block; text-decoration: none; text-align: center;
+  display: block; text-align: center;
   content-visibility: auto; contain-intrinsic-size: auto 190px;
   }
+  .ph-open { display: block; text-decoration: none; }
   .ph picture, .ph img {
   display: block; width: 100%; height: auto; aspect-ratio: 1;
   border: 1px solid oklch(80% 0.02 250); background: oklch(96.72% 0 0);
@@ -615,18 +633,52 @@ export function renderPhotosPage(photos, altMap) {
   font-family: var(--font-ui); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .ph:hover .ph-name { color: oklch(42.61% 0.2353 263.74); }
+  .ph-fmt { display: block; font-size: 7.5pt; font-family: var(--font-ui); color: oklch(44.95% 0 0); }
+  .ph-fmt a { margin: 0 2px; }
   footer { text-align: center; font-size: 9pt; color: oklch(44.95% 0 0); margin-top: 14px; padding-top: 10px; border-top: 1px solid oklch(86.67% 0.0294 259.59); }
   footer address { font-style: italic; margin-top: 4px; }
   a { color: oklch(42.61% 0.2353 263.74); }
-`,
+`;
+
+// `photos` is the WHOLE pool. The sheet lists the curated part and the lede
+// links each album with its count, so the two halves are derived from one input
+// and cannot disagree about which photo went where.
+export function renderPhotosPage(photos, altMap) {
+  const curated = curatedPool(photos);
+  if (!curated.length) {
+    return new Response("photo manifest unavailable", {
+      status: 503,
+      headers: { "content-type": "text/plain; charset=utf-8", "retry-after": "60" },
+    });
+  }
+
+  // .html rather than the Html value itself: this body is still the pre-`html`
+  // literal form, and an object in a plain template literal is what
+  // restrict-template-expressions exists to catch.
+  const tiles = joinHtml(curated.map((p, i) => renderTile(p, altMap, i)), "\n").html;
+  const albums = Object.values(ALBUMS)
+    .map((a) => ({ album: a, count: albumPool(photos, a).length }))
+    .filter(({ count }) => count > 0);
+  const albumsLine = albums.length
+    ? `\n    Albums: ${albums.map(({ album, count }) =>
+        `<a href="${escAttr(albumPath(album))}">${escHtml(album.title)}</a> (${count})`).join(" &middot; ")}.`
+    : "";
+
+  return lunaPage({
+    title: "aadhar.sh/photos",
+    path: "aadhar.sh/photos",
+    route: "/photos",
+    width: 980,
+    description: `All ${curated.length} photos, straight out of camera. FUJIFILM X-T50 + Leica M.`,
+    css: SHEET_CSS,
     body: unsafeHtml(`
   <h1>Photos</h1>
   <p class="lede">
-    All ${photos.length}, straight out of camera (FUJIFILM X-T50, Leica M).
+    All ${curated.length}, straight out of camera (FUJIFILM X-T50, Leica M).
     Click any tile for the full-resolution original. Machine-readable index:
     <a href="/images/manifest.json">manifest.json</a> &middot;
     <a href="/images/alt.json">alt.json</a> &middot;
-    <a href="/images/metadata.json">metadata.json</a>.
+    <a href="/images/metadata.json">metadata.json</a>.${albumsLine}
   </p>
   <div class="sheet">
 ${tiles}
@@ -638,6 +690,72 @@ ${tiles}
 `),
     cache: "public, max-age=300",
   });
+}
+
+// ── /<album> — one album, the same contact sheet, every format named ────────
+// Same purity contract as renderPhotosPage: `photos` is the whole pool and the
+// album's members are selected here, so build.ts step 1e and the live handler
+// render identical bytes from identical inputs. Each tile names the formats
+// the pipeline actually uploaded: JPEG always (the click-through), HEIF when
+// add-photos.sh ran with HEIF=1 and put the original beside it. A tile never
+// advertises a format the index does not record, which is the same rule the
+// tooltip follows for EXIF: never fabricate a line.
+export function renderAlbumPage(album: Album, photos, altMap) {
+  const members = albumPool(photos, album);
+  if (!members.length) {
+    return new Response("album unavailable", {
+      status: 503,
+      headers: { "content-type": "text/plain; charset=utf-8", "retry-after": "60" },
+    });
+  }
+  const heifs = members.filter((p) => p.heif).length;
+  const bytes = members.reduce((n, p) => n + (p.size || 0), 0);
+  const gb = (bytes / 1e9).toFixed(1);
+
+  const tiles = joinHtml(members.map((p, i) => {
+    // `download`: the tile opens the JPEG in the browser, the format links save
+    // it. Same-origin, so the attribute is honoured; the filename is the R2 key.
+    const links = [html`<a href="${fullUrl(p.full)}" download>JPEG</a>`];
+    if (p.heif) links.push(html`<a href="${fullUrl(p.heif)}" download>HEIF</a>`);
+    return renderTile(p, altMap, i, html`
+<span class="ph-fmt">${joinHtml(links, " &middot; ")}</span>`);
+  }), "\n");
+
+  const formats = heifs === members.length
+    ? "Every frame is here twice: the camera's JPEG, and the 10-bit HEIF it wrote."
+    : heifs
+      ? `${heifs} of the ${members.length} are here as the camera's 10-bit HEIF as well as JPEG; the rest were shot JPEG only.`
+      : "JPEG only.";
+
+  return lunaPage({
+    title: `aadhar.sh${albumPath(album)}`,
+    path: `aadhar.sh${albumPath(album)}`,
+    route: albumPath(album),
+    width: 980,
+    description: album.description,
+    css: SHEET_CSS,
+    body: html`
+  <h1>${album.title}</h1>
+  <p class="lede">
+    ${album.lede}
+    ${members.length} photos, ${gb} GB of full-resolution JPEG. ${formats}
+    Click a tile to view the full-resolution JPEG in the browser; the links under it download each format.
+  </p>
+  <div class="sheet">
+${tiles}
+  </div>
+  <footer>
+    &larr; <a href="/photos">all photos</a> &middot; <a href="/">aadhar.sh</a>
+    <address>handwritten worker at aadhar.sh</address>
+  </footer>
+`,
+    cache: "public, max-age=300",
+  });
+}
+
+export async function handleAlbum(album: Album, request, env, ctx) {
+  const render = async () => renderAlbumPage(album, PHOTO_POOL, await getAltMap(env));
+  return cachedRender(request, ctx, render, albumPath(album), env);
 }
 
 export async function handlePhotos(request, env, ctx) {

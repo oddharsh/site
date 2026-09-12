@@ -138,8 +138,11 @@ else
   [ "\${FAIL_AT:-}" != jpeg ] || exit 6
   touch "$2"
 fi`);
-    // The selected binary is inside this fixture, so no host encoder can run.
-    await command("tools/photos/libavif/build/avifenc", `
+    // The fake sits FIRST on the fixture's PATH, which is where the script looks
+    // first since 2026-09-12 (installed encoder, then the vendored build, then
+    // sips), so no host encoder can run. It lived at the vendored path before the
+    // flip, and after it that path is only consulted when PATH has no avifenc.
+    await command("bin/avifenc", `
 for out in "$@"; do :; done
 case "$out" in
   *-400.avif) tier=sm;; *-200.avif) tier=xs;; *) tier=sq;;

@@ -1258,10 +1258,12 @@ if (inlineProbe.includes("/* probe */") ||
   const nonce = `?build=${BUILD_NONCE}`;
   const grid = await import(pathToFileURL(resolve(OUT, "src/worker/lib/photo-grid.ts")).href + nonce);
   const photos = await import(pathToFileURL(resolve(OUT, "src/worker/photos.ts")).href + nonce);
-  const pool = photos.derivePhotoPool(
+  // curatedPool: album photos (albums.ts) stay out of the homepage draw, and the
+  // baked twelve have to come from the same set the live fragment draws from.
+  const pool = photos.curatedPool(photos.derivePhotoPool(
     JSON.parse(await readFile(`${OUT}/src/worker/photo-index.json`, "utf8")),
     JSON.parse(await readFile(`${OUT}/public/images/hashes.json`, "utf8")),
-  );
+  ));
   if (!pool.length) throw new Error("homepage bake: the photo pool is empty — the grid fallback would ship as bare frames");
   const altMap = JSON.parse(await readFile(`${OUT}/public/images/alt.json`, "utf8").catch(() => "{}"));
   const histograms = JSON.parse(await readFile(`${OUT}/public/images/histograms.json`, "utf8").catch(() => "{}"));
@@ -1323,11 +1325,27 @@ if (inlineProbe.includes("/* probe */") ||
   if (!photosHtml.includes("class=\"ph\"")) throw new Error("photos page: rendered document has no tiles — did the markup move?");
   await writeFile(`${OUT}/public/photos.html`, photosHtml);
 
+  // One document per album (src/worker/albums.ts), from the same pool. An album
+  // with no members is a registry entry nobody ran the pipeline for, and a page
+  // that renders 503 at deploy is a page whose route would 503 in production,
+  // so it fails the build by name rather than shipping the fallback.
+  const albums: typeof import("../src/worker/albums.ts") = await import(pathToFileURL(resolve(OUT, "src/worker/albums.ts")).href + nonce);
+  const { ALBUMS, albumPath } = albums;
+  const albumSizes: string[] = [];
+  for (const album of Object.values(ALBUMS)) {
+    const response = photos.renderAlbumPage(album, pool, altMap);
+    if (response.status !== 200) throw new Error(`album page ${albumPath(album)}: no photo in the pool carries album "${album.slug}" — run add-photos.sh with ALBUM=${album.slug}, or remove the registry entry`);
+    const html = await response.text();
+    if (!html.includes("class=\"ph\"")) throw new Error(`album page ${albumPath(album)}: rendered document has no tiles — did the markup move?`);
+    await writeFile(`${OUT}/public${albumPath(album)}.html`, html);
+    albumSizes.push(`${albumPath(album)}.html ${html.length}B (${photos.albumPool(pool, album).length} tiles)`);
+  }
+
   const botHtml = await bot.renderBotPage().text();
   if (!botHtml.includes("AadharshBot")) throw new Error("bot page: rendered document does not name the crawler — did the copy move?");
   await writeFile(`${OUT}/public/bot.html`, botHtml);
 
-  console.log(`pages(gen): photos.html ${photosHtml.length}B (${pool.length} tiles), bot.html ${botHtml.length}B`);
+  console.log(`pages(gen): photos.html ${photosHtml.length}B (${photos.curatedPool(pool).length} tiles), ${albumSizes.join(", ")}${albumSizes.length ? ", " : ""}bot.html ${botHtml.length}B`);
 }
 
 // 1f) /updates and /restore as deploy-time documents.

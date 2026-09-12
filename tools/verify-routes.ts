@@ -372,6 +372,10 @@ const ROUTES = [
   // stays local-checkable because it can fall back to the committed hashes.json.
   { path: "/photos", status: 200, ct: "text/html", marker: "handwritten worker", remote: true },
   { path: "/photos/", status: 301 },
+  // the first album (src/worker/albums.ts): generated at deploy like /photos,
+  // every tile carrying a JPEG download and, for a HEIF source, a HEIF one
+  { path: "/cota-wec", status: 200, ct: "text/html", marker: ">HEIF</a>" },
+  { path: "/cota-wec/", status: 301 },
   { path: "/run", status: 200, ct: "text/html", marker: "datalist" },
   { path: "/run?cmd=garage", status: 302 },
   { path: "/run?cmd=xyzzy-not-a-page", status: 200, ct: "text/html", marker: "cannot find" },

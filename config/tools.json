@@ -28,12 +28,19 @@
     "agreed on those inputs. Preserve these as scoped measurements, not a guarantee",
     "for a different source, encoder, or configuration.",
     "",
-    "Grid ingest and rerenders prefer tools/photos/libavif/build/avifenc, then the",
-    "ambient avifenc declared here, then sips. The source pin lives in",
-    "tools/photos/libavif/build.sh; encoding flags live in the callers. The ambient",
-    "entry also serves cars and encoding studies. A notice about it does not prove",
-    "that a caller selected it. Update recorded only with reviewed artifact evidence;",
-    "docs/DEPENDENCIES.md describes the checks and docs/MAINTENANCE.md the procedures."
+    "Grid ingest and rerenders prefer the INSTALLED avifenc declared here, then",
+    "tools/photos/libavif/build/avifenc, then sips. Owner call 2026-09-12: the",
+    "installed encoder is the one to track, and a fresh machine should not build",
+    "an older libavif to match a pin when a newer one is already on PATH. The",
+    "vendored build is the fallback for a machine with no avifenc at all, and the",
+    "place --sharpyuv lives if it is ever turned on. Drift shows up here, as the",
+    "recorded version below against what --version reports, and it is advisory:",
+    "the library is mixed by provenance on purpose (165 tiles on aom 3.14.1, the",
+    "cota-wec album on 3.15.0, byte-identical on 9 of 9 tiers across 3 stems at the",
+    "shipping flags). Encoding flags live in the callers. The entry also serves cars",
+    "and encoding studies. A notice about it does not prove that a caller selected",
+    "it. Update recorded only with reviewed artifact evidence; docs/DEPENDENCIES.md",
+    "describes the checks and docs/MAINTENANCE.md the procedures."
   ],
   "tools": [
     {
@@ -229,19 +236,19 @@
       "bin": "avifenc",
       "install": "brew install libavif",
       "optional": true,
-      "why": "Ambient AVIF encoder for car references and encoding studies; grid ingest and rerenders use it when the pinned build is unavailable, before falling back to sips",
+      "why": "the AVIF encoder for every shipped tier since 2026-09-12 (grid ingest and rerenders select it first), plus car references and encoding studies; the vendored build in tools/photos/libavif is the fallback when it is not installed, before sips",
       "required_by": [
         "tools/photos/add-car-photo.sh",
         "tools/photos/gen-encoding-grids.sh",
         "tools/photos/gen-encoding-samples.sh"
       ],
-      "bytes_why": "Produces AVIF artifacts in the callers that select this executable. Grid defaults come from the source pin in tools/photos/libavif/build.sh; this entry records the ambient installation.",
+      "bytes_why": "Produces the AVIF half of /i/ for every photo added since 2026-09-12, plus the AVIF artifacts in the other callers. /i/ is content-addressed, so a version change here re-mints nothing already shipped and decides the bytes of what is added next.",
       "version": {
         "flag": "--version",
         "match": "Version: (?<libavif>\\d+\\.\\d+\\.\\d+) \\(.*aom \\[enc/dec\\]:(?<aom>\\d+\\.\\d+\\.\\d+)"
       },
       "bytes": true,
-      "recorded": "libavif 1.4.2, aom 3.14.1"
+      "recorded": "libavif 1.4.2, aom 3.15.0"
     },
     {
       "bin": "cwebp",

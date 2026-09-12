@@ -2,7 +2,7 @@ import { serveMarkdownTwin } from "./lib/assets.ts";
 import { HOMEPAGE_DISCOVERY_LINK } from "./lib/security.ts";
 import { renderPhotoSlots } from "./lib/photo-grid.ts";
 import { span } from "./lib/trace.ts";
-import { getAltMap, getHistogramMap, PHOTO_POOL } from "./photos.ts";
+import { CURATED_POOL, getAltMap, getHistogramMap } from "./photos.ts";
 
 // ── the homepage's dynamic half, as a fragment ──────────────────────
 // `/` itself is now a DETERMINISTIC static document: build.ts bakes a fixed
@@ -41,7 +41,7 @@ import { getAltMap, getHistogramMap, PHOTO_POOL } from "./photos.ts";
 // The manifest span now reads the bundled pool synchronously. Only captions and
 // histograms need ASSETS reads, each cached per isolate and traced separately.
 export async function handlePhotoGrid(request, env) {
-  const pool = span("home.grid.manifest", () => PHOTO_POOL);
+  const pool = span("home.grid.manifest", () => CURATED_POOL);
   const [altMap, histograms] = await Promise.all([
     span("home.grid.alt", () => getAltMap(env).catch(() => ({}))),
     // Module-cached like the alt map, so this is one ASSETS read per isolate

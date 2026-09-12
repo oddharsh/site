@@ -18,6 +18,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildHistogramIndex } from "./build-histogram-index.ts";
 import { buildExifIndex, buildImageFingerprints, HISTOGRAM_KEY, tierFiles, TIER_KEYS } from "../lib/photo-indexes.ts";
+import { ALBUMS } from "../../src/worker/albums.ts";
 import { asRecord, asText } from "../../src/worker/lib/parse.ts";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -62,7 +63,7 @@ if (JSON.stringify(stems) !== JSON.stringify(metadataStems)) {
 // One entry per photo stem: the R2 key, its byte size, and the upload stamp.
 // Named here because `json()` answers unknown and this file's whole job is
 // asserting the shape of that record.
-const photoIndex: Record<string, { full?: string; size?: number; uploaded?: string }> =
+const photoIndex: Record<string, { full?: string; size?: number; uploaded?: string; album?: string; heif?: string }> =
   await json(path.join(ROOT, "src/worker/photo-index.json"));
 const indexStems = Object.keys(photoIndex).sort();
 if (JSON.stringify(stems) !== JSON.stringify(indexStems)) {
@@ -82,6 +83,19 @@ for (const [stem, entry] of Object.entries(photoIndex)) {
   }
   if (entry.uploaded !== null && Number.isNaN(Date.parse(entry.uploaded))) {
     fail(`${stem}: index uploaded must be an ISO date or null (got ${JSON.stringify(entry?.uploaded)})`);
+  }
+  // Both optional (ALBUM= and HEIF=1 in add-photos.sh). An album the registry
+  // does not declare is a photo that left the homepage draw and reached no page
+  // at all, and a heif key that is not this stem's is a download link to
+  // somebody else's original, so both are asserted rather than passed through.
+  if (entry.album !== undefined && !Object.hasOwn(ALBUMS, String(entry.album))) {
+    fail(`${stem}: index album ${JSON.stringify(entry.album)} is not declared in src/worker/albums.ts`);
+  }
+  if (entry.heif !== undefined && !/^[A-Za-z0-9_.-]+\.(?:heic|heif|hif)$/i.test(String(entry.heif)) ) {
+    fail(`${stem}: index heif must be a HEIF R2 key (got ${JSON.stringify(entry.heif)})`);
+  }
+  if (entry.heif !== undefined && !String(entry.heif).startsWith(`${stem}.`)) {
+    fail(`${stem}: index heif must be this stem's own key (got ${JSON.stringify(entry.heif)})`);
   }
 }
 

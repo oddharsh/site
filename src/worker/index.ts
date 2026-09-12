@@ -34,7 +34,8 @@ import { cronJob } from "./lib/cron.ts";
 import { isCallable } from "./lib/parse.ts";
 import { installTracing, span } from "./lib/trace.ts";
 import { installTracing as installCalTracing } from "../../cal/src/trace.ts";
-import { getThumbHashes, handleImagesManifest, handlePhotoQuery, handlePhotos, servePhotoFromR2 } from "./photos.ts";
+import { getThumbHashes, handleAlbum, handleImagesManifest, handlePhotoQuery, handlePhotos, servePhotoFromR2 } from "./photos.ts";
+import { ALBUMS, albumPath, type Album } from "./albums.ts";
 import { handleReading } from "./reading.ts";
 import { handleRun } from "./run.ts";
 import { cronEnrichTracks, handleRn, handleRnAdmin, handleRnArt, handleRnMarkdown, handleRnSet, handleRnTracks, handleRnTracksHtml } from "./rn.ts";
@@ -510,6 +511,12 @@ const ROUTE_TABLE: Array<[path: string, handler: RouteHandler]> = [
 
   ["/photos", routePhotos],
   ["/photos/", routePhotosRedirect],
+  // one page per album (albums.ts), generated at deploy like /photos, with the
+  // dynamic handler as the 404 fallback and the slashed twin 301ing to it
+  ...Object.values(ALBUMS).flatMap((album): Array<[string, RouteHandler]> => [
+    [albumPath(album), (request, env, ctx) => routeAlbum(album, request, env, ctx)],
+    [`${albumPath(album)}/`, (_request, _env, _ctx, url) => Response.redirect(url.origin + albumPath(album), 301)],
+  ]),
   ["/photos/query.json", handlePhotoQuery],
   // the homepage grid's random twelve, fetched by the inline hydrator
   ["/photos/grid.html", handlePhotoGrid],
@@ -1045,6 +1052,13 @@ async function routePhotos(request: SiteRequest, env: Env, ctx: ExecutionContext
   if (response.status !== 404) return response;
   try { await response.body?.cancel(); } catch {}
   return handlePhotos(request, env, ctx);
+}
+
+async function routeAlbum(album: Album, request: SiteRequest, env: Env, ctx: ExecutionContext) {
+  const response = await serveStaticPage(request, env, { headers: PHOTOS_PAGE_HEADERS });
+  if (response.status !== 404) return response;
+  try { await response.body?.cancel(); } catch {}
+  return handleAlbum(album, request, env, ctx);
 }
 
 async function routeBot(request: SiteRequest, env: Env, ctx: ExecutionContext) {

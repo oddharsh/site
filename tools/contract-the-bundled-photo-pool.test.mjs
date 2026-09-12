@@ -37,6 +37,11 @@ test("bundled photo pool derives one well-formed row per committed stem", async 
     assert.match(p.thumb_small, new RegExp(`^/i/${p.stem}-400\\.[a-f0-9]{8}\\.avif$`));
     assert.ok(p.full.startsWith(`${p.stem}.`), `${p.stem}: full must be the stem's R2 key`);
     assert.ok(Number.isInteger(p.size) && p.size > 0, `${p.stem}: size must be positive bytes`);
+    // album and heif are carried through as null for the plain library, never
+    // as undefined: /images/manifest.json is a public shape and a key that comes
+    // and goes per photo is a key a consumer cannot rely on
+    assert.ok("album" in p && "heif" in p, `${p.stem}: album and heif must be present`);
+    if (p.heif !== null) assert.ok(p.heif.startsWith(`${p.stem}.`), `${p.stem}: heif must be the stem's own key`);
   }
   const fulls = pool.map((p) => p.full);
   assert.deepEqual(fulls, [...fulls].sort((a, b) => a.localeCompare(b)), "pool keeps the manifest's sort order");

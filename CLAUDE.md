@@ -1031,6 +1031,7 @@ Single-page personal site at `aadhar.sh`. A Cloudflare Worker with static assets
 | `src/worker/wire.ts` | **`/terminal`: what an agent sees when it points at this site.** Server-rendered, with no client script and nothing to type into. It performs a real `POST /mcp` JSON-RPC exchange and shows the request beside the response, because that is what an agent does. It replaced a Windows PowerShell emulator in #266 and the reason is worth keeping: the console had grown to roughly 2,000 lines to explain an MCP server of 433, and it drew `[_][#][X]` window controls in ASCII inside a real XP window that already had them, which is the "terminal running inside Internet Explorer" mistake rebuilt one layer down. An agent never types, it POSTs JSON-RPC and reads JSON back, so emulating a shell faithfully made the demo LESS honest the better it got. `?plain=1` is inert rather than removed, so old links keep working. |
 | `src/worker/terminal.ts` + `lib/tui.ts` | The tools and the 80-column frame renderer. Tools are TOP-LEVEL utilities (`/finger`, `/radar`, `/dict`, `/cache`), because this site puts utilities at the root and only content nests; `/terminal` is the page that SHOWS them rather than their parent. The frame is a REPRESENTATION alongside `.md`: one URL answers HTML to a browser, the frame to everything else, and `<tool>.txt` explicitly. **The MCP tool name IS the route name** — what `/terminal` renders, what you curl, and what an agent calls are one word, and a contract test asserts every tool with a route is reachable over MCP. State is query params (small and addressable), so frames fork, bookmark and replay. `lib/tui.ts` is pure, which is what lets one renderer answer HTTP, MCP and `node --test`; its palette is MID-TONES ONLY because a terminal theme belongs to the visitor. |
 | the `/terminal` window | It is a **console window, not a page**, and the difference is entirely in what was REMOVED. `lunaPage` gained `windowClass`/`contentClass`/`windowAttrs` (all defaulting to empty, so the other nine callers are byte-identical) and the window declares `data-no-histnav`, which `nav.js` honours by skipping the site-wide Back/Forward injection — those are BROWSER controls, and a console carrying them reads as a terminal running inside Internet Explorer. Drag, resize, maximize and close all stay, because those are OS chrome. There is also nothing below the window: the explanatory paragraph that used to sit there was the single strongest tell, since real consoles do not come with a caption. Width is 624px so the console is exactly 80 columns, the size a real one opens at; left at the 760px page default it carried 136px of dead field to the right of every frame. Fonts stay on the design system — `"Lucida Console", var(--font-mono)`, one native Windows font in front of the existing token, no `@font-face`, no bytes. |
+| `src/worker/albums.ts` | The registry of photo ALBUMS, since 2026-09-12: a named set of photos served at `/<slug>` and kept OUT of the homepage draw and `/photos`. `add-photos.sh` stamps `album: "<slug>"` on each index entry (`ALBUM=`), `derivePhotoPool` carries it, and `CURATED_POOL` is the pool minus album photos; the machine surfaces (`/images/manifest.json`, `/photos/query.json`, the Run palette) still see everything. `HEIF=1` on the same run uploads the HEIF source beside the JPEG export and records it as `heif`, so an album tile can offer both formats with `download` links; the plain library keeps HEIF local-only as it always has. The page is generated at deploy (build.ts step 1e) from the same pool `/photos` uses, and the build FAILS on a registered album with no members, so the registry entry and the pipeline run land in one PR. Each album costs two `run_worker_first` rows (gotcha 26). First album: `/cota-wec`, Lone Star Le Mans, 93 photos. |
 | `src/worker` | The module worker (bundled by wrangler at deploy). Owns routing, photo serving from R2, manifest building, Spotify playlist scraping, AadharshBot crawler, the `/writing` Notepad pages, cache-control overrides. |
 | `public/_headers` | Static-asset cache + security headers (CSP, Permissions-Policy, etc.). Applied to direct static-asset requests; the worker overrides cache-control for select paths. |
 | `src/client/sw.js` | RETIRED (v136, 2026-07-03): now a ~15-line unregister stub (skipWaiting, delete caches, claim, unregister) that must keep serving 200 for a year+ so installed copies clean themselves up. No CACHE_VERSION anymore; the deploy-log vnum is staged in `checkpoints.json` and recorded in D1 by the ramp (bump-version.sh mints the next from that projection). Repeat-visit speed comes from immutable assets + bfcache + speculation prerender. |
@@ -1216,6 +1217,24 @@ Two encoders + one transform tool, all built from source:
   `config/tools.json` carries a whole `recorded`-version tier to DETECT that
   drift, and a pin removes it instead. The brew `avifenc` stays declared there
   because the `/garage/encoding` grid scripts still use it.
+
+  **REVERSED 2026-09-12, owner call: the INSTALLED `avifenc` is first and the
+  vendored build is the fallback.** The owner would rather track the latest
+  encoder than have a fresh machine spend ten minutes building an older libavif
+  to match a pin, so `add-photos.sh` and `reencode-thumbnails.sh` now select
+  PATH's `avifenc`, then `tools/photos/libavif/build/avifenc`, then sips, and
+  `photo-pipeline.yml` no longer builds the vendored one. What that trades
+  away is exactly the paragraph above: a `brew upgrade libavif` now changes the
+  bytes of the NEXT photo added, and the `recorded` version in
+  `config/tools.json` (moved to `aom 3.15.0` the same day) is the whole
+  tripwire, advisory, through `bun run tools:check`. It re-mints nothing
+  already shipped, since `/i/` is content-addressed per file. Measured before
+  the flip: brew's aom 3.15.0 against the vendored 3.14.1 at the shipping
+  flags, 3 stems (1 JPG, 2 HIF) x 3 tiers, 9 of 9 byte-identical, so the
+  library is mixed by provenance and not yet by bytes. Re-run that control at
+  the next aom bump. The one thing the vendored build still uniquely offers is
+  `--sharpyuv`, which nothing passes. The two paragraphs below describe the
+  vendored-first era and are kept for their measurements.
 
   **Adopting it re-mints nothing**, verified 2026-08-26: at `-q 63 -d 10
   --speed 4 --yuv 420` the vendored and brew binaries produced BYTE-IDENTICAL

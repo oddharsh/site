@@ -239,7 +239,16 @@
       // answer first and 404 a route the worker renders.
       "/rn", "/rn.md", "/rn/tracks", "/rn/tracks.html", "/rn/admin", "/rn/set", "/rn/art/*",
       "/bot", "/around", "/around/json", "/around/changes.json",
-      "/photos", "/photos/", "/photos/query.json", "/photos/grid.html", "/run",
+      // "/photos/*" FOLDS the three exact sub-rows it replaced ("/photos/",
+      // "/photos/query.json", "/photos/grid.html"), 2026-09-12. Nothing static
+      // lives under /photos/ (no public/photos, no src/pages/photos), so the
+      // wildcard claims only Worker routes. The two rows it freed pay for the
+      // first album below; the config is back at 98 of 100 after it.
+      "/photos", "/photos/*", "/run",
+      // albums (src/worker/albums.ts): each is a root-level generated page plus
+      // its slashed twin, and needs its own pair here because a root path has no
+      // wildcard to inherit. The next album costs two rows; fold before adding.
+      "/cota-wec", "/cota-wec/",
       "/images", "/images/", "/images/full", "/images/full/*",
       "/images/manifest.json", "/images/metadata.json", "/images/meta/*",
       "/images/*.avif", "/images/*.jpg", "/images/*.jpeg",

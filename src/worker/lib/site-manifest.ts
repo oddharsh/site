@@ -19,6 +19,12 @@ export const AGENT_SURFACES = [
     "description": "The straight-out-of-camera photo archive and public photo query utility."
   },
   {
+    "path": "/cota-wec",
+    "title": "Lone Star Le Mans",
+    "mimeType": "text/html",
+    "description": "Lone Star Le Mans 2026: the FIA World Endurance Championship at Circuit of the Americas, straight out of camera, every frame as JPEG and HEIF."
+  },
+  {
     "path": "/whoareyou",
     "title": "Who are you",
     "mimeType": "text/html",

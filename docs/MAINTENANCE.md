@@ -1067,15 +1067,12 @@ when the remote job is unavailable.
 
 ```bash
 # the photo pipeline
-brew install jaq mozjpeg libavif              # mozjpeg = jpegtran + cjpeg; libavif = avifenc for the /garage/encoding grids
-brew install cmake ninja                     # for the pinned avifenc below
-# Git must also be on PATH to clone the pinned sources (brew install git if missing).
-# the AVIF encoder the photo tiers actually use: libavif at a pinned tag, built
-# with aom + libsharpyuv + libyuv. First run clones and builds all four (~10 min,
-# needs network); after that it is a no-op. Byte-identical to brew's avifenc at
-# q63 -d 10 --yuv 420 at BOTH --speed 4 (2026-08-26) and --speed 2 (2026-08-28,
-# 3 stems across both yuv paths), so building it re-mints no /i/ URL.
-./tools/photos/libavif/build.sh
+brew install jaq mozjpeg libavif              # mozjpeg = jpegtran + cjpeg; libavif = avifenc, the AVIF encoder for every tier
+# That brew avifenc is the one the photo tiers use, first in preference since
+# 2026-09-12. tools/photos/libavif/build.sh (needs cmake ninja git, ~10 min) is
+# the fallback for a machine with no avifenc on PATH and the only build here with
+# --sharpyuv; nothing requires it. config/tools.json records the version the last
+# add encoded on, and `bun run tools:check` says when brew has moved past it.
 brew install uv && bun run photos:env               # Pillow, for gen-pixel-peeper.py only (brew's python3 is PEP 668; pip into it fails)
 # the JPEG encoder (zenc) builds itself on first pipeline run; needs rust (rustup.rs)
 cargo build --release --locked --manifest-path tools/photos/zenc/Cargo.toml
@@ -1138,6 +1135,38 @@ thumbnail tiers and committed records.
 To remove a photo, remove its index entry, hash entry, tiers, metadata, caption,
 histogram, and search terms together, then verify the artifact graph. Delete its
 R2 object separately only if the full-resolution copy should also be removed.
+
+### Add an album (photos that stay out of the homepage draw)
+
+An album is a set of photos published at its own page and kept out of the
+homepage's random twelve and the `/photos` sheet. The machine surfaces
+(`/images/manifest.json`, `/photos/query.json`, the Run palette) still see every
+photo. Two flags on the same command:
+
+```bash
+# 1. declare the album: slug, title, lede, description
+$EDITOR src/worker/albums.ts
+# 2. register the page: path "/<slug>", section "photos", then project it
+$EDITOR config/site-manifest.json && bun run gen:manifest
+#    plus one Run-palette row in src/client/nav-run.js, a sitemap.xml <url>,
+#    "/<slug>" and "/<slug>/" in wrangler.jsonc run_worker_first (gotcha 26:
+#    each album costs two rows), and a row in tools/verify-routes.ts
+# 3. ingest with the flags
+ALBUM=<slug> HEIF=1 bun run photos "/path/to/folder/"
+```
+
+`ALBUM=` stamps `album` on every index entry the run writes. `HEIF=1` uploads
+each HEIF source to R2 beside its JPEG export, under the source's own filename,
+and records the key as `heif`; the album page then offers both formats per tile
+with `download` links. A JPEG-only source gets a JPEG link alone. Both are off
+by default, so a plain `bun run photos` behaves exactly as it always has: the
+HEIF stays local and the photo joins the site-wide pool.
+
+`build.ts` step 1e renders `/<slug>.html` at deploy from the same pool `/photos`
+uses and FAILS the build on an album with no members, so declare the album and
+run the pipeline in the same PR. `check-photo-pipeline.ts` refuses an `album`
+the registry does not declare and a `heif` key that is not the stem's own.
+The first album is `/cota-wec` (2026-09-12).
 
 ### Regenerate just the EXIF metadata (photos already uploaded)
 ```bash
