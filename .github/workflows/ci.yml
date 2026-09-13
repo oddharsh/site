@@ -90,6 +90,13 @@ jobs:
       - name: Check Wrangler versions and lockfiles
         run: bun run check-wrangler
 
+      - name: Validate native search compiler
+        run: |
+          rustup component add clippy rustfmt
+          cargo fmt --manifest-path tools/search/Cargo.toml --check
+          cargo test --locked --manifest-path tools/search/Cargo.toml
+          cargo clippy --locked --manifest-path tools/search/Cargo.toml --all-targets -- -D warnings
+
       - name: Build homepage
         run: bun run build
 
