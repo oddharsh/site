@@ -26,6 +26,7 @@
 // .br twin, leaving the hash map alone, then sweep that one path. It must FAIL with
 // `blocked script-src-elem`. A control that passes means the sweep is decoration.
 import { chromium } from "playwright-core";
+import { chromeChannel } from "./lib/browser-channel.ts";
 import { readFileSync } from "node:fs";
 
 const BASE = process.env.BASE || "http://localhost:8812";
@@ -45,7 +46,7 @@ const paths = process.env.PATHS
   ? JSON.parse(readFileSync(process.env.PATHS, "utf8"))
   : pathsFrom(new URL("../.build/public/_worker.js/lib/csp-hashes.js", import.meta.url));
 
-const browser = await chromium.launch({ channel: "chrome", headless: true });
+const browser = await chromium.launch({ channel: chromeChannel(), headless: true });
 const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
 
 let bad = 0, swept = 0;

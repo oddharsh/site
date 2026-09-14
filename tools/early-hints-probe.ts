@@ -22,6 +22,7 @@
 // The payoff scales with the 103-to-200 window, which is worker think-time, so a
 // warm isolate legitimately shows real fetches. A short window is not a defect.
 import { chromium } from "playwright-core";
+import { chromeChannel } from "./lib/browser-channel.ts";
 
 type Entry = { name: string; initiatorType: string; duration: number; encodedBodySize: number };
 
@@ -30,7 +31,7 @@ const urls = targets.length ? targets : ["https://www.cloudflare.com/"];
 const headless = !process.argv.includes("--headful");
 
 async function run(url: string, attachCDP: boolean): Promise<{ entries: Entry[]; hints: number }> {
-  const browser = await chromium.launch({ channel: "chrome", headless });
+  const browser = await chromium.launch({ channel: chromeChannel(), headless });
   try {
     const ctx = await browser.newContext(); // fresh profile, so a cold cache
     const page = await ctx.newPage();

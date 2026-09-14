@@ -27,6 +27,7 @@
 //   node tools/webmcp-frame-probe.ts
 import { createServer } from "node:http";
 import { chromium } from "playwright-core";
+import { chromeChannel } from "./lib/browser-channel.ts";
 
 const CHILD = (name, label) => `<!doctype html><meta charset=utf-8><title>${label}</title>
 <body><pre id=o>...</pre><script>(async()=>{const mc=document.modelContext;
@@ -61,7 +62,7 @@ const C = await serve(8813, { "/cross.html": PARENT("http://127.0.0.1:8812/child
 // WebMCP is behind a flag on Chrome 151. It is ON by default in the 152 this was
 // cross-checked against, so a probe that skipped the flag would report the API
 // as absent on one machine and present on the next.
-const browser = await chromium.launch({ channel: "chrome", headless: false, args: ["--enable-features=WebMCP"] });
+const browser = await chromium.launch({ channel: chromeChannel(), headless: false, args: ["--enable-features=WebMCP"] });
 const page = await browser.newPage();
 
 const read = () => page.evaluate(async () => {

@@ -39,6 +39,11 @@
 //      a different URL, orphans every a-dict snapshot naming the old hash, and
 //      moves the CSP hashes documents are served under.
 //
+// Gates 3 to 5 live in lib/bun-gates.ts since 2026-09-14, because canary-bun.ts
+// runs the same five against the rolling canary every night. This script keeps
+// the decisions: whether a version is proposable at all (gates 1 and 2), and
+// what to do once it clears (write the pin). The canary script has neither.
+//
 // CONTROL, and it is permanent rather than a one-off: the PREVIOUS bun is a
 // known-bad runtime, so the script has a red input on hand forever.
 //
@@ -47,27 +52,30 @@
 // Without it, a run that reports "nothing to do" on a day when the pin is
 // already current proves only that the comparison ran.
 
-import { spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
-import { chmodSync, copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join, relative } from "node:path";
+import { readFileSync, rmSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { parseJsonc } from "./lib/jsonc.ts";
 import {
-  ZSTD_DICTIONARY_PROBE,
   compareVersions,
-  interpretZstdProbe,
   minimumReleaseAgeSeconds,
   readPin,
   releaseAsset,
   releaseUrl,
   writePin,
 } from "./lib/bun-pin.ts";
+import {
+  type Gate,
+  bunIdentity,
+  byteIdenticalBuildGate,
+  contractSuiteGate,
+  downloadBun,
+  lockfileFormatGate,
+  lockfileReadGate,
+  zstdGate,
+} from "./lib/bun-gates.ts";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
-const BUILD = join(ROOT, ".build");
-const SHADOW = join(ROOT, ".build.pinned-baseline");
 const WORK = join(ROOT, ".bun-candidate");
 
 const argv = process.argv.slice(2);
@@ -77,14 +85,17 @@ const flag = (name: string): string | null => {
   return i === -1 ? null : argv[i + 1];
 };
 
-const run = (cmd: string, args: string[], opts: Record<string, unknown> = {}) => spawnSync(cmd, args, { cwd: ROOT, encoding: "utf8", ...opts });
-
 const results: { name: string; ok: boolean }[] = [];
 const record = (name: string, ok: boolean, detail?: string) => {
   results.push({ name, ok });
   console.log(`${ok ? "  ok  " : " FAIL "} ${name}${detail ? ` — ${detail}` : ""}`);
 };
 const note = (text: string) => console.log(`       ${text}`);
+const gate = (g: Gate) => {
+  record(g.name, g.ok, g.detail);
+  for (const n of g.notes ?? []) note(n);
+  return g.ok;
+};
 
 // ---------------------------------------------------------------------------
 // which bun is the baseline
@@ -196,47 +207,19 @@ if (results.some((r) => !r.ok)) {
 // ---------------------------------------------------------------------------
 const asset = releaseAsset();
 const url = releaseUrl(target, asset);
-rmSync(WORK, { recursive: true, force: true });
-mkdirSync(WORK, { recursive: true });
-const zipPath = join(WORK, asset);
-
-{
-  const res = await fetch(url, { redirect: "follow" });
-  if (!res.ok) {
-    console.error(`could not download ${url}: HTTP ${res.status}`);
-    process.exit(2);
-  }
-  writeFileSync(zipPath, Buffer.from(await res.arrayBuffer()));
-}
-
-const unzip = run("unzip", ["-qo", zipPath, "-d", WORK]);
-if (unzip.status !== 0) {
-  console.error(`unzip failed: ${(unzip.stderr || "").trim()}`);
+let candidate: string;
+try {
+  candidate = await downloadBun(url, WORK);
+} catch (err) {
+  console.error(String(err instanceof Error ? err.message : err));
   process.exit(2);
 }
-
-const findBun = (dir: string): string | null => {
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const next = join(dir, entry.name);
-    if (entry.isDirectory()) {
-      const deeper = findBun(next);
-      if (deeper) return deeper;
-    } else if (entry.isFile() && entry.name === "bun") return next;
-  }
-  return null;
-};
-const candidate = findBun(WORK);
-if (!candidate) {
-  console.error(`no bun binary inside ${asset}`);
-  process.exit(2);
-}
-chmodSync(candidate, 0o755);
 
 {
   // The asset has to BE what the tag claims. Same assertion the setup-bun action
   // makes, and for the same reason: the version string is the whole guarantee
   // now that the digest pin is gone.
-  const reported = run(candidate, ["--version"]).stdout?.trim();
+  const reported = bunIdentity(candidate).version;
   record("the asset reports the version it is tagged with", reported === target, `asked for ${target}, the binary reports ${reported || "nothing"}`);
   if (reported !== target) {
     console.log("\nbun:pin: refusing to go further with a binary that disagrees with its own tag.");
@@ -247,84 +230,18 @@ chmodSync(candidate, 0o755);
 // ---------------------------------------------------------------------------
 // 3. the silent one
 // ---------------------------------------------------------------------------
-{
-  const out = run(candidate, ["-e", ZSTD_DICTIONARY_PROBE]);
-  const verdict = interpretZstdProbe(out.stdout);
-  record(
-    "zstd honours `dictionary`",
-    verdict.honoured === true,
-    verdict.honoured === true
-      ? verdict.detail
-      : `${verdict.detail}  <-- every dcz delta would be plain zstd`,
-  );
-  if (verdict.honoured !== true) {
-    console.log("\nbun:pin: NOT proposable. build.ts feature-detects the same collapse and throws, so this would");
-    console.log("  fail the build 40 seconds in rather than ship no-op deltas, which is a poor way to learn it.");
-    if (!has("--keep")) rmSync(WORK, { recursive: true, force: true });
-    process.exit(1);
-  }
+if (!gate(zstdGate(candidate))) {
+  console.log("\nbun:pin: NOT proposable. build.ts feature-detects the same collapse and throws, so this would");
+  console.log("  fail the build 40 seconds in rather than ship no-op deltas, which is a poor way to learn it.");
+  if (!has("--keep")) rmSync(WORK, { recursive: true, force: true });
+  process.exit(1);
 }
 
 // ---------------------------------------------------------------------------
 // 4. the lockfile, in both directions
 // ---------------------------------------------------------------------------
-{
-  // READ. `--dry-run` so a candidate runtime never writes into node_modules the
-  // pinned one is about to build with.
-  const out = run(candidate, ["install", "--frozen-lockfile", "--dry-run"]);
-  const ok = out.status === 0;
-  record("reads the committed bun.lock", ok, ok ? "frozen install resolves" : (out.stderr || out.stdout || "").trim().split("\n").slice(-2).join(" "));
-}
-
-{
-  // WRITE. A mirror of the manifests alone, resolved by each runtime back to
-  // back, which is what controls for registry drift: a caret range that floated
-  // upstream floats for both, seconds apart, so a difference between the two is
-  // attributable to the runtime rather than to the registry.
-  //
-  // Only the FORMAT fields fail. Comparing the whole file would fail on drift,
-  // measured 2026-08-24: the pinned bun does not reproduce the committed
-  // bun.lock byte-for-byte, because `vite` had moved 8.2.1 to 8.2.2 under a
-  // caret since the lockfile was written. That is a fact about the registry.
-  const pkg = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
-  const manifests = ["package.json", "bunfig.toml", ...(pkg.workspaces ?? []).map((w) => join(w, "package.json"))];
-  const lockVersions: Record<string, string | null> = {};
-  const texts: Record<string, string> = {};
-
-  for (const [label, exe] of [["pinned", process.execPath], ["candidate", candidate]]) {
-    const mirror = join(WORK, `lock-${label}`);
-    rmSync(mirror, { recursive: true, force: true });
-    for (const rel of manifests) {
-      const dest = join(mirror, rel);
-      mkdirSync(dirname(dest), { recursive: true });
-      copyFileSync(join(ROOT, rel), dest);
-    }
-    const out = run(exe, ["install", "--lockfile-only"], { cwd: mirror });
-    const lock = join(mirror, "bun.lock");
-    if (out.status !== 0 || !existsSync(lock)) {
-      lockVersions[label] = null;
-      continue;
-    }
-    const text = readFileSync(lock, "utf8");
-    texts[label] = text;
-    // bun.lock is JSONC: it carries trailing commas, so `JSON.parse` rejects it.
-    const parsed = parseJsonc(text);
-    lockVersions[label] = `lockfileVersion ${parsed.lockfileVersion} / configVersion ${parsed.configVersion}`;
-  }
-
-  const committed = parseJsonc(readFileSync(join(ROOT, "bun.lock"), "utf8"));
-  const committedFormat = `lockfileVersion ${committed.lockfileVersion} / configVersion ${committed.configVersion}`;
-  const same = lockVersions.pinned !== null && lockVersions.pinned === lockVersions.candidate && lockVersions.candidate === committedFormat;
-  record(
-    "writes the committed lockfile format",
-    same,
-    same ? committedFormat : `committed ${committedFormat}, pinned ${lockVersions.pinned ?? "wrote nothing"}, candidate ${lockVersions.candidate ?? "wrote nothing"}`,
-  );
-  if (same && texts.pinned !== texts.candidate) {
-    note("the two runtimes resolved the same manifests to DIFFERENT lockfile contents, which registry drift");
-    note("cannot explain across seconds. Read the diff before merging; the format gate above passed.");
-  }
-}
+gate(lockfileReadGate(candidate, ROOT));
+gate(lockfileFormatGate(candidate, process.execPath, ROOT, WORK));
 
 if (results.some((r) => !r.ok)) {
   console.log(`\nbun:pin: ${target} fails a gate above. Not proposing it.`);
@@ -335,81 +252,8 @@ if (results.some((r) => !r.ok)) {
 // ---------------------------------------------------------------------------
 // 5. the real bar
 // ---------------------------------------------------------------------------
-function hashTree(dir: string) {
-  const files = new Map<string, string>();
-  const walk = (abs: string) => {
-    for (const entry of readdirSync(abs, { withFileTypes: true })) {
-      const next = join(abs, entry.name);
-      if (entry.isDirectory()) walk(next);
-      else if (entry.isFile()) files.set(relative(dir, next), createHash("sha256").update(readFileSync(next)).digest("hex"));
-    }
-  };
-  walk(dir);
-  return files;
-}
-
-// THROWS rather than exits, because `process.exit()` skips `finally` and the
-// finally is what puts `.build/` back. Inherited from the retired check-bun.ts,
-// which learned it the hard way: the first run against a bun old enough to fail
-// the build left the tree holding a half-written `.build/` beside an orphan
-// baseline.
-const build = (label: string, exe: string) => {
-  const started = process.hrtime.bigint();
-  const out = run(exe, ["tools/build.ts"], { stdio: ["ignore", "pipe", "pipe"] });
-  const ms = Number(process.hrtime.bigint() - started) / 1e6;
-  if (out.status !== 0) {
-    const tail = (out.stderr || out.stdout || "").trim().split("\n").slice(-6).join("\n");
-    throw new Error(`${label} build failed (exit ${out.status}):\n${tail}`);
-  }
-  return ms;
-};
-
-if (existsSync(SHADOW)) rmSync(SHADOW, { recursive: true, force: true });
-let restored = false;
-try {
-  rmSync(BUILD, { recursive: true, force: true });
-  const pinnedMs = build("pinned", process.execPath);
-  renameSync(BUILD, SHADOW);
-  const candidateMs = build("candidate", candidate);
-
-  const a = hashTree(SHADOW);
-  const b = hashTree(BUILD);
-  const onlyPinned = [...a.keys()].filter((k) => !b.has(k));
-  const onlyCandidate = [...b.keys()].filter((k) => !a.has(k));
-  const differing = [...a.keys()].filter((k) => b.has(k) && a.get(k) !== b.get(k));
-  const identical = onlyPinned.length === 0 && onlyCandidate.length === 0 && differing.length === 0;
-
-  record(
-    "build output is byte-identical",
-    identical,
-    identical
-      ? `${a.size} files, pinned ${(pinnedMs / 1000).toFixed(1)}s vs candidate ${(candidateMs / 1000).toFixed(1)}s`
-      : `${differing.length} differing, ${onlyPinned.length} pinned-only, ${onlyCandidate.length} candidate-only`,
-  );
-  for (const f of [...differing, ...onlyPinned, ...onlyCandidate].slice(0, 20)) note(f);
-
-  // Leave `.build/` holding the PINNED output. A tree staged by a runtime this
-  // repo has not adopted is not something a later `wrangler deploy` should find.
-  rmSync(BUILD, { recursive: true, force: true });
-  renameSync(SHADOW, BUILD);
-  restored = true;
-} finally {
-  if (!restored && existsSync(SHADOW)) {
-    rmSync(BUILD, { recursive: true, force: true });
-    renameSync(SHADOW, BUILD);
-  }
-}
-
-{
-  // The preload is not decoration: `bun run test` carries it, so a suite run
-  // without it is a different suite from the one `validate` gates on.
-  const out = run(candidate, ["test", "--preload", "./tools/lib/no-network.ts", "tools/"]);
-  const text = `${out.stdout}\n${out.stderr}`;
-  const pass = Number(text.match(/(\d+) pass/)?.[1] ?? 0);
-  const fail = Number(text.match(/(\d+) fail/)?.[1] ?? -1);
-  record("contract suite passes under the candidate", fail === 0 && pass > 0, `${pass} pass, ${fail} fail`);
-  for (const line of text.split("\n").filter((l) => l.includes("(fail)")).slice(0, 10)) note(line.trim());
-}
+gate(byteIdenticalBuildGate(candidate, process.execPath, ROOT));
+gate(contractSuiteGate(candidate, ROOT));
 
 // ---------------------------------------------------------------------------
 if (!has("--keep")) rmSync(WORK, { recursive: true, force: true });

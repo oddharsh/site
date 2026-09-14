@@ -45,6 +45,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { chromium } from "playwright-core";
+import { chromeChannel } from "./lib/browser-channel.ts";
 
 import { executionChecks } from "../src/worker/lib/agent-execution.ts";
 
@@ -196,7 +197,7 @@ async function main() {
   let cbrowser = null;
   let cpage = null;
   if (WANT_CONTROL) {
-    cbrowser = await chromium.launch({ channel: "chrome", headless: true });
+    cbrowser = await chromium.launch({ channel: chromeChannel(), headless: true });
     cpage = await (await cbrowser.newContext({ viewport: { width: 1280, height: 900 } })).newPage();
   }
 

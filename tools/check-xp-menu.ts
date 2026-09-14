@@ -3,12 +3,13 @@
 // Chrome profile; edits remain in the page's ephemeral textareas.
 import assert from "node:assert/strict";
 import { chromium, type Locator } from "playwright-core";
+import { chromeChannel } from "./lib/browser-channel.ts";
 
 const target = new URL(process.argv[2] || "http://127.0.0.1:8799");
 if (process.argv.length > 3 || target.protocol !== "http:" || !["localhost", "127.0.0.1", "[::1]"].includes(target.hostname)) {
   throw new Error("usage: node tools/check-xp-menu.ts http://127.0.0.1:PORT (local preview only)");
 }
-const browser = await chromium.launch({ channel: "chrome", headless: true });
+const browser = await chromium.launch({ channel: chromeChannel(), headless: true });
 const page = await browser.newPage();
 const cdp = await page.context().newCDPSession(page);
 const notepadScripts = new Set<string>();

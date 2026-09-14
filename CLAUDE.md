@@ -210,6 +210,27 @@ bun run dict:roll
 # advisory: it reads production, so never make it a required check.
 bun run dcz:check
 
+# THE CANARY TRIPWIRE: three moving targets through gates this repo already
+# holds its pins to, PROPOSING NOTHING. .github/workflows/canary.yml runs all
+# three nightly and keeps at most one open issue per leg (canary-report.ts
+# dedupes on WHAT failed, closes it the night the leg goes green, and files
+# nothing when the instrument itself could not run, which reds the job instead).
+# No Cloudflare credential, no PR, no pin moved. Exit 0 green, 1 a finding, 2
+# the instrument.
+bun run canary:bun        # the rolling `canary` release through the bun:pin gates
+                          # (zstd dictionary, lockfile both ways, BYTE-IDENTICAL
+                          # build against the pinned bun, contract + cal suites)
+bun run canary:wrangler   # workers-sdk main from pkg.pr.new, installed into a
+                          # detached worktree: dry-run bundle diffed against the
+                          # pinned wrangler's, route oracle, cal suite.
+                          # `-- --ref <sha|PR#>` bisects or tests a PR before it merges
+bun run canary:browsers   # /garage/horizon's probes in stable vs prerelease engines,
+                          # diffed; on a Mac: `-- --pairs chrome:chrome-canary`.
+                          # First run (2026-09-14) found margin-trim live in Canary 155
+
+# every Playwright probe reads its Chrome from ONE place. Unset means stable.
+CHROME_CHANNEL=chrome-canary bun run csp:sweep
+
 # regenerate JUST the EXIF metadata (after photos are already uploaded)
 ./tools/photos/extract-photo-metadata.sh "/Users/aadharsh/Downloads/to post (from ssd)"
 

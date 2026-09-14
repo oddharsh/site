@@ -33,6 +33,7 @@
 // Deps: playwright-core (scripts-only devDep) driving the installed Google Chrome.
 
 import { chromium } from "playwright-core";
+import { chromeChannel } from "../lib/browser-channel.ts";
 import { mkdir, writeFile, readFile, readdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { spawn } from "node:child_process";
@@ -382,7 +383,7 @@ async function main() {
   const server = await maybeStartServer();
   const bliss = await blissBackground();
   const pages = await listPages();
-  const browser = await chromium.launch({ channel: "chrome", headless: true, args: ["--hide-scrollbars"] });
+  const browser = await chromium.launch({ channel: chromeChannel(), headless: true, args: ["--hide-scrollbars"] });
   // NEITHER context sets `reducedMotion: "reduce"`, and it is the obvious
   // companion to the `animations: "disabled"` capture below, so here is why not.
   // That option emulates `prefers-reduced-motion` and 13 of the pages these cards

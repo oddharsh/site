@@ -44,6 +44,7 @@ import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { chromium } from "playwright-core";
+import { chromeChannel } from "./lib/browser-channel.ts";
 import { wranglerCommand } from "./lib/wrangler-bin.ts";
 import { lensChipTargets } from "./lib/lens-chips.ts";
 import { readDocument } from "./lib/html-to-md.ts";
@@ -311,7 +312,7 @@ console.log(`${DRY ? "capturing (dry run)" : "capturing and seeding"} ${targets.
 console.log(`engine label: chromium-local-capture${DRY ? "" : `  ttl: ${TTL}s (${(TTL / 3600).toFixed(0)}h)  namespace: ${NAMESPACE}`}\n`);
 
 const scratch = mkdtempSync(join(tmpdir(), "lens-seed-"));
-const browser = await chromium.launch({ channel: "chrome", headless: true, args: ["--hide-scrollbars"] });
+const browser = await chromium.launch({ channel: chromeChannel(), headless: true, args: ["--hide-scrollbars"] });
 let failed = 0;
 
 try {
