@@ -28,11 +28,12 @@
 // So read the CONTROL line first every time. If hovering a link produces no
 // origin hit, the run measured the instrument and says nothing about the rules.
 import { chromium } from "playwright-core";
+import { chromeChannel } from "./lib/browser-channel.ts";
 
 const BASE = process.env.BASE || "http://localhost:8806";
 const dwell = (ms) => new Promise((r) => setTimeout(r, ms));
 
-const browser = await chromium.launch({ channel: "chrome", headless: false });
+const browser = await chromium.launch({ channel: chromeChannel(), headless: false });
 const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
 
 async function visible(label) {

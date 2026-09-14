@@ -1,0 +1,226 @@
+name: Canary tripwire
+
+# Three moving targets, each run through gates this repository already holds
+# its pinned version to, every night, PROPOSING NOTHING.
+#
+#   bun       the rolling `canary` release, through the pin bumper's own gates:
+#             zstd honours `dictionary`, the lockfile in both directions, a
+#             byte-identical build against the pinned bun, the contract suite,
+#             and cal's suite on wrangler's harness (oven-sh/bun#39247 lives
+#             there). tools/canary-bun.ts.
+#   wrangler  workers-sdk's main, installed from pkg.pr.new into a detached
+#             worktree: the dry-run bundle (diffed against the pinned wrangler's),
+#             the route oracle on the candidate's own createTestHarness, cal's
+#             suite. tools/canary-wrangler.ts.
+#   browsers  /garage/horizon's 90-odd feature probes in stable chromium,
+#             firefox and webkit and in chromium-tip-of-tree and firefox-beta,
+#             diffed pairwise. A flip is a card that moved; a flip to false is
+#             a browser bug. tools/canary-browsers.ts.
+#
+# WHY IT EXISTS. Every pin here is exact and every served URL is a hash of
+# what the toolchain emitted, so a regression in a runtime, a bundler or an
+# engine reaches this repository only when a release lands and dependabot
+# opens the bump. By then it is a release. bun's main is a hundred-odd commits
+# past each release, wrangler ships nearly daily, and Canary is two majors
+# ahead of the Chrome the probes normally drive. This is the same gates, a few
+# weeks earlier, against builds that can still be fixed before they ship.
+#
+# WHAT IT NEVER DOES. Write a pin, roll a dictionary, open a pull request, or
+# hold a Cloudflare credential. It is an instrument: canary-report.ts keeps at
+# most ONE open issue per leg and comments on it only when the signature
+# changes, then closes it the night the leg goes green. A leg that could not
+# run (no download, a page that did not load) files nothing and reds the JOB,
+# because "the runner had no unzip" is not a finding and an issue saying so
+# trains the reader to close canary issues unread.
+#
+# THE CONTROL is inside each leg rather than a fourth job: the pinned bun
+# builds first and is the baseline half of the byte comparison, the pinned
+# wrangler bundles the same tree, and the stable engine runs the same probes.
+# A leg whose control fails exits 2 and never reaches the reporter.
+#
+# Shape borrowed from bun-pin.yml and node-support-window.yml: nightly, quiet
+# when there is nothing to say, GITHUB token only, and `main` keeps its zero
+# bypass actors so nothing here can reach a protected ref.
+
+on:
+  schedule:
+    - cron: "5 10 * * *" # after bun-pin at 09:40, so the two never build at once
+  workflow_dispatch:
+    inputs:
+      wrangler_ref:
+        description: "pkg.pr.new ref for the wrangler leg: main, a 7-char sha, or a PR number"
+        required: false
+        default: "main"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: canary
+  cancel-in-progress: false
+
+jobs:
+  bun:
+    name: bun canary
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      issues: write # the only write it has, and only to say a leg flipped
+
+    steps:
+      - name: Check out main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up bun
+        # The PINNED bun, which is the baseline half of the byte comparison.
+        # The canary is downloaded by the script itself, so this workflow
+        # installs bun exactly once, the way every other workflow does.
+        uses: ./.github/actions/setup-bun
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run the canary through the pin gates
+        id: leg
+        run: |
+          set -euo pipefail
+          # gotcha 40: the status is the answer, so nothing may sit between
+          # the script and `$?`. Exit 1 is a finding and exit 2 is the
+          # instrument; the reporter tells them apart.
+          set +e
+          bun run canary:bun -- --json canary.json > canary.txt 2>&1
+          verdict=$?
+          set -e
+          cat canary.txt
+          echo "exit=$verdict" >> "$GITHUB_OUTPUT"
+
+      - name: File, comment, or close the leg's one issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bun run canary:report -- --leg bun --json canary.json --exit "${{ steps.leg.outputs.exit }}"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### bun canary"
+            echo
+            echo '```'
+            cat canary.txt 2>/dev/null || echo "(the leg did not run)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  wrangler:
+    name: wrangler main
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      issues: write
+
+    steps:
+      - name: Check out main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up bun
+        uses: ./.github/actions/setup-bun
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run wrangler's main through the release gates
+        id: leg
+        env:
+          REF: ${{ inputs.wrangler_ref || 'main' }}
+        run: |
+          set -euo pipefail
+          set +e
+          bun run canary:wrangler -- --ref "$REF" --json canary.json > canary.txt 2>&1
+          verdict=$?
+          set -e
+          cat canary.txt
+          echo "exit=$verdict" >> "$GITHUB_OUTPUT"
+
+      - name: File, comment, or close the leg's one issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bun run canary:report -- --leg wrangler --json canary.json --exit "${{ steps.leg.outputs.exit }}"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### wrangler main"
+            echo
+            echo '```'
+            cat canary.txt 2>/dev/null || echo "(the leg did not run)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  browsers:
+    name: prerelease browsers
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      issues: write
+
+    steps:
+      - name: Check out main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up bun
+        uses: ./.github/actions/setup-bun
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install the five engines
+        # The pinned playwright-core's own installer, by entry file, so the
+        # browser builds are the ones that version expects and no package
+        # manager gets to fetch a different playwright (gotcha 29).
+        run: node node_modules/playwright-core/cli.js install --with-deps chromium chromium-tip-of-tree firefox firefox-beta webkit
+
+      - name: Diff horizon's probes across stable and prerelease
+        id: leg
+        run: |
+          set -euo pipefail
+          set +e
+          bun run canary:browsers -- --json canary.json > canary.txt 2>&1
+          verdict=$?
+          set -e
+          cat canary.txt
+          echo "exit=$verdict" >> "$GITHUB_OUTPUT"
+
+      - name: File, comment, or close the leg's one issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bun run canary:report -- --leg browsers --json canary.json --exit "${{ steps.leg.outputs.exit }}"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### prerelease browsers"
+            echo
+            echo '```'
+            cat canary.txt 2>/dev/null || echo "(the leg did not run)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

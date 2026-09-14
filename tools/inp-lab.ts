@@ -40,6 +40,7 @@
 // most of the listener mass lives — cannot affect it and are not exercised here.
 
 import { chromium } from "playwright-core";
+import { chromeChannel } from "./lib/browser-channel.ts";
 
 // ── args ──────────────────────────────────────────────────────────────────────
 const arg = (flag, dflt) => {
@@ -217,7 +218,7 @@ try {
   process.exit(1);
 }
 
-const browser = await chromium.launch({ channel: "chrome", headless: !HEADED });
+const browser = await chromium.launch({ channel: chromeChannel(), headless: !HEADED });
 try {
   console.log(`\nINP lab — ${URL_BASE}   CPU ${THROTTLE}x   ${RUNS} runs/interaction\n`);
 

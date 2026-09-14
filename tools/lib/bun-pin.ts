@@ -86,6 +86,14 @@ export function releaseUrl(version: string, asset: string = releaseAsset()) {
   return `https://github.com/oven-sh/bun/releases/download/bun-v${version}/${asset}`;
 }
 
+// The ROLLING tag. Its assets are replaced on every canary build (the release
+// object itself dates from 2022 and its `published_at` never moves; the
+// asset's `updated_at` is the honest timestamp), so nothing that pins may read
+// it and canary-bun.ts, which proposes nothing, is its only consumer.
+export function canaryUrl(asset: string = releaseAsset()) {
+  return `https://github.com/oven-sh/bun/releases/download/canary/${asset}`;
+}
+
 // THE ONE CAPABILITY THIS BUILD CANNOT SHIP WITHOUT, and the one that fails
 // silently. `build.ts` mints every dcz delta through
 // `zstdCompressSync({ dictionary })`, and a runtime that ACCEPTS the option and

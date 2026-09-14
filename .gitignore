@@ -9,6 +9,10 @@
 
 # deploy-time build staging (build.ts output; regenerated every build)
 .build/
+# the bun bumper and the canary tripwire unzip a candidate runtime here and remove it; --keep leaves it
+.bun-candidate/
+.bun-canary/
+.build.pinned-baseline/
 
 # local dev's served URL root (tools/dev-stage.ts): a symlink farm merging
 # public/ + src/pages/ + src/content/ + src/client/ + src/styles/, because

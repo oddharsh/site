@@ -871,6 +871,72 @@ Before merging the first revision that uses this path, change each Workers
 Build project's production branch from `main` to `production`. Otherwise the
 merge push can still trigger the old direct production build.
 
+## Read the canary tripwire (`canary.yml`)
+
+Three nightly legs run moving targets through gates this repository already
+holds its pins to, and none of them writes anything. The workflow is
+`.github/workflows/canary.yml`; each leg is one script under `tools/`.
+
+| leg | target | gates | script |
+|---|---|---|---|
+| bun | the rolling `canary` release (oven-sh/bun) | zstd honours `dictionary`, lockfile read and format, byte-identical build against the pinned bun, contract suite, cal suite on wrangler's harness | `canary-bun.ts` |
+| wrangler | workers-sdk `main` from pkg.pr.new, installed into a detached worktree | `deploy --dry-run` bundles, bundle byte-identical to the pinned wrangler's (a DIFF, never a failure), route oracle on the candidate's own `createTestHarness`, cal suite | `canary-wrangler.ts` |
+| browsers | `/garage/horizon`'s probes in chromium, firefox and webkit against chromium-tip-of-tree and firefox-beta | every honest probe answers the same in stable and prerelease; every card marked shipped is true in two stable engines | `canary-browsers.ts` |
+
+**Read the verdict, then the signature.** A leg answers `green`, `red`,
+`changed` or `instrument`. `red` is a gate failing, `changed` is a byte or a
+probe moving with every gate still passing, and `instrument` (exit 2) is the
+leg unable to measure at all: no download, a page that did not load, a pinned
+build that failed. The reporter files nothing for `instrument` and the JOB goes
+red, because "the runner had no unzip" is not a finding and an issue saying so
+teaches you to close canary issues unread.
+
+**One issue per leg, titled `canary tripwire: <leg>`.** `canary-report.ts`
+creates it on the first red or changed night, comments only when the
+signature (the failing gate names, or the flipped probes) is new, and closes
+it the night the leg goes green. So a canary carrying yesterday's broken gate
+adds nothing. The signature rides in an HTML comment at the end of each body;
+grep the issue for `canary:<leg> signature:` to see what has been seen.
+
+The workstation forms print the same table and exit the same way:
+
+```bash
+bun run canary:bun                                   # ~4 min: two builds plus both suites
+bun run canary:wrangler                              # ~25 s on a warm install cache
+bun run canary:wrangler -- --ref 15640               # a workers-sdk PR, before it merges
+bun run canary:wrangler -- --ref b149147             # a 7-char sha, for bisecting
+bun run canary:browsers -- --pairs chrome:chrome-canary   # needs no download on a Mac with Canary
+```
+
+The Linux trio needs the engines installed once, through the pinned
+playwright-core's own installer rather than a package manager (gotcha 29):
+
+```bash
+node node_modules/playwright-core/cli.js install chromium chromium-tip-of-tree firefox firefox-beta webkit
+```
+
+**What to do with a finding.** A bun `red` on the byte-identical gate lists the
+differing staged files; file it upstream with the `--revision` string the
+report carries, since `--version` on a canary prints the plain triple. A
+wrangler `changed` means the next wrangler pin re-mints the bundle, and
+`perf-diff.yml` will say by how much when dependabot opens it. A browsers
+`changed` line is a horizon card to re-read (the page's "cards that moved"
+rot direction, found by machine), and a probe that goes `true -> false` in a
+prerelease is a browser bug to file with the probe's one-liner as the repro.
+
+**The control is inside each leg.** The pinned bun builds first and is the
+baseline half of the byte comparison; the pinned wrangler bundles the same
+tree; the stable engine runs the same probes. A leg whose control fails exits
+2 before the reporter runs. `pkg.pr.new` is a stackblitz-run free service and
+the canary tag rolls daily, so neither may ever appear in `validate` or the
+release path; this workflow is advisory by construction and holds only a
+GITHUB token with `issues: write`.
+
+`CHROME_CHANNEL` is the one knob shared with every other Playwright probe here
+(`csp:sweep`, `speculation:probe`, `early-hints:probe`, `lens-seed`, the OG
+cards, ...): `CHROME_CHANNEL=chrome-canary bun run csp:sweep` drives Canary,
+and unset means the stable Chrome it always meant.
+
 ## Re-run the user-agent survey (`/garage/useragent`)
 
 ```bash
