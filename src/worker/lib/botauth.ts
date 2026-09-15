@@ -34,6 +34,7 @@
 // "sign on the request path". Do not re-add it to botHeaders
 // without one, and read the CPU note above first.
 import { fetchFollowingPublicRedirects, validateLensTarget } from "./public-fetch.ts";
+import type { Env } from "./env.ts";
 
 const ENCODER = new TextEncoder();
 
@@ -44,6 +45,18 @@ const BOT_VERSION = "1.0";   // module-private: only BOT_UA below consumes it
 export const BOT_UA      = `${BOT_NAME}/${BOT_VERSION} (+https://aadhar.sh/bot)`;
 
 export const SIG_AGENT   = "https://aadhar.sh/";
+
+const DIRECTORY_PATH = "/.well-known/http-message-signatures-directory";
+const DIRECTORY_TYPE = "application/http-message-signatures-directory+json";
+
+// Cloudflare recommends a minute: signatures remain usable in transit without
+// leaving a long replay window. Each signature, including redirect hops, gets
+// its own 256-bit nonce. Only key material is memoized below.
+function signatureParams(components: string, keyId: string, tag: string) {
+  const created = Math.floor(Date.now() / 1000);
+  const nonce = crypto.getRandomValues(new Uint8Array(32)).toBase64();
+  return `(${components});created=${created};expires=${created + 60};nonce="${nonce}";keyid="${keyId}";alg="ed25519";tag="${tag}"`;
+}
 
 export type BotRequestOptions = {
   headers?: HeadersInit;
@@ -73,9 +86,8 @@ export async function botHeaders(targetUrl, env, opts: BotRequestOptions = {}) {
     throw new Error("AadharshBot signing key is unavailable");
   }
   const host = new URL(targetUrl).host;
-  const created = Math.floor(Date.now() / 1000);
   const { keyId, key } = await signingMaterial(env.RN_SIGNING_KEY_JWK);
-  const params = `("@authority" "signature-agent");created=${created};keyid="${keyId}";alg="ed25519";tag="web-bot-auth"`;
+  const params = signatureParams('"@authority" "signature-agent"', keyId, "web-bot-auth");
   // RFC 9421: one covered component per line, then the signed parameters.
   const base = ENCODER.encode([
     `"@authority": ${host}`,
@@ -87,6 +99,42 @@ export async function botHeaders(targetUrl, env, opts: BotRequestOptions = {}) {
   headers.set("Signature-Input", `sig1=${params}`);
   headers.set("Signature", `sig1=:${signature}:`);
   return headers;
+}
+
+// The committed JWK Set stays the public-key source of truth. Its response is
+// Worker-owned so it can prove possession of that key for the requesting host
+// (Cloudflare's directory-03 profile). Never serve an unsigned success, or sign
+// a directory that drifted from the configured secret. This site has one active
+// key; a rotation must update the public directory and secret together.
+export async function handleSignatureDirectory(request: Request, env: Pick<Env, "ASSETS" | "RN_SIGNING_KEY_JWK">) {
+  const headers = new Headers({ "cache-control": "no-store" });
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    headers.set("allow", "GET, HEAD");
+    return new Response("Method not allowed", { status: 405, headers });
+  }
+  try {
+    if (!env.RN_SIGNING_KEY_JWK) throw new Error("Signing key unavailable");
+    const { keyId, key } = await signingMaterial(env.RN_SIGNING_KEY_JWK);
+    // A fresh GET excludes client conditionals, ranges, and HEAD: every success
+    // needs the full directory and a new proof, even when its bytes are unchanged.
+    const asset = await env.ASSETS.fetch(new Request(new URL(DIRECTORY_PATH, request.url)));
+    if (asset.status !== 200) throw new Error("Directory unavailable");
+    const body = await asset.text();
+    const directory = JSON.parse(body);
+    if (!Array.isArray(directory.keys) || directory.keys.length !== 1
+      || await jwkThumbprint(directory.keys[0]) !== keyId) {
+      throw new Error("Directory does not match signing key");
+    }
+    const params = signatureParams('"@authority";req', keyId, "http-message-signatures-directory");
+    const base = ENCODER.encode(`"@authority";req: ${new URL(request.url).host}\n"@signature-params": ${params}`);
+    const signature = new Uint8Array(await crypto.subtle.sign("Ed25519", key, base)).toBase64();
+    headers.set("content-type", DIRECTORY_TYPE);
+    headers.set("signature-input", `sig1=${params}`);
+    headers.set("signature", `sig1=:${signature}:`);
+    return new Response(request.method === "HEAD" ? null : body, { headers });
+  } catch {
+    return new Response(request.method === "HEAD" ? null : "Signing directory unavailable", { status: 503, headers });
+  }
 }
 
 // The key material a signature needs, derived once per secret rather than once

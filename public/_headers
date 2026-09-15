@@ -265,10 +265,11 @@
 # path has no extension, and it is the directory draft's own media type rather
 # than jwk-set+json: draft-meunier-http-message-signatures-directory-03 names
 # application/http-message-signatures-directory+json (it was jwk-set+json here
-# until 2026-09-03). The body is still a JWK Set.
+# until 2026-09-03). The body is still a JWK Set. The Worker now signs this
+# response and sets its own no-store policy; never cache an expired proof.
 /.well-known/http-message-signatures-directory
   Content-Type: application/http-message-signatures-directory+json
-  Cache-Control: public, max-age=2592000, s-maxage=2592000
+  Cache-Control: no-store
 
 # NOTE: the five worker-first docs below (api-catalog, auth.md, both oauth
 # metadata files, agent-card.json) are served through serveFreshAsset, which sets

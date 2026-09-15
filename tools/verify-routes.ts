@@ -80,6 +80,10 @@ try {
 //     that merely serves a fallback locally is NOT remote — that fallback is
 //     worth asserting, and losing the row would be losing coverage.
 const ROUTES = [
+  // A signed directory requires the production secret. Local contract tests
+  // exercise GET/HEAD proofs, key mismatch, and the missing-key 503 with fixtures.
+  { path: "/.well-known/http-message-signatures-directory", status: 200,
+    ct: "application/http-message-signatures-directory+json", marker: '"keys"', remote: true },
   { path: "/", status: 200, ct: "text/html", marker: "Aadharsh" },
   // The front door answers agents in Markdown at its own URL. Two checks cover that
   // and they are not redundant: this row exercises the worker's own negotiation,
