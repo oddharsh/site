@@ -3099,6 +3099,20 @@ how to recover the plans and their audit from git.
    argument. A single `setProperty("--" + kind)` would defeat the whole pass
    silently.
 
+   **A style container query is a READ of a property and the collectors know
+   it, since 2026-09-15.** `@container style(--flag: true)` carries the exact
+   `--flag:` shape of a definition, and until then it was counted as one and
+   never as a reference. Measured on a fixture: a query on a flag nothing
+   defines never reached the dangling set, so the integrity assertion could
+   not see a missed file on it, and the flag was still planned a short name.
+   That is the one shape a style query is for here, a shell flag `nav.js`
+   sets with `setProperty` and page CSS reads, which by construction has no
+   stylesheet definition. Nothing in the tree uses the form yet (the build is
+   byte-identical across all 2391 staged files with the fix in), so this is
+   the collector being ready for the first use rather than a repair. Taken
+   from firefox.com's Flare stylesheet, which sets `--lang-supports-uppercase`
+   once on `html:lang()` and queries it from 21 components.
+
    **The integrity assertion is the load-bearing part, because a missed file is
    invisible.** Its `var(--surface-window)` would simply keep the old name,
    nothing would define it, and the colour would fall back to nothing several
