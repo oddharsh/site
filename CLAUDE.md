@@ -3095,7 +3095,7 @@ how to recover the plans and their audit from git.
    field baseline that the site does not collect.
 3. **Authoring stays buildless; serving is minified, on every page.** The only
    build is `build.ts`: a deploy-time transform that minifies every served HTML
-   document (structure plus inline CSS/JS), the six client scripts, `luna.css`,
+   document (structure plus inline CSS/JS, and the JSON data blocks since 2026-09-15), the six client scripts, `luna.css`,
    `lwe-base.css`, and the Worker modules' `/*min*/` CSS literals into a staged
    `.build/` copy. It ships a readable twin beside each transformed asset:
    `/<name>.src.js`, `/luna.src.css`, and a `.src.html` per page named by a banner

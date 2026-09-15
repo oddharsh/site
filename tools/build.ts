@@ -45,6 +45,7 @@ import { transform as transformCss } from "lightningcss";
 import { minifySync } from "oxc-minify";
 import { readManifest, workerModule, navFenceBody, readFenceBody, runProfilesBody } from "./gen-manifest.ts";
 import { parseCss } from "./lib/css-parse.ts";
+import { isJsonScriptType, minifyJsonScript } from "./lib/json-script.ts";
 import { HTML_MARKERS } from "./lib/html-markers.ts";
 import { buildExifIndex, buildImageFingerprints, serializeExifIndex, serializeFingerprints } from "./lib/photo-indexes.ts";
 import { zstdCompressDictionaryBatch } from "./lib/zstd-batch.ts";
@@ -1106,7 +1107,9 @@ const minifyCss = (filename, sourceText) => parseCss(filename, sourceText, { min
 
 // Homepage HTML uses minify-html for structure only; inline CSS/JS are passed
 // through the same Lightning CSS and Oxc settings used everywhere else in the
-// build. JSON-LD and speculation rules remain data, not JavaScript.
+// build. JSON-LD, speculation rules and the understanding-check payloads remain
+// data, not JavaScript: they go through lib/json-script.ts, which strips
+// whitespace and guards the two byte sequences that can end a script element.
 const HTML_MINIFY_CFG = {
   allow_noncompliant_unquoted_attribute_values: false,
   allow_optimal_entities: false,
@@ -1206,6 +1209,8 @@ const transformInlineHtmlBlocks = (source, label = "src/pages/index.html") => {
       out += minifyCss(`${label} inline <style>`, body);
     } else if (tag === "script" && isJavaScriptScript(token)) {
       out += minifyJavaScript(`${label} inline <script>`, body);
+    } else if (tag === "script" && isJsonScriptType(scriptType(token))) {
+      out += minifyJsonScript(`${label} inline <script type=${scriptType(token)}>`, body);
     } else {
       out += body;
     }
@@ -1236,9 +1241,11 @@ const inlineProbe = transformInlineHtmlBlocks(
   '<script>/* probe */ const x = 1 + 2;</script>\n' +
   '<script type="application/ld+json">\n{ "x": 1 }\n</script>'
 );
+// The JSON arm is asserted the other way round from the CSS/JS ones: its body
+// must come back stripped to the canonical form, with the open tag untouched.
 if (inlineProbe.includes("/* probe */") ||
-    !inlineProbe.includes('<script type="application/ld+json">\n{ "x": 1 }\n</script>')) {
-  throw new Error("inline CSS/JS transform self-test failed");
+    !inlineProbe.includes('<script type="application/ld+json">{"x":1}</script>')) {
+  throw new Error("inline CSS/JS/JSON transform self-test failed");
 }
 
 
