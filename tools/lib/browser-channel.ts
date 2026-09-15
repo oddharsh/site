@@ -10,12 +10,12 @@
 //
 // ONE environment variable, read in one place. `CHROME_CHANNEL` names any
 // channel Playwright's registry knows (chrome, chrome-beta, chrome-canary,
-// chromium-tip-of-tree, ...), and an unknown one fails at launch with
+// chrome-beta, msedge-dev, ...), and an unknown one fails at launch with
 // Playwright's own error naming the channel, so this does not restate the
 // list. Unset means what it always meant.
 //
 //   CHROME_CHANNEL=chrome-canary bun run csp:sweep
-//   CHROME_CHANNEL=chromium-tip-of-tree bun run canary:browsers
+//   CHROME_CHANNEL=chrome-beta bun run csp:sweep
 //
 // A function rather than a constant so a test can set the variable and read
 // the result without re-importing the module.

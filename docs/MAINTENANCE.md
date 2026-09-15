@@ -945,7 +945,7 @@ holds its pins to, and none of them writes anything. The workflow is
 |---|---|---|---|
 | bun | the rolling `canary` release (oven-sh/bun) | zstd honours `dictionary`, lockfile read and format, byte-identical build against the pinned bun, contract suite, cal suite on wrangler's harness | `canary-bun.ts` |
 | wrangler | workers-sdk `main` from pkg.pr.new, installed into a detached worktree | `deploy --dry-run` bundles, bundle byte-identical to the pinned wrangler's (a DIFF, never a failure), route oracle on the candidate's own `createTestHarness`, cal suite | `canary-wrangler.ts` |
-| browsers | `/garage/horizon`'s probes in chromium, firefox and webkit against chromium-tip-of-tree and firefox-beta, plus two live probes (a JXL data-URI decode, and the `Available-Dictionary` exchange with production) | every honest probe answers the same in stable and prerelease; every card marked shipped is true in two stable engines | `canary-browsers.ts` |
+| browsers | `/garage/horizon`'s probes in bundled chromium, firefox and webkit, with Chrome Beta diffed against chromium and Edge Dev against Edge (the prerelease channels the pinned playwright can install on Linux), plus two live probes (a JXL data-URI decode, and the `Available-Dictionary` exchange with production) | every honest probe answers the same in stable and prerelease; every card marked shipped is true in two stable engines | `canary-browsers.ts` |
 
 **Every leg also runs the WATCHES, since 2026-09-15.** A watch is a gate
 turned inside out: a probe that reads `not yet` on the pinned toolchain today,
@@ -1031,11 +1031,18 @@ it beside the tree and run the leg under that binary:
 bash .github/install-bun.sh /tmp/pinned-bun && /tmp/pinned-bun/bun tools/canary-bun.ts
 ```
 
-The Linux trio needs the engines installed once, through the pinned
-playwright-core's own installer rather than a package manager (gotcha 29):
+The Linux set needs the engines installed once, through the pinned
+playwright-core's own installer rather than a package manager (gotcha 29).
+The set is what that installer ACCEPTS, which is narrower than what Playwright
+can launch and has moved once: `chromium-tip-of-tree` and `firefox-beta` were
+the first draft, playwright-core 1.63 refuses both as installation targets,
+and the leg's first scheduled run (2026-09-15) died at that step without
+running a probe. A contract test now asks the installer about every default
+name. Playwright's bundled firefox and webkit are near-trunk builds, so they
+stand as snapshots without a stable control:
 
 ```bash
-node node_modules/playwright-core/cli.js install chromium chromium-tip-of-tree firefox firefox-beta webkit
+node node_modules/playwright-core/cli.js install --with-deps chromium chrome-beta msedge msedge-dev firefox webkit
 ```
 
 **What to do with a finding.** A bun `red` on the byte-identical gate lists the
