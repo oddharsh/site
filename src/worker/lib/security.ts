@@ -124,7 +124,7 @@ const HOMEPAGE_DISCOVERY_LINKS = [
   '</.well-known/oauth-protected-resource>; rel="service-desc"; type="application/json"; title="OAuth protected resource metadata"',
   '</.well-known/oauth-authorization-server>; rel="service-desc"; type="application/json"; title="OAuth authorization server metadata"',
   '</rn/tracks>; rel="service-desc"; type="application/json"; title="current rn playlist as JSON"',
-  '</.well-known/http-message-signatures-directory>; rel="http-message-signatures-directory"; type="application/jwk-set+json"',
+  '</.well-known/http-message-signatures-directory>; rel="http-message-signatures-directory"; type="application/http-message-signatures-directory+json"',
   '</.well-known/security.txt>; rel="security-policy"; type="text/plain"',
   '</.well-known/api-catalog>; rel="api-catalog"; type="application/linkset+json"',
   '</.well-known/mcp/server-card.json>; rel="service-desc"; type="application/json"; title="Aadharsh site MCP server card"',

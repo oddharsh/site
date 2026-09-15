@@ -55,7 +55,7 @@ test("the ed25519 signature is unchanged by the removal", async () => {
   assert.ok(input, "signature-input must be present");
   assert.match(
     input,
-    new RegExp(`sig1=\\("@authority" "signature-agent"\\);created=\\d+;keyid="${keyid}";alg="ed25519";tag="web-bot-auth"`)
+    new RegExp(`sig1=\\("@authority" "signature-agent"\\);created=\\d+;expires=\\d+;nonce="[A-Za-z0-9+/]+=*";keyid="${keyid}";alg="ed25519";tag="web-bot-auth"`)
   );
   assert.doesNotMatch(input, /keyid="test-ed"/, "the typed kid label must not reach the wire");
   // one label, so exactly one `created`

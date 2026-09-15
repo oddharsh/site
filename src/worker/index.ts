@@ -21,7 +21,7 @@ import { handleLensNlweb } from "./lens-nlweb.ts";
 import { handleLensTools } from "./lens-tools.ts";
 import { handleLensMarkdown } from "./lens-markdown.ts";
 import { serveAssetWith404Clamp, serveFreshAsset, servePrecompressedShell, servePrecompressedText, serveStaticPage } from "./lib/assets.ts";
-import { BOT_UA } from "./lib/botauth.ts";
+import { BOT_UA, handleSignatureDirectory } from "./lib/botauth.ts";
 import { CANONICAL_HOST, PAGE_CACHE_CONTROL, isCanonicalHost } from "./lib/const.ts";
 import { HOMEPAGE_DISCOVERY_LINK } from "./lib/security.ts";
 import { wantsMarkdown } from "./lib/http.ts";
@@ -394,6 +394,7 @@ const ROUTE_TABLE: Array<[path: string, handler: RouteHandler]> = [
   ["/.well-known/agent-card.json", routeAgentCard],
   ["/.well-known/oauth-protected-resource", routeOAuthProtectedResource],
   ["/.well-known/oauth-authorization-server", routeOAuthAuthorizationServer],
+  ["/.well-known/http-message-signatures-directory", handleSignatureDirectory],
   ["/agent/auth", handleAgentAuthRegister],
   ["/agent/auth/claim", handleAgentAuthClaim],
   ["/oauth2/token", handleAgentAuthToken],
