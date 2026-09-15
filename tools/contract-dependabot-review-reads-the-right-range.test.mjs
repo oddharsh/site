@@ -121,6 +121,9 @@ test("a single bump, a grouped bump and an actions group each parse to the right
     ],
   );
 
+  assert.deepEqual(group.map((b) => b.group), ["oxlint", "oxlint"], "the group is read off the first line so config sharing works off a body too");
+  assert.equal(one[0].group, null);
+
   const actions = bumpsFromBody(ACTIONS, "actions");
   assert.deepEqual(
     actions.map((b) => [b.name, b.repo, b.directory]),

@@ -95,6 +95,7 @@ import {
   renderPackage,
   selectUsage,
   tagCandidates,
+  usageRank,
 } from "./lib/dependency-review.ts";
 
 const REPO = path.resolve(import.meta.dirname, "..");
@@ -512,8 +513,48 @@ function materialText(bump: Bump, m: Material, body: string): { text: string; so
   return { text: parts.join("\n\n") || "(no upstream material could be read for this range)", sources };
 }
 
-async function usageText(bump: Bump): Promise<string> {
-  const { shown, tally } = selectUsage(gatherUsage(bump));
+// A CONFIG file the package's grep hits is the package's contract with this
+// tree, and a sample of eight lines from it is the wrong shape: the first run
+// on an oxlint bump reported that it could not tell which widened rules were
+// on because "the grep shows only fragments of .oxlintrc.json". Up to two such
+// files go in whole, largest mention count first, under a size that admits
+// .oxlintrc.json (18 KB) and wrangler.jsonc (34 KB) and keeps infra.json
+// (87 KB) out.
+const WHOLE_CONFIG = { files: 2, bytes: 40_000 };
+
+async function wholeConfigs(tally: Record<string, number>): Promise<{ path: string; text: string }[]> {
+  const candidates = Object.entries(tally)
+    .filter(([p]) => usageRank(p, "") === 2 && !p.startsWith(".github/"))
+    .sort((a, b) => b[1] - a[1]);
+  const out: { path: string; text: string }[] = [];
+  for (const [p] of candidates) {
+    if (out.length >= WHOLE_CONFIG.files) break;
+    const text = await readFile(path.join(REPO, p), "utf8").catch(() => null);
+    if (text === null || text.length > WHOLE_CONFIG.bytes) continue;
+    out.push({ path: p, text });
+  }
+  return out;
+}
+
+/** The config files a bump is shown: its own grep hits, plus its GROUP-MATES'.
+ *  A Dependabot group is the owner saying "these are one toolchain", and the
+ *  first run on the oxlint group proved the point: oxlint was handed
+ *  .oxlintrc.json and answered routine with reasons, while @oxlint/plugins,
+ *  whose name that file never spells, answered read-first for lack of it. */
+async function configsForGroup(bump: Bump, all: Bump[]): Promise<{ path: string; text: string }[]> {
+  const mates = all.filter((b) => b === bump || (bump.group !== null && b.group === bump.group));
+  const tally: Record<string, number> = {};
+  for (const mate of mates) {
+    for (const l of gatherUsage(mate)) tally[l.path] = (tally[l.path] ?? 0) + 1;
+  }
+  return wholeConfigs(tally);
+}
+
+async function usageText(bump: Bump, all: Bump[]): Promise<string> {
+  const { shown: sampled, tally } = selectUsage(gatherUsage(bump));
+  const whole = await configsForGroup(bump, all);
+  const wholePaths = new Set(whole.map((w) => w.path));
+  const shown = sampled.filter((l) => !wholePaths.has(l.path));
   const doc = await readFile(path.join(REPO, "docs/DEPENDENCIES.md"), "utf8").catch(() => "");
   const bullets = dependencyDocBullets(doc, bump.name);
   const parts: string[] = [];
@@ -528,6 +569,7 @@ async function usageText(bump: Bump): Promise<string> {
       (more > 0 ? `\n- and ${more} more files` : ""),
   );
   if (shown.length) parts.push(`## Selected lines, manifests and imports first\n` + shown.map((l) => `${l.path}:${l.line}: ${l.text}`).join("\n"));
+  for (const w of whole) parts.push(`## ${w.path}, whole\n${w.text}`);
   return parts.join("\n\n");
 }
 
@@ -566,6 +608,12 @@ async function askModel(bump: Bump, usage: string, material: string): Promise<Mo
       "",
       "--setting-sources",
       "",
+      // `--tools ""` disables the BUILT-IN set and nothing else. A workstation
+      // with MCP servers configured hands every one of their tools to the
+      // model, which measured as 61,536 tokens of schemas on a two-word
+      // prompt and, worse, is exactly the surface a release note would want:
+      // 1,152 tokens with the servers excluded, and no tool of any kind.
+      "--strict-mcp-config",
       "--output-format",
       "json",
       "--model",
@@ -660,7 +708,7 @@ let modelUsed = MODEL;
 let failure: string | null = null;
 for (const bump of bumps) {
   console.log(`\n== ${bump.name} ==`);
-  const usage = await usageText(bump);
+  const usage = await usageText(bump, bumps);
   const material = await gatherMaterial(bump);
   const { text, sources } = materialText(bump, material, pr.body);
   console.log(`  usage ${usage.length} chars; material ${text.length} chars; releases ${sources.releases}, commits ${sources.commits}${sources.commitsTruncated ? "+" : ""}, changelog ${sources.changelog ? "yes" : "no"}, advisories ${sources.advisories}, tags ${material.prevTag ?? "?"}..${material.nextTag ?? "?"}`);

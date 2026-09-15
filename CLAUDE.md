@@ -349,6 +349,18 @@ worktrees may edit freely, but a worktree is not a release surface.
   prints what the model would have been handed and is the control for the fetch
   half; oxc's `apps_v1.83.0` tags, whose version lives in the release TITLE, are
   the spelling that first needed it.
+
+  Two things measured on the first runs that outlive this tool. **`claude -p
+  --tools ""` disables the BUILT-IN tools and nothing else**: on a workstation
+  with MCP servers configured the model was handed every one of their tools,
+  61,536 tokens of schemas on a two-word prompt, beside somebody else's release
+  notes; `--strict-mcp-config` with no config named takes it to 1,152 and to no
+  tool of any kind. Pass both to anything here that scripts Claude Code. And a
+  CONFIG file the package's grep hits goes to the model WHOLE (up to two, under
+  40 KB, shared across a Dependabot group): sampled at eight lines,
+  `.oxlintrc.json` read as fragments and the oxlint half of #805 could not say
+  which widened rules were on; whole, it read `args: "none"` and answered
+  routine with reasons, and the group total went from 140K tokens to 33K.
 - PR CI lints (`bun run lint`, oxlint including its type-aware rules), builds
   the site, enforces the performance budget, dry-runs the single
   site Worker plus the auxiliary Garage/LWE configs (`cf-garage/`, `lwe-ask/`),

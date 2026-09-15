@@ -110,11 +110,14 @@ const UPDATES = /^Updates `([^`]+)` from (\S+) to (\S+?)\.?$/gm;
 export function bumpsFromBody(body: string, ecosystem: Ecosystem): Bump[] {
   const out: Bump[] = [];
   const seen = new Set<string>();
+  // "Bumps the oxlint group with 2 updates" names the group on the first
+  // line; a single bump has none.
+  const group = /^Bumps the (\S+) group\b/.exec(body)?.[1] ?? null;
   const push = (name: string, prev: string, next: string) => {
     if (seen.has(name)) return;
     seen.add(name);
     const link = repoLinkFor(body, name);
-    out.push({ name, prev, next, ecosystem, repo: link?.repo ?? null, directory: link?.directory ?? null, group: null, ghsaId: null });
+    out.push({ name, prev, next, ecosystem, repo: link?.repo ?? null, directory: link?.directory ?? null, group, ghsaId: null });
   };
   for (const m of body.matchAll(UPDATES)) push(m[1], m[2], m[3]);
   if (out.length === 0) {
