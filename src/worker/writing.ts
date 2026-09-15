@@ -75,8 +75,8 @@ background:oklch(93% 0.012 90);border-top:1px solid oklch(80% 0.02 90)}
 .np-file-name{font-weight:bold;color:inherit}.np-files a:hover .np-file-name{color:oklch(100% 0 0)}
 .np-file-meta{margin-left:auto;color:oklch(52% 0 0);font-size:11px}.np-files a:hover .np-file-meta{color:oklch(90% 0.02 263)}
 /* About dialog */
-.np-modal-back{position:fixed;inset:0;z-index:100000}
-.np-about{position:fixed;left:50%;top:42%;transform:translate(-50%,-50%);z-index:100001;width:min(340px,calc(100vw - 24px));background:oklch(100% 0 0);
+.np-about::backdrop{background:transparent}
+.np-about{position:fixed;left:50%;top:42%;transform:translate(-50%,-50%);margin:0;padding:0;color:inherit;width:min(340px,calc(100vw - 24px));background:oklch(100% 0 0);
 border:2px solid #0831d9;border-right-color:#001ea0;border-bottom-color:#001ea0;box-shadow:inset 1px 1px 0 #166aee,inset -1px -1px 0 #00138c,4px 4px 0 rgba(0,30,160,.35)}
 .np-about-body{padding:12px 14px}.np-about-body p{margin:0 0 9px;line-height:1.45}
 .np-about-btns{display:flex;justify-content:flex-end}

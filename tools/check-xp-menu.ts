@@ -120,6 +120,49 @@ try {
   assert.equal(await page.locator(".np-drop").count(), 0, "outside focus dismisses without stealing focus");
   await focused(text);
 
+  // The native dialog must remain above manual note popovers and must not let
+  // the folder's capture-phase Escape handler close its invoking note.
+  const help = bar.getByRole("menuitem", { name: "Help", exact: true });
+  const dialog = page.getByRole("dialog", { name: "About Notepad", exact: true });
+  async function openAbout() {
+    await help.click();
+    await bar.locator("[data-np-action='about']").click();
+    assert.equal(await dialog.evaluate((element) => element.matches(":modal")), true);
+    await focused(dialog.getByRole("button", { name: "OK", exact: true }));
+    assert.equal(await page.locator(".np-modal-back").count(), 0, "no separate backdrop node");
+  }
+  await openAbout();
+  await page.keyboard.press("Shift+Tab");
+  await focused(dialog.getByRole("button", { name: "Close", exact: true }));
+  await page.keyboard.press("Tab");
+  await focused(dialog.getByRole("button", { name: "OK", exact: true }));
+  await text.evaluate((element) => (element as HTMLElement).focus());
+  await focused(dialog.getByRole("button", { name: "OK", exact: true }));
+  const paragraph = await dialog.locator("p").first().boundingBox();
+  assert.ok(paragraph);
+  await page.mouse.move(paragraph.x + 10, paragraph.y + 5);
+  await page.mouse.down();
+  await page.mouse.move(5, 5);
+  await page.mouse.up();
+  assert.equal(await dialog.count(), 1, "dragging text beyond the dialog must not dismiss it");
+  await page.keyboard.press("Escape");
+  await dialog.waitFor({ state: "detached" });
+  assert.equal(await note.count(), 1, "dialog Escape leaves its note open");
+  await focused(help);
+  await openAbout();
+  await dialog.getByRole("button", { name: "OK", exact: true }).click();
+  await dialog.waitFor({ state: "detached" });
+  await focused(help);
+  await openAbout();
+  await dialog.getByRole("button", { name: "Close", exact: true }).click();
+  await dialog.waitFor({ state: "detached" });
+  await focused(help);
+  await openAbout();
+  await page.mouse.click(5, 5);
+  await dialog.waitFor({ state: "detached" });
+  await focused(help);
+  assert.equal(await note.count(), 1, "backdrop dismissal leaves its note open");
+
   // Keep both notes open and move between their menus. Each owns its own state,
   // while the page has at most one active dropdown.
   // The first floating window can cover this link; keyboard navigation remains available.
@@ -159,7 +202,7 @@ try {
   await focused(standalone.getByRole("textbox"));
   assert.equal(await page.locator(".np-drop").count(), 0);
   assert.deepEqual(errors, [], "no browser script errors");
-  console.log("XP Menu: keyboard, focus, actions, checkbox semantics, lazy dropdowns, multiple notes and standalone permalink pass");
+  console.log("XP Menu/Dialog: keyboard, focus, actions, native modality, checkbox semantics, lazy dropdowns, multiple notes and standalone permalink pass");
 } finally {
   await browser.close();
 }
