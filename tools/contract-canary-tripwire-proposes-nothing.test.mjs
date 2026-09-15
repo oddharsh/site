@@ -20,6 +20,7 @@
 // are the ones that could pass while measuring nothing, which is why each
 // carries a control that has to come back non-empty.
 
+import { spawnSync } from "node:child_process";
 import { readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
@@ -191,7 +192,6 @@ test("every name in the browsers leg's default pairs is an installation target t
   // moves: `chromium-tip-of-tree` and `firefox-beta` were valid when the leg
   // was written and refused by playwright-core 1.63, which killed the first
   // scheduled run at the install step. `--dry-run` answers without a download.
-  const { spawnSync } = require("node:child_process");
   const names = [...new Set(DEFAULT_PAIRS.split(",").flatMap((p) => p.split(":")))];
   assert.ok(names.length >= 4, "the default pairs collapsed");
   for (const name of names) {
