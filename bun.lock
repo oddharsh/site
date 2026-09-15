@@ -15,7 +15,7 @@
         "oxlint-tsgolint": "7.0.2001",
         "playwright-core": "1.63.0",
         "smol-toml": "1.8.0",
-        "timbrado": "github:oddharsh/timbrado#949947e104c4d2785a0cb9ab71aa3a16e29c2472",
+        "timbrado": "github:oddharsh/timbrado#9806880d918dce63c0e33e007604045ec328f696",
         "typescript": "7.0.2",
         "wrangler": "https://pkg.pr.new/cloudflare/workers-sdk/wrangler@982b806",
       },
@@ -413,7 +413,7 @@
 
     "supports-color": ["supports-color@10.2.2", "", {}, "sha512-SS+jx45GF1QjgEXQx4NJZV9ImqmO2NPz5FNsIHrsDjh2YsHnawpan7SNQ1o8NuhrbHZy9AZhIoCUiCeaW/C80g=="],
 
-    "timbrado": ["timbrado@github:oddharsh/timbrado#949947e", { "bin": { "timbrado": "./src/cli.ts" } }, "oddharsh-timbrado-949947e", "sha512-l4NQOIPUJPBM8dw5sZt/TvPyZh9VaXkjkjZ4agozu5Ko4E3OPnT9aN5OEJQWFAo+Z3ZL9Zbeh4DtVkKBrfNd4w=="],
+    "timbrado": ["timbrado@github:oddharsh/timbrado#9806880", { "bin": { "timbrado": "./dist/cli.js" } }, "oddharsh-timbrado-9806880", "sha512-hK9O9c5TenckKOmJyHsXpF38BV4WBD7sKM4zEobgV7KwVIdGVSgwBX6z/5sHADgW/y5CETnM3hKsmGyOb2pGyw=="],
 
     "tslib": ["tslib@2.8.1", "", {}, "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w=="],
 

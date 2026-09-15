@@ -23,8 +23,8 @@
 import { readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { marker, plan, render, title } from "timbrado/src/report.ts";
-import { checkWatch } from "timbrado/src/watch.ts";
+import { marker, plan, render, title } from "timbrado/report";
+import { checkWatch } from "timbrado/watch";
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 import { chromeChannel, DEFAULT_CHROME_CHANNEL } from "./lib/browser-channel.ts";
 import { HONEST_FALSE, JXL_2X2, LIVE_PROBES, familyOf, shippedCaps, tablesFor } from "./canary-browsers.ts";

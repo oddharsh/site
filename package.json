@@ -92,7 +92,7 @@
     "oxlint-tsgolint": "7.0.2001",
     "playwright-core": "1.63.0",
     "smol-toml": "1.8.0",
-    "timbrado": "github:oddharsh/timbrado#949947e104c4d2785a0cb9ab71aa3a16e29c2472",
+    "timbrado": "github:oddharsh/timbrado#9806880d918dce63c0e33e007604045ec328f696",
     "typescript": "7.0.2",
     "wrangler": "https://pkg.pr.new/cloudflare/workers-sdk/wrangler@982b806"
   },

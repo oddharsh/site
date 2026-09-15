@@ -38,10 +38,10 @@
 // tool extracted from these legs, and are re-exported here so the legs keep
 // one import path. A change to how a watch is read is a change there.
 
-import type { Watch } from "timbrado/src/watch.ts";
+import type { Watch } from "timbrado/watch";
 
-export type { Watch, WatchResult } from "timbrado/src/watch.ts";
-export { checkWatch, runWatch, watchMoved, watchRow, watchSignature } from "timbrado/src/watch.ts";
+export type { Watch, WatchResult } from "timbrado/watch";
+export { checkWatch, runWatch, watchMoved, watchRow, watchSignature } from "timbrado/watch";
 
 const PNG_2X1_8BIT = "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAAD0lEQVR4nGNgYGD4//8/AAYBAv4CsjmuAAAAAElFTkSuQmCC";
 const PNG_1X1_16BIT = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABEAIAAADA54+dAAAADElEQVR4nGNoYARBAAYQAYRMvznsAAAAAElFTkSuQmCC";
