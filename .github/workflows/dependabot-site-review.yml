@@ -1,91 +1,108 @@
 name: Annotate Dependabot site review
 
-# `synchronize` is deliberately absent. It fired a runner on every push to a
-# Dependabot branch and rewrote the note with byte-identical text, because a
-# force-push from Dependabot is a rebase and a rebase does not change the
-# version pair the note reports.
+# Reads what a Dependabot bump changed, against how this tree uses the package,
+# and posts the answer on the pull request. tools/review-dependency-bump.ts is
+# the whole of it; this file is the trigger, the credential and the event.
 #
-# THE SECOND HALF OF THAT ARGUMENT EXPIRED ON 2026-08-19 AND THIS COMMENT KEPT
-# MAKING IT UNTIL 2026-08-24. It said a genuinely newer version arrives as a NEW
-# pull request under `open-pull-requests-limit: 1`, which `opened` already
-# catches. That limit is gone: the npm block runs a limit of 10 with five
-# groups, and a grouped pull request is force-pushed IN PLACE when one member
-# moves. So the case the next paragraph calls residual is the ordinary one for
-# any grouped bump, and the note lags by however long the group keeps moving.
+# Until 2026-09-15 this job posted a static checklist ("check for new Workers
+# capabilities, check the perf budget, record a leverage or an explicit none"),
+# which named the reading without doing any of it. The script now fetches the
+# releases, the commits between the two tags, the CHANGELOG slice and the
+# advisories against the old version, hands them to a model beside this tree's
+# own usage of the package, and renders the structured answer under the same
+# comment marker. The reasoning about what it reads and what it trusts is at
+# the top of the script, not here.
 #
-# It stays absent anyway, on the fallback that was always the real backstop
-# rather than on the dead premise. The note would name the old pair while
-# Dependabot's own description names the new one, and the description is the
-# authoritative half, since it carries the upstream release notes this checklist
-# exists to send you toward. A runner per push to rewrite a checklist that links
-# somewhere more current is the wrong side of that trade.
+# `pull_request_target` rather than `pull_request`, for two reasons that both
+# matter. A Dependabot pull request under `pull_request` gets a read-only
+# token and DEPENDABOT secrets, not repository secrets, so it could neither
+# comment nor reach the model credential. Under `pull_request_target` the job
+# runs as the base branch: repository secrets, a token that can comment, and a
+# checkout of the BASE sha, which is the property the usual hazard turns on.
+# Nothing here checks out the head. The script reads this tree at the base
+# (the usage the model is shown) and the PR's body and metadata through the
+# API, so a bump cannot rewrite the context that judges it, and the model it
+# feeds has no tools to act on anything it reads.
+#
+# `synchronize` is PRESENT since 2026-09-15, and the argument that kept it
+# absent has a different answer now. A rebase force-push from Dependabot
+# re-fires it with the same version pairs, which used to mean a runner
+# rewriting byte-identical text and would now mean a model call for nothing.
+# The script records the pairs it wrote for inside the comment and exits 0
+# without a token spent when they match; a grouped bump whose member moved
+# (the case dependabot-relock.yml describes, a force-push in place rather than
+# a new pull request) re-reads. So the note follows the description, which is
+# the authoritative half, rather than lagging it.
+#
+# THE SECRET is `CLAUDE_CODE_OAUTH_TOKEN`, a REPOSITORY secret (Settings,
+# Secrets and variables, Actions) minted by `claude setup-token` on a
+# workstation. The model is reached through Claude Code's print mode rather
+# than the Messages API, and that is a credential decision: an API key bills
+# per token, so a job on a public repository would spend money on every
+# Dependabot push, while a setup-token authenticates a subscription seat, is
+# what Anthropic's own action documents for this use, and fails as a rate
+# limit rather than an invoice. It cannot touch Cloudflare, so the
+# no-write-token rule at the top of CLAUDE.md is untouched. Absent, the script
+# posts a note saying no model ran and exits 0, so a PR without the secret
+# reads as unreviewed rather than as clean. A refused model call posts the
+# same note and exits 1, so an outage shows in the Actions tab. This check is
+# not required and gates nothing; keep it that way.
+#
+# The CLI is installed PINNED, from npm through bun, in this job alone. The
+# package's postinstall is refused by bun's default-deny (trustedDependencies
+# names three packages and this is not one) and the platform binary still
+# resolves through the shim, measured 2026-09-15 on 2.1.270. Bump the pin by
+# hand; it is not in package.json on purpose, because a 200 KB launcher plus a
+# native binary is a cost for every `bun install` and this is the only caller.
 on:
   pull_request_target:
-    types: [opened, reopened]
+    types: [opened, reopened, synchronize]
 
 permissions:
+  contents: read
   pull-requests: write
 
+concurrency:
+  group: dependabot-site-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
-  annotate:
+  review:
     if: github.event.pull_request.user.login == 'dependabot[bot]' && github.repository == 'oddharsh/site'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
+      # The BASE sha, which is what `pull_request_target` checks out by default.
+      # Stated explicitly so a later edit that adds `ref: ${{ ... head.sha }}`
+      # has to delete a line that says why not.
+      - name: Check out the base branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+
+      - name: Set up bun
+        uses: ./.github/actions/setup-bun
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install Claude Code
+        run: |
+          bun install -g @anthropic-ai/claude-code@2.1.270
+          echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
+          "$HOME/.bun/bin/claude" --version
+
       - name: Fetch Dependabot metadata
         id: metadata
         uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
         with:
           github-token: ${{ github.token }}
 
-      - name: Add or refresh the site review note
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+      - name: Read the bump against this tree
         env:
-          DEPENDENCY_NAMES: ${{ steps.metadata.outputs.dependency-names }}
-          DEPENDENCY_TYPE: ${{ steps.metadata.outputs.dependency-type }}
-          UPDATE_TYPE: ${{ steps.metadata.outputs.update-type }}
-          PREVIOUS_VERSION: ${{ steps.metadata.outputs.previous-version }}
-          NEW_VERSION: ${{ steps.metadata.outputs.new-version }}
-        with:
-          github-token: ${{ github.token }}
-          script: |
-            const marker = "<!-- dependabot-site-review -->";
-            const issue_number = context.payload.pull_request.number;
-            const comments = await github.paginate(github.rest.issues.listComments, {
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number,
-              per_page: 100,
-            });
-            const body = `${marker}
-            ## Dependabot site review
-
-            **Dependency:** ${process.env.DEPENDENCY_NAMES || "unknown"}
-            **Change:** ${process.env.PREVIOUS_VERSION || "?"} → ${process.env.NEW_VERSION || "?"}
-            **Type:** ${process.env.DEPENDENCY_TYPE || "unknown"} (${process.env.UPDATE_TYPE || "unknown"})
-
-            Dependabot's PR description contains the upstream release notes/changelog and commit details. Review those before merging.
-
-            ### Site leverage checklist
-
-            - [ ] Checked for new Cloudflare/Workers/R2/KV/D1/Workers Builds capabilities.
-            - [ ] Checked bundle, runtime, browser-support, and performance-budget impact.
-            - [ ] Checked whether this changes the photo or CI toolchain.
-            - [ ] Recorded a concrete leverage or an explicit “none” in review.
-            `;
-            const prior = comments.find((comment) => comment.body?.includes(marker));
-            if (prior) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: prior.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number,
-                body,
-              });
-            }
+          GITHUB_TOKEN: ${{ github.token }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          DEPS_JSON: ${{ steps.metadata.outputs.updated-dependencies-json }}
+        run: bun run deps:review "$PR_NUMBER"
