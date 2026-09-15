@@ -231,9 +231,11 @@ bun run canary:browsers   # /garage/horizon's probes in stable vs prerelease eng
 # every Playwright probe reads its Chrome from ONE place. Unset means stable.
 CHROME_CHANNEL=chrome-canary bun run csp:sweep
 
-# PRODUCTION RUNS PRERELEASE PINS, exactly and immutably, since 2026-09-14:
-# `packageManager` is npm's DATED bun canary plus its build sha, and
-# `devDependencies.wrangler` is a pkg.pr.new COMMIT of workers-sdk main. The
+# PRODUCTION RUNS A PRERELEASE WRANGLER, exactly and immutably, since
+# 2026-09-14: `devDependencies.wrangler` is a pkg.pr.new COMMIT of workers-sdk
+# main. The bun half is PARKED (2026-09-15): Cloudflare's build image cannot
+# resolve a canary `packageManager`, measured with two reversal probes, so the
+# pin is a release while everything that accepts a canary pin stays in place. The
 # channel is the pin's own shape, nothing floats, and each nightly bumper
 # advances its pin only after the canary tripwire's gates pass on the
 # candidate. Switching a channel is a hand edit plus a relock; the runbook is
