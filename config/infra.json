@@ -691,6 +691,23 @@
     ],
     "deploy_command": "bash .github/deploy-wrangler.sh versions upload --x-provision=false --x-auto-create=false",
     "non_production_deploy_command": "bash .github/deploy-wrangler.sh versions upload --x-provision=false --x-auto-create=false",
+    "$comment_build_variables": [
+      "SKIP_DEPENDENCY_INSTALL turns the build image's own bootstrap off: it stops",
+      "installing a bun from packageManager and stops running the install, and",
+      ".github/deploy-wrangler.sh does both instead, through the same",
+      "install-bun.sh the setup-bun action uses. It exists because the image",
+      "cannot resolve a canary packageManager (measured 2026-09-15, two reversal",
+      "probes), while this repo wants the compiler on the canary channel.",
+      "",
+      "A BUILD VARIABLE, set under Settings > Build in the dashboard, and the",
+      "Builds API's trigger object has no field check-infra knows to read it",
+      "from, so this is recorded as intent and NOT asserted. The proof it is set",
+      "is behavioural: a canary packageManager builds only while it is. Extend",
+      "check-infra the day the field name is known."
+    ],
+    "build_variables": {
+      "SKIP_DEPENDENCY_INSTALL": "true"
+    },
     "verifiable": true,
     "promoted_by": ".github/workflows/promote-production.yml",
     "traffic_moved_by": "bun run deploy:promote (tools/deploy-promote.ts), workstation-only",
