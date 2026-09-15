@@ -160,6 +160,29 @@
     return outside;
   }
 
+  // Native modality owns focus containment, Escape and return focus. The caller
+  // supplies a dialog with form method="dialog" controls and an autofocus target.
+  /** @param {HTMLDialogElement} box */
+  function Dialog(box) {
+    box.addEventListener("close", function () { box.remove(); }, { once: true });
+    var pressedOutside = false;
+    /** @param {MouseEvent} e */
+    function outside(e) {
+      if (e.target !== box) return false;
+      var rect = box.getBoundingClientRect();
+      return e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom;
+    }
+    // A text-selection drag that starts inside must not become a backdrop click.
+    box.addEventListener("pointerdown", function (e) { pressedOutside = e.button === 0 && outside(e); });
+    box.addEventListener("pointercancel", function () { pressedOutside = false; });
+    box.addEventListener("click", function (e) {
+      if (pressedOutside && outside(e)) box.close();
+      pressedOutside = false;
+    });
+    D.body.appendChild(box);
+    box.showModal();
+  }
+
   // ── per-window enhancement ────────────────────────────────────────────────────
   function enhance(win) {
     if (!win || win.__np) return; win.__np = true;
@@ -229,22 +252,15 @@
     }
     function about() {
       if (D.querySelector(".np-about")) return;
-      var box = el(
-        '<div class="np-about" role="dialog" aria-label="About Notepad">' +
+      var box = /** @type {HTMLDialogElement} */ (el(
+        '<dialog class="np-about" aria-label="About Notepad"><form method="dialog">' +
           '<div class="np-titlebar"><span class="np-ico"></span><span class="np-title">About Notepad</span>' +
-            '<span class="np-controls"><a class="close" href="#" aria-label="Close">✕</a></span></div>' +
+            '<span class="np-controls"><button type="submit" class="close" aria-label="Close">✕</button></span></div>' +
           '<div class="np-about-body"><p><b>Notepad</b>, a resto-mod of the Windows&nbsp;XP app.</p>' +
           '<p>This is a real text field: edit it however you like. Nothing saves, so a reload restores my canonical version. The writing here is always in flux.</p>' +
-          '<div class="np-about-btns"><button type="button" class="np-btn">OK</button></div></div></div>'
-      );
-      var back = el('<div class="np-modal-back"></div>');
-      function close(e) { if (e) e.preventDefault(); box.remove(); back.remove(); }
-      back.addEventListener("click", close);
-      // Both controls are authored in the literal above, before this detached box is exposed.
-      /** @type {HTMLAnchorElement} */ (box.querySelector(".close")).addEventListener("click", close);
-      /** @type {HTMLButtonElement} */ (box.querySelector(".np-btn")).addEventListener("click", close);
-      D.body.appendChild(back); D.body.appendChild(box);
-      /** @type {HTMLElement} */ (box.querySelector(".np-btn")).focus();
+          '<div class="np-about-btns"><button type="submit" class="np-btn" autofocus>OK</button></div></div></form></dialog>'
+      ));
+      Dialog(box);
     }
 
     /** @type {MenuDefinition[]} */
@@ -305,7 +321,7 @@
     // menu, so leave the note alone (a second Escape then closes the note).
     D.addEventListener("keydown", function (e) {
       if (e.key !== "Escape") return;
-      if (D.querySelector(".np-drop")) return;
+      if (D.querySelector(".np-drop, dialog:modal")) return;
       var open = /** @type {NodeListOf<HTMLElement>} */ (D.querySelectorAll(".np-note:popover-open"));
       if (open.length) {
         e.preventDefault();

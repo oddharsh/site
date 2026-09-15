@@ -129,12 +129,37 @@ it is not an overall page-speed improvement claim.
 The earlier annotations removed all seven Notepad type errors; its count stays
 at zero. The browser ratchet records 157 remaining errors in other files.
 
+## Dialog behavior
+
+`Dialog(HTMLDialogElement)` in the same classic script now opens Notepad's About
+box with `showModal()`. The browser owns modality, focus containment, Escape and
+return focus through the [HTML dialog contract](https://html.spec.whatwg.org/multipage/interactive-elements.html#the-dialog-element).
+A `method="dialog"` form gives the Close and OK buttons native dismissal;
+`autofocus` selects OK. The previous standalone backdrop element is replaced by
+`::backdrop`, preserving its transparent appearance. The controller removes the
+closed element and permits outside-click dismissal only when the pointer press
+also started outside, so dragging selected text across the boundary stays safe.
+The folder's Escape handler yields to an open modal instead of closing its note.
+
+The browser checker now verifies About modality above a manual note popover,
+initial focus, keyboard movement between controls, blocked background focus,
+Escape/OK/Close/backdrop dismissal, return focus and text-selection dragging.
+The earlier div-based About fails the native-modality control. The first version
+of the backdrop handler also failed the drag control; the corrected controller
+passes both it and the rest of the Menu checks. These remain local Chrome checks.
+
+Against `28e7f93c`, the canonical Notepad script grows from 7,675 to 7,863 bytes,
+gzip-9 from 3,162 to 3,287, and Brotli-11 from 2,781 to 2,891. This adds browser
+behavior and typing, not a speedup claim. The DOM controller and its first About
+consumer are implemented; a Rust/shared markup projection and broader Dialog
+adoption remain separate work.
+
 ## Full component scope still to implement
 
 - Apply the native rendering path to static page compilation, and extend the
   shared definitions/code generation to the rest of the component family.
-- Add native/shared Menu rendering where needed beyond this first DOM consumer;
-  implement Dialog and Demo components.
+- Add Rust/shared Menu and Dialog rendering beyond these first DOM consumers;
+  implement the Demo component.
 - Typed, small client behaviors with keyboard/focus contracts, lazy loading,
   and machine actions where a component exposes an action.
 - Adoption by existing static and dynamic pages without changing the XP design.
