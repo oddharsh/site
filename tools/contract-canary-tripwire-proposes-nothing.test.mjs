@@ -6,26 +6,29 @@
 //   1. it never writes a pin, opens a PR, or holds a Cloudflare credential
 //   2. the gates are shared with the bumper rather than copied
 //   3. every Playwright launch reads the channel from one place
-//   4. the reporter's decision table is the one written on its header
+//   4. the legs' reports flow through timbrado's reporter unchanged: the
+//      verdict strings, the signature, the browsers leg's tables
 //   5. the honest-false detector matches the page's own convention, and the
 //      shipped-card scanner finds the cards
 //   6. every upstream watch names a thread, RUNS on the pinned bun, and
 //      answers a boolean rather than "did not run"
-//   7. the pin digest parses changesets out of a compare payload and never
-//      raises on a payload with none
+//   7. timbrado itself is pinned to a full commit sha, so the frozen lockfile
+//      is the whole guarantee about which reporter runs
 //
-// The last three are the ones that could pass while measuring nothing, which
-// is why each carries a control that has to come back non-empty.
+// The reporter's decision table and the digest parser are timbrado's and are
+// asserted in its conformance suite, so nothing here restates them. 5 and 6
+// are the ones that could pass while measuring nothing, which is why each
+// carries a control that has to come back non-empty.
 
 import { readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
+import { marker, plan, render, title } from "timbrado/src/report.ts";
+import { checkWatch } from "timbrado/src/watch.ts";
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 import { chromeChannel, DEFAULT_CHROME_CHANNEL } from "./lib/browser-channel.ts";
-import { HONEST_FALSE, JXL_2X2, LIVE_PROBES, familyOf, shippedCaps } from "./canary-browsers.ts";
-import { marker, plan, render, title } from "./canary-report.ts";
-import { BUN_WATCHES, WRANGLER_WATCHES, runBunWatch, watchMoved, watchRow, watchSignature } from "./lib/upstream-watches.ts";
-import { changesets, renderDigest } from "./pin-digest.ts";
+import { HONEST_FALSE, JXL_2X2, LIVE_PROBES, familyOf, shippedCaps, tablesFor } from "./canary-browsers.ts";
+import { BUN_WATCHES, WRANGLER_WATCHES, runWatch } from "./lib/upstream-watches.ts";
 
 const LEGS = ["tools/canary-bun.ts", "tools/canary-wrangler.ts", "tools/canary-browsers.ts"];
 const strip = (src) => src.split("\n").filter((l) => !l.trim().startsWith("//")).join("\n");
@@ -49,8 +52,9 @@ test("canary.yml holds no Cloudflare credential, writes only issues, and install
   assert.deepEqual(jobs, ["bun", "wrangler", "browsers"], "three legs, named for what they run");
   assert.equal((yml.match(/uses: \.\/\.github\/actions\/setup-bun/g) ?? []).length, 3, "each leg installs the PINNED bun through the shared action, once");
   assert.doesNotMatch(yml, /oven-sh\/setup-bun|bun-version:|releases\/download\/canary/, "the canary binary is fetched by the script, never by the workflow");
-  assert.equal((yml.match(/canary:report -- --leg (\w+)/g) ?? []).length, 3, "every leg reports through the same reporter");
-  for (const leg of jobs) assert.match(yml, new RegExp(`canary:report -- --leg ${leg} `), `${leg} reports under its own name`);
+  assert.equal((yml.match(/bun run timbrado report --target (\w+)/g) ?? []).length, 3, "every leg reports through timbrado's reporter");
+  for (const leg of jobs) assert.match(yml, new RegExp(`timbrado report --target ${leg} .*--reproduce "bun run canary:${leg}"`), `${leg} reports under its own name and says how to reproduce`);
+  assert.doesNotMatch(yml, /canary:report|canary-report/, "the site's own reporter is gone");
 });
 
 test("the bumper and the canary share the gates rather than each carrying a copy", async () => {
@@ -95,49 +99,30 @@ test("chromeChannel() reads CHROME_CHANNEL and defaults to stable Chrome", () =>
   assert.equal(chromeChannel({ CHROME_CHANNEL: " chromium-tip-of-tree " }), "chromium-tip-of-tree");
 });
 
-test("the reporter's decision table is the one on its header", () => {
-  // `.mjs` infers `verdict: string`, so each report is cast to the reporter's own
-  // parameter type rather than a copy of it.
-  const rep = (leg, verdict, signature) => /** @type {Parameters<typeof plan>[0]} */ ({ leg, verdict, signature });
-  const red = rep("bun", "red", "red:zstd honours `dictionary`");
-  const green = rep("bun", "green", "green");
-  const broken = rep("bun", "instrument", "instrument:download failed");
-  const open = (text) => ({ number: 7, text });
+test("the legs' reports flow through timbrado's reporter: leg-shaped JSON, the verdict strings, the browsers tables", () => {
+  // A leg writes `leg`; the workflow passes `--target <leg>`, and the reporter
+  // reads `target`. The join is one word, so it is pinned here.
+  const asTimbrado = (report, target) => ({ ...report, target });
+  const red = asTimbrado({ leg: "bun", verdict: "red", signature: "red:zstd honours `dictionary`", subject: { revision: "1.4.3-canary.1+b820c70d6" }, gates: [{ name: "zstd honours `dictionary`", ok: false, detail: "73 none / 73 good | 73 wrong" }] }, "bun");
+  assert.deepEqual(plan(red, null), { kind: "create" });
+  const body = render(red, undefined, "bun run canary:bun");
+  assert.ok(body.includes(marker("bun", red.signature)), "the rendered body carries the marker the next night dedupes on");
+  assert.ok(body.includes("73 none / 73 good \\| 73 wrong"), "a pipe in a detail survives the table");
+  assert.ok(body.includes("Reproduce with `bun run canary:bun`"));
+  assert.deepEqual(plan(red, { number: 7, text: body }), { kind: "none" }, "the same signature already on the issue stays quiet");
+  assert.equal(title("bun"), "timbrado: bun", "the issue title moved with the reporter; nothing open carried the old one");
 
-  assert.deepEqual(plan(red, null), { kind: "create" }, "red with nothing open files the issue");
-  assert.deepEqual(plan(red, open("some body")), { kind: "comment", number: 7 }, "red with a new signature comments");
-  assert.deepEqual(plan(red, open(`x\n${marker("bun", red.signature)}\ny`)), { kind: "none" }, "red with the same signature already on the issue stays quiet");
-  assert.deepEqual(plan(rep("bun", "changed", red.signature), null), { kind: "create" }, "changed is filed like red");
-  assert.deepEqual(plan(green, open("body")), { kind: "close", number: 7 }, "green closes the open issue");
-  assert.deepEqual(plan(green, null), { kind: "none" }, "green with nothing open is silence");
-  assert.deepEqual(plan(broken, null), { kind: "none" }, "an instrument failure files nothing");
-  assert.deepEqual(plan(broken, open("body")), { kind: "none" }, "and never touches an open issue either");
-
-  // The marker is what dedupes, so it has to survive a rendered body and be
-  // leg-scoped: bun's signature on the wrangler issue must not silence wrangler.
-  const body = render(/** @type {Parameters<typeof render>[0]} */ ({ ...red, subject: { version: "1.4.3", revision: "1.4.3-canary.1+b820c70d6" }, gates: [{ name: "zstd honours `dictionary`", ok: false, detail: "73 none / 73 good | 73 wrong" }], ms: 1 }), undefined);
-  assert.ok(body.includes(marker("bun", red.signature)), "the rendered body carries the marker");
-  assert.ok(body.includes("73 none / 73 good \\| 73 wrong"), "a pipe in a detail is escaped so the table survives");
-  assert.deepEqual(plan(rep("wrangler", "red", red.signature), open(body)), { kind: "comment", number: 7 }, "another leg's marker does not silence this one");
-  assert.equal(title("bun"), "canary tripwire: bun");
-});
-
-test("canary gate details preserve backslashes and cannot split table rows", () => {
-  // GFM resolves the pipe escape before inline backslash escapes. These bytes
-  // preserve the input through both stages, including a backslash before a pipe.
-  const cases = [
-    ["x|y", "x\\|y"],
-    ["i\\|j", "i\\\\\\|j"],
-    ["m\\\\|n", "m\\\\\\\\\\|n"],
-    ["g\\h", "g\\\\h"],
-    ["t\\", "t\\\\"],
-    ["line one\r\n| injected |\nline two", "line one \\| injected \\| line two"],
-  ];
-  for (const [detail, expected] of cases) {
-    const body = render({ leg: "bun", verdict: "red", signature: "red:gate", subject: {}, gates: [{ name: "gate", ok: false, detail }], ms: 1 }, undefined);
-    const rows = body.split("\n").filter((line) => line.startsWith("|"));
-    assert.deepEqual(rows, ["| gate | result | detail |", "|---|---|---|", `| gate | FAIL | ${expected} |`], detail);
-  }
+  const tables = tablesFor(
+    [{ name: "chrome", version: "153.0.8010.37", probes: 87, true: 64 }, { name: "chrome-canary", version: "155.0.8057.0", probes: 87, true: 66 }],
+    [{ cap: "live:jxl-decode", stable: false, prerelease: true, pair: "chrome:chrome-canary" }, { cap: "margin-trim", stable: true, prerelease: false, pair: "chrome:chrome-canary" }],
+    [{ cap: "popover", trueIn: ["chromium"] }],
+  );
+  const browsers = render(asTimbrado({ leg: "browsers", verdict: "changed", signature: "changed:x", subject: { page: "/src/pages/garage/horizon.html" }, tables }, "browsers"), undefined);
+  assert.ok(browsers.includes("| chrome-canary | 155.0.8057.0 | 66 / 87 |"), "the engine table");
+  assert.ok(browsers.includes("| `live:jxl-decode` | chrome:chrome-canary | false | true |"), "a flip");
+  assert.ok(browsers.includes("| `margin-trim` | chrome:chrome-canary | true | false (gone) |"), "a regression is marked gone");
+  assert.ok(browsers.includes("| `popover` | chromium |"), "the two-engine bar");
+  assert.ok(!browsers.includes("[object Object]"), "no structured field leaks through the subject list");
 });
 
 test("the honest-false detector matches the page's own convention, and finds the shipped cards", async () => {
@@ -161,12 +146,10 @@ test("the honest-false detector matches the page's own convention, and finds the
 });
 
 test("every upstream watch names a thread, and every bun watch RUNS on the pinned bun and answers a boolean", () => {
-  const thread = /^https:\/\/github\.com\/(oven-sh\/bun|cloudflare\/(workerd|workers-sdk))(\/(issues|pull)\/\d+)?$/;
   const names = new Set();
   for (const w of [...BUN_WATCHES, ...WRANGLER_WATCHES]) {
-    assert.match(w.issue, thread, `${w.name} must point at the upstream thread it waits on`);
-    assert.match(w.name, /^[a-z0-9-]+$/, `${w.name} is part of a signature and must be kebab-case`);
-    assert.match(w.measured, /^\d{4}-\d{2}-\d{2}, /, `${w.name} must record when it was measured false`);
+    const problems = checkWatch({ script: "x", ...w });
+    assert.deepEqual(problems, [], `${w.name}: ${problems.join("; ")}`);
     assert.ok(!names.has(w.name), `${w.name} is declared twice`);
     names.add(w.name);
   }
@@ -177,66 +160,23 @@ test("every upstream watch names a thread, and every bun watch RUNS on the pinne
   // watch that reads `null` is decoration, whichever way the fix goes.
   const bun = process.versions.bun ? process.execPath : "bun";
   for (const w of BUN_WATCHES) {
-    const r = runBunWatch(bun, w);
+    assert.equal(w.runtime, "bun", `${w.name} must name its runtime for timbrado's runner`);
+    const r = runWatch(bun, w);
     assert.ok(r.landed === true || r.landed === false, `${w.name} did not run under the pinned bun: ${r.detail}`);
     assert.ok(r.detail.length > 0, `${w.name} answered with no detail`);
   }
 });
 
-test("a watch moves only when both readings are real and differ, and the reporter renders every row", () => {
-  const w = { name: "x-lands", issue: "https://github.com/oven-sh/bun/issues/1", landed: "x is fixed" };
-  const yes = { landed: true, detail: "yes" };
-  const no = { landed: false, detail: "no" };
-  const none = { landed: null, detail: "did not run: boom" };
-  assert.equal(watchMoved(watchRow(w, no, yes)), true, "false in the pin, true in the candidate is the fix arriving");
-  assert.equal(watchMoved(watchRow(w, yes, no)), true, "true in the pin, false in the candidate is a regression, and still a move");
-  assert.equal(watchMoved(watchRow(w, no, no)), false);
-  assert.equal(watchMoved(watchRow(w, yes, yes)), false, "landed in both is retire-me, never a move");
-  assert.equal(watchMoved(watchRow(w, none, yes)), false, "a probe that did not run never flips a verdict");
-  assert.equal(watchSignature(watchRow(w, no, yes)), "watch:x-lands:f>t");
-
-  const report = /** @type {Parameters<typeof render>[0]} */ ({
-    leg: "bun", verdict: "changed", signature: "changed:watch:x-lands:f>t", subject: {}, gates: [], ms: 1,
-    watches: [watchRow(w, no, yes), watchRow(w, yes, yes), watchRow({ ...w, name: "y-lands" }, none, no)],
-  });
-  const body = render(report, undefined);
-  assert.ok(body.includes("| watch | pinned | candidate | reading |"), "a watches table");
-  assert.ok(body.includes("| [`x-lands`](https://github.com/oven-sh/bun/issues/1) | not yet | landed **MOVED** |"), "the moved row is marked");
-  assert.ok(body.includes("landed | landed (in the pin too: retire this watch)"), "a row landed in the pin says to retire it");
-  assert.ok(body.includes("| did not run | not yet |"), "a probe that did not run says so rather than reading as either answer");
-  assert.ok(body.includes("`x-lands` landed means: x is fixed"), "a moved row explains what landed means");
-});
-
-test("the pin digest parses changesets out of a compare payload, caps the subjects, and says nothing about changesets where none exist", () => {
-  const patch = (text) => text.split("\n").map((l) => `+${l}`).join("\n");
-  const cmp = {
-    total_commits: 3,
-    commits: [
-      { sha: "a", commit: { message: "perf(wrangler): remove execa (#1)\n\nbody", author: { name: "someone" } }, author: { login: "someone" } },
-      { sha: "b", commit: { message: "chore: bump", author: { name: "robobun" } }, author: { login: "robobun" } },
-      { sha: "c", commit: { message: "<script>x</script> subject", author: { name: "z" } }, author: null },
-    ],
-    files: [
-      { filename: ".changeset/nice-cats.md", status: "added", patch: patch('---\n"wrangler": patch\n"miniflare": minor\n---\n\nReplace execa with tinyexec.\nSecond line.') },
-      { filename: ".changeset/old.md", status: "removed", patch: "-gone" },
-      { filename: "packages/wrangler/src/x.ts", status: "modified", patch: "+x" },
-    ],
-  };
-  const sets = changesets(cmp.files);
-  assert.deepEqual(sets, [{ file: ".changeset/nice-cats.md", packages: [{ name: "wrangler", bump: "patch" }, { name: "miniflare", bump: "minor" }], note: "Replace execa with tinyexec.\nSecond line." }]);
-  const md = renderDigest("cloudflare/workers-sdk", "aaaaaaa", "bbbbbbb", cmp);
-  assert.ok(md.includes("- **wrangler** patch, **miniflare** minor: Replace execa with tinyexec."), "one line per changeset, first line of the note");
-  assert.ok(md.includes("3 commit subjects, 1 by bots"), "bots are counted");
-  assert.ok(md.includes("- scriptx/script subject (z)"), "angle brackets are stripped from subjects and a null author falls back to the commit author");
-  assert.ok(!md.includes("No changeset"), "a range that added one does not also claim it added none");
-
-  const bun = renderDigest("oven-sh/bun", "1111111", "2222222", { total_commits: 300, commits: Array.from({ length: 250 }, (_, i) => ({ sha: String(i), commit: { message: `commit ${i}`, author: { name: "robobun" } }, author: { login: "robobun" } })), files: [] });
-  assert.ok(bun.includes("(the API returned 250 of 300)"), "a truncated compare says so");
-  assert.ok(bun.includes("- and 210 more"), "subjects are capped at 40");
-  assert.ok(!bun.includes("changeset"), "a repository with no changeset directory gets no sentence about changesets");
+test("timbrado is pinned to a full commit sha, so the frozen lockfile is the whole guarantee about which reporter runs", async () => {
+  const pkg = JSON.parse(await readFile(new URL("package.json", ROOT), "utf8"));
+  const spec = pkg.devDependencies?.timbrado ?? "";
+  assert.match(spec, /^github:oddharsh\/timbrado#[0-9a-f]{40}$/, `timbrado is ${JSON.stringify(spec)}; a branch or a short sha floats`);
+  const lock = await readFile(new URL("bun.lock", ROOT), "utf8");
+  assert.ok(lock.includes(`timbrado@github:oddharsh/timbrado#${spec.slice(-40, -33)}`), "bun.lock records the same commit");
 });
 
 test("the JXL fixture is a real codestream and the live probes are named where the reporter can find them", () => {
+
   const bytes = Buffer.from(JXL_2X2, "base64");
   assert.deepEqual([bytes[0], bytes[1]], [0xff, 0x0a], "a bare JPEG XL codestream starts ff 0a");
   assert.ok(bytes.length > 100 && bytes.length < 400, `a 2x2 lossless JXL is a couple of hundred bytes, got ${bytes.length}`);

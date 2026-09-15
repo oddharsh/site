@@ -31,33 +31,17 @@
 // runner creates and removes, so a watch may write files there and nowhere
 // else. The two image fixtures are inline: a 2x1 8-bit PNG (black, white)
 // and a 1x1 16-bit PNG whose low sample byte an 8-bit decode has to lose.
+//
+// THE RUNNER IS TIMBRADO'S, since 2026-09-15. This file is the LIST, which is
+// this repository's; the probe runner, the row semantics (`null` never moves
+// a verdict) and the signature live in github.com/oddharsh/timbrado, the
+// tool extracted from these legs, and are re-exported here so the legs keep
+// one import path. A change to how a watch is read is a change there.
 
-import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import type { Watch } from "timbrado/src/watch.ts";
 
-export type Watch = {
-  /** kebab-case, stable: it is part of the issue signature */
-  name: string;
-  /** the upstream issue or PR this waits on */
-  issue: string;
-  /** what `landed: true` means, in one sentence */
-  landed: string;
-  /** the reading on the pinned toolchain the day the watch was written */
-  measured: string;
-  /** JavaScript for `bun -e`; prints exactly one JSON line `{ landed, detail }` */
-  script: string;
-};
-
-export type WatchResult = {
-  name: string;
-  issue: string;
-  landed: string;
-  pinned: boolean | null;
-  candidate: boolean | null;
-  detail: string;
-};
+export type { Watch, WatchResult } from "timbrado/src/watch.ts";
+export { checkWatch, runWatch, watchMoved, watchRow, watchSignature } from "timbrado/src/watch.ts";
 
 const PNG_2X1_8BIT = "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAAD0lEQVR4nGNgYGD4//8/AAYBAv4CsjmuAAAAAElFTkSuQmCC";
 const PNG_1X1_16BIT = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABEAIAAADA54+dAAAADElEQVR4nGNoYARBAAYQAYRMvznsAAAAAElFTkSuQmCC";
@@ -71,6 +55,7 @@ export const BUN_WATCHES: Watch[] = [
     issue: "https://github.com/oven-sh/bun/issues/40490",
     landed: "Bun.Image throws on `quality: 999` instead of encoding with it (robobun's fix is oven-sh/bun#40520)",
     measured: "2026-09-15, bun 1.4.2: accepted, wrote 652 B",
+    runtime: "bun",
     script: `
       const png = Buffer.from("${PNG_2X1_8BIT}", "base64");
       const first = ${firstLine};
@@ -85,6 +70,7 @@ export const BUN_WATCHES: Watch[] = [
     issue: "https://github.com/oven-sh/bun/issues/40490",
     landed: "Bun.Image throws on `quality: \"84\"` (a string) instead of falling back to the default (robobun's fix is oven-sh/bun#40491)",
     measured: "2026-09-15, bun 1.4.2: accepted, wrote 647 B at the q80 default",
+    runtime: "bun",
     script: `
       const png = Buffer.from("${PNG_2X1_8BIT}", "base64");
       const first = ${firstLine};
@@ -99,6 +85,7 @@ export const BUN_WATCHES: Watch[] = [
     issue: "https://github.com/oven-sh/bun/issues/40510",
     landed: "`resize(w, h, { colorspace: \"linear\" })` produces different bytes from the default, so the opt-in exists (robobun's fix is oven-sh/bun#40512)",
     measured: "2026-09-15, bun 1.4.2: byte-identical to the default, the option is ignored",
+    runtime: "bun",
     script: `
       const png = Buffer.from("${PNG_2X1_8BIT}", "base64");
       const a = Buffer.from(await new Bun.Image(png).resize(1, 1).png().bytes());
@@ -112,6 +99,7 @@ export const BUN_WATCHES: Watch[] = [
     issue: "https://github.com/oven-sh/bun/issues/30462",
     landed: "a 16-bit PNG round-trips through Bun.Image at 16 bits (IHDR depth 16), which is the depth the HIF decode would need before it can replace sips in the photo ingest",
     measured: "2026-09-15, bun 1.4.2: IHDR depth 8 on output, the 16-bit source is collapsed on decode",
+    runtime: "bun",
     script: `
       const png = Buffer.from("${PNG_1X1_16BIT}", "base64");
       const o = await new Bun.Image(png).png().bytes();
@@ -124,6 +112,7 @@ export const BUN_WATCHES: Watch[] = [
     issue: "https://github.com/oven-sh/bun/issues/39247",
     landed: "`fetch(url, { dispatcher })` calls the dispatcher's `dispatch()` under bun, which is what miniflare's `dispatchFetch()` relies on and the reason wrangler's harness hangs under bun (robobun's fix is oven-sh/bun#39250; this is the issue that decides whether node can leave `engines`)",
     measured: "2026-09-15, bun 1.4.2: dispatch() never called, the fetch went to the network and failed to connect",
+    runtime: "bun",
     script: `
       let called = 0;
       const dispatcher = { dispatch(opts, h) { called++; if (h && typeof h.onError === "function") h.onError(new Error("watch")); return true; } };
@@ -137,6 +126,7 @@ export const BUN_WATCHES: Watch[] = [
     issue: "https://github.com/oven-sh/bun/issues/41120",
     landed: "`Bun.build({ minify: true })` on CSS naming ::details-content, ::picker(), ::checkmark, ::picker-icon, ::scroll-marker, ::scroll-marker-group and ::scroll-button() logs no `Invalid selector` warning (oven-sh/bun#41122 shipped four of the seven in 1.4.2)",
     measured: "2026-09-15, bun 1.4.2: three warnings, the first on ::scroll-marker",
+    runtime: "bun",
     script: `
       await Bun.write("w.css", "a::details-content{c:d}b::picker(select){c:d}c::checkmark{c:d}d::picker-icon{c:d}e::scroll-marker{c:d}f::scroll-marker-group{c:d}g::scroll-button(*){c:d}");
       const r = await Bun.build({ entrypoints: ["w.css"], minify: true, outdir: "out" });
@@ -149,6 +139,7 @@ export const BUN_WATCHES: Watch[] = [
     issue: "https://github.com/oven-sh/bun/issues/42480",
     landed: "`:TARGET-CURRENT` is emitted lowercased like `:TARGET-WITHIN`, so two spellings of one selector merge to one rule (robobun adopted the fix as oven-sh/bun#42484, from oven-sh/bun#41139)",
     measured: "2026-09-15, bun 1.4.2: `:TARGET-CURRENT` emitted verbatim beside a lowercased `:target-within`",
+    runtime: "bun",
     script: `
       await Bun.write("w.css", "x:TARGET-CURRENT{c:d}y:TARGET-WITHIN{c:d}");
       await Bun.build({ entrypoints: ["w.css"], minify: true, outdir: "out" });
@@ -158,42 +149,6 @@ export const BUN_WATCHES: Watch[] = [
     `,
   },
 ];
-
-/** Runs one watch under a bun executable, in a scratch directory it removes. `landed: null` means the probe did not run. */
-export function runBunWatch(exe: string, watch: Watch): { landed: boolean | null; detail: string } {
-  const cwd = mkdtempSync(join(tmpdir(), "bun-watch-"));
-  try {
-    const run = spawnSync(exe, ["-e", watch.script], { cwd, encoding: "utf8", timeout: 60_000 });
-    const line = (run.stdout || "").trim().split("\n").filter(Boolean).pop() ?? "";
-    try {
-      // Both ends of this contract are in this file, so the line is parsed as
-      // the shape the scripts print and checked on the one value that decides.
-      const parsed = JSON.parse(line) as { landed?: boolean; detail?: string };
-      if (parsed.landed !== true && parsed.landed !== false) throw new Error("no landed boolean");
-      return { landed: parsed.landed, detail: parsed.detail ?? "" };
-    } catch {
-      const why = (run.stderr || run.stdout || "").trim().split("\n").filter(Boolean).pop() ?? `exit ${run.status}`;
-      return { landed: null, detail: `did not run: ${why.slice(0, 120)}` };
-    }
-  } finally {
-    rmSync(cwd, { recursive: true, force: true });
-  }
-}
-
-/** One row of the watches table: the pinned reading beside the candidate's, and the sentence that goes with the pair. */
-export function watchRow(watch: Pick<Watch, "name" | "issue" | "landed">, pinned: { landed: boolean | null; detail: string }, candidate: { landed: boolean | null; detail: string }): WatchResult {
-  const detail = pinned.landed === candidate.landed
-    ? candidate.detail
-    : `pinned: ${pinned.detail}; candidate: ${candidate.detail}`;
-  return { name: watch.name, issue: watch.issue, landed: watch.landed, pinned: pinned.landed, candidate: candidate.landed, detail };
-}
-
-/** A watch counts as moved when the two readings are both real and differ. `null` never moves anything. */
-export const watchMoved = (w: Pick<WatchResult, "pinned" | "candidate">) =>
-  w.pinned !== null && w.candidate !== null && w.pinned !== w.candidate;
-
-/** The signature fragment for a moved watch: which one, and which way. */
-export const watchSignature = (w: WatchResult) => `watch:${w.name}:${w.pinned ? "t" : "f"}>${w.candidate ? "t" : "f"}`;
 
 /**
  * The wrangler leg's watches. These need a tree and a wrangler entry file

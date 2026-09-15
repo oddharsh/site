@@ -101,8 +101,8 @@ jobs:
           to="${AFTER##*@}"
           # What main gained between the two shas: the changesets (the
           # unreleased changelog) and the commit subjects. Advisory prose;
-          # pin-digest exits 0 with a one-line note if GitHub will not answer.
-          DIGEST=$(GITHUB_TOKEN="$GH_TOKEN" bun run pin:digest -- --repo cloudflare/workers-sdk --from "$from" --to "$to")
+          # timbrado digest exits 0 with a one-line note if GitHub will not answer.
+          DIGEST=$(GITHUB_TOKEN="$GH_TOKEN" bun run timbrado digest --repo cloudflare/workers-sdk --from "$from" --to "$to" --prefer wrangler,miniflare)
 
           git checkout -B "$BRANCH"
           git add package.json bun.lock

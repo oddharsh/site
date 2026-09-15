@@ -977,7 +977,7 @@ carries the fix, and the reporter marks it. A probe that could not run reads
 harness hang under bun, and the issue that decides whether node can leave
 `engines`.
 
-**The nightly pin PRs say what they adopt.** `bun run pin:digest -- --repo
+**The nightly pin PRs say what they adopt.** `bun run timbrado digest --repo
 <owner/name> --from <sha> --to <sha>` renders the upstream commit range as
 Markdown, and both `bun-pin.yml` and `wrangler-pin.yml` put it in the PR body
 under the gate evidence. For workers-sdk that includes the `.changeset/*.md`
@@ -1004,12 +1004,13 @@ build that failed. The reporter files nothing for `instrument` and the JOB goes
 red, because "the runner had no unzip" is not a finding and an issue saying so
 teaches you to close canary issues unread.
 
-**One issue per leg, titled `canary tripwire: <leg>`.** `canary-report.ts`
+**One issue per leg, titled `timbrado: <leg>`.** timbrado's reporter (the tool
+extracted from these legs, a git dependency; `bun run timbrado report`)
 creates it on the first red or changed night, comments only when the
 signature (the failing gate names, or the flipped probes) is new, and closes
 it the night the leg goes green. So a canary carrying yesterday's broken gate
 adds nothing. The signature rides in an HTML comment at the end of each body;
-grep the issue for `canary:<leg> signature:` to see what has been seen.
+grep the issue for `timbrado:<leg> signature:` to see what has been seen.
 
 The workstation forms print the same table and exit the same way:
 

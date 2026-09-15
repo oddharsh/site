@@ -142,12 +142,12 @@ jobs:
           # hand, which is how a bot PR becomes a rubber stamp.
           EVIDENCE=$(sed -n '/^  ok  \|^ FAIL /p' pin.log)
           # A canary pin carries its build sha after `+`, so the range between
-          # two of them is a commit range on oven-sh/bun main and pin-digest
+          # two of them is a commit range on oven-sh/bun main and timbrado digest
           # lists what it holds (most of it robobun's, and it says how much).
           # Two release pins carry no sha and get no digest.
           DIGEST=""
           case "$BEFORE:$AFTER" in
-            *+*:*+*) DIGEST=$(GITHUB_TOKEN="$GH_TOKEN" bun run pin:digest -- --repo oven-sh/bun --from "${BEFORE##*+}" --to "${AFTER##*+}") ;;
+            *+*:*+*) DIGEST=$(GITHUB_TOKEN="$GH_TOKEN" bun run timbrado digest --repo oven-sh/bun --from "${BEFORE##*+}" --to "${AFTER##*+}") ;;
           esac
 
           git checkout -B "$BRANCH"

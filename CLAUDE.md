@@ -239,9 +239,15 @@ bun run canary:browsers   # /garage/horizon's probes in stable vs prerelease eng
 # dictionary and `wrangler types --x-new-config`). Each leg reads every watch
 # under the PIN and under the candidate; a row that differs is a `changed`
 # night naming the fix and the build it arrived in, and a row landed in both
-# is the cue to retire it. The nightly pin PRs also carry pin:digest now, the
+# is the cue to retire it. The nightly pin PRs also carry a DIGEST, the
 # upstream commit range with its changesets, so a bump says what it adopts.
-bun run pin:digest -- --repo cloudflare/workers-sdk --from b149147 --to 982b806
+#
+# The runner, the reporter and the digest are TIMBRADO's since 2026-09-15
+# (github.com/oddharsh/timbrado, the tool extracted from these legs, a git
+# dependency pinned by full commit sha). The legs, the gates, the watch list
+# and the browser probes stay here; `bun run timbrado` is its CLI.
+bun run timbrado digest --repo cloudflare/workers-sdk --from b149147 --to 982b806
+bun run timbrado survey                # which dependencies have a head at all (3 of 12, 2026-09-15)
 
 # every Playwright probe reads its Chrome from ONE place. Unset means stable.
 CHROME_CHANNEL=chrome-canary bun run csp:sweep
