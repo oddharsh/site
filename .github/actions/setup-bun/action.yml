@@ -67,9 +67,13 @@ runs:
 
         rm -rf /tmp/bun-install && mkdir -p /tmp/bun-install
         tar -xzf /tmp/bun.tgz -C /tmp/bun-install
+        # The tarball's own manifest names a canary WITH its build sha
+        # (`1.4.2-canary.20260913.1+09bb546`, measured on the first CI run of
+        # this installer), so it is compared against the whole pin. A release
+        # tarball names the bare version, which is the whole pin too.
         packaged=$(node -e "process.stdout.write(require('/tmp/bun-install/package/package.json').version)")
-        if [ "$packaged" != "$version" ]; then
-          echo "::error title=bun tarball version mismatch::asked for $version, the tarball's package.json says $packaged"
+        if [ "$packaged" != "$pin" ]; then
+          echo "::error title=bun tarball version mismatch::asked for $pin, the tarball's package.json says $packaged"
           exit 1
         fi
         mkdir -p "$HOME/.bun/bin"

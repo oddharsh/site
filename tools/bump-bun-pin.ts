@@ -285,10 +285,13 @@ try {
   const packaged = channel === "stable"
     ? identity.version
     : String(JSON.parse(readFileSync(join(WORK, "package", "package.json"), "utf8")).version ?? "");
+  // The canary tarball's manifest names the version WITH its build sha, so it
+  // equals the whole pin; a release tarball names the bare version, which is
+  // the whole pin too. The binary's revision is the second witness.
   const sha = target.split("+")[1] ?? "";
   const same = channel === "stable"
     ? packaged === target
-    : packaged === npmVersion(target) && identity.revision.includes(`+${sha}`);
+    : packaged === target && identity.revision.includes(`+${sha}`);
   record(
     channel === "stable" ? "the asset reports the version it is tagged with" : "the tarball and the binary both name the pinned canary",
     same,
