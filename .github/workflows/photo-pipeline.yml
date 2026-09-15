@@ -51,7 +51,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up bun
-        # config/... no longer applies: the version lives in packageManager and the
+        # config/... no longer applies: the version lives in config/bun-pin.json and the
         # action reads it, so there is one declaration of which bun this repo runs.
         uses: ./.github/actions/setup-bun
 

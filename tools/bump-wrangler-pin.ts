@@ -2,7 +2,7 @@
 // bun run wrangler:pin [--write] [--ref main|<sha>] [--keep]
 //
 // Keeps the wrangler pin on a COMMIT of cloudflare/workers-sdk main, the way
-// bump-bun-pin.ts keeps `packageManager` on a dated bun canary.
+// bump-bun-pin.ts keeps config/bun-pin.json on a dated bun canary.
 //
 // THE PIN IS A URL, not a version: `https://pkg.pr.new/cloudflare/workers-sdk/
 // wrangler@<sha>`. workers-sdk publishes every commit and PR to pkg.pr.new,

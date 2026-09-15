@@ -879,34 +879,32 @@ after the canary tripwire's gates pass on the candidate. Nothing floats.
 
 | pin | where | shape | advanced by |
 |---|---|---|---|
-| bun (the compiler) | `packageManager` in `package.json` | a RELEASE again (`bun@1.4.2`) as of 2026-09-15, see below; a dated canary plus its build sha (`bun@1.4.2-canary.20260913.1+09bb546`) is the shape everything else here accepts | `bun-pin.yml`, which follows whichever channel the pin's shape says |
+| bun (the compiler) | `config/bun-pin.json` (NOT `packageManager`; there is none) | `1.4.2-canary.20260913.1+09bb546`: npm's dated canary plus its build sha | `bun-pin.yml`, which follows npm's `canary` dist-tag because the pin's shape says canary |
 | wrangler (the publisher) | `devDependencies.wrangler` | `https://pkg.pr.new/cloudflare/workers-sdk/wrangler@b149147`: a commit of main | `wrangler-pin.yml`, which resolves main's sha from pkg.pr.new's own `x-commit-key` header |
 
-**THE BUN HALF IS PARKED, measured 2026-09-15, and the route out is the
-deploy wrapper owning the toolchain.** Cloudflare's build image cannot resolve
-a canary `packageManager`. Two reversal probes off the merged commit settled
-it in one build each: stable `bun@1.4.2` with the pkg.pr.new wrangler built
-and uploaded a version (`629b9d98`), the canary bun with a release wrangler
-failed, and the GitHub runner had already built the canary tree green through
-`setup-bun`. So the pins are sound and the image's own bootstrap is the wall;
-its docs name only `BUN_VERSION` and a 1.2.15 default. `packageManager` went
-back to a release in the same hour, because a `main` that cannot build ships
-nothing.
+**WHY THE BUN PIN IS ITS OWN FILE, measured 2026-09-15.** Cloudflare's build
+image reads `package.json`'s `packageManager` and cannot resolve a canary in
+it. Three probe builds settled it, one build each, everything else equal:
 
-The route (in progress): `SKIP_DEPENDENCY_INSTALL=true` in the dashboard's
-build variables turns the image's bootstrap and install off, and
-`.github/deploy-wrangler.sh` installs the pinned bun itself through the SAME
-`.github/install-bun.sh` the `setup-bun` action uses (npm tarball, sha512,
-manifest version, binary revision), runs the frozen install under it, and
-then runs wrangler. The wrapper does that ONLY when the variable is set, so
-it is inert before the variable exists and owns the toolchain after; one
-variable decides both halves. Order: merge the wrapper, set the variable (recorded in
-`infra.json` under `release.build_variables`, as intent, since the Builds
-API exposes no field check-infra can read it from), then push a branch with
-a canary `packageManager`. If THAT builds, the image no longer parses the pin
-under the flag and the canary can go back on `main`; if it fails, the image
-parses `packageManager` regardless and the fallback is a second declaration
-for the compiler that the image never reads.
+| `packageManager` | pin | `SKIP_DEPENDENCY_INSTALL` | Workers Builds |
+|---|---|---|---|
+| `bun@1.4.2` | (same) | unset | success |
+| `bun@1.4.2-canary.20260913.1+09bb546` | (same) | unset, then set | failure, both times |
+| `bun@1.4.2-canary.20260913.1` (no sha) | (same) | set | failure |
+| absent | `config/bun-pin.json` | set | **success, version `68035fe0` compiled by the canary** |
+
+So the field is read whether or not the image installs, it rejects any canary
+string, and the only reader that could not handle the truth was the image.
+The declaration moved to a file only this repository's own tools read, and
+`package.json` carries no `packageManager` at all (a contract test keeps it
+out). `SKIP_DEPENDENCY_INSTALL=true` in the dashboard's build variables turns
+the image's own bootstrap and install off, and `.github/deploy-wrangler.sh`
+installs the pinned bun through the SAME `.github/install-bun.sh` the
+`setup-bun` action uses (npm tarball, registry sha512, manifest version, binary
+revision), runs the frozen install under it, and then runs wrangler. The
+variable is recorded in `infra.json` under `release.build_variables` as
+intent, since the Builds API exposes no field check-infra can read it from;
+the behavioural proof is that a canary pin builds only while it is set.
 
 **The channel is the pin's shape.** A release-looking bun pin follows releases
 and a canary-looking one follows canaries; `bump-bun-pin.ts` never crosses
@@ -923,8 +921,8 @@ the install is the pin: the registry's sha512 on the tarball, the tarball's own
 **Fall back to a release in one edit each**, and relock:
 
 ```bash
-# bun: any released version, then reinstall it and relock
-perl -pi -e 's/"packageManager": "bun@[^"]+"/"packageManager": "bun@1.4.2"/' package.json
+# bun: any released version, in the pin file (never in packageManager)
+perl -pi -e 's/"bun": "[^"]+"/"bun": "1.4.2"/' config/bun-pin.json
 # wrangler: any released version
 bun add --dev wrangler@4.131.2
 bun run check-wrangler
@@ -934,10 +932,8 @@ bun run check-wrangler
 policy, so a pinned tarball can in principle vanish; `bun install
 --frozen-lockfile` then fails loudly on the next build (the lockfile carries
 the sha512, so nothing substitutes silently) and the fallback above is the
-repair. Advancing nightly keeps the pinned sha days old. Cloudflare's build
-image resolving a canary `packageManager` was measured by the branch build of
-the commit that flipped it; read the `Workers Builds: aadhar-sh` check on that
-commit, and its build log in the dashboard, before trusting the next flip.
+repair. Advancing nightly keeps the pinned sha days old. The build image's
+refusal of a canary `packageManager` is measured above; keep the field absent.
 
 ## Read the canary tripwire (`canary.yml`)
 

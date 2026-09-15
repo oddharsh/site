@@ -40,9 +40,15 @@ review policy and entry point for future agent runs.
 
 ## The two versions no ecosystem owns
 
-### bun, in `packageManager`
+### bun, in `config/bun-pin.json`
 
-`package.json`'s `packageManager` field names the bun this repository runs, and
+`config/bun-pin.json` names the bun this repository runs. It was
+`package.json`'s `packageManager` until 2026-09-15, and it moved because
+Cloudflare's build image reads that field and cannot resolve a canary in it
+(three probes that day: a release builds, a dated canary fails with or without
+its build sha, and removing the field with the pin in its own file builds a
+version the canary compiled). `package.json` deliberately carries no
+`packageManager` now, and a contract test keeps it that way. The field, and
 none of those update blocks changes it. The npm updater bumps `@types/bun`
 and leaves the runtime alone. Dependabot's own `bun` ecosystem would not help
 either: it reads `bun.lock` rather than the field, and it cannot run here at all

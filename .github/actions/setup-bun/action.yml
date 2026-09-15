@@ -1,7 +1,7 @@
 name: Set up bun
 description: >-
-  Install the exact bun that package.json's packageManager field names, read
-  from that field rather than repeated per workflow. One action because the
+  Install the exact bun that config/bun-pin.json names, read from that file
+  rather than repeated per workflow. One action because the
   version is a pin every job has to agree on.
 
 # WHY A LOCAL ACTION RATHER THAN `oven-sh/setup-bun`.
@@ -12,14 +12,14 @@ description: >-
 # the whole job is a few lines of shell.
 #
 # THE INSTALLER IS SHARED with .github/deploy-wrangler.sh, the Workers Builds
-# wrapper, since 2026-09-15: .github/install-bun.sh reads packageManager,
+# wrapper, since 2026-09-15: .github/install-bun.sh reads config/bun-pin.json,
 # fetches the `@oven/bun-<platform>` tarball from npm, verifies the registry's
 # sha512, the tarball's own version and the binary's revision, and installs
 # it. Two copies of that logic is how the CI side grew canary support the
 # deploy side never saw. The action is what puts the result on PATH and runs
 # the one capability probe the build depends on.
 #
-# It reads packageManager instead of taking an input so there is ONE declaration
+# It reads that file instead of taking an input so there is ONE declaration
 # of which bun this repo runs. A contract test asserts every workflow reaches
 # this action rather than installing bun some other way.
 

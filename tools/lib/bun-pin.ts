@@ -1,11 +1,14 @@
-// The bun this repository runs is declared ONCE, in package.json's
-// `packageManager`, and this module exists to keep it that way.
+// The bun this repository runs is declared ONCE, in config/bun-pin.json, and
+// this module exists to keep it that way.
 //
-// Two consumers read that one string and neither may carry a copy:
-// `.github/actions/setup-bun` reads the field in shell, and `bump-bun-pin.ts`
-// proposes moving it. There were three until 2026-08-24, when `check-bun.ts`
-// was retired: node cannot build this repo any more, so its node-versus-bun
-// comparison had no second side.
+// It was package.json's `packageManager` until 2026-09-15. Cloudflare's build
+// image reads that field and cannot resolve a canary in it (measured: a
+// release builds, a dated canary fails with or without its sha, and removing
+// the field with the pin in its own file builds and uploads a version the
+// canary compiled), so the declaration moved to a file only this repository's
+// own tools read. The readers: `.github/install-bun.sh` (the installer the
+// setup-bun action and the Workers Builds wrapper share), `bump-bun-pin.ts`,
+// which proposes moving it, and bun-pin.yml, which reads it before and after.
 //
 // The capability probe below is shared for the same reason `MCP_SUPPORTED` is
 // shared between the two MCP servers: two copies of a probe agree on the day
@@ -37,7 +40,8 @@ import { join } from "node:path";
 // canary's platform dependencies (`1.4.2-canary.20260913.1+09bb546`). So the
 // sha is how a running canary proves it IS the pin, which the baseline guard
 // in bump-bun-pin.ts and canary-bun.ts needs before it compares anything.
-const PIN_PATTERN = /("packageManager"\s*:\s*")bun@(\d+\.\d+\.\d+(?:-canary\.\d{8}\.\d+\+[0-9a-f]{7,40})?)(")/;
+export const PIN_FILE = "config/bun-pin.json";
+const PIN_PATTERN = /("bun"\s*:\s*")(\d+\.\d+\.\d+(?:-canary\.\d{8}\.\d+\+[0-9a-f]{7,40})?)(")/;
 
 export type Channel = "stable" | "canary";
 
@@ -76,23 +80,21 @@ export function runningMatchesPin(pin: string, running: { version: string; revis
   return { ok, why: `running revision ${running.revision.slice(0, 9)}, pin ${pin}` };
 }
 
-/** The bun `package.json` pins, as both the raw field and its bare version. */
+/** The bun config/bun-pin.json pins, as both the `bun@` form and its bare version. */
 export function readPin(root: string) {
-  const text = readFileSync(join(root, "package.json"), "utf8");
+  const text = readFileSync(join(root, PIN_FILE), "utf8");
   const found = PIN_PATTERN.exec(text);
-  if (!found) throw new Error("package.json carries no `packageManager: bun@x.y.z`");
+  if (!found) throw new Error(`${PIN_FILE} carries no "bun": "x.y.z" pin`);
   return { raw: `bun@${found[2]}`, version: found[2] };
 }
 
-// A SURGICAL REPLACE rather than a JSON round trip. `JSON.stringify` would
-// reorder nothing but would drop the file's own formatting and, more to the
-// point, its five `comment:` keys carry paragraphs that a re-serialize would
-// reflow into one line each. The pin is one field; edit one field.
+// A SURGICAL REPLACE rather than a JSON round trip, so the file's `$comment`
+// paragraphs keep their line breaks. The pin is one field; edit one field.
 export function writePin(root: string, version: string) {
-  const path = join(root, "package.json");
+  const path = join(root, PIN_FILE);
   const text = readFileSync(path, "utf8");
-  if (!PIN_PATTERN.test(text)) throw new Error("package.json carries no `packageManager: bun@x.y.z`");
-  writeFileSync(path, text.replace(PIN_PATTERN, `$1bun@${version}$3`));
+  if (!PIN_PATTERN.test(text)) throw new Error(`${PIN_FILE} carries no "bun": "x.y.z" pin`);
+  writeFileSync(path, text.replace(PIN_PATTERN, `$1${version}$3`));
 }
 
 // Read the install policy's window instead of restating it. bunfig.toml refuses

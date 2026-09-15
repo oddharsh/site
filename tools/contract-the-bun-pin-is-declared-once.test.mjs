@@ -4,64 +4,53 @@ import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 
 import { channelOf, compareVersions, interpretZstdProbe, minimumReleaseAgeSeconds, npmPlatform, npmTarballUrl, npmVersion, parseVersion, readPin, releaseAsset, releaseUrl, runningMatchesPin, writePin } from "./lib/bun-pin.ts";
 import { fileURLToPath } from "node:url";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const root = fileURLToPath(ROOT);
 
-// `packageManager` is the one dependency version here that no updater owns, and
+// config/bun-pin.json is the one dependency version here that no updater owns, and
 // the one that compiles the site: wrangler.jsonc builds with `bun
 // tools/build.ts`, so it decides every content-addressed /a/ and /i/ URL. Three
 // readers share it and none may carry a copy.
 
-test("the pin lib reads the same string package.json holds", async () => {
-  const text = await readFile(new URL("package.json", ROOT), "utf8");
-  const pkg = JSON.parse(text);
+test("the pin lib reads the same string config/bun-pin.json holds, and package.json declares none", async () => {
+  const declared = JSON.parse(await readFile(new URL("config/bun-pin.json", ROOT), "utf8"));
   const pin = readPin(root);
-  assert.equal(pin.raw, pkg.packageManager);
-  // A release or a DATED canary, and nothing looser: both are exact and both
-  // are immutable on npm, which is what makes either one a pin.
+  assert.equal(pin.version, declared.bun);
+  assert.equal(pin.raw, `bun@${declared.bun}`);
+  // A release or a DATED canary with its build sha, and nothing looser: both are
+  // exact and both are immutable on npm, which is what makes either one a pin.
   assert.match(pin.version, /^\d+\.\d+\.\d+(-canary\.\d{8}\.\d+\+[0-9a-f]{7,40})?$/);
   if (channelOf(pin.version) === "canary") assert.ok(parseVersion(pin.version).sha, "a canary pin must carry the build sha the running bun proves itself by");
-  assert.ok(["stable", "canary"].includes(channelOf(pin.version)));
+
+  // NO packageManager, on purpose. Cloudflare's build image reads that field
+  // and cannot resolve a canary in it (measured 2026-09-15, three probes), so
+  // a second declaration there is a production build waiting to stop.
+  const pkg = JSON.parse(await readFile(new URL("package.json", ROOT), "utf8"));
+  assert.equal(pkg.packageManager, undefined, "package.json must not carry packageManager; config/bun-pin.json is the declaration and the build image reads that field");
 });
 
 test("writePin edits one field and reflows nothing else", async () => {
-  // A JSON round trip would pass this test's letter and destroy the file: five
-  // `comment:` keys in package.json carry paragraphs that re-serializing folds
-  // into one line each. So the assertion is on the BYTES either side of the pin
-  // rather than on a parsed object.
-  //
-  // It runs against a COPY, and that is a fix rather than a preference. This used
-  // to write the REAL package.json and restore it in a `finally`, which is safe
-  // in one process and is not what happens: `node --test` runs test FILES in
-  // parallel processes, and `writeFileSync` truncates before it writes. So for
-  // the width of two writes, every other file's module resolution could read a
-  // half-written package.json, and Node answers that with
-  // ERR_INVALID_PACKAGE_CONFIG naming the repo root.
-  //
-  // It is a RACE, so it passed locally for months and failed in CI under load,
-  // on an unrelated test file, while this one reported green. `writePin` already
-  // took its root as an argument, so the copy costs nothing.
-  const before = await readFile(new URL("package.json", ROOT), "utf8");
+  const before = await readFile(new URL("config/bun-pin.json", ROOT), "utf8");
   const pin = readPin(root);
   const dir = await mkdtemp(join(tmpdir(), "bun-pin-"));
   try {
-    await writeFile(join(dir, "package.json"), before);
+    await mkdir(join(dir, "config"));
+    await writeFile(join(dir, "config", "bun-pin.json"), before);
     writePin(dir, "9.9.9");
-    const after = await readFile(join(dir, "package.json"), "utf8");
+    const after = await readFile(join(dir, "config", "bun-pin.json"), "utf8");
     assert.equal(readPin(dir).version, "9.9.9");
     assert.equal(
-      after.replace('"packageManager": "bun@9.9.9"', `"packageManager": "${pin.raw}"`),
+      after.replace('"bun": "9.9.9"', `"bun": "${pin.version}"`),
       before,
       "writePin changed something other than the version",
     );
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
-  // The real file is what the race was about, so assert it was never touched.
-  assert.equal(await readFile(new URL("package.json", ROOT), "utf8"), before, "the live package.json was modified");
+  assert.equal(await readFile(new URL("config/bun-pin.json", ROOT), "utf8"), before, "the live pin file was modified");
 });
 
 test("the zstd capability probe is declared once", async () => {
@@ -157,7 +146,8 @@ test("the channel is the pin's own shape, and the npm tarball names the platform
     readFile(new URL(".github/actions/setup-bun/action.yml", ROOT), "utf8"),
     readFile(new URL(".github/deploy-wrangler.sh", ROOT), "utf8"),
   ]).then(([installer, action, wrapper]) => {
-    assert.match(installer, /packageManager/, "the installer must read the pin from packageManager");
+    assert.match(installer, /config\/bun-pin\.json/, "the installer must read the pin from config/bun-pin.json");
+    assert.doesNotMatch(installer.replace(/^\s*#.*$/gm, ""), /packageManager/, "the installer must not read packageManager, which the build image also reads and cannot resolve a canary in");
     assert.match(installer, /registry\.npmjs\.org\/@oven\/\$\{platform\}\//, "the installer must fetch from the npm platform package");
     assert.match(installer, /integrity/, "the installer must verify the registry's sha512");
     assert.match(installer, /package\/package\.json/, "the installer must read the tarball's own version, since a canary binary reports the next release");
