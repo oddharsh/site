@@ -7,6 +7,7 @@
 // real Dependabot bodies and real tag spellings, because every one of them is a
 // place a heuristic can quietly match nothing and report a clean read.
 
+import { Parser } from "htmlparser2";
 import { asRecord, asText } from "../../src/worker/lib/parse.ts";
 
 // ── what a pull request bumps ──────────────────────────────────────────────
@@ -144,28 +145,32 @@ export function bodySectionsFor(body: string, name: string): { title: string; te
   return sections;
 }
 
-/** Enough of an HTML-to-text pass for Dependabot's release blocks, which are
- *  headings, lists, links and code. Links keep their text and drop the href,
- *  because the href is Dependabot's rewrite (`tree/HEAD/...` in front of an
- *  issue number) and misleads more than it informs. */
+/** Extract release-note text with headings, lists and code preserved. Parsing
+ *  handles malformed tags and decodes entities exactly once. The result is
+ *  untrusted TEXT for the model; renderPackage owns escaping for GitHub.
+ *  Links keep their text and drop Dependabot's rewritten href. */
 export function htmlToText(html: string): string {
-  return html
-    .replace(/<!--[\s\S]*?-->/g, "")
-    .replace(/<\/?(blockquote|details|summary|p|div)[^>]*>/g, "\n")
-    .replace(/<br\s*\/?>/g, "\n")
-    .replace(/<h(\d)[^>]*>/g, (_m, n: string) => `\n${"#".repeat(Number(n))} `)
-    .replace(/<\/h\d>/g, "\n")
-    .replace(/<li[^>]*>/g, "\n- ")
-    .replace(/<\/li>/g, "")
-    .replace(/<\/?(ul|ol)[^>]*>/g, "\n")
-    .replace(/<code[^>]*>([\s\S]*?)<\/code>/g, "`$1`")
-    .replace(/<a [^>]*>([\s\S]*?)<\/a>/g, "$1")
-    .replace(/<[^>]+>/g, "")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
+  const parts: string[] = [];
+  const blocks = new Set(["blockquote", "details", "summary", "p", "div", "ul", "ol", "pre"]);
+  let hidden = false;
+  new Parser({
+    onopentag(name) {
+      if (name === "script" || name === "style") { hidden = true; return; }
+      if (hidden) return;
+      if (/^h[1-6]$/.test(name)) parts.push(`\n${"#".repeat(Number(name[1]))} `);
+      else if (name === "li") parts.push("\n- ");
+      else if (name === "code") parts.push("`");
+      else if (name === "br" || blocks.has(name)) parts.push("\n");
+    },
+    ontext(text) { if (!hidden) parts.push(text); },
+    onclosetag(name) {
+      if (name === "script" || name === "style") { hidden = false; return; }
+      if (hidden) return;
+      if (name === "code") parts.push("`");
+      else if (/^h[1-6]$/.test(name) || blocks.has(name)) parts.push("\n");
+    },
+  }, { decodeEntities: true }).end(html);
+  return parts.join("")
     .replace(/\u200b/g, "")
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")

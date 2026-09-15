@@ -116,6 +116,24 @@ test("the reporter's decision table is the one on its header", () => {
   assert.equal(title("bun"), "canary tripwire: bun");
 });
 
+test("canary gate details preserve backslashes and cannot split table rows", () => {
+  // GFM resolves the pipe escape before inline backslash escapes. These bytes
+  // preserve the input through both stages, including a backslash before a pipe.
+  const cases = [
+    ["x|y", "x\\|y"],
+    ["i\\|j", "i\\\\\\|j"],
+    ["m\\\\|n", "m\\\\\\\\\\|n"],
+    ["g\\h", "g\\\\h"],
+    ["t\\", "t\\\\"],
+    ["line one\r\n| injected |\nline two", "line one \\| injected \\| line two"],
+  ];
+  for (const [detail, expected] of cases) {
+    const body = render({ leg: "bun", verdict: "red", signature: "red:gate", subject: {}, gates: [{ name: "gate", ok: false, detail }], ms: 1 }, undefined);
+    const rows = body.split("\n").filter((line) => line.startsWith("|"));
+    assert.deepEqual(rows, ["| gate | result | detail |", "|---|---|---|", `| gate | FAIL | ${expected} |`], detail);
+  }
+});
+
 test("the honest-false detector matches the page's own convention, and finds the shipped cards", async () => {
   const html = await readFile(new URL("src/pages/garage/horizon.html", ROOT), "utf8");
   const probes = [...html.matchAll(/^\s*"([a-z0-9-]+)": function \(\) \{ return \(false\); \},?$/gm)].map((m) => m[1]);
