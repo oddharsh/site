@@ -321,6 +321,34 @@ worktrees may edit freely, but a worktree is not a release surface.
   `labels:` lists against the same declaration now, with a structural floor on
   `package-ecosystem:` entries so a scanner that stops matching cannot report a
   clean pass over zero labels.
+
+  **A Dependabot PR gets its release notes READ, since 2026-09-15, and the
+  comment under `Dependabot site review` is a model's answer rather than a
+  checklist.** `.github/workflows/dependabot-site-review.yml` runs
+  `bun run deps:review <pr>` (`tools/review-dependency-bump.ts`), which
+  fetches the GitHub releases in `(prev, next]`, the commits between the two
+  tags (path-filtered in a monorepo), the CHANGELOG slice and the advisories
+  against the OLD version, puts them beside this tree's own `git grep` for the
+  package and the package's bullet in `docs/DEPENDENCIES.md`, and hands both to
+  Opus through `claude -p` with the boundary stated: the tree is trusted, the
+  release text is somebody else's. The answer is JSON against a schema, rendered here
+  with markup escaped, under four headings (security, performance, features,
+  behaviour changes that touch us) and a verdict. The model has NO tools, which
+  is the whole injection story.
+
+  Three things to know before trusting one. **It reads the same
+  `Dependabot site review` marker the checklist used**, so an old PR's note is
+  replaced in place. **Without `CLAUDE_CODE_OAUTH_TOKEN` (a repository secret
+  from `claude setup-token`: a subscription seat rather than a metered API key,
+  chosen so a public repo's job can be rate-limited but never invoiced, and it
+  cannot touch Cloudflare) it posts a note saying nothing was read and exits
+  0**, so an unreviewed PR reads as unreviewed rather than clean; a refused
+  model call posts the same note and exits 1. And **a rebase costs nothing**: the comment carries the version
+  pairs it was written for and a `synchronize` with the same pairs exits before
+  the model, which is what made adding that event affordable. `--no-model`
+  prints what the model would have been handed and is the control for the fetch
+  half; oxc's `apps_v1.83.0` tags, whose version lives in the release TITLE, are
+  the spelling that first needed it.
 - PR CI lints (`bun run lint`, oxlint including its type-aware rules), builds
   the site, enforces the performance budget, dry-runs the single
   site Worker plus the auxiliary Garage/LWE configs (`cf-garage/`, `lwe-ask/`),

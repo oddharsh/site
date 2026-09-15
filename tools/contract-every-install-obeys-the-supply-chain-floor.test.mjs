@@ -60,6 +60,21 @@ function commandLines(source) {
 // alias, and it cannot reach `bun index.ts` for the same reason.
 const INSTALL = /\bbun (?:install|i)\b/;
 
+// A GLOBAL install has no lockfile to freeze, so the floor it can obey is an
+// exact version: `bun install -g <name>@x.y.z`, nothing looser. One such line
+// exists (dependabot-site-review.yml installs the Claude Code CLI for its one
+// caller rather than adding a 200 KB launcher plus a native binary to every
+// `bun install` through package.json). A range, a tag or a bare name here
+// would let the registry pick, which is the exact thing the frozen rule
+// refuses, so it fails the same assertion.
+const PINNED_GLOBAL = /\bbun install -g (?:@[\w.-]+\/)?[\w.-]+@\d+\.\d+\.\d+(?:\s|$)/;
+
+/** True when a `bun install` line obeys the floor: frozen against a lockfile,
+ *  or global against an exact version. */
+export function installObeysFloor(line) {
+  return /--frozen-lockfile\b/.test(line) || PINNED_GLOBAL.test(line);
+}
+
 test("every bun install in .github/workflows is --frozen-lockfile", async () => {
   const files = workflows();
 
@@ -75,11 +90,11 @@ test("every bun install in .github/workflows is --frozen-lockfile", async () => 
     for (const [n, line] of commandLines(source)) {
       if (!INSTALL.test(line)) continue;
       found.push(`${rel}:${n}`);
-      if (!/--frozen-lockfile\b/.test(line)) unfrozen.push(`${rel}:${n}: ${line.trim()}`);
+      if (!installObeysFloor(line)) unfrozen.push(`${rel}:${n}: ${line.trim()}`);
     }
   }
 
-  assert.ok(found.length >= 9, `found only ${found.length} bun installs; the scanner is broken`);
+  assert.ok(found.length >= 10, `found only ${found.length} bun installs; the scanner is broken`);
   assert.deepEqual(
     unfrozen,
     [],
@@ -115,4 +130,16 @@ test("every directory with its own bun.lock carries its own bunfig.toml", async 
     // one is a policy change that belongs in both files.
     assert.equal(age, floor, `${where} floors installs at ${age}s where the root floors them at ${floor}s`);
   }
+});
+
+
+test("the global-install exemption admits an exact version and nothing looser", () => {
+  assert.equal(installObeysFloor("          bun install -g @anthropic-ai/claude-code@2.1.270"), true);
+  assert.equal(installObeysFloor("bun install -g left-pad@1.3.0 # pinned"), true);
+  // CONTROLS: each of these lets the registry choose.
+  assert.equal(installObeysFloor("bun install -g @anthropic-ai/claude-code"), false);
+  assert.equal(installObeysFloor("bun install -g @anthropic-ai/claude-code@latest"), false);
+  assert.equal(installObeysFloor("bun install -g @anthropic-ai/claude-code@^2.1.0"), false);
+  assert.equal(installObeysFloor("bun install -g @anthropic-ai/claude-code@2.1"), false);
+  assert.equal(installObeysFloor("bun install @anthropic-ai/claude-code@2.1.270"), false, "a local install still needs the lockfile");
 });

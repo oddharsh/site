@@ -24,12 +24,15 @@ on:
       - "package.json"
       - "**/package.json"
 
-# `synchronize` is PRESENT here and deliberately ABSENT from
-# dependabot-site-review.yml, and the difference is what each job produces. That
-# one rewrites a checklist which says the same thing after a rebase. This one has
-# to run again whenever the manifest MOVES, and for a grouped bump that is a
-# force-push in place rather than a new pull request, leaving a package.json the
-# committed lockfile no longer matches.
+# `synchronize` is PRESENT here, and since 2026-09-15 on
+# dependabot-site-review.yml as well, for the same reason from two directions.
+# This one has to run again whenever the manifest MOVES, and for a grouped bump
+# that is a force-push in place rather than a new pull request, leaving a
+# package.json the committed lockfile no longer matches. That one has to re-read
+# when the VERSION PAIRS move for the same force-push, and skips on a rebase
+# that moved none of them, by reading the pairs it wrote for out of its own
+# comment; until then it rewrote a checklist that said the same thing after a
+# rebase, and had no reason to fire at all.
 #
 # It therefore also fires on this workflow's OWN push. That is intended rather
 # than tolerated: the re-run rebases, installs, finds the lockfile already
