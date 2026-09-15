@@ -231,6 +231,16 @@ bun run canary:browsers   # /garage/horizon's probes in stable vs prerelease eng
 # every Playwright probe reads its Chrome from ONE place. Unset means stable.
 CHROME_CHANNEL=chrome-canary bun run csp:sweep
 
+# PRODUCTION RUNS PRERELEASE PINS, exactly and immutably, since 2026-09-14:
+# `packageManager` is npm's DATED bun canary plus its build sha, and
+# `devDependencies.wrangler` is a pkg.pr.new COMMIT of workers-sdk main. The
+# channel is the pin's own shape, nothing floats, and each nightly bumper
+# advances its pin only after the canary tripwire's gates pass on the
+# candidate. Switching a channel is a hand edit plus a relock; the runbook is
+# MAINTENANCE.md, "Production runs prerelease pins".
+bun run bun:pin            # follows npm's canary dist-tag while the pin is a canary
+bun run wrangler:pin       # resolves main's sha from pkg.pr.new and runs canary:wrangler on it
+
 # regenerate JUST the EXIF metadata (after photos are already uploaded)
 ./tools/photos/extract-photo-metadata.sh "/Users/aadharsh/Downloads/to post (from ssd)"
 

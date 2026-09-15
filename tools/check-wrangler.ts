@@ -15,7 +15,18 @@ async function readJson(relativePath) {
 }
 
 const rootPackage = await readJson("package.json");
-const expected = (process.env.WRANGLER_VERSION || rootPackage.devDependencies?.wrangler || "").replace(/^v/, "");
+const rootPin = process.env.WRANGLER_VERSION || rootPackage.devDependencies?.wrangler || "";
+// TWO PIN SHAPES, both exact. A release is a plain `4.131.1`. A COMMIT of
+// workers-sdk main is a pkg.pr.new tarball URL naming the sha
+// (`https://pkg.pr.new/cloudflare/workers-sdk/wrangler@b149147`), which is
+// what a prerelease pin looks like since 2026-09-14: the sha is the identity,
+// bun.lock records the tarball's sha512, and the version the tarball carries
+// is read from the install rather than declared twice. `@main`, a PR number
+// or anything else that FLOATS is refused, because a floating pin rewrites
+// the lockfile on the next install and `--frozen-lockfile` would fail on it.
+const COMMIT_PIN = /^https:\/\/pkg\.pr\.new\/cloudflare\/workers-sdk\/wrangler@[0-9a-f]{7,40}$/;
+const RELEASE_PIN = /^\d+\.\d+\.\d+$/;
+const pinKind = COMMIT_PIN.test(rootPin) ? "commit" : RELEASE_PIN.test(rootPin.replace(/^v/, "")) ? "release" : "invalid";
 const errors: string[] = [];
 
 let rootManifest = path.join(ROOT, "node_modules/wrangler/package.json");
@@ -31,12 +42,22 @@ try {
 
 const rootDeclared = rootPackage.devDependencies?.wrangler || rootPackage.dependencies?.wrangler || "";
 
-if (!/^\d+\.\d+\.\d+$/.test(expected)) {
-  errors.push(`root package must declare an exact Wrangler version, got ${JSON.stringify(expected)}`);
+// For a release the expected version is the pin; for a commit it is whatever
+// the tarball carries, so `expected` is the installed version and the pin is
+// asserted by its sha in the lockfile instead.
+const expected = pinKind === "release" ? rootPin.replace(/^v/, "") : installed;
+if (pinKind === "invalid") {
+  errors.push(`root package must declare an exact Wrangler version or a pkg.pr.new commit URL, got ${JSON.stringify(rootPin)}`);
 }
-if (rootDeclared !== expected) errors.push(`root: package.json declares ${JSON.stringify(rootDeclared)}, expected ${expected}`);
+if (rootDeclared !== rootPin && !process.env.WRANGLER_VERSION) errors.push(`root: package.json declares ${JSON.stringify(rootDeclared)}, expected ${rootPin}`);
 if (installed !== expected) errors.push(`root: node_modules resolves Wrangler ${JSON.stringify(installed)}, expected ${expected}`);
-console.log(`root: Wrangler ${rootDeclared} (installed ${installed})`);
+if (pinKind === "commit") {
+  // The lockfile has to name the same tarball, or the install and the pin
+  // are two different wranglers that happen to share a version number.
+  const lock = await readFile(path.join(ROOT, "bun.lock"), "utf8");
+  if (!lock.includes(`"wrangler@${rootPin}"`)) errors.push(`root: bun.lock does not resolve wrangler to ${rootPin}; run \`bun install\` so the lockfile records that tarball`);
+}
+console.log(`root: Wrangler ${rootDeclared} (installed ${installed}, ${pinKind} pin)`);
 
 const manifests = execFileSync("git", ["ls-files", "-z", "--", "package.json", ":(glob)**/package.json"], {
   cwd: ROOT, encoding: "utf8",

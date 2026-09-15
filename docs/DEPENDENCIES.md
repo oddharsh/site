@@ -297,7 +297,13 @@ does not make a failed write safe to ignore.
   writer under both Node and Bun. It is a development dependency with no
   transitive dependencies. The census retains Git and path dependencies without
   inventing semantic versions; each needs an explicit versionless policy.
-- Wrangler 4.131.1 is the exact root pin shared by all Worker projects, and
+- Wrangler is pinned to a COMMIT of `cloudflare/workers-sdk` main since
+  2026-09-14, as a pkg.pr.new tarball URL naming the sha (the wrangler line
+  in `package.json`), so no release number is stated here on purpose: the
+  tarball's own version is whatever main carried that day and the nightly
+  `wrangler-pin.yml` advances it. `bun run check-wrangler` holds the URL, the
+  lockfile's sha512 and the installed version together. It is still the ONE
+  root pin shared by all Worker projects, and
   since 2026-09-02 it is also cal's test harness: `cal/test` runs on bun:test
   against `createTestHarness`, so the tree carries exactly one Wrangler, one
   Miniflare and one Workerd by construction. Until that day `cal` declared

@@ -118,8 +118,17 @@ test("every workflow bootstraps the bun that package.json pins", async () => {
   // tag is immutable, so the VERSION is the guarantee the SHA-256 provided while
   // the canary tag was rolling daily. config/bun-canary.json is gone with it.
   const pkg = JSON.parse(await readFile(new URL("package.json", ROOT), "utf8"));
-  assert.match(pkg.packageManager, /^bun@\d+\.\d+\.\d+$/,
-    `packageManager is ${pkg.packageManager}; it must name a RELEASED bun, since that is the only string Cloudflare's build image resolves`);
+  // A RELEASE or a DATED CANARY WITH ITS BUILD SHA, and nothing that floats.
+  // Until 2026-09-14 this required a release, on the argument that a release
+  // tag is the only string Cloudflare's build image resolves. The canary form
+  // is what npm publishes daily under an immutable version, and the installer
+  // (setup-bun) fetches it from the registry with a sha512 either way; whether
+  // the build image accepts it is measured by the branch build of every commit
+  // that carries one, since Workers Builds builds every push. lib/bun-pin.ts
+  // owns the shape, and the sha is what lets a running canary prove it is the
+  // pin (its --version reports the NEXT release).
+  assert.match(pkg.packageManager, /^bun@\d+\.\d+\.\d+(-canary\.\d{8}\.\d+\+[0-9a-f]{7,40})?$/,
+    `packageManager is ${pkg.packageManager}; it must name an exact bun, a release or a dated canary with its build sha`);
 
   const dir = new URL(".github/workflows/", ROOT);
   const files = (await readdir(dir)).filter((n) => n.endsWith(".yml"));

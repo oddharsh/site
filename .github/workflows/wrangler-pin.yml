@@ -1,0 +1,156 @@
+name: Wrangler pin
+
+# The wrangler pin is a COMMIT of cloudflare/workers-sdk main, as a pkg.pr.new
+# tarball URL naming the sha, since 2026-09-14. Dependabot cannot bump a URL,
+# so nothing else moves it; this job asks nightly whether main has moved, runs
+# the canary leg's gates against the new commit (dry-run bundle, route oracle,
+# cal's suite, all on the candidate's own createTestHarness), and opens a PR
+# carrying the evidence when they pass. The bump-bun-pin.yml shape, for the
+# same reasons: one long-lived branch force-pushed, never a push to a
+# protected ref, a human merge because `main` takes no bypass actors.
+#
+# It holds no Cloudflare credential. Everything it runs is local to the
+# runner: pkg.pr.new for the tarball, and wrangler's harness in-process.
+
+on:
+  schedule:
+    - cron: "50 9 * * *" # after bun-pin at 09:40 and before canary at 10:05
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "workers-sdk ref to pin: main, or a sha"
+        required: false
+        default: "main"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wrangler-pin
+  cancel-in-progress: false
+
+jobs:
+  pin:
+    name: Propose the newest commit of wrangler main, if it earns it
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: write # only the chore/wrangler-pin branch; main and production carry rulesets with zero bypass actors
+      pull-requests: write
+
+    steps:
+      - name: Check out main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up bun
+        uses: ./.github/actions/setup-bun
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run the gates, and write the pin if they all pass
+        id: pin
+        env:
+          REF: ${{ inputs.ref || 'main' }}
+        run: |
+          set -euo pipefail
+
+          before=$(bun -e 'process.stdout.write(require("./package.json").devDependencies.wrangler)')
+
+          # gotcha 40: read the status without a pipe in front of it.
+          set +e
+          bun run wrangler:pin -- --write --ref "$REF" > pin.log 2>&1
+          status=$?
+          set -e
+          cat pin.log
+
+          after=$(bun -e 'process.stdout.write(require("./package.json").devDependencies.wrangler)')
+          {
+            echo "before=$before"
+            echo "after=$after"
+            echo "status=$status"
+          } >> "$GITHUB_OUTPUT"
+
+          # Exit 1 is "main moved and failed a gate", which is information about
+          # upstream rather than a fault here, so it is summarised and left green.
+          if [ "$status" -ne 0 ] && [ "$status" -ne 1 ]; then
+            echo "::error title=wrangler:pin could not run::exit $status"
+            exit "$status"
+          fi
+
+      - name: Open or update the pin PR
+        if: steps.pin.outputs.before != steps.pin.outputs.after
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: chore/wrangler-pin
+          BEFORE: ${{ steps.pin.outputs.before }}
+          AFTER: ${{ steps.pin.outputs.after }}
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          EVIDENCE=$(sed -n '/^  ok  \|^ FAIL \|^ DIFF /p' pin.log)
+          from="${BEFORE##*@}"
+          to="${AFTER##*@}"
+
+          git checkout -B "$BRANCH"
+          git add package.json bun.lock
+          git commit -m "chore(wrangler): move the pin from $from to $to
+
+          Every gate green on the candidate's own createTestHarness: the dry-run
+          bundle, the route oracle, and cal's suite.
+
+          Opened by .github/workflows/wrangler-pin.yml."
+          git push --force origin "$BRANCH"
+
+          BODY=$(cat <<BODY
+          The wrangler pin moves **\`$from\` → \`$to\`** (cloudflare/workers-sdk main, via pkg.pr.new).
+
+          \`\`\`
+          $EVIDENCE
+          \`\`\`
+
+          A DIFF line means the bundle moved bytes while every gate passed; \`perf-diff.yml\` on this PR says by how much. Wrangler is the publisher on the path that ships production, so this is a release-path change wearing a sha.
+
+          Reproduce with \`bun run wrangler:pin -- --ref $to\`. Dependabot cannot bump a URL, which is why this job exists.
+
+          Merging is a human call, because \`main\` takes no bypass actors.
+          BODY
+          )
+
+          if [ -n "$(gh pr list --head "$BRANCH" --state open --json number --jq '.[].number')" ]; then
+            gh pr edit "$BRANCH" --title "chore(wrangler): move the pin from $from to $to" --body "$BODY"
+            echo "PR already open for $BRANCH; the force-push updated it."
+          else
+            gh pr create --base main --head "$BRANCH" \
+              --assignee oddharsh \
+              --label "type: chore" --label "area: infra" \
+              --title "chore(wrangler): move the pin from $from to $to" \
+              --body "$BODY"
+          fi
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Wrangler pin"
+            echo
+            if [ "${{ steps.pin.outputs.before }}" != "${{ steps.pin.outputs.after }}" ]; then
+              echo "Proposed \`${{ steps.pin.outputs.before }}\` → \`${{ steps.pin.outputs.after }}\` on \`chore/wrangler-pin\`."
+            elif [ "${{ steps.pin.outputs.status }}" = "1" ]; then
+              echo "main moved and did not clear a gate. Not a fault here; the log says which."
+            else
+              echo "Nothing to do."
+            fi
+            echo
+            echo '```'
+            cat pin.log 2>/dev/null || echo "(wrangler:pin did not run)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

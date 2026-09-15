@@ -138,6 +138,13 @@ updates:
       # the tree on 2026-09-02 (cal tests on bun over wrangler's own harness);
       # the group stays, because the next @cloudflare/* package carrying its
       # own wrangler re-creates the same split.
+      #
+      # WRANGLER IS NOT A REGISTRY VERSION ANY MORE, since 2026-09-14: it is a
+      # pkg.pr.new tarball URL naming a commit of workers-sdk main, which
+      # Dependabot cannot bump (it tracks registry versions and nothing else), so
+      # the pattern below matches nothing today and wrangler-pin.yml owns that
+      # advance. The pattern STAYS, because the day the pin goes back to a
+      # release number this group is what should catch it again.
       cloudflare-toolchain:
         patterns:
           - "wrangler"

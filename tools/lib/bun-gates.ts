@@ -36,17 +36,29 @@ const run = (cmd: string, args: string[], opts: Record<string, unknown> = {}) =>
 const tail = (out: { stdout?: string | null; stderr?: string | null }, lines = 2) =>
   `${out.stderr || ""}\n${out.stdout || ""}`.trim().split("\n").slice(-lines).join(" ");
 
-/** Fetch a bun release zip into `work` and return the path of the binary inside it. Throws. */
-export async function downloadBun(url: string, work: string): Promise<string> {
+/**
+ * Fetch a bun binary into `work` and return its path. Two shapes: a GitHub
+ * release ZIP (the rolling `canary` tag, and releases) and an npm `.tgz`
+ * (`@oven/bun-<platform>`, which is where DATED canaries live). Pass the
+ * registry's `integrity` for the tgz and the bytes are checked before they
+ * are unpacked, which the zip path has never been able to offer. Throws.
+ */
+export async function downloadBun(url: string, work: string, integrity?: string): Promise<string> {
   rmSync(work, { recursive: true, force: true });
   mkdirSync(work, { recursive: true });
-  const zipPath = join(work, "bun.zip");
+  const isTgz = url.endsWith(".tgz");
+  const archive = join(work, isTgz ? "bun.tgz" : "bun.zip");
   const res = await fetch(url, { redirect: "follow" });
   if (!res.ok) throw new Error(`could not download ${url}: HTTP ${res.status}`);
-  writeFileSync(zipPath, Buffer.from(await res.arrayBuffer()));
+  const bytes = Buffer.from(await res.arrayBuffer());
+  if (integrity) {
+    const got = `sha512-${createHash("sha512").update(bytes).digest("base64")}`;
+    if (got !== integrity) throw new Error(`${url} does not match the registry's integrity: got ${got}, registry says ${integrity}`);
+  }
+  writeFileSync(archive, bytes);
 
-  const unzip = run("unzip", ["-qo", zipPath, "-d", work]);
-  if (unzip.status !== 0) throw new Error(`unzip failed: ${(unzip.stderr || "").trim()}`);
+  const unpack = isTgz ? run("tar", ["-xzf", archive, "-C", work]) : run("unzip", ["-qo", archive, "-d", work]);
+  if (unpack.status !== 0) throw new Error(`${isTgz ? "tar" : "unzip"} failed: ${(unpack.stderr || "").trim()}`);
 
   const findBun = (dir: string): string | null => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
