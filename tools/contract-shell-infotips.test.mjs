@@ -154,9 +154,12 @@ test("every workflow bootstraps the bun that package.json pins", async () => {
   }
   assert.ok(checked >= 4, `expected several bun bootstraps, matched ${checked}`);
 
-  // The action is the single place the version is read, so it must read it.
+  // The shared installer is the single place the version is read, so it must
+  // read it, and the action must go through it rather than carrying a copy.
   const action = await readFile(new URL(".github/actions/setup-bun/action.yml", ROOT), "utf8");
-  assert.match(action, /packageManager/, "setup-bun must read the version from packageManager");
+  const installer = await readFile(new URL(".github/install-bun.sh", ROOT), "utf8");
+  assert.match(installer, /packageManager/, "install-bun.sh must read the version from packageManager");
+  assert.match(action, /bash \.github\/install-bun\.sh /, "setup-bun must install through the shared installer");
   assert.match(action, /zstd/, "setup-bun must probe the dictionary capability before a build spends 40s discovering it");
 });
 

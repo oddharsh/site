@@ -235,7 +235,10 @@ CHROME_CHANNEL=chrome-canary bun run csp:sweep
 # 2026-09-14: `devDependencies.wrangler` is a pkg.pr.new COMMIT of workers-sdk
 # main. The bun half is PARKED (2026-09-15): Cloudflare's build image cannot
 # resolve a canary `packageManager`, measured with two reversal probes, so the
-# pin is a release while everything that accepts a canary pin stays in place. The
+# pin is a release while everything that accepts a canary pin stays in place.
+# The route out: SKIP_DEPENDENCY_INSTALL in the build settings, with
+# .github/deploy-wrangler.sh installing the pinned bun through the same
+# .github/install-bun.sh the setup-bun action uses (MAINTENANCE.md has the order). The
 # channel is the pin's own shape, nothing floats, and each nightly bumper
 # advances its pin only after the canary tripwire's gates pass on the
 # candidate. Switching a channel is a hand edit plus a relock; the runbook is

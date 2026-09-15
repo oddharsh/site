@@ -11,22 +11,13 @@ description: >-
 # download a binary from a URL we could curl ourselves is the wrong trade when
 # the whole job is a few lines of shell.
 #
-# IT INSTALLS FROM NPM, NOT FROM A GITHUB RELEASE, since 2026-09-14. The pin may
-# be a release (`1.4.2`) or a DATED CANARY (`1.4.2-canary.20260913.1`), and
-# only the registry carries both: bun publishes every canary build there under
-# an immutable dated version with `@oven/bun-<platform>` tarballs beside it,
-# while the GitHub `canary` tag rolls daily and has no per-day asset. The
-# registry document also carries a sha512 for the tarball, so this VERIFIES
-# THE BYTES, which the release zip never let it do: the version string used to
-# be the whole guarantee, and now it is the version plus the digest npm
-# recorded at publish time.
-#
-# A CANARY BINARY REPORTS THE NEXT VERSION. `bun --version` on the tarball
-# tagged 1.4.2-canary.20260913.1 prints `1.4.3`, and `--revision` prints
-# `1.4.3-canary.1+09bb54630`. So the identity check reads the tarball's own
-# package.json (which names the pinned version exactly) rather than the
-# binary, and the revision is printed for the log because it is what an
-# upstream bug report needs.
+# THE INSTALLER IS SHARED with .github/deploy-wrangler.sh, the Workers Builds
+# wrapper, since 2026-09-15: .github/install-bun.sh reads packageManager,
+# fetches the `@oven/bun-<platform>` tarball from npm, verifies the registry's
+# sha512, the tarball's own version and the binary's revision, and installs
+# it. Two copies of that logic is how the CI side grew canary support the
+# deploy side never saw. The action is what puts the result on PATH and runs
+# the one capability probe the build depends on.
 #
 # It reads packageManager instead of taking an input so there is ONE declaration
 # of which bun this repo runs. A contract test asserts every workflow reaches
@@ -39,58 +30,9 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        want=$(node -e "process.stdout.write(require('./package.json').packageManager)")
-        case "$want" in
-          bun@*) pin="${want#bun@}" ;;
-          *) echo "::error title=packageManager is not bun::package.json says '$want'"; exit 1 ;;
-        esac
-        # A canary pin carries its build sha after `+` (1.4.2-canary.20260913.1+09bb546);
-        # npm names the version without it, and the binary proves it by revision.
-        version="${pin%%+*}"
-        sha=""
-        case "$pin" in *+*) sha="${pin#*+}" ;; esac
-
-        # The registry's record of this exact version: where the bytes are and
-        # what they hash to. A version the registry does not carry fails HERE,
-        # with the version named, rather than as a 404 from curl.
-        doc=$(curl -fsSL "https://registry.npmjs.org/@oven/bun-linux-x64/${version}") \
-          || { echo "::error title=no such bun on npm::@oven/bun-linux-x64@${version} is not on the registry"; exit 1; }
-        tarball=$(node -e "process.stdout.write(JSON.parse(process.argv[1]).dist.tarball)" "$doc")
-        integrity=$(node -e "process.stdout.write(JSON.parse(process.argv[1]).dist.integrity)" "$doc")
-
-        curl -fsSL -o /tmp/bun.tgz "$tarball"
-        got="sha512-$(openssl dgst -sha512 -binary /tmp/bun.tgz | base64 -w0)"
-        if [ "$got" != "$integrity" ]; then
-          echo "::error title=bun tarball integrity mismatch::registry says $integrity, downloaded $got"
-          exit 1
-        fi
-
-        rm -rf /tmp/bun-install && mkdir -p /tmp/bun-install
-        tar -xzf /tmp/bun.tgz -C /tmp/bun-install
-        # The tarball's own manifest names a canary WITH its build sha
-        # (`1.4.2-canary.20260913.1+09bb546`, measured on the first CI run of
-        # this installer), so it is compared against the whole pin. A release
-        # tarball names the bare version, which is the whole pin too.
-        packaged=$(node -e "process.stdout.write(require('/tmp/bun-install/package/package.json').version)")
-        if [ "$packaged" != "$pin" ]; then
-          echo "::error title=bun tarball version mismatch::asked for $pin, the tarball's package.json says $packaged"
-          exit 1
-        fi
         mkdir -p "$HOME/.bun/bin"
-        install -m 0755 /tmp/bun-install/package/bin/bun "$HOME/.bun/bin/bun"
+        bash .github/install-bun.sh "$HOME/.bun/bin"
         echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
-
-        revision=$("$HOME/.bun/bin/bun" --revision)
-        if [ -n "$sha" ]; then
-          case "$revision" in
-            *"+$sha"*) ;;
-            *) echo "::error title=bun revision mismatch::pin names build $sha, the binary reports $revision"; exit 1 ;;
-          esac
-        elif [ "$("$HOME/.bun/bin/bun" --version)" != "$version" ]; then
-          echo "::error title=bun version mismatch::asked for $version, the binary reports $("$HOME/.bun/bin/bun" --version)"
-          exit 1
-        fi
-        echo "bun $("$HOME/.bun/bin/bun" --version) ($revision), npm @oven/bun-linux-x64@$version, sha512 verified"
 
     - name: Probe the capability the build depends on
       shell: bash

@@ -882,22 +882,31 @@ after the canary tripwire's gates pass on the candidate. Nothing floats.
 | bun (the compiler) | `packageManager` in `package.json` | a RELEASE again (`bun@1.4.2`) as of 2026-09-15, see below; a dated canary plus its build sha (`bun@1.4.2-canary.20260913.1+09bb546`) is the shape everything else here accepts | `bun-pin.yml`, which follows whichever channel the pin's shape says |
 | wrangler (the publisher) | `devDependencies.wrangler` | `https://pkg.pr.new/cloudflare/workers-sdk/wrangler@b149147`: a commit of main | `wrangler-pin.yml`, which resolves main's sha from pkg.pr.new's own `x-commit-key` header |
 
-**THE BUN HALF IS PARKED, measured 2026-09-15.** Cloudflare's build image
-cannot resolve a canary `packageManager`. Two reversal probes off the merged
-commit settled it in one build each: stable `bun@1.4.2` with the pkg.pr.new
-wrangler built and uploaded a version (`629b9d98`), the canary bun with a
-release wrangler failed, and the GitHub runner had already built the canary
-tree green through `setup-bun` (npm tarball, sha512 verified). So the pins are
-sound and the image's own bun bootstrap is the wall; its docs name only
-`BUN_VERSION` and a 1.2.15 default. `packageManager` went back to a release in
-the same hour, because a `main` that cannot build ships nothing. Everything
-that ACCEPTS a canary pin stays (the installer, the bumper's channel logic, the
-tests), so re-enabling it is one edit once the image is out of the way. The two
-routes worth measuring next: a second declaration for the compiler that the
-image never reads (keep `packageManager` as the image's bootstrap, install the
-canary in `deploy-wrangler.sh` before wrangler runs), or `SKIP_DEPENDENCY_INSTALL`
-in the build settings so the deploy command owns the whole toolchain, if the
-image still parses `packageManager` under that flag.
+**THE BUN HALF IS PARKED, measured 2026-09-15, and the route out is the
+deploy wrapper owning the toolchain.** Cloudflare's build image cannot resolve
+a canary `packageManager`. Two reversal probes off the merged commit settled
+it in one build each: stable `bun@1.4.2` with the pkg.pr.new wrangler built
+and uploaded a version (`629b9d98`), the canary bun with a release wrangler
+failed, and the GitHub runner had already built the canary tree green through
+`setup-bun`. So the pins are sound and the image's own bootstrap is the wall;
+its docs name only `BUN_VERSION` and a 1.2.15 default. `packageManager` went
+back to a release in the same hour, because a `main` that cannot build ships
+nothing.
+
+The route (in progress): `SKIP_DEPENDENCY_INSTALL=true` in the dashboard's
+build variables turns the image's bootstrap and install off, and
+`.github/deploy-wrangler.sh` installs the pinned bun itself through the SAME
+`.github/install-bun.sh` the `setup-bun` action uses (npm tarball, sha512,
+manifest version, binary revision), runs the frozen install under it, and
+then runs wrangler. The wrapper does that ONLY when the variable is set, so
+it is inert before the variable exists and owns the toolchain after; one
+variable decides both halves. Order: merge the wrapper, set the variable (recorded in
+`infra.json` under `release.build_variables`, as intent, since the Builds
+API exposes no field check-infra can read it from), then push a branch with
+a canary `packageManager`. If THAT builds, the image no longer parses the pin
+under the flag and the canary can go back on `main`; if it fails, the image
+parses `packageManager` regardless and the fallback is a second declaration
+for the compiler that the image never reads.
 
 **The channel is the pin's shape.** A release-looking bun pin follows releases
 and a canary-looking one follows canaries; `bump-bun-pin.ts` never crosses

@@ -148,12 +148,25 @@ test("the channel is the pin's own shape, and the npm tarball names the platform
     npmTarballUrl("1.4.2-canary.20260913.1", "bun-linux-x64"),
     "https://registry.npmjs.org/@oven/bun-linux-x64/-/bun-linux-x64-1.4.2-canary.20260913.1.tgz",
   );
-  // The CI installer reads the same platform package, so the two cannot name
-  // different tarballs for one pin.
-  return readFile(new URL(".github/actions/setup-bun/action.yml", ROOT), "utf8").then((action) => {
-    assert.match(action, /registry\.npmjs\.org\/@oven\/bun-linux-x64\//, "setup-bun must install from the npm platform package");
-    assert.match(action, /integrity/, "setup-bun must verify the registry's sha512");
-    assert.match(action, /package\/package\.json/, "setup-bun must read the tarball's own version, since a canary binary reports the next release");
+  // ONE installer, shared by the CI action and the Workers Builds wrapper, so
+  // the two cannot name different tarballs or verify different things for one
+  // pin. Two copies is how the CI side grew canary support the deploy side
+  // never saw (2026-09-15).
+  return Promise.all([
+    readFile(new URL(".github/install-bun.sh", ROOT), "utf8"),
+    readFile(new URL(".github/actions/setup-bun/action.yml", ROOT), "utf8"),
+    readFile(new URL(".github/deploy-wrangler.sh", ROOT), "utf8"),
+  ]).then(([installer, action, wrapper]) => {
+    assert.match(installer, /packageManager/, "the installer must read the pin from packageManager");
+    assert.match(installer, /registry\.npmjs\.org\/@oven\/\$\{platform\}\//, "the installer must fetch from the npm platform package");
+    assert.match(installer, /integrity/, "the installer must verify the registry's sha512");
+    assert.match(installer, /package\/package\.json/, "the installer must read the tarball's own version, since a canary binary reports the next release");
+    assert.match(installer, /--revision/, "the installer must check the binary's revision against the pin's sha");
+    for (const [name, body] of [["setup-bun", action], ["deploy-wrangler.sh", wrapper]]) {
+      assert.match(body, /bash \.github\/install-bun\.sh /, `${name} must install through the shared installer`);
+      assert.doesNotMatch(body, /registry\.npmjs\.org|releases\/download/, `${name} must not carry its own download path`);
+    }
+    assert.match(wrapper, /bun install --frozen-lockfile/, "the wrapper must lay out node_modules itself, since SKIP_DEPENDENCY_INSTALL turns the image's install off");
   });
 });
 
