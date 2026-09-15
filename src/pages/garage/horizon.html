@@ -993,6 +993,10 @@ window.__horizonCaps = (function () {
         } catch (e) { return false; }
       },
       "xslt": function () { return ("XSLTProcessor" in window); },
+      // ── added 2026-09-15, the three partial-engine rows of a cssdb cross-check ──
+      "alpha-function": function () { return CSS.supports("color: alpha(from red / 50%)"); },
+      "color-mix-variadic": function () { return CSS.supports("color: color-mix(in oklch, red, blue, green)"); },
+      "font-width": function () { return CSS.supports("font-width: condensed"); },
       "invoker-commands": function () { return ("commandForElement" in HTMLButtonElement.prototype); },
       "css-scope": function () { return ("CSSScopeRule" in window); },
       "custom-highlight": function () { return (("highlights" in CSS) && (typeof Highlight !== "undefined")); },
@@ -5172,6 +5176,95 @@ navigation.addEventListener("navigate", (e) =&gt; {
       <p class="unsupported">No <code>XSLTProcessor</code> in this browser, so the removal has already reached you.</p>
     </section>
 
+    <!-- ═════════════════════════════════════════════════════════════════
+         Added 2026-09-15. These three came out of cross-checking cssdb (the
+         feature list behind postcss-preset-env) against this page: of its 73
+         features, 55 ship in all three engines, 13 ship in none, and the five
+         in between are the ones a probe can watch arrive. Two of those five
+         are old properties finishing a rollout (break-*, logical resize), so
+         they earn no card. These are the other three.
+         ═════════════════════════════════════════════════════════════════ -->
+
+    <!-- ───────────────────── alpha() ───────────────────── -->
+    <section class="demo" data-cap="alpha-function">
+      <h2>
+        <span>CSS <span class="mono">alpha()</span></span>
+        <span class="stat cross">Chrome 151 &middot; Safari 27 &middot; FF 155</span>
+      </h2>
+      <p class="note">
+        Set a colour&apos;s opacity without restating the colour:
+        <code>alpha(from var(--blue-title) / 40%)</code> takes any colour value, a token
+        included, and returns it at that alpha; the <code>from</code> is the same
+        keyword relative colour syntax uses, and inside the slash the old alpha is
+        in scope as <code>alpha</code>, so <code>calc(alpha * 0.5)</code> halves
+        whatever it was. Until now the only way to do that
+        to a variable was relative colour syntax,
+        <code>oklch(from var(--blue-title) l c h / 40%)</code>, which works and reads
+        like a ritual. Per cssdb 8.11 it landed in all three engines within a
+        month of each other (Chrome 151, Safari 27, Firefox 155), which is the
+        cleanest cross-engine arrival on this page.
+      </p>
+      <p class="replaces">
+        On the site: <code>luna.css</code> carries 15 colours with an alpha
+        channel, every one spelled out as a full <code>oklch()</code> literal
+        beside the token it is really derived from (the window drop shadow is
+        <code>oklch(46% 0.16 var(--hue-luna) / 0.35)</code>, a Luna blue at 35%).
+        Each of those becomes <code>alpha(from &lt;token&gt; / 35%)</code>, so a hue
+        knob turn reaches the shadows too. Nothing to demo, because the whole
+        feature is the sentence above.
+      </p>
+      <p class="unsupported">Your browser doesn&apos;t parse <code>alpha()</code> yet; the relative-colour spelling above is the fallback and does the same thing.</p>
+    </section>
+
+    <!-- ───────────────────── color-mix() with 3+ colours ───────────────────── -->
+    <section class="demo" data-cap="color-mix-variadic">
+      <h2>
+        <span><span class="mono">color-mix()</span> with any number of colours</span>
+        <span class="stat trial">FF 150 &middot; Chrome no &middot; Safari no</span>
+      </h2>
+      <p class="note">
+        <code>color-mix()</code> shipped everywhere taking exactly two colours. CSS
+        Color 5 now lets it take one, or three, or more:
+        <code>color-mix(in oklch, red 20%, blue, green)</code> weights them and
+        blends the set, and the one-colour form is a colour-space conversion in
+        disguise (<code>color-mix(in oklch, var(--x))</code> hands back
+        <code>--x</code> as OKLCH). Firefox 150 is the only engine with it, so the
+        chip reads yes on exactly one browser today.
+      </p>
+      <p class="replaces">
+        On the site: nothing needs it, which is the honest answer for most of the
+        colour additions here. The Bliss-wallpaper gradient and the title-bar
+        highlight are hand-picked stops, and a three-colour mix could derive a
+        midpoint from both ends plus the hover tint. Filed with <code>random()</code>
+        as decoration that waits for a reason.
+      </p>
+      <p class="unsupported">Your browser&apos;s <code>color-mix()</code> takes two colours and no more; the three-colour form parses as invalid and the declaration is dropped.</p>
+    </section>
+
+    <!-- ───────────────────── font-width ───────────────────── -->
+    <section class="demo" data-cap="font-width">
+      <h2>
+        <span><span class="mono">font-width</span> <span class="mono">/ the property font-stretch became</span></span>
+        <span class="stat trial">Safari 18.4 &middot; Chrome no &middot; FF no</span>
+      </h2>
+      <p class="note">
+        CSS Fonts 4 renamed <code>font-stretch</code> to <code>font-width</code>,
+        because it never stretched anything: it selects a face from a family&apos;s
+        width axis (<code>condensed</code>, <code>expanded</code>, or a percentage on
+        a variable font). Safari 18.4 ships the new name with the old one kept as
+        an alias. Chrome and Firefox still answer only to <code>font-stretch</code>,
+        so this is the rare card where the OLD spelling is the safe one.
+      </p>
+      <p class="replaces">
+        On the site: nothing, and the card is here to say so. Tahoma, Verdana and
+        Trebuchet MS carry no width axis, and the site ships zero font bytes, so
+        there is no face for either property to select. It stays on the page so
+        the rename shows up in the canary diff the day Chrome or Firefox follow
+        Safari, rather than in a stylesheet that quietly stopped matching.
+      </p>
+      <p class="unsupported">Your browser doesn&apos;t know <code>font-width</code>; write <code>font-stretch</code> and both spellings resolve to the same face wherever a family has one.</p>
+    </section>
+
     <script>
       /* Demos for the 2026-08-10 sweep batch. Same discipline as the batch above:
          a browser missing the feature reads WHY, and nothing throws. */
@@ -5381,6 +5474,9 @@ navigation.addEventListener("navigate", (e) =&gt; {
     "animation-trigger": "animation-trigger",
     "scroll-promise": "scroll promise",
     "xslt": "XSLTProcessor",
+    "alpha-function": "alpha()",
+    "color-mix-variadic": "color-mix(3+)",
+    "font-width": "font-width",
     "http-query": "QUERY",
   };
   var state = {};

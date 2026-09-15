@@ -3090,6 +3090,35 @@ how to recover the plans and their audit from git.
    keeping the unhashed paths as short-cached fallbacks for Cal's absolute refs
    and stale HTML.
 
+   **`@custom-media` resolves at build, for every stylesheet, since 2026-09-15.**
+   No browser implements it (cssdb 8.11: zero engines), so the aliases in
+   `src/styles/custom-media.css` (`--p3`, `--reduced-motion`, `--motion-ok`,
+   `--coarse`, `--forced-colors`, `--narrow`) exist only because
+   `tools/lib/css-parse.ts` appends that file to whatever it parses and runs
+   Lightning's `CustomMediaQueries` transform. That is the ONE parser every
+   served stylesheet goes through, so it covers `luna.css`, the four
+   first-interaction sheets, every inline `<style>`, and the Worker's `/*min*/`
+   literals alike. Three properties make it free: an unused definition ships
+   nothing (the build was byte-identical across all 2391 staged files with the
+   file appended everywhere and used nowhere), an undefined name FAILS the build
+   by name, and `luna.css` with three queries rewritten to aliases produced the
+   same `/a/luna.<hash8>.css`. It came out of cross-checking cssdb's feature
+   list against this tree: 55 of preset-env's 73 features already ship in
+   every engine, 13 ship in none, and this is the one of those 13 the existing
+   engine does without a second CSS transformer.
+
+   **The cost is `bun run dev`, and it is why no query is rewritten yet.** Dev
+   serves the bytes in git, so `@media (--p3)` reaches the browser unresolved
+   and the rule behind it never applies. That is the same standing as `/search`
+   and the generated `/lens` shell (build-only surfaces), except a stylesheet is
+   the first one that would be visible on screen. Use the aliases where a rule
+   is cosmetic under dev's conditions anyway (a P3 upgrade, a reduced-motion
+   opt-out), and keep a layout breakpoint literal until dev resolves them.
+   `contract-custom-media-resolves-at-build` pins all three properties plus the
+   one diagnostic the append changes: a block left open at end-of-input used to
+   parse clean (implicit close) and now swallows the definitions, so `parseCss`
+   names the missing `}` rather than reporting five unknown at-rules.
+
    **Step 5c renames every CSS custom property in the staged tree**, so
    `--surface-window` ships as `--h`. The palette is authored for people and
    about 100 of those names are DISTINCT strings, which is the one thing brotli
