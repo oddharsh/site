@@ -12,9 +12,11 @@ name: Canary tripwire
 #             worktree: the dry-run bundle (diffed against the pinned wrangler's),
 #             the route oracle on the candidate's own createTestHarness, cal's
 #             suite. tools/canary-wrangler.ts.
-#   browsers  /garage/horizon's 90-odd feature probes in stable chromium,
-#             firefox and webkit and in chromium-tip-of-tree and firefox-beta,
-#             diffed pairwise, plus two live probes the page cannot carry (a
+#   browsers  /garage/horizon's 90-odd feature probes in bundled chromium,
+#             firefox and webkit, plus Chrome Beta against chromium and Edge
+#             Dev against Edge (the two prerelease channels the pinned
+#             playwright can INSTALL on Linux; tip-of-tree and firefox-beta
+#             left its installer), diffed pairwise, plus two live probes the page cannot carry (a
 #             JXL decode, and the Available-Dictionary exchange with
 #             production). A flip is a card that moved; a flip to false is
 #             a browser bug. tools/canary-browsers.ts.
@@ -201,11 +203,11 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Install the five engines
+      - name: Install the six engines
         # The pinned playwright-core's own installer, by entry file, so the
         # browser builds are the ones that version expects and no package
         # manager gets to fetch a different playwright (gotcha 29).
-        run: node node_modules/playwright-core/cli.js install --with-deps chromium chromium-tip-of-tree firefox firefox-beta webkit
+        run: node node_modules/playwright-core/cli.js install --with-deps chromium chrome-beta msedge msedge-dev firefox webkit
 
       - name: Diff horizon's probes across stable and prerelease
         id: leg

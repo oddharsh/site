@@ -25,11 +25,22 @@
 //
 // PAIRS. `a:b` diffs b against a; a lone name is a snapshot with no control.
 // Names are Playwright's: the bare engines (chromium, firefox, webkit) launch
-// the bundled build, anything else is a `channel`. The default is the trio
-// Linux CI can install; on a Mac with Canary, `--pairs chrome:chrome-canary`
-// is the one-minute version and needs nothing downloaded.
+// the bundled build, anything else is a `channel`. The default is what Linux
+// CI can INSTALL, which is narrower than what Playwright can launch, and it
+// moved under this leg once already: the first draft paired chromium with
+// `chromium-tip-of-tree` and firefox with `firefox-beta`, both of which
+// playwright-core 1.63's installer refuses ("Invalid installation targets"),
+// so the leg's first scheduled run on 2026-09-15 died at the install step
+// and every "first-run finding" before that came from a Mac. The installable
+// prerelease channels are Google's and Microsoft's: `chrome-beta` (one major
+// ahead of stable) and `msedge-dev` (Chromium's tip, roughly weekly), each
+// paired with its own stable. Playwright's bundled firefox and webkit are
+// themselves built from near-trunk, so they stand alone as snapshots. On a
+// Mac with Canary, `--pairs chrome:chrome-canary` is the one-minute version
+// and needs nothing downloaded. A contract test asks the pinned installer
+// about every default name, so the next rename fails there by name.
 //
-//   node node_modules/playwright-core/cli.js install chromium chromium-tip-of-tree firefox firefox-beta webkit
+//   node node_modules/playwright-core/cli.js install --with-deps chromium chrome-beta msedge msedge-dev firefox webkit
 //
 // THE CONTROL is the stable half of each pair, and it is two assertions: the
 // engine returned every probe the page declares, and at least one probe is
@@ -69,7 +80,7 @@ const flag = (name: string): string | null => {
   return i === -1 ? null : argv[i + 1];
 };
 
-export const DEFAULT_PAIRS = "chromium:chromium-tip-of-tree,firefox:firefox-beta,webkit";
+export const DEFAULT_PAIRS = "chromium:chrome-beta,msedge:msedge-dev,firefox,webkit";
 const pairs = (flag("--pairs") ?? DEFAULT_PAIRS).split(",").map((p) => p.trim()).filter(Boolean).map((p) => p.split(":"));
 const pagePath = realpathSync(flag("--page") ?? join(ROOT, "src", "pages", "garage", "horizon.html"));
 const jsonPath = flag("--json");
