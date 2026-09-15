@@ -53,7 +53,7 @@ function chromeCss(c) {
   // version this replaced was stale on all three and encoding.html was the only
   // page still wearing them, because its spec is the one pinned byte-exact.
   return `:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace; --accent:${c.accent}; --accent-soft:${soft}}
-.title-bar { background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%); color: #fff; font-family: var(--font-caption); font-weight: bold; font-size: 10pt; padding: 4px 5px 4px 8px; display: flex; align-items: center; gap: 6px; text-shadow: 1px 1px #0f1089; user-select: none; }
+.title-bar { background: var(--grad-title); color: #fff; font-family: var(--font-caption); font-weight: bold; font-size: 10pt; padding: 4px 5px 4px 8px; display: flex; align-items: center; gap: 6px; text-shadow: 1px 1px #0f1089; user-select: none; }
 .title-bar .icon { width: 14px; height: 14px; flex: 0 0 14px; background: #fff; border: 1px solid ${c.picBorder}; position: relative; }
 .title-bar .icon::before { content: "${c.glyph}"; position: absolute; inset: 0; display: grid; place-items: center; font-size: 10px; color: var(--accent); font-weight: bold; text-shadow: none; }
 .window > .content { flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 12px; }

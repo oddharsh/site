@@ -30,16 +30,16 @@ body {
   background: oklch(91.74% 0.0203 238.68);
   background: linear-gradient(180deg, oklch(56% 0.13 250) 0%, oklch(73% 0.10 236) 50%, oklch(88% 0.05 232) 60%, oklch(60% 0.16 140) 100%);
   font-family: var(--font-ui); font-size: 10.5pt; line-height: 1.5;
-  color: oklch(21.78% 0 0); padding: 24px 12px 60px; min-height: 100vh;
+  color: var(--ink); padding: 24px 12px 60px; min-height: 100vh;
 }
 .window { --axp-maxw: 720px; max-width: var(--axp-maxw); margin: 0 auto; background: oklch(100% 0 0);
   border: 2px solid #0831d9; border-right-color: #001ea0; border-bottom-color: #001ea0;
   border-top-left-radius: 8px; border-top-right-radius: 8px; overflow: hidden;
   box-shadow: inset 1px 1px 0 #166aee, inset 2px 2px 0 #0855dd, inset -1px -1px 0 #00138c, inset -2px -2px 0 #003bda, 4px 4px 0 rgba(0,30,160,.35); }
 .title-bar {
-  background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
+  background: var(--grad-title);
   color: oklch(100% 0 0); font-family: var(--font-caption); font-size: 10pt; font-weight: bold;
-  padding: 4px 8px; border-bottom: 1px solid oklch(41.92% 0.0962 250.51);
+  padding: 4px 8px; border-bottom: 1px solid var(--blue-40);
   display: flex; align-items: center; justify-content: space-between;
   text-shadow: 1px 1px #0f1089; border-top-left-radius: 8px; border-top-right-radius: 8px; }
 .title-bar .icon { display: inline-block; width: 16px; height: 16px; margin-right: 6px; vertical-align: middle;
@@ -64,8 +64,8 @@ body {
 .title-bar .controls .close::before { transform: rotate(45deg); } .title-bar .controls .close::after { transform: rotate(-45deg); }
 
 .content { padding: 12px 16px 16px; }
-h1 { font-family: var(--font-caption); font-size: 14pt; color: oklch(41.92% 0.0962 250.51); margin: 0 0 4px; font-weight: bold; letter-spacing: -0.01em; }
-.lede { margin: 0 0 14px; color: oklch(38.67% 0 0); font-size: 10.5pt; }
+h1 { font-family: var(--font-caption); font-size: 14pt; color: var(--blue-40); margin: 0 0 4px; font-weight: bold; letter-spacing: -0.01em; }
+.lede { margin: 0 0 14px; color: var(--ink-soft); font-size: 10.5pt; }
 p { margin: 0 0 12px; }
 a:link { color: oklch(42.61% 0.2353 263.74); text-decoration: underline; } a:visited { color: oklch(42.09% 0.1935 328.36); } a:hover { color: oklch(62.80% 0.2577 29.23); }
 hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 16px 0; height: 0; }
@@ -78,12 +78,12 @@ pre { font-family: var(--font-mono); font-size: 10pt; line-height: 1.5; backgrou
 .chip::before { content: "… "; }
 .chip.yes { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(97% 0.04 142); }
 .chip.yes::before { content: "\2713 "; }
-.chip.no { color: oklch(51.03% 0 0); border-color: oklch(70% 0 0); background: oklch(96% 0 0); }
+.chip.no { color: var(--ink-dim); border-color: oklch(70% 0 0); background: oklch(96% 0 0); }
 .chip.no::before { content: "\2717 "; }
 
-.demo { content-visibility: auto; contain-intrinsic-size: auto 320px; border: 1px solid oklch(61.14% 0.0611 253.60); border-top-color: oklch(47.12% 0.0555 253.58); border-left-color: oklch(47.12% 0.0555 253.58);
+.demo { content-visibility: auto; contain-intrinsic-size: auto 320px; border: 1px solid var(--frame); border-top-color: var(--blue-45); border-left-color: var(--blue-45);
   background: oklch(100% 0 0); margin: 0 0 18px; padding: 12px 14px 14px; }
-.demo > h2 { font-family: var(--font-caption); font-size: 13pt; font-weight: bold; color: oklch(41.92% 0.0962 250.51); margin: 0 0 2px;
+.demo > h2 { font-family: var(--font-caption); font-size: 13pt; font-weight: bold; color: var(--blue-40); margin: 0 0 2px;
   display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 /* let the title shrink/break so it wraps below the stat badge on narrow windows
    instead of overlapping it (flex items don't shrink past min-content w/o this) */
@@ -96,7 +96,7 @@ pre { font-family: var(--font-mono); font-size: 10pt; line-height: 1.5; backgrou
 .stat.stable { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(98% 0.04 142); }
 
 /* base-select demo (scoped .s27- so it can't touch any real future select) */
-.s27-sel { appearance: base-select; font-family: var(--font-ui); font-size: 10.5pt; color: oklch(21.78% 0 0); background: oklch(100% 0 0);
+.s27-sel { appearance: base-select; font-family: var(--font-ui); font-size: 10.5pt; color: var(--ink); background: oklch(100% 0 0);
   border: 2px solid; border-color: oklch(55% 0.02 250) oklch(94% 0.01 250) oklch(94% 0.01 250) oklch(55% 0.02 250); box-shadow: inset 1px 1px 1px oklch(0% 0 0 / .12);
   padding: 3px 3px 3px 8px; min-width: 0; max-width: 100%; display: inline-flex; align-items: stretch; gap: 8px; }
 .s27-sel::picker-icon { margin-left: auto; align-self: stretch; width: 16px; display: inline-flex; align-items: center; justify-content: center; color: oklch(24% 0.02 255);
@@ -105,7 +105,7 @@ pre { font-family: var(--font-mono); font-size: 10pt; line-height: 1.5; backgrou
 .s27-sel::picker(select) { appearance: base-select; background: oklch(100% 0 0); border: 1px solid oklch(61% 0.06 254); box-shadow: 3px 3px 0 oklch(61% 0.06 254 / .35); padding: 2px; margin-top: 2px; }
 .s27-sel option { font-family: var(--font-ui); font-size: 10pt; padding: 4px 8px; cursor: pointer; }
 .s27-sel option:nth-of-type(even) { background: oklch(97.5% 0.006 255); }
-.s27-sel option:hover { background: linear-gradient(180deg, oklch(60% 0.20 261), oklch(50% 0.225 263)); color: oklch(100% 0 0); }
+.s27-sel option:hover { background: linear-gradient(180deg, var(--blue-80), var(--blue-60)); color: oklch(100% 0 0); }
 .s27-sel option:checked::before { content: "\2713 "; color: oklch(49.32% 0.1678 142.50); font-weight: bold; }
 
 /* anchor-positioning demo */

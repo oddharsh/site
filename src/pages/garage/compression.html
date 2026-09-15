@@ -28,7 +28,7 @@ body {
   font-family: var(--font-ui);
   font-size: 10.5pt;
   line-height: 1.5;
-  color: oklch(21.78% 0 0);
+  color: var(--ink);
   padding: 24px 12px 60px;
   min-height: 100vh;
 }
@@ -43,12 +43,12 @@ body {
               4px 4px 0 rgba(0,30,160,.35);
 }
 .title-bar {
-  background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
+  background: var(--grad-title);
   color: oklch(100.00% 0 0);
   font-family: var(--font-caption);
   font-size: 10pt; font-weight: bold;
   padding: 4px 8px;
-  border-bottom: 1px solid oklch(41.92% 0.0962 250.51);
+  border-bottom: 1px solid var(--blue-40);
   display: flex; align-items: center; justify-content: space-between;
 }
 .title-bar .icon {
@@ -130,20 +130,20 @@ body {
 h1 {
   font-family: var(--font-caption);
   font-size: 14pt;
-  color: oklch(41.92% 0.0962 250.51);
+  color: var(--blue-40);
   margin: 0 0 6px;
 }
-.lede { color: oklch(38.67% 0 0); font-size: 10.5pt; margin: 0 0 4px; }
+.lede { color: var(--ink-soft); font-size: 10.5pt; margin: 0 0 4px; }
 h2 {
   font-family: var(--font-caption);
   font-size: 13pt;
-  color: oklch(41.92% 0.0962 250.51);
+  color: var(--blue-40);
   margin: 28px 0 4px;
 }
 .note { color: oklch(44.95% 0 0); font-size: 10pt; margin: 0 0 14px; }
 .note code, p code, li code { background: oklch(96.72% 0 0); border: 1px solid oklch(88.22% 0 0); padding: 0 4px; font-family: var(--font-mono); font-size: 9.5pt; }
 hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px 0; }
-a { color: oklch(41.92% 0.0962 250.51); }
+a { color: var(--blue-40); }
 .status {
   display: inline-block; font-family: var(--font-mono); font-size: 8.5pt;
   font-weight: bold; letter-spacing: 0.05em; padding: 1px 6px; border: 1px solid;
@@ -157,7 +157,7 @@ a { color: oklch(41.92% 0.0962 250.51); }
 .xp-btn { font-family: var(--font-ui); font-size: 9.5pt; padding: 3px 12px; background: linear-gradient(#fff, #ece9d8); border: 1px solid #707070; border-radius: 3px; box-shadow: inset 1px 1px 0 #fff; cursor: pointer; }
 .xp-btn:active { box-shadow: inset 1px 1px 2px rgba(0,0,0,.3); }
 .method { margin: 16px 0; }
-.method h3 { font-size: 10.5pt; margin: 0 0 4px; font-family: var(--font-caption); color: oklch(41.92% 0.0962 250.51); display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.method h3 { font-size: 10.5pt; margin: 0 0 4px; font-family: var(--font-caption); color: var(--blue-40); display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
 .method h3 small { font-weight: normal; font-size: 9pt; color: oklch(50% 0 0); font-family: var(--font-ui); }
 .chunks { display: flex; flex-wrap: wrap; gap: 3px; padding: 8px; background: oklch(97% 0.005 250); border: 1px solid oklch(85% 0.02 250); border-radius: 4px; min-height: 30px; }
 .chunk { height: 26px; border-radius: 2px; display: flex; align-items: center; justify-content: center; font: 8px/1 "Courier New", monospace; color: #fff; text-shadow: 0 1px 1px rgba(0,0,0,.45); padding: 0 3px; overflow: hidden; white-space: nowrap; cursor: default; transition: background .18s; }
@@ -173,16 +173,16 @@ a { color: oklch(41.92% 0.0962 250.51); }
 .legend .sh::before { background: oklch(52% 0.13 150); }
 .legend .ch::before { background: oklch(58% 0.19 38); }
 .legend .nu::before { background: oklch(53% 0.10 255); }
-.callout { font-size: 10pt; background: oklch(97% 0.025 255); border-left: 3px solid oklch(51% 0.225 263); padding: 8px 12px; margin: 14px 0; color: oklch(28% 0.04 255); }
+.callout { font-size: 10pt; background: oklch(97% 0.025 255); border-left: 3px solid var(--blue-65); padding: 8px 12px; margin: 14px 0; color: oklch(28% 0.04 255); }
 .replaces { font-size: 9.5pt; color: oklch(33% 0 0); margin: 8px 0 0; border-left: 3px solid oklch(86% 0.03 250); padding-left: 8px; }
 .drop { border: 2px dashed oklch(62% 0.05 255); border-radius: 6px; padding: 16px; text-align: center; color: oklch(45% 0.03 255); font-size: 10pt; cursor: pointer; background: oklch(98% 0.01 255); }
-.drop.over { background: oklch(94% 0.04 255); border-color: oklch(51% 0.225 263); }
+.drop.over { background: oklch(94% 0.04 255); border-color: var(--blue-65); }
 footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67% 0.0294 259.59); font-size: 9.5pt; color: oklch(45% 0 0); }
 @media (prefers-reduced-motion: reduce) { .chunk { transition: none; } }
 
 /* encoding study */
 .enc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin: 12px 0 20px; }
-.enc-card { margin: 0; background: oklch(97% 0.004 250); border: 1px solid oklch(61.14% 0.0611 253.60); padding: 4px; }
+.enc-card { margin: 0; background: oklch(97% 0.004 250); border: 1px solid var(--frame); padding: 4px; }
 .enc-card img { display: block; width: 100%; height: auto; background: #fff; cursor: crosshair; }
 @media (hover: none) { .enc-card img { cursor: default; } }
 
@@ -210,9 +210,9 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
 }
 .loupe .bar {
   height: 18px; box-sizing: border-box; display: flex; align-items: center; gap: 5px;
-  padding: 0 6px; border-bottom: 1px solid oklch(41.92% 0.0962 250.51);
+  padding: 0 6px; border-bottom: 1px solid var(--blue-40);
   font: bold 8.5pt var(--font-caption); color: oklch(100% 0 0); text-shadow: 1px 1px #0f1089;
-  background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
+  background: var(--grad-title);
 }
 .loupe .bar .z { margin-left: auto; font: bold 8pt var(--font-mono); text-shadow: none; color: oklch(96% 0.03 250); }
 .loupe .glass {
@@ -230,12 +230,12 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
 .loupe:not(:popover-open) { opacity: 0; }
 @starting-style { .loupe:popover-open { opacity: 0; } }
 .enc-card figcaption { font: 8.5pt var(--font-ui); color: oklch(30% 0.01 250); padding: 4px 2px 1px; line-height: 1.4; }
-.enc-card figcaption b { color: oklch(41.92% 0.0962 250.51); }
+.enc-card figcaption b { color: var(--blue-40); }
 .enc-sz { float: right; font-family: var(--font-mono); font-weight: bold; }
 .enc-bpp { display: block; font-family: var(--font-mono); color: oklch(54% 0 0); font-size: 8pt; }
 .enc-table { border-collapse: collapse; margin: 8px 0 20px; font-size: 10pt; width: 100%; max-width: 460px; }
 .enc-table th, .enc-table td { border: 1px solid oklch(80% 0.02 250); padding: 4px 10px; text-align: left; }
-.enc-table th { background: oklch(92.5% 0.018 95); font-family: var(--font-caption); }
+.enc-table th { background: var(--face); font-family: var(--font-caption); }
 .enc-table td.num { font-family: var(--font-mono); text-align: right; }
 .enc-table-scroll { overflow-x: auto; margin: 8px 0 20px; }
 .zen-table { max-width: none; min-width: 650px; margin: 0; }
@@ -265,7 +265,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
    is never minified, so View Source stays the authoring source. */
 .cmp { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 9.5pt; }
 .cmp th, .cmp td { border: 1px solid oklch(85% 0.02 250); padding: 5px 8px; text-align: left; vertical-align: top; }
-.cmp th { background: oklch(96% 0.01 250); font-family: var(--font-caption); color: oklch(41.92% 0.0962 250.51); font-weight: normal; }
+.cmp th { background: oklch(96% 0.01 250); font-family: var(--font-caption); color: var(--blue-40); font-weight: normal; }
 .cmp td:first-child { font-family: var(--font-caption); color: oklch(33% 0 0); }
 .cmp .y { color: oklch(43% 0.16 150); font-weight: bold; }
 .cmt { color: oklch(52% 0.02 250); }

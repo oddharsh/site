@@ -27,7 +27,7 @@ body {
   font-family: var(--font-ui);
   font-size: 10.5pt;
   line-height: 1.5;
-  color: oklch(21.78% 0 0);
+  color: var(--ink);
   padding: 24px 12px 60px;
   min-height: 100vh;
 }
@@ -36,18 +36,18 @@ body {
   --axp-maxw: 660px; max-width: var(--axp-maxw);
   margin: 0 auto;
   background: oklch(100.00% 0 0);
-  border: 1px solid oklch(61.14% 0.0611 253.60);
+  border: 1px solid var(--frame);
   box-shadow: 4px 4px 0 oklch(61.14% 0.0611 253.60 / 0.35);
 }
 
 .title-bar {
-  background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
+  background: var(--grad-title);
   color: oklch(100.00% 0 0);
   font-family: var(--font-caption);
   font-size: 10pt;
   font-weight: bold;
   padding: 4px 8px;
-  border-bottom: 1px solid oklch(41.92% 0.0962 250.51);
+  border-bottom: 1px solid var(--blue-40);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -149,7 +149,7 @@ body {
 h1 {
   font-family: var(--font-caption);
   font-size: 14pt;
-  color: oklch(41.92% 0.0962 250.51);
+  color: var(--blue-40);
   margin: 0 0 4px;
   font-weight: bold;
   letter-spacing: -0.01em;
@@ -157,7 +157,7 @@ h1 {
 
 .lede {
   margin: 0 0 14px;
-  color: oklch(38.67% 0 0);
+  color: var(--ink-soft);
   font-size: 10.5pt;
 }
 
@@ -179,9 +179,9 @@ hr {
   list-style: none;
   padding: 0;
   margin: 16px 0 6px;
-  border: 1px solid oklch(61.14% 0.0611 253.60);
-  border-top-color: oklch(47.12% 0.0555 253.58);
-  border-left-color: oklch(47.12% 0.0555 253.58);
+  border: 1px solid var(--frame);
+  border-top-color: var(--blue-45);
+  border-left-color: var(--blue-45);
   background: oklch(100% 0 0);
 }
 .shelf li {
@@ -201,7 +201,7 @@ hr {
   font-family: var(--font-caption);
   font-weight: bold;
   font-size: 12pt;
-  color: oklch(41.92% 0.0962 250.51);
+  color: var(--blue-40);
 }
 .shelf .name a { text-decoration: none; }
 .shelf .name a:hover { text-decoration: underline; }
@@ -218,7 +218,7 @@ hr {
 }
 .shelf .status.review  { color: oklch(54.44% 0.1504 47.10); border-color: oklch(54.44% 0.1504 47.10); background: oklch(98% 0.03 95); }
 .shelf .status.shipped { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(98% 0.04 142); }
-.shelf .status.idle    { color: oklch(51.03% 0 0); border-color: oklch(70% 0 0); background: oklch(96% 0 0); }
+.shelf .status.idle    { color: var(--ink-dim); border-color: oklch(70% 0 0); background: oklch(96% 0 0); }
 .shelf .status.dead    { color: oklch(46.34% 0.1902 29.23); border-color: oklch(46.34% 0.1902 29.23); background: oklch(98% 0.03 30); }
 .shelf .desc {
   font-size: 10.5pt;
@@ -227,7 +227,7 @@ hr {
 .shelf .meta {
   margin-top: 4px;
   font-size: 9.5pt;
-  color: oklch(51.03% 0 0);
+  color: var(--ink-dim);
   font-style: italic;
 }
 
@@ -249,7 +249,7 @@ footer {
   .mule-fig img { display: block; width: 100%; height: auto; border: 1px solid oklch(61% 0.0611 253.60); padding: 4px; background: #fff; box-shadow: 1px 1px 0 oklch(61% 0.0611 253.60 / 0.3); }
   .mule-fig figcaption { font-size: 8.5pt; color: oklch(50% 0 0); margin-top: 5px; line-height: 1.45; }
   .mule-hof { margin: 16px 0 0; font-size: 9.5pt; }
-  .mule-hof summary { cursor: pointer; font-weight: bold; color: oklch(41.92% 0.0962 250.51); font-family: var(--font-caption); }
+  .mule-hof summary { cursor: pointer; font-weight: bold; color: var(--blue-40); font-family: var(--font-caption); }
   .mule-hof ol { margin: 8px 0 0; padding-left: 22px; color: oklch(38% 0 0); }
   .mule-hof li { margin: 5px 0; line-height: 1.5; }
   .mule-hof .src { font-size: 8.5pt; color: oklch(52% 0 0); font-style: italic; margin: 8px 0 0; }

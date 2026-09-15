@@ -39,7 +39,7 @@ body {
   font-family: var(--font-ui);
   font-size: 10.5pt;
   line-height: 1.5;
-  color: oklch(21.78% 0 0);
+  color: var(--ink);
   padding: 24px 12px 60px;
   min-height: 100vh;
 }
@@ -54,12 +54,12 @@ body {
               4px 4px 0 rgba(0,30,160,.35);
 }
 .title-bar {
-  background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
+  background: var(--grad-title);
   color: oklch(100.00% 0 0);
   font-family: var(--font-caption);
   font-size: 10pt; font-weight: bold;
   padding: 4px 8px;
-  border-bottom: 1px solid oklch(41.92% 0.0962 250.51);
+  border-bottom: 1px solid var(--blue-40);
   display: flex; align-items: center; justify-content: space-between;
 }
 .title-bar .icon {
@@ -141,14 +141,14 @@ body {
 h1 {
   font-family: var(--font-caption);
   font-size: 14pt;
-  color: oklch(41.92% 0.0962 250.51);
+  color: var(--blue-40);
   margin: 0 0 6px;
 }
-.lede { color: oklch(38.67% 0 0); font-size: 10.5pt; margin: 0 0 4px; }
+.lede { color: var(--ink-soft); font-size: 10.5pt; margin: 0 0 4px; }
 h2 {
   font-family: var(--font-caption);
   font-size: 13pt;
-  color: oklch(41.92% 0.0962 250.51);
+  color: var(--blue-40);
   margin: 28px 0 4px;
   display: flex;
   align-items: baseline;
@@ -176,7 +176,7 @@ hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px
 .status.review  { color: oklch(54.44% 0.1504 47.10); border-color: oklch(54.44% 0.1504 47.10); background: oklch(98% 0.03 95); }
 .status.shipped { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(98% 0.04 142); }
 .status.dead    { color: oklch(46.34% 0.1902 29.23); border-color: oklch(46.34% 0.1902 29.23); background: oklch(98% 0.03 30); }
-.status.ref     { color: oklch(51.03% 0 0); border-color: oklch(70% 0 0); background: oklch(96% 0 0); }
+.status.ref     { color: var(--ink-dim); border-color: oklch(70% 0 0); background: oklch(96% 0 0); }
 
 /* rejection callout: small box explaining why a variant didn't ship */
 .rejection {
@@ -200,7 +200,7 @@ hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px
   display: block;
   background: oklch(100% 0 0);
   padding: 4px;
-  border: 1px solid oklch(61.14% 0.0611 253.60);
+  border: 1px solid var(--frame);
   box-shadow: 1px 1px 0 oklch(61.14% 0.0611 253.60 / 0.3);
   line-height: 0;
   aspect-ratio: 4 / 5;
@@ -396,7 +396,7 @@ hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px
   width: 100%;
   height: 100%;
   border: 4px solid oklch(98% 0 0);
-  outline: 1px solid oklch(61.14% 0.0611 253.60);
+  outline: 1px solid var(--frame);
   outline-offset: -1px;
   background: oklch(50% 0.05 240);
   transform: rotate(-6deg);
@@ -412,7 +412,7 @@ hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px
   list-style: none;
   padding: 0;
   margin: 8px 0 18px;
-  border: 1px solid oklch(61.14% 0.0611 253.60);
+  border: 1px solid var(--frame);
   background: oklch(100% 0 0);
   font-size: 10.5pt;
 }
@@ -424,10 +424,10 @@ hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px
 }
 .vinyl-demo li:last-child { border-bottom: none; }
 .vinyl-demo li:nth-child(even) { background: oklch(97.50% 0.0062 255.47); }
-.vinyl-demo .title { font-weight: bold; color: oklch(41.92% 0.0962 250.51); }
-.vinyl-demo .sep { color: oklch(62.68% 0 0); margin: 0 6px; }
-.vinyl-demo .artist { color: oklch(38.67% 0 0); }
-.vinyl-demo .duration { float: right; color: oklch(62.68% 0 0); font-family: var(--font-mono); font-size: 9.5pt; }
+.vinyl-demo .title { font-weight: bold; color: var(--blue-40); }
+.vinyl-demo .sep { color: var(--ink-faint); margin: 0 6px; }
+.vinyl-demo .artist { color: var(--ink-soft); }
+.vinyl-demo .duration { float: right; color: var(--ink-faint); font-family: var(--font-mono); font-size: 9.5pt; }
 
 /* XP-skinned camera readout (photos).
    same content shape as the Fuji LCD (histogram + exposure trio + recipe
@@ -488,11 +488,11 @@ hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px
 .balloon-tip .bln-meta   { margin-top: 5px; font-size: 10px; color: oklch(48% 0 0); }
 
 .xp-cam-tip .header {
-  background: linear-gradient(180deg, oklch(94.66% 0.0114 252.09), oklch(85.04% 0.0283 248.16));
-  border-bottom: 1px solid oklch(61.14% 0.0611 253.60);
+  background: linear-gradient(180deg, var(--surface-desktop), oklch(85.04% 0.0283 248.16));
+  border-bottom: 1px solid var(--frame);
   padding: 3px 8px;
   font-weight: bold;
-  color: oklch(41.92% 0.0962 250.51);
+  color: var(--blue-40);
   font-family: var(--font-caption);
   font-size: 10.5px;
   letter-spacing: 0.01em;
@@ -516,9 +516,9 @@ hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px
 .xp-cam-tip .flash-bolt { color: oklch(58% 0.18 75); }
 .xp-cam-tip .histogram-frame {
   margin: 8px 8px 0;
-  border: 1px solid oklch(61.14% 0.0611 253.60);
-  border-top-color: oklch(47.12% 0.0555 253.58);
-  border-left-color: oklch(47.12% 0.0555 253.58);
+  border: 1px solid var(--frame);
+  border-top-color: var(--blue-45);
+  border-left-color: var(--blue-45);
   height: 38px;
   background: oklch(100% 0 0);
   position: relative;
@@ -623,7 +623,7 @@ hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
   background: oklch(100% 0 0);
-  border: 1px solid oklch(61.14% 0.0611 253.60);
+  border: 1px solid var(--frame);
   box-shadow: 1px 1px 0 oklch(61.14% 0.0611 253.60 / 0.3);
   padding: 4px;
   line-height: 0;

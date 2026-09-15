@@ -28,7 +28,7 @@ body {
   font-family: var(--font-ui);
   font-size: 10.5pt;
   line-height: 1.5;
-  color: oklch(21.78% 0 0);
+  color: var(--ink);
   padding: 24px 12px 60px;
   min-height: 100vh;
 }
@@ -43,12 +43,12 @@ body {
               4px 4px 0 rgba(0,30,160,.35);
 }
 .title-bar {
-  background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
+  background: var(--grad-title);
   color: oklch(100.00% 0 0);
   font-family: var(--font-caption);
   font-size: 10pt; font-weight: bold;
   padding: 4px 8px;
-  border-bottom: 1px solid oklch(41.92% 0.0962 250.51);
+  border-bottom: 1px solid var(--blue-40);
   display: flex; align-items: center; justify-content: space-between;
 }
 .title-bar .icon {
@@ -130,20 +130,20 @@ body {
 h1 {
   font-family: var(--font-caption);
   font-size: 14pt;
-  color: oklch(41.92% 0.0962 250.51);
+  color: var(--blue-40);
   margin: 0 0 6px;
 }
-.lede { color: oklch(38.67% 0 0); font-size: 10.5pt; margin: 0 0 4px; }
+.lede { color: var(--ink-soft); font-size: 10.5pt; margin: 0 0 4px; }
 h2 {
   font-family: var(--font-caption);
   font-size: 13pt;
-  color: oklch(41.92% 0.0962 250.51);
+  color: var(--blue-40);
   margin: 28px 0 4px;
 }
 .note { color: oklch(44.95% 0 0); font-size: 10pt; margin: 0 0 14px; }
 .note code, p code, li code { background: oklch(96.72% 0 0); border: 1px solid oklch(88.22% 0 0); padding: 0 4px; font-family: var(--font-mono); font-size: 9.5pt; }
 hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px 0; }
-a { color: oklch(41.92% 0.0962 250.51); }
+a { color: var(--blue-40); }
 .status {
   display: inline-block; font-family: var(--font-mono); font-size: 8.5pt;
   font-weight: bold; letter-spacing: 0.05em; padding: 1px 6px; border: 1px solid;
@@ -169,7 +169,7 @@ a { color: oklch(41.92% 0.0962 250.51); }
 
   /* ── teardown: before/after comparison cards ─────────────────────────── */
   .content hr { border: 0; border-top: 1px solid oklch(86% 0.02 255); margin: 18px 0; }
-  .content h2 { font-family: var(--font-caption); font-size: 13pt; color: oklch(41.92% 0.0962 250.51);
+  .content h2 { font-family: var(--font-caption); font-size: 13pt; color: var(--blue-40);
     margin: 24px 0 4px; font-weight: bold; }
   .sev { font: bold 7.5pt var(--font-mono); text-transform: uppercase; letter-spacing: .04em;
     padding: 1px 6px; border-radius: 2px; vertical-align: 2px; margin-left: 8px; }
@@ -192,7 +192,7 @@ a { color: oklch(41.92% 0.0962 250.51); }
   .diff .after  pre { background: oklch(99% 0.012 150); border-color: oklch(88% 0.04 150); }
   .diff pre .c { color: oklch(52% 0.03 145); }   /* code comment */
   .what { font-size: 9.5pt; color: oklch(30% 0 0); margin: 7px 0 0; }
-  .what b { color: oklch(41.92% 0.0962 250.51); }
+  .what b { color: var(--blue-40); }
   .rest { width: 100%; border-collapse: collapse; font-size: 9pt; margin: 6px 0 0; }
   .rest th, .rest td { text-align: left; padding: 5px 8px; border-bottom: 1px solid oklch(89% 0.02 255); vertical-align: top; }
   .rest th { font: bold 8pt var(--font-mono); text-transform: uppercase; letter-spacing: .04em; color: oklch(40% 0.05 255); }
