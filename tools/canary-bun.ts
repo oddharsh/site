@@ -7,7 +7,7 @@
 // WHY A SECOND SCRIPT RATHER THAN A FLAG ON bump-bun-pin.ts. The bumper's
 // whole design is that only a stable release can be proposed, and a contract
 // test pins that: the target comes from `releases/latest`, the tag has to be a
-// plain `bun-vX.Y.Z`, and it writes `packageManager`. None of that applies to
+// plain `bun-vX.Y.Z`, and it writes config/bun-pin.json. None of that applies to
 // a rolling tag, and a canary that "clears every gate" must never be one flag
 // away from being written into package.json. So this shares the GATES
 // (lib/bun-gates.ts) and none of the decisions.

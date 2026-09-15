@@ -1,0 +1,30 @@
+{
+  "$comment": [
+    "THE ONE DECLARATION of which bun this repository runs: the compiler behind",
+    "every content-addressed /a/ and /i/ URL (wrangler.jsonc builds with `bun",
+    "tools/build.ts`), and the runtime the contract suite runs under.",
+    "",
+    "It lived in package.json's packageManager until 2026-09-15, and it moved",
+    "because Cloudflare's build image READS THAT FIELD and cannot resolve a canary",
+    "in it: measured with three probes on the day, a release pin builds, a dated",
+    "canary fails whether or not it carries its build sha, and removing the field",
+    "with the pin here builds and uploads a version compiled by the canary. The",
+    "image is the one reader that cannot handle the truth, so the declaration",
+    "moved to a file only this repository's own tools read. Every reader is here:",
+    "tools/lib/bun-pin.ts (readPin/writePin), .github/install-bun.sh (the shared",
+    "installer for the setup-bun action and the Workers Builds wrapper), and",
+    "bun-pin.yml, which reads it before and after a bump.",
+    "",
+    "A pin is a release (`1.4.2`) or a DATED CANARY WITH ITS BUILD SHA",
+    "(`1.4.2-canary.20260913.1+09bb546`), both exact and immutable on npm. The",
+    "channel is the pin's own shape, bump-bun-pin.ts walks that channel and never",
+    "crosses; switching channels is a hand edit here plus `bun run bun:pin`.",
+    "The sha is load-bearing: a canary binary reports the NEXT release as its",
+    "--version, and Bun.revision is what proves a running bun is this pin.",
+    "",
+    "There is deliberately NO packageManager in package.json any more. Putting",
+    "one back hands the image a field it will try to resolve, and the day it",
+    "names a canary the production build stops."
+  ],
+  "bun": "1.4.2-canary.20260913.1+09bb546"
+}

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# install-bun.sh <dir> — install the bun that package.json's packageManager
-# names into <dir>/bun, from npm, verified three ways. Prints nothing but the
+# install-bun.sh <dir> — install the bun that config/bun-pin.json names into
+# <dir>/bun, from npm, verified three ways. Prints nothing but the
 # one summary line on success; every failure names its cause.
 #
 # ONE INSTALLER FOR BOTH PLACES THIS REPO BOOTSTRAPS A BUN: the setup-bun
@@ -8,11 +8,12 @@
 # path that publishes production). They carried two copies of this logic
 # until 2026-09-15, which is how the CI copy grew canary support the deploy
 # copy never saw. The deploy side matters MORE, because Cloudflare's build
-# image cannot resolve a canary `packageManager` itself (measured 2026-09-15
-# with two reversal probes: a canary pin fails the image's own bootstrap
-# before any command of ours runs). With SKIP_DEPENDENCY_INSTALL set in the
-# build settings, the image stops bootstrapping and this script owns the
-# toolchain on both sides.
+# image cannot resolve a canary `packageManager` (measured 2026-09-15 with
+# three probes: a canary pin fails the image's own bootstrap before any
+# command of ours runs, sha or no sha, and only removing the field builds).
+# With SKIP_DEPENDENCY_INSTALL set in the build settings the image stops
+# bootstrapping, the pin lives in a file it never reads, and this script owns
+# the toolchain on both sides.
 #
 # WHY NPM RATHER THAN A GITHUB RELEASE. A pin may be a release (`1.4.2`) or a
 # DATED CANARY WITH ITS BUILD SHA (`1.4.2-canary.20260913.1+09bb546`), and
@@ -34,11 +35,14 @@
 set -euo pipefail
 
 dir="${1:?usage: install-bun.sh <dir>}"
-want=$(node -e "process.stdout.write(require('./package.json').packageManager)")
-case "$want" in
-  bun@*) pin="${want#bun@}" ;;
-  *) echo "install-bun.sh: packageManager is not bun: package.json says '$want'" >&2; exit 1 ;;
-esac
+# config/bun-pin.json is THE declaration, and it is deliberately not
+# package.json's packageManager: the build image reads that field and cannot
+# resolve a canary in it (measured 2026-09-15), while nothing but this
+# repository's own tools read the file.
+pin=$(node -e "process.stdout.write(String(require('./config/bun-pin.json').bun || ''))")
+if [ -z "$pin" ]; then
+  echo "install-bun.sh: config/bun-pin.json names no bun" >&2; exit 1
+fi
 version="${pin%%+*}"
 sha=""
 case "$pin" in *+*) sha="${pin#*+}" ;; esac

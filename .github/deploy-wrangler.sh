@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 # Workers Builds calls this wrapper with the arguments declared in
 # config/infra.json. It OWNS THE TOOLCHAIN since 2026-09-15: it installs the
-# bun that packageManager names, runs the frozen install with it, and then
+# bun that config/bun-pin.json names, runs the frozen install with it, and then
 # runs the installed Wrangler entrypoint under node. Arguments pass through
 # unchanged.
 #
 # WHY THE WRAPPER INSTALLS ITS OWN BUN. Cloudflare's build image bootstraps a
-# bun from `packageManager` before any command of ours runs, and it cannot
-# resolve a canary version (measured 2026-09-15: a dated-canary pin fails the
-# image's bootstrap, a release pin does not, with everything else equal). The
-# repo wants the compiler on the canary channel, so the image has to stop
-# bootstrapping: `SKIP_DEPENDENCY_INSTALL=true` in the build settings turns
+# bun from package.json's `packageManager` before any command of ours runs,
+# and it cannot resolve a canary there (measured 2026-09-15: a dated canary
+# fails the image's bootstrap with or without its sha, a release does not).
+# So the pin lives in config/bun-pin.json, package.json carries no
+# packageManager at all, and the image has to stop bootstrapping: `SKIP_DEPENDENCY_INSTALL=true` in the build settings turns
 # its install off, and this script does the same work with the SAME installer
 # the setup-bun action uses (.github/install-bun.sh: npm tarball, sha512,
 # manifest version and binary revision all checked). The image's own bun is

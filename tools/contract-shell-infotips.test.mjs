@@ -117,18 +117,15 @@ test("every workflow bootstraps the bun that package.json pins", async () => {
   // The 1.4 release retired the digest pin this test used to assert. A released
   // tag is immutable, so the VERSION is the guarantee the SHA-256 provided while
   // the canary tag was rolling daily. config/bun-canary.json is gone with it.
-  const pkg = JSON.parse(await readFile(new URL("package.json", ROOT), "utf8"));
+  const declared = JSON.parse(await readFile(new URL("config/bun-pin.json", ROOT), "utf8"));
   // A RELEASE or a DATED CANARY WITH ITS BUILD SHA, and nothing that floats.
-  // Until 2026-09-14 this required a release, on the argument that a release
-  // tag is the only string Cloudflare's build image resolves. The canary form
-  // is what npm publishes daily under an immutable version, and the installer
-  // (setup-bun) fetches it from the registry with a sha512 either way; whether
-  // the build image accepts it is measured by the branch build of every commit
-  // that carries one, since Workers Builds builds every push. lib/bun-pin.ts
-  // owns the shape, and the sha is what lets a running canary prove it is the
-  // pin (its --version reports the NEXT release).
-  assert.match(pkg.packageManager, /^bun@\d+\.\d+\.\d+(-canary\.\d{8}\.\d+\+[0-9a-f]{7,40})?$/,
-    `packageManager is ${pkg.packageManager}; it must name an exact bun, a release or a dated canary with its build sha`);
+  // It was package.json's packageManager until 2026-09-15, when three probes
+  // showed Cloudflare's build image reads that field and cannot resolve a
+  // canary in it, sha or no sha, while removing the field with the pin in its
+  // own file builds a version the canary compiled. lib/bun-pin.ts owns the
+  // shape, and the sha is what lets a running canary prove it is the pin.
+  assert.match(String(declared.bun), /^\d+\.\d+\.\d+(-canary\.\d{8}\.\d+\+[0-9a-f]{7,40})?$/,
+    `config/bun-pin.json names ${declared.bun}; it must be an exact bun, a release or a dated canary with its build sha`);
 
   const dir = new URL(".github/workflows/", ROOT);
   const files = (await readdir(dir)).filter((n) => n.endsWith(".yml"));
@@ -143,13 +140,13 @@ test("every workflow bootstraps the bun that package.json pins", async () => {
     // Same shape as every other naive scanner this repo has had to sharpen.
     const commands = body.split("\n").filter((l) => !/\becho\b/.test(l)).join("\n");
     if (!/^\s*bun\s+(install|run|test|x)\b/m.test(commands)) continue;
-    // ONE bootstrap, and it reads packageManager itself. A workflow that curls
+    // ONE bootstrap, and it reads config/bun-pin.json itself. A workflow that curls
     // its own bun, or names a version inline, is a second declaration that can
     // drift from the first.
     assert.match(body, /uses: \.\/\.github\/actions\/setup-bun/,
       `.github/workflows/${file} runs bun without going through the shared setup-bun action`);
     assert.ok(!/bun-version:|oven-sh\/setup-bun/.test(body),
-      `.github/workflows/${file} names a bun version inline instead of reading packageManager`);
+      `.github/workflows/${file} names a bun version inline instead of reading config/bun-pin.json`);
     checked++;
   }
   assert.ok(checked >= 4, `expected several bun bootstraps, matched ${checked}`);
@@ -158,7 +155,7 @@ test("every workflow bootstraps the bun that package.json pins", async () => {
   // read it, and the action must go through it rather than carrying a copy.
   const action = await readFile(new URL(".github/actions/setup-bun/action.yml", ROOT), "utf8");
   const installer = await readFile(new URL(".github/install-bun.sh", ROOT), "utf8");
-  assert.match(installer, /packageManager/, "install-bun.sh must read the version from packageManager");
+  assert.match(installer, /config\/bun-pin\.json/, "install-bun.sh must read the version from config/bun-pin.json");
   assert.match(action, /bash \.github\/install-bun\.sh /, "setup-bun must install through the shared installer");
   assert.match(action, /zstd/, "setup-bun must probe the dictionary capability before a build spends 40s discovering it");
 });

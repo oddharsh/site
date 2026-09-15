@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 // bun run bun:pin [--write] [--to X.Y.Z] [--from X.Y.Z] [--keep]
 //
-// Keeps `packageManager: bun@x.y.z` current, because NOTHING ELSE DOES.
+// Keeps config/bun-pin.json current, because NOTHING ELSE DOES.
 //
 // Dependabot owns five ecosystems here and none of them owns this string. The
 // npm updater bumps `@types/bun` and never the runtime; the `bun` ecosystem
@@ -137,7 +137,7 @@ console.log(`baseline:  ${process.execPath}\n`);
 // THE CHANNEL IS THE PIN'S SHAPE (lib/bun-pin.ts). A release pin follows
 // releases; a dated-canary pin follows npm's `canary` dist-tag, which names the
 // newest DATED canary and is immutable once published. Crossing channels is a
-// hand edit of packageManager and never something this script does on its own,
+// hand edit of config/bun-pin.json and never something this script does on its own,
 // in either direction: a stable pin must not wake up on a canary, and a canary
 // pin must not quietly fall back to the release line the day one ships.
 const channel = channelOf(pin.version);
@@ -209,7 +209,7 @@ if (channelOf(target) === "canary" && !target.includes("+")) {
 
 if (channelOf(target) !== channel) {
   console.error(`${target} is on the ${channelOf(target)} channel while the pin ${pin.version} is on ${channel}.`);
-  console.error("switching channels is a hand edit of packageManager, never a bump; this script only walks the channel it is on.");
+  console.error("switching channels is a hand edit of config/bun-pin.json, never a bump; this script only walks the channel it is on.");
   process.exit(2);
 }
 
@@ -357,7 +357,7 @@ if (pretend) {
 
 if (has("--write")) {
   writePin(ROOT, target);
-  console.log(`bun:pin: wrote packageManager: bun@${target}. Every gate green.`);
+  console.log(`bun:pin: wrote config/bun-pin.json: bun ${target}. Every gate green.`);
 } else {
   console.log(`bun:pin: ${target} clears every gate. Re-run with --write to move the pin.`);
 }

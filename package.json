@@ -4,7 +4,6 @@
   "description": "aadhar.sh - deploy-time transform only (authoring stays buildless; see build.ts)",
   "license": "MIT",
   "type": "module",
-  "packageManager": "bun@1.4.2",
   "scripts": {
     "build": "bun tools/build.ts",
     "dev": "bun tools/dev-stage.ts && wrangler dev -c wrangler.dev.jsonc",

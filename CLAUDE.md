@@ -231,14 +231,15 @@ bun run canary:browsers   # /garage/horizon's probes in stable vs prerelease eng
 # every Playwright probe reads its Chrome from ONE place. Unset means stable.
 CHROME_CHANNEL=chrome-canary bun run csp:sweep
 
-# PRODUCTION RUNS A PRERELEASE WRANGLER, exactly and immutably, since
-# 2026-09-14: `devDependencies.wrangler` is a pkg.pr.new COMMIT of workers-sdk
-# main. The bun half is PARKED (2026-09-15): Cloudflare's build image cannot
-# resolve a canary `packageManager`, measured with two reversal probes, so the
-# pin is a release while everything that accepts a canary pin stays in place.
-# The route out: SKIP_DEPENDENCY_INSTALL in the build settings, with
-# .github/deploy-wrangler.sh installing the pinned bun through the same
-# .github/install-bun.sh the setup-bun action uses (MAINTENANCE.md has the order). The
+# PRODUCTION RUNS PRERELEASE PINS, exactly and immutably: `config/bun-pin.json`
+# is npm's DATED bun canary plus its build sha (the compiler), and
+# `devDependencies.wrangler` is a pkg.pr.new COMMIT of workers-sdk main (the
+# publisher). The bun pin is NOT package.json's packageManager, and there is
+# none: Cloudflare's build image reads that field and cannot resolve a canary
+# in it (three probes, 2026-09-15), so SKIP_DEPENDENCY_INSTALL is set in the
+# build settings and .github/deploy-wrangler.sh installs the pinned bun itself
+# through the same .github/install-bun.sh the setup-bun action uses. Each
+# nightly bumper advances its pin only after the canary tripwire's gates pass. The
 # channel is the pin's own shape, nothing floats, and each nightly bumper
 # advances its pin only after the canary tripwire's gates pass on the
 # candidate. Switching a channel is a hand edit plus a relock; the runbook is
@@ -4635,10 +4636,11 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     `\$\{\{` inside `run:` and route values through `env:` instead.
 
 28. **Bun upgrades must preserve build bytes.** The runtime is pinned in
-    `package.json`'s `packageManager`; `bun run bun:pin` compares a candidate
+    `config/bun-pin.json` (it was `package.json`'s `packageManager` until
+    2026-09-15, see MAINTENANCE.md); `bun run bun:pin` compares a candidate
     against that exact runtime. Its stable-release, age, dictionary, lockfile,
     build, and test gates are described in
-    [DEPENDENCIES.md](docs/DEPENDENCIES.md#bun-in-packagemanager) and implemented
+    [DEPENDENCIES.md](docs/DEPENDENCIES.md#bun-in-configbun-pinjson) and implemented
     in `tools/bump-bun-pin.ts`. The nightly `bun-pin.yml` workflow runs them
     before proposing a change.
 
