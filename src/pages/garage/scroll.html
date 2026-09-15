@@ -309,7 +309,7 @@ code { font-family: var(--font-mono); font-size: 9.5pt; }
 
 /* honor reduced-motion: freeze the zoom + show a static copy bar. (the
    scrollbar isn't motion; it stays.) */
-@media (prefers-reduced-motion: reduce) {
+@media (--reduced-motion) {
   .maxi { animation: none !important; transform: none !important; opacity: 1 !important; }
   .xp-progress-fill { animation: none !important; width: 60% !important; }
 }

@@ -4,7 +4,7 @@ font-family:var(--font-ui,Tahoma,Verdana,Geneva,sans-serif);font-size:11px;color
 background:oklch(98.5% 0.035 95);border:1px solid oklch(72% 0.06 86);border-radius:4px;
 box-shadow:2px 3px 11px -3px oklch(40% 0.05 90 / .55)}
 #axp-balloon.open{display:block}
-@media (prefers-reduced-motion:no-preference){#axp-balloon.open{animation:axp-bln .12s ease-out}}
+@media (--motion-ok) {#axp-balloon.open{animation:axp-bln .12s ease-out}}
 @keyframes axp-bln{from{transform:translateY(7px);opacity:.3}to{transform:translateY(0);opacity:1}}
 #axp-balloon::before,#axp-balloon::after{content:'';position:absolute;top:100%;left:var(--tail,84%);width:0;height:0;border:9px solid transparent;border-bottom:0;margin-left:-9px}
 #axp-balloon::before{border-top-color:oklch(72% 0.06 86)}

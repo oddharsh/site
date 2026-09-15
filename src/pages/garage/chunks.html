@@ -179,7 +179,7 @@ a { color: var(--blue-40); }
 .drop { border: 2px dashed oklch(62% 0.05 255); border-radius: 6px; padding: 16px; text-align: center; color: oklch(45% 0.03 255); font-size: 10pt; cursor: pointer; background: oklch(98% 0.01 255); }
 .drop.over { background: oklch(94% 0.04 255); border-color: var(--blue-65); }
 footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67% 0.0294 259.59); font-size: 9.5pt; color: oklch(45% 0 0); }
-@media (prefers-reduced-motion: reduce) { .chunk { transition: none; } }
+@media (--reduced-motion) { .chunk { transition: none; } }
 
   /* OS-window geometry inlined so FIRST PAINT matches nav.js (no shell "pop"
      when the deferred desktop arrives). keep in sync with nav.js (search

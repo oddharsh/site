@@ -218,7 +218,7 @@ pre {
    script from a hand-kept list of what's genuinely adopted. */
 .demo.shipped { background: oklch(95% 0.055 150 / 0.62); border-color: oklch(70% 0.12 150); box-shadow: inset 3px 0 0 oklch(58% 0.16 150); }
 .ship-tag { display: inline-block; margin: 0 0 10px; padding: 1px 8px; font: bold 8pt var(--font-ui); letter-spacing: .05em; text-transform: uppercase; color: oklch(36% 0.13 150); background: oklch(90% 0.10 150); border: 1px solid oklch(66% 0.13 150); }
-@media (color-gamut: p3) { .demo.shipped { background: oklch(95% 0.08 150 / 0.62); } }
+@media (--p3) { .demo.shipped { background: oklch(95% 0.08 150 / 0.62); } }
 
 /* ── text-box-trim demo ──────────────────────────────────────────────── */
 .tb-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
@@ -398,7 +398,7 @@ footer {
 }
 
 /* honour reduced-motion: pin everything to its end state, no animation */
-@media (prefers-reduced-motion: reduce) {
+@media (--reduced-motion) {
   .sd-meter .bar { animation: none; transform: scaleX(1); }
   .sd-row { animation: none; opacity: 1; transform: none; }
   /* the @property gradient spin can't be composited (repaints every frame
@@ -606,7 +606,7 @@ placeholder
 @supports not (corner-shape: squircle) {
   .cs-frame { corner-shape: round; }
 }
-@media (color-gamut: p3) {
+@media (--p3) {
   .cs-cell { background: linear-gradient(180deg, oklch(62.22% 0.18 251.99) 0%, oklch(49.72% 0.16 250.87) 100%); }
 }
 /* card: calc-size */
@@ -697,7 +697,7 @@ placeholder
 .sy-track.yielded .tap { left: 48%; }
 .sy-leg { font-size: 8pt; color: oklch(48% 0 0); margin: 3px 0 0; }
 .sy-leg .red { color: oklch(54.44% 0.1504 47.10); font-weight: bold; }
-@media (color-gamut: p3) {
+@media (--p3) {
   .sy-track .tap { background: oklch(58.99% 0.2604 26.30); }
 }
 /* live interactive demo: a rAF-driven dot that freezes when the main thread is
@@ -791,7 +791,7 @@ placeholder
   color: oklch(46% 0.10 50);
   margin-top: 8px;
 }
-@media (color-gamut: p3) {
+@media (--p3) {
   .mas-mock .t4 { background: linear-gradient(160deg, oklch(59% 0.30 26), oklch(46% 0.24 29)); }
   .mas-mock .t9 { background: linear-gradient(160deg, oklch(70% 0.25 43), oklch(58% 0.29 30)); }
 }
@@ -845,7 +845,7 @@ placeholder
     linear-gradient(180deg, oklch(74% 0.12 250) 0%, oklch(56% 0.13 250) 60%, var(--blue-40) 100%);
   box-shadow: inset 0 0 24px oklch(95% 0.12 85 / .35);
 }
-@media (color-gamut: p3) {
+@media (--p3) {
   .hdr-swatch.hdr { background:
     radial-gradient(circle at 50% 32%, oklch(99% 0.09 95) 0 10%, oklch(95% 0.20 80) 10% 20%, oklch(85% 0.22 65 / .55) 20% 34%, transparent 52%),
     linear-gradient(180deg, oklch(74% 0.16 250) 0%, oklch(56% 0.17 250) 60%, oklch(38% 0.12 250) 100%); }
@@ -4840,7 +4840,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
       .s8-tdi { font-size: 11pt; color: oklch(28% 0 0); margin-top: 8px; }
       .s8-tdi u { text-decoration: underline 1px oklch(55% 0.20 30); text-decoration-inset: 4px; text-underline-offset: 3px; }
       .s8-out { font: 9pt "Courier New", monospace; white-space: pre-wrap; background: oklch(97% 0 0); border: 1px solid oklch(80% 0 0); padding: 8px 10px; margin-top: 8px; color: oklch(30% 0 0); }
-      @media (color-gamut: p3) {
+      @media (--p3) {
         .s8-chipbox.luna { background: oklch(50% 0.26 263); }
       }
     </style>
@@ -5193,14 +5193,14 @@ navigation.addEventListener("navigate", (e) =&gt; {
       </h2>
       <p class="note">
         Set a colour&apos;s opacity without restating the colour:
-        <code>alpha(from var(--blue-title) / 40%)</code> takes any colour value, a token
-        included, and returns it at that alpha; the <code>from</code> is the same
+        <code>alpha(from &lt;any colour&gt; / 40%)</code> takes any colour value, a
+        <code>var()</code> token included, and returns it at that alpha; the <code>from</code> is the same
         keyword relative colour syntax uses, and inside the slash the old alpha is
         in scope as <code>alpha</code>, so <code>calc(alpha * 0.5)</code> halves
         whatever it was. Until now the only way to do that
         to a variable was relative colour syntax,
-        <code>oklch(from var(--blue-title) l c h / 40%)</code>, which works and reads
-        like a ritual. Per cssdb 8.11 it landed in all three engines within a
+        <code>oklch(from &lt;token&gt; l c h / 40%)</code>, which works and reads like a
+        ritual. Per cssdb 8.11 it landed in all three engines within a
         month of each other (Chrome 151, Safari 27, Firefox 155), which is the
         cleanest cross-engine arrival on this page.
       </p>
@@ -5208,7 +5208,8 @@ navigation.addEventListener("navigate", (e) =&gt; {
         On the site: <code>luna.css</code> carries 15 colours with an alpha
         channel, every one spelled out as a full <code>oklch()</code> literal
         beside the token it is really derived from (the window drop shadow is
-        <code>oklch(46% 0.16 var(--hue-luna) / 0.35)</code>, a Luna blue at 35%).
+        <code>oklch(46% 0.16 &lt;luna hue&gt; / 0.35)</code>, a Luna blue at 35%, with
+        the hue pulled from the knob and the rest restated by hand).
         Each of those becomes <code>alpha(from &lt;token&gt; / 35%)</code>, so a hue
         knob turn reaches the shadows too. Nothing to demo, because the whole
         feature is the sentence above.

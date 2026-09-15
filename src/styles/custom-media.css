@@ -17,6 +17,13 @@
    cosmetic under dev's conditions anyway (a P3 upgrade, a reduced-motion
    opt-out), and keep a layout breakpoint literal until dev resolves them.
 
+   One place keeps the literal on purpose: luna.css's token blocks are
+   verbatim copies of design/tokens/*.css, pinned byte for byte by a contract
+   test, and the design files have readers outside this build (the design
+   skill, a pasted prototype) where `(--p3)` would resolve to nothing. So the
+   P3 block in luna.css says `(color-gamut: p3)` and stays that way; the alias
+   is for CSS this build is the only consumer of.
+
    Names are what the tree already spells out, counted 2026-09-15 across
    src/styles and src/pages. The six narrow breakpoints in play (460, 520, 540,
    560, 620, 760px) are a design question this file does not settle: only the
