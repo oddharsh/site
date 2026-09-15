@@ -69,7 +69,12 @@ export function render(report: Report, runUrl: string | undefined): string {
 
   if (report.gates?.length) {
     lines.push("| gate | result | detail |", "|---|---|---|");
-    for (const g of report.gates) lines.push(`| ${g.name} | ${g.ok ? "ok" : g.hard === false ? "DIFF" : "FAIL"} | ${g.detail.replace(/\|/g, "\\|")} |`);
+    for (const g of report.gates) {
+      // GFM splits cells before unescaping inline text. Preserve literal
+      // backslashes first, then protect pipes and keep each detail on one row.
+      const detail = g.detail.replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/[\r\n]+/g, " ");
+      lines.push(`| ${g.name} | ${g.ok ? "ok" : g.hard === false ? "DIFF" : "FAIL"} | ${detail} |`);
+    }
     for (const g of report.gates) for (const n of g.notes ?? []) lines.push(`    ${n}`);
     lines.push("");
   }

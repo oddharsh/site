@@ -23,6 +23,7 @@ import {
   dependencyDocBullets,
   ecosystemFromFiles,
   ecosystemOf,
+  escapeMd,
   htmlToText,
   inBumpRange,
   pairsFromComment,
@@ -170,6 +171,28 @@ test("each member of a grouped body gets its OWN sections, not its neighbour's",
   assert.equal(bodySectionsFor(SINGLE, "wrangler").length, 2);
   assert.deepEqual(bodySectionsFor(SINGLE, "not-in-this-pr"), []);
   assert.equal(htmlToText("<p>a&#39;b<br>c</p>"), "a'b\nc");
+});
+
+test("release-note entities decode once, including numeric and nested references", () => {
+  assert.equal(htmlToText("<p>&amp;lt; &amp;gt; &amp;quot; &amp;#39; &amp;amp;</p>"), "&lt; &gt; &quot; &#39; &amp;");
+  assert.equal(htmlToText("<p>&#x1F680; &#128640; &copy; &#39; &quot;</p>"), "🚀 🚀 © ' \"");
+});
+
+test("release-note parsing handles mixed case, quoted delimiters and raw-text elements", () => {
+  const html = '<H2 title="a > b">Changes</H2><P>before<BR/>after</P>' +
+    '<UL><LI><A title=">" href="https://example.com"><CODE>a&amp;b</CODE></A></LI></UL>' +
+    '<SCRIPT>discard me</SCRIPT extra><STYLE>also discard</STYLE><p>end</p>';
+  assert.equal(htmlToText(html), "## Changes\n\nbefore\nafter\n\n- `a&b`\n\nend");
+  assert.equal(htmlToText("<script/>discard through the close</script><p>kept</p>"), "kept");
+  assert.equal(htmlToText("<p>kept</p><script>unclosed"), "kept");
+});
+
+test("release-note comments are parsed and decoded tag examples remain inert text", () => {
+  assert.equal(htmlToText("<p>before</p><!-- hidden --!><p>after</p>"), "before\n\nafter");
+  assert.equal(htmlToText("<p>kept</p><!-- unclosed"), "kept");
+  const text = htmlToText("<code>&lt;SCRIPT&gt;example&lt;/SCRIPT&gt;</code>");
+  assert.equal(text, "`<SCRIPT>example</SCRIPT>`", "decoded text is never reparsed as markup");
+  assert.equal(escapeMd(text), "`&lt;SCRIPT&gt;example&lt;/SCRIPT&gt;`", "the comment renderer owns output escaping");
 });
 
 test("a version is read off a tag in every spelling this repository's dependencies use", () => {
@@ -352,7 +375,7 @@ test("the comment carries its marker, its pairs key, and no live markup from the
   const review = parseReview(
     JSON.stringify({
       verdict: "routine",
-      summary: "Nothing here <script>alert(1)</script>",
+      summary: 'Nothing here <script>alert(1)</script><SCRIPT src="x">example</SCRIPT>',
       security: [],
       perf: [{ claim: "faster <b>x</b>", source: "apps_v1.83.0", why_us: ".oxlintrc.json" }],
       features: [],
@@ -363,8 +386,7 @@ test("the comment carries its marker, its pairs key, and no live markup from the
   );
   const section = renderPackage(bumps[1], review, { releases: 1, commits: 2, commitsTruncated: false, changelog: false, advisories: 0, bodySections: [] });
   assert.match(section, /^### oxlint 1\.82\.0 → 1\.83\.0, routine/);
-  assert.doesNotMatch(section, /<script>|<b>/, "model text is escaped before it reaches GitHub");
-  assert.match(section, /&lt;script&gt;/);
+  assert.equal(section.split("\n\n")[1], 'Nothing here &lt;script&gt;alert(1)&lt;/script&gt;&lt;SCRIPT src="x"&gt;example&lt;/SCRIPT&gt;', "the complete model summary is escaped, regardless of tag casing or attributes");
   assert.match(section, /\*\*Security:\*\* nothing found\./);
   assert.match(section, /- faster &lt;b&gt;x&lt;\/b&gt; \(apps_v1\.83\.0\) Here: \.oxlintrc\.json/);
   assert.match(section, /Read: 1 release; 2 commits under npm\/oxlint; no CHANGELOG slice; 0 advisories against 1\.82\.0\./);

@@ -33,6 +33,8 @@ export const DOC_ALIASES = [
   { prose: "TypeScript", pkg: "typescript" },
   { prose: "@types/bun", pkg: "@types/bun" },
   { prose: "smol-toml", pkg: "smol-toml" },
+  // The Reader pins this package independently; its prose uses "htmlparser2".
+  { prose: "Release-note parser", pkg: "htmlparser2" },
   // playwright-core left VERSIONLESS on 2026-09-10. Its exemption rested on two
   // claims and one had gone stale: "only gen-og-cards.ts uses it, no CI job and
   // no deploy path touches it" was true when written and had grown to nine
