@@ -23,15 +23,23 @@ test("deadline lets a fast read through unmarked", async () => {
   assert.equal(marked, false, "a settled read must never be marked deadlined");
 });
 
+// The ORDER is the property and the wall clock is a proxy for it. `settled`
+// cannot flake: both sides are timers, expired timers fire in expiry order,
+// so the 15ms budget lands before the read however long the event loop
+// stalls. The elapsed-time bound can, and did: 60ms read, 55ms bound, 40ms
+// of headroom, and the third pass of the suite (4 workers, symlinked TMPDIR)
+// stalled past it on CI for main at 16924db2 (2026-09-15), which skipped that
+// commit's promotion. 400ms against 200ms keeps the same claim (the fallback
+// arrives well before the read) with 185ms for a loaded runner.
 test("deadline ships the fallback at the budget and leaves the read running", async () => {
   let marked = false;
   let settled = false;
-  const slow = new Promise((r) => setTimeout(() => { settled = true; r("late"); }, 60));
+  const slow = new Promise((r) => setTimeout(() => { settled = true; r("late"); }, 400));
   const t0 = Date.now();
   const v = await deadline(slow, 15, "fallback", () => { marked = true; });
   assert.equal(v, "fallback");
   assert.equal(marked, true);
-  assert.ok(Date.now() - t0 < 55, "fallback must arrive at the budget, not at the read");
+  assert.ok(Date.now() - t0 < 200, "fallback must arrive at the budget, not at the read");
   assert.equal(settled, false, "the read must still be in flight when the fallback ships");
   await slow;
   assert.equal(settled, true, "the abandoned read still completes");
