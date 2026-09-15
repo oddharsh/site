@@ -26,7 +26,7 @@ html { scrollbar-color: oklch(62% 0.14 255) oklch(91% 0.02 248); }
 body {
   background: linear-gradient(180deg, oklch(56% 0.13 250) 0%, oklch(73% 0.10 236) 50%, oklch(88% 0.05 232) 60%, oklch(60% 0.16 140) 100%);
   font-family: var(--font-ui);
-  font-size: 10.5pt; line-height: 1.5; color: oklch(21.78% 0 0);
+  font-size: 10.5pt; line-height: 1.5; color: var(--ink);
   padding: 24px 12px 60px; min-height: 100vh;
 }
 .window {
@@ -37,12 +37,12 @@ body {
               inset -1px -1px 0 #00138c, inset -2px -2px 0 #003bda, 4px 4px 0 rgba(0,30,160,.35);
 }
 .title-bar {
-  background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
+  background: var(--grad-title);
   color: oklch(100.00% 0 0);
   font-family: var(--font-caption);
   font-size: 10pt; font-weight: bold;
   padding: 4px 8px;
-  border-bottom: 1px solid oklch(41.92% 0.0962 250.51);
+  border-bottom: 1px solid var(--blue-40);
   display: flex; align-items: center; justify-content: space-between;
 }
 .title-bar .icon {
@@ -121,13 +121,13 @@ body {
 /* --- Luna polish: caption text shadow (matches horizon/scroll) --- */
 .title-bar { text-shadow: 1px 1px #0f1089; }
 .content { padding: 12px 16px 18px; }
-h1 { font-family: var(--font-caption); font-size: 14pt; color: oklch(41.92% 0.0962 250.51); margin: 0 0 6px; }
-.lede { color: oklch(38.67% 0 0); font-size: 10.5pt; margin: 0 0 4px; }
-h2 { font-family: var(--font-caption); font-size: 13pt; color: oklch(41.92% 0.0962 250.51); margin: 28px 0 4px; }
+h1 { font-family: var(--font-caption); font-size: 14pt; color: var(--blue-40); margin: 0 0 6px; }
+.lede { color: var(--ink-soft); font-size: 10.5pt; margin: 0 0 4px; }
+h2 { font-family: var(--font-caption); font-size: 13pt; color: var(--blue-40); margin: 28px 0 4px; }
 .note { color: oklch(44.95% 0 0); font-size: 10pt; margin: 0 0 14px; }
 .note code, p code, li code { background: oklch(96.72% 0 0); border: 1px solid oklch(88.22% 0 0); padding: 0 4px; font-family: var(--font-mono); font-size: 9.5pt; }
 hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 14px 0; }
-a { color: oklch(41.92% 0.0962 250.51); }
+a { color: var(--blue-40); }
 ul { margin: 0 0 14px; padding-left: 20px; font-size: 10pt; color: oklch(40% 0 0); }
 li { margin: 3px 0; }
 .status { display: inline-block; font-family: var(--font-mono); font-size: 8.5pt; font-weight: bold; letter-spacing: 0.05em; padding: 1px 6px; border: 1px solid; border-radius: 2px; text-transform: uppercase; vertical-align: middle; }
@@ -149,7 +149,7 @@ li { margin: 3px 0; }
 .ruler { height: 6px; background: repeating-linear-gradient(90deg, oklch(70% 0.04 250) 0 1px, transparent 1px 20px); border-bottom: 1px solid oklch(80% 0.02 250); }
 .race-out { font-family: var(--font-mono); font-size: 9.5pt; background: oklch(96% 0.01 250); border: 1px solid oklch(80% 0.02 250); border-radius: 4px; padding: 10px 12px; margin-top: 8px; color: oklch(25% 0 0); min-height: 1.5em; }
 .race-out b { color: oklch(40% 0.16 150); }
-.callout { font-size: 10pt; background: oklch(97% 0.025 255); border-left: 3px solid oklch(51% 0.225 263); padding: 8px 12px; margin: 14px 0; color: oklch(28% 0.04 255); }
+.callout { font-size: 10pt; background: oklch(97% 0.025 255); border-left: 3px solid var(--blue-65); padding: 8px 12px; margin: 14px 0; color: oklch(28% 0.04 255); }
 .verdict { font-size: 10pt; background: oklch(98% 0.02 95); border-left: 3px solid oklch(60% 0.13 75); padding: 8px 12px; margin: 14px 0; color: oklch(32% 0.05 75); }
 .replaces { font-size: 9.5pt; color: oklch(33% 0 0); margin: 8px 0 0; border-left: 3px solid oklch(86% 0.03 250); padding-left: 8px; }
 footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67% 0.0294 259.59); font-size: 9.5pt; color: oklch(45% 0 0); }

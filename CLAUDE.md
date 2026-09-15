@@ -3046,8 +3046,22 @@ how to recover the plans and their audit from git.
 2. **Keep perf lean.** Fold design tokens in without regressing the byte budget.
    On a brotli-compressed inline page, tokenizing repeated literals is a wash
    while token definitions are net-new bytes, so only the font tokens
-   (`--font-*`) are inlined site-wide. Color and gradient tokens are not inlined;
-   there is no external stylesheet and no JavaScript for styling.
+   (`--font-*`) are inlined per page. **The colour and gradient tokens reach
+   every page through `luna.css`**, which 42 of 43 documents link as a
+   blocking stylesheet, so page CSS writes `var(--blue-40)` rather than the
+   resolved `oklch(41.92% 0.0962 250.51)`, and `garage/vt-b` is the one page
+   that has to stay literal. This paragraph said "color and gradient tokens
+   are not inlined; there is no external stylesheet" until 2026-09-15, which
+   was true before `luna.css` existed and had been false for two months. What
+   it cost is the whole point of a knob: 345 hand-resolved token copies sat in
+   page CSS, 43 more inside `luna.css`, and `--grad-title` had ZERO consumers
+   while 30 pages carried the same five stops resolved by hand, so turning
+   `--hue-luna` moved nothing a visitor looks at. Measured on the homepage, the
+   swap is -8 B brotli: bytes are the wash the old sentence predicted, and the
+   knob is the reason. `contract-design-tokens-reach-every-page` holds it at
+   zero copies and pins `luna.css`'s token blocks to `design/tokens/` byte for
+   byte, which the "verbatim" in its header claimed without a check. No
+   JavaScript for styling, still.
 
    **Served pages load no cross-origin assets, and since 2026-08-25 every
    same-origin script they load is a file in this repository.** That is newer than

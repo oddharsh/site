@@ -133,7 +133,7 @@ body {
   /* modern line-breaking: fewer orphans + less ragged last lines. progressive —
      ignored where unsupported. (also set globally via nav.js for every page.) */
   text-wrap: pretty;
-  color: oklch(21.78% 0 0);
+  color: var(--ink);
   padding: 30px 14px 64px;
   min-height: 100vh;
 }
@@ -146,13 +146,13 @@ body {
 
 /* fake XP title bar */
 .title-bar {
-  background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
+  background: var(--grad-title);
   color: oklch(100.00% 0 0);
   font-family: var(--font-caption);
   font-size: 10pt;
   font-weight: bold;
   padding: 4px 8px;
-  border-bottom: 1px solid oklch(41.92% 0.0962 250.51);
+  border-bottom: 1px solid var(--blue-40);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -260,7 +260,7 @@ body {
 h1 {
   font-family: var(--font-caption);
   font-size: 14pt;
-  color: oklch(41.92% 0.0962 250.51);
+  color: var(--blue-40);
   margin: 0 0 4px;
   font-weight: bold;
   letter-spacing: -0.01em;
@@ -268,7 +268,7 @@ h1 {
 
 .lede {
   margin: 0 0 14px;
-  color: oklch(38.67% 0 0);
+  color: var(--ink-soft);
   font-size: 10.5pt;
   /* pretty: avoids orphan/short last lines in the prose. supported
      Chrome 117+/Safari 17.5+; treated as `normal` elsewhere (no harm). */
@@ -325,7 +325,7 @@ hr {
   /* one base token for the contact-sheet frame. the hover shade is DERIVED from
      it below with relative color — oklch(from var(--photo-frame) …) — so retuning
      this one value retunes the hover automatically. */
-  --photo-frame: oklch(61.14% 0.0611 253.60);
+  --photo-frame: var(--frame);
   border: 1px solid var(--photo-frame);
   box-shadow: 1px 1px 0 oklch(61.14% 0.0611 253.60 / 0.3);
   line-height: 0;
@@ -333,10 +333,10 @@ hr {
   overflow: hidden;
 }
 .photos a:hover {
-  background: oklch(97.73% 0.0373 95.44);
+  background: var(--row-hover);
   /* derived from --photo-frame: darker + a touch more saturated. the hand-tuned
      value is the fallback for engines without relative color (pre-2024). */
-  border-color: oklch(41.92% 0.0962 250.51);
+  border-color: var(--blue-40);
   border-color: oklch(from var(--photo-frame) calc(l - 0.19) calc(c + 0.035) h);
 }
 /* The one thumbnail <img> fills the aspect-ratio'd frame. box aspect ≈ native
@@ -414,7 +414,7 @@ footer .signature small { color: oklch(56.93% 0 0); }
    the tick rides the /hit beacon below instead of the render. */
 .counter {
   display: inline-block;
-  background: oklch(21.78% 0 0);
+  background: var(--ink);
   color: oklch(86.52% 0.1768 90.38);
   font-family: var(--font-mono);
   font-size: 9pt;
