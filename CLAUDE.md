@@ -1809,6 +1809,12 @@ per RFC 9421 + Web Bot Auth IETF draft. JWKS at
 - The Spotify scraper (`scrapeSpotifyEmbed()`)
 - Any other outbound fetch where being identifiable matters
 
+Request signatures expire after one minute and carry a fresh 32-byte nonce.
+The directory is Worker-first: `lib/botauth.ts` signs its response over
+`"@authority";req` with the directory tag and serves it with `no-store`.
+Its committed JWK Set must match `RN_SIGNING_KEY_JWK`; missing or mismatched
+material returns 503, so rotate the public file and private secret together.
+
 ### `/mcp` — dual-era, and why both eras are served
 
 `src/worker/mcp.ts` speaks **2026-07-28** and the three legacy revisions

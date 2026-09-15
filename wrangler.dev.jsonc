@@ -85,6 +85,8 @@
       "/auth.md", "/.well-known/api-catalog", "/.well-known/agent-card.json",
       "/.well-known/oauth-protected-resource",
       "/.well-known/oauth-authorization-server",
+      // Per-request proof of possession; the static asset alone is unsigned.
+      "/.well-known/http-message-signatures-directory",
       "/agent/*", "/oauth2/*",
       "/whoareyou", "/whoareyou.json", "/security",
       "/reading", "/updates", "/updates.json",
