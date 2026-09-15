@@ -1138,7 +1138,7 @@ export async function handleRnAdmin(request, env) {
     <p><strong>Currently:</strong><br>${current}</p>
     <form method="POST" action="/rn/set" autocomplete="off" style="margin-top:14px">
       <input type="hidden" name="secret" value="${esc(secret)}">
-      <label for="u" style="display:block;font-weight:bold;color:oklch(41.92% 0.0962 250.51);margin-bottom:4px">New playlist URL:</label>
+      <label for="u" style="display:block;font-weight:bold;color:var(--blue-40);margin-bottom:4px">New playlist URL:</label>
       <input id="u" name="url" type="text" placeholder="https://open.spotify.com/playlist/..." autofocus class="xp-input" style="font-family:'Courier New',monospace">
       <p style="margin-top:10px">
         <button type="submit" class="xp-button default">
@@ -1146,7 +1146,7 @@ export async function handleRnAdmin(request, env) {
         </button>
       </p>
     </form>
-    <p style="margin-top:18px;color:oklch(51.03% 0 0);font-size:9.5pt">
+    <p style="margin-top:18px;color:var(--ink-dim);font-size:9.5pt">
       <em>Tip:</em> on Spotify desktop, right-click the playlist &rarr; Share &rarr;
       Copy link to playlist, then paste here.
     </p>`;
@@ -1227,7 +1227,7 @@ export function setPage(status, title, bodyHtml) {
     robots: "noindex",
     css: `
   h1 {
-    font-family: "Trebuchet MS", Verdana, Geneva, sans-serif; color: oklch(41.92% 0.0962 250.51);
+    font-family: "Trebuchet MS", Verdana, Geneva, sans-serif; color: var(--blue-40);
     font-size: 16pt; margin: 0 0 8px;
   }
   a:link    { color: oklch(42.61% 0.2353 263.74); text-decoration: underline; }

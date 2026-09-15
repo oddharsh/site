@@ -103,7 +103,7 @@ export function renderRun({ cmd = "", notFound = false } = {}) {
     border: 1px solid oklch(60% 0.16 29); background: oklch(97% 0.02 60);
     color: oklch(35% 0.05 29); padding: 8px 10px; margin: 10px 0; font-size: 9.5pt;
   }
-  .run-note { font-size: 9pt; color: oklch(51.03% 0 0); margin-top: 12px; }
+  .run-note { font-size: 9pt; color: var(--ink-dim); margin-top: 12px; }
 `,
     body: unsafeHtml(`
     <div class="run-lede">

@@ -404,7 +404,7 @@ export async function handleCensus(request, env, ctx) {
 .lx-badge.warn { background:oklch(60% 0.16 50); }
 .lx-badge.ok { background:oklch(52% 0.13 150); }
 .lx-badge.off { background:oklch(60% 0 0); }
-h1 { font-family:"Trebuchet MS",Verdana,sans-serif; font-size:13pt; color:oklch(41.92% 0.0962 250.51); margin:0 0 2px; }
+h1 { font-family:"Trebuchet MS",Verdana,sans-serif; font-size:13pt; color:var(--blue-40); margin:0 0 2px; }
 .cx-lede { margin:0 0 12px; color:oklch(40% 0 0); font-size:10pt; line-height:1.5; }
 .cx-lede a { color:oklch(42.61% 0.2353 263.74); }
 footer { text-align:center; font-size:9pt; color:oklch(45% 0 0); margin-top:16px; padding-top:11px; border-top:1px solid oklch(86.67% 0.0294 259.59); }

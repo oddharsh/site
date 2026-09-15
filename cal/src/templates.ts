@@ -92,7 +92,7 @@ h1 {
 }
 .lead {
   font-size: 10.5pt;
-  color: oklch(38.67% 0 0);
+  color: var(--ink-soft);
   margin: 0 0 12px;
   text-wrap: pretty;    /* horizon: avoids orphans/ragged last line */
 }
