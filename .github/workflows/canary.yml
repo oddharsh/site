@@ -33,9 +33,11 @@ name: Canary tripwire
 # weeks earlier, against builds that can still be fixed before they ship.
 #
 # WHAT IT NEVER DOES. Write a pin, roll a dictionary, open a pull request, or
-# hold a Cloudflare credential. It is an instrument: canary-report.ts keeps at
-# most ONE open issue per leg and comments on it only when the signature
-# changes, then closes it the night the leg goes green. A leg that could not
+# hold a Cloudflare credential. It is an instrument: timbrado's reporter (the
+# tool extracted from these legs, github.com/oddharsh/timbrado, a git
+# dependency pinned by commit) keeps at most ONE open issue per leg and
+# comments on it only when the signature changes, then closes it the night
+# the leg goes green. A leg that could not
 # run (no download, a page that did not load) files nothing and reds the JOB,
 # because "the runner had no unzip" is not a finding and an issue saying so
 # trains the reader to close canary issues unread.
@@ -111,7 +113,7 @@ jobs:
       - name: File, comment, or close the leg's one issue
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bun run canary:report -- --leg bun --json canary.json --exit "${{ steps.leg.outputs.exit }}"
+        run: bun run timbrado report --target bun --json canary.json --exit "${{ steps.leg.outputs.exit }}" --reproduce "bun run canary:bun"
 
       - name: Summary
         if: always()
@@ -163,7 +165,7 @@ jobs:
       - name: File, comment, or close the leg's one issue
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bun run canary:report -- --leg wrangler --json canary.json --exit "${{ steps.leg.outputs.exit }}"
+        run: bun run timbrado report --target wrangler --json canary.json --exit "${{ steps.leg.outputs.exit }}" --reproduce "bun run canary:wrangler"
 
       - name: Summary
         if: always()
@@ -219,7 +221,7 @@ jobs:
       - name: File, comment, or close the leg's one issue
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bun run canary:report -- --leg browsers --json canary.json --exit "${{ steps.leg.outputs.exit }}"
+        run: bun run timbrado report --target browsers --json canary.json --exit "${{ steps.leg.outputs.exit }}" --reproduce "bun run canary:browsers"
 
       - name: Summary
         if: always()

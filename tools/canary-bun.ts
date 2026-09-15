@@ -49,7 +49,7 @@ import { rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { BUN_WATCHES, runBunWatch, type WatchResult, watchMoved, watchRow, watchSignature } from "./lib/upstream-watches.ts";
+import { BUN_WATCHES, runWatch, type WatchResult, watchMoved, watchRow, watchSignature } from "./lib/upstream-watches.ts";
 import { canaryUrl, compareVersions, npmVersion, readPin, releaseAsset, runningMatchesPin } from "./lib/bun-pin.ts";
 import {
   type Gate,
@@ -195,7 +195,7 @@ step(calSuiteGate(candidate, ROOT));
 console.log("\nwatches (pinned -> canary):");
 const mark = (v: boolean | null) => (v === null ? "?" : v ? "landed" : "not yet");
 for (const w of BUN_WATCHES) {
-  const row = watchRow(w, runBunWatch(process.execPath, w), runBunWatch(candidate, w));
+  const row = watchRow(w, runWatch(process.execPath, w), runWatch(candidate, w));
   watches.push(row);
   const note = watchMoved(row) ? "  <-- moved" : row.pinned && row.candidate ? "  (in the pin too: retire this watch)" : "";
   console.log(`  ${row.name.padEnd(46)} ${mark(row.pinned).padEnd(8)} -> ${mark(row.candidate).padEnd(8)}${note}`);

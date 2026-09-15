@@ -83,10 +83,12 @@ type Flip = { cap: string; stable: boolean; prerelease: boolean; pair: string };
 type Report = {
   leg: "browsers";
   verdict: "green" | "changed" | "instrument";
-  subject: { page: string; engines: { name: string; version: string; probes: number; true: number; honest: number }[] };
+  subject: { page: string };
   signature: string;
   flips: Flip[];
   belowBar: { cap: string; trueIn: string[] }[];
+  /** the findings as timbrado's reporter renders them: engines, flips, the two-engine bar */
+  tables: { caption?: string; columns: string[]; rows: string[][] }[];
   reason?: string;
   ms: number;
 };
@@ -200,27 +202,34 @@ async function snapshot(name: string): Promise<Snapshot> {
   }
 }
 
+/** The issue-body tables, pure so a test can render them through the reporter. */
+export function tablesFor(engines: { name: string; version: string; probes: number; true: number }[], flips: Flip[], belowBar: Report["belowBar"]): Report["tables"] {
+  return [
+    { columns: ["engine", "version", "probes true"], rows: engines.map((e) => [e.name, e.version, `${e.true} / ${e.probes}`]) },
+    { caption: "Probes that answer differently in the prerelease (a `gone` is a browser bug to file):", columns: ["probe", "pair", "stable", "prerelease"], rows: flips.map((f) => [`\`${f.cap}\``, f.pair, String(f.stable), `${f.prerelease}${f.prerelease ? "" : " (gone)"}`]) },
+    { caption: "Cards marked shipped that no longer clear the two-engine bar in stable engines:", columns: ["card", "true in"], rows: belowBar.map((b) => [`\`${b.cap}\``, b.trueIn.length ? b.trueIn.join(", ") : "no stable engine"]) },
+  ];
+}
+
 const emit = (verdict: Report["verdict"], snaps: Snapshot[], flips: Flip[], belowBar: Report["belowBar"], reason?: string) => {
   const sig = [
     ...flips.map((f) => `${f.cap}@${f.pair}:${f.stable ? "t" : "f"}>${f.prerelease ? "t" : "f"}`),
     ...belowBar.map((b) => `bar:${b.cap}`),
   ].sort();
+  const engines = snaps.map((s) => ({
+    name: s.name,
+    version: s.version,
+    probes: Object.keys(s.probes).length,
+    true: Object.values(s.probes).filter((p) => p.value).length,
+  }));
   const report: Report = {
     leg: "browsers",
     verdict,
-    subject: {
-      page: pagePath.replace(ROOT, ""),
-      engines: snaps.map((s) => ({
-        name: s.name,
-        version: s.version,
-        probes: Object.keys(s.probes).length,
-        true: Object.values(s.probes).filter((p) => p.value).length,
-        honest: Object.values(s.probes).filter((p) => p.honest).length,
-      })),
-    },
+    subject: { page: pagePath.replace(ROOT, "") },
     signature: verdict === "green" ? "green" : verdict === "instrument" ? `instrument:${reason}` : `changed:${sig.join("|")}`,
     flips,
     belowBar,
+    tables: tablesFor(engines, flips, belowBar),
     reason,
     ms: Date.now() - started,
   };

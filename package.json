@@ -65,9 +65,8 @@
     "canary:bun": "bun tools/canary-bun.ts",
     "canary:wrangler": "bun tools/canary-wrangler.ts",
     "canary:browsers": "bun tools/canary-browsers.ts",
-    "canary:report": "bun tools/canary-report.ts",
     "wrangler:pin": "bun tools/bump-wrangler-pin.ts",
-    "pin:digest": "bun tools/pin-digest.ts",
+    "timbrado": "bun node_modules/timbrado/src/cli.ts",
     "node:pin": "bun tools/check-node-pin.ts",
     "early-hints:probe": "bun tools/early-hints-probe.ts",
     "speculation:probe": "bun tools/speculation-probe.ts",
@@ -93,6 +92,7 @@
     "oxlint-tsgolint": "7.0.2001",
     "playwright-core": "1.63.0",
     "smol-toml": "1.8.0",
+    "timbrado": "github:oddharsh/timbrado#9806880d918dce63c0e33e007604045ec328f696",
     "typescript": "7.0.2",
     "wrangler": "https://pkg.pr.new/cloudflare/workers-sdk/wrangler@982b806"
   },

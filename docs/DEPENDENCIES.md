@@ -149,6 +149,19 @@ Available, measured, and deliberately not wired in: `bun test --shard` with
 repo's single `validate` job has no use for yet), `bun test --changed` for
 local loops, and `--cpu-prof-md`, which writes a grep-friendly CPU profile.
 
+### timbrado, a git dependency by commit
+
+[`timbrado`](https://github.com/oddharsh/timbrado) is the tool extracted from
+the canary tripwire on 2026-09-15: the watch runner and its row semantics, the
+issue reporter with its signature dedupe, and the upstream digest the two pin
+PRs carry. It is unpublished on npm, the same standing as halflight, so
+`package.json` names it as `github:oddharsh/timbrado#<full sha>` and bun.lock
+records the tarball's sha512. The sha is the identity. Bumping it is a hand
+edit of the sha plus `bun install`; dependabot cannot reach a git dependency
+(the halflight note above says the same of cargo). What stays in this
+repository is what is this repository's: the legs, the gates (a byte-identical
+build is a fact about `/a/` and `/i/`), the watch LIST, and the browser probes.
+
 ### node, in `.node-version`
 
 Also unowned, and it needs a DIFFERENT tool rather than the same one pointed
