@@ -34,7 +34,24 @@
 // starts DROPPING what it cannot parse fails here instead of silently shipping a
 // page with its demo stripped out.
 
-import { transform as transformCss } from "lightningcss";
+import { readFileSync } from "node:fs";
+import { Features, transform as transformCss } from "lightningcss";
+
+// `@custom-media` (src/styles/custom-media.css) is resolved HERE, for every
+// stylesheet, by the one engine that already parses them all. Two flags do it:
+// `drafts.customMedia` lets the parser accept the at-rule, and `include`
+// forces the transform, because with no `targets` Lightning preserves modern
+// syntax rather than downleveling it, and a query no engine implements is
+// exactly the one it would otherwise preserve verbatim. Nothing else is
+// included, so oklch(), nesting and the rest still ship as authored.
+//
+// The definitions are APPENDED rather than prepended, which the spec allows
+// (a definition applies stylesheet-wide, last one wins), so a parse error in
+// the caller's CSS still reports the caller's line number. An unused
+// definition emits nothing (measured on lightningcss 1.33.0), which is what
+// lets this ride on every stylesheet for free; an undefined name throws
+// `Custom media query --x is not defined`, and that is the failure wanted.
+const CUSTOM_MEDIA = readFileSync(new URL("../../src/styles/custom-media.css", import.meta.url), "utf8");
 
 export const UNKNOWN_SELECTOR = /'([^']+)' is not recognized as a valid pseudo-(?:element|class)/;
 
@@ -43,7 +60,13 @@ export const UNKNOWN_SELECTOR = /'([^']+)' is not recognized as a valid pseudo-(
 // `minify` is the caller's business: the build wants minified bytes, a contract
 // check only wants the verdict. Both want the same definition of "damaged".
 export const parseCss = (filename: string, sourceText: string, { minify = false } = {}) => {
-  const result = transformCss({ filename, code: Buffer.from(sourceText), minify });
+  const result = transformCss({
+    filename,
+    code: Buffer.from(sourceText + "\n" + CUSTOM_MEDIA),
+    minify,
+    drafts: { customMedia: true },
+    include: Features.CustomMediaQueries,
+  });
   const out = Buffer.from(result.code).toString();
 
   const fatal: string[] = [], tolerated: string[] = [];
@@ -51,6 +74,15 @@ export const parseCss = (filename: string, sourceText: string, { minify = false 
     const m = UNKNOWN_SELECTOR.exec(w.message);
     if (m) tolerated.push(m[1]);
     else fatal.push(w.message);
+  }
+  // A block the caller never closed runs to end-of-input, which is now the
+  // appended definitions, so they parse as at-rules NESTED in that block and
+  // Lightning reports each one as unknown. Before the append that stylesheet
+  // parsed clean (an implicit close at EOF is legal recovery), so the append
+  // is what surfaces the bug; the message it surfaces it with is not, hence
+  // the translation. Measured on 1.33.0 with `.c { d: 1 ` at EOF.
+  if (fatal.some((f) => f === "Unknown at rule: @custom-media")) {
+    throw new Error(`${filename}: a block is never closed (the stylesheet runs to end-of-input inside a rule), so the @custom-media definitions appended after it were read as nested at-rules; add the missing \`}\``);
   }
   if (fatal.length) {
     throw new Error(`${filename}: Lightning CSS emitted warnings: ${fatal.join("; ")}`);

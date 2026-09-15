@@ -1,0 +1,47 @@
+/* ============================================================================
+   aadhar.sh — Custom media queries (@custom-media, Media Queries 5)
+   ----------------------------------------------------------------------------
+   Named aliases for the media queries the site repeats. NO BROWSER implements
+   @custom-media (cssdb 8.11: zero engines, stage 2), so these are resolved at
+   build time by Lightning CSS (tools/lib/css-parse.ts appends this file to
+   every stylesheet it parses and runs the CustomMediaQueries transform). What
+   ships is the expanded query; a definition nothing uses costs zero bytes; a
+   name nothing defines fails the build by name.
+
+   The cost, and the reason to read this before writing `@media (--p3)`:
+   `bun run dev` serves the bytes in git, unresolved, so a rule behind a custom
+   media query is INVISIBLE in dev (the browser reads `(--p3)` as an unknown
+   query that never matches). Build-only surfaces already have this standing
+   here (/search, /images/meta/*, the /lens shell); a stylesheet is the first
+   place it would be visible on screen. Reach for these where the query is
+   cosmetic under dev's conditions anyway (a P3 upgrade, a reduced-motion
+   opt-out), and keep a layout breakpoint literal until dev resolves them.
+
+   One place keeps the literal on purpose: luna.css's token blocks are
+   verbatim copies of design/tokens/*.css, pinned byte for byte by a contract
+   test, and the design files have readers outside this build (the design
+   skill, a pasted prototype) where `(--p3)` would resolve to nothing. So the
+   P3 block in luna.css says `(color-gamut: p3)` and stays that way; the alias
+   is for CSS this build is the only consumer of.
+
+   Names are what the tree already spells out, counted 2026-09-15 across
+   src/styles and src/pages. The six narrow breakpoints in play (460, 520, 540,
+   560, 620, 760px) are a design question this file does not settle: only the
+   garage scaffold's 520 gets a name here, since it is the one that recurs.
+   ============================================================================ */
+
+/* wide-gamut upgrades: the OKLCH chroma boosts the Luna brief describes */
+@custom-media --p3 (color-gamut: p3);
+
+/* motion, both directions: the opt-out (8 uses) and the explicit opt-in (2) */
+@custom-media --reduced-motion (prefers-reduced-motion: reduce);
+@custom-media --motion-ok (prefers-reduced-motion: no-preference);
+
+/* a pointer that cannot hover: touch, where the hover cards must not fire (gotcha 10) */
+@custom-media --coarse (hover: none);
+
+/* Windows High Contrast and friends, where the bevels have to become borders */
+@custom-media --forced-colors (forced-colors: active);
+
+/* the garage scaffold's narrow breakpoint (20 uses across src/pages/garage) */
+@custom-media --narrow (max-width: 520px);

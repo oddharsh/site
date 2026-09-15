@@ -211,7 +211,7 @@ svg.graph{margin:0 auto}
 .rival{fill:none;stroke:#b8860b;stroke-width:1.4;stroke-dasharray:6 3;opacity:.75}
 .flow{fill:none;stroke:var(--danger);stroke-width:1.6;stroke-dasharray:4 3;opacity:0}
 .flowing .flow{opacity:.85}
-@media (prefers-reduced-motion:no-preference){.flowing .flow{animation:march 1s linear infinite}}
+@media (--motion-ok) {.flowing .flow{animation:march 1s linear infinite}}
 @keyframes march{to{stroke-dashoffset:-14}}
 .dev{cursor:pointer}
 .dev .box{fill:var(--face-light);stroke:var(--sh);stroke-width:1}

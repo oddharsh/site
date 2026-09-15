@@ -134,7 +134,7 @@ a{color:var(--link)}
 .axis svg{display:block;width:100%;height:54px}
 .axiscap{font-size:9.5pt;color:var(--ink-soft);margin-top:6px;line-height:1.5}
 @media (max-width:520px){h1{font-size:15pt}.tiles{gap:6px}.score-hero .pct{font-size:26pt}.cap{font-size:7.5pt}}
-@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+@media (--reduced-motion) {*{transition:none!important}}
 
   /* OS-window geometry inlined so FIRST PAINT matches nav.js (no shell "pop"
      when the deferred desktop arrives). keep in sync with nav.js (search
