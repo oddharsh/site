@@ -27,7 +27,7 @@ import { marker, plan, render, title } from "timbrado/report";
 import { checkWatch } from "timbrado/watch";
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 import { chromeChannel, DEFAULT_CHROME_CHANNEL } from "./lib/browser-channel.ts";
-import { HONEST_FALSE, JXL_2X2, LIVE_PROBES, familyOf, shippedCaps, tablesFor } from "./canary-browsers.ts";
+import { DEFAULT_PAIRS, HONEST_FALSE, JXL_2X2, LIVE_PROBES, familyOf, shippedCaps, tablesFor } from "./canary-browsers.ts";
 import { BUN_WATCHES, WRANGLER_WATCHES, runWatch } from "./lib/upstream-watches.ts";
 
 const LEGS = ["tools/canary-bun.ts", "tools/canary-wrangler.ts", "tools/canary-browsers.ts"];
@@ -96,7 +96,7 @@ test("chromeChannel() reads CHROME_CHANNEL and defaults to stable Chrome", () =>
   assert.equal(chromeChannel({ CHROME_CHANNEL: "" }), "chrome");
   assert.equal(chromeChannel({ CHROME_CHANNEL: "  " }), "chrome");
   assert.equal(chromeChannel({ CHROME_CHANNEL: "chrome-canary" }), "chrome-canary");
-  assert.equal(chromeChannel({ CHROME_CHANNEL: " chromium-tip-of-tree " }), "chromium-tip-of-tree");
+  assert.equal(chromeChannel({ CHROME_CHANNEL: " chrome-beta " }), "chrome-beta");
 });
 
 test("the legs' reports flow through timbrado's reporter: leg-shaped JSON, the verdict strings, the browsers tables", () => {
@@ -139,9 +139,10 @@ test("the honest-false detector matches the page's own convention, and finds the
   assert.ok(shipped.includes("text-box-trim"), "text-box-trim is shipped on the site and must be found");
   assert.ok(!shipped.includes("interestfor"), "interestfor is a demo card and must not read as shipped");
 
-  assert.equal(familyOf("chromium-tip-of-tree"), "chromium");
+  assert.equal(familyOf("chrome-beta"), "chromium");
+  assert.equal(familyOf("msedge-dev"), "chromium");
   assert.equal(familyOf("chrome-canary"), "chromium");
-  assert.equal(familyOf("firefox-beta"), "firefox");
+  assert.equal(familyOf("firefox"), "firefox");
   assert.equal(familyOf("webkit"), "webkit");
 });
 
@@ -183,4 +184,18 @@ test("the JXL fixture is a real codestream and the live probes are named where t
   assert.deepEqual([...LIVE_PROBES], ["live:jxl-decode", "live:dictionary-transport"]);
   const src = readdirSync(fileURLToPath(new URL("tools/", ROOT))).includes("canary-browsers.ts");
   assert.ok(src);
+});
+
+test("every name in the browsers leg's default pairs is an installation target the pinned playwright accepts", () => {
+  // The installer's target list is narrower than its launch channels and it
+  // moves: `chromium-tip-of-tree` and `firefox-beta` were valid when the leg
+  // was written and refused by playwright-core 1.63, which killed the first
+  // scheduled run at the install step. `--dry-run` answers without a download.
+  const { spawnSync } = require("node:child_process");
+  const names = [...new Set(DEFAULT_PAIRS.split(",").flatMap((p) => p.split(":")))];
+  assert.ok(names.length >= 4, "the default pairs collapsed");
+  for (const name of names) {
+    const run = spawnSync("node", ["node_modules/playwright-core/cli.js", "install", "--dry-run", name], { cwd: fileURLToPath(ROOT), encoding: "utf8", timeout: 60_000 });
+    assert.doesNotMatch(`${run.stdout}${run.stderr}`, /Invalid installation targets/, `${name} is not an installation target of the pinned playwright-core`);
+  }
 });
