@@ -24,7 +24,7 @@
 // Option order is shuffled deterministically (seeded from the question text),
 // so positions are stable across visits and balanced across questions without
 // an "the answer is always C" tell. No-ops without a #luq-data block.
-(function () {
+(() => {
   var D = document;
   var dataEl = D.getElementById("luq-data");
   if (!dataEl) return;
@@ -41,14 +41,14 @@
     'understanding check &middot; the idea is <a href="https://www.geoffreylitt.com/2026/07/02/understanding-is-the-new-bottleneck" rel="external">Geoffrey Litt&rsquo;s</a>: ' +
     "reading feels like understanding until someone asks. questions are AI-drafted from this page, misses point back at it.";
 
-  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, (c) => { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
 
   // deterministic shuffle: seed an LCG from the question text so the option
   // order is stable per question but uncorrelated across questions.
   function seeded(str) {
     var h = 2166136261;
     for (var i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
-    return function () { h = (Math.imul(h, 1103515245) + 12345) & 0x7fffffff; return h / 0x80000000; };
+    return () => { h = (Math.imul(h, 1103515245) + 12345) & 0x7fffffff; return h / 0x80000000; };
   }
   function shuffled(q) {
     var rnd = seeded(q.q), a = q.options.slice();
@@ -115,8 +115,8 @@
       qwrap.innerHTML = html;
       var check = /** @type {HTMLButtonElement} */ (qwrap.querySelector(".luq-check")),
           fb = qwrap.querySelector(".luq-fb");
-      qwrap.querySelector(".luq-opts").addEventListener("change", function () { check.disabled = false; });
-      check.addEventListener("click", function () {
+      qwrap.querySelector(".luq-opts").addEventListener("change", () => { check.disabled = false; });
+      check.addEventListener("click", () => {
         var picked = /** @type {HTMLInputElement} */ (qwrap.querySelector("input:checked")); if (!picked) return;
         var pick = opts[+picked.value], hit = !!pick.ok;
         if (hit) score++;
@@ -130,7 +130,7 @@
         }
         fb.innerHTML = '<p class="luq-why ' + (hit ? "hit" : "miss") + '"><b>' + (hit ? "Right." : "Close, and the miss is the useful part.") + "</b>" + esc(pick.why || "") + "</p>";
         /** @type {HTMLElement} */ (check.parentNode).innerHTML = '<button type="button" class="luq-btn luq-next">' + (idx + 1 < qs.length ? "Next &gt;" : "Finish") + "</button>";
-        qwrap.querySelector(".luq-next").addEventListener("click", function () {
+        qwrap.querySelector(".luq-next").addEventListener("click", () => {
           idx++;
           if (idx < qs.length) renderQ(); else renderEnd();
         });
@@ -151,7 +151,7 @@
         '<ul class="luq-list">' + list + "</ul>" +
         '<div class="luq-row"><button type="button" class="luq-btn luq-again">Retake</button></div>' +
         '<p class="luq-credit">' + CREDIT + "</p>";
-      qwrap.querySelector(".luq-again").addEventListener("click", function () { idx = 0; score = 0; results = []; renderQ(); });
+      qwrap.querySelector(".luq-again").addEventListener("click", () => { idx = 0; score = 0; results = []; renderQ(); });
     }
 
     renderQ();
@@ -190,7 +190,7 @@
       for (var i = 0; i < opts.length; i++) html += '<button type="button" class="luq-opt" data-i="' + i + '">' + esc(opts[i].t) + "</button>";
       html += "</div>";
       var m = msg("bot", html);
-      m.querySelector(".luq-opts").addEventListener("click", function (e) {
+      m.querySelector(".luq-opts").addEventListener("click", (e) => {
         var b = /** @type {HTMLButtonElement} */ (/** @type {Element} */ (e.target).closest(".luq-opt")); if (!b || b.disabled) return;
         var pick = opts[+b.dataset.i], hit = !!pick.ok;
         if (hit) score++;

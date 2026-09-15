@@ -6,7 +6,7 @@
 // human action after import(), so a cold click cannot race the client that owns it.
 // They are bound to the Lens content root rather than the document, so the
 // desktop shell's own controls never wait on a module they do not use.
-(function () {
+(() => {
   "use strict";
 
   /** @type {Promise<void> | null} */
@@ -18,12 +18,12 @@
   // ordering the promises here makes that handoff race-free even when a person
   // clicks while the registrar is still crossing the wire.
   var pageTools = (document.modelContext || navigator.modelContext)
-    ? import("/lens-webmcp.js").catch(function () { return null; })
+    ? import("/lens-webmcp.js").catch(() => { return null; })
     : null;
 
   function load() {
     if (app) return app;
-    var loading = Promise.resolve(pageTools).then(function () {
+    var loading = Promise.resolve(pageTools).then(() => {
       // @ts-expect-error — a CACHE-BUSTED specifier. "/lens.js?v=1" is a real URL
       // the browser resolves and no path mapping can match. Pointing tsc at the
       // file instead answers "is not a module", because lens.js is a classic
@@ -32,9 +32,9 @@
       // a side-effect import. @ts-expect-error rather than @ts-ignore so it fails
       // the day the situation changes.
       return import("/lens.js?v=1");
-    }).then(function () {
+    }).then(() => {
       ready = true;
-    }, function (error) {
+    }, (error) => {
       app = null;
       throw error;
     });
@@ -44,7 +44,7 @@
 
   function hasClientState() {
     var params = new URLSearchParams(location.search);
-    if (["url", "vs", "view", "lens", "cf"].some(function (key) { return params.has(key); })) return true;
+    if (["url", "vs", "view", "lens", "cf"].some((key) => { return params.has(key); })) return true;
     try {
       var saved = localStorage.getItem("lx-mode");
       return !!saved && saved !== "both";
@@ -58,7 +58,7 @@
   }
 
   function warm(event) {
-    if (control(event)) load().catch(function () {});
+    if (control(event)) load().catch(() => {});
   }
 
   function click(event) {
@@ -66,7 +66,7 @@
     if (!button || ready || replaying) return;
     event.preventDefault();
     event.stopImmediatePropagation();
-    var replay = function () {
+    var replay = () => {
       replaying = true;
       button.click();
       replaying = false;
@@ -80,7 +80,7 @@
     event.stopImmediatePropagation();
     var form = event.target;
     var submitter = event.submitter;
-    var replay = function () {
+    var replay = () => {
       replaying = true;
       form.requestSubmit(submitter || undefined);
       replaying = false;
@@ -111,6 +111,6 @@
   // WebMCP discovery happens before interaction, so register the six lightweight
   // definitions now. Their handlers call load() only when an agent invokes one.
   // Keep the ordinary cold shell lazy and hydrate saved/deep-linked state as before.
-  if (pageTools) pageTools.then(function (wm) { return wm && wm.boot(load); }).catch(function () {});
-  if (hasClientState()) load().catch(function () {});
+  if (pageTools) pageTools.then((wm) => { return wm && wm.boot(load); }).catch(() => {});
+  if (hasClientState()) load().catch(() => {});
 })();

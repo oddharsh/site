@@ -17,11 +17,11 @@ export function createTray(options) {
     if (!(node instanceof HTMLElement)) throw new Error("Tray island template must produce an element");
     return node;
   }
-  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function esc(s) { return String(s).replace(/[&<>"]/g, (c) => { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
   function body() { return balloon && balloon.querySelector(".bd"); }
   function flatFields(j) {
     var m = {};
-    (j.groups || []).forEach(function (g) { (g.fields || []).forEach(function (f) { m[f.k] = f.v; }); });
+    (j.groups || []).forEach((g) => { (g.fields || []).forEach((f) => { m[f.k] = f.v; }); });
     return m;
   }
   function renderSys(j) {
@@ -46,7 +46,7 @@ export function createTray(options) {
   function renderUpd(j) {
     var b = body(); if (!b) return;
     if (!j) { b.innerHTML = '<div class="load">couldn\'t read the update log.</div>'; return; }
-    var latest = (j.items || []).slice(0, 2).map(function (it) {
+    var latest = (j.items || []).slice(0, 2).map((it) => {
       return '<div class="ln"><span class="k">' + esc(it.slug) + '</span> ' + esc(it.title) + '</div>';
     }).join("");
     b.innerHTML =
@@ -71,7 +71,7 @@ export function createTray(options) {
       (j.failed ? ' \u00b7 <span class="k">' + j.failed + ' failed</span>' : "") + "</div>";
     // Newest first, because the question a person opens this to answer is
     // "what did it just do", never "what did it do first".
-    var rows = (j.recent || []).map(function (c) {
+    var rows = (j.recent || []).map((c) => {
       // Named rather than left to an else, so a fourth outcome shows up as
       // "unknown" instead of being quietly filed under failed.
       var mark = c.outcome === "ok" ? '<span class="ok">ran</span>'
@@ -128,7 +128,7 @@ export function createTray(options) {
     balloon.classList.add("open"); sound.play("open");
     if (ic) { ic.setAttribute("aria-expanded", "true"); placeTail(ic); }
     var x = balloon.querySelector(".x"); if (x) try { x.focus(); } catch (_) {}
-    cfg.load(function (data) { if (balloon.classList.contains("open") && balloonKind === kind) cfg.render(data); });
+    cfg.load((data) => { if (balloon.classList.contains("open") && balloonKind === kind) cfg.render(data); });
   }
   function close() {
     if (!balloon || !balloon.classList.contains("open")) return;
@@ -143,8 +143,8 @@ export function createTray(options) {
     else open(kind, ic);
   }
 
-  D.addEventListener("keydown", function (e) { if (e.key === "Escape") close(); });
-  D.addEventListener("pointerdown", function (e) {
+  D.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
+  D.addEventListener("pointerdown", (e) => {
     if (!balloon || !balloon.classList.contains("open")) return;
     if (e.target instanceof Element && (e.target.closest("#axp-balloon") || e.target.closest(".axp-trayico"))) return;
     close();

@@ -9,7 +9,7 @@
 // reader-mode extractor throws away, and the fact that the extractor is
 // guessing. So the gap leads, the prose comes last, and every panel says whose
 // opinion it is reporting.
-(function () {
+(() => {
   function esc(s) {
     return String(s == null ? "" : s)
       .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -78,7 +78,7 @@
   function recoveryScore(d) {
     var r = d.recovery;
     if (!r || r.overall == null) return "";
-    var rows = (r.checks || []).map(function (check) {
+    var rows = (r.checks || []).map((check) => {
       return '<li><b>' + (check.pass ? '&#10003;' : '&#10005;') + ' ' + esc(check.label) + '</b><span>' + esc(check.detail || "") + '</span></li>';
     }).join("");
     return section("Readability content recovery", { text: r.overall + "/100", kind: r.overall >= 75 ? "ok" : r.overall >= 50 ? "" : "warn" },
@@ -99,7 +99,7 @@
     if (!c || !c.total) return "";
     var kind = c.kept === 0 ? "ok" : c.kept >= c.total / 2 ? "warn" : "";
     var examples = (c.examples || []).length
-      ? '<div class="lx-cap">Kept, verbatim: ' + (c.examples || []).map(function (x) { return "<code>" + esc(x) + "</code>"; }).join(", ") + "</div>"
+      ? '<div class="lx-cap">Kept, verbatim: ' + (c.examples || []).map((x) => { return "<code>" + esc(x) + "</code>"; }).join(", ") + "</div>"
       : "";
     return section("Control labels that survived", { text: c.kept + " of " + c.total, kind: kind },
       "Button and control text the extraction kept. A label without its behaviour is a claim, and an agent reading this output has no way to tell one from a sentence.",
@@ -136,7 +136,7 @@
   function timing(d) {
     var ms = d.ms || {};
     var measured = (ms.fetch || 0);
-    var blind = ["parse", "extract", "markdown"].filter(function (k) { return ms[k] === 0; }).length;
+    var blind = ["parse", "extract", "markdown"].filter((k) => { return ms[k] === 0; }).length;
     return section("What the second read cost", { text: measured + " ms of network" },
       "This lens is opt-in because it re-fetches the target in full. The CPU half is a different story, below.",
       kvTable({
@@ -178,12 +178,12 @@
 
   function run(data, done, onError) {
     fetch("/lens/read?url=" + encodeURIComponent(data.finalUrl || data.url))
-      .then(function (response) {
+      .then((response) => {
         // Read as text and parse by hand, same reasoning as lens-browser.js: a
         // non-JSON body means the edge or the runtime answered for us with an
         // HTML error page, and .json() would surface a V8 parser message that
         // names the parser rather than the failure.
-        return response.text().then(function (text) {
+        return response.text().then((text) => {
           var json = null;
           try { json = JSON.parse(text); } catch (_e) {}
           if (!json) {
@@ -197,7 +197,7 @@
         });
       })
       .then(done)
-      .catch(function (error) {
+      .catch((error) => {
         done({ ok: false, error: String((error && error.message) || error) });
         if (onError) onError(error);
       });

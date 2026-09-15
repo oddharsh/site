@@ -16,7 +16,7 @@
 // Native fonts only (via the page's --font-* tokens, with literal fallbacks), OKLCH
 // colors, 1px bevels, squared corners, instant motion. honesty: every entry resolves
 // to a real destination; nothing decorative pretends to be interactive.
-(function () {
+(() => {
   "use strict";
   var W = /** @type {Window & typeof globalThis & {__axpNav?: boolean, webkitAudioContext?: typeof AudioContext}} */ (window);
   if (W.__axpNav) return; W.__axpNav = true;
@@ -54,11 +54,11 @@
   function loadPhotos() {
     if (photosPromise) return photosPromise;
     photosPromise = Promise.all([
-      fetch("/images/manifest.json").then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }),
-      fetch("/images/alt.json").then(function (r) { return r.ok ? r.json() : {}; }).catch(function () { return {}; })
-    ]).then(function (res) {
+      fetch("/images/manifest.json").then((r) => { return r.ok ? r.json() : null; }).catch(() => { return null; }),
+      fetch("/images/alt.json").then((r) => { return r.ok ? r.json() : {}; }).catch(() => { return {}; })
+    ]).then((res) => {
       var man = res[0], alt = res[1] || {};
-      var photos = ((man && man.photos) || []).map(function (p) {
+      var photos = ((man && man.photos) || []).map((p) => {
         return tag("photo", {
           label: p.stem,
           path: "/images/full/" + encodeURI(p.full),
@@ -76,9 +76,9 @@
   // writing posts (for /writing/<slug> entries) — same lazy pattern as photos
   function loadWriting() {
     if (writingPromise) return writingPromise;
-    writingPromise = fetch("/writing/posts.json").then(function (r) { return r.ok ? r.json() : []; }).catch(function () { return []; })
-      .then(function (posts) {
-        WRITING = (posts || []).map(function (p) {
+    writingPromise = fetch("/writing/posts.json").then((r) => { return r.ok ? r.json() : []; }).catch(() => { return []; })
+      .then((posts) => {
+        WRITING = (posts || []).map((p) => {
           return tag("writing", { label: p.title || p.slug, path: "/writing/" + p.slug, hint: p.date ? "note · " + p.date : "note" });
         });
         return WRITING;
@@ -119,7 +119,7 @@
   // bytes), gated by the tray mute toggle. Default OFF so there is never surprise
   // audio; the choice persists in localStorage. Navigation sounds are skipped on
   // purpose (page unload cuts them) — only in-page shell actions play.
-  var AXP_SND = (function () {
+  var AXP_SND = (() => {
     var ctx = null, on = false;
     try { on = localStorage.getItem("axp-sound") === "on"; } catch (e) {}
     function ac() { if (!ctx) { try { var Audio = W.AudioContext || W.webkitAudioContext; if (!Audio) return null; ctx = new Audio(); } catch (e) { return null; } } if (ctx.state === "suspended" && ctx.resume) ctx.resume(); return ctx; }
@@ -140,24 +140,24 @@
     }
     var voices = {
       // notification ding: a quick bright chime up a fourth
-      open:  function (c, t) { bell(c, 784, t, 0.45, 0.07); bell(c, 1047, t + 0.045, 0.6, 0.085); },
+      open:  (c, t) => { bell(c, 784, t, 0.45, 0.07); bell(c, 1047, t + 0.045, 0.6, 0.085); },
       // dismissal: a softer chime down
-      close: function (c, t) { bell(c, 659, t, 0.40, 0.06); bell(c, 494, t + 0.05, 0.5, 0.05); },
+      close: (c, t) => { bell(c, 659, t, 0.40, 0.06); bell(c, 494, t + 0.05, 0.5, 0.05); },
       // critical-stop: a low dissonant pair with a little grit
-      error: function (c, t) { partial(c, 196, t, 0.30, 0.075, "sine"); partial(c, 207, t, 0.32, 0.05, "triangle"); partial(c, 98, t, 0.34, 0.05, "sine"); },
+      error: (c, t) => { partial(c, 196, t, 0.30, 0.075, "sine"); partial(c, 207, t, 0.32, 0.05, "triangle"); partial(c, 98, t, 0.34, 0.05, "sine"); },
       // task-complete fanfare: a rising major arpeggio landing on a held octave
-      tada:  function (c, t) { [523, 659, 784].forEach(function (f, i) { bell(c, f, t + i * 0.09, 0.32, 0.07); }); bell(c, 1047, t + 0.27, 0.85, 0.09); }
+      tada:  (c, t) => { [523, 659, 784].forEach((f, i) => { bell(c, f, t + i * 0.09, 0.32, 0.07); }); bell(c, 1047, t + 0.27, 0.85, 0.09); }
     };
     return {
-      on: function () { return on; },
-      set: function (v) { on = !!v; try { localStorage.setItem("axp-sound", on ? "on" : "off"); } catch (e) {} },
-      play: function (name) { if (!on) return; var c = ac(); if (c && voices[name]) voices[name](c, c.currentTime); }
+      on: () => { return on; },
+      set: (v) => { on = !!v; try { localStorage.setItem("axp-sound", on ? "on" : "off"); } catch (e) {} },
+      play: (name) => { if (!on) return; var c = ac(); if (c && voices[name]) voices[name](c, c.currentTime); }
     };
   })();
 
   function front(win) { win.style.zIndex = ++accZ; }
   function initRaise() {
-    D.addEventListener("pointerdown", function (e) {
+    D.addEventListener("pointerdown", (e) => {
       var win = e.target instanceof Element && e.target.closest(".window,.np-window,.axp-acc");
       if (!(win instanceof HTMLElement) || String(win.style.zIndex) === String(accZ)) return;
       front(win);
@@ -172,12 +172,12 @@
   var stylePromises = Object.create(null);
   function loadStyle(name) {
     if (stylePromises[name]) return stylePromises[name];
-    stylePromises[name] = new Promise(function (resolve, reject) {
+    stylePromises[name] = new Promise((resolve, reject) => {
       var link = D.createElement("link");
       link.rel = "stylesheet";
       link.href = STYLE_ASSETS[name];
       link.onload = resolve;
-      link.onerror = function () { delete stylePromises[name]; link.remove(); reject(new Error(name + " styles failed")); };
+      link.onerror = () => { delete stylePromises[name]; link.remove(); reject(new Error(name + " styles failed")); };
       (D.head || D.documentElement).appendChild(link);
     });
     return stylePromises[name];
@@ -185,7 +185,7 @@
 
   function loadRun() {
     if (!runPromise) {
-      runPromise = Promise.all([loadStyle("nav-run"), import("/nav-run.js")]).then(function (loaded) {
+      runPromise = Promise.all([loadStyle("nav-run"), import("/nav-run.js")]).then((loaded) => {
         var m = loaded[1];
         runApi = m.createRun({
           kbd: KBD,
@@ -204,7 +204,7 @@
       if (runApi.isOpen()) runApi.close(); else runApi.open(viaKeyboard);
       return Promise.resolve();
     }
-    return loadRun().then(function (api) { api.open(viaKeyboard); });
+    return loadRun().then((api) => { api.open(viaKeyboard); });
   }
 
   // Behavior for the compiled taskbar. Shell presence is a build invariant:
@@ -216,12 +216,12 @@
       // platform-correct shortcut hint + title (the static partial ships ⌘K;
       // non-Mac visitors get it rewritten here before they can notice)
       start.title = "Run — navigate the site (" + KBD + ")";
-      [].forEach.call(start.querySelectorAll(".axp-kbd"), function (k) { k.textContent = KBD; });
-      start.addEventListener("click", function (e) {
+      [].forEach.call(start.querySelectorAll(".axp-kbd"), (k) => { k.textContent = KBD; });
+      start.addEventListener("click", (e) => {
         e.preventDefault();   // the href is the JS-off floor; JS gets the palette
         // detail === 0 means the click came from the keyboard (Enter/Space on the
         // focused orb) rather than a pointer, so the ring is still wanted here.
-        toggleRun(e.detail === 0).catch(function () {
+        toggleRun(e.detail === 0).catch(() => {
           location.assign(startHref);   // preserve the real /run fallback
         });
       });
@@ -235,15 +235,15 @@
       // is no hover on the keyboard path, and warming on modifier-keydown would
       // fire for every ⌘R/⌘T/⌘C. Touch fires a synthetic pointerover while
       // scrolling past the taskbar (gotcha 10), so only a real hover counts.
-      start.addEventListener("pointerover", function (e) {
-        if (e.pointerType !== "touch") loadRun().catch(function () { runPromise = null; });
+      start.addEventListener("pointerover", (e) => {
+        if (e.pointerType !== "touch") loadRun().catch(() => { runPromise = null; });
       }, { passive: true });
     }
     // XP taskbar truth: the app that's in front sits DEPRESSED. Match the
     // current path's first segment against each pin's section (garage subpages
     // keep the garage button pressed; the homepage is the desktop — none).
     var seg = "/" + (location.pathname.split("/")[1] || "");
-    [].forEach.call(bar.querySelectorAll(".axp-pin"), function (p) {
+    [].forEach.call(bar.querySelectorAll(".axp-pin"), (p) => {
       var pinSeg = "/" + ((p.getAttribute("href") || "").split("/")[1] || "");
       var cur = seg !== "/" && pinSeg === seg;
       p.classList.toggle("cur", cur);
@@ -261,27 +261,27 @@
         : '<defs><filter id="muSh" x="-20%" y="-20%" width="150%" height="150%"><feDropShadow dx="0" dy=".5" stdDeviation=".5" flood-color="#000" flood-opacity=".25"></feDropShadow></filter><linearGradient id="muC" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ededed"></stop><stop offset=".5" stop-color="#c2c2c2"></stop><stop offset="1" stop-color="#969696"></stop></linearGradient><radialGradient id="muR" cx=".4" cy=".34" r=".75"><stop offset="0" stop-color="#f47f72"></stop><stop offset="1" stop-color="#c2271c"></stop></radialGradient></defs><g filter="url(#muSh)"><rect x="2" y="8.6" width="2.6" height="6.8" rx=".6" fill="#8c8c8c"></rect><path d="M3.4 9 H6.4 L11 4.6 V17.4 L6.4 13 H3.4 Z" fill="url(#muC)" stroke="#5f5f5f" stroke-width=".6" stroke-linejoin="round"></path><circle cx="16.6" cy="10.8" r="5.1" fill="url(#muR)" stroke="#8c1a10" stroke-width=".7"></circle><path d="M13.3 7.5 L19.9 14.1" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round"></path><ellipse cx="14.9" cy="8.4" rx="2.5" ry="1.2" fill="#ffffff" opacity=".28"></ellipse></g>') + '</svg>';
     }
     if (sndBtn) {
-      sndBtn.addEventListener("click", function () { var next = !AXP_SND.on(); AXP_SND.set(next); paintSnd(); if (next) AXP_SND.play("tada"); });
+      sndBtn.addEventListener("click", () => { var next = !AXP_SND.on(); AXP_SND.set(next); paintSnd(); if (next) AXP_SND.play("tada"); });
       paintSnd();
     }
     // each system-utility tray icon opens a brief XP balloon above itself. they stay
     // real <a href> so a modified click (⌘/Ctrl/Shift, or middle — which fires
     // auxclick, not click) still opens the full page in a new tab.
-    [].forEach.call(bar.querySelectorAll(".axp-trayico"), function (ic) {
+    [].forEach.call(bar.querySelectorAll(".axp-trayico"), (ic) => {
       ic.setAttribute("aria-haspopup", "dialog");
       ic.setAttribute("aria-expanded", "false");
-      ic.addEventListener("click", function (e) {
+      ic.addEventListener("click", (e) => {
         if (e.metaKey || e.ctrlKey || e.shiftKey) return;   // let the browser navigate
         e.preventDefault();
-        toggleTray(ic.getAttribute("data-kind"), ic).catch(function () {
+        toggleTray(ic.getAttribute("data-kind"), ic).catch(() => {
           location.assign(ic.href);   // a failed island load falls back to the real page
         });
       });
       // same hover warm as the Start orb, for the same reason. Unlike /run these
       // icons keep their page prerenders: each balloon carries a "full page"
       // link, so /security and /updates are destinations a visitor really reaches.
-      ic.addEventListener("pointerover", function (e) {
-        if (e.pointerType !== "touch") loadTray().catch(function () { trayPromise = null; });
+      ic.addEventListener("pointerover", (e) => {
+        if (e.pointerType !== "touch") loadTray().catch(() => { trayPromise = null; });
       }, { passive: true });
     });
     tickClock();
@@ -327,7 +327,7 @@
       }
       cur = null;
     }
-    icons.addEventListener("pointerdown", function (e) {
+    icons.addEventListener("pointerdown", (e) => {
       if (e.pointerType === "mouse" && e.button !== 0) return;
       var a = e.target instanceof Element && e.target.closest(".axp-ico");
       if (!(a instanceof HTMLElement)) return;
@@ -339,7 +339,7 @@
       D.addEventListener("pointercancel", up, { once: true });
     });
     // swallow the click that follows a real drag so the link doesn't navigate
-    icons.addEventListener("click", function (e) {
+    icons.addEventListener("click", (e) => {
       if (moved) { e.preventDefault(); e.stopPropagation(); moved = false; }
     }, true);
   }
@@ -370,16 +370,16 @@
   function loadSys(cb) {
     if (sysData) { cb(sysData); return; }
     fetch("/whoareyou.json", { headers: { accept: "application/json" } })
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (j) { if (j && j.groups) sysData = j; cb(sysData); })
-      .catch(function () { cb(null); });
+      .then((r) => { return r.ok ? r.json() : null; })
+      .then((j) => { if (j && j.groups) sysData = j; cb(sysData); })
+      .catch(() => { cb(null); });
   }
   function loadUpd(cb) {
     if (updData) { cb(updData); return; }
     fetch("/updates.json", { headers: { accept: "application/json" } })
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (j) { if (j && j.items) updData = j; cb(updData); })
-      .catch(function () { cb(null); });
+      .then((r) => { return r.ok ? r.json() : null; })
+      .then((j) => { if (j && j.items) updData = j; cb(updData); })
+      .catch(() => { cb(null); });
   }
   // Is there ANY ModelContext to register into? Bare truthiness only, on both
   // hosts: `document` is where the spec and Chrome 152+ put it, `navigator` is
@@ -395,11 +395,11 @@
   // balloon renders as "nothing has asked".
   function loadWebmcp(cb) {
     if (!hasModelContext()) { cb(null); return; }
-    import("/webmcp.js").then(function (m) { cb(m.summary()); }, function () { cb(null); });
+    import("/webmcp.js").then((m) => { cb(m.summary()); }, () => { cb(null); });
   }
   function loadTray() {
     if (!trayPromise) {
-      trayPromise = Promise.all([loadStyle("nav-tray"), import("/nav-tray.js")]).then(function (loaded) {
+      trayPromise = Promise.all([loadStyle("nav-tray"), import("/nav-tray.js")]).then((loaded) => {
         var m = loaded[1];
         return m.createTray({ sound: AXP_SND, loadSys: loadSys, loadUpd: loadUpd, loadWebmcp: loadWebmcp });
       });
@@ -407,14 +407,14 @@
     return trayPromise;
   }
   function toggleTray(kind, ic) {
-    return loadTray().then(function (tray) { tray.toggle(kind, ic); });
+    return loadTray().then((tray) => { tray.toggle(kind, ic); });
   }
 
   // ⌘K / Ctrl-K anywhere
-  D.addEventListener("keydown", function (e) {
+  D.addEventListener("keydown", (e) => {
     if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) {
       e.preventDefault();
-      toggleRun(true).catch(function () { location.assign("/run"); });
+      toggleRun(true).catch(() => { location.assign("/run"); });
     }
   });
 
@@ -451,7 +451,7 @@
       win.style.transform = base + "translate(" + dx + "px," + dy + "px)";
     }
     function up() { if (win) { win.classList.remove("axp-dragging"); D.removeEventListener("pointermove", move); win = null; } }
-    D.addEventListener("pointerdown", function (e) {
+    D.addEventListener("pointerdown", (e) => {
       if (e.pointerType === "touch") return;                       // let touch scroll the page, not drag
       if (e.pointerType === "mouse" && e.button !== 0) return;
       var b = e.target instanceof Element && e.target.closest(".title-bar,.np-titlebar,.titlebar,#axp-run .tb");
@@ -495,19 +495,19 @@
   // scrollend (or a throttle) to write, one read on boot.
   function rememberScroll(sc) {
     var key = "axp-scroll:" + location.pathname;
-    var save = function () { try { sessionStorage.setItem(key, String(sc.scrollTop)); } catch (e) {} };
+    var save = () => { try { sessionStorage.setItem(key, String(sc.scrollTop)); } catch (e) {} };
     var nav = /** @type {PerformanceNavigationTiming|undefined} */ (performance.getEntriesByType && performance.getEntriesByType("navigation")[0]);
     if (nav && nav.type === "reload") {
       var y = parseInt(sessionStorage.getItem(key), 10);
       if (y > 0) {
         var done = false;
-        var restore = function () { if (done) return; sc.scrollTop = y; if (sc.scrollTop > 0) done = true; };   // fires scroll → thumb syncs
+        var restore = () => { if (done) return; sc.scrollTop = y; if (sc.scrollTop > 0) done = true; };   // fires scroll → thumb syncs
         requestAnimationFrame(restore);                      // once the scroller is laid out
         addEventListener("load", restore, { once: true });   // re-assert after images/fonts settle (scrollHeight final)
       }
     }
     if ("onscrollend" in sc) sc.addEventListener("scrollend", save, { passive: true });
-    else { var t; sc.addEventListener("scroll", function () { clearTimeout(t); t = setTimeout(save, 200); }, { passive: true }); }
+    else { var t; sc.addEventListener("scroll", () => { clearTimeout(t); t = setTimeout(save, 200); }, { passive: true }); }
     addEventListener("pagehide", save);   // catch a reload/close before scrollend fires
   }
 
@@ -519,12 +519,12 @@
     // one real job the platform can't do — pages clamp windows with their
     // design max-width/height, which native resize cannot exceed, so a
     // gesture starting in the corner lifts the clamps first.
-    [].forEach.call(D.querySelectorAll(".window,.np-window"), function (f) {
+    [].forEach.call(D.querySelectorAll(".window,.np-window"), (f) => {
       if (f.classList.contains("np-folder")) return;   // folder hugs its content — not resizable
       if (f.querySelector(":scope > .axp-resize")) return;
       if (getComputedStyle(f).position === "static") f.style.position = "relative";
       f.appendChild(el('<div class="axp-resize" aria-hidden="true"></div>'));
-      f.addEventListener("pointerdown", function (e) {
+      f.addEventListener("pointerdown", (e) => {
         if (f.classList.contains("axp-max")) return;
         var r = f.getBoundingClientRect();
         if (r.right - e.clientX < 20 && r.bottom - e.clientY < 20) {
@@ -575,7 +575,7 @@
       }
       return D.referrer === homeUrl && history.length === lenAtLoad;
     }
-    D.addEventListener("click", function (e) {
+    D.addEventListener("click", (e) => {
       if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
       var a = e.target instanceof Element && e.target.closest("a.close");
       if (!a || history.length <= 1 || !prevIsHome()) return;
@@ -663,15 +663,15 @@
     // Same: feature detection on the Navigation API, which older engines omit.
     // oxlint-disable-next-line anti-slop/no-runtime-typeof
       var navApi = window.navigation && typeof navigation.canGoBack === "boolean" ? navigation : null;
-      var realBack = function () {
+      var realBack = () => {
         return navApi ? navApi.canGoBack : history.length > 1;
       };
-      backButton.addEventListener("click", function () {
+      backButton.addEventListener("click", () => {
         if (realBack()) history.back();
         else if (!atRoot) location.href = parentPath;
       });
-      forwardButton.addEventListener("click", function () { history.forward(); });
-      var sync = function () {
+      forwardButton.addEventListener("click", () => { history.forward(); });
+      var sync = () => {
         if (!navApi) return;                            // no Navigation API -> leave both enabled
         var rb = navApi.canGoBack;
         backButton.disabled = !rb && atRoot;                  // parent fallback keeps it live elsewhere
@@ -698,13 +698,13 @@
       maximizeButton.setAttribute("aria-label", "Maximize");
       maximizeButton.title = "Maximize";
       maximizeButton.style.cursor = "pointer";
-      var toggle = function () {
+      var toggle = () => {
         var on = win.classList.toggle("axp-max");
         maximizeButton.setAttribute("aria-label", on ? "Restore" : "Maximize");
         maximizeButton.title = on ? "Restore" : "Maximize";
       };
       maximizeButton.addEventListener("click", toggle);
-      maximizeButton.addEventListener("keydown", function (/** @type {KeyboardEvent} */ e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } });
+      maximizeButton.addEventListener("keydown", (/** @type {KeyboardEvent} */ e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } });
     }
   }
 
@@ -749,11 +749,11 @@
     // restated there. Two copies of a rule this shape is how a loader and its
     // module come to disagree about which elements have a tip — and the symptom
     // would be a tooltip that works everywhere except wherever you looked first.
-    var targetFor = function (n) {
+    var targetFor = (n) => {
       var t = n && n.closest ? n.closest(INFOTIP_TARGETS) : null;
       return t && !t.closest(INFOTIP_SKIP) ? t : null;
     };
-    var load = function () {
+    var load = () => {
       if (mod) return;
       // hoist.js is infotip.js's one static import, so the parser cannot
       // discover it until infotip.js has landed — the same serialized second
@@ -762,8 +762,8 @@
       // runs the two in parallel; the result is unused on purpose, since the
       // module cache is what the static import hits, and on the homepage it is
       // usually already warm from tooltip.js.
-      import("/hoist.js").catch(function () {});
-      mod = Promise.all([loadStyle("infotip"), import("/infotip.js")]).then(function (loaded) {
+      import("/hoist.js").catch(() => {});
+      mod = Promise.all([loadStyle("infotip"), import("/infotip.js")]).then((loaded) => {
         var m = loaded[1];
         // These are nav.js's own readers, so a tray infotip and its click-balloon
         // share one fetch per page rather than race for it.
@@ -783,7 +783,7 @@
         D.removeEventListener("pointerover", onOver);
         D.removeEventListener("pointerout", onOut);
         D.removeEventListener("focusin", onFocus);
-      }).catch(function () { mod = null; pending = null; });
+      }).catch(() => { mod = null; pending = null; });
     };
     function onOver(e) {
       var t = targetFor(e.target);
@@ -838,7 +838,7 @@
   // has tools worth advertising.
   function bootWebmcp() {
     if (!hasModelContext()) return;   // no WebMCP here; do not spend the fetch
-    import("/webmcp.js").then(function (m) {
+    import("/webmcp.js").then((m) => {
       // The tray icon ships hidden (shell-data.ts says why). Showing it is the
       // page telling the visitor, in the place XP puts running things, that an
       // agent can drive this document. The badge then counts what one actually
@@ -856,7 +856,7 @@
           // there unstyled until somebody happened to touch the tray. Ask for the
           // sheet here. It is ~30 lines, it is idempotent, and it only ever loads
           // on a page that really has registered tools.
-          loadStyle("nav-tray").catch(function () {});
+          loadStyle("nav-tray").catch(() => {});
           badge = D.createElement("span");
           badge.className = "axp-traybadge";
           ico.appendChild(badge);
@@ -872,7 +872,7 @@
       }
       m.onActivity(paint);
       return m.boot().then(paint, paint);
-    }).catch(function () {});
+    }).catch(() => {});
   }
   // The idle timeout is the ceiling on how long a busy page can put this off,
   // and a readiness scanner reads the catalog about 4s after navigation
