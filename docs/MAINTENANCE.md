@@ -945,7 +945,56 @@ holds its pins to, and none of them writes anything. The workflow is
 |---|---|---|---|
 | bun | the rolling `canary` release (oven-sh/bun) | zstd honours `dictionary`, lockfile read and format, byte-identical build against the pinned bun, contract suite, cal suite on wrangler's harness | `canary-bun.ts` |
 | wrangler | workers-sdk `main` from pkg.pr.new, installed into a detached worktree | `deploy --dry-run` bundles, bundle byte-identical to the pinned wrangler's (a DIFF, never a failure), route oracle on the candidate's own `createTestHarness`, cal suite | `canary-wrangler.ts` |
-| browsers | `/garage/horizon`'s probes in chromium, firefox and webkit against chromium-tip-of-tree and firefox-beta | every honest probe answers the same in stable and prerelease; every card marked shipped is true in two stable engines | `canary-browsers.ts` |
+| browsers | `/garage/horizon`'s probes in chromium, firefox and webkit against chromium-tip-of-tree and firefox-beta, plus two live probes (a JXL data-URI decode, and the `Available-Dictionary` exchange with production) | every honest probe answers the same in stable and prerelease; every card marked shipped is true in two stable engines | `canary-browsers.ts` |
+
+**Every leg also runs the WATCHES, since 2026-09-15.** A watch is a gate
+turned inside out: a probe that reads `not yet` on the pinned toolchain today,
+one per upstream fix this repository is waiting on, and the interesting night
+is the first `landed`. The list is `tools/lib/upstream-watches.ts`, and each
+entry names the thread, what `landed` means, and the reading on the day it was
+written, because a watch that reads true on its first run is watching nothing.
+
+| watch | waits on | reads landed when |
+|---|---|---|
+| `bun-image-rejects-out-of-range-quality` | oven-sh/bun#40490 (fix #40520) | `quality: 999` throws |
+| `bun-image-rejects-wrong-option-types` | oven-sh/bun#40490 (fix #40491) | `quality: "84"` throws |
+| `bun-image-linear-light-resize` | oven-sh/bun#40510 (fix #40512) | `resize(w, h, { colorspace: "linear" })` changes the bytes |
+| `bun-image-keeps-16-bit-samples` | oven-sh/bun#30462 | a 16-bit PNG round-trips at depth 16 |
+| `fetch-honours-dispatcher` | oven-sh/bun#39247 (fix #39250) | `fetch(url, { dispatcher })` calls `dispatch()` |
+| `css-minifier-knows-the-seven-pseudo-elements` | oven-sh/bun#41120 | no `Invalid selector` on `::scroll-marker` and friends |
+| `css-minifier-lowercases-target-current` | oven-sh/bun#42480 (fix #42484) | `:TARGET-CURRENT` is emitted lowercased |
+| `workerd-honours-zstd-dictionary` | cloudflare/workerd#7106 | `tools/workerd-zstd-probe.ts` compresses smaller with the right dictionary |
+| `wrangler-types-accepts-x-new-config` | gotcha 41, no upstream issue | `wrangler types --x-new-config` writes the file in `cf-garage/` |
+
+Each leg reads every watch under the PIN and under the candidate. A row that
+differs is a `changed` verdict whose signature names the watch and the
+direction, so the issue says which fix arrived in which build and the reader
+has a version worth pinning; the row's `landed means` sentence is in the body.
+A row landed in BOTH is the cue to retire the watch, since the pin already
+carries the fix, and the reporter marks it. A probe that could not run reads
+`did not run` and moves nothing, because a watch is advisory by construction.
+`fetch-honours-dispatcher` is the one to read first when it moves: it is the
+harness hang under bun, and the issue that decides whether node can leave
+`engines`.
+
+**The nightly pin PRs say what they adopt.** `bun run pin:digest -- --repo
+<owner/name> --from <sha> --to <sha>` renders the upstream commit range as
+Markdown, and both `bun-pin.yml` and `wrangler-pin.yml` put it in the PR body
+under the gate evidence. For workers-sdk that includes the `.changeset/*.md`
+files added in the range, which is the unreleased changelog; for bun it is
+the commit subjects with the robobun count beside them. It is prose: if
+GitHub does not answer, the body carries a one-line note and a compare link,
+and the PR still opens.
+
+**The JXL finding is the reason the live probes exist.** On their first run
+(2026-09-15, Chrome 153 against Canary 155) `live:jxl-decode` flipped false to
+true: Canary decodes JPEG XL by default, where the roadmap note of a week
+earlier had it flag-only. That is the signal a JXL `/i/` tier waits on, and
+nothing on `/garage/horizon` could have produced it, because the page marks
+`jpeg-xl` honest-false. `live:dictionary-transport` read true in both, and its
+first version read false in Canary on three of six trials: the `.dict` fetch
+lands ~450ms into the load, before `goto` resolves, so a listener attached
+after navigation misses it. Attach before navigating.
 
 **Read the verdict, then the signature.** A leg answers `green`, `red`,
 `changed` or `instrument`. `red` is a gate failing, `changed` is a byte or a
@@ -970,6 +1019,15 @@ bun run canary:wrangler                              # ~25 s on a warm install c
 bun run canary:wrangler -- --ref 15640               # a workers-sdk PR, before it merges
 bun run canary:wrangler -- --ref b149147             # a 7-char sha, for bisecting
 bun run canary:browsers -- --pairs chrome:chrome-canary   # needs no download on a Mac with Canary
+bun run canary:browsers -- --offline                       # skip the production visit
+```
+
+`canary:bun` refuses to run under a bun that is not the pin, and since the pin
+is a dated canary that is almost never the bun on a workstation's PATH. Install
+it beside the tree and run the leg under that binary:
+
+```bash
+bash .github/install-bun.sh /tmp/pinned-bun && /tmp/pinned-bun/bun tools/canary-bun.ts
 ```
 
 The Linux trio needs the engines installed once, through the pinned

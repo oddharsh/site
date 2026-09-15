@@ -99,6 +99,10 @@ jobs:
           EVIDENCE=$(sed -n '/^  ok  \|^ FAIL \|^ DIFF /p' pin.log)
           from="${BEFORE##*@}"
           to="${AFTER##*@}"
+          # What main gained between the two shas: the changesets (the
+          # unreleased changelog) and the commit subjects. Advisory prose;
+          # pin-digest exits 0 with a one-line note if GitHub will not answer.
+          DIGEST=$(GITHUB_TOKEN="$GH_TOKEN" bun run pin:digest -- --repo cloudflare/workers-sdk --from "$from" --to "$to")
 
           git checkout -B "$BRANCH"
           git add package.json bun.lock
@@ -118,6 +122,8 @@ jobs:
           \`\`\`
 
           A DIFF line means the bundle moved bytes while every gate passed; \`perf-diff.yml\` on this PR says by how much. Wrangler is the publisher on the path that ships production, so this is a release-path change wearing a sha.
+
+          $DIGEST
 
           Reproduce with \`bun run wrangler:pin -- --ref $to\`. Dependabot cannot bump a URL, which is why this job exists.
 

@@ -14,8 +14,15 @@ name: Canary tripwire
 #             suite. tools/canary-wrangler.ts.
 #   browsers  /garage/horizon's 90-odd feature probes in stable chromium,
 #             firefox and webkit and in chromium-tip-of-tree and firefox-beta,
-#             diffed pairwise. A flip is a card that moved; a flip to false is
+#             diffed pairwise, plus two live probes the page cannot carry (a
+#             JXL decode, and the Available-Dictionary exchange with
+#             production). A flip is a card that moved; a flip to false is
 #             a browser bug. tools/canary-browsers.ts.
+#
+# EVERY LEG ALSO READS THE WATCHES (tools/lib/upstream-watches.ts): one probe
+# per upstream fix this repository is waiting on, each reading false on the
+# pinned toolchain today, answered under the pin and under the candidate. A
+# row that differs is `changed`, naming the fix and the build it arrived in.
 #
 # WHY IT EXISTS. Every pin here is exact and every served URL is a hash of
 # what the toolchain emitted, so a regression in a runtime, a bundler or an
@@ -120,7 +127,7 @@ jobs:
   wrangler:
     name: wrangler main
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30 # the two watches boot a probe Worker and run `wrangler types` on both trees
     permissions:
       contents: read
       issues: write

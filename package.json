@@ -67,6 +67,7 @@
     "canary:browsers": "bun tools/canary-browsers.ts",
     "canary:report": "bun tools/canary-report.ts",
     "wrangler:pin": "bun tools/bump-wrangler-pin.ts",
+    "pin:digest": "bun tools/pin-digest.ts",
     "node:pin": "bun tools/check-node-pin.ts",
     "early-hints:probe": "bun tools/early-hints-probe.ts",
     "speculation:probe": "bun tools/speculation-probe.ts",

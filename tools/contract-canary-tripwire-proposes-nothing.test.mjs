@@ -9,8 +9,12 @@
 //   4. the reporter's decision table is the one written on its header
 //   5. the honest-false detector matches the page's own convention, and the
 //      shipped-card scanner finds the cards
+//   6. every upstream watch names a thread, RUNS on the pinned bun, and
+//      answers a boolean rather than "did not run"
+//   7. the pin digest parses changesets out of a compare payload and never
+//      raises on a payload with none
 //
-// The last two are the ones that could pass while measuring nothing, which
+// The last three are the ones that could pass while measuring nothing, which
 // is why each carries a control that has to come back non-empty.
 
 import { readdirSync } from "node:fs";
@@ -18,8 +22,10 @@ import { fileURLToPath } from "node:url";
 
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 import { chromeChannel, DEFAULT_CHROME_CHANNEL } from "./lib/browser-channel.ts";
-import { HONEST_FALSE, familyOf, shippedCaps } from "./canary-browsers.ts";
+import { HONEST_FALSE, JXL_2X2, LIVE_PROBES, familyOf, shippedCaps } from "./canary-browsers.ts";
 import { marker, plan, render, title } from "./canary-report.ts";
+import { BUN_WATCHES, WRANGLER_WATCHES, runBunWatch, watchMoved, watchRow, watchSignature } from "./lib/upstream-watches.ts";
+import { changesets, renderDigest } from "./pin-digest.ts";
 
 const LEGS = ["tools/canary-bun.ts", "tools/canary-wrangler.ts", "tools/canary-browsers.ts"];
 const strip = (src) => src.split("\n").filter((l) => !l.trim().startsWith("//")).join("\n");
@@ -152,4 +158,89 @@ test("the honest-false detector matches the page's own convention, and finds the
   assert.equal(familyOf("chrome-canary"), "chromium");
   assert.equal(familyOf("firefox-beta"), "firefox");
   assert.equal(familyOf("webkit"), "webkit");
+});
+
+test("every upstream watch names a thread, and every bun watch RUNS on the pinned bun and answers a boolean", () => {
+  const thread = /^https:\/\/github\.com\/(oven-sh\/bun|cloudflare\/(workerd|workers-sdk))(\/(issues|pull)\/\d+)?$/;
+  const names = new Set();
+  for (const w of [...BUN_WATCHES, ...WRANGLER_WATCHES]) {
+    assert.match(w.issue, thread, `${w.name} must point at the upstream thread it waits on`);
+    assert.match(w.name, /^[a-z0-9-]+$/, `${w.name} is part of a signature and must be kebab-case`);
+    assert.match(w.measured, /^\d{4}-\d{2}-\d{2}, /, `${w.name} must record when it was measured false`);
+    assert.ok(!names.has(w.name), `${w.name} is declared twice`);
+    names.add(w.name);
+  }
+  assert.ok(BUN_WATCHES.length >= 5, `only ${BUN_WATCHES.length} bun watches; the list collapsed`);
+  // The control: each probe has to RUN, here, under the pinned bun. The suite
+  // also runs under node (test:node), where `process.execPath` is node, so the
+  // bun on PATH is the runtime then; CI's setup-bun puts the pin there. A
+  // watch that reads `null` is decoration, whichever way the fix goes.
+  const bun = process.versions.bun ? process.execPath : "bun";
+  for (const w of BUN_WATCHES) {
+    const r = runBunWatch(bun, w);
+    assert.ok(r.landed === true || r.landed === false, `${w.name} did not run under the pinned bun: ${r.detail}`);
+    assert.ok(r.detail.length > 0, `${w.name} answered with no detail`);
+  }
+});
+
+test("a watch moves only when both readings are real and differ, and the reporter renders every row", () => {
+  const w = { name: "x-lands", issue: "https://github.com/oven-sh/bun/issues/1", landed: "x is fixed" };
+  const yes = { landed: true, detail: "yes" };
+  const no = { landed: false, detail: "no" };
+  const none = { landed: null, detail: "did not run: boom" };
+  assert.equal(watchMoved(watchRow(w, no, yes)), true, "false in the pin, true in the candidate is the fix arriving");
+  assert.equal(watchMoved(watchRow(w, yes, no)), true, "true in the pin, false in the candidate is a regression, and still a move");
+  assert.equal(watchMoved(watchRow(w, no, no)), false);
+  assert.equal(watchMoved(watchRow(w, yes, yes)), false, "landed in both is retire-me, never a move");
+  assert.equal(watchMoved(watchRow(w, none, yes)), false, "a probe that did not run never flips a verdict");
+  assert.equal(watchSignature(watchRow(w, no, yes)), "watch:x-lands:f>t");
+
+  const report = /** @type {Parameters<typeof render>[0]} */ ({
+    leg: "bun", verdict: "changed", signature: "changed:watch:x-lands:f>t", subject: {}, gates: [], ms: 1,
+    watches: [watchRow(w, no, yes), watchRow(w, yes, yes), watchRow({ ...w, name: "y-lands" }, none, no)],
+  });
+  const body = render(report, undefined);
+  assert.ok(body.includes("| watch | pinned | candidate | reading |"), "a watches table");
+  assert.ok(body.includes("| [`x-lands`](https://github.com/oven-sh/bun/issues/1) | not yet | landed **MOVED** |"), "the moved row is marked");
+  assert.ok(body.includes("landed | landed (in the pin too: retire this watch)"), "a row landed in the pin says to retire it");
+  assert.ok(body.includes("| did not run | not yet |"), "a probe that did not run says so rather than reading as either answer");
+  assert.ok(body.includes("`x-lands` landed means: x is fixed"), "a moved row explains what landed means");
+});
+
+test("the pin digest parses changesets out of a compare payload, caps the subjects, and says nothing about changesets where none exist", () => {
+  const patch = (text) => text.split("\n").map((l) => `+${l}`).join("\n");
+  const cmp = {
+    total_commits: 3,
+    commits: [
+      { sha: "a", commit: { message: "perf(wrangler): remove execa (#1)\n\nbody", author: { name: "someone" } }, author: { login: "someone" } },
+      { sha: "b", commit: { message: "chore: bump", author: { name: "robobun" } }, author: { login: "robobun" } },
+      { sha: "c", commit: { message: "<script>x</script> subject", author: { name: "z" } }, author: null },
+    ],
+    files: [
+      { filename: ".changeset/nice-cats.md", status: "added", patch: patch('---\n"wrangler": patch\n"miniflare": minor\n---\n\nReplace execa with tinyexec.\nSecond line.') },
+      { filename: ".changeset/old.md", status: "removed", patch: "-gone" },
+      { filename: "packages/wrangler/src/x.ts", status: "modified", patch: "+x" },
+    ],
+  };
+  const sets = changesets(cmp.files);
+  assert.deepEqual(sets, [{ file: ".changeset/nice-cats.md", packages: [{ name: "wrangler", bump: "patch" }, { name: "miniflare", bump: "minor" }], note: "Replace execa with tinyexec.\nSecond line." }]);
+  const md = renderDigest("cloudflare/workers-sdk", "aaaaaaa", "bbbbbbb", cmp);
+  assert.ok(md.includes("- **wrangler** patch, **miniflare** minor: Replace execa with tinyexec."), "one line per changeset, first line of the note");
+  assert.ok(md.includes("3 commit subjects, 1 by bots"), "bots are counted");
+  assert.ok(md.includes("- scriptx/script subject (z)"), "angle brackets are stripped from subjects and a null author falls back to the commit author");
+  assert.ok(!md.includes("No changeset"), "a range that added one does not also claim it added none");
+
+  const bun = renderDigest("oven-sh/bun", "1111111", "2222222", { total_commits: 300, commits: Array.from({ length: 250 }, (_, i) => ({ sha: String(i), commit: { message: `commit ${i}`, author: { name: "robobun" } }, author: { login: "robobun" } })), files: [] });
+  assert.ok(bun.includes("(the API returned 250 of 300)"), "a truncated compare says so");
+  assert.ok(bun.includes("- and 210 more"), "subjects are capped at 40");
+  assert.ok(!bun.includes("changeset"), "a repository with no changeset directory gets no sentence about changesets");
+});
+
+test("the JXL fixture is a real codestream and the live probes are named where the reporter can find them", () => {
+  const bytes = Buffer.from(JXL_2X2, "base64");
+  assert.deepEqual([bytes[0], bytes[1]], [0xff, 0x0a], "a bare JPEG XL codestream starts ff 0a");
+  assert.ok(bytes.length > 100 && bytes.length < 400, `a 2x2 lossless JXL is a couple of hundred bytes, got ${bytes.length}`);
+  assert.deepEqual([...LIVE_PROBES], ["live:jxl-decode", "live:dictionary-transport"]);
+  const src = readdirSync(fileURLToPath(new URL("tools/", ROOT))).includes("canary-browsers.ts");
+  assert.ok(src);
 });

@@ -17,9 +17,15 @@
 // zlib or the wrangler harness reaches `canary` weeks before it reaches a
 // version this repo could pin. The byte-identical build gate is the strongest
 // regression signal this repository can offer any runtime: every content
-// addressed `/a/` and `/i/` URL is a hash of what the compiler emitted. And
-// this repo has six fixes of its own sitting in bun's review queue; the day
-// one lands, this is the run that says so.
+// addressed `/a/` and `/i/` URL is a hash of what the compiler emitted.
+//
+// THE WATCHES are the other half, since 2026-09-15. This repo has seven fixes
+// of its own sitting in bun's review queue, and lib/upstream-watches.ts turns
+// each one's reproduction into a probe that reads false on the pinned bun
+// today. Every run answers each watch under the pin AND under the canary; a
+// row that differs is a `changed` verdict naming the fix that arrived and the
+// build it arrived in, which is the day this becomes a bun worth pinning. A
+// row landed in both is the reader's cue to retire it.
 //
 // WHAT IT NEVER DOES. Write the pin, roll a dictionary, touch a credential.
 // It is an instrument. `.github/workflows/canary.yml` runs it nightly and
@@ -43,6 +49,7 @@ import { rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { BUN_WATCHES, runBunWatch, type WatchResult, watchMoved, watchRow, watchSignature } from "./lib/upstream-watches.ts";
 import { canaryUrl, compareVersions, npmVersion, readPin, releaseAsset, runningMatchesPin } from "./lib/bun-pin.ts";
 import {
   type Gate,
@@ -68,6 +75,7 @@ const flag = (name: string): string | null => {
 
 const jsonPath = flag("--json");
 const gates: Gate[] = [];
+const watches: WatchResult[] = [];
 const started = Date.now();
 
 const print = (g: Gate) => {
@@ -77,25 +85,28 @@ const print = (g: Gate) => {
 
 type Report = {
   leg: "bun";
-  verdict: "green" | "red" | "instrument";
+  verdict: "green" | "changed" | "red" | "instrument";
   subject: { version: string; revision: string; url: string; pin: string };
   signature: string;
   gates: Gate[];
+  watches: WatchResult[];
   reason?: string;
   ms: number;
 };
 
 const emit = (verdict: Report["verdict"], subject: Report["subject"], reason?: string) => {
   const failing = gates.filter((g) => !g.ok).map((g) => g.name);
+  const moved = watches.filter(watchMoved).map(watchSignature);
   const report: Report = {
     leg: "bun",
     verdict,
     subject,
-    // The signature is WHAT failed, never which canary failed it: the issue
-    // dedupes on this, so a fresh canary carrying the same broken gate adds no
-    // comment, and a different gate failing does.
-    signature: verdict === "green" ? "green" : `${verdict}:${failing.join("|") || reason || "unknown"}`,
+    // The signature is WHAT failed or moved, never which canary did it: the
+    // issue dedupes on this, so a fresh canary carrying the same broken gate
+    // (or the same landed fix) adds no comment, and a different one does.
+    signature: verdict === "green" ? "green" : `${verdict}:${[...failing, ...moved].join("|") || reason || "unknown"}`,
     gates,
+    watches,
     reason,
     ms: Date.now() - started,
   };
@@ -179,6 +190,18 @@ try {
 step(contractSuiteGate(candidate, ROOT));
 step(calSuiteGate(candidate, ROOT));
 
+// The watches, each read under the pin and under the canary. A watch never
+// makes a run red: it is a fix arriving, which is `changed`.
+console.log("\nwatches (pinned -> canary):");
+const mark = (v: boolean | null) => (v === null ? "?" : v ? "landed" : "not yet");
+for (const w of BUN_WATCHES) {
+  const row = watchRow(w, runBunWatch(process.execPath, w), runBunWatch(candidate, w));
+  watches.push(row);
+  const note = watchMoved(row) ? "  <-- moved" : row.pinned && row.candidate ? "  (in the pin too: retire this watch)" : "";
+  console.log(`  ${row.name.padEnd(46)} ${mark(row.pinned).padEnd(8)} -> ${mark(row.candidate).padEnd(8)}${note}`);
+  if (row.pinned === null || row.candidate === null) console.log(`       ${row.detail}`);
+}
+
 if (!has("--keep")) rmSync(WORK, { recursive: true, force: true });
 
 const failed = gates.filter((g) => !g.ok);
@@ -186,6 +209,12 @@ console.log("");
 if (failed.length) {
   emit("red", subject);
   console.log(`canary:bun: ${identity.revision} is RED — ${failed.map((g) => g.name).join("; ")}`);
+  process.exit(1);
+}
+const movedWatches = watches.filter(watchMoved);
+if (movedWatches.length) {
+  emit("changed", subject);
+  console.log(`canary:bun: ${identity.revision} clears every gate and ${movedWatches.length} watch(es) moved: ${movedWatches.map((w) => `${w.name} ${mark(w.pinned)} -> ${mark(w.candidate)}`).join("; ")}. Nothing written; a canary is never proposed.`);
   process.exit(1);
 }
 emit("green", subject);

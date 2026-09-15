@@ -40,13 +40,26 @@
 // build and no server. The shell assets 404 there and nothing in <head>
 // depends on them; the probes run before <body> parses by design.
 //
+// TWO LIVE PROBES ride beside the page's own, since 2026-09-15, for the two
+// site features parked on a browser rather than on a card: a JXL `/i/` tier
+// (a 2x2 JPEG XL decoded from a data URI, with a PNG decoded the same way as
+// the control), and dictionary transport (a real visit to production, then a
+// second navigation, read for the `Available-Dictionary` the engine sends and
+// the `dcz` it gets back). Horizon marks jpeg-xl honest-false because no
+// synchronous probe exists, and nothing on the page can see a request header,
+// so neither could ever flip there. They are diffed exactly like the page's
+// probes: a prerelease answering true where stable answers false is the
+// feature arriving. `--offline` skips the production visit. The dictionary
+// probe's control is stable chromium, which has sent the header since 130: a
+// run where it reads false is the network, and exits 2.
+//
 // Exit codes: 0 green, 1 changed, 2 the instrument could not run.
 
 import { existsSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { join } from "node:path";
 
-import { type Browser, chromium, firefox, webkit } from "playwright-core";
+import { type Browser, type Page, chromium, firefox, webkit } from "playwright-core";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 
@@ -60,6 +73,8 @@ export const DEFAULT_PAIRS = "chromium:chromium-tip-of-tree,firefox:firefox-beta
 const pairs = (flag("--pairs") ?? DEFAULT_PAIRS).split(",").map((p) => p.trim()).filter(Boolean).map((p) => p.split(":"));
 const pagePath = realpathSync(flag("--page") ?? join(ROOT, "src", "pages", "garage", "horizon.html"));
 const jsonPath = flag("--json");
+const offline = argv.includes("--offline");
+const LIVE_ORIGIN = "https://aadhar.sh";
 const started = Date.now();
 
 type Probe = { value: boolean; honest: boolean };
@@ -95,6 +110,59 @@ export function shippedCaps(html: string): string[] {
 /** The page's honest-false convention: a probe whose whole body returns false. */
 export const HONEST_FALSE = /\{\s*return\s*\(?\s*false\s*\)?\s*;?\s*\}\s*$/;
 
+/** A 2x2 JPEG XL, 190 bytes: `cjxl -d 0 -e 1` (libjxl 0.11) on a 2x2 RGB PNG, decoded back by djxl to the same pixels. Starts with the ff0a codestream signature. */
+export const JXL_2X2 = "/woIEBAJCAIBAMgCSxibnHGEAziAAzggSsA5BQEAIESACBABIkDk+Zd7+h5aZ+9TVXVvkiQJAXV3d3d39////1v1ZmZmZuD//Xv+e2jMOeda+9ybJElCQFVVVVVV9f///9z7uru7u+H//Xv+e2jMOeda+9ybJElCQFVVVVVV9f///9z7uru7u+H//Xv+e2jMOeda+9ybJElCQFVVVVVV9f///9z7uru7uy8QBQCH/9F/+HP0H/4c/kf/0S+YAg==";
+/** The control: a 2x1 PNG every engine decodes. */
+export const PNG_2X1 = "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAAD0lEQVR4nGNgYGD4//8/AAYBAv4CsjmuAAAAAElFTkSuQmCC";
+/** The live probes' names in the probe set, so a test and the reporter can find them. */
+export const LIVE_PROBES = ["live:jxl-decode", "live:dictionary-transport"] as const;
+
+/** Does this engine decode `data:<mime>;base64,...` into a real image? Answered by the image element, which is what a `<picture>` source would ask. */
+async function decodes(page: Page, mime: string, b64: string): Promise<boolean> {
+  return page.evaluate(([m, b]) => new Promise<boolean>((resolve) => {
+    const img = new Image();
+    const timer = setTimeout(() => resolve(false), 5000);
+    img.onload = () => { clearTimeout(timer); resolve(img.naturalWidth > 0); };
+    img.onerror = () => { clearTimeout(timer); resolve(false); };
+    img.src = `data:${m};base64,${b}`;
+  }), [mime, b64]);
+}
+
+/**
+ * Does this engine fetch the dictionary production offers and send it back on
+ * the next navigation? Two page loads against the live site: the first is
+ * where the `Link: rel="compression-dictionary"` arrives, the second is where
+ * `Available-Dictionary` would go out. An engine that never fetches the
+ * dictionary answers false after a bounded wait, which is the honest reading
+ * for firefox and webkit today. A network failure throws, and the caller
+ * treats that as the instrument.
+ */
+async function dictionaryTransport(browser: Browser): Promise<{ value: boolean; note: string }> {
+  const context = await browser.newContext();
+  try {
+    const page = await context.newPage();
+    // Listen BEFORE navigating: the dictionary fetch lands around 450ms into
+    // the load, often before `goto` resolves, and a listener attached after
+    // that only ever sees the trials where it came late (measured 2026-09-15:
+    // 3 of 6 trials read "never fetched" with the response visibly at 450ms).
+    const dictSeen = page.waitForResponse((r) => /\/a\/page-family\.[0-9a-f]+\.dict$/.test(r.url()), { timeout: 20_000 }).then(() => true, () => false);
+    await page.goto(`${LIVE_ORIGIN}/`, { waitUntil: "load", timeout: 30_000 });
+    if (!(await dictSeen)) return { value: false, note: "never fetched the offered dictionary" };
+    // The registration lands after the response body; a beat before the
+    // second navigation keeps a fast engine from racing its own store.
+    await page.waitForTimeout(1000);
+    const nav = page.waitForRequest((r) => r.isNavigationRequest() && r.url().startsWith(`${LIVE_ORIGIN}/garage`), { timeout: 15_000 });
+    await page.goto(`${LIVE_ORIGIN}/garage`, { waitUntil: "commit", timeout: 30_000 });
+    const req = await nav;
+    const headers = await req.allHeaders();
+    const offered = "available-dictionary" in headers;
+    const encoding = (await (await req.response())?.headerValue("content-encoding")) ?? "?";
+    return { value: offered, note: offered ? `sent Available-Dictionary, got ${encoding}` : `fetched the dictionary and sent no Available-Dictionary (got ${encoding})` };
+  } finally {
+    await context.close();
+  }
+}
+
 async function launch(name: string): Promise<Browser> {
   const family = familyOf(name);
   const engine = family === "webkit" ? webkit : family === "firefox" ? firefox : chromium;
@@ -116,6 +184,16 @@ async function snapshot(name: string): Promise<Snapshot> {
       return out;
     }, HONEST_FALSE.source);
     if (!probes) throw new Error(`${name}: the page exposed no __horizonCaps`);
+
+    // The live probes. The PNG control is what separates "this engine does
+    // not decode JXL" from "this engine decoded nothing".
+    if (!(await decodes(page, "image/png", PNG_2X1))) throw new Error(`${name}: the PNG control did not decode, so the JXL reading would be about the instrument`);
+    probes["live:jxl-decode"] = { value: await decodes(page, "image/jxl", JXL_2X2), honest: true };
+    if (!offline) {
+      const dict = await dictionaryTransport(browser);
+      probes["live:dictionary-transport"] = { value: dict.value, honest: true };
+      console.log(`${" ".repeat(26)} ${name}: ${dict.note}`);
+    }
     return { name, family: familyOf(name), version: browser.version(), probes };
   } finally {
     await browser.close();
@@ -191,6 +269,14 @@ for (const pair of pairs) {
 
   const [stable, pre] = taken;
   if (!stableByFamily.has(stable.family)) stableByFamily.set(stable.family, stable);
+  // THE CONTROL for the dictionary probe: stable chromium has sent
+  // Available-Dictionary since 130, so a false here is production or the
+  // network, and every other engine's reading would be about the same thing.
+  if (!offline && stable.family === "chromium" && stable.probes["live:dictionary-transport"]?.value === false) {
+    console.error(`${stable.name}: stable chromium did not complete the dictionary exchange with ${LIVE_ORIGIN}; the instrument is the network or production, so nothing here is a reading`);
+    emit("instrument", snaps, flips, [], "the dictionary control failed in stable chromium");
+    process.exit(2);
+  }
   if (!pre) continue;
 
   const a = new Set(Object.keys(stable.probes));

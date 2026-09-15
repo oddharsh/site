@@ -226,7 +226,22 @@ bun run canary:wrangler   # workers-sdk main from pkg.pr.new, installed into a
                           # `-- --ref <sha|PR#>` bisects or tests a PR before it merges
 bun run canary:browsers   # /garage/horizon's probes in stable vs prerelease engines,
                           # diffed; on a Mac: `-- --pairs chrome:chrome-canary`.
-                          # First run (2026-09-14) found margin-trim live in Canary 155
+                          # First run (2026-09-14) found margin-trim live in Canary 155.
+                          # Plus two LIVE probes the page cannot carry (2026-09-15): a
+                          # JXL data-URI decode and the Available-Dictionary exchange
+                          # with production; `-- --offline` skips the second. Their
+                          # first run found JXL decoding by default in Canary 155.
+#
+# THE WATCHES (2026-09-15) are the inverse of a gate: nine probes that read
+# FALSE on the pinned toolchain today, one per upstream fix this repo is
+# waiting on (tools/lib/upstream-watches.ts: seven bun issues from Bun.Image
+# option validation to fetch honouring `dispatcher`, plus workerd#7106's zstd
+# dictionary and `wrangler types --x-new-config`). Each leg reads every watch
+# under the PIN and under the candidate; a row that differs is a `changed`
+# night naming the fix and the build it arrived in, and a row landed in both
+# is the cue to retire it. The nightly pin PRs also carry pin:digest now, the
+# upstream commit range with its changesets, so a bump says what it adopts.
+bun run pin:digest -- --repo cloudflare/workers-sdk --from b149147 --to 982b806
 
 # every Playwright probe reads its Chrome from ONE place. Unset means stable.
 CHROME_CHANNEL=chrome-canary bun run csp:sweep
