@@ -871,6 +871,48 @@ Before merging the first revision that uses this path, change each Workers
 Build project's production branch from `main` to `production`. Otherwise the
 merge push can still trigger the old direct production build.
 
+## Production runs prerelease pins (bun canary, wrangler main)
+
+Since 2026-09-14 the two toolchain pins on the release path follow prerelease
+channels, EXACTLY and IMMUTABLY, and a nightly job advances each one only
+after the canary tripwire's gates pass on the candidate. Nothing floats.
+
+| pin | where | shape | advanced by |
+|---|---|---|---|
+| bun (the compiler) | `packageManager` in `package.json` | `bun@1.4.2-canary.20260913.1+09bb546`: npm's dated canary plus its build sha | `bun-pin.yml`, which follows npm's `canary` dist-tag because the pin's shape says canary |
+| wrangler (the publisher) | `devDependencies.wrangler` | `https://pkg.pr.new/cloudflare/workers-sdk/wrangler@b149147`: a commit of main | `wrangler-pin.yml`, which resolves main's sha from pkg.pr.new's own `x-commit-key` header |
+
+**The channel is the pin's shape.** A release-looking bun pin follows releases
+and a canary-looking one follows canaries; `bump-bun-pin.ts` never crosses
+between them. Switching channels is a hand edit followed by a relock, in
+either direction.
+
+**Why the bun sha is there.** A canary binary does not report its npm version:
+`bun --version` on the 1.4.2-canary.20260913.1 tarball prints `1.4.3`, and
+`Bun.revision` prints the commit. npm records that commit as build metadata on
+the canary's platform packages, so the pin carries it and three things prove
+the install is the pin: the registry's sha512 on the tarball, the tarball's own
+`package.json` version, and the binary's revision. `setup-bun` checks all three.
+
+**Fall back to a release in one edit each**, and relock:
+
+```bash
+# bun: any released version, then reinstall it and relock
+perl -pi -e 's/"packageManager": "bun@[^"]+"/"packageManager": "bun@1.4.2"/' package.json
+# wrangler: any released version
+bun add --dev wrangler@4.131.2
+bun run check-wrangler
+```
+
+**What can go wrong, and how it reads.** pkg.pr.new states no retention
+policy, so a pinned tarball can in principle vanish; `bun install
+--frozen-lockfile` then fails loudly on the next build (the lockfile carries
+the sha512, so nothing substitutes silently) and the fallback above is the
+repair. Advancing nightly keeps the pinned sha days old. Cloudflare's build
+image resolving a canary `packageManager` was measured by the branch build of
+the commit that flipped it; read the `Workers Builds: aadhar-sh` check on that
+commit, and its build log in the dashboard, before trusting the next flip.
+
 ## Read the canary tripwire (`canary.yml`)
 
 Three nightly legs run moving targets through gates this repository already

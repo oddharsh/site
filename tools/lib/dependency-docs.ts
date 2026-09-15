@@ -22,7 +22,8 @@ export const BASELINE_HEADING = "## Current baseline";
 // it is the thing the check exists to hold, so it is explicit rather than
 // inferred (nobody writes "@minify-html/node" or "lightningcss" in a sentence).
 export const DOC_ALIASES = [
-  { prose: "Wrangler", pkg: "wrangler" },
+  // wrangler left this table on 2026-09-14, when the pin became a pkg.pr.new
+  // COMMIT of workers-sdk main rather than a release number; see VERSIONLESS.
   { prose: "Oxc Minify", pkg: "oxc-minify" },
   { prose: "Lightning CSS", pkg: "lightningcss" },
   { prose: "Oxlint", pkg: "oxlint" },
@@ -45,9 +46,9 @@ export const DOC_ALIASES = [
 // Documented on purpose WITHOUT a version, each for a stated reason. An entry
 // here is a decision; a package in neither list fails the reverse direction.
 export const VERSIONLESS = new Map<string, string>([
-  // Empty on purpose, and it stays declared: a package in neither list fails the
-  // reverse direction, so the next dependency documented without a version needs
-  // an entry here and therefore a stated reason.
+  // A package in neither list fails the reverse direction, so the next dependency
+  // documented without a version needs an entry here and therefore a stated reason.
+  ["wrangler", "pinned to a COMMIT of cloudflare/workers-sdk main through a pkg.pr.new tarball URL since 2026-09-14, so there is no release number to state: the sha in the URL is the identity, bun.lock records the tarball's sha512, and `bun run check-wrangler` holds the URL, the lockfile and the installed version together. The prose names the channel and the reason; a number written there would be the tarball's own version, which the next nightly advance moves"],
 ]);
 
 // A null version keeps git/path dependencies in the census without inventing

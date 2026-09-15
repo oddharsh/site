@@ -20,11 +20,13 @@
 // only one that can be true and invisible at the same time, which is why it
 // runs before the two that cost a minute.
 //
-//   1. Is there a newer STABLE release, and does npm carry it too? Three
-//      different resolvers read this one string (the setup-bun action pulls a
-//      GitHub release asset, Cloudflare's build image resolves a released
-//      version, corepack-shaped tooling reads the registry), so a version that
-//      only half of them can see is not a version this repo can pin.
+//   1. Is there a newer version ON THE PIN'S CHANNEL, and does npm carry it?
+//      A release pin follows GitHub releases; a dated-canary pin follows npm's
+//      `canary` dist-tag. Either way npm has to carry it, because that is
+//      where the setup-bun action installs from (an `@oven/bun-<platform>`
+//      tarball with a registry sha512) and what Cloudflare's build image
+//      resolves. The channel is the pin's own SHAPE (lib/bun-pin.ts), so this
+//      script walks one channel and never crosses to the other.
 //   2. Is it older than the install policy's own window? bunfig.toml refuses a
 //      PACKAGE published in the last 24 hours; a runtime deserves at least that.
 //   3. Does its zstd honour `dictionary`? The silent one. See lib/bun-pin.ts.
@@ -57,9 +59,13 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  channelOf,
   compareVersions,
   minimumReleaseAgeSeconds,
+  npmBunDist,
+  npmVersion,
   readPin,
+  runningMatchesPin,
   releaseAsset,
   releaseUrl,
   writePin,
@@ -112,8 +118,11 @@ if (!baselineVersion) {
   console.error("bun:pin must run under bun: the pinned runtime is the baseline half of the comparison");
   process.exit(2);
 }
-if (baselineVersion !== pin.version) {
-  console.error(`running bun ${baselineVersion} while package.json pins ${pin.version}.`);
+// `baselineVersion !== pin.version` is the release-channel form of this guard;
+// a canary proves itself by revision, since its --version is the next release's.
+const baseline = runningMatchesPin(pin.version, { version: baselineVersion, revision: Bun.revision });
+if (!baseline.ok) {
+  console.error(`${baseline.why}: this bun is not the pin (baselineVersion !== pin.version).`);
   console.error("the pinned bun is the baseline, so this comparison would measure the wrong pair. install the pin first.");
   process.exit(2);
 }
@@ -123,17 +132,28 @@ console.log(`pinned:    bun@${pin.version}${pretend ? `  (comparing as if ${pret
 console.log(`baseline:  ${process.execPath}\n`);
 
 // ---------------------------------------------------------------------------
-// 1. is there a newer stable release, and can every resolver see it?
+// 1. is there a newer release ON THE PIN'S CHANNEL, and can every resolver see it?
 // ---------------------------------------------------------------------------
+// THE CHANNEL IS THE PIN'S SHAPE (lib/bun-pin.ts). A release pin follows
+// releases; a dated-canary pin follows npm's `canary` dist-tag, which names the
+// newest DATED canary and is immutable once published. Crossing channels is a
+// hand edit of packageManager and never something this script does on its own,
+// in either direction: a stable pin must not wake up on a canary, and a canary
+// pin must not quietly fall back to the release line the day one ships.
+const channel = channelOf(pin.version);
 const explicitTarget = flag("--to");
 let target = explicitTarget;
 let publishedAt: number | null = null;
 
-if (!target) {
+// npm has to carry the version either way, and it is also where the publish
+// time comes from, which is the field bunfig.toml's own note tells you to read.
+const npmRes = await fetch(`https://registry.npmjs.org/bun`, { headers: { accept: "application/json" } });
+const npmMeta = npmRes.ok ? await npmRes.json() : null;
+
+if (!target && channel === "stable") {
   // `releases/latest` skips drafts and prereleases, which is what keeps the
-  // rolling `canary` tag out. A canary is not pinnable anyway: the setup-bun
-  // action's whole argument for dropping its SHA-256 was that a RELEASED tag is
-  // immutable while `canary` changed daily.
+  // rolling `canary` tag out of the STABLE channel. That tag is not pinnable
+  // anyway: it changes daily, and a pin has to name bytes that never move.
   const headers: Record<string, string> = {
     accept: "application/vnd.github+json",
     "user-agent": "aadhar.sh bun:pin",
@@ -157,25 +177,58 @@ if (!target) {
   target = found[1];
 }
 
+if (!target && channel === "canary") {
+  // The dated canary npm publishes daily. Its value is an immutable version
+  // string, so unlike the GitHub tag it can be pinned, compared and re-fetched.
+  const tagged = String(npmMeta?.["dist-tags"]?.canary ?? "");
+  if (channelOf(tagged) !== "canary") {
+    console.error(`npm's canary dist-tag reads ${JSON.stringify(tagged)}, which is not a dated canary; refusing to guess`);
+    process.exit(2);
+  }
+  target = tagged;
+}
+
+if (!target) {
+  console.error("no candidate version could be resolved; nothing to compare");
+  process.exit(2);
+}
+
+// A canary pin carries its build sha, and npm records it as build metadata on
+// the canary's own platform dependencies (`1.4.2-canary.20260913.1+09bb546`).
+// Read it from there rather than from a binary, so the pin names the commit
+// before anything is downloaded.
+if (channelOf(target) === "canary" && !target.includes("+")) {
+  const dep = String(npmMeta?.versions?.[target]?.optionalDependencies?.["@oven/bun-linux-x64"] ?? "");
+  const sha = dep.split("+")[1];
+  if (!sha) {
+    console.error(`npm records no build sha for bun@${target}, so it cannot be pinned as a canary`);
+    process.exit(2);
+  }
+  target = `${target}+${sha}`;
+}
+
+if (channelOf(target) !== channel) {
+  console.error(`${target} is on the ${channelOf(target)} channel while the pin ${pin.version} is on ${channel}.`);
+  console.error("switching channels is a hand edit of packageManager, never a bump; this script only walks the channel it is on.");
+  process.exit(2);
+}
+
 if (compareVersions(target, current) <= 0) {
-  console.log(`bun:pin: nothing to do. ${target} is the newest stable release and the pin is ${current}.`);
+  console.log(`bun:pin: nothing to do. ${target} is the newest ${channel} release and the pin is ${current}.`);
   console.log("  the control is `bun run bun:pin --from 1.3.13 --to 1.3.14`, which must fail at the zstd gate.");
   process.exit(0);
 }
 
-console.log(`candidate: bun@${target}\n`);
+console.log(`candidate: bun@${target}  (${channel} channel)\n`);
 
-// npm has to carry it too. The registry is also where the publish time comes
-// from, which is the field bunfig.toml's own note tells you to read.
 {
-  const res = await fetch(`https://registry.npmjs.org/bun`, { headers: { accept: "application/json" } });
-  if (!res.ok) {
-    record("npm carries the release", false, `registry answered HTTP ${res.status}`);
+  if (!npmMeta) {
+    record("npm carries the release", false, `registry answered HTTP ${npmRes.status}`);
   } else {
-    const meta = await res.json();
-    const known = Boolean(meta.versions?.[target]);
-    publishedAt = meta.time?.[target] ? Date.parse(meta.time[target]) : null;
-    record("npm carries the release", known, known ? `bun@${target} published ${meta.time?.[target] ?? "at an unstated time"}` : `the registry has no bun@${target} yet, so half the resolvers cannot see it`);
+    const onNpm = npmVersion(target);
+    const known = Boolean(npmMeta.versions?.[onNpm]);
+    publishedAt = npmMeta.time?.[onNpm] ? Date.parse(npmMeta.time[onNpm]) : null;
+    record("npm carries the release", known, known ? `bun@${onNpm} published ${npmMeta.time?.[onNpm] ?? "at an unstated time"}` : `the registry has no bun@${onNpm} yet, so half the resolvers cannot see it`);
   }
 }
 
@@ -205,23 +258,46 @@ if (results.some((r) => !r.ok)) {
 // ---------------------------------------------------------------------------
 // fetch the candidate
 // ---------------------------------------------------------------------------
-const asset = releaseAsset();
-const url = releaseUrl(target, asset);
+// A release comes from its GitHub tag, as it always has. A dated canary has no
+// per-day GitHub asset and comes from npm's `@oven/bun-<platform>` tarball,
+// whose sha512 the registry records at publish time and which is verified
+// before the archive is opened.
 let candidate: string;
 try {
-  candidate = await downloadBun(url, WORK);
+  if (channel === "stable") {
+    candidate = await downloadBun(releaseUrl(target, releaseAsset()), WORK);
+  } else {
+    const dist = await npmBunDist(npmVersion(target));
+    candidate = await downloadBun(dist.tarball, WORK, dist.integrity);
+  }
 } catch (err) {
   console.error(String(err instanceof Error ? err.message : err));
   process.exit(2);
 }
 
 {
-  // The asset has to BE what the tag claims. Same assertion the setup-bun action
-  // makes, and for the same reason: the version string is the whole guarantee
-  // now that the digest pin is gone.
-  const reported = bunIdentity(candidate).version;
-  record("the asset reports the version it is tagged with", reported === target, `asked for ${target}, the binary reports ${reported || "nothing"}`);
-  if (reported !== target) {
+  // The asset has to BE what it claims. A release binary reports its own
+  // version. A canary binary reports the NEXT release (`1.4.3` for a tarball
+  // tagged 1.4.2-canary.20260913.1, measured 2026-09-14), so for that channel
+  // the identity is the tarball's own package.json, and the revision is printed
+  // because it is what an upstream bug report needs.
+  const identity = bunIdentity(candidate);
+  const packaged = channel === "stable"
+    ? identity.version
+    : String(JSON.parse(readFileSync(join(WORK, "package", "package.json"), "utf8")).version ?? "");
+  // The canary tarball's manifest names the version WITH its build sha, so it
+  // equals the whole pin; a release tarball names the bare version, which is
+  // the whole pin too. The binary's revision is the second witness.
+  const sha = target.split("+")[1] ?? "";
+  const same = channel === "stable"
+    ? packaged === target
+    : packaged === target && identity.revision.includes(`+${sha}`);
+  record(
+    channel === "stable" ? "the asset reports the version it is tagged with" : "the tarball and the binary both name the pinned canary",
+    same,
+    `asked for ${target}, ${channel === "stable" ? "the binary reports" : "the tarball says"} ${packaged || "nothing"}${channel === "canary" ? `, binary revision ${identity.revision}` : ""}`,
+  );
+  if (!same) {
     console.log("\nbun:pin: refusing to go further with a binary that disagrees with its own tag.");
     process.exit(1);
   }

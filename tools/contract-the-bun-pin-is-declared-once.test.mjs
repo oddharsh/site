@@ -2,7 +2,7 @@
 // Shared imports live in contract-shared.mjs.
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 
-import { compareVersions, interpretZstdProbe, minimumReleaseAgeSeconds, readPin, releaseAsset, releaseUrl, writePin } from "./lib/bun-pin.ts";
+import { channelOf, compareVersions, interpretZstdProbe, minimumReleaseAgeSeconds, npmPlatform, npmTarballUrl, npmVersion, parseVersion, readPin, releaseAsset, releaseUrl, runningMatchesPin, writePin } from "./lib/bun-pin.ts";
 import { fileURLToPath } from "node:url";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -20,7 +20,11 @@ test("the pin lib reads the same string package.json holds", async () => {
   const pkg = JSON.parse(text);
   const pin = readPin(root);
   assert.equal(pin.raw, pkg.packageManager);
-  assert.match(pin.version, /^\d+\.\d+\.\d+$/);
+  // A release or a DATED canary, and nothing looser: both are exact and both
+  // are immutable on npm, which is what makes either one a pin.
+  assert.match(pin.version, /^\d+\.\d+\.\d+(-canary\.\d{8}\.\d+\+[0-9a-f]{7,40})?$/);
+  if (channelOf(pin.version) === "canary") assert.ok(parseVersion(pin.version).sha, "a canary pin must carry the build sha the running bun proves itself by");
+  assert.ok(["stable", "canary"].includes(channelOf(pin.version)));
 });
 
 test("writePin edits one field and reflows nothing else", async () => {
@@ -104,12 +108,53 @@ test("the probe reader calls the silent case correctly", async () => {
   assert.equal(interpretZstdProbe("not json").honoured, null, "a probe that never ran is neither honoured nor refused");
 });
 
-test("versions compare numerically, so 1.10 is newer than 1.4", () => {
+test("versions compare numerically, so 1.10 is newer than 1.4, and canaries order by date under their release", () => {
   // The one comparison a string sort gets wrong, and bun will reach 1.10.
   assert.equal(compareVersions("1.10.0", "1.4.0"), 1);
   assert.equal(compareVersions("1.4.0", "1.4.0"), 0);
   assert.equal(compareVersions("1.3.14", "1.4.0"), -1);
   assert.equal(compareVersions("2.0.0", "1.99.99"), 1);
+  // npm names the canaries of the unreleased 1.4.3 `1.4.2-canary.<date>`, so a
+  // release outranks its own canaries and two canaries compare by date, then build.
+  assert.equal(compareVersions("1.4.2-canary.20260914.1", "1.4.2-canary.20260913.1"), 1);
+  assert.equal(compareVersions("1.4.2-canary.20260913.2", "1.4.2-canary.20260913.1"), 1);
+  assert.equal(compareVersions("1.4.2-canary.20260913.1", "1.4.2-canary.20260913.1"), 0);
+  assert.equal(compareVersions("1.4.2-canary.20260914.1", "1.4.2"), -1);
+  assert.equal(compareVersions("1.4.3-canary.20260920.1", "1.4.2-canary.20260914.1"), 1);
+  assert.throws(() => compareVersions("1.4", "1.4.0"), /not a bun version/);
+  assert.throws(() => compareVersions("1.4.2-beta.1", "1.4.2"), /not a bun version/, "only dated canaries are a channel here");
+});
+
+test("the channel is the pin's own shape, and the npm tarball names the platform package", () => {
+  assert.equal(channelOf("1.4.2"), "stable");
+  assert.equal(channelOf("1.4.2-canary.20260913.1"), "canary");
+  assert.equal(channelOf("1.4.2-canary.20260913.1+09bb546"), "canary");
+  assert.deepEqual(parseVersion("1.4.2-canary.20260913.1").canary, [20260913, 1]);
+  assert.equal(parseVersion("1.4.2-canary.20260913.1+09bb546").sha, "09bb546");
+  assert.equal(parseVersion("1.4.2").canary, null);
+  assert.equal(npmVersion("1.4.2-canary.20260913.1+09bb546"), "1.4.2-canary.20260913.1");
+  assert.equal(compareVersions("1.4.2-canary.20260913.1+09bb546", "1.4.2-canary.20260913.1"), 0, "the sha is identity, never order");
+  // The baseline guard: a release by version, a canary by revision, because a
+  // canary binary reports the NEXT release as its version (1.4.3 for a
+  // 1.4.2-canary tarball, measured 2026-09-14).
+  assert.equal(runningMatchesPin("1.4.2", { version: "1.4.2", revision: "744846f8" }).ok, true);
+  assert.equal(runningMatchesPin("1.4.2", { version: "1.4.3", revision: "09bb5463" }).ok, false);
+  assert.equal(runningMatchesPin("1.4.2-canary.20260913.1+09bb546", { version: "1.4.3", revision: "09bb5463058074ef" }).ok, true);
+  assert.equal(runningMatchesPin("1.4.2-canary.20260913.1+09bb546", { version: "1.4.3", revision: "5fce36e1" }).ok, false);
+  assert.equal(runningMatchesPin("1.4.2-canary.20260913.1", { version: "1.4.3", revision: "09bb5463" }).ok, false, "a canary pin without its sha proves nothing");
+  assert.equal(npmPlatform("linux", "x64"), "bun-linux-x64");
+  assert.equal(npmPlatform("darwin", "arm64"), "bun-darwin-aarch64");
+  assert.equal(
+    npmTarballUrl("1.4.2-canary.20260913.1", "bun-linux-x64"),
+    "https://registry.npmjs.org/@oven/bun-linux-x64/-/bun-linux-x64-1.4.2-canary.20260913.1.tgz",
+  );
+  // The CI installer reads the same platform package, so the two cannot name
+  // different tarballs for one pin.
+  return readFile(new URL(".github/actions/setup-bun/action.yml", ROOT), "utf8").then((action) => {
+    assert.match(action, /registry\.npmjs\.org\/@oven\/bun-linux-x64\//, "setup-bun must install from the npm platform package");
+    assert.match(action, /integrity/, "setup-bun must verify the registry's sha512");
+    assert.match(action, /package\/package\.json/, "setup-bun must read the tarball's own version, since a canary binary reports the next release");
+  });
 });
 
 test("the release-age window is read from bunfig rather than restated", async () => {
@@ -131,13 +176,17 @@ test("the release-age window is read from bunfig rather than restated", async ()
   );
 });
 
-test("only a stable release can ever be proposed", async () => {
+test("the bumper walks the pin's channel and never crosses it", async () => {
   const body = await readFile(new URL("tools/bump-bun-pin.ts", ROOT), "utf8");
-  // `releases/latest` is what skips drafts and prereleases, which is what keeps
-  // the rolling `canary` tag out. A canary is not pinnable: setup-bun dropped
-  // its SHA-256 precisely because a RELEASED tag is immutable and canary was not.
-  assert.match(body, /releases\/latest/, "the target must come from releases/latest, which excludes prereleases");
+  // STABLE: `releases/latest` skips drafts and prereleases, so the rolling
+  // `canary` tag can never become a release-channel target.
+  assert.match(body, /releases\/latest/, "the stable target must come from releases/latest, which excludes prereleases");
   assert.match(body, /\^bun-v\(\\d\+\\\.\\d\+\\\.\\d\+\)\$/, "the tag must be matched as a plain bun-vX.Y.Z");
+  // CANARY: npm's dist-tag names a DATED, immutable canary, which is the only
+  // shape of canary that can be a pin.
+  assert.match(body, /\["dist-tags"\]\?\.canary/, "the canary target must come from npm's canary dist-tag");
+  assert.match(body, /channelOf\(target\) !== channel/, "a target on the other channel must be refused");
+  assert.match(body, /npmBunDist\(npmVersion\(target\)\)/, "a canary must be fetched with the registry's integrity, by the version npm names");
 
   // The baseline guard. Without it a stale bun on PATH compares the candidate
   // against a third runtime and reports a byte-identical build that says nothing

@@ -43,7 +43,7 @@ import { rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { canaryUrl, compareVersions, readPin, releaseAsset } from "./lib/bun-pin.ts";
+import { canaryUrl, compareVersions, npmVersion, readPin, releaseAsset, runningMatchesPin } from "./lib/bun-pin.ts";
 import {
   type Gate,
   bunIdentity,
@@ -116,10 +116,15 @@ if (!process.versions.bun) {
   emit("instrument", bare, "not running under bun");
   process.exit(2);
 }
-if (process.versions.bun !== pin.version) {
-  console.error(`running bun ${process.versions.bun} while package.json pins ${pin.version}; install the pin first`);
-  emit("instrument", bare, `baseline is ${process.versions.bun}, pin is ${pin.version}`);
-  process.exit(2);
+{
+  // A release pin proves itself by version, a canary pin by revision (its
+  // --version is the next release's number); lib/bun-pin.ts knows which.
+  const baseline = runningMatchesPin(pin.version, { version: process.versions.bun, revision: Bun.revision });
+  if (!baseline.ok) {
+    console.error(`${baseline.why}; this bun is not the pin. install the pin first`);
+    emit("instrument", bare, `baseline is not the pin: ${baseline.why}`);
+    process.exit(2);
+  }
 }
 
 console.log(`pinned:    bun@${pin.version}`);
@@ -143,8 +148,8 @@ if (!identity.version || !identity.revision) {
   process.exit(2);
 }
 console.log(`revision:  ${identity.revision}`);
-if (compareVersions(identity.version, pin.version) <= 0) {
-  console.log(`           (reports ${identity.version}, not ahead of the pin; a canary cut right after a release looks like this)`);
+if (compareVersions(identity.version, npmVersion(pin.version).replace(/-canary\..*$/, "")) <= 0) {
+  console.log(`           (reports ${identity.version}, not ahead of the pin's release line; a canary cut right after a release looks like this)`);
 }
 console.log("");
 
