@@ -30,7 +30,7 @@ export function xpChromeCss() {
   }
   body {
     font-family: var(--font-ui);
-    font-size: 10.5pt; line-height: 1.5; color: oklch(21.78% 0 0);
+    font-size: 10.5pt; line-height: 1.5; color: var(--ink);
     text-wrap: pretty;  /* modern line-breaking; progressive, ignored where unsupported */
     margin: 0; padding: 24px 12px 60px; min-height: 100vh;
   }

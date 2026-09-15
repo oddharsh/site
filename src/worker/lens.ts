@@ -933,7 +933,7 @@ export function renderLensShell(initial?, state?, inputValue?, compare?) {
     // that response spends the crawl budget and carries third-party data.
     robots: "index, follow",
     css: `
-h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color:oklch(41.92% 0.0962 250.51); margin:0 0 2px; font-weight:bold; }
+h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color:var(--blue-40); margin:0 0 2px; font-weight:bold; }
 .lx-lede { margin:0 0 10px; color:oklch(40% 0 0); font-size:10pt; }
 .lx-lede a { color:oklch(42.61% 0.2353 263.74); }
 
@@ -965,7 +965,7 @@ h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color
 @media (prefers-reduced-motion:reduce){ .lx-tip.anchored:popover-open { transition:none; } }
 
 /* IE6 address bar */
-.lx-addr { display:flex; align-items:center; gap:6px; background:oklch(94.66% 0.0114 252.09); border:1px solid oklch(72% 0.03 250); border-radius:3px; padding:5px 6px; }
+.lx-addr { display:flex; align-items:center; gap:6px; background:var(--surface-desktop); border:1px solid oklch(72% 0.03 250); border-radius:3px; padding:5px 6px; }
 .lx-addr-label { font-size:9pt; color:oklch(45% 0 0); padding:0 2px; }
 .lx-globe { width:15px; height:15px; flex:0 0 auto; border-radius:50%; background:radial-gradient(circle at 35% 30%, oklch(78% 0.13 230), oklch(48% 0.16 250)); box-shadow:inset 0 0 0 1px oklch(100% 0 0 / .4); }
 .lx-url { flex:1 1 auto; min-width:0; font-family:"Courier New",Courier,monospace; font-size:10pt; padding:3px 6px; border:2px solid; border-color:oklch(55% 0 0) oklch(85% 0 0) oklch(85% 0 0) oklch(55% 0 0); background:#fff; color:oklch(25% 0.02 255); }

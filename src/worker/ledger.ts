@@ -292,7 +292,7 @@ async function renderLedger(env: Env) {
   }
 
   const css = `/*min*/
-h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color:oklch(41.92% 0.0962 250.51); margin:0 0 2px; font-weight:bold; }
+h1 { font-family:"Trebuchet MS",Verdana,Geneva,sans-serif; font-size:13pt; color:var(--blue-40); margin:0 0 2px; font-weight:bold; }
 .lg-lede { margin:0 0 12px; color:oklch(40% 0 0); font-size:10pt; }
 .lg-lede a { color:oklch(42.61% 0.2353 263.74); }
 

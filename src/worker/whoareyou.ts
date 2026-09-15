@@ -290,7 +290,7 @@ export async function handleWhoareyou(request, env, ctx) {
 h1 {
   font-family: "Trebuchet MS", Verdana, Geneva, sans-serif;
   font-size: 14pt;
-  color: oklch(41.92% 0.0962 250.51);
+  color: var(--blue-40);
   margin: 0 0 4px;
   font-weight: bold;
   letter-spacing: -0.01em;
@@ -298,7 +298,7 @@ h1 {
 h2 {
   font-family: "Trebuchet MS", Verdana, Geneva, sans-serif;
   font-size: 12pt;
-  color: oklch(41.92% 0.0962 250.51);
+  color: var(--blue-40);
   margin: 18px 0 6px;
   font-weight: bold;
   line-height: 1.3;
@@ -316,7 +316,7 @@ h2::after {
   margin-top: 8px;
 }
 
-.lede { margin: 0 0 14px; color: oklch(38.67% 0 0); font-size: 10.5pt; }
+.lede { margin: 0 0 14px; color: var(--ink-soft); font-size: 10.5pt; }
 p { margin: 0 0 12px; }
 ul { margin: 0 0 12px 22px; padding: 0; }
 li { margin-bottom: 4px; }
@@ -348,14 +348,14 @@ code, .mono {
   gap: 1px;
   margin: 4px 0 14px;
   background: oklch(85.04% 0.0283 248.16);
-  border: 1px solid oklch(61.14% 0.0611 253.60);
-  border-top-color: oklch(47.12% 0.0555 253.58);
-  border-left-color: oklch(47.12% 0.0555 253.58);
+  border: 1px solid var(--frame);
+  border-top-color: var(--blue-45);
+  border-left-color: var(--blue-45);
   font-size: 10pt;
 }
 .field-grid dt {
-  background: oklch(94.66% 0.0114 252.09);
-  color: oklch(41.92% 0.0962 250.51);
+  background: var(--surface-desktop);
+  color: var(--blue-40);
   font-weight: bold;
   padding: 4px 8px;
   font-family: Tahoma, Verdana, Geneva, sans-serif;
@@ -367,18 +367,18 @@ code, .mono {
   font-family: "Courier New", Courier, monospace;
   font-size: 9.5pt;
   word-break: break-all;
-  color: oklch(21.78% 0 0);
+  color: var(--ink);
 }
-.field-grid dd .dim { color: oklch(62.68% 0 0); font-family: Tahoma, Verdana, Geneva, sans-serif; font-size: 9pt; }
+.field-grid dd .dim { color: var(--ink-faint); font-family: Tahoma, Verdana, Geneva, sans-serif; font-size: 9pt; }
 .field-grid dd.muted { color: oklch(44.95% 0 0); }
 
 /* little raised "pill" — looks like a tiny 3D button */
 .pill {
   display: inline-block;
   padding: 0 5px;
-  border: 1px solid oklch(61.14% 0.0611 253.60);
-  background: oklch(94.66% 0.0114 252.09);
-  color: oklch(41.92% 0.0962 250.51);
+  border: 1px solid var(--frame);
+  background: var(--surface-desktop);
+  color: var(--blue-40);
   font-family: Tahoma, Verdana, Geneva, sans-serif;
   font-size: 8.5pt;
   font-weight: bold;
@@ -388,7 +388,7 @@ code, .mono {
 
 /* info callout — beveled like a Windows information dialog */
 .callout {
-  border: 1px solid oklch(61.14% 0.0611 253.60);
+  border: 1px solid var(--frame);
   background: oklch(98.81% 0.0263 99.90);
   padding: 8px 12px;
   margin: 14px 0;
@@ -397,7 +397,7 @@ code, .mono {
 }
 .callout::before {
   content: "ⓘ ";
-  color: oklch(41.92% 0.0962 250.51);
+  color: var(--blue-40);
   font-weight: bold;
 }
 

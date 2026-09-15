@@ -47,7 +47,7 @@ test("the resolver sees the knobs, and refuses an ambiguous value", () => {
   assert.deepEqual(tokenCopiesIn(".x{color:oklch(51% 0.225 263)}", map).map((c) => c.token), ["--blue-65"]);
 });
 
-test("no page <style> and no luna.css rule carries a token's value as a literal", async () => {
+test("no page <style>, Worker CSS literal or luna.css rule carries a token's value as a literal", async () => {
   const map = loadTokenValueMap(ROOT);
   assert.ok(map.size >= 25, `only ${map.size} token values resolved; the colors.css parse has collapsed`);
   const offenders = [];
@@ -72,6 +72,21 @@ test("no page <style> and no luna.css rule carries a token's value as a literal"
       const spec = JSON.parse(await read(`pipelines/${family}/specs/${f}`));
       for (const c of tokenCopiesIn(spec.pageCss ?? "", map)) offenders.push(`pipelines/${family}/specs/${f}: ${c.literal} is var(${c.token})`);
     }
+  }
+  // Worker-rendered pages: every one goes through lunaPage, which links
+  // luna.css, and cal links it by absolute URL, so the tokens resolve there
+  // too. 63 copies sat in these template strings on 2026-09-15 (around.ts 19,
+  // whoareyou.ts 15, reading.ts 9, bot.ts 8, ...), each read by hand before
+  // the swap because a TS file holds CSS beside things that are not CSS.
+  const workerFiles = [];
+  for (const dir of ["src/worker", "cal/src", "serendipity"]) {
+    for (const f of await readdir(new URL(dir, ROOT), { recursive: true })) {
+      if (/\.(ts|js)$/.test(f) && !/(^|\/)test\//.test(f) && !f.endsWith(".d.ts")) workerFiles.push(`${dir}/${f}`);
+    }
+  }
+  assert.ok(workerFiles.length >= 60, `walked ${workerFiles.length} Worker sources`);
+  for (const rel of workerFiles) {
+    for (const c of tokenCopiesIn(await read(rel), map)) offenders.push(`${rel}: ${c.literal} is var(${c.token})`);
   }
   // luna.css after its verbatim token blocks: the definitions themselves are literals by nature.
   const luna = await read("src/styles/luna.css");
