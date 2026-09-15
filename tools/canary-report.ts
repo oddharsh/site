@@ -39,6 +39,7 @@ type Report = {
   gates?: Gate[];
   flips?: { cap: string; stable: boolean; prerelease: boolean; pair: string }[];
   belowBar?: { cap: string; trueIn: string[] }[];
+  watches?: { name: string; issue: string; landed: string; pinned: boolean | null; candidate: boolean | null; detail: string }[];
   reason?: string;
   ms: number;
 };
@@ -82,6 +83,22 @@ export function render(report: Report, runUrl: string | undefined): string {
     lines.push("| probe | pair | stable | prerelease |", "|---|---|---|---|");
     for (const f of report.flips) lines.push(`| \`${f.cap}\` | ${f.pair} | ${f.stable} | ${f.prerelease}${f.prerelease ? "" : " (gone)"} |`);
     lines.push("");
+  }
+  if (report.watches?.length) {
+    // Every row, moved or not: the reader of a "changed" issue wants to see
+    // which fixes are still outstanding beside the one that arrived, and a
+    // row landed in the PIN is the signal to retire the watch.
+    lines.push("| watch | pinned | candidate | reading |", "|---|---|---|---|");
+    const mark = (v: boolean | null) => (v === null ? "did not run" : v ? "landed" : "not yet");
+    for (const w of report.watches) {
+      const moved = w.pinned !== null && w.candidate !== null && w.pinned !== w.candidate;
+      const detail = w.detail.replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/[\r\n]+/g, " ");
+      const tag = moved ? " **MOVED**" : w.pinned && w.candidate ? " (in the pin too: retire this watch)" : "";
+      lines.push(`| [\`${w.name}\`](${w.issue}) | ${mark(w.pinned)} | ${mark(w.candidate)}${tag} | ${detail} |`);
+    }
+    lines.push("");
+    for (const w of report.watches) if (w.pinned !== null && w.candidate !== null && w.pinned !== w.candidate) lines.push(`- \`${w.name}\` landed means: ${w.landed}`);
+    if (report.watches.some((w) => w.pinned !== null && w.candidate !== null && w.pinned !== w.candidate)) lines.push("");
   }
   if (report.belowBar?.length) {
     lines.push("Cards marked shipped that no longer clear the two-engine bar in stable engines:", "");

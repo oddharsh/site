@@ -39,7 +39,7 @@ minimumReleaseAge = 86400
 # every entry below now exempts that package FOREVER, at any version. Prune
 # this list when a bump lands rather than letting it grow — an unpruned entry
 # is a permanently disabled check, not a stale one.
-# EMPTY, and it stays that way unless something is actively blocked. It held 22
+# It held 22
 # entries until 2026-08-24: oxc-minify plus its 20 platform bindings, and
 # @cloudflare/workers-types. Every one of those bumps has since landed and each
 # package is now days past the window, so the entries were exempting packages
@@ -51,7 +51,29 @@ minimumReleaseAge = 86400
 # 1.4.0 at 93 h. Removing an entry for a package still inside 24 h would red
 # CI's frozen install instead, so read the registry's `time` field for the
 # PINNED version before deleting its line.
-minimumReleaseAgeExcludes = []
+# ONE PACKAGE FAMILY, since 2026-09-15, and the reason is the wrangler pin.
+# `devDependencies.wrangler` is a pkg.pr.new COMMIT of workers-sdk main, taken
+# at zero hours old by construction, and each such commit names the exact
+# `workerd` it was built against. workerd is the same publisher one step
+# removed and it releases most days, so wrangler main is routinely a day ahead
+# of this window: measured 2026-09-15, main had already moved to
+# workerd@1.20260915.1 (published 01:18Z) and every install of main, in the
+# canary leg's worktree and in the pin job's relock, refused it as too young.
+# Age-gating the runtime while taking its publisher unaged protects nothing
+# and reds the two nightly jobs on exactly the mornings they have news. The
+# five platform packages are workerd's own optionalDependencies at the same
+# version, published in the same minute, and would be refused the same way.
+#
+# Bounded by name and by reason: the day the wrangler pin returns to a release
+# number, these six lines go, because nothing then takes workerd early.
+minimumReleaseAgeExcludes = [
+  "workerd",
+  "@cloudflare/workerd-darwin-64",
+  "@cloudflare/workerd-darwin-arm64",
+  "@cloudflare/workerd-linux-64",
+  "@cloudflare/workerd-linux-arm64",
+  "@cloudflare/workerd-windows-64",
+]
 
 # ── test discovery ───────────────────────────────────────────────────────────
 #

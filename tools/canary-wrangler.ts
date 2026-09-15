@@ -39,6 +39,14 @@
 // `red`, and the workflow files it once and stays quiet until it changes
 // again or goes back to identical.
 //
+// THE WATCHES, since 2026-09-15, are the two upstream threads this repository
+// is waiting on wrangler's side of: cloudflare/workerd#7106 (the runtime zstd
+// dictionary, this repository's own PR) and `wrangler types` learning
+// `--x-new-config` (gotcha 41). Each is read on the pinned tree and on the
+// candidate, and a row that differs is `changed` naming the fix that
+// arrived. lib/upstream-watches.ts holds the record; the runners are here
+// because they need a tree and an entry file rather than a bun executable.
+//
 // Exit codes: 0 green, 1 red or changed, 2 the instrument could not run.
 
 import { spawnSync } from "node:child_process";
@@ -48,6 +56,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { interpretZstdProbe } from "./lib/bun-pin.ts";
+import { WRANGLER_WATCHES, type WatchResult, watchMoved, watchRow, watchSignature } from "./lib/upstream-watches.ts";
 import { wranglerCommand } from "./lib/wrangler-bin.ts";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
@@ -68,6 +78,7 @@ const url = `${PKG_PR_NEW}/wrangler@${ref}`;
 
 type Gate = { name: string; ok: boolean; hard: boolean; detail: string; notes?: string[] };
 const gates: Gate[] = [];
+const watches: WatchResult[] = [];
 const print = (g: Gate) => {
   console.log(`${g.ok ? "  ok  " : g.hard ? " FAIL " : " DIFF "} ${g.name} — ${g.detail}`);
   for (const n of g.notes ?? []) console.log(`       ${n}`);
@@ -81,18 +92,21 @@ type Report = {
   subject: Subject;
   signature: string;
   gates: Gate[];
+  watches: WatchResult[];
   reason?: string;
   ms: number;
 };
 
 const emit = (verdict: Report["verdict"], subject: Subject, reason?: string) => {
   const failing = gates.filter((g) => !g.ok).map((g) => g.name);
+  const moved = watches.filter(watchMoved).map(watchSignature);
   const report: Report = {
     leg: "wrangler",
     verdict,
     subject,
-    signature: verdict === "green" ? "green" : `${verdict}:${failing.join("|") || reason || "unknown"}`,
+    signature: verdict === "green" ? "green" : `${verdict}:${[...failing, ...moved].join("|") || reason || "unknown"}`,
     gates,
+    watches,
     reason,
     ms: Date.now() - started,
   };
@@ -245,8 +259,47 @@ try {
     });
   }
 
+  // ------------------------------------------------------------------------
+  // 4. the watches, read on the pinned tree and on the candidate
+  // ------------------------------------------------------------------------
+  {
+    type Reading = { landed: boolean | null; detail: string };
+    const runners: Record<string, (tree: string, entry: string) => Reading> = {
+      "workerd-honours-zstd-dictionary": (tree) => {
+        const out = run(NODE, ["tools/workerd-zstd-probe.ts"], { cwd: tree, timeout: 3 * 60_000 });
+        const read = interpretZstdProbe(out.stdout);
+        return read.parsed ? { landed: read.honoured, detail: read.detail } : { landed: null, detail: `did not run: ${tail(out, 1).join(" ").slice(0, 120)}` };
+      },
+      "wrangler-types-accepts-x-new-config": (tree, entry) => {
+        // cf-garage is the one config in the new format, and --path keeps the
+        // generated file out of either tree.
+        const target = join(scratch, `types-${tree === ROOT ? "pinned" : "candidate"}.d.ts`);
+        const out = run(NODE, [entry, "types", "--x-new-config", "--path", target], { cwd: join(tree, "cf-garage"), timeout: 2 * 60_000 });
+        const wrote = out.status === 0 && existsSync(target);
+        // wrangler colours its errors; the escape is built from its code point
+        // so the source carries no control character.
+        const ansi = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
+        const why = `${out.stderr || ""}${out.stdout || ""}`.replace(ansi, "").split("\n").find((l) => /Unknown argument|ERROR/.test(l))?.trim();
+        return { landed: wrote, detail: wrote ? `exit 0, wrote ${statSync(target).size} B` : `exit ${out.status}${why ? `: ${why.slice(0, 100)}` : ""}` };
+      },
+    };
+    const [pinnedCmd, pinnedArgs] = wranglerCommand([]);
+    const pinnedEntry = pinnedCmd === NODE ? pinnedArgs[0] : join(ROOT, "node_modules", "wrangler", "bin", "wrangler.js");
+    console.log("\nwatches (pinned -> candidate):");
+    const mark = (v: boolean | null) => (v === null ? "?" : v ? "landed" : "not yet");
+    for (const w of WRANGLER_WATCHES) {
+      const runner = runners[w.name];
+      if (!runner) continue;
+      const row = watchRow(w, runner(ROOT, pinnedEntry), runner(wt, candidateEntry));
+      watches.push(row);
+      const note = watchMoved(row) ? "  <-- moved" : row.pinned && row.candidate ? "  (in the pin too: retire this watch)" : "";
+      console.log(`  ${row.name.padEnd(46)} ${mark(row.pinned).padEnd(8)} -> ${mark(row.candidate).padEnd(8)}${note}`);
+      if (row.pinned === null || row.candidate === null || watchMoved(row)) console.log(`       ${row.detail}`);
+    }
+  }
+
   const hardFail = gates.some((g) => g.hard && !g.ok);
-  const softDiff = gates.some((g) => !g.hard && !g.ok);
+  const softDiff = gates.some((g) => !g.hard && !g.ok) || watches.some(watchMoved);
   console.log("");
   if (hardFail) {
     emit("red", subject);
@@ -255,7 +308,9 @@ try {
   }
   if (softDiff) {
     emit("changed", subject);
-    console.log(`canary:wrangler: wrangler@${ref} (${subject.wrangler}) passes every gate and bundles DIFFERENT bytes. The next wrangler pin re-mints the bundle.`);
+    const movedWatches = watches.filter(watchMoved);
+    const bundleMoved = gates.some((g) => !g.hard && !g.ok);
+    console.log(`canary:wrangler: wrangler@${ref} (${subject.wrangler}) passes every gate${bundleMoved ? " and bundles DIFFERENT bytes; the next wrangler pin re-mints the bundle" : ""}${movedWatches.length ? `${bundleMoved ? ", and" : " and"} ${movedWatches.length} watch(es) moved: ${movedWatches.map((w) => w.name).join(", ")}` : ""}.`);
     process.exit(1);
   }
   emit("green", subject);
