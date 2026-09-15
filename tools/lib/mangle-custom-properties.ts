@@ -21,8 +21,18 @@ export const RESERVED = new Set(["--x", "--y", "--lx", "--ly", "--tail"]);
 
 /** Any custom-property-shaped token. CLI flags match too and simply miss the map. */
 const TOKEN = /--[a-z0-9][a-z0-9-]*/g;
-const DEFINITION = /(--[a-z0-9][a-z0-9-]*)\s*:/g;
-const REFERENCE = /var\(\s*(--[a-z0-9][a-z0-9-]*)/g;
+// A definition is `--name:` at the head of a declaration. A style container
+// query, `@container style(--name: true)` (and `if(style(--name: 1): …)` from
+// CSS Values 5), has the same `--name:` shape and is a READ: the flag's value
+// is compared, never set. Counting it as a definition hid two things, measured
+// 2026-09-15 on a fixture. A query on a flag nothing defines never reached the
+// dangling set, so the one assertion this pass rests on could not see it, and
+// the flag was still planned a short name as if the tree defined it. The
+// lookbehind excludes the `style(` form here and REFERENCE collects it below,
+// so a shell flag that only a `setProperty` call ever sets is dangling by
+// construction, which is exactly what makes a missed file visible.
+const DEFINITION = /(?<!style\(\s*)(--[a-z0-9][a-z0-9-]*)\s*:/g;
+const REFERENCE = /(?:var|style)\(\s*(--[a-z0-9][a-z0-9-]*)/g;
 
 /** A first argument to those APIs that is NOT a literal, which would be unsafe. */
 const PROPERTY_API_DYNAMIC =
