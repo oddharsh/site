@@ -32,7 +32,7 @@ body {
   font-family: var(--font-ui);
   font-size: 10.5pt;
   line-height: 1.5;
-  color: oklch(21.78% 0 0);
+  color: var(--ink);
   padding: 24px 12px 60px;
   min-height: 100vh;
 }
@@ -41,16 +41,16 @@ body {
   --axp-maxw: 720px; max-width: var(--axp-maxw);
   margin: 0 auto;
   background: oklch(100.00% 0 0);
-  border: 1px solid oklch(61.14% 0.0611 253.60);
+  border: 1px solid var(--frame);
   box-shadow: 4px 4px 0 oklch(61.14% 0.0611 253.60 / 0.35);
 }
 .title-bar {
-  background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
+  background: var(--grad-title);
   color: oklch(100.00% 0 0);
   font-family: var(--font-caption);
   font-size: 10pt; font-weight: bold;
   padding: 4px 8px;
-  border-bottom: 1px solid oklch(41.92% 0.0962 250.51);
+  border-bottom: 1px solid var(--blue-40);
   display: flex; align-items: center; justify-content: space-between;
 }
 .title-bar .icon {
@@ -139,9 +139,9 @@ body {
 .content { padding: 12px 16px 16px; }
 h1 {
   font-family: var(--font-caption); font-size: 14pt;
-  color: oklch(41.92% 0.0962 250.51); margin: 0 0 4px; font-weight: bold; letter-spacing: -0.01em;
+  color: var(--blue-40); margin: 0 0 4px; font-weight: bold; letter-spacing: -0.01em;
 }
-.lede { margin: 0 0 14px; color: oklch(38.67% 0 0); font-size: 10.5pt; }
+.lede { margin: 0 0 14px; color: var(--ink-soft); font-size: 10.5pt; }
 p { margin: 0 0 12px; }
 a:link    { color: oklch(42.61% 0.2353 263.74); text-decoration: underline; }
 a:visited { color: oklch(42.09% 0.1935 328.36); }
@@ -170,13 +170,13 @@ pre {
 .chip::before { content: "… "; }
 .chip.yes { color: oklch(49.32% 0.1678 142.50); border-color: oklch(49.32% 0.1678 142.50); background: oklch(97% 0.04 142); }
 .chip.yes::before { content: "\2713 "; }
-.chip.no  { color: oklch(51.03% 0 0); border-color: oklch(70% 0 0); background: oklch(96% 0 0); }
+.chip.no  { color: var(--ink-dim); border-color: oklch(70% 0 0); background: oklch(96% 0 0); }
 .chip.no::before  { content: "\2717 "; }
 
 /* ── per-feature card ────────────────────────────────────────────────── */
 .demo {
-  border: 1px solid oklch(61.14% 0.0611 253.60);
-  border-top-color: oklch(47.12% 0.0555 253.58); border-left-color: oklch(47.12% 0.0555 253.58);
+  border: 1px solid var(--frame);
+  border-top-color: var(--blue-45); border-left-color: var(--blue-45);
   background: oklch(100% 0 0); margin: 0 0 18px; padding: 12px 14px 14px;
   /* skip rendering off-screen cards (this page is 48 of them, several with their
      own demos/animations). contain-intrinsic-size reserves a placeholder height so
@@ -187,7 +187,7 @@ pre {
 }
 .demo > h2 {
   font-family: var(--font-caption); font-size: 13pt; font-weight: bold;
-  color: oklch(41.92% 0.0962 250.51); margin: 0 0 2px; display: flex; align-items: baseline;
+  color: var(--blue-40); margin: 0 0 2px; display: flex; align-items: baseline;
   justify-content: space-between; gap: 10px; flex-wrap: wrap;
 }
 .demo > h2 .mono { font-size: 10pt; font-weight: normal; color: oklch(40% 0 0); }
@@ -235,9 +235,9 @@ pre {
 .tb-line.trim { text-box-trim: trim-both; text-box-edge: cap alphabetic; }
 /* a real XP title bar, trimmed vs not, to show the practical payoff */
 .tb-bar {
-  background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
+  background: var(--grad-title);
   color: oklch(100% 0 0); font-family: var(--font-caption); font-weight: bold;
-  font-size: 13pt; padding: 8px; border: 1px solid oklch(41.92% 0.0962 250.51); margin-top: 6px;
+  font-size: 13pt; padding: 8px; border: 1px solid var(--blue-40); margin-top: 6px;
 }
 .tb-bar.trim { text-box-trim: trim-both; text-box-edge: cap alphabetic; }
 
@@ -254,12 +254,12 @@ pre {
 /* ── interestfor + anchor positioning demo ───────────────────────────── */
 .ifor-demo a { text-decoration-style: dotted; text-underline-offset: 2px; interest-delay: 0s; }
 .ifor-pop {
-  margin: 0; padding: 0; border: 1px solid oklch(61.14% 0.0611 253.60);
+  margin: 0; padding: 0; border: 1px solid var(--frame);
   background: oklch(100% 0 0); box-shadow: 3px 3px 0 oklch(61.14% 0.0611 253.60 / .35);
 }
 .ifor-pop .cap {
   font-size: 8.5pt; color: oklch(38% 0 0); padding: 3px 6px;
-  background: oklch(96% 0.004 240); border-top: 1px solid oklch(61.14% 0.0611 253.60);
+  background: oklch(96% 0.004 240); border-top: 1px solid var(--frame);
 }
 .ifor-pop .box { width: 200px; height: 120px; display: flex; align-items: center; justify-content: center;
   font-size: 9pt; color: oklch(45% 0 0); background: oklch(94% 0.01 250); }
@@ -278,7 +278,7 @@ pre {
 .engine { margin: 12px 0 0; padding: 10px 0 0; border-top: 1px solid oklch(93% 0.01 248); }
 .engine h3 {
   font-family: var(--font-caption); font-size: 11.5pt; font-weight: bold;
-  color: oklch(41.92% 0.0962 250.51); margin: 0 0 4px; display: flex; align-items: baseline; gap: 8px;
+  color: var(--blue-40); margin: 0 0 4px; display: flex; align-items: baseline; gap: 8px;
 }
 .engine p { font-size: 9.5pt; color: oklch(33% 0 0); margin: 0 0 6px; }
 
@@ -303,7 +303,7 @@ footer {
 .anc-btn {
   anchor-name: --anc-btn;
   font-family: var(--font-ui); font-size: 9.5pt;
-  padding: 5px 14px; cursor: pointer; color: oklch(21.78% 0 0);
+  padding: 5px 14px; cursor: pointer; color: var(--ink);
   background: linear-gradient(180deg, oklch(99% 0 0) 0%, oklch(90% 0.01 250) 100%);
   border: 1px solid oklch(50% 0.02 250);
   border-top-color: oklch(100% 0 0); border-left-color: oklch(100% 0 0);
@@ -315,14 +315,14 @@ footer {
 .anc-pop {
   position: absolute;            /* fallback box if anchoring is unsupported */
   margin: 0; padding: 0; inset: auto;
-  border: 1px solid oklch(41.92% 0.0962 250.51);
+  border: 1px solid var(--blue-40);
   background: oklch(100% 0 0);
   box-shadow: 3px 3px 0 oklch(61.14% 0.0611 253.60 / .35);
   font-size: 8.5pt; max-width: 200px;
 }
 .anc-pop .hd {
   font-family: var(--font-caption); font-weight: bold; color: oklch(100% 0 0);
-  background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
+  background: var(--grad-title);
   padding: 2px 7px;
 }
 .anc-pop .bd { padding: 6px 8px; color: oklch(33% 0 0); }
@@ -355,13 +355,13 @@ footer {
       scroll the box, wired via a named scroll-timeline on the scroller.
    2. view() reveal: each row fades+slides in as it enters the scrollport,
       driven by its own view-timeline. */
-.sd-wrap { margin-top: 10px; border: 1px solid oklch(61.14% 0.0611 253.60);
-  border-top-color: oklch(47.12% 0.0555 253.58); border-left-color: oklch(47.12% 0.0555 253.58);
+.sd-wrap { margin-top: 10px; border: 1px solid var(--frame);
+  border-top-color: var(--blue-45); border-left-color: var(--blue-45);
   background: oklch(98% 0.004 250); }
 
 /* the XP-style progress strip, pinned above the scroller */
 .sd-meter { height: 18px; padding: 3px; background: oklch(87.51% 0.0281 248.15);
-  border-bottom: 1px solid oklch(61.14% 0.0611 253.60);
+  border-bottom: 1px solid var(--frame);
   /* sunken bevel: dark top/left, light bottom/right */
   border-top: 2px solid oklch(55% 0.02 250); border-left: 2px solid oklch(55% 0.02 250); }
 .sd-meter .bar {
@@ -425,7 +425,7 @@ footer {
 .ph-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; align-items: flex-start; }
 .ph-btn {
   font-family: var(--font-caption); font-size: 9.5pt; cursor: pointer;
-  padding: 4px 12px; color: oklch(21.78% 0 0);
+  padding: 4px 12px; color: var(--ink);
   background: linear-gradient(180deg, oklch(99% 0 0) 0%, oklch(90% 0.01 250) 100%);
   border: 1px solid oklch(50% 0.02 250);
   border-top-color: oklch(99% 0 0); border-left-color: oklch(97% 0 0);
@@ -436,12 +436,12 @@ footer {
 .ph-pop {
   margin: 0; padding: 0; inset: auto; position: fixed; top: 50%; left: 50%;
   transform: translate(-50%, -50%);
-  border: 1px solid oklch(61.14% 0.0611 253.60);
+  border: 1px solid var(--frame);
   background: oklch(100% 0 0); box-shadow: 4px 4px 0 oklch(61.14% 0.0611 253.60 / 0.35);
   font-size: 9pt; min-width: 150px;
 }
 .ph-pop .ph-bar {
-  background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
+  background: var(--grad-title);
   color: oklch(100% 0 0); font-family: var(--font-caption); font-weight: bold;
   font-size: 8.5pt; padding: 2px 6px;
 }
@@ -456,7 +456,7 @@ footer {
    button bevel, exactly like the homepage inputs. */
 .fs-field {
   display: block; width: 100%; font-family: var(--font-ui); font-size: 10pt;
-  line-height: 1.5; color: oklch(21.78% 0 0); padding: 5px 7px; resize: none;
+  line-height: 1.5; color: var(--ink); padding: 5px 7px; resize: none;
   background: oklch(100% 0 0);
   border: 2px solid;
   border-top-color: oklch(58% 0 0); border-left-color: oklch(58% 0 0);
@@ -491,7 +491,7 @@ placeholder
      same bevel language as the cal/ form inputs. */
   font-family: var(--font-ui);
   font-size: 10.5pt;
-  color: oklch(21.78% 0 0);
+  color: var(--ink);
   background: oklch(100% 0 0);
   border: 2px solid;
   border-color: oklch(55% 0.02 250) oklch(94% 0.01 250) oklch(94% 0.01 250) oklch(55% 0.02 250);
@@ -504,7 +504,7 @@ placeholder
   gap: 8px;
 }
 .bsel-field:focus-visible {
-  outline: 1px dotted oklch(41.92% 0.0962 250.51);
+  outline: 1px dotted var(--blue-40);
   outline-offset: 1px;
 }
 /* The drop-arrow becomes the classic raised XP combobox button: a beveled
@@ -533,7 +533,7 @@ placeholder
 .bsel-field::picker(select) {
   appearance: base-select;
   background: oklch(100% 0 0);
-  border: 1px solid oklch(61.14% 0.0611 253.60);
+  border: 1px solid var(--frame);
   box-shadow: 3px 3px 0 oklch(61.14% 0.0611 253.60 / 0.35);
   padding: 2px;
   margin-top: 2px;
@@ -551,7 +551,7 @@ placeholder
 .bsel-field option:nth-of-type(even) { background: oklch(97.5% 0.006 255); }
 .bsel-field option:hover,
 .bsel-field option:focus {
-  background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
+  background: var(--grad-title);
   color: oklch(100% 0 0);
 }
 /* The selected row gets the blue XP highlight + a checkmark, again only
@@ -571,8 +571,8 @@ placeholder
 .cs-cell {
   aspect-ratio: 3 / 2;
   border-radius: 18px;
-  border: 1px solid oklch(41.92% 0.0962 250.51);
-  background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
+  border: 1px solid var(--blue-40);
+  background: var(--grad-title);
   color: oklch(100% 0 0);
   font-family: var(--font-caption); font-size: 9pt; font-weight: bold;
   display: flex; align-items: center; justify-content: center; text-align: center; padding: 4px;
@@ -588,14 +588,14 @@ placeholder
    the kind of thing that needed an SVG mask or a clip-path polygon before. */
 .cs-frame {
   margin-top: 12px;
-  border: 1px solid oklch(41.92% 0.0962 250.51);
+  border: 1px solid var(--blue-40);
   border-radius: 14px 14px 0 0;
   corner-shape: scoop scoop round round;
   overflow: hidden;
   background: oklch(100% 0 0);
 }
 .cs-frame .bar {
-  background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
+  background: var(--grad-title);
   color: oklch(100% 0 0); font-family: var(--font-caption); font-weight: bold;
   font-size: 11pt; padding: 6px 10px;
 }
@@ -619,16 +619,16 @@ placeholder
 .cs-demo { interpolate-size: allow-keywords; }
 
 .cs-panel {
-  border: 1px solid oklch(61.14% 0.0611 253.60);
-  border-top-color: oklch(47.12% 0.0555 253.58);
-  border-left-color: oklch(47.12% 0.0555 253.58);
+  border: 1px solid var(--frame);
+  border-top-color: var(--blue-45);
+  border-left-color: var(--blue-45);
   background: oklch(100% 0 0); margin-top: 10px;
 }
 /* the XP "group box" header: a clickable summary-style bar */
 .cs-head {
   display: flex; align-items: center; justify-content: space-between;
   font-family: var(--font-caption); font-weight: bold;
-  font-size: 10.5pt; color: oklch(41.92% 0.0962 250.51);
+  font-size: 10.5pt; color: var(--blue-40);
   background: linear-gradient(180deg, oklch(97% 0.012 250) 0%, oklch(91% 0.02 250) 100%);
   padding: 5px 9px; cursor: pointer; user-select: none;
   border-bottom: 1px solid oklch(86% 0.03 250);
@@ -655,7 +655,7 @@ placeholder
 .cs-native { margin-top: 10px; }
 .cs-native > summary {
   font-family: var(--font-caption); font-weight: bold;
-  font-size: 10pt; color: oklch(41.92% 0.0962 250.51);
+  font-size: 10pt; color: var(--blue-40);
   cursor: pointer; list-style-position: inside;
 }
 .cs-native::details-content {
@@ -670,17 +670,17 @@ placeholder
 @media (max-width: 520px) { .sy-grid { grid-template-columns: 1fr; } }
 .sy-col h3 {
   font-family: var(--font-caption); font-size: 9.5pt; font-weight: bold;
-  margin: 0 0 4px; color: oklch(41.92% 0.0962 250.51);
+  margin: 0 0 4px; color: var(--blue-40);
 }
 /* a faux main-thread timeline: a long unbroken bar vs. a yielded one with gaps
    where input can be serviced. purely illustrative, not measured. */
 .sy-track {
-  height: 16px; border: 1px solid oklch(61.14% 0.0611 253.60);
+  height: 16px; border: 1px solid var(--frame);
   background: oklch(96% 0.004 240); position: relative; overflow: hidden;
 }
 .sy-track .blk {
   position: absolute; top: 0; bottom: 0;
-  background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
+  background: var(--grad-title);
 }
 /* one solid 100% block = task never yields, input starved */
 .sy-track.blocked .blk { left: 0; width: 100%; }
@@ -703,11 +703,11 @@ placeholder
 /* live interactive demo: a rAF-driven dot that freezes when the main thread is
    blocked vs. keeps gliding when the task yields. measured, not faked. */
 .sy-live { margin-top: 12px; }
-.sy-rail { position: relative; height: 20px; margin-bottom: 6px; background: oklch(96% 0.004 240); border: 1px solid oklch(61.14% 0.0611 253.60); overflow: hidden; }
-.sy-dot { position: absolute; top: 3px; left: 0; width: 13px; height: 13px; border-radius: 50%; background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%); }
+.sy-rail { position: relative; height: 20px; margin-bottom: 6px; background: oklch(96% 0.004 240); border: 1px solid var(--frame); overflow: hidden; }
+.sy-dot { position: absolute; top: 3px; left: 0; width: 13px; height: 13px; border-radius: 50%; background: var(--grad-title); }
 .sy-meter { font-size: 8.5pt; color: oklch(45% 0 0); margin: 0; }
 .sy-btns { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 0; }
-.sy-btn { font-family: var(--font-ui); font-size: 9pt; padding: 4px 12px; cursor: pointer; color: oklch(21.78% 0 0); background: linear-gradient(180deg, oklch(99% 0 0), oklch(90% 0.01 250)); border: 1px solid oklch(50% 0.02 250); border-top-color: oklch(100% 0 0); border-left-color: oklch(100% 0 0); box-shadow: 1px 1px 0 oklch(40% 0.03 250); }
+.sy-btn { font-family: var(--font-ui); font-size: 9pt; padding: 4px 12px; cursor: pointer; color: var(--ink); background: linear-gradient(180deg, oklch(99% 0 0), oklch(90% 0.01 250)); border: 1px solid oklch(50% 0.02 250); border-top-color: oklch(100% 0 0); border-left-color: oklch(100% 0 0); box-shadow: 1px 1px 0 oklch(40% 0.03 250); }
 .sy-btn:active { box-shadow: inset 1px 1px 0 oklch(40% 0.03 250); }
 .sy-btn:disabled { opacity: .5; cursor: default; }
 .sy-out { font-size: 8.5pt; color: oklch(38% 0 0); margin: 8px 0 0; min-height: 2.6em; }
@@ -720,18 +720,18 @@ placeholder
 .hic-cap { font-size: 8.5pt; color: oklch(48% 0 0); margin: 0 0 4px; }
 /* the live DOM source: a real XP title bar we will rasterize into canvas */
 .hic-src {
-  background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
+  background: var(--grad-title);
   color: oklch(100% 0 0); font-family: var(--font-caption); font-weight: bold;
-  font-size: 11pt; padding: 5px 8px; border: 1px solid oklch(41.92% 0.0962 250.51);
+  font-size: 11pt; padding: 5px 8px; border: 1px solid var(--blue-40);
   display: flex; align-items: center; justify-content: space-between;
 }
 .hic-src .glyphs { font-family: var(--font-ui); font-size: 9pt; letter-spacing: 2px; }
 .hic-src .glyphs span {
-  display: inline-block; background: oklch(87.51% 0.0281 248.15); color: oklch(41.92% 0.0962 250.51);
-  border: 1px solid oklch(41.92% 0.0962 250.51); padding: 0 4px; margin-left: 2px;
+  display: inline-block; background: oklch(87.51% 0.0281 248.15); color: var(--blue-40);
+  border: 1px solid var(--blue-40); padding: 0 4px; margin-left: 2px;
 }
 .hic-canvas {
-  border: 1px solid oklch(61.14% 0.0611 253.60); background: oklch(97% 0.004 240);
+  border: 1px solid var(--frame); background: oklch(97% 0.004 240);
   display: block; width: 100%; height: auto; image-rendering: auto;
 }
 .hic-note2 { font-size: 8.5pt; color: oklch(48% 0 0); margin: 6px 0 0; }
@@ -762,7 +762,7 @@ placeholder
 .mas-mock .tile {
   break-inside: avoid;
   margin: 0 0 8px;
-  border: 1px solid oklch(61.14% 0.0611 253.60);
+  border: 1px solid var(--frame);
   /* contact-sheet frame, same vocabulary as the homepage photo grid */
   background:
     linear-gradient(180deg, oklch(96% 0.01 250) 0%, oklch(91% 0.02 250) 100%);
@@ -776,7 +776,7 @@ placeholder
    Fuji frames packing without the gridlock of equal-height rows */
 .mas-mock .t1 { aspect-ratio: 3 / 4;  background: linear-gradient(160deg, oklch(62% 0.124 252), oklch(50% 0.113 251)); color: oklch(100% 0 0); }
 .mas-mock .t2 { aspect-ratio: 4 / 3;  background: linear-gradient(160deg, oklch(88% 0.088 66), oklch(70% 0.20 43)); }
-.mas-mock .t3 { aspect-ratio: 1 / 1;  background: linear-gradient(160deg, oklch(94.66% 0.0114 252.09), oklch(72% 0.06 250)); }
+.mas-mock .t3 { aspect-ratio: 1 / 1;  background: linear-gradient(160deg, var(--surface-desktop), oklch(72% 0.06 250)); }
 .mas-mock .t4 { aspect-ratio: 2 / 3;  background: linear-gradient(160deg, oklch(59% 0.234 26), oklch(46% 0.19 29)); color: oklch(100% 0 0); }
 .mas-mock .t5 { aspect-ratio: 16 / 9; background: linear-gradient(160deg, oklch(91% 0.02 250), oklch(80% 0.05 250)); }
 .mas-mock .t6 { aspect-ratio: 4 / 5;  background: linear-gradient(160deg, oklch(97% 0.037 95), oklch(85% 0.10 90)); }
@@ -802,8 +802,8 @@ placeholder
 .jxl-compare { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }
 @media (max-width: 520px) { .jxl-compare { grid-template-columns: 1fr; } }
 .jxl-fmt {
-  border: 1px solid oklch(61.14% 0.0611 253.60);
-  border-top-color: oklch(47.12% 0.0555 253.58); border-left-color: oklch(47.12% 0.0555 253.58);
+  border: 1px solid var(--frame);
+  border-top-color: var(--blue-45); border-left-color: var(--blue-45);
   background: oklch(98% 0.004 250); padding: 8px 9px;
 }
 .jxl-fmt h3 {
@@ -811,8 +811,8 @@ placeholder
   margin: 0 0 5px; color: oklch(38% 0.04 250);
 }
 /* a fake "file-size meter" bar: relative bytes at matched quality, illustrative */
-.jxl-bar { height: 9px; background: oklch(86% 0.06 250); border: 1px solid oklch(61.14% 0.0611 253.60); margin: 4px 0; }
-.jxl-bar > i { display: block; height: 100%; background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%); }
+.jxl-bar { height: 9px; background: oklch(86% 0.06 250); border: 1px solid var(--frame); margin: 4px 0; }
+.jxl-bar > i { display: block; height: 100%; background: var(--grad-title); }
 .jxl-fmt .jxl-kb { font-size: 8.5pt; color: oklch(45% 0 0); }
 .jxl-fmt .jxl-ships { font-size: 8pt; font-family: var(--font-mono); color: oklch(48% 0 0); margin-top: 3px; }
 .jxl-fmt.win { background: oklch(98% 0.04 142); border-color: oklch(49.32% 0.1678 142.50); }
@@ -842,7 +842,7 @@ placeholder
 .hdr-swatch.hdr {
   background:
     radial-gradient(circle at 50% 32%, oklch(99% 0.06 95) 0 10%, oklch(95% 0.14 80) 10% 20%, oklch(85% 0.16 65 / .55) 20% 34%, transparent 52%),
-    linear-gradient(180deg, oklch(74% 0.12 250) 0%, oklch(56% 0.13 250) 60%, oklch(41.92% 0.0962 250.51) 100%);
+    linear-gradient(180deg, oklch(74% 0.12 250) 0%, oklch(56% 0.13 250) 60%, var(--blue-40) 100%);
   box-shadow: inset 0 0 24px oklch(95% 0.12 85 / .35);
 }
 @media (color-gamut: p3) {
@@ -874,22 +874,22 @@ placeholder
    styling would look like, scoped under .rm- to avoid collisions. */
 .rm-mock { margin-top: 10px; }
 .rm-bar {
-  display: flex; flex-wrap: wrap; gap: 0; border: 1px solid oklch(47.12% 0.0555 253.58);
+  display: flex; flex-wrap: wrap; gap: 0; border: 1px solid var(--blue-45);
   background: linear-gradient(180deg, oklch(96% 0.006 250) 0%, oklch(90% 0.01 250) 100%);
   font-family: var(--font-caption); font-size: 10pt;
 }
 .rm-bar .rm-tab {
   padding: 5px 12px; border-right: 1px solid oklch(70% 0.02 250);
-  color: oklch(41.92% 0.0962 250.51); text-decoration: none; cursor: default;
+  color: var(--blue-40); text-decoration: none; cursor: default;
   border-top: 1px solid oklch(100% 0 0); /* faux raised bevel */
 }
 .rm-bar .rm-tab:last-child { border-right: none; }
 /* the "active route": what a :route-active pseudo would paint for you,
    here hard-coded to the /garage/ tab so the mock reads correctly */
 .rm-bar .rm-tab.rm-active {
-  background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
+  background: var(--grad-title);
   color: oklch(100% 0 0); font-weight: bold;
-  border-top-color: oklch(41.92% 0.0962 250.51);
+  border-top-color: var(--blue-40);
   box-shadow: inset 0 -2px 0 oklch(41.92% 0.0962 250.51 / .6);
 }
 .rm-cap { font-size: 8.5pt; color: oklch(48% 0 0); margin: 6px 0 0; }
@@ -2623,14 +2623,14 @@ navigation.addEventListener("navigate", (e) =&gt; {
     <style>
       /* ───── frontier batch 2: demo styles ───── */
       .rc-row { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
-      .rc-row .rc { --c: oklch(51% 0.225 263); background: var(--c); color: #fff; padding: 12px 8px; border-radius: 4px; font-size: 9pt; flex: 1 1 78px; text-align: center; text-shadow: 0 1px 1px rgba(0,0,0,.4); }
+      .rc-row .rc { --c: var(--blue-65); background: var(--c); color: #fff; padding: 12px 8px; border-radius: 4px; font-size: 9pt; flex: 1 1 78px; text-align: center; text-shadow: 0 1px 1px rgba(0,0,0,.4); }
       .rc-row .lite { background: oklch(from var(--c) calc(l + 0.30) c h); color: oklch(from var(--c) calc(l - 0.30) c h); text-shadow: none; }
       .rc-row .dark { background: oklch(from var(--c) calc(l - 0.24) c h); }
       .rc-row .hue  { background: oklch(from var(--c) l c calc(h + 130)); }
       .rc-row .chr  { background: oklch(from var(--c) l calc(c + 0.12) h); }
 
       @property --hz-ang { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
-      .prop-demo { margin-top: 10px; height: 54px; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 9.5pt; text-shadow: 0 1px 2px rgba(0,0,0,.45); --hz-ang: 0deg; background: linear-gradient(var(--hz-ang), oklch(51% 0.225 263), oklch(72% 0.16 200), oklch(60% 0.2 320)); animation: hz-spin 5s linear infinite; }
+      .prop-demo { margin-top: 10px; height: 54px; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 9.5pt; text-shadow: 0 1px 2px rgba(0,0,0,.45); --hz-ang: 0deg; background: linear-gradient(var(--hz-ang), var(--blue-65), oklch(72% 0.16 200), oklch(60% 0.2 320)); animation: hz-spin 5s linear infinite; }
       @keyframes hz-spin { to { --hz-ang: 360deg; } }
       .demo.no-support .prop-demo { animation: none; }
 
@@ -2653,12 +2653,12 @@ navigation.addEventListener("navigate", (e) =&gt; {
       .sw-row input[switch], .sw-row input { width: 40px; height: 24px; }
 
       .si-list { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-      .si-list li { background: oklch(93% 0.03 255); border-left: 3px solid oklch(51% 0.225 263); padding: 6px 10px; font-size: 9.5pt; animation: si-fade .5s backwards; animation-delay: calc(sibling-index() * 90ms); }
+      .si-list li { background: oklch(93% 0.03 255); border-left: 3px solid var(--blue-65); padding: 6px 10px; font-size: 9.5pt; animation: si-fade .5s backwards; animation-delay: calc(sibling-index() * 90ms); }
       @keyframes si-fade { from { opacity: 0; translate: -14px 0; } to { opacity: 1; translate: 0 0; } }
 
       .sst-scroll { margin-top: 10px; max-height: 120px; overflow: auto; border: 1px solid oklch(75% 0.03 250); border-radius: 4px; container-type: scroll-state; }
       .sst-sticky { position: sticky; top: 0; background: oklch(90% 0.02 250); color: oklch(25% 0 0); padding: 8px 10px; font-size: 9.5pt; font-weight: bold; border-bottom: 1px solid oklch(75% 0.03 250); transition: background .2s, color .2s; }
-      @container scroll-state(stuck: top) { .sst-sticky { background: oklch(51% 0.225 263); color: #fff; } }
+      @container scroll-state(stuck: top) { .sst-sticky { background: var(--blue-65); color: #fff; } }
       .sst-scroll p { margin: 8px 10px; font-size: 9pt; color: oklch(42% 0 0); }
 
       .rf-row { display: flex; gap: 6px; margin-top: 10px; reading-flow: flex-visual; }
@@ -2778,7 +2778,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
       </p>
       <xp-chip class="dsd-host">
         <template shadowrootmode="open">
-          <style>:host { display: inline-block; } .c { background: oklch(51% 0.225 263); color: #fff; padding: 6px 12px; border-radius: 11px; font: bold 9.5pt Tahoma, sans-serif; box-shadow: inset 0 1px 0 rgba(255,255,255,.4); }</style>
+          <style>:host { display: inline-block; } .c { background: var(--blue-65); color: #fff; padding: 6px 12px; border-radius: 11px; font: bold 9.5pt Tahoma, sans-serif; box-shadow: inset 0 1px 0 rgba(255,255,255,.4); }</style>
           <span class="c"><slot>chip</slot></span>
         </template>
         rendered server-side, zero JS
@@ -4827,9 +4827,9 @@ navigation.addEventListener("navigate", (e) =&gt; {
       /* --- 08-10 batch, all classes prefixed .s8- to stay out of the sibling cards --- */
       .s8-swatch { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
       .s8-chipbox { border: 1px solid oklch(50% 0.02 250); border-radius: 3px; padding: 8px 14px; font: bold 9.5pt Tahoma, Verdana, sans-serif; }
-      .s8-chipbox.accent { background: oklch(50% 0.225 263); color: oklch(100% 0 0); }
+      .s8-chipbox.accent { background: var(--blue-60); color: oklch(100% 0 0); }
       @supports (color: AccentColor) { .s8-chipbox.accent { background: AccentColor; color: AccentColorText; } }
-      .s8-chipbox.luna { background: oklch(50% 0.225 263); color: oklch(100% 0 0); }
+      .s8-chipbox.luna { background: var(--blue-60); color: oklch(100% 0 0); }
       .s8-caret { font: 11pt "Lucida Console", var(--font-mono); padding: 5px 8px; width: 260px; background: oklch(18% 0.01 250); color: oklch(88% 0.14 145); border: 1px solid oklch(45% 0.02 250); caret-shape: block; }
       .s8-find { font-size: 9.5pt; line-height: 1.6; color: oklch(28% 0 0); margin: 8px 0 0; }
       .s8-find::search-text { background: oklch(85% 0.17 95); color: oklch(25% 0.08 60); }

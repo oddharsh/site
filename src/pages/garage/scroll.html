@@ -26,7 +26,7 @@ html, body { margin: 0; padding: 0; } html{background:linear-gradient(180deg,okl
 body {
   background: linear-gradient(180deg, oklch(56% 0.13 250) 0%, oklch(73% 0.10 236) 50%, oklch(88% 0.05 232) 60%, oklch(60% 0.16 140) 100%);
   font-family: var(--font-ui);
-  font-size: 10.5pt; line-height: 1.5; color: oklch(21.78% 0 0);
+  font-size: 10.5pt; line-height: 1.5; color: var(--ink);
   padding: 24px 12px 60px; min-height: 100vh;
 }
 .window {
@@ -41,10 +41,10 @@ body {
               4px 4px 0 rgba(0,30,160,.35);
 }
 .title-bar {
-  background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
+  background: var(--grad-title);
   color: oklch(100% 0 0); font-family: var(--font-caption);
   font-size: 10pt; font-weight: bold; padding: 4px 8px;
-  border-bottom: 1px solid oklch(41.92% 0.0962 250.51);
+  border-bottom: 1px solid var(--blue-40);
   display: flex; align-items: center; justify-content: space-between;
   text-box-trim: trim-both; text-box-edge: cap alphabetic;
 }
@@ -123,8 +123,8 @@ body {
               4px 4px 0 rgba(0,30,160,.35);
 }
 .content { padding: 12px 16px 16px; }
-h1 { font-family: var(--font-caption); font-size: 14pt; color: oklch(41.92% 0.0962 250.51); margin: 0 0 4px; font-weight: bold; letter-spacing: -0.01em; }
-.lede { margin: 0 0 14px; color: oklch(38.67% 0 0); font-size: 10.5pt; }
+h1 { font-family: var(--font-caption); font-size: 14pt; color: var(--blue-40); margin: 0 0 4px; font-weight: bold; letter-spacing: -0.01em; }
+.lede { margin: 0 0 14px; color: var(--ink-soft); font-size: 10.5pt; }
 p { margin: 0 0 12px; }
 a:link { color: oklch(42.61% 0.2353 263.74); text-decoration: underline; }
 a:visited { color: oklch(42.09% 0.1935 328.36); }
@@ -137,16 +137,16 @@ code { font-family: var(--font-mono); font-size: 9.5pt; }
 .chip.no { color: oklch(51% 0 0); border-color: oklch(72% 0 0); background: oklch(97% 0 0); }
 .chip.no::before { content: "\2717 "; }
 
-.proto { border: 1px solid oklch(61.14% 0.0611 253.60); border-top-color: oklch(47.12% 0.0555 253.58); border-left-color: oklch(47.12% 0.0555 253.58); background: oklch(100% 0 0); margin: 0 0 20px; padding: 14px 16px; }
-.proto > h2 { font-family: var(--font-caption); font-size: 13pt; font-weight: bold; color: oklch(41.92% 0.0962 250.51); margin: 0 0 6px; }
+.proto { border: 1px solid var(--frame); border-top-color: var(--blue-45); border-left-color: var(--blue-45); background: oklch(100% 0 0); margin: 0 0 20px; padding: 14px 16px; }
+.proto > h2 { font-family: var(--font-caption); font-size: 13pt; font-weight: bold; color: var(--blue-40); margin: 0 0 6px; }
 .proto .note { font-size: 9.5pt; color: oklch(40% 0 0); margin: 0 0 10px; }
 .proto .how { font-size: 9pt; color: oklch(35% 0 0); border-left: 3px solid oklch(86% 0.03 250); padding-left: 8px; margin: 10px 0 0; }
 .scroll-hint { font-size: 8.5pt; color: oklch(54.44% 0.1504 47.10); font-weight: bold; }
 
 /* ── prototype 1: the "Copying…" dialog, progress fills with page scroll ── */
 .xp-dialog {
-  max-width: 380px; margin: 4px auto; border: 1px solid oklch(41.92% 0.0962 250.51);
-  background: oklch(94.66% 0.0114 252.09); box-shadow: 3px 3px 0 oklch(61.14% 0.0611 253.60 / .35);
+  max-width: 380px; margin: 4px auto; border: 1px solid var(--blue-40);
+  background: var(--surface-desktop); box-shadow: 3px 3px 0 oklch(61.14% 0.0611 253.60 / .35);
 }
 .xp-dialog .bar { padding: 3px 6px; font-size: 9.5pt; }
 .xp-dialog .body { padding: 12px 14px; font-size: 9pt; color: oklch(28% 0 0); }
@@ -174,7 +174,7 @@ code { font-family: var(--font-mono); font-size: 9.5pt; }
 /* ── prototype 2: windows that maximize-open as they enter the viewport ── */
 .maxi-stack { display: grid; gap: 12px; margin-top: 4px; }
 .maxi {
-  border: 1px solid oklch(61.14% 0.0611 253.60); background: oklch(100% 0 0);
+  border: 1px solid var(--frame); background: oklch(100% 0 0);
   box-shadow: 2px 2px 0 oklch(61.14% 0.0611 253.60 / .3);
 }
 .maxi .bar { padding: 3px 8px; font-size: 9pt; display: flex; justify-content: space-between; }
@@ -203,7 +203,7 @@ code { font-family: var(--font-mono); font-size: 9.5pt; }
    probe, which this page's sibling /garage/horizon documents. (-moz-appearance
    is the trap: Lightning CSS un-prefixes it to appearance, which Chromium
    supports, so the query would flip true and undo the reset at build time.) */
-.luna-scroller { height: 150px; overflow-y: scroll; border: 1px solid oklch(61.14% 0.0611 253.60); background: oklch(99% 0.004 250); padding: 8px 12px; font-size: 9.5pt; margin-top: 4px; scrollbar-color: auto; }
+.luna-scroller { height: 150px; overflow-y: scroll; border: 1px solid var(--frame); background: oklch(99% 0.004 250); padding: 8px 12px; font-size: 9.5pt; margin-top: 4px; scrollbar-color: auto; }
 @supports (not selector(::-webkit-scrollbar)) or selector(:-moz-focusring) {
   .luna-scroller { scrollbar-color: #6898d0 #c0d4ec; }
 }

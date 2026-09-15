@@ -117,10 +117,18 @@
 }
 
 /* ── WIDE-GAMUT UPGRADE — push the user-action accents past the sRGB chroma
-   envelope on P3 displays; XP chrome stays period-accurate. ──────────────── */
+   envelope on P3 displays; XP chrome stays period-accurate. ────────────────
+   That last clause is why `--chroma-luna` is NOT boosted here any more. It
+   feeds --blue-65 and --blue-60, the core of the title-bar gradient, which is
+   the most XP-chrome thing on the page. The boost sat here from the day the
+   knobs were written and never rendered once, because nothing consumed
+   --grad-title until 2026-09-15 (every title bar carried the gradient
+   hand-resolved at 0.225). Adopting the token made the line live for the
+   first time, and a PR whose claim is "the same pixels through the knob" is
+   not the place to change the title bar on every P3 display. Re-add it as a
+   deliberate one-line decision if a more saturated Luna is wanted. */
 @media (color-gamut: p3) {
   :root {
-    --chroma-luna: 0.30;     /* @kind other */
     --link:        oklch(42.61% 0.30 263.74);
     --link-visited:oklch(42.09% 0.27 328.36);
     --link-hover:  oklch(62.80% 0.33 29.23);
@@ -385,8 +393,8 @@ body:has(.window),body:has(.np-window),body:has(.wrap){overflow:hidden !importan
 #axp-desktop{position:fixed;inset:0;z-index:-1;transform:translateZ(0);background:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20200%20120%22%20preserveAspectRatio%3D%22xMidYMid%20slice%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22s%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%220%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%233f7fcc%22%2F%3E%3Cstop%20offset%3D%22.42%22%20stop-color%3D%22%236ba3e0%22%2F%3E%3Cstop%20offset%3D%22.62%22%20stop-color%3D%22%23bcdcf4%22%2F%3E%3Cstop%20offset%3D%22.67%22%20stop-color%3D%22%23dfeefb%22%2F%3E%3C%2FlinearGradient%3E%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%220%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%2395c43d%22%2F%3E%3Cstop%20offset%3D%22.35%22%20stop-color%3D%22%2374af2d%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%233c7d1a%22%2F%3E%3C%2FlinearGradient%3E%3CradialGradient%20id%3D%22sn%22%20cx%3D%22.5%22%20cy%3D%22.64%22%20r%3D%22.55%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%23fffbe6%22%20stop-opacity%3D%22.5%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23fffbe6%22%20stop-opacity%3D%220%22%2F%3E%3C%2FradialGradient%3E%3Cfilter%20id%3D%22bl%22%20x%3D%22-30%25%22%20y%3D%22-30%25%22%20width%3D%22160%25%22%20height%3D%22160%25%22%3E%3CfeGaussianBlur%20stdDeviation%3D%221.1%22%2F%3E%3C%2Ffilter%3E%3C%2Fdefs%3E%3Crect%20width%3D%22200%22%20height%3D%22120%22%20fill%3D%22url(%23s)%22%2F%3E%3Crect%20width%3D%22200%22%20height%3D%22120%22%20fill%3D%22url(%23sn)%22%2F%3E%3Cg%20fill%3D%22%23fff%22%20filter%3D%22url(%23bl)%22%3E%3Cg%20opacity%3D%22.92%22%3E%3Cellipse%20cx%3D%2234%22%20cy%3D%2225%22%20rx%3D%2218%22%20ry%3D%224.6%22%2F%3E%3Cellipse%20cx%3D%2241%22%20cy%3D%2220%22%20rx%3D%2211%22%20ry%3D%224.2%22%2F%3E%3Cellipse%20cx%3D%2225%22%20cy%3D%2222%22%20rx%3D%228%22%20ry%3D%223.6%22%2F%3E%3C%2Fg%3E%3Cg%20opacity%3D%22.8%22%3E%3Cellipse%20cx%3D%22151%22%20cy%3D%2218%22%20rx%3D%2214%22%20ry%3D%223.8%22%2F%3E%3Cellipse%20cx%3D%22158%22%20cy%3D%2214%22%20rx%3D%227%22%20ry%3D%223.2%22%2F%3E%3C%2Fg%3E%3Cg%20opacity%3D%22.6%22%3E%3Cellipse%20cx%3D%2298%22%20cy%3D%2231%22%20rx%3D%2222%22%20ry%3D%223%22%2F%3E%3C%2Fg%3E%3Cg%20opacity%3D%22.75%22%3E%3Cellipse%20cx%3D%22123%22%20cy%3D%2242%22%20rx%3D%2211%22%20ry%3D%222.6%22%2F%3E%3C%2Fg%3E%3C%2Fg%3E%3Cpath%20d%3D%22M0%2C79%20C36%2C69%2070%2C85%20104%2C76%20C140%2C67%20172%2C78%20200%2C72%20L200%2C120%20L0%2C120%20Z%22%20fill%3D%22url(%23g)%22%2F%3E%3Cpath%20d%3D%22M0%2C79%20C36%2C69%2070%2C85%20104%2C76%20C140%2C67%20172%2C78%20200%2C72%22%20fill%3D%22none%22%20stroke%3D%22%23bcde66%22%20stroke-width%3D%221.1%22%20opacity%3D%22.5%22%2F%3E%3C%2Fsvg%3E") center center/cover no-repeat}
 /* accessory windows — small built-in apps (a Clock for now) that float over the */
 /* desktop, composite, drag, and click-to-front. plain DOM windows, no iframes. */
-.axp-acc{position:fixed;z-index:40;min-width:170px;background:oklch(99% 0.005 95);border:2px solid #0831d9;border-right-color:#001ea0;border-bottom-color:#001ea0;border-top-left-radius:7px;border-top-right-radius:7px;box-shadow:inset 1px 1px 0 #166aee,inset -1px -1px 0 #00138c,3px 4px 9px rgba(0,20,90,.4);display:flex;flex-direction:column;overflow:hidden;touch-action:none}
-.axp-acc>.tb{display:flex;align-items:center;gap:5px;padding:3px 4px 3px 7px;cursor:move;color:#fff;font-family:var(--font-caption);font-weight:bold;font-size:10pt;text-shadow:1px 1px #0f1089;background:linear-gradient(180deg,oklch(70% 0.15 258),oklch(51% 0.225 263) 60%,oklch(58% 0.18 260))}
+.axp-acc{position:fixed;z-index:40;min-width:170px;background:var(--paper);border:2px solid #0831d9;border-right-color:#001ea0;border-bottom-color:#001ea0;border-top-left-radius:7px;border-top-right-radius:7px;box-shadow:inset 1px 1px 0 #166aee,inset -1px -1px 0 #00138c,3px 4px 9px rgba(0,20,90,.4);display:flex;flex-direction:column;overflow:hidden;touch-action:none}
+.axp-acc>.tb{display:flex;align-items:center;gap:5px;padding:3px 4px 3px 7px;cursor:move;color:#fff;font-family:var(--font-caption);font-weight:bold;font-size:10pt;text-shadow:1px 1px #0f1089;background:linear-gradient(180deg,var(--blue-95),var(--blue-65) 60%,var(--blue-55))}
 .axp-acc>.tb .t{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .axp-acc>.tb .x{width:18px;height:16px;flex:0 0 18px;display:grid;place-items:center;border:1px solid #d8401c;border-radius:3px;background:linear-gradient(180deg,#e8795f,#ae3110);font-size:9px;cursor:pointer}.axp-acc>.tb .x:hover{filter:brightness(1.12)}
 .axp-acc>.bd{padding:8px;background:#ece9d8}
@@ -526,10 +534,10 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
 :where(.content) { padding: 12px 16px 16px; }
 
   :where(.title-bar) {
-    background: linear-gradient(180deg, oklch(70% 0.15 258) 0%, oklch(60% 0.20 261) 8%, oklch(51% 0.225 263) 18%, oklch(50% 0.225 263) 86%, oklch(58% 0.18 260) 100%);
+    background: var(--grad-title);
     color: oklch(100.00% 0 0); font-family: var(--font-caption);
     font-size: 10pt; font-weight: bold; padding: 4px 8px;
-    border-bottom: 1px solid oklch(41.92% 0.0962 250.51); display: flex;
+    border-bottom: 1px solid var(--blue-40); display: flex;
     align-items: center; justify-content: space-between;
     text-box-trim: trim-both; text-box-edge: cap alphabetic;
   }
@@ -638,7 +646,7 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
 .now-playing h2 {
   font-family: var(--font-caption);
   font-size: 12pt;
-  color: oklch(41.92% 0.0962 250.51);
+  color: var(--blue-40);
   text-wrap: balance;
   margin: 0 0 32px;
   font-weight: bold;
@@ -670,9 +678,9 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
   list-style: none;
   padding: 0;
   margin: 0;
-  border: 1px solid oklch(61.14% 0.0611 253.60);
-  border-top-color: oklch(47.12% 0.0555 253.58);
-  border-left-color: oklch(47.12% 0.0555 253.58);
+  border: 1px solid var(--frame);
+  border-top-color: var(--blue-45);
+  border-left-color: var(--blue-45);
   background: oklch(100.00% 0 0);
   position: relative;
 }
@@ -681,7 +689,7 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
   position: absolute;
   inset: 0;
   pointer-events: none;
-  box-shadow: inset 1px 1px 0 oklch(47.12% 0.0555 253.58),
+  box-shadow: inset 1px 1px 0 var(--blue-45),
               inset -1px -1px 0 oklch(100.00% 0 0);
 }
 .np-list li {
@@ -697,27 +705,27 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
 .np-list li:nth-child(even) { background: oklch(97.50% 0.0062 255.47); }
 .np-list li:last-child { border-bottom: none; }
 .np-list .np-empty {
-  color: oklch(62.68% 0 0);
+  color: var(--ink-faint);
   font-style: italic;
   text-align: center;
   padding: 12px;
 }
 .np-list a {
   text-decoration: none;
-  color: oklch(21.78% 0 0);
+  color: var(--ink);
   display: block;
 }
-.np-list a:hover { background: oklch(97.73% 0.0373 95.44); }
+.np-list a:hover { background: var(--row-hover); }
 .np-list a:hover .np-title { color: oklch(62.80% 0.2577 29.23); }
 .np-title {
   font-weight: bold;
-  color: oklch(41.92% 0.0962 250.51);
+  color: var(--blue-40);
 }
 .np-sep {
-  color: oklch(62.68% 0 0);
+  color: var(--ink-faint);
   margin: 0 4px;
 }
-.np-artist { color: oklch(38.67% 0 0); }
+.np-artist { color: var(--ink-soft); }
 .np-artist-link { cursor: pointer; }
 .np-artist-link:hover,
 .np-artist-link:focus-visible {
@@ -729,7 +737,7 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
   font-family: var(--font-mono);
   font-size: 8pt;
   font-weight: bold;
-  color: oklch(51.03% 0 0);
+  color: var(--ink-dim);
   background: oklch(94.91% 0 0);
   border: 1px solid oklch(84.52% 0 0);
   padding: 0 3px;
@@ -739,7 +747,7 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
 .np-duration {
   font-family: var(--font-mono);
   font-size: 9pt;
-  color: oklch(62.68% 0 0);
+  color: var(--ink-faint);
   float: right;
   margin-left: 8px;
 }
@@ -814,11 +822,11 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
 .xp-tooltip:has(.cam) { width: 250px; max-width: 250px; }
 .xp-tooltip .cam { margin: -4px -8px; }
 .xp-tooltip .cam .header {
-  background: linear-gradient(180deg, oklch(94.66% 0.0114 252.09), oklch(85.04% 0.0283 248.16));
-  border-bottom: 1px solid oklch(61.14% 0.0611 253.60);
+  background: linear-gradient(180deg, var(--surface-desktop), oklch(85.04% 0.0283 248.16));
+  border-bottom: 1px solid var(--frame);
   padding: 3px 8px;
   font-weight: bold;
-  color: oklch(41.92% 0.0962 250.51);
+  color: var(--blue-40);
   font-family: var(--font-caption);
   font-size: 10.5px;
   display: flex;
@@ -833,9 +841,9 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
   height: 36px;
   position: relative;
   overflow: hidden;
-  border: 1px solid oklch(61.14% 0.0611 253.60);
-  border-top-color: oklch(47.12% 0.0555 253.58);
-  border-left-color: oklch(47.12% 0.0555 253.58);
+  border: 1px solid var(--frame);
+  border-top-color: var(--blue-45);
+  border-left-color: var(--blue-45);
   background: oklch(100% 0 0);
 }
 .xp-tooltip .cam .hist-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
@@ -872,7 +880,7 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
   object-fit: cover;
   background: oklch(94% 0.005 240);
   border: 3px solid oklch(100% 0 0);
-  outline: 1px solid oklch(61.14% 0.0611 253.60);
+  outline: 1px solid var(--frame);
   outline-offset: -1px;
 }
 .xp-tooltip .car-pop {
@@ -886,7 +894,7 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
   object-fit: cover;
   background: oklch(94% 0.005 240);
   border: 3px solid oklch(100% 0 0);
-  outline: 1px solid oklch(61.14% 0.0611 253.60);
+  outline: 1px solid var(--frame);
   outline-offset: -1px;
 }
 .xp-tooltip .car-cap {
@@ -896,7 +904,7 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
   font-size: 8.5pt;
   color: oklch(38% 0 0);
   background: oklch(96% 0.004 240);
-  border: 1px solid oklch(61.14% 0.0611 253.60);
+  border: 1px solid var(--frame);
   border-top: none;
   box-sizing: border-box;
 }
@@ -987,31 +995,31 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
 
 /* address bar — sits between the caption and the workspace, so it reads as
    window chrome rather than as page content. */
-.axp-address{display:flex;align-items:center;gap:6px;padding:3px 6px;background:#ece9d8;border-bottom:1px solid oklch(71.5% 0.014 95);font:11px/1.6 Tahoma,Verdana,Geneva,sans-serif;color:oklch(38.67% 0 0)}
+.axp-address{display:flex;align-items:center;gap:6px;padding:3px 6px;background:#ece9d8;border-bottom:1px solid var(--shadow);font:11px/1.6 Tahoma,Verdana,Geneva,sans-serif;color:var(--ink-soft)}
 .axp-addr-label{flex:0 0 auto;padding-left:2px}
 /* the well scrolls rather than wraps, so a deep path never grows the chrome to
    a second row and shifts the document down. */
-.axp-well{flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:4px;padding:2px 6px;background:oklch(99% 0.005 95);border:1px solid oklch(71.5% 0.014 95);box-shadow:inset 1px 1px 0 oklch(71.5% 0.014 95),inset -1px -1px 0 oklch(100% 0 0);overflow-x:auto;white-space:nowrap;scrollbar-width:none}
+.axp-well{flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:4px;padding:2px 6px;background:var(--paper);border:1px solid var(--shadow);box-shadow:inset 1px 1px 0 var(--shadow),inset -1px -1px 0 oklch(100% 0 0);overflow-x:auto;white-space:nowrap;scrollbar-width:none}
 .axp-well::-webkit-scrollbar{display:none}
 .axp-addr-icon{flex:0 0 auto;width:14px;height:14px;border:1px solid oklch(52% 0.13 258);border-radius:2px;background:linear-gradient(180deg,oklch(78% 0.13 250),oklch(58% 0.17 258))}
 .axp-well a{color:oklch(42.61% 0.30 263.74);text-decoration:none}
 .axp-well a:hover{text-decoration:underline}
-.axp-here{color:oklch(21.78% 0 0);font-weight:700}
+.axp-here{color:var(--ink);font-weight:700}
 .axp-sep{padding:0 1px;color:oklch(60% 0 0)}
 
 /* task pane — Luna's pale-blue group boxes: gel caption, rounded top only. */
 .axp-pane{display:flex;flex-direction:column;gap:10px;font:11px/1.45 Tahoma,Verdana,Geneva,sans-serif}
-.axp-group{border:1px solid oklch(86.67% 0.0294 259);border-radius:3px 3px 0 0;overflow:hidden;background:linear-gradient(180deg,oklch(98% 0.012 259),oklch(94.5% 0.028 259))}
-.axp-group>h2{margin:0;padding:4px 8px;font:700 11px/1.5 "Trebuchet MS",Verdana,Geneva,sans-serif;color:oklch(47.12% 0.0555 253.58);background:linear-gradient(180deg,#fff,oklch(93.5% 0.032 259));border-bottom:1px solid oklch(88% 0.03 259)}
+.axp-group{border:1px solid var(--rule);border-radius:3px 3px 0 0;overflow:hidden;background:linear-gradient(180deg,oklch(98% 0.012 259),oklch(94.5% 0.028 259))}
+.axp-group>h2{margin:0;padding:4px 8px;font:700 11px/1.5 "Trebuchet MS",Verdana,Geneva,sans-serif;color:var(--blue-45);background:linear-gradient(180deg,#fff,oklch(93.5% 0.032 259));border-bottom:1px solid oklch(88% 0.03 259)}
 .axp-group>ul{margin:0;padding:6px 8px;list-style:none;display:flex;flex-direction:column;gap:5px}
 .axp-group a{color:oklch(42.61% 0.30 263.74);text-decoration:none}
 .axp-group a:hover{text-decoration:underline}
-.axp-glyph{display:inline-block;width:12px;text-align:center;color:oklch(58% 0.180 260)}
+.axp-glyph{display:inline-block;width:12px;text-align:center;color:var(--blue-55)}
 .axp-group dl{margin:0;padding:6px 8px}
-.axp-group dt{color:oklch(38.67% 0 0);font-size:10px}
+.axp-group dt{color:var(--ink-soft);font-size:10px}
 /* a long object name or path wraps inside the rail instead of running out under
    the document column. */
-.axp-group dd{margin:0 0 5px;color:oklch(21.78% 0 0);font:10px/1.4 "Courier New",Courier,monospace;overflow-wrap:anywhere}
+.axp-group dd{margin:0 0 5px;color:var(--ink);font:10px/1.4 "Courier New",Courier,monospace;overflow-wrap:anywhere}
 
 /* Narrow: omit the furniture. Turning a 186px sidebar into a full-width strip
    below the document makes secondary navigation look like page content and

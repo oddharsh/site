@@ -90,10 +90,18 @@
 }
 
 /* ── WIDE-GAMUT UPGRADE — push the user-action accents past the sRGB chroma
-   envelope on P3 displays; XP chrome stays period-accurate. ──────────────── */
+   envelope on P3 displays; XP chrome stays period-accurate. ────────────────
+   That last clause is why `--chroma-luna` is NOT boosted here any more. It
+   feeds --blue-65 and --blue-60, the core of the title-bar gradient, which is
+   the most XP-chrome thing on the page. The boost sat here from the day the
+   knobs were written and never rendered once, because nothing consumed
+   --grad-title until 2026-09-15 (every title bar carried the gradient
+   hand-resolved at 0.225). Adopting the token made the line live for the
+   first time, and a PR whose claim is "the same pixels through the knob" is
+   not the place to change the title bar on every P3 display. Re-add it as a
+   deliberate one-line decision if a more saturated Luna is wanted. */
 @media (color-gamut: p3) {
   :root {
-    --chroma-luna: 0.30;     /* @kind other */
     --link:        oklch(42.61% 0.30 263.74);
     --link-visited:oklch(42.09% 0.27 328.36);
     --link-hover:  oklch(62.80% 0.33 29.23);
