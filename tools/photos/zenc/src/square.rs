@@ -17,8 +17,21 @@
 // `--transfer` names the SOURCE's curve (srgb, or g22 for the Monochrom's
 // Gray Gamma 2.2) and is used for decode and encode both, so unaveraged values
 // pass through exactly.
-use crate::pixels::{crop, load_linear, orient, parse_transfer, encoded, scale, Orientation, TransferOption};
+use crate::pixels::{crop, load_linear, orient, parse_transfer, encoded, scale, Frame, Orientation, TransferOption};
 use halflight::Filter;
+
+/// The production geometry, shared with the in-memory encoder experiment.
+pub fn tier(src: &Frame, size: u32, filter: Filter) -> image::DynamicImage {
+    let (w, h) = (src.w, src.h);
+    let (nw, nh) = if w <= h {
+        (size, (h as u64 * size as u64).div_ceil(w as u64) as u32)
+    } else {
+        ((w as u64 * size as u64).div_ceil(h as u64) as u32, size)
+    };
+    let (cx, cy) = ((nw.saturating_sub(size)) / 2, (nh.saturating_sub(size)) / 2);
+    let scaled = scale(src, nw, nh, filter);
+    encoded(&crop(&scaled, cx, cy, size.min(nw), size.min(nh)))
+}
 
 pub fn run(args: &[String]) -> i32 {
     let mut input: Option<&str> = None;
@@ -99,20 +112,10 @@ pub fn run(args: &[String]) -> i32 {
     // Orient BEFORE the resample, so the crop math sees the frame the viewer
     // will. For orientation 1 the decoded buffer moves without copying.
     let src = orient(src, exif);
-    let (w, h) = (src.w, src.h);
-
     for (size, (out, jpeg_out)) in sizes.iter().copied().zip(outs.iter()) {
         // Short edge lands on `size`. sips reaches the same crop from the long
         // edge, which is one more piece of arithmetic to get wrong.
-        let (nw, nh) = if w <= h {
-            (size, (h as u64 * size as u64).div_ceil(w as u64) as u32)
-        } else {
-            ((w as u64 * size as u64).div_ceil(h as u64) as u32, size)
-        };
-        let (cx, cy) = ((nw.saturating_sub(size)) / 2, (nh.saturating_sub(size)) / 2);
-        let scaled = scale(&src, nw, nh, filter);
-        let cropped = crop(&scaled, cx, cy, size.min(nw), size.min(nh));
-        let pixels = encoded(&cropped);
+        let pixels = tier(&src, size, filter);
         if let Err(e) = pixels.save(out) {
             return err(&format!("cannot write {out}: {e}"));
         }
