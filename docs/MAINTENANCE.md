@@ -150,10 +150,10 @@ rotation and treat all previously emailed links as compromised.
 
 ## CI/CD release path
 
-1. [CI](../.github/workflows/ci.yml) runs site validation and native photo
-   validation in parallel. Site validation covers locked dependencies, build,
+1. [CI](../.github/workflows/ci.yml) runs site, native photo, and network validation
+   in parallel. Site validation covers locked dependencies, build,
    lint, typechecks, tests, Worker dry-runs, performance gates and the local route
-   oracle. The required `validate` job always runs and succeeds only when both
+   oracle. The required `validate` job always runs and succeeds only when all
    jobs succeed; failure, cancellation or skipping fails the gate. Cal and
    Serendipity ship inside the site Worker.
 2. [Promote production](../.github/workflows/promote-production.yml) advances
@@ -164,7 +164,7 @@ rotation and treat all previously emailed links as compromised.
    10% of traffic, and waits for approval before moving 50% and then 100%.
 
 To run CI manually, select the desired branch in Actions, or run
-`gh workflow run ci.yml --ref <branch>`. Both validation jobs check out the
+`gh workflow run ci.yml --ref <branch>`. All validation jobs check out the
 event's commit. The former custom `ref` input is removed: overriding checkout
 could execute another revision with the dispatch branch's cache access and
 attach its result to the wrong commit. Manual runs retain a separate concurrency
@@ -198,8 +198,10 @@ prebuilt directory is for output created in the current job; it is not a
 cross-run cache. A missing bundle fails the route check.
 Standalone `bun run routes:check` continues to build from source.
 
-`infra:check` follows the code checks so deployed-state drift cannot prevent
-validation of the diff. It still blocks the PR on confirmed drift.
+The network job runs infrastructure, vulnerability, ramp, pin-queue and D1
+checks alongside the code checks. Deployed-state drift cannot prevent code
+validation, and network latency overlaps the tests. Confirmed drift still
+blocks the required `validate` join.
 If a code change must deploy to resolve that drift, validate locally, use the
 `deploy:direct` fallback, then rerun CI.
 

@@ -236,25 +236,36 @@ jobs:
           bun test
           bun x --no-install wrangler deploy --dry-run -c wrangler.toml
 
+  network:
+    name: network validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up bun
+        uses: ./.github/actions/setup-bun
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
       # infra.json against reality. The tree and DNS tiers need no credential;
       # the account tier runs only when the read-only token secret exists and
       # skips cleanly otherwise. Everything this cannot reach (an unreachable
       # resolver, a missing token) is an advisory, never a failure, so a network
       # blip cannot redden a PR that only touched CSS.
       #
-      # LAST on purpose, and it used to be near the front. This is the only step
-      # that asserts against LIVE PRODUCTION rather than the tree, so its result
-      # depends on the deployed world instead of on the diff. Sequential steps stop
-      # at the first failure, so sitting early it did not just redden a PR, it
-      # SKIPPED the ten code gates behind it and reported nothing about the change.
-      #
-      # Measured on 2026-07-31, when a Workers Cache regression on `/` put the
-      # production edge out of sync with infra.json: four PRs went red with
-      # `Build homepage` through `Validate LWE ask Worker config` all skipped, none
-      # of them related to the drift, and one of them (#193) belonged to someone who
-      # had no way to know why. Moving it here means a production incident can still
-      # redden a PR, which is correct, but every gate that describes the DIFF has
-      # already run and reported by then.
+      # Run independently of code validation. A production drift incident must
+      # report its failure without skipping code checks, and network latency
+      # should overlap the tests. The required join still fails on confirmed
+      # drift. This replaces the old ordering rule that put infra last after
+      # an incident on 2026-07-31 skipped unrelated PRs' code checks.
       #
       # Still fatal, so drift cannot merge unnoticed. One consequence to know about:
       # a PR whose whole purpose is to FIX production drift cannot turn its own check
@@ -515,7 +526,7 @@ jobs:
 
   validate:
     name: validate
-    needs: [site, native-photos]
+    needs: [site, native-photos, network]
     # Run even when a dependency fails, is cancelled, or is skipped. GitHub
     # treats a skipped required job as passing, so the join must fail explicitly.
     if: ${{ always() }}
