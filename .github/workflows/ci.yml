@@ -14,12 +14,10 @@ on:
   # be retried"), closing and reopening the PR fired nothing, and an empty commit
   # fired CodeQL and Workers Builds but not CI. A blocked PR with no lever is a
   # bad place to discover you have no lever.
+  # Select the branch in GitHub's dispatch UI or with `gh workflow run --ref`.
+  # A separate checkout override can run another branch's code with this
+  # dispatch's cache scope and misreport which commit was actually tested.
   workflow_dispatch:
-    inputs:
-      ref:
-        description: "Branch or SHA to validate (defaults to the branch you launch from)"
-        required: false
-        type: string
 
 permissions:
   contents: read
@@ -58,18 +56,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  validate:
-    name: validate
+  site:
+    name: site validation
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          # Empty on pull_request/push, where checkout's own default is correct.
-          # Only a manual run can name a ref, and then it is the point.
-          ref: ${{ inputs.ref || '' }}
 
       - name: Set up bun
         # config/... no longer applies: the version lives in config/bun-pin.json and the
@@ -97,36 +91,13 @@ jobs:
       - name: Typecheck annotated JavaScript
         run: bun run typecheck
 
-      - name: Build homepage
-        run: bun run build
+      # perf-budget owns the build and Worker dry-run. The route oracle below
+      # loads that exact bundle, so all checks exercise one build in this job.
+      - name: Build and validate site Worker and performance budget
+        run: bun run perf-budget
 
       - name: Check photo asset invariants
         run: bun run photos:check
-
-      - name: Set up native photo toolchain
-        id: native
-        # Select the declared compiler BEFORE computing the Rust cache key.
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libavif-dev libavif-bin pkg-config
-          rustup component add clippy
-          echo "cache-key=${ImageOS:?}-${ImageVersion:?}-$(dpkg-query --show --showformat='${Version}' libavif-dev)" >> "$GITHUB_OUTPUT"
-
-      - name: Restore compiled Rust dependencies
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
-        with:
-          workspaces: tools/photos/zenc -> target
-          # The action also keys by job, platform, compiler, flags and Cargo
-          # manifests/locks. Include the runner image and native library ABI.
-          key: ${{ steps.native.outputs.cache-key }}
-          cache-bin: false
-          # Rebuild our encoder/C adapter and execute all tests on every run.
-          cache-workspace-crates: false
-
-      - name: Test native photo processing
-        run: |
-          cargo test --locked --manifest-path tools/photos/zenc/Cargo.toml
-          cargo clippy --locked --manifest-path tools/photos/zenc/Cargo.toml --all-targets -- -D warnings
 
       # Does every committed derived artifact still describe the bytes it was made
       # from? photos:check above cannot answer that for the histograms, because it
@@ -138,11 +109,6 @@ jobs:
       - name: Check derived artifacts against their inputs
         run: bun run derive:check
 
-      - name: Enforce homepage performance budget
-        run: bun run perf-budget
-
-      - name: Validate site Worker config
-        run: bun x --no-install wrangler deploy --dry-run
 
       - name: Test homepage representation contracts
         run: bun run test
@@ -205,13 +171,13 @@ jobs:
           bun run test:node
 
       # The route oracle, pre-merge. createTestHarness() boots the site Worker
-      # in-process (honouring wrangler.jsonc's build.command, so it serves the
-      # minified .build/public tree) and verify-routes.mjs sweeps it. This is
+      # in-process from perf-budget's dry-run bundle and serves its minified
+      # .build/public tree; verify-routes.ts sweeps that same output. This is
       # status + content-type + markers for real; it is NOT a data check, since
       # local KV/R2/D1 come up empty. See MAINTENANCE.md "Verify the whole route
       # surface" for what the `remote: true` rows sit out and why.
       - name: Verify route surface against a local Worker
-        run: bun run routes:check
+        run: bun run routes:check --prebuilt .build/.perfbudget
 
       - name: Validate LWE and Garage page contracts
         run: bun run pages:check
@@ -513,3 +479,55 @@ jobs:
             exit 0
           fi
           bun run checkpoints:check
+
+  native-photos:
+    name: native photo validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up native photo toolchain
+        id: native
+        # Select the declared compiler BEFORE computing the Rust cache key.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libavif-dev libavif-bin pkg-config
+          rustup component add clippy
+          echo "cache-key=${ImageOS:?}-${ImageVersion:?}-$(dpkg-query --show --showformat='${Version}' libavif-dev)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore compiled Rust dependencies
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: tools/photos/zenc -> target
+          # The action also keys by job, platform, compiler, flags and Cargo
+          # manifests/locks. Include the runner image and native library ABI.
+          key: ${{ steps.native.outputs.cache-key }}
+          cache-bin: false
+          # Rebuild our encoder/C adapter and execute all tests on every run.
+          cache-workspace-crates: false
+
+      - name: Test native photo processing
+        run: |
+          cargo test --locked --manifest-path tools/photos/zenc/Cargo.toml
+          cargo clippy --locked --manifest-path tools/photos/zenc/Cargo.toml --all-targets -- -D warnings
+
+  validate:
+    name: validate
+    needs: [site, native-photos]
+    # Run even when a dependency fails, is cancelled, or is skipped. GitHub
+    # treats a skipped required job as passing, so the join must fail explicitly.
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - name: Require every validation job to succeed
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          jq -r 'to_entries[] | "\(.key): \(.value.result)"' <<< "$RESULTS"
+          if ! jq -e 'length > 0 and all(.[]; .result == "success")' <<< "$RESULTS" > /dev/null; then
+            echo "::error::Every validation job must succeed. Failed, cancelled, or skipped checks cannot satisfy validate."
+            exit 1
+          fi

@@ -8,6 +8,7 @@
 // can gate a PR instead of only auditing a deployment.
 //
 //   bun run routes:check                 # boot .build/public, sweep, exit non-zero on failure
+//   bun run perf-budget && bun run routes:check --prebuilt .build/.perfbudget
 //
 // It points at wrangler.jsonc, NOT wrangler.dev.jsonc, deliberately: that config
 // carries `build.command`, so the harness runs build.ts itself and serves the
@@ -15,6 +16,8 @@
 // is also why VERIFY_BUILT=1 is set, which re-arms the build-output rows
 // (minified banners, .src twins, the luna.css size ceiling) that verify-routes
 // otherwise skips on a local base.
+// With --prebuilt, Wrangler loads the specified dry-run bundle instead. CI
+// builds it through perf-budget in this same job; standalone runs still build.
 //
 // What this does NOT prove: local KV/R2/D1 come up EMPTY, so data-backed routes
 // answer from their fallback path. Status and content-type are real; a passing
@@ -25,10 +28,18 @@
 
 import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { parseArgs } from "node:util";
 import { createTestHarness } from "wrangler";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
-const args = process.argv.slice(2);
+const { values, positionals } = parseArgs({
+  options: { remote: { type: "boolean" }, prebuilt: { type: "string" } },
+  allowPositionals: true,
+});
+if (positionals.length > 1 || values.prebuilt === "") {
+  console.error("usage: routes:check [config] [--remote] [--prebuilt <dry-run directory>]");
+  process.exit(2);
+}
 
 // --remote boots the harness on a generated config whose KV/R2/Browser bindings
 // reach PRODUCTION (tools/gen-remote-config.ts), which un-skips the five rows
@@ -49,8 +60,8 @@ const args = process.argv.slice(2);
 // CI holds cannot do it, and widening that token is the one thing this repo's
 // release design will not trade away. `bun run routes:check` stays the CI gate
 // and stays honest about what it does not see.
-const remote = args.includes("--remote");
-const positional = args.find((a) => !a.startsWith("--"));
+const remote = values.remote;
+const [positional] = positionals;
 
 let config = positional || "./wrangler.jsonc";
 if (remote) {
@@ -70,7 +81,7 @@ if (remote) {
   config = "./.wrangler.remote.jsonc";
 }
 
-const server = createTestHarness({ workers: [{ configPath: config }] });
+const server = createTestHarness({ workers: [{ configPath: config, prebuiltWorkerDir: values.prebuilt }] });
 
 let code = 1;
 try {
