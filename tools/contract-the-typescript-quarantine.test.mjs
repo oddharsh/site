@@ -297,10 +297,6 @@ test("node is spawned only by the wrangler bridge, the route oracle and the twin
   assert.deepEqual(spawns, [
     // the bridge Workers Builds runs, which is the whole reason node is pinned
     ".github/deploy-wrangler.sh: node \"$",
-    // the canary job sets up node for wrangler main and runs playwright's
-    // browser installer under the node that is there; nothing else in the tree
-    // spawns that CLI, so moving it would buy no removed setup step
-    ".github/workflows/canary.yml: node node_modules/playwright-core/cli.js",
   ], `node spawns outside the allowlist: ${JSON.stringify(spawns)}`);
 });
 

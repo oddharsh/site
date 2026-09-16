@@ -90,11 +90,6 @@ jobs:
         # installs bun exactly once, the way every other workflow does.
         uses: ./.github/actions/setup-bun
 
-      - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: .node-version
-
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
@@ -195,11 +190,6 @@ jobs:
       - name: Set up bun
         uses: ./.github/actions/setup-bun
 
-      - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: .node-version
-
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
@@ -207,7 +197,7 @@ jobs:
         # The pinned playwright-core's own installer, by entry file, so the
         # browser builds are the ones that version expects and no package
         # manager gets to fetch a different playwright (gotcha 29).
-        run: node node_modules/playwright-core/cli.js install --with-deps chromium chrome-beta msedge msedge-dev firefox webkit
+        run: bun node_modules/playwright-core/cli.js install --with-deps chromium chrome-beta msedge msedge-dev firefox webkit
 
       - name: Diff horizon's probes across stable and prerelease
         id: leg

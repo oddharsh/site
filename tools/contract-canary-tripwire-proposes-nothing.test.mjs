@@ -195,7 +195,10 @@ test("every name in the browsers leg's default pairs is an installation target t
   const names = [...new Set(DEFAULT_PAIRS.split(",").flatMap((p) => p.split(":")))];
   assert.ok(names.length >= 4, "the default pairs collapsed");
   for (const name of names) {
-    const run = spawnSync("node", ["node_modules/playwright-core/cli.js", "install", "--dry-run", name], { cwd: fileURLToPath(ROOT), encoding: "utf8", timeout: 60_000 });
+    // The workflow runs the installer under bun since 2026-09-16 (canary.yml,
+    // the browsers job, which sets up no node at all now); this mirrors it.
+    const runtime = process.versions.bun ? process.execPath : "bun";
+    const run = spawnSync(runtime, ["node_modules/playwright-core/cli.js", "install", "--dry-run", name], { cwd: fileURLToPath(ROOT), encoding: "utf8", timeout: 60_000 });
     assert.doesNotMatch(`${run.stdout}${run.stderr}`, /Invalid installation targets/, `${name} is not an installation target of the pinned playwright-core`);
   }
 });

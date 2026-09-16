@@ -5397,12 +5397,30 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     What a node MAJOR still owns is that one column, since wrangler gzips with
     the node it runs under; `node-support-window.yml`'s PR body says so in
     those words. And the route oracle stays on node for a reason measured the
-    same day: `createTestHarness` under bun boots, prints no refusal, and
-    times out every route, 167 of 168 hard failures in 9m23s against 168 passes
-    in 6s under node. That is `check startup`'s silent failure wearing a
-    different subcommand, and it settles the wholesale question: node is spent
-    on the wrangler bridge, the route oracle and `test:node`, and a contract
-    test lists those spawns so a fourth is a decision. Deno was considered and
+    same day: the route oracle's `createTestHarness` under bun boots, prints
+    no refusal, and times out every route, 167 of 168 hard failures in 9m23s
+    against 168 passes in 6s under node. That is `check startup`'s silent
+    failure wearing a different subcommand. It is also NARROWER than "the
+    harness needs node": cal's 84-test suite boots the same harness under bun
+    and passes with node absent from PATH, so what times out is the site
+    Worker's configuration under bun, cause unmeasured. Either way node is
+    spent on the wrangler bridge, the route oracle and `test:node`, and a
+    contract test lists those spawns so a fourth is a decision.
+
+    **CI followed on the same day.** `setup-node` is in exactly the jobs that
+    run wrangler (validate, the ramp's canary and full, perf-diff, perf-history,
+    wrangler-pin, canary's wrangler leg, node-support-window, which measures
+    node itself) and nowhere else: the photo pipeline, og-cards, the dictionary
+    roll, bun-pin, the ramp's verify job and canary's bun and browsers legs run
+    with no node step, and the whole contract suite passes with node absent
+    from PATH (763 of 763). Two caveats keep that honest. Every `uses:` action
+    written in JavaScript (checkout, github-script, codeql, fetch-metadata, the
+    app-token) runs on the RUNNER's bundled node whatever we set up, so "off
+    node" means no step of ours invokes it, never that the job has none. And
+    the runner ships a node of its own, so a job without `setup-node` still
+    has one on PATH at whatever major the image carries; nothing of ours
+    reaches for it, and `contract-main-module-guards-survive-a-symlinked-path`
+    uses it when present to keep measuring the argv divergence. Deno was considered and
     removes none of them, since wrangler is Cloudflare's node CLI; the deno
     tutorial for Workers bundles the Worker's SOURCE with deno and still runs
     wrangler under node.
