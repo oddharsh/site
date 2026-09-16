@@ -291,20 +291,6 @@
         "why": "This libjxl metric has no version flag. Its build can affect the quality search even though it does not encode images itself."
       },
       "bytes": false
-    },
-    {
-      "bin": "python3",
-      "install": "brew install python",
-      "why": "gen-pixel-peeper.py alone, the one-off /pixel-peeper trial generator, which wants Pillow from tools/photos/requirements.txt. The captioner left for gen-alt-text.ts on 2026-09-15 and build-recipes.py for exif-sooc on 2026-08-14, so nothing in the photo PIPELINE runs an interpreter any more",
-      "required_by": [
-        "tools/photos/gen-pixel-peeper.py"
-      ],
-      "version": {
-        "flag": "--version",
-        "match": "Python (\\d+\\.\\d+\\.\\d+)"
-      },
-      "bytes": false,
-      "bytes_why": "one study-page generator. What would move its bytes is Pillow, which tools/photos/requirements.txt pins and dependabot owns"
     }
   ]
 }

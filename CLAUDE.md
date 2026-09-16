@@ -271,11 +271,6 @@ bun run wrangler:pin       # resolves main's sha from pkg.pr.new and runs canary
 # regenerate JUST the EXIF metadata (after photos are already uploaded)
 ./tools/photos/extract-photo-metadata.sh "/Users/aadharsh/Downloads/to post (from ssd)"
 
-# build the Python environment for gen-pixel-peeper.py (uv, into tools/photos/.venv).
-# NOT needed for the photo pipeline: the histogram bake moved into `zenc histogram`
-# on 2026-08-14. Homebrew's python3 is PEP 668, so a plain pip install fails.
-bun run photos:env
-
 # build the JPEG thumbnail encoder (zenc = zenjpeg hybrid+scan). the pipeline
 # scripts auto-build it on first run; this is the explicit form.
 cargo build --release --locked --manifest-path tools/photos/zenc/Cargo.toml
@@ -1128,7 +1123,7 @@ Single-page personal site at `aadhar.sh`. A Cloudflare Worker with static assets
 | `public/.well-known/http-message-signatures-directory` | JWKS for AadharshBot's Ed25519 public key (Web Bot Auth IETF draft). |
 | `public/images/` + `public/i/` | `images/` holds the photo DATA surfaces. COMMITTED: `metadata.json` (the EXIF RECORD, long field names + the Fuji recipe card), `histograms.json`, `alt.json`, `semantics.json`, `hashes.json` (stem to hash8 map). DERIVED into `.build/` by build.ts and never committed: `exif.json` (the tooltip's TEXT tier, every photo's short-key EXIF in one 2.6KB-brotli file, warmed once on idle because the homepage draws a fresh random 12 of 165 per request and a per-slot warm-up was cold nearly every visit), `fingerprints.json` (sha256 of every published tier, the map `photo_recipe` recognises an uploaded thumbnail with), and `meta/<stem>.json` (per-photo EXIF plus the four 64-bin histogram channels, the BARS tier, fetched only on the hover that needs them and the self-healing fallback for a stem missing from a cached `exif.json`). All three still serve at the URLs they always had; what changed is where they come from. The pixel tiers (600px AVIF+JPG squares, plus 400px and 200px AVIF) live in `i/` under content-hashed names, 660 files for 165 photos. |
 | `public/og/` | Pre-baked 1200x630 OG/Twitter cards, one per garage + lwe page (`<section>-<name>.png`): the page's live demo floated on the Bliss desktop under the page's own favicon as a brand stamp, so a shared link unfurls as the interaction rather than a bare title. **There is no route label on the card**, and this row said there was until 2026-08-15: the generator's own header comment has described a "translucent XP dock naming the route" since #55 while the card template has never rendered one, and the claim was copied here. Wired via `og:image`/`twitter:card` in each page's `<head>` (edge-direct static pages can't be worker-injected). Built by `tools/photos/gen-og-cards.ts` (playwright-core → Chrome, captures production for live data); meta added by `tools/photos/inject-og-meta.ts`. **Both paths read `scripts/` here until the same date**, which is the split the layout table above draws and costs a `No such file` to anyone following this row. Regen recipe in MAINTENANCE.md. Cached 30d, deploy purges the edge. |
-| `tools/photos/` | Photo-pipeline + asset scripts (see below). Beyond the core pipeline (`add-photos.sh`, `extract-photo-metadata.sh`, `check-photo-pipeline.mjs`, `zenc/` the JPEG encoder crate): `add-car-photo.sh` (one resto-mod reference photo into the dual AVIF+JPG pair the car-link tooltips expect, output `public/cars/<stem>.{avif,jpg}`, no EXIF/R2); `gen-alt-text.ts` (AI alt text for every grid photo, writes `public/images/alt.json` `{stem: alt}`, resumable; TypeScript since 2026-09-15, and it writes the file in the exact shape the Python it replaced did, held by a contract test, because the file is committed; run by `add-photos.sh` phase 4 — posts the committed `i/` thumbnail bytes to Workers AI when `CLOUDFLARE_API_TOKEN` is set so a brand-new photo captions pre-deploy, else falls back to the cf-garage `/garage/cf/caption` endpoint by stem, which only sees deployed photos); `gen-encoding-samples.sh` (regenerates the color sample set for the `/garage/encoding` study through every encoder, prints byte counts + bytes-per-pixel); `reencode-thumbnails.sh` (re-encodes all published grid thumbnails as pre-cropped center squares from the canonical source folder, two square tiers); `gen-pixel-peeper.py` (the one remaining Pillow consumer, a one-off generator for the /pixel-peeper comparison frames; NOT part of add-photos.sh). The four 64-bin RGB/luminance channels are baked by `zenc histogram`, inside the encoder crate, since 2026-08-14. |
+| `tools/photos/` | Photo-pipeline + asset scripts (see below). Beyond the core pipeline (`add-photos.sh`, `extract-photo-metadata.sh`, `check-photo-pipeline.mjs`, `zenc/` the JPEG encoder crate): `add-car-photo.sh` (one resto-mod reference photo into the dual AVIF+JPG pair the car-link tooltips expect, output `public/cars/<stem>.{avif,jpg}`, no EXIF/R2); `gen-alt-text.ts` (AI alt text for every grid photo, writes `public/images/alt.json` `{stem: alt}`, resumable; TypeScript since 2026-09-15, and it writes the file in the exact shape the Python it replaced did, held by a contract test, because the file is committed; run by `add-photos.sh` phase 4 — posts the committed `i/` thumbnail bytes to Workers AI when `CLOUDFLARE_API_TOKEN` is set so a brand-new photo captions pre-deploy, else falls back to the cf-garage `/garage/cf/caption` endpoint by stem, which only sees deployed photos); `gen-encoding-samples.sh` (regenerates the color sample set for the `/garage/encoding` study through every encoder, prints byte counts + bytes-per-pixel); `reencode-thumbnails.sh` (re-encodes all published grid thumbnails as pre-cropped center squares from the canonical source folder, two square tiers); `gen-pixel-peeper.ts` (the /pixel-peeper trial-set generator, TypeScript over `zenc frame` since 2026-09-15; NOT part of add-photos.sh). The four 64-bin RGB/luminance channels are baked by `zenc histogram`, inside the encoder crate, since 2026-08-14. |
 
 ### The photo pipeline
 
@@ -1427,27 +1422,25 @@ Two encoders + one transform tool, all built from source:
   22-key map is written ONCE now; the "written twice" note further down is
   history. `config/retired.json` bans the binary and
   `contract-pipeline-json-reproduces-jaq` holds the byte claims.
-- **Pillow, via uv** (`brew install uv`, then `bun run photos:env`) — required by
-  `gen-pixel-peeper.py` alone, which is a one-off generator rather than part of
-  this pipeline. The 64-bin RGB/luminance bake moved into `zenc histogram` on
-  2026-08-14, so nothing in add-photos.sh or extract-photo-metadata.sh needs it.
-  It installs into a venv at `tools/photos/.venv` rather than the system
-  interpreter, because Homebrew's python3 is PEP 668 **externally managed** and
-  refuses `pip install` outright: the documented recipe here was
-  `python3 -m pip install -r tools/photos/requirements.txt` and it had stopped
-  working, measured 2026-08-14. CI has always built its own venv in `RUNNER_TEMP`;
-  this is the local half of the same idea. Since the zenc move, a missing Pillow
-  costs one study page's regeneration rather than the histograms on 158 photos.
-
-  **The pipeline runs no Python at all since 2026-09-15.** The captioner was the
-  last interpreter it spawned, as `gen-alt-text.py`, and it is
-  `gen-alt-text.ts` now, beside the four node scripts `add-photos.sh` already
-  ran; `matched-bytes-probe.py` went the same way, its printed tables diffed
-  identical against the Python on the same sources. CI no longer sets up Python
-  or builds a venv. `python3` stays declared in `tools.json` for
-  `gen-pixel-peeper.py` alone, and `contract-the-photo-pipeline-runs-no-python`
-  holds the line: no pipeline script or workflow spawns one, and `alt.json`
-  round-trips through the new serializer byte for byte.
+- **No Python, since 2026-09-15.** Three files were the last of it, and each
+  went to the language that already owned its job. `gen-alt-text.py` became
+  `gen-alt-text.ts` beside the four node scripts `add-photos.sh` already ran,
+  writing `alt.json` in the exact shape the Python did (a contract test
+  round-trips the committed file). `matched-bytes-probe.py` became
+  `matched-bytes-probe.ts`, its printed tables diffed identical against the
+  Python on the same sources. `gen-pixel-peeper.py`, the Pillow one, became
+  `gen-pixel-peeper.ts` plus `zenc frame`: Pillow's four pixel jobs (decode
+  with orientation, a fitted proxy, a native crop as PNG and PPM, JPEG decode
+  for the metrics) are one subcommand of the crate that already decodes,
+  orients, resamples and crops every shipped tile, and the window scoring is
+  arithmetic over the proxy's PPM, ported from Pillow operation for operation.
+  The trial set was regenerated with the port: same 24 trials, same per-axis
+  split, same lone chroma survivor. `cjpegli` left the encoder lineup on the
+  way, since `config/retired.json` had banned it in July and the Python went on
+  calling an unmanaged copy the declaration scanner could not see. Pillow, uv,
+  `requirements.txt`, `photos:env`, the pip dependabot lane, the osv-scanner
+  requirements line and CI's `setup-python` all left with it; the ledger bans
+  the interpreter and `contract-the-photo-pipeline-runs-no-python` holds it.
 
 The four below serve the STUDY pages rather than the photo pipeline, and every
 one of them was undocumented until `tools:check` went looking (2026-08-14):

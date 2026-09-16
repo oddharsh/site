@@ -198,6 +198,16 @@
       "regenerate": "./tools/photos/extract-photo-metadata.sh \"$SOOC_DIR\""
     },
     {
+      "id": "pixel-peeper/trials",
+      "tier": "unverifiable",
+      "why": "The /pixel-peeper trial set: 320px tiles cropped at native resolution from the source photos, encoded on one byte budget per trial, and a manifest of the trials that cleared their axis's legibility gate. Regenerated whole; the manifest is all-or-nothing.",
+      "outputs": [
+        "public/pixel-peeper"
+      ],
+      "unverifiable": "gen-pixel-peeper.ts reads the SOOC originals in the photo source folder, which is outside the tree, and its crop selection is a scored scan whose answer depends on the scorer's exact arithmetic. There is no committed input to hash; the set is a deliberate act, and the generator refuses to write unless at least 12 trials survive.",
+      "regenerate": "node tools/photos/gen-pixel-peeper.ts"
+    },
+    {
       "id": "og/cards",
       "tier": "unverifiable",
       "why": "One pre-baked 1200x630 card per garage and lwe page, each showing that page's live demo on the Bliss desktop, so a shared link unfurls as the interaction rather than a bare title.",
