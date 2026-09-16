@@ -622,7 +622,9 @@ the reason, rather than written here with the caret quietly dropped.
   **It also depends on `halflight` by git rev, since 2026-09-02**: the resampling
   kernel that was `src/resample.rs`, now its own public MIT crate at
   `github.com/oddharsh/halflight`, pinned in `Cargo.lock` to a full rev and fetched
-  over https. A git dependency is outside the cargo ecosystem dependabot watches,
+  over https. Halflight also owns the exact 16-bit sRGB and gamma-2.2 decode
+  tables; zenc selects the curve from the source profile and uses those tables.
+  A git dependency is outside the cargo ecosystem dependabot watches,
   so this pin moves only by hand: edit the `rev`, rebuild, and re-run the
   old-binary-against-new A/B that gated the swap (histograms over 165 stems, three
   tiers of 52 photos, resize, encode, all byte-identical the first time).

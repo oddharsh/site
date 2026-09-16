@@ -23,10 +23,9 @@
 // at-the-end is the principled shape and the 16-bit path costs nothing extra.
 // It also fixes a real bug the 8-bit path had: a Luma16 TIFF missed the Luma8
 // arm and was silently promoted to RGB.
-use halflight::{g22_to_linear, linear_to_g22, linear_to_srgb, resample, srgb_to_linear, Filter};
+use halflight::{g22_lut16, g22_to_linear, linear_to_g22, linear_to_srgb, resample, srgb_lut16, srgb_to_linear, Filter};
 use image::{DynamicImage, GrayImage, ImageBuffer, ImageDecoder, ImageReader, Luma, Rgb, RgbImage};
 use std::path::Path;
-use std::sync::OnceLock;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum TransferOption {
@@ -150,25 +149,9 @@ impl Transfer {
             Transfer::Srgb => srgb_to_linear(c),
         }
     }
-    fn dec16(self, c: u16) -> f32 {
-        let s = c as f32 / 65535.0;
-        match self {
-            Transfer::G22 => s.powf(2.2),
-            Transfer::Srgb => {
-                if s <= 0.040_449_936 { s / 12.92 } else { ((s + 0.055) / 1.055).powf(2.4) }
-            }
-        }
-    }
-    /// Enumerate the existing formula once per curve, without interpolation or
-    /// quantization. Each table occupies 256 KiB and is initialized only when a
-    /// 16-bit source needs that curve. Resolve outside the pixel loops.
+    /// Resolve the source's curve once, then index halflight's exact table.
     fn table16(self) -> &'static [f32] {
-        static SRGB: OnceLock<Box<[f32]>> = OnceLock::new();
-        static G22: OnceLock<Box<[f32]>> = OnceLock::new();
-        let table = match self { Self::Srgb => &SRGB, Self::G22 => &G22 };
-        // Build directly on the heap: array::from_fn's temporary arrays overflow
-        // a test thread's stack in debug builds before OnceLock can retain one.
-        table.get_or_init(|| (0..=u16::MAX).map(|c| self.dec16(c)).collect())
+        match self { Self::Srgb => srgb_lut16(), Self::G22 => g22_lut16() }
     }
     fn enc(self, l: f32) -> u8 {
         match self {
@@ -582,7 +565,17 @@ mod icc_tests {
     fn all_16_bit_loader_samples_match_the_original_formula() {
         use image::{LumaA, Rgba};
         for (option, curve) in [(TransferOption::Srgb, Transfer::Srgb), (TransferOption::G22, Transfer::G22)] {
-            let expected: Vec<f32> = (0..=u16::MAX).map(|c| curve.dec16(c)).collect();
+            // Keep the original scalar formula as a compatibility oracle after
+            // moving production conversion into halflight.
+            let expected: Vec<f32> = (0..=u16::MAX).map(|c| {
+                let s = c as f32 / 65535.0;
+                match curve {
+                    Transfer::G22 => s.powf(2.2),
+                    Transfer::Srgb => {
+                        if s <= 0.040_449_936 { s / 12.92 } else { ((s + 0.055) / 1.055).powf(2.4) }
+                    }
+                }
+            }).collect();
             let luma = ImageBuffer::from_fn(256, 256, |x, y| Luma([(y * 256 + x) as u16]));
             let alpha = ImageBuffer::from_fn(256, 256, |x, y| LumaA([(y * 256 + x) as u16, x as u16]));
             for image in [DynamicImage::ImageLuma16(luma), DynamicImage::ImageLumaA16(alpha)] {

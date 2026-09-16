@@ -56,7 +56,7 @@ zenjpeg = { version = "0.8.4", features = ["trellis"] }
 # transfer curves) and the histogram bake over all 165 stems came back
 # identical from the binary built either way, and the same A/B is the gate for
 # moving this rev.
-halflight = { git = "https://github.com/oddharsh/halflight.git", rev = "edc6358de58e5de93309d01500971bb056c65708" }
+halflight = { git = "https://github.com/oddharsh/halflight.git", rev = "80e9f344f669f85cbf4e85d9337b11405691f7ba" }
 # Input decode only. `tiff` was added on 2026-08-25 for the Instagram export,
 # which needs a LOSSLESS decode of a HEIF source and cannot use JPEG for it.
 # Measured on a 7728x5152 HIF: `sips -s format png` takes 6222ms because it

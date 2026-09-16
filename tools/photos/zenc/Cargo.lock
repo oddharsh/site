@@ -194,7 +194,7 @@ dependencies = [
 [[package]]
 name = "halflight"
 version = "0.1.0"
-source = "git+https://github.com/oddharsh/halflight.git?rev=edc6358de58e5de93309d01500971bb056c65708#edc6358de58e5de93309d01500971bb056c65708"
+source = "git+https://github.com/oddharsh/halflight.git?rev=80e9f344f669f85cbf4e85d9337b11405691f7ba#80e9f344f669f85cbf4e85d9337b11405691f7ba"
 
 [[package]]
 name = "hashbrown"

@@ -7,6 +7,40 @@ Verdict: keep the lossless TIFF decoder and cache the shared 16-bit transfer
 conversion. The follow-up measured a 12.7% reduction in median time to generate thumbnails
 with identical outputs. Native decoding remains an experiment.
 
+## Upstream ownership: halflight
+
+The exact tables now live in halflight as `srgb_lut16()` and `g22_lut16()`,
+introduced by [halflight #1](https://github.com/oddharsh/halflight/pull/1).
+Zenc pins that commit in its Cargo manifest and lockfile, resolves the source's
+transfer curve once per frame, and indexes the selected table. This puts both
+8-bit and 16-bit transfer functions beside the resampling kernel; file decoding,
+ICC classification and channel policy remain in zenc.
+
+Halflight shares the normalized curve formulas between its two bit depths.
+Its exhaustive test compares every 16-bit value against the original scalar
+formulas and initializes both tables on a cold 128 KiB thread stack. Debug and
+release tests pass, along with its conformance suite, Rust 1.75 check and
+WebAssembly tests. The wasm build is 13,613 bytes gzip, below its 40,000-byte gate.
+
+The site-local binary at `3a9ceb21` and the halflight-backed binary produced
+identical bytes for all 312 outputs across 52 full-resolution originals:
+208 thumbnail files (600px JPEG plus 600/400/200px AVIF), 52 whole-frame PNGs
+capped to 1080px width, and 52 q84 JPEG encodes of those PNGs. Sources were all
+46 JPEGs directly in the curated source folder and six HIFs: `XT500010`,
+`XT500018`, `XT500026`, `XT508174`, `XT509334`, and `XT509986`. The HIFs passed
+through lossless TIFF; each source's numeric EXIF orientation was applied.
+Both binaries also agreed on all 258 histograms, and the canonical rebake and
+packer left the committed index unchanged. The derivation record was regenerated.
+
+Site validation passed: all 38 Rust tests, the exhaustive loader test in release
+mode, Clippy including the native example, 57 focused contract tests, lint,
+photo validation and the derivation check. Tool typechecking matched its existing
+409-error baseline with no new findings.
+
+The timing results below were recorded before this extraction, using the
+site-local tables at `3a9ceb21`. They remain measurements of that build; moving
+the tables into the library is validated separately for output parity.
+
 ## Follow-up: exact 16-bit conversion
 
 The native decoder saved little because both paths repeatedly evaluated a power
