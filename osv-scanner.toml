@@ -1,0 +1,30 @@
+# osv-scanner's config for the root bun.lock (the scanner reads the
+# osv-scanner.toml beside each lockfile it is handed; ci.yml runs it under
+# "Scan lockfiles for known vulnerabilities").
+#
+# ONE ignore, by advisory id, and it is a MISREAD rather than a risk accepted.
+# wrangler is pinned to a pkg.pr.new tarball URL (package.json, the
+# prerelease-pin note in CLAUDE.md), so bun.lock keys it as
+# `wrangler@https://pkg.pr.new/cloudflare/workers-sdk/wrangler@982b806` and
+# carries no semver anywhere: the tarball's own package.json is the only
+# place the number lives. osv-scalibr's bun.lock extractor blanks the version
+# for `file:` specifiers and routes `#commit` specifiers to git matching, and
+# a tarball URL falls through both branches, so the URL string is what reaches
+# the matcher. A string that is not semver cannot sit above any fix, so it
+# lands inside every `introduced: 0` range the package has ever had.
+#
+# Measured 2026-09-16 against osv-scanner v2.5.0, the CI pin. The installed
+# wrangler was 4.131.2 and the advisory below is fixed in 2.20.1; sending the
+# URL to api.osv.dev/v1/query returns the advisory and sending 4.131.2 returns
+# nothing. So the number being compared is the pin's SHAPE and never its
+# contents, and the same line follows every sha `wrangler:pin` advances to.
+#
+# `contract-osv-ignore-names-a-url-pin` holds this file to that argument: the
+# ignore is allowed only while package.json's wrangler is a URL, so the day the
+# pin returns to a registry version this entry fails the suite until it is
+# deleted, rather than quietly hiding a real advisory against a semver wrangler.
+# Do NOT widen it to a PackageOverrides entry on wrangler: that hides every
+# future advisory too, and the day this matters is the day one is real.
+[[IgnoredVulns]]
+id = "GHSA-8c93-4hch-xgxp"
+reason = "false positive: wrangler is pinned to a pkg.pr.new tarball URL, which the bun.lock extractor passes through as the version; the installed wrangler is 4.x and the fix is 2.20.1"

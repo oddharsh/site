@@ -364,6 +364,14 @@ jobs:
       # 127 is different: it means the scan never ran, which is this tree's own
       # lockfile paths being wrong, and a scanner that cannot tell "clean" from
       # "did not run" is decoration.
+      #
+      # osv-scanner.toml at the root is the one ignore, by advisory id, with the
+      # measurement written at it: the pkg.pr.new wrangler pin is a tarball URL
+      # that the bun.lock extractor passes through as the version, so a 2023
+      # advisory fires against a 4.x wrangler. The scanner prints the ignore and
+      # its reason in this step's log, and contract-osv-ignore-names-a-url-pin
+      # fails the suite the day the pin is a registry version again and the
+      # entry has not been deleted.
       - name: Scan lockfiles for known vulnerabilities
         env:
           OSV_VERSION: v2.5.0
