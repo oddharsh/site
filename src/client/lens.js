@@ -5,7 +5,7 @@
 // machine "lenses" — Readiness, Anatomy, Structured data, AI view, Terms, Discovery
 // files — next to a plain human read and an opt-in Browser Run render. No deps, no
 // build. Deferred, short-cached with SWR.
-(function () {
+(() => {
   "use strict";
 
   // The local parse layer. Client scripts here have no shared module graph, so
@@ -94,7 +94,7 @@
   // #lx-glossary), because the same term gets marked up from both sides: the
   // worker owns the facts rail, this file owns the checks. A second hand-kept
   // copy here is exactly the drift the /*luq-data*/ pattern exists to avoid.
-  var GLOSS = (function () {
+  var GLOSS = (() => {
     try { return JSON.parse(document.getElementById("lx-glossary").textContent); }
     catch (e) { return {}; }
   })();
@@ -103,12 +103,12 @@
   // checks say "Link relations" where the glossary says "Link headers".
   /** @type {[any, string][]} */
   var GLOSS_SPELLINGS = [];
-  Object.keys(GLOSS).forEach(function (key) {
-    [GLOSS[key].label].concat(GLOSS[key].alt || []).forEach(function (s) {
+  Object.keys(GLOSS).forEach((key) => {
+    [GLOSS[key].label].concat(GLOSS[key].alt || []).forEach((s) => {
       GLOSS_SPELLINGS.push([key, s]);
     });
   });
-  GLOSS_SPELLINGS.sort(function (a, b) { return b[1].length - a[1].length; });
+  GLOSS_SPELLINGS.sort((a, b) => { return b[1].length - a[1].length; });
 
   // Mirrors glossify() in _worker.js/lens.js. Input MUST already be escaped:
   // this inserts real tags, and only esc() having removed every < and > makes
@@ -177,16 +177,16 @@
   // a touch visitor never fetches an engine that would return a dead surface.
   // The <abbr title> stays the honest fallback for everyone else.
   if (!(window.matchMedia && (matchMedia("(hover: none)").matches || matchMedia("(pointer: coarse)").matches))) {
-    import("/hoist.js").then(function (h) {
+    import("/hoist.js").then((h) => {
       var node = document.getElementById("lx-tip");
       if (!node) return;
       h.createHoist({
         node: node,
         anchorName: "--lx-tip",
-        findTarget: function (/** @type {Element} */ el) {
+        findTarget: (/** @type {Element} */ el) => {
           return el && el.closest ? el.closest(".lx-term") : null;
         },
-        contentFor: function (t) {
+        contentFor: (t) => {
           var g = GLOSS[t.getAttribute("data-t")];
           if (!g) return "";
           return "<b>" + esc(g.label) + "</b>" + esc(g.plain) +
@@ -199,7 +199,7 @@
       // everything rendered from here on is emitted without one.
       var pre = document.querySelectorAll(".lx-term[title]");
       for (var i = 0; i < pre.length; i++) pre[i].removeAttribute("title");
-    }).catch(function () {});
+    }).catch(() => {});
   }
 
   function bytes(n) {
@@ -250,8 +250,8 @@
     // not the headings-only outline — an outline of a heading-light page yields an
     // absurd ×1000+ that reads as hyperbole. Phrase it as "a clean markdown copy"
     // without claiming the site does or doesn't publish one (some, like this one, do).
-    var clean = (c.tiers.filter(function (t) { return t.key === "markdown"; })[0]) ||
-                (c.tiers.filter(function (t) { return t.key === "text"; })[0]) ||
+    var clean = (c.tiers.filter((t) => { return t.key === "markdown"; })[0]) ||
+                (c.tiers.filter((t) => { return t.key === "text"; })[0]) ||
                 c.tiers[c.tiers.length - 1];
     var per1 = base.tokens / 1e6 * rate.usdPerMtok;
     var per1k = per1 * 1000;
@@ -322,7 +322,7 @@
     // normal visit) left every Delta switch dead and the Readiness projection
     // banner permanently empty. The seed doubles as the allowlist.
     var cf = { markdown: false, semantic: false, contract: false, authority: false, receipt: false, dictionary: false, ech: false };
-    (p.get("cf") || "").split(",").forEach(function (key) {
+    (p.get("cf") || "").split(",").forEach((key) => {
       if (Object.prototype.hasOwnProperty.call(cf, key)) cf[key] = true;
     });
     return {
@@ -338,7 +338,7 @@
     var u;
     try { u = new URL(location.href); } catch (e) { return; }
     u.pathname = "/lens";
-    ["url", "vs", "view", "lens", "cf"].forEach(function (key) { u.searchParams.delete(key); });
+    ["url", "vs", "view", "lens", "cf"].forEach((key) => { u.searchParams.delete(key); });
     var raw = urlInput.value.trim();
     if (raw) u.searchParams.set("url", raw);
     // head-to-head state is url + vs, nothing else: view/lens/cf describe the
@@ -349,7 +349,7 @@
     } else {
       if (view !== "both") u.searchParams.set("view", view);
       if (lens !== "anatomy") u.searchParams.set("lens", lens);
-      var cf = Object.keys(counterfactuals).filter(function (key) { return counterfactuals[key]; });
+      var cf = Object.keys(counterfactuals).filter((key) => { return counterfactuals[key]; });
       if (cf.length) u.searchParams.set("cf", cf.join(","));
     }
     var next = u.pathname + (u.search || "") + (u.hash || "");
@@ -448,9 +448,9 @@
     // them from a page-only payload would show "no agent doors" for a site that
     // simply had not been checked yet, which is the exact lie the phases flag
     // exists to prevent.
-    var scan = function (phases) {
+    var scan = (phases) => {
       return fetch("/lens/fetch?url=" + encodeURIComponent(url) + (phases ? "&phases=" + phases : ""))
-        .then(function (r) {
+        .then((r) => {
           var ct = r.headers.get("content-type") || "";
           if (ct.indexOf("json") < 0) throw new Error("The lens engine returned an unexpected response.");
           return r.json();
@@ -458,7 +458,7 @@
     };
 
     scan("page")
-      .then(function (j) {
+      .then((j) => {
         if (!j || !j.ok) return;         // pass 2 is authoritative; stay quiet here
         data = j;
         renderHuman();
@@ -466,9 +466,9 @@
         machineBody.innerHTML = '<div class="lx-spin">Read the page. Checking agent surfaces&hellip;</div>';
       })
       // A failed fast pass must not abort the real one, so swallow and continue.
-      .catch(function () {})
-      .then(function () { return scan(); })
-      .then(function (j) {
+      .catch(() => {})
+      .then(() => { return scan(); })
+      .then((j) => {
         busy = false;
         if (!j || !j.ok) {
           showError(j);
@@ -481,7 +481,7 @@
         renderStatus();
         maybeAutoRunBrowser();
       })
-      .catch(function (e) {
+      .catch((e) => {
         busy = false;
         machineBody.innerHTML = '<div class="lx-empty">Network error: ' + esc(e && e.message || e) + "</div>";
         statusBar.innerHTML = '<span class="err">Network error.</span>';
@@ -507,8 +507,8 @@
   function vsColumn(s) {
     var host = vsHost(s.finalUrl || s.url);
     var levelKind = s.level >= 5 ? "ok" : s.level >= 3 ? "" : "warn";
-    var pub = VS_SURFACES.filter(function (x) { return s.surfaces && s.surfaces[x[0]]; })
-      .map(function (x) { return '<span class="lx-tag">' + esc(x[1]) + "</span>"; }).join("");
+    var pub = VS_SURFACES.filter((x) => { return s.surfaces && s.surfaces[x[0]]; })
+      .map((x) => { return '<span class="lx-tag">' + esc(x[1]) + "</span>"; }).join("");
     var cost = s.cost
       ? "~" + fmtTok(s.cost.tokens) + " " + term("token", "tokens") + " &middot; " + fmtUsd(s.cost.usdPerRead) + "/read"
       : "no cost model (non-HTML)";
@@ -519,7 +519,7 @@
       ["one model read", cost],
       ["payload", esc(bytes(s.bytes))],
       ["words", esc(String(s.wordCount || 0))],
-    ].map(function (row) { return "<tr><td>" + esc(row[0]) + "</td><td>" + row[1] + "</td></tr>"; }).join("");
+    ].map((row) => { return "<tr><td>" + esc(row[0]) + "</td><td>" + row[1] + "</td></tr>"; }).join("");
     return '<div class="lx-vs-col"><div class="lx-vs-h"><span>' + esc(host) + '</span><a href="/lens?url=' + esc(encodeURIComponent(s.url || "")) + '">full scan &rarr;</a></div>' +
       '<div class="lx-vs-body"><div class="lx-vs-score"><b>' + (s.readiness == null ? "?" : esc(s.readiness)) + "<span>/100</span></b>" +
       badge("Level " + (s.level == null ? "?" : s.level), levelKind, s.levelNote || "") + "<span>" + esc(s.levelName || "") + "</span></div>" +
@@ -537,9 +537,9 @@
     if (L && R && L.readiness != null && R.readiness != null) {
       var win = L.readiness >= R.readiness ? L : R;
       var lose = win === L ? R : L;
-      var extras = VS_SURFACES.filter(function (x) {
+      var extras = VS_SURFACES.filter((x) => {
         return win.surfaces && win.surfaces[x[0]] && !(lose.surfaces && lose.surfaces[x[0]]);
-      }).map(function (x) { return x[1]; });
+      }).map((x) => { return x[1]; });
       var spread = win.readiness === lose.readiness
         ? "<b>" + esc(win.readiness) + " apiece.</b> Same score, one rubric."
         : "<b>" + esc(vsHost(win.finalUrl || win.url)) + " " + esc(win.readiness) + ", " + esc(vsHost(lose.finalUrl || lose.url)) + " " + esc(lose.readiness) + ".</b>";
@@ -553,7 +553,7 @@
 
   function setVsChrome(on) {
     vsMode = !!on;
-    [toolbar, modeNote, panes].forEach(function (el) { if (el) el.classList.toggle("lx-off", vsMode); });
+    [toolbar, modeNote, panes].forEach((el) => { if (el) el.classList.toggle("lx-off", vsMode); });
     if (vsSection) vsSection.classList.toggle("lx-off", !vsMode);
     if (vsRow) vsRow.classList.toggle("lx-off", !vsMode && !(vsInput && vsInput.value.trim()));
     if (vsToggle) vsToggle.setAttribute("aria-expanded", vsRow && !vsRow.classList.contains("lx-off") ? "true" : "false");
@@ -572,8 +572,8 @@
     vsSection.innerHTML = '<div class="lx-spin">Scanning both sites as AadharshBot&hellip;</div>';
     statusBar.innerHTML = "<span>Comparing <b>" + esc(vsHost(left)) + "</b> and <b>" + esc(vsHost(right)) + "</b> server-side&hellip;</span>";
     fetch("/lens/compare.json?left=" + encodeURIComponent(left) + "&right=" + encodeURIComponent(right))
-      .then(function (r) { return r.json(); })
-      .then(function (j) {
+      .then((r) => { return r.json(); })
+      .then((j) => {
         vsBusy = false;
         vsData = j;
         renderVs(j);
@@ -581,7 +581,7 @@
           ? '<span><b>Head-to-head</b></span><span>' + esc(vsHost(left)) + " vs " + esc(vsHost(right)) + '</span><span style="margin-left:auto">both fetched server-side as AadharshBot</span>'
           : '<span class="err">Comparison failed:</span> <span>' + esc((j && j.error) || "unknown error") + "</span>";
       })
-      .catch(function (e) {
+      .catch((e) => {
         vsBusy = false;
         vsSection.innerHTML = '<div class="lx-empty">Network error: ' + esc(e && e.message || e) + "</div>";
         statusBar.innerHTML = '<span class="err">Network error.</span>';
@@ -642,14 +642,14 @@
     // and let the snapshot UPGRADE it if it lands.
     renderReader(null, "Asking for a rendered snapshot as well");
     fetch("/lens/shot?url=" + encodeURIComponent(shotUrl))
-      .then(function (r) {
+      .then((r) => {
         var ct = r.headers.get("content-type") || "";
         if (r.ok && ct.indexOf("image/") === 0) {
           if (!data || (data.finalUrl || data.url) !== shotUrl) return;
           bleed(true);
           // The refusal is evidence, and we hold the refusing header: cite it.
           setHumanH("Refused", (data.frameReason ? "framing refused (" + data.frameReason + ")" : "this site refuses to be framed") + "; a machine's render stands in");
-          return r.blob().then(function (b) {
+          return r.blob().then((b) => {
             // The scan may have moved on while headless Chrome took its minute.
             // Painting a stale snapshot under a new URL is the one failure here
             // that a viewer cannot spot, so drop it rather than show it.
@@ -665,16 +665,16 @@
             var img = new Image();
             img.className = "lx-shot";
             img.alt = "Rendered snapshot of " + shotUrl;
-            img.onload = function () { if (lastShotUrl === objUrl) { URL.revokeObjectURL(objUrl); lastShotUrl = null; } };
+            img.onload = () => { if (lastShotUrl === objUrl) { URL.revokeObjectURL(objUrl); lastShotUrl = null; } };
             img.src = objUrl;
             humanBody.innerHTML = "";
             humanBody.appendChild(img);
           });
         }
-        return r.json().then(function (j) { renderReader(shotTrouble(j, r.status) || (j && j.error) || ("snapshot failed (" + r.status + ")")); })
-          .catch(function () { renderReader(shotTrouble(null, r.status) || ("snapshot failed (" + r.status + ")")); });
+        return r.json().then((j) => { renderReader(shotTrouble(j, r.status) || (j && j.error) || ("snapshot failed (" + r.status + ")")); })
+          .catch(() => { renderReader(shotTrouble(null, r.status) || ("snapshot failed (" + r.status + ")")); });
       })
-      .catch(function () { renderReader("The snapshot request did not go through"); });
+      .catch(() => { renderReader("The snapshot request did not go through"); });
   }
 
   // ---- Browser Run pane --------------------------------------------------
@@ -725,13 +725,13 @@
     browserBusy = true;
     function runLoaded() {
       if (!window.LensBrowser) { browserBusy = false; renderBrowser(); return; }
-      window.LensBrowser.run(browserBody, data, function (j) {
+      window.LensBrowser.run(browserBody, data, (j) => {
         browserBusy = false;
         if (recipeId) browserRecipeData = j;
         else browserData = j;
         renderBrowser();
         renderStatus();
-      }, function (e) {
+      }, (e) => {
         browserBusy = false;
       }, runBrowser, recipeId);
     }
@@ -742,7 +742,7 @@
     var script = document.createElement("script");
     script.src = "/lens-browser.js?v=1";
     script.onload = runLoaded;
-    script.onerror = function () { browserBusy = false; renderBrowser(); };
+    script.onerror = () => { browserBusy = false; renderBrowser(); };
     document.head.appendChild(script);
   }
 
@@ -787,16 +787,16 @@
     return '<div class="lx-sec"><div class="lx-sec-h">' + esc(title) + b + "</div>" + c + inner + "</div>";
   }
   function kvTable(obj, order) {
-    var keys = order ? order.filter(function (k) { return obj[k] != null && obj[k] !== ""; }) : Object.keys(obj);
+    var keys = order ? order.filter((k) => { return obj[k] != null && obj[k] !== ""; }) : Object.keys(obj);
     if (!keys.length) return '<div class="lx-none">none</div>';
-    var rows = keys.map(function (k) {
+    var rows = keys.map((k) => {
       return "<tr><td>" + esc(k) + "</td><td>" + esc(obj[k]) + "</td></tr>";
     }).join("");
     return '<table class="lx-kv">' + rows + "</table>";
   }
   function tags(arr) {
     if (!arr || !arr.length) return '<div class="lx-none">none found</div>';
-    return '<div class="lx-tags">' + arr.map(function (t) { return '<span class="lx-tag">' + esc(t) + "</span>"; }).join("") + "</div>";
+    return '<div class="lx-tags">' + arr.map((t) => { return '<span class="lx-tag">' + esc(t) + "</span>"; }).join("") + "</div>";
   }
   function pre(text, light) {
     return '<pre class="lx-pre' + (light ? " lx-pre-light" : "") + '">' + esc(text) + "</pre>";
@@ -811,7 +811,7 @@
 
   function briefTable(rows) {
     return '<table class="lx-bots"><tr><th>surface</th><th>what a machine can establish</th><th>state</th></tr>' +
-      rows.map(function (r) {
+      rows.map((r) => {
         return '<tr><td class="ua">' + esc(r[0]) + '</td><td>' + esc(r[1]) + '</td><td>' + badge(r[2], r[3]) + '</td></tr>';
       }).join("") + '</table>';
   }
@@ -829,8 +829,8 @@
     var mf = s.microformats ? s.microformats.length : 0;
     /** @type {string[]} */
     var entityTypes = [];
-    (s.jsonld || []).forEach(function (b) {
-      (b.types || []).forEach(function (x) { if (entityTypes.indexOf(x) < 0) entityTypes.push(x); });
+    (s.jsonld || []).forEach((b) => {
+      (b.types || []).forEach((x) => { if (entityTypes.indexOf(x) < 0) entityTypes.push(x); });
     });
     var title, badgeData, caption, rows, extra = "";
 
@@ -895,7 +895,7 @@
       if (entityTypes.length) extra = tags(entityTypes.slice(0, 18));
     } else if (lens === "ai") {
       var md = ag.mdNegotiation && ag.mdNegotiation.supported ? "negotiated text/markdown" : "HTML only";
-      var markdownTier = (data.cost && data.cost.tiers || []).filter(function (x) { return x.key === "markdown"; })[0];
+      var markdownTier = (data.cost && data.cost.tiers || []).filter((x) => { return x.key === "markdown"; })[0];
       var directives = data.ai && data.ai.directives || {};
       title = "AI view focus";
       badgeData = { text: markdownTier ? "~" + fmtTok(markdownTier.tokens) + " tok" : md, kind: markdownTier ? "ok" : "warn" };
@@ -903,14 +903,14 @@
       rows = { "representation": md + " · " + bytes((data.ai && data.ai.markdown || "").length), "directives": (directives.metaRobots || directives.xRobotsTag || directives.namesAiCrawlers) ? "crawler signals published" : "no AI-specific signal", "curation": data.ai && data.ai.llmsTxtPresent ? "llms.txt present" : "no llms.txt", "cheapest shortcut": markdownTier ? "markdown is the selected compact read" : "none observed" };
     } else if (lens === "terms") {
       var tier = t.spectrum && t.spectrum.tier || "unknown";
-      var blocked = (t.scoreboard || []).filter(function (b) { return b.verdict === "block"; }).length;
+      var blocked = (t.scoreboard || []).filter((b) => { return b.verdict === "block"; }).length;
       var enforcement = t.enforcement && (t.enforcement.challenged ? "bot challenge" : t.enforcement.blocked ? "fetch refused" : "fetch passed");
       title = "Terms focus";
       badgeData = { text: tier, kind: tier === "open" ? "ok" : "warn" };
       caption = "Is reading open, merely requested, actively enforced, or priced? Published policy and observed behavior stay separate.";
       rows = { "spectrum": tier, "robots": t.robotsUnknown ? "unknown / unreachable" : t.robotsPresent ? blocked + " of " + (t.scoreboard || []).length + " bots blocked" : "no robots.txt", "enforcement": enforcement || "not observed", "price": t.paid && t.paid.http402 ? "402 Payment Required" : "no payment signal" };
     } else {
-      var doors = [ag.mcp, ag.nlweb, ag.webmcp, ag.agentCard, ag.openapi, ag.apiCatalog].filter(function (x) { return x && (x.verdict === "yes" || x.verdict === "likely" || x.verdict === "maybe" || x.present || x.found); }).length;
+      var doors = [ag.mcp, ag.nlweb, ag.webmcp, ag.agentCard, ag.openapi, ag.apiCatalog].filter((x) => { return x && (x.verdict === "yes" || x.verdict === "likely" || x.verdict === "maybe" || x.present || x.found); }).length;
       var maps = (d.llmsTxt && d.llmsTxt.ok ? 1 : 0) + (d.sitemapXml && d.sitemapXml.ok ? 1 : 0);
       title = "Discovery focus";
       badgeData = { text: st.verdict || "unknown", kind: st.verdict === "agent-native" ? "ok" : st.verdict === "agent-readable" ? "" : "warn" };
@@ -949,7 +949,7 @@
     if (jsonld) {
       /** @type {string[]} */
       var types = [];
-      (s.jsonld || []).forEach(function (b) { (b.types || []).forEach(function (x) { if (types.indexOf(x) < 0) types.push(x); }); });
+      (s.jsonld || []).forEach((b) => { (b.types || []).forEach((x) => { if (types.indexOf(x) < 0) types.push(x); }); });
       line("ok", "Parsed structured data → " + jsonld + " JSON-LD block" + (jsonld === 1 ? "" : "s") + (types.length ? " (" + types.slice(0, 4).join(", ") + ")" : "") + ". Entities without guessing.");
     } else {
       line("warn", "Looked for a typed entity graph → none. Any structure must be inferred from the prose.");
@@ -973,7 +973,7 @@
     else { verdict = "BLOCKED: a task needing action can't complete. An agent can read this page, but not do anything here without a human driving a browser."; vkind = "no"; }
     line(vkind, "task verdict → " + verdict);
 
-    var body = lines.map(function (l) {
+    var body = lines.map((l) => {
       var glyph = l.kind === "ok" ? "✓" : l.kind === "no" ? "✗" : "•";
       // glossify LAST, over already-escaped text: it inserts real tags, and the
       // only thing making that safe is esc() having removed every < and > first.
@@ -1067,7 +1067,7 @@
   function cfObserved(key, checks) {
     var m = CF_MAP[key];
     checks = checks || {};
-    return !!(m && m.checks.some(function (n) { return checks[n] && checks[n].status === "pass"; }));
+    return !!(m && m.checks.some((n) => { return checks[n] && checks[n].status === "pass"; }));
   }
 
   function deltaView() {
@@ -1099,7 +1099,7 @@
       { key: "authority", label: "Delegated authority", stage: "Authorize", observed: cfObserved("authority", checks), detail: "Add a consent boundary with scopes and an explicit user approval." },
       { key: "receipt", label: "A result receipt", stage: "Confirm", observed: false, detail: "Return a durable result with origin, time, and provenance. No probe measures this surface yet, so it is always shown as a projection, never as observed." },
     ];
-    var controls = '<div class="lx-cf-grid">' + cf.map(function (x) {
+    var controls = '<div class="lx-cf-grid">' + cf.map((x) => {
       var on = !!counterfactuals[x.key];
       return '<div class="lx-cf-card' + (on ? " is-on" : "") + '"><h4>' + esc(x.label) + '</h4><p>' + esc(x.detail) + '</p>' +
         '<button class="lx-cf-toggle" type="button" data-cf="' + esc(x.key) + '" aria-pressed="' + (on ? "true" : "false") + '"><span class="lx-cf-dot" aria-hidden="true"></span>' + (on ? "on" : "off") + "</button></div>";
@@ -1114,7 +1114,7 @@
     // a rung somebody climbs. Flipping one switch therefore lights the rest of the
     // ladder, which is the lesson a micro-world is for.
     var open = true, reached = null, stopStage = null;
-    var path = cf.map(function (x) {
+    var path = cf.map((x) => {
       var signal = x.signal == null ? x.observed : x.signal;
       var satisfied = x.observed || !!counterfactuals[x.key];
       var state, copy;
@@ -1144,7 +1144,7 @@
     }).join("");
     var intro = '<div class="lx-delta-intro"><b>Counterfactual lab.</b> Turn on one piece of web infrastructure and watch the route change. The stages compound: a machine that cannot read this page never gets as far as understanding it, so the route stops where the chain breaks. Green means Lens observed a signal. Amber means this page is simulating the addition locally.</div>';
     var proof = '<div class="lx-proof"><b>Current evidence:</b> ' + esc((d.llmsTxt && d.llmsTxt.ok ? "llms.txt is present. " : "No llms.txt observed. ") + (action ? "An action surface answered. " : "No action surface answered. ") + (semantic ? "Structured data exists." : "Structured entity data is absent.")) + '</div>';
-    var deltaText = cf.filter(function (x) { return counterfactuals[x.key]; }).map(function (x) { return "+ " + x.stage.toLowerCase() + " · " + x.label; }).join("\n");
+    var deltaText = cf.filter((x) => { return counterfactuals[x.key]; }).map((x) => { return "+ " + x.stage.toLowerCase() + " · " + x.label; }).join("\n");
 
     // The wire group: transport counterfactuals that sit under the same task path.
     // Both read straight off data.wire (dictionary from the site's own response
@@ -1162,7 +1162,7 @@
         state: wireEch.observed ? { text: "configured", kind: "ok" } : wireEch.recordPresent && !wireEch.parsed ? { text: "record unread", kind: "warn" } : counterfactuals.ech ? { text: "counterfactual", kind: "warn" } : { text: "not configured", kind: "off" },
         detail: "Encrypt the TLS handshake server name so an on-path observer cannot see which site the fetch is for." },
     ];
-    var wireControls = '<div class="lx-cf-grid">' + wire.map(function (x) {
+    var wireControls = '<div class="lx-cf-grid">' + wire.map((x) => {
       var on = !!counterfactuals[x.key];
       return '<div class="lx-cf-card' + (on ? " is-on" : "") + '"><h4>' + esc(x.label) + " " + badge(x.state.text, x.state.kind) + "</h4><p>" + esc(x.detail) + "</p>" +
         '<button class="lx-cf-toggle" type="button" data-cf="' + esc(x.key) + '" aria-pressed="' + (on ? "true" : "false") + '"><span class="lx-cf-dot" aria-hidden="true"></span>' + (on ? "on" : "off") + "</button></div>";
@@ -1172,7 +1172,7 @@
       (wireEch.observed ? "ECH is configured in DNS, so the handshake hides which site the fetch is for." : wireEch.recordPresent ? "An HTTPS record is published but carries no ECH, so the destination name travels in the clear." : "No ECH in DNS, so the destination name travels in the clear.")
     ) + "</div>";
     var wireCap = "A dictionary was worth 87-97% fewer bytes on the aadhar.sh shell (measured 2026-07); the token win follows for an agent that re-reads only the delta. ECH changes what a network observer learns, leaving the byte count alone.";
-    var wireOn = wire.filter(function (x) { return !!counterfactuals[x.key]; }).map(function (x) { return "+ wire · " + x.label; }).join("\n");
+    var wireOn = wire.filter((x) => { return !!counterfactuals[x.key]; }).map((x) => { return "+ wire · " + x.label; }).join("\n");
     var allDelta = [deltaText, wireOn].filter(Boolean).join("\n");
     var routeLine = "reaches " + (reached ? reached.toLowerCase() : "nothing") +
       (stopStage ? ", stops at " + stopStage.toLowerCase() : ", complete");
@@ -1185,8 +1185,8 @@
   }
 
   function bindCounterfactuals() {
-    [].forEach.call(machineBody.querySelectorAll(".lx-cf-toggle"), function (b) {
-      b.addEventListener("click", function () {
+    [].forEach.call(machineBody.querySelectorAll(".lx-cf-toggle"), (b) => {
+      b.addEventListener("click", () => {
         var key = b.getAttribute("data-cf");
         if (!Object.prototype.hasOwnProperty.call(counterfactuals, key)) return;
         counterfactuals[key] = !counterfactuals[key];
@@ -1228,7 +1228,7 @@
 
   function readinessPolicy(bot) {
     var rows = data.terms && data.terms.scoreboard || [];
-    return rows.filter(function (r) { return r.ua === bot.key; })[0] || null;
+    return rows.filter((r) => { return r.ua === bot.key; })[0] || null;
   }
 
   function readinessBotState(bot) {
@@ -1249,22 +1249,22 @@
       { key: "contract", label: "Action contract" },
       { key: "authority", label: "Delegated authority" },
     ];
-    var active = direct.filter(function (x) { return counterfactuals[x.key] && !cfObserved(x.key, checks); });
+    var active = direct.filter((x) => { return counterfactuals[x.key] && !cfObserved(x.key, checks); });
     if (!active.length) return null;
     var pass = readiness.passed;
     var counted = readiness.counted;
-    active.forEach(function (x) { var c = checks[CF_MAP[x.key].checks[0]]; if (c && c.countInScore) pass++; });
-    return { score: counted ? Math.round(pass / counted * 100) : readiness.overall, labels: active.map(function (x) { return x.label; }) };
+    active.forEach((x) => { var c = checks[CF_MAP[x.key].checks[0]]; if (c && c.countInScore) pass++; });
+    return { score: counted ? Math.round(pass / counted * 100) : readiness.overall, labels: active.map((x) => { return x.label; }) };
   }
 
   function copyText(text, button) {
-    var done = function () {
+    var done = () => {
       if (!button) return;
       var old = button.textContent;
       button.textContent = "Copied";
-      setTimeout(function () { button.textContent = old; }, 1400);
+      setTimeout(() => { button.textContent = old; }, 1400);
     };
-    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done).catch(function () {});
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done).catch(() => {});
     else {
       var ta = document.createElement("textarea");
       ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
@@ -1275,12 +1275,12 @@
   }
 
   function bindReadinessActions() {
-    [].forEach.call(machineBody.querySelectorAll(".lx-copy-fix"), function (button) {
-      button.addEventListener("click", function () { copyText(button.getAttribute("data-fix") || "", button); });
+    [].forEach.call(machineBody.querySelectorAll(".lx-copy-fix"), (button) => {
+      button.addEventListener("click", () => { copyText(button.getAttribute("data-fix") || "", button); });
     });
     var all = machineBody.querySelector(".lx-copy-all");
-    if (all) all.addEventListener("click", function () {
-      var fixes = [].map.call(machineBody.querySelectorAll(".lx-readiness-check[data-status='fail']"), function (row) {
+    if (all) all.addEventListener("click", () => {
+      var fixes = [].map.call(machineBody.querySelectorAll(".lx-readiness-check[data-status='fail']"), (row) => {
         return "- " + row.getAttribute("data-label") + ": " + row.getAttribute("data-fix");
       });
       copyText("Lens readiness fixes for " + (data.finalUrl || data.url) + "\n\n" + fixes.join("\n"), all);
@@ -1291,7 +1291,7 @@
     return '<div class="lx-composite-source ' + esc(state || "") + '">' +
       '<div class="lx-composite-source-top"><span>0' + index + '</span><b>' + title + '</b><strong>' + value + '</strong></div>' +
       '<div class="lx-composite-caption">' + caption + '</div>' +
-      (details && details.length ? '<ul>' + details.map(function (detail) { return '<li>' + detail + '</li>'; }).join("") + '</ul>' : "") +
+      (details && details.length ? '<ul>' + details.map((detail) => { return '<li>' + detail + '</li>'; }).join("") + '</ul>' : "") +
       '</div>';
   }
 
@@ -1310,10 +1310,10 @@
       : cfScore == null
         ? esc((cloudflareData && cloudflareData.error) || "Cloudflare's independent score is unavailable.")
         : '<a href="' + esc(cloudflareData.sourceUrl || "https://isitagentready.com/") + '" rel="noopener">Cloudflare Agent Readiness</a> · Level ' + esc(cloudflareData.level) + '/5' + (cloudflareData.levelName ? ' · ' + esc(cloudflareData.levelName) : "");
-    var fieldDetails = (field.components || []).map(function (component) {
+    var fieldDetails = (field.components || []).map((component) => {
       return '<b>' + esc(component.label) + ':</b> ' + (Number.isFinite(component.score) ? esc(component.score) + '/100' : 'unknown');
     });
-    var recoveryDetails = recovery ? (recovery.checks || []).map(function (check) {
+    var recoveryDetails = recovery ? (recovery.checks || []).map((check) => {
       return (check.pass ? '&#10003; ' : '&#10005; ') + esc(check.label);
     }) : [];
 
@@ -1338,13 +1338,13 @@
     var projection = readinessProjection(r);
     var score = compositeReadiness(r);
 
-    var cats = '<div class="lx-readiness-cats">' + (r.categories || []).map(function (c) {
+    var cats = '<div class="lx-readiness-cats">' + (r.categories || []).map((c) => {
       var skipped = c.total === 0 && c.checkCount > 0;
       return '<div class="lx-readiness-cat' + (skipped ? " is-skipped" : "") + '"><div><b>' + esc(c.label) + '</b><span>' + (c.countInScore ? c.passed + "/" + c.total : "optional") + '</span></div><strong>' + (skipped ? "—" : c.score) + '</strong></div>';
     }).join("") + '</div>';
 
-    var checks = Object.keys(r.checks || {}).map(function (key) { return r.checks[key]; });
-    var checkHtml = '<div class="lx-readiness-checks">' + checks.map(function (item) {
+    var checks = Object.keys(r.checks || {}).map((key) => { return r.checks[key]; });
+    var checkHtml = '<div class="lx-readiness-checks">' + checks.map((item) => {
       var state = readinessStatus(item);
       var copy = readinessCopy(item);
       var fix = copy.fix;
@@ -1359,11 +1359,11 @@
     // A control got in, so a crawler refusal on this origin is about the NAME.
     // With every control refused, the instrument never got through and no row
     // here is evidence about user-agent policy.
-    var controlIn = bots.some(function (b) {
+    var controlIn = bots.some((b) => {
       return b.role === "control" && b.status >= 200 && b.status < 400 && !b.blocked && !b.challenge;
     });
-    var anyControl = bots.some(function (b) { return b.role === "control"; });
-    var botHtml = bots.length ? (anyControl && !controlIn ? '<div class="lx-bot-caveat">No control identity got a readable response, so every row below reports this origin refusing <em>us</em> rather than refusing a crawler by name. Read them as unmeasured.</div>' : "") + '<table class="lx-bot-matrix"><tr><th>identity</th><th>robots policy</th><th>sampled GET</th><th>what this enables</th></tr>' + bots.map(function (bot) {
+    var anyControl = bots.some((b) => { return b.role === "control"; });
+    var botHtml = bots.length ? (anyControl && !controlIn ? '<div class="lx-bot-caveat">No control identity got a readable response, so every row below reports this origin refusing <em>us</em> rather than refusing a crawler by name. Read them as unmeasured.</div>' : "") + '<table class="lx-bot-matrix"><tr><th>identity</th><th>robots policy</th><th>sampled GET</th><th>what this enables</th></tr>' + bots.map((bot) => {
       var isControl = bot.role === "control";
       // robots.txt governs crawlers. Grading a browser against it invents a
       // verdict, so a control shows the dash it has earned.
@@ -1382,8 +1382,8 @@
     if (data.structured && !(data.structured.jsonld || []).length && c.apiCatalog && c.apiCatalog.status !== "pass") gaps.push("A machine can read the page, but it has no stable entity graph or declared action catalog to validate.");
     if (data.agent && data.agent.strategy && !data.agent.strategy.action.length) gaps.push("Reading is possible; acting is not declared. An agent must drive the human page and guess at side effects.");
     if (!gaps.length) gaps.push("The main access surfaces are published. Inspect the individual checks for the remaining edge cases and bot-specific policy.");
-    var gapHtml = '<ul class="lx-why">' + gaps.map(function (g) { return '<li>' + esc(g) + '</li>'; }).join("") + '</ul>';
-    var next = (r.nextActions || []).length ? '<div class="lx-next-actions">' + r.nextActions.map(function (a) { var copy = readinessCopy(a); return '<div><b>' + esc(copy.label) + '</b><span>' + esc(copy.fix) + '</span></div>'; }).join("") + '</div>' : '<div class="lx-none">No scored fixes are waiting.</div>';
+    var gapHtml = '<ul class="lx-why">' + gaps.map((g) => { return '<li>' + esc(g) + '</li>'; }).join("") + '</ul>';
+    var next = (r.nextActions || []).length ? '<div class="lx-next-actions">' + r.nextActions.map((a) => { var copy = readinessCopy(a); return '<div><b>' + esc(copy.label) + '</b><span>' + esc(copy.fix) + '</span></div>'; }).join("") + '</div>' : '<div class="lx-none">No scored fixes are waiting.</div>';
     // The level is capped when one signal outruns the breadth of the score, and
     // the cap has to be VISIBLE or the two numbers beside each other read as a
     // contradiction. The worker ships `levelNote` on exactly those scans; the
@@ -1475,7 +1475,7 @@
     // other one, so look in both rather than in whichever was true last week.
     var scoreBtn = machineBody.querySelector(".lx-verdict-score") ||
       (machineTop && machineTop.querySelector(".lx-verdict-score"));
-    if (scoreBtn) scoreBtn.addEventListener("click", function () { setLens("readiness"); });
+    if (scoreBtn) scoreBtn.addEventListener("click", () => { setLens("readiness"); });
     if (lens === "readiness" && view !== "delta") setTimeout(ensureReadinessSources, 0);
   }
 
@@ -1506,10 +1506,10 @@
     function loaded() {
       if (!data || (data.finalUrl || data.url) !== targetUrl) return;
       if (!window.LensReader) { readerBusy = false; renderMachine(); return; }
-      window.LensReader.run(data, function (json) {
+      window.LensReader.run(data, (json) => {
         if (!data || (data.finalUrl || data.url) !== targetUrl) return;
         readerBusy = false; readerData = json; renderMachine(); renderStatus();
-      }, function () {
+      }, () => {
         if (!data || (data.finalUrl || data.url) !== targetUrl) return;
         readerBusy = false; renderMachine();
       });
@@ -1518,7 +1518,7 @@
     var script = document.createElement("script");
     script.src = "/lens-reader.js?v=1";
     script.onload = loaded;
-    script.onerror = function () {
+    script.onerror = () => {
       if (!data || (data.finalUrl || data.url) !== targetUrl) return;
       readerBusy = false; renderMachine();
     };
@@ -1555,10 +1555,10 @@
       // site B's scan.
       if (!data || (data.finalUrl || data.url) !== targetUrl) return;
       if (!window.LensWire) { wireBusy = false; renderMachine(); return; }
-      window.LensWire.run(data, function (json) {
+      window.LensWire.run(data, (json) => {
         if (!data || (data.finalUrl || data.url) !== targetUrl) return;
         wireBusy = false; wireData = json; renderMachine(); renderStatus();
-      }, function () {
+      }, () => {
         if (!data || (data.finalUrl || data.url) !== targetUrl) return;
         wireBusy = false; renderMachine();
       });
@@ -1567,7 +1567,7 @@
     var script = document.createElement("script");
     script.src = "/lens-wire.js?v=1";
     script.onload = loaded;
-    script.onerror = function () {
+    script.onerror = () => {
       if (!data || (data.finalUrl || data.url) !== targetUrl) return;
       wireBusy = false; renderMachine();
     };
@@ -1627,11 +1627,11 @@
       '<br><span class="lx-wmcp-k">Chrome keeps only <code>readOnlyHint</code> across registration, so read-versus-write is the whole safety story a page can tell your agent. ' +
       (w.unstated ? "An unstated tool has not claimed to be safe; it has said nothing." : "Every tool here stated one.") +
       '</span></div>';
-    var rows = (w.tools || []).map(function (t) {
+    var rows = (w.tools || []).map((t) => {
       var kind = t.readOnly === true ? '<span class="lx-wmcp-read">read</span>'
         : t.readOnly === false ? '<span class="lx-wmcp-write">write</span>'
         : '<span class="lx-wmcp-k">unstated</span>';
-      var args = (t.params || []).map(function (a) {
+      var args = (t.params || []).map((a) => {
         return '<code>' + esc(a.name) + (a.required ? "*" : "") + "</code>";
       }).join(" ");
       return '<div class="lx-wmcp-row"><div><b>' + esc(t.name || "?") + "</b> " + kind +
@@ -1666,10 +1666,10 @@
       // catalogue over origin B's scan.
       if (!data || (data.finalUrl || data.url) !== targetUrl) return;
       if (!window.LensTools) { toolsBusy = false; renderMachine(); return; }
-      window.LensTools.run(targetUrl, function (json) {
+      window.LensTools.run(targetUrl, (json) => {
         if (!data || (data.finalUrl || data.url) !== targetUrl) return;
         toolsBusy = false; toolsData = json; renderMachine();
-      }, function () {
+      }, () => {
         if (!data || (data.finalUrl || data.url) !== targetUrl) return;
         toolsBusy = false;
         toolsData = { ok: false, unreadable: true, error: "the catalogue request did not complete" };
@@ -1680,7 +1680,7 @@
     var script = document.createElement("script");
     script.src = "/lens-tools.js?v=1";
     script.onload = loaded;
-    script.onerror = function () {
+    script.onerror = () => {
       if (!data || (data.finalUrl || data.url) !== targetUrl) return;
       toolsBusy = false; renderMachine();
     };
@@ -1717,10 +1717,10 @@
       // flight, and a late reply must not be labelled with the new question.
       if (!data || (data.finalUrl || data.url) !== targetUrl) return;
       if (!window.LensNlweb) { nlwebBusy = false; renderMachine(); return; }
-      window.LensNlweb.run(targetUrl, askedFor, function (json) {
+      window.LensNlweb.run(targetUrl, askedFor, (json) => {
         if (!data || (data.finalUrl || data.url) !== targetUrl || askedFor !== nlwebQuery) return;
         nlwebBusy = false; nlwebData = json; renderMachine();
-      }, function () {
+      }, () => {
         if (!data || (data.finalUrl || data.url) !== targetUrl || askedFor !== nlwebQuery) return;
         nlwebBusy = false;
         nlwebData = { ok: false, unreadable: true, error: "the /ask request did not complete" };
@@ -1731,7 +1731,7 @@
     var script = document.createElement("script");
     script.src = "/lens-nlweb.js?v=1";
     script.onload = loaded;
-    script.onerror = function () {
+    script.onerror = () => {
       if (!data || (data.finalUrl || data.url) !== targetUrl) return;
       nlwebBusy = false; renderMachine();
     };
@@ -1762,10 +1762,10 @@
       // while this is in flight, and a late reply must not be labelled with it.
       if (!data || (data.finalUrl || data.url) !== targetUrl) return;
       if (!window.LensMarkdown) { markdownBusy = false; renderMachine(); return; }
-      window.LensMarkdown.run(targetUrl, function (json) {
+      window.LensMarkdown.run(targetUrl, (json) => {
         if (!data || (data.finalUrl || data.url) !== targetUrl) return;
         markdownBusy = false; markdownData = json; renderMachine();
-      }, function () {
+      }, () => {
         if (!data || (data.finalUrl || data.url) !== targetUrl) return;
         markdownBusy = false;
         markdownData = { ok: false, unreadable: true, error: "the Markdown check did not complete" };
@@ -1776,7 +1776,7 @@
     var script = document.createElement("script");
     script.src = "/lens-markdown.js?v=1";
     script.onload = loaded;
-    script.onerror = function () {
+    script.onerror = () => {
       if (!data || (data.finalUrl || data.url) !== targetUrl) return;
       markdownBusy = false; renderMachine();
     };
@@ -1789,14 +1789,14 @@
     cloudflareBusy = true;
     renderMachine();
     fetch("/lens/fetch?mode=cloudflare&url=" + encodeURIComponent(targetUrl))
-      .then(function (response) { return response.json(); })
-      .then(function (json) {
+      .then((response) => { return response.json(); })
+      .then((json) => {
         if (!data || (data.finalUrl || data.url) !== targetUrl) return;
         cloudflareBusy = false;
         cloudflareData = json && json.ok ? json : { available: false, error: (json && json.error) || "Cloudflare's scanner is unavailable." };
         renderMachine();
       })
-      .catch(function () {
+      .catch(() => {
         if (!data || (data.finalUrl || data.url) !== targetUrl) return;
         cloudflareBusy = false;
         cloudflareData = { available: false, error: "Cloudflare's scanner is unavailable." };
@@ -1861,7 +1861,7 @@
 
     var metaOrder = ["description", "keywords", "robots", "author", "generator", "viewport", "theme-color", "application-name"];
     out += section("Meta tags", null, "The original machine-readable layer (1995). description + keywords were the first SEO surface.",
-      kvTable(s.meta || {}, metaOrder.concat(Object.keys(s.meta || {}).filter(function (k) { return metaOrder.indexOf(k) < 0; }))));
+      kvTable(s.meta || {}, metaOrder.concat(Object.keys(s.meta || {}).filter((k) => { return metaOrder.indexOf(k) < 0; }))));
 
     // Open Graph card
     if (has(s.og)) {
@@ -1880,9 +1880,9 @@
 
     // JSON-LD
     if (s.jsonld && s.jsonld.length) {
-      var blocks = s.jsonld.map(function (b) {
+      var blocks = s.jsonld.map((b) => {
         if (b.valid) {
-          var types = b.types && b.types.length ? '<div class="lx-tags">' + b.types.map(function (t) { return '<span class="lx-tag">' + esc(t) + "</span>"; }).join("") + "</div>" : "";
+          var types = b.types && b.types.length ? '<div class="lx-tags">' + b.types.map((t) => { return '<span class="lx-tag">' + esc(t) + "</span>"; }).join("") + "</div>" : "";
           return types + pre(b.json, true);
         }
         return '<div class="lx-badge warn">invalid JSON</div> ' + esc(b.error) + pre(b.raw, true);
@@ -1921,7 +1921,7 @@
     var rate = (c.rates && c.rates[0]) || { model: "reference", usdPerMtok: 3 };
     var base = c.tiers[0];
     var rows = '<tr><th>representation</th><th class="num">size</th><th class="num">~tokens</th><th class="num">1 read</th><th class="num">1,000 reads</th><th></th></tr>';
-    c.tiers.forEach(function (t) {
+    c.tiers.forEach((t) => {
       var usd = t.tokens / 1e6 * rate.usdPerMtok;
       var mult = (t !== base && t.tokens > 0) ? Math.round(base.tokens / t.tokens) : 0;
       rows += "<tr><td>" + esc(t.label) + '<br><span class="who">' + esc(t.note) + '</span></td><td class="num">' + bytes(t.chars) +
@@ -1937,7 +1937,7 @@
         (multAll > 1 ? "A naive read pays &times;" + multAll + " what the " + esc(cheapest.label) + " costs. The semantic web asked publishers to do this work up front; models just pay the difference on every read. " : "") +
         '1,000 naive reads of this page &asymp; <b>' + per1k + "</b> of inference; the publisher collects $0.00 (<a href=\"/ledger\">the ledger</a>).</div>";
     }
-    var others = (c.rates || []).slice(1).map(function (r) { return r.model + " $" + r.usdPerMtok; }).join(", ");
+    var others = (c.rates || []).slice(1).map((r) => { return r.model + " $" + r.usdPerMtok; }).join(", ");
     return section("Context economics", { text: "~" + fmtTok(base.tokens) + " tok" },
       "What reading this page costs a machine. Priced at " + rate.model + " input, $" + rate.usdPerMtok + "/Mtok (" + others + " — checked " + (c.checked || "") + "); tokens are " + c.tokenizer + ".",
       '<table class="lx-bots">' + rows + "</table>" + summary);
@@ -1977,20 +1977,20 @@
       { k: "enforced", label: "Enforced", sub: "blocks at the edge" },
       { k: "paid",     label: "Paid",     sub: "charges for access" },
     ];
-    var strip = '<div class="lx-spectrum">' + TIERS.map(function (x) {
+    var strip = '<div class="lx-spectrum">' + TIERS.map((x) => {
       return '<div class="lx-spec' + (t.spectrum.tier === x.k ? " is-here" : "") + '"><b>' + x.label + "</b><span>" + x.sub + "</span></div>";
     }).join("") + "</div>";
-    var why = '<ul class="lx-why">' + (t.spectrum.reasons || []).map(function (r) { return "<li>" + esc(r) + "</li>"; }).join("") + "</ul>";
+    var why = '<ul class="lx-why">' + (t.spectrum.reasons || []).map((r) => { return "<li>" + esc(r) + "</li>"; }).join("") + "</ul>";
     out += section("Where this site sits", { text: t.spectrum.tier, kind: t.spectrum.tier === "open" ? "ok" : t.spectrum.tier === "signaled" ? "" : "warn" },
       "Open to any bot, gated behind payment, or anywhere in between. The agentic web's actual terms of service.",
       strip + why);
 
     // the bot scoreboard
     var KIND = { search: "Search engines", train: "AI training crawlers", answers: "AI answer engines (live retrieval)" };
-    var blocked = (t.scoreboard || []).filter(function (b) { return b.verdict === "block"; }).length;
+    var blocked = (t.scoreboard || []).filter((b) => { return b.verdict === "block"; }).length;
     var rows = "<tr><th>crawler</th><th>runs it</th><th>verdict</th><th>why</th></tr>";
     var lastKind = null;
-    (t.scoreboard || []).forEach(function (b) {
+    (t.scoreboard || []).forEach((b) => {
       if (b.kind !== lastKind) { rows += '<tr class="lx-kindrow"><td colspan="4">' + KIND[b.kind] + "</td></tr>"; lastKind = b.kind; }
       var badge, why2;
       if (t.robotsUnknown) { badge = '<span class="lx-badge warn">unknown</span>'; why2 = "robots.txt unreachable: " + (t.robotsError || "no answer"); }
@@ -2011,8 +2011,8 @@
     // Content Signals
     var sig;
     if (t.signals && t.signals.length) {
-      sig = t.signals.map(function (s) {
-        var chips = ["search", "ai-input", "ai-train"].map(function (k) {
+      sig = t.signals.map((s) => {
+        var chips = ["search", "ai-input", "ai-train"].map((k) => {
           var v = s.parsed[k];
           var kind = v === "yes" ? "ok" : v === "no" ? "no" : "off";
           return '<span class="lx-badge ' + kind + '">' + k + "=" + esc(v || "unset") + "</span>";
@@ -2154,7 +2154,7 @@
 
     var feeds = dsc.feeds || [];
     var feedsInner = feeds.length
-      ? '<div class="lx-tags">' + feeds.map(function (f) { return '<a class="lx-tag" href="' + esc(f.href) + '" target="_blank" rel="noopener">' + esc(f.type || "feed") + " &middot; " + esc(f.href) + "</a>"; }).join("") + "</div>"
+      ? '<div class="lx-tags">' + feeds.map((f) => { return '<a class="lx-tag" href="' + esc(f.href) + '" target="_blank" rel="noopener">' + esc(f.type || "feed") + " &middot; " + esc(f.href) + "</a>"; }).join("") + "</div>"
       : '<div class="lx-none">none advertised in &lt;head&gt;</div>';
     out += section("Feeds (RSS / Atom)", feeds.length ? { text: feeds.length, kind: "ok" } : { text: "none", kind: "off" },
       "The 2000s syndication web. Declared via <link rel=\"alternate\">.", feedsInner);
@@ -2239,7 +2239,7 @@
       // terms in eleven words. Same rule as section() captions, which is that
       // our own sentences carry their own definitions.
       '<h3>' + esc(LENS_LABEL[lens] || p.title) + '</h3><p>' + glossify(esc(p.note)) + '</p><ul>' +
-      p.rows.map(function (row) { return '<li>' + glossify(esc(row)) + '</li>'; }).join("") +
+      p.rows.map((row) => { return '<li>' + glossify(esc(row)) + '</li>'; }).join("") +
       '</ul><div class="lx-idle-cta">Choose an example above or paste a URL, then press <b>Go</b> to replace this primer with observed evidence.</div></div>';
   }
 
@@ -2260,7 +2260,7 @@
   function updateDeltaCount() {
     var el = document.getElementById("lx-delta-n");
     if (!el) return;
-    var n = Object.keys(counterfactuals).filter(function (key) { return counterfactuals[key]; }).length;
+    var n = Object.keys(counterfactuals).filter((key) => { return counterfactuals[key]; }).length;
     el.textContent = n ? String(n) : "";
     el.hidden = !n;
   }
@@ -2271,7 +2271,7 @@
     // tabs live inside the Machine pane now, so no CSS hangs off this beyond
     // the class itself staying truthful.
     if (toolbar) toolbar.className = "lx-toolbar is-" + view;
-    [].forEach.call(document.querySelectorAll(".lx-seg"), function (b) {
+    [].forEach.call(document.querySelectorAll(".lx-seg"), (b) => {
       var active = b.getAttribute("data-view") === view;
       b.classList.toggle("is-on", active);
       b.setAttribute("aria-checked", active ? "true" : "false");
@@ -2308,7 +2308,7 @@
   function setLens(l, animate, writeHistory) {
     lens = l;
     if (writeHistory !== false) syncUrl(true);
-    [].forEach.call(document.querySelectorAll(".lx-tab"), function (b) {
+    [].forEach.call(document.querySelectorAll(".lx-tab"), (b) => {
       var active = b.getAttribute("data-lens") === l;
       b.classList.toggle("is-on", active);
       b.setAttribute("aria-selected", active ? "true" : "false");
@@ -2316,7 +2316,7 @@
     if (data) renderMachine(); else { updateModeUi(); renderIdleLens(); }
   }
 
-  form.addEventListener("submit", function (e) {
+  form.addEventListener("submit", (e) => {
     e.preventDefault();
     // A visible, filled vs row turns Go into a head-to-head; otherwise Go
     // scans one site, exactly as before the row existed.
@@ -2324,25 +2324,25 @@
     if (second && urlInput.value.trim()) runVs(urlInput.value, second);
     else run(urlInput.value);
   });
-  [].forEach.call(document.querySelectorAll(".lx-chip"), function (c) {
-    c.addEventListener("click", function () {
+  [].forEach.call(document.querySelectorAll(".lx-chip"), (c) => {
+    c.addEventListener("click", () => {
       var pair = c.getAttribute("data-vs-pair");
       if (pair && pair.indexOf("|") > 0) { runVs(pair.split("|")[0], pair.split("|")[1]); return; }
       if (c.getAttribute("data-url")) run(c.getAttribute("data-url"));
     });
   });
-  if (vsToggle) vsToggle.addEventListener("click", function () {
+  if (vsToggle) vsToggle.addEventListener("click", () => {
     if (!vsRow) return;
     var hidden = vsRow.classList.toggle("lx-off");
     vsToggle.setAttribute("aria-expanded", hidden ? "false" : "true");
     if (!hidden && vsInput) vsInput.focus();
   });
-  if (vsCloseBtn) vsCloseBtn.addEventListener("click", function () { exitVs(true); });
-  [].forEach.call(document.querySelectorAll(".lx-seg"), function (b) {
-    b.addEventListener("click", function () { setView(b.getAttribute("data-view")); });
+  if (vsCloseBtn) vsCloseBtn.addEventListener("click", () => { exitVs(true); });
+  [].forEach.call(document.querySelectorAll(".lx-seg"), (b) => {
+    b.addEventListener("click", () => { setView(b.getAttribute("data-view")); });
   });
-  [].forEach.call(document.querySelectorAll(".lx-tab"), function (b) {
-    b.addEventListener("click", function () {
+  [].forEach.call(document.querySelectorAll(".lx-tab"), (b) => {
+    b.addEventListener("click", () => {
       // Delta ignores the lens (it runs its own no-score narrative), so picking a
       // lens while in Delta looked like a dead click. Treat it as "show me that
       // evidence": drop back to Compare with the chosen lens selected.
@@ -2357,10 +2357,10 @@
   var sowDialog = /** @type {HTMLDialogElement} */ (document.getElementById("lx-sow-dialog"));
   if (sowDialog) {
     var sowClose = document.getElementById("lx-sow-close");
-    if (sowClose) sowClose.addEventListener("click", function () { sowDialog.close(); });
-    sowDialog.addEventListener("click", function (e) { if (e.target === sowDialog) sowDialog.close(); });
+    if (sowClose) sowClose.addEventListener("click", () => { sowDialog.close(); });
+    sowDialog.addEventListener("click", (e) => { if (e.target === sowDialog) sowDialog.close(); });
   }
-  [].forEach.call(document.querySelectorAll("[data-sow-open]"), function (b) {
+  [].forEach.call(document.querySelectorAll("[data-sow-open]"), (b) => {
     b.addEventListener("click", openStateWeb);
   });
 
@@ -2371,16 +2371,16 @@
   var abtDialog = /** @type {HTMLDialogElement} */ (document.getElementById("lx-abt-dialog"));
   if (abtDialog) {
     var abtClose = document.getElementById("lx-abt-close");
-    if (abtClose) abtClose.addEventListener("click", function () { abtDialog.close(); });
-    abtDialog.addEventListener("click", function (e) { if (e.target === abtDialog) abtDialog.close(); });
+    if (abtClose) abtClose.addEventListener("click", () => { abtDialog.close(); });
+    abtDialog.addEventListener("click", (e) => { if (e.target === abtDialog) abtDialog.close(); });
   }
-  [].forEach.call(document.querySelectorAll("[data-abt-open]"), function (b) {
-    b.addEventListener("click", function () {
+  [].forEach.call(document.querySelectorAll("[data-abt-open]"), (b) => {
+    b.addEventListener("click", () => {
       if (abtDialog && !abtDialog.open && abtDialog.showModal) { try { abtDialog.showModal(); } catch (e) {} }
     });
   });
-  [].forEach.call(document.querySelectorAll(".lx-goto"), function (b) {
-    b.addEventListener("click", function () {
+  [].forEach.call(document.querySelectorAll(".lx-goto"), (b) => {
+    b.addEventListener("click", () => {
       if (abtDialog && abtDialog.open) abtDialog.close();
       var toLens = b.getAttribute("data-goto-lens");
       var toView = b.getAttribute("data-goto-view");
@@ -2404,7 +2404,7 @@
   setView(view, false, false);
   setLens(lens, false, false);
 
-  window.addEventListener("popstate", function () {
+  window.addEventListener("popstate", () => {
     var state = readUrlState();
     view = state.view;
     lens = state.lens;
@@ -2463,7 +2463,7 @@
       }
     } else if (qp) {
       if (/** @type {any} */ (document).prerendering) {
-        document.addEventListener("prerenderingchange", function () { run(qp); }, { once: true });
+        document.addEventListener("prerenderingchange", () => { run(qp); }, { once: true });
       } else {
         run(qp);
       }
@@ -2500,7 +2500,7 @@
   // caller would put the tool layer inside code paths a visitor's click shares.
   // A busy flag they already maintain is the cheaper seam.
   function wmSettle(isBusy, limitMs) {
-    return new Promise(function (resolve, reject) {
+    return new Promise((resolve, reject) => {
       var started = Date.now();
       (function poll() {
         if (!isBusy()) return resolve(null);
@@ -2523,7 +2523,7 @@
       comparing: vsMode
         ? { left: urlInput.value || null, right: vsInput ? vsInput.value : null, loaded: !!vsData }
         : null,
-      deltaSwitchesOn: Object.keys(counterfactuals).filter(function (k) { return counterfactuals[k]; }),
+      deltaSwitchesOn: Object.keys(counterfactuals).filter((k) => { return counterfactuals[k]; }),
       // Which opt-in panes actually hold a result. An agent that skips this asks
       // for a reading the person has not paid for yet.
       tabsWithData: {
@@ -2537,7 +2537,7 @@
 
   var tabs = Object.keys(LENS_LABEL);
   wmBridge.installHandlers({
-    lens_scan: function (args) {
+    lens_scan: (args) => {
       var url = String((args && args.url) || "").trim();
       if (!url) return wmErr("A url is required.");
       if (busy || vsBusy) return wmErr("The Lens window is already fetching. Call lens_read_screen to see what it is doing.");
@@ -2549,28 +2549,28 @@
       var before = data;
       run(url);
       if (!busy) return wmErr("Lens refused that URL. It has to be an absolute http(s) address.");
-      return wmSettle(function () { return busy; }, 60000).then(function () {
+      return wmSettle(() => { return busy; }, 60000).then(() => {
         if (!data || data === before) {
           return wmErr("The scan did not complete. Lens reported: " + (statusBar.textContent || "no reason given").replace(/\s+/g, " ").trim());
         }
         return wmOk(wmScreen());
       });
     },
-    lens_compare_onscreen: function (args) {
+    lens_compare_onscreen: (args) => {
       var left = String((args && args.left) || "").trim();
       var right = String((args && args.right) || "").trim();
       if (!left || !right) return wmErr("Both left and right are required.");
       if (busy || vsBusy) return wmErr("The Lens window is already fetching.");
       runVs(left, right);
       if (!vsBusy) return wmErr("Lens refused that pair. Both have to be absolute http(s) addresses.");
-      return wmSettle(function () { return vsBusy; }, 60000).then(function () {
+      return wmSettle(() => { return vsBusy; }, 60000).then(() => {
         if (!vsData || !vsData.ok) {
           return wmErr("The comparison did not complete. Lens reported: " + ((vsData && vsData.error) || (statusBar.textContent || "no reason given")).replace(/\s+/g, " ").trim());
         }
         return wmOk({ screen: wmScreen(), comparison: vsData });
       });
     },
-    lens_show: function (args) {
+    lens_show: (args) => {
       var pane = args && args.pane ? String(args.pane) : "";
       var tab = args && args.tab ? String(args.tab) : "";
       if (!pane && !tab) return wmErr("Give a pane, a tab, or both.");
@@ -2585,7 +2585,7 @@
       }
       return wmOk(wmScreen());
     },
-    lens_run_tab: function (args) {
+    lens_run_tab: (args) => {
       var tab = String((args && args.tab) || "");
       var starter = Object.prototype.hasOwnProperty.call(WM_OPT_IN, tab) ? WM_OPT_IN[tab] : null;
       if (!starter || WM_OPT_IN_NAMES.indexOf(tab) < 0) return wmErr("Unknown tab " + tab + ". Try one of: " + WM_OPT_IN_NAMES.join(", ") + ".");
@@ -2601,15 +2601,15 @@
       }
       setLens(tab);
       starter();
-      var pending = { reader: function () { return readerBusy; }, wire: function () { return wireBusy; }, tools: function () { return toolsBusy; }, nlweb: function () { return nlwebBusy; }, markdown: function () { return markdownBusy; } }[tab];
-      return wmSettle(pending, 90000).then(function () {
+      var pending = { reader: () => { return readerBusy; }, wire: () => { return wireBusy; }, tools: () => { return toolsBusy; }, nlweb: () => { return nlwebBusy; }, markdown: () => { return markdownBusy; } }[tab];
+      return wmSettle(pending, 90000).then(() => {
         var got = { reader: readerData, wire: wireData, tools: toolsData, nlweb: nlwebData, markdown: markdownData }[tab];
         if (!got) return wmErr("The " + tab + " pane came back empty. Lens reported: " + (statusBar.textContent || "no reason given").replace(/\s+/g, " ").trim());
         return wmOk({ screen: wmScreen(), tab: tab, result: got });
       });
     },
-    lens_read_screen: function () { return wmOk(wmScreen()); },
-    lens_delta: function (args) {
+    lens_read_screen: () => { return wmOk(wmScreen()); },
+    lens_delta: (args) => {
       var key = String((args && args["switch"]) || "");
       if (WM_SWITCHES.indexOf(key) < 0 || !Object.prototype.hasOwnProperty.call(counterfactuals, key)) {
         return wmErr("Unknown switch " + key + ". Try one of: " + WM_SWITCHES.join(", ") + ".");

@@ -10,7 +10,7 @@
 // loading the page actually spends, and that most of the spending goes to people
 // who wrote none of it. So the third-party share leads, the itemised rows come
 // last, and every panel says what its number is worth.
-(function () {
+(() => {
   function esc(s) {
     return String(s == null ? "" : s)
       .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -93,10 +93,10 @@
   // Bytes by kind, sorted heaviest first, with a bar so the shape is readable
   // before the numbers are. Scripts dominating an "article" is the finding.
   function byType(d) {
-    var keys = Object.keys(d.byType).sort(function (a, b) { return d.byType[b].bytes - d.byType[a].bytes; });
+    var keys = Object.keys(d.byType).sort((a, b) => { return d.byType[b].bytes - d.byType[a].bytes; });
     if (!keys.length) return "";
     var max = d.byType[keys[0]].bytes || 1;
-    var rows = keys.map(function (k) {
+    var rows = keys.map((k) => {
       var t = d.byType[k];
       return '<li><b>' + esc(TYPE_LABEL[k] || k) + '</b>' +
         '<span class="lx-wire-track"><i style="width:' + Math.max(2, Math.round((t.bytes / max) * 100)) + '%"></i></span>' +
@@ -111,7 +111,7 @@
   // received a request because someone opened a page.
   function hosts(d) {
     if (!d.hosts.length) return "";
-    var rows = d.hosts.map(function (h) {
+    var rows = d.hosts.map((h) => {
       return "<tr><td>" + (h.third ? '<span class="lx-wire-dot third"></span>' : '<span class="lx-wire-dot first"></span>') +
         "<code>" + esc(h.host) + "</code></td><td>" + num(h.count) + "</td><td>" + bytes(h.bytes) + "</td></tr>";
     }).join("");
@@ -130,7 +130,7 @@
 
   function waterfall(d) {
     if (!d.rows.length) return "";
-    var rows = d.rows.map(function (r) {
+    var rows = d.rows.map((r) => {
       var cls = r.failed ? " is-failed" : r.third ? " is-third" : "";
       // "canceled" and "fail" are different events and the difference is
       // load-bearing: a beacon that got its 204 and was then abandoned at
@@ -196,12 +196,12 @@
 
   function run(data, done, onError) {
     fetch("/lens/wire?url=" + encodeURIComponent(data.finalUrl || data.url))
-      .then(function (response) {
+      .then((response) => {
         // Read as text and parse by hand, same reasoning as lens-reader.js: a
         // non-JSON body means the edge or the runtime answered for us with an
         // HTML error page, and .json() would surface a V8 parser message naming
         // the parser rather than the failure.
-        return response.text().then(function (text) {
+        return response.text().then((text) => {
           var json = null;
           try { json = JSON.parse(text); } catch (_e) {}
           if (!json) {
@@ -215,7 +215,7 @@
         });
       })
       .then(done)
-      .catch(function (error) {
+      .catch((error) => {
         done({ ok: false, error: String((error && error.message) || error) });
         if (onError) onError(error);
       });

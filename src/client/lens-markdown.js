@@ -17,7 +17,7 @@
 // sample goes into a <pre> as text. The agent NAMES are ours and still go
 // through the same path, because a table where some cells are trusted and some
 // are not is a table somebody edits wrongly later.
-(function () {
+(() => {
   function esc(s) {
     return String(s == null ? "" : s)
       .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -186,16 +186,16 @@
   }
 
   window.LensMarkdown = {
-    run: function (targetUrl, onOk, onFail) {
+    run: (targetUrl, onOk, onFail) => {
       fetch("/lens/markdown?url=" + encodeURIComponent(targetUrl), { headers: { accept: "application/json" } })
-        .then(function (r) { return r.json(); })
+        .then((r) => { return r.json(); })
         .then(onOk)
-        .catch(function () { onFail(); });
+        .catch(() => { onFail(); });
     },
     render: paneHtml,
     // Called after the pane's HTML lands, exactly like LensNlweb.bind. Everything
     // carrying a foreign string is created here rather than in the string above.
-    bind: function (root) {
+    bind: (root) => {
       if (!state || !state.ok) return;
       var agents = root.querySelector("#lx-md-agents");
       if (agents && state.agents) agents.replaceChildren.apply(agents, state.agents.map(agentNode));

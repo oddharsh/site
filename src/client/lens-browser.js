@@ -1,7 +1,7 @@
 // lens-browser.js — the opt-in Browser Run pane for /lens.
 // Loaded only when the owner asks for the rendered-browser comparison, so the
 // ordinary HTTP/Human Lens path does not pay for this optional view.
-(function () {
+(() => {
   "use strict";
 
   // The local parse layer. Client scripts here have no shared module graph, so
@@ -37,9 +37,9 @@
     return '<div class="lx-sec"><div class="lx-sec-h">' + esc(title) + b + "</div>" + c + (inner || "") + "</div>";
   }
   function kvTable(obj) {
-    var keys = Object.keys(obj).filter(function (key) { return obj[key] != null && obj[key] !== ""; });
+    var keys = Object.keys(obj).filter((key) => { return obj[key] != null && obj[key] !== ""; });
     if (!keys.length) return '<div class="lx-none">none</div>';
-    return '<table class="lx-kv">' + keys.map(function (key) {
+    return '<table class="lx-kv">' + keys.map((key) => {
       return "<tr><td>" + esc(key) + "</td><td>" + esc(obj[key]) + "</td></tr>";
     }).join("") + "</table>";
   }
@@ -65,7 +65,7 @@
     var inner = '<div class="lx-cap">The HTTP scan found ' + source + '. Browser Run runtime discovery is a separate observation.</div>';
     if (webmcp.status === "available") {
       var tools = Array.isArray(webmcp.tools) ? webmcp.tools : [];
-      inner += tools.length ? '<div class="lx-tags">' + tools.map(function (tool) { return '<span class="lx-tag">' + esc(tool.name || "unnamed tool") + "</span>"; }).join("") + "</div>" : '<div class="lx-none">The runtime API answered, but listed no tools.</div>';
+      inner += tools.length ? '<div class="lx-tags">' + tools.map((tool) => { return '<span class="lx-tag">' + esc(tool.name || "unnamed tool") + "</span>"; }).join("") + "</div>" : '<div class="lx-none">The runtime API answered, but listed no tools.</div>';
       inner += '<div class="lx-cap" style="margin-top:6px">Discovery only. Lens does not call WebMCP tools.</div>';
     } else {
       inner += '<div class="lx-none">' + esc(webmcp.detail || "No runtime WebMCP tools were observed.") + "</div>";
@@ -95,7 +95,7 @@
     if (tally.jsonld != null) rows.push([tally.jsonld, "JSON-LD block"]);
     if (tally.headings != null) rows.push([tally.headings, "heading"]);
     if (tally.links != null) rows.push([tally.links, "link"]);
-    return rows.map(function (r) {
+    return rows.map((r) => {
       return r[0] + " " + r[1] + (r[0] === 1 ? "" : "s");
     }).join(" &middot; ");
   }
@@ -167,7 +167,7 @@
   function chips() {
     return '<div class="lx-browser-do"><b>After interaction:</b>' +
       '<div class="lx-cap">Lens runs one fixed, published script in its own copy of the page, then re-reads it. Each click spends one of your three renders a minute.</div>' +
-      '<div class="lx-chips">' + RECIPES.map(function (r) {
+      '<div class="lx-chips">' + RECIPES.map((r) => {
         return '<button class="lx-chip lx-do-chip" type="button" data-do="' + esc(r.id) + '" title="' + esc(r.claim) + '">' + esc(r.label) + "</button>";
       }).join("") + "</div></div>";
   }
@@ -305,8 +305,8 @@
   function wireChips(body, onRun) {
     var nodes = body.querySelectorAll(".lx-do-chip");
     for (var i = 0; i < nodes.length; i++) {
-      (function (node) {
-        node.addEventListener("click", function () { onRun(node.getAttribute("data-do")); });
+      ((node) => {
+        node.addEventListener("click", () => { onRun(node.getAttribute("data-do")); });
       })(nodes[i]);
     }
   }
@@ -337,13 +337,13 @@
       (recipeId ? " and running the published script" : "") + "&hellip;</div>";
     fetch("/lens/browser?url=" + encodeURIComponent(data.finalUrl || data.url) +
       (recipeId ? "&do=" + encodeURIComponent(recipeId) : ""))
-      .then(function (response) {
+      .then((response) => {
         // Read as text and parse by hand. /lens/browser answers JSON on every
         // path it controls, so a non-JSON body means something ANSWERED FOR IT:
         // a Cloudflare 1101/1102/524 page, which is HTML. Calling .json() on
         // that surfaces V8's "Unexpected token '<', \"<!DOCTYPE \"..." to the
         // reader, which names the parser rather than the failure.
-        return response.text().then(function (text) {
+        return response.text().then((text) => {
           var json = null;
           try { json = JSON.parse(text); } catch (_e) {}
           if (!json) {
@@ -355,7 +355,7 @@
         });
       })
       .then(done)
-      .catch(function (error) {
+      .catch((error) => {
         body.innerHTML = unavailable(error, data);
         var button = document.getElementById("lx-browser-run");
         if (button) button.addEventListener("click", onRun);

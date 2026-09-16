@@ -32,7 +32,7 @@ export function createRun(options) {
     if (!(node instanceof HTMLElement)) throw new Error("Run island template must produce an element");
     return node;
   }
-  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function esc(s) { return String(s).replace(/[&<>"]/g, (c) => { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
   function tag(kind, o) { o.kind = kind; return o; }
 
   /** @type {RunItem[]} */
@@ -124,8 +124,8 @@ export function createRun(options) {
     { label: "Music", icon: "Spotify", hint: "Spotify", url: "https://open.spotify.com/user/aadharsh2010" }
     // generated:run-profiles:end
   ];
-  PAGES.forEach(function (p) { if (!p.kind) tag("page", p); });
-  PROFILES.forEach(function (p) { p.path = p.url; tag("profile", p); });
+  PAGES.forEach((p) => { if (!p.kind) tag("page", p); });
+  PROFILES.forEach((p) => { p.path = p.url; tag("profile", p); });
 
   function buildRun() {
     // a REAL <dialog> (phase C follow-up): showModal gives the native focus
@@ -149,12 +149,12 @@ export function createRun(options) {
     D.body.appendChild(preview);
     // ::backdrop click = light dismiss: a click landing on the dialog element
     // itself (not its children) can only be the backdrop-covered margin area
-    run.addEventListener("click", function (e) { if (e.target === run) closeRun(); });
+    run.addEventListener("click", (e) => { if (e.target === run) closeRun(); });
     // native close (Esc/cancel, or run.close()): one place for the side effects
     // native Esc fires cancel (then close) WITHOUT routing through closeRun, so
     // the card needs its own hook on that path too.
-    run.addEventListener("cancel", function () { if (previewHoist) previewHoist.hide(); });
-    run.addEventListener("close", function () {
+    run.addEventListener("cancel", () => { if (previewHoist) previewHoist.hide(); });
+    run.addEventListener("close", () => {
       sound.play("close");
       if (previewHoist) previewHoist.hide();   // belt and braces with closeRun
       var s = D.getElementById("axp-start"); if (s) s.setAttribute("aria-expanded", "false");
@@ -163,10 +163,10 @@ export function createRun(options) {
     list = run.querySelector("#axp-run-list");
     run.querySelector(".x").addEventListener("click", closeRun);
     run.querySelector('[data-act=cancel]').addEventListener("click", closeRun);
-    run.querySelector('[data-act=ok]').addEventListener("click", function () { go(results[sel] || results[0]); });
+    run.querySelector('[data-act=ok]').addEventListener("click", () => { go(results[sel] || results[0]); });
     input.addEventListener("input", render);
     input.addEventListener("keydown", onKey);
-    list.addEventListener("click", function (e) {
+    list.addEventListener("click", (e) => {
       var o = e.target.closest(".opt"); if (!o) return;
       // Navigable rows are anchors now. A MODIFIED click (⌘/ctrl/shift/alt, or any
       // non-primary button) is the user asking the browser for a new tab or window,
@@ -179,7 +179,7 @@ export function createRun(options) {
     });
     // XP list controls hot-track: the row under the cursor becomes the selection,
     // so OK / Enter act on whatever you're hovering (not a stale keyboard pick).
-    list.addEventListener("mouseover", function (e) {
+    list.addEventListener("mouseover", (e) => {
       var o = e.target.closest(".opt"); if (!o) return;
       setSel(+o.dataset.i);
     });
@@ -202,10 +202,10 @@ export function createRun(options) {
     var q = input.value.trim().toLowerCase();
     var items = pool();
     if (q) {
-      items = items.map(function (it) { return { it: it, s: score(it, q) }; })
-        .filter(function (x) { return x.s >= 0; })
-        .sort(function (a, b) { return b.s - a.s; })
-        .map(function (x) { return x.it; })
+      items = items.map((it) => { return { it: it, s: score(it, q) }; })
+        .filter((x) => { return x.s >= 0; })
+        .sort((a, b) => { return b.s - a.s; })
+        .map((x) => { return x.it; })
         .slice(0, 40);
     } else {
       // empty: show pages + writing + profiles + a handful of photos as a "directory"
@@ -215,8 +215,8 @@ export function createRun(options) {
     // group. Debounced fetch; the results fold in on a later render with the same query.
     if (q && q.length >= 3) {
       if (semantic.q === q) {
-        var have = {}; items.forEach(function (it) { have[it.path] = 1; });
-        items = semantic.items.filter(function (s) { return !have[s.path]; }).concat(items);
+        var have = {}; items.forEach((it) => { have[it.path] = 1; });
+        items = semantic.items.filter((s) => { return !have[s.path]; }).concat(items);
       } else { scheduleSemantic(input.value.trim()); }
     }
     // preserve the selection across an async re-render (loadPhotos/loadWriting
@@ -244,16 +244,16 @@ export function createRun(options) {
     // item incl. the kind:"raycast" easter eggs, and groups["raycast"] was
     // undefined, so render threw and the list came up empty until you typed
     // something that filtered the raycast rows out. any future kind self-buckets.
-    items.forEach(function (it, i) {
+    items.forEach((it, i) => {
       var k = it.kind || "page";
       if (!groups[k]) { groups[k] = []; order.push(k); names[k] = k; }
       groups[k].push({ it: it, i: i });
     });
     var html = "";
-    order.forEach(function (k) {
+    order.forEach((k) => {
       if (!groups[k].length) return;
       html += '<div class="grp">' + names[k] + "</div>";
-      groups[k].forEach(function (g) {
+      groups[k].forEach((g) => {
         // A row that navigates to a same-origin path renders as a REAL anchor, and
         // the href is the whole point: `eagerness: "moderate"` starts a prerender
         // when the pointer rests on a LINK, so a <div> row could never be
@@ -286,18 +286,18 @@ export function createRun(options) {
   // ── Search Companion: debounced semantic search over the LWE index ─────────────
   function scheduleSemantic(qRaw) {
     clearTimeout(searchTimer);
-    searchTimer = setTimeout(function () { doSemantic(qRaw); }, 240);
+    searchTimer = setTimeout(() => { doSemantic(qRaw); }, 240);
   }
   function doSemantic(qRaw) {
     var qKey = qRaw.trim().toLowerCase();
     if (qKey.length < 3) return;
     fetch("/lwe/ask/search", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ query: qRaw }) })
-      .then(function (r) { return r.ok ? r.json() : { results: [] }; })
-      .then(function (d) {
-        semantic = { q: qKey, items: (d.results || []).map(function (x) { return { kind: "search", label: x.title, hint: x.snippet, path: x.url }; }) };
+      .then((r) => { return r.ok ? r.json() : { results: [] }; })
+      .then((d) => {
+        semantic = { q: qKey, items: (d.results || []).map((x) => { return { kind: "search", label: x.title, hint: x.snippet, path: x.url }; }) };
         if (input && input.value.trim().toLowerCase() === qKey && run && run.open) render();
       })
-      .catch(function () {});
+      .catch(() => {});
   }
 
   function onKey(e) {
@@ -320,7 +320,7 @@ export function createRun(options) {
   function setSel(i) {
     sel = i;
     var cur = /** @type {HTMLElement | null} */ (null);
-    [].forEach.call(list.querySelectorAll(".opt"), function (o) {
+    [].forEach.call(list.querySelectorAll(".opt"), (o) => {
       var on = +o.dataset.i === sel;
       o.setAttribute("aria-selected", on);
       if (on) cur = o;
@@ -345,12 +345,12 @@ export function createRun(options) {
   function loadPreview() {
     if (previewHoist || previewLoading || !preview) return;
     previewLoading = true;
-    import("/hoist.js").then(function (m) {
+    import("/hoist.js").then((m) => {
       previewHoist = m.createHoist({
         node: preview,
         followPointer: false,                      // anchored only; there is no cursor to glide with
         anchorName: "--axp-run-preview",
-        contentFor: function (row) {
+        contentFor: (row) => {
           if (!(row instanceof HTMLElement)) return "";
           var src = row.dataset.thumb;
           if (!src) return "";
@@ -359,7 +359,7 @@ export function createRun(options) {
         }
       });
       showPreview(list.querySelector('.opt[aria-selected=true]'));
-    }).catch(function () { /* no preview is a fine outcome; Run still navigates */ });
+    }).catch(() => { /* no preview is a fine outcome; Run still navigates */ });
   }
 
   function ensureVisible() {
@@ -388,7 +388,7 @@ export function createRun(options) {
   ];
   function accFront(win) { front(win); }
   function openAccessory(id) {
-    var a = ACCESSORIES.filter(function (x) { return x.accId === id; })[0]; if (!a) return;
+    var a = ACCESSORIES.filter((x) => { return x.accId === id; })[0]; if (!a) return;
     if (ACC_OPEN[id]) { accFront(ACC_OPEN[id].win); return; }
     sound.play("open");
     var n = Object.keys(ACC_OPEN).length;
@@ -403,10 +403,10 @@ export function createRun(options) {
     var btn = el('<button class="axp-pin axp-acc-btn" title="' + a.hint + '"><span class="fav" aria-hidden="true">' + a.icon + '</span><span class="lbl">' + a.label + '</span></button>');
     var bar = D.getElementById("axp-taskbar"), spacer = D.getElementById("axp-spacer");
     if (bar && spacer) bar.insertBefore(btn, spacer);
-    btn.addEventListener("click", function () { accFront(win); });
+    btn.addEventListener("click", () => { accFront(win); });
     ACC_OPEN[id] = { win: win, btn: btn };
-    win.addEventListener("pointerdown", function () { accFront(win); });
-    win.querySelector(".x").addEventListener("click", function (ev) {
+    win.addEventListener("pointerdown", () => { accFront(win); });
+    win.querySelector(".x").addEventListener("click", (ev) => {
       ev.stopPropagation(); if (bd._iv) clearInterval(bd._iv); win.remove(); btn.remove(); delete ACC_OPEN[id];
     });
     var tb = win.querySelector(".tb");
@@ -422,7 +422,7 @@ export function createRun(options) {
     // .axp-acc is position:fixed, so viewport left/top and transform are the same
     // coordinates, and it has no fixed-position descendants, so the transform's
     // new containing block changes nothing.
-    tb.addEventListener("pointerdown", function (/** @type {PointerEvent} */ e) {
+    tb.addEventListener("pointerdown", (/** @type {PointerEvent} */ e) => {
       if (e.target instanceof Element && e.target.closest(".x")) return;
       accFront(win);
       var r = win.getBoundingClientRect(), sx = e.clientX, sy = e.clientY, ox = r.left, oy = r.top;
@@ -471,8 +471,8 @@ export function createRun(options) {
   function openRun(viaKeyboard) {
     if (!run) buildRun();
     if (run.open) return;
-    if (!PHOTOS) loadPhotos().then(function (items) { PHOTOS = items; if (run.open) render(); });
-    if (!WRITING) loadWriting().then(function (items) { WRITING = items; if (run.open) render(); });
+    if (!PHOTOS) loadPhotos().then((items) => { PHOTOS = items; if (run.open) render(); });
+    if (!WRITING) loadWriting().then((items) => { WRITING = items; if (run.open) render(); });
     // the hover engine is fetched on the FIRST Run open, never on page load:
     // a visitor who never opens the palette never pays for it.
     loadPreview();
@@ -495,6 +495,6 @@ export function createRun(options) {
   return {
     open: openRun,
     close: closeRun,
-    isOpen: function () { return !!(run && run.open); }
+    isOpen: () => { return !!(run && run.open); }
   };
 }

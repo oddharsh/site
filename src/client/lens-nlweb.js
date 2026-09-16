@@ -18,7 +18,7 @@
 // createElement and textContent for the same reason lens-tools.js builds its
 // controls that way, and the raw schema.org object is rendered into a <pre> as
 // text rather than as markup.
-(function () {
+(() => {
   var FIELDS = ["url", "name", "site", "score", "description", "schema_object"];
   // What each field is FOR, in the reader's terms. A coverage table of six bare
   // names tells somebody who has not read the spec nothing at all.
@@ -76,7 +76,7 @@
   }
 
   function coverageTable(s) {
-    var rows = FIELDS.map(function (field) {
+    var rows = FIELDS.map((field) => {
       var got = s.coverage[field] || 0;
       var kind = got === s.total ? "ok" : got ? "warn" : "bad";
       var pct = s.total ? Math.round((got / s.total) * 100) : 0;
@@ -113,7 +113,7 @@
 
     var types = (s.schemaTypes || []).length
       ? '<div class="lx-cap">schema.org types returned: ' +
-        s.schemaTypes.map(function (t) { return "<code>" + esc(t.name) + "</code> " + t.count; }).join(", ") +
+        s.schemaTypes.map((t) => { return "<code>" + esc(t.name) + "</code> " + t.count; }).join(", ") +
         " · " + s.schemaBytes + " bytes of structured data</div>"
       // Stated as an absence rather than omitted. A missing row reads as a
       // question nobody asked; this one was asked and the answer was none.
@@ -196,19 +196,19 @@
   }
 
   window.LensNlweb = {
-    run: function (targetUrl, query, onOk, onFail) {
+    run: (targetUrl, query, onOk, onFail) => {
       var url = "/lens/nlweb?url=" + encodeURIComponent(targetUrl) +
         (query ? "&q=" + encodeURIComponent(query) : "");
       fetch(url, { headers: { accept: "application/json" } })
-        .then(function (r) { return r.json(); })
+        .then((r) => { return r.json(); })
         .then(onOk)
-        .catch(function () { onFail(); });
+        .catch(() => { onFail(); });
     },
     render: paneHtml,
     // Called after the pane's HTML lands, exactly like LensTools.bind. The rows
     // are built here rather than in the string above because they carry foreign
     // strings and must be created as nodes.
-    bind: function (root) {
+    bind: (root) => {
       var mount = root.querySelector("#lx-nlweb-results");
       if (mount && state && state.ok && state.results) {
         mount.replaceChildren.apply(mount, state.results.map(resultNode));
@@ -218,12 +218,12 @@
       // Enter submits, because a text box beside a button that ignores Enter is
       // the kind of small lie this site tries not to tell.
       if (input && button) {
-        input.addEventListener("keydown", function (event) {
+        input.addEventListener("keydown", (event) => {
           if (event.key === "Enter") { event.preventDefault(); button.click(); }
         });
       }
     },
-    _question: function (root) {
+    _question: (root) => {
       var input = root && root.querySelector("#lx-nlweb-q");
       return input ? input.value.replace(/^\s+|\s+$/g, "").slice(0, 200) : "";
     },

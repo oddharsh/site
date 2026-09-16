@@ -133,9 +133,9 @@ test("a cold Lens document loads its page tools when WebMCP is available", () =>
   // browser while lens.js stays behind saved state, human intent, or a tool call.
   assert.match(LENS_BOOT, /\(document\.modelContext \|\| navigator\.modelContext\)\s*\? import\("\/lens-webmcp\.js"\)/,
     "lens-boot.js must load the lightweight registrar in a WebMCP browser");
-  assert.match(LENS_BOOT, /if \(pageTools\) pageTools\.then\(function \(wm\) \{ return wm && wm\.boot\(load\); \}\)/,
+  assert.match(LENS_BOOT, /if \(pageTools\) pageTools\.then\((?:function \(wm\)|\(wm\) =>) \{ return wm && wm\.boot\(load\); \}\)/,
     "lens-boot.js must register page tools before interaction");
-  assert.match(LENS_BOOT, /import\("\/lens-webmcp\.js"\)\.catch\(function \(\) \{ return null; \}\)/,
+  assert.match(LENS_BOOT, /import\("\/lens-webmcp\.js"\)\.catch\((?:function \(\)|\(\) =>) \{ return null; \}\)/,
     "a failed optional registrar import must not prevent the human Lens client from loading");
   assert.doesNotMatch(LENS_BOOT, /document\.modelContext\s*\|\|\s*hasClientState\(\)/,
     "WebMCP discovery must not hydrate the full Lens client while idle");
@@ -149,7 +149,7 @@ test("the early definitions and lazy Lens handlers stay one-to-one", () => {
   const start = LENS.indexOf("wmBridge.installHandlers({");
   const end = LENS.indexOf("\n  });", start);
   assert.ok(start > 0 && end > start, "could not find the Lens page-handler boundary");
-  const handlers = [...LENS.slice(start, end).matchAll(/^\s{4}([a-z0-9_]+): function/gm)].map((m) => m[1]);
+  const handlers = [...LENS.slice(start, end).matchAll(/^\s{4}([a-z0-9_]+): (?:function|\([a-z, ]*\) =>)/gm)].map((m) => m[1]);
   assert.deepEqual(handlers, pageToolNames(),
     "every early page-tool definition needs exactly one closure-backed handler, in the same order");
 });
