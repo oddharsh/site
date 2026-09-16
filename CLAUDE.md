@@ -371,8 +371,8 @@ worktrees may edit freely, but a worktree is not a release surface.
   site Worker plus the auxiliary Garage/LWE configs (`cf-garage/`, `lwe-ask/`),
   runs the coffee tests, and sweeps the route oracle against a Worker booted
   in-process (`bun run routes:check`, wrangler's `createTestHarness()`), so a
-  broken route fails the PR instead of the deploy. Site validation and native
-  photo validation run in parallel. The required `validate` job depends on BOTH
+  broken route fails the PR instead of the deploy. Site, native photo, and network
+  validation run in parallel. The required `validate` job depends on all three
   and always runs: any failed, cancelled or skipped dependency makes it fail.
   Keep every validation job in its `needs`; the contract suite checks the census.
   Production promotion still requires the entire CI workflow to succeed.
