@@ -197,11 +197,15 @@
       "/garage", "/garage/*", "/lwe", "/lwe/*",
       "/pixel-peeper", "/pixel-peeper/*",
       "/access", "/access/*",
-      "/auth.md", "/.well-known/api-catalog", "/.well-known/agent-card.json",
-      "/.well-known/oauth-protected-resource",
-      "/.well-known/oauth-authorization-server",
-      // Per-request proof of possession; the static asset alone is unsigned.
-      "/.well-known/http-message-signatures-directory",
+      "/auth.md",
+      // The whole agent-discovery namespace, FOLDED from five exact rows on
+      // 2026-09-16 (api-catalog, agent-card.json, the two oauth documents, and
+      // the signed http-message-signatures-directory, which needs the Worker for
+      // its per-request proof of possession). The fold frees four rows and
+      // brings the static cards (mcp/*.json, ard.json, ai-catalog.json) to the
+      // Worker for their q11 twins; they were the one discovery surface still
+      // shipping at the edge's q4.
+      "/.well-known/*",
       "/agent/*", "/oauth2/*",
       "/whoareyou", "/whoareyou.json",
       // /security and /security.json (the page is built, the JSON is its three live
@@ -269,10 +273,11 @@
       // were worker-first already and needed nothing here. `*` spans slashes in
       // this allowlist (build.ts's own coverage check reads it that way), so
       // "/*.md" claims every Markdown twin at any depth and "/images/*.json"
-      // the data indexes beside meta/. This puts the config at 98 of the 100
-      // rules wrangler allows; the fold gotcha 26 names is the next step if a
-      // 101st is ever needed.
-      "/images/*.json", "/*.md", "/search-index.json", "/llms.txt", "/sitemap.xml"
+      // the data indexes beside meta/. This put the config at 98 of the 100
+      // rules wrangler allows; the /.well-known fold above (gotcha 26's remedy)
+      // took it back down, and "/*.src.*" (the readable twins at the root:
+      // index.src.html, nav.src.js, luna.src.css) spent one of the freed rows.
+      "/images/*.json", "/*.md", "/*.src.*", "/search-index.json", "/llms.txt", "/sitemap.xml"
     ]
   },
   // `enabled` is Workers LOGS (the structured line serveWorkerRequest emits).

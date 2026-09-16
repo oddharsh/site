@@ -2,7 +2,7 @@
   "files": {
     "pipelines/lwe/specs/encoding-demo.js": 5,
     "public/garage/pretext.lib.js": 30,
-    "public/lwe/ask.js": 8,
+    "src/client/lwe/ask.js": 8,
     "src/client/hoist.js": 7,
     "src/client/infotip.js": 5,
     "src/client/lens-browser.js": 2,

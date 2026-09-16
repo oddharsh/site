@@ -82,11 +82,9 @@
       "/garage", "/garage/*", "/lwe", "/lwe/*",
       "/pixel-peeper", "/pixel-peeper/*",
       "/access", "/access/*",
-      "/auth.md", "/.well-known/api-catalog", "/.well-known/agent-card.json",
-      "/.well-known/oauth-protected-resource",
-      "/.well-known/oauth-authorization-server",
-      // Per-request proof of possession; the static asset alone is unsigned.
-      "/.well-known/http-message-signatures-directory",
+      "/auth.md",
+      // Folded from five exact rows on 2026-09-16; see wrangler.jsonc.
+      "/.well-known/*",
       "/agent/*", "/oauth2/*",
       "/whoareyou", "/whoareyou.json", "/security*",
       "/reading", "/updates", "/updates.json",
@@ -152,7 +150,7 @@
       // the data indexes beside meta/. This puts the config at 98 of the 100
       // rules wrangler allows; the fold gotcha 26 names is the next step if a
       // 101st is ever needed.
-      "/images/*.json", "/*.md", "/search-index.json", "/llms.txt", "/sitemap.xml"
+      "/images/*.json", "/*.md", "/*.src.*", "/search-index.json", "/llms.txt", "/sitemap.xml"
     ]
   },
   // matches wrangler.jsonc. Locally the spans open and record nothing

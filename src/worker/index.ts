@@ -616,6 +616,28 @@ const PREFIX = [
     handle: routeTextTwin,
   },
   {
+    // The readable twins at the ROOT (/index.src.html, /nav.src.js,
+    // /luna.src.css). Section-level ones (/garage/horizon.src.html) reach the
+    // same twin lookup through serveStaticPage's extension branch; these have no
+    // section, so they need a row of their own ("/*.src.*") and this match.
+    // Measured 2026-09-16 over all 79 readable twins: 984 KiB at the edge's q4,
+    // 819 KiB from the q11 twin.
+    label: "/<name>.src.<ext>",
+    match: (pathname) => /^\/[^/]+\.src\.(?:html|js|css)$/i.test(pathname),
+    handle: routeTextTwin,
+  },
+  {
+    // The static agent-discovery cards (/.well-known/mcp/*.json, ard.json,
+    // ai-catalog.json, mcp.json, agent-skills/*). Every exact /.well-known route
+    // above wins first; what lands here is a committed file the build wrote a
+    // q11 twin for. Before 2026-09-16 the whole namespace was edge-direct, so the
+    // cards an agent reads FIRST were the one surface still on q4: measured
+    // 20,092 B across nine files against 15,428 minified at q11.
+    label: "/.well-known/<card>",
+    match: (pathname) => pathname.startsWith("/.well-known/"),
+    handle: routeTextTwin,
+  },
+  {
     label: "/images/full/<key>",
     match: (pathname) => pathname.startsWith("/images/full/"),
     handle: servePhotoFromR2,

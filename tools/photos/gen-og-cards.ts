@@ -1,7 +1,7 @@
 // gen-og-cards.mjs — build grabby Twitter/OG cards for every garage + lwe page,
 // plus the top-level page directories registered in og-pages.mjs.
 //
-// Each card is a 1200x630 PNG: the page's live interactive demo screenshotted
+// Each card is a 1200x630 JPEG (PNG until 2026-09-16; see writeCard): the page's live interactive demo screenshotted
 // and floated on the Bliss desktop, with the page's own favicon as a brand stamp
 // bottom-left. There is NO route label on the card, and this comment claimed one
 // from the first commit (#55) while `cardHtml` below has always said the opposite
@@ -34,7 +34,7 @@
 
 import { chromium } from "playwright-core";
 import { chromeChannel } from "../lib/browser-channel.ts";
-import { mkdir, writeFile, readFile, readdir } from "node:fs/promises";
+import { mkdir, rm, writeFile, readFile, readdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { spawn } from "node:child_process";
 import net from "node:net";
@@ -346,8 +346,37 @@ async function capture(page, cardPage, p, bliss) {
   await cardPage.setContent(cardHtml({ bliss, shot, favicon }), { waitUntil: "load" });
   await cardPage.waitForTimeout(150);
   const cardBuf = await cardPage.screenshot({ clip: { x: 0, y: 0, width: CARD_W, height: CARD_H }, type: "png", animations: "disabled" });
-  await writeFile(path.join(OUT, `${p.id}.png`), cardBuf);
+  await writeCard(p.id, cardBuf);
   return { id: p.id, route, usedFallback: !box };
+}
+
+// A card is a JPEG since 2026-09-16, encoded by zenc from Chrome's lossless
+// capture. The 39 PNGs were 9.2 MB and lossless optimisation found 0.4% in them
+// (measured: ffmpeg at level 100 with mixed predictors, 621,149 to 618,569 on
+// the largest); the format was the only lever, and the consumer is an unfurl
+// crawler that re-encodes anyway. q92 at 4:4:4 rather than the photo tiers' 4:2:0:
+// a card is XP chrome and body text on a gradient, and it is the chroma edges of
+// text that 4:2:0 smears. Measured on garage-workers.png (263,706 B): q92/444
+// 102,814, q92/420 91,649, q88/420 79,497; a 3x crop of the q92/444 text is
+// indistinguishable from the PNG. Chrome's own `type: "jpeg"` was not used
+// because it offers no subsampling control and its encoder is not the one this
+// repository trusts for every other JPEG it ships.
+const ZENC = path.join(ROOT, "tools", "photos", "zenc", "target", "release", "zenc");
+async function writeCard(id, pngBuf) {
+  if (!existsSync(ZENC)) {
+    throw new Error(`zenc is not built: cargo build --release --locked --manifest-path tools/photos/zenc/Cargo.toml`);
+  }
+  const tmp = path.join(OUT, `.${id}.capture.png`);
+  await writeFile(tmp, pngBuf);
+  try {
+    await new Promise((resolve, reject) => {
+      const child = spawn(ZENC, [tmp, path.join(OUT, `${id}.jpg`), "-q", "92", "--yuv", "444"], { stdio: ["ignore", "ignore", "inherit"] });
+      child.on("exit", (code) => code === 0 ? resolve(undefined) : reject(new Error(`zenc exited ${code} on ${id}`)));
+      child.on("error", reject);
+    });
+  } finally {
+    await rm(tmp, { force: true });
+  }
 }
 
 // Boot a throwaway static server over public/ so the generator is one command.

@@ -22,7 +22,7 @@ test("every LWE content page carries a wired ask surface", async () => {
   //
   // This asserts the whole chain per page, derived from the directory, so a new page
   // that forgets any link in it fails here instead of shipping a dead widget.
-  const askJs = await readFile(new URL("public/lwe/ask.js", ROOT), "utf8");
+  const askJs = await readFile(new URL("src/client/lwe/ask.js", ROOT), "utf8");
   const concepts = JSON.parse(askJs.match(/var CONCEPTS = (\{[^;]*?\});/)[1]);
   const registry = JSON.parse(
     await readFile(new URL("pipelines/lwe/concepts.json", ROOT), "utf8")).concepts;

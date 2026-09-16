@@ -26,7 +26,7 @@ async function fixture(run) {
   const files = ["pipelines/garage/generate.mjs", "pipelines/lwe/generate.mjs", "pipelines/lwe/concepts.json",
     "pipelines/content/page-contract.mjs", "tools/gen-manifest.ts", "tools/photos/shell-data.ts", "tools/lib/html-raw-text.ts",
     "src/worker/lib/desktop.ts", "src/worker/lib/site-manifest.ts", "src/client/nav-run.js",
-    "config/site-manifest.json", "public/sitemap.xml", "src/pages/lwe/index.html", "public/lwe/ask.js"];
+    "config/site-manifest.json", "public/sitemap.xml", "src/pages/lwe/index.html", "src/client/lwe/ask.js"];
   try {
     for (const file of files) await put(file, await readFile(new URL(file, ROOT), "utf8"));
     await run({ root, put, read, cli });
@@ -53,8 +53,8 @@ test("LWE wiring uses the manifest for navigation and agent discovery", async ()
     assert.equal(await read("src/worker/lib/site-manifest.ts"), workerModule(manifest.surfaces));
     assert.match(await read("src/pages/lwe/index.html"), /Fixture buddy/);
     assert.match(await read("public/sitemap.xml"), /<lastmod>2001-02-03<\/lastmod>/);
-    assert.ok((await read("public/lwe/ask.js")).includes(`"${concept.path}": "${concept.id}"`));
-    const files = ["src/client/nav-run.js", "src/worker/lib/site-manifest.ts", "src/pages/lwe/index.html", "public/sitemap.xml", "public/lwe/ask.js"];
+    assert.ok((await read("src/client/lwe/ask.js")).includes(`"${concept.path}": "${concept.id}"`));
+    const files = ["src/client/nav-run.js", "src/worker/lib/site-manifest.ts", "src/pages/lwe/index.html", "public/sitemap.xml", "src/client/lwe/ask.js"];
     const once = await Promise.all(files.map(read));
     assert.equal(cli("pipelines/lwe/generate.mjs", "wire").status, 0);
     assert.deepEqual(await Promise.all(files.map(read)), once, "rewiring is byte-idempotent");

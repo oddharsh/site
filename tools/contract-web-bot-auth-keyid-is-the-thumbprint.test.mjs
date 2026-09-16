@@ -161,9 +161,14 @@ test("directory failures never fall back to an unsigned or mismatched success", 
 });
 
 test("both asset routers send the directory to the Worker within the platform's rule limit", async () => {
+  // An exact row or a covering wildcard: `*` spans slashes in this allowlist,
+  // which is how build.ts's own coverage check reads it. The directory's row
+  // folded into "/.well-known/*" on 2026-09-16, and what this test guards is
+  // that the Worker still sees the request, not the spelling of the rule.
+  const claims = (rule, path) => rule === path || (rule.endsWith("*") && path.startsWith(rule.slice(0, -1)));
   for (const name of ["wrangler.jsonc", "wrangler.dev.jsonc"]) {
     const config = parseJsonc(await readFile(new URL(name, ROOT), "utf8"));
-    assert.ok(config.assets.run_worker_first.includes(DIRECTORY_PATH), name);
+    assert.ok(config.assets.run_worker_first.some((rule) => claims(rule, DIRECTORY_PATH)), name);
     assert.ok(config.assets.run_worker_first.length <= 100, name);
   }
 });

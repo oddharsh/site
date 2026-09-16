@@ -492,12 +492,26 @@ export async function servePrecompressedShell(request, env) {
 //
 // encodeBody: "manual" is load-bearing here for the reason recorded on the
 // shell path: without it the runtime would brotli these already-brotli bytes.
-const TEXT_TWIN_TYPES = new Set(["md", "json", "txt", "xml", "svg"]);
+//
+// js and css joined on 2026-09-16, for the scripts that live under a section
+// prefix rather than in the content-hashed shell (/lwe/ask.js, the vendored
+// /garage/pretext.lib.js) and for the readable .src.js / .src.css twins. html is
+// deliberately NOT a member: `/garage/horizon.html` reaches serveStaticPage's
+// extension branch too, and a twin lookup there would answer the page at a
+// second URL with a 200 where the asset layer redirects it to the canonical one.
+// Only the `.src.html` readable twin is admitted, by name, through hasTextTwin.
+const TEXT_TWIN_TYPES = new Set(["md", "json", "txt", "xml", "svg", "js", "css"]);
+const SOURCE_TWIN = /\.src\.html$/i;
+
+/** Does the build write a q11 twin beside this path, if the Worker claims it? */
+export function hasTextTwin(pathname: string): boolean {
+  const ext = (pathname.split(".").pop() ?? "").toLowerCase();
+  return TEXT_TWIN_TYPES.has(ext) || SOURCE_TWIN.test(pathname);
+}
 
 export async function servePrecompressedText(request, env, opts: AssetOptions = {}) {
   const url = new URL(request.url);
-  const ext = (url.pathname.split(".").pop() ?? "").toLowerCase();
-  if (request.method !== "GET" || !TEXT_TWIN_TYPES.has(ext) || env.IDENTITY_BODY) {
+  if (request.method !== "GET" || !hasTextTwin(url.pathname) || env.IDENTITY_BODY) {
     return serveAssetWith404Clamp(request, env, opts);
   }
 
@@ -600,11 +614,12 @@ export async function serveStaticPage(request, env, opts: AssetOptions = {}) {
 
   if (!rel || rel.includes("..") || /\.[a-z0-9]+$/i.test(rel)) {
     // Sub-resources under these prefixes are not pages. The TEXT ones (a page's
-    // .md twin, a section's llms.txt or feed.xml) have a q11 twin of their own
-    // since 2026-08-31 and take servePrecompressedText, which falls through to
-    // the plain asset on any miss; everything else (the garage's images,
-    // ask.js) goes straight to the asset layer untouched, as it always did.
-    if (!rel.includes("..") && TEXT_TWIN_TYPES.has((rel.split(".").pop() ?? "").toLowerCase())) {
+    // .md twin, a section's llms.txt or feed.xml, and since 2026-09-16 its
+    // scripts and its readable .src.html twin) have a q11 twin of their own and
+    // take servePrecompressedText, which falls through to the plain asset on any
+    // miss; everything else (the garage's images) goes straight to the asset
+    // layer untouched, as it always did.
+    if (!rel.includes("..") && hasTextTwin(rel)) {
       return servePrecompressedText(request, env);
     }
     return serveAssetWith404Clamp(request, env);
