@@ -26,7 +26,7 @@
 //
 //   export CLOUDFLARE_API_TOKEN=...   # Account · Workers AI · Read
 //   export CLOUDFLARE_AI_GATEWAY=""   # opt OUT of gateway routing (defaults to "default")
-//   bun run captions                  # or: node tools/photos/gen-alt-text.ts
+//   bun run captions                  # or: bun tools/photos/gen-alt-text.ts
 //
 // Strippable: delete alt.json plus the worker/template lookups to revert to
 // empty alt.

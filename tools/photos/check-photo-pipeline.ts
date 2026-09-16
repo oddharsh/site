@@ -240,7 +240,7 @@ const metaPresent = await stat(META).then((s) => s.isDirectory(), () => false);
 const histMissing = stems.filter((stem) => !histIndex[stem]);
 if (histMissing.length) {
   fail(`${histMissing.length} photo(s) absent from images/histograms.json: ${histMissing.slice(0, 8).join(", ")}` +
-       `${histMissing.length > 8 ? " …" : ""}\n  fix with: node tools/photos/build-histogram-index.ts`);
+       `${histMissing.length > 8 ? " …" : ""}\n  fix with: bun tools/photos/build-histogram-index.ts`);
 }
 
 if (metaPresent) {
@@ -262,7 +262,7 @@ if (metaPresent) {
   const histStale = stems.filter((stem) => histIndex[stem] !== rebuiltHist[stem]);
   if (histStale.length) {
     fail(`images/histograms.json disagrees with images/meta/ for ${histStale.length} photo(s): ${histStale.slice(0, 8).join(", ")}` +
-         `${histStale.length > 8 ? " …" : ""}\n  fix with: node tools/photos/build-histogram-index.ts`);
+         `${histStale.length > 8 ? " …" : ""}\n  fix with: bun tools/photos/build-histogram-index.ts`);
   }
 } else {
   console.log("photo-pipeline: images/meta/ absent (build output), so the projection-agreement checks are skipped here");

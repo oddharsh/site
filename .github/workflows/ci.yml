@@ -394,7 +394,7 @@ jobs:
           esac
 
       - name: Resolve the account id from wrangler.jsonc
-        run: node tools/print-account-id.ts >> "$GITHUB_ENV"
+        run: bun tools/print-account-id.ts >> "$GITHUB_ENV"
 
       - name: Check infrastructure declaration
         env:

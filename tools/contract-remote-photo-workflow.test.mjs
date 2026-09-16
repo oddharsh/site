@@ -46,8 +46,10 @@ for (const routine of ["reencode-thumbnails", "refresh-metadata"]) test(`remote 
     await command("tools/photos/reencode-thumbnails.sh", 'echo pixels >> "$TRACE"');
     await command("tools/photos/hash-thumbnails.sh", 'echo hashes >> "$TRACE"');
     await command("tools/photos/extract-photo-metadata.sh", 'test "$1" = --merge\ntest "$2" = "$RUNNER_TEMP/photo-source"\necho metadata-and-histograms >> "$TRACE"\ntouch rebuilt-metadata rebuilt-histograms');
-    await command("bin/node", 'test "$1" = tools/photos/gen-photo-semantics.ts\ntest -e rebuilt-metadata\necho semantics >> "$TRACE"\ntouch rebuilt-semantics');
-    await command("bin/bun", 'test "$*" = "run photos:check"\ntest -e rebuilt-histograms\ntest -e rebuilt-semantics\necho verified >> "$TRACE"');
+    // One fake bun answers both spawns the routine makes, in order: the
+    // semantics generator (a TS file, under bun since 2026-09-16) and then the
+    // verification script.
+    await command("bin/bun", 'if [ "$1" = tools/photos/gen-photo-semantics.ts ]; then test -e rebuilt-metadata; echo semantics >> "$TRACE"; touch rebuilt-semantics; else test "$*" = "run photos:check"; test -e rebuilt-histograms; test -e rebuilt-semantics; echo verified >> "$TRACE"; fi');
     const result = shell("Run the selected photo routine", { ROUTINE: routine });
     assert.equal(result.status, 0, result.stderr);
     const expected = routine === "reencode-thumbnails" ? ["pixels", "hashes"] : [];

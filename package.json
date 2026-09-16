@@ -7,7 +7,7 @@
   "scripts": {
     "build": "bun tools/build.ts",
     "dev": "bun tools/dev-stage.ts && wrangler dev -c wrangler.dev.jsonc",
-    "dev:remote": "bun tools/dev-stage.ts && node tools/gen-remote-config.ts wrangler.dev.jsonc && wrangler dev -c .wrangler.remote.jsonc",
+    "dev:remote": "bun tools/dev-stage.ts && bun tools/gen-remote-config.ts wrangler.dev.jsonc && wrangler dev -c .wrangler.remote.jsonc",
     "deploy:direct": "wrangler deploy --x-provision=false --x-auto-create=false --strict",
     "deploy:version": "wrangler versions upload --x-provision=false --x-auto-create=false --strict",
     "deploy:promote": "bun tools/deploy-promote.ts",
@@ -21,9 +21,9 @@
     "photos:check": "bun tools/photos/check-photo-pipeline.ts",
     "onestep:probe": "bash tools/photos/onestep-probe.sh",
     "resample:probe": "bun tools/photos/resample-probe.ts",
-    "captions": "node tools/photos/gen-alt-text.ts",
-    "perf-budget": "node tools/perf-budget.ts",
-    "perf:snapshot": "node tools/perf-snapshot.ts",
+    "captions": "bun tools/photos/gen-alt-text.ts",
+    "perf-budget": "bun tools/perf-budget.ts",
+    "perf:snapshot": "bun tools/perf-snapshot.ts",
     "deps:dedupe": "bun dedupe --check",
     "deps:audit": "bun audit",
     "check-wrangler": "bun tools/check-wrangler.ts",
@@ -36,7 +36,7 @@
     "tools:check": "bun tools/check-tools.ts",
     "derive:check": "bun tools/check-derivations.ts",
     "obs:check": "bun tools/check-observability.ts",
-    "ua:survey": "node tools/ua-survey.ts",
+    "ua:survey": "bun tools/ua-survey.ts",
     "test": "bun test --parallel=4 --no-isolate --timeout=30000 --preload ./tools/lib/no-network.ts tools/",
     "deps:relock": "bun tools/relock-dependabot.ts",
     "deps:review": "bun tools/review-dependency-bump.ts",
@@ -111,7 +111,7 @@
     "sharp",
     "workerd"
   ],
-  "comment:exec": "A tool NEVER spawns a package manager, and the two perf tools run under NODE rather than bun. Managers: `pnpm exec` refuses on a bun tree outright, and `bun x`/`npx` FETCH what they cannot resolve (measured 2026-08-16 on 1.4.0-canary.1: `bun x wrangler --version` in an empty directory downloaded 4.123.0 from the registry, which is gotcha 29's npx hole wearing bun's name). Spawns go through wranglerCommand() in tools/lib/wrangler-bin.ts, which names node and the pinned entry file. THIS COMMENT USED TO SAY deploy-promote.mjs and perf-budget.mjs already used `bun x --no-install wrangler`. They did not; both still spawned `pnpm exec` when the tree became bun, so the release path and a required check broke on the merge. A comment describing a sweep is not the sweep. Node for the perf tools because the MEASUREMENT must not move with the toolchain: bun 1.4 ships zlib-ng, and on one byte-identical 2.8MB input node gzips to 893,610 bytes against bun's 898,553 (0.55% larger, measured 2026-08-20). Every baseline constant in perf-budget.mjs was set with node's zlib, so running these under bun re-reads the whole series ~1% heavier for free. Shipped bytes are unaffected: brotli and zstd are untouched, which the deploy proved when Cloudflare's content-addressed upload found 0 of 1443 files changed.",
+  "comment:exec": "A tool NEVER spawns a package manager. The perf tools ran under NODE from 2026-08-20 to 2026-09-16 for bun's zlib-ng; measured before the move, the nightly row is byte-identical across the two runtimes (its gzip figure is wrangler's, and wrangler runs under node whoever spawns it) and perf-budget's per-asset gzip readings sit at half their envelopes, so node is now spent only where wrangler needs it. Managers: `pnpm exec` refuses on a bun tree outright, and `bun x`/`npx` FETCH what they cannot resolve (measured 2026-08-16 on 1.4.0-canary.1: `bun x wrangler --version` in an empty directory downloaded 4.123.0 from the registry, which is gotcha 29's npx hole wearing bun's name). Spawns go through wranglerCommand() in tools/lib/wrangler-bin.ts, which names node and the pinned entry file. THIS COMMENT USED TO SAY deploy-promote.mjs and perf-budget.mjs already used `bun x --no-install wrangler`. They did not; both still spawned `pnpm exec` when the tree became bun, so the release path and a required check broke on the merge. A comment describing a sweep is not the sweep. Node for the perf tools because the MEASUREMENT must not move with the toolchain: bun 1.4 ships zlib-ng, and on one byte-identical 2.8MB input node gzips to 893,610 bytes against bun's 898,553 (0.55% larger, measured 2026-08-20). Every baseline constant in perf-budget.mjs was set with node's zlib, so running these under bun re-reads the whole series ~1% heavier for free. Shipped bytes are unaffected: brotli and zstd are untouched, which the deploy proved when Cloudflare's content-addressed upload found 0 of 1443 files changed.",
   "overrides": {
     "sharp": "0.35.4"
   },

@@ -252,18 +252,52 @@ test("wranglerCommand runs the pinned wrangler under node", async () => {
 });
 
 // The two perf tools must stay on node for a different reason: the MEASUREMENT
-// must not move with the toolchain. bun 1.4 ships zlib-ng, which gzips one
-// byte-identical 2.8MB input to 898,553 bytes against node's 893,610 (0.55%
-// larger, measured 2026-08-20). Every baseline constant in perf-budget.mjs was
-// set under node's zlib, and perf-history's nightly series is years of the same,
-// so running these under bun would re-read the whole series ~1% heavier with no
-// code change. Shipped bytes are untouched, since brotli and zstd did not move.
-test("the perf tools run under node so their numbers stay comparable", async () => {
+// were pinned to node from 2026-08-20 to 2026-09-16. bun 1.4 ships zlib-ng,
+// which gzips one byte-identical 2.8MB input to 898,553 bytes against node's
+// 893,610 (0.55% larger), and the fear was that perf-history's nightly series
+// would re-read ~1% heavier with no code change. Measured before lifting the
+// pin: the series never saw the runtime. A snapshot recorded under node and one
+// under bun differ in exactly one field name, `gzip`, across 70 leaves, and the
+// nightly ROW built from each is byte-identical, because the row's only gzip
+// figure is the Worker bundle's, which wrangler reports and wrangler runs under
+// node whoever spawns it. perf-budget's own gzip readings moved by 0.1 KiB on
+// two assets against 12 KiB envelopes. So the claim to hold is structural: the
+// row must never take a gzip figure from the runtime's zlib.
+test("the nightly row's gzip figure is wrangler's, never the runtime's zlib", async () => {
   const { readFileSync } = await import("node:fs");
+  const src = readFileSync(new URL("tools/perf-snapshot.ts", ROOT).pathname, "utf8");
+  const row = src.slice(src.indexOf("const line = {"), src.indexOf("source: \"nightly\""));
+  assert.ok(row.length > 100, "the row builder moved; re-anchor this test");
+  assert.match(row, /worker_gzip: snap\.worker\.gzipBytes/, "worker_gzip must be the figure the wrangler dry-run printed");
+  assert.doesNotMatch(row, /\.gzip\b/, "no row field may read a per-asset gzip, which is the runtime's zlib");
+  // and the figure it does take is parsed off wrangler's output, not computed
+  assert.match(src, /dryOut\.match\(\/gzip:/, "gzipBytes must be read from the dry-run's own line");
+});
+
+// With that settled, node is spent only where wrangler needs it. Wrangler
+// refuses bun per command (`check startup`, measured 2026-08-20) and its
+// createTestHarness under bun boots and then times out every route (167 of 168
+// hard failures in 9m23s against 168 passes in 6s under node, measured
+// 2026-09-16), so the bridge and the route oracle stay on node; test:node is
+// the twin suite and exists to be the other runtime. Everything else runs
+// under bun, and this is the list, so a fourth node spawn is a decision.
+test("node is spawned only by the wrangler bridge, the route oracle and the twin suite", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { execFileSync } = await import("node:child_process");
+  const root = new URL(".", ROOT).pathname;
   const pkg = JSON.parse(readFileSync(new URL("package.json", ROOT).pathname, "utf8"));
-  for (const name of ["perf-budget", "perf:snapshot"]) {
-    assert.match(pkg.scripts[name], /^node /, `${name} must run under node (bun's zlib-ng shifts every gzip number ~1%)`);
+  const nodeScripts = Object.entries(pkg.scripts).filter(([, cmd]) => /(^|&& |\| )node /.test(cmd)).map(([k]) => k).sort();
+  assert.deepEqual(nodeScripts, ["routes:check", "routes:check:remote", "test:node"]);
+  const files = execFileSync("git", ["ls-files", "-z", "*.sh", "**/*.sh", ".github/workflows/*.yml"], { cwd: root, encoding: "utf8" }).split("\0").filter(Boolean);
+  const spawns = [];
+  for (const rel of files) {
+    const code = readFileSync(`${root}${rel}`, "utf8").split("\n").filter((l) => !/^\s*#/.test(l)).join("\n");
+    for (const m of code.matchAll(/(?:^|[ "(;&|])node (?:tools|\.perf|"\$|\S*\.(?:m?js|ts))/gm)) spawns.push(`${rel}: ${m[0].trim()}`);
   }
+  assert.deepEqual(spawns, [
+    // the bridge Workers Builds runs, which is the whole reason node is pinned
+    ".github/deploy-wrangler.sh: node \"$",
+  ], `node spawns outside the allowlist: ${JSON.stringify(spawns)}`);
 });
 
 // THE DEPLOY BRIDGE. The dashboard holds one command string per trigger and it

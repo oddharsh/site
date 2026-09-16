@@ -103,7 +103,9 @@ printf encoded > "$last"`);
     // BSD stat is used by these macOS scripts; keep the control portable in CI.
     await command("bin/stat", 'test "$1" = -f%z; test -f "$2"; echo 7');
     await command("bin/cargo", 'echo cargo >> "$TRACE"');
-    await command("bin/node", `exec "${process.execPath}" "$@"`);
+    // The shells spawn `bun` for their TS since 2026-09-16; under `bun test` that
+    // is this very runtime, and under test:node it is node running the same TS.
+    await command("bin/bun", `exec "${process.execPath}" "$@"`);
     await command("node_modules/.bin/wrangler", 'echo forbidden-upload >> "$TRACE"; exit 99');
     // Stop the successful ingest control at the next phase, before unrelated
     // index/caption work; failed phase 1 must never reach this sentinel.

@@ -305,7 +305,7 @@ trap 'rm -rf "$TMP"' EXIT
 # Resolve every stem before encoding. A same-folder HEIF/JPEG pair has one
 # pixel/metadata source and one click-through source; all other collisions fail.
 INPUTS="$TMP/inputs"
-node "$SCRIPT_DIR/photo-inputs.ts" ingest "$@" > "$INPUTS"
+bun "$SCRIPT_DIR/photo-inputs.ts" ingest "$@" > "$INPUTS"
 TOTAL=$(( $(tr -cd '\000' < "$INPUTS" | wc -c) / 4 ))
 echo "found $TOTAL photo(s) to process"
 echo ""
@@ -589,8 +589,8 @@ while read_input; do
   META_SOURCES+=("$f")
 done < "$INPUTS"
 # writes beside and renames, so a failure here leaves the committed index as it was
-node "$SCRIPT_DIR/pipeline-json.ts" index-merge "$INDEX_FILE" --entries "$NEW_ENTRIES" --now "$NOW_ISO"
-echo "  photo index: $(node "$SCRIPT_DIR/pipeline-json.ts" length "$INDEX_FILE") entries"
+bun "$SCRIPT_DIR/pipeline-json.ts" index-merge "$INDEX_FILE" --entries "$NEW_ENTRIES" --now "$NOW_ISO"
+echo "  photo index: $(bun "$SCRIPT_DIR/pipeline-json.ts" length "$INDEX_FILE") entries"
 # Ingest is always a batch update: read precisely the selected pixel sources
 # and preserve metadata for other published photos, even across input folders.
 # The standalone extractor still offers a full replacement with its own guard.
@@ -629,12 +629,12 @@ echo "  photo index: $(node "$SCRIPT_DIR/pipeline-json.ts" length "$INDEX_FILE")
 # already-captioned stems cost nothing. a 429 (the free 10k neurons/day) stops it
 # early, which is why the failure is tolerated here and the real gate is
 # check-photo-pipeline.ts below.
-# node rather than python3 since 2026-09-15: the captioner was the last thing
+# bun rather than python3 since 2026-09-15: the captioner was the last thing
 # here that ran under an interpreter the rest of this script does not already
-# need (photo-inputs, the histogram index, semantics and the pipeline check are
-# all node), and gotcha 40's ninth site is what a Python file outside the shell
-# sweep cost.
-node "$SCRIPT_DIR/gen-alt-text.ts" || \
+# need (photo-inputs, the histogram index, semantics and the pipeline check all
+# run under the tree's own runtime), and gotcha 40's ninth site is what a Python
+# file outside the shell sweep cost.
+bun "$SCRIPT_DIR/gen-alt-text.ts" || \
   echo "  captions incomplete — re-run 'bun run captions' before deploying"
 
 # retrieval terms for every stem, and the ONE stem-keyed artifact this script has
@@ -656,9 +656,9 @@ node "$SCRIPT_DIR/gen-alt-text.ts" || \
 # byte-identical no-op, measured on all 165 stems at 95ms. --vision is the opt-in
 # model tier and is deliberately not passed here, since it wants a token and this
 # path has to work without one.
-node "$PROJECT_DIR/tools/photos/gen-photo-semantics.ts"
+bun "$PROJECT_DIR/tools/photos/gen-photo-semantics.ts"
 
-node "$PROJECT_DIR/tools/photos/check-photo-pipeline.ts"
+bun "$PROJECT_DIR/tools/photos/check-photo-pipeline.ts"
 echo ""
 
 echo "✓ photo artifacts generated. Review them and their derivation locks in a PR."

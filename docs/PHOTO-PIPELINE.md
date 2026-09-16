@@ -90,7 +90,7 @@ manifest cache to bust.
 ## Toolchain
 
 The runner installs the tools named by the workflow (no JSON CLI among them
-since 2026-09-15: `tools/photos/pipeline-json.ts` runs under node) and builds
+since 2026-09-15: `tools/photos/pipeline-json.ts` runs under bun) and builds
 `zenc` with the repository's Rust toolchain and Cargo lock. Every routine uses
 Homebrew's `avifenc`, which is the encoder the grid tiers select first since
 2026-09-12; the source build in

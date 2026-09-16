@@ -27,7 +27,7 @@
 //      the native crop's own mean. It measures the gamma axis on real
 //      photographs instead of synthetic patterns.
 //
-//   node tools/photos/matched-bytes-probe.ts <path-to-zenc> [--limit N] [--work DIR]
+//   bun tools/photos/matched-bytes-probe.ts <path-to-zenc> [--limit N] [--work DIR]
 //
 // Ported from matched-bytes-probe.py on 2026-09-15 with the subprocess graph
 // unchanged, so the numbers it prints are the same measurement. --limit and

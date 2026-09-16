@@ -5,7 +5,7 @@ with the exact command and the gotcha that bit me last time. Deep design notes
 and the full conventions list live in [CLAUDE.md](../CLAUDE.md); this is the ops sheet.
 
 One site Worker, with three source islands:
-- **public/** (aadhar.sh): the **Cloudflare Worker with static assets** (migrated off Pages 2026-06-30). Config is `wrangler.jsonc` at the repo root: it points `main` + `assets.directory` at `.build/public` and runs `build.ts` via its `build.command`, so `assets.run_worker_first` (an allowlist mirroring the `ROUTES`/`PREFIX` tables in `index.js`; static is the default) applies to the built tree; `workers_dev:false` (custom domain only). **Production deploy: merge to `main`; GitHub CI promotes the exact tested commit to the machine-owned `production` branch, then Cloudflare Workers Builds deploys it.** The config self-builds, so the Workers Build Deploy command ships the minified tree; local dev uses `wrangler.dev.jsonc` (readable `public/`, fast reload). A local `wrangler deploy` is fallback-only. Verify after every deploy with `node tools/verify-routes.ts https://aadhar.sh` (now also asserts `/nav.js` minified + `.src` twins resolve). All site bindings live in `wrangler.jsonc`; secrets via `wrangler versions secret put`.
+- **public/** (aadhar.sh): the **Cloudflare Worker with static assets** (migrated off Pages 2026-06-30). Config is `wrangler.jsonc` at the repo root: it points `main` + `assets.directory` at `.build/public` and runs `build.ts` via its `build.command`, so `assets.run_worker_first` (an allowlist mirroring the `ROUTES`/`PREFIX` tables in `index.js`; static is the default) applies to the built tree; `workers_dev:false` (custom domain only). **Production deploy: merge to `main`; GitHub CI promotes the exact tested commit to the machine-owned `production` branch, then Cloudflare Workers Builds deploys it.** The config self-builds, so the Workers Build Deploy command ships the minified tree; local dev uses `wrangler.dev.jsonc` (readable `public/`, fast reload). A local `wrangler deploy` is fallback-only. Verify after every deploy with `bun tools/verify-routes.ts https://aadhar.sh` (now also asserts `/nav.js` minified + `.src` twins resolve). All site bindings live in `wrangler.jsonc`; secrets via `wrangler versions secret put`.
 - **cal/** (coffee booking module): **LIVE** at `aadhar.sh/coffee`, dispatched by the same `aadhar-sh` Worker. Availability still serves from an SWR calendar snapshot (KV `cal:busy`, 2s upstream deadline, stale fallback); the GET page edge-caches 30s; booking fails closed if the calendar can't be vouched for. See [cal/README.md](../cal/README.md). `cal/wrangler.test.toml` is test-only; it is not a deployment target.
 - **serendipity/** (event dashboard module): **LIVE** at `aadhar.sh/serendipity`, dispatched by the same `aadhar-sh` Worker. Its D1, secrets, route-specific CSP, and dashboard cache policy remain isolated in the module and shared root bindings.
 
@@ -1199,7 +1199,7 @@ below whenever they look unreferenced again:
 
 [`tools/verify-routes.ts`](../tools/verify-routes.ts) owns the route cases and
 asserts their status, content type, and selected markers. Run
-`node tools/verify-routes.ts https://aadhar.sh` to check production.
+`bun tools/verify-routes.ts https://aadhar.sh` to check production.
 "0 hard failure(s)" means the asserted cases passed; inspect skips and advisory
 rows separately.
 
@@ -1389,7 +1389,7 @@ The subshell stops on the first failed stage:
   ./tools/photos/reencode-thumbnails.sh "$PHOTO_SOURCE"
   ./tools/photos/hash-thumbnails.sh
   ./tools/photos/extract-photo-metadata.sh --merge "$PHOTO_SOURCE"
-  node tools/photos/gen-photo-semantics.ts
+  bun tools/photos/gen-photo-semantics.ts
   bun run photos:check
   for id in images/hashes images/histograms images/semantics; do
     bun run derive:check -- --lock --only "$id"
@@ -1517,8 +1517,8 @@ EARLIER rather than asking for a bigger one. Run this within 6 hours of the
 demo, because an expired warm is the same as no warm:
 
 ```bash
-node tools/lens-warm.ts                 # the seeded /lens chips, production
-node tools/lens-warm.ts https://foo/    # specific URLs instead
+bun tools/lens-warm.ts                 # the seeded /lens chips, production
+bun tools/lens-warm.ts https://foo/    # specific URLs instead
 ```
 
 It performs REAL Browser Run calls, away from an audience. Re-running it is also
@@ -1531,8 +1531,8 @@ The allowance resets at 00:00 UTC and not before, so a demo landing after that
 ceiling needs the other script:
 
 ```bash
-node tools/lens-seed.ts --dry-run   # capture locally, write nothing, print sizes
-node tools/lens-seed.ts             # capture and seed production KV (24h TTL)
+bun tools/lens-seed.ts --dry-run   # capture locally, write nothing, print sizes
+bun tools/lens-seed.ts             # capture and seed production KV (24h TTL)
 ```
 
 That drives real headless Chrome on this machine (playwright-core, channel
@@ -1606,7 +1606,7 @@ recipes are synchronous. Anything whose effect lands after a tick needs
 lands after injection is exactly what the probe measures:
 
 ```bash
-BROWSER_RUN_TOKEN=... node tools/lens-inject-probe.ts
+BROWSER_RUN_TOKEN=... bun tools/lens-inject-probe.ts
 ```
 
 Seven cases, one render each, spaced 11s apart against the 6/min account-wide
@@ -1628,8 +1628,8 @@ A binding that refuses `addScriptTag` surfaces as the existing `upstream_not_ok`
 `images/semantics.json` is what `photo_query` ranks against beyond the caption and
 the EXIF. Two tiers, and every stem records which it got:
 ```bash
-node tools/photos/gen-photo-semantics.ts            # derived tier only
-node tools/photos/gen-photo-semantics.ts --vision   # + model-written terms
+bun tools/photos/gen-photo-semantics.ts            # derived tier only
+bun tools/photos/gen-photo-semantics.ts --vision   # + model-written terms
 ```
 The **derived** tier needs no network and no credential — it is vocabulary repair,
 mapping what the camera writes to what a person types (`Nostalgic Neg` →
@@ -1679,7 +1679,7 @@ By hand:
 
 ```bash
 bun run og-cards                    # captures LIVE aadhar.sh (data-driven demos render populated)
-node tools/photos/inject-og-meta.ts   # add the meta to any page missing it (idempotent)
+bun tools/photos/inject-og-meta.ts   # add the meta to any page missing it (idempotent)
 # then deploy — a deploy purges the edge so the refreshed card lands.
 ```
 

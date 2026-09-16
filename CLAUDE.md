@@ -5375,9 +5375,55 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     somebody typed under node's zlib, and `perf-history` is a nightly series of
     the same. Running those tools under bun re-reads the whole record about 1%
     heavier for free, which is precisely the phantom step the perf-history branch
-    exists to detect. Both scripts are pinned to `node` in package.json with a
-    test asserting it. `perf-diff.yml` and `perf-history.yml` already invoked
-    node explicitly and were never affected.
+    exists to detect. Both scripts were pinned to `node` in package.json with a
+    test asserting it, and `perf-diff.yml` and `perf-history.yml` invoked node
+    explicitly.
+
+    **THE PIN WAS LIFTED ON 2026-09-16, MEASURED, and what it had been guarding
+    was narrower than the paragraph above.** The "same dry-run" figure is
+    wrangler's, and since `wranglerCommand()` runs wrangler under node whoever
+    spawns it, that number is node's zlib either way. A snapshot recorded under
+    node and one under bun differ in exactly one field name, `gzip`, across 70
+    leaves, and the nightly ROW built from each is byte-identical: its only
+    gzip column is the Worker bundle's, from wrangler's own output line, and
+    every other column is brotli, which zlib-ng never touched. So the series
+    never saw the runtime. The per-asset gzip readings that do shift feed
+    `perf:snapshot compare` alone, where both sides are recorded by one job,
+    and `perf-budget`'s envelopes, where they moved 0.1 KiB on two assets
+    against 12 KiB. Both tools run under bun now, and the test that pinned
+    them asserts the structural fact instead: the row builder takes
+    `worker_gzip` from the dry-run's line and never a per-asset `.gzip`.
+
+    What a node MAJOR still owns is that one column, since wrangler gzips with
+    the node it runs under; `node-support-window.yml`'s PR body says so in
+    those words. And the route oracle stays on node for a reason measured the
+    same day: the route oracle's `createTestHarness` under bun boots, prints
+    no refusal, and times out every route, 167 of 168 hard failures in 9m23s
+    against 168 passes in 6s under node. That is `check startup`'s silent
+    failure wearing a different subcommand. It is also NARROWER than "the
+    harness needs node": cal's 84-test suite boots the same harness under bun
+    and passes with node absent from PATH, so what times out is the site
+    Worker's configuration under bun, cause unmeasured. Either way node is
+    spent on the wrangler bridge, the route oracle and `test:node`, and a
+    contract test lists those spawns so a fourth is a decision.
+
+    **CI followed on the same day.** `setup-node` is in exactly the jobs that
+    run wrangler (validate, the ramp's canary and full, perf-diff, perf-history,
+    wrangler-pin, canary's wrangler leg, node-support-window, which measures
+    node itself) and nowhere else: the photo pipeline, og-cards, the dictionary
+    roll, bun-pin, the ramp's verify job and canary's bun and browsers legs run
+    with no node step, and the whole contract suite passes with node absent
+    from PATH (763 of 763). Two caveats keep that honest. Every `uses:` action
+    written in JavaScript (checkout, github-script, codeql, fetch-metadata, the
+    app-token) runs on the RUNNER's bundled node whatever we set up, so "off
+    node" means no step of ours invokes it, never that the job has none. And
+    the runner ships a node of its own, so a job without `setup-node` still
+    has one on PATH at whatever major the image carries; nothing of ours
+    reaches for it, and `contract-main-module-guards-survive-a-symlinked-path`
+    uses it when present to keep measuring the argv divergence. Deno was considered and
+    removes none of them, since wrangler is Cloudflare's node CLI; the deno
+    tutorial for Workers bundles the Worker's SOURCE with deno and still runs
+    wrangler under node.
 
     **SHIPPED bytes are untouched, and the proof is Cloudflare's rather than
     ours.** Brotli and zstd did not move, so the first bun-built deploy uploaded

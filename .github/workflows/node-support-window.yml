@@ -123,13 +123,13 @@ jobs:
 
           \`.node-version\` holds a bare major, so patches and minors are already current on every run. This is about the major.
 
-          Node runs wrangler here, which is the path that publishes production, plus the route oracle and the gzip measurements. It builds nothing: \`node tools/build.ts\` cannot run since \`lib/link-integrity.ts\` began parsing with HTMLRewriter.
+          Node runs wrangler here, which is the path that publishes production, plus the route oracle (wrangler's createTestHarness, which times out every route under bun) and the twin test suite. Nothing else: the perf tools moved to bun on 2026-09-16 once the nightly row was measured byte-identical across the two runtimes, and the build cannot run under node since \`lib/link-integrity.ts\` began parsing with HTMLRewriter.
 
           Gates before taking a new major:
 
           - wrangler runs under it, per COMMAND rather than per tool (gotcha 38: \`deploy --dry-run\` worked under bun while \`check startup\` silently did nothing).
           - \`bun run test:node\` and \`bun run typecheck\`, both of which run under node.
-          - **gzip continuity.** \`perf-budget\`'s constants and every \`perf-history\` row were measured under this major. A zlib change re-reads the whole series as a step nobody took, which is exactly the phantom the perf-history branch exists to detect. Compress one fixed buffer under both majors and compare before believing any number after the move.
+          - **gzip continuity, one column.** Every \`perf-history\` row's \`worker_gzip\` is the figure wrangler prints, gzipped by the node wrangler runs under; the other columns are brotli and runtime-independent. A zlib change in the new major re-reads that one column as a step nobody took, which is exactly the phantom the perf-history branch exists to detect. Compress one fixed buffer under both majors and compare before believing any number after the move.
           - the zstd \`dictionary\` floor, which \`build.ts\` throws on. Measured 2026-08-24: v23.11.1 ignores it (63 none / 63 dict), v24.19.0 and v26.7.0 honour it (63 / 19).
 
           Filed by [\`node-support-window.yml\`](.github/workflows/node-support-window.yml). Reproduce with \`bun run node:pin\`; the permanent controls are \`--pretend 23\` (end of life) and \`--pretend 22\` (maintenance).

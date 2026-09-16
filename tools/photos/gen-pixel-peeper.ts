@@ -22,10 +22,10 @@
 //      reported, not quietly shipped. A call nobody can see is not a test.
 //
 // Usage:
-//     node tools/photos/gen-pixel-peeper.ts                 # full rebuild
-//     node tools/photos/gen-pixel-peeper.ts --dry-run       # measure, write nothing
-//     node tools/photos/gen-pixel-peeper.ts --sheet x.html  # a contact sheet to eyeball
-//     node tools/photos/gen-pixel-peeper.ts --only chroma   # one axis, implies --dry-run
+//     bun tools/photos/gen-pixel-peeper.ts                  # full rebuild
+//     bun tools/photos/gen-pixel-peeper.ts --dry-run        # measure, write nothing
+//     bun tools/photos/gen-pixel-peeper.ts --sheet x.html   # a contact sheet to eyeball
+//     bun tools/photos/gen-pixel-peeper.ts --only chroma    # one axis, implies --dry-run
 //
 // Needs: zenc (cargo build in tools/photos/zenc), mozjpeg's cjpeg, sips,
 // ssimulacra2, butteraugli_main, and the source folder.

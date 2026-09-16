@@ -111,7 +111,7 @@
           ".lock"
         ]
       },
-      "regenerate": "bash tools/photos/extract-photo-metadata.sh \"$SOOC_DIR\" && node tools/photos/build-histogram-index.ts",
+      "regenerate": "bash tools/photos/extract-photo-metadata.sh \"$SOOC_DIR\" && bun tools/photos/build-histogram-index.ts",
       "recorded": {
         "inputs": "933ece421250a5e9e4234dcdeb399233fbb035b1f98518b9645136d871510ac7",
         "count": 261
@@ -134,7 +134,7 @@
         "set": "^public/i/(.+)\\.[0-9a-f]{8}\\.jpg$"
       },
       "covers": "public/images/alt.json",
-      "regenerate": "node tools/photos/gen-alt-text.ts",
+      "regenerate": "bun tools/photos/gen-alt-text.ts",
       "recorded": {
         "inputs": "d457e90604ddd1fb8206e0c374a39c372596c678b116defb5cd4a84b973666fb",
         "count": 258
@@ -157,7 +157,7 @@
         "set": "^public/i/(.+)\\.[0-9a-f]{8}\\.jpg$"
       },
       "covers": "public/images/semantics.json",
-      "regenerate": "node tools/photos/gen-photo-semantics.ts   # add --vision for the model tier",
+      "regenerate": "bun tools/photos/gen-photo-semantics.ts   # add --vision for the model tier",
       "recorded": {
         "inputs": "d457e90604ddd1fb8206e0c374a39c372596c678b116defb5cd4a84b973666fb",
         "count": 258
@@ -205,7 +205,7 @@
         "public/pixel-peeper"
       ],
       "unverifiable": "gen-pixel-peeper.ts reads the SOOC originals in the photo source folder, which is outside the tree, and its crop selection is a scored scan whose answer depends on the scorer's exact arithmetic. There is no committed input to hash; the set is a deliberate act, and the generator refuses to write unless at least 12 trials survive.",
-      "regenerate": "node tools/photos/gen-pixel-peeper.ts"
+      "regenerate": "bun tools/photos/gen-pixel-peeper.ts"
     },
     {
       "id": "og/cards",
@@ -225,7 +225,7 @@
         "public/lwe/quadgrams.txt"
       ],
       "unverifiable": "The input is an english_quadgrams.txt corpus passed as argv[2], which is not in this repository and is not small. What IS checkable is that the table still parses and still has 4000 rows, which the page contract owns. FOUND BROKEN while taking this census: the generator wrote to `../lwe/quadgrams.txt` relative to tools/photos/, which is tools/lwe/, a directory that has never existed. Gotcha 40 again, third instance in one afternoon.",
-      "regenerate": "node tools/photos/gen-quadgram-table.ts <english_quadgrams.txt>"
+      "regenerate": "bun tools/photos/gen-quadgram-table.ts <english_quadgrams.txt>"
     },
     {
       "id": "repo/card",
