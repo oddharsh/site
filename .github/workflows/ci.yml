@@ -90,19 +90,41 @@ jobs:
       - name: Check Wrangler versions and lockfiles
         run: bun run check-wrangler
 
+      # Report source errors before building or installing the native toolchain.
+      - name: Lint
+        run: bun run lint
+
+      - name: Typecheck annotated JavaScript
+        run: bun run typecheck
+
       - name: Build homepage
         run: bun run build
 
       - name: Check photo asset invariants
         run: bun run photos:check
 
-      - name: Test native photo processing
-        # Run from the repository root so rust-toolchain.toml selects the same
-        # compiler used by the local photo pipeline.
+      - name: Set up native photo toolchain
+        id: native
+        # Select the declared compiler BEFORE computing the Rust cache key.
         run: |
           sudo apt-get update
           sudo apt-get install -y libavif-dev libavif-bin pkg-config
           rustup component add clippy
+          echo "cache-key=${ImageOS:?}-${ImageVersion:?}-$(dpkg-query --show --showformat='${Version}' libavif-dev)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore compiled Rust dependencies
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: tools/photos/zenc -> target
+          # The action also keys by job, platform, compiler, flags and Cargo
+          # manifests/locks. Include the runner image and native library ABI.
+          key: ${{ steps.native.outputs.cache-key }}
+          cache-bin: false
+          # Rebuild our encoder/C adapter and execute all tests on every run.
+          cache-workspace-crates: false
+
+      - name: Test native photo processing
+        run: |
           cargo test --locked --manifest-path tools/photos/zenc/Cargo.toml
           cargo clippy --locked --manifest-path tools/photos/zenc/Cargo.toml --all-targets -- -D warnings
 
@@ -121,26 +143,6 @@ jobs:
 
       - name: Validate site Worker config
         run: bun x --no-install wrangler deploy --dry-run
-
-      # Lint, syntax AND type-aware, in one pass. tsgolint (the Go type checker
-      # behind `--type-aware`) tracks TypeScript 7.0.2, which is the version
-      # pinned below, and that pairing is not a coincidence: TypeScript 7.0 ships
-      # no stable programmatic API, so typescript-eslint cannot run on it at all.
-      # oxlint reaches the same type-aware rules through tsgolint instead.
-      #
-      # It runs FIRST because it is the cheapest thing in this job (0.56s locally,
-      # against 1.1s for the typecheck it precedes) and because a dead binding is
-      # a cheaper thing to read than whatever it causes further down.
-      - name: Lint
-        run: bun run lint
-
-      # Type checking WITHOUT TypeScript: tsc reads the JSDoc already in these
-      # files, emits nothing, and never touches a served byte. Scoped to cal/src
-      # today (see tsconfig.json for the measured error counts of the scopes it
-      # is meant to grow into). It runs BEFORE the tests because a type error is
-      # cheaper to read than the failure it would cause downstream.
-      - name: Typecheck annotated JavaScript
-        run: bun run typecheck
 
       - name: Test homepage representation contracts
         run: bun run test

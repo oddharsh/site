@@ -173,6 +173,13 @@ the build step; keep the dashboard Build command empty to avoid building twice.
 For the auxiliary `cf-garage/` Worker, commands run from its directory with
 `--x-new-config`; its TypeScript config does not accept `-c`.
 
+CI runs lint and typechecks before the build and native toolchain setup. Native
+photo validation caches Cargo dependencies and their compiled artifacts with
+`Swatinem/rust-cache`, scoped to `tools/photos/zenc`. Its key includes the job,
+platform, Rust compiler, Cargo manifests/locks, runner image and libavif package
+version. The encoder and C adapter rebuild, and tests and Clippy run on cache
+hits. Cache misses use the same commands; no test result is cached.
+
 `infra:check` follows the code checks so deployed-state drift cannot prevent
 validation of the diff. It still blocks the PR on confirmed drift.
 If a code change must deploy to resolve that drift, validate locally, use the
