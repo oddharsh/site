@@ -97,8 +97,10 @@ jobs:
       - name: Typecheck annotated JavaScript
         run: bun run typecheck
 
-      - name: Build homepage
-        run: bun run build
+      # perf-budget owns the build and Worker dry-run. The route oracle below
+      # loads that exact bundle, so all checks exercise one build in this job.
+      - name: Build and validate site Worker and performance budget
+        run: bun run perf-budget
 
       - name: Check photo asset invariants
         run: bun run photos:check
@@ -138,11 +140,6 @@ jobs:
       - name: Check derived artifacts against their inputs
         run: bun run derive:check
 
-      - name: Enforce homepage performance budget
-        run: bun run perf-budget
-
-      - name: Validate site Worker config
-        run: bun x --no-install wrangler deploy --dry-run
 
       - name: Test homepage representation contracts
         run: bun run test
@@ -205,13 +202,13 @@ jobs:
           bun run test:node
 
       # The route oracle, pre-merge. createTestHarness() boots the site Worker
-      # in-process (honouring wrangler.jsonc's build.command, so it serves the
-      # minified .build/public tree) and verify-routes.mjs sweeps it. This is
+      # in-process from perf-budget's dry-run bundle and serves its minified
+      # .build/public tree; verify-routes.ts sweeps that same output. This is
       # status + content-type + markers for real; it is NOT a data check, since
       # local KV/R2/D1 come up empty. See MAINTENANCE.md "Verify the whole route
       # surface" for what the `remote: true` rows sit out and why.
       - name: Verify route surface against a local Worker
-        run: bun run routes:check
+        run: bun run routes:check --prebuilt .build/.perfbudget
 
       - name: Validate LWE and Garage page contracts
         run: bun run pages:check

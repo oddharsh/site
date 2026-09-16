@@ -180,6 +180,14 @@ platform, Rust compiler, Cargo manifests/locks, runner image and libavif package
 version. The encoder and C adapter rebuild, and tests and Clippy run on cache
 hits. Cache misses use the same commands; no test result is cached.
 
+CI builds the site once through `bun run perf-budget`, whose Wrangler dry-run
+also validates the Worker config. It writes `.build/.perfbudget/index.js` for
+`bun run routes:check --prebuilt .build/.perfbudget` and the upload-format
+`worker.bundle` for startup profiling. Both come from that one dry-run. The
+prebuilt directory is for output created in the current job; it is not a
+cross-run cache. A missing bundle fails the route check.
+Standalone `bun run routes:check` continues to build from source.
+
 `infra:check` follows the code checks so deployed-state drift cannot prevent
 validation of the diff. It still blocks the PR on confirmed drift.
 If a code change must deploy to resolve that drift, validate locally, use the
