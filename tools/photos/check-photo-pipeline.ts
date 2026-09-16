@@ -225,14 +225,16 @@ const exifIndex = await buildExifIndex(ROOT);
 // checkout. Where it exists, which is a workstation that just ran the pipeline,
 // roll it up and compare.
 //
-// WHAT THAT COMPARISON MEANS CHANGED with the move, and it is worth more now
-// than it was. It used to hold two committed copies of one projection together.
-// The projection has TWO IMPLEMENTATIONS: the jq object literal in
-// extract-photo-metadata.sh, which writes these per-photo files, and
-// EXIF_KEY_MAP in tools/lib/photo-indexes.ts, which is what ships. Nothing else
-// holds those two to each other, and a field added to one and forgotten in the
-// other is silent on both sides: the tooltip renders one line fewer and the
-// per-photo fallback renders one line more.
+// WHAT THAT COMPARISON MEANS has changed twice. It used to hold two committed
+// copies of one projection together. Then, from 2026-08-29, it held the two
+// IMPLEMENTATIONS of the projection to each other: a jq object literal in
+// extract-photo-metadata.sh writing these per-photo files, and EXIF_KEY_MAP in
+// tools/lib/photo-indexes.ts shipping, where a field added to one and forgotten
+// in the other was silent on both sides. Since 2026-09-15 the split calls
+// projectExifRecord too (pipeline-json.ts meta-split), so there is one
+// implementation, and what this catches is the remaining way the two files can
+// disagree: images/meta/ written from an OLDER metadata.json than the one on
+// disk. That is still worth a failure, since zenc's histogram bake reads meta/.
 const metaPresent = await stat(META).then((s) => s.isDirectory(), () => false);
 
 const histMissing = stems.filter((stem) => !histIndex[stem]);
@@ -253,9 +255,8 @@ if (metaPresent) {
   if (stale.length) {
     fail(`the two EXIF projections disagree for ${stale.length} photo(s): ${stale.slice(0, 8).join(", ")}` +
          `${stale.length > 8 ? " …" : ""}\n` +
-         `  images/meta/ came from the jq map in tools/photos/extract-photo-metadata.sh;\n` +
-         `  what ships comes from EXIF_KEY_MAP in tools/lib/photo-indexes.ts. Make the two agree,\n` +
-         `  or re-run extract-photo-metadata.sh if images/meta/ is simply older than metadata.json.`);
+         `  both come from projectExifRecord in tools/lib/photo-indexes.ts, so images/meta/ was\n` +
+         `  written from an older metadata.json than the one on disk. Re-run extract-photo-metadata.sh.`);
   }
   const rebuiltHist = (await buildHistogramIndex()).index;
   const histStale = stems.filter((stem) => histIndex[stem] !== rebuiltHist[stem]);

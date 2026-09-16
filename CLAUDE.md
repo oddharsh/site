@@ -1399,20 +1399,34 @@ Two encoders + one transform tool, all built from source:
   those files at all, so the parse is ~0.3ms and no language or rewrite can
   reach it. The photo pipeline's real cost is the encode: the same run spends
   ~19s in the zenc histogram bake.
-- **exif-sooc, jaq** (`cargo install --git https://github.com/oddharsh/exif-sooc exif-sooc --locked`, and
-  `brew install jaq`). exiftool is GONE from this repository as of 2026-08-14:
+- **exif-sooc** (`cargo install --git https://github.com/oddharsh/exif-sooc exif-sooc --locked`).
+  exiftool is GONE from this repository as of 2026-08-14:
   the six other scripts that still called it (encoding grids and samples,
   Instagram export, add photos, remote download, thumbnail re-encode) moved too, using ExifTool's own
   flag spellings so each swap was one word. `-all=` is byte-identical to
   ExifTool's output across a 20-file, 452 MB mixed Fujifilm and Leica set, and
   `-TagsFromFile` copies APP1 segments verbatim where ExifTool rebuilds them,
-  keeping 165 tags to its 163 at the cost of the source's padding. The per-stem
-  split still wants a jq-language interpreter, and since 2026-09-08 that is
-  **jaq** rather than jq: every remaining filter was diffed engine against
-  engine over the real 165-photo library and matched byte for byte
-  (`--slurpfile`, `-S`, `--arg`, `-n`, `with_entries`, `has`, `to_entries`,
-  array subtraction, the photo-index merge). Nothing here uses `-s`, which is
-  the one real incompatibility.
+  keeping 165 tags to its 163 at the cost of the source's padding.
+
+  **No jq-dialect CLI is in the pipeline since 2026-09-15.** The JSON the
+  shells used to hand to jaq (the photo-index entry build and merge, the
+  metadata prune and its dropped and unread lists, the per-stem split, the
+  manifest key list and `@uri` in the remote downloader) goes through
+  `tools/photos/pipeline-json.ts`, one node call per operation, each
+  subcommand naming the filter it replaced. jaq had held that seat since
+  2026-09-08, when every filter was diffed jq against jaq over the library;
+  the reason it left is the paragraph above this one, where the swap misfiled
+  a `-s` incompatibility as an operator bug because nobody ran the control.
+  Two engines that disagree in the corners is a class of bug, and the pipeline
+  already ran node four times per add. Two outputs are committed files
+  carrying jaq's pretty-printer bytes, so the bar was byte identity:
+  `index-merge` reproduces `src/worker/photo-index.json` on an empty spool and
+  matches jaq's filters on a three-entry one, `prune` reproduces
+  `public/images/metadata.json`, and `meta-split` writes 258 per-stem files
+  identical to the jaq split. The split also calls `projectExifRecord`, so the
+  22-key map is written ONCE now; the "written twice" note further down is
+  history. `config/retired.json` bans the binary and
+  `contract-pipeline-json-reproduces-jaq` holds the byte claims.
 - **Pillow, via uv** (`brew install uv`, then `bun run photos:env`) — required by
   `gen-pixel-peeper.py` alone, which is a one-off generator rather than part of
   this pipeline. The 64-bin RGB/luminance bake moved into `zenc histogram` on
@@ -1781,11 +1795,12 @@ Diffing a full build against `origin/main`'s put all 1532 staged files identical
 **exif.json lost a hop rather than moving one.** It used to be rolled up out of
 `images/meta/`, which build.ts step 1a2 derives FROM `exif.json`, so the pipeline
 projected `metadata.json` into 165 files and rolled those back into one. It is
-one projection now. What that costs is a second implementation of the key map,
-since `extract-photo-metadata.sh` still writes the per-photo files for the
-histogram bake through a jaq object literal; `check-photo-pipeline.ts` holds the
-two together wherever `images/meta/` exists, which is any workstation that has
-just run the pipeline.
+one projection now. What that cost until 2026-09-15 was a second implementation
+of the key map, since `extract-photo-metadata.sh` wrote the per-photo files for
+the histogram bake through a jaq object literal; `check-photo-pipeline.ts`
+held the two together wherever `images/meta/` existed. The split calls
+`projectExifRecord` now, so the map is one implementation, and that check
+catches a stale `images/meta/` instead.
 
 Two floors, since every failure here is an ABSENCE: the build throws below 100
 exif stems (165 today) and below 400 fingerprint tiers (660 today, 165 photos x

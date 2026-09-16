@@ -568,8 +568,12 @@ echo "phase 4 — hash tiers + photo index + metadata regen"
 # upload dates survive a rerender.
 INDEX_FILE="$PROJECT_DIR/src/worker/photo-index.json"
 NOW_ISO="$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
-NEW_ENTRIES="$TMP/index-entries.json"
-echo '{}' > "$NEW_ENTRIES"
+# Entries spool as NUL-separated fields, five per photo, and one node call at
+# the end merges them all. It was one jaq call per photo building a JSON
+# object, then a second jaq merging that object in; the JSON engine left the
+# pipeline on 2026-09-15 (pipeline-json.ts names the filters it replaced).
+NEW_ENTRIES="$TMP/index-entries.spool"
+: > "$NEW_ENTRIES"
 [ -f "$INDEX_FILE" ] || echo '{}' > "$INDEX_FILE"
 idx=0
 META_SOURCES=()
@@ -581,20 +585,12 @@ while read_input; do
   # `album` and `heif` are written only when set, so an entry for the site-wide
   # pool keeps the three-key shape it has always had and photo-index.json diffs
   # stay legible. An empty string is never written as a value.
-  jaq --arg s "$stem" --arg k "$full" --argjson z "$size" --arg album "$ALBUM" --arg heif "$heif" \
-     '. + {($s): ({full: $k, size: $z}
-                  + (if $album != "" then {album: $album} else {} end)
-                  + (if $heif != "" then {heif: $heif} else {} end))}' "$NEW_ENTRIES" > "$NEW_ENTRIES.tmp"
-  mv "$NEW_ENTRIES.tmp" "$NEW_ENTRIES"
+  printf '%s\0%s\0%s\0%s\0%s\0' "$stem" "$full" "$size" "$ALBUM" "$heif" >> "$NEW_ENTRIES"
   META_SOURCES+=("$f")
 done < "$INPUTS"
-jaq -S --arg now "$NOW_ISO" --slurpfile new "$NEW_ENTRIES" '
-  . as $idx
-  | ($new[0] | with_entries(.value += {uploaded: ($idx[.key].uploaded // $now)}))
-  | $idx + .
-' "$INDEX_FILE" > "$INDEX_FILE.tmp"
-mv "$INDEX_FILE.tmp" "$INDEX_FILE"
-echo "  photo index: $(jaq 'length' "$INDEX_FILE") entries"
+# writes beside and renames, so a failure here leaves the committed index as it was
+node "$SCRIPT_DIR/pipeline-json.ts" index-merge "$INDEX_FILE" --entries "$NEW_ENTRIES" --now "$NOW_ISO"
+echo "  photo index: $(node "$SCRIPT_DIR/pipeline-json.ts" length "$INDEX_FILE") entries"
 # Ingest is always a batch update: read precisely the selected pixel sources
 # and preserve metadata for other published photos, even across input folders.
 # The standalone extractor still offers a full replacement with its own guard.
