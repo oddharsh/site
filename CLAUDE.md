@@ -372,7 +372,9 @@ worktrees may edit freely, but a worktree is not a release surface.
   runs the coffee tests, and sweeps the route oracle against a Worker booted
   in-process (`bun run routes:check`, wrangler's `createTestHarness()`), so a
   broken route fails the PR instead of the deploy. Site, native photo, and network
-  validation run in parallel. The required `validate` job depends on all three
+  validation run in parallel. Four contract jobs consume the site job's built
+  tree: Bun/Node crossed with real/symlinked temporary directories. The required
+  `validate` job depends on the matrix and all three validation jobs
   and always runs: any failed, cancelled or skipped dependency makes it fail.
   Keep every validation job in its `needs`; the contract suite checks the census.
   Production promotion still requires the entire CI workflow to succeed.

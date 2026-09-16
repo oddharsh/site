@@ -12,6 +12,24 @@ const workflow = JSON.parse(execFileSync("bun", [
 const { validate, ...jobs } = workflow.jobs;
 const gate = validate.steps.find((step) => step.env?.RESULTS);
 
+test("the contract matrix retains both runtimes and both temporary-directory shapes", () => {
+  const { contracts } = jobs;
+  assert.equal(contracts.needs, "site");
+  assert.equal(contracts.strategy["fail-fast"], false);
+  const { runtime, temp } = contracts.strategy.matrix;
+  assert.deepEqual(runtime.flatMap((r) => temp.map((t) => `${r}:${t}`)).sort(),
+    ["bun:real", "bun:symlink", "node:real", "node:symlink"]);
+  const download = contracts.steps.find((step) => step.uses?.startsWith("actions/download-artifact@"));
+  assert.equal(download.with.name, "site-build");
+  for (const override of ["run-id", "repository", "github-token"]) {
+    assert.equal(download.with[override], undefined, "the build must come from this workflow run");
+  }
+  const suite = contracts.steps.find((step) => step.env?.CONTRACT_SCRIPT);
+  assert.equal(suite.env.CONTRACT_SCRIPT, "${{ matrix.runtime == 'bun' && 'test' || 'test:node' }}");
+  assert.equal(suite.run, 'bun run "$CONTRACT_SCRIPT"');
+  assert.equal(suite.if, undefined);
+});
+
 test("manual CI keeps checkout and cache scope on the dispatched revision", () => {
   assert.ok(Object.hasOwn(workflow.on, "workflow_dispatch"));
   assert.equal(workflow.on.workflow_dispatch?.inputs, undefined);
