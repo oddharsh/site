@@ -13,7 +13,7 @@ const inputs = [["XT500010.HIF", "8"], ["XT509986.HIF", "1"]] as const;
 const files = ["600.jpg", "600.avif", "400.avif", "200.avif"];
 const root = mkdtempSync(join(tmpdir(), "site-heif-"));
 const run = (args: (string | number)[]) => execFileSync(String(args[0]), args.slice(1).map(String), { stdio: ["ignore", "pipe", "pipe"] });
-const median = (v: number[]) => [...v].sort((a,b) => a-b)[Math.floor(v.length / 2)];
+const median = (v: number[]) => { const s = [...v].sort((a,b) => a-b); return (s[Math.floor((s.length-1)/2)] + s[Math.floor(s.length/2)]) / 2; };
 type Kind = "baseline" | "candidate";
 function tiers(kind: Kind, name: string, orient: string) {
   const out = join(root, kind, name);

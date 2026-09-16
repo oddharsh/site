@@ -31,15 +31,18 @@ HEIF decode. Encoders and settings are shared and pinned identically.
 
 | Pair | TIFF path (ms) | Native path (ms) |
 |---|---:|---:|
-| 1 | 6874.14 | 6233.10 |
-| 2 | 6630.75 | 6252.13 |
-| 3 | 6238.96 | 6471.94 |
-| 4 | 6540.77 | 6473.14 |
-| 5 | 6446.86 | 6745.34 |
-| Median | 6540.77 | 6471.94 |
+| 1 | 5997.83 | 6577.64 |
+| 2 | 6669.62 | 6205.31 |
+| 3 | 6012.22 | 5891.53 |
+| 4 | 5863.13 | 5940.45 |
+| 5 | 5864.70 | 5891.53 |
+| Median | 5997.83 | 5940.45 |
 
-The ratio of medians is **1.05% faster**, with two of five pairs slower. This
-is within the observed run-to-run variation, not a demonstrated stable gain.
+The ratio of medians is **0.96% faster**, with three of five pairs slower.
+This is within observed variation, not a demonstrated stable gain. An earlier
+harness measured 1.05% with two of five pairs slower; that data is retained in
+`heif-initial-result.json`. The table above comes from the committed Bun harness.
+
 Each source avoided writing and reading a roughly 311.35 MiB TIFF, but memory
 rendering and decode still cost time. This sample used warm local files and
 says nothing about cold storage, other camera formats or other macOS versions.
@@ -55,7 +58,7 @@ Build baseline from the stated commit in a separate worktree; build candidate:
 
 ```sh
 cargo build --release --locked --manifest-path tools/photos/zenc/Cargo.toml --features heif-experiment --example heif-memory
-python3 tools/photos/experiments/bench-heif.py /absolute/baseline/zenc tools/photos/zenc/target/release/examples/heif-memory /absolute/originals 5
+bun tools/photos/experiments/bench-heif.ts /absolute/baseline/zenc tools/photos/zenc/target/release/examples/heif-memory /absolute/originals 5
 ```
 
 Needs macOS ImageIO, the existing libavif prerequisites, and those two originals.
@@ -73,3 +76,7 @@ end-to-end benefit remain prerequisites before connecting this to ingest.
 The shared loader extraction also rebaked all 258 committed photo histograms;
 the packed index remained byte-identical. The derivation digest was regenerated
 only after that comparison, so the metadata records the new shared source.
+
+The initial CI run rejected a Python benchmark under the repository retirement
+rule. The harness was ported to pinned Bun, the unchanged contract passed, and
+the complete experiment was rerun. No test or retirement rule was relaxed.
