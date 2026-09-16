@@ -970,6 +970,14 @@ refusal of a canary `packageManager` is measured above; keep the field absent.
 
 ## Read the canary tripwire (`canary.yml`)
 
+The Linux browser leg uses the official Playwright image pinned by digest and
+checks its version against the installed `playwright-core`. The image supplies
+system libraries and bundled Chromium/Firefox/WebKit; Chrome Beta and both Edge
+channels are installed fresh for every run. The verified host Bun binary runs
+inside the container. Reporting stays on the host, where GitHub CLI is available.
+Branch dispatches print results without editing the shared issues. An instrument
+failure still fails its job, even when issue reporting is disabled.
+
 Three nightly legs run moving targets through gates this repository already
 holds its pins to, and none of them writes anything. The workflow is
 `.github/workflows/canary.yml`; each leg is one script under `tools/`.
