@@ -311,16 +311,16 @@
     {
       "bin": "python3",
       "install": "brew install python",
-      "why": "alt text in add-photos.sh, plus gen-pixel-peeper.py; only the last of those wants Pillow, from tools/photos/requirements.txt. build-recipes.py was the third consumer and was deleted on 2026-08-14 when exif-sooc took over the recipe card",
+      "why": "gen-pixel-peeper.py alone, the one-off /pixel-peeper trial generator, which wants Pillow from tools/photos/requirements.txt. The captioner left for gen-alt-text.ts on 2026-09-15 and build-recipes.py for exif-sooc on 2026-08-14, so nothing in the photo PIPELINE runs an interpreter any more",
       "required_by": [
-        "tools/photos/add-photos.sh"
+        "tools/photos/gen-pixel-peeper.py"
       ],
       "version": {
         "flag": "--version",
         "match": "Python (\\d+\\.\\d+\\.\\d+)"
       },
       "bytes": false,
-      "bytes_why": "captions and one study-page generator. What would move those is Pillow, which tools/photos/requirements.txt pins and dependabot owns"
+      "bytes_why": "one study-page generator. What would move its bytes is Pillow, which tools/photos/requirements.txt pins and dependabot owns"
     }
   ]
 }

@@ -1128,7 +1128,7 @@ Single-page personal site at `aadhar.sh`. A Cloudflare Worker with static assets
 | `public/.well-known/http-message-signatures-directory` | JWKS for AadharshBot's Ed25519 public key (Web Bot Auth IETF draft). |
 | `public/images/` + `public/i/` | `images/` holds the photo DATA surfaces. COMMITTED: `metadata.json` (the EXIF RECORD, long field names + the Fuji recipe card), `histograms.json`, `alt.json`, `semantics.json`, `hashes.json` (stem to hash8 map). DERIVED into `.build/` by build.ts and never committed: `exif.json` (the tooltip's TEXT tier, every photo's short-key EXIF in one 2.6KB-brotli file, warmed once on idle because the homepage draws a fresh random 12 of 165 per request and a per-slot warm-up was cold nearly every visit), `fingerprints.json` (sha256 of every published tier, the map `photo_recipe` recognises an uploaded thumbnail with), and `meta/<stem>.json` (per-photo EXIF plus the four 64-bin histogram channels, the BARS tier, fetched only on the hover that needs them and the self-healing fallback for a stem missing from a cached `exif.json`). All three still serve at the URLs they always had; what changed is where they come from. The pixel tiers (600px AVIF+JPG squares, plus 400px and 200px AVIF) live in `i/` under content-hashed names, 660 files for 165 photos. |
 | `public/og/` | Pre-baked 1200x630 OG/Twitter cards, one per garage + lwe page (`<section>-<name>.png`): the page's live demo floated on the Bliss desktop under the page's own favicon as a brand stamp, so a shared link unfurls as the interaction rather than a bare title. **There is no route label on the card**, and this row said there was until 2026-08-15: the generator's own header comment has described a "translucent XP dock naming the route" since #55 while the card template has never rendered one, and the claim was copied here. Wired via `og:image`/`twitter:card` in each page's `<head>` (edge-direct static pages can't be worker-injected). Built by `tools/photos/gen-og-cards.ts` (playwright-core → Chrome, captures production for live data); meta added by `tools/photos/inject-og-meta.ts`. **Both paths read `scripts/` here until the same date**, which is the split the layout table above draws and costs a `No such file` to anyone following this row. Regen recipe in MAINTENANCE.md. Cached 30d, deploy purges the edge. |
-| `tools/photos/` | Photo-pipeline + asset scripts (see below). Beyond the core pipeline (`add-photos.sh`, `extract-photo-metadata.sh`, `check-photo-pipeline.mjs`, `zenc/` the JPEG encoder crate): `add-car-photo.sh` (one resto-mod reference photo into the dual AVIF+JPG pair the car-link tooltips expect, output `public/cars/<stem>.{avif,jpg}`, no EXIF/R2); `gen-alt-text.py` (AI alt text for every grid photo, writes `public/images/alt.json` `{stem: alt}`, resumable; run by `add-photos.sh` phase 4 — posts the committed `i/` thumbnail bytes to Workers AI when `CLOUDFLARE_API_TOKEN` is set so a brand-new photo captions pre-deploy, else falls back to the cf-garage `/garage/cf/caption` endpoint by stem, which only sees deployed photos); `gen-encoding-samples.sh` (regenerates the color sample set for the `/garage/encoding` study through every encoder, prints byte counts + bytes-per-pixel); `reencode-thumbnails.sh` (re-encodes all published grid thumbnails as pre-cropped center squares from the canonical source folder, two square tiers); `gen-pixel-peeper.py` (the one remaining Pillow consumer, a one-off generator for the /pixel-peeper comparison frames; NOT part of add-photos.sh). The four 64-bin RGB/luminance channels are baked by `zenc histogram`, inside the encoder crate, since 2026-08-14. |
+| `tools/photos/` | Photo-pipeline + asset scripts (see below). Beyond the core pipeline (`add-photos.sh`, `extract-photo-metadata.sh`, `check-photo-pipeline.mjs`, `zenc/` the JPEG encoder crate): `add-car-photo.sh` (one resto-mod reference photo into the dual AVIF+JPG pair the car-link tooltips expect, output `public/cars/<stem>.{avif,jpg}`, no EXIF/R2); `gen-alt-text.ts` (AI alt text for every grid photo, writes `public/images/alt.json` `{stem: alt}`, resumable; TypeScript since 2026-09-15, and it writes the file in the exact shape the Python it replaced did, held by a contract test, because the file is committed; run by `add-photos.sh` phase 4 — posts the committed `i/` thumbnail bytes to Workers AI when `CLOUDFLARE_API_TOKEN` is set so a brand-new photo captions pre-deploy, else falls back to the cf-garage `/garage/cf/caption` endpoint by stem, which only sees deployed photos); `gen-encoding-samples.sh` (regenerates the color sample set for the `/garage/encoding` study through every encoder, prints byte counts + bytes-per-pixel); `reencode-thumbnails.sh` (re-encodes all published grid thumbnails as pre-cropped center squares from the canonical source folder, two square tiers); `gen-pixel-peeper.py` (the one remaining Pillow consumer, a one-off generator for the /pixel-peeper comparison frames; NOT part of add-photos.sh). The four 64-bin RGB/luminance channels are baked by `zenc histogram`, inside the encoder crate, since 2026-08-14. |
 
 ### The photo pipeline
 
@@ -1170,7 +1170,7 @@ public/images/<stem>.{avif,jpg}  +  R2 aadhar-photos/<filename>
    |   that are null rather than fabricate. never guess metadata.
    |
    v
-[gen-alt-text.py] captions any stem missing one -> public/images/alt.json
+[gen-alt-text.ts] captions any stem missing one -> public/images/alt.json
    |   with CLOUDFLARE_API_TOKEN set it posts the committed i/ thumbnail
    |   bytes to Workers AI, so a photo added seconds ago captions here
    |   instead of waiting for a deploy. check-photo-pipeline.mjs then
@@ -1257,7 +1257,7 @@ reference bias stays visible instead of being a claim, and it fails loudly
 rather than averaging over a metric that could not run. Re-run it before
 touching the ingest geometry again.
 
-Take the general rule past this pipeline, since `matched-bytes-probe.py` states
+Take the general rule past this pipeline, since `matched-bytes-probe.ts` states
 half of it already and this is the other half. **A reference-free metric is not
 a safer metric, it is a NARROWER one**, and "the instrument was the error" has
 now been the answer twice on this one thread (gotcha 15 and version affinity are
@@ -1347,7 +1347,7 @@ Two encoders + one transform tool, all built from source:
   measurement is why. Over 12 Fuji colour frames at the shipped tier it looks
   like +1.218 mean SSIMULACRA2, but it spends +4.54% more bytes, and the
   matched-bytes probe (raise plain's q until it costs the same, the test
-  `matched-bytes-probe.py` runs for the resampling work) puts it at **+0.411
+  `matched-bytes-probe.ts` runs for the resampling work) puts it at **+0.411
   mean with sharpyuv LOSING on 5 of 12**. Wins are concentrated and
   content-dependent (one frame +3.473); losses are small. So it is real and
   modest, and turning it on is a deliberate decision that re-mints every `/i/`
@@ -1424,6 +1424,16 @@ Two encoders + one transform tool, all built from source:
   working, measured 2026-08-14. CI has always built its own venv in `RUNNER_TEMP`;
   this is the local half of the same idea. Since the zenc move, a missing Pillow
   costs one study page's regeneration rather than the histograms on 158 photos.
+
+  **The pipeline runs no Python at all since 2026-09-15.** The captioner was the
+  last interpreter it spawned, as `gen-alt-text.py`, and it is
+  `gen-alt-text.ts` now, beside the four node scripts `add-photos.sh` already
+  ran; `matched-bytes-probe.py` went the same way, its printed tables diffed
+  identical against the Python on the same sources. CI no longer sets up Python
+  or builds a venv. `python3` stays declared in `tools.json` for
+  `gen-pixel-peeper.py` alone, and `contract-the-photo-pipeline-runs-no-python`
+  holds the line: no pipeline script or workflow spawns one, and `alt.json`
+  round-trips through the new serializer byte for byte.
 
 The four below serve the STUDY pages rather than the photo pipeline, and every
 one of them was undocumented until `tools:check` went looking (2026-08-14):
@@ -5443,7 +5453,9 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     added since. The general lesson is the same one this gotcha already teaches
     from the other direction: the sweep that fixes a rename has to cover every
     LANGUAGE that resolves a path, and `dirname(dirname(__file__))` is the same
-    arithmetic as `$SCRIPT_DIR/..` wearing different syntax.
+    arithmetic as `$SCRIPT_DIR/..` wearing different syntax. That file is
+    `gen-alt-text.ts` since 2026-09-15, which closes this site by a different
+    route: one fewer language in the pipeline is one fewer sweep to remember.
 
     **Every one of them was CORRECT when written**, because these scripts lived
     at `www/scripts/`, where `$SCRIPT_DIR/..` was the served tree. They moved to

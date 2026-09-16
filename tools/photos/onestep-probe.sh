@@ -22,7 +22,7 @@
 #
 # THE REFERENCE IS THE OTHER TRAP, and it is why this script does not simply
 # score against `zenc square` at full resolution. That reference IS candidate B,
-# so it would be scoring one candidate against itself; `matched-bytes-probe.py`'s
+# so it would be scoring one candidate against itself; `matched-bytes-probe.ts`'s
 # header records the same warning from the other direction. The way out is that
 # ROTATION AND CROPPING RESAMPLE NOTHING — they select and re-index samples — so
 # sips can do those with no filter bias at all, and only the final reduction

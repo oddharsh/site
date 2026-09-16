@@ -457,7 +457,9 @@ does not make a failed write safe to ignore.
   `gen-pixel-peeper.py`, a one-off generator for the /pixel-peeper comparison
   frames. It baked the photo histograms until 2026-08-14, when that moved into
   `zenc histogram` and left the core photo pipeline with no Pillow dependency at
-  all. Nothing in CI installs it any more.
+  all. Nothing in CI installs it any more, and since 2026-09-15 nothing in CI
+  installs Python either: the captioner is `gen-alt-text.ts`, so `python3` is a
+  workstation prerequisite for that one generator and for nothing else.
 - **This repo declares no runtime dependencies.** Everything below is build or
   test tooling. @noble/post-quantum 0.7.0 used to be the exception, the one
   package that reached a visitor, because `lib/botauth.js` imported `ml-dsa.js`

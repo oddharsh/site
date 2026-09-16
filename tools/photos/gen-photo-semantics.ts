@@ -35,7 +35,7 @@
 //   node tools/photos/gen-photo-semantics.ts --vision     # + model terms
 //   node tools/photos/gen-photo-semantics.ts --vision --dry-run
 //
-//   export CLOUDFLARE_API_TOKEN=...   # the same token gen-alt-text.py uses
+//   export CLOUDFLARE_API_TOKEN=...   # the same token gen-alt-text.ts uses
 //   export CLOUDFLARE_AI_GATEWAY=""   # opt OUT of gateway routing (defaults to "default")
 //
 // Resumable: --vision only calls the model for stems that have no vision terms
@@ -44,6 +44,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { MODEL, TOKEN, runVision, visionBody } from "./lib/workers-ai.ts";
 
 // ROOT is the REPO root, matching every sibling in this directory. It used to be
 // dirname(dirname(here)), which resolved to public/ only because this script lived
@@ -57,15 +58,9 @@ const OUT = path.join(ROOT, "public", "images", "semantics.json");
 
 const WANT_VISION = process.argv.includes("--vision");
 const DRY_RUN = process.argv.includes("--dry-run");
-const TOKEN = (process.env.CLOUDFLARE_API_TOKEN || "").trim();
-const ACCOUNT = process.env.CLOUDFLARE_ACCOUNT_ID || "1c99acdb6141579023fb97d24261ea58";
-const MODEL = "@cf/llava-hf/llava-1.5-7b-hf";
-const AI_RUN = `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT}/ai/run/${MODEL}`;
-// Same gateway the worker and gen-alt-text.py use, so all three callers of this one
-// model report into a single per-model log with cost attribution. Observability only,
-// no cf-aig-cache-ttl: --vision is resumable and re-running a stem is how bad terms
-// get replaced, which a cache keyed on the identical request would make impossible.
-const GATEWAY = (process.env.CLOUDFLARE_AI_GATEWAY ?? "default").trim();
+// The token, account, model and gateway live in lib/workers-ai.ts, shared with
+// gen-alt-text.ts since 2026-09-15 so the two callers of this one model cannot
+// drift on auth or on which per-model log their spend reports into.
 
 // Alt text answers "what is in this frame". This answers "what would someone
 // call this frame when looking for it", which is a different question and the
@@ -150,8 +145,7 @@ async function visionTerms(stem, hashes) {
   const entry = hashes[stem] || {};
   if (!entry.j) throw new Error(`${stem} missing from hashes.json (half-run pipeline?)`);
   const file = path.join(ROOT, "public", "i", `${stem}.${entry.j}.jpg`);
-  const image = Array.from(fs.readFileSync(file));
-  const body = JSON.stringify({ image, prompt: VISION_PROMPT, max_tokens: 128 });
+  const body = visionBody(file, VISION_PROMPT, 128);
   if (DRY_RUN) {
     // Report the intent WITHOUT the constructed endpoint. That URL embeds the
     // account id, which comes from the environment, and a dry run is precisely
@@ -160,19 +154,7 @@ async function visionTerms(stem, hashes) {
     console.log(`      would POST ${body.length}B to Workers AI (${MODEL})`);
     return null;
   }
-  // The gateway id is omitted rather than sent empty, because an empty
-  // `cf-aig-gateway-id` is not the same request as one that names no gateway,
-  // and CLAUDE.md records that a wrong gateway FAILS the inference call.
-  const headers = { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" };
-  if (GATEWAY) headers["cf-aig-gateway-id"] = GATEWAY;
-  const response = await fetch(AI_RUN, {
-    method: "POST",
-    headers,
-    body,
-  });
-  if (!response.ok) throw new Error(`${response.status} ${(await response.text()).slice(0, 160)}`);
-  const payload = await response.json();
-  const raw = payload?.result?.description || payload?.result?.response || "";
+  const raw = await runVision(body);
   // The model is asked for a comma list and sometimes writes a sentence anyway.
   // Normalising here rather than trusting the prompt keeps the artifact one
   // shape, which is what the ranking reads.
