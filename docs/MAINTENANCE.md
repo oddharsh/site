@@ -152,8 +152,9 @@ rotation and treat all previously emailed links as compromised.
 
 1. [CI](../.github/workflows/ci.yml) runs site, native photo, and network validation
    in parallel. Site validation covers locked dependencies, build,
-   lint, typechecks, tests, Worker dry-runs, performance gates and the local route
-   oracle. The required `validate` job always runs and succeeds only when all
+   lint, typechecks, module tests, Worker dry-runs, performance gates and the local
+   route oracle. Its built tree is passed to four contract jobs: Bun and Node,
+   each with a real and symlinked temporary directory. The required `validate` job always runs and succeeds only when all
    jobs succeed; failure, cancellation or skipping fails the gate. Cal and
    Serendipity ship inside the site Worker.
 2. [Promote production](../.github/workflows/promote-production.yml) advances
@@ -189,6 +190,11 @@ validation runs independently and caches Cargo dependencies and artifacts with
 platform, Rust compiler, Cargo manifests/locks, runner image and libavif package
 version. The encoder and C adapter rebuild, and tests and Clippy run on cache
 hits. Cache misses use the same commands; no test result is cached.
+
+The contract matrix downloads a tar archive of this run's validated `.build`
+tree, preserving hidden assets and symlinks. Every cell runs the full suite;
+`fail-fast: false` lets all four report. The required join includes the matrix,
+so any failed or skipped cell blocks validation. Artifacts expire after one day.
 
 CI builds the site once through `bun run perf-budget`, whose Wrangler dry-run
 also validates the Worker config. It writes `.build/.perfbudget/index.js` for
