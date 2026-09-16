@@ -27,7 +27,6 @@ export const LIFT: Array<[name: string, files: number, lines: number, what: stri
   ["x402 paywall", 1, 140, "machine payment for the full corpus"],
   ["frame renderer", 1, 307, "the 80-column TUI representation"],
   ["the tools", 5, 1932, "finger, lens, dict, cache, radar"],
-  ["console client", 1, 458, "the PowerShell MCP client at /terminal"],
 ];
 
 // The honest decomposition, and the point of publishing any of this: BASELINE

@@ -33,7 +33,6 @@ export const PLACES = [
   { path: "/serendipity", label: "Serendipity" },
   { path: "/around", label: "Around" },
   { path: "/lens", label: "The Other Web" },
-  { path: "/terminal", label: "Terminal" },
   { path: "/pixel-peeper", label: "Pixel Peeper" },
   { path: "/rn", label: "Music" },
   { path: "/coffee", label: "Coffee" },

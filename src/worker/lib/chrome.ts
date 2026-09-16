@@ -133,7 +133,8 @@ export function lunaPage({
   titleClass = "",
   // Extra classes on the window and its content pane, plus raw attributes on
   // the window. All three default to empty, so the nine existing callers are
-  // byte-identical. They exist for /terminal, which needs the SAME window
+  // byte-identical. They were added for the /terminal console (retired 2026-09-16),
+  // which needed the SAME window
   // structure (nav.js's drag, resize and maximize all key off `body > .window`
   // and its `.title-bar`) while looking like a console rather than a document:
   // no content padding, its own icon, and — via data-no-histnav below — no
@@ -153,8 +154,8 @@ export function lunaPage({
   // "" rather than guessing at `path` keeps a caption from being published as a
   // URL — "Inbox — Outlook Express" would have become a breadcrumb.
   route = "",
-  // The address bar and task pane (lib/explorer.js). /terminal opts out for the
-  // same reason it drops the history buttons: a console is not a folder, and
+  // The address bar and task pane (lib/explorer.js). The /terminal console opted out for the
+  // same reason it dropped the history buttons: a console is not a folder, and
   // neither device would be telling the truth about a per-query frame.
   // `explorerName` is the object's display name, and `explorerTasks` /
   // `explorerDetails` are facts the CALLER counted — nothing here invents one.

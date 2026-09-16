@@ -1785,8 +1785,10 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   // scan matched nothing at all after the Worker moved from .js to .ts, and with
   // no floor it printed "0 literals" and shipped unminified CSS on every
   // Worker-rendered page for as long as nobody read the line. The extension list
-  // above is fixed; the next rename, or an edit to the sentinel, is not.
-  if (litCount < 7) throw new Error(`worker CSS: found only ${litCount} /*min*/ literals (expected 7+) — did the sentinel change, or did the walk stop reaching the staged Worker modules?`);
+  // above is fixed; the next rename, or an edit to the sentinel, is not. The floor
+  // was 7 until wire.ts (the /terminal console) retired on 2026-09-16 and took its
+  // literal with it; 6 are left and the floor sits at that number on purpose.
+  if (litCount < 6) throw new Error(`worker CSS: found only ${litCount} /*min*/ literals (expected 6+) — did the sentinel change, or did the walk stop reaching the staged Worker modules?`);
   console.log(`worker CSS: minified ${litCount} /*min*/ literals across ${fileCount} modules, ~${(saved / 1024).toFixed(1)}KB raw saved`);
 }
 

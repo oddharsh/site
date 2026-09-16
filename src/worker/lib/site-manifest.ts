@@ -133,12 +133,6 @@ export const AGENT_SURFACES = [
     "description": "How much of an origin a machine can actually use — the agent doors, counted rather than scored — and, for this origin, what building all of it cost in files and lines."
   },
   {
-    "path": "/terminal",
-    "title": "Terminal",
-    "mimeType": "text/html",
-    "description": "Three terminal programs an agent can drive by keypress: finger (who runs this host), photos (the archive), and lens (how a URL reads to a machine)."
-  },
-  {
     "path": "/pixel-peeper",
     "title": "Pixel Peeper",
     "mimeType": "text/html",

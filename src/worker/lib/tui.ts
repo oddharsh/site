@@ -1,4 +1,4 @@
-// tui.js — the frame renderer behind /terminal/*. Box-drawing, ANSI SGR, and the
+// tui.ts — the frame renderer behind the terminal tools (/finger, /dict, ...). Box-drawing, ANSI SGR, and the
 // width math that keeps an 80-column frame actually 80 columns wide.
 //
 // The whole module is pure: frames in, string out. No env, no fetch, no state.

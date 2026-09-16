@@ -1,4 +1,4 @@
-// ── /terminal — the terminal programs ─────────────────────────────────────────
+// ── the terminal programs (/finger, /photos, /lens, /dict, /cache, /encode, ...) ──
 // Split from contract-tests.test.mjs; shared imports live in contract-shared.mjs.
 import {
   MODERN_META,
@@ -6,7 +6,6 @@ import {
   assert,
   context,
   handleSiteMcp,
-  handleTerminal,
   handleTool,
   mcpPost,
   staticAssets,
@@ -18,13 +17,11 @@ import {
   tokenizeKeys,
 } from "./contract-shared.ts";
 
-// ── /terminal — the terminal programs ─────────────────────────────────────────
+// ── the terminal programs ──────────────────────────────────────────────────────
 // The renderer is pure and the apps are readers, so these run with stub assets
 // and no network. What they pin is the handful of properties a frame stops
 // being a frame without.
 
-// /terminal stopped being a frame when the console became the wire view; it is
-// an HTML page now and has its own tests below.
 // Every state worth drawing, so a width regression cannot hide in the one pane
 // nobody exercised. Panes that need network (reading, listening, around,
 // coffee) still render here — their loaders fail closed to an empty list, which
@@ -138,33 +135,9 @@ test("the tui routes refuse to be cached or indexed", async () => {
   }
 });
 
-test("/terminal shows the wire, and renders it through the real MCP handler", async () => {
-  // The page exists to show a VIEWER what an agent gets. That is only true if it
-  // runs the actual handler: a second code path that merely agreed with /mcp
-  // today is precisely the thing this page is supposed to not be.
-  const res = await handleTerminal(new Request("https://aadhar.sh/terminal", {
-    headers: { accept: "text/html" },
-  }), terminalEnv(), context());
-  assert.equal(res.status, 200);
-  assert.match(res.headers.get("content-type") || "", /^text\/html/);
-  const html = await res.text();
-
-  // The exchange itself: both halves of the request, and a catalogue that came
-  // back from tools/list rather than from a hand-written list in this file.
-  assert.match(html, /tools\/list/);
-  assert.match(html, /tools\/call/);
-  assert.match(html, /jsonrpc/);
-  for (const tool of ["finger", "dict", "encode", "lens_inspect"]) {
-    assert.ok(html.includes(tool), `the catalogue is missing ${tool}`);
-  }
-
-  // And it is not the emulator again. Named glyph by glyph and class by class,
-  // because this regressed once already by being rebuilt one layer down: the
-  // frames drew [_][#][X] in ASCII inside a real window that had those buttons.
-  for (const ghost of ["ps-line", "ps-console", "PowerShell", "[_][#][X]", "╔", "terminal.js"]) {
-    assert.ok(!html.includes(ghost), `/terminal is drawing the old console again (${ghost})`);
-  }
-});
+// The /terminal console page (wire.ts) retired on 2026-09-16 and its test went
+// with it. What it pinned, that the catalogue comes from the real tools/list
+// rather than a hand-written copy, is the MCP suite's job and stays there.
 
 test("a browser gets the same text a terminal does, not a second layout", async () => {
   // The claim survived the console's deletion, in a simpler form. A tool route
@@ -189,9 +162,14 @@ test("a browser gets the same text a terminal does, not a second layout", async 
 });
 
 test("an unknown program 404s and names the ones that exist", async () => {
-  const res = await terminalGet("/terminal/nope");
+  const res = await terminalGet("/nope");
   assert.equal(res.status, 404);
-  assert.match(await res.text(), /\/terminal/);
+  const body = await res.text();
+  // The index frame is the 404 body: every real program, at its own path.
+  for (const tool of ["/finger", "/photos", "/lens", "/dict", "/cache", "/encode", "/agent-ready", "/radar"]) {
+    assert.ok(body.includes(`  ${tool}\n`) || body.includes(`  ${tool} `), `the 404 body does not list ${tool}`);
+  }
+  assert.ok(!body.includes("/terminal"), "the 404 body still points at the retired console");
   const post = await handleTool(new Request("https://aadhar.sh/finger", { method: "POST" }), terminalEnv(), context());
   assert.equal(post.status, 405);
   assert.equal(post.headers.get("allow"), "GET, HEAD");
