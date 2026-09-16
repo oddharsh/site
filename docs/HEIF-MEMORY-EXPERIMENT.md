@@ -1,12 +1,99 @@
-# Direct HEIF decode experiment — 2026-09-16
+# HEIF processing experiments, 2026-09-16
 
-Base: `206bb3b7bddcba1618ad045f14342103ebacfdbe` (main after #846).
+Original experiment base: `206bb3b7bddcba1618ad045f14342103ebacfdbe` (main after #846).
 Branch: `codex/heif-memory-decode`.
 
-Verdict: preserve this as an experiment; the measured timing gain is too small
-and inconsistent to adopt the native decoder in ingest.
+Verdict: keep the lossless TIFF decoder and cache the shared 16-bit transfer
+conversion. The follow-up measured a 12.7% reduction in median time to generate thumbnails
+with identical outputs. Native decoding remains an experiment.
 
-## What it tries
+## Follow-up: exact 16-bit conversion
+
+The native decoder saved little because both paths repeatedly evaluated a power
+function while converting each channel sample to linear light. The shared
+loader now evaluates the existing formula once for every possible 16-bit value.
+Subsequent samples index those exact results, preserving the original `f32` bits.
+
+There is no interpolation or reduced-precision intermediate. Each transfer
+curve lazily initializes one 256 KiB table per process. The 8-bit path, ICC
+classification, channel policy, orientation, resampling and encoders retain their
+existing behavior. Production ingest continues to pass a lossless TIFF to zenc.
+
+The first table initializer used temporary arrays and overflowed a test
+thread's stack in debug builds. The final version constructs a boxed slice
+directly on the heap. Debug tests and release parity checks both pass.
+
+Baseline and candidate were built from `b7ab04dc`, which incorporates main
+`ee1cc171` into this PR. The candidate adds the table and experiment diagnostics.
+The native example now reports decode, linear conversion, orientation and tier
+timings; `tiff-tiers` profiles the same stages from an existing lossless TIFF.
+
+Six rounds exercised all six execution orders of three paths. Each timed batch
+processed the same two originals described below. Each process initialized its
+own table, so startup cost is included. TIFF paths include creation, read and
+removal of the intermediate.
+
+| Round | Original TIFF (ms) | TIFF with table (ms) | Native with table (ms) |
+|---|---:|---:|---:|
+| 1 | 12533.93 | 12664.96 | 9408.20 |
+| 2 | 12566.55 | 10258.95 | 10525.45 |
+| 3 | 5383.30 | 4726.19 | 5954.49 |
+| 4 | 5436.39 | 4501.65 | 4572.96 |
+| 5 | 5797.94 | 4583.51 | 4462.64 |
+| 6 | 6671.35 | 6159.98 | 5310.36 |
+| Median | 6234.65 | 5443.09 | 5632.42 |
+
+Caching the conversion reduced the TIFF path's median time by **12.70%**.
+Five rounds were faster; paired improvements ranged from -1.05% to 20.95%, with
+a **14.70% median paired improvement**. System load varied during this run:
+the baseline alone ranged from 5.38 to 12.57 seconds. The performance result
+remains provisional; the bit-for-bit correctness result is independent of timing.
+
+Native decoding was **3.48% slower** by median than optimized TIFF, and slower
+in three rounds. It provides no demonstrated additional performance benefit.
+
+All eight tier outputs matched the original TIFF baseline for both candidates,
+before timing and after every round. Full-resolution native RGBA16 samples and
+ICC bytes also matched TIFF. An exhaustive regression test compares all 65,536
+values against the original formula through Luma16, LumaA16, RGB16 and RGBA16,
+for both sRGB and gamma 2.2, including alpha stripping and channel order.
+
+These measurements cover thumbnail generation for two Fuji originals on this
+Mac. They exclude archive JPEG generation, metadata extraction and upload.
+They do not establish a whole-ingest speedup, cold-storage behavior or timing on
+another platform. Raw measurements include execution orders, input and binary
+hashes, and runtime provenance in
+`tools/photos/experiments/heif-transfer-result.json`.
+
+Build the baseline CLI from `b7ab04dc` in an isolated worktree, then build the
+candidate CLI and example from this PR:
+
+```sh
+cargo build --release --locked --manifest-path tools/photos/zenc/Cargo.toml --features heif-experiment --example heif-memory
+cargo build --release --locked --manifest-path tools/photos/zenc/Cargo.toml --bin zenc
+bun tools/photos/experiments/bench-heif.ts /absolute/baseline/zenc tools/photos/zenc/target/release/examples/heif-memory /absolute/originals 6 tools/photos/zenc/target/release/zenc
+```
+
+The optional final argument enables the third path. Three-path runs require a
+multiple of six rounds so each execution order occurs equally often. Omitting
+it retains the original two-path experiment below.
+
+Build the TIFF CLI separately with default features, as above. Enabling the
+experiment also links ImageIO frameworks into a CLI built in that invocation,
+which would change the startup costs being compared. Both timed TIFF CLIs use
+default features and link only libavif and libSystem.
+
+Follow-up validation: 38 Rust tests, release-mode exhaustive sample parity,
+and Clippy with all targets and the experiment feature passed. All 57 focused
+photo/derivation contract tests passed using the repository's 30-second timeout.
+A first focused invocation hit Bun's five-second default timeout.
+
+Lint passed; the tool typecheck matched its existing baseline with no new
+findings. All 258 histograms were rebaked through the canonical histogram
+generator and packer. The packed index stayed byte-identical, its derivation
+record was regenerated, and photo and derivation checks passed.
+
+## Original experiment: direct decoding
 
 The macOS-only `heif-memory` example asks ImageIO for the HEIF image and renders
 it into caller-owned 16-bit RGBA memory in the same color space. It carries the

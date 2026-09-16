@@ -7,7 +7,7 @@
 #[path = "../src/square.rs"] mod square;
 #[path = "../src/jpeg.rs"] mod jpeg;
 #[path = "../src/avif.rs"] mod avif;
-use std::{ffi::{c_char, c_void, CString}, path::Path, process::ExitCode};
+use std::{ffi::{c_char, c_void, CString}, path::Path, process::ExitCode, time::Instant};
 use image::{DynamicImage, ImageDecoder, ImageReader};
 
 extern "C" {
@@ -35,6 +35,14 @@ fn decode(path: &str) -> Result<(DynamicImage, Vec<u8>), String> {
     Ok((DynamicImage::ImageRgba16(buffer), icc))
 }
 
+fn decode_tiff(path: &str) -> Result<(DynamicImage, Vec<u8>), String> {
+    let mut reader = ImageReader::open(path).map_err(|e| e.to_string())?;
+    reader.no_limits();
+    let mut decoder = reader.into_decoder().map_err(|e| e.to_string())?;
+    let icc = decoder.icc_profile().map_err(|e| e.to_string())?.ok_or("TIFF has no ICC")?;
+    Ok((DynamicImage::from_decoder(decoder).map_err(|e| e.to_string())?, icc))
+}
+
 fn run(args: &[String]) -> Result<(), String> {
     match args.first().map(String::as_str) {
         Some("compare") if args.len() == 3 => {
@@ -52,10 +60,15 @@ fn run(args: &[String]) -> Result<(), String> {
             }
             println!("{}", serde_json::json!({"width":width,"height":height,"iccBytes":icc.len(),"rgba16Equal":true}));
         }
-        Some("tiers") if args.len() == 4 => {
+        Some("tiers" | "tiff-tiers") if args.len() == 4 => {
             let orientation = pixels::Orientation::try_from(args[3].parse::<u8>().map_err(|e| e.to_string())?)?;
-            let (image, icc) = decode(&args[1])?;
-            let src = pixels::orient(pixels::from_decoded(image, Some(&icc), pixels::TransferOption::Auto)?, orientation);
+            let start = Instant::now();
+            let (image, icc) = if args[0] == "tiers" { decode(&args[1])? } else { decode_tiff(&args[1])? };
+            let decoded = Instant::now();
+            let src = pixels::from_decoded(image, Some(&icc), pixels::TransferOption::Auto)?;
+            let linear = Instant::now();
+            let src = pixels::orient(src, orientation);
+            let oriented = Instant::now();
             let root = Path::new(&args[2]);
             std::fs::create_dir_all(root).map_err(|e| e.to_string())?;
             for size in [600, 400, 200] {
@@ -66,8 +79,14 @@ fn run(args: &[String]) -> Result<(), String> {
                     std::fs::write(root.join("600.jpg"), jpg).map_err(|e| e.to_string())?;
                 }
             }
+            println!("{}", serde_json::json!({
+                "decodeMs": (decoded-start).as_secs_f64()*1000.0,
+                "linearMs": (linear-decoded).as_secs_f64()*1000.0,
+                "orientMs": (oriented-linear).as_secs_f64()*1000.0,
+                "tiersMs": oriented.elapsed().as_secs_f64()*1000.0,
+            }));
         }
-        _ => return Err("usage: heif-memory compare SOURCE.HIF LOSSLESS.tif | tiers SOURCE.HIF OUTDIR ORIENTATION".into()),
+        _ => return Err("usage: heif-memory compare SOURCE.HIF LOSSLESS.tif | tiers SOURCE.HIF OUTDIR ORIENTATION | tiff-tiers LOSSLESS.tif OUTDIR ORIENTATION".into()),
     }
     Ok(())
 }

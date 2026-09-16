@@ -113,7 +113,7 @@
       },
       "regenerate": "bash tools/photos/extract-photo-metadata.sh \"$SOOC_DIR\" && bun tools/photos/build-histogram-index.ts",
       "recorded": {
-        "inputs": "7841f5911df4f6827fa82d9b1dcaefdf8e0c607de25121baa7f13a4fd2758068",
+        "inputs": "34610abf4821b577d472b6ca980bee3e628b140765d1ebc69ef8d42f7ef43a8a",
         "count": 261
       }
     },
