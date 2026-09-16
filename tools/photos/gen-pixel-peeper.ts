@@ -441,6 +441,15 @@ function encode(kind: Kind, srcs: Srcs, out: string, q: number, chroma = "420"):
  *  Returns the closest attempt, whether or not it made tolerance; the caller
  *  decides whether to keep it. */
 function searchQuality(kind: Kind, srcs: Srcs, tmp: string, target: number, chroma = "420", lo = 5, hi = 100): { q: number; bytes: number; path: string } | null {
+  if (lo > hi) return null;
+  if (kind === "zenc") {
+    const out = path.join(tmp, "search-zenc.jpg");
+    const result = JSON.parse(zenc(["jpeg-search", srcs.png, out, String(target), chroma, String(lo), String(hi)])) as { q: number; bytes: number };
+    // Keep the same returned filename/lifetime as the other encoder paths.
+    const keep = path.join(tmp, `cand-zenc-${result.q}.jpg`);
+    fs.copyFileSync(out, keep);
+    return { ...result, path: keep };
+  }
   const out = path.join(tmp, `search-${kind}.jpg`);
   let best: { q: number; bytes: number; path: string } | null = null;
   const seen = new Set<number>();
