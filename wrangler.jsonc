@@ -203,7 +203,10 @@
       // Per-request proof of possession; the static asset alone is unsigned.
       "/.well-known/http-message-signatures-directory",
       "/agent/*", "/oauth2/*",
-      "/whoareyou", "/whoareyou.json", "/security",
+      "/whoareyou", "/whoareyou.json",
+      // /security and /security.json (the page is built, the JSON is its three live
+      // connection values). /security.md is already claimed by "/*.md" below.
+      "/security*",
       "/reading", "/updates", "/updates.json",
     "/perf",
     "/perf.json", "/restore",

@@ -1835,6 +1835,19 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   const searchHtml = await searchResponse.text();
   if (!searchHtml.includes('form method="get" action="/search"')) throw new Error("static /search renderer lost its blank search form");
   await writeFile(`${OUT}/public/search.html`, searchHtml);
+  // /security, since 2026-09-16. Three placeholders and the one script that
+  // fills them from /security.json are what make a per-request page bakeable;
+  // both are asserted, because a render that lost either would ship a page
+  // claiming a connection it never read.
+  const security = await import(pathToFileURL(resolve(OUT, "src/worker/security.ts")).href + nonce);
+  const securityResponse = security.renderSecurityCenter();
+  if (securityResponse.status !== 200) throw new Error(`static /security renderer returned ${securityResponse.status}`);
+  const securityHtml = await securityResponse.text();
+  for (const key of ["colo", "httpProtocol", "tlsVersion"]) {
+    if (!securityHtml.includes(`data-sc="${key}"`)) throw new Error(`static /security renderer lost its ${key} placeholder`);
+  }
+  if (!securityHtml.includes('fetch("/security.json"')) throw new Error("static /security renderer lost the script that fills its connection values");
+  await writeFile(`${OUT}/public/security.html`, securityHtml);
 
   const env = { ASSETS: assets };
   const indexResponse = await writing.renderWritingIndex(env);
@@ -1848,7 +1861,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     if (response.status !== 200) throw new Error(`static /writing/${post.slug} renderer returned ${response.status}`);
     await writeFile(`${OUT}/public/writing/${post.slug}.html`, await response.text());
   }
-  console.log(`static renders: /lens + blank /run + blank /search + /writing index + ${posts.length} notes staged from canonical Worker renderers`);
+  console.log(`static renders: /lens + blank /run + blank /search + /security + /writing index + ${posts.length} notes staged from canonical Worker renderers`);
 }
 
 // 5c) shorten every CSS custom property name, across the whole staged tree.

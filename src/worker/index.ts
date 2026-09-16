@@ -20,7 +20,7 @@ import { handleLensWire } from "./lens-wire.ts";
 import { handleLensNlweb } from "./lens-nlweb.ts";
 import { handleLensTools } from "./lens-tools.ts";
 import { handleLensMarkdown } from "./lens-markdown.ts";
-import { serveAssetWith404Clamp, serveFreshAsset, servePrecompressedShell, servePrecompressedText, serveStaticPage } from "./lib/assets.ts";
+import { serveAssetWith404Clamp, serveFreshAsset, serveMarkdownTwin, servePrecompressedShell, servePrecompressedText, serveStaticPage } from "./lib/assets.ts";
 import { BOT_UA, handleSignatureDirectory, withBotPolicyCache } from "./lib/botauth.ts";
 import { CANONICAL_HOST, PAGE_CACHE_CONTROL, isCanonicalHost } from "./lib/const.ts";
 import { HOMEPAGE_DISCOVERY_LINK } from "./lib/security.ts";
@@ -43,7 +43,7 @@ import { cronHomeProbe } from "./perf-probe.ts";
 import { handleDyno, handleDynoJson } from "./dyno.ts";
 import { handleAsk } from "./nlweb.ts";
 import { handleSearch, handleSearchJson } from "./search.ts";
-import { handleSecurityCenter } from "./security.ts";
+import { handleSecurityJson, renderSecurityCenter } from "./security.ts";
 import { handleTool } from "./terminal.ts";
 import { handleSystemRestore, handleUpdatesJson, handleWindowsUpdate } from "./updates.ts";
 import { handleWhoareyou, handleWhoareyouJson } from "./whoareyou.ts";
@@ -405,7 +405,8 @@ const ROUTE_TABLE: Array<[path: string, handler: RouteHandler]> = [
 
   ["/whoareyou", handleWhoareyou],
   ["/whoareyou.json", handleWhoareyouJson],
-  ["/security", handleSecurityCenter],
+  ["/security", routeSecurity],
+  ["/security.json", handleSecurityJson],
   ["/reading", handleReading],
   ["/updates", routeUpdates],
   ["/updates.json", handleUpdatesJson],
@@ -1007,6 +1008,33 @@ function routeRun(request: SiteRequest, env: Env, ctx: ExecutionContext, url: UR
 function routeSearch(request: SiteRequest, env: Env, ctx: ExecutionContext, url: URL) {
   if (url.searchParams.get("q")) return handleSearch(request, env, ctx);
   return serveStaticPage(request, env, { headers: UTILITY_SHELL_HEADERS });
+}
+
+// /security is a built document since 2026-09-16 (security.ts's header says
+// why); the three per-connection values it shows arrive from /security.json.
+// Markdown negotiation runs here rather than inside serveStaticPage because the
+// twin has to carry the page's own noindex: a Markdown rendering of a noindex
+// page should not be the indexable copy of it.
+async function routeSecurity(request: SiteRequest, env: Env) {
+  if (wantsMarkdown(request)) {
+    const md = await serveMarkdownTwin(request, env, "/security.md", { "x-robots-tag": "noindex" });
+    if (md) return md;
+  }
+  const headers = {
+    ...GENERATED_PAGE_HEADERS,
+    "x-robots-tag":    "noindex",
+    "referrer-policy": "strict-origin-when-cross-origin",
+  };
+  const response = await serveStaticPage(request, env, { headers });
+  if (response.status !== 404) return response;
+  // No staged document: `bun run dev` serves the readable tree and derives
+  // nothing, so the bake is absent there. Render live, the way /writing does,
+  // so the page works in dev; in production the build refuses to ship without
+  // the file, so this arm is never taken.
+  try { await response.body?.cancel(); } catch {}
+  const live = renderSecurityCenter();
+  for (const [k, v] of Object.entries(headers)) live.headers.set(k, v);
+  return live;
 }
 
 function routeLens(request: SiteRequest, env: Env, ctx: ExecutionContext, url: URL) {

@@ -88,7 +88,7 @@
       // Per-request proof of possession; the static asset alone is unsigned.
       "/.well-known/http-message-signatures-directory",
       "/agent/*", "/oauth2/*",
-      "/whoareyou", "/whoareyou.json", "/security",
+      "/whoareyou", "/whoareyou.json", "/security*",
       "/reading", "/updates", "/updates.json",
     "/perf",
     "/perf.json", "/restore",
