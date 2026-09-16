@@ -302,10 +302,6 @@
     delta: "Delta toggles hypothetical infrastructure. Predict, flip, check.",
   };
 
-  function modeLabel() {
-    return view === "both" ? "Compare" : view.charAt(0).toUpperCase() + view.slice(1);
-  }
-
   function readUrlState() {
     var p = new URLSearchParams(location.search);
     var views = ["both", "human", "machine", "browser", "delta"];
@@ -2167,7 +2163,7 @@
     /** @type {string[]} */
     var parts = [];
     parts.push("<span><b>" + data.status + "</b> " + esc(httpText(data.status)) + "</span>");
-    parts.push("<span>" + esc(modeLabel()) + "</span>");
+    parts.push("<span>" + esc(view === "both" ? "Compare" : view.charAt(0).toUpperCase() + view.slice(1)) + "</span>");
     parts.push("<span>" + esc(data.contentType || "?") + "</span>");
     if (data.anatomy) parts.push("<span>" + bytes(data.anatomy.rawBytes) + "</span>");
     if (data.cost && data.cost.tiers && data.cost.tiers.length) parts.push("<span>~" + fmtTok(data.cost.tiers[0].tokens) + " tok</span>");

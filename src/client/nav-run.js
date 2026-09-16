@@ -186,8 +186,6 @@ export function createRun(options) {
   }
 
   // ── filtering + render ────────────────────────────────────────────────────────
-  function pool() { return PAGES.concat(ACCESSORIES, WRITING || [], PROFILES, PHOTOS || []); }
-
   function score(item, q) {
     var l = item.label.toLowerCase(), h = (item.hint || "").toLowerCase(), p = (item.path || "").toLowerCase();
     if (l === q) return 100;
@@ -200,7 +198,7 @@ export function createRun(options) {
 
   function render() {
     var q = input.value.trim().toLowerCase();
-    var items = pool();
+    var items = PAGES.concat(ACCESSORIES, WRITING || [], PROFILES, PHOTOS || []);
     if (q) {
       items = items.map((it) => { return { it: it, s: score(it, q) }; })
         .filter((x) => { return x.s >= 0; })

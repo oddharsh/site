@@ -47,19 +47,6 @@
 
   var state = null;
 
-  function intro() {
-    return section("What it answers", { text: "not run" },
-      "Asks this origin's /ask endpoint one real question and grades the answer against NLWeb's result contract.",
-      '<div class="lx-tools-intro"><b>Agent doors knocks. This walks through.</b> ' +
-      'A door that answers 200 can still answer with nothing an agent can use, and the field that decides it is ' +
-      '<code>schema_object</code>.' +
-      '<div class="lx-nlweb-ask"><input type="text" id="lx-nlweb-q" maxlength="200" ' +
-      'placeholder="what is this site about" aria-label="the question to ask this origin">' +
-      '<button class="lx-browser-run" type="button" id="lx-nlweb-run">Ask it</button></div>' +
-      '<div class="lx-cap">One request, cached for an hour. Asking somebody else’s retrieval endpoint a question ' +
-      'costs them a lookup, so this sends <code>mode=list</code> and never fires on its own.</div></div>');
-  }
-
   function shutPane(s) {
     // SHUT and UNREADABLE are different findings and are drawn differently, the
     // same distinction classifyDoor keeps: "there is no endpoint here" and "we
@@ -90,7 +77,16 @@
   }
 
   function paneHtml(s) {
-    if (!s) return intro();
+    if (!s) return section("What it answers", { text: "not run" },
+      "Asks this origin's /ask endpoint one real question and grades the answer against NLWeb's result contract.",
+      '<div class="lx-tools-intro"><b>Agent doors knocks. This walks through.</b> ' +
+      'A door that answers 200 can still answer with nothing an agent can use, and the field that decides it is ' +
+      '<code>schema_object</code>.' +
+      '<div class="lx-nlweb-ask"><input type="text" id="lx-nlweb-q" maxlength="200" ' +
+      'placeholder="what is this site about" aria-label="the question to ask this origin">' +
+      '<button class="lx-browser-run" type="button" id="lx-nlweb-run">Ask it</button></div>' +
+      '<div class="lx-cap">One request, cached for an hour. Asking somebody else’s retrieval endpoint a question ' +
+      'costs them a lookup, so this sends <code>mode=list</code> and never fires on its own.</div></div>');
     if (s.pending) return section("What it answers", { text: "asking…" },
       "One request to this origin's /ask endpoint.", '<div class="lx-nlweb-shut">Waiting for the answer.</div>');
     if (!s.ok) return shutPane(s);

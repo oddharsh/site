@@ -42,18 +42,6 @@
     "(Apache-2.0, Mozilla) &mdash; the engine behind Firefox Reader View. It runs in its own Worker at /lens/read, " +
     "because it still needs a DOM implementation and this site's Worker will not carry one.</div>";
 
-  function intro() {
-    return section("Reader's guess", { text: "not run" },
-      "A third-party extractor's opinion of this page, from its own Worker.",
-      '<div class="lx-reader-intro">Readability guesses which part of the document is the article and throws the rest away. ' +
-      'The <b>Raw response</b> tab is what the server actually sent. The interesting number is the gap between them.' +
-      '<button class="lx-browser-run" type="button" id="lx-reader-run">Run the extractor</button></div>' + CREDIT);
-  }
-
-  function busyPane() {
-    return '<div class="lx-spin">Readability is re-reading the page and extracting an article&hellip;</div>';
-  }
-
   // The headline. A percentage alone would be a verdict, and the verdict depends
   // entirely on what kind of page this is: 22% off a Wikipedia article is an
   // extractor doing its job, 55% off a landing page is an extractor deciding the
@@ -159,8 +147,12 @@
   }
 
   function mount(d, isBusy) {
-    if (isBusy) return busyPane();
-    if (!d) return intro();
+    if (isBusy) return '<div class="lx-spin">Readability is re-reading the page and extracting an article&hellip;</div>';
+    if (!d) return section("Reader's guess", { text: "not run" },
+      "A third-party extractor's opinion of this page, from its own Worker.",
+      '<div class="lx-reader-intro">Readability guesses which part of the document is the article and throws the rest away. ' +
+      'The <b>Raw response</b> tab is what the server actually sent. The interesting number is the gap between them.' +
+      '<button class="lx-browser-run" type="button" id="lx-reader-run">Run the extractor</button></div>' + CREDIT);
     if (!d.ok) {
       return section("Reader's guess", { text: "failed", kind: "warn" },
         "The extractor could not read this page.",

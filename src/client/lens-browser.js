@@ -164,14 +164,6 @@
   // before. Running a recipe first would spend a render to produce an after with
   // nothing to measure it against, so the control simply does not exist yet
   // rather than sitting there disabled.
-  function chips() {
-    return '<div class="lx-browser-do"><b>After interaction:</b>' +
-      '<div class="lx-cap">Lens runs one fixed, published script in its own copy of the page, then re-reads it. Each click spends one of your three renders a minute.</div>' +
-      '<div class="lx-chips">' + RECIPES.map((r) => {
-        return '<button class="lx-chip lx-do-chip" type="button" data-do="' + esc(r.id) + '" title="' + esc(r.claim) + '">' + esc(r.label) + "</button>";
-      }).join("") + "</div></div>";
-  }
-
   // What the recipe actually did, said plainly. Every branch here is a real
   // observation and none of them is a failure, which is why none of them is
   // styled or worded as one.
@@ -320,7 +312,11 @@
       // an ADDITION above it, so the reader never loses the baseline they are
       // being asked to compare against.
       body.innerHTML = (recipeSnapshot ? interactionStrip(recipeSnapshot, snapshot, data) : "") +
-        chips() +
+        '<div class="lx-browser-do"><b>After interaction:</b>' +
+          '<div class="lx-cap">Lens runs one fixed, published script in its own copy of the page, then re-reads it. Each click spends one of your three renders a minute.</div>' +
+          '<div class="lx-chips">' + RECIPES.map((r) => {
+            return '<button class="lx-chip lx-do-chip" type="button" data-do="' + esc(r.id) + '" title="' + esc(r.claim) + '">' + esc(r.label) + "</button>";
+          }).join("") + "</div></div>" +
         (recipeSnapshot ? beforeAfter(snapshot, recipeSnapshot) : "") +
         summary(snapshot, data);
       wireChips(body, onRun);
