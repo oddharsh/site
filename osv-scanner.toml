@@ -25,6 +25,11 @@
 # deleted, rather than quietly hiding a real advisory against a semver wrangler.
 # Do NOT widen it to a PackageOverrides entry on wrangler: that hides every
 # future advisory too, and the day this matters is the day one is real.
+#
+# Upstream: google/osv-scalibr#2441 (filed 2026-09-16) asks the extractor to
+# treat a tarball URL the way it already treats `file:`, version unknown and
+# the package reported as unscannable. When a release carries that, this
+# entry is dead weight and can go, whatever the pin looks like.
 [[IgnoredVulns]]
 id = "GHSA-8c93-4hch-xgxp"
 reason = "false positive: wrangler is pinned to a pkg.pr.new tarball URL, which the bun.lock extractor passes through as the version; the installed wrangler is 4.x and the fix is 2.20.1"
