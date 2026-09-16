@@ -10,7 +10,7 @@
 #   ./extract-photo-metadata.sh --merge /first/frame.HIF /second/other.jpg
 #
 # requires: exif-sooc (cargo install --git https://github.com/oddharsh/exif-sooc exif-sooc),
-#           and the node the rest of the pipeline already runs (pipeline-json.ts)
+#           and the bun the rest of the pipeline already runs (pipeline-json.ts)
 #
 # This read exiftool + jaq + build-recipes.py until 2026-08-14, and jaq alone
 # for its JSON until 2026-09-15. exif-sooc emits
@@ -187,10 +187,10 @@ HASHES_JSON="$PUBLIC_DIR/images/hashes.json"
 # metadata.json byte for byte, which is the bar because that file is jaq's
 # pretty-printer output and `mv` below is what commits it.
 PJ="$SCRIPT_DIR/pipeline-json.ts"
-read_count=$(node "$PJ" length "$OUT.tmp")
-if [ -s "$HASHES_JSON" ] && [ "$(node "$PJ" length "$HASHES_JSON")" -gt 0 ]; then
-  dropped=$(node "$PJ" prune "$OUT.tmp" --published "$HASHES_JSON" --out "$OUT.pruned")
-  kept_count=$(node "$PJ" length "$OUT.pruned")
+read_count=$(bun "$PJ" length "$OUT.tmp")
+if [ -s "$HASHES_JSON" ] && [ "$(bun "$PJ" length "$HASHES_JSON")" -gt 0 ]; then
+  dropped=$(bun "$PJ" prune "$OUT.tmp" --published "$HASHES_JSON" --out "$OUT.pruned")
+  kept_count=$(bun "$PJ" length "$OUT.pruned")
 
   # FLOOR. An empty intersection means SRC_DIR is not the folder this archive was
   # built from, and writing that result would replace every record with nothing.
@@ -226,7 +226,7 @@ if [ -s "$HASHES_JSON" ] && [ "$(node "$PJ" length "$HASHES_JSON")" -gt 0 ]; the
   # --merge is the mode for a partial source, which is why the remote pipeline
   # uses it, and merge preserves stems it did not read, so this list is empty
   # there by construction.
-  unread=$(node "$PJ" unread "$HASHES_JSON" --against "$OUT.tmp")
+  unread=$(bun "$PJ" unread "$HASHES_JSON" --against "$OUT.tmp")
   if [ -n "$unread" ]; then
     unread_count=$(printf '%s\n' "$unread" | wc -l | tr -d ' ')
     {
@@ -268,7 +268,7 @@ fi
 # comment used to close with is closed. check-photo-pipeline.ts's agreement
 # check still runs and still means something: images/meta/ older than
 # metadata.json is the state it catches now, rather than two maps drifting.
-node "$PJ" meta-split "$OUT" --out-dir "$META_DIR"
+bun "$PJ" meta-split "$OUT" --out-dir "$META_DIR"
 
 # the recipe card is derived during extraction now (exif-sooc --keyed), so
 # build-recipes.py is gone. One consequence worth knowing: a --merge run
@@ -307,9 +307,9 @@ node "$PJ" meta-split "$OUT" --out-dir "$META_DIR"
 
 # The packed bars the grid inlines into each tile as data-hist. These read the
 # per-photo files, so they still run here.
-node "$SCRIPT_DIR/build-histogram-index.ts"
+bun "$SCRIPT_DIR/build-histogram-index.ts"
 
-COUNT=$(node "$PJ" length "$OUT")
+COUNT=$(bun "$PJ" length "$OUT")
 if [ "$MERGE" -eq 1 ]; then
   echo "✓ merged metadata for $COUNT photos → $OUT (+ per-stem files in images/meta/, histograms baked)"
 else

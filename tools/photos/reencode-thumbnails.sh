@@ -124,7 +124,7 @@ fi
 # Missing sources remain a supported partial rerender; ambiguous ones fail
 # before any existing tier is replaced.
 INPUTS="$TMP/inputs"
-node "$SCRIPT_DIR/photo-inputs.ts" rerender "$SRC" "$PROJECT_DIR/public/i" > "$INPUTS"
+bun "$SCRIPT_DIR/photo-inputs.ts" rerender "$SRC" "$PROJECT_DIR/public/i" > "$INPUTS"
 TOTAL=$(( $(tr -cd '\000' < "$INPUTS" | wc -c) / 4 ))
 echo "re-encoding $TOTAL thumbnails as ${SQ}×${SQ} / ${SQ_SM}×${SQ_SM} center squares  (zenc q${ZENC_Q} + AVIF via $AVIF_KIND)"
 echo "  source: $SRC"

@@ -40,7 +40,7 @@ if grep -Eq '^[[:space:]]*all[[:space:]]*$' "$KEYS_FILE"; then
   fi
   curl --fail --silent --show-error --location --retry 3 --retry-all-errors \
     "${ORIGIN%/}/images/manifest.json" |
-    node "$SCRIPT_DIR/pipeline-json.ts" manifest-keys - > "$NORMALIZED"
+    bun "$SCRIPT_DIR/pipeline-json.ts" manifest-keys - > "$NORMALIZED"
 else
   sed 's/\r$//' "$KEYS_FILE" |
     awk 'NF { sub(/^[[:space:]]+/, ""); sub(/[[:space:]]+$/, ""); print }' > "$NORMALIZED"
@@ -64,7 +64,7 @@ while IFS= read -r key || [ -n "$key" ]; do
   fi
   printf '%s\n' "$stem" >> "$STEMS_FILE"
 
-  encoded="$(node "$SCRIPT_DIR/pipeline-json.ts" uri "$key")"
+  encoded="$(bun "$SCRIPT_DIR/pipeline-json.ts" uri "$key")"
   output="$DEST_DIR/$key"
   echo "fetching $key"
   curl --fail --silent --show-error --location --retry 3 --retry-all-errors \

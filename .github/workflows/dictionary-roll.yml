@@ -69,11 +69,6 @@ jobs:
         # action reads it, so there is one declaration of which bun this repo runs.
         uses: ./.github/actions/setup-bun
 
-      - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: .node-version
-
       - name: Install dependencies
         run: bun install --frozen-lockfile
 

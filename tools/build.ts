@@ -1275,7 +1275,7 @@ if (inlineProbe.includes("/* probe */") ||
   // A silent {} here would ship a grid whose tiles all fall back to the per-hover
   // fetch, which is the pre-#440 behaviour and looks like nothing is wrong.
   const histed = twelve.filter((p) => histograms[p.stem]).length;
-  if (histed !== 12) throw new Error(`homepage bake: ${histed} of 12 baked tiles carry a histogram — run bun run photos or node tools/photos/build-histogram-index.ts`);
+  if (histed !== 12) throw new Error(`homepage bake: ${histed} of 12 baked tiles carry a histogram — run bun run photos or bun tools/photos/build-histogram-index.ts`);
   const slots = grid.renderPhotoSlots(twelve, altMap, { histograms });
 
   let html = await readFile(`${OUT}/public/index.html`, "utf8");

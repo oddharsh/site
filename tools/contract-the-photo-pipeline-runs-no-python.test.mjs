@@ -49,7 +49,7 @@ test("nothing on the photo pipeline's path spawns python", async () => {
     assert.doesNotMatch(code, /setup-python/, `${rel} sets up python`);
   }
   const scripts = JSON.parse(await readFile(new URL("package.json", ROOT), "utf8")).scripts;
-  assert.equal(scripts.captions, "node tools/photos/gen-alt-text.ts");
+  assert.equal(scripts.captions, "bun tools/photos/gen-alt-text.ts");
   assert.equal(scripts["photos:env"], undefined, "the Pillow venv builder left with the last Python");
   for (const [name, cmd] of Object.entries(scripts)) assert.doesNotMatch(cmd, /\bpython3?\b|\buv\b/, `script ${name} names python`);
 });
