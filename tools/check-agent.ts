@@ -60,7 +60,7 @@ const WANT_JSON = process.argv.includes("--json");
 // The sample. One page per rendering path rather than one per section, because
 // what varies here is HOW a document is produced: baked static, worker-rendered,
 // client-hydrated, and the two consoles that build their own DOM.
-const SAMPLE = ["/", "/writing", "/garage", "/garage/horizon", "/terminal", "/lens", "/coffee", "/around"];
+const SAMPLE = ["/", "/writing", "/garage", "/garage/horizon", "/lens", "/coffee", "/around"];
 
 const log = (m) => { if (!WANT_JSON) console.log(m); };
 

@@ -1,7 +1,7 @@
 {
   "$comment": "Machine-owned. Per-input hashes for config/derivations.json, so a stale result can name what moved. Written by `bun run derive:check -- --lock`; do not hand-edit.",
   "files": {
-    "config/site-manifest.json": "db0a1277d9fff075b9114dc393e35a1595bc1a8ff0d0b4630f239f0a8a2f5f08",
+    "config/site-manifest.json": "f553f30185b7eff8e5e8a81e86386521f678b46eb6e9d18065fd37e6a4e057cc",
     "images/alt#L1000069_3": "set",
     "images/alt#L1009919_2": "set",
     "images/alt#L1009920": "set",
@@ -1550,7 +1550,7 @@
     "public/i/XT509996-400.91537e40.avif": "91537e40c58794c8a206880c35e8e5acfad598c37ab1760550cf0ab732625460",
     "public/i/XT509996.47144221.avif": "471442213dffcaf2ad49d282c3a2c6058f555c6a57bdd1de0fa7fe3d2af84612",
     "public/i/XT509996.7c90b12d.jpg": "7c90b12dc70fc92e8f5e836e0b28248f7f07929b2df5607bf8a601b2a4b1b7c4",
-    "tools/photos/shell-data.ts": "1f9f02180c390b232403d24a11b478dbbddd55d5e1d2ed30d96365a7ff5d6e4b",
+    "tools/photos/shell-data.ts": "9f579625d015d884ac8cae51ee6075df9993b3b658f894cadbd168cde05b29e1",
     "tools/photos/zenc/Cargo.lock": "398c295d709c0a2af327efca3f66fe176ffd4b2acde0a9b6b47cf4f342814bf4",
     "tools/photos/zenc/src/histogram.rs": "59e46d9f6e65905da2f6019714963cfc0d2d0cd40b518f5f57c5a14377b6612a",
     "tools/photos/zenc/src/pixels.rs": "e228794c874883f1c94290b40bde33dc02f021b3330dbf5298e8cafb6138d1a9"

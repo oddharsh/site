@@ -520,7 +520,7 @@ export async function queryPhotos(env, options: PhotoQueryOptions = {}, _ctx = n
 }
 
 // The archive's shape rather than its contents: how many shots per camera, lens,
-// film simulation, and year. /terminal/photos renders these as meters, where the
+// film simulation, and year. The /photos frame renders these as meters, where the
 // DISTRIBUTION is the answer ("mostly Classic Chrome on the 27mm") and the exact
 // count is a footnote.
 //

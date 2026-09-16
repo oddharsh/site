@@ -15,7 +15,7 @@
 // A page that renders from the Worker keeps its prose in template literals
 // rather than in a file this script can read, so its twin is authored in
 // src/content/md/ instead. EIGHT are today: /around, /bot, /coffee, /lens,
-// /security, /terminal, /whoareyou, /garage/dyno. The set is not declared
+// /security, /whoareyou, /garage/dyno (and /terminal until 2026-09-16). The set is not declared
 // anywhere; buildTwins looks for <path>.md per surface, so a page joins by
 // someone dropping a file in and nothing announces it. checkTwinFacts() below
 // pins FOUR of them (bot, whoareyou, security, garage/dyno) so those twins

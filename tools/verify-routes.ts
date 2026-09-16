@@ -207,8 +207,7 @@ const ROUTES = [
     { path: "/tooltip.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "tooltip.js" },
     // /terminal.js and /terminal.src.js used to be asserted here — the console
     // was the one client script whose absence was invisible on its own page.
-    // Both are gone: /terminal is a server-rendered view of the MCP exchange and
-    // ships no script at all.
+    // Both are gone, and so is /terminal itself (410 since 2026-09-16).
     { path: "/luna.src.css", status: 200, ct: "text/css", marker: "axp-desktop" },
   ] : []),
   // Representation contracts: the machine paths stay fixed even if a caller
@@ -257,10 +256,10 @@ const ROUTES = [
   // and a bottom-left corner only reaches the body if a complete frame was
   // drawn. A row asserting a word would pass on a frame with no border at all.
   // `plain=1` keeps every assertion off the ANSI escapes.
-  // Was a text frame with a box border. It is an HTML page now, and the marker
-  // is the thing it exists to show: the request an agent actually sends.
-  { path: "/terminal", status: 200, ct: "text/html", marker: "tools/list" },
-  { path: "/terminal/", status: 301 },   // routeDropSlash 301s to /terminal
+  // The console page retired 2026-09-16. 410, and the body names the exchange it
+  // used to show, so an old link is told where to go rather than shrugged at.
+  { path: "/terminal", status: 410, ct: "text/plain", marker: "POST https://aadhar.sh/mcp" },
+  { path: "/terminal/", status: 410, ct: "text/plain", marker: "POST https://aadhar.sh/mcp" },
   { path: "/finger?plain=1", status: 200, ct: "text/plain", marker: "finger — aadharsh@aadhar.sh" },
   // Driving. Two keys switch to the writing pane and open its first note, and
   // the frame prints the state that produced it. If the key loop silently stops
@@ -284,20 +283,22 @@ const ROUTES = [
   { path: "/agent-ready.txt", status: 200, ct: "text/plain", marker: "doors a machine can walk through" },
   { path: "/encode?plain=1", status: 200, ct: "text/plain", marker: "what did your encoder" },
   { path: "/encode?plain=1&url=javascript%3Aalert(1)", status: 200, ct: "text/plain", marker: "refused" },
+  // No marker, on purpose: this path matches no run_worker_first row, so it is
+  // the ASSET layer's 404 (empty content-type), never handleTool's. handleTool's
+  // own 404 (the index frame listing every real program) is only reachable by a
+  // direct call and is pinned in the contract suite instead.
   { path: "/nope-not-a-tool", status: 404 },
-  // The old namespace redirects rather than 404s: these URLs never shipped, but
-  // any link written during development should still land on the tool.
-  { path: "/terminal/dict", status: 301 },
-  { path: "/terminal/finger", status: 301 },
+  // The old /terminal/<tool> namespace (never shipped, a 301 while the console
+  // lived) is gone with it.
+  { path: "/terminal/dict", status: 410 },
   // .txt is the frame's explicit representation, the exact parallel to .md.
   { path: "/dict.txt", status: 200, ct: "text/plain", marker: "fail silently" },
   { path: "/finger.txt", status: 200, ct: "text/plain", marker: "aadharsh@aadhar.sh" },
   { path: "/lens.txt", status: 200, ct: "text/plain", marker: "the other web" },
   { path: "/photos.txt", status: 200, ct: "text/plain", marker: "the archive" },
-  { path: "/terminal.md", status: 200, ct: "text/markdown", marker: "State is a URL, not a session" },
-  // The browser arm of the same route. One renderer feeds both, so this asserts
-  // the HTML wrapper is there — not that a second layout exists.
-  { path: "/terminal", status: 200, ct: "text/html", headers: { accept: "text/html" }, marker: "Courier New", fullPage: true },
+  // The browser arm of a tool route. One renderer feeds both, so this asserts
+  // the HTML wrapper is there and carries the frame, not that a second layout exists.
+  { path: "/dict", status: 200, ct: "text/html", headers: { accept: "text/html" }, marker: "tool-out", fullPage: true },
 
   { path: "/search", status: 200, ct: "text/html", marker: "Search aadhar.sh", fullPage: true },
   { path: "/search.json?q=photo", status: 200, ct: "application/json" },

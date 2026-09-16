@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// radar-sample.mjs — the SENSOR half of /terminal/radar.
+// radar-sample.ts — the SENSOR half of /radar.
 //
 // A server has no antenna, so the sampling has to happen here, on a machine that
 // does. This reads wifi and Bluetooth signal strength on macOS and either prints
@@ -134,7 +134,7 @@ async function sample() {
 }
 
 async function draw(base, samples) {
-  const res = await fetch(`${base.replace(/\/+$/, "")}/terminal/radar`, {
+  const res = await fetch(`${base.replace(/\/+$/, "")}/radar`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ samples, source: ANON ? "radar-sample (anonymized)" : "radar-sample" }),

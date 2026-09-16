@@ -67,7 +67,6 @@ export const TASKBAR = [
   { label: "serendipity", path: "/serendipity", hint: "events worth going to" },
   { label: "around", path: "/around", hint: "the crypto-VC neighborhood" },
   { label: "lens", path: "/lens", hint: "the other web: how machines read a URL" },
-  { label: "terminal", path: "/terminal", hint: "terminal utilities, drivable by keypress" },
   { label: "pixel peeper", path: "/pixel-peeper", hint: "a compression vision test — whose eye do you have?" },
   { label: "music", path: "/rn", hint: "what I'm listening to right now" },
   { label: "coffee", path: "/coffee", hint: "book a coffee / bagel" },
@@ -86,7 +85,6 @@ const ICON_DEFS: Record<string, [prefix: string, colors: string[], art: string]>
   coffee: ["coffee", ["#b08858", "#875c34", "#5e3c1e", "#472d16"], '<path d="M8 12 h13 v6 a6.5 6.5 0 0 1-13 0 Z" fill="#fff"/><path d="M21 13 h3 a2.6 2.6 0 0 1 0 5.2 h-3" fill="none" stroke="#fff" stroke-width="2.2"/><g stroke="#fff" stroke-width="1.8" stroke-linecap="round"><path d="M11 5.5 v3"/><path d="M14.5 5 v3.5"/></g>'],
   lwe: ["lwe", ["#838ae6", "#4b53c9", "#333aa0", "#272d82"], '<path d="M6 9 h20 a2 2 0 0 1 2 2 v9 a2 2 0 0 1-2 2 H14 l-5 4 v-4 H6 a2 2 0 0 1-2-2 v-9 a2 2 0 0 1 2-2 Z" fill="#fff"/><g stroke="#4b53c9" stroke-width="1.7" stroke-linecap="round" fill="none"><path d="M8.5 13.5 q2 -2.4 4 0 t4 0 t4 0"/><path d="M8.5 18 q2 -2.4 4 0 t4 0"/></g>'],
   lens: ["lens", ["#79c7e6", "#2f9fc4", "#1d7895", "#145d73"], '<rect x="5.5" y="5" width="15" height="19" rx="2" fill="#fff"/><g fill="#2f9fc4"><rect x="8.5" y="9.5" width="9" height="1.7" rx=".6"/><rect x="8.5" y="13" width="9" height="1.7" rx=".6"/><rect x="8.5" y="16.5" width="6" height="1.7" rx=".6"/></g><circle cx="20.5" cy="20.5" r="6" fill="#2f9fc4" stroke="#fff" stroke-width="2.2"/><circle cx="18.6" cy="18.6" r="1.5" fill="#fff" opacity=".85"/><path d="M24.8 24.8 L28.5 28.5" stroke="#fff" stroke-width="3.2" stroke-linecap="round"/>'],
-  terminal: ["terminal", ["#4a6ea8", "#22497f", "#012456", "#001633"], '<rect x="4" y="6.5" width="24" height="19" rx="2" fill="#fff"/><rect x="4" y="6.5" width="24" height="4.2" rx="2" fill="#dfe3ee"/><g stroke="#012456" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M9 15 l3.4 2.9 L9 20.8"/></g><rect x="15.2" y="19.2" width="7.6" height="2" rx="1" fill="#012456"/>'],
   "pixel peeper": ["peeper", ["#f19ad0", "#d24d9c", "#a32d73", "#82205a"], '<path d="M2.6 16 C7 9.6 11.4 7.1 16 7.1 C20.6 7.1 25 9.6 29.4 16 C25 22.4 20.6 24.9 16 24.9 C11.4 24.9 7 22.4 2.6 16 Z" fill="#fff"/><rect x="11.1" y="11.1" width="9.8" height="9.8" rx="1" fill="#a32d73"/><rect x="12.9" y="12.9" width="3.1" height="3.1" rx=".5" fill="#fff" opacity=".92"/>'],
 };
 

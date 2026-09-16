@@ -45,7 +45,6 @@ import { handleAsk } from "./nlweb.ts";
 import { handleSearch, handleSearchJson } from "./search.ts";
 import { handleSecurityCenter } from "./security.ts";
 import { handleTool } from "./terminal.ts";
-import { handleTerminal } from "./wire.ts";
 import { handleSystemRestore, handleUpdatesJson, handleWindowsUpdate } from "./updates.ts";
 import { handleWhoareyou, handleWhoareyouJson } from "./whoareyou.ts";
 import { handleWritingIndex, handleWritingPost } from "./writing.ts";
@@ -436,20 +435,20 @@ const ROUTE_TABLE: Array<[path: string, handler: RouteHandler]> = [
 
   ["/mcp", withSelfFetchHandler(handleSiteMcp)],
 
-  // the terminal utilities. /terminal is the index; the programs live under it and
-  // are matched by the PREFIX entry below, which also owns the 404 for a name
-  // that isn't one of them.
   // ── the tools ──────────────────────────────────────────────────────────
   // Top-level, because that is where this site puts utilities: /lens, /photos,
   // /coffee and /reading all live here, while every content page nests. Each
   // tool answers HTML to a browser and a frame to everything else, with an
   // explicit .txt representation alongside — the same contract as the .md twins.
   //
-  // /terminal is NOT their parent. It is the console that drives them, and it
-  // keeps its own route for the same reason /lens has one: there, the
-  // interaction is the product.
-  ["/terminal", handleTerminal],
-  ["/terminal/", routeDropSlash],
+  // /terminal, the console page that showed one /mcp exchange, retired on
+  // 2026-09-16. It rendered per request (no twin, no delta, edge-compressed at
+  // about q4) to show bytes that came out identical every time, and the exchange
+  // it demonstrated reads better from /mcp itself. A 410 rather than a redirect,
+  // because no surviving page is the same thing; the body says where to go. One
+  // `/terminal*` run_worker_first row covers the bare path and everything under it.
+  ["/terminal", routeTerminalGone],
+  ["/terminal/", routeTerminalGone],
 
   ["/finger", handleTool], ["/finger.txt", handleTool],
   ["/radar", handleTool],  ["/radar.txt", handleTool],
@@ -578,18 +577,12 @@ const PREFIX = [
     handle: routeTextTwin,
   },
   {
-    // The old /terminal/<tool> namespace, kept as a permanent redirect. These
-    // URLs never shipped — the restructure landed before the PR merged — so it
-    // costs nothing, and it exists so any link written during development lands
-    // on the tool rather than a 404.
-    label: "/terminal/<tool> -> /<tool>",
+    // /terminal/<tool> was a development-era spelling of the top-level tools
+    // (never shipped) and was a 301 while the console page lived. Gone with it;
+    // the tools still answer at /<tool>, and the 410 body lists them.
+    label: "/terminal/<anything>",
     match: (pathname) => pathname.startsWith("/terminal/"),
-    handle: (request) => {
-      const url = new URL(request.url);
-      const name = url.pathname.replace(/^\/terminal\//, "").replace(/\/+$/, "");
-      const target = name ? `/${name}${url.search}` : "/terminal";
-      return new Response(null, { status: 301, headers: { location: target, "cache-control": "public, max-age=3600" } });
-    },
+    handle: routeTerminalGone,
   },
   {
     label: "/rn/art/<hash>-<width>-<v>.<ext>",
@@ -959,6 +952,26 @@ function routePhotosRedirect(_request, _env, _ctx, url) {
 // slashed twin 301s to the slashless form rather than serving a duplicate 200.
 function routeDropSlash(_request, _env, _ctx, url) {
   return Response.redirect(url.origin + url.pathname.replace(/\/+$/, "") + url.search, 301);
+}
+
+// /terminal retired 2026-09-16 (the ROUTES comment says why). 410 rather than 404
+// so a bookmark or an old link reads as "removed on purpose" and is told where
+// the thing it wanted now lives. Cached a day: the answer will not change.
+function routeTerminalGone() {
+  return new Response(
+    "410 Gone: the /terminal console page retired on 2026-09-16.\n\n"
+    + "What it showed is the live exchange: POST https://aadhar.sh/mcp (JSON-RPC, tools/list then tools/call).\n"
+    + "The catalogue as a document: https://aadhar.sh/.well-known/mcp/server-card.json\n"
+    + "Every tool also answers a plain GET at its own path: /finger, /photos, /lens, /radar, /dict, /cache, /agent-ready, /encode\n",
+    {
+      status: 410,
+      headers: {
+        "content-type": "text/plain; charset=utf-8",
+        "cache-control": "public, max-age=86400",
+        "x-robots-tag": "noindex",
+      },
+    },
+  );
 }
 
 async function routeWritingPost(request: SiteRequest, env: Env, ctx: ExecutionContext, url: URL) {

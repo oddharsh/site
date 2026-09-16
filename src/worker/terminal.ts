@@ -1,4 +1,5 @@
-// tui.js — the terminal apps at /terminal/*, and the key-driven session model behind
+// terminal.ts — the terminal apps at /finger, /photos, /lens, /radar, /dict, /cache,
+// /agent-ready and /encode, and the key-driven session model behind
 // them. lib/tui.js draws the frames; this file decides what goes in them.
 //
 // ── what this is for ──────────────────────────────────────────────────────
@@ -28,7 +29,7 @@
 // route a session back to the same backend. This origin already speaks it;
 // lib/mcp-protocol.js serves it, and its "DUAL-ERA" note is that cutover.
 //
-// /terminal applies the principle ONE LAYER UP. MCP made a single tool CALL
+// These tools apply the principle ONE LAYER UP. MCP made a single tool CALL
 // stateless; this makes a whole session over those tools stateless too, which is
 // the harder half, because a session is the thing that looks like it obviously
 // needs a server to hold it. The npx/uvx analogy is the useful one: fetch, run,
@@ -174,7 +175,7 @@ export function stateUrl(state, extra = {}) {
 /**
  * The status-bar line that prints the current state.
  *
- * LABELLED, because a frame legitimately contains several /terminal/… strings —
+ * LABELLED, because a frame legitimately contains several /<tool> URLs —
  * cross-references between the programs, examples in the help screen — and an
  * agent told to "pass the url back" has to be able to tell which one is the
  * state. Unlabelled, the first match in the frame is whichever URL happens to
@@ -1015,7 +1016,7 @@ export async function encodeFrame(env, request, state, ctx) {
 // ── the index frame ───────────────────────────────────────────────────────
 function indexFrame() {
   const app = (name, line) => rows(
-    [s(`  /terminal/${name}`, "accent")],
+    [s(`  /${name}`, "accent")],
     ...wrap(line, INNER - 4).map((row) => [s("    " + row)]),
     blank(),
   );
@@ -1046,7 +1047,6 @@ const TERMINAL_APPS = new Set(["finger", "photos", "lens", "radar", "dict", "cac
 
 async function buildFrame(name, request, env, ctx, url) {
   const tokens = tokenizeKeys(url.searchParams.get("keys") ?? url.searchParams.get("k") ?? "");
-  if (!name) return indexFrame();
   const state = readState(url, name);
   if (name === "finger") return fingerFrame(env, ctx, request, state, tokens);
   if (name === "photos") return photosFrame(env, ctx, state, tokens);
@@ -1077,7 +1077,6 @@ function toolPage(frame, path) {
   return lunaPage({
     title: `aadhar.sh${path}`,
     path: `aadhar.sh${path}`,
-    route: "/terminal",
     width: 760,
     description: String(frame.title || "").slice(0, 140),
     robots: "noindex",
@@ -1103,12 +1102,12 @@ function toolPage(frame, path) {
 //   /dict                       anything else      -> the frame (curl, agents)
 //   /dict.txt                                      -> the frame, explicitly
 //
-// Exactly the markdown-twin contract this site already runs on. /terminal keeps
-// its own route because it is not their parent, it is a CONSOLE that drives
-// them — the interaction is the product there, not the namespace.
+// Exactly the markdown-twin contract this site already runs on. The /terminal
+// console that used to sit beside them (a page rendering one /mcp exchange)
+// retired on 2026-09-16; the tools were never under it and did not move.
 export const TOOL_NAMES = TERMINAL_APPS;
 
-/** Shared by the console and by every tool route. */
+/** Shared by every tool route. */
 async function serveFrame(name, request, env, ctx, { explicitText = false } = {}) {
   const url = new URL(request.url);
 
@@ -1161,19 +1160,21 @@ export async function handleTool(request, env, ctx) {
   const explicitText = raw.endsWith(".txt");
   const name = raw.replace(/\.txt$/, "");
   if (!TOOL_NAMES.has(name)) {
-    return new Response(`no such tool: ${name}\n\ntry /terminal\n`, {
+    // The index frame IS the 404 body: a wrong name gets every right one, with a
+    // sentence each. It was the console's landing frame until the console retired.
+    return new Response(`no such tool: ${name}\n\n${frameText(indexFrame())}\n`, {
       status: 404, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" },
     });
   }
   return serveFrame(name, request, env, ctx, { explicitText });
 }
 
-/** /terminal — the PowerShell console that drives the tools above. */
+
 
 
 /** The MCP entry point: a frame as plain text, never coloured. */
 export async function terminalToolFrame(app, args, request, env, ctx) {
-  const url = new URL(`https://aadhar.sh/terminal/${app}`);
+  const url = new URL(`https://aadhar.sh/${app}`);
   for (const [key, value] of Object.entries(args || {})) {
     if (value !== undefined && value !== null && value !== "") url.searchParams.set(key, asScalarText(value).slice(0, 512));
   }

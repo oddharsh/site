@@ -43,7 +43,6 @@ import { sign } from "../cal/src/sign.ts";
 import { AGENT_SURFACES, WEBMENTION_PATHS } from "../src/worker/lib/site-manifest.ts";
 import { handleWritingIndex } from "../src/worker/writing.ts";
 import { handleTool, tokenizeKeys } from "../src/worker/terminal.ts";
-import { handleTerminal } from "../src/worker/wire.ts";
 import { DATA_TOOLS } from "../src/worker/lib/tools.ts";
 import { cronJob } from "../src/worker/lib/cron.ts";
 import { BASELINE_HEADING, FLOOR_CLAIMS, auditDependencyDocs, baselineSection, checkDependencyDocs, findClaims, parseCargoDeps } from "./lib/dependency-docs.ts";
@@ -445,7 +444,6 @@ export {
   handleRnTracksHtml,
   handleSearchJson,
   handleSiteMcp,
-  handleTerminal,
   handleTool,
   handleWebmention,
   handleWebmentionDecision,
