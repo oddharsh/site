@@ -184,7 +184,7 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
 .enc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin: 12px 0 20px; }
 .enc-card { margin: 0; background: oklch(97% 0.004 250); border: 1px solid var(--frame); padding: 4px; }
 .enc-card img { display: block; width: 100%; height: auto; background: #fff; cursor: crosshair; }
-@media (hover: none) { .enc-card img { cursor: default; } }
+@media (--coarse) { .enc-card img { cursor: default; } }
 
 /* ── loupe / magnifier ──────────────────────────────────────────────────────
    Mouse over any sample to inspect compression artifacts at zoom. Reuses the

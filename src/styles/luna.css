@@ -954,7 +954,7 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
    Bliss SVG) are stripped, box-shadow bevels go to none, links and buttons
    take system colors. We add only what flattening can't infer: window and
    taskbar boundaries that were carried purely by the removed backgrounds. */
-@media (forced-colors: active) {
+@media (--forced-colors) {
   .window, .np-window, .axp-acc { border: 1px solid CanvasText !important; }
   #axp-taskbar { border-top: 1px solid CanvasText; }
   .title-bar, .np-titlebar, .titlebar { border-bottom: 1px solid CanvasText; text-shadow: none !important; }
@@ -1030,7 +1030,7 @@ a.car-link:visited { text-decoration-style: dotted; text-underline-offset: 2px; 
   .window:has(>.axp-tasks)>.axp-tasks,.np-window:has(>.axp-tasks)>.axp-tasks{display:none}
   .axp-addr-label{display:none}
 }
-@media (forced-colors: active){
+@media (--forced-colors) {
   .axp-group,.axp-well,.axp-address{border:1px solid CanvasText}
   .axp-group>h2{border-bottom:1px solid CanvasText}
 }
