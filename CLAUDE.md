@@ -1838,7 +1838,14 @@ Its committed JWK Set must match `RN_SIGNING_KEY_JWK`; missing or mismatched
 material returns 503, so rotate the public file and private secret together.
 
 All signed content reads use `botRequestHeaders`, which checks the destination's
-robots.txt before each hop. `botHeaders` remains the pure signer for self-dispatch
+robots.txt before each hop by default. RN explicitly selects `robots: "spotify-embed"`
+for the owner's public playlist, track and artist embed reads: the 2026-09-16
+operator-approved exception restores the music feed after the shared crawl gate
+blocked all three tiers. It applies only to GET requests to those three embed
+shapes on `https://open.spotify.com`, including RN's `_t` cache-busting query.
+Every redirect is checked again; other paths, origins and readers (including Lens
+on Spotify) keep the default robots policy. Signing and public-URL validation
+remain mandatory. `botHeaders` remains the pure signer for self-dispatch
 and the robots bootstrap. The bootstrap follows only public redirects, has a
 three-second deadline and a 512 KiB cap. Policies are cached in KV for 12 hours;
 `BOT_ROBOTS_CACHE` shares the read inside one invocation, including the Workflow

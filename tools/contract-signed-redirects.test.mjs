@@ -3,6 +3,7 @@ import { signedFetch, withBotPolicyCache } from "../src/worker/lib/botauth.ts";
 import { lensFetch, lensFetchAsBot } from "../src/worker/lens.ts";
 import { probeRevalidation } from "../src/worker/cache-lint.ts";
 import { foreignMcpTools, foreignNlwebAsk } from "../src/worker/lib/doors.ts";
+import { scrapeSpotifyEmbed } from "../src/worker/rn.ts";
 
 const origin = "https://example.com";
 const readers = [
@@ -189,4 +190,85 @@ test("a policy read preserves platform exhaustion for the census guard", async (
     await assert.rejects(signedFetch(origin + "/page", env), /Too many subrequests/);
     assert.equal(seen.length, 1);
   }, () => { throw new Error("Too many subrequests by single Worker"); });
+});
+
+const spotify = "https://open.spotify.com";
+const spotifyId = "5DIi2JWfQPTKffaVBlIYRn";
+const spotifyRobots = () => new Response("User-agent: *\nDisallow: /embed/");
+const embedResponse = (entity) => new Response(`<script id="__NEXT_DATA__">${JSON.stringify({
+  props: { pageProps: { state: { data: { entity } } } },
+})}</script>`);
+
+test("RN fetches all three Spotify embed tiers with its signed identity despite robots disallow", async () => {
+  const { env, publicKey } = await keyPair();
+  for (const kind of ["playlist", "track", "artist"]) {
+    const entity = { name: kind, visualIdentity: { image: [{ url: "https://i.scdn.co/image/fixture" }] } };
+    await withFetch(() => embedResponse(entity), async (seen) => {
+      assert.deepEqual(await scrapeSpotifyEmbed(`${kind}/${spotifyId}`, env), entity);
+      assert.equal(seen.length, 1, "RN fetches the embed without reading robots.txt");
+      const request = seen[0];
+      assert.equal(new URL(request.url).pathname, `/embed/${kind}/${spotifyId}`);
+      assert.equal(request.headers.get("user-agent"), "AadharshBot/1.0 (+https://aadhar.sh/bot)");
+      assert.equal(await verifies(request, publicKey), true);
+      assert.deepEqual(request.cf, kind === "playlist"
+        ? { cacheTtl: 0, cacheEverything: false }
+        : { cacheTtl: 86400, cacheEverything: true });
+    }, spotifyRobots);
+  }
+});
+
+test("RN's fresh retry keeps the Spotify exception and signature", async () => {
+  const { env, publicKey } = await keyPair();
+  let attempts = 0;
+  await withFetch(() => ++attempts === 1 ? embedResponse({}) : embedResponse({ name: "artist" }), async (seen) => {
+    assert.deepEqual(await scrapeSpotifyEmbed(`artist/${spotifyId}`, env), { name: "artist" });
+    assert.equal(seen.length, 2);
+    assert.equal(new URL(seen[0].url).search, "");
+    assert.match(new URL(seen[1].url).search, /^\?_t=\d+$/);
+    assert.deepEqual(seen[1].cf, { cacheTtl: 0, cacheEverything: false });
+    for (const record of seen) assert.equal(await verifies(record, publicKey), true);
+  }, spotifyRobots);
+});
+
+test("normal signed readers still respect Spotify's robots disallow", async () => {
+  const { env } = await keyPair();
+  const url = `${spotify}/embed/artist/${spotifyId}`;
+  for (const read of [signedFetch, lensFetch]) await withFetch(() => { throw new Error("disallowed embed fetched"); }, async (seen) => {
+    await assert.rejects(read(url, env), /Disallow: \/embed\//);
+    assert.deepEqual(seen.map((r) => r.url), [spotify + "/robots.txt"]);
+  }, spotifyRobots);
+});
+
+test("the Spotify exception cannot bypass policy on unrelated URLs", async () => {
+  const { env } = await keyPair();
+  for (const url of [
+    `${origin}/embed/artist/${spotifyId}`,
+    `${spotify}/artist/${spotifyId}`,
+    `${spotify}/embed/show/${spotifyId}`,
+    `${spotify}/embed/artist/not-an-id`,
+    `${spotify}/embed/artist/${spotifyId}?redirect=https://other.example`,
+  ]) await withFetch(() => { throw new Error("unrelated content fetched"); }, async (seen) => {
+    await assert.rejects(signedFetch(url, env, { robots: "spotify-embed" }), /Disallow/);
+    assert.deepEqual(seen.map((r) => r.url), [new URL(url).origin + "/robots.txt"]);
+  }, () => new Response("User-agent: *\nDisallow: /"));
+});
+
+test("RN redirects retain policy checks outside Spotify embeds and reject private destinations", async () => {
+  const { env } = await keyPair();
+  for (const destination of [
+    `${origin}/embed/artist/${spotifyId}`,
+    `${spotify}/private`,
+    "http://169.254.169.254/private",
+  ]) await withFetch(() => new Response(null, { status: 302, headers: { location: destination } }), async (seen) => {
+    await assert.rejects(scrapeSpotifyEmbed(`artist/${spotifyId}`, env));
+    assert.ok(seen.some((r) => new URL(r.url).pathname.startsWith("/embed/")), "the allowed initial request must run");
+    assert.ok(seen.every((r) => r.url !== destination), "the redirect must be rejected before fetching content");
+  }, () => new Response("User-agent: *\nDisallow: /"));
+});
+
+test("the Spotify exception still requires a signing key", async () => {
+  await withFetch(() => { throw new Error("unsigned embed fetched"); }, async (seen) => {
+    await assert.rejects(scrapeSpotifyEmbed(`artist/${spotifyId}`, {}), /signing key/);
+    assert.equal(seen.length, 0);
+  }, spotifyRobots);
 });
