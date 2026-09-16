@@ -125,11 +125,30 @@ class Node {
   parentNode: Node | null;
   childNodes: Node[];
   elementChildren: Element[] | null;
+  private cachedText: string | null;
 
   constructor(nodeType: number, ownerDocument: Document | null) {
     this.nodeType = nodeType;
     this.ownerDocument = ownerDocument;
     this.parentNode = null;
+    this.childNodes = [];
+    this.elementChildren = null;
+    this.cachedText = null;
+  }
+
+  // A cached parent has read (and cached) every element descendant. Stop at
+  // the first dirty node: its ancestors are already dirty too. This keeps
+  // parsing, where nothing has been read yet, from walking to the root on
+  // every append. The cache belongs to this tree, never to a request global.
+  invalidateText(): void {
+    if (this.cachedText === null) return;
+    this.cachedText = null;
+    this.parentNode?.invalidateText();
+  }
+
+  protected clearChildren(): void {
+    this.invalidateText();
+    for (const child of this.childNodes) child.parentNode = null;
     this.childNodes = [];
     this.elementChildren = null;
   }
@@ -168,6 +187,7 @@ class Node {
     child.parentNode = this;
     this.childNodes.push(child);
     this.elementChildren = null;
+    this.invalidateText();
     return child;
   }
 
@@ -178,6 +198,7 @@ class Node {
     child.parentNode = this;
     this.childNodes.splice(i < 0 ? this.childNodes.length : i, 0, child);
     this.elementChildren = null;
+    this.invalidateText();
     return child;
   }
 
@@ -186,18 +207,20 @@ class Node {
     if (i >= 0) {
       this.childNodes.splice(i, 1);
       this.elementChildren = null;
+      this.invalidateText();
     }
     child.parentNode = null;
     return child;
   }
 
   replaceChild(newChild, oldChild) {
-    const i = this.childNodes.indexOf(oldChild);
-    if (i < 0) return oldChild;
+    if (newChild === oldChild || !this.childNodes.includes(oldChild)) return oldChild;
     if (newChild.parentNode) newChild.parentNode.removeChild(newChild);
+    const i = this.childNodes.indexOf(oldChild);
     newChild.parentNode = this;
     this.childNodes[i] = newChild;
     this.elementChildren = null;
+    this.invalidateText();
     oldChild.parentNode = null;
     return oldChild;
   }
@@ -211,24 +234,29 @@ class Node {
   }
 
   get textContent() {
+    if (this.cachedText !== null) return this.cachedText;
     let out = "";
     for (const n of this.childNodes) {
       if (n.nodeType === TEXT_NODE) out += (n as Text).data;
       else if (n.nodeType === ELEMENT_NODE) out += n.textContent;
     }
-    return out;
+    return this.cachedText = out;
   }
   set textContent(value) {
-    this.childNodes = [];
-    this.elementChildren = null;
+    this.clearChildren();
     if (value) this.appendChild(new Text(String(value), this.ownerDocument));
   }
 }
 
 class Text extends Node {
-  data: string;
+  private value: string;
 
-  constructor(data: string, ownerDocument: Document | null) { super(TEXT_NODE, ownerDocument); this.data = data; }
+  constructor(data: string, ownerDocument: Document | null) { super(TEXT_NODE, ownerDocument); this.value = data; }
+  get data() { return this.value; }
+  set data(value: string) {
+    this.value = String(value);
+    this.parentNode?.invalidateText();
+  }
   get nodeName() { return "#text"; }
   get nodeValue() { return this.data; }
   set nodeValue(v) { this.data = String(v); }
@@ -357,20 +385,17 @@ class Element extends Node {
 
   get innerHTML() { return serializeChildren(this); }
   set innerHTML(html) {
-    this.childNodes = [];
-    this.elementChildren = null;
+    this.clearChildren();
     parseInto(String(html), this, this.ownerDocument);
   }
   get outerHTML() { return serializeNode(this); }
 
   getElementsByTagName(name: string): Element[] { return collectByTag(this, name); }
   querySelectorAll(selector: string): Element[] { return querySelectorAll(this, selector); }
-  querySelector(selector: string): Element | null { return querySelectorAll(this, selector)[0] || null; }
+  querySelector(selector: string): Element | null { return querySelector(this, selector); }
   matches(selector: string): boolean { return matchesSelector(this, parseSelector(selector)); }
   getElementById(id: string): Element | null {
-    let found: Element | null = null;
-    walk(this, (el) => { if (!found && el.getAttribute("id") === id) found = el; });
-    return found;
+    return walk(this, (el) => el.getAttribute("id") === id);
   }
 }
 
@@ -460,7 +485,10 @@ class Document extends Node {
     const root = this.documentElement;
     return root ? querySelectorAll(root, selector, true) : [];
   }
-  querySelector(selector: string): Element | null { return this.querySelectorAll(selector)[0] || null; }
+  querySelector(selector: string): Element | null {
+    const root = this.documentElement;
+    return root ? querySelector(root, selector, true) : null;
+  }
   /** INCLUSIVE of documentElement, which the element-level walk is not. The
    *  fragment fallback asks for the id on the root element itself. */
   getElementById(id: string): Element | null {
@@ -483,15 +511,15 @@ class Document extends Node {
  * survives Readability's style-stripping pass. Walk into it and the payload
  * loses 226 bytes of that page.
  */
-function walk(node: Node, visit: (el: Element) => void, skipTemplates = false): void {
+function walk(node: Node, visit: (el: Element) => boolean | void, skipTemplates = false): Element | null {
   for (const child of node.childNodes) {
-    // instanceof rather than a nodeType compare, so the narrowing survives into
-    // visit() and the template check below.
     if (!(child instanceof Element)) continue;
-    visit(child);
+    if (visit(child) === true) return child;
     if (skipTemplates && child.localName.toLowerCase() === "template") continue;
-    walk(child, visit, skipTemplates);
+    const found = walk(child, visit, skipTemplates);
+    if (found) return found;
   }
+  return null;
 }
 
 /** Case-SENSITIVE on localName, matching linkedom. See createElement above. */
@@ -546,6 +574,12 @@ function querySelectorAll(root: Node, selector: string, includeRoot = false): El
   if (includeRoot && root instanceof Element && matchesSelector(root, compounds)) out.push(root);
   walk(root, (el) => { if (matchesSelector(el, compounds)) out.push(el); }, true);
   return out;
+}
+
+function querySelector(root: Node, selector: string, includeRoot = false): Element | null {
+  const compounds = parseSelector(selector);
+  if (includeRoot && root instanceof Element && matchesSelector(root, compounds)) return root;
+  return walk(root, (el) => matchesSelector(el, compounds), true);
 }
 
 // ── serialization ───────────────────────────────────────────────────────────
