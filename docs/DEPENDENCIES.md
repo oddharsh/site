@@ -343,6 +343,19 @@ does not make a failed write safe to ignore.
   packages run only in the build environment; they add no browser or Worker
   runtime dependency. Dependabot should review their release notes for output,
   target-browser, and native-install changes.
+- SWC 1.16.2 (`@swc/core`) is an exact root pin for the SECOND JavaScript
+  minifier, a compressor pre-pass in `tools/lib/minify-js.ts` since 2026-09-16.
+  Measured that day, oxc alone trailed SWC by 0.84% brotli across the client
+  assets, all of it three of SWC's compressor passes, so every served script
+  and inline `<script>` now runs four candidate pipelines and ships the one
+  smallest after brotli q11, with oxc last on three of them. It is a BRIDGE:
+  the `oxc-minifier-reaches-swc-parity` watch measures oxc alone, and the
+  night it reads landed this pin should leave and the picker drop to one
+  candidate. Same standing as Oxc Minify otherwise: platform-specific optional
+  packages, build environment only, no browser or Worker runtime dependency.
+  Dependabot bumps it in the minifiers group, and a bump re-mints every `/a/`
+  URL whose winning candidate moved, which the build log's `minify: winners`
+  tally makes visible.
 - Oxlint 1.83.0 and oxlint-tsgolint 7.0.2001 are exact root pins for
   `bun run lint`, a required step in `validate`. The tsgolint version tracks the
   TypeScript pin below on purpose: TypeScript 7.0 ships no stable programmatic

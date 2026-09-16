@@ -25,6 +25,7 @@ export const DOC_ALIASES = [
   // wrangler left this table on 2026-09-14, when the pin became a pkg.pr.new
   // COMMIT of workers-sdk main rather than a release number; see VERSIONLESS.
   { prose: "Oxc Minify", pkg: "oxc-minify" },
+  { prose: "SWC", pkg: "@swc/core" },
   { prose: "Lightning CSS", pkg: "lightningcss" },
   { prose: "Oxlint", pkg: "oxlint" },
   { prose: "oxlint-tsgolint", pkg: "oxlint-tsgolint" },

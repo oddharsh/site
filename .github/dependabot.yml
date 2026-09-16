@@ -163,6 +163,7 @@ updates:
           - "oxc-minify"
           - "lightningcss"
           - "@minify-html/node"
+          - "@swc/core"
       # Everything else, batched by RISK rather than by package. A minor or
       # patch lands as one PR; a MAJOR is deliberately excluded so it arrives
       # alone and its surgery stays legible. That is the "flag what we cannot

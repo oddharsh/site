@@ -179,6 +179,14 @@ export const BUN_WATCHES: Watch[] = [
     // oxc-project/oxc#14310 and #14311; no single issue asks for parity, so
     // the thread named here is the repository.
     //
+    // SINCE 2026-09-16 THIS ROW IS A RETIREMENT TRIGGER. lib/minify-js.ts
+    // runs SWC's compressor as a pre-pass and ships the smallest of four
+    // candidates per script, which is parity by construction; this watch
+    // keeps measuring oxc ALONE, and the night it reads landed is the night
+    // @swc/core can leave package.json and the picker can drop to one
+    // candidate. It is the only reading here whose "landed" means "delete a
+    // dependency" rather than "bump one".
+    //
     // The fixtures are FROZEN copies of two client files (quiz.js and
     // lens-wire.js as of #823), because a live file drifts and takes the
     // constant with it. SWC's number is what `@swc/core` 1.16.2 produces on

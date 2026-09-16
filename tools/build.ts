@@ -43,7 +43,7 @@ import { brotliCompress, brotliDecompressSync, constants as zlibConstants, zstdC
 import minifyHtml from "@minify-html/node";
 import { transform as transformCss } from "lightningcss";
 import { minifySync } from "oxc-minify";
-import { OXC_MINIFY_OPTIONS } from "./lib/oxc-minify-options.ts";
+import { minifyJavaScript as minifyJs } from "./lib/minify-js.ts";
 import { readManifest, workerModule, navFenceBody, readFenceBody, runProfilesBody } from "./gen-manifest.ts";
 import { parseCss } from "./lib/css-parse.ts";
 import { isJsonScriptType, minifyJsonScript } from "./lib/json-script.ts";
@@ -1088,12 +1088,16 @@ await Promise.all([
 // is exactly why /updates and /restore never got one. Moved below 1f, after the
 // deploy-time documents exist. See the block there.
 
+// Every served script and inline <script> goes through lib/minify-js.ts, which
+// runs four candidate pipelines (oxc alone, SWC's compressor before oxc, both
+// ways, SWC alone) and ships the smallest after brotli q11. Its header carries
+// the measurement and the retirement trigger. The tally below is printed at
+// the end of the shell step so an engine bump shows what it moved.
+const minifyWinners = new Map<string, number>();
 const minifyJavaScript = (filename, sourceText) => {
-  const result = minifySync(filename, sourceText, OXC_MINIFY_OPTIONS);
-  if (result.errors.length) {
-    throw new Error(`${filename}: Oxc parse/minify failed: ${result.errors.map((e) => e.message).join("; ")}`);
-  }
-  return result.code;
+  const { code, winner } = minifyJs(filename, sourceText);
+  minifyWinners.set(winner, (minifyWinners.get(winner) ?? 0) + 1);
+  return code;
 };
 
 // The tolerated-warning family and the pass-through re-proof live in
@@ -1694,7 +1698,8 @@ for (const [file, srcPath, marker] of SHELLS) {
   const src = await readFile(`src/client/${file}`, "utf8");
   await writeFile(`${OUT}/public/${srcPath.slice(1)}`, src);
 
-  const code = minifyJavaScript(`src/client/${file}`, src);
+  const { code, winner, sizes } = minifyJs(`src/client/${file}`, src);
+  minifyWinners.set(winner, (minifyWinners.get(winner) ?? 0) + 1);
   const banner = `/*! minified at deploy - readable source: ${srcPath} */\n`;
   const min = banner + code;
 
@@ -1704,8 +1709,12 @@ for (const [file, srcPath, marker] of SHELLS) {
   }
 
   await writeFile(`${OUT}/public/${file}`, min);
-  console.log(`${file}: ${src.length} -> ${min.length} bytes (+ ${srcPath})`);
+  console.log(`${file}: ${src.length} -> ${min.length} bytes (+ ${srcPath}) [${winner}: ${sizes[winner]} B brotli, oxc alone ${sizes.oxc} B, swc alone ${sizes.swc} B]`);
 }
+// The tally covers the shells above AND every inline <script> minified in
+// step 2. A run where "oxc" wins everything is the day the SWC pre-pass can go
+// (lib/minify-js.ts, and the parity watch says so first).
+console.log(`minify: winners ${[...minifyWinners].map(([k, n]) => `${k} ${n}`).join(", ")}`);
 
 // 4) luna.css: the one shared external stylesheet, minified with a readable
 // /luna.src.css twin (same readable-twin philosophy as the shells). Repaired, it

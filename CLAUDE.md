@@ -3139,6 +3139,31 @@ how to recover the plans and their audit from git.
    parse clean (implicit close) and now swallows the definitions, so `parseCss`
    names the missing `}` rather than reporting five unknown at-rules.
 
+   **JavaScript is minified by TWO engines since 2026-09-16, and the second
+   one is a bridge with a committed exit.** `tools/lib/minify-js.ts` runs four
+   candidate pipelines per script (oxc-minify alone, SWC's compressor then
+   oxc, oxc-SWC-oxc, SWC alone) and ships whichever is smallest after brotli
+   q11, the same move zenc makes with its progressive scan search. Measured
+   2026-09-15 across the 19 client assets: oxc alone trailed `@swc/core`
+   1.16.2 by 0.84% brotli, all of it three of SWC's compressor passes
+   (guard-clause inversion into nested ifs, hoisting a scope's `var`s into one
+   declaration, inlining inner function declarations) that no source edit
+   reproduces; #823 took the one transform that was source-portable (function
+   expressions to arrows) for 82 B. The pick is per file and by measurement
+   because no single arrangement is smallest everywhere: the two printers
+   differ by a few bytes per file in both directions. Shipped: 71,736 B
+   against 72,539 B for oxc alone (-1.11%) and 71,930 B for SWC alone, and
+   parity with SWC holds BY CONSTRUCTION since SWC alone is a candidate.
+   The build log's `minify: winners` tally says what each engine bump moved.
+   The `oxc-minifier-reaches-swc-parity` watch in `lib/upstream-watches.ts`
+   keeps measuring oxc ALONE on two frozen fixtures; the night it reads
+   landed, `@swc/core` leaves `package.json` and the picker drops to one
+   candidate. Two SWC settings are load-bearing and measured: `module:
+   "unknown"`, because SWC refuses `import` under `module: false` where oxc
+   parses it either way and seven client files are ES modules; and `ecma:
+   2022`, because SWC's default is 5 and forbids modern syntax in the OUTPUT
+   even when the input carries it.
+
    **Step 5c renames every CSS custom property in the staged tree**, so
    `--surface-window` ships as `--h`. The palette is authored for people and
    about 100 of those names are DISTINCT strings, which is the one thing brotli
