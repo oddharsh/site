@@ -154,9 +154,6 @@ jobs:
             console.log(`stash resolves the pinned wrangler at ${WRANGLER_ENTRY}`);
           '
 
-      # Install with whatever the CHECKED-OUT commit asks for. This workflow
-      # builds two different commits in one job, and during a package-manager
-      # migration those two want different installers.
       # Install with whatever the CHECKED-OUT commit asks for. This job builds
       # two different commits, and across a package-manager migration those two
       # want different installers. Written to a file the later steps SOURCE,
