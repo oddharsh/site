@@ -45,7 +45,9 @@ async function fixture(run) {
     // consumer became a .py outside the shell glob (2026-09-15).
     const declared = JSON.parse(await readFile(new URL("../config/tools.json", import.meta.url), "utf8"))
       .tools.flatMap((t) => t.required_by ?? []);
-    const corpus = ["tools/photos/*.sh", "tools/photos/photo-inputs.ts", ...new Set(declared)];
+    // pipeline-json.ts is the shells' JSON since 2026-09-15 and runs for real
+    // under the fixture's node, with the one module it imports.
+    const corpus = ["tools/photos/*.sh", "tools/photos/photo-inputs.ts", "tools/photos/pipeline-json.ts", "tools/lib/photo-indexes.ts", ...new Set(declared)];
     for (const rel of execFileSync("git", ["ls-files", "-z", ...corpus], { cwd: REPO, encoding: "utf8" }).split("\0").filter(Boolean)) {
       await put(rel, await readFile(path.join(REPO, rel), "utf8"));
     }
@@ -466,10 +468,10 @@ test("ingest forwards exactly the selected metadata sources across folders as a 
     await put("other/second photo.jpeg", "second original");
     await put("src/worker/photo-index.json", "{}");
     await command("tools/photos/hash-thumbnails.sh", "exit 0");
-    // The JSON writer is outside this argument-boundary control. Native jaq
-    // parity is checked separately; a constant producer lets the real shell
-    // reach the extractor without installing an external CLI in contract CI.
-    await command("bin/jaq", "echo '{}'");
+    // The index writer is pipeline-json.ts under the fixture's real node, so
+    // it runs here rather than being stubbed: this fixture used to stand in a
+    // constant `bin/jaq` because installing a JSON CLI in contract CI was the
+    // alternative, and that alternative is gone.
     await command("tools/photos/extract-photo-metadata.sh", `printf '%s\\0' "$@" > "$FIXTURE_ROOT/metadata-args"; exit 31`);
     const result = ingest(["source", "other/second photo.jpeg"]);
     assert.equal(result.status, 31, result.stderr + result.stdout);
@@ -483,7 +485,6 @@ test("metadata extraction passes multiple file arguments intact and preserves th
   await fixture(async ({ root, put, command, shell, read }) => {
     await put("other/second photo.jpeg", "second original");
     await put("public/images/metadata.json", '{"previous":{"camera":"kept"}}');
-    await command("bin/jaq", "exit 99");
     await command("bin/exif-sooc", `printf '%s\\0' "$@" > "$FIXTURE_ROOT/metadata-args"; exit 29`);
     const files = [`${root}/source/frame.jpg`, `${root}/other/second photo.jpeg`];
     const result = shell("extract-photo-metadata.sh", ["--merge", ...files]);
@@ -500,10 +501,16 @@ test("an index write failure stops ingest before metadata can advance", async ()
     const previous = '{"held":{"full":"held.jpg","size":9}}';
     await put("src/worker/photo-index.json", previous);
     await command("tools/photos/hash-thumbnails.sh", "exit 0");
-    await command("bin/jaq", "exit 17");
+    // A REAL write failure rather than a stub exiting 17: the writer lands its
+    // output at <index>.tmp and renames, so a directory squatting on that path
+    // fails the write with EISDIR after the merge has been computed, which is
+    // the latest point a failure can land and the one that must leave the
+    // committed bytes alone.
+    await put("src/worker/photo-index.json.tmp/squatter", "");
     await command("tools/photos/extract-photo-metadata.sh", 'echo unexpected-metadata >> "$TRACE"; exit 31');
     const result = ingest(["source/frame.jpg"]);
-    assert.equal(result.status, 17, result.stderr + result.stdout);
+    assert.equal(result.status, 1, result.stderr + result.stdout);
+    assert.match(result.stderr, /pipeline-json: /, "the writer names itself in the failure");
     assert.equal(await read("src/worker/photo-index.json"), previous);
     assert.doesNotMatch(await read("trace"), /unexpected-metadata/);
   });

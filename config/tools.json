@@ -67,22 +67,6 @@
       "recorded": "0.2.0"
     },
     {
-      "bin": "jaq",
-      "install": "brew install jaq",
-      "why": "JSON assembly in the metadata shell scripts. Swapped from jq on 2026-09-08 after every remaining filter was diffed jq against jaq over the real 165-photo library and matched byte for byte. The one incompatibility is `-s` across multiple file arguments, which nothing here uses; --slurpfile reads one named file and agrees. jq had been required by the recursive-merge `*` in the old reshape, which exif-sooc --merge-into retired",
-      "required_by": [
-        "tools/photos/extract-photo-metadata.sh",
-        "tools/photos/download-remote-photos.sh",
-        "tools/photos/add-photos.sh"
-      ],
-      "version": {
-        "flag": "--version",
-        "match": "jaq (\\d+\\.\\d+(?:\\.\\d+)?)"
-      },
-      "bytes": false,
-      "bytes_why": "assembles JSON, so its output is the same text at any version"
-    },
-    {
       "bin": "sips",
       "install": "ships with macOS",
       "why": "resize, HEIF decode, and the AVIF fallback encoder",

@@ -1263,7 +1263,7 @@ when the remote job is unavailable.
 
 ```bash
 # the photo pipeline
-brew install jaq mozjpeg libavif              # mozjpeg = jpegtran + cjpeg; libavif = avifenc, the AVIF encoder for every tier
+brew install mozjpeg libavif                  # mozjpeg = jpegtran + cjpeg; libavif = avifenc, the AVIF encoder for every tier
 # That brew avifenc is the one the photo tiers use, first in preference since
 # 2026-09-12. tools/photos/libavif/build.sh (needs cmake ninja git, ~10 min) is
 # the fallback for a machine with no avifenc on PATH and the only build here with

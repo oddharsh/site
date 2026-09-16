@@ -170,6 +170,14 @@
           "except": ["tools/photos/gen-pixel-peeper.py"]
         }
       }
+    },
+    {
+      "id": "jaq",
+      "replaced_by": "tools/photos/pipeline-json.ts, one node call per JSON operation the shell pipeline used to hand to a jq-dialect CLI, each subcommand naming the filter it stands in for",
+      "on": "2026-09-15",
+      "why": "The pipeline already ran node four times per add (photo-inputs, the histogram index, semantics, the pipeline check), so a second JSON engine bought nothing, and the jq dialect had cost something twice: the recursive-merge `*` pinned the extractor to one engine until exif-sooc grew --merge-into, and the 2026-09-08 swap from jq to jaq misfiled a `-s` incompatibility as an operator bug because nobody ran the control. Two implementations that disagree in the corners is a class of bug; one JSON.parse is not. The per-stem split also carried the SECOND copy of the 22-key EXIF map, held to tools/lib/photo-indexes.ts by a check; the split calls that module's projectExifRecord now, so there is one.",
+      "measured": "Every subcommand diffed against jaq on the real library before the swap: index-merge reproduces the committed src/worker/photo-index.json byte for byte on an empty spool and matches jaq's filters on a three-entry spool (an existing stem keeping its upload date, a pool photo, an album photo with a HEIF); prune reproduces the committed public/images/metadata.json byte for byte; meta-split writes 258 per-stem files identical to the jaq split; length, unread, manifest-keys (258 keys off the live manifest) and @uri (including !'()* and UTF-8) agree line for line.",
+      "bans": { "binary": ["jaq"] }
     }
   ]
 }
