@@ -12,6 +12,18 @@ const workflow = JSON.parse(execFileSync("bun", [
 const { validate, ...jobs } = workflow.jobs;
 const gate = validate.steps.find((step) => step.env?.RESULTS);
 
+test("manual CI keeps checkout and cache scope on the dispatched revision", () => {
+  assert.ok(Object.hasOwn(workflow.on, "workflow_dispatch"));
+  assert.equal(workflow.on.workflow_dispatch?.inputs, undefined);
+  const checkouts = Object.values(jobs).flatMap((job) => job.steps)
+    .filter((step) => step.uses?.startsWith("actions/checkout@"));
+  assert.ok(checkouts.length > 0);
+  for (const checkout of checkouts) {
+    assert.equal(checkout.with?.ref, undefined, "checkout must use the event's revision and cache scope");
+    assert.equal(checkout.with?.repository, undefined, "checkout must use the event's repository");
+  }
+});
+
 test("the required validate job joins every validation job even after failure", () => {
   assert.equal(validate.name, "validate");
   assert.equal(validate.if, "${{ always() }}");

@@ -163,6 +163,13 @@ rotation and treat all previously emailed links as compromised.
 4. [Ramp production](../.github/workflows/ramp.yml) waits for the upload, moves
    10% of traffic, and waits for approval before moving 50% and then 100%.
 
+To run CI manually, select the desired branch in Actions, or run
+`gh workflow run ci.yml --ref <branch>`. Both validation jobs check out the
+event's commit. The former custom `ref` input is removed: overriding checkout
+could execute another revision with the dispatch branch's cache access and
+attach its result to the wrong commit. Manual runs retain a separate concurrency
+group so they can recover from a stuck PR run.
+
 Workers Builds uses the settings declared under `release` in
 [`config/infra.json`](../config/infra.json): branch `production`, repository root
 `.`, an empty Build command, and this Deploy command:
