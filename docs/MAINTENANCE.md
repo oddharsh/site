@@ -789,11 +789,11 @@ bun run perf:snapshot compare base.json head.json     # markdown to stdout
 ```
 
 `.github/workflows/perf-diff.yml` runs that on every PR touching served code: it
-builds the merge base, builds HEAD, measures BOTH WITH HEAD'S COPY of the script
-(stashed in `$RUNNER_TEMP` before the first `git switch`, since the base does not
-have it and measuring each side with its own copy would report a change to the
-measurement as a change in wire size), and posts the delta as a marker-updated PR
-comment. It is deliberately **not** part of `validate`: `validate` is the one
+builds the merge base and HEAD concurrently in separate worktrees, each with
+its own dependencies and output. Both use HEAD's measurement code, copied to
+`.perf-measure` at the same depth in each tree so Wrangler resolves correctly.
+It waits for both measurements and rejects either failure before comparing,
+then posts the delta as a marker-updated PR comment. It is deliberately **not** part of `validate`: `validate` is the one
 required check on `main`, so anything living there is a merge gate, and a perf
 number that blocks a merge teaches people to widen thresholds. This one fails on
 nothing.
