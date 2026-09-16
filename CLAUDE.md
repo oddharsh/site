@@ -1819,8 +1819,10 @@ arm degrades the same way. Build if you need either.
 
 ### AadharshBot — the branded crawler
 
-Lives in `_worker.js` (search for `BOT_NAME`). Signs all outbound requests
-per RFC 9421 + Web Bot Auth IETF draft. JWKS at
+Lives in `src/worker/lib/botauth.ts`. Signs outbound HTTP reader requests
+per RFC 9421 + Web Bot Auth IETF draft. The User-Agent alone is not proof:
+browser rendering, webmentions and ancillary service calls also use it but
+do not carry signatures. JWKS at
 `/.well-known/http-message-signatures-directory`. Used for:
 
 - The `/around` neighborhood dashboard (crypto VC homepages it crawls)
@@ -1832,6 +1834,18 @@ The directory is Worker-first: `lib/botauth.ts` signs its response over
 `"@authority";req` with the directory tag and serves it with `no-store`.
 Its committed JWK Set must match `RN_SIGNING_KEY_JWK`; missing or mismatched
 material returns 503, so rotate the public file and private secret together.
+
+All signed content reads use `botRequestHeaders`, which checks the destination's
+robots.txt before each hop. `botHeaders` remains the pure signer for self-dispatch
+and the robots bootstrap. The bootstrap follows only public redirects, has a
+three-second deadline and a 512 KiB cap. Policies are cached in KV for 12 hours;
+`BOT_ROBOTS_CACHE` shares the read inside one invocation, including the Workflow
+census entry, so Lens's parallel probes do not each spend another subrequest.
+Disallow, positive Crawl-delay, unreadable/oversized policies and 429 stop the
+content read. Crawl-delay means skip this origin; this bot has no distributed
+per-origin scheduler. Lens's unsigned UA diagnostic probes obey the same opt-out.
+Browser rendering remains a separate transport. `/bot` and its Markdown twin
+publish the scope, reference use, contact and no-training statement.
 
 ### `/mcp` — dual-era, and why both eras are served
 

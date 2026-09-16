@@ -55,23 +55,40 @@ export function renderBotPage() {
 
     <h2>What it does</h2>
     <p>
-      It fetches small numbers of public homepages on demand, mostly because I'm
-      curious. The <a href="/around">/around</a> dashboard shows what it
-      currently looks at.
-      It reads only what's publicly served. It respects <code>robots.txt</code>. It does not
-      submit forms, log in, or scrape behind a login. It caches results in
-      Cloudflare KV for at least an hour so it doesn't re-hit the same URL repeatedly.
+      This is Aadharsh Pannirselvam's bot for <a href="/">aadhar.sh</a>, running on
+      Cloudflare Workers. The <a href="/around">/around</a> dashboard checks a small
+      list of public homepages daily. The music and reading sections fetch public
+      playlist metadata and bookmarks. <a href="/lens">/lens</a> fetches public pages
+      and discovery documents when a visitor asks to inspect a URL, and can read
+      published MCP tool catalogues and NLWeb answers.
+    </p>
+    <p>
+      Content is used for linked references, metadata, and on-demand inspection.
+      It is not used to train or fine-tune AI models or build a search index.
+      Requests use bounded fan-outs and cached results. The bot does not log in
+      to third-party sites or read content behind a login.
+    </p>
+    <p>
+      Lens also compares responses to sample browser and crawler User-Agent
+      strings. Those diagnostic requests do not claim a Web Bot Auth identity
+      for the sampled bot, and still obey AadharshBot's robots.txt policy.
     </p>
 
     <h2>How to verify it's really ${BOT_NAME}</h2>
     <p>
-      Every request includes <code>Signature-Agent</code>, <code>Signature-Input</code>,
+      The signed HTTP readers for /around, music, bookmarks and Lens include <code>Signature-Agent</code>, <code>Signature-Input</code>,
       and <code>Signature</code> headers per
       <a href="https://www.rfc-editor.org/rfc/rfc9421" target="_blank" rel="noopener">RFC 9421</a>
       with the Web Bot Auth profile (<code>tag="web-bot-auth"</code>). Fetch the JWKS
       at the URL above, find the key with the matching <code>kid</code> (its RFC 7638 thumbprint), and verify the
       Ed25519 signature over the canonical components listed in <code>Signature-Input</code>.
-      If the verification fails, the request is not from this site.
+      Treat an absent, expired or invalid signature as unverified. A User-Agent
+      string alone does not prove who sent a request.
+    </p>
+    <p>
+      Browser rendering, webmention delivery and verification, and ancillary
+      service calls can also use this User-Agent but do not currently carry Web
+      Bot Auth signatures. They are outside the signed identity described here.
     </p>
 
     <h2>The second signature, retired</h2>
@@ -97,11 +114,13 @@ export function renderBotPage() {
     <pre><code>User-agent: ${BOT_NAME}
 Disallow: /</code></pre>
     <p>
-      Before the <a href="/around">/around</a> crawl fetches a site, ${BOT_NAME}
-      reads that site's <code>robots.txt</code> (cached briefly per origin) and skips
-      any path <code>Disallow</code>ed for <code>${BOT_NAME}</code> or <code>*</code>;
-      a site whose <code>robots.txt</code> it can't read is skipped that cycle, not
-      crawled. If you have a question or a complaint, email
+      Before fetching third-party content, the signed HTTP readers read that origin's
+      <code>robots.txt</code> (cached for up to 12 hours). It skips paths disallowed
+      for <code>${BOT_NAME}</code> or <code>*</code>, including redirect destinations.
+      If the policy is unreachable, rate-limited, or too large to read safely,
+      the fetch is skipped. A positive <code>Crawl-delay</code> also makes this bot
+      skip the origin. These rules apply to scheduled crawls and visitor-requested
+      Lens HTTP reads. If you have a question or a complaint, email
       <!--email_off--><a href="mailto:coffee@aadhar.sh">coffee@aadhar.sh</a><!--/email_off--> and I'll reply by hand.
     </p>
 

@@ -31,8 +31,8 @@
 // WHAT IT SENDS. An honest AadharshBot user-agent carrying somebody else's
 // Accept header. The Accept IS the instrument here, so replaying it is the
 // measurement, and wearing the agent's user-agent on top would buy nothing and
-// cost the disclosure rule the About dialog now makes explicit. No signature, in
-// line with the other lens fetch paths.
+// cost the disclosure rule the About dialog now makes explicit. External reads
+// use the same signed, robots-aware transport as the other Lens HTTP reads.
 //
 // COST. Ten plain GETs of one URL, deduped by Accept string, no browser and
 // no model. Cheaper per run than the Reader or Wire tabs and more than a knock,
@@ -42,7 +42,7 @@ import { validateLensTarget } from "./lib/public-fetch.ts";
 import { mapWithConcurrency } from "./lib/crawl.ts";
 import { jsonResponse } from "./lib/http.ts";
 import { span } from "./lib/trace.ts";
-import { LENS_BUDGETS, lensFetchAsBot, lensSha256Hex, overLensBudget } from "./lens.ts";
+import { LENS_BUDGETS, lensFetch, lensSha256Hex, overLensBudget } from "./lens.ts";
 
 const MARKDOWN_CACHE_SECONDS = 3600;
 const BODY_SAMPLE = 4096;
@@ -207,7 +207,7 @@ async function probeOnce(targetUrl, env, accept) {
   const ctrl = new AbortController();
   const to = setTimeout(() => ctrl.abort(), PROBE_TIMEOUT_MS);
   try {
-    const res = await lensFetchAsBot(targetUrl, env, ctrl.signal, "AadharshBot/1.0 (+https://aadhar.sh/bot)", accept);
+    const res = await lensFetch(targetUrl, env, ctrl.signal, accept);
     const body = await readCounting(res, BODY_SAMPLE, MAX_BODY_BYTES);
     return {
       ok: true,

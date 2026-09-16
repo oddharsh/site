@@ -24,7 +24,7 @@
 // POST body that lensFetch cannot express, so it re-states each of those bounds
 // itself rather than inheriting them, per-hop redirect validation included.
 // This module adds no new way to reach the network.
-import { botHeaders } from "./botauth.ts";
+import { botHeaders, botRequestHeaders } from "./botauth.ts";
 import { CANONICAL_HOST } from "./const.ts";
 import { fetchFollowingPublicRedirects, validateLensTarget } from "./public-fetch.ts";
 import { readResponseCapped } from "./crawl.ts";
@@ -181,7 +181,7 @@ export async function foreignMcpTools(origin, env, opts: { schemas?: boolean } =
   try { isSelf = new URL(url).hostname.toLowerCase() === CANONICAL_HOST && !!(env.SELF_FETCH || env.ASSETS); } catch { /* not self */ }
 
   const send = async (extra) => {
-    const headersFor = (candidate) => botHeaders(candidate, env, {
+    const headersFor = (candidate) => (isSelf ? botHeaders : botRequestHeaders)(candidate, env, {
       headers: {
         "content-type": "application/json",
         // Both framings, because the server picks. DeepWiki refuses a
@@ -193,6 +193,7 @@ export async function foreignMcpTools(origin, env, opts: { schemas?: boolean } =
       },
       method: "POST",
       sign: !isSelf,
+      signal: controller.signal,
     });
     if (isSelf) {
       const selfReq = new Request(url, { method: "POST", headers: await headersFor(url), body });
@@ -366,10 +367,11 @@ export async function foreignNlwebAsk(origin, env, opts: { query?: string } = {}
   try {
     // Both framings on Accept. A server is entitled to stream even when asked
     // not to, and one that does is answering rather than failing.
-    const headersFor = (candidate) => botHeaders(candidate, env, {
+    const headersFor = (candidate) => (isSelf ? botHeaders : botRequestHeaders)(candidate, env, {
       headers: { accept: "application/json, text/event-stream" },
       method: "GET",
       sign: !isSelf,
+      signal: controller.signal,
     });
 
     let res;

@@ -1,4 +1,4 @@
-import { BOT_UA, botHeaders } from "./lib/botauth.ts";
+import { BOT_UA, botHeaders, botRequestHeaders, botRobotsPolicy, BotPolicyError, withBotPolicyCache } from "./lib/botauth.ts";
 import { cachedRender } from "./lib/cache.ts";
 import { CANONICAL_HOST } from "./lib/const.ts";
 import { fetchFollowingPublicRedirects, privateHostBlocked, validateLensTarget } from "./lib/public-fetch.ts";
@@ -2345,6 +2345,9 @@ export async function handleLensCompare(request, env, ctx) {
 // fetch named by URL, so a straggler identifies itself without any per-probe
 // code here.
 export async function lensInspect(targetUrl, env, opts) {
+  // Workflow census steps enter here without the HTTP dispatcher. Share the
+  // policy read across this scan too, keeping its fan-out inside the budget.
+  if (!env?.BOT_ROBOTS_CACHE) env = withBotPolicyCache(env || {});
   opts = opts || {};
   return span("lens.inspect", (s) => lensInspectInner(targetUrl, env, opts, s), {
     "lens.target_host": safeHost(targetUrl),
@@ -2688,7 +2691,7 @@ export async function lensFetch(targetUrl, env, signal?, accept?) {
   }
   const followed = await fetchFollowingPublicRedirects(
     targetUrl,
-    async (candidate) => ({ method: "GET", headers: await botHeaders(candidate, env, { headers: baseHeaders }), signal, cf: { cacheTtl: 0 } }),
+    async (candidate) => ({ method: "GET", headers: await botRequestHeaders(candidate, env, { headers: baseHeaders, signal }), signal, cf: { cacheTtl: 0 } }),
     (candidate) => validateLensTarget(candidate),
   );
   if (!followed.ok) return new Response(null, { status: 502, statusText: "Blocked redirect" });
@@ -3057,7 +3060,12 @@ export async function lensFetchAsBot(targetUrl, env, signal, userAgent, accept =
   // refused hop reads as an unreachable target, which is what it is.
   const followed = await fetchFollowingPublicRedirects(
     targetUrl,
-    () => ({ method: "GET", headers, signal, cf: { cacheTtl: 0 } }),
+    async (candidate) => {
+      // Diagnostic UA comparisons cannot be a back door around our own opt-out.
+      const policy = await botRobotsPolicy(candidate, env || {}, signal);
+      if (!policy.ok) throw new BotPolicyError(policy);
+      return { method: "GET", headers, signal, cf: { cacheTtl: 0 } };
+    },
     (candidate) => validateLensTarget(candidate),
   );
   if (!followed.ok) return new Response(null, { status: 502, statusText: "Blocked redirect" });

@@ -40,6 +40,7 @@
 // form the compiler enforces.
 
 
+import type { BotRobotsRead } from "./botauth.ts";
 import type { BookingWorkflow } from "../../../cal/src/workflow.ts";
 import type { CensusWorkflow } from "../census-workflow.ts";
 
@@ -197,6 +198,8 @@ export interface EnvOptionalSecrets {
 // they exist.
 // ---------------------------------------------------------------------------
 export interface EnvInjected {
+  /** Policy reads shared by one invocation, never Worker-global I/O. */
+  BOT_ROBOTS_CACHE?: Map<string, Promise<BotRobotsRead>>;
   /**
    * In-process dispatch back into this Worker, so a /lens self-scan costs no
    * wire request. index.ts sets it to NULL on the inner env, which is what stops

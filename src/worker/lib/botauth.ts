@@ -33,7 +33,9 @@
 // Reviving it needs a runtime with native ML-DSA, or a plan that is not
 // "sign on the request path". Do not re-add it to botHeaders
 // without one, and read the CPU note above first.
-import { fetchFollowingPublicRedirects, validateLensTarget } from "./public-fetch.ts";
+import { fetchFollowingPublicRedirects, readResponseCapped, validateLensTarget } from "./public-fetch.ts";
+import { lensParseRobots, lensRobotsVerdict } from "./robots.ts";
+import { isSubrequestLimit } from "./budget.ts";
 import type { Env } from "./env.ts";
 
 const ENCODER = new TextEncoder();
@@ -191,10 +193,102 @@ function signingMaterial(jwkText: string) {
   return material;
 }
 
+type BotPolicy = { ok: true } | { ok: false; kind: "disallow"; rule: string } | { ok: false; kind: "undetermined"; reason: string };
+
+export class BotPolicyError extends Error {
+  readonly policy: Exclude<BotPolicy, { ok: true }>;
+  constructor(policy: Exclude<BotPolicy, { ok: true }>) {
+    super(`AadharshBot: ${policy.kind === "disallow" ? policy.rule : policy.reason}, not fetched`);
+    this.name = "BotPolicyError";
+    this.policy = policy;
+  }
+}
+
+// A policy fetch is the only bootstrap request: its redirect chain is validated
+// and signed, but cannot recursively ask itself for permission. All content
+// requests (including Lens and redirect hops) consult this same cached policy.
+// Keep this out of botHeaders: signing is a pure operation used by self-dispatch
+// and cryptographic verifiers as well as network callers.
+export async function botRobotsPolicy(targetUrl: string, env: Pick<Env, "RN_KV" | "RN_SIGNING_KEY_JWK" | "BOT_ROBOTS_CACHE">, signal?: AbortSignal): Promise<BotPolicy> {
+  const target = validateLensTarget(targetUrl);
+  if (!target.ok) return { ok: false, kind: "undetermined", reason: target.error || "invalid target" };
+  const url = new URL(target.url);
+  if (url.pathname === "/robots.txt" && !url.search) return { ok: true };
+  const cache = env.BOT_ROBOTS_CACHE;
+  let pending = cache?.get(url.origin);
+  if (!pending) {
+    pending = readBotRobots(url.origin, env);
+    cache?.set(url.origin, pending);
+  }
+  const read = await pending;
+  if (!read.ok) return read;
+  const parsed = read.parsed;
+  signal?.throwIfAborted();
+  const verdict = lensRobotsVerdict(parsed, BOT_NAME, url.pathname + url.search);
+  if (verdict.verdict === "block") return { ok: false, kind: "disallow", rule: verdict.rule || "Disallow" };
+  if (verdict.crawlDelay > 0) return { ok: false, kind: "disallow", rule: `Crawl-delay: ${verdict.crawlDelay} (origin skipped)` };
+  return { ok: true };
+}
+
+// Only the parsed policy is shared inside one invocation, including in-flight
+// reads. No Worker-global I/O promises can leak into another request context.
+export type BotRobotsRead = { ok: true; parsed: ReturnType<typeof lensParseRobots> } | Extract<BotPolicy, { kind: "undetermined" }>;
+
+export function withBotPolicyCache<T>(env: T) {
+  return { ...env, BOT_ROBOTS_CACHE: new Map<string, Promise<BotRobotsRead>>() };
+}
+
+async function readBotRobots(origin: string, env: Pick<Env, "RN_KV" | "RN_SIGNING_KEY_JWK">): Promise<BotRobotsRead> {
+  const cacheKey = `bot:robots:v1:${origin}`;
+  let parsed: ReturnType<typeof lensParseRobots> | null = null;
+  try { parsed = env.RN_KV ? await env.RN_KV.get(cacheKey, "json") : null; } catch (error) { if (isSubrequestLimit(error)) throw error; }
+  if (!parsed) {
+    const policySignal = AbortSignal.timeout(3000);
+    try {
+      const followed = await fetchFollowingPublicRedirects(origin + "/robots.txt", async (candidate) => ({
+        headers: await botHeaders(candidate, env, { headers: { accept: "text/plain" } }),
+        signal: policySignal,
+        cf: { cacheTtl: 0 },
+      }), validateLensTarget, 5);
+      if (!followed.ok) return { ok: false, kind: "undetermined", reason: "robots.txt redirect refused" };
+      const response = followed.response;
+      if (response.ok) {
+        // RFC 9309 requires at least 500 KiB. A truncated policy is unknown,
+        // never allow-all: a later Disallow could be the part we did not read.
+        const body = await readResponseCapped(response, 512 * 1024, policySignal);
+        if (body.truncated) return { ok: false, kind: "undetermined", reason: "robots.txt exceeds 512 KiB" };
+        parsed = lensParseRobots(body.text);
+      } else {
+        await response.body?.cancel();
+        if (response.status < 400 || response.status >= 500 || response.status === 429) {
+          return { ok: false, kind: "undetermined", reason: "robots.txt " + response.status };
+        }
+        parsed = lensParseRobots(""); // RFC 9309: unavailable 4xx means no rules.
+      }
+      if (env.RN_KV) {
+        try { await env.RN_KV.put(cacheKey, JSON.stringify(parsed), { expirationTtl: 43200 }); } catch (error) { if (isSubrequestLimit(error)) throw error; }
+      }
+    } catch (error) {
+      // Census must still distinguish an exhausted instrument from the site.
+      if (isSubrequestLimit(error)) throw error;
+      return { ok: false, kind: "undetermined", reason: "robots.txt unreachable" };
+    }
+  }
+  return { ok: true, parsed };
+}
+
+export async function botRequestHeaders(targetUrl: string, env, opts: BotRequestOptions = {}) {
+  // Fail before any network activity if there is no usable signing key.
+  const headers = await botHeaders(targetUrl, env, { ...opts, sign: true });
+  const policy = await botRobotsPolicy(targetUrl, env, opts.signal);
+  if (!policy.ok) throw new BotPolicyError(policy);
+  return headers;
+}
+
 export async function signedFetch(targetUrl, env, opts: BotRequestOptions = {}) {
   const init = async (url) => ({
     method: opts.method || "GET",
-    headers: await botHeaders(url, env, { ...opts, sign: true }),
+    headers: await botRequestHeaders(url, env, opts),
     signal: opts.signal,  // optional caller-supplied deadline (AbortSignal)
     cf: opts.cf || { cacheTtl: 0 },  // caller may set its own edge-cache policy; default is app-layer only
   });
