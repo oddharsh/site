@@ -5,7 +5,8 @@ name: Wrangler pin
 # so nothing else moves it; this job asks nightly whether main has moved, runs
 # the canary leg's gates against the new commit (dry-run bundle, route oracle,
 # cal's suite, all on the candidate's own createTestHarness), and opens a PR
-# carrying the evidence when they pass. The bump-bun-pin.yml shape, for the
+# carrying the evidence when they pass. That same evaluation now supplies the
+# nightly Wrangler canary report, even when the pin is unchanged. The shape, for the
 # same reasons: one long-lived branch force-pushed, never a push to a
 # protected ref, a human merge because `main` takes no bypass actors.
 #
@@ -14,7 +15,7 @@ name: Wrangler pin
 
 on:
   schedule:
-    - cron: "50 9 * * *" # after bun-pin at 09:40 and before canary at 10:05
+    - cron: "50 9 * * *" # owns the one nightly Wrangler evaluation
   workflow_dispatch:
     inputs:
       ref:
@@ -38,6 +39,7 @@ jobs:
     permissions:
       contents: write # only the chore/wrangler-pin branch; main and production carry rulesets with zero bypass actors
       pull-requests: write
+      issues: write # the same candidate report drives the Wrangler canary issue
 
     steps:
       - name: Check out main
@@ -58,6 +60,7 @@ jobs:
         id: pin
         env:
           REF: ${{ inputs.ref || 'main' }}
+          PROPOSE: ${{ github.ref == 'refs/heads/main' }}
         run: |
           set -euo pipefail
 
@@ -65,7 +68,9 @@ jobs:
 
           # gotcha 40: read the status without a pipe in front of it.
           set +e
-          bun run wrangler:pin -- --write --ref "$REF" > pin.log 2>&1
+          args=(--ref "$REF" --json canary.json)
+          if [ "$PROPOSE" = true ]; then args+=(--write); fi
+          bun run wrangler:pin -- "${args[@]}" > pin.log 2>&1
           status=$?
           set -e
           cat pin.log
@@ -77,15 +82,29 @@ jobs:
             echo "status=$status"
           } >> "$GITHUB_OUTPUT"
 
-          # Exit 1 is "main moved and failed a gate", which is information about
+          # Preserve the canary result independently of a later pin/relock error.
+          if [ -f canary.json ]; then
+            bun -e '
+              const { verdict } = require("./canary.json");
+              console.log(`report_status=${verdict === "green" ? 0 : verdict === "instrument" ? 2 : 1}`);
+            ' >> "$GITHUB_OUTPUT"
+          fi
+
+          # Exit 1 is "the candidate failed a gate", which is information about
           # upstream rather than a fault here, so it is summarised and left green.
           if [ "$status" -ne 0 ] && [ "$status" -ne 1 ]; then
             echo "::error title=wrangler:pin could not run::exit $status"
             exit "$status"
           fi
 
+      - name: Report the same evaluation to the Wrangler canary issue
+        if: always() && github.ref == 'refs/heads/main' && steps.pin.outputs.report_status != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bun run timbrado report --target wrangler --json canary.json --exit "${{ steps.pin.outputs.report_status }}" --reproduce "bun run canary:wrangler"
+
       - name: Open or update the pin PR
-        if: steps.pin.outputs.before != steps.pin.outputs.after
+        if: github.ref == 'refs/heads/main' && steps.pin.outputs.before != steps.pin.outputs.after
         env:
           GH_TOKEN: ${{ github.token }}
           BRANCH: chore/wrangler-pin
@@ -151,9 +170,11 @@ jobs:
             if [ "${{ steps.pin.outputs.before }}" != "${{ steps.pin.outputs.after }}" ]; then
               echo "Proposed \`${{ steps.pin.outputs.before }}\` → \`${{ steps.pin.outputs.after }}\` on \`chore/wrangler-pin\`."
             elif [ "${{ steps.pin.outputs.status }}" = "1" ]; then
-              echo "main moved and did not clear a gate. Not a fault here; the log says which."
+              echo "The candidate did not clear a gate; the log says which."
+            elif [ "${{ steps.pin.outputs.status }}" = "0" ]; then
+              echo "Evaluation completed without changing the pin."
             else
-              echo "Nothing to do."
+              echo "The evaluation or pin update could not complete; inspect the failing step."
             fi
             echo
             echo '```'

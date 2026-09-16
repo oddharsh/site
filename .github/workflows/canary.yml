@@ -1,7 +1,9 @@
 name: Canary tripwire
 
 # Three moving targets, each run through gates this repository already holds
-# its pinned version to, every night, PROPOSING NOTHING.
+# its pinned version to, PROPOSING NOTHING. Bun and browsers run here nightly;
+# the Wrangler pin workflow owns its nightly evaluation and issue report.
+# A manual dispatch here still runs all three read-only legs.
 #
 #   bun       the rolling `canary` release, through the pin bumper's own gates:
 #             zstd honours `dictionary`, the lockfile in both directions, a
@@ -127,6 +129,7 @@ jobs:
 
   wrangler:
     name: wrangler main
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 30 # the two watches boot a probe Worker and run `wrangler types` on both trees
     permissions:
