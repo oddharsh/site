@@ -60,11 +60,6 @@ jobs:
         with:
           node-version-file: .node-version
 
-      - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.12"
-
       - name: Install image toolchain
         run: |
           # libavif is brew's, and it is the encoder the tiers use: the pipeline
@@ -80,14 +75,11 @@ jobs:
           # on its next run. macOS runners ship cargo, as the zenc step below
           # relies on too.
           cargo install --git https://github.com/oddharsh/exif-sooc exif-sooc --locked
-          # The venv is for gen-alt-text.py, which needs
-          # python3 and nothing else. requirements.txt is deliberately NOT
-          # installed here any more: its one entry is Pillow, the histogram bake
-          # moved into zenc on 2026-08-14, and the only remaining Pillow consumer
-          # (gen-pixel-peeper.py) is a one-off page generator this workflow never
-          # runs. Verified by import, not by assumption.
-          python -m venv "$RUNNER_TEMP/photo-venv"
-          echo "$RUNNER_TEMP/photo-venv/bin" >> "$GITHUB_PATH"
+          # No Python here since 2026-09-15. The captioner (gen-alt-text.ts) runs
+          # under the node this job already sets up, so the venv that used to
+          # follow this line, and the setup-python step above it, are gone.
+          # requirements.txt still pins Pillow for gen-pixel-peeper.py, a one-off
+          # page generator this workflow never runs.
 
       - name: Install repository dependencies
         run: bun install --frozen-lockfile

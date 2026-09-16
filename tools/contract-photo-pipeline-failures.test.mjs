@@ -37,8 +37,15 @@ async function fixture(run) {
     // misses the nested AVIF builder, so a declaration naming it reads as a
     // stale path, and it would copy an ignored download that no check sees.
     // photo-inputs.ts is named outright because the shells call it: it is a
-    // dependency of the corpus rather than a member of it.
-    const corpus = ["tools/photos/*.sh", "tools/photos/photo-inputs.ts"];
+    // dependency of the corpus rather than a member of it. Every file a
+    // `required_by` in config/tools.json names joins for the same reason, read
+    // from the declaration rather than listed here: check-tools.ts fails on a
+    // required_by it cannot open, so the fixture has to hold whatever the real
+    // declaration points at, and that set changed the day python3's only
+    // consumer became a .py outside the shell glob (2026-09-15).
+    const declared = JSON.parse(await readFile(new URL("../config/tools.json", import.meta.url), "utf8"))
+      .tools.flatMap((t) => t.required_by ?? []);
+    const corpus = ["tools/photos/*.sh", "tools/photos/photo-inputs.ts", ...new Set(declared)];
     for (const rel of execFileSync("git", ["ls-files", "-z", ...corpus], { cwd: REPO, encoding: "utf8" }).split("\0").filter(Boolean)) {
       await put(rel, await readFile(path.join(REPO, rel), "utf8"));
     }

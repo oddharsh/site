@@ -30,7 +30,7 @@
 #      it ships at deploy like every other committed artifact. (It replaced the
 #      manifest:images KV cache over a runtime R2 list(); there is no cache to
 #      bust anymore.)
-#   6. captions anything still missing alt text (gen-alt-text.py), rebuilds the
+#   6. captions anything still missing alt text (gen-alt-text.ts), rebuilds the
 #      retrieval terms queryPhotos ranks on (gen-photo-semantics.ts, which reads
 #      those captions and so must follow them), then validates the whole artifact
 #      graph — pixels, EXIF, histograms, captions, the index — via
@@ -329,7 +329,7 @@ avif_encode() {  # avif_encode <src.jpg> <out.avif>
     # 2026-08-26 over 12 Fuji colour frames at this exact tier: it looks like
     # +1.218 mean SSIMULACRA2, but it also spends +4.54% more bytes, and the
     # matched-bytes probe (raise q until plain costs the same, the test
-    # matched-bytes-probe.py runs for the resampling work) puts the real figure
+    # matched-bytes-probe.ts runs for the resampling work) puts the real figure
     # at +0.411 mean with sharpyuv LOSING on 5 of 12. Turning it on is a
     # deliberate decision that also re-mints every /i/ URL it touches.
     #
@@ -633,12 +633,13 @@ echo "  photo index: $(jaq 'length' "$INDEX_FILE") entries"
 # already-captioned stems cost nothing. a 429 (the free 10k neurons/day) stops it
 # early, which is why the failure is tolerated here and the real gate is
 # check-photo-pipeline.ts below.
-if command -v python3 >/dev/null 2>&1; then
-  python3 "$SCRIPT_DIR/gen-alt-text.py" || \
-    echo "  captions incomplete — re-run 'bun run captions' before deploying"
-else
-  echo "  python3 missing — skipping alt-text generation"
-fi
+# node rather than python3 since 2026-09-15: the captioner was the last thing
+# here that ran under an interpreter the rest of this script does not already
+# need (photo-inputs, the histogram index, semantics and the pipeline check are
+# all node), and gotcha 40's ninth site is what a Python file outside the shell
+# sweep cost.
+node "$SCRIPT_DIR/gen-alt-text.ts" || \
+  echo "  captions incomplete — re-run 'bun run captions' before deploying"
 
 # retrieval terms for every stem, and the ONE stem-keyed artifact this script has
 # never regenerated. The other five reach it: hashes and fingerprints through
@@ -648,7 +649,7 @@ fi
 # a deleted www/ for a week (gotcha 40). That fixed the producer and left the hole
 # that let seven photos drift out of it, so the next add would open it again.
 #
-# It runs AFTER gen-alt-text.py because the derived tier folds alt[stem] into
+# It runs AFTER gen-alt-text.ts because the derived tier folds alt[stem] into
 # `terms`. Captioning second leaves a new stem carrying camera vocabulary and no
 # subject, which is the quiet half of this failure: the photo stays findable one
 # tier down and nothing errors.
