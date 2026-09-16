@@ -1819,8 +1819,10 @@ arm degrades the same way. Build if you need either.
 
 ### AadharshBot — the branded crawler
 
-Lives in `_worker.js` (search for `BOT_NAME`). Signs all outbound requests
-per RFC 9421 + Web Bot Auth IETF draft. JWKS at
+Lives in `src/worker/lib/botauth.ts`. Signs outbound HTTP reader requests
+per RFC 9421 + Web Bot Auth IETF draft. The User-Agent alone is not proof:
+browser rendering, webmentions and ancillary service calls also use it but
+do not carry signatures. JWKS at
 `/.well-known/http-message-signatures-directory`. Used for:
 
 - The `/around` neighborhood dashboard (crypto VC homepages it crawls)

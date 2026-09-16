@@ -76,13 +76,19 @@ export function renderBotPage() {
 
     <h2>How to verify it's really ${BOT_NAME}</h2>
     <p>
-      Requests made as AadharshBot include <code>Signature-Agent</code>, <code>Signature-Input</code>,
+      The signed HTTP readers for /around, music, bookmarks and Lens include <code>Signature-Agent</code>, <code>Signature-Input</code>,
       and <code>Signature</code> headers per
       <a href="https://www.rfc-editor.org/rfc/rfc9421" target="_blank" rel="noopener">RFC 9421</a>
       with the Web Bot Auth profile (<code>tag="web-bot-auth"</code>). Fetch the JWKS
       at the URL above, find the key with the matching <code>kid</code> (its RFC 7638 thumbprint), and verify the
       Ed25519 signature over the canonical components listed in <code>Signature-Input</code>.
-      If the verification fails, the request is not from this site.
+      Treat an absent, expired or invalid signature as unverified. A User-Agent
+      string alone does not prove who sent a request.
+    </p>
+    <p>
+      Browser rendering, webmention delivery and verification, and ancillary
+      service calls can also use this User-Agent but do not currently carry Web
+      Bot Auth signatures. They are outside the signed identity described here.
     </p>
 
     <h2>The second signature, retired</h2>
@@ -108,7 +114,7 @@ export function renderBotPage() {
     <pre><code>User-agent: ${BOT_NAME}
 Disallow: /</code></pre>
     <p>
-      Before fetching third-party content, ${BOT_NAME} reads that origin's
+      Before fetching third-party content, the signed HTTP readers read that origin's
       <code>robots.txt</code> (cached for up to 12 hours). It skips paths disallowed
       for <code>${BOT_NAME}</code> or <code>*</code>, including redirect destinations.
       If the policy is unreachable, rate-limited, or too large to read safely,
