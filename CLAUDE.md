@@ -5414,12 +5414,28 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     same day: the route oracle's `createTestHarness` under bun boots, prints
     no refusal, and times out every route, 167 of 168 hard failures in 9m23s
     against 168 passes in 6s under node. That is `check startup`'s silent
-    failure wearing a different subcommand. It is also NARROWER than "the
-    harness needs node": cal's 84-test suite boots the same harness under bun
-    and passes with node absent from PATH, so what times out is the site
-    Worker's configuration under bun, cause unmeasured. Either way node is
-    spent on the wrangler bridge, the route oracle and `test:node`, and a
-    contract test lists those spawns so a fourth is a decision.
+    failure wearing a different subcommand, and the reason is the DOOR rather
+    than the config, measured 2026-09-16. Wrangler's harness serves the
+    loopback URL `server.listen()` returns through a ProxyWorker that queues
+    every request until the ProxyController sends it a `play` carrying the
+    upstream URL in a `cf.hostMetadata` blob, and that `play` goes through
+    miniflare's `dispatchFetch`, which attaches the blob as the `MF-CF-Blob`
+    header from a custom undici `Dispatcher` and calls `fetch(url,
+    { dispatcher })`. Bun ignores the `dispatcher` option (oven-sh/bun#39247,
+    the `fetch-honours-dispatcher` watch in `tools/lib/upstream-watches.ts`),
+    so the header never lands, the ProxyWorker reads `request.cf?.hostMetadata`
+    as undefined and never flushes, and all 168 requests time out. The oracle
+    takes that door, since `check-routes-harness.ts` spawns
+    `verify-routes.ts <url>` and it `fetch`es the URL; cal's suite takes the
+    OTHER door, `worker.fetch()` in-process, which dispatches to workerd's real
+    origin with the route on an `MF-Route-Override` header and no ProxyWorker
+    in the path, so it passes under bun. Proven by delivering the `play` by
+    hand under bun: without the blob the queue stays blocked, with it the same
+    harness flushes and serves, and pointing cal's own config at the wire door
+    hangs it too, so this is the door and not site-vs-cal. When that watch
+    flips (fix oven-sh/bun#39250) the oracle becomes runnable under bun. Either
+    way node is spent on the wrangler bridge, the route oracle and `test:node`,
+    and a contract test lists those spawns so a fourth is a decision.
 
     **CI followed on the same day.** `setup-node` is in exactly the jobs that
     run wrangler (validate, the ramp's canary and full, perf-diff, perf-history,
