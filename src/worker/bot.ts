@@ -110,11 +110,17 @@ export function renderBotPage() {
     </p>
 
     <h2>How to opt out</h2>
+    <p>
+      The RN music panel has one operator-configured exception: its public Spotify
+      playlist, track, and artist embed requests skip <code>robots.txt</code>.
+      They retain the signed bot identity, bounded batches, and caching.
+      Other readers, including Lens requests to Spotify, follow the policy below.
+    </p>
     <p>Add to your <code>robots.txt</code>:</p>
     <pre><code>User-agent: ${BOT_NAME}
 Disallow: /</code></pre>
     <p>
-      Before fetching third-party content, the signed HTTP readers read that origin's
+      Outside that exception, the signed HTTP readers read the origin's
       <code>robots.txt</code> (cached for up to 12 hours). It skips paths disallowed
       for <code>${BOT_NAME}</code> or <code>*</code>, including redirect destinations.
       If the policy is unreachable, rate-limited, or too large to read safely,

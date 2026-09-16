@@ -61,6 +61,11 @@ measurements and the full argument.
 
 ## How to opt out
 
+The RN music panel has one operator-configured exception: its public Spotify
+playlist, track, and artist embed requests skip `robots.txt`.
+They retain the signed bot identity, bounded batches, and caching.
+Other readers, including Lens requests to Spotify, follow the policy below.
+
 Add this to your `robots.txt`:
 
 ```
@@ -68,7 +73,7 @@ User-agent: AadharshBot
 Disallow: /
 ```
 
-Before fetching third-party content, the signed HTTP readers read that origin's `robots.txt`
+Outside that exception, the signed HTTP readers read the origin's `robots.txt`
 (cached for up to 12 hours). It skips paths disallowed for `AadharshBot` or `*`,
 including redirect destinations. If the policy is unreachable, rate-limited,
 or too large to read safely, the fetch is skipped. A positive `Crawl-delay`
