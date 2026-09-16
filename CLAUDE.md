@@ -1833,6 +1833,18 @@ The directory is Worker-first: `lib/botauth.ts` signs its response over
 Its committed JWK Set must match `RN_SIGNING_KEY_JWK`; missing or mismatched
 material returns 503, so rotate the public file and private secret together.
 
+All signed content reads use `botRequestHeaders`, which checks the destination's
+robots.txt before each hop. `botHeaders` remains the pure signer for self-dispatch
+and the robots bootstrap. The bootstrap follows only public redirects, has a
+three-second deadline and a 512 KiB cap. Policies are cached in KV for 12 hours;
+`BOT_ROBOTS_CACHE` shares the read inside one invocation, including the Workflow
+census entry, so Lens's parallel probes do not each spend another subrequest.
+Disallow, positive Crawl-delay, unreadable/oversized policies and 429 stop the
+content read. Crawl-delay means skip this origin; this bot has no distributed
+per-origin scheduler. Lens's unsigned UA diagnostic probes obey the same opt-out.
+Browser rendering remains a separate transport. `/bot` and its Markdown twin
+publish the scope, reference use, contact and no-training statement.
+
 ### `/mcp` — dual-era, and why both eras are served
 
 `src/worker/mcp.ts` speaks **2026-07-28** and the three legacy revisions

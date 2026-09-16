@@ -1,5 +1,5 @@
 import { assert, test, testGlobals } from "./contract-shared.ts";
-import { signedFetch } from "../src/worker/lib/botauth.ts";
+import { signedFetch, withBotPolicyCache } from "../src/worker/lib/botauth.ts";
 import { lensFetch, lensFetchAsBot } from "../src/worker/lens.ts";
 import { probeRevalidation } from "../src/worker/cache-lint.ts";
 import { foreignMcpTools, foreignNlwebAsk } from "../src/worker/lib/doors.ts";
@@ -18,7 +18,7 @@ async function keyPair() {
   return { publicKey: pair.publicKey, env: { RN_SIGNING_KEY_JWK: JSON.stringify(await crypto.subtle.exportKey("jwk", pair.privateKey)) } };
 }
 
-async function withFetch(respond, run) {
+async function withFetch(respond, run, robots = (_record) => new Response(null, { status: 404 })) {
   const original = globalThis.fetch;
   const seen = [];
   testGlobals.fetch = async (input, init = {}) => {
@@ -26,7 +26,7 @@ async function withFetch(respond, run) {
     for (let hop = 0; hop <= 20; hop++) {
       const record = { url, ...init, headers: new Headers(init.headers) };
       seen.push(record);
-      const response = respond(record);
+      const response = new URL(url).pathname === "/robots.txt" ? robots(record) : respond(record);
       const location = response.headers.get("location");
       if (init.redirect === "follow" && location) {
         url = new URL(location, url).href;
@@ -74,12 +74,13 @@ test("signedFetch retains explicit redirect modes, headers, method, deadline and
   const cf = { cacheTtl: 86400, cacheEverything: true };
   for (const redirect of /** @type {const} */ (["manual", "error"])) await withFetch(() => new Response(null, { status: 302, headers: { location: "/next" } }), async (seen) => {
     await signedFetch(origin, env, { method: "HEAD", headers: { accept: "application/json" }, signal, cf, redirect });
-    assert.equal(seen.length, 1);
-    assert.equal(seen[0].redirect, redirect);
-    assert.equal(seen[0].method, "HEAD");
-    assert.equal(seen[0].headers.get("accept"), "application/json");
-    assert.equal(seen[0].signal, signal);
-    assert.deepEqual(seen[0].cf, cf);
+    assert.equal(seen.length, 2, "one policy read and one content request");
+    assert.equal(seen[0].url, origin + "/robots.txt");
+    assert.equal(seen[1].redirect, redirect);
+    assert.equal(seen[1].method, "HEAD");
+    assert.equal(seen[1].headers.get("accept"), "application/json");
+    assert.equal(seen[1].signal, signal);
+    assert.deepEqual(seen[1].cf, cf);
   });
   await withFetch(() => { throw new Error("unexpected fetch"); }, async (seen) => {
     await assert.rejects(signedFetch(origin, {}, { sign: false }), /signing key/);
@@ -108,4 +109,84 @@ test("self-dispatch stays unsigned and a failed local binding never falls throug
       assert.equal(seen.length, 0, "a binding failure is not authorization for an unsigned external fallback");
     }
   });
+});
+
+for (const reader of readers) test(`${reader.name} honors AadharshBot opt-outs before reading content`, async () => {
+  const { env } = await keyPair();
+  await withFetch(() => { throw new Error("disallowed content fetched"); }, async (seen) => {
+    try { await reader.run(env); } catch (error) { assert.match(error.message, /Disallow/); }
+    assert.equal(seen.length, 1);
+    assert.equal(seen[0].url, origin + "/robots.txt");
+  }, () => new Response("User-agent: AadharshBot\nDisallow: /"));
+});
+
+test("redirect destinations are checked against their own policy", async () => {
+  const { env } = await keyPair();
+  await withFetch(() => new Response(null, { status: 302, headers: { location: "https://other.example/private" } }), async (seen) => {
+    await assert.rejects(signedFetch(origin + "/page", env), /Disallow: \/private/);
+    assert.deepEqual(seen.map((r) => r.url), [origin + "/robots.txt", origin + "/page", "https://other.example/robots.txt"]);
+  }, ({ url }) => new Response(new URL(url).origin === origin ? "" : "User-agent: *\nDisallow: /private"));
+});
+
+test("unknown, oversized, rate-limited and crawl-delayed policies stop the content request", async () => {
+  const { env } = await keyPair();
+  for (const policy of [
+    () => new Response(null, { status: 503 }),
+    () => new Response(null, { status: 429 }),
+    () => { throw new Error("offline"); },
+    () => new Response("#".repeat(512 * 1024 + 1)),
+    () => new Response("User-agent: *\nCrawl-delay: 0.5"),
+    () => new Response(null, { status: 302, headers: { location: "http://169.254.169.254/robots.txt" } }),
+  ]) await withFetch(() => { throw new Error("content fetched without permission"); }, async (seen) => {
+    await assert.rejects(signedFetch(origin + "/page", env), /not fetched/);
+    assert.deepEqual(seen.map((r) => r.url), [origin + "/robots.txt"]);
+  }, policy);
+});
+
+test("named groups, query paths and percent-encoded paths keep the same opt-out", async () => {
+  const { env } = await keyPair();
+  const policy = "User-agent: *\nDisallow: /\nCrawl-delay: 5\nUser-agent: AadharshBot\nDisallow: /private\nDisallow: /*?secret=\nAllow: /private/public";
+  for (const [path, allowed] of [["/page", true], ["/private/public", true], ["/pr%69vate", false], ["/page?secret=yes", false]]) {
+    await withFetch(() => new Response("content"), async (seen) => {
+      if (allowed) assert.equal((await signedFetch(origin + path, env)).status, 200);
+      else await assert.rejects(signedFetch(origin + path, env), /Disallow/);
+      assert.equal(seen.length, allowed ? 2 : 1);
+    }, () => new Response(policy));
+  }
+});
+
+test("a policy is fetched once per invocation and cached in KV for twelve hours", async () => {
+  const { env } = await keyPair();
+  const entries = new Map();
+  let reads = 0, writes = 0;
+  const bindings = { ...env, RN_KV: {
+    async get(key) { reads++; return entries.get(key) || null; },
+    async put(key, value, opts) { writes++; assert.equal(opts.expirationTtl, 43200); entries.set(key, JSON.parse(value)); },
+  } };
+  await withFetch(() => new Response("content"), async (seen) => {
+    const scoped = withBotPolicyCache(bindings);
+    await Promise.all(Array.from({ length: 28 }, (_, i) => signedFetch(origin + "/p" + i, scoped)));
+    assert.equal(seen.filter((r) => r.url.endsWith("/robots.txt")).length, 1);
+    assert.equal(reads, 1);
+    assert.equal(writes, 1);
+    await signedFetch(origin + "/another", withBotPolicyCache(bindings));
+    assert.equal(reads, 2, "the next invocation reads its own policy, not an old I/O promise");
+    assert.equal(writes, 1);
+  });
+});
+
+test("Lens UA diagnostics cannot bypass AadharshBot's robots opt-out", async () => {
+  const { env } = await keyPair();
+  await withFetch(() => { throw new Error("diagnostic content fetched"); }, async (seen) => {
+    await assert.rejects(lensFetchAsBot(origin + "/page", env, undefined, "GPTBot/1.0"), /Disallow/);
+    assert.equal(seen.length, 1);
+  }, () => new Response("User-agent: AadharshBot\nDisallow: /"));
+});
+
+test("a policy read preserves platform exhaustion for the census guard", async () => {
+  const { env } = await keyPair();
+  await withFetch(() => { throw new Error("content fetched after exhaustion"); }, async (seen) => {
+    await assert.rejects(signedFetch(origin + "/page", env), /Too many subrequests/);
+    assert.equal(seen.length, 1);
+  }, () => { throw new Error("Too many subrequests by single Worker"); });
 });

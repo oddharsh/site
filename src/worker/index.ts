@@ -21,7 +21,7 @@ import { handleLensNlweb } from "./lens-nlweb.ts";
 import { handleLensTools } from "./lens-tools.ts";
 import { handleLensMarkdown } from "./lens-markdown.ts";
 import { serveAssetWith404Clamp, serveFreshAsset, servePrecompressedShell, servePrecompressedText, serveStaticPage } from "./lib/assets.ts";
-import { BOT_UA, handleSignatureDirectory } from "./lib/botauth.ts";
+import { BOT_UA, handleSignatureDirectory, withBotPolicyCache } from "./lib/botauth.ts";
 import { CANONICAL_HOST, PAGE_CACHE_CONTROL, isCanonicalHost } from "./lib/const.ts";
 import { HOMEPAGE_DISCOVERY_LINK } from "./lib/security.ts";
 import { wantsMarkdown } from "./lib/http.ts";
@@ -136,6 +136,7 @@ function withSelfFetch(env: Env, ctx: ExecutionContext) {
 }
 
 async function serveWorkerRequest(request: SiteRequest, env: Env, ctx: ExecutionContext) {
+  env = withBotPolicyCache(env);
   const url = new URL(request.url);
 
   // Workers preview URLs (see lib/preview.js). A preview serves the real site
@@ -260,6 +261,7 @@ export default {
   // schedule so the request path stays a pure KV read and the page is safe to
   // prerender. The weekly schedule sweeps the /lens/census roster into D1.
   async scheduled(event, env, ctx) {
+    env = withBotPolicyCache(env);
     // Each arm runs inside a named span. This is the single highest-value place
     // to trace in the whole worker, because a cron has NO response: there is no
     // Server-Timing header to read, no status code, no visitor to complain. Every

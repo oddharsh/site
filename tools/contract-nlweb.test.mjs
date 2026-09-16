@@ -561,6 +561,8 @@ test("a redirect off a vetted origin is validated per hop, not followed blindly"
   const run = async (location, second) => {
     const hops = [];
     testGlobals.fetch = async (url) => {
+      // The content redirect probe runs only after its origin allows crawling.
+      if (new URL(String(url)).pathname === "/robots.txt") return new Response(null, { status: 404 });
       hops.push(String(url));
       return hops.length === 1
         ? new Response(null, { status: 302, headers: { location } })

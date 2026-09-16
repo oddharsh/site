@@ -14,15 +14,25 @@ to stop it from visiting if you don't want it to.
 
 ## What it does
 
-It fetches small numbers of public homepages on demand, mostly out of curiosity.
-The [/around](https://aadhar.sh/around) dashboard shows what it currently looks
-at. It reads only what is publicly served, and it respects `robots.txt`. It does
-not submit forms, log in, or scrape behind a login. Results are cached in
-Cloudflare KV for at least an hour so it does not re-hit the same URL repeatedly.
+This is Aadharsh Pannirselvam's bot for [aadhar.sh](https://aadhar.sh/), running on
+Cloudflare Workers. The [/around](https://aadhar.sh/around) dashboard checks a
+small list of public homepages daily. The music and reading sections fetch
+public playlist metadata and bookmarks. [/lens](https://aadhar.sh/lens) fetches
+public pages and discovery documents when a visitor asks to inspect a URL, and
+can read published MCP tool catalogues and NLWeb answers.
+
+Content is used for linked references, metadata, and on-demand inspection.
+It is not used to train or fine-tune AI models or build a search index.
+Requests use bounded fan-outs and cached results. The bot does not log in to
+third-party sites or read content behind a login.
+
+Lens also compares responses to sample browser and crawler User-Agent strings.
+Those diagnostic requests do not claim a Web Bot Auth identity for the sampled
+bot, and still obey AadharshBot's robots.txt policy.
 
 ## How to verify it is really AadharshBot
 
-Every request carries `Signature-Agent`, `Signature-Input`, and `Signature`
+Requests made as AadharshBot carry `Signature-Agent`, `Signature-Input`, and `Signature`
 headers per [RFC 9421](https://www.rfc-editor.org/rfc/rfc9421) with the Web Bot
 Auth profile (`tag="web-bot-auth"`). Fetch the JWKS at the URL above, find the
 key whose `kid` matches (the kid is the key's RFC 7638 thumbprint), and verify the Ed25519 signature over the canonical
@@ -54,8 +64,10 @@ User-agent: AadharshBot
 Disallow: /
 ```
 
-Before the [/around](https://aadhar.sh/around) crawl fetches a site, AadharshBot
-reads that site's `robots.txt` (cached briefly per origin) and skips any path
-`Disallow`ed for `AadharshBot` or `*`. A site whose `robots.txt` it cannot read
-is skipped that cycle rather than crawled. If you have a question or a complaint,
-email coffee@aadhar.sh and I will reply by hand.
+Before fetching third-party content, AadharshBot reads that origin's `robots.txt`
+(cached for up to 12 hours). It skips paths disallowed for `AadharshBot` or `*`,
+including redirect destinations. If the policy is unreachable, rate-limited,
+or too large to read safely, the fetch is skipped. A positive `Crawl-delay`
+also makes this bot skip the origin. These rules apply to scheduled crawls and
+visitor-requested Lens HTTP reads. If you have a question or a complaint, email
+coffee@aadhar.sh and I will reply by hand.

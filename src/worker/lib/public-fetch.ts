@@ -123,3 +123,75 @@ export async function fetchFollowingPublicRedirects(url, init: (url: string) => 
   }
   return { ok: false, error: `That URL redirected more than ${maxHops} times.`, blockedHop: maxHops, url: current };
 }
+
+export const DEFAULT_CRAWL_BODY_CAP = 200 * 1024;
+
+// Read at most maxBytes from a response stream. A second read after the cap
+// distinguishes an exactly-max-sized body from a truncated one without ever
+// buffering an unbounded response.
+export async function readResponseCapped(response, maxBytes = DEFAULT_CRAWL_BODY_CAP, signal?: AbortSignal) {
+  const reader = response && response.body && response.body.getReader
+    ? response.body.getReader()
+    : null;
+  if (!reader) {
+    signal?.throwIfAborted();
+    return { text: "", bytesRead: 0, truncated: false, digest: "" };
+  }
+
+  // Annotated because an empty literal infers `never[]` under strictNullChecks,
+  // which the lens-reader Worker's program turns on: TypeScript only lets an
+  // array evolve from its pushes while that flag is off.
+  const chunks: Uint8Array[] = [];
+  let bytesRead = 0;
+  let truncated = false;
+  // Internal responses have no fetch transport to cancel their body for us.
+  const abort = () => { void reader.cancel(signal?.reason).catch(() => {}); };
+  signal?.addEventListener("abort", abort, { once: true });
+  if (signal?.aborted) abort();
+  try {
+    for (;;) {
+      signal?.throwIfAborted();
+      const { done, value } = await reader.read();
+      signal?.throwIfAborted();
+      if (done) break;
+      if (!value.byteLength) continue;
+      if (bytesRead >= maxBytes) {
+        truncated = true;
+        break;
+      }
+      const take = Math.min(value.byteLength, maxBytes - bytesRead);
+      chunks.push(value.subarray(0, take));
+      bytesRead += take;
+      if (take < value.byteLength) {
+        truncated = true;
+        break;
+      }
+    }
+  } finally {
+    signal?.removeEventListener("abort", abort);
+    if (truncated) {
+      try { await reader.cancel(); } catch (_e) {}
+    }
+  }
+
+  const bytes = new Uint8Array(bytesRead);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return {
+    text: new TextDecoder("utf-8").decode(bytes),
+    bytesRead,
+    truncated,
+    digest: await sha256Hex(bytes),
+  };
+}
+
+export async function sha256Hex(value) {
+  const bytes = value instanceof Uint8Array
+    ? value
+    : new TextEncoder().encode(String(value ?? ""));
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+  return digest.toHex();
+}

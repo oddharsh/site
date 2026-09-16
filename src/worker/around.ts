@@ -1,37 +1,10 @@
-import { BOT_NAME, BOT_UA, SIG_AGENT, signedFetch } from "./lib/botauth.ts";
+import { BOT_NAME, BOT_UA, SIG_AGENT, botRobotsPolicy, BotPolicyError } from "./lib/botauth.ts";
 import { cachedRender, deleteSWRKV } from "./lib/cache.ts";
-import { crawlDocument, mapWithConcurrency, readResponseCapped } from "./lib/crawl.ts";
+import { crawlDocument, mapWithConcurrency } from "./lib/crawl.ts";
 import { lunaPage } from "./lib/chrome.ts";
 import { unsafeHtml } from "./lib/html.ts";
 import { esc, extractMeta, jsonResponse } from "./lib/http.ts";
-import { lensParseRobots, lensRobotsVerdict } from "./lib/robots.ts";
 import { span } from "./lib/trace.ts";
-
-// Obey robots.txt before crawling a neighbor. /bot promises AadharshBot reads and
-// obeys robots.txt, and this cron is the one path that fetches third-party sites
-// unprompted, so it is where the promise has to be kept. RFC 9309: an absent or
-// 4xx robots.txt means allow-all; a 5xx or unreachable one means treat as
-// disallowed (we skip THIS cycle and retry next cron, rather than crawl over a
-// policy we could not read). Parsed robots is cached 12h per origin — ~20 origins,
-// one write each, trivially within the KV budget.
-async function robotsGate(env, url) {
-  let origin, path;
-  try { const u = new URL(url); origin = u.origin; path = u.pathname || "/"; } catch { return { ok: true }; }
-  const key = `around:robots:${origin}`;
-  let parsed = null;
-  try { parsed = env.RN_KV ? await env.RN_KV.get(key, "json") : null; } catch {}
-  if (!parsed) {
-    try {
-      const r = await signedFetch(origin + "/robots.txt", env, { signal: AbortSignal.timeout(3000) });
-      if (r.status >= 500) return { ok: false, kind: "undetermined", reason: "robots.txt " + r.status };   // 5xx: don't cache, retry next cron
-      const body = r.ok ? await readResponseCapped(r, 64 * 1024) : { text: "" };
-      parsed = r.ok ? lensParseRobots(body.text) : { groups: [], sitemaps: [] };   // 4xx / absent → allow-all, cacheable
-      if (env.RN_KV) { try { await env.RN_KV.put(key, JSON.stringify(parsed), { expirationTtl: 43200 }); } catch {} }
-    } catch { return { ok: false, kind: "undetermined", reason: "robots.txt unreachable" }; }
-  }
-  const v = lensRobotsVerdict(parsed, BOT_NAME, path);
-  return v.verdict === "block" ? { ok: false, kind: "disallow", rule: v.rule || "Disallow" } : { ok: true };
-}
 
   // Signature-Agent value (RFC 8941 string)
 
@@ -410,13 +383,13 @@ async function runAroundInner(env, sCrawl) {
     // honor robots.txt first. A disallow is a legitimate result (skipped row, no
     // error); an undetermined robots.txt is recorded as an error so a network-wide
     // outage can't overwrite the last-good snapshot with an all-skipped one.
-    const gate = await span("around.robots_gate", () => robotsGate(env, url));
-    if (gate.kind === "disallow") {
+    const gate = await span("around.robots_gate", () => botRobotsPolicy(url, env));
+    if (!gate.ok && gate.kind === "disallow") {
       s.setAttribute("around.outcome", "robots_disallow");
       s.setAttribute("around.robots_rule", gate.rule);
       return { name, url, skipped: "robots", robots: "disallow", robotsRule: gate.rule, elapsedMs: Date.now() - t0 };
     }
-    if (gate.kind === "undetermined") {
+    if (!gate.ok && gate.kind === "undetermined") {
       // the reason string ("robots.txt 503", "robots.txt unreachable") is the
       // whole diagnosis and it has been going into a JSON field nobody reads.
       s.setAttribute("around.outcome", "robots_undetermined");
@@ -447,6 +420,14 @@ async function runAroundInner(env, sCrawl) {
         elapsedMs:     crawl.elapsedMs,
       };
     } catch (e) {
+      // Redirect destinations have their own robots policy too.
+      if (e instanceof BotPolicyError) {
+        const policy = e.policy;
+        s.setAttribute("around.outcome", "robots_" + policy.kind);
+        return policy.kind === "disallow"
+          ? { name, url, skipped: "robots", robots: "disallow", robotsRule: policy.rule, elapsedMs: Date.now() - t0 }
+          : { name, url, robots: "undetermined", error: e.message, elapsedMs: Date.now() - t0 };
+      }
       s.setAttribute("around.outcome", "error");
       s.setAttribute("around.error", String(e?.message || e));
       return { name, url, robots: "allow", error: String(e?.message || e), elapsedMs: Date.now() - t0 };
