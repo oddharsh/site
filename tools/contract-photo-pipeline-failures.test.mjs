@@ -45,7 +45,9 @@ async function fixture(run) {
     // consumer became a .py outside the shell glob (2026-09-15).
     const declared = JSON.parse(await readFile(new URL("../config/tools.json", import.meta.url), "utf8"))
       .tools.flatMap((t) => t.required_by ?? []);
-    const corpus = ["tools/photos/*.sh", "tools/photos/photo-inputs.ts", ...new Set(declared)];
+    // pipeline-json.ts is the shells' JSON since 2026-09-15 and runs for real
+    // under the fixture's node, with the one module it imports.
+    const corpus = ["tools/photos/*.sh", "tools/photos/photo-inputs.ts", "tools/photos/pipeline-json.ts", "tools/lib/photo-indexes.ts", ...new Set(declared)];
     for (const rel of execFileSync("git", ["ls-files", "-z", ...corpus], { cwd: REPO, encoding: "utf8" }).split("\0").filter(Boolean)) {
       await put(rel, await readFile(path.join(REPO, rel), "utf8"));
     }
