@@ -15,7 +15,8 @@ int site_avif_encode(const uint8_t *pixels, uint32_t width, uint32_t height, int
         if (encoder) avifEncoderDestroy(encoder);
         return 1;
     }
-    image->colorPrimaries = AVIF_COLOR_PRIMARIES_SRGB;
+    // sRGB shares BT.709 primaries; this name also exists in libavif 1.0.
+    image->colorPrimaries = AVIF_COLOR_PRIMARIES_BT709;
     image->transferCharacteristics = AVIF_TRANSFER_CHARACTERISTICS_SRGB;
     image->matrixCoefficients = AVIF_MATRIX_COEFFICIENTS_BT601;
     image->yuvRange = AVIF_RANGE_FULL;
