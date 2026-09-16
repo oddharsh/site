@@ -67,6 +67,9 @@ export type BotRequestOptions = {
   redirect?: "follow" | "error" | "manual";
   signal?: AbortSignal;
   cf?: RequestInitCfProperties;
+  // RN alone opts into the operator-approved exception for Spotify embeds.
+  // Every other URL, including redirect destinations, keeps the default policy.
+  robots?: "respect" | "spotify-embed";
 };
 
 // Build the headers for an identified outbound request. AadharshBot's public
@@ -205,8 +208,8 @@ export class BotPolicyError extends Error {
 }
 
 // A policy fetch is the only bootstrap request: its redirect chain is validated
-// and signed, but cannot recursively ask itself for permission. All content
-// requests (including Lens and redirect hops) consult this same cached policy.
+// and signed, but cannot recursively ask itself for permission. Content readers
+// consult this cached policy unless RN selects the Spotify-only exception below.
 // Keep this out of botHeaders: signing is a pure operation used by self-dispatch
 // and cryptographic verifiers as well as network callers.
 export async function botRobotsPolicy(targetUrl: string, env: Pick<Env, "RN_KV" | "RN_SIGNING_KEY_JWK" | "BOT_ROBOTS_CACHE">, signal?: AbortSignal): Promise<BotPolicy> {
@@ -277,9 +280,16 @@ async function readBotRobots(origin: string, env: Pick<Env, "RN_KV" | "RN_SIGNIN
   return { ok: true, parsed };
 }
 
+// The music panel reads these three public embed shapes on the owner's behalf.
+// Keep the exception explicit at the RN call site and re-check it on EVERY hop:
+// neither an unrelated Spotify page nor another origin inherits it. `_t` is
+// RN's existing cache-busting parameter, used for playlist refreshes and retries.
+const SPOTIFY_EMBED = /^https:\/\/open\.spotify\.com\/embed\/(?:playlist|track|artist)\/[A-Za-z0-9]{22}(?:\?_t=\d+)?$/;
+
 export async function botRequestHeaders(targetUrl: string, env, opts: BotRequestOptions = {}) {
   // Fail before any network activity if there is no usable signing key.
   const headers = await botHeaders(targetUrl, env, { ...opts, sign: true });
+  if (opts.robots === "spotify-embed" && (opts.method || "GET") === "GET" && SPOTIFY_EMBED.test(targetUrl)) return headers;
   const policy = await botRobotsPolicy(targetUrl, env, opts.signal);
   if (!policy.ok) throw new BotPolicyError(policy);
   return headers;

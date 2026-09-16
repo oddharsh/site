@@ -286,7 +286,7 @@ jobs:
 
   verify:
     name: Post-ramp checks
-    needs: full
+    needs: [canary, full]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # No environment and no Cloudflare credential. Both checks below read

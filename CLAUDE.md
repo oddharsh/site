@@ -371,9 +371,13 @@ worktrees may edit freely, but a worktree is not a release surface.
   site Worker plus the auxiliary Garage/LWE configs (`cf-garage/`, `lwe-ask/`),
   runs the coffee tests, and sweeps the route oracle against a Worker booted
   in-process (`bun run routes:check`, wrangler's `createTestHarness()`), so a
-  broken route fails the PR instead of the deploy. All of that lives in the ONE
-  `validate` job, because `validate` is the one required check on `main` and a
-  gate that is not required is not a gate.
+  broken route fails the PR instead of the deploy. Site, native photo, and network
+  validation run in parallel. Four contract jobs consume the site job's built
+  tree: Bun/Node crossed with real/symlinked temporary directories. The required
+  `validate` job depends on the matrix and all three validation jobs
+  and always runs: any failed, cancelled or skipped dependency makes it fail.
+  Keep every validation job in its `needs`; the contract suite checks the census.
+  Production promotion still requires the entire CI workflow to succeed.
 - **`.github/workflows/perf-diff.yml` is deliberately OUTSIDE that job**, and the
   separation is the whole design rather than tidiness. It builds the merge base
   and HEAD, diffs the wire sizes, and comments the delta on the PR; it fails on
@@ -1836,7 +1840,14 @@ Its committed JWK Set must match `RN_SIGNING_KEY_JWK`; missing or mismatched
 material returns 503, so rotate the public file and private secret together.
 
 All signed content reads use `botRequestHeaders`, which checks the destination's
-robots.txt before each hop. `botHeaders` remains the pure signer for self-dispatch
+robots.txt before each hop by default. RN explicitly selects `robots: "spotify-embed"`
+for the owner's public playlist, track and artist embed reads: the 2026-09-16
+operator-approved exception restores the music feed after the shared crawl gate
+blocked all three tiers. It applies only to GET requests to those three embed
+shapes on `https://open.spotify.com`, including RN's `_t` cache-busting query.
+Every redirect is checked again; other paths, origins and readers (including Lens
+on Spotify) keep the default robots policy. Signing and public-URL validation
+remain mandatory. `botHeaders` remains the pure signer for self-dispatch
 and the robots bootstrap. The bootstrap follows only public redirects, has a
 three-second deadline and a 512 KiB cap. Policies are cached in KV for 12 hours;
 `BOT_ROBOTS_CACHE` shares the read inside one invocation, including the Workflow

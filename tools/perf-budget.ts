@@ -241,8 +241,9 @@ try {
 let dryOut = "";
 let dryRunFailed = false;
 try {
-  // --outfile writes the single prebuilt bundle that `check startup` consumes
-  // below, so the startup profile costs no second build.
+  // One dry-run writes index.js for the route harness's prebuiltWorkerDir and
+  // the upload-format worker.bundle for `check startup`. They are different
+  // formats; the profiler cannot consume the plain JavaScript entrypoint.
   dryOut = execFileSync(...wranglerCommand(["deploy", "--dry-run", "--outdir", ".build/.perfbudget", "--outfile", ".build/.perfbudget/worker.bundle", "--metafile"]), { encoding: "utf8" });
 } catch (e) {
   dryOut = (e.stdout || "") + "\n" + (e.stderr || "");

@@ -1074,6 +1074,10 @@ export async function scrapeSpotifyEmbed(kindAndId, env) {
     // signedFetch adds the required Web Bot Auth signature (RFC 9421), so a
     // plain fetch can never accidentally put the AadharshBot UA on the wire.
     const res = await signedFetch(`https://open.spotify.com/embed/${kindAndId}${qs}`, env || {}, {
+      // Owner-approved RN exception: preserve the signed bot identity, but do
+      // not apply Spotify's crawl policy to these public playlist/art lookups.
+      // signedFetch confines it to the three embed URL shapes on every hop.
+      robots: "spotify-embed",
       // 5s deadline. scrapePlaylistTracks fans out to dozens of these embeds in
       // Promise.all, and one stuck fetch used to hang its whole branch. A timeout
       // throws into the same empty-entity path any embed failure already takes.

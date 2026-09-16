@@ -14,12 +14,10 @@ on:
   # be retried"), closing and reopening the PR fired nothing, and an empty commit
   # fired CodeQL and Workers Builds but not CI. A blocked PR with no lever is a
   # bad place to discover you have no lever.
+  # Select the branch in GitHub's dispatch UI or with `gh workflow run --ref`.
+  # A separate checkout override can run another branch's code with this
+  # dispatch's cache scope and misreport which commit was actually tested.
   workflow_dispatch:
-    inputs:
-      ref:
-        description: "Branch or SHA to validate (defaults to the branch you launch from)"
-        required: false
-        type: string
 
 permissions:
   contents: read
@@ -58,18 +56,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  validate:
-    name: validate
+  site:
+    name: site validation
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          # Empty on pull_request/push, where checkout's own default is correct.
-          # Only a manual run can name a ref, and then it is the point.
-          ref: ${{ inputs.ref || '' }}
 
       - name: Set up bun
         # config/... no longer applies: the version lives in config/bun-pin.json and the
@@ -97,36 +91,13 @@ jobs:
       - name: Typecheck annotated JavaScript
         run: bun run typecheck
 
-      - name: Build homepage
-        run: bun run build
+      # perf-budget owns the build and Worker dry-run. The route oracle below
+      # loads that exact bundle, so all checks exercise one build in this job.
+      - name: Build and validate site Worker and performance budget
+        run: bun run perf-budget
 
       - name: Check photo asset invariants
         run: bun run photos:check
-
-      - name: Set up native photo toolchain
-        id: native
-        # Select the declared compiler BEFORE computing the Rust cache key.
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libavif-dev libavif-bin pkg-config
-          rustup component add clippy
-          echo "cache-key=${ImageOS:?}-${ImageVersion:?}-$(dpkg-query --show --showformat='${Version}' libavif-dev)" >> "$GITHUB_OUTPUT"
-
-      - name: Restore compiled Rust dependencies
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
-        with:
-          workspaces: tools/photos/zenc -> target
-          # The action also keys by job, platform, compiler, flags and Cargo
-          # manifests/locks. Include the runner image and native library ABI.
-          key: ${{ steps.native.outputs.cache-key }}
-          cache-bin: false
-          # Rebuild our encoder/C adapter and execute all tests on every run.
-          cache-workspace-crates: false
-
-      - name: Test native photo processing
-        run: |
-          cargo test --locked --manifest-path tools/photos/zenc/Cargo.toml
-          cargo clippy --locked --manifest-path tools/photos/zenc/Cargo.toml --all-targets -- -D warnings
 
       # Does every committed derived artifact still describe the bytes it was made
       # from? photos:check above cannot answer that for the histograms, because it
@@ -138,80 +109,15 @@ jobs:
       - name: Check derived artifacts against their inputs
         run: bun run derive:check
 
-      - name: Enforce homepage performance budget
-        run: bun run perf-budget
-
-      - name: Validate site Worker config
-        run: bun x --no-install wrangler deploy --dry-run
-
-      - name: Test homepage representation contracts
-        run: bun run test
-
-      # THE SAME SUITE UNDER NODE, and it is here because it was not.
-      # CLAUDE.md credits the twin with a real find (bun's spec-strict Response
-      # rejecting a body the suite reused, which undici allowed), and the script
-      # has existed since the migration — but nothing ran it, so the whole claim
-      # rested on somebody remembering. A test that only runs on a workstation
-      # protects the workstation.
-      #
-      # It caught its first regression the day it was wired: #497 moved the ref
-      # scanner onto HTMLRewriter, a bun global, and the node twin went red while
-      # CI stayed green. That test now declares its runtime and skips explicitly.
-      - name: The same contracts under Node
-        run: bun run test:node
-
-      # AND AGAIN WITH $TMPDIR ON A SYMLINK, which is the shape every macOS
-      # workstation runs and ubuntu-latest structurally cannot reach: $TMPDIR
-      # there gets to /private/var through the /var symlink, while /tmp on this
-      # runner is a real directory. Every mkdtemp fixture roots under $TMPDIR, so
-      # a fixture that hands a callee an unresolved root and then compares paths
-      # against what the callee printed fails on every workstation and passes
-      # here. That is the lens-reader split inverted, and worse: a standing red
-      # on main teaches everybody to push over a red local run, at which point
-      # the workstation suite has stopped being a gate at all. Gotcha 45 has the
-      # census, including the two instances that sat on main unreported.
-      #
-      # THE CONTROL, because a gate that has never gone red is decoration. Drop
-      # the realpath from contract-scoped-typecheck's fixture root and the two
-      # steps disagree, identically under both runners (measured 2026-09-10):
-      #
-      #   real $TMPDIR (the step above)   10 pass  0 fail
-      #   symlinked $TMPDIR (this step)    7 pass  3 fail
-      #
-      # #779 canonicalized 4 of the 19 fixture roots in this suite. The other 15
-      # are correct today and rely on the next author remembering, which is why
-      # the CONDITION is the gate rather than a lint over the call shape.
-      #
-      # It runs BOTH suites because the pick would otherwise be a guess. This
-      # variant fires the same way under each, and #782 settled the other one
-      # (the main-module guard) at the source with a test that builds its own
-      # symlink and needs nothing from here. What remains is that node and bun
-      # genuinely disagree about path canonicalization: node resolves the entry
-      # module and leaves argv[1] alone, bun resolves both. Pinning this to one
-      # runtime is a bet on which of them the next instance needs, and both
-      # together cost 42s on the runner inside a 30-minute job (measured on the
-      # first green run of this step, 2026-09-10; the estimate going in was 80s).
-      #
-      # The link and its target are SIBLINGS on purpose, so neither path holds
-      # the other as a substring. macOS's /private/var DOES contain /var, and the
-      # coverage fixture passed on that containment alone until #783; a nested
-      # layout would rebuild that blind spot inside the check meant to remove it.
-      - name: The same contracts again, with a symlinked TMPDIR
-        run: |
-          mkdir -p "$RUNNER_TEMP/real-tmp"
-          ln -sfn "$RUNNER_TEMP/real-tmp" "$RUNNER_TEMP/link-tmp"
-          export TMPDIR="$RUNNER_TEMP/link-tmp"
-          bun run test
-          bun run test:node
 
       # The route oracle, pre-merge. createTestHarness() boots the site Worker
-      # in-process (honouring wrangler.jsonc's build.command, so it serves the
-      # minified .build/public tree) and verify-routes.mjs sweeps it. This is
+      # in-process from perf-budget's dry-run bundle and serves its minified
+      # .build/public tree; verify-routes.ts sweeps that same output. This is
       # status + content-type + markers for real; it is NOT a data check, since
       # local KV/R2/D1 come up empty. See MAINTENANCE.md "Verify the whole route
       # surface" for what the `remote: true` rows sit out and why.
       - name: Verify route surface against a local Worker
-        run: bun run routes:check
+        run: bun run routes:check --prebuilt .build/.perfbudget
 
       - name: Validate LWE and Garage page contracts
         run: bun run pages:check
@@ -270,25 +176,103 @@ jobs:
           bun test
           bun x --no-install wrangler deploy --dry-run -c wrangler.toml
 
+      # Transfer the exact tree validated above, including hidden assets and
+      # symlinks. This artifact belongs to this run; no cross-run build cache.
+      - name: Archive the validated build
+        run: tar -cf "$RUNNER_TEMP/site-build.tar" .build
+
+      - name: Share the validated build with contract jobs
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: site-build
+          path: ${{ runner.temp }}/site-build.tar
+          compression-level: 1
+          if-no-files-found: error
+          retention-days: 1
+
+  contracts:
+    name: contracts (${{ matrix.runtime }}, ${{ matrix.temp }})
+    needs: site
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        runtime: [bun, node]
+        temp: [real, symlink]
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up bun
+        uses: ./.github/actions/setup-bun
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Download this run's validated build
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: site-build
+          path: ${{ runner.temp }}/site-build
+
+      - name: Restore the validated build
+        run: tar -xf "$RUNNER_TEMP/site-build/site-build.tar"
+
+      # Sibling paths catch the macOS symlink case without substring matches.
+      # Both runtimes need it: Node and Bun canonicalize argv[1] differently.
+      - name: Select the temporary-directory shape
+        env:
+          TEMP_SHAPE: ${{ matrix.temp }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/real-tmp"
+          if [ "$TEMP_SHAPE" = symlink ]; then
+            ln -s "$RUNNER_TEMP/real-tmp" "$RUNNER_TEMP/link-tmp"
+            echo "TMPDIR=$RUNNER_TEMP/link-tmp" >> "$GITHUB_ENV"
+          else
+            echo "TMPDIR=$RUNNER_TEMP/real-tmp" >> "$GITHUB_ENV"
+          fi
+
+      - name: Run the full contract suite
+        env:
+          CONTRACT_SCRIPT: ${{ matrix.runtime == 'bun' && 'test' || 'test:node' }}
+        run: bun run "$CONTRACT_SCRIPT"
+
+  network:
+    name: network validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up bun
+        uses: ./.github/actions/setup-bun
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
       # infra.json against reality. The tree and DNS tiers need no credential;
       # the account tier runs only when the read-only token secret exists and
       # skips cleanly otherwise. Everything this cannot reach (an unreachable
       # resolver, a missing token) is an advisory, never a failure, so a network
       # blip cannot redden a PR that only touched CSS.
       #
-      # LAST on purpose, and it used to be near the front. This is the only step
-      # that asserts against LIVE PRODUCTION rather than the tree, so its result
-      # depends on the deployed world instead of on the diff. Sequential steps stop
-      # at the first failure, so sitting early it did not just redden a PR, it
-      # SKIPPED the ten code gates behind it and reported nothing about the change.
-      #
-      # Measured on 2026-07-31, when a Workers Cache regression on `/` put the
-      # production edge out of sync with infra.json: four PRs went red with
-      # `Build homepage` through `Validate LWE ask Worker config` all skipped, none
-      # of them related to the drift, and one of them (#193) belonged to someone who
-      # had no way to know why. Moving it here means a production incident can still
-      # redden a PR, which is correct, but every gate that describes the DIFF has
-      # already run and reported by then.
+      # Run independently of code validation. A production drift incident must
+      # report its failure without skipping code checks, and network latency
+      # should overlap the tests. The required join still fails on confirmed
+      # drift. This replaces the old ordering rule that put infra last after
+      # an incident on 2026-07-31 skipped unrelated PRs' code checks.
       #
       # Still fatal, so drift cannot merge unnoticed. One consequence to know about:
       # a PR whose whole purpose is to FIX production drift cannot turn its own check
@@ -513,3 +497,55 @@ jobs:
             exit 0
           fi
           bun run checkpoints:check
+
+  native-photos:
+    name: native photo validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up native photo toolchain
+        id: native
+        # Select the declared compiler BEFORE computing the Rust cache key.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libavif-dev libavif-bin pkg-config
+          rustup component add clippy
+          echo "cache-key=${ImageOS:?}-${ImageVersion:?}-$(dpkg-query --show --showformat='${Version}' libavif-dev)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore compiled Rust dependencies
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: tools/photos/zenc -> target
+          # The action also keys by job, platform, compiler, flags and Cargo
+          # manifests/locks. Include the runner image and native library ABI.
+          key: ${{ steps.native.outputs.cache-key }}
+          cache-bin: false
+          # Rebuild our encoder/C adapter and execute all tests on every run.
+          cache-workspace-crates: false
+
+      - name: Test native photo processing
+        run: |
+          cargo test --locked --manifest-path tools/photos/zenc/Cargo.toml
+          cargo clippy --locked --manifest-path tools/photos/zenc/Cargo.toml --all-targets -- -D warnings
+
+  validate:
+    name: validate
+    needs: [site, native-photos, network, contracts]
+    # Run even when a dependency fails, is cancelled, or is skipped. GitHub
+    # treats a skipped required job as passing, so the join must fail explicitly.
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - name: Require every validation job to succeed
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          jq -r 'to_entries[] | "\(.key): \(.value.result)"' <<< "$RESULTS"
+          if ! jq -e 'length > 0 and all(.[]; .result == "success")' <<< "$RESULTS" > /dev/null; then
+            echo "::error::Every validation job must succeed. Failed, cancelled, or skipped checks cannot satisfy validate."
+            exit 1
+          fi

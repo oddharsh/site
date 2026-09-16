@@ -150,15 +150,26 @@ rotation and treat all previously emailed links as compromised.
 
 ## CI/CD release path
 
-1. [CI](../.github/workflows/ci.yml) runs the required `validate` check: locked
-   dependencies, build, lint, typechecks, tests, Worker dry-runs, performance gates,
-   and the local route oracle. Cal and Serendipity ship inside the site Worker.
+1. [CI](../.github/workflows/ci.yml) runs site, native photo, and network validation
+   in parallel. Site validation covers locked dependencies, build,
+   lint, typechecks, module tests, Worker dry-runs, performance gates and the local
+   route oracle. Its built tree is passed to four contract jobs: Bun and Node,
+   each with a real and symlinked temporary directory. The required `validate` job always runs and succeeds only when all
+   jobs succeed; failure, cancellation or skipping fails the gate. Cal and
+   Serendipity ship inside the site Worker.
 2. [Promote production](../.github/workflows/promote-production.yml) advances
    `production` after successful CI on current `main` and a merged PR.
    Manual dispatch also requires a merged PR.
 3. Cloudflare Workers Builds uploads that commit as a Worker version.
 4. [Ramp production](../.github/workflows/ramp.yml) waits for the upload, moves
    10% of traffic, and waits for approval before moving 50% and then 100%.
+
+To run CI manually, select the desired branch in Actions, or run
+`gh workflow run ci.yml --ref <branch>`. All validation jobs check out the
+event's commit. The former custom `ref` input is removed: overriding checkout
+could execute another revision with the dispatch branch's cache access and
+attach its result to the wrong commit. Manual runs retain a separate concurrency
+group so they can recover from a stuck PR run.
 
 Workers Builds uses the settings declared under `release` in
 [`config/infra.json`](../config/infra.json): branch `production`, repository root
@@ -173,15 +184,30 @@ the build step; keep the dashboard Build command empty to avoid building twice.
 For the auxiliary `cf-garage/` Worker, commands run from its directory with
 `--x-new-config`; its TypeScript config does not accept `-c`.
 
-CI runs lint and typechecks before the build and native toolchain setup. Native
-photo validation caches Cargo dependencies and their compiled artifacts with
+Site validation runs lint and typechecks before its build. Native photo
+validation runs independently and caches Cargo dependencies and artifacts with
 `Swatinem/rust-cache`, scoped to `tools/photos/zenc`. Its key includes the job,
 platform, Rust compiler, Cargo manifests/locks, runner image and libavif package
 version. The encoder and C adapter rebuild, and tests and Clippy run on cache
 hits. Cache misses use the same commands; no test result is cached.
 
-`infra:check` follows the code checks so deployed-state drift cannot prevent
-validation of the diff. It still blocks the PR on confirmed drift.
+The contract matrix downloads a tar archive of this run's validated `.build`
+tree, preserving hidden assets and symlinks. Every cell runs the full suite;
+`fail-fast: false` lets all four report. The required join includes the matrix,
+so any failed or skipped cell blocks validation. Artifacts expire after one day.
+
+CI builds the site once through `bun run perf-budget`, whose Wrangler dry-run
+also validates the Worker config. It writes `.build/.perfbudget/index.js` for
+`bun run routes:check --prebuilt .build/.perfbudget` and the upload-format
+`worker.bundle` for startup profiling. Both come from that one dry-run. The
+prebuilt directory is for output created in the current job; it is not a
+cross-run cache. A missing bundle fails the route check.
+Standalone `bun run routes:check` continues to build from source.
+
+The network job runs infrastructure, vulnerability, ramp, pin-queue and D1
+checks alongside the code checks. Deployed-state drift cannot prevent code
+validation, and network latency overlaps the tests. Confirmed drift still
+blocks the required `validate` join.
 If a code change must deploy to resolve that drift, validate locally, use the
 `deploy:direct` fallback, then rerun CI.
 
@@ -763,11 +789,11 @@ bun run perf:snapshot compare base.json head.json     # markdown to stdout
 ```
 
 `.github/workflows/perf-diff.yml` runs that on every PR touching served code: it
-builds the merge base, builds HEAD, measures BOTH WITH HEAD'S COPY of the script
-(stashed in `$RUNNER_TEMP` before the first `git switch`, since the base does not
-have it and measuring each side with its own copy would report a change to the
-measurement as a change in wire size), and posts the delta as a marker-updated PR
-comment. It is deliberately **not** part of `validate`: `validate` is the one
+builds the merge base and HEAD concurrently in separate worktrees, each with
+its own dependencies and output. Both use HEAD's measurement code, copied to
+`.perf-measure` at the same depth in each tree so Wrangler resolves correctly.
+It waits for both measurements and rejects either failure before comparing,
+then posts the delta as a marker-updated PR comment. It is deliberately **not** part of `validate`: `validate` is the one
 required check on `main`, so anything living there is a merge gate, and a perf
 number that blocks a merge teaches people to widen thresholds. This one fails on
 nothing.
@@ -944,9 +970,22 @@ refusal of a canary `packageManager` is measured above; keep the field absent.
 
 ## Read the canary tripwire (`canary.yml`)
 
+The Linux browser leg uses the official Playwright image pinned by digest and
+checks its version against the installed `playwright-core`. The image supplies
+system libraries and bundled Chromium/Firefox/WebKit; Chrome Beta and both Edge
+channels are installed fresh for every run. The verified host Bun binary runs
+inside the container. Reporting stays on the host, where GitHub CLI is available.
+Branch dispatches print results without editing the shared issues. An instrument
+failure still fails its job, even when issue reporting is disabled.
+
 Three nightly legs run moving targets through gates this repository already
-holds its pins to, and none of them writes anything. The workflow is
-`.github/workflows/canary.yml`; each leg is one script under `tools/`.
+holds its pins to. Bun and browsers run in `.github/workflows/canary.yml`.
+Wrangler runs once in `wrangler-pin.yml`: `wrangler:pin --json canary.json`
+resolves one SHA, runs the canary, and supplies that same report to both the
+issue reporter and the pin decision. An unchanged pin still runs the watches.
+Manual canary dispatches retain all three read-only legs. A Wrangler pin
+workflow dispatched on a feature branch evaluates and reports to its log,
+without writing a pin, issue or PR. No cached test result is reused.
 
 | leg | target | gates | script |
 |---|---|---|---|

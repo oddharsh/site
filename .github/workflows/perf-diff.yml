@@ -105,7 +105,7 @@ jobs:
           echo "head=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       # BOTH sides get measured by HEAD's copy of the script, which is why it is
-      # stashed before the first switch. Two reasons, and the second is the one
+      # stashed before measuring. Two reasons, and the second is the one
       # that bites: the script does not exist at the merge base on the PR that
       # introduces it, and measuring each side with its own copy would report a
       # change to the MEASUREMENT as a change in wire size.
@@ -115,10 +115,8 @@ jobs:
       # resolves the pinned wrangler from its OWN path, so a copy under
       # $RUNNER_TEMP points at a node_modules that is not there. One down,
       # because that resolution counts directories and `tools/` is one down.
-      # UNTRACKED, because an untracked directory survives both switches, while
-      # copying over `tools/` would dirty the tree and abort the switch back to
-      # HEAD on "local changes would be overwritten", which is the failure the
-      # install note below already records this job hitting once.
+      # The stash is copied into the base worktree at the same depth. Neither
+      # revision switches in place or overwrites the other's source or output.
       #
       # The whole of `tools/lib` comes along rather than the one file the script
       # imports today, because naming the file is precisely what broke: #481
@@ -132,7 +130,7 @@ jobs:
           cp tools/perf-snapshot.ts .perf-measure/perf-snapshot.ts
           cp -R tools/lib .perf-measure/lib
 
-          # Prove the stash before the first switch, because both ways it can be
+          # Prove the stash before measuring, because both ways it can be
           # wrong are worse than a failure here. With no arguments the script
           # prints usage and exits 2, so a 2 means every import in its graph
           # resolved and anything else means the copy is short a file.
@@ -156,9 +154,6 @@ jobs:
             console.log(`stash resolves the pinned wrangler at ${WRANGLER_ENTRY}`);
           '
 
-      # Install with whatever the CHECKED-OUT commit asks for. This workflow
-      # builds two different commits in one job, and during a package-manager
-      # migration those two want different installers.
       # Install with whatever the CHECKED-OUT commit asks for. This job builds
       # two different commits, and across a package-manager migration those two
       # want different installers. Written to a file the later steps SOURCE,
@@ -166,7 +161,7 @@ jobs:
       # the point of use and does not depend on how Actions invokes bash.
       - name: Define the installer
         run: |
-          cat > /tmp/installer.sh <<'SH'
+          cat > "$RUNNER_TEMP/perf-installer.sh" <<'SH'
           install_for_tree() {
             if [ -f bun.lock ]; then
               bun install --frozen-lockfile
@@ -178,48 +173,52 @@ jobs:
           }
           SH
 
-      - name: Record the merge base
+      - name: Record both revisions concurrently
         env:
           MERGE_BASE: ${{ steps.base.outputs.sha }}
           HEAD_SHA: ${{ steps.base.outputs.head }}
         run: |
-          git switch --detach "$MERGE_BASE"
-          # Only reinstall when the lockfile actually moved. On the common PR it
-          # did not, and a second install is a minute of nothing.
-          #
-          # ACROSS THE TOOLCHAIN SWAP the two commits disagree about which
-          # installer exists at all, so the lockfile in the CHECKED-OUT tree
-          # decides. A bun install against a pnpm base writes an untracked
-          # bun.lock and edits package.json, and the switch back to HEAD then
-          # aborts on "local changes would be overwritten" — which is how this
-          # job failed rather than by anything the diff measured.
-          if ! git diff --quiet "$MERGE_BASE" "$HEAD_SHA" -- bun.lock pnpm-lock.yaml; then
-            source /tmp/installer.sh && install_for_tree
-          fi
-          bun .perf-measure/perf-snapshot.ts record "$RUNNER_TEMP/base.json" \
-            --label "$(git rev-parse --short HEAD)"
+          set -euo pipefail
+          base_dir="$RUNNER_TEMP/perf-base"
+          base_pid=""
+          head_pid=""
+          cleanup() {
+            # Stop unfinished measurements before removing their private tree.
+            for pid in "$base_pid" "$head_pid"; do
+              if [ -n "$pid" ]; then kill "$pid" 2>/dev/null || true; fi
+            done
+            wait 2>/dev/null || true
+            git worktree remove --force "$base_dir"
+          }
+          git worktree add --detach "$base_dir" "$MERGE_BASE"
+          trap cleanup EXIT
+          trap 'exit 130' INT
+          trap 'exit 143' TERM
+          cp -R .perf-measure "$base_dir/.perf-measure"
+          source "$RUNNER_TEMP/perf-installer.sh"
 
-      - name: Record HEAD
-        env:
-          MERGE_BASE: ${{ steps.base.outputs.sha }}
-          HEAD_SHA: ${{ steps.base.outputs.head }}
-        run: |
-          # The install above may have dirtied the base tree with a lockfile
-          # that commit never had. Discard it rather than carry it across.
-          #
-          # `.perf-measure` is excluded BY NAME rather than left to .gitignore.
-          # The clean runs while the tree is at the MERGE BASE, and a base older
-          # than the commit that added that ignore rule does not carry it, so
-          # the stash reads as ordinary untracked cruft and gets deleted between
-          # the two records. Measured on this PR's own first run: the base
-          # recorded 69 files and HEAD then died on MODULE_NOT_FOUND.
-          git checkout -- . && git clean -qfd -e node_modules -e .perf-measure
-          git switch --detach "$HEAD_SHA"
-          if ! git diff --quiet "$MERGE_BASE" "$HEAD_SHA" -- bun.lock pnpm-lock.yaml; then
-            source /tmp/installer.sh && install_for_tree
-          fi
-          bun .perf-measure/perf-snapshot.ts record "$RUNNER_TEMP/head.json" \
-            --label "$(git rev-parse --short HEAD)"
+          # Each revision owns its dependencies and .build. Sharing node_modules
+          # would point workspace symlinks at HEAD while measuring the base.
+          (
+            cd "$base_dir"
+            install_for_tree
+            bun .perf-measure/perf-snapshot.ts record "$RUNNER_TEMP/base.json" --label "$MERGE_BASE"
+          ) > "$RUNNER_TEMP/base.log" 2>&1 &
+          base_pid=$!
+          (
+            bun .perf-measure/perf-snapshot.ts record "$RUNNER_TEMP/head.json" --label "$HEAD_SHA"
+          ) > "$RUNNER_TEMP/head.log" 2>&1 &
+          head_pid=$!
+
+          # Wait for both, including when the first fails. A partial measurement
+          # must never reach Compare as a successful zero-byte result.
+          status=0
+          wait "$base_pid" || status=1
+          base_pid=""
+          wait "$head_pid" || status=1
+          head_pid=""
+          cat "$RUNNER_TEMP/base.log" "$RUNNER_TEMP/head.log"
+          exit "$status"
 
       - name: Compare
         run: |
