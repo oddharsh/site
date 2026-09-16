@@ -1263,13 +1263,12 @@ when the remote job is unavailable.
 
 ```bash
 # the photo pipeline
-brew install jaq mozjpeg libavif              # mozjpeg = jpegtran + cjpeg; libavif = avifenc, the AVIF encoder for every tier
+brew install mozjpeg libavif                  # mozjpeg = jpegtran + cjpeg; libavif = avifenc, the AVIF encoder for every tier
 # That brew avifenc is the one the photo tiers use, first in preference since
 # 2026-09-12. tools/photos/libavif/build.sh (needs cmake ninja git, ~10 min) is
 # the fallback for a machine with no avifenc on PATH and the only build here with
 # --sharpyuv; nothing requires it. config/tools.json records the version the last
 # add encoded on, and `bun run tools:check` says when brew has moved past it.
-brew install uv && bun run photos:env               # Pillow, for gen-pixel-peeper.py only (brew's python3 is PEP 668; pip into it fails)
 # the JPEG encoder (zenc) builds itself on first pipeline run; needs rust (rustup.rs)
 cargo build --release --locked --manifest-path tools/photos/zenc/Cargo.toml
 bun run wrangler login                                         # Cloudflare auth (deploys + KV + R2 all use it)

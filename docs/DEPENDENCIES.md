@@ -8,7 +8,9 @@ The [Dependabot configuration](../.github/dependabot.yml) has five update blocks
 | npm | `/lens-reader` | the Reader lens Worker, which is outside the workspace on purpose |
 | github-actions | `/`, `/.github/actions/*` | SHA-pinned workflows and composite actions |
 | cargo | `/tools/photos/zenc` | the JPEG thumbnail encoder's zenjpeg pin |
-| pip | `/tools/photos` | Pillow, for one page generator |
+
+A fifth, pip, watched Pillow for one page generator until 2026-09-15, when the
+last Python in the tree became TypeScript and the lane left with it.
 
 Each update PR keeps the upstream release notes/changelog in its Dependabot
 description and gets a persistent site-review comment containing the exact
@@ -97,9 +99,10 @@ question too. Three are, and each earns its place with a number.
 `bun audit` reads the **committed lockfile** against npm's advisory database in
 under half a second, 184 packages, clean on 2026-09-10. `bun run deps:audit`
 runs it, and it is a LOCAL command rather than a CI step, because CI already has
-this covered and better: the pinned `osv-scanner` step in `validate` scans four
-lockfiles across three ecosystems (`bun.lock`, `lens-reader/bun.lock`, zenc's
-`Cargo.lock`, the photo pipeline's `requirements.txt`) and is advisory for the
+this covered and better: the pinned `osv-scanner` step in `validate` scans three
+lockfiles across two ecosystems (`bun.lock`, `lens-reader/bun.lock`, zenc's
+`Cargo.lock`; the photo pipeline's `requirements.txt` left with the last Python
+on 2026-09-15) and is advisory for the
 reason an added `bun audit` step would have had to argue from scratch. Reach for
 `deps:audit` when you want the npm half answered in the time it takes to read
 the question, and read the CI step for the whole tree.
@@ -453,11 +456,14 @@ does not make a failed write safe to ignore.
   of two, and a rendering change now arrives as a dependabot PR under the
   one-day cooldown with the review this file asks for, rather than as a silent
   resolve at install time. No deploy path touches it, which is still true.
-- Pillow 12.3.0 is pinned in `tools/photos/requirements.txt` for
-  `gen-pixel-peeper.py`, a one-off generator for the /pixel-peeper comparison
-  frames. It baked the photo histograms until 2026-08-14, when that moved into
-  `zenc histogram` and left the core photo pipeline with no Pillow dependency at
-  all. Nothing in CI installs it any more.
+- **There is no Python in the tree since 2026-09-15, and no Pillow pin to
+  state.** Pillow baked the photo histograms until 2026-08-14 (`zenc
+  histogram` took that), and then served one generator, `gen-pixel-peeper.py`,
+  until that became `gen-pixel-peeper.ts` with its pixel work in `zenc frame`.
+  `config/retired.json` records both halves and bans the interpreter, the pip
+  lane is gone from `dependabot.yml`, and `check-dependency-docs` fails this
+  file on any Pillow version it states, since that would be a claim about a
+  file that does not exist.
 - **This repo declares no runtime dependencies.** Everything below is build or
   test tooling. @noble/post-quantum 0.7.0 used to be the exception, the one
   package that reached a visitor, because `lib/botauth.js` imported `ml-dsa.js`

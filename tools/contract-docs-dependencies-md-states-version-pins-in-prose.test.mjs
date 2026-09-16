@@ -70,14 +70,14 @@ test("the dependency-doc check catches every drift it exists for", () => {
   const empty = auditDependencyDocs({ doc: `${BASELINE_HEADING}\nno versions here`, pins: {} });
   assert.ok(empty.problems.some((p) => /below the floor/.test(p)));
 
-  // 5. Pillow lives in requirements.txt, not package.json
+  // 5. Pillow is gone with the last Python (2026-09-15), so a stated version
+  //    is a claim about nothing, and the audit says so
   const pillow = auditDependencyDocs({
     doc: `${BASELINE_HEADING}\n- Wrangler 4.120.1 is the pin.\n- Pillow 12.3.0 is pinned.`,
     pins,
-    requirements: "Pillow==12.4.0\n",
     ...quiet,
   });
-  assert.ok(pillow.problems.some((p) => /Pillow 12\.3\.0.*pins 12\.4\.0/.test(p)));
+  assert.ok(pillow.problems.some((p) => /Pillow version.*no Python/.test(p)));
 });
 
 test("the collapsed check keeps the two rules that came from #382", () => {

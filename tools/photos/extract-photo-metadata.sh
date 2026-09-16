@@ -10,9 +10,10 @@
 #   ./extract-photo-metadata.sh --merge /first/frame.HIF /second/other.jpg
 #
 # requires: exif-sooc (cargo install --git https://github.com/oddharsh/exif-sooc exif-sooc),
-#           jaq (brew install jaq)
+#           and the node the rest of the pipeline already runs (pipeline-json.ts)
 #
-# This read exiftool + jaq + build-recipes.py until 2026-08-14. exif-sooc emits
+# This read exiftool + jaq + build-recipes.py until 2026-08-14, and jaq alone
+# for its JSON until 2026-09-15. exif-sooc emits
 # this record shape and the recipe card directly, and owns the merge, so the
 # reshape filter and the Python step are both gone. Measured on the 158
 # committed photos: byte-identical output, and 9.9ms against exiftool's 995ms,
@@ -89,11 +90,6 @@ if ! command -v exif-sooc >/dev/null 2>&1; then
   echo "  cargo install --git https://github.com/oddharsh/exif-sooc exif-sooc" >&2
   exit 1
 fi
-if ! command -v jaq >/dev/null 2>&1; then
-  echo "error: jaq not found. install with: brew install jaq" >&2
-  exit 1
-fi
-
 # resolve the output path relative to this script
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 # The served asset tree. NOT "$SCRIPT_DIR/..": that resolved to www/ back when
@@ -186,11 +182,15 @@ fi
 # same unpublished frames; it differs in preserving stems it did not read, and
 # those are already published by definition.
 HASHES_JSON="$PUBLIC_DIR/images/hashes.json"
-read_count=$(jaq 'length' "$OUT.tmp")
-if [ -s "$HASHES_JSON" ] && [ "$(jaq 'length' "$HASHES_JSON")" -gt 0 ]; then
-  dropped=$(jaq -r --slurpfile pub "$HASHES_JSON" 'keys - ($pub[0] | keys) | .[]' "$OUT.tmp")
-  jaq --slurpfile pub "$HASHES_JSON" 'with_entries(select(.key as $k | $pub[0] | has($k)))' "$OUT.tmp" > "$OUT.pruned"
-  kept_count=$(jaq 'length' "$OUT.pruned")
+# pipeline-json.ts since 2026-09-15, where this was four jaq calls; it names
+# the filters it stands in for, and its prune reproduces the committed
+# metadata.json byte for byte, which is the bar because that file is jaq's
+# pretty-printer output and `mv` below is what commits it.
+PJ="$SCRIPT_DIR/pipeline-json.ts"
+read_count=$(node "$PJ" length "$OUT.tmp")
+if [ -s "$HASHES_JSON" ] && [ "$(node "$PJ" length "$HASHES_JSON")" -gt 0 ]; then
+  dropped=$(node "$PJ" prune "$OUT.tmp" --published "$HASHES_JSON" --out "$OUT.pruned")
+  kept_count=$(node "$PJ" length "$OUT.pruned")
 
   # FLOOR. An empty intersection means SRC_DIR is not the folder this archive was
   # built from, and writing that result would replace every record with nothing.
@@ -226,7 +226,7 @@ if [ -s "$HASHES_JSON" ] && [ "$(jaq 'length' "$HASHES_JSON")" -gt 0 ]; then
   # --merge is the mode for a partial source, which is why the remote pipeline
   # uses it, and merge preserves stems it did not read, so this list is empty
   # there by construction.
-  unread=$(jaq -r --slurpfile meta "$OUT.tmp" 'keys - ($meta[0] | keys) | .[]' "$HASHES_JSON")
+  unread=$(node "$PJ" unread "$HASHES_JSON" --against "$OUT.tmp")
   if [ -n "$unread" ]; then
     unread_count=$(printf '%s\n' "$unread" | wc -l | tr -d ' ')
     {
@@ -260,21 +260,15 @@ fi
 # fields dropped. these are fetched once per hover (the hot path), so every byte is
 # on someone's cursor. metadata.json keeps the full, readable, long-key schema — it
 # is the public /photos index (photos.js PHOTO_PUBLIC_FIELDS reads it) and the
-# archive. KEEP THIS MAP IN SYNC with tooltip.js (reader) and zenc's histogram.rs
-# (which merges the "hi" histogram into these same files):
-#   cm camera · ln lens · ap aperture · sp shutter · is iso · fl focal · ev ·
-#   dt date · w width · h height · wb white_balance · ct color_temp · fs flash ·
-#   fm film · dr · cc chrome · cb chrome_blue · gr grain · gs grain_size ·
-#   ht highlight_tone · st shadow_tone · sa saturation  (hi added later by histograms)
-jaq -c 'to_entries[]' "$OUT" | while IFS= read -r entry; do
-  stem=$(printf '%s' "$entry" | jaq -r '.key')
-  printf '%s' "$entry" | jaq -c '.value | {
-    cm: .camera, ln: .lens, ap: .aperture, sp: .shutter, is: .iso, fl: .focal,
-    ev: .ev, dt: .date, w: .width, h: .height, wb: .white_balance, ct: .color_temp,
-    fs: .flash, fm: .film, dr: .dr, cc: .chrome, cb: .chrome_blue, gr: .grain,
-    gs: .grain_size, ht: .highlight_tone, st: .shadow_tone, sa: .saturation
-  } | with_entries(select(.value != null))' > "$META_DIR/$stem.json"
-done
+# archive. The map is EXIF_KEY_MAP in tools/lib/photo-indexes.ts; KEEP IT IN
+# SYNC with tooltip.js (reader) and zenc's histogram.rs (which merges the "hi"
+# histogram into these same files).
+# ONE map now, since 2026-09-15: the split calls projectExifRecord, the same
+# function build.ts projects exif.json through, so the "written twice" this
+# comment used to close with is closed. check-photo-pipeline.ts's agreement
+# check still runs and still means something: images/meta/ older than
+# metadata.json is the state it catches now, rather than two maps drifting.
+node "$PJ" meta-split "$OUT" --out-dir "$META_DIR"
 
 # the recipe card is derived during extraction now (exif-sooc --keyed), so
 # build-recipes.py is gone. One consequence worth knowing: a --merge run
@@ -306,16 +300,16 @@ done
 # of the per-photo files above no longer feeds anything that ships; what still
 # needs them is the histogram bake, below.
 #
-# The map is therefore written twice, as the jaq literal above and as
-# EXIF_KEY_MAP in tools/lib/photo-indexes.ts. check-photo-pipeline.ts holds the
-# two together wherever images/meta/ exists, which is exactly a workstation that
-# has just run this script.
+# The map was written twice until 2026-09-15, as a jaq literal above and as
+# EXIF_KEY_MAP in tools/lib/photo-indexes.ts; the split reads the latter now.
+# check-photo-pipeline.ts still compares images/meta/ against the projection
+# wherever the directory exists, which catches a stale meta/ rather than drift.
 
 # The packed bars the grid inlines into each tile as data-hist. These read the
 # per-photo files, so they still run here.
 node "$SCRIPT_DIR/build-histogram-index.ts"
 
-COUNT=$(jaq 'keys | length' "$OUT")
+COUNT=$(node "$PJ" length "$OUT")
 if [ "$MERGE" -eq 1 ]; then
   echo "✓ merged metadata for $COUNT photos → $OUT (+ per-stem files in images/meta/, histograms baked)"
 else
