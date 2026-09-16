@@ -31,29 +31,6 @@
   /** @type {any} */
   var state = null;
 
-  function intro() {
-    return section("What agents get", { text: "not run" },
-      "Replays the Accept header seven named agent clients actually send, and reports which representation each one got back.",
-      '<div class="lx-tools-intro"><b>Agent doors knocks. This walks through.</b> ' +
-      'The doors tier keeps one boolean about Markdown negotiation: did the content-type flip for a bare ' +
-      '<code>text/markdown</code>. That can be true while the client you use still gets HTML, because ' +
-      'three of the seven agents send a header where Markdown and HTML arrive tied.' +
-      '<div class="lx-md-run"><button class="lx-browser-run" type="button" id="lx-md-run">Check it</button></div>' +
-      '<div class="lx-cap">Ten plain requests for this one page, cached for an hour. It costs the origin ' +
-      'bandwidth rather than compute, and it never fires on its own.</div></div>');
-  }
-
-  function unreadablePane(s) {
-    // The same distinction classifyDoor keeps, for the same reason: "this origin
-    // serves no Markdown" and "we never got an answer at all" are different
-    // findings, and merging them would have the pane grade a live origin on a
-    // request that never arrived.
-    return section("What agents get", { text: "unreadable", kind: "warn" },
-      esc(s.error || ""),
-      '<div class="lx-md-note">The origin did not answer a plain browser request, so nothing below could be ' +
-      'measured. This is not evidence that it refuses Markdown.</div>');
-  }
-
   function verdictLine(s) {
     if (!s.negotiating) {
       // No control separation means no reach number. An origin handing every
@@ -71,11 +48,22 @@
   }
 
   function paneHtml(s) {
-    if (!s) return intro();
+    if (!s) return section("What agents get", { text: "not run" },
+      "Replays the Accept header seven named agent clients actually send, and reports which representation each one got back.",
+      '<div class="lx-tools-intro"><b>Agent doors knocks. This walks through.</b> ' +
+      'The doors tier keeps one boolean about Markdown negotiation: did the content-type flip for a bare ' +
+      '<code>text/markdown</code>. That can be true while the client you use still gets HTML, because ' +
+      'three of the seven agents send a header where Markdown and HTML arrive tied.' +
+      '<div class="lx-md-run"><button class="lx-browser-run" type="button" id="lx-md-run">Check it</button></div>' +
+      '<div class="lx-cap">Ten plain requests for this one page, cached for an hour. It costs the origin ' +
+      'bandwidth rather than compute, and it never fires on its own.</div></div>');
     if (s.pending) return section("What agents get", { text: "checking…" },
       "Ten requests for this page, one per distinct Accept header.",
       '<div class="lx-md-note">Waiting for the origin.</div>');
-    if (!s.ok) return unreadablePane(s);
+    if (!s.ok) return section("What agents get", { text: "unreadable", kind: "warn" },
+      esc(s.error || ""),
+      '<div class="lx-md-note">The origin did not answer a plain browser request, so nothing below could be ' +
+      'measured. This is not evidence that it refuses Markdown.</div>');
     state = s;
 
     var r = s.reach;

@@ -41,19 +41,6 @@
     'identified as AadharshBot. One cold load, no extensions, no blocker, no cookies — so this is the page a machine gets ' +
     'on first contact, which is usually worse than the page you get.</div>';
 
-  function intro() {
-    return section("What it costs", { text: "not run" },
-      "Every request the page actually makes, and who receives them.",
-      '<div class="lx-wire-intro">Every other lens reads the <b>document</b>. This one records the <b>load</b>: ' +
-      'each request the page fires, its bytes on the wire, and which host got it. The number worth waiting for is ' +
-      'how much of the weight belongs to somebody who wrote none of the words.' +
-      '<button class="lx-browser-run" type="button" id="lx-wire-run">Record the load</button></div>' + CREDIT);
-  }
-
-  function busyPane() {
-    return '<div class="lx-spin">Opening a browser and recording every request the page makes&hellip;</div>';
-  }
-
   // The headline, and the reason this tab exists. A bare percentage would be a
   // verdict without a scale, so the band names what kind of page each range
   // usually means rather than pretending one number settles it.
@@ -178,8 +165,13 @@
   }
 
   function mount(d, isBusy) {
-    if (isBusy) return busyPane();
-    if (!d) return intro();
+    if (isBusy) return '<div class="lx-spin">Opening a browser and recording every request the page makes&hellip;</div>';
+    if (!d) return section("What it costs", { text: "not run" },
+      "Every request the page actually makes, and who receives them.",
+      '<div class="lx-wire-intro">Every other lens reads the <b>document</b>. This one records the <b>load</b>: ' +
+      'each request the page fires, its bytes on the wire, and which host got it. The number worth waiting for is ' +
+      'how much of the weight belongs to somebody who wrote none of the words.' +
+      '<button class="lx-browser-run" type="button" id="lx-wire-run">Record the load</button></div>' + CREDIT);
     if (!d.ok) {
       return section("What it costs", { text: "failed", kind: "warn" },
         "The load could not be recorded.",
