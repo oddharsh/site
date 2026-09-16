@@ -220,10 +220,10 @@
         "tools/photos/gen-encoding-grids.sh",
         "tools/photos/gen-encoding-samples.sh"
       ],
-      "bytes_why": "Produces the AVIF half of /i/ for every photo added since 2026-09-12, plus the AVIF artifacts in the other callers. /i/ is content-addressed, so a version change here re-mints nothing already shipped and decides the bytes of what is added next.",
+      "bytes_why": "Produces AVIF artifacts for cars and encoding studies; the native grid path uses the same installed library. /i/ is content-addressed, so a version change here re-mints nothing already shipped and decides the bytes of what is added next.",
       "version": {
         "flag": "--version",
-        "match": "Version: (?<libavif>\\d+\\.\\d+\\.\\d+) \\(.*aom \\[enc/dec\\]:(?<aom>\\d+\\.\\d+\\.\\d+)"
+        "match": "Version: (?<libavif>\\d+\\.\\d+\\.\\d+) \\(.*aom \\[enc/dec\\]:v?(?<aom>\\d+\\.\\d+\\.\\d+)"
       },
       "bytes": true,
       "recorded": "libavif 1.4.2, aom 3.15.0"
@@ -312,7 +312,7 @@
       ],
       "version": {
         "flag": "--avif-version",
-        "match": "libavif (?<libavif>\\d+\\.\\d+\\.\\d+) \\(.*aom \\[enc/dec\\]:(?<aom>\\d+\\.\\d+\\.\\d+)"
+        "match": "libavif (?<libavif>\\d+\\.\\d+\\.\\d+) \\(.*aom \\[enc/dec\\]:v?(?<aom>\\d+\\.\\d+\\.\\d+)"
       },
       "bytes": true,
       "recorded": "libavif 1.4.2, aom 3.15.0"
