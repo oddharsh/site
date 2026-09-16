@@ -963,8 +963,13 @@ refusal of a canary `packageManager` is measured above; keep the field absent.
 ## Read the canary tripwire (`canary.yml`)
 
 Three nightly legs run moving targets through gates this repository already
-holds its pins to, and none of them writes anything. The workflow is
-`.github/workflows/canary.yml`; each leg is one script under `tools/`.
+holds its pins to. Bun and browsers run in `.github/workflows/canary.yml`.
+Wrangler runs once in `wrangler-pin.yml`: `wrangler:pin --json canary.json`
+resolves one SHA, runs the canary, and supplies that same report to both the
+issue reporter and the pin decision. An unchanged pin still runs the watches.
+Manual canary dispatches retain all three read-only legs. A Wrangler pin
+workflow dispatched on a feature branch evaluates and reports to its log,
+without writing a pin, issue or PR. No cached test result is reused.
 
 | leg | target | gates | script |
 |---|---|---|---|
