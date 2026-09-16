@@ -160,14 +160,13 @@
       "id": "Pillow",
       "replaced_by": "`zenc histogram`, which bakes the four 64-bin RGB and luminance channels inside the encoder crate",
       "on": "2026-08-14",
-      "scope": "the photo pipeline only",
-      "why": "A SCOPED retirement, recorded as one rather than rounded to a clean kill. Neither add-photos.sh nor extract-photo-metadata.sh needs Pillow any more, so the core pipeline no longer needs python3 plus a venv, which matters because Homebrew's python3 is PEP 668 externally managed and refuses `pip install` outright. tools/photos/gen-pixel-peeper.py still uses it and is a one-off page generator rather than part of any pipeline.",
+      "scope": "the photo pipeline on 2026-08-14; the whole tree since 2026-09-15",
+      "why": "A SCOPED retirement, recorded as one rather than rounded to a clean kill. Neither add-photos.sh nor extract-photo-metadata.sh needs Pillow any more, so the core pipeline no longer needs python3 plus a venv, which matters because Homebrew's python3 is PEP 668 externally managed and refuses `pip install` outright. tools/photos/gen-pixel-peeper.py still used it and was a one-off page generator rather than part of any pipeline. COMPLETED 2026-09-15: that generator is gen-pixel-peeper.ts, its pixel work is `zenc frame` and arithmetic over the proxy's PPM, and the exception below is gone with the file.",
       "measured": "A missing Pillow now costs one study page's regeneration rather than the histograms on 158 photos.",
       "bans": {
         "source": {
           "specifiers": ["PIL"],
-          "trees": ["tools"],
-          "except": ["tools/photos/gen-pixel-peeper.py"]
+          "trees": ["tools"]
         }
       }
     },
@@ -178,6 +177,14 @@
       "why": "The pipeline already ran node four times per add (photo-inputs, the histogram index, semantics, the pipeline check), so a second JSON engine bought nothing, and the jq dialect had cost something twice: the recursive-merge `*` pinned the extractor to one engine until exif-sooc grew --merge-into, and the 2026-09-08 swap from jq to jaq misfiled a `-s` incompatibility as an operator bug because nobody ran the control. Two implementations that disagree in the corners is a class of bug; one JSON.parse is not. The per-stem split also carried the SECOND copy of the 22-key EXIF map, held to tools/lib/photo-indexes.ts by a check; the split calls that module's projectExifRecord now, so there is one.",
       "measured": "Every subcommand diffed against jaq on the real library before the swap: index-merge reproduces the committed src/worker/photo-index.json byte for byte on an empty spool and matches jaq's filters on a three-entry spool (an existing stem keeping its upload date, a pool photo, an album photo with a HEIF); prune reproduces the committed public/images/metadata.json byte for byte; meta-split writes 258 per-stem files identical to the jaq split; length, unread, manifest-keys (258 keys off the live manifest) and @uri (including !'()* and UTF-8) agree line for line.",
       "bans": { "binary": ["jaq"] }
+    },
+    {
+      "id": "python3",
+      "replaced_by": "node for the glue (gen-alt-text.ts, matched-bytes-probe.ts, gen-pixel-peeper.ts) and zenc for the pixels (`zenc frame`)",
+      "on": "2026-09-15",
+      "why": "The last three Python files were an HTTP client, a subprocess orchestrator and a Pillow generator, in a tree whose pipeline already ran node four times per add and whose encoder crate already decoded, oriented, resampled and cropped every shipped tile. Each file was the one of its kind outside the checks the rest of the tree gets: gotcha 40's ninth site was the captioner being Python and so outside the shell path sweep, and the generator called cjpegli, a binary this ledger had banned in July, invisible to the ban (it checks declarations) and to tools:check (it reads shell). One language fewer is one blind spot fewer.",
+      "measured": "gen-alt-text.ts reproduces the committed alt.json byte for byte and round-tripped one real caption; matched-bytes-probe.ts prints line-identical tables against the Python on the same sources; gen-pixel-peeper.ts regenerated the trial set to the same 24 trials in the same per-axis split (8/6/1/3/6) with the same lone chroma survivor, worst budget drift 1.33%, in 2m36s. The pip dependabot lane, the osv-scanner requirements line, setup-python and the venv left with it.",
+      "bans": { "binary": ["python3", "python", "uv"] }
     }
   ]
 }

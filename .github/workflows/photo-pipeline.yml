@@ -77,9 +77,9 @@ jobs:
           cargo install --git https://github.com/oddharsh/exif-sooc exif-sooc --locked
           # No Python here since 2026-09-15. The captioner (gen-alt-text.ts) runs
           # under the node this job already sets up, so the venv that used to
-          # follow this line, and the setup-python step above it, are gone.
-          # requirements.txt still pins Pillow for gen-pixel-peeper.py, a one-off
-          # page generator this workflow never runs.
+          # follow this line, and the setup-python step above it, are gone; so
+          # is requirements.txt, since the last Python generator became
+          # gen-pixel-peeper.ts the same day.
 
       - name: Install repository dependencies
         run: bun install --frozen-lockfile

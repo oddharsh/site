@@ -7,6 +7,7 @@
 // script wrote it in Python's json.dump(indent=0, sort_keys=True) shape, so the
 // serializer has to reproduce the committed file byte for byte or the first
 // captioned photo diffs 258 lines it did not touch.
+import { fileURLToPath } from "node:url";
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 import { clean, serializeAlt } from "./photos/gen-alt-text.ts";
 
@@ -47,16 +48,24 @@ test("nothing on the photo pipeline's path spawns python", async () => {
     assert.doesNotMatch(code, /\bpython3? /, `${rel} spawns python`);
     assert.doesNotMatch(code, /setup-python/, `${rel} sets up python`);
   }
-  // package.json is checked by SCRIPT rather than by file: `photos:env` still
-  // builds the Pillow venv for gen-pixel-peeper.py and names python on purpose.
   const scripts = JSON.parse(await readFile(new URL("package.json", ROOT), "utf8")).scripts;
   assert.equal(scripts.captions, "node tools/photos/gen-alt-text.ts");
+  assert.equal(scripts["photos:env"], undefined, "the Pillow venv builder left with the last Python");
+  for (const [name, cmd] of Object.entries(scripts)) assert.doesNotMatch(cmd, /\bpython3?\b|\buv\b/, `script ${name} names python`);
 });
 
-test("python3 is declared for the one generator that still wants it, and nothing else", async () => {
+test("no Python is committed, declared, or pinned anywhere in the tree", async () => {
+  // The last three .py files left on 2026-09-15 (gen-alt-text, matched-bytes-
+  // probe, gen-pixel-peeper). config/retired.json bans the binary; this holds
+  // the other three shapes a return could take.
+  const { execFileSync } = await import("node:child_process");
+  const py = execFileSync("git", ["ls-files", "-z", "*.py", "**/*.py", "*/requirements*.txt", "**/requirements*.txt"], { cwd: fileURLToPath(ROOT), encoding: "utf8" }).split("\0").filter(Boolean);
+  assert.deepEqual(py, [], `Python files are committed: ${py.join(", ")}`);
   const tools = JSON.parse(await readFile(new URL("config/tools.json", ROOT), "utf8")).tools;
-  const py = tools.find((t) => t.bin === "python3");
-  assert.ok(py, "python3 stays declared while gen-pixel-peeper.py exists");
-  assert.deepEqual(py.required_by, ["tools/photos/gen-pixel-peeper.py"]);
-  assert.match(py.why, /gen-pixel-peeper\.py/);
+  assert.equal(tools.some((t) => /^python|^uv$/.test(t.bin)), false, "tools.json declares an interpreter");
+  const dependabot = await readFile(new URL(".github/dependabot.yml", ROOT), "utf8");
+  assert.doesNotMatch(dependabot, /package-ecosystem: pip/, "the pip lane is back");
+  // Control: the ls-files pathspec matches when there is something to match.
+  const ts = execFileSync("git", ["ls-files", "-z", "tools/photos/*.ts"], { cwd: fileURLToPath(ROOT), encoding: "utf8" }).split("\0").filter(Boolean);
+  assert.ok(ts.includes("tools/photos/gen-pixel-peeper.ts"), "the pathspec scanner sees files that exist");
 });

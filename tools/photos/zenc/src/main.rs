@@ -19,6 +19,7 @@ mod histogram;
 mod jpeg;
 mod pixels;
 mod resize;
+mod frame;
 mod square;
 
 fn die(msg: String) -> ! {
@@ -57,6 +58,11 @@ fn main() {
     // export wants and what `square` deliberately does not do.
     if args.get(1).map(String::as_str) == Some("resize") {
         exit(resize::run(&args[2..]));
+    }
+    // A decoded, oriented frame written as PNG or PPM, fitted or cropped: the
+    // pixel half of gen-pixel-peeper.ts, which took over from Pillow.
+    if args.get(1).map(String::as_str) == Some("frame") {
+        exit(frame::run(&args[2..]));
     }
 
     let (mut input, mut output, mut q): (Option<String>, Option<String>, u8) = (None, None, 82);
