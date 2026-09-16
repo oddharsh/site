@@ -39,9 +39,13 @@ const TSC = join(REPO, "node_modules", "typescript", "bin", "tsc");
 
 // src/dict holds the PREVIOUSLY SHIPPED BYTES of each client asset, so the .js
 // files in it are compression dictionary input rather than source: a build
-// cannot derive them and a checker has nothing to say about them. This is the
-// one exclusion, and it is a directory rather than a file list on purpose.
-const NOT_SOURCE = ["src/dict/"];
+// cannot derive them and a checker has nothing to say about them. tools/fixtures
+// is the same standing from the other direction: FROZEN copies of client files
+// that a measurement runs over (the minifier parity watch in
+// lib/upstream-watches.ts), kept byte-stable on purpose so a recorded constant
+// keeps meaning what it meant. Both are directories rather than file lists on
+// purpose, and there are no others.
+const NOT_SOURCE = ["src/dict/", "tools/fixtures/"];
 const SOURCE = /\.(?:js|mjs|cjs|ts)$/;
 
 const owned = execFileSync("git", ["ls-files"], { encoding: "utf8", cwd: REPO })

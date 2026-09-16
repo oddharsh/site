@@ -15,6 +15,12 @@
 // the fix, the upstream issue can be closed if it is still open, and the row
 // is noise from then on. The reporter says so in the table.
 //
+// ONE ENTRY WATCHES A PACKAGE RATHER THAN BUN. `oxc-minifier-reaches-swc-parity`
+// reads the pinned oxc-minify, which dependabot bumps, so it answers the same
+// under pin and canary and can only ever arrive as "landed in both" the first
+// night after a bump. For that row, "landed in both" is the finding rather than
+// the cue to retire, and its comment says which threads it waits on.
+//
 // THREE RULES for an entry, because a watch that cannot fail is decoration:
 //
 //   1. It was measured false on the pinned bun the day it was written, and
@@ -39,6 +45,9 @@
 // one import path. A change to how a watch is read is a change there.
 
 import type { Watch } from "timbrado/watch";
+import { fileURLToPath } from "node:url";
+
+import { OXC_MINIFY_OPTIONS } from "./oxc-minify-options.ts";
 
 export type { Watch, WatchResult } from "timbrado/watch";
 export { checkWatch, runWatch, watchMoved, watchRow, watchSignature } from "timbrado/watch";
@@ -48,6 +57,12 @@ const PNG_1X1_16BIT = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABEAIAAADA54+dAAAADElEQVR4n
 
 const out = (expr: string) => `console.log(JSON.stringify(${expr}));`;
 const firstLine = `(e) => String(e && e.message || e).split("\\n")[0].slice(0, 90)`;
+
+// The runner spawns `bun -e` in a scratch directory, where a bare specifier
+// resolves nothing, so the one watch that needs this repository's pinned
+// oxc-minify and its frozen fixtures is handed both by ABSOLUTE path, computed
+// here where the list module knows where it lives.
+const REPO = fileURLToPath(new URL("../../", import.meta.url));
 
 export const BUN_WATCHES: Watch[] = [
   {
@@ -146,6 +161,52 @@ export const BUN_WATCHES: Watch[] = [
       const css = await Bun.file("out/w.css").text();
       const landed = css.includes(":target-current") && !css.includes(":TARGET-CURRENT");
       ${out('{ landed, detail: "emitted " + JSON.stringify(css.trim().slice(0, 60)) }')}
+    `,
+  },
+  {
+    // THIS ONE IS NOT A BUN FIX, and it moves through a different door. The
+    // probe reads oxc-minify, which is pinned in package.json and bumped by
+    // dependabot's minifiers group, so under the bun leg it answers the SAME
+    // under pin and canary every night and never reads `moved`. What it does
+    // is turn "did that oxc-minify bump reach SWC" into a row the first
+    // nightly after the merge answers: the day it reads `landed` in both
+    // columns is the day oxc's compressor caught up, and the note beside it
+    // says so. The comparison this waits on was measured 2026-09-15: oxc
+    // trails SWC 1.16.2 by 0.84% brotli across the 19 client assets, and the
+    // whole of it is three passes (guard-clause inversion into nested ifs,
+    // hoisting every `var` of a scope into one declaration, and inlining or
+    // reordering inner function declarations). The nearest open threads are
+    // oxc-project/oxc#14310 and #14311; no single issue asks for parity, so
+    // the thread named here is the repository.
+    //
+    // The fixtures are FROZEN copies of two client files (quiz.js and
+    // lens-wire.js as of #823), because a live file drifts and takes the
+    // constant with it. SWC's number is what `@swc/core` 1.16.2 produces on
+    // those exact bytes with `compress: { ecma: 2022, toplevel: false },
+    // mangle: { toplevel: false }`, brotli q11, and bun's and node's brotli
+    // agree on it to the byte. Re-derive it with the scratch bench recorded
+    // in the wire-byte sweep note before changing either fixture.
+    name: "oxc-minifier-reaches-swc-parity",
+    issue: "https://github.com/oxc-project/oxc",
+    landed: "oxc-minify at the pin, run with the build's exact options over the two frozen fixtures, produces no more brotli q11 bytes than SWC 1.16.2 did on the same bytes (5,786 B)",
+    measured: "2026-09-15, oxc-minify 0.150.0 under bun 1.4.2: 5,843 B against SWC's 5,786 B, +57 B (quiz.js 2,974 vs 2,932; lens-wire.js 2,869 vs 2,854)",
+    runtime: "bun",
+    script: `
+      const { minifySync } = require(${JSON.stringify(REPO + "node_modules/oxc-minify/index.js")});
+      const { brotliCompressSync, constants } = require("node:zlib");
+      const { readFileSync } = require("node:fs");
+      const OPTS = ${JSON.stringify(OXC_MINIFY_OPTIONS)};
+      const SWC = 5786;
+      const br = (s) => brotliCompressSync(Buffer.from(s), { params: { [constants.BROTLI_PARAM_QUALITY]: 11 } }).length;
+      let oxc = 0;
+      for (const f of ["quiz.js", "lens-wire.js"]) {
+        const path = ${JSON.stringify(REPO + "tools/fixtures/minify-parity/")} + f;
+        const r = minifySync(f, readFileSync(path, "utf8"), OPTS);
+        if (r.errors.length) throw new Error(f + ": " + r.errors[0].message);
+        oxc += br(r.code);
+      }
+      const gap = oxc - SWC;
+      ${out('{ landed: gap <= 0, detail: "oxc " + oxc + " B vs SWC " + SWC + " B brotli q11 on the frozen fixtures (" + (gap > 0 ? "+" : "") + gap + " B)" }')}
     `,
   },
 ];
