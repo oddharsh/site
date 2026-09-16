@@ -150,9 +150,12 @@ rotation and treat all previously emailed links as compromised.
 
 ## CI/CD release path
 
-1. [CI](../.github/workflows/ci.yml) runs the required `validate` check: locked
-   dependencies, build, lint, typechecks, tests, Worker dry-runs, performance gates,
-   and the local route oracle. Cal and Serendipity ship inside the site Worker.
+1. [CI](../.github/workflows/ci.yml) runs site validation and native photo
+   validation in parallel. Site validation covers locked dependencies, build,
+   lint, typechecks, tests, Worker dry-runs, performance gates and the local route
+   oracle. The required `validate` job always runs and succeeds only when both
+   jobs succeed; failure, cancellation or skipping fails the gate. Cal and
+   Serendipity ship inside the site Worker.
 2. [Promote production](../.github/workflows/promote-production.yml) advances
    `production` after successful CI on current `main` and a merged PR.
    Manual dispatch also requires a merged PR.
@@ -173,8 +176,8 @@ the build step; keep the dashboard Build command empty to avoid building twice.
 For the auxiliary `cf-garage/` Worker, commands run from its directory with
 `--x-new-config`; its TypeScript config does not accept `-c`.
 
-CI runs lint and typechecks before the build and native toolchain setup. Native
-photo validation caches Cargo dependencies and their compiled artifacts with
+Site validation runs lint and typechecks before its build. Native photo
+validation runs independently and caches Cargo dependencies and artifacts with
 `Swatinem/rust-cache`, scoped to `tools/photos/zenc`. Its key includes the job,
 platform, Rust compiler, Cargo manifests/locks, runner image and libavif package
 version. The encoder and C adapter rebuild, and tests and Clippy run on cache

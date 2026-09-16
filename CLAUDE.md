@@ -371,9 +371,11 @@ worktrees may edit freely, but a worktree is not a release surface.
   site Worker plus the auxiliary Garage/LWE configs (`cf-garage/`, `lwe-ask/`),
   runs the coffee tests, and sweeps the route oracle against a Worker booted
   in-process (`bun run routes:check`, wrangler's `createTestHarness()`), so a
-  broken route fails the PR instead of the deploy. All of that lives in the ONE
-  `validate` job, because `validate` is the one required check on `main` and a
-  gate that is not required is not a gate.
+  broken route fails the PR instead of the deploy. Site validation and native
+  photo validation run in parallel. The required `validate` job depends on BOTH
+  and always runs: any failed, cancelled or skipped dependency makes it fail.
+  Keep every validation job in its `needs`; the contract suite checks the census.
+  Production promotion still requires the entire CI workflow to succeed.
 - **`.github/workflows/perf-diff.yml` is deliberately OUTSIDE that job**, and the
   separation is the whole design rather than tidiness. It builds the merge base
   and HEAD, diffs the wire sizes, and comments the delta on the PR; it fails on
