@@ -123,6 +123,9 @@ test("re-encoding refuses partial tiers and empty selections before downstream h
   await fixture(async ({ root, put, command }) => {
     await put("tools/photos/reencode-thumbnails.sh", source);
     await put("tools/photos/require-exif-sooc.sh", await readFile(new URL("./photos/require-exif-sooc.sh", import.meta.url), "utf8"));
+    await put("tools/photos/require-zenc.sh", await readFile(new URL("./photos/require-zenc.sh", import.meta.url), "utf8"));
+    await command("bin/cargo", "exit 0");
+    await command("bin/pkg-config", "exit 0");
     await put("tools/photos/photo-inputs.ts", await readFile(new URL("./photos/photo-inputs.ts", import.meta.url), "utf8"));
     await put("public/i/frame.12345678.jpg", "published fixture");
     await put("source/frame.jpg", "source fixture");
@@ -130,34 +133,37 @@ test("re-encoding refuses partial tiers and empty selections before downstream h
     await command("bin/exif-sooc", 'if [ "$1" = --version ]; then echo "exif-sooc 0.2.0"; else echo 1; fi');
     await command("bin/sips", 'echo "space: RGB"');
     await command("tools/photos/zenc/target/release/zenc", `
-if [ "$1" = square ]; then
-  [ "\${FAIL_AT:-}" != square ] || exit 6
-  while [ "$#" -gt 0 ]; do
-    if [ "$1" = --out ]; then shift; touch "$1"; fi
-    shift
-  done
-else
-  [ "\${FAIL_AT:-}" != jpeg ] || exit 6
-  touch "$2"
-fi`);
-    // The fake sits FIRST on the fixture's PATH, which is where the script looks
-    // first since 2026-09-12 (installed encoder, then the vendored build, then
-    // sips), so no host encoder can run. It lived at the vendored path before the
-    // flip, and after it that path is only consulted when PATH has no avifenc.
-    await command("bin/avifenc", `
-for out in "$@"; do :; done
-case "$out" in
-  *-400.avif) tier=sm;; *-200.avif) tier=xs;; *) tier=sq;;
-esac
-[ "\${FAIL_AT:-}" != "$tier" ] || exit 6
-touch "$out"`);
+[ "$1" != --avif-version ] || { echo "libavif 1.4.2"; exit 0; }
+[ "$1" = square ] || exit 9
+[ "\${FAIL_AT:-}" != square ] || exit 6
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --avif-out|--jpeg-out)
+      shift
+      case "$1" in *-400.avif) tier=sm ;; *-200.avif) tier=xs ;; *.avif) tier=sq ;; *.jpg) tier=jpeg ;; esac
+      [ "\${FAIL_AT:-}" != "$tier" ] || exit 6
+      printf encoded > "$1" ;;
+  esac
+  shift
+done`);
+    const tiers = ["frame.jpg", "frame.avif", "frame-400.avif", "frame-200.avif"];
     for (const failure of ["", "square", "jpeg", "sq", "sm", "xs"]) {
+      for (const tier of tiers) await put(`public/images/${tier}`, `previous ${tier}`);
       const result = spawnSync("bash", ["tools/photos/reencode-thumbnails.sh", "source"], {
         cwd: root, encoding: "utf8", env: { ...process.env, PATH: `${root}/bin:${process.env.PATH}`, FAIL_AT: failure },
       });
       assert.equal(result.status, failure ? 1 : 0, `${failure || "complete"}: ${result.stderr}`);
       if (failure) assert.match(result.stderr, /do not hash or publish/);
+      for (const tier of tiers) assert.equal(await readFile(path.join(root, "public/images", tier), "utf8"),
+        failure ? `previous ${tier}` : "encoded", `${failure || "complete"}: ${tier}`);
     }
+    for (const tier of tiers) await put(`public/images/${tier}`, `previous ${tier}`);
+    const subset = spawnSync("bash", ["tools/photos/reencode-thumbnails.sh", "source"], {
+      cwd: root, encoding: "utf8", env: { ...process.env, PATH: `${root}/bin:${process.env.PATH}`, TIERS: "xs" },
+    });
+    assert.equal(subset.status, 0, subset.stderr);
+    for (const tier of tiers) assert.equal(await readFile(path.join(root, "public/images", tier), "utf8"),
+      tier === "frame-200.avif" ? "encoded" : `previous ${tier}`, `xs selection: ${tier}`);
     await rm(path.join(root, "source/frame.jpg"));
     const empty = spawnSync("bash", ["tools/photos/reencode-thumbnails.sh", "source"], {
       cwd: root, encoding: "utf8", env: { ...process.env, PATH: `${root}/bin:${process.env.PATH}` },

@@ -504,7 +504,7 @@ mod icc_tests {
         let mut b = b"curv".to_vec();
         b.extend_from_slice(&0u32.to_be_bytes());
         b.extend_from_slice(&n.to_be_bytes());
-        b.extend(std::iter::repeat(0u8).take(n as usize * 2));
+        b.extend(std::iter::repeat_n(0u8, n as usize * 2));
         b
     }
 

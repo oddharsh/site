@@ -253,52 +253,14 @@ for cmd in sips exif-sooc; do
 done
 
 source "$SCRIPT_DIR/require-exif-sooc.sh"
-# Cargo's incremental check also upgrades an existing binary when this script
-# starts using a new native pipeline operation.
-command -v cargo >/dev/null 2>&1 || { echo "error: cargo (rust) not found; install from https://rustup.rs" >&2; exit 1; }
-(cd "$PROJECT_DIR" && cargo build --release --locked --manifest-path "$ZENC_DIR/Cargo.toml" --target-dir "$ZENC_DIR/target") >&2 || { echo "error: zenc build failed" >&2; exit 1; }
+source "$SCRIPT_DIR/require-zenc.sh"
+require_zenc_avif "$ZENC_DIR"
 
 if [ ! -x "$MOZ_JTRAN" ]; then
   echo "error: jpegtran not installed at $MOZJPEG_DIR" >&2
   echo "  install with: brew install mozjpeg" >&2
   exit 1
 fi
-# AVIF encoder, in preference order: the INSTALLED avifenc first, the vendored
-# build second, sips last. Owner call 2026-09-12, reversing the 2026-08-26 order
-# that put the vendored build first: the installed encoder is the one to track,
-# and a fresh machine should not spend ten minutes building an older libavif to
-# match a pin when a newer one is already on PATH. What the pin bought was
-# protection against a `brew upgrade` re-minting URLs silently (gotcha 46), and
-# that protection now lives in config/tools.json's `recorded` version, which
-# `bun run tools:check` compares against `avifenc --version` and reports as
-# drift. Adding a photo on a moved encoder re-mints NOTHING already shipped,
-# since /i/ is content-addressed per file; what it changes is the bytes of the
-# photo being added, which is exactly what the recorded version is for.
-#
-# Measured before the flip rather than assumed: brew's aom 3.15.0 against the
-# vendored aom 3.14.1, shipping flags verbatim, 3 stems (1 JPG, 2 HIF), all three
-# tiers each: 9 of 9 byte-identical. The library is therefore mixed by
-# PROVENANCE and not by bytes, so far. Re-run that control before trusting the
-# next aom bump, since two versions agreeing is evidence about those two.
-#
-# The vendored build stays for two reasons: it is the fallback on a machine with
-# no avifenc at all, and it is the only build here with `--sharpyuv`, which this
-# script deliberately does NOT pass (see avif_encode).
-VENDORED_AVIFENC="$(cd "$(dirname "$0")" && pwd)/libavif/build/avifenc"
-if command -v avifenc >/dev/null 2>&1; then
-  AVIF_ENCODER="avifenc"; AVIF_KIND="brew"
-elif [ -x "$VENDORED_AVIFENC" ]; then
-  AVIF_ENCODER="$VENDORED_AVIFENC"; AVIF_KIND="vendored"
-else
-  AVIF_ENCODER="sips"; AVIF_KIND="sips"
-fi
-# The sips fallback is a DIFFERENT ENCODER at a different quality, so say so
-# rather than let a missing avifenc quietly change what ships.
-if [ "$AVIF_KIND" = "sips" ]; then
-  echo "warning: no avifenc found; falling back to sips, which encodes the AVIF" >&2
-  echo "         tier differently. brew install libavif, or build one: tools/photos/libavif/build.sh" >&2
-fi
-
 mkdir -p "$DEST" "$TMP"
 trap 'rm -rf "$TMP"' EXIT
 
@@ -310,72 +272,13 @@ TOTAL=$(( $(tr -cd '\000' < "$INPUTS" | wc -c) / 4 ))
 echo "found $TOTAL photo(s) to process"
 echo ""
 
-avif_encode() {  # avif_encode <src.jpg> <out.avif>
-  if [ "$AVIF_KIND" != "sips" ]; then
-    # 4:0:0 for grayscale (Leica Monochrom — no chroma planes), else 4:2:0.
-    # strip ICC/EXIF/XMP: the grid reads EXIF from metadata.json, so embedded
-    # metadata is dead weight (and avifenc copies source EXIF by default).
-    # `|| space=""` keeps this tolerant under pipefail: a sips that cannot read
-    # the colorspace should fall through to 4:2:0, never abort the encode.
-    local space; space=$(sips -g space "$1" 2>/dev/null | awk '/space:/{print $2}') || space=""
-    local yuv; [ "$space" = "Gray" ] && yuv=400 || yuv=420
-    # -q 63, unchanged from the sips era on purpose: see ZENC_Q above for why
-    # the geometry change did not drag the encoder settings with it. Ladder if it
-    # ever needs revisiting, against the old sips-q63 baseline on a skewed
-    # 8-photo sample: q54 -10.2%, q56/57 +0.9%, q58 +6.8%, q59 +12.4%, q63 +28.8%.
-    # Note q56 and q57 produce identical bytes, so the quantizer mapping is
-    # coarser than the flag suggests.
-    # --sharpyuv is available on the vendored build and is NOT passed. Measured
-    # 2026-08-26 over 12 Fuji colour frames at this exact tier: it looks like
-    # +1.218 mean SSIMULACRA2, but it also spends +4.54% more bytes, and the
-    # matched-bytes probe (raise q until plain costs the same, the test
-    # matched-bytes-probe.ts runs for the resampling work) puts the real figure
-    # at +0.411 mean with sharpyuv LOSING on 5 of 12. Turning it on is a
-    # deliberate decision that also re-mints every /i/ URL it touches.
-    #
-    # --speed 2 since 2026-08-28, up from 4, because it wins on BOTH axes at
-    # once. Measured over 6 stems covering both yuv paths through this exact
-    # geometry (sips to TIFF, then zenc square at 600/400/200), shipping flags
-    # verbatim and varying only --speed: the 600 tier goes 153,138 -> 150,948 B
-    # (-1.43%) and all three tiers 262,158 -> 257,836 B (-1.65%), while mean
-    # ssimulacra2 on the 600 tier RISES 79.439 -> 79.601. The bill is +0.21 s
-    # per photo serial (0.515 -> 1.078), so an incremental add of 5 goes
-    # 0.7 s -> 1.7 s and a full 165-photo run goes 21.8 s -> 57 s.
-    #
-    # speed 0 is REJECTED on its own numbers rather than on principle: it beats
-    # speed 2 by 0.09 ssimulacra2 for 3.6x the time (2.942 s per photo), and it
-    # produced LARGER files than speed 2 on 2 of the 6 stems.
-    #
-    # THE LIBRARY IS MIXED, deliberately. Every tile committed before that date
-    # is speed 4 and stays speed 4. Re-encoding to collect the difference buys
-    # 118.6 KiB spread over 495 immutable-1y AVIF files, about 245 B per tile,
-    # of which a homepage visit fetches 12. It costs 495 re-minted /i/ URLs, 495
-    # rewritten rows in public/images/fingerprints.json, the a/s/x keys of all
-    # 165 stems in hashes.json, a hand-edit to src/pages/garage/tooltips.html
-    # (12 literal /i/ refs across 3 stems), and a p-dict roll for that page.
-    # That is the trade that has broken this build twice.
-    #
-    # Two speeds cost nothing operationally, because a /i/ URL names exact bytes
-    # PER FILE and nothing downstream reads encoder settings. config/tools.json
-    # already makes this argument about its own `recorded` versions: "Nothing
-    # recorded which encoder made the 632 files in public/i, and #394 re-encoded
-    # 316 of them on 2026-08-14, so claiming these versions produced them would
-    # be inventing provenance." The remaining 118.6 KiB gets collected whenever
-    # something forces a full re-encode anyway: a LIBAVIF_TAG bump, a geometry
-    # change, or another reencode-thumbnails.sh run.
-    "$AVIF_ENCODER" -q 63 -d 10 --ignore-icc --ignore-exif --ignore-xmp --speed 2 --jobs 4 --yuv "$yuv" "$1" "$2" >/dev/null 2>&1
-  else
-    sips -s format avif --setProperty formatOptions 60 "$1" --out "$2" >/dev/null 2>&1
-  fi
-}
-
 # ── phase 1: square thumbnails (zenc q84 JPG + 10-bit AVIF, + mobile AVIF) ──
-echo "phase 1 — square thumbnails (${SQ}×${SQ} / ${SQ_SM}×${SQ_SM}, zenc q84 + AVIF via $AVIF_KIND, metadata-stripped, parallel $JOBS)"
+echo "phase 1 — square thumbnails (${SQ}×${SQ} / ${SQ_SM}×${SQ_SM}, zenc q84 + AVIF via libavif, metadata-stripped, parallel $JOBS)"
 INTER="$TMP/inter"; mkdir -p "$INTER"
 st_init "$TMP/status1"
 thumb_one() {  # thumb_one <source-file> <index>
   local f="$1" idx="$2"
-  local base stem jpg avif smavif xs xsavif tif sq sm input o profile transfer file current stage
+  local base stem jpg avif smavif xsavif tif input o file current stage
   base=$(basename "$f"); stem="${base%.*}"
   current=1
   for file in "$DEST/$stem.jpg" "$DEST/$stem.avif" "$DEST/$stem-${SQ_SM}.avif" "$DEST/$stem-${SQ_XS}.avif"; do
@@ -389,10 +292,8 @@ thumb_one() {  # thumb_one <source-file> <index>
   stage="$INTER/$idx"; mkdir -p "$stage"
   jpg="$stage/${stem}.jpg"; avif="$stage/${stem}.avif"
   smavif="$stage/${stem}-${SQ_SM}.avif"; xsavif="$stage/${stem}-${SQ_XS}.avif"
-  xs="$INTER/${stem}.xs.png"
-  # The intermediates are LOSSLESS: a TIFF for the HEIF decode, PNGs out.
+  # HEIF uses a lossless TIFF decode; tier pixels stay inside zenc.
   tif="$INTER/${stem}.tif"
-  sq="$INTER/${stem}.sq.png"; sm="$INTER/${stem}.sm.png"
 
   # 1-3. decode → orient → all three tiers, ONE zenc invocation, in linear light.
   # The full argument lives at the twin site in reencode-thumbnails.sh; short
@@ -420,7 +321,8 @@ thumb_one() {  # thumb_one <source-file> <index>
   # data is wrong by up to 4 codes in the shadows. Classification is unchanged
   # on this corpus (2 g22, 179 srgb) and the outputs are byte-identical.
   if ! "$ZENC" square "$input" --orient "$o" --filter box \
-      --size "$SQ" --out "$sq" --jpeg-out "$jpg" --jpeg-quality "$ZENC_Q" --size "$SQ_SM" --out "$sm" --size "$SQ_XS" --out "$xs" >/dev/null 2>&1; then
+      --size "$SQ" --avif-out "$avif" --jpeg-out "$jpg" --jpeg-quality "$ZENC_Q" \
+      --size "$SQ_SM" --avif-out "$smavif" --size "$SQ_XS" --avif-out "$xsavif" >/dev/null 2>&1; then
     rm -f "$tif"; mark fail "$idx"; printf "✗"; return
   fi
   # Deleted per photo rather than by the EXIT trap: a full-res TIFF is ~311MB
@@ -438,21 +340,10 @@ thumb_one() {  # thumb_one <source-file> <index>
   # value is accepted silently too, so nothing errors in any direction. Dropping
   # to 8 bits to buy the compression is the thing this door exists to avoid.
   rm -f "$tif"
-  # 4. desktop square JPG was emitted with the PNG above (zenc: zenjpeg hybrid+scan, q84 ≈ old jpegli q82) + strip
+  # 4. desktop square JPG was emitted with the AVIF above (zenc: zenjpeg hybrid+scan, q84 ≈ old jpegli q82) + strip
   #    any residual metadata (sips can leave a grayscale ICC on B&W frames; keep
   #    formats consistent / sRGB).
   if ! exif-sooc -all= -overwrite_original "$jpg" >/dev/null; then mark fail "$idx"; printf "✗"; return; fi
-  # 5. desktop square AVIF
-  if ! avif_encode "$sq" "$avif"; then mark fail "$idx"; printf "✗"; return; fi
-  # 6. mobile square AVIF — from the same full-resolution frame as the 600
-  # tier since 2026-08-26 (it used to be a resize of the 600 square, and before
-  # that a JPEG resized from a JPEG).
-  if ! avif_encode "$sm" "$smavif"; then mark fail "$idx"; printf "✗"; return; fi
-  # 7. 1x square AVIF, same one-encode-from-the-source property as step 6.
-  # (This tier was missed when the geometry first moved on 2026-08-25 — the 600
-  # and 400 went linear-light while the 200 stayed on sips — and its next
-  # incarnation re-squared the 600. Both found by reading, not by a check.)
-  if ! avif_encode "$xs" "$xsavif"; then mark fail "$idx"; printf "✗"; return; fi
   for file in "$jpg" "$avif" "$smavif" "$xsavif"; do
     if [ ! -s "$file" ]; then mark fail "$idx"; printf "✗"; return; fi
   done

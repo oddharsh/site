@@ -57,13 +57,9 @@ jobs:
 
       - name: Install image toolchain
         run: |
-          # libavif is brew's, and it is the encoder the tiers use: the pipeline
-          # selects the installed avifenc first since 2026-09-12 (the vendored
-          # build in tools/photos/libavif is the fallback for a machine with none),
-          # so the ten-minute pinned build that used to follow this step is gone.
-          # config/tools.json records the version the last add ran on, and
-          # tools:check reports drift from it as an advisory.
-          brew install ffmpeg libavif mozjpeg webp
+          # Grid tiers link Homebrew's libavif directly through zenc. pkgconf
+          # supplies build discovery; avifenc remains the byte-parity oracle.
+          brew install ffmpeg libavif pkgconf mozjpeg webp
           # exif-sooc reads and writes every EXIF the pipeline touches, and
           # replaced exiftool on 2026-08-14. It was NOT installed here when the
           # extractor moved onto it in #390, so this workflow would have failed
@@ -79,7 +75,7 @@ jobs:
       - name: Install repository dependencies
         run: bun install --frozen-lockfile
 
-      - name: Build the JPEG encoder (zenc)
+      - name: Build the JPEG and AVIF encoder (zenc)
         # zenjpeg hybrid + progressive scan search; Cargo.lock pins the graph.
         # dependabot tracks the zenjpeg version and cannot track halflight, the
         # resampling kernel, which is a public git dependency pinned to a full

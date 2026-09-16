@@ -1,18 +1,24 @@
 # Photo encoding in memory
 
-Keep pixels in memory between resizing and AVIF encoding. On four full-resolution JPEG originals, the prototype cuts the measured tier batch from **6.43 s to 3.77 s (41.3%)**, with byte-identical outputs. This is the strongest candidate for a production follow-up, once the HEIF input path and supported encoder builds are verified.
+The production integration keeps pixels in memory between resizing and AVIF
+encoding. A normal-macOS repeat over all six originals, including both HEIFs,
+measured **9.45 s to 9.15 s (3.1%)**, with all 24 tier outputs byte-identical.
+The earlier 41.3% JPEG-only result below ran inside the execution sandbox and
+must not be used as a production speedup claim. A nine-run control measured the
+same `sips -g space` probe at 262 ms inside the sandbox versus 21 ms normally.
+Removing those subprocesses therefore removed sandbox overhead as well as work.
 
 Baseline and candidate started at `f55e946965ff58acbde85f740e261858a8e4066f`. Measurements ran on macOS arm64 with the pinned Rust toolchain and Bun, libavif 1.4.2, and aom 3.15.0. This libavif build has no libyuv. The prototype borrows libavif through its [public API](https://github.com/AOMediaCodec/libavif/blob/main/include/avif/avif.h); it does not replace the codec.
 
 ## Changes
 
-The normal pipeline decodes and resizes once, writes three PNG tiers, asks `sips` for each tier's color space, then starts `avifenc` for each PNG. The prototype passes the same 8-bit gray or RGB tier buffers directly to libavif. It retains the production transfer curve, linear-light resize, EXIF orientation, crop, JPEG encoder, and AVIF settings, including automatic tiling.
+The previous pipeline decoded and resized once, wrote three PNG tiers, asked `sips` for each tier's color space, then started `avifenc` for each PNG. The integrated encoder passes the same 8-bit gray or RGB tier buffers directly to libavif. It retains the production transfer curve, linear-light resize, EXIF orientation, crop, JPEG encoder, and AVIF settings, including automatic tiling.
 
-`square::tier` is extracted from the existing production loop so both paths use one geometry implementation. The experimental front end is a Cargo example behind the explicit `avif-memory-experiment` feature. The default binary and ingest script retain their existing behavior and need no libavif development files.
+`square::tier` is extracted from the existing production loop so both paths use one geometry implementation. The normal `zenc square` interface now accepts `--avif-out` beside `--jpeg-out` and optional `--out` for PNG. Ingest and rerender use that interface; the benchmark example delegates to the same AVIF module. Builds require installed libavif development files and pkg-config.
 
 A second command decodes a JPEG reference once and reuses it for five fixed quality trials. This isolates decode and process-launch overhead. It does not implement adaptive quality search or measure SSIMULACRA2/Butteraugli.
 
-## Results
+## Original sandbox measurements (superseded for production timing)
 
 Each sample times the entire selected image batch. Baseline and candidate alternate; byte comparisons run outside the timed region.
 
@@ -29,26 +35,37 @@ The original JPEG sample is `L1000069_3`, `L1009919_2`, `L1009920`, and `XT50783
 
 These percentages cover decoding, resizing, encoding, and the removed tier handoffs. They exclude metadata extraction, uploads, histogram generation, and quality scoring. They are not an end-to-end photo-ingest speedup claim.
 
-## Unresolved HEIF baseline failure
+## HEIF resolution and normal-macOS measurement
 
-The six-original run stopped on `XT500010.HIF`. `sips` successfully produced the shared TIFF, but the unchanged baseline and candidate both failed to decode it through the pinned `image` crate:
+The failed `XT500010.HIF` conversion was an instrument failure. Sandboxed
+`sips` returned success but wrote a 7,056-byte TIFF without pixel offsets.
+Outside the sandbox the same command wrote the complete 326,474,696-byte
+16-bit TIFF. No decoder change or lower-precision conversion was needed.
 
-```text
-Format error decoding Tiff: format error: file should contain either
-(StripByteCounts and StripOffsets) or (TileByteCounts and TileOffsets),
-other combination was found
-```
+Three alternating pairs over all six originals, with the shared HEIF-to-TIFF
+preparation excluded from both sides:
 
-That run is inconclusive. The four-JPEG result is a separately named finite sample, not a skipped-error average. The prototype has not established parity or speed for full-resolution HEIF originals. Resolve the existing TIFF decode failure before extending the adoption claim to that input path.
+| Metric | Baseline | Native candidate |
+|---|---:|---:|
+| Tier batch median | 9,450.43 ms | 9,153.66 ms |
+| Pair 1 | 9,450.43 ms | 9,153.66 ms |
+| Pair 2 | 9,393.77 ms | 9,013.31 ms |
+| Pair 3 | 9,690.31 ms | 9,708.44 ms |
+| Fixed JPEG trials median | 1,563.11 ms | 1,430.25 ms |
+
+All 24 tier files and 30 trial JPEGs matched byte for byte. The tier gain is
+small and one pair is slightly slower; these observations do not establish a
+large ingestion speedup. The integration removes the PNG handoffs and keeps
+one encoder path. JPEG trial reuse remains a benchmark-only experiment.
 
 ## Reproduce
 
-Use separate baseline and candidate worktrees at the same base, install the repository-pinned toolchain, and provide libavif development files through `pkg-config`. These commands build the default baseline without the experimental feature:
+Use separate baseline and candidate worktrees at the same base, install the repository-pinned toolchain, and provide libavif development files through `pkg-config`. Build the baseline from the experiment base commit; the candidate now uses the default native module:
 
 ```sh
 cargo build --release --locked --manifest-path /absolute/baseline/tools/photos/zenc/Cargo.toml
 cargo build --release --locked --manifest-path tools/photos/zenc/Cargo.toml \
-  --features avif-memory-experiment --example memory-encode
+  --example memory-encode
 bun tools/photos/experiments/bench-memory.ts \
   /absolute/baseline/tools/photos/zenc/target/release/zenc \
   tools/photos/zenc/target/release/examples/memory-encode 5
@@ -63,8 +80,8 @@ PHOTO_BENCH_STEMS=L1000069_3,L1009919_2,L1009920,XT507831 \
   tools/photos/zenc/target/release/examples/memory-encode 3 /absolute/originals
 ```
 
-The benchmark writes only to its own temporary directory and deletes it afterward. It prints the selected sample and all timings, requires exact output parity, and stops on any failed input. For HEIF it shares an untimed lossless TIFF preparation step between both sides. Other libavif builds and Linux remain unmeasured.
+The benchmark writes only to its own temporary directory and deletes it afterward. It prints the selected sample and all timings, requires exact output parity, and stops on any failed input. For HEIF it shares an untimed lossless TIFF preparation step between both sides. Timing comparisons require normal macOS execution: a sandbox that restricts sips changes the instrument. Linux CI exercises native encoding and CLI parity, but is not a macOS ingest timing measurement.
 
 ## Validation
 
-The 34 Rust tests pass, including the production geometry and paired JPEG tests. Default and experimental Clippy checks pass with warnings denied; the C shim compiles with `-Wall -Wextra -Werror`. Root lint, typecheck against the existing ratchets, build, and derivation checks pass. The root Bun suite passes all 777 tests; Node passes 768 and skips nine cases requiring Bun's HTMLRewriter. No committed image or photo metadata was regenerated, and no upload ran.
+The 35 Rust tests cover production geometry, paired JPEGs, and byte parity with the installed `avifenc` for gray and color tiers. Clippy checks all targets with warnings denied; the C adapter compiles with warnings denied too. The shell contracts cover failed encodes preserving every previous tier and `TIERS=xs` leaving the larger tiers untouched. The 258-photo histogram bake was rerun because its locked build inputs changed; its output is byte-identical. No photo was uploaded or re-encoded in the committed library.

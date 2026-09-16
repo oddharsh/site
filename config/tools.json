@@ -28,19 +28,14 @@
     "agreed on those inputs. Preserve these as scoped measurements, not a guarantee",
     "for a different source, encoder, or configuration.",
     "",
-    "Grid ingest and rerenders prefer the INSTALLED avifenc declared here, then",
-    "tools/photos/libavif/build/avifenc, then sips. Owner call 2026-09-12: the",
-    "installed encoder is the one to track, and a fresh machine should not build",
-    "an older libavif to match a pin when a newer one is already on PATH. The",
-    "vendored build is the fallback for a machine with no avifenc at all, and the",
-    "place --sharpyuv lives if it is ever turned on. Drift shows up here, as the",
-    "recorded version below against what --version reports, and it is advisory:",
-    "the library is mixed by provenance on purpose (165 tiles on aom 3.14.1, the",
-    "cota-wec album on 3.15.0, byte-identical on 9 of 9 tiers across 3 stems at the",
-    "shipping flags). Encoding flags live in the callers. The entry also serves cars",
-    "and encoding studies. A notice about it does not prove that a caller selected",
-    "it. Update recorded only with reviewed artifact evidence; docs/DEPENDENCIES.md",
-    "describes the checks and docs/MAINTENANCE.md the procedures."
+    "Grid ingest and rerenders link the INSTALLED libavif through zenc. The",
+    "zenc-avif entry records the library actually loaded by that binary; avifenc",
+    "remains the reference CLI and serves cars and encoding studies. No grid",
+    "fallback selects a different encoder. The installed library follows the",
+    "owner preference of 2026-09-12; recorded versions detect drift without",
+    "claiming provenance for already shipped tiles. Update recorded only with",
+    "reviewed artifact evidence. docs/DEPENDENCIES.md describes the checks and",
+    "docs/MAINTENANCE.md the procedures."
   ],
   "tools": [
     {
@@ -105,12 +100,11 @@
       "why": "builds zenc, the shipped JPEG encoder, on first run",
       "required_by": [
         "tools/photos/add-car-photo.sh",
-        "tools/photos/add-photos.sh",
         "tools/photos/export-for-instagram.sh",
         "tools/photos/gen-encoding-grids.sh",
         "tools/photos/gen-encoding-samples.sh",
         "tools/photos/onestep-probe.sh",
-        "tools/photos/reencode-thumbnails.sh"
+        "tools/photos/require-zenc.sh"
       ],
       "version": {
         "flag": "--version",
@@ -167,7 +161,7 @@
       "path": "tools/photos/zenc/target/release/zenc",
       "install": "cargo build --release --locked --manifest-path tools/photos/zenc/Cargo.toml",
       "optional": true,
-      "why": "the JPEG encoder for every shipped tier, plus the square/resize geometry and the histogram bake. It decides the bytes of the JPG half of /i/ exactly the way avifenc decides the AVIF half, and it was the one encoder here with no entry: `cargo` was declared as its BUILD prerequisite, which is a different question from which encoder baked the library",
+      "why": "JPEG and AVIF grid encoder, square/resize geometry, and histogram bake; grid callers build incrementally and require installed libavif development files",
       "required_by": [
         "tools/photos/add-car-photo.sh",
         "tools/photos/add-photos.sh",
@@ -220,7 +214,7 @@
       "bin": "avifenc",
       "install": "brew install libavif",
       "optional": true,
-      "why": "the AVIF encoder for every shipped tier since 2026-09-12 (grid ingest and rerenders select it first), plus car references and encoding studies; the vendored build in tools/photos/libavif is the fallback when it is not installed, before sips",
+      "why": "AVIF command-line reference for car images and encoding studies; grid ingest uses the installed library through zenc",
       "required_by": [
         "tools/photos/add-car-photo.sh",
         "tools/photos/gen-encoding-grids.sh",
@@ -291,6 +285,37 @@
         "why": "This libjxl metric has no version flag. Its build can affect the quality search even though it does not encode images itself."
       },
       "bytes": false
+    },
+    {
+      "bin": "pkg-config",
+      "install": "brew install pkgconf libavif",
+      "why": "resolves installed libavif development headers and libraries for the native grid encoder",
+      "required_by": [
+        "tools/photos/require-zenc.sh"
+      ],
+      "version": {
+        "flag": "--version",
+        "match": "(\\d+\\.\\d+\\.\\d+)"
+      },
+      "bytes": false,
+      "bytes_why": "build discovery; the linked libavif and AOM versions decide AVIF bytes"
+    },
+    {
+      "bin": "zenc-avif",
+      "path": "tools/photos/zenc/target/release/zenc",
+      "install": "brew install libavif pkgconf; cargo build --release --locked --manifest-path tools/photos/zenc/Cargo.toml",
+      "optional": true,
+      "optional_why": "zenc is built incrementally by grid callers before processing inputs",
+      "why": "records the installed libavif and AOM used for normal grid AVIF output",
+      "required_by": [
+        "tools/photos/require-zenc.sh"
+      ],
+      "version": {
+        "flag": "--avif-version",
+        "match": "libavif (?<libavif>\\d+\\.\\d+\\.\\d+) \\(.*aom \\[enc/dec\\]:(?<aom>\\d+\\.\\d+\\.\\d+)"
+      },
+      "bytes": true,
+      "recorded": "libavif 1.4.2, aom 3.15.0"
     }
   ]
 }

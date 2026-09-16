@@ -100,9 +100,11 @@ jobs:
         # Run from the repository root so rust-toolchain.toml selects the same
         # compiler used by the local photo pipeline.
         run: |
+          sudo apt-get update
+          sudo apt-get install -y libavif-dev libavif-bin pkg-config
           rustup component add clippy
           cargo test --locked --manifest-path tools/photos/zenc/Cargo.toml
-          cargo clippy --locked --manifest-path tools/photos/zenc/Cargo.toml -- -D warnings
+          cargo clippy --locked --manifest-path tools/photos/zenc/Cargo.toml --all-targets -- -D warnings
 
       # Does every committed derived artifact still describe the bytes it was made
       # from? photos:check above cannot answer that for the histograms, because it

@@ -95,38 +95,16 @@ for cmd in sips exif-sooc; do
 done
 
 source "$SCRIPT_DIR/require-exif-sooc.sh"
-if [ ! -x "$ZENC" ]; then
-  command -v cargo >/dev/null 2>&1 || { echo "error: cargo (rust) not found; install from https://rustup.rs" >&2; exit 1; }
-  echo "building zenc (zenjpeg encoder) — first run only…" >&2
-  cargo build --release --locked --manifest-path "$ZENC_DIR/Cargo.toml" >&2 || { echo "error: zenc build failed" >&2; exit 1; }
-fi
+source "$SCRIPT_DIR/require-zenc.sh"
+require_zenc_avif "$ZENC_DIR"
 [ -d "$SRC" ]      || { echo "error: source folder not found: $SRC" >&2; exit 1; }
-# Same encoder preference as add-photos.sh (installed first, vendored second,
-# sips last, since 2026-09-12), and it matters MORE here: this script re-encodes
-# the whole published library, so the encoder it picks decides every /i/ URL at
-# once. Read the recorded version in config/tools.json against `avifenc
-# --version` before running this, because a full re-encode on a moved encoder
-# is the one operation that can re-mint the whole library in one go.
-VENDORED_AVIFENC="$(cd "$(dirname "$0")" && pwd)/libavif/build/avifenc"
-if command -v avifenc >/dev/null 2>&1; then
-  AVIF_ENCODER="avifenc"; AVIF_KIND="brew"
-elif [ -x "$VENDORED_AVIFENC" ]; then
-  AVIF_ENCODER="$VENDORED_AVIFENC"; AVIF_KIND="vendored"
-else
-  AVIF_ENCODER="sips"; AVIF_KIND="sips"
-fi
-if [ "$AVIF_KIND" = "sips" ]; then
-  echo "warning: no avifenc found; sips encodes the AVIF tier differently, and this" >&2
-  echo "         script rewrites the WHOLE library. build tools/photos/libavif/build.sh" >&2
-fi
-
 # Use the same source selection as ingest, restricted to published stems.
 # Missing sources remain a supported partial rerender; ambiguous ones fail
 # before any existing tier is replaced.
 INPUTS="$TMP/inputs"
 bun "$SCRIPT_DIR/photo-inputs.ts" rerender "$SRC" "$PROJECT_DIR/public/i" > "$INPUTS"
 TOTAL=$(( $(tr -cd '\000' < "$INPUTS" | wc -c) / 4 ))
-echo "re-encoding $TOTAL thumbnails as ${SQ}×${SQ} / ${SQ_SM}×${SQ_SM} center squares  (zenc q${ZENC_Q} + AVIF via $AVIF_KIND)"
+echo "re-encoding $TOTAL thumbnails as ${SQ}×${SQ} / ${SQ_SM}×${SQ_SM} center squares  (zenc q${ZENC_Q} + AVIF via libavif)"
 echo "  source: $SRC"
 echo ""
 
@@ -137,9 +115,6 @@ while IFS= read -r -d '' src && IFS= read -r -d '' original &&
   if [ -z "$src" ]; then MISS=$((MISS+1)); printf "?"; continue; fi
 
   tif="$INTER/${stem}.tif"
-  sqjpg="$INTER/${stem}.sq.png"; smtmp="$INTER/${stem}.sm.png"
-  jpg="$DEST/${stem}.jpg"; avif="$DEST/${stem}.avif"; smavif="$DEST/${stem}-${SQ_SM}.avif"
-  xstmp="$INTER/${stem}.xs.png"; xsavif="$DEST/${stem}-${SQ_XS}.avif"
 
   # 1-3. decode → orient → all three tiers, ONE zenc invocation, in linear light.
   #
@@ -185,86 +160,36 @@ while IFS= read -r -d '' src && IFS= read -r -d '' original &&
   # silent, because any other spelling falls back to sRGB and sRGB on Monochrom
   # data is wrong by up to 4 codes in the shadows. Classification is unchanged
   # on this corpus (2 g22, 179 srgb) and the outputs are byte-identical.
-  if ! "$ZENC" square "$input" --orient "$o" --filter box \
-      --size "$SQ" --out "$sqjpg" --size "$SQ_SM" --out "$smtmp" --size "$SQ_XS" --out "$xstmp" >/dev/null 2>&1; then
+  # Only requested tiers are written, all from one decoded linear-light frame.
+  stage="$INTER/$stem"; mkdir -p "$stage"
+  args=(square "$input" --orient "$o" --filter box --jpeg-quality "$ZENC_Q")
+  outputs=()
+  if want sq; then
+    args+=(--size "$SQ" --avif-out "$stage/${stem}.avif" --jpeg-out "$stage/${stem}.jpg")
+    outputs+=("$stage/${stem}.avif" "$stage/${stem}.jpg")
+  fi
+  if want sm; then
+    args+=(--size "$SQ_SM" --avif-out "$stage/${stem}-${SQ_SM}.avif")
+    outputs+=("$stage/${stem}-${SQ_SM}.avif")
+  fi
+  if want xs; then
+    args+=(--size "$SQ_XS" --avif-out "$stage/${stem}-${SQ_XS}.avif")
+    outputs+=("$stage/${stem}-${SQ_XS}.avif")
+  fi
+  if [ "${#outputs[@]}" -eq 0 ]; then
+    echo "error: TIERS must select sq, sm, or xs" >&2; exit 1
+  fi
+  if ! "$ZENC" "${args[@]}"; then
     rm -f "$tif"; FAIL=$((FAIL+1)); printf "✗"; continue
   fi
-  # Deleted per photo rather than by the EXIT trap: a full-res TIFF is ~311MB,
-  # and 158 of them would want 50GB of /tmp. Compressing it instead is not on
-  # offer: `sips -s formatOptions lzw` is documented for TIFF and silently
-  # ignored at 16 bits, measured at the twin site in add-photos.sh.
   rm -f "$tif"
-  # 4. desktop square: zenc (zenjpeg hybrid+scan+sharp_yuv, q84) + AVIF (yuv400 for grayscale, else yuv420).
-  #    metadata is stripped: the grid reads EXIF/histogram from metadata.json, so
-  #    embedded EXIF/XMP/ICC in the thumbnail files is dead weight (~1.5KB/AVIF
-  #    avg, up to ~5KB). avifenc gets --ignore-exif/--ignore-xmp (below); zenc
-  #    already emits clean JPGs, but sips can leave a grayscale ICC on B&W frames,
-  #    so strip the JPG too. assumes sRGB display (the AVIF primary has no profile
-  #    either, so this keeps the two formats consistent).
-  #
-  #    All three avifenc calls below pass --speed 2, up from 4 on 2026-08-28.
-  #    The measurement and the speed-0 rejection live once, at avif_encode() in
-  #    add-photos.sh; the short version is -1.65% bytes across the three tiers
-  #    AND +0.162 mean ssimulacra2, for +0.21 s per photo.
-  #
-  #    THIS SCRIPT IS WHERE THE MIXED LIBRARY GOT COLLECTED, on 2026-08-28, by
-  #    a run of exactly this command with no arguments. The library is one
-  #    speed again. It cost the 495 re-minted /i/ URLs, 495 fingerprint rows,
-  #    the a/s/x keys of all 165 stems in hashes.json, the 12 literal /i/ refs
-  #    in src/pages/garage/tooltips.html, and a p-dict roll for that one page.
-  #
-  #    It bought 138,609 bytes, which is 135.4 KiB and MORE than the 118.6 KiB
-  #    projected from 6 stems: -1.816% on the 600 tier, -1.968% on 400,
-  #    -2.007% on 200, -1.882% across all three. Re-derived from git on
-  #    2026-08-29 and exact to the byte.
-  #
-  #    QUALITY ROSE ON AVERAGE RATHER THAN EVERYWHERE, and the figure first
-  #    recorded here said only the first half of that. It read "+0.327 mean
-  #    ssimulacra2 over 24 tier comparisons on 8 stems", which is a real
-  #    measurement of a small sample and reads as the whole result. A wider
-  #    independent scoring against the same reference, 51 comparisons on 17
-  #    stems, gives mean +0.2080: better on 39 tiers, WORSE on 12, worst tier
-  #    -0.61. That scoring is quoted rather than reproduced, since redoing it
-  #    means rebuilding the ingest reference from the SOOC originals.
-  #
-  #    The decision it justified is unchanged, because every magnitude is far
-  #    under perceptual significance and the aggregate direction holds. The
-  #    record is what needed fixing: a lone mean gets read later as "quality
-  #    rose", and 12 of 51 tiers went the other way. PR #660's description
-  #    still carries the +0.327 figure and cannot usefully be edited.
-  #
-  #    The JPG tier did not move by a single byte on any of the 165, which is
-  #    what said no histogram re-bake was owed. Do not read that as a rule: it
-  #    holds because --speed reaches avifenc alone, and any change to the zenc
-  #    call or to the geometry above moves j and owes the bake.
-  space=$(sips -g space "$sqjpg" 2>/dev/null | awk '/space:/{print $2}'); [ "$space" = "Gray" ] && yuv=400 || yuv=420
-  if want sq; then
-  if ! "$ZENC" "$sqjpg" "$jpg" -q "$ZENC_Q" >/dev/null 2>&1; then FAIL=$((FAIL+1)); printf "✗"; continue; fi
-  if ! exif-sooc -all= -overwrite_original "$jpg" >/dev/null; then FAIL=$((FAIL+1)); printf "✗"; continue; fi
-  if [ "$AVIF_KIND" != "sips" ]; then
-    "$AVIF_ENCODER" -q 63 -d 10 --ignore-icc --ignore-exif --ignore-xmp --speed 2 --jobs 4 --yuv "$yuv" "$sqjpg" "$avif" >/dev/null 2>&1 || { FAIL=$((FAIL+1)); printf "✗"; continue; }
-  else
-    sips -s format avif --setProperty formatOptions 60 "$sqjpg" --out "$avif" >/dev/null 2>&1 || { FAIL=$((FAIL+1)); printf "✗"; continue; }
+  if want sq && ! exif-sooc -all= -overwrite_original "$stage/${stem}.jpg" >/dev/null; then
+    FAIL=$((FAIL+1)); printf "✗"; continue
   fi
-  fi
-  # 5. mobile square: from the same full-resolution frame as the 600 tier
-  if want sm; then
-    if [ "$AVIF_KIND" != "sips" ]; then
-      "$AVIF_ENCODER" -q 63 -d 10 --ignore-icc --ignore-exif --ignore-xmp --speed 2 --jobs 4 --yuv "$yuv" "$smtmp" "$smavif" >/dev/null 2>&1 || { FAIL=$((FAIL+1)); printf "✗"; continue; }
-    else
-      sips -s format avif --setProperty formatOptions 60 "$smtmp" --out "$smavif" >/dev/null 2>&1 || { FAIL=$((FAIL+1)); printf "✗"; continue; }
-    fi
-  fi
-  # 6. 1x square: from the same full-resolution frame. (Until 2026-08-26 this
-  #    and the 400 tier re-squared the 600 square — a resize of a resize, while
-  #    this very comment claimed one encode from the source. The multi-size
-  #    ingest made the claim true.)
-  if want xs; then
-    if [ "$AVIF_KIND" != "sips" ]; then
-      "$AVIF_ENCODER" -q 63 -d 10 --ignore-icc --ignore-exif --ignore-xmp --speed 2 --jobs 4 --yuv "$yuv" "$xstmp" "$xsavif" >/dev/null 2>&1 || { FAIL=$((FAIL+1)); printf "✗"; continue; }
-    else
-      sips -s format avif --setProperty formatOptions 60 "$xstmp" --out "$xsavif" >/dev/null 2>&1 || { FAIL=$((FAIL+1)); printf "✗"; continue; }
-    fi
+  complete=1
+  for file in "${outputs[@]}"; do [ -s "$file" ] || complete=0; done
+  if [ "$complete" -ne 1 ] || ! mv "${outputs[@]}" "$DEST/"; then
+    FAIL=$((FAIL+1)); printf "✗"; continue
   fi
   OK=$((OK+1)); printf "."
 done < "$INPUTS"
