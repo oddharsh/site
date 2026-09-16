@@ -127,11 +127,14 @@ const ROUTES = [
   { path: "/.well-known/ai-catalog.json", status: 200, ct: "application/json", marker: "urn:air:aadhar.sh:mcp:site", cors: "*" },
   { path: "/whoareyou", status: 200, ct: "text/html" },
   { path: "/whoareyou.json", status: 200, ct: "application/json" },
-  { path: "/security", status: 200, ct: "text/html" },
+  // A built document since 2026-09-16, so the marker is the placeholder its
+  // inline script fills, and the row beside it is the endpoint that fills it.
+  { path: "/security", status: 200, ct: "text/html", marker: "data-sc=colo", fullPage: true },
+  { path: "/security.json", status: 200, ct: "application/json", marker: '"httpProtocol"' },
   // /security is static prose about the headers, so it earns a hand twin
   // (src/content/md/security.md). Both halves asserted for the same reason the
   // generated ones below are: the .md URL proves the build staged it, the
-  // negotiated form proves handleSecurityCenter reaches it.
+  // negotiated form proves routeSecurity reaches it.
   { path: "/security.md", status: 200, ct: "text/markdown", marker: "Security Center" },
   { path: "/security", status: 200, ct: "text/markdown", headers: { accept: "text/markdown" },
     marker: "http-message-signatures-directory" },
