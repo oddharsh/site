@@ -5047,7 +5047,7 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     |---|---|
     | `scripts/**` | nothing |
     | `src/worker/**`, `cal/src/**`, `serendipity/` | that module alone |
-    | an unhashed client asset (`public/lwe/ask.js`) | that asset alone |
+    | an unhashed client asset (`src/client/lwe/ask.js`, in `public/lwe/` until 2026-09-16) | that asset alone |
     | a HASHED client asset (`nav`, `nav-run`, `tooltip`, `lens*`, `hoist`, `quiz`, `notepad`, `luna.css`, …) | itself, every page, every page dictionary, `_headers` |
 
     **A comment is free on all of them**, because oxc-minify strips it and the

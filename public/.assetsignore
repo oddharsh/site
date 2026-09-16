@@ -22,3 +22,10 @@ _worker.js
 # each one AT ITS PAGE'S PATH (/bot.md), so shipping this directory as well
 # would serve the same twin at a second URL.
 md
+
+# src/styles/custom-media.css is BUILD INPUT: the @custom-media aliases that
+# tools/lib/css-parse.ts appends to every stylesheet it parses, so the served
+# CSS never contains an @custom-media rule and nothing links this file. It
+# stages to the root with the rest of src/styles/ and was uploaded as a
+# servable /custom-media.css (2.8KB, unminified, unlinked) until 2026-09-16.
+custom-media.css

@@ -27,7 +27,7 @@ const CHECK = process.argv.includes("--check");
 const EXCLUDE = new Set(["garage-vt-b", "garage-vt-check"]);
 
 function block(id, alt) {
-  const img = `${SITE}/og/${id}.png`;
+  const img = `${SITE}/og/${id}.jpg`;
   return [
     `<meta name="twitter:card" content="summary_large_image">`,
     `<meta property="og:image" content="${img}">`,
@@ -52,8 +52,8 @@ let missing = 0, wrote = 0, skipped = 0;
 async function wire(file, id, alt?) {
   let html = await readFile(file, "utf8");
 
-  if (!existsSync(path.join(PUBLIC, "og", `${id}.png`))) {
-    console.log(`  ! ${id}: no card PNG yet — run og-cards first`);
+  if (!existsSync(path.join(PUBLIC, "og", `${id}.jpg`))) {
+    console.log(`  ! ${id}: no card JPEG yet — run og-cards first`);
     missing++;
     return;
   }

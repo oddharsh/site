@@ -424,6 +424,20 @@ const ROUTES = [
   { path: "/search-index.json", status: 200, ct: "application/json", encoding: "br" },   // exact route
   { path: "/llms.txt", status: 200, ct: "text/plain", encoding: "br" },                  // exact route, _headers 30d rule
   { path: "/sitemap.xml", status: 200, ct: "application/xml", encoding: "br" },          // exact route
+  // The five shapes that joined on 2026-09-16, each a different door into the
+  // same lookup: a section's script (minified now, with its readable twin), a
+  // vendored library under a section, a section page's readable twin, a ROOT
+  // readable twin (its own "/*.src.*" row and prefix route), and a static
+  // discovery card (the "/.well-known/*" fold). The .src.* rows assert a
+  // comment the minifier strips, so a minified file served at the readable
+  // URL would fail on the marker rather than pass on the encoding.
+  { path: "/lwe/ask.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "minified at deploy", encoding: "br" },
+  { path: "/lwe/ask.src.js", status: 200, ct: ["text/javascript", "application/javascript"], marker: "generated:concepts:start", encoding: "br" },
+  { path: "/garage/pretext.lib.js", status: 200, ct: ["text/javascript", "application/javascript"], encoding: "br" },
+  { path: "/garage/horizon.src.html", status: 200, ct: "text/html", marker: "<!-- axp:desktop -->", encoding: "br" },
+  { path: "/index.src.html", status: 200, ct: "text/html", marker: "<!-- axp:desktop -->", encoding: "br" },
+  { path: "/.well-known/mcp/server-card.json", status: 200, ct: "application/json", marker: '"tools"', encoding: "br" },
+  { path: "/.well-known/ard.json", status: 200, ct: "application/json", encoding: "br", cors: "*" },
 ];
 
 function cacheBust(path) {

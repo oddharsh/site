@@ -130,11 +130,11 @@ function pageHtml(spec) {
 <meta property="og:title" content="aadhar.sh${c.path} · ${titleSuffix}">
 <meta property="og:url" content="https://aadhar.sh${c.path}">
 <meta name="twitter:card" content="summary_large_image">
-<meta property="og:image" content="https://aadhar.sh/og/${c.path.slice(1).replace(/\//g, "-")}.png">
+<meta property="og:image" content="https://aadhar.sh/og/${c.path.slice(1).replace(/\//g, "-")}.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="aadhar.sh${c.path} · ${titleSuffix}, live demo screenshotted">
-<meta name="twitter:image" content="https://aadhar.sh/og/${c.path.slice(1).replace(/\//g, "-")}.png">
+<meta name="twitter:image" content="https://aadhar.sh/og/${c.path.slice(1).replace(/\//g, "-")}.jpg">
 
 <link rel="stylesheet" href="/lwe-base.css">
 <style>${chromeCss(c)}
@@ -219,7 +219,7 @@ function conceptsBlock(concepts) {
 //
 // `file` is REPO-ROOT relative, never relative to the served tree. Three of the four
 // targets left src/pages/ in the 2026-08-18 layout split (sitemap.xml to public/,
-// ask.js to public/lwe/, nav.js to src/client/nav-run.js) and this resolved them
+// ask.js to src/client/lwe/ (public/lwe/ until 2026-09-16), nav.js to src/client/nav-run.js) and this resolved them
 // against HOLDING for months afterwards, so `wire` silently rewrote one file of four
 // and every later concept got hand-wired into regions this script owns.
 function injectBetween(file, start, end, content) {
@@ -265,7 +265,7 @@ if (import.meta.main) {
     const wired = [
       injectBetween("public/sitemap.xml", "<!-- generated:lwe:start -->", "<!-- generated:lwe:end -->", sitemapBlock(REGISTRY)),
       injectBetween("src/pages/lwe/index.html", "<!-- generated:buddies:start -->", "<!-- generated:buddies:end -->", buddyGroup(REGISTRY)),
-      injectBetween("public/lwe/ask.js", "// generated:concepts:start", "// generated:concepts:end", conceptsBlock(REGISTRY)),
+      injectBetween("src/client/lwe/ask.js", "// generated:concepts:start", "// generated:concepts:end", conceptsBlock(REGISTRY)),
     ];
     // A skipped target is the failure this script had for months, and it was silent
     // because a soft skip prints beside three successes and reads as noise. Exit

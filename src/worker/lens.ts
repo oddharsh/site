@@ -921,7 +921,7 @@ export function renderLensShell(initial?, state?, inputValue?, compare?) {
 <meta property="og:title" content="The Other Web: how machines read a URL">
 <meta property="og:description" content="${escAttr(lensDescription)}">
 <meta property="og:url" content="https://${CANONICAL_HOST}/lens">
-<meta property="og:image" content="https://${CANONICAL_HOST}/og/lens.png">
+<meta property="og:image" content="https://${CANONICAL_HOST}/og/lens.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="A Windows XP browser window showing one URL three ways at once: the page a person sees, the evidence a machine can recover, and a rendered snapshot.">

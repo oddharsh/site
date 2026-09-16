@@ -23,7 +23,7 @@ node pipelines/lwe/publish.mjs <id>         # one command: page -> corpus -> wir
 ```
 
 `wire` rewrites three marked LWE regions: `public/sitemap.xml`,
-`src/pages/lwe/index.html`, and `public/lwe/ask.js`. It then runs the canonical
+`src/pages/lwe/index.html`, and `src/client/lwe/ask.js`. It then runs the canonical
 manifest generator, which updates `src/client/nav-run.js` and the Worker's
 agent discovery module from `config/site-manifest.json`. Both registries have
 distinct jobs; a Run label does not come from the page's subtitle.

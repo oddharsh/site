@@ -30,9 +30,9 @@
   // remembers, so its coverage silently stops following the code, which is the
   // same failure shape as every scanner in this repo that lost its target.
   //
-  // public/**/*.js is here for the one island that lives outside src/client:
-  // /lwe/ask.js ships from public/ because it is page-specific rather than part
-  // of the shell.
+  // public/**/*.js is here for any island that lives outside src/client. None
+  // does today: /lwe/ask.js was the one, and it moved to src/client/lwe/ on
+  // 2026-09-16 when the build started minifying it. The glob stays as the net.
   //
   // pipelines/**/*.js is browser code too, and its location is the only reason
   // it reads otherwise. A page generator's `specs/` directory holds the inline
