@@ -288,16 +288,13 @@ Run `bun run tools:check` before a pipeline session:
   `recorded`. An unreadable version or violated minimum fails. A differing
   recorded version remains a notice, including with `--strict`.
 
-The selected executable matters. Grid ingest and rerenders prefer the installed
-`avifenc`, then the source build from
-[`tools/photos/libavif/build.sh`](../tools/photos/libavif/build.sh), then `sips`
-(the order was reversed on 2026-09-12; the owner would rather track the
-installed encoder than build an older one to match a pin). Cars and encoding
-studies use the same installed encoder. The `avifenc` entry therefore records
-the encoder the last grid add ran on, and its drift is the signal that the next
-add will encode on a different one. That re-mints nothing already shipped,
-because `/i/` is content-addressed per file. Named version captures include the
-linked AOM encoder, just as `zenc` reports its linked zenjpeg version.
+The selected library matters. Grid ingest and rerenders link the installed
+libavif through `zenc`, preserving the installed-encoder preference established
+on 2026-09-12. The `zenc-avif` entry queries `zenc --avif-version` and records
+both libavif and AOM. Missing development files fail the build; no grid fallback
+selects another encoder. Cars and encoding studies still use `avifenc`, which
+also serves as the native grid encoder's byte-parity reference. A changed
+encoder affects newly encoded files, not existing content-addressed `/i/` URLs.
 
 A matching version is only one part of provenance. The declaration retains
 historical verification notes; encoder source, flags, and inputs also determine
@@ -612,7 +609,10 @@ the reason, rather than written here with the caret quietly dropped.
   import from `lens-reader/src/` fails in CI with `ERR_MODULE_NOT_FOUND` while
   passing on any workstation that has installed there.
 
-- **`tools/photos/zenc/`** pins `zenjpeg` 0.8.4, `image` and `serde_json` through Cargo. zenjpeg is
+- **`tools/photos/zenc/`** builds its libavif adapter with `cc` and `pkg-config`
+  and links the installed native library (at least 1.0). Linux CI installs the
+  development package and CLI, then checks byte parity for color and grayscale
+  tiers at even and odd sizes. It pins `zenjpeg` 0.8.4, `image` and `serde_json` through Cargo. zenjpeg is
   the production JPEG thumbnail encoder, so a bump changes the BYTES of every
   photo re-encoded after it. Nothing re-encodes automatically, so the risk is
   deferred rather than absent: the next `bun run photos` run mints new

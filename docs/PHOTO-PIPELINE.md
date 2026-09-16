@@ -91,13 +91,15 @@ manifest cache to bust.
 
 The runner installs the tools named by the workflow (no JSON CLI among them
 since 2026-09-15: `tools/photos/pipeline-json.ts` runs under bun) and builds
-`zenc` with the repository's Rust toolchain and Cargo lock. Every routine uses
-Homebrew's `avifenc`, which is the encoder the grid tiers select first since
-2026-09-12; the source build in
-[`tools/photos/libavif/build.sh`](../tools/photos/libavif/build.sh) is the
-fallback for a machine with no `avifenc` on PATH, and the workflow no longer
-builds it. The mozjpeg commands resolve its keg through Homebrew, so the install
-prefix is not tied to one workstation.
+`zenc` with the repository's Rust toolchain and Cargo lock. Grid ingest and
+rerenders link the installed libavif directly, retaining tier pixels in memory.
+Install `libavif` and `pkgconf` before building (`libavif-dev`, `libavif-bin`,
+and `pkg-config` on Debian/Ubuntu). Grid scripts run Cargo's incremental check
+before encoding and refuse missing libraries instead of changing codecs.
+`zenc --avif-version` reports the linked libavif and codec versions; `avifenc`
+remains the byte-parity oracle and is used by the other image routines.
+The mozjpeg commands resolve their keg through Homebrew, so the install prefix
+is not tied to one workstation.
 
 Dependabot tracks the Cargo dependencies; the AVIF encoder version is RECORDED
 in `config/tools.json` rather than pinned, and `bun run tools:check` reports the

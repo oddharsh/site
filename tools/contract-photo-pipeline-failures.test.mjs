@@ -75,11 +75,20 @@ else
   printf encoded > "$last"
 fi`);
     await command("tools/photos/zenc/target/release/zenc", `
+[ "$1" != --avif-version ] || { echo "libavif 1.4.2"; exit 0; }
 echo zenc >> "$TRACE"
 case "$1" in
   square|resize)
     while [ "$#" -gt 0 ]; do
-      case "$1" in --out|--jpeg-out) shift; printf encoded > "$1" ;; esac
+      case "$1" in
+        --out|--jpeg-out|--avif-out)
+          shift
+          case "$1" in *-400.avif) tier=sm ;; *-200.avif) tier=xs ;; *.avif) tier=sq ;; *) tier=other ;; esac
+          [ "\${FAIL_TIER:-}" != "$tier" ] || exit 8
+          if [ "\${OMIT_TIER:-}" = "$tier" ]; then :
+          elif [ "\${EMPTY_TIER:-}" = "$tier" ]; then : > "$1"
+          else printf encoded > "$1"; fi ;;
+      esac
       shift
     done ;;
   *) printf encoded > "$2" ;;
@@ -103,6 +112,7 @@ printf encoded > "$last"`);
     // BSD stat is used by these macOS scripts; keep the control portable in CI.
     await command("bin/stat", 'test "$1" = -f%z; test -f "$2"; echo 7');
     await command("bin/cargo", 'echo cargo >> "$TRACE"');
+    await command("bin/pkg-config", "exit 0");
     // The shells spawn `bun` for their TS since 2026-09-16; under `bun test` that
     // is this very runtime, and under test:node it is node running the same TS.
     await command("bin/bun", `exec "${process.execPath}" "$@"`);

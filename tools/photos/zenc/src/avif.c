@@ -1,6 +1,6 @@
 // Borrow the exact 8-bit tier zenc would write as PNG. Match avifenc 1.4.2:
 // -q 63 -d 10 --ignore-icc --ignore-exif --ignore-xmp --speed 2 --jobs 4.
-// This is an experiment, not a second production encoder selection policy.
+// The normal grid encoder. RGB input also supports the libavif 1.0 API.
 #include <avif/avif.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -15,16 +15,17 @@ int site_avif_encode(const uint8_t *pixels, uint32_t width, uint32_t height, int
         if (encoder) avifEncoderDestroy(encoder);
         return 1;
     }
-    image->colorPrimaries = AVIF_COLOR_PRIMARIES_SRGB;
+    // sRGB shares BT.709 primaries; this name also exists in libavif 1.0.
+    image->colorPrimaries = AVIF_COLOR_PRIMARIES_BT709;
     image->transferCharacteristics = AVIF_TRANSFER_CHARACTERISTICS_SRGB;
     image->matrixCoefficients = AVIF_MATRIX_COEFFICIENTS_BT601;
     image->yuvRange = AVIF_RANGE_FULL;
     avifRGBImage rgb;
     avifRGBImageSetDefaults(&rgb, image);
     rgb.depth = 8;
-    rgb.format = gray ? AVIF_RGB_FORMAT_GRAY : AVIF_RGB_FORMAT_RGB;
+    rgb.format = AVIF_RGB_FORMAT_RGB;
     rgb.pixels = (uint8_t *)pixels;
-    rgb.rowBytes = width * (gray ? 1 : 3);
+    rgb.rowBytes = width * 3;
     encoder->quality = 63;
     encoder->qualityAlpha = 63;
     encoder->speed = 2;
@@ -46,4 +47,10 @@ int site_avif_encode(const uint8_t *pixels, uint32_t width, uint32_t height, int
     avifEncoderDestroy(encoder);
     avifImageDestroy(image);
     return failed;
+}
+
+void site_avif_version(char *out, size_t size) {
+    char codecs[256];
+    avifCodecVersions(codecs);
+    snprintf(out, size, "libavif %s (%s)", avifVersion(), codecs);
 }

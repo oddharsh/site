@@ -1263,19 +1263,20 @@ when the remote job is unavailable.
 
 ```bash
 # the photo pipeline
-brew install mozjpeg libavif                  # mozjpeg = jpegtran + cjpeg; libavif = avifenc, the AVIF encoder for every tier
-# That brew avifenc is the one the photo tiers use, first in preference since
-# 2026-09-12. tools/photos/libavif/build.sh (needs cmake ninja git, ~10 min) is
-# the fallback for a machine with no avifenc on PATH and the only build here with
-# --sharpyuv; nothing requires it. config/tools.json records the version the last
-# add encoded on, and `bun run tools:check` says when brew has moved past it.
-# the JPEG encoder (zenc) builds itself on first pipeline run; needs rust (rustup.rs)
+brew install mozjpeg libavif pkgconf          # JPEG tools plus native AVIF library and build discovery
+# Grid tiers use libavif directly from zenc. avifenc is the parity reference;
+# zenc --avif-version reports the library and codec actually linked at runtime
+# (the zenc-avif entry in config/tools.json).
 cargo build --release --locked --manifest-path tools/photos/zenc/Cargo.toml
 bun run wrangler login                                         # Cloudflare auth (deploys + KV + R2 all use it)
 
 # the study pages, which are NOT needed to add a photo
 brew install webp ffmpeg                              # cwebp for the encoding grids; ffmpeg for their PNG -> PPM step
 ```
+Homebrew's `pkgconf` provides `pkg-config`, which resolves the native library.
+The optional source AVIF study build still needs `brew install cmake ninja`;
+grid ingest does not use that build.
+
 sips is macOS-native and needs no install. Published-photo rerenders can use
 the remote workflow above; fresh ingestion needs the credentials described below.
 

@@ -15,6 +15,7 @@
 use std::process::exit;
 use zenjpeg::encoder::ChromaSubsampling;
 
+mod avif;
 mod histogram;
 mod jpeg;
 mod pixels;
@@ -41,6 +42,11 @@ fn main() {
             env!("CARGO_PKG_VERSION"),
             env!("ZENJPEG_VERSION")
         );
+        exit(0);
+    }
+
+    if args.get(1).map(String::as_str) == Some("--avif-version") {
+        println!("{}", avif::version());
         exit(0);
     }
 

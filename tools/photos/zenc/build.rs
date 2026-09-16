@@ -12,9 +12,7 @@
 use std::{env, fs, path::Path};
 
 fn main() {
-    if env::var_os("CARGO_FEATURE_AVIF_MEMORY_EXPERIMENT").is_some() {
-        build_avif_experiment();
-    }
+    build_avif();
     let root = env::var("CARGO_MANIFEST_DIR").expect("cargo sets CARGO_MANIFEST_DIR");
     let lock = Path::new(&root).join("Cargo.lock");
     println!("cargo:rerun-if-changed=Cargo.lock");
@@ -30,28 +28,16 @@ fn main() {
     println!("cargo:rustc-env=ZENJPEG_VERSION={version}");
 }
 
-fn build_avif_experiment() {
-    use std::process::Command;
-    let out = env::var("OUT_DIR").expect("cargo sets OUT_DIR");
-    let source = "examples/avif-memory.c";
-    println!("cargo:rerun-if-changed={source}");
-    let flags = Command::new("pkg-config").args(["--cflags", "--libs", "libavif"])
-        .output().expect("the AVIF experiment requires pkg-config and libavif development files");
-    assert!(flags.status.success(), "pkg-config could not resolve libavif");
-    let flags = String::from_utf8(flags.stdout).expect("pkg-config flags are UTF-8");
-    let object = format!("{out}/avif-memory.o");
-    let mut cc = Command::new("cc");
-    cc.args(["-std=c11", "-O3", "-Wall", "-Wextra", "-Werror", "-c", source, "-o", &object]);
-    for flag in flags.split_whitespace().filter(|f| f.starts_with("-I")) { cc.arg(flag); }
-    assert!(cc.status().expect("run C compiler").success(), "compile AVIF adapter");
-    assert!(Command::new("ar").args(["rcs", &format!("{out}/libavif_memory.a"), &object])
-        .status().expect("run ar").success(), "archive AVIF adapter");
-    println!("cargo:rustc-link-search=native={out}");
-    println!("cargo:rustc-link-lib=static=avif_memory");
-    for flag in flags.split_whitespace() {
-        if let Some(path) = flag.strip_prefix("-L") { println!("cargo:rustc-link-search=native={path}"); }
-        if let Some(name) = flag.strip_prefix("-l") { println!("cargo:rustc-link-lib={name}"); }
-    }
+fn build_avif() {
+    println!("cargo:rerun-if-changed=src/avif.c");
+    let mut config = pkg_config::Config::new();
+    config.atleast_version("1.0.0");
+    let library = config.cargo_metadata(false).probe("libavif")
+        .expect("zenc requires libavif development files (brew install libavif pkgconf; on Debian: libavif-dev pkg-config)");
+    cc::Build::new().file("src/avif.c").includes(&library.include_paths)
+        .flag_if_supported("-std=c11").warnings_into_errors(true).compile("site_avif");
+    // Emit library links after the static adapter that references them.
+    config.cargo_metadata(true).probe("libavif").expect("libavif was resolved above");
 }
 
 /// The `version` of one `[[package]]` block in a Cargo.lock, by package name.

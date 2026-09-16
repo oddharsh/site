@@ -1,7 +1,8 @@
 //! Experimental photo front end. Reuses production pixels/geometry/JPEG code.
 //! `memory-encode tiers INPUT OUTDIR ORIENTATION` writes 600/400/200 AVIF and 600 JPEG.
 //! `memory-encode jpeg-batch INPUT OUTDIR Q...` decodes once across quality trials.
-//! Build explicitly with --features avif-memory-experiment --example memory-encode.
+//! The AVIF path delegates to the production encoder. This example retains the
+//! original benchmark interface and the separate JPEG trial experiment.
 #[allow(dead_code)]
 #[path = "../src/pixels.rs"]
 mod pixels;
@@ -10,25 +11,11 @@ mod pixels;
 mod square;
 #[path = "../src/jpeg.rs"]
 mod jpeg;
-use std::{ffi::CString, path::Path, process::ExitCode};
+#[path = "../src/avif.rs"]
+mod avif;
+use std::{path::Path, process::ExitCode};
 use zenjpeg::encoder::ChromaSubsampling;
 
-extern "C" {
-    fn site_avif_encode(pixels: *const u8, width: u32, height: u32, gray: i32, path: *const std::ffi::c_char) -> i32;
-}
-fn avif(image: &image::DynamicImage, path: &Path) -> Result<(), String> {
-    let (bytes, gray) = match image {
-        image::DynamicImage::ImageLuma8(p) => (p.as_raw(), 1),
-        image::DynamicImage::ImageRgb8(p) => (p.as_raw(), 0),
-        _ => return Err("expected the production 8-bit gray or RGB tier".into()),
-    };
-    let name = CString::new(path.to_str().ok_or("non-UTF8 output path")?).map_err(|e| e.to_string())?;
-    // The C adapter borrows a complete, tightly packed frame only for this call;
-    // it releases its own allocations and never retains the Rust buffer.
-    let failed = unsafe { site_avif_encode(bytes.as_ptr(), image.width(), image.height(), gray, name.as_ptr()) };
-    if failed != 0 { return Err(format!("AVIF encode failed for {}", path.display())); }
-    Ok(())
-}
 fn run(args: &[String]) -> Result<(), String> {
     if args.len() < 4 { return Err("usage: memory-encode tiers INPUT OUTDIR ORIENTATION | jpeg-batch INPUT OUTDIR Q...".into()); }
     let root = Path::new(&args[2]);
@@ -41,7 +28,7 @@ fn run(args: &[String]) -> Result<(), String> {
             std::fs::create_dir_all(root).map_err(|e| e.to_string())?;
             for size in [600, 400, 200] {
                 let tier = square::tier(&src, size, halflight::Filter::Box);
-                avif(&tier, &root.join(format!("{size}.avif")))?;
+                avif::write(&tier, &root.join(format!("{size}.avif")))?;
                 if size == 600 {
                     let encoded = jpeg::encode(&tier, 84, ChromaSubsampling::Quarter)?;
                     std::fs::write(root.join("600.jpg"), encoded).map_err(|e| e.to_string())?;

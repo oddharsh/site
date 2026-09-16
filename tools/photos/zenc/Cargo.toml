@@ -10,13 +10,12 @@ publish = false
 name = "zenc"
 path = "src/main.rs"
 
-# Explicit experiment boundary: the normal photo binary needs no libavif SDK.
-[features]
-avif-memory-experiment = []
-
 [[example]]
 name = "memory-encode"
-required-features = ["avif-memory-experiment"]
+
+[build-dependencies]
+cc = "1"
+pkg-config = "0.3"
 
 [dependencies]
 # The encoder. hybrid trellis (auto_optimize) needs `trellis`.

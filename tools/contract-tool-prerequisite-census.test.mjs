@@ -5,6 +5,20 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+test("AVIF version declarations read both Homebrew and Ubuntu codec reports", async () => {
+  const { tools } = JSON.parse(await readFile(new URL("../config/tools.json", import.meta.url), "utf8"));
+  for (const [bin, prefix] of [["avifenc", "Version:"], ["zenc-avif", "libavif"]]) {
+    const pattern = new RegExp(tools.find((tool) => tool.bin === bin).version.match);
+    for (const [report, libavif, aom] of [
+      ["1.4.2 (dav1d [dec]:1.5.4, aom [enc/dec]:3.15.0)", "1.4.2", "3.15.0"],
+      ["1.0.4 (dav1d [dec]:1.4.1, libgav1 [dec]:0.18.0, aom [enc/dec]:v3.8.2, rav1e [enc]:0.7.1 (UNKNOWN), svt [enc]:v1.7.0)", "1.0.4", "3.8.2"],
+    ]) {
+      assert.deepEqual({ ...pattern.exec(`${prefix} ${report}`)?.groups }, { libavif, aom });
+    }
+    assert.equal(pattern.test(`${prefix} 1.0.4 (aom [enc/dec]:unknown)`), false);
+  }
+});
+
 // Run the real CLI in a small Git repository. Five scripts exercise the scanner
 // floors; a deliberately absent tool keeps the presence tier independent of the
 // host. None of the fixture shell scripts are executed.
