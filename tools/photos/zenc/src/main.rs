@@ -22,6 +22,7 @@ mod pixels;
 mod resize;
 mod frame;
 mod square;
+mod search;
 
 fn die(msg: String) -> ! {
     eprintln!("zenc: {msg}");
@@ -69,6 +70,9 @@ fn main() {
     // pixel half of gen-pixel-peeper.ts, which took over from Pillow.
     if args.get(1).map(String::as_str) == Some("frame") {
         exit(frame::run(&args[2..]));
+    }
+    if args.get(1).map(String::as_str) == Some("jpeg-search") {
+        exit(search::run(&args[2..]));
     }
 
     let (mut input, mut output, mut q): (Option<String>, Option<String>, u8) = (None, None, 82);

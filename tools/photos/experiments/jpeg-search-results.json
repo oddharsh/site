@@ -1,0 +1,340 @@
+{
+  "baseCommit": "206bb3b7bddcba1618ad045f14342103ebacfdbe",
+  "toolchain": {
+    "platform": "macOS-27.0-arm64-arm-64bit-Mach-O",
+    "macOS": "ProductName:\t\tmacOS\nProductVersion:\t\t27.0\nBuildVersion:\t\t26A428\n",
+    "rustc": "rustc 1.93.0 (254b59607 2026-01-19)",
+    "tools": {
+      "ssimulacra2": {
+        "sha256": "86b6ca12212927110b6930ee5c9e70e84dd87c8145d838ad36300fbfc0bc8a72",
+        "bytes": 671568
+      },
+      "butteraugli_main": {
+        "sha256": "092b00142f73ac28607dc9f73cd59e21c9731513c0b4f9b7f3bdea8d93afedec",
+        "bytes": 2252336
+      }
+    }
+  },
+  "bun": {
+    "searchAndScoring": {
+      "pairs": 5,
+      "inputs": [
+        "L1000069_3",
+        "L1009919_2",
+        "L1009920",
+        "XT500010",
+        "XT507831",
+        "XT509986"
+      ],
+      "chroma": [
+        "420",
+        "422",
+        "444"
+      ],
+      "referenceSize": 320,
+      "equalSearches": 18,
+      "boundaryControls": 5,
+      "samplesMs": {
+        "baseline": {
+          "search": [
+            2964.0862899999993,
+            2961.6118339999957,
+            2931.321373999999,
+            2960.9501660000096,
+            2930.741877000022
+          ],
+          "scoring": [
+            1761.6599570000035,
+            1756.8152919999993,
+            1735.7356680000048,
+            1748.1174560000145,
+            1726.0256229999868
+          ],
+          "total": [
+            4726.1614580000005,
+            4718.813083000001,
+            4667.433499999999,
+            4709.451374999997,
+            4657.110833999999
+          ]
+        },
+        "candidate": {
+          "search": [
+            1878.6011270000072,
+            1898.9763339999918,
+            1882.3562079999938,
+            1890.321541000012,
+            1881.4337489999816
+          ],
+          "scoring": [
+            1751.1647929999872,
+            1801.615500999993,
+            1732.042581999991,
+            1757.1955830000225,
+            1700.5254159999968
+          ],
+          "total": [
+            3630.1555420000004,
+            3700.9428329999973,
+            3614.749042000003,
+            3647.8934999999983,
+            3582.3354159999944
+          ]
+        }
+      },
+      "medianMs": {
+        "baseline": {
+          "search": 2960.9501660000096,
+          "scoring": 1748.1174560000145,
+          "total": 4709.451374999997
+        },
+        "candidate": {
+          "search": 1882.3562079999938,
+          "scoring": 1751.1647929999872,
+          "total": 3630.1555420000004
+        }
+      },
+      "improvementPercent": {
+        "search": 36.42729183305047,
+        "total": 22.917655307567486
+      }
+    },
+    "generatorTradeoff": {
+      "pairs": 3,
+      "axis": "tradeoff",
+      "configuredOriginals": 8,
+      "retainedTrials": 3,
+      "samplesMs": {
+        "baseline": [
+          25032.481042,
+          25180.733708,
+          26662.83587499999
+        ],
+        "candidate": [
+          23892.579541999996,
+          24132.3465,
+          27473.175249999986
+        ]
+      },
+      "medianMs": {
+        "baseline": 25180.733708,
+        "candidate": 24132.3465
+      },
+      "improvementPercent": 4.163449803160124,
+      "parity": {
+        "tileSha256": {
+          "tradeoff-XT509509-0.jpg": "61cff3540b6822f7cf70f473619fe405bd78a125baa4673c896b5d8e9e943c53",
+          "tradeoff-XT509509-1.jpg": "bfac369653ed7fba90bd9690dae901b3c243690454d54c4880c13842e2fb12f8",
+          "tradeoff-XT509809-0.jpg": "0d3b7d19730adb246ac9f03d07c02210550f2123b9baed4a6c48e02f0f771180",
+          "tradeoff-XT509809-1.jpg": "91a4134dcabf573544b14ae9ba303c2f17ff38487292df0dc5f023f1b1bd08c8",
+          "tradeoff-XT509987-0.jpg": "ab68d1f0e0352f810adcce7c1e311e0a9039f253400d471ae4186f35c9941c1e",
+          "tradeoff-XT509987-1.jpg": "9f21ef828ff3f58eb745f43226dec533ede83da5effde55ba002bdadbc2f498a"
+        },
+        "report": "\u00b7 tradeoff  XT509987  4:2:0=16286B/s2 77.06 4:2:2=16115B/s2 75.97 [budget 16115B, drift 1.06%] penalty 0.041 SPLIT\n  \u00b7 tradeoff  XT509315  4:2:0=14297B/s2 82 4:2:2=14577B/s2 82.1 [budget 14577B, drift 1.92%] penalty 0.043\n  \u00b7 tradeoff  XT509534  4:2:0=17352B/s2 75.87 4:2:2=17511B/s2 74.99 [budget 17511B, drift 0.91%] penalty 0.077\n  \u00b7 tradeoff  XT509535  4:2:0=14616B/s2 73.85 4:2:2=14537B/s2 73.59 [budget 14537B, drift 0.54%] penalty 0.268\n  \u00b7 tradeoff  XT508947  4:2:0=34488B/s2 81.73 4:2:2=34284B/s2 80.55 [budget 34284B, drift 0.6%] penalty 0.01\n  \u00b7 tradeoff  XT509509  4:2:0=13043B/s2 78.97 4:2:2=12876B/s2 78.6 [budget 12876B, drift 1.3%] penalty 0.006 SPLIT\n  \u00b7 tradeoff  XT509809  4:2:0=13789B/s2 82.29 4:2:2=13975B/s2 81.48 [budget 13975B, drift 1.33%] penalty 0.004 SPLIT\n  \u00b7 tradeoff  XT509346  4:2:0=13868B/s2 81.44 4:2:2=13616B/s2 80.57 [budget 13616B, drift 1.85%] penalty 0.066\n\nkept 3 of 8 built: tradeoff 3\nchroma-flavoured: 3 of 3\nworst equal-budget drift shipped: 1.33%\ndropped 5:\n   tradeoff/XT509535: ranked [0,0.268], below the top 3 on this axis\n   tradeoff/XT509534: ranked [0,0.077], below the top 3 on this axis\n   tradeoff/XT509346: ranked [0,0.066], below the top 3 on this axis\n   tradeoff/XT509315: ranked [0,0.043], below the top 3 on this axis\n   tradeoff/XT508947: ranked [0,0.01], below the top 3 on this axis\n\n--dry-run: no tiles or manifest written"
+      }
+    }
+  },
+  "preliminary": {
+    "harness": "Out-of-tree Python driver, superseded by the committed Bun harnesses. Initial search timing is confounded by scoring variance.",
+    "initialSearch": {
+      "pairs": 5,
+      "inputs": [
+        "L1000069_3",
+        "L1009919_2",
+        "L1009920",
+        "XT500010",
+        "XT507831",
+        "XT509986"
+      ],
+      "chroma": [
+        "420",
+        "422",
+        "444"
+      ],
+      "referenceSize": 320,
+      "equalSearches": 18,
+      "boundaryControls": 5,
+      "samplesMs": {
+        "baseline": {
+          "search": [
+            10913.32775002229,
+            13558.642458010581,
+            23889.646459996584,
+            4398.143709040596,
+            3892.6062079699477
+          ],
+          "scoring": [
+            8115.065793012036,
+            9827.879666961962,
+            20940.486624996993,
+            2432.773290958721,
+            2248.4000829717843
+          ],
+          "total": [
+            19029.083166999044,
+            23387.090749994968,
+            44830.77416699962,
+            6831.255291006528,
+            6141.328625002643
+          ]
+        },
+        "candidate": {
+          "search": [
+            5499.67645801371,
+            5520.6754190294305,
+            8205.091540003195,
+            3363.494708042708,
+            2419.831751001766
+          ],
+          "scoring": [
+            4402.856791988597,
+            6129.439622964128,
+            7907.484877971001,
+            3039.7991269710474,
+            2203.0786669492954
+          ],
+          "total": [
+            9903.15237500181,
+            11650.754416987184,
+            16113.450916003785,
+            6403.732167003909,
+            4623.198082990712
+          ]
+        }
+      },
+      "medianMs": {
+        "baseline": {
+          "search": 10913.32775002229,
+          "scoring": 8115.065793012036,
+          "total": 19029.083166999044
+        },
+        "candidate": {
+          "search": 5499.67645801371,
+          "scoring": 4402.856791988597,
+          "total": 9903.15237500181
+        }
+      },
+      "improvementPercent": {
+        "search": 49.605871059792214,
+        "total": 47.957806016759484
+      }
+    },
+    "repeatSearch": {
+      "pairs": 5,
+      "inputs": [
+        "L1000069_3",
+        "L1009919_2",
+        "L1009920",
+        "XT500010",
+        "XT507831",
+        "XT509986"
+      ],
+      "chroma": [
+        "420",
+        "422",
+        "444"
+      ],
+      "referenceSize": 320,
+      "equalSearches": 18,
+      "boundaryControls": 5,
+      "samplesMs": {
+        "baseline": {
+          "search": [
+            3933.2167089742143,
+            3752.956042997539,
+            3283.0729150009574,
+            3288.6595000018133,
+            3556.4758730033645
+          ],
+          "scoring": [
+            2410.7150409690803,
+            2214.0865010005655,
+            1917.2310379799455,
+            1919.8708759940928,
+            2085.2523329958785
+          ],
+          "total": [
+            6344.214875003672,
+            5967.355459011742,
+            5200.572458998067,
+            5208.788458010531,
+            5642.00179198815
+          ]
+        },
+        "candidate": {
+          "search": [
+            2066.555666999193,
+            1993.5646259546047,
+            1934.478875991772,
+            1919.7262079833308,
+            2128.0079999705777
+          ],
+          "scoring": [
+            1975.0461259682197,
+            1934.0654550178442,
+            1896.1947529751342,
+            1853.8137480063597,
+            1984.8171239864314
+          ],
+          "total": [
+            4041.8714999977965,
+            3927.8896670002723,
+            3830.9381250001024,
+            3773.7793330015847,
+            4113.083333999384
+          ]
+        }
+      },
+      "medianMs": {
+        "baseline": {
+          "search": 3556.4758730033645,
+          "scoring": 2085.2523329958785,
+          "total": 5642.00179198815
+        },
+        "candidate": {
+          "search": 1993.5646259546047,
+          "scoring": 1934.0654550178442,
+          "total": 3927.8896670002723
+        }
+      },
+      "improvementPercent": {
+        "search": 43.94550400053512,
+        "total": 30.38127579863551
+      }
+    },
+    "generatorTradeoff": {
+      "pairs": 3,
+      "axis": "tradeoff",
+      "configuredOriginals": 8,
+      "retainedTrials": 3,
+      "samplesMs": {
+        "baseline": [
+          27450.300833006622,
+          28508.293749997392,
+          24633.95441698958
+        ],
+        "candidate": [
+          24921.27237499517,
+          24487.68791698967,
+          26936.60070799524
+        ]
+      },
+      "medianMs": {
+        "baseline": 27450.300833006622,
+        "candidate": 24921.27237499517
+      },
+      "improvementPercent": 9.213117456878706,
+      "parity": {
+        "tileSha256": {
+          "tradeoff-XT509809-1.jpg": "91a4134dcabf573544b14ae9ba303c2f17ff38487292df0dc5f023f1b1bd08c8",
+          "tradeoff-XT509809-0.jpg": "0d3b7d19730adb246ac9f03d07c02210550f2123b9baed4a6c48e02f0f771180",
+          "tradeoff-XT509509-0.jpg": "61cff3540b6822f7cf70f473619fe405bd78a125baa4673c896b5d8e9e943c53",
+          "tradeoff-XT509509-1.jpg": "bfac369653ed7fba90bd9690dae901b3c243690454d54c4880c13842e2fb12f8",
+          "tradeoff-XT509987-0.jpg": "ab68d1f0e0352f810adcce7c1e311e0a9039f253400d471ae4186f35c9941c1e",
+          "tradeoff-XT509987-1.jpg": "9f21ef828ff3f58eb745f43226dec533ede83da5effde55ba002bdadbc2f498a"
+        },
+        "report": "  \u00b7 tradeoff  XT509987  4:2:0=16286B/s2 77.06 4:2:2=16115B/s2 75.97 [budget 16115B, drift 1.06%] penalty 0.041 SPLIT\n  \u00b7 tradeoff  XT509315  4:2:0=14297B/s2 82 4:2:2=14577B/s2 82.1 [budget 14577B, drift 1.92%] penalty 0.043\n  \u00b7 tradeoff  XT509534  4:2:0=17352B/s2 75.87 4:2:2=17511B/s2 74.99 [budget 17511B, drift 0.91%] penalty 0.077\n  \u00b7 tradeoff  XT509535  4:2:0=14616B/s2 73.85 4:2:2=14537B/s2 73.59 [budget 14537B, drift 0.54%] penalty 0.268\n  \u00b7 tradeoff  XT508947  4:2:0=34488B/s2 81.73 4:2:2=34284B/s2 80.55 [budget 34284B, drift 0.6%] penalty 0.01\n  \u00b7 tradeoff  XT509509  4:2:0=13043B/s2 78.97 4:2:2=12876B/s2 78.6 [budget 12876B, drift 1.3%] penalty 0.006 SPLIT\n  \u00b7 tradeoff  XT509809  4:2:0=13789B/s2 82.29 4:2:2=13975B/s2 81.48 [budget 13975B, drift 1.33%] penalty 0.004 SPLIT\n  \u00b7 tradeoff  XT509346  4:2:0=13868B/s2 81.44 4:2:2=13616B/s2 80.57 [budget 13616B, drift 1.85%] penalty 0.066\n\nkept 3 of 8 built: tradeoff 3\nchroma-flavoured: 3 of 3\nworst equal-budget drift shipped: 1.33%\ndropped 5:\n   tradeoff/XT509535: ranked [0,0.268], below the top 3 on this axis\n   tradeoff/XT509534: ranked [0,0.077], below the top 3 on this axis\n   tradeoff/XT509346: ranked [0,0.066], below the top 3 on this axis\n   tradeoff/XT509315: ranked [0,0.043], below the top 3 on this axis\n   tradeoff/XT508947: ranked [0,0.01], below the top 3 on this axis\n\n--dry-run: no tiles or manifest written"
+      }
+    }
+  }
+}
