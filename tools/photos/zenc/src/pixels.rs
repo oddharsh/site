@@ -221,8 +221,13 @@ pub fn load_linear(path: &str, t: TransferOption) -> Result<Frame, String> {
     // A 311MB TIFF is the test that keeps that honest.
     let mut dec = r.into_decoder().map_err(|e| format!("cannot decode {path}: {e}"))?;
     let icc = dec.icc_profile().ok().flatten();
-    let t = t.resolve(icc.as_deref());
     let img = DynamicImage::from_decoder(dec).map_err(|e| format!("cannot decode {path}: {e}"))?;
+    from_decoded(img, icc.as_deref(), t)
+}
+
+/// One precision/channel/transfer policy for file and native-memory decoders.
+pub fn from_decoded(img: DynamicImage, icc: Option<&[u8]>, t: TransferOption) -> Result<Frame, String> {
+    let t = t.resolve(icc);
     let (w, h) = (img.width(), img.height());
     if w == 0 || h == 0 {
         return Err("source has a zero dimension".into());

@@ -13,6 +13,15 @@ use std::{env, fs, path::Path};
 
 fn main() {
     build_avif();
+    if env::var_os("CARGO_FEATURE_HEIF_EXPERIMENT").is_some() {
+        assert_eq!(env::var("CARGO_CFG_TARGET_OS").unwrap(), "macos", "heif-experiment requires macOS ImageIO");
+        println!("cargo:rerun-if-changed=examples/heif-imageio.c");
+        cc::Build::new().file("examples/heif-imageio.c").flag("-std=c11")
+            .warnings_into_errors(true).compile("site_heif_experiment");
+        for framework in ["ImageIO", "CoreGraphics", "CoreFoundation"] {
+            println!("cargo:rustc-link-lib=framework={framework}");
+        }
+    }
     let root = env::var("CARGO_MANIFEST_DIR").expect("cargo sets CARGO_MANIFEST_DIR");
     let lock = Path::new(&root).join("Cargo.lock");
     println!("cargo:rerun-if-changed=Cargo.lock");
