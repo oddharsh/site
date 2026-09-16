@@ -43,6 +43,7 @@ import { brotliCompress, brotliDecompressSync, constants as zlibConstants, zstdC
 import minifyHtml from "@minify-html/node";
 import { transform as transformCss } from "lightningcss";
 import { minifySync } from "oxc-minify";
+import { OXC_MINIFY_OPTIONS } from "./lib/oxc-minify-options.ts";
 import { readManifest, workerModule, navFenceBody, readFenceBody, runProfilesBody } from "./gen-manifest.ts";
 import { parseCss } from "./lib/css-parse.ts";
 import { isJsonScriptType, minifyJsonScript } from "./lib/json-script.ts";
@@ -832,6 +833,23 @@ const SHELLS = [
   ["webmcp.js",  "/webmcp.src.js",  "registerSiteTools"],
 ];
 
+// EVERY client script is a SHELLS row, or is sw.js. A file missing from the list
+// ships readable and unminified with no .src.js twin and, the sharper half, no
+// MARKER: the marker is the one tripwire that turns a minifier deleting a whole
+// island into a failed build (measured 2026-09-15: `propertyWriteSideEffects:
+// false` minified six /lens islands to 0 bytes, and "lost the LensBrowser
+// marker" is what stopped it). Three contract tests used to pin three files by
+// name, which is the allowlist that only grows when somebody remembers; this
+// reads the directory. sw.js is the ONE exception and the comment above the
+// list is its reason.
+{
+  const rows = new Map(SHELLS.map(([file, , marker]) => [file, marker]));
+  const missing = (await readdir("src/client")).filter((f) => f.endsWith(".js") && f !== "sw.js" && !rows.has(f));
+  if (missing.length) throw new Error(`SHELLS: ${missing.join(", ")} in src/client but not in the list, so it would ship unminified with no twin and no marker tripwire`);
+  const unmarked = [...rows].filter(([, marker]) => !marker).map(([file]) => file);
+  if (unmarked.length) throw new Error(`SHELLS: ${unmarked.join(", ")} carries no marker, so a minifier deleting it would pass the build`);
+}
+
 // Fail fast on a broken invariant before doing any staging work. The same walk
 // also returns the destination directory skeleton used by the merge below.
 const stageDirectories = await checkInvariants();
@@ -1071,29 +1089,7 @@ await Promise.all([
 // deploy-time documents exist. See the block there.
 
 const minifyJavaScript = (filename, sourceText) => {
-  const result = minifySync(filename, sourceText, {
-    module: false,
-    compress: {
-      // The site deliberately targets modern browsers. This preserves modern
-      // syntax while enabling Oxc's full ESNext compression set.
-      target: "esnext",
-      dropDebugger: true,
-      unused: true,
-      joinVars: true,
-      sequences: true,
-      treeshake: {
-        annotations: true,
-        propertyReadSideEffects: "always",
-        propertyWriteSideEffects: true,
-        unknownGlobalSideEffects: true,
-        invalidImportSideEffects: true,
-      },
-    },
-    // Keep top-level names stable: several shell files expose globals that
-    // other site code discovers by name.
-    mangle: { toplevel: false },
-    codegen: { removeWhitespace: true, legalComments: "none" },
-  });
+  const result = minifySync(filename, sourceText, OXC_MINIFY_OPTIONS);
   if (result.errors.length) {
     throw new Error(`${filename}: Oxc parse/minify failed: ${result.errors.map((e) => e.message).join("; ")}`);
   }
