@@ -16,12 +16,27 @@ import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 // The one advisory this tree ignores, and the package whose pin excuses it.
 const URL_PIN_IGNORES = { "GHSA-8c93-4hch-xgxp": "wrangler" };
 
-/** The rule, pure so the control below can feed it a semver pin. */
+/**
+ * An array-of-tables (`[[Name]]`) out of a parsed document, or empty. smol-toml
+ * types every value as TomlValue, so this is where the shape gets narrowed.
+ * @param {Record<string, import("smol-toml").TomlValue>} config
+ * @param {string} key
+ * @returns {Record<string, any>[]}
+ */
+function tables(config, key) {
+  const value = config[key];
+  return Array.isArray(value) ? /** @type {Record<string, any>[]} */ (value) : [];
+}
+
+/**
+ * The rule, pure so the control below can feed it a semver pin.
+ * @param {string} toml
+ * @param {{ dependencies?: Record<string, string>, devDependencies?: Record<string, string> }} pkg
+ */
 export function auditOsvIgnores(toml, pkg) {
   const problems = [];
   const config = parse(toml);
-  const ignored = config.IgnoredVulns ?? [];
-  for (const entry of ignored) {
+  for (const entry of tables(config, "IgnoredVulns")) {
     if (!entry.reason || entry.reason.trim().length < 20) {
       problems.push(`${entry.id} is ignored without a reason a reader can act on`);
     }
@@ -35,7 +50,7 @@ export function auditOsvIgnores(toml, pkg) {
       problems.push(`${entry.id} is ignored because ${dep} was pinned by URL, and ${dep} is now "${pin}": the scanner can read that version, so delete the ignore`);
     }
   }
-  for (const override of config.PackageOverrides ?? []) {
+  for (const override of tables(config, "PackageOverrides")) {
     if (Object.values(URL_PIN_IGNORES).includes(override.name)) {
       problems.push(`PackageOverrides on ${override.name} hides every advisory against it, present and future; ignore by advisory id instead`);
     }
@@ -50,7 +65,7 @@ test("osv-scanner.toml ignores only advisories a URL pin explains", async () => 
   assert.deepEqual(problems, [], problems.join("\n"));
   // The file must ignore the advisory it was written for, and nothing else,
   // so a second entry is a deliberate act that edits URL_PIN_IGNORES too.
-  const ids = (parse(toml).IgnoredVulns ?? []).map((e) => e.id);
+  const ids = tables(parse(toml), "IgnoredVulns").map((e) => e.id);
   assert.deepEqual(ids, Object.keys(URL_PIN_IGNORES));
 });
 
