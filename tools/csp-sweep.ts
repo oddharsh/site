@@ -44,7 +44,11 @@ const pathsFrom = (file) => {
 
 const paths = process.env.PATHS
   ? JSON.parse(readFileSync(process.env.PATHS, "utf8"))
-  : pathsFrom(new URL("../.build/public/_worker.js/lib/csp-hashes.js", import.meta.url));
+  // The Worker stages at .build/src/worker/ since the 2026-08-18 split; this read
+  // .build/public/_worker.js/ until 2026-09-16 and died with ENOENT before the
+  // browser launched, which is gotcha 40's shape (a path that was correct when
+  // written and rotted under a move) on the one instrument that proves CSP hashes.
+  : pathsFrom(new URL("../.build/src/worker/lib/csp-hashes.ts", import.meta.url));
 
 const browser = await chromium.launch({ channel: chromeChannel(), headless: true });
 const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
