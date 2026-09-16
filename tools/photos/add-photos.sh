@@ -30,7 +30,7 @@
 #      it ships at deploy like every other committed artifact. (It replaced the
 #      manifest:images KV cache over a runtime R2 list(); there is no cache to
 #      bust anymore.)
-#   6. captions anything still missing alt text (gen-alt-text.ts), rebuilds the
+#   6. captions anything still missing alt text (gen-alt-text.py), rebuilds the
 #      retrieval terms queryPhotos ranks on (gen-photo-semantics.ts, which reads
 #      those captions and so must follow them), then validates the whole artifact
 #      graph — pixels, EXIF, histograms, captions, the index — via
@@ -329,7 +329,7 @@ avif_encode() {  # avif_encode <src.jpg> <out.avif>
     # 2026-08-26 over 12 Fuji colour frames at this exact tier: it looks like
     # +1.218 mean SSIMULACRA2, but it also spends +4.54% more bytes, and the
     # matched-bytes probe (raise q until plain costs the same, the test
-    # matched-bytes-probe.ts runs for the resampling work) puts the real figure
+    # matched-bytes-probe.py runs for the resampling work) puts the real figure
     # at +0.411 mean with sharpyuv LOSING on 5 of 12. Turning it on is a
     # deliberate decision that also re-mints every /i/ URL it touches.
     #
@@ -568,12 +568,8 @@ echo "phase 4 — hash tiers + photo index + metadata regen"
 # upload dates survive a rerender.
 INDEX_FILE="$PROJECT_DIR/src/worker/photo-index.json"
 NOW_ISO="$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
-# Entries spool as NUL-separated fields, five per photo, and one node call at
-# the end merges them all. It was one jaq call per photo building a JSON
-# object, then a second jaq merging that object in; the JSON engine left the
-# pipeline on 2026-09-15 (pipeline-json.ts names the filters it replaced).
-NEW_ENTRIES="$TMP/index-entries.spool"
-: > "$NEW_ENTRIES"
+NEW_ENTRIES="$TMP/index-entries.json"
+echo '{}' > "$NEW_ENTRIES"
 [ -f "$INDEX_FILE" ] || echo '{}' > "$INDEX_FILE"
 idx=0
 META_SOURCES=()
@@ -585,12 +581,20 @@ while read_input; do
   # `album` and `heif` are written only when set, so an entry for the site-wide
   # pool keeps the three-key shape it has always had and photo-index.json diffs
   # stay legible. An empty string is never written as a value.
-  printf '%s\0%s\0%s\0%s\0%s\0' "$stem" "$full" "$size" "$ALBUM" "$heif" >> "$NEW_ENTRIES"
+  jaq --arg s "$stem" --arg k "$full" --argjson z "$size" --arg album "$ALBUM" --arg heif "$heif" \
+     '. + {($s): ({full: $k, size: $z}
+                  + (if $album != "" then {album: $album} else {} end)
+                  + (if $heif != "" then {heif: $heif} else {} end))}' "$NEW_ENTRIES" > "$NEW_ENTRIES.tmp"
+  mv "$NEW_ENTRIES.tmp" "$NEW_ENTRIES"
   META_SOURCES+=("$f")
 done < "$INPUTS"
-# writes beside and renames, so a failure here leaves the committed index as it was
-node "$SCRIPT_DIR/pipeline-json.ts" index-merge "$INDEX_FILE" --entries "$NEW_ENTRIES" --now "$NOW_ISO"
-echo "  photo index: $(node "$SCRIPT_DIR/pipeline-json.ts" length "$INDEX_FILE") entries"
+jaq -S --arg now "$NOW_ISO" --slurpfile new "$NEW_ENTRIES" '
+  . as $idx
+  | ($new[0] | with_entries(.value += {uploaded: ($idx[.key].uploaded // $now)}))
+  | $idx + .
+' "$INDEX_FILE" > "$INDEX_FILE.tmp"
+mv "$INDEX_FILE.tmp" "$INDEX_FILE"
+echo "  photo index: $(jaq 'length' "$INDEX_FILE") entries"
 # Ingest is always a batch update: read precisely the selected pixel sources
 # and preserve metadata for other published photos, even across input folders.
 # The standalone extractor still offers a full replacement with its own guard.
@@ -629,13 +633,12 @@ echo "  photo index: $(node "$SCRIPT_DIR/pipeline-json.ts" length "$INDEX_FILE")
 # already-captioned stems cost nothing. a 429 (the free 10k neurons/day) stops it
 # early, which is why the failure is tolerated here and the real gate is
 # check-photo-pipeline.ts below.
-# node rather than python3 since 2026-09-15: the captioner was the last thing
-# here that ran under an interpreter the rest of this script does not already
-# need (photo-inputs, the histogram index, semantics and the pipeline check are
-# all node), and gotcha 40's ninth site is what a Python file outside the shell
-# sweep cost.
-node "$SCRIPT_DIR/gen-alt-text.ts" || \
-  echo "  captions incomplete — re-run 'bun run captions' before deploying"
+if command -v python3 >/dev/null 2>&1; then
+  python3 "$SCRIPT_DIR/gen-alt-text.py" || \
+    echo "  captions incomplete — re-run 'bun run captions' before deploying"
+else
+  echo "  python3 missing — skipping alt-text generation"
+fi
 
 # retrieval terms for every stem, and the ONE stem-keyed artifact this script has
 # never regenerated. The other five reach it: hashes and fingerprints through
@@ -645,7 +648,7 @@ node "$SCRIPT_DIR/gen-alt-text.ts" || \
 # a deleted www/ for a week (gotcha 40). That fixed the producer and left the hole
 # that let seven photos drift out of it, so the next add would open it again.
 #
-# It runs AFTER gen-alt-text.ts because the derived tier folds alt[stem] into
+# It runs AFTER gen-alt-text.py because the derived tier folds alt[stem] into
 # `terms`. Captioning second leaves a new stem carrying camera vocabulary and no
 # subject, which is the quiet half of this failure: the photo stays findable one
 # tier down and nothing errors.

@@ -240,6 +240,7 @@ export function auditManifest({
 export function auditDependencyDocs({
   doc,
   pins,
+  requirements = "",
   aliases = DOC_ALIASES,
   versionless = VERSIONLESS,
   floor = FLOOR_CLAIMS,
@@ -248,6 +249,7 @@ export function auditDependencyDocs({
 }: {
   doc: string;
   pins: DependencyVersions;
+  requirements?: string;
   aliases?: DocAlias[];
   versionless?: Map<string, unknown>;
   floor?: number;
@@ -326,23 +328,27 @@ export function auditDependencyDocs({
     });
   }
 
-  // Pillow was the one non-npm pin the doc named, held to requirements.txt
-  // here until 2026-09-15, when the last Python left the tree and the pin with
-  // it. A doc that still states a Pillow version is a claim about a file that
-  // does not exist, and it reads as one now.
-  if (/(?<![\w-])Pillow\s+v?\d+\.\d+/i.test(baseline)) {
-    problems.push("docs/DEPENDENCIES.md states a Pillow version, and there is no Python in the tree to pin it (retired 2026-09-15).");
+  // Pillow lives in requirements.txt, the one non-npm pin the doc names.
+  const pillowDoc = /(?<![\w-])Pillow\s+v?(\d+\.\d+\.\d+[\w.-]*)/i.exec(baseline);
+  const pillowPin = /^\s*Pillow==([^\s#]+)/im.exec(requirements);
+  if (pillowPin && !pillowDoc) {
+    problems.push(`tools/photos/requirements.txt pins Pillow==${pillowPin[1]} and docs/DEPENDENCIES.md states no version for it.`);
+  } else if (pillowPin && pillowDoc && pillowPin[1] !== pillowDoc[1]) {
+    problems.push(`docs/DEPENDENCIES.md states "Pillow ${pillowDoc[1]}" but requirements.txt pins ${pillowPin[1]}.`);
+  } else if (!pillowPin && pillowDoc) {
+    problems.push(`docs/DEPENDENCIES.md states "Pillow ${pillowDoc[1]}" but requirements.txt no longer pins it.`);
   }
 
-  return { claims, problems };
+  return { claims, problems, pillow: pillowPin ? pillowPin[1] : null };
 }
 
 // The thin I/O shell. Everything decidable lives in auditDependencyDocs above.
 export async function checkDependencyDocs(root = REPO_ROOT) {
   const read = (p) => readFile(path.join(root, p), "utf8");
-  const [doc, pkgRaw] = await Promise.all([
+  const [doc, pkgRaw, requirements] = await Promise.all([
     read("docs/DEPENDENCIES.md"),
     read("package.json"),
+    read("tools/photos/requirements.txt").catch(() => ""),
   ]);
   const pkg = JSON.parse(pkgRaw);
 
@@ -366,6 +372,7 @@ export async function checkDependencyDocs(root = REPO_ROOT) {
   return auditDependencyDocs({
     doc,
     pins: { ...pkg.dependencies, ...pkg.devDependencies },
+    requirements,
     subManifests,
   });
 }

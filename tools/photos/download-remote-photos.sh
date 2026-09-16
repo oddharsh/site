@@ -8,7 +8,6 @@
 # state.
 
 set -euo pipefail
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 if [ "$#" -ne 2 ]; then
   echo "usage: $0 <keys-file> <destination-dir>" >&2
@@ -19,7 +18,7 @@ KEYS_FILE="$1"
 DEST_DIR="$2"
 ORIGIN="${PHOTO_SOURCE_ORIGIN:-https://aadhar.sh}"
 
-for cmd in curl exif-sooc; do
+for cmd in curl jaq exif-sooc; do
   command -v "$cmd" >/dev/null 2>&1 || {
     echo "error: $cmd not found in PATH" >&2
     exit 1
@@ -40,7 +39,7 @@ if grep -Eq '^[[:space:]]*all[[:space:]]*$' "$KEYS_FILE"; then
   fi
   curl --fail --silent --show-error --location --retry 3 --retry-all-errors \
     "${ORIGIN%/}/images/manifest.json" |
-    node "$SCRIPT_DIR/pipeline-json.ts" manifest-keys - > "$NORMALIZED"
+    jaq -r '.photos[]?.full' > "$NORMALIZED"
 else
   sed 's/\r$//' "$KEYS_FILE" |
     awk 'NF { sub(/^[[:space:]]+/, ""); sub(/[[:space:]]+$/, ""); print }' > "$NORMALIZED"
@@ -64,7 +63,7 @@ while IFS= read -r key || [ -n "$key" ]; do
   fi
   printf '%s\n' "$stem" >> "$STEMS_FILE"
 
-  encoded="$(node "$SCRIPT_DIR/pipeline-json.ts" uri "$key")"
+  encoded="$(jaq -nr --arg key "$key" '$key | @uri')"
   output="$DEST_DIR/$key"
   echo "fetching $key"
   curl --fail --silent --show-error --location --retry 3 --retry-all-errors \
