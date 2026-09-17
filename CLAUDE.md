@@ -1280,8 +1280,10 @@ Two encoders + one transform tool, all built from source:
   **Its resampling kernel is `halflight` as of 2026-09-02, a git dependency
   pinned to a full rev in `Cargo.lock`.** `src/resample.rs` moved out to
   `github.com/oddharsh/halflight` (public, MIT; crate + npm, own conformance
-  suite, not on crates.io) and zenc imports the same six names from the crate
-  instead. The swap moved no byte, measured old binary against new: the
+  suite, not on crates.io) and zenc imports its resampler and transfer helpers
+  instead. The 16-bit decode tables now live there too; zenc selects a table
+  from the source profile once per frame.
+  The original swap moved no byte, measured old binary against new: the
   histogram bake over all 165 stems, the 600/400/200 tiers of 52 real photos
   (46 JPG, 6 HIF, both sensors, both transfer curves), the Instagram `resize`
   and the q84 JPEG encode, all identical, which is why

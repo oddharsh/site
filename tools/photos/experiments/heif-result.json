@@ -1,0 +1,47 @@
+{
+  "pairs": 5,
+  "decoded": [
+    {
+      "input": "XT500010.HIF",
+      "tiffBytes": 326474696,
+      "width": 7728,
+      "height": 5152,
+      "iccBytes": 3144,
+      "rgba16Equal": true
+    },
+    {
+      "input": "XT509986.HIF",
+      "tiffBytes": 326474694,
+      "width": 7728,
+      "height": 5152,
+      "iccBytes": 3144,
+      "rgba16Equal": true
+    }
+  ],
+  "orientations": {
+    "XT500010.HIF": "8",
+    "XT509986.HIF": "1"
+  },
+  "tierFilesEqual": 8,
+  "samplesMs": {
+    "baseline": [
+      5997.830125,
+      6669.617292000003,
+      6012.223250000003,
+      5863.130750000004,
+      5864.697625000001
+    ],
+    "candidate": [
+      6577.643625000001,
+      6205.307624999998,
+      5891.526624999999,
+      5940.453625000002,
+      5891.531208
+    ]
+  },
+  "medianMs": {
+    "baseline": 5997.830125,
+    "candidate": 5940.453625000002
+  },
+  "improvementPercent": 0.9566209579835117
+}

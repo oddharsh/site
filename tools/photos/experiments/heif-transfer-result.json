@@ -1,0 +1,107 @@
+{
+  "pairs": 6,
+  "decoded": [
+    {
+      "input": "XT500010.HIF",
+      "tiffBytes": 326474696,
+      "width": 7728,
+      "height": 5152,
+      "iccBytes": 3144,
+      "rgba16Equal": true
+    },
+    {
+      "input": "XT509986.HIF",
+      "tiffBytes": 326474694,
+      "width": 7728,
+      "height": 5152,
+      "iccBytes": 3144,
+      "rgba16Equal": true
+    }
+  ],
+  "orientations": {
+    "XT500010.HIF": "8",
+    "XT509986.HIF": "1"
+  },
+  "tierFilesEqual": 8,
+  "provenance": {
+    "bun": "09bb5463058074ef143a9d9a5a405d669c787375",
+    "macOS": "27.0",
+    "build": "26A428",
+    "arch": "arm64",
+    "binaries": {
+      "baseline": "4972971ece769d4bfc8ed132768fc3b6499531d57d66fe2ac9e2aba5e24b72d0",
+      "candidate": "140edd7fbb2a68e1b143e71d5b763a1d9e00826c984aefea5c2640831d18433c",
+      "tiffCandidate": "e0ddcac9bb25ff948dd12a58781c2cefe645041fe0ebc039f1cc0ab9fd1bb558"
+    },
+    "inputs": {
+      "XT500010.HIF": "27a9e5e35e6a28d2f508bb3c5dc91520cb79d36fa0a9373800e550fdf026517d",
+      "XT509986.HIF": "4d41f4255e8320144f82f711af819b80da8fdd97a00a7a31807c65c9d7c8d948"
+    }
+  },
+  "orders": [
+    [
+      "baseline",
+      "candidate",
+      "tiffCandidate"
+    ],
+    [
+      "tiffCandidate",
+      "candidate",
+      "baseline"
+    ],
+    [
+      "candidate",
+      "tiffCandidate",
+      "baseline"
+    ],
+    [
+      "baseline",
+      "tiffCandidate",
+      "candidate"
+    ],
+    [
+      "tiffCandidate",
+      "baseline",
+      "candidate"
+    ],
+    [
+      "candidate",
+      "baseline",
+      "tiffCandidate"
+    ]
+  ],
+  "samplesMs": {
+    "baseline": [
+      12533.929374999992,
+      12566.547374999995,
+      5383.298208000022,
+      5436.386541999993,
+      5797.941000000021,
+      6671.35145799999
+    ],
+    "candidate": [
+      9408.204750000004,
+      10525.451499999996,
+      5954.485374999989,
+      4572.964374999981,
+      4462.635458000004,
+      5310.358458000002
+    ],
+    "tiffCandidate": [
+      12664.961832999994,
+      10258.945917000005,
+      4726.19070799998,
+      4501.653707999998,
+      4583.511916999996,
+      6159.982541000005
+    ]
+  },
+  "medianMs": {
+    "baseline": 6234.646229000005,
+    "candidate": 5632.421916499996,
+    "tiffCandidate": 5443.0866244999925
+  },
+  "improvementPercent": 9.65931811333267,
+  "tiffImprovementPercent": 12.696143059699693,
+  "nativeVsOptimizedTiffPercent": -3.478454506819384
+}

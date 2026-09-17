@@ -23,7 +23,7 @@
 // at-the-end is the principled shape and the 16-bit path costs nothing extra.
 // It also fixes a real bug the 8-bit path had: a Luma16 TIFF missed the Luma8
 // arm and was silently promoted to RGB.
-use halflight::{g22_to_linear, linear_to_g22, linear_to_srgb, resample, srgb_to_linear, Filter};
+use halflight::{g22_lut16, g22_to_linear, linear_to_g22, linear_to_srgb, resample, srgb_lut16, srgb_to_linear, Filter};
 use image::{DynamicImage, GrayImage, ImageBuffer, ImageDecoder, ImageReader, Luma, Rgb, RgbImage};
 use std::path::Path;
 
@@ -149,14 +149,9 @@ impl Transfer {
             Transfer::Srgb => srgb_to_linear(c),
         }
     }
-    fn dec16(self, c: u16) -> f32 {
-        let s = c as f32 / 65535.0;
-        match self {
-            Transfer::G22 => s.powf(2.2),
-            Transfer::Srgb => {
-                if s <= 0.040_449_936 { s / 12.92 } else { ((s + 0.055) / 1.055).powf(2.4) }
-            }
-        }
+    /// Resolve the source's curve once, then index halflight's exact table.
+    fn table16(self) -> &'static [f32] {
+        match self { Self::Srgb => srgb_lut16(), Self::G22 => g22_lut16() }
     }
     fn enc(self, l: f32) -> u8 {
         match self {
@@ -221,8 +216,13 @@ pub fn load_linear(path: &str, t: TransferOption) -> Result<Frame, String> {
     // A 311MB TIFF is the test that keeps that honest.
     let mut dec = r.into_decoder().map_err(|e| format!("cannot decode {path}: {e}"))?;
     let icc = dec.icc_profile().ok().flatten();
-    let t = t.resolve(icc.as_deref());
     let img = DynamicImage::from_decoder(dec).map_err(|e| format!("cannot decode {path}: {e}"))?;
+    from_decoded(img, icc.as_deref(), t)
+}
+
+/// One precision/channel/transfer policy for file and native-memory decoders.
+pub fn from_decoded(img: DynamicImage, icc: Option<&[u8]>, t: TransferOption) -> Result<Frame, String> {
+    let t = t.resolve(icc);
     let (w, h) = (img.width(), img.height());
     if w == 0 || h == 0 {
         return Err("source has a zero dimension".into());
@@ -232,31 +232,36 @@ pub fn load_linear(path: &str, t: TransferOption) -> Result<Frame, String> {
             w, h, gray: true, transfer: t,
             data: g.pixels().map(|p| t.dec8(p[0])).collect(),
         },
-        DynamicImage::ImageLuma16(g) => Frame {
-            w, h, gray: true, transfer: t,
-            data: g.pixels().map(|p| t.dec16(p[0])).collect(),
+        DynamicImage::ImageLuma16(g) => {
+            let table = t.table16();
+            Frame { w, h, gray: true, transfer: t,
+                data: g.pixels().map(|p| table[p[0] as usize]).collect(),
+            }
         },
         DynamicImage::ImageLumaA8(g) => Frame {
             w, h, gray: true, transfer: t,
             data: g.pixels().map(|p| t.dec8(p[0])).collect(),
         },
-        DynamicImage::ImageLumaA16(g) => Frame {
-            w, h, gray: true, transfer: t,
-            data: g.pixels().map(|p| t.dec16(p[0])).collect(),
+        DynamicImage::ImageLumaA16(g) => {
+            let table = t.table16();
+            Frame { w, h, gray: true, transfer: t,
+                data: g.pixels().map(|p| table[p[0] as usize]).collect(),
+            }
         },
         DynamicImage::ImageRgb16(_) | DynamicImage::ImageRgba16(_) => {
             let rgb = img.to_rgb16();
+            let table = t.table16();
             if channel_equal(rgb.as_raw()) {
                 Frame {
                     w, h, gray: true, transfer: t,
-                    data: rgb.pixels().map(|p| t.dec16(p[0])).collect(),
+                    data: rgb.pixels().map(|p| table[p[0] as usize]).collect(),
                 }
             } else {
                 let mut data = Vec::with_capacity((w * h * 3) as usize);
                 for p in rgb.pixels() {
-                    data.push(t.dec16(p[0]));
-                    data.push(t.dec16(p[1]));
-                    data.push(t.dec16(p[2]));
+                    data.push(table[p[0] as usize]);
+                    data.push(table[p[1] as usize]);
+                    data.push(table[p[2] as usize]);
                 }
                 Frame { w, h, gray: false, data, transfer: t }
             }
@@ -551,6 +556,59 @@ mod icc_tests {
     fn auto_never_reaches_the_sample_path() {
         assert_eq!(Transfer::G22.dec8(128).to_bits(), g22_to_linear(128).to_bits());
         assert_eq!(Transfer::Srgb.dec8(128).to_bits(), srgb_to_linear(128).to_bits());
+    }
+
+    /// Check the complete u16 domain through each loader arm, including alpha
+    /// stripping and channel order. Bit equality protects resampling and the
+    /// content-addressed output bytes; an approximate curve is insufficient.
+    #[test]
+    fn all_16_bit_loader_samples_match_the_original_formula() {
+        use image::{LumaA, Rgba};
+        for (option, curve) in [(TransferOption::Srgb, Transfer::Srgb), (TransferOption::G22, Transfer::G22)] {
+            // Keep the original scalar formula as a compatibility oracle after
+            // moving production conversion into halflight.
+            let expected: Vec<f32> = (0..=u16::MAX).map(|c| {
+                let s = c as f32 / 65535.0;
+                match curve {
+                    Transfer::G22 => s.powf(2.2),
+                    Transfer::Srgb => {
+                        if s <= 0.040_449_936 { s / 12.92 } else { ((s + 0.055) / 1.055).powf(2.4) }
+                    }
+                }
+            }).collect();
+            let luma = ImageBuffer::from_fn(256, 256, |x, y| Luma([(y * 256 + x) as u16]));
+            let alpha = ImageBuffer::from_fn(256, 256, |x, y| LumaA([(y * 256 + x) as u16, x as u16]));
+            for image in [DynamicImage::ImageLuma16(luma), DynamicImage::ImageLumaA16(alpha)] {
+                let frame = from_decoded(image, None, option).unwrap();
+                assert!(frame.gray);
+                assert_eq!(frame.transfer, curve);
+                assert_eq!(frame.data.len(), expected.len());
+                for (actual, want) in frame.data.iter().zip(&expected) {
+                    assert_eq!(actual.to_bits(), want.to_bits());
+                }
+            }
+            // All channels traverse the entire domain in different orders.
+            let channels = |x: u32, y: u32| {
+                let c = (y * 256 + x) as u16;
+                [c, c.wrapping_add(12345), u16::MAX - c]
+            };
+            let rgb = ImageBuffer::from_fn(256, 256, |x, y| Rgb(channels(x, y)));
+            let rgba = ImageBuffer::from_fn(256, 256, |x, y| {
+                let [r, g, b] = channels(x, y);
+                Rgba([r, g, b, x as u16])
+            });
+            for image in [DynamicImage::ImageRgb16(rgb), DynamicImage::ImageRgba16(rgba)] {
+                let frame = from_decoded(image, None, option).unwrap();
+                assert!(!frame.gray);
+                assert_eq!(frame.transfer, curve);
+                assert_eq!(frame.data.len(), expected.len() * 3);
+                for (c, actual) in frame.data.chunks_exact(3).enumerate() {
+                    for (sample, code) in actual.iter().zip(channels(c as u32 % 256, c as u32 / 256)) {
+                        assert_eq!(sample.to_bits(), expected[code as usize].to_bits());
+                    }
+                }
+            }
+        }
     }
 }
 
