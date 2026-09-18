@@ -1174,7 +1174,8 @@ window.__horizonCaps = (function () {
     </p>
     <p class="note">
       <strong>Last swept 2026-08-10</strong>, against Chrome&nbsp;151&ndash;153, Safari&nbsp;26.6
-      plus Technology&nbsp;Preview&nbsp;249, and Firefox&nbsp;153&ndash;154. A page like this rots in two directions
+      plus Technology&nbsp;Preview&nbsp;249, and Firefox&nbsp;153&ndash;154; two cards moved on
+      2026-09-17 from a canary reading rather than a sweep (below). A page like this rots in two directions
       and only one of them is obvious: features arrive, and features I already wrote up
       quietly change status underneath me. The 07-26 sweep moved four cards
       (<code>InstallEvent.addRoutes()</code>, compression dictionaries,
@@ -1195,6 +1196,18 @@ window.__horizonCaps = (function () {
       and the <code>&lt;install&gt;</code> card retired: aadhar.sh is not a PWA and
       isn&apos;t becoming one, so a card forecasting an install button for it was
       forecasting nothing.
+    </p>
+    <p class="note">
+      Since 2026-09-14 the page no longer waits for me to sweep it. A nightly job runs
+      every probe below in stable Chromium, Firefox and WebKit and again in Chrome Beta
+      and Edge Dev, and files one issue per leg naming any probe that answers
+      differently in the prerelease. Its first two findings moved the
+      <code>margin-trim</code> and JPEG&nbsp;XL cards on 2026-09-17: both flip on in
+      Chrome&nbsp;155, three weeks before stable. That catches the direction a sweep
+      structurally cannot, a feature that ships between sweeps, and it catches it
+      before the release rather than after. It reads only what a probe can measure,
+      so a card whose status lives in a standards position or a flag description
+      still rots at the old rate.
     </p>
     <p class="note">
       The 07-30 pass found a <em>third</em> rot direction I hadn&apos;t accounted
@@ -2122,16 +2135,20 @@ ctx.drawElementImage(el, 0, 0);            // &lt;- the new primitive (el has la
     <section class="demo" data-cap="jpeg-xl">
       <h2>
         <span>JPEG XL <span class="mono">image/jxl</span></span>
-        <span class="stat contested">Safari &middot; Chrome 145 flag &middot; Firefox 153 Nightly</span>
+        <span class="stat trial">Safari &middot; Chrome 155 beta &middot; Firefox 157 beta</span>
       </h2>
       <p class="note">
         The format the photo pipeline actually wants: smaller than AVIF at the
         <em>high</em> quality end (where this site lives), genuinely progressive
         (a low-res preview paints from the first few KB, then sharpens), and it
         can losslessly <em>re-wrap</em> an existing JPEG ~20% smaller with the
-        original bytes recoverable. No live decode below: Chrome (my daily
-        driver) won&apos;t decode JXL without a flag, and there&apos;s no
+        original bytes recoverable. No live decode below: Chrome stable (153,
+        my daily driver) still won&apos;t decode JXL without a flag, and there&apos;s no
         <code>.jxl</code> asset on the site, so this is an honest mock plus the wiring it&apos;d take.
+        The probe table on this page cannot carry the decode check either, because
+        an image decode is asynchronous and every probe here is a synchronous
+        <code>() =&gt; boolean</code>; the nightly browser canary carries it instead,
+        and that is where the news below comes from.
         <a href="https://github.com/WebKit/standards-positions/issues/72" rel="external" class="wk sup" style="margin-left:4px">WebKit: support (shipped)</a>
       </p>
 
@@ -2152,7 +2169,7 @@ ctx.drawElementImage(el, 0, 0);            // &lt;- the new primitive (el has la
           <h3>JPEG XL</h3>
           <div class="jxl-bar"><i style="width:62%"></i></div>
           <p class="jxl-kb">smaller still at the high-q end + progressive</p>
-          <p class="jxl-ships">Safari 16.4+ only</p>
+          <p class="jxl-ships">Saf 16.4+ &middot; Cr 155 &middot; FF 157</p>
         </div>
       </div>
       <p class="note" style="font-size:8.5pt">
@@ -2189,23 +2206,32 @@ cjxl -q 90 -e 7 &lt;stem&gt;.png &lt;stem&gt;.jxl</pre>
         format in <code>public/i/</code> (120 stems &times; <em>3</em>
         formats). But the <code>&lt;picture&gt;</code> type-fallback decode trap
         from the CLAUDE.md gotcha applies double here: the format split is
-        wildly uneven. Only Safari decodes it by default. Chrome dropped it in 2023
-        but reintroduced a decoder (the Rust <code>jxl-rs</code>) behind
-        <code>#enable-jxl-image-format</code> in Chrome&nbsp;145 (default-on targeted
-        H2&nbsp;2026), and Firefox&nbsp;152 shipped the same <code>jxl-rs</code> decoder
-        behind a Labs flag. So for now it&apos;d still only serve by default to
-        Safari while tripling the asset count and KB on disk. <strong>Not a
-        graduation candidate</strong> until Chrome and Firefox decode it
-        non-flagged; it stays parked here as the format I&apos;d adopt the day
-        that happens, given the SOOC originals already live in R2 to re-encode from.
+        wildly uneven today and stops being so in three weeks. Only Safari decodes
+        it by default in a stable build. Chrome dropped it in 2023, reintroduced a
+        decoder (the Rust <code>jxl-rs</code>) behind
+        <code>#enable-jxl-image-format</code> in Chrome&nbsp;145, and turns it on in
+        Chrome&nbsp;155: chromestatus names milestone&nbsp;155 for desktop and Android,
+        Beta&nbsp;155 has been out since 09-16, and stable lands 2026-10-06. Measured
+        rather than read off the milestone: on 2026-09-17 the nightly canary fed the
+        same 190-byte <code>data:image/jxl</code> to Chromium&nbsp;153 and Chrome
+        Beta&nbsp;155, and only the Beta decoded it, with a PNG control decoding in
+        both. Firefox&nbsp;152 shipped the same <code>jxl-rs</code> decoder behind a
+        Labs flag and Firefox&nbsp;157 flips it on, 2026-09-29. So by early October
+        every engine decodes it unflagged. <strong>Still parked, for three more
+        weeks</strong>: a Beta reading is a claim about a build that can still be
+        pulled. The day both stables land it becomes a graduation candidate,
+        the first card here to get there on a canary reading, given the SOOC originals
+        already live in R2 to re-encode from.
       </p>
 
       <p class="unsupported">
         Nothing to decode live regardless of your browser, this card is a
         static mock by design. To actually <em>view</em> a <code>.jxl</code>
-        today you need Safari 16.4+; in Chrome&nbsp;145+ enable
-        <code>chrome://flags#enable-jxl-image-format</code>, and in Firefox&nbsp;153
-        the <code>image.jxl.enabled</code> pref is on by default in Nightly.
+        today you need Safari 16.4+, Chrome&nbsp;155 Beta, or Firefox&nbsp;157 Beta. In
+        Chrome&nbsp;145&ndash;154 enable
+        <code>chrome://flags#enable-jxl-image-format</code>; in Firefox&nbsp;153&ndash;156
+        set the <code>image.jxl.enabled</code> pref, which Nightly has carried on by
+        default since 153.
       </p>
     </section>
 
@@ -4357,7 +4383,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
     <section class="demo" data-cap="margin-trim">
       <h2>
         <span>margin-trim</span>
-        <span class="stat chrome">Safari 16.4 only &middot; Chrome no &middot; FF no</span>
+        <span class="stat trial">Safari 16.4 &middot; Chrome 155 beta &middot; FF no</span>
       </h2>
       <p class="note">
         Drops the margin on a container&apos;s first and last children, so a box
@@ -4365,8 +4391,13 @@ navigation.addEventListener("navigate", (e) =&gt; {
         edges from the paragraphs inside it. The usual workaround is a
         <code>:first-child</code> / <code>:last-child</code> pair per component,
         which every stylesheet on the web has written at least once.
-        Safari-only since 16.4, which makes it the inverse of most cards here:
-        WebKit shipped it three years ago and nobody followed.
+        Safari-only since 16.4, which made it the inverse of most cards here:
+        WebKit shipped it three years ago and nobody followed, until Chrome&nbsp;155.
+        chromestatus names milestone&nbsp;155 (stable 2026-10-06), and the nightly
+        browser canary measured the flip on 2026-09-17: this card&apos;s own
+        <code>CSS.supports("margin-trim", "block")</code> probe reads false in
+        Chromium&nbsp;153 and Edge&nbsp;153 and true in Chrome Beta&nbsp;155 and Edge
+        Dev&nbsp;155. Firefox has a positive position and no milestone.
       </p>
       <div class="mt-grid">
         <div><p class="tb-cap">default</p><div class="mt-box"><p>first</p><p>last</p></div></div>
@@ -4375,12 +4406,15 @@ navigation.addEventListener("navigate", (e) =&gt; {
       <p class="replaces">
         On the site: the <code>.content</code> workspace inside every XP window
         carries exactly the hand-written first-child/last-child pair this
-        replaces. It stays hand-written, because one engine is one engine, and
-        the fallback here is not graceful in the way most of this page&apos;s
-        cards are: without support the margins collide and the window padding
-        looks wrong, rather than merely unstyled.
+        replaces. It stays hand-written through October, because one engine is
+        one engine until the second one is in a stable build, and the fallback
+        here is not graceful in the way most of this page&apos;s cards are:
+        without support the margins collide and the window padding looks wrong,
+        rather than merely unstyled. Once Chrome&nbsp;155 is stable the pair can go
+        behind <code>@supports not (margin-trim: block)</code> and the property
+        takes over in two engines, with Firefox still on the hand-written path.
       </p>
-      <p class="unsupported">No <code>margin-trim</code> here (expected outside Safari), so both boxes look the same.</p>
+      <p class="unsupported">No <code>margin-trim</code> here (expected outside Safari and Chrome&nbsp;155+), so both boxes look the same.</p>
     </section>
 
     <!-- ─────────── the site-relevant half: measurement, probes, chrome ─────────── -->
@@ -5379,7 +5413,7 @@ navigation.addEventListener("navigate", (e) =&gt; {
 
     <footer>
       <p>&larr; back to the <a href="/garage">garage</a> &middot; <a href="/">aadhar.sh</a></p>
-      <p><small>&copy; 2026 Aadharsh Pannirselvam &middot; built in the open &middot; triangulated from chromestatus.com + chrome://flags (Canary) + webkit.org/standards-positions + MDN browser-compat-data &middot; last swept 2026-08-10</small></p>
+      <p><small>&copy; 2026 Aadharsh Pannirselvam &middot; built in the open &middot; triangulated from chromestatus.com + chrome://flags (Canary) + webkit.org/standards-positions + MDN browser-compat-data &middot; last swept 2026-08-10, two cards moved by the nightly canary 2026-09-17</small></p>
     </footer>
 
     <hr>
