@@ -4931,8 +4931,14 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     The combining behaviour above is real and unchanged, and it is documented at
     [Custom headers](https://developers.cloudflare.com/workers/static-assets/headers/).
     What was wrong here was the conclusion drawn from it. Filed upstream as
-    [cloudflare-docs#32979](https://github.com/cloudflare/cloudflare-docs/issues/32979)
-    with a PR for the ordering rule.
+    [cloudflare-docs#32979](https://github.com/cloudflare/cloudflare-docs/issues/32979),
+    with [#32995](https://github.com/cloudflare/cloudflare-docs/pull/32995) carrying
+    the ordering rule. That PR was written against the shared
+    `custom_headers.mdx` partial; upstream #32998 inlined the partial into the
+    Workers and Pages headers pages while it sat open, so on 2026-09-18 it was
+    rebased to land the same text in BOTH `workers/static-assets/headers.mdx`
+    and `pages/configuration/headers.mdx`. Read the rule on whichever page you
+    are on; neither one is the canonical copy any more.
 
     The general lesson is the expensive one. This note reasoned from one failed
     experiment to "there is no way", without reading the page that documents the
