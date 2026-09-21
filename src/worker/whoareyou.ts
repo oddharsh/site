@@ -125,7 +125,11 @@ export async function gatherWhoareyou(request, ctx) {
     longitude:      cf.longitude || null,
     timezone:       cf.timezone || "—",
     colo:           cf.colo || "—",
-    clientTcpRtt:   cf.clientTcpRtt ?? null,
+    // MEASURED 2026-09-21 in Chrome over a real HTTP/3 connection: cf.clientTcpRtt
+    // is 0 rather than absent on QUIC, so `?? null` alone rendered "TCP
+    // round-trip 0 ms" beside a 40 ms QUIC row on the page whose own copy says
+    // the two never both appear. The transport decides which row is real.
+    clientTcpRtt:   cf.httpProtocol === "HTTP/3" ? null : (cf.clientTcpRtt ?? null),
     // QUIC's counterpart to clientTcpRtt: only populated on HTTP/3, so the two
     // are mutually exclusive and together they always name the transport.
     clientQuicRtt:  cf.clientQuicRtt ?? null,
