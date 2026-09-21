@@ -159,8 +159,18 @@ const worker = defineWorker({
   // WHAT A DRY RUN CANNOT TELL YOU, and the reason this is written down: whether
   // the API accepts the exports form for a class that already exists under
   // migration tag v1. A dry run never computes a migration at all, so the first
-  // real `wrangler deploy` from this directory is the measurement. If it
-  // refuses, `git revert` restores the toml and nothing is lost but the trip.
+  // real `wrangler deploy` from this directory is the measurement.
+  //
+  // MEASURED 2026-09-21, and the answer is yes. The first deploy on this format
+  // (wrangler 4.136.0 main, pin b168333, version 3706d928) uploaded in 1.25 s,
+  // reconciled the trigger, and left the `Counter` namespace and its storage in
+  // place: `/garage/cf/counter` answered 18 then 20 across the calls after,
+  // where a recreated namespace would have restarted from 0. So the declarative
+  // export against a class created under `[[migrations]] tag = "v1"` is
+  // accepted by plain `wrangler deploy`. That says nothing about `versions
+  // upload`, which this Worker never uses and which refuses DO lifecycle
+  // changes on its own path (the DO note in CLAUDE.md). The toml fallback is
+  // still one `git revert` away and is no longer the expected outcome.
   exports: {
     Counter: exports.durableObject({ storage: "sqlite" }),
   },
