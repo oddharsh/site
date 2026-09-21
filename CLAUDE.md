@@ -5766,15 +5766,25 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     behaves exactly like the explicit `true` cf-garage used to set. Verified by
     reading wrangler's upload path, since a dry run never reports it.
 
-    **What is verified, and what the first real deploy is still the measurement
+    **What is verified, and what the first real deploy was the measurement
     for.** The dry-run is byte-identical to the toml's (8.83 KiB, 3.07 KiB gzip,
     the same four bindings), and `wrangler build --x-cf-build-output` writes the
-    resolved config to `.cloudflare/output/v0/workers/default/config.json`, which
-    is the readout to reach for when you want to see what a config actually
-    resolved to. What neither can check is whether the API accepts the
-    exports-based DO form for a class that already exists under migration tag
-    `v1`, which is the DO note above holding in its new clothes: a dry run never
-    computes a migration. `git revert` restores the toml if it refuses.
+    resolved config to `.cloudflare/output/v0/` (`config.json` for the settings
+    half, `workers/default/worker.config.json` for the Worker; one
+    `workers/default/config.json` until #15713), which is the readout to reach
+    for when you want to see what a config actually resolved to. What neither
+    could check is whether the API accepts the exports-based DO form for a class
+    that already exists under migration tag `v1`, which is the DO note above
+    holding in its new clothes: a dry run never computes a migration.
+
+    **MEASURED 2026-09-21: accepted.** The first real `wrangler deploy
+    --x-new-config` from `cf-garage/` (4.136.0 main, pin b168333, version
+    `3706d928`) reconciled the declarative `Counter` export against the class
+    created under tag `v1` and kept its storage: `/garage/cf/counter` read 18
+    then 20 afterwards, where a recreated namespace restarts from 0. Plain
+    `deploy` only; `versions upload` refuses DO lifecycle changes on its own
+    path and this Worker never takes it. The toml fallback stays one
+    `git revert` away and is no longer the expected outcome.
 
     Two smaller things. `--config` / `-c` is REFUSED alongside the flag, because
     the loader reads from the working directory, so CI's step keeps its
