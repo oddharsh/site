@@ -5735,11 +5735,17 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
 
     Three translation notes worth having before reading the file:
 
-    - **`accountId` is on a separate `settings` export**, via `defineSettings`,
-      rather than on the worker. `check-infra.ts` reads it from there now, and
-      `AUX_CONFIGS` carries a pattern per path so the three auxiliary Workers can
-      be in two formats without one regex being widened until it matches
-      anything.
+    - **`accountId` sits beside `worker` on the ONE default export**,
+      `defineConfig({ accountId, worker })`, rather than on the worker. It was a
+      separate `settings` export via `defineSettings` from 2026-08-23 until
+      workers-sdk#15713 deleted that name; the wrangler pin that carried it
+      (#873, 2026-09-21) failed `tsc` with TS2305 and the cf-garage dry-run
+      with "does not provide an export named 'defineSettings'", and the loader
+      now reads `mod.default` alone, so a `settings` export would be IGNORED
+      rather than refused. `check-infra.ts` reads the id by a line-anchored
+      `accountId:` regex that survived the move, and `AUX_CONFIGS` carries a
+      pattern per path so the three auxiliary Workers can be in two formats
+      without one regex being widened until it matches anything.
     - **Bindings live under `env`**, which is what pays for the format: the
       generated types read `InferEnv<typeof cloudflare.config.default>`, so the
       binding names ARE the type of `env` instead of a snapshot some earlier

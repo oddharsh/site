@@ -66,30 +66,37 @@
 // --x-cf-build-output --x-new-config` writes the Build Output API tree that
 // `cf deploy --prebuilt` is designed to consume:
 //
-//     .cloudflare/output/v0/workers/default/{config.json,bundle/index.js}
+//     .cloudflare/output/v0/config.json
+//     .cloudflare/output/v0/workers/default/{worker.config.json,bundle/index.js}
 //
-// That config.json carries the name, compatibility date and flags, the fetch
-// trigger, all four bindings and the declarative `Counter` DO export. So the
+// The top-level config.json is the settings half (`accountId`, a build
+// context), and worker.config.json carries the name, compatibility date and
+// flags, the fetch trigger, all four bindings and the declarative `Counter` DO
+// export. It was one `workers/default/config.json` until the single-default-
+// export change below split the settings out (read 2026-09-21). So the
 // handoff exists today and only the credential rule stands between it and a
 // working `cf` deploy from a built tree. Re-try when `cf` either reads a
 // workspace root for its dev server or stops asking for auth on a dry run;
 // re-trying on a version bump alone measures nothing.
 
-import { bindings, defineSettings, defineWorker, exports, triggers } from "wrangler/experimental-config";
+import { bindings, defineConfig, defineWorker, exports, triggers } from "wrangler/experimental-config";
 
-// `accountId` lives on a SEPARATE `settings` export rather than on the worker,
-// which is the one field placement most likely to send you looking in the wrong
-// object. The pin itself is unchanged and load-bearing for the same reason it
-// always was: this Worker deploys from its own directory, so wrangler resolves
-// the account here rather than from the root wrangler.jsonc, and auto-selection
-// only works while the login sees exactly one account (a second appeared
-// 2026-08-07). Must equal wrangler.jsonc's account_id; check-infra.ts fails on
-// drift and reads this file for the value.
-export const settings = defineSettings({
-  accountId: "1c99acdb6141579023fb97d24261ea58",
-});
-
-export default defineWorker({
+// THE SHAPE MOVED UNDER US ON 2026-09-21, which the header above said it would.
+// workers-sdk#15713 ("Define experimental Cloudflare configuration with a single
+// default export") deleted `defineSettings` and the separate `settings` export
+// this file carried from 2026-08-23. The loader now reads `mod.default` and
+// nothing else, so the old two-export file failed twice on the wrangler pin
+// that carried it: `tsc` with TS2305 on the missing name, and the dry-run with
+// "does not provide an export named 'defineSettings'". A `settings` export
+// that survived by accident would have been IGNORED rather than refused, so
+// the account pin below is on the one object wrangler reads.
+//
+// The worker is a named const so the default export can be the whole
+// configuration (`CloudflareConfig extends Settings`, so `accountId` sits
+// beside `worker` and `containers`). The generated types follow that nesting:
+// `wrangler types` now emits `UnwrapConfig<typeof default>["worker"]` and
+// reads `InferEnv` off that, so the binding names still type `env`.
+const worker = defineWorker({
   name: "cf-garage",
   compatibilityDate: "2026-06-16",
   // `new_module_registry` is not date-gated; the argument is at the same key in
@@ -117,7 +124,7 @@ export default defineWorker({
   },
 
   // BINDINGS ARE `env`, which is the change that pays for the whole format: the
-  // generated types read `InferEnv<typeof cloudflare.config.default>`, so the
+  // generated types read `InferEnv` off the default export's `worker`, so the
   // names below ARE the type of `env` rather than a snapshot some earlier
   // `wrangler types` run happened to take.
   env: {
@@ -157,4 +164,16 @@ export default defineWorker({
   exports: {
     Counter: exports.durableObject({ storage: "sqlite" }),
   },
+});
+
+export default defineConfig({
+  // The account pin is unchanged and load-bearing for the same reason it always
+  // was: this Worker deploys from its own directory, so wrangler resolves the
+  // account here rather than from the root wrangler.jsonc, and auto-selection
+  // only works while the login sees exactly one account (a second appeared
+  // 2026-08-07). Must equal wrangler.jsonc's account_id; check-infra.ts fails
+  // on drift and reads this file for the value, by a line-anchored regex, so
+  // keep `accountId:` on a line of its own.
+  accountId: "1c99acdb6141579023fb97d24261ea58",
+  worker,
 });
