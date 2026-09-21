@@ -259,8 +259,10 @@ async function resolveWithFallback(name: string, type: string): Promise<DnsResol
 
 // The three auxiliary Workers, whose configs stopped being one format on
 // 2026-08-23: cf-garage moved to wrangler's experimental TypeScript config,
-// where the account pin sits on a `settings` export as `accountId` rather than
-// as a toml `account_id`. The pattern and the label travel WITH the path, so a
+// where the account pin is an `accountId` key on the default export (it sat on
+// a separate `settings` export until workers-sdk#15713, 2026-09-21; the
+// line-anchored regex below matched both) rather than a toml `account_id`.
+// The pattern and the label travel WITH the path, so a
 // fourth format joins by adding a row instead of by widening one regex until it
 // matches every shape and asserts nothing about any of them.
 const AUX_CONFIGS = [
