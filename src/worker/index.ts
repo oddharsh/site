@@ -683,6 +683,14 @@ const PREFIX = [
     match: (pathname) => pathname === "/access" || pathname.startsWith("/access/"),
     handle: routeStaticPage,
   },
+  // /dotfiles is a static page with one sub-resource, /dotfiles/macos.sh, which
+  // falls through serveStaticPage's extension branch to the asset layer (no
+  // .sh twin: it is 6 KB and read once).
+  {
+    label: "/dotfiles",
+    match: (pathname) => pathname === "/dotfiles" || pathname.startsWith("/dotfiles/"),
+    handle: routeStaticPage,
+  },
   {
     label: "/a/<asset>",
     match: (pathname) => /^\/a\/[^/]+\.[0-9a-f]{8}\.(js|css|svg|dict)$/.test(pathname),

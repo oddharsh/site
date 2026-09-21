@@ -133,6 +133,12 @@ export const AGENT_SURFACES = [
     "description": "How much of an origin a machine can actually use — the agent doors, counted rather than scored — and, for this origin, what building all of it cost in files and lines."
   },
   {
+    "path": "/dotfiles",
+    "title": "Dotfiles",
+    "mimeType": "text/html",
+    "description": "The macOS defaults i changed on my own Mac, read back off the machine: tick the ones you want and get the defaults write script that sets them."
+  },
+  {
     "path": "/pixel-peeper",
     "title": "Pixel Peeper",
     "mimeType": "text/html",

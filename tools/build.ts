@@ -837,6 +837,10 @@ const SHELLS = [
   // unchanged and this one is now minified. Measured: 4,305 B on the wire at the
   // edge's q4 against 2,833 minified with a q11 twin, on 12 pages.
   ["lwe/ask.js", "/lwe/ask.src.js", "lwe-q"],
+  // the /dotfiles checklist. An ES module (tools/gen-dotfiles.ts imports its
+  // renderer to write the committed macos.sh), unhashed like ask.js: one page
+  // loads it and a hash would re-mint nothing worth re-minting.
+  ["dotfiles.js", "/dotfiles.src.js", "dotfiles-data"],
 ];
 
 // EVERY client script is a SHELLS row, or is sw.js. A file missing from the list

@@ -60,6 +60,7 @@ export function createRun(options) {
     { label: "encode", path: "/encode", hint: "what did your encoder actually do?" },
     { label: "agent ready", path: "/agent-ready", hint: "the scorecard, pointed at anyone including us" },
     { label: "pixel peeper", path: "/pixel-peeper", hint: "whose eye do you have? a compression vision test — pick the best encode, blind" },
+    { label: "dotfiles", path: "/dotfiles", hint: "folder options for a mac: tick the defaults you want, get the script that sets them" },
     { label: "learning with errors", path: "/lwe", hint: "chat-style explainers + live demos" },
     // generated:lwe-pages:start
     { label: "lwe · fhe", path: "/lwe/fhe", hint: "fully homomorphic encryption, explained" },
