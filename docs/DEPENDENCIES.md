@@ -361,7 +361,7 @@ does not make a failed write safe to ignore.
   packages run only in the build environment; they add no browser or Worker
   runtime dependency. Dependabot should review their release notes for output,
   target-browser, and native-install changes.
-- Oxlint 1.83.0 and oxlint-tsgolint 7.0.2001 are exact root pins for
+- Oxlint 1.83.0 and oxlint-tsgolint 7.0.2002 are exact root pins for
   `bun run lint`, a required step in `validate`. The tsgolint version tracks the
   TypeScript pin below on purpose: TypeScript 7.0 ships no stable programmatic
   API, so typescript-eslint cannot run on it, and tsgolint is the door oxlint
