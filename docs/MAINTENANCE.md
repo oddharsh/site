@@ -912,7 +912,7 @@ after the canary tripwire's gates pass on the candidate. Nothing floats.
 
 | pin | where | shape | advanced by |
 |---|---|---|---|
-| bun (the compiler) | `config/bun-pin.json` (NOT `packageManager`; there is none) | `1.4.2-canary.20260913.1+09bb546`: npm's dated canary plus its build sha | `bun-pin.yml`, which follows npm's `canary` dist-tag because the pin's shape says canary |
+| bun (the compiler) | `config/bun-pin.json` (NOT `packageManager`; there is none) | `1.4.2-canary.20260913.1+09bb546`: npm's dated canary plus its build sha | `bun-pin.yml`, which takes the newest dated canary in npm's version list that is already past `bunfig`'s 24 h window, because the pin's shape says canary. NOT the `canary` dist-tag: that names the newest daily publish, which the same window refuses by construction, and the pin sat still from 2026-09-15 to 09-21 while the job exited green every night |
 | wrangler (the publisher) | `devDependencies.wrangler` | `https://pkg.pr.new/cloudflare/workers-sdk/wrangler@b149147`: a commit of main | `wrangler-pin.yml`, which resolves main's sha from pkg.pr.new's own `x-commit-key` header |
 
 **WHY THE BUN PIN IS ITS OWN FILE, measured 2026-09-15.** Cloudflare's build
