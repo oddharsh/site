@@ -2,7 +2,7 @@
 // Shared imports live in contract-shared.mjs.
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 
-import { channelOf, compareVersions, interpretZstdProbe, minimumReleaseAgeSeconds, npmPlatform, npmTarballUrl, npmVersion, parseVersion, readPin, releaseAsset, releaseUrl, runningMatchesPin, writePin } from "./lib/bun-pin.ts";
+import { channelOf, compareVersions, interpretZstdProbe, minimumReleaseAgeSeconds, newestSeasonedCanary, npmPlatform, npmTarballUrl, npmVersion, parseVersion, readPin, releaseAsset, releaseUrl, runningMatchesPin, writePin } from "./lib/bun-pin.ts";
 import { fileURLToPath } from "node:url";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -185,9 +185,13 @@ test("the bumper walks the pin's channel and never crosses it", async () => {
   // `canary` tag can never become a release-channel target.
   assert.match(body, /releases\/latest/, "the stable target must come from releases/latest, which excludes prereleases");
   assert.match(body, /\^bun-v\(\\d\+\\\.\\d\+\\\.\\d\+\)\$/, "the tag must be matched as a plain bun-vX.Y.Z");
-  // CANARY: npm's dist-tag names a DATED, immutable canary, which is the only
-  // shape of canary that can be a pin.
-  assert.match(body, /\["dist-tags"\]\?\.canary/, "the canary target must come from npm's canary dist-tag");
+  // CANARY: the candidate is the newest DATED canary already past gate 2's
+  // window, chosen by the resolver. It was npm's `canary` dist-tag until
+  // 2026-09-21, and that tag names the newest daily publish by definition, so
+  // gate 2 refused it every night for six nights while the job exited green.
+  // Re-reading the tag is how that deadlock comes back.
+  assert.match(body, /newestSeasonedCanary\(npmMeta, window\)/, "the canary target must come from the seasoned resolver, handed bunfig's window");
+  assert.doesNotMatch(body, /dist-tags"?\]?\??\.?\[?"?canary/, "the bumper must not read npm's canary dist-tag; it names a version the window refuses by construction");
   assert.match(body, /channelOf\(target\) !== channel/, "a target on the other channel must be refused");
   assert.match(body, /npmBunDist\(npmVersion\(target\)\)/, "a canary must be fetched with the registry's integrity, by the version npm names");
 
@@ -197,6 +201,63 @@ test("the bumper walks the pin's channel and never crosses it", async () => {
   // (being invoked through bun, which would have compared bun with bun) and the
   // assertion moved here when it was retired.
   assert.match(body, /baselineVersion !== pin\.version/, "the bumper must refuse a baseline that is not the pin");
+});
+
+test("the canary resolver picks the newest dated canary already past the window, never the newest publish", () => {
+  // bun publishes at ~14:20 UTC daily. Freeze "now" at 16:00 UTC on the 21st,
+  // which is the shape every one of the six deadlocked runs saw.
+  const now = Date.parse("2026-09-21T16:00:00Z");
+  const H = 3600;
+  const meta = {
+    "dist-tags": { canary: "1.4.2-canary.20260921.1", latest: "1.4.2" },
+    versions: {
+      "1.4.2": {},
+      "1.4.2-canary.20260919.1": {},
+      "1.4.2-canary.20260920.1": {},
+      "1.4.2-canary.20260921.1": {},
+      "1.4.1": {},
+    },
+    time: {
+      created: "2021-01-01T00:00:00Z",
+      modified: "2026-09-21T14:20:33Z",
+      "1.4.2": "2026-09-05T05:55:48Z",
+      "1.4.2-canary.20260919.1": "2026-09-19T14:15:36Z",
+      "1.4.2-canary.20260920.1": "2026-09-20T14:20:00Z",
+      "1.4.2-canary.20260921.1": "2026-09-21T14:20:33Z",
+      "1.4.1": "2026-09-04T08:33:19Z",
+    },
+  };
+  const picked = newestSeasonedCanary(meta, 24 * H, now);
+  assert.ok(picked, "a daily publish always has a seasoned canary behind the newest one");
+  assert.equal(picked.version, "1.4.2-canary.20260920.1", "the 20th is 25.7 h old and the 21st is 1.7 h old; the tag names the 21st");
+  assert.notEqual(picked.version, meta["dist-tags"].canary, "the control: the dist-tag's answer is exactly the one the window refuses");
+  assert.equal(picked.publishedAt, Date.parse("2026-09-20T14:20:00Z"));
+  assert.deepEqual(picked.skipped, [{ version: "1.4.2-canary.20260921.1", ageSeconds: Math.floor((now - Date.parse("2026-09-21T14:20:33Z")) / 1000) }]);
+  // Gate 2 then agrees with the choice by construction, which is the property
+  // the old shape lacked: the candidate it handed gate 2 could never pass it.
+  assert.ok((now - picked.publishedAt) / 1000 >= 24 * H);
+
+  // A wider window walks further back; a window nothing clears is null, not
+  // the newest thing on the list.
+  assert.equal(newestSeasonedCanary(meta, 40 * H, now)?.version, "1.4.2-canary.20260919.1");
+  assert.equal(newestSeasonedCanary(meta, 100 * H, now), null);
+  assert.equal(newestSeasonedCanary(null, 24 * H, now), null, "no registry document is no candidate");
+
+  // Releases are never a canary candidate, however old.
+  assert.equal(newestSeasonedCanary({ versions: { "1.4.2": {} }, time: meta.time }, 1, now), null);
+
+  // The next release line outranks the current one once its canary is seasoned:
+  // after 1.4.3 ships, npm names canaries 1.4.3-canary.<date>.
+  const next = { versions: { ...meta.versions, "1.4.3-canary.20260918.1": {} }, time: { ...meta.time, "1.4.3-canary.20260918.1": "2026-09-18T14:20:00Z" } };
+  assert.equal(newestSeasonedCanary(next, 24 * H, now)?.version, "1.4.3-canary.20260918.1");
+
+  // A canary with no publish time is skipped and named, never read as old.
+  const { "1.4.2-canary.20260920.1": _dropped, ...timeWithoutThe20th } = meta.time;
+  const untimed = { versions: meta.versions, time: timeWithoutThe20th };
+  const p2 = newestSeasonedCanary(untimed, 24 * H, now);
+  assert.ok(p2);
+  assert.equal(p2.version, "1.4.2-canary.20260919.1");
+  assert.deepEqual(p2.skipped.map((s) => [npmVersion(s.version), s.ageSeconds === null]), [["1.4.2-canary.20260921.1", false], ["1.4.2-canary.20260920.1", true]]);
 });
 
 test("the release asset names match what oven-sh/bun tags", () => {

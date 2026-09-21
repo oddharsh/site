@@ -271,7 +271,10 @@ CHROME_CHANNEL=chrome-canary bun run csp:sweep
 # advances its pin only after the canary tripwire's gates pass on the
 # candidate. Switching a channel is a hand edit plus a relock; the runbook is
 # MAINTENANCE.md, "Production runs prerelease pins".
-bun run bun:pin            # follows npm's canary dist-tag while the pin is a canary
+bun run bun:pin            # while the pin is a canary: the newest dated canary ALREADY older
+                           # than bunfig's 24 h window, never the dist-tag (which names the
+                           # newest daily publish, so it failed that window every night from
+                           # 2026-09-15 to 09-21 while the job exited green)
 bun run wrangler:pin       # resolves main's sha from pkg.pr.new and runs canary:wrangler on it
 
 # regenerate JUST the EXIF metadata (after photos are already uploaded)

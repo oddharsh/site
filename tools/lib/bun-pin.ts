@@ -112,6 +112,58 @@ export function minimumReleaseAgeSeconds(root: string) {
   return Number(found[1]);
 }
 
+/** What the registry document carries that a candidate is chosen from. */
+export type NpmMeta = {
+  versions?: Record<string, unknown>;
+  time?: Record<string, string>;
+};
+
+/**
+ * The newest dated canary npm has carried for at least `windowSeconds`, read
+ * off the registry document's `versions` and `time` maps. Pure: callers pass
+ * the parsed document and the window, and a test passes `now`.
+ *
+ * NOT npm's `canary` dist-tag, and the reason is a deadlock this repo sat in
+ * for six nights (2026-09-15 to 09-21). The tag names the newest daily publish
+ * by definition. Gate 2 in bump-bun-pin.ts refuses anything younger than
+ * bunfig's window. bun publishes its canary at 14:20 UTC every day and the
+ * bumper fires between 13:40 and 16:00, so the tag's candidate read 2 h or
+ * 23 h old on every run, the job exited green with "the pin is current", and
+ * the pin never moved. "Newest" and "at least a day old" are each satisfiable;
+ * they are not satisfied by the same version, so the candidate has to be
+ * resolved WITH the window rather than checked against it afterwards. Gate 2
+ * stays, because an explicit `--to` skips this resolver.
+ *
+ * A version with no `time` entry is skipped rather than read as old, since an
+ * unknown age fails closed everywhere else here. `skipped` lists every canary
+ * newer than the candidate, with its age, so the log can say what was passed
+ * over and why. Null means nothing clears the window, which for a daily
+ * publish is a registry read missing its `time` map rather than bun going
+ * quiet; the caller refuses rather than guesses.
+ */
+export function newestSeasonedCanary(
+  npmMeta: NpmMeta | null | undefined,
+  windowSeconds: number,
+  now: number = Date.now(),
+): { version: string; publishedAt: number; skipped: { version: string; ageSeconds: number | null }[] } | null {
+  const time = npmMeta?.time ?? {};
+  const canaries = Object.keys(npmMeta?.versions ?? {})
+    .filter((v) => channelOf(v) === "canary")
+    .sort((a, b) => compareVersions(b, a));
+  const skipped: { version: string; ageSeconds: number | null }[] = [];
+  for (const version of canaries) {
+    const publishedAt = time[version] ? Date.parse(time[version]) : NaN;
+    if (Number.isNaN(publishedAt)) {
+      skipped.push({ version, ageSeconds: null });
+      continue;
+    }
+    const ageSeconds = Math.floor((now - publishedAt) / 1000);
+    if (ageSeconds >= windowSeconds) return { version, publishedAt, skipped };
+    skipped.push({ version, ageSeconds });
+  }
+  return null;
+}
+
 // Numeric per component, so 1.10.0 reads as newer than 1.4.0. On an equal
 // triple a RELEASE outranks a canary of it (semver's rule, and npm's: the
 // canaries of the unreleased 1.4.3 are published as `1.4.2-canary.<date>`), and

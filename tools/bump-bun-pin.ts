@@ -21,14 +21,22 @@
 // runs before the two that cost a minute.
 //
 //   1. Is there a newer version ON THE PIN'S CHANNEL, and does npm carry it?
-//      A release pin follows GitHub releases; a dated-canary pin follows npm's
-//      `canary` dist-tag. Either way npm has to carry it, because that is
-//      where the setup-bun action installs from (an `@oven/bun-<platform>`
-//      tarball with a registry sha512) and what Cloudflare's build image
-//      resolves. The channel is the pin's own SHAPE (lib/bun-pin.ts), so this
-//      script walks one channel and never crosses to the other.
+//      A release pin follows GitHub releases; a dated-canary pin follows the
+//      newest dated canary in npm's OWN version list that is already older
+//      than gate 2's window (newestSeasonedCanary in lib/bun-pin.ts). Either
+//      way npm has to carry it, because that is where the setup-bun action
+//      installs from (an `@oven/bun-<platform>` tarball with a registry
+//      sha512) and what Cloudflare's build image resolves. The channel is the
+//      pin's own SHAPE (lib/bun-pin.ts), so this script walks one channel and
+//      never crosses to the other.
 //   2. Is it older than the install policy's own window? bunfig.toml refuses a
 //      PACKAGE published in the last 24 hours; a runtime deserves at least that.
+//      On the canary channel the resolver in gate 1 already chose with this
+//      window, so here it is the assertion for an explicit `--to`. It used
+//      to be the only place the window was read, and the candidate came from
+//      npm's `canary` dist-tag, which names the newest daily publish: that
+//      pair can never both hold, and the pin sat still for six nights
+//      (2026-09-15 to 09-21) while every run exited green.
 //   3. Does its zstd honour `dictionary`? The silent one. See lib/bun-pin.ts.
 //   4. Can it read the committed bun.lock, and does it write the same
 //      lockfileVersion? This is the gate that exists because of what 1.4 DID:
@@ -62,6 +70,7 @@ import {
   channelOf,
   compareVersions,
   minimumReleaseAgeSeconds,
+  newestSeasonedCanary,
   npmBunDist,
   npmVersion,
   readPin,
@@ -135,8 +144,9 @@ console.log(`baseline:  ${process.execPath}\n`);
 // 1. is there a newer release ON THE PIN'S CHANNEL, and can every resolver see it?
 // ---------------------------------------------------------------------------
 // THE CHANNEL IS THE PIN'S SHAPE (lib/bun-pin.ts). A release pin follows
-// releases; a dated-canary pin follows npm's `canary` dist-tag, which names the
-// newest DATED canary and is immutable once published. Crossing channels is a
+// releases; a dated-canary pin follows npm's version list, taking the newest
+// DATED canary that has already aged past the window, since a dated canary is
+// immutable once published and the rolling tag is not. Crossing channels is a
 // hand edit of config/bun-pin.json and never something this script does on its own,
 // in either direction: a stable pin must not wake up on a canary, and a canary
 // pin must not quietly fall back to the release line the day one ships.
@@ -178,14 +188,21 @@ if (!target && channel === "stable") {
 }
 
 if (!target && channel === "canary") {
-  // The dated canary npm publishes daily. Its value is an immutable version
-  // string, so unlike the GitHub tag it can be pinned, compared and re-fetched.
-  const tagged = String(npmMeta?.["dist-tags"]?.canary ?? "");
-  if (channelOf(tagged) !== "canary") {
-    console.error(`npm's canary dist-tag reads ${JSON.stringify(tagged)}, which is not a dated canary; refusing to guess`);
+  // The dated canary npm publishes daily is an immutable version string, so
+  // unlike the GitHub tag it can be pinned, compared and re-fetched. Which one
+  // is chosen WITH gate 2's window, never checked against it afterwards: see
+  // newestSeasonedCanary for the six nights that cost.
+  const window = minimumReleaseAgeSeconds(ROOT);
+  const seasoned = newestSeasonedCanary(npmMeta, window);
+  if (!seasoned) {
+    console.error(`npm lists no dated canary older than bunfig's ${(window / 3600).toFixed(0)} h window; refusing to guess`);
     process.exit(2);
   }
-  target = tagged;
+  target = seasoned.version;
+  if (seasoned.skipped.length) {
+    const ages = seasoned.skipped.map((s) => `${npmVersion(s.version)} (${s.ageSeconds === null ? "no publish time" : `${(s.ageSeconds / 3600).toFixed(0)} h`})`);
+    console.log(`skipping ${seasoned.skipped.length} newer canar${seasoned.skipped.length === 1 ? "y" : "ies"} inside bunfig's ${(window / 3600).toFixed(0)} h window: ${ages.join(", ")}`);
+  }
 }
 
 if (!target) {
