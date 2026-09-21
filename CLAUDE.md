@@ -245,7 +245,13 @@ bun run canary:browsers   # /garage/horizon's probes in stable vs prerelease eng
 # The runner, the reporter and the digest are TIMBRADO's since 2026-09-15
 # (github.com/oddharsh/timbrado, the tool extracted from these legs, a git
 # dependency pinned by full commit sha). The legs, the gates, the watch list
-# and the browser probes stay here; `bun run timbrado` is its CLI.
+# and the browser probes stay here; `bun run timbrado` is its CLI. Since
+# 0.2.0 (pinned 2026-09-20) the watch runner is a RUST BINARY, built on
+# demand from the installed package by `ensureTimbradoEngine` in
+# tools/lib/upstream-watches.ts, zenc-style; a checkout with cargo needs
+# nothing, and a runner without it is exit 2 rather than eight rows reading
+# `null`, because timbrado's own runWatch degrades a missing engine to null
+# and null never moves a verdict. DEPENDENCIES.md has the long form.
 bun run timbrado digest --repo cloudflare/workers-sdk --from b149147 --to 982b806
 bun run timbrado survey                # which dependencies have a head at all (3 of 12, 2026-09-15)
 

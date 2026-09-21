@@ -93,6 +93,9 @@ jobs:
         uses: ./.github/actions/setup-bun
 
       - name: Install dependencies
+        # timbrado's watch runner is a Rust engine that canary:bun builds on
+        # demand from the installed package (lib/upstream-watches.ts); the
+        # runner image ships cargo, and a runner without it is exit 2 below.
         run: bun install --frozen-lockfile
 
       - name: Run the canary through the pin gates

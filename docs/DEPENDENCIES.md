@@ -165,6 +165,24 @@ edit of the sha plus `bun install`; dependabot cannot reach a git dependency
 repository is what is this repository's: the legs, the gates (a byte-identical
 build is a fact about `/a/` and `/i/`), the watch LIST, and the browser probes.
 
+**The watch runner is a Rust binary since timbrado 0.2.0 (pinned here
+2026-09-20), and it is BUILT ON DEMAND the way zenc is.** `runWatch` in
+`tools/lib/upstream-watches.ts` runs `cargo build --release --locked` in the
+installed package before it measures anything, so a fresh checkout with cargo
+repairs itself and `config/tools.json` declares the engine as optional for
+that reason. The build lands under `node_modules/.bun/timbrado@…+<sha>/`, a
+directory bun mints per commit, so a pin bump gets a fresh build without
+anyone clearing a cache. What forced the guard is timbrado's own degraded
+reading: its `runWatch` answers a missing engine as `landed: null`, and null
+never moves a verdict, so the bun leg would have printed GREEN over eight
+unmeasured rows. The wrapper THROWS instead and `canary-bun.ts` turns that
+into exit 2 before it downloads a canary. `TIMBRADO_BIN` names a built engine
+elsewhere and skips the build; only `canary:bun` needs one, since the wrangler
+leg runs its two watches through its own probe Worker and the reporter, the
+digest and the survey are still TypeScript. The bump adopted 0.2.0 at its
+merge commit unchanged: every one of the eight bun watches reads the same
+boolean through the engine as it did through the JavaScript runner.
+
 ### node, in `.node-version`
 
 Also unowned, and it needs a DIFFERENT tool rather than the same one pointed
