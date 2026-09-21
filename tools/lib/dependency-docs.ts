@@ -50,7 +50,7 @@ export const DOC_ALIASES = [
 export const VERSIONLESS = new Map<string, string>([
   // A package in neither list fails the reverse direction, so the next dependency
   // documented without a version needs an entry here and therefore a stated reason.
-  ["timbrado", "a git dependency pinned to a full commit sha of github.com/oddharsh/timbrado since 2026-09-15: the tool extracted from the canary legs (the watch runner, the reporter, the digest), unpublished on npm like halflight, so the sha in package.json is the identity and bun.lock records the tarball's sha512. Bumping it is a hand edit of the sha plus a relock, and the prose names the shape rather than a number"],
+  ["timbrado", "a git dependency pinned to a full commit sha of github.com/oddharsh/timbrado since 2026-09-15: the tool extracted from the canary legs (the watch runner, a Rust engine built on demand since 0.2.0; the reporter; the digest), unpublished on npm like halflight, so the sha in package.json is the identity and bun.lock records the tarball's sha512. Bumping it is a hand edit of the sha plus a relock, and the prose names the shape rather than a number"],
   ["wrangler", "pinned to a COMMIT of cloudflare/workers-sdk main through a pkg.pr.new tarball URL since 2026-09-14, so there is no release number to state: the sha in the URL is the identity, bun.lock records the tarball's sha512, and `bun run check-wrangler` holds the URL, the lockfile and the installed version together. The prose names the channel and the reason; a number written there would be the tarball's own version, which the next nightly advance moves"],
 ]);
 

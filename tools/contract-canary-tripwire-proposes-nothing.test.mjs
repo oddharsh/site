@@ -29,7 +29,7 @@ import { checkWatch } from "timbrado/watch";
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 import { chromeChannel, DEFAULT_CHROME_CHANNEL } from "./lib/browser-channel.ts";
 import { DEFAULT_PAIRS, HONEST_FALSE, JXL_2X2, LIVE_PROBES, familyOf, shippedCaps, tablesFor } from "./canary-browsers.ts";
-import { BUN_WATCHES, WRANGLER_WATCHES, runWatch } from "./lib/upstream-watches.ts";
+import { BUN_WATCHES, WRANGLER_WATCHES, ensureTimbradoEngine, runWatch } from "./lib/upstream-watches.ts";
 
 const LEGS = ["tools/canary-bun.ts", "tools/canary-wrangler.ts", "tools/canary-browsers.ts"];
 const strip = (src) => src.split("\n").filter((l) => !l.trim().startsWith("//")).join("\n");
@@ -175,6 +175,42 @@ test("timbrado is pinned to a full commit sha, so the frozen lockfile is the who
   assert.match(spec, /^github:oddharsh\/timbrado#[0-9a-f]{40}$/, `timbrado is ${JSON.stringify(spec)}; a branch or a short sha floats`);
   const lock = await readFile(new URL("bun.lock", ROOT), "utf8");
   assert.ok(lock.includes(`timbrado@github:oddharsh/timbrado#${spec.slice(-40, -33)}`), "bun.lock records the same commit");
+});
+
+test("a missing Rust engine is an instrument failure, never eight watch rows reading null", async () => {
+  // timbrado 0.2.0 answers a missing engine as `landed: null`, and null never
+  // moves a verdict, so the bare re-export would let the bun leg print GREEN
+  // over unmeasured rows. The list module has to export its OWN runWatch,
+  // behind a guard that throws, and the leg has to ask for the engine before
+  // it spends minutes downloading and building a canary.
+  const lib = strip(await readFile(new URL("tools/lib/upstream-watches.ts", ROOT), "utf8"));
+  assert.doesNotMatch(lib, /export \{[^}]*\brunWatch\b[^}]*\} from "timbrado\/watch"/, "runWatch is re-exported bare from timbrado; a missing engine would read null");
+  assert.match(lib, /export function runWatch\([^)]*\)[^{]*\{\s*ensureTimbradoEngine\(\);/, "the exported runWatch builds the engine before it measures");
+  const leg = strip(await readFile(new URL("tools/canary-bun.ts", ROOT), "utf8"));
+  const ensureAt = leg.indexOf("ensureTimbradoEngine();");
+  assert.ok(ensureAt > 0, "canary-bun.ts never asks for the engine");
+  assert.ok(ensureAt < leg.indexOf('"download failed"'), "the engine is asked for AFTER the canary download; a runner without cargo pays for the download first");
+  assert.ok(ensureAt < leg.indexOf("for (const w of BUN_WATCHES)"), "the engine is asked for after the watch loop it exists for");
+  assert.match(leg.slice(ensureAt, ensureAt + 400), /emit\("instrument", bare, [^)]*engine[^)]*\);\s*process\.exit\(2\);/, "an engine that cannot be built is exit 2, the instrument, so the reporter files nothing");
+
+  // Behavioural: point TIMBRADO_BIN (timbrado's own override, read on every
+  // call) at an engine that does not exist. The guard and the wrapped runWatch
+  // both have to THROW; a `{ landed: null }` return here is the exact failure.
+  const had = process.env.TIMBRADO_BIN;
+  process.env.TIMBRADO_BIN = "/definitely/not/a/timbrado/engine";
+  try {
+    assert.throws(() => ensureTimbradoEngine(), /TIMBRADO_BIN/, "a named engine that is missing must throw by name");
+    assert.throws(() => runWatch("bun", BUN_WATCHES[0]), /TIMBRADO_BIN/, "runWatch must not degrade to null when the engine is missing");
+  } finally {
+    if (had === undefined) delete process.env.TIMBRADO_BIN;
+    else process.env.TIMBRADO_BIN = had;
+  }
+  // The control: with nothing named, the guard returns an engine that exists
+  // and is executable, which is what the "every bun watch RUNS" test above
+  // rests on without saying so.
+  const engine = ensureTimbradoEngine();
+  const probe = spawnSync(engine, ["--version"], { encoding: "utf8" });
+  assert.match(probe.stdout, /^timbrado \d+\.\d+\.\d+/, `${engine} --version answered ${JSON.stringify(probe.stdout)}`);
 });
 
 test("the JXL fixture is a real codestream and the live probes are named where the reporter can find them", () => {

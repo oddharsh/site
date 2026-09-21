@@ -49,7 +49,7 @@ import { rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { BUN_WATCHES, runWatch, type WatchResult, watchMoved, watchRow, watchSignature } from "./lib/upstream-watches.ts";
+import { BUN_WATCHES, ensureTimbradoEngine, runWatch, type WatchResult, watchMoved, watchRow, watchSignature } from "./lib/upstream-watches.ts";
 import { canaryUrl, compareVersions, npmVersion, readPin, releaseAsset, runningMatchesPin } from "./lib/bun-pin.ts";
 import {
   type Gate,
@@ -136,6 +136,19 @@ if (!process.versions.bun) {
     emit("instrument", bare, `baseline is not the pin: ${baseline.why}`);
     process.exit(2);
   }
+}
+
+// The watch runner is timbrado's Rust engine, built on demand from the
+// installed package (lib/upstream-watches.ts says why a missing one has to
+// throw). Asked for HERE, before the download and the two builds, so a runner
+// without cargo is an instrument failure that costs seconds rather than one
+// that surfaces after minutes of work as eight unmeasured rows.
+try {
+  ensureTimbradoEngine();
+} catch (err) {
+  console.error(err instanceof Error ? err.message : String(err));
+  emit("instrument", bare, "timbrado's Rust engine could not be built");
+  process.exit(2);
 }
 
 console.log(`pinned:    bun@${pin.version}`);

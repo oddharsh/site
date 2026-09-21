@@ -43,14 +43,67 @@
 // a verdict) and the signature live in github.com/oddharsh/timbrado, the
 // tool extracted from these legs, and are re-exported here so the legs keep
 // one import path. A change to how a watch is read is a change there.
+//
+// THE RUNNER IS A RUST BINARY since timbrado 0.2.0 (2026-09-20 here), built
+// on demand from the installed package the way zenc is. Two facts decide the
+// shape of `ensureTimbradoEngine` below. bun lays the git dependency out
+// under `node_modules/.bun/timbrado@github+oddharsh+timbrado+<sha>/`, so a pin
+// bump is a FRESH directory with no `target/` in it and "build when missing"
+// is sound; cargo's own fingerprint check makes the every-run form cost ~0.2s
+// when nothing moved, so it runs every time like zenc's guard does. And
+// timbrado's `runWatch` answers a MISSING engine as `landed: null` ("did not
+// run"), which by rule 3 above never moves a verdict: a leg reading eight
+// unmeasured rows would print GREEN over them. So the `runWatch` this module
+// exports is a wrapper that builds first and THROWS when it cannot, and
+// canary-bun.ts turns that throw into exit 2 before it downloads anything.
+// `TIMBRADO_BIN` (an absolute path to a built engine) skips the build, which
+// is timbrado's own override and the one a runner without cargo would use.
 
-import type { Watch } from "timbrado/watch";
+import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { createRequire } from "node:module";
+import { dirname, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { type Reading, runWatch as measureWatch, type Watch } from "timbrado/watch";
 
 import { OXC_MINIFY_OPTIONS } from "./oxc-minify-options.ts";
 
 export type { Watch, WatchResult } from "timbrado/watch";
-export { checkWatch, runWatch, watchMoved, watchRow, watchSignature } from "timbrado/watch";
+export { checkWatch, watchMoved, watchRow, watchSignature } from "timbrado/watch";
+
+/** The installed timbrado package, wherever bun laid it out (a symlink into node_modules/.bun). */
+export const TIMBRADO_PACKAGE = dirname(createRequire(import.meta.url).resolve("timbrado/package.json"));
+/** Where `cargo build --release` in that package puts the engine, and where timbrado's own loader looks. */
+export const TIMBRADO_ENGINE = join(TIMBRADO_PACKAGE, "target", "release", "timbrado");
+
+let built: string | null = null;
+
+/**
+ * Makes sure timbrado's Rust engine exists and returns its path. Honours
+ * `TIMBRADO_BIN`; otherwise builds it in place from the installed package.
+ * Throws rather than degrading, because the degraded reading is `null`.
+ */
+export function ensureTimbradoEngine(): string {
+  const named = process.env.TIMBRADO_BIN;
+  if (named !== undefined) {
+    if (!isAbsolute(named) || !existsSync(named)) throw new Error(`TIMBRADO_BIN names ${JSON.stringify(named)}, which is not an absolute path to a built timbrado engine`);
+    return named;
+  }
+  if (built) return built;
+  const build = spawnSync("cargo", ["build", "--release", "--locked", "--manifest-path", join(TIMBRADO_PACKAGE, "Cargo.toml")], {
+    stdio: ["ignore", "ignore", "inherit"],
+  });
+  if (build.error) throw new Error(`timbrado's Rust engine needs cargo, which did not run (${build.error.message}); install Rust or set TIMBRADO_BIN to a built engine`);
+  if (build.status !== 0) throw new Error(`cargo build of timbrado's Rust engine exited ${build.status}`);
+  if (!existsSync(TIMBRADO_ENGINE)) throw new Error(`cargo exited 0 and ${TIMBRADO_ENGINE} is still missing`);
+  return (built = TIMBRADO_ENGINE);
+}
+
+/** timbrado's `runWatch`, behind the engine guard: a missing engine throws here instead of reading `null`. */
+export function runWatch(exe: string, watch: Watch, timeoutMs?: number): Reading {
+  ensureTimbradoEngine();
+  return measureWatch(exe, watch, timeoutMs);
+}
 
 const PNG_2X1_8BIT = "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAAD0lEQVR4nGNgYGD4//8/AAYBAv4CsjmuAAAAAElFTkSuQmCC";
 const PNG_1X1_16BIT = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABEAIAAADA54+dAAAADElEQVR4nGNoYARBAAYQAYRMvznsAAAAAElFTkSuQmCC";

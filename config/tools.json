@@ -181,6 +181,25 @@
       "recorded": "zenc 0.1.0, zenjpeg 0.8.4"
     },
     {
+      "bin": "timbrado",
+      "path": "node_modules/timbrado/target/release/timbrado",
+      "install": "cargo build --release --locked --manifest-path node_modules/timbrado/Cargo.toml",
+      "optional": true,
+      "why": "timbrado's Rust measurement engine (0.2.0): runs every upstream watch under the pinned bun and the candidate, in a scratch directory it removes; the TypeScript half (reporter, digest, survey, resolve) needs no binary",
+      "required_by": [
+        "tools/lib/upstream-watches.ts",
+        "tools/canary-bun.ts"
+      ],
+      "optional_why": "BUILT ON DEMAND like zenc: `ensureTimbradoEngine` in tools/lib/upstream-watches.ts runs the install command whenever a watch is read and throws when it cannot, so an absent engine on a fresh checkout is repaired rather than installed by hand, and a runner without cargo is exit 2 rather than eight rows reading `null`. The path is inside node_modules because bun lays the git dependency out per commit sha, so a pin bump is a fresh directory and the build follows it. `TIMBRADO_BIN` names a built engine elsewhere and skips the build",
+      "version": {
+        "flag": "--version",
+        "match": "timbrado (\\d+\\.\\d+\\.\\d+)"
+      },
+      "bytes": false,
+      "bytes_why": "supervises probe processes and parses their JSON line; encodes nothing and touches no served byte",
+      "recorded": "timbrado 0.2.0"
+    },
+    {
       "bin": "jpegtran",
       "path": "/opt/homebrew/opt/mozjpeg/bin/jpegtran",
       "install": "brew install mozjpeg",
