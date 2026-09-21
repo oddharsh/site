@@ -6014,6 +6014,28 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     (config/.generated/ was first proven from one), and it costs about 2s of
     install. Remove it with `git worktree remove --force` afterwards.
 
+    **A THIRD DOOR, found 2026-09-21, and it fails in the OTHER direction:
+    red on the workstation, green in CI.** `bun run typecheck` reported two
+    errors in `cal/test/*.js`, `"BOOKING_WORKFLOW"` not assignable to `never`,
+    and the detached control above answered 0. Wrangler's `cli.d.ts` imports
+    `Workflow` from its OPTIONAL peer `@cloudflare/workers-types`, so its
+    `BindingName<Env, Workflow>` compares that type against the generated
+    runtime's `Workflow` on `CalEnv`. In CI the peer is absent, the import is
+    `any` under `skipLibCheck`, and the generic degrades to `string`. On the
+    workstation `--traceResolution` found the peer at
+    `node_modules/.bun/node_modules/@cloudflare/workers-types`, bun's HOISTED
+    store links, pointing at a `5.20260825.1` entry the lockfile had not named
+    since the package left on 2026-09-02. Deleting `node_modules/@cloudflare`
+    changed nothing, because that is the first door and this was the third.
+    A frozen install never recreates any of it, so a tree that has only ever
+    been installed forward carries every version it ever held.
+
+    The rule is the one already stated, made sharper: **`rm -rf node_modules
+    && bun install --frozen-lockfile` is the only removal that removes**, and
+    a nested worktree needs it on the PARENT too (its store is on the walk).
+    Read a workstation-only typecheck failure on a wrangler pin bump as this
+    before reading it as the pin.
+
 45. **A fixture rooted at a bare `mkdtemp` of `tmpdir()` compares a tool's
     RESOLVED output against an UNRESOLVED path, and only macOS can see it.**
     `$TMPDIR` there reaches `/private/var/folders/...` through the `/var`
