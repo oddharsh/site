@@ -9,7 +9,7 @@ import { cronCensus, handleCensus, handleCensusJson } from "./census.ts";
 import { shouldUseWorkersCache } from "./lib/cache.ts";
 import { handleCoffeeAvailability } from "./coffee.ts";
 import { handleHit } from "./counter.ts";
-import { handlePhotoGrid, serveMarkdown } from "./home.ts";
+import { handlePhotoGrid, serveMarkdown, warmGridData } from "./home.ts";
 import { handleInbox } from "./inbox.ts";
 import { handleWebmention, handleWebmentionDecision } from "./webmention.ts";
 import { cronSendWebmentions } from "./webmention-send.ts";
@@ -200,7 +200,7 @@ async function serveWorkerRequest(request: SiteRequest, env: Env, ctx: Execution
   // also the safer seam, because env is not caller-controllable and no external
   // request can ask production to stop serving its precompressed bodies.
   // Workers Logs: one structured line per worker-owned request (path, method,
-  // status, ms, version, country, bot), filterable in the dashboard. Edge-direct
+  // status, ms, version, country, bot, protocol), filterable in the dashboard. Edge-direct
   // traffic never reaches this code, so it never logs. Strippable: delete the
   // wrapper, keep `return withSecurityHeaders(await route(...))`.
   //
@@ -228,6 +228,13 @@ async function serveWorkerRequest(request: SiteRequest, env: Env, ctx: Execution
       v: env.CF_VERSION_METADATA?.id?.slice(0, 8),
       co: request.cf?.country,
       bot: request.cf?.botManagement?.verifiedBot || undefined,
+      // `h` answers the SHARE question. infra:check asserts HTTP/3 is ON (alt-svc
+      // plus the HTTPS DNS record); nothing before 2026-09-21 said whether it was
+      // USED. Read it grouped over a tail. Expect a mix rather than a switch:
+      // Chrome learns h3 from Alt-Svc after the first response and keeps a healthy
+      // h2 connection, so a cold visit's document reads HTTP/2 by design and the
+      // assets it discovers a moment later read HTTP/3.
+      h: request.cf?.httpProtocol,
     }));
   } catch {}
   // noindex EVERY hostname that is not the canonical site, not just previews.
@@ -1285,5 +1292,7 @@ const HOMEPAGE_HEADERS = {
 // Both branches now take the GET's own code, which decides the header set once.
 function routeHomepage(request: SiteRequest, env: Env, ctx: ExecutionContext) {
   if (wantsMarkdown(request)) return serveMarkdown(request, env);
+  // warm the grid fragment's two memoised maps behind the document (home.ts says why)
+  ctx.waitUntil(warmGridData(env));
   return serveStaticPage(request, env, { headers: HOMEPAGE_HEADERS });
 }
