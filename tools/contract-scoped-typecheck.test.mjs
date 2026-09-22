@@ -149,14 +149,17 @@ test("coverage rejects a failed compiler census even when it prints all owned fi
   // Canonical for the reason above: the census asserts on paths tsc printed.
   const repo = realpathSync(mkdtempSync(join(tmpdir(), "coverage-typecheck-")));
   try {
-    for (const dir of ["tools", "src", "config"]) mkdirSync(join(repo, dir));
+    for (const dir of ["tools", "tools/lib", "src", "config"]) mkdirSync(join(repo, dir));
     symlinkSync(fileURLToPath(new URL("../node_modules", import.meta.url)), join(repo, "node_modules"), "dir");
     copyFileSync(new URL("./check-ts-coverage.ts", import.meta.url), join(repo, "tools/check-ts-coverage.ts"));
+    // The checker's one first-party import, which computes both file sets. It
+    // is copied rather than stubbed so this fixture exercises the real census.
+    copyFileSync(new URL("./lib/tsc-scope.ts", import.meta.url), join(repo, "tools/lib/tsc-scope.ts"));
     // Satisfy the real census floors without altering the checker. Source
     // diagnostics and unavailable imports are deliberately outside its job.
     // The owned set is collected AS the files are written, so the census
     // assertion below cannot drift from the fixture that produced it.
-    const owned = new Set([join(repo, "tools/check-ts-coverage.ts")]);
+    const owned = new Set([join(repo, "tools/check-ts-coverage.ts"), join(repo, "tools/lib/tsc-scope.ts")]);
     for (let i = 0; i < 150; i++) {
       const file = join(repo, "src", `fixture${i}.ts`);
       writeFileSync(file, "export {};\n");
@@ -171,7 +174,7 @@ test("coverage rejects a failed compiler census even when it prints all owned fi
       { cwd: repo, encoding: "utf8", timeout: 20_000 });
     const healthy = run();
     assert.equal(healthy.status, 0, healthy.stderr);
-    assert.match(healthy.stdout, /151 source files, all held by one of 5 programs/);
+    assert.match(healthy.stdout, /152 source files, all held by one of 5 programs and all named by an include/);
 
     const broken = "config/tsconfig.fixture0.json";
     writeFileSync(join(repo, broken), JSON.stringify({ ...config,
