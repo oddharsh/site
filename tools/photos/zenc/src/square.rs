@@ -17,20 +17,23 @@
 // `--transfer` names the SOURCE's curve (srgb, or g22 for the Monochrom's
 // Gray Gamma 2.2) and is used for decode and encode both, so unaveraged values
 // pass through exactly.
-use crate::pixels::{crop, load_linear, orient, parse_transfer, encoded, scale, Frame, Orientation, TransferOption};
+use crate::pixels::{crop, load_linear, parse_transfer, encoded, scale_oriented, Frame, Orientation, TransferOption};
 use halflight::Filter;
 use std::path::Path;
 
-/// The production geometry, shared with the benchmark front end.
-pub fn tier(src: &Frame, size: u32, filter: Filter) -> image::DynamicImage {
-    let (w, h) = (src.w, src.h);
+/// The production geometry, shared with the benchmark front end. `src` is the
+/// STORED frame and `orientation` brings it upright inside the resample, so no
+/// upright copy of the full frame is ever built. Geometry is computed on the
+/// upright size, exactly as it was when this took an oriented frame.
+pub fn tier(src: &Frame, orientation: Orientation, size: u32, filter: Filter) -> image::DynamicImage {
+    let (w, h) = if orientation.swaps_axes() { (src.h, src.w) } else { (src.w, src.h) };
     let (nw, nh) = if w <= h {
         (size, (h as u64 * size as u64).div_ceil(w as u64) as u32)
     } else {
         ((w as u64 * size as u64).div_ceil(h as u64) as u32, size)
     };
     let (cx, cy) = ((nw.saturating_sub(size)) / 2, (nh.saturating_sub(size)) / 2);
-    let scaled = scale(src, nw, nh, filter);
+    let scaled = scale_oriented(src, orientation, nw, nh, filter);
     encoded(&crop(&scaled, cx, cy, size.min(nw), size.min(nh)))
 }
 
@@ -114,13 +117,14 @@ pub fn run(args: &[String]) -> i32 {
         Ok(f) => f,
         Err(e) => return err(&e),
     };
-    // Orient BEFORE the resample, so the crop math sees the frame the viewer
-    // will. For orientation 1 the decoded buffer moves without copying.
-    let src = orient(src, exif);
+    // The orientation is applied INSIDE each tier's resample (tier() and
+    // halflight::resample_oriented), so the crop math still sees the frame the
+    // viewer will and no upright copy of the full frame is built. That copy was
+    // a 311 MB f32 buffer for a 26 MP photo, rebuilt once per ingest.
     for output in outputs {
         // Short edge lands on `size`. sips reaches the same crop from the long
         // edge, which is one more piece of arithmetic to get wrong.
-        let pixels = tier(&src, output.size, filter);
+        let pixels = tier(&src, exif, output.size, filter);
         if let Some(path) = output.png {
             if let Err(e) = pixels.save(path) { return err(&format!("cannot write {path}: {e}")); }
         }

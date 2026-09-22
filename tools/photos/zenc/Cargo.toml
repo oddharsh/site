@@ -56,7 +56,14 @@ zenjpeg = { version = "0.8.4", features = ["trellis"] }
 # transfer curves) and the histogram bake over all 165 stems came back
 # identical from the binary built either way, and the same A/B is the gate for
 # moving this rev.
-halflight = { git = "https://github.com/oddharsh/halflight.git", rev = "80e9f344f669f85cbf4e85d9337b11405691f7ba" }
+#
+# Moved 2026-09-22 to 871487e for resample_oriented, which square now calls so
+# no upright copy of a full frame is built. `bun run zenc:bench` is that A/B
+# now: all 24 square outputs and 258 histograms byte-identical, and the
+# histograms regenerated from this build matched the committed file. Pin the
+# rev to halflight's branch commit and merge that PR with a merge commit (not a
+# squash), as #1 was, so this sha stays reachable from halflight's main.
+halflight = { git = "https://github.com/oddharsh/halflight.git", rev = "871487e15be16dae0da39ddd882d94d188a5dc5f" }
 # Input decode only. `tiff` was added on 2026-08-25 for the Instagram export,
 # which needs a LOSSLESS decode of a HEIF source and cannot use JPEG for it.
 # Measured on a 7728x5152 HIF: `sips -s format png` takes 6222ms because it
