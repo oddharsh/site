@@ -1,0 +1,6 @@
+#!/bin/sh
+# Drains what merge-driver.ts parked. All three of these exist because which hook
+# fires is measured rather than guessed: a CONFLICTED merge resolved and
+# committed fires post-commit and NOT post-merge, which is the one path that
+# most needs the regeneration. tools/merge-finish.ts is idempotent.
+exec bun tools/merge-finish.ts --quiet

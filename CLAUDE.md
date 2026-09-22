@@ -307,6 +307,17 @@ worktrees may edit freely, but a worktree is not a release surface.
   change to yourself, and never revert or commit a hunk you did not write. When
   the work is more than a couple of edits, take a worktree so nobody can move
   your branch out from under you.
+- **The machine-owned files resolve their own conflicts, after one setup run.**
+  `main` moves under every open branch here, and about 14% of adjacent PR pairs
+  collide. `.gitattributes` routes `package.json`, `config/derivations.json`,
+  `config/bun-pin.json` and the three lockfiles through
+  [`tools/merge-driver.ts`](tools/merge-driver.ts), which merges them
+  structurally, takes the newer pin, or parks a derived file for regeneration.
+  Run `bun run setup:merge` once per clone; worktrees share one `.git/config`,
+  so that covers all of them. A conflict that still arrives is a real one, and
+  a resolution can owe you something (a `bun install`, a pin's gate), which
+  `bun run merge:finish -- --check` prints. Gotcha 47 has the measurements and
+  [MAINTENANCE.md](docs/MAINTENANCE.md) the runbook.
 - Keep each change on its own branch, commit it, push it, and open a PR. Do
   not deploy from a dirty worktree or push agent work directly to `main`.
 - **Turn on CI auto-fix as soon as a PR exists**, through the Claude Code
@@ -6234,6 +6245,128 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     workstation suite stops being a pre-push gate at all. Two of these three
     instances were sitting on `main` unreported. Treat a local-only failure as a
     real bug in the fixture rather than an environment quirk to route around.
+
+47. **A merge driver's `%A` and `%B` INVERT between merge and rebase, and the
+    marker files that would tell you which you are in do not exist yet.** The
+    drivers in `.gitattributes` exist because `main` moves under every open
+    branch here; what took the measuring was making them safe.
+
+    Replaying the last 80 commits (cherry-pick each onto the parent of the one
+    before, which is "my branch was cut before that landed") gives 11 conflicts
+    in 78 adjacent pairs, about 14%. **The class is not what it looks like**: 22
+    of the 44 conflicted regions are ADD/ADD, two branches each inserting a line
+    into the same block, and exactly ONE of the 11 is a version bump. With the
+    drivers in, `package.json` and `bun.lock` leave the conflict list entirely
+    and `config/derivations.json` goes 5 to 2, the 2 being genuine two-sided
+    edits. Conflicted PAIRS only go 11 to 10, because prose in `CLAUDE.md` and
+    `MAINTENANCE.md` co-occurs with nearly every one and nothing here touches it.
+
+    Four things were measured rather than reasoned about, and each one changed
+    the design:
+
+    - **`git rerere` does not help.** It keys on the conflict TEXT and every pin
+      bump carries a different sha, so recording a resolution for one and
+      replaying the next printed `Recorded preimage` and left the markers in.
+      Two entries in `rr-cache`, never a replay.
+    - **Orientation.** One driver, three verbs:
+
+      | verb | `GIT_REFLOG_ACTION` | markers | `%A` ours | `%B` theirs |
+      |---|---|---|---|---|
+      | merge | `merge upstream` | none | FEATURE | UPSTREAM |
+      | rebase | unset | `rebase-merge` | UPSTREAM | FEATURE |
+      | cherry-pick | unset | none | UPSTREAM | FEATURE |
+
+      So a driver written as "take theirs" takes the OPPOSITE side depending on
+      how the branch was integrated, and both verbs are used here. `MERGE_HEAD`
+      and `CHERRY_PICK_HEAD` are not written yet when the driver runs, so merge
+      and cherry-pick are indistinguishable by marker while being opposites;
+      merge is the one case carrying a positive signal, which is what
+      `mainlineIsOurs()` reads. Every mode is side-independent by construction
+      except the pin rule, which is loud about what it took.
+    - **A refusing driver writes NO conflict markers.** Exiting non-zero marks
+      the path unmerged and leaves `%A` exactly as it found it, so the working
+      file held the mainline side, clean, with nothing to see. Staging it would
+      have taken one side blind. `refuse()` runs `git merge-file` to put the
+      markers in, and the contract test that caught this fails without it.
+    - **`post-merge` does not fire when a merge had conflicts**, which is
+      precisely the case a driver creates. Measured: a conflicted merge resolved
+      and committed fires `post-commit`; a clean merge fires `post-merge`; a
+      rebase fires `post-rewrite` whether or not it stopped. All three drain the
+      ledger, and `bun install --frozen-lockfile` in CI is the backstop under
+      them.
+
+    **The round-trip guard is what makes refusing safe AND is a silent
+    no-op risk.** `json` and `pin` rewrite the whole file from a parsed value, so
+    each first re-serializes the untouched inputs and refuses anything it cannot
+    reproduce byte for byte. All three owned files reproduce exactly today. The
+    failure has no symptom: reformat one and the conflicts simply come back with
+    nothing connecting them to the reformat, so a contract test asserts the
+    committed bytes round-trip rather than asserting only the code.
+
+    Two smaller things this cost. `git clean -qfd $EXCLUDES` in a zsh harness
+    passed one literal argument and deleted the driver under test, which read as
+    "merge drivers do not work" for a while and is gotcha 2 arriving in a new
+    place. And splicing the new code in with `t.indexOf("}", ...)` found the
+    brace of a `${line}` inside a template literal rather than the function's,
+    which is gotcha 19 one layer up.
+
+    **THE PROSE HALF IS WHY `merge=union` IS NOT THE ANSWER, and the granularity
+    is the whole finding.** Git's built-in union resolves a conflicting hunk by
+    concatenating both sides, which is right for an insertion and wrong for an
+    edit, and it works on LINES so it cannot tell them apart. The case that
+    decided it, from this file's own history: one side had `# First run
+    (2026-09-14) found margin-trim live in Canary 155` and the other had that
+    sentence WITH a full stop plus 21 lines extending the section. Line union
+    keeps both, so the sentence lands here twice in a row one character apart.
+    **A duplicate-line counter scores that zero**, because the lines are not
+    identical, which is how the first attempt to measure it came back clean.
+
+    So `prose` is diff3 over BLOCKS: a chunk one side moved is taken, a chunk
+    both sides moved identically is taken once, a chunk both sides moved
+    differently is refused, and the one place both sides are emitted is a chunk
+    whose base is EMPTY, meaning neither side edited anything and both inserted.
+
+    Two refinements, each forced by a measurement against the eight real
+    diverged branches in this repository rather than against the replay, which
+    structurally cannot exercise this (its `ours` is the PARENT of base, so every
+    side reads as a deletion):
+
+    - **Blank-line paragraphs are too coarse.** Markdown puts no blank line
+      between bullets, so a 30-item list is ONE block and any two branches
+      touching that list collide. At that granularity the driver resolved 0 of 4.
+      Blocks now split per list item, heading and table row as well.
+    - **Plain diff3 is still too coarse**, because a chunk between two anchors
+      conflates independent changes. `docs/DEPENDENCIES.md` had main bumping
+      `Oxlint 1.83.0` to `1.84.0` inside one bullet while a branch added a
+      different bullet beside it, which is exactly the version-bump-next-to-an-
+      insertion shape this whole change is named after. When one side's change
+      within a chunk is pure INSERTION, its new blocks are laid back into the
+      other side's text at the same anchors.
+
+    That takes it to **2 of 4 real prose conflicts resolved**, and the two it
+    still refuses are genuine two-sided edits of one paragraph. Verified rather
+    than counted: across every resolution, 0 invented lines, 0 dropped lines that
+    both sides kept, and every main-only line preserved, including 3678 of 3678
+    on a branch 521 commits behind. A stale branch cannot silently revert main's
+    prose through this.
+
+    **THE EXPENSIVE MISTAKE HERE WAS RETURNING 1 FROM A REFUSAL.** A driver
+    REPLACES the default merge for every path it claims, including the many the
+    default resolves cleanly, so declining with a hard failure manufactures
+    conflicts rather than declining to help: claiming CLAUDE.md that way took the
+    replay from 11 conflicted pairs to **24**. `fallBackToTextMerge` runs
+    `git merge-file` and returns ITS exit code, so a decline is a true no-op when
+    the text merge is clean and carries ordinary markers when it is not. A
+    contract test pins that, because the failure looks like the driver working.
+
+    **The definitions cannot be committed**, which is git's decision rather than
+    an oversight: `.gitattributes` names a driver and `.git/config` defines the
+    COMMAND, and a repository you clone must not be able to run one at you. So
+    `config/gitconfig` is committed and `bun run setup:merge` wires it in with
+    `include.path`, once per clone. Worktrees share one `.git/config`, so one run
+    covers all of them. An `include.path` naming a missing file is SILENTLY
+    IGNORED, so that script reads the driver back out afterwards and fails if it
+    is not there.
 
 ---
 
