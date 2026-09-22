@@ -9,15 +9,41 @@ name: Ramp production
 # at a terminal. CLAUDE.md described a `ramp.yml` doing it from 2026-08-06 onward
 # and no such workflow was ever written; this is it.
 #
-# What the ramp buys is the ability to read a change before everyone gets it, so
-# automating it must not mean removing the human. It does not:
+# What the ramp buys is the ability to read a change before everyone gets it, and
+# for a year that reading was a person. Measured over the last 60 runs of this
+# workflow on 2026-09-22, it was nobody: 2 of the 20 real ramps reached the
+# reviewer and finished, and 18 were cancelled by the next release while parked
+# at the gate. One waited 17 hours first. Every one of them had already put its
+# version at 10%, so the settled state of this pipeline was production serving a
+# split that no human chose and no probe had read.
+#
+# So the reading is now done by something that actually does it:
 #
 #   canary  10%          `production-canary`, no reviewer, runs on its own
-#   full    50% -> 100%  `production-full`, REQUIRED REVIEWER, waits for a click
+#   soak    20 min       `production-canary`, no reviewer. Exercises the canaried
+#                        version directly every few minutes, then finishes the
+#                        ramp or rolls it back on what it measured.
+#   full    50% -> 100%  `production-full`, REQUIRED REVIEWER. The FAST PATH for
+#                        a human who has looked and wants it now, and no longer
+#                        the only way a release completes.
 #
-# A merge therefore reaches a tenth of traffic by itself and stops. The rest is a
-# person deciding, which is the same decision they were already making, minus the
-# terminal.
+# A merge therefore reaches a tenth of traffic by itself, gets exercised for
+# twenty minutes, and then reaches a terminal state on its own. What changed is
+# which way the default falls: a release that nobody decides on now ships if it
+# is measurably healthy, where before it sat split until a later merge deleted
+# the run holding the decision.
+#
+# THE HUMAN VETO IS THE RUN ITSELF. Cancelling this workflow run during the soak
+# stops the resolution and leaves the canary at 10%; rejecting the
+# `production-full` deployment does NOT, because the soak is a separate job that
+# never asked for that approval. The step summary says so on every canary.
+#
+# WHAT WILL NEVER AUTO-ROLL-BACK. `tools/soak-canary.ts` returns `faulty` only
+# when a request PINNED to the canaried version came back non-200. A probe that
+# stalls, a runner with bad egress, or a version override that stops applying all
+# return `unproven`, which does nothing at all. That asymmetry is deliberate and
+# is gotcha 15's lesson: a measurement failure must not be read as a fault, or a
+# bad afternoon on GitHub's network rolls back healthy releases.
 #
 # THE TOKEN. Both ramping jobs need a Cloudflare credential that can write, and
 # this is the only place in this repo that holds one. It is an ENVIRONMENT secret
@@ -46,10 +72,14 @@ on:
         required: false
         type: string
       canary_only:
-        description: "Stop at 10% and do not offer the full ramp"
+        description: "Stop at 10%: no soak, no full ramp"
         required: false
         default: false
         type: boolean
+      soak_minutes:
+        description: "How long to watch the canary before resolving it (default 20)"
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -129,6 +159,14 @@ jobs:
       url: https://aadhar.sh
     outputs:
       target: ${{ steps.ramp.outputs.target }}
+      # The WHOLE uuid, separately, because the two consumers want different
+      # things. `full`'s guard compares 8 characters to answer "did a different
+      # build appear", which a prefix answers fine. The soak PROBES this version
+      # with Cloudflare-Workers-Version-Overrides, and that header declines to
+      # pin on a prefix without saying so (gotcha 36), so a soak handed the short
+      # form would measure the live split, watch the incumbent answer 200 twelve
+      # times, and report a canary it never touched as clean.
+      target_id: ${{ steps.ramp.outputs.target_id }}
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_RAMP }}
       VERSION_INPUT: ${{ inputs.version }}
@@ -189,11 +227,20 @@ jobs:
           set -euo pipefail
           out="$(bun run --silent deploy:promote -- --to 10 ${VERSION_INPUT:+--version "$VERSION_INPUT"} 2>&1 | tee /dev/stderr)"
           target="$(printf '%s\n' "$out" | sed -n 's/^target version: *\([0-9a-f]\{8\}\).*/\1/p' | head -1)"
+          # A DIFFERENT line, and the literal colon is what keeps them apart:
+          # `^target version: ` does not match `target version id:`, so the two
+          # captures cannot read each other's output.
+          target_id="$(printf '%s\n' "$out" | sed -n 's/^target version id: *//p' | head -1)"
           if [ -z "$target" ]; then
             echo "::error::could not read the ramped version out of deploy:promote's output"
             exit 1
           fi
+          if [ -z "$target_id" ]; then
+            echo "::error::deploy:promote printed no 'target version id:' line; the soak cannot probe a prefix"
+            exit 1
+          fi
           echo "target=${target}" >> "$GITHUB_OUTPUT"
+          echo "target_id=${target_id}" >> "$GITHUB_OUTPUT"
 
       - name: Record the canary
         if: always()
@@ -206,12 +253,165 @@ jobs:
             echo "- the other 90% is still on the previous version"
             echo ""
             echo "The ramp samples status codes. It cannot tell whether the page is RIGHT."
-            echo "Read Workers Logs filtered to \`v=${TARGET:-}\` before approving the full ramp."
+            echo "Read Workers Logs filtered to \`v=${TARGET:-}\` if you want to look."
             echo ""
-            echo "Leaving this parked does NOT hold a queue open. The next release cancels"
-            echo "this run and ramps its own version, so an unapproved canary expires"
-            echo "quietly rather than blocking what comes after it."
+            echo "### This resolves on its own"
+            echo ""
+            echo "The soak job is now watching this version and will take it to 100% in"
+            echo "about 20 minutes if every probe comes back clean, or roll it back if one"
+            echo "of them does not. Approving \`production-full\` skips the wait."
+            echo ""
+            echo "**To stop it, cancel this workflow run.** Rejecting the \`production-full\`"
+            echo "deployment does not stop the soak, because the soak never asked for it."
           } >> "$GITHUB_STEP_SUMMARY"
+
+  soak:
+    name: Soak the canary, then resolve it
+    needs: canary
+    if: ${{ !inputs.canary_only }}
+    runs-on: ubuntu-latest
+    # The soak itself plus setup plus a 50->100 ramp. Comfortably over the
+    # 20-minute default so a soak never dies of the job timeout and leaves the
+    # canary at 10%, which is the exact state this job exists to end.
+    timeout-minutes: 45
+    environment:
+      # THE SAME ENVIRONMENT AS THE CANARY, and that is the whole reason this
+      # job can exist. Moving traffic needs the write token, the token is an
+      # environment secret, and the only other environment holding it is
+      # `production-full`, whose required reviewer is the thing being routed
+      # around. `production-canary` already has no reviewer and already ramps
+      # traffic unattended, so this widens nothing: it reuses a credential that
+      # was already reachable without a click.
+      name: production-canary
+      url: https://aadhar.sh
+    permissions:
+      contents: read
+      # For the rollback notice only. A clean auto-ship writes a step summary
+      # and nothing else, because an issue per release is noise and noise is how
+      # a channel stops being read.
+      issues: write
+    outputs:
+      resolution: ${{ steps.soak.outputs.verdict }}
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_RAMP }}
+      CANARY: ${{ needs.canary.outputs.target }}
+      CANARY_ID: ${{ needs.canary.outputs.target_id }}
+      SOAK_MINUTES: ${{ inputs.soak_minutes || '20' }}
+
+    steps:
+      - name: Check out the promoted commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: production
+
+      - name: Set up bun
+        uses: ./.github/actions/setup-bun
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # Watch the canaried version. No credential is used here and no traffic
+      # moves: every request is plain HTTPS at /whoareyou.json, which is the one
+      # route that reports WHICH version answered. `continue-on-error` because
+      # the exit code IS the verdict and a non-zero one is a result rather than
+      # a failure; the branch below reads the code back off the step.
+      - name: Soak
+        id: soak
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          bun tools/soak-canary.ts \
+            --version "$CANARY_ID" \
+            --worker "$(jq -r '.release.worker' config/infra.json)" \
+            --minutes "$SOAK_MINUTES"
+
+      - name: Resolve the account id from wrangler.jsonc
+        if: ${{ steps.soak.outputs.verdict == 'clean' || steps.soak.outputs.verdict == 'faulty' }}
+        run: bun tools/print-account-id.ts >> "$GITHUB_ENV"
+
+      # Ends at 100, which is what makes deploy:promote write the D1 changelog
+      # row for this release. It re-runs its own pinned and sampled checks at
+      # each step and aborts on a non-200, so the soak's verdict is the reason to
+      # start this rather than a substitute for it.
+      #
+      # `--version` is passed explicitly. Re-resolving "newest production build"
+      # here would inherit exactly the hazard the `full` job's guard exists to
+      # refuse, twenty minutes later: a build that landed during the soak is a
+      # build nothing probed.
+      - name: Finish the ramp
+        if: ${{ steps.soak.outputs.verdict == 'clean' }}
+        run: bun run deploy:promote -- --version "$CANARY_ID" --steps 50,100
+
+      # A request handled by the canaried version came back non-200. That is the
+      # one signal that moves traffic backwards without a human.
+      - name: Roll back
+        if: ${{ steps.soak.outputs.verdict == 'faulty' }}
+        run: bun run deploy:promote -- --rollback
+
+      - name: Say what happened
+        if: always()
+        env:
+          VERDICT: ${{ steps.soak.outputs.verdict }}
+          REASON: ${{ steps.soak.outputs.reason }}
+        run: |
+          {
+            echo "## Canary resolved: \`${VERDICT:-unknown}\`"
+            echo ""
+            echo "- version: \`${CANARY}\`"
+            echo "- ${REASON:-the soak produced no verdict, which is itself a bug worth reading the log for}"
+            echo ""
+            case "${VERDICT:-}" in
+              clean)    echo "Taken to 100%. The changelog row was written by the 100% step." ;;
+              faulty)   echo "**Rolled back.** Production is on the previous version. Read Workers Logs filtered to \`v=${CANARY}\`." ;;
+              shipped)  echo "Nothing to do: the full ramp had already finished this one." ;;
+              unproven) echo "**Nothing was done, on purpose.** The soak could not measure this version, which is not the same as measuring a fault. Traffic is still split; resolve it with \`bun run deploy:promote --status\` and then \`--to 100\` or \`--rollback\`." ;;
+              *)        echo "No verdict was produced. Traffic is still split." ;;
+            esac
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Only on a rollback. A GitHub issue pushes to the mobile app and to email,
+      # which is the one channel here that reaches a person who is not already
+      # looking at the Actions tab. Advisory: a failed notification must not turn
+      # a completed rollback into a red job.
+      - name: Open a rollback notice
+        if: ${{ steps.soak.outputs.verdict == 'faulty' }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REASON: ${{ steps.soak.outputs.reason }}
+        run: |
+          gh issue create \
+            --title "Canary rolled back: ${CANARY}" \
+            --body "$(printf '%s\n' \
+              "The soak found a fault in \`${CANARY}\` and rolled production back to the previous version." \
+              "" \
+              "What it saw: ${REASON}" \
+              "" \
+              "Every one of those requests was pinned to that version with \`Cloudflare-Workers-Version-Overrides\`, so this is the origin answering badly rather than sampling noise." \
+              "" \
+              "- run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+              "- what is serving now: \`bun run deploy:promote -- --status\`")"
+
+      # The job's colour, decided LAST so the summary and the notice are already
+      # written. `clean` and `shipped` are releases that ended correctly and read
+      # green. `faulty` and `unproven` both leave something for a person: one
+      # rolled production back, the other left it split. Neither should sit in
+      # the Actions list looking like an ordinary success, which is precisely how
+      # eighteen cancelled ramps went unnoticed.
+      - name: Colour the job by what the soak found
+        if: always()
+        env:
+          VERDICT: ${{ steps.soak.outputs.verdict }}
+        run: |
+          case "${VERDICT:-}" in
+            clean|shipped) echo "resolved ${VERDICT}" ;;
+            *) echo "::error::soak verdict ${VERDICT:-none}; see the job summary"; exit 1 ;;
+          esac
 
   full:
     name: 50% then 100% (requires approval)
@@ -274,6 +474,17 @@ jobs:
           fi
           echo "confirmed: ${now} is the version the canary put at 10%."
 
+          # AND IT MAY ALREADY BE DONE. The soak job resolves this same canary
+          # without a reviewer, so an approval that arrives after it finished
+          # would otherwise run `--steps 50,100` against a version already at
+          # 100% and put HALF of production back on the previous build. A late
+          # click must be a no-op, never a regression.
+          serving="$(printf '%s\n' "$out" | sed -n 's/^serving now: *//p' | head -1)"
+          if [ "$serving" = "${CANARY} @ 100%" ]; then
+            echo "::notice::${CANARY} already holds all traffic; the soak resolved this ramp. Nothing to do."
+            exit 0
+          fi
+
       # Ends at 100, which is what makes deploy:promote write the D1 changelog row
       # for this release. Because this checked out `production`, the
       # checkpoints.json it diffs is the one that actually shipped.
@@ -286,7 +497,13 @@ jobs:
 
   verify:
     name: Post-ramp checks
-    needs: [canary, full]
+    # `soak` and NOT `full`. A job that is `waiting` on an environment gate has
+    # not concluded, so a `needs` on `full` made this job wait exactly as long as
+    # the reviewer did, which on the record above meant forever. `soak` always
+    # reaches a conclusion, including when a human took the fast path, so this is
+    # the link that lets a release have an end.
+    needs: [canary, soak]
+    if: ${{ always() && needs.canary.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # No environment and no Cloudflare credential. Both checks below read
@@ -326,11 +543,13 @@ jobs:
         if: always()
         env:
           TARGET: ${{ needs.canary.outputs.target }}
+          RESOLUTION: ${{ needs.soak.outputs.resolution }}
         run: |
           {
-            echo "## Release complete"
-            echo "- version at 100%: \`${TARGET}\`"
-            echo "- changelog row written to D1 by the 100% step"
+            echo "## Release record"
+            echo "- version: \`${TARGET}\`"
+            echo "- how it resolved: \`${RESOLUTION:-unknown}\`"
+            echo "- a changelog row is written to D1 only by a step that reached 100%"
             echo ""
             echo "If \`dcz:check\` above is red, the committed dictionaries no longer"
             echo "describe what production serves. dictionary-roll.yml opens a PR for"

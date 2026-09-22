@@ -170,7 +170,16 @@ test("no ramp sample can hang, and a stall is never reported as an origin error"
   //
   // Source text for the same reason as the test above: the alternative is
   // spawning wrangler against production from the suite.
-  const src = await readFile(new URL("./tools/deploy-promote.ts", ROOT), "utf8");
+  //
+  // The pair, since 2026-09-22: the sampler and the pinned probe moved to
+  // lib/version-probe.ts so `tools/soak-canary.ts` could reuse them without
+  // deploy-promote's credentialed module-scope setup. Every fetch on the ramp
+  // path is in the second file now, so reading only the first would count zero
+  // of each and pass by measuring nothing.
+  const src = [
+    await readFile(new URL("./tools/deploy-promote.ts", ROOT), "utf8"),
+    await readFile(new URL("./tools/lib/version-probe.ts", ROOT), "utf8"),
+  ].join("\n");
 
   // Counted rather than matched once, so a SECOND fetch added later without a
   // timeout fails this instead of riding the first one's signal.
