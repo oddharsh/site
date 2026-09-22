@@ -77,17 +77,41 @@ test("the walk finds every committed lockfile and every workspace each one gover
 // The live wiring, not just the pure function: perturb ONE resolution in the
 // real lockfiles and confirm the same call that reports a clean tree above goes
 // red. Without this, every negative case below is a statement about fixtures.
+//
+// BOTH HALVES OF THE PERTURBATION ARE DERIVED, and the version half is the one
+// that cost a red build. This named `oxc-minify` and hardcoded 0.151.0, the
+// real 9c1e6adb drift. #880 merged that exact bump into `main` hours later; CI
+// builds a merge commit, so the pin BECAME 0.151.0, the "perturbation" became
+// the correct resolution, and the audit reported nothing. A fixture whose value
+// is owned by the outside world has an expiry date, and dependabot owns this
+// one. The package is derived for the milder version of the same reason: naming
+// a dependency makes this test fail the day that dependency leaves.
+//
+// There WAS a guard for this (`assert.notEqual(pin, "0.151.0")`), and it sat
+// after the assertion it existed to explain, so the build failed on a bare
+// `0 !== 1` instead. A guard that runs after the thing it guards is a comment.
 test("perturbing one real resolution turns the live check red", () => {
   const lockfiles = readLockfilePins();
   const { packages, devDependencies } = rootOf(lockfiles);
-  const pin = devDependencies["oxc-minify"];
-  // the 9c1e6adb state, rebuilt from today's bytes: mirror untouched, resolution moved.
-  packages["oxc-minify"] = ["oxc-minify@0.151.0", ...packages["oxc-minify"].slice(1)];
+
+  const target = auditLockfilePins({ lockfiles }).checked
+    .find((c) => c.lock === "bun.lock" && c.field === "devDependencies");
+  if (!target) throw new Error("the walk checked no root devDependency");
+  const entry = packages[target.name];
+  if (!Array.isArray(entry)) throw new Error(`bun.lock resolves nothing for ${target.name}`);
+
+  const pin = devDependencies[target.name];
+  // Different from the pin whatever the pin becomes, and obviously synthetic.
+  const moved = pin === "9.9.9" ? "8.8.8" : "9.9.9";
+  // the 9c1e6adb shape: mirror untouched, resolution moved.
+  packages[target.name] = [`${target.name}@${moved}`, ...entry.slice(1)];
 
   const { problems } = auditLockfilePins({ lockfiles });
   assert.equal(problems.length, 1, problems.join("\n"));
-  assert.match(problems[0], /oxc-minify at .* and bun\.lock RESOLVES 0\.151\.0/);
-  assert.notEqual(pin, "0.151.0", "the fixture stopped being a perturbation; pick another version");
+  assert.ok(
+    problems[0].includes(`pins ${target.name} at ${pin} and bun.lock RESOLVES ${moved}`),
+    problems[0],
+  );
 });
 
 // ── the negative battery ─────────────────────────────────────────────────────
