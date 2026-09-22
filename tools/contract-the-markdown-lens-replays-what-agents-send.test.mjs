@@ -11,7 +11,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
-  AGENT_ACCEPTS, BROWSER_ACCEPT, handleLensMarkdown, isMarkdown, markdownAlternate, probePlan, variesOnAccept,
+  AGENT_ACCEPTS, BROWSER_ACCEPT, handleLensMarkdown, isMarkdown, markdownAlternate, probePlan, sharedStorable, variesOnAccept,
+  varyEveryVariant,
 } from "../src/worker/lens-markdown.ts";
 import { wantsMarkdown } from "../src/worker/lib/http.ts";
 
@@ -283,4 +284,79 @@ test("every lazily-loaded lens island has a cache rule in _headers", async () =>
       `${path} has a block in public/_headers but no Cache-Control rule`,
     );
   }
+});
+
+test("a shared cache may store what no-store and private do not forbid", () => {
+  assert.equal(sharedStorable("public, max-age=0, s-maxage=86400"), true);
+  assert.equal(sharedStorable(""), true, "no Cache-Control is still heuristically cacheable");
+  assert.equal(sharedStorable(null), true);
+  assert.equal(sharedStorable("no-store, must-revalidate"), false);
+  assert.equal(sharedStorable("Private, max-age=60"), false);
+  // no-cache permits storage (it only forces revalidation), so it is exposed.
+  assert.equal(sharedStorable("no-cache"), true);
+});
+
+// One row per probe, in the [id, result] shape the handler passes. JSDoc is
+// live in a .mjs file, and without it an array literal types as any[], not a tuple.
+/** @returns {[string, any]} */
+const raw = (id, result) => [id, result];
+/** @returns {[string, any]} */
+const row = (id, contentType, vary, cacheControl = "public, s-maxage=86400") =>
+  [id, { ok: true, status: 200, contentType, vary, cacheControl }];
+
+test("Vary is read off EVERY variant, not only the Markdown one", () => {
+  // The shape this site served on 2026-09-22: Markdown names Accept, the
+  // shared-cacheable HTML copy does not. The old single-response check passes it.
+  const ours = [
+    row("control", "text/html; charset=utf-8", "accept-encoding, available-dictionary"),
+    row("markdown", "text/markdown; charset=utf-8", "accept", "no-store, must-revalidate"),
+  ];
+  const verdict = varyEveryVariant(ours);
+  assert.equal(verdict.status, "fail");
+  assert.match(verdict.detail, /text\/html for control/, "names the variant that leaks");
+  assert.ok(!verdict.detail.includes("markdown for markdown"), "does not blame the variant that varies");
+
+  assert.equal(varyEveryVariant([
+    row("control", "text/html", "Accept-Encoding, Accept"),
+    row("markdown", "text/markdown", "accept"),
+  ]).status, "pass");
+
+  // A bare Vary on a copy no shared cache may keep cannot reach anyone else.
+  assert.equal(varyEveryVariant([
+    row("control", "text/html", "accept-encoding", "private, max-age=60"),
+    row("markdown", "text/markdown", "accept"),
+  ]).status, "pass");
+
+  // One representation owes Vary nothing, however bare it is.
+  assert.equal(varyEveryVariant([
+    row("control", "text/html", ""),
+    row("markdown", "text/html; charset=utf-8", ""),
+  ]).status, "info");
+
+  // Errors and non-2xx answers are not stored variants. A 406 carrying no Vary
+  // must not turn a clean origin into a failing one.
+  assert.equal(varyEveryVariant([
+    row("control", "text/html", "accept"),
+    row("markdown", "text/markdown", "accept"),
+    raw("unservable", { ok: true, status: 406, contentType: "text/plain", vary: "", cacheControl: "" }),
+    raw("q-zero", { ok: false, error: "timeout" }),
+  ]).status, "pass");
+});
+
+test("the handler grades a leaking HTML copy end to end", async () => {
+  const env = {
+    SELF_FETCH: async (request) => {
+      const md = (request.headers.get("accept") || "").startsWith("text/markdown");
+      return md
+        ? new Response("# md", { headers: { "content-type": "text/markdown", vary: "accept", "cache-control": "no-store" } })
+        : new Response("<h1>html</h1>", { headers: { "content-type": "text/html", vary: "accept-encoding", "cache-control": "public, s-maxage=86400" } });
+    },
+  };
+  const target = encodeURIComponent("https://aadhar.sh/garage/horizon");
+  const payload = await (await handleLensMarkdown(new Request(`https://aadhar.sh/lens/markdown?url=${target}`), env)).json();
+  const byId = Object.fromEntries(payload.checks.map((c) => [c.id, c]));
+  assert.equal(byId["varies-by-accept"].status, "pass", "the checklist's one-response read misses it");
+  assert.equal(byId["vary-on-every-variant"].status, "fail", "and the every-variant read catches it");
+  assert.equal(payload.responses.find((r) => r.id === "control").cacheControl, "public, s-maxage=86400",
+    "the evidence carries the header the verdict rests on");
 });

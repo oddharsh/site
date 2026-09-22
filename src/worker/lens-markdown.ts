@@ -5,7 +5,7 @@
 // against (serves Markdown, sets Vary, refuses what it cannot serve, honours
 // q-values), and the site is credited in the pane. They are RFC 9110 read back
 // as a checklist, so the checks are re-derived from the spec rather than copied,
-// and two more are added below for reasons the four cannot cover.
+// and three more are added below for reasons the four cannot cover.
 //
 // WHAT THIS TAB IS FOR, WHICH IS NOT THE CHECKLIST. A conformance grade answers
 // "is this origin correct". The question an agent author has is "does MY client
@@ -141,6 +141,51 @@ export function variesOnAccept(vary) {
   return raw.split(",").map((s) => s.trim()).includes("accept");
 }
 
+// May a SHARED cache store this response? RFC 9111 section 3: no-store and
+// private forbid it, and everything else is storable, including a response with
+// no Cache-Control at all, which a cache may still keep under heuristic
+// freshness. Read as tokens for the same reason Vary is: "private" inside a
+// quoted no-cache field list is not the directive.
+export function sharedStorable(cacheControl) {
+  const directives = String(cacheControl || "").toLowerCase().split(",")
+    .map((d) => d.trim().split("=")[0].trim());
+  return !directives.includes("no-store") && !directives.includes("private");
+}
+
+// Vary is a claim every variant has to make, and the public checklist reads it
+// off one. A cache stores each response under the Vary THAT response carried, so
+// an HTML copy with no Accept in its Vary is stored unconditionally and served to
+// the next agent that asks for Markdown, however correct the Markdown copy's own
+// Vary is. Cloudflare named this as the caveat on its Vary launch (2026-09-22):
+// omit Vary on one cacheable response and the cache can serve the wrong variant.
+// It is also this site's own #195 bug from the other side.
+//
+// Only 2xx responses count, since those are the representations a cache keeps,
+// and only ones a shared cache may store, since a no-store copy with a bare Vary
+// is never anybody else's answer. One representation in total owes Vary nothing.
+type ProbeRow = [string, { ok: boolean; status?: number; contentType?: string; vary?: string; cacheControl?: string; error?: string }];
+export function varyEveryVariant(rows: ProbeRow[]): Check {
+  const variants = rows.filter(([, r]) => r?.ok && (r.status ?? 0) >= 200 && (r.status ?? 0) < 300);
+  const types = new Set<string>(variants.map(([, r]) => mediaType(r.contentType)));
+  if (types.size < 2) {
+    return { id: "vary-on-every-variant", status: "info",
+      detail: `Every 2xx answer was ${[...types][0] || "untyped"}, so there is one representation and Vary owes nothing.` };
+  }
+  const bare = variants.filter(([, r]) => !variesOnAccept(r.vary));
+  const exposed = bare.filter(([, r]) => sharedStorable(r.cacheControl));
+  const summary = `${variants.length} answers across ${types.size} types`;
+  if (!exposed.length) {
+    return { id: "vary-on-every-variant", status: "pass",
+      detail: bare.length
+        ? `${summary}. ${bare.length} omit Accept from Vary, and each forbids shared caching, so no cache can hand it to the wrong client.`
+        : `${summary}, and every one names Accept in Vary.` };
+  }
+  const named = exposed.map(([id, r]) =>
+    `${mediaType(r.contentType) || "untyped"} for ${id} (Vary: ${r.vary || "none"}; Cache-Control: ${r.cacheControl || "none"})`);
+  return { id: "vary-on-every-variant", status: "fail",
+    detail: `${summary}. A shared cache may store ${named.join("; ")} without Accept in its key, then serve it to a client that asked for another type.` };
+}
+
 // RFC 8288 in the header, plus the HTML element that says the same thing. Codex
 // CLI follows this rather than sending an Accept at all, so an origin can be
 // perfectly reachable by one real client while failing every check above.
@@ -215,6 +260,7 @@ async function probeOnce(targetUrl, env, accept) {
       status: res.status,
       contentType: res.headers.get("content-type") || "",
       vary: res.headers.get("vary") || "",
+      cacheControl: res.headers.get("cache-control") || "",
       link: res.headers.get("link") || "",
       // Measured, decoded, and null when it hit the cap, so a truncated read
       // reports no size rather than a floor dressed up as a total.
@@ -303,8 +349,10 @@ export async function handleLensMarkdown(request, env) {
       ? { id: "varies-by-accept", status: "pass", detail: `Vary: ${varySource.vary}` }
       : { id: "varies-by-accept", status: anyMarkdown ? "fail" : "warn",
           detail: varySource.vary
-            ? `Vary: ${varySource.vary} — it does not name Accept, so a shared cache can hand one audience the other's copy.`
+            ? `Vary: ${varySource.vary}. It does not name Accept, so a shared cache can hand one audience the other's copy.`
             : "No Vary header. A shared cache can hand one audience the other's copy." });
+
+    checks.push(varyEveryVariant([...byId.entries()]));
 
     const bogus = byId.get("unservable");
     checks.push(bogus?.ok
@@ -406,7 +454,8 @@ export async function handleLensMarkdown(request, env) {
       responses: probes.map((p) => {
         const r = byId.get(p.id);
         return { id: p.id, accept: p.accept, ok: !!r?.ok, status: r?.status ?? null,
-                 contentType: r?.contentType || "", vary: r?.vary || "", error: r?.error };
+                 contentType: r?.contentType || "", vary: r?.vary || "",
+                 cacheControl: r?.cacheControl || "", error: r?.error };
       }),
       sample: mdBest ? mdBest.sample.slice(0, BODY_SAMPLE) : "",
       source: "https://acceptmarkdown.com/status",
