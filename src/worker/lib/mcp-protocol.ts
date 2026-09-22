@@ -249,6 +249,74 @@ function mcpGate(msg, request) {
 
 export const mcpError = (id, code, message) => ({ jsonrpc: "2.0", id: id ?? null, error: { code, message } });
 
+// ── which era is actually calling ───────────────────────────────────
+// The legacy half of this module exists for one reason, that a pre-2026 client
+// has no fall-forward mechanism. That reason expires when those clients stop
+// calling, and nothing here could say when that happens. This records the era of
+// every well-formed message so the per-request log line in index.ts can carry
+// it, which turns "can the legacy door close" into a count rather than a guess.
+//
+// It rides the EXISTING log line rather than emitting its own, because every
+// console.log and every span is one observability event on the 200K/day Free
+// quota from 2026-10-01 (CLAUDE.md, Observability). A second line per /mcp call
+// would buy nothing this field does not.
+//
+// Keyed on the Request OBJECT, which is the one value both the MCP handlers and
+// serveWorkerRequest hold: route() hands the same object all the way down. A
+// WeakMap means nothing outlives the request and nothing needs clearing. A
+// self-dispatch (SELF_FETCH) never reaches serveWorkerRequest, so this origin's
+// own /lens probes are recorded here and logged nowhere, which is correct: they
+// are this site talking to itself.
+//
+// Everything written here is caller-controlled, so it is narrowed before it can
+// reach a log: a version must be date-shaped, and a client name keeps printable
+// ASCII and 40 characters. A field that fails that is dropped rather than
+// rewritten, the same undefined-is-skipped rule the span attributes follow.
+type McpEra = { era: "modern" | "legacy" | "mixed"; version?: string; client?: string };
+const ERAS = new WeakMap<Request, McpEra>();
+
+const REVISION = /^\d{4}-\d{2}-\d{2}$/;
+function revision(value) {
+  const text = asText(value);
+  return text && REVISION.test(text) ? text : undefined;
+}
+function clientName(value) {
+  const text = asText(value)?.replace(/[^\x20-\x7e]/g, "").trim().slice(0, 40);
+  return text || undefined;
+}
+
+// A modern message declares its revision in `_meta`; everything else is legacy,
+// which is the same era signal mcpGate reads (see declaredVersion). A legacy
+// message names its revision in `initialize` params, or on the
+// MCP-Protocol-Version header that 2025-06-18 added for every later request.
+// Only `initialize` carries a client name in the legacy era, so a legacy
+// session is named once, on the request that opened it.
+function noteEra(request: Request, msg) {
+  const declared = declaredVersion(msg);
+  const era = declared ? "modern" : "legacy";
+  const version = declared
+    ? revision(declared)
+    : revision(msg.params?.protocolVersion) ?? revision(request.headers.get("mcp-protocol-version"));
+  const client = declared ? undefined : clientName(asRecord(msg.params?.clientInfo)?.name);
+  const seen = ERAS.get(request);
+  if (!seen) {
+    ERAS.set(request, { era, version, client });
+    return;
+  }
+  // A batch can mix eras, and then no single revision describes the request.
+  // Say so rather than letting the last message win.
+  if (seen.era !== era) seen.era = "mixed";
+  if (seen.version !== version) seen.version = undefined;
+  seen.client ??= client;
+}
+
+// What the MCP handlers recorded for this request, or undefined when the
+// request never reached one (every non-MCP route, and every MCP request that
+// failed to parse). Read by the log line in index.ts.
+export function mcpEraOf(request: Request): McpEra | undefined {
+  return ERAS.get(request);
+}
+
 // Only a valid request without an ID is a notification. Malformed envelopes
 // get Invalid Request with an unknown ID, even when they have no ID member.
 export async function mcpRequest(msg, request, dispatch) {
@@ -257,6 +325,7 @@ export async function mcpRequest(msg, request, dispatch) {
     (Object.hasOwn(msg, "params") && asRecord(msg.params) === null && !Array.isArray(msg.params))) {
     return mcpError(null, -32600, "Invalid Request");
   }
+  noteEra(request, msg);
   const reply = mcpGate(msg, request) ?? await dispatch(msg);
   return Object.hasOwn(msg, "id") ? reply : null;
 }
