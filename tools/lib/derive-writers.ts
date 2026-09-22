@@ -65,6 +65,12 @@ const SCANNED = [".ts", ".mjs", ".js", ".py"];
 /** A write, per language. Exact calls, never a loose path match. */
 const WRITES = [
   /\bwriteFile(?:Sync)?\s*\(/,          // node
+  // APPENDING IS WRITING, and this list did not say so until 2026-09-22.
+  // tools/soak-canary.ts was the first file under these roots to reach for it,
+  // which is the only reason the gap surfaced; a generator that appended to a
+  // committed artifact would have been invisible to the census whose whole job
+  // is noticing an undeclared generator.
+  /\bappendFile(?:Sync)?\s*\(/,
   /\bBun\.write\s*\(/,                  // bun
   /\bopen\s*\([^)]*["']w[b+]?["']\s*\)/, // python
   /\bcreateWriteStream\s*\(/,

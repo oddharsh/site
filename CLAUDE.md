@@ -566,21 +566,81 @@ worktrees may edit freely, but a worktree is not a release surface.
   the gated pipeline it was meant to protect while doing nothing about a ramp
   that starts unauthenticated and dies after traffic already moved.
 
-  **The ramp runs in Actions now, and it splits at the human.**
+  **The ramp runs in Actions now, and since 2026-09-22 it RESOLVES ITSELF.**
   `.github/workflows/ramp.yml` (built 2026-08-12) fires off a successful
   `Promote production`, waits for Workers Builds to finish uploading, and then:
 
   | job | traffic | environment | gate |
   |---|--:|---|---|
   | `canary` | 10% | `production-canary` | none, runs on its own |
-  | `full` | 50% then 100% | `production-full` | REQUIRED REVIEWER |
+  | `soak` | 50% then 100%, or rollback | `production-canary` | none, after ~20 min of probing |
+  | `full` | 50% then 100% | `production-full` | REQUIRED REVIEWER, the fast path |
   | `verify` | none | (no environment, no credential) | runs `dcz:check` |
 
-  So a merge reaches a tenth of traffic by itself and stops. Approving the `full`
-  job is the same decision you were making at a terminal, minus the terminal, and
-  the pause is still the point. A workstation ramp keeps working exactly as
-  before; `release-guard.mjs` asks whether the process can authenticate rather
-  than whether it is CI, which is what made both paths possible.
+  **The reviewer used to be the only way a release finished, and measured over
+  the last 60 runs of this workflow it finished 2 of the 20 real ramps.** The
+  other 18 were cancelled by the next release while parked at the gate, one of
+  them after waiting 17 hours. Every one had already put its version at 10%, so
+  the settled state of this pipeline was production serving a split that no human
+  chose and no probe had read, with the decision deferred until a later merge
+  deleted the run holding it. A gate nobody passes through is not providing
+  review; it is providing staleness.
+
+  So the reading the gate existed for is now performed by something that actually
+  performs it. `tools/soak-canary.ts` exercises the canaried version directly with
+  `Cloudflare-Workers-Version-Overrides` every few minutes for twenty minutes,
+  then the job finishes the ramp or rolls it back on what it measured. Approving
+  `production-full` still works and is now the FAST PATH rather than the only
+  path: it skips the wait. A workstation ramp is untouched;
+  `tools/lib/release-guard.ts` asks whether the process can authenticate rather
+  than whether it is CI, which is what made every path here possible.
+
+  **Four verdicts, and only one of them moves traffic backwards.** `faulty` means
+  a request PINNED to the canaried version came back non-200, which is the origin
+  answering badly rather than sampling noise, and it rolls back and opens an
+  issue. `clean` finishes the ramp. `shipped` means a human beat the soak to it.
+  `unproven` means nothing could be measured (every probe stalled, or the version
+  override stopped applying because the version left the deployment) and it does
+  NOTHING, leaving the split for a person. That asymmetry is gotcha 15's lesson
+  made structural: a measurement failure read as a fault would roll back healthy
+  releases every time a runner had bad egress, and the `unproven` path is what
+  refuses to do that. The soak found its own first `unproven` in testing, against
+  a real deployment change that happened underneath it.
+
+  Three things about it worth knowing before editing it:
+
+  - **It runs on `production-canary`, and that is the load-bearing detail.**
+    Moving traffic needs the write token, the token is an ENVIRONMENT secret, and
+    the only other environment holding it is `production-full`, whose reviewer is
+    the thing being routed around. `production-canary` already ramps traffic with
+    no reviewer, so reusing it widens nothing.
+  - **The human veto is cancelling the RUN.** Rejecting the `production-full`
+    deployment does not stop the soak, because the soak is a separate job that
+    never asked for that approval. The canary's step summary says so.
+  - **`verify` needs `soak` rather than `full`.** A job `waiting` on an
+    environment gate has not concluded, so a `needs` on `full` made the
+    post-ramp checks wait exactly as long as the reviewer did, which on the
+    record above meant forever.
+
+  **`full` is idempotent now, and it had to become so.** An approval that arrives
+  after the soak resolved would otherwise run `--steps 50,100` against a version
+  already at 100% and put HALF of production back on the previous build. Its
+  guard exits 0 when the canaried version already holds everything.
+
+  **The probes moved out of `deploy-promote.ts` to make any of this possible.**
+  `probePinned` and the sampler live in `tools/lib/version-probe.ts`, which holds
+  no credential and touches no filesystem, because `deploy-promote.ts` performs a
+  credentialed `currentDeployment()` at module scope and importing it runs a
+  ramp's worth of authenticated setup. The two checks that decide whether a
+  release is healthy had therefore never been reachable from a test. They are now.
+
+  **`deploy:promote` prints `target version id:` as well as `target version:`,
+  and the difference is load-bearing.** The override header declines to pin on an
+  8-char prefix and says nothing about it (gotcha 36), so a soak handed the short
+  form would probe the live split, watch the incumbent answer 200 twelve times,
+  and report a canary it never touched as clean. `soak-canary.ts` refuses
+  anything that is not a full uuid, and a contract test pins both lines plus the
+  two `sed` captures in `ramp.yml` that keep them apart.
 
   **Expect more `Ramp production` runs in the Actions tab than releases, and most
   of them doing nothing.** It fires on `Promote production` COMPLETING, and a
