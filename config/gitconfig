@@ -1,0 +1,20 @@
+# The merge-driver definitions .gitattributes refers to, committed so the two
+# halves cannot drift. Git will not read this on its own: `bun run setup:merge`
+# adds an include.path for it to .git/config, once per clone. Worktrees share
+# one .git/config, so one run covers every worktree of this repository.
+#
+# %O base, %A ours (the result goes here), %B theirs, %P the real path. %A and
+# %B INVERT between merge and rebase, which is why every mode is side-independent
+# or asks for the mainline explicitly. See tools/merge-driver.ts.
+
+[merge "json"]
+	name = structural three-way merge of a JSON registry
+	driver = bun tools/merge-driver.ts json %O %A %B %L %P
+
+[merge "pin"]
+	name = take the newer pin and record the gate it owes
+	driver = bun tools/merge-driver.ts pin %O %A %B %L %P
+
+[merge "regen"]
+	name = park a derived file for regeneration by merge-finish
+	driver = bun tools/merge-driver.ts regen %O %A %B %L %P

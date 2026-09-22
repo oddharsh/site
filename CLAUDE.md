@@ -307,6 +307,17 @@ worktrees may edit freely, but a worktree is not a release surface.
   change to yourself, and never revert or commit a hunk you did not write. When
   the work is more than a couple of edits, take a worktree so nobody can move
   your branch out from under you.
+- **The machine-owned files resolve their own conflicts, after one setup run.**
+  `main` moves under every open branch here, and about 14% of adjacent PR pairs
+  collide. `.gitattributes` routes `package.json`, `config/derivations.json`,
+  `config/bun-pin.json` and the three lockfiles through
+  [`tools/merge-driver.ts`](tools/merge-driver.ts), which merges them
+  structurally, takes the newer pin, or parks a derived file for regeneration.
+  Run `bun run setup:merge` once per clone; worktrees share one `.git/config`,
+  so that covers all of them. A conflict that still arrives is a real one, and
+  a resolution can owe you something (a `bun install`, a pin's gate), which
+  `bun run merge:finish -- --check` prints. Gotcha 47 has the measurements and
+  [MAINTENANCE.md](docs/MAINTENANCE.md) the runbook.
 - Keep each change on its own branch, commit it, push it, and open a PR. Do
   not deploy from a dirty worktree or push agent work directly to `main`.
 - **A new issue or PR assigns and labels itself**, via
@@ -6161,6 +6172,79 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     workstation suite stops being a pre-push gate at all. Two of these three
     instances were sitting on `main` unreported. Treat a local-only failure as a
     real bug in the fixture rather than an environment quirk to route around.
+
+47. **A merge driver's `%A` and `%B` INVERT between merge and rebase, and the
+    marker files that would tell you which you are in do not exist yet.** The
+    drivers in `.gitattributes` exist because `main` moves under every open
+    branch here; what took the measuring was making them safe.
+
+    Replaying the last 80 commits (cherry-pick each onto the parent of the one
+    before, which is "my branch was cut before that landed") gives 11 conflicts
+    in 78 adjacent pairs, about 14%. **The class is not what it looks like**: 22
+    of the 44 conflicted regions are ADD/ADD, two branches each inserting a line
+    into the same block, and exactly ONE of the 11 is a version bump. With the
+    drivers in, `package.json` and `bun.lock` leave the conflict list entirely
+    and `config/derivations.json` goes 5 to 2, the 2 being genuine two-sided
+    edits. Conflicted PAIRS only go 11 to 10, because prose in `CLAUDE.md` and
+    `MAINTENANCE.md` co-occurs with nearly every one and nothing here touches it.
+
+    Four things were measured rather than reasoned about, and each one changed
+    the design:
+
+    - **`git rerere` does not help.** It keys on the conflict TEXT and every pin
+      bump carries a different sha, so recording a resolution for one and
+      replaying the next printed `Recorded preimage` and left the markers in.
+      Two entries in `rr-cache`, never a replay.
+    - **Orientation.** One driver, three verbs:
+
+      | verb | `GIT_REFLOG_ACTION` | markers | `%A` ours | `%B` theirs |
+      |---|---|---|---|---|
+      | merge | `merge upstream` | none | FEATURE | UPSTREAM |
+      | rebase | unset | `rebase-merge` | UPSTREAM | FEATURE |
+      | cherry-pick | unset | none | UPSTREAM | FEATURE |
+
+      So a driver written as "take theirs" takes the OPPOSITE side depending on
+      how the branch was integrated, and both verbs are used here. `MERGE_HEAD`
+      and `CHERRY_PICK_HEAD` are not written yet when the driver runs, so merge
+      and cherry-pick are indistinguishable by marker while being opposites;
+      merge is the one case carrying a positive signal, which is what
+      `mainlineIsOurs()` reads. Every mode is side-independent by construction
+      except the pin rule, which is loud about what it took.
+    - **A refusing driver writes NO conflict markers.** Exiting non-zero marks
+      the path unmerged and leaves `%A` exactly as it found it, so the working
+      file held the mainline side, clean, with nothing to see. Staging it would
+      have taken one side blind. `refuse()` runs `git merge-file` to put the
+      markers in, and the contract test that caught this fails without it.
+    - **`post-merge` does not fire when a merge had conflicts**, which is
+      precisely the case a driver creates. Measured: a conflicted merge resolved
+      and committed fires `post-commit`; a clean merge fires `post-merge`; a
+      rebase fires `post-rewrite` whether or not it stopped. All three drain the
+      ledger, and `bun install --frozen-lockfile` in CI is the backstop under
+      them.
+
+    **The round-trip guard is what makes refusing safe AND is a silent
+    no-op risk.** `json` and `pin` rewrite the whole file from a parsed value, so
+    each first re-serializes the untouched inputs and refuses anything it cannot
+    reproduce byte for byte. All three owned files reproduce exactly today. The
+    failure has no symptom: reformat one and the conflicts simply come back with
+    nothing connecting them to the reformat, so a contract test asserts the
+    committed bytes round-trip rather than asserting only the code.
+
+    Two smaller things this cost. `git clean -qfd $EXCLUDES` in a zsh harness
+    passed one literal argument and deleted the driver under test, which read as
+    "merge drivers do not work" for a while and is gotcha 2 arriving in a new
+    place. And splicing the new code in with `t.indexOf("}", ...)` found the
+    brace of a `${line}` inside a template literal rather than the function's,
+    which is gotcha 19 one layer up.
+
+    **The definitions cannot be committed**, which is git's decision rather than
+    an oversight: `.gitattributes` names a driver and `.git/config` defines the
+    COMMAND, and a repository you clone must not be able to run one at you. So
+    `config/gitconfig` is committed and `bun run setup:merge` wires it in with
+    `include.path`, once per clone. Worktrees share one `.git/config`, so one run
+    covers all of them. An `include.path` naming a missing file is SILENTLY
+    IGNORED, so that script reads the driver back out afterwards and fails if it
+    is not there.
 
 ---
 

@@ -285,6 +285,7 @@
       "pipelines"
     ],
     "exempt": {
+      "tools/merge-driver.ts": "git calls it DURING a merge and it writes only to the temporary %A file git handed it, which never becomes a committed artifact on its own: what lands is whatever the merge is committed as. The one path it touches outside that is $GIT_DIR/site-merge-pending, inside .git, drained by tools/merge-finish.ts",
       "tools/build.ts": "writes only into .build/, the staged tree, which is rebuilt from source every deploy and never committed",
       "tools/gen-md-twins.ts": "same, a build step: the twins are generated into .build/ precisely so no committed copy can fall behind",
       "tools/generate-search-index.ts": "same, and for the same reason: it was committed until 2026-08-24 and froze twice, which is why it is build output now",
