@@ -39,8 +39,14 @@ import { isDeepStrictEqual } from "node:util";
 // Measured 2026-09-22 over the 78 committed blocks: every literal is already
 // its own shortest form, so preserving them costs 0 bytes today, and the cost
 // of the first non-canonical one is the few bytes it was authored with.
-const preserveNumbers = (_key: string, value: unknown, context?: { source?: unknown }): unknown =>
-  typeof value === "number" && typeof context?.source === "string" ? JSON.rawJSON(context.source) : value;
+// The reviver's third argument (ES2025). `source` is the primitive's own text,
+// which is the contract this module rests on, so it is declared rather than
+// sniffed. A JSON number is always finite, and no other JSON value is a finite
+// number, so `Number.isFinite` is the exact test for "this one is a number".
+type ParseContext = { source?: string };
+
+const preserveNumbers = (_key: string, value: unknown, context?: ParseContext): unknown =>
+  Number.isFinite(value) && context?.source !== undefined ? JSON.rawJSON(context.source) : value;
 
 // Every number literal in `text`, in document order, exactly as written. A
 // runtime with no source-text access cannot preserve anything and would leave
@@ -48,13 +54,13 @@ const preserveNumbers = (_key: string, value: unknown, context?: { source?: unkn
 // preservation exists to end, so it fails here by name rather than degrade.
 const numberLiterals = (label: string, text: string): string[] => {
   const literals: string[] = [];
-  JSON.parse(text, (_key: string, value: unknown, context?: { source?: unknown }) => {
-    if (typeof value === "number") {
-      if (typeof context?.source !== "string") {
-        throw new Error(`${label}: this runtime gives JSON.parse no source-text access, so a number literal cannot be preserved`);
-      }
-      literals.push(context.source);
+  JSON.parse(text, (_key: string, value: unknown, context?: ParseContext) => {
+    if (!Number.isFinite(value)) return value;
+    const source = context?.source;
+    if (source === undefined) {
+      throw new Error(`${label}: this runtime gives JSON.parse no source-text access, so a number literal cannot be preserved`);
     }
+    literals.push(source);
     return value;
   });
   return literals;
