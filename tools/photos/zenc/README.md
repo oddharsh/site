@@ -95,9 +95,12 @@ whole rows for the flips and walks 64px tiles for the four transposes, which
 took the decode-to-resample floor from 731/774/859 ms to 572/577/601 ms at
 orientations 3/6/8. On the bench's corpus, rotated sources run 1.09-1.17x
 faster and use 5-9.5% less CPU, each at p = 0.0006, with every output
-byte-identical. What orientation still costs over upright is the copy into a
-fresh full-frame buffer. Removing it means reading through the orientation
-inside halflight's resample, which is a halflight API change and its own A/B.
+byte-identical. The second pass removed the copy itself: `square` now hands the
+STORED frame to halflight's `resample_oriented`, which reads it upright inside
+the resample and is bitwise equal to orienting first. On one 26 MP JPEG the
+floor reads 491 ms upright and 491/445/461 ms at orientations 3/6/8, so a
+rotated photo now costs nothing extra, and the axis-swapping ones are cheaper
+than upright. `resize` and `frame` still orient with the tiled copy.
 
 ## Remaining work
 

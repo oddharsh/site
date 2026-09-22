@@ -71,6 +71,20 @@ pub enum Orientation {
     Rotate270,
 }
 
+impl Orientation {
+    /// Whether the upright frame's width is the stored frame's height.
+    pub fn swaps_axes(self) -> bool {
+        self as u8 >= 5
+    }
+
+    /// The same transform in halflight's terms. Both enums number the eight
+    /// cases as EXIF does and map a stored pixel identically, which zenc:bench
+    /// gates on real photos byte for byte.
+    fn halflight(self) -> halflight::Orientation {
+        halflight::Orientation::from_exif(self as u8).expect("Orientation admits exactly EXIF 1-8")
+    }
+}
+
 impl TryFrom<u8> for Orientation {
     type Error = &'static str;
     fn try_from(value: u8) -> Result<Self, Self::Error> {
@@ -310,11 +324,11 @@ pub fn orient(f: Frame, orientation: Orientation) -> Frame {
     //   orientation 6   774 -> 577 ms   (tiled transpose)
     //   orientation 8   859 -> 601 ms   (tiled transpose)
     //
-    // What is left over upright is the copy into a fresh full-frame buffer.
-    // Removing that means reading through the orientation inside halflight's
-    // resample, which is a halflight API change. Output is byte-identical,
-    // since this moves the same values to the same places, and zenc:bench gates
-    // that on real photos.
+    // The ingest no longer calls this: `square` reads the stored frame upright
+    // inside the resample (scale_oriented, halflight::resample_oriented), which
+    // skips the copy this still makes. `resize` and `frame` use it. Output is
+    // byte-identical, since this moves the same values to the same places, and
+    // zenc:bench gates that on real photos.
     //
     // The channel count is a const generic so each pixel copy compiles to a
     // fixed-size move.
@@ -386,6 +400,20 @@ pub fn scale(f: &Frame, dw: u32, dh: u32, filter: Filter) -> Frame {
         gray: f.gray,
         transfer: f.transfer,
         data: resample(&f.data, f.w as usize, f.h as usize, ch, dw as usize, dh as usize, filter),
+    }
+}
+
+/// Resample a STORED frame to an exact UPRIGHT size, reading it through the
+/// orientation inside the resample rather than orienting a full-frame copy
+/// first. halflight holds this bitwise equal to `scale(&orient(f, o), ..)`.
+pub fn scale_oriented(f: &Frame, o: Orientation, dw: u32, dh: u32, filter: Filter) -> Frame {
+    let ch = if f.gray { 1 } else { 3 };
+    Frame {
+        w: dw,
+        h: dh,
+        gray: f.gray,
+        transfer: f.transfer,
+        data: halflight::resample_oriented(&f.data, f.w as usize, f.h as usize, ch, o.halflight(), dw as usize, dh as usize, filter),
     }
 }
 
