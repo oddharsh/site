@@ -74,11 +74,14 @@ agentic-iteration AGENTS.md to a crate whose output is content-addressed.
 - Encoder settings are off limits. AVIF speed, `--jobs` and quality, JPEG
   quality and subsampling all change bytes (CLAUDE.md gotcha 43), so none of
   them is a speed knob here.
-- A change that adds threads inside one photo owes a `--parallel 8` run,
-  because `add-photos.sh` already runs 8 photos at once.
+- Read the CPU table for throughput. `add-photos.sh` runs 8 photos at once, so
+  the pipeline is CPU-bound, and wall-clock under load can miss a real saving:
+  the tiled `orient()` read 1.004x at `--parallel 8` on wall-clock while saving
+  5.4-7.0% of CPU per rotated photo. A change that adds threads inside one
+  photo also owes a `--parallel 8` run.
 - Don't run the bench while something else builds or benchmarks. It prints the
   load average, and a BUSY warning means rerun.
-- Stop when a pass moves no source beyond its own noise, or wins under 5%
+- Stop when a pass moves no source at p < 0.01, or wins under 5%
   while adding a disproportionate amount of code.
 
 The split the bench prints bounds the prize. On the 2026-09-22 corpus, zenc's

@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
-import { classify, geomean, median, OUTPUT_FILES, pickCorpus, productionArgs, spread } from "./photos/zenc-bench.ts";
+import { ALPHA, classify, geomean, mannWhitneyP, median, OUTPUT_FILES, pickCorpus, productionArgs, spread } from "./photos/zenc-bench.ts";
 
 /** @typedef {{ size: string, outputs: string[] }} Tier */
 /** @typedef {{ orient: string | null, filter: string | null, quality: string | null, tiers: Tier[] }} Invocation */
@@ -118,6 +118,26 @@ test("the statistics the verdict rests on", () => {
   assert.equal(median([4, 1, 3, 2]), 2.5);
   assert.equal(spread([90, 100, 110]), 0.2);
   assert.ok(Math.abs(geomean([2, 0.5]) - 1) < 1e-12);
+});
+
+// Exact values by hand: C(10,5) = 252 orderings of 5 vs 5, C(14,7) = 3432 of
+// 7 vs 7. The counts of orderings with U = 0..5 are 1, 1, 2, 3, 5, 7 for any
+// sample at least 5 wide (partitions of k), so U <= 5 at 7 vs 7 is 19 of 3432.
+test("the Mann-Whitney p the verdict rests on", () => {
+  const close = (a, b) => Math.abs(a - b) < 1e-12;
+  assert.ok(close(mannWhitneyP([1, 2, 3, 4, 5], [6, 7, 8, 9, 10]), 2 / 252));
+  assert.ok(close(mannWhitneyP([6, 7, 8, 9, 10], [1, 2, 3, 4, 5]), 2 / 252), "two-sided, either direction");
+  // One outlier: 7 vs 7 with U = 5.
+  const old = [4.77, 4.74, 4.79, 4.82, 4.82, 5.31, 5.01];
+  const neu = [4.49, 4.5, 4.51, 4.56, 4.63, 4.98, 4.73];
+  assert.ok(close(mannWhitneyP(neu, old), (2 * 19) / 3432));
+  // Interleaved samples carry no evidence, and ties can only raise p.
+  assert.equal(mannWhitneyP([1, 3, 5, 7, 9], [2, 4, 6, 8, 10]) > 0.5, true);
+  assert.equal(mannWhitneyP([1, 1, 1, 1, 1], [1, 1, 1, 1, 1]), 1);
+  // The floor the CLI enforces: at 4 vs 4 even complete separation misses ALPHA,
+  // at 5 vs 5 it clears it.
+  assert.ok(mannWhitneyP([1, 2, 3, 4], [5, 6, 7, 8]) >= ALPHA);
+  assert.ok(mannWhitneyP([1, 2, 3, 4, 5], [6, 7, 8, 9, 10]) < ALPHA);
 });
 
 test("the gate and its control both run before any timing is printed", async () => {

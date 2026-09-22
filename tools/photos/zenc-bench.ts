@@ -4,7 +4,7 @@
 //
 //   bun run zenc:bench                     baseline = merge-base with origin/main
 //   bun run zenc:bench -- --ref <rev>      any commit as the baseline
-//   bun run zenc:bench -- --trials 9       alternating pairs per source (default 5)
+//   bun run zenc:bench -- --trials 9       alternating pairs per source (default 7)
 //   bun run zenc:bench -- --parallel 8     THROUGHPUT: the corpus through 8 workers,
 //                                          which is how add-photos.sh runs it
 //   SRC=/path bun run zenc:bench           a different source folder
@@ -55,10 +55,15 @@
 //
 // The histogram bake is not worth a loop: 0.6 s for all 258 stems.
 //
-// LATENCY IS NOT THROUGHPUT, and the default measures latency. add-photos.sh
-// runs 8 photos at once (JOBS) and every AVIF encode already takes 4 threads, so
-// a change that parallelises INSIDE one photo can win this bench's default mode
-// and lose the pipeline. Any change that adds threads owes a --parallel 8 run.
+// LATENCY IS NOT THROUGHPUT, and wall-clock only measures the first.
+// add-photos.sh runs 8 photos at once (JOBS) and every AVIF encode already takes
+// 4 threads, so the pipeline is CPU-bound and its throughput follows CPU-seconds
+// per photo. Every run therefore prints a CPU table beside the wall one, and
+// each source in each is judged by an exact Mann-Whitney test (mannWhitneyP). The first change through this loop is why: the
+// tiled orient() read 1.004x at --parallel 8 on wall-clock (load 7.4, noise
+// +-11.7%) while saving 5.4-7.0% of CPU per rotated photo with a spread near 3%.
+// A change that parallelises INSIDE one photo can win wall-clock and lose the
+// pipeline, and the CPU table is where that shows.
 //
 // It is a workstation instrument like zenc:reproducible: it needs the SOOC
 // originals, cargo, libavif, sips (for HIF) and exif-sooc. Nothing is written
@@ -135,6 +140,45 @@ export const spread = (xs: readonly number[]): number => (Math.max(...xs) - Math
 
 export const geomean = (xs: readonly number[]): number => Math.exp(xs.reduce((a, x) => a + Math.log(x), 0) / xs.length);
 
+/** The p below which a source is called faster or slower. */
+export const ALPHA = 0.01;
+
+/**
+ * Two-sided EXACT Mann-Whitney U p-value for two samples. It replaced a
+ * "beyond its own (max - min) / median" rule that called one of six sources
+ * faster on a noise-floor run of IDENTICAL source at 3 trials, which is the
+ * false win this bench exists to refuse. Exact rather than the normal
+ * approximation because the samples are 5-9 runs, where the approximation is
+ * poor. Ties count half, and the tail is taken at the ceiling of U, so a tie
+ * can only make the result more conservative.
+ */
+export function mannWhitneyP(a: readonly number[], b: readonly number[]): number {
+  const [m, n] = [a.length, b.length];
+  let u = 0;
+  for (const x of a) for (const y of b) u += x < y ? 1 : x === y ? 0.5 : 0;
+  // ways[i][j][k]: orderings of i a's and j b's with U = k, by the standard
+  // recursion on whether the largest element is an a or a b.
+  const ways: number[][][] = [];
+  for (let i = 0; i <= m; i++) {
+    ways.push([]);
+    for (let j = 0; j <= n; j++) {
+      const row = new Array<number>(i * j + 1).fill(0);
+      if (i === 0 || j === 0) row[0] = 1;
+      else {
+        ways[i - 1][j].forEach((c, k) => { row[k] += c; });
+        ways[i][j - 1].forEach((c, k) => { row[k + i] += c; });
+      }
+      ways[i].push(row);
+    }
+  }
+  const all = ways[m][n];
+  const total = all.reduce((x, y) => x + y, 0);
+  const tail = Math.ceil(Math.min(u, m * n - u));
+  let hits = 0;
+  for (let k = 0; k <= tail; k++) hits += all[k];
+  return Math.min(1, (2 * hits) / total);
+}
+
 // ── the run ─────────────────────────────────────────────────────────────────
 if (import.meta.main) {
   const ROOT = fileURLToPath(new URL("../..", import.meta.url));
@@ -146,9 +190,10 @@ if (import.meta.main) {
     const i = argv.indexOf(name);
     return i >= 0 && argv[i + 1] ? argv[i + 1] : fallback;
   };
-  const TRIALS = Number(flag("--trials", "5"));
+  const TRIALS = Number(flag("--trials", "7"));
   const PARALLEL = Number(flag("--parallel", "0"));
-  if (!Number.isInteger(TRIALS) || TRIALS < 3) die("--trials needs an integer of at least 3, since a median of two is an average");
+  // Below 5 per side no ordering reaches p < ALPHA, so a verdict would be unreachable.
+  if (!Number.isInteger(TRIALS) || TRIALS < 5) die("--trials needs an integer of at least 5: with fewer, no result can reach p < 0.01");
   if (!Number.isInteger(PARALLEL) || PARALLEL < 0) die("--parallel needs a worker count");
 
   const run = (cmd: string[], cwd = ROOT, env?: Record<string, string>) =>
@@ -233,9 +278,12 @@ if (import.meta.main) {
     mkdirSync(d, { recursive: true });
     return d;
   };
+  // User plus system time of the child, in seconds.
+  const cpuOf = (u: { cpuTime: { user: number; system: number } } | undefined) => (u ? (Number(u.cpuTime.user) + Number(u.cpuTime.system)) / 1e6 : NaN);
   const encode = (bin: string, s: Source, dir: string, quality = JPEG_QUALITY) => {
     const r = run([bin, ...productionArgs(inputs.get(s.file)!, s.orient, dir, quality)]);
     if (r.exitCode !== 0) die(`${bin === A ? "baseline" : "candidate"} failed on ${s.file}: ${r.stderr.toString().trim()}`);
+    return cpuOf(r.resourceUsage);
   };
   // Every production output must exist and be non-empty on both sides, so a
   // binary that writes nothing cannot agree with another that writes nothing.
@@ -298,34 +346,40 @@ if (import.meta.main) {
   // load land on both sides. One untimed warm-up each pulls the input into the
   // page cache before anything is measured.
   const time = (fn: () => void) => { const t = performance.now(); fn(); return performance.now() - t; };
+  // Wall and CPU of one run, as [ms, CPU-s].
+  const timed = (fn: () => number): [number, number] => { let c = 0; const w = time(() => { c = fn(); }); return [w, c]; };
   const ms = (x: number) => `${x.toFixed(0).padStart(6)} ms`;
 
   if (PARALLEL > 0) {
     // Throughput: the whole corpus, repeated to keep every worker busy, through
     // a pool of PARALLEL processes. The unit is batch wall-clock.
     const jobs = Array.from({ length: Math.max(PARALLEL * 2, corpus.length) }, (_, i) => corpus[i % corpus.length]);
-    const batch = async (bin: string, who: string) => {
+    const batch = async (bin: string, who: string): Promise<[number, number]> => {
       const t = performance.now();
       let next = 0;
+      let cpu = 0;
       await Promise.all(Array.from({ length: PARALLEL }, async () => {
         while (next < jobs.length) {
           const i = next++;
           const s = jobs[i];
           const p = Bun.spawn([bin, ...productionArgs(inputs.get(s.file)!, s.orient, outDir(`${who}-p${i}`, s))], { stdout: "ignore", stderr: "pipe" });
           if ((await p.exited) !== 0) die(`${who} failed on ${s.file} under --parallel`);
+          cpu += cpuOf(p.resourceUsage());
         }
       }));
-      return performance.now() - t;
+      return [performance.now() - t, cpu];
     };
     console.log(`\nthroughput: ${jobs.length} photos through ${PARALLEL} workers, ${TRIALS} alternating batches`);
     await batch(A, "baseline");
     await batch(B, "candidate");
-    const [ta, tb]: number[][] = [[], []];
+    const row: Row = { label: `batch of ${jobs.length}`, a: [], b: [], ca: [], cb: [] };
     for (let i = 0; i < TRIALS; i++) {
-      ta.push(await batch(A, "baseline"));
-      tb.push(await batch(B, "candidate"));
+      const [wa, ca] = await batch(A, "baseline");
+      const [wb, cb] = await batch(B, "candidate");
+      row.a.push(wa); row.ca.push(ca); row.b.push(wb); row.cb.push(cb);
     }
-    report([{ label: `batch of ${jobs.length}`, a: ta, b: tb }]);
+    report([row], "wall");
+    report([row], "cpu");
   } else {
     console.log(`\nlatency: ${TRIALS} alternating pairs per source, after one warm-up each`);
     const rows: Row[] = [];
@@ -333,14 +387,16 @@ if (import.meta.main) {
       const [da, db] = [outDir("baseline", s), outDir("candidate", s)];
       encode(A, s, da);
       encode(B, s, db);
-      const [ta, tb]: number[][] = [[], []];
+      const row: Row = { label: s.file, a: [], b: [], ca: [], cb: [] };
       for (let i = 0; i < TRIALS; i++) {
-        ta.push(time(() => encode(A, s, da)));
-        tb.push(time(() => encode(B, s, db)));
+        const [wa, ca] = timed(() => encode(A, s, da));
+        const [wb, cb] = timed(() => encode(B, s, db));
+        row.a.push(wa); row.ca.push(ca); row.b.push(wb); row.cb.push(cb);
       }
-      rows.push({ label: s.file, a: ta, b: tb });
+      rows.push(row);
     }
-    report(rows);
+    report(rows, "wall");
+    report(rows, "cpu");
 
     // ── where the time goes ────────────────────────────────────────────────
     // The candidate with the same NUMBER of tiers at 8px and no AVIF. tier()
@@ -370,31 +426,35 @@ if (import.meta.main) {
     console.log("  and the encoders' knobs are quality flags (gotcha 43), so the rest can only be rescheduled.");
   }
 
-  type Row = { label: string; a: number[]; b: number[] };
-  // Each source is judged against ITS OWN noise. A corpus-wide worst case would
-  // let one bad trial on one photo erase a real win on five others, which errs
-  // the safe way and still hides exactly what the loop is looking for.
-  function report(rows: Row[]) {
-    console.log(`  ${"".padEnd(18)} ${"baseline".padStart(9)} ${"candidate".padStart(9)}   speedup    noise`);
+  // a/b: wall ms of baseline/candidate; ca/cb: their CPU seconds.
+  type Row = { label: string; a: number[]; b: number[]; ca: number[]; cb: number[] };
+  // Each source gets its own test, so one bad trial on one photo cannot erase a
+  // real win on five others. "noise" is the (max - min) / median spread, shown
+  // for reading; the call is made on p alone.
+  function report(rows: Row[], kind: "wall" | "cpu") {
+    const fmt = kind === "wall" ? ms : (x: number) => `${x.toFixed(3).padStart(6)} s `;
+    console.log(`\n  ${(kind === "wall" ? "wall-clock" : "CPU (user + sys)").padEnd(18)} ${"baseline".padStart(9)} ${"candidate".padStart(9)}   speedup    noise        p`);
     const ratios: number[] = [];
     let [won, lost] = [0, 0];
     for (const r of rows) {
-      const [ma, mb] = [median(r.a), median(r.b)];
-      const n = Math.max(spread(r.a), spread(r.b));
+      const [xa, xb] = kind === "wall" ? [r.a, r.b] : [r.ca, r.cb];
+      const [ma, mb] = [median(xa), median(xb)];
+      const n = Math.max(spread(xa), spread(xb));
       const ratio = ma / mb;
       ratios.push(ratio);
-      const call = Math.abs(ratio - 1) <= n ? "" : ratio > 1 ? "  faster" : "  SLOWER";
+      const p = mannWhitneyP(xa, xb);
+      const call = p >= ALPHA ? "" : ratio > 1 ? "  faster" : "  SLOWER";
       if (call === "  faster") won++;
       if (call === "  SLOWER") lost++;
-      console.log(`  ${r.label.padEnd(18)} ${ms(ma)} ${ms(mb)}   ${ratio.toFixed(3)}x   ±${(100 * n).toFixed(1).padStart(4)}%${call}`);
+      console.log(`  ${r.label.padEnd(18)} ${fmt(ma)} ${fmt(mb)}   ${ratio.toFixed(3)}x   ±${(100 * n).toFixed(1).padStart(4)}%   ${p.toFixed(4)}${call}`);
     }
     const g = geomean(ratios);
     const verdict = lost
-      ? `SLOWER beyond noise on ${lost} of ${rows.length}${won ? `, faster on ${won}` : ""}`
+      ? `SLOWER at p < ${ALPHA} on ${lost} of ${rows.length}${won ? `, faster on ${won}` : ""}`
       : won
-        ? `FASTER beyond noise on ${won} of ${rows.length}, slower on none`
-        : "no source moved beyond its own noise: no measurable difference";
-    console.log(`\n  geomean speedup ${g.toFixed(3)}x: ${verdict}`);
+        ? `FASTER at p < ${ALPHA} on ${won} of ${rows.length}, slower on none`
+        : `no source moved at p < ${ALPHA}: no measurable difference`;
+    console.log(`  geomean ${kind === "wall" ? "speedup" : "CPU saving"} ${g.toFixed(3)}x: ${verdict}`);
   }
 }
 
