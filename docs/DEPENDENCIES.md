@@ -361,7 +361,7 @@ does not make a failed write safe to ignore.
   packages run only in the build environment; they add no browser or Worker
   runtime dependency. Dependabot should review their release notes for output,
   target-browser, and native-install changes.
-- Oxlint 1.83.0 and oxlint-tsgolint 7.0.2002 are exact root pins for
+- Oxlint 1.84.0 and oxlint-tsgolint 7.0.2002 are exact root pins for
   `bun run lint`, a required step in `validate`. The tsgolint version tracks the
   TypeScript pin below on purpose: TypeScript 7.0 ships no stable programmatic
   API, so typescript-eslint cannot run on it, and tsgolint is the door oxlint
@@ -370,7 +370,7 @@ does not make a failed write safe to ignore.
   unchanged code, and should treat any tsgolint release as paired with a
   TypeScript one. Every rule this repo turns off is turned off in
   `.oxlintrc.json` beside the measurement that decided it.
-- @oxlint/plugins 1.83.0 is the runtime for the three rules vendored from
+- @oxlint/plugins 1.84.0 is the runtime for the three rules vendored from
   anti-slop at `tools/oxlint/anti-slop`. **Bump it in lockstep with oxlint and
   never on its own**: it is the ABI between the linter and a JS plugin, the two
   ship one version number, and a mismatch would fail at plugin load rather than
