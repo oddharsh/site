@@ -45,7 +45,8 @@ cargo clippy --locked --manifest-path tools/photos/zenc/Cargo.toml --all-targets
 cargo build --release --locked --manifest-path tools/photos/zenc/Cargo.toml
 ```
 
-The 35 unit tests cover pixel permutations and inverses, RGB channel integrity,
+The 39 unit tests cover pixel permutations and inverses (the tiled orient checked
+against the per-pixel one it replaced, across tile edges), RGB channel integrity,
 8/16-bit monochrome decoding, transfer preservation, rejected EXIF values, and
 allocation reuse for the upright transform, and AVIF byte parity with the
 installed CLI. CI runs the tests and Clippy inside the required validate job.
@@ -87,9 +88,16 @@ agentic-iteration AGENTS.md to a crate whose output is content-addressed.
 The split the bench prints bounds the prize. On the 2026-09-22 corpus, zenc's
 own code was 27-28% of a photo, a ceiling of about 1.37x before any encoder.
 135 of the 185 sources are rotated, and `orient()` costs 225-360 ms per 26 MP
-frame for a permuted full-frame copy. Reading the source through the
-orientation inside the resample is the first target, and it is identity-safe
-by construction because the same values arrive in the same order.
+frame, most of it in a per-pixel loop that read the source down a column.
+
+That was the first pass through the loop. `orient()` now copies or reverses
+whole rows for the flips and walks 64px tiles for the four transposes, which
+took the decode-to-resample floor from 731/774/859 ms to 572/577/601 ms at
+orientations 3/6/8. On the bench's corpus, rotated sources run 1.09-1.17x
+faster and use 5-9.5% less CPU, each at p = 0.0006, with every output
+byte-identical. What orientation still costs over upright is the copy into a
+fresh full-frame buffer. Removing it means reading through the orientation
+inside halflight's resample, which is a halflight API change and its own A/B.
 
 ## Remaining work
 

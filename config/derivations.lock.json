@@ -1553,6 +1553,6 @@
     "tools/photos/shell-data.ts": "9f579625d015d884ac8cae51ee6075df9993b3b658f894cadbd168cde05b29e1",
     "tools/photos/zenc/Cargo.lock": "f8461ff344258f61c9ca715e93c3f12a549be5cc0d7dd89364de27cb143e5897",
     "tools/photos/zenc/src/histogram.rs": "59e46d9f6e65905da2f6019714963cfc0d2d0cd40b518f5f57c5a14377b6612a",
-    "tools/photos/zenc/src/pixels.rs": "156dce6149119ed686c47801237909c7474ef1c8459a12e3147de646b0cdac62"
+    "tools/photos/zenc/src/pixels.rs": "4ba5b98e36b3013260e2368f15a4a25adf7d3bce8dba4b326accab66a5dbd786"
   }
 }
