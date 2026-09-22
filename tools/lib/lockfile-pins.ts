@@ -42,7 +42,8 @@
 // boolbase@1.0.0` and a healthy one with the same string naming 2.0.0, so the
 // only offline discriminator is a version inside an error message, and a
 // reworded message would read as landed. Nor is the repository WAITING on it,
-// which is what a watch row schedules: this check is local, complete and ~25ms,
+// which is what a watch row schedules: this check is local, complete and 21 ms
+// (median of 7 on this tree, most of it the `git ls-files` spawn),
 // it also covers the mirror half without anyone running an install, and it stays
 // worth keeping the day bun fixes its side.
 //
@@ -147,7 +148,11 @@ export function auditLockfilePins({ lockfiles, floor = FLOOR_PINS }: { lockfiles
           );
         }
 
-        const fingerprint = `${lock} ${name}`;
+        // JSON rather than a separator character: a NUL would work and would
+        // also make this file read as BINARY to grep and `git grep`, which in a
+        // repository whose checks are scanners over `git ls-files` is a file the
+        // next scanner skips without saying so.
+        const fingerprint = JSON.stringify([lock, name]);
         if (seen.has(fingerprint)) continue;
         seen.add(fingerprint);
 
