@@ -1554,6 +1554,20 @@ Two encoders + one transform tool, all built from source:
   requirements line and CI's `setup-python` all left with it; the ledger bans
   the interpreter and `contract-the-photo-pipeline-runs-no-python` holds it.
 
+  **That was false for a week, and TRUE only since 2026-09-22.** Two shell
+  scripts still piped a heredoc to `python3 -`: `hash-thumbnails.sh`, which
+  `add-photos.sh` runs on every photo add, and `bump-version.sh`, which stages
+  every release. The test's regex would have matched both. What it never did
+  was read them, because it scanned a hand-kept list of three files. Both
+  heredocs are `pipeline-json.ts` subcommands now (`hash-tiers`,
+  `checkpoint-add`), diffed byte for byte against the Python on the real
+  `hashes.json`, `public/i/` and `checkpoints.json`. The test now derives its
+  set from what the pipeline's entry points invoke, transitively, plus every
+  committed `.sh`. It found the second heredoc on its first run, which nobody
+  had gone looking for. Same lesson as gotcha 40: **a ban enforced over a list
+  is enforced over the list**, and the file that breaks it is the one nobody
+  thought to add.
+
 The four below serve the STUDY pages rather than the photo pipeline, and every
 one of them was undocumented until `tools:check` went looking (2026-08-14):
 
