@@ -42,6 +42,19 @@
 //       jaq -r '.photos[]?.full'
 //   pipeline-json.ts uri <string>
 //       jaq -nr '$key | @uri'
+//   pipeline-json.ts hash-tiers <images-dir> --out-dir <i-dir> --map <hashes.json>
+//       NOT a jaq filter: the Python heredoc hash-thumbnails.sh ran until
+//       2026-09-22, which the 2026-09-15 sweep missed because the no-python
+//       contract test read a hand-kept list of three files and this script was
+//       not on it. hashes.json is committed and carries Python's json.dump
+//       bytes (sort_keys, no spaces, ensure_ascii, no trailing newline), and
+//       /i/ is content-addressed, so the port was diffed byte for byte against
+//       the heredoc on the real library before it replaced it.
+//   pipeline-json.ts checkpoint-add <checkpoints.json> --slug <s> --title <t> --ymd <date>
+//       the other heredoc, bump-version.sh's, found the same day by the widened
+//       test rather than by anyone looking: json.dumps(rows, indent=2,
+//       sort_keys=True) + "\n" into src/worker/checkpoints.json, committed.
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { projectExifRecord } from "../lib/photo-indexes.ts";
@@ -114,6 +127,144 @@ export function mergeIndex(index: Record<string, IndexEntry>, entries: Record<st
   return sortKeysDeep(merged as Json) as Record<string, IndexEntry>;
 }
 
+/** Python's json.dumps(v, sort_keys=True, separators=(",", ":")), byte for
+ *  byte. JSON.stringify already escapes the same control characters in the
+ *  same lowercase form; what it does not do is ensure_ascii, which escapes
+ *  every code unit outside space..~ (DEL included) as \uXXXX. A JS string is
+ *  UTF-16, so an astral character comes out as the same surrogate pair Python
+ *  writes. */
+export function pyCompactJson(value: Json): string {
+  return ensureAscii(JSON.stringify(sortKeysDeep(value)));
+}
+
+/** json.dumps(v, indent=2, sort_keys=True) + "\n". With an indent Python drops
+ *  the space after the item comma and keeps the one after the colon, which is
+ *  exactly JSON.stringify's 2-space shape; ensure_ascii is again the one gap. */
+export const pyPrettyJson = (value: Json): string => ensureAscii(pretty(sortKeysDeep(value)));
+
+const ensureAscii = (json: string): string => json.replace(/[\u007f-￿]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`);
+
+export type Checkpoint = { slug: string; title: string; version: string; vnum: number; ymd: string };
+
+/** bump-version.sh's body: mint the next vnum from the PROJECTION (so staging a
+ *  release needs no D1, no network and no credential), refuse a slug already in
+ *  the log, append, and keep the rows in vnum order. */
+export function addCheckpoint(rows: Checkpoint[], slug: string, title: string, ymd: string): { rows: Checkpoint[]; entry: Checkpoint } {
+  const vnum = rows.reduce((max, r) => Math.max(max, r.vnum), 0) + 1;
+  if (rows.some((r) => r.slug === slug)) throw new Error(`slug '${slug}' is already in the log, pick another`);
+  const entry = { slug, title, version: `aadhar-v${vnum}-${slug}`, vnum, ymd };
+  // Array.prototype.sort is stable, as Python's list.sort is.
+  return { rows: [...rows, entry].sort((a, b) => a.vnum - b.vnum), entry };
+}
+
+type TierMap = Record<string, Record<string, string>>;
+
+/** The stem a tier file belongs to, from ANY tier rather than the JPG alone. A
+ *  full re-encode writes every tier, so the JPG was a fine proxy; an ADDITIVE
+ *  run (TIERS=xs in reencode-thumbnails.sh, which is how the 200px tier was
+ *  backfilled without reminting the other three hashes) writes one AVIF and no
+ *  JPG, and a JPG-only scan finds nothing and silently hashes zero photos. The
+ *  suffix order is the heredoc's: the sized AVIFs are tested before the bare
+ *  extensions, so `X-400.avif` is stem X rather than stem `X-400`. */
+export function tierStem(name: string): string | null {
+  for (const suffix of ["-400.avif", "-200.avif"]) if (name.endsWith(suffix)) return name.slice(0, -suffix.length);
+  if (name.endsWith(".jpg")) return name.slice(0, -4);
+  if (name.endsWith(".avif")) return name.slice(0, -5);
+  return null;
+}
+
+/** The four tiers as [map key, name suffix, extension], in the heredoc's order.
+ *  A source is `<stem><suffix><ext>` and its address `<stem><suffix>.<h8><ext>`. */
+const TIERS = [["a", "", ".avif"], ["j", "", ".jpg"], ["s", "-400", ".avif"], ["x", "-200", ".avif"]] as const;
+const sourceName = (stem: string, [, suffix, ext]: typeof TIERS[number]) => `${stem}${suffix}${ext}`;
+const hashedName = (stem: string, [, suffix, ext]: typeof TIERS[number], h: string) => `${stem}${suffix}.${h}${ext}`;
+
+/** hash-thumbnails.sh's body: address every tier in `srcDir` into `outDir`
+ *  under its hash8, MERGE the result into the map at `mapPath`, then prune the
+ *  addressed sources and any /i/ file the merged map no longer names. Returns
+ *  the lines the heredoc printed, in its order. See hash-thumbnails.sh for why
+ *  each half exists; this is the mechanism, kept statement for statement. */
+export function hashTiers(srcDir: string, outDir: string, mapPath: string): string[] {
+  const h8 = (file: string) => crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex").slice(0, 8);
+  const stems = [...new Set(fs.readdirSync(srcDir).map(tierStem).filter((s): s is string => Boolean(s)))].sort(byCodePoint);
+
+  // A missing or unreadable map starts empty, exactly as `except Exception`
+  // did. That fallback is inherited rather than endorsed: on a corrupt map the
+  // prune below deletes every /i/ file the new map does not name.
+  let loaded: Json = {};
+  if (fs.existsSync(mapPath)) {
+    try { loaded = JSON.parse(fs.readFileSync(mapPath, "utf8")); } catch { loaded = {}; }
+  }
+  // Python crashed on a map that parsed to anything but an object of objects
+  // (`.items()` on a list, `.update` on a string); refusing keeps that loud.
+  if (loaded === null || loaded.constructor !== Object) throw new Error(`${mapPath} is not a JSON object`);
+  const hashes = loaded as TierMap;
+  for (const [stem, entry] of Object.entries(hashes)) {
+    if (entry === null || (entry as Json as object).constructor !== Object) throw new Error(`${mapPath}: entry for ${stem} is not an object`);
+  }
+
+  // The j-tier hash each histogram was computed from, snapshotted before this
+  // run mutates the map. images/histograms.json is a pure function of those
+  // exact JPEG bytes, and a re-encode mints a NEW hash, so a run that moves any
+  // j leaves the committed bars describing pixels nobody is served. Not
+  // hypothetical: #394 re-encoded 316 thumbnails on 2026-08-14 and re-baked
+  // nothing, unseen for nine days (gotcha 46).
+  const prevJ = new Map(Object.entries(hashes).map(([st, e]) => [st, e.j]));
+  let copied = 0;
+  for (const stem of stems) {
+    const entry: Record<string, string> = {};
+    for (const tier of TIERS) {
+      const src = path.join(srcDir, sourceName(stem, tier));
+      if (!fs.existsSync(src)) continue;
+      const h = h8(src);
+      const out = path.join(outDir, hashedName(stem, tier, h));
+      if (!fs.existsSync(out)) { fs.copyFileSync(src, out); copied += 1; }
+      entry[tier[0]] = h;
+    }
+    // MERGE per stem too: an additive run carries only the tier it generated.
+    if (Object.keys(entry).length) hashes[stem] = { ...hashes[stem], ...entry };
+  }
+
+  fs.writeFileSync(mapPath, pyCompactJson(hashes as Json));
+
+  // Clean up so the tree matches the map: drop the un-hashed source tiers just
+  // addressed (they live in /i/ now; metadata.json, alt.json, hashes.json and
+  // meta/ stay put), then drop every /i/ file a re-encode superseded, so /i/ is
+  // 1:1 with hashes.json and check-photo-pipeline.ts passes.
+  let prunedSrc = 0, prunedI = 0;
+  for (const stem of stems) {
+    for (const tier of TIERS) {
+      const p = path.join(srcDir, sourceName(stem, tier));
+      if (fs.existsSync(p)) { fs.rmSync(p); prunedSrc += 1; }
+    }
+  }
+  const expected = new Set<string>();
+  for (const [st, e] of Object.entries(hashes)) for (const tier of TIERS) if (Object.hasOwn(e, tier[0])) expected.add(hashedName(st, tier, e[tier[0]]));
+  for (const f of fs.readdirSync(outDir)) {
+    if ((f.endsWith(".avif") || f.endsWith(".jpg")) && !expected.has(f)) { fs.rmSync(path.join(outDir, f)); prunedI += 1; }
+  }
+
+  const lines = [
+    `hashed ${Object.keys(hashes).length} stems, copied ${copied} new files -> ${outDir}`,
+    `pruned ${prunedSrc} un-hashed source tiers, ${prunedI} superseded /i/ files`,
+    `map: ${mapPath}`,
+  ];
+  // `prev_j.get(st)` is truthy-tested, so a prior entry with no j never warns.
+  const restale = Object.entries(hashes).filter(([st, e]) => prevJ.get(st) && e.j !== prevJ.get(st)).map(([st]) => st).sort(byCodePoint);
+  if (restale.length) {
+    const shown = restale.slice(0, 8).join(", ") + (restale.length > 8 ? " ..." : "");
+    lines.push(
+      "",
+      `WARNING: the JPEG tier changed for ${restale.length} photo(s): ${shown}`,
+      "  images/histograms.json is computed from those exact bytes, so the",
+      "  tooltip bars are now stale. Re-bake before committing:",
+      "    ./tools/photos/extract-photo-metadata.sh /path/to/sooc-originals/",
+      "  add-photos.sh already runs that; a standalone re-encode does not.",
+    );
+  }
+  return lines;
+}
+
 /** `-` reads stdin, for the one caller that pipes curl straight in. */
 const readJson = (file: string): Json => JSON.parse(fs.readFileSync(file === "-" ? 0 : file, "utf8"));
 const flag = (args: string[], name: string): string | undefined => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : undefined; };
@@ -183,8 +334,18 @@ export function main(argv: string[]): number {
     case "uri":
       process.stdout.write(`${jqUri(positional[0] ?? "")}\n`);
       return 0;
+    case "hash-tiers":
+      for (const line of hashTiers(positional[0], need(args, "--out-dir"), need(args, "--map"))) process.stdout.write(`${line}\n`);
+      return 0;
+    case "checkpoint-add": {
+      const [file] = positional;
+      const { rows, entry } = addCheckpoint(readJson(file) as Checkpoint[], need(args, "--slug"), need(args, "--title"), need(args, "--ymd"));
+      fs.writeFileSync(file, pyPrettyJson(rows as Json));
+      process.stdout.write(`staged: v${entry.vnum} (${entry.ymd}) as ${entry.version}\n        ${entry.title}\n`);
+      return 0;
+    }
     default:
-      process.stderr.write("usage: pipeline-json.ts <length|index-merge|prune|unread|manifest-keys|uri> ...\n");
+      process.stderr.write("usage: pipeline-json.ts <length|index-merge|prune|unread|meta-split|manifest-keys|uri|hash-tiers|checkpoint-add> ...\n");
       return 2;
   }
 }
