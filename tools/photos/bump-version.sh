@@ -41,28 +41,12 @@ case "$title" in *\'*) echo "title cannot contain a single quote (')" >&2; exit 
 ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/../.." && pwd )"
 OUT="$ROOT/src/worker/checkpoints.json"
 
-SLUG="$slug" TITLE="$title" YMD="$(date -u +%Y-%m-%d)" python3 - "$OUT" <<'PY'
-import json, os, sys
-
-path = sys.argv[1]
-slug, title, ymd = os.environ["SLUG"], os.environ["TITLE"], os.environ["YMD"]
-rows = json.load(open(path))
-
-# The high-water mark comes from the PROJECTION, which is the whole point: this
-# script no longer needs to reach D1 to know what number it is minting, so it
-# runs on a plane, in CI, or on a machine with no Cloudflare credentials at all.
-vnum = max((r["vnum"] for r in rows), default=0) + 1
-version = f"aadhar-v{vnum}-{slug}"
-
-if any(r["slug"] == slug for r in rows):
-    sys.exit(f"error:  slug '{slug}' is already in the log — pick another")
-
-rows.append({"slug": slug, "title": title, "version": version, "vnum": vnum, "ymd": ymd})
-rows.sort(key=lambda r: r["vnum"])
-open(path, "w").write(json.dumps(rows, indent=2, sort_keys=True) + "\n")
-print(f"staged: v{vnum} ({ymd}) as {version}")
-print(f"        {title}")
-PY
+# pipeline-json.ts checkpoint-add since 2026-09-22; a Python heredoc until then,
+# a week after the ban, and found only once the no-python test stopped reading a
+# hand-kept list. The file it writes is committed, so the port keeps Python's
+# json.dumps(indent=2, sort_keys=True) bytes, and it mints the vnum from the
+# PROJECTION, which is why this runs with no D1 and no credential at all.
+bun "$ROOT/tools/photos/pipeline-json.ts" checkpoint-add "$OUT" --slug "$slug" --title "$title" --ymd "$(date -u +%Y-%m-%d)"
 
 echo "next:   commit src/worker/checkpoints.json with the change it describes."
 echo "        /updates + /restore show it as soon as that version serves;"
