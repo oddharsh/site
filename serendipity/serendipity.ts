@@ -816,7 +816,7 @@ async function fetchMyEvents(auth, selfId) {
       page++;
       const p = new URLSearchParams({ pagination_limit: "50", period });
       if (cursor) p.set("pagination_cursor", cursor);
-      const data = asRecord(await (await lumaFetch(`${LUMA_API}/home/get-events?${p}`, auth)).json()) ?? {};
+      const data = asRecord(await (await lumaFetch(`${LUMA_API}/home/get-events?${p.toString()}`, auth)).json()) ?? {};
       all.push(...parseEvents(data, selfId));
       if (!data.has_more || !data.next_cursor) break;
       cursor = data.next_cursor;
@@ -850,7 +850,7 @@ export async function fetchEventGuests(
     if (ticketKey) p.set("ticket_key", ticketKey);
     if (cursor) p.set("pagination_cursor", cursor);
     if (budget) budget.charge(1);
-    const data = asRecord(await (await lumaFetch(`${LUMA_API}/event/get-guest-list?${p}`, auth)).json()) ?? {};
+    const data = asRecord(await (await lumaFetch(`${LUMA_API}/event/get-guest-list?${p.toString()}`, auth)).json()) ?? {};
     for (const e of (data.entries || [])) all.push(parseGuest(e.api_id, e.user || {}));
     if (!data.has_more || !data.next_cursor) return { guests: all, done: true, cursor: null };
     cursor = data.next_cursor;
@@ -875,7 +875,7 @@ async function fetchEventDescription(eventId, auth) {
   const p = new URLSearchParams({ event_api_id: eventId });
   let res;
   // deleted/private events 400/404 — lumaFetch throws; treat as "no description".
-  try { res = await lumaFetch(`${LUMA_API}/event/get?${p}`, auth); }
+  try { res = await lumaFetch(`${LUMA_API}/event/get?${p.toString()}`, auth); }
   catch { return null; }
   const data = await res.json();
   const e = data.event || {};
@@ -1003,7 +1003,7 @@ async function fetchCalendarEvents(calId, cap) {
       const p = new URLSearchParams({ calendar_api_id: calId, period, pagination_limit: "50" });
       if (cursor) p.set("pagination_cursor", cursor);
       let data;
-      try { data = await (await lumaFetch(`${LUMA_API}/calendar/get-items?${p}`, "")).json(); }
+      try { data = await (await lumaFetch(`${LUMA_API}/calendar/get-items?${p.toString()}`, "")).json(); }
       catch { break; }  // rate-limit / transient error: keep whatever we have
       all.push(...parseEvents(data, null));
       if (!data.has_more || !data.next_cursor) break;
@@ -1025,7 +1025,7 @@ async function fetchDiscoverEvents(slug, cap) {
     const p = new URLSearchParams({ slug, pagination_limit: "50" });
     if (cursor) p.set("pagination_cursor", cursor);
     let data;
-    try { data = await (await lumaFetch(`${LUMA_API}/discover/get-paginated-events?${p}&${DISCOVER_BOX}`, "")).json(); }
+    try { data = await (await lumaFetch(`${LUMA_API}/discover/get-paginated-events?${p.toString()}&${DISCOVER_BOX}`, "")).json(); }
     catch { break; }
     for (const e of parseEvents(data, null)) {
       if (!e.start_at || Date.parse(e.start_at) >= cutoff) all.push(e);

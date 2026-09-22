@@ -56,5 +56,27 @@
   // The generated runtime surface is a literal path rather than a glob, so a
   // missing file (typecheck run without its generator) fails on the include
   // instead of checking the Worker against no globals at all.
-  "include": ["../cal/src/**/*.ts", "../src/worker/**/*.ts", "./.generated/workers-runtime.d.ts"]
+  //
+  // SERENDIPITY IS NAMED HERE THOUGH TSC ALREADY REACHED IT, and the second
+  // reader is why. It arrives in this program transitively, through the
+  // Worker's imports, so `tsc -p` has always checked it and check-ts-coverage
+  // has always counted it. tsgolint asks a DIFFERENT question: it walks up from
+  // each file looking for a config that NAMES it, and until 2026-09-22 nothing
+  // did, so it built a default program with the DOM lib for serendipity alone.
+  // Measured on an unchanged tree: `oxlint --type-aware --type-check` reported
+  // 308 errors there against tsc's 0, five of them the `caches.default`
+  // shadowing the `lib` note above warns about, and the plain `--type-aware`
+  // lint reported 0 findings where it now reports 5. So the type-aware lint had
+  // been blind on that file since it landed, exactly as #709 was blind on the
+  // whole tree before the root tsconfig.json existed.
+  //
+  // Reachable and named are separate properties, and only the first one has a
+  // check. Adding a tree here moved neither ratchet and left coverage at 374
+  // files across 10 programs; the include is what the LINT reads.
+  "include": [
+    "../cal/src/**/*.ts",
+    "../src/worker/**/*.ts",
+    "../serendipity/**/*.ts",
+    "./.generated/workers-runtime.d.ts"
+  ]
 }
