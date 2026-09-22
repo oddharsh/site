@@ -371,8 +371,11 @@ export async function checkDependencyDocs(root = REPO_ROOT) {
 }
 
 // An exact pin is the only shape the prose can be wrong ABOUT: a range names a
-// set, and the doc states one number.
-const EXACT_PIN = /^\d+\.\d+\.\d+[\w.-]*$/;
+// set, and the doc states one number. EXPORTED because tools/lib/lockfile-pins.ts
+// asks the same question of the same manifests for a different reason, and two
+// spellings of "exact pin" is the drift that would let one checker cover a
+// declaration the other silently skips.
+export const EXACT_PIN = /^\d+\.\d+\.\d+[\w.-]*$/;
 
 type DocAlias = { prose: string; pkg: string };
 // What findClaims hands back: the prose name, the package it maps to, the version

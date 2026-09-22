@@ -91,6 +91,41 @@ The baseline below already worked that through: the release-age policy once held
 the types pin a release behind the runtime and it caught up on its own, which is
 a wait rather than a fork.
 
+### what a frozen install does not check
+
+`bun install --frozen-lockfile` is the gate CI trusts to answer "does the
+installed tree match what this repository declares". It answers half of that
+question, and PR #880 was the half it misses.
+
+`bun.lock` records every direct dependency twice: in `workspaces[<dir>]` as a
+copy of the manifest's spec string, and in `packages` as the version that
+actually installs. Installs compare the manifest against the first copy alone.
+Measured 2026-09-22 on bun 1.4.2 (744846f84) and again on `oven/bun:1.4` Linux,
+one dependency and one hand-edited lockfile:
+
+| lockfile state | frozen install | installed |
+|---|---:|---|
+| the mirror disagrees with the manifest | exit 1 | nothing |
+| the mirror agrees, `packages` resolves something else | **exit 0** | **the resolution** |
+
+A plain `bun install` behaves the same way and rewrites nothing, and so does
+`bun ci`; `bun update <name>` is the only one of the four that repairs it, so
+the reflexive `rm -rf node_modules && bun install` leaves the drift in place.
+Filed as [oven-sh/bun#43795](https://github.com/oven-sh/bun/issues/43795).
+
+The state comes from version control rather than from bun. On #880 a merge of
+`main` into a dependabot branch resolved the `package.json` conflict in favour
+of the base, which reverted the bump and left the lockfile's resolution ahead of
+it, so every job on that PR built with a version the manifest denied. Every
+dependabot PR that needs a `main` merge is a candidate.
+
+`bun run test` holds it now, in
+[`tools/lib/lockfile-pins.ts`](../tools/lib/lockfile-pins.ts): every exact pin
+in every committed manifest must equal what its lockfile resolves. It is
+deliberately NOT an upstream-watch row, and that module's header says why — the
+guard is local, complete and cheap, so there is no workaround here waiting on
+the fix to be retired.
+
 ### the bun surface this repo actually uses
 
 bun is the toolchain, so which of its features are wired in is a dependency
