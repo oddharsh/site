@@ -309,6 +309,19 @@ worktrees may edit freely, but a worktree is not a release surface.
   your branch out from under you.
 - Keep each change on its own branch, commit it, push it, and open a PR. Do
   not deploy from a dirty worktree or push agent work directly to `main`.
+- **Turn on CI auto-fix as soon as a PR exists**, through the Claude Code
+  desktop app: call `ccd_pr set_monitor` with `auto_fix: true`,
+  `address_comments: true` and the PR's url as `get_status` reports it. A
+  standing instruction here, so nobody asks per PR. It earns a line because
+  the app has no global default for it: the switch is per SESSION and per PR,
+  stored on the session record, and enabling it REVOKES it from every other
+  session bound to that PR. So the session that opened the PR is the one that
+  claims it, and a second session claiming it silently takes over the first
+  one's watch. `address_comments` is the same switch as `auto_fix` on macOS
+  and has to carry the same value. It matters more here than in most repos,
+  since several agents work in this tree at once (the bullet above) and
+  `validate` is a required check, so a red run blocks the merge until somebody
+  goes looking.
 - **A new issue or PR assigns and labels itself**, via
   `.github/workflows/triage.yml`. It reads the title's conventional-commit
   prefix for a `type:` label and the changed paths for `area:` labels, so
