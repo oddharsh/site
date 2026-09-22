@@ -232,11 +232,13 @@ bun run canary:browsers   # /garage/horizon's probes in stable vs prerelease eng
                           # with production; `-- --offline` skips the second. Their
                           # first run found JXL decoding by default in Canary 155.
 #
-# THE WATCHES (2026-09-15) are the inverse of a gate: nine probes that read
+# THE WATCHES (2026-09-15) are the inverse of a gate: eleven probes that read
 # FALSE on the pinned toolchain today, one per upstream fix this repo is
 # waiting on (tools/lib/upstream-watches.ts: seven bun issues from Bun.Image
-# option validation to fetch honouring `dispatcher`, plus workerd#7106's zstd
-# dictionary and `wrangler types --x-new-config`). Each leg reads every watch
+# option validation to fetch honouring `dispatcher`, oxc-minify reaching SWC
+# parity, workerd#7106's zstd dictionary, `wrangler types --x-new-config`, and
+# since 2026-09-22 the vitest-plugin at the wrangler pin's own commit admitting
+# Vitest 5, which is the cue to revisit #703). Each leg reads every watch
 # under the PIN and under the candidate; a row that differs is a `changed`
 # night naming the fix and the build it arrived in, and a row landed in both
 # is the cue to retire it. The nightly pin PRs also carry a DIGEST, the
@@ -3625,6 +3627,31 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     with `content-encoding: null`. A regex could not do this job, for the reason
     every naive scanner in this file has failed: the init is an expression, and
     finding its end needs balanced parentheses.
+
+    **Since 2026-09-22 the RULES the walker applies are checked in workerd too.**
+    `contract-encodebody-survives-a-rebuild-in-workerd` writes a fixture Worker
+    that imports the real `lib/security.ts`, boots it through wrangler's
+    `createTestHarness` on the pinned workerd under production's compatibility
+    flags, and POSTs a brotli body through each rebuild shape. A client decoding
+    once gets the page back from `new Response(r.body, r)` and from both of
+    `withSecurityHeaders`'s carries, and one leftover brotli layer from an object
+    init, which is the control row that proves the instrument can see the bug. It
+    costs 1.2s and no dependency, runs under bun and node alike, and fails by name
+    when either carry in `security.ts` is deleted. A wrangler pin that moves the
+    asymmetry fails there rather than shipping. This was the case for bringing
+    back `@cloudflare/vitest-pool-workers`, which #703 removed, and the harness
+    turned out to answer it without Vitest.
+
+    **Writing it found the flag is read ONCE, at serialization.** Deleting the
+    carry on `withSecurityHeaders`'s early noindex rebuild left an HTML row
+    green, because the main rebuild after it sets the flag again and an
+    intermediate Response hands its body stream on untouched. So that carry
+    matters only on the paths where no later rebuild runs, the image and redirect
+    bails, and the test holds it with an `image/svg+xml` row. The walker is
+    therefore conservative in one direction: it flags an intermediate rebuild
+    that a later carry would rescue. Leave it that way, since proving a later
+    carry exists on every path is a control-flow analysis a brace matcher cannot
+    do.
 
     Three suspects were investigated and exonerated. Two of the three are real
     facts worth keeping, they just weren't the cause: (1) a worker cannot read the

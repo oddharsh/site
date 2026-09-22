@@ -56,6 +56,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { asRecord, asText } from "../src/worker/lib/parse.ts";
 import { interpretZstdProbe } from "./lib/bun-pin.ts";
 import { WRANGLER_WATCHES, type WatchResult, watchMoved, watchRow, watchSignature } from "./lib/upstream-watches.ts";
 import { wranglerCommand } from "./lib/wrangler-bin.ts";
@@ -281,6 +282,28 @@ try {
         const ansi = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
         const why = `${out.stderr || ""}${out.stdout || ""}`.replace(ansi, "").split("\n").find((l) => /Unknown argument|ERROR/.test(l))?.trim();
         return { landed: wrote, detail: wrote ? `exit 0, wrote ${statSync(target).size} B` : `exit ${out.status}${why ? `: ${why.slice(0, 100)}` : ""}` };
+      },
+      "vitest-plugin-accepts-vitest-5": (tree) => {
+        // Each tree's own wrangler spec names the workers-sdk ref, and pkg.pr.new
+        // publishes the plugin from that same ref, so this reads the build that
+        // tree would install beside its wrangler. The ref is a sha on the pinned
+        // tree and whatever `--ref` said on the candidate, `main` on the nightly
+        // run, which pkg.pr.new resolves for the plugin exactly as it does for
+        // wrangler (measured 2026-09-22: main, a PR number and a short sha all
+        // answer 200). A hex-only match here read `null` on every nightly
+        // candidate, and `null` never moves a verdict, so it could never fire.
+        const spec = String(JSON.parse(readFileSync(join(tree, "package.json"), "utf8")).devDependencies?.wrangler ?? "");
+        const at = spec.match(/^https:\/\/pkg\.pr\.new\/cloudflare\/workers-sdk\/wrangler@([\w.-]+)$/)?.[1];
+        if (!at) return { landed: null, detail: `did not run: the wrangler spec is not a pkg.pr.new build (${spec.slice(0, 60)})` };
+        const tgz = join(scratch, `vitest-plugin-${tree === ROOT ? "pinned" : "candidate"}.tgz`);
+        const got = run("curl", ["-sfL", "-o", tgz, `${PKG_PR_NEW}/@cloudflare/vitest-plugin@${at}`], { timeout: 60_000 });
+        if (got.status !== 0) return { landed: null, detail: `did not run: no vitest-plugin build on pkg.pr.new at ${at} (curl exit ${got.status})` };
+        const manifest = run("tar", ["-xzOf", tgz, "package/package.json"], { timeout: 30_000 });
+        let parsed: unknown = null;
+        try { parsed = JSON.parse(manifest.stdout); } catch { parsed = null; }
+        const range = asText(asRecord(asRecord(parsed)?.peerDependencies)?.vitest);
+        if (!range) return { landed: null, detail: `did not run: the ${at} build declares no vitest peer range` };
+        return { landed: Bun.semver.satisfies("5.0.0", range), detail: `vitest-plugin@${at} peers vitest "${range}"` };
       },
     };
     const [pinnedCmd, pinnedArgs] = wranglerCommand([]);

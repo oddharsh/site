@@ -283,4 +283,17 @@ export const WRANGLER_WATCHES: Pick<Watch, "name" | "issue" | "landed" | "measur
     landed: "`wrangler types --x-new-config` runs in cf-garage/ and writes the file, so the generated Env types can follow cloudflare.config.ts instead of a snapshot from `wrangler dev` (gotcha 41 records the refusal; no upstream issue is filed for it)",
     measured: "2026-09-15, wrangler 982b806 (main): exit 1, `Unknown arguments: x-new-config, xNewConfig`",
   },
+  {
+    // The revisit for Vitest in the Worker suite. #703 took the pool out, and
+    // on 2026-09-22 the owner chose to hold the harness test in its place and
+    // come back to Vitest once the plugin can ride the SAME workers-sdk commit as
+    // the wrangler pin. It depends on `wrangler: workspace:*`, so any other
+    // commit's build puts a second wrangler, miniflare and workerd in the tree.
+    // The peer range is the behaviour here rather than a version string: per
+    // workers-sdk#15618 the plugin refuses to start a Vitest outside it.
+    name: "vitest-plugin-accepts-vitest-5",
+    issue: "https://github.com/cloudflare/workers-sdk/pull/15500",
+    landed: "the @cloudflare/vitest-plugin build published at the wrangler pin's own workers-sdk commit declares a vitest peer range that admits 5.0.0, so the Worker suite can move to Vitest 5 with one wrangler, one miniflare and one workerd in the tree (#703's property)",
+    measured: "2026-09-22, via pkg.pr.new: 6906bf0 (the pin) and cd7508c (main) both `^4.1.0`, false; the control is PR #15500's own build 7b89dc4, `^4.1.11 || ^5.0.0`, true",
+  },
 ];
