@@ -470,6 +470,12 @@
     // production, and the Kitesurf path in lens-render.js would have skipped
     // straight to the binding no matter how the token was set.
     "CF_ACCOUNT_ID": "1c99acdb6141579023fb97d24261ea58",
+    // Serendipity's Jev calls go through this gateway, to the account's
+    // `custom-typesafe` provider (base_url https://api.typesafe.ai). A missing
+    // gateway or provider FAILS those calls rather than bypassing the gateway
+    // (gotcha 23), and the tag pass reports the status. "" is the off-switch:
+    // TypeSafe directly, no code change.
+    "AI_GATEWAY": "default",
     "HOST_TIMEZONE": "America/New_York",
     "WORKING_HOURS_START": "9",
     "WORKING_HOURS_END": "18",

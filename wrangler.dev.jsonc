@@ -239,6 +239,7 @@
     // production, and the Kitesurf path in lens-render.js would have skipped
     // straight to the binding no matter how the token was set.
     "CF_ACCOUNT_ID": "1c99acdb6141579023fb97d24261ea58",
+    "AI_GATEWAY": "default",
     "HOST_TIMEZONE": "America/New_York",
     "WORKING_HOURS_START": "9",
     "WORKING_HOURS_END": "18",
