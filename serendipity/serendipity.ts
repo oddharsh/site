@@ -19,6 +19,7 @@ import { CACHE_EMPTY, CACHE_STATIC, mcpCorsHeaders, mcpError, mcpHttpStatus, mcp
 import { mcpTool } from "../src/worker/lib/mcp-tools.ts";
 import { previewToolRefusal } from "../src/worker/lib/preview.ts";
 import { asRecord, asText } from "../src/worker/lib/parse.ts";
+import { EVENT_FORMATS, EVENT_TAGS_DDL, EVENT_TOPICS, TAG_MIN_CONFIDENCE, askJev, buildTagRequest, tagInputHash } from "./jev.ts";
 
 // ── tiny helpers ────────────────────────────────────────────────────────────
 const html = (status, body) =>
@@ -1325,6 +1326,109 @@ async function handleSyncDescriptions(request, env, d) {
   return new Response(JSON.stringify({ ok: !r.error, via: set.label, ...r }, null, 2), { headers: { "content-type": "application/json" } });
 }
 
+// ── event tags: Jev's topic + format, decided once and stored ───────────────
+// serendipity/jev.ts carries the argument. What lives here is the D1 half:
+// which events are owed a tag, and writing the answers down.
+//
+// An event is owed a tag when it has none, or when the hash of the request it
+// WOULD send differs from the hash stored beside its tag. Its description has
+// to have been attempted first (desc_synced_at), otherwise every event would be
+// tagged on its name alone and then re-tagged a tick later when the description
+// landed, paying twice for the worse answer.
+//
+// Soonest upcoming first, then most recent past: an upcoming event is what an
+// agent is filtering for right now, and a past one is backfill.
+const TAG_DEFAULT = 12;
+const TAG_MAX = 30;
+// Hashing is cheap and native, but the candidate scan is still bounded so a pool
+// of thousands cannot turn one tick into a CPU problem on Workers Free.
+const TAG_SCAN = 300;
+
+type TagFetch = Parameters<typeof askJev>[2];
+
+export async function tagEvents(d, env, limit, fetchImpl?: TagFetch) {
+  if (!env?.TYPESAFE_API_KEY) return { skipped: "TYPESAFE_API_KEY not set" };
+  await d.raw.prepare(EVENT_TAGS_DDL).run();
+  const rows = await d.prepare(
+    `SELECT e.id, e.name, e.description, e.location, t.input_hash
+       FROM events e LEFT JOIN event_tags t ON t.event_id = e.id
+      WHERE e.description IS NOT NULL OR e.desc_synced_at IS NOT NULL
+      ORDER BY (e.start_at IS NOT NULL AND datetime(e.start_at) >= datetime('now')) DESC,
+               CASE WHEN datetime(e.start_at) >= datetime('now') THEN datetime(e.start_at) END ASC,
+               datetime(e.start_at) DESC
+      LIMIT ?`
+  ).all(TAG_SCAN);
+  const owed: { id: string, request: ReturnType<typeof buildTagRequest>, hash: string }[] = [];
+  for (const r of rows) {
+    const request = buildTagRequest(r);
+    const hash = await tagInputHash(request);
+    if (hash !== r.input_hash) owed.push({ id: r.id, request, hash });
+  }
+  const batch = owed.slice(0, limit);
+  // Concurrent, one event per call (see buildTagRequest for why not one call
+  // for all of them). TypeSafe allows 1,200 requests a minute; this is at most 30.
+  const results = await Promise.all(batch.map((o) => askJev(o.request, env, fetchImpl)));
+  const S: any[] = [];
+  const failed: Record<string, number> = {};
+  results.forEach((r, i) => {
+    if ("error" in r) { failed[r.error] = (failed[r.error] || 0) + 1; return; }
+    const t = r.tag;
+    S.push(d.stmt(
+      `INSERT INTO event_tags (event_id, topic, topic_confidence, format, format_confidence, model, input_hash, probabilities, tagged_at)
+       VALUES (?,?,?,?,?,?,?,?,datetime('now'))
+       ON CONFLICT(event_id) DO UPDATE SET topic=excluded.topic, topic_confidence=excluded.topic_confidence,
+         format=excluded.format, format_confidence=excluded.format_confidence, model=excluded.model,
+         input_hash=excluded.input_hash, probabilities=excluded.probabilities, tagged_at=excluded.tagged_at`,
+      batch[i].id, t.topic, t.topic_confidence, t.format, t.format_confidence, t.model, batch[i].hash, JSON.stringify(t.probabilities),
+    ));
+  });
+  if (S.length) await d.batch(S);
+  // `remaining` is counted within the scan window, which is the honest bound:
+  // past TAG_SCAN rows this run did not look, so it cannot say.
+  return { scanned: rows.length, asked: batch.length, tagged: S.length, failed, remaining: owed.length - S.length };
+}
+
+// secret-gated: POST /serendipity/tag[?n=12], secret in x-sync-key. The cron
+// reaches it by self-dispatch so the tag pass gets its own subrequest ceiling.
+async function handleTag(request, env, d) {
+  if (!adminGated(request, env)) return new Response("forbidden", { status: 403 });
+  const n = parseInt(new URL(request.url).searchParams.get("n") || "", 10);
+  const limit = Math.min(TAG_MAX, Math.max(1, Number.isFinite(n) ? n : TAG_DEFAULT));
+  const r = await tagEvents(d, env, limit);
+  return new Response(JSON.stringify({ ok: !("skipped" in r), ...r }, null, 2), { headers: { "content-type": "application/json" } });
+}
+
+// The stored tags for a set of events, keyed by id. Its own query rather than a
+// join inside queryEvents, for two reasons: that GROUP BY is the dashboard's
+// whole cost and stays untouched, and a database where event_tags does not exist
+// yet degrades to "no tags" here instead of failing every read of the pool.
+async function queryEventTags(d): Promise<Map<string, any>> {
+  try {
+    const rows = await d.prepare(`SELECT event_id, topic, topic_confidence, format, format_confidence FROM event_tags`).all();
+    return new Map(rows.map((r) => [r.event_id, r]));
+  } catch {
+    return new Map();
+  }
+}
+
+async function queryEventTag(d, id) {
+  try {
+    return await d.prepare(`SELECT topic, topic_confidence, format, format_confidence FROM event_tags WHERE event_id = ?`).get(id);
+  } catch {
+    return null;
+  }
+}
+
+/** The public shape of a stored tag. A label under TAG_MIN_CONFIDENCE is still
+ *  shown, with its confidence, but it does not satisfy a filter. */
+function mcpTags(t) {
+  if (!t) return null;
+  return {
+    topic: t.topic, topic_confidence: Math.round(Number(t.topic_confidence) * 100) / 100,
+    format: t.format, format_confidence: Math.round(Number(t.format_confidence) * 100) / 100,
+  };
+}
+
 // secret-gated trigger: POST /serendipity/sync?key=SECRET[&event=<id>]
 // The three admin triggers shared this gate by copy. It now also reads the
 // secret from a HEADER, because the cron dispatches to /enrich over the wire and
@@ -1394,7 +1498,9 @@ const CRON_DESC_LIMIT = 10;
 // typed out here as `const CRON_SUBREQUEST_CAP = 50` while rn.ts carried its own
 // copy of the same platform fact, which is how a limit gets updated in one place
 // and stays wrong in the other.
-const CRON_BUDGET_HEADROOM = 6;
+// Seven: the D1 batches plus the two self-dispatches (enrich, tag) at one
+// subrequest each. It was six before the tag pass took the second.
+const CRON_BUDGET_HEADROOM = 7;
 export function guestSweepBudget(setCount, cap = SUBREQUEST_CAP_FREE) {
   const perSet = SERENDIPITY_SYNC_LIMITS.futurePages + SERENDIPITY_SYNC_LIMITS.pastPages;
   return Math.max(0, cap - (setCount * perSet) - CRON_DESC_LIMIT - CRON_BUDGET_HEADROOM);
@@ -1433,6 +1539,29 @@ export async function dispatchEnrich(env, fetchImpl: EnrichFetch = fetch) {
     const by = {};
     for (const r of rows) by[r.outcome || "unknown"] = (by[r.outcome || "unknown"] || 0) + 1;
     return { attempted: rows.length, outcomes: by };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+// The tag pass rides the same door for the same reason: up to TAG_MAX Jev calls
+// plus the scan and the write would not fit beside the roster sweep, and in its
+// own invocation they fit with room to spare. One subrequest here, covered by
+// CRON_BUDGET_HEADROOM. Reported, never thrown, like enrichment: a tick whose
+// sweep succeeded must not go red because tagging could not run.
+export async function dispatchTag(env, fetchImpl: EnrichFetch = fetch) {
+  if (!env || !env.SYNC_SECRET) return { skipped: "no SYNC_SECRET" };
+  if (!env.TYPESAFE_API_KEY) return { skipped: "TYPESAFE_API_KEY not set" };
+  const base = asText(env.HOST_PUBLIC_URL) ?? "https://aadhar.sh";
+  try {
+    const res = await fetchImpl(`${base}/serendipity/tag`, {
+      method: "POST", headers: { "x-sync-key": env.SYNC_SECRET },
+    });
+    if (!res.ok) return { error: `tag ${res.status}` };
+    const body = await res.json();
+    // Counts only, for the cron log line. `failed` is keyed by cause, so a
+    // missing gateway provider reads as "http 404" rather than as zero tags.
+    return { asked: body?.asked ?? null, tagged: body?.tagged ?? null, failed: body?.failed ?? null, remaining: body?.remaining ?? null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : String(err) };
   }
@@ -1479,7 +1608,7 @@ export async function cronSerendipity(env) {
   // the literal in TypeScript, and this is the log line's whole schema.
   const out: {
     events: any[], guests: any[], skipped: any[],
-    descriptions: any, enrich?: any,
+    descriptions: any, enrich?: any, tag?: any,
   } = { events: [], guests: [], skipped: [], descriptions: null };
   // One budget for the whole sweep, so no single roster can spend the tick.
   const budget = createBudget(guestSweepBudget(sets.length));
@@ -1498,8 +1627,11 @@ export async function cronSerendipity(env) {
     else out.guests.push({ event: ev.id, ...r });
   }
   out.descriptions = await syncDescriptions(d, fresh[0].user_key, fresh[0].cookies_json, CRON_DESC_LIMIT);
-  // last, and in its own invocation: see dispatchEnrich.
+  // last, and each in its own invocation: see dispatchEnrich and dispatchTag.
   out.enrich = await dispatchEnrich(env);
+  // after descriptions on purpose: an event is only owed a tag once its
+  // description has been attempted, so this tick's backfill is taggable now.
+  out.tag = await dispatchTag(env);
   // fetches + budget_exhausted are the two numbers that were missing while the
   // sweep was silently overspending. An exhausted budget is normal on a tick
   // holding a large roster; it is a problem only when it never clears.
@@ -1904,8 +2036,8 @@ function mcpAttendee(a): McpAttendee {
   return o;
 }
 
-function mcpEventSummary(e) {
-  return {
+function mcpEventSummary(e, tags: Map<string, any> | null = null) {
+  const summary: Record<string, any> = {
     id: e.id,
     name: e.name,
     start_at: e.start_at || null,
@@ -1920,6 +2052,11 @@ function mcpEventSummary(e) {
     rsvp: e.user_status || "unknown",
     contributors: e.contributors || null,
   };
+  // Jev's stored topic + format (serendipity/jev.ts), or null when this event
+  // has not been tagged yet. Null means UNREAD, never "no topic", so the key is
+  // omitted entirely by callers that never read the tags at all.
+  if (tags) summary.tags = mcpTags(tags.get(e.id));
+  return summary;
 }
 
 // people search: one query for the matches, one IN(...) query for their events
@@ -1985,7 +2122,7 @@ async function mcpContributorEvents(d, contributor) {
       WHERE ec.user_key = ? ORDER BY e.start_at`
   ).all(c.user_key);
   const now = Date.now();
-  const summaries = rows.map(mcpEventSummary);
+  const summaries = rows.map((e) => mcpEventSummary(e));
   return {
     contributor: { label: c.label || null, id_prefix: String(c.user_key).slice(0, 8),
                    luma_user_id: c.luma_user_id || null, enabled: Number(c.enabled) === 1 },
@@ -2118,19 +2255,21 @@ async function mcpSharedEvents(d, qa, qb) {
         AND e.id IN (SELECT event_id FROM event_attendees WHERE attendee_id = ?2)
       ORDER BY e.start_at DESC`
   ).all(a.id, b.id);
-  return { a: mcpAttendee(a), b: mcpAttendee(b), shared_count: rows.length, shared_events: rows.map(mcpEventSummary) };
+  return { a: mcpAttendee(a), b: mcpAttendee(b), shared_count: rows.length, shared_events: rows.map((e) => mcpEventSummary(e)) };
 }
 
 const MCP_TOOL_DEFINITIONS = [
   {
     name: "list_events",
-    description: "List events in the Serendipity pool, each with a head count of who's going and an RSVP tier. The pool mixes events a contributor actually RSVP'd to or hosts (rsvp:\"going\" — first-class, the ones with real rosters) with events synced from just browsing a Luma feed (rsvp:\"invited\"/\"pending\"/etc — no roster, second-class). By default only the going (RSVP'd) events are returned, with a discovered_hidden count noting how many browsed events were omitted; pass rsvp:\"all\" to include them (first-class first) or rsvp:\"discovered\" for only the browsed ones. Each event carries attending (bool) + rsvp (raw status). Defaults to upcoming, soonest first.",
+    description: "List events in the Serendipity pool, each with a head count of who's going, an RSVP tier, and a classified topic and format with confidences (null until an event is tagged; filter with topic/format). The pool mixes events a contributor actually RSVP'd to or hosts (rsvp:\"going\" — first-class, the ones with real rosters) with events synced from just browsing a Luma feed (rsvp:\"invited\"/\"pending\"/etc — no roster, second-class). By default only the going (RSVP'd) events are returned, with a discovered_hidden count noting how many browsed events were omitted; pass rsvp:\"all\" to include them (first-class first) or rsvp:\"discovered\" for only the browsed ones. Each event carries attending (bool) + rsvp (raw status). Defaults to upcoming, soonest first.",
     inputSchema: {
       type: "object",
       properties: {
         when: { type: "string", enum: ["upcoming", "past", "all"], description: "which time slice to return (default \"upcoming\")" },
         rsvp: { type: "string", enum: ["going", "all", "discovered"], description: "RSVP tier: \"going\" = only events a contributor RSVP'd to / hosts (default); \"all\" = include browsed-but-not-RSVP'd events, first-class first; \"discovered\" = only the browsed ones" },
         q: { type: "string", description: "optional case-insensitive filter on event name, location, or contributor" },
+        topic: { type: "string", enum: [...EVENT_TOPICS], description: "optional: only events whose classified topic is this. Untagged or low-confidence events never match, and are counted in `untagged`" },
+        format: { type: "string", enum: [...EVENT_FORMATS], description: "optional: only events whose classified format is this (talks, meal, social, ...). Same untagged rule as topic" },
         limit: { type: "integer", minimum: 1, maximum: 200, description: "max events to return (default 50)" },
       },
     },
@@ -2257,22 +2396,41 @@ async function mcpCallTool(d, name, args): Promise<McpToolResult> {
     else if (when === "past") rows = rows.filter((e) => e.start_at && new Date(e.start_at).getTime() < now)
                                          .sort((a, b) => new Date(b.start_at).getTime() - new Date(a.start_at).getTime());
     if (q) rows = rows.filter((e) => [e.name, e.location, e.contributors].some((v) => v && String(v).toLowerCase().includes(q)));
+    const tags = await queryEventTags(d);
+    // A topic/format filter can only match what was classified with confidence,
+    // so it also reports how many events in the slice it could not judge. Without
+    // that count, "2 AI events" and "2 AI events out of the 9 we could read" are
+    // the same answer.
+    const topic = EVENT_TOPICS.includes(args.topic) ? args.topic : null;
+    const format = EVENT_FORMATS.includes(args.format) ? args.format : null;
+    let untagged: number | undefined;
+    if (topic || format) {
+      const judged = (e, field) => {
+        const t = tags.get(e.id);
+        return t && Number(t[`${field}_confidence`]) >= TAG_MIN_CONFIDENCE ? t[field] : null;
+      };
+      untagged = rows.filter((e) => (topic && judged(e, "topic") == null) || (format && judged(e, "format") == null)).length;
+      rows = rows.filter((e) => (!topic || judged(e, "topic") === topic) && (!format || judged(e, "format") === format));
+    }
     const matched = rows.length;                                            // after when + q, before rsvp tier
     const goingCount = rows.filter((e) => e.user_status === "going").length;
     if (rsvp === "going") rows = rows.filter((e) => e.user_status === "going");
     else if (rsvp === "discovered") rows = rows.filter((e) => e.user_status !== "going");
     else rows = rows.slice().sort((a, b) => Number(b.user_status === "going") - Number(a.user_status === "going")); // stable: first-class first, date order kept within tier
     const total = rows.length;
-    const events = rows.slice(0, limit).map(mcpEventSummary);
-    const out: { when: any, rsvp: any, total: number, returned: number, events: any[], discovered_hidden?: number } =
+    const events = rows.slice(0, limit).map((e) => mcpEventSummary(e, tags));
+    const out: { when: any, rsvp: any, total: number, returned: number, events: any[], discovered_hidden?: number, topic?: string, format?: string, untagged?: number } =
       { when, rsvp, total, returned: events.length, events };
+    if (topic) out.topic = topic;
+    if (format) out.format = format;
+    if (untagged !== undefined) out.untagged = untagged;
     if (rsvp === "going") out.discovered_hidden = matched - goingCount;      // transparency: not-RSVP'd events omitted from this view
     return out;
   }
   if (name === "get_event") {
     const id = String(args.id || "").trim();
     if (!id) return { _error: "id is required" };
-    const [ev, rows, contributors] = await Promise.all([queryEvent(d, id), queryEventAttendees(d, id), queryContributors(d, id)]);
+    const [ev, rows, contributors, tags] = await Promise.all([queryEvent(d, id), queryEventAttendees(d, id), queryContributors(d, id), queryEventTag(d, id)]);
     if (!ev) return { _error: "no event with id \"" + id + "\" is in the pool" };
     const hosts = rows.filter((a) => a.is_host).map(mcpAttendee);
     const guests = rows.filter((a) => !a.is_host).map((a) => ({ ...a, _s: attendeeScore(a) }))
@@ -2283,6 +2441,7 @@ async function mcpCallTool(d, name, args): Promise<McpToolResult> {
         start_at: ev.start_at || null, end_at: ev.end_at || null,
         location: ev.location || null, url: ev.url || (ev.id ? "https://lu.ma/" + ev.id : null),
         status: ev.user_status || null,
+        tags: mcpTags(tags),
       },
       hosts, going: guests.length, attendees: guests,
       contributors: contributors.map((c) => c.label),
@@ -2455,7 +2614,8 @@ export async function handleSerendipity(request, env, ctx) {
   // any mutation (sync / enrich / contribute) invalidates the cached dashboard
   if (request.method === "POST" &&
       (path === `${PREFIX}/sync` || path === `${PREFIX}/sync-descriptions` ||
-       path === `${PREFIX}/enrich` || path === `${PREFIX}/cookies` || path === `${PREFIX}/add-event`)) {
+       path === `${PREFIX}/enrich` || path === `${PREFIX}/tag` ||
+       path === `${PREFIX}/cookies` || path === `${PREFIX}/add-event`)) {
     ctx.waitUntil(caches.default.delete(dashKey));
   }
 
@@ -2463,6 +2623,7 @@ export async function handleSerendipity(request, env, ctx) {
   if (request.method === "POST" && path === `${PREFIX}/sync`) return handleSync(request, env, d);
   if (request.method === "POST" && path === `${PREFIX}/sync-descriptions`) return handleSyncDescriptions(request, env, d);
   if (request.method === "POST" && path === `${PREFIX}/enrich`) return handleEnrich(request, env, d);
+  if (request.method === "POST" && path === `${PREFIX}/tag`) return handleTag(request, env, d);
 
   // same-origin cover proxy (resizes via cf.image) — early return, no uid cookie
   // so the response stays cacheable at the edge.

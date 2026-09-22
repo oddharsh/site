@@ -24,7 +24,7 @@
     {
       "name": "list_events",
       "title": "List Events",
-      "description": "List events in the Serendipity pool, each with a head count of who's going and an RSVP tier. The pool mixes events a contributor actually RSVP'd to or hosts (rsvp:\"going\" — first-class, the ones with real rosters) with events synced from just browsing a Luma feed (rsvp:\"invited\"/\"pending\"/etc — no roster, second-class). By default only the going (RSVP'd) events are returned, with a discovered_hidden count noting how many browsed events were omitted; pass rsvp:\"all\" to include them (first-class first) or rsvp:\"discovered\" for only the browsed ones. Each event carries attending (bool) + rsvp (raw status). Defaults to upcoming, soonest first.",
+      "description": "List events in the Serendipity pool, each with a head count of who's going, an RSVP tier, and a classified topic and format with confidences (null until an event is tagged; filter with topic/format). The pool mixes events a contributor actually RSVP'd to or hosts (rsvp:\"going\" — first-class, the ones with real rosters) with events synced from just browsing a Luma feed (rsvp:\"invited\"/\"pending\"/etc — no roster, second-class). By default only the going (RSVP'd) events are returned, with a discovered_hidden count noting how many browsed events were omitted; pass rsvp:\"all\" to include them (first-class first) or rsvp:\"discovered\" for only the browsed ones. Each event carries attending (bool) + rsvp (raw status). Defaults to upcoming, soonest first.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -49,6 +49,38 @@
           "q": {
             "type": "string",
             "description": "optional case-insensitive filter on event name, location, or contributor"
+          },
+          "topic": {
+            "type": "string",
+            "enum": [
+              "crypto",
+              "ai",
+              "fintech",
+              "devtools",
+              "bio",
+              "climate",
+              "hardware",
+              "consumer",
+              "startups",
+              "culture",
+              "other"
+            ],
+            "description": "optional: only events whose classified topic is this. Untagged or low-confidence events never match, and are counted in `untagged`"
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "talks",
+              "conference",
+              "hackathon",
+              "demo",
+              "workshop",
+              "meal",
+              "social",
+              "meetup",
+              "other"
+            ],
+            "description": "optional: only events whose classified format is this (talks, meal, social, ...). Same untagged rule as topic"
           },
           "limit": {
             "type": "integer",
