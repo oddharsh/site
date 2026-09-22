@@ -106,17 +106,24 @@ function say(line: string) {
 }
 
 /**
- * Hand the file back to git's own text merge, WITH markers, and report the
- * conflict.
+ * Hand the file back to git's own three-way text merge and report WHAT THAT
+ * SAID, which is the whole subtlety: a driver REPLACES the default merge for
+ * every path it claims, including the many that the default resolves cleanly.
  *
- * This is not a nicety. A custom driver that exits non-zero leaves %A exactly as
- * it found it and git does NOT add markers on its behalf: measured, a refusing
- * driver produced an unmerged path whose working-tree content was the mainline
- * side, clean, with nothing to see, so staging it would have taken one side
- * blind. A refusal has to write the markers itself, which git merge-file does in
- * place, and only then is refusing the safe outcome this module claims it is.
+ * Returning 1 unconditionally here is therefore not "declining to help", it is
+ * manufacturing conflicts. Measured: claiming CLAUDE.md and refusing with a
+ * hard 1 took the replay from 11 conflicted pairs to 24, because the prose
+ * driver ran on every three-way merge of that file rather than only on the ones
+ * that were already conflicts.
+ *
+ * git merge-file does exactly the default merge, in place, and exits with the
+ * number of conflicting hunks, so 0 means it merged cleanly and this path is a
+ * true no-op. That also fixes the second half: a custom driver that exits
+ * non-zero leaves %A as it found it and git does NOT write markers on its
+ * behalf, so a refusal without this call left the mainline side sitting clean in
+ * the working tree where staging it would take one side blind.
  */
-function refuse(why: string): number {
+function fallBackToTextMerge(why: string): number {
   say(`${repoPath}: ${why}`);
   try {
     execFileSync(
@@ -136,10 +143,12 @@ function refuse(why: string): number {
       ],
       { stdio: "ignore" },
     );
+    return 0;
   } catch {
-    // merge-file exits with the conflict count, which is the expected path here.
+    // merge-file exits with the conflict count, so any throw here is a genuine
+    // conflict that now carries ordinary markers.
+    return 1;
   }
-  return 1;
 }
 
 // ── formatting-preserving JSON ───────────────────────────────────────────────
@@ -322,11 +331,11 @@ function runJson(): number {
   const o = parseExact(text.ours);
   const t = parseExact(text.theirs);
   if (!b.ok || !o.ok || !t.ok) {
-    return refuse("not reproducible by this serializer, leaving the conflict.");
+    return fallBackToTextMerge("not reproducible by this serializer, leaving the conflict.");
   }
   const merged = merge3(b.value, o.value, t.value, mainlineIsOurs());
   if (merged === CONFLICT) {
-    return refuse("both sides moved the same key, leaving the conflict.");
+    return fallBackToTextMerge("both sides moved the same key, leaving the conflict.");
   }
   writeFileSync(oursPath, serialize(merged, o.indent, o.nl));
   say(`${repoPath}: merged structurally.`);
@@ -346,15 +355,15 @@ async function runPin(): Promise<number> {
   const o = parseExact(text.ours);
   const t = parseExact(text.theirs);
   if (!o.ok || !t.ok) {
-    return refuse("not reproducible by this serializer, leaving the conflict.");
+    return fallBackToTextMerge("not reproducible by this serializer, leaving the conflict.");
   }
   if (!isPlainObject(o.value) || !isPlainObject(t.value)) {
-    return refuse("not a JSON object on both sides, leaving the conflict.");
+    return fallBackToTextMerge("not a JSON object on both sides, leaving the conflict.");
   }
   const ourPin = asText(o.value.bun);
   const theirPin = asText(t.value.bun);
   if (ourPin === null || theirPin === null) {
-    return refuse("no string bun pin on both sides, leaving the conflict.");
+    return fallBackToTextMerge("no string bun pin on both sides, leaving the conflict.");
   }
   if (ourPin === theirPin) return 0;
 
@@ -363,11 +372,11 @@ async function runPin(): Promise<number> {
   try {
     const { compareVersions, channelOf } = await import("./lib/bun-pin.ts");
     if (channelOf(ourPin) !== channelOf(theirPin)) {
-      return refuse("the two sides are on different channels, leaving the conflict.");
+      return fallBackToTextMerge("the two sides are on different channels, leaving the conflict.");
     }
     cmp = compareVersions(ourPin, theirPin);
   } catch {
-    return refuse("could not compare the pins, leaving the conflict.");
+    return fallBackToTextMerge("could not compare the pins, leaving the conflict.");
   }
   const winner = cmp >= 0 ? o : t;
   const chosen = cmp >= 0 ? ourPin : theirPin;
@@ -395,9 +404,264 @@ function runRegen(): number {
   return 0;
 }
 
-const run = { json: runJson, pin: runPin, regen: runRegen }[mode ?? ""];
+
+// ── prose ────────────────────────────────────────────────────────────────────
+//
+// A THREE-WAY MERGE AT PARAGRAPH GRANULARITY, which unions only where unioning
+// is safe. The granularity and the one exception are both measured.
+//
+// Half of every conflicted region in this repository is add/add, two branches
+// each inserting a block in the same place, and for CLAUDE.md and the runbooks
+// that is two people documenting two different things. Git's built-in
+// `merge=union` resolves those by concatenating both sides of a conflicting
+// hunk, which is right for an insertion and WRONG for an edit, and it works on
+// lines so it cannot tell them apart. The case that settled it, from the real
+// history: one side had
+//
+//   # First run (2026-09-14) found margin-trim live in Canary 155
+//
+// and the other had that sentence WITH a full stop plus 21 lines extending the
+// section. Line union keeps both, so the sentence lands in CLAUDE.md twice in a
+// row differing by one character, silently. A duplicate-line counter scores that
+// zero, because the lines are not identical.
+//
+// So the rule is ordinary diff3 over blocks: a chunk only one side moved is
+// taken, a chunk both sides moved the same way is taken once, and a chunk both
+// sides moved differently is a conflict. THE ONE EXCEPTION is a chunk whose BASE
+// IS EMPTY, which means neither side edited anything and both inserted. That is
+// the add/add class and the only place both sides are emitted.
+//
+// A PURE-INSERTION GATE WAS TRIED FIRST AND IS TOO STRICT TO EVER FIRE. It asked
+// whether base's blocks were still a subsequence of each side's, which is true
+// only if nothing anywhere in the file was edited. Measured against the eight
+// real diverged branches in this repository, it resolved 0 of 4 prose conflicts,
+// because CLAUDE.md is rewritten in place constantly rather than appended to.
+//
+// A block carries its trailing blank lines, so rejoining is concatenation and no
+// formatting is invented. That is asserted rather than assumed: a file whose
+// blocks do not rejoin to the original bytes is refused, the same round-trip
+// rule the JSON modes use.
+
+/**
+ * Blocks: blank-line paragraphs, and additionally one per LIST ITEM, HEADING
+ * and TABLE ROW, with fenced code kept whole.
+ *
+ * The list-item rule is what makes this useful rather than merely safe.
+ * Markdown puts no blank line between bullets, so a blank-line splitter reads a
+ * 30-item list as ONE block and any two branches touching that list collide.
+ * Measured against the real diverged branches here, that granularity resolved 0
+ * of 4 prose conflicts; the DEPENDENCIES.md case is main bumping
+ * `Oxlint 1.83.0 -> 1.84.0` in one bullet while a branch adds a different bullet
+ * beside it, which is the version-bump-next-to-an-insertion shape this whole
+ * change exists for. Per item, that is a one-sided edit and a one-sided
+ * insertion, and diff3 takes both.
+ *
+ * Splitting finer is safe by construction: a block is still a run of whole
+ * lines, so rejoining is concatenation either way, and finer blocks only ever
+ * give the merge MORE places where a chunk is one-sided. The round trip is
+ * asserted rather than trusted.
+ */
+function blocks(text: string): string[] {
+  const lines = text.split("\n");
+  const out: string[] = [];
+  let current: string[] = [];
+  let fence: string | null = null;
+  const flush = () => {
+    if (current.length > 0) out.push(current.join("\n"));
+    current = [];
+  };
+  const startsBlock = (line: string) =>
+    /^\s*([-*+]|\d+[.)])\s/.test(line) || /^#{1,6}\s/.test(line) || /^\s*\|/.test(line);
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    const mark = line.match(/^\s*(`{3,}|~{3,})/);
+    if (fence === null && mark) fence = mark[1][0];
+    else if (fence !== null && mark && mark[1][0] === fence) fence = null;
+
+    // A new item, heading or row opens its own block, but only when something is
+    // already being accumulated and we are not inside a fence.
+    if (fence === null && current.length > 0 && startsBlock(line) && current.at(-1)?.trim() !== "") {
+      flush();
+    }
+    current.push(line);
+    if (fence === null && line.trim() === "" && (i + 1 >= lines.length || lines[i + 1].trim() !== "")) {
+      flush();
+    }
+  }
+  flush();
+  return out;
+}
+
+const joinBlocks = (parts: string[]) => parts.join("\n");
+
+/** Longest common subsequence as a base-index to side-index map. */
+function matchMap(base: string[], side: string[]): Map<number, number> {
+  const n = base.length;
+  const m = side.length;
+  const table = new Int32Array((n + 1) * (m + 1));
+  for (let i = n - 1; i >= 0; i -= 1) {
+    for (let j = m - 1; j >= 0; j -= 1) {
+      table[i * (m + 1) + j] =
+        base[i] === side[j]
+          ? table[(i + 1) * (m + 1) + (j + 1)] + 1
+          : Math.max(table[(i + 1) * (m + 1) + j], table[i * (m + 1) + (j + 1)]);
+    }
+  }
+  const out = new Map<number, number>();
+  let i = 0;
+  let j = 0;
+  while (i < n && j < m) {
+    if (base[i] === side[j]) {
+      out.set(i, j);
+      i += 1;
+      j += 1;
+    } else if (table[(i + 1) * (m + 1) + j] >= table[i * (m + 1) + (j + 1)]) i += 1;
+    else j += 1;
+  }
+  return out;
+}
+
+/**
+ * Where each side inserted within a chunk, keyed by how many base blocks precede
+ * it, or null when that side did anything other than insert.
+ */
+function insertionsWithin(base: string[], side: string[]): Map<number, string[]> | null {
+  const inserts = new Map<number, string[]>();
+  let b = 0;
+  for (const block of side) {
+    if (b < base.length && base[b] === block) {
+      b += 1;
+      continue;
+    }
+    const at = inserts.get(b) ?? [];
+    at.push(block);
+    inserts.set(b, at);
+  }
+  return b === base.length ? inserts : null;
+}
+
+/**
+ * Both sides changed this chunk, but possibly in ways that do not touch each
+ * other: one side only INSERTED blocks while the other only edited blocks that
+ * the first left alone. That is the common shape here and the one the original
+ * question was about, measured on docs/DEPENDENCIES.md: main bumped
+ * `Oxlint 1.83.0 -> 1.84.0` in one bullet while a branch added a different
+ * bullet immediately above it. Per block those are disjoint, and plain diff3
+ * still calls the chunk contested because both sides changed SOMETHING in it.
+ *
+ * So when one side is pure insertion against the chunk's base, lay its new
+ * blocks back into the other side's text at the same anchors. Null when that
+ * does not hold, which keeps a real two-sided edit of one block a conflict.
+ */
+function combineChunk(base: string[], inserter: string[], editor: string[]): string[] | null {
+  const inserts = insertionsWithin(base, inserter);
+  if (!inserts) return null;
+  const kept = matchMap(base, editor);
+  const out: string[] = [];
+  let e = 0;
+  for (let i = 0; i <= base.length; i += 1) {
+    for (const block of inserts.get(i) ?? []) out.push(block);
+    if (i === base.length) break;
+    const target = kept.get(i);
+    if (target === undefined) continue;
+    while (e <= target) {
+      out.push(editor[e]);
+      e += 1;
+    }
+  }
+  while (e < editor.length) {
+    out.push(editor[e]);
+    e += 1;
+  }
+  return out;
+}
+
+const sameChunk = (a: string[], b: string[]) => a.length === b.length && a.every((v, i) => v === b[i]);
+
+function runProse(): number {
+  const text = readAll();
+  const base = blocks(text.base);
+  const ours = blocks(text.ours);
+  const theirs = blocks(text.theirs);
+  for (const [parts, original] of [
+    [base, text.base],
+    [ours, text.ours],
+    [theirs, text.theirs],
+  ] as const) {
+    if (joinBlocks(parts) !== original) {
+      return fallBackToTextMerge("blocks do not rejoin to the original bytes, leaving it to the text merge.");
+    }
+  }
+
+  const mo = matchMap(base, ours);
+  const mt = matchMap(base, theirs);
+  const anchors = [...mo.keys()].filter((i) => mt.has(i)).sort((a, b) => a - b);
+
+  const mainFirst = mainlineIsOurs();
+  const merged: string[] = [];
+  let unioned = 0;
+  let disjoint = 0;
+  let taken = 0;
+  let prevB = 0;
+  let prevO = 0;
+  let prevT = 0;
+
+  for (const anchor of [...anchors, base.length]) {
+    const isEnd = anchor === base.length;
+    const endO = isEnd ? ours.length : (mo.get(anchor) as number);
+    const endT = isEnd ? theirs.length : (mt.get(anchor) as number);
+    const baseChunk = base.slice(prevB, anchor);
+    const ourChunk = ours.slice(prevO, endO);
+    const theirChunk = theirs.slice(prevT, endT);
+
+    if (sameChunk(ourChunk, theirChunk)) merged.push(...ourChunk);
+    else if (sameChunk(ourChunk, baseChunk)) {
+      merged.push(...theirChunk);
+      taken += 1;
+    } else if (sameChunk(theirChunk, baseChunk)) {
+      merged.push(...ourChunk);
+      taken += 1;
+    } else if (baseChunk.length === 0) {
+      // Neither side edited anything here; both inserted. This is the only place
+      // both sides are emitted, and it is what a union buys.
+      const [first, second] = mainFirst ? [ourChunk, theirChunk] : [theirChunk, ourChunk];
+      const seen = new Set<string>();
+      for (const block of [...first, ...second]) {
+        if (seen.has(block)) continue;
+        seen.add(block);
+        merged.push(block);
+      }
+      unioned += 1;
+    } else {
+      const [inserterFirst, editorFirst] = [
+        combineChunk(baseChunk, theirChunk, ourChunk),
+        combineChunk(baseChunk, ourChunk, theirChunk),
+      ];
+      const combined = inserterFirst ?? editorFirst;
+      if (!combined) {
+        return fallBackToTextMerge("a block was edited on both sides, leaving it to the text merge.");
+      }
+      merged.push(...combined);
+      disjoint += 1;
+    }
+
+    if (!isEnd) {
+      merged.push(base[anchor]);
+      prevB = anchor + 1;
+      prevO = endO + 1;
+      prevT = endT + 1;
+    }
+  }
+
+  writeFileSync(oursPath, joinBlocks(merged));
+  say(`${repoPath}: merged at block level (${unioned} add/add unioned, ${disjoint} disjoint chunk(s) combined, ${taken} one-sided).`);
+  return 0;
+}
+
+const run = { json: runJson, pin: runPin, regen: runRegen, prose: runProse }[mode ?? ""];
 if (!run) {
-  say(`unknown mode ${JSON.stringify(mode)}; expected one of json, pin, regen.`);
+  say(`unknown mode ${JSON.stringify(mode)}; expected one of json, pin, regen, prose.`);
   process.exit(1);
 }
 process.exit(await run());

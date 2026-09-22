@@ -20,3 +20,11 @@ config/bun-pin.json             merge=pin
 bun.lock                        merge=regen
 lens-reader/bun.lock            merge=regen
 config/derivations.lock.json    merge=regen
+
+# Paragraph-granularity union for the long-form prose. Two branches documenting
+# two different things is the single biggest conflict class here, and it is safe
+# to resolve; a block either side EDITED is not, so this refuses that rather
+# than concatenating two versions of one sentence. tools/merge-driver.ts has the
+# measurement that decided the granularity.
+CLAUDE.md                       merge=prose
+docs/*.md                       merge=prose

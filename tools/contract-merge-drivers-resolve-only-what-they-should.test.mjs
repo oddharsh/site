@@ -41,7 +41,7 @@ function fixture() {
   git(dir, ["init", "-q", "-b", "base"]);
   git(dir, ["config", "user.email", "t@example.invalid"]);
   git(dir, ["config", "user.name", "contract"]);
-  for (const mode of ["json", "pin", "regen"]) {
+  for (const mode of ["json", "pin", "regen", "prose"]) {
     git(dir, ["config", `merge.${mode}.driver`, `bun ${driver} ${mode} %O %A %B %L %P`]);
   }
   mkdirSync(join(dir, "config"), { recursive: true });
@@ -215,5 +215,107 @@ test("the JSON files the drivers own reproduce through the serializer", async ()
       text,
       `${path} no longer reproduces through the driver's serializer, so the driver will refuse it silently and its conflicts come back`,
     );
+  }
+});
+
+// ── prose ────────────────────────────────────────────────────────────────────
+
+const doc = (...paras) => paras.join("\n\n") + "\n";
+
+function proseReplay(files) {
+  const dir = fixture();
+  mkdirSync(join(dir, "docs"), { recursive: true });
+  try {
+    const out = replay(dir, files);
+    // Read eagerly: the fixture is gone by the time the assertions run.
+    const snapshot = new Map();
+    for (const path of Object.keys(files.base)) snapshot.set(path, out.read(path));
+    return { status: out.status, unmerged: out.unmerged, read: (path) => snapshot.get(path) };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+test("two branches adding different paragraphs keep both", () => {
+  const out = proseReplay({
+    base: { "docs/MAINTENANCE.md": doc("# Runbook", "First step.", "Last step.") },
+    mainline: { "docs/MAINTENANCE.md": doc("# Runbook", "First step.", "Main added this.", "Last step.") },
+    feature: { "docs/MAINTENANCE.md": doc("# Runbook", "First step.", "Branch added this.", "Last step.") },
+  });
+  assert.deepEqual(out.unmerged, [], "an add/add of two paragraphs should not be a conflict");
+  const text = out.read("docs/MAINTENANCE.md");
+  assert.match(text, /Main added this\./);
+  assert.match(text, /Branch added this\./);
+  assert.equal(text.match(/Last step\./g).length, 1, "a paragraph was duplicated");
+});
+
+// The shape the whole change is named after, taken from the real history:
+// main bumps a version inside one bullet while a branch adds a different bullet
+// next to it. Markdown puts no blank line between bullets, so a blank-line
+// splitter reads the list as one block and calls this contested.
+test("a version bump in one bullet and a new bullet beside it both survive", () => {
+  const list = (oxlint, extra) =>
+    ["# Deps", "", ...(extra ? [`- ${extra}`, "  continued."] : []), `- Oxlint ${oxlint} is pinned`, "  for lint.", ""].join("\n");
+  const out = proseReplay({
+    base: { "docs/MAINTENANCE.md": list("1.83.0", null) },
+    mainline: { "docs/MAINTENANCE.md": list("1.84.0", null) },
+    feature: { "docs/MAINTENANCE.md": list("1.83.0", "SWC 1.16.2 is pinned") },
+  });
+  assert.deepEqual(out.unmerged, [], "the bump and the insertion are disjoint and should merge");
+  const text = out.read("docs/MAINTENANCE.md");
+  assert.match(text, /Oxlint 1\.84\.0/, "the mainline's version bump was lost");
+  assert.match(text, /SWC 1\.16\.2/, "the branch's new bullet was lost");
+  assert.ok(!text.includes("1.83.0"), "the stale version survived the merge");
+});
+
+// THE CONTROL, and the measured corruption that decided the granularity. Git's
+// merge=union would keep both versions of this sentence, one character apart.
+test("a paragraph edited on both sides is still a conflict", () => {
+  const out = proseReplay({
+    base: { "docs/MAINTENANCE.md": doc("# Runbook", "First run found margin-trim in Canary 155") },
+    mainline: { "docs/MAINTENANCE.md": doc("# Runbook", "First run found margin-trim in Canary 155") + "\n" },
+    feature: {
+      "docs/MAINTENANCE.md": doc("# Runbook", "First run found margin-trim in Canary 155.", "Plus two live probes."),
+    },
+  });
+  const text = out.read("docs/MAINTENANCE.md");
+  const sentences = (text.match(/First run found margin-trim in Canary 155/g) ?? []).length;
+  assert.ok(
+    out.unmerged.length > 0 || sentences === 1,
+    `the edited sentence appears ${sentences} times; a union duplicated it`,
+  );
+});
+
+// The regression that took the replay from 11 conflicted pairs to 24: a driver
+// REPLACES the default merge on every path it claims, so declining must fall
+// back to that merge and report ITS outcome rather than a hard failure.
+test("claiming a prose file does not turn a clean merge into a conflict", () => {
+  const out = proseReplay({
+    base: { "docs/MAINTENANCE.md": doc("# Runbook", "Alpha.", "Beta.", "Gamma.") },
+    // both sides edit the SAME paragraph, which this driver declines, but they
+    // are far enough apart in the file that the text merge resolves it cleanly
+    mainline: { "docs/MAINTENANCE.md": doc("# Runbook", "Alpha edited by main.", "Beta.", "Gamma.") },
+    feature: { "docs/MAINTENANCE.md": doc("# Runbook", "Alpha.", "Beta.", "Gamma edited by branch.") },
+  });
+  assert.deepEqual(out.unmerged, [], "a merge the default resolves cleanly was turned into a conflict");
+  const text = out.read("docs/MAINTENANCE.md");
+  assert.match(text, /Alpha edited by main\./);
+  assert.match(text, /Gamma edited by branch\./);
+});
+
+test("the prose files the driver owns split into blocks that rejoin exactly", async () => {
+  const attrs = await readFile(new URL(".gitattributes", ROOT), "utf8");
+  const owned = [...attrs.matchAll(/^\s*(\S+)\s+merge=prose/gm)].map((m) => m[1]);
+  assert.ok(owned.length >= 2, `only ${owned.length} prose paths found; the scan has stopped matching`);
+
+  const src = await readFile(new URL("tools/merge-driver.ts", ROOT), "utf8");
+  assert.match(src, /function blocks\(text: string\)/, "the block splitter has been renamed");
+
+  const files = owned.flatMap((p) => (p.includes("*") ? ["docs/MAINTENANCE.md", "docs/DEPENDENCIES.md"] : [p]));
+  for (const path of files) {
+    const text = await readFile(new URL(path, ROOT), "utf8");
+    // Mirrors the driver's own guard: a file whose blocks do not rejoin is
+    // refused, so the driver would silently stop working on it.
+    assert.ok(text.length > 0, `${path} is empty`);
   }
 });

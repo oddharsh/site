@@ -18,3 +18,7 @@
 [merge "regen"]
 	name = park a derived file for regeneration by merge-finish
 	driver = bun tools/merge-driver.ts regen %O %A %B %L %P
+
+[merge "prose"]
+	name = paragraph-granularity union for long-form prose
+	driver = bun tools/merge-driver.ts prose %O %A %B %L %P

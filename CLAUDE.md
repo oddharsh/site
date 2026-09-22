@@ -6237,6 +6237,55 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     brace of a `${line}` inside a template literal rather than the function's,
     which is gotcha 19 one layer up.
 
+    **THE PROSE HALF IS WHY `merge=union` IS NOT THE ANSWER, and the granularity
+    is the whole finding.** Git's built-in union resolves a conflicting hunk by
+    concatenating both sides, which is right for an insertion and wrong for an
+    edit, and it works on LINES so it cannot tell them apart. The case that
+    decided it, from this file's own history: one side had `# First run
+    (2026-09-14) found margin-trim live in Canary 155` and the other had that
+    sentence WITH a full stop plus 21 lines extending the section. Line union
+    keeps both, so the sentence lands here twice in a row one character apart.
+    **A duplicate-line counter scores that zero**, because the lines are not
+    identical, which is how the first attempt to measure it came back clean.
+
+    So `prose` is diff3 over BLOCKS: a chunk one side moved is taken, a chunk
+    both sides moved identically is taken once, a chunk both sides moved
+    differently is refused, and the one place both sides are emitted is a chunk
+    whose base is EMPTY, meaning neither side edited anything and both inserted.
+
+    Two refinements, each forced by a measurement against the eight real
+    diverged branches in this repository rather than against the replay, which
+    structurally cannot exercise this (its `ours` is the PARENT of base, so every
+    side reads as a deletion):
+
+    - **Blank-line paragraphs are too coarse.** Markdown puts no blank line
+      between bullets, so a 30-item list is ONE block and any two branches
+      touching that list collide. At that granularity the driver resolved 0 of 4.
+      Blocks now split per list item, heading and table row as well.
+    - **Plain diff3 is still too coarse**, because a chunk between two anchors
+      conflates independent changes. `docs/DEPENDENCIES.md` had main bumping
+      `Oxlint 1.83.0` to `1.84.0` inside one bullet while a branch added a
+      different bullet beside it, which is exactly the version-bump-next-to-an-
+      insertion shape this whole change is named after. When one side's change
+      within a chunk is pure INSERTION, its new blocks are laid back into the
+      other side's text at the same anchors.
+
+    That takes it to **2 of 4 real prose conflicts resolved**, and the two it
+    still refuses are genuine two-sided edits of one paragraph. Verified rather
+    than counted: across every resolution, 0 invented lines, 0 dropped lines that
+    both sides kept, and every main-only line preserved, including 3678 of 3678
+    on a branch 521 commits behind. A stale branch cannot silently revert main's
+    prose through this.
+
+    **THE EXPENSIVE MISTAKE HERE WAS RETURNING 1 FROM A REFUSAL.** A driver
+    REPLACES the default merge for every path it claims, including the many the
+    default resolves cleanly, so declining with a hard failure manufactures
+    conflicts rather than declining to help: claiming CLAUDE.md that way took the
+    replay from 11 conflicted pairs to **24**. `fallBackToTextMerge` runs
+    `git merge-file` and returns ITS exit code, so a decline is a true no-op when
+    the text merge is clean and carries ordinary markers when it is not. A
+    contract test pins that, because the failure looks like the driver working.
+
     **The definitions cannot be committed**, which is git's decision rather than
     an oversight: `.gitattributes` names a driver and `.git/config` defines the
     COMMAND, and a repository you clone must not be able to run one at you. So
