@@ -65,6 +65,13 @@
     "instead, so those artifacts go stale for the one reason they can be: a photo",
     "arrived or left.",
     "",
+    "That reason is not always the only one, and assuming it was cost a blind spot.",
+    "semantics.json also folds in each caption and recipe, so a re-captioned photo",
+    "left it stale while its stem set, and its digest, never moved. `bytes` hashes",
+    "such whole-file inputs beside a set (set mode only). The way to find them is to",
+    "read what the generator OPENS rather than what its declaration assumes: on",
+    "2026-09-22 strace over the regenerate commands found this one in one run.",
+    "",
     "The digest alone is still not enough for an artifact built one key at a time. A",
     "resumable generator that dies halfway leaves a file covering most of the set,",
     "and --lock afterwards would call it fresh forever. `covers` reads the output and",
@@ -143,7 +150,7 @@
     {
       "id": "images/semantics",
       "tier": "pinned",
-      "why": "images/semantics.json widens what queryPhotos can match beyond the one-sentence caption and the EXIF. A photo missing from it is still findable, one tier down, which is why it went unnoticed: the failure is a search result that is quietly worse rather than an error. FOUND STALE BY THIS CHECK at 158 of 165, because gen-photo-semantics.ts had been reading a www/ that the 2026-08-18 split deleted, so nobody had been able to run it since.",
+      "why": "images/semantics.json widens what queryPhotos can match beyond the one-sentence caption and the EXIF. A photo missing from it is still findable, one tier down, which is why it went unnoticed: the failure is a search result that is quietly worse rather than an error. FOUND STALE BY THIS CHECK at 158 of 165, because gen-photo-semantics.ts had been reading a www/ that the 2026-08-18 split deleted, so nobody had been able to run it since. The stem set is not its only input: the generator folds each caption (alt.json) and Fuji recipe (metadata.json) into the terms, so both are hashed whole under `bytes`. Until 2026-09-22 they were undeclared, and a re-captioned photo left semantics.json describing the old caption while this entry read fresh; strace found the reads and one changed caption proved the gap.",
       "outputs": [
         "public/images/semantics.json"
       ],
@@ -154,13 +161,17 @@
         "include": [
           ".jpg"
         ],
-        "set": "^public/i/(.+)\\.[0-9a-f]{8}\\.jpg$"
+        "set": "^public/i/(.+)\\.[0-9a-f]{8}\\.jpg$",
+        "bytes": [
+          "public/images/alt.json",
+          "public/images/metadata.json"
+        ]
       },
       "covers": "public/images/semantics.json",
       "regenerate": "bun tools/photos/gen-photo-semantics.ts   # add --vision for the model tier",
       "recorded": {
-        "inputs": "d457e90604ddd1fb8206e0c374a39c372596c678b116defb5cd4a84b973666fb",
-        "count": 258
+        "inputs": "5583c46f67eb93c81299b82f981539a1a814b682f2f617a0c03cffee7de10dbe",
+        "count": 260
       }
     },
     {

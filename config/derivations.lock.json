@@ -1550,6 +1550,8 @@
     "public/i/XT509996-400.91537e40.avif": "91537e40c58794c8a206880c35e8e5acfad598c37ab1760550cf0ab732625460",
     "public/i/XT509996.47144221.avif": "471442213dffcaf2ad49d282c3a2c6058f555c6a57bdd1de0fa7fe3d2af84612",
     "public/i/XT509996.7c90b12d.jpg": "7c90b12dc70fc92e8f5e836e0b28248f7f07929b2df5607bf8a601b2a4b1b7c4",
+    "public/images/alt.json": "1b133ef47bf7695e5503f9f98197d9930995f9f74629a1d3bd1602c21c559ac1",
+    "public/images/metadata.json": "0dcbf4790d4a2c2eba07f7fa79600ee0e53df055aa886644255b34b5461b1cc0",
     "tools/photos/shell-data.ts": "9f579625d015d884ac8cae51ee6075df9993b3b658f894cadbd168cde05b29e1",
     "tools/photos/zenc/Cargo.lock": "f7a8fc33f3c9da7a2f287dbf239758d567a9ab6dc87fd4a20870b77b7f01b207",
     "tools/photos/zenc/src/histogram.rs": "59e46d9f6e65905da2f6019714963cfc0d2d0cd40b518f5f57c5a14377b6612a",
