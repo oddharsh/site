@@ -60,6 +60,34 @@ This covers the changed transformation
 path; it does not establish full-resolution ingest performance. All 165 photo
 histograms were regenerated, and the packed committed index stayed identical.
 
+## Optimizing zenc
+
+`bun run zenc:bench` is the instrument, and its gate is the definition of done:
+every `square` output and every histogram byte-identical to the baseline. The
+rules below are for an agent iterating on speed, adapted from Max Woolf's
+agentic-iteration AGENTS.md to a crate whose output is content-addressed.
+
+- Run it once on an unchanged tree first. That run is the baseline and the
+  noise floor, and it should report no measurable difference.
+- Never edit the bench, its corpus, `TIERS`, or `add-photos.sh` to make a
+  result pass. A contract test pins the bench to the production command.
+- Encoder settings are off limits. AVIF speed, `--jobs` and quality, JPEG
+  quality and subsampling all change bytes (CLAUDE.md gotcha 43), so none of
+  them is a speed knob here.
+- A change that adds threads inside one photo owes a `--parallel 8` run,
+  because `add-photos.sh` already runs 8 photos at once.
+- Don't run the bench while something else builds or benchmarks. It prints the
+  load average, and a BUSY warning means rerun.
+- Stop when a pass moves no source beyond its own noise, or wins under 5%
+  while adding a disproportionate amount of code.
+
+The split the bench prints bounds the prize. On the 2026-09-22 corpus, zenc's
+own code was 27-28% of a photo, a ceiling of about 1.37x before any encoder.
+135 of the 185 sources are rotated, and `orient()` costs 225-360 ms per 26 MP
+frame for a permuted full-frame copy. Reading the source through the
+orientation inside the resample is the first target, and it is identity-safe
+by construction because the same values arrive in the same order.
+
 ## Remaining work
 
 - Carry typed source depth and colour information through the complete pipeline.

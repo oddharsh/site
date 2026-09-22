@@ -77,6 +77,7 @@
     "checkpoints:sync": "bun tools/check-checkpoints.ts --sync",
     "inp": "bun tools/inp-lab.ts",
     "release": "bun tools/release-status.ts",
+    "zenc:bench": "bun tools/photos/zenc-bench.ts",
     "zenc:reproducible": "bun tools/photos/zenc-reproducible.ts"
   },
   "comment:lint": "gen-runtime-types runs FIRST because tsgolint reads the real programs now (root tsconfig.json), and those programs include config/.generated/workers-runtime.d.ts. Without it every Workers global is an error type acting as `any`, which is a different lint from the one that passes locally: CI runs lint before typecheck, typecheck was the only thing generating the file, and #709 went red on 6 `error type` findings that no workstation could reproduce. 0.02s warm, 3s on a cold checkout.",

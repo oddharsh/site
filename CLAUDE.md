@@ -284,6 +284,14 @@ bun run wrangler:pin       # resolves main's sha from pkg.pr.new and runs canary
 # scripts auto-build it on first run; this is the explicit form.
 cargo build --release --locked --manifest-path tools/photos/zenc/Cargo.toml
 
+# is a zenc change FASTER with byte-identical output? builds the merge-base as
+# the baseline, gates every square output and histogram byte for byte (a
+# mismatch prints NO timing, since /i/ is content-addressed), then times both
+# binaries interleaved and prints how much of a photo is zenc's own code rather
+# than libavif's. `-- --parallel 8` measures throughput, which is how
+# add-photos.sh actually runs. Workstation-only: it reads the SOOC originals.
+bun run zenc:bench
+
 # bust caches via wrangler (RN_KV namespace ID hardcoded in scripts).
 # NB: the photo manifest is NOT a cache anymore — the worker bundles
 # photo-index.json + hashes.json, so a deploy replaces the pool atomically
@@ -1492,7 +1500,10 @@ Two encoders + one transform tool, all built from source:
   Do not chase it further, because 9.6ms of that is the I/O floor for opening
   those files at all, so the parse is ~0.3ms and no language or rewrite can
   reach it. The photo pipeline's real cost is the encode: the same run spends
-  ~19s in the zenc histogram bake.
+  ~19s in the zenc histogram bake. **Re-measured 2026-09-22, the bake takes
+  0.6 s for all 258 stems**, so the encode cost lives in `zenc square` now,
+  about three quarters of it inside libavif. `bun run zenc:bench` prints that
+  split on every run.
 - **exif-sooc** (`cargo install --git https://github.com/oddharsh/exif-sooc exif-sooc --locked`).
   exiftool is GONE from this repository as of 2026-08-14:
   the six other scripts that still called it (encoding grids and samples,
