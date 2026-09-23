@@ -58,7 +58,7 @@ import { fileURLToPath } from "node:url";
 
 import { asRecord, asText } from "../src/worker/lib/parse.ts";
 import { interpretZstdProbe } from "./lib/bun-pin.ts";
-import { WRANGLER_WATCHES, type WatchResult, watchMoved, watchRow, watchSignature } from "./lib/upstream-watches.ts";
+import { WRANGLER_WATCHES, type WatchResult, interpretTemporalProbe, watchMoved, watchRow, watchSignature } from "./lib/upstream-watches.ts";
 import { wranglerCommand } from "./lib/wrangler-bin.ts";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
@@ -270,6 +270,11 @@ try {
         const out = run(NODE, ["tools/workerd-zstd-probe.ts"], { cwd: tree, timeout: 3 * 60_000 });
         const read = interpretZstdProbe(out.stdout);
         return read.parsed ? { landed: read.honoured, detail: read.detail } : { landed: null, detail: `did not run: ${tail(out, 1).join(" ").slice(0, 120)}` };
+      },
+      "workerd-exposes-temporal": (tree) => {
+        const out = run(NODE, ["tools/workerd-temporal-probe.ts"], { cwd: tree, timeout: 3 * 60_000 });
+        const read = interpretTemporalProbe(out.stdout);
+        return read.landed === null ? { landed: null, detail: `did not run: ${tail(out, 1).join(" ").slice(0, 120)}` } : read;
       },
       "wrangler-types-accepts-x-new-config": (tree, entry) => {
         // cf-garage is the one config in the new format, and --path keeps the
