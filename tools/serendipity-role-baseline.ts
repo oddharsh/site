@@ -9,12 +9,19 @@
 // file maps attendee id to one of LABELS and must live OUTSIDE this repository:
 // it pairs real names' ids with a judgment about them, and this repo is public.
 //
-// Measured 2026-09-23 on 5,116 bios: the tiers match 2,177 (43%). On a 60-bio
-// sample labelled by hand they were right on 24 of the 25 they matched and found
-// 24 of the 44 bios that state a role, so a replacement has to keep precision
-// near 96% while beating 55% recall. 8 of the 20 misses were founders saying
-// "building @x" or "cofounder", 2 were investors (the table has no investor
-// tier), and the rest were titles no tier names ("Community @x", a musician).
+// Measured 2026-09-23 on 5,116 bios, two 60-bio samples labelled by hand
+// (sample positions 0-59, then 60-119 as a HELD-OUT set):
+//
+//   regex                      matched     sample 0-59      held-out 60-119
+//   inherited Next-app tiers   2,177 (43%)  96% P, 55% R     92% P, 55% R
+//   + founder phrasing, investor 2,575 (50%)  94% P, 73% R    90% P, 64% R
+//
+// The second row's rules were written after reading the first sample's misses,
+// so its 73% is fitted and the held-out 64% is the number to beat. A Jev role
+// classifier has to clear 64% recall at about 90% precision. Of the 15 held-out
+// misses 9 are job functions no tier names (growth, BD, sales, GTM), which is
+// the gap a model is for; 3 are founder spellings left unfixed so the held-out
+// set stays held out ("building @ x", "Building raycast.com").
 
 import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
@@ -31,10 +38,9 @@ export const LABELS = Object.freeze(["founder", "investor", "operator", "enginee
 
 // Which labels count as a tier being RIGHT. The tiers rank seniority rather than
 // name a kind of work, so every title tier is right for an operator or an
-// engineer and none of them is right for an investor, which the table has no
-// tier for at all. `unmatched` is never right: it is the tier declining.
+// engineer. `unmatched` is never right: it is the tier declining.
 const TIER_FITS: Record<string, readonly string[]> = {
-  founder: ["founder"],
+  founder: ["founder"], investor: ["investor"],
   "c-level": ["operator", "engineer"], president: ["operator"], vp: ["operator", "engineer"],
   director: ["operator", "engineer"], lead: ["operator", "engineer"], senior: ["operator", "engineer"],
   ic: ["engineer", "operator"], junior: ["student"],

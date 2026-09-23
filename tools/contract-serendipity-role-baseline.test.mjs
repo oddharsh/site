@@ -18,10 +18,29 @@ test("an enriched role outranks the bio it was derived from", () => {
   assert.equal(attendeeScore({ role: "VP Engineering", bio_short: "founder of three things" }), 70);
 });
 
-test("first tier wins, in the order the Next app had", () => {
-  assert.deepEqual(ROLE_TIERS.map(([t]) => t), ["founder", "c-level", "president", "vp", "director", "lead", "senior", "ic", "junior"]);
+test("first tier wins, investor sitting after the job titles", () => {
+  assert.deepEqual(ROLE_TIERS.map(([t]) => t), ["founder", "c-level", "investor", "president", "vp", "director", "lead", "senior", "ic", "junior"]);
   assert.equal(roleTier("co-founder and CTO at AEON").tier, "founder");
   assert.equal(roleTier("Senior Community Lead").tier, "lead");
+  assert.equal(roleTier("CTO & angel investor").tier, "c-level", "the job outranks the side portfolio");
+});
+
+test("founders are read the way they write a bio", () => {
+  for (const bio of ["Cofounder @ Colosseum", "cofounder of strobe", "Co founder of Kaleidoscope", "building @halldon", "Building Exa.ai", "Building Doorman | Ex-Ramp"]) {
+    assert.equal(roleTier(bio).tier, "founder", bio);
+  }
+  // The "Building <Name>" rule reads the capital, and only at the start.
+  assert.equal(roleTier("building software for fun").tier, "unmatched");
+  assert.equal(roleTier("Love traveling and Building Things").tier, "unmatched");
+});
+
+test("investors have a tier, and partnerships do not count as one", () => {
+  for (const bio of ["Investor @ Archetype", "Investing at Slow Ventures", "GP @ Further.ae", "Managing Partner, Amino Capital", "Partner @ Variant", "pre-seed VC"]) {
+    assert.equal(roleTier(bio).tier, "investor", bio);
+  }
+  assert.equal(roleTier("Partnerships at Acme").tier, "unmatched");
+  assert.equal(roleTier("Head of Partnerships & Ventures at MoonPay").tier, "director");
+  assert.equal(attendeeScore({ bio_short: "Partner @ 1kx" }), 90);
 });
 
 test("saying nothing and saying something untiered are different", () => {
@@ -35,13 +54,13 @@ test("the baseline scores precision over matches and recall over stated roles", 
   const bios = [
     { id: "a", bio: "Founder of X" },            // matched, right
     { id: "b", bio: "aspiring product manager" }, // matched, wrong
-    { id: "c", bio: "building @y" },              // stated, missed
+    { id: "c", bio: "Growth at Corgi" },          // stated, missed
     { id: "d", bio: "espresso and tennis" },      // not stated, ignored by recall
     { id: "e", bio: "Engineer at Z" },            // unlabelled, ignored entirely
   ];
-  const s = scoreTiers(bios, { a: "founder", b: "other", c: "founder", d: "not_stated" });
+  const s = scoreTiers(bios, { a: "founder", b: "other", c: "operator", d: "not_stated" });
   assert.deepEqual({ matched: s.matched, right: s.right, stated: s.stated, found: s.found }, { matched: 2, right: 1, stated: 3, found: 1 });
-  assert.deepEqual(s.missed, { other: 1, founder: 1 });
+  assert.deepEqual(s.missed, { other: 1, operator: 1 });
   assert.ok(LABELS.includes("investor") && LABELS.includes("not_stated"));
   assert.throws(() => scoreTiers(bios, { a: "ceo" }), /not one of/);
 });
