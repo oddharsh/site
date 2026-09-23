@@ -313,6 +313,8 @@
       "tools/check-checkpoints.ts": "--sync writes src/worker/checkpoints.json, the deploy-log projection, which checkpoints:check already diffs against D1",
       "tools/lib/tsc-scope.ts": "writes the typecheck ratchet baseline, a machine-owned record of owed errors",
       "tools/perf-snapshot.ts": "writes a snapshot file named on the command line, never a fixed committed path",
+      "tools/insn-count.ts": "writes an instruction-count record named on the command line, never a fixed committed path; like perf-snapshot, two records are diffed and neither is committed",
+      "tools/layout-shift-lab.ts": "writes a --json report only when asked, to a path named on the command line; it measures a running server and commits nothing",
       "tools/gen-remote-config.ts": "writes .wrangler.remote.jsonc, which is gitignored",
       "tools/lib/bun-gates.ts": "the gates bump-bun-pin.ts and canary-bun.ts share: it unzips a candidate bun into a work directory, mirrors the manifests to resolve a lockfile with each runtime, and builds twice, parking the pinned `.build/` in `.build.pinned-baseline` while the candidate builds and putting it back in a finally. Nothing it writes is committed",
       "tools/bump-wrangler-pin.ts": "writes an optional canary JSON report to the caller's path and rewrites the wrangler line of the root package.json to a newer pkg.pr.new commit URL and relocks, the same maintenance edit to a hand-authored file that lib/bun-pin.ts makes for packageManager; check-wrangler.ts holds the URL, bun.lock and the installed version together after every move",
