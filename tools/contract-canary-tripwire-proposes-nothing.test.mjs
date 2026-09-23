@@ -29,7 +29,7 @@ import { checkWatch } from "timbrado/watch";
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 import { chromeChannel, DEFAULT_CHROME_CHANNEL } from "./lib/browser-channel.ts";
 import { DEFAULT_PAIRS, HONEST_FALSE, JXL_2X2, LIVE_PROBES, familyOf, shippedCaps, tablesFor } from "./canary-browsers.ts";
-import { BUN_WATCHES, WRANGLER_WATCHES, ensureTimbradoEngine, runWatch } from "./lib/upstream-watches.ts";
+import { BUN_WATCHES, WRANGLER_WATCHES, ensureTimbradoEngine, interpretTemporalProbe, runWatch } from "./lib/upstream-watches.ts";
 
 const LEGS = ["tools/canary-bun.ts", "tools/canary-wrangler.ts", "tools/canary-browsers.ts"];
 const strip = (src) => src.split("\n").filter((l) => !l.trim().startsWith("//")).join("\n");
@@ -167,6 +167,23 @@ test("every upstream watch names a thread, and every bun watch RUNS on the pinne
     assert.ok(r.landed === true || r.landed === false, `${w.name} did not run under the pinned bun: ${r.detail}`);
     assert.ok(r.detail.length > 0, `${w.name} answered with no detail`);
   }
+});
+
+test("every wrangler watch has a runner in the wrangler leg, which otherwise skips it without a word", async () => {
+  // canary-wrangler.ts looks each watch up by name and `continue`s past a
+  // miss, so a watch declared without a runner is a row that never appears.
+  const leg = await readFile(new URL("tools/canary-wrangler.ts", ROOT), "utf8");
+  for (const w of WRANGLER_WATCHES) assert.ok(leg.includes(`"${w.name}": (tree`), `${w.name} has no runner in canary-wrangler.ts`);
+});
+
+test("the Temporal watch reads a Temporal with a broken clock as NOT landed", () => {
+  // The control is the #6907 build: Temporal present, Temporal.Now at epoch 0.
+  // Reading that as landed would announce the one build the watch exists for.
+  assert.equal(interpretTemporalProbe('{"present":true,"skewMs":-1790000000000,"date":"2026-06-01"}').landed, false);
+  assert.equal(interpretTemporalProbe('{"present":true,"skewMs":3,"date":"2026-06-01"}').landed, true);
+  assert.equal(interpretTemporalProbe('{"present":false,"skewMs":null,"date":"2026-06-01"}').landed, false);
+  assert.equal(interpretTemporalProbe('{"present":true,"skewMs":null}').landed, false, "a Temporal.Now that throws is not landed");
+  assert.equal(interpretTemporalProbe("not json").landed, null, "a probe that never ran is neither answer");
 });
 
 test("timbrado is pinned to a full commit sha, so the frozen lockfile is the whole guarantee about which reporter runs", async () => {

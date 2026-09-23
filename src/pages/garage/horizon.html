@@ -2374,8 +2374,8 @@ navigation.addEventListener("navigate", (e) =&gt; {
       <p class="replaces">
         On the site: this is overkill <em>today</em>: aadhar.sh is
         deliberately one handwritten file per page, with routing that lives in
-        <code>route()</code> at the top of <code>_worker.js</code>, not in the
-        client. There&apos;s no SPA and no active-nav state to track. But it&apos;s
+        the Worker&apos;s route table (<code>ROUTES</code> in
+        <code>src/worker/index.ts</code>) rather than in the client. There&apos;s no SPA and no active-nav state to track. But it&apos;s
         the right thing to watch <em>if</em> the garage ever grows a shared
         client-side nav: the cross-browser half (<code>URLPattern</code> +
         Navigation API) could already replace any hand-rolled
@@ -2983,14 +2983,15 @@ navigation.addEventListener("navigate", (e) =&gt; {
     <section class="demo shipped" data-cap="temporal">
       <h2>
         <span>Temporal <span class="mono">/ the date/time rewrite</span></span>
-        <span class="stat cross">ES2026 &middot; Chrome 144 &middot; FF 139 &middot; no Safari</span>
+        <span class="stat cross">ES2027 &middot; Chrome 144 &middot; FF 139 &middot; no Safari</span>
       </h2>
       <p class="ship-tag">✓ shipped on the site</p>
       <p class="note">
         The long-awaited replacement for <code>Date</code>: immutable objects,
         first-class time zones and calendars, no more month-zero footguns. It reached
-        <strong>TC39 stage&nbsp;4</strong> in March&nbsp;2026, so it is part of the
-        ECMAScript&nbsp;2026 language rather than a proposal. Shipping is a separate
+        <strong>TC39 stage&nbsp;4</strong> in March&nbsp;2026, after the 2026 edition&apos;s
+        feature set had closed, so it lands in ECMAScript&nbsp;2027 and already sits in the
+        living draft at <a href="https://tc39.es/ecma262/">tc39.es/ecma262</a>. Shipping is a separate
         question from standardising, and Safari is the reminder: Blink and Gecko both
         shipped it in spring&nbsp;2026 and Safari&nbsp;27 beta does <em>not</em> include it.
         That changed in the direction you want on 2026-07-30: <strong>Technology
@@ -3000,12 +3001,23 @@ navigation.addEventListener("navigate", (e) =&gt; {
       </p>
       <div class="tmp-out" id="tmp-out">checking for Temporal&hellip;</div>
       <p class="replaces">
-        On the site: photo &quot;uploaded&quot; stamps and serendipity event times become
+        On the site: photo &quot;uploaded&quot; stamps in the hover card become
         zone-correct and DST-safe without a date library. This is the one card on the page
         that breaks the two-engine rule on purpose, and the reason it gets away with it is
         that every use is a progressive enhancement over a working <code>Date</code> path:
-        the taskbar clock and the Notepad F5 stamp both try <code>Temporal</code> and fall
-        back. Safari visitors get the fallback and notice nothing.
+        the taskbar clock, the Notepad F5 stamp and the photo tooltip all try
+        <code>Temporal</code> and fall back. Safari visitors get the fallback and notice nothing.
+      </p>
+      <p class="replaces">
+        The Worker is the exception, and it uses <code>Date</code> only. Cloudflare&apos;s
+        runtime carries V8&apos;s <code>Temporal</code> switched off, with no compatibility flag
+        to turn it on, and the one time it was switched on in production
+        (<a href="https://github.com/cloudflare/workerd/issues/6907">workerd#6907</a>)
+        <code>Temporal.Now</code> read the Unix epoch, so a server-side
+        <code>typeof Temporal</code> guard would have taken the broken branch for every
+        visitor at once. The /serendipity event times dropped their <code>Temporal</code>
+        branch for that reason, and a nightly probe now reports the day workerd exposes one
+        whose clock agrees with <code>Date.now()</code>.
       </p>
       <p class="unsupported">Your browser doesn&apos;t expose <code>Temporal</code> yet, the box above says so.</p>
     </section>
@@ -3073,10 +3085,12 @@ navigation.addEventListener("navigate", (e) =&gt; {
         something that is already two engines deep.
       </p>
       <p class="replaces">
-        On the site: the <code>_worker.js</code> HTMLRewriter injection of the
-        now-playing tracks and the random photo grid into <code>index.html</code> is
-        exactly this server-side partial render, done by hand. This would make it a
-        declared contract instead. It shares a WICG repo with the route-matching work above.
+        On the site: the homepage did exactly this partial render by hand until
+        August&nbsp;2026, an HTMLRewriter pass in the Worker injecting the now-playing
+        tracks and the random photo grid into <code>index.html</code>. It serves a fixed
+        document now and fetches both as fragments (<code>/rn/tracks.html</code>,
+        <code>/photos/grid.html</code>) from two inline scripts, which is the scripted
+        half of what <code>&lt;template for&gt;</code> would make a declared contract. It shares a WICG repo with the route-matching work above.
       </p>
     </section>
 
@@ -4261,15 +4275,13 @@ navigation.addEventListener("navigate", (e) =&gt; {
       <p><button class="xp-button" id="tc39-go">Run all three</button></p>
       <pre class="out" id="tc39-out">press the button</pre>
       <p class="replaces">
-        On the site: <code>getOrInsert</code> is the one with real call sites.
-        The Spotify scrape builds an artist-id map with the
-        has/get/set pattern in <code>_worker.js</code>, and
-        <code>buildImagesManifest</code> does the same shape when grouping
-        stems. <code>Math.sumPrecise</code> is the sort of thing you reach for
-        once and remember forever: the photo pipeline sums per-tier byte counts,
-        and while naive summation is fine at 474 files, the precise version
-        costs nothing. Worth noting these are three engines deep, so they are
-        past this page&apos;s bar and into &quot;just use them.&quot;
+        On the site: <code>getOrInsertComputed</code> is the one with real call
+        sites, grouping rows by key in the Worker&apos;s <code>/around</code>, census and
+        inbox code where a has/get/set dance used to sit. <code>Math.sumPrecise</code>
+        is the one still waiting, and what it waits on is a server: the Worker
+        runs it fine, but the test suite imports the same modules under Node&nbsp;26.9,
+        which lacks it. All three are ECMAScript&nbsp;2026 and three engines deep, so
+        they are past this page&apos;s bar and into &quot;just use them.&quot;
       </p>
       <p class="unsupported">One or more of the three is missing here; the output says which.</p>
     </section>
@@ -4446,10 +4458,9 @@ navigation.addEventListener("navigate", (e) =&gt; {
         a visitor is likely to take next, and the only evidence that they help
         is that the pages feel fast when I click them, which is not evidence.
         <code>on-prefetch-activation</code> is the one that fits this
-        architecture best: it is a response header, so <code>_worker.js</code>
-        can set it and receive the callback, and the accounting lands next to
-        the existing Analytics Engine counters rather than in a client script
-        the RUM beacon would have to carry. Precision is the number worth
+        architecture best: it is a response header, so the Worker can set it
+        and receive the callback, and the accounting lands next to the existing
+        Analytics Engine counters rather than in a client script. Precision is the number worth
         knowing, since a prefetch that never activates is bandwidth spent on
         someone else&apos;s behalf.
       </p>

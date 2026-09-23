@@ -1085,6 +1085,7 @@ written, because a watch that reads true on its first run is watching nothing.
 | `css-minifier-lowercases-target-current` | oven-sh/bun#42480 (fix #42484) | `:TARGET-CURRENT` is emitted lowercased |
 | `workerd-honours-zstd-dictionary` | cloudflare/workerd#7106 | `tools/workerd-zstd-probe.ts` compresses smaller with the right dictionary |
 | `wrangler-types-accepts-x-new-config` | gotcha 41, no upstream issue | `wrangler types --x-new-config` writes the file in `cf-garage/` |
+| `workerd-exposes-temporal` | cloudflare/workerd#6907 | `tools/workerd-temporal-probe.ts` finds Temporal under production's compat settings, with a clock within a minute of `Date.now()` |
 
 Each leg reads every watch under the PIN and under the candidate. A row that
 differs is a `changed` verdict whose signature names the watch and the
