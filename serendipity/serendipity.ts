@@ -81,20 +81,37 @@ function fmtDateTime(s) {
   return d.toLocaleDateString("en-US", opt) + " · " + d.toLocaleTimeString("en-US", topt);
 }
 
-// influence/seniority proxy — ported verbatim from the Next app's attendeeScore.
-function attendeeScore(a) {
-  let s = 0;
-  const r = (a.role || "").toLowerCase();
-  if (/\bfounder\b/.test(r)) s += 100;
-  else if (/\b(ceo|cto|coo|cfo|cpo|cmo|cro|chief)\b/.test(r)) s += 90;
-  else if (/\bpresident\b/.test(r)) s += 80;
-  else if (/\b(vp|vice\s+president)\b/.test(r)) s += 70;
-  else if (/\b(director|head)\b/.test(r)) s += 60;
-  else if (/\b(manager|lead)\b/.test(r)) s += 40;
-  else if (/\b(senior|staff|principal)\b/.test(r)) s += 30;
-  else if (/\b(engineer|developer|designer|analyst)\b/.test(r)) s += 20;
-  else if (/\b(intern|junior|student)\b/.test(r)) s += 5;
-  else if (r.length) s += 15;
+// influence/seniority proxy — the tiers are ported verbatim from the Next app's
+// attendeeScore, first match wins. Exported as a table so a classifier meant to
+// replace it (tools/serendipity-role-baseline.ts) is measured against exactly
+// the regex the roster sorts by.
+export const ROLE_TIERS: readonly (readonly [tier: string, re: RegExp, points: number])[] = Object.freeze([
+  ["founder", /\bfounder\b/, 100],
+  ["c-level", /\b(ceo|cto|coo|cfo|cpo|cmo|cro|chief)\b/, 90],
+  ["president", /\bpresident\b/, 80],
+  ["vp", /\b(vp|vice\s+president)\b/, 70],
+  ["director", /\b(director|head)\b/, 60],
+  ["lead", /\b(manager|lead)\b/, 40],
+  ["senior", /\b(senior|staff|principal)\b/, 30],
+  ["ic", /\b(engineer|developer|designer|analyst)\b/, 20],
+  ["junior", /\b(intern|junior|student)\b/, 5],
+] as const);
+
+/** The tier a role line falls in: `unmatched` for text no tier names, `none`
+ *  for no text at all. The two differ by 15 points, since saying anything about
+ *  yourself is a weak signal of its own. */
+export function roleTier(text: string | null | undefined): { tier: string, points: number } {
+  const r = (text || "").toLowerCase();
+  for (const [tier, re, points] of ROLE_TIERS) if (re.test(r)) return { tier, points };
+  return r.trim().length ? { tier: "unmatched", points: 15 } : { tier: "none", points: 0 };
+}
+
+// The enriched role when there is one, else the person's own Luma bio. On
+// 2026-09-23 the role existed for 15 of 19,733 people and a bio for 5,116, so
+// reading the role alone left the tiers dark for nearly everyone; read against a
+// 60-bio hand-labelled sample, the tiers were right on 24 of the 25 they matched.
+export function attendeeScore(a) {
+  let s = roleTier(a.role || a.bio_short).points;
   if (a.twitter_handle) s += 15;
   if (a.linkedin_handle || a.linkedin_url) s += 5;
   if (a.website) s += 5;
