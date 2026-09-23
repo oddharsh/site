@@ -81,20 +81,55 @@ function fmtDateTime(s) {
   return d.toLocaleDateString("en-US", opt) + " · " + d.toLocaleTimeString("en-US", topt);
 }
 
-// influence/seniority proxy — ported verbatim from the Next app's attendeeScore.
-function attendeeScore(a) {
-  let s = 0;
-  const r = (a.role || "").toLowerCase();
-  if (/\bfounder\b/.test(r)) s += 100;
-  else if (/\b(ceo|cto|coo|cfo|cpo|cmo|cro|chief)\b/.test(r)) s += 90;
-  else if (/\bpresident\b/.test(r)) s += 80;
-  else if (/\b(vp|vice\s+president)\b/.test(r)) s += 70;
-  else if (/\b(director|head)\b/.test(r)) s += 60;
-  else if (/\b(manager|lead)\b/.test(r)) s += 40;
-  else if (/\b(senior|staff|principal)\b/.test(r)) s += 30;
-  else if (/\b(engineer|developer|designer|analyst)\b/.test(r)) s += 20;
-  else if (/\b(intern|junior|student)\b/.test(r)) s += 5;
-  else if (r.length) s += 15;
+// influence/seniority proxy, first match wins. Exported as a table so a
+// classifier meant to replace it (tools/serendipity-role-baseline.ts) is
+// measured against exactly the regex the roster sorts by.
+//
+// The tiers came from the Next app's attendeeScore, which was written for a
+// job-title field. A Luma bio is how someone describes themselves, so two rules
+// joined on 2026-09-23 for how founders and investors actually write it, each
+// counted over all 5,116 bios before it went in:
+//   founder   "cofounder" as one word (+66), "building @x" (+21), and a bio that
+//             OPENS "Building <Name>" (+59). The capital is the signal there, so
+//             that one regex is case-sensitive; "building software" is a hobby.
+//   investor  a tier the old table did not have at all, on a pool fed by people
+//             at a venture firm: investor/investing/vc/angel, GP and the partner
+//             titles, and "Partner @x". Scored as c-level, and placed after it so
+//             "CTO & angel investor" still reads as the job.
+// "Entrepreneur" was measured and left out: about half of its 39 hits were
+// "entrepreneur mentor" or a network OF entrepreneurs, not a founder.
+// A tier is a LIST of regexes so one rule can keep its case: a single /i
+// regex would let `[A-Z0-9]` match lowercase and read "building software" as
+// a founder.
+export const ROLE_TIERS: readonly (readonly [tier: string, res: readonly RegExp[], points: number])[] = Object.freeze([
+  ["founder", [/\b(founder|cofounder)\b|\bbuilding\s+@\S/i, /^\s*[Bb]uilding\s+[A-Z0-9]/], 100],
+  ["c-level", [/\b(ceo|cto|coo|cfo|cpo|cmo|cro|chief)\b/i], 90],
+  ["investor", [/\b(investor|investing|vc|angel|gp|general\s+partner|managing\s+partner|venture\s+partner|venture\s+capital)\b|\bpartner\s+(@|at\b)/i], 90],
+  ["president", [/\bpresident\b/i], 80],
+  ["vp", [/\b(vp|vice\s+president)\b/i], 70],
+  ["director", [/\b(director|head)\b/i], 60],
+  ["lead", [/\b(manager|lead)\b/i], 40],
+  ["senior", [/\b(senior|staff|principal)\b/i], 30],
+  ["ic", [/\b(engineer|developer|designer|analyst)\b/i], 20],
+  ["junior", [/\b(intern|junior|student)\b/i], 5],
+] as const);
+
+/** The tier a role line falls in: `unmatched` for text no tier names, `none`
+ *  for no text at all. The two differ by 15 points, since saying anything about
+ *  yourself is a weak signal of its own. Tested against the text as written,
+ *  since one rule reads its capitals. */
+export function roleTier(text: string | null | undefined): { tier: string, points: number } {
+  const r = text || "";
+  for (const [tier, res, points] of ROLE_TIERS) if (res.some((re) => re.test(r))) return { tier, points };
+  return r.trim().length ? { tier: "unmatched", points: 15 } : { tier: "none", points: 0 };
+}
+
+// The enriched role when there is one, else the person's own Luma bio. On
+// 2026-09-23 the role existed for 15 of 19,733 people and a bio for 5,116, so
+// reading the role alone left the tiers dark for nearly everyone; read against a
+// 60-bio hand-labelled sample, the tiers were right on 24 of the 25 they matched.
+export function attendeeScore(a) {
+  let s = roleTier(a.role || a.bio_short).points;
   if (a.twitter_handle) s += 15;
   if (a.linkedin_handle || a.linkedin_url) s += 5;
   if (a.website) s += 5;

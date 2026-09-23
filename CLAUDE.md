@@ -5470,6 +5470,31 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     portable path can be forced where reproducibility has to be guaranteed
     rather than observed.
 
+    **THAT CORRECTION HOLDS FOR AN ENCODE AND BREAKS ON A RESIZE.** Re-measured
+    2026-09-23 on three shipped tiles (`L1000069_3`, `XT500010`, `XT507876`) at
+    q84 progressive. Each backend was forced in turn on one macOS host (bun
+    1.4.3), with `oven/bun:1.4` Linux arm64 (1.4.2) as the control:
+
+    | operation | macOS `system` vs `bun` | macOS `bun` vs Linux |
+    |---|---|---|
+    | encode only | identical, 3 of 3 | identical, 3 of 3 |
+    | `rotate(90)` | identical, 3 of 3 | identical, 3 of 3 |
+    | `resize(400, 400, { fit: "inside" })` | **differs, 3 of 3** (+18, +8, -5 B) | identical, 3 of 3 |
+
+    So the 2026-08-25 run was right about what it ran, an encode of a tile that
+    was already 600px, and the paragraph above generalised that to the backend.
+    Which resampler each backend calls is not verified here. What is measured is
+    that the two agree on the two exact operations and disagree on the one that
+    has to choose a filter. Every served tier here is a resize, so the original
+    argument stands for the job this pipeline would hand it: macOS and Linux
+    WOULD mint different `/i/` URLs. `Bun.Image.backend = "bun"` is the fix, and
+    it makes macOS match Linux on all nine cells above, across two bun releases.
+
+    Take the general shape past this API: **a byte-identity result is a claim
+    about the operations it exercised.** A backend difference can only show on
+    an operation where the backends do different work, and an encode of
+    pre-sized pixels exercised the shared encoder and nothing else.
+
     **The SIZE gap is real and is the whole case, and it is smaller than the
     numbers above.** `progressive: true` is documented and this note never tried
     it: on the shipped 600px `L1000069_3` tile it takes the q84 encode from
