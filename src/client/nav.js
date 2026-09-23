@@ -192,7 +192,8 @@
           sound: AXP_SND,
           loadPhotos: loadPhotos,
           loadWriting: loadWriting,
-          front: front
+          front: front,
+          saver: runSaver
         });
         return runApi;
       });
@@ -408,6 +409,47 @@
   }
   function toggleTray(kind, ic) {
     return loadTray().then((tray) => { tray.toggle(kind, ic); });
+  }
+
+  // ── screen saver ────────────────────────────────────────────────────────────
+  // One minute, well under XP's default "Wait: 10 minutes", because a visit to a
+  // personal site is short and a saver nobody ever sees is not a feature. Scrolling,
+  // typing and pointer movement all reset it, so an active reader never meets it.
+  // The hot path is one timestamp store per input event: nothing is cleared or
+  // re-armed while the visitor is active, and the one timer re-schedules itself
+  // for whatever is left when it wakes early.
+  // /nav-pipes.js is fetched only when the wait actually runs out, so a visitor
+  // who never goes idle pays for a timer and nothing else.
+  var SAVER_WAIT = 60 * 1000;
+  var saverLast = 0, saverTimer = 0, saverOn = false;
+  var saverPromise = /** @type {Promise<any> | null} */ (null);
+  function saverPoke() { saverLast = performance.now(); }
+  function saverArm(ms) { clearTimeout(saverTimer); saverTimer = W.setTimeout(saverCheck, Math.max(1000, ms)); }
+  function saverCheck() {
+    if (saverOn) return;
+    var left = saverLast + SAVER_WAIT - performance.now();
+    if (left > 0) { saverArm(left); return; }
+    // a background tab is not an idle desktop; coming back to it counts as input
+    if (D.hidden) { saverPoke(); saverArm(SAVER_WAIT); return; }
+    runSaver();
+  }
+  function runSaver() {
+    if (saverOn) return;
+    saverOn = true;
+    if (!saverPromise) saverPromise = import("/nav-pipes.js").catch((e) => { saverPromise = null; throw e; });
+    saverPromise.then((m) => {
+      m.startPipes({ onExit: () => { saverOn = false; saverPoke(); saverArm(SAVER_WAIT); } });
+    }).catch(() => { saverOn = false; saverPoke(); saverArm(SAVER_WAIT); });
+  }
+  function initSaver() {
+    ["pointermove", "pointerdown", "keydown", "wheel", "touchstart"].forEach((t) => {
+      W.addEventListener(t, saverPoke, { capture: true, passive: true });
+    });
+    // windows scroll internally here, and scroll does not bubble, so listen in
+    // the capture phase to hear every scroller on the page
+    D.addEventListener("scroll", saverPoke, { capture: true, passive: true });
+    D.addEventListener("visibilitychange", saverPoke);
+    saverPoke(); saverArm(SAVER_WAIT);
   }
 
   // ⌘K / Ctrl-K anywhere
@@ -809,7 +851,7 @@
   function boot() {
     var bar = D.getElementById("axp-taskbar");
     if (!bar || !D.getElementById("axp-desktop")) return;
-    ensureLunaCss(); wireTaskbar(bar); initDrag(); initRaise(); initIconDrag(); initScrollbars(); initResize();  initCloseBack(); initWindowControls(); initInfotips();
+    ensureLunaCss(); wireTaskbar(bar); initDrag(); initRaise(); initIconDrag(); initScrollbars(); initResize();  initCloseBack(); initWindowControls(); initInfotips(); initSaver();
   }
   function bootAfterStaticPaint() {
     // Generated/static pages and Worker-rendered shells already carry the desktop

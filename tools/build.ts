@@ -809,6 +809,7 @@ const SHELLS = [
   ["nav.js",     "/nav.src.js",     "axp-histnav"],
   ["nav-run.js", "/nav-run.src.js", "axp-run"],
   ["nav-tray.js", "/nav-tray.src.js", "axp-balloon"],
+  ["nav-pipes.js", "/nav-pipes.src.js", "axp-pipes"],  // the idle screen saver
   ["notepad.js", "/notepad.src.js", "np-window"],
   ["lens-boot.js", "/lens-boot.src.js", "requestSubmit"],
   ["lens-webmcp.js", "/lens-webmcp.src.js", "LensWebMcp"],
@@ -2098,6 +2099,10 @@ let freshFamily: Buffer | null = null;
       [/import\((["'`])\/nav-run\.js\1\)/g, `import($1${to}$1)`] ] },
     { file: "/nav-tray.js",     base: "nav-tray",     mk: (to) => [
       [/import\((["'`])\/nav-tray\.js\1\)/g, `import($1${to}$1)`] ] },
+    // The idle screen saver. A leaf with no imports, rewritten into nav.js before
+    // the shell is hashed, like the two islands above.
+    { file: "/nav-pipes.js",    base: "nav-pipes",    mk: (to) => [
+      [/import\((["'`])\/nav-pipes\.js\1\)/g, `import($1${to}$1)`] ] },
     { file: "/lens-browser.js", base: "lens-browser", mk: (to) => [
       [/(["'`])\/lens-browser\.js\?v=1\1/g, `$1${to}$1`] ] },
     { file: "/lens-reader.js",  base: "lens-reader",  mk: (to) => [
@@ -2165,7 +2170,7 @@ let freshFamily: Buffer | null = null;
     const run = await readFile(`${OUT}/public${hashedFor["nav-run"]}`, "utf8");
     if (!idx.includes(hashedFor.tooltip)) throw new Error("index.html was not repointed to hashed tooltip.js");
     if (!idx.includes(hashedFor.hoist) || !run.includes(hashedFor.hoist)) throw new Error("a hoist.js loader was not repointed (index.html or nav-run.js)");
-    if (!nav.includes(hashedFor["nav-run"]) || !nav.includes(hashedFor["nav-tray"])) throw new Error("nav.js was not repointed to its first-interaction islands");
+    if (!nav.includes(hashedFor["nav-run"]) || !nav.includes(hashedFor["nav-tray"]) || !nav.includes(hashedFor["nav-pipes"])) throw new Error("nav.js was not repointed to its first-interaction islands");
     for (const style of ["nav-run", "nav-tray", "infotip"]) {
       if (!nav.includes(hashedFor[`${style}.css`])) throw new Error(`nav.js was not repointed to hashed ${style}.css`);
     }
