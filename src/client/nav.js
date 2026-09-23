@@ -596,29 +596,10 @@
     if (!bar) return;
     var home = (location.pathname.replace(/\/+$/, "") || "/") === "/";
 
-    if (!D.getElementById("axp-wc-css")) {
-      var st = D.createElement("style"); st.id = "axp-wc-css";
-      st.textContent =
-        // maximized: cover the whole desktop (wallpaper + icons), stop at the 30px taskbar floor
-        ".window.axp-max,.np-window.axp-max{position:fixed!important;inset:0 0 30px 0!important;width:auto!important;height:auto!important;max-width:none!important;max-height:none!important;margin:0!important;border-radius:0!important;transform:none!important;z-index:9998!important}" +
-        // history-nav buttons, at the head of the title bar. same Luna caption-button
-        // GEL as .controls .min/.max site-wide (21x21 lozenge, traced-hex blue gradient,
-        // top specular gloss band via ::after, CSS-drawn white glyph via ::before, brighter
-        // hover) so back/forward read as real caption buttons. glyph is an arrow, not a bar.
-        ".axp-histnav{display:inline-flex;gap:2px;margin-right:6px;flex:0 0 auto;align-items:center}" +
-        ".axp-histnav button{position:relative;box-sizing:border-box;width:21px;height:21px;padding:0;margin:0;display:inline-block;overflow:hidden;font:0/0 a;color:transparent;cursor:pointer;border:1px solid #6696eb;border-radius:3px;background-color:#3e73f5;background-image:linear-gradient(180deg,#5f8cf7 0%,#3a71f5 22%,#3e73f5 55%,#2a70f2 82%,#1045be 100%);transition:filter 60ms ease-out}" +
-        ".axp-histnav button::after{content:'';position:absolute;left:0;right:0;top:0;height:45%;background:linear-gradient(180deg,rgba(255,255,255,.55) 0%,rgba(255,255,255,.12) 70%,rgba(255,255,255,0) 100%);border-radius:2px 2px 5px 5px;pointer-events:none}" +
-        // translate(-50%,-50%) centers against the triangle's real border box (5x10),
-        // which margin guesses got wrong (back sat 3.5px left of center, fwd 1.5px)
-        ".axp-histnav button::before{content:'';position:absolute;top:50%;left:50%;width:0;height:0;border:5px solid transparent;transform:translate(-50%,-50%);filter:drop-shadow(0 1px 0 rgba(0,0,0,.35))}" +
-        ".axp-histnav .axp-back::before{border-right-color:#fff;border-left-width:0}" +
-        ".axp-histnav .axp-fwd::before{border-left-color:#fff;border-right-width:0}" +
-        ".axp-histnav button:hover:not([disabled]){border-color:#8fb4ff;background-color:#4fa4ff;background-image:linear-gradient(180deg,#689bff 0%,#468aff 22%,#4fa4ff 55%,#3990fc 82%,#1858c8 100%);outline:none}" +
-        ".axp-histnav button:active:not([disabled]){filter:brightness(.9)}" +
-        ".axp-histnav button:focus-visible{outline:1px dotted #fff;outline-offset:-4px}" +
-        ".axp-histnav button[disabled]{opacity:.45;cursor:default;filter:none}";
-      D.head.appendChild(st);
-    }
+    // The maximize state and the back/forward buttons are styled in luna.css, so
+    // their rules are in place at first paint rather than when this runs. They
+    // were an injected <style id="axp-wc-css"> here until the pair moved into the
+    // HTML (see the history-nav block below).
 
     // close -> aadhar.sh on every non-home page. initCloseBack still upgrades the
     // click to history.back() when you actually arrived from home (bfcache, no flash).
@@ -627,8 +608,16 @@
       if (closeA instanceof HTMLAnchorElement) { closeA.setAttribute("href", "/"); closeA.title = "close to aadhar.sh"; closeA.setAttribute("aria-label", "close to aadhar.sh"); }
     }
 
-    // back / forward, injected at the head of the title bar (excluded from title-bar
-    // drag because they're <button>, which initDrag already skips).
+    // back / forward, at the head of the title bar (excluded from title-bar drag
+    // because they're <button>, which initDrag already skips).
+    //
+    // The pair SHIPS IN THE HTML now (gen-desktop-partial.ts HISTNAV_HTML, baked
+    // into static pages by gen:shell and into Worker pages by lunaPage), and this
+    // only wires it. It used to be created here, and since boot() runs two frames
+    // after the static paint on purpose, every windowed page painted its caption,
+    // then slid it ~50px right (65 of 65 pages under bun run cls). Creating it is
+    // kept as the fallback for a renderer that has not baked it, so a missing bake
+    // costs a layout shift rather than the buttons.
     //
     // A window may opt out with data-no-histnav; the /terminal console was the one that
     // did. Back and Forward are BROWSER controls: on a document window they
@@ -637,9 +626,12 @@
     // Opting out here rather than by giving that window a different title-bar
     // class keeps drag, resize, maximize and close-to-home, which a console
     // window still wants — those are OS chrome, not browser chrome.
-    if (!bar.querySelector(".axp-histnav") && !win.hasAttribute("data-no-histnav")) {
-      var hn = el('<span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>');
+    var hn = bar.querySelector(":scope > .axp-histnav");
+    if (!hn && !win.hasAttribute("data-no-histnav")) {
+      hn = el('<span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>');
       bar.insertBefore(hn, bar.firstChild);
+    }
+    if (hn) {
       var bBtn = hn.querySelector(".axp-back"), fBtn = hn.querySelector(".axp-fwd");
       if (!(bBtn instanceof HTMLButtonElement) || !(fBtn instanceof HTMLButtonElement)) return;
       var backButton = bBtn, forwardButton = fBtn;

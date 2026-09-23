@@ -10,7 +10,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { renderUnderstanding, validatePageSpec } from "../content/page-contract.mjs";
-import { DESKTOP_CHROME, DESKTOP_TOP } from "../../src/worker/lib/desktop.ts";
+import { DESKTOP_CHROME, DESKTOP_HISTNAV, DESKTOP_TOP } from "../../src/worker/lib/desktop.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..", "..");   // pipelines/<name>/ -> repo root
@@ -87,7 +87,7 @@ export function pageHtml(spec) {
 <body>
 <!-- axp:desktop -->${DESKTOP_TOP}<!-- /axp:desktop -->
 <div class="window">
-  <div class="title-bar" aria-hidden="true">
+  <div class="title-bar" aria-hidden="true">${DESKTOP_HISTNAV}
     <span class="title-text"><span class="icon"></span>aadhar.sh${html(path)}</span>
     <span class="controls"><span class="min"></span><span class="max"></span><a class="close" href="/garage" title="back to the garage" aria-label="back to the garage"></a></span>
   </div>

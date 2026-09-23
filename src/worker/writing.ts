@@ -1,7 +1,7 @@
 // writing.js — extracted from the worker (no-build reorg). Bundled by
 // wrangler/Cloudflare at deploy; not served (inside _worker.js/).
 import { cachedRender } from "./lib/cache.ts";
-import { DESKTOP_CHROME, DESKTOP_TOP } from "./lib/desktop.ts";
+import { DESKTOP_CHROME, DESKTOP_HISTNAV, DESKTOP_TOP } from "./lib/desktop.ts";
 import { addressBar, taskPane } from "./lib/explorer.ts";
 import { escAttr, escHtml } from "./lib/http.ts";
 import { twinFor } from "./lib/twins.ts";
@@ -128,7 +128,7 @@ export function notepadWindow(filename, text, closeHref, date?, popId?) {
     ? "<div class=\"np-window np-note\" id=\"" + escAttr(popId) + "\" popover=\"manual\">"
     : "<div class=\"np-window\">";
   return open +
-    "<div class=\"np-titlebar\"><span class=\"np-ico\" aria-hidden=\"true\"></span>" +
+    "<div class=\"np-titlebar\">" + (popId ? "" : DESKTOP_HISTNAV) + "<span class=\"np-ico\" aria-hidden=\"true\"></span>" +
       "<span class=\"np-title\">" + escHtml(filename) + " — Notepad</span>" +
       "<span class=\"np-controls\"><span class=\"min\" aria-hidden=\"true\"></span><span class=\"max\" aria-hidden=\"true\"></span>" +
       "<a class=\"close\" href=\"" + escAttr(closeHref) + "\"" + (popId ? " data-pop" : "") + " title=\"back to writing\" aria-label=\"Close\">✕</a></span></div>" +
@@ -207,7 +207,7 @@ export async function renderWritingIndex(env) {
     return notepadWindow((e.p.title || e.safe) + ".txt", e.text, "/writing", e.p.date, "note-" + e.safe);
   }).join("");
   const body = "<div class=\"np-window np-folder\">" +
-    "<div class=\"np-titlebar\"><span class=\"np-ico\" aria-hidden=\"true\"></span>" +
+    "<div class=\"np-titlebar\">" + DESKTOP_HISTNAV + "<span class=\"np-ico\" aria-hidden=\"true\"></span>" +
       "<span class=\"np-title\">aadhar.sh/writing</span>" +
       "<span class=\"np-controls\"><span class=\"min\" aria-hidden=\"true\"></span><span class=\"max\" aria-hidden=\"true\"></span>" +
       "<a class=\"close\" href=\"/\" title=\"back home\" aria-label=\"Close\">✕</a></span></div>" +

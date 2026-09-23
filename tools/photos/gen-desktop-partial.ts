@@ -107,6 +107,7 @@ export function renderDesktopArtifacts(surfaces = readManifest().surfaces) {
   // rules landed after first paint and could not prerender anything the visitor
   // hovered before that. In the HTML they parse with the document.
   const chromeHtml = iconsHtml + taskbarHtml + speculationHtml();
+  const histnavHtml = HISTNAV_HTML;
 
 
   // The sprite banner names the generator by NAME, never by PATH. icons.svg is
@@ -119,8 +120,10 @@ export function renderDesktopArtifacts(surfaces = readManifest().surfaces) {
     + `// tools/photos/gen-desktop-partial.ts from shell-data.ts and\n`
     + `// site-manifest.json. Do not hand-edit; run bun run gen:shell.\n`
     + `// DESKTOP_TOP opens <body>; DESKTOP_CHROME closes it with icons/taskbar.\n`
+    + `// DESKTOP_HISTNAV opens the page window's title bar (Back/Forward).\n`
     + `export const DESKTOP_TOP = ${JSON.stringify(desktopHtml)};\n`
     + `export const DESKTOP_CHROME = ${JSON.stringify(chromeHtml)};\n`
+    + `export const DESKTOP_HISTNAV = ${JSON.stringify(histnavHtml)};\n`
     + `export const SECTION_FAVICONS = ${JSON.stringify(sectionFavicons(), null, 2)};\n`;
 
   const spriteWidth = Math.max(...cells.map((cell) => cell.right));
@@ -139,7 +142,40 @@ export function renderDesktopArtifacts(surfaces = readManifest().surfaces) {
     `${SECTION_ICONS[item.label].replace("<svg ", '<svg width="32" height="32" ')}\n`,
   ]));
 
-  return { desktopHtml, chromeHtml, moduleSource, sprite, favicons };
+  return { desktopHtml, chromeHtml, histnavHtml, moduleSource, sprite, favicons };
+}
+
+// Back and Forward, at the head of the page window's title bar. nav.js used to
+// CREATE this span at boot, two animation frames after the static paint on
+// purpose, so the title text slid ~50px right on every windowed page after it
+// had painted (bun run cls: 65 of 65 pages at desktop width), and on a phone a
+// long caption wrapped onto a second line and pushed the document down 19px.
+// Baked into the HTML it has geometry at first paint, and nav.js only wires it.
+// Its CSS lives in luna.css, which hides it when scripting is off (dead buttons
+// otherwise) and below 720px, where the phone's own back gesture does the job
+// and 50px of a 370px caption is the difference between one line and two.
+export const HISTNAV_HTML = '<span class="axp-histnav">'
+  + '<button type="button" class="axp-back" aria-label="Back" title="Back"></button>'
+  + '<button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>';
+
+// Any baked histnav, canonical or from an older generator, so a markup change
+// converges on the next gen:shell run instead of stacking a second pair.
+const HISTNAV_BLOCK = /<span class="axp-histnav">(?:<button\b[^>]*><\/button>)*<\/span>/g;
+
+// The page window's title bar: the first `body > .window` (or .np-window) whose
+// first element child is a title bar, with comments and whitespace allowed
+// between (the homepage carries one). This is the element nav.js's
+// initWindowControls() resolves, and a string match rather than a parse keeps
+// every other byte of the authored page untouched. `data-no-histnav` on the
+// window opts it out, the same attribute nav.js honours.
+const WINDOW_TITLE_BAR = /(<div class="(?:window|np-window)(?:\s[^"]*)?"([^>]*)>(?:\s|<!--[\s\S]*?-->)*<div class="(?:title-bar|np-titlebar|titlebar)(?:\s[^"]*)?"[^>]*>)/;
+
+export function bakeHistnav(source, histnavHtml = HISTNAV_HTML) {
+  const stripped = source.replace(HISTNAV_BLOCK, "");
+  const match = stripped.match(WINDOW_TITLE_BAR);
+  if (!match || /\bdata-no-histnav\b/.test(match[2])) return stripped;
+  const at = match.index + match[1].length;
+  return stripped.slice(0, at) + histnavHtml + stripped.slice(at);
 }
 
 // A section's favicon is addressed by ROUTE, because that is what both consumers
@@ -165,7 +201,7 @@ export function patchStaticShell(source, artifacts) {
   if (!next.includes("</body>")) throw new Error("shell page has no </body>");
   next = next.replace(body[0], `${body[0]}\n${TOP_OPEN}${artifacts.desktopHtml}${TOP_CLOSE}`);
   next = next.replace("</body>", `${CHROME_OPEN}${artifacts.chromeHtml}${CHROME_CLOSE}\n</body>`);
-  return next;
+  return bakeHistnav(next, artifacts.histnavHtml);
 }
 
 export function staticShellPages() {

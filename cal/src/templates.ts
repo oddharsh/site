@@ -23,7 +23,7 @@
 // resolves in both. Emitted only under /coffee (see `onShell` in shell()): on
 // the bare cal.aadhar.sh fallback the shell's links would be cross-origin and
 // /nav.js 404s, so that host stays a standalone window, as it always has.
-import { DESKTOP_CHROME, DESKTOP_TOP } from "../../src/worker/lib/desktop.ts";
+import { DESKTOP_CHROME, DESKTOP_HISTNAV, DESKTOP_TOP } from "../../src/worker/lib/desktop.ts";
 
 const STYLES = `
 * { box-sizing: border-box; }
@@ -384,7 +384,7 @@ function shell(title, body, env) {
 </head>
 <body>${onShell ? DESKTOP_TOP : ""}
 <div class="window">
-  <div class="title-bar" aria-hidden="true">
+  <div class="title-bar" aria-hidden="true">${onShell ? DESKTOP_HISTNAV : ""}
     <span class="title-text"><span class="icon"></span>${esc(fullTitle)}</span>
     <span class="controls"
       ><span class="min" title="minimize"></span
