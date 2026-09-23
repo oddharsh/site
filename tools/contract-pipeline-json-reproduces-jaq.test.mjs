@@ -8,7 +8,7 @@
 import { readFile as fsReadFile, mkdir, mkdtemp, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 import { addCheckpoint, hashTiers, jqUri, mergeIndex, parseSpool, pretty, pyCompactJson, pyPrettyJson, sortKeysDeep, tierStem } from "./photos/pipeline-json.ts";
@@ -100,7 +100,9 @@ test("no photo shell script calls jaq on a code line, and no tool declares it", 
 // themselves. The heredocs were also diffed against the ports over five
 // scenarios on the real library (no-op, a mixed ingest, eleven re-encodes, a
 // corrupt map, a missing map) before either was replaced; this keeps the
-// halves that need no Python to re-check.
+// halves that need no Python to re-check. The corrupt-map scenario matched
+// Python then and deliberately does not now: the heredoc read it as `{}` and
+// pruned i/ to nothing, and hash-tiers refuses it instead (the test below).
 
 test("the Python-shaped serializers reproduce the committed hashes.json and checkpoints.json", async () => {
   const hashes = await readFile(new URL("public/images/hashes.json", ROOT), "utf8");
@@ -145,6 +147,68 @@ test("hash-tiers finds stems from any tier, merges rather than replaces, and pru
   assert.equal(tierStem("X-400.avif"), "X");
   assert.equal(tierStem("X-400.jpg"), "X-400");
   assert.equal(tierStem("hashes.json"), null);
+});
+
+test("hash-tiers refuses a map that exists and does not parse, and writes and deletes nothing", async () => {
+  // Every file in both directories, with its bytes, so "untouched" covers a
+  // copy, a prune AND a rewritten map.
+  const snapshot = async (dir) => Object.fromEntries(await Promise.all(
+    (await readdir(dir)).sort().map(async (f) => [f, await fsReadFile(path.join(dir, f), "utf8")])));
+  const fixture = async (mapBytes, { seeded = true } = {}) => {
+    const dir = await mkdtemp(path.join(tmpdir(), "pipeline-json-corrupt-"));
+    const src = path.join(dir, "images"), out = path.join(dir, "i"), map = path.join(src, "hashes.json");
+    await mkdir(src); await mkdir(out);
+    if (seeded) {
+      await writeFile(path.join(out, "OLD.aaaaaaaa.avif"), "old-a");
+      await writeFile(path.join(out, "OLD.bbbbbbbb.jpg"), "old-j");
+      await writeFile(path.join(out, "KEEP.cccccccc.jpg"), "keep-j");
+    }
+    await writeFile(path.join(src, "NEW.jpg"), "a fresh tier waiting to be addressed");
+    if (mapBytes !== null) await writeFile(map, mapBytes);
+    return { src, out, map };
+  };
+  const good = JSON.stringify({ KEEP: { j: "cccccccc" }, OLD: { a: "aaaaaaaa", j: "bbbbbbbb" } });
+  // The three ways a committed one-line map really arrives broken: a truncated
+  // write, a git conflict (no merge driver claims hashes.json, so the markers
+  // wrap the whole line), and an empty file.
+  const corrupt = {
+    truncated: good.slice(0, 30),
+    conflict: `<<<<<<< HEAD\n${good}\n=======\n${good.replace("cccccccc", "dddddddd")}\n>>>>>>> branch\n`,
+    empty: "",
+  };
+  for (const [breakage, bytes] of Object.entries(corrupt)) {
+    const { src, out, map } = await fixture(bytes);
+    const before = { src: await snapshot(src), out: await snapshot(out) };
+    const untouched = async (door) => {
+      assert.deepEqual(await snapshot(src), before.src, `${breakage} via ${door}: images/ untouched, map included`);
+      assert.deepEqual(await snapshot(out), before.out, `${breakage} via ${door}: i/ untouched`);
+    };
+    // Checked after EACH door, because a refusal that fires after the prune
+    // still throws, and would leave the second door a repaired map to accept.
+    assert.throws(() => hashTiers(src, out, map), /exists but is not valid JSON/, `${breakage}: refused`);
+    await untouched("hashTiers");
+    // The CLI is what hash-thumbnails.sh runs under `set -e`, so the refusal
+    // has to be a non-zero exit that names the file, not a stack trace.
+    const cli = spawnSync(process.execPath, [CLI, "hash-tiers", src, "--out-dir", out, "--map", map], { encoding: "utf8" });
+    assert.equal(cli.status, 1, `${breakage}: CLI exits 1`);
+    assert.match(cli.stderr, /^pipeline-json: .*hashes\.json exists but is not valid JSON/, `${breakage}: CLI names the file`);
+    await untouched("the CLI");
+  }
+
+  // Control 1: a MISSING map is a first run and still starts from {}.
+  const first = await fixture(null, { seeded: false });
+  hashTiers(first.src, first.out, first.map);
+  const minted = JSON.parse(await fsReadFile(first.map, "utf8"));
+  assert.deepEqual(Object.keys(minted), ["NEW"]);
+  assert.deepEqual(await readdir(first.out), [`NEW.${minted.NEW.j}.jpg`]);
+
+  // Control 2: what the refusal prevents. A VALID empty map on the same
+  // fixture is what `except Exception` handed the prune, and it deletes every
+  // tile the three corrupt maps above left standing.
+  const empty = await fixture("{}");
+  hashTiers(empty.src, empty.out, empty.map);
+  const survivors = await readdir(empty.out);
+  assert.deepEqual(survivors, [`NEW.${JSON.parse(await fsReadFile(empty.map, "utf8")).NEW.j}.jpg`], "the fixture can see the prune");
 });
 
 test("checkpoint-add mints the next vnum from the projection and refuses a reused slug", () => {

@@ -188,12 +188,25 @@ export function hashTiers(srcDir: string, outDir: string, mapPath: string): stri
   const h8 = (file: string) => crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex").slice(0, 8);
   const stems = [...new Set(fs.readdirSync(srcDir).map(tierStem).filter((s): s is string => Boolean(s)))].sort(byCodePoint);
 
-  // A missing or unreadable map starts empty, exactly as `except Exception`
-  // did. That fallback is inherited rather than endorsed: on a corrupt map the
-  // prune below deletes every /i/ file the new map does not name.
+  // A MISSING map starts empty, because a first run has none. A map that EXISTS
+  // and does not parse is refused here, above the first copy, so the run writes
+  // nothing and deletes nothing. This is the one place the port parts from the
+  // heredoc on purpose: Python read that case as `{}` (`except Exception`), and
+  // the prune below deletes every /i/ file the new map does not name, so an
+  // empty prior map reads as "all of /i/ is superseded". Measured on a scratch
+  // copy during #896: a corrupt map took i/ from 1,032 files to 1. The realistic
+  // way in is a git conflict, since hashes.json is one line and no merge driver
+  // claims it, so the markers cover the whole file. The fix is to restore the
+  // file, never to rebuild it from whatever sources are lying in images/.
   let loaded: Json = {};
   if (fs.existsSync(mapPath)) {
-    try { loaded = JSON.parse(fs.readFileSync(mapPath, "utf8")); } catch { loaded = {}; }
+    const raw = fs.readFileSync(mapPath, "utf8");
+    try { loaded = JSON.parse(raw); } catch (e) {
+      throw new Error(
+        `${mapPath} exists but is not valid JSON (${e instanceof Error ? e.message : String(e)}). ` +
+        "Refusing to prune /i/ against an empty map; restore it (git checkout -- public/images/hashes.json) and re-run.",
+      );
+    }
   }
   // Python crashed on a map that parsed to anything but an object of objects
   // (`.items()` on a list, `.update` on a string); refusing keeps that loud.
