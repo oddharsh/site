@@ -412,12 +412,15 @@
   }
 
   // ── screen saver ────────────────────────────────────────────────────────────
-  // XP's default was "Wait: 10 minutes". The hot path is one timestamp store per
-  // input event: nothing is cleared or re-armed while the visitor is active, and
-  // the one timer re-schedules itself for whatever is left when it wakes early.
+  // One minute, well under XP's default "Wait: 10 minutes", because a visit to a
+  // personal site is short and a saver nobody ever sees is not a feature. Scrolling,
+  // typing and pointer movement all reset it, so an active reader never meets it.
+  // The hot path is one timestamp store per input event: nothing is cleared or
+  // re-armed while the visitor is active, and the one timer re-schedules itself
+  // for whatever is left when it wakes early.
   // /nav-pipes.js is fetched only when the wait actually runs out, so a visitor
   // who never goes idle pays for a timer and nothing else.
-  var SAVER_WAIT = 10 * 60 * 1000;
+  var SAVER_WAIT = 60 * 1000;
   var saverLast = 0, saverTimer = 0, saverOn = false;
   var saverPromise = /** @type {Promise<any> | null} */ (null);
   function saverPoke() { saverLast = performance.now(); }

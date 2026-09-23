@@ -1,7 +1,7 @@
 // nav-pipes.js — the 3D Pipes screen saver (sspipes.scr), as an idle island.
 //
 // nav.js owns WHEN: it keeps one timestamp per input event and imports this
-// module only after ten quiet minutes (XP's default "Wait"), or when the Run
+// module only after one quiet minute (XP defaulted to ten), or when the Run
 // palette's "3D Pipes" row asks for a preview. This module owns WHAT: one
 // top-layer overlay, one WebGL2 context, and the teardown when the visitor
 // comes back. Nothing here loads for a visitor who never goes idle.
