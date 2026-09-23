@@ -32,7 +32,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { renderUnderstanding, validatePageSpec } from "../content/page-contract.mjs";
-import { DESKTOP_CHROME, DESKTOP_TOP } from "../../src/worker/lib/desktop.ts";
+import { DESKTOP_CHROME, DESKTOP_HISTNAV, DESKTOP_TOP } from "../../src/worker/lib/desktop.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..", "..");   // pipelines/<name>/ -> repo root
@@ -144,7 +144,7 @@ ${spec.demoCss ? spec.demoCss + "\n" : ""}</style>
 <body>
 <!-- axp:desktop -->${DESKTOP_TOP}<!-- /axp:desktop -->
 <div class="window">
-  <div class="title-bar" aria-hidden="true">
+  <div class="title-bar" aria-hidden="true">${DESKTOP_HISTNAV}
     <span class="title-text"><span class="icon"></span>aadhar.sh/lwe &middot; ${titleSuffix}</span>
     <span class="controls"><span class="min" title="minimize"></span><span class="max" title="maximize"></span><a class="close" href="/lwe" title="back to Learning With Errors" aria-label="back to Learning With Errors"></a></span>
   </div>

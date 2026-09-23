@@ -118,6 +118,13 @@ export type LunaPageOptions = {
   closeLabel?: string;
 };
 
+// The same bytes as desktop.ts's DESKTOP_HISTNAV, written as an `html` literal
+// rather than spliced through the unescaped door, whose use count
+// (config/unsafe-html-baseline.json) may only go down. It has no interpolation,
+// so it is Html by construction, and contract-histnav-ships-in-the-html holds
+// the two copies byte-equal.
+const HISTNAV = html`<span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>`;
+
 export function lunaPage({
   title,
   path,
@@ -177,6 +184,10 @@ export function lunaPage({
     ? html`\n<meta name="robots" content="${robots}">`
     : EMPTY;
   const scriptHtml = html`${scripts}\n<script src="/nav.js" defer></script>`;
+  // Back/Forward ship in the HTML so the caption has its final geometry at first
+  // paint (gen-desktop-partial.ts, HISTNAV_HTML, says what injecting it cost).
+  // A window that opts out with data-no-histnav gets none, as nav.js would.
+  const histnavHtml = /\bdata-no-histnav\b/.test(String(windowAttrs)) ? EMPTY : HISTNAV;
 
   // The Markdown twin, advertised only where the build actually wrote one, and
   // offered as this object's first task for the same reason.
@@ -214,7 +225,7 @@ ${unsafeHtml(css || "")}
 <body>
 ${unsafeHtml(DESKTOP_TOP)}
 <div class="window${windowClass ? " " + windowClass : ""}"${windowAttrs === EMPTY ? EMPTY : html` ${windowAttrs}`}>
-  <div class="title-bar">
+  <div class="title-bar">${histnavHtml}
     <span class="title-text${titleClass ? " " + titleClass : ""}"><span class="icon"></span>${windowTitle}</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="${closeHref}" title="${closeTitle}" aria-label="${closeLabel}"></a></span>
   </div>${addressHtml}

@@ -497,7 +497,7 @@ footer .signature small { color: oklch(56.93% 0 0); }
      ~0.04 shift). spacer:flex-1 pins the tray right. luna.css:458/474/477. */
   #axp-pins    { display: flex; align-items: center; min-width: 0; gap: 3px; padding: 0 3px; }
   #axp-spacer  { flex: 1; }
-  #axp-tray    { flex: 0 0 auto; display: flex; align-items: center; padding: 0 8px 0 7px; }
+  #axp-tray    { flex: 0 0 auto; display: flex; align-items: center; padding: 0 14px 0 13px; border-left: 1px solid transparent; letter-spacing: .02em; }
   /* ...and the taskbar's INTRINSIC WIDTHS, which is a separate race from the flex
      row above. The bar ships fully SSR'd, so before luna lands it is real content
      styled by nothing: labels render at the body's 16px Verdana instead of 11px
@@ -510,11 +510,18 @@ footer .signature small { color: oklch(56.93% 0 0); }
      0.0061 at 390px, 0.1958 at 820px. luna.css:440/448/463/489 own the visuals;
      these are only the properties that decide a box's SIZE. Keep them in sync. */
   #axp-taskbar { font-family: var(--font-ui, Tahoma, Verdana, Geneva, sans-serif); font-size: 11px; }
-  #axp-start   { display: flex; align-items: center; gap: 6px; padding: 0 16px 2px 9px; }
+  /* The orb's caption font and margin, the chip's line-height, the tray's
+     padding and each pin's 1px border had drifted from luna.css here (the tray
+     still said 0 8px 0 7px), so on the runs luna lost the race the orb grew
+     12px, the pins moved 18px and grew 2px apiece, and the tray grew 13px when
+     it landed: 9 of 40 natural loads under bun run cls --hold none. The border
+     colours are transparent on purpose; this block mirrors SIZE, and luna
+     paints the lines. */
+  #axp-start   { display: flex; align-items: center; gap: 6px; padding: 0 16px 2px 9px; margin-right: 6px; font-family: var(--font-caption, 'Trebuchet MS', Verdana, Geneva, sans-serif); font-style: italic; font-weight: bold; font-size: 14px; }
   #axp-cone    { flex: 0 0 auto; width: 15px; height: 15px; margin-right: 1px; }
-  #axp-start .axp-kbd { padding: 0 0 0 6px; margin-left: 5px; font-size: 9.5px; letter-spacing: .04em; }
-  .axp-kbd     { display: inline-flex; align-items: center; white-space: nowrap; }
-  .axp-pin     { display: flex; align-items: center; gap: 6px; height: 23px; padding: 0 10px; flex: 0 0 auto; font-size: 11px; }
+  #axp-start .axp-kbd { padding: 0 0 0 6px; margin-left: 5px; border-left: 1px solid transparent; font-weight: normal; font-size: 9.5px; letter-spacing: .04em; }
+  .axp-kbd     { display: inline-flex; align-items: center; white-space: nowrap; font-family: var(--font-ui, Tahoma, Verdana, Geneva, sans-serif); font-style: normal; font-weight: bold; font-size: 9px; line-height: 1; }
+  .axp-pin     { display: flex; align-items: center; gap: 6px; height: 23px; padding: 0 10px; flex: 0 0 auto; font-size: 11px; border: 1px solid transparent; }
   .axp-pin .fav { width: 15px; height: 15px; flex: 0 0 auto; display: flex; line-height: 0; }
   .axp-pin .fav img { width: 100%; height: 100%; display: block; }
   .axp-pin .lbl { overflow: hidden; text-overflow: ellipsis; max-width: 92px; }
@@ -529,6 +536,15 @@ footer .signature small { color: oklch(56.93% 0 0); }
   /* the ≤560px overrides too, or narrow viewports race the other way (labels
      visible pre-luna, hidden after). mirrors luna.css:636. */
   @media (max-width: 560px) { .axp-pin .lbl { display: none; } .axp-pin { padding: 0 7px; } }
+  /* the Back/Forward pair baked into the title bar. Without its size here the
+     caption paints with two 16x6 native buttons and grows 15px taller when luna
+     lands (bun run cls --hold none on /, 1 run in 20). The face colour keeps it
+     from flashing native grey; luna.css (search "back / forward") owns the gel
+     and the hover, and its (scripting: none) arm needs no copy, since noscript
+     loads luna render-blocking. */
+  .axp-histnav { display: inline-flex; gap: 2px; margin-right: 6px; flex: 0 0 auto; align-items: center; }
+  .axp-histnav button { box-sizing: border-box; width: 21px; height: 21px; padding: 0; margin: 0; font: 0/0 a; color: transparent; border: 1px solid #6696eb; border-radius: 3px; background: #3e73f5; }
+  @media (width < 720px) { .axp-histnav { display: none; } }
 
 </style>
 <!-- luna.css applies non-render-blocking: the visible window above is fully
@@ -556,7 +572,7 @@ footer .signature small { color: oklch(56.93% 0 0); }
 <div class="window">
 
   <!-- fake XP title bar — period chrome. the "controls" are decorative. -->
-  <div class="title-bar">
+  <div class="title-bar"><span class="axp-histnav"><button type="button" class="axp-back" aria-label="Back" title="Back"></button><button type="button" class="axp-fwd" aria-label="Forward" title="Forward"></button></span>
     <span class="title-text"><span class="icon"></span>aadhar.sh</span>
     <span class="controls"><span class="min" aria-hidden="true"></span><span class="max" aria-hidden="true"></span><a class="close" href="https://www.youtube.com/watch?v=dQw4w9WgXcQ" title="close" aria-label="close"></a></span>
   </div>
