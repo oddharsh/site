@@ -10,7 +10,9 @@ export async function sign(message, secret) {
 export async function verify(message, signature, secret) {
   try {
     const key = await importKey(secret);
-    const sig = b64urlDecode(signature);
+    // base64url alone: a "+" or "/" is a spelling sign() never emits, so it throws
+    // here and the link fails closed instead of decoding to the same bytes
+    const sig = Uint8Array.fromBase64(signature, { alphabet: "base64url" });
     return await crypto.subtle.verify("HMAC", key, sig, new TextEncoder().encode(message));
   } catch {
     return false;
@@ -24,13 +26,4 @@ async function importKey(secret) {
     { name: "HMAC", hash: "SHA-256" },
     false, ["sign", "verify"]
   );
-}
-
-function b64urlDecode(s) {
-  s = s.replace(/-/g, "+").replace(/_/g, "/");
-  while (s.length % 4) s += "=";
-  const binary = atob(s);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return bytes.buffer;
 }

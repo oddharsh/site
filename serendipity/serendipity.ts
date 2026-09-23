@@ -38,19 +38,16 @@ function avatar(name, size = 30) {
   return `<span class="ava" style="--ab:oklch(72% 0.13 ${h});width:${size}px;height:${size}px;font-size:${Math.round(size*0.4)}px" aria-hidden="true">${esc(initials)}</span>`;
 }
 
+// Both helpers are Date-only on purpose. They carried a Temporal branch behind
+// `typeof Temporal !== "undefined"`, which never ran in production (workerd
+// ships V8's Temporal switched off, with no compat flag to turn it on) and
+// would have run the day Cloudflare flipped it. That already happened once:
+// cloudflare/workerd#6907 exposed a Temporal whose clock read epoch 0, which
+// would have put every past event here at "today". A vendor switch should not
+// be able to change which code path renders a page, so a watch reports the
+// flip instead (`workerd-exposes-temporal`, tools/lib/upstream-watches.ts).
 function relativeTime(date) {
-  // whole-days elapsed, via Temporal when the runtime ships it (enable_temporal
-  // compat flag), else the plain epoch-ms delta. same output either way.
-  let days;
-  try {
-    // Bare global: referencing an undeclared `Temporal` to hand it to a parser
-  // throws ReferenceError, so typeof is the only operator that can ask.
-  // oxlint-disable-next-line anti-slop/no-runtime-typeof
-  if (typeof Temporal !== "undefined" && date.toTemporalInstant) {
-      days = Math.floor(Temporal.Now.instant().since(date.toTemporalInstant()).total({ unit: "hour" }) / 24);
-    }
-  } catch (e) {}
-  if (days === undefined) days = Math.floor((Date.now() - date.getTime()) / 86400000);
+  const days = Math.floor((Date.now() - date.getTime()) / 86400000);
   if (days <= 0) return "today";
   if (days === 1) return "yesterday";
   if (days < 7) return `${days}d ago`;
@@ -59,24 +56,18 @@ function relativeTime(date) {
   return `${Math.floor(days / 365)}y ago`;
 }
 
+// Pinned to UTC, which is this Worker's clock: an instant shows in UTC and a
+// zoneless wall-clock string shows as recorded. A zoneless string is read AS
+// UTC rather than as the host's local time, so the output is the same in
+// workerd and in a test on a workstation in any timezone. Matches what the
+// retired Temporal branch printed, byte for byte (checked on six shapes, two
+// host zones, 2026-09-23).
 function fmtDateTime(s) {
   if (!s) return "";
-  const opt: Intl.DateTimeFormatOptions = { weekday: "short", month: "short", day: "numeric" };
-  const topt: Intl.DateTimeFormatOptions = { hour: "numeric", minute: "2-digit" };
-  // Temporal when available: a wall-clock string shows as recorded; an instant
-  // shows in UTC (matching this Worker's clock). falls back to Date otherwise.
-  try {
-    // Bare global, same as above: only typeof can ask whether it exists.
-  // oxlint-disable-next-line anti-slop/no-runtime-typeof
-  if (typeof Temporal !== "undefined") {
-      const z = s.replace(" ", "T");
-      const pdt = /[zZ]|[+-]\d{2}:?\d{2}$/.test(z)
-        ? Temporal.Instant.from(z).toZonedDateTimeISO("UTC").toPlainDateTime()
-        : Temporal.PlainDateTime.from(z);
-      return pdt.toLocaleString("en-US", opt) + " · " + pdt.toLocaleString("en-US", topt);
-    }
-  } catch (e) {}
-  const d = new Date(s);
+  const opt: Intl.DateTimeFormatOptions = { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" };
+  const topt: Intl.DateTimeFormatOptions = { hour: "numeric", minute: "2-digit", timeZone: "UTC" };
+  const z = String(s).replace(" ", "T");
+  const d = new Date(/T\d/.test(z) && !/[zZ]|[+-]\d{2}:?\d{2}$/.test(z) ? z + "Z" : z);
   if (isNaN(d.getTime())) return "";
   return d.toLocaleDateString("en-US", opt) + " · " + d.toLocaleTimeString("en-US", topt);
 }
@@ -1927,7 +1918,7 @@ async function signCoverUrl(rawUrl, secret) {
 async function verifyCoverUrl(rawUrl, sig, secret) {
   if (!sig) return false;
   let bytes;
-  try { bytes = Uint8Array.from(atob(sig.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0)); }
+  try { bytes = Uint8Array.fromBase64(sig, { alphabet: "base64url" }); }
   catch { return false; }
   return crypto.subtle.verify("HMAC", await coverKey(secret), bytes, _enc.encode(rawUrl));
 }
@@ -2120,8 +2111,7 @@ async function mcpSearchPeople(d, q, limit) {
   ).all(...ids);
   const byPerson = new Map();
   for (const m of memberships) {
-    if (!byPerson.has(m.attendee_id)) byPerson.set(m.attendee_id, []);
-    byPerson.get(m.attendee_id).push({ id: m.event_id, name: m.event_name, start_at: m.start_at || null, is_host: !!Number(m.is_host) });
+    byPerson.getOrInsertComputed(m.attendee_id, () => []).push({ id: m.event_id, name: m.event_name, start_at: m.start_at || null, is_host: !!Number(m.is_host) });
   }
   const now = Date.now();
   return people.map((p) => {

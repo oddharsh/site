@@ -257,13 +257,15 @@ bun run canary:browsers   # /garage/horizon's probes in stable vs prerelease eng
                           # with production; `-- --offline` skips the second. Their
                           # first run found JXL decoding by default in Canary 155.
 #
-# THE WATCHES (2026-09-15) are the inverse of a gate: eleven probes that read
+# THE WATCHES (2026-09-15) are the inverse of a gate: twelve probes that read
 # FALSE on the pinned toolchain today, one per upstream fix this repo is
 # waiting on (tools/lib/upstream-watches.ts: seven bun issues from Bun.Image
 # option validation to fetch honouring `dispatcher`, oxc-minify reaching SWC
 # parity, workerd#7106's zstd dictionary, `wrangler types --x-new-config`, and
 # since 2026-09-22 the vitest-plugin at the wrangler pin's own commit admitting
-# Vitest 5, which is the cue to revisit #703). Each leg reads every watch
+# Vitest 5, which is the cue to revisit #703, and since 2026-09-23 workerd
+# exposing a Temporal whose clock is sane, the switch workerd#6907 flipped
+# once with Temporal.Now at epoch 0). Each leg reads every watch
 # under the PIN and under the candidate; a row that differs is a `changed`
 # night naming the fix and the build it arrived in, and a row landed in both
 # is the cue to retire it. The nightly pin PRs also carry a DIGEST, the

@@ -2733,13 +2733,18 @@ function lensDetectDictionary(headers) {
 // type-65 rdata as RFC 3597 generic form (`\# <len> <hex...>`), so read the SvcParams
 // off the wire bytes and look for key 5. A presentation-form answer (`... ech="..."`)
 // from some other resolver is caught as a substring fallback.
-function svcbHasEch(dataStr) {
+//
+// RFC 3597 lets each hex word carry any even number of digits. Cloudflare happens to
+// emit one byte per word, the only grouping a parseInt per word read correctly, so the
+// words are joined and read as one byte string; an odd digit count is unparsed.
+export function svcbHasEch(dataStr) {
   const s = String(dataStr || "").trim();
   if (/(?:^|[\s"])ech=/i.test(s)) return { ech: true, parsed: true };
   const m = s.match(/^\\#\s+\d+\s+([0-9a-fA-F\s]+)$/);
   if (!m) return { ech: false, parsed: false };
-  const bytes = m[1].trim().split(/\s+/).map((h) => parseInt(h, 16));
-  if (bytes.some((b) => Number.isNaN(b))) return { ech: false, parsed: false };
+  let bytes;
+  try { bytes = Uint8Array.fromHex(m[1].replace(/\s+/g, "")); }
+  catch { return { ech: false, parsed: false }; }
   let i = 2;                                   // skip 2-byte SvcPriority
   while (i < bytes.length) {                    // skip the TargetName (length-prefixed labels, 0x00-terminated)
     const l = bytes[i];

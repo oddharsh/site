@@ -4,6 +4,7 @@
 // These pin the three things that promise rests on: the hash moves exactly when
 // the request does, a failure writes nothing (so absence reads as unread rather
 // than as "no topic"), and a failure says which kind it was.
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { assert, test } from "./contract-shared.ts";
 import {
@@ -39,6 +40,9 @@ test("one event per request, with the pinned model and a bounded description", (
 
 test("the input hash moves when the event, the taxonomy or the model moves, and only then", async () => {
   const base = await tagInputHash(buildTagRequest(EV));
+  // lowercase SHA-256 hex of the exact request, checked against node:crypto rather than
+  // the Worker's own encoder, so every tag already stored under it keeps its key
+  assert.equal(base, createHash("sha256").update(JSON.stringify(buildTagRequest(EV))).digest("hex"));
   assert.equal(await tagInputHash(buildTagRequest({ ...EV })), base, "same event, same hash");
   assert.notEqual(await tagInputHash(buildTagRequest({ ...EV, description: EV.description + " Now with talks." })), base);
   const req = buildTagRequest(EV);

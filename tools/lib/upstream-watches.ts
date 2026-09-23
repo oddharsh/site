@@ -66,6 +66,7 @@ import { dirname, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { type Reading, runWatch as measureWatch, type Watch } from "timbrado/watch";
 
+import { asNumber, asRecord, asText } from "../../src/worker/lib/parse.ts";
 import { OXC_MINIFY_OPTIONS } from "./oxc-minify-options.ts";
 
 export type { Watch, WatchResult } from "timbrado/watch";
@@ -296,4 +297,36 @@ export const WRANGLER_WATCHES: Pick<Watch, "name" | "issue" | "landed" | "measur
     landed: "the @cloudflare/vitest-plugin build published at the wrangler pin's own workers-sdk commit declares a vitest peer range that admits 5.0.0, so the Worker suite can move to Vitest 5 with one wrangler, one miniflare and one workerd in the tree (#703's property)",
     measured: "2026-09-22, via pkg.pr.new: 6906bf0 (the pin) and cd7508c (main) both `^4.1.0`, false; the control is PR #15500's own build 7b89dc4, `^4.1.11 || ^5.0.0`, true",
   },
+  {
+    // Not a fix this repository filed. It watches a vendor switch that already
+    // flipped once without notice: cloudflare/workerd#6907 exposed Temporal in
+    // production with `Temporal.Now` stuck at epoch 0, and every `typeof
+    // Temporal` guard in a Worker changed paths that week. The CLOCK is part of
+    // "landed", so a rerun of that build reads not-yet rather than landed.
+    name: "workerd-exposes-temporal",
+    issue: "https://github.com/cloudflare/workerd/issues/6907",
+    landed: "the workerd this wrangler ships exposes a Temporal under production's compatibility date and flags, and `Temporal.Now.instant()` agrees with Date.now() within a minute (tools/workerd-temporal-probe.ts); until then Worker code here uses Date and the client islands keep their typeof guard",
+    measured: "2026-09-23, workerd 1.20260921.1 via wrangler a1f05a3 at compatibility_date 2026-06-01: Temporal absent; V8's harmony_temporal is compiled in and no compat flag enables it",
+  },
 ];
+
+/**
+ * Reads tools/workerd-temporal-probe.ts's one JSON line. Landed means present
+ * AND sane: a Temporal whose clock is more than a minute off Date.now() is the
+ * #6907 failure, and reading it as landed would announce the one build this
+ * watch exists to warn about. A line that does not parse is `null`, which by
+ * rule 3 moves nothing.
+ */
+export function interpretTemporalProbe(stdout: unknown): { landed: boolean | null; detail: string } {
+  let raw: unknown = null;
+  try { raw = JSON.parse(String(stdout).trim().split("\n").at(-1) ?? ""); } catch { /* left null on purpose */ }
+  const parsed = asRecord(raw);
+  if (!parsed || (parsed.present !== true && parsed.present !== false)) return { landed: null, detail: "probe did not run" };
+  const date = asText(parsed.date);
+  const at = date ? ` at ${date}` : "";
+  if (parsed.present === false) return { landed: false, detail: `Temporal absent${at}` };
+  const skew = asNumber(parsed.skewMs);
+  if (skew === null) return { landed: false, detail: `Temporal present${at} but Temporal.Now threw` };
+  const sane = Math.abs(skew) <= 60_000;
+  return { landed: sane, detail: `Temporal present${at}, clock ${sane ? "agrees" : "is off"} by ${skew} ms` };
+}

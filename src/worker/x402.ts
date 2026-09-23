@@ -46,8 +46,9 @@ export async function handleLlmsFull(request: SiteRequest, env: Env, _ctx: Execu
       " in USDC (" + requirements.network + "). The llms.txt map next door is free.");
   }
 
+  // JSON is UTF-8, and atob's Latin-1 string turned any non-ASCII byte in it to mojibake
   let payload = null;
-  try { payload = JSON.parse(atob(paymentHeader)); } catch (_e) {
+  try { payload = JSON.parse(new TextDecoder().decode(Uint8Array.fromBase64(paymentHeader))); } catch (_e) {
     return deny(requirements, "X-PAYMENT did not decode as base64 JSON.");
   }
 
@@ -75,8 +76,11 @@ export async function handleLlmsFull(request: SiteRequest, env: Env, _ctx: Execu
       (settle.json && settle.json.error ? ": " + settle.json.error : "."));
   }
 
+  // UTF-8 before base64. btoa threw on anything above U+00FF, and this line runs after
+  // the payment settled, so one curly quote from the facilitator charged the payer for
+  // an error. Identical bytes to btoa for every ASCII receipt.
   return llmsFullResponse(request, env, {
-    "x-payment-response": btoa(JSON.stringify(settle.json)),
+    "x-payment-response": new TextEncoder().encode(JSON.stringify(settle.json)).toBase64(),
   });
 }
 
