@@ -282,8 +282,8 @@ const variantEtag = (etag, suffix) => {
 
 
 // Available-Dictionary is a Structured Field Byte Sequence: `:<base64 sha256>:`. Returns
-// the first 16 hex chars of that hash, which is the tag gen-shell-deltas.mjs put in the
-// .dcb filename, or null if the header is absent or malformed.
+// the first 16 hex chars of that hash, which is the tag build.ts puts in each .dcz
+// filename, or null if the header is absent or malformed.
 //
 // Deliberately strict. This value selects a file path, so anything unexpected must become
 // null rather than something that could escape the /ad/ prefix: the base64 is length-
@@ -295,11 +295,9 @@ function dictionaryTag(request) {
   const m = raw.trim().match(/^:([A-Za-z0-9+/=]+):$/);
   if (!m) return null;
   try {
-    const bin = atob(m[1]);
-    if (bin.length !== 32) return null;          // not a SHA-256 digest
-    let hex = "";
-    for (let i = 0; i < 16; i++) hex += bin.charCodeAt(i).toString(16).padStart(2, "0");
-    return hex.slice(0, 16);
+    const digest = Uint8Array.fromBase64(m[1]);
+    if (digest.length !== 32) return null;       // not a SHA-256 digest
+    return digest.subarray(0, 8).toHex();
   } catch { return null; }
 }
 
@@ -309,7 +307,7 @@ async function serveDictionaryDelta(url, ext, request, env) {
   const tag = dictionaryTag(request);
   if (!tag) return null;
 
-  // /a/<base>.<hash8>.<ext> -> /ad/<base>.<hash8>.<tag>.dcb
+  // /a/<base>.<hash8>.<ext> -> /ad/<base>.<hash8>.<tag>.dcz
   const stem = url.pathname.slice("/a/".length).replace(new RegExp(`\\.${ext}$`), "");
   let res;
   try {

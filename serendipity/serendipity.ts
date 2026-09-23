@@ -1927,7 +1927,7 @@ async function signCoverUrl(rawUrl, secret) {
 async function verifyCoverUrl(rawUrl, sig, secret) {
   if (!sig) return false;
   let bytes;
-  try { bytes = Uint8Array.from(atob(sig.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0)); }
+  try { bytes = Uint8Array.fromBase64(sig, { alphabet: "base64url" }); }
   catch { return false; }
   return crypto.subtle.verify("HMAC", await coverKey(secret), bytes, _enc.encode(rawUrl));
 }
@@ -2120,8 +2120,7 @@ async function mcpSearchPeople(d, q, limit) {
   ).all(...ids);
   const byPerson = new Map();
   for (const m of memberships) {
-    if (!byPerson.has(m.attendee_id)) byPerson.set(m.attendee_id, []);
-    byPerson.get(m.attendee_id).push({ id: m.event_id, name: m.event_name, start_at: m.start_at || null, is_host: !!Number(m.is_host) });
+    byPerson.getOrInsertComputed(m.attendee_id, () => []).push({ id: m.event_id, name: m.event_name, start_at: m.start_at || null, is_host: !!Number(m.is_host) });
   }
   const now = Date.now();
   return people.map((p) => {
