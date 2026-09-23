@@ -168,7 +168,13 @@ const HISTNAV_BLOCK = /<span class="axp-histnav">(?:<button\b[^>]*><\/button>)*<
 // initWindowControls() resolves, and a string match rather than a parse keeps
 // every other byte of the authored page untouched. `data-no-histnav` on the
 // window opts it out, the same attribute nav.js honours.
-const WINDOW_TITLE_BAR = /(<div class="(?:window|np-window)(?:\s[^"]*)?"([^>]*)>(?:\s|<!--[\s\S]*?-->)*<div class="(?:title-bar|np-titlebar|titlebar)(?:\s[^"]*)?"[^>]*>)/;
+//
+// A comment body is `(?:[^-]|-(?!->))*`, which cannot contain `-->`, rather than
+// a lazy `[\s\S]*?`. The lazy form could swallow `--><!--` too, so a run of N
+// comments had exponentially many parses and a near-miss backtracked through
+// all of them (CodeQL, code-scanning alert 109). This form parses each comment
+// exactly one way.
+const WINDOW_TITLE_BAR = /(<div class="(?:window|np-window)(?:\s[^"]*)?"([^>]*)>(?:\s|<!--(?:[^-]|-(?!->))*-->)*<div class="(?:title-bar|np-titlebar|titlebar)(?:\s[^"]*)?"[^>]*>)/;
 
 export function bakeHistnav(source, histnavHtml = HISTNAV_HTML) {
   const stripped = source.replace(HISTNAV_BLOCK, "");
