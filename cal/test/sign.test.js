@@ -32,6 +32,13 @@ describe("sign/verify — approve/decline link auth", () => {
     expect(await verify("approve:abc123", sig, "a-rotated-secret")).toBe(false);
   });
 
+  it("rejects the fixed vector re-spelled in the standard alphabet", async () => {
+    // "/" is the standard alphabet's spelling of the six bits "_" carries, so the
+    // hand-rolled decoder this replaced mapped both to the same bytes and let it through
+    const respelled = "4IVM4ftd9T5CfZ6ziuY0eO0YsrDq4G0/EGY1nM77AVo";
+    expect(await verify("approve:abc123", respelled, SECRET)).toBe(false);
+  });
+
   it("returns false (never throws) on a malformed/empty signature", async () => {
     expect(await verify("approve:abc123", "!!!not base64!!!", SECRET)).toBe(false);
     expect(await verify("approve:abc123", "", SECRET)).toBe(false);

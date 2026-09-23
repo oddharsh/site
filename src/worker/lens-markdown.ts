@@ -109,7 +109,7 @@ export const AGENT_ACCEPTS = [
 // could not honestly return different answers anyway.
 export function probePlan() {
   const seen = new Map();
-  const add = (id, accept) => { if (!seen.has(accept)) seen.set(accept, { id, accept }); return seen.get(accept).id; };
+  const add = (id, accept) => seen.getOrInsertComputed(accept, () => ({ id, accept })).id;
 
   add("control", BROWSER_ACCEPT);
   add("markdown", "text/markdown");
