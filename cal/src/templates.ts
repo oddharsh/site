@@ -3,6 +3,16 @@
 // page-specific rules live inline; shared Luna window chrome comes from the
 // cacheable /luna.css stylesheet.
 //
+// That link is RELATIVE, like the /nav.js one beside it. It was absolute
+// (https://aadhar.sh/luna.css) so that cal.aadhar.sh could reach it, and that
+// never worked: the site's CSP says style-src 'self', which on cal.aadhar.sh
+// means cal.aadhar.sh, so the browser refused the cross-origin sheet there too
+// (measured on production 2026-09-23). What the absolute URL did do was break
+// every other host. Under wrangler dev and on a preview URL /coffee fetched
+// PRODUCTION's luna.css, the CSP refused it, and the page painted with no shell
+// styling until nav.js booted: bun run cls read that as a 0.345 layout shift,
+// the worst on the site, and production could not reproduce it.
+//
 // design vocab:
 //   - .xp-window           outer panel, blue title bar + chrome buttons
 //   - .title-bar        title strip with glossy gel min/max/close controls
@@ -375,8 +385,8 @@ function shell(title, body, env) {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#2D78BD">
-<link rel="preload" as="style" href="https://aadhar.sh/luna.css">
-<link rel="stylesheet" href="https://aadhar.sh/luna.css">
+<link rel="preload" as="style" href="/luna.css">
+<link rel="stylesheet" href="/luna.css">
 <title>${esc(fullTitle)}</title>
 <meta name="description" content="let's grab coffee or a bagel with ${esc(env.HOST_NAME)} in NYC. requests are reviewed by hand.">
 <link rel="icon" type="image/svg+xml" href="/section-icons/coffee.svg">

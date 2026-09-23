@@ -199,8 +199,10 @@ bun run perf:snapshot row base.json
 # page on desktop slides its title 50-56px when nav.js injects Back/Forward after
 # paint (bootAfterStaticPaint waits two frames on purpose), and on a phone four
 # garage pages wrap the title bar and push content down 19px (CLS 0.0525).
-# /coffee reads 0.35 LOCALLY ONLY: cal links https://aadhar.sh/luna.css, which is
-# cross-origin on localhost, so the page renders unstyled. Production reads 0.0004.
+# /coffee read 0.35 LOCALLY ONLY until 2026-09-23: cal linked luna.css by absolute
+# https://aadhar.sh URL, which style-src 'self' refuses off that host, so localhost
+# and preview URLs painted it unstyled. The link is relative now and the local
+# reading matches production's.
 bun run cls --url http://localhost:8799            # every registered page, desktop + phone
 bun run cls --paths / --hold none --runs 20        # natural loads: how often, not whether
 
