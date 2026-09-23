@@ -1619,6 +1619,54 @@ let dressPage: (html: string, rel: string) => { html: string; addedLink: boolean
   console.log(`explorer chrome: address bar + task pane on ${dressed} staged pages; ${linked} advertise a Markdown twin; ${twinPaths.length} twin paths handed to the Worker`);
 }
 
+// 1g3) /llms-full.txt, the map plus every writing post and every Garage and LWE
+// explainer, inlined.
+//
+// Build output on the twins' argument, and it reads the twins 1g just wrote
+// rather than re-extracting anything, so each explainer here is byte-for-byte
+// what its `.md` URL serves. The Worker used to assemble the writing half per
+// request, one ASSETS lookup per post; inlining 39 explainers that way would
+// spend most of Workers Free's 50-subrequest ceiling (gotcha 36) on one route.
+// Staged at the path the route shadows: /llms-full.txt is run_worker_first, so
+// the x402 handler is the only door to it.
+//
+// Floors, because every failure here is an absence: a post whose .txt did not
+// stage, or a section whose twins stopped generating, would otherwise ship a
+// shorter file that reads as complete.
+{
+  const { renderLlmsFull, WRITING_HEADING } = await import("../src/worker/lib/llms-full.ts");
+  const { INDEXED_SECTIONS, readManifest, twinPath } = await import("./gen-md-twins.ts");
+  const map = await readFile(`${OUT}/public/llms.txt`, "utf8");
+  const posts = JSON.parse(await readFile(`${OUT}/public/writing/posts.json`, "utf8"));
+  const writing = await Promise.all(posts.map(async (p) => ({
+    title: p.title, date: p.date, path: `/writing/${p.slug}.txt`,
+    body: await readFile(`${OUT}/public/writing/${p.slug}.txt`, "utf8"),
+  })));
+  if (!writing.length) throw new Error("llms-full: posts.json staged no writing posts");
+
+  const manifest = readManifest(".");
+  const sections = [{ heading: WRITING_HEADING, docs: writing }];
+  const counts: string[] = [];
+  for (const section of INDEXED_SECTIONS) {
+    // Same order as the section's own llms.txt: the section page, then the
+    // registry order. A surface with no twin (none today) is left out, exactly
+    // as that index lists it under "HTML only".
+    const own = manifest.surfaces.filter((s) => s.section === section);
+    const head = own.find((s) => s.kind === "section") || own[0];
+    const docs = [head, ...own.filter((s) => s !== head)].flatMap((s) => {
+      const body = twinFiles.get(twinPath(s.path));
+      return body ? [{ title: s.title, path: twinPath(s.path), body }] : [];
+    });
+    if (docs.length < 10) throw new Error(`llms-full: only ${docs.length} ${section} twins to inline (expected 10+) — did step 1g stop writing them?`);
+    sections.push({ heading: `${head.title}: full text`, docs });
+    counts.push(`${docs.length} ${section}`);
+  }
+
+  const body = renderLlmsFull(map, sections);
+  await writeFile(`${OUT}/public/llms-full.txt`, body);
+  console.log(`llms-full: ${writing.length} writing posts + ${counts.join(" + ")} explainers, ${Buffer.byteLength(body)} bytes`);
+}
+
 // 1h) RSS feeds for the three authored sections.
 //
 // Build output for the same reason the twins are: a feed is a pure function of
