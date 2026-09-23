@@ -191,6 +191,31 @@ bun run perf:snapshot compare base.json head.json
 # the machine-owned `perf-history` branch and /garage/dyno charts them.
 bun run perf:snapshot row base.json
 
+# DOES ANYTHING MOVE AFTER PAINT? The site collects no RUM, so this is the only
+# layout-shift reading there is. It holds each page's scripts, fetches and images
+# until first paint and then releases them, which turns a slow-network race into a
+# shift on every run (claude.ai's method, 2026-09-23), and names the REGION that
+# moved. A forced shift is the control and runs first. First sweep: every windowed
+# page on desktop slides its title 50-56px when nav.js injects Back/Forward after
+# paint (bootAfterStaticPaint waits two frames on purpose), and on a phone four
+# garage pages wrap the title bar and push content down 19px (CLS 0.0525).
+# /coffee reads 0.35 LOCALLY ONLY: cal links https://aadhar.sh/luna.css, which is
+# cross-origin on localhost, so the page renders unstyled. Production reads 0.0004.
+bun run cls --url http://localhost:8799            # every registered page, desktop + phone
+bun run cls --paths / --hold none --runs 20        # natural loads: how often, not whether
+
+# How many INSTRUCTIONS does a Worker hot path retire? A span reads 0ms by design
+# (frozen clock), so this is the CPU number the Workers Free clamp is about.
+# valgrind under `node --predictable`, differenced at N and 2N calls so node's
+# ~195M-instruction startup cancels; identical records agree within 0.05%.
+# LINUX ONLY: on a Mac, build tools/insn-count.Dockerfile under apple/container
+# (the tool prints the two lines). Node rather than bun because workerd is V8.
+# Diff two records made in the same image, never a record against a constant.
+# It found the search stopword gap on its first run: -21.4% instructions and
+# -22.2% wall clock on the same five queries, which is the correlation check.
+bun run insn record head.json    # refuses off Linux and says how to run it
+bun run insn compare base.json head.json
+
 # diff infra.json (DNS, zone/edge settings, account resources, Workers) against
 # reality. read-only; never mutates Cloudflare. add CLOUDFLARE_API_TOKEN for
 # the account tier, or --offline for the no-network tier.
