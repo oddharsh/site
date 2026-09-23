@@ -2210,9 +2210,10 @@ let freshFamily: Buffer | null = null;
   // to src/pages/index.html for the perf-budget twin check — View Source is the
   // authoring source, which keeps the plain /nav.js the fallback still serves).
   // cal/src rides along: /coffee's SSR templates load the shell too, and were the
-  // whole reason the unhashed fallbacks existed. Their nav ref is attribute-shaped so
-  // the ordinary reps catch it; the luna refs are ABSOLUTE (cal.aadhar.sh serves the
-  // same templates, where a relative /luna.css would 404) and get their own pass below.
+  // whole reason the unhashed fallbacks existed. Their nav and luna refs are both
+  // relative and attribute-shaped, so the ordinary reps catch them (the luna ref was
+  // absolute until 2026-09-23 and had its own pass; cal/src/templates.ts says why
+  // that never worked).
   const targets = [`${OUT}/serendipity/serendipity.ts`];
   for (const rel of await readdir(`${OUT}/cal/src`).catch(() => [])) {
     if (rel.endsWith(".ts")) targets.push(`${OUT}/cal/src/${rel}`);
@@ -2242,16 +2243,13 @@ let freshFamily: Buffer | null = null;
   const refCount = rewriteHits.reduce((total, hits) => total + hits, 0);
   const filesTouched = rewriteHits.filter(Boolean).length;
 
-  // /coffee's absolute shell refs (https://aadhar.sh/luna.css) — the attr reps above
-  // only match leading-slash paths, so the absolute form is rewritten here, scoped to
-  // the staged cal modules alone.
+  // /coffee's shell refs ride the ordinary reps above. Assert they landed, since a
+  // cal page left on the unhashed /luna.css keeps working and only loses the
+  // immutable cache, which nothing else would notice.
   {
     const p = `${OUT}/cal/src/templates.ts`;
-    let t; try { t = await readFile(p, "utf8"); } catch { t = null; }
-    if (t !== null) {
-      const out = t.split("https://aadhar.sh/luna.css").join(`https://aadhar.sh${hashedFor.luna}`);
-      if (out !== t) await writeFile(p, out);
-      const now = await readFile(p, "utf8");
+    let now; try { now = await readFile(p, "utf8"); } catch { now = null; }
+    if (now !== null) {
       if (!now.includes(hashedFor.luna)) throw new Error("cal/src/templates.ts was not repointed to hashed luna.css");
       if (!now.includes(hashedFor.nav)) throw new Error("cal/src/templates.ts was not repointed to hashed nav.js");
       console.log(`cal: /coffee templates repointed to ${hashedFor.luna} + ${hashedFor.nav}`);
