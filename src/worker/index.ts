@@ -29,6 +29,7 @@ import { isPreviewHost, previewDenial } from "./lib/preview.ts";
 import { handleSiteMcp } from "./mcp.ts";
 import { withSecurityHeaders } from "./lib/security.ts";
 import { earlyDataDenial } from "./lib/early-data.ts";
+import { mcpEraOf } from "./lib/mcp-protocol.ts";
 import { SHELL_PRELOAD_LINK } from "./lib/shell-assets.ts";
 import { cronJob } from "./lib/cron.ts";
 import { isCallable } from "./lib/parse.ts";
@@ -219,6 +220,7 @@ async function serveWorkerRequest(request: SiteRequest, env: Env, ctx: Execution
   // the speculation ledger's denominator: every Sec-Purpose prefetch/prerender
   // request. Its numerator (the activation beacon) arrives at /ledger/prefetch.
   countSpeculativeLoad(env, request, response, url.pathname);
+  const mcpEra = mcpEraOf(request);
   try {
     console.log(JSON.stringify({
       p: url.pathname,
@@ -235,6 +237,14 @@ async function serveWorkerRequest(request: SiteRequest, env: Env, ctx: Execution
       // h2 connection, so a cold visit's document reads HTTP/2 by design and the
       // assets it discovers a moment later read HTTP/3.
       h: request.cf?.httpProtocol,
+      // The MCP era, set only on requests one of the two MCP servers parsed
+      // (lib/mcp-protocol.ts noteEra). `mcp` is modern, legacy or mixed; `mv`
+      // the revision it declared; `mc` the client a legacy `initialize` named.
+      // Group `mcp` over a window to see whether the legacy door still has
+      // callers, and `mv` to see which legacy revisions they speak.
+      mcp: mcpEra?.era,
+      mv: mcpEra?.version,
+      mc: mcpEra?.client,
     }));
   } catch {}
   // noindex EVERY hostname that is not the canonical site, not just previews.

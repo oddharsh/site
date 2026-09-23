@@ -2109,6 +2109,23 @@ BOTH servers, and one fails if either file re-declares `MCP_SUPPORTED` or
 `MCP_PROTOCOL` locally instead of importing them — the drift that would pass on
 the day it was written and rot later.
 
+**The legacy half has an exit condition now, and it is a count.** Since
+2026-09-22 `mcpRequest` tags every well-formed message with its era
+(`noteEra` in `lib/mcp-protocol.ts`), and the per-request log line in
+`index.ts` carries it as `mcp` (`modern`, `legacy` or `mixed`), `mv` (the
+revision declared) and `mc` (the client a legacy `initialize` named). It rides
+the existing line rather than emitting its own, because every log line and span
+is an event on the 200K/day Free quota from 2026-10-01. Group `mcp` over the
+Observability dashboard's window to see whether legacy callers still exist, and
+`mv` to see which legacy revisions they speak, since `2024-11-05` can go before
+`2025-06-18` does. Both `mv` and `mc` are caller-controlled, so a revision must
+be date-shaped and a name keeps 40 printable ASCII characters, or the field is
+dropped. Self-dispatch (the `/lens` door probes against this origin) never
+reaches `serveWorkerRequest`, so this site's own calls are not counted.
+`contract-mcp-era-is-recorded-per-request` pins both servers and the log line.
+Retiring the legacy door stays an owner call made on those numbers, and Workers
+Logs keeps 3 days on Free, so read it more than once before deciding.
+
 **`/mcp` is also the browser's tool catalog, which is why `find_events` lives
 there.** `src/client/webmcp.js` reads `tools/list` from this ONE endpoint and
 registers it into `document.modelContext`. Cloudflare's injected bridge did the
