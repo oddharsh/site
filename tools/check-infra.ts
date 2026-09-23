@@ -1329,13 +1329,12 @@ async function checkApi(infra, wrangler, token) {
   // pairing argument are in infra.json under zone.zero_rtt. A workstation run
   // reads FAIL until the toggle is flipped, which is the tripwire working:
   // the guard shipped, the round trip it exists to make safe has not.
-  await section("0-RTT connection resumption", "Zone:Zone Settings:Read and Zone:Zone:Read", async () => {
-    const declared = infra.zone?.zero_rtt;
+  async function assertZoneSetting(label, declared) {
     if (!declared) return;
     const zones = await cf(token, `/zones?name=${encodeURIComponent(infra.zone.name)}`);
     const zoneId = zones?.[0]?.id;
     if (!zoneId) {
-      warn(`0-RTT unchecked: this token sees no zone named ${infra.zone.name}`);
+      warn(`${label} unchecked: this token sees no zone named ${infra.zone.name}`);
       return;
     }
     const live = await cf(token, `/zones/${zoneId}/settings/${declared.setting}`);
@@ -1345,6 +1344,19 @@ async function checkApi(infra, wrangler, token) {
       return;
     }
     pass(`zone setting ${declared.setting} is ${value}`);
+  }
+
+  await section("0-RTT connection resumption", "Zone:Zone Settings:Read and Zone:Zone:Read", async () => {
+    await assertZoneSetting("0-RTT", infra.zone?.zero_rtt);
+  });
+
+  // Shared Dictionaries passthrough. Same standing as 0-RTT: zone-scoped, so CI
+  // degrades to a note and a workstation run asserts it. The docs say `disabled`
+  // strips Use-As-Dictionary and refuses to cache dcb/dcz, which would drop every
+  // dictionary tier to plain brotli without an error. infra.json under
+  // zone.shared_dictionary says what is and is not measured about that.
+  await section("shared dictionaries passthrough", "Zone:Zone Settings:Read and Zone:Zone:Read", async () => {
+    await assertZoneSetting("shared dictionaries", infra.zone?.shared_dictionary);
   });
 
   await section("version affinity", "Zone:Transform Rules:Read and Zone:Zone:Read", async () => {

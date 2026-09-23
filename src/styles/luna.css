@@ -309,6 +309,15 @@ body{text-wrap:pretty}
 /* is pinned: it never scrolls the page and can't slide under the taskbar. its */
 /* inner region scrolls instead. (:has gates this; old browsers fall back to the */
 /* scrolling body above. the fixed taskbar/desktop/icons/run sit outside this flow.) */
+/* THIS :has IS FREE, measured 2026-09-23 because claude.ai found a root-level :has
+   costing 24ms per DOM change. A/B in Chromium, 1500 rounds of the mutations this
+   site makes (tooltip insert/remove, fragment swap, class flip): as served against
+   plain `body`, style recalc was identical within noise on /, /garage/horizon,
+   /writing and /lwe/vigenere (2.5-3.9us per recalc either way). The control, a
+   root :has whose match restyles every descendant, cost 57x on / and 163x on
+   horizon, so the instrument sees the expensive shape. What makes this one cheap:
+   Chromium filters :has invalidation on the argument's classes, and body's own
+   declarations here inherit nothing that forces descendants to restyle. */
 body:has(.window),body:has(.np-window),body:has(.wrap){overflow:hidden !important;display:flex !important;flex-direction:column !important;align-items:center !important;padding:8px !important}
 /* window frame: bounded to the desktop, sized to content but never taller than it. */
 .window,.np-window,.wrap{position:relative;z-index:2;flex:0 1 auto !important;min-height:0;max-height:100% !important;width:100%;margin:0 auto !important;box-sizing:border-box}

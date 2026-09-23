@@ -158,6 +158,30 @@
       "setting": "0rtt",
       "value": "on",
       "why": "one RTT off every resumed connection's first request; the Worker's early-data guard (lib/early-data.ts) is what makes it safe to turn on"
+    },
+    "shared_dictionary": {
+      "$comment": [
+        "Shared Dictionaries (Speed > Settings > Content Optimization), the zone",
+        "setting `shared_dictionary_mode`, beta on every plan. The only value",
+        "besides `disabled` is `passthrough`: the origin builds the deltas and",
+        "Cloudflare forwards Use-As-Dictionary, Available-Dictionary and the",
+        "dcb/dcz encodings untouched, varying its cache on Accept-Encoding and",
+        "Available-Dictionary. That is exactly this site's model, since build.ts",
+        "makes every dcz delta and the Worker serves them (gotcha 14).",
+        "",
+        "Declared because the docs say that with it off Cloudflare STRIPS the",
+        "dictionary headers and does not cache dcb/dcz variants, and every",
+        "failure of that shape here is silent: pages keep working, one tier",
+        "larger. Confirmed on in the dashboard by the owner on 2026-09-23.",
+        "",
+        "What is NOT measured: whether `disabled` strips a Worker-generated",
+        "response or only cached origin ones. The docs never mention Workers.",
+        "So this asserts the setting, and `bun run dcz:check` stays the",
+        "evidence that the tier actually works on the wire."
+      ],
+      "setting": "shared_dictionary_mode",
+      "value": "passthrough",
+      "why": "the dcz shell, family and per-page dictionary tiers all rely on Cloudflare forwarding the dictionary headers and encodings, which the docs say it stops doing when this is disabled"
     }
   },
 

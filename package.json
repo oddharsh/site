@@ -77,6 +77,8 @@
     "checkpoints:check": "bun tools/check-checkpoints.ts",
     "checkpoints:sync": "bun tools/check-checkpoints.ts --sync",
     "inp": "bun tools/inp-lab.ts",
+    "cls": "bun tools/layout-shift-lab.ts",
+    "insn": "node tools/insn-count.ts",
     "release": "bun tools/release-status.ts",
     "zenc:bench": "bun tools/photos/zenc-bench.ts",
     "zenc:reproducible": "bun tools/photos/zenc-reproducible.ts"
