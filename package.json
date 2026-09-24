@@ -96,7 +96,7 @@
     "oxlint": "1.85.0",
     "oxlint-tsgolint": "7.0.2002",
     "playwright-core": "1.63.0",
-    "smol-toml": "1.8.0",
+    "smol-toml": "1.9.0",
     "timbrado": "github:oddharsh/timbrado#c110b3091a42162af54287b869578ea1579e54a9",
     "typescript": "7.0.2",
     "wrangler": "https://pkg.pr.new/cloudflare/workers-sdk/wrangler@cd60c9c"
