@@ -3392,6 +3392,34 @@ how to recover the plans and their audit from git.
    tree. The `.src.*` twins are deliberately NOT mangled, since they are the
    readable copy.
 
+   **The short names come in TWO TIERS since 2026-09-24, because one site-wide
+   ranking let a page edit re-mint the shell.** On #915, one more `var(--sh)` in
+   /pixel-peeper's inline CSS made that page-local name (25 uses) outrank
+   luna.css's `--blue-65` (23). The two swapped letters inside luna.css,
+   `/a/luna.5e0c7979.css` became `/a/luna.5b20cdaa.css`, and 311 staged files
+   changed, which is gotcha 35's full bill for a one-line edit to one page. Now
+   `planNames` takes `CONTENT_HASHED`, the staged files step 6 hashes into `/a/`:
+
+   | tier | names | ranked by |
+   |---|---|---|
+   | shell | every name a hashed file DEFINES | uses inside the hashed files alone, `--a` first |
+   | rest | page-local names, and a name the shell only reads | a hash of the NAME into the two-character space |
+
+   No page count reaches either tier, so a page edit moves only that page. The
+   same edit on the fixed build changes 7 files, all pixel-peeper's (the page,
+   its `.src` twin, both `.br`, three page deltas). A CSS comment naming
+   `var(--sh)` changes only the `.src` twin and its `.br`, since minification
+   strips the comment later. Running 5c after minification was the other way to
+   fix comments counting, and it became unnecessary: page counts no longer
+   decide anything. Measured at q11 against the single ranking: `/a/` is -15 B
+   in total (luna.css -17 B, since its own repetition now decides its names),
+   and the 59 pages are +179 B in total, about 3 B each. The one remaining way
+   a page can move a shell name is to add a LITERAL short token (an authored
+   `--q`), because `taken` still seeds from every file. Step 6 fails if its
+   asset lists and `CONTENT_HASHED` disagree, and
+   `contract-mangle-keeps-page-edits-out-of-the-shell` pins the tiers with a
+   control showing the old ranking moves the shell on the same edit.
+
    **`keep_closing_tags` went false in the same change** (16,270 B raw across 55
    pages), which means served documents no longer carry `</html>`. That was
    measured and declined on 2026-09-02 because it re-mints every page and page
