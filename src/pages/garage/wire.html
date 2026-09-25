@@ -249,10 +249,10 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
       <li><strong>Native brotli in the Worker.</strong> There is none. Workers'
         <code>CompressionStream</code> speaks gzip and deflate only. Dead end by
         platform design.</li>
-      <li><strong>wasm brotli at q11, per request.</strong> The homepage re-renders
-        per visit (random photo grid + live counter), so it would compress on the hot
+      <li><strong>wasm brotli at q11, per request.</strong> The homepage re-rendered
+        per visit then (random photo grid + live counter), so it would compress on the hot
         path: multi-ms of CPU per request plus a wasm blob in the bundle to save
-        ~6KB. Rejected on arithmetic.</li>
+        ~6KB. Rejected on arithmetic, and later made moot by the fifth road below.</li>
       <li><strong>Worker-side gzip level 9.</strong> Measured a local gzip-9 of the
         homepage at <code class="m">31,204</code> bytes vs the edge's
         <code class="m">31,207</code>. Three bytes. The edge's gzip is already at the
@@ -538,8 +538,8 @@ transition:filter 60ms ease-out}</pre></figure>
 
     <div class="cf-feat">
       <h2>Watch it happen</h2>
-      <p>This fetches <code class="m">/lens</code> and <code class="m">/reading</code>
-        twice each and prints the <code class="m">x-edge-cache</code> header from
+      <p>This fetches <code class="m">/reading</code> and <code class="m">/ledger/lines.html</code>
+        (the fragment behind <a href="/ledger">/ledger</a>) twice each and prints the <code class="m">x-edge-cache</code> header from
         your nearest Cloudflare colo. A fresh colo shows <code class="m">miss</code>
         then <code class="m">hit</code>; a warm one may say
         <code class="m">hit</code> twice. Your browser hitting production, nothing
@@ -547,6 +547,64 @@ transition:filter 60ms ease-out}</pre></figure>
       <button class="cf-btn" id="probe-btn" type="button">probe the edge cache</button>
       <div id="probe-out"></div>
     </div>
+
+    <h2>The fifth road: stop rendering per request</h2>
+    <p>All four roads assumed the page had to be assembled per visit, so the compressor
+      would always sit on the hot path. The fifth drops that assumption. Bake the page once
+      at deploy, where q11 costs nothing, and fetch only the part that actually changes, as
+      a small fragment after load.</p>
+    <p>A document built at deploy gets four things a Worker response can't have: a q11 twin,
+      a <a href="/garage/compression">dcz delta</a> against the family dictionary, an ETag
+      that turns a return visit into a 304 with no body, and sha256 hashes in its script
+      policy. The fragment loses nothing, because the whole page was already going out at
+      the edge's quality.</p>
+    <p>The homepage took this road first, on 2026-08-31. Its random photo grid and its
+      now-playing list became two fragments (<code class="m">/photos/grid.html</code> and
+      <code class="m">/rn/tracks.html</code>), and the document itself became a built file.
+      That retired the trade the scorecard below used to end on: randomization and q11 were
+      separable all along.</p>
+
+    <div class="callout">
+      The shape lives in one module, <code class="m">lib/island.ts</code>. The placeholder
+      comes from the same renderer as the fragment, so the swap moves nothing. The fragment
+      is preloaded from <code class="m">&lt;head&gt;</code> with
+      <code class="m">crossorigin</code>, which is load-bearing even same-origin: without it
+      the preload can't satisfy the script's fetch and the fragment downloads twice. The
+      loader refuses any response missing an <code class="m">x-island</code> marker, since an
+      edge 5xx is HTML too. A failed fetch leaves the placeholder and says so.
+    </div>
+
+    <p>Five more pages moved on 2026-09-25. Brotli bytes on the wire, measured against
+      production the same day:</p>
+    <table class="cmp">
+      <thead><tr><th>page</th><th>per request</th><th>built shell</th><th>fragment</th><th>first visit</th></tr></thead>
+      <tbody>
+        <tr><td><a href="/whoareyou">/whoareyou</a></td><td class="n">8,280</td><td>6,286</td><td>1,504</td><td>7,790</td></tr>
+        <tr><td><a href="/garage/dyno">/garage/dyno</a></td><td class="n">8,060</td><td>4,285</td><td>3,885</td><td>8,170</td></tr>
+        <tr><td><a href="/ledger">/ledger</a></td><td class="n">5,539</td><td>4,515</td><td>700</td><td>5,215</td></tr>
+        <tr><td><a href="/around">/around</a></td><td class="n">5,967</td><td>4,010</td><td>1,798</td><td>5,808</td></tr>
+        <tr><td><a href="/serendipity">/serendipity</a></td><td class="n">15,258</td><td>5,260</td><td>7,428</td><td class="y">12,688</td></tr>
+      </tbody>
+      <caption>"Per request" is the whole page as the edge served it before the move. A
+        return visit revalidates the shell to a 304 with no body and fetches the fragment,
+        which the browser may reuse for 1 to 5 minutes on every page but /whoareyou. After a
+        deploy the shell arrives as a family-dictionary delta of 2,131 to 4,490 bytes.</caption>
+    </table>
+
+    <p>The first visit comes out close to even, and that's the honest headline. The fragment
+      still ships at the edge's quality, and the dyno's chart is half its page, so that one
+      lands 110 bytes heavier. Serendipity gains the most because 12KB of it was CSS that
+      never changes between visits.</p>
+    <p>The return visit is where it pays: a 304 for the shell, then a fragment of 700 bytes to
+      7KB, against the whole page again. The quieter win is latency. The dyno used to hold its
+      entire response behind a fetch to GitHub, with a 3-second budget, on every cold cache;
+      now only the chart waits.</p>
+    <p>Some pages don't fit, and the build names them. <a href="/reading">/reading</a> stays
+      per request because its Curius list is nearly the whole page, so the fragment would carry
+      almost every byte. <a href="/coffee">/coffee</a> belongs to a module that can't import
+      the helper. The build fails on any registered page that is neither built nor named, with
+      a reason, in <code class="m">config/per-request-pages.json</code>, so the next page
+      arrives built by default.</p>
 
     <h2>The honest scorecard</h2>
     <table class="cmp">
@@ -558,16 +616,17 @@ transition:filter 60ms ease-out}</pre></figure>
         <tr><td>repeat /lens, /writing, /reading</td><td class="n">full re-render</td><td class="y">colo cache hit</td><td>caches.default, 200-only, short TTLs</td></tr>
         <tr><td>readable source</td><td>served as written</td><td class="y">source twins</td><td><code>/&lt;name&gt;.src.js</code> + <code>/luna.src.css</code> + <code>/index.src.html</code></td></tr>
         <tr><td>authoring workflow</td><td>no build</td><td>no build</td><td>the transform lives in deploy, not in writing</td></tr>
-        <tr><td>homepage bytes</td><td>75.9KB raw source</td><td class="y">46.3KB raw<br><small>11.5KiB gzip / 9.9KiB Brotli</small></td><td>structure + inline CSS/JS transform; per-visit re-render remains by design</td></tr>
+        <tr><td>homepage bytes</td><td>75.9KB raw source</td><td class="y">46.3KB raw<br><small>11.5KiB gzip / 9.9KiB Brotli</small></td><td>structure + inline CSS/JS transform; a built document since 2026-08-31, with the grid and tracklist as fragments</td></tr>
+        <tr><td>per-request pages</td><td class="n">whole page at edge quality</td><td class="y">built shell + fragment</td><td><code>lib/island.ts</code>; a 304 on return</td></tr>
       </tbody>
-      <caption>The homepage line is the point of the whole page: per-visit randomization and a live
-        counter are worth more here than 6KB of q11. Performance is a budget, and that is what this
-        site chooses to spend it on.</caption>
+      <caption>The homepage line used to be the point of the whole page: per-visit randomization and
+        a live counter looked worth more than 6KB of q11. The fifth road showed the two were never in
+        tension. The part that changes per visit only had to move into its own request.</caption>
     </table>
 
     <footer>
       <p>&larr; back to the <a href="/garage">garage</a> &middot; <a href="/">aadhar.sh</a> &middot; kin: <a href="/garage/workers">off Pages, onto Workers</a> &middot; <a href="/garage/encoding">the thumbnail encoding study</a></p>
-      <p><small>build measurements refreshed 2026-07-19 on this site; the prober reads live production headers.</small></p>
+      <p><small>build measurements refreshed 2026-07-19 on this site; built-page bytes measured in production 2026-09-25; the prober reads live production headers.</small></p>
     </footer>
 
     <hr>
@@ -583,9 +642,9 @@ transition:filter 60ms ease-out}</pre></figure>
   function esc(s){ return String(s == null ? "" : s).replace(/[&<>]/g, function(c){ return c === "&" ? "&amp;" : c === "<" ? "&lt;" : "&gt;"; }); }
   if (btn) btn.addEventListener("click", async function(){
     btn.disabled = true;
-    out.innerHTML = "<p class=\"note\" style=\"margin:6px 0\">two GETs each against /lens and /reading&hellip;</p>";
+    out.innerHTML = "<p class=\"note\" style=\"margin:6px 0\">two GETs each against /reading and /ledger/lines.html&hellip;</p>";
     var rows = "";
-    for (var path of ["/lens", "/reading"]) {
+    for (var path of ["/reading", "/ledger/lines.html"]) {
       var vals = [];
       for (var i = 0; i < 2; i++) {
         try {
@@ -607,7 +666,7 @@ transition:filter 60ms ease-out}</pre></figure>
 <script type="application/json" id="luq-data">
 {
   "skin": "garage",
-  "intro": "The numbers above got measured twice; check your model once. 6 questions, every answer is somewhere upstream.",
+  "intro": "The numbers above got measured twice; check your model once. 7 questions, every answer is somewhere upstream.",
   "questions": [
     {
       "q": "The edge served the homepage at ~31KB while a local brotli q11 of the same document came out ~25KB. Where does that gap come from?",
@@ -738,6 +797,28 @@ transition:filter 60ms ease-out}</pre></figure>
         {
           "t": "The worker rendered faster on the second pass because its KV reads were warm.",
           "why": "A hit means the render never ran at all; warm KV would only speed up a miss. Distinguishing exactly those two paths is what the x-edge-cache header exists for."
+        }
+      ]
+    },
+    {
+      "q": "Five pages moved to a built shell plus a fragment and came out roughly even on a first visit. Where does the win land?",
+      "options": [
+        {
+          "t": "On the return visit: the shell revalidates to a 304 with no body, and only the fragment is fetched again.",
+          "ok": true,
+          "why": "Right. The fragment still ships at the edge's quality, so a first visit barely moves; the ETag and the dictionary delta a built document earns only pay off for someone who comes back."
+        },
+        {
+          "t": "The build precompresses the fragment at q11 too.",
+          "why": "The fragment is rendered per request, and the runtime ships no brotli encoder, so it goes out at the edge's quality. That's the reason the first-visit column in the table barely moves."
+        },
+        {
+          "t": "The edge now caches the whole page, so the Worker stops running.",
+          "why": "The Worker still answers, serving the built shell's q11 twin or its delta from the asset store. What changed is which bytes it sends, which the table measures."
+        },
+        {
+          "t": "A reader without scripts skips the fragment and saves its bytes.",
+          "why": "Without scripts the fragment never loads, and a link in the page points to it instead. The table's numbers are for a browser that runs the loader."
         }
       ]
     }
