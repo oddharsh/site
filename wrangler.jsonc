@@ -249,7 +249,9 @@
       // speculation readback. Nothing static lives under /ledger/.
       "/ledger/*",
       "/writing", "/writing/*",
-      "/webmention", "/webmention/*", "/inbox",
+      // "/inbox*" covers the page and its island at /inbox/mail.html (2026-09-25);
+      // nothing static lives under it, and /inbox.md is "/*.md"'s anyway.
+      "/webmention", "/webmention/*", "/inbox*",
       // "/rn.md" carries an extension, so without it here the asset layer would
       // answer first and 404 a route the worker renders.
       "/rn", "/rn.md", "/rn/tracks", "/rn/tracks.html", "/rn/admin", "/rn/set", "/rn/art/*",

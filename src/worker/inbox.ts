@@ -12,8 +12,12 @@
 // No avatars, by choice: hotlinking a stranger's profile picture leaks my
 // readers' IPs to their host and buys nothing OE ever had. Name, subject, date,
 // excerpt — very 2003.
+import { serveStaticPage } from "./lib/assets.ts";
 import { lunaPage } from "./lib/chrome.ts";
-import { unsafeHtml } from "./lib/html.ts";
+import { PAGE_CACHE_CONTROL } from "./lib/const.ts";
+import { SHELL_PRELOAD_LINK } from "./lib/shell-assets.ts";
+import { html, unsafeHtml } from "./lib/html.ts";
+import { islandMount, islandPreload, islandResponse, islandScript } from "./lib/island.ts";
 import { esc } from "./lib/http.ts";
 import { readApprovedMentions } from "./webmention.ts";
 
@@ -25,9 +29,27 @@ const KIND_LABEL = {
   mention: "mentioned",
 };
 
-export async function handleInbox(request, env, ctx) {
-  const { state, mentions } = await readApprovedMentions(env);
-  const origin = new URL(request.url).origin;
+// /inbox is a BUILT document since 2026-09-25: build.ts step 5b bakes
+// renderInboxPage() once, so the lede and 3 KB of CSS ship as a q11 twin with a
+// dcz delta and an ETag. The mail itself (the folder tree, the message list and
+// the endpoint line under them) is the island at MAIL_URL, read from D1 per
+// request. The endpoint line rides in the island because it names the origin,
+// and because nothing may sit below an island whose height the mail decides.
+export const MAIL_URL = "/inbox/mail.html";
+
+// The endpoint, relative so the one baked shell is right on every host. RFC 8288
+// resolves a Link target against the request URL, and webmention discovery
+// follows RFC 8288.
+export const WEBMENTION_LINK = '</webmention>; rel="webmention"';
+
+// A screenful of unread rows for the placeholder. The live count is whatever has
+// been approved, and it does not need to match: nothing follows the island.
+const PENDING_ROWS = 4;
+
+/** The island: folder tree, message list and endpoint line, or the placeholder. */
+export function renderInboxMail(mentions, state, origin) {
+  const pending = state === "pending";
+  const dots = "…";
 
   // Folders are the pages that were written about, newest activity first. This
   // answers the question that actually matters at a glance: who is talking
@@ -38,11 +60,17 @@ export async function handleInbox(request, env, ctx) {
     folders.getOrInsertComputed(path, () => []).push(m);
   }
 
-  const folderRows = [...folders.entries()].map(([path, items]) =>
-    `<li><a class="oe-folder" href="#f-${esc(slugOf(path))}"><span class="oe-fico" aria-hidden="true"></span>${esc(path)}<span class="oe-count">${items.length}</span></a></li>`
-  ).join("\n        ");
+  const folderRows = pending
+    ? `<li><span class="oe-folder oe-muted"><span class="oe-fico" aria-hidden="true"></span>${dots}</span></li>`
+    : [...folders.entries()].map(([path, items]) =>
+      `<li><a class="oe-folder" href="#f-${esc(slugOf(path))}"><span class="oe-fico" aria-hidden="true"></span>${esc(path)}<span class="oe-count">${items.length}</span></a></li>`
+    ).join("\n        ");
 
-  const messageRows = mentions.map((m, i) => {
+  const messageRows = pending
+    ? Array.from({ length: PENDING_ROWS }, () => `<li class="oe-row oe-light" aria-hidden="true">
+          <span class="oe-from">${dots}</span><span class="oe-subject">${dots}</span><span class="oe-kind">${dots}</span><span class="oe-target">${dots}</span><span class="oe-date">${dots}</span>
+        </li>`).join("\n        ")
+    : mentions.map((m, i) => {
     const kind = KIND_LABEL[m.kind] || "mentioned";
     const when = m.approved_at ? new Date(m.approved_at).toISOString().slice(0, 10) : "";
     // A like/bookmark is a read receipt, not a message: one compact line, no
@@ -64,29 +92,10 @@ export async function handleInbox(request, env, ctx) {
     ? "The mention store did not answer just now. This page stays read-only either way."
     : "No mentions yet. Link to a page here from your own site and it will show up, once I have approved it.";
 
-  return lunaPage({
-    title: "Inbox · aadhar.sh",
-    path: "Inbox — Outlook Express",
-    route: "/inbox",
-    width: 860,
-    description: "Webmentions from the open web: who linked to aadhar.sh, moderated and rendered as mail.",
-    // The endpoint advertised on the page that displays its results, so a reader
-    // (or their software) can find it from here too.
-    headers: { link: `<${origin}/webmention>; rel="webmention"` },
-    css: OE_CSS,
-    body: unsafeHtml(`
-    <h1>Inbox</h1>
-    <p class="oe-sub">When someone links to a page here from their own site, their post arrives as
-      <a href="https://www.w3.org/TR/webmention/" rel="noopener external" target="_blank">a webmention</a>
-      — the standards-track descendant of the trackback. Verified automatically (the source really
-      does link here), then approved by hand before it appears. The
-      <a href="https://indieweb.org/Webmention" rel="noopener external" target="_blank">IndieWeb wiki</a>
-      keeps the working notes: who sends, who receives, and what breaks between them.</p>
-
-    <div class="oe-panes">
+  return unsafeHtml(`<div class="oe-panes">
       <nav class="oe-tree" aria-label="folders">
         <ul>
-          <li><a class="oe-folder oe-root" href="#all"><span class="oe-fico" aria-hidden="true"></span>Local Folders<span class="oe-count">${mentions.length}</span></a>
+          <li><a class="oe-folder oe-root" href="#all"><span class="oe-fico" aria-hidden="true"></span>Local Folders<span class="oe-count">${pending ? dots : mentions.length}</span></a>
             <ul>
         ${folderRows || '<li><span class="oe-folder oe-muted"><span class="oe-fico" aria-hidden="true"></span>(no mail)</span></li>'}
             </ul>
@@ -102,10 +111,58 @@ export async function handleInbox(request, env, ctx) {
       </section>
     </div>
 
-    <p class="oe-foot">Endpoint: <code>${esc(origin)}/webmention</code> · POST <code>source</code> and <code>target</code>.
+    <p class="oe-foot">Endpoint: <code>${esc(pending ? "/webmention" : origin + "/webmention")}</code> · POST <code>source</code> and <code>target</code>.
       Mentions are moderated; nothing appears here automatically. Sending a mention again after the link is
-      removed retracts it.</p>
-`),
+      removed retracts it.</p>`);
+}
+
+// The island's response. Moderation state changes rarely and a stale read costs
+// a few minutes of a mention not yet showing, so it takes a short browser cache;
+// it was never edge-cached and is not now, since an approval has no cache to evict.
+export async function handleInboxMail(request, env, ctx) {
+  const { state, mentions } = await readApprovedMentions(env);
+  return islandResponse(renderInboxMail(mentions, state, new URL(request.url).origin), { "cache-control": "public, max-age=60" });
+}
+
+// The route. It serves the built shell with the page policy every generated
+// document takes, plus the webmention Link header the live render always sent,
+// and falls back to rendering the shell where no bake is staged (bun run dev,
+// and the contract suite, which is why it lives here rather than in index.ts).
+export async function handleInbox(request, env) {
+  const headers = { "cache-control": PAGE_CACHE_CONTROL, link: `${SHELL_PRELOAD_LINK}, ${WEBMENTION_LINK}` };
+  const response = await serveStaticPage(request, env, { headers });
+  if (response.status !== 404) return response;
+  try { await response.body?.cancel(); } catch {}
+  const live = renderInboxPage();
+  for (const [k, v] of Object.entries(headers)) live.headers.set(k, v);
+  return live;
+}
+
+/** The shell build.ts bakes. It takes no arguments, so every build agrees. */
+export function renderInboxPage() {
+  return lunaPage({
+    title: "Inbox · aadhar.sh",
+    path: "Inbox — Outlook Express",
+    route: "/inbox",
+    width: 860,
+    description: "Webmentions from the open web: who linked to aadhar.sh, moderated and rendered as mail.",
+    // The endpoint advertised on the page that displays its results, so a reader
+    // (or their software) can find it from here too.
+    headers: { link: WEBMENTION_LINK },
+    head: islandPreload(MAIL_URL),
+    css: OE_CSS,
+    body: html`
+    <h1>Inbox</h1>
+    <p class="oe-sub">When someone links to a page here from their own site, their post arrives as
+      <a href="https://www.w3.org/TR/webmention/" rel="noopener external" target="_blank">a webmention</a>
+      — the standards-track descendant of the trackback. Verified automatically (the source really
+      does link here), then approved by hand before it appears. The
+      <a href="https://indieweb.org/Webmention" rel="noopener external" target="_blank">IndieWeb wiki</a>
+      keeps the working notes: who sends, who receives, and what breaks between them.</p>
+    ${islandMount("oe-mail", MAIL_URL, renderInboxMail([], "pending", ""), html`<p>The mail arrives in a second request after the page loads, and that needs a script. Without one, <a href="${MAIL_URL}">${MAIL_URL}</a> shows it as plain HTML.</p>`)}
+    <p class="oe-fail">The request for the mail failed, so the inbox stays empty rather than guessed. <a href="${MAIL_URL}">${MAIL_URL}</a> has it as plain HTML.</p>
+`,
+    scripts: islandScript(),
   });
 }
 
@@ -147,4 +204,6 @@ h1{margin:0 0 4px}
 .oe-foot{font-size:8.5pt;color:#6b7280;border-top:1px solid #e2e8f0;padding-top:8px;margin-top:12px}
 .oe-foot code{font-family:var(--font-mono);font-size:8pt}
 @media (max-width:640px){.oe-panes{grid-template-columns:1fr}.oe-head{display:none}.oe-row{grid-template-columns:1fr;gap:2px}}
+.oe-fail{display:none;font-size:8.5pt;color:#6b7280;margin:10px 0 0}
+#oe-mail[data-state="failed"] + .oe-fail{display:block}
 `;

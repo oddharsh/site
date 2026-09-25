@@ -4155,7 +4155,7 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     site tree, gotcha 16), the live `/serendipity` pages (they compose their own
     policy; the built dashboard carries that policy with the build's hashes), and
     the `/lens?url=` framed view (ditto). `/security` (2026-09-16), `/whoareyou`,
-    `/garage/dyno`, `/ledger`, `/around` and the `/serendipity` dashboard (all 2026-09-25) are built documents with their live values fetched after load;
+    `/garage/dyno`, `/ledger`, `/around`, `/inbox`, `/lens/census` and the `/serendipity` dashboard (all 2026-09-25) are built documents with their live values fetched after load, and build step 5b now fails on a registered page that is neither built nor named with a reason in `config/per-request-pages.json`;
     `src/worker/lib/island.ts` is that convention for rows, and its header says
     when JSON slots fit better.
 

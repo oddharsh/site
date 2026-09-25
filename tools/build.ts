@@ -1971,6 +1971,12 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
       live: /<td class="mono">[A-Za-z]|Total due<\/span> <b>\$\d/ },
     { module: "around", render: "renderAroundPage", url: "SNAPSHOT_URL", out: "around.html",
       live: /class="firm">[A-Za-z]|class="latency">\d|\d{4}-\d\d-\d\dT\d\d:/ },
+    // /inbox and /lens/census, the same day. A mention row carries an id and a
+    // ugc link, and a census row links a site through the lens.
+    { module: "inbox", render: "renderInboxPage", url: "MAIL_URL", out: "inbox.html",
+      live: /id="m-\d|rel="noopener ugc external"/ },
+    { module: "census", render: "renderCensusPage", url: "TABLE_URL", out: "lens/census.html",
+      live: /class="cx-site"><a |<span>\/100<\/span>/ },
   ]) {
     const mod = await import(pathToFileURL(resolve(OUT, `src/worker/${page.module}.ts`)).href + nonce);
     const res = mod[page.render]();
@@ -1981,6 +1987,8 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     if (!body.includes(`rel="preload" as="fetch" href="${url}" crossorigin`)) throw new Error(`static /${page.module} renderer lost the preload for its island`);
     if (!body.includes('querySelectorAll("[data-island]")')) throw new Error(`static /${page.module} renderer lost the island loader`);
     if (page.live.test(body)) throw new Error(`static /${page.module} bake carries a live value`);
+    // /lens/census stages below a directory nothing else writes to.
+    await mkdir(resolve(OUT, "public", page.out, ".."), { recursive: true });
     await writeFile(`${OUT}/public/${page.out}`, body);
   }
   // /serendipity's dashboard, the same day. Staged beside src/, so it imports
@@ -2010,7 +2018,34 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     if (response.status !== 200) throw new Error(`static /writing/${post.slug} renderer returned ${response.status}`);
     await writeFile(`${OUT}/public/writing/${post.slug}.html`, await response.text());
   }
-  console.log(`static renders: /lens + blank /run + blank /search + /security + /whoareyou + /garage/dyno + /serendipity + /ledger + /around + /writing index + ${posts.length} notes staged from canonical Worker renderers`);
+  // THE RATCHET, since 2026-09-25. Every registered surface either has a built
+  // document by now or is named in config/per-request-pages.json with a reason.
+  // So a new Worker-rendered page cannot arrive per request by default: it fails
+  // here until it is built at deploy (lib/island.ts) or argues its case in the
+  // ledger. The ledger can only shrink, because an entry whose page is built, is
+  // unregistered, or carries no reason fails too. The registry floor stops a
+  // manifest that stopped parsing from passing over zero surfaces.
+  {
+    const manifest: { surfaces: { path: string }[] } = JSON.parse(await readFile("config/site-manifest.json", "utf8"));
+    const ledger: Record<string, string> = JSON.parse(await readFile("config/per-request-pages.json", "utf8")).pages ?? {};
+    const surfaces = new Set<string>(manifest.surfaces.map((s) => s.path));
+    if (surfaces.size < 60) throw new Error(`per-request ratchet read only ${surfaces.size} registered surfaces — the scanner has lost the registry`);
+    const built = (p: string) => existsSync(`${OUT}/public${p === "/" ? "/index" : p}.html`) || existsSync(`${OUT}/public${p}/index.html`);
+    const problems: string[] = [];
+    for (const p of surfaces) {
+      if (!built(p) && !(p in ledger)) problems.push(`${p} is rendered per request: build it at deploy (lib/island.ts), or add it to config/per-request-pages.json with the reason it cannot be`);
+    }
+    for (const [p, why] of Object.entries(ledger)) {
+      if (!surfaces.has(p)) problems.push(`${p} is in config/per-request-pages.json but is not a registered surface`);
+      else if (built(p)) problems.push(`${p} is built now: remove it from config/per-request-pages.json`);
+      // A reason is a sentence. The JSON is read as strings, so a missing or
+      // non-string value arrives here as something String() makes short.
+      if (String(why ?? "").trim().length < 20) problems.push(`${p} needs a reason in config/per-request-pages.json, not ${JSON.stringify(why)}`);
+    }
+    if (problems.length) throw new Error(`per-request ratchet:\n  ${problems.join("\n  ")}`);
+    console.log(`per-request ratchet: ${surfaces.size - Object.keys(ledger).length} of ${surfaces.size} registered surfaces are built documents; ${Object.keys(ledger).length} stay per request, each with a reason`);
+  }
+  console.log(`static renders: /lens + blank /run + blank /search + /security + /whoareyou + /garage/dyno + /serendipity + /ledger + /around + /inbox + /lens/census + /writing index + ${posts.length} notes staged from canonical Worker renderers`);
 }
 
 // Every staged file step 6 content-hashes into /a/. Step 5c reads it to keep
