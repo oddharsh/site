@@ -253,7 +253,10 @@
       // "/rn.md" carries an extension, so without it here the asset layer would
       // answer first and 404 a route the worker renders.
       "/rn", "/rn.md", "/rn/tracks", "/rn/tracks.html", "/rn/admin", "/rn/set", "/rn/art/*",
-      "/bot", "/around", "/around/json", "/around/changes.json",
+      // "/around*" folds "/around", "/around/json" and "/around/changes.json",
+      // and covers the page's island at /around/snapshot.html (2026-09-25).
+      // Nothing static lives under /around; /around.md is "/*.md"'s anyway.
+      "/bot", "/around*",
       // "/photos/*" FOLDS the three exact sub-rows it replaced ("/photos/",
       // "/photos/query.json", "/photos/grid.html"), 2026-09-12. Nothing static
       // lives under /photos/ (no public/photos, no src/pages/photos), so the

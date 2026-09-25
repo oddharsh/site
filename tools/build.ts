@@ -1961,6 +1961,28 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   if (!dynoHtml.includes('querySelectorAll("[data-island]")')) throw new Error("static /garage/dyno renderer lost the island loader");
   if (/<polyline|<td class="mono sha">[0-9a-f]{7}/.test(dynoHtml)) throw new Error("static /garage/dyno bake carries a series point");
   await writeFile(`${OUT}/public/garage/dyno.html`, dynoHtml);
+  // /ledger and /around, the same day and the same shape, so they take one loop
+  // with the same assertions. Each names what its bake must never carry: the
+  // build has no Analytics Engine token and no crawl snapshot, so a crawler row,
+  // a priced total, a neighbour's name or a latency in the bake could only be a
+  // fixture served to every visitor until the next deploy.
+  for (const page of [
+    { module: "ledger", render: "renderLedgerPage", url: "LINES_URL", out: "ledger.html",
+      live: /<td class="mono">[A-Za-z]|Total due<\/span> <b>\$\d/ },
+    { module: "around", render: "renderAroundPage", url: "SNAPSHOT_URL", out: "around.html",
+      live: /class="firm">[A-Za-z]|class="latency">\d|\d{4}-\d\d-\d\dT\d\d:/ },
+  ]) {
+    const mod = await import(pathToFileURL(resolve(OUT, `src/worker/${page.module}.ts`)).href + nonce);
+    const res = mod[page.render]();
+    if (res.status !== 200) throw new Error(`static /${page.module} renderer returned ${res.status}`);
+    const body = await res.text();
+    const url = mod[page.url];
+    if (!body.includes(`data-island="${url}"`)) throw new Error(`static /${page.module} renderer lost its island`);
+    if (!body.includes(`rel="preload" as="fetch" href="${url}" crossorigin`)) throw new Error(`static /${page.module} renderer lost the preload for its island`);
+    if (!body.includes('querySelectorAll("[data-island]")')) throw new Error(`static /${page.module} renderer lost the island loader`);
+    if (page.live.test(body)) throw new Error(`static /${page.module} bake carries a live value`);
+    await writeFile(`${OUT}/public/${page.out}`, body);
+  }
 
   const env = { ASSETS: assets };
   const indexResponse = await writing.renderWritingIndex(env);
@@ -1974,7 +1996,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     if (response.status !== 200) throw new Error(`static /writing/${post.slug} renderer returned ${response.status}`);
     await writeFile(`${OUT}/public/writing/${post.slug}.html`, await response.text());
   }
-  console.log(`static renders: /lens + blank /run + blank /search + /security + /whoareyou + /garage/dyno + /writing index + ${posts.length} notes staged from canonical Worker renderers`);
+  console.log(`static renders: /lens + blank /run + blank /search + /security + /whoareyou + /garage/dyno + /ledger + /around + /writing index + ${posts.length} notes staged from canonical Worker renderers`);
 }
 
 // Every staged file step 6 content-hashes into /a/. Step 5c reads it to keep
