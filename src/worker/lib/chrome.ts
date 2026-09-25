@@ -3,6 +3,7 @@
 import { DESKTOP_CHROME, DESKTOP_TOP, SECTION_FAVICONS } from "./desktop.ts";
 import { addressBar, taskPane } from "./explorer.ts";
 import { EMPTY, Html, html, unsafeHtml } from "./html.ts";
+import { inlineScriptPolicy } from "./inline-csp.ts";
 import { SHELL_PRELOAD_LINK } from "./shell-assets.ts";
 import { twinFor } from "./twins.ts";
 
@@ -238,15 +239,21 @@ ${scriptHtml}
 </body>
 </html>`;
 
-  return new Response(String(document), {
-    status,
-    headers: {
-      "content-type": "text/html; charset=utf-8",
-      "cache-control": cache,
-      // preload the shell assets ahead of the body (Cloudflare Early Hints
-      // replays these as a 103). a caller's own `link` in headers still wins.
-      "link": SHELL_PRELOAD_LINK,
-      ...headers,
-    },
-  });
+  const bytes = String(document);
+  // A hashed script-src for exactly these bytes (lib/inline-csp.ts). This is
+  // what takes a per-request page off 'unsafe-inline': the build's hash map only
+  // knows staged documents. null means the page carries something a hash cannot
+  // cover, and then no header is set here, so withSecurityHeaders stamps the
+  // loose default as before. A caller's own policy in `headers` still wins
+  // (lens.ts's framed view composes one).
+  const out: Record<string, string> = {
+    "content-type": "text/html; charset=utf-8",
+    "cache-control": cache,
+    // preload the shell assets ahead of the body (Cloudflare Early Hints
+    // replays these as a 103). a caller's own `link` in headers still wins.
+    "link": SHELL_PRELOAD_LINK,
+  };
+  const policy = inlineScriptPolicy(bytes);
+  if (policy) out["content-security-policy"] = policy;
+  return new Response(bytes, { status, headers: { ...out, ...headers } });
 }
