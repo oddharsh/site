@@ -41,7 +41,7 @@ import { handleReading } from "./reading.ts";
 import { handleRun } from "./run.ts";
 import { cronEnrichTracks, handleRn, handleRnAdmin, handleRnArt, handleRnMarkdown, handleRnSet, handleRnTracks, handleRnTracksHtml } from "./rn.ts";
 import { cronHomeProbe } from "./perf-probe.ts";
-import { handleDyno, handleDynoJson } from "./dyno.ts";
+import { handleDynoJson, handleDynoPulls, PULLS_URL as DYNO_PULLS_URL, renderDynoPage } from "./dyno.ts";
 import { handleAsk } from "./nlweb.ts";
 import { handleSearch, handleSearchJson } from "./search.ts";
 import { handleSecurityJson, renderSecurityCenter } from "./security.ts";
@@ -429,7 +429,8 @@ const ROUTE_TABLE: Array<[path: string, handler: RouteHandler]> = [
   ["/updates", routeUpdates],
   ["/updates.json", handleUpdatesJson],
   ["/restore", routeRestore],
-  ["/garage/dyno", handleDyno],
+  ["/garage/dyno", routeDyno],
+  [DYNO_PULLS_URL, handleDynoPulls],
   ["/garage/dyno.json", handleDynoJson],
   // /perf shipped as the original name and lived for about an hour. The 301s are
   // not for humans: `agents: true` puts a surface in the MCP resources projection,
@@ -1097,6 +1098,26 @@ async function routeWhoareyou(request: SiteRequest, env: Env) {
   try { await response.body?.cancel(); } catch {}
   const live = renderWhoareyouPage();
   for (const [k, v] of Object.entries(headers)) live.headers.set(k, v);
+  return live;
+}
+
+// /garage/dyno is a built document since 2026-09-25, with its chart and table as
+// an island from /garage/dyno/pulls.html (dyno.ts says why). It takes the same
+// headers as the other garage pages, since the shell only moves on a deploy.
+// Markdown negotiation happens here because this exact route is matched before
+// the /garage prefix; before this, `Accept: text/markdown` got the HTML.
+async function routeDyno(request: SiteRequest, env: Env) {
+  if (wantsMarkdown(request)) {
+    const md = await serveMarkdownTwin(request, env, "/garage/dyno.md");
+    if (md) return md;
+  }
+  const response = await serveStaticPage(request, env, { headers: GENERATED_PAGE_HEADERS });
+  if (response.status !== 404) return response;
+  // `bun run dev` stages no bake; render live so the page works there. The
+  // build refuses to ship without the file, so production never takes this arm.
+  try { await response.body?.cancel(); } catch {}
+  const live = renderDynoPage();
+  for (const [k, v] of Object.entries(GENERATED_PAGE_HEADERS)) live.headers.set(k, v);
   return live;
 }
 

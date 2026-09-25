@@ -5,7 +5,7 @@
     "src/worker/cache-lint.ts": 2,
     "src/worker/census.ts": 1,
     "src/worker/counter.ts": 1,
-    "src/worker/dyno.ts": 3,
+    "src/worker/dyno.ts": 1,
     "src/worker/encode.ts": 25,
     "src/worker/image-tools.ts": 7,
     "src/worker/lens-nlweb.ts": 1,

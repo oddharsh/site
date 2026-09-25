@@ -4147,8 +4147,8 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     `/rn/admin`, `/serendipity`) are NOT precompressed, so a per-response nonce is
     the right mechanism there and is the open follow-up. They keep the loose policy
     until then, which is no worse than before. **The other way off that list is
-    to stop rendering per request**: `/security` (2026-09-16) and `/whoareyou`
-    (2026-09-25) are built documents now, with their live values fetched after
+    to stop rendering per request**: `/security` (2026-09-16), `/whoareyou`
+    and `/garage/dyno` (both 2026-09-25) are built documents now, with their live values fetched after
     load. `src/worker/lib/island.ts` is that convention for rows, and its header
     says when JSON slots fit better.
 
