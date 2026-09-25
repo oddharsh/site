@@ -4152,9 +4152,10 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     hash cannot cover (an event-handler attribute, a `javascript:` URL, an
     `srcdoc`). Three HTML surfaces stay loose because they do not come through
     `lunaPage`: `/coffee` (cal renders its own templates and cannot import the
-    site tree, gotcha 16), `/serendipity` (composes its own policy), and the
-    `/lens?url=` framed view (ditto). `/security` (2026-09-16), `/whoareyou` and
-    `/garage/dyno` (both 2026-09-25) are built documents with their live values fetched after load;
+    site tree, gotcha 16), the live `/serendipity` pages (they compose their own
+    policy; the built dashboard carries that policy with the build's hashes), and
+    the `/lens?url=` framed view (ditto). `/security` (2026-09-16), `/whoareyou`,
+    `/garage/dyno` and the `/serendipity` dashboard (all 2026-09-25) are built documents with their live values fetched after load;
     `src/worker/lib/island.ts` is that convention for rows, and its header says
     when JSON slots fit better.
 
