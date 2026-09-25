@@ -23,7 +23,9 @@
 // at-the-end is the principled shape and the 16-bit path costs nothing extra.
 // It also fixes a real bug the 8-bit path had: a Luma16 TIFF missed the Luma8
 // arm and was silently promoted to RGB.
-use halflight::{g22_lut16, g22_to_linear, linear_to_g22, linear_to_srgb, resample, srgb_lut16, srgb_to_linear, Filter};
+use halflight::{g22_lut, g22_lut16, linear_to_g22, linear_to_srgb, resample, srgb_lut, srgb_lut16, Filter};
+#[cfg(test)]
+use halflight::{g22_to_linear, srgb_to_linear};
 use image::{DynamicImage, GrayImage, ImageBuffer, ImageDecoder, ImageReader, Luma, Rgb, RgbImage};
 use std::path::Path;
 
@@ -157,11 +159,15 @@ fn classify(icc: Option<&[u8]>) -> Transfer {
 }
 
 impl Transfer {
+    /// Resolve the curve once and hand back the 256-entry table. The per-sample
+    /// form (`srgb_to_linear(c)`) reads a `OnceLock` and matches on the curve for
+    /// every sample; indexing a table taken outside the loop does neither.
+    fn table8(self) -> &'static [f32; 256] {
+        match self { Self::Srgb => srgb_lut(), Self::G22 => g22_lut() }
+    }
+    #[cfg(test)]
     fn dec8(self, c: u8) -> f32 {
-        match self {
-            Transfer::G22 => g22_to_linear(c),
-            Transfer::Srgb => srgb_to_linear(c),
-        }
+        self.table8()[c as usize]
     }
     /// Resolve the source's curve once, then index halflight's exact table.
     fn table16(self) -> &'static [f32] {
@@ -242,9 +248,11 @@ pub fn from_decoded(img: DynamicImage, icc: Option<&[u8]>, t: TransferOption) ->
         return Err("source has a zero dimension".into());
     }
     Ok(match img {
-        DynamicImage::ImageLuma8(g) => Frame {
-            w, h, gray: true, transfer: t,
-            data: g.pixels().map(|p| t.dec8(p[0])).collect(),
+        DynamicImage::ImageLuma8(g) => {
+            let table = t.table8();
+            Frame { w, h, gray: true, transfer: t,
+                data: g.pixels().map(|p| table[p[0] as usize]).collect(),
+            }
         },
         DynamicImage::ImageLuma16(g) => {
             let table = t.table16();
@@ -252,9 +260,11 @@ pub fn from_decoded(img: DynamicImage, icc: Option<&[u8]>, t: TransferOption) ->
                 data: g.pixels().map(|p| table[p[0] as usize]).collect(),
             }
         },
-        DynamicImage::ImageLumaA8(g) => Frame {
-            w, h, gray: true, transfer: t,
-            data: g.pixels().map(|p| t.dec8(p[0])).collect(),
+        DynamicImage::ImageLumaA8(g) => {
+            let table = t.table8();
+            Frame { w, h, gray: true, transfer: t,
+                data: g.pixels().map(|p| table[p[0] as usize]).collect(),
+            }
         },
         DynamicImage::ImageLumaA16(g) => {
             let table = t.table16();
@@ -282,17 +292,18 @@ pub fn from_decoded(img: DynamicImage, icc: Option<&[u8]>, t: TransferOption) ->
         }
         other => {
             let rgb = other.to_rgb8();
+            let table = t.table8();
             if channel_equal(rgb.as_raw()) {
                 Frame {
                     w, h, gray: true, transfer: t,
-                    data: rgb.pixels().map(|p| t.dec8(p[0])).collect(),
+                    data: rgb.pixels().map(|p| table[p[0] as usize]).collect(),
                 }
             } else {
                 let mut data = Vec::with_capacity((w * h * 3) as usize);
                 for p in rgb.pixels() {
-                    data.push(t.dec8(p[0]));
-                    data.push(t.dec8(p[1]));
-                    data.push(t.dec8(p[2]));
+                    data.push(table[p[0] as usize]);
+                    data.push(table[p[1] as usize]);
+                    data.push(table[p[2] as usize]);
                 }
                 Frame { w, h, gray: false, data, transfer: t }
             }
