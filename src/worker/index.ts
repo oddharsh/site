@@ -47,7 +47,7 @@ import { handleSearch, handleSearchJson } from "./search.ts";
 import { handleSecurityJson, renderSecurityCenter } from "./security.ts";
 import { handleTool } from "./terminal.ts";
 import { handleSystemRestore, handleUpdatesJson, handleWindowsUpdate } from "./updates.ts";
-import { handleWhoareyou, handleWhoareyouJson } from "./whoareyou.ts";
+import { handleWhoareyouJson, handleWhoareyouValues, renderWhoareyouPage, VALUES_URL as WHOAREYOU_VALUES_URL } from "./whoareyou.ts";
 import { handleWritingIndex, handleWritingPost } from "./writing.ts";
 import { handleLlmsFull } from "./x402.ts";
 import { cronSerendipity, handleSerendipity, withSerendipitySecurityHeaders } from "../../serendipity/serendipity.ts";
@@ -420,8 +420,9 @@ const ROUTE_TABLE: Array<[path: string, handler: RouteHandler]> = [
 
   ["/hit", handleHit],
 
-  ["/whoareyou", handleWhoareyou],
+  ["/whoareyou", routeWhoareyou],
   ["/whoareyou.json", handleWhoareyouJson],
+  [WHOAREYOU_VALUES_URL, handleWhoareyouValues],
   ["/security", routeSecurity],
   ["/security.json", handleSecurityJson],
   ["/reading", handleReading],
@@ -1072,6 +1073,29 @@ async function routeSecurity(request: SiteRequest, env: Env) {
   // the file, so this arm is never taken.
   try { await response.body?.cancel(); } catch {}
   const live = renderSecurityCenter();
+  for (const [k, v] of Object.entries(headers)) live.headers.set(k, v);
+  return live;
+}
+
+// /whoareyou is a built document since 2026-09-25, with its per-request values
+// as an island from /whoareyou/values.html (whoareyou.ts says why and what moved).
+// Same shape as routeSecurity above, down to the twin carrying the page's noindex.
+async function routeWhoareyou(request: SiteRequest, env: Env) {
+  if (wantsMarkdown(request)) {
+    const md = await serveMarkdownTwin(request, env, "/whoareyou.md", { "x-robots-tag": "noindex" });
+    if (md) return md;
+  }
+  const headers = {
+    ...GENERATED_PAGE_HEADERS,
+    "x-robots-tag":    "noindex",
+    "referrer-policy": "strict-origin-when-cross-origin",
+  };
+  const response = await serveStaticPage(request, env, { headers });
+  if (response.status !== 404) return response;
+  // `bun run dev` stages no bake; render live so the page works there. The
+  // build refuses to ship without the file, so production never takes this arm.
+  try { await response.body?.cancel(); } catch {}
+  const live = renderWhoareyouPage();
   for (const [k, v] of Object.entries(headers)) live.headers.set(k, v);
   return live;
 }

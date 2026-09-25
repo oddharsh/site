@@ -1,11 +1,10 @@
-// whoareyou.js — extracted from the worker (no-build reorg). Bundled by
-// wrangler/Cloudflare at deploy; not served (inside _worker.js/).
-import { serveMarkdownTwin } from "./lib/assets.ts";
+// whoareyou.ts — /whoareyou (System Properties), its values island, and the
+// /whoareyou.json feed the tray and the release canary read. Bundled by wrangler.
 import { BOT_UA } from "./lib/botauth.ts";
 import { deadline } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
-import { unsafeHtml } from "./lib/html.ts";
-import { esc, wantsMarkdown } from "./lib/http.ts";
+import { html, unsafeHtml } from "./lib/html.ts";
+import { islandMount, islandPreload, islandResponse, islandScript } from "./lib/island.ts";
 import { asNumber, asRecord, asText } from "./lib/parse.ts";
 
 const RDAP_BUDGET_MS = 250;
@@ -130,9 +129,12 @@ export async function gatherWhoareyou(request, ctx) {
     // round-trip 0 ms" beside a 40 ms QUIC row on the page whose own copy says
     // the two never both appear. The transport decides which row is real.
     clientTcpRtt:   cf.httpProtocol === "HTTP/3" ? null : (cf.clientTcpRtt ?? null),
-    // QUIC's counterpart to clientTcpRtt: only populated on HTTP/3, so the two
-    // are mutually exclusive and together they always name the transport.
-    clientQuicRtt:  cf.clientQuicRtt ?? null,
+    // QUIC's counterpart, and the same bug in the other direction. MEASURED
+    // 2026-09-25 over curl on HTTP/2: cf.clientQuicRtt is 0 rather than absent
+    // on TCP, so the page showed "QUIC round-trip 0 ms" beside a real 8 ms TCP
+    // row. The transport decides here too, which is what finally makes the two
+    // mutually exclusive, the way the page's own copy always said they were.
+    clientQuicRtt:  cf.httpProtocol === "HTTP/3" ? (cf.clientQuicRtt ?? null) : null,
     deliveryRate:   cf.edgeL4?.deliveryRate ?? null,
     requestPriority: cf.requestPriority || null,
     httpProtocol:   cf.httpProtocol || "—",
@@ -260,19 +262,128 @@ export async function handleWhoareyouJson(request, env, ctx) {
   });
 }
 
-export async function handleWhoareyou(request, env, ctx) {
-  // The twin DESCRIBES this page rather than mirroring it: every value here is
-  // per-request, so there is nothing fixed to publish. An agent that wants the
-  // actual values for its own request should GET /whoareyou.json, which the twin
-  // points at. Markdown negotiation is still worth answering, because "what does
-  // this page tell you about yourself" is a question worth reading in prose.
-  if (wantsMarkdown(request)) {
-    const md = await serveMarkdownTwin(request, env, "/whoareyou.md");
-    if (md) return md;
-  }
+// ── /whoareyou: a built shell and one island ─────────────────────────
+// The page rendered per request until 2026-09-25, which cost it everything a
+// built document gets: it went out at the edge's roughly-q4 brotli (8,293 B
+// against 6,836 B at q11, measured that day), with no dcz delta, no ETag, and
+// the loose 'unsafe-inline' script policy every unhashed page falls back to.
+// About half the body is fixed prose, so it takes lib/island.ts's shape: the
+// document is baked by build.ts step 5b, and the values are a fragment from
+// /whoareyou/values.html, fetched once after load by the same request pattern
+// the homepage uses for its photo grid.
+//
+// What moved is worth stating, because this page's subject is what a request
+// reveals. The values now describe the FRAGMENT request, which is normally the
+// same connection (one IP, one TLS session, one HTTP version) with a slightly
+// later clock and its own ray id. The one field that genuinely differs is the
+// referrer: the fragment request's Referer is this page, so that row is filled
+// in the browser from document.referrer, which is what the browser sent with
+// the page request. The callout says all of this in the page's own copy.
+export const VALUES_URL = "/whoareyou/values.html";
+const PENDING = "…";
 
+// The placeholder model. The same renderer draws the baked placeholder and the
+// live fragment, so the swap moves only what the live values add. Optional
+// fields a browser visitor normally has (coords, a round-trip, delivery rate,
+// stream priority, the TLS extensions hash) are PENDING rather than null, so
+// their rows are already standing when the values land. Fields most visitors
+// never carry (RDAP until the colo is warm, JA3/JA4, a bot score) stay null.
+const PLACEHOLDER_DATA = {
+  host: "aadhar.sh", scheme: "https", ray: PENDING, ip: PENDING, asn: PENDING, asOrg: PENDING,
+  country: PENDING, continent: "—", isEU: false, region: PENDING, city: PENDING, postalCode: "—",
+  latitude: PENDING, longitude: PENDING, timezone: PENDING, colo: PENDING,
+  clientTcpRtt: PENDING, clientQuicRtt: null, deliveryRate: PENDING, requestPriority: PENDING,
+  httpProtocol: PENDING, tlsVersion: PENDING, tlsCipher: PENDING, tlsExtensions: PENDING,
+  acceptEncoding: PENDING, userAgent: PENDING, acceptLanguage: PENDING, dnt: PENDING,
+  referer: PENDING, cookies: PENDING, botScore: null, verifiedBot: false, detectionIds: null,
+  corporateProxy: null, ja3Hash: null, ja4: null, when: PENDING,
+};
+const PLACEHOLDER_UA = { browser: PENDING, os: PENDING, device: "" };
+
+const unit = (v, u) => (v === PENDING ? v : `${v} ${u}`);
+
+export function renderWhoareyouValues(data, ua, rdap) {
+  const pending = data.ip === PENDING;
+  const dim = (text) => html` <span class="dim">(${text})</span>`;
+  return html`
+    <div style="border:1px solid #9aa7bd;background:#fff;box-shadow:inset 1px 1px 0 #eef2f8;margin:8px 0 2px">
+      <div style="background:linear-gradient(#fbfdff,#eaf0f9);border-bottom:1px solid #cfd8e6;padding:5px 9px;font-weight:bold;color:#0a246a">🖥 Device Manager &middot; this connection</div>
+      <ul style="list-style:none;margin:0;padding:7px 12px;line-height:1.95;font-size:9.5pt">
+        <li>🖧 <b>Network adapter</b> &nbsp;Anycast edge, colo <b>${data.colo}</b> <span class="dim">(${data.asOrg}, AS${data.asn})</span></li>
+        <li>🔒 <b>Security coprocessor</b> &nbsp;<b>${data.tlsVersion}</b> <span class="dim">${data.tlsCipher}</span></li>
+        <li>🌐 <b>Transport</b> &nbsp;<b>${data.httpProtocol}</b>${data.httpProtocol === "HTTP/3" ? html` <span class="dim">over QUIC</span>` : ""}</li>
+        <li>🌍 <b>Region</b> &nbsp;${data.city}, ${data.country} <span class="dim">(${data.timezone})</span></li>
+        <li>🖥 <b>Client</b> &nbsp;${ua.browser} on ${ua.os} <span class="dim">${ua.device}</span></li>
+      </ul>
+      <div style="border-top:1px solid #cfd8e6;padding:5px 10px;font-size:8.5pt;color:#6b7280">What guards all this: <a href="/security">Security Center</a></div>
+    </div>
+
+    <hr>
+
+    <h2>Network adapter</h2>
+    <dl class="field-grid">
+      <dt>IP address</dt>           <dd>${data.ip}</dd>
+      <dt>ISP / ASN</dt>            <dd>${data.asOrg} (AS${data.asn})</dd>
+      ${rdap?.owner ? html`<dt>Registered to</dt>       <dd>${rdap.owner}${dim("per RDAP, usually more specific than the ASN operator")}</dd>` : ""}
+      ${rdap?.networkName ? html`<dt>Network name</dt>        <dd>${rdap.networkName}${rdap.allocType ? dim(rdap.allocType.toLowerCase()) : ""}</dd>` : ""}
+      ${rdap?.cidr ? html`<dt>Allocated range</dt>     <dd>${rdap.cidr}</dd>` : ""}
+      ${rdap?.registered ? html`<dt>Block registered</dt>    <dd>${rdap.registered.slice(0, 10)}${rdap.lastChanged && rdap.lastChanged.slice(0, 10) !== rdap.registered.slice(0, 10) ? dim(`last changed ${rdap.lastChanged.slice(0, 10)}`) : ""}</dd>` : ""}
+      <dt>Country</dt>              <dd>${data.country}${data.continent !== "—" ? dim(`${data.continent}${data.isEU ? ", EU" : ""}`) : ""}</dd>
+      <dt>Region</dt>               <dd>${data.region}</dd>
+      <dt>City</dt>                 <dd>${data.city} ${data.postalCode !== "—" ? `(${data.postalCode})` : ""}</dd>
+      <dt>Timezone</dt>             <dd>${data.timezone}</dd>
+      ${data.latitude ? html`<dt>Approx. coords</dt><dd>${data.latitude}, ${data.longitude}${pending ? "" : html` <a href="https://www.openstreetmap.org/?mlat=${data.latitude}&amp;mlon=${data.longitude}&amp;zoom=10" target="_blank" rel="noopener">(see on map)</a>`}</dd>` : ""}
+      <dt>Cloudflare colo</dt>      <dd>${data.colo}${dim("nearest CF data center serving you")}</dd>
+      ${pending ? html`<dt>Round-trip</dt><dd>${PENDING}</dd>` : ""}
+      ${!pending && data.clientTcpRtt !== null ? html`<dt>TCP round-trip</dt><dd>${data.clientTcpRtt} ms</dd>` : ""}
+      ${!pending && data.clientQuicRtt !== null ? html`<dt>QUIC round-trip</dt><dd>${data.clientQuicRtt} ms${dim("only set on HTTP/3, so it and the TCP row never both appear")}</dd>` : ""}
+      ${data.deliveryRate !== null ? html`<dt>Delivery rate</dt><dd>${unit(data.deliveryRate, "B/s")}${dim("most recent edge estimate for this connection")}</dd>` : ""}
+    </dl>
+
+    <h2>Transport and security</h2>
+    <dl class="field-grid">
+      <dt>HTTP version</dt>         <dd>${data.httpProtocol} ${data.httpProtocol === "HTTP/3" ? html`<span class="pill">over QUIC</span>` : ""}</dd>
+      <dt>TLS version</dt>          <dd>${data.tlsVersion}</dd>
+      <dt>TLS cipher</dt>           <dd>${data.tlsCipher}</dd>
+      <dt>Accept-Encoding</dt>      <dd>${data.acceptEncoding}</dd>
+      ${data.requestPriority ? html`<dt>Stream priority</dt><dd class="muted">${data.requestPriority}</dd>` : ""}
+      ${data.ja3Hash ? html`<dt>JA3 fingerprint</dt><dd>${data.ja3Hash}${dim("TLS ClientHello hash")}</dd>` : ""}
+      ${data.ja4 ? html`<dt>JA4 fingerprint</dt><dd>${data.ja4}</dd>` : ""}
+      ${data.tlsExtensions ? html`<dt>TLS extensions</dt><dd class="muted">${data.tlsExtensions}${dim("SHA-1 of the extension list")}</dd>` : ""}
+    </dl>
+
+    <h2>Computer</h2>
+    <dl class="field-grid">
+      <dt>Best guess</dt>           <dd>${ua.browser} on ${ua.os} ${ua.device}</dd>
+      <dt>User agent</dt>           <dd class="muted">${data.userAgent}</dd>
+      <dt>Languages</dt>            <dd>${data.acceptLanguage}</dd>
+      <dt>Do-not-track</dt>         <dd>${data.dnt}</dd>
+    </dl>
+
+    <h2>This session</h2>
+    <dl class="field-grid">
+      <dt>Received at</dt>          <dd>${data.when}${dim("when the edge rendered these values")}</dd>
+      <dt>Referrer</dt>             <dd><span data-referrer>${PENDING}</span>${dim("read by your browser from what it sent with this page")}</dd>
+      <dt>Cookies sent</dt>         <dd>${data.cookies}</dd>
+      <dt>Cloudflare ray</dt>       <dd class="muted">${data.ray}${dim("the edge's id for the request that fetched these values")}</dd>
+      ${data.botScore !== null ? html`<dt>CF bot score</dt><dd>${data.botScore} / 99${dim("higher = more human-like")}</dd>` : ""}
+      ${data.detectionIds ? html`<dt>Bot detection IDs</dt><dd class="muted">${JSON.stringify(data.detectionIds)}</dd>` : ""}
+      ${data.corporateProxy ? html`<dt>Corporate proxy</dt><dd>detected</dd>` : ""}
+      ${data.verifiedBot ? html`<dt>Verified bot</dt><dd>yes <span class="pill">CF-signed</span></dd>` : ""}
+    </dl>
+`;
+}
+
+// The island. Everything in it is this one request's, so it is never cached.
+export async function handleWhoareyouValues(request, env, ctx) {
   const { data, ua, rdap } = await gatherWhoareyou(request, ctx);
+  return islandResponse(renderWhoareyouValues(data, ua, rdap), {
+    "referrer-policy": "strict-origin-when-cross-origin",
+  });
+}
 
+// ── the shell (rendered at BUILD time; see the section header) ────────
+export function renderWhoareyouPage() {
   return lunaPage({
     title: "System Properties · aadhar.sh/whoareyou",
     path: "System Properties",
@@ -280,6 +391,7 @@ export async function handleWhoareyou(request, env, ctx) {
     width: 720,
     description: "what one HTTP request to aadhar.sh reveals about you. read-only, never stored.",
     robots: "noindex",
+    head: islandPreload(VALUES_URL),
     css: `
 /* ─── /whoareyou, circa 2003 ──────────────────────────────────────────
    matches the holding page chrome: light-blue gradient body, white
@@ -417,8 +529,12 @@ footer {
 }
 footer .signature { font-style: italic; margin-top: 4px; }
 footer .signature small { color: oklch(56.93% 0 0); }
+
+/* the island's failure note, shown only if the values request failed */
+.wy-fail { display: none; color: var(--ink-faint); font-size: 9pt; }
+#wy-values[data-state="failed"] + .wy-fail { display: block; }
 `,
-    body: unsafeHtml(`
+    body: html`
 
     <h1>System Properties</h1>
     <p class="lede">
@@ -426,59 +542,17 @@ footer .signature small { color: oklch(56.93% 0 0); }
       revealed to this site. None of it is logged, none of it is stored. Close this tab and it's gone.
     </p>
 
-    <div style="border:1px solid #9aa7bd;background:#fff;box-shadow:inset 1px 1px 0 #eef2f8;margin:8px 0 2px">
-      <div style="background:linear-gradient(#fbfdff,#eaf0f9);border-bottom:1px solid #cfd8e6;padding:5px 9px;font-weight:bold;color:#0a246a">🖥 Device Manager &middot; this connection</div>
-      <ul style="list-style:none;margin:0;padding:7px 12px;line-height:1.95;font-size:9.5pt">
-        <li>🖧 <b>Network adapter</b> &nbsp;Anycast edge, colo <b>${esc(data.colo)}</b> <span class="dim">(${esc(data.asOrg)}, AS${esc(data.asn)})</span></li>
-        <li>🔒 <b>Security coprocessor</b> &nbsp;<b>${esc(data.tlsVersion)}</b> <span class="dim">${esc(data.tlsCipher)}</span></li>
-        <li>🌐 <b>Transport</b> &nbsp;<b>${esc(data.httpProtocol)}</b>${data.httpProtocol === "HTTP/3" ? ` <span class="dim">over QUIC</span>` : ""}</li>
-        <li>🌍 <b>Region</b> &nbsp;${esc(data.city)}, ${esc(data.country)} <span class="dim">(${esc(data.timezone)})</span></li>
-        <li>🖥 <b>Client</b> &nbsp;${esc(ua.browser)} on ${esc(ua.os)} <span class="dim">${esc(ua.device)}</span></li>
-      </ul>
-      <div style="border-top:1px solid #cfd8e6;padding:5px 10px;font-size:8.5pt;color:#6b7280">What guards all this: <a href="/security">Security Center</a></div>
-    </div>
-
-    <hr>
-
-    <h2>Network adapter</h2>
-    <dl class="field-grid">
-      <dt>IP address</dt>           <dd>${esc(data.ip)}</dd>
-      <dt>ISP / ASN</dt>            <dd>${esc(data.asOrg)} (AS${esc(data.asn)})</dd>
-      ${rdap?.owner ? `<dt>Registered to</dt>       <dd>${esc(rdap.owner)} <span class="dim">(per RDAP, usually more specific than the ASN operator)</span></dd>` : ""}
-      ${rdap?.networkName ? `<dt>Network name</dt>        <dd>${esc(rdap.networkName)}${rdap.allocType ? ` <span class="dim">(${esc(rdap.allocType.toLowerCase())})</span>` : ""}</dd>` : ""}
-      ${rdap?.cidr ? `<dt>Allocated range</dt>     <dd>${esc(rdap.cidr)}</dd>` : ""}
-      ${rdap?.registered ? `<dt>Block registered</dt>    <dd>${esc(rdap.registered.slice(0, 10))}${rdap.lastChanged && rdap.lastChanged.slice(0,10) !== rdap.registered.slice(0,10) ? ` <span class="dim">(last changed ${esc(rdap.lastChanged.slice(0, 10))})</span>` : ""}</dd>` : ""}
-      <dt>Country</dt>              <dd>${esc(data.country)}${data.continent !== "—" ? ` <span class="dim">(${esc(data.continent)}${data.isEU ? ", EU" : ""})</span>` : ""}</dd>
-      <dt>Region</dt>               <dd>${esc(data.region)}</dd>
-      <dt>City</dt>                 <dd>${esc(data.city)} ${data.postalCode !== "—" ? `(${esc(data.postalCode)})` : ""}</dd>
-      <dt>Timezone</dt>             <dd>${esc(data.timezone)}</dd>
-      ${data.latitude ? `<dt>Approx. coords</dt><dd>${esc(data.latitude)}, ${esc(data.longitude)} <a href="https://www.openstreetmap.org/?mlat=${data.latitude}&mlon=${data.longitude}&zoom=10" target="_blank" rel="noopener">(see on map)</a></dd>` : ""}
-      <dt>Cloudflare colo</dt>      <dd>${esc(data.colo)} <span class="dim">(nearest CF data center serving you)</span></dd>
-      ${data.clientTcpRtt !== null ? `<dt>TCP round-trip</dt><dd>${esc(data.clientTcpRtt)} ms</dd>` : ""}
-      ${data.clientQuicRtt !== null ? `<dt>QUIC round-trip</dt><dd>${esc(data.clientQuicRtt)} ms <span class="dim">(only set on HTTP/3, so it and the TCP row never both appear)</span></dd>` : ""}
-      ${data.deliveryRate !== null ? `<dt>Delivery rate</dt><dd>${esc(data.deliveryRate)} B/s <span class="dim">(most recent edge estimate for this connection)</span></dd>` : ""}
-    </dl>
-
-    <h2>Transport and security</h2>
-    <dl class="field-grid">
-      <dt>HTTP version</dt>         <dd>${esc(data.httpProtocol)} ${data.httpProtocol === "HTTP/3" ? `<span class="pill">over QUIC</span>` : ""}</dd>
-      <dt>TLS version</dt>          <dd>${esc(data.tlsVersion)}</dd>
-      <dt>TLS cipher</dt>           <dd>${esc(data.tlsCipher)}</dd>
-      <dt>Accept-Encoding</dt>      <dd>${esc(data.acceptEncoding)}</dd>
-      ${data.requestPriority ? `<dt>Stream priority</dt><dd class="muted">${esc(data.requestPriority)}</dd>` : ""}
-      ${data.ja3Hash ? `<dt>JA3 fingerprint</dt><dd>${esc(data.ja3Hash)} <span class="dim">(TLS ClientHello hash)</span></dd>` : ""}
-      ${data.ja4 ? `<dt>JA4 fingerprint</dt><dd>${esc(data.ja4)}</dd>` : ""}
-      ${data.tlsExtensions ? `<dt>TLS extensions</dt><dd class="muted">${esc(data.tlsExtensions)} <span class="dim">(SHA-1 of the extension list)</span></dd>` : ""}
-    </dl>
+    ${islandMount("wy-values", VALUES_URL, renderWhoareyouValues(PLACEHOLDER_DATA, PLACEHOLDER_UA, null), html`<p>These values arrive in a second request after the page loads, and that needs a script. Without one, <a href="${VALUES_URL}">${VALUES_URL}</a> shows them for your request as plain HTML, and <a href="/whoareyou.json">/whoareyou.json</a> as JSON.</p>`)}
+    <p class="wy-fail">The request for these values failed, so they stay unknown rather than assumed. <a href="${VALUES_URL}">${VALUES_URL}</a> has them for your request.</p>
 
     <h2>Edge Trace</h2>
     <p class="lede">Seven things Cloudflare's edge knows about this connection that
     it never tells the worker. <code>request.cf</code> carries geography, TLS
     version and protocol, but not whether your SNI was encrypted, nor whether you
     arrived through WARP. Those live only in
-    <a href="/cdn-cgi/trace"><code>/cdn-cgi/trace</code></a>, so this section is
-    the one part of the page your browser fetches for itself, from this same
-    origin, after the page has loaded.</p>
+    <a href="/cdn-cgi/trace"><code>/cdn-cgi/trace</code></a>, so your browser
+    fetches this section for itself, from this same origin, after the page has
+    loaded.</p>
     <dl class="field-grid" id="trace-grid">
       <dt>Encrypted SNI</dt>        <dd data-trace="sni">…</dd>
       <dt>Key exchange</dt>         <dd data-trace="kex">…</dd>
@@ -489,26 +563,6 @@ footer .signature small { color: oklch(56.93% 0 0); }
       <dt>Edge sliver</dt>          <dd data-trace="sliver">…</dd>
     </dl>
     <p class="dim" id="trace-note">Fetching…</p>
-
-    <h2>Computer</h2>
-    <dl class="field-grid">
-      <dt>Best guess</dt>           <dd>${esc(ua.browser)} on ${esc(ua.os)} ${esc(ua.device)}</dd>
-      <dt>User agent</dt>           <dd class="muted">${esc(data.userAgent)}</dd>
-      <dt>Languages</dt>            <dd>${esc(data.acceptLanguage)}</dd>
-      <dt>Do-not-track</dt>         <dd>${esc(data.dnt)}</dd>
-    </dl>
-
-    <h2>This session</h2>
-    <dl class="field-grid">
-      <dt>Received at</dt>          <dd>${esc(data.when)}</dd>
-      <dt>Referrer</dt>             <dd>${esc(data.referer)}</dd>
-      <dt>Cookies sent</dt>         <dd>${esc(data.cookies)}</dd>
-      <dt>Cloudflare ray</dt>       <dd class="muted">${esc(data.ray)} <span class="dim">(the edge's id for this one request)</span></dd>
-      ${data.botScore !== null ? `<dt>CF bot score</dt><dd>${esc(data.botScore)} / 99 <span class="dim">(higher = more human-like)</span></dd>` : ""}
-      ${data.detectionIds ? `<dt>Bot detection IDs</dt><dd class="muted">${esc(JSON.stringify(data.detectionIds))}</dd>` : ""}
-      ${data.corporateProxy ? `<dt>Corporate proxy</dt><dd>detected</dd>` : ""}
-      ${data.verifiedBot ? `<dt>Verified bot</dt><dd>yes <span class="pill">CF-signed</span></dd>` : ""}
-    </dl>
 
     <hr>
 
@@ -529,13 +583,24 @@ footer .signature small { color: oklch(56.93% 0 0); }
     </ul>
 
     <div class="callout">
-      <strong>About this page:</strong> The Cloudflare edge renders it. Your
-      browser never speaks to a third party. There are exactly two outbound
-      calls: one server-side RDAP lookup to your IP's registry, which the edge
-      caches for 24h so visitors from the same block don't re-hit ARIN, and the
-      Edge Trace section's fetch of <code>/cdn-cgi/trace</code>, which your own
-      browser makes to this same origin because those seven fields are the ones
-      the worker is never told. The data above lives for as long as
+      <strong>About this page:</strong> The page itself is built once at deploy
+      and is byte-identical for everybody, which is what lets it arrive
+      compressed against bytes your browser may already hold. Everything above
+      that describes you comes from a second request, to
+      <code>/whoareyou/values.html</code> on this same origin, which the
+      Cloudflare edge renders from that request and nothing else. So the values
+      describe the request that fetched them: normally the same connection, IP
+      and TLS session as the page, with a slightly later clock and its own ray
+      id. The referrer is the one field that request would get wrong, since its
+      referrer is this page, so your browser fills that row in from what it sent
+      with the page.
+      <br><br>
+      Your browser never speaks to a third party. Two requests leave this page
+      after it loads, both to this same origin: the values, and the Edge Trace
+      section's read of <code>/cdn-cgi/trace</code>, because those seven fields
+      are the ones the worker is never told. One call leaves the server: an RDAP
+      lookup to your IP's registry, which the edge caches for 24h so visitors
+      from the same block don't re-hit ARIN. The data above lives for as long as
       it takes to render, then nothing writes it to storage. View-source if you
       want, since it's a single JavaScript file you can read end-to-end.
       <br><br>
@@ -573,16 +638,25 @@ footer .signature small { color: oklch(56.93% 0 0); }
       </p>
     </footer>
 
-`),
-    // The one script on the page. It fills the Edge Trace section from
-    // /cdn-cgi/trace, which is the only source for those fields: request.cf
-    // never carries them, so the worker cannot render them and would have to
-    // guess. Same-origin, no third party, and the page states plainly that this
-    // second request happens. Failure is reported rather than hidden, because a
-    // page whose whole subject is what a request reveals should not quietly
-    // show blanks where it could not look.
-    scripts: unsafeHtml(`<script>
+`,
+    // Two scripts. The first fills the Edge Trace section from /cdn-cgi/trace,
+    // the only source for those fields (request.cf never carries them), and the
+    // referrer row from document.referrer, both now and after every island swap.
+    // Failure is reported rather than hidden, because a page whose whole subject
+    // is what a request reveals should not quietly show blanks where it could not
+    // look. The second is lib/island.ts's shared loader, byte-identical on every
+    // page that uses it. build.ts hashes both into script-src (step 7c).
+    scripts: html`${unsafeHtml(`<script>
 (function () {
+  // The referrer row. The values request's own Referer is this page, so the
+  // Worker cannot report what the page request carried; document.referrer is
+  // exactly that, read where it lives.
+  function ref() {
+    var els = document.querySelectorAll("[data-referrer]");
+    for (var i = 0; i < els.length; i++) els[i].textContent = document.referrer || "(none)";
+  }
+  ref();
+  document.addEventListener("island", ref);
   var grid = document.getElementById("trace-grid");
   var note = document.getElementById("trace-note");
   if (!grid || !note || !window.fetch) return;
@@ -609,8 +683,7 @@ footer .signature small { color: oklch(56.93% 0 0); }
       note.textContent = "Could not reach /cdn-cgi/trace (" + e.message + "), so these seven fields are unknown rather than assumed.";
     });
 })();
-</script>`),
-    cache: "no-store, must-revalidate",
+</script>`)}${islandScript()}`,
     headers: {
       "x-robots-tag":    "noindex",
       "referrer-policy": "strict-origin-when-cross-origin",

@@ -86,7 +86,7 @@
       // Folded from five exact rows on 2026-09-16; see wrangler.jsonc.
       "/.well-known/*",
       "/agent/*", "/oauth2/*",
-      "/whoareyou", "/whoareyou.json", "/security*",
+      "/whoareyou*", "/security*",
       "/reading", "/updates", "/updates.json",
     "/perf",
     "/perf.json", "/restore",
