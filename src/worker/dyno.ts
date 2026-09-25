@@ -1,7 +1,8 @@
 import { BOT_UA } from "./lib/botauth.ts";
 import { swrKV } from "./lib/cache.ts";
 import { lunaPage } from "./lib/chrome.ts";
-import { unsafeHtml } from "./lib/html.ts";
+import { html, unsafeHtml } from "./lib/html.ts";
+import { islandMount, islandPreload, islandResponse, islandScript } from "./lib/island.ts";
 import { asNumber } from "./lib/parse.ts";
 import { esc, jsonResponse } from "./lib/http.ts";
 import { span } from "./lib/trace.ts";
@@ -132,7 +133,14 @@ function chart(rows) {
     { key: "worker_gzip", cls: "s-worker", label: "worker bundle, gzip" },
     { key: "assets_br",   cls: "s-assets", label: "client assets, Brotli" },
   ];
-  const sc = scales(rows, (r) => Math.max(r.pages_br ?? 0, r.worker_gzip ?? 0, r.assets_br ?? 0));
+  // The placeholder model (PENDING_ROWS below) carries no dates and no numbers,
+  // so it draws the frame alone: the same viewBox, grid and legend, with no
+  // lines and no tick values. That keeps the swap to the live chart from moving
+  // anything, and it is not a guess at the series.
+  const pending = rows.every((r) => r.ts === null);
+  const sc = pending
+    ? { x: () => PAD_L, y: (v) => PAD_T + PLOT_H - v * PLOT_H, yMax: 1 }
+    : scales(rows, (r) => Math.max(r.pages_br ?? 0, r.worker_gzip ?? 0, r.assets_br ?? 0));
 
   // The seeded prefix is drawn dashed. A number typed into a code comment and a
   // number a runner measured last night are not the same kind of fact, and a
@@ -147,16 +155,16 @@ function chart(rows) {
     const v = sc.yMax * f;
     const y = sc.y(v).toFixed(1);
     return `<line class="grid" x1="${PAD_L}" y1="${y}" x2="${W - PAD_R}" y2="${y}"/>`
-      + `<text class="ytick" x="${PAD_L - 6}" y="${(+y + 3).toFixed(1)}">${Math.round(kib(v))}</text>`;
+      + `<text class="ytick" x="${PAD_L - 6}" y="${(+y + 3).toFixed(1)}">${pending ? "…" : Math.round(kib(v))}</text>`;
   }).join("");
 
   const first = rows[0], last = rows[rows.length - 1];
   const xTicks = [
-    `<text class="xtick" x="${PAD_L}" y="${H - 8}" text-anchor="start">${esc(first.ts)}</text>`,
-    `<text class="xtick" x="${W - PAD_R}" y="${H - 8}" text-anchor="end">${esc(last.ts)}</text>`,
+    `<text class="xtick" x="${PAD_L}" y="${H - 8}" text-anchor="start">${esc(first.ts ?? "…")}</text>`,
+    `<text class="xtick" x="${W - PAD_R}" y="${H - 8}" text-anchor="end">${esc(last.ts ?? "…")}</text>`,
   ].join("");
 
-  const lines = series.map((s) => {
+  const lines = pending ? "" : series.map((s) => {
     const pick = (r) => r[s.key];
     return polyline(seeded, sc, pick, `${s.cls} dashed`)
       + polyline(bridge, sc, pick, `${s.cls} dashed`)
@@ -164,8 +172,9 @@ function chart(rows) {
       + dots(rows, sc, pick, s.cls);
   }).join("");
 
-  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(
-    `Wire size over time, ${first.ts} to ${last.ts}. Worker bundle ${kib(last.worker_gzip ?? 0).toFixed(0)} KiB gzip.`
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(pending
+    ? "Wire size over time, not read yet."
+    : `Wire size over time, ${first.ts} to ${last.ts}. Worker bundle ${kib(last.worker_gzip ?? 0).toFixed(0)} KiB gzip.`
   )}">
   ${gridY}
   <line class="axis" x1="${PAD_L}" y1="${PAD_T}" x2="${PAD_L}" y2="${PAD_T + PLOT_H}"/>
@@ -181,6 +190,25 @@ function chart(rows) {
 
 // ── page ────────────────────────────────────────────────────────────────────
 
+// /garage/dyno is a BUILT document since 2026-09-25, in lib/island.ts's shape:
+// build.ts step 5b renders the shell once, so the lede, the footnote and 4 KB of
+// CSS ship as a q11 twin with a dcz delta, an ETag and hashed CSP. The part that
+// comes from the perf-history branch (chart, callout, table) is the island,
+// fetched after load from PULLS_URL. It rendered per request until then, which
+// sent the whole page at the edge's on-the-fly brotli with no twin and no delta,
+// for a series that changes once a night.
+export const PULLS_URL = "/garage/dyno/pulls.html";
+
+// The table shows the last 14 pulls. The live series has held more than that
+// since 2026-08, so the placeholder draws exactly this many rows and the swap
+// adds none.
+const TABLE_ROWS = 14;
+
+// The placeholder model: rows with no date, no commit and no numbers. The same
+// renderer draws it, so the baked frame and the live fragment share markup, and
+// nothing in it is a guess at the series.
+const PENDING_ROWS = Array.from({ length: TABLE_ROWS }, () => ({ ts: null, sha: null, source: "pending" }));
+
 const delta = (rows, key) => {
   const have = rows.filter((r) => asNumber(r[key]) !== null);
   if (have.length < 2) return null;
@@ -188,24 +216,55 @@ const delta = (rows, key) => {
   return { a, b, pct: ((b - a) / a) * 100, from: have[0].ts, to: have[have.length - 1].ts };
 };
 
-export function renderDyno(rows) {
-  const empty = rows.length < 2;
-  const worker = delta(rows, "worker_gzip");
-  const last = rows[rows.length - 1];
+/** The island: chart, callout and recent pulls, for `rows` or the placeholder. */
+export function renderDynoPulls(rows) {
+  const pending = rows.length > 0 && rows.every((r) => r.ts === null);
+  const empty = !pending && rows.length < 2;
+  const worker = pending ? null : delta(rows, "worker_gzip");
+  const dots = "…";
 
   // An em dash for a row that carries no number, which is what a JSONL row
   // written before that column existed looks like. asNumber also refuses NaN,
-  // so a corrupt cell reads as absent rather than plotting as zero.
-  const cell = (v) => (asNumber(v) === null ? "—" : kib(asNumber(v)).toFixed(1));
-  const table = rows.slice(-14).reverse().map((r) => `<tr>
-      <td class="mono">${esc(r.ts)}</td>
-      <td class="mono sha">${esc(r.sha)}</td>
+  // so a corrupt cell reads as absent rather than plotting as zero. The
+  // placeholder reads an ellipsis instead, since its cells are unread rather
+  // than absent.
+  const cell = (v) => (pending ? dots : asNumber(v) === null ? "—" : kib(asNumber(v)).toFixed(1));
+  const source = (r) => (pending ? dots : r.source === "baseline-note" ? "by hand" : "measured");
+  const table = rows.slice(-TABLE_ROWS).reverse().map((r) => `<tr>
+      <td class="mono">${esc(r.ts ?? dots)}</td>
+      <td class="mono sha">${esc(r.sha ?? dots)}</td>
       <td class="num">${cell(r.worker_gzip)}</td>
       <td class="num">${cell(r.pages_br)}</td>
       <td class="num">${cell(r.assets_br)}</td>
-      <td class="src">${r.source === "baseline-note" ? "by hand" : "measured"}</td>
+      <td class="src">${source(r)}</td>
     </tr>`).join("\n    ");
 
+  // The placeholder keeps the callout's box and its sentence, with the figures
+  // unread, so the text below it does not jump when the numbers arrive.
+  const callout = worker || pending
+    ? `<div class="callout"><b>The worker bundle is the pull worth watching.</b>
+    It went from ${worker ? kib(worker.a).toFixed(0) : dots} to ${worker ? kib(worker.b).toFixed(0) : dots} KiB gzip between ${esc(worker ? worker.from : dots)} and
+    ${esc(worker ? worker.to : dots)}, ${worker ? (worker.pct > 0 ? "up" : "down") : dots} ${worker ? Math.abs(worker.pct).toFixed(0) : dots}%. Every one of those numbers
+    got found by somebody tripping over a stale threshold rather than by anyone watching the slope, which is the
+    specific failure a per-change check cannot catch and a series can.</div>`
+    : "";
+
+  return unsafeHtml(`${empty ? `<div class="callout">No pulls recorded yet, or the series could not be read just now. The
+    hand-entered points below come from the baseline history in <code>perf-budget.mjs</code>, which is what
+    this page exists to replace.</div>` : ""}
+    ${rows.length ? chart(rows) : ""}
+    ${callout}
+    <h2>Recent pulls</h2>
+    <table>
+      <thead><tr><th>date</th><th>commit</th><th class="num">worker gzip</th><th class="num">pages br</th><th class="num">assets br</th><th>source</th></tr></thead>
+      <tbody>
+    ${table || `<tr><td colspan="6">No pulls recorded.</td></tr>`}
+      </tbody>
+    </table>`);
+}
+
+/** The shell build.ts bakes. It takes no arguments, so every build agrees. */
+export function renderDynoPage() {
   return lunaPage({
     title: "Dyno · aadhar.sh",
     path: "Dyno",
@@ -213,10 +272,7 @@ export function renderDyno(rows) {
     width: 700,
     description: "The site on the rollers: worker bundle, pages, and client assets weighed nightly, charted over time.",
     explorerName: "Dyno",
-    explorerDetails: [
-      `${rows.length} pull${rows.length === 1 ? "" : "s"} recorded`,
-      last ? `latest ${last.ts}` : "no data",
-    ],
+    head: islandPreload(PULLS_URL),
     css: `
 h1{margin:0 0 3px}
 .lede{font-size:9pt;color:#4a5568;margin:0 0 13px;line-height:1.5}
@@ -254,40 +310,33 @@ td{padding:4px 6px;border-bottom:1px solid #eef2f7;color:#33415c}
 td.sha{color:#7a4eb0}
 td.src{font-size:7.5pt;color:#8b98a8}
 .foot{font-size:8.5pt;color:#6b7280;border-top:1px solid #e2e8f0;padding-top:9px;margin-top:13px;line-height:1.55}
+/* the island's failure note, shown only if the pulls request failed */
+.dy-fail{display:none;font-size:8.5pt;color:#6b7280;margin:0 0 13px}
+#dy-pulls[data-state="failed"] + .dy-fail{display:block}
 `,
-    body: unsafeHtml(`
+    body: html`
     <h1>Dyno</h1>
     <p class="lede">A dyno tells you what an engine actually puts down. The spec sheet is a claim; the rollers
     are a measurement. This one straps the site down every night: a GitHub Action builds <code>main</code>,
     weighs what would go over the wire, and records a pull.</p>
-    ${empty ? `<div class="callout">No pulls recorded yet, or the series could not be read just now. The
-    hand-entered points below come from the baseline history in <code>perf-budget.mjs</code>, which is what
-    this page exists to replace.</div>` : ""}
-    ${rows.length ? chart(rows) : ""}
-    ${worker ? `<div class="callout"><b>The worker bundle is the pull worth watching.</b>
-    It went from ${kib(worker.a).toFixed(0)} to ${kib(worker.b).toFixed(0)} KiB gzip between ${esc(worker.from)} and
-    ${esc(worker.to)}, ${worker.pct > 0 ? "up" : "down"} ${Math.abs(worker.pct).toFixed(0)}%. Every one of those numbers
-    got found by somebody tripping over a stale threshold rather than by anyone watching the slope, which is the
-    specific failure a per-change check cannot catch and a series can.</div>` : ""}
-    <h2>Recent pulls</h2>
-    <table>
-      <thead><tr><th>date</th><th>commit</th><th class="num">worker gzip</th><th class="num">pages br</th><th class="num">assets br</th><th>source</th></tr></thead>
-      <tbody>
-    ${table || `<tr><td colspan="6">No pulls recorded.</td></tr>`}
-      </tbody>
-    </table>
+    ${islandMount("dy-pulls", PULLS_URL, renderDynoPulls(PENDING_ROWS), html`<p>The chart and the recent pulls arrive in a second request after the page loads, and that needs a script. Without one, <a href="${PULLS_URL}">${PULLS_URL}</a> shows them as plain HTML, and <a href="/garage/dyno.json">/garage/dyno.json</a> as JSON.</p>`)}
+    <p class="dy-fail">The request for the series failed, so the chart stays empty rather than drawn from a guess. <a href="${PULLS_URL}">${PULLS_URL}</a> has it as plain HTML.</p>
     <p class="foot">Every number here is deterministic: identical source bytes weigh the same every time, so a
     flat line means nothing changed rather than that nothing was measured. Sampled figures are deliberately
     absent, because <code>wrangler check startup</code> read 9.6, 7.6, 6.4 and 16.4&nbsp;ms across bytes nobody
     touched, and charting that would draw weather. A dyno with a wandering needle is a decoration. Raw series at
     <a href="/garage/dyno.json">/garage/dyno.json</a>.</p>
-`),
+`,
+    scripts: islandScript(),
   });
 }
 
-export async function handleDyno(request, env, ctx) {
+// The island. The series is the same for every visitor and moves once a night,
+// so unlike /whoareyou's values it may be cached, for the five minutes the JSON
+// endpoint already takes.
+export async function handleDynoPulls(request, env, ctx) {
   const rows = mergeHistory(await readHistory(env, ctx));
-  return renderDyno(rows);
+  return islandResponse(renderDynoPulls(rows), { "cache-control": "public, max-age=300, s-maxage=300" });
 }
 
 export async function handleDynoJson(request, env, ctx) {

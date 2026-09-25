@@ -6,8 +6,10 @@ compressed bytes a browser receives. The page charts that series so a slow
 drift shows up as a slope rather than as a number nobody re-reads.
 
 **This twin describes the chart rather than mirroring it, because the chart is
-drawn from data at request time.** The data is the useful part for a machine
-and it is served as JSON:
+drawn from data at request time.** The page itself is built once per deploy,
+and the chart and the table of recent pulls arrive after load from
+`/garage/dyno/pulls.html`, an HTML fragment rendered from the series. The data
+is the useful part for a machine and it is served as JSON:
 
 - `/garage/dyno.json`: `{ generated, source, count, points }`. `points` is the
   whole series, oldest first. A row carries `ts` (the date), `sha` (the commit

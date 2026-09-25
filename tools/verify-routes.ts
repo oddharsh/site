@@ -166,7 +166,12 @@ const ROUTES = [
   // branch. The local harness has no KV and GitHub is unreachable from it, so
   // these rows assert the DEGRADED path on purpose: the seeded baseline history
   // is bundled, so the page must still render a chart with the fetch failing.
-  { path: "/garage/dyno", status: 200, ct: "text/html", marker: "Dyno" },
+  // A built document since 2026-09-25 (lib/island.ts): the marker is the island
+  // mount, the row after it the fragment that fills it, and the Markdown row
+  // pins the negotiation the exact route skipped until then.
+  { path: "/garage/dyno", status: 200, ct: "text/html", marker: "data-island=/garage/dyno/pulls.html", fullPage: true },
+  { path: "/garage/dyno/pulls.html", status: 200, ct: "text/html", marker: "Recent pulls", fragment: true },
+  { path: "/garage/dyno", status: 200, ct: "text/markdown", headers: { accept: "text/markdown" }, marker: "on the rollers" },
   { path: "/garage/dyno.json", status: 200, ct: "application/json" },
   // The old names, kept because `agents: true` published them and the well-known
   // cards carrying that projection are cached 30 days. An exact ROUTES entry beats

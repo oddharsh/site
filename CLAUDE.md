@@ -4153,8 +4153,8 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     `srcdoc`). Three HTML surfaces stay loose because they do not come through
     `lunaPage`: `/coffee` (cal renders its own templates and cannot import the
     site tree, gotcha 16), `/serendipity` (composes its own policy), and the
-    `/lens?url=` framed view (ditto). `/security` (2026-09-16) and `/whoareyou`
-    (2026-09-25) are built documents with their live values fetched after load;
+    `/lens?url=` framed view (ditto). `/security` (2026-09-16), `/whoareyou` and
+    `/garage/dyno` (both 2026-09-25) are built documents with their live values fetched after load;
     `src/worker/lib/island.ts` is that convention for rows, and its header says
     when JSON slots fit better.
 

@@ -378,6 +378,7 @@ export const TWIN_FACTS = [
       { label: "worker series key", source: "src/worker/dyno.ts", string: "worker_gzip" },
       { label: "assets series key", source: "src/worker/dyno.ts", string: "assets_br" },
       { label: "history branch", source: "src/worker/dyno.ts", string: "perf-history" },
+      { label: "island URL", source: "src/worker/dyno.ts", string: "/garage/dyno/pulls.html" },
       {
         label: "cache window",
         source: "src/worker/dyno.ts",

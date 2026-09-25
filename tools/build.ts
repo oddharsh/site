@@ -1947,6 +1947,20 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   if (!whoareyouHtml.includes('querySelectorAll("[data-island]")')) throw new Error("static /whoareyou renderer lost the island loader");
   if (/TLSv1\.[23]|\d{4}-\d\d-\d\dT\d\d:/.test(whoareyouHtml)) throw new Error("static /whoareyou bake carries a per-request value");
   await writeFile(`${OUT}/public/whoareyou.html`, whoareyouHtml);
+  // /garage/dyno, the same day and the same shape: the chart and table are the
+  // island. What must never reach the bake is a series point, since the build
+  // cannot read perf-history and a baked chart would be one build's snapshot
+  // served for a week: no <polyline>, and no sha cell.
+  const dyno = await import(pathToFileURL(resolve(OUT, "src/worker/dyno.ts")).href + nonce);
+  const dynoResponse = dyno.renderDynoPage();
+  if (dynoResponse.status !== 200) throw new Error(`static /garage/dyno renderer returned ${dynoResponse.status}`);
+  const dynoHtml = await dynoResponse.text();
+  const pullsUrl = dyno.PULLS_URL;
+  if (!dynoHtml.includes(`data-island="${pullsUrl}"`)) throw new Error("static /garage/dyno renderer lost its pulls island");
+  if (!dynoHtml.includes(`rel="preload" as="fetch" href="${pullsUrl}" crossorigin`)) throw new Error("static /garage/dyno renderer lost the preload for its pulls island");
+  if (!dynoHtml.includes('querySelectorAll("[data-island]")')) throw new Error("static /garage/dyno renderer lost the island loader");
+  if (/<polyline|<td class="mono sha">[0-9a-f]{7}/.test(dynoHtml)) throw new Error("static /garage/dyno bake carries a series point");
+  await writeFile(`${OUT}/public/garage/dyno.html`, dynoHtml);
 
   const env = { ASSETS: assets };
   const indexResponse = await writing.renderWritingIndex(env);
@@ -1960,7 +1974,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     if (response.status !== 200) throw new Error(`static /writing/${post.slug} renderer returned ${response.status}`);
     await writeFile(`${OUT}/public/writing/${post.slug}.html`, await response.text());
   }
-  console.log(`static renders: /lens + blank /run + blank /search + /security + /writing index + ${posts.length} notes staged from canonical Worker renderers`);
+  console.log(`static renders: /lens + blank /run + blank /search + /security + /whoareyou + /garage/dyno + /writing index + ${posts.length} notes staged from canonical Worker renderers`);
 }
 
 // Every staged file step 6 content-hashes into /a/. Step 5c reads it to keep
@@ -2748,12 +2762,20 @@ let freshFamily: Buffer | null = null;
 
   const idxSrc = await readFile("src/worker/index.ts", "utf8");
   const wranglerSrc = await readFile("wrangler.jsonc", "utf8");
-  const routesSrc = (idxSrc.match(/const ROUTES = new Map\(\[([\s\S]*?)\]\);/) || [, ""])[1];
+  // The same pattern invariant #1 reads the table with, and the same floor. This
+  // matched `const ROUTES = new Map([...])` until 2026-09-25, a form that stopped
+  // existing on 2026-08-19, so for five weeks routeKeys was EMPTY and every Worker
+  // route resolved only by luck: through a run_worker_first glob, or not at all
+  // under a governed prefix. /garage/dyno.json was the first ref to land in the
+  // gap, when /garage/dyno became the first built page linking it.
+  const routesSrc = (idxSrc.match(/const ROUTE_TABLE(?::[^=]*)? = \[([\s\S]*?)\n\];/) || [, ""])[1];
+  const linkRouteKeys = new Set([...routesSrc.matchAll(/\[\s*"([^"]+)"/g)].map((m) => m[1]));
+  if (linkRouteKeys.size < 60) throw new Error(`link-integrity scanned only ${linkRouteKeys.size} ROUTE_TABLE keys — the scanner has lost the table`);
   const surfaceList = JSON.parse(await readFile("config/site-manifest.json", "utf8")).surfaces;
 
   const resolves = makeResolver({
     files: served,
-    routeKeys: new Set([...routesSrc.matchAll(/\[\s*"([^"]+)"/g)].map((m) => m[1])),
+    routeKeys: linkRouteKeys,
     allow: runWorkerFirst(wranglerSrc).filter((a) => !a.startsWith("!")),
     surfaces: new Set(surfaceList.map((s) => s.path)),
   });
