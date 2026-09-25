@@ -709,6 +709,17 @@ async function handleCookies(request, env, d, uid) {
   return back(`Synced ${r.synced} events — thanks for contributing!`, true);
 }
 
+// /serendipity/mcp-info is BAKED at deploy since 2026-09-25 (build.ts step 5b):
+// a fixed tool list and the endpoint URL, with nothing read per request, so it
+// ships as a q11 twin with a dcz delta and an ETag like any built page. The live
+// arm below stays for local dev, where no bake is staged.
+export const MCP_INFO_PATH = `${PREFIX}/mcp-info`;
+
+/** The page build.ts bakes. It takes no arguments, so every build agrees. */
+export function renderMcpInfoPage() {
+  return renderMcpInfo(MCP_INFO_PATH);
+}
+
 function renderMcpInfo(path) {
   const ep = `https://aadhar.sh${PREFIX}/mcp`;
   const tool = (n, args, desc) =>

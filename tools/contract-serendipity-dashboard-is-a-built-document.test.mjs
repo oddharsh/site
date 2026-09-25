@@ -9,7 +9,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ISLAND_MARKER, islandPreload, islandScript } from "../src/worker/lib/island.ts";
-import { EVENTS_URL, handleSerendipity, renderSerendipityPage, SERENDIPITY_SECURITY_HEADERS, serendipityCsp } from "../serendipity/serendipity.ts";
+import { EVENTS_URL, handleSerendipity, MCP_INFO_PATH, renderMcpInfoPage, renderSerendipityPage, SERENDIPITY_SECURITY_HEADERS, serendipityCsp } from "../serendipity/serendipity.ts";
 
 const EVENTS = [
   { id: "e1", name: "Future <script>", start_at: "2099-01-02T18:00:00Z", location: "NYC", user_status: "going", cover_url: null, attendee_count: 4, host_count: 1, contributors: "alice" },
@@ -102,4 +102,18 @@ test("serendipity's policy keeps its img-src whichever script-src it carries", (
   assert.doesNotMatch(hashed, /unsafe-inline'; img/);
   assert.match(hashed, /img-src 'self' data: https:/, "the cover proxy's https fallback must stay loadable");
   assert.equal(SERENDIPITY_SECURITY_HEADERS["content-security-policy"], serendipityCsp("'self' 'unsafe-inline'"));
+});
+
+test("the agents page is a deterministic bake, and the live arm still renders it", async () => {
+  // Baked by build.ts step 5b since 2026-09-25 with no island, because nothing
+  // on it is read per request. The live arm stays for local dev's missing bake.
+  const a = await renderMcpInfoPage().text();
+  assert.equal(a, await renderMcpInfoPage().text(), "two renders differ, so the build would bake whichever it got");
+  assert.match(a, /list_events/);
+  assert.match(a, /https:\/\/aadhar\.sh\/serendipity\/mcp/, "the endpoint it tells an agent to call");
+  await withCache(async (_c, ctx) => {
+    const live = await handleSerendipity(new Request("https://aadhar.sh" + MCP_INFO_PATH), { SERENDIPITY_DB: fakeDb() }, ctx);
+    assert.equal(live.status, 200);
+    assert.equal(await live.text(), a, "the bake and the live render are the same bytes");
+  });
 });

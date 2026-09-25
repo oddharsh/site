@@ -267,6 +267,8 @@ const ROUTES = [
   // answers 503 without the island marker, which is the loader's failure arm.
   { path: "/serendipity", status: 200, ct: "text/html", marker: "data-island=/serendipity/events.html", fullPage: true },
   { path: "/serendipity/events.html", status: [200, 503], ct: "text/html" },
+  // The agents page is a plain bake since 2026-09-25: a fixed tool list, no island.
+  { path: "/serendipity/mcp-info", status: 200, ct: "text/html", marker: "list_events", fullPage: true },
   ...["/mcp", "/serendipity/mcp"].map((path) => ({ path, method: "POST", status: 200, ct: "application/json",
     headers: { "content-type": "application/json" }, body: "[]", marker: "Invalid Request" })),
 

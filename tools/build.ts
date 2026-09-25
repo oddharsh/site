@@ -2005,6 +2005,14 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   if (!serendipityHtml.includes('querySelectorAll("[data-island]")')) throw new Error("static /serendipity renderer lost the island loader");
   if (/<a class="ev|\d+ events? in the pool|data-cover=/.test(serendipityHtml)) throw new Error("static /serendipity bake carries a pool value");
   await writeFile(`${OUT}/public/serendipity.html`, serendipityHtml);
+  // /serendipity/mcp-info, the same day: a plain bake with no island, since the
+  // page is a fixed tool list. Two renders must agree, or the build would bake
+  // whichever it got.
+  const mcpInfoHtml = await serendipity.renderMcpInfoPage().text();
+  if (mcpInfoHtml !== await serendipity.renderMcpInfoPage().text()) throw new Error("static /serendipity/mcp-info renderer is not deterministic");
+  if (!mcpInfoHtml.includes("list_events")) throw new Error("static /serendipity/mcp-info renderer lost its tool list");
+  await mkdir(`${OUT}/public/serendipity`, { recursive: true });
+  await writeFile(`${OUT}/public/serendipity/mcp-info.html`, mcpInfoHtml);
 
   const env = { ASSETS: assets };
   const indexResponse = await writing.renderWritingIndex(env);
@@ -2045,7 +2053,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     if (problems.length) throw new Error(`per-request ratchet:\n  ${problems.join("\n  ")}`);
     console.log(`per-request ratchet: ${surfaces.size - Object.keys(ledger).length} of ${surfaces.size} registered surfaces are built documents; ${Object.keys(ledger).length} stay per request, each with a reason`);
   }
-  console.log(`static renders: /lens + blank /run + blank /search + /security + /whoareyou + /garage/dyno + /serendipity + /ledger + /around + /inbox + /lens/census + /writing index + ${posts.length} notes staged from canonical Worker renderers`);
+  console.log(`static renders: /lens + blank /run + blank /search + /security + /whoareyou + /garage/dyno + /serendipity + /serendipity/mcp-info + /ledger + /around + /inbox + /lens/census + /writing index + ${posts.length} notes staged from canonical Worker renderers`);
 }
 
 // Every staged file step 6 content-hashes into /a/. Step 5c reads it to keep
