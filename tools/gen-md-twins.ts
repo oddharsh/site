@@ -339,12 +339,14 @@ export const TWIN_FACTS = [
   {
     // /security is a page ABOUT headers, so pinning it to the page's own copy of
     // those headers would only prove the twin agrees with prose that is itself
-    // free to rot. Every fact below is read from lib/security.js, the module that
-    // actually sends them, except the JWKS path, which is the page's own claim.
+    // free to rot. Every fact below is read from the modules that actually send
+    // them: the policy strings from lib/csp-policy.ts (their home since
+    // 2026-09-25), the rest from lib/security.ts. The JWKS path is the page's own
+    // claim.
     twin: "src/content/md/security.md",
     facts: [
-      { label: "frame-ancestors", source: "src/worker/lib/security.ts", string: "frame-ancestors 'none'" },
-      { label: "object-src",      source: "src/worker/lib/security.ts", string: "object-src 'none'" },
+      { label: "frame-ancestors", source: "src/worker/lib/csp-policy.ts", string: "frame-ancestors 'none'" },
+      { label: "object-src",      source: "src/worker/lib/csp-policy.ts", string: "object-src 'none'" },
       { label: "Referrer-Policy", source: "src/worker/lib/security.ts", string: "strict-origin-when-cross-origin" },
       {
         // This used to read the ENFORCE_PAGE_HASHES rollout flag and pick the

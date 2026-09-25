@@ -4142,15 +4142,21 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
 
     Hashes rather than a nonce because the staged documents are PRECOMPRESSED
     (gotcha 14): nothing can be injected per request into bytes brotli'd at build
-    time, and the runtime has no brotli encoder to redo them. The live
-    worker-rendered pages (`/around`, `/coffee`, `/search`, `/ledger`,
-    `/rn/admin`, `/serendipity`) are NOT precompressed, so a per-response nonce is
-    the right mechanism there and is the open follow-up. They keep the loose policy
-    until then, which is no worse than before. **The other way off that list is
-    to stop rendering per request**: `/security` (2026-09-16), `/whoareyou`
-    and `/garage/dyno` (both 2026-09-25) are built documents now, with their live values fetched after
-    load. `src/worker/lib/island.ts` is that convention for rows, and its header
-    says when JSON slots fit better.
+    time, and the runtime has no brotli encoder to redo them. **Pages the Worker
+    renders at request time hash their own, since 2026-09-25**: `lunaPage` holds
+    the whole document as one string before building the Response, so
+    `lib/inline-csp.ts` hashes its inline scripts there (a synchronous SHA-256 in
+    `lib/sha256.ts`, because `crypto.subtle` is async and there is no
+    `nodejs_compat`) and sends the hashed policy with the bytes, which is also
+    what a cached render stores. It FAILS OPEN to the loose policy on anything a
+    hash cannot cover (an event-handler attribute, a `javascript:` URL, an
+    `srcdoc`). Three HTML surfaces stay loose because they do not come through
+    `lunaPage`: `/coffee` (cal renders its own templates and cannot import the
+    site tree, gotcha 16), `/serendipity` (composes its own policy), and the
+    `/lens?url=` framed view (ditto). `/security` (2026-09-16), `/whoareyou` and
+    `/garage/dyno` (both 2026-09-25) are built documents with their live values fetched after load;
+    `src/worker/lib/island.ts` is that convention for rows, and its header says
+    when JSON slots fit better.
 
     Three things verified in a real browser rather than assumed, all on 2026-07-30:
     a HASHED `<script type="speculationrules">` is allowed and an unhashed one
