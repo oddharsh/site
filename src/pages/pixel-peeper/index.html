@@ -80,6 +80,14 @@ b{color:var(--ink)}
 /* below the taskbar (99999) on purpose: the loupe is page furniture, and the
    shell chrome must never be occluded by it. */
 #loupe{position:fixed;z-index:50;width:150px;height:150px;border:2px solid var(--navy);box-shadow:2px 2px 0 rgba(0,0,0,.35);display:none;pointer-events:none;background:#000;image-rendering:pixelated;border-radius:2px}
+/* the diff map draws at the tiles' native 320px, so every source pixel is one screen pixel */
+.diffrow{display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap}
+.diffmap{display:block;width:320px;max-width:100%;aspect-ratio:1;image-rendering:pixelated;background:#000;border:2px solid var(--sh);box-shadow:var(--bevel-sunken);border-radius:2px}
+.diffctl{flex:1 1 200px;display:flex;flex-direction:column;gap:8px}
+.diffctl input[type=range]{vertical-align:middle;width:120px}
+.seg{gap:4px}
+.seg .btn{min-width:0;padding:3px 10px;font-size:9pt}
+.seg .btn[aria-pressed=true]{box-shadow:var(--bevel-sunken);background:var(--face);font-weight:700}
 .banner{display:flex;gap:8px;align-items:flex-start;padding:8px 10px;border:1px solid;border-radius:2px;font-size:10pt;margin:10px 0;line-height:1.45}
 .banner .g{font-weight:700;flex:0 0 auto}
 .banner.ok{background:#eaf5e6;border-color:#a9cf9c;color:#2c5720}
@@ -133,7 +141,10 @@ a{color:var(--link)}
 .axis{position:relative;height:54px;margin-top:4px}
 .axis svg{display:block;width:100%;height:54px}
 .axiscap{font-size:9.5pt;color:var(--ink-soft);margin-top:6px;line-height:1.5}
-@media (max-width:520px){h1{font-size:15pt}.tiles{gap:6px}.score-hero .pct{font-size:26pt}.cap{font-size:7.5pt}}
+@media (max-width:520px){h1{font-size:15pt}.tiles{gap:6px}.score-hero .pct{font-size:26pt}.cap{font-size:7.5pt}
+  /* a phone has no room for the verdict beside its explanation: an unwrapping
+     .g left the explanation a one-word column and pushed it past the window */
+  .banner{flex-direction:column;gap:2px}}
 @media (--reduced-motion) {*{transition:none!important}}
 
   /* OS-window geometry inlined so FIRST PAINT matches nav.js (no shell "pop"
@@ -326,10 +337,14 @@ function onPick(pos,order,trial){
           : ` you picked the one <b>neither</b> metric ranked first. rebel.`;
   } else {const right=chosen.s2best&&chosen.butterbest;
     cls=right?"ok":"no";head=right?"✓ both metrics agree, and so did you":"✕ both metrics picked another one";extra="";}
+  const gl=diffGL();
   fb.innerHTML=`<div class="banner ${cls}"><span class="g">${head}</span><span>${extra} ${AXES[trial.axis].teach}</span></div>
+    ${gl?diffHTML(trial.options.length):""}
     <div class="row" style="justify-content:flex-end"><button class="btn primary" id="next">${state.i===state.trials.length-1?"See my profile ▸":"Next ▸"}</button></div>`;
+  if(gl)wireDiff(gl,tiles,trial,order,pos);
   const next=document.getElementById("next");next.focus();next.onclick=advance;
-  document.onkeydown=e=>{if(typing(e))return;if(e.key==="Enter"||e.key===" ")advance();};
+  // the diff map's own buttons take Enter and Space, so those keys only advance from elsewhere
+  document.onkeydown=e=>{if(typing(e)||(e.target instanceof Element&&e.target.closest("#diff")))return;if(e.key==="Enter"||e.key===" ")advance();};
 }
 function advance(){document.onkeydown=null;state.i++;
   if(state.i>=state.trials.length){screenResult();return;} screenTrial();}
@@ -583,6 +598,102 @@ function attachLoupe(tile,cv,img){
     lctx.drawImage(cv,sx-span/2,sy-span/2,span,span,0,0,loupe.width,loupe.height);
     loupe.style.display="block";loupe.style.left=(e.clientX-loupe.width/2)+"px";loupe.style.top=(e.clientY-loupe.height/2)+"px";});
   tile.addEventListener("mouseleave",()=>loupe.style.display="none");
+}
+
+/* ---- diff map --------------------------------------------------------------
+   After the pick, where two tiles differ. Shown only once the call is made: a
+   map drawn during the pick would hand over the answer the test exists to ask.
+   There is no original on the page, so it compares tiles with each other.
+
+   The difference is taken in JPEG's own space, YCbCr over the decoded sRGB
+   bytes, because that is where the encoders made their choices. Luma is the
+   detail a quality drop eats; CbCr is the color that 4:2:0 halves. A fragment
+   shader does it per pixel, so the gain slider and the mode buttons are a
+   uniform change and a redraw rather than a pass over the pixels in JS. */
+const DIFF_VS=`#version 300 es
+out vec2 uv;
+void main(){vec2 p=vec2((gl_VertexID<<1)&2,gl_VertexID&2);uv=p;gl_Position=vec4(p*2.-1.,0.,1.);}`;
+const DIFF_FS=`#version 300 es
+precision highp float;
+uniform sampler2D A,B;uniform float gain;uniform int mode;
+in vec2 uv;out vec4 o;
+const mat3 YCC=mat3(.299,-.168736,.5,.587,-.331264,-.418688,.114,.5,-.081312);
+const vec3 AMBER=vec3(1.,.645,.14);
+void main(){
+  vec3 d=YCC*(texture(A,uv).rgb-texture(B,uv).rgb);
+  float y=abs(d.x)*gain,c=length(d.yz)*gain;
+  vec3 v=mode==1?vec3(y):mode==2?c*AMBER:vec3(y)+c*AMBER;
+  o=vec4(min(v,vec3(1.)),1.);
+}`;
+const DIFF_MODES=[["both",0],["detail",1],["color",2]];
+// One context for the page's whole life. A context per call would pass the
+// browser's live-context cap inside a single play, and the oldest one is lost.
+let DIFF;
+function diffGL(){
+  if(DIFF!==undefined)return DIFF;
+  const cv=document.createElement("canvas"), gl=cv.getContext("webgl2",{alpha:false,antialias:false});
+  if(!gl)return DIFF=null;
+  const sh=(type,src)=>{const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);return s;};
+  const p=gl.createProgram();
+  gl.attachShader(p,sh(gl.VERTEX_SHADER,DIFF_VS));gl.attachShader(p,sh(gl.FRAGMENT_SHADER,DIFF_FS));gl.linkProgram(p);
+  if(!gl.getProgramParameter(p,gl.LINK_STATUS))return DIFF=null;
+  gl.useProgram(p);
+  gl.uniform1i(gl.getUniformLocation(p,"A"),0);gl.uniform1i(gl.getUniformLocation(p,"B"),1);
+  const uGain=gl.getUniformLocation(p,"gain"), uMode=gl.getUniformLocation(p,"mode");
+  const tex=[0,1].map(()=>{const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);
+    [gl.TEXTURE_MIN_FILTER,gl.TEXTURE_MAG_FILTER].forEach(k=>gl.texParameteri(gl.TEXTURE_2D,k,gl.NEAREST));
+    [gl.TEXTURE_WRAP_S,gl.TEXTURE_WRAP_T].forEach(k=>gl.texParameteri(gl.TEXTURE_2D,k,gl.CLAMP_TO_EDGE));return t;});
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);
+  // the decoded bytes as the encoder wrote them, never color-managed on the way in
+  gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL,gl.NONE);
+  cv.className="diffmap";cv.setAttribute("role","img");
+  cv.addEventListener("webglcontextlost",()=>{DIFF=undefined;});
+  const draw=(gain,mode)=>{gl.viewport(0,0,cv.width,cv.height);gl.uniform1f(uGain,gain);gl.uniform1i(uMode,mode);gl.drawArrays(gl.TRIANGLES,0,3);};
+  // max and mean of one channel at gain 1, read back from the shader's own
+  // output, so the numbers and the picture cannot disagree about what differs
+  let px=null;
+  const measure=mode=>{draw(1,mode);const n=cv.width*cv.height;if(!px||px.length!==n*4)px=new Uint8Array(n*4);
+    gl.readPixels(0,0,cv.width,cv.height,gl.RGBA,gl.UNSIGNED_BYTE,px);
+    let max=0,sum=0;for(let i=0;i<px.length;i+=4){const v=px[i];if(v>max)max=v;sum+=v;}return{max,mean:sum/n};};
+  return DIFF={cv,draw,
+    load(a,b){cv.width=a.naturalWidth;cv.height=a.naturalHeight;
+      [a,b].forEach((img,i)=>{gl.activeTexture(gl.TEXTURE0+i);gl.bindTexture(gl.TEXTURE_2D,tex[i]);
+        gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,img);});
+      return{y:measure(1),c:measure(2)};}};
+}
+function diffHTML(n){
+  const pairs=n===2?[[0,1]]:[[0,1],[0,2],[1,2]];
+  return `<div class="gb" id="diff"><span class="gb-legend">diff map</span>
+    <div class="diffrow"><div id="diffwrap"></div>
+      <div class="diffctl">
+        ${pairs.length>1?`<div class="row seg" role="group" aria-label="compare">${pairs.map(([a,b])=>`<button class="btn" data-pair="${a},${b}" aria-pressed="false">${a+1} vs ${b+1}</button>`).join("")}</div>`:""}
+        <div class="row seg" role="group" aria-label="show">${DIFF_MODES.map(([t,m])=>`<button class="btn" data-mode="${m}" aria-pressed="false">${t}</button>`).join("")}</div>
+        <label class="meta">gain ×<output id="dgv"></output> <input type="range" id="dgain" min="0" max="5" step="1" value="3"></label>
+        <p class="meta" id="dstat" style="margin:0"></p>
+        <p style="margin:0;font-size:9pt">black means the two tiles match. white marks a brightness difference and amber a color one, both multiplied by the gain so a one-level gap still shows.</p>
+      </div></div></div>`;
+}
+function wireDiff(gl,tiles,trial,order,pos){
+  document.getElementById("diffwrap").appendChild(gl.cv);
+  // default: your pick against the tile ssimulacra2 ranked first, or its neighbour when that was your pick
+  const best=order.findIndex(i=>trial.options[i].s2best);
+  const other=best>=0&&best!==pos?best:(pos+1)%order.length;
+  let pair=[Math.min(pos,other),Math.max(pos,other)], mode=0;
+  const gain=document.getElementById("dgain"), gv=document.getElementById("dgv"), stat=document.getElementById("dstat");
+  const g=()=>2**+gain.value;
+  const press=(sel,on)=>document.querySelectorAll(`#diff [${sel}]`).forEach(b=>b.setAttribute("aria-pressed",String(b.getAttribute(sel)===on)));
+  const redraw=()=>{gv.textContent=g();gl.draw(g(),mode);};
+  const load=()=>{
+    const [a,b]=pair.map(p=>tiles[p].querySelector("img"));
+    if(!a.complete||!b.complete||!a.naturalWidth){stat.textContent="tiles still loading";return;}
+    const s=gl.load(a,b),f=v=>`max ${v.max}, avg ${v.mean.toFixed(1)}`;
+    stat.textContent=`tile ${pair[0]+1} vs ${pair[1]+1}, in levels of 255 · detail ${f(s.y)} · color ${f(s.c)}`;
+    gl.cv.setAttribute("aria-label",`difference between tile ${pair[0]+1} and tile ${pair[1]+1}: ${stat.textContent}`);
+    press("data-pair",pair.join(","));redraw();};
+  document.querySelectorAll("#diff [data-pair]").forEach(b=>b.onclick=()=>{pair=b.dataset.pair.split(",").map(Number);load();});
+  document.querySelectorAll("#diff [data-mode]").forEach(b=>b.onclick=()=>{mode=+b.dataset.mode;press("data-mode",String(mode));redraw();});
+  gain.oninput=redraw;
+  press("data-mode","0");load();
 }
 
 let DATA=null;
