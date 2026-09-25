@@ -5,12 +5,12 @@ import calWorker from "../../cal/src/index.ts";
 import { handleAgentAuthClaim, handleAgentAuthRegister, handleAgentAuthRevoke, handleAgentAuthToken } from "./agent.ts";
 import { cronAround, handleAroundChangesJson, handleAroundJson, handleAroundSnapshot, refreshAroundSnapshot, renderAroundPage, SNAPSHOT_URL as AROUND_SNAPSHOT_URL } from "./around.ts";
 import { handleBotPage } from "./bot.ts";
-import { cronCensus, handleCensus, handleCensusJson } from "./census.ts";
+import { cronCensus, handleCensus, handleCensusJson, handleCensusTable, renderCensusPage, TABLE_URL as CENSUS_TABLE_URL } from "./census.ts";
 import { shouldUseWorkersCache } from "./lib/cache.ts";
 import { handleCoffeeAvailability } from "./coffee.ts";
 import { handleHit } from "./counter.ts";
 import { handlePhotoGrid, serveMarkdown, warmGridData } from "./home.ts";
-import { handleInbox } from "./inbox.ts";
+import { handleInbox, handleInboxMail, MAIL_URL as INBOX_MAIL_URL } from "./inbox.ts";
 import { handleWebmention, handleWebmentionDecision } from "./webmention.ts";
 import { cronSendWebmentions } from "./webmention-send.ts";
 import { countCrawlerHit, handleLedgerJson, handleLedgerLines, LINES_URL as LEDGER_LINES_URL, renderLedgerPage } from "./ledger.ts";
@@ -451,7 +451,8 @@ const ROUTE_TABLE: Array<[path: string, handler: RouteHandler]> = [
   ["/lens/nlweb", withSelfFetchHandler(handleLensNlweb)],
   ["/lens/markdown", withSelfFetchHandler(handleLensMarkdown)],
   ["/lens/compare.json", withSelfFetchHandler(handleLensCompare)],
-  ["/lens/census", handleCensus],
+  ["/lens/census", routeCensus],
+  [CENSUS_TABLE_URL, handleCensusTable],
   ["/lens/census.json", handleCensusJson],
 
   ["/mcp", withSelfFetchHandler(handleSiteMcp)],
@@ -518,6 +519,7 @@ const ROUTE_TABLE: Array<[path: string, handler: RouteHandler]> = [
   ["/webmention/approve", handleWebmentionDecision],
   ["/webmention/decline", handleWebmentionDecision],
   ["/inbox", handleInbox],
+  [INBOX_MAIL_URL, handleInboxMail],
 
   ["/rn", handleRn],
   // /rn has no page of its own to twin, so its Markdown is rendered live from
@@ -1148,6 +1150,21 @@ async function routeDyno(request: SiteRequest, env: Env) {
 // /ledger and /around are built documents since 2026-09-25, each with its live
 // half as an island (ledger.ts and around.ts say why). The dev fallback is the
 // same as routeDyno's.
+// /lens/census is a built document since 2026-09-25 (census.ts says why). The
+// owner's ?refresh=KEY view renders live and whole, because its banner belongs
+// to the request that asked for the sweep. /inbox is the same shape, and its
+// route lives in inbox.ts so the contract suite can call it (gotcha 16).
+async function routeCensus(request: SiteRequest, env: Env, ctx: ExecutionContext) {
+  if (new URL(request.url).searchParams.has("refresh")) return handleCensus(request, env, ctx);
+  const headers = { ...GENERATED_PAGE_HEADERS, "x-robots-tag": "index" };
+  const response = await serveStaticPage(request, env, { headers });
+  if (response.status !== 404) return response;
+  try { await response.body?.cancel(); } catch {}
+  const live = renderCensusPage();
+  for (const [k, v] of Object.entries(headers)) live.headers.set(k, v);
+  return live;
+}
+
 async function routeLedger(request: SiteRequest, env: Env) {
   const response = await serveStaticPage(request, env, { headers: GENERATED_PAGE_HEADERS });
   if (response.status !== 404) return response;

@@ -16,6 +16,10 @@
 // index.html. A page whose live part is a handful of SCALARS wants /security's
 // lighter form instead (JSON into data-attributes); an island is for rows.
 //
+// It is the DEFAULT for a registered page, enforced rather than suggested: build
+// step 5b fails on a surface in config/site-manifest.json that has no built
+// document and is not named in config/per-request-pages.json with a reason.
+//
 // Four rules, each learned on the homepage first:
 //   1. The placeholder comes from the SAME renderer as the fragment, fed a
 //      placeholder model, so the two share markup and the swap moves as little

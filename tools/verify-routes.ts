@@ -361,6 +361,12 @@ const ROUTES = [
   // no read token, so the fragment is the meter-unreadable invoice.
   { path: "/ledger", status: 200, ct: "text/html", marker: "data-island=/ledger/lines.html", fullPage: true },
   { path: "/ledger/lines.html", status: 200, ct: "text/html", marker: "Total due", fragment: true },
+  // /inbox and /lens/census are built documents since 2026-09-25 too. A local D1
+  // holds no mentions and no census, so each island answers its empty panel.
+  { path: "/inbox", status: 200, ct: "text/html", marker: "data-island=/inbox/mail.html", fullPage: true },
+  { path: "/inbox/mail.html", status: 200, ct: "text/html", marker: "Local Folders", fragment: true },
+  { path: "/lens/census", status: 200, ct: "text/html", marker: "data-island=/lens/census/table.html", fullPage: true },
+  { path: "/lens/census/table.html", status: 200, ct: "text/html", fragment: true },
   { path: "/ledger.json", status: 200, ct: "application/json" },
   // Browser RUM is retired. Keep both old ledger paths dark so a stale loader
   // cannot silently reconnect to a proxy or collector added as a static asset.

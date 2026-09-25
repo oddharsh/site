@@ -130,7 +130,9 @@
       // was a live round of ammunition rather than a wound. Same class as the
       // missing "41 5 * * *" cron (see the triggers note); build.ts invariant #6
       // diffs the two allowlists now, so the next one fails a check.
-      "/webmention", "/webmention/*", "/inbox",
+      // "/inbox*" covers the page and its island at /inbox/mail.html (2026-09-25);
+      // nothing static lives under it, and /inbox.md is "/*.md"'s anyway.
+      "/webmention", "/webmention/*", "/inbox*",
       "/rn", "/rn.md", "/rn/tracks", "/rn/tracks.html", "/rn/admin", "/rn/set", "/rn/art/*",
       // "/around*" folds "/around", "/around/json" and "/around/changes.json",
       // and covers the page's island at /around/snapshot.html (2026-09-25).

@@ -1,5 +1,6 @@
 import { lunaPage } from "./lib/chrome.ts";
-import { unsafeHtml } from "./lib/html.ts";
+import { html, unsafeHtml } from "./lib/html.ts";
+import { islandMount, islandPreload, islandResponse, islandScript } from "./lib/island.ts";
 import { escHtml, escAttr, jsonResponse, timingSafeEqual } from "./lib/http.ts";
 import { isSubrequestLimit } from "./lib/budget.ts";
 import { lensInspect } from "./lens.ts";
@@ -309,6 +310,17 @@ const TIER_KIND = { open: "ok", signaled: "", enforced: "warn", paid: "warn", un
 // The shared exhibit renderer: the full per-site trend table. Used by the
 // standalone /lens/census page.
 export function censusExhibitHtml(grouped) {
+  // The placeholder model: one unnamed row per roster host, since the roster is
+  // what a sweep reports on. Nothing in it is a claim about any site.
+  if (grouped === PENDING_CENSUS) {
+    const cell = "…";
+    const rows = CENSUS_ROSTER.map(() => '<tr aria-hidden="true"><td class="cx-site">' + cell + "</td><td>" + cell + '</td><td class="cx-num">' + cell +
+      '</td><td class="cx-num">' + cell + '</td><td class="cx-num">' + cell + '</td><td class="cx-spark">' + cell + '</td><td class="cx-surfs">' + cell + "</td></tr>").join("");
+    return '<div class="cx-meta">' + cell + "</div>" +
+      '<div class="cx-scroll"><table class="cx-table"><thead><tr>' +
+      "<th>site</th><th>terms</th><th>readiness</th><th>level</th><th>doors</th><th>score trend</th><th>surfaces published</th>" +
+      "</tr></thead><tbody>" + rows + "</tbody></table></div>";
+  }
   if (!grouped || !grouped.hosts.length) {
     return '<div class="cx-empty">No snapshots recorded yet. The weekly census writes its first row on the next run; an owner can seed it immediately with the refresh key.</div>';
   }
@@ -373,7 +385,7 @@ export const CENSUS_CSS = `
 export async function handleCensus(request, env, ctx) {
   const url = new URL(request.url);
   const refresh = url.searchParams.get("refresh");
-  let banner = "";
+  let banner = html``;
   if (refresh) {
     if (env.CENSUS_KEY && timingSafeEqual(refresh, env.CENSUS_KEY)) {
       // ONE sweep path now. This used to run its own cursor-and-batch variant
@@ -383,12 +395,48 @@ export async function handleCensus(request, env, ctx) {
       // room to spare, and the owner's manual pass and the cron are the same
       // code. Two sweep implementations is how the roster quietly became four.
       ctx.waitUntil(cronCensus(env));
-      banner = '<div class="cx-banner ok">Census refresh triggered: one Workflow instance per roster host, 16 in all, each with its own subrequest budget. Reload in a minute or two as they land.</div>';
+      banner = html`<div class="cx-banner ok">Census refresh triggered: one Workflow instance per roster host, 16 in all, each with its own subrequest budget. Reload in a minute or two as they land.</div>`;
     } else {
-      banner = '<div class="cx-banner err">That refresh key did not match. The census only re-scans on the weekly cron or with the owner key.</div>';
+      banner = html`<div class="cx-banner err">That refresh key did not match. The census only re-scans on the weekly cron or with the owner key.</div>`;
     }
   }
   const grouped = await fetchCensusGrouped(env);
+  return censusPage(html`${banner}${censusExhibit(grouped)}`, { cache: "public, max-age=300, s-maxage=900" });
+}
+
+// /lens/census is a BUILT document since 2026-09-25: build.ts step 5b bakes
+// renderCensusPage() once, so the lede and the CSS ship as a q11 twin with a dcz
+// delta and an ETag, and the table arrives from TABLE_URL. The owner's
+// ?refresh=KEY view above still renders live and whole, since its banner belongs
+// to the request that asked for the sweep (index.ts routes it there).
+export const TABLE_URL = "/lens/census/table.html";
+
+const PENDING_CENSUS = { pending: true };
+
+// The one place the string-built exhibit becomes markup. censusExhibitHtml
+// escapes every value it interpolates (escHtml, escAttr), and the three callers
+// above all take it through here rather than wrapping it themselves.
+function censusExhibit(grouped) {
+  return unsafeHtml(censusExhibitHtml(grouped));
+}
+
+/** The island: the census table, read from D1 for this request. */
+export async function handleCensusTable(request, env) {
+  const grouped = await fetchCensusGrouped(env);
+  return islandResponse(censusExhibit(grouped), { "cache-control": "public, max-age=300, s-maxage=900" });
+}
+
+/** The shell build.ts bakes. It takes no arguments, so every build agrees. */
+export function renderCensusPage() {
+  const mount = islandMount("cx-island", TABLE_URL, censusExhibit(PENDING_CENSUS),
+    html`<p>The census table arrives in a second request after the page loads, and that needs a script. Without one, <a href="${TABLE_URL}">${TABLE_URL}</a> shows it as plain HTML, and <a href="/lens/census.json">/lens/census.json</a> as JSON.</p>`);
+  return censusPage(html`${mount}<p class="cx-fail">The request for the census failed, so the table stays empty rather than guessed. <a href="${TABLE_URL}">${TABLE_URL}</a> has it as plain HTML.</p>`,
+    { head: islandPreload(TABLE_URL), scripts: islandScript() });
+}
+
+// One page frame for both renders, so the live refresh view and the baked shell
+// cannot drift apart.
+function censusPage(exhibit, extra = {}) {
   return lunaPage({
     title: "The census · aadhar.sh",
     path: "The Other Web · census",
@@ -397,6 +445,8 @@ export async function handleCensus(request, env, ctx) {
     description: "A weekly, longitudinal record of how agent-ready 16 representative websites are — spectrum tier, readiness score, and agent doors, tracked over time.",
     robots: "index, follow",
     css: CENSUS_CSS + `
+.cx-fail { display:none; font-size:8.6pt; color:oklch(50% 0 0); margin:8px 0 0; }
+#cx-island[data-state="failed"] + .cx-fail { display:block; }
 .cx-banner { margin:0 0 12px; padding:7px 10px; border-radius:3px; font-size:9pt; }
 .cx-banner.ok { border:1px solid oklch(74% 0.09 150); background:oklch(96% 0.03 150); color:oklch(34% 0.11 150); }
 .cx-banner.err { border:1px solid oklch(74% 0.12 40); background:oklch(96% 0.04 60); color:oklch(44% 0.13 45); }
@@ -410,15 +460,14 @@ h1 { font-family:"Trebuchet MS",Verdana,sans-serif; font-size:13pt; color:var(--
 footer { text-align:center; font-size:9pt; color:oklch(45% 0 0); margin-top:16px; padding-top:11px; border-top:1px solid oklch(86.67% 0.0294 259.59); }
 footer a { color:oklch(42.61% 0.2353 263.74); }
 `,
-    body: unsafeHtml(`
+    body: html`
     <h1>The census</h1>
     <p class="cx-lede">Every per-URL scan in <a href="/lens">The Other Web</a> is a sample of one. This is the population over time: 16 representative sites, re-scanned weekly, so you can watch the agentic web actually move. Nobody else publishes agent-readiness as a time series for named sites, which is exactly why it is worth keeping.</p>
-    ${banner}
-    ${censusExhibitHtml(grouped)}
+    ${exhibit}
     <footer>&larr; <a href="/lens">The Other Web</a> &middot; <a href="/">aadhar.sh</a> &middot; fetched by <a href="/bot">AadharshBot</a></footer>
-`),
-    cache: "public, max-age=300, s-maxage=900",
+`,
     headers: { "x-robots-tag": "index" },
+    ...extra,
   });
 }
 
