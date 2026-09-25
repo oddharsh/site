@@ -50,7 +50,7 @@ import { handleSystemRestore, handleUpdatesJson, handleWindowsUpdate } from "./u
 import { handleWhoareyouJson, handleWhoareyouValues, renderWhoareyouPage, VALUES_URL as WHOAREYOU_VALUES_URL } from "./whoareyou.ts";
 import { handleWritingIndex, handleWritingPost } from "./writing.ts";
 import { handleLlmsFull } from "./x402.ts";
-import { cronSerendipity, handleSerendipity, SERENDIPITY_SECURITY_HEADERS, serendipityCsp, withSerendipitySecurityHeaders } from "../../serendipity/serendipity.ts";
+import { cronSerendipity, handleSerendipity, MCP_INFO_PATH as SERENDIPITY_MCP_INFO, SERENDIPITY_SECURITY_HEADERS, serendipityCsp, withSerendipitySecurityHeaders } from "../../serendipity/serendipity.ts";
 import { scriptHashesFor } from "./lib/csp-hashes.ts";
 
 // Hand the runtime's tracer to both span helpers. THIS is the only module that
@@ -964,8 +964,11 @@ function isResolvedCalendarUrl(href) {
 // does local dev, where no bake is staged and the build map has no entry.
 async function routeSerendipity(request: SiteRequest, env: Env, ctx: ExecutionContext) {
   const url = new URL(request.url);
-  if (request.method === "GET" && url.pathname === "/serendipity" && !url.searchParams.has("msg")) {
-    const hashes = scriptHashesFor("/serendipity");
+  // The dashboard's plain GET and the agents page, both built at deploy; a
+  // flash ?msg= belongs to the dashboard only.
+  const built = (url.pathname === "/serendipity" && !url.searchParams.has("msg")) || url.pathname === SERENDIPITY_MCP_INFO;
+  if (request.method === "GET" && built) {
+    const hashes = scriptHashesFor(url.pathname);
     if (hashes) {
       const scriptSrc = ["'self'", ...hashes.map((h) => `'sha256-${h}'`)].join(" ");
       const response = await serveStaticPage(request, env, {
