@@ -164,8 +164,8 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
   }
   fr.addEventListener('input', draw);
   window.addEventListener('resize', function () { fitDPR(); draw(); });
-  var running = false, raf = 0; function loop() { if (!running) return; t += 0.08; draw(); raf = requestAnimationFrame(loop); }
-  if (reduce) { t = 1.2; draw(); } else if ('IntersectionObserver' in window) { new IntersectionObserver(function (es) { es.forEach(function (e) { if (e.isIntersecting) { if (!running) { running = true; loop(); } } else { running = false; if (raf) cancelAnimationFrame(raf); } }); }, { threshold: 0.1 }).observe(c); } else { running = true; loop(); }
+  var running = false, raf = 0, last = 0; function loop(now) { if (!running) return; t += last ? Math.min(now - last, 50) * 0.0048 : 0.08; last = now || 0; draw(); raf = requestAnimationFrame(loop); }
+  if (reduce) { t = 1.2; draw(); } else if ('IntersectionObserver' in window) { new IntersectionObserver(function (es) { es.forEach(function (e) { if (e.isIntersecting) { if (!running) { running = true; last = 0; loop(); } } else { running = false; if (raf) cancelAnimationFrame(raf); } }); }, { threshold: 0.1 }).observe(c); } else { running = true; loop(); }
 })();
 </script>
 <script type="application/json" id="luq-data">

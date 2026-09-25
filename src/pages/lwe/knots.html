@@ -133,7 +133,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
   // Without it the fixed 560x200 bitmap is upscaled by CSS and reads soft.
   var DPR = Math.min(window.devicePixelRatio || 1, 2);
   c.width = W * DPR; c.height = H * DPR; ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-  var square = true, t = 0, anim = 0; // t: pull progress 0..1
+  var square = true, t = 0, anim = 0, last = 0; // t: pull progress 0..1
   var RED = '#b03a4a', BLUE = '#2f6fd0';
   function ss(a, b, u) { u = u < 0 ? 0 : u > 1 ? 1 : u; u = u * u * (3 - 2 * u); return a + (b - a) * u; }
   function crossings() {
@@ -174,8 +174,8 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
       ? '<b>Square (reef).</b> The second crossing mirrors the first, so the knot seats flat and each rope nips the other. Pull and it locks.'
       : '<b>Granny.</b> The second crossing repeats the first, so the knot is unbalanced. Pull and it capsizes and slides apart, a slip waiting to happen.';
   }
-  function loop() { if (t < 1) { t = Math.min(1, t + 0.03); draw(); anim = requestAnimationFrame(loop); } }
-  function startPull() { if (anim) cancelAnimationFrame(anim); t = 0; draw(); anim = requestAnimationFrame(loop); }
+  function loop(now) { if (t < 1) { t = Math.min(1, t + (last ? Math.min(now - last, 50) * 0.0018 : 0.03)); last = now; draw(); anim = requestAnimationFrame(loop); } }
+  function startPull() { if (anim) cancelAnimationFrame(anim); t = 0; last = 0; draw(); anim = requestAnimationFrame(loop); }
   if (btn) btn.addEventListener('click', function () { square = !square; t = 0; draw(); });
   if (pull) pull.addEventListener('click', startPull);
   draw();
