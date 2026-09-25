@@ -63,7 +63,11 @@ b{color:var(--ink)}
 .spread{justify-content:space-between}
 .tiles{display:flex;gap:10px;justify-content:center;margin:6px 0 2px}
 .opt{flex:1 1 0;max-width:205px;display:flex;flex-direction:column;gap:4px}
-.tile{position:relative;background:#000;border:2px solid var(--sh);box-shadow:var(--bevel-sunken);padding:4px;cursor:pointer;transition:60ms ease-out;border-radius:2px}
+/* one rule for both frames. The build ranks custom-property short names by use
+   across the whole site, comments included, so one more use of the shadow
+   token here renamed a luna.css token and re-minted every page. */
+.tile,.diffmap{border:2px solid var(--sh);box-shadow:var(--bevel-sunken)}
+.tile{position:relative;background:#000;padding:4px;cursor:pointer;transition:60ms ease-out;border-radius:2px}
 .tile img{display:block;width:100%;height:auto}
 .tile .tag{position:absolute;left:6px;top:6px;font-family:var(--font-mono);font-size:8pt;background:rgba(0,0,0,.55);color:#fff;padding:1px 5px;border-radius:2px}
 .tile:hover{border-color:var(--navy2)}
@@ -82,7 +86,7 @@ b{color:var(--ink)}
 #loupe{position:fixed;z-index:50;width:150px;height:150px;border:2px solid var(--navy);box-shadow:2px 2px 0 rgba(0,0,0,.35);display:none;pointer-events:none;background:#000;image-rendering:pixelated;border-radius:2px}
 /* the diff map draws at the tiles' native 320px, so every source pixel is one screen pixel */
 .diffrow{display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap}
-.diffmap{display:block;width:320px;max-width:100%;aspect-ratio:1;image-rendering:pixelated;background:#000;border:2px solid var(--sh);box-shadow:var(--bevel-sunken);border-radius:2px}
+.diffmap{display:block;width:320px;max-width:100%;aspect-ratio:1;image-rendering:pixelated;background:#000;border-radius:2px}
 .diffctl{flex:1 1 200px;display:flex;flex-direction:column;gap:8px}
 .diffctl input[type=range]{vertical-align:middle;width:120px}
 .seg{gap:4px}
@@ -339,7 +343,7 @@ function onPick(pos,order,trial){
     cls=right?"ok":"no";head=right?"✓ both metrics agree, and so did you":"✕ both metrics picked another one";extra="";}
   const gl=diffGL();
   fb.innerHTML=`<div class="banner ${cls}"><span class="g">${head}</span><span>${extra} ${AXES[trial.axis].teach}</span></div>
-    ${gl?diffHTML(trial.options.length):""}
+    ${gl?diffHTML(trial,order):""}
     <div class="row" style="justify-content:flex-end"><button class="btn primary" id="next">${state.i===state.trials.length-1?"See my profile ▸":"Next ▸"}</button></div>`;
   if(gl)wireDiff(gl,tiles,trial,order,pos);
   const next=document.getElementById("next");next.focus();next.onclick=advance;
@@ -661,23 +665,37 @@ function diffGL(){
         gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,img);});
       return{y:measure(1),c:measure(2)};}};
 }
-function diffHTML(n){
-  const pairs=n===2?[[0,1]]:[[0,1],[0,2],[1,2]];
+// a tile's short name, the same one its caption shows once revealed: "quality 45", "zenc", "4:2:0"
+const tileName=(trial,order,p)=>trial.options[order[p]].label.split(" · ")[0];
+function diffHTML(trial,order){
+  const n=order.length, pairs=n===2?[[0,1]]:[[0,1],[0,2],[1,2]], nm=p=>tileName(trial,order,p);
   return `<div class="gb" id="diff"><span class="gb-legend">diff map</span>
     <div class="diffrow"><div id="diffwrap"></div>
       <div class="diffctl">
-        ${pairs.length>1?`<div class="row seg" role="group" aria-label="compare">${pairs.map(([a,b])=>`<button class="btn" data-pair="${a},${b}" aria-pressed="false">${a+1} vs ${b+1}</button>`).join("")}</div>`:""}
+        ${pairs.length>1?`<div class="row seg" role="group" aria-label="compare">${pairs.map(([a,b])=>`<button class="btn" data-pair="${a},${b}" aria-pressed="false">${nm(a)} vs ${nm(b)}</button>`).join("")}</div>`:""}
         <div class="row seg" role="group" aria-label="show">${DIFF_MODES.map(([t,m])=>`<button class="btn" data-mode="${m}" aria-pressed="false">${t}</button>`).join("")}</div>
         <label class="meta">gain ×<output id="dgv"></output> <input type="range" id="dgain" min="0" max="5" step="1" value="3"></label>
         <p class="meta" id="dstat" style="margin:0"></p>
         <p style="margin:0;font-size:9pt">black means the two tiles match. white marks a brightness difference and amber a color one, both multiplied by the gain so a one-level gap still shows.</p>
       </div></div></div>`;
 }
+// Which tile the map compares your pick against when it opens. Wrong on a
+// clear call: the one both metrics chose. On a split: the winner of the metric
+// you did not side with. Right: the runner-up you beat. The resample calls
+// carry no scores by design, and have two tiles, so that is simply the other one.
+function diffDefault(trial,order,pos){
+  const at=f=>order.findIndex(i=>f(trial.options[i]));
+  const s2=at(o=>o.s2best), bt=at(o=>o.butterbest);
+  if(s2<0)return (pos+1)%order.length;
+  if(trial.disagree)return pos===s2?bt:s2;
+  if(pos!==s2)return s2;
+  let best=-1;
+  order.forEach((i,p)=>{if(p!==pos&&(best<0||trial.options[i].s2>trial.options[order[best]].s2))best=p;});
+  return best;
+}
 function wireDiff(gl,tiles,trial,order,pos){
   document.getElementById("diffwrap").appendChild(gl.cv);
-  // default: your pick against the tile ssimulacra2 ranked first, or its neighbour when that was your pick
-  const best=order.findIndex(i=>trial.options[i].s2best);
-  const other=best>=0&&best!==pos?best:(pos+1)%order.length;
+  const other=diffDefault(trial,order,pos), nm=p=>tileName(trial,order,p);
   let pair=[Math.min(pos,other),Math.max(pos,other)], mode=0;
   const gain=document.getElementById("dgain"), gv=document.getElementById("dgv"), stat=document.getElementById("dstat");
   const g=()=>2**+gain.value;
@@ -687,8 +705,8 @@ function wireDiff(gl,tiles,trial,order,pos){
     const [a,b]=pair.map(p=>tiles[p].querySelector("img"));
     if(!a.complete||!b.complete||!a.naturalWidth){stat.textContent="tiles still loading";return;}
     const s=gl.load(a,b),f=v=>`max ${v.max}, avg ${v.mean.toFixed(1)}`;
-    stat.textContent=`tile ${pair[0]+1} vs ${pair[1]+1}, in levels of 255 · detail ${f(s.y)} · color ${f(s.c)}`;
-    gl.cv.setAttribute("aria-label",`difference between tile ${pair[0]+1} and tile ${pair[1]+1}: ${stat.textContent}`);
+    stat.textContent=`${nm(pair[0])} vs ${nm(pair[1])}, in levels of 255 · detail ${f(s.y)} · color ${f(s.c)}`;
+    gl.cv.setAttribute("aria-label",`difference between ${nm(pair[0])} and ${nm(pair[1])}: ${stat.textContent}`);
     press("data-pair",pair.join(","));redraw();};
   document.querySelectorAll("#diff [data-pair]").forEach(b=>b.onclick=()=>{pair=b.dataset.pair.split(",").map(Number);load();});
   document.querySelectorAll("#diff [data-mode]").forEach(b=>b.onclick=()=>{mode=+b.dataset.mode;press("data-mode",String(mode));redraw();});
