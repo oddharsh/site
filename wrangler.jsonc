@@ -197,6 +197,7 @@
       "/garage", "/garage/*", "/lwe", "/lwe/*",
       "/pixel-peeper", "/pixel-peeper/*",
       "/access", "/access/*",
+      "/dotfiles", "/dotfiles/*",
       "/auth.md",
       // The whole agent-discovery namespace, FOLDED from five exact rows on
       // 2026-09-16 (api-catalog, agent-card.json, the two oauth documents, and

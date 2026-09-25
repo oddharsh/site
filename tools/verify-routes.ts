@@ -417,6 +417,12 @@ const ROUTES = [
   // over: if that table stops shipping, the page silently becomes a blank canvas.
   { path: "/access", status: 200, ct: "text/html", marker: "Device list, flat" },
   { path: "/access.md", status: 200, ct: "text/markdown", marker: "Device list, flat", encoding: "br" },
+  // /dotfiles: the page, its twin, and the one sub-resource, the curl-able script
+  // with every box ticked. The script marker is the last line the renderer
+  // writes, so a truncated projection reads as the failure it is.
+  { path: "/dotfiles", status: 200, ct: "text/html", marker: "Advanced settings:" },
+  { path: "/dotfiles.md", status: 200, ct: "text/markdown", marker: "How this list was made", encoding: "br" },
+  { path: "/dotfiles/macos.sh", status: 200, ct: "text/plain", marker: "log out and back in for the rest" },
   // The brotli q11 twins for static text assets, one row per routing shape that
   // reaches servePrecompressedText, since each is a different way for a twin to be
   // built and then not served. feed.xml is the control for the design decision in

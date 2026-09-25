@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#2D78BD">
+<link rel="preload" as="style" href="/luna.css">
+<title>aadhar.sh/dotfiles</title>
+<meta name="description" content="The macOS defaults i changed on my own Mac, read back off the machine with defaults read. Tick the ones you want, copy the generated defaults write script, paste it into Terminal, and restart what it tells you to.">
+<link rel="canonical" href="https://aadhar.sh/dotfiles">
+<meta property="og:type" content="website">
+<meta property="og:title" content="aadhar.sh/dotfiles">
+<meta property="og:description" content="Folder Options for a Mac: tick the defaults you want, get the defaults write lines that set them.">
+<meta property="og:url" content="https://aadhar.sh/dotfiles">
+<meta name="twitter:card" content="summary">
+<!-- Its own favicon: a Folder Options sheet, one ticked box. nav.js's setFavicon
+     only fires for taskbar routes and this one is deliberately unpinned. Encoded
+     with encodeURIComponent, never `;utf8` (a raw < > # or space in a data: URI
+     favicon breaks it silently). -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2016%2016%22%3E%3Crect%20x%3D%221.5%22%20y%3D%222.5%22%20width%3D%2213%22%20height%3D%2211%22%20fill%3D%22%23ece9d8%22%20stroke%3D%22%230831d9%22%2F%3E%3Crect%20x%3D%221.5%22%20y%3D%222.5%22%20width%3D%2213%22%20height%3D%223%22%20fill%3D%22%230831d9%22%2F%3E%3Crect%20x%3D%223.5%22%20y%3D%227.5%22%20width%3D%223%22%20height%3D%223%22%20fill%3D%22%23fff%22%20stroke%3D%22%231c5180%22%2F%3E%3Cpath%20d%3D%22M4%209l1%201%202-2.5%22%20stroke%3D%22%231c5180%22%20fill%3D%22none%22%2F%3E%3Crect%20x%3D%228%22%20y%3D%228.5%22%20width%3D%225%22%20height%3D%221%22%20fill%3D%22%23716f64%22%2F%3E%3C%2Fsvg%3E">
+<style>
+:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:transparent;font-family:var(--font-ui);font-size:10.5pt;line-height:1.5;color:var(--ink);padding:24px 12px 60px;min-height:100vh}
+.window{--axp-maxw:760px;max-width:var(--axp-maxw);margin:0 auto;background:var(--window)}
+.title-bar .df-icon{background:var(--face);border:1px solid var(--blue-40);position:relative}
+.title-bar .df-icon:before{content:"";position:absolute;left:0;right:0;top:0;height:3px;background:var(--blue-40)}
+.title-bar .df-icon:after{content:"";position:absolute;left:3px;top:6px;width:4px;height:4px;background:#fff;border:1px solid var(--blue-40)}
+.content{padding-bottom:18px}
+h1,h2,h3{font-family:var(--font-caption);color:var(--text-heading);line-height:1.25}
+h1{font-size:18pt;margin:0 0 5px;letter-spacing:-.01em}
+h2{font-size:12pt;margin:18px 0 4px}
+p{margin:0 0 12px}.lede{font-size:11pt;color:var(--ink-soft);max-width:65ch}.fine{font-size:9pt;color:var(--ink-dim)}
+a{color:var(--link)}a:hover{color:var(--link-hover)}
+code,.mono{font-family:var(--font-mono);font-size:9pt}
+/* ── the property sheet. Folder Options › View, which is what a long list of
+   checkboxes with an Apply button already was in 2003: a beige sheet, a sunken
+   white tree, bold group rows, indented boxes. Apply here writes a script
+   instead of applying, which is the one honest change. ───────────────────── */
+.sheet{background:var(--face);border:1px solid var(--shadow);box-shadow:var(--bevel-raised);padding:12px 12px 10px;margin:0 0 14px}
+.sheet .cap{font-size:9.5pt;margin:0 0 4px;color:var(--ink)}
+.df-tree{background:var(--surface-field);border:1px solid var(--border-field);box-shadow:var(--bevel-sunken);height:340px;overflow:auto;padding:4px 2px;font-size:9.5pt;scrollbar-color:auto}
+.df-group{font-weight:700;padding:5px 4px 1px;color:var(--ink)}
+.df-group:before{content:"";display:inline-block;width:11px;height:9px;margin:0 6px -1px 0;background:linear-gradient(180deg,#f9e8a3,#e5c35a);border:1px solid #b08b2a;border-top-left-radius:2px}
+.df-row{display:flex;align-items:baseline;gap:6px;padding:1px 4px 1px 22px;cursor:default;white-space:nowrap}
+.df-row:hover{background:var(--row-hover)}
+.df-row input{margin:0 2px 0 0;flex:0 0 auto;accent-color:var(--blue-45)}
+.df-label{flex:0 1 auto;overflow:hidden;text-overflow:ellipsis}
+.df-was{font-family:var(--font-mono);font-size:8pt;color:var(--ink-dim);margin-left:auto;padding-left:10px}
+.df-btns{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:10px 0 0}
+.df-btns .spacer{flex:1}
+.df-btns .mono{color:var(--ink-dim);font-size:8.5pt}
+.df-out{display:block;width:100%;height:260px;margin:0;resize:vertical;font:8.5pt/1.35 var(--font-mono);color:var(--ink);background:var(--surface-field);border:1px solid var(--border-field);box-shadow:var(--bevel-sunken);padding:6px 8px;white-space:pre;overflow:auto;tab-size:2}
+.df-out:focus{outline:none;border-color:var(--blue-45)}
+.curl{background:var(--paper);border:1px solid var(--shadow);box-shadow:var(--bevel-sunken);padding:7px 9px;margin:6px 0 12px;font:9pt/1.5 var(--font-mono);overflow:auto;white-space:pre}
+dl{margin:0 0 12px}dt{font-weight:700;margin-top:6px}dd{margin:0 0 4px 0}
+.status{border-top:1px solid var(--rule);background:var(--face-light);padding:4px 10px;display:flex;gap:8px;flex-wrap:wrap;font-size:8.5pt;color:var(--ink-dim)}.status span:after{content:"·";margin-left:8px;color:var(--ink-faint)}.status span:last-child:after{content:""}
+@media(max-width:620px){body{padding:8px 6px 45px}.df-tree{height:280px}.df-row{white-space:normal;flex-wrap:wrap}.df-label{flex:1 1 0;min-width:0}.df-was{margin-left:0;flex-basis:100%;padding:0 0 0 18px}}
+</style>
+<link rel="stylesheet" href="/luna.css">
+</head>
+<body>
+<!-- axp:desktop --><div id="axp-desktop" aria-hidden="true"></div><!-- /axp:desktop -->
+<div class="window">
+  <div class="title-bar" aria-hidden="true">
+    <span class="title-text"><span class="icon df-icon"></span>aadhar.sh/dotfiles</span>
+    <span class="controls"><span class="min"></span><span class="max"></span><a class="close" href="/" title="back to the desktop" aria-label="back to the desktop"></a></span>
+  </div>
+  <div class="content">
+    <h1>macOS, the way i have it</h1>
+    <p class="lede">Every setting below is one i changed on my own Mac, read back off the machine with <code>defaults read</code> rather than from memory. Tick the ones you want, copy the script, paste it into Terminal, and restart what it tells you to. Nothing runs from this page.</p>
+
+    <section class="sheet" aria-labelledby="df-cap">
+      <p class="cap" id="df-cap">Advanced settings:</p>
+      <div class="df-tree" id="df-list" role="group" aria-labelledby="df-cap">
+        <noscript><div class="df-group">This checklist needs JavaScript to build. The whole set, unedited, is at <a href="/dotfiles/macos.sh">/dotfiles/macos.sh</a>.</div></noscript>
+      </div>
+      <div class="df-btns">
+        <button class="xp-button" type="button" id="df-all">Select all</button>
+        <button class="xp-button" type="button" id="df-none">Clear</button>
+        <span class="spacer"></span>
+        <span class="mono" id="df-count"></span>
+      </div>
+    </section>
+
+    <section class="sheet" aria-labelledby="df-out-cap">
+      <p class="cap" id="df-out-cap">Generated script:</p>
+      <textarea class="df-out" id="df-out" readonly spellcheck="false" aria-labelledby="df-out-cap" wrap="off"></textarea>
+      <div class="df-btns">
+        <button class="xp-button default" type="button" id="df-copy">Copy</button>
+        <span class="spacer"></span>
+        <span class="mono">paste into Terminal, then do what the last lines say</span>
+      </div>
+    </section>
+
+    <h2>The whole set, unedited</h2>
+    <p>The same lines with everything ticked live at <a href="/dotfiles/macos.sh">/dotfiles/macos.sh</a>. Read it before you run it; it is short.</p>
+    <pre class="curl">curl -fsSL https://aadhar.sh/dotfiles/macos.sh -o macos.sh
+less macos.sh
+bash macos.sh</pre>
+
+    <h2>How this list was made</h2>
+    <p><code>defaults read &lt;domain&gt;</code> prints only the keys something has written, so a key that is missing is proof that setting is still at factory, and a key that is present means it was touched at some point. i read the dozen domains that dotfiles conventionally cover, kept the keys whose value differs from what a fresh account gets, and dropped the ones i could not vouch for. Where i know the factory value it sits at the right of the row.</p>
+    <dl>
+      <dt>What is deliberately missing</dt>
+      <dd>My text replacements (personal), the Dock's app list (bookmark blobs, <code>dockutil</code> territory), the Control Center menu bar layout (an opaque blob), and the Terminal profile (archived colours, exportable as a <code>.terminal</code> file instead). Also the keyboard shortcuts i turned off under Accessibility, because i could not confirm which of those ship off already.</dd>
+      <dt>Why some rows want a logout</dt>
+      <dd>Key repeat, the press-and-hold switch, tracking speed and the sound settings are read once at login by the processes that own them, and no <code>killall</code> reaches those. The Dock, Finder, the screenshot service and the clock each restart in place.</dd>
+      <dt>Measured on</dt>
+      <dd>macOS 26 (Darwin 27.2), 2026-09-21. Three rows are macOS 26 keys and say so, the window rows are Sonoma and Sequoia keys, and everything else predates Ventura.</dd>
+    </dl>
+    <p class="fine">Made in the same spirit as <a href="https://github.com/mathiasbynens/dotfiles/blob/main/.macos" rel="noopener">mathiasbynens/dotfiles</a>, which is where most of the world learned these keys. The difference is the checklist: his is a script you edit, this is a list you tick.</p>
+  </div>
+  <div class="status"><span>folder options, for a mac</span><span>nothing runs from this page</span><span>read off the machine 2026-09-21</span></div>
+</div>
+<script type="application/json" id="dotfiles-data">
+{
+  "options": [
+    { "id": "key-repeat", "group": "Keyboard", "label": "Fastest key repeat", "was": "6", "note": "System Settings stops at 2. This is that floor.",
+      "restart": ["login"], "writes": [{ "domain": "NSGlobalDomain", "key": "KeyRepeat", "type": "int", "value": 2 }] },
+    { "id": "initial-key-repeat", "group": "Keyboard", "label": "Shortest delay until repeat", "was": "25",
+      "restart": ["login"], "writes": [{ "domain": "NSGlobalDomain", "key": "InitialKeyRepeat", "type": "int", "value": 15 }] },
+    { "id": "press-and-hold", "group": "Keyboard", "label": "Hold a key to repeat it, never the accent popup", "was": "true",
+      "restart": ["login"], "writes": [{ "domain": "NSGlobalDomain", "key": "ApplePressAndHoldEnabled", "type": "bool", "value": false }] },
+    { "id": "spotlight-hotkey", "group": "Keyboard", "label": "Free Cmd+Space from Spotlight", "was": "enabled", "note": "Hotkey 64 is Spotlight search. Off here because Raycast takes the chord. Search still opens from the menu bar.",
+      "restart": ["settings"], "raw": ["defaults write com.apple.symbolichotkeys AppleSymbolicHotKeys -dict-add 64 '{ enabled = 0; value = { parameters = (32, 49, 1048576); type = standard; }; }'"] },
+
+    { "id": "tap-to-click", "group": "Trackpad", "label": "Tap to click", "was": "off", "note": "Three writes: the built-in trackpad, a Bluetooth one, and the per-host key the login screen reads.",
+      "restart": ["login"], "writes": [
+        { "domain": "com.apple.AppleMultitouchTrackpad", "key": "Clicking", "type": "bool", "value": true },
+        { "domain": "com.apple.driver.AppleBluetoothMultitouch.trackpad", "key": "Clicking", "type": "bool", "value": true },
+        { "domain": "NSGlobalDomain", "key": "com.apple.mouse.tapBehavior", "type": "int", "value": 1, "host": "current" }
+      ] },
+    { "id": "three-finger-drag", "group": "Trackpad", "label": "Three-finger drag", "was": "off", "note": "Lives under Accessibility, Pointer Control. Enabling it moves the space-switch swipe to four fingers, which is what the last four lines do.",
+      "restart": ["login"], "writes": [
+        { "domain": "com.apple.AppleMultitouchTrackpad", "key": "TrackpadThreeFingerDrag", "type": "bool", "value": true },
+        { "domain": "com.apple.driver.AppleBluetoothMultitouch.trackpad", "key": "TrackpadThreeFingerDrag", "type": "bool", "value": true },
+        { "domain": "NSGlobalDomain", "key": "com.apple.trackpad.threeFingerDragGesture", "type": "int", "value": 1, "host": "current" },
+        { "domain": "com.apple.AppleMultitouchTrackpad", "key": "TrackpadThreeFingerHorizSwipeGesture", "type": "int", "value": 0 },
+        { "domain": "com.apple.AppleMultitouchTrackpad", "key": "TrackpadFourFingerHorizSwipeGesture", "type": "int", "value": 2 },
+        { "domain": "com.apple.driver.AppleBluetoothMultitouch.trackpad", "key": "TrackpadThreeFingerHorizSwipeGesture", "type": "int", "value": 0 },
+        { "domain": "com.apple.driver.AppleBluetoothMultitouch.trackpad", "key": "TrackpadFourFingerHorizSwipeGesture", "type": "int", "value": 2 }
+      ] },
+    { "id": "tracking-speed", "group": "Trackpad", "label": "Tracking speed all the way up", "note": "3 is the right end of the slider.",
+      "restart": ["login"], "writes": [{ "domain": "NSGlobalDomain", "key": "com.apple.trackpad.scaling", "type": "float", "value": 3 }] },
+
+    { "id": "dark-mode", "group": "Appearance", "label": "Dark mode", "was": "Light", "note": "To go back: defaults delete NSGlobalDomain AppleInterfaceStyle. There is no Light value, only the absence of Dark.",
+      "restart": ["login"], "writes": [{ "domain": "NSGlobalDomain", "key": "AppleInterfaceStyle", "type": "string", "value": "Dark" }] },
+    { "id": "dark-icons", "group": "Appearance", "label": "Dark icon and widget style (macOS 26)",
+      "restart": ["login"], "writes": [{ "domain": "NSGlobalDomain", "key": "AppleIconAppearanceTheme", "type": "string", "value": "RegularDark" }] },
+    { "id": "glass-tint", "group": "Appearance", "label": "No glass tint (macOS 26)",
+      "restart": ["login"], "writes": [{ "domain": "NSGlobalDomain", "key": "NSGlassTintAmount", "type": "int", "value": 0 }] },
+    { "id": "menu-icons", "group": "Appearance", "label": "No icons in menu items (macOS 26)", "was": "true", "note": "No switch for this in System Settings. Apps read it when they launch.",
+      "restart": ["login"], "writes": [{ "domain": "NSGlobalDomain", "key": "NSMenuEnableActionImages", "type": "bool", "value": false }] },
+
+    { "id": "dock-autohide", "group": "Dock", "label": "Hide the Dock", "was": "shown",
+      "restart": ["Dock"], "writes": [{ "domain": "com.apple.dock", "key": "autohide", "type": "bool", "value": true }] },
+    { "id": "dock-instant", "group": "Dock", "label": "Show it instantly, no delay and no slide", "note": "No switch for either in System Settings. This is the pair that proves a Mac was once scripted.",
+      "restart": ["Dock"], "writes": [
+        { "domain": "com.apple.dock", "key": "autohide-delay", "type": "float", "value": 0 },
+        { "domain": "com.apple.dock", "key": "autohide-time-modifier", "type": "float", "value": 0 }
+      ] },
+    { "id": "dock-size", "group": "Dock", "label": "Tiny Dock, big magnification", "note": "24px tiles, 61px under the cursor.",
+      "restart": ["Dock"], "writes": [
+        { "domain": "com.apple.dock", "key": "tilesize", "type": "int", "value": 24 },
+        { "domain": "com.apple.dock", "key": "magnification", "type": "bool", "value": true },
+        { "domain": "com.apple.dock", "key": "largesize", "type": "int", "value": 61 }
+      ] },
+    { "id": "dock-group-apps", "group": "Dock", "label": "Group windows by app in Mission Control",
+      "restart": ["Dock"], "writes": [{ "domain": "com.apple.dock", "key": "expose-group-apps", "type": "bool", "value": true }] },
+
+    { "id": "stage-manager", "group": "Windows", "label": "Stage Manager off",
+      "restart": ["login"], "writes": [{ "domain": "com.apple.WindowManager", "key": "GloballyEnabled", "type": "bool", "value": false }] },
+    { "id": "tiling-margins", "group": "Windows", "label": "No gaps between tiled windows", "was": "true",
+      "restart": ["login"], "writes": [{ "domain": "com.apple.WindowManager", "key": "EnableTiledWindowMargins", "type": "bool", "value": false }] },
+    { "id": "click-wallpaper", "group": "Windows", "label": "Clicking the wallpaper does nothing", "was": "true", "note": "Sonoma made a click on the desktop hide every window. This puts it back.",
+      "restart": ["login"], "writes": [{ "domain": "com.apple.WindowManager", "key": "EnableStandardClickToShowDesktop", "type": "bool", "value": false }] },
+    { "id": "reopen-windows", "group": "Windows", "label": "Reopen an app's windows after quitting it",
+      "restart": ["login"], "writes": [{ "domain": "NSGlobalDomain", "key": "NSQuitAlwaysKeepsWindows", "type": "bool", "value": true }] },
+
+    { "id": "screenshot-clipboard", "group": "Screenshots", "label": "Screenshots go to the clipboard", "was": "file on the Desktop",
+      "restart": ["SystemUIServer"], "writes": [{ "domain": "com.apple.screencapture", "key": "target", "type": "string", "value": "clipboard" }] },
+    { "id": "screenshot-hdr", "group": "Screenshots", "label": "Capture in SDR, never HDR",
+      "restart": ["SystemUIServer"], "writes": [{ "domain": "com.apple.screencapture", "key": "captureHDR", "type": "bool", "value": false }] },
+
+    { "id": "clock-seconds", "group": "Menu bar", "label": "Clock shows seconds", "was": "false",
+      "restart": ["ControlCenter"], "writes": [{ "domain": "com.apple.menuextra.clock", "key": "ShowSeconds", "type": "bool", "value": true }] },
+    { "id": "clock-ampm", "group": "Menu bar", "label": "Clock hides AM/PM",
+      "restart": ["ControlCenter"], "writes": [{ "domain": "com.apple.menuextra.clock", "key": "ShowAMPM", "type": "bool", "value": false }] },
+
+    { "id": "ui-sounds", "group": "Sound", "label": "Interface sound effects off", "was": "on",
+      "restart": ["login"], "writes": [{ "domain": "NSGlobalDomain", "key": "com.apple.sound.uiaudio.enabled", "type": "int", "value": 0 }] },
+    { "id": "beep", "group": "Sound", "label": "Alert sound is Glass",
+      "restart": ["login"], "writes": [{ "domain": "NSGlobalDomain", "key": "com.apple.sound.beep.sound", "type": "string", "value": "/System/Library/Sounds/Glass.aiff" }] },
+
+    { "id": "finder-list", "group": "Finder", "label": "List view by default", "was": "icons", "note": "Nlsv is list. icnv icons, clmv columns, glyv gallery.",
+      "restart": ["Finder"], "writes": [{ "domain": "com.apple.finder", "key": "FXPreferredViewStyle", "type": "string", "value": "Nlsv" }] },
+    { "id": "finder-home", "group": "Finder", "label": "New windows open at home", "was": "Recents", "note": "PfHm is home. PfDe Desktop, PfDo Documents, PfAF Recents.",
+      "restart": ["Finder"], "writes": [{ "domain": "com.apple.finder", "key": "NewWindowTarget", "type": "string", "value": "PfHm" }] },
+    { "id": "finder-drives", "group": "Finder", "label": "Internal drive off the desktop, externals stay",
+      "restart": ["Finder"], "writes": [
+        { "domain": "com.apple.finder", "key": "ShowHardDrivesOnDesktop", "type": "bool", "value": false },
+        { "domain": "com.apple.finder", "key": "ShowExternalHardDrivesOnDesktop", "type": "bool", "value": true },
+        { "domain": "com.apple.finder", "key": "ShowRemovableMediaOnDesktop", "type": "bool", "value": true }
+      ] },
+
+    { "id": "screensaver", "group": "Screen saver", "label": "Start after 5 minutes", "was": "20 minutes",
+      "restart": [], "writes": [{ "domain": "com.apple.screensaver", "key": "idleTime", "type": "int", "value": 300, "host": "current" }] }
+  ]
+}
+</script>
+<script type="module">import { init } from "/dotfiles.js"; init();</script>
+<script src="/nav.js" defer></script>
+<!-- axp:shell --><nav id="axp-icons" aria-label="desktop shortcuts"><a class="axp-ico" title="writing, in flux" href="/writing" data-key="Notepad" style="left:9px;top:9px"><span class="ic note" aria-hidden="true"></span><span class="t">Notepad</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="GitHub (opens in a new tab)" href="https://github.com/oddharsh" data-key="GitHub" style="left:9px;top:95px"><span class="ic " style="background:linear-gradient(180deg,oklch(72% 0.05 255),oklch(60% 0.07 257))" aria-hidden="true">G</span><span class="t">GitHub</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Twitter (opens in a new tab)" href="https://x.com/oddhash" data-key="Twitter" style="left:9px;top:181px"><span class="ic " style="background:linear-gradient(180deg,oklch(78% 0.12 233),oklch(64% 0.16 240))" aria-hidden="true">@</span><span class="t">Twitter</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Instagram (opens in a new tab)" href="https://www.instagram.com/aadharsh.hif" data-key="Photos" style="left:9px;top:267px"><span class="ic " style="background:linear-gradient(180deg,oklch(74% 0.08 78),oklch(52% 0.10 52))" aria-hidden="true"><i class="cam" aria-hidden="true"></i></span><span class="t">Photos</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Curius (opens in a new tab)" href="https://curius.app/aadharsh-pannirselvam" data-key="Curius" style="left:9px;top:353px"><span class="ic " style="background:linear-gradient(180deg,oklch(73% 0.15 145),oklch(60% 0.17 146))" aria-hidden="true">C</span><span class="t">Curius</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Beli (opens in a new tab)" href="https://beliapp.com/users/aadharsh" data-key="Beli" style="left:9px;top:439px"><span class="ic " style="background:linear-gradient(180deg,oklch(81% 0.16 70),oklch(68% 0.18 55))" aria-hidden="true">B</span><span class="t">Beli</span></a><a class="axp-ico" target="_blank" rel="noopener me external" title="Spotify (opens in a new tab)" href="https://open.spotify.com/user/aadharsh2010" data-key="Music" style="left:9px;top:525px"><span class="ic " style="background:linear-gradient(180deg,oklch(75% 0.17 146),oklch(62% 0.19 147))" aria-hidden="true">♪</span><span class="t">Music</span></a></nav><div id="axp-taskbar" role="navigation" aria-label="taskbar"><a id="axp-start" href="/run" aria-haspopup="dialog" aria-expanded="false"><span id="axp-cone" aria-hidden="true"></span>start<span class="axp-kbd" aria-hidden="true">⌘K</span></a><div id="axp-pins"><a class="axp-pin" title="prototypes + experiments" href="/garage" data-count="25"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-garage" alt=""></span><span class="lbl">garage</span></a><a class="axp-pin" title="chat-style explainers + live demos" href="/lwe" data-count="12"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lwe" alt=""></span><span class="lbl">lwe</span></a><a class="axp-pin" title="notes, in flux: an editable notepad" href="/writing" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-writing" alt=""></span><span class="lbl">writing</span></a><a class="axp-pin" title="what I've been reading, from Curius" href="/reading" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-reading" alt=""></span><span class="lbl">reading</span></a><a class="axp-pin" title="events worth going to" href="/serendipity" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-serendipity" alt=""></span><span class="lbl">serendipity</span></a><a class="axp-pin" title="the crypto-VC neighborhood" href="/around" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-around" alt=""></span><span class="lbl">around</span></a><a class="axp-pin" title="the other web: how machines read a URL" href="/lens" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-lens" alt=""></span><span class="lbl">lens</span></a><a class="axp-pin" title="a compression vision test — whose eye do you have?" href="/pixel-peeper" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-pixel-peeper" alt=""></span><span class="lbl">pixel peeper</span></a><a class="axp-pin" title="what I'm listening to right now" href="/rn" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-music" alt=""></span><span class="lbl">music</span></a><a class="axp-pin" title="book a coffee / bagel" href="/coffee" data-count="0"><span class="fav" aria-hidden="true"><img src="/icons.svg#pin-coffee" alt=""></span><span class="lbl">coffee</span></a></div><div id="axp-spacer"></div><div id="axp-tray"><button id="axp-sound" type="button" hidden></button><a id="axp-sysprop" class="axp-trayico" href="/whoareyou" data-kind="sysprop" title="System Properties · what one request reveals" aria-label="System Properties"><img src="/icons.svg#tray-sysprop" alt=""></a><a id="axp-security" class="axp-trayico" href="/security" data-kind="security" title="Security Center · what guards this site" aria-label="Security Center"><img src="/icons.svg#tray-security" alt=""></a><a id="axp-updates" class="axp-trayico" href="/updates" data-kind="updates" title="Windows Update · what shipped lately" aria-label="Windows Update"><img src="/icons.svg#tray-updates" alt=""></a><a id="axp-webmcp" class="axp-trayico" hidden href="/whoareyou" data-kind="webmcp" title="Agent activity · what an agent has asked this page to do" aria-label="Agent activity"><img src="/icons.svg#tray-webmcp" alt=""></a><span id="axp-clock" aria-hidden="true"></span></div></div><script type="speculationrules">{"prerender":[{"where":{"and":[{"href_matches":"/*"},{"not":{"href_matches":"/whoareyou*"}},{"not":{"href_matches":"/run"}},{"not":{"href_matches":"/rn*"}},{"not":{"href_matches":"/images*"}},{"not":{"href_matches":"/index.md"}},{"not":{"href_matches":"/llms.txt"}}]},"eagerness":"moderate"}]}</script><!-- /axp:shell -->
+</body>
+</html>
