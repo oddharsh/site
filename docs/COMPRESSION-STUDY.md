@@ -115,6 +115,17 @@ The current family offer matches `document`. A fragment fetched through `fetch()
 destination `empty`, so fixing the encoder alone does not make these requests negotiate DCZ.
 The photo fragment is `no-store` and cannot supply a reusable response dictionary itself.
 
+### Worker-rendered documents, measured 2026-09-25
+
+The fragments above are the weak case. Whole documents the Worker renders are requested as
+`document`, so the family dictionary does apply to them once the encoder works. Against
+production on 2026-09-25, 51 of 66 registered pages answered `dcz` and 15 answered `br`.
+At zstd level 6 those 15 drop from 97,711 to 76,557 B (21.6%), and each saves 1,178 to
+1,694 B: the shared shell, nearly constant across a sixfold range in page size. Level 6
+took a median 0.207 ms per page under Node 26.9 on an M3 Max; level 19 took up to 9.9 ms.
+`node tools/runtime-dcz-probe.ts` reproduces the table, and
+[`/garage/dictionary`](https://aadhar.sh/garage/dictionary) is the write-up.
+
 ### A held-out fragment dictionary check
 
 Use the first 6,797-byte grid response as a raw dictionary; its q11 acquisition costs 1,334 B.

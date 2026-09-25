@@ -101,6 +101,7 @@ export function createRun(options) {
     { label: "garage · tooltips", path: "/garage/tooltips", hint: "tooltip experiments" },
     { label: "garage · wire", path: "/garage/wire", hint: "the first build step + the brotli rabbit hole" },
     { label: "garage · workers", path: "/garage/workers", hint: "off Pages, onto Workers" },
+    { label: "garage · dictionary", path: "/garage/dictionary", hint: "runtime dcz deltas, and the workerd fix they wait on" },
     // generated:garage-pages:end
     // Raycast deep-link easter eggs — fire built-in Raycast commands (every Raycast
     // user has these). kind "raycast" → location.href to the protocol URL: the OS
