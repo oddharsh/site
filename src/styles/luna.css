@@ -771,7 +771,9 @@ font-size:11px;letter-spacing:.02em;border-left:1px solid oklch(40% 0.16 262);bo
 }
 .np-list a:hover { background: var(--row-hover); }
 .np-list a:hover .np-title { color: oklch(62.80% 0.2577 29.23); }
-.np-title {
+/* Scoped to the tracklist on purpose. The Notepad caption on /writing is also
+   a .np-title, inside a white title bar, and a bare selector painted it navy. */
+.np-list .np-title {
   font-weight: bold;
   color: var(--blue-40);
 }
