@@ -69,7 +69,11 @@ test("the ledger placeholder is one unread line per nameable crawler, and names 
 
 test("/ledger/lines.html is an edge-cached island that degrades without tokens", async () => {
   await withColdCache(async (puts) => {
-    const res = await handleLedgerLines(new Request("https://aadhar.sh" + LINES_URL), NO_BINDINGS, { waitUntil(p) { return p; } });
+    // cachedRender stores the fragment inside waitUntil, after hashing a weak
+    // ETag, so the test awaits those promises rather than guessing how long they
+    // take. A setTimeout(0) passed under bun and lost the race on CI's node leg.
+    const waits = [];
+    const res = await handleLedgerLines(new Request("https://aadhar.sh" + LINES_URL), NO_BINDINGS, { waitUntil(p) { waits.push(p); } });
     assert.equal(res.status, 200);
     assert.equal(res.headers.get(ISLAND_MARKER), "1");
     assert.equal(res.headers.get("cache-control"), "public, max-age=60, s-maxage=300");
@@ -77,7 +81,7 @@ test("/ledger/lines.html is an edge-cached island that degrades without tokens",
     const body = await res.text();
     assert.match(body, /can't read it back yet/, "no read token is the meter-unreadable line, not an error");
     assert.doesNotMatch(body, /<html|<head/i, "a fragment, never a document");
-    await new Promise((r) => setTimeout(r, 0));
+    await Promise.all(waits);
     assert.equal(puts.length, 1, "a 200 fragment is stored for the next visitor in this colo");
   });
 });
