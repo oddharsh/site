@@ -1947,6 +1947,16 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   console.log(`static renders: /lens + blank /run + blank /search + /security + /writing index + ${posts.length} notes staged from canonical Worker renderers`);
 }
 
+// Every staged file step 6 content-hashes into /a/. Step 5c reads it to keep
+// page edits out of these files' bytes, and step 6 fails if its two asset lists
+// and this one disagree, so an asset cannot join /a/ without joining this too.
+const CONTENT_HASHED = new Set([
+  "nav.js", "luna.css", "lens-boot.js", "icons.svg", "quiz.js", "notepad.js", "lwe-base.css",
+  "nav-run.css", "nav-tray.css", "infotip.css", "hoist.js", "nav-run.js", "nav-tray.js", "nav-pipes.js",
+  "lens-browser.js", "lens-reader.js", "lens-wire.js", "lens-tools.js", "lens-nlweb.js", "lens-markdown.js",
+  "lens-webmcp.js", "lens.js", "tooltip.js", "infotip.js",
+].map((f) => `public/${f}`));
+
 // 5c) shorten every CSS custom property name, across the whole staged tree.
 //
 // The palette is authored for people and 100-odd of those names are distinct
@@ -1956,6 +1966,13 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
 // It runs HERE, after every document, stylesheet and Worker CSS literal is
 // staged and before step 6 hashes anything, so the content hashes, the CSP
 // hashes at 7c and the deltas at 8 all see final bytes.
+//
+// The names come in two tiers (planNames has the argument): a name a hashed
+// shell file defines is ranked by the shell's own uses, and everything else is
+// placed by a hash of its name. So an edit to one page's CSS cannot rename a
+// token inside luna.css and re-mint every page (gotcha 35), which one site-wide
+// ranking did on 2026-09-24. Comments in page CSS are still unminified here and
+// still count as uses, which no longer matters: no tier reads a page's counts.
 //
 // The `.src.*` twins are skipped on purpose: they are the readable copy, and
 // `--surface-window` is what makes them worth reading.
@@ -1980,7 +1997,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   // follow, so it is a build failure rather than a silent miss.
   assertNoDynamicPropertyNames(before);
 
-  const map = planNames(before);
+  const map = planNames(before, CONTENT_HASHED);
   const after = new Map<string, string>();
   for (const [rel, text] of before) after.set(rel, applyMangle(text, map));
 
@@ -2131,6 +2148,13 @@ let freshFamily: Buffer | null = null;
     { file: "/infotip.js",      base: "infotip",      mk: (to) => [
       [/import\((["'`])\/infotip\.js\1\)/g, `import($1${to}$1)`] ] },
   ];
+  // 5c planned its short names with CONTENT_HASHED as the shell. An asset hashed
+  // here and missing there would take page-driven renames into an /a/ URL again.
+  {
+    const hashedHere = new Set([...ASSETS.map((a) => a.from), ...STRING_ASSETS.map((a) => a.file)].map((f) => `public${f}`));
+    const drift = [...hashedHere].filter((f) => !CONTENT_HASHED.has(f)).concat([...CONTENT_HASHED].filter((f) => !hashedHere.has(f)));
+    if (drift.length) throw new Error(`CONTENT_HASHED (step 5c) and step 6's asset lists disagree on: ${drift.join(", ")}`);
+  }
   {
     // Every staged surface that can carry a loader: HTML pages, the top-level shell
     // scripts themselves (nav.js imports hoist), worker modules, serendipity. NOT the
