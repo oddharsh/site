@@ -261,6 +261,12 @@ const ROUTES = [
     headers: { "content-type": "application/json" }, marker: "# Right now",
     body: JSON.stringify({ jsonrpc: "2.0", id: "music-resource", method: "resources/read", params: { uri: base + "/rn" } }) },
   // An empty batch is invalid, not an all-notification batch to accept silently.
+  // A built document since 2026-09-25 (lib/island.ts): the marker is the island
+  // mount. The fragment row only pins the shape, because the harness's local D1
+  // carries no serendipity schema, so the pool read fails and the fragment
+  // answers 503 without the island marker, which is the loader's failure arm.
+  { path: "/serendipity", status: 200, ct: "text/html", marker: "data-island=/serendipity/events.html", fullPage: true },
+  { path: "/serendipity/events.html", status: [200, 503], ct: "text/html" },
   ...["/mcp", "/serendipity/mcp"].map((path) => ({ path, method: "POST", status: 200, ct: "application/json",
     headers: { "content-type": "application/json" }, body: "[]", marker: "Invalid Request" })),
 

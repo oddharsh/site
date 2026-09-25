@@ -13,6 +13,8 @@ const PREFIX = "/serendipity";
 import { DESKTOP_CHROME, DESKTOP_TOP } from "../src/worker/lib/desktop.ts";
 import { privateHostBlocked } from "../src/worker/lib/public-fetch.ts";
 import { esc } from "../src/worker/lib/http.ts";
+import { html as htmlTag, unsafeHtml } from "../src/worker/lib/html.ts";
+import { islandMount, islandPreload, islandResponse, islandScript } from "../src/worker/lib/island.ts";
 import { SUBREQUEST_CAP_FREE, createBudget, isSubrequestLimit } from "../src/worker/lib/budget.ts";
 import type { Budget } from "../src/worker/lib/budget.ts";
 import { CACHE_EMPTY, CACHE_STATIC, mcpCorsHeaders, mcpError, mcpHttpStatus, mcpRequest, mcpServer } from "../src/worker/lib/mcp-protocol.ts";
@@ -318,6 +320,9 @@ function shellCss() {
   .chip{font:8.5pt var(--font-ui);padding:3px 11px;border:1px solid #8e9dad;border-radius:0;background:linear-gradient(180deg,#fff,#f3f2ec);color:#222;cursor:pointer}
   .chip.on{color:#fff;border-color:#2c4d7e;font-weight:bold;background:linear-gradient(180deg,#5b9bf0,#2f6fde 60%,#2a60cc)}
   .ev[hidden],.grp[hidden]{display:none}
+  .toolbar:has(+ [data-island] .empty){display:none}
+  .sd-fail{display:none;color:oklch(50% 0.01 250);font-size:11px;margin:0 0 14px}
+  #sd-events[data-state="failed"] + .sd-fail{display:block}
   .empty-filter{display:none;color:oklch(50% 0.01 250);padding:24px 12px;border:1px dashed oklch(78% 0.04 250);border-radius:0;background:oklch(98% 0.01 250);text-align:center;font-size:11px}
   /* cursor-following cover tooltip, driven by the shared engine in /hoist.js.
      --x/--y are typed <length> so the translate() positions it with no JS rAF; clamp
@@ -349,10 +354,10 @@ function shellCss() {
      letterboxing inside it (bg fills) rather than distorting. */
   #ev-tip img{display:block;width:300px;height:auto;max-height:340px;object-fit:contain;background:oklch(94% 0.005 240);border:3px solid #fff;outline:1px solid oklch(61% 0.061 253);outline-offset:-1px;box-shadow:2px 3px 12px -2px rgba(0,20,90,.55)}
   @media(max-width:640px){.body{flex-direction:column}.pane{width:auto;border-right:0;border-bottom:2px solid #7a96c8}}
-}`;
+`;
 }
 
-function shell(title, currentPath, bodyHtml) {
+function shell(title, currentPath, bodyHtml, head = "") {
   const nav = (href, label) => {
     const full = PREFIX + href;
     const cur = currentPath === full || (href !== "" && currentPath.startsWith(full));
@@ -364,7 +369,7 @@ function shell(title, currentPath, bodyHtml) {
 <link rel="icon" type="image/svg+xml" href="/section-icons/serendipity.svg">
 <meta name="description" content="A public, shared database of events worth going to and who's going — fed by the collective, queryable by humans and agents.">
 <style>:root{--font-caption:"Trebuchet MS",Verdana,Geneva,sans-serif;--font-ui:Tahoma,Verdana,Geneva,sans-serif;--font-mono:"Courier New",Courier,monospace}${shellCss()}</style>
-<link rel="preload" as="style" href="/luna.css"><link rel="stylesheet" href="/luna.css"></head><body>${DESKTOP_TOP}
+<link rel="preload" as="style" href="/luna.css"><link rel="stylesheet" href="/luna.css">${head}</head><body>${DESKTOP_TOP}
 <div class="wrap"><div class="window">
   <div class="title-bar"><span class="title-text"><span class="icon" aria-hidden="true"></span>aadhar.sh/serendipity</span>
     <span class="controls"><a class="close" href="/" title="back to aadhar.sh" aria-label="back to aadhar.sh"></a></span>
@@ -391,6 +396,13 @@ function shell(title, currentPath, bodyHtml) {
 
 // ── pages ────────────────────────────────────────────────────────────────────
 function eventCard(e, isPast) {
+  if (e.pending) {
+    return `<div class="ev" aria-hidden="true">
+    <div class="nm">…</div>
+    <div class="meta">…</div>
+    <div class="row"><span class="count">…</span></div>
+  </div>`;
+  }
   // split on the GROUP_CONCAT delimiter (char 31 / unit separator), which can't
   // occur in a label — a plain ", " split shredded any label containing a comma.
   const contributors = (e.contributors || "").split("\x1f").filter(Boolean);
@@ -416,15 +428,18 @@ function eventCard(e, isPast) {
 
 // client-side dashboard interactivity: live search, date-filter chips, and the
 // cursor-following cover tooltip (homepage idiom). all over the rendered cards —
-// no extra requests, works with the 60s edge-cached HTML.
+// no extra requests. On the built page the cards arrive with the island, so the
+// filter re-reads them on every apply and re-runs when the island lands.
 const DASHBOARD_JS = `
 (function(){
-  var cards=[].slice.call(document.querySelectorAll('.ev'));
-  var grps=[].slice.call(document.querySelectorAll('.grp[data-grp]'));
+  // Cards and group headers are read on every apply rather than once, because
+  // on the built page they arrive with the island after this runs. The toolbar
+  // is in the shell, so a search typed before the swap survives it.
   var search=document.getElementById('ev-search'), chips=document.getElementById('ev-chips');
   var none=document.getElementById('ev-none'), tip=document.getElementById('ev-tip'), when='all';
   function isWeekend(s,now){ if(s<now||s>now+8*864e5)return false; var w=new Date(s).getDay(); return w===0||w===6; }
   function apply(){
+    var cards=[].slice.call(document.querySelectorAll('.ev[href]')), grps=[].slice.call(document.querySelectorAll('.grp[data-grp]'));
     var q=((search&&search.value)||'').trim().toLowerCase(), now=Date.now(), wk=now+7*864e5, shown=0;
     cards.forEach(function(c){
       var okq=!q||c.textContent.toLowerCase().indexOf(q)!==-1;
@@ -438,8 +453,9 @@ const DASHBOARD_JS = `
       while(n&&!(n.classList&&n.classList.contains('grp'))){ if(n.classList&&n.classList.contains('ev')&&!n.hidden){any=true;break;} n=n.nextElementSibling; }
       g.hidden=!any;
     });
-    if(none)none.style.display=shown?'none':'block';
+    if(none)none.style.display=shown||!cards.length?'none':'block';
   }
+  document.addEventListener('island',apply);
   if(search)search.addEventListener('input',apply);
   if(chips)chips.addEventListener('click',function(e){
     var b=e.target.closest&&e.target.closest('.chip'); if(!b)return;
@@ -470,48 +486,96 @@ const DASHBOARD_JS = `
 })();
 `;
 
-async function renderDashboard(d, path, msg, env) {
-  const [events, contribCount] = await Promise.all([queryEvents(d), countContributors(d)]);
-  let body;
-  if (!events.length) {
-    body = `<h1 class="page">Events</h1>
-      <p class="lede">A public, collective database of events worth going to and who&apos;s showing up. Anyone can contribute their Luma feed into the shared pool.</p>
-      <div class="empty">
-        <p style="font-size:14px;margin:0 0 6px"><b>The pool is empty.</b></p>
-        <p class="note">No one has contributed events yet. <a href="${PREFIX}/contribute">Contribute your Luma feed</a> to seed it.</p>
-      </div>`;
-  } else {
-    const now = Date.now();
-    const PAST_CAP = 30;  // past-event cards were ~88% of the payload, mostly unscrolled
-    // stable: surface RSVP'd ('going') events first within each section, so the
-    // real events lead and a past one isn't buried below the cap by the browsed pile.
-    const goingFirst = (arr) => arr.slice().sort((a, b) => Number(b.user_status === "going") - Number(a.user_status === "going"));
-    const upcoming = events.filter((e) => !e.start_at || new Date(e.start_at).getTime() >= now);
-    const pastAll = events.filter((e) => e.start_at && new Date(e.start_at).getTime() < now)
-                          .sort((a, b) => new Date(b.start_at).getTime() - new Date(a.start_at).getTime());
-    const past = goingFirst(pastAll).slice(0, PAST_CAP);
-    // sign the cover-proxy URL for every card we actually render (upcoming + the
-    // capped past slice) — not all of pastAll. eventCard reads e._coverHref.
-    await Promise.all(
-      [...upcoming, ...past].filter((e) => e.cover_url).map(async (e) => { e._coverHref = await coverProxyUrl(e.cover_url, env); })
-    );
-    body = `<h1 class="page">Events</h1>
-      <p class="lede">${events.length} event${events.length == 1 ? "" : "s"} in the pool, fed by ${contribCount} contributor${contribCount == 1 ? "" : "s"}. Click any event to see who&apos;s going.</p>
-      <div class="toolbar">
+// ── the dashboard: a built shell and one island ──────────────────────────────
+// Since 2026-09-25 build.ts step 5b bakes renderSerendipityPage() once, so the
+// shell (12 KB of CSS, the toolbar and the filter script) ships as a q11 twin
+// with a dcz delta, an ETag and hashed script-src. The pool's half, the count
+// line and the cards, is the island at EVENTS_URL, cached at the edge for the
+// 60 s the whole dashboard used to take and evicted by every mutation below.
+// A view carrying a flash ?msg= still renders live, since that one belongs to
+// the person who just acted.
+export const EVENTS_URL = `${PREFIX}/events.html`;
+
+const DASHBOARD_LEDE = `<h1 class="page">Events</h1>
+      <p class="lede">A public, collective database of events worth going to and who&apos;s showing up, fed by anyone who contributes their Luma feed. Click any event to see who&apos;s going.</p>`;
+
+// The toolbar hides itself over an empty pool, on the built page (where the
+// island may say the pool is empty) as on the live one.
+const DASHBOARD_TOOLBAR = `<div class="toolbar">
         <input class="xp-field search" id="ev-search" type="search" placeholder="Search events, places, contributors…" autocomplete="off">
         <div class="chips" id="ev-chips">
           <button type="button" class="chip on" data-when="all">All</button>
           <button type="button" class="chip" data-when="week">This week</button>
           <button type="button" class="chip" data-when="weekend">This weekend</button>
         </div>
-      </div>
-      ${upcoming.length ? `<div class="grp" data-grp>Upcoming (${upcoming.length})</div>${goingFirst(upcoming).map((e) => eventCard(e, false)).join("")}` : ""}
-      ${pastAll.length ? `<div class="grp" data-grp>Past ${pastAll.length > PAST_CAP ? `(${PAST_CAP} of ${pastAll.length})` : `(${pastAll.length})`}</div>${past.map((e) => eventCard(e, true)).join("")}` : ""}
-      <p class="empty-filter" id="ev-none">No events match — clear the search or pick a wider range.</p>
+      </div>`;
+
+const DASHBOARD_TAIL = `<p class="empty-filter" id="ev-none">No events match — clear the search or pick a wider range.</p>
       <div id="ev-tip" popover="manual" aria-hidden="true"></div>
       <script>${DASHBOARD_JS}</script>`;
+
+// The placeholder model: a count line and a screenful of unread cards. The
+// number of cards is not the live number, and it does not need to be: nothing
+// follows the island but the hidden no-match note and the popover.
+const PENDING_CARDS = 8;
+
+/** The island: the pool's count line and its cards, or the empty panel. */
+async function renderDashboardEvents(d, env) {
+  const [events, contribCount] = await Promise.all([queryEvents(d), countContributors(d)]);
+  if (!events.length) {
+    return `<div class="empty">
+        <p style="font-size:14px;margin:0 0 6px"><b>The pool is empty.</b></p>
+        <p class="note">No one has contributed events yet. <a href="${PREFIX}/contribute">Contribute your Luma feed</a> to seed it.</p>
+      </div>`;
   }
-  return html(200, shell("Events", path, banner(msg) + body));
+  const now = Date.now();
+  const PAST_CAP = 30;  // past-event cards were ~88% of the payload, mostly unscrolled
+  // stable: surface RSVP'd ('going') events first within each section, so the
+  // real events lead and a past one isn't buried below the cap by the browsed pile.
+  const goingFirst = (arr) => arr.slice().sort((a, b) => Number(b.user_status === "going") - Number(a.user_status === "going"));
+  const upcoming = events.filter((e) => !e.start_at || new Date(e.start_at).getTime() >= now);
+  const pastAll = events.filter((e) => e.start_at && new Date(e.start_at).getTime() < now)
+                        .sort((a, b) => new Date(b.start_at).getTime() - new Date(a.start_at).getTime());
+  const past = goingFirst(pastAll).slice(0, PAST_CAP);
+  // sign the cover-proxy URL for every card we actually render (upcoming + the
+  // capped past slice) — not all of pastAll. eventCard reads e._coverHref.
+  await Promise.all(
+    [...upcoming, ...past].filter((e) => e.cover_url).map(async (e) => { e._coverHref = await coverProxyUrl(e.cover_url, env); })
+  );
+  return `<p class="lede">${events.length} event${events.length == 1 ? "" : "s"} in the pool, fed by ${contribCount} contributor${contribCount == 1 ? "" : "s"}.</p>
+      ${upcoming.length ? `<div class="grp" data-grp>Upcoming (${upcoming.length})</div>${goingFirst(upcoming).map((e) => eventCard(e, false)).join("")}` : ""}
+      ${pastAll.length ? `<div class="grp" data-grp>Past ${pastAll.length > PAST_CAP ? `(${PAST_CAP} of ${pastAll.length})` : `(${pastAll.length})`}</div>${past.map((e) => eventCard(e, true)).join("")}` : ""}`;
+}
+
+function pendingDashboardEvents() {
+  return `<p class="lede">… events in the pool, fed by … contributors.</p>
+      <div class="grp">Upcoming (…)</div>${Array.from({ length: PENDING_CARDS }, () => eventCard({ pending: true }, false)).join("")}`;
+}
+
+// The live dashboard, for a view carrying a flash message (and for local dev,
+// where no bake is staged).
+async function renderDashboard(d, path, msg, env) {
+  const events = await renderDashboardEvents(d, env);
+  const toolbar = events.startsWith(`<div class="empty">`) ? "" : DASHBOARD_TOOLBAR;
+  return html(200, shell("Events", path, banner(msg) + DASHBOARD_LEDE + toolbar + events + DASHBOARD_TAIL));
+}
+
+/** The shell build.ts bakes. It takes no arguments, so every build agrees. */
+export function renderSerendipityPage() {
+  const mount = islandMount("sd-events", EVENTS_URL, unsafeHtml(pendingDashboardEvents()),
+    htmlTag`<p>The events arrive in a second request after the page loads, and that needs a script. Without one, <a href="${EVENTS_URL}">${EVENTS_URL}</a> shows them as plain HTML.</p>`);
+  const fail = `<p class="sd-fail">The request for the events failed, so the list stays empty rather than guessed. <a href="${EVENTS_URL}">${EVENTS_URL}</a> has it as plain HTML.</p>`;
+  return html(200, shell("Events", PREFIX, DASHBOARD_LEDE + DASHBOARD_TOOLBAR + mount.html + fail + DASHBOARD_TAIL + islandScript().html, islandPreload(EVENTS_URL).html));
+}
+
+// The island's response. Cookie-free and shared, so it may sit in the edge cache.
+async function handleDashboardEvents(env, d, ctx, cacheKey) {
+  let hit = await caches.default.match(cacheKey);
+  if (!hit) {
+    hit = islandResponse(unsafeHtml(await renderDashboardEvents(d, env)), { "cache-control": "public, max-age=60, s-maxage=60" });
+    ctx.waitUntil(caches.default.put(cacheKey, hit.clone()));
+  }
+  return hit;
 }
 
 function attendeeRow(a) {
@@ -2634,14 +2698,14 @@ export async function handleSerendipity(request, env, ctx) {
   if (path === `${PREFIX}/mcp`) return handleMcp(request, env, d);
 
   const msg = url.searchParams.get("msg");
-  const dashKey = new Request(`${url.origin}${PREFIX}`);  // shared public-dashboard cache key
+  const eventsKey = new Request(`${url.origin}${EVENTS_URL}`);  // the dashboard island's shared cache key
 
   // any mutation (sync / enrich / contribute) invalidates the cached dashboard
   if (request.method === "POST" &&
       (path === `${PREFIX}/sync` || path === `${PREFIX}/sync-descriptions` ||
        path === `${PREFIX}/enrich` || path === `${PREFIX}/tag` ||
        path === `${PREFIX}/cookies` || path === `${PREFIX}/add-event`)) {
-    ctx.waitUntil(caches.default.delete(dashKey));
+    ctx.waitUntil(caches.default.delete(eventsKey));
   }
 
   // secret-gated triggers (admin/cron): pull from cookies + Exa-enrich attendees
@@ -2654,29 +2718,19 @@ export async function handleSerendipity(request, env, ctx) {
   // so the response stays cacheable at the edge.
   if ((request.method === "GET" || request.method === "HEAD") && path === `${PREFIX}/cover`) return handleCover(request, env, ctx);
 
+  // the dashboard's island, early and cookie-free for the same reason
+  if ((request.method === "GET" || request.method === "HEAD") && path === EVENTS_URL) {
+    try { return await handleDashboardEvents(env, d, ctx, eventsKey); }
+    catch { return html(503, `<p class="note">The event pool hit a database error.</p>`); }
+  }
+
   let res;
   try {
   if (request.method === "POST" && path === `${PREFIX}/cookies`) res = await handleCookies(request, env, d, uid);
   else if (request.method === "POST" && path === `${PREFIX}/add-event`) res = await handleAddEvent(request, env, d, uid);
-  else if (path === PREFIX) {
-    // public pool — data changes only on sync/contribute (which bust above).
-    // cache the rendered HTML at the edge for 60s so repeat + agent hits skip
-    // the D1 GROUP BY. skip when a flash msg is present (just-acted view).
-    if (request.method === "GET" && !msg) {
-      let hit = await caches.default.match(dashKey);
-      if (!hit) {
-        const rendered = await renderDashboard(d, path, msg, env);
-        const h = new Headers(rendered.headers);
-        h.set("cache-control", "public, max-age=60, s-maxage=60");
-        h.delete("set-cookie");  // never store a per-visitor uid cookie in a shared cache
-        hit = new Response(rendered.body, { status: rendered.status, headers: h });
-        ctx.waitUntil(caches.default.put(dashKey, hit.clone()));
-      }
-      res = hit;
-    } else {
-      res = await renderDashboard(d, path, msg, env);
-    }
-  }
+  // The plain GET is a built file served by index.ts (routeSerendipity), so this
+  // arm renders a flash-message view, a HEAD, or local dev's missing bake.
+  else if (path === PREFIX) res = await renderDashboard(d, path, msg, env);
   else if (path === `${PREFIX}/contribute`) res = await renderContribute(d, path, uid, msg);
   else if (path === `${PREFIX}/mcp-info`) res = renderMcpInfo(path);
   else if (path.startsWith(`${PREFIX}/event/`)) res = await renderEvent(d, decodeURIComponent(path.slice(`${PREFIX}/event/`.length)), path);
@@ -2699,14 +2753,20 @@ export async function handleSerendipity(request, env, ctx) {
 // The root aadhar-sh Worker dispatches /serendipity/* here. These headers stay
 // local because this surface permits arbitrary HTTPS cover-image hosts while
 // the homepage CSP deliberately remains narrower.
+export function serendipityCsp(scriptSrc: string) {
+  return `default-src 'self'; style-src 'self' 'unsafe-inline'; script-src ${scriptSrc}; img-src 'self' data: https:; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'`;
+}
+
 export const SERENDIPITY_SECURITY_HEADERS = {
   "content-security-policy":
+    // The one policy, with the loose script-src. The built dashboard gets the
+    // same string with its build-time hashes instead (serendipityCsp below).
     // img-src is `https:` (any host) because Luma lets organizers point covers
     // at arbitrary CDNs (lumacdn, unsplash, …); allow-listing hosts was whack-a-
     // mole and silently broke the odd external cover. Covers now route through the
     // same-origin /cover proxy anyway, so 'self' carries them — `https:` is the
     // belt-and-suspenders net for the proxy's full-size fallback redirect path.
-    "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'",
+    serendipityCsp("'self' 'unsafe-inline'"),
   "x-content-type-options": "nosniff",
   "referrer-policy": "strict-origin-when-cross-origin",
   "x-frame-options": "DENY",

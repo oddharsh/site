@@ -1961,6 +1961,20 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   if (!dynoHtml.includes('querySelectorAll("[data-island]")')) throw new Error("static /garage/dyno renderer lost the island loader");
   if (/<polyline|<td class="mono sha">[0-9a-f]{7}/.test(dynoHtml)) throw new Error("static /garage/dyno bake carries a series point");
   await writeFile(`${OUT}/public/garage/dyno.html`, dynoHtml);
+  // /serendipity's dashboard, the same day. Staged beside src/, so it imports
+  // from .build/serendipity. The build has no D1, so an event card (always an
+  // <a class="ev"), a pool count, or a signed cover URL in the bake could only
+  // be a fixture every visitor would read as the pool.
+  const serendipity = await import(pathToFileURL(resolve(OUT, "serendipity/serendipity.ts")).href + nonce);
+  const serendipityResponse = serendipity.renderSerendipityPage();
+  if (serendipityResponse.status !== 200) throw new Error(`static /serendipity renderer returned ${serendipityResponse.status}`);
+  const serendipityHtml = await serendipityResponse.text();
+  const eventsUrl = serendipity.EVENTS_URL;
+  if (!serendipityHtml.includes(`data-island="${eventsUrl}"`)) throw new Error("static /serendipity renderer lost its events island");
+  if (!serendipityHtml.includes(`rel="preload" as="fetch" href="${eventsUrl}" crossorigin`)) throw new Error("static /serendipity renderer lost the preload for its events island");
+  if (!serendipityHtml.includes('querySelectorAll("[data-island]")')) throw new Error("static /serendipity renderer lost the island loader");
+  if (/<a class="ev|\d+ events? in the pool|data-cover=/.test(serendipityHtml)) throw new Error("static /serendipity bake carries a pool value");
+  await writeFile(`${OUT}/public/serendipity.html`, serendipityHtml);
 
   const env = { ASSETS: assets };
   const indexResponse = await writing.renderWritingIndex(env);
@@ -1974,7 +1988,7 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
     if (response.status !== 200) throw new Error(`static /writing/${post.slug} renderer returned ${response.status}`);
     await writeFile(`${OUT}/public/writing/${post.slug}.html`, await response.text());
   }
-  console.log(`static renders: /lens + blank /run + blank /search + /security + /whoareyou + /garage/dyno + /writing index + ${posts.length} notes staged from canonical Worker renderers`);
+  console.log(`static renders: /lens + blank /run + blank /search + /security + /whoareyou + /garage/dyno + /serendipity + /writing index + ${posts.length} notes staged from canonical Worker renderers`);
 }
 
 // Every staged file step 6 content-hashes into /a/. Step 5c reads it to keep
