@@ -5,7 +5,8 @@ import {
   assert,
   diffAroundRows,
   persistAroundHistory,
-  renderAroundHtml,
+  renderAroundPage,
+  renderAroundSnapshot,
   test,
 } from "./contract-shared.ts";
 
@@ -109,17 +110,20 @@ test("around persists DDL, observations, and retention in one ordered D1 batch",
 });
 
 test("around renders an honest empty panel rather than a fabricated table", async () => {
-  // The failure-honesty rule this file states at renderAroundHtml: no snapshot
-  // means a visibly pending panel, never invented rows. Only ever seen before
-  // the first cron run, which is exactly when nobody is looking.
-  const response = renderAroundHtml(null);
-  assert.ok(response instanceof Response, "it renders a Response, not a string");
-  assert.equal(response.status, 200, "a pending panel is a 200, not an error");
-  assert.match(response.headers.get("content-type") || "", /text\/html/);
-  const empty = await response.text();
-  assert.match(empty, /<html/i, "it still renders a page");
-  assert.match(empty, /noindex/, "an empty snapshot is not indexable");
+  // The failure-honesty rule this file states at renderAroundSnapshot: no
+  // snapshot means a visibly pending panel, never invented rows. Only ever seen
+  // before the first cron run, which is exactly when nobody is looking. The
+  // panel is the island's body now; the shell around it is noindex either way.
+  const empty = renderAroundSnapshot(null).html;
+  assert.match(empty, /class="pending"/, "no snapshot is a pending panel");
+  assert.doesNotMatch(empty, /<table/, "and never a table");
   for (const n of NEIGHBORS.slice(0, 3)) {
     assert.ok(!empty.includes(`>${n.name}<`), `${n.name} must not appear as a row when there is no data`);
+  }
+  const shell = await renderAroundPage().text();
+  assert.match(shell, /<meta name="robots" content="noindex">/, "the page is not indexable");
+  // The built shell's placeholder names no firm either: it is a frame, not a guess.
+  for (const n of NEIGHBORS) {
+    assert.ok(!shell.includes(`class="firm">${n.name}`), `the baked placeholder must not name ${n.name}`);
   }
 });

@@ -3,7 +3,7 @@ import type { Env, SiteRequest } from "./lib/env.ts";
 import type { SpanName } from "./lib/span-vocabulary.ts";
 import calWorker from "../../cal/src/index.ts";
 import { handleAgentAuthClaim, handleAgentAuthRegister, handleAgentAuthRevoke, handleAgentAuthToken } from "./agent.ts";
-import { cronAround, handleAround, handleAroundChangesJson, handleAroundJson } from "./around.ts";
+import { cronAround, handleAroundChangesJson, handleAroundJson, handleAroundSnapshot, refreshAroundSnapshot, renderAroundPage, SNAPSHOT_URL as AROUND_SNAPSHOT_URL } from "./around.ts";
 import { handleBotPage } from "./bot.ts";
 import { cronCensus, handleCensus, handleCensusJson } from "./census.ts";
 import { shouldUseWorkersCache } from "./lib/cache.ts";
@@ -13,7 +13,7 @@ import { handlePhotoGrid, serveMarkdown, warmGridData } from "./home.ts";
 import { handleInbox } from "./inbox.ts";
 import { handleWebmention, handleWebmentionDecision } from "./webmention.ts";
 import { cronSendWebmentions } from "./webmention-send.ts";
-import { countCrawlerHit, handleLedger, handleLedgerJson } from "./ledger.ts";
+import { countCrawlerHit, handleLedgerJson, handleLedgerLines, LINES_URL as LEDGER_LINES_URL, renderLedgerPage } from "./ledger.ts";
 import { countSpeculativeLoad, handlePrefetchActivation, handleSpeculationJson } from "./speculation.ts";
 import { handleLens, handleLensBrowser, handleLensCompare, handleLensFetch, handleLensShot } from "./lens.ts";
 import { handleLensWire } from "./lens-wire.ts";
@@ -497,7 +497,8 @@ const ROUTE_TABLE: Array<[path: string, handler: RouteHandler]> = [
 
   // the crawl ledger: the month's AI-bot traffic as an invoice, issued
   // monthly, collected never.
-  ["/ledger", handleLedger],
+  ["/ledger", routeLedger],
+  [LEDGER_LINES_URL, handleLedgerLines],
   ["/ledger.json", handleLedgerJson],
 
   // the prefetch activation beacon's receiver (speculation.js). A credentialless
@@ -528,7 +529,8 @@ const ROUTE_TABLE: Array<[path: string, handler: RouteHandler]> = [
   ["/rn/set", handleRnSet],
 
   ["/bot", routeBot],
-  ["/around", handleAround],
+  ["/around", routeAround],
+  [AROUND_SNAPSHOT_URL, handleAroundSnapshot],
   ["/around/json", handleAroundJson],
   ["/around/changes.json", handleAroundChangesJson],
 
@@ -1140,6 +1142,40 @@ async function routeDyno(request: SiteRequest, env: Env) {
   try { await response.body?.cancel(); } catch {}
   const live = renderDynoPage();
   for (const [k, v] of Object.entries(GENERATED_PAGE_HEADERS)) live.headers.set(k, v);
+  return live;
+}
+
+// /ledger and /around are built documents since 2026-09-25, each with its live
+// half as an island (ledger.ts and around.ts say why). The dev fallback is the
+// same as routeDyno's.
+async function routeLedger(request: SiteRequest, env: Env) {
+  const response = await serveStaticPage(request, env, { headers: GENERATED_PAGE_HEADERS });
+  if (response.status !== 404) return response;
+  try { await response.body?.cancel(); } catch {}
+  const live = renderLedgerPage();
+  for (const [k, v] of Object.entries(GENERATED_PAGE_HEADERS)) live.headers.set(k, v);
+  return live;
+}
+
+// The owner's ?bust=SECRET still works at the page URL: it re-crawls and
+// overwrites this colo's cached snapshot before the shell goes out, so the
+// island the shell then fetches is the new crawl. A wrong or absent secret does
+// nothing and the static page is served as usual.
+async function routeAround(request: SiteRequest, env: Env) {
+  if (new URL(request.url).searchParams.has("bust")) {
+    const busted = await refreshAroundSnapshot(request, env);
+    try { await busted?.body?.cancel(); } catch {}
+  }
+  const headers = { ...GENERATED_PAGE_HEADERS, "x-robots-tag": "noindex" };
+  if (wantsMarkdown(request)) {
+    const md = await serveMarkdownTwin(request, env, "/around.md", { "x-robots-tag": "noindex" });
+    if (md) return md;
+  }
+  const response = await serveStaticPage(request, env, { headers });
+  if (response.status !== 404) return response;
+  try { await response.body?.cancel(); } catch {}
+  const live = renderAroundPage();
+  for (const [k, v] of Object.entries(headers)) live.headers.set(k, v);
   return live;
 }
 

@@ -108,7 +108,9 @@
       "/coffee", "/coffee/*", "/serendipity", "/serendipity/*",
       "/slots", "/book", "/approve", "/decline",
       "/llms-full.txt", "/ledger", "/ledger.json",
-      "/ledger/prefetch",
+      // mirrors wrangler.jsonc's one glob for the ledger's sub-routes, which
+      // since 2026-09-25 include the invoice's island at /ledger/lines.html.
+      "/ledger/*",
       "/writing", "/writing/*",
       // These four ("/ask" above, and the three here) were MISSING from this file
       // until 2026-08-27, against both headers' rule that the two allowlists match.
@@ -130,7 +132,10 @@
       // diffs the two allowlists now, so the next one fails a check.
       "/webmention", "/webmention/*", "/inbox",
       "/rn", "/rn.md", "/rn/tracks", "/rn/tracks.html", "/rn/admin", "/rn/set", "/rn/art/*",
-      "/bot", "/around", "/around/json", "/around/changes.json",
+      // "/around*" folds "/around", "/around/json" and "/around/changes.json",
+      // and covers the page's island at /around/snapshot.html (2026-09-25).
+      // Nothing static lives under /around; /around.md is "/*.md"'s anyway.
+      "/bot", "/around*",
       // mirrors wrangler.jsonc: "/photos/*" folds the three exact sub-rows, and
       // each album (src/worker/albums.ts) is a root path plus its slashed twin
       "/photos", "/photos/*", "/run",

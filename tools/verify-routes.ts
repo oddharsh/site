@@ -356,7 +356,11 @@ const ROUTES = [
   { path: "/lens/markdown?url=http://localhost", status: 400, ct: "application/json", marker: "no-fetch list" },
   // 200 text/plain when the x402 gate is unconfigured; 402 json once X402_PAY_TO is set
   { path: "/llms-full.txt", status: [200, 402], ct: ["text/plain", "application/json"] },
-  { path: "/ledger", status: 200, ct: "text/html", marker: "Crawl Ledger" },
+  // Built documents since 2026-09-25 (lib/island.ts): the marker is the island
+  // mount, and the row after it is the fragment that fills it. A local Worker has
+  // no read token, so the fragment is the meter-unreadable invoice.
+  { path: "/ledger", status: 200, ct: "text/html", marker: "data-island=/ledger/lines.html", fullPage: true },
+  { path: "/ledger/lines.html", status: 200, ct: "text/html", marker: "Total due", fragment: true },
   { path: "/ledger.json", status: 200, ct: "application/json" },
   // Browser RUM is retired. Keep both old ledger paths dark so a stale loader
   // cannot silently reconnect to a proxy or collector added as a static asset.
@@ -380,9 +384,12 @@ const ROUTES = [
   { path: "/rn/tracks.html", status: 200, ct: "text/html", fragment: true },
   { path: "/rn/admin", status: 403 },
   { path: "/bot", status: 200, ct: "text/html" },
-  { path: "/around", status: 200, ct: "text/html" },
-  // serves the KV snapshot the */30 cron writes; a local KV has none, and the
-  // route says so ("no snapshot yet; the cron crawl hasn't run") with a 503.
+  // A local KV has no snapshot, so the island is the not-built-yet panel.
+  { path: "/around", status: 200, ct: "text/html", marker: "data-island=/around/snapshot.html", fullPage: true },
+  { path: "/around/snapshot.html", status: 200, ct: "text/html", marker: "snapshot isn", fragment: true },
+  { path: "/around", status: 200, ct: "text/markdown", headers: { accept: "text/markdown" }, marker: "neighbourhood" },
+  // serves the KV snapshot the daily cron writes; a local KV has none, and the
+  // route says so ("no snapshot yet; the daily crawl hasn't run") with a 503.
   { path: "/around/json", status: 200, ct: "application/json", remote: true },
   { path: "/around/changes.json", status: 200, ct: "application/json" },
   { path: "/photos/query.json?q=XT", status: 200, ct: "application/json" },

@@ -1,8 +1,9 @@
 import { BOT_NAME, BOT_UA, SIG_AGENT, botRobotsPolicy, BotPolicyError } from "./lib/botauth.ts";
-import { cachedRender, deleteSWRKV } from "./lib/cache.ts";
+import { cachedRender, deleteSWRKV, edgeKey, withWeakEtag } from "./lib/cache.ts";
 import { crawlDocument, mapWithConcurrency } from "./lib/crawl.ts";
 import { lunaPage } from "./lib/chrome.ts";
-import { unsafeHtml } from "./lib/html.ts";
+import { html, unsafeHtml } from "./lib/html.ts";
+import { islandMount, islandPreload, islandResponse, islandScript } from "./lib/island.ts";
 import { esc, extractMeta, jsonResponse } from "./lib/http.ts";
 import { span } from "./lib/trace.ts";
 
@@ -49,17 +50,8 @@ export const NEIGHBORS = [
 // prerender can make this site fetch 20 third-party homepages, which is what
 // lets /around join the prerender set with every other page. The crawl runs on
 // the schedule in wrangler.jsonc (cronAround, via index.js's scheduled handler).
-export async function handleAround(request, env, ctx) {
-  const url = new URL(request.url);
-  // ?bust=SECRET is the owner's force-refresh (it re-crawls inside
-  // readAroundReport), so it must skip the edge cache. Every other visit serves
-  // the version-keyed caches.default copy and never touches KV; the TTL is the
-  // response's own s-maxage=300 (renderAroundHtml). The crawl runs on cron.
-  const isBust = env.RN_BUST_SECRET && url.searchParams.get("bust") === env.RN_BUST_SECRET;
-  const render = async () => renderAroundHtml(await readAroundReport(request, env));
-  return isBust ? render() : cachedRender(request, ctx, render, "/around", env);
-}
-
+// The page itself is a built file served by index.ts (routeAround); its crawl
+// half is renderAroundSnapshot below. The JSON twin keeps its own bust.
 export async function handleAroundJson(request, env, ctx) {
   const url = new URL(request.url);
   const isBust = env.RN_BUST_SECRET && url.searchParams.get("bust") === env.RN_BUST_SECRET;
@@ -454,31 +446,44 @@ async function runAroundInner(env, sCrawl) {
   };
 }
 
-export function renderAroundHtml(report) {
+// ── /around: a built shell and one island ───────────────────────────
+// Since 2026-09-25 build.ts step 5b bakes renderAroundPage() once, so the lede,
+// the footer and 3 KB of CSS ship as a q11 twin with a dcz delta and an ETag.
+// The crawl's half (when it ran, and the twenty rows) is the island, fetched
+// from SNAPSHOT_URL. The snapshot changes once a day and is the same for every
+// visitor, so the island is edge-cached behind cachedRender like the page was.
+export const SNAPSHOT_URL = "/around/snapshot.html";
+
+// The placeholder model: one row per neighbour, none of them named. The live
+// crawl always reports exactly NEIGHBORS.length rows, so the swap adds none,
+// and nothing in the placeholder is a claim about any firm.
+const PENDING_REPORT = { crawledAt: null, results: NEIGHBORS.map(() => null) };
+
+const SNAPSHOT_CACHE = "public, max-age=60, s-maxage=300";
+
+/** The island: the crawl's meta line and its rows, or the not-built-yet panel. */
+export function renderAroundSnapshot(report) {
   // failure honesty: no snapshot means a greyed, period-correct empty panel,
   // never a fabricated table. only ever visible before the first cron run
   // (or after an owner bust that failed to rebuild).
   if (!report) {
-    return lunaPage({
-      title: "aadhar.sh/around",
-      path: "aadhar.sh/around",
-      route: "/around",
-      width: 820,
-      description: "Snapshot of crypto VC homepages I keep tabs on, crawled by AadharshBot on a schedule.",
-      robots: "noindex",
-      css: `.pending { border: 1px solid var(--frame); background: oklch(96.72% 0 0);
-        color: var(--ink-dim); padding: 18px 16px; margin: 16px 0; cursor: progress; }`,
-      body: unsafeHtml(`
-    <h1 style="font-family:'Trebuchet MS',Verdana,Geneva,sans-serif;color:var(--blue-40);font-size:18pt;margin:0 0 4px">Around the Neighborhood</h1>
-    <div class="pending"><b>The neighborhood snapshot isn't built yet.</b><br>
-    The crawl runs on a schedule, not on your visit; check back in a few minutes.</div>
-    <footer style="text-align:center;font-size:9pt;margin-top:14px">&larr; <a href="/">aadhar.sh</a></footer>`),
-      cache: "public, max-age=60",
-      headers: { "x-robots-tag": "noindex" },
-    });
+    return unsafeHtml(`<div class="pending"><b>The neighborhood snapshot isn't built yet.</b><br>
+    The crawl runs on a schedule, not on your visit; check back tomorrow.</div>`);
   }
+  const pending = report.crawledAt === null;
+  const dots = "…";
 
-  const rows = report.results.map((r, i) => {
+  const rows = report.results.map((r) => {
+    if (pending) {
+      return `
+      <tr>
+        <td class="firm">${dots}<div class="host">${dots}</div></td>
+        <td class="status">${dots}</td>
+        <td class="title">${dots}</td>
+        <td class="latency">${dots}</td>
+        <td class="link"></td>
+      </tr>`;
+    }
     const skipped = r.skipped === "robots";
     const ok = !r.error && !skipped && r.status >= 200 && r.status < 400;
     const status = r.error
@@ -504,13 +509,56 @@ export function renderAroundHtml(report) {
       </tr>`;
   }).join("");
 
+  return unsafeHtml(`<div class="meta">
+      <strong>Last crawl:</strong> ${esc(report.crawledAt ?? dots)} &middot;
+      <strong>UA:</strong> <code>${esc(BOT_UA)}</code> &middot;
+      <strong>Signature-Agent:</strong> <code>${esc(SIG_AGENT)}</code> &middot;
+      <strong>Refreshed:</strong> once a day by cron (your visit triggers nothing)
+    </div>
+    <table class="scout">
+      <thead>
+        <tr><th>Firm</th><th>Status</th><th>Title / description</th><th>Latency</th><th>↗</th></tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`);
+}
+
+// The owner's force-refresh, which lives on the island now because the page is
+// a static file and cannot take a query. A valid ?bust=SECRET re-crawls inside
+// readAroundReport, renders the fragment from that fresh report, and OVERWRITES
+// this colo's cached copy, awaited, so the owner's own next load reads the new
+// crawl instead of whatever KV's cacheTtl still holds. Anything else is null.
+export async function refreshAroundSnapshot(request, env) {
+  const url = new URL(request.url);
+  if (!env.RN_BUST_SECRET || url.searchParams.get("bust") !== env.RN_BUST_SECRET) return null;
+  const report = await readAroundReport(request, env);
+  const fresh = islandResponse(renderAroundSnapshot(report), { "cache-control": report ? SNAPSHOT_CACHE : "public, max-age=60" });
+  if (report) {
+    try { await caches.default.put(edgeKey(url.origin, SNAPSHOT_URL, env), await withWeakEtag(fresh.clone())); } catch {}
+  }
+  return fresh;
+}
+
+export async function handleAroundSnapshot(request, env, ctx) {
+  const busted = await refreshAroundSnapshot(request, env);
+  if (busted) return busted;
+  const render = async () => {
+    const report = await readAroundReport(request, env);
+    return islandResponse(renderAroundSnapshot(report), { "cache-control": report ? SNAPSHOT_CACHE : "public, max-age=60" });
+  };
+  return cachedRender(request, ctx, render, SNAPSHOT_URL, env);
+}
+
+/** The shell build.ts bakes. It takes no arguments, so every build agrees. */
+export function renderAroundPage() {
   return lunaPage({
     title: "aadhar.sh/around",
     path: "aadhar.sh/around",
-      route: "/around",
+    route: "/around",
     width: 820,
-    description: "Snapshot of crypto VC homepages I keep tabs on, crawled live by AadharshBot.",
+    description: "Snapshot of crypto VC homepages I keep tabs on, crawled once a day by AadharshBot.",
     robots: "noindex",
+    head: islandPreload(SNAPSHOT_URL),
     css: `
   h1 {
     font-family: "Trebuchet MS", Verdana, Geneva, sans-serif; color: var(--blue-40);
@@ -553,11 +601,16 @@ export function renderAroundHtml(report) {
   a { color: oklch(42.61% 0.2353 263.74); }
   .dim { color: var(--ink-faint); }
   hr { border: 0; border-top: 2px groove oklch(86.67% 0.0294 259.59); margin: 12px 0; height: 0; }
+  .pending { border: 1px solid var(--frame); background: oklch(96.72% 0 0);
+    color: var(--ink-dim); padding: 18px 16px; margin: 16px 0; cursor: progress; }
+  /* the island's failure note, shown only if the snapshot request failed */
+  .ar-fail { display: none; color: var(--ink-faint); font-size: 9pt; margin: 0 0 12px; }
+  #ar-snapshot[data-state="failed"] + .ar-fail { display: block; }
 `,
-    body: unsafeHtml(`
+    body: html`
     <h1>Around the Neighborhood</h1>
     <p class="lede">
-      A peek at what folks in crypto VC are up to. <code>${esc(BOT_UA)}</code>, the
+      A peek at what folks in crypto VC are up to. <code>${BOT_UA}</code>, the
       small branded crawler I run from this site, crawls each homepage on a
       schedule and lays the snapshot out as a tiny neighborhood window. I built
       this mostly to play with signed outbound requests per
@@ -568,18 +621,8 @@ export function renderAroundHtml(report) {
       request carries two: Ed25519, and a provisional post-quantum ML-DSA-44
       second label (<a href="/garage/pqc">why</a>).
     </p>
-    <div class="meta">
-      <strong>Last crawl:</strong> ${esc(report.crawledAt)} &middot;
-      <strong>UA:</strong> <code>${esc(BOT_UA)}</code> &middot;
-      <strong>Signature-Agent:</strong> <code>${esc(SIG_AGENT)}</code> &middot;
-      <strong>Refreshed:</strong> every 30 min by cron (your visit triggers nothing)
-    </div>
-    <table class="scout">
-      <thead>
-        <tr><th>Firm</th><th>Status</th><th>Title / description</th><th>Latency</th><th>↗</th></tr>
-      </thead>
-      <tbody>${rows}</tbody>
-    </table>
+    ${islandMount("ar-snapshot", SNAPSHOT_URL, renderAroundSnapshot(PENDING_REPORT), html`<p>The crawl arrives in a second request after the page loads, and that needs a script. Without one, <a href="${SNAPSHOT_URL}">${SNAPSHOT_URL}</a> shows it as plain HTML, and <a href="/around/json">/around/json</a> as JSON.</p>`)}
+    <p class="ar-fail">The request for the snapshot failed, so the table stays empty rather than guessed. <a href="${SNAPSHOT_URL}">${SNAPSHOT_URL}</a> has it as plain HTML.</p>
     <hr>
     <p class="dim" style="font-size:9pt">
       Also available as JSON: <a href="/around/json">/around/json</a> &middot;
@@ -587,10 +630,9 @@ export function renderAroundHtml(report) {
       Bot methodology and ethics: <a href="/bot">/bot</a>.
     </p>
     <footer>
-      &larr; <a href="/">aadhar.sh</a> &middot; crawled by <a href="/bot">${esc(BOT_NAME)}</a>
+      &larr; <a href="/">aadhar.sh</a> &middot; crawled by <a href="/bot">${BOT_NAME}</a>
     </footer>
-`),
-    cache: "public, max-age=60, s-maxage=300",
-    headers: { "x-robots-tag": "noindex" },
+`,
+    scripts: islandScript(),
   });
 }
