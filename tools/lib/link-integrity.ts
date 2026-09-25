@@ -50,6 +50,12 @@ export function makeResolver({ files, routeKeys, allow, surfaces }: {
   }
 
   return function resolves(path) {
+    // /cdn-cgi/ is Cloudflare's own namespace on every zone it fronts (the edge
+    // answers /cdn-cgi/trace before any Worker or asset runs), so nothing in
+    // this tree could ever serve it and nothing here can vouch for it either.
+    // /whoareyou links /cdn-cgi/trace, and became the first built page to do so
+    // on 2026-09-25; before that it rendered per request and was never scanned.
+    if (path.startsWith("/cdn-cgi/")) return true;
     const bare = path.length > 1 ? path.replace(/\/$/, "") : path;
     if (files.has(path) || files.has(bare)) return true;
     if (files.has(bare + ".html") || files.has(bare + "/index.html")) return true;

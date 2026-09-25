@@ -125,8 +125,12 @@ const ROUTES = [
   // browser context still cannot read it, so every other column reads as a pass.
   { path: "/.well-known/ard.json", status: 200, ct: "application/json", marker: "urn:air:aadhar.sh:mcp:site", cors: "*" },
   { path: "/.well-known/ai-catalog.json", status: 200, ct: "application/json", marker: "urn:air:aadhar.sh:mcp:site", cors: "*" },
-  { path: "/whoareyou", status: 200, ct: "text/html" },
+  // A built document since 2026-09-25 (lib/island.ts): the marker is the island
+  // mount, and the row after the JSON is the fragment that fills it.
+  { path: "/whoareyou", status: 200, ct: "text/html", marker: "data-island=/whoareyou/values.html", fullPage: true },
   { path: "/whoareyou.json", status: 200, ct: "application/json" },
+  { path: "/whoareyou/values.html", status: 200, ct: "text/html", marker: "Cloudflare colo", fragment: true },
+  { path: "/whoareyou", status: 200, ct: "text/markdown", headers: { accept: "text/markdown" }, marker: "System Properties" },
   // A built document since 2026-09-16, so the marker is the placeholder its
   // inline script fills, and the row beside it is the endpoint that fills it.
   { path: "/security", status: 200, ct: "text/html", marker: "data-sc=colo", fullPage: true },
