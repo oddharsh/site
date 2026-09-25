@@ -166,10 +166,14 @@ async function measure(browser: Browser, path: string, vp: (typeof VIEWPORTS)[nu
     // with the first match in DOCUMENT order, which on this site is the fixed
     // #axp-desktop wallpaper, so the control's block moved nothing in the flow and
     // the control "passed" on an unrelated natural shift. Measured on the first run.
+    // ".window > .body > .content" sits ahead of ".window > .body" because on
+    // /serendipity .body is a flex ROW (the side pane beside main.content): a
+    // 160px-tall block prepended there is a zero-width column that moves nothing,
+    // so the control went unseen and the lab refused the page (2026-09-25).
     let perturbedAt: number | undefined;
     if (perturb) {
       perturbedAt = await page.evaluate(() => {
-        const host = [".window > .content", ".window > .body", ".np-window > .np-text", ".window", "main"]
+        const host = [".window > .content", ".window > .body > .content", ".window > .body", ".np-window > .np-text", ".window", "main"]
           .map((sel) => document.querySelector(sel)).find(Boolean);
         const block = document.createElement("div");
         block.style.cssText = "height:160px;flex:none";

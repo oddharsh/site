@@ -50,7 +50,8 @@ import { handleSystemRestore, handleUpdatesJson, handleWindowsUpdate } from "./u
 import { handleWhoareyouJson, handleWhoareyouValues, renderWhoareyouPage, VALUES_URL as WHOAREYOU_VALUES_URL } from "./whoareyou.ts";
 import { handleWritingIndex, handleWritingPost } from "./writing.ts";
 import { handleLlmsFull } from "./x402.ts";
-import { cronSerendipity, handleSerendipity, withSerendipitySecurityHeaders } from "../../serendipity/serendipity.ts";
+import { cronSerendipity, handleSerendipity, SERENDIPITY_SECURITY_HEADERS, serendipityCsp, withSerendipitySecurityHeaders } from "../../serendipity/serendipity.ts";
+import { scriptHashesFor } from "./lib/csp-hashes.ts";
 
 // Hand the runtime's tracer to both span helpers. THIS is the only module that
 // may import it: the rest of the worker is also imported by contract-tests.mjs
@@ -950,7 +951,28 @@ function isResolvedCalendarUrl(href) {
   }
 }
 
+// The dashboard's plain GET is a built document since 2026-09-25, with its
+// events as an island (serendipity.ts says why). It keeps serendipity's own CSP,
+// whose img-src admits the cover proxy's https fallback, with the build's hashes
+// in place of 'unsafe-inline', so withSecurityHeaders sees a bespoke policy and
+// leaves it. The headers go in through serveStaticPage rather than through
+// withSerendipitySecurityHeaders, because that REBUILDS the Response from an
+// object init, which drops encodeBody on a precompressed body and double-encodes
+// it (gotcha 13). A flash ?msg= view, a HEAD and every other path stay live, and so
+// does local dev, where no bake is staged and the build map has no entry.
 async function routeSerendipity(request: SiteRequest, env: Env, ctx: ExecutionContext) {
+  const url = new URL(request.url);
+  if (request.method === "GET" && url.pathname === "/serendipity" && !url.searchParams.has("msg")) {
+    const hashes = scriptHashesFor("/serendipity");
+    if (hashes) {
+      const scriptSrc = ["'self'", ...hashes.map((h) => `'sha256-${h}'`)].join(" ");
+      const response = await serveStaticPage(request, env, {
+        headers: { ...SERENDIPITY_SECURITY_HEADERS, ...GENERATED_PAGE_HEADERS, "content-security-policy": serendipityCsp(scriptSrc) },
+      });
+      if (response.status !== 404) return response;
+      try { await response.body?.cancel(); } catch {}
+    }
+  }
   const response = await handleSerendipity(request, env, ctx);
   return withSerendipitySecurityHeaders(response);
 }

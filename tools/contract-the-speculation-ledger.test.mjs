@@ -226,11 +226,13 @@ test("every Response rebuilt from another response's body either preserves encod
          + "sets no content-encoding.",
     },
     "serendipity/serendipity.ts": {
-      count: 4,
-      why: "three rebuild locally-built HTML or add a cookie, and one is this file's own "
-         + "withSecurityHeaders twin. None of them is a precompressed path today. NOT "
-         + "measured the way the assets.ts entry was: if serendipity ever serves "
-         + "precompressed bytes, that twin needs the same conditional carry security.ts has.",
+      count: 3,
+      why: "two rebuild locally-built HTML or add a cookie, and one is this file's own "
+         + "withSecurityHeaders twin. None of them is a precompressed path. Since "
+         + "2026-09-25 serendipity DOES serve precompressed bytes, the built dashboard, "
+         + "and index.ts routeSerendipity returns that response WITHOUT the twin, passing "
+         + "its headers through serveStaticPage instead, which is what keeps it off this "
+         + "list. The fourth site was the old edge-cached dashboard, which the island replaced.",
     },
   };
 
