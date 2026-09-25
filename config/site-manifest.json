@@ -1056,7 +1056,7 @@
       "title": "The dictionary the runtime dropped",
       "section": "garage",
       "kind": "content",
-      "description": "15 pages here are written per request and ship as plain brotli, because workerd's zstd dropped its dictionary option. What the fix would save, what it costs, and what it cannot reach.",
+      "description": "13 pages here are written per request and ship as plain brotli, because workerd's zstd dropped its dictionary option. What the fix would save, what it costs, and what it cannot reach.",
       "hint": "runtime dcz deltas, and the workerd fix they wait on",
       "flags": {
         "run": true,

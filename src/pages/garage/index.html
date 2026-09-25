@@ -362,13 +362,14 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
         <div class="desc">
           In workerd, <code style="font-family: var(--font-mono);font-size:9pt">node:zlib</code>&apos;s
           zstd accepted a <code style="font-family: var(--font-mono);font-size:9pt">dictionary</code>
-          option and dropped it. That&apos;s why the 15 pages this site&apos;s Worker writes per
-          request ship as plain brotli, while the other 51 arrive as shared-dictionary deltas. The
+          option and dropped it. That&apos;s why the 13 pages this site&apos;s Worker still writes per
+          request ship as plain brotli, while the other 53 arrive as shared-dictionary deltas. The
           fix is <a href="https://github.com/cloudflare/workerd/pull/7106" rel="external">cloudflare/workerd#7106</a>,
           written here and waiting on review. Measured against production, a runtime delta would
-          take 21.6% off those 15 pages for about 0.2 ms of CPU each. Each page sheds a near
-          constant 1.4 KB, because what the delta removes is the shell. The page fetches itself a
-          second time in your browser to show the gap, and names what the fix can&apos;t reach.
+          take 21.9% off those 13 pages for about 0.2 ms of CPU each. Each page sheds a near
+          constant 1.3 KB, because what the delta removes is the shell. The page fetches itself a
+          second time in your browser to show the gap. It also names what the fix can&apos;t reach,
+          and weighs it against the baked-shell route the site took for two pages the same week.
         </div>
         <div class="meta">
           shape: a runtime gap, its upstream fix, and what the fix is worth &middot; added 2026-09-25

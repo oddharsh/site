@@ -370,7 +370,7 @@ export const AGENT_SURFACES = [
     "path": "/garage/dictionary",
     "title": "The dictionary the runtime dropped",
     "mimeType": "text/html",
-    "description": "15 pages here are written per request and ship as plain brotli, because workerd's zstd dropped its dictionary option. What the fix would save, what it costs, and what it cannot reach."
+    "description": "13 pages here are written per request and ship as plain brotli, because workerd's zstd dropped its dictionary option. What the fix would save, what it costs, and what it cannot reach."
   },
   {
     "path": "/bot",

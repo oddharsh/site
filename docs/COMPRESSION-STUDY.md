@@ -120,9 +120,11 @@ The photo fragment is `no-store` and cannot supply a reusable response dictionar
 The fragments above are the weak case. Whole documents the Worker renders are requested as
 `document`, so the family dictionary does apply to them once the encoder works. Against
 production on 2026-09-25, 51 of 66 registered pages answered `dcz` and 15 answered `br`.
-At zstd level 6 those 15 drop from 97,711 to 76,557 B (21.6%), and each saves 1,178 to
-1,694 B: the shared shell, nearly constant across a sixfold range in page size. Level 6
-took a median 0.207 ms per page under Node 26.9 on an M3 Max; level 19 took up to 9.9 ms.
+Two of those 15, `/whoareyou` (#924) and `/garage/dyno` (#926), moved to a shell baked at
+build time the same day. At zstd level 6 the remaining 13 drop from 81,228 to 63,449 B
+(21.9%), and each saves 1,178 to 1,672 B: the shared shell, nearly constant across a sixfold
+range in page size. Level 6 took a median 0.165 ms per page under Node 26.9 on an M3 Max;
+level 19 took up to 9.9 ms.
 `node tools/runtime-dcz-probe.ts` reproduces the table, and
 [`/garage/dictionary`](https://aadhar.sh/garage/dictionary) is the write-up.
 

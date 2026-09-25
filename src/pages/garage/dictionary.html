@@ -6,11 +6,11 @@
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
 <title>aadhar.sh/garage/dictionary: The dictionary the runtime dropped</title>
-<meta name="description" content="15 pages here are written per request and ship as plain brotli, because workerd&#39;s zstd took a dictionary option and dropped it. What the fix would save, what it costs, and what it can&#39;t reach.">
+<meta name="description" content="13 pages here are written per request and ship as plain brotli, because workerd&#39;s zstd took a dictionary option and dropped it. What the fix would save, what it costs, and what it can&#39;t reach.">
 <link rel="canonical" href="https://aadhar.sh/garage/dictionary">
 <meta property="og:type" content="article">
 <meta property="og:title" content="aadhar.sh/garage/dictionary: The dictionary the runtime dropped">
-<meta property="og:description" content="15 pages here are written per request and ship as plain brotli, because workerd&#39;s zstd took a dictionary option and dropped it. What the fix would save, what it costs, and what it can&#39;t reach.">
+<meta property="og:description" content="13 pages here are written per request and ship as plain brotli, because workerd&#39;s zstd took a dictionary option and dropped it. What the fix would save, what it costs, and what it can&#39;t reach.">
 <meta property="og:url" content="https://aadhar.sh/garage/dictionary">
 <meta name="twitter:card" content="summary_large_image">
 <meta property="og:image" content="https://aadhar.sh/og/garage-dictionary.jpg">
@@ -57,16 +57,16 @@ body{background:transparent;font-family:var(--font-ui);font-size:10.5pt;line-hei
   </div>
   <div class="content">
 <h1>The dictionary the runtime dropped</h1>
-<p class="garage-intro">Most pages on this site reach a returning Chromium visitor as a delta. The build compresses each one against a 64 KB dictionary made from the site's own markup, and a browser that already holds that dictionary downloads only what differs. Measured against production on 2026-09-25, 51 of the 66 pages here answer that way.</p>
-<p>The other 15 answer as plain brotli. They're the pages the Worker writes when you ask for them, like <a href="/whoareyou">/whoareyou</a>, <a href="/ledger">/ledger</a> and <a href="/finger">/finger</a>, so no build ever sees their bytes.</p>
+<p class="garage-intro">Most pages on this site reach a returning Chromium visitor as a delta. The build compresses each one against a 64 KB dictionary made from the site's own markup, and a browser that already holds that dictionary downloads only what differs. Measured against production on 2026-09-25, 51 of the 66 pages here answer that way, and 2 more join them with the release rolling out as I write this.</p>
+<p>The other 13 answer as plain brotli. They're the pages the Worker writes when you ask for them, like <a href="/ledger">/ledger</a>, <a href="/around">/around</a> and <a href="/finger">/finger</a>, so no build ever sees their bytes.</p>
 <p>The Worker could compute the delta itself, since <code>node:zlib</code>'s <code>zstdCompressSync</code> takes a <code>dictionary</code> option. In workerd it accepted that option and threw it away.</p>
 <p>I filed that as <a href="https://github.com/cloudflare/workerd/issues/6967">cloudflare/workerd#6967</a> and wrote the fix, <a href="https://github.com/cloudflare/workerd/pull/7106">cloudflare/workerd#7106</a>, which is waiting on review. This page is what the fix is worth to this site, what it costs, and the part it can't reach. <a href="/garage/compression">/garage/compression</a> covers the build-time half.</p>
 
 <h2>This page, twice</h2>
-<p>This page is one of the 51. Your browser downloaded it once already, as the document you're reading, and the script below asks for it again with <code>fetch()</code>.</p>
+<p>This page is one of the delta pages. Your browser downloaded it once already, as the document you're reading, and the script below asks for it again with <code>fetch()</code>.</p>
 <p>A fetch has the destination <code>empty</code>, and the site offers its dictionary only for requests whose destination is <code>document</code>, so the second copy arrives without the delta. Same bytes, two transfers:</p>
 <div id="dd-demo" class="dd-box">enable JavaScript to run the measurement</div>
-<p>A page the Worker writes gets the second number both times. That gap, paid on every visit to those 15 pages, is what the fix is for.</p>
+<p>A page the Worker writes gets the second number both times. That gap, paid on every visit to those 13 pages, is what the fix is for.</p>
 
 <h2>Why nothing complained</h2>
 <p>A dropped dictionary fails silently on the compressing side, and zstd's design is why. A frame compressed without a dictionary is still a valid frame, and it decodes fine when the reader supplies one anyway. So the only symptom is a delta the same size as no delta at all.</p>
@@ -80,8 +80,8 @@ body{background:transparent;font-family:var(--font-ui);font-size:10.5pt;line-hei
 <p>The cause was plumbing. The options cross from JavaScript into C++ through a struct that lists the fields it reads. <code>dictionary</code> wasn't one of them, so the value vanished at the language boundary before zstd ever saw it. The fix adds the field and hands the bytes to <code>ZSTD_CCtx_loadDictionary</code> and <code>ZSTD_DCtx_loadDictionary</code>, the way Node does.</p>
 
 <h2>What it would save</h2>
-<p>For each of the 15 pages, <code>tools/runtime-dcz-probe.ts</code> compressed the live HTML at zstd level 6 against the 64 KB dictionary production serves. It then compared each result with the brotli the edge sends today.</p>
-<p>Together they drop from 97,711 to 76,557 bytes, 21.6% off. Each bar is today's brotli, and the green end is the part a runtime delta removes:</p>
+<p>For each of the 13 pages, <code>tools/runtime-dcz-probe.ts</code> compressed the live HTML at zstd level 6 against the 64 KB dictionary production serves. It then compared each result with the brotli the edge sends today.</p>
+<p>Together they drop from 81,228 to 63,449 bytes, 21.9% off. Each bar is today's brotli, and the green end is the part a runtime delta removes:</p>
 <div class="dd-box dd-chart">
 <div class="dd-row"><a class="dd-path" href="/cache">/cache</a><span class="dd-raw">10,333 B</span><span class="dd-bar" aria-hidden="true"><span class="keep" style="width:10.9%"></span><span class="cut" style="width:6.9%"></span></span><span class="dd-num">3,162 &rarr; 1,938 B, 1,224 saved (39%)</span></div>
 <div class="dd-row"><a class="dd-path" href="/encode">/encode</a><span class="dd-raw">10,408 B</span><span class="dd-bar" aria-hidden="true"><span class="keep" style="width:11.4%"></span><span class="cut" style="width:6.7%"></span></span><span class="dd-num">3,231 &rarr; 2,028 B, 1,203 saved (37%)</span></div>
@@ -93,25 +93,23 @@ body{background:transparent;font-family:var(--font-ui);font-size:10.5pt;line-hei
 <div class="dd-row"><a class="dd-path" href="/lens/census">/lens/census</a><span class="dd-raw">16,395 B</span><span class="dd-bar" aria-hidden="true"><span class="keep" style="width:17.7%"></span><span class="cut" style="width:8.2%"></span></span><span class="dd-num">4,625 &rarr; 3,155 B, 1,470 saved (32%)</span></div>
 <div class="dd-row"><a class="dd-path" href="/ledger">/ledger</a><span class="dd-raw">20,132 B</span><span class="dd-bar" aria-hidden="true"><span class="keep" style="width:21.9%"></span><span class="cut" style="width:9.1%"></span></span><span class="dd-num">5,541 &rarr; 3,910 B, 1,631 saved (29%)</span></div>
 <div class="dd-row"><a class="dd-path" href="/around">/around</a><span class="dd-raw">23,996 B</span><span class="dd-bar" aria-hidden="true"><span class="keep" style="width:25.2%"></span><span class="cut" style="width:8.2%"></span></span><span class="dd-num">5,974 &rarr; 4,505 B, 1,469 saved (25%)</span></div>
-<div class="dd-row"><a class="dd-path" href="/whoareyou">/whoareyou</a><span class="dd-raw">25,513 B</span><span class="dd-bar" aria-hidden="true"><span class="keep" style="width:37.8%"></span><span class="cut" style="width:9.4%"></span></span><span class="dd-num">8,428 &rarr; 6,747 B, 1,681 saved (20%)</span></div>
 <div class="dd-row"><a class="dd-path" href="/coffee">/coffee</a><span class="dd-raw">33,539 B</span><span class="dd-bar" aria-hidden="true"><span class="keep" style="width:36.6%"></span><span class="cut" style="width:6.6%"></span></span><span class="dd-num">7,711 &rarr; 6,533 B, 1,178 saved (15%)</span></div>
-<div class="dd-row"><a class="dd-path" href="/garage/dyno">/garage/dyno</a><span class="dd-raw">36,073 B</span><span class="dd-bar" aria-hidden="true"><span class="keep" style="width:35.6%"></span><span class="cut" style="width:9.5%"></span></span><span class="dd-num">8,055 &rarr; 6,361 B, 1,694 saved (21%)</span></div>
 <div class="dd-row"><a class="dd-path" href="/serendipity">/serendipity</a><span class="dd-raw">52,539 B</span><span class="dd-bar" aria-hidden="true"><span class="keep" style="width:76.2%"></span><span class="cut" style="width:9.4%"></span></span><span class="dd-num">15,276 &rarr; 13,606 B, 1,670 saved (11%)</span></div>
 <div class="dd-row"><a class="dd-path" href="/reading">/reading</a><span class="dd-raw">63,199 B</span><span class="dd-bar" aria-hidden="true"><span class="keep" style="width:90.6%"></span><span class="cut" style="width:9.4%"></span></span><span class="dd-num">17,844 &rarr; 16,172 B, 1,672 saved (9%)</span></div>
 </div>
-<p>The percentages spread from 9% to 39%, and the bytes saved barely move. Every page sheds between 1,178 and 1,694 bytes, a median of 1,373, across a sixfold range in page size.</p>
+<p>The percentages spread from 9% to 39%, and the bytes saved barely move. Every page sheds between 1,178 and 1,672 bytes, a median of 1,268, across a sixfold range in page size.</p>
 <p>That constant is the shell. The dictionary is built from this site's own pages, so what it matches is the markup they share: the head, the window frame, the tags that load the shell scripts. Every page carries about the same amount of it.</p>
 <p>A utility page like <a href="/cache">/cache</a> is mostly shell and loses 39%, and <a href="/reading">/reading</a> is mostly its own list and loses 9%.</p>
 
 <h2>What it would cost</h2>
 <p>A build-time delta costs nothing when a visitor arrives. A runtime delta costs CPU on every request, and this site runs on Workers Free, where a request gets about 10 ms of it.</p>
 <div class="dd-box dd-table dd-levels">
-<div class="dd-row lv"><span>level 3</span><span>82,252 B</span><span>15.8% off</span><span>median 0.269 ms, max 0.519 ms</span></div>
-<div class="dd-row lv"><span>level 6</span><span>76,557 B</span><span>21.6% off</span><span>median 0.207 ms, max 0.503 ms</span></div>
-<div class="dd-row lv"><span>level 19</span><span>72,348 B</span><span>26.0% off</span><span>median 3.712 ms, max 9.904 ms</span></div>
+<div class="dd-row lv"><span>level 3</span><span>68,167 B</span><span>16.1% off</span><span>median 0.239 ms, max 0.475 ms</span></div>
+<div class="dd-row lv"><span>level 6</span><span>63,449 B</span><span>21.9% off</span><span>median 0.165 ms, max 0.503 ms</span></div>
+<div class="dd-row lv"><span>level 19</span><span>60,237 B</span><span>25.8% off</span><span>median 3.451 ms, max 9.904 ms</span></div>
 </div>
-<p>Those times are Node 26.9 on an M3 Max, calling the same zstd library workerd wraps, because workerd itself can't run the dictionary call until the fix ships. At level 6 the median page took 0.207 ms and the slowest 0.503 ms. Level 19 buys 4.4 more points and spends up to 9.904 ms on /reading, which is the whole allowance, so level 6 is where the curve bends.</p>
-<p>More than half of each level-6 call goes to the dictionary. Without it, the same call takes a median 0.08 ms. <code>node:zlib</code> has no way to keep a prepared dictionary between calls, so a Worker would load all 64 KB into a fresh context on every request.</p>
+<p>Those times are Node 26.9 on an M3 Max, calling the same zstd library workerd wraps, because workerd itself can't run the dictionary call until the fix ships. At level 6 the median page took 0.165 ms and the slowest 0.503 ms. Level 19 buys 3.9 more points and spends up to 9.904 ms on /reading, which is the whole allowance, so level 6 is where the curve bends.</p>
+<p>More than half of each level-6 call goes to the dictionary. Without it, the same call takes a median 0.072 ms. <code>node:zlib</code> has no way to keep a prepared dictionary between calls, so a Worker would load all 64 KB into a fresh context on every request.</p>
 
 <h2>What it can't reach</h2>
 <p>The homepage fetches two fragments after it loads, the photo grid and the now-playing list. Both are <code>fetch()</code> requests, so the dictionary never answers them, for the same reason the demo's second copy arrives whole.</p>
@@ -127,9 +125,14 @@ body{background:transparent;font-family:var(--font-ui);font-size:10.5pt;line-hei
 <li>A trained dictionary, the kind <code>zstd --train</code> makes, writes its ID into every frame, so a reader without it fails cleanly as <code>Dictionary mismatch</code>. This site's dictionaries are raw bytes with no ID, so the frame can't name them. The dcz header's SHA-256 is what tells the browser which dictionary a delta needs.</li>
 </ul>
 
-<h2>Why bother for 1.4 KB</h2>
-<p>The objection writes itself: 1.4 KB is a rounding error next to a page of photos. For any single request that's fair.</p>
-<p>What changes the arithmetic is the dictionary itself. A returning visitor already paid for it, 14,754 bytes the first time, and today it earns nothing on the 15 pages the Worker writes. The fix lets one download work on every page the site serves, whoever wrote it.</p>
+<h2>The road the site took anyway</h2>
+<p>While this page was being written, the site moved two of the original 15 off the Worker's per-request path. <a href="/whoareyou">/whoareyou</a> and <a href="/garage/dyno">/garage/dyno</a> now bake their frame at build time, so it ships as a delta today, and fetch the parts that change as a fragment (<a href="https://github.com/oddharsh/site/pull/924">#924</a>, <a href="https://github.com/oddharsh/site/pull/926">#926</a>).</p>
+<p>That road needs no workerd release and no CPU per request. It costs a second request and a placeholder that can't shift the layout, and the data arrives as a fragment, which the dictionary can't reach. On /garage/dyno the first visit came out even: 8,158 bytes across two requests, against 8,060 bytes in one.</p>
+<p>Most of the remaining 13 could take the same treatment, one page at a time. The runtime fix is the version that needs no second request, no placeholder and no per-page work, which is why it's worth finishing with the other road open.</p>
+
+<h2>Why bother for 1.3 KB</h2>
+<p>The objection writes itself: 1.3 KB is a rounding error next to a page of photos. For any single request that's fair.</p>
+<p>What changes the arithmetic is the dictionary itself. A returning visitor already paid for it, 14,754 bytes the first time, and today it earns nothing on the 13 pages the Worker writes. The fix lets one download work on every page the site serves, whoever wrote it.</p>
     <section id="luq" aria-label="understanding check"></section>
     <p class="garage-meta">watching · the understanding check is part of the page, not a gate</p>
   </div>
@@ -187,7 +190,7 @@ body{background:transparent;font-family:var(--font-ui);font-size:10.5pt;line-hei
       ]
     },
     {
-      "q": "Why does the saving stay near 1.4 KB whether the page is 10 KB or 63 KB?",
+      "q": "Why does the saving stay near 1.3 KB whether the page is 10 KB or 63 KB?",
       "options": [
         {
           "t": "The dictionary matches the shell the pages share, and every page carries about the same amount of shell.",
@@ -208,7 +211,7 @@ body{background:transparent;font-family:var(--font-ui);font-size:10.5pt;line-hei
       "q": "Why is level 6 the right choice for a runtime delta here?",
       "options": [
         {
-          "t": "Level 19 saves 4.4 more points and can spend the whole 10 ms CPU allowance on one page.",
+          "t": "Level 19 saves 3.9 more points and can spend the whole 10 ms CPU allowance on one page.",
           "ok": true,
           "why": "Right. Level 6 stays well under a millisecond, and on the slowest page the last few points cost 20 times the CPU."
         },
@@ -218,7 +221,7 @@ body{background:transparent;font-family:var(--font-ui);font-size:10.5pt;line-hei
         },
         {
           "t": "Level 6 produces smaller frames than level 19.",
-          "why": "Level 19 is smaller, 26.0% off against 21.6%. It loses on CPU."
+          "why": "Level 19 is smaller, 25.8% off against 21.9%. It loses on CPU."
         }
       ]
     },
