@@ -5,9 +5,9 @@ this site is a resto-mod. the look is Windows XP "Luna" — blue title bars, rai
 
 a few of the moving parts:
 
-· the homepage is one HTML file. inline CSS, inline JS, no build step, no framework. you're meant to be able to read the whole thing — just View Source.
+· the homepage is one HTML file, written by hand with no framework. a build step minifies what ships, but it leaves a readable copy beside each page it touches, and the first line of View Source tells you where to find it. you're meant to be able to read the whole thing.
 
-· photos are shot on a Fujifilm X-T50 and a Leica, then run through a little pipeline: resized, EXIF-rotated, and encoded twice — AVIF first, with a jpegli JPEG as the fallback. jpegli (Google's encoder, built from source) lands ~25% smaller than the system one at the same quality. see /garage/encoding for the byte counts.
+· photos are shot on a Fujifilm X-T50 and a Leica, then run through a little pipeline: resized, EXIF-rotated, and encoded twice. 10-bit AVIF comes first, with a JPEG as the fallback. the JPEG comes from zenc, a small Rust wrapper around zenjpeg that lands about 4% under Google's jpegli at the same quality. see /garage/encoding for the byte counts.
 
 · the visitor counter is a Durable Object now, not a spreadsheet cell. the "now playing" list is scraped from a Spotify playlist by a little crawler that signs its own requests.
 
