@@ -1931,6 +1931,22 @@ for (const file of ["nav-run.css", "nav-tray.css", "infotip.css"]) {
   }
   if (!securityHtml.includes('fetch("/security.json"')) throw new Error("static /security renderer lost the script that fills its connection values");
   await writeFile(`${OUT}/public/security.html`, securityHtml);
+  // /whoareyou, since 2026-09-25: the same move with an island (lib/island.ts)
+  // in place of three placeholders, since its live part is rows rather than
+  // scalars. The mount, its URL, the shared loader and the preload are asserted,
+  // and so is the absence of a per-request value: the build runs with no
+  // request, so a TLS version or an ISO timestamp in the bake could only be a
+  // fixture leaking into every visitor's copy.
+  const whoareyou = await import(pathToFileURL(resolve(OUT, "src/worker/whoareyou.ts")).href + nonce);
+  const whoareyouResponse = whoareyou.renderWhoareyouPage();
+  if (whoareyouResponse.status !== 200) throw new Error(`static /whoareyou renderer returned ${whoareyouResponse.status}`);
+  const whoareyouHtml = await whoareyouResponse.text();
+  const valuesUrl = whoareyou.VALUES_URL;
+  if (!whoareyouHtml.includes(`data-island="${valuesUrl}"`)) throw new Error("static /whoareyou renderer lost its values island");
+  if (!whoareyouHtml.includes(`rel="preload" as="fetch" href="${valuesUrl}" crossorigin`)) throw new Error("static /whoareyou renderer lost the preload for its values island");
+  if (!whoareyouHtml.includes('querySelectorAll("[data-island]")')) throw new Error("static /whoareyou renderer lost the island loader");
+  if (/TLSv1\.[23]|\d{4}-\d\d-\d\dT\d\d:/.test(whoareyouHtml)) throw new Error("static /whoareyou bake carries a per-request value");
+  await writeFile(`${OUT}/public/whoareyou.html`, whoareyouHtml);
 
   const env = { ASSETS: assets };
   const indexResponse = await writing.renderWritingIndex(env);

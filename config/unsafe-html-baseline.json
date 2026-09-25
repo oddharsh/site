@@ -16,7 +16,7 @@
     "src/worker/security.ts": 2,
     "src/worker/terminal.ts": 2,
     "src/worker/updates.ts": 3,
-    "src/worker/whoareyou.ts": 3
+    "src/worker/whoareyou.ts": 2
   },
-  "total": 43
+  "total": 42
 }

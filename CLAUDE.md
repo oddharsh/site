@@ -4143,10 +4143,14 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     Hashes rather than a nonce because the staged documents are PRECOMPRESSED
     (gotcha 14): nothing can be injected per request into bytes brotli'd at build
     time, and the runtime has no brotli encoder to redo them. The live
-    worker-rendered pages (`/whoareyou`, `/around`, `/coffee`, `/search`, `/ledger`,
+    worker-rendered pages (`/around`, `/coffee`, `/search`, `/ledger`,
     `/rn/admin`, `/serendipity`) are NOT precompressed, so a per-response nonce is
     the right mechanism there and is the open follow-up. They keep the loose policy
-    until then, which is no worse than before.
+    until then, which is no worse than before. **The other way off that list is
+    to stop rendering per request**: `/security` (2026-09-16) and `/whoareyou`
+    (2026-09-25) are built documents now, with their live values fetched after
+    load. `src/worker/lib/island.ts` is that convention for rows, and its header
+    says when JSON slots fit better.
 
     Three things verified in a real browser rather than assumed, all on 2026-07-30:
     a HASHED `<script type="speculationrules">` is allowed and an unhashed one

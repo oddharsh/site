@@ -207,7 +207,10 @@
       // shipping at the edge's q4.
       "/.well-known/*",
       "/agent/*", "/oauth2/*",
-      "/whoareyou", "/whoareyou.json",
+      // /whoareyou (a built page), /whoareyou.json, and the page's values island
+      // at /whoareyou/values.html, folded onto one row 2026-09-25 like "/security*".
+      // /whoareyou.md is already claimed by "/*.md" below.
+      "/whoareyou*",
       // /security and /security.json (the page is built, the JSON is its three live
       // connection values). /security.md is already claimed by "/*.md" below.
       "/security*",
