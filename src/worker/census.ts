@@ -181,15 +181,28 @@ export async function censusScanOne(env, site, ts, ymd) {
  *  Workflows refuse a duplicate id, so a second sweep on the same day is a
  *  no-op per host rather than a second scan, which is exactly the "same-day
  *  passes upsert into one snapshot" rule the old cursor path spelled out. Kept
- *  well inside the 100-character ceiling. */
+ *  well inside the 100-character ceiling.
+ *
+ *  NO DOTS. An instance id must match `^[a-zA-Z0-9_][a-zA-Z0-9-_]*$`, the
+ *  pattern miniflare's Workflows binding enforces, and this kept `.` from
+ *  #656 until 2026-09-26. Every roster label is a hostname, so the local
+ *  binding refuses all sixteen creates with "Workflow instance has invalid
+ *  id", which the sweep counts as `failed`. Production agrees as far as it can
+ *  be read from outside: /lens/census.json's lastYmd is 2026-08-23, the
+ *  Sunday before #656 shipped, and four Sunday sweeps since wrote nothing.
+ *  contract-census-duplicate-id-in-workerd holds it against the real binding. */
 export function censusInstanceId(ymd, site) {
-  return `census-${ymd}-${String(site.label || site.url).replace(/[^a-z0-9.-]/gi, "-")}`.slice(0, 100);
+  return `census-${ymd}-${String(site.label || site.url).replace(/[^a-z0-9-]/gi, "-")}`.slice(0, 100);
 }
 
 /** Workflows reject a duplicate instance id. The message is not a documented
  *  contract, so this is deliberately loose and the caller treats a miss as a
- *  real failure rather than silently counting it as a skip. */
-function isDuplicateInstance(error) {
+ *  real failure rather than silently counting it as a skip. The text the
+ *  local binding throws, recorded 2026-09-26 on the wrangler pin 3572193, is
+ *  `(instance.already_exists) Workflow instance with id "<id>" already exists`.
+ *  Exported for contract-census-duplicate-id-in-workerd, which classifies that
+ *  error inside workerd rather than a string typed from memory. */
+export function isDuplicateInstance(error) {
   return /already exists|duplicate/i.test((error && error.message) || String(error));
 }
 
