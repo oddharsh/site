@@ -379,13 +379,6 @@ does not make a failed write safe to ignore.
 
 ## Current baseline
 
-- Release-note parser 12.0.0 is the root `htmlparser2` pin. It parses untrusted
-  Dependabot HTML in `tools/lib/dependency-review.ts` under both Bun and Node.
-  Its event parser replaces tag-stripping regexes and decodes entities once.
-  The returned text remains untrusted; the comment renderer escapes it before
-  publishing.
-  This root development dependency serves the review CLI; the Reader keeps
-  its own parser dependency below.
 - `smol-toml` 1.9.0 parses Cargo manifests for the dependency audit and relock
   writer under both Node and Bun. It is a development dependency with no
   transitive dependencies. The census retains Git and path dependencies without
