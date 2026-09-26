@@ -8,8 +8,8 @@
 // so every probe here hits aadhar.sh. Loader-class rules this encodes:
 //   js/css  dcz expected  (proven in production 2026-07-27)
 //   html    dcz expected  (server side proven; document-loader client check post-deploy)
-//   svg     NO dictionary offer by default (#119, never reproduced since); a request
-//           carrying the svg-dcz=1 canary cookie gets the offer and the delta
+//   svg     dcz expected  (image loader, proven in production 2026-09-26; #119 was
+//           the reason it sat out, and it never reproduced)
 //   SSR     blocked: workerd's zstd ignores `dictionary`; revisit via scratchpad spike
 import { readdir, readFile } from "node:fs/promises";
 import { brotliDecompressSync } from "node:zlib";
@@ -243,30 +243,27 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
              : `no snapshot carries ${unheld.join(", ")} — an edge feature is rewriting HTML after the Worker, so re-run bun run shell:roll (it reads production)`);
   }
 }
-// 3. svg: OFF by default (the #119 rule), ON for a request carrying the canary cookie
-// (SVG_DCZ_COOKIE in lib/assets.ts). Three rows, because the canary is only worth
-// anything while the default stays exactly what it was.
+// 3. svg: on the dictionary path for everyone since 2026-09-26. The offer must be
+// scoped to the image destination and must NOT vary on cookie: that header belonged to
+// the canary (#940), and leaving it would key every browser's cache on its cookies.
 {
   const home = await (await fetch("https://aadhar.sh/", { headers: { "accept-encoding": "identity" } })).text();
   const live = home.match(/\/a\/icons\.([0-9a-f]{8})\.svg/)?.[1] ?? "";
   if (!live) report("svg (icons)", false, "the homepage names no /a/icons.<hash8>.svg, so there is no sprite to probe");
   const url = `https://aadhar.sh/a/icons.${live}.svg`;
-  const canary = { cookie: "svg-dcz=1" };
-  const off = await get(url);
-  report("svg stays off (icons, no cookie)", !off.headers.get("use-as-dictionary"), `use-as-dictionary=${off.headers.get("use-as-dictionary")}`);
-  const on = await get(url, undefined, canary);
+  const on = await get(url);
   const offer = on.headers.get("use-as-dictionary") || "";
-  report("svg canary offers (icons, cookie)", offer.includes('match-dest=("image")') && /\bcookie\b/i.test(on.headers.get("vary") || ""),
+  report("svg offers (icons)", offer.includes('match-dest=("image")') && !/\bcookie\b/i.test(on.headers.get("vary") || ""),
     `use-as-dictionary=${offer || "(none)"} vary=${on.headers.get("vary")}`);
   // The delta row needs a sprite in a-dict that is NOT the live one, which exists only
   // after a roll has adopted a sprite and a later deploy re-minted it. Until then this
-  // is a skip rather than a failure: there is nothing a canary browser could hold yet.
+  // is a skip rather than a failure: there is nothing a returning browser could hold yet.
   const cand = (await readdir("src/dict/a-dict")).find((n) => /^icons\.[0-9a-f]{8}\.svg$/.test(n) && !n.includes(live));
-  if (!cand) console.log("  SKIP  svg canary delta (icons)  no non-live sprite in a-dict yet; it arrives with the first sprite change after a roll");
+  if (!cand) console.log("  SKIP  svg delta (icons)  no non-live sprite in a-dict yet; it arrives with the first sprite change after a roll");
   else {
-    const r = await get(url, b64(await readFile(`src/dict/a-dict/${cand}`)), canary);
+    const r = await get(url, b64(await readFile(`src/dict/a-dict/${cand}`)));
     const ce = r.headers.get("content-encoding");
-    report("svg canary delta (icons)", ce === "dcz", `ce=${ce} vs candidate ${cand}`);
+    report("svg delta (icons)", ce === "dcz", `ce=${ce} vs candidate ${cand}`);
   }
 }
 // 4. offers are SCOPED to destinations we answer. The spec defaults match-dest to every

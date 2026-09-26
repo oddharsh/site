@@ -73,8 +73,13 @@ export class Counter {
   }
 }
 
+// `Env` is GENERATED from cloudflare.config.ts, not written here. Wrangler writes
+// .cloudflare/types/index.d.ts from the config's `env` block on every `wrangler
+// build --x-new-config --x-cf-build-output` (tools/gen-runtime-types.ts runs it
+// before typecheck and lint), so a binding renamed in the config and not here is
+// a type error rather than a 500 on /garage/cf/*.
 export default {
-  async fetch(request, env, ctx) {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext) {
     const url = new URL(request.url);
     const path = url.pathname;
     const t0 = Date.now();
@@ -89,7 +94,7 @@ export default {
       if (path === "/garage/cf/counter") {
         const id = env.COUNTER.idFromName("garage-global");
         const res = await env.COUNTER.get(id).fetch("https://do/");
-        const { n } = await res.json();
+        const { n } = await res.json<{ n: number }>();
         log({ feature: "durable-object", n, ms: Date.now() - t0 });
         return json({ ok: true, count: n });
       }
@@ -103,7 +108,7 @@ export default {
         const seed = parseInt(url.searchParams.get("n") || "0", 10) || 0;
         const id = env.COUNTER.idFromName("homepage-visits");
         const res = await env.COUNTER.get(id).fetch(`https://do/?seed=${seed}`);
-        const out = await res.json();
+        const out = await res.json<{ n: number; seeded: boolean }>();
         log({ feature: "do-seed", seed, n: out.n, ms: Date.now() - t0 });
         return json({ ok: true, ...out });
       }
@@ -131,7 +136,11 @@ export default {
           prompt,
           max_tokens: 64,
         }, env.AI_GATEWAY ? { gateway: { id: env.AI_GATEWAY } } : undefined);
-        let caption = (out.description || out.response || "").trim()
+        // The runtime types name `description` alone for an image-to-text model.
+        // `response` stays as the fallback it always was (a text-generation shape
+        // some models answer in), read through a widened type so typing `env` did
+        // not quietly change what the demo does.
+        let caption = (out.description || (out as { response?: string }).response || "").trim()
           .replace(/^(an? |the )?(image|photo|photograph|picture) (of|shows|depicts|captures)\s*/i, "")
           .replace(/\s+/g, " ").trim();
         if (caption) caption = caption[0].toUpperCase() + caption.slice(1);
@@ -237,7 +246,7 @@ export default {
           facts.counter = await timedSpan(tr, "do.counter.peek", tt, spans, async (s) => {
             if (s.setAttribute) s.setAttribute("do.name", "garage-global");
             const r = await env.COUNTER.get(env.COUNTER.idFromName("garage-global")).fetch("https://do/?peek=1");
-            const { n } = await r.json();
+            const { n } = await r.json<{ n: number }>();
             if (s.setAttribute) s.setAttribute("counter.value", n);
             return n;
           });

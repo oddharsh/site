@@ -23,7 +23,8 @@
 // them is referenced anywhere in the tree, which is what an identical count
 // proves.
 //
-// ONE FILE FOR FOUR CONFIGS, and that is asserted rather than assumed. The
+// ONE FILE FOR THREE CONFIGS (it was four until cf-garage got its own, below),
+// and that is asserted rather than assumed. The
 // runtime section is a function of compatibility date and flags, and the four
 // Workers here sit on four different dates (2026-05-01 to 2026-07-02) with two
 // flag sets. Generated separately, their runtime sections came back
@@ -31,10 +32,27 @@
 // auxiliary configs wrangler can read alongside the site's and FAILS if any
 // pair diverges, because that is the day the programs need a file each and a
 // silent divergence would type one Worker against another's runtime.
-// cf-garage is the one it cannot cross-check: `wrangler types` refuses
-// `--x-new-config` (measured again today, "Unknown arguments"), so that
-// Worker types against the shared file on the strength of the other three
-// agreeing, and its dry-run in CI is the runtime check it gets.
+//
+// CF-GARAGE GETS ITS OWN FILE, FROM ITS OWN CONFIG, since 2026-09-26. It is the
+// one Worker on wrangler's experimental cloudflare.config.ts (gotcha 41), and
+// `wrangler types` still refuses `--x-new-config`. What changed is a second
+// door: workers-sdk#15778 made wrangler write `.cloudflare/types/index.d.ts`
+// itself whenever it reads that config for `dev` or for the build-output
+// `build`. The file carries an `Env` INFERRED from the config's `env` block
+// (so a binding renamed there and not in the source is a type error without
+// any regeneration) plus the runtime surface at cf-garage's own compatibility
+// date and flags. So this script runs the cheapest command that reaches the
+// door, below, and tsconfig.cf-garage.json includes what it writes in place of
+// the site's file.
+//
+// Measured the day it moved (wrangler 3572193, workerd 1.20260925.1): the
+// runtime section at 2026-06-16 + nodejs_compat,new_module_registry is
+// BYTE-IDENTICAL to the site's at 2026-06-01 + enable_request_signal,
+// new_module_registry (604,981 B each). nodejs_compat adds nothing to the
+// generated declarations, since workerd's types describe the Workers globals
+// and leave `node:*` to @types/node. So the switch buys the Env, not a
+// different runtime, and it will start buying the runtime the day cf-garage's
+// date or flags move somewhere the site's do not.
 //
 // RUNTIME ONLY. `--include-env=false`, because the Env half wrangler would
 // write types COUNTER and the two Workflows by importing `.build/src/worker/
@@ -62,7 +80,7 @@
 // and runs its custom build. The temporary runtime-only configs below removed
 // that extra build: 6.15s -> 3.03s in a 2026-09-08 workstation comparison,
 // with byte-identical declarations and no writes to the staged site.
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -87,13 +105,73 @@ const MARKER = "// Begin runtime types";
 
 const inputsKey = () => {
   const h = createHash("sha256");
-  h.update(JSON.parse(readFileSync(join(REPO, "node_modules", "wrangler", "package.json"), "utf8")).version);
+  h.update(wranglerVersion());
   for (const c of CONFIGS) h.update("\0" + c.config + "\0").update(readFileSync(join(REPO, c.config)));
   return h.digest("hex").slice(0, 16);
 };
 
+const FORCE = process.argv.includes("--force");
+const wranglerVersion = () => JSON.parse(readFileSync(join(REPO, "node_modules", "wrangler", "package.json"), "utf8")).version;
+
+// ── cf-garage: wrangler writes this one, from cloudflare.config.ts ─────────
+//
+// The path is wrangler's constant (NEW_CONFIG_TYPES_OUTPUT_PATH), resolved
+// against the working directory, which is why the spawn runs in cf-garage/.
+// Both `.cloudflare/` trees are gitignored by the root rule.
+export const CF_GARAGE_OUT = join(REPO, "cf-garage", ".cloudflare", "types", "index.d.ts");
+// Kept beside this script's other output rather than inside the file, because
+// wrangler owns that file and rewrites it whenever its content differs, which a
+// key line of ours would guarantee on every `wrangler dev`.
+const CF_GARAGE_KEY = join(REPO, "config", ".generated", "cf-garage-types.key");
+
+function generateCfGarage() {
+  const h = createHash("sha256").update(wranglerVersion()).update("\0");
+  h.update(readFileSync(join(REPO, "cf-garage", "cloudflare.config.ts")));
+  const cfKey = h.digest("hex").slice(0, 16);
+  if (!FORCE && existsSync(CF_GARAGE_OUT) && existsSync(CF_GARAGE_KEY) && readFileSync(CF_GARAGE_KEY, "utf8").trim() === cfKey) {
+    console.log(`gen-runtime-types: cf-garage/.cloudflare/types/index.d.ts is current (key ${cfKey})`);
+    return;
+  }
+  // Removed first, because wrangler SWALLOWS a type-generation failure: the
+  // generator logs the error and returns, and the build carries on to exit 0.
+  // A stale file left in place would then read as a fresh one.
+  rmSync(CF_GARAGE_OUT, { force: true });
+  // `build --x-new-config --x-cf-build-output` rather than the three commands
+  // that look cheaper, each measured 2026-09-26 on wrangler 3572193:
+  //   - `types --x-new-config` is refused ("Unknown arguments").
+  //   - `deploy --dry-run --x-new-config` bundles and prints the bindings but
+  //     never reaches the generator.
+  //   - `build --x-new-config` WITHOUT the output flag is that same dry run with
+  //     `--outdir=dist`, so it writes an unignored cf-garage/dist/ and no types.
+  // This one reads the config, writes the types, then bundles into the ignored
+  // .cloudflare/output/ tree: 1.3 s, no credential, no network. It also spawns
+  // `docker` to tidy container image tags even with no container configured,
+  // which prints a daemon error on a machine without one and changes nothing.
+  // WRANGLER_SEND_METRICS=false keeps the telemetry POST off the wire.
+  const out = spawnSync(...wranglerCommand(["build", "--x-new-config", "--x-cf-build-output"]), {
+    cwd: join(REPO, "cf-garage"),
+    env: { ...process.env, WRANGLER_SEND_METRICS: "false" },
+    encoding: "utf8",
+  });
+  const text = existsSync(CF_GARAGE_OUT) ? readFileSync(CF_GARAGE_OUT, "utf8") : "";
+  const at = text.indexOf(MARKER);
+  if (out.status !== 0 || at < 0 || !text.includes("InferEnv<") || text.length - at < 400_000) {
+    process.stderr.write(`${out.stdout ?? ""}${out.stderr ?? ""}`);
+    throw new Error(
+      `gen-runtime-types: \`wrangler build --x-new-config --x-cf-build-output\` in cf-garage/ exited ${out.status} ` +
+      `and left ${text ? `${text.length} bytes without a full Env + runtime surface` : "no file"} at cf-garage/.cloudflare/types/index.d.ts`,
+    );
+  }
+  mkdirSync(dirname(CF_GARAGE_KEY), { recursive: true });
+  writeFileSync(CF_GARAGE_KEY, cfKey + "\n");
+  const header = text.split("\n").find((l) => l.startsWith("// Runtime types generated with")) ?? "";
+  console.log(`gen-runtime-types: ${text.length - at} bytes + inferred Env -> cf-garage/.cloudflare/types/index.d.ts (${header.replace("// ", "")})`);
+}
+
+generateCfGarage();
+
 const key = inputsKey();
-if (!process.argv.includes("--force") && existsSync(OUT) && readFileSync(OUT, "utf8").startsWith(KEY_PREFIX + key + "\n")) {
+if (!FORCE && existsSync(OUT) && readFileSync(OUT, "utf8").startsWith(KEY_PREFIX + key + "\n")) {
   console.log(`gen-runtime-types: config/.generated/workers-runtime.d.ts is current (key ${key}); pass --force to regenerate`);
   process.exit(0);
 }

@@ -276,18 +276,6 @@ try {
         const read = interpretTemporalProbe(out.stdout);
         return read.landed === null ? { landed: null, detail: `did not run: ${tail(out, 1).join(" ").slice(0, 120)}` } : read;
       },
-      "wrangler-types-accepts-x-new-config": (tree, entry) => {
-        // cf-garage is the one config in the new format, and --path keeps the
-        // generated file out of either tree.
-        const target = join(scratch, `types-${tree === ROOT ? "pinned" : "candidate"}.d.ts`);
-        const out = run(NODE, [entry, "types", "--x-new-config", "--path", target], { cwd: join(tree, "cf-garage"), timeout: 2 * 60_000 });
-        const wrote = out.status === 0 && existsSync(target);
-        // wrangler colours its errors; the escape is built from its code point
-        // so the source carries no control character.
-        const ansi = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
-        const why = `${out.stderr || ""}${out.stdout || ""}`.replace(ansi, "").split("\n").find((l) => /Unknown argument|ERROR/.test(l))?.trim();
-        return { landed: wrote, detail: wrote ? `exit 0, wrote ${statSync(target).size} B` : `exit ${out.status}${why ? `: ${why.slice(0, 100)}` : ""}` };
-      },
       "vitest-plugin-accepts-vitest-5": (tree) => {
         // Each tree's own wrangler spec names the workers-sdk ref, and pkg.pr.new
         // publishes the plugin from that same ref, so this reads the build that
