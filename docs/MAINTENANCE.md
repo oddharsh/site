@@ -1084,7 +1084,6 @@ written, because a watch that reads true on its first run is watching nothing.
 | `css-minifier-knows-the-seven-pseudo-elements` | oven-sh/bun#41120 | no `Invalid selector` on `::scroll-marker` and friends |
 | `css-minifier-lowercases-target-current` | oven-sh/bun#42480 (fix #42484) | `:TARGET-CURRENT` is emitted lowercased |
 | `workerd-honours-zstd-dictionary` | cloudflare/workerd#7106 | `tools/workerd-zstd-probe.ts` compresses smaller with the right dictionary |
-| `wrangler-types-accepts-x-new-config` | gotcha 41, no upstream issue | `wrangler types --x-new-config` writes the file in `cf-garage/` |
 | `workerd-exposes-temporal` | cloudflare/workerd#6907 | `tools/workerd-temporal-probe.ts` finds Temporal under production's compat settings, with a clock within a minute of `Date.now()` |
 
 Each leg reads every watch under the PIN and under the candidate. A row that
@@ -1097,6 +1096,13 @@ carries the fix, and the reporter marks it. A probe that could not run reads
 `fetch-honours-dispatcher` is the one to read first when it moves: it is the
 harness hang under bun, and the issue that decides whether node can leave
 `engines`.
+
+A watch can also retire WITHOUT landing, when the need it stood for arrives
+through another door. `wrangler-types-accepts-x-new-config` went that way on
+2026-09-26: `types --x-new-config` still exits 1 on the pin, and
+`wrangler build --x-new-config --x-cf-build-output` now writes cf-garage's
+generated Env and runtime types, which `bun run typecheck` requires. Gotcha 41
+has the measurement.
 
 **The nightly pin PRs say what they adopt.** `bun run timbrado digest --repo
 <owner/name> --from <sha> --to <sha>` renders the upstream commit range as

@@ -477,6 +477,10 @@ does not make a failed write safe to ignore.
   produced identical diagnostics across the four Worker programs, while
   replacing a separately updated runtime description with the runtime used by
   local validation. Binding-type changes now arrive with Wrangler updates.
+  Since 2026-09-26 cf-garage is the exception: it includes
+  `cf-garage/.cloudflare/types/index.d.ts`, which Wrangler writes from
+  `cloudflare.config.ts` (its inferred `Env` plus the runtime at cf-garage's
+  own date and flags), and the same script runs the build that writes it.
 
   Wrangler still declares the package as an optional peer; its own `cli.d.ts`
   imports some names from it. Those resolve to `any` under `skipLibCheck` when

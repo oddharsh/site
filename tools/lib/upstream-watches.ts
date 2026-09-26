@@ -278,12 +278,15 @@ export const WRANGLER_WATCHES: Pick<Watch, "name" | "issue" | "landed" | "measur
     landed: "the workerd this wrangler ships compresses SMALLER with the right zstd dictionary than with none (tools/workerd-zstd-probe.ts), which is what a runtime dcz tier for the pages build.ts cannot precompress would need; cloudflare/workerd#7106 is this repository's fix for cloudflare/workerd#6967",
     measured: "2026-09-15, workerd 1.20260911.1 via wrangler 982b806: 73 none / 73 good / 73 wrong, the option is accepted and ignored",
   },
-  {
-    name: "wrangler-types-accepts-x-new-config",
-    issue: "https://github.com/cloudflare/workers-sdk",
-    landed: "`wrangler types --x-new-config` runs in cf-garage/ and writes the file, so the generated Env types can follow cloudflare.config.ts instead of a snapshot from `wrangler dev` (gotcha 41 records the refusal; no upstream issue is filed for it)",
-    measured: "2026-09-15, wrangler 982b806 (main): exit 1, `Unknown arguments: x-new-config, xNewConfig`",
-  },
+  // RETIRED 2026-09-26: `wrangler-types-accepts-x-new-config`. It watched the
+  // COMMAND, and what it waited for was the NEED, an Env for cf-garage that
+  // follows cloudflare.config.ts. workers-sdk#15778 met the need through another
+  // door: `wrangler build --x-new-config --x-cf-build-output` writes
+  // cf-garage/.cloudflare/types/index.d.ts, and tools/gen-runtime-types.ts runs
+  // it before every typecheck. `types --x-new-config` still exits 1 on the pin
+  // (3572193, "Unknown arguments"), so the watch would have gone on reading
+  // false while the thing it stood for already shipped. The build door is a
+  // GATE now (typecheck fails without its file), which is the stronger form.
   {
     // The revisit for Vitest in the Worker suite. #703 took the pool out, and
     // on 2026-09-22 the owner chose to hold the harness test in its place and
