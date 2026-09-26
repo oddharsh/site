@@ -3983,14 +3983,16 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     unnegotiable server-side; the ONLY safe zstd trigger is `Available-Dictionary`,
     which doubles as proof the client speaks dcz. So "zstd where it wins" IS the
     delta path. Loader classes differ (#119): js/css dcz proven in production, html
-    server-side proven (149-byte page delta decodes to the live page), svg OFF by
-    default and ON behind a cookie canary since 2026-09-26. The July diagnosis
-    (Chromium's image loader chokes on dcz) never reproduced: Chrome 154 and Canary
-    156 decode an svg dcz from this Worker in the image loader, pixel-identical to
-    the br control, while a wrong-dictionary delta breaks the image, so the rig can
-    see the failure. Production's path is what is left, and `svg-dcz=1` (see
-    `SVG_DCZ_COOKIE` in `lib/assets.ts`) is how one browser tests it. The delta
-    needs a sprite change AFTER the nightly roll has adopted the current one.
+    server-side proven (149-byte page delta decodes to the live page), and svg ON
+    for everyone since 2026-09-26. The July diagnosis that kept svg off (Chromium's
+    image loader chokes on dcz) never reproduced, locally or in production: a cookie
+    canary (#940) and a sprite change (#943) put the first svg delta on the wire,
+    116 B against 2,424 B of br, and two profiles holding the previous sprite
+    (Chrome 154.0.8037.58, Canary 156.0.8074.0) took it over h2 and drew all 14
+    icons on first load and reload. A wrong-dictionary delta does break the image,
+    so the rig can see the failure. The rollback is taking `svg` out of
+    `DICTIONARY_TYPES` in `lib/assets.ts`; the symptom to watch for is the July
+    one, blank taskbar icons for returning Chromium visitors after a sprite change.
     `bun run dcz:check` asserts both page
     tiers against production, reading the family dictionary out of the live `Link`
     header and the per-page candidate from `src/dict/p-dict`. With `bun run dict:roll`

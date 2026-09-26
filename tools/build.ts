@@ -2729,9 +2729,8 @@ let freshFamily: Buffer | null = null;
     if (cands.length) await mkdir(`${OUT}/public/ad`, { recursive: true });
     let n = 0, deltaBytes = 0;
     for (const asset of shell) {
-      // An svg delta is built like any other, and the Worker serves it only to a browser
-      // carrying the svg canary cookie (SVG_DCZ_COOKIE in lib/assets.ts). Everybody else
-      // still gets the plain q11 twin, so for them these files are inert bytes in /ad/.
+      // An svg delta is built like any other and served like any other, since
+      // 2026-09-26 (DICTIONARY_TYPES in lib/assets.ts records why it sat out before).
       const targetBytes = await readFile(`${dir}/${asset.name}`);
       for (const d of cands) {
         if (d.base !== asset.base || d.ext !== asset.ext) continue;
