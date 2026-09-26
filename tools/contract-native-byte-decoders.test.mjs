@@ -83,7 +83,12 @@ test("x402 reads the payment as UTF-8 and writes a receipt btoa could not", asyn
   const env = /** @type {any} */ ({
     X402_PAY_TO: `0x${"12".repeat(20)}`,
     X402_FACILITATOR: "https://facilitator.test",
-    ASSETS: { fetch: async () => new Response("the full corpus") },
+    // 404 on the q11 twin, so this test stays about the UTF-8 receipt. An asset
+    // layer answering every path would hand back plain text as the "twin" and
+    // the handler would label it br.
+    ASSETS: { fetch: async (req) => new URL(req.url).pathname.endsWith(".br")
+      ? new Response("not found", { status: 404 })
+      : new Response("the full corpus") },
   });
   const pay = async (settled) => {
     const posts = [];

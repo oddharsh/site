@@ -239,6 +239,18 @@ bun run dict:roll
 # advisory: it reads production, so never make it a required check.
 bun run dcz:check
 
+# does every q11 twin the build writes (shell, pages, text; 522 on 2026-09-26)
+# reach a browser AT q11? Compares BYTES: decodes what arrived, re-encodes it at
+# build.ts's exact settings, and asks whether the wire is that stream, so the
+# verdict holds from any checkout (the checkout only supplies the URL list, so
+# run it from the deployed commit for a complete one). A header check cannot do
+# this: the local harness re-encodes an unencoded body to br by itself, which is
+# how /llms-full.txt shipped 31.7 KB over q11 a fetch until 2026-09-26. Advisory,
+# like dcz:check. Against a LOCAL Worker pass `-- --accept-encoding br`, because
+# miniflare turns a browser's Accept-Encoding into gzip for everything.
+bun run q11:check
+bun run q11:check -- --url http://localhost:8799 --accept-encoding br
+
 # THE CANARY TRIPWIRE: three moving targets through gates this repo already
 # holds its pins to, PROPOSING NOTHING. .github/workflows/canary.yml runs all
 # three nightly and keeps at most one open issue per leg (canary-report.ts
