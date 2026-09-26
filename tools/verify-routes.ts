@@ -356,7 +356,17 @@ const ROUTES = [
   // The SSRF guard on this route specifically, same reasoning as the nlweb row:
   // a blocked host is refused before any of the ten fetches leave.
   { path: "/lens/markdown?url=http://localhost", status: 400, ct: "application/json", marker: "no-fetch list" },
-  // 200 text/plain when the x402 gate is unconfigured; 402 json once X402_PAY_TO is set
+  // 200 text/plain when the x402 gate is unconfigured; 402 json once X402_PAY_TO is set.
+  // NO `encoding` pin here, deliberately, and the reason generalises to the
+  // text/plain rows further down. Measured 2026-09-26 by booting the harness and
+  // probing this route while the Worker served NO twin: it still answered
+  // `content-encoding: br`, because miniflare re-encodes the types it deems
+  // compressible and production's edge compresses them on the fly too. So an
+  // encoding pin on a text/plain row passes whether or not a twin was served,
+  // which is the one thing it exists to catch. What does discriminate is the
+  // `vary` and the weakened `-br` etag servePrecompressedText adds, and
+  // contract-llms-full-ships-its-q11-twin asserts those against a fake asset
+  // layer instead.
   { path: "/llms-full.txt", status: [200, 402], ct: ["text/plain", "application/json"] },
   // Built documents since 2026-09-25 (lib/island.ts): the marker is the island
   // mount, and the row after it is the fragment that fills it. A local Worker has
