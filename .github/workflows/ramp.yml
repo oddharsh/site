@@ -509,6 +509,13 @@ jobs:
     # No environment and no Cloudflare credential. Both checks below read
     # production over plain HTTPS, which is the whole reason they can run here
     # without widening anything.
+    permissions:
+      contents: read
+      # To dispatch dictionary-roll.yml once a release reaches 100%, and for
+      # nothing else. It lives on THIS job because this is the one job here that
+      # holds no Cloudflare credential; putting it on `soak` or `full` would widen
+      # the token sitting next to the ramp secret.
+      actions: write
 
     steps:
       - name: Check out the promoted commit
@@ -534,6 +541,39 @@ jobs:
         continue-on-error: true
         run: bun run dcz:check
 
+      # A release that reached 100% re-mints whatever shell assets and pages it
+      # touched, and a returning visitor holding those new bytes earns a delta on
+      # the NEXT release only if they are committed by then. The roll was nightly
+      # alone until 2026-09-26, and this repo ships several releases a day, so a
+      # second release inside one roll window gave returning visitors plain q11
+      # on the render path. Measured the day this landed: #921 rolled at 14:42Z,
+      # a later release re-minted luna, nav and nav-run, and `dcz:check` reported
+      # all three uncovered.
+      #
+      # `clean` and `shipped` are the two resolutions that mean the new version
+      # holds 100%. `faulty` rolled back and `unproven` left a split, and rolling
+      # against a split adopts whichever version this runner's IP is pinned to.
+      #
+      # A workflow_run trigger on this workflow would have been the obvious
+      # shape and reads the wrong signal: of the last 40 ramp runs, 25 ended
+      # `skipped` (no-op ramps) and 14 `cancelled`, some of those AFTER reaching
+      # 100% (gotcha 36), so the run's conclusion cannot tell a shipped release
+      # from one superseded at 10%. It would also sit at the end of a
+      # CI -> promote -> ramp -> roll chain, three workflow_run hops, which is
+      # the most GitHub will start, so anything chained after the roll would
+      # silently never run.
+      #
+      # workflow_dispatch is the one event the default GITHUB_TOKEN may create
+      # that still starts a run. The roll opens a PR only when something moved,
+      # and the nightly schedule stays as the backstop for a ramp cancelled
+      # before this step.
+      - name: Roll the dictionaries onto the release
+        if: ${{ needs.soak.outputs.resolution == 'clean' || needs.soak.outputs.resolution == 'shipped' }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run dictionary-roll.yml --repo "$GITHUB_REPOSITORY" --ref main
+
       # Through `env:` rather than `${{ }}` inside the script, for the same reason
       # og-cards.yml does it: an expression is substituted into the script text
       # before bash parses it. This particular value is a hex prefix the canary job
@@ -552,6 +592,7 @@ jobs:
             echo "- a changelog row is written to D1 only by a step that reached 100%"
             echo ""
             echo "If \`dcz:check\` above is red, the committed dictionaries no longer"
-            echo "describe what production serves. dictionary-roll.yml opens a PR for"
-            echo "that nightly, or run it now from the Actions tab."
+            echo "describe what production serves. A release that reached 100% has"
+            echo "already dispatched dictionary-roll.yml, which opens a PR for that;"
+            echo "the nightly schedule catches any ramp that ended before this job."
           } >> "$GITHUB_STEP_SUMMARY"
