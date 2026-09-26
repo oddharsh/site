@@ -559,11 +559,34 @@ export async function handlePhotoQuery(request, env, ctx) {
   return response;
 }
 
-export function handleImagesManifest() {
-  const photos = PHOTO_POOL;
+// /images/manifest.json is BUILD OUTPUT since 2026-09-26: build.ts step 1e stages
+// these bytes and the text-twin step writes their q11 twin, so the route serves
+// them through servePrecompressedText. Rendered per request, the edge compressed
+// them on the fly: 13,082 B on the wire against 9,803 at q11 (+33.4%), measured
+// in production the day this moved. The inputs are the bundled pool alone, which
+// only a deploy can change, so nothing about the body was ever per-request.
+//
+// ONE serializer and ONE header set for both doors. The build writes this string
+// and the Worker falls back to it on a 404 (bun run dev stages nothing), so the
+// two cannot drift, and a contract test holds the staged file to it byte for byte.
+export function imagesManifestJson(photos: ReturnType<typeof derivePhotoPool>): string {
   // _address: the doctrinal signature that lived in the retired Apache listings;
   // the machine surface keeps it now that the human one is /photos.
-  return jsonResp({ _address: "handwritten worker at aadhar.sh", photos, count: photos.length });
+  return JSON.stringify({ _address: "handwritten worker at aadhar.sh", photos, count: photos.length });
+}
+
+// cache-control is load-bearing on the STATIC path rather than a restatement.
+// _headers gives /images/* a one-year immutable cache for the old thumbnail
+// URLs, and a staged file under /images/ inherits it, so a manifest that must
+// move on every photo add would otherwise pin in browsers for a year.
+export const IMAGES_MANIFEST_HEADERS = {
+  "content-type": "application/json; charset=utf-8",
+  "cache-control": "public, max-age=300, s-maxage=600",
+  "access-control-allow-origin": "*",
+};
+
+export function handleImagesManifest() {
+  return new Response(imagesManifestJson(PHOTO_POOL), { headers: IMAGES_MANIFEST_HEADERS });
 }
 
 // ── /photos — the archive, Explorer's Thumbnails view ───────────────────────

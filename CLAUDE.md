@@ -229,7 +229,8 @@ bun run infra:check
 bun run infra:apply
 
 # roll the shared-compression dictionaries onto what production is SERVING.
-# .github/workflows/dictionary-roll.yml does this nightly and opens a PR; this is
+# .github/workflows/dictionary-roll.yml does this after every release that reaches
+# 100% (ramp.yml dispatches it) and nightly as a backstop, and opens a PR; this is
 # the manual form. Sourced from the wire, so it is correct from any checkout.
 bun run dict:roll
 
@@ -1971,6 +1972,18 @@ map that is not a restatement of its own inputs.
 the generated `/lens` shell and `/search`. The farm derives nothing, so a hover
 in dev draws the photo frame with no EXIF lines, and `photo_recipe`'s byte-match
 arm degrades the same way. Build if you need either.
+
+**`/images/manifest.json` joined them on 2026-09-26, by a different road.** It
+is staged by build.ts step 1e from the bundled pool through `imagesManifestJson`
+in `photos.ts`, the same serializer the Worker falls back to, and the text-twin
+step gives it a q11 twin. Rendered per request, the edge compressed it on the
+fly: 13,082 B on the wire against 9,803 at q11 (+33.4%), measured in production.
+Unlike the two above it is NOT a build-only surface under `bun run dev`: the route
+falls back to the per-request handler on a 404, so dev still answers. Its route
+sets `IMAGES_MANIFEST_HEADERS` explicitly, and that is load-bearing, because
+`_headers` gives `/images/*` a one-year `immutable` cache that a staged file
+there would otherwise inherit. `contract-images-manifest-is-build-output` holds
+the byte identity, the twin, and that header, with a control showing the leak.
 
 ### AadharshBot — the branded crawler
 
@@ -3878,8 +3891,16 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     A returning visitor was taking 13.7 KB on the render-blocking path where the
     deltas are 1.3 KB. `dcz:check` printed PASS the whole time (see below).
 
-    `.github/workflows/dictionary-roll.yml` runs the roll nightly against
-    production and opens a PR when anything moved. It cannot merge that PR:
+    `.github/workflows/dictionary-roll.yml` runs the roll against production
+    and opens a PR when anything moved. **It fires after every release that
+    reaches 100%, since 2026-09-26**: ramp.yml's `verify` job dispatches it on a
+    `clean` or `shipped` soak, and the nightly schedule stays as the backstop. A
+    nightly roll alone fell behind a repo that ships several releases a day: #921
+    rolled at 14:42Z, a later release re-minted luna, nav and nav-run, and
+    `dcz:check` reported all three uncovered hours later. It is a dispatch from
+    inside the ramp rather than a `workflow_run` on it because a ramp's
+    conclusion cannot say whether it shipped: of 40 runs, 25 were `skipped`
+    no-ops and 14 `cancelled`, some of those after reaching 100% (gotcha 36). It cannot merge that PR:
     `main` takes zero bypass actors, which is the property the release model rests
     on, so the last step stays a human one deliberately. `a-dict` is
     `.assetsignore`d (build input, not a public URL).
