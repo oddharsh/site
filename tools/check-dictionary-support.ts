@@ -8,7 +8,8 @@
 // so every probe here hits aadhar.sh. Loader-class rules this encodes:
 //   js/css  dcz expected  (proven in production 2026-07-27)
 //   html    dcz expected  (server side proven; document-loader client check post-deploy)
-//   svg     NO dictionary offer, by design (#119: Chromium's image loader chokes on dcz)
+//   svg     NO dictionary offer by default (#119, never reproduced since); a request
+//           carrying the svg-dcz=1 canary cookie gets the offer and the delta
 //   SSR     blocked: workerd's zstd ignores `dictionary`; revisit via scratchpad spike
 import { readdir, readFile } from "node:fs/promises";
 import { brotliDecompressSync } from "node:zlib";
@@ -17,11 +18,11 @@ import { PAGE_FAMILY_MATCH } from "../src/worker/lib/assets.ts";
 import { FAMILY_DICT_DIR, readCommittedFamily, type CommittedFamily } from "./lib/page-family.ts";
 
 const b64 = (buf) => `:${createHash("sha256").update(buf).digest("base64")}:`;
-const get = (url, dict?) => {
+const get = (url, dict?, extra: Record<string, string> = {}) => {
   // The header is ABSENT on the control arm rather than empty: an empty
   // `available-dictionary` is a different request from one that never offered a
   // dictionary, and the control depends on the second.
-  const headers = { "accept-encoding": "zstd, br, dcz" };
+  const headers: Record<string, string> = { "accept-encoding": "zstd, br, dcz", ...extra };
   if (dict) headers["available-dictionary"] = dict;
   return fetch(url, { headers, redirect: "manual" });
 };
@@ -242,12 +243,31 @@ const report = (name, ok, detail) => { console.log(`  ${ok ? "PASS" : "FAIL"}  $
              : `no snapshot carries ${unheld.join(", ")} — an edge feature is rewriting HTML after the Worker, so re-run bun run shell:roll (it reads production)`);
   }
 }
-// 3. svg — must NOT offer a dictionary (the #119 rule)
+// 3. svg: OFF by default (the #119 rule), ON for a request carrying the canary cookie
+// (SVG_DCZ_COOKIE in lib/assets.ts). Three rows, because the canary is only worth
+// anything while the default stays exactly what it was.
 {
   const home = await (await fetch("https://aadhar.sh/", { headers: { "accept-encoding": "identity" } })).text();
-  const icons = home.match(/\/a\/icons\.[0-9a-f]{8}\.svg/)?.[0];
-  const r = await get(`https://aadhar.sh${icons}`);
-  report("svg stays off (icons)", !r.headers.get("use-as-dictionary"), `use-as-dictionary=${r.headers.get("use-as-dictionary")}`);
+  const live = home.match(/\/a\/icons\.([0-9a-f]{8})\.svg/)?.[1] ?? "";
+  if (!live) report("svg (icons)", false, "the homepage names no /a/icons.<hash8>.svg, so there is no sprite to probe");
+  const url = `https://aadhar.sh/a/icons.${live}.svg`;
+  const canary = { cookie: "svg-dcz=1" };
+  const off = await get(url);
+  report("svg stays off (icons, no cookie)", !off.headers.get("use-as-dictionary"), `use-as-dictionary=${off.headers.get("use-as-dictionary")}`);
+  const on = await get(url, undefined, canary);
+  const offer = on.headers.get("use-as-dictionary") || "";
+  report("svg canary offers (icons, cookie)", offer.includes('match-dest=("image")') && /\bcookie\b/i.test(on.headers.get("vary") || ""),
+    `use-as-dictionary=${offer || "(none)"} vary=${on.headers.get("vary")}`);
+  // The delta row needs a sprite in a-dict that is NOT the live one, which exists only
+  // after a roll has adopted a sprite and a later deploy re-minted it. Until then this
+  // is a skip rather than a failure: there is nothing a canary browser could hold yet.
+  const cand = (await readdir("src/dict/a-dict")).find((n) => /^icons\.[0-9a-f]{8}\.svg$/.test(n) && !n.includes(live));
+  if (!cand) console.log("  SKIP  svg canary delta (icons)  no non-live sprite in a-dict yet; it arrives with the first sprite change after a roll");
+  else {
+    const r = await get(url, b64(await readFile(`src/dict/a-dict/${cand}`)), canary);
+    const ce = r.headers.get("content-encoding");
+    report("svg canary delta (icons)", ce === "dcz", `ce=${ce} vs candidate ${cand}`);
+  }
 }
 // 4. offers are SCOPED to destinations we answer. The spec defaults match-dest to every
 // destination, so a bare `match=` promises deltas for image/fetch/etc too. Assert the

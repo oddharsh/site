@@ -1,7 +1,7 @@
 {
   "files": {
     "tools/apply-infra.ts": 4,
-    "tools/build.ts": 31,
+    "tools/build.ts": 30,
     "tools/check-agent.ts": 10,
     "tools/check-dictionary-support.ts": 25,
     "tools/check-infra.ts": 25,
