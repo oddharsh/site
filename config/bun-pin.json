@@ -26,5 +26,5 @@
     "one back hands the image a field it will try to resolve, and the day it",
     "names a canary the production build stops."
   ],
-  "bun": "1.4.2-canary.20260913.1+09bb546"
+  "bun": "1.4.2-canary.20260925.1+29d9638"
 }
