@@ -2729,10 +2729,9 @@ let freshFamily: Buffer | null = null;
     if (cands.length) await mkdir(`${OUT}/public/ad`, { recursive: true });
     let n = 0, deltaBytes = 0;
     for (const asset of shell) {
-      // Images sit out the dictionary path — see DICTIONARY_TYPES in lib/assets.js. The
-      // worker will never answer an svg with a dcz, so building one here would ship a
-      // delta nothing can ask for.
-      if (asset.ext === "svg") continue;
+      // An svg delta is built like any other, and the Worker serves it only to a browser
+      // carrying the svg canary cookie (SVG_DCZ_COOKIE in lib/assets.ts). Everybody else
+      // still gets the plain q11 twin, so for them these files are inert bytes in /ad/.
       const targetBytes = await readFile(`${dir}/${asset.name}`);
       for (const d of cands) {
         if (d.base !== asset.base || d.ext !== asset.ext) continue;

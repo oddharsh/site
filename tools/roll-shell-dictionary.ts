@@ -105,12 +105,13 @@ const DICTS = "src/dict/a-dict";
 // fan-out, while only serving visitors who skipped exactly that many deploys.
 const KEEP = 3;
 
-// js and css only, matching DICTIONARY_TYPES in _worker.js/lib/assets.js. The icon
-// sprite is served as plain brotli and never as a delta, so adopting it would file
-// candidates nothing can ever read — and the roller would keep filing a new one on
-// every sprite change, forever.
+// js, css, and the icon sprite. The sprite sat out until 2026-09-26, matching
+// DICTIONARY_TYPES in lib/assets.ts; it rejoined for the svg canary (SVG_DCZ_COOKIE
+// there), which can only ever be exercised if a-dict already holds the sprite a canary
+// browser was offered. It changes rarely and KEEP prunes per base, so this files one
+// candidate per sprite change rather than one per deploy.
 const parse = (n) => {
-  const m = n.match(/^(.+)\.([0-9a-f]{8})\.(js|css)$/);
+  const m = n.match(/^(.+)\.([0-9a-f]{8})\.(js|css|svg)$/);
   return m ? { base: m[1], hash8: m[2], ext: m[3], name: n } : null;
 };
 
@@ -138,7 +139,9 @@ if (!live && !existsSync(BUILT)) {
 // costs a second request per asset and, worse, opens a window for a deploy to land between
 // the scan and the adopt, which would store bytes this run never actually read.
 const liveBody = new Map();
-const assetRefs = (body) => [...body.toString("utf8").matchAll(/\/a\/([\w-]+\.[0-9a-f]{8}\.(?:js|css))/g)].map(([, n]) => n);
+// The sprite is referenced as /a/icons.<hash8>.svg#pin-garage; the fragment falls
+// outside the match, which is what the name needs.
+const assetRefs = (body) => [...body.toString("utf8").matchAll(/\/a\/([\w-]+\.[0-9a-f]{8}\.(?:js|css|svg))/g)].map(([, n]) => n);
 
 async function fetchLive(path) {
   let r;

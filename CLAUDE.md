@@ -3989,7 +3989,14 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     which doubles as proof the client speaks dcz. So "zstd where it wins" IS the
     delta path. Loader classes differ (#119): js/css dcz proven in production, html
     server-side proven (149-byte page delta decodes to the live page), svg OFF by
-    design (Chromium's image loader chokes). `bun run dcz:check` asserts both page
+    default and ON behind a cookie canary since 2026-09-26. The July diagnosis
+    (Chromium's image loader chokes on dcz) never reproduced: Chrome 154 and Canary
+    156 decode an svg dcz from this Worker in the image loader, pixel-identical to
+    the br control, while a wrong-dictionary delta breaks the image, so the rig can
+    see the failure. Production's path is what is left, and `svg-dcz=1` (see
+    `SVG_DCZ_COOKIE` in `lib/assets.ts`) is how one browser tests it. The delta
+    needs a sprite change AFTER the nightly roll has adopted the current one.
+    `bun run dcz:check` asserts both page
     tiers against production, reading the family dictionary out of the live `Link`
     header and the per-page candidate from `src/dict/p-dict`. With `bun run dict:roll`
     the source is production for both halves, so the old "roll only from the deployed
