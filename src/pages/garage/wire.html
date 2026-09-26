@@ -574,8 +574,8 @@ transition:filter 60ms ease-out}</pre></figure>
       edge 5xx is HTML too. A failed fetch leaves the placeholder and says so.
     </div>
 
-    <p>Seven more pages moved on 2026-09-25. Brotli bytes on the wire, measured against
-      production the same day:</p>
+    <p>Eight more pages moved on 2026-09-25, seven of them with a fragment. Brotli bytes on
+      the wire, measured against production the same day:</p>
     <table class="cmp">
       <thead><tr><th>page</th><th>per request</th><th>built shell</th><th>fragment</th><th>first visit</th></tr></thead>
       <tbody>
@@ -586,6 +586,7 @@ transition:filter 60ms ease-out}</pre></figure>
         <tr><td><a href="/inbox">/inbox</a></td><td class="n">4,316</td><td>3,919</td><td>479</td><td>4,398</td></tr>
         <tr><td><a href="/lens/census">/lens/census</a></td><td class="n">4,625</td><td>3,801</td><td>669</td><td>4,470</td></tr>
         <tr><td><a href="/serendipity">/serendipity</a></td><td class="n">15,258</td><td>5,260</td><td>7,428</td><td class="y">12,688</td></tr>
+        <tr><td><a href="/serendipity/mcp-info">/serendipity/mcp-info</a></td><td class="n">7,587</td><td>4,976</td><td>none</td><td class="y">4,976</td></tr>
       </tbody>
       <caption>"Per request" is the whole page as the edge served it before the move. A
         return visit revalidates the shell to a 304 with no body and fetches the fragment,
@@ -597,7 +598,9 @@ transition:filter 60ms ease-out}</pre></figure>
       still ships at the edge's quality, and the dyno's chart is half its page, so that one
       lands 110 bytes heavier. The inbox lands 82 heavier, which is what a second response
       costs to carry 479 bytes of mail. Serendipity gains the most because 12KB of it was CSS that
-      never changes between visits.</p>
+      never changes between visits. Its agents page needed no fragment at all: nothing on it is
+      read per request, yet it went out marked <code class="m">no-store</code>, so baking it
+      took 34% off a first visit outright.</p>
     <p>The return visit is where it pays: a 304 for the shell, then a fragment of 479 bytes to
       7KB, against the whole page again. The quieter win is latency. The dyno used to hold its
       entire response behind a fetch to GitHub, with a 3-second budget, on every cold cache;
