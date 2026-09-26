@@ -468,10 +468,7 @@ const ROUTES = [
   { path: "/lwe/llms.txt", status: 200, ct: "text/plain", encoding: "br" },             // page prefix, .txt
   { path: "/garage/feed.xml", status: 200, ct: "application/rss+xml", encoding: "br" },  // page prefix, _headers type survives
   { path: "/images/exif.json", status: 200, ct: "application/json", encoding: "br" },    // /images/<index>.json prefix
-  // XT500010 rather than META: L1000069_3's twin loses to the edge's own q4
-  // (232 B against 228), so build.ts no longer writes one, and this row is
-  // here for the meta route's twin.
-  { path: "/images/meta/XT500010.json", status: 200, ct: "application/json", encoding: "br" }, // existing meta route
+  { path: "/images/meta/L1000069_3.json", status: 200, ct: "application/json", encoding: "br" }, // existing meta route
   { path: "/search-index.json", status: 200, ct: "application/json", encoding: "br" },   // exact route
   { path: "/llms.txt", status: 200, ct: "text/plain", encoding: "br" },                  // exact route, _headers 30d rule
   { path: "/sitemap.xml", status: 200, ct: "application/xml", encoding: "br" },          // exact route
