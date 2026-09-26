@@ -16,29 +16,44 @@
 // handler in that harness, q11:check flagged exactly this URL and no other.
 import { assert, test } from "./contract-shared.ts";
 import { brotliCompressSync, constants as zc, gzipSync } from "node:zlib";
-import { classify, kindOfTwin, q11, urlForTwin } from "./check-q11.ts";
+import { atQ11, classify, kindOfTwin, q11, q11Slack, urlForTwin } from "./check-q11.ts";
 
 // Big enough that q4 and q11 produce different streams, which is the whole
 // distinction under test. A tiny input can encode identically at both.
 const PLAIN = Buffer.from(Array.from({ length: 400 }, (_, i) => `line ${i}: the corpus, ${i % 7} ${"ab".repeat(i % 13)}\n`).join(""));
 
-test("the classifier tells a q11 twin from every other encoding of the same bytes", () => {
+test("the classifier judges on size, and still names a stream that is not byte-identical", () => {
   assert.equal(classify("br", q11(PLAIN)).verdict, "q11");
-  // THE CONTROL: the shape an edge produces on the fly. If this read q11 the
+  // THE CONTROL: the shape an edge produces on the fly. If this passed, the
   // sweep could not fail, which is the check agreeing with itself.
   const q4 = brotliCompressSync(PLAIN, { params: { [zc.BROTLI_PARAM_QUALITY]: 4 } });
   const v = classify("br", q4);
-  assert.equal(v.verdict, "not-q11");
-  assert.equal(v.verdict === "not-q11" && v.q11, q11(PLAIN).length, "must report the size the twin would have been");
-  // Same quality, different window: same content, different stream. That is a
-  // re-encode somewhere between the Worker and the client, never our twin.
+  assert.equal(v.verdict, "over");
+  assert.equal(v.verdict === "over" && v.q11, q11(PLAIN).length, "must report the size the twin would have been");
+  assert.ok(!atQ11(v));
+  // Same quality, different window: a different stream at q11 size. This is
+  // the shape of the /writing false alarm (macOS arm64 re-encoded production's
+  // 5,841 B twin to 5,847 B), so it must pass while being told apart from exact.
   const w22 = brotliCompressSync(PLAIN, { params: { [zc.BROTLI_PARAM_QUALITY]: 11, [zc.BROTLI_PARAM_LGWIN]: 22 } });
-  assert.equal(classify("br", w22).verdict, "not-q11");
-  assert.equal(classify("gzip", gzipSync(PLAIN)).verdict, "not-q11");
-  assert.equal(classify(null, PLAIN).verdict, "not-q11", "an unencoded body is not a twin");
+  assert.ok(!w22.equals(q11(PLAIN)), "the fixture must be a different stream, or this proves nothing");
+  const drift = classify("br", w22);
+  assert.equal(drift.verdict, "q11-size");
+  assert.ok(atQ11(drift));
+  assert.equal(classify("gzip", gzipSync(PLAIN)).verdict, "over");
+  assert.equal(classify(null, PLAIN).verdict, "over", "an unencoded body is not at q11 size");
   // A header that lies about the body is its own finding, not a crash.
   assert.equal(classify("br", PLAIN).verdict, "undecodable");
   assert.equal(classify("dcz", q11(PLAIN)).verdict, "undecodable");
+});
+
+test("the slack is 1% with an 8 B floor, between measured drift and the edge's q4", () => {
+  // Drift measured 2026-09-26: 6 B on 5,841 (0.1%). The edge's q4 on anything
+  // real is 12-26% over. The floor keeps a 1 B drift on an 87 B file a pass.
+  assert.equal(q11Slack(87), 8);
+  assert.equal(q11Slack(800), 8);
+  assert.equal(q11Slack(5841), 59);
+  assert.ok(q11Slack(5841) >= 6, "the /writing drift must fit inside the slack");
+  assert.ok(q11Slack(156709) < 188404 - 156709, "the edge's /llms-full.txt must not fit inside it");
 });
 
 test("q11() is build.ts's brotliQ11, so a served twin reads as q11", async () => {

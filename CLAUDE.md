@@ -240,10 +240,12 @@ bun run dict:roll
 bun run dcz:check
 
 # does every q11 twin the build writes (shell, pages, text; 522 on 2026-09-26)
-# reach a browser AT q11? Compares BYTES: decodes what arrived, re-encodes it at
-# build.ts's exact settings, and asks whether the wire is that stream, so the
-# verdict holds from any checkout (the checkout only supplies the URL list, so
-# run it from the deployed commit for a complete one). A header check cannot do
+# reach a browser AT q11? Decodes what arrived, re-encodes it at build.ts's
+# settings, and passes it at q11 + max(1%, 8 B): judged on SIZE, since q11 is not
+# the same stream on every machine (macOS arm64 re-encoded /writing 6 B off the
+# Linux twin production serves), and a different stream at q11 size is named
+# rather than failed. The verdict holds from any checkout (it only supplies the
+# URL list, so run it from the deployed commit for a complete one). A header check cannot do
 # this: the local harness re-encodes an unencoded body to br by itself, which is
 # how /llms-full.txt shipped 31.7 KB over q11 a fetch until 2026-09-26. Advisory,
 # like dcz:check. Against a LOCAL Worker pass `-- --accept-encoding br`, because
