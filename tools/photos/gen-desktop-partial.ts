@@ -162,12 +162,21 @@ export function renderDesktopArtifacts(surfaces = readManifest().surfaces) {
 // - linearGradient drops x1="0" y1="0" and stop drops offset="0", the defaults
 // - a filter primitive drops flood-color="#000", its initial value. feDropShadow
 //   keeps dx and dy, because THEIR default is 2, not 0.
+// - a six-digit hex colour whose digit pairs repeat takes its three-digit form,
+//   #ffffff to #fff, which CSS parses to the same colour. The bytes are the
+//   small half. The tray icons spell white #ffffff while the section tiles
+//   spell it #fff, so the security icon's gloss matched garageG in every
+//   stop and still missed hoistDefs below, which merges on exact text. Only
+//   a WHOLE attribute value is rewritten, so a fragment like url(#abcabc)
+//   cannot be read as a colour. Measured 2026-09-26 on the built sprite:
+//   14,721 to 14,531 B raw, 2,451 to 2,424 B brotli, one gradient fewer.
 export const compactSvg = (svg: string): string => svg
   .replace(/<([a-zA-Z]+)(\s[^<>]*)?><\/\1>/g, (_m, tag: string, attrs = "") => `<${tag}${attrs}/>`)
   .replace(/ d="([^"]*)"/g, (_m, d: string) => ` d="${d.replace(/ +([MLHVCSQTAZmlhvcsqtaz])/g, "$1").replace(/([MLHVCSQTAZmlhvcsqtaz]) +/g, "$1")}"`)
   .replace(/(<linearGradient\b[^>]*?) x1="0" y1="0"/g, "$1")
   .replace(/<stop offset="0" /g, "<stop ")
-  .replaceAll(' flood-color="#000"', "");
+  .replaceAll(' flood-color="#000"', "")
+  .replace(/="#([0-9a-f])\1([0-9a-f])\2([0-9a-f])\3"/gi, (_m, r: string, g: string, b: string) => `="#${r}${g}${b}"`.toLowerCase());
 
 // Back and Forward, at the head of the page window's title bar. nav.js used to
 // CREATE this span at boot, two animation frames after the static paint on
