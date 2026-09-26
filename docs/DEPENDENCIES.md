@@ -212,9 +212,23 @@ reading: its `runWatch` answers a missing engine as `landed: null`, and null
 never moves a verdict, so the bun leg would have printed GREEN over eight
 unmeasured rows. The wrapper THROWS instead and `canary-bun.ts` turns that
 into exit 2 before it downloads a canary. `TIMBRADO_BIN` names a built engine
-elsewhere and skips the build; only `canary:bun` needs one, since the wrangler
-leg runs its two watches through its own probe Worker and the reporter, the
-digest and the survey are still TypeScript. The bump adopted 0.2.0 at its
+elsewhere and skips the build. Three callers need the engine: `canary:bun`,
+`bun:pin`, and the contract suite, which RUNS every bun watch. The wrangler
+leg runs its two watches through its own probe Worker, and the reporter, the
+digest and the survey are still TypeScript.
+
+**The suite is the one that bit, and `bun:pin` is the one that paid.** A
+cold build takes about 5s on a laptop and longer on a runner, and it lands on
+whichever test asks first. `bun run test` gives each test 30s, so `validate`
+never noticed. The bumper's suite gate restated its flags and dropped
+`--timeout`, so candidates ran on bun's 5s default, and bun test kills a
+`spawnSync`'d child at the timeout: cargo was killed at 5010ms every night
+from 2026-09-15, the pin never moved, and `bun-pin.yml` read the failed gate
+as green. Fixed 2026-09-26 three ways. The gate takes `bun run test`'s own
+arguments out of package.json, the bumper builds the engine before it
+downloads anything (exit 2 without cargo, the same as the canary leg), and a
+failed gate files the `timbrado: bun-pin` issue rather than only a line in a
+green run's summary. The bump adopted 0.2.0 at its
 merge commit unchanged: every one of the eight bun watches reads the same
 boolean through the engine as it did through the JavaScript runner.
 

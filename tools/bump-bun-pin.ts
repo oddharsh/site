@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-// bun run bun:pin [--write] [--to X.Y.Z] [--from X.Y.Z] [--keep]
+// bun run bun:pin [--write] [--to X.Y.Z] [--from X.Y.Z] [--keep] [--json <path>]
 //
 // Keeps config/bun-pin.json current, because NOTHING ELSE DOES.
 //
@@ -54,6 +54,19 @@
 // the decisions: whether a version is proposable at all (gates 1 and 2), and
 // what to do once it clears (write the pin). The canary script has neither.
 //
+// A RED GATE IS AN ISSUE, since 2026-09-26. bun-pin.yml leaves the job green
+// when a newer bun fails a gate, because "upstream shipped a build we cannot
+// take" is not a fault here, and that is correct for one night. It was also
+// correct for eleven: the suite gate killed a cold cargo build at bun's 5s
+// default every night from 2026-09-15, the pin never moved, and every run
+// said green. `--json` writes the verdict in timbrado's report shape, and the
+// workflow hands it to `timbrado report --target bun-pin`, which keeps ONE
+// issue open for as long as the same gates fail, comments only when the set
+// changes, and closes it the night the pin moves or is current. A candidate
+// that is merely too young (gates 1 and 2) writes no report at all: it clears
+// on its own tomorrow, and a "green again" for it would close an issue about
+// a gate that never ran.
+//
 // CONTROL, and it is permanent rather than a one-off: the PREVIOUS bun is a
 // known-bad runtime, so the script has a red input on hand forever.
 //
@@ -62,9 +75,10 @@
 // Without it, a run that reports "nothing to do" on a day when the pin is
 // already current proves only that the comparison ran.
 
-import { readFileSync, rmSync } from "node:fs";
+import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { Report } from "timbrado/report";
 
 import {
   channelOf,
@@ -89,6 +103,7 @@ import {
   lockfileReadGate,
   zstdGate,
 } from "./lib/bun-gates.ts";
+import { ensureTimbradoEngine } from "./lib/upstream-watches.ts";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const WORK = join(ROOT, ".bun-candidate");
@@ -100,16 +115,35 @@ const flag = (name: string): string | null => {
   return i === -1 ? null : argv[i + 1];
 };
 
-const results: { name: string; ok: boolean }[] = [];
-const record = (name: string, ok: boolean, detail?: string) => {
-  results.push({ name, ok });
+const results: { name: string; ok: boolean; detail: string; notes?: string[] }[] = [];
+const record = (name: string, ok: boolean, detail?: string, notes?: string[]) => {
+  results.push({ name, ok, detail: detail ?? "", notes });
   console.log(`${ok ? "  ok  " : " FAIL "} ${name}${detail ? ` — ${detail}` : ""}`);
 };
 const note = (text: string) => console.log(`       ${text}`);
 const gate = (g: Gate) => {
-  record(g.name, g.ok, g.detail);
+  record(g.name, g.ok, g.detail, g.notes);
   for (const n of g.notes ?? []) note(n);
   return g.ok;
+};
+
+// The report bun-pin.yml files through timbrado. The signature is WHICH gates
+// failed, never which candidate failed them, so a fresh candidate carrying
+// yesterday's broken gate adds nothing to the open issue.
+const jsonPath = flag("--json");
+const report = (verdict: "green" | "red", subject: Record<string, string>, reason?: string) => {
+  if (!jsonPath) return;
+  const failing = results.filter((r) => !r.ok).map((r) => r.name);
+  const out: Report = {
+    schemaVersion: 1,
+    target: "bun-pin",
+    verdict,
+    subject,
+    signature: verdict === "green" ? "green" : `red:${failing.join("|") || reason || "unknown"}`,
+    gates: results,
+    reason,
+  };
+  writeFileSync(jsonPath, JSON.stringify(out, null, 2) + "\n");
 };
 
 // ---------------------------------------------------------------------------
@@ -233,6 +267,7 @@ if (channelOf(target) !== channel) {
 if (compareVersions(target, current) <= 0) {
   console.log(`bun:pin: nothing to do. ${target} is the newest ${channel} release and the pin is ${current}.`);
   console.log("  the control is `bun run bun:pin --from 1.3.13 --to 1.3.14`, which must fail at the zstd gate.");
+  if (!pretend) report("green", { pin: `bun@${pin.version}` }, "the pin is current");
   process.exit(0);
 }
 
@@ -270,6 +305,29 @@ console.log(`candidate: bun@${target}  (${channel} channel)\n`);
 if (results.some((r) => !r.ok)) {
   console.log(`\nbun:pin: ${target} is not proposable yet. Nothing downloaded, nothing built.`);
   process.exit(1);
+}
+
+const subject = { pin: `bun@${pin.version}`, candidate: `bun@${target}` };
+const red = (reason?: string) => {
+  if (!pretend) report("red", subject, reason);
+};
+
+// ---------------------------------------------------------------------------
+// the instrument, before anything is downloaded
+// ---------------------------------------------------------------------------
+// The contract suite RUNS every bun watch, and a watch runs on timbrado's Rust
+// engine, which lib/upstream-watches.ts builds on demand. Left to the suite,
+// that cold cargo build is billed to whichever test asks first, under the
+// candidate's clock, so a slow runner reads as a bad bun. Asked for here, as
+// canary-bun.ts does, the build is the instrument's cost, and a runner that
+// cannot build it is exit 2 (a red job) rather than a failed gate the
+// workflow reports as green.
+try {
+  ensureTimbradoEngine();
+} catch (err) {
+  console.error(err instanceof Error ? err.message : String(err));
+  console.error("bun:pin: timbrado's Rust engine could not be built, so the contract suite cannot run its watches");
+  process.exit(2);
 }
 
 // ---------------------------------------------------------------------------
@@ -316,6 +374,7 @@ try {
   );
   if (!same) {
     console.log("\nbun:pin: refusing to go further with a binary that disagrees with its own tag.");
+    red();
     process.exit(1);
   }
 }
@@ -327,6 +386,7 @@ if (!gate(zstdGate(candidate))) {
   console.log("\nbun:pin: NOT proposable. build.ts feature-detects the same collapse and throws, so this would");
   console.log("  fail the build 40 seconds in rather than ship no-op deltas, which is a poor way to learn it.");
   if (!has("--keep")) rmSync(WORK, { recursive: true, force: true });
+  red();
   process.exit(1);
 }
 
@@ -339,6 +399,7 @@ gate(lockfileFormatGate(candidate, process.execPath, ROOT, WORK));
 if (results.some((r) => !r.ok)) {
   console.log(`\nbun:pin: ${target} fails a gate above. Not proposing it.`);
   if (!has("--keep")) rmSync(WORK, { recursive: true, force: true });
+  red();
   process.exit(1);
 }
 
@@ -355,6 +416,7 @@ const failed = results.filter((r) => !r.ok);
 console.log("");
 if (failed.length) {
   console.log(`bun:pin: ${target} is NOT proposable — ${failed.map((r) => r.name).join("; ")}`);
+  red();
   process.exit(1);
 }
 
@@ -371,6 +433,10 @@ if (pretend) {
   console.log(`bun:pin: ${target} clears every gate. Nothing written, because --from means this was a control run.`);
   process.exit(0);
 }
+
+// Green whether or not --write moved the pin: every gate passed, so an issue
+// about a gate that failed is answered either way.
+report("green", subject);
 
 if (has("--write")) {
   writePin(ROOT, target);

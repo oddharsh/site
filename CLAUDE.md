@@ -306,7 +306,10 @@ CHROME_CHANNEL=chrome-canary bun run csp:sweep
 bun run bun:pin            # while the pin is a canary: the newest dated canary ALREADY older
                            # than bunfig's 24 h window, never the dist-tag (which names the
                            # newest daily publish, so it failed that window every night from
-                           # 2026-09-15 to 09-21 while the job exited green)
+                           # 2026-09-15 to 09-21 while the job exited green). A failed gate
+                           # files ONE `timbrado: bun-pin` issue since 2026-09-26, because a
+                           # green run hid a killed cargo build for eleven nights; the gate
+                           # runs `bun run test`'s own flags (DEPENDENCIES.md, timbrado)
 bun run wrangler:pin       # resolves main's sha from pkg.pr.new and runs canary:wrangler on it
 
 # regenerate JUST the EXIF metadata (after photos are already uploaded)
