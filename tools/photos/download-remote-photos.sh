@@ -34,7 +34,7 @@ STEMS_FILE="$(mktemp)"
 trap 'rm -f "$NORMALIZED" "$STEMS_FILE"' EXIT
 
 if grep -Eq '^[[:space:]]*all[[:space:]]*$' "$KEYS_FILE"; then
-  if grep -Ev '^[[:space:]]*(all)?[[:space:]]*$' "$KEYS_FILE" | grep -q .; then
+  if grep -Evq '^[[:space:]]*(all)?[[:space:]]*$' "$KEYS_FILE"; then
     echo "error: all must be the only source-key entry" >&2
     exit 1
   fi
