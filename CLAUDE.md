@@ -239,8 +239,10 @@ bun run dict:roll
 # advisory: it reads production, so never make it a required check.
 bun run dcz:check
 
-# does every q11 twin the build writes (shell, pages, text; 522 on 2026-09-26)
-# reach a browser AT q11? Decodes what arrived, re-encodes it at build.ts's
+# does every q11 twin the build writes (shell, pages, text; 516 on 2026-09-26)
+# reach a browser AT q11? The build writes a text twin only where it beats the
+# edge's own ~q4 by more than the same slack (lib/q11.ts), and logs each skip,
+# so every twin swept is one the check can tell apart. Decodes what arrived, re-encodes it at build.ts's
 # settings, and passes it at q11 + max(1%, 8 B): judged on SIZE, since q11 is not
 # the same stream on every machine (macOS arm64 re-encoded /writing 6 B off the
 # Linux twin production serves), and a different stream at q11 size is named

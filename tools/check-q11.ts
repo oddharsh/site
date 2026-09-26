@@ -31,11 +31,13 @@
 // architecture can pick a different stream on an occasional input. That is a
 // false alarm about bytes nobody pays for, so the rule is the one a reader cares
 // about: at most q11 + max(1%, 8 B). The edge's on-the-fly encoding lands 12-26%
-// over on anything real, and drift was 0.1%. The cost is that on five tiny files
-// (two per-photo meta JSONs, one 87 B writing .txt) q4 comes out no larger than
-// q11, so size cannot tell them apart; it also cannot matter there, since
-// nothing is over. A stream that passes on size but is not byte-identical is
-// still counted and named, because a re-encode somewhere is worth seeing.
+// over on anything real, and drift was 0.1%. Size alone cannot tell q11 from
+// the edge on a file where a twin barely beats q4, and there are none: build.ts
+// skips any twin that does not beat q4 by more than this same slack (six of 522
+// on 2026-09-26, saving 8 B between them), through the one function in
+// lib/q11.ts, so every twin this sweeps is one it can tell apart. A stream that
+// passes on size but is not byte-identical is still counted and named, because
+// a re-encode somewhere is worth seeing.
 //
 // AGAINST A LOCAL WORKER, PASS `--accept-encoding br`. wrangler's harness puts
 // miniflare's asset layer in front of the Worker, and offered the browser's
@@ -68,6 +70,7 @@ import {
   brotliCompressSync, brotliDecompressSync, gunzipSync, inflateSync, zstdDecompressSync,
   constants as zc,
 } from "node:zlib";
+import { q11Slack } from "./lib/q11.ts";
 
 const BUILT = ".build/public/";
 // What Chrome sends. The edge chooses among these, so offering br alone would
@@ -105,10 +108,9 @@ export function kindOfTwin(rel: string): "shell" | "page" | "text" {
   return rel.endsWith(".html.br") && !rel.endsWith(".src.html.br") ? "page" : "text";
 }
 
-/** How far over a fresh q11 encode a body may land and still count as q11. */
-export function q11Slack(q11Bytes: number): number {
-  return Math.max(Math.ceil(q11Bytes * 0.01), 8);
-}
+// The slack lives in lib/q11.ts because build.ts applies the same number when it
+// decides whether a twin is worth writing at all.
+export { q11Slack };
 
 // `q11` is byte-identical to this machine's re-encode; `q11-size` is a different
 // stream within the slack (encoder drift across platforms, or a re-encode that

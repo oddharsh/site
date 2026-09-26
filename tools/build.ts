@@ -44,6 +44,7 @@ import minifyHtml from "@minify-html/node";
 import { transform as transformCss } from "lightningcss";
 import { minifySync } from "oxc-minify";
 import { OXC_MINIFY_OPTIONS } from "./lib/oxc-minify-options.ts";
+import { edgeEstimate, twinEarnsItsPlace } from "./lib/q11.ts";
 import { readManifest, workerModule, navFenceBody, readFenceBody, runProfilesBody } from "./gen-manifest.ts";
 import { parseCss } from "./lib/css-parse.ts";
 import { isJsonScriptType, minifyJsonScript } from "./lib/json-script.ts";
@@ -3321,10 +3322,20 @@ let freshFamily: Buffer | null = null;
     const bytes = await readFile(`${OUT}/public/${rel}`);
     return { rel, bytes, br: await brotliQ11(bytes) };
   }));
-  const wins = compressed.filter(({ bytes, br }) => br.length < bytes.length);
+  // A twin is written only where q11 is what makes the difference. Beating the
+  // raw file is not enough: the edge compresses anything the Worker hands back
+  // unencoded at about q4, so a twin that does not beat THAT by more than the
+  // slack q11:check allows is a file in the upload that saves a visitor nothing,
+  // and one the checker could never tell apart from the edge's own encoding.
+  // Six of 522 on 2026-09-26, all tiny (four per-photo meta JSONs, posts.json,
+  // an 87 B writing .txt), saving 8 B between them, three of them larger than
+  // q4. The rule and the checker share lib/q11.ts, so the two cannot drift.
+  const worth = compressed.map((c) => ({ ...c, edge: c.br.length < c.bytes.length ? edgeEstimate(c.bytes) : c.bytes.length }));
+  const wins = worth.filter(({ bytes, br, edge }) => br.length < bytes.length && twinEarnsItsPlace(br.length, edge));
   await Promise.all(wins.map(({ rel, br }) => writeFile(`${OUT}/public/${rel}.br`, br)));
-  for (const { rel, bytes, br } of compressed) {
+  for (const { rel, bytes, br, edge } of worth) {
     if (br.length >= bytes.length) console.log(`text-twins: SKIPPED /${rel} (br ${br.length} >= raw ${bytes.length})`);
+    else if (!twinEarnsItsPlace(br.length, edge)) console.log(`text-twins: SKIPPED /${rel} (q11 ${br.length} vs the edge's ~${edge}: not worth a twin, served at edge quality)`);
   }
   const raw = wins.reduce((t, { bytes }) => t + bytes.length, 0);
   const enc = wins.reduce((t, { br }) => t + br.length, 0);

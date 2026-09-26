@@ -17,6 +17,9 @@
 import { assert, test } from "./contract-shared.ts";
 import { brotliCompressSync, constants as zc, gzipSync } from "node:zlib";
 import { atQ11, classify, kindOfTwin, q11, q11Slack, urlForTwin } from "./check-q11.ts";
+import { edgeEstimate, twinEarnsItsPlace } from "./lib/q11.ts";
+import { existsSync } from "node:fs";
+import { readdir, readFile } from "node:fs/promises";
 
 // Big enough that q4 and q11 produce different streams, which is the whole
 // distinction under test. A tiny input can encode identically at both.
@@ -84,4 +87,33 @@ test("every twin shape maps to the URL a visitor requests", () => {
     assert.equal(urlForTwin(rel), path, rel);
     assert.equal(kindOfTwin(rel), kind, rel);
   }
+});
+
+// ── build.ts writes a twin only where q11 beats the edge ─────────────────────
+// A twin that does not beat the edge's own on-the-fly q4 by more than the slack
+// saves a visitor nothing and is one q11:check could never tell apart from the
+// edge. build.ts and the checker share lib/q11.ts for exactly that reason.
+test("a twin earns its place only by beating the edge's q4 by more than the slack", () => {
+  // The measured 2026-09-26 cases: three twins larger than q4, three that won
+  // by 1-5 B, and the /llms-full.txt twin that saves 31,695 B.
+  assert.equal(twinEarnsItsPlace(232, 228), false, "L1000069_3.json: q11 larger than q4");
+  assert.equal(twinEarnsItsPlace(149, 154), false, "posts.json: 5 B is inside the 8 B floor");
+  assert.equal(twinEarnsItsPlace(156709, 188404), true, "llms-full.txt");
+  // Right at the edge of the slack: equal to it is not enough.
+  assert.equal(twinEarnsItsPlace(800, 800 + q11Slack(800)), false);
+  assert.equal(twinEarnsItsPlace(800, 800 + q11Slack(800) + 1), true);
+});
+
+const BUILT = new URL("../.build/public/", import.meta.url);
+test("every text twin the build wrote beats the edge's q4 by more than the slack", { skip: !existsSync(BUILT) && "needs a built tree: bun run build" }, async () => {
+  const all = await readdir(BUILT, { recursive: true });
+  const twins = all.filter((f) => f.endsWith(".br") && !f.startsWith("a/") && !f.endsWith(".html.br"));
+  assert.ok(twins.length >= 200, `expected 200+ text twins, found ${twins.length}`);
+  const losers = [];
+  for (const rel of twins) {
+    const twin = await readFile(new URL(rel, BUILT));
+    const plain = await readFile(new URL(rel.slice(0, -3), BUILT));
+    if (!twinEarnsItsPlace(twin.length, edgeEstimate(plain))) losers.push(`/${rel.slice(0, -3)} (${twin.length} B)`);
+  }
+  assert.deepEqual(losers, [], "build.ts wrote a twin that does not beat the edge by more than the slack");
 });
