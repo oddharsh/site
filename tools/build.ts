@@ -3300,6 +3300,10 @@ let freshFamily: Buffer | null = null;
     // a twin, so a twin for either would be the dead weight this block refuses.
     /^\.well-known\/(?!agent-card\.json$).+\.(?:json|md)$/,
     /^(?:search-index\.json|llms\.txt|sitemap\.xml)$/,
+    // an exact route that reads its own twin rather than going through
+    // servePrecompressedText, because the x402 gate sits in front of it
+    // (x402.ts, llmsFullResponse). 516 KB raw, the largest text file here.
+    /^llms-full\.txt$/,
   ];
   // Two root-level .md files the Worker renders itself rather than serves from a
   // file, so a twin of the staged copy would describe bytes it never sends.

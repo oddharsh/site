@@ -129,22 +129,49 @@ async function facilitatorPost(url, body) {
 // With no built file (`bun run dev` stages nothing derived), it falls back to
 // assembling the writing half live through the same renderer.
 //
+// The built file has a brotli q11 twin (build.ts's text-twin step), and this
+// hands it over first. Until 2026-09-26 the .text() path above was the only
+// one, so the largest text file on the site left the Worker unencoded and the
+// edge compressed it on the fly at roughly q4: 516,100 bytes raw, 188,401 at
+// q4 against 156,709 at q11, measured on the staged file. That is 31.7 KB a
+// fetch, and nothing noticed, because the route oracle's harness re-encodes an
+// unencoded text body to br on its own, so an `encoding: br` row reads the same
+// either way. `bun run q11:check` is what tells the two apart. encodeBody is
+// set on the init itself, the shape servePrecompressedText uses (gotcha 13).
+// An in-process caller (IDENTITY_BODY, the /lens self-scan) has no transport
+// to decode with, so it keeps the text path.
+//
 // no-store: the paid response carries a per-payment receipt header, so it must
 // never be shared from a cache.
 async function llmsFullResponse(request: SiteRequest, env: Env, extraHeaders) {
   const base = new URL(request.url);
+  const headers = {
+    "content-type": "text/plain; charset=utf-8",
+    "cache-control": "no-store",
+    ...extraHeaders,
+  };
+  if (!env.IDENTITY_BODY) {
+    const twin = await env.ASSETS.fetch(new Request(new URL("/llms-full.txt.br", base), {
+      headers: { "accept-encoding": "identity" },
+    })).catch(() => null);
+    if (twin?.ok && !twin.headers.get("content-encoding")) {
+      const encoded = new Headers(headers);
+      encoded.set("content-encoding", "br");
+      encoded.set("vary", "accept-encoding");
+      // The twin's length is the one on the wire; with none stated, the runtime
+      // measures the stream rather than trusting a number that is wrong.
+      const length = twin.headers.get("content-length");
+      if (length) encoded.set("content-length", length);
+      return new Response(twin.body, { headers: encoded, encodeBody: "manual" });
+    }
+    try { await twin?.body?.cancel(); } catch {}
+  }
   const grab = async (path) => {
     const r = await env.ASSETS.fetch(new Request(new URL(path, base)));
     return r.ok ? await r.text() : null;
   };
   const body = (await grab("/llms-full.txt")) ?? (await assembleWritingOnly(grab));
-  return new Response(body, {
-    headers: {
-      "content-type": "text/plain; charset=utf-8",
-      "cache-control": "no-store",
-      ...extraHeaders,
-    },
-  });
+  return new Response(body, { headers });
 }
 
 async function assembleWritingOnly(grab: (path: string) => Promise<string | null>) {
