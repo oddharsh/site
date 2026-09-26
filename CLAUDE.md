@@ -412,33 +412,25 @@ worktrees may edit freely, but a worktree is not a release surface.
   `package-ecosystem:` entries so a scanner that stops matching cannot report a
   clean pass over zero labels.
 
-  **A Dependabot PR gets its release notes READ, since 2026-09-15, and the
-  comment under `Dependabot site review` is a model's answer rather than a
-  checklist.** `.github/workflows/dependabot-site-review.yml` runs
-  `bun run deps:review <pr>` (`tools/review-dependency-bump.ts`), which
-  fetches the GitHub releases in `(prev, next]`, the commits between the two
-  tags (path-filtered in a monorepo), the CHANGELOG slice and the advisories
-  against the OLD version, puts them beside this tree's own `git grep` for the
-  package and the package's bullet in `docs/DEPENDENCIES.md`, and hands both to
-  Opus through `claude -p` with the boundary stated: the tree is trusted, the
-  release text is somebody else's. The answer is JSON against a schema, rendered here
-  with markup escaped, under four headings (security, performance, features,
-  behaviour changes that touch us) and a verdict. The model has NO tools, which
-  is the whole injection story.
+  **Dependabot PRs get no model review in CI any more, and it never ran once.**
+  `.github/workflows/dependabot-site-review.yml` (2026-09-15 to 2026-09-26)
+  fetched a bump's releases, commits and changelog, put them beside this
+  tree's `git grep` for the package, and asked `claude -p` for a verdict. It
+  needed a `CLAUDE_CODE_OAUTH_TOKEN` repository secret that was never added, so
+  every comment it posted, through #920 on the day it went, said "Not read". A job that posts
+  on every PR while reading nothing is the silent-green failure this file keeps
+  recording, so it was deleted with its CLI, its lib, its test and the root
+  `htmlparser2` it alone used, rather than fixed with a secret.
 
-  Three things to know before trusting one. **It reads the same
-  `Dependabot site review` marker the checklist used**, so an old PR's note is
-  replaced in place. **Without `CLAUDE_CODE_OAUTH_TOKEN` (a repository secret
-  from `claude setup-token`: a subscription seat rather than a metered API key,
-  chosen so a public repo's job can be rate-limited but never invoiced, and it
-  cannot touch Cloudflare) it posts a note saying nothing was read and exits
-  0**, so an unreviewed PR reads as unreviewed rather than clean; a refused
-  model call posts the same note and exits 1. And **a rebase costs nothing**: the comment carries the version
-  pairs it was written for and a `synchronize` with the same pairs exits before
-  the model, which is what made adding that event affordable. `--no-model`
-  prints what the model would have been handed and is the control for the fetch
-  half; oxc's `apps_v1.83.0` tags, whose version lives in the release TITLE, are
-  the spelling that first needed it.
+  The reading moved to a LOCAL scheduled task on the owner's machine
+  (`dependency-leverage-digest`, Mondays), which already has `gh` auth and a
+  checkout, so it needs no credential in Actions. It reads what merged since its
+  last run (Dependabot PRs plus the wrangler and bun pin PRs, whose bodies carry
+  the upstream digests), checks each change against the tree and this file, and
+  posts ranked suggestions to one rolling issue, `chore(deps): dependency
+  leverage digest`, with its cursor in a comment marker. It lives outside the
+  repository, so nothing here can check it is still scheduled; the issue going
+  quiet for weeks is the tell.
 - PR CI lints (`bun run lint`, oxlint including its type-aware rules), builds
   the site, enforces the performance budget, dry-runs the single
   site Worker plus the auxiliary Garage/LWE configs (`cf-garage/`, `lwe-ask/`),
