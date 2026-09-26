@@ -231,7 +231,7 @@ if [ -s "$HASHES_JSON" ] && [ "$(bun "$PJ" length "$HASHES_JSON")" -gt 0 ]; then
     unread_count=$(printf '%s\n' "$unread" | wc -l | tr -d ' ')
     {
       echo "error: $unread_count published photo(s) have no source file in $SRC_DIR."
-      printf '%s\n' "$unread" | head -8 | sed 's/^/    /'
+      printf '%s\n' "$unread" | sed -n '1,8s/^/    /p'
       [ "$unread_count" -gt 8 ] && echo "    (+$((unread_count - 8)) more)"
       echo "  a full regen REPLACES metadata.json, so writing this would delete their EXIF."
       echo "  point at the folder holding every published photo, or pass --merge to update just this batch."

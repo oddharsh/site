@@ -107,7 +107,12 @@ jobs:
             echo "Every card already matches what production renders; nothing to do."
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
-            git status --short public/og public/garage public/lwe public/pixel-peeper | head -40
+            # sed, NOT head. head exits after 40 lines, git's next write meets a
+            # closed pipe, and pipefail turns that SIGPIPE into exit 141, so this
+            # step would fail on exactly the full re-bakes with the most to
+            # propose. dictionary-roll.yml lost runs 36012100366 and 36216390330
+            # to the identical line. sed reads to EOF, so the pipe never closes early.
+            git status --short public/og public/garage public/lwe public/pixel-peeper | sed -n '1,40p'
           fi
 
       - name: Open or update the card PR
