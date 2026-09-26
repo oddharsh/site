@@ -981,6 +981,32 @@ await Promise.all([
     if (out !== src) { await writeFile(path, out); stripped += src.length - out.length; }
   }
   console.log(`svg: generator comments stripped from ${svgs.length} files, ${stripped} bytes raw`);
+
+  // bimi.svg is the one HAND-authored SVG, so its comments explain the drawing
+  // rather than name a generator, and the source keeps them. The staged copy
+  // drops every comment and the whitespace between tags: 1,057 to 619 B raw,
+  // 497 to 338 B brotli. Safe here because its only text node is <title>, which
+  // `>\s+<` cannot reach, and nothing else is rewritten, so the Tiny-PS profile
+  // attributes BIMI validators check (version, baseProfile, <title>) ship as
+  // authored. No readable twin: the source is one click away in the repository,
+  // and the one reader of this URL is an inbox provider fetching a logo.
+  const bimi = `${OUT}/public/bimi.svg`;
+  const bimiSrc = await readFile(bimi, "utf8");
+  // Strip comments to a fixed point, because one pass is not a complete strip:
+  // `<!-<!-- x -->- y -->` becomes `<!-- y -->`, a comment the first pass built.
+  // An opener with no closer survives any number of passes, so that case throws.
+  let bimiOut = bimiSrc;
+  for (let prev = ""; prev !== bimiOut;) {
+    prev = bimiOut;
+    bimiOut = bimiOut.replace(/<!--[\s\S]*?-->/g, "");
+  }
+  if (bimiOut.includes("<!--")) throw new Error("bimi.svg: an unterminated <!-- survived the comment strip");
+  bimiOut = bimiOut.replace(/>\s+</g, "><").trim();
+  if (!bimiOut.includes('baseProfile="tiny-ps"') || !bimiOut.includes("<title>")) {
+    throw new Error("bimi.svg: minified copy lost the Tiny-PS profile or its <title>, which BIMI validators require");
+  }
+  await writeFile(bimi, bimiOut);
+  console.log(`svg: bimi.svg ${bimiSrc.length} -> ${bimiOut.length} bytes raw`);
 }
 // 1a) /images/exif.json and /images/fingerprints.json, DERIVED rather than copied.
 //
