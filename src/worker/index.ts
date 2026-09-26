@@ -564,6 +564,7 @@ const ROUTE_TABLE: Array<[path: string, handler: RouteHandler]> = [
   ["/search-index.json", routeTextTwin],
   ["/llms.txt", routeTextTwin],
   ["/sitemap.xml", routeTextTwin],
+  ["/resume.json", routeTextTwin],
 
   ["/index.html", routeIndexHtml],
   ["/", routeHomepage],
@@ -599,6 +600,13 @@ const PREFIX = [
     // the bare asset fetch at the end of route() and ship edge-compressed.
     label: "/writing/<file>.<ext>",
     match: (pathname) => /^\/writing\/[^/]+\.(json|txt|xml)$/i.test(pathname),
+    handle: routeTextTwin,
+  },
+  {
+    // The favicons. Each section's first-level route sets its tab icon from
+    // here, so these load on 12 pages, and until 2026-09-26 at the edge's q4.
+    label: "/section-icons/<name>.svg",
+    match: (pathname) => /^\/section-icons\/[^/]+\.svg$/i.test(pathname),
     handle: routeTextTwin,
   },
   {
@@ -646,8 +654,8 @@ const PREFIX = [
     // section, so they need a row of their own ("/*.src.*") and this match.
     // Measured 2026-09-16 over all 79 readable twins: 984 KiB at the edge's q4,
     // 819 KiB from the q11 twin.
-    label: "/<name>.src.<ext>",
-    match: (pathname) => /^\/[^/]+\.src\.(?:html|js|css)$/i.test(pathname),
+    label: "/<path>.src.<ext>",
+    match: (pathname) => /^\/(?:[^/]+\/)*[^/]+\.src\.(?:html|js|css)$/i.test(pathname),
     handle: routeTextTwin,
   },
   {
@@ -964,6 +972,11 @@ function isResolvedCalendarUrl(href) {
 // does local dev, where no bake is staged and the build map has no entry.
 async function routeSerendipity(request: SiteRequest, env: Env, ctx: ExecutionContext) {
   const url = new URL(request.url);
+  // The readable twin of a built page here (/serendipity/mcp-info.src.html),
+  // which that page's own first line names as its View Source. This prefix wins
+  // before the generic "/<path>.src.<ext>" row, and handleSerendipity has no
+  // such file, so it answered 404 until 2026-09-26.
+  if (/^\/serendipity\/[^/]+\.src\.html$/i.test(url.pathname)) return servePrecompressedText(request, env);
   // The dashboard's plain GET and the agents page, both built at deploy; a
   // flash ?msg= belongs to the dashboard only.
   const built = (url.pathname === "/serendipity" && !url.searchParams.has("msg")) || url.pathname === SERENDIPITY_MCP_INFO;

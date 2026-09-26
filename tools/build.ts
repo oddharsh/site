@@ -824,13 +824,14 @@ const SHELLS = [
   ["tooltip.js", "/tooltip.src.js", "function start"],
   ["infotip.js", "/infotip.src.js", "axp-infotip"],   // the shell's own tooltips
   // the shared hover engine. tooltip.js imports it statically; the serendipity
-  // shell and nav.js import it dynamically. Deliberately NOT content-hashed:
-  // the /a/ repointer is attribute-scoped (src=/href= only) and would never
-  // rewrite an `import` specifier, so it stays a plain /hoist.js like its peers.
+  // shell and nav.js import it dynamically. Content-hashed in step 6 through
+  // STRING_ASSETS, which rewrites those `import` specifiers; the attribute-scoped
+  // /a/ repointer never could, which is what this comment used to say instead.
   ["hoist.js",   "/hoist.src.js",   "createHoist"],
-  // first-party WebMCP registration. Unhashed for hoist.js's reason: nav.js and
-  // lens-webmcp.js both reach it through an `import()` specifier, which the /a/
-  // repointer is attribute-scoped and would never rewrite.
+  // first-party WebMCP registration, loaded on idle from nav.js on every page and
+  // from lens-webmcp.js. Content-hashed through STRING_ASSETS like hoist.js since
+  // 2026-09-26; it had stayed a plain /webmcp.js on hoist's old, stale reason, and
+  // so shipped at the edge's q4 with no twin (2,436 B against 2,098 at q11).
   ["webmcp.js",  "/webmcp.src.js",  "registerSiteTools"],
   // the LWE pages' ask widget. Page-specific rather than shell, so it keeps its
   // /lwe/ URL (a subdirectory here stages to the same subdirectory served); it
@@ -2097,7 +2098,7 @@ const CONTENT_HASHED = new Set([
   "nav.js", "luna.css", "lens-boot.js", "icons.svg", "quiz.js", "notepad.js", "lwe-base.css",
   "nav-run.css", "nav-tray.css", "infotip.css", "hoist.js", "nav-run.js", "nav-tray.js", "nav-pipes.js",
   "lens-browser.js", "lens-reader.js", "lens-wire.js", "lens-tools.js", "lens-nlweb.js", "lens-markdown.js",
-  "lens-webmcp.js", "lens.js", "tooltip.js", "infotip.js",
+  "lens-webmcp.js", "lens.js", "tooltip.js", "infotip.js", "webmcp.js",
 ].map((f) => `public/${f}`));
 
 // 5c) shorten every CSS custom property name, across the whole staged tree.
@@ -2252,6 +2253,10 @@ let freshFamily: Buffer | null = null;
     { file: "/hoist.js",        base: "hoist",        mk: (to) => [
       [/import\((["'`])\/hoist\.js\1\)/g, `import($1${to}$1)`],
       [/(\bfrom\s*)(["'`])\/hoist\.js\2/g, `$1$2${to}$2`] ] },
+    // The WebMCP core. A leaf: nav.js and lens-webmcp.js import it, so it is
+    // hashed before lens-webmcp below and before nav.js is hashed by ASSETS.
+    { file: "/webmcp.js",       base: "webmcp",       mk: (to) => [
+      [/import\((["'`])\/webmcp\.js\1\)/g, `import($1${to}$1)`] ] },
     // First-interaction shell islands. nav-run depends on hoist, so hoist must
     // be rewritten into its source before nav-run receives its own hash. Both
     // are then rewritten into nav.js before the shared shell is hashed below.
@@ -2350,6 +2355,9 @@ let freshFamily: Buffer | null = null;
     const lensBoot = await readFile(`${OUT}/public/lens-boot.js`, "utf8");
     if (!lensBoot.includes(hashedFor.lens)) throw new Error("lens-boot.js was not repointed to hashed lens.js");
     if (!lensBoot.includes(hashedFor["lens-webmcp"])) throw new Error("lens-boot.js was not repointed to hashed lens-webmcp.js");
+    const lensWebmcp = await readFile(`${OUT}/public${hashedFor["lens-webmcp"]}`, "utf8");
+    if (!nav.includes(hashedFor.webmcp)) throw new Error("nav.js was not repointed to hashed webmcp.js");
+    if (!lensWebmcp.includes(hashedFor.webmcp)) throw new Error(`${hashedFor["lens-webmcp"]} still imports an unhashed /webmcp.js (webmcp must be hashed before lens-webmcp)`);
     // the SERVED tooltip bytes, not the staged source: this is the copy the browser gets,
     // and the one the old ordering left pointing at the unhashed duplicate.
     if (!tip.includes(hashedFor.hoist)) throw new Error(`${hashedFor.tooltip} still imports an unhashed /hoist.js — STRING_ASSETS ordering broke (hoist must be hashed before tooltip)`);
@@ -3277,9 +3285,15 @@ let freshFamily: Buffer | null = null;
 // the failure the contract test refuses: every twin written here must match a
 // run_worker_first rule. The globs below are therefore a declaration of what
 // servePrecompressedText can reach, kept beside the rules that make it true,
-// rather than "every text file". robots.txt, resume.json and the section icons
-// are deliberately absent: none is worth an allowlist rule. /.well-known/* joined
-// on 2026-09-16 when its five exact rows folded into one wildcard.
+// rather than "every text file". robots.txt is deliberately absent: it is
+// q11:check's live control precisely BECAUSE it has no twin, and 311 B to
+// crawlers is not worth giving that up. /.well-known/* joined on 2026-09-16 when
+// its five exact rows folded into one wildcard. The section icons (favicons on
+// 12 pages), /resume.json and the readable .src.html twins under /writing,
+// /lens and /serendipity joined on 2026-09-26, "q11 everywhere", owner call:
+// measured at the edge's q4 against q11, 5,742 B against 5,103 across the ten
+// icons, 2,041 against 1,599 for resume.json, and 6.8 KB over the seven
+// readable twins.
 //
 // Refuses a twin that is not smaller, the same guard the /a/ step carries, and
 // floors the count so a walk that quietly matched nothing reads as the failure
@@ -3304,7 +3318,9 @@ let freshFamily: Buffer | null = null;
     // inlined the explainers and took the corpus from 20.5 KB to 516 KB:
     // production served 188,404 B against q11's 156,709, and the route is
     // no-store, so every agent fetch paid it.
-    /^(?:search-index\.json|llms\.txt|llms-full\.txt|sitemap\.xml)$/,
+    /^(?:search-index\.json|llms\.txt|llms-full\.txt|sitemap\.xml|resume\.json)$/,
+    /^section-icons\/[^/]+\.svg$/,                // favicons, "/section-icons/*"
+    /^(?:writing|lens|serendipity)\/.+\.src\.html$/, // readable twins, "/*.src.*" spans slashes
   ];
   // Two root-level .md files the Worker renders itself rather than serves from a
   // file, so a twin of the staged copy would describe bytes it never sends.

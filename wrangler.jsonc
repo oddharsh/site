@@ -285,7 +285,10 @@
       // rules wrangler allows; the /.well-known fold above (gotcha 26's remedy)
       // took it back down, and "/*.src.*" (the readable twins at the root:
       // index.src.html, nav.src.js, luna.src.css) spent one of the freed rows.
-      "/images/*.json", "/*.md", "/*.src.*", "/search-index.json", "/llms.txt", "/sitemap.xml"
+      "/images/*.json", "/*.md", "/*.src.*", "/search-index.json", "/llms.txt", "/sitemap.xml",
+      // q11 everywhere, 2026-09-26: the section icons (favicons on 12 pages) and
+      // /resume.json, both at the edge's q4 until their twins had a route.
+      "/section-icons/*", "/resume.json"
     ]
   },
   // `enabled` is Workers LOGS (the structured line serveWorkerRequest emits).

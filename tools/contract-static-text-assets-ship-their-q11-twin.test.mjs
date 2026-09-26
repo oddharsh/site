@@ -63,7 +63,10 @@ test("every text twin sits on a path the Worker claims, in both configs", { skip
   // If somebody widens the walk without adding a rule, the assertion above goes
   // red; if somebody adds a rule without widening the walk, this one stays green
   // and the file is simply left at edge quality, which is the safe direction.
-  for (const unroutable of ["section-icons/around.svg", "robots.txt"]) {
+  // bimi.svg rather than a section icon since 2026-09-26: the icons got a rule
+  // and a twin ("q11 everywhere"). robots.txt stays untwinned on purpose, as
+  // q11:check's live control.
+  for (const unroutable of ["bimi.svg", "robots.txt"]) {
     assert.ok(existsSync(new URL(unroutable, BUILT)), `${unroutable} should be staged; the control needs a real file`);
     assert.ok(!existsSync(new URL(`${unroutable}.br`, BUILT)), `${unroutable} has a twin but no run_worker_first rule reaches it`);
   }

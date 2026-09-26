@@ -486,6 +486,14 @@ const ROUTES = [
   { path: "/index.src.html", status: 200, ct: "text/html", marker: "<!-- axp:desktop -->", encoding: "br" },
   { path: "/.well-known/mcp/server-card.json", status: 200, ct: "application/json", marker: '"tools"', encoding: "br" },
   { path: "/.well-known/ard.json", status: 200, ct: "application/json", encoding: "br", cors: "*" },
+  // "q11 everywhere", 2026-09-26: the favicons and /resume.json got a rule and a
+  // twin, and the readable twins under /writing, /lens and /serendipity got a
+  // route. The serendipity row is the one that was broken outright: the page's
+  // own banner names that URL as its View Source, and it answered 404.
+  { path: "/section-icons/lens.svg", status: 200, ct: "image/svg+xml", encoding: "br" },
+  { path: "/resume.json", status: 200, ct: "application/json", encoding: "br" },
+  { path: "/writing/in-flux.src.html", status: 200, ct: "text/html", marker: "<html lang", encoding: "br" },
+  { path: "/serendipity/mcp-info.src.html", status: 200, ct: "text/html", marker: "<html lang", encoding: "br" },
 ];
 
 function cacheBust(path) {
