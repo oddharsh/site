@@ -163,13 +163,15 @@ export function renderDesktopArtifacts(surfaces = readManifest().surfaces) {
 // - a filter primitive drops flood-color="#000", its initial value. feDropShadow
 //   keeps dx and dy, because THEIR default is 2, not 0.
 // - a six-digit hex colour whose digit pairs repeat takes its three-digit form,
-//   #ffffff to #fff, which CSS parses to the same colour. The bytes are the
-//   small half. The tray icons spell white #ffffff while the section tiles
-//   spell it #fff, so the security icon's gloss matched garageG in every
-//   stop and still missed hoistDefs below, which merges on exact text. Only
-//   a WHOLE attribute value is rewritten, so a fragment like url(#abcabc)
-//   cannot be read as a colour. Measured 2026-09-26 on the built sprite:
-//   14,721 to 14,531 B raw, 2,451 to 2,424 B brotli, one gradient fewer.
+//   #ffffff to #fff, which CSS parses to the same colour. It exists for the
+//   dedupe. The tray icons spell white #ffffff while the section tiles spell
+//   it #fff, so the security icon's gloss matched garageG in every stop and
+//   still missed hoistDefs below, which merges on exact text. Only a WHOLE
+//   attribute value is rewritten, so a fragment like url(#abcabc) cannot be
+//   read as a colour. It claims no byte saving: the built sprite read 2,451
+//   to 2,424 B brotli (14,721 to 14,531 B raw), and 30 random deletions of
+//   the same raw size spread -41 to +10 B, median -20, so -27 is inside what
+//   any edit this size does. What it buys is one gradient fewer.
 export const compactSvg = (svg: string): string => svg
   .replace(/<([a-zA-Z]+)(\s[^<>]*)?><\/\1>/g, (_m, tag: string, attrs = "") => `<${tag}${attrs}/>`)
   .replace(/ d="([^"]*)"/g, (_m, d: string) => ` d="${d.replace(/ +([MLHVCSQTAZmlhvcsqtaz])/g, "$1").replace(/([MLHVCSQTAZmlhvcsqtaz]) +/g, "$1")}"`)
