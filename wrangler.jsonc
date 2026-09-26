@@ -311,9 +311,15 @@
   // so a burst of scans consumes the budget far faster than the page views do.
   // If the banner ever says events are being sampled, lower this rather than
   // deleting spans. Same if a span ever shows up ON the critical path.
+  // issues: real-time error grouping (workers-sdk #15684, wrangler pin 6874aa9+).
+  // Turned on 2026-09-26. Its pricing and whether it spends the 200K/day
+  // observability quota are UNDOCUMENTED publicly as of that date (the docs PR
+  // is internal), so read `bun run obs:check` for a week after it ships and
+  // turn it off if events/day moves.
   "observability": {
     "enabled": true,
-    "traces": { "enabled": true, "head_sampling_rate": 1 }
+    "traces": { "enabled": true, "head_sampling_rate": 1 },
+    "issues": { "enabled": true }
   },
   // the deployed version id (changes every deploy). lib/cache.js folds it into
   // the caches.default key for rendered shells, so a deploy orphans the old
