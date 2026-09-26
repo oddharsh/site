@@ -3299,7 +3299,12 @@ let freshFamily: Buffer | null = null;
     // api-catalog are exact routes through serveFreshAsset and would never read
     // a twin, so a twin for either would be the dead weight this block refuses.
     /^\.well-known\/(?!agent-card\.json$).+\.(?:json|md)$/,
-    /^(?:search-index\.json|llms\.txt|sitemap\.xml)$/,
+    // llms-full.txt joined 2026-09-26. It had been absent since this list was
+    // written, which was worth about 1 KB then and 31,695 B (16.8%) once #903
+    // inlined the explainers and took the corpus from 20.5 KB to 516 KB:
+    // production served 188,404 B against q11's 156,709, and the route is
+    // no-store, so every agent fetch paid it.
+    /^(?:search-index\.json|llms\.txt|llms-full\.txt|sitemap\.xml)$/,
   ];
   // Two root-level .md files the Worker renders itself rather than serves from a
   // file, so a twin of the staged copy would describe bytes it never sends.
