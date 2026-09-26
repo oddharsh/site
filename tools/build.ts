@@ -992,7 +992,16 @@ await Promise.all([
   // and the one reader of this URL is an inbox provider fetching a logo.
   const bimi = `${OUT}/public/bimi.svg`;
   const bimiSrc = await readFile(bimi, "utf8");
-  const bimiOut = bimiSrc.replace(/<!--[\s\S]*?-->/g, "").replace(/>\s+</g, "><").trim();
+  // Strip comments to a fixed point, because one pass is not a complete strip:
+  // `<!-<!-- x -->- y -->` becomes `<!-- y -->`, a comment the first pass built.
+  // An opener with no closer survives any number of passes, so that case throws.
+  let bimiOut = bimiSrc;
+  for (let prev = ""; prev !== bimiOut;) {
+    prev = bimiOut;
+    bimiOut = bimiOut.replace(/<!--[\s\S]*?-->/g, "");
+  }
+  if (bimiOut.includes("<!--")) throw new Error("bimi.svg: an unterminated <!-- survived the comment strip");
+  bimiOut = bimiOut.replace(/>\s+</g, "><").trim();
   if (!bimiOut.includes('baseProfile="tiny-ps"') || !bimiOut.includes("<title>")) {
     throw new Error("bimi.svg: minified copy lost the Tiny-PS profile or its <title>, which BIMI validators require");
   }
