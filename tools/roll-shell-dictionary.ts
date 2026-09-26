@@ -106,10 +106,10 @@ const DICTS = "src/dict/a-dict";
 const KEEP = 3;
 
 // js, css, and the icon sprite. The sprite sat out until 2026-09-26, matching
-// DICTIONARY_TYPES in lib/assets.ts; it rejoined for the svg canary (SVG_DCZ_COOKIE
-// there), which can only ever be exercised if a-dict already holds the sprite a canary
-// browser was offered. It changes rarely and KEEP prunes per base, so this files one
-// candidate per sprite change rather than one per deploy.
+// DICTIONARY_TYPES in lib/assets.ts, and rejoined when svg deltas went on for everyone.
+// A delta exists only if a-dict already holds the sprite a browser was offered. It
+// changes rarely and KEEP prunes per base, so this files one candidate per sprite
+// change rather than one per deploy.
 const parse = (n) => {
   const m = n.match(/^(.+)\.([0-9a-f]{8})\.(js|css|svg)$/);
   return m ? { base: m[1], hash8: m[2], ext: m[3], name: n } : null;
