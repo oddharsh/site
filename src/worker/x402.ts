@@ -16,6 +16,7 @@
 //   X402_FACILITATOR  verify/settle service; defaults to x402.org's hosted
 //                     one (base-sepolia only — mainnet needs e.g. Coinbase's).
 import type { Env, SiteRequest } from "./lib/env.ts";
+import { servePrecompressedText } from "./lib/assets.ts";
 import { jsonResponse } from "./lib/http.ts";
 import { renderLlmsFull, WRITING_HEADING, type LlmsFullDoc } from "./lib/llms-full.ts";
 
@@ -123,55 +124,42 @@ async function facilitatorPost(url, body) {
 // writing post, and the Markdown twin of every Garage and LWE page, staged at the
 // asset path this route shadows. /llms-full.txt is run_worker_first, so the file is
 // reachable only through this handler and the paywall stays in front of it.
-// Read with .text() rather than handing the asset's body on, which keeps this a
-// fresh Response rather than a rebuild of another one (gotcha 13).
+// It goes out through the q11 twin, which is why this is no longer a `.text()`
+// read. The corpus is 516 KB and this route is `no-store`, so every agent fetch
+// re-paid the edge's on-the-fly compression at about q4: measured 2026-09-26
+// against production, 188,404 B on the wire where q11 is 156,709, a flat
+// 31,695 B (16.8%) off the largest text artifact this site serves. The gap was
+// worth about 1 KB when the twin allowlist was written (2026-09-01, #692, which
+// names llms.txt and not this file), and #903 took the corpus from 20.5 KB to
+// 516 KB three days before anyone looked. Nothing joins "a file grew" to "a
+// file has no twin", which is why no check caught it.
 //
-// With no built file (`bun run dev` stages nothing derived), it falls back to
-// assembling the writing half live through the same renderer.
+// The comment here used to say to read `.text()` rather than hand the asset's
+// body on, so as not to rebuild another response (gotcha 13). That reasoning is
+// intact and now lives one layer down: servePrecompressedText owns the
+// `encodeBody: "manual"` rebuild that 430 other twins already ship through, and
+// it falls back to the plain asset when no twin was built.
 //
-// The built file has a brotli q11 twin (build.ts's text-twin step), and this
-// hands it over first. Until 2026-09-26 the .text() path above was the only
-// one, so the largest text file on the site left the Worker unencoded and the
-// edge compressed it on the fly at roughly q4: 516,100 bytes raw, 188,401 at
-// q4 against 156,709 at q11, measured on the staged file. That is 31.7 KB a
-// fetch, and nothing noticed, because the route oracle's harness re-encodes an
-// unencoded text body to br on its own, so an `encoding: br` row reads the same
-// either way. `bun run q11:check` is what tells the two apart. encodeBody is
-// set on the init itself, the shape servePrecompressedText uses (gotcha 13).
-// An in-process caller (IDENTITY_BODY, the /lens self-scan) has no transport
-// to decode with, so it keeps the text path.
+// With no staged file at all (`bun run dev` stages nothing derived) that helper
+// 404s, and the writing half is assembled live through the same renderer.
 //
 // no-store: the paid response carries a per-payment receipt header, so it must
 // never be shared from a cache.
 async function llmsFullResponse(request: SiteRequest, env: Env, extraHeaders) {
-  const base = new URL(request.url);
   const headers = {
     "content-type": "text/plain; charset=utf-8",
     "cache-control": "no-store",
     ...extraHeaders,
   };
-  if (!env.IDENTITY_BODY) {
-    const twin = await env.ASSETS.fetch(new Request(new URL("/llms-full.txt.br", base), {
-      headers: { "accept-encoding": "identity" },
-    })).catch(() => null);
-    if (twin?.ok && !twin.headers.get("content-encoding")) {
-      const encoded = new Headers(headers);
-      encoded.set("content-encoding", "br");
-      encoded.set("vary", "accept-encoding");
-      // The twin's length is the one on the wire; with none stated, the runtime
-      // measures the stream rather than trusting a number that is wrong.
-      const length = twin.headers.get("content-length");
-      if (length) encoded.set("content-length", length);
-      return new Response(twin.body, { headers: encoded, encodeBody: "manual" });
-    }
-    try { await twin?.body?.cancel(); } catch {}
-  }
+  const served = await servePrecompressedText(request, env, { headers });
+  if (served.status !== 404) return served;
+
+  const base = new URL(request.url);
   const grab = async (path) => {
     const r = await env.ASSETS.fetch(new Request(new URL(path, base)));
     return r.ok ? await r.text() : null;
   };
-  const body = (await grab("/llms-full.txt")) ?? (await assembleWritingOnly(grab));
-  return new Response(body, { headers });
+  return new Response(await assembleWritingOnly(grab), { headers });
 }
 
 async function assembleWritingOnly(grab: (path: string) => Promise<string | null>) {

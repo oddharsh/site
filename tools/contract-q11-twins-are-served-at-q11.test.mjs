@@ -5,19 +5,18 @@
 // bytes on the wire ARE the twin, by re-encoding what arrived at the build's
 // settings and comparing. It reads production, so it is advisory and never runs
 // here; what runs here is the part a network cannot break: the classifier and
-// the twin-to-URL map it rests on, plus the one handler that serves a twin by
-// hand rather than through servePrecompressedText.
+// the twin-to-URL map it rests on.
 //
-// The handler is /llms-full.txt. Until 2026-09-26 it read the built file with
-// .text() and returned a fresh unencoded body, so the edge compressed 516 KB
-// on the fly at about q4: 188,401 B against 156,709 B at q11. The route
-// oracle's `encoding: br` row could not see that, because the local harness
-// re-encodes an unencoded text body to br by itself. The q11:check run against
-// the old handler flagged exactly this URL and no other (177,938 B locally).
-import { assert, context, test } from "./contract-shared.ts";
+// The first sweep found /llms-full.txt, whose handler read the built file with
+// .text() and returned a fresh unencoded body, so the edge compressed 516 KB on
+// the fly at about q4: 188,401 B against 156,709 B at q11. #956 fixed the
+// handler and carries its own test (contract-llms-full-ships-its-q11-twin). The
+// route oracle's `encoding: br` row could not see it, because the local harness
+// re-encodes an unencoded text body to br by itself; run against the old
+// handler in that harness, q11:check flagged exactly this URL and no other.
+import { assert, test } from "./contract-shared.ts";
 import { brotliCompressSync, constants as zc, gzipSync } from "node:zlib";
 import { classify, kindOfTwin, q11, urlForTwin } from "./check-q11.ts";
-import { handleLlmsFull } from "../src/worker/x402.ts";
 
 // Big enough that q4 and q11 produce different streams, which is the whole
 // distinction under test. A tiny input can encode identically at both.
@@ -69,56 +68,5 @@ test("every twin shape maps to the URL a visitor requests", () => {
   for (const [rel, path, kind] of cases) {
     assert.equal(urlForTwin(rel), path, rel);
     assert.equal(kindOfTwin(rel), kind, rel);
-  }
-});
-
-// ── /llms-full.txt serves its twin ──────────────────────────────────────────
-const TWIN = q11(PLAIN);
-function env({ twin = true, identity = false } = {}) {
-  const asked = [];
-  const out = {
-    asked,
-    IDENTITY_BODY: false,
-    ASSETS: {
-      async fetch(req) {
-        const path = new URL(req.url).pathname;
-        asked.push({ path, ae: req.headers.get("accept-encoding") });
-        if (path === "/llms-full.txt") return new Response(new Uint8Array(PLAIN), { headers: { "content-type": "text/plain" } });
-        if (path === "/llms-full.txt.br" && twin) {
-          return new Response(new Uint8Array(TWIN), { headers: { "content-type": "application/octet-stream", "content-length": String(TWIN.length) } });
-        }
-        return new Response("not found", { status: 404 });
-      },
-    },
-  };
-  if (identity) out.IDENTITY_BODY = true;
-  return out;
-}
-const ask = (e) => handleLlmsFull(new Request("https://aadhar.sh/llms-full.txt"), /** @type {any} */ (e), context());
-
-test("/llms-full.txt hands over the q11 twin with the plain route's headers", async () => {
-  const e = env();
-  const res = await ask(e);
-  assert.equal(res.status, 200);
-  assert.equal(res.headers.get("content-encoding"), "br");
-  assert.equal(res.headers.get("content-type"), "text/plain; charset=utf-8", "the twin's octet-stream type must not leak");
-  assert.equal(res.headers.get("cache-control"), "no-store", "the paid response carries a receipt and must never be shared");
-  assert.equal(res.headers.get("content-length"), String(TWIN.length));
-  assert.match(res.headers.get("vary") ?? "", /accept-encoding/);
-  assert.ok(res.headers.get("x-payment-note"), "the ungated note must survive the twin path");
-  assert.ok(Buffer.from(await res.arrayBuffer()).equals(TWIN), "the body must be the twin's bytes, untouched");
-  assert.deepEqual(e.asked, [{ path: "/llms-full.txt.br", ae: "identity" }],
-    "one lookup, asking for identity so the asset layer cannot wrap the twin again");
-});
-
-test("/llms-full.txt falls back to the plain file, unencoded, on every miss", async () => {
-  for (const { label, e } of [
-    { label: "no twin (bun run dev stages nothing derived)", e: env({ twin: false }) },
-    { label: "in-process caller (IDENTITY_BODY, the /lens self-scan)", e: env({ identity: true }) },
-  ]) {
-    const res = await ask(e);
-    assert.equal(res.status, 200, label);
-    assert.equal(res.headers.get("content-encoding"), null, `${label}: must not claim an encoding it did not apply`);
-    assert.ok(Buffer.from(await res.arrayBuffer()).equals(PLAIN), `${label}: body must be the plain file`);
   }
 });
