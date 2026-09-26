@@ -1973,6 +1973,18 @@ the generated `/lens` shell and `/search`. The farm derives nothing, so a hover
 in dev draws the photo frame with no EXIF lines, and `photo_recipe`'s byte-match
 arm degrades the same way. Build if you need either.
 
+**`/images/manifest.json` joined them on 2026-09-26, by a different road.** It
+is staged by build.ts step 1e from the bundled pool through `imagesManifestJson`
+in `photos.ts`, the same serializer the Worker falls back to, and the text-twin
+step gives it a q11 twin. Rendered per request, the edge compressed it on the
+fly: 13,082 B on the wire against 9,803 at q11 (+33.4%), measured in production.
+Unlike the two above it is NOT a build-only surface under `bun run dev`: the route
+falls back to the per-request handler on a 404, so dev still answers. Its route
+sets `IMAGES_MANIFEST_HEADERS` explicitly, and that is load-bearing, because
+`_headers` gives `/images/*` a one-year `immutable` cache that a staged file
+there would otherwise inherit. `contract-images-manifest-is-build-output` holds
+the byte identity, the twin, and that header, with a control showing the leak.
+
 ### AadharshBot — the branded crawler
 
 Lives in `src/worker/lib/botauth.ts`. Signs outbound HTTP reader requests

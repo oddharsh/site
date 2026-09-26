@@ -35,7 +35,7 @@ import { cronJob } from "./lib/cron.ts";
 import { isCallable } from "./lib/parse.ts";
 import { installTracing, span } from "./lib/trace.ts";
 import { installTracing as installCalTracing } from "../../cal/src/trace.ts";
-import { getThumbHashes, handleAlbum, handleImagesManifest, handlePhotoQuery, handlePhotos, servePhotoFromR2 } from "./photos.ts";
+import { IMAGES_MANIFEST_HEADERS, getThumbHashes, handleAlbum, handleImagesManifest, handlePhotoQuery, handlePhotos, servePhotoFromR2 } from "./photos.ts";
 import { ALBUMS, albumPath, type Album } from "./albums.ts";
 import { handleReading } from "./reading.ts";
 import { handleRun } from "./run.ts";
@@ -556,7 +556,7 @@ const ROUTE_TABLE: Array<[path: string, handler: RouteHandler]> = [
   ["/images/", routePhotosRedirect],
   ["/images/full", routePhotosRedirect],
   ["/images/full/", routePhotosRedirect],
-  ["/images/manifest.json", handleImagesManifest],
+  ["/images/manifest.json", routeImagesManifest],
   ["/images/metadata.json", routeImagesMetadata],
   // Three root-level text assets that were edge-compressed at ~q4 until
   // 2026-08-31, now served from their build-time q11 twin. search-index.json is
@@ -1281,6 +1281,17 @@ function serveGeneratedWriting(request: SiteRequest, env: Env) {
       "link": `${SHELL_PRELOAD_LINK}, </webmention>; rel="webmention"`,
     },
   });
+}
+
+// The staged manifest and its q11 twin (build.ts step 1e), with the live handler
+// as the 404 fallback for a tree that staged nothing, which is `bun run dev`.
+// IMAGES_MANIFEST_HEADERS overrides the one-year immutable cache _headers puts on
+// /images/*; photos.ts carries the measurement and the reason.
+async function routeImagesManifest(request: SiteRequest, env: Env) {
+  const response = await servePrecompressedText(request, env, { headers: IMAGES_MANIFEST_HEADERS });
+  if (response.status !== 404) return response;
+  try { await response.body?.cancel(); } catch {}
+  return handleImagesManifest();
 }
 
 function routeImagesMetadata(request: SiteRequest, env: Env) {

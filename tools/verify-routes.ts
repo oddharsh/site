@@ -409,7 +409,9 @@ const ROUTES = [
   { path: "/images/full/", status: 301 },
   // the archive page builds its manifest by LISTING the R2 bucket, so an empty
   // local bucket is a 503 ("photo manifest unavailable"). /images/manifest.json
-  // stays local-checkable because it can fall back to the committed hashes.json.
+  // stays local-checkable because it is built from the committed photo index, and
+  // since 2026-09-26 it is STAGED at deploy, so the row asserts the q11 twin: a
+  // plain body here means the route fell back to the per-request handler.
   { path: "/photos", status: 200, ct: "text/html", marker: "handwritten worker", remote: true },
   { path: "/photos/", status: 301 },
   // the first album (src/worker/albums.ts): generated at deploy like /photos,
@@ -419,7 +421,7 @@ const ROUTES = [
   { path: "/run", status: 200, ct: "text/html", marker: "datalist" },
   { path: "/run?cmd=garage", status: 302 },
   { path: "/run?cmd=xyzzy-not-a-page", status: 200, ct: "text/html", marker: "cannot find" },
-  { path: "/images/manifest.json", status: 200, ct: "application/json" },
+  { path: "/images/manifest.json", status: 200, ct: "application/json", encoding: "br" },
   { path: "/images/metadata.json", status: 200, ct: "application/json", encoding: "br" },
   { path: `/images/meta/${META}.json`, status: 200, ct: "application/json" },
   // the SOOC original: ~3GB of R2 that is deliberately not in the repo.
