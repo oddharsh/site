@@ -697,7 +697,7 @@ function buildResample(src: Source, tmp: string): Built {
 //        jpeg-tier: what zenc spends at q84, the shipping JPEG fallback. AVIF
 //                   is then searched onto that.
 //   3. EACH FORMAT AT A SERIOUS SETTING, NOT A DEFAULT. AVIF gets the shipping
-//      flags (10-bit, speed 2, 4:2:0). WebP gets -m 6 and -sharp_yuv, the best
+//      flags (10-bit, speed 2, 4:4:4). WebP gets -m 6 and -sharp_yuv, the best
 //      libwebp has. JXL gets effort 9, near the top of cjxl's range the way
 //      speed 2 is near the top of aom's. Effort 7 (cjxl's default) was measured
 //      first and scored 0.0-4.5 s2 lower at equal bytes; holding JXL at its
@@ -741,7 +741,7 @@ export const JXL_ARGS = ["-e", "9"];
 
 // avifenc's flags beyond the quality: the photo pipeline's own (add-photos.sh),
 // so the AVIF tile is a shipping encode. codec-knob-probe.ts varies these.
-export const AVIF_ARGS = ["-d", "10", "--speed", "2", "--yuv", "420"];
+export const AVIF_ARGS = ["-d", "10", "--speed", "2", "--yuv", "444"];
 
 export function encodeFmt(fmt: Fmt, png: string, out: string, knob: number, jxlArgs: string[] = JXL_ARGS, avifArgs: string[] = AVIF_ARGS): number {
   if (fs.existsSync(out)) fs.unlinkSync(out);

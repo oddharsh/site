@@ -238,7 +238,13 @@ export function judgeEncode(info, byteLength) {
     } else if (info.bitDepth) {
       add("depth", "ok", `${info.bitDepth}-bit — the free win; 10-bit beats 8-bit at equal quality`);
     }
-    if (info.subsampling === "4:4:4") add("chroma", "warn", "4:4:4 — same byte tax as in JPEG, and rarely worth it at delivery sizes");
+    // NOT the JPEG rule above, measured 2026-09-26 on this site's own tiers: at
+    // equal bytes 4:4:4 AVIF beat 4:2:0 by ~0.5 ssimulacra2 on every tier size,
+    // butteraugli agreeing. A downscaled photo has full chroma to keep, and AV1
+    // spends little on smooth chroma planes, so the halving buys less than the
+    // colour bleed it causes. zenc/src/avif.c carries the numbers.
+    if (info.subsampling === "4:4:4") add("chroma", "ok", "4:4:4: full chroma. For AVIF at delivery sizes this measured ahead of 4:2:0 at equal bytes here (~2% bytes, median)");
+    else if (info.subsampling === "4:2:0") add("chroma", "ok", "4:2:0: fine, though on downscaled photos 4:4:4 measured ~2% better at equal bytes here");
     else if (info.subsampling) add("chroma", "ok", info.subsampling);
     if (info.brand) add("brand", "ok", info.brand);
   }

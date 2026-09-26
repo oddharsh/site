@@ -178,7 +178,7 @@
         "match": "zenc (?<zenc>\\d+\\.\\d+\\.\\d+) \\(zenjpeg (?<zenjpeg>\\d+\\.\\d+\\.\\d+)\\)"
       },
       "bytes": true,
-      "recorded": "zenc 0.1.0, zenjpeg 0.8.4"
+      "recorded": "zenc 0.2.0, zenjpeg 0.8.4"
     },
     {
       "bin": "timbrado",

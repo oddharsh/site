@@ -74,7 +74,8 @@ test("the AVIF parser reads bit depth and subsampling, and monochrome is real", 
     assert.ok(info, `${f} should parse`);
     assert.equal(info.bitDepth, 10, `${f} should be 10-bit — the measured free win`);
     if (info.monochrome) mono += 1; else colour += 1;
-    assert.ok(["4:2:0", "grayscale"].includes(info.subsampling), `${f} unexpected subsampling ${info.subsampling}`);
+    // Colour AVIF tiers are 4:4:4 since 2026-09-26 (zenc/src/avif.c has the why).
+    assert.ok(["4:4:4", "grayscale"].includes(info.subsampling), `${f} unexpected subsampling ${info.subsampling}`);
   }
   // A parser that always answered "monochrome" would still pass every assertion
   // above on a small enough sample. This is the one that catches it.

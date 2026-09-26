@@ -1288,8 +1288,9 @@ SOOC original (in /Users/aadharsh/Downloads/to post (from ssd)/)
    |      gotcha 3); --transfer names the SOURCE curve, g22 for the Monochrom.
    |   3. zenc -q 84 (zenjpeg hybrid trellis + progressive scan search; ~4%
    |      under the retired cjpegli at equal quality, q84 ≈ old cjpegli q82)
-   |   4. avifenc -q 63 -d 10 --speed 2 (10-bit AVIF, ~6% smaller at equal
-   |      quality than 8-bit; sips formatOptions 60 fallback) — primary
+   |   4. avifenc -q 63 -d 10 --speed 2, 4:4:4 colour / 4:0:0 gray (10-bit
+   |      AVIF, ~6% smaller at equal quality than 8-bit; libavif inside zenc
+   |      since the consolidation; sips formatOptions 60 fallback) — primary
    |
    v
 public/images/<stem>.{avif,jpg}  +  R2 aadhar-photos/<filename>
@@ -1367,6 +1368,58 @@ it was that a full re-encode re-mints every URL either way, so once one was bein
 run the flag was free. The two `/garage/encoding` study generators keep
 their own efforts (6 and 4) and deliberately do NOT track this, because their
 byte counts are what that page prints.
+
+**The colour AVIF tiers are 4:4:4 since 2026-09-26, and the camera recording
+4:2:2 is not an argument against it.** 4:2:2 describes the 7728x5152 frame. A
+600px tier is that frame's square reduced ~8.6x, so every tier pixel averages ~4
+chroma samples across and ~9 down, and the tier carries FULL chroma at its own
+size. 4:2:0 then halves real information both ways. The no-compression round
+trip shows it: subsample and restore alone scores 93.1-93.5 ssimulacra2 on the
+three tiers against 96.3 on a native-resolution crop, so it is the downscale that
+makes subsampling expensive.
+
+At the SAME bytes, each layout bracketed between adjacent `-q` steps and
+interpolated to the shipped tier's exact size, 4:4:4 beat the shipped 4:2:0 by
++0.45 / +0.52 / +0.59 s2 on the 600 / 400 / 200 tiers over 24 photos (ahead on
+18, 16 and 15 of them), butteraugli agreeing at -0.03 to -0.08. 4:2:0 needs a
+median 2.2% more bytes to match it; 0 on 6 photos, 35% on XT508316, a red-lit
+night frame, because red is only 0.299 of BT.601 luma and its fine detail lives
+in Cr. 4:2:2 moved nothing. `tools/photos/avif-chroma-probe.ts` is the
+measurement and compares all three layouts against whatever ships, so it stays
+runnable after the change it justified.
+
+Three things about it worth keeping:
+
+- **The old verdict was measured at a fixed KNOB, and that is the whole
+  error.** `/garage/encoding` concluded "4:4:4 costs ~8% more and buys no
+  visible gain" from two cards at `-q 63`, where 4:4:4 is also the better
+  picture, so "costs more" and "buys nothing" were never measured at once. The
+  JPEG verdict in `src/worker/encode.ts` (4:4:4 is a byte tax) was never
+  re-measured and still stands; the AVIF one was rewritten with this change.
+- **`-q 63` stayed by owner call, and it is NOT byte-neutral.** The knob
+  probe's 320px crops put 4:4:4's equal-bytes point at a median fractional q of
+  62.79, which projected ~1%. The re-encoded library says otherwise: the colour
+  AVIF tiers grew +5.64% / +6.50% / +7.04% (600 / 400 / 200), 12.73 MB to 13.50 MB
+  in total, for +1.29 / +1.50 / +1.72 s2 on the 24-photo sample. The byte-flat
+  setting is q62 (+0.40% / +0.99% / +1.70%, +0.50 / +0.72 / +0.97 s2); q61 and
+  q60 are the same quantizer step and byte-identical to each other. So the
+  shipped change is the equal-bytes win PLUS a deliberate ~6% spend on quality,
+  and a projection from native crops did not survive contact with the tiers.
+- **The re-encode had a control first.** With the old 4:2:0 zenc, every tier of
+  all 258 photos was re-encoded and compared to the shipped `/i/` bytes
+  (1032 of 1032 files byte-identical, JPEG tier included), including the 93 `/cota-wec` album photos, whose originals were
+  fetched from R2 (`heif` in the photo index, else `full`) into a scratch
+  folder. Two traps on the way: `photo-inputs.ts` reads `Dirent.isFile()`, so a
+  SYMLINKED source folder reads as 165 missing photos and a partial rerender
+  silently skips them (clone with `cp -c` instead), and the remote
+  `reencode-thumbnails` workflow renders from the q100 share JPEGs rather than
+  the HEIF originals, so it cannot reproduce a HIF-sourced tier.
+
+Decoding: Apple's ImageIO decoded a 4:4:4 10-bit AVIF on macOS 27.2 (checked
+through `sips`); Chromium and Firefox decode through dav1d. AV1 needs its High
+profile for 4:4:4, and gotcha 7 is why that matters: a decode failure shows a
+broken image rather than falling back to the JPEG. If broken-image reports
+arrive from an older Apple device, this is the first suspect.
 
 **The ingest consolidated into `zenc square` on 2026-08-26, and the reason to
 read that entry is the INSTRUMENT rather than the pixels.** A note in
