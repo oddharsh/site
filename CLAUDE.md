@@ -158,7 +158,8 @@ bun run lint
 # runtime this repo did not run on; the file is cached on wrangler's version
 # plus the config bytes, so `bun run types:gen` costs 3s cold and 0.02s warm),
 # the client islands get the DOM's, sw.js gets webworker's, the three auxiliary
-# Workers get Cloudflare's apiece, and the test suites get whichever runtime they
+# Workers get Cloudflare's apiece (cf-garage from a file wrangler writes out of
+# its OWN cloudflare.config.ts, Env included, gotcha 41), and the test suites get whichever runtime they
 # actually run on. Each config/tsconfig.*.json header argues its own case.
 # Three of the ten go through a WRAPPER instead of a bare `tsc -p`, because they
 # hold files from two runtimes at once and the imported half is checked against
@@ -260,11 +261,11 @@ bun run canary:browsers   # /garage/horizon's probes in stable vs prerelease eng
                           # with production; `-- --offline` skips the second. Their
                           # first run found JXL decoding by default in Canary 155.
 #
-# THE WATCHES (2026-09-15) are the inverse of a gate: twelve probes that read
+# THE WATCHES (2026-09-15) are the inverse of a gate: eleven probes that read
 # FALSE on the pinned toolchain today, one per upstream fix this repo is
 # waiting on (tools/lib/upstream-watches.ts: seven bun issues from Bun.Image
 # option validation to fetch honouring `dispatcher`, oxc-minify reaching SWC
-# parity, workerd#7106's zstd dictionary, `wrangler types --x-new-config`, and
+# parity, workerd#7106's zstd dictionary, and
 # since 2026-09-22 the vitest-plugin at the wrangler pin's own commit admitting
 # Vitest 5, which is the cue to revisit #703, and since 2026-09-23 workerd
 # exposing a Temporal whose clock is sane, the switch workerd#6907 flipped
@@ -6023,9 +6024,31 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     - **Bindings live under `env`**, which is what pays for the format: the
       generated types read `InferEnv<typeof cloudflare.config.default>`, so the
       binding names ARE the type of `env` instead of a snapshot some earlier
-      `wrangler types` run happened to take. Nothing here reached that payoff
-      yet, because `wrangler types` does NOT accept `--x-new-config` (measured:
-      unknown argument) and the types are written by `wrangler dev`.
+      `wrangler types` run happened to take. **The payoff arrived on
+      2026-09-26, through `build` rather than `types`.** `wrangler types`
+      still refuses `--x-new-config` (exit 1, "Unknown arguments", on pin
+      3572193). What workers-sdk#15778 added is a writer inside the config
+      loader: `dev` and the BUILD-OUTPUT `build` each write
+      `.cloudflare/types/index.d.ts` in the working directory, the `Env`
+      inference above plus the runtime surface at this Worker's own date and
+      flags. `tools/gen-runtime-types.ts` runs `wrangler build --x-new-config
+      --x-cf-build-output` in `cf-garage/` before typecheck and lint (1.15 s
+      cold, no credential, offline; cached on the wrangler version plus the
+      config's bytes), and `tsconfig.cf-garage.json` includes that file in
+      place of the site's. `src/index.ts` types its handler as `env: Env`, so
+      renaming `COUNTER` in the config and not in the source fails typecheck
+      by name, with no regeneration, because the `Env` is a `typeof import`
+      of the config rather than a copy of it. Three traps on the way:
+      `deploy --dry-run --x-new-config` never reaches the writer; `build
+      --x-new-config` WITHOUT the output flag is a dry run with
+      `--outdir=dist` and leaves an unignored `cf-garage/dist/`; and the writer
+      SWALLOWS its own failure (logs, returns, exit 0), measured by denying it
+      loopback, so the generator deletes the file first and refuses when it
+      does not come back. The runtime half is byte-identical to the site's
+      today (604,981 B each): `nodejs_compat` adds nothing to workerd's
+      generated declarations, which leave `node:*` to @types/node. So this
+      bought the Env, and it buys a separate runtime the day cf-garage's date
+      or flags move where the site's cannot follow.
     - **`[[migrations]]` has no equivalent and needs none.** A DO class declares
       its lifecycle as state on its export (`{ storage: "sqlite" }` is the
       created form; `state` carries deleted / renamed / transferred /
