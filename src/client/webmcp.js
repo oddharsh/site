@@ -32,10 +32,9 @@
 // agent actually reads. Where the standard cannot express consent, this asks the
 // human directly (see gate() below).
 //
-// Loaded on idle from nav.js, so it costs nothing on the critical path, and
-// deliberately NOT content-hashed: like hoist.js it is reached through an
-// `import()` specifier, which the /a/ repointer is attribute-scoped and would
-// never rewrite.
+// Loaded on idle from nav.js, so it costs nothing on the critical path. It is
+// content-hashed into /a/ at build (build.ts STRING_ASSETS rewrites the
+// `import()` specifiers that reach it), so it ships with a q11 twin.
 
 // The spec hangs the object on `document` (partial interface Document, read
 // 2026-09-11) and that is where Chrome 152+ puts it. `navigator.modelContext`

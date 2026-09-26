@@ -157,7 +157,10 @@
       // the data indexes beside meta/. This puts the config at 98 of the 100
       // rules wrangler allows; the fold gotcha 26 names is the next step if a
       // 101st is ever needed.
-      "/images/*.json", "/*.md", "/*.src.*", "/search-index.json", "/llms.txt", "/sitemap.xml"
+      "/images/*.json", "/*.md", "/*.src.*", "/search-index.json", "/llms.txt", "/sitemap.xml",
+      // q11 everywhere, 2026-09-26: the section icons (favicons on 12 pages) and
+      // /resume.json, both at the edge's q4 until their twins had a route.
+      "/section-icons/*", "/resume.json"
     ]
   },
   // matches wrangler.jsonc. Locally the spans open and record nothing
