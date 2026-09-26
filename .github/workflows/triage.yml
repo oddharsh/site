@@ -13,9 +13,9 @@ name: Triage
 # labelled yet, and the whole point of the block below is that the absence of a
 # label should mean something.
 #
-# `pull_request_target` rather than `pull_request`, for the reason
-# dependabot-site-review.yml uses it: a fork or Dependabot pull request running
-# under `pull_request` gets a read-only token and cannot label itself. Nothing
+# `pull_request_target` rather than `pull_request`: a fork or Dependabot pull
+# request running under `pull_request` gets a read-only token and cannot label
+# itself. Nothing
 # here checks out the head, so the usual `pull_request_target` hazard does not
 # apply — and the routing rules are deliberately read at the BASE sha, so a
 # pull request cannot rewrite the rules that classify it.
