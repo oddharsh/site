@@ -62,6 +62,9 @@ jobs:
       # bypass actors.
       contents: write
       pull-requests: write
+      # The one issue a stuck pin files through timbrado's reporter, the same
+      # write canary.yml holds for the same reason.
+      issues: write
 
     steps:
       - name: Check out main
@@ -94,9 +97,9 @@ jobs:
           # here would hand $? to tee and report every failed gate as a pass.
           set +e
           if [ -n "${TO:-}" ]; then
-            bun run bun:pin --write --to "$TO" > pin.log 2>&1
+            bun run bun:pin --write --json pin-report.json --to "$TO" > pin.log 2>&1
           else
-            bun run bun:pin --write > pin.log 2>&1
+            bun run bun:pin --write --json pin-report.json > pin.log 2>&1
           fi
           status=$?
           set -e
@@ -112,13 +115,25 @@ jobs:
           # THREE OUTCOMES, and only one of them is a failure worth a red run.
           # Nothing to do exits 0 and moves the pin nowhere. A candidate that
           # fails a gate exits 1 and is INFORMATION rather than a fault in this
-          # repository, so it is summarised and left green; a red nightly for
-          # "upstream shipped a release we cannot take" is a red nightly nobody
-          # reads. Anything else is a real fault.
+          # repository, so the job stays green; a red nightly for "upstream
+          # shipped a release we cannot take" is a red nightly nobody reads.
+          # Green is not silent, though: the report step below files it as an
+          # issue, because green alone hid a broken gate for eleven nights
+          # (2026-09-15 to 09-26). Anything else is a real fault.
           if [ "$status" -ne 0 ] && [ "$status" -ne 1 ]; then
             echo "::error title=bun:pin could not run::exit $status"
             exit "$status"
           fi
+
+      - name: File, comment, or close the pin's one issue
+        # One open issue while the same gates fail, a comment only when the set
+        # changes, closed the night the pin moves or is current. No report file
+        # means the candidate was only too young, which clears on its own; a
+        # failed pin step never gets here, because exit 2 reds the job.
+        if: github.ref == 'refs/heads/main' && hashFiles('pin-report.json') != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bun run timbrado report --target bun-pin --json pin-report.json --exit "${{ steps.pin.outputs.status }}" --reproduce "bun run bun:pin"
 
       - name: Open or update the pin PR
         if: steps.pin.outputs.before != steps.pin.outputs.after
@@ -200,8 +215,10 @@ jobs:
             echo
             if [ "${{ steps.pin.outputs.before }}" != "${{ steps.pin.outputs.after }}" ]; then
               echo "Proposed \`${{ steps.pin.outputs.before }}\` → \`${{ steps.pin.outputs.after }}\` on \`chore/bun-pin\`."
+            elif [ "${{ steps.pin.outputs.status }}" = "1" ] && [ -f pin-report.json ]; then
+              echo "A newer bun exists and failed a gate. Not a fault here, and not silent either: the \`timbrado: bun-pin\` issue stays open until the pin moves. The log says which gate."
             elif [ "${{ steps.pin.outputs.status }}" = "1" ]; then
-              echo "A newer bun exists and did not clear a gate. Not a fault here; the log says which."
+              echo "A newer bun exists and is too young to propose yet. Nothing filed; it clears on its own."
             else
               echo "The pin is current."
             fi

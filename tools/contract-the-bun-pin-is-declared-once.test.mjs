@@ -4,7 +4,8 @@ import { ROOT, assert, readFile, test } from "./contract-shared.ts";
 
 import { channelOf, compareVersions, interpretZstdProbe, minimumReleaseAgeSeconds, newestSeasonedCanary, npmPlatform, npmTarballUrl, npmVersion, parseVersion, readPin, releaseAsset, releaseUrl, runningMatchesPin, writePin } from "./lib/bun-pin.ts";
 import { fileURLToPath } from "node:url";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { contractSuiteGate, suiteArgs } from "./lib/bun-gates.ts";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -268,4 +269,53 @@ test("the release asset names match what oven-sh/bun tags", () => {
     releaseUrl("1.4.0", "bun-linux-x64.zip"),
     "https://github.com/oven-sh/bun/releases/download/bun-v1.4.0/bun-linux-x64.zip",
   );
+});
+
+test("the suite gate runs `bun run test`'s own flags, and a failed gate reaches an issue rather than a green run", async () => {
+  // The gate restated `--preload` and dropped `--timeout=30000`, so candidates
+  // ran on bun's 5s default. bun test kills a spawnSync'd child at the timeout,
+  // which is how a cold cargo build of timbrado's engine read "exited null"
+  // every night from 2026-09-15 while validate's copy of the suite passed.
+  const pkg = JSON.parse(await readFile(new URL("package.json", ROOT), "utf8"));
+  const args = suiteArgs(root);
+  assert.equal(["bun", "test", ...args].join(" "), pkg.scripts.test.trim().split(/\s+/).join(" "), "the gate's arguments are the test script's, word for word");
+  assert.ok(args.some((a) => a.startsWith("--timeout=")), "the test script carries a --timeout; without one the gate runs on bun's 5s default");
+  assert.ok(args.includes("--preload"), "the test script carries the network tripwire");
+  const gates = await readFile(new URL("tools/lib/bun-gates.ts", ROOT), "utf8");
+  assert.match(gates, /run\(exe, \["test", \.\.\.suiteArgs\(root\)\]/, "contractSuiteGate runs suiteArgs rather than a restated flag list");
+
+  // Behavioural: a fake `bun` that answers green ONLY when handed the fixture
+  // script's arguments. A gate that restates its flags reads red here.
+  const dir = await mkdtemp(join(tmpdir(), "suite-gate-"));
+  try {
+    await writeFile(join(dir, "package.json"), JSON.stringify({ scripts: { test: "bun test --timeout=12345 --preload ./p.ts tools/" } }));
+    const fake = join(dir, "fake-bun");
+    await writeFile(fake, `#!/bin/sh\nif [ "$*" = "test --timeout=12345 --preload ./p.ts tools/" ]; then echo " 3 pass"; echo " 0 fail"; else echo "(fail) wrong flags: $*"; echo " 0 pass"; echo " 1 fail"; fi\n`);
+    await chmod(fake, 0o755);
+    const g = contractSuiteGate(fake, dir, 10_000);
+    assert.ok(g.ok, `the gate did not hand bun the script's flags: ${g.detail}; ${(g.notes ?? []).join(" ")}`);
+    // The control: the same fake refuses any other argument list.
+    await writeFile(join(dir, "package.json"), JSON.stringify({ scripts: { test: "bun test --preload ./p.ts tools/" } }));
+    assert.ok(!contractSuiteGate(fake, dir, 10_000).ok, "the fake bun accepts any flags, so the check above measures nothing");
+    await writeFile(join(dir, "package.json"), JSON.stringify({ scripts: { test: "vitest run" } }));
+    assert.throws(() => suiteArgs(dir), /bun test/, "a test script that is not `bun test` is refused by name");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+
+  // The visibility half. bun-pin.yml stays green on a failed gate on purpose,
+  // so the gate has to land somewhere a person reads: timbrado's one issue.
+  const yml = await readFile(new URL(".github/workflows/bun-pin.yml", ROOT), "utf8");
+  assert.match(yml, /issues:\s*write/, "bun-pin.yml cannot file its issue");
+  assert.equal((yml.match(/bun run bun:pin --write --json pin-report\.json/g) ?? []).length, 2, "both bumper invocations write the report");
+  assert.match(yml, /bun run timbrado report --target bun-pin --json pin-report\.json --exit "\$\{\{ steps\.pin\.outputs\.status \}\}"/, "the report goes through timbrado's reporter under its own target");
+  const bumper = await readFile(new URL("tools/bump-bun-pin.ts", ROOT), "utf8");
+  const young = bumper.indexOf("is not proposable yet");
+  const firstReport = bumper.indexOf('report("red"');
+  assert.ok(young > 0 && firstReport > young, "a candidate that is only too young must write no report; a green for it would close an issue about a gate that never ran");
+  for (const exit of ["fails a gate above", "is NOT proposable", "disagrees with its own tag", "fail the build 40 seconds in"]) {
+    const at = bumper.indexOf(exit);
+    assert.ok(at > 0, `the bumper no longer prints ${JSON.stringify(exit)}`);
+    assert.match(bumper.slice(at, at + 300), /red\(\);\s*process\.exit\(1\);/, `the ${JSON.stringify(exit)} exit writes no red report, so its gate never reaches the issue`);
+  }
 });

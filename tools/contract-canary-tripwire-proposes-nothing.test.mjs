@@ -210,6 +210,18 @@ test("a missing Rust engine is an instrument failure, never eight watch rows rea
   assert.ok(ensureAt < leg.indexOf("for (const w of BUN_WATCHES)"), "the engine is asked for after the watch loop it exists for");
   assert.match(leg.slice(ensureAt, ensureAt + 400), /emit\("instrument", bare, [^)]*engine[^)]*\);\s*process\.exit\(2\);/, "an engine that cannot be built is exit 2, the instrument, so the reporter files nothing");
 
+  // The BUMPER runs the same suite gate, and it did not ask. So the suite's
+  // first watch paid for a cold cargo build under bun's clock, bun test killed
+  // cargo at 5010ms, and the pin sat still for eleven nights while bun-pin.yml
+  // read the failed gate as green (2026-09-15 to 09-26).
+  const bumper = strip(await readFile(new URL("tools/bump-bun-pin.ts", ROOT), "utf8"));
+  const askAt = bumper.indexOf("ensureTimbradoEngine();");
+  assert.ok(askAt > 0, "bump-bun-pin.ts never asks for the engine, so the suite gate builds it on the candidate's clock");
+  assert.ok(askAt < bumper.indexOf("downloadBun("), "the bumper asks for the engine after the download; a runner without cargo pays for it first");
+  assert.ok(askAt < bumper.indexOf("contractSuiteGate(candidate"), "the bumper asks for the engine after the suite that needs it");
+  assert.ok(askAt > bumper.indexOf("is not proposable yet"), "the bumper builds the engine before gates 1 and 2, so every quiet night pays a cargo build");
+  assert.match(bumper.slice(askAt, askAt + 400), /process\.exit\(2\);/, "an engine the bumper cannot build is exit 2, which bun-pin.yml reds, never a failed gate it reads as green");
+
   // Behavioural: point TIMBRADO_BIN (timbrado's own override, read on every
   // call) at an engine that does not exist. The guard and the wrapped runWatch
   // both have to THROW; a `{ landed: null }` return here is the exact failure.
