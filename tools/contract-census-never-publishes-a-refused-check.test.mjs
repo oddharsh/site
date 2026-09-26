@@ -64,12 +64,17 @@ test("censusInstanceId is deterministic, per host per day, and legal", () => {
   assert.notEqual(a, censusInstanceId("2026-09-06", first), "a new census day is a new instance");
   assert.notEqual(a, censusInstanceId("2026-08-30", CENSUS_ROSTER[1]), "two hosts never collide");
 
-  // Workflows cap an instance id at 100 characters and reject the exotic ones.
+  // Workflows cap an instance id at 100 characters and hold it to one pattern.
+  // This asserted /^[A-Za-z0-9._-]+$/ until 2026-09-26, a guess that let a dot
+  // through, while the binding's own ALLOWED_STRING_ID_PATTERN (miniflare's
+  // workflows binding, wrangler pin 3572193) refuses one. Every roster label is
+  // a hostname, so every id failed the real check and passed this one.
+  // contract-census-duplicate-id-in-workerd asks the binding itself.
   const ids = CENSUS_ROSTER.map((s) => censusInstanceId("2026-08-30", s));
   assert.equal(new Set(ids).size, CENSUS_ROSTER.length, "every roster host gets a distinct id");
   for (const id of ids) {
     assert.ok(id.length <= 100, `${id} is longer than the 100-character ceiling`);
-    assert.match(id, /^[A-Za-z0-9._-]+$/, `${id} carries a character an instance id may not`);
+    assert.match(id, /^[a-zA-Z0-9_][a-zA-Z0-9-_]*$/, `${id} carries a character an instance id may not`);
   }
 });
 
