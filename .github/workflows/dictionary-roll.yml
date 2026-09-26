@@ -118,7 +118,12 @@ jobs:
             echo "Dictionaries already cover what production is serving; nothing to do."
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
-            git status --short src/dict/a-dict src/dict/p-dict src/dict/f-dict | head -40
+            # sed, NOT head. head exits after 40 lines, git's next write meets a
+            # closed pipe, and pipefail turns that SIGPIPE into exit 141, so this
+            # step failed on exactly the rolls with the most to propose. Runs
+            # 36012100366 and 36216390330 both died here with a full roll staged
+            # and no PR opened. sed reads to EOF, so the pipe never closes early.
+            git status --short src/dict/a-dict src/dict/p-dict src/dict/f-dict | sed -n '1,40p'
           fi
 
       - name: Open or update the roll PR
