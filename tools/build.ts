@@ -1334,7 +1334,8 @@ if (inlineProbe.includes("/* probe */") ||
   console.log(`homepage bake: 12 deterministic fallback tiles + last-modified ${new Date(newest).toISOString().slice(0, 10)}`);
 }
 
-// 1e) /photos and /bot as deploy-time documents.
+// 1e) /photos and /bot as deploy-time documents, and /images/manifest.json beside
+// them from the same pool.
 //
 // Both render from build-time inputs only, so their bytes are knowable here, and
 // emitting them as HTML buys the q11 twin plus both dcz delta tiers that step 8
@@ -1362,6 +1363,13 @@ if (inlineProbe.includes("/* probe */") ||
   const photosHtml = await photos.renderPhotosPage(pool, altMap).text();
   if (!photosHtml.includes("class=\"ph\"")) throw new Error("photos page: rendered document has no tiles — did the markup move?");
   await writeFile(`${OUT}/public/photos.html`, photosHtml);
+
+  // /images/manifest.json, from the same pool through the Worker's own serializer.
+  // Staged here, it picks up a q11 twin from the text-twin step below (its
+  // `images/*.json` glob already matches, and the path is already worker-first),
+  // plus an ETag the per-request handler never had. That handler stays as the
+  // route's 404 fallback, so this is the one place the static copy is made.
+  await writeFile(`${OUT}/public/images/manifest.json`, photos.imagesManifestJson(pool));
 
   // One document per album (src/worker/albums.ts), from the same pool. An album
   // with no members is a registry entry nobody ran the pipeline for, and a page
