@@ -47,13 +47,13 @@ test("fragment probe preserves timings, missing values, cancellation and version
     await copyFile(new URL("../src/worker/perf-probe.ts", import.meta.url), join(root, "perf-probe.ts"));
     await writeFile(join(root, "lib/const.ts"), 'export const CANONICAL_HOST = "fixture.example";');
     await writeFile(join(root, "home.ts"), 'import { fragment } from "./fixture.mjs"; export const handlePhotoGrid = (...args) => fragment("grid", ...args);');
-    await writeFile(join(root, "rn.ts"), 'import { fragment } from "./fixture.mjs"; export const handleRnTracksHtml = (...args) => fragment("tracks", ...args);');
+    await writeFile(join(root, "rn.ts"), 'import { fragment } from "./fixture.mjs"; export const rnTracksHtml = (...args) => fragment("tracks", ...args);');
     await writeFile(join(root, "fixture.mjs"), `
       export const state = { clock: 100, phases: {}, events: [], requests: [] };
-      export async function fragment(kind, request, env, ctx) {
+      export async function fragment(kind, request, env, ctx, opts) {
         const phase = state.phases[kind];
         state.events.push(kind);
-        state.requests.push({ request, env, ctx });
+        state.requests.push({ request, env, ctx, opts });
         state.clock += phase.ms;
         if (phase.error) throw new Error(kind);
         return new Response(phase.noBody ? null : new ReadableStream({
@@ -93,6 +93,11 @@ test("fragment probe preserves timings, missing values, cancellation and version
         assert.equal(received, env);
       }
       assert.equal(state.requests[0].ctx, ctx);
+      // The probe runs in the :07/:37 tick that cronEnrichTracks shares, and the
+      // art warm fans out up to 40 Images fetches in whatever invocation asks
+      // for it. Asking for it here spent the tick's 50 subrequests on
+      // 2026-09-27 and stranded 3 covers and 6 artist photos.
+      assert.deepEqual(state.requests[0].opts, { warm: false }, `${label}: the probe must not warm the art cache`);
     }
     for (const id of [undefined, ""]) {
       const written = [];
