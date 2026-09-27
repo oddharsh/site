@@ -1519,6 +1519,18 @@ Two encoders + one transform tool, all built from source:
   `--sharpyuv`, which nothing passes. The two paragraphs below describe the
   vendored-first era and are kept for their measurements.
 
+  **Run again at the 3.15.1 bump, 2026-09-27: 42 of 42 identical.** This time
+  the bump got a sharper instrument. Build both tags from source with brew's
+  cmake flags, then point `DYLD_LIBRARY_PATH` at each one under the SAME zenc
+  binary, which confirms the swap through `--avif-version`, so libaom is the
+  only thing that differs. The result covers 9 stems (3 Leica JPG, 2 Fuji JPG
+  including the orientation-6 XT507876, 4 HIF) x 4 tiers at the 4:4:4 shipping
+  flags. Every tier matched across 3.15.0, the self-built 3.15.1, brew's
+  3.15.1 and the shipped `/i/` bytes. `avifenc` matched too, on 6 of 6 at
+  4:4:4 and 4:2:0. The source diff predicted it: the tag changes only
+  `av1/common/x86/convolve_2d_avx2.c`, which arm64 never compiles. So this
+  says nothing about an x86 runner, which is the one place that file runs.
+
   **Adopting it re-mints nothing**, verified 2026-08-26: at `-q 63 -d 10
   --speed 4 --yuv 420` the vendored and brew binaries produced BYTE-IDENTICAL
   output on a real 600px square, 26,594 bytes either way. That is the bar, since
