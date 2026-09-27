@@ -329,7 +329,7 @@
       "tools/check-infra.ts": "writes one request line into a mkdtemp directory while probing the edge",
       "tools/lens-seed.ts": "writes seed captures into a scratch directory",
       "tools/photos/resample-probe.ts": "writes probe output while measuring the ingest geometry, and commits nothing",
-      "tools/photos/codec-knob-probe.ts": "writes scratch encodes and an optional --json report while measuring cjxl and avifenc flags at matched bytes, and commits nothing",
+      "tools/photos/codec-knob-probe.ts": "writes scratch encodes and an optional --json report while measuring cjxl, avifenc and AV2 (avifenc-avm) flags at matched bytes, and commits nothing",
       "tools/photos/avif-chroma-probe.ts": "writes scratch tiers, encodes and an optional --json report while comparing AVIF chroma layouts at the shipped bytes, and commits nothing",
       "tools/photos/experiments/bench-jpeg-search.ts": "writes JPEG search candidates only inside its own mkdtemp directory, removes them in finally, and reports measurements on stdout; it never regenerates a committed photo, manifest or histogram",
       "tools/relock-dependabot.ts": "rewrites the version pins inside docs/DEPENDENCIES.md to match the lockfile, in a throwaway worktree during a dependabot relock. The prose is edited in place rather than generated, and contract-docs-dependencies-md-states-version-pins-in-prose.test.mjs already holds those pins to the lockfile on every run, which is the check a digest here would duplicate",

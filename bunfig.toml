@@ -107,6 +107,20 @@ minimumReleaseAgeExcludes = [
 # package.json's comment:test-parallel carries the measurements, the isolation
 # argument and the control that come with them.
 
+#
+# The two vendored encoder builds are ignored by path. They are gitignored
+# third-party checkouts under tools/, and the AV2 one (tools/photos/libavif-avm)
+# fetches FlatBuffers, whose own tests import a `flatbuffers` package nothing
+# here installs: 6 module errors on the first run after a build. The derivation
+# census (tools/lib/derive-writers.ts) and config/tsconfig.tools.json skip the
+# same four directories for the same reason.
+
 [test]
 root = "tools"
 preload = ["./tools/lib/no-network.ts"]
+pathIgnorePatterns = [
+  "tools/photos/libavif/src/**",
+  "tools/photos/libavif/build/**",
+  "tools/photos/libavif-avm/src/**",
+  "tools/photos/libavif-avm/build/**",
+]

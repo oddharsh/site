@@ -1783,6 +1783,21 @@ zero credentials and zero subrequests, and it still works on the free plan. Dele
 ```
 Prints byte counts + bytes-per-pixel so the figcaptions on `/garage/encoding` can be updated to match. The grayscale (`g-*`) set is generated separately and is not touched.
 
+### Measure AV2 stills against the shipped AVIF
+```bash
+tools/photos/libavif-avm/build.sh
+bun tools/photos/codec-knob-probe.ts --codec avm --variants base,s4
+```
+The build is `avifenc-avm` in `config/tools.json`: libavif pinned by commit with
+its experimental AV2 codec (AVM 1.0.0) on, plus the installed aom, so one binary
+writes both (`-c avm` / `-c aom`). No tagged libavif carries AVM 1.0.0 yet, which
+is why the pin is a commit. The probe arm scores AV2 at the byte budget of each
+shipped AVIF tile on the /pixel-peeper crops, train and holdout, and the table
+it prints is the answer to "where is AV2 now". Measurement only: no browser
+decodes AV2 and the `av02` image format is experimental, so none of this output
+can ship. The slow speeds are the expensive rows (`s3` is several times `s4`),
+so pick variants rather than running the whole list.
+
 ---
 
 ## Regenerate the OG / Twitter cards
