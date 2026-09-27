@@ -64,17 +64,23 @@
 //
 // WHAT IT FOUND FOR AV2, 2026-09-27 (AVM 1.0.0 via libavif 768b3dfe, against
 // the 4:4:4 AVIF budget; Δ s2 vs the shipped AVIF at matched bytes, train /
-// holdout; butteraugli wins out of 32):
-//   speed 6 (this arm, base)                      -1.70 / -2.21   0 of 32 s2 wins
-//   cpu-used 6, raw avmenc, payload vs payload    -1.46 / -2.32   bu wins 18 of 32
-//   cpu-used 3, raw avmenc, payload vs payload    -0.81 / -1.66   bu wins 21 of 32
-// The raw-avmenc rows come from a scratch harness with its own RGB->YUV code;
-// the two speed 6 rows agree within 0.25, which is the check that neither the
-// harness nor the container accounting is the result. The metrics DISAGREE,
-// and the pictures say why: AV2 flattens sensor grain on high-ISO frames, which
-// ssimulacra2 punishes and butteraugli mostly forgives. Lossless (-l, identity
-// matrix, bit-exact on all 16 crops) is 29% LARGER than aom's, and speed 3 did
-// not close it (161,336 B vs 160,357 at speed 6 on XT509794).
+// holdout; wins out of 32; one 320 px encode, best of 3, idle machine):
+//   shipped AVIF (aom --speed 2)                        reference              0.45 s
+//   speed 6, tune ssim (libavif default, the base)  -1.75 / -2.16   s2 0, bu 7   5.4 s
+//   speed 6, tune psnr (tunepsnr)                   -2.04 / -2.81   s2 0, bu 14  5.4 s
+//   speed 3, tune ssim (s3)                         -1.03 / -1.53   s2 4, bu 11  18.3 s
+// Speed 3 beat speed 6 on all 32 calls. A scratch harness driving raw avmenc
+// through its own RGB->YUV (tune psnr) scores AV2 about 0.5 better at the same
+// tune (-1.46 / -2.32 at cpu-used 6, -0.81 / -1.66 at 3); that gap is untraced
+// and neither instrument puts AV2 ahead on average.
+// WHERE AV2 LOSES, from the decodes of all 32 calls at speed 6: error on 8x8
+// block means is higher than aom's on 32 of 32 in luma (0.26 -> 0.39) and 32 of
+// 32 in chroma (0.25 -> 0.41), including the 8 calls within 1% of budget, while
+// fine luma texture tracks the source better on 21 of 32 (Laplacian correlation
+// 0.773 -> 0.811). An earlier reading here said AV2 flattens sensor grain; that
+// came from eyeballing one frame and the decodes disprove it.
+// Lossless (-l, identity matrix, bit-exact on all 16 crops) is 29% LARGER than
+// aom's, and speed 3 did not close it (161,336 B vs 160,357 at speed 6).
 //
 // Crops are cached in --cache (default: a directory under the OS temp dir), since
 // cutting one from a HIF costs a full-resolution sips decode.
@@ -170,10 +176,19 @@ const AVIF_VARIANTS: Record<string, string[]> = {
 // for aom: on one crop, raw avmenc at cpu-used 3 scored +2.4 s2 over cpu-used 6
 // at the same bytes, for 5x the time, and cpu-used 1 ran past 8 minutes on a
 // single 320px frame. So the base is speed 6, and the slow speeds are variants.
-// Screened 2026-09-27 at q63 on one crop, like the lists above: tune=ssim,
+// Screened 2026-09-27 at q63 on one crop, like the lists above:
 // enable-restoration=0 and deltaq-mode=0 came back BYTE-IDENTICAL to the base,
 // and enable-tcq is refused ("Invalid codec-specific option", as is an invented
 // key, which is the control that a refusal is visible). The rest moved bytes.
+//
+// TUNE IS THE KNOB THAT MATTERS, and libavif picks it for you. codec_avm.c sets
+// AVM_TUNE_SSIM unless a tune is given, where raw avmenc defaults to PSNR, so
+// tune=ssim screened byte-identical to the base because it IS the base. AVM
+// accepts only psnr and ssim: tune=iq, which libaom 3.13+ uses for the shipped
+// AVIF stills, is refused, so AV2 has no still-image tune yet. On XT509540 at
+// qp 105, speed 3: ssim 8,308 B s2 69.70 bu 2.56; psnr 8,599 B s2 68.84 bu 1.72.
+// ssimulacra2 barely moves and butteraugli swings, which is why the metrics
+// read as disagreeing under one tune and agreeing under the other.
 const AVIFENC_AVM = path.join(path.dirname(fileURLToPath(import.meta.url)), "libavif-avm", "build", "avifenc");
 const AVIFDEC_AVM = path.join(path.dirname(AVIFENC_AVM), "avifdec");
 const AVM_ARGS = ["-c", "avm", "-d", "10", "--speed", "6", "--yuv", "444"];
@@ -189,21 +204,34 @@ const AVM_VARIANTS: Record<string, string[]> = {
   cdef0: avm("-a", "enable-cdef=0"),
   ccso0: avm("-a", "enable-ccso=0"),
   gdf0: avm("-a", "enable-gdf=0"),
+  tunepsnr: avm("-a", "tune=psnr"),
   nofilt: avm("-a", "enable-cdef=0", "-a", "enable-ccso=0", "-a", "enable-gdf=0"),
 };
 
 /** Encode and decode for one AVIF-family codec: the shipped aom build, or the
- *  AV2 build, which reads and writes files the shipped avifdec cannot open. */
-type AvifCodec = { enc: (png: string, out: string, q: number, args: string[]) => number; dec: (file: string, png: string) => string };
+ *  AV2 build, which reads and writes files the shipped avifdec cannot open.
+ *  `enc` takes a KNOB in 0..range whose bytes rise with it, which is all
+ *  bracketed() needs to know about a codec's quality scale. */
+type AvifCodec = { range: number; enc: (png: string, out: string, knob: number, args: string[]) => number; dec: (file: string, png: string) => string };
 const AOM: AvifCodec = {
+  range: 100,
   enc: (png, out, q, args) => encodeFmt("avif", png, out, q, undefined, args),
   dec: (file, png) => decodeFmt("avif", file, png),
 };
+// AV2's knob is its own quantizer, qp = 255 - knob. libavif's -q is far too
+// coarse for AV2: on XT509540 at speed 3, -q 49 wrote 6,865 B and -q 50 wrote
+// 9,608 B, a 40% step, so a -q bracket interpolated across a gap that size.
+// `-a qp=` is accepted and overrides -q (qp 120 wrote 2,219 B, qp 126 1,584 B).
+// Through that door qp runs 0..255: avmenc's 10-bit floor of -48 is REFUSED
+// ("Invalid codec-specific option", measured down to -1), and the first run with
+// a -48 ceiling errored on all 32 calls. -q stays at 50 so libavif never reads
+// the request as lossless.
 const AVM: AvifCodec = {
-  enc: (png, out, q, args) => {
+  range: 255,
+  enc: (png, out, knob, args) => {
     // --jobs pinned like the AVIF arm, since a thread count can move bytes (gotcha 43)
-    const r = spawnSync(AVIFENC_AVM, ["-q", String(q), ...args, "--jobs", "4", "--ignore-icc", "--ignore-exif", "--ignore-xmp", png, out], { encoding: "utf8" });
-    if (r.status !== 0 || !fs.existsSync(out)) throw new Error(`avifenc-avm -q ${q} failed: ${(r.stderr || r.stdout || "").trim().slice(-200)}`);
+    const r = spawnSync(AVIFENC_AVM, ["-q", "50", "-a", `qp=${255 - knob}`, ...args, "--jobs", "4", "--ignore-icc", "--ignore-exif", "--ignore-xmp", png, out], { encoding: "utf8" });
+    if (r.status !== 0 || !fs.existsSync(out)) throw new Error(`avifenc-avm qp=${255 - knob} failed: ${(r.stderr || r.stdout || "").trim().slice(-200)}`);
     return fs.statSync(out).size;
   },
   dec: (file, png) => {
@@ -258,8 +286,8 @@ function recompressed(srcs: { png: string; ppm: string }, dir: string, target: n
 export function bracketed(ref: string, dir: string, target: number, args: string[], codec: AvifCodec = AOM): { bytes: number; d: number; s2: number; bu: number } {
   const size = new Map<number, number>();
   const at = (q: number) => { if (!size.has(q)) size.set(q, codec.enc(ref, path.join(dir, `q${q}.avif`), q, args)); return size.get(q) as number; };
-  let lo = 0, hi = 100;                        // invariant: at(lo) <= target < at(hi), checked below
-  if (at(lo) > target || at(hi) <= target) throw new Error(`budget ${target}B outside -q 0..100 (${at(0)}..${at(100)}B)`);
+  let lo = 0, hi = codec.range;                // invariant: at(lo) <= target < at(hi), checked below
+  if (at(lo) > target || at(hi) <= target) throw new Error(`budget ${target}B outside knob 0..${codec.range} (${at(0)}..${at(codec.range)}B)`);
   while (hi - lo > 1) { const m = (lo + hi) >> 1; if (at(m) <= target) lo = m; else hi = m; }
   const score = (q: number) => { const d = codec.dec(path.join(dir, `q${q}.avif`), path.join(dir, `q${q}.png`)); return [ssim2(ref, d), butter(ref, d)]; };
   const [s2a, bua] = score(lo), [s2b, bub] = score(hi);
@@ -319,7 +347,8 @@ function report(rows: Row[], variants: string[], codec: Codec): void {
     const avifGap = base.reduce((n, r) => n + ((r.v.base as { s2: number }).s2 - r.avif.s2), 0) / base.length;
     // jxl and avm are rival codecs, so their question is the gap to the shipped AVIF
     const vsAvif = codec !== "avif";
-    if (vsAvif) console.log(`  base vs AVIF at matched bytes: mean ${avifGap >= 0 ? "+" : ""}${avifGap.toFixed(2)} s2`);
+    // An all-error run leaves `base` empty and the mean NaN; say so rather than print it
+    if (vsAvif) console.log(base.length ? `  base vs AVIF at matched bytes: mean ${avifGap >= 0 ? "+" : ""}${avifGap.toFixed(2)} s2` : "  base vs AVIF: no call landed on budget, so there is no gap to report (see the errors in --json)");
     console.log(`  variant     n  mean Δs2  mean Δbu  s2 wins  ${vsAvif ? "vs AVIF s2" : "bu wins"}`);
     for (const name of variants) {
       const pairs = rs.filter((r) => ok(r.v.base, r.budget) && ok(r.v[name], r.budget));
