@@ -83,7 +83,6 @@ const BUTTERAUGLI = which("butteraugli_main") ?? "/opt/zerobrew/prefix/bin/butte
 // metrics, so a score describes the bitstream rather than a browser's decode.
 const CJXL = which("cjxl"), DJXL = which("djxl");
 const AVIFENC = which("avifenc"), AVIFDEC = which("avifdec");
-const CWEBP = which("cwebp"), DWEBP = which("dwebp");
 
 const TILE = 320;         // tile edge, cropped at NATIVE resolution: 1:1 pixels is the point
 const BUDGET_TOL = 0.02;  // equal-budget trials: every option within +/-2% of the target
@@ -179,10 +178,10 @@ export const CANDIDATES: Record<Axis, [Intent, number, string[]]> = {
     "XT507517",   // license plate lettering
     "XT509535",   // Coca-Cola livery, text on a curve
   ]],
-  // The format axis: JPEG XL, AVIF and WebP at one byte budget. Detail crops,
+  // The format axis: JPEG XL against AVIF at one byte budget. Detail crops,
   // because a format difference at equal bytes shows first in what each codec
-  // chooses to smooth: AVIF's deblocking eats grain and fine texture, WebP's
-  // 4:2:0 plus 16px macroblocks eat edges, JXL keeps texture and rings.
+  // chooses to smooth: AVIF's deblocking eats grain and fine texture, JXL
+  // keeps texture and rings.
   // Each stem yields one trial per budget tier (FORMAT_TIER_ANCHOR).
   format: ["detail", 6, [
     "XT507494",   // chrome grille, fine mesh
@@ -681,14 +680,20 @@ function buildResample(src: Source, tmp: string): Built {
 
 // ------------------------------------------------------------------ format axis
 //
-// JPEG XL, AVIF and WebP at one byte budget. Three decisions carry the axis:
+// JPEG XL against AVIF at one byte budget. Three decisions carry the axis, and
+// one exclusion:
+//
+//   0. NO WEBP. It was the third format until 2026-09-27 and came last on all
+//      14 calls it entered, 5-6 s2 behind AVIF even with its best flags, so it
+//      made every call easy without teaching anything. The page says so in one
+//      sentence instead of spending tiles on it.
 //
 //   1. THE BUDGET IS ANCHORED ON THE COARSEST KNOB. avifenc's -q is an integer
 //      over ~64 quantizer steps, so on a 320px tile consecutive values move the
 //      file 3-6% and AVIF often cannot land inside BUDGET_TOL of an arbitrary
-//      number. cjxl's distance and cwebp's -q are continuous. So AVIF is encoded
-//      first and its ACTUAL output size becomes the budget the other two are
-//      searched onto, which they can hit to well under 1%.
+//      number. cjxl's distance is continuous. So AVIF is encoded first and its
+//      ACTUAL output size becomes the budget JXL is searched onto, which it can
+//      hit to well under 1%.
 //   2. TWO BUDGETS, each taken from what this site ships rather than picked.
 //      The ranking between these formats is known to depend on bitrate (AVIF's
 //      reputation is built low, JXL's high), so one budget would teach whichever
@@ -698,22 +703,21 @@ function buildResample(src: Source, tmp: string): Built {
 //        jpeg-tier: what zenc spends at q84, the shipping JPEG fallback. AVIF
 //                   is then searched onto that.
 //   3. EACH FORMAT AT A SERIOUS SETTING, NOT A DEFAULT. AVIF gets the shipping
-//      flags (10-bit, speed 2, 4:4:4). WebP gets -m 6 and -sharp_yuv, the best
-//      libwebp has. JXL gets effort 9 with decoder smoothing off (JXL_ARGS
+//      flags (10-bit, speed 2, 4:4:4). JXL gets effort 9 with decoder smoothing off (JXL_ARGS
 //      says why), effort 9 being near the top of cjxl's range the way speed
 //      2 is near the top of aom's. Effort 7 (cjxl's default) was measured
 //      first and scored 0.0-4.5 s2 lower at equal bytes; holding JXL at its
 //      default against AVIF at its slow preset would decide the call by preset.
-//      Defaults across the board would compare three speed presets and call it
-//      a format comparison.
+//      Defaults on both would compare two speed presets and call it a format
+//      comparison.
 //
 // One caveat the page must carry: both metrics come from the JPEG XL project,
 // and cjxl's distance IS a butteraugli target. Scoring JXL with butteraugli is
 // grading it against its own answer key. ssimulacra2 is less directly coupled,
 // and the tiles, not the numbers, are what the visitor judges.
 
-export type Fmt = "jxl" | "avif" | "webp";
-const FMT_EXT: Record<Fmt, string> = { jxl: "jxl", avif: "avif", webp: "webp" };
+export type Fmt = "jxl" | "avif";
+const FMT_EXT: Record<Fmt, string> = { jxl: "jxl", avif: "avif" };
 // Each tier names the SHIPPING encode its budget is read off. "avif" means the
 // AVIF tile is that encode itself; "zenc" means AVIF is searched onto what zenc
 // spends at that quality and chroma.
@@ -722,11 +726,12 @@ export const FORMAT_TIER_ANCHOR = {
   "jpeg-tier": { enc: "zenc", q: 84, chroma: "420" },  // add-photos.sh's JPEG fallback
 } as const;
 // Two higher tiers were MEASURED and left out, 2026-09-26, over the 8 crops below:
-//   zenc q94: all three formats land within 1.8-3.4 s2 on every crop (s2 86-92),
-//     so the legibility gate drops all 8. Near transparency they converge.
-//   zenc q100 4:2:2, the /images/full companion: past WebP's LOSSY CEILING.
-//     cwebp at q100 tops out 24-42% short of that budget, because lossy WebP is
-//     locked to 4:2:0 at 8 bits, so it cannot enter the trial at all.
+//   zenc q94: all three formats (WebP was still in the race) land within
+//     1.8-3.4 s2 on every crop (s2 86-92), so the legibility gate drops all 8.
+//     Near transparency they converge.
+//   zenc q100 4:2:2, the /images/full companion: dropped because lossy WebP
+//     could not reach that budget at all. With WebP gone that reason is gone
+//     too, and JXL against AVIF at q100 has not been measured.
 type FormatTier = keyof typeof FORMAT_TIER_ANCHOR;
 const FORMAT_TIERS = Object.keys(FORMAT_TIER_ANCHOR) as FormatTier[];
 // Knob ranges, and whether a HIGHER knob means MORE bytes. Continuous knobs get
@@ -734,7 +739,6 @@ const FORMAT_TIERS = Object.keys(FORMAT_TIER_ANCHOR) as FormatTier[];
 const FMT_KNOB: Record<Fmt, { lo: number; hi: number; up: boolean; int: boolean }> = {
   jxl: { lo: 0.1, hi: 15, up: false, int: false },   // butteraugli distance: smaller is bigger
   avif: { lo: 0, hi: 100, up: true, int: true },
-  webp: { lo: 0, hi: 100, up: true, int: false },
 };
 
 // cjxl's flags beyond the distance, for the format axis. Effort 9 with the
@@ -756,8 +760,7 @@ export function encodeFmt(fmt: Fmt, png: string, out: string, knob: number, jxlA
   if (fmt === "jxl") r = run([CJXL as string, png, out, "-d", knob.toFixed(4), ...jxlArgs, "--quiet"]);
   // --jobs is pinned to the pipeline's 4, because it changes AVIF output bytes
   // (gotcha 43), so this tile is byte-identical to a shipping encode at that -q.
-  else if (fmt === "avif") r = run([AVIFENC as string, "-q", String(Math.round(knob)), ...avifArgs, "--jobs", "4", "--ignore-icc", "--ignore-exif", "--ignore-xmp", png, out]);
-  else r = run([CWEBP as string, "-q", knob.toFixed(3), "-m", "6", "-sharp_yuv", "-quiet", png, "-o", out]);
+  else r = run([AVIFENC as string, "-q", String(Math.round(knob)), ...avifArgs, "--jobs", "4", "--ignore-icc", "--ignore-exif", "--ignore-xmp", png, out]);
   if (!fs.existsSync(out) || fs.statSync(out).size === 0) throw new Error(`${fmt} knob=${knob} produced nothing: ${(r.stderr || "").trim().slice(0, 200)}`);
   return fs.statSync(out).size;
 }
@@ -767,8 +770,7 @@ export function encodeFmt(fmt: Fmt, png: string, out: string, knob: number, jxlA
  *  an 8-bit reference. */
 export function decodeFmt(fmt: Fmt, file: string, png: string): string {
   const r = fmt === "jxl" ? run([DJXL as string, file, png, "--bits_per_sample=8", "--quiet"])
-    : fmt === "avif" ? run([AVIFDEC as string, "-d", "8", file, png])
-    : run([DWEBP as string, file, "-quiet", "-o", png]);   // PNG is dwebp's default; 1.6 dropped -png
+    : run([AVIFDEC as string, "-d", "8", file, png]);
   if (!fs.existsSync(png)) throw new Error(`${fmt} decode failed: ${(r.stderr || r.stdout || "").trim().slice(0, 200)}`);
   return png;
 }
@@ -792,7 +794,7 @@ export function searchFmt(fmt: Fmt, png: string, tmp: string, target: number, jx
 }
 
 const knobLabel = (fmt: Fmt, knob: number): string =>
-  fmt === "jxl" ? `JPEG XL · distance ${knob.toFixed(2)}` : fmt === "avif" ? `AVIF · q${Math.round(knob)}` : `WebP · q${knob.toFixed(1)}`;
+  fmt === "jxl" ? `JPEG XL · distance ${knob.toFixed(2)}` : `AVIF · q${Math.round(knob)}`;
 
 function buildFormat(cropId: string, srcs: Srcs, refPng: string, tmp: string): Built[] {
   return FORMAT_TIERS.map((tier): Built => {
@@ -810,7 +812,7 @@ function buildFormatTier(tier: FormatTier, cropId: string, srcs: Srcs, refPng: s
       ? (() => { const p = path.join(sub, "ship.avif"); return { knob: a.q, bytes: encodeFmt("avif", srcs.png, p, a.q), path: p }; })()
       : searchFmt("avif", srcs.png, sub, encode("zenc", srcs, path.join(sub, "jpeg-anchor.jpg"), a.q, a.chroma));
     const target = avif.bytes;   // decision 1: the coarse knob's real output is the budget
-    const got: [Fmt, { knob: number; bytes: number; path: string }][] = [["avif", avif], ["jxl", searchFmt("jxl", srcs.png, sub, target)], ["webp", searchFmt("webp", srcs.png, sub, target)]];
+    const got: [Fmt, { knob: number; bytes: number; path: string }][] = [["avif", avif], ["jxl", searchFmt("jxl", srcs.png, sub, target)]];
     const rejected: string[] = [];
     const options: Option[] = [];
     for (const [fmt, g] of got) {
@@ -819,9 +821,9 @@ function buildFormatTier(tier: FormatTier, cropId: string, srcs: Srcs, refPng: s
       const dec = decodeFmt(fmt, g.path, path.join(sub, `${fmt}-dec.png`));
       options.push({ label: knobLabel(fmt, g.knob), bytes: g.bytes, s2: ssim2(refPng, dec), butter: butter(refPng, dec), q: Number(g.knob.toFixed(4)), path: g.path, decoded: dec });
     }
-    if (options.length < 3) return [null, `${tier}: only ${options.length} format(s) hit ${target}B; ${JSON.stringify(rejected)}`];
+    if (options.length < 2) return [null, `${tier}: only ${options.length} format(s) hit ${target}B; ${JSON.stringify(rejected)}`];
     options.sort((a, b) => (a.s2 as number) - (b.s2 as number));
-    const spread = (options[2].s2 as number) - (options[0].s2 as number);
+    const spread = (options[1].s2 as number) - (options[0].s2 as number);
     const summary = options.map((o) => `${o.label.split(" · ")[0]} ${o.s2}`).join(", ");
     if (spread < ENCODER_MIN_SPREAD) return [null, `${tier} @ ${target}B: formats within ${spread.toFixed(1)} s2 (${summary}); nothing to see`];
     const budgetDrift = Math.max(...options.map((o) => Math.abs(o.bytes - target))) / target;
@@ -875,7 +877,7 @@ function preflight(axes: string[]): void {
   const missing = [["zenc", ZENC], ["mozjpeg cjpeg", CJPEG], ["ssimulacra2", SSIMULACRA2], ["butteraugli_main", BUTTERAUGLI]].filter(([, p]) => !fs.existsSync(p)).map(([n]) => n);
   if (!which("exif-sooc")) missing.push("exif-sooc");
   if (!fs.existsSync(SRC_DIR)) missing.push(`source photos at ${SRC_DIR}`);
-  if (axes.includes("format")) for (const [n, p] of [["cjxl", CJXL], ["djxl", DJXL], ["avifenc", AVIFENC], ["avifdec", AVIFDEC], ["cwebp", CWEBP], ["dwebp", DWEBP]] as const) if (!p) missing.push(n);
+  if (axes.includes("format")) for (const [n, p] of [["cjxl", CJXL], ["djxl", DJXL], ["avifenc", AVIFENC], ["avifdec", AVIFDEC]] as const) if (!p) missing.push(n);
   if (missing.length) {
     log(`missing: ${missing.join(", ")}`);
     log("  zenc:  cargo build --release --locked --manifest-path tools/photos/zenc/Cargo.toml");

@@ -33,6 +33,7 @@
 // the dispatch loop are production's. Gotcha 16 holds: `cloudflare:workers` is
 // imported by the fixture, which only workerd ever loads.
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -80,6 +81,29 @@ export default {
 };
 `;
 
+// A STALE INSTALL FAILS THE CONTROL EXACTLY LIKE A REGRESSION DOES. Measured
+// 2026-09-27: a worktree whose node_modules still held the previous pin
+// (b168333, workerd 1.20260921.1) under a lockfile naming 3572193 failed the
+// control below every run, while CI passed on the same commit. The older
+// binding predates workers-sdk#14847, so it really does accept a repeated id,
+// and the old message blamed the binding. The store path carries the tarball's
+// sha, so the message compares it against the pin and says which case it is.
+function wranglerProvenance() {
+  const pin = JSON.parse(readFileSync(new URL("package.json", ROOT), "utf8")).devDependencies.wrangler;
+  const manifest = realpathSync(createRequire(import.meta.url).resolve("wrangler/package.json"));
+  const version = JSON.parse(readFileSync(manifest, "utf8")).version;
+  const pinned = /wrangler@([0-9a-f]{7,40})$/.exec(pin)?.[1];
+  const installed = /workers-sdk\+wrangler@([0-9a-f]{7,40})/.exec(manifest)?.[1];
+  if (pinned && installed && pinned !== installed) {
+    return `node_modules holds wrangler@${installed} (${version}) but package.json pins @${pinned}. `
+      + "That is a stale install rather than a regression: run "
+      + "`rm -rf node_modules && bun install --frozen-lockfile` and re-run";
+  }
+  return `the installed wrangler is ${installed ? `@${installed} ` : ""}${version}, which matches the pin ${pin}, `
+    + "so the local Workflows binding no longer enforces id uniqueness (workers-sdk#14847) "
+    + "and nothing below measures anything";
+}
+
 /** What the fixture's attempt() reports for one create.
  *  @typedef {{ threw: boolean, id?: string, name?: string, message?: string, duplicate?: boolean }} Attempt */
 /** cronCensus's return, as the fixture serialises it.
@@ -121,8 +145,7 @@ test("a same-day census re-run counts every host as a duplicate, measured on the
     assert.equal(raw.first.threw, false,
       `the first create of ${raw.id} was refused (${raw.first.message}), so this probe cannot reach a duplicate`);
     assert.equal(raw.second.threw, true,
-      "a second create with the same id returned quietly: the local Workflows binding no longer "
-    + "enforces id uniqueness (workers-sdk#14847), so nothing below measures anything");
+      `a second create with the same id returned quietly: ${raw.second.threw ? "" : wranglerProvenance()}`);
 
     // The real classifier, on the real error object, inside workerd.
     assert.match(String(raw.second.message), /instance\.already_exists|already exists/,

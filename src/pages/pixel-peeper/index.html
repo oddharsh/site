@@ -187,7 +187,7 @@ const AXES={
   chroma:  {teach:`that was chroma subsampling. your eye resolves brightness far finer than color, so JPEG stores color at lower resolution to save bytes, and 4:2:0 halves what these 4:2:2 files began with. here's the honest part: on most photos this is free. fourteen saturated crops were built and measured for this test and <b>twelve were thrown out</b> because 4:2:0 cost them nothing you could see. what survives is a high-contrast two-tone edge, which is where the halved color plane can't keep up — and butteraugli (a color model) punishes that far harder than ssimulacra2. that's also why you only get one of these per run.`},
   encoder: {teach:`same photo, same byte budget. every tile in that call was searched onto one file size and landed within 2% of it, so the only thing that varied was the encoder's math. newer coders (zenc, jpegli) fit more picture into those bytes than mozjpeg, and sips fits the least. that gap is free quality — same size, better image, for picking a different tool.`},
   resample:{teach:`same photo, same byte budget, same encoder — only the DOWNSCALER changed. one averaged the pixels as sRGB numbers, the other converted to light first, averaged, and converted back. sRGB is a curve, not light, so averaging it directly loses energy and darkens texture: a black-and-white checkerboard should reduce to sRGB 188 and the naive way gives 128. that shows up as flat-looking detail and a faint dark halo at high-contrast edges. this site's thumbnails were built the naive way until the geometry was rewritten in 2026-08.`},
-  format:  {teach:`same photo, same byte budget, three different formats: JPEG XL, AVIF and WebP. the budget is whatever this site's own AVIF encode spends on the photo, and the other two were searched onto it, so every tile is the same file size and only the format's math varied. of the fifteen calls built for this axis, AVIF scored highest on twelve and JPEG XL on three, the ones heavy with lettering and knit; WebP, stuck with 4:2:0 color and 16px blocks, came last on every one. one caveat worth knowing: both judges here come from the JPEG XL project, and butteraugli is the exact target JPEG XL's encoder aims at, so if the scoring leans anywhere it leans toward JPEG XL.`},
+  format:  {teach:`same photo, same byte budget, two formats: JPEG XL and AVIF. the budget is whatever this site's own AVIF encode spends on the photo, and JPEG XL was searched onto it, so both tiles are the same file size and only the format's math varied. sixteen calls were built for this axis and <b>fourteen were thrown out</b>, because the two formats landed too close to tell apart by eye. what survives is grain and fine texture, where AVIF pulls ahead; JPEG XL led on lettering and knit, but never by enough to see. WebP isn't in the race: at the same bytes it came last on every call it entered, five to six points behind AVIF even at its best settings, so this test doesn't spend tiles on it. one caveat worth knowing: both judges here come from the JPEG XL project, and butteraugli is the exact target JPEG XL's encoder aims at, so if the scoring leans anywhere it leans toward JPEG XL.`},
   tradeoff:{teach:`same bytes, a forced trade. 4:2:0 spends them on sharp detail; 4:2:2 spends them on the source's full color. you can't buy both, because color bits come straight out of the detail budget. which one you reached for is what your eye quietly weights, and it's where ssimulacra2 (structure) and butteraugli (color) split.`},
 };
 
@@ -201,10 +201,13 @@ const AXES={
 // and structural, but it is a whole-tile tone shift rather than a local artifact,
 // which is a different kind of looking.
 // format joined 2026-09-27 and took one call each from encoder and quality, so a
-// play stays 12 calls and the share grid stays two rows of six. A browser that
-// cannot decode JPEG XL never draws a format call (see CAN_JXL), and the top-up
-// below fills those two slots from the other axes instead.
-const AXIS_QUOTA={chroma:1,tradeoff:2,resample:2,format:2,encoder:2,quality:3};
+// play stays 12 calls and the share grid stays two rows of six. It dropped to
+// one call the same day, when WebP left the axis: JPEG XL against AVIF clears
+// the legibility gate on two crops of sixteen, and a quota equal to its pool
+// would show every player the same two calls. encoder took the call back. A
+// browser that cannot decode JPEG XL never draws a format call (see CAN_JXL),
+// and the top-up below fills that slot from the other axes instead.
+const AXIS_QUOTA={chroma:1,tradeoff:2,resample:2,format:1,encoder:3,quality:3};
 const RUN_SIZE=Object.values(AXIS_QUOTA).reduce((a,b)=>a+b,0);
 
 // end-of-exam understanding check: you judged with your eyes, now test the WHY.
@@ -253,7 +256,7 @@ function wireQuiz(){
 
 const state={i:0,trials:[],log:[]};
 // JPEG XL decodes in Safari 17+ and is arriving in Chrome, and nowhere else yet.
-// A format call the browser cannot draw would be three tiles with one blank, so
+// A format call the browser cannot draw would be two tiles with one blank, so
 // the axis is gated on actually decoding a 25-byte, 1px lossless JXL. Asking the
 // decoder is the only honest test: a type check says what the browser claims.
 const CAN_JXL=new Promise(r=>{const i=new Image();i.onload=()=>r(i.naturalWidth===1);i.onerror=()=>r(false);
@@ -416,7 +419,7 @@ function screenResult(){
       ${bar("Sharpness",sharp,"spotting the higher-quality JPEG")}
       ${bar("Color",color,"catching chroma subsampling",true)}
       ${bar("Encoders",enc,"separating real encoders at equal bytes")}
-      ${state.noJxl?"":bar("Formats",fmt,"telling JPEG XL, AVIF and WebP apart at equal bytes")}</div>
+      ${state.noJxl?"":bar("Formats",fmt,"telling JPEG XL and AVIF apart at equal bytes")}</div>
     <div class="banner info"><span class="g">the takeaway</span><span>the metrics agree on the obvious calls and only split at the margins, where the differences are near invisible.${colorAha} that margin is exactly where an export preset should live: the setting no human, and barely a metric, can flag.</span></div>
     <div class="gb"><span class="gb-legend">share your run</span>
       ${shareGridHTML(marks)}
@@ -428,7 +431,7 @@ function screenResult(){
         <button class="btn" id="showcard">Preview image</button></div>
       <div id="cardwrap"></div></div>
     <div class="gb"><span class="gb-legend">what's real, what's next</span>
-      <p style="margin:0">every tile was a genuine encode (zenc · mozjpeg · sips; cjxl · avifenc · cwebp for the format calls; real 4:2:2 / 4:2:0 on 4:2:2-native files), scored by <b style="color:var(--s2)">ssimulacra2</b> and <b style="color:var(--bt-ink)">butteraugli</b> against the original. encoder and format calls are searched onto <b>one shared byte budget</b>, so neither an encoder nor a format ever wins by being handed a bigger file.${state.noJxl?" your browser can't decode JPEG XL yet, so the format calls sat this run out.":""} next: <b>sharpYUV</b>, a bigger photo set, everyone's picks pooled, and the crowd threshold read into an <b>instagram export preset</b>.</p></div>
+      <p style="margin:0">every tile was a genuine encode (zenc · mozjpeg · sips; cjxl · avifenc for the format calls; real 4:2:2 / 4:2:0 on 4:2:2-native files), scored by <b style="color:var(--s2)">ssimulacra2</b> and <b style="color:var(--bt-ink)">butteraugli</b> against the original. encoder and format calls are searched onto <b>one shared byte budget</b>, so neither an encoder nor a format ever wins by being handed a bigger file.${state.noJxl?" your browser can't decode JPEG XL yet, so the format calls sat this run out.":""} next: <b>sharpYUV</b>, a bigger photo set, everyone's picks pooled, and the crowd threshold read into an <b>instagram export preset</b>.</p></div>
     ${quizHTML()}
     <div class="row spread" style="margin-top:14px">
       <small>your grid spoils nothing — no photo, encoder or setting is named</small>
