@@ -35,6 +35,24 @@
 //     bun tools/photos/codec-knob-probe.ts --set train --variants base,epf0
 //     bun tools/photos/codec-knob-probe.ts --json out.json
 //
+// WHAT IT FOUND FOR JXL, 2026-09-27, against the 4:4:4 AVIF budget (train /
+// holdout, Δ s2 over plain effort 9 at matched bytes; base trails AVIF by
+// 2.09 / 2.50, and no arm closes that):
+//   zenc JPEG repacked (cjxl -j 1), no reconstruction box   +1.34 / +1.50   bu +0.18 / +0.21
+//   zenc JPEG repacked, box kept                            +0.97 / +0.99   bu +0.20 / +0.27
+//   --gaborish=0 --epf=0                                    +0.40 / +0.64   bu +0.04 / +0.06
+//   lossy modular (-I 100, -E 3, -g 0, e10 all alike)       ~0    / +1.0    bu +0.31 to +0.47
+//   --intensity_target=400                                  +0.04 / +0.51   does not replicate
+//   --faster_decoding=4                                     -0.02 / +0.24   about free
+//   effort 10, --codestream_level=10, 16-bit                ~0
+//   -p (progressive)                                        -1.13 / -1.37
+//   --intensity_target=150                                  -0.23 / -0.76
+//   --disable_perceptual_optimizations                      -15.9 / -14.3
+// The repack of a 4:4:4 zenc JPEG is worse than of a 4:2:0 one (+0.20 / +0.60).
+// Repacking the SHIPPED 600px JPEG tier saves 9.24% (12.64 to 11.48 MB) with
+// identical pixels, and is still 42.7% larger than the 4:4:4 AVIF tier, so it
+// never wins for a browser that decodes both.
+//
 // Crops are cached in --cache (default: a directory under the OS temp dir), since
 // cutting one from a HIF costs a full-resolution sips decode.
 import { spawn } from "node:child_process";
@@ -48,25 +66,52 @@ import {
 
 // The baseline is whatever the format axis ships, so a variant's delta is the
 // delta the page would see if it were promoted.
+// Variants are built on PLAIN effort 9, so they stay comparable across runs
+// whatever the format axis currently ships (JXL_ARGS, the `base` row).
+const E9 = ["-e", "9"];
 const JXL_VARIANTS: Record<string, string[]> = {
   base: JXL_ARGS,
+  e9: E9,
   e7: ["-e", "7"],
   e10: ["-e", "10"],
   e11: ["-e", "11", "--allow_expert_options"],
-  epf0: [...JXL_ARGS, "--epf=0"],
-  epf1: [...JXL_ARGS, "--epf=1"],
-  epf2: [...JXL_ARGS, "--epf=2"],
-  epf3: [...JXL_ARGS, "--epf=3"],
-  gab0: [...JXL_ARGS, "--gaborish=0"],
-  resamp2: [...JXL_ARGS, "--resampling=2"],
-  modular: [...JXL_ARGS, "-m", "1"],
-  gab0epf0: [...JXL_ARGS, "--gaborish=0", "--epf=0"],
-  gab0epf3: [...JXL_ARGS, "--gaborish=0", "--epf=3"],
-  modgab0: [...JXL_ARGS, "-m", "1", "--gaborish=0"],
+  epf0: [...E9, "--epf=0"],
+  epf1: [...E9, "--epf=1"],
+  epf2: [...E9, "--epf=2"],
+  epf3: [...E9, "--epf=3"],
+  gab0: [...E9, "--gaborish=0"],
+  resamp2: [...E9, "--resampling=2"],
+  modular: [...E9, "-m", "1"],
+  gab0epf0: [...E9, "--gaborish=0", "--epf=0"],
+  gab0epf3: [...E9, "--gaborish=0", "--epf=3"],
+  modgab0: [...E9, "-m", "1", "--gaborish=0"],
   // Not a cjxl flag set: zenc's JPEG, repacked into JXL LOSSLESSLY (cjxl -j 1).
   // The knob searched is zenc's quality, and the size is the repacked file's.
   // This is the lever only JXL has: the tuned JPEG encoder's pixels, ~20% smaller.
   zencjxl: ["<zenc-recompress>"],
+  // Second batch, 2026-09-27. Screened first for "accepted, and moves the
+  // bytes" at d1.8 e9 on one crop; these came back BYTE-IDENTICAL to the base
+  // and are left out: --dots, --patches, --noise=0, --gaborish=1, --epf=-1,
+  // --buffering=0, --container=0 (cjxl already writes a bare codestream), and
+  // in modular mode -C, -P 15, -Y 0, -X 0, -R 1. An unknown flag exits 1.
+  it150: [...E9, "--intensity_target=150"],
+  it400: [...E9, "--intensity_target=400"],
+  noperc: [...E9, "--disable_perceptual_optimizations"],
+  fastdec4: [...E9, "--faster_decoding=4"],
+  prog: [...E9, "-p"],
+  progdc: [...E9, "--progressive_dc=1"],
+  level10: [...E9, "--codestream_level=10"],
+  bd16: [...E9, "--override_bitdepth=16"],
+  gab0epf0it150: [...E9, "--gaborish=0", "--epf=0", "--intensity_target=150"],
+  modI100: [...E9, "-m", "1", "-I", "100"],
+  modE3: [...E9, "-m", "1", "-E", "3"],
+  modg0: [...E9, "-m", "1", "-g", "0"],
+  mode10: ["-e", "10", "-m", "1"],
+  // The repack arm without the JPEG-reconstruction box (the site never needs
+  // the original JPEG back, so those bytes are overhead), and from a 4:4:4
+  // zenc JPEG, since a repack keeps whatever subsampling the JPEG had.
+  zencjxlnr: ["<zenc-recompress>", "420", "--allow_jpeg_reconstruction=0"],
+  zenc444jxlnr: ["<zenc-recompress>", "444", "--allow_jpeg_reconstruction=0"],
 };
 
 // Keys already at libavif 1.4.2's defaults for a still image are left out,
@@ -119,13 +164,13 @@ function cropFor(stem: string, cache: string): string {
 }
 
 /** zenc at quality q, then cjxl --lossless_jpeg=1. Bisect q onto the budget. */
-function recompressed(srcs: { png: string; ppm: string }, dir: string, target: number, ref: string): { bytes: number; d: number; s2: number; bu: number } {
+function recompressed(srcs: { png: string; ppm: string }, dir: string, target: number, ref: string, chroma = "420", extra: string[] = []): { bytes: number; d: number; s2: number; bu: number } {
   let lo = 5, hi = 100, best: { q: number; bytes: number; path: string } | null = null;
   while (lo <= hi) {
     const q = Math.floor((lo + hi) / 2);
     const jpg = path.join(dir, `z${q}.jpg`), jxl = path.join(dir, `z${q}.jxl`);
-    encode("zenc", srcs, jpg, q, "420");
-    const r = Bun.spawnSync(["cjxl", jpg, jxl, "--lossless_jpeg=1", "-e", "9", "--quiet"]);
+    encode("zenc", srcs, jpg, q, chroma);
+    const r = Bun.spawnSync(["cjxl", jpg, jxl, "--lossless_jpeg=1", "-e", "9", ...extra, "--quiet"]);
     if (r.exitCode !== 0) throw new Error(`cjxl -j 1 failed on zenc q${q}`);
     const bytes = fs.statSync(jxl).size;
     if (!best || Math.abs(bytes - target) < Math.abs(best.bytes - target)) best = { q, bytes, path: jxl };
@@ -172,7 +217,8 @@ function work(codec: Codec, set: string, stem: string, variants: string[], cache
         fs.mkdirSync(vd);
         if (codec === "avif") { try { row.v[name] = bracketed(ref, vd, avif.bytes, AVIF_VARIANTS[name]); } catch (e) { row.v[name] = { error: e instanceof Error ? e.message.slice(0, 120) : String(e) }; } continue; }
         try {
-          if (name === "zencjxl") { row.v[name] = recompressed(srcs, vd, avif.bytes, ref); continue; }
+          const v = JXL_VARIANTS[name];
+          if (v[0] === "<zenc-recompress>") { row.v[name] = recompressed(srcs, vd, avif.bytes, ref, v[1] ?? "420", v.slice(2)); continue; }
           const got = searchFmt("jxl", ref, vd, avif.bytes, JXL_VARIANTS[name]);
           const dec = decodeFmt("jxl", got.path, path.join(vd, "dec.png"));
           row.v[name] = { bytes: got.bytes, d: Number(got.knob.toFixed(3)), s2: ssim2(ref, dec), bu: butter(ref, dec) };
