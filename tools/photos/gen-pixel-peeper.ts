@@ -698,8 +698,8 @@ function buildResample(src: Source, tmp: string): Built {
 //        jpeg-tier: what zenc spends at q84, the shipping JPEG fallback. AVIF
 //                   is then searched onto that.
 //   3. EACH FORMAT AT A SERIOUS SETTING, NOT A DEFAULT. AVIF gets the shipping
-//      flags (10-bit, speed 2, 4:4:4). WebP gets -m 6 and -sharp_yuv, the best
-//      libwebp has. JXL gets effort 9 with decoder smoothing off (JXL_ARGS
+//      flags (10-bit, speed 2, 4:4:4). WebP gets -m 6, -sharp_yuv and -sns 25 (WEBP_ARGS
+//      says why), the best libwebp does on these photos. JXL gets effort 9 with decoder smoothing off (JXL_ARGS
 //      says why), effort 9 being near the top of cjxl's range the way speed
 //      2 is near the top of aom's. Effort 7 (cjxl's default) was measured
 //      first and scored 0.0-4.5 s2 lower at equal bytes; holding JXL at its
@@ -750,14 +750,27 @@ export const JXL_ARGS = ["-e", "9", "--gaborish=0", "--epf=0"];
 // so the AVIF tile is a shipping encode. codec-knob-probe.ts varies these.
 export const AVIF_ARGS = ["-d", "10", "--speed", "2", "--yuv", "444"];
 
-export function encodeFmt(fmt: Fmt, png: string, out: string, knob: number, jxlArgs: string[] = JXL_ARGS, avifArgs: string[] = AVIF_ARGS): number {
+// cwebp's flags beyond -q, placed BEFORE it because `-preset` must come first
+// on cwebp's command line (it overwrites what precedes it). The flag order does
+// not move the bytes for these flags, checked on three crops against the order
+// used before this parameter existed.
+//
+// -sns 25 rather than the default 50: spatial noise shaping moves bits OUT of
+// busy regions, and on grain-heavy photos that is the wrong direction.
+// codec-knob-probe.ts measured +0.45 / +0.66 s2 over the default at matched
+// bytes (train / holdout) with butteraugli improving too (-0.15 / -0.19), and
+// 25 is the peak: 10, 15, 35 and 40 all score lower. The probe's header has
+// the rest, including why zenwebp is not a better encoder here.
+export const WEBP_ARGS = ["-m", "6", "-sharp_yuv", "-sns", "25"];
+
+export function encodeFmt(fmt: Fmt, png: string, out: string, knob: number, jxlArgs: string[] = JXL_ARGS, avifArgs: string[] = AVIF_ARGS, webpArgs: string[] = WEBP_ARGS): number {
   if (fs.existsSync(out)) fs.unlinkSync(out);
   let r;
   if (fmt === "jxl") r = run([CJXL as string, png, out, "-d", knob.toFixed(4), ...jxlArgs, "--quiet"]);
   // --jobs is pinned to the pipeline's 4, because it changes AVIF output bytes
   // (gotcha 43), so this tile is byte-identical to a shipping encode at that -q.
   else if (fmt === "avif") r = run([AVIFENC as string, "-q", String(Math.round(knob)), ...avifArgs, "--jobs", "4", "--ignore-icc", "--ignore-exif", "--ignore-xmp", png, out]);
-  else r = run([CWEBP as string, "-q", knob.toFixed(3), "-m", "6", "-sharp_yuv", "-quiet", png, "-o", out]);
+  else r = run([CWEBP as string, ...webpArgs, "-q", knob.toFixed(3), "-quiet", png, "-o", out]);
   if (!fs.existsSync(out) || fs.statSync(out).size === 0) throw new Error(`${fmt} knob=${knob} produced nothing: ${(r.stderr || "").trim().slice(0, 200)}`);
   return fs.statSync(out).size;
 }
@@ -774,13 +787,13 @@ export function decodeFmt(fmt: Fmt, file: string, png: string): string {
 }
 
 /** Bisect one format's knob onto `target` bytes; returns the closest attempt. */
-export function searchFmt(fmt: Fmt, png: string, tmp: string, target: number, jxlArgs: string[] = JXL_ARGS, avifArgs: string[] = AVIF_ARGS): { knob: number; bytes: number; path: string } {
+export function searchFmt(fmt: Fmt, png: string, tmp: string, target: number, jxlArgs: string[] = JXL_ARGS, avifArgs: string[] = AVIF_ARGS, webpArgs: string[] = WEBP_ARGS): { knob: number; bytes: number; path: string } {
   const k = FMT_KNOB[fmt];
   let lo = k.lo, hi = k.hi, best: { knob: number; bytes: number; path: string } | null = null;
   for (let step = 0; step < 18; step += 1) {
     const mid = k.int ? Math.floor((lo + hi) / 2) : (lo + hi) / 2;
     const out = path.join(tmp, `fmt-${fmt}-${step}.${FMT_EXT[fmt]}`);
-    const size = encodeFmt(fmt, png, out, mid, jxlArgs, avifArgs);
+    const size = encodeFmt(fmt, png, out, mid, jxlArgs, avifArgs, webpArgs);
     if (best === null || Math.abs(size - target) < Math.abs(best.bytes - target)) best = { knob: mid, bytes: size, path: out };
     if (size === target || Math.abs(size - target) / target < 0.002) break;
     const tooBig = size > target;

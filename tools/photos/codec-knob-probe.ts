@@ -53,6 +53,22 @@
 // identical pixels, and is still 42.7% larger than the 4:4:4 AVIF tier, so it
 // never wins for a browser that decodes both.
 //
+// WHAT IT FOUND FOR WEBP, 2026-09-27, against the 4:4:4 AVIF budget (train /
+// holdout, Δ s2 over -m 6 -sharp_yuv at the default sns 50; that baseline
+// trails AVIF by 5.24 / 5.68, and no arm closes it):
+//   -sns 25                                  +0.45 / +0.66   bu -0.15 / -0.19   shipped on the axis
+//   -sns 10 / 15 / 35 / 40                   lower than 25 on both sets
+//   -sns 25 with -sharpness 7 and -pass 10   +0.56 / +0.70   within noise of 25 alone
+//   -sns 80 / 100                            -2.18 / -2.81, -5.53 / -7.26
+//   -preset photo / picture                  -2.3 to -2.7 (both raise sns)
+//   -m 4                                     -1.46 / -1.24
+//   -nostrong                                -1.26 / -1.49
+//   -f 0, -af, -segments 1 or 2              -0.2 to -1.1
+//   zenwebp 0.4.4 (imazen's pure-Rust VP8)   -0.54 / -0.30, and its Auto preset -1.06 / -0.41
+// zenwebp follows libwebp's algorithms closely (its README claims sizes within
+// 0.02% at method 5), so no better WebP encoder exists to swap in; the gains
+// are in libwebp's own knobs, and they are worth under a point.
+//
 // Crops are cached in --cache (default: a directory under the OS temp dir), since
 // cutting one from a HIF costs a full-resolution sips decode.
 import { spawn } from "node:child_process";
@@ -61,7 +77,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  AVIF_ARGS, bestCrop, butter, CANDIDATES, decodeFmt, encode, encodeFmt, FORMAT_TIER_ANCHOR, JXL_ARGS, loadSource, searchFmt, ssim2,
+  AVIF_ARGS, bestCrop, butter, CANDIDATES, decodeFmt, encode, encodeFmt, FORMAT_TIER_ANCHOR, JXL_ARGS, loadSource, searchFmt, ssim2, WEBP_ARGS,
 } from "./gen-pixel-peeper.ts";
 
 // The baseline is whatever the format axis ships, so a variant's delta is the
@@ -142,11 +158,57 @@ const AVIF_VARIANTS: Record<string, string[]> = {
   nofilt: AV("-a", "enable-cdef=0", "-a", "enable-restoration=0"),
 };
 
+// WebP, 2026-09-27. Screened at -q 80 -m 6 -sharp_yuv on one crop first: an
+// unknown flag exits 1, and -strong (the default), -pre 2, -hint and -mt came
+// back BYTE-IDENTICAL, so they are left out. -mt changing nothing is worth a
+// line beside gotcha 43, where avifenc's --jobs did change the bytes. The loop
+// filter flags (-f, -sharpness, -nostrong, -af) keep the size and change the
+// decode, so matched bytes is exactly the right test for them. -preset has to
+// come first on cwebp's command line, which is why WEBP_ARGS precede -q.
+// Variants are built on the PLAIN flags (default sns), so they stay comparable
+// across runs whatever the format axis ships (WEBP_ARGS, the `base` row).
+const WEBP_PLAIN = ["-m", "6", "-sharp_yuv"];
+const W = (...extra: string[]) => [...WEBP_PLAIN, ...extra];
+const WEBP_VARIANTS: Record<string, string[]> = {
+  base: WEBP_ARGS,
+  plain: WEBP_PLAIN,
+  m4: ["-m", "4", "-sharp_yuv"],
+  nosharp: ["-m", "6"],
+  sns0: W("-sns", "0"),
+  sns25: W("-sns", "25"),
+  sns80: W("-sns", "80"),
+  sns100: W("-sns", "100"),
+  f0: W("-f", "0"),
+  f30: W("-f", "30"),
+  f90: W("-f", "90"),
+  sharp7: W("-sharpness", "7"),
+  nostrong: W("-nostrong"),
+  af: W("-af"),
+  seg1: W("-segments", "1"),
+  seg2: W("-segments", "2"),
+  pass10: W("-pass", "10"),
+  sns10: W("-sns", "10"),
+  sns15: W("-sns", "15"),
+  sns35: W("-sns", "35"),
+  sns40: W("-sns", "40"),
+  sns25s7: W("-sns", "25", "-sharpness", "7"),
+  sns25p10: W("-sns", "25", "-pass", "10"),
+  sns25s7p10: W("-sns", "25", "-sharpness", "7", "-pass", "10"),
+  photo: ["-preset", "photo", ...WEBP_PLAIN],
+  picture: ["-preset", "picture", ...WEBP_PLAIN],
+  // Not cwebp: zenwebp, imazen's pure-Rust VP8 encoder (the zenjpeg authors),
+  // through a small CLI named by ZENWEBP_BIN, since the crate ships no usable
+  // one. Method 6 with sharp YUV to match the base; the second arm adds its
+  // content-detecting Auto preset, the one idea it has that libwebp lacks.
+  zenwebp: ["<zenwebp>", "none"],
+  zenwebpauto: ["<zenwebp>", "auto"],
+};
+
 const TRAIN = CANDIDATES.format[2];
 const HOLDOUT = ["XT509278", "XT507955", "XT508055", "XT509535", "XT509965", "XT509848", "XT509388", "XT509540"];
 const TIERS = Object.keys(FORMAT_TIER_ANCHOR) as (keyof typeof FORMAT_TIER_ANCHOR)[];
 
-type Codec = "jxl" | "avif";
+type Codec = "jxl" | "avif" | "webp";
 type Row = { set: string; stem: string; tier: string; budget: number; avif: { s2: number; bu: number }; v: Record<string, { bytes: number; d: number; s2: number; bu: number } | { error: string }> };
 
 // ------------------------------------------------------------------ worker
@@ -184,6 +246,23 @@ function recompressed(srcs: { png: string; ppm: string }, dir: string, target: n
 /** Score an AVIF variant AT the budget: find the adjacent -q pair whose sizes
  *  straddle it, score both, interpolate linearly in bytes. `d` carries the
  *  lower -q plus the fraction of the way to the next one. */
+/** zenwebp's quality is continuous like cwebp's, so bisect it onto the budget. */
+function searchZenwebp(png: string, dir: string, target: number, preset: string): { knob: number; bytes: number; path: string } {
+  const bin = process.env.ZENWEBP_BIN;
+  if (!bin || !fs.existsSync(bin)) throw new Error("set ZENWEBP_BIN to a zenwebp CLI: <in.png> <out.webp> <q> <method> <sharp 0|1> <preset>");
+  let lo = 0, hi = 100, best: { knob: number; bytes: number; path: string } | null = null;
+  for (let step = 0; step < 18; step += 1) {
+    const q = (lo + hi) / 2, out = path.join(dir, `zw-${step}.webp`);
+    const r = Bun.spawnSync([bin, png, out, q.toFixed(3), "6", "1", preset]);
+    if (r.exitCode !== 0 || !fs.existsSync(out)) throw new Error(`zenwebp q=${q} failed: ${r.stderr.toString().slice(0, 120)}`);
+    const bytes = fs.statSync(out).size;
+    if (!best || Math.abs(bytes - target) < Math.abs(best.bytes - target)) best = { knob: q, bytes, path: out };
+    if (Math.abs(bytes - target) / target < 0.002) break;
+    if (bytes > target) hi = q; else lo = q;
+  }
+  return best as { knob: number; bytes: number; path: string };
+}
+
 export function bracketed(ref: string, dir: string, target: number, args: string[]): { bytes: number; d: number; s2: number; bu: number } {
   const size = new Map<number, number>();
   const at = (q: number) => { if (!size.has(q)) size.set(q, encodeFmt("avif", ref, path.join(dir, `q${q}.avif`), q, undefined, args)); return size.get(q) as number; };
@@ -215,6 +294,15 @@ function work(codec: Codec, set: string, stem: string, variants: string[], cache
       for (const name of variants) {
         const vd = path.join(sub, name);
         fs.mkdirSync(vd);
+        if (codec === "webp") {
+          try {
+            const v = WEBP_VARIANTS[name];
+            const got = v[0] === "<zenwebp>" ? searchZenwebp(ref, vd, avif.bytes, v[1]) : searchFmt("webp", ref, vd, avif.bytes, undefined, undefined, v);
+            const dec = decodeFmt("webp", got.path, path.join(vd, "dec.png"));
+            row.v[name] = { bytes: got.bytes, d: Number(got.knob.toFixed(3)), s2: ssim2(ref, dec), bu: butter(ref, dec) };
+          } catch (e) { row.v[name] = { error: e instanceof Error ? e.message.slice(0, 120) : String(e) }; }
+          continue;
+        }
         if (codec === "avif") { try { row.v[name] = bracketed(ref, vd, avif.bytes, AVIF_VARIANTS[name]); } catch (e) { row.v[name] = { error: e instanceof Error ? e.message.slice(0, 120) : String(e) }; } continue; }
         try {
           const v = JXL_VARIANTS[name];
@@ -242,8 +330,8 @@ function report(rows: Row[], variants: string[], codec: Codec): void {
     const base = rs.filter((r) => ok(r.v.base, r.budget));
     console.log(`\n${set}: ${rs.length} calls (${new Set(rs.map((r) => r.stem)).size} crops x ${TIERS.length} tiers)`);
     const avifGap = base.reduce((n, r) => n + ((r.v.base as { s2: number }).s2 - r.avif.s2), 0) / base.length;
-    if (codec === "jxl") console.log(`  base vs AVIF at matched bytes: mean ${avifGap >= 0 ? "+" : ""}${avifGap.toFixed(2)} s2`);
-    console.log(`  variant     n  mean Δs2  mean Δbu  s2 wins  ${codec === "jxl" ? "vs AVIF s2" : "bu wins"}`);
+    if (codec !== "avif") console.log(`  base vs AVIF at matched bytes: mean ${avifGap >= 0 ? "+" : ""}${avifGap.toFixed(2)} s2`);
+    console.log(`  variant     n  mean Δs2  mean Δbu  s2 wins  ${codec !== "avif" ? "vs AVIF s2" : "bu wins"}`);
     for (const name of variants) {
       const pairs = rs.filter((r) => ok(r.v.base, r.budget) && ok(r.v[name], r.budget));
       if (!pairs.length) { console.log(`  ${name.padEnd(10)}  0  (never landed on budget)`); continue; }
@@ -252,7 +340,7 @@ function report(rows: Row[], variants: string[], codec: Codec): void {
       const va = pairs.map((r) => (r.v[name] as { s2: number }).s2 - r.avif.s2);
       const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
       const sign = (x: number) => `${x >= 0 ? "+" : ""}${x.toFixed(2)}`;
-      console.log(`  ${name.padEnd(10)}${String(pairs.length).padStart(2)}  ${sign(mean(d2)).padStart(8)}  ${sign(mean(db)).padStart(8)}  ${`${d2.filter((x) => x > 0).length}/${pairs.length}`.padStart(7)}  ${codec === "jxl" ? sign(mean(va)).padStart(10) : `${db.filter((x) => x < 0).length}/${pairs.length}`.padStart(7)}`);
+      console.log(`  ${name.padEnd(10)}${String(pairs.length).padStart(2)}  ${sign(mean(d2)).padStart(8)}  ${sign(mean(db)).padStart(8)}  ${`${d2.filter((x) => x > 0).length}/${pairs.length}`.padStart(7)}  ${codec !== "avif" ? sign(mean(va)).padStart(10) : `${db.filter((x) => x < 0).length}/${pairs.length}`.padStart(7)}`);
     }
   }
   console.log("\nΔbu is butteraugli, where NEGATIVE is better. Only calls landing within 2% of budget count.");
@@ -264,8 +352,8 @@ async function main(): Promise<number> {
   const cache = arg("--cache") ?? path.join(os.tmpdir(), "jxl-knob-probe-crops");
   fs.mkdirSync(cache, { recursive: true });
   const codec = (arg("--codec") ?? "jxl") as Codec;
-  if (codec !== "jxl" && codec !== "avif") { console.error("--codec wants jxl or avif"); return 2; }
-  const VARIANTS = codec === "avif" ? AVIF_VARIANTS : JXL_VARIANTS;
+  if (codec !== "jxl" && codec !== "avif" && codec !== "webp") { console.error("--codec wants jxl, avif or webp"); return 2; }
+  const VARIANTS = codec === "avif" ? AVIF_VARIANTS : codec === "webp" ? WEBP_VARIANTS : JXL_VARIANTS;
   const variants = (arg("--variants") ?? Object.keys(VARIANTS).join(",")).split(",");
   for (const v of variants) if (!VARIANTS[v]) { console.error(`unknown ${codec} variant ${v}; have ${Object.keys(VARIANTS).join(", ")}`); return 2; }
   if (!variants.includes("base")) variants.unshift("base");
