@@ -39,6 +39,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createTestHarness } from "wrangler";
 import { parseJsonc } from "./lib/jsonc.ts";
+import { STALE_INSTALL_REMEDY, installedSha, pinnedSha } from "./lib/wrangler-provenance.ts";
 import { CENSUS_ROSTER, isDuplicateInstance } from "../src/worker/census.ts";
 import { ROOT, assert, readFileSync, test } from "./contract-shared.ts";
 
@@ -88,16 +89,19 @@ export default {
 // binding predates workers-sdk#14847, so it really does accept a repeated id,
 // and the old message blamed the binding. The store path carries the tarball's
 // sha, so the message compares it against the pin and says which case it is.
+// The parse is tools/lib/wrangler-provenance.ts, which check-wrangler also
+// reads, so `bun run check-wrangler` names the same stale tree without
+// booting workerd.
 function wranglerProvenance() {
   const pin = JSON.parse(readFileSync(new URL("package.json", ROOT), "utf8")).devDependencies.wrangler;
   const manifest = realpathSync(createRequire(import.meta.url).resolve("wrangler/package.json"));
   const version = JSON.parse(readFileSync(manifest, "utf8")).version;
-  const pinned = /wrangler@([0-9a-f]{7,40})$/.exec(pin)?.[1];
-  const installed = /workers-sdk\+wrangler@([0-9a-f]{7,40})/.exec(manifest)?.[1];
+  const pinned = pinnedSha(pin);
+  const installed = installedSha(manifest);
   if (pinned && installed && pinned !== installed) {
     return `node_modules holds wrangler@${installed} (${version}) but package.json pins @${pinned}. `
       + "That is a stale install rather than a regression: run "
-      + "`rm -rf node_modules && bun install --frozen-lockfile` and re-run";
+      + `\`${STALE_INSTALL_REMEDY}\` and re-run`;
   }
   return `the installed wrangler is ${installed ? `@${installed} ` : ""}${version}, which matches the pin ${pin}, `
     + "so the local Workflows binding no longer enforces id uniqueness (workers-sdk#14847) "
