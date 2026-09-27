@@ -1925,6 +1925,33 @@ are also retired: `/images/` and `/images/full/` redirect to `/photos`. The
 photo index and hashes are bundled with the Worker, so publishing those changes
 replaces the manifest without a KV purge.
 
+### Overwrite a full-size archive in place (`ARCHIVE_VERSION`)
+
+`/images/full/<stem>.jpg` names a slot rather than its bytes, and it is cached
+three ways: the browser (`immutable`, one year), the CDN, and the Worker's own
+`caches.default`. A Cloudflare purge, by URL or Purge Everything, does NOT evict
+`caches.default`, so an in-place R2 overwrite stays invisible until the Worker's
+cache key moves. `ARCHIVE_VERSION` in `src/worker/lib/const.ts` is that key. The
+order, as run on 2026-09-27 for the 208 scan-order rewrites:
+
+1. Upload the new bytes, same key, same content type:
+
+   ```bash
+   bun run wrangler r2 object put "aadhar-photos/<stem>.jpg" --file=<new.jpg> --content-type=image/jpeg --remote
+   ```
+
+2. Merge a PR that bumps `ARCHIVE_VERSION` and updates each stem's `size` in
+   `src/worker/photo-index.json`, then ramp it to 100%.
+3. Purge Everything once, after the ramp, so no request mid-purge re-fills the
+   CDN tier from the old version's cache.
+4. Verify on the wire. `bun run archive:gate -- --stems <stems>` reads each
+   archive's scan order from production, and a bare `curl -sI` should show the
+   new `etag` (R2's MD5 of the new bytes).
+
+Browsers that already hold a copy keep it for up to a year. That is harmless
+when the rewrite is lossless, as a scan reorder is, and it is the reason to
+prefer a new filename over an overwrite whenever the pixels change.
+
 ### Bump THUMB_VERSION (retired — nothing to bump)
 
 Thumbnails use `/i/<stem>.<hash8>.<ext>` URLs. The
