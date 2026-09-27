@@ -313,8 +313,10 @@ initWhenNear("csCanvas", function(){
 // The dots are the camera's color samples; each cell is one tile pixel,
 // filled with the average of the samples inside it (nearest one when none).
 initWhenNear("crCanvas", function(){
-  var c = /** @type {HTMLCanvasElement | null} */ (document.getElementById('crCanvas')); if (!c) return;
-  var ctx = c.getContext('2d'); if (!ctx) return;
+  var el = /** @type {HTMLCanvasElement | null} */ (document.getElementById('crCanvas')); if (!el) return;
+  var ctx2d = el.getContext('2d'); if (!ctx2d) return;
+  // non-null aliases: var narrowing does not reach the render closure
+  var c = /** @type {HTMLCanvasElement} */ (el), ctx = /** @type {CanvasRenderingContext2D} */ (ctx2d);
   var rng = /** @type {HTMLInputElement | null} */ (document.getElementById('crScale'));
   var sel = /** @type {HTMLSelectElement | null} */ (document.getElementById('crMode'));
   var outF = document.getElementById('crF'), info = document.getElementById('crInfo');
@@ -342,7 +344,7 @@ initWhenNear("crCanvas", function(){
     }
     var cells = [];
     for (var j = 0; j < ROWS; j++) for (var i = 0; i < COLS; i++) {
-      var cb = 0, cr = 0, n = 0, best = null, bd = Infinity;
+      var cb = 0, cr = 0, n = 0, best = pts[0], bd = Infinity;
       for (var p = 0; p < pts.length; p++) {
         var q = pts[p];
         if (q.x >= i && q.x < i + 1 && q.y >= j && q.y < j + 1) { cb += q.cb; cr += q.cr; n++; }
