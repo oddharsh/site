@@ -506,29 +506,43 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
       loses the one property that matters when a single large image <em>is</em> the page. Both are
       true at once, which is why the grid is AVIF and the archive is JPEG.</p>
 
-    <h3>A fifth of the archive gets the order wrong <span class="status review">open</span></h3>
+    <h3>A fifth of the archive had the order wrong <span class="status shipped">fixed</span></h3>
     <p class="note">The gate applies to the archive too, where it costs seconds. Each of the 258 files
-      was streamed from R2 until every channel had started, giving up at 3&nbsp;MB:</p>
+      was streamed from R2 until every channel had started, giving up at 3&nbsp;MB, then again after
+      the repair below. Each cell is the group&apos;s median first paint, as a share of the file:</p>
     <table class="enc-table">
-      <thead><tr><th>archive files</th><th>count</th><th>Chrome&apos;s first paint</th></tr></thead>
+      <thead><tr><th>archive files</th><th>count</th><th>before</th><th>after</th></tr></thead>
       <tbody>
-        <tr><td>colour, every channel&apos;s DC up front</td><td class="num">202</td><td class="num">median 3.7%, max 5.1%</td></tr>
-        <tr><td>colour, all of luma before any chroma</td><td class="num">53</td><td class="num">past 3&nbsp;MB</td></tr>
-        <tr><td>grayscale, one channel</td><td class="num">2</td><td class="num">first scan</td></tr>
-        <tr><td>baseline, one scan</td><td class="num">1</td><td class="num">top rows first</td></tr>
+        <tr><td>colour, all of luma before any chroma</td><td class="num">53</td><td class="num">93.4%</td><td class="num">0.023%</td></tr>
+        <tr><td>colour, zenc&apos;s DC-first script</td><td class="num">154</td><td class="num">3.9%</td><td class="num">0.022%</td></tr>
+        <tr><td>colour, baseline, top rows down</td><td class="num">1</td><td class="num">0.080%</td><td class="num">0.084%</td></tr>
+        <tr><td>colour, JPG original through <code>jpegtran</code></td><td class="num">48</td><td class="num">0.53%</td><td class="num">unchanged</td></tr>
+        <tr><td>grayscale, one channel</td><td class="num">2</td><td class="num">0.34%</td><td class="num">unchanged</td></tr>
       </tbody>
     </table>
-    <p class="note">All 53 are HIF re-encodes, where zenc&apos;s search picked a luma-first order for a
-      40&nbsp;MP q100 frame; the JPG-source originals go through <code>jpegtran</code>&apos;s standard
-      script and all paint early. Five of the 53 were followed to the end and start colour at 93 to
-      98% of the file. XT508165 is the worst: 98.4% of 23.8&nbsp;MB, about nine seconds of blank frame
-      on a 20&nbsp;Mbps link before a finished picture appears in one step, which is precisely the
-      experience the archive is progressive to avoid. The repair is lossless, since
-      <code>jpegtran -progressive</code> rewrites the same coefficients into a script that leads with
-      every channel&apos;s DC. It has not run yet: it needs the archive cache bust any in-place
-      <code>/images/full/</code> overwrite does, and <code>add-photos.sh</code> needs the same
-      constraint so the next HIF does not reintroduce it. The one baseline file, XT508887, predates
-      the pipeline.</p>
+    <p class="note">All 53 were HIF re-encodes, and the cause is narrower than &quot;the search picked
+      badly&quot;. zenjpeg trial-encodes two scripts and keeps the smaller: jpegli&apos;s default,
+      which opens with each channel&apos;s DC, and the winner of a mozjpeg-style search, which zenjpeg
+      serializes with luma&apos;s DC and every luma AC scan ahead of chroma&apos;s DC. On 53 of 207
+      40&nbsp;MP frames the second script won by bytes, and every one of them started colour between 66
+      and 99% of the file. XT508165 was the worst: 98.4% of 23.8&nbsp;MB, about nine seconds of blank
+      frame on a 20&nbsp;Mbps link before a finished picture appeared in one step, which is precisely
+      the experience the archive is progressive to avoid.</p>
+    <p class="note">The repair never decodes a pixel. <code>jpegtran -progressive</code> rewrote the
+      scan script of every HIF archive, all 207, around the same quantized coefficients: collapsing
+      old and new to one baseline encoding gives byte-identical files for every one, each metadata
+      segment survives byte for byte, and <code>djpeg</code> decodes both to the same pixels.
+      mozjpeg&apos;s own search is free to interleave DC, so each file now opens with one scan that
+      starts all three channels, and Chrome&apos;s first paint lands 4 to 6&nbsp;KB in.</p>
+    <p class="note">The bytes split by group. The 53 came out 0.11% smaller. The 154 that already
+      painted by 5% came out 0.27% larger, a median 74&nbsp;KB each, and that was a deliberate trade:
+      74&nbsp;KB more on a ~22&nbsp;MB download to start painting about 800&nbsp;KB sooner. Across all
+      207 the pass costs 0.17%, and <code>add-photos.sh</code> now runs it after zenc on every new
+      HIF.</p>
+    <p class="note">The one baseline file, XT508887, is the camera&apos;s own JPEG, kept on purpose when
+      the HIF archives were re-encoded in July. Fuji writes a single baseline scan with stock Huffman
+      tables, so the same lossless pass made it progressive and 7.4% smaller, 16.4 to 15.2&nbsp;MB,
+      with its first paint at 0.084%.</p>
 
     <h3>What the archive tier actually costs</h3>
     <p class="note">The archive is a second encode: a HIF is decoded to lossless PNG, then re-encoded

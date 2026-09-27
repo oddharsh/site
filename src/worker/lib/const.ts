@@ -43,7 +43,13 @@ export function isCanonicalHost(hostname) {
 // Everything once to clear the CDN tier. Public URLs stay clean; this token never
 // appears in a served path. (Same idea as the retired THUMB_VERSION, scoped to the
 // non-content-addressed originals instead of the now-hashed thumbnails.)
-export const ARCHIVE_VERSION = 2;
+//
+// 3 (2026-09-27): 208 archives rewritten losslessly by `jpegtran -progressive`,
+// same coefficients and metadata, new scan order: all 207 HIF re-encodes (53 of
+// which sent all of luma before any chroma, so Chromium painted nothing until
+// 66-99% of the file) and XT508887, the camera's own baseline JPEG.
+// /garage/encoding.
+export const ARCHIVE_VERSION = 3;
 
 // The freshness contract every deploy-time HTML document ships, `/` included as of
 // 2026-07-31. Each clause is load-bearing and none of them is a default:

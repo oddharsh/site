@@ -321,7 +321,8 @@ test("failed source or HEIF-companion uploads stop before hashing and index writ
     assert.match(await read("trace"), /downstream-hash/);
     const sent = (await uploads()).filter(row => row.event === "start").map(({key,body}) => ({key,body}));
     assert.deepEqual(sent.sort((a,b) => a.key.localeCompare(b.key)), [
-      { key: "aadhar-photos/companion.jpg", body: "encoded" },
+      // A HIF's archive is zenc's re-encode AFTER jpegtran's DC-first reorder.
+      { key: "aadhar-photos/companion.jpg", body: "progressive" },
       { key: "aadhar-photos/frame.jpg", body: "progressive" },
     ]);
     assert.equal(await read("source/frame.jpg"), "source fixture");
@@ -337,6 +338,25 @@ test("progressive-copy failure uploads the untouched source and removes the reje
     assert.equal(sent.body, "source fixture");
     assert.equal(sent.discardedCopyStillExists, false);
     assert.equal(await read("source/frame.jpg"), "source fixture");
+  });
+});
+
+// The HIF branch has no untouched original to fall back to: zenc's own file is
+// the one whose luma-first scan order kept 53 archives blank until 66-99% of the
+// download, so a failed reorder must fail the photo rather than upload that.
+test("a HIF archive whose DC-first reorder fails is never uploaded", async () => {
+  await uploadFixture(async ({ put, read, ingest, uploads }) => {
+    await put("source/companion.HIF", "HEIF original");
+    const result = ingest(["source/companion.HIF"], { COPY_FAIL: "1" });
+    assert.equal(result.status, 1, result.stderr + result.stdout);
+    assert.match(result.stderr, /phase 2 incomplete/);
+    assert.deepEqual(await uploads(), []);
+    assert.doesNotMatch(await read("trace"), /downstream-hash/);
+    // control: the same source with a working reorder uploads the reordered bytes
+    const good = ingest(["source/companion.HIF"]);
+    assert.equal(good.status, 23, good.stderr + good.stdout);
+    const sent = (await uploads()).filter(row => row.event === "start");
+    assert.deepEqual(sent.map(({ key, body }) => ({ key, body })), [{ key: "aadhar-photos/companion.jpg", body: "progressive" }]);
   });
 });
 
