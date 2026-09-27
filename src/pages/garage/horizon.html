@@ -2385,10 +2385,12 @@ navigation.addEventListener("navigate", (e) =&gt; {
         a forward-look while it&apos;s Chrome-flag-only.
       </p>
       <p class="unsupported">
-        Your browser is missing the building blocks (<code>URLPattern</code> or
-        the Navigation API), so even the JS-today version above wouldn&apos;t
-        run. The mock tab-bar is static either way, no engine ships the
-        declarative CSS side yet. To try the flag in Chrome:
+        The chip above always reads &quot;no,&quot; and that is a limitation of the probe
+        rather than a claim about your browser. No engine ships the declarative CSS
+        side yet, so there is nothing for a probe to find. The building blocks are a
+        separate question: <code>URLPattern</code> (Chrome 95, Safari 26, Firefox 142)
+        and the Navigation API (Chrome 102, Safari 26.2, Firefox 147) ship in all three
+        engines, so the JS-today version above runs in any current browser. The mock tab-bar is static either way. To try the flag in Chrome:
         <code>chrome://flags#route-matching</code>.
       </p>
     </section>
