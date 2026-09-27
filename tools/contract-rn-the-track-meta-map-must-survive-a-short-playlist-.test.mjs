@@ -146,6 +146,62 @@ test("the enrich tick reads KV in bulk, so its cost does not scale with artists"
   }
 });
 
+test("the artist slots go to live tracks, and an artist with no photo stops asking", async () => {
+  // Production, 2026-09-27: after a playlist swap 24 of 38 map entries were a
+  // retired playlist's, kept for the 30-day window, and the slot walk ran in
+  // map order, so their artists took slots ahead of the live ones. And
+  // `scarletchoir`, an artist with no Spotify photo, was cached as a null image,
+  // which `!a.image_url` read as pending on every tick for good.
+  const now = Date.now();
+  const staleArtists = ["s1", "s2", "s3", "s4", "s5", "s6"];
+  const meta = {
+    // map order is insertion order, so the retired entry is walked first
+    gone: {
+      image_url: "https://i.scdn.co/image/gone",
+      seen: now,
+      artists: staleArtists.map((id) => ({ id, name: id, image_url: null })),
+    },
+    live: {
+      image_url: "https://i.scdn.co/image/live",
+      seen: now,
+      artists: [
+        { id: "nophoto", name: "scarletchoir", image_url: null },
+        { id: "x", name: "X", image_url: null },
+      ],
+    },
+  };
+  const seed = {
+    "artist:nophoto": { name: "scarletchoir", image_url: null },
+    "artist:x": { name: "X", image_url: "https://i.scdn.co/image/x" },
+  };
+  const { store, reads, env } = metaEnv({ tracks: [{ id: "live" }], meta, seed });
+  await cronEnrichTracks(env, null);
+
+  assert.deepEqual(reads[2], ["artist:nophoto", "artist:x"],
+    "only live tracks' artists take slots; a retired playlist's six would have filled all of them");
+  const after = JSON.parse(store.get("trackmeta:v1"));
+  const [nophoto, x] = after.live.artists;
+  assert.equal(x.image_url, "https://i.scdn.co/image/x", "the live artist lands in one tick");
+  assert.equal(nophoto.image_url, null);
+  assert.equal(typeof nophoto.checked, "number", "a read that found no photo is recorded as read");
+  const payload = JSON.parse(store.get("tracks:0raTdu2MZH4dNvfG5keVAL"));
+  assert.ok(payload.tracks[0].artists.every((a) => !("checked" in a)), "bookkeeping stays out of /rn/tracks");
+
+  // The next tick has nothing left to ask about, so it makes no artist read.
+  reads.length = 0;
+  await cronEnrichTracks(env, null);
+  assert.equal(reads.length, 2, `a settled artist must not be read again: ${JSON.stringify(reads)}`);
+
+  // CONTROL: once the mark is older than the artist cache's TTL, it lapses, so
+  // an artist who later uploads a photo is picked up again.
+  const aged = JSON.parse(store.get("trackmeta:v1"));
+  aged.live.artists[0].checked = now - 31 * 24 * 60 * 60 * 1000;
+  store.set("trackmeta:v1", JSON.stringify(aged));
+  reads.length = 0;
+  await cronEnrichTracks(env, null);
+  assert.deepEqual(reads[2], ["artist:nophoto"], "an expired mark puts the artist back in the queue");
+});
+
 test("the published key directory advertises only what the bot signs with", async () => {
   const dir = JSON.parse(await readFile(new URL("./public/.well-known/http-message-signatures-directory", ROOT), "utf8"));
   // Advertising a key we no longer sign with is the dangling-pointer problem

@@ -2,7 +2,7 @@
 // series in Analytics Engine. The measurement sees the cron's colo and the
 // handlers' I/O; it does not measure browser load time or synchronous CPU.
 import { handlePhotoGrid } from "./home.ts";
-import { handleRnTracksHtml } from "./rn.ts";
+import { rnTracksHtml } from "./rn.ts";
 import { CANONICAL_HOST } from "./lib/const.ts";
 
 // Preserve the persisted column positions from the old homepage SSR series:
@@ -24,7 +24,11 @@ export async function cronHomeProbe(env, ctx) {
       try { await r.body?.cancel(); } catch {}
       return Date.now() - s;
     };
-    const tracksMs = await time(() => handleRnTracksHtml(request, env, ctx));
+    // warm: false, because the art warm is a visitor-colo side effect that runs
+    // after the response and so is not part of what this times, and because it
+    // fans out in THIS invocation, the cron tick cronEnrichTracks shares. See
+    // handleRnTracksHtml in rn.ts for the tick it cost.
+    const tracksMs = await time(() => rnTracksHtml(request, env, ctx, { warm: false }));
     const gridMs = await time(() => handlePhotoGrid(request, env));
     // Both arms failing means the probe learned nothing. Say nothing.
     if (tracksMs == null && gridMs == null) return;
