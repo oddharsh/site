@@ -105,7 +105,10 @@ esac
 printf encoded > "$last"`);
     await command("bin/brew", 'printf "%s/mozjpeg\\n" "$FIXTURE_ROOT"');
     await command("mozjpeg/bin/cjpeg", 'echo cjpeg >> "$TRACE"; printf encoded');
-    await command("mozjpeg/bin/jpegtran", 'echo jpegtran >> "$TRACE"; exit 1');
+    // A tripwire for the rotation jpegtran used to do (gotcha 3): any call fails,
+    // except the -revert coefficient reorders gen-encoding-samples.sh writes its
+    // scan-order twins with, which have no geometry in them.
+    await command("mozjpeg/bin/jpegtran", 'echo "jpegtran $*" >> "$TRACE"; case "$*" in *-revert*) printf encoded; exit 0 ;; esac; exit 1');
     await command("bin/ffmpeg", 'for last in "$@"; do :; done; printf encoded > "$last"');
     await command("bin/ssimulacra2", "echo 95");
     await command("bin/butteraugli_main", "echo 0.5");
@@ -155,6 +158,7 @@ for (const { file, args, status } of cases) {
       assert.equal(good.status, status, good.stderr + good.stdout);
       assert.match(await read("trace"), /metadata/);
       if (file === "add-photos.sh") assert.match(await read("trace"), /downstream-hash/);
+      if (file === "gen-encoding-samples.sh") assert.match(await read("trace"), /jpegtran -revert .*-optimize[\s\S]*jpegtran -revert .*-progressive/);
       if (file === "export-for-instagram.sh") assert.equal(await read("exports/frame.jpg"), "encoded");
     });
   });

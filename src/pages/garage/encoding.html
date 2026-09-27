@@ -244,6 +244,35 @@ footer { margin-top: 26px; padding-top: 12px; border-top: 2px groove oklch(86.67
 .zen-results { min-width: 480px; max-width: 620px; }
 .enc-ships { line-height: 1.6; }
 
+/* progressive demo: three scan orders of one set of coefficients, cut at the slider */
+.pj-panes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 12px 0 8px; }
+.pj-pane { margin: 0; background: oklch(97% 0.004 250); border: 1px solid var(--frame); padding: 4px; }
+.pj-frame { position: relative; aspect-ratio: 400 / 266; background: oklch(92% 0.01 250); }
+.pj-frame canvas { display: block; width: 100%; height: 100%; }
+.pj-empty { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; font: 8.5pt var(--font-ui); color: oklch(45% 0 0); }
+.pj-none canvas { visibility: hidden; }
+.pj-none .pj-empty { display: flex; }
+.pj-pane figcaption { font: 8.5pt var(--font-ui); color: oklch(30% 0.01 250); padding: 4px 2px 1px; line-height: 1.4; }
+.pj-pane figcaption b { color: var(--blue-40); }
+.pj-ctl { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 9.5pt; margin: 6px 0; }
+.pj-ctl input[type=range] { flex: 1; min-width: 180px; }
+.pj-ctl output { font-family: var(--font-mono); font-size: 9pt; }
+.pj-ctl select { font: inherit; }
+.pj-scans { max-width: none; }
+.pj-scans td { font-family: var(--font-mono); font-size: 9pt; padding: 2px 8px; }
+.pj-scans .pj-done td { background: oklch(96% 0.02 250); }
+.pj-scans .pj-part td { background: oklch(97% 0.05 95); }
+.pj-scans .pj-wait td { color: oklch(62% 0 0); }
+.pj-scans .pj-gate td:first-child::after { content: " \2605"; color: oklch(50% 0.19 38); }
+/* three across even on a phone, so the panes stay in view while the slider moves */
+@media (max-width: 560px) {
+  .pj-panes { gap: 4px; }
+  .pj-pane { padding: 2px; }
+  .pj-pane figcaption { font-size: 7.5pt; }
+  .pj-pane .enc-sz { float: none; display: block; }
+  .pj-empty { font-size: 7.5pt; text-align: center; }
+}
+
   /* OS-window geometry inlined so FIRST PAINT matches nav.js (no shell "pop"
      when the deferred desktop arrives). keep in sync with nav.js (search
      "app-shell"); degrades with JS off (.content scrolls natively). */
@@ -443,33 +472,101 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
       perf.now() 2018</a>: the same bytes, reordered, show a recognisable picture at a quarter of the
       file, and it costs nothing because it is not an extra request or a placeholder tier.</p>
 
-    <p class="note">Every JPG this site ships is already progressive, thumbnails included: 158 of 158
-      parse as <code>SOF2</code>, and the scan search picks a good script. On a representative
-      31.3&nbsp;KB thumbnail the seven scans land at these points in the file, so the first three,
-      which is where an image becomes recognisable, are inside the first third:</p>
-    <table class="enc-table">
-      <thead><tr><th>scan</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th></tr></thead>
-      <tbody>
-        <tr><td>byte offset</td><td class="num">0%</td><td class="num">15%</td><td class="num">34%</td>
-            <td class="num">85%</td><td class="num">87%</td><td class="num">90%</td><td class="num">94%</td></tr>
-      </tbody>
-    </table>
+    <h3>What a scan actually is</h3>
+    <p class="note">A JPEG stores each 8&times;8 block as 64 quantized DCT coefficients: one DC term, the
+      block&apos;s average, and 63 AC terms for finer and finer detail. Baseline writes every block
+      complete in a single pass, top to bottom, so half the file is the top half of the picture.
+      Progressive writes the same coefficients over several passes, each called a <em>scan</em> and
+      each covering the whole frame. A scan header names its channels, a band of coefficients
+      (<code>Ss</code>..<code>Se</code>: DC alone, then coarse AC, then fine) and a bit precision
+      (<code>Ah</code>/<code>Al</code>: the high bits first, the low bits in later refinement scans).
+      Nothing is quantized twice, so the finished pixels match.</p>
+    <p class="note">The demo takes that last claim off the honour system. <code>jpegtran</code>
+      rewrote the shipped q84 fixture into a baseline file and into libjpeg&apos;s standard 10-scan
+      script without decoding it, and all three decode to byte-identical pixels. The slider sets how
+      many bytes have arrived; each cut-off file is closed with an end marker and handed to
+      <em>your</em> browser&apos;s decoder, and the table reads the scans out of the file&apos;s own
+      headers.</p>
 
-    <p class="note"><b>And you will never see it work on a thumbnail.</b> At a 32&nbsp;KB median, a
-      typical 10-packet initial congestion window (~14&nbsp;KB) already carries 45% of the file, so
-      those first three scans arrive in the opening flight and the tile paints once. The scan search
-      still earns its place at this size, purely for the bytes it saves. The rendering half of the
-      feature is dormant.</p>
+    <div class="pj" id="pj-garage">
+      <div class="pj-panes">
+        <figure class="pj-pane" data-pj-src="/garage/enc/c-zc84-baseline.jpg"><div class="pj-frame"><canvas width="400" height="266" role="img" aria-label="the baseline file, decoded from the bytes that have arrived"></canvas><span class="pj-empty" aria-hidden="true">nothing to paint yet</span></div><figcaption><b>baseline</b> &middot; 1 scan<span class="enc-sz" data-pj-size>16,324 B</span><span class="enc-bpp" data-pj-state></span></figcaption></figure>
+        <figure class="pj-pane" data-pj-src="/garage/enc/c-zc84-libjpeg.jpg"><div class="pj-frame"><canvas width="400" height="266" role="img" aria-label="the libjpeg-script file, decoded from the bytes that have arrived"></canvas><span class="pj-empty" aria-hidden="true">nothing to paint yet</span></div><figcaption><b>libjpeg script</b> &middot; 10 scans<span class="enc-sz" data-pj-size>16,609 B</span><span class="enc-bpp" data-pj-state></span></figcaption></figure>
+        <figure class="pj-pane" data-pj-src="/garage/enc/c-zc84.jpg"><div class="pj-frame"><canvas width="400" height="266" role="img" aria-label="the shipped zenc file, decoded from the bytes that have arrived"></canvas><span class="pj-empty" aria-hidden="true">nothing to paint yet</span></div><figcaption><b>zenc search</b> &middot; 7 scans, shipped<span class="enc-sz" data-pj-size>16,234 B</span><span class="enc-bpp" data-pj-state></span></figcaption></figure>
+      </div>
+      <div class="pj-ctl"><input type="range" min="0" max="16609" value="5000" aria-label="bytes arrived"><output>&hellip;</output></div>
+      <div class="pj-ctl">
+        <label>scans of <select aria-label="which file the table reads"><option value="0">baseline</option><option value="1">libjpeg script</option><option value="2" selected>zenc search</option></select></label>
+        <button type="button" class="xp-btn" data-pj-step="-1">&#9664; scan</button>
+        <button type="button" class="xp-btn" data-pj-step="1">scan &#9654;</button>
+        <button type="button" class="xp-btn" data-pj-jump="14600" title="10 packets of 1,460 bytes, the usual initial congestion window">first flight</button>
+      </div>
+      <table class="enc-table pj-scans">
+        <thead><tr><th>#</th><th>channels</th><th>carries</th><th>starts at</th></tr></thead>
+        <tbody><tr><td>1</td><td>Y</td><td>DC (block averages)</td><td>2%</td></tr><tr><td>2</td><td>Y</td><td>AC 1–2</td><td>11%</td></tr><tr><td>3</td><td>Y</td><td>AC 3–63</td><td>24%</td></tr><tr><td>4</td><td>Cb</td><td>DC (block averages)</td><td>83%</td></tr><tr class="pj-gate"><td>5</td><td>Cr</td><td>DC (block averages)</td><td>85%</td></tr><tr><td>6</td><td>Cb</td><td>AC 1–63</td><td>86%</td></tr><tr><td>7</td><td>Cr</td><td>AC 1–63</td><td>92%</td></tr></tbody>
+      </table>
+    </div>
 
-    <p class="note">It wakes up at <a href="/photos">the full-size archive</a>. <code>/images/full/</code>
+    <p class="note">The three sizes are the byte half of the story. A progressive AC scan can code a
+      run of all-zero blocks as one symbol, and each scan carries Huffman tables fitted to its own
+      statistics; refinement scans give some of that back in correction bits. So the libjpeg script
+      lands <b>1.7% over</b> baseline (16,609 against 16,324 bytes) while zenc&apos;s searched order
+      lands <b>0.6% under</b> it (16,234). A smaller progressive file is a property of a good script.</p>
+
+    <h3>Chrome paints nothing until every channel has started <span class="status review">measured</span></h3>
+    <p class="note">Cut a progressive JPEG anywhere and Chromium draws what the coefficients so far
+      imply, missing rows and all, with one exception that decides everything: it paints nothing
+      until Y, Cb and Cr have each begun a scan. The gate is exact to the byte. On the fixture
+      the Cr DC scan header starts at byte 13,753 and its data at 13,763; a prefix ending anywhere up
+      to 13,760 fails to decode, and one ending at 13,765 paints. <code>ImageDecoder</code> fed the
+      same prefixes as a stream agrees, so this is the streaming path a visitor gets, and truncated
+      blobs are a faithful stand-in for it. Measured in Chromium 152; the starred row in the demo
+      marks the gate, and the panes show whether your engine keeps it.</p>
+    <p class="note">zenc&apos;s search scores bytes and nothing else, and at thumbnail size the winning
+      order often sends the whole luma plane before either chroma plane. On the fixture that puts
+      the gate at 84.8%, so the shipped file paints once, at the end, like a slow baseline. Across the
+      library&apos;s 255 colour JPG tiles the gate sits at a median 80% of the file: 99 paint within
+      their first quarter, and the other 156 wait past halfway.</p>
+    <p class="note"><b>On a thumbnail that barely matters.</b> The JPG tile is the fallback most
+      browsers never fetch, and it is small: a median 48.7&nbsp;KB, with the gate at a median
+      19.3&nbsp;KB. A 10-packet initial congestion window carries about 14&nbsp;KB, so 116 of the 255
+      reach their gate in the opening flight and the rest one round trip later. Press
+      <i>first flight</i> above to see what that window holds. The scan search still earns its place
+      at this size, purely for the bytes it saves.</p>
+
+    <p class="note">It matters at <a href="/photos">the full-size archive</a>. <code>/images/full/</code>
       is the one image surface here with no AVIF tier and no <code>&lt;picture&gt;</code> around it:
-      the worker streams ~10&nbsp;MB from R2 as bare <code>image/jpeg</code>, and that single file is
-      the whole payload. That is also the awkward part of the format story, because <b>AVIF
+      the worker streams a median 21.6&nbsp;MB from R2 as bare <code>image/jpeg</code>, and that single
+      file is the whole payload. That is also the awkward part of the format story, because <b>AVIF
       structurally cannot do this</b>. Its layered mode caps at four stages, is effectively
       Chromium-only, and is staged rather than incremental the way a JPEG scan script is; nothing
       here emits layered AVIF anyway. So the format that wins every byte comparison on this page
       loses the one property that matters when a single large image <em>is</em> the page. Both are
       true at once, which is why the grid is AVIF and the archive is JPEG.</p>
+
+    <h3>A fifth of the archive gets the order wrong <span class="status review">open</span></h3>
+    <p class="note">The gate applies to the archive too, where it costs seconds. Each of the 258 files
+      was streamed from R2 until every channel had started, giving up at 3&nbsp;MB:</p>
+    <table class="enc-table">
+      <thead><tr><th>archive files</th><th>count</th><th>Chrome&apos;s first paint</th></tr></thead>
+      <tbody>
+        <tr><td>colour, every channel&apos;s DC up front</td><td class="num">202</td><td class="num">median 3.7%, max 5.1%</td></tr>
+        <tr><td>colour, all of luma before any chroma</td><td class="num">53</td><td class="num">past 3&nbsp;MB</td></tr>
+        <tr><td>grayscale, one channel</td><td class="num">2</td><td class="num">first scan</td></tr>
+        <tr><td>baseline, one scan</td><td class="num">1</td><td class="num">top rows first</td></tr>
+      </tbody>
+    </table>
+    <p class="note">All 53 are HIF re-encodes, where zenc&apos;s search picked a luma-first order for a
+      40&nbsp;MP q100 frame; the JPG-source originals go through <code>jpegtran</code>&apos;s standard
+      script and all paint early. Five of the 53 were followed to the end and start colour at 93 to
+      98% of the file. XT508165 is the worst: 98.4% of 23.8&nbsp;MB, about nine seconds of blank frame
+      on a 20&nbsp;Mbps link before a finished picture appears in one step, which is precisely the
+      experience the archive is progressive to avoid. The repair is lossless, since
+      <code>jpegtran -progressive</code> rewrites the same coefficients into a script that leads with
+      every channel&apos;s DC. It has not run yet: it needs the archive cache bust any in-place
+      <code>/images/full/</code> overwrite does, and <code>add-photos.sh</code> needs the same
+      constraint so the next HIF does not reintroduce it. The one baseline file, XT508887, predates
+      the pipeline.</p>
 
     <h3>What the archive tier actually costs</h3>
     <p class="note">The archive is a second encode: a HIF is decoded to lossless PNG, then re-encoded
@@ -495,7 +592,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
       anywhere else. Comparing a direct downscale of the HIF against a downscale of the archive JPEG,
       the same pair that reads 88.15 at full resolution reads <b>94.62 at 1080px</b>: averaging ~50
       source pixels into one washes most encoding artifacts out. Delivery scale forgives the second
-      encode. A 10&nbsp;MB download does not, which is the whole reason the archive is progressive.</p>
+      encode. A 20&nbsp;MB download does not, which is the whole reason the archive is progressive.</p>
 
     <h2>Chroma: hold the bytes, then compare <span class="status shipped">shipped</span></h2>
     <p class="note">The two AVIF q63 cards in the showdown put 4:4:4 at 11.3&nbsp;KB against 4:2:0&apos;s
@@ -543,7 +640,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
         equal-bytes win, plus a deliberate spend on quality. Holding bytes flat would have meant
         <code>q62</code>, at +0.4% to +1.7% and +0.5 to +1.0.</li>
       <li><b>Full-res share copies in R2 at JPEG <code>q100 4:2:2</code></b>, progressive: 4:2:2 matches
-        the HIF&apos;s native sensor chroma, and the scan order is the point at 10&nbsp;MB. The true HEIF
+        the HIF&apos;s native sensor chroma, and the scan order is the point at 20&nbsp;MB. The true HEIF
         originals stay on local disk. A JPG-source original is uploaded byte-for-byte from the camera,
         rearranged to progressive by <code>jpegtran</code> on the way up: a lossless coefficient
         reorder, never a re-encode.</li>
@@ -606,6 +703,155 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
     if (loupe.matches(":popover-open")) loupe.hidePopover();
     active = null;
   });
+})();
+</script>
+<script>
+// ── Demo: progressive JPEG, the same coefficients in a different order ──
+// Each pane holds a JPEG whose bytes are cut at the slider and closed with an
+// EOI marker, then handed to the browser's own decoder (createImageBitmap on a
+// blob, which the page CSP's img-src never sees because nothing is fetched), so
+// what you see is what this browser paints from that many bytes. The scan table is read
+// out of the file itself: every SOS header names its channels (Y, Cb, Cr), its
+// band of the 64 DCT coefficients (Ss..Se) and its bit precision (Ah/Al).
+// Its twin is pipelines/lwe/specs/encoding-demo.js (/lwe/encoding); keep the two in step.
+/** @typedef {{at:number,data:number,end:number,comps:string[],ss:number,se:number,ah:number,al:number}} Scan */
+/** @param {Uint8Array} b */
+function jpegScans(b) {
+  /** @type {Record<number,string>} */
+  const names = {};
+  /** @type {Scan[]} */
+  const scans = [];
+  let i = 2, nc = 0;
+  while (i + 3 < b.length) {
+    if (b[i] !== 0xff) { i++; continue; }
+    const m = b[i + 1];
+    if (m === 0xd9) break;
+    // stuffed 0xFF00, fill bytes and restart markers sit inside entropy data
+    if (m === 0xff || m === 0 || (m >= 0xd0 && m <= 0xd7)) { i++; continue; }
+    const len = (b[i + 2] << 8) | b[i + 3];
+    if (m >= 0xc0 && m <= 0xc2) {
+      nc = b[i + 9];
+      for (let k = 0; k < nc; k++) names[b[i + 10 + k * 3]] = nc === 1 ? "Y" : ["Y", "Cb", "Cr"][k];
+    }
+    if (m === 0xda) {
+      const ns = b[i + 4], comps = [];
+      for (let k = 0; k < ns; k++) comps.push(names[b[i + 5 + k * 2]]);
+      const p = i + 5 + ns * 2;
+      scans.push({ at: i, data: i + 2 + len, end: b.length, comps, ss: b[p], se: b[p + 1], ah: b[p + 2] >> 4, al: b[p + 2] & 15 });
+    }
+    i += 2 + len;
+  }
+  for (let k = 0; k + 1 < scans.length; k++) scans[k].end = scans[k + 1].at;
+  // the scan that brings the last channel in: Chrome paints nothing until the
+  // first data byte of this one (measured, and it is exact to the byte)
+  const seen = new Set();
+  let gate = -1;
+  for (let k = 0; k < scans.length && gate < 0; k++) {
+    scans[k].comps.forEach(function (c) { seen.add(c); });
+    if (seen.size === nc) gate = k;
+  }
+  return { scans, gate };
+}
+/** @param {Scan} s */
+function scanLabel(s) {
+  let t = s.ss === 0 ? "DC (block averages)" : "AC " + s.ss + "–" + s.se;
+  if (s.ah === 0 && s.al > 0) t += ", top bits only";
+  else if (s.ah > 0) t += ", refines bit " + s.al;
+  return t;
+}
+/** @param {string} id */
+function progressiveDemo(id) {
+  const root = document.getElementById(id);
+  if (!root) return;
+  const panes = Array.from(root.querySelectorAll("[data-pj-src]"));
+  const rangeQ = /** @type {HTMLInputElement | null} */ (root.querySelector("input[type=range]"));
+  const outQ = root.querySelector("output");
+  const pickQ = /** @type {HTMLSelectElement | null} */ (root.querySelector("select"));
+  const bodyQ = root.querySelector("tbody");
+  if (!rangeQ || !outQ || !pickQ || !bodyQ || !panes.length) return;
+  // rebound after the guard: the checker drops the narrowing inside the callbacks below
+  const range = rangeQ, out = outQ, pick = pickQ, body = bodyQ;
+  void Promise.all(panes.map(function (p) {
+    return fetch(p.getAttribute("data-pj-src") || "").then(function (r) { return r.arrayBuffer(); }).then(function (a) { return new Uint8Array(a); });
+  })).then(function (files) {
+    const info = files.map(jpegScans);
+    const max = Math.max.apply(null, files.map(function (f) { return f.length; }));
+    // a decode can resolve after a newer one, so each pane keeps its latest ticket
+    const ticket = panes.map(function () { return 0; });
+    range.max = String(max);
+    range.value = String(Math.round(max * 0.3));
+    panes.forEach(function (p, k) {
+      const sz = p.querySelector("[data-pj-size]");
+      if (sz) sz.textContent = files[k].length.toLocaleString("en-US") + " B";
+    });
+    let queued = false;
+    function paint() {
+      queued = false;
+      const n = Number(range.value);
+      out.textContent = (n / 1024).toFixed(1) + " KB arrived (" + Math.round(n / max * 100) + "%)";
+      panes.forEach(function (p, k) {
+        const f = files[k], cut = Math.min(n, f.length), sc = info[k].scans;
+        const cv = /** @type {HTMLCanvasElement | null} */ (p.querySelector("canvas")), state = p.querySelector("[data-pj-state]");
+        const ctx = cv && cv.getContext("2d");
+        if (!cv || !ctx) return;
+        const whole = sc.filter(function (s) { return s.end <= cut; }).length;
+        if (state) state.textContent = cut >= f.length ? "complete" : whole + " of " + sc.length + (sc.length === 1 ? " scan" : " scans") + " whole";
+        let bytes = f;
+        if (cut < f.length) { bytes = new Uint8Array(cut + 2); bytes.set(f.subarray(0, cut)); bytes[cut] = 0xff; bytes[cut + 1] = 0xd9; }
+        const t = ++ticket[k];
+        createImageBitmap(new Blob([bytes], { type: "image/jpeg" })).then(function (bm) {
+          if (t === ticket[k]) { ctx.drawImage(bm, 0, 0, cv.width, cv.height); p.classList.remove("pj-none"); }
+          bm.close();
+        }, function () { if (t === ticket[k]) p.classList.add("pj-none"); });
+      });
+      table();
+    }
+    function table() {
+      const k = Number(pick.value), sc = info[k].scans, n = Math.min(Number(range.value), files[k].length);
+      body.textContent = "";
+      sc.forEach(function (s, j) {
+        const tr = document.createElement("tr");
+        tr.className = n >= s.end ? "pj-done" : n > s.data ? "pj-part" : "pj-wait";
+        if (j === info[k].gate && sc.length > 1) tr.className += " pj-gate";
+        [String(j + 1), s.comps.join(" "), scanLabel(s), Math.round(s.at / files[k].length * 100) + "%"].forEach(function (t) {
+          const td = document.createElement("td");
+          td.textContent = t;
+          tr.appendChild(td);
+        });
+        body.appendChild(tr);
+      });
+    }
+    function schedule() { if (!queued) { queued = true; requestAnimationFrame(paint); } }
+    range.addEventListener("input", schedule);
+    pick.addEventListener("change", table);
+    root.querySelectorAll("[data-pj-step]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        const dir = Number(btn.getAttribute("data-pj-step")), n = Number(range.value);
+        const k = Number(pick.value), f = files[k];
+        // the byte where each scan is whole, plus the start of the next scan's data
+        const stops = info[k].scans.map(function (s) { return s.end; }).concat([f.length]);
+        const next = dir > 0 ? stops.filter(function (s) { return s > n; })[0] : stops.filter(function (s) { return s < n; }).pop();
+        range.value = String(next == null ? (dir > 0 ? max : 0) : next);
+        paint();
+      });
+    });
+    root.querySelectorAll("[data-pj-jump]").forEach(function (btn) {
+      btn.addEventListener("click", function () { range.value = btn.getAttribute("data-pj-jump") || "0"; paint(); });
+    });
+    paint();
+  }).catch(function () { root.classList.add("pj-failed"); });
+}
+(function () {
+  "use strict";
+  var target = document.getElementById("pj-garage");
+  if (!target) return;
+  if (!("IntersectionObserver" in window)) { progressiveDemo("pj-garage"); return; }
+  // three 16 KB fetches, made only once the demo is near the viewport
+  var io = new IntersectionObserver(function (entries) {
+    if (!entries.some(function (e) { return e.isIntersecting; })) return;
+    io.disconnect(); progressiveDemo("pj-garage");
+  }, { root: target.closest(".content"), rootMargin: "400px 0px" });
+  io.observe(target);
 })();
 </script>
 
@@ -750,9 +996,9 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
       "q": "AVIF beats JPEG by ~34-36% at every resolution on this page, and the grid is AVIF-primary because of it. So why is the full-size archive at /images/full/ a JPEG?",
       "options": [
         {
-          "t": "A ~10 MB file is served as bare image/jpeg with no <picture> around it, so scan order IS the loading experience, and AVIF cannot render incrementally the way a progressive JPEG can.",
+          "t": "A ~20 MB file is served as bare image/jpeg with no <picture> around it, so scan order IS the loading experience, and AVIF cannot render incrementally the way a progressive JPEG can.",
           "ok": true,
-          "why": "Both facts hold at once. AVIF wins every byte comparison here, and it still loses the one property that matters when a single large image is the whole payload: its layered mode caps at four stages, is effectively Chromium-only, and is staged rather than incremental. The grid is AVIF because bytes dominate at 32 KB; the archive is JPEG because rendering order dominates at 10 MB."
+          "why": "Both facts hold at once. AVIF wins every byte comparison here, and it still loses the one property that matters when a single large image is the whole payload: its layered mode caps at four stages, is effectively Chromium-only, and is staged rather than incremental. The grid is AVIF because bytes dominate at 49 KB; the archive is JPEG because rendering order dominates at 20 MB."
         },
         {
           "t": "AVIF loses its byte advantage at full resolution, so JPEG is simply smaller there.",
@@ -764,7 +1010,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
         },
         {
           "t": "The archive keeps the camera original untouched, and cameras cannot write AVIF.",
-          "why": "Half true and still not the reason. A JPG-source original does go up byte-for-byte, but 112 of the archive files are re-encoded from HIF and could have been AVIF. They are JPEG so a 10 MB download paints progressively."
+          "why": "Half true and still not the reason. A JPG-source original does go up byte-for-byte, but 207 of the 258 archive files are re-encoded from HIF and could have been AVIF. They are JPEG so a 20 MB download paints progressively."
         }
       ]
     }
