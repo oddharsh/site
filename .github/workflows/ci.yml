@@ -238,6 +238,15 @@ jobs:
             echo "TMPDIR=$RUNNER_TEMP/real-tmp" >> "$GITHUB_ENV"
           fi
 
+      # timbrado's watch engine is a cold cargo build here: rustup installs the
+      # pinned toolchain, cargo syncs the index, then compiles. Inside the
+      # suite that ran on one test's 30s clock against 4 parallel files and
+      # timed out intermittently (runs 36294774979, 36285475911). Built here,
+      # it has the job's clock, and a runner that cannot build it fails this
+      # step by name rather than reading watch rows as null.
+      - name: Build timbrado's watch engine
+        run: bun -e 'import { ensureTimbradoEngine } from "./tools/lib/upstream-watches.ts"; console.log(ensureTimbradoEngine())'
+
       - name: Run the full contract suite
         env:
           CONTRACT_SCRIPT: ${{ matrix.runtime == 'bun' && 'test' || 'test:node' }}
