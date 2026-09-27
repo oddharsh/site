@@ -69,7 +69,6 @@ initWhenNear("csCanvas", function(){
 // what you see is what this browser paints from that many bytes. The scan table is read
 // out of the file itself: every SOS header names its channels (Y, Cb, Cr), its
 // band of the 64 DCT coefficients (Ss..Se) and its bit precision (Ah/Al).
-// Its twin is inline in src/pages/garage/encoding.html; keep the two in step.
 /** @typedef {{at:number,data:number,end:number,comps:string[],ss:number,se:number,ah:number,al:number}} Scan */
 /** @param {Uint8Array} b */
 function jpegScans(b) {
