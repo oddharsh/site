@@ -26,6 +26,7 @@
 //     bun tools/photos/gen-pixel-peeper.ts --dry-run        # measure, write nothing
 //     bun tools/photos/gen-pixel-peeper.ts --sheet x.html   # a contact sheet to eyeball
 //     bun tools/photos/gen-pixel-peeper.ts --only chroma    # one axis, implies --dry-run
+//     bun tools/photos/gen-pixel-peeper.ts --merge format   # rebuild ONE axis into the committed set
 //
 // Needs: zenc (cargo build in tools/photos/zenc), mozjpeg's cjpeg, sips,
 // ssimulacra2, butteraugli_main, and the source folder.
@@ -698,8 +699,9 @@ function buildResample(src: Source, tmp: string): Built {
 //                   is then searched onto that.
 //   3. EACH FORMAT AT A SERIOUS SETTING, NOT A DEFAULT. AVIF gets the shipping
 //      flags (10-bit, speed 2, 4:4:4). WebP gets -m 6 and -sharp_yuv, the best
-//      libwebp has. JXL gets effort 9, near the top of cjxl's range the way
-//      speed 2 is near the top of aom's. Effort 7 (cjxl's default) was measured
+//      libwebp has. JXL gets effort 9 with decoder smoothing off (JXL_ARGS
+//      says why), effort 9 being near the top of cjxl's range the way speed
+//      2 is near the top of aom's. Effort 7 (cjxl's default) was measured
 //      first and scored 0.0-4.5 s2 lower at equal bytes; holding JXL at its
 //      default against AVIF at its slow preset would decide the call by preset.
 //      Defaults across the board would compare three speed presets and call it
@@ -735,9 +737,14 @@ const FMT_KNOB: Record<Fmt, { lo: number; hi: number; up: boolean; int: boolean 
   webp: { lo: 0, hi: 100, up: true, int: false },
 };
 
-// cjxl's flags beyond the distance. jxl-knob-probe.ts varies these; everything
-// else here takes the default.
-export const JXL_ARGS = ["-e", "9"];
+// cjxl's flags beyond the distance, for the format axis. Effort 9 with the
+// decoder's two smoothing filters OFF (gaborish, and the edge-preserving filter):
+// the one knob codec-knob-probe.ts found that holds on BOTH metrics and on the
+// holdout, +0.40 / +0.64 s2 over plain effort 9 at matched bytes with
+// butteraugli flat (+0.04 / +0.06). It removes filtering rather than adding
+// any, which fits the rule that nothing here synthesizes content. The probe's
+// full table is in its header.
+export const JXL_ARGS = ["-e", "9", "--gaborish=0", "--epf=0"];
 
 // avifenc's flags beyond the quality: the photo pipeline's own (add-photos.sh),
 // so the AVIF tile is a shipping encode. codec-knob-probe.ts varies these.
@@ -876,13 +883,55 @@ function preflight(axes: string[]): void {
   }
 }
 
+/** Stage a trial's option files under content-hashed names; returns name -> bytes. */
+function stageTiles(trials: Trial[]): Map<string, Buffer> {
+  const staged = new Map<string, Buffer>();
+  for (const t of trials) {
+    for (const o of t.options) {
+      const data = fs.readFileSync(o.path);
+      const name = `${createHash("sha256").update(data).digest("hex").slice(0, 12)}${path.extname(o.path)}`;
+      staged.set(name, data);
+      o.src = `/pixel-peeper/tiles/${name}`;
+      delete (o as Partial<Option>).path;
+      delete o.decoded;
+    }
+    delete t.rejected;
+  }
+  return staged;
+}
+
+/** --merge: replace one axis's trials in the committed manifest, add its tiles,
+ *  and prune only the tiles no trial references any more. */
+function writeMerged(axis: Axis, fresh: Trial[]): number {
+  if (fresh.length < 2) { log(`\nrefusing to merge: only ${fresh.length} ${axis} trial(s) survived, want >= 2`); return 1; }
+  const manifestFile = path.join(OUT_DIR, "manifest.json");
+  const current = JSON.parse(fs.readFileSync(manifestFile, "utf8")) as { tile: number; trials: Trial[] };
+  const kept = current.trials.filter((t) => t.axis !== axis);
+  const staged = stageTiles(fresh);
+  for (const [name, data] of staged) fs.writeFileSync(path.join(TILES_DIR, name), data);
+  const trials = [...kept, ...fresh];
+  const referenced = new Set(trials.flatMap((t) => t.options.map((o) => path.basename(o.src as string))));
+  let pruned = 0;
+  for (const f of fs.readdirSync(TILES_DIR)) if (!referenced.has(f)) { fs.rmSync(path.join(TILES_DIR, f)); pruned += 1; }
+  fs.writeFileSync(manifestFile, `${JSON.stringify({ tile: current.tile, trials })}\n`);
+  log(`\nmerged ${fresh.length} ${axis} trial(s) over ${current.trials.length - kept.length} old; kept ${kept.length} others byte-identical; wrote ${staged.size} tiles, pruned ${pruned}`);
+  return 0;
+}
+
 function main(): number {
   const argv = process.argv.slice(2);
-  const only = argv.includes("--only") ? argv[argv.indexOf("--only") + 1] as Axis : null;
+  // --merge <axis> rebuilds ONE axis and splices it into the existing manifest,
+  // leaving every other trial and tile byte-identical. It is how an axis is
+  // added without a full rebuild re-rolling 60 unrelated tiles through encoders
+  // (sips above all) that may have moved since they were cut. The manifest
+  // stays all-or-nothing per AXIS: the merged axis replaces its old trials whole.
+  const merge = argv.includes("--merge") ? argv[argv.indexOf("--merge") + 1] as Axis : null;
+  if (merge && !(merge in CANDIDATES)) { log(`--merge wants one of ${Object.keys(CANDIDATES).join(", ")}`); return 2; }
+  const only = merge ?? (argv.includes("--only") ? argv[argv.indexOf("--only") + 1] as Axis : null);
   if (only && !(only in CANDIDATES)) { log(`--only wants one of ${Object.keys(CANDIDATES).join(", ")}`); return 2; }
   // --only implies --dry-run: a partial set must never be written, because the
-  // manifest is all-or-nothing.
-  const dryRun = argv.includes("--dry-run") || only !== null;
+  // manifest is all-or-nothing. --merge is the exception, and writes one axis.
+  const dryRun = argv.includes("--dry-run") || (only !== null && merge === null);
   const sheet = argv.includes("--sheet") ? argv[argv.indexOf("--sheet") + 1] : null;
   preflight(only ? [only] : Object.keys(CANDIDATES));
 
@@ -945,32 +994,14 @@ function main(): number {
 
     if (sheet) writeSheet(trials, sheet);
     if (dryRun) { log("\n--dry-run: no tiles or manifest written"); return 0; }
+    if (merge) return writeMerged(merge, trials);
     if (trials.length < 12) { log(`\nrefusing to write: only ${trials.length} trials survived, want >= 12`); return 1; }
 
     // ---- write (only now that the whole set is known good)
-    // The page cannot show a format trial yet (it has no teach copy for the axis
-    // and no decode-support gate for JXL), so those stay out of the manifest
-    // until it can. Remove this filter in the change that teaches the page.
-    const held = trials.filter((t) => t.axis === "format").length;
-    if (held) { log(`holding ${held} format trial(s) out of the manifest: the page cannot show them yet`); trials.splice(0, trials.length, ...trials.filter((t) => t.axis !== "format")); }
-    const staged = new Map<string, Buffer>();
-    const exts = new Map<string, string>();
-    for (const t of trials) {
-      for (const o of t.options) {
-        const data = fs.readFileSync(o.path);
-        const h = createHash("sha256").update(data).digest("hex").slice(0, 12);
-        const ext = path.extname(o.path).slice(1);
-        staged.set(h, data);
-        exts.set(h, ext);
-        o.src = `/pixel-peeper/tiles/${h}.${ext}`;
-        delete (o as Partial<Option>).path;
-        delete o.decoded;
-      }
-      delete t.rejected;
-    }
+    const staged = stageTiles(trials);
     fs.rmSync(TILES_DIR, { recursive: true, force: true });
     fs.mkdirSync(TILES_DIR, { recursive: true });
-    for (const [h, data] of staged) fs.writeFileSync(path.join(TILES_DIR, `${h}.${exts.get(h)}`), data);
+    for (const [name, data] of staged) fs.writeFileSync(path.join(TILES_DIR, name), data);
     const manifestFile = path.join(OUT_DIR, "manifest.json");
     fs.writeFileSync(manifestFile, `${JSON.stringify({ tile: TILE, trials })}\n`);
     const total = [...staged.values()].reduce((n, d) => n + d.length, 0);
