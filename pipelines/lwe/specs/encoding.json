@@ -17,7 +17,7 @@
     "uncertainty": "The demos teach the model; they do not replace a measurement or a full treatment."
   },
   "understanding": {
-    "intro": "Before you jump to the garage study: pop quiz, four questions. If the bytes-per-pixel table made sense, this takes a minute.",
+    "intro": "Before you jump to the garage study: pop quiz, six questions. If the bytes-per-pixel table made sense, this takes a minute.",
     "questions": [
       {
         "q": "Start from the top. One photo goes through a stack of encoders and comes out at wildly different sizes. Where does the shrink actually come from?",
@@ -82,6 +82,50 @@
           {
             "t": "the picture dimmed a little, since half the samples are gone",
             "why": "Brightness survives untouched because every discarded sample is chroma. The 4:2:0 file keeps full luma plus quarter-resolution color, which is why the info line reads 50% of raw samples with zero visible dimming."
+          }
+        ]
+      },
+      {
+        "q": "A baseline and a progressive version of one photo decode to identical pixels. What changes between them?",
+        "options": [
+          {
+            "t": "only the order the coefficients are written in, so a cut-off file shows the whole picture coarsely instead of the top rows sharply",
+            "ok": true,
+            "why": "Right. jpegtran made the demo's three files from one another without decoding anything, and the finished files are pixel-identical. Scan order decides what a partial file can show."
+          },
+          {
+            "t": "the early passes use a blurrier quantization that later passes replace",
+            "why": "Nothing is quantized twice. The early scans carry some of the same rounded numbers, or their top bits, and later scans complete them in place."
+          },
+          {
+            "t": "progressive always makes the file smaller",
+            "why": "On this photo libjpeg's standard script is 1.7% larger than baseline. Only zenjpeg's searched order came out smaller, because the search scored bytes."
+          },
+          {
+            "t": "the file stores a low-resolution copy for the browser to show first",
+            "why": "There is no second copy. The first scan is every block's DC, which is the picture at 1/8 scale by construction; later scans add detail to the same grid."
+          }
+        ]
+      },
+      {
+        "q": "In Chrome the shipped zenjpeg file stays blank until about 85% has arrived, while the libjpeg order paints almost at once. Why?",
+        "options": [
+          {
+            "t": "its scan order sends all the brightness before either color plane, and chrome paints nothing until every channel has started",
+            "ok": true,
+            "why": "That is the gate, measured to the byte: the first data byte of the Cr scan. zenjpeg's search picked the order for size, and on this photo size put color last."
+          },
+          {
+            "t": "zenjpeg writes a baseline file",
+            "why": "It is progressive, seven scans, and the table reads them straight out of its headers. The problem is their order."
+          },
+          {
+            "t": "a jpeg cannot be decoded until its end marker arrives",
+            "why": "Every cut-off file in the demo gets an end marker appended, and the libjpeg order paints from its first few hundred bytes. What differs is which channels have started."
+          },
+          {
+            "t": "the zenjpeg file is larger, so it takes longer",
+            "why": "It is the smallest of the three, 16,234 bytes against 16,324 for baseline. The delay comes from order, and a smaller file in a worse order still paints later."
           }
         ]
       },
@@ -252,6 +296,52 @@
     },
     {
       "who": "you",
+      "time": "23:11",
+      "html": "<p>the garage page keeps saying every jpg here is <i>progressive</i>. if the pixels come out the same in the end, what actually changes?</p>"
+    },
+    {
+      "who": "bot",
+      "time": "23:11",
+      "html": "<p>The order the bytes arrive in. Each 8x8 block becomes 64 numbers: one <b>DC</b> coefficient, the block's average, and 63 <b>AC</b> coefficients for finer and finer detail. Quantization rounds them. Everything after that is bookkeeping about how to write them down.</p><p>A <b>baseline</b> JPEG writes each block complete, left to right and top to bottom, in one pass called a <i>scan</i>. Half the file gets you the top half of the picture. A <b>progressive</b> JPEG spreads the same numbers across several scans, each covering the whole image. It slices two ways: by frequency (every block's DC first, which is the picture at 1/8 scale, then the coarse AC bands, then the fine ones) and by precision (the high bits of each coefficient first, the low bits in later refinement scans). The decoder adds every scan into one coefficient grid, so when the last scan lands it holds exactly the numbers the baseline file held.</p>",
+      "cite": {
+        "url": "https://www.w3.org/Graphics/JPEG/itu-t81.pdf",
+        "title": "ITU-T T.81, the JPEG standard (Annex G, progressive DCT)"
+      }
+    },
+    {
+      "who": "you",
+      "time": "23:12",
+      "html": "<p>show me. same photo, cut off partway.</p>"
+    },
+    {
+      "demo": {
+        "id": "demo-progressive",
+        "bar": "progressive JPEG · same coefficients, three orders",
+        "html": "<p class=\"lead\">Three files holding the <b>same quantized coefficients</b>. jpegtran rewrote the shipped zenjpeg thumbnail in two other orders without decoding it, so all three finish as identical pixels. Drag the slider to choose how many bytes have arrived, and your browser decodes each cut-off file live. The table reads one file's scans out of its own headers.</p>\n<div class=\"pj\" id=\"pj-lwe\">\n<div class=\"pj-panes\">\n<figure class=\"pj-pane\" data-pj-src=\"/garage/enc/c-zc84-baseline.jpg\"><div class=\"pj-frame\"><canvas width=\"400\" height=\"266\" role=\"img\" aria-label=\"the baseline file, decoded from the bytes that have arrived\"></canvas><span class=\"pj-empty\" aria-hidden=\"true\">nothing to paint yet</span></div><figcaption><b>baseline · 1 scan</b><br><span class=\"pj-mono\" data-pj-size>16,324 B</span><br><span data-pj-state></span></figcaption></figure>\n<figure class=\"pj-pane\" data-pj-src=\"/garage/enc/c-zc84-libjpeg.jpg\"><div class=\"pj-frame\"><canvas width=\"400\" height=\"266\" role=\"img\" aria-label=\"the libjpeg-script file, decoded from the bytes that have arrived\"></canvas><span class=\"pj-empty\" aria-hidden=\"true\">nothing to paint yet</span></div><figcaption><b>libjpeg script · 10 scans</b><br><span class=\"pj-mono\" data-pj-size>16,609 B</span><br><span data-pj-state></span></figcaption></figure>\n<figure class=\"pj-pane\" data-pj-src=\"/garage/enc/c-zc84.jpg\"><div class=\"pj-frame\"><canvas width=\"400\" height=\"266\" role=\"img\" aria-label=\"the shipped zenjpeg file, decoded from the bytes that have arrived\"></canvas><span class=\"pj-empty\" aria-hidden=\"true\">nothing to paint yet</span></div><figcaption><b>zenjpeg search · 7 scans</b><br><span class=\"pj-mono\" data-pj-size>16,234 B</span><br><span data-pj-state></span></figcaption></figure>\n</div>\n<div class=\"pj-ctl\"><input type=\"range\" min=\"0\" max=\"16609\" value=\"5000\" aria-label=\"bytes arrived\"><output>…</output></div>\n<div class=\"pj-ctl\"><label>scans of <select aria-label=\"which file the table reads\"><option value=\"0\">baseline</option><option value=\"1\" selected>libjpeg script</option><option value=\"2\">zenjpeg search</option></select></label><button type=\"button\" data-pj-step=\"-1\">&#9664; previous scan</button><button type=\"button\" data-pj-step=\"1\">next scan &#9654;</button></div>\n<table class=\"pj-scans\"><thead><tr><th>#</th><th>channels</th><th>carries</th><th>starts at</th></tr></thead><tbody><tr class=\"pj-gate\"><td>1</td><td>Y Cb Cr</td><td>DC (block averages), top bits only</td><td>2%</td></tr><tr><td>2</td><td>Y</td><td>AC 1–5, top bits only</td><td>12%</td></tr><tr><td>3</td><td>Cr</td><td>AC 1–63, top bits only</td><td>23%</td></tr><tr><td>4</td><td>Cb</td><td>AC 1–63, top bits only</td><td>27%</td></tr><tr><td>5</td><td>Y</td><td>AC 6–63, top bits only</td><td>29%</td></tr><tr><td>6</td><td>Y</td><td>AC 1–63, refines bit 1</td><td>36%</td></tr><tr><td>7</td><td>Y Cb Cr</td><td>DC (block averages), refines bit 0</td><td>56%</td></tr><tr><td>8</td><td>Cr</td><td>AC 1–63, refines bit 0</td><td>58%</td></tr><tr><td>9</td><td>Cb</td><td>AC 1–63, refines bit 0</td><td>63%</td></tr><tr><td>10</td><td>Y</td><td>AC 1–63, refines bit 0</td><td>66%</td></tr></tbody></table>\n</div>\n<p class=\"dac-cap\"><b>DC</b> is each 8x8 block's average; <b>AC</b> numbers pick a band of the 63 detail coefficients, low numbers coarse and high numbers fine. <b>Top bits only</b> sends each coefficient at reduced precision, and <b>refines bit</b> adds one more bit of it later. <b>Y</b> is brightness, <b>Cb</b> and <b>Cr</b> the two color planes. The starred row is the first scan with every channel in play: Chrome paints nothing from a progressive JPEG before that scan's first data byte, exact to the byte. Other engines may draw sooner, and these panes show what yours does.</p>"
+      }
+    },
+    {
+      "who": "you",
+      "time": "23:13",
+      "html": "<p>the zenjpeg one sits blank until nearly the end. isn't that the file the site ships?</p>"
+    },
+    {
+      "who": "bot",
+      "time": "23:13",
+      "html": "<p>It is, and that is the finding this demo was built to show. zenjpeg searches 64 scan orders for the <i>smallest</i> file, and on this photo the winner sends every bit of brightness first and both color planes last. Chrome waits for every channel to start before it paints anything, so the cutoff lands on the first data byte of the Cr scan, 84.8% of the way through. The order that wins on bytes paints once, at the end, like a slow baseline. Across the library, 156 of 255 color thumbnails wait past their halfway mark.</p><p>On a thumbnail that costs almost nothing: the whole file arrives in a round trip or two, and most browsers get the AVIF anyway. It matters on the 20&nbsp;MB full-size downloads, which the <a href=\"/garage/encoding\" rel=\"external\">garage study</a> measures: 53 of 256 color originals there hold their color until the last few percent.</p>"
+    },
+    {
+      "who": "you",
+      "time": "23:14",
+      "html": "<p>and the sizes? does progressive make the file smaller or bigger?</p>"
+    },
+    {
+      "who": "bot",
+      "time": "23:14",
+      "html": "<p>It depends on the script, and the three sizes above show it. A progressive AC scan can code a long run of all-zero blocks as one symbol, and each scan can carry Huffman tables fitted to its own statistics, which usually beats one table set for everything. Refinement scans pay some of that back in correction bits. On this photo libjpeg's standard 10-scan script comes out <b>1.7% larger</b> than baseline, while zenjpeg's searched 7-scan order comes out <b>0.6% smaller</b>. So a smaller progressive file is a property of a good script, and the search that found this one scored bytes alone.</p>"
+    },
+    {
+      "who": "you",
       "time": "23:06",
       "html": "<p>so what does the site actually ship per thumbnail?</p>"
     },
@@ -269,6 +359,6 @@
       "scrollnote": "end of first pass"
     }
   ],
-  "demoCss": ".bpp-wrap{display:flex;gap:13px;align-items:flex-start;flex-wrap:wrap}.bpp-img{border:1px solid #cfd8e6;border-radius:3px;flex:0 0 auto}.bpp-tbl{border-collapse:collapse;font-size:9pt;flex:1;min-width:230px}.bpp-tbl th{text-align:left;color:#6b7280;font-weight:bold;font-size:8pt;border-bottom:1px solid #cfd8e6;padding:3px 6px}.bpp-tbl td{padding:3px 6px;border-bottom:1px solid #eef2f7}.bpp-tbl tr.win td{background:#eef4fa}.bpp-tbl tr.win b{color:#2c5d8f}.bpp-tbl .dim{color:#9aa3b2}.bpp-tbl .mono{font-family:var(--font-mono);color:#33415c}.cs-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:4px 0 10px}.cs-row label{display:flex;align-items:center;gap:8px;font-size:9pt;color:#46617f}.cs-row select{font:inherit;font-size:9pt;padding:2px 6px;border:1px solid #9fb3c9;border-radius:3px}.cs-row .mono{font-family:var(--font-mono)}.cs-row .dim{color:#9aa3b2}canvas#csCanvas{width:100%;max-width:560px;height:auto;border:1px solid #cfd8e6;border-radius:3px;background:#fff;display:block;image-rendering:pixelated}.zgrid{display:grid;gap:5px;margin:4px 0 2px;align-items:center}.zgrid.fmt{grid-template-columns:42px 1fr 1fr 1fr}.zgrid.enc{grid-template-columns:1fr 1fr 1fr 1fr}.zgrid.chroma{grid-template-columns:1fr 1fr 1fr}.zgrid .zh{font-size:8pt;color:#6b7280;text-align:center;font-family:var(--font-mono)}.zgrid .zlabel{font-size:8.5pt;color:#46617f;font-weight:bold}.zcell{margin:0}.zcell img{width:100%;height:auto;display:block;border:1px solid #cfd8e6;border-radius:2px;image-rendering:pixelated;background:#fff}.zcell figcaption{font-size:7.5pt;color:#6b7280;text-align:center;font-family:var(--font-mono);margin-top:2px;line-height:1.35}",
+  "demoCss": ".bpp-wrap{display:flex;gap:13px;align-items:flex-start;flex-wrap:wrap}.bpp-img{border:1px solid #cfd8e6;border-radius:3px;flex:0 0 auto}.bpp-tbl{border-collapse:collapse;font-size:9pt;flex:1;min-width:230px}.bpp-tbl th{text-align:left;color:#6b7280;font-weight:bold;font-size:8pt;border-bottom:1px solid #cfd8e6;padding:3px 6px}.bpp-tbl td{padding:3px 6px;border-bottom:1px solid #eef2f7}.bpp-tbl tr.win td{background:#eef4fa}.bpp-tbl tr.win b{color:#2c5d8f}.bpp-tbl .dim{color:#9aa3b2}.bpp-tbl .mono{font-family:var(--font-mono);color:#33415c}.cs-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:4px 0 10px}.cs-row label{display:flex;align-items:center;gap:8px;font-size:9pt;color:#46617f}.cs-row select{font:inherit;font-size:9pt;padding:2px 6px;border:1px solid #9fb3c9;border-radius:3px}.cs-row .mono{font-family:var(--font-mono)}.cs-row .dim{color:#9aa3b2}canvas#csCanvas{width:100%;max-width:560px;height:auto;border:1px solid #cfd8e6;border-radius:3px;background:#fff;display:block;image-rendering:pixelated}.zgrid{display:grid;gap:5px;margin:4px 0 2px;align-items:center}.zgrid.fmt{grid-template-columns:42px 1fr 1fr 1fr}.zgrid.enc{grid-template-columns:1fr 1fr 1fr 1fr}.zgrid.chroma{grid-template-columns:1fr 1fr 1fr}.zgrid .zh{font-size:8pt;color:#6b7280;text-align:center;font-family:var(--font-mono)}.zgrid .zlabel{font-size:8.5pt;color:#46617f;font-weight:bold}.zcell{margin:0}.zcell img{width:100%;height:auto;display:block;border:1px solid #cfd8e6;border-radius:2px;image-rendering:pixelated;background:#fff}.zcell figcaption{font-size:7.5pt;color:#6b7280;text-align:center;font-family:var(--font-mono);margin-top:2px;line-height:1.35}.pj-panes{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:4px 0 6px}.pj-pane{margin:0}.pj-frame{position:relative;background:#e9edf3;border:1px solid #cfd8e6;border-radius:2px;aspect-ratio:400/266}.pj-frame canvas{display:block;width:100%;height:100%}.pj-empty{position:absolute;inset:0;display:none;align-items:center;justify-content:center;font-size:8pt;color:#6b7280;text-align:center;padding:4px}.pj-none canvas{visibility:hidden}.pj-none .pj-empty{display:flex}.pj-pane figcaption{font-size:7.5pt;color:#46617f;text-align:center;margin-top:2px;line-height:1.35}.pj-mono,.pj-ctl output{font-family:var(--font-mono)}.pj-ctl{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:9pt;color:#46617f;margin:4px 0}.pj-ctl input[type=range]{flex:1;min-width:160px}.pj-ctl select,.pj-ctl button{font:inherit;font-size:9pt;padding:1px 6px;border:1px solid #9fb3c9;border-radius:3px;background:#fff}.pj-scans{border-collapse:collapse;font-size:8.5pt;width:100%;margin:4px 0 2px}.pj-scans th{text-align:left;color:#6b7280;font-size:8pt;font-weight:bold;border-bottom:1px solid #cfd8e6;padding:2px 5px}.pj-scans td{padding:2px 5px;border-bottom:1px solid #eef2f7;font-family:var(--font-mono)}.pj-scans .pj-done td{color:#33415c;background:#eef4fa}.pj-scans .pj-part td{color:#33415c;background:#fff7dd}.pj-scans .pj-wait td{color:#9aa3b2}.pj-scans .pj-gate td:first-child::after{content:\" \\2605\";color:#c2410c}",
   "demoJsFile": "encoding-demo.js"
 }
