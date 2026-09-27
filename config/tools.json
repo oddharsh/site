@@ -43,7 +43,7 @@
     {
       "bin": "exif-sooc",
       "install": "cargo install --git https://github.com/oddharsh/exif-sooc exif-sooc",
-      "why": "every EXIF read and write in the pipeline. It emits metadata.json's record shape directly and owns the merge, which retired the 50-line jq reshape and build-recipes.py, and on 2026-08-14 it took the last of exiftool's jobs too: orientation reads, -all= strips and -TagsFromFile copies, in ExifTool's own flag spellings. Pinned at 0.2.0 by the guards in the writing scripts: 0.1.0 could not write, and its -all= truncated progressive JPEGs at the first scan, which is every JPEG this pipeline produces",
+      "why": "every EXIF read and write in the pipeline. It emits metadata.json's record shape directly and owns the merge, which retired the 50-line jq reshape and build-recipes.py, and on 2026-08-14 it took the last of exiftool's jobs too: orientation reads, -all= strips and -TagsFromFile copies, in ExifTool's own flag spellings. Pinned at 0.3.0 by the guards in the writing scripts: 0.1.0 could not write, and its -all= truncated progressive JPEGs at the first scan, which is every JPEG this pipeline produces; 0.2.0's -TagsFromFile carried a HEIF's EXIF and silently dropped its XMP item, the only place an X-T50 records an in-camera star rating (oddharsh/exif-sooc#3)",
       "required_by": [
         "tools/photos/add-photos.sh",
         "tools/photos/download-remote-photos.sh",
@@ -55,13 +55,13 @@
         "tools/photos/require-exif-sooc.sh",
         "tools/photos/reencode-thumbnails.sh"
       ],
-      "min_version": "0.2.0",
+      "min_version": "0.3.0",
       "version": {
         "flag": "--version",
         "match": "exif-sooc (\\d+\\.\\d+\\.\\d+)"
       },
       "bytes": true,
-      "recorded": "0.2.0"
+      "recorded": "0.3.0"
     },
     {
       "bin": "sips",

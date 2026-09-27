@@ -60,7 +60,7 @@ async function fixture(run) {
     await put("exports/frame.jpg", "previous export");
     await command("bin/exif-sooc", `
 case "$1" in
-  --version) echo version >> "$TRACE"; printf '%s\\n' "\${SOOC_VERSION:-exif-sooc 0.2.0}"; exit "\${SOOC_STATUS:-0}" ;;
+  --version) echo version >> "$TRACE"; printf '%s\\n' "\${SOOC_VERSION:-exif-sooc 0.3.0}"; exit "\${SOOC_STATUS:-0}" ;;
   -s) echo "orientation $*" >> "$TRACE"; echo 1 ;;
   *) echo "metadata $*" >> "$TRACE"
      [ "\${FAIL_METADATA:-0}" != 1 ] || { echo "metadata write failed" >&2; exit 7; }
@@ -141,7 +141,7 @@ for (const { file, args, status } of cases) {
     await fixture(async ({ put, read, shell }) => {
       const refused = shell(file, args, { SOOC_VERSION: "exif-sooc 0.1.0" });
       assert.equal(refused.status, 1, refused.stderr);
-      assert.match(refused.stderr, /older than 0\.2\.0/);
+      assert.match(refused.stderr, /older than 0\.3\.0/);
       assert.doesNotMatch(await read("trace"), /sips|zenc|metadata|downstream|upload/);
       assert.equal(await read("public/garage/enc/c-png.png"), "published color fixture");
 
@@ -216,12 +216,13 @@ test("ingest preserves previous tiers on failure and rebuilds an incomplete cach
 
 test("the shared EXIF guard requires a successful, exact version report", async () => {
   await fixture(async ({ shell }) => {
-    for (const version of ["exif-sooc 0.2.0", "exif-sooc 0.10.0", "exif-sooc 1.0.0"]) {
+    for (const version of ["exif-sooc 0.3.0", "exif-sooc 0.10.0", "exif-sooc 1.0.0"]) {
       const result = shell("require-exif-sooc.sh", [], { SOOC_VERSION: version });
       assert.equal(result.status, 0, result.stderr);
     }
     for (const [version, status] of [
-      ["exif-sooc 0.1.9", "0"], ["exif-sooc 0.2.0", "9"],
+      ["exif-sooc 0.1.9", "0"], ["exif-sooc 0.2.0", "0"], ["exif-sooc 0.2.9", "0"],
+      ["exif-sooc 0.3.0", "9"],
       ["exif-sooc 1..0", "0"], ["exif-sooc 2", "0"], ["exif-sooc 2.0.0.0", "0"],
       ["unknown 2.0.0", "0"], ["exif-sooc 2.0.0\nwarning", "0"], ["garbled", "0"],
     ]) {
@@ -249,11 +250,11 @@ test("tools:check still refuses missing or contradictory minimum-version guards"
     assert.equal(good.status, 0, good.stderr);
     const file = "tools/photos/require-exif-sooc.sh";
     const guard = await read(file);
-    await put(file, guard.replace("EXIF_SOOC_MIN=0.2.0", "EXIF_SOOC_MIN=0.1.0"));
+    await put(file, guard.replace("EXIF_SOOC_MIN=0.3.0", "EXIF_SOOC_MIN=0.1.0"));
     const mismatch = cli();
     assert.equal(mismatch.status, 1, mismatch.stderr);
-    assert.match(mismatch.stderr, /floors exif-sooc at 0\.1\.0 while config\/tools.json declares 0\.2\.0/);
-    await put(file, guard.replace("EXIF_SOOC_MIN=0.2.0", ""));
+    assert.match(mismatch.stderr, /floors exif-sooc at 0\.1\.0 while config\/tools.json declares 0\.3\.0/);
+    await put(file, guard.replace("EXIF_SOOC_MIN=0.3.0", ""));
     const missing = cli();
     assert.equal(missing.status, 1, missing.stderr);
     assert.match(missing.stderr, /minimum-version scanner matched 0 guards/);
