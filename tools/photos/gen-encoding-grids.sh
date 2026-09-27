@@ -1,12 +1,17 @@
 #!/usr/bin/env bash
 #
 # gen-encoding-grids.sh — generate the ZOOMED comparison crops for the
-# /lwe/encoding study's three grids, all from ONE centered detail crop of the
-# same lossless base the color study uses (garage/enc/c-png.png):
+# /lwe/encoding study's three grids. Each grid gets the 96x96 slice that shows
+# its axis, since one slice cannot: artifacts need edges, subsampling needs color.
 #
-#   1. format x quality   — zenjpeg / WebP / AVIF, each at high/mid/low
-#   2. chroma             — JPEG (mozjpeg) at 4:4:4 / 4:2:2 / 4:2:0, one quality
-#   3. jpeg encoders      — baseline (sips) vs mozjpeg vs jpegli vs zenjpeg
+#   1. format x quality   — zenjpeg / WebP / AVIF, each at high/mid/low, on the
+#                           front wheel of the color study's lossless base
+#                           (garage/enc/c-png.png)
+#   2. chroma             — JPEG (mozjpeg) at 4:4:4 / 4:2:2 / 4:2:0, one quality,
+#                           on branches against red glass (ch-branches.png)
+#   3. jpeg encoders      — baseline (sips) vs mozjpeg vs jpegli vs zenjpeg, on
+#                           the centred crop of c-png.png, which it keeps because
+#                           its jpegli cell cannot be re-encoded (below)
 #
 # Outputs garage/enc/z-*.{jpg,webp,avif,png}. The demos fetch these live and
 # measure real byte sizes, displayed pixel-zoomed so the artifacts are visible.
@@ -55,15 +60,22 @@ fi
 
 TMP="/tmp/encgrid-$$"; mkdir -p "$TMP"; trap 'rm -rf "$TMP"' EXIT
 
-# one centered 96x96 detail crop, shared by all three grids
+# the centred 96x96 crop: the encoder grid's slice (and z-crop.png)
 sips -c 96 96 "$DEST/c-png.png" --out "$TMP/crop.png" >/dev/null 2>&1
 ffmpeg -loglevel error -y -i "$TMP/crop.png" "$TMP/crop.ppm" 2>/dev/null   # cjpeg reads PPM, not PNG (sips BMP confuses it)
 cp "$TMP/crop.png" "$DEST/z-crop.png"
 sz(){ stat -f%z "$1"; }
 
-# 1. format x quality
-for q in 90 50 22; do "$ZENC" "$TMP/crop.png" "$DEST/z-zc$q.jpg" -q $q >/dev/null 2>&1; done
-for q in 90 50 22; do cwebp -q $q "$TMP/crop.png" -o "$DEST/z-wp$q.webp" >/dev/null 2>&1; done
+# 1. format x quality, on its OWN slice: the front wheel's face (spokes, bolts,
+# the red caliper, the centre cap) rather than the centred crop, which is mostly
+# flat black bodywork. A near-empty slice hid both halves of what this grid
+# teaches: the artifacts had nothing to break, and its bytes were so small that
+# container overhead ranked the formats (AVIF heaviest) the opposite way to the
+# full-photo table on the same page. On the wheel AVIF comes out smallest at all
+# three tiers, which is the ordering that table measures.
+sips -c 96 96 --cropOffset 125 45 "$DEST/c-png.png" --out "$TMP/fmt.png" >/dev/null 2>&1
+for q in 90 50 22; do "$ZENC" "$TMP/fmt.png" "$DEST/z-zc$q.jpg" -q $q >/dev/null 2>&1; done
+for q in 90 50 22; do cwebp -q $q "$TMP/fmt.png" -o "$DEST/z-wp$q.webp" >/dev/null 2>&1; done
 # --speed 6 here, --speed 4 in gen-encoding-samples.sh, --speed 2 in the photo
 # pipeline since 2026-08-28. Three values on purpose for now, and the divergence
 # is recorded rather than swept: this grid varies FORMAT and QUALITY at a fixed
@@ -73,7 +85,7 @@ for q in 90 50 22; do cwebp -q $q "$TMP/crop.png" -o "$DEST/z-wp$q.webp" >/dev/n
 # whose job is teaching these axes is an editorial decision rather than a flag
 # sweep. Do not "fix" this to match the pipeline without regenerating.
 AV="--speed 6 --jobs 4 --ignore-icc --ignore-exif --ignore-xmp --yuv 420"
-for q in 78 42 18; do avifenc -q $q $AV "$TMP/crop.png" "$DEST/z-av$q.avif" >/dev/null 2>&1; done
+for q in 78 42 18; do avifenc -q $q $AV "$TMP/fmt.png" "$DEST/z-av$q.avif" >/dev/null 2>&1; done
 
 # 2. chroma subsampling (mozjpeg, one quality so only the chroma sampling varies)
 #
