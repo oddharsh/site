@@ -302,18 +302,18 @@
     {
       "who": "you",
       "time": "23:10",
-      "html": "<p>so each one squeezes a little harder than the last, same setting throughout. and chroma, up close on a real edge?</p>"
+      "html": "<p>so each one squeezes a little harder than the last, same setting throughout. and chroma, up close on a real photo?</p>"
     },
     {
       "who": "bot",
       "time": "23:10",
-      "html": "<p>The same crop as a JPEG at the three chroma samplings. Luma holds; the color is what softens.</p>"
+      "html": "<p>A different slice for this one. The car crop is nearly all black and gray, and subsampling only touches color, so all three came out the same. These are bare branches against red glass from a night frame, cut at thumbnail scale and saved as a JPEG at the three chroma samplings. Luma holds; the color is what softens.</p>"
     },
     {
       "demo": {
         "id": "demo-chromagrid",
-        "bar": "chroma subsampling · a real edge",
-        "html": "<p class=\"lead\">Chroma subsampling on a real edge instead of stripes: the same crop saved as a JPEG at 4:4:4, 4:2:2, and 4:2:0. The luma edge holds at every setting; the color is what loses resolution.</p>\n<div class=\"zgrid chroma\"><figure class=\"zcell\"><img src=\"/garage/enc/z-ch444.jpg?v=1\" loading=\"lazy\" decoding=\"async\" alt=\"4:4:4\"><figcaption>4:4:4<br><span data-zsize=\"/garage/enc/z-ch444.jpg?v=1\">…</span></figcaption></figure><figure class=\"zcell\"><img src=\"/garage/enc/z-ch422.jpg?v=1\" loading=\"lazy\" decoding=\"async\" alt=\"4:2:2\"><figcaption>4:2:2<br><span data-zsize=\"/garage/enc/z-ch422.jpg?v=1\">…</span></figcaption></figure><figure class=\"zcell\"><img src=\"/garage/enc/z-ch420.jpg?v=1\" loading=\"lazy\" decoding=\"async\" alt=\"4:2:0\"><figcaption>4:2:0<br><span data-zsize=\"/garage/enc/z-ch420.jpg?v=1\">…</span></figcaption></figure></div>\n<p class=\"dac-cap\">The size drop is modest here (4:4:4 to 4:2:0) because this crop is mostly grays. On saturated content the savings grow and the color fringing gets obvious, which is the stark version in the stripes demo above.</p>"
+        "bar": "chroma subsampling &middot; a real photo",
+        "html": "<p class=\"lead\">Chroma subsampling on a real photo instead of stripes: 96 pixels of bare branches lit against red glass, saved as a JPEG at 4:4:4, 4:2:2, and 4:2:0 at one quality setting. The branch shapes hold at every setting, because their brightness lives in luma. What goes is their color: at 4:2:0 the thin orange twigs turn brown.</p>\n<div class=\"zgrid chroma\"><figure class=\"zcell\"><img src=\"/garage/enc/z-ch444.jpg?v=2\" loading=\"lazy\" decoding=\"async\" alt=\"4:4:4\"><figcaption>4:4:4<br><span data-zsize=\"/garage/enc/z-ch444.jpg?v=2\">…</span></figcaption></figure><figure class=\"zcell\"><img src=\"/garage/enc/z-ch422.jpg?v=2\" loading=\"lazy\" decoding=\"async\" alt=\"4:2:2\"><figcaption>4:2:2<br><span data-zsize=\"/garage/enc/z-ch422.jpg?v=2\">…</span></figcaption></figure><figure class=\"zcell\"><img src=\"/garage/enc/z-ch420.jpg?v=2\" loading=\"lazy\" decoding=\"async\" alt=\"4:2:0\"><figcaption>4:2:0<br><span data-zsize=\"/garage/enc/z-ch420.jpg?v=2\">…</span></figcaption></figure></div>\n<p class=\"dac-cap\">4:2:0 comes out 42% smaller than 4:4:4 here (the sizes under each cell are measured live). Nearly everything in this slice is color detail, and the bytes subsampling saves are exactly the detail it throws away.</p>"
       }
     },
     {
@@ -355,7 +355,7 @@
     {
       "who": "bot",
       "time": "23:11",
-      "html": "<p>Under red light. Red carries only 0.299 of the brightness in the BT.601 matrix these files use, so in a red scene the fine detail lives in the color planes rather than in luma. One night frame of bare branches against red windows needs 35% more bytes at 4:2:0 to match 4:4:4.</p>"
+      "html": "<p>Under red light. Red carries only 0.299 of the brightness in the BT.601 matrix these files use, so in a red scene the fine detail lives in the color planes rather than in luma. One night frame of bare branches against red windows, the one the real-photo grid above is cut from, needs 35% more bytes at 4:2:0 to match 4:4:4.</p>"
     },
     {
       "who": "you",
