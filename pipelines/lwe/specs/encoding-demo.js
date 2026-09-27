@@ -59,6 +59,93 @@ initWhenNear("csCanvas", function(){
   render();
 });
 
+// ── Demo: chroma through a downscale (why a 4:2:2 camera earns a 4:4:4 tile) ──
+// The camera stores one color sample per 2x1 pixels (4:2:2). Shrinking the
+// frame by f makes each tile pixel an average of an f-by-f patch, which holds
+// f/2 color samples across and f down. Past 2x every tile pixel has color
+// measured for it alone, so the tile carries full color at its own size, and
+// 4:2:0 is the step that averages it back down to one sample per 2x2 block.
+// The dots are the camera's color samples; each cell is one tile pixel,
+// filled with the average of the samples inside it (nearest one when none).
+initWhenNear("crCanvas", function(){
+  var el = /** @type {HTMLCanvasElement | null} */ (document.getElementById('crCanvas')); if (!el) return;
+  var ctx2d = el.getContext('2d'); if (!ctx2d) return;
+  // non-null aliases: var narrowing does not reach the render closure
+  var c = /** @type {HTMLCanvasElement} */ (el), ctx = /** @type {CanvasRenderingContext2D} */ (ctx2d);
+  var rng = /** @type {HTMLInputElement | null} */ (document.getElementById('crScale'));
+  var sel = /** @type {HTMLSelectElement | null} */ (document.getElementById('crMode'));
+  var outF = document.getElementById('crF'), info = document.getElementById('crInfo');
+  var COLS = 8, ROWS = 4, CELL = Math.floor(Math.min(c.width / COLS, c.height / ROWS));
+  var X0 = Math.floor((c.width - COLS * CELL) / 2), Y0 = Math.floor((c.height - ROWS * CELL) / 2);
+  // a pure-chroma field in tile-pixel units: Cr flips every column, Cb every
+  // row, luma held flat, so the only detail in the picture is color detail
+  // at exactly one tile pixel, the finest a 4:4:4 tile can hold
+  // A camera sample is an AREA average over its footprint (w wide, h tall in
+  // tile pixels), which for a sine is the sine times a sinc factor. At 1x the
+  // footprint is two columns wide and the column-by-column Cr cancels to zero:
+  // 4:2:2 genuinely cannot record color that flips every pixel.
+  function sinc(w) { var a = Math.PI * w / 2; return a < 1e-6 ? 1 : Math.sin(a) / a; }
+  function field(u, v, w, h) { return { cb: 34 * sinc(h) * Math.sin(Math.PI * v), cr: 58 * sinc(w) * Math.sin(Math.PI * u) }; }
+  function rgb(cb, cr) {
+    function k(x) { return Math.round(x < 0 ? 0 : x > 255 ? 255 : x); }
+    var y = 150; return "rgb(" + k(y + 1.402 * cr) + "," + k(y - 0.344136 * cb - 0.714136 * cr) + "," + k(y + 1.772 * cb) + ")";
+  }
+  function render() {
+    var f = rng ? parseFloat(rng.value) : 8.6, mode = sel ? sel.value : "444";
+    // camera color samples, in tile-pixel units: 2 camera pixels wide, 1 tall
+    var sx = 2 / f, sy = 1 / f, pts = [];
+    for (var y = sy / 2; y < ROWS; y += sy) for (var x = sx / 2; x < COLS; x += sx) {
+      var fv = field(x, y, sx, sy); pts.push({ x: x, y: y, cb: fv.cb, cr: fv.cr });
+    }
+    var cells = [];
+    for (var j = 0; j < ROWS; j++) for (var i = 0; i < COLS; i++) {
+      var cb = 0, cr = 0, n = 0, best = pts[0], bd = Infinity;
+      for (var p = 0; p < pts.length; p++) {
+        var q = pts[p];
+        if (q.x >= i && q.x < i + 1 && q.y >= j && q.y < j + 1) { cb += q.cb; cr += q.cr; n++; }
+        var d = Math.abs(q.x - i - 0.5) + Math.abs(q.y - j - 0.5); if (d < bd) { bd = d; best = q; }
+      }
+      cells.push(n ? { cb: cb / n, cr: cr / n } : { cb: best.cb, cr: best.cr });
+    }
+    if (mode === "420") {
+      // the tile stored at 4:2:0: one color per 2x2 block of tile pixels
+      for (var bj = 0; bj < ROWS; bj += 2) for (var bi = 0; bi < COLS; bi += 2) {
+        var ab = 0, ar = 0, m = 0, idx = [];
+        for (var dj = 0; dj < 2 && bj + dj < ROWS; dj++) for (var di = 0; di < 2 && bi + di < COLS; di++) { var t = (bj + dj) * COLS + bi + di; idx.push(t); ab += cells[t].cb; ar += cells[t].cr; m++; }
+        for (var z = 0; z < idx.length; z++) cells[idx[z]] = { cb: ab / m, cr: ar / m };
+      }
+    }
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, c.width, c.height);
+    for (var r = 0; r < ROWS; r++) for (var s = 0; s < COLS; s++) {
+      var cc = cells[r * COLS + s]; ctx.fillStyle = rgb(cc.cb, cc.cr); ctx.fillRect(X0 + s * CELL, Y0 + r * CELL, CELL, CELL);
+    }
+    // camera samples as small outlined dots, so they read as a count
+    var rad = Math.max(1.2, Math.min(4, CELL * Math.min(sx, sy) * 0.28));
+    ctx.lineWidth = 1; ctx.strokeStyle = "rgba(20,30,50,.55)";
+    for (var p2 = 0; p2 < pts.length; p2++) {
+      var pt = pts[p2]; ctx.beginPath(); ctx.arc(X0 + pt.x * CELL, Y0 + pt.y * CELL, rad, 0, 2 * Math.PI);
+      ctx.fillStyle = rgb(pt.cb, pt.cr); ctx.fill(); ctx.stroke();
+    }
+    // tile-pixel grid, with the 4:2:0 blocks drawn heavier when they apply
+    ctx.strokeStyle = "rgba(255,255,255,.9)";
+    for (var gx = 0; gx <= COLS; gx++) { ctx.lineWidth = mode === "420" && gx % 2 === 0 ? 3 : 1; ctx.beginPath(); ctx.moveTo(X0 + gx * CELL, Y0); ctx.lineTo(X0 + gx * CELL, Y0 + ROWS * CELL); ctx.stroke(); }
+    for (var gy = 0; gy <= ROWS; gy++) { ctx.lineWidth = mode === "420" && gy % 2 === 0 ? 3 : 1; ctx.beginPath(); ctx.moveTo(X0, Y0 + gy * CELL); ctx.lineTo(X0 + COLS * CELL, Y0 + gy * CELL); ctx.stroke(); }
+    var across = f / 2, down = f;
+    if (outF) outF.textContent = f.toFixed(1) + "x";
+    if (info) {
+      var per = across.toFixed(1) + " across × " + down.toFixed(1) + " down";
+      info.textContent = across < 1
+        ? "each tile pixel gets " + per + ": neighbors still share one camera sample, so 4:4:4 would store copies"
+        : mode === "420"
+          ? "each tile pixel gets " + per + ", then 4:2:0 averages every 2x2 block back to one color"
+          : "each tile pixel gets " + per + ": its color was measured for it alone, and 4:4:4 keeps all of it";
+    }
+  }
+  if (rng) rng.addEventListener("input", render);
+  if (sel) sel.addEventListener("change", render);
+  render();
+});
+
 // live byte sizes for the zoomed comparison grids
 ['demo-fmtgrid','demo-encgrid','demo-chromagrid'].forEach(function(id){initWhenNear(id,function(){var root=document.getElementById(id),ns=root?root.querySelectorAll('[data-zsize]'):[];for(var i=0;i<ns.length;i++){(function(n){void fetch(n.getAttribute('data-zsize')).then(function(r){return r.blob();}).then(function(b){n.textContent=(b.size/1024).toFixed(1)+' KB';}).catch(function(){n.textContent='';});})(ns[i]);}})});
 
