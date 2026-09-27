@@ -208,7 +208,7 @@ mod tests {
                 assert_eq!(run(&args), 0);
                 let output = std::process::Command::new("avifenc").args([
                     "-q", "63", "-d", "10", "--ignore-icc", "--ignore-exif", "--ignore-xmp",
-                    "--speed", "2", "--jobs", "4", "--yuv", if gray { "400" } else { "420" },
+                    "--speed", "2", "--jobs", "4", "--yuv", if gray { "400" } else { "444" },
                     png.to_str().unwrap(), control.to_str().unwrap(),
                 ]).output().expect("install avifenc alongside libavif to run the parity test");
                 assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));

@@ -497,14 +497,51 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
       source pixels into one washes most encoding artifacts out. Delivery scale forgives the second
       encode. A 10&nbsp;MB download does not, which is the whole reason the archive is progressive.</p>
 
+    <h2>Chroma: hold the bytes, then compare <span class="status shipped">shipped</span></h2>
+    <p class="note">The two AVIF q63 cards in the showdown put 4:4:4 at 11.3&nbsp;KB against 4:2:0&apos;s
+      10.4&nbsp;KB, and this page used to conclude from them that full chroma was a byte tax. Those cards
+      hold the <em>quality knob</em> fixed, so the 4:4:4 card also comes out better, and the two halves of
+      that conclusion were never measured at once. The fair comparison fixes the bytes and lets quality
+      move. Scored that way, on the tiles the grid actually serves, the call reverses:</p>
+    <table class="enc-table">
+      <thead><tr><th>tier</th><th>shipped 4:2:0</th><th>4:4:4, same bytes</th><th>4:4:4 ahead on</th></tr></thead>
+      <tbody>
+        <tr><td>600&times;600</td><td class="num">78.25</td><td class="num">+0.45</td><td class="num">18 of 24</td></tr>
+        <tr><td>400&times;400</td><td class="num">79.25</td><td class="num">+0.52</td><td class="num">16 of 24</td></tr>
+        <tr><td>200&times;200</td><td class="num">79.80</td><td class="num">+0.59</td><td class="num">15 of 24</td></tr>
+      </tbody>
+    </table>
+    <p class="note">SSIMULACRA2 over 24 photos from both cameras, and butteraugli agrees on every tier.
+      In bytes, 4:2:0 needs a median <b>2.2% more</b> on the 600 tile to reach 4:4:4&apos;s score.</p>
+    <p class="note"><b>Why more chroma helps when the camera recorded less.</b> Every color original here
+      is 4:2:2, but that describes the 7728&times;5152 frame. A 600px tile is the frame&apos;s centre square
+      reduced 8.6&times;, so each tile pixel averages about four color samples across and nine down, and
+      at its own size the tile carries full color. 4:2:0 then discards half of it in each direction.
+      With no compression at all, halving the color and restoring it scores 93.1 to 93.5 on the three
+      tiles against 96.3 on a crop at native resolution: the downscale is what makes subsampling expensive.
+      It barely costs bytes to keep, because full-resolution color in a reduced photo is smooth, and AV1
+      codes smooth planes for very little.</p>
+    <p class="note">It matters most under red light. Red carries only 0.299 of the brightness in the
+      BT.601 matrix these files signal, so fine detail in a red scene lives mostly in the color planes.
+      One night frame of bare branches against red windows needs <b>35% more bytes</b> at 4:2:0 to match
+      4:4:4.</p>
+    <p class="note">Each layout was scored at the shipped tile&apos;s exact byte count. avifenc&apos;s quality
+      knob moves in steps of a few percent, so every score is interpolated between the two steps on
+      either side of the budget, and the reproduced 4:2:0 tiles matched the shipped ones byte for byte
+      (72 of 72) before anything was compared. <code>tools/photos/avif-chroma-probe.ts</code> reruns it.</p>
+
     <h2>What aadhar.sh actually ships</h2>
     <ul class="enc-ships">
-      <li><b>AVIF primary</b> (<code>q63</code>, <code>4:2:0</code> color / <code>4:0:0</code> gray) +
+      <li><b>AVIF primary</b> (<code>q63</code>, <code>4:4:4</code> color / <code>4:0:0</code> gray) +
         <b>zenc JPG q84</b> (zenjpeg hybrid+scan) as the universal fallback, via <code>&lt;picture&gt;</code>.</li>
-      <li><b>Pre-cropped 600/400 squares</b>, metadata-stripped: the file <em>holds exactly</em> the displayed
+      <li><b>Pre-cropped 600/400/200 squares</b>, metadata-stripped: the file <em>holds exactly</em> the displayed
         pixels, so no off-square or EXIF bytes ride along.</li>
-      <li><b>4:2:0 over 4:4:4</b> for color: storing the full chroma at 4:4:4 costs ~8% more
-        bytes (the two AVIF q63 cards above) and buys no visible gain at thumbnail size, so 4:2:0 hands you free quality.</li>
+      <li><b>4:4:4 over 4:2:0</b> for color, since 2026-09-26: at equal bytes it scores higher on every
+        tile size, because a downscaled photo has full color to keep (the chroma section above).
+        The tiles ship at the same <code>q63</code>, where 4:4:4 lands about 6% heavier across the library
+        (+5.6%, +6.5% and +7.0% on the 600, 400 and 200 tiles) and scores 1.3 to 1.7 higher: the
+        equal-bytes win, plus a deliberate spend on quality. Holding bytes flat would have meant
+        <code>q62</code>, at +0.4% to +1.7% and +0.5 to +1.0.</li>
       <li><b>Full-res share copies in R2 at JPEG <code>q100 4:2:2</code></b>, progressive: 4:2:2 matches
         the HIF&apos;s native sensor chroma, and the scan order is the point at 10&nbsp;MB. The true HEIF
         originals stay on local disk. A JPG-source original is uploaded byte-for-byte from the camera,
@@ -666,24 +703,24 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
       ]
     },
     {
-      "q": "Color thumbnails ship at 4:2:0 chroma subsampling instead of full 4:4:4. What tradeoff did the study measure?",
+      "q": "The camera records 4:2:2 color, yet the AVIF thumbnails ship at full 4:4:4. Why does keeping more chroma than the original had win?",
       "options": [
         {
-          "t": "4:4:4 costs about 8% more bytes and buys no visible gain at thumbnail size, so 4:2:0 is effectively free.",
+          "t": "A thumbnail is the frame reduced about 9x, so it carries full color at its own size; 4:2:0 would discard real detail, and 4:4:4 scores higher at the same bytes.",
           "ok": true,
-          "why": "Compare the two AVIF q63 cards: 10.4 KB against 11.3 KB, with no difference you can point at under the loupe. That's quality budget for free."
+          "why": "The chroma section scores every layout at the shipped tile's exact byte count: 4:4:4 comes out about 0.5 SSIMULACRA2 ahead on all three tile sizes, and 4:2:0 needs a median 2.2% more bytes to catch up."
         },
         {
-          "t": "4:2:0 halves the file size, which outweighs the visible color smearing it causes.",
-          "why": "Both halves of that overshoot: the measured gap is about 8%, and at 400px there's no smearing to see. Scroll back to the two q63 cards and check with the loupe."
+          "t": "It doesn't win per byte; the site simply chose to pay about 8% more for better color.",
+          "why": "It wins before any extra byte is spent: at equal bytes 4:4:4 scores 0.45 to 0.59 higher. The shipped tiles do run about 6% heavier at q63, and that buys more quality on top of the free part."
         },
         {
-          "t": "4:4:4 fails to decode in some browsers, so 4:2:0 is the compatibility floor.",
-          "why": "Every sampling mode here decodes anywhere the format itself does; format support is what the picture element's fallback handles. The choice is purely bytes versus visible gain."
+          "t": "4:4:4 restores the color detail the camera's 4:2:2 threw away.",
+          "why": "Nothing can restore what the sensor pipeline never kept. The gain comes from the downscale: averaging many source pixels into one tile pixel leaves full-resolution color at tile size, which 4:2:0 would then halve."
         },
         {
-          "t": "Subsampling only applies to the JPEG fallback; the AVIF primary always keeps full chroma.",
-          "why": "The AVIF cards are labeled 4:2:0 for a reason: the primary is subsampled too. Only the grayscale frames change mode, and that's to 4:0:0."
+          "t": "Browsers upsample 4:2:0 chroma badly, so any subsampled AVIF looks smeared.",
+          "why": "The scores come from the reference decoder, with no browser involved. Halving the color and restoring it with no compression at all already costs a tile 6.5 to 6.9 points, so the loss is in the halving itself."
         }
       ]
     },

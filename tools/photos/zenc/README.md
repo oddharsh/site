@@ -24,7 +24,8 @@ reduction, not a claim of a measured end-to-end speedup.
 emits both formats from one quantized pixel buffer. Each `--size` starts a tier;
 `--out` optionally also writes its PNG. JPEG quality is global and defaults to
 84. AVIF uses the installed libavif at the existing grid settings: quality 63,
-10-bit, speed 2, four threads, automatic tiling, gray YUV400 or color YUV420.
+10-bit, speed 2, four threads, automatic tiling, gray YUV400 or color YUV444
+(4:4:4 since 2026-09-26; the measurement is in `src/avif.c`).
 `add-photos.sh` and `reencode-thumbnails.sh` build incrementally before running.
 `--version` reports zenjpeg; `--avif-version` reports the linked libavif/codecs.
 

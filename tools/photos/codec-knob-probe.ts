@@ -75,13 +75,16 @@ const JXL_VARIANTS: Record<string, string[]> = {
 // avifenc does not know exits 1 ("Invalid codec-specific option"), so every
 // key below was accepted, and each moved the bytes.
 const AV = (...extra: string[]) => [...AVIF_ARGS, ...extra];
+/** The shipping flags with one of them replaced. */
+const with_ = (flag: string, value: string) => AVIF_ARGS.map((a, i) => (AVIF_ARGS[i - 1] === flag ? value : a));
 const AVIF_VARIANTS: Record<string, string[]> = {
   base: AVIF_ARGS,
-  s1: ["-d", "10", "--speed", "1", "--yuv", "420"],
-  yuv444: ["-d", "10", "--speed", "2", "--yuv", "444"],
-  yuv422: ["-d", "10", "--speed", "2", "--yuv", "422"],
-  d8: ["-d", "8", "--speed", "2", "--yuv", "420"],
-  d12: ["-d", "12", "--speed", "2", "--yuv", "420"],
+  s1: with_("--speed", "1"),
+  yuv420: with_("--yuv", "420"),
+  yuv422: with_("--yuv", "422"),
+  yuv444: with_("--yuv", "444"),
+  d8: with_("-d", "8"),
+  d12: with_("-d", "12"),
   tunessim: AV("-a", "tune=ssim"),
   tunepsnr: AV("-a", "tune=psnr"),
   dq0: AV("-a", "deltaq-mode=0"),
