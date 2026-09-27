@@ -32,6 +32,7 @@
 // Usage:
 //     bun tools/photos/codec-knob-probe.ts                    # JXL, every variant, both sets
 //     bun tools/photos/codec-knob-probe.ts --codec avif
+//     bun tools/photos/codec-knob-probe.ts --codec avm --variants base,s4   # AV2; needs libavif-avm/build.sh
 //     bun tools/photos/codec-knob-probe.ts --set train --variants base,epf0
 //     bun tools/photos/codec-knob-probe.ts --json out.json
 //
@@ -53,9 +54,31 @@
 // identical pixels, and is still 42.7% larger than the 4:4:4 AVIF tier, so it
 // never wins for a browser that decodes both.
 //
+// AV2, `--codec avm`: where the next codec in the AV1 line stands on these
+// photos. It is scored against the SAME shipped AVIF budgets and the same AVIF
+// scores, so every row reads "AV2 at the bytes AVIF actually costs". Both files
+// are AVIF containers (AV2 writes an `av02` item), so this is file against file
+// with no container adjustment. It needs avifenc-avm, the AV2 build from
+// tools/photos/libavif-avm/build.sh, and is bracketed on -q exactly like the
+// AVIF arm. Nothing it writes can ship: no browser decodes AV2.
+//
+// WHAT IT FOUND FOR AV2, 2026-09-27 (AVM 1.0.0 via libavif 768b3dfe, against
+// the 4:4:4 AVIF budget; Δ s2 vs the shipped AVIF at matched bytes, train /
+// holdout; butteraugli wins out of 32):
+//   speed 6 (this arm, base)                      -1.70 / -2.21   0 of 32 s2 wins
+//   cpu-used 6, raw avmenc, payload vs payload    -1.46 / -2.32   bu wins 18 of 32
+//   cpu-used 3, raw avmenc, payload vs payload    -0.81 / -1.66   bu wins 21 of 32
+// The raw-avmenc rows come from a scratch harness with its own RGB->YUV code;
+// the two speed 6 rows agree within 0.25, which is the check that neither the
+// harness nor the container accounting is the result. The metrics DISAGREE,
+// and the pictures say why: AV2 flattens sensor grain on high-ISO frames, which
+// ssimulacra2 punishes and butteraugli mostly forgives. Lossless (-l, identity
+// matrix, bit-exact on all 16 crops) is 29% LARGER than aom's, and speed 3 did
+// not close it (161,336 B vs 160,357 at speed 6 on XT509794).
+//
 // Crops are cached in --cache (default: a directory under the OS temp dir), since
 // cutting one from a HIF costs a full-resolution sips decode.
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -142,11 +165,59 @@ const AVIF_VARIANTS: Record<string, string[]> = {
   nofilt: AV("-a", "enable-cdef=0", "-a", "enable-restoration=0"),
 };
 
+// AV2 through libavif's experimental AVM codec. --speed maps straight onto
+// AVM's cpu-used (clamped 0..9), and that axis matters far more than it does
+// for aom: on one crop, raw avmenc at cpu-used 3 scored +2.4 s2 over cpu-used 6
+// at the same bytes, for 5x the time, and cpu-used 1 ran past 8 minutes on a
+// single 320px frame. So the base is speed 6, and the slow speeds are variants.
+// Screened 2026-09-27 at q63 on one crop, like the lists above: tune=ssim,
+// enable-restoration=0 and deltaq-mode=0 came back BYTE-IDENTICAL to the base,
+// and enable-tcq is refused ("Invalid codec-specific option", as is an invented
+// key, which is the control that a refusal is visible). The rest moved bytes.
+const AVIFENC_AVM = path.join(path.dirname(fileURLToPath(import.meta.url)), "libavif-avm", "build", "avifenc");
+const AVIFDEC_AVM = path.join(path.dirname(AVIFENC_AVM), "avifdec");
+const AVM_ARGS = ["-c", "avm", "-d", "10", "--speed", "6", "--yuv", "444"];
+const avm = (...extra: string[]) => [...AVM_ARGS, ...extra];
+const withAvm = (flag: string, value: string) => AVM_ARGS.map((a, i) => (AVM_ARGS[i - 1] === flag ? value : a));
+const AVM_VARIANTS: Record<string, string[]> = {
+  base: AVM_ARGS,
+  s4: withAvm("--speed", "4"),
+  s3: withAvm("--speed", "3"),
+  yuv420: withAvm("--yuv", "420"),
+  qm1: avm("-a", "enable-qm=1"),
+  dq2: avm("-a", "deltaq-mode=2"),
+  cdef0: avm("-a", "enable-cdef=0"),
+  ccso0: avm("-a", "enable-ccso=0"),
+  gdf0: avm("-a", "enable-gdf=0"),
+  nofilt: avm("-a", "enable-cdef=0", "-a", "enable-ccso=0", "-a", "enable-gdf=0"),
+};
+
+/** Encode and decode for one AVIF-family codec: the shipped aom build, or the
+ *  AV2 build, which reads and writes files the shipped avifdec cannot open. */
+type AvifCodec = { enc: (png: string, out: string, q: number, args: string[]) => number; dec: (file: string, png: string) => string };
+const AOM: AvifCodec = {
+  enc: (png, out, q, args) => encodeFmt("avif", png, out, q, undefined, args),
+  dec: (file, png) => decodeFmt("avif", file, png),
+};
+const AVM: AvifCodec = {
+  enc: (png, out, q, args) => {
+    // --jobs pinned like the AVIF arm, since a thread count can move bytes (gotcha 43)
+    const r = spawnSync(AVIFENC_AVM, ["-q", String(q), ...args, "--jobs", "4", "--ignore-icc", "--ignore-exif", "--ignore-xmp", png, out], { encoding: "utf8" });
+    if (r.status !== 0 || !fs.existsSync(out)) throw new Error(`avifenc-avm -q ${q} failed: ${(r.stderr || r.stdout || "").trim().slice(-200)}`);
+    return fs.statSync(out).size;
+  },
+  dec: (file, png) => {
+    const r = spawnSync(AVIFDEC_AVM, ["-d", "8", file, png], { encoding: "utf8" });
+    if (r.status !== 0 || !fs.existsSync(png)) throw new Error(`avifdec (AV2 build) failed: ${(r.stderr || r.stdout || "").trim().slice(-200)}`);
+    return png;
+  },
+};
+
 const TRAIN = CANDIDATES.format[2];
 const HOLDOUT = ["XT509278", "XT507955", "XT508055", "XT509535", "XT509965", "XT509848", "XT509388", "XT509540"];
 const TIERS = Object.keys(FORMAT_TIER_ANCHOR) as (keyof typeof FORMAT_TIER_ANCHOR)[];
 
-type Codec = "jxl" | "avif";
+type Codec = "jxl" | "avif" | "avm";
 type Row = { set: string; stem: string; tier: string; budget: number; avif: { s2: number; bu: number }; v: Record<string, { bytes: number; d: number; s2: number; bu: number } | { error: string }> };
 
 // ------------------------------------------------------------------ worker
@@ -184,13 +255,13 @@ function recompressed(srcs: { png: string; ppm: string }, dir: string, target: n
 /** Score an AVIF variant AT the budget: find the adjacent -q pair whose sizes
  *  straddle it, score both, interpolate linearly in bytes. `d` carries the
  *  lower -q plus the fraction of the way to the next one. */
-export function bracketed(ref: string, dir: string, target: number, args: string[]): { bytes: number; d: number; s2: number; bu: number } {
+export function bracketed(ref: string, dir: string, target: number, args: string[], codec: AvifCodec = AOM): { bytes: number; d: number; s2: number; bu: number } {
   const size = new Map<number, number>();
-  const at = (q: number) => { if (!size.has(q)) size.set(q, encodeFmt("avif", ref, path.join(dir, `q${q}.avif`), q, undefined, args)); return size.get(q) as number; };
+  const at = (q: number) => { if (!size.has(q)) size.set(q, codec.enc(ref, path.join(dir, `q${q}.avif`), q, args)); return size.get(q) as number; };
   let lo = 0, hi = 100;                        // invariant: at(lo) <= target < at(hi), checked below
   if (at(lo) > target || at(hi) <= target) throw new Error(`budget ${target}B outside -q 0..100 (${at(0)}..${at(100)}B)`);
   while (hi - lo > 1) { const m = (lo + hi) >> 1; if (at(m) <= target) lo = m; else hi = m; }
-  const score = (q: number) => { const d = decodeFmt("avif", path.join(dir, `q${q}.avif`), path.join(dir, `q${q}.png`)); return [ssim2(ref, d), butter(ref, d)]; };
+  const score = (q: number) => { const d = codec.dec(path.join(dir, `q${q}.avif`), path.join(dir, `q${q}.png`)); return [ssim2(ref, d), butter(ref, d)]; };
   const [s2a, bua] = score(lo), [s2b, bub] = score(hi);
   const t = (target - at(lo)) / (at(hi) - at(lo));
   const r = (x: number) => Number(x.toFixed(3));
@@ -215,7 +286,11 @@ function work(codec: Codec, set: string, stem: string, variants: string[], cache
       for (const name of variants) {
         const vd = path.join(sub, name);
         fs.mkdirSync(vd);
-        if (codec === "avif") { try { row.v[name] = bracketed(ref, vd, avif.bytes, AVIF_VARIANTS[name]); } catch (e) { row.v[name] = { error: e instanceof Error ? e.message.slice(0, 120) : String(e) }; } continue; }
+        if (codec === "avif" || codec === "avm") {
+          try { row.v[name] = codec === "avif" ? bracketed(ref, vd, avif.bytes, AVIF_VARIANTS[name]) : bracketed(ref, vd, avif.bytes, AVM_VARIANTS[name], AVM); }
+          catch (e) { row.v[name] = { error: e instanceof Error ? e.message.slice(0, 120) : String(e) }; }
+          continue;
+        }
         try {
           const v = JXL_VARIANTS[name];
           if (v[0] === "<zenc-recompress>") { row.v[name] = recompressed(srcs, vd, avif.bytes, ref, v[1] ?? "420", v.slice(2)); continue; }
@@ -242,8 +317,10 @@ function report(rows: Row[], variants: string[], codec: Codec): void {
     const base = rs.filter((r) => ok(r.v.base, r.budget));
     console.log(`\n${set}: ${rs.length} calls (${new Set(rs.map((r) => r.stem)).size} crops x ${TIERS.length} tiers)`);
     const avifGap = base.reduce((n, r) => n + ((r.v.base as { s2: number }).s2 - r.avif.s2), 0) / base.length;
-    if (codec === "jxl") console.log(`  base vs AVIF at matched bytes: mean ${avifGap >= 0 ? "+" : ""}${avifGap.toFixed(2)} s2`);
-    console.log(`  variant     n  mean Δs2  mean Δbu  s2 wins  ${codec === "jxl" ? "vs AVIF s2" : "bu wins"}`);
+    // jxl and avm are rival codecs, so their question is the gap to the shipped AVIF
+    const vsAvif = codec !== "avif";
+    if (vsAvif) console.log(`  base vs AVIF at matched bytes: mean ${avifGap >= 0 ? "+" : ""}${avifGap.toFixed(2)} s2`);
+    console.log(`  variant     n  mean Δs2  mean Δbu  s2 wins  ${vsAvif ? "vs AVIF s2" : "bu wins"}`);
     for (const name of variants) {
       const pairs = rs.filter((r) => ok(r.v.base, r.budget) && ok(r.v[name], r.budget));
       if (!pairs.length) { console.log(`  ${name.padEnd(10)}  0  (never landed on budget)`); continue; }
@@ -252,7 +329,7 @@ function report(rows: Row[], variants: string[], codec: Codec): void {
       const va = pairs.map((r) => (r.v[name] as { s2: number }).s2 - r.avif.s2);
       const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
       const sign = (x: number) => `${x >= 0 ? "+" : ""}${x.toFixed(2)}`;
-      console.log(`  ${name.padEnd(10)}${String(pairs.length).padStart(2)}  ${sign(mean(d2)).padStart(8)}  ${sign(mean(db)).padStart(8)}  ${`${d2.filter((x) => x > 0).length}/${pairs.length}`.padStart(7)}  ${codec === "jxl" ? sign(mean(va)).padStart(10) : `${db.filter((x) => x < 0).length}/${pairs.length}`.padStart(7)}`);
+      console.log(`  ${name.padEnd(10)}${String(pairs.length).padStart(2)}  ${sign(mean(d2)).padStart(8)}  ${sign(mean(db)).padStart(8)}  ${`${d2.filter((x) => x > 0).length}/${pairs.length}`.padStart(7)}  ${vsAvif ? sign(mean(va)).padStart(10) : `${db.filter((x) => x < 0).length}/${pairs.length}`.padStart(7)}`);
     }
   }
   console.log("\nΔbu is butteraugli, where NEGATIVE is better. Only calls landing within 2% of budget count.");
@@ -264,8 +341,12 @@ async function main(): Promise<number> {
   const cache = arg("--cache") ?? path.join(os.tmpdir(), "jxl-knob-probe-crops");
   fs.mkdirSync(cache, { recursive: true });
   const codec = (arg("--codec") ?? "jxl") as Codec;
-  if (codec !== "jxl" && codec !== "avif") { console.error("--codec wants jxl or avif"); return 2; }
-  const VARIANTS = codec === "avif" ? AVIF_VARIANTS : JXL_VARIANTS;
+  if (codec !== "jxl" && codec !== "avif" && codec !== "avm") { console.error("--codec wants jxl, avif or avm"); return 2; }
+  if (codec === "avm" && !(fs.existsSync(AVIFENC_AVM) && fs.existsSync(AVIFDEC_AVM))) {
+    console.error(`--codec avm needs avifenc-avm, the AV2 build; run tools/photos/libavif-avm/build.sh (expected ${AVIFENC_AVM})`);
+    return 2;
+  }
+  const VARIANTS = codec === "avif" ? AVIF_VARIANTS : codec === "avm" ? AVM_VARIANTS : JXL_VARIANTS;
   const variants = (arg("--variants") ?? Object.keys(VARIANTS).join(",")).split(",");
   for (const v of variants) if (!VARIANTS[v]) { console.error(`unknown ${codec} variant ${v}; have ${Object.keys(VARIANTS).join(", ")}`); return 2; }
   if (!variants.includes("base")) variants.unshift("base");
@@ -280,8 +361,10 @@ async function main(): Promise<number> {
   const self = fileURLToPath(import.meta.url);
   const rows: Row[] = [];
   let next = 0;
-  // cjxl and avifenc are multithreaded themselves, so a few workers saturate the machine
-  const conc = Number(arg("--jobs") ?? 4);
+  // cjxl and avifenc are multithreaded themselves, so a few workers saturate the
+  // machine. AVM barely threads on a 320px still (raw avmenc sat at ~98% of one
+  // core), so the AV2 arm takes a worker per core instead.
+  const conc = Number(arg("--jobs") ?? (codec === "avm" ? os.availableParallelism() : 4));
   const runOne = async (): Promise<void> => {
     while (next < jobs.length) {
       const [set, stem] = jobs[next++];

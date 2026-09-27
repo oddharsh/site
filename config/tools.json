@@ -120,6 +120,7 @@
       "install": "brew install cmake",
       "why": "configures and builds the pinned AVIF encoder and its libraries",
       "required_by": [
+        "tools/photos/libavif-avm/build.sh",
         "tools/photos/libavif/build.sh"
       ],
       "version": {
@@ -134,6 +135,7 @@
       "install": "brew install ninja",
       "why": "executes the CMake build for the pinned AVIF encoder",
       "required_by": [
+        "tools/photos/libavif-avm/build.sh",
         "tools/photos/libavif/build.sh"
       ],
       "version": {
@@ -148,8 +150,9 @@
       "install": "brew install git",
       "why": "fetches the pinned AVIF encoder sources; also supplies the tracked-script census for tools:check",
       "required_by": [
-        "tools/photos/libavif/build.sh",
-        "tools/check-tools.ts"
+        "tools/check-tools.ts",
+        "tools/photos/libavif-avm/build.sh",
+        "tools/photos/libavif/build.sh"
       ],
       "version": {
         "flag": "--version",
@@ -312,6 +315,7 @@
       "install": "brew install pkgconf libavif",
       "why": "resolves installed libavif development headers and libraries for the native grid encoder",
       "required_by": [
+        "tools/photos/libavif-avm/build.sh",
         "tools/photos/require-zenc.sh"
       ],
       "version": {
@@ -337,6 +341,23 @@
       },
       "bytes": true,
       "recorded": "libavif 1.4.2, aom 3.15.1"
+    },
+    {
+      "bin": "avifenc-avm",
+      "path": "tools/photos/libavif-avm/build/avifenc",
+      "install": "brew install aom cmake ninja pkgconf && tools/photos/libavif-avm/build.sh",
+      "optional": true,
+      "optional_why": "measurement only: codec-knob-probe.ts --codec avm is its one caller and refuses with the build command when it is missing. Nothing in the photo pipeline or the build needs it",
+      "why": "AV2 (AVM 1.0.0) still-image encoder, with avifdec beside it, for the --codec avm arm of codec-knob-probe.ts. libavif pinned by commit with its experimental AVIF_CODEC_AVM on",
+      "required_by": [
+        "tools/photos/codec-knob-probe.ts"
+      ],
+      "version": {
+        "flag": "--version",
+        "match": "Version: (?<libavif>\\d+\\.\\d+\\.\\d+) \\(.*avm \\[enc/dec\\]:v?(?<avm>\\d+\\.\\d+\\.\\d+)"
+      },
+      "bytes": false,
+      "bytes_why": "writes scratch AV2 encodes for a probe and commits nothing; no browser decodes AV2, so none of its output can ship"
     }
   ]
 }
