@@ -373,6 +373,12 @@ export const AGENT_SURFACES = [
     "description": "13 pages here are written per request and ship as plain brotli, because workerd's zstd dropped its dictionary option. What the fix would save, what it costs, and what it cannot reach."
   },
   {
+    "path": "/garage/av2",
+    "title": "AV2, before anyone can see it",
+    "mimeType": "text/html",
+    "description": "AV2 still images, scored against the AVIF this site ships at matched bytes, before any browser can decode them, and why an AV2 file behind a picture fallback still breaks."
+  },
+  {
     "path": "/bot",
     "title": "AadharshBot",
     "mimeType": "text/html",
@@ -445,6 +451,7 @@ export const WEBMENTION_PATHS = [
   "/garage/wire",
   "/garage/workers",
   "/garage/dictionary",
+  "/garage/av2",
   "/inbox"
 ];
 export const WEBMENTION_SECTIONS = [

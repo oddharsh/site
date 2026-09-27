@@ -1069,6 +1069,23 @@
       }
     },
     {
+      "path": "/garage/av2",
+      "title": "AV2, before anyone can see it",
+      "section": "garage",
+      "kind": "content",
+      "description": "AV2 still images, scored against the AVIF this site ships at matched bytes, before any browser can decode them, and why an AV2 file behind a picture fallback still breaks.",
+      "hint": "AV2 stills vs shipped AVIF, and the picture fallback trap",
+      "flags": {
+        "run": true,
+        "taskbar": false,
+        "sitemap": true,
+        "gallery": true,
+        "agents": true,
+        "searchIndex": false,
+        "webmention": true
+      }
+    },
+    {
       "path": "/bot",
       "title": "AadharshBot",
       "section": "identity",
