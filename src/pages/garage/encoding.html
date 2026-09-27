@@ -530,33 +530,6 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
       either side of the budget, and the reproduced 4:2:0 tiles matched the shipped ones byte for byte
       (72 of 72) before anything was compared. <code>tools/photos/avif-chroma-probe.ts</code> reruns it.</p>
 
-    <h2>WebP: one setting worth turning, and no better encoder</h2>
-    <p class="note">The grid serves no WebP, since every browser that takes WebP also takes AVIF. It is
-      still the format most people reach for, so it got a matched-bytes run of its own: every
-      <code>cwebp</code> setting that changes the bytes, scored at the exact size of the 4:4:4 AVIF tile
-      on 16 crops, 8 used to choose and 8 held back to check the choice.</p>
-    <table class="enc-table">
-      <thead><tr><th>WebP setting</th><th>SSIMULACRA2, chosen / held back</th></tr></thead>
-      <tbody>
-        <tr><td>noise shaping 25 (default 50)</td><td class="num">+0.45 / +0.66</td></tr>
-        <tr><td>noise shaping 80 or 100</td><td class="num">&minus;2.2 to &minus;7.3</td></tr>
-        <tr><td><code>photo</code> or <code>picture</code> preset</td><td class="num">&minus;2.3 to &minus;2.7</td></tr>
-        <tr><td>faster encode, <code>-m 4</code></td><td class="num">&minus;1.5 / &minus;1.2</td></tr>
-        <tr><td>zenwebp, a pure-Rust encoder</td><td class="num">&minus;0.5 / &minus;0.3</td></tr>
-      </tbody>
-    </table>
-    <p class="note">Spatial noise shaping decides where a fixed budget goes. At the default 50,
-      <code>cwebp</code> moves bits out of busy regions on the theory that noise hides errors. On these
-      photos the grain is the detail, so turning it down to 25 raised both metrics at once, and 25 is
-      the peak: 10, 15, 35 and 40 all scored lower. The <code>photo</code> and <code>picture</code>
-      presets lose for the same reason run backwards, since both turn noise shaping up.</p>
-    <p class="note">The one serious alternative encoder, imazen&apos;s zenwebp (from the authors of the
-      zenjpeg encoder above), follows libwebp&apos;s algorithms closely and scored lower at the same
-      bytes; its content-detecting auto preset scored lower still. So the ceiling is the format itself:
-      8-bit, color always halved to 4:2:0, 16px blocks. Tuned, WebP still trailed 4:4:4 AVIF by 5.2 to
-      5.7 points, and the format calls on <a href="/pixel-peeper">/pixel-peeper</a> run it at noise
-      shaping 25 so it enters that race at its best.</p>
-
     <h2>What aadhar.sh actually ships</h2>
     <ul class="enc-ships">
       <li><b>AVIF primary</b> (<code>q63</code>, <code>4:4:4</code> color / <code>4:0:0</code> gray) +
