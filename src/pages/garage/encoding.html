@@ -443,33 +443,92 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
       perf.now() 2018</a>: the same bytes, reordered, show a recognisable picture at a quarter of the
       file, and it costs nothing because it is not an extra request or a placeholder tier.</p>
 
-    <p class="note">Every JPG this site ships is already progressive, thumbnails included: 158 of 158
-      parse as <code>SOF2</code>, and the scan search picks a good script. On a representative
-      31.3&nbsp;KB thumbnail the seven scans land at these points in the file, so the first three,
-      which is where an image becomes recognisable, are inside the first third:</p>
+    <h3>What a scan actually is</h3>
+    <p class="note">A JPEG stores each 8&times;8 block as 64 quantized DCT coefficients: one DC term, the
+      block&apos;s average, and 63 AC terms for finer and finer detail. Baseline writes every block
+      complete in a single pass, top to bottom, so half the file is the top half of the picture.
+      Progressive writes the same coefficients over several passes, each called a <em>scan</em> and
+      each covering the whole frame. A scan header names its channels, a band of coefficients
+      (<code>Ss</code>..<code>Se</code>: DC alone, then coarse AC, then fine) and a bit precision
+      (<code>Ah</code>/<code>Al</code>: the high bits first, the low bits in later refinement scans).
+      Nothing is quantized twice, so the finished pixels match.</p>
+    <p class="note">The <a href="/lwe/encoding#demo-progressive">/lwe/encoding demo</a> takes that last
+      claim off the honour system. <code>jpegtran</code> rewrote the shipped q84 fixture into a baseline
+      file and into libjpeg&apos;s standard 10-scan script without decoding it, all three decode to
+      byte-identical pixels, and a slider hands each cut-off file to <em>your</em> browser&apos;s decoder.
+      The shipped file&apos;s own scan headers read:</p>
     <table class="enc-table">
-      <thead><tr><th>scan</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th></tr></thead>
+      <thead><tr><th>scan</th><th>channels</th><th>carries</th><th>starts at</th></tr></thead>
       <tbody>
-        <tr><td>byte offset</td><td class="num">0%</td><td class="num">15%</td><td class="num">34%</td>
-            <td class="num">85%</td><td class="num">87%</td><td class="num">90%</td><td class="num">94%</td></tr>
+        <tr><td>1</td><td>Y</td><td>DC (block averages)</td><td class="num">2%</td></tr>
+        <tr><td>2</td><td>Y</td><td>AC 1&ndash;2</td><td class="num">11%</td></tr>
+        <tr><td>3</td><td>Y</td><td>AC 3&ndash;63</td><td class="num">24%</td></tr>
+        <tr><td>4</td><td>Cb</td><td>DC (block averages)</td><td class="num">83%</td></tr>
+        <tr><td>5 &#9733;</td><td>Cr</td><td>DC (block averages)</td><td class="num">85%</td></tr>
+        <tr><td>6</td><td>Cb</td><td>AC 1&ndash;63</td><td class="num">86%</td></tr>
+        <tr><td>7</td><td>Cr</td><td>AC 1&ndash;63</td><td class="num">92%</td></tr>
       </tbody>
     </table>
 
-    <p class="note"><b>And you will never see it work on a thumbnail.</b> At a 32&nbsp;KB median, a
-      typical 10-packet initial congestion window (~14&nbsp;KB) already carries 45% of the file, so
-      those first three scans arrive in the opening flight and the tile paints once. The scan search
-      still earns its place at this size, purely for the bytes it saves. The rendering half of the
-      feature is dormant.</p>
+    <p class="note">The three files are also the byte half of the story. A progressive AC scan can code a
+      run of all-zero blocks as one symbol, and each scan carries Huffman tables fitted to its own
+      statistics; refinement scans give some of that back in correction bits. So the libjpeg script
+      lands <b>1.7% over</b> baseline (16,609 against 16,324 bytes) while zenc&apos;s searched order
+      lands <b>0.6% under</b> it (16,234). A smaller progressive file is a property of a good script.</p>
 
-    <p class="note">It wakes up at <a href="/photos">the full-size archive</a>. <code>/images/full/</code>
+    <h3>Chrome paints nothing until every channel has started <span class="status review">measured</span></h3>
+    <p class="note">Cut a progressive JPEG anywhere and Chromium draws what the coefficients so far
+      imply, missing rows and all, with one exception that decides everything: it paints nothing
+      until Y, Cb and Cr have each begun a scan. The gate is exact to the byte. On the fixture
+      the Cr DC scan header starts at byte 13,753 and its data at 13,763; a prefix ending anywhere up
+      to 13,760 fails to decode, and one ending at 13,765 paints. <code>ImageDecoder</code> fed the
+      same prefixes as a stream agrees, so this is the streaming path a visitor gets, and truncated
+      blobs are a faithful stand-in for it. Measured in Chromium 152; the starred row above is the
+      gate, and the LWE demo shows whether your engine keeps it.</p>
+    <p class="note">zenc&apos;s search scores bytes and nothing else, and at thumbnail size the winning
+      order often sends the whole luma plane before either chroma plane. On the fixture that puts
+      the gate at 84.8%, so the shipped file paints once, at the end, like a slow baseline. Across the
+      library&apos;s 255 colour JPG tiles the gate sits at a median 80% of the file: 99 paint within
+      their first quarter, and the other 156 wait past halfway.</p>
+    <p class="note"><b>On a thumbnail that barely matters.</b> The JPG tile is the fallback most
+      browsers never fetch, and it is small: a median 48.7&nbsp;KB, with the gate at a median
+      19.3&nbsp;KB. A 10-packet initial congestion window carries about 14&nbsp;KB, so 116 of the 255
+      reach their gate in the opening flight and the rest one round trip later. The scan search still earns its place
+      at this size, purely for the bytes it saves.</p>
+
+    <p class="note">It matters at <a href="/photos">the full-size archive</a>. <code>/images/full/</code>
       is the one image surface here with no AVIF tier and no <code>&lt;picture&gt;</code> around it:
-      the worker streams ~10&nbsp;MB from R2 as bare <code>image/jpeg</code>, and that single file is
-      the whole payload. That is also the awkward part of the format story, because <b>AVIF
+      the worker streams a median 21.6&nbsp;MB from R2 as bare <code>image/jpeg</code>, and that single
+      file is the whole payload. That is also the awkward part of the format story, because <b>AVIF
       structurally cannot do this</b>. Its layered mode caps at four stages, is effectively
       Chromium-only, and is staged rather than incremental the way a JPEG scan script is; nothing
       here emits layered AVIF anyway. So the format that wins every byte comparison on this page
       loses the one property that matters when a single large image <em>is</em> the page. Both are
       true at once, which is why the grid is AVIF and the archive is JPEG.</p>
+
+    <h3>A fifth of the archive gets the order wrong <span class="status review">open</span></h3>
+    <p class="note">The gate applies to the archive too, where it costs seconds. Each of the 258 files
+      was streamed from R2 until every channel had started, giving up at 3&nbsp;MB:</p>
+    <table class="enc-table">
+      <thead><tr><th>archive files</th><th>count</th><th>Chrome&apos;s first paint</th></tr></thead>
+      <tbody>
+        <tr><td>colour, every channel&apos;s DC up front</td><td class="num">202</td><td class="num">median 3.7%, max 5.1%</td></tr>
+        <tr><td>colour, all of luma before any chroma</td><td class="num">53</td><td class="num">past 3&nbsp;MB</td></tr>
+        <tr><td>grayscale, one channel</td><td class="num">2</td><td class="num">first scan</td></tr>
+        <tr><td>baseline, one scan</td><td class="num">1</td><td class="num">top rows first</td></tr>
+      </tbody>
+    </table>
+    <p class="note">All 53 are HIF re-encodes, where zenc&apos;s search picked a luma-first order for a
+      40&nbsp;MP q100 frame; the JPG-source originals go through <code>jpegtran</code>&apos;s standard
+      script and all paint early. Five of the 53 were followed to the end and start colour at 93 to
+      98% of the file. XT508165 is the worst: 98.4% of 23.8&nbsp;MB, about nine seconds of blank frame
+      on a 20&nbsp;Mbps link before a finished picture appears in one step, which is precisely the
+      experience the archive is progressive to avoid. The repair is lossless, since
+      <code>jpegtran -progressive</code> rewrites the same coefficients into a script that leads with
+      every channel&apos;s DC. It has not run yet: it needs the archive cache bust any in-place
+      <code>/images/full/</code> overwrite does, and <code>add-photos.sh</code> needs the same
+      constraint so the next HIF does not reintroduce it. The one baseline file, XT508887, predates
+      the pipeline.</p>
 
     <h3>What the archive tier actually costs</h3>
     <p class="note">The archive is a second encode: a HIF is decoded to lossless PNG, then re-encoded
@@ -495,7 +554,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
       anywhere else. Comparing a direct downscale of the HIF against a downscale of the archive JPEG,
       the same pair that reads 88.15 at full resolution reads <b>94.62 at 1080px</b>: averaging ~50
       source pixels into one washes most encoding artifacts out. Delivery scale forgives the second
-      encode. A 10&nbsp;MB download does not, which is the whole reason the archive is progressive.</p>
+      encode. A 20&nbsp;MB download does not, which is the whole reason the archive is progressive.</p>
 
     <h2>Chroma: hold the bytes, then compare <span class="status shipped">shipped</span></h2>
     <p class="note">The two AVIF q63 cards in the showdown put 4:4:4 at 11.3&nbsp;KB against 4:2:0&apos;s
@@ -543,7 +602,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
         equal-bytes win, plus a deliberate spend on quality. Holding bytes flat would have meant
         <code>q62</code>, at +0.4% to +1.7% and +0.5 to +1.0.</li>
       <li><b>Full-res share copies in R2 at JPEG <code>q100 4:2:2</code></b>, progressive: 4:2:2 matches
-        the HIF&apos;s native sensor chroma, and the scan order is the point at 10&nbsp;MB. The true HEIF
+        the HIF&apos;s native sensor chroma, and the scan order is the point at 20&nbsp;MB. The true HEIF
         originals stay on local disk. A JPG-source original is uploaded byte-for-byte from the camera,
         rearranged to progressive by <code>jpegtran</code> on the way up: a lossless coefficient
         reorder, never a re-encode.</li>
@@ -750,9 +809,9 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
       "q": "AVIF beats JPEG by ~34-36% at every resolution on this page, and the grid is AVIF-primary because of it. So why is the full-size archive at /images/full/ a JPEG?",
       "options": [
         {
-          "t": "A ~10 MB file is served as bare image/jpeg with no <picture> around it, so scan order IS the loading experience, and AVIF cannot render incrementally the way a progressive JPEG can.",
+          "t": "A ~20 MB file is served as bare image/jpeg with no <picture> around it, so scan order IS the loading experience, and AVIF cannot render incrementally the way a progressive JPEG can.",
           "ok": true,
-          "why": "Both facts hold at once. AVIF wins every byte comparison here, and it still loses the one property that matters when a single large image is the whole payload: its layered mode caps at four stages, is effectively Chromium-only, and is staged rather than incremental. The grid is AVIF because bytes dominate at 32 KB; the archive is JPEG because rendering order dominates at 10 MB."
+          "why": "Both facts hold at once. AVIF wins every byte comparison here, and it still loses the one property that matters when a single large image is the whole payload: its layered mode caps at four stages, is effectively Chromium-only, and is staged rather than incremental. The grid is AVIF because bytes dominate at 49 KB; the archive is JPEG because rendering order dominates at 20 MB."
         },
         {
           "t": "AVIF loses its byte advantage at full resolution, so JPEG is simply smaller there.",
@@ -764,7 +823,7 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
         },
         {
           "t": "The archive keeps the camera original untouched, and cameras cannot write AVIF.",
-          "why": "Half true and still not the reason. A JPG-source original does go up byte-for-byte, but 112 of the archive files are re-encoded from HIF and could have been AVIF. They are JPEG so a 10 MB download paints progressively."
+          "why": "Half true and still not the reason. A JPG-source original does go up byte-for-byte, but 207 of the 258 archive files are re-encoded from HIF and could have been AVIF. They are JPEG so a 20 MB download paints progressively."
         }
       ]
     }
