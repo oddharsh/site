@@ -25,7 +25,9 @@
     "The 2026-08-28 pixel-tier rerender reproduced all 165 JPEGs byte-for-byte and",
     "reproduced three old AVIF tiles at --speed 4 before taking --speed 2. The same",
     "flag study found --jobs 1 differed from parallel encoding, while 2, 4, and 8",
-    "agreed on those inputs. Preserve these as scoped measurements, not a guarantee",
+    "agreed on those inputs. On 2026-09-27, aom 3.15.0 and 3.15.1 (swapped under one",
+    "zenc and one avifenc binary) reproduced 36 of 36 shipped 4:4:4 tiers on 9 stems",
+    "and 6 of 6 CLI encodes on macOS arm64. Preserve these as scoped measurements, not a guarantee",
     "for a different source, encoder, or configuration.",
     "",
     "Grid ingest and rerenders link the INSTALLED libavif through zenc. The",
@@ -245,7 +247,7 @@
         "match": "Version: (?<libavif>\\d+\\.\\d+\\.\\d+) \\(.*aom \\[enc/dec\\]:v?(?<aom>\\d+\\.\\d+\\.\\d+)"
       },
       "bytes": true,
-      "recorded": "libavif 1.4.2, aom 3.15.0"
+      "recorded": "libavif 1.4.2, aom 3.15.1"
     },
     {
       "bin": "cwebp",
@@ -334,7 +336,7 @@
         "match": "libavif (?<libavif>\\d+\\.\\d+\\.\\d+) \\(.*aom \\[enc/dec\\]:v?(?<aom>\\d+\\.\\d+\\.\\d+)"
       },
       "bytes": true,
-      "recorded": "libavif 1.4.2, aom 3.15.0"
+      "recorded": "libavif 1.4.2, aom 3.15.1"
     }
   ]
 }
