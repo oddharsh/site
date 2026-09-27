@@ -86,6 +86,28 @@
         ]
       },
       {
+        "q": "The camera records color at 4:2:2, yet the 600px AVIF tile scores better at 4:4:4 than at 4:2:0 for the same bytes. Where does the extra color come from?",
+        "options": [
+          {
+            "t": "the 8.6x downscale averages several camera color samples into every tile pixel",
+            "ok": true,
+            "why": "Each tile pixel covers an 8.6 by 8.6 patch of the frame, which holds about four color samples across and nine down. At its own size the tile has full color, and 4:2:0 would halve it in each direction. Drag the reduction demo below 2x to see where that stops being true."
+          },
+          {
+            "t": "4:4:4 upsamples the camera);o.why=o.why.replace(/&apos;/g,s missing color and sharpens it",
+            "why": "Nothing can recover color the camera never recorded. The gain is color the downscale already measured: past 2x, every tile pixel has camera samples of its own. At 1x in the demo, 4:4:4 only stores copies."
+          },
+          {
+            "t": "AV1 always compresses 4:4:4 better than 4:2:0",
+            "why": "At native size a 4:2:2 source stored at 4:4:4 just duplicates samples, so there is nothing to win. The advantage exists because the tile is 8.6x smaller than the frame, and it shrinks toward nothing as the reduction approaches 2x."
+          },
+          {
+            "t": "it only helps on photos lit in red",
+            "why": "Red is where the gap is widest (one night frame needs 35% more bytes at 4:2:0), but 4:4:4 scored higher on 18 of 24 photos at the 600px tier. Red widens the effect; the downscale causes it."
+          }
+        ]
+      },
+      {
         "q": "A baseline and a progressive version of one photo decode to identical pixels. What changes between them?",
         "options": [
           {
@@ -231,7 +253,7 @@
     {
       "who": "bot",
       "time": "23:06",
-      "html": "<p>Exactly, and for photographs it is almost free, because real scenes rarely put fine high-contrast color edges right next to each other. Where it shows is red text on a dark background or saturated line art, which is why screenshots and graphics keep 4:4:4 while photos ship 4:2:0.</p>"
+      "html": "<p>Exactly, and for photographs it is almost free, because real scenes rarely put fine high-contrast color edges right next to each other. Where it shows is red text on a dark background or saturated line art, which is why screenshots and graphics keep 4:4:4 and 4:2:0 became the default for photos.</p>"
     },
     {
       "who": "you",
@@ -296,6 +318,47 @@
     },
     {
       "who": "you",
+      "time": "23:10",
+      "html": "<p>hold on. the garage page says the AVIF thumbnails here ship at 4:4:4, and the camera only records 4:2:2. how does storing more color than the camera kept help anything?</p>"
+    },
+    {
+      "who": "bot",
+      "time": "23:10",
+      "html": "<p>Because 4:2:2 describes the camera&apos;s frame, and a thumbnail is a much smaller picture. The Fuji frame is 5152 pixels tall; the 600px tile is its centre square shrunk 8.6x, so every tile pixel is an average of an 8.6 by 8.6 patch of the frame. Even at half-width color, that patch holds about four color samples across and nine down.</p><p>So at its own size the tile carries full color, measured separately for every pixel. 4:2:0 would average it back down to one color per 2x2 block, throwing away half in each direction.</p>"
+    },
+    {
+      "demo": {
+        "id": "demo-chromascale",
+        "bar": "chroma through a downscale &middot; drag the reduction",
+        "html": "<p class=\"lead\">Each dot is one color sample the camera recorded at 4:2:2 (one per two pixels across). Each cell is one pixel of the finished tile, filled with the average of the dots inside it. At 1x, pairs of cells share a dot. Drag past 2x and every cell owns its own color; then switch the tile to 4:2:0 and watch the 2x2 blocks flatten it again.</p><div class=\"cs-row\"><label>reduce by <input type=\"range\" id=\"crScale\" min=\"1\" max=\"13\" step=\"0.1\" value=\"8.6\"></label> <output class=\"mono\" id=\"crF\">8.6x</output> <label>tile stored as <select id=\"crMode\"><option value=\"444\" selected>4:4:4</option><option value=\"420\">4:2:0</option></select></label></div><canvas id=\"crCanvas\" width=\"560\" height=\"280\"></canvas><p class=\"lead cr-info\" id=\"crInfo\"></p><p class=\"lead\">The shipped tiers sit at 8.6x (600px), 12.9x (400px) and 25.8x (200px) of the Fuji frame, so all three are far past the 2x line.</p>"
+      }
+    },
+    {
+      "who": "you",
+      "time": "23:11",
+      "html": "<p>so under 2x there&apos;s nothing to gain, since two tile pixels still share one camera sample. past 2x every pixel owns its color, and 4:2:0 is the step that shrinks it again.</p>"
+    },
+    {
+      "who": "bot",
+      "time": "23:11",
+      "html": "<p>That&apos;s the model, and the garage page measured it. With no compression at all, halving a tile&apos;s color and restoring it scores 93.1 to 93.5 on SSIMULACRA2, against 96.3 for the same round trip on a crop at native size. The downscale is what makes subsampling expensive.</p><p>Keeping it costs almost nothing, because color in a shrunken photo is smooth and AV1 codes smooth planes cheaply. At the same file size, 4:4:4 scored higher on 18 of 24 photos at the 600px tier; 4:2:0 needs a median 2.2% more bytes to catch up.</p>",
+      "cite": {
+        "url": "/garage/encoding",
+        "title": "garage encoding study, the chroma section"
+      }
+    },
+    {
+      "who": "you",
+      "time": "23:11",
+      "html": "<p>where does it matter most?</p>"
+    },
+    {
+      "who": "bot",
+      "time": "23:11",
+      "html": "<p>Under red light. Red carries only 0.299 of the brightness in the BT.601 matrix these files use, so in a red scene the fine detail lives in the color planes rather than in luma. One night frame of bare branches against red windows needs 35% more bytes at 4:2:0 to match 4:4:4.</p>"
+    },
+    {
+      "who": "you",
       "time": "23:11",
       "html": "<p>the garage page keeps saying every jpg here is <i>progressive</i>. if the pixels come out the same in the end, what actually changes?</p>"
     },
@@ -348,7 +411,7 @@
     {
       "who": "bot",
       "time": "23:06",
-      "html": "<p>Each thumbnail is dual-encoded: an <b>AVIF primary</b> and a <b>zenjpeg JPEG fallback</b> inside one <code>&lt;picture&gt;</code>, plus a 400px AVIF tier for phones. The browser loads the smallest format it can decode and never downloads the others.</p>"
+      "html": "<p>Each thumbnail is dual-encoded: an <b>AVIF primary</b> at 4:4:4 color and a <b>zenjpeg JPEG fallback</b> inside one <code>&lt;picture&gt;</code>, plus a 400px AVIF tier for phones. The browser loads the smallest format it can decode and never downloads the others.</p>"
     },
     {
       "who": "you",
@@ -359,6 +422,6 @@
       "scrollnote": "end of first pass"
     }
   ],
-  "demoCss": ".bpp-wrap{display:flex;gap:13px;align-items:flex-start;flex-wrap:wrap}.bpp-img{border:1px solid #cfd8e6;border-radius:3px;flex:0 0 auto}.bpp-tbl{border-collapse:collapse;font-size:9pt;flex:1;min-width:230px}.bpp-tbl th{text-align:left;color:#6b7280;font-weight:bold;font-size:8pt;border-bottom:1px solid #cfd8e6;padding:3px 6px}.bpp-tbl td{padding:3px 6px;border-bottom:1px solid #eef2f7}.bpp-tbl tr.win td{background:#eef4fa}.bpp-tbl tr.win b{color:#2c5d8f}.bpp-tbl .dim{color:#9aa3b2}.bpp-tbl .mono{font-family:var(--font-mono);color:#33415c}.cs-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:4px 0 10px}.cs-row label{display:flex;align-items:center;gap:8px;font-size:9pt;color:#46617f}.cs-row select{font:inherit;font-size:9pt;padding:2px 6px;border:1px solid #9fb3c9;border-radius:3px}.cs-row .mono{font-family:var(--font-mono)}.cs-row .dim{color:#9aa3b2}canvas#csCanvas{width:100%;max-width:560px;height:auto;border:1px solid #cfd8e6;border-radius:3px;background:#fff;display:block;image-rendering:pixelated}.zgrid{display:grid;gap:5px;margin:4px 0 2px;align-items:center}.zgrid.fmt{grid-template-columns:42px 1fr 1fr 1fr}.zgrid.enc{grid-template-columns:1fr 1fr 1fr 1fr}.zgrid.chroma{grid-template-columns:1fr 1fr 1fr}.zgrid .zh{font-size:8pt;color:#6b7280;text-align:center;font-family:var(--font-mono)}.zgrid .zlabel{font-size:8.5pt;color:#46617f;font-weight:bold}.zcell{margin:0}.zcell img{width:100%;height:auto;display:block;border:1px solid #cfd8e6;border-radius:2px;image-rendering:pixelated;background:#fff}.zcell figcaption{font-size:7.5pt;color:#6b7280;text-align:center;font-family:var(--font-mono);margin-top:2px;line-height:1.35}.pj-panes{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:4px 0 6px}.pj-pane{margin:0}.pj-frame{position:relative;background:#e9edf3;border:1px solid #cfd8e6;border-radius:2px;aspect-ratio:400/266}.pj-frame canvas{display:block;width:100%;height:100%}.pj-empty{position:absolute;inset:0;display:none;align-items:center;justify-content:center;font-size:8pt;color:#6b7280;text-align:center;padding:4px}.pj-none canvas{visibility:hidden}.pj-none .pj-empty{display:flex}.pj-pane figcaption{font-size:7.5pt;color:#46617f;text-align:center;margin-top:2px;line-height:1.35}.pj-mono,.pj-ctl output{font-family:var(--font-mono)}.pj-ctl{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:9pt;color:#46617f;margin:4px 0}.pj-ctl input[type=range]{flex:1;min-width:160px}.pj-ctl select,.pj-ctl button{font:inherit;font-size:9pt;padding:1px 6px;border:1px solid #9fb3c9;border-radius:3px;background:#fff}.pj-scans{border-collapse:collapse;font-size:8.5pt;width:100%;margin:4px 0 2px}.pj-scans th{text-align:left;color:#6b7280;font-size:8pt;font-weight:bold;border-bottom:1px solid #cfd8e6;padding:2px 5px}.pj-scans td{padding:2px 5px;border-bottom:1px solid #eef2f7;font-family:var(--font-mono)}.pj-scans .pj-done td{color:#33415c;background:#eef4fa}.pj-scans .pj-part td{color:#33415c;background:#fff7dd}.pj-scans .pj-wait td{color:#9aa3b2}.pj-scans .pj-gate td:first-child::after{content:\" \\2605\";color:#c2410c}",
+  "demoCss": ".bpp-wrap{display:flex;gap:13px;align-items:flex-start;flex-wrap:wrap}.bpp-img{border:1px solid #cfd8e6;border-radius:3px;flex:0 0 auto}.bpp-tbl{border-collapse:collapse;font-size:9pt;flex:1;min-width:230px}.bpp-tbl th{text-align:left;color:#6b7280;font-weight:bold;font-size:8pt;border-bottom:1px solid #cfd8e6;padding:3px 6px}.bpp-tbl td{padding:3px 6px;border-bottom:1px solid #eef2f7}.bpp-tbl tr.win td{background:#eef4fa}.bpp-tbl tr.win b{color:#2c5d8f}.bpp-tbl .dim{color:#9aa3b2}.bpp-tbl .mono{font-family:var(--font-mono);color:#33415c}.cs-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:4px 0 10px}.cs-row label{display:flex;align-items:center;gap:8px;font-size:9pt;color:#46617f}.cs-row select{font:inherit;font-size:9pt;padding:2px 6px;border:1px solid #9fb3c9;border-radius:3px}.cs-row .mono{font-family:var(--font-mono)}.cs-row .dim{color:#9aa3b2}canvas#csCanvas{width:100%;max-width:560px;height:auto;border:1px solid #cfd8e6;border-radius:3px;background:#fff;display:block;image-rendering:pixelated}.zgrid{display:grid;gap:5px;margin:4px 0 2px;align-items:center}.zgrid.fmt{grid-template-columns:42px 1fr 1fr 1fr}.zgrid.enc{grid-template-columns:1fr 1fr 1fr 1fr}.zgrid.chroma{grid-template-columns:1fr 1fr 1fr}.zgrid .zh{font-size:8pt;color:#6b7280;text-align:center;font-family:var(--font-mono)}.zgrid .zlabel{font-size:8.5pt;color:#46617f;font-weight:bold}.zcell{margin:0}.zcell img{width:100%;height:auto;display:block;border:1px solid #cfd8e6;border-radius:2px;image-rendering:pixelated;background:#fff}.zcell figcaption{font-size:7.5pt;color:#6b7280;text-align:center;font-family:var(--font-mono);margin-top:2px;line-height:1.35}.pj-panes{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:4px 0 6px}.pj-pane{margin:0}.pj-frame{position:relative;background:#e9edf3;border:1px solid #cfd8e6;border-radius:2px;aspect-ratio:400/266}.pj-frame canvas{display:block;width:100%;height:100%}.pj-empty{position:absolute;inset:0;display:none;align-items:center;justify-content:center;font-size:8pt;color:#6b7280;text-align:center;padding:4px}.pj-none canvas{visibility:hidden}.pj-none .pj-empty{display:flex}.pj-pane figcaption{font-size:7.5pt;color:#46617f;text-align:center;margin-top:2px;line-height:1.35}.pj-mono,.pj-ctl output{font-family:var(--font-mono)}.pj-ctl{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:9pt;color:#46617f;margin:4px 0}.pj-ctl input[type=range]{flex:1;min-width:160px}.pj-ctl select,.pj-ctl button{font:inherit;font-size:9pt;padding:1px 6px;border:1px solid #9fb3c9;border-radius:3px;background:#fff}.pj-scans{border-collapse:collapse;font-size:8.5pt;width:100%;margin:4px 0 2px}.pj-scans th{text-align:left;color:#6b7280;font-size:8pt;font-weight:bold;border-bottom:1px solid #cfd8e6;padding:2px 5px}.pj-scans td{padding:2px 5px;border-bottom:1px solid #eef2f7;font-family:var(--font-mono)}.pj-scans .pj-done td{color:#33415c;background:#eef4fa}.pj-scans .pj-part td{color:#33415c;background:#fff7dd}.pj-scans .pj-wait td{color:#9aa3b2}.pj-scans .pj-gate td:first-child::after{content:\" \\2605\";color:#c2410c}canvas#crCanvas{width:100%;max-width:560px;height:auto;border:1px solid #cfd8e6;border-radius:3px;background:#fff;display:block}.cs-row input[type=range]{min-width:140px}.cr-info{margin-top:6px;color:#33415c}",
   "demoJsFile": "encoding-demo.js"
 }
