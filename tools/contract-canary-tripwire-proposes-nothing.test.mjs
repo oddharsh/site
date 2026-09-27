@@ -147,7 +147,13 @@ test("the honest-false detector matches the page's own convention, and finds the
   assert.equal(familyOf("webkit"), "webkit");
 });
 
-test("every upstream watch names a thread, and every bun watch RUNS on the pinned bun and answers a boolean", () => {
+// The first runWatch below may pay a cold cargo build of timbrado's engine,
+// which bun's suite-wide 30s clock cannot hold: on a CI runner it is a
+// toolchain install, an index sync and a 16.61s compile on 4 contended vCPUs,
+// and it timed out there (run 36294774979). CI builds the engine in its own
+// step first; this budget is for a fresh local checkout, where the build is
+// 11.5s cold on 14 cores. Node honours the option too, and runs unclocked.
+test("every upstream watch names a thread, and every bun watch RUNS on the pinned bun and answers a boolean", { timeout: 180_000 }, () => {
   const names = new Set();
   for (const w of [...BUN_WATCHES, ...WRANGLER_WATCHES]) {
     const problems = checkWatch({ script: "x", ...w });
@@ -221,6 +227,15 @@ test("a missing Rust engine is an instrument failure, never eight watch rows rea
   assert.ok(askAt < bumper.indexOf("contractSuiteGate(candidate"), "the bumper asks for the engine after the suite that needs it");
   assert.ok(askAt > bumper.indexOf("is not proposable yet"), "the bumper builds the engine before gates 1 and 2, so every quiet night pays a cargo build");
   assert.match(bumper.slice(askAt, askAt + 400), /process\.exit\(2\);/, "an engine the bumper cannot build is exit 2, which bun-pin.yml reds, never a failed gate it reads as green");
+
+  // CI's contract matrix is the third caller of the same suite, and it did
+  // not ask either: the cold build ran inside one test's 30s and killed
+  // cargo in the bun legs of runs 36294774979 and 36285475911.
+  const ci = await readFile(new URL(".github/workflows/ci.yml", ROOT), "utf8");
+  const job = ci.slice(ci.indexOf("\n  contracts:"), ci.indexOf("\n  network:"));
+  const buildAt = job.indexOf("ensureTimbradoEngine()");
+  assert.ok(buildAt > 0, "the contracts job never builds timbrado's engine, so the suite builds it on one test's clock");
+  assert.ok(buildAt < job.indexOf("Run the full contract suite"), "the contracts job builds the engine after the suite that needs it");
 
   // Behavioural: point TIMBRADO_BIN (timbrado's own override, read on every
   // call) at an engine that does not exist. The guard and the wrapped runWatch
