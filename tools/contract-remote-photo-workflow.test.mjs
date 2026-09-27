@@ -130,7 +130,7 @@ test("re-encoding refuses partial tiers and empty selections before downstream h
     await put("public/i/frame.12345678.jpg", "published fixture");
     await put("source/frame.jpg", "source fixture");
     await mkdir(path.join(root, "public/images"), { recursive: true });
-    await command("bin/exif-sooc", 'if [ "$1" = --version ]; then echo "exif-sooc 0.2.0"; else echo 1; fi');
+    await command("bin/exif-sooc", 'if [ "$1" = --version ]; then echo "exif-sooc 0.3.0"; else echo 1; fi');
     await command("bin/sips", 'echo "space: RGB"');
     await command("tools/photos/zenc/target/release/zenc", `
 [ "$1" != --avif-version ] || { echo "libavif 1.4.2"; exit 0; }
