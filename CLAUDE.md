@@ -1114,14 +1114,33 @@ worktrees may edit freely, but a worktree is not a release surface.
   Making previews real means `aadhar-sh` stops exporting `Counter`: host it in
   another Worker and bind to it with `script_name`. That is a DO lifecycle change
   (`transferred_classes` to keep the counter's data), so it ships once through
-  `bun run deploy:direct`, per the DO note above. Two things are unmeasured
-  before anyone does it: whether a cross-script DO BINDING also suppresses
-  previews (the docs say "implementing", which reads as exporting), and whether
-  a Workflow class does (the docs name neither, and Workflows run on Durable
-  Objects). A throwaway Worker uploaded once with each shape answers both
-  through `has_preview`, and that is the control to run first. Note also that
-  commit 5af65648 moved `Counter` IN from cf-garage, so this reverses a deliberate
-  choice rather than tidying one.
+  `bun run deploy:direct`, per the DO note above. Note that commit 5af65648
+  moved `Counter` IN from cf-garage, so this reverses a deliberate choice rather
+  than tidying one.
+
+  **Only the EXPORT blocks previews, measured 2026-09-28** with five throwaway
+  Workers (wrangler 4.142.0, this Worker's compatibility date and flags,
+  `workers_dev: false`, `preview_urls: true`), each deployed once and then
+  deleted:
+
+  | shape | `has_preview` | preview URL |
+  |---|---|---|
+  | plain fetch handler (the control) | true | 200 |
+  | exports a DO class (`new_sqlite_classes`) | **false** | 404 + `x-preview-user-error` |
+  | binds another Worker's DO via `script_name` | true | 200 |
+  | exports a Workflow class | true | 200 |
+  | the `cache` + `exports` block this Worker runs Workers Cache through | true | 200 |
+
+  So `aadhar-sh`'s two Workflows and its Workers Cache entrypoints are all
+  compatible, and a `Counter` hosted elsewhere and bound by `script_name` leaves
+  previews on. A `versions upload --preview-alias` on the cross-bind shape
+  printed both `Version Preview URL:` and `Version Preview Alias URL:`, and both
+  answered 200, so the alias form the Workflow check below relies on works too.
+  The control reading true is what makes the other rows mean anything.
+
+  One cleanup trap from the run: `wrangler delete` on a Worker that owns a
+  Workflow leaves the Workflow behind (it still showed in `wrangler workflows
+  list`), so it needs its own `wrangler workflows delete`.
 
   The setting stays in `wrangler.jsonc` meanwhile, and so does the guard below:
   `preview_urls` DEFAULTS to whatever `workers_dev` is, so the explicit line is
