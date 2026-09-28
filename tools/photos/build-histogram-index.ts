@@ -130,13 +130,16 @@ export function unpackHistogram(packed) {
   return hi;
 }
 
-export async function buildHistogramIndex() {
-  const files = (await readdir(META)).filter((f) => f.endsWith(".json")).sort();
+// `metaDir` defaults to the pipeline's local tree. check-histograms.ts passes a
+// scratch bake instead, so the reproduction check packs through this exact loop
+// rather than a copy of it.
+export async function buildHistogramIndex(metaDir = META) {
+  const files = (await readdir(metaDir)).filter((f) => f.endsWith(".json")).sort();
   const index = {};
   let skipped = 0;
   for (const file of files) {
     const stem = file.slice(0, -5);
-    const record = JSON.parse(await readFile(path.join(META, file), "utf8"));
+    const record = JSON.parse(await readFile(path.join(metaDir, file), "utf8"));
     const packed = packHistogram(record.hi);
     if (packed) index[stem] = packed;
     else skipped++;

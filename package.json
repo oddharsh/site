@@ -19,6 +19,7 @@
     "search:index": "bun tools/generate-search-index.ts",
     "photos": "bash tools/photos/add-photos.sh",
     "photos:check": "bun tools/photos/check-photo-pipeline.ts",
+    "histograms:check": "bun tools/photos/check-histograms.ts",
     "archive:gate": "bun tools/photos/archive-gate.ts",
     "onestep:probe": "bash tools/photos/onestep-probe.sh",
     "resample:probe": "bun tools/photos/resample-probe.ts",
@@ -88,6 +89,7 @@
   "comment:typecheck-runtime": "THE FIVE WRAPPERS RUN UNDER BUN, moved 2026-09-10, and nothing about node was ever measured here: they said `node` from the day they were written, and every one of them spawns `tsc`, which is node either way, so the runtime chosen here only decides who parses the wrapper. Measured on all five, one run each after `types:gen`: stdout and stderr BYTE-IDENTICAL between the two runtimes, same exit codes, and identical again on a tree where config/.generated is missing (both exit 1 with the same text). `bun run typecheck` goes 2.71s to 1.82s, best of three on a 14-core laptop. Do not read this as a precedent for the rest: `routes:check` and the two perf tools stay on node for reasons that WERE measured, and both are written down at comment:node-pinned-scripts. One trap met while taking these numbers, and it is the older lesson in new clothes: wrapping each run in `/usr/bin/time -p` while redirecting stderr into the captured file puts the timing lines INTO the comparison, so the first reading said all five differed between runtimes. The instrument was the difference. Diff the outputs in one command and time them in another.",
   "comment:check-fast": "Local feedback only: lint, typecheck and test are independent read-only gates, so Bun can run them concurrently. CI keeps them as named sequential steps for legible failures. Do not add build, routes, Lens or perf commands here: several share .build or intentionally run under Node.",
   "devDependencies": {
+    "@cloudflare/config": "0.20.0",
     "@minify-html/node": "0.18.1",
     "@oxlint/plugins": "1.85.0",
     "@types/bun": "1.4.2",

@@ -85,10 +85,12 @@ if (WRITE) {
   let nextLock: Lock = { ...lock };
   let vouched = 0;
   let pruned = 0;
+  const live = new Set<string>();
   for (const d of graph) {
     const made = await record(ROOT, d, toolVersions);
     if (!made) continue;
     d.recorded = made.recorded;
+    for (const key of Object.keys(made.hashes)) live.add(key);
     const rolled = relock(nextLock, made.hashes, made.owns);
     const gone = rolled.pruned;
     nextLock = rolled.next;
@@ -97,6 +99,19 @@ if (WRITE) {
     console.log(`recorded ${d.id}: ${made.recorded.count} inputs -> ${made.recorded.inputs.slice(0, 12)}`);
     if (gone.length) console.log(`      pruned ${gone.length} lock row(s) for inputs that are gone: ${gone.slice(0, 4).join(", ")}${gone.length > 4 ? ", ..." : ""}`);
     for (const out of d.outputs) console.log(`      vouching for ${out}`);
+  }
+  // relock() prunes only rows its derivation still OWNS, so an input taken OUT of
+  // a declaration (rather than deleted from disk) is owned by nobody and survives
+  // every per-derivation pass. Measured 2026-09-28: zenc's three sources left the
+  // histogram digest and a full --lock kept all three rows, while the contract
+  // test that caught them told you to run exactly that. A FULL run has recorded
+  // every pinned derivation, so any row outside what they collected is dead.
+  // --only still cannot do this, since it saw one derivation's inputs.
+  if (!ONLY) {
+    const orphans = Object.keys(nextLock).filter((key) => !live.has(key));
+    for (const key of orphans) delete nextLock[key];
+    pruned += orphans.length;
+    if (orphans.length) console.log(`pruned ${orphans.length} lock row(s) no declaration collects any more: ${orphans.slice(0, 4).join(", ")}${orphans.length > 4 ? ", ..." : ""}`);
   }
   await writeFile(DECL, `${JSON.stringify(declaration, null, 2)}\n`);
   await writeFile(

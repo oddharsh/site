@@ -6257,6 +6257,27 @@ harness; see [cal/test/harness.ts](cal/test/harness.ts) and
     cards already have a contract test that deep-equals them against each server's
     live `tools/list`, which is stronger than a digest.
 
+    **The histogram digest no longer hashes zenc, since 2026-09-28, because CI
+    measures the output instead.** It used to include `histogram.rs`,
+    `pixels.rs` and `Cargo.lock`, so every zenc dependency bump read STALE and
+    was cleared by hand the same way each time: build zenc on both lockfiles,
+    bake 258 photos twice, diff, run a control, `--lock` (#871, #985, both 258
+    of 258 identical). `bun run histograms:check` does that in CI's native photo
+    validation job. It builds zenc from the tree, bakes every photo into a temp
+    root, and compares the packed result with the committed
+    `histograms.json` byte for byte, with a one-bin control on every run. A zenc
+    bump that moves no bar now passes with no commit, and one that does fails
+    naming the photos. `public/i` stays in the digest, so a re-encode that skips
+    the bake still fails on a machine with no cargo.
+
+    Two things worth knowing. The auto-relock route (`dependabot-relock.yml`
+    pushing a `--lock` commit) was the obvious build and is the wrong one: it
+    holds a write token and refuses to execute bumped code, and checking a cargo
+    bump means compiling it, `cc` being build-script code by definition. And a
+    full `--lock` now prunes rows that NO declaration collects. Before, an input
+    taken out of a declaration kept its row forever, while the contract test that
+    caught it recommended the full `--lock` that could not remove it.
+
 42. **A JSDoc TYPE in a `.ts` file is INERT, and this repo wrote them six times
     during one migration.** TypeScript ignores `@type`, `@param {T}`,
     `@returns {T}` and `@typedef` in a `.ts` file; they work only in `.js` and

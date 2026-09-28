@@ -33,6 +33,7 @@ export const DOC_ALIASES = [
   { prose: "TypeScript", pkg: "typescript" },
   { prose: "@types/bun", pkg: "@types/bun" },
   { prose: "smol-toml", pkg: "smol-toml" },
+  { prose: "@cloudflare/config", pkg: "@cloudflare/config" },
   // playwright-core left VERSIONLESS on 2026-09-10. Its exemption rested on two
   // claims and one had gone stale: "only gen-og-cards.ts uses it, no CI job and
   // no deploy path touches it" was true when written and had grown to nine

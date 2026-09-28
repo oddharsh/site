@@ -540,6 +540,19 @@ jobs:
           cargo test --locked --manifest-path tools/photos/zenc/Cargo.toml
           cargo clippy --locked --manifest-path tools/photos/zenc/Cargo.toml --all-targets -- -D warnings
 
+      - name: Set up bun
+        uses: ./.github/actions/setup-bun
+
+      # Re-bake every photo's histogram with the zenc THIS tree builds and compare
+      # it byte for byte with the committed public/images/histograms.json. It is
+      # what lets config/derivations.json leave zenc's sources and Cargo.lock out
+      # of the histogram digest: a zenc bump is measured here, on the output,
+      # instead of reading STALE until somebody re-bakes by hand and re-locks
+      # (#871, #985). No credential, no install (the checker imports only node
+      # builtins), and the bumped crates already ran in this job's cargo test.
+      - name: Reproduce the committed histograms
+        run: bun run histograms:check
+
   validate:
     name: validate
     needs: [site, native-photos, network, contracts]
