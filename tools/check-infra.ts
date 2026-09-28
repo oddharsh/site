@@ -584,15 +584,20 @@ async function checkTriageDeclaration(repo) {
     }
   }
 
-  let workflow;
-  try {
-    workflow = await readFile(join(ROOT, triage.workflow), "utf8");
-  } catch {
-    fail(`infra.json declares repository.triage but ${triage.workflow} is missing, so nothing assigns or labels anything`);
-    return;
-  }
-  if (!workflow.includes("triage.assignee")) {
-    fail(`${triage.workflow} does not read \`triage.assignee\` from infra.json; hard-coding the assignee is how the two silently disagree about who owns the inbox`);
+  // triage.yml was deleted 2026-09-28, so `workflow` is optional: the label
+  // set stays declared because the self-opening workflows and dependabot still
+  // pass these names to `--label`, which fails outright on an unknown one.
+  if (triage.workflow) {
+    let workflow;
+    try {
+      workflow = await readFile(join(ROOT, triage.workflow), "utf8");
+    } catch {
+      fail(`infra.json declares repository.triage.workflow but ${triage.workflow} is missing, so nothing assigns or labels anything`);
+      return;
+    }
+    if (!workflow.includes("triage.assignee")) {
+      fail(`${triage.workflow} does not read \`triage.assignee\` from infra.json; hard-coding the assignee is how the two silently disagree about who owns the inbox`);
+    }
   }
 
   // The self-opening workflows. FLOOR included, for the reason every scanner in
@@ -700,7 +705,7 @@ async function checkTriageDeclaration(repo) {
   }
 
   if (hard.length > before) return;
-  pass(`triage declaration is consistent: ${triage.labels.length} labels, all routed or attributed, ${inline} inline flag(s) and ${dbLabels} dependabot label(s) declared across ${ecosystems} ecosystem(s), ${triage.workflow} reads the assignee from here`);
+  pass(`triage declaration is consistent: ${triage.labels.length} labels, all routed or attributed, ${inline} inline flag(s) and ${dbLabels} dependabot label(s) declared across ${ecosystems} ecosystem(s)${triage.workflow ? `, ${triage.workflow} reads the assignee from here` : ""}`);
 }
 
 // The CodeQL language curation, asserted from the COMMITTED workflow rather

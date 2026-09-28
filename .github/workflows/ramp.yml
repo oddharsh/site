@@ -23,9 +23,13 @@ name: Ramp production
 #   soak    20 min       `production-canary`, no reviewer. Exercises the canaried
 #                        version directly every few minutes, then finishes the
 #                        ramp or rolls it back on what it measured.
-#   full    50% -> 100%  `production-full`, REQUIRED REVIEWER. The FAST PATH for
-#                        a human who has looked and wants it now, and no longer
-#                        the only way a release completes.
+#
+# A third job, `full`, used to park on the `production-full` environment's
+# required reviewer as a "fast path" past the soak. Nobody took it: every real
+# ramp from 2026-09-26 to 09-28 finished through the soak while `full` waited
+# until the next release cancelled it, so each release left an approval request
+# behind and read as `cancelled`. Deleted 2026-09-28. The fast path is a
+# workstation `bun run deploy:promote`, which the soak reports as `shipped`.
 #
 # A merge therefore reaches a tenth of traffic by itself, gets exercised for
 # twenty minutes, and then reaches a terminal state on its own. What changed is
@@ -34,9 +38,8 @@ name: Ramp production
 # the run holding the decision.
 #
 # THE HUMAN VETO IS THE RUN ITSELF. Cancelling this workflow run during the soak
-# stops the resolution and leaves the canary at 10%; rejecting the
-# `production-full` deployment does NOT, because the soak is a separate job that
-# never asked for that approval. The step summary says so on every canary.
+# stops the resolution and leaves the canary at 10%. The step summary says so on
+# every canary.
 #
 # WHAT WILL NEVER AUTO-ROLL-BACK. `tools/soak-canary.ts` returns `faulty` only
 # when a request PINNED to the canaried version came back non-200. A probe that
@@ -159,9 +162,7 @@ jobs:
       url: https://aadhar.sh
     outputs:
       target: ${{ steps.ramp.outputs.target }}
-      # The WHOLE uuid, separately, because the two consumers want different
-      # things. `full`'s guard compares 8 characters to answer "did a different
-      # build appear", which a prefix answers fine. The soak PROBES this version
+      # The WHOLE uuid, separately. The soak PROBES this version
       # with Cloudflare-Workers-Version-Overrides, and that header declines to
       # pin on a prefix without saying so (gotcha 36), so a soak handed the short
       # form would measure the live split, watch the incumbent answer 200 twelve
@@ -340,9 +341,8 @@ jobs:
       # start this rather than a substitute for it.
       #
       # `--version` is passed explicitly. Re-resolving "newest production build"
-      # here would inherit exactly the hazard the `full` job's guard exists to
-      # refuse, twenty minutes later: a build that landed during the soak is a
-      # build nothing probed.
+      # here would ramp a build that landed during the soak, which is a build
+      # nothing probed.
       - name: Finish the ramp
         if: ${{ steps.soak.outputs.verdict == 'clean' }}
         run: bun run deploy:promote -- --version "$CANARY_ID" --steps 50,100
@@ -413,95 +413,10 @@ jobs:
             *) echo "::error::soak verdict ${VERDICT:-none}; see the job summary"; exit 1 ;;
           esac
 
-  full:
-    name: 50% then 100% (requires approval)
-    needs: canary
-    if: ${{ !inputs.canary_only }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    environment:
-      # Required reviewers live on this environment, so this job sits in
-      # "Waiting" until a human approves it. That pause IS the ramp.
-      name: production-full
-      url: https://aadhar.sh
-    env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_RAMP }}
-      CANARY: ${{ needs.canary.outputs.target }}
-
-    steps:
-      - name: Check out the promoted commit
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: production
-
-      - name: Set up bun
-        # config/... no longer applies: the version lives in config/bun-pin.json and the
-        # action reads it, so there is one declaration of which bun this repo runs.
-        uses: ./.github/actions/setup-bun
-
-      - name: Set up Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: .node-version
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Resolve the account id from wrangler.jsonc
-        run: bun tools/print-account-id.ts >> "$GITHUB_ENV"
-
-      # THE GUARD THIS JOB EXISTS AROUND. Approval is asynchronous, so minutes or
-      # hours pass between the canary and this step, and Workers Builds uploads a
-      # version for EVERY push. Re-resolving the newest production build here
-      # could therefore ramp something no canary ever read, silently, and every
-      # downstream check would pass, because a version that built and deployed
-      # returns 200s. So compare against what the canary actually put at 10% and
-      # refuse if it moved. Eight hex characters is plenty to detect "a different
-      # build appeared"; it is not being used to address anything.
-      - name: Refuse to ramp a version the canary never saw
-        run: |
-          set -euo pipefail
-          out="$(bun run --silent deploy:promote -- --dry-run 2>&1 | tee /dev/stderr)"
-          now="$(printf '%s\n' "$out" | sed -n 's/^target version: *\([0-9a-f]\{8\}\).*/\1/p' | head -1)"
-          if [ "$now" != "$CANARY" ]; then
-            echo "::error::newest production version is ${now}, but ${CANARY} was canaried."
-            printf '%s\n' \
-              "A newer build landed while this ramp waited for approval." \
-              "Ramping ${now} would put traffic on something no canary ever read." \
-              "Re-run this workflow so it canaries ${now} first, or dispatch it with" \
-              "version=${CANARY} if serving the canaried build is what you mean."
-            exit 1
-          fi
-          echo "confirmed: ${now} is the version the canary put at 10%."
-
-          # AND IT MAY ALREADY BE DONE. The soak job resolves this same canary
-          # without a reviewer, so an approval that arrives after it finished
-          # would otherwise run `--steps 50,100` against a version already at
-          # 100% and put HALF of production back on the previous build. A late
-          # click must be a no-op, never a regression.
-          serving="$(printf '%s\n' "$out" | sed -n 's/^serving now: *//p' | head -1)"
-          if [ "$serving" = "${CANARY} @ 100%" ]; then
-            echo "::notice::${CANARY} already holds all traffic; the soak resolved this ramp. Nothing to do."
-            exit 0
-          fi
-
-      # Ends at 100, which is what makes deploy:promote write the D1 changelog row
-      # for this release. Because this checked out `production`, the
-      # checkpoints.json it diffs is the one that actually shipped.
-      - name: Ramp 50% then 100%
-        run: bun run deploy:promote -- --steps 50,100
-
-      - name: Show what is serving
-        if: always()
-        run: bun run deploy:promote -- --status
-
   verify:
     name: Post-ramp checks
-    # `soak` and NOT `full`. A job that is `waiting` on an environment gate has
-    # not concluded, so a `needs` on `full` made this job wait exactly as long as
-    # the reviewer did, which on the record above meant forever. `soak` always
-    # reaches a conclusion, including when a human took the fast path, so this is
-    # the link that lets a release have an end.
+    # `soak` always reaches a conclusion, including when a human took the fast
+    # path from a workstation, so this is the link that lets a release have an end.
     needs: [canary, soak]
     if: ${{ always() && needs.canary.result == 'success' }}
     runs-on: ubuntu-latest
@@ -513,7 +428,7 @@ jobs:
       contents: read
       # To dispatch dictionary-roll.yml once a release reaches 100%, and for
       # nothing else. It lives on THIS job because this is the one job here that
-      # holds no Cloudflare credential; putting it on `soak` or `full` would widen
+      # holds no Cloudflare credential; putting it on `soak` would widen
       # the token sitting next to the ramp secret.
       actions: write
 

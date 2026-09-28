@@ -80,7 +80,7 @@ jobs:
           echo "Promoted ${RELEASE_SHA} to ${ref}."
           echo "Cloudflare Workers Builds will now UPLOAD this commit as a Worker version."
           echo "It does NOT move traffic: the deploy command is 'wrangler versions upload'."
-          echo "Ramp production will canary it at 10%, then wait for approval of the full ramp."
+          echo "Ramp production will canary it at 10%, soak it for 20 minutes, then finish or roll back."
 
       - name: Publish promotion record
         if: always()
@@ -94,9 +94,9 @@ jobs:
             echo "- target: the aadhar-sh Worker (homepage, Lens, coffee, Serendipity)"
             echo "- effect: **uploads a version, moves no traffic**"
             echo ""
-            echo "Workers Builds uploads the version. Follow the **Ramp production**"
-            echo "workflow for the automatic 10% canary, then inspect the new version"
-            echo "before approving **50% then 100%** in the production-full environment."
+            echo "Workers Builds uploads the version. **Ramp production** canaries it at"
+            echo "10%, soaks it for 20 minutes, then finishes the ramp or rolls it back."
+            echo "Cancel that run during the soak to hold the canary at 10%."
             echo ""
             echo "For the workstation fallback, inspect the target first:"
             echo '```bash'
