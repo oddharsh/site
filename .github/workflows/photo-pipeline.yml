@@ -23,9 +23,10 @@ on:
         required: false
         type: string
 
+# Read: the push and the PR go through the App token minted just before them
+# (.github/actions/bot-pr-token says why).
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 concurrency:
   group: remote-photo-pipeline
@@ -49,6 +50,7 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Set up bun
         # config/... no longer applies: the version lives in config/bun-pin.json and the
@@ -172,9 +174,16 @@ jobs:
           bun run derive:check
           git diff --check
 
+      - name: Mint the App token that opens the PR
+        id: bot
+        uses: ./.github/actions/bot-pr-token
+        with:
+          app-id: ${{ secrets.RELOCK_APP_ID }}
+          private-key: ${{ secrets.RELOCK_APP_PRIVATE_KEY }}
+
       - name: Open artifact pull request
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.bot.outputs.token }}
         run: |
           set -euo pipefail
           case "$ROUTINE" in
@@ -200,8 +209,6 @@ jobs:
             exit 0
           fi
           git diff --cached --stat
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "$title"
           git push --set-upstream origin "$branch"
           gh pr create \

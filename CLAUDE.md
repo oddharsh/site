@@ -411,12 +411,21 @@ worktrees may edit freely, but a worktree is not a release surface.
   so a declaration that runs ahead of reality blocks its own PR.
 
   Four workflows label themselves inline instead (`dictionary-roll`, `bun-pin`,
-  `og-cards`, `node-support-window`), and that is a platform limit rather than a
-  style choice: an event created with the default `GITHUB_TOKEN` does not
-  trigger another workflow, so `triage.yml` never sees them. `gh pr create
-  --label` fails outright on an unknown label, so their flags are checked
-  against the same declaration; a rename without a sync stops the nightly roll
-  rather than mislabelling it.
+  `og-cards`, `node-support-window`). That was a platform limit when it was
+  written, since an event created with the default `GITHUB_TOKEN` triggers no
+  other workflow. `gh pr create --label` fails outright on an unknown label, so
+  their flags are checked against the same declaration; a rename without a sync
+  stops the nightly roll rather than mislabelling it.
+
+  **The PR-opening jobs push as an App since 2026-09-28**, through
+  `.github/actions/bot-pr-token`, and that is the fix for a newer limit. Since
+  GitHub's 2026-06-11 change, a PR pushed by `github-actions[bot]` runs CI only
+  after a human clicks "Approve and run", with no setting to turn it off: 20
+  CI and CodeQL runs sat `action_required` on the roll and pin branches in three
+  weeks, and `validate` is required, so none of those PRs could merge unattended.
+  The token is minted after every gate and each job checks out with
+  `persist-credentials: false`, so a candidate toolchain never shares a process
+  with a credential that can push. Their PRs now reach `triage.yml` too.
 
   **Dependabot is the QUIET half of that, and it was unwatched until 2026-08-27.**
   A `labels:` key in `.github/dependabot.yml` REPLACES the defaults Dependabot
