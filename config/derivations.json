@@ -39,8 +39,12 @@
     "`tools` names entries in config/tools.json whose `recorded` version is part of",
     "an artifact's identity, so swapping encoders reads as staleness. A FIRST-PARTY",
     "tool needs no such entry, because its source is committed and goes straight",
-    "into `inputs`: zenc's decode and histogram sources are inputs to the histogram",
-    "bake for the same reason the JPEGs are.",
+    "into `inputs`, with ONE exception worth knowing before adding another. The",
+    "histogram bake's tool inputs (zenc's sources and Cargo.lock) are NOT in its",
+    "digest, because that artifact can be reproduced from committed bytes alone, and",
+    "CI does exactly that: `bun run histograms:check` re-bakes it and compares it to",
+    "the committed file. A measured output beats a hashed input, and the hash made",
+    "every zenc dependency bump read as stale until somebody re-baked by hand.",
     "",
     "WHAT IS DELIBERATELY NOT HERE, so the coverage claim stays honest:",
     "  - the MCP server cards, which a contract test already deep-equals against",
@@ -101,27 +105,22 @@
     {
       "id": "images/histograms",
       "tier": "pinned",
-      "why": "THE ONE THIS FILE WAS BUILT FOR. images/histograms.json holds four 64-bin channels per photo, baked by `zenc histogram` from the SHIPPED hashed JPG tier, and build.ts derives the served /images/meta/<stem>.json from it. #394 re-encoded 316 of those JPEGs on 2026-08-14 and re-baked nothing, so the bars described pixels nobody had been served for nine days. photos:check could not see it, because it compares histograms.json against images/meta/, which the build derives FROM histograms.json: two sides of one source agree no matter what the pixels say.",
+      "why": "THE ONE THIS FILE WAS BUILT FOR. images/histograms.json holds four 64-bin channels per photo, baked by `zenc histogram` from the SHIPPED hashed JPG tier, and build.ts derives the served /images/meta/<stem>.json from it. #394 re-encoded 316 of those JPEGs on 2026-08-14 and re-baked nothing, so the bars described pixels nobody had been served for nine days. photos:check could not see it, because it compares histograms.json against images/meta/, which the build derives FROM histograms.json: two sides of one source agree no matter what the pixels say. zenc's sources and Cargo.lock were inputs here until 2026-09-28 and are not now: CI's native photo validation job runs `bun run histograms:check`, which re-bakes every photo with the zenc the tree builds and compares the result to this file byte for byte. That measures the output a tool change could move, where the digest could only say it MIGHT have moved, and it cost a hand re-bake and --lock on every zenc bump (#871, #985). public/i stays, so a re-encode that skips the bake still fails here with no cargo.",
       "outputs": [
         "public/images/histograms.json"
       ],
       "inputs": {
         "paths": [
-          "public/i",
-          "tools/photos/zenc/src/histogram.rs",
-          "tools/photos/zenc/src/pixels.rs",
-          "tools/photos/zenc/Cargo.lock"
+          "public/i"
         ],
         "include": [
-          ".jpg",
-          ".rs",
-          ".lock"
+          ".jpg"
         ]
       },
-      "regenerate": "bash tools/photos/extract-photo-metadata.sh \"$SOOC_DIR\" && bun tools/photos/build-histogram-index.ts",
+      "regenerate": "tools/photos/zenc/target/release/zenc histogram --root public && bun tools/photos/build-histogram-index.ts (inside a photo add: bash tools/photos/extract-photo-metadata.sh \"$SOOC_DIR\")",
       "recorded": {
-        "inputs": "3e83868493882513b476d21c07face243db6b5303a618d7f3a10e235def82abb",
-        "count": 261
+        "inputs": "1a7794939ed47f4c164f7a989edbf557589ef51846b672cfbd9e0d3615a8d0ca",
+        "count": 258
       }
     },
     {
@@ -191,7 +190,7 @@
       },
       "regenerate": "bun tools/photos/gen-desktop-partial.ts",
       "recorded": {
-        "inputs": "a1d7c6d106c67deec9b0617ad98e4704f20da297ffd1bda80d28434a193fcc0d",
+        "inputs": "2c6a2d512ad704b5503fe39173996815bbefeba4bf648abfb7627dcd66583d8b",
         "count": 2
       }
     },
@@ -330,6 +329,9 @@
       "tools/lens-seed.ts": "writes seed captures into a scratch directory",
       "tools/photos/resample-probe.ts": "writes probe output while measuring the ingest geometry, and commits nothing",
       "tools/photos/codec-knob-probe.ts": "writes scratch encodes and an optional --json report while measuring cjxl, avifenc and AV2 (avifenc-avm) flags at matched bytes, and commits nothing",
+      "tools/photos/av2-tile-probe.ts": "writes 600px tiles, scratch encodes and an optional --json report under the OS temp dir while scoring AV2 against the shipped AVIF at matched bytes, and commits nothing",
+      "tools/photos/libavif-avm/build.sh": "READS public/i/ (one committed 600px tier is the input to its byte-identity gate) and writes only under tools/photos/libavif-avm/build/ and src/, the gitignored AV2 build trees. The shell scanner flags it for mentioning a committed path, which is the over-approximation working as designed",
+      "tools/photos/libavif-avm/simde.ts": "writes only under tools/photos/libavif-avm/build/, the gitignored AV2 build tree: rtcd headers, a SIMDe shim, compiled kernel objects, and the libavm.a it appends them to. build.sh --tuned runs it and then gates the result byte for byte against the pristine build, so nothing it writes is ever a committed artifact",
       "tools/photos/avif-chroma-probe.ts": "writes scratch tiers, encodes and an optional --json report while comparing AVIF chroma layouts at the shipped bytes, and commits nothing",
       "tools/photos/experiments/bench-jpeg-search.ts": "writes JPEG search candidates only inside its own mkdtemp directory, removes them in finally, and reports measurements on stdout; it never regenerates a committed photo, manifest or histogram",
       "tools/relock-dependabot.ts": "rewrites the version pins inside docs/DEPENDENCIES.md to match the lockfile, in a throwaway worktree during a dependabot relock. The prose is edited in place rather than generated, and contract-docs-dependencies-md-states-version-pins-in-prose.test.mjs already holds those pins to the lockfile on every run, which is the check a digest here would duplicate",

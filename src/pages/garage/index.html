@@ -362,11 +362,11 @@ body { text-wrap: pretty; } /* progressive; older engines ignore it */
         <div class="desc">
           AV2&apos;s reference encoder <a href="https://github.com/AOMediaCodec/avm" rel="external">shipped 1.0.0 in May</a>,
           and no browser decodes it yet. Built locally and scored against the AVIF this site ships,
-          at matched bytes on 16 photo crops, it loses all 32 calls by ssimulacra2 at speed 6. It
-          tracks fine texture more closely than AV1, and it lets tone and colour drift at the block
-          scale on every one of the 32.
+          at matched bytes, it wins 28 of 38 whole-frame thumbnails by ssimulacra2 and loses all 32
+          calls on dense detail crops, and bits per pixel decides which. Per-segment quantization
+          matrices, which AV1 has no syntax for, widen the win.
           <a href="https://arxiv.org/abs/2605.15800" rel="external">AOM&apos;s own report</a> puts it
-          18 to 24% ahead with video metrics, and the page shows how both can be true. It also
+          18 to 24% ahead with video metrics, and the page shows where each number comes from. It also
           catches a trap: behind a <code style="font-family: var(--font-mono);font-size:9pt">&lt;picture&gt;</code>
           source typed <code style="font-family: var(--font-mono);font-size:9pt">image/avif</code>,
           an AV2 file draws broken in Chrome and the fallback never loads. Your browser runs that

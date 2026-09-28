@@ -6,11 +6,11 @@
 <meta name="theme-color" content="#2D78BD">
 <link rel="preload" as="style" href="/luna.css">
 <title>aadhar.sh/garage/av2: AV2, before anyone can see it</title>
-<meta name="description" content="AV2&#39;s reference encoder shipped 1.0.0 in May and no browser decodes it yet. Scored against the AVIF this site ships, on photos, at matched bytes: where it wins, where it loses, and why an AV2 file behind a picture element&#39;s fallback still breaks.">
+<meta name="description" content="AV2&#39;s reference encoder shipped 1.0.0 in May and no browser decodes it yet. Scored against the AVIF this site ships, at matched bytes: it wins on whole-frame thumbnails, loses on dense detail, and an AV2 file behind a picture fallback still breaks.">
 <link rel="canonical" href="https://aadhar.sh/garage/av2">
 <meta property="og:type" content="article">
 <meta property="og:title" content="aadhar.sh/garage/av2: AV2, before anyone can see it">
-<meta property="og:description" content="AV2&#39;s reference encoder shipped 1.0.0 in May and no browser decodes it yet. Scored against the AVIF this site ships, on photos, at matched bytes: where it wins, where it loses, and why an AV2 file behind a picture element&#39;s fallback still breaks.">
+<meta property="og:description" content="AV2&#39;s reference encoder shipped 1.0.0 in May and no browser decodes it yet. Scored against the AVIF this site ships, at matched bytes: it wins on whole-frame thumbnails, loses on dense detail, and an AV2 file behind a picture fallback still breaks.">
 <meta property="og:url" content="https://aadhar.sh/garage/av2">
 <meta name="twitter:card" content="summary_large_image">
 <meta property="og:image" content="https://aadhar.sh/og/garage-av2.jpg">
@@ -41,6 +41,8 @@ body{background:transparent;font-family:var(--font-ui);font-size:10.5pt;line-hei
 .dd-row.head{font-weight:700;background:#e8eef7}
 .dd-speeds .dd-row{grid-template-columns:2.2fr 1fr 1fr 1fr 1fr}
 .dd-lossless .dd-row{grid-template-columns:2fr 1fr 1fr}
+.dd-bpp .dd-row{grid-template-columns:1.2fr 1.4fr 1fr 1fr}
+.dd-tune .dd-row{grid-template-columns:1.1fr 2.6fr 1.2fr .7fr}
 .dd-num{font-family:var(--font-mono);font-size:8.2pt;color:#3a4a5e}
 .av2-fig{margin:14px 0}
 .av2-stack{display:flex;flex-wrap:wrap;gap:8px}
@@ -52,7 +54,7 @@ body{background:transparent;font-family:var(--font-ui);font-size:10.5pt;line-hei
 .av2-fig figcaption{font-size:8.4pt;margin-top:4px}
 .av2-note{font-size:8.4pt;color:#3a4a5e}
 .av2-code{font-family:var(--font-mono);font-size:8.4pt;background:#f3f6fa;border:1px solid #99a8bd;padding:6px 10px;overflow-x:auto}
-@media(max-width:620px){.dd-speeds .dd-row,.dd-lossless .dd-row{grid-template-columns:1fr 1fr}}
+@media(max-width:620px){.dd-speeds .dd-row,.dd-lossless .dd-row,.dd-bpp .dd-row,.dd-tune .dd-row{grid-template-columns:1fr 1fr}}
 </style>
 <link rel="stylesheet" href="/luna.css">
 </head>
@@ -83,8 +85,19 @@ body{background:transparent;font-family:var(--font-ui);font-size:10.5pt;line-hei
 <p>So an AV2 image needs a name a browser can decline, the way <code>image/avif</code> gave AV1 stills a name that browsers without AV1 could skip. Until one exists, serving AV2 under the AVIF name breaks the image in every browser that supports AVIF, which is every current release of Chrome, Firefox, Safari and Edge.</p>
 
 <h2>At the bytes AVIF actually costs</h2>
-<p>The comparison runs on the 16 detail crops from <a href="/pixel-peeper">/pixel-peeper</a>, each 320 px, from an X-T50. Each crop gets two budgets. The first is the file size of the AVIF tier this site ships (<code>avifenc -q 63 -d 10 --speed 2 --yuv 444</code>). The second is the size of the JPEG fallback tier, filled with AVIF instead. AV2 is encoded onto each budget, file against file. Both are scored against the source with the two perceptual metrics this site ships by: <a href="https://github.com/cloudinary/ssimulacra2">ssimulacra2</a>, where higher is better, and <a href="https://github.com/google/butteraugli">butteraugli</a>, where lower is better.</p>
+<p class="av2-verdict"><b>Corrected 2026-09-28.</b> The first version of this section scored only the 16 detail crops further down, found AV2 losing every call, and called that the answer for photographs. It was the answer for the densest detail in each photo. On the thumbnails this site actually ships, AV2 wins.</p>
+<p>The thumbnails are 38 tiles at 600 px, cut the way the site's own pipeline cuts them: the whole frame, squared and reduced about 8x in linear light by <code>zenc square</code>. They come from Fuji photos that none of the tuning below ever saw. Each tile's budget is the file size of the AVIF tier this site ships (<code>avifenc -q 63 -d 10 --speed 2 --yuv 444</code>), and AV2 is encoded onto that budget, file against file. Both are scored against the source with the two perceptual metrics this site ships by: <a href="https://github.com/cloudinary/ssimulacra2">ssimulacra2</a>, where higher is better, and <a href="https://github.com/google/butteraugli">butteraugli</a>, where lower is better.</p>
 <p>Matched bytes is the whole method, and AV2 makes it harder than usual. libavif's quality scale is far too coarse for it: on one crop, <code>-q 49</code> wrote 6,865 bytes of AV2 and <code>-q 50</code> wrote 9,608, a 40% step. So the probe steps AV2's own quantizer instead, one notch at a time.</p>
+<div class="dd-box dd-speeds">
+  <div class="dd-row head"><span>38 tiles, AV2 speed 6</span><span>Δ s2, mean</span><span>Δ s2, median</span><span>s2 wins</span><span>butteraugli wins</span></div>
+  <div class="dd-row"><span>the shipped AVIF (AV1, speed 2)</span><span class="dd-num">reference</span><span class="dd-num">reference</span><span class="dd-num"></span><span class="dd-num"></span></div>
+  <div class="dd-row"><span>AV2, libavif default (tune ssim)</span><span class="dd-num">+0.77</span><span class="dd-num">+0.65</span><span class="dd-num">28 of 38</span><span class="dd-num">24 of 38</span></div>
+  <div class="dd-row"><span>AV2 with per-segment QM (see below)</span><span class="dd-num">+0.89</span><span class="dd-num">+0.90</span><span class="dd-num">30 of 38</span><span class="dd-num">28 of 38</span></div>
+</div>
+<p><b>With no tuning at all, AV2 wins 28 of 38 tiles by ssimulacra2 and 24 by butteraugli.</b> The average margin is 0.77 points. That is modest, and it comes against an AV1 encoder with a still-image tune, while AV2's encoder has only the video defaults. It costs about 14 times the encode time, single-threaded, on a 600 px tile.</p>
+
+<h2>The crops that disagree</h2>
+<p>The first version of this page ran on the 16 detail crops from <a href="/pixel-peeper">/pixel-peeper</a>, each 320 px, from an X-T50. Each is the single most detailed 320 px window in its photo, at full resolution, picked to be the hardest thing an encoder sees. Each crop gets two budgets. The first is the file size of the shipped AVIF tier, and the second is the size of the JPEG fallback tier, filled with AVIF instead.</p>
 <div class="dd-box dd-speeds">
   <div class="dd-row head"><span>AV2 encoder</span><span>Δ s2, train</span><span>Δ s2, holdout</span><span>wins of 32, s2 / bu</span><span>one 320 px encode</span></div>
   <div class="dd-row"><span>the shipped AVIF (AV1, speed 2)</span><span class="dd-num">reference</span><span class="dd-num">reference</span><span class="dd-num"></span><span class="dd-num">0.45 s</span></div>
@@ -94,11 +107,24 @@ body{background:transparent;font-family:var(--font-ui);font-size:10.5pt;line-hei
   <div class="dd-row"><span>cross-check: raw avmenc, cpu-used 6 (tune psnr)</span><span class="dd-num">-1.46</span><span class="dd-num">-2.32</span><span class="dd-num">0 / 18</span><span class="dd-num"></span></div>
   <div class="dd-row"><span>cross-check: raw avmenc, cpu-used 3 (tune psnr)</span><span class="dd-num">-0.81</span><span class="dd-num">-1.66</span><span class="dd-num">6 / 21</span><span class="dd-num"></span></div>
 </div>
-<p>Each Δ is AV2 minus the shipped AVIF in ssimulacra2, averaged over 16 crop and budget pairs. Train is the 8 crops /pixel-peeper uses and holdout is 8 it never sees, so a result has to survive a set nobody tuned on. The two cross-check rows drive AV2's raw encoder through my own colour conversion, which shares no code with libavif above the codec. They score AV2 about half a point better than libavif does at the same tune. I haven't traced that gap, and neither instrument puts AV2 ahead on average.</p>
-<p><b>At speed 6, ssimulacra2 prefers the shipped AV1 on all 32 calls.</b> Speed 3 beats speed 6 on every one of them and closes about a third of the gap, to 1.03 and 1.53, winning 4 of 32. It costs 41 times the encode time of the AVIF this site ships, and none of the speeds I could afford to run closes the whole gap.</p>
+<p>Each Δ is AV2 minus the shipped AVIF in ssimulacra2, averaged over 16 crop and budget pairs. Train is the 8 crops /pixel-peeper uses and holdout is 8 it never sees, so a result has to survive a set nobody tuned on. The two cross-check rows drive AV2's raw encoder through my own colour conversion, which shares no code with libavif above the codec. They score AV2 about half a point better than libavif does at the same tune. I haven't traced that gap, and neither instrument puts AV2 ahead on the crops.</p>
+<p><b>On the crops, at speed 6, ssimulacra2 prefers the shipped AV1 on all 32 calls.</b> Speed 3 beats speed 6 on every one of them and closes about a third of the gap, to 1.03 and 1.53, winning 4 of 32. It costs 41 times the encode time of the AVIF this site ships, and none of the speeds I could afford to run closes the whole gap.</p>
+<p class="av2-note">These rows let AV2's encoder choose its own superblock size, and at 320 px it picks 64. Pinning the 128 that a real 600 px tile gets moves speed 6 to -1.57 on train and -2.12 on holdout.</p>
+
+<h2>What decides it: bits per pixel</h2>
+<p>The tiles and the crops sit at different densities. At the AVIF tier's budget a tile averages 0.46 bits per pixel and a crop 1.08, about 2.3 times as many, because a crop is all detail and a tile is mostly sky, skin and shadow at thumbnail scale. Pool the two, sort by bits per pixel, and AV2's standing follows one curve.</p>
+<div class="dd-box dd-bpp">
+  <div class="dd-row head"><span>bits per pixel</span><span>calls</span><span>Δ s2</span><span>AV2 wins</span></div>
+  <div class="dd-row"><span>under 0.3</span><span>12 tiles</span><span class="dd-num">+1.60</span><span class="dd-num">12 of 12</span></div>
+  <div class="dd-row"><span>0.3 to 0.5</span><span>12 tiles</span><span class="dd-num">+0.70</span><span class="dd-num">11 of 12</span></div>
+  <div class="dd-row"><span>0.5 to 0.8</span><span>11 tiles, 4 crops</span><span class="dd-num">-0.47</span><span class="dd-num">4 of 15</span></div>
+  <div class="dd-row"><span>0.8 to 1.2</span><span>2 tiles, 8 crops</span><span class="dd-num">-0.94</span><span class="dd-num">2 of 10</span></div>
+  <div class="dd-row"><span>over 1.2</span><span>1 tile, 4 crops</span><span class="dd-num">-2.36</span><span class="dd-num">0 of 5</span></div>
+</div>
+<p>AV2 wins where the budget is thin and loses where every pixel carries detail, and the flip sits near half a bit per pixel. The trend holds within the tiles alone (a correlation of -0.33 between bits per pixel and AV2's margin), so it is more than a difference between two ways of cutting images. A photo site's thumbnails live at the thin end. A pixel-peeping crop lives at the thick end, which is where the next section finds the loss.</p>
 
 <h2>Where AV2 loses</h2>
-<p>My first guess was that AV2 smooths away sensor grain, and I nearly published it. It's wrong. Measured on the decodes, AV2 reproduces the source's fine, pixel-scale texture more faithfully than AV1 on 21 of the 32 calls. The correlation between each decode's fine detail and the source's rises from 0.773 to 0.811.</p>
+<p>At the dense end, the loss has a shape. My first guess was that AV2 smooths away sensor grain, and I nearly published it. It's wrong. Measured on the decodes, AV2 reproduces the source's fine, pixel-scale texture more faithfully than AV1 on 21 of the 32 calls. The correlation between each decode's fine detail and the source's rises from 0.773 to 0.811.</p>
 <p>What AV2 gets wrong is the coarse picture. Average each image over 8 by 8 pixel blocks, which is roughly what you'd see from across the room, and compare those averages with the source's. AV2's error is higher than AV1's on <b>32 of 32</b> calls, by 50% in brightness (0.26 to 0.39 on an 8-bit scale) and 64% in colour (0.25 to 0.41). It holds on the 8 calls where the two files sit within 1% of the same size, so it isn't a byte shortfall.</p>
 <p>So this encoder moves its bits from the broad strokes to the fine ones: slightly truer texture, slightly wronger tone and colour in flat areas. ssimulacra2 scores the picture at several scales and weighs colour heavily, and it reads that trade as a loss.</p>
 
@@ -137,7 +163,7 @@ body{background:transparent;font-family:var(--font-ui);font-size:10.5pt;line-hei
 <h2>Where the literature's number comes from</h2>
 <p>AOM's report measures something real and different. Its AV2 beats an AV1 anchor by 17.82% on PSNR-Y and 23.58% on VMAF in all-intra mode, which codes every frame as a still. The anchor is a branch of libaom, the test material is video sequences, and the metrics are PSNR-HVS, PSNR, SSIM, MS-SSIM, CIEDE2000 and VMAF. Neither ssimulacra2 nor butteraugli appears, and I couldn't find the encoder speeds in it.</p>
 <p>It also reports cost: on average AV2 took 33 times longer to encode than the anchor and 3.86 times longer to decode. The encode column above agrees in kind. Through libavif, one 320 px thumbnail takes 5.4 seconds at speed 6 and 18.3 at speed 3, against 0.45 for the AVIF this site ships. AV2's raw encoder at cpu-used 1 was still running after 8 minutes when I stopped it.</p>
-<p>So the two results don't contradict each other. By the metrics video is judged by, AV2 is the better codec. On photographs, at speeds a person will wait for, its first encoder hasn't turned that into a win by a photo metric. AV1 froze its bitstream in June 2018, and Chrome shipped AVIF in August 2020, after faster encoders had arrived. I expect AV2 to need the same run-up.</p>
+<p>So the two results don't contradict each other. By the metrics video is judged by, AV2 is the better codec. On photographs, its first encoder turns that into a win by a photo metric at the density a thumbnail ships at, and gives it back on dense detail. AV1 froze its bitstream in June 2018, and Chrome shipped AVIF in August 2020, after faster encoders had arrived. I expect AV2 to need the same run-up before the dense end turns too.</p>
 
 <h2>Lossless</h2>
 <p>AV2's lossless mode round-trips all 16 crops bit for bit. It's also 29% larger than AV1's, which surprised me, because AOM lists improved lossless coding among AV2's new tools.</p>
@@ -150,14 +176,28 @@ body{background:transparent;font-family:var(--font-ui);font-size:10.5pt;line-hei
 </div>
 <p>Both AVIF files used the same setup: 8-bit 4:4:4, full range, and the identity matrix, so the colour conversion isn't the difference. The slower speed 3 made one crop slightly bigger, 161,336 bytes against 160,357. I think libavif's experimental AV2 path is the likelier cause than the format, and I haven't proved it. JPEG XL's lead is the older, bigger story, and nothing here changes it.</p>
 
+<h2>What the reference encoder leaves on the table</h2>
+<p>AVM is a reference encoder, and a reference encoder leaves tuning to whoever comes next. I ported four ideas from the encoders that tune AV1 for stills, and one that only AV2 can express. Each is a patch that is off by default, and the untouched reference decoder reads its output pixel for pixel. Each was scored on the crops, where AV2 needs the help most.</p>
+<div class="dd-box dd-tune">
+  <div class="dd-row head"><span>patch</span><span>what it does</span><span>Δ s2 on crops</span><span>verdict</span></div>
+  <div class="dd-row"><span>base-delta-q</span><span>unlocks the sequence-level DC and chroma offsets AVM hard-codes to zero</span><span class="dd-num">-0.06 (holdout, chroma +4)</span><span>about zero</span></div>
+  <div class="dd-row"><span>variance-boost</span><span>libaom and SVT-AV1's Variance Boost: finer quantizers for flat superblocks</span><span class="dd-num">-0.54 (train)</span><span>loses</span></div>
+  <div class="dd-row"><span>jpegli-mask</span><span>jpegli's adaptive-quantization field, mapped onto AV2's quantizer</span><span class="dd-num">-0.25 (train)</span><span>loses</span></div>
+  <div class="dd-row"><span>qm-curves</span><span>libaom's all-intra quantization-matrix curve</span><span class="dd-num">-0.47 (holdout)</span><span>loses</span></div>
+  <div class="dd-row"><span>qm-per-segment</span><span>two matrix sets per frame, split by texture</span><span class="dd-num">+0.14 (holdout)</span><span>wins</span></div>
+</div>
+<p>Only the last one pays, and it is the one AV1 had no syntax for. AV1 signals one quantization-matrix level per plane for the whole frame. AV2 can carry up to four sets and let each segment pick one. The all-intra curve helps smooth crops and costs 2 to 3.5 points on busy ones, so one frame-wide matrix is the wrong granularity. Splitting the frame with jpegli's masking field, a flatter matrix for textured areas and the curve for smooth ones, turns the curve's 0.47 loss into a 0.14 gain on the holdout crops, winning 11 of 16. On the tiles it adds 0.12 over plain AV2 and wins 28 of 38.</p>
+<p>The same build compiles AVM's own AVX2 kernels for Apple silicon through <a href="https://github.com/simd-everywhere/simde">SIMDe</a>. AVM ships almost no NEON code, so on a Mac most of its hot loops ran in plain C. The output is byte-identical to the plain build, and a 600 px encode runs 1.35 times as fast.</p>
+
 <h2>Run it yourself</h2>
-<p>Everything above comes from two committed tools. <code>tools/photos/libavif-avm/build.sh</code> builds libavif at a pinned commit with its experimental AV2 codec switched on. No tagged libavif release carries AVM 1.0.0 yet, so the pin is a commit. <code>codec-knob-probe.ts --codec avm</code> runs the comparison.</p>
-<pre class="av2-code"><code>tools/photos/libavif-avm/build.sh
+<p>Everything above comes from three committed tools. <code>tools/photos/libavif-avm/build.sh</code> builds libavif at a pinned commit with its experimental AV2 codec switched on. No tagged libavif release carries AVM 1.0.0 yet, so the pin is a commit. <code>--tuned</code> adds the five patches and the SIMDe kernels, and refuses to finish unless the result matches the pristine build byte for byte with every option off. <code>av2-tile-probe.ts</code> runs the tile comparison and <code>codec-knob-probe.ts --codec avm</code> runs the crops.</p>
+<pre class="av2-code"><code>tools/photos/libavif-avm/build.sh --tuned
+bun tools/photos/av2-tile-probe.ts --src &lt;a folder of originals&gt;
 bun tools/photos/codec-knob-probe.ts --codec avm --variants base,tunepsnr</code></pre>
 <p>With every scheduling and caching concern stripped out, the probe is four steps per crop. Encode the shipped AVIF and take its size as the budget. Find the two AV2 quantizer settings whose files straddle that size. Decode both and score them against the source. Interpolate the score to the exact budget. The rest of the file is caching, crop selection and parallelism, which change how long it takes and not what it says.</p>
 
 <h2>What would change this</h2>
-<p>The result is small and specific. It covers 16 crops from one camera at 320 px and the reference encoder rather than a production one. The image container is one libavif itself labels experimental, and both metrics come from the JPEG XL project. A production AV2 encoder is the likeliest thing to flip it, the way SVT-AV1 and later libaom releases were for AV1. A still-image tune would be the first place to look. When one ships, the probe above re-runs in an afternoon.</p>
+<p>The result is small, and it cuts both ways. It covers 38 tiles and 16 crops from one camera, the reference encoder rather than a production one, a container libavif itself labels experimental, and two metrics that both come from the JPEG XL project. A production AV2 encoder is the likeliest thing to move the dense end, the way SVT-AV1 and later libaom releases did for AV1, and a still-image tune is the first place to look. The thin end is already a win, so what it waits on is a browser that decodes AV2 and a name that browser can decline. When either arrives, both probes re-run in an afternoon.</p>
     <section id="luq" aria-label="understanding check"></section>
     <p class="garage-meta">watching · the understanding check is part of the page, not a gate</p>
   </div>
@@ -243,7 +283,7 @@ bun tools/photos/codec-knob-probe.ts --codec avm --variants base,tunepsnr</code>
       ]
     },
     {
-      "q": "AV2 reproduces fine texture better on 21 of 32 calls, yet ssimulacra2 prefers AV1 on all 32 at speed 6. What reconciles that?",
+      "q": "On the dense detail crops, AV2 reproduces fine texture better on 21 of 32 calls, yet ssimulacra2 prefers AV1 on all 32 at speed 6. What reconciles that?",
       "options": [
         {
           "t": "AV2's error on 8 by 8 block averages, the tone and colour of flat areas, is higher on all 32, and ssimulacra2 scores several scales and weighs colour heavily.",
@@ -279,7 +319,25 @@ bun tools/photos/codec-knob-probe.ts --codec avm --variants base,tunepsnr</code>
       ]
     },
     {
-      "q": "Which future result would most directly reverse the lossy finding?",
+      "q": "On whole-frame 600 px tiles AV2 beats the shipped AVIF, and on 320 px detail crops it loses every call. What explains the disagreement?",
+      "options": [
+        {
+          "t": "The crops carry about twice the bits per pixel of the tiles, and AV2's margin shrinks as bits per pixel rise until it flips.",
+          "ok": true,
+          "why": "Right. The tiles average 0.46 bits per pixel and the crops 1.08. Pooled, AV2 wins 12 of 12 under 0.3 and 0 of 5 over 1.2."
+        },
+        {
+          "t": "The tiles were scored with a different metric.",
+          "why": "Both sets use ssimulacra2 and butteraugli against the same shipped AVIF, at matched bytes."
+        },
+        {
+          "t": "AV2 got more bytes on the tiles.",
+          "why": "Every AV2 score is interpolated to the exact byte count of the shipped AVIF for the same image, so neither codec gets extra bytes."
+        }
+      ]
+    },
+    {
+      "q": "Which future result would most directly reverse the loss on the dense crops?",
       "options": [
         {
           "t": "A production AV2 encoder that beats the shipped AVIF by ssimulacra2 at matched bytes on the same crops.",
@@ -293,6 +351,24 @@ bun tools/photos/codec-knob-probe.ts --codec avm --variants base,tunepsnr</code>
         {
           "t": "A smaller lossless AV2 file.",
           "why": "Lossless and lossy use different tools, so a lossless improvement wouldn't change a lossy comparison."
+        }
+      ]
+    },
+    {
+      "q": "libaom's all-intra quantization-matrix curve loses on the crops, and the same curve split by texture wins. What does AV2 allow that AV1 doesn't?",
+      "options": [
+        {
+          "t": "Several matrix sets per frame, with each segment choosing one, so textured and smooth areas can use different matrices.",
+          "ok": true,
+          "why": "Right. AV1 signals one matrix level per plane for the whole frame. AV2 carries up to four sets and a per-segment index."
+        },
+        {
+          "t": "A larger transform size.",
+          "why": "AV2 does add transform tools, and none of them is involved here. The gain comes from choosing a matrix per region."
+        },
+        {
+          "t": "Lossless coding of the textured areas.",
+          "why": "Every encode here is lossy. The textured areas get a flatter matrix, which keeps more of their detail at the same quantizer."
         }
       ]
     }

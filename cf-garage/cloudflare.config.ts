@@ -79,7 +79,21 @@
 // workspace root for its dev server or stops asking for auth on a dry run;
 // re-trying on a version bump alone measures nothing.
 
-import { bindings, defineConfig, defineWorker, exports, triggers } from "wrangler/experimental-config";
+// THE HELPERS MOVED AGAIN, and this import is ahead of the wrangler pin on
+// purpose. workers-sdk#15914 took them out of `wrangler/experimental-config`
+// (which keeps only `defineWranglerConfig`) and published them as `cf/config`,
+// in the `cf` CLI package. The wrangler commit after f96458c refuses the old
+// import with "does not provide an export named 'bindings'", and because
+// gen-runtime-types builds this Worker first, that one line reds lint,
+// typecheck and lens-reader along with it (measured 2026-09-28 on 3bdcd0d).
+//
+// `cf/config` is one line, `export * from "@cloudflare/config/public"`, so this
+// imports the package it re-exports. `cf` itself pins its own miniflare and
+// workerd for the CLI half, which measured about 580 MB of node_modules (two
+// workerd binaries) for helpers that need 0.2 MB plus zod. The generated types
+// still name `cf/config`, so config/tsconfig.cf-garage.json maps that
+// specifier here. Both pins pass lint, typecheck and the dry-run this way.
+import { bindings, defineConfig, defineWorker, exports, triggers } from "@cloudflare/config/public";
 
 // THE SHAPE MOVED UNDER US ON 2026-09-21, which the header above said it would.
 // workers-sdk#15713 ("Define experimental Cloudflare configuration with a single

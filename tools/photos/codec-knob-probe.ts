@@ -82,6 +82,18 @@
 // Lossless (-l, identity matrix, bit-exact on all 16 crops) is 29% LARGER than
 // aom's, and speed 3 did not close it (161,336 B vs 160,357 at speed 6).
 //
+// THE CROPS ARE THE DENSE END. These are /pixel-peeper's detail
+// crops, the hardest native-resolution window per photo, at about 1.08 bits per
+// pixel. The shipped 600px tier averages 0.46, and there AV2 WINS: +0.77 s2 on
+// 28 of 38 whole-frame tiles (av2-tile-probe.ts, 2026-09-28). Read a number
+// from this probe as the worst case, never as the verdict for the tier.
+//
+// TUNING, 2026-09-27/28, on build.sh --tuned with sb-size=128 pinned (base vs
+// AVIF -1.57 train, -2.12 holdout). Only per-segment QM held on the holdout:
+// `a:enable-qm=1+qm-curve=1+qmseg=1+qmseg-level=12` +0.14 (11 of 16), where the
+// QM curve alone is -0.47. Chroma AC +4 (-0.06), Variance Boost and the jpegli
+// mask (train only, -0.54 and -0.25 at their best) did not.
+//
 // Crops are cached in --cache (default: a directory under the OS temp dir), since
 // cutting one from a HIF costs a full-resolution sips decode.
 import { spawn, spawnSync } from "node:child_process";
@@ -189,9 +201,16 @@ const AVIF_VARIANTS: Record<string, string[]> = {
 // qp 105, speed 3: ssim 8,308 B s2 69.70 bu 2.56; psnr 8,599 B s2 68.84 bu 1.72.
 // ssimulacra2 barely moves and butteraugli swings, which is why the metrics
 // read as disagreeing under one tune and agreeing under the other.
-const AVIFENC_AVM = path.join(path.dirname(fileURLToPath(import.meta.url)), "libavif-avm", "build", "avifenc");
+// AVM_BUILD_DIR points the AV2 arm at another build of the same libavif, which
+// is how a patched encoder is measured against the pinned reference by name.
+const AVIFENC_AVM = path.join(process.env.AVM_BUILD_DIR ?? path.join(path.dirname(fileURLToPath(import.meta.url)), "libavif-avm", "build"), "avifenc");
 const AVIFDEC_AVM = path.join(path.dirname(AVIFENC_AVM), "avifdec");
-const AVM_ARGS = ["-c", "avm", "-d", "10", "--speed", "6", "--yuv", "444"];
+// sb-size=128 is pinned because AVM's dynamic choice depends on frame size: at
+// speed > 1 it picks 64px superblocks when the short side is 480px or less, so the
+// 320px crops would otherwise encode with 64 while a real 600px tier gets 128.
+// Measured on two full 600px tiles, 64 costs 1.31 and 1.38 s2 at matched bytes,
+// and every per-superblock tool (delta-q, the masks) changes behaviour with it.
+const AVM_ARGS = ["-c", "avm", "-d", "10", "--speed", "6", "--yuv", "444", "-a", "sb-size=128"];
 const avm = (...extra: string[]) => [...AVM_ARGS, ...extra];
 const withAvm = (flag: string, value: string) => AVM_ARGS.map((a, i) => (AVM_ARGS[i - 1] === flag ? value : a));
 const AVM_VARIANTS: Record<string, string[]> = {
@@ -241,12 +260,22 @@ const AVM: AvifCodec = {
   },
 };
 
-const TRAIN = CANDIDATES.format[2];
-const HOLDOUT = ["XT509278", "XT507955", "XT508055", "XT509535", "XT509965", "XT509848", "XT509388", "XT509540"];
+/** A named AV2 variant, or an inline one: "a:key=val+key2=val2" appends each
+ *  pair as `-a key=val` to the base args. Returns null for an unknown name. */
+function avmVariant(name: string): string[] | null {
+  if (AVM_VARIANTS[name]) return AVM_VARIANTS[name];
+  if (!name.startsWith("a:")) return null;
+  const pairs = name.slice(2).split("+").filter(Boolean);
+  if (!pairs.length || pairs.some((p) => !/^[a-z0-9-]+=-?[0-9A-Za-z.]+$/.test(p))) return null;
+  return [...AVM_ARGS, ...pairs.flatMap((p) => ["-a", p])];
+}
+
+export const TRAIN = CANDIDATES.format[2];
+export const HOLDOUT = ["XT509278", "XT507955", "XT508055", "XT509535", "XT509965", "XT509848", "XT509388", "XT509540"];
 const TIERS = Object.keys(FORMAT_TIER_ANCHOR) as (keyof typeof FORMAT_TIER_ANCHOR)[];
 
 type Codec = "jxl" | "avif" | "avm";
-type Row = { set: string; stem: string; tier: string; budget: number; avif: { s2: number; bu: number }; v: Record<string, { bytes: number; d: number; s2: number; bu: number } | { error: string }> };
+type Row = { set: string; stem: string; tier: string; budget: number; avif: { s2: number; bu: number; bu3?: number }; v: Record<string, { bytes: number; d: number; s2: number; bu: number; bu3?: number } | { error: string }> };
 
 // ------------------------------------------------------------------ worker
 
@@ -280,20 +309,45 @@ function recompressed(srcs: { png: string; ppm: string }, dir: string, target: n
   return { bytes: b.bytes, d: b.q, s2: ssim2(ref, dec), bu: butter(ref, dec) };
 }
 
+function butterBoth(ref: string, dec: string): [number, number] {
+  const r = spawnSync("butteraugli_main", [ref, dec], { encoding: "utf8" });
+  const out = `${r.stdout ?? ""}`;
+  const max = Number.parseFloat(out.split("\n")[0] ?? "");
+  const p3 = Number.parseFloat(/3-norm:\s*([0-9.]+)/.exec(out)?.[1] ?? "");
+  if (!Number.isFinite(max) || !Number.isFinite(p3)) throw new Error(`butteraugli printed no scores: ${out.slice(0, 120)}`);
+  return [Number(max.toFixed(3)), Number(p3.toFixed(4))];
+}
+
 /** Score an AVIF variant AT the budget: find the adjacent -q pair whose sizes
  *  straddle it, score both, interpolate linearly in bytes. `d` carries the
  *  lower -q plus the fraction of the way to the next one. */
-export function bracketed(ref: string, dir: string, target: number, args: string[], codec: AvifCodec = AOM): { bytes: number; d: number; s2: number; bu: number } {
+export function bracketed(ref: string, dir: string, target: number, args: string[], codec: AvifCodec = AOM, hint?: number): { bytes: number; d: number; s2: number; bu: number; bu3: number } {
   const size = new Map<number, number>();
   const at = (q: number) => { if (!size.has(q)) size.set(q, codec.enc(ref, path.join(dir, `q${q}.avif`), q, args)); return size.get(q) as number; };
   let lo = 0, hi = codec.range;                // invariant: at(lo) <= target < at(hi), checked below
+  // SEEDED: start from a nearby answer (the base variant's) and expand in
+  // doubling steps until the sizes straddle the budget, then bisect inside.
+  // Bytes are monotone in the knob, so this finds the same adjacent pair the
+  // full-range bisection does in about half the encodes; --no-seed is the
+  // control that checks that equivalence rather than assuming it.
+  if (hint !== undefined && Number.isFinite(hint)) {
+    const h = Math.max(0, Math.min(codec.range, Math.round(hint)));
+    let step = 2;
+    if (at(h) <= target) {
+      lo = h; hi = Math.min(codec.range, h + step);
+      while (hi < codec.range && at(hi) <= target) { lo = hi; step *= 2; hi = Math.min(codec.range, hi + step); }
+    } else {
+      hi = h; lo = Math.max(0, h - step);
+      while (lo > 0 && at(lo) > target) { hi = lo; step *= 2; lo = Math.max(0, lo - step); }
+    }
+  }
   if (at(lo) > target || at(hi) <= target) throw new Error(`budget ${target}B outside knob 0..${codec.range} (${at(0)}..${at(codec.range)}B)`);
   while (hi - lo > 1) { const m = (lo + hi) >> 1; if (at(m) <= target) lo = m; else hi = m; }
-  const score = (q: number) => { const d = codec.dec(path.join(dir, `q${q}.avif`), path.join(dir, `q${q}.png`)); return [ssim2(ref, d), butter(ref, d)]; };
-  const [s2a, bua] = score(lo), [s2b, bub] = score(hi);
+  const score = (q: number) => { const d = codec.dec(path.join(dir, `q${q}.avif`), path.join(dir, `q${q}.png`)); return [ssim2(ref, d), ...butterBoth(ref, d)]; };
+  const [s2a, bua, b3a] = score(lo), [s2b, bub, b3b] = score(hi);
   const t = (target - at(lo)) / (at(hi) - at(lo));
   const r = (x: number) => Number(x.toFixed(3));
-  return { bytes: target, d: r(lo + t), s2: r(s2a + t * (s2b - s2a)), bu: r(bua + t * (bub - bua)) };
+  return { bytes: target, d: r(lo + t), s2: r(s2a + t * (s2b - s2a)), bu: r(bua + t * (bub - bua)), bu3: Number((b3a + t * (b3b - b3a)).toFixed(4)) };
 }
 
 function work(codec: Codec, set: string, stem: string, variants: string[], cache: string): Row[] {
@@ -310,12 +364,20 @@ function work(codec: Codec, set: string, stem: string, variants: string[], cache
         ? (() => { const p = path.join(sub, "ship.avif"); return { bytes: encodeFmt("avif", ref, p, a.q), path: p }; })()
         : searchFmt("avif", ref, sub, encode("zenc", srcs, path.join(sub, "anchor.jpg"), a.q, a.chroma));
       const ad = decodeFmt("avif", avif.path, path.join(sub, "avif.png"));
-      const row: Row = { set, stem, tier, budget: avif.bytes, avif: { s2: ssim2(ref, ad), bu: butter(ref, ad) }, v: {} };
+      const [abu, abu3] = butterBoth(ref, ad);
+      const row: Row = { set, stem, tier, budget: avif.bytes, avif: { s2: ssim2(ref, ad), bu: abu, bu3: abu3 }, v: {} };
+      // the base variant runs first; its landing point seeds everyone else
+      let hint: number | undefined;
+      const seed = !process.argv.includes("--no-seed");
       for (const name of variants) {
-        const vd = path.join(sub, name);
+        const vd = path.join(sub, name.replace(/[^a-zA-Z0-9_.-]/g, "_"));
         fs.mkdirSync(vd);
         if (codec === "avif" || codec === "avm") {
-          try { row.v[name] = codec === "avif" ? bracketed(ref, vd, avif.bytes, AVIF_VARIANTS[name]) : bracketed(ref, vd, avif.bytes, AVM_VARIANTS[name], AVM); }
+          try {
+            row.v[name] = codec === "avif" ? bracketed(ref, vd, avif.bytes, AVIF_VARIANTS[name], AOM, seed ? hint : undefined) : bracketed(ref, vd, avif.bytes, avmVariant(name) as string[], AVM, seed ? hint : undefined);
+            const got = row.v[name];
+            if (name === "base" && !("error" in got)) hint = got.d;
+          }
           catch (e) { row.v[name] = { error: e instanceof Error ? e.message.slice(0, 120) : String(e) }; }
           continue;
         }
@@ -347,18 +409,24 @@ function report(rows: Row[], variants: string[], codec: Codec): void {
     const avifGap = base.reduce((n, r) => n + ((r.v.base as { s2: number }).s2 - r.avif.s2), 0) / base.length;
     // jxl and avm are rival codecs, so their question is the gap to the shipped AVIF
     const vsAvif = codec !== "avif";
+    // inline variants ("a:key=val+...") run long, so the name column fits the longest
+    const W = Math.max(10, ...variants.map((v) => v.length + 1));
     // An all-error run leaves `base` empty and the mean NaN; say so rather than print it
     if (vsAvif) console.log(base.length ? `  base vs AVIF at matched bytes: mean ${avifGap >= 0 ? "+" : ""}${avifGap.toFixed(2)} s2` : "  base vs AVIF: no call landed on budget, so there is no gap to report (see the errors in --json)");
-    console.log(`  variant     n  mean Δs2  mean Δbu  s2 wins  ${vsAvif ? "vs AVIF s2" : "bu wins"}`);
+    console.log(`  ${"variant".padEnd(W)} n  mean Δs2  mean Δbu  s2 wins  ${vsAvif ? "vs AVIF s2" : "bu wins"}   Δbu3  ${vsAvif ? "vs AVIF bu3" : ""}`);
     for (const name of variants) {
       const pairs = rs.filter((r) => ok(r.v.base, r.budget) && ok(r.v[name], r.budget));
-      if (!pairs.length) { console.log(`  ${name.padEnd(10)}  0  (never landed on budget)`); continue; }
+      if (!pairs.length) { console.log(`  ${name.padEnd(W)}  0  (never landed on budget)`); continue; }
       const d2 = pairs.map((r) => (r.v[name] as { s2: number }).s2 - (r.v.base as { s2: number }).s2);
       const db = pairs.map((r) => (r.v[name] as { bu: number }).bu - (r.v.base as { bu: number }).bu);
+      const b3 = pairs.filter((r) => (r.v[name] as { bu3?: number }).bu3 !== undefined && (r.v.base as { bu3?: number }).bu3 !== undefined)
+        .map((r) => ((r.v[name] as { bu3: number }).bu3 - (r.v.base as { bu3: number }).bu3));
+      const b3a = pairs.filter((r) => (r.v[name] as { bu3?: number }).bu3 !== undefined && r.avif.bu3 !== undefined)
+        .map((r) => ((r.v[name] as { bu3: number }).bu3 - (r.avif.bu3 as number)));
       const va = pairs.map((r) => (r.v[name] as { s2: number }).s2 - r.avif.s2);
       const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
       const sign = (x: number) => `${x >= 0 ? "+" : ""}${x.toFixed(2)}`;
-      console.log(`  ${name.padEnd(10)}${String(pairs.length).padStart(2)}  ${sign(mean(d2)).padStart(8)}  ${sign(mean(db)).padStart(8)}  ${`${d2.filter((x) => x > 0).length}/${pairs.length}`.padStart(7)}  ${vsAvif ? sign(mean(va)).padStart(10) : `${db.filter((x) => x < 0).length}/${pairs.length}`.padStart(7)}`);
+      console.log(`  ${name.padEnd(W)}${String(pairs.length).padStart(2)}  ${sign(mean(d2)).padStart(8)}  ${sign(mean(db)).padStart(8)}  ${`${d2.filter((x) => x > 0).length}/${pairs.length}`.padStart(7)}  ${vsAvif ? sign(mean(va)).padStart(10) : `${db.filter((x) => x < 0).length}/${pairs.length}`.padStart(7)}  ${b3.length ? `${mean(b3) >= 0 ? "+" : ""}${mean(b3).toFixed(3)}`.padStart(7) : "      -"}  ${vsAvif && b3a.length ? `${mean(b3a) >= 0 ? "+" : ""}${mean(b3a).toFixed(3)}`.padStart(8) : ""}`);
     }
   }
   console.log("\nΔbu is butteraugli, where NEGATIVE is better. Only calls landing within 2% of budget count.");
@@ -377,7 +445,7 @@ async function main(): Promise<number> {
   }
   const VARIANTS = codec === "avif" ? AVIF_VARIANTS : codec === "avm" ? AVM_VARIANTS : JXL_VARIANTS;
   const variants = (arg("--variants") ?? Object.keys(VARIANTS).join(",")).split(",");
-  for (const v of variants) if (!VARIANTS[v]) { console.error(`unknown ${codec} variant ${v}; have ${Object.keys(VARIANTS).join(", ")}`); return 2; }
+  for (const v of variants) if (!(codec === "avm" ? avmVariant(v) : VARIANTS[v])) { console.error(`unknown ${codec} variant ${v}; have ${Object.keys(VARIANTS).join(", ")}`); return 2; }
   if (!variants.includes("base")) variants.unshift("base");
 
   if (argv.includes("--worker")) {
@@ -399,7 +467,7 @@ async function main(): Promise<number> {
       const [set, stem] = jobs[next++];
       const t0 = Date.now();
       const out = await new Promise<string>((resolve, reject) => {
-        const p = spawn(process.execPath, [self, "--worker", "--codec", codec, "--set", set, "--stem", stem, "--variants", variants.join(","), "--cache", cache], { stdio: ["ignore", "pipe", "inherit"] });
+        const p = spawn(process.execPath, [self, "--worker", "--codec", codec, "--set", set, "--stem", stem, "--variants", variants.join(","), "--cache", cache, ...(argv.includes("--no-seed") ? ["--no-seed"] : [])], { stdio: ["ignore", "pipe", "inherit"] });
         let buf = "";
         p.stdout.on("data", (c) => { buf += c; });
         p.on("close", (code) => (code === 0 ? resolve(buf) : reject(new Error(`${stem} exited ${code}`))));
